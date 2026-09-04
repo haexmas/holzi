@@ -162,13 +162,13 @@ pub struct OpenInstanceArgs {
 
 **Postconditions on success**: SQLCipher unlocked; Nostr relay listening; iroh peer online; `AppState.active_instance = Some(...)`; the database mtime is refreshed to the current time as the persisted `lastAccess`; and any import-pending marker is removed. If another instance was active, it is fully closed before the new one becomes visible. Backend emits `instance-list-changed` (last-access bumped).
 
-**Atomic switch and rollback**: the state lock is held from validation through shutdown of the previous runtime and activation of the requested runtime. No concurrent command can observe a half-switched state. If any requested startup step fails, every service started for the requested instance is stopped, its database handle is dropped, and `AppState.active_instance` is cleared. The import-pending copy and marker are removed on credential or database validation failure. A subsequent `open_instance` attempt starts from clean state; the previous instance is not silently resumed.
+**Atomic switch and rollback**: the state lock is held from validation through shutdown of the previous runtime and activation of the requested runtime. No concurrent command can observe a half-switched state. If any requested startup step fails, every service started for the requested instance is stopped, its database handle is dropped, and `AppState.active_instance` is cleared. For an import-pending copy, a failed unlock attempt—including an incorrect passphrase—retains the copy and marker so a subsequent `open_instance` attempt can retry; deletion requires an explicit discard action or conclusive validation that the file is not a holzi instance. The previous instance is not silently resumed.
 
 **Failure modes**:
 
 - `HolziError::NotFound { name }` — no such file.
 - `HolziError::WrongPassphrase` — SQLCipher rejected. **The frontend MUST NOT expose whether the error was `NotFound` vs `WrongPassphrase`** (FR-021); it renders both as a generic "Öffnen fehlgeschlagen". The typed error is for logs and telemetry only.
-- `HolziError::NotAValidInstance { reason }` — the database or SQLCipher format is invalid. For an import-pending copy, the backend removes the copy and its marker before returning this explicit error.
+- `HolziError::NotAValidInstance { reason }` — the database or SQLCipher format is invalid. An import-pending copy remains available unless the backend has conclusively established that it is not a holzi instance; a passphrase-related failure must never delete it.
 - `HolziError::Io` — read error.
 
 ---
@@ -226,7 +226,7 @@ pub struct ImportInstanceResult {
 **Notes**:
 
 - `source_path` is the external file path returned by `@tauri-apps/plugin-dialog`; it is the only path accepted from the frontend. It is not a managed-instance path. The command validates that it is a regular file and that the extension is `.db`.
-- SQLCipher page validation is deferred until `open_instance`, where the operator supplies the passphrase. The copied file is marked by a sibling `<name>.import-pending` marker so an invalid credential or database causes the copied file and marker to be removed atomically; the source file is never touched.
+- SQLCipher page validation is deferred until `open_instance`, where the operator supplies the passphrase. The copied file is marked by a sibling `<name>.import-pending` marker. Failed unlock attempts retain both the copied file and marker for retry; only an explicit discard action or conclusive validation that the file is not a holzi instance may remove them. The source file is never touched.
 - Copy is atomic (write to temp path, `rename` into place) and creates the import-pending marker as part of the same backend-owned operation. On any error the temp file and marker are deleted.
 - For `ConflictPolicy::Overwrite`, the command checks the target name while holding the `AppState` lock and rejects replacement if that name is the active instance. The frontend must close that instance explicitly before retrying overwrite.
 - The source file is never modified or moved.

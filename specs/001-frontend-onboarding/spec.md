@@ -56,7 +56,7 @@ The operator has an instance file (`.db`) on the host filesystem — for example
 
 1. **Given** a valid `.db` file at an arbitrary path, **When** the operator selects it in the Öffnen sheet, **Then** the file is copied into `instances/`, appears in the list, and unlocks with its original passphrase.
 2. **Given** a file whose name conflicts with an existing instance, **When** the operator confirms the import, **Then** the operator is prompted for either overwrite, rename, or cancel — default behavior is rename with a numeric suffix, no silent overwrite.
-3. **Given** a regular `.db` file whose SQLCipher or holzi format cannot be validated without its passphrase, **When** the operator imports and then attempts to unlock it, **Then** `open_instance` rejects it with an explicit error and removes the pending imported copy and marker; structural source failures are still rejected before copying.
+3. **Given** a regular `.db` file whose SQLCipher or holzi format cannot be validated without its passphrase, **When** the operator imports and then attempts to unlock it, **Then** `open_instance` rejects it with an explicit error and retains the pending imported copy and marker for a later unlock attempt or explicit discard; structural source failures are still rejected before copying.
 
 ---
 
@@ -124,7 +124,7 @@ No attested device survives, and the operator has only their paper-seed. From th
 **Öffnen (Import external `.db` file)**
 
 - **FR-010**: The Öffnen action MUST open a Sheet that invokes the OS file picker via `@tauri-apps/plugin-dialog`, restricted to `.db` extension.
-- **FR-011**: Upon selection, the backend MUST validate the source as a regular `.db` file before copying. SQLCipher credential validation MUST occur in `open_instance`, using the passphrase entered in the Unlock sheet; an invalid database or passphrase MUST remove the pending imported copy and return an explicit error.
+- **FR-011**: Upon selection, the backend MUST validate the source as a regular `.db` file before copying. SQLCipher credential validation MUST occur in `open_instance`, using the passphrase entered in the Unlock sheet; a failed unlock attempt, including an incorrect passphrase, MUST return an explicit error without deleting the pending imported copy or marker. Deletion requires an explicit discard action or conclusive validation that the file is not a holzi instance.
 - **FR-012**: The backend MUST copy (not move) the file into `<AppLocalData>/instances/` preserving its filename basename and mark the copy as pending validation until a successful unlock.
 - **FR-013**: On name collision, the backend MUST prompt via return value; the frontend MUST offer overwrite / rename / cancel; default MUST be rename with numeric suffix (`<name>-2.db`). Silent overwrite is prohibited.
 - **FR-014**: After successful copy, the `instances/` list MUST refresh (via `instance-list-changed` event) so the imported file appears immediately.
