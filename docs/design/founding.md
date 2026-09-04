@@ -2,6 +2,8 @@
 
 **Status**: Draft. Founding design captured 2026-09-04.
 
+**Revised by**: [`docs/plans/2026-09-04-v1-scope-design.md`](../plans/2026-09-04-v1-scope-design.md). That document draws the v1 scope line and revises the identity/pairing model, the storage layer (introducing `haex-crdt`), and the mobile availability model. Where the two documents disagree for v1, the plans document wins.
+
 **What holzi is**: a portable, isolated personal-agent app. Runs as a Tauri application on any device the operator owns. All LLM credentials, model choice, and history live inside the app. LLM interactions happen inside holzi; the host system's LLM configuration (if any) is unrelated. External access to holzi is only via MCP.
 
 **Origin**: This design emerged from a brainstorming session that briefly considered building the same feature set inside haex-hive. The scope shift (from haex-hive's harness-configurator role to a full agent runtime with signaling and transport planes) was too large, so holzi lives as its own project. haex-hive stays as it is (harness plane per its Scope Realignment). Where useful, holzi may consume haex-hive-distributed configuration for the harness that runs inside it, but that is a downstream integration question, not a coupling.
