@@ -56,7 +56,7 @@ The operator has an instance file (`.db`) on the host filesystem — for example
 
 1. **Given** a valid `.db` file at an arbitrary path, **When** the operator selects it in the Öffnen sheet, **Then** the file is copied into `instances/`, appears in the list, and unlocks with its original passphrase.
 2. **Given** a file whose name conflicts with an existing instance, **When** the operator confirms the import, **Then** the operator is prompted for either overwrite, rename, or cancel — default behavior is rename with a numeric suffix, no silent overwrite.
-3. **Given** a regular `.db` file whose SQLCipher or holzi format cannot be validated without its passphrase, **When** the operator imports and then attempts to unlock it, **Then** `open_instance` rejects it with an explicit error and retains the pending imported copy and marker for a later unlock attempt or explicit discard; structural source failures are still rejected before copying.
+3. **Given** a structurally valid regular `.db` file that was imported successfully, **When** the operator attempts to unlock it with an incorrect passphrase, **Then** `open_instance` rejects the attempt with an explicit error, retains the pending imported copy and marker for a later unlock attempt or explicit discard, and leaves any currently active instance unchanged; structural source failures are still rejected before copying.
 
 ---
 
@@ -99,7 +99,7 @@ No attested device survives, and the operator has only their paper-seed. From th
 - **Instance name collision with reserved filename** (`.trash`, files starting with `.`, path traversal): rejected client-side with clear error before any command is sent.
 - **List refresh after external mutation** (e.g., another process or CLI creates a file in `instances/`): Tauri backend emits `instance-list-changed`; Pinia store re-syncs; list updates without page reload.
 - **App closed mid-Anlegen (before paper-seed confirmation)**: on next launch, an orphan file may exist. Behavior: on startup, delete any Genesis file in `instances/` whose creation flag `.pending` still exists in the same directory. The pending flag is written before the DB and removed only by `confirm_create` after paper-seed confirmation. Imported files use a separate import-pending marker and remain available for unlock validation.
-- **Two instances open concurrently**: `open_instance` serializes the close-and-open switch under the backend state lock. The frontend does not call `close_instance` first; a concurrent request waits for the lock and then observes either the old or the new fully-active instance, never a half-switched state.
+- **Two instances open concurrently**: `open_instance` serializes the close-and-open switch under the backend state lock. It validates the requested credentials while the current runtime remains active; a validation failure leaves that runtime and `AppState.active_instance` unchanged. The frontend does not call `close_instance` first; a concurrent request waits for the lock and then observes either the old or the new fully-active instance, never a half-switched state.
 - **Mobile foreground/background** for Anlegen: if the app is backgrounded during Genesis before paper-seed confirmation, the same pending-flag mechanism applies. No changes to relay-lifetime rules for mobile beyond `v1-scope-design.md §7`.
 
 ## Requirements *(mandatory)*
