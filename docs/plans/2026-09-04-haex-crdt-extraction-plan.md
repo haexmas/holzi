@@ -102,7 +102,15 @@ pub trait SignatureProvider {
 }
 
 pub struct NoopSignatureProvider;
-// NoopSignatureProvider inherits the default no-op `on_before_apply`.
+// NoopSignatureProvider inherits the default no-op `on_before_apply`,
+// signs with empty payloads, and accepts empty incoming sigs on verify.
+impl SignatureProvider for NoopSignatureProvider {
+    fn sign_column(&self, _preimage: &[u8]) -> Result<Vec<u8>> { Ok(Vec::new()) }
+    fn verify_column(&self, _preimage: &[u8], sig: &[u8], _author: &AuthorId) -> Result<()> {
+        if sig.is_empty() { Ok(()) } else { Err(Error::UnexpectedSignatureUnderNoop) }
+    }
+    fn author_id(&self) -> AuthorId { AuthorId::anonymous() }
+}
 ```
 
 `haex-vault` implements the trait against its UCAN/DID stack (reusing today's `column_sig` + `registry_row_sig` code, now living inside haex-vault). `holzi` uses `NoopSignatureProvider` in v1 (no per-column signing needed while the closed federation trusts every attested device equally); it can graduate to a real provider post-v1 if needed. The crate's storage schema reserves the `haex_column_sigs` column even for no-op providers, so a future upgrade does not require a migration.
@@ -113,7 +121,7 @@ pub struct NoopSignatureProvider;
   1. Call `SignatureProvider::on_before_apply(&changes)`. On `Err`, roll back and return.
   2. **Preflight-verify every incoming column change** via `SignatureProvider::verify_column(preimage, sig, author)` before writing anything. Any verification failure rolls back the transaction and returns `Error::SignatureVerificationFailed { first_failed_change, .. }`. No column is written before every column has been verified.
   3. Apply the writes. Any apply-side error (constraint violation, disk error, HLC clock issue) rolls back the transaction and returns the corresponding `Error`; no earlier writes remain.
-- The provider decides whether an empty `sig` is acceptable — the crate itself has no policy. `NoopSignatureProvider::verify_column` accepts empty signatures (`sig.is_empty() → Ok`) and rejects non-empty ones it cannot verify. It performs no transport attestation itself; consumers using `NoopSignatureProvider` MUST deliver remote changes over an already-authenticated transport (an MLS group in `haex-vault`, an authenticated iroh channel in `holzi`). The crate documents this precondition prominently so a consumer cannot silently accept unsigned changes from an unauthenticated source.
+- The provider decides whether an empty `sig` is acceptable — the crate itself has no policy. `NoopSignatureProvider::sign_column` returns `Ok(Vec::new())`, so local writes persist an empty byte string in `haex_column_sigs`; `NoopSignatureProvider::verify_column` accepts empty signatures (`sig.is_empty() → Ok`) and rejects non-empty ones it cannot verify. Local scan and remote apply between two `NoopSignatureProvider` stores therefore round-trip cleanly. It performs no transport attestation itself; consumers using `NoopSignatureProvider` MUST deliver remote changes over an already-authenticated transport (an MLS group in `haex-vault`, an authenticated iroh channel in `holzi`). The crate documents this precondition prominently so a consumer cannot silently accept unsigned changes from an unauthenticated source.
 - A signing provider (haex-vault's UCAN-backed one) rejects empty signatures on already-signed vaults, so downgrading to `NoopSignatureProvider` on an existing signed vault is not silently possible.
 - **Row-level trust** — today's `registry_row_sig/` — is **not** something `haex-crdt`'s apply pipeline validates on its own. Since `registry_row_sig` stays in `haex-vault`, the trait exposes the pre-apply hook (`on_before_apply`) declared above; `haex-vault`'s hook enforces registry-row-sig policy against the incoming batch; `NoopSignatureProvider`'s inherited default is a no-op.
 
@@ -137,7 +145,7 @@ pub trait MigrationSource {
 - `list_migrations` MUST return unique names in a stable, total order (lexicographic on `MigrationName`, which encodes the applied ordinal). Two calls at the same version of a shipped consumer MUST return identical sequences.
 - `load_migration` MUST return byte-identical content for the same name across releases of the consumer. Once a migration has been applied by any deployed instance, its content is frozen; new work goes into a new migration name.
 - The engine stores a SHA-256 digest of each applied migration's SQL in the journal. On subsequent starts, a mismatch between the stored digest and the `load_migration` result aborts with `Error::MigrationContentDrift { name, expected, found }` rather than re-running or silently continuing.
-- **Journal reconciliation on every open**: before executing any pending migrations, the engine walks the full journal and verifies that every applied entry still appears in `list_migrations`. If an applied migration is missing from the current source, `Store::open` aborts with `Error::MigrationMissingFromSource { name }`. This blocks the case where a consumer's build ships a `MigrationSource` that has silently dropped an already-applied migration — the ordering and remaining digests would otherwise match, and the engine would open an incomplete schema. Recovery is the consumer's decision (restore the migration, or ship an explicit forward-only migration that supersedes it).
+- **Journal reconciliation on every open, scoped per journal**: before executing any pending migrations, each journal is reconciled independently against its own source. `haex_crdt_migrations` is reconciled against the crate's built-in bookkeeping list (compiled into `haex-crdt`); `haex_app_migrations` is reconciled against the consumer's `MigrationSource`. Missing entries in either journal abort `Store::open` with `Error::MigrationMissingFromSource { journal, name }` — the `journal` field distinguishes crate-owned vs consumer-owned so misdiagnosis is impossible. This scoping prevents a valid crate-owned CRDT migration from being wrongly reported as missing from a consumer source that does not (and must not) contain it. Recovery is the consumer's decision (restore the migration, or ship an explicit forward-only migration that supersedes it).
 
 **Two migration sets, two journals**:
 
@@ -258,8 +266,9 @@ Steps 1 and 2 are the invasive ones inside `haex-vault`. Step 3 is a repo-mechan
     - (a) `Store::open` succeeds on both fresh databases.
     - (b) Crate-owned bookkeeping migrations run on both (journal in `haex_crdt_migrations`).
     - (c) A consumer-owned toy migration runs on both (journal in `haex_app_migrations`).
-    - (d) `install_crdt` on a pre-populated table on store A verifies the backfill contract: `scan_local_changes` on A returns the backfilled rows.
-    - (e) End-to-end apply flow: store A does a local write; `scan_local_changes(A)` returns exactly that change (**assert scanned payload matches**); the change is handed to `apply_remote_changes(B)` (**assert it succeeds**); a fresh read from store B returns the applied row with A's HLC and author metadata (**assert readback**). Store A's HLC state remains bound to `device_a`; store B's to `device_b` — reopening either with the wrong `DeviceIdProvider` MUST return `Error::DeviceIdMismatch`.
+    - (d) The toy CRDT-managed table is created on **both** stores through the shared `MigrationSource` (so the plain table exists on A and B). Store A is then pre-populated with rows via direct inserts *before* `install_crdt` runs on it, so step (d) exercises the backfill contract on A: `install_crdt(A, "toy")` succeeds inside its `IMMEDIATE` transaction, and `scan_local_changes(A)` returns the backfilled rows.
+    - (d′) Store B calls `install_crdt(B, "toy")` on the (empty) toy table before any apply, so B has the CRDT metadata columns, triggers, and local-changes journal wiring in place. Without this, apply on B would either fail (missing metadata columns) or succeed against a store that isn't actually CRDT-managed — neither would validate remote application.
+    - (e) End-to-end apply flow: store A does a local write against the CRDT-managed toy table; `scan_local_changes(A)` returns exactly that change (**assert scanned payload matches**); the change is handed to `apply_remote_changes(B)` (**assert it succeeds**); a fresh read from store B returns the applied row with A's HLC and author metadata (**assert readback**). Store A's HLC state remains bound to `device_a`; store B's to `device_b` — reopening either with the wrong `DeviceIdProvider` MUST return `Error::DeviceIdMismatch`.
 
   This is what proves the published git artifact is actually consumable, that remote-application works across independent stores, and that device-identity isolation holds — none of which the workspace-member test on its own establishes.
 - `holzi` writes its own small integration test that opens a `haex-crdt` `Store`, defines a toy CRDT-managed table, writes and re-reads a row. Once the standalone-git-tag test above exists, holzi's own test builds on it rather than re-scaffolding.
