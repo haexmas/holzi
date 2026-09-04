@@ -1,0 +1,23 @@
+{
+  "active_feature": null,
+  "atoms": [
+    {
+      "includes": [
+        "com.github.haexmas.haex-hive.constitution"
+      ],
+      "revision": "336eaf1e5b1a86f76031b60b7f692da98682b9ac",
+      "source": "https://github.com/haexmas/haex-hive"
+    },
+    {
+      "includes": [
+        "com.github.haexmas.atoms.graphify-first-authoring"
+      ],
+      "revision": "ff6fda2180563479497e0bd5a25144653d3175fb",
+      "source": "https://github.com/haexmas/atoms"
+    }
+  ],
+  "groups": [],
+  "haex_hive_min_version": ">=2.0.0",
+  "haex_hive_version": "2",
+  "identity": "com.github.haexmas.holzi"
+}
