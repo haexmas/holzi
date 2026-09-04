@@ -53,9 +53,9 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 - [ ] **T013** [-] Implement `src-tauri/src/error.rs` with the `HolziError` enum per [`contracts/tauri-commands.md`](./contracts/tauri-commands.md). Add `#[derive(TS)]` and export.
 - [ ] **T014** [-] Implement `src-tauri/src/state.rs`: `AppState { active_instance: Mutex<Option<ActiveInstanceHandle>> }`. `ActiveInstanceHandle` holds the `haex-crdt` handle and shutdown senders for the Nostr relay + iroh peer. Register in `main.rs::manage`.
 - [ ] **T015** [-] Implement `src-tauri/src/instances/events.rs::emit_instance_list_changed(app, reason, affected)` and wire the AppHandle plumbing.
-- [ ] **T016** [-] Implement `src-tauri/src/instances/list.rs::list_instances` per contract. Sort by mtime desc. Filter out `.trash/` and hidden files. `#[tauri::command]` registered in `main.rs`.
-- [ ] **T017** [-] Implement `src-tauri/src/instances/crud.rs::close_instance` per contract. Idempotent. `#[tauri::command]` registered.
-- [ ] **T018** [-] Wire up frontend `src/composables/useInstance.ts` skeleton: exposes `openAsync`, `createAsync`, `closeAsync`, `importAsync`, `trashAsync`. Each wraps a single `invoke(...)` and re-throws typed errors.
+- [ ] **T016** [-] Implement `src-tauri/src/instances/list.rs::list_instances` per contract. Treat the database mtime as the persisted `lastAccess` value, sort by it desc, and filter out `.trash/`, hidden files, and pending Genesis files. `#[tauri::command]` registered in `main.rs`. Add coverage that a successful `open_instance` mtime refresh changes list ordering.
+- [ ] **T017** [-] Implement `src-tauri/src/instances/crud.rs::close_instance` per contract, including `AppHandle` event emission. Idempotent. `#[tauri::command]` registered. `open_instance` reuses the same shutdown path while holding the state lock for an atomic switch.
+- [ ] **T018** [-] Wire up frontend `src/composables/useInstance.ts` skeleton: exposes `openAsync`, `createAsync`, `confirmCreateAsync`, `abortCreateAsync`, `closeAsync`, `importAsync`, `trashAsync`. Each wraps a single `invoke(...)` and re-throws typed errors.
 - [ ] **T019** [-] Fill `src/stores/instances.ts` (Pinia): `instances` ref, `activeInstance` ref, `syncAsync()` calling `list_instances`, event listener for `instance-list-changed` calling `syncAsync()`. Test with Vitest that a fake emitted event triggers a re-sync.
 - [ ] **T020** [-] Implement `src/app.vue`: root with `<UiSonner />` (toast provider) and `<NuxtPage />`. Add `useHead({ title: 'Holzi' })`. Register the i18n locale switcher plumbing (UI element deferred to a later spec).
 
@@ -73,18 +73,18 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 
 ### Tests for US4
 
-- [ ] **T021** [P] [US4] `tests/stores/instances.spec.ts`: Vitest — asserts `syncAsync` populates from a mocked `invoke('list_instances')` in `lastAccess` desc order.
+- [ ] **T021** [P] [US4] `tests/stores/instances.spec.ts`: Vitest — asserts `syncAsync` populates from a mocked `invoke('list_instances')` in `lastAccess` desc order and renders the non-secret `alias` field.
 - [ ] **T022** [P] [US4] `e2e/onboarding.spec.ts::"landing shows seeded instances"`: Playwright — with a fixture instance file present, page renders the list.
 - [ ] **T023** [P] [US4] `e2e/onboarding.spec.ts::"unlock happy path"`: enter correct passphrase → navigates to `/federation/<name>`.
 - [ ] **T024** [P] [US4] `e2e/onboarding.spec.ts::"unlock wrong passphrase shows generic error, does not leak file existence"`: enter wrong passphrase for existing and non-existing name — error text is identical.
 
 ### Implementation for US4
 
-- [ ] **T025** [US4] Implement `src-tauri/src/instances/crud.rs::open_instance` per contract. Enforce `NotFound` and `WrongPassphrase` return the same discriminator-different-but-message-same guarantee.
+- [ ] **T025** [US4] Implement `src-tauri/src/instances/crud.rs::open_instance` per contract. Under the state lock, validate the requested instance, close any current active runtime, start the requested SQLCipher/relay/iroh runtime, refresh its mtime as `lastAccess`, and publish only the fully-active result. On any startup failure, stop started services, drop the handle, clear state, and remove an import-pending copy when validation fails. Enforce `NotFound` and `WrongPassphrase` return the same discriminator-different-but-message-same guarantee. Add a retry test after a forced partial failure.
 - [ ] **T026** [US4] Implement `src/pages/index.vue` landing shell with `<UiLogo />`, welcome text, version footer via `useAppVersion` composable, and slots for CTAs + list.
 - [ ] **T027** [P] [US4] Implement `src/components/onboarding/InstancesList.vue`: iterates `useInstancesStore().instances`, renders each with alias + `formatRelativeTime(lastAccess)`, click emits `select(name)`. Empty state hides (FR-004).
 - [ ] **T028** [P] [US4] Implement `src/components/onboarding/UnlockSheet.vue`: `<UiSheet>` with masked passphrase field, submit button, inline error area. On submit calls `useInstance.openAsync(name, passphrase)`.
-- [ ] **T029** [US4] Wire `InstancesList → UnlockSheet` in `pages/index.vue`. On successful unlock, `navigateTo('/federation/' + name)`. Placeholder `pages/federation/[instance].vue` shows "Federation view — not this spec" so the navigation target exists.
+- [ ] **T029** [US4] Wire `InstancesList → UnlockSheet` in `pages/index.vue`. On successful unlock, `navigateTo('/federation/' + name)`; do not call `close_instance` first because `open_instance` owns the atomic switch. Placeholder `pages/federation/[instance].vue` shows "Federation view — not this spec" so the navigation target exists.
 - [ ] **T030** [P] [US4] i18n keys: `landing.welcome`, `landing.lastUsed`, `onboarding.unlock.title`, `onboarding.unlock.passphrase`, `onboarding.unlock.submit`, `errors.openFailed` (single generic message for `NotFound` + `WrongPassphrase` — see FR-021).
 
 **Checkpoint**: US4 fully functional. Operator can Unlock an existing instance seeded manually.
@@ -99,18 +99,18 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 
 ### Tests for US1
 
-- [ ] **T031** [P] [US1] `e2e/onboarding.spec.ts::"anlegen genesis happy path"`: click Anlegen → fill name+passphrase+passphrase → paper-seed displayed → confirm → arrives at federation view; verify `<AppLocalData>/instances/<name>.db` exists.
+- [ ] **T031** [P] [US1] `e2e/onboarding.spec.ts::"anlegen genesis happy path"`: click Anlegen → fill name+passphrase+passphrase → paper-seed displayed → confirm (which invokes `confirm_create`) → arrives at federation view; verify the DB and no `.pending` marker remain.
 - [ ] **T032** [P] [US1] `e2e/onboarding.spec.ts::"anlegen name collision blocked"`: seed an instance, try to Anlegen with same name → inline error, no file created.
 - [ ] **T033** [P] [US1] `e2e/onboarding.spec.ts::"anlegen cancelled after file created discards orphan"`: intercept close-before-confirm, verify `.pending` marker + file are gone on next `list_instances`.
-- [ ] **T034** [P] [US1] Rust test: `create_instance` with `CreateMode::Genesis` writes `.pending` marker before `.db`, removes marker after seed confirmation, deletes both on error.
+- [ ] **T034** [P] [US1] Rust test: `create_instance` with `CreateMode::Genesis` writes `.pending` before `.db`, activates the runtime, `confirm_create` removes the marker, and `abort_create` deletes both marker and DB on cancellation or error.
 
 ### Implementation for US1
 
-- [ ] **T035** [US1] Implement `src-tauri/src/instances/crud.rs::create_instance` per contract — Genesis branch only in this task (Join/Recover in later phases). Enforces `NameConflict`, `InvalidName`, `WeakPassphrase`, `InstanceAlreadyActive`. Writes `.pending` marker; hands passphrase + Genesis mode to `haex-crdt::init`.
-- [ ] **T036** [US1] Implement startup orphan-cleanup in `src-tauri/src/main.rs::setup`: on boot, scan `instances/` for `.pending` markers and delete both the marker and the sibling `.db`. Emit `instance-list-changed { reason: 'startup-cleanup' }`.
+- [ ] **T035** [US1] Implement `src-tauri/src/instances/crud.rs::create_instance` per contract — Genesis branch only in this task (Join/Recover in later phases). Enforces `NameConflict`, `InvalidName`, `WeakPassphrase`, `InstanceAlreadyActive`. Writes `.pending` marker; hands passphrase + Genesis mode to `haex-crdt::init`; creates and stores the `ActiveInstanceHandle`, starts the Genesis Nostr relay and iroh peer, and completes runtime activation before returning the paper-seed.
+- [ ] **T036** [US1] Implement startup orphan-cleanup in `src-tauri/src/main.rs::setup`: on boot, scan `instances/` for Genesis `.pending` markers and delete both the marker and the sibling `.db`; do not remove import-pending files, which await unlock validation. Emit `instance-list-changed { reason: 'startup-cleanup' }`.
 - [ ] **T037** [P] [US1] Implement `src/components/onboarding/CreateSheet.vue`: `<UiSheet>` with `<UiRadioGroup>` (Genesis / Recover — Recover disabled with tooltip "Post-MVP" until US5), name field, two passphrase fields with match check, submit button. On submit calls `useInstance.createAsync(...)`.
 - [ ] **T038** [P] [US1] Implement `src/components/onboarding/PaperSeedDisplay.vue`: renders the seed in a monospaced block with a "Ich habe die Wiederherstellungs-Seed notiert" confirm checkbox and Continue button. Copy-to-clipboard is intentionally NOT in v1 (operator must physically record it — same as haex-vault Genesis-parallel flows).
-- [ ] **T039** [US1] Wire CreateSheet → PaperSeedDisplay in a two-step flow. On PaperSeedDisplay Continue, call `close_instance` NOT — the newly-created instance stays active. Navigate to `/federation/<name>`.
+- [ ] **T039** [US1] Wire CreateSheet → PaperSeedDisplay in a two-step flow. On PaperSeedDisplay Continue, call `confirm_create` (never `close_instance`); on cancellation call `abort_create`. After confirmation the newly-created instance stays active and the app navigates to `/federation/<name>`.
 - [ ] **T040** [P] [US1] Add Anlegen CTA to `pages/index.vue` as the first primary button; wire to open CreateSheet.
 - [ ] **T041** [P] [US1] i18n: `onboarding.create.title`, `onboarding.create.name`, `onboarding.create.passphrase`, `onboarding.create.passphraseConfirm`, `onboarding.create.submit`, `onboarding.create.paperSeed.title`, `onboarding.create.paperSeed.recorded`, `errors.nameConflict`, `errors.invalidName`, `errors.weakPassphrase`.
 
@@ -126,7 +126,7 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 
 ### Tests for US2
 
-- [ ] **T042** [P] [US2] Rust integration test with two `haex-crdt` handles: parent issues a pairing token, joiner submits, both attestations appear in both stores after sync.
+- [ ] **T042** [US2] `e2e/two-device-pairing.spec.ts`: launch two isolated Tauri app instances, have the parent issue a token, paste it into the joiner, verify relay delivery and `haex-crdt` synchronization of both attestations, then send the walking-skeleton ping and assert the pong. This is the MVP acceptance test.
 - [ ] **T043** [P] [US2] Rust test: expired token → `PairingTokenInvalid { reason: "expired" }`, no instance file created.
 - [ ] **T044** [P] [US2] Rust test: already-consumed token → `PairingTokenInvalid { reason: "already-consumed" }`.
 - [ ] **T045** [P] [US2] `e2e/onboarding.spec.ts::"verbinden happy path (mocked backend)"`: sheet opens, token pasted, submit, navigation succeeds.
@@ -135,7 +135,7 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 
 - [ ] **T046** [US2] Implement `src-tauri/src/pairing/join.rs`: token parsing, transcript construction, contact-hint dial into parent's relay, co-signature exchange. Depends on the presence-event / attestation surface being present in `haex-crdt` (may require a shim task tracked separately if `haex-crdt` isn't fully there).
 - [ ] **T047** [US2] Extend `create_instance` to route `CreateMode::Join` to `pairing::join::run`. Same orphan-file guarantee as Genesis.
-- [ ] **T048** [P] [US2] Implement `src/components/onboarding/ConnectSheet.vue`: `<UiSheet>` with token field (text input, monospace); QR scanner is behind a feature flag (`enableQrScan`) for v1 minimum and can be tackled in a follow-up (T054).
+- [ ] **T048** [P] [US2] Implement `src/components/onboarding/ConnectSheet.vue`: `<UiSheet>` with the pairing-token text field (monospace). QR/camera scanning is not part of v1; track it in a future onboarding spec rather than coupling it to the import task T054.
 - [ ] **T049** [P] [US2] Add Verbinden CTA to `pages/index.vue` (third primary button); wire to open ConnectSheet.
 - [ ] **T050** [P] [US2] i18n: `onboarding.connect.title`, `onboarding.connect.token`, `onboarding.connect.submit`, `errors.pairingTokenInvalid`.
 
@@ -151,17 +151,17 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 
 ### Tests for US3
 
-- [ ] **T051** [P] [US3] Rust test: `import_instance_file` with a valid throwaway SQLCipher file copies to target, leaves source untouched, emits `instance-list-changed { reason: 'imported' }`.
-- [ ] **T052** [P] [US3] Rust test: invalid file (not SQLCipher, or wrong extension) rejected before copy.
+- [ ] **T051** [P] [US3] Rust test: `import_instance_file` with a valid throwaway encrypted instance copies atomically to a pending target, leaves source untouched, emits `instance-list-changed { reason: 'imported' }`, and clears the marker after a successful unlock with the supplied passphrase.
+- [ ] **T052** [P] [US3] Rust test: invalid source (not a regular `.db`, structurally unreadable, or wrong extension) rejected before copy; encrypted-page validation is covered at unlock time.
 - [ ] **T053** [P] [US3] Rust test: name collision with `ConflictPolicy::Rename` produces `<name>-2.db`; with `Abort` returns `NameConflict`.
 - [ ] **T054** [P] [US3] `e2e/onboarding.spec.ts::"öffnen happy path"`: simulate a `plugin-dialog` selection → sheet completes → new item in list.
 
 ### Implementation for US3
 
-- [ ] **T055** [US3] Implement `src-tauri/src/instances/import.rs::import_instance_file` per contract, including atomic copy (temp + rename), SQLCipher magic check, conflict handling.
-- [ ] **T056** [P] [US3] Implement `src/components/onboarding/OpenSheet.vue`: `<UiSheet>` with "Datei wählen" button that calls `@tauri-apps/plugin-dialog::open({ filters: [{ name: 'Instance', extensions: ['db'] }] })`. Shows the selected path (basename only for privacy) and a "Importieren" button.
+- [ ] **T055** [US3] Implement `src-tauri/src/instances/import.rs::import_instance_file` per contract, including regular-file/extension validation, atomic copy (temp + rename), import-pending marker, conflict handling, and active-target rejection under the state lock. Defer SQLCipher credential validation to `open_instance`.
+- [ ] **T056** [P] [US3] Implement `src/components/onboarding/OpenSheet.vue`: `<UiSheet>` with "Datei wählen" button that calls `@tauri-apps/plugin-dialog::open({ filters: [{ name: 'Instance', extensions: ['db'] }] })`. Pass the picker-returned external `source_path` only to `import_instance_file`; show the basename only for privacy and provide an "Importieren" button. Managed instance paths never cross the frontend boundary.
 - [ ] **T057** [P] [US3] Add Öffnen CTA to `pages/index.vue` (second primary button, between Anlegen and Verbinden).
-- [ ] **T058** [P] [US3] Conflict resolution UI: if `import_instance_file` returns `NameConflict`, show a `<UiDialog>` with three options: Rename (default), Overwrite (requires confirming a checkbox), Cancel. Never silently overwrite.
+- [ ] **T058** [P] [US3] Conflict resolution UI: if `import_instance_file` returns `NameConflict`, show a `<UiDialog>` with three options: Rename (default), Overwrite (requires confirming a checkbox), Cancel. Never silently overwrite; an overwrite targeting the active instance is rejected under the backend state lock until that instance is explicitly closed.
 - [ ] **T059** [P] [US3] i18n: `onboarding.open.title`, `onboarding.open.chooseFile`, `onboarding.open.import`, `onboarding.open.conflict.title`, `onboarding.open.conflict.rename`, `onboarding.open.conflict.overwrite`, `onboarding.open.conflict.cancel`, `errors.notAValidInstance`.
 
 **Checkpoint**: US1 + US2 + US3 + US4 shipped → landing has all three CTAs plus Unlock.
@@ -194,7 +194,7 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 
 - [ ] **T066** [P] [-] Playwright network-assertion: build the production bundle, load in headless Chromium, assert zero requests to `api.iconify.design`, `fonts.googleapis.com`, `fonts.gstatic.com`, or any host outside the app's own scheme (satisfies SC-006).
 - [ ] **T067** [P] [-] Playwright visual snapshot: landing with 0, 1, 10 instances (satisfies SC-007).
-- [ ] **T068** [P] [-] Trash + list-remove context menu on `InstancesList` items per FR-023: `<UiDialog>` confirms trash; list-remove is not v1 UI-wise because the list is a directory scan — if the operator wants "aus Liste entfernen ohne Datei löschen", the only path is trash. Document this decision in `research.md`.
+- [ ] **T068** [P] [-] Trash context menu on `InstancesList` items per FR-023: `<UiDialog>` confirms trash. Do not expose list-remove-with-file-retained in v1 because the list is a directory scan without exclusion metadata; document this decision in `research.md`.
 - [ ] **T069** [P] [-] Passphrase strength meter component `<OnboardingPassphraseStrength>` for CreateSheet and ConnectSheet — pure UI, drives `WeakPassphrase` prevention client-side to match the backend policy.
 - [ ] **T070** [-] Run [`quickstart.md`](./quickstart.md) end-to-end from a fresh clone; fix any drift; commit updates.
 - [ ] **T071** [P] [-] Add `security-review` skill pass over the passphrase / seed / token handling paths. Address findings in a follow-up commit.
@@ -230,7 +230,7 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 
 ### MVP Definition
 
-MVP = US4 + US1 + US2 shipped end-to-end, plus a passing E2E test for the two-device pairing walking-skeleton (`v1-scope-design.md §11`).
+MVP = US4 + US1 + US2 shipped end-to-end, plus a passing `T042` E2E test using two running Tauri instances, real relay delivery, `haex-crdt` synchronization, and the two-device ping/pong walking-skeleton (`v1-scope-design.md §11`).
 
 ### Suggested Incremental Delivery
 

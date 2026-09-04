@@ -1,6 +1,6 @@
 # Quickstart: Frontend Onboarding
 
-**Goal**: from a fresh clone of `holzi`, reach a running Tauri window rendering the landing page with the three primary CTAs (Anlegen, Öffnen, Verbinden) and the "Zuletzt verwendet" list, in under 5 minutes on a warm machine.
+**Goal (post-implementation)**: after the frontend scaffold, `haex-crdt` extraction, and the implementation tasks are complete, reach a running Tauri window from a fresh clone of `holzi` that renders the landing page with the three primary CTAs (Anlegen, Öffnen, Verbinden) and the "Zuletzt verwendet" list, in under 5 minutes on a warm machine.
 
 **Prerequisites** on the host:
 

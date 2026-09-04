@@ -581,12 +581,13 @@ except Exception:
                     *'{CORE_TEMPLATE}'*) ;;
                     *) echo "Error: wrap strategy missing {CORE_TEMPLATE} placeholder" >&2; return 1 ;;
                 esac
-                while [[ "$layer_content" == *'{CORE_TEMPLATE}'* ]]; do
-                    local before="${layer_content%%\{CORE_TEMPLATE\}*}"
-                    local after="${layer_content#*\{CORE_TEMPLATE\}}"
-                    layer_content="${before}${content}${after}"
+                local composed=""
+                local remainder="$layer_content"
+                while [[ "$remainder" == *'{CORE_TEMPLATE}'* ]]; do
+                    composed+="${remainder%%\{CORE_TEMPLATE\}*}${content}"
+                    remainder="${remainder#*\{CORE_TEMPLATE\}}"
                 done
-                content="$layer_content"
+                content="${composed}${remainder}"
                 ;;
             *) echo "Error: unknown strategy '$strat'" >&2; return 1 ;;
         esac
@@ -595,4 +596,3 @@ except Exception:
     printf '%s' "$content"
     return 0
 }
-

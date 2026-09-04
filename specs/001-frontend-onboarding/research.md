@@ -50,6 +50,7 @@ Departures from haex-vault:
 - No `Import` component that reads a `.kdbx`-style file — holzi's "Öffnen" is the closest analog and always copies (never imports/converts).
 - No `Connect` component talking to a sync backend — holzi's "Verbinden" is peer-pairing.
 - No "recent" list that differs from "all instances" — the two are the same list, sorted by last-access.
+- The backend refreshes the database mtime after each successful unlock; that mtime is the persisted `lastAccess` value returned by `list_instances`.
 
 ## `@nuxt/icon` local-bundle configuration
 
@@ -94,6 +95,7 @@ Cost: manual transcription is slower. Acceptable for a one-time genesis step. If
 - LLM chat UI, MCP surfaces, per-device policy screens. Own specs.
 - Biometric unlock (`@choochmeque/tauri-plugin-biometry-api` in haex-vault). Post-v1.
 - Instance rename / merge / export. Post-v1; export is intentionally absent (see above).
-- QR scanner implementation (only the token text input ships in v1; QR is behind a feature flag). Follow-up.
+- List removal while retaining the file. The v1 list is a directory scan with no exclusion metadata, so the only removal action is moving an instance to `.trash`.
+- QR scanner implementation (only the token text input ships in v1; camera scanning is deferred to a follow-up spec). Follow-up.
 - Tour / onboarding walkthrough (`driver.js` in haex-vault). Post-v1.
 - Font choice + hosting. Assumed system-font stack for v1; if we later add a custom font, it MUST ship locally (same SC-006 rule).

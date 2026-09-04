@@ -41,12 +41,18 @@ mkdir -p "$FEATURE_DIR"
 # Copy plan template if it exists
 TEMPLATE=$(resolve_template "plan-template" "$REPO_ROOT") || true
 if [[ -n "$TEMPLATE" ]] && [[ -f "$TEMPLATE" ]]; then
-    cp "$TEMPLATE" "$IMPL_PLAN"
-    echo "Copied plan template to $IMPL_PLAN"
+    if [[ ! -e "$IMPL_PLAN" ]]; then
+        cp "$TEMPLATE" "$IMPL_PLAN"
+        echo "Copied plan template to $IMPL_PLAN"
+    else
+        echo "Keeping existing plan at $IMPL_PLAN"
+    fi
 else
     echo "Warning: Plan template not found"
     # Create a basic plan file if template doesn't exist
-    touch "$IMPL_PLAN"
+    if [[ ! -e "$IMPL_PLAN" ]]; then
+        touch "$IMPL_PLAN"
+    fi
 fi
 
 # Output results
@@ -70,4 +76,3 @@ else
     echo "BRANCH: $CURRENT_BRANCH"
     echo "HAS_GIT: $HAS_GIT"
 fi
-

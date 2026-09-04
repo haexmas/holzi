@@ -14,3 +14,12 @@ See [docs/design/founding.md](docs/design/founding.md) for the founding architec
 ## Status
 
 Draft. No code yet. Founding design captured 2026-09-04.
+
+## Development setup
+
+The repository uses the Claude speckit integration. After a fresh clone,
+restore the ignored local `/speckit.*` entrypoints with:
+
+```bash
+specify init --here --ai claude --offline
+```

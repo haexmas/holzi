@@ -5,7 +5,7 @@
 
 ## Summary
 
-Deliver the holzi Tauri app's first-impression surfaces: a landing page with three primary actions (Anlegen, Öffnen, Verbinden) mirroring haex-vault's landing pattern, plus a Zuletzt-verwendet list and an Unlock sheet for existing instances. Frontend is Nuxt 4 (SPA) with Tailwind v4, shadcn-vue components (copy-in), Pinia stores, `@nuxtjs/i18n`, and `@nuxt/icon` fed from a locally-bundled Lucide icon set. Backend is a set of five Tauri commands over the `haex-crdt` layer that manage `<name>.db` files under `<AppLocalData>/instances/`, plus a `close_instance` for safe hand-off between active instances. This slice is the minimum surface required to reach the walking-skeleton described in `docs/plans/2026-09-04-v1-scope-design.md §11` (two devices paired into one federation, exchanging a ping).
+Deliver the holzi Tauri app's first-impression surfaces: a landing page with three primary actions (Anlegen, Öffnen, Verbinden) mirroring haex-vault's landing pattern, plus a Zuletzt-verwendet list and an Unlock sheet for existing instances. Frontend is Nuxt 4 (SPA) with Tailwind v4, shadcn-vue components (copy-in), Pinia stores, `@nuxtjs/i18n`, and `@nuxt/icon` fed from a locally-bundled Lucide icon set. Backend is a set of Tauri commands over the `haex-crdt` layer that manage `<name>.db` files under `<AppLocalData>/instances/`, including the two-phase Genesis boundary and atomic active-instance switching. This slice is the minimum surface required to reach the walking-skeleton described in `docs/plans/2026-09-04-v1-scope-design.md §11` (two devices paired into one federation, exchanging a ping).
 
 ## Technical Context
 
@@ -41,8 +41,8 @@ Deliver the holzi Tauri app's first-impression surfaces: a landing page with thr
 **Constraints**:
 - Offline-capable: zero external CDN or icon-API traffic (SC-006, FR-027).
 - App must never write outside `<AppLocalData>/instances/` for instance data.
-- The frontend must never construct or receive filesystem paths for instances (FR-025).
-- Only one active instance at runtime (FR-022) — enforced backend-side, surfaced as a typed error.
+- The frontend must never construct or receive managed-instance filesystem paths (FR-025); the external picker path is permitted only as the `import_instance_file` source argument.
+- Only one active instance at runtime (FR-022) — enforced backend-side by the state-locked atomic switch.
 
 **Scale/Scope**:
 - v1 typical operator: 1–3 instances on desktop, 1 on mobile. UI must render acceptably up to ~50 instances (SC-007 covers 10+; 50 is a soft ceiling).
@@ -51,7 +51,7 @@ Deliver the holzi Tauri app's first-impression surfaces: a landing page with thr
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-The repo's constitution reference is `.haex-hive.json → com.github.haexmas.haex-hive.constitution` (revision `336eaf1e`). This spec does not attempt to import and re-render the full constitution — its NON-NEGOTIABLE principles apply session-wide per `~/.claude/CLAUDE.md` haex-hive detection block. Gates that touch this feature:
+The repo's constitution reference is `.haex-hive.json → com.github.haexmas.haex-hive.constitution` (revision `336eaf1e`). The live speckit constitution in `.specify/memory/constitution.md` mirrors that pinned source so constitution-dependent gates have concrete rules. Gates that touch this feature:
 
 - **No secrets in git**: instance DBs live under `<AppLocalData>/`, never inside the repo. Fixtures for tests use throwaway paths under `tmp/`. ✅
 - **Local-only artifacts**: all icons, fonts, translations, and templates are bundled at build time. No runtime CDN. ✅ (FR-027, SC-006)
@@ -99,7 +99,7 @@ src/                                 # Nuxt frontend (SPA)
 │   └── onboarding/                  # Feature components → <OnboardingCreateSheet>, ...
 │       ├── CreateSheet.vue          # Anlegen — Genesis + Recover sub-modes
 │       ├── OpenSheet.vue            # Öffnen — file picker + copy
-│       ├── ConnectSheet.vue         # Verbinden — QR/token pairing
+│       ├── ConnectSheet.vue         # Verbinden — text-token pairing
 │       ├── UnlockSheet.vue          # Passphrase entry for existing instance
 │       ├── PaperSeedDisplay.vue     # Read-once seed presentation
 │       └── InstancesList.vue        # Zuletzt-verwendet list

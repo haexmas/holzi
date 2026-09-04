@@ -8,7 +8,7 @@
 
 ### `list_instances`
 
-Scans `<AppLocalData>/instances/` for `.db` files (excluding the `.trash/` subdirectory) and returns metadata.
+Scans `<AppLocalData>/instances/` for `.db` files (excluding the `.trash/` subdirectory and pending Genesis files) and returns metadata.
 
 ```rust
 #[tauri::command]
@@ -60,6 +60,7 @@ pub struct CreateInstanceResult {
     pub info: InstanceInfo,
     pub paper_seed: Option<String>,       // Some for Genesis, None otherwise
     pub root_fingerprint: Option<String>, // Some for Recover (matched), None otherwise
+    pub requires_confirmation: bool,      // True for Genesis until confirm_create
 }
 ```
 
@@ -77,9 +78,9 @@ const result = await invoke<CreateInstanceResult>('create_instance', {
 
 **Preconditions**: `name` matches `^[A-Za-z0-9][A-Za-z0-9_\-]{0,63}$`; passphrase meets min-length policy; no active instance in `AppState`.
 
-**Postconditions on success**: `<name>.db` exists, is unlocked, is bound as the active instance in `AppState`. Backend emits `instance-list-changed`.
+**Postconditions on success**: `<name>.db` exists, is unlocked, is bound as the active instance in `AppState`, and the Genesis `.pending` marker remains until `confirm_create`. The Nostr relay and iroh peer are already running before the result is returned. Backend emits `instance-list-changed`.
 
-**Postconditions on failure**: no partial file on disk. If a file was created before failure, backend deletes it. A `.pending` marker (empty file next to the `.db` during Genesis) is removed on startup if orphaned.
+**Postconditions on failure**: no partial file on disk. If a file was created before failure, backend deletes it. A `<name>.db.pending` marker (empty file next to the `.db` during Genesis) is removed with its sibling on startup if orphaned.
 
 **Failure modes**:
 
@@ -93,9 +94,55 @@ const result = await invoke<CreateInstanceResult>('create_instance', {
 
 ---
 
+### `confirm_create`
+
+Finalizes a successful Genesis flow after the operator confirms that the paper-seed was recorded. It is the commit point for the `.pending` marker; the active runtime remains open.
+
+```rust
+#[tauri::command]
+pub async fn confirm_create(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    args: ConfirmCreateArgs,
+) -> Result<InstanceInfo, HolziError>;
+
+pub struct ConfirmCreateArgs {
+    pub name: String,
+}
+```
+
+**Preconditions**: `<name>.db` is the active instance created by the current Genesis flow and its `.pending` marker exists.
+
+**Postconditions**: the marker is removed atomically, the instance remains active, and `instance-list-changed { reason: 'created', affectedName: name }` is emitted. A confirmed instance is never removed by startup orphan cleanup.
+
+**Failure modes**: `NotFound`, `InstanceActive`, or `Io`. Failure leaves the marker and database intact so confirmation can be retried.
+
+---
+
+### `abort_create`
+
+Cancels a pending Genesis flow. It shuts down the runtime, removes the pending database and marker, clears `AppState.active_instance`, and emits `instance-list-changed { reason: 'aborted' }` only after both files are gone.
+
+```rust
+#[tauri::command]
+pub async fn abort_create(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    args: AbortCreateArgs,
+) -> Result<(), HolziError>;
+
+pub struct AbortCreateArgs {
+    pub name: String,
+}
+```
+
+The command is idempotent for an already-cleaned pending flow. It MUST NOT remove a confirmed instance.
+
+---
+
 ### `open_instance`
 
-Opens an existing `.db`, unlocks SQLCipher, starts Nostr relay + iroh peer, marks active in `AppState`.
+Opens an existing `.db`, unlocks SQLCipher, starts Nostr relay + iroh peer, marks active in `AppState`. If another instance is active, the command performs the close-and-open switch as one state-locked operation.
 
 ```rust
 #[tauri::command]
@@ -111,15 +158,16 @@ pub struct OpenInstanceArgs {
 }
 ```
 
-**Preconditions**: `<name>.db` exists; no active instance (call `close_instance` first).
+**Preconditions**: `<name>.db` exists and is not a pending Genesis database. An imported database with an import-pending marker may be opened; its SQLCipher credential validation is completed by this command.
 
-**Postconditions on success**: SQLCipher unlocked; Nostr relay listening; iroh peer online; `AppState.active_instance = Some(...)`. Backend emits `instance-list-changed` (last-access bumped).
+**Postconditions on success**: SQLCipher unlocked; Nostr relay listening; iroh peer online; `AppState.active_instance = Some(...)`; the database mtime is refreshed to the current time as the persisted `lastAccess`; and any import-pending marker is removed. If another instance was active, it is fully closed before the new one becomes visible. Backend emits `instance-list-changed` (last-access bumped).
+
+**Atomic switch and rollback**: the state lock is held from validation through shutdown of the previous runtime and activation of the requested runtime. No concurrent command can observe a half-switched state. If any requested startup step fails, every service started for the requested instance is stopped, its database handle is dropped, and `AppState.active_instance` is cleared. The import-pending copy and marker are removed on credential or database validation failure. A subsequent `open_instance` attempt starts from clean state; the previous instance is not silently resumed.
 
 **Failure modes**:
 
 - `HolziError::NotFound { name }` — no such file.
 - `HolziError::WrongPassphrase` — SQLCipher rejected. **The frontend MUST NOT expose whether the error was `NotFound` vs `WrongPassphrase`** (FR-021); it renders both as a generic "Öffnen fehlgeschlagen". The typed error is for logs and telemetry only.
-- `HolziError::InstanceAlreadyActive` — see above.
 - `HolziError::Io` — read error.
 
 ---
@@ -131,9 +179,12 @@ Closes the currently-active instance: shuts down Nostr relay, disconnects iroh p
 ```rust
 #[tauri::command]
 pub async fn close_instance(
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), HolziError>;
 ```
+
+After a successful close of an active instance, emit `instance-list-changed { reason: 'closed', affectedName: name }`. The event requires the `AppHandle` dependency; an idempotent close with no active instance emits no mutation event.
 
 **Failure modes**:
 
@@ -143,17 +194,18 @@ pub async fn close_instance(
 
 ### `import_instance_file`
 
-Copies an external `.db` file into `<AppLocalData>/instances/`. Validates it is a readable SQLCipher database before copying.
+Copies an external `.db` file into `<AppLocalData>/instances/`. Structural validation happens before copying; SQLCipher credential validation is completed by `open_instance`.
 
 ```rust
 #[tauri::command]
 pub async fn import_instance_file(
     app: AppHandle,
+    state: State<'_, AppState>,
     args: ImportInstanceArgs,
 ) -> Result<ImportInstanceResult, HolziError>;
 
 pub struct ImportInstanceArgs {
-    pub source_path: String,        // Absolute path chosen by user via plugin-dialog
+    pub source_path: String,        // External path returned by plugin-dialog; never a managed path
     pub on_conflict: ConflictPolicy,
 }
 
@@ -166,19 +218,23 @@ pub enum ConflictPolicy {
 pub struct ImportInstanceResult {
     pub info: InstanceInfo,
     pub renamed_from: Option<String>,  // Set if on_conflict=Rename triggered
+    pub pending_validation: bool,      // True until open_instance validates the passphrase
 }
 ```
 
 **Notes**:
 
-- Source path is trusted from the frontend ONLY because it came from `@tauri-apps/plugin-dialog`, which the OS gates. The command still validates the path is a regular file and that the extension is `.db`.
-- Copy is atomic (write to temp path, `rename` into place). On any error the temp file is deleted.
+- `source_path` is the external file path returned by `@tauri-apps/plugin-dialog`; it is the only path accepted from the frontend. It is not a managed-instance path. The command validates that it is a regular file and that the extension is `.db`.
+- SQLCipher page validation is deferred until `open_instance`, where the operator supplies the passphrase. The copied file is marked by a sibling `<name>.import-pending` marker so an invalid credential or database causes the copied file and marker to be removed atomically; the source file is never touched.
+- Copy is atomic (write to temp path, `rename` into place) and creates the import-pending marker as part of the same backend-owned operation. On any error the temp file and marker are deleted.
+- For `ConflictPolicy::Overwrite`, the command checks the target name while holding the `AppState` lock and rejects replacement if that name is the active instance. The frontend must close that instance explicitly before retrying overwrite.
 - The source file is never modified or moved.
 
 **Failure modes**:
 
-- `HolziError::NotAValidInstance { reason }` — file is not readable, wrong magic, or SQLCipher rejects the header check.
+- `HolziError::NotAValidInstance { reason }` — the source is not a regular `.db` file or fails structural validation before copying.
 - `HolziError::NameConflict { name }` — only when `on_conflict = Abort`.
+- `HolziError::InstanceActive { name }` — `Overwrite` targets the active instance.
 - `HolziError::Io` — copy failed.
 
 ---
@@ -208,9 +264,9 @@ pub struct TrashInstanceArgs {
 
 ---
 
-### `forget_instance` *(v1 optional)*
+### `forget_instance` *(out of v1 scope)*
 
-Removes an instance from the frontend list without touching the file — a no-op in this design because the list is a directory scan, not a stored preference. Included for API-shape parity with haex-vault; may be removed if not surfaced in v1 UI.
+Not exposed in v1. Because the list is a directory scan, removing an item while retaining its file would require persistent exclusion metadata. The only v1 removal action is `move_instance_to_trash`.
 
 ## Error type
 

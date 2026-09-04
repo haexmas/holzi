@@ -20,7 +20,8 @@ Metadata for one instance in the list. No secrets.
 #[serde(rename_all = "camelCase")]
 pub struct InstanceInfo {
     pub name: String,              // Filename basename without `.db`
-    pub last_access: String,       // ISO-8601, from file mtime or a persisted last-open
+    pub alias: String,             // Non-secret user-visible label; defaults to `name`
+    pub last_access: String,       // ISO-8601, from the database mtime; open_instance refreshes it
     pub size_bytes: u64,           // File size at scan time
 }
 ```
@@ -30,6 +31,7 @@ pub struct InstanceInfo {
 ```ts
 export type InstanceInfo = {
   name: string
+  alias: string
   lastAccess: string
   sizeBytes: number
 }
@@ -69,7 +71,7 @@ pub enum ConflictPolicy {
 }
 ```
 
-### `CreateInstanceArgs`, `CreateInstanceResult`, `OpenInstanceArgs`, `ImportInstanceArgs`, `ImportInstanceResult`, `TrashInstanceArgs`
+### `CreateInstanceArgs`, `CreateInstanceResult`, `ConfirmCreateArgs`, `AbortCreateArgs`, `OpenInstanceArgs`, `ImportInstanceArgs`, `ImportInstanceResult`, `TrashInstanceArgs`
 
 See [`tauri-commands.md`](./tauri-commands.md). All derive `TS` with `#[serde(rename_all = "camelCase")]` for consistent camelCase field names on the wire.
 
@@ -87,5 +89,5 @@ See [`tauri-commands.md`](./tauri-commands.md) → "Error type". Serialized as a
 ## Naming rules
 
 - Rust struct names are `PascalCase`; TS exports the same names.
-- Enum variants: `PascalCase` on both sides; `#[serde(tag = "type")]` for external-tagged discriminant `type` (data enums) and `#[serde(tag = "kind")]` for `HolziError` — chosen to keep error-vs-mode discriminators visually distinct in logs.
+- Enum variants: `PascalCase` on both sides; `#[serde(tag = "type")]` for internally tagged discriminant `type` (data enums) and `#[serde(tag = "kind")]` for `HolziError` — chosen to keep error-vs-mode discriminators visually distinct in logs.
 - Field names: Rust `snake_case`, wire `camelCase` (via `#[serde(rename_all = "camelCase")]`), TS `camelCase`.
