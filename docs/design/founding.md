@@ -2,7 +2,9 @@
 
 **Status**: Draft. Founding design captured 2026-09-04.
 
-**Revised by**: [`docs/plans/2026-09-04-v1-scope-design.md`](../plans/2026-09-04-v1-scope-design.md). That document draws the v1 scope line and revises the identity/pairing model, the storage layer (introducing `haex-crdt`), and the mobile availability model. Where the two documents disagree for v1, the plans document wins.
+**Revised by**:
+- [`docs/plans/2026-09-04-v1-scope-design.md`](../plans/2026-09-04-v1-scope-design.md). That document draws the v1 scope line and revises the identity/pairing model, the storage layer (introducing `haex-crdt`), and the mobile availability model. Where the two documents disagree for v1, the plans document wins.
+- [`specs/001-frontend-onboarding/spec.md`](../../specs/001-frontend-onboarding/spec.md). First speckit spec. Refines §2.2 "Device equals relay equals Tauri application" to "the *active* SQLite instance equals the running Nostr relay endpoint equals the running iroh peer" — the Tauri application is a container that may hold multiple `.db` files on disk with exactly one active at a time. Rationale in [`specs/001-frontend-onboarding/research.md → Storage-file model`](../../specs/001-frontend-onboarding/research.md).
 
 **What holzi is**: a portable, isolated personal-agent app. Runs as a Tauri application on any device the operator owns. All LLM credentials, model choice, and history live inside the app. LLM interactions happen inside holzi; the host system's LLM configuration (if any) is unrelated. External access to holzi is only via MCP.
 
