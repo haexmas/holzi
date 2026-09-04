@@ -2,7 +2,9 @@
 
 **Status**: Draft. Founding design captured 2026-09-04.
 
-**Revised by**: [`docs/plans/2026-09-04-v1-scope-design.md`](../plans/2026-09-04-v1-scope-design.md). That document draws the v1 scope line and revises the identity/pairing model, the storage layer (introducing `haex-crdt`), and the mobile availability model. Where the two documents disagree for v1, the plans document wins.
+**Revised by**:
+- [`docs/plans/2026-09-04-v1-scope-design.md`](../plans/2026-09-04-v1-scope-design.md). That document draws the v1 scope line and revises the identity/pairing model, the storage layer (introducing `haex-crdt`), and the mobile availability model. Where the two documents disagree for v1, the plans document wins.
+- [`specs/001-frontend-onboarding/spec.md`](../../specs/001-frontend-onboarding/spec.md). First speckit spec. Refines §2.2 "Device equals relay equals Tauri application" to "the *active* SQLite instance equals the running Nostr relay endpoint equals the running iroh peer" — the Tauri application is a container that may hold multiple `.db` files on disk with exactly one active at a time. Rationale in [`specs/001-frontend-onboarding/research.md → Storage-file model`](../../specs/001-frontend-onboarding/research.md).
 
 **What holzi is**: a portable, isolated personal-agent app. Runs as a Tauri application on any device the operator owns. All LLM credentials, model choice, and history live inside the app. LLM interactions happen inside holzi; the host system's LLM configuration (if any) is unrelated. External access to holzi is only via MCP.
 
@@ -14,7 +16,7 @@
 
 ## 0. Normative status
 
-This is a design record. Every requirement below has to be re-expressed as a numbered spec (holzi's own spec system, to be defined) before any code moves. Field names, event kinds, wire formats and identity derivations are working proposals, not settled interfaces.
+This is a design record. Every requirement below has to be re-expressed as a numbered spec before any code moves. Holzi adopted the full speckit workflow on 2026-09-04; `specs/001-frontend-onboarding/` is its first numbered spec. Field names, event kinds, wire formats and identity derivations are working proposals, not settled interfaces.
 
 ## 1. What holzi is, and what it is not
 
@@ -148,7 +150,7 @@ Recorded here so the follow-up spec work knows its scope:
 
 Ordered by the earliest thing that must exist for the rest to have a normative home.
 
-1. **Project structure and spec workflow for holzi.** How normative slices are captured, reviewed, and versioned. haex-hive uses speckit; whether holzi adopts speckit, adopts it lightly, or picks a different approach is an open first decision.
+1. **Project structure and spec workflow for holzi.** Resolved on 2026-09-04: holzi uses the full speckit workflow; `specs/001-frontend-onboarding/` is the first normative slice. Future specs continue to be captured, reviewed, and versioned there.
 2. **Spec for the attestation event and device registry.** The smallest normative slice, no transport yet.
 3. **Spec for the two-track ingress policy** with concrete event kinds and the relay policy engine surface.
 4. **Spec for the `blob.offer` announcement, ticket lifecycle, and iroh accept-handler.**

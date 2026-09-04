@@ -7,3 +7,7 @@ Thumbs.db
 *.swo
 .vscode/
 .idea/
+
+# AI agent scratch — may hold credentials or session state.
+# See specify init warning: keep out of the repository.
+.claude/

@@ -164,3 +164,8 @@ Once this document is committed:
 
 1. Wait on haex-hive migration and `haex-crdt` extraction.
 2. Start the "Project structure and spec workflow" question (`founding.md` §5 item 1): whether to adopt speckit as haex-hive does, adopt it lightly, or use a different approach. This can begin before the two blockers clear.
+
+## 14. Follow-up decisions (post-drafting)
+
+- **Speckit adopted** (2026-09-04): decision on §13 item 2 resolved in favor of full speckit initialization. `specify init --here --ai claude --offline` was run; `.specify/`, `.claude/skills/speckit-*`, and `CLAUDE.md` (speckit block) are in place.
+- **First spec written**: [`specs/001-frontend-onboarding/`](../../specs/001-frontend-onboarding/) covers the Landing / Anlegen / Öffnen / Verbinden / Unlock surface. It also revises `founding.md` §2.2 to permit multiple `.db` files per install with exactly one active — see that spec's [`research.md → Storage-file model`](../../specs/001-frontend-onboarding/research.md) for the rationale. This revision does not change v1 scope; it changes how the walking-skeleton is reached (per §11) and how `<AppLocalData>/instances/` is laid out on disk.
