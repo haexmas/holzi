@@ -115,7 +115,7 @@ pub struct ConfirmCreateArgs {
 
 **Postconditions**: the marker is removed atomically, the instance remains active, and `instance-list-changed { reason: 'created', affectedName: name }` is emitted. A confirmed instance is never removed by startup orphan cleanup.
 
-**Failure modes**: `NotFound`, `InstanceActive`, or `Io`. Failure leaves the marker and database intact so confirmation can be retried.
+**Failure modes**: `NotFound`, `InstanceMismatch`, or `Io`. `InstanceMismatch` means that a different instance is active than the pending Genesis instance named by the command. Failure leaves the marker and database intact so confirmation can be retried.
 
 ---
 
@@ -168,6 +168,7 @@ pub struct OpenInstanceArgs {
 
 - `HolziError::NotFound { name }` — no such file.
 - `HolziError::WrongPassphrase` — SQLCipher rejected. **The frontend MUST NOT expose whether the error was `NotFound` vs `WrongPassphrase`** (FR-021); it renders both as a generic "Öffnen fehlgeschlagen". The typed error is for logs and telemetry only.
+- `HolziError::NotAValidInstance { reason }` — the database or SQLCipher format is invalid. For an import-pending copy, the backend removes the copy and its marker before returning this explicit error.
 - `HolziError::Io` — read error.
 
 ---
@@ -292,6 +293,9 @@ pub enum HolziError {
 
     #[error("An instance is already active")]
     InstanceAlreadyActive,
+
+    #[error("Instance '{name}' is not the pending active creation")]
+    InstanceMismatch { name: String },
 
     #[error("Instance '{name}' is active; close it before this operation")]
     InstanceActive { name: String },

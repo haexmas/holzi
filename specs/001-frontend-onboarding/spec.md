@@ -56,7 +56,7 @@ The operator has an instance file (`.db`) on the host filesystem — for example
 
 1. **Given** a valid `.db` file at an arbitrary path, **When** the operator selects it in the Öffnen sheet, **Then** the file is copied into `instances/`, appears in the list, and unlocks with its original passphrase.
 2. **Given** a file whose name conflicts with an existing instance, **When** the operator confirms the import, **Then** the operator is prompted for either overwrite, rename, or cancel — default behavior is rename with a numeric suffix, no silent overwrite.
-3. **Given** a file that is not a valid holzi/SQLCipher database, **When** the operator selects it, **Then** the import is rejected with an explicit "not a holzi instance" error before any copy occurs.
+3. **Given** a regular `.db` file whose SQLCipher or holzi format cannot be validated without its passphrase, **When** the operator imports and then attempts to unlock it, **Then** `open_instance` rejects it with an explicit error and removes the pending imported copy and marker; structural source failures are still rejected before copying.
 
 ---
 
