@@ -8,25 +8,26 @@ Backend emits events via `AppHandle::emit(topic, payload)`. Frontend subscribes 
 
 ### `instance-list-changed`
 
-Emitted whenever the set of files in `<AppLocalData>/instances/` changes as a result of a backend command: create, open (last-access bump), close (active-state transition), import, trash. Also emitted on startup after any orphan-cleanup pass and for changes made outside the Tauri command handlers.
+Emitted whenever a backend command mutates the set of files in `<AppLocalData>/instances/`: create, confirm-create, abort-create, open (last-access bump), close (active-state transition), import, trash. Also emitted on startup after any orphan-cleanup pass.
 
 **Payload**:
 
 ```ts
 type InstanceListChanged = {
-  reason: 'created' | 'opened' | 'closed' | 'imported' | 'trashed' | 'aborted' | 'startup-cleanup' | 'external-change'
+  reason: 'created' | 'opened' | 'closed' | 'imported' | 'trashed' | 'aborted' | 'startup-cleanup'
   affectedName?: string   // Present for single-instance mutations
-  source?: 'external-directory-watcher' | 'android-share-intent'
 }
 ```
 
 **Consumer behavior**:
 
-The `useInstancesStore` Pinia store subscribes in its factory and calls `syncAsync()` on every event. The `reason` and optional `source` fields are intended for future telemetry and for tests to assert cause; the store does not branch on them.
+The `useInstancesStore` Pinia store subscribes in its factory and calls `syncAsync()` on every event. The `reason` field is intended for future telemetry and for tests to assert cause; the store does not branch on it.
 
 **Why an event and not polling**:
 
-Mutations can originate outside the drawer UI (Android share-intent, CLI, or another process editing the directory). At startup the backend registers a debounced watcher for the instances directory. A create, remove, or rename observed from the CLI or another process triggers a rescan and one `external-change` event with `source: 'external-directory-watcher'`. The Android share-intent handler copies the selected file through the same backend-owned destination path and emits an `external-change` event with `source: 'android-share-intent'` after the copy succeeds. The watcher is the fallback for share-intent implementations that materialize a file directly. Polling would either be wasteful or laggy. haex-vault uses the same pattern for `vault-list-changed` (see [`stores/vault/lastVaults.ts:37`](../../../../haex-vault/src/stores/vault/lastVaults.ts#L37)).
+Every mutation in v1 goes through a Tauri command, so the command handler is the authoritative producer. Polling would be wasteful. haex-vault uses the same pattern for `vault-list-changed` (see [`stores/vault/lastVaults.ts:37`](../../../../haex-vault/src/stores/vault/lastVaults.ts#L37)).
+
+**Explicitly not in v1**: a filesystem watcher on the instances directory for changes made outside the app (CLI drop-in, third-party file managers). v1 has no CLI, no share-intent code path that bypasses `import_instance_file`, and no other in-scope mutator. If such a path is introduced later, the watcher (with a debounce and platform-specific backend) can be added then; the event shape above accommodates it without a breaking change.
 
 ### `active-instance-changed` *(v1 optional)*
 

@@ -129,15 +129,16 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 - [ ] **T042** [US2] `e2e/two-device-pairing.spec.ts`: launch two isolated Tauri app instances, have the parent issue a token, paste it into the joiner, verify relay delivery and `haex-crdt` synchronization of both attestations, then send the walking-skeleton ping and assert the pong. This is the MVP acceptance test.
 - [ ] **T043** [P] [US2] Rust test: expired token → `PairingTokenInvalid { reason: "expired" }`, no instance file created.
 - [ ] **T044** [P] [US2] Rust test: already-consumed token → `PairingTokenInvalid { reason: "already-consumed" }`.
-- [ ] **T045** [P] [US2] `e2e/onboarding.spec.ts::"verbinden happy path (mocked backend)"`: sheet opens, token pasted, submit, navigation succeeds.
+- [ ] **T045** [P] [US2] `e2e/onboarding.spec.ts::"verbinden happy path (mocked backend)"`: two variants — (a) token pasted into the text fallback, submit, navigation succeeds; (b) camera mocked at the `getUserMedia` boundary to yield a QR image encoding a valid token, `html5-qrcode` decodes it, submit, navigation succeeds.
 
 ### Implementation for US2
 
 - [ ] **T046** [US2] Implement `src-tauri/src/pairing/join.rs`: token parsing, transcript construction, contact-hint dial into parent's relay, co-signature exchange. Depends on the presence-event / attestation surface being present in `haex-crdt` (may require a shim task tracked separately if `haex-crdt` isn't fully there).
 - [ ] **T047** [US2] Extend `create_instance` to route `CreateMode::Join` to `pairing::join::run`. Same orphan-file guarantee as Genesis.
-- [ ] **T048** [P] [US2] Implement `src/components/onboarding/ConnectSheet.vue`: `<UiSheet>` with the pairing-token text field (monospace). QR/camera scanning is not part of v1; track it in a future onboarding spec rather than coupling it to the import task T054.
+- [ ] **T048** [P] [US2] Implement `src/components/onboarding/ConnectSheet.vue`: `<UiSheet>` whose primary control is a live camera preview + QR decoder using `html5-qrcode` (same library haex-vault uses, works via `getUserMedia` in the Tauri webview on desktop and native camera on Android/iOS). Fallback text-input for the same token below the scanner. On successful decode, populate the token field and enable submit. Sheet exposes a camera-permission prompt and a graceful "Kamera nicht verfügbar — Token eingeben" state.
 - [ ] **T049** [P] [US2] Add Verbinden CTA to `pages/index.vue` (third primary button); wire to open ConnectSheet.
-- [ ] **T050** [P] [US2] i18n: `onboarding.connect.title`, `onboarding.connect.token`, `onboarding.connect.submit`, `errors.pairingTokenInvalid`.
+- [ ] **T050** [P] [US2] i18n: `onboarding.connect.title`, `onboarding.connect.scan`, `onboarding.connect.cameraUnavailable`, `onboarding.connect.token`, `onboarding.connect.submit`, `errors.pairingTokenInvalid`.
+- [ ] **T050a** [P] [US2] Add `html5-qrcode` (^2.3.8, matching haex-vault) to `package.json`. Tauri camera permission: on Android configure `<uses-permission android:name="android.permission.CAMERA" />` in `src-tauri/gen/android/app/src/main/AndroidManifest.xml`; on iOS add `NSCameraUsageDescription` to `Info.plist`. Desktop uses standard WebRTC — no extra config.
 
 **Checkpoint**: US1 + US2 + US4 shipped → holzi v1 walking-skeleton fully reachable via UI. Two devices can be paired end-to-end from a fresh install.
 

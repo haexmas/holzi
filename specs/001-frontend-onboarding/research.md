@@ -96,6 +96,6 @@ Cost: manual transcription is slower. Acceptable for a one-time genesis step. If
 - Biometric unlock (`@choochmeque/tauri-plugin-biometry-api` in haex-vault). Post-v1.
 - Instance rename / merge / export. Post-v1; export is intentionally absent (see above).
 - List removal while retaining the file. The v1 list is a directory scan with no exclusion metadata, so the only removal action is moving an instance to `.trash`.
-- QR scanner implementation (only the token text input ships in v1; camera scanning is deferred to a follow-up spec). Follow-up.
+- Filesystem watcher on `<AppLocalData>/instances/`. All v1 mutations go through Tauri commands that emit `instance-list-changed`; no CLI, share-intent bypass, or third-party file-manager path is in scope. If one is later added, a watcher can be introduced without a wire-format break — the `InstanceListChanged` payload is designed to accept new `reason` values.
 - Tour / onboarding walkthrough (`driver.js` in haex-vault). Post-v1.
 - Font choice + hosting. Assumed system-font stack for v1; if we later add a custom font, it MUST ship locally (same SC-006 rule).
