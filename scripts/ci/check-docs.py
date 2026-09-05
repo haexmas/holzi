@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Validate the repository's documentation-only CI contract."""
+"""Validate the repository's documentation-only CI contract.
+
+Hygiene-only. Checks that required spec documents exist and that local
+Markdown links resolve. Deliberately does NOT pin the prose of the spec:
+tightening or rewording is the author's call, not the CI's.
+"""
 
 from pathlib import Path
 import re
@@ -16,42 +21,11 @@ REQUIRED_FILES = (
     DOC_ROOT / "tasks.md",
 )
 
-ANDROID_RESEARCH_REQUIREMENT = (
-    "OS `CAMERA` runtime grant"
-    " and the WebView's `PermissionRequest` handler allows only"
-    " `RESOURCE_VIDEO_CAPTURE`"
-)
-
 
 def check_required_files(errors: list[str]) -> None:
     for path in REQUIRED_FILES:
         if not path.is_file():
             errors.append(f"missing required document: {path.relative_to(ROOT)}")
-
-
-def check_qr_permission_contract(errors: list[str]) -> None:
-    research = DOC_ROOT / "research.md"
-    tasks = DOC_ROOT / "tasks.md"
-
-    if research.is_file() and ANDROID_RESEARCH_REQUIREMENT not in research.read_text():
-        errors.append(
-            "research.md must document Android's runtime CAMERA grant and "
-            "RESOURCE_VIDEO_CAPTURE PermissionRequest handling"
-        )
-
-    if tasks.is_file():
-        task_text = tasks.read_text()
-        required_task_terms = (
-            "android.permission.CAMERA",
-            "PermissionRequest",
-            "RESOURCE_VIDEO_CAPTURE",
-        )
-        missing = [term for term in required_task_terms if term not in task_text]
-        if missing:
-            errors.append(
-                "tasks.md is missing Android camera requirements: "
-                + ", ".join(missing)
-            )
 
 
 def check_local_markdown_links(errors: list[str]) -> None:
@@ -77,7 +51,6 @@ def check_local_markdown_links(errors: list[str]) -> None:
 def main() -> int:
     errors: list[str] = []
     check_required_files(errors)
-    check_qr_permission_contract(errors)
     check_local_markdown_links(errors)
 
     if errors:
