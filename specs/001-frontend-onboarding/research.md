@@ -58,7 +58,7 @@ QR and text entry carry the same opaque pairing-token string. The scanner uses `
 
 - **Consistency with haex-vault.** haex-vault ships `html5-qrcode` and targets the same platform matrix; matching keeps knowledge, patched versions, and issue-space shared.
 - **No desktop path for `@tauri-apps/plugin-barcode-scanner`.** That plugin is mobile-only (MLKit on Android, Vision on iOS). Adopting it as the primary would force a dual-stack solution — two libraries, doubled tests, and platform-branching in `ConnectSheet` — for a QR-decoded string that is byte-identical on either path.
-- **`getUserMedia` works in Tauri WebViews.** Android's system WebView (Chromium ≥ 43) supports it once `android.permission.CAMERA` is granted and the WebView receives a `PermissionRequest` callback; iOS's WKWebView supports it from iOS 14.3 given `NSCameraUsageDescription`. Both are one-time Tauri-config items, not per-plugin runtime plumbing.
+- **`getUserMedia` works in Tauri WebViews.** Android's system WebView (Chromium ≥ 43) supports it once the app has requested and received the OS `CAMERA` runtime grant and the WebView's `PermissionRequest` handler allows only `RESOURCE_VIDEO_CAPTURE`; iOS's WKWebView supports it from iOS 14.3 given `NSCameraUsageDescription`. The Android manifest declaration alone is insufficient because the runtime grant and WebView permission bridge are also required.
 
 A single idempotent cleanup path awaits `stop()` before clearing the canvas on every exit path: successful decode, Sheet close, component unmount, and startup failure. If startup never reached the running state, the failed `stop()` is tolerated and cleanup completes without throwing.
 
