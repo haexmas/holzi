@@ -99,7 +99,7 @@ src/                                 # Nuxt frontend (SPA)
 │   └── onboarding/                  # Feature components → <OnboardingCreateSheet>, ...
 │       ├── CreateSheet.vue          # Anlegen — Genesis + Recover sub-modes
 │       ├── OpenSheet.vue            # Öffnen — file picker + copy
-│       ├── ConnectSheet.vue         # Verbinden — text-token pairing
+│       ├── ConnectSheet.vue         # Verbinden — QR scanner with text-token fallback
 │       ├── UnlockSheet.vue          # Passphrase entry for existing instance
 │       ├── PaperSeedDisplay.vue     # Read-once seed presentation
 │       └── InstancesList.vue        # Zuletzt-verwendet list

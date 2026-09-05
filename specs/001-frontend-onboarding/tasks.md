@@ -132,6 +132,7 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 - [ ] **T045** [P] [US2] `e2e/onboarding.spec.ts::"verbinden happy path (mocked backend)"`: two desktop variants — (a) paste the token into the text fallback, submit, and assert navigation; (b) launch Chromium with a deterministic fake-camera video fixture containing a valid QR code so `getUserMedia()` returns a real `MediaStream`, let `html5-qrcode.start()` decode it, submit, and assert navigation. Add close/reopen and decode/close cases that assert every fake-camera `MediaStreamTrack` reaches `ended` before another scanner starts.
 - [ ] **T045a** [P] [US2] `tests/components/onboarding/ConnectSheet.spec.ts`: mock `html5-qrcode` and `@tauri-apps/plugin-barcode-scanner` at their module boundaries. Assert QR callbacks populate the same token field used by text input and submit it to `CreateMode::Join`; assert desktop `stop()` completes before `clear()` on successful decode, Sheet close, component unmount, and startup failure; assert mobile `cancel()` runs on Sheet close/unmount and after a completed or failed scan. Cover granted, denied, prompt, and unavailable-camera states while keeping text fallback usable.
 - [ ] **T045b** [US2] Run Android-emulator and iOS-simulator smoke tests plus one real-device acceptance pass per platform: verify native permission grant/denial, QR decode into the token field, cancellation/teardown on close, close/reopen, successful submit/navigation, and text fallback. Record that the Android merged manifest contains `android.permission.CAMERA` and the iOS bundle contains `NSCameraUsageDescription`.
+- [ ] **T045c** [US2] Run packaged desktop acceptance tests for Linux, macOS, and Windows (one supported package per OS) with a fake camera/device harness: verify camera permission grant and denial fallback, QR decode, `stop()`/`clear()` teardown, close/reopen, and the shared text-token fallback. Keep the package matrix separate from Chromium-only T045 so WebView packaging regressions are caught.
 
 ### Implementation for US2
 
@@ -157,7 +158,7 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 - [ ] **T051** [P] [US3] Rust test: `import_instance_file` with a valid throwaway encrypted instance copies atomically to a pending target, leaves source untouched, emits `instance-list-changed { reason: 'imported' }`, and clears the marker after a successful unlock with the supplied passphrase.
 - [ ] **T052** [P] [US3] Rust test: invalid source (not a regular `.db`, structurally unreadable, or wrong extension) rejected before copy; encrypted-page validation is covered at unlock time.
 - [ ] **T053** [P] [US3] Rust test: name collision with `ConflictPolicy::Rename` produces `<name>-2.db`; with `Abort` returns `NameConflict`.
-- [ ] **T054** [P] [US3] `e2e/onboarding.spec.ts::"öffnen happy path"`: simulate a `plugin-dialog` selection → sheet completes → new item in list.
+- [ ] **T054** [P] [US3] `e2e/onboarding.spec.ts::"öffnen happy path"`: simulate a `plugin-dialog` selection → sheet completes → assert the backend's `instance-list-changed { reason: 'imported' }` event refreshes the new item in the list.
 
 ### Implementation for US3
 
@@ -197,7 +198,7 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 
 - [ ] **T066** [P] [-] Playwright network-assertion: build the production bundle, load in headless Chromium, assert zero requests to `api.iconify.design`, `fonts.googleapis.com`, `fonts.gstatic.com`, or any host outside the app's own scheme (satisfies SC-006).
 - [ ] **T067** [P] [-] Playwright visual snapshot: landing with 0, 1, 10 instances (satisfies SC-007).
-- [ ] **T068** [P] [-] Trash context menu on `InstancesList` items per FR-023: `<UiDialog>` confirms trash. Do not expose list-remove-with-file-retained in v1 because the list is a directory scan without exclusion metadata; document this decision in `research.md`.
+- [ ] **T068** [P] [-] Trash context menu on `InstancesList` items per FR-023: `<UiDialog>` confirms trash, then assert `instance-list-changed { reason: 'trashed' }` removes the item after the backend move completes. Do not expose list-remove-with-file-retained in v1 because the list is a directory scan without exclusion metadata; document this decision in `research.md`.
 - [ ] **T069** [P] [-] Passphrase strength meter component `<OnboardingPassphraseStrength>` for CreateSheet and ConnectSheet — pure UI, drives `WeakPassphrase` prevention client-side to match the backend policy.
 - [ ] **T070** [-] Run [`quickstart.md`](./quickstart.md) end-to-end from a fresh clone; fix any drift; commit updates.
 - [ ] **T071** [P] [-] Add `security-review` skill pass over the passphrase / seed / token handling paths. Address findings in a follow-up commit.

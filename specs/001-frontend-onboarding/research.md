@@ -57,7 +57,7 @@ Departures from haex-vault:
 QR and text entry carry the same opaque pairing-token string, but camera access is platform-specific:
 
 - Android and iOS use Tauri's official `@tauri-apps/plugin-barcode-scanner`, restricted to `Format.QRCode`. Its native scanner avoids depending on WebView `getUserMedia` behavior. Mobile capabilities grant only the scan, cancel, permission-check/request, and settings commands used by the flow. iOS declares `NSCameraUsageDescription`; the plugin's Android manifest supplies the `CAMERA` permission and the merged manifest is verified during the mobile build.
-- Linux, macOS, and Windows use `html5-qrcode` over WebRTC `getUserMedia`, matching haex-vault's library version. The scanner is stopped before its canvas is cleared on every exit path: successful decode, Sheet close, component unmount, and startup failure.
+- Linux, macOS, and Windows use `html5-qrcode` over WebRTC `getUserMedia`, matching haex-vault's library version. A single idempotent cleanup path awaits `stop()` before clearing the canvas on every exit path: successful decode, Sheet close, component unmount, and startup failure. If startup never reached the running state, the failed `stop()` is tolerated and cleanup still completes without throwing.
 - Permission denial or unavailable hardware never blocks pairing because the text field remains available on every platform.
 
 References: [Tauri barcode-scanner setup and permissions](https://v2.tauri.app/plugin/barcode-scanner/), [Tauri barcode-scanner API](https://v2.tauri.app/reference/javascript/barcode-scanner/), and [Html5Qrcode lifecycle](https://scanapp.org/html5-qrcode-docs/docs/apis/classes/Html5Qrcode).
