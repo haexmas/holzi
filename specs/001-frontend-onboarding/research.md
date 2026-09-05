@@ -41,7 +41,7 @@ Studied [`haex-vault src-tauri/src/database/paths.rs`](../../../../haex-vault/sr
 
 - Files under `<AppLocalData>/instances/`. Backend resolves paths; frontend passes only names.
 - Rust ensures the directory exists on every path resolution (haex-vault does this — cheap and idempotent).
-- List is a directory scan, not a persisted JSON. Removes an entire class of drift bugs (list vs. actual files) and works across processes / share-intents naturally.
+- List is a directory scan, not a persisted JSON. This removes an entire class of drift bugs between persisted list metadata and actual files. Changes outside holzi are unsupported in v1 and become visible only on the next scan; in-scope imports go through the backend command and trigger a scan through `instance-list-changed`.
 - Backend emits `instance-list-changed` on every mutation; frontend Pinia store subscribes.
 - Soft-delete (`.trash/` subdirectory) is the only destructive path exposed in v1.
 
@@ -51,6 +51,16 @@ Departures from haex-vault:
 - No `Connect` component talking to a sync backend — holzi's "Verbinden" is peer-pairing.
 - No "recent" list that differs from "all instances" — the two are the same list, sorted by last-access.
 - The backend refreshes the database mtime after each successful unlock; that mtime is the persisted `lastAccess` value returned by `list_instances`.
+
+## QR scanner: native mobile, WebRTC desktop
+
+QR and text entry carry the same opaque pairing-token string, but camera access is platform-specific:
+
+- Android and iOS use Tauri's official `@tauri-apps/plugin-barcode-scanner`, restricted to `Format.QRCode`. Its native scanner avoids depending on WebView `getUserMedia` behavior. Mobile capabilities grant only the scan, cancel, permission-check/request, and settings commands used by the flow. iOS declares `NSCameraUsageDescription`; the plugin's Android manifest supplies the `CAMERA` permission and the merged manifest is verified during the mobile build.
+- Linux, macOS, and Windows use `html5-qrcode` over WebRTC `getUserMedia`, matching haex-vault's library version. The scanner is stopped before its canvas is cleared on every exit path: successful decode, Sheet close, component unmount, and startup failure.
+- Permission denial or unavailable hardware never blocks pairing because the text field remains available on every platform.
+
+References: [Tauri barcode-scanner setup and permissions](https://v2.tauri.app/plugin/barcode-scanner/), [Tauri barcode-scanner API](https://v2.tauri.app/reference/javascript/barcode-scanner/), and [Html5Qrcode lifecycle](https://scanapp.org/html5-qrcode-docs/docs/apis/classes/Html5Qrcode).
 
 ## `@nuxt/icon` local-bundle configuration
 
@@ -96,6 +106,6 @@ Cost: manual transcription is slower. Acceptable for a one-time genesis step. If
 - Biometric unlock (`@choochmeque/tauri-plugin-biometry-api` in haex-vault). Post-v1.
 - Instance rename / merge / export. Post-v1; export is intentionally absent (see above).
 - List removal while retaining the file. The v1 list is a directory scan with no exclusion metadata, so the only removal action is moving an instance to `.trash`.
-- Filesystem watcher on `<AppLocalData>/instances/`. All v1 mutations go through Tauri commands that emit `instance-list-changed`; no CLI, share-intent bypass, or third-party file-manager path is in scope. If one is later added, a watcher can be introduced without a wire-format break — the `InstanceListChanged` payload is designed to accept new `reason` values.
+- Filesystem watcher on `<AppLocalData>/instances/`. All v1 mutations go through Tauri commands that emit `instance-list-changed`; no CLI, share-intent bypass, or third-party file-manager path is in scope. If one is later added, a watcher can reuse the event topic and payload envelope, with its producer and reason added explicitly to the event contract.
 - Tour / onboarding walkthrough (`driver.js` in haex-vault). Post-v1.
 - Font choice + hosting. Assumed system-font stack for v1; if we later add a custom font, it MUST ship locally (same SC-006 rule).

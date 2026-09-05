@@ -113,7 +113,7 @@ pub struct ConfirmCreateArgs {
 
 **Preconditions**: `<name>.db` is the active instance created by the current Genesis flow and its `.pending` marker exists.
 
-**Postconditions**: the marker is removed atomically, the instance remains active, and `instance-list-changed { reason: 'created', affectedName: name }` is emitted. A confirmed instance is never removed by startup orphan cleanup.
+**Postconditions**: the marker is removed atomically, the instance remains active, and `instance-list-changed { reason: 'confirmed', affectedName: name }` is emitted. A confirmed instance is never removed by startup orphan cleanup.
 
 **Failure modes**: `NotFound`, `InstanceMismatch`, or `Io`. `InstanceMismatch` means that a different instance is active than the pending Genesis instance named by the command. Failure leaves the marker and database intact so confirmation can be retried.
 

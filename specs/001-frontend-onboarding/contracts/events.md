@@ -8,13 +8,13 @@ Backend emits events via `AppHandle::emit(topic, payload)`. Frontend subscribes 
 
 ### `instance-list-changed`
 
-Emitted whenever a backend command mutates the set of files in `<AppLocalData>/instances/`: create, confirm-create, abort-create, open (last-access bump), close (active-state transition), import, trash. Also emitted on startup after any orphan-cleanup pass.
+Emitted whenever a backend command changes instance-list-relevant state under `<AppLocalData>/instances/`: create, confirm-create, abort-create, open (last-access bump), close (active-state transition), import, trash. Also emitted on startup after any orphan-cleanup pass.
 
 **Payload**:
 
 ```ts
 type InstanceListChanged = {
-  reason: 'created' | 'opened' | 'closed' | 'imported' | 'trashed' | 'aborted' | 'startup-cleanup'
+  reason: 'created' | 'confirmed' | 'opened' | 'closed' | 'imported' | 'trashed' | 'aborted' | 'startup-cleanup'
   affectedName?: string   // Present for single-instance mutations
 }
 ```
@@ -27,7 +27,7 @@ The `useInstancesStore` Pinia store subscribes in its factory and calls `syncAsy
 
 Every mutation in v1 goes through a Tauri command, so the command handler is the authoritative producer. Polling would be wasteful. haex-vault uses the same pattern for `vault-list-changed` (see [`stores/vault/lastVaults.ts:37`](../../../../haex-vault/src/stores/vault/lastVaults.ts#L37)).
 
-**Explicitly not in v1**: a filesystem watcher on the instances directory for changes made outside the app (CLI drop-in, third-party file managers). v1 has no CLI, no share-intent code path that bypasses `import_instance_file`, and no other in-scope mutator. If such a path is introduced later, the watcher (with a debounce and platform-specific backend) can be added then; the event shape above accommodates it without a breaking change.
+**Explicitly not in v1**: a filesystem watcher on the instances directory for changes made outside the app (CLI drop-in, third-party file managers). v1 has no CLI, no share-intent code path that bypasses `import_instance_file`, and no other in-scope mutator. If such a path is introduced later, a watcher with a debounce and platform-specific backend can reuse this event topic and payload envelope; its producer and new `reason` value must then be added to this contract.
 
 ### `active-instance-changed` *(v1 optional)*
 
