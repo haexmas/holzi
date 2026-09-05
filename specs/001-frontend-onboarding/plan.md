@@ -16,8 +16,8 @@ Deliver the holzi Tauri app's first-impression surfaces: a landing page with thr
 **Primary Dependencies**:
 - Nuxt modules: `@nuxtjs/i18n`, `@nuxt/icon`, `@pinia/nuxt`, `@vueuse/nuxt`.
 - Styling: Tailwind v4 via `@tailwindcss/vite`, `tw-animate-css`.
-- UI: `shadcn-vue` (Radix Vue-based, copy-in), `class-variance-authority`, `tailwind-merge`, `lucide-vue-next` (via `@nuxt/icon` iconify-json bundle).
-- Tauri plugins: `@tauri-apps/plugin-dialog` (file picker for Öffnen), `@tauri-apps/plugin-store` (only for non-secret preferences — not for instance list), `@tauri-apps/plugin-fs` (limited to `AppLocalData` scope).
+- UI: `shadcn-vue` (Radix Vue-based, copy-in), `class-variance-authority`, `tailwind-merge`, `lucide-vue-next` (via `@nuxt/icon` iconify-json bundle), `html5-qrcode` (desktop QR scanner in the Verbinden Sheet, same version haex-vault uses).
+- Tauri plugins: `@tauri-apps/plugin-barcode-scanner` (native QR scanning on Android/iOS), `@tauri-apps/plugin-os` (scanner implementation selection), `@tauri-apps/plugin-dialog` (file picker for Öffnen), `@tauri-apps/plugin-store` (only for non-secret preferences — not for instance list), `@tauri-apps/plugin-fs` (limited to `AppLocalData` scope).
 - Rust-side: `haex-crdt` (workspace path or crates.io once extracted), `tauri`, `serde`, `ts-rs` (for type sharing), `thiserror`.
 
 **Storage**:
@@ -25,8 +25,8 @@ Deliver the holzi Tauri app's first-impression surfaces: a landing page with thr
 - No frontend-side persistence of instance state. Recent-list is a directory scan, not a JSON file.
 
 **Testing**:
-- Unit: Vitest for Vue composables and Pinia stores.
-- E2E: Playwright for the landing → Anlegen → Unlock → Close → Reopen loop.
+- Unit: Vitest for Vue composables, Pinia stores, and the platform-specific scanner lifecycle in `ConnectSheet`.
+- E2E: Playwright for the onboarding flows, including deterministic desktop QR-camera and scanner-teardown coverage.
 - Backend: `cargo test` for Rust commands; ts-rs bindings validated by a `test:constants` equivalent.
 
 **Target Platform**: Desktop (Linux, macOS, Windows), Android, iOS. SPA mode (`ssr: false`) required because Tauri renders into a native WebView, not against a Node server.
@@ -99,7 +99,7 @@ src/                                 # Nuxt frontend (SPA)
 │   └── onboarding/                  # Feature components → <OnboardingCreateSheet>, ...
 │       ├── CreateSheet.vue          # Anlegen — Genesis + Recover sub-modes
 │       ├── OpenSheet.vue            # Öffnen — file picker + copy
-│       ├── ConnectSheet.vue         # Verbinden — text-token pairing
+│       ├── ConnectSheet.vue         # Verbinden — QR scanner with text-token fallback
 │       ├── UnlockSheet.vue          # Passphrase entry for existing instance
 │       ├── PaperSeedDisplay.vue     # Read-once seed presentation
 │       └── InstancesList.vue        # Zuletzt-verwendet list

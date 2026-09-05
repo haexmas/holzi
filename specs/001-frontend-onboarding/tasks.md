@@ -12,7 +12,7 @@ description: "Task list for the frontend-onboarding feature (spec 001)"
 - `haex-crdt` extraction from `haex-vault` (per [`docs/plans/2026-09-04-haex-crdt-extraction-plan.md`](../../docs/plans/2026-09-04-haex-crdt-extraction-plan.md) and [`docs/plans/2026-09-04-v1-scope-design.md §10`](../../docs/plans/2026-09-04-v1-scope-design.md)). No implementation task below that requires `haex-crdt` at runtime may start until the crate is importable.
 - Frontend-only scaffold tasks (T001..T010) do not depend on `haex-crdt` and may begin immediately.
 
-**Tests**: E2E tests are IN scope (SC-006 and SC-007 depend on them). Vitest for stores and composables is IN scope. Rust `cargo test` for command handlers is IN scope. Unit tests for pure UI components are OUT of scope for this slice — component behavior is covered by E2E.
+**Tests**: E2E tests are IN scope (SC-006 and SC-007 depend on them). Vitest for stores, composables, and the platform-specific scanner lifecycle in `ConnectSheet` is IN scope. Rust `cargo test` for command handlers is IN scope. Other pure UI component tests are OUT of scope for this slice because their behavior is covered by E2E.
 
 **Organization**: Tasks are grouped by user story (US1..US5 from `spec.md`). Setup + Foundational phases are shared; user stories are as independent as they can practically be, given they share the Landing page.
 
@@ -102,7 +102,7 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 - [ ] **T031** [P] [US1] `e2e/onboarding.spec.ts::"anlegen genesis happy path"`: click Anlegen → fill name+passphrase+passphrase → paper-seed displayed → confirm (which invokes `confirm_create`) → arrives at federation view; verify the DB and no `.pending` marker remain.
 - [ ] **T032** [P] [US1] `e2e/onboarding.spec.ts::"anlegen name collision blocked"`: seed an instance, try to Anlegen with same name → inline error, no file created.
 - [ ] **T033** [P] [US1] `e2e/onboarding.spec.ts::"anlegen cancelled after file created discards orphan"`: intercept close-before-confirm, verify `.pending` marker + file are gone on next `list_instances`.
-- [ ] **T034** [P] [US1] Rust test: `create_instance` with `CreateMode::Genesis` writes `.pending` before `.db`, activates the runtime, `confirm_create` removes the marker, and `abort_create` deletes both marker and DB on cancellation or error.
+- [ ] **T034** [P] [US1] Rust test: `create_instance` with `CreateMode::Genesis` writes `.pending` before `.db` and activates the runtime; `confirm_create` removes the marker and emits `instance-list-changed { reason: 'confirmed' }`; `abort_create` deletes both marker and DB on cancellation or error.
 
 ### Implementation for US1
 
@@ -129,15 +129,19 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 - [ ] **T042** [US2] `e2e/two-device-pairing.spec.ts`: launch two isolated Tauri app instances, have the parent issue a token, paste it into the joiner, verify relay delivery and `haex-crdt` synchronization of both attestations, then send the walking-skeleton ping and assert the pong. This is the MVP acceptance test.
 - [ ] **T043** [P] [US2] Rust test: expired token → `PairingTokenInvalid { reason: "expired" }`, no instance file created.
 - [ ] **T044** [P] [US2] Rust test: already-consumed token → `PairingTokenInvalid { reason: "already-consumed" }`.
-- [ ] **T045** [P] [US2] `e2e/onboarding.spec.ts::"verbinden happy path (mocked backend)"`: sheet opens, token pasted, submit, navigation succeeds.
+- [ ] **T045** [P] [US2] `e2e/onboarding.spec.ts::"verbinden happy path (mocked backend)"`: two desktop variants — (a) paste the token into the text fallback, submit, and assert navigation; (b) launch Chromium with a deterministic fake-camera video fixture containing a valid QR code so `getUserMedia()` returns a real `MediaStream`, let `html5-qrcode.start()` decode it, submit, and assert navigation. Add close/reopen and decode/close cases that assert every fake-camera `MediaStreamTrack` reaches `ended` before another scanner starts.
+- [ ] **T045a** [P] [US2] `tests/components/onboarding/ConnectSheet.spec.ts`: mock `@tauri-apps/plugin-os::platform()` to select each desktop, Android, and iOS branch deterministically, then mock `html5-qrcode` and `@tauri-apps/plugin-barcode-scanner` at their module boundaries. Assert QR callbacks populate the same token field used by text input and submit it to `CreateMode::Join`; assert desktop `stop()` completes before `clear()` on successful decode, Sheet close, component unmount, and startup failure; assert mobile `cancel()` runs on Sheet close/unmount and after a completed or failed scan. Cover granted, denied, prompt, and unavailable-camera states while keeping text fallback usable.
+- [ ] **T045b** [US2] Run Android-emulator and iOS-simulator smoke tests for UI, text fallback, and unavailable-camera behavior; the iOS simulator MUST NOT assert camera permissions or QR decoding because it has no camera input. Run one real-device acceptance pass per platform to verify native permission grant/denial, QR decode into the token field, cancellation/teardown on close, close/reopen, successful submit/navigation, and text fallback. Record that the Android merged manifest contains `android.permission.CAMERA` and the iOS bundle contains `NSCameraUsageDescription`.
+- [ ] **T045c** [US2] Run packaged desktop acceptance tests for Linux, macOS, and Windows (one supported package per OS) with a fake camera/device harness: verify camera permission grant and denial fallback, QR decode, `stop()`/`clear()` teardown, close/reopen, and the shared text-token fallback. Keep the package matrix separate from Chromium-only T045 so WebView packaging regressions are caught.
 
 ### Implementation for US2
 
 - [ ] **T046** [US2] Implement `src-tauri/src/pairing/join.rs`: token parsing, transcript construction, contact-hint dial into parent's relay, co-signature exchange. Depends on the presence-event / attestation surface being present in `haex-crdt` (may require a shim task tracked separately if `haex-crdt` isn't fully there).
 - [ ] **T047** [US2] Extend `create_instance` to route `CreateMode::Join` to `pairing::join::run`. Same orphan-file guarantee as Genesis.
-- [ ] **T048** [P] [US2] Implement `src/components/onboarding/ConnectSheet.vue`: `<UiSheet>` with the pairing-token text field (monospace). QR/camera scanning is not part of v1; track it in a future onboarding spec rather than coupling it to the import task T054.
+- [ ] **T048** [P] [US2] Implement `src/components/onboarding/ConnectSheet.vue`: `<UiSheet>` selects the scanner via `@tauri-apps/plugin-os`. Android/iOS check and, for a prompt state, request permission before calling `@tauri-apps/plugin-barcode-scanner::scan({ formats: [Format.QRCode] })`; a denied state offers the plugin's open-settings action. Desktop renders a live WebRTC preview decoded by `html5-qrcode`. On successful decode, stop/cancel the scanner, populate the same token field used by the fallback, and enable submit. Keep the text field available during permission denial or camera failure. A single desktop cleanup path MUST attempt and await `stop()` after every `start()` attempt, tolerate the scanner not reaching its running state, and only then call `clear()`; invoke it on successful decode, Sheet close, component unmount, and startup failure. Mobile cleanup MUST call and await `cancel()` on every exit path and tolerate an already-completed or failed scan.
 - [ ] **T049** [P] [US2] Add Verbinden CTA to `pages/index.vue` (third primary button); wire to open ConnectSheet.
-- [ ] **T050** [P] [US2] i18n: `onboarding.connect.title`, `onboarding.connect.token`, `onboarding.connect.submit`, `errors.pairingTokenInvalid`.
+- [ ] **T050** [P] [US2] i18n: `onboarding.connect.title`, `onboarding.connect.scan`, `onboarding.connect.cameraPermission`, `onboarding.connect.openCameraSettings`, `onboarding.connect.cameraUnavailable`, `onboarding.connect.token`, `onboarding.connect.submit`, `errors.pairingTokenInvalid`.
+- [ ] **T050a** [P] [US2] Add desktop `html5-qrcode` (^2.3.8, matching haex-vault) plus `@tauri-apps/plugin-barcode-scanner` and `@tauri-apps/plugin-os` guest bindings to `package.json`. Add and initialize `tauri-plugin-os` on every platform; add `tauri-plugin-barcode-scanner` as an Android/iOS-only Rust dependency and initialize it under `#[cfg(mobile)]`. Grant `os:allow-platform` wherever `ConnectSheet` runs. Create `src-tauri/capabilities/mobile.json` for Android/iOS with least-privilege barcode-scanner scan, cancel, permission-check/request, and open-settings permissions. Add `NSCameraUsageDescription` to `src-tauri/Info.ios.plist`; rely on the plugin's Android manifest for `android.permission.CAMERA` and verify that permission in the merged manifest instead of editing generated Android files. Desktop uses standard WebRTC and does not initialize the native plugin.
 
 **Checkpoint**: US1 + US2 + US4 shipped → holzi v1 walking-skeleton fully reachable via UI. Two devices can be paired end-to-end from a fresh install.
 
@@ -154,7 +158,7 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 - [ ] **T051** [P] [US3] Rust test: `import_instance_file` with a valid throwaway encrypted instance copies atomically to a pending target, leaves source untouched, emits `instance-list-changed { reason: 'imported' }`, and clears the marker after a successful unlock with the supplied passphrase.
 - [ ] **T052** [P] [US3] Rust test: invalid source (not a regular `.db`, structurally unreadable, or wrong extension) rejected before copy; encrypted-page validation is covered at unlock time.
 - [ ] **T053** [P] [US3] Rust test: name collision with `ConflictPolicy::Rename` produces `<name>-2.db`; with `Abort` returns `NameConflict`.
-- [ ] **T054** [P] [US3] `e2e/onboarding.spec.ts::"öffnen happy path"`: simulate a `plugin-dialog` selection → sheet completes → new item in list.
+- [ ] **T054** [P] [US3] `e2e/onboarding.spec.ts::"öffnen happy path"`: simulate a `plugin-dialog` selection → sheet completes → assert the backend's `instance-list-changed { reason: 'imported' }` event refreshes the new item in the list.
 
 ### Implementation for US3
 
@@ -194,7 +198,7 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 
 - [ ] **T066** [P] [-] Playwright network-assertion: build the production bundle, load in headless Chromium, assert zero requests to `api.iconify.design`, `fonts.googleapis.com`, `fonts.gstatic.com`, or any host outside the app's own scheme (satisfies SC-006).
 - [ ] **T067** [P] [-] Playwright visual snapshot: landing with 0, 1, 10 instances (satisfies SC-007).
-- [ ] **T068** [P] [-] Trash context menu on `InstancesList` items per FR-023: `<UiDialog>` confirms trash. Do not expose list-remove-with-file-retained in v1 because the list is a directory scan without exclusion metadata; document this decision in `research.md`.
+- [ ] **T068** [P] [-] Trash context menu on `InstancesList` items per FR-023: `<UiDialog>` confirms trash, then assert `instance-list-changed { reason: 'trashed' }` removes the item after the backend move completes. Do not expose list-remove-with-file-retained in v1 because the list is a directory scan without exclusion metadata; document this decision in `research.md`.
 - [ ] **T069** [P] [-] Passphrase strength meter component `<OnboardingPassphraseStrength>` for CreateSheet and ConnectSheet — pure UI, drives `WeakPassphrase` prevention client-side to match the backend policy.
 - [ ] **T070** [-] Run [`quickstart.md`](./quickstart.md) end-to-end from a fresh clone; fix any drift; commit updates.
 - [ ] **T071** [P] [-] Add `security-review` skill pass over the passphrase / seed / token handling paths. Address findings in a follow-up commit.

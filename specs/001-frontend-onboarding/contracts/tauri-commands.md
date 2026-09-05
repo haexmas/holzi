@@ -113,7 +113,7 @@ pub struct ConfirmCreateArgs {
 
 **Preconditions**: `<name>.db` is the active instance created by the current Genesis flow and its `.pending` marker exists.
 
-**Postconditions**: the marker is removed atomically, the instance remains active, and `instance-list-changed { reason: 'created', affectedName: name }` is emitted. A confirmed instance is never removed by startup orphan cleanup.
+**Postconditions**: the marker is removed atomically, the instance remains active, and `instance-list-changed { reason: 'confirmed', affectedName: name }` is emitted. A confirmed instance is never removed by startup orphan cleanup.
 
 **Failure modes**: `NotFound`, `InstanceMismatch`, or `Io`. `InstanceMismatch` means that a different instance is active than the pending Genesis instance named by the command. Failure leaves the marker and database intact so confirmation can be retried.
 
@@ -223,6 +223,8 @@ pub struct ImportInstanceResult {
 }
 ```
 
+**Postconditions on success**: the destination file and import-pending marker exist, and `instance-list-changed { reason: 'imported', affectedName: info.name }` is emitted after both are in place so the Pinia store can immediately resync.
+
 **Notes**:
 
 - `source_path` is the external file path returned by `@tauri-apps/plugin-dialog`; it is the only path accepted from the frontend. It is not a managed-instance path. The command validates that it is a regular file and that the extension is `.db`.
@@ -256,6 +258,8 @@ pub struct TrashInstanceArgs {
     pub name: String,
 }
 ```
+
+**Postconditions on success**: the source database is absent from the managed root, the trashed copy exists under `.trash/`, and `instance-list-changed { reason: 'trashed', affectedName: name }` is emitted only after the move completes.
 
 **Failure modes**:
 
