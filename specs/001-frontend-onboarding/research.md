@@ -52,15 +52,21 @@ Departures from haex-vault:
 - No "recent" list that differs from "all instances" — the two are the same list, sorted by last-access.
 - The backend refreshes the database mtime after each successful unlock; that mtime is the persisted `lastAccess` value returned by `list_instances`.
 
-## QR scanner: native mobile, WebRTC desktop
+## QR scanner: single-stack `html5-qrcode` on every platform
 
-QR and text entry carry the same opaque pairing-token string, but camera access is platform-specific:
+QR and text entry carry the same opaque pairing-token string. The scanner uses `html5-qrcode` over the standard `navigator.mediaDevices.getUserMedia()` Web API on every platform Tauri targets — desktop (Linux/macOS/Windows) and mobile (Android/iOS). Rationale:
 
-- Android and iOS use Tauri's official `@tauri-apps/plugin-barcode-scanner`, restricted to `Format.QRCode`. Its native scanner avoids depending on WebView `getUserMedia` behavior. Mobile capabilities grant only the scan, cancel, permission-check/request, and settings commands used by the flow. iOS declares `NSCameraUsageDescription`; the plugin's Android manifest supplies the `CAMERA` permission and the merged manifest is verified during the mobile build.
-- Linux, macOS, and Windows use `html5-qrcode` over WebRTC `getUserMedia`, matching haex-vault's library version. A single idempotent cleanup path awaits `stop()` before clearing the canvas on every exit path: successful decode, Sheet close, component unmount, and startup failure. If startup never reached the running state, the failed `stop()` is tolerated and cleanup still completes without throwing.
-- Permission denial or unavailable hardware never blocks pairing because the text field remains available on every platform.
+- **Consistency with haex-vault.** haex-vault ships `html5-qrcode` and targets the same platform matrix; matching keeps knowledge, patched versions, and issue-space shared.
+- **No desktop path for `@tauri-apps/plugin-barcode-scanner`.** That plugin is mobile-only (MLKit on Android, Vision on iOS). Adopting it as the primary would force a dual-stack solution — two libraries, doubled tests, and platform-branching in `ConnectSheet` — for a QR-decoded string that is byte-identical on either path.
+- **`getUserMedia` works in Tauri WebViews.** Android's system WebView (Chromium ≥ 43) supports it once `android.permission.CAMERA` is granted and the WebView receives a `PermissionRequest` callback; iOS's WKWebView supports it from iOS 14.3 given `NSCameraUsageDescription`. Both are one-time Tauri-config items, not per-plugin runtime plumbing.
 
-References: [Tauri barcode-scanner setup and permissions](https://v2.tauri.app/plugin/barcode-scanner/), [Tauri barcode-scanner API](https://v2.tauri.app/reference/javascript/barcode-scanner/), and [Html5Qrcode lifecycle](https://scanapp.org/html5-qrcode-docs/docs/apis/classes/Html5Qrcode).
+A single idempotent cleanup path awaits `stop()` before clearing the canvas on every exit path: successful decode, Sheet close, component unmount, and startup failure. If startup never reached the running state, the failed `stop()` is tolerated and cleanup completes without throwing.
+
+Permission denial or unavailable hardware never blocks pairing because the text field remains available on every platform.
+
+**Contingency plan.** If a concrete Tauri-WebView `getUserMedia` regression on a target OS/version emerges in E2E or field use and cannot be resolved via manifest/permission fixes, add `@tauri-apps/plugin-barcode-scanner` behind a runtime feature detect as a mobile fallback — not a rewrite, just a wrapping call in `ConnectSheet`'s scan-start path. This is not v1 work.
+
+References: [Html5Qrcode lifecycle](https://scanapp.org/html5-qrcode-docs/docs/apis/classes/Html5Qrcode).
 
 ## `@nuxt/icon` local-bundle configuration
 
