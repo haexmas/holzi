@@ -19,10 +19,10 @@ It does **not** fire for renames, in-place edits, trivial inline expressions, or
 
 ## What to do (the loop)
 
-1. **Bootstrap or refresh first on tracked branches** (independent of any git hook running):
+1. **Bootstrap or refresh first on tracked branches that are not feature branches or worktrees** (independent of any git hook running):
    - On a tracked branch, if `graphify-out/` or its required `graph.json` is **absent**, run `graphify update <repo-root>` to build the graph before continuing. A directory without `graph.json` is not a usable graph.
    - On a tracked branch, if `graphify-out/.meta.json` is absent, invalid, or its `indexed_at_sha` does **not** match current `HEAD`, run `graphify update <repo-root>` to refresh incrementally.
-   - On a feature branch or worktree, use a complete fork-point snapshot as-is. Do not compare its marker with the feature branch's advancing `HEAD`, and do not refresh it. If the snapshot lacks `graph.json`, warn and continue with the normal consultation failure handling.
+   - On a feature branch or worktree, including tracked feature branches, use a complete fork-point snapshot as-is. Do not compare its marker with the feature branch's advancing `HEAD`, and do not refresh it. If the snapshot lacks `graph.json`, warn and continue with the normal consultation failure handling.
    - If bootstrap or refresh fails, warn, continue with the consultation/authoring flow, and flag the incomplete refresh for a later manual check. The failure MUST NOT block authoring.
    - These tracked-branch checks hold even when the git hooks are not installed or were bypassed (e.g. `git commit --no-verify`).
 2. **Query the graph** for candidates using plain `graphify` CLI invocations — `graphify query "<intent>"`, `graphify path <from> <to>`, `graphify explain <symbol>`. Do **not** substitute any single harness's slash-command syntax; the rule reads correctly regardless of which harness loads it.
@@ -91,9 +91,9 @@ Rough guidance, not hard cutoffs — operator judgment overrides:
 
 FR-010 requires this rule's freshness guarantee to hold even when the `post-commit` and `post-checkout` hooks are not installed or have been bypassed:
 
-- **On a tracked branch, absent or incomplete graph** (`graphify-out/` or `graphify-out/graph.json` missing) → bootstrap with `graphify update <repo-root>` before authoring.
-- **On a tracked branch, stale or unmarked graph** (missing/invalid `indexed_at_sha`, or marker ≠ `HEAD`) → refresh with `graphify update <repo-root>` before authoring.
-- **On a feature branch/worktree, incomplete snapshot** → warn and continue with failed-consultation handling; do not run graphify against feature `HEAD`.
+- **On a tracked branch that is not a feature branch or worktree, absent or incomplete graph** (`graphify-out/` or `graphify-out/graph.json` missing) → bootstrap with `graphify update <repo-root>` before authoring.
+- **On a tracked branch that is not a feature branch or worktree, stale or unmarked graph** (missing/invalid `indexed_at_sha`, or marker ≠ `HEAD`) → refresh with `graphify update <repo-root>` before authoring.
+- **On a feature branch/worktree, including tracked feature branches, incomplete snapshot** → warn and continue with failed-consultation handling; do not run graphify against feature `HEAD`.
 - **Fresh graph** or a **complete feature-branch snapshot** (intentionally frozen at fork point) → proceed to the consult step.
 
 ## Non-goals of this principle
