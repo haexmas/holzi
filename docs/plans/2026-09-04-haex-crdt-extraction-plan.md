@@ -15,7 +15,9 @@ Known drift between this plan and what shipped:
   `AdoptOnMismatch` lets a consumer adopt a relocated `.db` as a device handover. See
   [`2026-09-04-v1-scope-design.md` §5](./2026-09-04-v1-scope-design.md) for holzi's decision.
 - The crate's scope came out narrower than `specs/001-frontend-onboarding/` assumed: no identity,
-  pairing, or sync transport. holzi owns all of that, plus its own federation-state migrations.
+  pairing, or sync transport. holzi owns all of that, plus its own federation-state migrations and
+  the v1 sync transport, which calls `haex-crdt`'s scanner and apply APIs. A transport supplied by
+  the crate remains a future-consumer option, not part of holzi's v1 contract.
 - §12's "next actions" are all discharged.
 
 **Original status**: Draft. Written 2026-09-04. Companion to [`2026-09-04-v1-scope-design.md`](./2026-09-04-v1-scope-design.md), which decided that holzi consumes `haex-crdt` as a Rust crate dependency and that the crate must exist before holzi's first implementation slice.

@@ -41,6 +41,20 @@ any leader.
 capability flags, merged with the monotonic epoch mechanic already designed for `peer_instances` in
 v1-scope §4. Same trust property, no UCAN serialization, no general delegation graph.
 
+**Membership authority and validation.** The space creator's signed genesis record establishes the
+first member and its `admin` capability. Afterwards, only a current member whose record carries
+`admin` at the space's current epoch may create a grant or revoke a member. Every mutation carries
+the `space_id`, subject federation npub, capability set (for a grant), pre-mutation epoch, signer
+instance pubkey and a signature over that canonical payload. The receiver verifies the instance
+signature and its binding to the signer's current member record before accepting the mutation. A
+grant's capabilities MUST be a subset of the signer's current capabilities; an admin cannot grant
+itself or another member a capability it does not hold. A revocation cannot grant capabilities and
+must name the target and the resulting epoch. An accepted revocation advances the space epoch and
+rotates the content key, so a same-epoch or stale grant cannot restore the revoked member. A
+receiver rejects an invalid signature, unknown or non-admin signer, stale or future pre-mutation
+epoch, or capability escalation before the record enters the CRDT merge; it does not rely on a
+later apply-time check to repair an unauthorized merge.
+
 **Cost**: no arbitrary-depth re-delegation. The known cases need none — a grant names a federation
 identity (§7), which spans that person's instances without any chain at all. Onward sharing between
 *people* is a separate question (§8 item 4); if it ever needs real depth, that is the point at which
@@ -49,9 +63,27 @@ UCAN becomes worth reconsidering.
 **MLS provides** epoch keys derived from group state, rotating on membership change, with forward
 secrecy and post-compromise security, scaling at O(log N).
 
-**Replaced by** a symmetric content key per space epoch, wrapped to each member with NIP-44
-(secp256k1 ECDH + ChaCha20-Poly1305), which holzi already implements for NIP-17 DMs. Rotation on
-membership change means minting a fresh key and re-wrapping to the remaining members.
+**Replaced by** a symmetric 32-byte content key per space epoch, wrapped to each member with
+**NIP-44 version 2**. The wrapping uses secp256k1 ECDH (the unhashed 32-byte x-coordinate),
+HKDF-SHA256, ChaCha20 and HMAC-SHA256; it is not ChaCha20-Poly1305. Rotation on membership change
+means minting a fresh key and re-wrapping to the remaining members.
+
+The plaintext passed to NIP-44 v2 is canonical UTF-8 JSON with exactly these fields:
+
+```json
+{"content_key":"<base64 of exactly 32 bytes>","epoch":42,"space_id":"<canonical space id>"}
+```
+
+For each member, the wire envelope is canonical UTF-8 JSON with the following fields:
+`alg` (`"nip44-v2"`), `space_id`, `epoch`, `sender_pubkey` and `recipient_pubkey` (64 lowercase
+hex characters containing the secp256k1 x-only public keys), and `payload`. `payload` is the
+standard padded Base64 encoding of the NIP-44 v2 bytes
+`version (0x02) || nonce (32 bytes) || ciphertext || mac (32 bytes)`. The sender derives the
+conversation key from its private key and the recipient public key; the recipient selects the
+matching envelope by `recipient_pubkey` and derives it from the inverse key pair. The member record
+signs the canonical envelope together with the subject and epoch, preventing an envelope from
+being swapped between spaces, epochs or recipients. NIP-44's random nonce is fresh for every
+envelope, and its authenticated payload is verified before the key payload is parsed.
 
 **Cost**: O(N) re-wrap per membership change instead of O(log N), and no post-compromise security.
 Note that ADR 0002 already scopes backward secrecy out — a removed member keeps old epoch keys and
@@ -104,19 +136,50 @@ alongside the buffer relay, and the roles split cleanly:
 - The **sync endpoint transports** — ciphertext deltas, with HLC cursors and compaction anchors.
 
 Per-change authenticity comes from the `SignatureProvider` trait the extraction plan already
-defines. holzi uses `NoopSignatureProvider` inside the closed federation, where an authenticated
-transport carries the trust; shared spaces get a real implementation signing with the instance key.
-This satisfies ADR 0002's requirement that authorization be verifiable locally and independently of
-any leader.
+defines. For a shared space, the real provider's `AuthorId` is the signing instance's Nostr
+pubkey, and its verification context contains the NIP-42-authenticated `nostr_pubkey`, the space's
+current epoch and the federation-signed instance attestations. Before calling
+`haex-crdt`'s apply pipeline, the provider MUST require every change author to equal the
+NIP-42-authenticated pubkey or to be bound to it by a valid federation-signed attestation for the
+current epoch. The attestation must also bind that instance to the member federation identity and
+its current capabilities. `on_before_apply` rejects an identity mismatch, stale/invalid
+attestation or wrong-space context, and the all-or-nothing apply then writes nothing. This binding
+prevents a relay that authenticated one instance from accepting a valid signature from another.
+
+holzi uses `NoopSignatureProvider` inside the closed federation, where an authenticated iroh
+transport carries the trust; it remains valid there because the provider's documented no-op
+precondition is that the transport is already authenticated. `NoopSignatureProvider` is not used
+for shared-space ingress. This satisfies ADR 0002's requirement that authorization be verifiable
+locally and independently of any leader.
 
 **Read gating is enforced, not blind.** The endpoint checks the authenticated pubkey against a
 per-space member list rather than serving anyone who knows a `space_id`. Rationale is requirement 3
 of the content-addressable IAM plan: enforcement must exist at the storage layer, not only at the
 encryption layer, or a removed member can keep listing and hoarding ciphertext against a future key
 compromise. The price is that the operator of a buffer relay learns the participant set per space —
-the same metadata trade `haex-vault`'s sync server already makes through whitelist filtering. Every
-member still re-verifies on apply, so the endpoint never becomes an authority that could be
-bypassed.
+the same metadata trade `haex-vault`'s sync server already makes through whitelist filtering.
+
+The list is a signed **relay-readable authorization projection**, not a second CRDT. After a peer
+relay has committed a valid membership merge, an instance holding `sharing-authority` publishes a
+projection containing `space_id`, the resulting `epoch`, the canonical list of read-authorized
+instance `nostr_pubkey` values, explicit revocation tombstones, a `membership_digest`, `issued_at`,
+`expires_at`, and the federation signature. The digest is computed over the canonical member
+records and is also carried by the encrypted CRDT membership state. On a grant or revocation, the
+peer first commits the membership mutation, then publishes the projection; a revocation publishes
+a higher-epoch tombstone before the peer sends new deltas. The federation signer refuses to publish
+a projection unless its digest matches the merged CRDT membership, so the projection cannot silently
+drift from encrypted state.
+
+The buffer relay verifies only the federation signature, `space_id`, digest, and monotonic epoch;
+it stores the latest projection without decrypting or applying CRDT state. It accepts a read only if
+the authenticated NIP-42 pubkey is in the projection for that space, the projection epoch is at
+least the client's requested minimum epoch, and `issued_at <= now < expires_at` within a bounded
+maximum projection lifetime. A higher-epoch projection supersedes every lower-epoch projection;
+same-epoch conflicting projections are rejected. Missing, expired, invalid, or revoked projections
+fail closed, so delayed publication cannot authorize reads indefinitely. Every member still
+re-verifies the signed membership, epoch, digest and `SignatureProvider` identity binding on apply;
+the buffer projection is a storage-layer gate, never an authority that can be bypassed or used to
+grant access.
 
 ## 5. File plane
 

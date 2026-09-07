@@ -81,7 +81,7 @@ The 2026-09-04 model was rejected because a paper-seed only reconstructs signing
 
 `founding.md` §4 items 5 and 8 (encrypted-at-rest choice, multi-device routing) are resolved by consuming an extracted library.
 
-- **`haex-crdt`.** The SQLite + CRDT-sync layer currently living inside `haex-vault` is extracted into a standalone Rust crate named `haex-crdt`. Both `haex-vault` and `holzi` consume it as a Rust library dependency. This extraction is v1-blocking: no holzi implementation slice starts until `haex-crdt` exists as an importable crate. **Done 2026-09-06**: the crate exists at `~/Projekte/haex-crdt` and no longer blocks.
+- **`haex-crdt`.** The SQLite + CRDT-sync layer currently living inside `haex-vault` is extracted into a standalone Rust crate named `haex-crdt`. Both `haex-vault` and `holzi` consume it as a Rust library dependency. This extraction was v1-blocking: no holzi implementation slice could start until `haex-crdt` existed as an importable crate. **Done 2026-09-06**: the crate exists at `~/Projekte/haex-crdt` and no longer blocks; the first holzi implementation slice can proceed. The crate owns the scanner and apply APIs, while holzi owns the v1 sync transport that wires them together.
 - **At-rest encryption is inherited.** `holzi` does not choose its own at-rest scheme; it uses whatever `haex-crdt` provides (working assumption: SQLCipher, to be confirmed during extraction). If `haex-crdt` changes its scheme, `holzi` moves with it.
 - **What lives in `haex-crdt`-synced state.** Federation-scope encrypted state that must be identical across paired instances: `peer_instances` registry, revocation-epoch table, capability grants (per-peer flags), chat/session history, skills/memory (post-v1 scope but reserved). Per the 2026-09-06 §4 revision there is no capability-scoped signing material to replicate — instances only ever sign with their own keypair from `instance_identity`, which is a local-only record and MUST NOT sync across peers.
 - **What does not live in `haex-crdt`.** Ephemeral runtime state (open iroh sessions, current relay connections), local-only preferences that should not sync (device alias, local model file paths), and the per-instance secret keys in `instance_identity` (Nostr keypair + iroh NodeId keypair) that live inside the SQLite but MUST be excluded from CRDT delta transmission — they are per-instance-database secrets, not federation-shared state.
@@ -112,7 +112,7 @@ The 2026-09-04 model was rejected because a paper-seed only reconstructs signing
   1. **Nostr** — semantic events: presence, capability advertisement, commands, LLM prompts/responses, DMs, control-plane events, confirmation intents and releases.
   2. **iroh** — bulk bytes: `blob.offer` (post-v1) and `stream.offer` (post-v1). No v1 traffic on this channel except peer keep-alive.
   3. **`haex-crdt` sync** — federation state deltas: `peer_instances` records, revocation-epoch changes, capability changes, chat/session state.
-  These channels do not share ownership. `haex-crdt` is authoritative for chat/session records and their stable message IDs; Nostr events are transport-only envelopes for prompts, responses, and control messages, and are not a second chat history. A received event is applied to the CRDT record keyed by its message ID exactly once; replays and duplicate deliveries are ignored. Nostr never carries CRDT deltas; `haex-crdt` never carries a command intent; iroh never carries state. Which transport `haex-crdt` uses internally (its own WS bridge, iroh, or something else) is a `haex-crdt`-internal decision, not a holzi-visible one.
+  These channels do not share ownership. `haex-crdt` is authoritative for chat/session records and their stable message IDs; Nostr events are transport-only envelopes for prompts, responses, and control messages, and are not a second chat history. A received event is applied to the CRDT record keyed by its message ID exactly once; replays and duplicate deliveries are ignored. Nostr never carries CRDT deltas; `haex-crdt` never carries a command intent; iroh never carries state. holzi owns the v1 CRDT sync transport and wires it to `haex-crdt`'s scanner and apply APIs; the crate supplies no transport in this contract. A future consumer may choose a different transport without changing the crate's storage API.
 
 ## 6. Provider layer
 
@@ -164,11 +164,13 @@ Two parallel workstreams gate holzi v1's first implementation slice:
 - **haex-hive schema migration** (in progress, in `~/Projekte/haex-hive/`). Until the migration lands, holzi's declared `com.github.haexmas.atoms.graphify-first-authoring` atom does not take effect. Blocks *tooling*, not code — holzi can proceed on design/spec work without it.
 - ~~**`haex-crdt` extraction from `haex-vault`**~~ — **cleared 2026-09-06**. The crate lives at `~/Projekte/haex-crdt`, released as `v0.1.0`, with a `feat/v0.1.1-batch-2-unblocker` series and the `feat/device-id-policy` change stacked on top and pending a release cut (working assumption `v0.2.0`). This no longer blocks the first implementation slice.
 
-Both are outside this repository. Neither is a holzi task. This document flags them so future readers know why holzi's implementation timeline waits.
+Both are outside this repository. Neither is a holzi task. The haex-hive migration remains a
+tooling dependency only; it does not delay holzi's implementation timeline now that `haex-crdt`
+is cleared.
 
 ## 11. First implementation slice — walking-skeleton sketch
 
-A concrete first slice, once both blockers above are cleared. Not a spec; a sketch of what to bring up first.
+A concrete first slice that can start while the haex-hive migration is still pending. Not a spec; a sketch of what to bring up first.
 
 **Target.** Two desktop devices, paired into a fresh federation, exchanging a ping-pong command.
 
@@ -217,5 +219,6 @@ Once this document is committed:
 - **Plane roles sharpened** (2026-09-07): Nostr carries authentication, authorization and
   orchestration; iroh carries data and file transfer. This tightens `founding.md` §2's two-plane
   split. It sits awkwardly with §5's "iroh never carries state" should the `haex-crdt` sync channel
-  later run over iroh — which the same section already permits by leaving haex-crdt's transport to
-  haex-crdt. Flagged for the sync-channel spec to resolve.
+  later run over iroh — which the v1 contract resolves by making holzi the owner of the sync
+  transport and using `haex-crdt` only through its scanner/apply APIs. The concrete holzi transport
+  remains a sync-channel spec decision.
