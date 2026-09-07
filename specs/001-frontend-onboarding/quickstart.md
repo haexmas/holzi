@@ -2,6 +2,10 @@
 
 **Goal (post-implementation)**: after the frontend scaffold, `haex-crdt` extraction, and the implementation tasks are complete, reach a running Tauri window from a fresh clone of `holzi` that renders the landing page with the three primary CTAs (Anlegen, Öffnen, Verbinden) and the "Zuletzt verwendet" list, in under 5 minutes on a warm machine.
 
+**V1 contract note**: Genesis creates a fresh per-instance identity without a
+paper-seed display or confirmation step. Imported databases are rekeyed before
+network startup and then paired from the federation view.
+
 **Prerequisites** on the host:
 
 - Node.js LTS + `pnpm` in `PATH`.
@@ -46,8 +50,7 @@
    - Name: `test-01` (any alphanumeric name).
    - Passphrase: any string meeting the min-length policy, entered twice.
    - Submit.
-   - Paper-seed is displayed. **Read it, physically record it, tick the confirmation.**
-   - Click Continue.
+   - Fresh Nostr and iroh identities are generated inside the encrypted database.
    - App navigates to `/federation/test-01` (placeholder page for this spec).
 
    Verify on disk:
@@ -68,9 +71,15 @@
    - Copy `~/.local/share/holzi/instances/test-01.db` to `/tmp/other.db`.
    - In the app, click **Öffnen**.
    - File picker opens; select `/tmp/other.db`.
-   - Import succeeds; `other.db` appears in the list (source at `/tmp/other.db` is untouched).
+   - Import succeeds; `other.db` appears in the list with restore-pending state (source at `/tmp/other.db` is untouched).
 
-7. **Verbinden requires two devices** — end-to-end pairing is out of scope for this quickstart. To smoke-test the flow with a single machine, run two `pnpm tauri dev` instances against separate `AppLocalData` roots (via `XDG_DATA_HOME` on Linux). Follow-up docs will cover this.
+7. **Restore and pair the imported database**.
+
+   - Select `other.db` and enter the original passphrase. Verify that `open_instance` rekeys the copied identity before starting any relay or iroh endpoint.
+   - Verify that the app opens `/federation/other` in `restore-pairing-required` state and offers **Wiederherstellung verbinden**; importing alone does not complete onboarding.
+   - Scan or paste a valid parent token. Verify that the federation view calls `pair_restored_instance`, updates the same `other.db` in place, removes the restore marker, and does not create a second database.
+
+8. **Verbinden requires two devices** — end-to-end pairing is out of scope for this quickstart. To smoke-test the flow with a single machine, run two `pnpm tauri dev` instances against separate `AppLocalData` roots (via `XDG_DATA_HOME` on Linux). Follow-up docs will cover this.
 
 ## Common failure modes
 
@@ -84,6 +93,6 @@
 This spec is done when:
 
 - A fresh clone reaches step 5 (create + unlock loop) without deviations.
-- Step 6 (Öffnen) works with an arbitrary valid `.db`.
+- Steps 6–7 (Öffnen, rekey, and restore pairing) work with an arbitrary valid `.db`.
 - All E2E tests in `e2e/onboarding.spec.ts` pass.
 - Playwright network-assertion test (T066) passes with zero external requests.

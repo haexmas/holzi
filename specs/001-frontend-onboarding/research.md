@@ -95,7 +95,11 @@ Chosen (per operator direction) over explicit imports. Trade-offs:
 
 Net: the operator has weighed this and chosen auto-import. Documenting so future contributors don't relitigate.
 
-## No copy-to-clipboard for paper-seed
+## No copy-to-clipboard for paper-seed (Historical — superseded for v1)
+
+This decision belongs to the superseded paper-seed onboarding design. V1 Genesis
+has no paper-seed display or confirmation step; backup recovery uses
+rekey-on-restore followed by in-place pairing.
 
 Paper-seed is displayed for the operator to *record physically*. Copy-to-clipboard would:
 
