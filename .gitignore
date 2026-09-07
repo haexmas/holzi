@@ -14,3 +14,4 @@ Thumbs.db
 
 # spaex advisory manifest lock
 .spaex.json.lock
+.spaex/install.lock
