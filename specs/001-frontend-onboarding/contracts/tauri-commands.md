@@ -229,7 +229,7 @@ const result = await invoke<CreateInstanceResult>('create_instance', {
 - `HolziError::WeakPassphrase { reason }` — policy failure.
 - `HolziError::InstanceAlreadyActive` — another instance is currently active in `AppState`.
 - `HolziError::PairingTokenInvalid { reason }` — Join mode only.
-- `HolziError::DeviceIdMismatch { .. }` / `HolziError::MigrationMissingFromSource { .. }` / `HolziError::MigrationContentDrift { .. }` / `HolziError::CrdtSqlite { reason }` / `HolziError::CrdtIo { reason }` / `HolziError::CrdtHlc { reason }` / `HolziError::CrdtAlreadyInstalled { table }` / `HolziError::CrdtInit { reason }` — see [Error mapping](#error-mapping). All are catastrophic during `create_instance` (fresh DB); the backend rolls back per postconditions above.
+- `HolziError::DeviceIdMismatch { .. }` / `HolziError::MigrationMissingFromSource { .. }` / `HolziError::MigrationContentDrift { .. }` / `HolziError::MigrationCompatibility { reason }` / `HolziError::CrdtSqlite { reason }` / `HolziError::CrdtIo { reason }` / `HolziError::CrdtHlc { reason }` / `HolziError::CrdtSignatureVerificationFailed { .. }` (Join only, on remote-change apply) / `HolziError::CrdtUnexpectedSignatureUnderNoop` (Join only) / `HolziError::CrdtAlreadyInstalled { table }` / `HolziError::CrdtInit { reason }` — see [Error mapping](#error-mapping). All are catastrophic during `create_instance` (fresh DB); the backend rolls back per postconditions above.
 
 ---
 
