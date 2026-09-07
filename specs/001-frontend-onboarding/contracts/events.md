@@ -8,7 +8,7 @@ Backend emits events via `AppHandle::emit(topic, payload)`. Frontend subscribes 
 
 ### `instance-list-changed`
 
-Emitted whenever a backend command changes instance-list-relevant state under `<AppLocalData>/instances/`: create, open (last-access bump), close (active-state transition), import, restore-pair, or trash. Also emitted on startup after any orphan-cleanup pass.
+Emitted whenever a backend command changes instance-list-relevant state under `<AppLocalData>/instances/`: create, open (last-access bump), close (active-state transition), import, restore-paired, or trash. Also emitted on startup after any orphan-cleanup pass.
 
 **Payload**:
 
