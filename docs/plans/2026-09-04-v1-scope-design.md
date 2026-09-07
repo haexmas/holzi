@@ -22,7 +22,7 @@ The founding document captures the full architectural vision. This document does
 | iroh peer per device | **In v1** | Every registered instance runs an iroh peer. Mobile only while foreground. |
 | Nostr command events (device-to-device) | **In v1** | Cross-device command routing over Nostr is v1's core value. |
 | NIP-17 DMs | **In v1** | Second ingress track survives from founding. |
-| `blob.offer` (iroh content-addressed blob transfer) | **Post-v1** | v1 does not ship blob transfer between devices. `blob.offer` and the ticket-lifecycle spec (`founding.md` §5 item 4) are deferred. Cross-device MCP results that would exceed a size threshold are refused in v1 rather than falling back to blobs. |
+| `blob.offer` (iroh content-addressed blob transfer) | **Post-v1** | v1 does not ship blob transfer between devices. `blob.offer` and the ticket-lifecycle spec (`founding.md` §5 item 4) are deferred. Cross-device MCP results that would exceed a size threshold are refused in v1 rather than falling back to blobs. Confirmed post-v1 on 2026-09-07, but explicitly kept in view as the first capability after v1 — see §14. |
 | `stream.offer` (real-time voice/video/screen streams) | **Post-v1** | No real-time media in v1. `founding.md` §4 item 11 (stream-session semantics) is entirely post-v1. |
 | MCP server for external clients (host-local) | **In v1** | IDE/shell/script access is v1. Standard MCP auth per transport. Two auth boundaries to spec (this one plus the cross-device one). |
 | MCP-to-Nostr adapter (cross-device MCP invocation) | **In v1** | Follows from cross-device commands + external MCP. |
@@ -50,6 +50,15 @@ No file transfer between devices. No voice/video. No cross-user sharing.
 
 - 2026-09-04 (initial): introduced a federation-root keypair derived from a paper-seed, master-signed attestation ring, and paper-seed-only recovery. Superseded.
 - 2026-09-06 (this revision): removed the federation-root/paper-seed layer as over-engineering for v1's closed-federation scope. Identity is per-SQLite-instance, held inside the encrypted database itself. Recovery is a surviving synced instance or a backup of the `.db` file. Pairing and capability slots kept but simplified to CRDT-synced peer records signed by the granting instance's own key. `founding.md` §2 (Identity model) is fully superseded for v1.
+- 2026-09-07 (scope note, **not** a v1 revision): cross-user sharing is designed against a
+  federation identity keypair that returns post-v1 — one secp256k1 key per person, replicated as
+  data inside the encrypted database to instances holding `sharing-authority`, signing instance
+  attestations only. See
+  [`2026-09-07-cross-user-sharing-deferred-design.md` §7](./2026-09-07-cross-user-sharing-deferred-design.md).
+  **v1's identity model below is unchanged**: instance keys only, no federation-scope key. The
+  2026-09-06 objection does not carry over, because it turned on paper-seed recovery being theatre
+  and the post-v1 key is not an offline artifact — it recovers from a surviving paired instance or a
+  `.db` backup like everything else.
 
 The 2026-09-04 model was rejected because a paper-seed only reconstructs signing capability, not the data that lived in the compromised or lost devices. In a closed federation of one operator's own devices with no cross-user sharing (see `founding.md` §6, still post-v1), no external party references the federation as a stable public identity, so the federation-scope root pubkey buys nothing that a surviving encrypted `.db` does not already provide. The paper-seed layer was inherited from the cross-user-sharing future direction and is deferred with it.
 
@@ -72,10 +81,33 @@ The 2026-09-04 model was rejected because a paper-seed only reconstructs signing
 
 `founding.md` §4 items 5 and 8 (encrypted-at-rest choice, multi-device routing) are resolved by consuming an extracted library.
 
-- **`haex-crdt`.** The SQLite + CRDT-sync layer currently living inside `haex-vault` is extracted into a standalone Rust crate named `haex-crdt`. Both `haex-vault` and `holzi` consume it as a Rust library dependency. This extraction is v1-blocking: no holzi implementation slice starts until `haex-crdt` exists as an importable crate.
+- **`haex-crdt`.** The SQLite + CRDT-sync layer currently living inside `haex-vault` is extracted into a standalone Rust crate named `haex-crdt`. Both `haex-vault` and `holzi` consume it as a Rust library dependency. This extraction is v1-blocking: no holzi implementation slice starts until `haex-crdt` exists as an importable crate. **Done 2026-09-06**: the crate exists at `~/Projekte/haex-crdt` and no longer blocks.
 - **At-rest encryption is inherited.** `holzi` does not choose its own at-rest scheme; it uses whatever `haex-crdt` provides (working assumption: SQLCipher, to be confirmed during extraction). If `haex-crdt` changes its scheme, `holzi` moves with it.
 - **What lives in `haex-crdt`-synced state.** Federation-scope encrypted state that must be identical across paired instances: `peer_instances` registry, revocation-epoch table, capability grants (per-peer flags), chat/session history, skills/memory (post-v1 scope but reserved). Per the 2026-09-06 §4 revision there is no capability-scoped signing material to replicate — instances only ever sign with their own keypair from `instance_identity`, which is a local-only record and MUST NOT sync across peers.
 - **What does not live in `haex-crdt`.** Ephemeral runtime state (open iroh sessions, current relay connections), local-only preferences that should not sync (device alias, local model file paths), and the per-instance secret keys in `instance_identity` (Nostr keypair + iroh NodeId keypair) that live inside the SQLite but MUST be excluded from CRDT delta transmission — they are per-instance-database secrets, not federation-shared state.
+- **Device identity for HLC (`DeviceIdProvider`).** Decided 2026-09-07. holzi mints device UUIDs in
+  two steps, following `haex-vault`: an installation-scoped random UUID is written to a file in the
+  host's user space, and from it a *further* random UUID is minted per database and used as that
+  database's `device_id`. Two vaults on the same host therefore carry unrelated device UUIDs, so an
+  observer cannot tell they were operated on the same machine. Consequence for the extraction
+  `Error::DeviceIdMismatch` behaviour shipped in `haex-crdt` v0.1.0 (`src/database/mod.rs`,
+  `reconcile_device_id`): the UUID is recorded in `haex_crdt_configs` on first open and a differing
+  supplied UUID is rejected. A `.db` copied to another host mints a fresh UUID there, so `uhlc`
+  node-ID uniqueness holds by construction and the mismatch signals "this database moved", not a
+  correctness hazard — but it currently blocks the move outright.
+
+  holzi's intended response is a **device handover**: adopt the new device UUID and rekey the
+  instance identity per this section's rekey-on-restore rule, so a `.db` stays portable across the
+  operator's machines. holzi cannot implement this alone, because `Database::open` fails before any
+  handle exists. **Shipped in `haex-crdt` v0.2.0** (2026-09-07): `DeviceIdPolicy` on
+  `DatabaseConfig` — `Reject` as the default so `haex-vault`'s assumptions are untouched, and an
+  `AdoptOnMismatch` opt-in that holzi sets after asking the operator. Adoption is safe for the HLC:
+  a new node ID is simply a new participant, and existing timestamps stay valid and comparable as
+  long as the copy it came from is retired, which is exactly what the handover means.
+
+  The one case that MUST be prevented is the same database opened twice on the same host, which the
+  `fs2` file lock inherited from `haex-vault`'s `vault_lock.rs` already covers
+  (`DatabaseError::VaultAlreadyOpenElsewhere`).
 - **Three cross-device channels, disjoint by role.** With `haex-crdt` in play, holzi has three cross-device channels rather than the two in `founding.md`:
   1. **Nostr** — semantic events: presence, capability advertisement, commands, LLM prompts/responses, DMs, control-plane events, confirmation intents and releases.
   2. **iroh** — bulk bytes: `blob.offer` (post-v1) and `stream.offer` (post-v1). No v1 traffic on this channel except peer keep-alive.
@@ -130,7 +162,7 @@ The killer v1 use case: an operator confirms from their phone a `require-confirm
 Two parallel workstreams gate holzi v1's first implementation slice:
 
 - **haex-hive schema migration** (in progress, in `~/Projekte/haex-hive/`). Until the migration lands, holzi's declared `com.github.haexmas.atoms.graphify-first-authoring` atom does not take effect. Blocks *tooling*, not code — holzi can proceed on design/spec work without it.
-- **`haex-crdt` extraction from `haex-vault`** (planned). Until `haex-crdt` exists as an importable Rust crate, holzi cannot start its first implementation slice. Blocks *code*.
+- ~~**`haex-crdt` extraction from `haex-vault`**~~ — **cleared 2026-09-06**. The crate lives at `~/Projekte/haex-crdt` (v0.2.0 as of 2026-09-07) and holzi consumes it as a git dependency. This no longer blocks the first implementation slice.
 
 Both are outside this repository. Neither is a holzi task. This document flags them so future readers know why holzi's implementation timeline waits.
 
@@ -161,16 +193,29 @@ Not decided by this document; still spec-phase work.
 - **From `founding.md` §4, still open:** item 1 (event-kind numbering), item 2 (peer-record wire format + replay protection — reshaped from the old `attestation` event per Section 4's 2026-09-06 revision), item 3 (ingress ACL policy language), item 9 (comparison due-diligence). Item 6 (master-key-custody options) is dropped for v1 — the SQLCipher passphrase is the only operator-managed secret; a broader custody story returns only if cross-user sharing reintroduces a federation-scope keypair post-v1.
 - **From this document, still open:** presence-event kind and availability-class wire format; sender queue TTL for `foreground-only` targets; embedded-runner stack selection (llama.cpp vs candle vs mistral.rs); exact `haex-crdt` crate boundaries and its own transport.
 - **Ephemeral Session Mode.** Temporary installs on untrusted hosts (an internet cafe laptop, a shared workstation) need a session-scoped lifecycle. Regardless of whether the eventual implementation uses an attested empty-capability device or an unattested guest peer, the parent issues a short-lived session lease with an explicit expiry bound to the temporary device or guest-session identity. On a normal session end, the parent publishes a revocation targeting that lease or attestation before the temporary device wipes its local haex-crdt store, per-device keypairs, and cached federation state. If the parent cannot reach every peer, the lease expiry is fail-closed; peers stop accepting the session identity when the expiry passes. A crash, forced termination, or power loss skips the clean-end revocation but has the same bounded-expiry outcome, and the operator can issue an explicit revocation from any surviving authority after recovery. Peers validate both revocation and expiry, so a copied device keypair cannot remain accepted beyond the session lease or a subsequent epoch bump. Open sub-questions are the exact lease/heartbeat wire format and whether the guest or empty-capability model ships in v1; the remote cleanup and fail-closed lifetime are requirements for either model.
-- **haex-crdt extraction plan** itself: which parts of `haex-vault` move out, what the new crate's public API looks like, how `haex-vault` continues to work post-extraction. Owned by the `haex-vault` project, not holzi.
+- ~~**haex-crdt extraction plan**~~ — resolved. The crate shipped; see [`2026-09-04-haex-crdt-extraction-plan.md`](./2026-09-04-haex-crdt-extraction-plan.md) for the post-hoc status header and what the delivered API actually looks like.
 
 ## 13. Next actions for holzi (this repo)
 
 Once this document is committed:
 
-1. Wait on haex-hive migration and `haex-crdt` extraction.
+1. ~~Wait on haex-hive migration and `haex-crdt` extraction.~~ `haex-crdt` cleared 2026-09-06; the haex-hive migration blocks tooling only.
 2. Start the "Project structure and spec workflow" question (`founding.md` §5 item 1): whether to adopt speckit as haex-hive does, adopt it lightly, or use a different approach. This can begin before the two blockers clear.
 
 ## 14. Follow-up decisions (post-drafting)
 
 - **Speckit adopted** (2026-09-04): decision on §13 item 2 resolved in favor of full speckit initialization. `specify init --here --ai claude --offline` was run; `.specify/`, `.claude/skills/speckit-*`, and `CLAUDE.md` (speckit block) are in place.
 - **First spec written**: [`specs/001-frontend-onboarding/`](../../specs/001-frontend-onboarding/) covers the Landing / Anlegen / Öffnen / Verbinden / Unlock surface. It also revises `founding.md` §2.2 to permit multiple `.db` files per install with exactly one active — see that spec's [`research.md → Storage-file model`](../../specs/001-frontend-onboarding/research.md) for the rationale. This revision does not change v1 scope; it changes how the walking-skeleton is reached (per §11) and how `<AppLocalData>/instances/` is laid out on disk.
+- **Cross-user sharing deferred, design captured** (2026-09-07):
+  [`2026-09-07-cross-user-sharing-deferred-design.md`](./2026-09-07-cross-user-sharing-deferred-design.md)
+  records how shared spaces would work without MLS or UCAN. Not v1. Sequencing decided: closed
+  federation first, open federation after.
+- **`blob.offer` confirmed post-v1** (2026-09-07): the §2 line stands, but blob transfer is now the
+  named next capability after v1 rather than an open question. Exchanging files between the
+  operator's own devices ("fetch my photos from my phone") is a headline use case, so v1 design
+  work must not foreclose it.
+- **Plane roles sharpened** (2026-09-07): Nostr carries authentication, authorization and
+  orchestration; iroh carries data and file transfer. This tightens `founding.md` §2's two-plane
+  split. It sits awkwardly with §5's "iroh never carries state" should the `haex-crdt` sync channel
+  later run over iroh — which the same section already permits by leaving haex-crdt's transport to
+  haex-crdt. Flagged for the sync-channel spec to resolve.
