@@ -1,16 +1,18 @@
 # `haex-crdt` — Extraction Plan
 
 **Status**: **Executed — this plan is history, not a to-do.** The crate shipped on 2026-09-06 and
-lives at `~/Projekte/haex-crdt` (repo `haexmas/haex-crdt`), released as `v0.1.0` and bumped to
-`v0.2.0` on 2026-09-07. Read the crate's own source and README for the delivered API; this document
+lives at `~/Projekte/haex-crdt` (repo `haexmas/haex-crdt`), released as `v0.1.0`, with an unmerged `feat/v0.1.1-batch-2-unblocker` series and the
+`feat/device-id-policy` change on top of it, both awaiting the same release cut (working
+assumption `v0.2.0`). Read the crate's own source and README for the delivered API; this document
 records the intent and the reasoning, and its future tense is no longer accurate.
 
 Known drift between this plan and what shipped:
 
-- §4.1's `DeviceIdMismatch` contract shipped, but the recorded UUID lives in `haex_crdt_configs`
-  (key `CONFIG_KEY_DEVICE_ID`), not in `haex_hlc_state` as written here. As of `v0.2.0` the
-  mismatch outcome is also configurable via `DeviceIdPolicy` on `DatabaseConfig` — `Reject` is the
-  default, `AdoptOnMismatch` lets a consumer adopt a relocated `.db` as a device handover. See
+- §4.1's `DeviceIdMismatch` contract shipped, but the recorded UUID lives in
+  `haex_crdt_configs_no_sync` (key `CONFIG_KEY_DEVICE_ID`), not in `haex_hlc_state` as written
+  here. On top of that, the pending `feat/device-id-policy` change makes the mismatch outcome
+  configurable via `DeviceIdPolicy` on `DatabaseConfig` — `Reject` is the default,
+  `AdoptOnMismatch` lets a consumer adopt a relocated `.db` as a device handover. See
   [`2026-09-04-v1-scope-design.md` §5](./2026-09-04-v1-scope-design.md) for holzi's decision.
 - The crate's scope came out narrower than `specs/001-frontend-onboarding/` assumed: no identity,
   pairing, or sync transport. holzi owns all of that, plus its own federation-state migrations.

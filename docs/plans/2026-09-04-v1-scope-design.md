@@ -91,7 +91,7 @@ The 2026-09-04 model was rejected because a paper-seed only reconstructs signing
   database's `device_id`. Two vaults on the same host therefore carry unrelated device UUIDs, so an
   observer cannot tell they were operated on the same machine. Consequence for the extraction
   `Error::DeviceIdMismatch` behaviour shipped in `haex-crdt` v0.1.0 (`src/database/mod.rs`,
-  `reconcile_device_id`): the UUID is recorded in `haex_crdt_configs` on first open and a differing
+  `reconcile_device_id`): the UUID is recorded in `haex_crdt_configs_no_sync` on first open and a differing
   supplied UUID is rejected. A `.db` copied to another host mints a fresh UUID there, so `uhlc`
   node-ID uniqueness holds by construction and the mismatch signals "this database moved", not a
   correctness hazard — but it currently blocks the move outright.
@@ -99,7 +99,7 @@ The 2026-09-04 model was rejected because a paper-seed only reconstructs signing
   holzi's intended response is a **device handover**: adopt the new device UUID and rekey the
   instance identity per this section's rekey-on-restore rule, so a `.db` stays portable across the
   operator's machines. holzi cannot implement this alone, because `Database::open` fails before any
-  handle exists. **Shipped in `haex-crdt` v0.2.0** (2026-09-07): `DeviceIdPolicy` on
+  handle exists. **Shipped in `haex-crdt`** on `feat/device-id-policy` (2026-09-07), rebased onto the v0.1.1 unblocker series and awaiting the same release cut: `DeviceIdPolicy` on
   `DatabaseConfig` — `Reject` as the default so `haex-vault`'s assumptions are untouched, and an
   `AdoptOnMismatch` opt-in that holzi sets after asking the operator. Adoption is safe for the HLC:
   a new node ID is simply a new participant, and existing timestamps stay valid and comparable as
@@ -162,7 +162,7 @@ The killer v1 use case: an operator confirms from their phone a `require-confirm
 Two parallel workstreams gate holzi v1's first implementation slice:
 
 - **haex-hive schema migration** (in progress, in `~/Projekte/haex-hive/`). Until the migration lands, holzi's declared `com.github.haexmas.atoms.graphify-first-authoring` atom does not take effect. Blocks *tooling*, not code — holzi can proceed on design/spec work without it.
-- ~~**`haex-crdt` extraction from `haex-vault`**~~ — **cleared 2026-09-06**. The crate lives at `~/Projekte/haex-crdt` (v0.2.0 as of 2026-09-07) and holzi consumes it as a git dependency. This no longer blocks the first implementation slice.
+- ~~**`haex-crdt` extraction from `haex-vault`**~~ — **cleared 2026-09-06**. The crate lives at `~/Projekte/haex-crdt`, released as `v0.1.0`, with a `feat/v0.1.1-batch-2-unblocker` series and the `feat/device-id-policy` change stacked on top and pending a release cut (working assumption `v0.2.0`). This no longer blocks the first implementation slice.
 
 Both are outside this repository. Neither is a holzi task. This document flags them so future readers know why holzi's implementation timeline waits.
 
