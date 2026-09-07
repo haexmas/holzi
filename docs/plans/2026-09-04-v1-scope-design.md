@@ -148,7 +148,7 @@ A concrete first slice, once both blockers above are cleared. Not a spec; a sket
 4. Holzi boots on device B. First-run wizard offers "join existing federation." Device A displays a short-lived pairing QR (containing a one-time token and a Nostr contact hint). Device B scans it.
 5. Device B generates its own Nostr/iroh identities and signs the canonical pairing transcript. Device A verifies and signs the same transcript; both write mutually identifying `peer_instances` records, signed by their respective instance keys, and `haex-crdt` synchronizes those peer records between the two devices.
 6. Device B's relay endpoint comes up, publishes its Presence.
-7. From Device A's UI, the operator sends a `ping` command targeting `@device-b` (alias resolution + peer-record epoch binding as in `founding.md` explicit-targeting). The relay routes the command to Device B; Device B echoes a `pong` result.
+7. From Device A's UI, the operator sends a `ping` command targeting `@device-b`. The relay resolves the alias only through the target's mutually signed `peer_instances` record, checks its federation-epoch binding, and routes the command to Device B; Device B echoes a `pong` result.
 
 **Explicitly out of this slice.** LLM chat, external MCP server, MCP-to-Nostr adapter, confirmation-authority flow, embedded model runner, provider adapters, mobile.
 

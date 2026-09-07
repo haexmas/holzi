@@ -147,7 +147,7 @@ The command is idempotent for an already-cleaned pending flow. It MUST NOT remov
 
 ### `open_instance`
 
-Opens an existing `.db`, validates and unlocks SQLCipher, starts Nostr relay + iroh peer, and marks active in `AppState`. If another instance is active, the command performs the close-and-open switch as one state-locked operation, but validates the requested credentials before closing the current runtime.
+Opens an existing `.db`, validates and unlocks SQLCipher, starts Nostr relay + iroh peer, and marks active in `AppState`. If another instance is active, the command performs the close-and-open switch as one state-locked operation, but validates the requested credentials before closing the current runtime. An import-pending copy is a restore, not a normal open: after credential validation, it MUST rekey `instance_identity` and retire the copied keys before any relay or iroh endpoint starts; the fresh identity then proceeds through normal pairing as a new peer.
 
 ```rust
 #[tauri::command]
@@ -165,7 +165,7 @@ pub struct OpenInstanceArgs {
 
 **Preconditions**: `<name>.db` exists and is not a pending Genesis database. An imported database with an import-pending marker may be opened; its SQLCipher credential validation is completed by this command.
 
-**Postconditions on success**: SQLCipher unlocked; Nostr relay listening; iroh peer online; `AppState.active_instance = Some(...)`; the database mtime is refreshed to the current time as the persisted `lastAccess`; and any import-pending marker is removed. If another instance was active, it is fully closed before the new one becomes visible. Backend emits `instance-list-changed` (last-access bumped).
+**Postconditions on success**: SQLCipher unlocked; Nostr relay listening; iroh peer online; `AppState.active_instance = Some(...)`; the database mtime is refreshed to the current time as the persisted `lastAccess`; and any import-pending marker is removed. For an import-pending copy, the fresh `instance_identity` is active and the copied keys were never used to start a network endpoint; the fresh identity proceeds through normal pairing as a new peer. If another instance was active, it is fully closed before the new one becomes visible. Backend emits `instance-list-changed` (last-access bumped).
 
 **Atomic switch and rollback**: the state lock is held throughout the operation. First, `open_instance` validates the requested file and SQLCipher credentials while the current runtime and `AppState.active_instance` remain unchanged. If that validation fails, no close, state transition, mtime refresh, or active-instance event occurs. Only after validation succeeds may the command shut down the previous runtime and activate the requested runtime. If a later startup step fails, every service started for the requested instance is stopped, its database handle is dropped, and `AppState.active_instance` is cleared. For an import-pending copy, a failed unlock attempt—including an incorrect passphrase—retains the copy and marker so a subsequent `open_instance` attempt can retry; deletion requires an explicit discard action or conclusive validation that the file is not a holzi instance. The previous instance is not silently resumed after a post-validation startup failure.
 
