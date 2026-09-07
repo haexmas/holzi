@@ -96,7 +96,7 @@ Zunächst nur stabile IDs und kurze, atomare Schreibvorgänge. `haex-crdt` biete
 | Lokale Modellzuordnung | Modell-Fingerprint → lokaler Dateiverweis, Kontext-/Runtime-Einstellungen | nein |
 | Generierungsauftrag und Zwischenstand | lokale Tabelle mit Request-ID; nach Crash als unterbrochen behandeln | nein |
 | Sync-Fortschritt und Installations-/Datenbank-Zuordnung | lokale Metadaten, getrennt pro Peer | nein |
-| Private Identitätsschlüssel | Produktziel: lokale `instance_identity`-Tabelle innerhalb der SQLCipher-Datenbank; erforderliche Wortlautkorrektur siehe Schlüsselhaltung | niemals |
+| Private Identitätsschlüssel | Produktziel: lokale `instance_identity_no_sync`-Tabelle innerhalb der SQLCipher-Datenbank; erforderliche Wortlautkorrektur siehe Schlüsselhaltung | niemals |
 | GGUF-Gewichte | App-eigener Modellordner oder ausdrücklich gewählte lokale Datei, außerhalb der SQLite | nein |
 
 Nachrichten nach Veröffentlichung nicht im selben Datensatz parallel bearbeiten. Zwei Geräte dürfen neue Nachrichten mit verschiedenen IDs erzeugen. Elternbezüge erhalten Verzweigungen; eine deterministische Geschwistersortierung mit logischer Zeit plus ID verhindert wechselnde Reihenfolgen. Für eine neue Generierung explizit den verwendeten Elternpfad bestimmen. Ein monolithisches JSON-Array pro Gespräch würde durch LWW ganze Verläufe verdrängen.
