@@ -2,6 +2,11 @@
 
 **Status**: Draft. All types are generated from Rust `#[derive(ts_rs::TS)]` structs and exported to `src/types/bindings/` via `cargo test` (per haex-vault's `generate:ts-types` script).
 
+**V1 supersession notice**: The `Recover` variant and paper-seed-related types
+in this draft are historical and blocked. They MUST NOT be implemented until
+this contract is rewritten for the per-instance identity and rekey-on-restore
+model in `v1-scope-design.md` §4.
+
 Frontend imports via a `@bindings/*` path alias:
 
 ```ts

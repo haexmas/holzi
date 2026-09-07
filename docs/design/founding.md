@@ -3,7 +3,7 @@
 **Status**: Draft. Founding design captured 2026-09-04.
 
 **Revised by**:
-- [`docs/plans/2026-09-04-v1-scope-design.md`](../plans/2026-09-04-v1-scope-design.md). That document draws the v1 scope line and revises the identity/pairing model, the storage layer (introducing `haex-crdt`), and the mobile availability model. Where the two documents disagree for v1, the plans document wins. **§4 of that plan carries a 2026-09-06 revision that fully supersedes §4 of this founding doc** (Master key + master-signed device attestations → per-SQLite-instance keypair stored inside the encrypted database; paper-seed dropped; recovery via surviving synced instance or `.db` backup).
+- [`docs/plans/2026-09-04-v1-scope-design.md`](../plans/2026-09-04-v1-scope-design.md). That document draws the v1 scope line and revises the identity/pairing model, the storage layer (introducing `haex-crdt`), and the mobile availability model. Where the two documents disagree for v1, the plans document wins. **§4 of that plan carries a 2026-09-06 revision that fully supersedes §2's Identity model in this founding doc** (Master key + master-signed device attestations → per-SQLite-instance keypairs stored inside the encrypted database; paper-seed dropped; recovery via surviving synced instance or `.db` backup).
 - [`specs/001-frontend-onboarding/spec.md`](../../specs/001-frontend-onboarding/spec.md). First speckit spec. Refines §2.2 "Device equals relay equals Tauri application" to "the *active* SQLite instance equals the running Nostr relay endpoint equals the running iroh peer" — the Tauri application is a container that may hold multiple `.db` files on disk with exactly one active at a time. Rationale in [`specs/001-frontend-onboarding/research.md → Storage-file model`](../../specs/001-frontend-onboarding/research.md).
 
 **What holzi is**: a portable, isolated personal-agent app. Runs as a Tauri application on any device the operator owns. All LLM credentials, model choice, and history live inside the app. LLM interactions happen inside holzi; the host system's LLM configuration (if any) is unrelated. External access to holzi is only via MCP.
@@ -151,7 +151,7 @@ Recorded here so the follow-up spec work knows its scope:
 Ordered by the earliest thing that must exist for the rest to have a normative home.
 
 1. **Project structure and spec workflow for holzi.** Resolved on 2026-09-04: holzi uses the full speckit workflow; `specs/001-frontend-onboarding/` is the first normative slice. Future specs continue to be captured, reviewed, and versioned there.
-2. **Spec for the attestation event and device registry.** The smallest normative slice, no transport yet.
+2. **Spec for the `peer_instances` record and peer registry.** The smallest normative slice, no transport yet.
 3. **Spec for the two-track ingress policy** with concrete event kinds and the relay policy engine surface.
 4. **Spec for the `blob.offer` announcement, ticket lifecycle, and iroh accept-handler.**
 5. **Spec for the MCP-to-Nostr adapter** (cross-device MCP invocation between the operator's own holzi devices) and remote capability advertisement.

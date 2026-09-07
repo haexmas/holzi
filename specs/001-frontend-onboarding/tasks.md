@@ -12,6 +12,12 @@ description: "Task list for the frontend-onboarding feature (spec 001)"
 - `haex-crdt` extraction from `haex-vault` (per [`docs/plans/2026-09-04-haex-crdt-extraction-plan.md`](../../docs/plans/2026-09-04-haex-crdt-extraction-plan.md) and [`docs/plans/2026-09-04-v1-scope-design.md §10`](../../docs/plans/2026-09-04-v1-scope-design.md)). No implementation task below that requires `haex-crdt` at runtime may start until the crate is importable.
 - Frontend-only scaffold tasks (T001..T010) do not depend on `haex-crdt` and may begin immediately.
 
+**V1 supersession notice**: The paper-seed display/confirmation tasks and the
+US5 Recover phase are historical from the pre-2026-09-06 design and are blocked
+until this feature is rewritten for per-instance identities and rekey-on-restore.
+Do not implement `PaperSeedDisplay`, `paper_seed`, `root_fingerprint`, or
+`CreateMode::Recover` from this task list.
+
 **Tests**: E2E tests are IN scope (SC-006 and SC-007 depend on them). Vitest for stores, composables, and the `html5-qrcode` scanner lifecycle in `ConnectSheet` is IN scope. Rust `cargo test` for command handlers is IN scope. Other pure UI component tests are OUT of scope for this slice because their behavior is covered by E2E.
 
 **Organization**: Tasks are grouped by user story (US1..US5 from `spec.md`). Setup + Foundational phases are shared; user stories are as independent as they can practically be, given they share the Landing page.
@@ -122,7 +128,7 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 
 **Goal**: Verbinden CTA opens the Connect sheet; scanning/pasting a valid pairing token from a parent device creates a new instance, co-signs the pairing transcript, syncs `haex-crdt`, navigates to federation view.
 
-**Independent Test**: With a second real holzi instance acting as parent (or a mocked pairing server for CI), Verbinden a fresh install and observe the attestation ring contains both devices on both sides.
+**Independent Test**: With a second real holzi instance acting as parent (or a mocked pairing server for CI), Verbinden a fresh install and observe the `peer_instances` registry contains both devices on both sides.
 
 ### Tests for US2
 

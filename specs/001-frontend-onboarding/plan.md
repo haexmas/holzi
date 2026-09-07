@@ -3,6 +3,11 @@
 **Branch**: `001-frontend-onboarding` | **Date**: 2026-09-04 | **Spec**: [`spec.md`](./spec.md)
 **Input**: Feature specification from [`./spec.md`](./spec.md)
 
+**V1 supersession notice**: The paper-seed/Recover portions of this plan,
+including `PaperSeedDisplay.vue`, are historical and blocked until the feature
+is rewritten for per-instance identities and rekey-on-restore. Do not implement
+those portions from this draft.
+
 ## Summary
 
 Deliver the holzi Tauri app's first-impression surfaces: a landing page with three primary actions (Anlegen, Öffnen, Verbinden) mirroring haex-vault's landing pattern, plus a Zuletzt-verwendet list and an Unlock sheet for existing instances. Frontend is Nuxt 4 (SPA) with Tailwind v4, shadcn-vue components (copy-in), Pinia stores, `@nuxtjs/i18n`, and `@nuxt/icon` fed from a locally-bundled Lucide icon set. Backend is a set of Tauri commands over the `haex-crdt` layer that manage `<name>.db` files under `<AppLocalData>/instances/`, including the two-phase Genesis boundary and atomic active-instance switching. This slice is the minimum surface required to reach the walking-skeleton described in `docs/plans/2026-09-04-v1-scope-design.md §11` (two devices paired into one federation, exchanging a ping).

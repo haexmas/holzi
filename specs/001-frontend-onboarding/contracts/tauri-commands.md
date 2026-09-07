@@ -2,6 +2,11 @@
 
 **Status**: Draft, spec-phase working proposals. Field names, error variants, and argument shapes MUST be reviewed once `haex-crdt`'s own initialization API is finalized. Nothing here is a settled interface.
 
+**V1 supersession notice**: The paper-seed/Recover branch, `paper_seed`,
+`root_fingerprint`, and paper-seed confirmation flow below are historical and
+blocked. They MUST NOT be implemented until this contract is rewritten for the
+per-instance identity and rekey-on-restore model in `v1-scope-design.md` §4.
+
 **Convention**: All commands are async, return `Result<T, HolziError>` on the Rust side, and are exposed to the frontend via `@tauri-apps/api/core::invoke<T>(name, args)`. Argument keys are `camelCase` from the frontend, mapped to `snake_case` Rust field names by serde.
 
 ## Commands

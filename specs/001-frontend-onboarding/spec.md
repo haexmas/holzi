@@ -10,6 +10,16 @@
 - Consumes decisions from [`docs/design/founding.md`](../../docs/design/founding.md) and [`docs/plans/2026-09-04-v1-scope-design.md`](../../docs/plans/2026-09-04-v1-scope-design.md).
 - Revises `founding.md` §2.2 ("Device equals relay equals Tauri application") to allow multiple SQLite database files on disk per install, with exactly one active at runtime. See **Assumptions** below.
 
+**V1 supersession notice (2026-09-06)**: This draft still contains the earlier
+paper-seed/federation-root onboarding contract. Those parts are superseded by
+`v1-scope-design.md` §4 and are blocked from implementation until this spec is
+rewritten. In particular, `CreateMode::Recover`, `paper_seed`,
+`root_fingerprint`, `PaperSeedDisplay`, paper-seed display/confirmation, and
+US5 are not v1 requirements. V1 Genesis creates a fresh per-SQLite identity;
+`.db` backup recovery uses rekey-on-restore before any network endpoint starts.
+The same notice applies to the shared-type, Tauri-command, plan, quickstart,
+and task documents in this feature directory.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 — Anlegen (Genesis of a new federation) (Priority: P1) 🎯 MVP
@@ -34,7 +44,7 @@ The operator has an already-attested device (parent) running holzi and installs 
 
 **Why this priority**: This is the second half of the v1 walking-skeleton (`v1-scope-design.md §11`: two devices paired into one federation exchanging a ping). Without Verbinden, holzi is single-device.
 
-**Independent Test**: With a parent device running an attested instance and displaying a valid pairing token, on the joiner complete the Verbinden sheet; verify (1) a new `<name>.db` file appears on the joiner, (2) the attestation ring in `haex-crdt` contains both devices on both sides after sync, (3) the joiner's presence event appears in the parent's registry.
+**Independent Test**: With a parent device running a registered instance and displaying a valid pairing token, on the joiner complete the Verbinden sheet; verify (1) a new `<name>.db` file appears on the joiner, (2) the `peer_instances` registry in `haex-crdt` contains both devices on both sides after sync, (3) the joiner's presence event appears in the parent's registry.
 
 **Acceptance Scenarios**:
 
@@ -153,7 +163,7 @@ No attested device survives, and the operator has only their paper-seed. From th
 
 ### Key Entities
 
-- **Instance**: a `<name>.db` file in `<AppLocalData>/instances/`, containing a SQLCipher-encrypted `haex-crdt` store with federation state (attestation ring, revocation epochs, capability grants, chat/session history). Each instance is one identity in one federation.
+- **Instance**: a `<name>.db` file in `<AppLocalData>/instances/`, containing a SQLCipher-encrypted `haex-crdt` store with federation state (`peer_instances` registry, revocation epochs, capability grants, chat/session history). Each instance is one identity in one federation.
 - **InstanceInfo**: metadata surface for the frontend list: `{ name: string, alias: string, lastAccess: ISO8601, sizeBytes: number }`. `name` is the filename basename without `.db`; `alias` is the non-secret user-visible label, initially defaulting to `name`. No secrets.
 - **CreateMode**: `Genesis | Recover { seed: string, expectedFingerprint: string } | Join { token: string }` — the three initialization modes across Anlegen + Verbinden.
 - **PairingToken**: opaque short-lived value issued by a parent device, carrying (in encoded form) a Nostr contact hint, a one-time nonce, an expiry, and the current federation epoch.
