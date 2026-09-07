@@ -3,14 +3,14 @@
 **Branch**: `001-frontend-onboarding` | **Date**: 2026-09-04 | **Spec**: [`spec.md`](./spec.md)
 **Input**: Feature specification from [`./spec.md`](./spec.md)
 
-**V1 supersession notice**: The paper-seed/Recover portions of this plan,
-including `PaperSeedDisplay.vue`, are historical and blocked until the feature
-is rewritten for per-instance identities and rekey-on-restore. Do not implement
-those portions from this draft.
+**V1 contract note**: Genesis creates a fresh per-SQLite identity without a
+paper-seed confirmation step. Imported databases use rekey-on-restore and the
+restore-pairing handoff described in `spec.md`; `PaperSeedDisplay.vue` is not a
+v1 component.
 
 ## Summary
 
-Deliver the holzi Tauri app's first-impression surfaces: a landing page with three primary actions (Anlegen, Öffnen, Verbinden) mirroring haex-vault's landing pattern, plus a Zuletzt-verwendet list and an Unlock sheet for existing instances. Frontend is Nuxt 4 (SPA) with Tailwind v4, shadcn-vue components (copy-in), Pinia stores, `@nuxtjs/i18n`, and `@nuxt/icon` fed from a locally-bundled Lucide icon set. Backend is a set of Tauri commands over the `haex-crdt` layer that manage `<name>.db` files under `<AppLocalData>/instances/`, including the two-phase Genesis boundary and atomic active-instance switching. This slice is the minimum surface required to reach the walking-skeleton described in `docs/plans/2026-09-04-v1-scope-design.md §11` (two devices paired into one federation, exchanging a ping).
+Deliver the holzi Tauri app's first-impression surfaces: a landing page with three primary actions (Anlegen, Öffnen, Verbinden) mirroring haex-vault's landing pattern, plus a Zuletzt-verwendet list and an Unlock sheet for existing instances. Frontend is Nuxt 4 (SPA) with Tailwind v4, shadcn-vue components (copy-in), Pinia stores, `@nuxtjs/i18n`, and `@nuxt/icon` fed from a locally-bundled Lucide icon set. Backend is a set of Tauri commands over the `haex-crdt` layer that manage `<name>.db` files under `<AppLocalData>/instances/`, including atomic Genesis creation, rekey-on-restore, restore pairing, and active-instance switching. This slice is the minimum surface required to reach the walking-skeleton described in `docs/plans/2026-09-04-v1-scope-design.md §11` (two devices paired into one federation, exchanging a ping).
 
 ## Technical Context
 
@@ -102,11 +102,10 @@ src/                                 # Nuxt frontend (SPA)
 │   │   ├── radio-group/RadioGroup.vue
 │   │   └── sonner/Sonner.vue
 │   └── onboarding/                  # Feature components → <OnboardingCreateSheet>, ...
-│       ├── CreateSheet.vue          # Anlegen — Genesis + Recover sub-modes
+│       ├── CreateSheet.vue          # Anlegen — fresh Genesis instance
 │       ├── OpenSheet.vue            # Öffnen — file picker + copy
 │       ├── ConnectSheet.vue         # Verbinden — QR scanner with text-token fallback
 │       ├── UnlockSheet.vue          # Passphrase entry for existing instance
-│       ├── PaperSeedDisplay.vue     # Read-once seed presentation
 │       └── InstancesList.vue        # Zuletzt-verwendet list
 ├── composables/
 │   ├── useInstance.ts               # Bridge to Tauri commands + AppState

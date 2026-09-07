@@ -10,31 +10,29 @@
 - Consumes decisions from [`docs/design/founding.md`](../../docs/design/founding.md) and [`docs/plans/2026-09-04-v1-scope-design.md`](../../docs/plans/2026-09-04-v1-scope-design.md).
 - Revises `founding.md` §2.2 ("Device equals relay equals Tauri application") to allow multiple SQLite database files on disk per install, with exactly one active at runtime. See **Assumptions** below.
 
-**V1 supersession notice (2026-09-06)**: This draft still contains the earlier
-paper-seed/federation-root onboarding contract. Those parts are superseded by
-`v1-scope-design.md` §4 and are blocked from implementation until this spec is
-rewritten. In particular, `CreateMode::Recover`, `paper_seed`,
-`root_fingerprint`, `PaperSeedDisplay`, paper-seed display/confirmation, and
-US5 are not v1 requirements. V1 Genesis creates a fresh per-SQLite identity;
-`.db` backup recovery uses rekey-on-restore before any network endpoint starts.
-The same notice applies to the shared-type, Tauri-command, plan, quickstart,
-and task documents in this feature directory.
+**V1 supersession notice (2026-09-06)**: The paper-seed/federation-root
+onboarding material retained in this draft is historical and non-normative. It
+is superseded by `v1-scope-design.md` §4 and MUST NOT be implemented. V1
+Genesis creates a fresh per-SQLite identity; `.db` backup recovery uses
+rekey-on-restore before any network endpoint starts, then completes pairing in
+the same imported database. The same notice applies to the shared-type,
+Tauri-command, plan, quickstart, and task documents in this feature directory.
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 — Anlegen (Genesis of a new federation) (Priority: P1) 🎯 MVP
 
-The operator installs holzi for the first time on a device and creates a fresh federation. On the landing page, they choose **Anlegen**, name the instance, set a passphrase, are shown the paper-seed bundle, confirm they have recorded it, and are dropped into the running instance.
+The operator installs holzi for the first time on a device and creates a fresh federation. On the landing page, they choose **Anlegen**, name the instance, set a passphrase, and are dropped into the running instance with fresh Nostr and iroh identities stored in the encrypted database.
 
 **Why this priority**: Without Anlegen, no federation exists. It is the entry point for every subsequent scenario and must ship for the v1 walking-skeleton.
 
-**Independent Test**: On a fresh install with an empty `instances/` directory, complete the Anlegen sheet with valid inputs; verify (1) a new `<name>.db` file appears in `<AppLocalData>/instances/`, (2) the paper-seed is displayed exactly once, (3) after confirmation the app navigates to the federation surface and Nostr relay + iroh peer are running.
+**Independent Test**: On a fresh install with an empty `instances/` directory, complete the Anlegen sheet with valid inputs; verify (1) a new `<name>.db` file appears in `<AppLocalData>/instances/`, (2) its fresh `instance_identity` is stored in the encrypted database, and (3) the app navigates to the federation surface with the Nostr relay and iroh peer running.
 
 **Acceptance Scenarios**:
 
-1. **Given** no existing instance and the Anlegen sheet open, **When** the operator submits name, passphrase, and paper-seed confirmation, **Then** the instance file is created, the app unlocks it, and navigates to the federation view.
+1. **Given** no existing instance and the Anlegen sheet open, **When** the operator submits name and passphrase, **Then** the instance file is created with fresh per-instance identities, the app unlocks it, and navigates to the federation view.
 2. **Given** the Anlegen sheet open, **When** the operator submits a name that already exists in `instances/`, **Then** an inline error is shown and no file is created.
-3. **Given** the paper-seed display step, **When** the operator dismisses the sheet without confirming, **Then** the instance file is either not created or is discarded and removed from the list.
+3. **Given** the Anlegen sheet is dismissed before submission, **Then** no instance file is created.
 
 ---
 
@@ -56,17 +54,19 @@ The operator has a parent instance whose `peer_instances` record carries `pairin
 
 ### User Story 3 — Öffnen (Import external `.db` file from filesystem) (Priority: P2)
 
-The operator has an instance file (`.db`) on the host filesystem — for example moved from another machine on a USB stick, restored from backup, or checked out of a personal sync location — and wants holzi to manage it. On the landing they choose **Öffnen**, pick the file via OS file dialog, and holzi copies it into `<AppLocalData>/instances/` under its original name (or a de-duplicated variant). The copy is treated as a restore: after the original passphrase unlocks it, holzi performs rekey-on-restore before starting any relay or iroh endpoint, retires the copied identity, and creates fresh instance keys. The restored instance then enters the normal pairing flow as a new peer; it is never started on the copied keys.
+The operator has an instance file (`.db`) on the host filesystem — for example moved from another machine on a USB stick, restored from backup, or checked out of a personal sync location — and wants holzi to manage it. On the landing they choose **Öffnen**, pick the file via OS file dialog, and holzi copies it into `<AppLocalData>/instances/` under its original name (or a de-duplicated variant). The copy is treated as a restore: after the original passphrase unlocks it, holzi performs rekey-on-restore before starting any relay or iroh endpoint, retires the copied identity, and creates fresh instance keys. Holzi then opens the federation view for that same imported database in `restore-pairing-required` state. The operator selects **Wiederherstellung verbinden**, scans or pastes a pairing token from a surviving parent instance, and holzi completes pairing in place; it never creates a second database or starts on the copied keys.
 
 **Why this priority**: Portability. Holzi has no export command because the `.db` file *is* the export; Öffnen is the corresponding import. Not required for the walking-skeleton, but essential for cross-device migration in v1.
 
-**Independent Test**: Place a valid holzi `.db` file outside `<AppLocalData>/instances/`; open the Öffnen sheet, pick the file; verify (1) the file is copied (not moved) into `instances/`, (2) the source file remains untouched, (3) the copied file appears in the list, (4) unlocking with the original passphrase performs rekey-on-restore before any relay or iroh endpoint starts, and (5) the fresh identity enters pairing as a new peer.
+**Independent Test**: Place a valid holzi `.db` file outside `<AppLocalData>/instances/`; open the Öffnen sheet, pick the file; verify (1) the file is copied (not moved) into `instances/`, (2) the source file remains untouched, (3) the copied file appears in the list, (4) unlocking with the original passphrase performs rekey-on-restore before any relay or iroh endpoint starts, (5) the federation view offers **Wiederherstellung verbinden**, (6) scanning or pasting a parent token updates that same imported database with mutually signed `peer_instances` records, and (7) no second instance file is created.
 
 **Acceptance Scenarios**:
 
-1. **Given** a valid `.db` file at an arbitrary path, **When** the operator selects it in the Öffnen sheet, **Then** the file is copied into `instances/`, appears in the list, and its original passphrase unlocks the copy for rekey-on-restore; no network endpoint starts with the copied identity, and the fresh identity proceeds through pairing as a new peer.
-2. **Given** a file whose name conflicts with an existing instance, **When** the operator confirms the import, **Then** the operator is prompted for either overwrite, rename, or cancel — default behavior is rename with a numeric suffix, no silent overwrite.
-3. **Given** a structurally valid regular `.db` file that was imported successfully, **When** the operator attempts to unlock it with an incorrect passphrase, **Then** `open_instance` rejects the attempt with an explicit error, retains the pending imported copy and marker for a later unlock attempt or explicit discard, and leaves any currently active instance unchanged; structural source failures are still rejected before copying.
+1. **Given** a valid `.db` file at an arbitrary path, **When** the operator selects it in the Öffnen sheet, **Then** the file is copied into `instances/`, appears in the list, and its original passphrase unlocks the copy for rekey-on-restore; no network endpoint starts with the copied identity, and the federation view offers the restore-pairing handoff for the same database.
+2. **Given** an imported database in `restore-pairing-required` state, **When** the operator selects **Wiederherstellung verbinden** and scans or pastes a valid parent token, **Then** the backend updates that imported database in place with the fresh identity's mutually signed `peer_instances` records, clears the restore marker, and opens the normal federation view without creating another instance.
+3. **Given** a file whose name conflicts with an existing instance, **When** the operator confirms the import, **Then** the operator is prompted for either overwrite, rename, or cancel — default behavior is rename with a numeric suffix, no silent overwrite.
+4. **Given** a structurally valid regular `.db` file that was imported successfully, **When** the operator attempts to unlock it with an incorrect passphrase, **Then** `open_instance` rejects the attempt with an explicit error, retains the pending imported copy and marker for a later unlock attempt or explicit discard, and leaves any currently active instance unchanged; structural source failures are still rejected before copying.
+5. **Given** an imported database in `restore-pairing-required` state, **When** the pairing token is expired, consumed, or rejected, **Then** pairing rolls back without partial peer-record writes, the same database and fresh identity remain available for retry, and no second database is created.
 
 ---
 
@@ -87,18 +87,15 @@ On every subsequent launch, the landing shows the operator's instances (from `<A
 
 ---
 
-### User Story 5 — Aus Paper-Seed wiederherstellen (Recover) (Priority: P3)
+### User Story 5 — Aus Paper-Seed wiederherstellen (Recover) (Historical — superseded, not a v1 requirement)
 
-No attested device survives, and the operator has only their paper-seed. From the Anlegen sheet they choose the "Recover" sub-mode, enter the seed, and confirm the federation-root fingerprint matches. A new local instance is created with the recovered federation-root; the attested-device registry is empty (no other devices survived). The operator can then Verbinden other newly-installed devices as normal.
+This user story belongs to the superseded paper-seed/federation-root design and is retained only as historical context. V1 recovery is the Öffnen flow in User Story 3: import a `.db`, rekey it before network startup, and pair the fresh identity in that same database.
 
-**Why this priority**: Recovery is the "in case of emergency" path. It is functionally implied by the paper-seed design in v1-scope-design.md §4, but the initial walking-skeleton does not require it. Can ship post-MVP.
+**Why this priority**: Not applicable to v1. The historical flow is blocked; backup recovery is covered by User Story 3.
 
-**Independent Test**: Delete all instance files; on a fresh install, choose Anlegen → Recover; enter a previously-recorded paper-seed; verify (1) the fingerprint displayed matches the one shown at Genesis, (2) upon confirmation an instance is created whose federation-root public key matches, (3) the attested-device registry contains only this device.
+**Independent Test**: Not applicable; see the User Story 3 restore-pairing test.
 
-**Acceptance Scenarios**:
-
-1. **Given** a valid paper-seed and passphrase, **When** the operator submits Recover, **Then** the instance is created and the fingerprint match is displayed before the final confirm.
-2. **Given** a paper-seed whose derived public key does not match the fingerprint the operator claims, **When** the operator submits, **Then** recovery is aborted with an explicit fingerprint-mismatch error and no instance file is created.
+**Acceptance Scenarios**: None for v1; this historical flow MUST NOT be implemented.
 
 ---
 
@@ -108,9 +105,9 @@ No attested device survives, and the operator has only their paper-seed. From th
 - **Passphrase field visibility**: masked by default, reveal on hold (mouse) or tap (mobile); never persisted in the browser autofill store.
 - **Instance name collision with reserved filename** (`.trash`, files starting with `.`, path traversal): rejected client-side with clear error before any command is sent.
 - **Instance directory changed outside holzi** (e.g., another process creates a file in `instances/`): direct external mutations are unsupported in v1 and do not emit `instance-list-changed`; the new file is discovered on the next app launch or explicit list refresh. Operators import external files through **Öffnen**, whose backend command emits the event.
-- **App closed mid-Anlegen (before paper-seed confirmation)**: on next launch, an orphan file may exist. Behavior: on startup, delete any Genesis file in `instances/` whose creation flag `.pending` still exists in the same directory. The pending flag is written before the DB and removed only by `confirm_create` after paper-seed confirmation. Imported files use a separate import-pending marker and remain available for unlock validation.
+- **App closed during Anlegen**: on next launch, an orphan Genesis file may exist. Startup cleanup deletes any Genesis file whose creation flag `.pending` still exists. Imported files use a separate import-pending marker and remain available for restore validation.
 - **Two instances open concurrently**: `open_instance` serializes the close-and-open switch under the backend state lock. It validates the requested credentials while the current runtime remains active; a validation failure leaves that runtime and `AppState.active_instance` unchanged. The frontend does not call `close_instance` first; a concurrent request waits for the lock and then observes either the old or the new fully-active instance, never a half-switched state.
-- **Mobile foreground/background** for Anlegen: if the app is backgrounded during Genesis before paper-seed confirmation, the same pending-flag mechanism applies. No changes to relay-lifetime rules for mobile beyond `v1-scope-design.md §7`.
+- **Mobile foreground/background** for Anlegen: if the app is backgrounded during Genesis, the same pending-flag mechanism applies. No changes to relay-lifetime rules for mobile beyond `v1-scope-design.md §7`.
 
 ## Requirements *(mandatory)*
 
@@ -125,19 +122,20 @@ No attested device survives, and the operator has only their paper-seed. From th
 
 **Anlegen (Create)**
 
-- **FR-005**: The Anlegen action MUST open a Sheet (side panel) with two mode choices: "Neue Federation" (Genesis, default) and "Aus Paper-Seed wiederherstellen" (Recover).
-- **FR-006**: The Anlegen sheet MUST require: instance name (alphanumeric plus dash/underscore, ≤64 chars, unique within `instances/`), passphrase (min length per policy, entered twice), and paper-seed confirmation (Genesis) OR paper-seed entry with fingerprint match (Recover).
-- **FR-007**: On successful submit, the backend MUST create `<AppLocalData>/instances/<name>.db`, initialize `haex-crdt` with the passphrase, run the mode-specific initialization, activate the Genesis runtime, and return the paper-seed (Genesis) or matched fingerprint (Recover). Genesis remains pending until the confirmation boundary.
-- **FR-008**: The paper-seed MUST be displayed for reading in a Genesis flow; the operator MUST explicitly confirm they recorded it, causing the frontend to invoke `confirm_create` before the Anlegen sheet closes. `confirm_create` removes the Genesis `.pending` marker while leaving the instance active.
-- **FR-009**: If Anlegen is cancelled after the DB file is created but before paper-seed confirmation, the frontend MUST invoke `abort_create`; the backend MUST stop the pending runtime and discard the file and marker. Startup cleanup MUST apply the same rule after a crash.
+- **FR-005**: The Anlegen action MUST open a Sheet for a fresh Genesis instance. The historical Recover mode is not available in v1.
+- **FR-006**: The Anlegen sheet MUST require an instance name (alphanumeric plus dash/underscore, ≤64 chars, unique within `instances/`) and a passphrase entered twice.
+- **FR-007**: On successful submit, the backend MUST create `<AppLocalData>/instances/<name>.db`, initialize `haex-crdt` with the passphrase, generate fresh per-instance Nostr and iroh identities, write the Genesis `peer_instances` self-record, activate the runtime, and return the active instance. No paper-seed or confirmation step exists in v1.
+- **FR-008**: If Anlegen is cancelled before submission, no instance file is created. If creation fails, the backend MUST remove any partial file and marker; startup cleanup MUST apply the same rule after a crash.
 
 **Öffnen (Import external `.db` file)**
 
 - **FR-010**: The Öffnen action MUST open a Sheet that invokes the OS file picker via `@tauri-apps/plugin-dialog`, restricted to `.db` extension.
 - **FR-011**: Upon selection, the backend MUST validate the source as a regular `.db` file before copying. SQLCipher credential validation MUST occur in `open_instance`, using the passphrase entered in the Unlock sheet; a failed unlock attempt, including an incorrect passphrase, MUST return an explicit error without deleting the pending imported copy or marker. For an import-pending copy, successful credential validation MUST trigger rekey-on-restore before any Nostr relay or iroh endpoint starts: generate fresh `instance_identity` keys, retire the copied identity without using it on the network, and send the fresh identity through normal pairing as a new peer. Deletion requires an explicit discard action or conclusive validation that the file is not a holzi instance.
-- **FR-012**: The backend MUST copy (not move) the file into `<AppLocalData>/instances/` preserving its filename basename and mark the copy as pending validation until a successful unlock.
+- **FR-011**: Upon selection, the backend MUST validate the source as a regular `.db` file before copying. SQLCipher credential validation MUST occur in `open_instance`, using the passphrase entered in the Unlock sheet; a failed unlock attempt, including an incorrect passphrase, MUST return an explicit error without deleting the pending imported copy or marker. For an import-pending copy, successful credential validation MUST trigger rekey-on-restore before any Nostr relay or iroh endpoint starts: generate fresh `instance_identity` keys, retire the copied identity without using it on the network, and open the federation view in `restore-pairing-required` state. Deletion requires an explicit discard action or conclusive validation that the file is not a holzi instance.
+- **FR-012**: The backend MUST copy (not move) the file into `<AppLocalData>/instances/` preserving its filename basename and mark the copy as pending validation until successful rekey and restore pairing.
 - **FR-013**: On name collision, the backend MUST prompt via return value; the frontend MUST offer overwrite / rename / cancel; default MUST be rename with numeric suffix (`<name>-2.db`). Silent overwrite is prohibited.
 - **FR-014**: After successful copy, the `instances/` list MUST refresh (via `instance-list-changed` event) so the imported file appears immediately.
+- **FR-014a**: In `restore-pairing-required` state, the federation view MUST offer **Wiederherstellung verbinden** with the same QR scanner and text-token fallback as Verbinden. Submitting a token MUST call `pair_restored_instance` for the active imported database; pairing updates that database in place and MUST NOT call `create_instance` or create another file.
 
 **Verbinden (Join federation via pairing)**
 
@@ -156,7 +154,7 @@ No attested device survives, and the operator has only their paper-seed. From th
 
 **Cross-cutting**
 
-- **FR-024**: All backend mutations to `instances/` (create, confirm-create, abort-create, open, close, import, trash) MUST emit `instance-list-changed` events; the Pinia store MUST subscribe and re-sync. v1 has no in-scope path for mutations outside these commands, so no filesystem watcher is required.
+- **FR-024**: All backend mutations to `instances/` (create, open, close, import, restore-paired, trash) MUST emit `instance-list-changed` events; the Pinia store MUST subscribe and re-sync. v1 has no in-scope path for mutations outside these commands, so no filesystem watcher is required.
 - **FR-025**: The frontend MUST NEVER pass managed-instance paths to backend commands; all instance-management commands MUST use instance names (basename without `.db`). `import_instance_file` MAY receive the external `source_path` returned by the OS file picker, while destination resolution and source-file validation remain backend authority.
 - **FR-026**: All UI copy MUST be locale-driven via `@nuxtjs/i18n` with `de` and `en` locales at minimum; `de` is the default.
 - **FR-027**: All icons MUST be delivered from the local bundle (`@iconify-json/lucide` package installed offline); no runtime request to any external icon API is permitted.
@@ -165,15 +163,14 @@ No attested device survives, and the operator has only their paper-seed. From th
 
 - **Instance**: a `<name>.db` file in `<AppLocalData>/instances/`, containing a SQLCipher-encrypted `haex-crdt` store with federation state (`peer_instances` registry, revocation epochs, capability grants, chat/session history). Each instance is one identity in one federation.
 - **InstanceInfo**: metadata surface for the frontend list: `{ name: string, alias: string, lastAccess: ISO8601, sizeBytes: number }`. `name` is the filename basename without `.db`; `alias` is the non-secret user-visible label, initially defaulting to `name`. No secrets.
-- **CreateMode**: `Genesis | Recover { seed: string, expectedFingerprint: string } | Join { token: string }` — the three initialization modes across Anlegen + Verbinden.
+- **CreateMode**: `Genesis | Join { token: string }` — the two v1 initialization modes across Anlegen + Verbinden. Backup restore is handled by Öffnen plus the restore-pairing handoff, not by Recover.
 - **PairingToken**: opaque short-lived value issued by a parent device, carrying (in encoded form) a Nostr contact hint, a one-time nonce, an expiry, and the current federation epoch.
-- **PaperSeed**: versioned bundle displayed once at Genesis, containing federation-root seed material and federation-root public-key fingerprint. Sole federation-scope recovery secret.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: A fresh operator can complete Anlegen (Genesis) end-to-end in under 90 seconds on desktop hardware, including reading the paper-seed prompt.
+- **SC-001**: A fresh operator can complete Anlegen (Genesis) end-to-end in under 90 seconds on desktop hardware.
 - **SC-002**: With a valid pairing token, Verbinden completes in under 30 seconds on the same local network, from token entry to federation view.
 - **SC-003**: The landing page renders and becomes interactive within 500ms of app launch on desktop, 1500ms on mid-range Android hardware.
 - **SC-004**: Unlock of a healthy instance succeeds within 2 seconds on desktop hardware, 4 seconds on mobile.
@@ -185,7 +182,7 @@ No attested device survives, and the operator has only their paper-seed. From th
 
 - The founding-doc assertion "device equals relay equals Tauri application" (`founding.md` §2.2) is refined to: **the *active* instance equals the running Nostr relay endpoint equals the running iroh peer**. The Tauri application is a container that may hold multiple `.db` files on disk, with exactly one active at any given time. This revision was surfaced during the 2026-09-04 brainstorming and takes precedence for v1.
 - `<AppLocalData>` on each platform is the app-private data directory Tauri resolves via `BaseDirectory::AppLocalData`: Linux `$XDG_DATA_HOME/<bundle_identifier>/` (normally `~/.local/share/<bundle_identifier>/`), macOS `~/Library/Application Support/<bundle_identifier>/`, Windows `%LOCALAPPDATA%\<bundle_identifier>\`, Android app-private storage, and iOS app-sandbox `Library/Application Support/<bundle_identifier>/`. The `<bundle_identifier>` is the identifier configured in `tauri.conf.json`; all platforms append it before `instances/`.
-- `haex-crdt` (extracted from `haex-vault` per `v1-scope-design.md §5`) provides the SQLite + CRDT layer with SQLCipher at-rest. This spec assumes `haex-crdt` exposes an initialization surface accepting a passphrase and a mode (Genesis / Recover / Join). Exact API is a `haex-crdt` concern.
+- `haex-crdt` (extracted from `haex-vault` per `v1-scope-design.md §5`) provides the SQLite + CRDT layer with SQLCipher at-rest. This spec assumes `haex-crdt` exposes an initialization surface accepting a passphrase and a mode (Genesis / Join). Exact API is a `haex-crdt` concern.
 - Pairing offers QR scanning through the joiner's camera as the primary path, with text-token input as fallback. Both paths carry exactly the same encoded token; the QR is only a transport for that string. The scanner uses `html5-qrcode` on every platform (matching haex-vault); a mobile-native barcode plugin is documented as a contingency in [`research.md`](./research.md) and is not v1. The QR-rendering surface on the parent device (which produces the token the joiner scans) lives outside this spec's landing scope and is covered by the federation-view spec.
 - shadcn-vue components are copy-in under `src/components/ui/`. The initial component set is: `button`, `card`, `sheet`, `dialog`, `input`, `label`, `radio-group`, `sonner` (toasts), plus a custom `stepper` composed from `progress` + `button`. Later stories may add more.
 - No cross-device blob or stream transfer is required by any onboarding flow. Verbinden's initial `haex-crdt` sync uses whatever transport `haex-crdt` chooses internally — not `blob.offer` (post-v1 per `v1-scope-design.md §2`).

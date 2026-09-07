@@ -2,10 +2,8 @@
 
 **Status**: Draft. All types are generated from Rust `#[derive(ts_rs::TS)]` structs and exported to `src/types/bindings/` via `cargo test` (per haex-vault's `generate:ts-types` script).
 
-**V1 supersession notice**: The `Recover` variant and paper-seed-related types
-in this draft are historical and blocked. They MUST NOT be implemented until
-this contract is rewritten for the per-instance identity and rekey-on-restore
-model in `v1-scope-design.md` §4.
+**V1 contract note**: Backup restore uses the Öffnen flow and an explicit
+restore-pairing handoff; it is not a `Recover` mode or a second database.
 
 Frontend imports via a `@bindings/*` path alias:
 
@@ -28,6 +26,7 @@ pub struct InstanceInfo {
     pub alias: String,             // Non-secret user-visible label; defaults to `name`
     pub last_access: String,       // ISO-8601, from the database mtime; open_instance refreshes it
     pub size_bytes: u64,           // File size at scan time
+    pub restore_pairing_required: bool, // True for an imported copy awaiting pairing
 }
 ```
 
@@ -39,6 +38,7 @@ export type InstanceInfo = {
   alias: string
   lastAccess: string
   sizeBytes: number
+  restorePairingRequired: boolean
 }
 ```
 
@@ -50,7 +50,6 @@ export type InstanceInfo = {
 #[serde(tag = "type")]
 pub enum CreateMode {
     Genesis,
-    Recover { seed: String, expected_fingerprint: String },
     Join { token: String },
 }
 ```
@@ -60,7 +59,6 @@ pub enum CreateMode {
 ```ts
 export type CreateMode =
   | { type: 'Genesis' }
-  | { type: 'Recover'; seed: string; expectedFingerprint: string }
   | { type: 'Join'; token: string }
 ```
 
@@ -76,7 +74,7 @@ pub enum ConflictPolicy {
 }
 ```
 
-### `CreateInstanceArgs`, `CreateInstanceResult`, `ConfirmCreateArgs`, `AbortCreateArgs`, `OpenInstanceArgs`, `ImportInstanceArgs`, `ImportInstanceResult`, `TrashInstanceArgs`
+### `CreateInstanceArgs`, `CreateInstanceResult`, `OpenInstanceArgs`, `PairRestoredInstanceArgs`, `ImportInstanceArgs`, `ImportInstanceResult`, `TrashInstanceArgs`
 
 See [`tauri-commands.md`](./tauri-commands.md). All derive `TS` with `#[serde(rename_all = "camelCase")]` for consistent camelCase field names on the wire.
 

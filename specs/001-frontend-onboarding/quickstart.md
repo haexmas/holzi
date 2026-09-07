@@ -2,9 +2,9 @@
 
 **Goal (post-implementation)**: after the frontend scaffold, `haex-crdt` extraction, and the implementation tasks are complete, reach a running Tauri window from a fresh clone of `holzi` that renders the landing page with the three primary CTAs (Anlegen, Öffnen, Verbinden) and the "Zuletzt verwendet" list, in under 5 minutes on a warm machine.
 
-**V1 supersession notice**: The paper-seed display and confirmation steps below
-belong to the superseded onboarding draft. They are blocked until the quickstart
-is rewritten for fresh per-instance identities and rekey-on-restore.
+**V1 contract note**: Genesis creates a fresh per-instance identity without a
+paper-seed display or confirmation step. Imported databases are rekeyed before
+network startup and then paired from the federation view.
 
 **Prerequisites** on the host:
 
@@ -50,8 +50,7 @@ is rewritten for fresh per-instance identities and rekey-on-restore.
    - Name: `test-01` (any alphanumeric name).
    - Passphrase: any string meeting the min-length policy, entered twice.
    - Submit.
-   - Paper-seed is displayed. **Read it, physically record it, tick the confirmation.**
-   - Click Continue.
+   - Fresh Nostr and iroh identities are generated inside the encrypted database.
    - App navigates to `/federation/test-01` (placeholder page for this spec).
 
    Verify on disk:

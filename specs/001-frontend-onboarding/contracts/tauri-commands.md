@@ -2,10 +2,9 @@
 
 **Status**: Draft, spec-phase working proposals. Field names, error variants, and argument shapes MUST be reviewed once `haex-crdt`'s own initialization API is finalized. Nothing here is a settled interface.
 
-**V1 supersession notice**: The paper-seed/Recover branch, `paper_seed`,
-`root_fingerprint`, and paper-seed confirmation flow below are historical and
-blocked. They MUST NOT be implemented until this contract is rewritten for the
-per-instance identity and rekey-on-restore model in `v1-scope-design.md` §4.
+**V1 contract note**: Genesis creates a fresh per-SQLite identity without a
+paper-seed or confirmation step. Backup restore uses `open_instance` followed
+by `pair_restored_instance`, updating the same imported database in place.
 
 **Convention**: All commands are async, return `Result<T, HolziError>` on the Rust side, and are exposed to the frontend via `@tauri-apps/api/core::invoke<T>(name, args)`. Argument keys are `camelCase` from the frontend, mapped to `snake_case` Rust field names by serde.
 
@@ -57,15 +56,11 @@ pub struct CreateInstanceArgs {
 
 pub enum CreateMode {
     Genesis,
-    Recover { seed: String, expected_fingerprint: String },
     Join { token: String },
 }
 
 pub struct CreateInstanceResult {
     pub info: InstanceInfo,
-    pub paper_seed: Option<String>,       // Some for Genesis, None otherwise
-    pub root_fingerprint: Option<String>, // Some for Recover (matched), None otherwise
-    pub requires_confirmation: bool,      // True for Genesis until confirm_create
 }
 ```
 
@@ -76,14 +71,14 @@ const result = await invoke<CreateInstanceResult>('create_instance', {
   args: {
     name: 'laptop-home',
     passphrase: '…',
-    mode: { type: 'Genesis' },  // or { type: 'Recover', seed, expectedFingerprint }
+    mode: { type: 'Genesis' },  // or { type: 'Join', token }
   },
 })
 ```
 
 **Preconditions**: `name` matches `^[A-Za-z0-9][A-Za-z0-9_\-]{0,63}$`; passphrase meets min-length policy; no active instance in `AppState`.
 
-**Postconditions on success**: `<name>.db` exists, is unlocked, is bound as the active instance in `AppState`, and the Genesis `.pending` marker remains until `confirm_create`. The Nostr relay and iroh peer are already running before the result is returned. Backend emits `instance-list-changed`.
+**Postconditions on success**: `<name>.db` exists, is unlocked, is bound as the active instance in `AppState`, and has fresh per-instance identity keys plus a Genesis self-record (for Genesis) or mutually signed peer records (for Join). The Nostr relay and iroh peer are already running before the result is returned. Backend emits `instance-list-changed`.
 
 **Postconditions on failure**: no partial file on disk. If a file was created before failure, backend deletes it. A `<name>.db.pending` marker (empty file next to the `.db` during Genesis) is removed with its sibling on startup if orphaned.
 
@@ -94,12 +89,11 @@ const result = await invoke<CreateInstanceResult>('create_instance', {
 - `HolziError::WeakPassphrase { reason }` — policy failure.
 - `HolziError::InstanceAlreadyActive` — another instance is currently active in `AppState`.
 - `HolziError::PairingTokenInvalid { reason }` — Join mode only.
-- `HolziError::FingerprintMismatch` — Recover mode only.
 - `HolziError::CrdtInit { reason }` — passthrough from `haex-crdt`.
 
 ---
 
-### `confirm_create`
+### `confirm_create` *(historical — not in v1)*
 
 Finalizes a successful Genesis flow after the operator confirms that the paper-seed was recorded. It is the commit point for the `.pending` marker; the active runtime remains open.
 
@@ -124,7 +118,7 @@ pub struct ConfirmCreateArgs {
 
 ---
 
-### `abort_create`
+### `abort_create` *(historical — not in v1)*
 
 Cancels a pending Genesis flow. It shuts down the runtime, removes the pending database and marker, clears `AppState.active_instance`, and emits `instance-list-changed { reason: 'aborted' }` only after both files are gone.
 
@@ -147,7 +141,7 @@ The command is idempotent for an already-cleaned pending flow. It MUST NOT remov
 
 ### `open_instance`
 
-Opens an existing `.db`, validates and unlocks SQLCipher, starts Nostr relay + iroh peer, and marks active in `AppState`. If another instance is active, the command performs the close-and-open switch as one state-locked operation, but validates the requested credentials before closing the current runtime. An import-pending copy is a restore, not a normal open: after credential validation, it MUST rekey `instance_identity` and retire the copied keys before any relay or iroh endpoint starts; the fresh identity then proceeds through normal pairing as a new peer.
+Opens an existing `.db`, validates and unlocks SQLCipher, starts Nostr relay + iroh peer, and marks active in `AppState`. If another instance is active, the command performs the close-and-open switch as one state-locked operation, but validates the requested credentials before closing the current runtime. An import-pending copy is a restore, not a normal open: after credential validation, it MUST rekey `instance_identity` and retire the copied keys before any relay or iroh endpoint starts; the fresh identity becomes active with `restore_pairing_required` set and the federation view hands off to `pair_restored_instance`.
 
 ```rust
 #[tauri::command]
@@ -165,9 +159,9 @@ pub struct OpenInstanceArgs {
 
 **Preconditions**: `<name>.db` exists and is not a pending Genesis database. An imported database with an import-pending marker may be opened; its SQLCipher credential validation is completed by this command.
 
-**Postconditions on success**: SQLCipher unlocked; Nostr relay listening; iroh peer online; `AppState.active_instance = Some(...)`; the database mtime is refreshed to the current time as the persisted `lastAccess`; and any import-pending marker is removed. For an import-pending copy, the fresh `instance_identity` is active and the copied keys were never used to start a network endpoint; the fresh identity proceeds through normal pairing as a new peer. If another instance was active, it is fully closed before the new one becomes visible. Backend emits `instance-list-changed` (last-access bumped).
+**Postconditions on success**: SQLCipher unlocked; Nostr relay listening; iroh peer online; `AppState.active_instance = Some(...)`; the database mtime is refreshed to the current time as the persisted `lastAccess`; and any ordinary import-pending marker is removed. For an imported copy, rekey-on-restore has completed before startup, the copied keys were never used to start a network endpoint, `restore_pairing_required = true`, and the restore marker remains until pairing succeeds. If another instance was active, it is fully closed before the new one becomes visible. Backend emits `instance-list-changed` (last-access bumped).
 
-**Atomic switch and rollback**: the state lock is held throughout the operation. First, `open_instance` validates the requested file and SQLCipher credentials while the current runtime and `AppState.active_instance` remain unchanged. If that validation fails, no close, state transition, mtime refresh, or active-instance event occurs. Only after validation succeeds may the command shut down the previous runtime and activate the requested runtime. If a later startup step fails, every service started for the requested instance is stopped, its database handle is dropped, and `AppState.active_instance` is cleared. For an import-pending copy, a failed unlock attempt—including an incorrect passphrase—retains the copy and marker so a subsequent `open_instance` attempt can retry; deletion requires an explicit discard action or conclusive validation that the file is not a holzi instance. The previous instance is not silently resumed after a post-validation startup failure.
+**Atomic switch and rollback**: the state lock is held throughout the operation. First, `open_instance` validates the requested file and SQLCipher credentials while the current runtime and `AppState.active_instance` remain unchanged. If that validation fails, no close, state transition, mtime refresh, or active-instance event occurs. For an import-pending copy, rekey is completed before any requested runtime service starts; a rekey failure leaves the copy, marker, and previous runtime unchanged. Only after validation and rekey succeed may the command shut down the previous runtime and activate the requested fresh identity. If a later startup step fails, every service started for the requested instance is stopped, its database handle is dropped, and `AppState.active_instance` is cleared. A failed unlock attempt retains the copy and marker so a subsequent attempt can retry; deletion requires an explicit discard action or conclusive validation that the file is not a holzi instance. The previous instance is not silently resumed after a post-validation startup failure.
 
 **Failure modes**:
 
@@ -175,6 +169,49 @@ pub struct OpenInstanceArgs {
 - `HolziError::WrongPassphrase` — SQLCipher rejected. **The frontend MUST NOT expose whether the error was `NotFound` vs `WrongPassphrase`** (FR-021); it renders both as a generic "Öffnen fehlgeschlagen". The typed error is for logs and telemetry only.
 - `HolziError::NotAValidInstance { reason }` — the database or SQLCipher format is invalid. An import-pending copy remains available unless the backend has conclusively established that it is not a holzi instance; a passphrase-related failure must never delete it.
 - `HolziError::Io` — read error.
+
+---
+
+### `pair_restored_instance`
+
+Completes pairing for an imported database that `open_instance` has rekeyed and
+placed in `restore-pairing-required` state. It updates that active database in
+place; it MUST NOT copy a file or call `create_instance`.
+
+```rust
+#[tauri::command]
+pub async fn pair_restored_instance(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    args: PairRestoredInstanceArgs,
+) -> Result<InstanceInfo, HolziError>;
+
+pub struct PairRestoredInstanceArgs {
+    pub name: String,
+    pub token: String,
+}
+```
+
+The federation view invokes this command when the operator selects
+**Wiederherstellung verbinden** and scans or pastes the parent's pairing token.
+The QR and text paths pass the same token string as the normal Verbinden flow.
+
+**Preconditions**: the named instance is the active rekeyed import, its restore
+marker is present, and no restore pairing has completed.
+
+**Postconditions on success**: the command verifies the token and transcript,
+writes the mutually signed `peer_instances` records into the same database,
+removes the import and restore markers, clears `restore_pairing_required`, and
+emits `instance-list-changed { reason: 'restore-paired', affectedName: name }`.
+No second database is created.
+
+**Rollback on failure**: an expired, consumed, or rejected token rolls back all
+peer-record writes and leaves the same database, fresh identity, restore marker,
+and active runtime available for retry. No second database is created and the
+previous instance is not reopened implicitly.
+
+**Failure modes**: `NotFound`, `InstanceMismatch`, `PairingTokenInvalid`,
+`CrdtInit`, or `Io`.
 
 ---
 
@@ -224,7 +261,7 @@ pub enum ConflictPolicy {
 pub struct ImportInstanceResult {
     pub info: InstanceInfo,
     pub renamed_from: Option<String>,  // Set if on_conflict=Rename triggered
-    pub pending_validation: bool,      // True until open_instance validates the passphrase
+    pub pending_validation: bool,      // True until rekey and restore pairing complete
 }
 ```
 
@@ -233,7 +270,7 @@ pub struct ImportInstanceResult {
 **Notes**:
 
 - `source_path` is the external file path returned by `@tauri-apps/plugin-dialog`; it is the only path accepted from the frontend. It is not a managed-instance path. The command validates that it is a regular file and that the extension is `.db`.
-- SQLCipher page validation is deferred until `open_instance`, where the operator supplies the passphrase. The copied file is marked by a sibling `<name>.import-pending` marker. Failed unlock attempts retain both the copied file and marker for retry; only an explicit discard action or conclusive validation that the file is not a holzi instance may remove them. The source file is never touched.
+- SQLCipher page validation is deferred until `open_instance`, where the operator supplies the passphrase. The copied file is marked by a sibling `<name>.import-pending` marker; after rekey, a restore marker remains until `pair_restored_instance` succeeds. Failed unlock or pairing attempts retain the copied file and marker for retry; only an explicit discard action or conclusive validation that the file is not a holzi instance may remove them. The source file is never touched.
 - Copy is atomic (write to temp path, `rename` into place) and creates the import-pending marker as part of the same backend-owned operation. On any error the temp file and marker are deleted.
 - For `ConflictPolicy::Overwrite`, the command checks the target name while holding the `AppState` lock and rejects replacement if that name is the active instance. The frontend must close that instance explicitly before retrying overwrite.
 - The source file is never modified or moved.
@@ -314,9 +351,6 @@ pub enum HolziError {
 
     #[error("Pairing token invalid: {reason}")]
     PairingTokenInvalid { reason: String },
-
-    #[error("Recovered fingerprint does not match expected")]
-    FingerprintMismatch,
 
     #[error("Failed to close active instance: {reason}")]
     CloseFailed { reason: String },
