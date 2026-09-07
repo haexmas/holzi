@@ -1,12 +1,116 @@
 # Contract: Tauri Commands (Rust ↔ Frontend)
 
-**Status**: Draft, spec-phase working proposals. Field names, error variants, and argument shapes MUST be reviewed once `haex-crdt`'s own initialization API is finalized. Nothing here is a settled interface.
+**Status**: Working draft against `haex-crdt` at Cargo version 0.2.0 on `main`
+(not tagged). Field names and shapes are stable enough to implement against;
+the error-mapping table below reflects the current crate surface. Any
+haex-crdt change to migration IDs, provider trait signatures, or the
+`Database::open` shape reopens this contract.
 
 **V1 contract note**: Genesis creates a fresh per-SQLite identity without a
 paper-seed or confirmation step. Backup restore uses `open_instance` followed
 by `pair_restored_instance`, updating the same imported database in place.
 
 **Convention**: All commands are async, return `Result<T, HolziError>` on the Rust side, and are exposed to the frontend via `@tauri-apps/api/core::invoke<T>(name, args)`. Argument keys are `camelCase` from the frontend, mapped to `snake_case` Rust field names by serde.
+
+## Data layer and providers
+
+`haex-crdt` exposes a `Database` handle and requires four provider
+implementations from holzi. These providers, the holzi-owned migrations, and
+the error-mapping layer are the seams between holzi and the crate. This
+section documents them normatively; command sections reference these seams
+without re-explaining them.
+
+### Provider implementations
+
+Four traits, all implemented by holzi in a dedicated `src-tauri/identity/`
+module. Extraction into a standalone `haex-identity` crate is deferred until
+the trait surface has stabilized against a working slice.
+
+- **`DeviceIdProvider`** — returns the current instance's device UUID.
+  Implementation reads the per-database UUID persisted in
+  `haex_crdt_configs_no_sync`; on first open of a fresh database it seeds a
+  random v4 UUID derived independently of the host's installation UUID
+  (see [Device-ID model](#device-id-model)).
+- **`SignatureProvider`** — signs canonical CRDT records with the instance
+  keypair from `instance_identity`. It MUST NOT sign with the
+  federation-attestation keypair; that key is reserved for signing device
+  attestations at bootstrap.
+- **`MigrationSource`** — enumerates the holzi-owned migrations listed in
+  [holzi-owned data layer](#holzi-owned-data-layer). haex-crdt's own
+  bookkeeping migrations (the `_no_sync`/`_no_trigger` tables) are separate
+  and shipped by the crate itself.
+- **`trigger_version`** — an integer holzi bumps when it changes the shape of
+  its CRDT-tracked tables. Independent of haex-crdt's own version numbers.
+
+### holzi-owned data layer
+
+Tables holzi ships via its `MigrationSource`. These sit next to (not inside)
+haex-crdt's `_no_sync` bookkeeping tables and are installed as CRDT-tracked
+tables via `install_crdt(table, opts)` unless noted.
+
+- **`instance_identity`** (singleton row) — the per-database instance's
+  Nostr+iroh keypair, its device UUID, and the federation-attestation keypair
+  (secp256k1, wrapped for delivery to instances with `sharing-authority` per
+  Sharing-Doc §7). Restore-pairing state (`restore_pairing_required`) also
+  lives here so it survives marker loss.
+- **`peer_instances`** — the attested-device registry. One row per peer with
+  `alias`, `nostr_pubkey`, `iroh_node_id`, current attestation epoch,
+  capabilities (including `pairing-authority`, `confirmation-authority`,
+  `sharing-authority`), and `valid_until`. Mutually signed on both sides
+  during pairing.
+- **`revocation_epochs`** — monotonic epoch counter per device. Revocation
+  bumps the epoch atomically; in-flight iroh transfers against a stale epoch
+  are cancelled by the accept handler on the next chunk.
+- **`capability_grants`** — cross-device write-action grants (e.g., which
+  device holds `confirmation-authority` at time T). Referenced by relay-side
+  intent-hold logic.
+- **`attested_devices`** — historical attestation records for audit and
+  rollback; write-once, no updates.
+
+### Device-ID model
+
+Two UUIDs, layered:
+
+1. **Installation UUID** — one per holzi installation on a host, stored in
+   userspace outside any vault. Never sent over the wire.
+2. **Device UUID** — a fresh random v4 UUID generated on first database open,
+   persisted in `haex_crdt_configs_no_sync` and returned by
+   `DeviceIdProvider`. Two vaults on the same host are not linkable via this
+   ID.
+
+**Policy at v1**: `DeviceIdProvider` returns the persisted UUID. Opening a
+database whose persisted device UUID differs from what the caller supplies
+fails with `HolziError::DeviceIdMismatch`. This matches haex-crdt's current
+`Reject` behavior (the only implicit policy on `main`).
+
+**Post-v1**: geographic device-handoff (moving the same `.db` between
+physical machines) needs `DatabaseConfig::device_id_policy = AdoptOnMismatch`,
+which is not on haex-crdt `main`. Tracked as an open sub-task; the contract
+MUST NOT rely on Adopt semantics until it lands.
+
+The only invariant `fs2` guarantees is that the same `.db` cannot be opened
+twice on the same host. Cross-host handoff is a policy question, not a lock
+question.
+
+### Error mapping
+
+`haex-crdt`'s `Error` variants map to `HolziError` as follows:
+
+| haex-crdt variant                     | HolziError variant                       | Notes                                                                                     |
+| ------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `Sqlite(_)`                           | `CrdtSqlite { reason }`                  | opaque passthrough                                                                        |
+| `Io(_)`                               | `CrdtIo { reason }`                      | opaque passthrough                                                                        |
+| `Hlc(_)`                              | `CrdtHlc { reason }`                     | opaque passthrough                                                                        |
+| `DeviceIdMismatch { expected, found }`| `DeviceIdMismatch { expected, found }`   | surfaced to UI                                                                            |
+| `MigrationMissingFromSource(id)`      | `MigrationMissingFromSource { id }`      | catastrophic; suggests holzi shipped a newer DB than its `MigrationSource` knows about    |
+| `MigrationContentDrift { id }`        | `MigrationContentDrift { id }`           | catastrophic; abort                                                                       |
+| `CrdtAlreadyInstalled { table }`      | `CrdtAlreadyInstalled { table }`         | logic error in holzi's bootstrap                                                          |
+| any other                             | `CrdtInit { reason }`                    | catch-all; SHOULD be promoted to a specific variant if it starts appearing in logs        |
+
+Filesystem-level lock collisions surface as `VaultAlreadyOpenElsewhere`
+(`fs2::TryLockError::WouldBlock` on the SQLCipher file), distinct from
+`InstanceAlreadyActive` (a process-internal `AppState.active_instance ==
+Some(_)`).
 
 ## Commands
 
@@ -78,9 +182,23 @@ const result = await invoke<CreateInstanceResult>('create_instance', {
 
 **Preconditions**: `name` matches `^[A-Za-z0-9][A-Za-z0-9_\-]{0,63}$`; passphrase meets min-length policy; no active instance in `AppState`.
 
-**Postconditions on success**: `<name>.db` exists, is unlocked, is bound as the active instance in `AppState`, and has fresh per-instance identity keys plus a Genesis self-record (for Genesis) or mutually signed peer records (for Join). The Nostr relay and iroh peer are already running before the result is returned. Backend emits `instance-list-changed`.
+**Internal choreography** (holzi-orchestrated, not a single haex-crdt call):
 
-**Postconditions on failure**: no partial file on disk. If a file was created before failure, backend deletes it. A `<name>.db.pending` marker (empty file next to the `.db` during Genesis) is removed with its sibling on startup if orphaned.
+1. Validate `name` and passphrase policy in-process (haex-crdt accepts opaque strings; policy is holzi's job).
+2. Generate a fresh v4 device UUID for this database (see [Device-ID model](#device-id-model)); do not derive it from the installation UUID.
+3. Write `<name>.db.pending` (empty file), then `<name>.db` as a candidate path. Both are inside `<AppLocalData>/instances/` on the same filesystem so the later rename is atomic.
+4. Call `Database::open(DatabaseConfig { path, passphrase, create_if_missing: true, device_id, migration_source: HolziMigrationSource, .. })`. This opens the SQLCipher file, runs haex-crdt's own `_no_sync` bookkeeping migrations, and runs the holzi migrations from [holzi-owned data layer](#holzi-owned-data-layer) transactionally.
+5. Generate the per-instance Nostr and iroh keypairs plus the federation-attestation secp256k1 keypair; write them (and the device UUID) into the `instance_identity` singleton row.
+6. For `CreateMode::Genesis`: write a Genesis self-record into `peer_instances` with the full local capability set (`pairing-authority`, `confirmation-authority`, `sharing-authority`) and epoch 0.
+7. For `CreateMode::Join`: validate the token, perform the pairing handshake against the parent (see `spec 002` for the parent-side surface), and write the mutually-signed `peer_instances` rows returned by the transcript.
+8. Start the Nostr relay and iroh peer bound to the new instance identity.
+9. Bind `AppState.active_instance = Some(info)`.
+10. Rename `<name>.db.pending` → committed state (marker removed). This is the durable commit point for the whole flow.
+11. Emit `instance-list-changed`.
+
+**Postconditions on success**: `<name>.db` exists, is unlocked, is bound as the active instance in `AppState`, and has fresh per-instance identity keys plus a Genesis self-record (for Genesis) or mutually signed peer records (for Join). The Nostr relay and iroh peer are already running before the result is returned. The `.pending` marker is gone.
+
+**Postconditions on failure**: no partial file remains that startup would treat as a real instance. The backend drops the `Arc<Database>` before touching disk so haex-crdt's write handles are released, then removes `<name>.db` and `<name>.db.pending`. If the process crashes between steps 3 and 10, startup orphan-cleanup finds the `.pending` marker and removes it together with its sibling `.db`.
 
 **Failure modes**:
 
@@ -88,8 +206,9 @@ const result = await invoke<CreateInstanceResult>('create_instance', {
 - `HolziError::InvalidName { reason }` — regex mismatch.
 - `HolziError::WeakPassphrase { reason }` — policy failure.
 - `HolziError::InstanceAlreadyActive` — another instance is currently active in `AppState`.
+- `HolziError::VaultAlreadyOpenElsewhere` — the target file's `fs2` lock is held by another process on this host.
 - `HolziError::PairingTokenInvalid { reason }` — Join mode only.
-- `HolziError::CrdtInit { reason }` — passthrough from `haex-crdt`.
+- `HolziError::DeviceIdMismatch { .. }` / `HolziError::MigrationMissingFromSource { .. }` / `HolziError::MigrationContentDrift { .. }` / `HolziError::CrdtSqlite { reason }` / `HolziError::CrdtIo { reason }` / `HolziError::CrdtHlc { reason }` / `HolziError::CrdtAlreadyInstalled { table }` / `HolziError::CrdtInit { reason }` — see [Error mapping](#error-mapping). All are catastrophic during `create_instance` (fresh DB); the backend rolls back per postconditions above.
 
 ---
 
@@ -213,13 +332,13 @@ and active runtime available for retry. No second database is created and the
 previous instance is not reopened implicitly.
 
 **Failure modes**: `NotFound`, `InstanceMismatch`, `PairingTokenInvalid`,
-`CrdtInit`, or `Io`.
+`Io`, or any of the haex-crdt-mapped variants listed in [Error mapping](#error-mapping).
 
 ---
 
 ### `close_instance`
 
-Closes the currently-active instance: shuts down Nostr relay, disconnects iroh peer, drops the `haex-crdt` handle, clears `AppState.active_instance`. Idempotent — succeeds if nothing is active.
+Closes the currently-active instance: shuts down Nostr relay, disconnects iroh peer, drops the last `Arc<Database>` clone (haex-crdt closes the SQLCipher handle and releases its `fs2` lock as a consequence of the last-Arc drop, not through a separate crate call), clears `AppState.active_instance`. Idempotent — succeeds if nothing is active.
 
 ```rust
 #[tauri::command]
@@ -228,6 +347,8 @@ pub async fn close_instance(
     state: State<'_, AppState>,
 ) -> Result<(), HolziError>;
 ```
+
+**Postcondition on success**: no `Arc<Database>` clone survives inside `AppState` or any subsystem holzi owns. If a subsystem is still holding a clone at drop time, `close_instance` MUST error with `CloseFailed` rather than returning `Ok`; a returned `Ok` implies the file lock is released and a subsequent `open_instance` of the same file will succeed on this host.
 
 After a successful close of an active instance, emit `instance-list-changed { reason: 'closed', affectedName: name }`. The event requires the `AppHandle` dependency; an idempotent close with no active instance emits no mutation event.
 
@@ -339,8 +460,11 @@ pub enum HolziError {
     #[error("No instance named '{name}'")]
     NotFound { name: String },
 
-    #[error("An instance is already active")]
+    #[error("An instance is already active in this process")]
     InstanceAlreadyActive,
+
+    #[error("Vault file is locked by another process on this host")]
+    VaultAlreadyOpenElsewhere,
 
     #[error("Instance '{name}' is not the pending active creation")]
     InstanceMismatch { name: String },
@@ -356,6 +480,28 @@ pub enum HolziError {
 
     #[error("Failed to close active instance: {reason}")]
     CloseFailed { reason: String },
+
+    // Mapped from haex-crdt Error variants — see "Error mapping" above.
+    #[error("SQLCipher error from haex-crdt: {reason}")]
+    CrdtSqlite { reason: String },
+
+    #[error("I/O error from haex-crdt: {reason}")]
+    CrdtIo { reason: String },
+
+    #[error("HLC error from haex-crdt: {reason}")]
+    CrdtHlc { reason: String },
+
+    #[error("Device UUID mismatch: expected {expected}, found {found}")]
+    DeviceIdMismatch { expected: String, found: String },
+
+    #[error("Migration id {id} present in database but missing from MigrationSource")]
+    MigrationMissingFromSource { id: String },
+
+    #[error("Migration id {id} content drift between database and MigrationSource")]
+    MigrationContentDrift { id: String },
+
+    #[error("CRDT already installed for table {table}")]
+    CrdtAlreadyInstalled { table: String },
 
     #[error("haex-crdt init failed: {reason}")]
     CrdtInit { reason: String },
