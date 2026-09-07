@@ -14,4 +14,4 @@ Reihenfolge im Plan: Integrationsbasis → Instanzlebenszyklus → lokaler Chat 
 
 Bewusst nicht als neue Arbeit geplant: erneute `haex-crdt`-Extraktion (bereits erfolgt), Wechsel des Frontend-Stacks (kein belegter Nutzen), vollständiges Multi-Plattform-/MCP-/Sharing-v1 vor dem ersten nutzbaren Chat (zu großer erster Umfang).
 
-Klarstellung vom Betreiber: Secrets dürfen in der verschlüsselten Instanz-SQLite liegen, aber niemals in Git. Die zu weit gehende kanonische Keychain-Formulierung wird als separater Korrekturvorschlag im Plan geführt; Harness-Dateien wurden nicht verändert. Ein eigener Holzi-Sync-Transport ist nicht mehr vorgesehen, solange der Ausbauvertrag keinen Consumer-Adapter verlangt.
+Klarstellung vom Betreiber: Secrets dürfen in der verschlüsselten Instanz-SQLite liegen, aber niemals in Git. Die zu weit gehende kanonische Keychain-Formulierung wird als separater Korrekturvorschlag im Plan geführt; Harness-Dateien wurden nicht verändert. Holzi besitzt und verdrahtet den v1-Sync-Transport einschließlich Scanner-/Apply-APIs; konkrete Transportwahl, Vollabgleich-Verhalten und Cursorstrategie bleiben offene Vertragsentscheidungen.

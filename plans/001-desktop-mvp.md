@@ -22,7 +22,7 @@ Es existiert noch kein Anwendungscode, kein `package.json` und kein `Cargo.toml`
 | Befund | Bedeutung | Aufwand der Klärung | Änderungsrisiko | Beleg |
 | --- | --- | --- | --- | --- |
 | v1 umfasst wesentlich mehr als den ersten lokalen Chat mit Sync | MVP-Schnitt explizit festhalten, bevor die bestehende Taskliste abgearbeitet wird | S | mittel | `docs/plans/2026-09-04-v1-scope-design.md`, §§2, 11 |
-| Bestehende Dokumente beschreiben den damaligen Crate-Umfang ohne Sync-Transport | Den angekündigten Sync-Ausbau von `haex-crdt` integrieren; API und Transportzuständigkeit vor Integration abstimmen | S | mittel | Extraktionsplan, Einleitung; Betreiber-Klarstellung vom 2026-09-07 |
+| Bestehende Dokumente beschreiben den damaligen Crate-Umfang ohne Sync-Transport | Den angekündigten Sync-Ausbau von `haex-crdt` integrieren; Holzis Transport- und Scanner-/Apply-Verantwortung vor Integration festhalten | S | mittel | Extraktionsplan, Einleitung; Betreiber-Klarstellung vom 2026-09-07 |
 | Kanonische Keychain-Pflicht geht über die erklärte Absicht „keine Secrets in Git“ hinaus | Produktziel SQLite festhalten und Konstitution separat korrigieren | S | gering | Betreiber-Klarstellung; Abschnitt Schlüsselhaltung unten |
 | Restore als neue parallele Identität und Handover mit stillgelegter Quelle werden vermischt | Import nicht beiläufig in den MVP aufnehmen | M | hoch | v1-Scope §4 gegenüber §5; `haex-crdt/src/database/config.rs` am unten genannten Commit |
 | Laufzeit- und Testbasis fehlen | Ein kleiner realer Integrationsdurchlauf muss vor UI-Ausbau stehen | M | gering | `README.md:23`, `.github/workflows/ci.yml` |
@@ -35,7 +35,7 @@ Beibehalten: Tauri 2, Rust, Nuxt 4 als SPA (`ssr: false`), Vue, Pinia, Tailwind 
 
 Der bestehende erste Slice ist ein Nostr-Ping zwischen zwei Geräten und schließt den Modellrunner ausdrücklich aus. **Dieser Vorschlag zieht lokalen Chat vor und verschiebt die vollständige Nostr-Steuerungsebene.** Das ist eine bewusste neue Reihenfolge, keine Behauptung, die vorhandene Spec sei damit umgesetzt.
 
-Der Betreiber baut `haex-crdt` für den Datenabgleich zwischen zwei SQLite-Instanzen aus. Holzi konsumiert diese Fähigkeit über eine schmale Integrationsschicht. Der frühere Vorschlag eines eigenen iroh-Sync-Protokolls in Holzi entfällt. Welche Transport-, Pairing- und Wiederanlauffunktionen das Crate konkret liefert und welche Adapter es vom Consumer erwartet, wird am Integrationsvertrag geklärt. Die bestehende Nostr-Pairing-Entscheidung wird durch diese Klarstellung weder aufgehoben noch durch ein zweites Pairing-System ersetzt.
+Der Betreiber baut `haex-crdt` für den Datenabgleich zwischen zwei SQLite-Instanzen aus. Holzi konsumiert diese Fähigkeit über eine schmale Integrationsschicht und besitzt sowie verdrahtet im v1 den Sync-Transport einschließlich der Scanner-/Apply-APIs. Der frühere Vorschlag eines eigenen iroh-Sync-Protokolls in Holzi entfällt. Die konkrete Transportwahl, das Verhalten des Vollabgleichs und die Cursorstrategie werden am Integrationsvertrag geklärt. Die bestehende Nostr-Pairing-Entscheidung wird durch diese Klarstellung weder aufgehoben noch durch ein zweites Pairing-System ersetzt.
 
 Noch nicht im MVP: Mobile, Headless-Server, externe MCP-Schnittstelle, Agenten-Tools/Shell-Ausführung, geräteübergreifende LLM-Aufträge, Cloudanbieter, NIP-17, Cross-User-Sharing, RAG, Skills/Memory, Modellübertragung, Sprache/Video. Ebenfalls zurückstellen: Import/Restore beliebiger `.db`-Dateien und komplexe Instanzwechsel-UI. Reguläres Wiederöffnen einer selbst angelegten Instanz gehört dagegen zum MVP.
 
@@ -119,14 +119,14 @@ Für ein auslieferbares Paket: Runner-Revision, Zielarchitektur und Prüfsumme f
 
 `haex-crdt` wird vom Betreiber für den Datenabgleich zwischen zwei SQLite-Instanzen erweitert. Das ist eine externe Entwicklungsabhängigkeit, keine Aufforderung, diesen Ausbau im Holzi-Repo nachzubauen. Der zuvor gelesene Commit beschreibt nur den damaligen Stand; neue Sync-APIs und deren Lieferumfang sind noch nicht überprüft.
 
-Holzi besitzt seine Instanzen, sein Anwendungsschema, Modell-/Chatlogik und die Entscheidung, welche Peers welche Daten erhalten. `haex-crdt` soll die wiederverwendbare Synchronisierung liefern. Ob es den Transport selbst betreibt oder einen Transportadapter erwartet, bleibt bis zum abgestimmten Vertrag offen. Es gibt noch keine Entscheidung für einen zusätzlichen Holzi-eigenen iroh-Kanal, einen Vollabgleich oder eine bestimmte Cursorstrategie.
+Holzi besitzt seine Instanzen, sein Anwendungsschema, Modell-/Chatlogik und die Entscheidung, welche Peers welche Daten erhalten. `haex-crdt` soll die wiederverwendbare Synchronisierung liefern; Holzi besitzt und verdrahtet im v1 den Sync-Transport einschließlich der Scanner-/Apply-APIs. Offen bleiben nur die konkrete Transportwahl, das Verhalten des Vollabgleichs und die Cursorstrategie. Einen zusätzlichen konkurrierenden iroh-Kanal in Holzi gibt es nicht.
 
 Vor Integration gemeinsam festlegen:
 
 | Vertragspunkt | Benötigtes Ergebnis |
 | --- | --- |
 | Initialisierung und Lebenszyklus | Sync an eine geöffnete Datenbank binden, starten, pausieren und sauber stoppen können |
-| Peer-Anbindung | Zuständigkeit für Verbindungsaufbau, Pairing und authentifizierten/verschlüsselten Transport benennen |
+| Peer-Anbindung | Holzi verdrahtet Verbindungsaufbau, Pairing und authentifizierten/verschlüsselten v1-Transport; die konkrete Transportwahl bleibt offen |
 | Datenfreigabe | Holzi kann lokale Tabellen und Spalten sowohl beim Senden als auch beim Empfangen ausschließen |
 | Vertrauen | Peerfreigaben prüfen und widerrufen können; eine erkannte Peer-ID allein gewährt keinen Zugriff |
 | Wiederverbindung | Offline-Änderungen und unterbrochene Übertragungen zuverlässig nachholen |
@@ -134,7 +134,7 @@ Vor Integration gemeinsam festlegen:
 | Beobachtbarkeit | Status, Fehler und empfangene Änderungen an die Holzi-UI melden können |
 | Kompatibilität | Unterstützte Schema-/Protokollversionen und Verhalten bei inkompatiblen Daten dokumentieren |
 
-Die genaue API wird aus dem Crate übernommen und am gewählten Commit dokumentiert, nicht in diesem Plan erfunden. Fortschrittsmarken, Wiederholungen, Pagination und eventuelle Compaction sollen einmal im dafür zuständigen Sync-Baustein gelöst werden. Falls das Crate dafür Consumer-Aufgaben vorsieht, müssen diese vor der Aufwandsschätzung explizit benannt werden.
+Die genaue API-Nutzung wird aus dem Crate übernommen und am gewählten Commit dokumentiert, nicht in diesem Plan erfunden. Die Holzi-Sync-Schicht kapselt Scanner, Apply, Transportlebenszyklus und Fortschritt. Offen bleiben nur die konkrete Transportwahl, das Verhalten des Vollabgleichs und die Cursorstrategie; Fortschrittsmarken, Wiederholungen, Pagination und eventuelle Compaction werden dort festgelegt.
 
 Zwei frisch angelegte Datenbanken besitzen unterschiedliche Instanzidentitäten und HLC-Device-IDs; eine Dateikopie ersetzt Pairing nicht. Jede Datenbank kann ein eigenes Passwort verwenden. SQLCipher-Dateiverschlüsselung und verschlüsselter Transport sind getrennte Anforderungen. Die bestehende Non-Escalation- und Revocation-Semantik für Holzi-Peers bleibt Grundlage; CRDT-Konvergenz ersetzt keine Berechtigungsprüfung.
 
@@ -170,7 +170,7 @@ Abnahme: ohne laufendes Ollama, ohne API-Key eines Anbieters und ohne Internet a
 
 ### 3. Ausbau von haex-crdt integrieren — etwa 1–3 Arbeitstage bei fertigem Sync-Vertrag
 
-Voraussetzung: der Betreiber liefert eine gepinnte `haex-crdt`-Revision mit abgenommenem Zwei-Instanzen-Sync und dokumentierten Consumer-Aufgaben. Holzi bindet diese API an Instanzlebenszyklus, Peerfreigaben und Sync-Status an. Pairing gemäß abgestimmtem Vertrag integrieren, ohne ein eigenes konkurrierendes Protokoll zu bauen. Autorisierung vor Datenfreigabe und Apply sicherstellen; lokale Tabellen konsequent ausschließen. Vertrauen widerrufen und laufenden Zugriff beenden können. Trust-Grants/-Revocations nicht durch beliebige LWW-Feldüberschreibungen entscheiden, sondern signierte Fakten erhalten und effektiv auswerten.
+Voraussetzung: der Betreiber liefert eine gepinnte `haex-crdt`-Revision mit abgenommenem Zwei-Instanzen-Sync und den dokumentierten APIs. Holzi bindet diese APIs an Instanzlebenszyklus, Peerfreigaben, den v1-Transport und Sync-Status an. Pairing gemäß abgestimmtem Vertrag integrieren, ohne ein eigenes konkurrierendes Protokoll zu bauen. Autorisierung vor Datenfreigabe und Apply sicherstellen; lokale Tabellen konsequent ausschließen. Vertrauen widerrufen und laufenden Zugriff beenden können. Trust-Grants/-Revocations nicht durch beliebige LWW-Feldüberschreibungen entscheiden, sondern signierte Fakten erhalten und effektiv auswerten.
 
 Abnahme: A und B zunächst synchron; Netz trennen; auf beiden neue Gespräche/Nachrichten erstellen und den Titel desselben Gesprächs ändern; wieder verbinden. Beide behalten alle neuen Nachrichten und zeigen denselben Konfliktgewinner für den Titel. Beide Richtungen, Duplikate, umgeordnete Batches, verlorene Quittierung, Prozessneustart sowie unautorisierter/widerrufener Peer sind getestet. Kein empfangener Datensatz löst eine Generierung aus.
 
