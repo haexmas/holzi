@@ -92,15 +92,47 @@ Two UUIDs, layered:
    `haex_crdt_configs_no_sync` and mirrored in `instance_identity_no_sync`.
    Two vaults on the same host are not linkable via this ID.
 
+**Holzi-owned mapping for ordinary reopen**: Holzi stores a non-secret mapping
+from instance name to device UUID in an atomically replaced JSON index at
+`<AppLocalData>/instance-index.json`. Creation writes a `pending` mapping and
+fsyncs the index before constructing `DatabaseConfig`; after the database and
+pending marker commit, the mapping becomes `ready`. `open_instance` reads the
+`ready` mapping before calling `Database::open` and passes that UUID through a
+stable `DeviceIdProvider`; it MUST NOT mint a new UUID during ordinary reopen.
+Startup removes `pending` mappings whose creation marker or database is absent.
+If a mapping is missing, corrupt, or not `ready`, `open_instance` returns an
+explicit validation error for that database and leaves it and any currently
+active instance untouched; it MUST NOT guess a UUID or overwrite the database's
+recorded value. Import (`import_instance_file` / Öffnen) is the exception: it
+runs the restore path defined below, which itself writes the mapping.
+
 **Policy at v1**: `DeviceIdProvider` returns the UUID retained by Holzi.
 Opening a database whose recorded device UUID differs from what the caller
 supplies fails with `HolziError::DeviceIdMismatch`. This matches the pinned
 haex-crdt revision's reject-on-mismatch behavior.
 
-**Post-v1**: geographic device-handoff (moving the same `.db` between
-physical machines) needs an explicit adopt-on-mismatch API in haex-crdt, which
-is not present in the pinned revision. Tracked as an open sub-task; the
-contract MUST NOT rely on adopt semantics until it lands.
+**Restore path in Öffnen (v1, per spec User Story 3)**: importing an external
+`.db` is not an ordinary reopen. Holzi performs rekey-on-restore before
+`Database::open`: (1) copy the source file into `<AppLocalData>/instances/`
+under a restore-pending marker, (2) open the copy directly via `rusqlite` with
+the operator-supplied passphrase and the SQLCipher pragma, generate a fresh v4
+device UUID, and `UPDATE haex_crdt_configs_no_sync SET device_id = ?` (a
+schema-level compatibility write against haex-crdt's own bookkeeping table; no
+CRDT triggers fire because the table is `_no_sync`), (3) write the fresh UUID
+into `instance-index.json` as `restore-pending` and fsync, (4) call
+`Database::open` with the fresh UUID via `DeviceIdProvider`. The copied Nostr
+and iroh secret keys are then discarded and replaced by fresh ones inside
+`instance_identity_no_sync` before any endpoint starts (per
+`docs/plans/2026-09-04-v1-scope-design.md §4`). This bypass is anchored on the
+crate's public `_no_sync` schema, not on any adopt API. When haex-crdt exposes
+a first-class `reset_device_id` API, Holzi replaces the direct SQL write with
+it; the contract does not otherwise depend on adopt semantics.
+
+**Post-v1**: cross-host device-handoff that preserves the source's device
+UUID (as opposed to Öffnen's rekey-on-restore, which mints a new one) needs
+an explicit adopt-on-mismatch API in haex-crdt, which is not present in the
+pinned revision. Tracked as an open sub-task; v1 does not offer preserve-UUID
+handoff.
 
 The only invariant `fs2` guarantees is that the same `.db` cannot be opened
 twice on the same host. Cross-host handoff is a policy question, not a lock
@@ -207,20 +239,20 @@ const result = await invoke<CreateInstanceResult>('create_instance', {
 **Internal choreography** (holzi-orchestrated, not a single haex-crdt call):
 
 1. Validate `name` and passphrase policy in-process (haex-crdt accepts opaque strings; policy is holzi's job).
-2. Generate a fresh v4 device UUID for this database (see [Device-ID model](#device-id-model)); do not derive it from the installation UUID.
-3. Write `<name>.db.pending` as an empty marker, then create `<name>.db` as the candidate path. Both are inside `<AppLocalData>/instances/`; the marker, not a database-file rename, controls publication.
+2. Generate a fresh v4 device UUID for this database (see [Device-ID model](#device-id-model)); do not derive it from the installation UUID. Atomically persist a `pending` name-to-UUID entry in `<AppLocalData>/instance-index.json` and fsync the index before opening the database.
+3. Write `<name>.db.pending` as an empty marker, then create `<name>.db` as the candidate path. Both are inside `<AppLocalData>/instances/`; the marker and pending index entry, not a database-file rename, control publication.
 4. Call `Database::open(DatabaseConfig { path, key: SqlCipherKey::new(passphrase), create_if_missing: true, device_id: Arc::new(...), signature_provider: Arc::new(...), migration_source: Arc::new(...), trigger_version: HOLZI_TRIGGER_VERSION })`. `device_id` is a `DeviceIdProvider`, not a UUID field. This opens the SQLCipher file, runs haex-crdt's own `_no_sync` bookkeeping migrations, and runs the holzi migrations from [holzi-owned data layer](#holzi-owned-data-layer) transactionally.
 5. Generate the per-instance Nostr and iroh keypairs plus the federation-attestation secp256k1 keypair; write them (and the device UUID) into the `instance_identity_no_sync` singleton row.
 6. For `CreateMode::Genesis`: write a Genesis self-record into `peer_instances` with the full local capability set (`pairing-authority`, `confirmation-authority`, `sharing-authority`) and epoch 0.
 7. For `CreateMode::Join`: validate the token, perform the pairing handshake against the parent (see `spec 002` for the parent-side surface), and write the mutually-signed `peer_instances` rows returned by the transcript.
 8. Start the Nostr relay and iroh peer bound to the new instance identity.
 9. Bind `AppState.active_instance = Some(info)`.
-10. Flush the database and directory, remove `<name>.db.pending`, and flush the directory again. Marker removal is the durable commit point for the whole flow; no database-file rename is used.
+10. Flush the database and directory, remove `<name>.db.pending`, atomically promote the index entry from `pending` to `ready`, and flush the index and directory again. Marker removal plus the ready mapping is the durable commit point for the whole flow; no database-file rename is used.
 11. Emit `instance-list-changed`.
 
 **Postconditions on success**: `<name>.db` exists, is unlocked, is bound as the active instance in `AppState`, and has fresh per-instance identity keys plus a Genesis self-record (for Genesis) or mutually signed peer records (for Join). The Nostr relay and iroh peer are already running before the result is returned. The `.pending` marker is gone.
 
-**Postconditions on failure**: no partial file remains that startup would treat as a real instance. The backend drops the `Arc<Database>` before touching disk so haex-crdt's write handles are released, then removes `<name>.db` and `<name>.db.pending`. If the process crashes between steps 3 and 10, startup orphan-cleanup finds the `.pending` marker and removes it together with its sibling `.db`.
+**Postconditions on failure**: no partial file remains that startup would treat as a real instance. For `CreateMode::Join`, any parent-side `peer_instances` publication is staged until the local commit or undone with a compensating transaction before cleanup. On any failure before step 10, Holzi stops every relay and iroh service started for the candidate, clears `AppState.active_instance`, drops every `Arc<Database>` clone it owns, verifies the database lock is released, removes the candidate `.db`, marker, and pending index entry, and only then returns the error. If a remote peer publication cannot be synchronously undone, the join is recorded as failed and a compensating revocation is published before the local files are removed. If the process crashes between steps 3 and 10, startup orphan-cleanup finds the `.pending` marker, removes it together with its sibling `.db`, and removes the matching pending index entry.
 
 **Failure modes**:
 
@@ -382,6 +414,11 @@ After a successful close of an active instance, emit `instance-list-changed { re
 ### `import_instance_file`
 
 Copies an external `.db` file into `<AppLocalData>/instances/`. Structural validation happens before copying; SQLCipher credential validation is completed by `open_instance`.
+
+V1 accepts only a same-host import whose recorded device UUID is present in the
+local device-ID index. An unknown or cross-host source may be staged as pending,
+but `open_instance` MUST return an explicit validation error; it MUST NOT open
+the copy with a generated replacement UUID.
 
 ```rust
 #[tauri::command]

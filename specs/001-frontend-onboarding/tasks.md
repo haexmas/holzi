@@ -112,7 +112,7 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 
 ### Implementation for US1
 
-- [ ] **T035** [US1] Implement `src-tauri/src/instances/crud.rs::create_instance` per contract — Genesis branch only in this task (Join in later phases). Enforces `NameConflict`, `InvalidName`, `WeakPassphrase`, `InstanceAlreadyActive`. Hands passphrase + Genesis mode to `haex-crdt::init`; generates fresh Nostr and iroh identities, writes the Genesis `peer_instances` self-record, creates and stores the `ActiveInstanceHandle`, starts the relay and iroh peer, and completes runtime activation before returning the active instance.
+- [ ] **T035** [US1] Implement `src-tauri/src/instances/crud.rs::create_instance` per contract — Genesis branch only in this task (Join in later phases). Enforces `NameConflict`, `InvalidName`, `WeakPassphrase`, `InstanceAlreadyActive`. Builds the provider-backed `haex_crdt::DatabaseConfig`, calls `Database::open`, then performs Holzi-owned Genesis initialization: generate fresh Nostr and iroh identities, write the Genesis `peer_instances` self-record, create and store the `ActiveInstanceHandle`, start the relay and iroh peer, and complete runtime activation before returning the active instance.
 - [ ] **T036** [US1] Implement startup orphan-cleanup in `src-tauri/src/main.rs::setup`: on boot, scan `instances/` for incomplete Genesis markers and delete both the marker and sibling `.db`; retain import/restore-pending files, which await credential validation or pairing. Emit `instance-list-changed { reason: 'startup-cleanup' }`.
 - [ ] **T037** [P] [US1] Implement `src/components/onboarding/CreateSheet.vue`: `<UiSheet>` with a Genesis form, name field, two passphrase fields with match check, and submit button. On submit call `useInstance.createAsync(...)`.
 - [ ] **T040** [P] [US1] Add Anlegen CTA to `pages/index.vue` as the first primary button; wire to open CreateSheet.
@@ -141,7 +141,7 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 ### Implementation for US2
 
 - [ ] **T046** [US2] Implement `src-tauri/src/pairing/join.rs`: token parsing, transcript construction, contact-hint dial into parent's relay, mutual instance-signed `peer_instances` record exchange, and capability/epoch validation. Depends on the presence and peer-record surfaces being present in `haex-crdt` (may require a shim task tracked separately if `haex-crdt` isn't fully there).
-- [ ] **T047** [US2] Extend `create_instance` to route `CreateMode::Join` to `pairing::join::run`. Same orphan-file guarantee as Genesis.
+- [ ] **T047** [US2] Extend `create_instance` to route `CreateMode::Join` to `pairing::join::run`. On any pre-commit failure, stop candidate services, clear candidate active state, release all database handles, undo or compensate parent-side `peer_instances` publication, remove the database/marker/pending UUID mapping, and only then return the error; preserve the restored-database retry path separately.
 - [ ] **T048** [P] [US2] Implement `src/components/onboarding/ConnectSheet.vue`: `<UiSheet>` with a live camera preview + QR decoder using `html5-qrcode` on every platform (works via `getUserMedia` in both desktop Tauri WebView and mobile WebView). Fallback text-input for the same token below the scanner. On successful decode, stop the scanner, populate the token field, and enable submit. Keep the text field available during permission denial or camera failure. A single idempotent cleanup path MUST await `stop()` after every `start()` attempt, tolerate the scanner not reaching its running state, and only then call `clear()`; invoke it on successful decode, Sheet close, component unmount, and startup failure.
 - [ ] **T049** [P] [US2] Add Verbinden CTA to `pages/index.vue` (third primary button); wire to open ConnectSheet.
 - [ ] **T050** [P] [US2] i18n: `onboarding.connect.title`, `onboarding.connect.scan`, `onboarding.connect.cameraPermission`, `onboarding.connect.cameraUnavailable`, `onboarding.connect.token`, `onboarding.connect.submit`, `errors.pairingTokenInvalid`.
@@ -155,7 +155,7 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 
 **Goal**: Öffnen CTA opens the OS file picker; selected `.db` is copied into `<AppLocalData>/instances/`; appears in the list.
 
-**Independent Test**: Point the file picker at a `.db` outside the managed directory; verify copy, source untouched, list refreshes.
+**Independent Test**: Point the file picker at a same-host `.db` outside the managed directory whose UUID is present in the local device-ID index; verify copy, source untouched, list refreshes, and explicit rejection when the mapping is missing.
 
 ### Tests for US3
 
@@ -166,7 +166,7 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 
 ### Implementation for US3
 
-- [ ] **T055** [US3] Implement `src-tauri/src/instances/import.rs::import_instance_file` per contract, including regular-file/extension validation, crash-safe marker-before-publish staging, generation-bound overwrite journaling, conflict handling, and active-target rejection under the state lock. Defer SQLCipher credential validation and rekey-on-restore to `open_instance`; the copied keys MUST NOT reach relay/iroh startup, and the fresh identity MUST remain in `restore-pairing-required` state until `pair_restored_instance` completes.
+- [ ] **T055** [US3] Implement `src-tauri/src/instances/import.rs::import_instance_file` per contract, including regular-file/extension validation, local device-ID mapping validation, crash-safe marker-before-publish staging, generation-bound overwrite journaling, conflict handling, and active-target rejection under the state lock. Defer SQLCipher credential validation and rekey-on-restore to `open_instance`; the copied keys MUST NOT reach relay/iroh startup, and the fresh identity MUST remain in `restore-pairing-required` state until `pair_restored_instance` completes. Cross-host files without a local UUID mapping remain pending and are rejected explicitly in v1.
 - [ ] **T055a** [US3] Implement `pair_restored_instance` per contract: accept the token from the federation-view restore handoff, update the active imported database in place with mutually signed `peer_instances` records, clear restore state only after a successful transaction, and retain the same database and fresh identity for retry after failure.
 - [ ] **T056** [P] [US3] Implement `src/components/onboarding/OpenSheet.vue`: `<UiSheet>` with "Datei wählen" button that calls `@tauri-apps/plugin-dialog::open({ filters: [{ name: 'Instance', extensions: ['db'] }] })`. Pass the picker-returned external `source_path` only to `import_instance_file`; show the basename only for privacy and provide an "Importieren" button. Managed instance paths never cross the frontend boundary.
 - [ ] **T057** [P] [US3] Add Öffnen CTA to `pages/index.vue` (second primary button, between Anlegen and Verbinden).
