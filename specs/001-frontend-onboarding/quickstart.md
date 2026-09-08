@@ -3,8 +3,9 @@
 **Goal (post-implementation)**: after the frontend scaffold, `haex-crdt` extraction, and the implementation tasks are complete, reach a running Tauri window from a fresh clone of `holzi` that renders the landing page with the three primary CTAs (Anlegen, Öffnen, Verbinden) and the "Zuletzt verwendet" list, in under 5 minutes on a warm machine.
 
 **V1 contract note**: Genesis creates a fresh per-instance identity without a
-paper-seed display or confirmation step. Imported databases are rekeyed before
-network startup and then paired from the federation view.
+paper-seed display or confirmation step. Imported databases complete attested
+adoption offline before network startup; token pairing is the fallback when no
+valid attestation is available, including later invalidation.
 
 **Prerequisites** on the host:
 
@@ -76,9 +77,11 @@ network startup and then paired from the federation view.
 7. **Verify the adoption gate; restore after the dependency upgrade**.
 
    - At the current crate pin, select `other.db` and enter the original passphrase. Verify the explicit adoption-unavailable `CrdtInit` error, retained copy and import marker, unchanged index and active instance, and no new endpoint. Repeat with a copy whose source UUID is unknown; the result must be the same.
-   - The following success checks are blocked until an adoption-capable revision is reviewed and pinned. They require a reachable surviving parent instance. After that upgrade, verify that `open_instance` adopts a fresh UUID and signing/endpoint keys before any application write or endpoint starts, preserving the original source identity.
-   - Verify that the app opens `/federation/other` in `restore-pairing-required` state and offers **Wiederherstellung verbinden**; importing alone does not complete onboarding.
-   - Scan or paste a valid parent token. Verify that the federation view calls `pair_restored_instance`, updates the same `other.db` in place, removes the restore marker, and does not create a second database.
+   - The following success checks are blocked until an adoption-capable revision is reviewed and pinned. Only the token-fallback check requires a reachable parent with pairing authority. After that upgrade, verify that `open_instance` adopts a fresh UUID and signing/endpoint keys before any application write or endpoint starts, preserving the original source identity.
+   - Verify that a handover attestation was written with the copied signing key **before** that key was retired, and that the app then opens `/federation/other` directly — with no network reachable, no token, and no parent running. Adoption completes offline (FR-011b).
+   - Bring a peer whose effective trust store still authorizes the source grant online. Verify that it checks the complete attested identity, endpoint-key proof, capabilities, expiry and epochs before allowing ordinary traffic, and visibly shows the newly derived replica. A changed endpoint key or capability must be rejected; so must an expired or revoked grant even with a valid signature.
+   - Restart an attested copy after interrupted index publication and after a forced endpoint startup failure. Verify the same UUID, keys and attestation, `restorePairingRequired = false`, no leftover import/restore marker after recovery, and no token prompt.
+   - Fallback path only: with a copy whose Nostr signing key is missing/unusable or whose source lacks pairing authority, verify the app enters `restore-pairing-required`, offers **Wiederherstellung verbinden**, and that a valid parent token makes the federation view call `pair_restored_instance`, update the same `other.db` in place, remove the restore marker, and create no second database. Repeat after a receiver rejects an initially attested copy against newer revocation state; preserve the already adopted identity throughout token reauthorization.
 
 8. **Verbinden requires two instances**. Token-Join creates a fresh database and is independent of the adoption gate. To test it (or the future restore-pairing checks in step 7) on one machine, run two `pnpm tauri dev` instances against separate `AppLocalData` roots (via `XDG_DATA_HOME` on Linux), using a reachable parent with pairing authority. Follow-up docs will cover the complete two-device setup.
 
@@ -94,6 +97,6 @@ network startup and then paired from the federation view.
 This spec is done when:
 
 - A fresh clone reaches step 5 (create + unlock loop) without deviations.
-- Steps 6–7 stage both known-UUID and unknown-UUID copies safely and enforce the adoption gate at the current pin. Full import onboarding remains dependency-blocked until a reviewed crate upgrade makes fresh UUID/key adoption and authorized restore pairing pass for both cases; rejection tests alone do not satisfy that success path. See FR-011a.
+- Steps 6–7 stage both known-UUID and unknown-UUID copies safely and enforce the adoption gate at the current pin. Full import onboarding remains dependency-blocked until a reviewed crate upgrade makes fresh UUID/key adoption and offline attested completion pass for both cases, alongside the separate token-fallback checks; rejection tests alone do not satisfy that success path. See FR-011a.
 - All E2E tests in `e2e/onboarding.spec.ts` pass.
 - Playwright network-assertion test (T066) passes with zero external requests.

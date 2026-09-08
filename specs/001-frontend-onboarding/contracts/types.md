@@ -2,8 +2,8 @@
 
 **Status**: Draft. All types are generated from Rust `#[derive(ts_rs::TS)]` structs and exported to `src/types/bindings/` via `cargo test` (per haex-vault's `generate:ts-types` script).
 
-**V1 contract note**: Backup restore uses the Öffnen flow and an explicit
-restore-pairing handoff; it is not a `Recover` mode or a second database.
+**V1 contract note**: Backup restore uses the Öffnen flow with offline attested adoption and a
+restore-pairing handoff only as the token fallback; it is not a `Recover` mode or a second database.
 
 Frontend imports via a `@bindings/*` path alias:
 
@@ -26,7 +26,7 @@ pub struct InstanceInfo {
     pub alias: String,             // Non-secret user-visible label; defaults to `name`
     pub last_access: String,       // ISO-8601, from the database mtime; open_instance refreshes it
     pub size_bytes: u64,           // File size at scan time
-    pub restore_pairing_required: bool, // True for an imported copy awaiting pairing
+    pub restore_pairing_required: bool, // True only for an adopted copy in the token fallback
 }
 ```
 

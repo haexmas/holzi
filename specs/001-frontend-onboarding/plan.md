@@ -4,8 +4,8 @@
 **Input**: Feature specification from [`./spec.md`](./spec.md)
 
 **V1 contract note**: Genesis creates a fresh per-SQLite identity without a
-paper-seed confirmation step. Imported databases use rekey-on-restore and the
-restore-pairing handoff described in `spec.md`; `PaperSeedDisplay.vue` is not a
+paper-seed confirmation step. Imported databases use offline attested adoption
+and rekey-on-restore, with token pairing only as the fallback in `spec.md`; `PaperSeedDisplay.vue` is not a
 v1 component.
 
 ## Summary

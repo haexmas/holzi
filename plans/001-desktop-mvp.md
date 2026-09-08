@@ -110,12 +110,12 @@ Alle zur Synchronisierung vorgesehenen Anwendungstabellen werden bereits im MVP 
 | Tabelle | CRDT | Inhalt |
 | --- | --- | --- |
 | `instance_identity_no_sync` | nein | Geräte-UUID und Signierschlüssel dieser Instanz. Verlässt die Datenbank nie |
-| `providers` | ja | Nicht geheime Anbieterkonfiguration: Art (`local`, `api_key`, `cli_delegate`), Name, Basis-URL ohne eingebettete Zugangsdaten |
+| `providers` | ja | Anbieterkonfiguration einschließlich API-Schlüssel: Art (`local`, `api_key`, `cli_delegate`), Name, Basis-URL, Zugangsdaten. Betreiber-Entscheidung vom 2026-09-08: Schlüssel werden mitsynchronisiert, damit ein Anbieter einmal statt je Gerät eingerichtet wird — siehe Abschnitt Anbietermodelle |
 | `models` | ja | Abgefragter Modellkatalog als Cache mit Abrufzeitpunkt; lokale und Anbietermodelle in einer Tabelle |
 | `device_downloaded_models_no_sync` | nein | Lokal verifizierte GGUF-Dateien: Modell-ID, Pfad **relativ zu** `AppLocalData/models/`, Größe, Abrufdatum; nach Import oder Restore erneut prüfen |
 | `chat_threads` | ja | Gespräch: ID, Titel, zuletzt genutzter Anbieter und Modell, Zeitstempel |
 | `chat_messages` | ja | Abgeschlossene Nachricht: ID, Gespräch, Elternnachricht, Rolle, Inhalt, erzeugender Anbieter und Modell, Token-Zähler, Abschlussstatus |
-| `app_settings_no_sync` | nein | Gerätebezogene Vorbelegungen und Anbieter-Aktivierung; API-Schlüssel je Anbieter-ID sowie lokale Generierungsaufträge und Zwischenstände, ausschließlich innerhalb SQLCipher |
+| `app_settings_no_sync` | nein | Gerätebezogene Vorbelegungen, Anbieter-Aktivierung je Gerät sowie lokale Generierungsaufträge und Zwischenstände. Keine Zugangsdaten — die liegen in `providers` |
 
 **Modellgewichte gehören niemals in die SQLite.** Mehrere Gigabyte pro Datensatz sind kein Anwendungsfall für SQLite. Die GGUF-Dateien liegen unter `AppLocalData/models/<modell-slug>/`, die Datenbank hält nur den relativen Pfad. Der Pfad ist bewusst relativ und bewusst unter `AppLocalData`, damit dieselbe Logik auf Android und iOS trägt, wo absolute Pfade außerhalb des App-Containers nicht zugreifbar sind. Wird eine eigene GGUF importiert, wird sie **kopiert**, nicht referenziert.
 
@@ -123,7 +123,11 @@ Nachrichten nach Veröffentlichung nicht im selben Datensatz parallel bearbeiten
 
 Streaming läuft über Tauri-Events. Der Teilstand wird mit stabiler Nachrichten-ID, Geräte-UUID und Request-ID ausschließlich lokal gespeichert, etwa alle 500 ms. Erst bei Abschluss wird die Nachricht mit derselben ID atomar in `chat_messages` veröffentlicht und der lokale Auftrag entfernt: als `complete`, bei Abbruch als `cancelled` mit Teilinhalt. Nach einem Absturz werden nur eigene verwaiste lokale Aufträge als `error` mit Grund „unterbrochen" abgeschlossen. Empfangene Nachrichten und Aufträge anderer Geräte bleiben unverändert; sie starten niemals automatisch einen LLM-Aufruf. Pro aktivem Gerät zunächst höchstens eine Generierung gleichzeitig. Die Sync-Abnahme muss insbesondere den Neustart von B während einer laufenden Generierung auf A prüfen.
 
-Für die spätere Sync-Etappe: nur explizit freigegebene Tabellen und Spalten gehen in Scan **und** Apply. `_no_sync`-Tabellen nicht automatisch registrieren; der Suffix ersetzt keine Eingangsprüfung. Absolute Modellpfade, Passphrasen, Anbieterschlüssel, private Schlüssel und Prozesszustände sind kein Sync-Payload.
+Für die spätere Sync-Etappe: nur explizit freigegebene Tabellen und Spalten gehen in Scan **und** Apply. `_no_sync`-Tabellen nicht automatisch registrieren; der Suffix ersetzt keine Eingangsprüfung. Kein Sync-Payload sind: absolute Modellpfade, die SQLCipher-Passphrase, **private Instanzschlüssel** (Signier-, Nostr- und iroh-Schlüssel) und Prozesszustände.
+
+**Was `_no_sync` nicht leistet**: der Suffix hält Zeilen aus dem Sync-Kanal heraus — er schützt nicht gegen `cp`. Eine Dateikopie enthält `instance_identity_no_sync` samt aller privaten Schlüssel. Daraus folgt beides, was die Adoption ausmacht: Rekey ist **zwingend** und nicht optional, weil sonst zwei Geräte mit identischer Identität liefen; und die Übergabe-Attestierung ist überhaupt erst möglich, weil der alte Signierschlüssel in der Kopie noch vorliegt. „Gerätelokal" heißt hier „wandert nicht über den Sync", nicht „ist gegen Dateizugriff geschützt" — gegen Dateizugriff schützt allein SQLCipher.
+
+**Anbieter-API-Schlüssel sind ausdrücklich Sync-Payload** (Betreiber-Entscheidung vom 2026-09-08). Sie unterscheiden sich kategorisch von privaten Instanzschlüsseln: letztere *sind* die Geräteidentität und müssen je Replikat verschieden sein, erstere sind Zugangsdaten zu einem externen Konto, das für alle Geräte dasselbe ist. Ein Anbieter wird damit einmal eingerichtet statt je Gerät.
 
 ## Lokale Inferenz: Runtime und Modellbezug
 
@@ -152,7 +156,7 @@ Neben lokaler Inferenz stehen Anbietermodelle ab Tag 1 zur Verfügung. Drei Anbi
 | Klasse | Authentifizierung | Abrechnung | Beispiel |
 | --- | --- | --- | --- |
 | `local` | keine | keine | `mistral.rs` mit lokaler GGUF |
-| `api_key` | Schlüssel je Anbieter-ID in `app_settings_no_sync`, geschützt durch SQLCipher | pro Token | Anthropic API, OpenAI API, Google Gemini API |
+| `api_key` | Schlüssel in `providers`, geschützt durch SQLCipher | pro Token | Anthropic API, OpenAI API, Google Gemini API |
 | `cli_delegate` | das aufgerufene Programm authentifiziert selbst | vorhandenes Abonnement | `claude`, `codex` |
 
 Die Klasse `cli_delegate` ist der Weg, ein bestehendes Abonnement zu nutzen. Holzi ruft das offizielle Kommandozeilenprogramm des Anbieters als Unterprozess auf; dieses bringt seine eigene Anmeldung mit. **Holzi sieht dabei keine Zugangsdaten.**
@@ -184,14 +188,21 @@ Die Geräte-UUID ist die CRDT-Knotenidentität und **muss** je Replikat eindeuti
 
 **Zwei Wege zu einem zweiten Replikat**, beide vorgesehen:
 
-| | Datei kopieren | Token-/QR-Kopplung |
+| | Datei kopieren (Adoption) | Token-/QR-Kopplung |
 | --- | --- | --- |
-| Vorbereitung ohne zweites Gerät | Datei lokal kopieren; Adoption benötigt die künftige Crate-API | neue lokale Datenbank anlegen |
-| Autorisierter Abschluss offline | nein; Restore-Pairing benötigt einen erreichbaren Eltern-Peer | nein; Join benötigt einen erreichbaren Eltern-Peer |
-| Bestehendes Gerät kann Aufnahme verweigern | ja, beim Restore-Pairing | ja, beim Join |
-| Andere Geräte erfahren davon | Eltern-Peer beim Restore-Pairing, übrige Peers beim Abgleich | Eltern-Peer beim Join, übrige Peers beim Abgleich |
+| Zweites Gerät zur Kopplungszeit nötig | nein | ja |
+| Autorisierter Abschluss offline | **ja**, mit lokal gültiger Übergabe-Attestierung einer berechtigten Quelle | nein; Join benötigt einen erreichbaren Eltern-Peer |
+| Bestehendes Gerät kann Aufnahme vorab verweigern | nein | ja |
+| Andere Geräte erfahren davon | beim nächsten Abgleich | Eltern-Peer sofort, übrige beim Abgleich |
+| Rücknahme möglich | ja, per Revocation-Epoch | ja, per Revocation-Epoch |
 
-Beide enden im selben Zustand. Der Kopierweg braucht dafür drei Dinge: Übernahme einer **neuen** Geräte-UUID statt Abweisung, **Neuerzeugung des Signierschlüssels** — sonst hätten zwei Geräte denselben und man könnte Schreibvorgänge nicht mehr zuordnen — sowie neue Endpunktschlüssel für Relay und iroh, die je Gerät eindeutig sein müssen.
+Beide enden im selben Zustand. Der Kopierweg braucht dafür vier Dinge: Übernahme einer **neuen** Geräte-UUID statt Abweisung, **Neuerzeugung des Signierschlüssels** — sonst hätten zwei Geräte denselben und man könnte Schreibvorgänge nicht mehr zuordnen — neue Endpunktschlüssel für Relay und iroh, sowie eine **Übergabe-Attestierung**.
+
+**Übergabe-Attestierung** (Betreiber-Entscheidung vom 2026-09-08: Adoption muss offline abschließen). Zuerst bereitet die Kopie eine neue UUID und sämtliche neuen Schlüssel vor. Solange der kopierte Nostr-Signierschlüssel noch verfügbar ist, signiert sie damit die vollständige öffentliche Zielidentität einschließlich CRDT-/Endpunktschlüsseln, Alias, Berechtigungen, Gültigkeit und Epochen gemäß [Spec 001](../specs/001-frontend-onboarding/contracts/tauri-commands.md#device-id-model). Die Adoption schreibt die Attestierung vor dem Identitätswechsel in `peer_instances`; Attestierung, zugehörige neue private Schlüssel und lokaler Abschlussnachweis müssen gemeinsam committen. Erst danach dürfen die neuen Endpunkte starten. Bei fehlender gültiger Attestierung wird stattdessen der Token-Fallback atomar festgehalten; Speicherfehler führen zum Rollback, nicht zum Fallback.
+
+Ein empfangender Peer prüft vor normalem Zugriff die vollständige Signaturbindung und den Besitz der neuen Endpunktschlüssel. Die bestehende Regel bleibt gültig: Die Quelle braucht aktuelle `pairing-authority`, darf höchstens ihre eigenen Berechtigungen vergeben und die Gültigkeit ihrer Freigabe nicht verlängern. Widerrufene oder veraltete Freigaben werden abgewiesen. Der lokale Offline-Abschluss garantiert keine Annahme gegen einen neueren Widerrufsstand; eine spätere Ablehnung wird sichtbar gemeldet und kann über Token-Pairing derselben frischen Identität behoben werden.
+
+Eine lesbare Dateikopie gibt Zugriff auf vorhandene Daten und Zugangsdaten. Die Attestierung gewährt zusätzlich dauerhafte Mitgliedschaft und Zugriff auf künftig synchronisierte Daten im Rahmen der erteilten Rechte; ein Passphrase-Wechsel hebt das nicht auf. Nur ein aktuell zur Kopplung berechtigter Peer darf widerrufen. Die Oberfläche jedes Peers **muss** neu akzeptierte abgeleitete Replikate anzeigen. Der Widerruf eines einzelnen Kindes sperrt den kopierten Quellschlüssel nicht: Bei dessen Kompromittierung müssen auch die Quelle und davon abhängige Freigaben widerrufen oder der Föderations-Reset genutzt werden. Token-Fallback hängt an fehlender gültiger Attestierung, nicht daran, ob das Quellgerät noch existiert.
 
 Die Übernahme einer neuen Geräte-UUID setzt eine Erweiterung in `haex-crdt` voraus, die im gelesenen Stand nicht vorhanden ist: der aktuelle Ablauf weist eine abweichende UUID ab. Die Uhr wird **vor** dem UUID-Abgleich aus dem letzten gespeicherten Zeitstempel geladen; die Erweiterung muss dennoch monotone erste Schreibvorgänge mit neuer Knoten-ID und Crash-Recovery nachweisen. Diese Erweiterung ist eine benannte offene Aufgabe am Crate.
 
@@ -240,7 +251,7 @@ Abnahme: Erstellen → schließen → entsperren erhält Daten und Identität. F
 
 Anbieter anlegen, Zugangsdaten hinterlegen, Erreichbarkeit prüfen. Modelllisten von allen aktiven Anbietern abfragen und cachen. Modell-Download mit Fortschritt und Import eigener GGUF. Auswahlfeld mit Verfügbarkeitszuständen.
 
-Abnahme: Ein hinterlegter Anbieterschlüssel führt zu einer abgefragten, nicht hartkodierten Modellliste. Auch bei leerem Modellordner liefert der Katalog herunterladbare Modelle; ein heruntergeladenes Modell erscheint erst nach erfolgreicher Dateiprüfung als verfügbar. Ungültige Zugangsdaten führen zu einer verständlichen Meldung, nicht zu einem leeren Auswahlfeld. CLI-Adapter weisen Modellabfrage mit bestehender Anmeldung, reinen Chatbetrieb und sauberen Prozessabbruch nach. Anbieter-Zugangsdaten und lokale Dateipfade fehlen in CRDT-Metadaten sowie späteren Scan-/Apply-Payloads.
+Abnahme: Ein hinterlegter Anbieterschlüssel führt zu einer abgefragten, nicht hartkodierten Modellliste. Auch bei leerem Modellordner liefert der Katalog herunterladbare Modelle; ein heruntergeladenes Modell erscheint erst nach erfolgreicher Dateiprüfung als verfügbar. Ungültige Zugangsdaten führen zu einer verständlichen Meldung, nicht zu einem leeren Auswahlfeld. CLI-Adapter weisen Modellabfrage mit bestehender Anmeldung, reinen Chatbetrieb und sauberen Prozessabbruch nach. Lokale Dateipfade und private Instanzschlüssel fehlen in CRDT-Metadaten sowie späteren Scan-/Apply-Payloads; Anbieter-Zugangsdaten sind dort erwartet und dürfen nur über den verschlüsselten Transport gehen.
 
 ### 3. Nutzbarer Chat — etwa 3–5 Arbeitstage
 
@@ -293,9 +304,11 @@ Vor neuen Codeartefakten gilt der deklarierte graphify-Authoring-Check aus [`.sp
 ## Gates und Wartung
 
 - Schlüsselhaltung ist als Produktziel entschieden: verschlüsselte SQLite, auch für Anbieterschlüssel. Vor entsprechender Implementierung die abweichende kanonische Keychain-Formulierung in einem separaten geprüften Amendment korrigieren.
+- Weil Anbieterschlüssel mitsynchronisieren, hält jedes gekoppelte Gerät jeden Schlüssel. Ein kompromittiertes Gerät gibt damit alle Anbieterkonten preis, nicht nur seine eigenen. Das ist der bewusst gewählte Preis dafür, einen Anbieter nur einmal einzurichten; die Sync-Abnahme muss zeigen, dass Schlüssel den Transport nie unverschlüsselt verlassen, und die Rücknahme eines Peers muss praktisch mit einer Schlüsselrotation beim Anbieter einhergehen.
+- Die Übergabe-Attestierung macht aus einem einmaligen Dateizugriff eine dauerhafte Mitgliedschaft. Die Oberfläche muss neu aufgetauchte abgeleitete Replikate sichtbar melden, sonst ist die Rücknahme-Möglichkeit wertlos.
 - Die bestehende Onboarding-Spec gilt erst als erfüllt, wenn ihre Anforderungen implementiert oder ausdrücklich per Review neu zugeschnitten wurden.
 - Die Übernahme einer neuen Geräte-UUID ist eine offene Aufgabe am Crate und Voraussetzung für jeden Import als neues Replikat. Token-Join ist davon unabhängig; beide Kopplungswege bleiben gemäß diesem MVP-Vorschlag einer späteren Etappe zugeordnet.
-- Sobald eine geprüfte und gepinnte `haex-crdt`-Revision Adoption unterstützt, ist FR-011a einzulösen: jede importierte Kopie erhält eine frische UUID und frische Signier-/Endpunktschlüssel und läuft danach in den Restore-Pairing-Ablauf. Die Crate-Adoption und der Holzi-Rekey müssen einschließlich Index und Restore-Markern nach Unterbrechung sicher fortsetzbar sein; bloßer Endpunkt-Rekey ersetzt keine UUID-Adoption.
+- Sobald eine geprüfte und gepinnte `haex-crdt`-Revision Adoption unterstützt, ist FR-011a einzulösen: jede importierte Kopie erhält eine frische UUID und frische Signier-/Endpunktschlüssel und schließt mit gültiger Attestierung offline ab; nur ohne gültige Attestierung folgt der Token-Fallback. Die Crate-Adoption und der Holzi-Rekey müssen einschließlich Index und Restore-Markern nach Unterbrechung sicher fortsetzbar sein; bloßer Endpunkt-Rekey ersetzt keine UUID-Adoption.
 - Ohne Prozess-Isolation beendet ein Modell, das den Speicher überschreitet, die Anwendung. Die Abnahme von Etappe 3 muss zeigen, was in diesem Fall passiert und ob offene Gespräche erhalten bleiben.
 - Überfordert das gewählte Modell die Zielhardware, wird das sichtbar gemeldet; kein automatisches Ausweichen auf einen Dienst.
 - Bei Mobile müssen Inferenz-Backend, Speicherbudget und Modellbezug neu bewertet werden. Das Pfadmodell ist darauf vorbereitet, die Leistungsfrage nicht.
