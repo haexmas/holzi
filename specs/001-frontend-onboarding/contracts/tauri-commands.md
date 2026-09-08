@@ -103,22 +103,61 @@ Startup removes `pending` mappings whose creation marker or database is absent.
 If a mapping is missing, corrupt, or not `ready`, `open_instance` returns an
 explicit validation error and leaves the database and any currently active
 instance untouched; it MUST NOT guess a UUID or overwrite the database's
-recorded value. Import may proceed only when the source UUID is already known
-to this local index.
+recorded value.
 
-**Policy at v1**: `DeviceIdProvider` returns the UUID retained by Holzi.
-Opening a database whose recorded device UUID differs from what the caller
-supplies fails with `HolziError::DeviceIdMismatch`. This matches the pinned
-haex-crdt revision's reject-on-mismatch behavior.
+**Ordinary reopen** — a database whose UUID this index already knows — passes
+that UUID straight through and MUST NOT mint a new one.
 
-**Post-v1**: cross-host device-handoff (moving the same `.db` between physical
-machines) needs an explicit adopt-on-mismatch API in haex-crdt, which is not
-present in the pinned revision. Tracked as an open sub-task; v1 rejects a
-database without a local UUID mapping instead of relying on adopt semantics.
+**Adopting a copied database is a distinct, intended flow.** Importing a `.db`
+creates a new replica, whether the source is on this machine or another one
+and whether its UUID is already in the local index. The source remains
+untouched and may still run, so its UUID MUST NOT be reused for the copy.
+Only ordinary reopen of the original managed database retains its UUID.
+Copy adoption and token/QR pairing must end in the same authorized state,
+so adoption is not merely "accept the mismatch" — it MUST also:
 
-The only invariant `fs2` guarantees is that the same `.db` cannot be opened
-twice on the same host. Cross-host handoff is a policy question, not a lock
-question.
+1. Mint and record a **new device UUID** (the CRDT node identity must be
+   unique per replica, or conflict resolution stops being deterministic).
+2. Generate a **new signing keypair**, retiring the copied one. Without this,
+   two replicas would sign with the same key and writes could not be
+   attributed.
+3. Generate **new Nostr and iroh endpoint keys**, which must be unique per
+   device.
+
+At the pinned revision, `initialize_in_place` runs before device-id
+reconciliation and seeds the HLC from the last persisted timestamp. That
+supports a future adoption implementation; it does not itself implement
+adoption or prove crash safety. The adopting revision MUST verify that the
+first new write advances past the copied timestamp and uses the new node ID,
+and that UUID, keys, local index and restore markers recover consistently
+after interruption before any endpoint or application write starts.
+Sources at the pinned revision: [open lifecycle](https://github.com/haexmas/haex-crdt/blob/c41ef2e2695da980af56aa586211ec508bf1789b/src/database/mod.rs#L129)
+and [HLC initialization](https://github.com/haexmas/haex-crdt/blob/c41ef2e2695da980af56aa586211ec508bf1789b/src/crdt/hlc.rs#L140).
+
+**What the pinned revision actually does**: `reconcile_device_id` rejects a
+mismatch outright; there is no adopt API. Until a supporting revision is
+reviewed and pinned, `open_instance` MUST reject every unprocessed
+import-pending copy before rekey, application writes or network startup,
+including copies with a known source UUID. It returns
+`HolziError::CrdtInit { reason: "copied database adoption unavailable in pinned haex-crdt" }`
+and retains the copy, marker, index and currently active instance unchanged.
+This capability error MUST NOT be treated as conclusive file invalidity.
+`DeviceIdMismatch { expected, supplied }` remains reserved for an actual
+crate-reported mismatch; a missing index entry supplies neither a verified
+expected UUID nor a permitted replacement UUID.
+
+This dependency limitation applies only to copy adoption. Token/QR join
+uses `create_instance` to create an empty database with a fresh UUID and
+does not require adoption. Copying alone does not authorize a new peer:
+after adoption, the restore-pairing handoff still requires a valid token
+and an authorized surviving parent.
+
+**Never permitted**, independent of the above: the same `.db` open in two
+processes at once. `fs2` prevents it on one host. Across a shared network
+mount or a cloud-sync folder it cannot be prevented reliably, because such
+services replicate byte ranges rather than transactions — that case is a
+documented anti-requirement, and startup SHOULD warn when an instance path
+looks like a known sync folder.
 
 ### Error mapping
 
@@ -313,11 +352,36 @@ pub struct OpenInstanceArgs {
 
 **Preconditions**: `<name>.db` exists and is not a pending Genesis database. An imported database with an import-pending marker may be opened; its SQLCipher credential validation is completed by this command. A database with a restore-pending marker is an already-rekeyed restore and may be reopened without rekeying again.
 
+**Pinned-revision gate**: the import-pending success path below is conditional
+on the adoption capability in [Device-ID model](#device-id-model). At the
+current pin, reject unprocessed imports with the capability error defined
+there. A known source UUID does not bypass this gate. After the dependency
+upgrade, adopt a fresh UUID and rotate all signing/endpoint keys before
+entering the restore-pairing state; persist the target name-to-new-UUID mapping
+without modifying the source mapping. Only restore completion proven for this local import generation remains
+authoritative for retries, so neither adoption nor rekey repeats.
+
+**Local import-generation proof**: every staging operation allocates a fresh
+random operation ID in the durable local import marker/journal, including
+Rename imports. Source-embedded restore state is not proof of local completion.
+The adoption/rekey transition records this operation ID and the new UUID in
+the encrypted restore state; the target index and restore marker record the
+same association. Resume without adoption/rekey only when the database's
+completion record matches the current locally recorded operation and its new
+UUID. If interrupted before index/restore-marker publication, the matching
+local import journal/marker plus committed completion record permit finishing
+that publication before startup. A mismatching pre-existing restore flag or
+operation ID belongs to the source: this is still an unprocessed import and
+must pass the adoption gate. Missing or contradictory local evidence fails
+closed while retaining the copy. All restore-state precedence rules below
+are subject to this generation check; a copied flag alone never overrides a
+fresh import marker.
+
 **Postconditions on success**: SQLCipher unlocked; Nostr relay listening; iroh peer online; `AppState.active_instance = Some(...)`; the database mtime is refreshed to the current time as the persisted `lastAccess`; and any ordinary import-pending marker is removed. For an imported copy, rekey-on-restore has completed before startup, the copied keys were never used to start a network endpoint, `restore_pairing_required = true`, and the restore marker remains until pairing succeeds. If another instance was active, it is fully closed before the new one becomes visible. Backend emits `instance-list-changed` (last-access bumped).
 
 **Atomic switch and rollback**: the state lock is held throughout the operation. First, `open_instance` validates the requested file and SQLCipher credentials while the current runtime and `AppState.active_instance` remain unchanged. If that validation fails, no close, state transition, mtime refresh, or active-instance event occurs. For an import-pending copy, the rekey transaction durably records the restore-pairing-required state before any requested runtime service starts; the backend then writes and fsyncs the restore-pending marker before removing the import marker. If interrupted between the database transaction and marker publication, the persisted restore state lets the next open recreate the marker without rekeying. If both markers are present, the persisted restore state or restore-pending marker is authoritative: the backend verifies the database is in restore-pairing-required state, skips rekey, removes only the stale import marker, and continues with the fresh identity. A rekey failure leaves the copy and import marker unchanged. After validation and any required rekey succeed, the backend starts the requested SQLCipher, relay, and iroh runtime as a private candidate while the current runtime and `AppState.active_instance` remain active. Only after every requested startup step succeeds may it stop the previous runtime and publish the candidate as the active instance. If candidate startup fails, every candidate service is stopped, its database handle is dropped, and the previous runtime and `AppState.active_instance` remain available; no half-switched event or mtime update is emitted. The restore-pending marker and fresh identity remain, so a subsequent `open_instance` recognizes the already-rekeyed restore, skips rekey entirely, and starts only the fresh identity for another pairing attempt. A failed unlock attempt retains the copy and import marker so a subsequent attempt can retry; deletion requires an explicit discard action or conclusive validation that the file is not a holzi instance. The previous instance is not silently resumed because it never stopped on a candidate startup failure.
 
-**Marker lifecycle**: for `<name>.db`, the sibling `<name>.import-pending` marker means that the copied database has not yet passed credential validation. Successful validation durably records the restore-pairing-required state after fresh identity keys have replaced and retired the copied identity, then publishes `<name>.restore-pending` and removes the import marker. On a later open, `<name>.restore-pending` or the persisted restore-pairing-required state means rekey already completed: the backend MUST skip rekey, MUST never start the copied identity, and MUST return `restore_pairing_required = true` until `pair_restored_instance` succeeds. If both markers are present, restore-pending or persisted restore state wins; after verifying that state, the backend removes the stale import marker and retains the restore marker until pairing succeeds. A successful pairing transaction removes the restore marker and clears the state. Startup and open reject inconsistent marker/database combinations without starting a network endpoint; they retain a valid restore database for retry after interruption.
+**Marker lifecycle**: for `<name>.db`, the sibling `<name>.import-pending` marker identifies the local import operation whose adoption and credential validation are not yet durably complete. Successful validation durably records the restore-pairing-required state after fresh identity keys have replaced and retired the copied identity, then publishes `<name>.restore-pending` and removes the import marker. On a later open, `<name>.restore-pending` or the persisted restore-pairing-required state means rekey already completed: the backend MUST skip rekey, MUST never start the copied identity, and MUST return `restore_pairing_required = true` until `pair_restored_instance` succeeds. If both markers are present, restore-pending or persisted restore state wins; after verifying that state, the backend removes the stale import marker and retains the restore marker until pairing succeeds. A successful pairing transaction removes the restore marker and clears the state. Startup and open reject inconsistent marker/database combinations without starting a network endpoint; they retain a valid restore database for retry after interruption.
 
 **Failure modes**:
 
@@ -325,6 +389,7 @@ pub struct OpenInstanceArgs {
 - `HolziError::WrongPassphrase` — SQLCipher rejected. **The frontend MUST NOT expose whether the error was `NotFound` vs `WrongPassphrase`** (FR-021); it renders both as a generic "Öffnen fehlgeschlagen". The typed error is for logs and telemetry only.
 - `HolziError::NotAValidInstance { reason }` — the database or SQLCipher format is invalid. An import-pending copy remains available unless the backend has conclusively established that it is not a holzi instance; a passphrase-related failure must never delete it.
 - `HolziError::Io` — read error.
+- `HolziError::CrdtInit` — copied-database adoption is unavailable at the pinned revision; retain the imported copy and marker for retry after a dependency upgrade or explicit discard.
 
 ---
 
@@ -397,10 +462,18 @@ After a successful close of an active instance, emit `instance-list-changed { re
 
 Copies an external `.db` file into `<AppLocalData>/instances/`. Structural validation happens before copying; SQLCipher credential validation is completed by `open_instance`.
 
-V1 accepts only a same-host import whose recorded device UUID is present in the
-local device-ID index. An unknown or cross-host source may be staged as pending,
-but `open_instance` MUST return an explicit validation error; it MUST NOT open
-the copy with a generated replacement UUID.
+This command may stage a structurally valid source as import-pending,
+regardless of whether the local index knows its UUID. Against the pinned
+haex-crdt revision, `open_instance` MUST reject every unprocessed imported
+copy with the adoption capability error in [Device-ID model](#device-id-model).
+It MUST NOT reuse the source UUID or silently supply a replacement to
+`Database::open`. Successful staging does not imply a usable replica.
+
+That restriction tracks the **dependency**, not the intended scope: adopting a
+copied database is a supported way to add a replica once haex-crdt exposes an
+adopt API, and it then follows the three-step adoption in
+[Device-ID model](#device-id-model) — new device UUID, new signing keypair, new
+endpoint keys. Nothing here may be read as limiting holzi to one machine.
 
 ```rust
 #[tauri::command]
@@ -434,7 +507,7 @@ pub struct ImportInstanceResult {
 
 - `source_path` is the external file path returned by `@tauri-apps/plugin-dialog`; it is the only path accepted from the frontend. It is not a managed-instance path. The command validates that it is a regular file and that the extension is `.db`.
 - SQLCipher page validation is deferred until `open_instance`, where the operator supplies the passphrase. The copied file is marked by a sibling `<name>.import-pending` marker; after rekey, `<name>.restore-pending` remains until `pair_restored_instance` succeeds. Failed unlock or pairing attempts retain the copied file and its current marker for retry; only an explicit discard action or conclusive validation that the file is not a holzi instance may remove them. The source file is never touched.
-- Copy uses a crash-safe publish protocol: for Rename, write the database to a temporary file in the managed directory and fsync it; write and fsync `<name>.import-pending`; fsync the directory; atomically rename the temporary database to `<name>.db`; then fsync the directory again before emitting the import event. For Overwrite, the backend instead allocates an operation id, writes the staged database to `<name>.db.importing.<operation-id>`, writes a generation-bound `<name>.import-pending.<operation-id>` marker containing the staged-file digest, and fsyncs an overwrite journal before touching the existing `<name>.db`. The recoverable commit renames the old database to an operation-specific backup, renames the staged generation into `<name>.db`, fsyncs the directory, records the committed phase, and only then removes the backup, marker, and journal. Startup/open never applies a generation-specific marker to an old target: with an unfinished journal it verifies the digest and either completes the staged generation or restores/retains the old target, without network startup. A marker without its matching database is treated as an incomplete import and is cleaned up or retried without network startup. On any pre-publish error the temporary file and marker are deleted.
+- Copy uses a crash-safe publish protocol: for Rename, write the database to a temporary file in the managed directory and fsync it; write and fsync `<name>.import-pending` with a fresh operation ID and staged-file digest; fsync the directory; atomically rename the temporary database to `<name>.db`; then fsync the directory again before emitting the import event. For Overwrite, the backend instead allocates an operation id, writes the staged database to `<name>.db.importing.<operation-id>`, writes a generation-bound `<name>.import-pending.<operation-id>` marker containing the staged-file digest, and fsyncs an overwrite journal before touching the existing `<name>.db`. The recoverable commit renames the old database to an operation-specific backup, renames the staged generation into `<name>.db`, fsyncs the directory, records the committed phase, and durably publishes the ordinary `<name>.import-pending` marker carrying the committed operation ID before removing the backup, operation-specific marker, and journal. Startup/open never applies a generation-specific marker to an old target: with an unfinished journal it verifies the digest and either completes the staged generation or restores/retains the old target, without network startup. A marker without its matching database is treated as an incomplete import and is cleaned up or retried without network startup. On any pre-publish error the temporary file and marker are deleted.
 - For `ConflictPolicy::Overwrite`, the command checks the target name while holding the `AppState` lock and rejects replacement if that name is the active instance. The frontend must close that instance explicitly before retrying overwrite.
 - The source file is never modified or moved.
 

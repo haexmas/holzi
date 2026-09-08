@@ -68,18 +68,19 @@ network startup and then paired from the federation view.
 
 6. **Import an external `.db` (Öffnen)**.
 
-   - Copy `~/.local/share/holzi/instances/test-01.db` to `/tmp/other.db` on the same host; the local device-ID index must contain `test-01`'s UUID.
+   - Close `test-01` cleanly before taking the copy, so committed data is not left in an active WAL. Copy `~/.local/share/holzi/instances/test-01.db` to `/tmp/other.db`; the local index may still know the source UUID, but that UUID cannot identify a second replica.
    - In the app, click **Öffnen**.
    - File picker opens; select `/tmp/other.db`.
-   - Import succeeds; `other.db` appears in the list with restore-pending state (source at `/tmp/other.db` is untouched).
+   - Import succeeds; `other.db` appears in the list with import-pending state (source at `/tmp/other.db` is untouched).
 
-7. **Restore and pair the imported database**.
+7. **Verify the adoption gate; restore after the dependency upgrade**.
 
-   - Select `other.db` and enter the original passphrase. Verify that `open_instance` rekeys the copied identity before starting any relay or iroh endpoint.
+   - At the current crate pin, select `other.db` and enter the original passphrase. Verify the explicit adoption-unavailable `CrdtInit` error, retained copy and import marker, unchanged index and active instance, and no new endpoint. Repeat with a copy whose source UUID is unknown; the result must be the same.
+   - The following success checks are blocked until an adoption-capable revision is reviewed and pinned. They require a reachable surviving parent instance. After that upgrade, verify that `open_instance` adopts a fresh UUID and signing/endpoint keys before any application write or endpoint starts, preserving the original source identity.
    - Verify that the app opens `/federation/other` in `restore-pairing-required` state and offers **Wiederherstellung verbinden**; importing alone does not complete onboarding.
    - Scan or paste a valid parent token. Verify that the federation view calls `pair_restored_instance`, updates the same `other.db` in place, removes the restore marker, and does not create a second database.
 
-8. **Verbinden requires two devices** — end-to-end pairing is out of scope for this quickstart. To smoke-test the flow with a single machine, run two `pnpm tauri dev` instances against separate `AppLocalData` roots (via `XDG_DATA_HOME` on Linux). Follow-up docs will cover this.
+8. **Verbinden requires two instances**. Token-Join creates a fresh database and is independent of the adoption gate. To test it (or the future restore-pairing checks in step 7) on one machine, run two `pnpm tauri dev` instances against separate `AppLocalData` roots (via `XDG_DATA_HOME` on Linux), using a reachable parent with pairing authority. Follow-up docs will cover the complete two-device setup.
 
 ## Common failure modes
 
@@ -93,6 +94,6 @@ network startup and then paired from the federation view.
 This spec is done when:
 
 - A fresh clone reaches step 5 (create + unlock loop) without deviations.
-- Steps 6–7 (same-host Öffnen, rekey, and restore pairing) work with a valid `.db` whose UUID is present in the local device-ID index; cross-host restore is deferred until haex-crdt supports adopt-on-mismatch.
+- Steps 6–7 stage both known-UUID and unknown-UUID copies safely and enforce the adoption gate at the current pin. Full import onboarding remains dependency-blocked until a reviewed crate upgrade makes fresh UUID/key adoption and authorized restore pairing pass for both cases; rejection tests alone do not satisfy that success path. See FR-011a.
 - All E2E tests in `e2e/onboarding.spec.ts` pass.
 - Playwright network-assertion test (T066) passes with zero external requests.
