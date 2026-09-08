@@ -2,7 +2,7 @@
 
 Erstellt am 2026-09-07 als Antwort auf den Wunsch nach einem ersten Tauri-MVP mit SQLite, CRDT-Sync und lokalem LLM. Am 2026-09-08 überarbeitet, nachdem der Betreiber den MVP-Schnitt präzisiert hat: Sync ist nicht mehr Teil des MVP, Anbietermodelle sind es ab Tag 1.
 
-Ablage im Repo: `plans/` — beratende Roadmap dieses Verzeichnisses; `specs/` — verbindliche Speckit-Artefakte; `docs/plans/` — v1-Architekturentwürfe. Dieser Ordner ist Beratungsgrundlage für die vorhandenen Speckit-Reviewstufen und überschreibt weder die v1-Entwürfe noch die Onboarding-Spezifikation.
+Ablage und Vorrang: Nummerierte `specs/`-Artefakte einschließlich ihrer Verträge sind die normative Quelle für Produktverhalten; `docs/plans/` sind Architekturentwürfe; `plans/` ist eine beratende Roadmap. Kein Plan überschreibt eine Spec. Widersprüche werden zuerst in der zuständigen Spec per Review aufgelöst; bis dahin gilt die bestehende Spec. Dieser Ordner ist Beratungsgrundlage für die vorhandenen Speckit-Reviewstufen.
 
 | Plan | Priorität | Aufwand | Status | Gate |
 | --- | --- | --- | --- | --- |
