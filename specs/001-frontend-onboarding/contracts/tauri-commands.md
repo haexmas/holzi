@@ -148,9 +148,36 @@ expected UUID nor a permitted replacement UUID.
 
 This dependency limitation applies only to copy adoption. Token/QR join
 uses `create_instance` to create an empty database with a fresh UUID and
-does not require adoption. Copying alone does not authorize a new peer:
-after adoption, the restore-pairing handoff still requires a valid token
-and an authorized surviving parent.
+does not require adoption.
+
+**How an adopted replica is authorized, without a token.** Operator decision
+of 2026-09-08: copy adoption MUST complete offline, with no reachable parent.
+Authorization comes from a **handover attestation** the copy issues to itself
+during adoption, in this order:
+
+1. While the copied signing key is still available and before it is retired,
+   sign a record stating that the source instance (old public key) attests the
+   adopted instance (new public key) as a derived replica, with the adoption
+   timestamp.
+2. Write that record into `peer_instances` as the adopted instance's own entry,
+   carrying the attestation.
+3. Only then retire the copied key and rotate the endpoint keys.
+
+Any peer can verify the attestation against a public key it already trusts in
+its own `peer_instances`, so the adopted replica is accepted on first contact
+without either side having been online during adoption.
+
+**What this trust model does and does not claim.** Possession of the copied
+signing key is equivalent to possession of the file plus its passphrase, which
+already grants full read access — the attestation makes that possession
+explicit and verifiable rather than granting anything new. It does, however,
+convert a one-time file capture into an ongoing membership, which a passphrase
+change alone does not undo. The counterweight is **revocation**: any peer that
+sees a derived record it did not expect can bump the revocation epoch for that
+device, and the UI SHOULD surface newly appeared derived replicas rather than
+adding them silently. Restore pairing with a token remains the path for the
+*other* case — the source device is gone and there is no key left to attest
+with.
 
 **Never permitted**, independent of the above: the same `.db` open in two
 processes at once. `fs2` prevents it on one host. Across a shared network

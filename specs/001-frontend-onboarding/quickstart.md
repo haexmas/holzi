@@ -77,8 +77,9 @@ network startup and then paired from the federation view.
 
    - At the current crate pin, select `other.db` and enter the original passphrase. Verify the explicit adoption-unavailable `CrdtInit` error, retained copy and import marker, unchanged index and active instance, and no new endpoint. Repeat with a copy whose source UUID is unknown; the result must be the same.
    - The following success checks are blocked until an adoption-capable revision is reviewed and pinned. They require a reachable surviving parent instance. After that upgrade, verify that `open_instance` adopts a fresh UUID and signing/endpoint keys before any application write or endpoint starts, preserving the original source identity.
-   - Verify that the app opens `/federation/other` in `restore-pairing-required` state and offers **Wiederherstellung verbinden**; importing alone does not complete onboarding.
-   - Scan or paste a valid parent token. Verify that the federation view calls `pair_restored_instance`, updates the same `other.db` in place, removes the restore marker, and does not create a second database.
+   - Verify that a handover attestation was written with the copied signing key **before** that key was retired, and that the app then opens `/federation/other` directly — with no network reachable, no token, and no parent running. Adoption completes offline (FR-011b).
+   - Bring a peer that trusts the source instance online and verify it accepts the adopted replica on first contact by checking the attestation, and shows it as a newly derived device rather than adding it silently.
+   - Fallback path only: with a copy whose signing key is missing or unusable, verify the app enters `restore-pairing-required`, offers **Wiederherstellung verbinden**, and that a valid parent token makes the federation view call `pair_restored_instance`, update the same `other.db` in place, remove the restore marker, and create no second database.
 
 8. **Verbinden requires two instances**. Token-Join creates a fresh database and is independent of the adoption gate. To test it (or the future restore-pairing checks in step 7) on one machine, run two `pnpm tauri dev` instances against separate `AppLocalData` roots (via `XDG_DATA_HOME` on Linux), using a reachable parent with pairing authority. Follow-up docs will cover the complete two-device setup.
 
