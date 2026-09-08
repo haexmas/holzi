@@ -13,10 +13,11 @@
 **V1 supersession notice (2026-09-06)**: The paper-seed/federation-root
 onboarding material retained in this draft is historical and non-normative. It
 is superseded by `v1-scope-design.md` §4 and MUST NOT be implemented. V1
-Genesis creates a fresh per-SQLite identity; `.db` backup recovery uses
-rekey-on-restore before any network endpoint starts, then completes pairing in
-the same imported database. The same notice applies to the shared-type,
-Tauri-command, plan, quickstart, and task documents in this feature directory.
+Genesis creates a fresh per-SQLite identity; `.db` backup recovery opens the
+copied database directly, reusing or minting the local `known_devices` row
+before any network endpoint starts. No rekey or restore pairing is performed.
+The same notice applies to the shared-type, command, plan, quickstart, and
+task documents in this feature directory.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -54,17 +55,17 @@ The operator has a parent instance whose `peer_instances` record carries `pairin
 
 ### User Story 3 — Öffnen (Import external `.db` file from filesystem) (Priority: P2)
 
-The operator has an instance file (`.db`) on the filesystem — moved from another machine, restored from backup, or simply outside the managed directory — and wants holzi to manage it. On the landing they choose **Öffnen**, pick the file via OS file dialog, and holzi copies it into `<AppLocalData>/instances/` under its original name (or a de-duplicated variant). On next open, holzi's `DeviceIdProvider` looks up this installation's UUID in the copied DB's `known_devices` table; finding no matching row (the source's rows are for other installations), it inserts a fresh vault-device UUID row for this installation and returns that UUID as the HLC node id. The DB then unlocks with the original passphrase. That is the entire flow: no rekey, no attestation, no restore-pairing handshake.
+The operator has an instance file (`.db`) on the filesystem — moved from another machine, restored from backup, or simply outside the managed directory — and wants holzi to manage it. On the landing they choose **Öffnen**, pick the file via OS file dialog, and holzi copies it into `<AppLocalData>/instances/` under its original name (or a de-duplicated variant). On next open, the pre-HLC bootstrap looks up this installation's UUID in the copied DB's local `known_devices` column; it reuses the row when the copy came from the same installation, or inserts a fresh vault-device UUID row when it came from another installation. The resulting UUID is then supplied to HLC through `DeviceIdProvider`. The DB unlocks with the original passphrase. That is the entire direct-copy flow: no rekey, no attestation, no restore-pairing handshake.
 
-The vault identity in the DB is authoritative and already carried across by the copy, so other replicas of the same vault accept a connection from this new install via proof-of-possession of the vault key. The vault-device UUID is per-installation and therefore different by construction; two replicas running the same vault get different HLC node IDs.
+The vault identity in the DB is authoritative and already carried across by the copy, so other replicas of the same vault accept a connection from this new install via proof-of-possession of the vault key. A vault-identity rotation rejects copies with the old key. The vault-device UUID is per-installation: same-installation copies reuse the local row, while different installations get different HLC node IDs.
 
 **Why this priority**: Local portability. Holzi has no export command because the `.db` file *is* the export; Öffnen is the corresponding import. Adopting a database copied from another machine is a supported way to add a replica.
 
-**Independent Test**: Import a valid throwaway database. Verify copy (not move), unchanged source, immediate list refresh, and that unlocking with the correct passphrase inserts a new `known_devices` row for this installation with a vault-device UUID distinct from the source's, and opens the DB. Verify that reopening finds the same row and reuses the same UUID. No second database is created.
+**Independent Test**: Import a valid throwaway database from the same installation and verify copy (not move), unchanged source, immediate list refresh, and reuse of the existing local `known_devices` row and vault-device UUID. Repeat under a second installation and verify that unlocking inserts a new local row with a vault-device UUID distinct from the source's. Verify that reopening under either installation reuses its row and UUID. No second database is created.
 
 **Acceptance Scenarios**:
 
-1. **Given** a valid `.db` file (from this machine or another install), **When** the operator imports and unlocks it, **Then** holzi inserts a `known_devices` row for the local installation with a fresh vault-device UUID, opens the DB, and shows the federation view. No token is requested, no parent must be reachable.
+1. **Given** a valid `.db` file (from this machine or another install), **When** the operator imports and unlocks it, **Then** holzi reuses the matching local `known_devices` row or inserts one with a fresh vault-device UUID when no local row exists, opens the DB, and shows the federation view. No token is requested, no parent must be reachable.
 2. **Given** a file whose name conflicts with an existing instance, **When** the operator confirms the import, **Then** the operator is prompted for either overwrite, rename, or cancel — default behavior is rename with a numeric suffix, no silent overwrite.
 3. **Given** a structurally valid regular `.db` file that was imported successfully, **When** the operator attempts to unlock it with an incorrect passphrase, **Then** `open_instance` rejects the attempt with an explicit error, retains the imported copy for a later unlock attempt or explicit discard, and leaves any currently active instance unchanged.
 4. **Given** an imported copy that has been opened once (so `known_devices` contains a row for this installation), **When** the operator closes and reopens it, **Then** the same vault-device UUID is used; no new row is inserted.
@@ -90,7 +91,7 @@ On every subsequent launch, the landing shows the operator's instances (from `<A
 
 ### User Story 5 — Aus Paper-Seed wiederherstellen (Recover) (Historical — superseded, not a v1 requirement)
 
-This user story belongs to the superseded paper-seed/federation-root design and is retained only as historical context. V1 recovery is the Öffnen flow in User Story 3: import a `.db`; a fresh `known_devices` row is inserted on first open, and the vault identity in the copy authenticates the new install to any other replicas.
+This user story belongs to the superseded paper-seed/federation-root design and is retained only as historical context. V1 recovery is the Öffnen flow in User Story 3: import a `.db`; the local `known_devices` row is reused or freshly inserted on first open, and the vault identity in the copy authenticates the new install to any other replicas.
 
 **Why this priority**: Not applicable to v1. The historical flow is blocked; backup recovery is covered by User Story 3.
 
@@ -125,13 +126,13 @@ This user story belongs to the superseded paper-seed/federation-root design and 
 
 - **FR-005**: The Anlegen action MUST open a Sheet for a fresh Genesis instance. The historical Recover mode is not available in v1.
 - **FR-006**: The Anlegen sheet MUST require an instance name (alphanumeric plus dash/underscore, ≤64 chars, unique within `instances/`) and a passphrase entered twice.
-- **FR-007**: On successful submit, the backend MUST construct the provider-backed `DatabaseConfig` and call `haex-crdt`'s `Database::open` with the passphrase, device-ID provider, signature provider, migration source, and trigger version. The `DeviceIdProvider` mints a fresh vault-device UUID and inserts a `known_devices` row keyed by the local installation UUID; the flow then generates the vault identity keypair (singleton `vault_identity` row), activates the runtime, and returns the active instance. No paper-seed or confirmation step exists in v1.
+- **FR-007**: On successful submit, the backend MUST run the pre-HLC bootstrap after migrations: atomically create the vault identity keypair and singleton `vault_identity` row, then look up or mint the local `known_devices` row, before HLC initialization or any signed bootstrap write. It MUST then construct the provider-backed `DatabaseConfig` and call `haex-crdt`'s `Database::open` with the passphrase, a `DeviceIdProvider` that returns the persisted vault-device UUID without database access, signature provider, migration source, and trigger version. Genesis writes the self-`peer_instances` record after this bootstrap and activates the runtime. No paper-seed or confirmation step exists in v1.
 - **FR-008**: If Anlegen is cancelled before submission, no instance file is created. If creation fails, the backend MUST remove any partial file and marker; startup cleanup MUST apply the same rule after a crash.
 
 **Öffnen (Import external `.db` file)**
 
 - **FR-010**: The Öffnen action MUST open a Sheet that invokes the OS file picker via `@tauri-apps/plugin-dialog`, restricted to `.db` extension.
-- **FR-011**: Upon selection, the backend MUST validate the source as a regular `.db` file before copying. SQLCipher credential validation MUST occur in `open_instance`, using the passphrase entered in the Unlock sheet; a failed unlock attempt MUST return an explicit error without deleting the imported copy. On successful unlock, the `DeviceIdProvider` looks up the local installation UUID in `known_devices`; if no matching row exists (the normal case for an imported copy from another install), it inserts a fresh row and returns the new vault-device UUID as the HLC node id. No rekey, no attestation, no restore-pairing handshake. The vault identity keypair in the copy is authoritative for authenticating to other replicas via proof-of-possession. Deletion of the imported file requires an explicit discard action or conclusive validation that the file is not a holzi instance.
+- **FR-011**: Upon selection, the backend MUST validate the source as a regular `.db` file before copying. SQLCipher credential validation MUST occur in `open_instance`, using the passphrase entered in the Unlock sheet; a failed unlock attempt MUST return an explicit error without deleting the imported copy. On successful unlock, the pre-HLC bootstrap looks up the local installation UUID in the local-only `known_devices` column; it reuses a matching row or inserts a fresh row and returns its vault-device UUID to the database opener. The `installation_uuid` column is excluded from CRDT payloads. No rekey, no attestation, no restore-pairing handshake. The vault identity keypair in the copy is authoritative for authenticating to other replicas via proof-of-possession; rotation of that key rejects stale copies. Deletion of the imported file requires an explicit discard action or conclusive validation that the file is not a holzi instance.
 - **FR-012**: The backend MUST copy (not move) the file into `<AppLocalData>/instances/` preserving its filename basename. Any `<AppLocalData>/installation-id` sidecar is installation-scoped and MUST NOT be created or modified per-vault; if it does not yet exist for this install, it is minted during the next `open_instance` (see FR-011). The source file is never modified or moved.
 - **FR-013**: On name collision, the backend MUST prompt via return value; the frontend MUST offer overwrite / rename / cancel; default MUST be rename with numeric suffix (`<name>-2.db`). Silent overwrite is prohibited.
 - **FR-014**: After successful copy, the `instances/` list MUST refresh (via `instance-list-changed` event) so the imported file appears immediately.
@@ -141,7 +142,7 @@ This user story belongs to the superseded paper-seed/federation-root design and 
 - **FR-015**: The Verbinden action MUST open a Sheet whose primary control is a QR scanner reading the pairing token from the joiner's camera via the standard `navigator.mediaDevices.getUserMedia()` Web API on every platform (desktop webcam or mobile camera, whichever the Tauri WebView exposes). The Sheet MUST also offer a text-input fallback for the same token so hosts without a usable camera can complete pairing. The parent device MUST expose a matching "Pairing anbieten" surface that renders the token as a QR code (and, for symmetry, as copyable text) for the joiner to scan; that parent-side surface lives outside this spec's landing scope and is covered by the federation-view spec.
 - **FR-016**: The Verbinden sheet MUST require: instance name (as FR-006), passphrase (as FR-006), and a non-empty pairing token supplied either by successful QR decoding or by the text-input fallback. Both acquisition paths MUST pass the same token string to `CreateMode::Join`.
 - **FR-017**: On submit, the backend MUST create a new local instance, generate device-scoped Nostr and iroh keypairs, connect to the parent device's relay using the token's contact hint, sign the canonical pairing transcript, wait for the parent's co-signature, and persist mutually signed `peer_instances` records into `haex-crdt`.
-- **FR-018**: *(historical — Join and restore-pairing are out of MVP scope; retained as a marker for the later spec.)*
+- **FR-018**: *(historical — the superseded restore-pairing/rekey flow is out of scope; the QR/token Join flow in FR-015–FR-017 remains in MVP.)*
 
 **Zuletzt verwendet + Unlock**
 

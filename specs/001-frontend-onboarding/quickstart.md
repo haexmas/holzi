@@ -4,9 +4,9 @@
 
 **V1 contract note**: Genesis creates a fresh vault identity without a
 paper-seed display or confirmation step. Imported databases open directly:
-holzi's `DeviceIdProvider` inserts a `known_devices` row keyed by the local
-installation UUID with a fresh vault-device UUID; no rekey, no attestation,
-no restore-pairing handshake.
+the pre-HLC bootstrap reuses or inserts a `known_devices` row keyed by the
+local installation UUID, and `DeviceIdProvider` receives the persisted
+vault-device UUID; no rekey, no attestation, no restore-pairing handshake.
 
 **Prerequisites** on the host:
 
@@ -79,9 +79,10 @@ no restore-pairing handshake.
 
    - Select `other.db` and enter the original passphrase.
    - Verify the app opens `/federation/other` directly — no restore-pairing prompt, no token, no reachable parent required.
-   - Verify (via a quick SQL peek or a debug log) that `known_devices` now contains a row for the local installation UUID (from `~/.local/share/holzi/installation-id`) with a vault-device UUID **different** from any row that came in from the source. Close and reopen — the same row is reused; no new one is inserted.
+   - Because this copy was made on the same installation, verify (via a quick SQL peek or a debug log) that `known_devices` reuses the existing local-installation row and its vault-device UUID. Close and reopen — the same row is reused; no new one is inserted.
+   - To verify minting for a different installation, repeat Steps 6–7 with a second `XDG_DATA_HOME` (or another machine). That installation has a different `installation-id`, so its copied database gets a fresh vault-device UUID while the source remains untouched.
 
-8. **Verbinden and two-device flows are out of MVP scope.** They come with the sync etappe. To exercise multi-replica behaviour today, copy the DB to a second install (either a different `XDG_DATA_HOME` on the same host or a different machine) and open it there — you should get an independent vault-device UUID on the other side.
+8. **Verbinden and two-device flows.** Verbinden is the explicit QR/token pairing path; the direct-copy check above is independent of it. Use the second-install setup to exercise multi-replica behaviour — you should get an independent vault-device UUID on the other side.
 
 ## Common failure modes
 
@@ -95,6 +96,6 @@ no restore-pairing handshake.
 This spec is done when:
 
 - A fresh clone reaches step 5 (create + unlock loop) without deviations.
-- Steps 6–7 import a copy, open it with the original passphrase, and confirm a fresh `known_devices` row for the local installation with a vault-device UUID distinct from the source.
+- Steps 6–7 import a same-installation copy and confirm local-row reuse; the second-installation variant confirms a fresh `known_devices` row with a distinct vault-device UUID.
 - All E2E tests in `e2e/onboarding.spec.ts` pass.
 - Playwright network-assertion test (T066) passes with zero external requests.
