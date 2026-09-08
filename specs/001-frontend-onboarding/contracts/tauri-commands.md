@@ -101,38 +101,20 @@ pending marker commit, the mapping becomes `ready`. `open_instance` reads the
 stable `DeviceIdProvider`; it MUST NOT mint a new UUID during ordinary reopen.
 Startup removes `pending` mappings whose creation marker or database is absent.
 If a mapping is missing, corrupt, or not `ready`, `open_instance` returns an
-explicit validation error for that database and leaves it and any currently
-active instance untouched; it MUST NOT guess a UUID or overwrite the database's
-recorded value. Import (`import_instance_file` / Öffnen) is the exception: it
-runs the restore path defined below, which itself writes the mapping.
+explicit validation error and leaves the database and any currently active
+instance untouched; it MUST NOT guess a UUID or overwrite the database's
+recorded value. Import may proceed only when the source UUID is already known
+to this local index.
 
 **Policy at v1**: `DeviceIdProvider` returns the UUID retained by Holzi.
 Opening a database whose recorded device UUID differs from what the caller
 supplies fails with `HolziError::DeviceIdMismatch`. This matches the pinned
 haex-crdt revision's reject-on-mismatch behavior.
 
-**Restore path in Öffnen (v1, per spec User Story 3)**: importing an external
-`.db` is not an ordinary reopen. Holzi performs rekey-on-restore before
-`Database::open`: (1) copy the source file into `<AppLocalData>/instances/`
-under a restore-pending marker, (2) open the copy directly via `rusqlite` with
-the operator-supplied passphrase and the SQLCipher pragma, generate a fresh v4
-device UUID, and `UPDATE haex_crdt_configs_no_sync SET device_id = ?` (a
-schema-level compatibility write against haex-crdt's own bookkeeping table; no
-CRDT triggers fire because the table is `_no_sync`), (3) write the fresh UUID
-into `instance-index.json` as `restore-pending` and fsync, (4) call
-`Database::open` with the fresh UUID via `DeviceIdProvider`. The copied Nostr
-and iroh secret keys are then discarded and replaced by fresh ones inside
-`instance_identity_no_sync` before any endpoint starts (per
-`docs/plans/2026-09-04-v1-scope-design.md §4`). This bypass is anchored on the
-crate's public `_no_sync` schema, not on any adopt API. When haex-crdt exposes
-a first-class `reset_device_id` API, Holzi replaces the direct SQL write with
-it; the contract does not otherwise depend on adopt semantics.
-
-**Post-v1**: cross-host device-handoff that preserves the source's device
-UUID (as opposed to Öffnen's rekey-on-restore, which mints a new one) needs
-an explicit adopt-on-mismatch API in haex-crdt, which is not present in the
-pinned revision. Tracked as an open sub-task; v1 does not offer preserve-UUID
-handoff.
+**Post-v1**: cross-host device-handoff (moving the same `.db` between physical
+machines) needs an explicit adopt-on-mismatch API in haex-crdt, which is not
+present in the pinned revision. Tracked as an open sub-task; v1 rejects a
+database without a local UUID mapping instead of relying on adopt semantics.
 
 The only invariant `fs2` guarantees is that the same `.db` cannot be opened
 twice on the same host. Cross-host handoff is a policy question, not a lock
