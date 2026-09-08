@@ -8,8 +8,9 @@ change to migration IDs, provider trait signatures, or the `Database::open`
 shape reopens this contract.
 
 **V1 contract note**: Genesis creates a fresh per-SQLite identity without a
-paper-seed or confirmation step. Backup restore uses `open_instance` followed
-by `pair_restored_instance`, updating the same imported database in place.
+paper-seed or confirmation step. Backup restore uses offline adoption in
+`open_instance`; `pair_restored_instance` is the token fallback when no
+valid handover attestation is available, including later invalidation. Both update the imported database in place.
 
 **Convention**: All commands are async, return `Result<T, HolziError>` on the Rust side, and are exposed to the frontend via `@tauri-apps/api/core::invoke<T>(name, args)`. Argument keys are `camelCase` from the frontend, mapped to `snake_case` Rust field names by serde.
 
@@ -116,12 +117,13 @@ Only ordinary reopen of the original managed database retains its UUID.
 Copy adoption and token/QR pairing must end in the same authorized state,
 so adoption is not merely "accept the mismatch" — it MUST also:
 
-1. Mint and record a **new device UUID** (the CRDT node identity must be
+1. Prepare a **new device UUID** (the CRDT node identity must be
    unique per replica, or conflict resolution stops being deterministic).
-2. Generate a **new signing keypair**, retiring the copied one. Without this,
+2. Prepare a **new signing keypair**, retiring the copied one only in the
+   attestation/completion transaction below. Without this,
    two replicas would sign with the same key and writes could not be
    attributed.
-3. Generate **new Nostr and iroh endpoint keys**, which must be unique per
+3. Prepare **new Nostr and iroh endpoint keys**, which must be unique per
    device.
 
 At the pinned revision, `initialize_in_place` runs before device-id
@@ -151,33 +153,85 @@ uses `create_instance` to create an empty database with a fresh UUID and
 does not require adoption.
 
 **How an adopted replica is authorized, without a token.** Operator decision
-of 2026-09-08: copy adoption MUST complete offline, with no reachable parent.
-Authorization comes from a **handover attestation** the copy issues to itself
-during adoption, in this order:
+of 2026-09-08: adoption with a valid handover attestation MUST complete locally
+offline, with no reachable parent. A missing or unusable signing key, or a
+source that cannot authorize the grant under the existing peer-registry rules,
+uses the token fallback. Neither path may start the copied identity.
 
-1. While the copied signing key is still available and before it is retired,
-   sign a record stating that the source instance (old public key) attests the
-   adopted instance (new public key) as a derived replica, with the adoption
-   timestamp.
-2. Write that record into `peer_instances` as the adopted instance's own entry,
-   carrying the attestation.
-3. Only then retire the copied key and rotate the endpoint keys.
+The adoption transaction MUST follow this order:
 
-Any peer can verify the attestation against a public key it already trusts in
-its own `peer_instances`, so the adopted replica is accepted on first contact
-without either side having been online during adoption.
+1. Prepare the fresh device UUID, CRDT signing keypair, Nostr keypair and iroh
+   keypair without activating them. Keep the copied keys available until commit.
+2. Sign a versioned, domain-separated canonical handover payload using the
+   **copied Nostr instance signing key** corresponding to the source
+   `nostr_pubkey` already trusted in `peer_instances`. A CRDT column signature
+   or an unregistered attestation key is not a substitute for this authorization.
+   The payload MUST bind the source device UUID and `nostr_pubkey`, its grant
+   and revocation epoch, the adopted device UUID, CRDT signing public key,
+   `nostr_pubkey`, `iroh_node_id`, alias, capabilities, `valid_until`, grant
+   epoch, a unique attestation ID and adoption timestamp. Private keys and
+   local import-operation evidence MUST NOT enter this payload.
+3. In the recoverable adoption transaction, write the complete signed payload
+   into the adopted `peer_instances` entry **before** replacing the singleton
+   local identity and retiring all copied private keys. Commit the attestation,
+   exact prepared private keys, fresh UUID and local completion record together.
+   There MUST be no durable state with retired copied keys but missing
+   attestation or missing corresponding new private keys. A pre-commit crash
+   rolls back the entire transaction; a post-commit retry reuses its identity
+   and attestation. Publish the target index and markers as specified by
+   `open_instance` before application writes or endpoint startup.
 
-**What this trust model does and does not claim.** Possession of the copied
-signing key is equivalent to possession of the file plus its passphrase, which
-already grants full read access — the attestation makes that possession
-explicit and verifiable rather than granting anything new. It does, however,
-convert a one-time file capture into an ongoing membership, which a passphrase
-change alone does not undo. The counterweight is **revocation**: any peer that
-sees a derived record it did not expect can bump the revocation epoch for that
-device, and the UI SHOULD surface newly appeared derived replicas rather than
-adding them silently. Restore pairing with a token remains the path for the
-*other* case — the source device is gone and there is no key left to attest
-with.
+If no valid attestation can be produced, the same atomic identity/completion
+transition instead records the explicit token-fallback outcome and
+`restore_pairing_required = true`; it does not publish an authorized peer grant.
+A signing-key/authorization limitation permits this fallback; a failed database
+write, fsync or incomplete transaction does not. Storage failures retain the
+import for retry and MUST NOT retire keys without a committed outcome.
+
+**Receiver validation and first contact.** Before granting ordinary Nostr,
+iroh or CRDT access, a receiver MUST validate the complete handover payload
+against its own effective trust store, not against self-asserted trust in the
+incoming row. The source grant must be current, unexpired and unrevoked and
+carry `pairing-authority`; the granted capabilities must be a subset of the
+source's currently held capabilities and the expiry must not outlive the
+source grant. Both source and adopted grant epochs must pass the existing
+monotonic revocation rules; stale grants, replay of a revoked identity and
+unauthorized epoch advances are rejected. An adoption timestamp is informational
+and cannot prove that a grant preceded revocation. Validation of a derived
+source must reach an already trusted authorization anchor; unknown or cyclic
+self-assertions cannot bootstrap trust.
+
+The first-contact handshake carries the attestation before ordinary sync and
+proves possession of the attested new endpoint keys; the CRDT verification key
+is taken only from that validated binding. No full sync or application access
+is allowed merely to obtain the peer row. Identical valid attestations are
+idempotent; changing any signed field invalidates them. Subsequent ingress
+rechecks effective trust, including the source authorization on which a derived
+grant depends, so revocation is not bypassed by a previously accepted record.
+The receiver MUST show a newly accepted derived replica in the UI.
+
+Offline completion uses the copy's locally available trust snapshot; it cannot
+guarantee acceptance by a peer that already knows a later revocation or expiry.
+Such a peer rejects access and the UI reports the authorization failure without
+rolling back adoption or reusing copied keys. Token reauthorization of that
+same fresh identity uses the existing restore-pairing fallback, explicitly
+recorded locally before `pair_restored_instance` is offered. Merely being offline
+or unreachable MUST NOT trigger fallback. The supporting dependency/protocol
+review must fix the canonical wire encoding, version/domain and first-contact
+proof with positive and tamper/replay test vectors before adoption is enabled.
+
+**Trust and revocation.** A readable database copy already exposes its stored
+history and credentials; attestation additionally grants ongoing membership
+and access to future synchronized data within the granted capabilities. Changing
+the SQLCipher passphrase does not revoke that membership. Only a currently
+authorized `pairing-authority` peer may publish a revocation under the existing
+monotonic epoch rules. Any peer's UI MUST surface newly accepted derived
+replicas; observing an unexpected one does not itself grant revocation authority.
+Revoking only one child does not remove the copied source key's ability to
+request more grants: compromise response must also revoke the source and its
+dependent grants, or use the existing federation-wide reset. Token fallback
+depends on inability to produce a valid attestation, regardless of whether the
+source device still exists or is reachable.
 
 **Never permitted**, independent of the above: the same `.db` open in two
 processes at once. `fs2` prevents it on one host. Across a shared network
@@ -361,7 +415,7 @@ The command is idempotent for an already-cleaned pending flow. It MUST NOT remov
 
 ### `open_instance`
 
-Opens an existing `.db`, validates and unlocks SQLCipher, starts Nostr relay + iroh peer, and marks active in `AppState`. If another instance is active, the command performs the close-and-open switch as one state-locked operation, but validates the requested credentials before closing the current runtime. An import-pending copy is a restore, not a normal open: after credential validation, it MUST rekey `instance_identity_no_sync` and retire the copied keys before any relay or iroh endpoint starts; the fresh identity becomes active with `restore_pairing_required` set and the federation view hands off to `pair_restored_instance`.
+Opens an existing `.db`, validates and unlocks SQLCipher, starts Nostr relay + iroh peer, and marks active in `AppState`. If another instance is active, the command performs the close-and-open switch as one state-locked operation, but validates the requested credentials before closing the current runtime. An import-pending copy follows the adoption transaction in [Device-ID model](#device-id-model) before any relay or iroh endpoint starts. With a valid handover attestation it opens the normal federation view offline with `restore_pairing_required = false`. Only the token fallback sets that flag and offers `pair_restored_instance`.
 
 ```rust
 #[tauri::command]
@@ -377,23 +431,25 @@ pub struct OpenInstanceArgs {
 }
 ```
 
-**Preconditions**: `<name>.db` exists and is not a pending Genesis database. An imported database with an import-pending marker may be opened; its SQLCipher credential validation is completed by this command. A database with a restore-pending marker is an already-rekeyed restore and may be reopened without rekeying again.
+**Preconditions**: `<name>.db` exists and is not a pending Genesis database. An imported database with an import-pending marker may be opened; its SQLCipher credential validation is completed by this command. A database with a restore-pending marker may be reopened without rekeying only after verifying the matching local completion proof below.
 
 **Pinned-revision gate**: the import-pending success path below is conditional
 on the adoption capability in [Device-ID model](#device-id-model). At the
 current pin, reject unprocessed imports with the capability error defined
 there. A known source UUID does not bypass this gate. After the dependency
 upgrade, adopt a fresh UUID and rotate all signing/endpoint keys before
-entering the restore-pairing state; persist the target name-to-new-UUID mapping
+startup; persist the attested or token-fallback outcome and target name-to-new-UUID mapping
 without modifying the source mapping. Only restore completion proven for this local import generation remains
 authoritative for retries, so neither adoption nor rekey repeats.
 
 **Local import-generation proof**: every staging operation allocates a fresh
 random operation ID in the durable local import marker/journal, including
 Rename imports. Source-embedded restore state is not proof of local completion.
-The adoption/rekey transition records this operation ID and the new UUID in
-the encrypted restore state; the target index and restore marker record the
-same association. Resume without adoption/rekey only when the database's
+The adoption/rekey transition records this operation ID, the new UUID and
+the attested or token-fallback outcome in an encrypted completion record,
+independent of `restore_pairing_required`. The target index records the same
+operation ID and UUID; a restore marker records them only for the fallback.
+Resume without adoption/rekey only when the database's
 completion record matches the current locally recorded operation and its new
 UUID. If interrupted before index/restore-marker publication, the matching
 local import journal/marker plus committed completion record permit finishing
@@ -404,11 +460,20 @@ closed while retaining the copy. All restore-state precedence rules below
 are subject to this generation check; a copied flag alone never overrides a
 fresh import marker.
 
-**Postconditions on success**: SQLCipher unlocked; Nostr relay listening; iroh peer online; `AppState.active_instance = Some(...)`; the database mtime is refreshed to the current time as the persisted `lastAccess`; and any ordinary import-pending marker is removed. For an imported copy, rekey-on-restore has completed before startup, the copied keys were never used to start a network endpoint, `restore_pairing_required = true`, and the restore marker remains until pairing succeeds. If another instance was active, it is fully closed before the new one becomes visible. Backend emits `instance-list-changed` (last-access bumped).
+**Postconditions on success**: SQLCipher unlocked; Nostr relay and iroh peer started under the existing identity for an ordinary reopen or the fresh identity for an adopted copy, without requiring network reachability; `AppState.active_instance = Some(...)`; the database mtime is refreshed as the persisted `lastAccess`; and the import-pending marker is durably removed. For an attested copy, `restore_pairing_required = false` and no restore marker remains. For the fallback, `restore_pairing_required = true` and the restore marker remains until pairing succeeds. If another instance was active, it is fully closed before the new one becomes visible. Backend emits `instance-list-changed` (last-access bumped).
 
-**Atomic switch and rollback**: the state lock is held throughout the operation. First, `open_instance` validates the requested file and SQLCipher credentials while the current runtime and `AppState.active_instance` remain unchanged. If that validation fails, no close, state transition, mtime refresh, or active-instance event occurs. For an import-pending copy, the rekey transaction durably records the restore-pairing-required state before any requested runtime service starts; the backend then writes and fsyncs the restore-pending marker before removing the import marker. If interrupted between the database transaction and marker publication, the persisted restore state lets the next open recreate the marker without rekeying. If both markers are present, the persisted restore state or restore-pending marker is authoritative: the backend verifies the database is in restore-pairing-required state, skips rekey, removes only the stale import marker, and continues with the fresh identity. A rekey failure leaves the copy and import marker unchanged. After validation and any required rekey succeed, the backend starts the requested SQLCipher, relay, and iroh runtime as a private candidate while the current runtime and `AppState.active_instance` remain active. Only after every requested startup step succeeds may it stop the previous runtime and publish the candidate as the active instance. If candidate startup fails, every candidate service is stopped, its database handle is dropped, and the previous runtime and `AppState.active_instance` remain available; no half-switched event or mtime update is emitted. The restore-pending marker and fresh identity remain, so a subsequent `open_instance` recognizes the already-rekeyed restore, skips rekey entirely, and starts only the fresh identity for another pairing attempt. A failed unlock attempt retains the copy and import marker so a subsequent attempt can retry; deletion requires an explicit discard action or conclusive validation that the file is not a holzi instance. The previous instance is not silently resumed because it never stopped on a candidate startup failure.
+**Atomic switch and rollback**: the state lock is held throughout the operation. First, validate the requested file and SQLCipher credentials while the current runtime and `AppState.active_instance` remain unchanged. Validation failure causes no close, state transition, mtime refresh or active-instance event. For an import-pending copy, commit the adoption transaction and its completion outcome before candidate startup. Publish and fsync the target index and, only for the fallback, the restore marker; then remove the import marker and fsync the directory. A matching completion record allows an interrupted publication to finish without repeating adoption, even when `restore_pairing_required = false`. A transaction failure retains the copied identity and import marker for retry; a storage failure MUST NOT be converted into a token fallback.
 
-**Marker lifecycle**: for `<name>.db`, the sibling `<name>.import-pending` marker identifies the local import operation whose adoption and credential validation are not yet durably complete. Successful validation durably records the restore-pairing-required state after fresh identity keys have replaced and retired the copied identity, then publishes `<name>.restore-pending` and removes the import marker. On a later open, `<name>.restore-pending` or the persisted restore-pairing-required state means rekey already completed: the backend MUST skip rekey, MUST never start the copied identity, and MUST return `restore_pairing_required = true` until `pair_restored_instance` succeeds. If both markers are present, restore-pending or persisted restore state wins; after verifying that state, the backend removes the stale import marker and retains the restore marker until pairing succeeds. A successful pairing transaction removes the restore marker and clears the state. Startup and open reject inconsistent marker/database combinations without starting a network endpoint; they retain a valid restore database for retry after interruption.
+After validation and any required adoption succeed, start the requested SQLCipher, relay and iroh runtime as a private candidate while the current runtime remains active. Only after every requested startup step succeeds may the backend stop the previous runtime and publish the candidate. On candidate startup failure, stop every candidate service and drop its handle; retain the previous runtime and active state without a half-switched event or mtime update. Keep the committed fresh identity, completion record, target mapping and any fallback marker. Retry preserves the same UUID, keys, attestation and outcome; it neither rotates again nor asks an attested replica to pair. A failed unlock retains the copy and markers; deletion requires an explicit discard action or conclusive validation that the file is not a holzi instance.
+
+**Marker lifecycle**: `<name>.import-pending` identifies a local import whose adoption or publication is unfinished. All recovery decisions require the local import-generation proof above; marker presence alone is insufficient.
+
+- **Attested completion**: durably record the attestation, fresh identity and completion with `restore_pairing_required = false`; publish the target index before removing the import marker. No `<name>.restore-pending` marker is needed. If publication is interrupted, finish it from the matching completion record without rekeying or entering token pairing.
+- **Token fallback**: durably record the fresh identity and completion with `restore_pairing_required = true`; publish and fsync the target index and `<name>.restore-pending` before removing the import marker. Matching completion evidence wins over a stale import marker. Reopen preserves the identity and pairing flag until `pair_restored_instance` commits.
+- **Later invalidation**: after verifying newer trust evidence that invalidates an attested grant, the backend holds the state lock, atomically changes the existing completion outcome and pairing flag to token fallback without changing UUID or keys, then publishes and fsyncs the matching restore marker. Emit `instance-list-changed` with reason `restore-pairing-required` only after durable publication. A crash before marker publication is recovered from the matching database completion and target-index proof. Unauthenticated rejection messages or reachability failures cannot cause this transition.
+- **Fallback pairing completion**: atomically write the peer records and clear the pairing flag, retaining the completion record with its successful outcome; then durably remove the restore marker. After interruption, a matching completed transaction permits stale-marker cleanup without pairing again.
+
+Startup and open reject contradictory or unverifiable marker/database combinations without starting an endpoint and retain the copy for recovery. Source-embedded completion or restore state never substitutes for proof of the current local import generation.
 
 **Failure modes**:
 
@@ -422,8 +487,10 @@ fresh import marker.
 
 ### `pair_restored_instance`
 
-Completes pairing for an imported database that `open_instance` has rekeyed and
-placed in `restore-pairing-required` state. It updates that active database in
+Completes the token fallback for an imported database that
+`open_instance` has rekeyed, with `restore-pairing-required` set during adoption
+or after verified later invalidation of the attestation.
+It updates that active database in
 place; it MUST NOT copy a file or call `create_instance`.
 
 ```rust
@@ -445,7 +512,7 @@ The federation view invokes this command when the operator selects
 The QR and text paths pass the same token string as the normal Verbinden flow.
 
 **Preconditions**: the named instance is the active rekeyed import, its restore
-marker is present, and no restore pairing has completed.
+marker and matching completion proof are present, and `restore_pairing_required` is true. This also permits reauthorization after an attested replica was rejected against newer trust state, without rekeying or creating another database.
 
 **Postconditions on success**: the command verifies the token and transcript,
 writes the mutually signed `peer_instances` records into the same database,
@@ -524,7 +591,7 @@ pub enum ConflictPolicy {
 pub struct ImportInstanceResult {
     pub info: InstanceInfo,
     pub renamed_from: Option<String>,  // Set if on_conflict=Rename triggered
-    pub pending_validation: bool,      // True until rekey and restore pairing complete
+    pub pending_validation: bool,      // True until adoption and attestation or fallback pairing complete
 }
 ```
 
@@ -533,7 +600,7 @@ pub struct ImportInstanceResult {
 **Notes**:
 
 - `source_path` is the external file path returned by `@tauri-apps/plugin-dialog`; it is the only path accepted from the frontend. It is not a managed-instance path. The command validates that it is a regular file and that the extension is `.db`.
-- SQLCipher page validation is deferred until `open_instance`, where the operator supplies the passphrase. The copied file is marked by a sibling `<name>.import-pending` marker; after rekey, `<name>.restore-pending` remains until `pair_restored_instance` succeeds. Failed unlock or pairing attempts retain the copied file and its current marker for retry; only an explicit discard action or conclusive validation that the file is not a holzi instance may remove them. The source file is never touched.
+- SQLCipher page validation is deferred until `open_instance`, where the operator supplies the passphrase. The copied file starts with a sibling `<name>.import-pending` marker. Attested adoption completes offline and removes it after durable index publication; only the fallback publishes `<name>.restore-pending` until `pair_restored_instance` succeeds. See the `open_instance` marker lifecycle for crash recovery. Failed unlock or pairing attempts retain the copied file and its current marker for retry; only an explicit discard action or conclusive validation that the file is not a holzi instance may remove them. The source file is never touched.
 - Copy uses a crash-safe publish protocol: for Rename, write the database to a temporary file in the managed directory and fsync it; write and fsync `<name>.import-pending` with a fresh operation ID and staged-file digest; fsync the directory; atomically rename the temporary database to `<name>.db`; then fsync the directory again before emitting the import event. For Overwrite, the backend instead allocates an operation id, writes the staged database to `<name>.db.importing.<operation-id>`, writes a generation-bound `<name>.import-pending.<operation-id>` marker containing the staged-file digest, and fsyncs an overwrite journal before touching the existing `<name>.db`. The recoverable commit renames the old database to an operation-specific backup, renames the staged generation into `<name>.db`, fsyncs the directory, records the committed phase, and durably publishes the ordinary `<name>.import-pending` marker carrying the committed operation ID before removing the backup, operation-specific marker, and journal. Startup/open never applies a generation-specific marker to an old target: with an unfinished journal it verifies the digest and either completes the staged generation or restores/retains the old target, without network startup. A marker without its matching database is treated as an incomplete import and is cleaned up or retried without network startup. On any pre-publish error the temporary file and marker are deleted.
 - For `ConflictPolicy::Overwrite`, the command checks the target name while holding the `AppState` lock and rejects replacement if that name is the active instance. The frontend must close that instance explicitly before retrying overwrite.
 - The source file is never modified or moved.
