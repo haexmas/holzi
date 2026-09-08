@@ -3,14 +3,16 @@
 **Branch**: `001-frontend-onboarding` | **Date**: 2026-09-04 | **Spec**: [`spec.md`](./spec.md)
 **Input**: Feature specification from [`./spec.md`](./spec.md)
 
-**V1 contract note**: Genesis creates a fresh per-SQLite identity without a
-paper-seed confirmation step. Imported databases use offline attested adoption
-and rekey-on-restore, with token pairing only as the fallback in `spec.md`; `PaperSeedDisplay.vue` is not a
-v1 component.
+**V1 contract note**: Genesis creates a fresh vault identity without a
+paper-seed confirmation step. Imported databases open directly: the pre-HLC
+bootstrap reuses a `known_devices` row keyed by the local installation UUID
+when present, or inserts one with a fresh vault-device UUID for a different
+installation. `DeviceIdProvider` receives the persisted UUID after bootstrap.
+`PaperSeedDisplay.vue` is not a v1 component.
 
 ## Summary
 
-Deliver the holzi Tauri app's first-impression surfaces: a landing page with three primary actions (Anlegen, Öffnen, Verbinden) mirroring haex-vault's landing pattern, plus a Zuletzt-verwendet list and an Unlock sheet for existing instances. Frontend is Nuxt 4 (SPA) with Tailwind v4, shadcn-vue components (copy-in), Pinia stores, `@nuxtjs/i18n`, and `@nuxt/icon` fed from a locally-bundled Lucide icon set. Backend is a set of Tauri commands over the `haex-crdt` layer that manage `<name>.db` files under `<AppLocalData>/instances/`, including atomic Genesis creation, rekey-on-restore, restore pairing, and active-instance switching. This slice is the minimum surface required to reach the walking-skeleton described in `docs/plans/2026-09-04-v1-scope-design.md §11` (two devices paired into one federation, exchanging a ping).
+Deliver the holzi Tauri app's first-impression surfaces: a landing page with three primary actions (Anlegen, Öffnen, Verbinden) mirroring haex-vault's landing pattern, plus a Zuletzt-verwendet list and an Unlock sheet for existing instances. Frontend is Nuxt 4 (SPA) with Tailwind v4, shadcn-vue components (copy-in), Pinia stores, `@nuxtjs/i18n`, and `@nuxt/icon` fed from a locally-bundled Lucide icon set. Backend is a set of Tauri commands over the `haex-crdt` layer that manage `<name>.db` files under `<AppLocalData>/instances/`, including atomic Genesis creation, direct opening of imported databases without rekey or restore pairing, Verbinden pairing, and active-instance switching. The full federation sync/ping walking skeleton is a separate integration milestone; this plan defines the onboarding contracts that lead to it.
 
 ## Technical Context
 

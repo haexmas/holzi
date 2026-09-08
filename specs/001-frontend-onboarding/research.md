@@ -98,14 +98,16 @@ Net: the operator has weighed this and chosen auto-import. Documenting so future
 ## No copy-to-clipboard for paper-seed (Historical — superseded for v1)
 
 This decision belongs to the superseded paper-seed onboarding design. V1 Genesis
-has no paper-seed display or confirmation step; backup recovery uses
-rekey-on-restore followed by in-place pairing.
+has no paper-seed display or confirmation step; backup recovery opens the
+copied database directly, without rekey or restore pairing. The direct-copy
+flow authenticates with the copied vault identity and reuses or mints the local
+`known_devices` row during pre-HLC bootstrap.
 
 Paper-seed is displayed for the operator to *record physically*. Copy-to-clipboard would:
 
 - Leave the seed in the clipboard history and any clipboard manager.
 - Enable a silent screen-capture-based exfiltration if the host is compromised.
-- Undermine the "sole federation-scope recovery secret" property from `v1-scope-design.md §4`.
+- The old design's "sole federation-scope recovery secret" property from `v1-scope-design.md §4` was superseded with that model.
 
 Cost: manual transcription is slower. Acceptable for a one-time genesis step. If operators push back post-v1, a "reveal for 30s and clear clipboard" flow is one option.
 

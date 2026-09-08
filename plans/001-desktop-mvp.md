@@ -109,13 +109,16 @@ Alle zur Synchronisierung vorgesehenen Anwendungstabellen werden bereits im MVP 
 
 | Tabelle | CRDT | Inhalt |
 | --- | --- | --- |
-| `instance_identity_no_sync` | nein | Geräte-UUID und Signierschlüssel dieser Instanz. Verlässt die Datenbank nie |
+| `vault_identity` | ja | Vault-Identitäts-Keypair (Public + Private) für Proof-of-Possession-Auth zwischen Replikaten. Einmal bei Genesis geschrieben; wandert mit jeder Dateikopie mit |
+| `known_devices` | ja, mit lokaler Spalte | Eine Zeile pro (Vault × Installation): `installation_uuid` ist ein lokaler Lookup-Key und wird aus jedem CRDT-Payload ausgeschlossen; `vault_device_uuid` (HLC-Node-ID dieses Replikats), Alias, Erstöffnungszeitpunkt und iroh-Node-ID sind synchronisierbare Felder. Beim ersten Öffnen einer neuen Installation wird eine neue Zeile eingefügt |
 | `providers` | ja | Anbieterkonfiguration einschließlich API-Schlüssel: Art (`local`, `api_key`, `cli_delegate`), Name, Basis-URL, Zugangsdaten. Betreiber-Entscheidung vom 2026-09-08: Schlüssel werden mitsynchronisiert, damit ein Anbieter einmal statt je Gerät eingerichtet wird — siehe Abschnitt Anbietermodelle |
 | `models` | ja | Abgefragter Modellkatalog als Cache mit Abrufzeitpunkt; lokale und Anbietermodelle in einer Tabelle |
 | `device_downloaded_models_no_sync` | nein | Lokal verifizierte GGUF-Dateien: Modell-ID, Pfad **relativ zu** `AppLocalData/models/`, Größe, Abrufdatum; nach Import oder Restore erneut prüfen |
 | `chat_threads` | ja | Gespräch: ID, Titel, zuletzt genutzter Anbieter und Modell, Zeitstempel |
 | `chat_messages` | ja | Abgeschlossene Nachricht: ID, Gespräch, Elternnachricht, Rolle, Inhalt, erzeugender Anbieter und Modell, Token-Zähler, Abschlussstatus |
 | `app_settings_no_sync` | nein | Gerätebezogene Vorbelegungen, Anbieter-Aktivierung je Gerät sowie lokale Generierungsaufträge und Zwischenstände. Keine Zugangsdaten — die liegen in `providers` |
+
+Zusätzlich, **außerhalb** aller Vaults: `<AppLocalData>/installation-id` als Datei mit einer einzigen zufälligen UUID. Wird beim ersten Holzi-Start auf einem Host geschrieben (fsync) und danach von jedem `open_instance` als Lookup-Key für `known_devices` gelesen. Verlässt das Gerät niemals; ist für alle Vaults auf diesem Host gleich.
 
 **Modellgewichte gehören niemals in die SQLite.** Mehrere Gigabyte pro Datensatz sind kein Anwendungsfall für SQLite. Die GGUF-Dateien liegen unter `AppLocalData/models/<modell-slug>/`, die Datenbank hält nur den relativen Pfad. Der Pfad ist bewusst relativ und bewusst unter `AppLocalData`, damit dieselbe Logik auf Android und iOS trägt, wo absolute Pfade außerhalb des App-Containers nicht zugreifbar sind. Wird eine eigene GGUF importiert, wird sie **kopiert**, nicht referenziert.
 
@@ -125,7 +128,7 @@ Streaming läuft über Tauri-Events. Der Teilstand wird mit stabiler Nachrichten
 
 Für die spätere Sync-Etappe: nur explizit freigegebene Tabellen und Spalten gehen in Scan **und** Apply. `_no_sync`-Tabellen nicht automatisch registrieren; der Suffix ersetzt keine Eingangsprüfung. Kein Sync-Payload sind: absolute Modellpfade, die SQLCipher-Passphrase, **private Instanzschlüssel** (Signier-, Nostr- und iroh-Schlüssel) und Prozesszustände.
 
-**Was `_no_sync` nicht leistet**: der Suffix hält Zeilen aus dem Sync-Kanal heraus — er schützt nicht gegen `cp`. Eine Dateikopie enthält `instance_identity_no_sync` samt aller privaten Schlüssel. Daraus folgt beides, was die Adoption ausmacht: Rekey ist **zwingend** und nicht optional, weil sonst zwei Geräte mit identischer Identität liefen; und die Übergabe-Attestierung ist überhaupt erst möglich, weil der alte Signierschlüssel in der Kopie noch vorliegt. „Gerätelokal" heißt hier „wandert nicht über den Sync", nicht „ist gegen Dateizugriff geschützt" — gegen Dateizugriff schützt allein SQLCipher.
+**Was `_no_sync` nicht leistet**: der Suffix hält Zeilen aus dem Sync-Kanal heraus — er schützt nicht gegen `cp`. Für Holzi ist das kein Problem: alles Installation-spezifische liegt bewusst **außerhalb** der Vault-DB (die Installations-UUID in `<AppLocalData>/installation-id`), und die per-Vault-per-Installation-Identität in `known_devices` unterscheidet sich pro Replikat, weil die Installations-UUID sich unterscheidet. „Gerätelokal" heißt hier „wandert nicht über den Sync", nicht „ist gegen Dateizugriff geschützt" — gegen Dateizugriff schützt allein SQLCipher.
 
 **Anbieter-API-Schlüssel sind ausdrücklich Sync-Payload** (Betreiber-Entscheidung vom 2026-09-08). Sie unterscheiden sich kategorisch von privaten Instanzschlüsseln: letztere *sind* die Geräteidentität und müssen je Replikat verschieden sein, erstere sind Zugangsdaten zu einem externen Konto, das für alle Geräte dasselbe ist. Ein Anbieter wird damit einmal eingerichtet statt je Gerät.
 
@@ -177,38 +180,31 @@ Zwei Begriffe, die auseinandergehalten werden müssen:
 
 | | Bereich | Synchronisiert | Im MVP |
 | --- | --- | --- | --- |
-| Geräte-/Replikat-Identität (Geräte-UUID, Signierschlüssel) | je Replikat | nie | ja |
-| Öffentliche Peeridentitäten und Berechtigungen | Föderation | ja, signierte öffentliche Datensätze | nein |
+| Installations-UUID (Geräteweit, in `<AppLocalData>/installation-id`) | pro Installation | nie | ja |
+| Vault-Device-UUID (HLC-Node-ID, in `known_devices`) | pro (Vault × Installation) | ja | ja |
+| Vault-Identity-Keypair (Auth zwischen Replikaten) | pro Vault | ja | ja |
+| Peer-Records und Berechtigungen | Föderation | ja, signierte öffentliche Datensätze | ja (Verbinden/Genesis); weiterer Sync-Ausbau folgt |
 
-Private Instanz- und Attestierungsschlüssel bleiben nach Spec 001 lokal in `instance_identity_no_sync` und werden niemals zur Übertragung gewrappt. Eine gemeinsame Nutzer-/Föderationsidentität gehört ausschließlich zum [zurückgestellten Cross-User-Sharing-Entwurf](../docs/plans/2026-09-07-cross-user-sharing-deferred-design.md); sie ist weder Teil dieses MVP noch eine Änderung des v1-Schlüsselvertrags.
+Die Vault-Identity liegt als singleton `vault_identity`-Zeile in der DB und wird von jedem `cp` mitkopiert; sie ist damit automatisch auf jedem Replikat verfügbar. Der direkte Kopierweg authentifiziert den ersten Verbindungsaufbau per Proof-of-Possession dieses Schlüssels, ohne `peer_instances`, Attestierung oder Pairing zu benötigen. Eine Vault-Identity-Rotation ist die Revokationsgrenze: Kopien mit dem alten Schlüssel werden danach abgewiesen. Der separate Verbinden-Weg bleibt der zustimmungsbasierte Pairing-Ablauf.
 
-Die Geräte-UUID ist die CRDT-Knotenidentität und **muss** je Replikat eindeutig sein, sonst wird die Konfliktauflösung nicht deterministisch. Die Konfigurationstabelle des Crates sowie alle privaten und gerätelokalen Holzi-Tabellen tragen deshalb den `_no_sync`-Suffix; nur freigegebene gemeinsame Daten konvergieren.
+Die **Vault-Device-UUID** ist die CRDT-Knotenidentität und **muss** je Replikat eindeutig sein, sonst wird die Konfliktauflösung nicht deterministisch. Die Uniqueness ergibt sich aus der Zwei-Ebenen-Struktur: jede Installation hat eine eigene Installations-UUID, aus der pro Vault ein eigener `known_devices`-Eintrag mit frischer Vault-Device-UUID abgeleitet wird. Zwei Vaults auf demselben Host bekommen unabhängige Vault-Device-UUIDs; zwei Installationen desselben Vaults ebenfalls. Öffnet dieselbe Installation eine Dateikopie, wird ihr vorhandener lokaler Eintrag wiederverwendet.
 
-**Nicht zulässig** bleibt, dieselbe Datei gleichzeitig von zwei Prozessen zu öffnen. Auf demselben Rechner verhindert das der Dateilock des Crates. Über ein geteiltes Netzlaufwerk oder einen Cloud-Sync-Ordner lässt es sich nicht zuverlässig verhindern, weil solche Dienste Byte-Bereiche statt Transaktionen replizieren — der Fall ist eine dokumentierte Anti-Anforderung, und der Programmstart soll bekannte Sync-Pfade erkennen und warnen.
+**Nicht zulässig** bleibt, dieselbe Datei gleichzeitig von zwei Prozessen zu öffnen. Auf demselben Rechner verhindert das der Dateilock des Crates. Über ein geteiltes Netzlaufwerk oder einen Cloud-Sync-Ordner lässt es sich nicht zuverlässig verhindern, weil solche Dienste Byte-Bereiche statt Transaktionen replizieren — der Fall ist eine dokumentierte Anti-Anforderung, und der Programmstart soll bekannte Sync-Pfade erkennen und warnen. Zusätzlich bricht Vault-Device-UUID-Uniqueness, wenn die `installation-id`-Datei mitkopiert wird (VM-Klon, `rsync -a` des ganzen App-Data-Verzeichnisses); Erkennung ist Aufgabe der späteren Sync-Etappe.
 
 **Zwei Wege zu einem zweiten Replikat**, beide vorgesehen:
 
-| | Datei kopieren (Adoption) | Token-/QR-Kopplung |
+| | Datei kopieren | Token-/QR-Kopplung (Verbinden, MVP) |
 | --- | --- | --- |
 | Zweites Gerät zur Kopplungszeit nötig | nein | ja |
-| Autorisierter Abschluss offline | **ja**, mit lokal gültiger Übergabe-Attestierung einer berechtigten Quelle | nein; Join benötigt einen erreichbaren Eltern-Peer |
+| Autorisierter Abschluss offline | ja, per Proof-of-Possession des Vault-Keys beim ersten Verbindungsaufbau | nein; Join benötigt einen erreichbaren Eltern-Peer |
 | Bestehendes Gerät kann Aufnahme vorab verweigern | nein | ja |
 | Andere Geräte erfahren davon | beim nächsten Abgleich | Eltern-Peer sofort, übrige beim Abgleich |
-| Rücknahme möglich | ja, per Revocation-Epoch | ja, per Revocation-Epoch |
 
-Beide enden im selben Zustand. Der Kopierweg braucht dafür vier Dinge: Übernahme einer **neuen** Geräte-UUID statt Abweisung, **Neuerzeugung des Signierschlüssels** — sonst hätten zwei Geräte denselben und man könnte Schreibvorgänge nicht mehr zuordnen — neue Endpunktschlüssel für Relay und iroh, sowie eine **Übergabe-Attestierung**.
+Der Kopierweg funktioniert mit der noch nicht veröffentlichten haex-crdt-Revision, die PR #23 und den Pre-HLC-Bootstrap-Hook enthält: Beim ersten Öffnen der Kopie auf einer neuen Installation findet der Bootstrap keinen lokalen `known_devices`-Eintrag, mintet atomar einen frischen und gibt die gespeicherte UUID anschließend über den `DeviceIdProvider` an die HLC weiter. Kein Rekey, keine Attestierung, kein Token-Round-Trip. Die Vault-Identity ist bereits mitkopiert und autorisiert das neue Replikat gegenüber anderen.
 
-**Übergabe-Attestierung** (Betreiber-Entscheidung vom 2026-09-08: Adoption muss offline abschließen). Zuerst bereitet die Kopie eine neue UUID und sämtliche neuen Schlüssel vor. Solange der kopierte Nostr-Signierschlüssel noch verfügbar ist, signiert sie damit die vollständige öffentliche Zielidentität einschließlich CRDT-/Endpunktschlüsseln, Alias, Berechtigungen, Gültigkeit und Epochen gemäß [Spec 001](../specs/001-frontend-onboarding/contracts/tauri-commands.md#device-id-model). Die Adoption schreibt die Attestierung vor dem Identitätswechsel in `peer_instances`; Attestierung, zugehörige neue private Schlüssel und lokaler Abschlussnachweis müssen gemeinsam committen. Erst danach dürfen die neuen Endpunkte starten. Bei fehlender gültiger Attestierung wird stattdessen der Token-Fallback atomar festgehalten; Speicherfehler führen zum Rollback, nicht zum Fallback.
+Der Token-/QR-Weg (Verbinden, Spec 001) erzeugt eine leere DB mit frischer Vault-Identity und pairt sie in eine bestehende Föderation ein — ein anderer Ablauf für einen anderen Zweck (neue Föderation aufmachen und aufnehmen), nicht für Vault-Replikation.
 
-Ein empfangender Peer prüft vor normalem Zugriff die vollständige Signaturbindung und den Besitz der neuen Endpunktschlüssel. Die bestehende Regel bleibt gültig: Die Quelle braucht aktuelle `pairing-authority`, darf höchstens ihre eigenen Berechtigungen vergeben und die Gültigkeit ihrer Freigabe nicht verlängern. Widerrufene oder veraltete Freigaben werden abgewiesen. Der lokale Offline-Abschluss garantiert keine Annahme gegen einen neueren Widerrufsstand; eine spätere Ablehnung wird sichtbar gemeldet und kann über Token-Pairing derselben frischen Identität behoben werden.
-
-Eine lesbare Dateikopie gibt Zugriff auf vorhandene Daten und Zugangsdaten. Die Attestierung gewährt zusätzlich dauerhafte Mitgliedschaft und Zugriff auf künftig synchronisierte Daten im Rahmen der erteilten Rechte; ein Passphrase-Wechsel hebt das nicht auf. Nur ein aktuell zur Kopplung berechtigter Peer darf widerrufen. Die Oberfläche jedes Peers **muss** neu akzeptierte abgeleitete Replikate anzeigen. Der Widerruf eines einzelnen Kindes sperrt den kopierten Quellschlüssel nicht: Bei dessen Kompromittierung müssen auch die Quelle und davon abhängige Freigaben widerrufen oder der Föderations-Reset genutzt werden. Token-Fallback hängt an fehlender gültiger Attestierung, nicht daran, ob das Quellgerät noch existiert.
-
-Die Übernahme einer neuen Geräte-UUID setzt eine Erweiterung in `haex-crdt` voraus, die im gelesenen Stand nicht vorhanden ist: der aktuelle Ablauf weist eine abweichende UUID ab. Die Uhr wird **vor** dem UUID-Abgleich aus dem letzten gespeicherten Zeitstempel geladen; die Erweiterung muss dennoch monotone erste Schreibvorgänge mit neuer Knoten-ID und Crash-Recovery nachweisen. Diese Erweiterung ist eine benannte offene Aufgabe am Crate.
-
-Jede importierte Kopie wird als neues Replikat behandelt, auch auf demselben Rechner mit bekanntem Quell-UUID-Eintrag. Andernfalls würden Quelle und Kopie trotz neuer Endpunktschlüssel dieselbe CRDT-Knotenidentität verwenden. Nur das gewöhnliche Wiederöffnen der ursprünglichen verwalteten Datenbank behält ihre UUID.
-
-**Für den MVP folgt daraus nur eines**: sich die Tür nicht zubauen. Der MVP implementiert keinen der beiden Kopplungswege, schreibt aber auch keine Einschränkung auf einen einzelnen Rechner fest. Die Adopt-API blockiert ausschließlich den Kopierweg. Token-Join erzeugt eine neue Datenbank mit frischer UUID und benötigt diese API nicht; seine spätere Umsetzung folgt der separaten MVP-Scope-Entscheidung.
+**Für den MVP** ist der Datei-Kopieren-Weg als direkter Vertrag festgelegt. Seine Implementierung bleibt blockiert, bis eine veröffentlichte haex-crdt-Revision PR #23 und den Pre-HLC-Bootstrap-Hook enthält; `v0.1.0` deckt den Adopt-Fall noch nicht ab.
 
 ## Sync-Vertrag mit dem Ausbau von haex-crdt
 
@@ -295,7 +291,9 @@ Für jedes Gate vor Implementierung konkrete Testdateien gemäß der Tabelle anl
 
 Diese Überarbeitung verändert `plans/001-desktop-mvp.md`, `plans/README.md`, den Device-ID- und Import-Abschnitt in [`specs/001-frontend-onboarding/contracts/tauri-commands.md`](../specs/001-frontend-onboarding/contracts/tauri-commands.md) sowie zwei Stellen in [`docs/plans/2026-09-04-v1-scope-design.md`](../docs/plans/2026-09-04-v1-scope-design.md). Harness-Instruktionen bleiben unverändert.
 
-Ebenfalls bereinigt: `specs/001-frontend-onboarding/spec.md` (User Story 3 samt Akzeptanzszenarien, FR-011, neu FR-011a), `tasks.md` (T055 und dessen Test) und `quickstart.md`. Dort stand die „same-host"-Formulierung an acht weiteren Stellen. User Story 3 beschreibt jetzt denselben Adopt-/Rekey-Ablauf für beide Fälle: jede Kopie benötigt eine neue Geräte-UUID, auch bei bekanntem Quelleintrag. Die Abhängigkeitslücke steht als solche benannt statt als Scope-Grenze. Diese Spec-Artefakte sind die normative Quelle; dieser Plan dokumentiert die abgestimmte Änderung, ersetzt aber keine Spec-Anforderung.
+Ebenfalls bereinigt: `specs/001-frontend-onboarding/spec.md` (User Story 3, FR-011, FR-012), `tasks.md` (T055 und Tests) und `quickstart.md`. Diese Spec-Artefakte sind die normative Quelle; dieser Plan dokumentiert die abgestimmte Änderung, ersetzt aber keine Spec-Anforderung.
+
+**Vom 2026-09-08 später am Tag zusätzlich vereinfacht**: Attestierungs-Protokoll (FR-011a/FR-011b) wieder entfernt. Der User hat das Zwei-UUID-Modell aus haex-vault klargestellt (Installations-UUID + Vault-Device-UUID + Vault-Identity-Keypair); die geteilte Vault-Identity ersetzt die Attestierung, das per-(Vault × Installation)-Lookup ersetzt die Adopt-API. `haex-crdt` PR #23 entfernt `reconcile_device_id` gleichzeitig; damit fällt jeder Sonderpfad im `open_instance` weg — importierte Kopien öffnen sich wie normale Datenbanken.
 
 Spätere Umsetzung betrifft nach Spec-Review: `src/`, `src-tauri/`, `tests/`, `e2e/`, Build- und Paketkonfiguration, Toolchain/Lockfiles, passende CI und abgestimmte Änderungen unter `specs/`. Themenbranches und Conventional Commits wie im Repo; Integration über PR mit Rebase- oder Merge-Commit, kein Squash. Keine externe Crate-Änderung stillschweigend als Holzi-Aufgabe erledigen.
 
@@ -305,10 +303,9 @@ Vor neuen Codeartefakten gilt der deklarierte graphify-Authoring-Check aus [`.sp
 
 - Schlüsselhaltung ist als Produktziel entschieden: verschlüsselte SQLite, auch für Anbieterschlüssel. Vor entsprechender Implementierung die abweichende kanonische Keychain-Formulierung in einem separaten geprüften Amendment korrigieren.
 - Weil Anbieterschlüssel mitsynchronisieren, hält jedes gekoppelte Gerät jeden Schlüssel. Ein kompromittiertes Gerät gibt damit alle Anbieterkonten preis, nicht nur seine eigenen. Das ist der bewusst gewählte Preis dafür, einen Anbieter nur einmal einzurichten; die Sync-Abnahme muss zeigen, dass Schlüssel den Transport nie unverschlüsselt verlassen, und die Rücknahme eines Peers muss praktisch mit einer Schlüsselrotation beim Anbieter einhergehen.
-- Die Übergabe-Attestierung macht aus einem einmaligen Dateizugriff eine dauerhafte Mitgliedschaft. Die Oberfläche muss neu aufgetauchte abgeleitete Replikate sichtbar melden, sonst ist die Rücknahme-Möglichkeit wertlos.
 - Die bestehende Onboarding-Spec gilt erst als erfüllt, wenn ihre Anforderungen implementiert oder ausdrücklich per Review neu zugeschnitten wurden.
-- Die Übernahme einer neuen Geräte-UUID ist eine offene Aufgabe am Crate und Voraussetzung für jeden Import als neues Replikat. Token-Join ist davon unabhängig; beide Kopplungswege bleiben gemäß diesem MVP-Vorschlag einer späteren Etappe zugeordnet.
-- Sobald eine geprüfte und gepinnte `haex-crdt`-Revision Adoption unterstützt, ist FR-011a einzulösen: jede importierte Kopie erhält eine frische UUID und frische Signier-/Endpunktschlüssel und schließt mit gültiger Attestierung offline ab; nur ohne gültige Attestierung folgt der Token-Fallback. Die Crate-Adoption und der Holzi-Rekey müssen einschließlich Index und Restore-Markern nach Unterbrechung sicher fortsetzbar sein; bloßer Endpunkt-Rekey ersetzt keine UUID-Adoption.
+- Eine veröffentlichte haex-crdt-Revision mit PR #23 und dem Pre-HLC-Bootstrap-Hook muss gepinnt sein, bevor `open_instance` auf einer Kopie zuverlässig funktioniert. `v0.1.0` und frühere Versionen mit `reconcile_device_id` würden jeden Datei-Kopie-Öffnen mit `DeviceIdMismatch` abweisen.
+- Wird die `<AppLocalData>/installation-id`-Datei mitkopiert (VM-Klon, `rsync -a` des ganzen App-Data-Verzeichnisses), bekommen beide Replikate dieselbe Vault-Device-UUID und die HLC-Kausalität bricht still. Detektion ist Aufgabe der späteren Sync-Etappe (siehe „Node-ID collision detection" im Contract). Für den MVP reicht die Doku-Warnung im Onboarding.
 - Ohne Prozess-Isolation beendet ein Modell, das den Speicher überschreitet, die Anwendung. Die Abnahme von Etappe 3 muss zeigen, was in diesem Fall passiert und ob offene Gespräche erhalten bleiben.
 - Überfordert das gewählte Modell die Zielhardware, wird das sichtbar gemeldet; kein automatisches Ausweichen auf einen Dienst.
 - Bei Mobile müssen Inferenz-Backend, Speicherbudget und Modellbezug neu bewertet werden. Das Pfadmodell ist darauf vorbereitet, die Leistungsfrage nicht.
