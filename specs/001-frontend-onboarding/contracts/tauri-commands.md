@@ -103,22 +103,41 @@ Startup removes `pending` mappings whose creation marker or database is absent.
 If a mapping is missing, corrupt, or not `ready`, `open_instance` returns an
 explicit validation error and leaves the database and any currently active
 instance untouched; it MUST NOT guess a UUID or overwrite the database's
-recorded value. Import may proceed only when the source UUID is already known
-to this local index.
+recorded value.
 
-**Policy at v1**: `DeviceIdProvider` returns the UUID retained by Holzi.
-Opening a database whose recorded device UUID differs from what the caller
-supplies fails with `HolziError::DeviceIdMismatch`. This matches the pinned
-haex-crdt revision's reject-on-mismatch behavior.
+**Ordinary reopen** — a database whose UUID this index already knows — passes
+that UUID straight through and MUST NOT mint a new one.
 
-**Post-v1**: cross-host device-handoff (moving the same `.db` between physical
-machines) needs an explicit adopt-on-mismatch API in haex-crdt, which is not
-present in the pinned revision. Tracked as an open sub-task; v1 rejects a
-database without a local UUID mapping instead of relying on adopt semantics.
+**Adopting a copied database is a distinct, intended flow, not a rejected
+one.** Copying a `.db` to a second machine and opening it there is a supported
+way to add a replica, alongside token/QR pairing. Both paths must end in the
+same state, so adoption is not merely "accept the mismatch" — it MUST also:
 
-The only invariant `fs2` guarantees is that the same `.db` cannot be opened
-twice on the same host. Cross-host handoff is a policy question, not a lock
-question.
+1. Mint and record a **new device UUID** (the CRDT node identity must be
+   unique per replica, or conflict resolution stops being deterministic).
+2. Generate a **new signing keypair**, retiring the copied one. Without this,
+   two replicas would sign with the same key and writes could not be
+   attributed.
+3. Generate **new Nostr and iroh endpoint keys**, which must be unique per
+   device.
+
+The HLC tolerates the new node identity because `initialize_in_place` runs
+*before* the device-id reconciliation and seeds from the last persisted
+timestamp, so a new node ID continues the causal chain monotonically.
+
+**What the pinned revision actually does**: `reconcile_device_id` rejects a
+mismatch outright; there is no adopt API. Until that lands, holzi cannot
+implement either replica-adding path, and `open_instance` on an unknown
+database returns `HolziError::DeviceIdMismatch`. This is a **current
+limitation of the dependency, not a scope decision** — no contract text may be
+read as restricting holzi to a single machine.
+
+**Never permitted**, independent of the above: the same `.db` open in two
+processes at once. `fs2` prevents it on one host. Across a shared network
+mount or a cloud-sync folder it cannot be prevented reliably, because such
+services replicate byte ranges rather than transactions — that case is a
+documented anti-requirement, and startup SHOULD warn when an instance path
+looks like a known sync folder.
 
 ### Error mapping
 
@@ -397,10 +416,17 @@ After a successful close of an active instance, emit `instance-list-changed { re
 
 Copies an external `.db` file into `<AppLocalData>/instances/`. Structural validation happens before copying; SQLCipher credential validation is completed by `open_instance`.
 
-V1 accepts only a same-host import whose recorded device UUID is present in the
-local device-ID index. An unknown or cross-host source may be staged as pending,
-but `open_instance` MUST return an explicit validation error; it MUST NOT open
-the copy with a generated replacement UUID.
+Against the pinned haex-crdt revision this command can only complete for a
+source whose recorded device UUID is already in the local device-ID index. A
+source from another machine may be staged as pending, but `open_instance` MUST
+then return an explicit validation error; it MUST NOT silently open the copy
+with a generated replacement UUID.
+
+That restriction tracks the **dependency**, not the intended scope: adopting a
+copied database is a supported way to add a replica once haex-crdt exposes an
+adopt API, and it then follows the three-step adoption in
+[Device-ID model](#device-id-model) — new device UUID, new signing keypair, new
+endpoint keys. Nothing here may be read as limiting holzi to one machine.
 
 ```rust
 #[tauri::command]
