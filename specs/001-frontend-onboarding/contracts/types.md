@@ -80,7 +80,7 @@ See [`tauri-commands.md`](./tauri-commands.md). All derive `TS` with `#[serde(re
 
 ### `HolziError`
 
-See [`tauri-commands.md`](./tauri-commands.md) → "Error type". Serialized as a tagged union with `kind` as the discriminator, matching Rust's `#[serde(tag = "kind")]`.
+See [`tauri-commands.md`](./tauri-commands.md) → "Error type". Serialized as a tagged union with `kind` as the discriminator, matching Rust's `#[serde(tag = "kind")]`. The haex-crdt-mapped variants (`CrdtSqlite`, `CrdtIo`, `CrdtHlc`, `DeviceIdMismatch`, `CrdtSignatureVerificationFailed`, `CrdtUnexpectedSignatureUnderNoop`, `MigrationMissingFromSource`, `MigrationContentDrift`, `MigrationCompatibility`, `CrdtAlreadyInstalled`) plus the residual `CrdtInit` catch-all replace what earlier drafts flattened into a single opaque `CrdtInit { reason: String }`; see [`tauri-commands.md`](./tauri-commands.md) → "Error mapping" for the source-of-truth table.
 
 ## Generation flow
 

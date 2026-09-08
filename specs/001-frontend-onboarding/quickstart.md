@@ -68,7 +68,7 @@ network startup and then paired from the federation view.
 
 6. **Import an external `.db` (Öffnen)**.
 
-   - Copy `~/.local/share/holzi/instances/test-01.db` to `/tmp/other.db`.
+   - Copy `~/.local/share/holzi/instances/test-01.db` to `/tmp/other.db` on the same host; the local device-ID index must contain `test-01`'s UUID.
    - In the app, click **Öffnen**.
    - File picker opens; select `/tmp/other.db`.
    - Import succeeds; `other.db` appears in the list with restore-pending state (source at `/tmp/other.db` is untouched).
@@ -93,6 +93,6 @@ network startup and then paired from the federation view.
 This spec is done when:
 
 - A fresh clone reaches step 5 (create + unlock loop) without deviations.
-- Steps 6–7 (Öffnen, rekey, and restore pairing) work with an arbitrary valid `.db`.
+- Steps 6–7 (same-host Öffnen, rekey, and restore pairing) work with a valid `.db` whose UUID is present in the local device-ID index; cross-host restore is deferred until haex-crdt supports adopt-on-mismatch.
 - All E2E tests in `e2e/onboarding.spec.ts` pass.
 - Playwright network-assertion test (T066) passes with zero external requests.
