@@ -7,16 +7,16 @@ description: "Task list for the frontend-onboarding feature (spec 001)"
 **Input**: Design documents from `specs/001-frontend-onboarding/`
 **Prerequisites**: [`spec.md`](./spec.md), [`plan.md`](./plan.md), [`contracts/tauri-commands.md`](./contracts/tauri-commands.md), [`contracts/events.md`](./contracts/events.md), [`contracts/types.md`](./contracts/types.md)
 
-**Blockers external to this spec**:
+**External dependency**:
 
-- `haex-crdt` extraction from `haex-vault` (per [`docs/plans/2026-09-04-haex-crdt-extraction-plan.md`](../../docs/plans/2026-09-04-haex-crdt-extraction-plan.md) and [`docs/plans/2026-09-04-v1-scope-design.md §10`](../../docs/plans/2026-09-04-v1-scope-design.md)). No implementation task below that requires `haex-crdt` at runtime may start until the crate is importable.
-- Frontend-only scaffold tasks (T001..T010) do not depend on `haex-crdt` and may begin immediately.
+- [`haex-crdt` at `1c069ef0ea19143af2748f40fc41cba05c94dbe1` (`Cargo.toml`, package 0.4.0)](https://github.com/haexmas/haex-crdt/blob/1c069ef0ea19143af2748f40fc41cba05c94dbe1/Cargo.toml) is the pinned implementation dependency for runtime tasks. Frontend-only scaffold tasks (T001..T010) do not depend on it.
 
 **V1 contract note**: The paper-seed display/confirmation tasks and the US5
 Recover phase are historical and not implementation work. Implement Genesis as
 a fresh vault identity; imported databases open directly, with the pre-HLC
-bootstrap reusing or inserting a local-only `known_devices` row keyed by the
-installation UUID before `DeviceIdProvider` receives the persisted UUID. Do
+`DatabaseBootstrap` reusing or inserting a local-only `known_devices` row
+keyed by the installation UUID and returning the vault-device UUID for HLC.
+Do
 not implement `PaperSeedDisplay`, `paper_seed`, `root_fingerprint`, or
 `CreateMode::Recover` from this task list.
 
@@ -56,7 +56,7 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete. All tasks in this phase depend on `haex-crdt` being importable.
 
-- [ ] **T011** [-] Add `haex-crdt` as a Rust dependency in `src-tauri/Cargo.toml` (workspace path or crates.io per its release status). Verify a hello-world `HaexCrdt::init` compiles.
+- [ ] **T011** [-] Add `haex-crdt` as a git dependency in `src-tauri/Cargo.toml`, pinned to `1c069ef0ea19143af2748f40fc41cba05c94dbe1`, and commit the resolved lockfile. Verify a minimal `Database::open(DatabaseConfig)` compiles with `DatabaseConfig::bootstrap`.
 - [ ] **T012** [-] Implement `src-tauri/src/instances/paths.rs` mirroring [`haex-vault paths.rs`](../../../../haex-vault/src-tauri/src/database/paths.rs): `get_instance_path(name)`, `get_instances_directory()` — resolves against `BaseDirectory::AppLocalData`, creates directory if missing.
 - [ ] **T013** [-] Implement `src-tauri/src/error.rs` with the `HolziError` enum per [`contracts/tauri-commands.md`](./contracts/tauri-commands.md). Add `#[derive(TS)]` and export.
 - [ ] **T014** [-] Implement `src-tauri/src/state.rs`: `AppState { active_instance: Mutex<Option<ActiveInstanceHandle>> }`. `ActiveInstanceHandle` holds the `haex-crdt` handle and shutdown senders for the Nostr relay + iroh peer. Register in `main.rs::manage`.
@@ -88,7 +88,7 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 
 ### Implementation for US4
 
-- [ ] **T025** [US4] Implement `src-tauri/src/instances/crud.rs::open_instance` per contract. Under the state lock, validate the requested instance and SQLCipher credentials before changing any current active runtime; on validation failure, preserve the existing runtime and `AppState.active_instance` unchanged. Run the pre-HLC bootstrap to reuse or insert the local-only `known_devices` row, then pass its persisted vault-device UUID through a provider with no database access. Start the requested SQLCipher/relay/iroh runtime as a private candidate while the old runtime remains active; close the old runtime and publish the candidate only after every startup step succeeds. On candidate startup failure, stop only candidate services, drop its handle, and retain the old runtime and `AppState.active_instance`. Permit deletion only after an explicit discard action or conclusive validation that the file is not a holzi instance. Enforce that `NotFound` and `WrongPassphrase` return the discriminator-different-but-message-same guarantee. Add tests for active-instance preservation on validation failure and forced partial startup failure.
+- [ ] **T025** [US4] Implement `src-tauri/src/instances/crud.rs::open_instance` per contract. Under the state lock, validate the requested instance and SQLCipher credentials before changing any current active runtime; on validation failure, preserve the existing runtime and `AppState.active_instance` unchanged. Pass a `DatabaseBootstrap` implementation to `Database::open`; it reuses or inserts the local-only `known_devices` row and returns its vault-device UUID for HLC. Start the requested SQLCipher/relay/iroh runtime as a private candidate while the old runtime remains active; close the old runtime and publish the candidate only after every startup step succeeds. On candidate startup failure, stop only candidate services, drop its handle, and retain the old runtime and `AppState.active_instance`. Permit deletion only after an explicit discard action or conclusive validation that the file is not a holzi instance. Enforce that `NotFound` and `WrongPassphrase` return the discriminator-different-but-message-same guarantee. Add tests for active-instance preservation on validation failure and forced partial startup failure.
 - [ ] **T026** [US4] Implement `src/pages/index.vue` landing shell with `<UiLogo />`, welcome text, version footer via `useAppVersion` composable, and slots for CTAs + list.
 - [ ] **T027** [P] [US4] Implement `src/components/onboarding/InstancesList.vue`: iterates `useInstancesStore().instances`, renders each with alias + `formatRelativeTime(lastAccess)`, click emits `select(name)`. Empty state hides (FR-004).
 - [ ] **T028** [P] [US4] Implement `src/components/onboarding/UnlockSheet.vue`: `<UiSheet>` with masked passphrase field, submit button, inline error area. On submit calls `useInstance.openAsync(name, passphrase)`.
@@ -114,7 +114,7 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 
 ### Implementation for US1
 
-- [ ] **T035** [US1] Implement `src-tauri/src/instances/crud.rs::create_instance` per contract — Genesis branch only in this task (Join in later phases). Enforces `NameConflict`, `InvalidName`, `WeakPassphrase`, `InstanceAlreadyActive`. Runs the pre-HLC bootstrap before constructing the provider-backed `haex_crdt::DatabaseConfig` and calling `Database::open`; then performs Holzi-owned Genesis initialization: generate fresh Nostr and iroh identities, write the Genesis `peer_instances` self-record, create and store the `ActiveInstanceHandle`, start the relay and iroh peer, and complete runtime activation before returning the active instance.
+- [ ] **T035** [US1] Implement `src-tauri/src/instances/crud.rs::create_instance` per contract — Genesis branch only in this task (Join in later phases). Enforces `NameConflict`, `InvalidName`, `WeakPassphrase`, `InstanceAlreadyActive`. Calls `Database::open` with a `haex_crdt::DatabaseConfig` whose `DatabaseBootstrap` atomically creates the vault identity and self-`known_devices` row; then performs Holzi-owned Genesis initialization: generate fresh Nostr and iroh identities, write the Genesis `peer_instances` self-record, create and store the `ActiveInstanceHandle`, start the relay and iroh peer, and complete runtime activation before returning the active instance.
 - [ ] **T036** [US1] Implement startup orphan-cleanup in `src-tauri/src/main.rs::setup`: on boot, scan `instances/` for incomplete Genesis markers and delete both the marker and sibling `.db`. Also clean up any `.db.importing` files left over by an interrupted `import_instance_file`. Emit `instance-list-changed { reason: 'startup-cleanup' }`.
 - [ ] **T037** [P] [US1] Implement `src/components/onboarding/CreateSheet.vue`: `<UiSheet>` with a Genesis form, name field, two passphrase fields with match check, and submit button. On submit call `useInstance.createAsync(...)`.
 - [ ] **T040** [P] [US1] Add Anlegen CTA to `pages/index.vue` as the first primary button; wire to open CreateSheet.
@@ -168,7 +168,7 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 
 ### Implementation for US3
 
-- [ ] **T055** [US3] Implement `src-tauri/src/instances/import.rs::import_instance_file` per contract, including regular-file/extension validation, crash-safe staging (`.db.importing` → atomic rename), conflict handling, and active-target rejection under the state lock. SQLCipher credential validation is deferred to `open_instance`. No rekey, no attestation, no restore marker — the pre-HLC bootstrap reuses a same-installation row or inserts a local-only `known_devices` row for another installation before `DeviceIdProvider` receives the persisted UUID.
+- [ ] **T055** [US3] Implement `src-tauri/src/instances/import.rs::import_instance_file` per contract, including regular-file/extension validation, crash-safe staging (`.db.importing` → atomic rename), conflict handling, and active-target rejection under the state lock. SQLCipher credential validation is deferred to `open_instance`. No rekey, no attestation, no restore marker — `DatabaseBootstrap` reuses a same-installation row or inserts a local-only `known_devices` row for another installation and returns its vault-device UUID for HLC.
 - [ ] **T056** [P] [US3] Implement `src/components/onboarding/OpenSheet.vue`: `<UiSheet>` with "Datei wählen" button that calls `@tauri-apps/plugin-dialog::open({ filters: [{ name: 'Instance', extensions: ['db'] }] })`. Pass the picker-returned external `source_path` only to `import_instance_file`; show the basename only for privacy and provide an "Importieren" button. Managed instance paths never cross the frontend boundary.
 - [ ] **T057** [P] [US3] Add Öffnen CTA to `pages/index.vue` (second primary button, between Anlegen and Verbinden).
 - [ ] **T058** [P] [US3] Conflict resolution UI: if `import_instance_file` returns `NameConflict`, show a `<UiDialog>` with three options: Rename (default), Overwrite (requires confirming a checkbox), Cancel. Never silently overwrite; an overwrite targeting the active instance is rejected under the backend state lock until that instance is explicitly closed.

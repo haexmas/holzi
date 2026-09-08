@@ -1,12 +1,15 @@
 # Contract: Tauri Commands (Rust ↔ Frontend)
 
-**Status**: Working draft against `haex-crdt` 0.4.0 (Cargo main, not tagged).
-That revision removes the crate's device-ID arbitration and exposes the
-`DatabaseBootstrap` hook holzi runs its per-installation known-devices lookup
-in. Field names and shapes are stable enough to implement against; the
-error-mapping table below reflects the current crate surface. Any haex-crdt
-change to migration IDs, the `DatabaseBootstrap` signature, bootstrap
-ordering, or the `Database::open` shape reopens this contract.
+**Status**: Working draft against [`haexmas/haex-crdt` at
+`1c069ef0ea19143af2748f40fc41cba05c94dbe1` (`Cargo.toml`, package
+0.4.0)](https://github.com/haexmas/haex-crdt/blob/1c069ef0ea19143af2748f40fc41cba05c94dbe1/Cargo.toml).
+The pinned revision removes the crate's device-ID arbitration and exposes the
+[`DatabaseBootstrap` hook](https://github.com/haexmas/haex-crdt/blob/1c069ef0ea19143af2748f40fc41cba05c94dbe1/src/device_id.rs)
+holzi runs its per-installation known-devices lookup in. Field names and shapes
+are stable enough to implement against; the error-mapping table below reflects
+the pinned crate surface. Any change to the pin's migration IDs,
+`DatabaseBootstrap` signature, bootstrap ordering, or `Database::open` shape
+reopens this contract.
 
 **V1 contract note**: Genesis creates a fresh vault, generating a per-vault
 identity keypair (see [Vault identity and device model](#vault-identity-and-device-model)).
@@ -77,13 +80,15 @@ the surface has stabilized against a working slice.
      minting and fsyncing the file if it does not yet exist.
   2. Looks up the local-only `known_devices.installation_uuid` column.
   3. Reuses the matching `vault_device_uuid` if present; otherwise mints a
-     fresh one and inserts a complete `known_devices` row (CRDT metadata
-     plus the local-only lookup value).
+     fresh one and inserts a complete consumer-owned `known_devices` row,
+     including the local-only lookup value. It MUST NOT write CRDT bookkeeping
+     tables or `_no_trigger` metadata columns; the crate prepares that metadata
+     only after HLC initialization and trigger installation.
   4. On Genesis (empty `vault_identity`), generates the vault identity
      keypair and inserts the singleton `vault_identity` row in the same
      transaction. On any other open, verifies the row is present.
-  5. Returns the vault-device UUID. The crate commits everything atomically
-     and uses that UUID as the HLC node id for this open.
+  5. Returns the vault-device UUID. The crate atomically commits the bootstrap
+     rows and result, then uses that UUID as the HLC node id for this open.
 
   The whole sequence is one transaction: the vault-identity row, the
   `known_devices` row, and the returned UUID commit or roll back together.
@@ -238,7 +243,7 @@ pub struct CreateInstanceResult {
 1. Validate `name` and passphrase policy in-process (haex-crdt accepts opaque strings; policy is holzi's job).
 2. Ensure `<AppLocalData>/installation-id` exists — read it if present, otherwise mint a fresh v4 UUID and write it (fsync). This file is one-time-per-installation, not per-vault; it may already exist from earlier holzi use on this host.
 3. Write `<name>.db.pending` as an empty marker, then create `<name>.db` as the candidate path in `<AppLocalData>/instances/`. Marker presence controls publication.
-4. Call `Database::open` with `create_if_missing: true` and a `HolziBootstrap` implementation of [`DatabaseBootstrap`](#provider-implementations). Inside the transaction the crate opens for the hook, holzi generates the vault identity keypair, inserts the singleton `vault_identity` row, mints the vault-device UUID, and inserts the self-`known_devices` row. All of that plus HLC init and trigger install either commit together or roll back together.
+4. Call `Database::open` with `create_if_missing: true` and a `HolziBootstrap` implementation of [`DatabaseBootstrap`](#provider-implementations). Inside the transaction the crate opens for the hook, holzi generates the vault identity keypair, inserts the singleton `vault_identity` row, mints the vault-device UUID, and inserts the self-`known_devices` row. Those bootstrap rows and the returned UUID commit together or roll back together. Only after that commit does the crate initialize HLC and install triggers; a later failure does not roll the bootstrap transaction back, so this command's failure cleanup removes the candidate database and pending marker.
 5. Bind `AppState.active_instance = Some(info)`.
 6. Flush the DB and directory, remove `<name>.db.pending`, flush the directory again. Marker removal is the durable commit point.
 7. Emit `instance-list-changed`.

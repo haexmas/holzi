@@ -200,11 +200,11 @@ Die **Vault-Device-UUID** ist die CRDT-Knotenidentität und **muss** je Replikat
 | Bestehendes Gerät kann Aufnahme vorab verweigern | nein | ja |
 | Andere Geräte erfahren davon | beim nächsten Abgleich | Eltern-Peer sofort, übrige beim Abgleich |
 
-Der Kopierweg funktioniert mit der noch nicht veröffentlichten haex-crdt-Revision, die PR #23 und den Pre-HLC-Bootstrap-Hook enthält: Beim ersten Öffnen der Kopie auf einer neuen Installation findet der Bootstrap keinen lokalen `known_devices`-Eintrag, mintet atomar einen frischen und gibt die gespeicherte UUID anschließend über den `DeviceIdProvider` an die HLC weiter. Kein Rekey, keine Attestierung, kein Token-Round-Trip. Die Vault-Identity ist bereits mitkopiert und autorisiert das neue Replikat gegenüber anderen.
+Der Kopierweg funktioniert mit [`haexmas/haex-crdt` bei `1c069ef0ea19143af2748f40fc41cba05c94dbe1` (`Cargo.toml`, Paket 0.4.0)](https://github.com/haexmas/haex-crdt/blob/1c069ef0ea19143af2748f40fc41cba05c94dbe1/Cargo.toml): Beim ersten Öffnen der Kopie auf einer neuen Installation findet `DatabaseBootstrap` keinen lokalen `known_devices`-Eintrag, mintet atomar einen frischen und gibt dessen UUID als HLC-Knoten-ID für diesen Open-Vorgang zurück. Kein Rekey, keine Attestierung, kein Token-Round-Trip. Die Vault-Identity ist bereits mitkopiert und autorisiert das neue Replikat gegenüber anderen.
 
 Der Token-/QR-Weg (Verbinden, Spec 001) erzeugt eine leere DB mit frischer Vault-Identity und pairt sie in eine bestehende Föderation ein — ein anderer Ablauf für einen anderen Zweck (neue Föderation aufmachen und aufnehmen), nicht für Vault-Replikation.
 
-**Für den MVP** ist der Datei-Kopieren-Weg als direkter Vertrag festgelegt. Seine Implementierung bleibt blockiert, bis eine veröffentlichte haex-crdt-Revision PR #23 und den Pre-HLC-Bootstrap-Hook enthält; `v0.1.0` deckt den Adopt-Fall noch nicht ab.
+**Für den MVP** ist der Datei-Kopieren-Weg als direkter Vertrag festgelegt. Die gepinnte `haex-crdt`-Revision stellt den `DatabaseBootstrap`-Hook bereit; `v0.1.0` und frühere Revisionen decken den Kopierfall nicht ab.
 
 ## Sync-Vertrag mit dem Ausbau von haex-crdt
 
@@ -304,7 +304,7 @@ Vor neuen Codeartefakten gilt der deklarierte graphify-Authoring-Check aus [`.sp
 - Schlüsselhaltung ist als Produktziel entschieden: verschlüsselte SQLite, auch für Anbieterschlüssel. Vor entsprechender Implementierung die abweichende kanonische Keychain-Formulierung in einem separaten geprüften Amendment korrigieren.
 - Weil Anbieterschlüssel mitsynchronisieren, hält jedes gekoppelte Gerät jeden Schlüssel. Ein kompromittiertes Gerät gibt damit alle Anbieterkonten preis, nicht nur seine eigenen. Das ist der bewusst gewählte Preis dafür, einen Anbieter nur einmal einzurichten; die Sync-Abnahme muss zeigen, dass Schlüssel den Transport nie unverschlüsselt verlassen, und die Rücknahme eines Peers muss praktisch mit einer Schlüsselrotation beim Anbieter einhergehen.
 - Die bestehende Onboarding-Spec gilt erst als erfüllt, wenn ihre Anforderungen implementiert oder ausdrücklich per Review neu zugeschnitten wurden.
-- Eine veröffentlichte haex-crdt-Revision mit PR #23 und dem Pre-HLC-Bootstrap-Hook muss gepinnt sein, bevor `open_instance` auf einer Kopie zuverlässig funktioniert. `v0.1.0` und frühere Versionen mit `reconcile_device_id` würden jeden Datei-Kopie-Öffnen mit `DeviceIdMismatch` abweisen.
+- [`haexmas/haex-crdt` bei `1c069ef0ea19143af2748f40fc41cba05c94dbe1` (`Cargo.toml`, Paket 0.4.0)](https://github.com/haexmas/haex-crdt/blob/1c069ef0ea19143af2748f40fc41cba05c94dbe1/Cargo.toml) muss als Git-Revision gepinnt sein, bevor `open_instance` auf einer Kopie zuverlässig funktioniert. `v0.1.0` und frühere Versionen mit `reconcile_device_id` würden jeden Datei-Kopie-Öffnen mit `DeviceIdMismatch` abweisen.
 - Wird die `<AppLocalData>/installation-id`-Datei mitkopiert (VM-Klon, `rsync -a` des ganzen App-Data-Verzeichnisses), bekommen beide Replikate dieselbe Vault-Device-UUID und die HLC-Kausalität bricht still. Detektion ist Aufgabe der späteren Sync-Etappe (siehe „Node-ID collision detection" im Contract). Für den MVP reicht die Doku-Warnung im Onboarding.
 - Ohne Prozess-Isolation beendet ein Modell, das den Speicher überschreitet, die Anwendung. Die Abnahme von Etappe 3 muss zeigen, was in diesem Fall passiert und ob offene Gespräche erhalten bleiben.
 - Überfordert das gewählte Modell die Zielhardware, wird das sichtbar gemeldet; kein automatisches Ausweichen auf einen Dienst.
