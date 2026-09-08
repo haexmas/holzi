@@ -93,6 +93,6 @@ network startup and then paired from the federation view.
 This spec is done when:
 
 - A fresh clone reaches step 5 (create + unlock loop) without deviations.
-- Steps 6–7 (same-host Öffnen, rekey, and restore pairing) work with a valid `.db` whose UUID is present in the local device-ID index; cross-host restore is deferred until haex-crdt supports adopt-on-mismatch.
+- Steps 6–7 (Öffnen, rekey, and restore pairing) work with a valid `.db` whose UUID is present in the local device-ID index. A file copied from another machine needs UUID adoption, which the pinned haex-crdt revision cannot do yet — it fails with an explicit `DeviceIdMismatch`. That is a dependency gap, not a scope boundary; see FR-011a.
 - All E2E tests in `e2e/onboarding.spec.ts` pass.
 - Playwright network-assertion test (T066) passes with zero external requests.

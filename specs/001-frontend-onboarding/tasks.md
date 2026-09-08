@@ -155,7 +155,7 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 
 **Goal**: Öffnen CTA opens the OS file picker; selected `.db` is copied into `<AppLocalData>/instances/`; appears in the list.
 
-**Independent Test**: Point the file picker at a same-host `.db` outside the managed directory whose UUID is present in the local device-ID index; verify copy, source untouched, list refreshes, and explicit rejection when the mapping is missing.
+**Independent Test**: Point the file picker at a `.db` outside the managed directory whose UUID is present in the local device-ID index; verify copy, source untouched, list refreshes. Separately verify that a file with an unknown UUID is retained as pending and rejected with an explicit `DeviceIdMismatch`, never opened with a silently minted UUID.
 
 ### Tests for US3
 
@@ -166,7 +166,7 @@ Paths follow [`plan.md → Project Structure`](./plan.md).
 
 ### Implementation for US3
 
-- [ ] **T055** [US3] Implement `src-tauri/src/instances/import.rs::import_instance_file` per contract, including regular-file/extension validation, local device-ID mapping validation, crash-safe marker-before-publish staging, generation-bound overwrite journaling, conflict handling, and active-target rejection under the state lock. Defer SQLCipher credential validation and rekey-on-restore to `open_instance`; the copied keys MUST NOT reach relay/iroh startup, and the fresh identity MUST remain in `restore-pairing-required` state until `pair_restored_instance` completes. Cross-host files without a local UUID mapping remain pending and are rejected explicitly in v1.
+- [ ] **T055** [US3] Implement `src-tauri/src/instances/import.rs::import_instance_file` per contract, including regular-file/extension validation, local device-ID mapping validation, crash-safe marker-before-publish staging, generation-bound overwrite journaling, conflict handling, and active-target rejection under the state lock. Defer SQLCipher credential validation and rekey-on-restore to `open_instance`; the copied keys MUST NOT reach relay/iroh startup, and the fresh identity MUST remain in `restore-pairing-required` state until `pair_restored_instance` completes. Files without a local UUID mapping remain pending and are rejected explicitly with `DeviceIdMismatch` until haex-crdt exposes UUID adoption; see FR-011a. Do not structure the code so that adoption would need a rewrite — the rekey path already produces exactly the fresh keys adoption requires.
 - [ ] **T055a** [US3] Implement `pair_restored_instance` per contract: accept the token from the federation-view restore handoff, update the active imported database in place with mutually signed `peer_instances` records, clear restore state only after a successful transaction, and retain the same database and fresh identity for retry after failure.
 - [ ] **T056** [P] [US3] Implement `src/components/onboarding/OpenSheet.vue`: `<UiSheet>` with "Datei wählen" button that calls `@tauri-apps/plugin-dialog::open({ filters: [{ name: 'Instance', extensions: ['db'] }] })`. Pass the picker-returned external `source_path` only to `import_instance_file`; show the basename only for privacy and provide an "Importieren" button. Managed instance paths never cross the frontend boundary.
 - [ ] **T057** [P] [US3] Add Öffnen CTA to `pages/index.vue` (second primary button, between Anlegen and Verbinden).
