@@ -24,7 +24,7 @@ Unverändert gültig aus der Erstfassung: Schlüsselhaltung samt Konstitutionsko
 
 Der Betreiber installiert Holzi, legt eine passwortgeschützte Instanz an und führt einen Chat — wahlweise mit einem lokal laufenden Modell oder über ein hinterlegtes Anbieterkonto. Nach einem Neustart sind die Gespräche vorhanden.
 
-**Der MVP ist fertig, wenn das auf einem Gerät zuverlässig funktioniert.** Zwei-Geräte-Sync ist ausdrücklich **kein** Bestandteil dieses MVP; er folgt als eigene Etappe, sobald der `haex-crdt`-Sync-Ausbau vorliegt. Die Vorarbeiten dafür (CRDT-Installation auf allen Anwendungstabellen, Geräte-Identität, signierte Schreibvorgänge) gehören dagegen in den MVP, damit der spätere Sync keine Migration über gefüllte Tabellen braucht.
+**Der MVP ist fertig, wenn das auf einem Gerät zuverlässig funktioniert.** Zwei-Geräte-Sync ist ausdrücklich **kein** Bestandteil dieses MVP; er folgt als eigene Etappe, sobald der `haex-crdt`-Sync-Ausbau vorliegt. Die Vorarbeiten dafür (CRDT-Installation auf allen synchronisierbaren Anwendungstabellen, Geräte-Identität, signierte Schreibvorgänge) gehören dagegen in den MVP, damit der spätere Sync keine Migration über gefüllte Tabellen braucht.
 
 Planungsannahme: zuerst ein Desktop-Zielsystem; vorläufig Linux, Hardware noch offen. Weitere Desktop-Plattformen folgen nach dem ersten paketierten Durchlauf. Mobile ist nicht Teil des MVP, prägt aber das Datei- und Pfadmodell, damit später kein Bruch nötig wird. Kein bestimmtes Modell und keine GPU-Leistung werden vorausgesetzt.
 
@@ -105,23 +105,23 @@ Rust besitzt Dateien, Datenbank, Schlüsselzugriffe und Netzwerk. Die WebView be
 
 Zunächst nur stabile IDs und kurze, atomare Schreibvorgänge. `haex-crdt` bietet spaltenweises Last-Writer-Wins mit Hybrid Logical Clocks; das ist kein kollaborativer Texteditor.
 
-Alle Anwendungstabellen werden bereits im MVP über `install_crdt` installiert, obwohl noch nichts synchronisiert. Die `_no_trigger`-Metadatenspalten kosten wenig und ersparen später eine Schemamigration über gefüllte Tabellen.
+Alle zur Synchronisierung vorgesehenen Anwendungstabellen werden bereits im MVP über `install_crdt` installiert, obwohl noch nichts synchronisiert. Private und gerätelokale Tabellen bleiben gemäß dem Vertrag von `install_crdt` ausgeschlossen. Die `_no_trigger`-Metadatenspalten der synchronisierbaren Tabellen ersparen später eine Schemamigration über gefüllte Tabellen.
 
 | Tabelle | CRDT | Inhalt |
 | --- | --- | --- |
 | `instance_identity_no_sync` | nein | Geräte-UUID und Signierschlüssel dieser Instanz. Verlässt die Datenbank nie |
-| `providers` | ja | Anbieterkonfiguration: Art (`api_key`, `cli_delegate`), Name, Basis-URL, Zugangsdaten, aktiv-Flag |
+| `providers` | ja | Nicht geheime Anbieterkonfiguration: Art (`local`, `api_key`, `cli_delegate`), Name, Basis-URL ohne eingebettete Zugangsdaten |
 | `models` | ja | Abgefragter Modellkatalog als Cache mit Abrufzeitpunkt; lokale und Anbietermodelle in einer Tabelle |
-| `device_downloaded_models` | ja | Welche GGUF-Datei auf welchem Gerät liegt: Geräte-UUID, Modell-ID, Pfad **relativ zu** `AppLocalData/models/`, Größe, Abrufdatum |
+| `device_downloaded_models_no_sync` | nein | Lokal verifizierte GGUF-Dateien: Modell-ID, Pfad **relativ zu** `AppLocalData/models/`, Größe, Abrufdatum; nach Import oder Restore erneut prüfen |
 | `chat_threads` | ja | Gespräch: ID, Titel, zuletzt genutzter Anbieter und Modell, Zeitstempel |
-| `chat_messages` | ja | Nachricht: ID, Gespräch, Elternnachricht, Rolle, Inhalt, erzeugender Anbieter und Modell, Token-Zähler, Abschlussstatus |
-| `app_settings_no_sync` | nein | Zuletzt gewählter Anbieter und Modell als Vorbelegung neuer Gespräche — gerätespezifisch |
+| `chat_messages` | ja | Abgeschlossene Nachricht: ID, Gespräch, Elternnachricht, Rolle, Inhalt, erzeugender Anbieter und Modell, Token-Zähler, Abschlussstatus |
+| `app_settings_no_sync` | nein | Gerätebezogene Vorbelegungen und Anbieter-Aktivierung; API-Schlüssel je Anbieter-ID sowie lokale Generierungsaufträge und Zwischenstände, ausschließlich innerhalb SQLCipher |
 
 **Modellgewichte gehören niemals in die SQLite.** Mehrere Gigabyte pro Datensatz sind kein Anwendungsfall für SQLite. Die GGUF-Dateien liegen unter `AppLocalData/models/<modell-slug>/`, die Datenbank hält nur den relativen Pfad. Der Pfad ist bewusst relativ und bewusst unter `AppLocalData`, damit dieselbe Logik auf Android und iOS trägt, wo absolute Pfade außerhalb des App-Containers nicht zugreifbar sind. Wird eine eigene GGUF importiert, wird sie **kopiert**, nicht referenziert.
 
 Nachrichten nach Veröffentlichung nicht im selben Datensatz parallel bearbeiten. Zwei Geräte dürfen neue Nachrichten mit verschiedenen IDs erzeugen. Elternbezüge erhalten Verzweigungen; eine deterministische Geschwistersortierung mit logischer Zeit plus ID verhindert wechselnde Reihenfolgen. Für eine neue Generierung explizit den verwendeten Elternpfad bestimmen. Ein monolithisches JSON-Array pro Gespräch würde durch LWW ganze Verläufe verdrängen.
 
-Streaming läuft über Tauri-Events. Der Teilstand darf gedrosselt gespeichert werden — etwa alle 500 ms statt pro Token, sonst entsteht ein CRDT-Schreibsturm. Der Datensatz wird beim Start mit leerem Inhalt und Status `streaming` angelegt und am Ende auf `complete` gesetzt. Ein Abbruch durch den Betreiber setzt `cancelled` und behält den Teilinhalt. Nach einem Absturz gefundene `streaming`-Datensätze werden beim nächsten Öffnen auf `error` mit Grund „unterbrochen" gesetzt. Ein empfangener Chatdatensatz startet niemals automatisch einen LLM-Aufruf. Pro aktivem Gerät zunächst höchstens eine Generierung gleichzeitig.
+Streaming läuft über Tauri-Events. Der Teilstand wird mit stabiler Nachrichten-ID, Geräte-UUID und Request-ID ausschließlich lokal gespeichert, etwa alle 500 ms. Erst bei Abschluss wird die Nachricht mit derselben ID atomar in `chat_messages` veröffentlicht und der lokale Auftrag entfernt: als `complete`, bei Abbruch als `cancelled` mit Teilinhalt. Nach einem Absturz werden nur eigene verwaiste lokale Aufträge als `error` mit Grund „unterbrochen" abgeschlossen. Empfangene Nachrichten und Aufträge anderer Geräte bleiben unverändert; sie starten niemals automatisch einen LLM-Aufruf. Pro aktivem Gerät zunächst höchstens eine Generierung gleichzeitig. Die Sync-Abnahme muss insbesondere den Neustart von B während einer laufenden Generierung auf A prüfen.
 
 Für die spätere Sync-Etappe: nur explizit freigegebene Tabellen und Spalten gehen in Scan **und** Apply. `_no_sync`-Tabellen nicht automatisch registrieren; der Suffix ersetzt keine Eingangsprüfung. Absolute Modellpfade, Passphrasen, Anbieterschlüssel, private Schlüssel und Prozesszustände sind kein Sync-Payload.
 
@@ -152,14 +152,16 @@ Neben lokaler Inferenz stehen Anbietermodelle ab Tag 1 zur Verfügung. Drei Anbi
 | Klasse | Authentifizierung | Abrechnung | Beispiel |
 | --- | --- | --- | --- |
 | `local` | keine | keine | `mistral.rs` mit lokaler GGUF |
-| `api_key` | Schlüssel in `providers`, geschützt durch SQLCipher | pro Token | Anthropic API, OpenAI API, Google Gemini API |
+| `api_key` | Schlüssel je Anbieter-ID in `app_settings_no_sync`, geschützt durch SQLCipher | pro Token | Anthropic API, OpenAI API, Google Gemini API |
 | `cli_delegate` | das aufgerufene Programm authentifiziert selbst | vorhandenes Abonnement | `claude`, `codex` |
 
 Die Klasse `cli_delegate` ist der Weg, ein bestehendes Abonnement zu nutzen. Holzi ruft das offizielle Kommandozeilenprogramm des Anbieters als Unterprozess auf; dieses bringt seine eigene Anmeldung mit. **Holzi sieht dabei keine Zugangsdaten.**
 
+Der Adapter muss für die unterstützte CLI-Version einen reinen Chatbetrieb nachweisen: keine Datei-/Shell-Tools, keine Hooks oder MCP-Ausführung und keine lokale Klartextpersistenz von Prompts oder Antworten durch Sitzungsdateien, Logs oder temporäre Dateien. Rust besitzt den Prozess, übergibt Nutzereingaben als Daten ohne Shell-Interpolation und beendet ihn bei Abbruch, Sperren oder Instanzwechsel. Kann eine CLI diese Grenzen nicht einhalten, bleibt der Anbieter mit konkretem Grund deaktiviert. CLI-Delegation ist ein Desktop-Pfad; auf Mobile ist ihre Verfügbarkeit separat zu prüfen.
+
 Das ist bewusst so gelöst und nicht anders: Die dokumentierten programmatischen Authentifizierungswege der Anbieter — statischer API-Schlüssel oder OAuth-Profil — sind an eine Organisation mit eigener Abrechnung gebunden, nicht an ein Endkundenabonnement. Abonnement-Zugangsdaten abzugreifen und gegen die Endkunden-Endpunkte zu richten, wäre Reverse Engineering nicht öffentlicher Schnittstellen: bricht bei jeder Änderung, verstößt gegen die Nutzungsbedingungen und riskiert die Sperrung genau des Kontos, das genutzt werden soll. Die Delegation an das offizielle Programm erreicht dasselbe Ziel auf dem vorgesehenen Weg.
 
-**Modelllisten werden immer abgefragt, nie hartkodiert.** Jeder Anbieter hat einen Endpunkt dafür; für lokale Modelle tritt der Verzeichnis-Scan an dessen Stelle. Die Tabelle `models` ist ein Cache mit Abrufzeitpunkt, aufgefrischt bei Schlüsseleingabe, bei Programmstart nach Ablauf einer Frist und auf ausdrückliche Anforderung. Neue Anbietermodelle erscheinen damit ohne Holzi-Update.
+**Modelllisten werden immer abgefragt, nie hartkodiert.** API-Anbieter verwenden ihre Modelllisten-Schnittstelle; CLI-Adapter müssen eine dokumentierte Modellabfrage mit der CLI-eigenen Anmeldung nachweisen, ohne einen zusätzlichen API-Schlüssel vorauszusetzen. Fehlt sie, meldet der Adapter die fehlende Fähigkeit ausdrücklich. Für herunterladbare lokale Modelle wird ein externer GGUF-Katalog abgefragt, der Modell-ID, unveränderliche Revision, Downloadartefakte und Prüfsummen liefert. Dessen konkrete Quelle und Schnittstelle sind in Etappe 2 vor Implementierung festzulegen. Ein Verzeichnis-Scan ergänzt eigene Importe und bestimmt die tatsächlich installierten Modelle; er ersetzt nicht den Downloadkatalog. Die Tabelle `models` ist ein Cache mit Abrufzeitpunkt, aufgefrischt bei Schlüsseleingabe, bei Programmstart nach Ablauf einer Frist und auf ausdrückliche Anforderung. Ein fehlgeschlagener Abruf erhält den vorhandenen Cache und blockiert keine installierten lokalen Modelle. Neue Anbietermodelle erscheinen damit ohne Holzi-Update.
 
 **Auswahl-UI**: ein flaches Auswahlfeld, gruppiert nach Herkunft, ohne Bewertung oder Rangfolge. Ein Eintrag ist entweder verfügbar oder deaktiviert mit Grund — „Download erforderlich" beziehungsweise „Zugangsdaten fehlen". Beide Gründe sind anklickbar und führen in den jeweiligen Einrichtungsweg, statt zu blockieren. Das Modell wird **pro Gespräch** gewählt; ein Wechsel mitten im Verlauf ist erlaubt, und jede Nachricht behält, von welchem Modell sie stammt.
 
@@ -172,9 +174,11 @@ Zwei Begriffe, die auseinandergehalten werden müssen:
 | | Bereich | Synchronisiert | Im MVP |
 | --- | --- | --- | --- |
 | Geräte-/Replikat-Identität (Geräte-UUID, Signierschlüssel) | je Replikat | nie | ja |
-| Nutzer-/Föderationsidentität (secp256k1) | ein Betreiber, alle Geräte | ja, gewrappt | nein |
+| Öffentliche Peeridentitäten und Berechtigungen | Föderation | ja, signierte öffentliche Datensätze | nein |
 
-Die Geräte-UUID ist die CRDT-Knotenidentität und **muss** je Replikat eindeutig sein, sonst wird die Konfliktauflösung nicht deterministisch. Deshalb trägt die Konfigurationstabelle des Crates den `_no_sync`-Suffix: sie ist die einzige, die zwischen Replikaten auseinanderläuft, während alle anderen konvergieren.
+Private Instanz- und Attestierungsschlüssel bleiben nach Spec 001 lokal in `instance_identity_no_sync` und werden niemals zur Übertragung gewrappt. Eine gemeinsame Nutzer-/Föderationsidentität gehört ausschließlich zum [zurückgestellten Cross-User-Sharing-Entwurf](../docs/plans/2026-09-07-cross-user-sharing-deferred-design.md); sie ist weder Teil dieses MVP noch eine Änderung des v1-Schlüsselvertrags.
+
+Die Geräte-UUID ist die CRDT-Knotenidentität und **muss** je Replikat eindeutig sein, sonst wird die Konfliktauflösung nicht deterministisch. Die Konfigurationstabelle des Crates sowie alle privaten und gerätelokalen Holzi-Tabellen tragen deshalb den `_no_sync`-Suffix; nur freigegebene gemeinsame Daten konvergieren.
 
 **Nicht zulässig** bleibt, dieselbe Datei gleichzeitig von zwei Prozessen zu öffnen. Auf demselben Rechner verhindert das der Dateilock des Crates. Über ein geteiltes Netzlaufwerk oder einen Cloud-Sync-Ordner lässt es sich nicht zuverlässig verhindern, weil solche Dienste Byte-Bereiche statt Transaktionen replizieren — der Fall ist eine dokumentierte Anti-Anforderung, und der Programmstart soll bekannte Sync-Pfade erkennen und warnen.
 
@@ -182,16 +186,18 @@ Die Geräte-UUID ist die CRDT-Knotenidentität und **muss** je Replikat eindeuti
 
 | | Datei kopieren | Token-/QR-Kopplung |
 | --- | --- | --- |
-| Zweites Gerät zur Kopplungszeit nötig | nein | ja |
-| Funktioniert offline | ja | nein |
-| Bestehendes Gerät kann verweigern | nein | ja |
-| Andere Geräte erfahren davon | beim nächsten Abgleich | sofort |
+| Vorbereitung ohne zweites Gerät | Datei lokal kopieren; Adoption benötigt die künftige Crate-API | neue lokale Datenbank anlegen |
+| Autorisierter Abschluss offline | nein; Restore-Pairing benötigt einen erreichbaren Eltern-Peer | nein; Join benötigt einen erreichbaren Eltern-Peer |
+| Bestehendes Gerät kann Aufnahme verweigern | ja, beim Restore-Pairing | ja, beim Join |
+| Andere Geräte erfahren davon | Eltern-Peer beim Restore-Pairing, übrige Peers beim Abgleich | Eltern-Peer beim Join, übrige Peers beim Abgleich |
 
 Beide enden im selben Zustand. Der Kopierweg braucht dafür drei Dinge: Übernahme einer **neuen** Geräte-UUID statt Abweisung, **Neuerzeugung des Signierschlüssels** — sonst hätten zwei Geräte denselben und man könnte Schreibvorgänge nicht mehr zuordnen — sowie neue Endpunktschlüssel für Relay und iroh, die je Gerät eindeutig sein müssen.
 
-Die Übernahme einer neuen Geräte-UUID setzt eine Erweiterung in `haex-crdt` voraus, die im gelesenen Stand nicht vorhanden ist: der aktuelle Ablauf weist eine abweichende UUID ab. Die technische Grundlage trägt, weil die Uhr **vor** dem UUID-Abgleich aus dem letzten gespeicherten Zeitstempel geladen wird und eine neue Knoten-ID die Kausalkette monoton fortsetzt. Diese Erweiterung ist eine benannte offene Aufgabe am Crate.
+Die Übernahme einer neuen Geräte-UUID setzt eine Erweiterung in `haex-crdt` voraus, die im gelesenen Stand nicht vorhanden ist: der aktuelle Ablauf weist eine abweichende UUID ab. Die Uhr wird **vor** dem UUID-Abgleich aus dem letzten gespeicherten Zeitstempel geladen; die Erweiterung muss dennoch monotone erste Schreibvorgänge mit neuer Knoten-ID und Crash-Recovery nachweisen. Diese Erweiterung ist eine benannte offene Aufgabe am Crate.
 
-**Für den MVP folgt daraus nur eines**: sich die Tür nicht zubauen. Der MVP implementiert keinen der beiden Kopplungswege, schreibt aber auch keine Einschränkung auf einen einzelnen Rechner fest. Der gemergte Vertrag enthält an dieser Stelle noch die Formulierung, dass der geräteübergreifende Wechsel zurückgestellt sei; sie wird nachgezogen.
+Jede importierte Kopie wird als neues Replikat behandelt, auch auf demselben Rechner mit bekanntem Quell-UUID-Eintrag. Andernfalls würden Quelle und Kopie trotz neuer Endpunktschlüssel dieselbe CRDT-Knotenidentität verwenden. Nur das gewöhnliche Wiederöffnen der ursprünglichen verwalteten Datenbank behält ihre UUID.
+
+**Für den MVP folgt daraus nur eines**: sich die Tür nicht zubauen. Der MVP implementiert keinen der beiden Kopplungswege, schreibt aber auch keine Einschränkung auf einen einzelnen Rechner fest. Die Adopt-API blockiert ausschließlich den Kopierweg. Token-Join erzeugt eine neue Datenbank mit frischer UUID und benötigt diese API nicht; seine spätere Umsetzung folgt der separaten MVP-Scope-Entscheidung.
 
 ## Sync-Vertrag mit dem Ausbau von haex-crdt
 
@@ -234,7 +240,7 @@ Abnahme: Erstellen → schließen → entsperren erhält Daten und Identität. F
 
 Anbieter anlegen, Zugangsdaten hinterlegen, Erreichbarkeit prüfen. Modelllisten von allen aktiven Anbietern abfragen und cachen. Modell-Download mit Fortschritt und Import eigener GGUF. Auswahlfeld mit Verfügbarkeitszuständen.
 
-Abnahme: Ein hinterlegter Anbieterschlüssel führt zu einer abgefragten, nicht hartkodierten Modellliste. Ein heruntergeladenes Modell erscheint als verfügbar. Ungültige Zugangsdaten führen zu einer verständlichen Meldung, nicht zu einem leeren Auswahlfeld.
+Abnahme: Ein hinterlegter Anbieterschlüssel führt zu einer abgefragten, nicht hartkodierten Modellliste. Auch bei leerem Modellordner liefert der Katalog herunterladbare Modelle; ein heruntergeladenes Modell erscheint erst nach erfolgreicher Dateiprüfung als verfügbar. Ungültige Zugangsdaten führen zu einer verständlichen Meldung, nicht zu einem leeren Auswahlfeld. CLI-Adapter weisen Modellabfrage mit bestehender Anmeldung, reinen Chatbetrieb und sauberen Prozessabbruch nach. Anbieter-Zugangsdaten und lokale Dateipfade fehlen in CRDT-Metadaten sowie späteren Scan-/Apply-Payloads.
 
 ### 3. Nutzbarer Chat — etwa 3–5 Arbeitstage
 
@@ -278,7 +284,7 @@ Für jedes Gate vor Implementierung konkrete Testdateien gemäß der Tabelle anl
 
 Diese Überarbeitung verändert `plans/001-desktop-mvp.md`, `plans/README.md`, den Device-ID- und Import-Abschnitt in [`specs/001-frontend-onboarding/contracts/tauri-commands.md`](../specs/001-frontend-onboarding/contracts/tauri-commands.md) sowie zwei Stellen in [`docs/plans/2026-09-04-v1-scope-design.md`](../docs/plans/2026-09-04-v1-scope-design.md). Harness-Instruktionen bleiben unverändert.
 
-Ebenfalls bereinigt: `specs/001-frontend-onboarding/spec.md` (User Story 3 samt Akzeptanzszenarien, FR-011, neu FR-011a), `tasks.md` (T055 und dessen Test) und `quickstart.md`. Dort stand die „same-host"-Formulierung an acht weiteren Stellen. User Story 3 beschreibt jetzt einen Ablauf für beide Fälle — der Unterschied ist allein, ob die Geräte-UUID bereits bekannt ist — und die Abhängigkeitslücke steht als solche benannt statt als Scope-Grenze. Diese Spec-Artefakte sind die normative Quelle; dieser Plan dokumentiert die abgestimmte Änderung, ersetzt aber keine Spec-Anforderung.
+Ebenfalls bereinigt: `specs/001-frontend-onboarding/spec.md` (User Story 3 samt Akzeptanzszenarien, FR-011, neu FR-011a), `tasks.md` (T055 und dessen Test) und `quickstart.md`. Dort stand die „same-host"-Formulierung an acht weiteren Stellen. User Story 3 beschreibt jetzt denselben Adopt-/Rekey-Ablauf für beide Fälle: jede Kopie benötigt eine neue Geräte-UUID, auch bei bekanntem Quelleintrag. Die Abhängigkeitslücke steht als solche benannt statt als Scope-Grenze. Diese Spec-Artefakte sind die normative Quelle; dieser Plan dokumentiert die abgestimmte Änderung, ersetzt aber keine Spec-Anforderung.
 
 Spätere Umsetzung betrifft nach Spec-Review: `src/`, `src-tauri/`, `tests/`, `e2e/`, Build- und Paketkonfiguration, Toolchain/Lockfiles, passende CI und abgestimmte Änderungen unter `specs/`. Themenbranches und Conventional Commits wie im Repo; Integration über PR mit Rebase- oder Merge-Commit, kein Squash. Keine externe Crate-Änderung stillschweigend als Holzi-Aufgabe erledigen.
 
@@ -288,8 +294,8 @@ Vor neuen Codeartefakten gilt der deklarierte graphify-Authoring-Check aus [`.sp
 
 - Schlüsselhaltung ist als Produktziel entschieden: verschlüsselte SQLite, auch für Anbieterschlüssel. Vor entsprechender Implementierung die abweichende kanonische Keychain-Formulierung in einem separaten geprüften Amendment korrigieren.
 - Die bestehende Onboarding-Spec gilt erst als erfüllt, wenn ihre Anforderungen implementiert oder ausdrücklich per Review neu zugeschnitten wurden.
-- Die Übernahme einer neuen Geräte-UUID ist eine offene Aufgabe am Crate und Voraussetzung für den Kopierweg. Bis dahin keinen der beiden Kopplungswege implementieren, aber auch keine Einschränkung auf einen einzelnen Rechner festschreiben.
-- Sobald `haex-crdt` die Übernahme einer neuen Geräte-UUID liefert, ist FR-011a einzulösen: der Zweig, der heute mit `DeviceIdMismatch` scheitert, adoptiert dann eine frische UUID und läuft in denselben Restore-Pairing-Ablauf. Der Rekey-Pfad erzeugt bereits genau das nötige Schlüsselmaterial; die Implementierung darf sich nicht so verbauen, dass daraus eine Umstrukturierung wird.
+- Die Übernahme einer neuen Geräte-UUID ist eine offene Aufgabe am Crate und Voraussetzung für jeden Import als neues Replikat. Token-Join ist davon unabhängig; beide Kopplungswege bleiben gemäß diesem MVP-Vorschlag einer späteren Etappe zugeordnet.
+- Sobald eine geprüfte und gepinnte `haex-crdt`-Revision Adoption unterstützt, ist FR-011a einzulösen: jede importierte Kopie erhält eine frische UUID und frische Signier-/Endpunktschlüssel und läuft danach in den Restore-Pairing-Ablauf. Die Crate-Adoption und der Holzi-Rekey müssen einschließlich Index und Restore-Markern nach Unterbrechung sicher fortsetzbar sein; bloßer Endpunkt-Rekey ersetzt keine UUID-Adoption.
 - Ohne Prozess-Isolation beendet ein Modell, das den Speicher überschreitet, die Anwendung. Die Abnahme von Etappe 3 muss zeigen, was in diesem Fall passiert und ob offene Gespräche erhalten bleiben.
 - Überfordert das gewählte Modell die Zielhardware, wird das sichtbar gemeldet; kein automatisches Ausweichen auf einen Dienst.
 - Bei Mobile müssen Inferenz-Backend, Speicherbudget und Modellbezug neu bewertet werden. Das Pfadmodell ist darauf vorbereitet, die Leistungsfrage nicht.
