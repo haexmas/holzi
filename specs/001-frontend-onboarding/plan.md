@@ -3,10 +3,11 @@
 **Branch**: `001-frontend-onboarding` | **Date**: 2026-09-04 | **Spec**: [`spec.md`](./spec.md)
 **Input**: Feature specification from [`./spec.md`](./spec.md)
 
-**V1 contract note**: Genesis creates a fresh per-SQLite identity without a
-paper-seed confirmation step. Imported databases use offline attested adoption
-and rekey-on-restore, with token pairing only as the fallback in `spec.md`; `PaperSeedDisplay.vue` is not a
-v1 component.
+**V1 contract note**: Genesis creates a fresh vault identity without a
+paper-seed confirmation step. Imported databases open directly: the
+`DeviceIdProvider` inserts a `known_devices` row keyed by the local
+installation UUID with a fresh vault-device UUID on first open.
+`PaperSeedDisplay.vue` is not a v1 component.
 
 ## Summary
 

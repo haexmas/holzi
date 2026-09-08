@@ -2,8 +2,7 @@
 
 **Status**: Draft. All types are generated from Rust `#[derive(ts_rs::TS)]` structs and exported to `src/types/bindings/` via `cargo test` (per haex-vault's `generate:ts-types` script).
 
-**V1 contract note**: Backup restore uses the Öffnen flow with offline attested adoption and a
-restore-pairing handoff only as the token fallback; it is not a `Recover` mode or a second database.
+**V1 contract note**: Backup restore is a plain `open_instance` of a copied `.db`. No `Recover` mode, no second database, no restore-pairing handoff.
 
 Frontend imports via a `@bindings/*` path alias:
 
@@ -26,7 +25,6 @@ pub struct InstanceInfo {
     pub alias: String,             // Non-secret user-visible label; defaults to `name`
     pub last_access: String,       // ISO-8601, from the database mtime; open_instance refreshes it
     pub size_bytes: u64,           // File size at scan time
-    pub restore_pairing_required: bool, // True only for an adopted copy in the token fallback
 }
 ```
 
@@ -38,28 +36,7 @@ export type InstanceInfo = {
   alias: string
   lastAccess: string
   sizeBytes: number
-  restorePairingRequired: boolean
 }
-```
-
-### `CreateMode`
-
-```rust
-#[derive(Debug, Clone, serde::Deserialize, ts_rs::TS)]
-#[ts(export)]
-#[serde(tag = "type")]
-pub enum CreateMode {
-    Genesis,
-    Join { token: String },
-}
-```
-
-**TypeScript view**:
-
-```ts
-export type CreateMode =
-  | { type: 'Genesis' }
-  | { type: 'Join'; token: string }
 ```
 
 ### `ConflictPolicy`
@@ -74,13 +51,13 @@ pub enum ConflictPolicy {
 }
 ```
 
-### `CreateInstanceArgs`, `CreateInstanceResult`, `OpenInstanceArgs`, `PairRestoredInstanceArgs`, `ImportInstanceArgs`, `ImportInstanceResult`, `TrashInstanceArgs`
+### `CreateInstanceArgs`, `CreateInstanceResult`, `OpenInstanceArgs`, `ImportInstanceArgs`, `ImportInstanceResult`, `TrashInstanceArgs`
 
 See [`tauri-commands.md`](./tauri-commands.md). All derive `TS` with `#[serde(rename_all = "camelCase")]` for consistent camelCase field names on the wire.
 
 ### `HolziError`
 
-See [`tauri-commands.md`](./tauri-commands.md) → "Error type". Serialized as a tagged union with `kind` as the discriminator, matching Rust's `#[serde(tag = "kind")]`. The haex-crdt-mapped variants (`CrdtSqlite`, `CrdtIo`, `CrdtHlc`, `DeviceIdMismatch`, `CrdtSignatureVerificationFailed`, `CrdtUnexpectedSignatureUnderNoop`, `MigrationMissingFromSource`, `MigrationContentDrift`, `MigrationCompatibility`, `CrdtAlreadyInstalled`) plus the residual `CrdtInit` catch-all replace what earlier drafts flattened into a single opaque `CrdtInit { reason: String }`; see [`tauri-commands.md`](./tauri-commands.md) → "Error mapping" for the source-of-truth table.
+See [`tauri-commands.md`](./tauri-commands.md) → "Error type". Serialized as a tagged union with `kind` as the discriminator, matching Rust's `#[serde(tag = "kind")]`. The haex-crdt-mapped variants (`CrdtSqlite`, `CrdtIo`, `CrdtHlc`, `DeviceIdMismatch`, `CrdtSignatureVerificationFailed`, `CrdtUnexpectedSignatureUnderNoop`, `MigrationMissingFromSource`, `MigrationContentDrift`, `MigrationCompatibility`, `CrdtAlreadyInstalled`) plus the residual `CrdtInit` catch-all replace what earlier drafts flattened into a single opaque `CrdtInit { reason: String }`; see [`tauri-commands.md`](./tauri-commands.md) → "Error mapping" for the source-of-truth table. `DeviceIdMismatch` is not expected in normal operation — holzi's à-la-carte integration does not go through `reconcile_device_id`.
 
 ## Generation flow
 
