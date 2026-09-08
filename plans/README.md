@@ -6,7 +6,7 @@ Ablage im Repo: `plans/` — beratende Roadmap dieses Verzeichnisses; `specs/` �
 
 | Plan | Priorität | Aufwand | Status | Gate |
 | --- | --- | --- | --- | --- |
-| [001: Desktop-MVP](001-desktop-mvp.md) | P1 | L | Draft | Sync-Ausbau von haex-crdt einplanen (Schlüsselhaltung geklärt) |
+| [001: Desktop-MVP](./001-desktop-mvp.md) | P1 | L | Draft | Sync-Ausbau von haex-crdt einplanen (Schlüsselhaltung geklärt) |
 
 Legende: Priorität `P1` (höchste) – `P3` (nachrangig); Aufwand `S` (klein), `M` (mittel), `L` (groß).
 

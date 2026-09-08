@@ -21,11 +21,11 @@ Es existiert noch kein Anwendungscode, kein `package.json` und kein `Cargo.toml`
 
 | Befund | Bedeutung | Aufwand der Klärung | Änderungsrisiko | Beleg |
 | --- | --- | --- | --- | --- |
-| v1 umfasst wesentlich mehr als den ersten lokalen Chat mit Sync | MVP-Schnitt explizit festhalten, bevor die bestehende Taskliste abgearbeitet wird | S | mittel | `docs/plans/2026-09-04-v1-scope-design.md`, §§2, 11 |
-| Bestehende Dokumente beschreiben den damaligen Crate-Umfang ohne Sync-Transport | Den angekündigten Sync-Ausbau von `haex-crdt` integrieren; Holzis Transport- und Scanner-/Apply-Verantwortung vor Integration festhalten | S | mittel | Extraktionsplan, Einleitung; Betreiber-Klarstellung vom 2026-09-07 |
+| v1 umfasst wesentlich mehr als den ersten lokalen Chat mit Sync | MVP-Schnitt explizit festhalten, bevor die bestehende Taskliste abgearbeitet wird | S | mittel | [`docs/plans/2026-09-04-v1-scope-design.md`](../docs/plans/2026-09-04-v1-scope-design.md), §§2, 11 |
+| Bestehende Dokumente beschreiben den damaligen Crate-Umfang ohne Sync-Transport | Den angekündigten Sync-Ausbau von `haex-crdt` integrieren; Holzis Transport- und Scanner-/Apply-Verantwortung vor Integration festhalten | S | mittel | [`haex-crdt`-Extraktionsplan](../docs/plans/2026-09-04-haex-crdt-extraction-plan.md), Einleitung; Betreiber-Klarstellung vom 2026-09-07 |
 | Kanonische Keychain-Pflicht geht über die erklärte Absicht „keine Secrets in Git“ hinaus | Produktziel SQLite festhalten und Konstitution separat korrigieren | S | gering | Betreiber-Klarstellung; Abschnitt Schlüsselhaltung unten |
 | Restore als neue parallele Identität und Handover mit stillgelegter Quelle werden vermischt | Import nicht beiläufig in den MVP aufnehmen | M | hoch | v1-Scope §4 gegenüber §5; `haex-crdt/src/database/config.rs` am unten genannten Commit |
-| Laufzeit- und Testbasis fehlen | Ein kleiner realer Integrationsdurchlauf muss vor UI-Ausbau stehen | M | gering | `README.md:23`, `.github/workflows/ci.yml` |
+| Laufzeit- und Testbasis fehlen | Ein kleiner realer Integrationsdurchlauf muss vor UI-Ausbau stehen | M | gering | [`README.md`](../README.md#status), [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) |
 
 Die Befunde sind durch die gelesenen Dokumente/API belegt; Aufwand ist eine Planungsschätzung. Es werden keine Implementierungsfehler in noch nicht existierendem Code behauptet.
 
@@ -144,7 +144,7 @@ Primäre Netzwerkabnahme: zwei Geräte im selben LAN. Lokaler Chat funktioniert 
 
 ## Umsetzung in prüfbaren Etappen
 
-Vor Implementierung werden diese Etappen im vorhandenen Speckit-Ablauf spezifiziert und geprüft (`.specify/workflows/speckit/workflow.yml`). Dieser Beratungsentwurf ersetzt weder Spec-Review noch Plan-Review. Bestehende Spec 001 gezielt eingrenzen und korrigieren; keine parallele widersprüchliche Onboarding-Spec schreiben.
+Vor Implementierung werden diese Etappen im vorhandenen Speckit-Ablauf spezifiziert und geprüft ([`.specify/workflows/speckit/workflow.yml`](../.specify/workflows/speckit/workflow.yml)). Dieser Beratungsentwurf ersetzt weder Spec-Review noch Plan-Review. Bestehende [Spec 001](../specs/001-frontend-onboarding/) gezielt eingrenzen und korrigieren; keine parallele widersprüchliche Onboarding-Spec schreiben.
 
 ### 0. Entscheidungen und Integrationsbasis klären — etwa 1–3 Arbeitstage
 
@@ -158,7 +158,7 @@ Nachweis: Test mit zwei temporären SQLCipher-Dateien, verschiedenen Passwörter
 
 ### 1. App und Instanzlebenszyklus — etwa 2–4 Arbeitstage
 
-Scaffold nach `specs/001-frontend-onboarding/plan.md`: `src/` und `src-tauri/`, dazu Toolchain und Lockfiles. Landing, Anlegen, Liste selbst angelegter Instanzen, Unlock und Sperren. DB-Namen validiert der Backendpfad; keinerlei managed paths vom Frontend. Atomare Erstellung samt Pending-Marker und Crash-Cleanup. Schlüsselhaltung ausschließlich nach aufgelöstem Gate aus Etappe 0.
+Scaffold nach [`specs/001-frontend-onboarding/plan.md`](../specs/001-frontend-onboarding/plan.md): `src/` und `src-tauri/`, dazu Toolchain und Lockfiles. Landing, Anlegen, Liste selbst angelegter Instanzen, Unlock und Sperren. DB-Namen validiert der Backendpfad; keinerlei managed paths vom Frontend. Atomare Erstellung samt Pending-Marker und Crash-Cleanup. Schlüsselhaltung ausschließlich nach aufgelöstem Gate aus Etappe 0.
 
 Abnahme: Erstellen → schließen → entsperren erhält Daten/Identität. Falsches Passwort, Namenskollision, fehlende Rechte und Prozessabbruch führen nicht zu Datenverlust oder halbfertiger aktiver Instanz. Kein Netzwerk muss für diesen Ablauf verfügbar sein.
 
@@ -209,7 +209,7 @@ Für jedes Gate vor Implementierung konkrete Testdateien gemäß der Tabelle anl
 
 Dieser Entwurf verändert ausschließlich `plans/001-desktop-mvp.md` und `plans/README.md`. Bestehende Spezifikationen und Harness-Instruktionen bleiben als Referenzen erhalten.
 
-Spätere Umsetzung betrifft nach Spec-Review: `src/`, `src-tauri/`, `tests/`, `e2e/`, Build-/Paketkonfiguration, Toolchain/Lockfiles, passende CI und abgestimmte Änderungen unter `specs/001-frontend-onboarding/` bzw. weitere nummerierte Specs für Chat/Sync. Themenbranches und Conventional Commits wie im Repo; Integration über PR mit Rebase- oder Merge-Commit, kein Squash. Keine externe Crate-Änderung stillschweigend als Holzi-Aufgabe erledigen.
+Spätere Umsetzung betrifft nach Spec-Review: `src/`, `src-tauri/`, `tests/`, `e2e/`, Build-/Paketkonfiguration, Toolchain/Lockfiles, passende CI und abgestimmte Änderungen unter [`specs/001-frontend-onboarding/`](../specs/001-frontend-onboarding/) bzw. weitere nummerierte Specs für Chat/Sync. Themenbranches und Conventional Commits wie im Repo; Integration über PR mit Rebase- oder Merge-Commit, kein Squash. Keine externe Crate-Änderung stillschweigend als Holzi-Aufgabe erledigen.
 
 Vor Start Drift prüfen: `git diff --stat 73788177109ccd7dd1cd367997ee1caec05189d5..HEAD -- README.md docs specs .specify .haex-hive.json`. Neue Implementierung oder geänderte Schnittstellen erfordern Planabgleich. Vor neuen Codeartefakten gilt der bereits deklarierte graphify-Authoring-Check; dieser Dokumententwurf führt noch keine Codeartefakte ein.
 

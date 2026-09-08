@@ -12,6 +12,7 @@ A portable, isolated personal-agent app. Runs as a Tauri application on any devi
 
 The design corpus lives under [docs/](docs/) and the numbered specs under [specs/](specs/). Founding architecture first, then v1 scope revisions on top of it.
 
+- [plans/README.md](plans/README.md) — advisory roadmap for the first desktop MVP; the numbered specs remain normative.
 - [docs/design/founding.md](docs/design/founding.md) — founding architecture. Partially superseded by the v1 scope document below (see its front matter for the pointers).
 - [docs/plans/2026-09-04-v1-scope-design.md](docs/plans/2026-09-04-v1-scope-design.md) — draws the v1 line and revises identity/pairing, storage, and mobile. Normative for v1 where it differs from founding.
 - [docs/plans/2026-09-04-haex-crdt-extraction-plan.md](docs/plans/2026-09-04-haex-crdt-extraction-plan.md) — extraction of the SQLite + CRDT-sync layer into the standalone `haex-crdt` crate (shipped as v0.1.0; holzi consumes it as a Rust dependency).
