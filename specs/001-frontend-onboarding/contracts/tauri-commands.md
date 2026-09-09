@@ -82,8 +82,9 @@ the surface has stabilized against a working slice.
   3. Reuses the matching `vault_device_uuid` if present; otherwise mints a
      fresh one and inserts a complete consumer-owned `known_devices` row,
      including the local-only lookup value. It MUST NOT write CRDT bookkeeping
-     tables or `_no_trigger` metadata columns; the crate prepares that metadata
-     only after HLC initialization and trigger installation.
+     tables or the three `_no_sync`-suffixed metadata columns (`haex_hlc_no_sync`,
+     `haex_column_hlcs_no_sync`, `haex_column_sigs_no_sync`); the crate prepares
+     that metadata only after HLC initialization and trigger installation.
   4. On Genesis (empty `vault_identity`), generates the vault identity
      keypair and inserts the singleton `vault_identity` row in the same
      transaction. On any other open, verifies the row is present.
@@ -101,8 +102,9 @@ the surface has stabilized against a working slice.
   needs no migration over populated tables.
 
 - **`MigrationSource`** — enumerates the holzi-owned migrations below.
-  haex-crdt's own bookkeeping migrations (`_no_sync` tables and
-  `_no_trigger` metadata columns) are separate and shipped by the crate.
+  haex-crdt's own bookkeeping migrations (`_no_sync`-suffixed tables and the
+  three `_no_sync`-suffixed metadata columns the CRDT transformer adds to
+  every synced table) are separate and shipped by the crate.
 
 Holzi also passes **`trigger_version: i32`** in `DatabaseConfig`. This is
 haex-crdt's own trigger-schema version; holzi passes

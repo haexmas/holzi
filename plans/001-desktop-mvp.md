@@ -1,6 +1,6 @@
 # Holzi: erster MVP mit lokalem Chat und Anbietermodellen
 
-Stand: 2026-09-08 (überarbeitet). Ursprungsfassung 2026-09-07. Geplant gegen Holzi-Commit `acb64b9` und `haex-crdt` Commit `c41ef2e` (Cargo-Version 0.2.0, kein Tag).
+Stand: 2026-09-09 (überarbeitet). Ursprungsfassung 2026-09-07. Geplant gegen Holzi-Commit `bf4752b` und `haex-crdt` Commit `1c069ef` (Cargo-Version 0.4.0, kein Tag; siehe Contract-Pin).
 Status: **Entwurf zur Produkt- und Architekturabstimmung**, keine freigegebene Implementierungsspezifikation.
 Priorität P1 · Aufwand L · Integrationsrisiko mittel · Kategorie direction.
 
@@ -237,6 +237,8 @@ Zielsystem und Hardware aufnehmen. Einen realen Durchlauf gegen `haex-crdt` baue
 
 Den Produktions-Schreibpfad mit HLC-Injektion und Triggern prüfen; ein gewöhnliches SQL-Update darf keine fehlenden CRDT-Metadaten erzeugen.
 
+**Abgeschlossen am 2026-09-09** — Baseline-Zahlen und fünf Nachfolge-Punkte im Ergebnisdokument des Wegwerf-Crates unter `~/Projekte/holzi-etappe0/RESULTS.md`. Kernbefund: `haex-crdt` 0.4.0 trägt (213 ms Genesis-Open, 1.13 ms/CRDT-Write), `mistralrs` auf einer RTX A2000 8 GB liefert mit Qwen2.5-0.5B-Q4 163 tok/s (warm) bzw. 72 tok/s (kalt); CPU-Fallback 5.6 tok/s. Runtime-Wahl `mistral.rs` bleibt unverändert. Details, Assertions und die fünf Punkte in Abschnitt "Erkenntnisse aus Etappe 0" unten.
+
 ### 1. App und Instanzlebenszyklus — etwa 2–4 Arbeitstage
 
 Scaffold nach [`specs/001-frontend-onboarding/plan.md`](../specs/001-frontend-onboarding/plan.md): `src/` und `src-tauri/`, dazu Toolchain und Lockfiles. Landing, Anlegen, Liste selbst angelegter Instanzen, Unlock und Sperren. Die drei Provider-Traits und die Geräte-UUID-Verwaltung gemäß gemergtem Vertrag. Datenbanknamen validiert der Backendpfad; keinerlei verwaltete Pfade vom Frontend. Atomare Erstellung samt Pending-Marker und Crash-Aufräumen.
@@ -298,6 +300,24 @@ Ebenfalls bereinigt: `specs/001-frontend-onboarding/spec.md` (User Story 3, FR-0
 Spätere Umsetzung betrifft nach Spec-Review: `src/`, `src-tauri/`, `tests/`, `e2e/`, Build- und Paketkonfiguration, Toolchain/Lockfiles, passende CI und abgestimmte Änderungen unter `specs/`. Themenbranches und Conventional Commits wie im Repo; Integration über PR mit Rebase- oder Merge-Commit, kein Squash. Keine externe Crate-Änderung stillschweigend als Holzi-Aufgabe erledigen.
 
 Vor neuen Codeartefakten gilt der deklarierte graphify-Authoring-Check aus [`.spaex/constitution.md`](../.spaex/constitution.md); dieser Dokumententwurf führt noch keine Codeartefakte ein.
+
+## Erkenntnisse aus Etappe 0
+
+Etappe 0 lief am 2026-09-09 gegen `haex-crdt` bei `1c069ef` und `mistralrs` 0.8.1 auf einem Laptop mit RTX A2000 8 GB und CUDA-Toolkit 12.0. Der vollständige Zahlensatz, sieben Fallstricke und die Assertions liegen in `~/Projekte/holzi-etappe0/RESULTS.md`. Fünf konkrete Konsequenzen sind für Etappe 1 und später zu berücksichtigen:
+
+1. **`mistralrs`-Version festschreiben auf 0.8** (crates.io) oder auf einen konkreten Git-Commit pinnen. Die 0.6-Zeile, die während der Vertrags-Phase informell zirkulierte, existiert nicht auf crates.io. Die API zwischen 0.6-Erwartung und 0.8.1 hat sich sichtbar bewegt (`with_paged_attn` nimmt jetzt den fertigen `PagedAttentionConfig`, keine Closure); Beispielsyntax im Scaffold muss dagegen geschrieben werden.
+
+2. **CRDT-Write-Konvention explizit machen**. Jeder `INSERT`/`UPDATE` in eine CRDT-getrackte Tabelle muss `haex_hlc_no_sync = current_hlc()` in der SET-/VALUES-Klausel setzen — sonst bleibt der Row-Level-HLC NULL, der Trigger überspringt die Column-HLC-Map und markiert die Tabelle nicht dirty. Etappe 1 soll den Storage-Wrapper so bauen, dass ein Aufrufer diese Konvention nicht vergessen kann (typisiertes Insert/Update, das die HLC-Spalte automatisch einsetzt).
+
+3. **CUDA-Toolkit als Build-Requirement dokumentieren**. Der `cuda`-Feature-Build braucht `nvcc` ≥ 12.0 zur Build-Zeit; nur der Driver reicht nicht. Etappe 4 (Paket und Endabnahme) muss dies in der Dev-/CI-Setup-Anleitung nennen, sonst scheitert der erste Feature-Build mit nichtssagenden Linker-Meldungen.
+
+4. **Erst-Lade-UX für CUDA planen**. Der erste Modell-Load nach Installation dauert 30-45 s, davon 12 s reiner mistralrs-"Dummy-Run"; ab dem zweiten Load ~4 s. Ursache ist der CUDA-JIT-Cache unter `~/.nv/ComputeCache`. Etappe 3 (Chat) soll beim allerersten Ladevorgang einen dedizierten "GPU wird für dieses Modell optimiert (einmalig, ~30 s)"-Zustand zeigen — ein generischer "Modell wird geladen"-Placeholder reicht nicht, weil der Wartezustand nach der Installation wie ein Bug wirkt.
+
+5. **TTFT-Messung braucht Streaming-API**. Die im aktuellen mistralrs-Release stabile `Model::send_chat_request`-Methode gibt erst nach vollständiger Antwort zurück; TTFT ist damit nicht messbar. Wenn TTFT im Etappe-3-Testkatalog steht, muss die local-inference-Testschicht direkt gegen `Model::stream_chat_request` bauen.
+
+Zusätzlich landet als kleiner Doc-PR gegen `haex-crdt` die Korrektur des `_no_trigger`→`_no_sync`-Bugs im `DatabaseBootstrap`-Docstring; der wortgleiche Passus im Tauri-Contract wird in derselben Runde nachgezogen (in diesem PR bereits enthalten).
+
+**Nicht revidieren**: die Runtime-Wahl `mistral.rs`, das In-Process-Modell, den `_no_sync`-Mechanismus (Column-Level-Bypass funktioniert wie designed und deckt `installation_uuid_no_sync` sauber ab), die drei-Identitäten-Struktur. Bootstrap-Hook, Genesis-Rollback und Vault-Device-UUID-Stabilität über Reopen wurden im Wegwerf-Crate als harte Assertions bewiesen.
 
 ## Gates und Wartung
 
