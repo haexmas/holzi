@@ -1,0 +1,26 @@
+{
+  "landing": {
+    "welcome": "Willkommen bei Holzi",
+    "lastUsed": "Zuletzt verwendet"
+  },
+  "onboarding": {
+    "create": {
+      "title": "Instanz anlegen",
+      "name": "Name",
+      "passphrase": "Passphrase",
+      "passphraseConfirm": "Passphrase bestätigen",
+      "submit": "Anlegen"
+    },
+    "unlock": {
+      "title": "Instanz entsperren",
+      "passphrase": "Passphrase",
+      "submit": "Entsperren"
+    }
+  },
+  "errors": {
+    "openFailed": "Öffnen fehlgeschlagen",
+    "nameConflict": "Eine Instanz mit diesem Namen existiert bereits",
+    "invalidName": "Ungültiger Name",
+    "weakPassphrase": "Passphrase erfüllt nicht die Richtlinie"
+  }
+}

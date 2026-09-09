@@ -15,3 +15,26 @@ Thumbs.db
 # spaex advisory manifest lock
 .spaex.json.lock
 .spaex/install.lock
+
+# Node
+node_modules/
+
+# Nuxt
+.nuxt/
+.output/
+.data/
+# `dist` is a symlink Nuxt generates as a convenience for `nuxt generate` — no trailing slash so the symlink itself is ignored.
+dist
+
+# Tauri (Rust build output)
+src-tauri/target/
+src-tauri/gen/
+
+# Generated ts-rs bindings (regenerated from Rust; CI check runs `pnpm generate:ts-types`)
+# Keeping them tracked lets the frontend import without a Rust build; the CI check
+# fails if they drift from a fresh regeneration.
+
+# Env
+.env
+.env.*
+!.env.example
