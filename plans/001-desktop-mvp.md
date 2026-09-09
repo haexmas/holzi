@@ -105,7 +105,7 @@ Rust besitzt Dateien, Datenbank, Schlüsselzugriffe und Netzwerk. Die WebView be
 
 Zunächst nur stabile IDs und kurze, atomare Schreibvorgänge. `haex-crdt` bietet spaltenweises Last-Writer-Wins mit Hybrid Logical Clocks; das ist kein kollaborativer Texteditor.
 
-Alle zur Synchronisierung vorgesehenen Anwendungstabellen werden bereits im MVP über `install_crdt` installiert, obwohl noch nichts synchronisiert. Private und gerätelokale Tabellen bleiben gemäß dem Vertrag von `install_crdt` ausgeschlossen. Die `_no_trigger`-Metadatenspalten der synchronisierbaren Tabellen ersparen später eine Schemamigration über gefüllte Tabellen.
+Alle zur Synchronisierung vorgesehenen Anwendungstabellen werden bereits im MVP über `install_crdt` installiert, obwohl noch nichts synchronisiert. Private und gerätelokale Tabellen bleiben gemäß dem Vertrag von `install_crdt` ausgeschlossen. Die drei `_no_sync`-Metadatenspalten der synchronisierbaren Tabellen ersparen später eine Schemamigration über gefüllte Tabellen.
 
 | Tabelle | CRDT | Inhalt |
 | --- | --- | --- |
@@ -237,7 +237,7 @@ Zielsystem und Hardware aufnehmen. Einen realen Durchlauf gegen `haex-crdt` baue
 
 Den Produktions-Schreibpfad mit HLC-Injektion und Triggern prüfen; ein gewöhnliches SQL-Update darf keine fehlenden CRDT-Metadaten erzeugen.
 
-**Abgeschlossen am 2026-09-09** — Baseline-Zahlen und fünf Nachfolge-Punkte im Ergebnisdokument des Wegwerf-Crates unter `~/Projekte/holzi-etappe0/RESULTS.md`. Kernbefund: `haex-crdt` 0.4.0 trägt (213 ms Genesis-Open, 1.13 ms/CRDT-Write), `mistralrs` auf einer RTX A2000 8 GB liefert mit Qwen2.5-0.5B-Q4 163 tok/s (warm) bzw. 72 tok/s (kalt); CPU-Fallback 5.6 tok/s. Runtime-Wahl `mistral.rs` bleibt unverändert. Details, Assertions und die fünf Punkte in Abschnitt "Erkenntnisse aus Etappe 0" unten.
+**Abgeschlossen am 2026-09-09** — Baseline-Zahlen und fünf Nachfolge-Punkte im lokalen, nicht versionierten Ergebnisdokument des Wegwerf-Crates. Kernbefund: `haex-crdt` 0.4.0 trägt (213 ms Genesis-Open, 1.13 ms/CRDT-Write), `mistralrs` auf einer RTX A2000 8 GB liefert mit Qwen2.5-0.5B-Q4 163 tok/s (warm) bzw. 72 tok/s (kalt); CPU-Fallback 5.6 tok/s. Runtime-Wahl `mistral.rs` bleibt unverändert. Details, Assertions und die fünf Punkte in Abschnitt "Erkenntnisse aus Etappe 0" unten.
 
 ### 1. App und Instanzlebenszyklus — etwa 2–4 Arbeitstage
 
@@ -303,7 +303,7 @@ Vor neuen Codeartefakten gilt der deklarierte graphify-Authoring-Check aus [`.sp
 
 ## Erkenntnisse aus Etappe 0
 
-Etappe 0 lief am 2026-09-09 gegen `haex-crdt` bei `1c069ef` und `mistralrs` 0.8.1 auf einem Laptop mit RTX A2000 8 GB und CUDA-Toolkit 12.0. Der vollständige Zahlensatz, sieben Fallstricke und die Assertions liegen in `~/Projekte/holzi-etappe0/RESULTS.md`. Fünf konkrete Konsequenzen sind für Etappe 1 und später zu berücksichtigen:
+Etappe 0 lief am 2026-09-09 gegen `haex-crdt` bei `1c069ef` und `mistralrs` 0.8.1 auf einem Laptop mit RTX A2000 8 GB und CUDA-Toolkit 12.0. Der vollständige Zahlensatz, sieben Fallstricke und die Assertions liegen im lokalen, nicht versionierten Ergebnisdokument des Wegwerf-Crates. Fünf konkrete Konsequenzen sind für Etappe 1 und später zu berücksichtigen:
 
 1. **`mistralrs`-Version festschreiben auf 0.8** (crates.io) oder auf einen konkreten Git-Commit pinnen. Die 0.6-Zeile, die während der Vertrags-Phase informell zirkulierte, existiert nicht auf crates.io. Die API zwischen 0.6-Erwartung und 0.8.1 hat sich sichtbar bewegt (`with_paged_attn` nimmt jetzt den fertigen `PagedAttentionConfig`, keine Closure); Beispielsyntax im Scaffold muss dagegen geschrieben werden.
 
@@ -331,4 +331,4 @@ Zusätzlich landet als kleiner Doc-PR gegen `haex-crdt` die Korrektur des `_no_t
 - Bei Mobile müssen Inferenz-Backend, Speicherbudget und Modellbezug neu bewertet werden. Das Pfadmodell ist darauf vorbereitet, die Leistungsfrage nicht.
 - Bei späterem Löschen von Gesprächen braucht es Tombstones, Retention und Resync nach zu langer Offlinezeit.
 
-Die erste Entwicklungsaufgabe nach der Spezifikationsabstimmung ist der reale SQLCipher/CRDT- und Inferenz-Durchlauf aus Etappe 0. Er reduziert die beiden größten technischen Unbekannten, bevor eine größere Oberfläche entsteht.
+Die erste Entwicklungsaufgabe nach der Spezifikationsabstimmung ist die Implementierung von Etappe 1 auf Grundlage der abgeschlossenen Integrationsbasis und ihrer fünf Folgepunkte. Sie baut den Instanzlebenszyklus, bevor eine größere Oberfläche entsteht.
