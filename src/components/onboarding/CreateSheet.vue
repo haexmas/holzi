@@ -87,20 +87,18 @@ async function onSubmit() {
           <ShadcnLabel for="create-passphrase">
             {{ t('onboarding.create.passphrase') }}
           </ShadcnLabel>
-          <ShadcnInput
+          <UiInputPassword
             id="create-passphrase"
             v-model="passphrase"
-            type="password"
           />
         </div>
         <div class="space-y-1.5">
           <ShadcnLabel for="create-passphrase-confirm">
             {{ t('onboarding.create.passphraseConfirm') }}
           </ShadcnLabel>
-          <ShadcnInput
+          <UiInputPassword
             id="create-passphrase-confirm"
             v-model="passphraseConfirm"
-            type="password"
           />
         </div>
         <p v-if="error" class="text-sm text-destructive" role="alert">

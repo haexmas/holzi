@@ -74,10 +74,9 @@ async function onSubmit() {
           <ShadcnLabel for="unlock-passphrase">
             {{ t('onboarding.unlock.passphrase') }}
           </ShadcnLabel>
-          <ShadcnInput
+          <UiInputPassword
             id="unlock-passphrase"
             v-model="passphrase"
-            type="password"
             autofocus
           />
         </div>
