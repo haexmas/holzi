@@ -58,36 +58,38 @@ async function onSubmit() {
 </script>
 
 <template>
-  <UiSheet
-    :open="props.open"
-    :title="t('onboarding.unlock.title')"
-    @update:open="$emit('update:open', $event)"
-  >
-    <form class="space-y-4" @submit.prevent="onSubmit">
-      <p v-if="props.name" class="text-sm text-muted-foreground">
-        {{ props.name }}
-      </p>
-      <div>
-        <UiLabel for="unlock-passphrase">
-          {{ t('onboarding.unlock.passphrase') }}
-        </UiLabel>
-        <UiInput
-          id="unlock-passphrase"
-          v-model="passphrase"
-          type="password"
-          autofocus
-        />
-      </div>
-      <p v-if="error" class="text-sm text-red-500" role="alert">
-        {{ error }}
-      </p>
-      <UiButton
-        type="submit"
-        :disabled="!canSubmit"
-        class="w-full"
-      >
-        {{ submitting ? '…' : t('onboarding.unlock.submit') }}
-      </UiButton>
-    </form>
-  </UiSheet>
+  <ShadcnDialog :open="props.open" @update:open="$emit('update:open', $event)">
+    <ShadcnDialogContent>
+      <ShadcnDialogHeader>
+        <ShadcnDialogTitle>{{ t('onboarding.unlock.title') }}</ShadcnDialogTitle>
+        <ShadcnDialogDescription v-if="props.name">
+          {{ props.name }}
+        </ShadcnDialogDescription>
+      </ShadcnDialogHeader>
+      <form class="space-y-4" @submit.prevent="onSubmit">
+        <div class="space-y-1.5">
+          <ShadcnLabel for="unlock-passphrase">
+            {{ t('onboarding.unlock.passphrase') }}
+          </ShadcnLabel>
+          <ShadcnInput
+            id="unlock-passphrase"
+            v-model="passphrase"
+            type="password"
+            autofocus
+          />
+        </div>
+        <p v-if="error" class="text-sm text-destructive" role="alert">
+          {{ error }}
+        </p>
+        <UiButton
+          type="submit"
+          :disabled="!canSubmit"
+          :loading="submitting"
+          class="w-full"
+        >
+          {{ t('onboarding.unlock.submit') }}
+        </UiButton>
+      </form>
+    </ShadcnDialogContent>
+  </ShadcnDialog>
 </template>

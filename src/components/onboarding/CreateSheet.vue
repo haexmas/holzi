@@ -62,48 +62,54 @@ async function onSubmit() {
 </script>
 
 <template>
-  <UiSheet :open="props.open" :title="t('onboarding.create.title')" @update:open="$emit('update:open', $event)">
-    <form class="space-y-4" @submit.prevent="onSubmit">
-      <div>
-        <UiLabel for="create-name">
-          {{ t('onboarding.create.name') }}
-        </UiLabel>
-        <UiInput
-          id="create-name"
-          v-model="name"
-          autofocus
-        />
-      </div>
-      <div>
-        <UiLabel for="create-passphrase">
-          {{ t('onboarding.create.passphrase') }}
-        </UiLabel>
-        <UiInput
-          id="create-passphrase"
-          v-model="passphrase"
-          type="password"
-        />
-      </div>
-      <div>
-        <UiLabel for="create-passphrase-confirm">
-          {{ t('onboarding.create.passphraseConfirm') }}
-        </UiLabel>
-        <UiInput
-          id="create-passphrase-confirm"
-          v-model="passphraseConfirm"
-          type="password"
-        />
-      </div>
-      <p v-if="error" class="text-sm text-red-500" role="alert">
-        {{ error }}
-      </p>
-      <UiButton
-        type="submit"
-        :disabled="!canSubmit"
-        class="w-full"
-      >
-        {{ submitting ? '…' : t('onboarding.create.submit') }}
-      </UiButton>
-    </form>
-  </UiSheet>
+  <ShadcnDialog :open="props.open" @update:open="$emit('update:open', $event)">
+    <ShadcnDialogContent>
+      <ShadcnDialogHeader>
+        <ShadcnDialogTitle>{{ t('onboarding.create.title') }}</ShadcnDialogTitle>
+      </ShadcnDialogHeader>
+      <form class="space-y-4" @submit.prevent="onSubmit">
+        <div class="space-y-1.5">
+          <ShadcnLabel for="create-name">
+            {{ t('onboarding.create.name') }}
+          </ShadcnLabel>
+          <ShadcnInput
+            id="create-name"
+            v-model="name"
+            autofocus
+          />
+        </div>
+        <div class="space-y-1.5">
+          <ShadcnLabel for="create-passphrase">
+            {{ t('onboarding.create.passphrase') }}
+          </ShadcnLabel>
+          <ShadcnInput
+            id="create-passphrase"
+            v-model="passphrase"
+            type="password"
+          />
+        </div>
+        <div class="space-y-1.5">
+          <ShadcnLabel for="create-passphrase-confirm">
+            {{ t('onboarding.create.passphraseConfirm') }}
+          </ShadcnLabel>
+          <ShadcnInput
+            id="create-passphrase-confirm"
+            v-model="passphraseConfirm"
+            type="password"
+          />
+        </div>
+        <p v-if="error" class="text-sm text-destructive" role="alert">
+          {{ error }}
+        </p>
+        <UiButton
+          type="submit"
+          :disabled="!canSubmit"
+          :loading="submitting"
+          class="w-full"
+        >
+          {{ t('onboarding.create.submit') }}
+        </UiButton>
+      </form>
+    </ShadcnDialogContent>
+  </ShadcnDialog>
 </template>
