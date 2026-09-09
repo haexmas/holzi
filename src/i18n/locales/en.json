@@ -15,6 +15,9 @@
       "title": "Unlock instance",
       "passphrase": "Passphrase",
       "submit": "Unlock"
+    },
+    "lock": {
+      "submit": "Lock"
     }
   },
   "errors": {

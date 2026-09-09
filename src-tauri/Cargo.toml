@@ -24,6 +24,7 @@ thiserror = "2"
 log = "0.4"
 uuid = { version = "1", features = ["v4", "serde"] }
 ts-rs = { version = "10", features = ["serde-compat", "uuid-impl"] }
+filetime = "0.2"
 
 # haex-crdt 0.4.0 pinned per plans/001-desktop-mvp.md.
 # `raw-connection` gives holzi's storage wrapper direct rusqlite access for

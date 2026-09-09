@@ -1,0 +1,78 @@
+//! Path resolution + name validation for managed instance files.
+//!
+//! Contract: `tauri-commands.md`. All paths anchor at
+//! `<AppLocalData>/instances/`; the backend owns path construction, the
+//! frontend never sends a managed path (FR-025).
+
+use std::path::{Path, PathBuf};
+
+use tauri::{path::BaseDirectory, AppHandle, Manager};
+
+use crate::error::{HolziError, Result};
+
+pub const INSTANCES_DIRECTORY: &str = "instances";
+pub const INSTANCE_EXTENSION: &str = "db";
+pub const PENDING_MARKER_EXTENSION: &str = "db.pending";
+pub const TRASH_DIRECTORY: &str = ".trash";
+
+/// Instance-name regex per contract: alphanumeric + `_`/`-`, first char
+/// must be alphanumeric, 1..=64 chars.
+fn is_valid_name(name: &str) -> bool {
+    let bytes = name.as_bytes();
+    if bytes.is_empty() || bytes.len() > 64 {
+        return false;
+    }
+    let is_alnum = |b: u8| b.is_ascii_alphanumeric();
+    let is_valid_body = |b: u8| b.is_ascii_alphanumeric() || b == b'_' || b == b'-';
+    is_alnum(bytes[0]) && bytes.iter().all(|&b| is_valid_body(b))
+}
+
+/// Validates an instance name per contract regex. Errors with
+/// `InvalidName` if the name is empty, too long, or contains disallowed
+/// characters.
+pub fn validate_instance_name(name: &str) -> Result<()> {
+    if is_valid_name(name) {
+        Ok(())
+    } else {
+        Err(HolziError::InvalidName {
+            reason: "must match ^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$".to_string(),
+        })
+    }
+}
+
+/// Resolves `<AppLocalData>/instances/`. Creates the directory if
+/// missing.
+pub fn get_instances_directory(app: &AppHandle) -> Result<PathBuf> {
+    let dir = app
+        .path()
+        .resolve(INSTANCES_DIRECTORY, BaseDirectory::AppLocalData)
+        .map_err(|e| HolziError::PathResolution {
+            reason: format!("resolve instances dir: {e}"),
+        })?;
+    std::fs::create_dir_all(&dir).map_err(HolziError::from)?;
+    Ok(dir)
+}
+
+/// Resolves `<AppLocalData>/instances/<name>.db`. Validates `name` first.
+pub fn get_instance_path(app: &AppHandle, name: &str) -> Result<PathBuf> {
+    validate_instance_name(name)?;
+    let dir = get_instances_directory(app)?;
+    Ok(dir.join(format!("{name}.{INSTANCE_EXTENSION}")))
+}
+
+/// Sibling `<name>.db.pending` marker path.
+pub fn get_pending_marker_path(instance_path: &Path) -> PathBuf {
+    let mut p = instance_path.to_path_buf();
+    p.set_extension(PENDING_MARKER_EXTENSION);
+    p
+}
+
+/// Resolves `<AppLocalData>/` — where the installation-id file lives.
+pub fn get_app_local_data(app: &AppHandle) -> Result<PathBuf> {
+    app.path()
+        .app_local_data_dir()
+        .map_err(|e| HolziError::PathResolution {
+            reason: format!("resolve app_local_data_dir: {e}"),
+        })
+}
+

@@ -15,6 +15,9 @@
       "title": "Instanz entsperren",
       "passphrase": "Passphrase",
       "submit": "Entsperren"
+    },
+    "lock": {
+      "submit": "Sperren"
     }
   },
   "errors": {

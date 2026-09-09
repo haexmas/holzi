@@ -1,25 +1,63 @@
 import { defineStore } from 'pinia'
+import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import type { InstanceInfo } from '@bindings/InstanceInfo'
 
-export interface InstanceInfo {
-  name: string
-  alias: string | null
-  lastAccess: number
+const INSTANCE_LIST_CHANGED = 'instance-list-changed'
+
+interface InstanceListChangedPayload {
+  reason: string
+  affectedName: string | null
 }
 
-/** Stores the known instances and the instance active in this process. */
 export const useInstancesStore = defineStore('instances', () => {
+  const { listAsync } = useInstance()
+
   const instances = ref<InstanceInfo[]>([])
   const activeInstance = ref<string | null>(null)
+  const lastError = ref<string | null>(null)
 
-  /** Returns known instances until the backend synchronization slice is connected. */
+  let unlisten: UnlistenFn | null = null
+
   async function syncAsync() {
-    // Wired up in a later slice — calls invoke('list_instances').
+    try {
+      instances.value = await listAsync()
+      lastError.value = null
+    }
+    catch (e) {
+      lastError.value = e instanceof Error ? e.message : String(e)
+    }
     return instances.value
+  }
+
+  async function startListening() {
+    if (unlisten)
+      return
+    unlisten = await listen<InstanceListChangedPayload>(
+      INSTANCE_LIST_CHANGED,
+      () => {
+        void syncAsync()
+      },
+    )
+  }
+
+  function stopListening() {
+    if (unlisten) {
+      unlisten()
+      unlisten = null
+    }
+  }
+
+  function setActiveInstance(name: string | null) {
+    activeInstance.value = name
   }
 
   return {
     instances,
     activeInstance,
+    lastError,
     syncAsync,
+    startListening,
+    stopListening,
+    setActiveInstance,
   }
 })
