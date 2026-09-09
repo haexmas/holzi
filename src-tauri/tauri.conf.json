@@ -5,7 +5,7 @@
   "identifier": "com.haex.holzi",
   "build": {
     "frontendDist": "../.output/public",
-    "devUrl": "http://localhost:3000",
+    "devUrl": "http://localhost:3030",
     "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": "pnpm generate"
   },
@@ -32,12 +32,12 @@
         "frame-ancestors": "'none'"
       },
       "devCsp": {
-        "default-src": "'self' http://localhost:3000",
-        "connect-src": "ipc: http://ipc.localhost http://localhost:3000 ws://localhost:3000",
-        "font-src": "'self' data: http://localhost:3000",
-        "img-src": "'self' asset: http://asset.localhost blob: data: http://localhost:3000",
-        "script-src": "'self' 'unsafe-eval' http://localhost:3000",
-        "style-src": "'self' 'unsafe-inline' http://localhost:3000",
+        "default-src": "'self' http://localhost:3030",
+        "connect-src": "ipc: http://ipc.localhost http://localhost:3030 ws://localhost:3030",
+        "font-src": "'self' data: http://localhost:3030",
+        "img-src": "'self' asset: http://asset.localhost blob: data: http://localhost:3030",
+        "script-src": "'self' 'unsafe-eval' http://localhost:3030",
+        "style-src": "'self' 'unsafe-inline' http://localhost:3030",
         "object-src": "'none'",
         "base-uri": "'self'",
         "frame-ancestors": "'none'"

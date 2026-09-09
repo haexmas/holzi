@@ -6,6 +6,13 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   ssr: false,
   srcDir: 'src/',
+  // Nuxt/Nitro liest den Dev-Port aus `devServer`, NICHT aus `vite.server.port`
+  // (letzteres greift nur beim Vite-Preview nach `nuxt build`). Muss mit
+  // tauri.conf.json → build.devUrl und security.devCsp synchron bleiben.
+  devServer: {
+    host: 'localhost',
+    port: 3030,
+  },
   alias: {
     '@bindings': './src/types/bindings',
   },

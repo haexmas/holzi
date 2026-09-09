@@ -31,7 +31,7 @@ attestation, no restore-pairing handshake.
    pnpm dev
    ```
 
-   Open the dev URL (default `http://localhost:3000`) — you should see the landing shell, three CTA buttons (disabled or empty labels until i18n keys are filled), and the version footer.
+   Open the dev URL (`http://localhost:3030`, pinned in `nuxt.config.ts` and `src-tauri/tauri.conf.json`) — you should see the landing shell, three CTA buttons (disabled or empty labels until i18n keys are filled), and the version footer.
 
 3. **Run the Tauri app**.
 
