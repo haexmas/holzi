@@ -121,9 +121,7 @@ impl From<CrdtError> for HolziError {
             CrdtError::MigrationCompatibility { reason } => {
                 HolziError::MigrationCompatibility { reason }
             }
-            CrdtError::CrdtAlreadyInstalled { table } => {
-                HolziError::CrdtAlreadyInstalled { table }
-            }
+            CrdtError::CrdtAlreadyInstalled { table } => HolziError::CrdtAlreadyInstalled { table },
             // RemoteHlcDriftTooLarge is not part of the MVP mapping — sync
             // is deferred. Catch-all Message covers it until sync lands.
             other => HolziError::CrdtInit {

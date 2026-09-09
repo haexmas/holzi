@@ -8,7 +8,8 @@
 //! not a spike.
 
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Barrier};
+use std::thread;
 
 use haex_crdt::crdt::columns::HLC_TIMESTAMP_COLUMN;
 use haex_crdt::rusqlite::params;
@@ -125,11 +126,14 @@ fn known_devices_row_syncs_via_row_pks() {
     // Bootstrap-inserted row is sync-invisible until an UPDATE fires the
     // trigger (HLC not initialised inside the bootstrap transaction — see
     // contract §"Vault identity and device model" and Etappe-0 finding).
-    let installation_uuid = holzi_lib::identity::read_or_mint_installation_uuid(&installation_id_file)
-        .expect("read installation id");
+    let installation_uuid =
+        holzi_lib::identity::read_or_mint_installation_uuid(&installation_id_file)
+            .expect("read installation id");
 
-    db.with_connection(|c| known_devices::update_alias(c, installation_uuid, "renamed").map_err(Into::into))
-        .expect("alias update");
+    db.with_connection(|c| {
+        known_devices::update_alias(c, installation_uuid, "renamed").map_err(Into::into)
+    })
+    .expect("alias update");
 
     let changes = db
         .scan_table_for_local_changes("known_devices", None, ScanFilters::default())
@@ -171,5 +175,40 @@ fn known_devices_row_syncs_via_row_pks() {
     assert!(
         hlc_after.is_some(),
         "row-level HLC must be populated after a CRDT-injecting UPDATE"
+    );
+}
+
+#[test]
+fn concurrent_installation_uuid_mint_uses_first_writer() {
+    let tmp = tempfile::tempdir().expect("tmp dir");
+    let installation_id_file = installation_id_path(tmp.path());
+    let start = Arc::new(Barrier::new(16));
+
+    let handles: Vec<_> = (0..16)
+        .map(|_| {
+            let start = Arc::clone(&start);
+            let path = installation_id_file.clone();
+            thread::spawn(move || {
+                start.wait();
+                holzi_lib::identity::read_or_mint_installation_uuid(&path)
+            })
+        })
+        .collect();
+
+    let uuids: Vec<_> = handles
+        .into_iter()
+        .map(|handle| {
+            handle
+                .join()
+                .expect("mint thread")
+                .expect("installation id")
+        })
+        .collect();
+
+    assert!(uuids.iter().all(|uuid| *uuid == uuids[0]));
+    assert_eq!(
+        holzi_lib::identity::read_or_mint_installation_uuid(&installation_id_file)
+            .expect("persisted installation id"),
+        uuids[0]
     );
 }

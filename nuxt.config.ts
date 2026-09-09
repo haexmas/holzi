@@ -6,6 +6,9 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   ssr: false,
   srcDir: 'src/',
+  alias: {
+    '@bindings': './src/types/bindings',
+  },
   modules: [
     '@nuxtjs/i18n',
     '@nuxt/icon',

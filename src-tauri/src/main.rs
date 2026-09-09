@@ -3,5 +3,5 @@
 
 /// Starts the desktop application through the shared library entry point.
 fn main() {
-  holzi_lib::run();
+    holzi_lib::run();
 }

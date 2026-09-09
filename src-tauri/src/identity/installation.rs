@@ -42,14 +42,45 @@ fn mint_and_fsync(path: &Path) -> std::io::Result<Uuid> {
         fs::create_dir_all(parent)?;
     }
     let fresh = Uuid::new_v4();
+    let tmp = path.with_file_name(format!(
+        "{}.{}.tmp",
+        INSTALLATION_ID_FILENAME,
+        Uuid::new_v4()
+    ));
 
     let mut opts = OpenOptions::new();
     opts.create_new(true).write(true);
     #[cfg(unix)]
     opts.mode(0o600);
 
-    let mut f = opts.open(path)?;
-    f.write_all(fresh.to_string().as_bytes())?;
-    f.sync_all()?;
-    Ok(fresh)
+    let mut f = opts.open(&tmp)?;
+    if let Err(error) = f.write_all(fresh.to_string().as_bytes()) {
+        drop(f);
+        let _ = fs::remove_file(&tmp);
+        return Err(error);
+    }
+    if let Err(error) = f.sync_all() {
+        drop(f);
+        let _ = fs::remove_file(&tmp);
+        return Err(error);
+    }
+    drop(f);
+
+    match fs::hard_link(&tmp, path) {
+        Ok(()) => {
+            let _ = fs::remove_file(&tmp);
+            Ok(fresh)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            let _ = fs::remove_file(&tmp);
+            let existing = fs::read_to_string(path)?;
+            Uuid::parse_str(existing.trim()).map_err(|parse_error| {
+                std::io::Error::new(std::io::ErrorKind::InvalidData, parse_error)
+            })
+        }
+        Err(error) => {
+            let _ = fs::remove_file(&tmp);
+            Err(error)
+        }
+    }
 }
