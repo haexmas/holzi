@@ -245,6 +245,8 @@ Scaffold nach [`specs/001-frontend-onboarding/plan.md`](../specs/001-frontend-on
 
 Abnahme: Erstellen → schließen → entsperren erhält Daten und Identität. Falsches Passwort, Namenskollision, fehlende Rechte und Prozessabbruch führen nicht zu Datenverlust oder halbfertiger aktiver Instanz. Kein Netzwerk muss für diesen Ablauf verfügbar sein.
 
+**Abgeschlossen am 2026-09-09** — Scaffold + Provider-Traits (PR #22 Sub-Slice a+b), Command-Choreo + Onboarding-UI (PR #22 Sub-Slice c+d), @haex/ui-Nuxt-Layer-Integration mit responsivem `UiDrawerModal` + `UiInputPassword` (PR #23). Etappe-1-Abnahme via 14 cargo tests grün und manuellem `pnpm tauri dev`: Anlegen → Sperren → Entsperren erhält Daten und Identität. Modul-Baum jetzt vorhanden unter `src-tauri/src/{identity,instances,storage,state,error}` und `src/{pages,components/onboarding,composables,stores}`. Begleitende Upstream-PRs im geteilten UI-Layer: haex-space/haextension#54 (deps→peerDeps) und #55 (UiInputPassword slot-fix).
+
 ### 2. Anbieter und Modellkatalog — etwa 2–3 Arbeitstage
 
 Anbieter anlegen, Zugangsdaten hinterlegen, Erreichbarkeit prüfen. Modelllisten von allen aktiven Anbietern abfragen und cachen. Modell-Download mit Fortschritt und Import eigener GGUF. Auswahlfeld mit Verfügbarkeitszuständen.
