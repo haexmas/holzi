@@ -11,7 +11,7 @@ export default defineNuxtConfig({
   // changes never surprise our build. Layer declares its peers; we
   // list them explicitly under `dependencies` below.
   extends: [
-    'github:haex-space/haextension/packages/haex-ui#50a0177',
+    'github:haex-space/haextension/packages/haex-ui#634d621',
   ],
   build: {
     transpile: ['reka-ui'],
