@@ -14,7 +14,7 @@ export default defineNuxtConfig({
     port: 3030,
   },
   alias: {
-    '@bindings': './src/types/bindings',
+    '@bindings': '../src/types/bindings',
   },
   modules: [
     '@nuxtjs/i18n',

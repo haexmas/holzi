@@ -13,7 +13,7 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "generate:ts-types": "cd src-tauri && cargo test export_bindings -- --nocapture"
+    "generate:ts-types": "cd src-tauri && cargo test export_bindings -- --nocapture && cd .. && sed -i -E 's/[[:space:]]+$//' src/types/bindings/*.ts"
   },
   "dependencies": {
     "@nuxt/icon": "2.5.1",
