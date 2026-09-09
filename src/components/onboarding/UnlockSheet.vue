@@ -58,15 +58,18 @@ async function onSubmit() {
 </script>
 
 <template>
-  <ShadcnDialog :open="props.open" @update:open="$emit('update:open', $event)">
-    <ShadcnDialogContent>
-      <ShadcnDialogHeader>
-        <ShadcnDialogTitle>{{ t('onboarding.unlock.title') }}</ShadcnDialogTitle>
-        <ShadcnDialogDescription v-if="props.name">
-          {{ props.name }}
-        </ShadcnDialogDescription>
-      </ShadcnDialogHeader>
-      <form class="space-y-4" @submit.prevent="onSubmit">
+  <UiDrawerModal
+    :open="props.open"
+    :title="t('onboarding.unlock.title')"
+    :description="props.name ?? undefined"
+    @update:open="$emit('update:open', $event)"
+  >
+    <template #content>
+      <form
+        id="unlock-form"
+        class="space-y-4 px-6 py-2"
+        @submit.prevent="onSubmit"
+      >
         <div class="space-y-1.5">
           <ShadcnLabel for="unlock-passphrase">
             {{ t('onboarding.unlock.passphrase') }}
@@ -81,15 +84,18 @@ async function onSubmit() {
         <p v-if="error" class="text-sm text-destructive" role="alert">
           {{ error }}
         </p>
-        <UiButton
-          type="submit"
-          :disabled="!canSubmit"
-          :loading="submitting"
-          class="w-full"
-        >
-          {{ t('onboarding.unlock.submit') }}
-        </UiButton>
       </form>
-    </ShadcnDialogContent>
-  </ShadcnDialog>
+    </template>
+    <template #footer>
+      <UiButton
+        form="unlock-form"
+        type="submit"
+        :disabled="!canSubmit"
+        :loading="submitting"
+        class="w-full"
+      >
+        {{ t('onboarding.unlock.submit') }}
+      </UiButton>
+    </template>
+  </UiDrawerModal>
 </template>

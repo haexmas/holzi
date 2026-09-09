@@ -1,4 +1,12 @@
 @import "tailwindcss";
+
+/* Tailwind v4 content scan: include the @haex/ui layer that Nuxt/giget
+   downloads to node_modules/.c12/. Without this, all `data-[state=open]:...`,
+   `fixed inset-0`, and other utility classes used inside the layer's Vue
+   files would be stripped from the final CSS and dialogs/drawers would
+   render as plain inline content. */
+@source "../../../node_modules/.c12/**/*.vue";
+
 @import "tw-animate-css";
 
 @custom-variant dark (&:where(.dark, .dark *));

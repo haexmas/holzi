@@ -62,12 +62,17 @@ async function onSubmit() {
 </script>
 
 <template>
-  <ShadcnDialog :open="props.open" @update:open="$emit('update:open', $event)">
-    <ShadcnDialogContent>
-      <ShadcnDialogHeader>
-        <ShadcnDialogTitle>{{ t('onboarding.create.title') }}</ShadcnDialogTitle>
-      </ShadcnDialogHeader>
-      <form class="space-y-4" @submit.prevent="onSubmit">
+  <UiDrawerModal
+    :open="props.open"
+    :title="t('onboarding.create.title')"
+    @update:open="$emit('update:open', $event)"
+  >
+    <template #content>
+      <form
+        id="create-form"
+        class="space-y-4 px-6 py-2"
+        @submit.prevent="onSubmit"
+      >
         <div class="space-y-1.5">
           <ShadcnLabel for="create-name">
             {{ t('onboarding.create.name') }}
@@ -101,15 +106,18 @@ async function onSubmit() {
         <p v-if="error" class="text-sm text-destructive" role="alert">
           {{ error }}
         </p>
-        <UiButton
-          type="submit"
-          :disabled="!canSubmit"
-          :loading="submitting"
-          class="w-full"
-        >
-          {{ t('onboarding.create.submit') }}
-        </UiButton>
       </form>
-    </ShadcnDialogContent>
-  </ShadcnDialog>
+    </template>
+    <template #footer>
+      <UiButton
+        form="create-form"
+        type="submit"
+        :disabled="!canSubmit"
+        :loading="submitting"
+        class="w-full"
+      >
+        {{ t('onboarding.create.submit') }}
+      </UiButton>
+    </template>
+  </UiDrawerModal>
 </template>
