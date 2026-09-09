@@ -68,26 +68,23 @@ async fn load_and_stream_generates_tokens() {
     let mut total_content = String::new();
     let mut saw_done = false;
     let mut ttft_ms: Option<u64> = None;
-    let mut completion_tokens = 0;
 
     while let Some(item) = handle.next().await {
         match item.expect("stream error") {
             StreamChunk::Delta { content, .. } => total_content.push_str(&content),
-            StreamChunk::Done {
-                completion_tokens: c,
-                ttft_ms: t,
-                ..
-            } => {
+            StreamChunk::Done { ttft_ms: t, .. } => {
                 saw_done = true;
-                completion_tokens = c;
                 ttft_ms = t;
                 break;
             }
         }
     }
 
+    // Token counts are optional (mistralrs 0.8.1 can close the stream
+    // without emitting Done on CUDA; the synthetic Done then reports
+    // None). The load-bearing assertions are: we saw a Done frame,
+    // we saw non-empty content, and TTFT was observed.
     assert!(saw_done, "stream ended without Done frame");
-    assert!(completion_tokens > 0, "no completion tokens produced");
     assert!(!total_content.is_empty(), "generated content is empty");
     assert!(
         ttft_ms.is_some(),

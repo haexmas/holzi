@@ -27,11 +27,14 @@ pub enum StreamChunk {
     },
     /// Final frame with token counts and TTFT. TTFT is measured from
     /// the moment `stream_chat` starts polling until the first chunk
-    /// that carries non-empty content is observed.
+    /// that carries non-empty content is observed. Token counts are
+    /// `Option`al because mistralrs 0.8.1 has been observed to close
+    /// the stream on CUDA without a `Response::Done` frame; the
+    /// synthetic Done we emit in that case cannot report counts.
     Done {
         finish_reason: Option<String>,
-        prompt_tokens: usize,
-        completion_tokens: usize,
+        prompt_tokens: Option<usize>,
+        completion_tokens: Option<usize>,
         ttft_ms: Option<u64>,
         total_ms: u64,
     },
@@ -157,24 +160,32 @@ impl LocalModel {
 
             let mut ttft_ms: Option<u64> = None;
             let mut done_emitted = false;
+            let mut delta_emitted = false;
+            let mut last_finish_reason: Option<String> = None;
 
             while let Some(response) = stream.next().await {
                 match response {
                     Response::Chunk(chunk) => {
                         let mut content = String::new();
                         let mut reasoning: Option<String> = None;
-                        for choice in chunk.choices {
-                            if let Some(c) = choice.delta.content {
-                                content.push_str(&c);
+                        for choice in &chunk.choices {
+                            if let Some(c) = &choice.delta.content {
+                                content.push_str(c);
                             }
-                            if let Some(r) = choice.delta.reasoning_content {
+                            if let Some(r) = &choice.delta.reasoning_content {
                                 reasoning
                                     .get_or_insert_with(String::new)
-                                    .push_str(&r);
+                                    .push_str(r);
+                            }
+                            if let Some(fr) = &choice.finish_reason {
+                                last_finish_reason = Some(fr.clone());
                             }
                         }
                         if ttft_ms.is_none() && !content.is_empty() {
                             ttft_ms = Some(start.elapsed().as_millis() as u64);
+                        }
+                        if !content.is_empty() {
+                            delta_emitted = true;
                         }
                         if tx
                             .send(Ok(StreamChunk::Delta { content, reasoning }))
@@ -191,8 +202,8 @@ impl LocalModel {
                             .map(|c| c.finish_reason.clone());
                         let done = StreamChunk::Done {
                             finish_reason,
-                            prompt_tokens: final_resp.usage.prompt_tokens,
-                            completion_tokens: final_resp.usage.completion_tokens,
+                            prompt_tokens: Some(final_resp.usage.prompt_tokens),
+                            completion_tokens: Some(final_resp.usage.completion_tokens),
                             ttft_ms,
                             total_ms: start.elapsed().as_millis() as u64,
                         };
@@ -230,7 +241,24 @@ impl LocalModel {
             }
 
             if !done_emitted {
-                let _ = tx.send(Err(StreamError::UnexpectedEnd));
+                if delta_emitted {
+                    // mistralrs 0.8.1 has been observed to close the stream
+                    // on CUDA without emitting a final `Response::Done`
+                    // when the model hits its max_new_tokens cap. Treat a
+                    // clean stream close after we saw content as a
+                    // synthetic completion — token counts are unknown
+                    // because they only reach us in the Done frame.
+                    let synth = StreamChunk::Done {
+                        finish_reason: last_finish_reason,
+                        prompt_tokens: None,
+                        completion_tokens: None,
+                        ttft_ms,
+                        total_ms: start.elapsed().as_millis() as u64,
+                    };
+                    let _ = tx.send(Ok(synth));
+                } else {
+                    let _ = tx.send(Err(StreamError::UnexpectedEnd));
+                }
             }
         });
 

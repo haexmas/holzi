@@ -341,8 +341,8 @@ pub async fn send_message(
                     ttft_ms: t,
                     ..
                 }) => {
-                    prompt_tokens = Some(pt);
-                    completion_tokens = Some(ct);
+                    prompt_tokens = pt;
+                    completion_tokens = ct;
                     ttft_ms = t;
                     break;
                 }
