@@ -5,9 +5,10 @@
 
 **V1 contract note**: Genesis creates a fresh vault identity without a
 paper-seed confirmation step. Imported databases open directly: the pre-HLC
-bootstrap reuses a `known_devices` row keyed by the local installation UUID
-when present, or inserts one with a fresh vault-device UUID for a different
-installation. `DeviceIdProvider` receives the persisted UUID after bootstrap.
+`DatabaseBootstrap` reuses a `known_devices` row keyed by the local
+installation UUID when present, or inserts one with a fresh vault-device UUID
+for a different installation. Its returned UUID becomes the HLC node ID for
+that open.
 `PaperSeedDisplay.vue` is not a v1 component.
 
 ## Summary
@@ -25,7 +26,7 @@ Deliver the holzi Tauri app's first-impression surfaces: a landing page with thr
 - Styling: Tailwind v4 via `@tailwindcss/vite`, `tw-animate-css`.
 - UI: `shadcn-vue` (Radix Vue-based, copy-in), `class-variance-authority`, `tailwind-merge`, `lucide-vue-next` (via `@nuxt/icon` iconify-json bundle), `html5-qrcode` (QR scanner in the Verbinden Sheet on every platform, same version haex-vault uses).
 - Tauri plugins: `@tauri-apps/plugin-dialog` (file picker for Öffnen), `@tauri-apps/plugin-store` (only for non-secret preferences — not for instance list), `@tauri-apps/plugin-fs` (limited to `AppLocalData` scope).
-- Rust-side: `haex-crdt` (workspace path or crates.io once extracted), `tauri`, `serde`, `ts-rs` (for type sharing), `thiserror`.
+- Rust-side: [`haex-crdt` at `1c069ef0ea19143af2748f40fc41cba05c94dbe1` (`Cargo.toml`, package 0.4.0)](https://github.com/haexmas/haex-crdt/blob/1c069ef0ea19143af2748f40fc41cba05c94dbe1/Cargo.toml) as a git dependency, `tauri`, `serde`, `ts-rs` (for type sharing), `thiserror`.
 
 **Storage**:
 - Instance DBs: `<AppLocalData>/instances/<name>.db`, SQLCipher-encrypted, `haex-crdt`-managed.

@@ -1,18 +1,21 @@
 # Contract: Tauri Commands (Rust ↔ Frontend)
 
-**Status**: Working draft against an unreleased `haex-crdt` revision that
-includes the PR removing `reconcile_device_id` plus a pre-HLC bootstrap hook.
-The currently released `v0.1.0` does not provide that integration. Field names
-and shapes are stable enough to implement against; the error-mapping table
-below reflects the current crate surface. Any haex-crdt change to migration
-IDs, provider trait signatures, bootstrap ordering, or the `Database::open`
-shape reopens this contract.
+**Status**: Working draft against [`haexmas/haex-crdt` at
+`1c069ef0ea19143af2748f40fc41cba05c94dbe1` (`Cargo.toml`, package
+0.4.0)](https://github.com/haexmas/haex-crdt/blob/1c069ef0ea19143af2748f40fc41cba05c94dbe1/Cargo.toml).
+The pinned revision removes the crate's device-ID arbitration and exposes the
+[`DatabaseBootstrap` hook](https://github.com/haexmas/haex-crdt/blob/1c069ef0ea19143af2748f40fc41cba05c94dbe1/src/device_id.rs)
+holzi runs its per-installation known-devices lookup in. Field names and shapes
+are stable enough to implement against; the error-mapping table below reflects
+the pinned crate surface. Any change to the pin's migration IDs,
+`DatabaseBootstrap` signature, bootstrap ordering, or `Database::open` shape
+reopens this contract.
 
 **V1 contract note**: Genesis creates a fresh vault, generating a per-vault
 identity keypair (see [Vault identity and device model](#vault-identity-and-device-model)).
 Backup restore is a plain `open_instance` of a copied `.db` — no rekey, no
 attestation, no restore-pairing handshake. The copy carries the vault
-identity and the source's `known_devices` rows; the pre-HLC bootstrap reuses
+identity and the source's `known_devices` rows; the `DatabaseBootstrap` hook reuses
 the local installation row when present or adds a local-only row with a fresh
 vault-scoped device UUID when the copy came from another installation.
 
@@ -63,47 +66,40 @@ installation therefore reuses its row; a copy from another installation has
 no matching local row and receives a fresh UUID. The bootstrap transaction
 must leave the local-only column out of CRDT payloads.
 
-### Pre-HLC known-device bootstrap
-
-The current `haex-crdt` open sequence needs one consumer-facing extension. After
-crate and consumer migrations have run, but before HLC initialization or any
-signed bootstrap write, the database opener MUST run a single atomic
-pre-HLC bootstrap transaction. That operation:
-
-1. Reads the installation UUID from `<AppLocalData>/installation-id` (minting
-   and fsyncing the file if needed).
-2. Looks up the local-only `known_devices.installation_uuid` column.
-3. Reuses the matching `vault_device_uuid`, or mints a fresh one and inserts a
-   complete `known_devices` row with all CRDT metadata and the local-only
-   lookup value. The local-only column is excluded from the CRDT projection.
-4. For Genesis, creates the vault identity keypair and singleton
-   `vault_identity` row in the same unsigned bootstrap phase. For an imported
-   database, it verifies that the copied vault identity is present.
-5. Commits both results atomically, or rolls both back.
-
-The hook returns the persisted vault-device UUID and the vault identity needed
-to construct the providers. HLC initialization then consumes that UUID through
-`DeviceIdProvider::device_id()`. The provider MUST be a pure, already-resolved
-provider for this open: it returns the UUID it was given and MUST NOT open a
-database connection or transaction. `Database::open` MUST NOT initialize HLC or
-perform signed bootstrap writes until this hook has committed.
-
 ### Provider implementations
 
-Three traits implemented by holzi in a dedicated `src-tauri/identity/`
+Three consumer seams implemented by holzi in a dedicated `src-tauri/identity/`
 module. Extraction into a standalone `haex-identity` crate is deferred until
-the trait surface has stabilized against a working slice.
+the surface has stabilized against a working slice.
 
-- **`DeviceIdProvider`** — returns the current replica's vault-device UUID.
-  The pre-HLC bootstrap performs the installation-file read, local lookup, mint,
-  and transaction. The provider is then constructed from the persisted result;
-  its `device_id()` only returns that UUID, so it has no database or transaction
-  dependency. This guarantees that the UUID committed by bootstrap is the one
-  HLC uses as its node id for this open.
+- **`DatabaseBootstrap`** — the bootstrap hook `haex-crdt` 0.4.0 calls after
+  migrations and before HLC init, inside an unsigned transaction the crate
+  commits on `Ok` or rolls back on `Err`. Holzi's implementation:
+
+  1. Reads the installation UUID from `<AppLocalData>/installation-id`,
+     minting and fsyncing the file if it does not yet exist.
+  2. Looks up the local-only `known_devices.installation_uuid` column.
+  3. Reuses the matching `vault_device_uuid` if present; otherwise mints a
+     fresh one and inserts a complete consumer-owned `known_devices` row,
+     including the local-only lookup value. It MUST NOT write CRDT bookkeeping
+     tables or `_no_trigger` metadata columns; the crate prepares that metadata
+     only after HLC initialization and trigger installation.
+  4. On Genesis (empty `vault_identity`), generates the vault identity
+     keypair and inserts the singleton `vault_identity` row in the same
+     transaction. On any other open, verifies the row is present.
+  5. Returns the vault-device UUID. The crate atomically commits the bootstrap
+     rows and result, then uses that UUID as the HLC node id for this open.
+
+  The whole sequence is one transaction: the vault-identity row, the
+  `known_devices` row, and the returned UUID commit or roll back together.
+  The local-only `installation_uuid` column is never included in CRDT
+  payloads.
+
 - **`SignatureProvider`** — signs the canonical column preimage supplied to
   `sign_column`, using the vault identity keypair. Verification is a later
   sync concern; holzi ships the signatures now so the deferred sync layer
   needs no migration over populated tables.
+
 - **`MigrationSource`** — enumerates the holzi-owned migrations below.
   haex-crdt's own bookkeeping migrations (`_no_sync` tables and
   `_no_trigger` metadata columns) are separate and shipped by the crate.
@@ -112,12 +108,6 @@ Holzi also passes **`trigger_version: i32`** in `DatabaseConfig`. This is
 haex-crdt's own trigger-schema version; holzi passes
 `haex_crdt::DEFAULT_TRIGGER_VERSION` verbatim and bumps it only in lockstep
 with a crate-required upgrade.
-
-**Crate integration uses the provider-authoritative open hook.** The unreleased
-haex-crdt revision containing PR #23 no longer arbitrates device IDs —
-`reconcile_device_id` is gone — but the pre-HLC bootstrap hook is still required
-so holzi can resolve and persist `known_devices` before HLC starts. The released
-`v0.1.0` surface is not sufficient for this contract.
 
 ### holzi-owned data layer
 
@@ -179,7 +169,7 @@ as `CrdtInit { reason }` until the crate exposes a typed top-level variant.
 | `Sqlite(error)` | `CrdtSqlite { reason: error.to_string() }` | SQL/SQLCipher failure |
 | `Io(error)` | `CrdtIo { reason: error.to_string() }` | I/O failure |
 | `Hlc(reason)` | `CrdtHlc { reason }` | HLC/provider failure |
-| `DeviceIdMismatch { expected, supplied }` | `DeviceIdMismatch { expected, supplied }` | not expected in normal operation — holzi's à-la-carte integration (see [Provider implementations](#provider-implementations)) does not go through `reconcile_device_id`; this maps only a defensive `HlcService::initialize_in_place` self-check |
+| `DeviceIdMismatch { expected, supplied }` | `DeviceIdMismatch { expected, supplied }` | not expected in normal operation — haex-crdt 0.3.0+ removed `reconcile_device_id`; this maps only a defensive `HlcService::initialize_in_place` self-check |
 | `SignatureVerificationFailed { first_failed_change }` | `CrdtSignatureVerificationFailed { first_failed_change }` | remote batch is rejected atomically |
 | `UnexpectedSignatureUnderNoop` | `CrdtUnexpectedSignatureUnderNoop` | transport/provider configuration error |
 | `MigrationMissingFromSource { journal, name }` | `MigrationMissingFromSource { journal, name }` | catastrophic; source and journal are retained |
@@ -253,11 +243,10 @@ pub struct CreateInstanceResult {
 1. Validate `name` and passphrase policy in-process (haex-crdt accepts opaque strings; policy is holzi's job).
 2. Ensure `<AppLocalData>/installation-id` exists — read it if present, otherwise mint a fresh v4 UUID and write it (fsync). This file is one-time-per-installation, not per-vault; it may already exist from earlier holzi use on this host.
 3. Write `<name>.db.pending` as an empty marker, then create `<name>.db` as the candidate path in `<AppLocalData>/instances/`. Marker presence controls publication.
-4. Run the pre-HLC bootstrap after migrations. In one unsigned transaction, generate the vault identity keypair and insert the singleton `vault_identity` row, then look up or mint the local-only `known_devices.installation_uuid` row with its complete CRDT metadata. No HLC initialization or signed write may happen before this transaction commits.
-5. Construct a `DeviceIdProvider` from the persisted vault-device UUID and a `SignatureProvider` from the bootstrapped vault identity, then call `Database::open` with `create_if_missing: true`. The provider performs no database I/O; HLC receives exactly the UUID committed by bootstrap.
-6. Bind `AppState.active_instance = Some(info)`.
-7. Flush the DB and directory, remove `<name>.db.pending`, flush the directory again. Marker removal is the durable commit point.
-8. Emit `instance-list-changed`.
+4. Call `Database::open` with `create_if_missing: true` and a `HolziBootstrap` implementation of [`DatabaseBootstrap`](#provider-implementations). Inside the transaction the crate opens for the hook, holzi generates the vault identity keypair, inserts the singleton `vault_identity` row, mints the vault-device UUID, and inserts the self-`known_devices` row. Those bootstrap rows and the returned UUID commit together or roll back together. Only after that commit does the crate initialize HLC and install triggers; a later failure does not roll the bootstrap transaction back, so this command's failure cleanup removes the candidate database and pending marker.
+5. Bind `AppState.active_instance = Some(info)`.
+6. Flush the DB and directory, remove `<name>.db.pending`, flush the directory again. Marker removal is the durable commit point.
+7. Emit `instance-list-changed`.
 
 **Postconditions on success**: `<name>.db` exists and is unlocked and active; `<AppLocalData>/installation-id` exists (it may have already existed); the `vault_identity` and self-`known_devices` rows are written; the pending marker is gone.
 
@@ -296,7 +285,7 @@ pub struct OpenInstanceArgs {
 **Internal choreography**:
 
 1. Ensure `<AppLocalData>/installation-id` exists (mint and fsync if absent).
-2. Run the pre-HLC bootstrap after migrations. It reads the installation UUID, looks it up in the local-only `known_devices.installation_uuid` column, and either reuses the found `vault_device_uuid` or mints a fresh one, inserts the complete row, and commits. Construct the pure `DeviceIdProvider` from that result, then call `Database::open` with `create_if_missing: false`.
+2. Call `Database::open` with `create_if_missing: false` and a `HolziBootstrap` implementation. Inside the crate-owned transaction, holzi's hook reads the installation UUID, looks it up in the local-only `known_devices.installation_uuid` column, and either reuses the found `vault_device_uuid` or mints a fresh one and inserts the complete row. The returned UUID becomes the HLC node id for this open.
 3. If another instance was active, stop its runtime; then bind `AppState.active_instance = Some(info)` and refresh the DB mtime as `lastAccess`.
 4. Emit `instance-list-changed`.
 
@@ -338,7 +327,7 @@ After a successful close of an active instance, emit `instance-list-changed { re
 
 ### `import_instance_file`
 
-Copies an external `.db` file into `<AppLocalData>/instances/`. Structural validation happens before copying; SQLCipher credential validation is completed by `open_instance`. The copy carries the source's `known_devices` rows unchanged. On first open, the pre-HLC bootstrap reuses a matching local-only installation row when the source came from the same installation, otherwise it inserts a new local row with a fresh vault-device UUID. The local-only `installation_uuid` column is never included in CRDT payloads.
+Copies an external `.db` file into `<AppLocalData>/instances/`. Structural validation happens before copying; SQLCipher credential validation is completed by `open_instance`. The copy carries the source's `known_devices` rows unchanged. On first open, the `DatabaseBootstrap` hook reuses a matching local-only installation row when the source came from the same installation, otherwise it inserts a new local row with a fresh vault-device UUID. The local-only `installation_uuid` column is never included in CRDT payloads.
 
 ```rust
 #[tauri::command]
@@ -370,7 +359,7 @@ pub struct ImportInstanceResult {
 **Notes**:
 
 - `source_path` is the external file path returned by `@tauri-apps/plugin-dialog`; it is the only path accepted from the frontend. It is not a managed-instance path. The command validates that it is a regular file and that the extension is `.db`.
-- SQLCipher page validation is deferred until `open_instance`, where the operator supplies the passphrase. The pre-HLC bootstrap reuses the matching local-only `known_devices.installation_uuid` row for a same-installation copy, or inserts one with a fresh vault-device UUID for a copy from another installation. That local-only lookup column is excluded from CRDT payloads.
+- SQLCipher page validation is deferred until `open_instance`, where the operator supplies the passphrase. The `DatabaseBootstrap` hook reuses the matching local-only `known_devices.installation_uuid` row for a same-installation copy, or inserts one with a fresh vault-device UUID for a copy from another installation. That local-only lookup column is excluded from CRDT payloads.
 - Copy uses a crash-safe publish protocol: write the database to a temporary file in the managed directory and fsync it; fsync the directory; atomically rename the temporary database to `<name>.db`; then fsync the directory again before emitting the import event. For `ConflictPolicy::Overwrite`, stage as `<name>.db.importing`, rename the old `<name>.db` to an operation-specific backup, atomically rename the staged file into `<name>.db`, fsync the directory, and only then remove the backup. A crash mid-import leaves either the original target intact or a `.importing` file that startup deletes without opening it. The source file is never modified or moved.
 - For `ConflictPolicy::Overwrite`, the command checks the target name while holding the `AppState` lock and rejects replacement if that name is the active instance. The frontend must close that instance explicitly before retrying overwrite. On open, the new file reuses a matching local installation row when present; otherwise bootstrap inserts one with a fresh vault-device UUID.
 

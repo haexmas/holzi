@@ -2,9 +2,9 @@
 
 **Status**: **Executed — this plan is history, not a to-do.** The crate shipped on 2026-09-06 and
 lives in the separate `haexmas/haex-crdt` repository. Holzi's current contract is pinned to
-revision `c41ef2e2695da980af56aa586211ec508bf1789b`; the unmerged device-ID adoption work is not
-part of that contract. Read the crate's own source and README for the delivered API; this
-document records the intent and the reasoning, and its future tense is no longer accurate.
+revision `1c069ef0ea19143af2748f40fc41cba05c94dbe1` (package 0.4.0). Read the crate's own source
+and README for the delivered API; this document records the intent and the reasoning, and its
+future tense is no longer accurate.
 
 Known drift between this plan and what shipped:
 

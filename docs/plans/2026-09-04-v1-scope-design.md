@@ -81,11 +81,11 @@ The 2026-09-04 model was rejected because a paper-seed only reconstructs signing
 
 `founding.md` §4 items 5 and 8 (encrypted-at-rest choice, multi-device routing) are resolved by consuming an extracted library.
 
-- **`haex-crdt`.** The SQLite + CRDT-sync layer currently living inside `haex-vault` is extracted into a standalone Rust crate named `haex-crdt`. Both `haex-vault` and `holzi` consume it as a Rust library dependency. This extraction was v1-blocking: no holzi implementation slice could start until `haex-crdt` existed as an importable crate. **Done 2026-09-06**: the crate exists at `~/Projekte/haex-crdt` and no longer blocks; the first holzi implementation slice can proceed. The crate owns the scanner and apply APIs, while holzi owns the v1 sync transport that wires them together.
+- **`haex-crdt`.** The SQLite + CRDT-sync layer currently living inside `haex-vault` is extracted into a standalone Rust crate named `haex-crdt`. Both `haex-vault` and `holzi` consume it as a Rust library dependency. Holzi pins [`haexmas/haex-crdt` at `1c069ef0ea19143af2748f40fc41cba05c94dbe1` (`Cargo.toml`, package 0.4.0)](https://github.com/haexmas/haex-crdt/blob/1c069ef0ea19143af2748f40fc41cba05c94dbe1/Cargo.toml). The crate owns the scanner and apply APIs, while holzi owns the v1 sync transport that wires them together.
 - **At-rest encryption is inherited.** `holzi` does not choose its own at-rest scheme; it uses whatever `haex-crdt` provides (working assumption: SQLCipher, to be confirmed during extraction). If `haex-crdt` changes its scheme, `holzi` moves with it.
 - **What lives in `haex-crdt`-synced state.** Federation-scope encrypted state that must converge across paired replicas of the same vault: the vault identity keypair (`vault_identity`, singleton), the synchronizable portion of the device registry (`known_devices` device UUID, alias, timestamps, and endpoint metadata), and later — with sync — `peer_instances` / revocation-epoch / capability grants, chat/session history, skills/memory (post-v1 scope but reserved). The installation UUID is a local-only lookup column and is explicitly excluded from every CRDT payload.
 - **What does not live in `haex-crdt` at all.** Ephemeral runtime state (open iroh sessions, current relay connections), local-only preferences (local model file paths, active-provider selection), and the installation UUID at `<AppLocalData>/installation-id` (in a file outside every vault; never in the wire).
-- **Device identity for HLC (`DeviceIdProvider`).** Decided 2026-09-07, refined 2026-09-08. Two UUIDs, layered:
+- **Device identity for HLC (`DatabaseBootstrap`).** Decided 2026-09-07, refined 2026-09-08. Two UUIDs, layered:
   - **Installation UUID** — one random UUID per holzi installation on a host, stored in
     `<AppLocalData>/installation-id`, shared by every vault opened by that installation, never sent
     over the wire. Its sole purpose is the local lookup key for the next UUID.
@@ -96,13 +96,11 @@ The 2026-09-04 model was rejected because a paper-seed only reconstructs signing
     vault-device UUIDs. The local column is never included in a CRDT payload, so no observer can
     infer the host relationship from sync data.
 
-  On every open, holzi's pre-HLC bootstrap reads the installation UUID → looks up
+  On every open, `DatabaseBootstrap` reads the installation UUID → looks up
   `known_devices` → returns the row's UUID or (on first open of this vault by this install) mints
-  a fresh vault-device UUID and inserts the complete row atomically. The subsequent
-  `DeviceIdProvider` receives that persisted UUID and returns it without opening a database or
-  transaction. This requires the unreleased haex-crdt revision containing PR #23's authoritative
-  provider change plus the pre-HLC bootstrap hook; the currently released `v0.1.0` does not yet
-  provide that integration. No adoption API, no attestation, no rekey.
+  a fresh vault-device UUID and inserts the consumer-owned row atomically. The crate then uses
+  that returned UUID for HLC initialization. The pinned 0.4.0 revision provides this hook; no
+  adoption API, attestation, or rekey is needed.
 
   The one case that MUST be prevented is the same database opened twice on the same host, which the
   `fs2` file lock inherited from `haex-vault`'s `vault_lock.rs` already covers
@@ -163,7 +161,7 @@ The killer v1 use case: an operator confirms from their phone a `require-confirm
 Two parallel workstreams gate holzi v1's first implementation slice:
 
 - **haex-hive schema migration** (in progress, in `~/Projekte/haex-hive/`). Until the migration lands, holzi's declared `com.github.haexmas.atoms.graphify-first-authoring` atom does not take effect. Blocks *tooling*, not code — holzi can proceed on design/spec work without it.
-- ~~**`haex-crdt` extraction from `haex-vault`**~~ — **cleared 2026-09-06**. The crate lives at `~/Projekte/haex-crdt`, released as `v0.1.0`, with a `feat/v0.1.1-batch-2-unblocker` series and the `feat/device-id-policy` change stacked on top and pending a release cut (working assumption `v0.2.0`). This no longer blocks the first implementation slice.
+- ~~**`haex-crdt` extraction from `haex-vault`**~~ — **cleared**. Holzi consumes the pinned 0.4.0 revision; no local checkout, branch, or future release assumption is part of this dependency.
 
 Both are outside this repository. Neither is a holzi task. The haex-hive migration remains a
 tooling dependency only; it does not delay holzi's implementation timeline now that `haex-crdt`

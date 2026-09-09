@@ -4,16 +4,16 @@
 
 **V1 contract note**: Genesis creates a fresh vault identity without a
 paper-seed display or confirmation step. Imported databases open directly:
-the pre-HLC bootstrap reuses or inserts a `known_devices` row keyed by the
-local installation UUID, and `DeviceIdProvider` receives the persisted
-vault-device UUID; no rekey, no attestation, no restore-pairing handshake.
+`DatabaseBootstrap` reuses or inserts a `known_devices` row keyed by the local
+installation UUID and returns the vault-device UUID for HLC; no rekey, no
+attestation, no restore-pairing handshake.
 
 **Prerequisites** on the host:
 
 - Node.js LTS + `pnpm` in `PATH`.
 - Rust toolchain matching `rust-toolchain.toml` (once added — the extraction task provides this).
 - Tauri build prerequisites for the host OS (Linux: `webkit2gtk-4.1`; macOS: Xcode CLI Tools; Windows: MSVC + WebView2).
-- `haex-crdt` crate available (see [`v1-scope-design.md §10`](../../docs/plans/2026-09-04-v1-scope-design.md) — this is currently a blocker; use a workspace-path override if the crate is not yet published).
+- `haex-crdt` available as the git dependency pinned in [`plan.md`](./plan.md); do not use a workspace-path override.
 
 ## Steps
 

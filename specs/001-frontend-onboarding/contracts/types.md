@@ -57,7 +57,7 @@ See [`tauri-commands.md`](./tauri-commands.md). All derive `TS` with `#[serde(re
 
 ### `HolziError`
 
-See [`tauri-commands.md`](./tauri-commands.md) → "Error type". Serialized as a tagged union with `kind` as the discriminator, matching Rust's `#[serde(tag = "kind")]`. The haex-crdt-mapped variants (`CrdtSqlite`, `CrdtIo`, `CrdtHlc`, `DeviceIdMismatch`, `CrdtSignatureVerificationFailed`, `CrdtUnexpectedSignatureUnderNoop`, `MigrationMissingFromSource`, `MigrationContentDrift`, `MigrationCompatibility`, `CrdtAlreadyInstalled`) plus the residual `CrdtInit` catch-all replace what earlier drafts flattened into a single opaque `CrdtInit { reason: String }`; see [`tauri-commands.md`](./tauri-commands.md) → "Error mapping" for the source-of-truth table. `DeviceIdMismatch` is not expected in normal operation — holzi's à-la-carte integration does not go through `reconcile_device_id`.
+See [`tauri-commands.md`](./tauri-commands.md) → "Error type". Serialized as a tagged union with `kind` as the discriminator, matching Rust's `#[serde(tag = "kind")]`. The haex-crdt-mapped variants (`CrdtSqlite`, `CrdtIo`, `CrdtHlc`, `DeviceIdMismatch`, `CrdtSignatureVerificationFailed`, `CrdtUnexpectedSignatureUnderNoop`, `MigrationMissingFromSource`, `MigrationContentDrift`, `MigrationCompatibility`, `CrdtAlreadyInstalled`) plus the residual `CrdtInit` catch-all replace what earlier drafts flattened into a single opaque `CrdtInit { reason: String }`; see [`tauri-commands.md`](./tauri-commands.md) → "Error mapping" for the source-of-truth table. `DeviceIdMismatch` is not expected in normal operation — Holzi uses the pinned `DatabaseBootstrap` hook instead of the crate's removed `reconcile_device_id` arbitration.
 
 ## Generation flow
 
