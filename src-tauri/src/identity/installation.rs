@@ -36,6 +36,7 @@ pub fn read_or_mint_installation_uuid(path: &Path) -> std::io::Result<Uuid> {
     }
 }
 
+/// Creates and durably writes a new installation UUID at `path`.
 fn mint_and_fsync(path: &Path) -> std::io::Result<Uuid> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;

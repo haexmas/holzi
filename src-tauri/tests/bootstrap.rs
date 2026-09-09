@@ -22,6 +22,7 @@ use holzi_lib::storage::known_devices;
 
 const PASSPHRASE: &str = "etappe1-integration-test";
 
+/// Builds a database configuration using the production bootstrap providers.
 fn make_config(
     db_path: PathBuf,
     installation_id: PathBuf,
@@ -39,6 +40,7 @@ fn make_config(
 }
 
 #[test]
+/// Verifies that reopening a vault preserves its installation and device identities.
 fn bootstrap_genesis_and_reopen_reuse_uuid() {
     let tmp = tempfile::tempdir().expect("tmp dir");
     let db_path = tmp.path().join("vault.db");
@@ -107,6 +109,7 @@ fn bootstrap_genesis_and_reopen_reuse_uuid() {
 }
 
 #[test]
+/// Verifies that runtime updates expose the immutable primary key through `row_pks`.
 fn known_devices_row_syncs_via_row_pks() {
     let tmp = tempfile::tempdir().expect("tmp dir");
     let db_path = tmp.path().join("vault.db");

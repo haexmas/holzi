@@ -87,6 +87,7 @@ pub enum HolziError {
 pub type Result<T> = std::result::Result<T, HolziError>;
 
 impl From<CrdtError> for HolziError {
+    /// Maps a `haex-crdt` error into the stable error contract exposed by holzi.
     fn from(err: CrdtError) -> Self {
         match err {
             CrdtError::Sqlite(e) => HolziError::CrdtSqlite {
@@ -133,6 +134,7 @@ impl From<CrdtError> for HolziError {
 }
 
 impl From<std::io::Error> for HolziError {
+    /// Wraps application-level I/O failures for transport across the Tauri boundary.
     fn from(e: std::io::Error) -> Self {
         HolziError::Io {
             reason: e.to_string(),
@@ -140,6 +142,7 @@ impl From<std::io::Error> for HolziError {
     }
 }
 
+/// Returns the database table name associated with a migration journal.
 fn journal_label(j: MigrationJournal) -> &'static str {
     match j {
         MigrationJournal::CrateOwned => "haex_crdt_migrations_no_sync",

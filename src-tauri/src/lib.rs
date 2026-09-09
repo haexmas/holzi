@@ -5,6 +5,7 @@ pub mod storage;
 pub use error::{HolziError, Result};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// Builds and starts the holzi Tauri application.
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {

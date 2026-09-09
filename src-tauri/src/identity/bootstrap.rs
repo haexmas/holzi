@@ -26,6 +26,7 @@ pub struct HolziBootstrap {
 }
 
 impl HolziBootstrap {
+    /// Creates a bootstrap provider backed by the given installation-id file.
     pub fn new(installation_id_path: PathBuf) -> Self {
         Self {
             installation_id_path,
@@ -33,6 +34,7 @@ impl HolziBootstrap {
         }
     }
 
+    /// Overrides the alias assigned when this installation is first registered.
     pub fn with_alias(mut self, alias: impl Into<String>) -> Self {
         self.alias = alias.into();
         self
@@ -40,6 +42,7 @@ impl HolziBootstrap {
 }
 
 impl DatabaseBootstrap for HolziBootstrap {
+    /// Ensures the installation, device, and vault identities exist before HLC setup.
     fn bootstrap(&self, tx: &Transaction<'_>) -> CrdtResult<Uuid> {
         // 1. Installation UUID from `<AppLocalData>/installation-id`, minted
         //    and fsynced on first open of this installation.
@@ -122,6 +125,7 @@ fn mint_placeholder_keypair() -> ([u8; 33], [u8; 32]) {
     (pubkey, privkey)
 }
 
+/// Fills a placeholder key buffer with fresh UUID bytes.
 fn fill_random(buf: &mut [u8]) {
     for chunk in buf.chunks_mut(16) {
         let bytes = *Uuid::new_v4().as_bytes();
