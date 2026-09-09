@@ -58,7 +58,9 @@ pub fn classify(info: &HardwareInfo, m: ModelFitInputs) -> Fit {
     };
 
     let ctx = m.context_window.unwrap_or(4096);
-    let need = m.file_size_bytes.saturating_add(ctx.saturating_mul(KV_BYTES_PER_TOKEN));
+    let need = m
+        .file_size_bytes
+        .saturating_add(ctx.saturating_mul(KV_BYTES_PER_TOKEN));
 
     if need > target {
         Fit::TooBig

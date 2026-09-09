@@ -75,7 +75,10 @@ pub fn insert_provider(conn: &Connection, p: &Provider) -> Result<usize> {
 
 /// Deletes a provider by id.
 pub fn delete_provider(conn: &Connection, id: Uuid) -> Result<usize> {
-    conn.execute("DELETE FROM providers WHERE id = ?1", params![id.to_string()])
+    conn.execute(
+        "DELETE FROM providers WHERE id = ?1",
+        params![id.to_string()],
+    )
 }
 
 /// Lists all providers ordered by creation time (oldest first).

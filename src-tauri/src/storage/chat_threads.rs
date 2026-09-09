@@ -83,7 +83,8 @@ pub fn get_thread(conn: &Connection, id: Uuid) -> Result<Option<ChatThread>> {
         "SELECT id, title, last_provider_id, last_model_id, created_at, updated_at \
          FROM chat_threads WHERE id = ?1",
     )?;
-    stmt.query_row(params![id.to_string()], row_to_thread).optional()
+    stmt.query_row(params![id.to_string()], row_to_thread)
+        .optional()
 }
 
 fn row_to_thread(row: &haex_crdt::rusqlite::Row<'_>) -> Result<ChatThread> {
@@ -92,9 +93,7 @@ fn row_to_thread(row: &haex_crdt::rusqlite::Row<'_>) -> Result<ChatThread> {
     Ok(ChatThread {
         id: parse_uuid(&id_str, 0)?,
         title: row.get(1)?,
-        last_provider_id: last_provider_str
-            .map(|s| parse_uuid(&s, 2))
-            .transpose()?,
+        last_provider_id: last_provider_str.map(|s| parse_uuid(&s, 2)).transpose()?,
         last_model_id: row.get(3)?,
         created_at: row.get(4)?,
         updated_at: row.get(5)?,

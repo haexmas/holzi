@@ -134,14 +134,10 @@ fn row_to_message(row: &haex_crdt::rusqlite::Row<'_>) -> Result<ChatMessage> {
     Ok(ChatMessage {
         id: parse_uuid(&id_str, 0)?,
         thread_id: parse_uuid(&thread_id_str, 1)?,
-        parent_id: parent_id_str
-            .map(|s| parse_uuid(&s, 2))
-            .transpose()?,
+        parent_id: parent_id_str.map(|s| parse_uuid(&s, 2)).transpose()?,
         role: MessageRole::parse(&role_str).ok_or_else(|| bad_enum(3, &role_str))?,
         content: row.get(4)?,
-        provider_id: provider_id_str
-            .map(|s| parse_uuid(&s, 5))
-            .transpose()?,
+        provider_id: provider_id_str.map(|s| parse_uuid(&s, 5)).transpose()?,
         model_id: row.get(6)?,
         prompt_tokens: row.get(7)?,
         completion_tokens: row.get(8)?,

@@ -137,7 +137,5 @@ fn with_suffix(p: &std::path::Path, suffix: &str) -> PathBuf {
 }
 
 fn download_err(msg: impl Into<String>) -> HolziError {
-    HolziError::ModelDownload {
-        reason: msg.into(),
-    }
+    HolziError::ModelDownload { reason: msg.into() }
 }

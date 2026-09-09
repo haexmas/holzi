@@ -35,7 +35,11 @@ fn cpu_too_big_when_model_exceeds_ram() {
 #[test]
 fn cuda_uses_vram_not_ram() {
     // Small VRAM, plenty of RAM. Model should be TooBig despite the RAM.
-    let info = hw(Backend::Cuda, 32 * 1024 * 1024 * 1024, Some(2 * 1024 * 1024 * 1024));
+    let info = hw(
+        Backend::Cuda,
+        32 * 1024 * 1024 * 1024,
+        Some(2 * 1024 * 1024 * 1024),
+    );
     let m = ModelFitInputs {
         file_size_bytes: 5 * 1024 * 1024 * 1024, // 5 GiB
         context_window: Some(4096),

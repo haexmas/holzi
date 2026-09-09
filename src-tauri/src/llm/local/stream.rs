@@ -173,9 +173,7 @@ impl LocalModel {
                                 content.push_str(c);
                             }
                             if let Some(r) = &choice.delta.reasoning_content {
-                                reasoning
-                                    .get_or_insert_with(String::new)
-                                    .push_str(r);
+                                reasoning.get_or_insert_with(String::new).push_str(r);
                             }
                             if let Some(fr) = &choice.finish_reason {
                                 last_finish_reason = Some(fr.clone());
@@ -196,10 +194,8 @@ impl LocalModel {
                         }
                     }
                     Response::Done(final_resp) => {
-                        let finish_reason = final_resp
-                            .choices
-                            .first()
-                            .map(|c| c.finish_reason.clone());
+                        let finish_reason =
+                            final_resp.choices.first().map(|c| c.finish_reason.clone());
                         let done = StreamChunk::Done {
                             finish_reason,
                             prompt_tokens: Some(final_resp.usage.prompt_tokens),

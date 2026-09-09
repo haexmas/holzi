@@ -16,9 +16,7 @@ use crate::providers::local::ensure_local_provider;
 use crate::state::AppState;
 use crate::state_utils::active_database;
 use crate::storage::{
-    device_downloaded_models::{
-        self as dm_store, DownloadedModel,
-    },
+    device_downloaded_models::{self as dm_store, DownloadedModel},
     models::{self as models_store, ModelRow},
 };
 
@@ -82,11 +80,12 @@ pub async fn download_model_from_catalog(
     state: State<'_, AppState>,
     catalog_id: String,
 ) -> Result<InstalledModelPayload> {
-    let entry = catalog::get(&catalog_id).cloned().ok_or_else(|| {
-        HolziError::CatalogEntryNotFound {
-            id: catalog_id.clone(),
-        }
-    })?;
+    let entry =
+        catalog::get(&catalog_id)
+            .cloned()
+            .ok_or_else(|| HolziError::CatalogEntryNotFound {
+                id: catalog_id.clone(),
+            })?;
     let args = DownloadFromHfArgs {
         id: entry.id.clone(),
         name: entry.name.clone(),
@@ -183,8 +182,8 @@ pub async fn list_installed_models(
     let db = active_database(&state)?;
     let payload = tauri::async_runtime::spawn_blocking(move || {
         db.with_connection(|conn| {
-            let installed = dm_store::list_downloaded_models(conn)
-                .map_err(haex_crdt::Error::from)?;
+            let installed =
+                dm_store::list_downloaded_models(conn).map_err(haex_crdt::Error::from)?;
             let mut out = Vec::with_capacity(installed.len());
             for dm in installed {
                 let mut stmt = conn.prepare(
@@ -231,8 +230,7 @@ pub async fn delete_installed_model(
         db.with_connection(|conn| {
             let existing =
                 dm_store::get_downloaded_model(conn, &id_for_db).map_err(haex_crdt::Error::from)?;
-            dm_store::delete_downloaded_model(conn, &id_for_db)
-                .map_err(haex_crdt::Error::from)?;
+            dm_store::delete_downloaded_model(conn, &id_for_db).map_err(haex_crdt::Error::from)?;
             Ok(existing)
         })
     })
@@ -245,11 +243,11 @@ pub async fn delete_installed_model(
     if let Some(dm) = existing {
         let path = paths::resolve_relative(&app, &dm.relative_path)?;
         if path.is_file() {
-            tokio::fs::remove_file(&path).await.map_err(|e| {
-                HolziError::Io {
+            tokio::fs::remove_file(&path)
+                .await
+                .map_err(|e| HolziError::Io {
                     reason: format!("remove {}: {e}", path.display()),
-                }
-            })?;
+                })?;
         }
     }
     Ok(())
@@ -288,8 +286,7 @@ async fn register_downloaded(
                 sha256: None,
                 verified_at: now_ms(),
             };
-            dm_store::upsert_downloaded_model(conn, &dm)
-                .map_err(haex_crdt::Error::from)?;
+            dm_store::upsert_downloaded_model(conn, &dm).map_err(haex_crdt::Error::from)?;
             Ok(InstalledModelPayload {
                 id: id_owned,
                 name: name_owned,

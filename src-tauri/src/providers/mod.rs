@@ -14,9 +14,7 @@ use uuid::Uuid;
 use crate::error::{HolziError, Result};
 use crate::state::AppState;
 use crate::state_utils::active_database;
-use crate::storage::providers::{
-    self as storage, Provider, ProviderKind,
-};
+use crate::storage::providers::{self as storage, Provider, ProviderKind};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -17,8 +17,7 @@ pub use state::{ActiveInstanceHandle, AppState};
 use catalog::list_catalog;
 #[cfg(feature = "llm-cpu")]
 use chat::commands::{
-    abort_current_generation, active_model_info, load_local_model, send_message,
-    unload_local_model,
+    abort_current_generation, active_model_info, load_local_model, send_message, unload_local_model,
 };
 #[cfg(feature = "llm-cpu")]
 use chat::session::ChatState;

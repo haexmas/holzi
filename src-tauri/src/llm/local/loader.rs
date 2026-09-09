@@ -5,9 +5,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use mistralrs::{GgufModelBuilder, Model};
 #[cfg(feature = "llm-cuda")]
 use mistralrs::PagedAttentionMetaBuilder;
+use mistralrs::{GgufModelBuilder, Model};
 use thiserror::Error;
 
 /// Loaded GGUF model, kept alive by the [`Arc`] so multiple in-flight

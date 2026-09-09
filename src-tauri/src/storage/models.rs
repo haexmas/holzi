@@ -53,10 +53,7 @@ pub fn upsert_model(conn: &Connection, m: &ModelRow) -> Result<usize> {
 }
 
 /// Lists all models for a provider, ordered by name.
-pub fn list_models_by_provider(
-    conn: &Connection,
-    provider_id: Uuid,
-) -> Result<Vec<ModelRow>> {
+pub fn list_models_by_provider(conn: &Connection, provider_id: Uuid) -> Result<Vec<ModelRow>> {
     let mut stmt = conn.prepare(
         "SELECT id, provider_id, name, context_window, fetched_at \
          FROM models WHERE provider_id = ?1 ORDER BY name ASC",

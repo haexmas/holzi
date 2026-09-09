@@ -31,9 +31,8 @@ pub fn ensure_local_provider(conn: &Connection) -> Result<Uuid> {
 }
 
 fn find_local_provider(conn: &Connection) -> Result<Option<Uuid>> {
-    let mut stmt = conn.prepare(
-        "SELECT id FROM providers WHERE kind = ?1 ORDER BY created_at ASC LIMIT 1",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT id FROM providers WHERE kind = ?1 ORDER BY created_at ASC LIMIT 1")?;
     let raw: Option<String> = stmt
         .query_row(params![ProviderKind::Local.as_str()], |r| r.get(0))
         .optional()?;

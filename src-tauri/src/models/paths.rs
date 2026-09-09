@@ -60,7 +60,9 @@ pub fn resolve_relative(app: &AppHandle, relative: &str) -> Result<PathBuf> {
     // was tampered with. Relative paths are always exactly
     // "<slug>/<filename>".
     let mut parts = relative.split('/');
-    let slug = parts.next().ok_or_else(|| bad_input("empty relative path"))?;
+    let slug = parts
+        .next()
+        .ok_or_else(|| bad_input("empty relative path"))?;
     let filename = parts
         .next()
         .ok_or_else(|| bad_input("relative path missing filename"))?;
@@ -81,9 +83,7 @@ fn validate_slug(slug: &str) -> Result<()> {
         .chars()
         .any(|c| !(c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.'))
     {
-        return Err(bad_input(
-            "slug may only contain [A-Za-z0-9_.-]",
-        ));
+        return Err(bad_input("slug may only contain [A-Za-z0-9_.-]"));
     }
     Ok(())
 }

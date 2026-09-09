@@ -5,7 +5,9 @@ use tauri::{AppHandle, Emitter, State};
 use uuid::Uuid;
 
 use crate::error::{HolziError, Result};
-use crate::llm::local::{ChatMessage as LlmMessage, ChatRequest, ChatRole, LocalModel, StreamChunk};
+use crate::llm::local::{
+    ChatMessage as LlmMessage, ChatRequest, ChatRole, LocalModel, StreamChunk,
+};
 use crate::models::paths;
 use crate::state::AppState;
 use crate::state_utils::active_database;
@@ -165,9 +167,7 @@ pub async fn unload_local_model(chat: State<'_, ChatState>) -> Result<()> {
 
 /// Introspection — `None` when no model is loaded.
 #[tauri::command]
-pub async fn active_model_info(
-    chat: State<'_, ChatState>,
-) -> Result<Option<LoadedModelInfo>> {
+pub async fn active_model_info(chat: State<'_, ChatState>) -> Result<Option<LoadedModelInfo>> {
     let guard = chat.session.lock().map_err(|e| HolziError::CrdtInit {
         reason: format!("chat.session mutex poisoned: {e}"),
     })?;
@@ -263,8 +263,7 @@ pub async fn send_message(
     let history_db = db.clone();
     let history = tauri::async_runtime::spawn_blocking(move || {
         history_db.with_connection(|conn| {
-            let msgs = msg_store::list_messages(conn, thread_id)
-                .map_err(haex_crdt::Error::from)?;
+            let msgs = msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)?;
             Ok(msgs)
         })
     })
@@ -466,11 +465,10 @@ fn default_thread_title(first_message: &str) -> String {
     }
 }
 
-fn current_title(
-    conn: &haex_crdt::rusqlite::Connection,
-    thread_id: Uuid,
-) -> Option<String> {
-    let mut stmt = conn.prepare("SELECT title FROM chat_threads WHERE id = ?1").ok()?;
+fn current_title(conn: &haex_crdt::rusqlite::Connection, thread_id: Uuid) -> Option<String> {
+    let mut stmt = conn
+        .prepare("SELECT title FROM chat_threads WHERE id = ?1")
+        .ok()?;
     stmt.query_row(haex_crdt::rusqlite::params![thread_id.to_string()], |r| {
         r.get::<_, String>(0)
     })

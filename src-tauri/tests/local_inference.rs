@@ -19,9 +19,7 @@ use std::env;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use holzi_lib::llm::local::{
-    ChatMessage, ChatRequest, ChatRole, LocalModel, StreamChunk,
-};
+use holzi_lib::llm::local::{ChatMessage, ChatRequest, ChatRole, LocalModel, StreamChunk};
 
 const DEFAULT_TOKENIZER: &str = "Qwen/Qwen2.5-0.5B-Instruct";
 const MAX_NEW_TOKENS: usize = 64;
@@ -49,8 +47,8 @@ fn expand_home(s: &str) -> String {
 #[ignore = "requires HOLZI_TEST_GGUF pointing at a real GGUF file"]
 async fn load_and_stream_generates_tokens() {
     let path = model_path_from_env().expect("HOLZI_TEST_GGUF is not set");
-    let tokenizer = env::var("HOLZI_TEST_GGUF_TOKENIZER")
-        .unwrap_or_else(|_| DEFAULT_TOKENIZER.to_string());
+    let tokenizer =
+        env::var("HOLZI_TEST_GGUF_TOKENIZER").unwrap_or_else(|_| DEFAULT_TOKENIZER.to_string());
 
     let model = LocalModel::load(&path, Some(&tokenizer))
         .await
@@ -96,8 +94,8 @@ async fn load_and_stream_generates_tokens() {
 #[ignore = "requires HOLZI_TEST_GGUF pointing at a real GGUF file"]
 async fn abort_stops_generation_before_completion() {
     let path = model_path_from_env().expect("HOLZI_TEST_GGUF is not set");
-    let tokenizer = env::var("HOLZI_TEST_GGUF_TOKENIZER")
-        .unwrap_or_else(|_| DEFAULT_TOKENIZER.to_string());
+    let tokenizer =
+        env::var("HOLZI_TEST_GGUF_TOKENIZER").unwrap_or_else(|_| DEFAULT_TOKENIZER.to_string());
 
     let model = LocalModel::load(&path, Some(&tokenizer))
         .await
@@ -133,9 +131,7 @@ async fn abort_stops_generation_before_completion() {
 
     // After abort, the receiver must return `None` within a bounded
     // window. In-flight chunks may still arrive first; they are fine.
-    let drain = async {
-        while handle.next().await.is_some() {}
-    };
+    let drain = async { while handle.next().await.is_some() {} };
     tokio::time::timeout(ABORT_DRAIN_TIMEOUT, drain)
         .await
         .expect("abort did not close the stream within the drain window");

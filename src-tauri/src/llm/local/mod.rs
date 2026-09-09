@@ -12,6 +12,4 @@ mod loader_tests;
 mod stream;
 
 pub use loader::{LocalModel, LocalModelError};
-pub use stream::{
-    ChatMessage, ChatRequest, ChatRole, GenerationHandle, StreamChunk, StreamError,
-};
+pub use stream::{ChatMessage, ChatRequest, ChatRole, GenerationHandle, StreamChunk, StreamError};

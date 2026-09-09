@@ -54,9 +54,7 @@ pub async fn create_thread(
 pub async fn list_threads(state: State<'_, AppState>) -> Result<Vec<ThreadPayload>> {
     let db = active_database(&state)?;
     let rows = tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            thread_store::list_threads(conn).map_err(haex_crdt::Error::from)
-        })
+        db.with_connection(|conn| thread_store::list_threads(conn).map_err(haex_crdt::Error::from))
     })
     .await
     .map_err(|e| HolziError::CrdtInit {
