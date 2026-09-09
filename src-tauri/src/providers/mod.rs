@@ -1,9 +1,9 @@
-//! Provider commands: add / list / get / delete.
+//! Provider commands: add / list / get / delete + refresh model listing.
 //!
-//! This slice ships the schema and CRUD. Live provider invocation
-//! (Anthropic/OpenAI HTTP, `cli_delegate` subprocess spawning) is a
-//! later slice — a `local` provider row is enough to drive the chat
-//! loop through the mistralrs wrapper from slice a.
+//! CRUD is provider-kind-agnostic; the refresh path dispatches on
+//! `ProviderKind` to build the right adapter. Live invocation for
+//! `cli_delegate` still awaits its own design pass — refresh returns
+//! an error until then.
 
 pub mod local;
 
@@ -11,9 +11,12 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 use uuid::Uuid;
 
+use crate::adapters::anthropic::AnthropicAdapter;
+use crate::adapters::{AdapterError, ProviderAdapter, ProviderModel};
 use crate::error::{HolziError, Result};
 use crate::state::AppState;
 use crate::state_utils::active_database;
+use crate::storage::models::{self as models_store, ModelRow};
 use crate::storage::providers::{self as storage, Provider, ProviderKind};
 
 #[derive(Debug, Deserialize)]
@@ -131,6 +134,158 @@ pub async fn list_providers(state: State<'_, AppState>) -> Result<Vec<ProviderPa
     })?
     .map_err(HolziError::from)?;
     Ok(rows.into_iter().map(Into::into).collect())
+}
+
+/// Payload returned by [`refresh_provider_models`]. Reports what the
+/// live fetch produced; the frontend can then re-query `models` via
+/// the existing storage path for full display data.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RefreshProviderModelsResult {
+    pub provider_id: Uuid,
+    pub model_count: usize,
+    pub fetched_at: i64,
+}
+
+/// Fetches the given provider's model catalog live and replaces the
+/// cached `models` rows for it. Plan §"Anbietermodelle": "Modelllisten
+/// werden immer abgefragt, nie hartkodiert." A failed fetch leaves the
+/// existing cache untouched — the caller sees an error and the UI
+/// stays on the previous listing (or empty state).
+///
+/// Never routes for `ProviderKind::Local` — local models are managed
+/// via the download/import commands. `ProviderKind::CliDelegate`
+/// awaits a separate design pass and returns `InvalidInput`.
+#[tauri::command]
+pub async fn refresh_provider_models(
+    state: State<'_, AppState>,
+    provider_id: Uuid,
+) -> Result<RefreshProviderModelsResult> {
+    let db = active_database(&state)?;
+    let db_read = db.clone();
+    let provider = tauri::async_runtime::spawn_blocking(move || {
+        db_read.with_connection(|conn| {
+            storage::get_provider(conn, provider_id).map_err(haex_crdt::Error::from)
+        })
+    })
+    .await
+    .map_err(|e| HolziError::CrdtInit {
+        reason: format!("get_provider join: {e}"),
+    })?
+    .map_err(HolziError::from)?
+    .ok_or_else(|| HolziError::InvalidInput {
+        reason: format!("provider {provider_id} not found"),
+    })?;
+
+    let adapter = build_adapter(&provider)?;
+    let fetched = adapter.list_models().await.map_err(map_adapter_error)?;
+
+    let fetched_at = now_ms();
+    let rows: Vec<ModelRow> = fetched
+        .into_iter()
+        .map(|m| compose_model_row(provider_id, fetched_at, m))
+        .collect();
+    let model_count = rows.len();
+
+    let db_write = db.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        db_write.with_connection(|conn| {
+            models_store::replace_provider_models(conn, provider_id, &rows)
+                .map_err(haex_crdt::Error::from)?;
+            Ok(())
+        })
+    })
+    .await
+    .map_err(|e| HolziError::CrdtInit {
+        reason: format!("replace_provider_models join: {e}"),
+    })?
+    .map_err(HolziError::from)?;
+
+    Ok(RefreshProviderModelsResult {
+        provider_id,
+        model_count,
+        fetched_at,
+    })
+}
+
+/// Builds the right adapter for the provider's kind and credentials.
+/// Kept sync so the caller can decide how to schedule the network
+/// call. `Local` is rejected — refresh only makes sense for remote
+/// listings.
+fn build_adapter(provider: &Provider) -> Result<Box<dyn ProviderAdapter>> {
+    match provider.kind {
+        ProviderKind::ApiKey => {
+            let base_url =
+                provider
+                    .base_url
+                    .as_deref()
+                    .ok_or_else(|| HolziError::InvalidInput {
+                        reason: "api_key provider is missing base_url".into(),
+                    })?;
+            let credentials =
+                provider
+                    .credentials
+                    .as_ref()
+                    .ok_or_else(|| HolziError::InvalidInput {
+                        reason: "api_key provider is missing credentials".into(),
+                    })?;
+            let api_key = std::str::from_utf8(credentials.as_slice())
+                .map_err(|e| HolziError::InvalidInput {
+                    reason: format!("api_key credentials are not UTF-8: {e}"),
+                })?
+                .to_string();
+            // Slice (a) only ships the Anthropic adapter. Additional
+            // api_key vendors (OpenAI, Google, Groq) each require their
+            // own listing endpoint and land as follow-up PRs.
+            let adapter =
+                AnthropicAdapter::new(base_url.to_string(), api_key).map_err(map_adapter_error)?;
+            Ok(Box::new(adapter))
+        }
+        ProviderKind::CliDelegate => Err(HolziError::InvalidInput {
+            reason: "cli_delegate refresh is not yet implemented".into(),
+        }),
+        ProviderKind::Local => Err(HolziError::InvalidInput {
+            reason: "refresh does not apply to local providers".into(),
+        }),
+    }
+}
+
+fn compose_model_row(provider_id: Uuid, fetched_at: i64, m: ProviderModel) -> ModelRow {
+    // Composite id per plan §"Datenmodell". Keeps the same remote id
+    // distinguishable when the operator configures two accounts with
+    // the same provider.
+    ModelRow {
+        id: format!("{provider_id}:{}", m.remote_id),
+        provider_id,
+        name: m.display_name,
+        context_window: m.context_window,
+        fetched_at: Some(fetched_at),
+        // API providers do not need a local tokenizer — the vendor's
+        // server-side tokenizer handles that.
+        tokenizer_repo: None,
+    }
+}
+
+fn map_adapter_error(err: AdapterError) -> HolziError {
+    // Surface `InvalidCredentials` as its own kind so the frontend can
+    // render "Ungültige Zugangsdaten" per plan §"Anbietermodelle".
+    // Other adapter errors ride the generic `InvalidInput` bucket for
+    // now — a dedicated `HolziError::Provider*` variant lands with the
+    // chat integration in slice (b), when the UI needs finer control.
+    match err {
+        AdapterError::InvalidCredentials => HolziError::InvalidInput {
+            reason: "provider rejected credentials".into(),
+        },
+        AdapterError::Http { reason } => HolziError::InvalidInput {
+            reason: format!("provider transport error: {reason}"),
+        },
+        AdapterError::Status { status, body } => HolziError::InvalidInput {
+            reason: format!("provider returned {status}: {body}"),
+        },
+        AdapterError::Parse { reason } => HolziError::InvalidInput {
+            reason: format!("provider response parse error: {reason}"),
+        },
+    }
 }
 
 /// Deletes a provider by id. Callers (frontend) are responsible for

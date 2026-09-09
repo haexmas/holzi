@@ -14,7 +14,7 @@ use crate::state_utils::active_database;
 use crate::storage::{
     chat_messages::{self as msg_store, ChatMessage, FinishReason, MessageRole},
     chat_threads::{self as thread_store, ChatThread},
-    device_downloaded_models,
+    device_downloaded_models, models as models_store,
 };
 
 use super::session::{ActiveSession, ChatState};
@@ -98,15 +98,17 @@ pub async fn load_local_model(
                 .ok_or_else(|| {
                     haex_crdt::Error::from(haex_crdt::rusqlite::Error::QueryReturnedNoRows)
                 })?;
-            let mut stmt = conn
-                .prepare("SELECT name, context_window FROM models WHERE id = ?1")
-                .map_err(haex_crdt::Error::from)?;
-            let row: (String, Option<i64>) = stmt
-                .query_row(haex_crdt::rusqlite::params![id_owned], |r| {
-                    Ok((r.get(0)?, r.get(1)?))
-                })
-                .map_err(haex_crdt::Error::from)?;
-            Ok((dm.relative_path, row.0, row.1))
+            let row = models_store::get_model(conn, &id_owned)
+                .map_err(haex_crdt::Error::from)?
+                .ok_or_else(|| {
+                    haex_crdt::Error::from(haex_crdt::rusqlite::Error::QueryReturnedNoRows)
+                })?;
+            Ok((
+                dm.relative_path,
+                row.name,
+                row.context_window,
+                row.tokenizer_repo,
+            ))
         })
     })
     .await
@@ -116,15 +118,15 @@ pub async fn load_local_model(
     .map_err(|_| HolziError::ModelNotFound {
         id: model_id.clone(),
     })?;
-    let (relative_path, name, context_window) = resolved;
+    let (relative_path, name, context_window, db_tokenizer_repo) = resolved;
 
     let absolute = paths::resolve_relative(&app, &relative_path)?;
 
-    // Tokenizer repo lives in the catalog for now — arbitrary HF
-    // downloads carry it directly; look either up.
-    let tokenizer_repo = crate::catalog::get(&model_id)
-        .map(|e| e.tokenizer_repo.clone())
-        .or_else(|| tokenizer_repo_lookup_from_db(&state, &model_id))
+    // Prefer the persisted `tokenizer_repo` (migration 0009 onwards).
+    // The catalog fallback covers pre-0009 rows the lazy backfill in
+    // `list_installed_models` has not yet touched.
+    let tokenizer_repo = db_tokenizer_repo
+        .or_else(|| crate::catalog::get(&model_id).map(|e| e.tokenizer_repo.clone()))
         .ok_or_else(|| HolziError::InvalidInput {
             reason: format!("tokenizer_repo missing for model {model_id}"),
         })?;
@@ -481,15 +483,6 @@ fn last_message_id(
 ) -> haex_crdt::Result<Option<Uuid>> {
     let msgs = msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)?;
     Ok(msgs.last().map(|m| m.id))
-}
-
-fn tokenizer_repo_lookup_from_db(_state: &State<'_, AppState>, _id: &str) -> Option<String> {
-    // For MVP the tokenizer_repo is not stored in the `models` table —
-    // it comes from the catalog. Arbitrary HF downloads pass it in
-    // `DownloadFromHfArgs`, but we do not currently persist it. If it
-    // becomes necessary we add a column to `models` and back-fill.
-    // Returning `None` here forces the caller to derive from context.
-    None
 }
 
 fn now_ms() -> i64 {

@@ -1,3 +1,4 @@
+pub mod adapters;
 pub mod catalog;
 pub mod chat;
 pub mod error;
@@ -31,7 +32,7 @@ use models::commands::{
     delete_installed_model, download_model_from_catalog, download_model_from_hf,
     import_model_from_file, list_installed_models,
 };
-use providers::{add_provider, delete_provider, list_providers};
+use providers::{add_provider, delete_provider, list_providers, refresh_provider_models};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 /// Builds and starts the holzi Tauri application.
@@ -67,6 +68,7 @@ pub fn run() {
             add_provider,
             list_providers,
             delete_provider,
+            refresh_provider_models,
             download_model_from_catalog,
             download_model_from_hf,
             import_model_from_file,

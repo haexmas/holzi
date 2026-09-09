@@ -166,5 +166,19 @@ pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
             .to_string(),
     );
 
+    // `load_local_model` needs a tokenizer repo to feed mistralrs. Until
+    // this migration it was looked up from the built-in catalog only,
+    // which meant arbitrary HuggingFace downloads (via
+    // `download_model_from_hf` with a caller-supplied `tokenizer_repo`)
+    // could not be loaded after a restart — the value was thrown away.
+    // Column is NULL for api_key/cli_delegate rows (they do not tokenize
+    // locally) and is set on download / import going forward. Pre-existing
+    // catalog rows are back-filled lazily by `models::commands` on the
+    // next `list_installed_models` call.
+    m.insert(
+        MigrationName::from("0009_models_add_tokenizer_repo"),
+        "ALTER TABLE models ADD COLUMN tokenizer_repo TEXT;".to_string(),
+    );
+
     Arc::new(StaticMigrationSource(m))
 }

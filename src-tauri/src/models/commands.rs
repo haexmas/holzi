@@ -91,7 +91,7 @@ pub async fn download_model_from_catalog(
         name: entry.name.clone(),
         hf_repo: entry.hf_repo,
         hf_filename: entry.hf_filename,
-        tokenizer_repo: entry.tokenizer_repo,
+        tokenizer_repo: entry.tokenizer_repo.clone(),
         context_window: Some(entry.context_window as i64),
     };
     download_model_from_hf(app, state, args).await
@@ -130,6 +130,7 @@ pub async fn download_model_from_hf(
         &relative,
         downloaded.bytes_written as i64,
         args.context_window,
+        Some(args.tokenizer_repo.clone()),
     )
     .await?;
 
@@ -167,6 +168,7 @@ pub async fn import_model_from_file(
         &relative,
         bytes as i64,
         args.context_window,
+        Some(args.tokenizer_repo.clone()),
     )
     .await
 }
@@ -175,6 +177,11 @@ pub async fn import_model_from_file(
 /// `device_downloaded_models_no_sync`. Rows without a filesystem
 /// registration are skipped — they represent catalog entries the user
 /// has not yet downloaded.
+///
+/// Also opportunistically back-fills `models.tokenizer_repo` for any
+/// catalog rows that predate migration 0009 (idempotent — the UPDATE
+/// only touches rows where the column is still NULL and the id
+/// matches a compiled-in catalog entry).
 #[tauri::command]
 pub async fn list_installed_models(
     state: State<'_, AppState>,
@@ -182,6 +189,11 @@ pub async fn list_installed_models(
     let db = active_database(&state)?;
     let payload = tauri::async_runtime::spawn_blocking(move || {
         db.with_connection(|conn| {
+            let _ = models_store::backfill_tokenizer_repo(conn, |id| {
+                catalog::get(id).map(|entry| entry.tokenizer_repo.clone())
+            })
+            .map_err(haex_crdt::Error::from)?;
+
             let installed =
                 dm_store::list_downloaded_models(conn).map_err(haex_crdt::Error::from)?;
             let mut out = Vec::with_capacity(installed.len());
@@ -262,6 +274,7 @@ async fn register_downloaded(
     relative: &str,
     size_bytes: i64,
     context_window: Option<i64>,
+    tokenizer_repo: Option<String>,
 ) -> Result<InstalledModelPayload> {
     let db = active_database(state)?;
     let id_owned = id.to_string();
@@ -277,6 +290,7 @@ async fn register_downloaded(
                 name: name_owned.clone(),
                 context_window,
                 fetched_at: Some(now_ms()),
+                tokenizer_repo: tokenizer_repo.clone(),
             };
             models_store::upsert_model(conn, &m).map_err(haex_crdt::Error::from)?;
             let dm = DownloadedModel {
