@@ -1,6 +1,7 @@
 pub mod error;
 pub mod identity;
 pub mod instances;
+pub mod llm;
 pub mod state;
 pub mod storage;
 
