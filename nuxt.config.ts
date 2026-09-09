@@ -6,6 +6,16 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   ssr: false,
   srcDir: 'src/',
+  // haex-ui Nuxt layer — provides Shadcn* + Ui* components, i18n
+  // scaffolding, reka-ui config. Pinned by commit SHA so upstream
+  // changes never surprise our build. Layer declares its peers; we
+  // list them explicitly under `dependencies` below.
+  extends: [
+    'github:haex-space/haextension/packages/haex-ui#634d621',
+  ],
+  build: {
+    transpile: ['reka-ui'],
+  },
   // Nuxt/Nitro liest den Dev-Port aus `devServer`, NICHT aus `vite.server.port`
   // (letzteres greift nur beim Vite-Preview nach `nuxt build`). Muss mit
   // tauri.conf.json → build.devUrl und security.devCsp synchron bleiben.

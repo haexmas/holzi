@@ -58,36 +58,43 @@ async function onSubmit() {
 </script>
 
 <template>
-  <UiSheet
+  <UiDrawerModal
     :open="props.open"
     :title="t('onboarding.unlock.title')"
+    :description="props.name ?? undefined"
     @update:open="$emit('update:open', $event)"
   >
-    <form class="space-y-4" @submit.prevent="onSubmit">
-      <p v-if="props.name" class="text-sm text-muted-foreground">
-        {{ props.name }}
-      </p>
-      <div>
-        <UiLabel for="unlock-passphrase">
-          {{ t('onboarding.unlock.passphrase') }}
-        </UiLabel>
-        <UiInput
-          id="unlock-passphrase"
-          v-model="passphrase"
-          type="password"
-          autofocus
-        />
-      </div>
-      <p v-if="error" class="text-sm text-red-500" role="alert">
-        {{ error }}
-      </p>
+    <template #content>
+      <form
+        id="unlock-form"
+        class="space-y-4 px-6 py-2"
+        @submit.prevent="onSubmit"
+      >
+        <div class="space-y-1.5">
+          <ShadcnLabel for="unlock-passphrase">
+            {{ t('onboarding.unlock.passphrase') }}
+          </ShadcnLabel>
+          <UiInputPassword
+            id="unlock-passphrase"
+            v-model="passphrase"
+            autofocus
+          />
+        </div>
+        <p v-if="error" class="text-sm text-destructive" role="alert">
+          {{ error }}
+        </p>
+      </form>
+    </template>
+    <template #footer>
       <UiButton
+        form="unlock-form"
         type="submit"
         :disabled="!canSubmit"
+        :loading="submitting"
         class="w-full"
       >
-        {{ submitting ? '…' : t('onboarding.unlock.submit') }}
+        {{ t('onboarding.unlock.submit') }}
       </UiButton>
-    </form>
-  </UiSheet>
+    </template>
+  </UiDrawerModal>
 </template>

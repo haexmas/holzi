@@ -5,6 +5,6 @@ useHead({ title: 'Holzi' })
 <template>
   <div>
     <NuxtPage />
-    <UiSonner />
+    <ShadcnSonnerToaster position="bottom-right" />
   </div>
 </template>
