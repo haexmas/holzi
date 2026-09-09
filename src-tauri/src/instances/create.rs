@@ -43,6 +43,7 @@ pub struct CreateInstanceResult {
     pub info: InstanceInfo,
 }
 
+/// Creates, initializes, and publishes a new encrypted instance.
 #[tauri::command]
 pub async fn create_instance(
     app: AppHandle,
@@ -107,6 +108,7 @@ pub async fn create_instance(
     }
 }
 
+/// Publishes a newly opened database as the active instance.
 fn publish_active(
     state: State<'_, AppState>,
     app: &AppHandle,
@@ -142,6 +144,7 @@ fn publish_active(
     Ok(CreateInstanceResult { info })
 }
 
+/// Opens a new database with the lifecycle command's bootstrap configuration.
 fn open_new_database(
     args: &CreateInstanceArgs,
     db_path: &Path,
@@ -159,6 +162,7 @@ fn open_new_database(
     Ok(Arc::new(Database::open(config)?))
 }
 
+/// Returns the current UNIX timestamp in milliseconds.
 fn now_millis() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

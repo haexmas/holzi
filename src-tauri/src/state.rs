@@ -30,6 +30,7 @@ pub struct AppState {
 }
 
 impl AppState {
+    /// Creates application state with no active instance.
     pub fn new() -> Self {
         Self {
             active_instance: Mutex::new(None),

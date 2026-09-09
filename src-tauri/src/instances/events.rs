@@ -19,6 +19,7 @@ pub struct InstanceListChanged {
     pub affected_name: Option<String>,
 }
 
+/// Emits a lifecycle change notification for frontend list synchronization.
 pub fn emit_instance_list_changed(
     app: &AppHandle,
     reason: &'static str,

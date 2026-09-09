@@ -36,6 +36,7 @@ pub struct OpenInstanceArgs {
     pub passphrase: String,
 }
 
+/// Opens an encrypted instance and makes it the active application instance.
 #[tauri::command]
 pub async fn open_instance(
     app: AppHandle,
@@ -106,6 +107,7 @@ pub async fn open_instance(
     Ok(info)
 }
 
+/// Opens an existing database with the lifecycle command's runtime configuration.
 fn open_existing_database(
     passphrase: &str,
     db_path: &Path,
