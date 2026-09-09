@@ -75,4 +75,3 @@ pub fn get_app_local_data(app: &AppHandle) -> Result<PathBuf> {
             reason: format!("resolve app_local_data_dir: {e}"),
         })
 }
-

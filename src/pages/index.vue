@@ -7,8 +7,17 @@ const unlockSheetOpen = ref(false)
 const selectedName = ref<string | null>(null)
 
 onMounted(async () => {
-  await store.startListening()
+  let listenerError: unknown
+  try {
+    await store.startListening()
+  }
+  catch (e) {
+    listenerError = e
+  }
   await store.syncAsync()
+  if (listenerError !== undefined) {
+    store.lastError = listenerError instanceof Error ? listenerError.message : String(listenerError)
+  }
 })
 
 onBeforeUnmount(() => {

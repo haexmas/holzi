@@ -63,18 +63,114 @@ pub async fn open_instance(
         });
     }
 
-    // Hold the state lock across the whole switch. Failure to open the
+    // Database::open acquires the active database's advisory lock, so an
+    // already-active request for the same name needs a credential check that
+    // does not mount a second Database handle.
+    let active_database = {
+        let guard = state
+            .active_instance
+            .lock()
+            .map_err(|e| HolziError::CrdtInit {
+                reason: format!("active_instance mutex poisoned: {e}"),
+            })?;
+        guard
+            .as_ref()
+            .filter(|active| active.name == args.name)
+            .map(|active| Arc::clone(&active.database))
+    };
+
+    if let Some(_active_database) = active_database {
+        let passphrase = args.passphrase.clone();
+        let validation_path = db_path.clone();
+        let validation = tauri::async_runtime::spawn_blocking(move || {
+            let connection = rusqlite::Connection::open_with_flags(
+                &validation_path,
+                rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+            );
+            let result = match connection {
+                Ok(connection) => {
+                    connection
+                        .pragma_update(None, "key", passphrase)
+                        .and_then(|()| {
+                            connection.query_row("SELECT count(*) FROM sqlite_master", [], |row| {
+                                row.get::<_, i64>(0)
+                            })
+                        })
+                }
+                Err(e) => Err(e),
+            };
+
+            match result {
+                Ok(_) => Ok(()),
+                Err(e)
+                    if matches!(
+                        &e,
+                        rusqlite::Error::SqliteFailure(code, _)
+                            if code.code == rusqlite::ErrorCode::NotADatabase
+                    ) || e.to_string().to_lowercase().contains("not a database") =>
+                {
+                    Err(HolziError::WrongPassphrase)
+                }
+                Err(e) => Err(HolziError::CrdtSqlite {
+                    reason: e.to_string(),
+                }),
+            }
+        })
+        .await
+        .map_err(|e| HolziError::CrdtInit {
+            reason: format!("passphrase validation task failed: {e}"),
+        })?;
+        validation?;
+
+        // The active slot may have changed while the read-only validation ran.
+        // Only return the existing instance if it is still the requested one.
+        let guard = state
+            .active_instance
+            .lock()
+            .map_err(|e| HolziError::CrdtInit {
+                reason: format!("active_instance mutex poisoned: {e}"),
+            })?;
+        if guard
+            .as_ref()
+            .is_some_and(|active| active.name == args.name)
+        {
+            drop(guard);
+            let _ = set_file_mtime(&db_path, FileTime::now());
+            let info = InstanceInfo {
+                name: args.name.clone(),
+                alias: None,
+                last_access: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis() as u64)
+                    .unwrap_or(0),
+            };
+            emit_instance_list_changed(&app, "opened", Some(args.name.clone()));
+            return Ok(info);
+        }
+    }
+
+    // Open the candidate without holding active_instance. Failure to open the
     // candidate leaves the previous runtime intact (contract postcondition).
+    let passphrase = args.passphrase.clone();
+    let open_path = db_path.clone();
+    let open_installation_id_file = installation_id_file.clone();
+    let candidate_result = tauri::async_runtime::spawn_blocking(move || {
+        open_existing_database(&passphrase, &open_path, &open_installation_id_file)
+    })
+    .await
+    .map_err(|e| HolziError::CrdtInit {
+        reason: format!("database open task failed: {e}"),
+    })?;
+    let candidate = candidate_result?;
+
+    // Hold the state lock only for the atomic old-runtime drop/new-runtime
+    // publish. The blocking SQLCipher open above cannot stall observers.
     let mut guard = state
         .active_instance
         .lock()
         .map_err(|e| HolziError::CrdtInit {
             reason: format!("active_instance mutex poisoned: {e}"),
         })?;
-
-    // Open the candidate before touching any active state.
-    let candidate =
-        open_existing_database(&args.passphrase, &db_path, &installation_id_file)?;
 
     // Candidate is up — drop the previous handle (releases fs2 lock)
     // and publish the new one atomically.

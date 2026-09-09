@@ -67,6 +67,6 @@ pub async fn list_instances(app: AppHandle) -> Result<Vec<InstanceInfo>> {
         });
     }
 
-    out.sort_by(|a, b| b.last_access.cmp(&a.last_access));
+    out.sort_by_key(|instance| std::cmp::Reverse(instance.last_access));
     Ok(out)
 }

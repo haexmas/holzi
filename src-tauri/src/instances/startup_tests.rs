@@ -25,7 +25,10 @@ fn cleanup_removes_marker_and_sibling_db() {
         !dir.join("orphan.db.pending").exists(),
         "orphan marker removed"
     );
-    assert!(dir.join("healthy.db").exists(), "healthy instance untouched");
+    assert!(
+        dir.join("healthy.db").exists(),
+        "healthy instance untouched"
+    );
 }
 
 #[test]
@@ -48,4 +51,19 @@ fn cleanup_missing_dir_is_not_error() {
     let tmp = tempfile::tempdir().unwrap();
     let missing = tmp.path().join("does-not-exist");
     assert_eq!(cleanup_orphans_in_dir(&missing).unwrap(), 0);
+}
+
+#[test]
+fn cleanup_keeps_marker_when_sibling_cannot_be_removed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path();
+
+    // A directory at the sibling path makes remove_file fail without relying
+    // on platform-specific permissions or running the test as a non-root user.
+    fs::create_dir(dir.join("blocked.db")).unwrap();
+    fs::write(dir.join("blocked.db.pending"), b"").unwrap();
+
+    assert_eq!(cleanup_orphans_in_dir(dir).unwrap(), 0);
+    assert!(dir.join("blocked.db").is_dir());
+    assert!(dir.join("blocked.db.pending").exists());
 }

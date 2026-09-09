@@ -50,13 +50,21 @@ pub fn cleanup_orphans_in_dir(dir: &Path) -> Result<usize> {
         if !filename.ends_with(&marker_suffix) {
             continue;
         }
-        // Sibling `.db` first (best-effort — may already be gone if the
-        // crash happened before Database::open), then the marker.
+        // Sibling `.db` first. A missing sibling is expected if the crash
+        // happened before Database::open; other deletion failures retain the
+        // marker so the file cannot be published as a healthy instance.
         // `with_extension("db")` would turn `foo.db.pending` into
         // `foo.db.db`; strip the `.pending` suffix from the filename
         // instead.
         let sibling_db = path.with_file_name(sibling_filename);
-        let _ = fs::remove_file(&sibling_db);
+        match fs::remove_file(&sibling_db) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                log::warn!("failed to remove orphan database {sibling_db:?}: {e}");
+                continue;
+            }
+        }
         if let Err(e) = fs::remove_file(&path) {
             log::warn!("failed to remove orphan pending marker {path:?}: {e}");
             continue;
@@ -65,4 +73,3 @@ pub fn cleanup_orphans_in_dir(dir: &Path) -> Result<usize> {
     }
     Ok(removed)
 }
-

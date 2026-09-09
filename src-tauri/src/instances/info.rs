@@ -17,5 +17,6 @@ pub struct InstanceInfo {
     /// list results, filled later when needed.
     pub alias: Option<String>,
     /// Milliseconds since UNIX epoch; sourced from the DB file's mtime.
+    #[ts(type = "number")]
     pub last_access: u64,
 }

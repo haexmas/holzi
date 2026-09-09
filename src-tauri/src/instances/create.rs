@@ -96,10 +96,34 @@ pub async fn create_instance(
         })?;
 
     // From here on, any early return MUST clean up the marker + .db.
-    let open_result = open_new_database(&args, &db_path, &installation_id_file);
+    let passphrase = args.passphrase.clone();
+    let open_path = db_path.clone();
+    let open_installation_id_file = installation_id_file.clone();
+    let open_result = match tauri::async_runtime::spawn_blocking(move || {
+        open_new_database(&passphrase, &open_path, &open_installation_id_file)
+    })
+    .await
+    {
+        Ok(result) => result,
+        Err(e) => {
+            let _ = std::fs::remove_file(&db_path);
+            let _ = std::fs::remove_file(&pending_marker);
+            return Err(HolziError::CrdtInit {
+                reason: format!("database open task failed: {e}"),
+            });
+        }
+    };
 
     match open_result {
-        Ok(db_arc) => publish_active(state, &app, &args.name, db_arc, &pending_marker),
+        Ok(db_arc) => match publish_active(state, &app, &args.name, &db_arc, &pending_marker) {
+            Ok(result) => Ok(result),
+            Err(e) => {
+                drop(db_arc);
+                let _ = std::fs::remove_file(&db_path);
+                let _ = std::fs::remove_file(&pending_marker);
+                Err(e)
+            }
+        },
         Err(e) => {
             let _ = std::fs::remove_file(&db_path);
             let _ = std::fs::remove_file(&pending_marker);
@@ -113,7 +137,7 @@ fn publish_active(
     state: State<'_, AppState>,
     app: &AppHandle,
     name: &str,
-    db_arc: Arc<Database>,
+    db_arc: &Arc<Database>,
     pending_marker: &Path,
 ) -> Result<CreateInstanceResult> {
     {
@@ -123,9 +147,12 @@ fn publish_active(
             .map_err(|e| HolziError::CrdtInit {
                 reason: format!("active_instance mutex poisoned during publish: {e}"),
             })?;
+        if guard.is_some() {
+            return Err(HolziError::InstanceAlreadyActive);
+        }
         *guard = Some(ActiveInstanceHandle {
             name: name.to_string(),
-            database: Arc::clone(&db_arc),
+            database: Arc::clone(db_arc),
         });
     }
 
@@ -146,13 +173,13 @@ fn publish_active(
 
 /// Opens a new database with the lifecycle command's bootstrap configuration.
 fn open_new_database(
-    args: &CreateInstanceArgs,
+    passphrase: &str,
     db_path: &Path,
     installation_id_file: &Path,
 ) -> Result<Arc<Database>> {
     let config = DatabaseConfig {
         path: db_path.to_path_buf(),
-        key: SqlCipherKey::new(&args.passphrase),
+        key: SqlCipherKey::new(passphrase),
         create_if_missing: true,
         bootstrap: Arc::new(HolziBootstrap::new(installation_id_file.to_path_buf())),
         signature_provider: Arc::new(NoopSignatureProvider),
