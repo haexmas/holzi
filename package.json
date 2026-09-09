@@ -1,0 +1,50 @@
+{
+  "name": "holzi",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "typecheck": "nuxt typecheck",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "generate:ts-types": "cd src-tauri && cargo test --features ts-rs export_bindings -- --nocapture"
+  },
+  "dependencies": {
+    "@nuxt/icon": "2.5.1",
+    "@nuxtjs/i18n": "10.6.0",
+    "@pinia/nuxt": "1.0.2",
+    "@tauri-apps/api": "^2.5.0",
+    "@tauri-apps/plugin-dialog": "^2.2.0",
+    "@tauri-apps/plugin-fs": "^2.2.0",
+    "@tauri-apps/plugin-store": "^2.2.0",
+    "@vueuse/nuxt": "14.4.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-vue-next": "^0.469.0",
+    "nuxt": "4.5.2",
+    "pinia": "^3.0.0",
+    "reka-ui": "^2.0.0",
+    "tailwind-merge": "^3.0.0",
+    "vue": "^3.5.13",
+    "vue-sonner": "^2.0.0"
+  },
+  "devDependencies": {
+    "@iconify-json/lucide": "^1.2.0",
+    "@tailwindcss/vite": "4.3.3",
+    "@tauri-apps/cli": "^2.5.0",
+    "tailwindcss": "4.3.3",
+    "tw-animate-css": "^1.0.0",
+    "typescript": "^5.7.0",
+    "vue-tsc": "^2.2.0"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
