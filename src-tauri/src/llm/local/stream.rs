@@ -73,6 +73,14 @@ impl GenerationHandle {
     pub fn abort(&self) {
         self.task.abort();
     }
+
+    /// Returns a cloneable, Send abort handle for the underlying task.
+    /// Chat commands stash this in shared state so an out-of-band
+    /// `abort_current_generation` call can cancel without owning the
+    /// full `GenerationHandle`.
+    pub fn abort_handle(&self) -> tokio::task::AbortHandle {
+        self.task.abort_handle()
+    }
 }
 
 impl Drop for GenerationHandle {

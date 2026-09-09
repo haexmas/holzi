@@ -31,12 +31,12 @@ function onSelect(name: string) {
 
 async function onCreated(name: string) {
   store.setActiveInstance(name)
-  await navigateTo(`/federation/${encodeURIComponent(name)}`)
+  await navigateTo(`/chat/${encodeURIComponent(name)}`)
 }
 
 async function onUnlocked(name: string) {
   store.setActiveInstance(name)
-  await navigateTo(`/federation/${encodeURIComponent(name)}`)
+  await navigateTo(`/chat/${encodeURIComponent(name)}`)
 }
 </script>
 
