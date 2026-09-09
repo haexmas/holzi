@@ -1,6 +1,6 @@
 # Holzi: erster MVP mit lokalem Chat und Anbietermodellen
 
-Stand: 2026-09-08 (überarbeitet). Ursprungsfassung 2026-09-07. Geplant gegen Holzi-Commit `acb64b9` und `haex-crdt` Commit `c41ef2e` (Cargo-Version 0.2.0, kein Tag).
+Stand: 2026-09-09 (überarbeitet). Ursprungsfassung 2026-09-07. Geplant gegen Holzi-Commit `bf4752b` und `haex-crdt` Commit `1c069ef` (Cargo-Version 0.4.0, kein Tag; siehe Contract-Pin).
 Status: **Entwurf zur Produkt- und Architekturabstimmung**, keine freigegebene Implementierungsspezifikation.
 Priorität P1 · Aufwand L · Integrationsrisiko mittel · Kategorie direction.
 
@@ -105,12 +105,12 @@ Rust besitzt Dateien, Datenbank, Schlüsselzugriffe und Netzwerk. Die WebView be
 
 Zunächst nur stabile IDs und kurze, atomare Schreibvorgänge. `haex-crdt` bietet spaltenweises Last-Writer-Wins mit Hybrid Logical Clocks; das ist kein kollaborativer Texteditor.
 
-Alle zur Synchronisierung vorgesehenen Anwendungstabellen werden bereits im MVP über `install_crdt` installiert, obwohl noch nichts synchronisiert. Private und gerätelokale Tabellen bleiben gemäß dem Vertrag von `install_crdt` ausgeschlossen. Die `_no_trigger`-Metadatenspalten der synchronisierbaren Tabellen ersparen später eine Schemamigration über gefüllte Tabellen.
+Alle zur Synchronisierung vorgesehenen Anwendungstabellen werden bereits im MVP über `install_crdt` installiert, obwohl noch nichts synchronisiert. Private und gerätelokale Tabellen bleiben gemäß dem Vertrag von `install_crdt` ausgeschlossen. Die drei `_no_sync`-Metadatenspalten der synchronisierbaren Tabellen ersparen später eine Schemamigration über gefüllte Tabellen.
 
 | Tabelle | CRDT | Inhalt |
 | --- | --- | --- |
 | `vault_identity` | ja | Vault-Identitäts-Keypair (Public + Private) für Proof-of-Possession-Auth zwischen Replikaten. Einmal bei Genesis geschrieben; wandert mit jeder Dateikopie mit |
-| `known_devices` | ja, mit lokaler Spalte | Eine Zeile pro (Vault × Installation): `installation_uuid` ist ein lokaler Lookup-Key und wird aus jedem CRDT-Payload ausgeschlossen; `vault_device_uuid` (HLC-Node-ID dieses Replikats), Alias, Erstöffnungszeitpunkt und iroh-Node-ID sind synchronisierbare Felder. Beim ersten Öffnen einer neuen Installation wird eine neue Zeile eingefügt |
+| `known_devices` | ja | Eine Zeile pro (Vault × Installation): `installation_uuid` (aus `<AppLocalData>/installation-id` gelesen, dient dem Bootstrap als unveränderliche Zeilenidentität), `vault_device_uuid` (HLC-Node-ID dieses Replikats), Alias, Erstöffnungszeitpunkt und iroh-Node-ID. Die UUID wird als `row_pks` übertragen, die übrigen Felder sind synchronisierbare Spalten. Beim ersten Öffnen einer neuen Installation wird eine neue Zeile eingefügt |
 | `providers` | ja | Anbieterkonfiguration einschließlich API-Schlüssel: Art (`local`, `api_key`, `cli_delegate`), Name, Basis-URL, Zugangsdaten. Betreiber-Entscheidung vom 2026-09-08: Schlüssel werden mitsynchronisiert, damit ein Anbieter einmal statt je Gerät eingerichtet wird — siehe Abschnitt Anbietermodelle |
 | `models` | ja | Abgefragter Modellkatalog als Cache mit Abrufzeitpunkt; lokale und Anbietermodelle in einer Tabelle |
 | `device_downloaded_models_no_sync` | nein | Lokal verifizierte GGUF-Dateien: Modell-ID, Pfad **relativ zu** `AppLocalData/models/`, Größe, Abrufdatum; nach Import oder Restore erneut prüfen |
@@ -128,7 +128,7 @@ Streaming läuft über Tauri-Events. Der Teilstand wird mit stabiler Nachrichten
 
 Für die spätere Sync-Etappe: nur explizit freigegebene Tabellen und Spalten gehen in Scan **und** Apply. `_no_sync`-Tabellen nicht automatisch registrieren; der Suffix ersetzt keine Eingangsprüfung. Kein Sync-Payload sind: absolute Modellpfade, die SQLCipher-Passphrase, **private Instanzschlüssel** (Signier-, Nostr- und iroh-Schlüssel) und Prozesszustände.
 
-**Was `_no_sync` nicht leistet**: der Suffix hält Zeilen aus dem Sync-Kanal heraus — er schützt nicht gegen `cp`. Für Holzi ist das kein Problem: alles Installation-spezifische liegt bewusst **außerhalb** der Vault-DB (die Installations-UUID in `<AppLocalData>/installation-id`), und die per-Vault-per-Installation-Identität in `known_devices` unterscheidet sich pro Replikat, weil die Installations-UUID sich unterscheidet. „Gerätelokal" heißt hier „wandert nicht über den Sync", nicht „ist gegen Dateizugriff geschützt" — gegen Dateizugriff schützt allein SQLCipher.
+**Was `_no_sync` nicht leistet**: der Suffix hält Zeilen aus dem Sync-Kanal heraus — er schützt nicht gegen `cp`. „Gerätelokal" heißt hier „wandert nicht über den Sync", nicht „ist gegen Dateizugriff geschützt" — gegen Dateizugriff schützt allein SQLCipher. Für Holzi bleibt das Installation-spezifische bewusst als Datei **außerhalb** der Vault-DB (die Installations-UUID in `<AppLocalData>/installation-id`); die per-Vault-per-Installation-Identität in `known_devices` unterscheidet sich pro Replikat, weil die im Bootstrap gemintete Vault-Device-UUID zufällig ist. Die `installation_uuid`-Zeilenidentität wird als `row_pks` übertragen, nicht als veränderbares Spaltenfeld — die Cross-Vault-Unlinkability zwischen zwei Vaults desselben Users, die ein Ausschluss dieser Identität anstreben würde, wird nicht als Ziel geführt (siehe Contract §"Vault identity and device model" für die Begründung).
 
 **Anbieter-API-Schlüssel sind ausdrücklich Sync-Payload** (Betreiber-Entscheidung vom 2026-09-08). Sie unterscheiden sich kategorisch von privaten Instanzschlüsseln: letztere *sind* die Geräteidentität und müssen je Replikat verschieden sein, erstere sind Zugangsdaten zu einem externen Konto, das für alle Geräte dasselbe ist. Ein Anbieter wird damit einmal eingerichtet statt je Gerät.
 
@@ -237,6 +237,8 @@ Zielsystem und Hardware aufnehmen. Einen realen Durchlauf gegen `haex-crdt` baue
 
 Den Produktions-Schreibpfad mit HLC-Injektion und Triggern prüfen; ein gewöhnliches SQL-Update darf keine fehlenden CRDT-Metadaten erzeugen.
 
+**Abgeschlossen am 2026-09-09** — Baseline-Zahlen und fünf Nachfolge-Punkte im lokalen, nicht versionierten Ergebnisdokument des Wegwerf-Crates. Kernbefund: `haex-crdt` 0.4.0 trägt (162 ms Genesis-Open, 0,71 ms/CRDT-Write), `mistralrs` auf einer RTX A2000 8 GB liefert mit Qwen2.5-0.5B-Q4 163 tok/s (warm) bzw. 72 tok/s (kalt); CPU-Fallback 5.6 tok/s. Runtime-Wahl `mistral.rs` bleibt unverändert. Details, Assertions und die fünf Punkte in Abschnitt "Erkenntnisse aus Etappe 0" unten.
+
 ### 1. App und Instanzlebenszyklus — etwa 2–4 Arbeitstage
 
 Scaffold nach [`specs/001-frontend-onboarding/plan.md`](../specs/001-frontend-onboarding/plan.md): `src/` und `src-tauri/`, dazu Toolchain und Lockfiles. Landing, Anlegen, Liste selbst angelegter Instanzen, Unlock und Sperren. Die drei Provider-Traits und die Geräte-UUID-Verwaltung gemäß gemergtem Vertrag. Datenbanknamen validiert der Backendpfad; keinerlei verwaltete Pfade vom Frontend. Atomare Erstellung samt Pending-Marker und Crash-Aufräumen.
@@ -299,6 +301,24 @@ Spätere Umsetzung betrifft nach Spec-Review: `src/`, `src-tauri/`, `tests/`, `e
 
 Vor neuen Codeartefakten gilt der deklarierte graphify-Authoring-Check aus [`.spaex/constitution.md`](../.spaex/constitution.md); dieser Dokumententwurf führt noch keine Codeartefakte ein.
 
+## Erkenntnisse aus Etappe 0
+
+Etappe 0 lief am 2026-09-09 gegen `haex-crdt` bei `1c069ef` und `mistralrs` 0.8.1 auf einem Laptop mit RTX A2000 8 GB und CUDA-Toolkit 12.0. Der vollständige Zahlensatz, sieben Fallstricke und die Assertions liegen im lokalen, nicht versionierten Ergebnisdokument des Wegwerf-Crates. Fünf konkrete Konsequenzen sind für Etappe 1 und später zu berücksichtigen:
+
+1. **`mistralrs`-Version festschreiben auf 0.8** (crates.io) oder auf einen konkreten Git-Commit pinnen. Die 0.6-Zeile, die während der Vertrags-Phase informell zirkulierte, existiert nicht auf crates.io. Die API zwischen 0.6-Erwartung und 0.8.1 hat sich sichtbar bewegt (`with_paged_attn` nimmt jetzt den fertigen `PagedAttentionConfig`, keine Closure); Beispielsyntax im Scaffold muss dagegen geschrieben werden.
+
+2. **CRDT-Write-Konvention explizit machen**. Jeder `INSERT`/`UPDATE` in eine CRDT-getrackte Tabelle muss `haex_hlc_no_sync = current_hlc()` in der SET-/VALUES-Klausel setzen — sonst bleibt der Row-Level-HLC NULL, der Trigger überspringt die Column-HLC-Map und markiert die Tabelle nicht dirty. Etappe 1 soll den Storage-Wrapper so bauen, dass ein Aufrufer diese Konvention nicht vergessen kann (typisiertes Insert/Update, das die HLC-Spalte automatisch einsetzt).
+
+3. **CUDA-Toolkit als Build-Requirement dokumentieren**. Der `cuda`-Feature-Build braucht `nvcc` ≥ 12.0 zur Build-Zeit; nur der Driver reicht nicht. Etappe 4 (Paket und Endabnahme) muss dies in der Dev-/CI-Setup-Anleitung nennen, sonst scheitert der erste Feature-Build mit nichtssagenden Linker-Meldungen.
+
+4. **Erst-Lade-UX für CUDA planen**. Der erste Modell-Load nach Installation dauert 30-45 s, davon 12 s reiner mistralrs-"Dummy-Run"; ab dem zweiten Load ~4 s. Ursache ist der CUDA-JIT-Cache unter `~/.nv/ComputeCache`. Etappe 3 (Chat) soll beim allerersten Ladevorgang einen dedizierten "GPU wird für dieses Modell optimiert (einmalig, ~30 s)"-Zustand zeigen — ein generischer "Modell wird geladen"-Placeholder reicht nicht, weil der Wartezustand nach der Installation wie ein Bug wirkt.
+
+5. **TTFT-Messung braucht Streaming-API**. Die im aktuellen mistralrs-Release stabile `Model::send_chat_request`-Methode gibt erst nach vollständiger Antwort zurück; TTFT ist damit nicht messbar. Wenn TTFT im Etappe-3-Testkatalog steht, muss die local-inference-Testschicht direkt gegen `Model::stream_chat_request` bauen.
+
+Zusätzlich landet als kleiner Doc-PR gegen `haex-crdt` die Korrektur des `_no_trigger`→`_no_sync`-Bugs im `DatabaseBootstrap`-Docstring; der wortgleiche Passus im Tauri-Contract wird in derselben Runde nachgezogen (in diesem PR bereits enthalten).
+
+**Nicht revidieren**: die Runtime-Wahl `mistral.rs`, das In-Process-Modell, den `_no_sync`-Mechanismus für gerätelokale Tabellen, die drei-Identitäten-Struktur und die Entscheidung, `known_devices.installation_uuid` als synchronisierte Zeilenidentität zu führen. Der Bootstrap-Hook, Genesis-Rollback, die Synchronisierbarkeit der PK-basierten `known_devices`-Zeile und die Vault-Device-UUID-Stabilität über Reopen wurden im Wegwerf-Crate als harte Assertions bewiesen.
+
 ## Gates und Wartung
 
 - Schlüsselhaltung ist als Produktziel entschieden: verschlüsselte SQLite, auch für Anbieterschlüssel. Vor entsprechender Implementierung die abweichende kanonische Keychain-Formulierung in einem separaten geprüften Amendment korrigieren.
@@ -311,4 +331,4 @@ Vor neuen Codeartefakten gilt der deklarierte graphify-Authoring-Check aus [`.sp
 - Bei Mobile müssen Inferenz-Backend, Speicherbudget und Modellbezug neu bewertet werden. Das Pfadmodell ist darauf vorbereitet, die Leistungsfrage nicht.
 - Bei späterem Löschen von Gesprächen braucht es Tombstones, Retention und Resync nach zu langer Offlinezeit.
 
-Die erste Entwicklungsaufgabe nach der Spezifikationsabstimmung ist der reale SQLCipher/CRDT- und Inferenz-Durchlauf aus Etappe 0. Er reduziert die beiden größten technischen Unbekannten, bevor eine größere Oberfläche entsteht.
+Die erste Entwicklungsaufgabe nach der Spezifikationsabstimmung ist die Implementierung von Etappe 1 auf Grundlage der abgeschlossenen Integrationsbasis und ihrer fünf Folgepunkte. Sie baut den Instanzlebenszyklus, bevor eine größere Oberfläche entsteht.

@@ -83,18 +83,18 @@ The 2026-09-04 model was rejected because a paper-seed only reconstructs signing
 
 - **`haex-crdt`.** The SQLite + CRDT-sync layer currently living inside `haex-vault` is extracted into a standalone Rust crate named `haex-crdt`. Both `haex-vault` and `holzi` consume it as a Rust library dependency. Holzi pins [`haexmas/haex-crdt` at `1c069ef0ea19143af2748f40fc41cba05c94dbe1` (`Cargo.toml`, package 0.4.0)](https://github.com/haexmas/haex-crdt/blob/1c069ef0ea19143af2748f40fc41cba05c94dbe1/Cargo.toml). The crate owns the scanner and apply APIs, while holzi owns the v1 sync transport that wires them together.
 - **At-rest encryption is inherited.** `holzi` does not choose its own at-rest scheme; it uses whatever `haex-crdt` provides (working assumption: SQLCipher, to be confirmed during extraction). If `haex-crdt` changes its scheme, `holzi` moves with it.
-- **What lives in `haex-crdt`-synced state.** Federation-scope encrypted state that must converge across paired replicas of the same vault: the vault identity keypair (`vault_identity`, singleton), the synchronizable portion of the device registry (`known_devices` device UUID, alias, timestamps, and endpoint metadata), and later — with sync — `peer_instances` / revocation-epoch / capability grants, chat/session history, skills/memory (post-v1 scope but reserved). The installation UUID is a local-only lookup column and is explicitly excluded from every CRDT payload.
-- **What does not live in `haex-crdt` at all.** Ephemeral runtime state (open iroh sessions, current relay connections), local-only preferences (local model file paths, active-provider selection), and the installation UUID at `<AppLocalData>/installation-id` (in a file outside every vault; never in the wire).
+- **What lives in `haex-crdt`-synced state.** Federation-scope encrypted state that must converge across paired replicas of the same vault: the vault identity keypair (`vault_identity`, singleton), the device registry (`known_devices` installation UUID as immutable row identity, device UUID, alias, timestamps, and endpoint metadata), and later — with sync — `peer_instances` / revocation-epoch / capability grants, chat/session history, skills/memory (post-v1 scope but reserved). The installation UUID file remains local to the host, while its value is carried as the `known_devices` row's primary-key identity (`row_pks`) when that row is synchronized.
+- **What does not live in `haex-crdt` at all.** Ephemeral runtime state (open iroh sessions, current relay connections), local-only preferences (local model file paths, active-provider selection), and the installation UUID **file** at `<AppLocalData>/installation-id` (outside every vault; the file itself is never sent over the wire). Its value is stored as the `known_devices` primary-key identity and is carried in that row's CRDT `row_pks`.
 - **Device identity for HLC (`DatabaseBootstrap`).** Decided 2026-09-07, refined 2026-09-08. Two UUIDs, layered:
   - **Installation UUID** — one random UUID per holzi installation on a host, stored in
     `<AppLocalData>/installation-id`, shared by every vault opened by that installation, never sent
     over the wire. Its sole purpose is the local lookup key for the next UUID.
   - **Vault-device UUID** — one per (vault × installation), stored as a row in `known_devices`
-    alongside a local-only installation-UUID lookup column. This is the HLC node id for this
-    replica. Two vaults opened by the same installation get independent random vault-device UUIDs;
-    two installations opening the same vault (via a copied `.db`) get independent random
-    vault-device UUIDs. The local column is never included in a CRDT payload, so no observer can
-    infer the host relationship from sync data.
+    keyed by the installation UUID. This is the HLC node id for this replica. Two vaults opened
+    by the same installation get independent random vault-device UUIDs; two installations opening
+    the same vault (via a copied `.db`) get independent random vault-device UUIDs. The installation
+    UUID is the immutable row identity and is carried in CRDT `row_pks`; it is not a mutable column
+    update.
 
   On every open, `DatabaseBootstrap` reads the installation UUID → looks up
   `known_devices` → returns the row's UUID or (on first open of this vault by this install) mints
@@ -175,7 +175,7 @@ A concrete first slice that can start while the haex-hive migration is still pen
 
 **Steps in the slice.**
 
-1. Holzi Tauri app boots on device A. First-run wizard creates a fresh SQLite (SQLCipher passphrase set by the operator), runs the unsigned pre-HLC bootstrap to generate the vault identity keypair (a secp256k1 keypair for Proof-of-Possession auth between replicas) and store it in the singleton `vault_identity` row, mints a vault-device UUID for device A and inserts it into `known_devices` keyed by device A's local-only installation UUID, then writes the Genesis self-record into `peer_instances` with both `pairing-authority` and `confirmation-authority` (Genesis default).
+1. Holzi Tauri app boots on device A. First-run wizard creates a fresh SQLite (SQLCipher passphrase set by the operator), runs the unsigned pre-HLC bootstrap to generate the vault identity keypair (a secp256k1 keypair for Proof-of-Possession auth between replicas) and store it in the singleton `vault_identity` row, mints a vault-device UUID for device A and inserts it into `known_devices` keyed by device A's installation UUID, then writes the Genesis self-record into `peer_instances` with both `pairing-authority` and `confirmation-authority` (Genesis default). The installation UUID remains in the local sidecar file; when the row syncs, it is carried as the row's primary-key identity.
 2. Device A's embedded Nostr relay endpoint comes up bound to the instance's `nostr_pubkey`; its iroh peer comes up bound to the instance's NodeId.
 3. Device A's embedded Nostr relay endpoint comes up, announces a Presence event with `always-on` availability class.
 4. Holzi boots on device B. First-run wizard offers "join existing federation." Device A displays a short-lived pairing QR (containing a one-time token and a Nostr contact hint). Device B scans it.
