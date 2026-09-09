@@ -13,8 +13,8 @@ description: "Task list for the frontend-onboarding feature (spec 001)"
 
 **V1 contract note**: The paper-seed display/confirmation tasks and the US5
 Recover phase are historical and not implementation work. Implement Genesis as
-a fresh vault identity; imported databases open directly, with the pre-HLC
-`DatabaseBootstrap` reusing or inserting a local-only `known_devices` row
+a fresh vault identity; imported databases open directly, with the
+`DatabaseBootstrap` hook reusing or inserting a local-only `known_devices` row
 keyed by the installation UUID and returning the vault-device UUID for HLC.
 Do
 not implement `PaperSeedDisplay`, `paper_seed`, `root_fingerprint`, or

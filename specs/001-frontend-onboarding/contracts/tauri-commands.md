@@ -15,7 +15,7 @@ reopens this contract.
 identity keypair (see [Vault identity and device model](#vault-identity-and-device-model)).
 Backup restore is a plain `open_instance` of a copied `.db` — no rekey, no
 attestation, no restore-pairing handshake. The copy carries the vault
-identity and the source's `known_devices` rows; the pre-HLC bootstrap reuses
+identity and the source's `known_devices` rows; the `DatabaseBootstrap` hook reuses
 the local installation row when present or adds a local-only row with a fresh
 vault-scoped device UUID when the copy came from another installation.
 
@@ -327,7 +327,7 @@ After a successful close of an active instance, emit `instance-list-changed { re
 
 ### `import_instance_file`
 
-Copies an external `.db` file into `<AppLocalData>/instances/`. Structural validation happens before copying; SQLCipher credential validation is completed by `open_instance`. The copy carries the source's `known_devices` rows unchanged. On first open, the pre-HLC bootstrap reuses a matching local-only installation row when the source came from the same installation, otherwise it inserts a new local row with a fresh vault-device UUID. The local-only `installation_uuid` column is never included in CRDT payloads.
+Copies an external `.db` file into `<AppLocalData>/instances/`. Structural validation happens before copying; SQLCipher credential validation is completed by `open_instance`. The copy carries the source's `known_devices` rows unchanged. On first open, the `DatabaseBootstrap` hook reuses a matching local-only installation row when the source came from the same installation, otherwise it inserts a new local row with a fresh vault-device UUID. The local-only `installation_uuid` column is never included in CRDT payloads.
 
 ```rust
 #[tauri::command]
@@ -359,7 +359,7 @@ pub struct ImportInstanceResult {
 **Notes**:
 
 - `source_path` is the external file path returned by `@tauri-apps/plugin-dialog`; it is the only path accepted from the frontend. It is not a managed-instance path. The command validates that it is a regular file and that the extension is `.db`.
-- SQLCipher page validation is deferred until `open_instance`, where the operator supplies the passphrase. The pre-HLC bootstrap reuses the matching local-only `known_devices.installation_uuid` row for a same-installation copy, or inserts one with a fresh vault-device UUID for a copy from another installation. That local-only lookup column is excluded from CRDT payloads.
+- SQLCipher page validation is deferred until `open_instance`, where the operator supplies the passphrase. The `DatabaseBootstrap` hook reuses the matching local-only `known_devices.installation_uuid` row for a same-installation copy, or inserts one with a fresh vault-device UUID for a copy from another installation. That local-only lookup column is excluded from CRDT payloads.
 - Copy uses a crash-safe publish protocol: write the database to a temporary file in the managed directory and fsync it; fsync the directory; atomically rename the temporary database to `<name>.db`; then fsync the directory again before emitting the import event. For `ConflictPolicy::Overwrite`, stage as `<name>.db.importing`, rename the old `<name>.db` to an operation-specific backup, atomically rename the staged file into `<name>.db`, fsync the directory, and only then remove the backup. A crash mid-import leaves either the original target intact or a `.importing` file that startup deletes without opening it. The source file is never modified or moved.
 - For `ConflictPolicy::Overwrite`, the command checks the target name while holding the `AppState` lock and rejects replacement if that name is the active instance. The frontend must close that instance explicitly before retrying overwrite. On open, the new file reuses a matching local installation row when present; otherwise bootstrap inserts one with a fresh vault-device UUID.
 
