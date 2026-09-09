@@ -24,19 +24,22 @@ onBeforeUnmount(() => {
   store.stopListening()
 })
 
+/** Opens the unlock sheet for the selected instance. */
 function onSelect(name: string) {
   selectedName.value = name
   unlockSheetOpen.value = true
 }
 
+/** Activates a newly created instance and opens its chat page. */
 async function onCreated(name: string) {
   store.setActiveInstance(name)
-  await navigateTo(`/federation/${encodeURIComponent(name)}`)
+  await navigateTo(`/chat/${encodeURIComponent(name)}`)
 }
 
+/** Activates an unlocked instance and opens its chat page. */
 async function onUnlocked(name: string) {
   store.setActiveInstance(name)
-  await navigateTo(`/federation/${encodeURIComponent(name)}`)
+  await navigateTo(`/chat/${encodeURIComponent(name)}`)
 }
 </script>
 

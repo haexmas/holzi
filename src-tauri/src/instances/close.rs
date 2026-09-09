@@ -14,9 +14,12 @@ use super::events::emit_instance_list_changed;
 #[tauri::command]
 pub async fn close_instance(app: AppHandle, state: State<'_, AppState>) -> Result<()> {
     let handle_opt = {
-        let mut guard = state.active_instance.lock().map_err(|e| HolziError::CloseFailed {
-            reason: format!("active_instance mutex poisoned: {e}"),
-        })?;
+        let mut guard = state
+            .active_instance
+            .lock()
+            .map_err(|e| HolziError::CloseFailed {
+                reason: format!("active_instance mutex poisoned: {e}"),
+            })?;
         guard.take()
     };
 
@@ -38,13 +41,12 @@ pub async fn close_instance(app: AppHandle, state: State<'_, AppState>) -> Resul
             let strong = std::sync::Arc::strong_count(&arc);
             // Put the handle back — closing "half" would leave AppState
             // desynced from the actual DB state.
-            let mut guard =
-                state
-                    .active_instance
-                    .lock()
-                    .map_err(|e| HolziError::CloseFailed {
-                        reason: format!("active_instance mutex poisoned on rollback: {e}"),
-                    })?;
+            let mut guard = state
+                .active_instance
+                .lock()
+                .map_err(|e| HolziError::CloseFailed {
+                    reason: format!("active_instance mutex poisoned on rollback: {e}"),
+                })?;
             *guard = Some(super::super::state::ActiveInstanceHandle {
                 name: name.clone(),
                 database: arc,

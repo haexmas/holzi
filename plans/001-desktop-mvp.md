@@ -245,17 +245,23 @@ Scaffold nach [`specs/001-frontend-onboarding/plan.md`](../specs/001-frontend-on
 
 Abnahme: Erstellen → schließen → entsperren erhält Daten und Identität. Falsches Passwort, Namenskollision, fehlende Rechte und Prozessabbruch führen nicht zu Datenverlust oder halbfertiger aktiver Instanz. Kein Netzwerk muss für diesen Ablauf verfügbar sein.
 
+**Abgeschlossen am 2026-09-09** — Scaffold + Provider-Traits (PR #22 Sub-Slice a+b), Command-Choreo + Onboarding-UI (PR #22 Sub-Slice c+d), @haex/ui-Nuxt-Layer-Integration mit responsivem `UiDrawerModal` + `UiInputPassword` (PR #23). Etappe-1-Abnahme via 14 cargo tests grün und manuellem `pnpm tauri dev`: Anlegen → Sperren → Entsperren erhält Daten und Identität. Modul-Baum jetzt vorhanden unter `src-tauri/src/{identity,instances,storage,state,error}` und `src/{pages,components/onboarding,composables,stores}`. Begleitende Upstream-PRs im geteilten UI-Layer: haex-space/haextension#54 (deps→peerDeps) und #55 (UiInputPassword slot-fix).
+
 ### 2. Anbieter und Modellkatalog — etwa 2–3 Arbeitstage
 
 Anbieter anlegen, Zugangsdaten hinterlegen, Erreichbarkeit prüfen. Modelllisten von allen aktiven Anbietern abfragen und cachen. Modell-Download mit Fortschritt und Import eigener GGUF. Auswahlfeld mit Verfügbarkeitszuständen.
 
 Abnahme: Ein hinterlegter Anbieterschlüssel führt zu einer abgefragten, nicht hartkodierten Modellliste. Auch bei leerem Modellordner liefert der Katalog herunterladbare Modelle; ein heruntergeladenes Modell erscheint erst nach erfolgreicher Dateiprüfung als verfügbar. Ungültige Zugangsdaten führen zu einer verständlichen Meldung, nicht zu einem leeren Auswahlfeld. CLI-Adapter weisen Modellabfrage mit bestehender Anmeldung, reinen Chatbetrieb und sauberen Prozessabbruch nach. Lokale Dateipfade und private Instanzschlüssel fehlen in CRDT-Metadaten sowie späteren Scan-/Apply-Payloads; Anbieter-Zugangsdaten sind dort erwartet und dürfen nur über den verschlüsselten Transport gehen.
 
+**Teilweise abgeschlossen am 2026-09-09** — Schema (`providers`, `models`, `device_downloaded_models_no_sync`) + Storage-Wrapper + `local`-Provider-Auto-Anlage + `local`-Modellbezug via kuratiertem Katalog und HuggingFace-Download komplett; `api_key`/`cli_delegate` als Schema aber ohne Live-Abfrage. Katalog-Quelle: fünf handverlesene Bartowski-GGUF-Familien (Qwen 2.5 0.5B/1.5B/7B, Llama 3.2 1B/3B) unter `src-tauri/src/catalog/model_catalog.json`; keine Modelle mit der App ausgeliefert; Nutzer kann zusätzlich beliebige HF-Repos angeben oder lokale GGUF importieren. Hardware-Filter (VRAM+Kontextfenster-Reserve) klassifiziert Vorschläge als `fits`/`tight`/`too_big`/`unknown`. Verbleibend für Etappe-2-Abschluss: Live-Modelllisten-Abfrage bei `api_key`-Anbietern, CLI-Adapter-Wege für `cli_delegate`, ausdrückliche Fehler-UX bei ungültigen Zugangsdaten.
+
 ### 3. Nutzbarer Chat — etwa 3–5 Arbeitstage
 
 Gesprächsliste, Chat, Streaming und Abbruch, für lokale wie Anbietermodelle. Nachrichten über denselben CRDT-fähigen Schreibpfad persistieren. Kontextbudget und ausdrückliche Fehlermeldung bei zu langem Gespräch; keine stillschweigende unbegrenzte Historie an das Modell senden.
 
 Abnahme: ohne Internet antwortet ein lokal geladenes Modell. Mit hinterlegtem Schlüssel antwortet ein Anbietermodell. Ein Modellwechsel mitten im Gespräch ist sichtbar zugeordnet. Antworten bleiben nach Neustart erhalten. Abbruch, ungültiges Modell, Speichermangel und Sperren während des Streamings enden in nachvollziehbarem Zustand. **Das ist die erste tägliche Nutzversion und der Abschluss des MVP.**
+
+**Teilweise abgeschlossen am 2026-09-09** — Chat-Loop läuft für `local`-Modelle: mistralrs 0.8.1 in-process, Streaming via Tauri-Events (`chat-token`, `chat-message-complete`, `chat-message-error`), Abbruch via `AbortHandle` in `ChatState`, `chat_threads`/`chat_messages` persistiert. Onboarding-Wizard-Erweiterung: der `/chat/[instance]`-Screen zeigt bei leerem Modellordner den Katalog als Setup-Panel, Skip = nicht herunterladen (Katalog bleibt sichtbar, bis der Nutzer eins wählt). Verbleibend für Etappe-3-Abschluss: Anbietermodelle im Chat, Modellwechsel mitten im Gespräch mit sichtbarer Zuordnung, Kontextbudget-Vorprüfung (aktuell prüft nur mistralrs zur Laufzeit), Absturz-/Sperren-Verhalten mit erhaltenem Verlauf explizit testen, OOM-Verhalten dokumentieren.
 
 ### 4. Paket und Endabnahme — etwa 2–4 Arbeitstage
 

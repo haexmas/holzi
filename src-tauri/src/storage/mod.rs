@@ -14,4 +14,9 @@
 //! sync-invisible until a later UPDATE fires the trigger. See contract
 //! §"Vault identity and device model".
 
+pub mod chat_messages;
+pub mod chat_threads;
+pub mod device_downloaded_models;
 pub mod known_devices;
+pub mod models;
+pub mod providers;
