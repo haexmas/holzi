@@ -26,6 +26,7 @@ export interface CatalogEntryWithFit extends CatalogEntry {
  * "here are models that would work on this device" list.
  */
 export function useCatalog() {
+  /** Returns every bundled catalog entry with its hardware-fit verdict. */
   async function listAsync(): Promise<CatalogEntryWithFit[]> {
     return await invoke<CatalogEntryWithFit[]>('list_catalog')
   }

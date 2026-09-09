@@ -15,6 +15,7 @@ export interface HardwareInfo {
  * at 500 ms wall clock server-side.
  */
 export function useHardware() {
+  /** Returns the hardware snapshot detected by the backend. */
   async function getInfoAsync(): Promise<HardwareInfo> {
     return await invoke<HardwareInfo>('get_hardware_info')
   }

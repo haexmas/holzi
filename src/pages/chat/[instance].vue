@@ -46,11 +46,13 @@ const activeMessages = computed<Message[]>(() => {
 
 const noModelsInstalled = computed(() => installedModels.value.length === 0)
 
+/** Refreshes the installed models and their catalog metadata together. */
 async function refreshInstalledAndCatalog() {
   installedModels.value = await models.listInstalledAsync()
   catalogEntries.value = await catalog.listAsync()
 }
 
+/** Refreshes the thread list and selects the first thread when needed. */
 async function refreshThreads() {
   threads.value = await chat.listThreadsAsync()
   const first = threads.value[0]
@@ -59,6 +61,7 @@ async function refreshThreads() {
   }
 }
 
+/** Selects a thread, loading its persisted messages on first access. */
 async function selectThread(id: string) {
   activeThreadId.value = id
   const existing = messagesByThread.value[id]
@@ -68,12 +71,14 @@ async function selectThread(id: string) {
   await scrollToBottom()
 }
 
+/** Scrolls the message viewport to its newest item after rendering. */
 async function scrollToBottom() {
   await nextTick()
   const el = document.querySelector('[data-messages-scroll]')
   if (el) el.scrollTop = el.scrollHeight
 }
 
+/** Loads the selected local model and exposes backend errors to the page. */
 async function loadModel(id: string) {
   lastError.value = null
   busy.value = true
@@ -88,6 +93,7 @@ async function loadModel(id: string) {
   }
 }
 
+/** Downloads a catalog model, refreshes the lists, and loads the result. */
 async function downloadCatalogEntry(entry: CatalogEntryWithFit) {
   lastError.value = null
   downloadingId.value = entry.id
@@ -106,6 +112,7 @@ async function downloadCatalogEntry(entry: CatalogEntryWithFit) {
   }
 }
 
+/** Sends the current input and seeds local message placeholders for streaming. */
 async function send() {
   const content = input.value.trim()
   if (!content || busy.value) return
@@ -156,6 +163,7 @@ async function send() {
   }
 }
 
+/** Requests cancellation of the active generation. */
 async function abort() {
   try {
     await chat.abortAsync()
@@ -165,6 +173,7 @@ async function abort() {
   }
 }
 
+/** Clears the active conversation so the next send creates a new thread. */
 async function newChat() {
   activeThreadId.value = null
   input.value = ''
@@ -172,6 +181,7 @@ async function newChat() {
   streamingBuffer.value = ''
 }
 
+/** Closes the active instance and returns to the locked landing page. */
 async function lock() {
   try {
     await closeAsync()
@@ -183,6 +193,7 @@ async function lock() {
   }
 }
 
+/** Converts backend and JavaScript failures into displayable text. */
 function errString(e: unknown): string {
   if (typeof e === 'string') return e
   if (e && typeof e === 'object' && 'kind' in e) {
@@ -191,6 +202,7 @@ function errString(e: unknown): string {
   return String(e)
 }
 
+/** Formats a byte count for the model download UI. */
 function humanBytes(n: number | null): string {
   if (n === null) return '?'
   const kb = 1024
@@ -201,6 +213,7 @@ function humanBytes(n: number | null): string {
   return (n / kb).toFixed(0) + ' KB'
 }
 
+/** Maps a hardware-fit verdict to its localized display label. */
 function fitLabel(f: CatalogEntryWithFit['fit']): string {
   return f === 'fits'
     ? 'passt'
