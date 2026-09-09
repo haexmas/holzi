@@ -12,8 +12,9 @@
 //! Metal we return `None` and rely on unified memory ≈ RAM, for CPU we
 //! return `None` because there is no separate device.
 
-use std::process::Command;
-use std::time::Duration;
+use std::io::Read;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use sysinfo::System;
@@ -65,7 +66,7 @@ impl Backend {
 
 /// Probes the host. Fast enough to call on every catalog listing (the
 /// expensive branch is `nvidia-smi` on CUDA hosts, capped by a 500 ms
-/// wall clock via `timeout`).
+/// wall clock via [`CUDA_PROBE_TIMEOUT`].
 pub fn probe() -> HardwareInfo {
     let mut sys = System::new();
     sys.refresh_memory();
@@ -90,24 +91,44 @@ pub fn probe() -> HardwareInfo {
 /// a hard cap of 500 ms; any failure (missing binary, non-zero exit,
 /// unparseable output) returns `None` — VRAM is informational.
 fn probe_cuda_vram() -> Option<u64> {
-    // `nvidia-smi` on non-nvidia hosts still emits an error banner and
-    // exits non-zero, so a plain Command::output with a short timeout
-    // is safe. We use GNU `timeout(1)` to guarantee the wall clock cap
-    // because `Command::output` has no built-in one and pulling in
-    // wait4/select for one call is overkill.
-    let out = Command::new("timeout")
-        .arg("0.5")
-        .arg("nvidia-smi")
+    // Spawn nvidia-smi directly so the probe works on Windows and macOS
+    // without requiring the GNU `timeout` executable. Enforce the same
+    // deadline on every platform in Rust.
+    let mut child = Command::new("nvidia-smi")
         .arg("--query-gpu=memory.total")
         .arg("--format=csv,noheader,nounits")
-        .output()
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
         .ok()?;
 
-    if !out.status.success() {
+    let deadline = Instant::now() + CUDA_PROBE_TIMEOUT;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(10)),
+            Err(_) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    };
+
+    if !status.success() {
         return None;
     }
 
-    let stdout = String::from_utf8(out.stdout).ok()?;
+    let mut stdout = child.stdout.take()?;
+    let mut output = Vec::new();
+    stdout.read_to_end(&mut output).ok()?;
+
+    let stdout = String::from_utf8(output).ok()?;
     // First line, first GPU. Value is in MiB per the format spec.
     let mib: u64 = stdout.lines().next()?.trim().parse().ok()?;
     Some(mib * 1024 * 1024)

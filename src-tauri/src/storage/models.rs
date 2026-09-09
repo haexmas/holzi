@@ -25,15 +25,20 @@ pub struct ModelRow {
     pub fetched_at: Option<i64>,
 }
 
-/// Inserts or replaces a model row. INSERT-OR-REPLACE is safe here
-/// because `id` is a stable key and the row content is derived data —
-/// LWW is exactly the semantics we want. Always sets
-/// `haex_hlc_no_sync = current_hlc()` (Etappe-0 finding #2).
+/// Inserts or updates a model row while preserving CRDT column metadata on
+/// conflicts. Always sets `haex_hlc_no_sync = current_hlc()` (Etappe-0
+/// finding #2).
 pub fn upsert_model(conn: &Connection, m: &ModelRow) -> Result<usize> {
     let sql = format!(
-        "INSERT OR REPLACE INTO models \
+        "INSERT INTO models \
            (id, provider_id, name, context_window, fetched_at, {HLC_TIMESTAMP_COLUMN}) \
-         VALUES (?1, ?2, ?3, ?4, ?5, current_hlc())"
+         VALUES (?1, ?2, ?3, ?4, ?5, current_hlc()) \
+         ON CONFLICT(id) DO UPDATE SET \
+           provider_id = excluded.provider_id, \
+           name = excluded.name, \
+           context_window = excluded.context_window, \
+           fetched_at = excluded.fetched_at, \
+           {HLC_TIMESTAMP_COLUMN} = current_hlc()"
     );
     conn.execute(
         &sql,

@@ -95,8 +95,14 @@ fn validate_filename(filename: &str) -> Result<()> {
     if filename.starts_with('.') {
         return Err(bad_input("filename cannot start with a dot"));
     }
-    if filename.chars().any(|c| c == '/' || c == '\\') {
-        return Err(bad_input("filename cannot contain path separators"));
+    if filename
+        .chars()
+        .any(|c| !(c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.'))
+    {
+        return Err(bad_input("filename may only contain [A-Za-z0-9_.-]"));
+    }
+    if filename.contains("..") {
+        return Err(bad_input("filename cannot contain '..'"));
     }
     Ok(())
 }

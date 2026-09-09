@@ -320,6 +320,7 @@ pub async fn send_message(
         let mut completion_tokens: Option<usize> = None;
         let mut ttft_ms: Option<u64> = None;
         let mut error_reason: Option<String> = None;
+        let mut saw_done = false;
 
         while let Some(item) = handle.next().await {
             match item {
@@ -341,6 +342,7 @@ pub async fn send_message(
                     ttft_ms: t,
                     ..
                 }) => {
+                    saw_done = true;
                     prompt_tokens = pt;
                     completion_tokens = ct;
                     ttft_ms = t;
@@ -355,8 +357,10 @@ pub async fn send_message(
 
         let finish_reason = if error_reason.is_some() {
             FinishReason::Error
-        } else {
+        } else if saw_done {
             FinishReason::Complete
+        } else {
+            FinishReason::Cancelled
         };
         let now2 = now_ms();
         let final_content = assembled.clone();
@@ -390,13 +394,18 @@ pub async fn send_message(
         })
         .await;
 
-        if let Err(e) = insert_result {
+        let persist_error = match insert_result {
+            Err(e) => Some(format!("assistant persist join: {e}")),
+            Ok(Err(e)) => Some(format!("assistant persist failed: {e}")),
+            Ok(Ok(())) => None,
+        };
+        if let Some(reason) = persist_error {
             let _ = app_for_task.emit(
                 EVENT_CHAT_MESSAGE_ERROR,
                 MessageErrorEvent {
                     message_id: assistant_message_id,
                     thread_id,
-                    reason: format!("assistant persist join: {e}"),
+                    reason,
                 },
             );
             return;
@@ -491,4 +500,3 @@ fn now_ms() -> i64 {
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0)
 }
-

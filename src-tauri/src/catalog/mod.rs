@@ -8,10 +8,10 @@
 //! runs at pick time.
 //!
 //! The JSON blob is embedded at compile time via `include_str!` and
-//! parsed once into a `LazyLock` so listing costs nothing after the
+//! parsed once into a `OnceLock` so listing costs nothing after the
 //! first call.
 
-use std::sync::LazyLock;
+use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
@@ -43,15 +43,17 @@ struct RawCatalog {
     models: Vec<CatalogEntry>,
 }
 
-static CATALOG: LazyLock<Vec<CatalogEntry>> = LazyLock::new(|| {
-    let raw: RawCatalog = serde_json::from_str(CATALOG_JSON)
-        .expect("built-in catalog JSON must be valid at compile time");
-    raw.models
-});
+static CATALOG: OnceLock<Vec<CatalogEntry>> = OnceLock::new();
 
 /// Returns the curated list, cheap-copied per call.
 pub fn entries() -> &'static [CatalogEntry] {
-    CATALOG.as_slice()
+    CATALOG
+        .get_or_init(|| {
+            let raw: RawCatalog = serde_json::from_str(CATALOG_JSON)
+                .expect("built-in catalog JSON must be valid at compile time");
+            raw.models
+        })
+        .as_slice()
 }
 
 /// Fetches one entry by id.

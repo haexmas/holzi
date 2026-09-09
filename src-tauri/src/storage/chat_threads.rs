@@ -51,7 +51,7 @@ pub fn update_thread(
 ) -> Result<usize> {
     let sql = format!(
         "UPDATE chat_threads SET \
-           title = ?1, last_provider_id = ?2, last_model_id = ?3, \
+           title = ?1, last_provider_id = COALESCE(?2, last_provider_id), last_model_id = ?3, \
            updated_at = ?4, {HLC_TIMESTAMP_COLUMN} = current_hlc() \
          WHERE id = ?5"
     );

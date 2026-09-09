@@ -1,7 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref, nextTick } from 'vue'
 import type { UnlistenFn } from '@tauri-apps/api/event'
-import { useChat, type LoadedModelInfo, type Message, type Thread } from '~/composables/useChat'
+import {
+  useChat,
+  type LoadedModelInfo,
+  type Message,
+  type MessageCompleteEvent,
+  type MessageErrorEvent,
+  type Thread,
+  type TokenEvent,
+} from '~/composables/useChat'
 import { useModels, type InstalledModel } from '~/composables/useModels'
 import { useCatalog, type CatalogEntryWithFit } from '~/composables/useCatalog'
 import { useInstance } from '~/composables/useInstance'
@@ -24,6 +32,14 @@ const catalogEntries = ref<CatalogEntryWithFit[]>([])
 
 const streamingMessageId = ref<string | null>(null)
 const streamingBuffer = ref<string>('')
+
+type PendingStreamEvents = {
+  tokens: string
+  complete?: MessageCompleteEvent
+  error?: MessageErrorEvent
+}
+
+const pendingStreamEvents = new Map<string, PendingStreamEvents>()
 
 const input = ref('')
 const busy = ref(false)
@@ -155,6 +171,17 @@ async function send() {
     messagesByThread.value[result.threadId] = list
     streamingMessageId.value = result.assistantMessageId
     streamingBuffer.value = ''
+    const pending = pendingStreamEvents.get(result.assistantMessageId)
+    pendingStreamEvents.delete(result.assistantMessageId)
+    if (pending?.tokens) {
+      handleToken({ messageId: result.assistantMessageId, delta: pending.tokens })
+    }
+    if (pending?.error) {
+      handleError(pending.error)
+    }
+    else if (pending?.complete) {
+      handleComplete(pending.complete)
+    }
     await scrollToBottom()
   }
   catch (e: unknown) {
@@ -224,59 +251,98 @@ function fitLabel(f: CatalogEntryWithFit['fit']): string {
         : 'unbekannt'
 }
 
+function pendingFor(messageId: string): PendingStreamEvents {
+  const existing = pendingStreamEvents.get(messageId)
+  if (existing) return existing
+  const pending: PendingStreamEvents = { tokens: '' }
+  pendingStreamEvents.set(messageId, pending)
+  return pending
+}
+
+function applyToken(e: TokenEvent, threadId: string) {
+  streamingBuffer.value += e.delta
+  const list = messagesByThread.value[threadId] ?? []
+  const idx = list.findIndex((m) => m.id === e.messageId)
+  const existing = list[idx]
+  if (idx !== -1 && existing) {
+    list[idx] = { ...existing, content: existing.content + e.delta }
+    messagesByThread.value[threadId] = list
+  }
+  scrollToBottom()
+}
+
+function handleToken(e: TokenEvent) {
+  const threadId = activeThreadId.value
+  if (streamingMessageId.value !== e.messageId || !threadId) {
+    pendingFor(e.messageId).tokens += e.delta
+    return
+  }
+  applyToken(e, threadId)
+}
+
+function applyComplete(e: MessageCompleteEvent) {
+  streamingMessageId.value = null
+  streamingBuffer.value = ''
+  busy.value = false
+  const list = messagesByThread.value[e.threadId] ?? []
+  const idx = list.findIndex((m) => m.id === e.messageId)
+  const existing = list[idx]
+  if (idx !== -1 && existing) {
+    list[idx] = {
+      ...existing,
+      promptTokens: e.promptTokens,
+      completionTokens: e.completionTokens,
+      finishReason: 'complete',
+    }
+    messagesByThread.value[e.threadId] = list
+  }
+}
+
+function handleComplete(e: MessageCompleteEvent) {
+  if (streamingMessageId.value !== e.messageId) {
+    const pending = pendingFor(e.messageId)
+    pending.complete = e
+    delete pending.error
+    return
+  }
+  applyComplete(e)
+}
+
+function applyError(e: MessageErrorEvent) {
+  streamingMessageId.value = null
+  streamingBuffer.value = ''
+  busy.value = false
+  lastError.value = e.reason
+  const list = messagesByThread.value[e.threadId] ?? []
+  const idx = list.findIndex((m) => m.id === e.messageId)
+  const existing = list[idx]
+  if (idx !== -1 && existing) {
+    list[idx] = { ...existing, finishReason: 'error' }
+    messagesByThread.value[e.threadId] = list
+  }
+}
+
+function handleError(e: MessageErrorEvent) {
+  if (streamingMessageId.value !== e.messageId) {
+    const pending = pendingFor(e.messageId)
+    pending.error = e
+    delete pending.complete
+    return
+  }
+  applyError(e)
+}
+
 onMounted(async () => {
+  [unlistenToken, unlistenComplete, unlistenError] = await Promise.all([
+    chat.onToken(handleToken),
+    chat.onMessageComplete(handleComplete),
+    chat.onMessageError(handleError),
+  ])
+
   activeModel.value = await chat.activeModelInfoAsync()
   await refreshInstalledAndCatalog()
   await refreshThreads()
 
-  unlistenToken = await chat.onToken((e) => {
-    if (streamingMessageId.value !== e.messageId) return
-    streamingBuffer.value += e.delta
-    const tid = activeThreadId.value
-    if (!tid) return
-    const list = messagesByThread.value[tid] ?? []
-    const idx = list.findIndex((m) => m.id === e.messageId)
-    const existing = list[idx]
-    if (idx !== -1 && existing) {
-      list[idx] = { ...existing, content: existing.content + e.delta }
-      messagesByThread.value[tid] = list
-    }
-    scrollToBottom()
-  })
-  unlistenComplete = await chat.onMessageComplete((e) => {
-    if (streamingMessageId.value === e.messageId) {
-      streamingMessageId.value = null
-      streamingBuffer.value = ''
-      busy.value = false
-      const list = messagesByThread.value[e.threadId] ?? []
-      const idx = list.findIndex((m) => m.id === e.messageId)
-      const existing = list[idx]
-      if (idx !== -1 && existing) {
-        list[idx] = {
-          ...existing,
-          promptTokens: e.promptTokens,
-          completionTokens: e.completionTokens,
-          finishReason: 'complete',
-        }
-        messagesByThread.value[e.threadId] = list
-      }
-    }
-  })
-  unlistenError = await chat.onMessageError((e) => {
-    if (streamingMessageId.value === e.messageId) {
-      streamingMessageId.value = null
-      streamingBuffer.value = ''
-      busy.value = false
-      lastError.value = e.reason
-      const list = messagesByThread.value[e.threadId] ?? []
-      const idx = list.findIndex((m) => m.id === e.messageId)
-      const existing = list[idx]
-      if (idx !== -1 && existing) {
-        list[idx] = { ...existing, finishReason: 'error' }
-        messagesByThread.value[e.threadId] = list
-      }
-    }
-  })
   unlistenDownloadProgress = await models.onDownloadProgress((e) => {
     if (downloadingId.value === e.modelId) {
       downloadProgressBytes.value = e.bytesDownloaded

@@ -35,7 +35,7 @@ fn find_local_provider(conn: &Connection) -> Result<Option<Uuid>> {
         "SELECT id FROM providers WHERE kind = ?1 ORDER BY created_at ASC LIMIT 1",
     )?;
     let raw: Option<String> = stmt
-        .query_row(params!["local"], |r| r.get(0))
+        .query_row(params![ProviderKind::Local.as_str()], |r| r.get(0))
         .optional()?;
     Ok(raw.and_then(|s| Uuid::parse_str(&s).ok()))
 }

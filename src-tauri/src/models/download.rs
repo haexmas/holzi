@@ -48,9 +48,6 @@ where
     F: FnMut(DownloadProgress),
 {
     let client = Client::builder()
-        // A GGUF may be many GB; disable the default timeout and rely
-        // on the caller aborting via task cancellation.
-        .timeout(Duration::from_secs(0))
         .connect_timeout(Duration::from_secs(30))
         .user_agent(concat!("holzi/", env!("CARGO_PKG_VERSION")))
         .build()

@@ -34,7 +34,7 @@ pub enum ProviderKind {
 }
 
 impl ProviderKind {
-    fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             ProviderKind::Local => "local",
             ProviderKind::ApiKey => "api_key",

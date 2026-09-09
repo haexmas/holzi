@@ -3,7 +3,7 @@
 //! Contract: `tauri-commands.md` §"holzi-owned data layer". Slices a and b
 //! land seven tables: identity (`vault_identity`, `known_devices`) plus the
 //! Etappe-2 tables (`providers`, `models`, `chat_threads`, `chat_messages`,
-//! `device_downloaded_models_no_sync`).
+//! `device_downloaded_models_no_sync`) and their supporting indexes.
 //!
 //! CRDT-tracked tables (no `_no_sync` suffix) get the three metadata
 //! columns (`haex_hlc_no_sync`, `haex_column_hlcs_no_sync`,
@@ -154,6 +154,16 @@ pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
             verified_at INTEGER NOT NULL\
          );"
         .to_string(),
+    );
+
+    // list_messages and chat history assembly filter by thread and order by
+    // creation time. Keep the lookup bounded as a thread grows. This is a
+    // new migration so the already-issued 0007 migration remains immutable.
+    m.insert(
+        MigrationName::from("0008_chat_messages_thread_index"),
+        "CREATE INDEX idx_chat_messages_thread \
+         ON chat_messages (thread_id, created_at, id);"
+            .to_string(),
     );
 
     Arc::new(StaticMigrationSource(m))
