@@ -1,0 +1,74 @@
+{
+  "_meta": {
+    "version": 1,
+    "note": "Curated starting list for the onboarding wizard. Not exhaustive — the operator can also enter any HuggingFace repo/filename or import a local GGUF. Sizes are approximate (verified via HTTP HEAD before download).",
+    "source": "https://huggingface.co/bartowski (community-quantized GGUFs, MIT/Apache licensed base models)"
+  },
+  "models": [
+    {
+      "id": "qwen2.5-0.5b-instruct-q4_k_m",
+      "name": "Qwen 2.5 0.5B Instruct (Q4_K_M)",
+      "family": "Qwen 2.5",
+      "parameters": "0.5B",
+      "quantization": "Q4_K_M",
+      "hf_repo": "bartowski/Qwen2.5-0.5B-Instruct-GGUF",
+      "hf_filename": "Qwen2.5-0.5B-Instruct-Q4_K_M.gguf",
+      "tokenizer_repo": "Qwen/Qwen2.5-0.5B-Instruct",
+      "approx_size_bytes": 400000000,
+      "context_window": 32768,
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "qwen2.5-1.5b-instruct-q4_k_m",
+      "name": "Qwen 2.5 1.5B Instruct (Q4_K_M)",
+      "family": "Qwen 2.5",
+      "parameters": "1.5B",
+      "quantization": "Q4_K_M",
+      "hf_repo": "bartowski/Qwen2.5-1.5B-Instruct-GGUF",
+      "hf_filename": "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf",
+      "tokenizer_repo": "Qwen/Qwen2.5-1.5B-Instruct",
+      "approx_size_bytes": 1000000000,
+      "context_window": 32768,
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "llama-3.2-1b-instruct-q4_k_m",
+      "name": "Llama 3.2 1B Instruct (Q4_K_M)",
+      "family": "Llama 3.2",
+      "parameters": "1B",
+      "quantization": "Q4_K_M",
+      "hf_repo": "bartowski/Llama-3.2-1B-Instruct-GGUF",
+      "hf_filename": "Llama-3.2-1B-Instruct-Q4_K_M.gguf",
+      "tokenizer_repo": "meta-llama/Llama-3.2-1B-Instruct",
+      "approx_size_bytes": 810000000,
+      "context_window": 131072,
+      "license": "Llama-3.2-Community"
+    },
+    {
+      "id": "llama-3.2-3b-instruct-q4_k_m",
+      "name": "Llama 3.2 3B Instruct (Q4_K_M)",
+      "family": "Llama 3.2",
+      "parameters": "3B",
+      "quantization": "Q4_K_M",
+      "hf_repo": "bartowski/Llama-3.2-3B-Instruct-GGUF",
+      "hf_filename": "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+      "tokenizer_repo": "meta-llama/Llama-3.2-3B-Instruct",
+      "approx_size_bytes": 2020000000,
+      "context_window": 131072,
+      "license": "Llama-3.2-Community"
+    },
+    {
+      "id": "qwen2.5-7b-instruct-q4_k_m",
+      "name": "Qwen 2.5 7B Instruct (Q4_K_M)",
+      "family": "Qwen 2.5",
+      "parameters": "7B",
+      "quantization": "Q4_K_M",
+      "hf_repo": "bartowski/Qwen2.5-7B-Instruct-GGUF",
+      "hf_filename": "Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+      "tokenizer_repo": "Qwen/Qwen2.5-7B-Instruct",
+      "approx_size_bytes": 4700000000,
+      "context_window": 32768,
+      "license": "Apache-2.0"
+    }
+  ]
+}

@@ -22,7 +22,7 @@ tauri-build = { version = "2.3.0", features = [] }
 default = ["llm-cpu"]
 
 # Local inference via mistralrs 0.8.x (in-process, per plan §"Lokale Inferenz").
-llm-cpu = ["dep:mistralrs", "dep:tokio", "dep:futures"]
+llm-cpu = ["dep:mistralrs", "dep:futures"]
 # CUDA build. Needs nvcc + CUDA toolkit >= 12.0 present at build time
 # (Etappe 0 finding #3). Not enabled by default; opt in via
 # `cargo build --features llm-cuda`.
@@ -51,8 +51,17 @@ haex-crdt = { git = "https://github.com/haexmas/haex-crdt", rev = "1c069ef0ea191
 # crates.io; API moved between 0.6 expectation and 0.8.1). Kept optional so
 # `--no-default-features` builds skip the candle/nvcc dependency graph.
 mistralrs = { version = "0.8.1", optional = true }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"], optional = true }
+# Tokio is unconditional: reqwest and the download commands need an async
+# runtime even without local inference, and Tauri already pulls tokio in
+# transitively. The extra `sync` and `fs` features are cheap.
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "fs"] }
 futures = { version = "0.3", optional = true }
+
+# Slice b: hardware detection and model catalog / download.
+# `sysinfo` and `reqwest` are unconditional — hardware info and provider
+# list are surfaced even in `--no-default-features` builds.
+sysinfo = "0.32"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
 
 [dev-dependencies]
 tempfile = "3"

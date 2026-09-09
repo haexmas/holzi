@@ -82,6 +82,24 @@ pub enum HolziError {
 
     #[error("I/O error: {reason}")]
     Io { reason: String },
+
+    #[error("No active instance for this operation")]
+    NoActiveInstance,
+
+    #[error("Catalog entry not found: {id}")]
+    CatalogEntryNotFound { id: String },
+
+    #[error("Model download failed: {reason}")]
+    ModelDownload { reason: String },
+
+    #[error("Model import failed: {reason}")]
+    ModelImport { reason: String },
+
+    #[error("Model not found: {id}")]
+    ModelNotFound { id: String },
+
+    #[error("Invalid input: {reason}")]
+    InvalidInput { reason: String },
 }
 
 pub type Result<T> = std::result::Result<T, HolziError>;
