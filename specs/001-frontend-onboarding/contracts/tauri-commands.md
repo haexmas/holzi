@@ -54,9 +54,12 @@ command sections reference these seams without re-explaining them.
   `known_devices` below.
 - **Vault-device UUID** — one per (vault × installation), stored as a row in
   the vault's `known_devices` table. `installation_uuid` is the lookup key
-  the bootstrap hook uses to find "this replica's own row";
+  the bootstrap hook uses to find "this replica's own row" and is that row's
+  immutable primary key;
   `vault_device_uuid`, alias, timestamps, and endpoint metadata form the
-  rest of the (fully synced) row. This UUID is the HLC node id for this
+  rest of the (fully synced) row. The primary-key value is carried in the
+  CRDT change's `row_pks` identity object; it is not a mutable column change.
+  This UUID is the HLC node id for this
   replica of this vault. Two vaults opened by the same installation get
   independent random vault-device UUIDs; two installations opening the same
   vault (via a copied `.db`) get independent random vault-device UUIDs.
@@ -67,9 +70,10 @@ The lookup on every open is: read the local installation UUID from
 vault-device UUID as HLC node id. A copied database from the same
 installation therefore reuses its row; a copy from another installation
 has no matching row for its installation and receives a fresh one from
-the bootstrap hook. `installation_uuid` is a plain CRDT-tracked column,
-so the row a bootstrap hook inserts eventually surfaces on other replicas
-of the same vault along with the rest of `known_devices`.
+the bootstrap hook. The immutable `installation_uuid` row identity is
+carried in each change's `row_pks`; the row's non-PK fields are emitted as
+ordinary CRDT column changes, so the row a bootstrap hook inserts
+eventually surfaces on other replicas of the same vault.
 
 ### Provider implementations
 
@@ -131,11 +135,12 @@ lands on already-CRDT-tracked tables.
 - **`known_devices`** — one row per (vault × installation) that has ever
   opened this vault. `installation_uuid` matches the value stored in
   `<AppLocalData>/installation-id` on that installation's host and is the
-  bootstrap hook's lookup key. `vault_device_uuid` (the HLC node id for
+  bootstrap hook's immutable primary-key lookup. `vault_device_uuid` (the HLC node id for
   this replica), alias, first-seen timestamp, and (later, with sync) an
-  iroh node id are the further columns. All columns are plain
-  CRDT-tracked fields; every replica sees the full row set once sync
-  lands. Note that a peer who holds two of a user's vaults can then
+  iroh node id are the further columns. The primary-key value is carried in
+  `row_pks`; the further columns are plain CRDT-tracked fields, so every
+  replica sees the full row set once sync lands. Note that a peer who holds
+  two of a user's vaults can then
   correlate them on installation UUIDs — this is judged acceptable: any
   peer that holds two vaults of the same user already has stronger
   correlation signals (iroh node id, access-timing, granted scopes), and
