@@ -5,6 +5,8 @@
 //! "Modelllisten werden immer abgefragt, nie hartkodiert") and when a
 //! local GGUF is downloaded / imported.
 
+use std::collections::HashSet;
+
 use haex_crdt::crdt::columns::HLC_TIMESTAMP_COLUMN;
 use haex_crdt::rusqlite::{params, Connection, OptionalExtension, Result};
 use serde::{Deserialize, Serialize};
@@ -87,10 +89,25 @@ pub fn get_model(conn: &Connection, id: &str) -> Result<Option<ModelRow>> {
     stmt.query_row(params![id], row_to_model).optional()
 }
 
-/// Replaces the entire model cache for a provider: rows for
-/// `provider_id` that are absent from `fresh` are removed, and each
-/// entry in `fresh` is upserted. Runs inside a single transaction so
-/// a partial refresh cannot leave the cache in an inconsistent state.
+/// Replaces the entire model cache for a provider: every entry in
+/// `fresh` is upserted, then rows for `provider_id` that are absent
+/// from `fresh` are removed. Runs inside a single transaction so a
+/// partial refresh cannot leave the cache in an inconsistent state.
+///
+/// Order matters, and so does upserting rather than delete-then-insert.
+/// `models` is CRDT-tracked: a DELETE fires the BEFORE-DELETE trigger,
+/// which appends a tombstone to `haex_deleted_rows` carrying
+/// `current_hlc()`. That value is pinned per transaction, so a
+/// re-INSERT of the same id in the same transaction lands on the *same*
+/// HLC — and `delete_shadows_insert` resolves that tie in favour of the
+/// delete, meaning a peer applying the payload would drop every
+/// refreshed row. Touching only the rows that actually changed keeps
+/// the delete-log free of tombstones for surviving models.
+///
+/// Upserting also tolerates a provider that reports the same model id
+/// twice (cursor pagination can overlap when the remote catalog changes
+/// mid-listing) — a plain INSERT would abort the whole refresh on the
+/// primary-key conflict.
 ///
 /// A failed remote fetch never reaches this function — callers only
 /// invoke it on success, keeping the previous cache intact on error
@@ -102,55 +119,50 @@ pub fn replace_provider_models(
     fresh: &[ModelRow],
 ) -> Result<()> {
     let tx = conn.unchecked_transaction()?;
-    tx.execute(
-        "DELETE FROM models WHERE provider_id = ?1",
-        params![provider_id.to_string()],
-    )?;
-    let sql = format!(
-        "INSERT INTO models \
-           (id, provider_id, name, context_window, fetched_at, tokenizer_repo, {HLC_TIMESTAMP_COLUMN}) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, current_hlc())"
-    );
+
     for m in fresh {
-        tx.execute(
-            &sql,
-            params![
-                m.id,
-                m.provider_id.to_string(),
-                m.name,
-                m.context_window,
-                m.fetched_at,
-                m.tokenizer_repo,
-            ],
-        )?;
+        upsert_model(&tx, m)?;
     }
+
+    let keep: HashSet<&str> = fresh.iter().map(|m| m.id.as_str()).collect();
+    let stale: Vec<String> = {
+        let mut stmt = tx.prepare("SELECT id FROM models WHERE provider_id = ?1")?;
+        let rows = stmt.query_map(params![provider_id.to_string()], |r| r.get::<_, String>(0))?;
+        let mut stale = Vec::new();
+        for row in rows {
+            let id = row?;
+            if !keep.contains(id.as_str()) {
+                stale.push(id);
+            }
+        }
+        stale
+    };
+    for id in stale {
+        tx.execute("DELETE FROM models WHERE id = ?1", params![id])?;
+    }
+
     tx.commit()
 }
 
-/// Fills `tokenizer_repo` for existing rows whose id matches an entry
-/// in `catalog_lookup(id) -> Option<&str>`. Idempotent — after the
-/// first successful pass the `WHERE tokenizer_repo IS NULL` clause
-/// filters out any row already populated. Runs cheaply enough
-/// (bounded by the catalog size) to be safe to call from a hot path.
-pub fn backfill_tokenizer_repo<F>(conn: &Connection, catalog_lookup: F) -> Result<usize>
-where
-    F: Fn(&str) -> Option<String>,
-{
-    let mut stmt = conn.prepare("SELECT id FROM models WHERE tokenizer_repo IS NULL")?;
-    let ids: Vec<String> = stmt
-        .query_map([], |r| r.get::<_, String>(0))?
-        .collect::<Result<Vec<_>>>()?;
-
-    let mut updated = 0usize;
+/// Fills `tokenizer_repo` for the ids in `catalog` that still have the
+/// column NULL. Idempotent — the `WHERE tokenizer_repo IS NULL` clause
+/// filters out any row already populated, and a second pass updates
+/// nothing.
+///
+/// Driven by the catalog rather than by a scan of the table: rows
+/// written by `replace_provider_models` keep `tokenizer_repo` NULL
+/// forever (API providers tokenize server-side), so scanning for NULLs
+/// would re-read every remote model on every call. Bounded by the
+/// catalog size, which is what makes this safe on a hot path.
+pub fn backfill_tokenizer_repo(conn: &Connection, catalog: &[(&str, &str)]) -> Result<usize> {
     let update_sql = format!(
         "UPDATE models \
          SET tokenizer_repo = ?1, {HLC_TIMESTAMP_COLUMN} = current_hlc() \
          WHERE id = ?2 AND tokenizer_repo IS NULL"
     );
-    for id in ids {
-        if let Some(repo) = catalog_lookup(&id) {
-            updated += conn.execute(&update_sql, params![repo, id])?;
-        }
+    let mut updated = 0usize;
+    for (id, repo) in catalog {
+        updated += conn.execute(&update_sql, params![repo, id])?;
     }
     Ok(updated)
 }
