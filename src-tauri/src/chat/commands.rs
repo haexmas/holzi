@@ -119,6 +119,7 @@ pub async fn load_model(
     Ok(info)
 }
 
+/// Resolves a provider-qualified model id and builds its remote adapter session.
 async fn load_api_key_model(
     state: &State<'_, AppState>,
     composite_id: &str,
@@ -161,6 +162,7 @@ async fn load_api_key_model(
     })
 }
 
+/// Loads an installed local model and wraps it in an adapter-backed session.
 async fn load_local_model_by_id(
     app: &AppHandle,
     state: &State<'_, AppState>,
@@ -217,6 +219,7 @@ async fn load_local_model_by_id(
     })
 }
 
+/// Returns the cached display name for a model when its row can be read.
 async fn resolve_display_name(state: &State<'_, AppState>, model_id: &str) -> Option<String> {
     let db = active_database(state).ok()?;
     let id_owned = model_id.to_string();

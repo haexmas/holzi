@@ -338,6 +338,7 @@ impl ProviderAdapter for AnthropicAdapter {
     }
 }
 
+/// Serializes a provider-neutral chat request for Anthropic's Messages API.
 fn build_messages_body(req: &ChatRequest) -> Value {
     let messages: Vec<Value> = req
         .messages
