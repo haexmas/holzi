@@ -1,7 +1,7 @@
 //! Provider commands: add / list / get / delete + refresh model listing.
 //!
 //! CRUD is provider-kind-agnostic; the refresh path dispatches on
-//! `ProviderKind` to build the right adapter. Live invocation for
+//! the persisted adapter discriminator to build the right adapter. Live invocation for
 //! `cli_delegate` still awaits its own design pass — refresh returns
 //! an error until then.
 
@@ -24,6 +24,10 @@ use crate::storage::providers::{self as storage, Provider, ProviderKind};
 pub struct AddProviderArgs {
     pub kind: ProviderKind,
     pub name: String,
+    /// Adapter/vendor for `api_key` providers. Only `anthropic` is currently
+    /// supported; the field is required so refresh cannot guess a protocol.
+    #[serde(default)]
+    pub adapter: Option<String>,
     /// Base URL for `api_key` providers (e.g. `https://api.anthropic.com`).
     /// `None` for `local` and `cli_delegate`.
     pub base_url: Option<String>,
@@ -37,6 +41,7 @@ pub struct AddProviderArgs {
 pub struct ProviderPayload {
     pub id: Uuid,
     pub kind: ProviderKind,
+    pub adapter: Option<String>,
     pub name: String,
     pub base_url: Option<String>,
     /// True when a credentials blob is present; the blob itself is
@@ -50,6 +55,7 @@ impl From<Provider> for ProviderPayload {
         ProviderPayload {
             id: p.id,
             kind: p.kind,
+            adapter: p.adapter,
             name: p.name,
             base_url: p.base_url,
             has_credentials: p.credentials.is_some(),
@@ -71,10 +77,10 @@ pub struct AddProviderResult {
     pub refresh_error: Option<String>,
 }
 
-/// Adds a provider. Validates minimally: `api_key` needs `base_url` and
-/// a non-empty `api_key`; `local` needs neither. For `api_key` providers
-/// the model catalog is refreshed inline; if that call fails the
-/// provider is kept and `refresh_error` is set so the frontend can
+/// Adds a provider. API-key providers require a supported adapter,
+/// `base_url`, and a non-empty `api_key`; `local` needs neither. For
+/// `api_key` providers the model catalog is refreshed inline; if that call
+/// fails the provider is kept and `refresh_error` is set so the frontend can
 /// toast it.
 #[tauri::command]
 pub async fn add_provider(
@@ -88,6 +94,7 @@ pub async fn add_provider(
     }
     match args.kind {
         ProviderKind::ApiKey => {
+            validate_adapter(args.adapter.as_deref())?;
             if args.base_url.as_deref().unwrap_or("").is_empty() {
                 return Err(HolziError::InvalidInput {
                     reason: "api_key provider requires base_url".into(),
@@ -100,6 +107,11 @@ pub async fn add_provider(
             }
         }
         ProviderKind::CliDelegate => {
+            if args.adapter.is_some() {
+                return Err(HolziError::InvalidInput {
+                    reason: "adapter is only valid for api_key providers".into(),
+                });
+            }
             if args.base_url.as_deref().unwrap_or("").is_empty() {
                 return Err(HolziError::InvalidInput {
                     reason: "cli_delegate provider requires base_url (cli command)".into(),
@@ -108,6 +120,11 @@ pub async fn add_provider(
         }
         ProviderKind::Local => {
             // No requirements — one row per local runtime is enough.
+            if args.adapter.is_some() {
+                return Err(HolziError::InvalidInput {
+                    reason: "adapter is only valid for api_key providers".into(),
+                });
+            }
         }
     }
 
@@ -116,6 +133,7 @@ pub async fn add_provider(
     let provider = Provider {
         id: Uuid::new_v4(),
         kind: args.kind,
+        adapter: args.adapter,
         name: args.name,
         base_url: args.base_url,
         credentials: args.api_key.map(|k| k.into_bytes()),
@@ -322,12 +340,20 @@ pub(crate) fn build_adapter(provider: &Provider) -> Result<Box<dyn ProviderAdapt
                     reason: format!("api_key credentials are not UTF-8: {e}"),
                 })?
                 .to_string();
-            // Slice (b) still only ships the Anthropic adapter for
-            // api_key providers. OpenAI / Google / Groq each require
-            // their own listing + Messages endpoint and land as
-            // follow-up PRs.
-            let adapter =
-                AnthropicAdapter::new(base_url.to_string(), api_key).map_err(map_adapter_error)?;
+            let adapter = match provider.adapter.as_deref() {
+                Some("anthropic") => AnthropicAdapter::new(base_url.to_string(), api_key)
+                    .map_err(map_adapter_error)?,
+                Some(other) => {
+                    return Err(HolziError::InvalidInput {
+                        reason: format!("unsupported provider adapter: {other}"),
+                    });
+                }
+                None => {
+                    return Err(HolziError::InvalidInput {
+                        reason: "api_key provider is missing adapter".into(),
+                    });
+                }
+            };
             Ok(Box::new(adapter))
         }
         ProviderKind::CliDelegate => Err(HolziError::InvalidInput {
@@ -335,6 +361,20 @@ pub(crate) fn build_adapter(provider: &Provider) -> Result<Box<dyn ProviderAdapt
         }),
         ProviderKind::Local => Err(HolziError::InvalidInput {
             reason: "refresh does not apply to local providers".into(),
+        }),
+    }
+}
+
+/// Validates the adapter discriminator before storing an API-key provider.
+/// Dispatch must remain explicit as more vendor adapters are added.
+fn validate_adapter(adapter: Option<&str>) -> Result<()> {
+    match adapter {
+        Some("anthropic") => Ok(()),
+        Some(other) => Err(HolziError::InvalidInput {
+            reason: format!("unsupported provider adapter: {other}"),
+        }),
+        None => Err(HolziError::InvalidInput {
+            reason: "api_key provider requires adapter".into(),
         }),
     }
 }
@@ -374,6 +414,26 @@ pub(crate) fn map_adapter_error(err: AdapterError) -> HolziError {
         AdapterError::Parse { reason } => HolziError::InvalidInput {
             reason: format!("provider response parse error: {reason}"),
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_adapter;
+    use crate::error::HolziError;
+
+    #[test]
+    /// Only adapters with an implemented protocol may be persisted.
+    fn validate_adapter_rejects_missing_and_unknown_values() {
+        assert!(validate_adapter(Some("anthropic")).is_ok());
+        assert!(matches!(
+            validate_adapter(None),
+            Err(HolziError::InvalidInput { reason }) if reason.contains("requires adapter")
+        ));
+        assert!(matches!(
+            validate_adapter(Some("openai")),
+            Err(HolziError::InvalidInput { reason }) if reason.contains("unsupported")
+        ));
     }
 }
 

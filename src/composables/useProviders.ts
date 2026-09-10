@@ -5,6 +5,7 @@ export type ProviderKind = 'local' | 'api_key' | 'cli_delegate'
 export interface Provider {
   id: string
   kind: ProviderKind
+  adapter: string | null
   name: string
   baseUrl: string | null
   hasCredentials: boolean
@@ -14,6 +15,7 @@ export interface Provider {
 export interface AddProviderArgs {
   kind: ProviderKind
   name: string
+  adapter?: string
   baseUrl?: string
   apiKey?: string
 }

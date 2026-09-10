@@ -14,4 +14,4 @@ pub mod migrations;
 
 pub use bootstrap::HolziBootstrap;
 pub use installation::{installation_id_path, read_or_mint_installation_uuid};
-pub use migrations::holzi_migration_source;
+pub use migrations::{holzi_migration_source, HOLZI_TRIGGER_VERSION};

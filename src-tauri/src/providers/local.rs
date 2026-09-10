@@ -21,6 +21,7 @@ pub fn ensure_local_provider(conn: &Connection) -> Result<Uuid> {
     let provider = Provider {
         id: Uuid::new_v4(),
         kind: ProviderKind::Local,
+        adapter: None,
         name: LOCAL_PROVIDER_NAME.to_string(),
         base_url: None,
         credentials: None,

@@ -106,6 +106,32 @@ async fn list_models_paginates_on_has_more() {
 }
 
 #[tokio::test]
+/// A paginated response without a cursor must not produce an incomplete
+/// model cache.
+async fn list_models_rejects_has_more_without_last_id() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/models"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": [{
+                "id": "model-a",
+                "display_name": "Model A",
+                "max_input_tokens": 4096
+            }],
+            "has_more": true
+        })))
+        .mount(&server)
+        .await;
+
+    let adapter = AnthropicAdapter::new(server.uri(), "test-key".to_string()).unwrap();
+    let error = adapter
+        .list_models()
+        .await
+        .expect_err("missing cursor must fail");
+    assert!(matches!(error, AdapterError::Parse { reason } if reason.contains("without last_id")));
+}
+
+#[tokio::test]
 async fn list_models_maps_401_to_invalid_credentials() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))

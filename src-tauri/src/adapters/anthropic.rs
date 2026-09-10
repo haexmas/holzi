@@ -151,7 +151,17 @@ impl ProviderAdapter for AnthropicAdapter {
             // without bound.
             match page.last_id {
                 Some(id) if after_id.as_deref() != Some(id.as_str()) => after_id = Some(id),
-                _ => break,
+                Some(_) => {
+                    return Err(AdapterError::Parse {
+                        reason: "pagination response has_more=true without an advancing last_id"
+                            .into(),
+                    });
+                }
+                None => {
+                    return Err(AdapterError::Parse {
+                        reason: "pagination response has_more=true without last_id".into(),
+                    });
+                }
             }
         }
         Ok(out)
