@@ -16,13 +16,10 @@ pub use error::{HolziError, Result};
 pub use state::{ActiveInstanceHandle, AppState};
 
 use catalog::list_catalog;
-#[cfg(feature = "llm-cpu")]
 use chat::commands::{
     abort_current_generation, active_model_info, load_model, send_message, unload_local_model,
 };
-#[cfg(feature = "llm-cpu")]
 use chat::session::ChatState;
-#[cfg(feature = "llm-cpu")]
 use chat::thread_commands::{create_thread, list_messages, list_threads};
 use hardware::get_hardware_info;
 use instances::{
@@ -40,7 +37,6 @@ use providers::{
 /// Builds and starts the holzi Tauri application.
 pub fn run() {
     let builder = tauri::Builder::default().manage(AppState::new());
-    #[cfg(feature = "llm-cpu")]
     let builder = builder.manage(ChatState::new());
     builder
         .setup(|app| {
@@ -77,21 +73,13 @@ pub fn run() {
             import_model_from_file,
             list_installed_models,
             delete_installed_model,
-            #[cfg(feature = "llm-cpu")]
             load_model,
-            #[cfg(feature = "llm-cpu")]
             unload_local_model,
-            #[cfg(feature = "llm-cpu")]
             active_model_info,
-            #[cfg(feature = "llm-cpu")]
             send_message,
-            #[cfg(feature = "llm-cpu")]
             abort_current_generation,
-            #[cfg(feature = "llm-cpu")]
             create_thread,
-            #[cfg(feature = "llm-cpu")]
             list_threads,
-            #[cfg(feature = "llm-cpu")]
             list_messages,
         ])
         .run(tauri::generate_context!())

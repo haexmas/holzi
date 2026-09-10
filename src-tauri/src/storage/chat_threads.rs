@@ -39,6 +39,14 @@ pub fn insert_thread(conn: &Connection, t: &ChatThread) -> Result<usize> {
     )
 }
 
+/// Removes a thread created solely for a generation that failed to start.
+pub fn delete_thread(conn: &Connection, id: Uuid) -> Result<usize> {
+    conn.execute(
+        "DELETE FROM chat_threads WHERE id = ?1",
+        params![id.to_string()],
+    )
+}
+
 /// Updates a thread's title, last provider/model pointer and
 /// `updated_at`. HLC injected per Etappe-0 finding #2.
 pub fn update_thread(

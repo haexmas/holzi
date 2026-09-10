@@ -85,6 +85,15 @@ pub fn delete_provider(conn: &Connection, id: Uuid) -> Result<usize> {
     )
 }
 
+/// Persists a repaired adapter discriminator and marks the CRDT row dirty.
+pub fn set_adapter(conn: &Connection, id: Uuid, adapter: &str) -> Result<usize> {
+    let sql = format!(
+        "UPDATE providers SET adapter = ?1, {HLC_TIMESTAMP_COLUMN} = current_hlc() \
+         WHERE id = ?2"
+    );
+    conn.execute(&sql, params![adapter, id.to_string()])
+}
+
 /// Lists all providers ordered by creation time (oldest first).
 pub fn list_providers(conn: &Connection) -> Result<Vec<Provider>> {
     let mut stmt = conn.prepare(

@@ -106,6 +106,14 @@ pub fn insert_message(conn: &Connection, m: &ChatMessage) -> Result<usize> {
     )
 }
 
+/// Removes a message that was staged before adapter startup completed.
+pub fn delete_message(conn: &Connection, id: Uuid) -> Result<usize> {
+    conn.execute(
+        "DELETE FROM chat_messages WHERE id = ?1",
+        params![id.to_string()],
+    )
+}
+
 /// Lists all messages in a thread, oldest first. Deterministic order
 /// matters for the "conversation history" render — plan §"Datenmodell"
 /// demands per-thread ordering by logical time + id; this helper uses

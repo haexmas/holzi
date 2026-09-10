@@ -8,6 +8,8 @@
 
 use std::sync::{Arc, Mutex};
 
+use uuid::Uuid;
+
 use crate::adapters::ProviderAdapter;
 
 /// Metadata about the currently-loaded model. Both the local and
@@ -19,6 +21,8 @@ pub struct ActiveSession {
     /// or the catalog id for local ones. Persisted verbatim as the
     /// `chat_messages.model_id` foreign key.
     pub model_id: String,
+    /// Provider UUID for API-key sessions; `None` for local sessions.
+    pub provider_id: Option<Uuid>,
     pub adapter: Arc<dyn ProviderAdapter>,
     /// Only meaningful for local models; api_key rows carry an empty
     /// string because the vendor's server-side tokenizer handles it.

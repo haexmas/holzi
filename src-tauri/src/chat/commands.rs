@@ -6,18 +6,23 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 use uuid::Uuid;
 
+#[cfg(feature = "llm-cpu")]
 use crate::adapters::local::LocalAdapter;
 use crate::adapters::types::{ChatMessage as LlmMessage, ChatRequest, ChatRole, StreamChunk};
 use crate::error::{HolziError, Result};
+#[cfg(feature = "llm-cpu")]
 use crate::llm::local::LocalModel;
+#[cfg(feature = "llm-cpu")]
 use crate::models::paths;
 use crate::providers::build_adapter;
 use crate::state::AppState;
 use crate::state_utils::active_database;
+#[cfg(feature = "llm-cpu")]
+use crate::storage::device_downloaded_models;
 use crate::storage::{
     chat_messages::{self as msg_store, ChatMessage, FinishReason, MessageRole},
     chat_threads::{self as thread_store, ChatThread},
-    device_downloaded_models, models as models_store, providers as providers_store,
+    models as models_store, providers as providers_store,
 };
 
 use super::session::{ActiveSession, ChatState};
@@ -99,7 +104,17 @@ pub async fn load_model(
     let session = if let Some((provider_id_str, _remote_id)) = model_id.split_once(':') {
         load_api_key_model(&state, &model_id, provider_id_str).await?
     } else {
-        load_local_model_by_id(&app, &state, &model_id).await?
+        #[cfg(feature = "llm-cpu")]
+        {
+            load_local_model_by_id(&app, &state, &model_id).await?
+        }
+        #[cfg(not(feature = "llm-cpu"))]
+        {
+            let _ = app;
+            return Err(HolziError::InvalidInput {
+                reason: "local inference is not enabled in this build".into(),
+            });
+        }
     };
 
     let name = resolve_display_name(&state, &model_id)
@@ -130,8 +145,9 @@ async fn load_api_key_model(
     })?;
     let db = active_database(state)?;
     let id_owned = composite_id.to_string();
+    let db_read = db.clone();
     let (provider, row) = tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
+        db_read.with_connection(|conn| {
             let provider = providers_store::get_provider(conn, provider_id)
                 .map_err(haex_crdt::Error::from)?
                 .ok_or_else(|| {
@@ -153,9 +169,11 @@ async fn load_api_key_model(
         id: composite_id.to_string(),
     })?;
 
+    let provider = crate::providers::repair_legacy_adapter(&db, &provider).await?;
     let adapter = build_adapter(&provider)?;
     Ok(ActiveSession {
         model_id: composite_id.to_string(),
+        provider_id: Some(provider_id),
         adapter: Arc::from(adapter),
         tokenizer_repo: String::new(),
         context_window: row.context_window,
@@ -163,6 +181,7 @@ async fn load_api_key_model(
 }
 
 /// Loads an installed local model and wraps it in an adapter-backed session.
+#[cfg(feature = "llm-cpu")]
 async fn load_local_model_by_id(
     app: &AppHandle,
     state: &State<'_, AppState>,
@@ -213,6 +232,7 @@ async fn load_local_model_by_id(
 
     Ok(ActiveSession {
         model_id: model_id.to_string(),
+        provider_id: None,
         adapter: Arc::new(LocalAdapter::new(model)),
         tokenizer_repo,
         context_window,
@@ -289,6 +309,7 @@ pub async fn send_message(
     let insert_db = db.clone();
     let content_owned = args.content.clone();
     let session_model_id = session.model_id.clone();
+    let session_provider_id = session.provider_id;
     let is_new_thread = args.thread_id.is_none();
     tauri::async_runtime::spawn_blocking(move || {
         insert_db.with_connection(|conn| {
@@ -298,7 +319,7 @@ pub async fn send_message(
                     &ChatThread {
                         id: thread_id,
                         title: default_thread_title(&content_owned),
-                        last_provider_id: None,
+                        last_provider_id: session_provider_id,
                         last_model_id: Some(session_model_id.clone()),
                         created_at: now,
                         updated_at: now,
@@ -310,7 +331,7 @@ pub async fn send_message(
                     conn,
                     thread_id,
                     &current_title(conn, thread_id).unwrap_or_default(),
-                    None,
+                    session_provider_id,
                     Some(&session_model_id),
                     now,
                 )
@@ -323,7 +344,7 @@ pub async fn send_message(
                 parent_id,
                 role: MessageRole::User,
                 content: content_owned.clone(),
-                provider_id: None,
+                provider_id: session_provider_id,
                 model_id: Some(session_model_id.clone()),
                 prompt_tokens: None,
                 completion_tokens: None,
@@ -386,14 +407,34 @@ pub async fn send_message(
     // Start the generation. `stream_chat` may fail before the first
     // byte (credential rejection, transport error); surface those to
     // the caller instead of hiding them inside the streaming task.
-    let mut stream =
-        session
-            .adapter
-            .stream_chat(request)
-            .await
-            .map_err(|e| HolziError::InvalidInput {
-                reason: format!("adapter start: {e}"),
-            })?;
+    let mut stream = match session.adapter.stream_chat(request).await {
+        Ok(stream) => stream,
+        Err(error) => {
+            let cleanup_db = db.clone();
+            let cleanup = tauri::async_runtime::spawn_blocking(move || {
+                cleanup_db.with_connection(|conn| {
+                    msg_store::delete_message(conn, user_message_id)
+                        .map_err(haex_crdt::Error::from)?;
+                    if is_new_thread {
+                        thread_store::delete_thread(conn, thread_id)
+                            .map_err(haex_crdt::Error::from)?;
+                    }
+                    Ok(())
+                })
+            })
+            .await;
+            if let Err(cleanup_error) = cleanup {
+                return Err(HolziError::CrdtInit {
+                    reason: format!(
+                        "adapter start: {error}; failed to clean up staged message: {cleanup_error}"
+                    ),
+                });
+            }
+            return Err(HolziError::InvalidInput {
+                reason: format!("adapter start: {error}"),
+            });
+        }
+    };
     let abort = stream.abort_handle();
     {
         let mut g = chat
@@ -471,7 +512,7 @@ pub async fn send_message(
                     parent_id: Some(user_message_id),
                     role: MessageRole::Assistant,
                     content: final_content,
-                    provider_id: None,
+                    provider_id: session_for_task.provider_id,
                     model_id: Some(session_for_task.model_id.clone()),
                     prompt_tokens: prompt_tokens.map(|n| n as i64),
                     completion_tokens: completion_tokens.map(|n| n as i64),
@@ -483,7 +524,7 @@ pub async fn send_message(
                     conn,
                     thread_id,
                     &current_title(conn, thread_id).unwrap_or_default(),
-                    None,
+                    session_for_task.provider_id,
                     Some(&session_for_task.model_id),
                     now2,
                 )

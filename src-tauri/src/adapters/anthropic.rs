@@ -29,13 +29,8 @@ const ANTHROPIC_VERSION: &str = "2023-06-01";
 /// `has_more` for correctness.
 const PAGE_LIMIT: u16 = 1000;
 
-/// Whole-request budget (connect + TLS + headers + body). Without it a
-/// `base_url` that completes the handshake and then stalls would hang
-/// `refresh_provider_models` forever, holding the caller's task.
-/// Streaming requests bypass this budget — the token stream is
-/// intentionally long-lived — via `Client::post` + no per-request
-/// timeout override; a hung mid-stream connection is handled by the
-/// caller aborting through `AdapterStream::abort_handle`.
+/// Budget for the finite model-list request. Streaming requests are
+/// intentionally long-lived and are governed by the caller's abort handle.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Fallback `max_tokens` cap sent when the request does not carry one.
@@ -60,9 +55,6 @@ impl AnthropicAdapter {
     pub fn new(base_url: String, api_key: String) -> Result<Self, AdapterError> {
         let client = Client::builder()
             .connect_timeout(Duration::from_secs(15))
-            // `timeout` covers the pre-stream request budget; per-call
-            // overrides in `list_models` and `stream_chat` still apply.
-            .timeout(REQUEST_TIMEOUT)
             .user_agent(concat!("holzi/", env!("CARGO_PKG_VERSION")))
             .build()
             .map_err(|e| AdapterError::Http {
@@ -110,6 +102,7 @@ impl ProviderAdapter for AnthropicAdapter {
             let resp = self
                 .client
                 .get(&endpoint)
+                .timeout(REQUEST_TIMEOUT)
                 .query(&query)
                 .header("x-api-key", &self.api_key)
                 .header("anthropic-version", ANTHROPIC_VERSION)
@@ -170,9 +163,7 @@ impl ProviderAdapter for AnthropicAdapter {
     async fn stream_chat(&self, req: ChatRequest) -> Result<AdapterStream, AdapterError> {
         let endpoint = format!("{}/v1/messages", self.base_url.trim_end_matches('/'));
         let body = build_messages_body(&req);
-        // The pre-stream POST inherits the client-wide `REQUEST_TIMEOUT`
-        // (headers + body), then reqwest hands us `bytes_stream()`
-        // which is intentionally long-lived — abort via
+        // The response body is intentionally long-lived — abort via
         // `AdapterStream::abort_handle` if the caller wants to cancel.
         let resp = self
             .client
@@ -210,7 +201,6 @@ impl ProviderAdapter for AnthropicAdapter {
             let mut ttft_ms: Option<u64> = None;
             let mut finish_reason: Option<String> = None;
             let mut done_emitted = false;
-            let mut delta_seen = false;
 
             while let Some(event) = event_stream.next().await {
                 let event = match event {
@@ -246,9 +236,6 @@ impl ProviderAdapter for AnthropicAdapter {
                                 {
                                     if !text.is_empty() && ttft_ms.is_none() {
                                         ttft_ms = Some(start.elapsed().as_millis() as u64);
-                                    }
-                                    if !text.is_empty() {
-                                        delta_seen = true;
                                     }
                                     if tx
                                         .send(Ok(StreamChunk::Delta {
@@ -320,17 +307,7 @@ impl ProviderAdapter for AnthropicAdapter {
             }
 
             if !done_emitted {
-                if delta_seen {
-                    let _ = tx.send(Ok(StreamChunk::Done {
-                        finish_reason,
-                        prompt_tokens,
-                        completion_tokens,
-                        ttft_ms,
-                        total_ms: start.elapsed().as_millis() as u64,
-                    }));
-                } else {
-                    let _ = tx.send(Err(StreamError::UnexpectedEnd));
-                }
+                let _ = tx.send(Err(StreamError::UnexpectedEnd));
             }
         });
 

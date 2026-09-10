@@ -326,6 +326,42 @@ async fn stream_chat_emits_deltas_and_done_with_token_counts() {
 }
 
 #[tokio::test]
+/// A stream that ends after a delta without `message_stop` is truncated.
+async fn stream_chat_reports_unexpected_end_after_delta() {
+    let server = MockServer::start().await;
+    let body = sse_body(&[(
+        "content_block_delta",
+        serde_json::json!({
+            "type": "content_block_delta",
+            "delta": {"type": "text_delta", "text": "partial"}
+        }),
+    )]);
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(body)
+                .insert_header("content-type", "text/event-stream"),
+        )
+        .mount(&server)
+        .await;
+
+    let adapter = AnthropicAdapter::new(server.uri(), "sk-any".to_string()).unwrap();
+    let mut stream = adapter
+        .stream_chat(sample_request("claude-opus-5"))
+        .await
+        .unwrap();
+    let mut saw_unexpected_end = false;
+    while let Some(chunk) = stream.next().await {
+        if matches!(chunk, Err(StreamError::UnexpectedEnd)) {
+            saw_unexpected_end = true;
+            break;
+        }
+    }
+    assert!(saw_unexpected_end, "truncated stream must not complete");
+}
+
+#[tokio::test]
 async fn stream_chat_surfaces_thinking_delta_as_reasoning() {
     let server = MockServer::start().await;
     let body = sse_body(&[

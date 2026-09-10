@@ -8,6 +8,7 @@
 pub mod local;
 
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use tauri::State;
 use uuid::Uuid;
 
@@ -282,11 +283,9 @@ pub async fn list_provider_models(
 
 /// Shared refresh core used by both [`add_provider`] and
 /// [`refresh_provider_models`]. Returns the number of models cached.
-async fn do_refresh(
-    db: &std::sync::Arc<haex_crdt::Database>,
-    provider: &Provider,
-) -> Result<usize> {
-    let adapter = build_adapter(provider)?;
+async fn do_refresh(db: &Arc<haex_crdt::Database>, provider: &Provider) -> Result<usize> {
+    let provider = repair_legacy_adapter(db, provider).await?;
+    let adapter = build_adapter(&provider)?;
     let fetched = adapter.list_models().await.map_err(map_adapter_error)?;
 
     let fetched_at = now_ms();
@@ -312,6 +311,46 @@ async fn do_refresh(
     .map_err(HolziError::from)?;
 
     Ok(model_count)
+}
+
+/// Repairs a legacy API-key row only when its stored base URL identifies the
+/// Anthropic endpoint unambiguously. Other legacy rows stay unresolved and
+/// are rejected by `build_adapter` instead of being guessed as Anthropic.
+pub(crate) async fn repair_legacy_adapter(
+    db: &Arc<haex_crdt::Database>,
+    provider: &Provider,
+) -> Result<Provider> {
+    if provider.adapter.is_some() {
+        return Ok(provider.clone());
+    }
+    let Some(adapter) = legacy_adapter_for_url(provider.base_url.as_deref()) else {
+        return Ok(provider.clone());
+    };
+
+    let provider_id = provider.id;
+    let db_write = db.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        db_write.with_connection(|conn| {
+            storage::set_adapter(conn, provider_id, adapter).map_err(haex_crdt::Error::from)?;
+            Ok(())
+        })
+    })
+    .await
+    .map_err(|e| HolziError::CrdtInit {
+        reason: format!("repair provider adapter join: {e}"),
+    })?
+    .map_err(HolziError::from)?;
+
+    let mut repaired = provider.clone();
+    repaired.adapter = Some(adapter.to_string());
+    Ok(repaired)
+}
+
+fn legacy_adapter_for_url(base_url: Option<&str>) -> Option<&'static str> {
+    match base_url?.trim_end_matches('/') {
+        "https://api.anthropic.com" | "http://api.anthropic.com" => Some("anthropic"),
+        _ => None,
+    }
 }
 
 /// Builds the right adapter for the provider's kind and credentials.
@@ -419,7 +458,7 @@ pub(crate) fn map_adapter_error(err: AdapterError) -> HolziError {
 
 #[cfg(test)]
 mod tests {
-    use super::validate_adapter;
+    use super::{legacy_adapter_for_url, validate_adapter};
     use crate::error::HolziError;
 
     #[test]
@@ -434,6 +473,17 @@ mod tests {
             validate_adapter(Some("openai")),
             Err(HolziError::InvalidInput { reason }) if reason.contains("unsupported")
         ));
+    }
+
+    #[test]
+    /// Legacy rows are repaired only when their endpoint identifies Anthropic.
+    fn legacy_adapter_repair_does_not_guess_from_kind() {
+        assert_eq!(
+            legacy_adapter_for_url(Some("https://api.anthropic.com/")),
+            Some("anthropic")
+        );
+        assert_eq!(legacy_adapter_for_url(Some("https://api.openai.com")), None);
+        assert_eq!(legacy_adapter_for_url(None), None);
     }
 }
 
