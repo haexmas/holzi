@@ -125,8 +125,8 @@ description: "Actionable, dependency-ordered task list for the onboarding-model-
 - [ ] T042 [US2] Add `resolve_default_model` helper function in `src-tauri/src/chat/commands.rs` implementing the FR-014 chain per [contracts/tauri-commands.md](contracts/tauri-commands.md); returns `{ modelId: Option<String>, source: ResolveSource }`; pure read
 - [ ] T043 [US2] Add `resolve_default_model` Tauri command wrapper (thin); register in `lib.rs`
 - [ ] T044 [US2] `load_model` in `src-tauri/src/chat/commands.rs` schreibt WEDER bei `auto` NOCH bei `manual` in `chat.last_active_model_id`. Der `mode`-Parameter wird gestrichen — Frontend braucht keine Unterscheidung mehr für diesen Zweck. (Post-Analyze-Korrektur FR-009: nur `send_message` schreibt last_active.)
-- [ ] T045 [US2] Extend `send_message` in `src-tauri/src/chat/commands.rs`: nach erfolgreichem User-Message-Persist ALS EINZIGER Trigger `preferences[('<my_device>', 'chat.last_active_model_id')] = session.model_id` via `storage::preferences::insert_or_update` schreiben; idempotent bei wiederholten Sends
-- [ ] T046 [US2] Add integration test in `src-tauri/tests/preferences_roundtrip.rs` covering the resolver chain: seed preferences at various levels, call resolve, verify precedence device > vault > first-available
+- [ ] T045 [US2] Extend `send_message` in `src-tauri/src/chat/commands.rs`: User-Message-Persist und `preferences[('<my_device>', 'chat.last_active_model_id')] = session.model_id` an einer atomaren Accepted-Send-Grenze committen und bei `stream_chat`-Startup-Fehler gemeinsam zurückrollen; falls der Storage das nicht unterstützt, einen stabilen Idempotency-Key plus reparierbaren Preference-Pfad verwenden; einziger Trigger ist ein erfolgreiches `send_message`
+- [ ] T046 [US2] Add integration test in `src-tauri/tests/preferences_roundtrip.rs` covering the resolver chain: seed a loadable `chat.last_active_model_id` together with device and vault `chat.default_model_id` values, call resolve, verify `last_active` wins before device default, vault default, and first-available; retain separate cases for each lower-priority fallback
 
 ### Loading UX for US2
 
@@ -202,8 +202,7 @@ description: "Actionable, dependency-ordered task list for the onboarding-model-
 **Purpose**: Documentation, cleanup, verification.
 
 - [ ] T060a [P] i18n-Locale-Einträge in `src/i18n/de/onboarding.json`, `src/i18n/de/settings.json`, `src/i18n/de/workspace.json`, `src/i18n/de/chat.json` (bzw. bestehende Locale-Struktur) hinzufügen und in `src/i18n/en/` denselben Satz auf Englisch spiegeln. Keys mindestens: `onboarding.alias.label`, `onboarding.alias.defaultPlaceholder`, `onboarding.model.tier.{easy,sweet,max,laterViaProvider}`, `onboarding.wizard.{next,finish,cancel}`, `settings.header.forDevice`, `settings.default.scope.{device,vault}`, `settings.default.save`, `settings.alias.{label,save}`, `workspace.settings.iconTitle`, `chat.loading.{connecting,loading,cudaJitWarmup,ready}`. Grep über alle neuen `.vue`-Dateien: KEINE hardcoded deutschen/englischen Strings.
-- [ ] T061 [P] Update [holzi-status.md](../../../.claude/projects/-home-haex-Projekte-holzi/memory/holzi-status.md) memory with "Feature 002 landed": migration numbers, DROP of device_downloaded_models_no_sync, sentinel-row convention, new commands surface
-- [ ] T062 [P] Update `plans/001-desktop-mvp.md` "Onboarding-Härtung"-Abschnitt to mark it as landed (Feature 002 abgeschlossen am YYYY-MM-DD)
+- [ ] T061 [P] Update the repository-owned `plans/001-desktop-mvp.md` "Onboarding-Härtung"-Abschnitt to mark Feature 002 as landed (Feature 002 abgeschlossen am YYYY-MM-DD) and summarize the migration numbers, DROP of `device_downloaded_models_no_sync`, sentinel-row convention, and new command surface
 - [ ] T063 Run `cargo fmt --check` and fix any style violations
 - [ ] T064 Run `cargo clippy --lib --tests -- -D warnings` — no warnings
 - [ ] T065 Run `cargo test` (full suite: lib + all integration tests) — all green

@@ -35,7 +35,7 @@ CREATE INDEX idx_preferences_key
 **Validierungsregeln** (Rust-Wrapper):
 
 - `key` ist nicht-leer und enthält mindestens einen `.` (Namespace-Erzwingung).
-- `vault_device_uuid` ist ein gültiges UUID-Format (parseable via `Uuid::parse_str`).
+- `vault_device_uuid` ist ein gültiges UUID-Format (parseable via `Uuid::parse_str`). Für `PrefScope::Device(uuid)` wird zusätzlich `Uuid::nil()` abgewiesen; die nil-UUID ist ausschließlich `PrefScope::Vault` und dessen Sentinel-Row vorbehalten. Andere parsebare UUIDs sind für den Device-Scope zulässig.
 - `set_pref(scope, key, value)` erzeugt Row wenn nicht vorhanden, sonst UPDATE.
 - `clear_pref(scope, key)` = DELETE der Row (nicht Update-auf-NULL).
 
@@ -44,7 +44,7 @@ CREATE INDEX idx_preferences_key
 | Key | Scope | Semantik |
 |---|---|---|
 | `chat.default_model_id` | device oder vault | Expliziter Standardmodell-Wunsch. Wird ausschließlich via Settings-Screen-Trigger gesetzt (FR-011). Kein Auto-Overwrite. |
-| `chat.last_active_model_id` | nur device | Zuletzt intentional-genutztes Modell. Auto-Write bei manuellem Picker-Wechsel oder `send_message` (FR-009/010). |
+| `chat.last_active_model_id` | nur device | Zuletzt erfolgreich genutztes Modell. Auto-Write ausschließlich nach erfolgreichem `send_message` (FR-009/010); ein manueller Picker-Wechsel ohne Nachricht schreibt nicht. |
 
 **State-Transitions**:
 
@@ -93,7 +93,7 @@ Keine — Preference-Rows sind zustandslos. Ihre Existenz ist der Zustand. Über
 DROP TABLE device_downloaded_models_no_sync;
 ```
 
-Ersatz: `list_installed_models` scannt `<AppLocalData>/models/` per readdir. Jedes Sub-Verzeichnis, dessen Name als `models.id` in der `models`-Tabelle existiert, gilt als installiert. `size_bytes` wird per `fs::metadata` on-demand ermittelt. `sha256` und `verified_at` fallen ersatzlos weg (LocalModel-Load selbst ist Integritätscheck).
+Ersatz: `list_installed_models` scannt `<AppLocalData>/models/` per readdir. Ein Sub-Verzeichnis gilt nur als installiert, wenn es eine vollständige `.gguf`-Datei oder einen atomaren Completion-Marker mit verfügbarer Modelldatei enthält und sein Name als `models.id` in der `models`-Tabelle existiert. Fehlt das Root-Verzeichnis, ist die Liste leer; `size_bytes` wird per `fs::metadata` on-demand ermittelt. `sha256` und `verified_at` fallen ersatzlos weg (LocalModel-Load selbst ist Integritätscheck).
 
 ---
 
@@ -132,7 +132,8 @@ pub struct DeviceInfoPayload {
     pub vault_device_uuid: Uuid,
     pub alias: Option<String>,
     /// Roher OS-Hostname wenn ermittelbar, sonst None. Frontend wendet
-    /// i18n-Fallback `onboarding.alias.defaultPlaceholder` an — kein
+    /// i18n-Fallback `onboarding.alias.defaultPlaceholder` als echten
+    /// initialen Eingabewert an — kein
     /// lokalisierter String im Backend (FR-020).
     pub hostname: Option<String>,
 }
@@ -179,7 +180,7 @@ export interface DeviceInfo {
   installationUuid: string
   vaultDeviceUuid: string
   alias: string | null
-  hostnamePlaceholder: string
+  hostname: string | null
 }
 ```
 

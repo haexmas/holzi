@@ -17,10 +17,10 @@ Alle offenen Klärfragen aus dem Spec sind in der Clarify-Session vom 2026-09-10
 
 **Decision**: Migrations 0011 und 0012 werden über den bestehenden `HolziMigrationSource`-Mechanismus geliefert. `CREATE TABLE preferences (..., PRIMARY KEY (vault_device_uuid, key), FOREIGN KEY (vault_device_uuid) REFERENCES known_devices(vault_device_uuid) ON DELETE CASCADE)` als 0011; `DROP TABLE device_downloaded_models_no_sync` als 0012.
 
-**Rationale**: 
+**Rationale**:
 - haex-crdt's `CrdtTransformer` verarbeitet `ALTER TABLE` (bereits bewiesen in Migration 0009 `models.tokenizer_repo`) und `DROP TABLE` (unterstützt in `src/db/core/extract.rs:226` und `migrations/compat.rs:184`).
 - `CREATE TABLE` mit `FOREIGN KEY`-Klausel geht durch: haex-crdt's Transformer installiert seine CRDT-Metadaten-Spalten (`haex_hlc_no_sync`, `haex_column_hlcs_no_sync`, `haex_column_sigs_no_sync`) additiv, ohne die FK-Deklaration zu berühren.
-- `PRAGMA foreign_keys` ist beim App-Betrieb an (siehe [db/core/init.rs:61](../../../haex-crdt/src/db/core/init.rs)); wird während CRDT-Sync-Apply per RAII-Guard temporär off — Sync-Payloads mit potenziellen Referential-Race-Conditions brechen den FK nicht.
+- `PRAGMA foreign_keys` ist beim App-Betrieb an (siehe [db/core/init.rs:61](../../../haex-crdt/src/db/core/init.rs)); wird während CRDT-Sync-Apply per RAII-Guard temporär off — dadurch scheitert ein Payload mit potenzieller Referential-Race-Condition nicht mitten im Apply. Vor dem Commit muss `apply_remote_changes` die Elternzeilen in `known_devices` vor den `preferences`-Zeilen anwenden oder die Reihenfolge explizit reparieren und per `PRAGMA foreign_key_check` validieren.
 
 **Alternatives considered**:
 - Migration ohne FK-Deklaration, nur Namenskonvention: verwirft die Hard-FK-Safety aus ADR-0001, die genau wegen bestehender Bug-Vorlage (`device_downloaded_models_no_sync` ohne device_id) gefordert wurde.
@@ -41,7 +41,7 @@ Alle offenen Klärfragen aus dem Spec sind in der Clarify-Session vom 2026-09-10
 
 ## Entscheidung 4: Filesystem-Scan für `list_installed_models`
 
-**Decision**: `tokio::fs::read_dir` unter `<AppLocalData>/models/`. Für jeden Sub-Dir wird der Slug als Modell-ID interpretiert. Modell-Metadaten kommen aus einem Lookup in der `models`-Tabelle (per `models_store::get_model(&id)`). Sub-Dirs ohne passenden `models`-Row werden übersprungen.
+**Decision**: `tokio::fs::read_dir` unter `<AppLocalData>/models/`. Für jeden Sub-Dir wird der Slug als Modell-ID interpretiert, aber nur wenn eine vollständige `.gguf`-Datei oder ein atomarer Completion-Marker mit verfügbarer Modelldatei vorhanden ist. Modell-Metadaten kommen aus einem Lookup in der `models`-Tabelle (per `models_store::get_model(&id)`). Sub-Dirs ohne passende `models`-Row oder ohne verfügbare Modelldatei werden übersprungen; ein fehlendes Root-Verzeichnis ergibt eine leere Liste.
 
 **Rationale**:
 - Async-Konsistenz mit anderen Tauri-Command-Pfaden.
@@ -110,7 +110,7 @@ Alle offenen Klärfragen aus dem Spec sind in der Clarify-Session vom 2026-09-10
 
 ## Entscheidung 9: Preference-Value-Persistence-Details
 
-**Decision**: `set_pref(scope, key, value)` und `clear_pref(scope, key)` als separate Commands. Composable exposes `usePreferences().setPref({ scope, key, value })` und `.clearPref({ scope, key })`. Werte werden als reine TEXT ohne JSON-Encoding gespeichert (Spec-Entscheidung 4a in Grill). Der `models.default_model_id`-Wert ist die Composite-ID (bei api_key `<provider_uuid>:<remote>`, bei local Catalog-ID) — dieselbe Semantik wie im Chat-Command.
+**Decision**: `set_pref(scope, key, value)` und `clear_pref(scope, key)` als separate Commands. Composable exposes `usePreferences().setPref({ scope, key, value })` und `.clearPref({ scope, key })`. Werte werden als reine TEXT ohne JSON-Encoding gespeichert (Spec-Entscheidung 4a in Grill). Der `chat.default_model_id`-Wert ist die Composite-ID (bei api_key `<provider_uuid>:<remote>`, bei local Catalog-ID) — dieselbe Semantik wie im Chat-Command.
 
 **Rationale**:
 - `clear_pref` ist expliziter als "set with empty string" oder "set with NULL" — Nutzer-Intent "vergessen" ist eine eigene Aktion, kein Sonderfall von "setzen".
@@ -126,6 +126,7 @@ Alle offenen Klärfragen aus dem Spec sind in der Clarify-Session vom 2026-09-10
 **Decision**:
 - **Backend-Unit-Tests**: `src-tauri/src/storage/preferences_tests.rs` für Storage-Roundtrip + FK-Cascade + Sentinel-Idempotency + Resolver-Chain-Priorisierung.
 - **Backend-Integration-Test**: `src-tauri/tests/preferences_roundtrip.rs` für einen End-to-End-Bootstrap-mit-Sentinel-Test plus Cross-Session-Preferences-Persistenz.
+- **Sync-FK-Apply-Order-Test**: `apply_remote_changes` mit Child-before-Parent und Parent-before-Child Payloads; beide Reihenfolgen müssen vor dem Commit einen gültigen FK-Zustand herstellen.
 - **Filesystem-Scan-Test**: eigener Test in `src-tauri/src/models/commands.rs` oder als Modul-Test mit tmp-Verzeichnis.
 - **Frontend**: keine automatisierten Tests (Playwright ist nicht eingerichtet, siehe Etappe-1-Follow-Up-Note); manuelle Verifikation via `pnpm tauri dev` mit dokumentierten Steps in [quickstart.md](quickstart.md).
 

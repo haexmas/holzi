@@ -14,10 +14,11 @@ _Avoid_: instance (used to mean this earlier, deprecated), database.
 
 **Installation UUID**:
 Per-app-installation identifier stored in a file at
-`<AppLocalData>/installation-id`. Never leaves the device, never
-enters a sync payload. The lookup key `HolziBootstrap` uses to decide
-whether the current open is genesis, resume, or adoption of a copied
-vault.
+`<AppLocalData>/installation-id`. The corresponding `installation_uuid` is
+also recorded in the sync-tracked `known_devices` table, so a copied vault
+can carry that historical row with it. The lookup key `HolziBootstrap` uses to
+decide whether the current open is genesis, resume, or adoption of a copied
+vault; adoption mints a fresh `vault_device_uuid` for the new installation.
 _Avoid_: device id (ambiguous — see below).
 
 **Vault Device UUID**:

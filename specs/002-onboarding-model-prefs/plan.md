@@ -76,7 +76,7 @@ src-tauri/src/
 ├── models/
 │   └── commands.rs               # + list_installed_models scannt Filesystem statt DB
 ├── chat/
-│   ├── commands.rs               # + resolve_default_model + Chain, + write last_active bei send_message/manual load
+│   ├── commands.rs               # + resolve_default_model + Chain, + write last_active bei send_message
 │   └── session.rs                # unverändert
 ├── catalog/
 │   └── mod.rs                    # + recommend_tiers(&HardwareInfo) -> [entry; 3]

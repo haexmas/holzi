@@ -39,7 +39,7 @@ Ein Nutzer öffnet eine Vault das erste Mal auf einem Gerät. Das kann eine ganz
 
 **Acceptance Scenarios**:
 
-1. **Given** eine Vault existiert nirgends, **When** der Nutzer sie neu anlegt und öffnet, **Then** wird der Nutzer auf eine eigenständige Onboarding-Seite geleitet, bekommt ein vorbelegtes Feld für den Gerätenamen (Placeholder = Betriebssystem-Hostname, wenn ermittelbar; sonst ein generischer Fallback wie "Neues Gerät") und drei Modellvorschläge, aus denen einer gewählt werden KANN. Alternativ kann der Nutzer "später via Anbieter" wählen, ohne ein Modell zu setzen.
+1. **Given** eine Vault existiert nirgends, **When** der Nutzer sie neu anlegt und öffnet, **Then** wird der Nutzer auf eine eigenständige Onboarding-Seite geleitet, bekommt ein mit dem Betriebssystem-Hostname vorbefülltes Feld für den Gerätenamen (oder mit einem generischen Fallback wie "Neues Gerät", wenn der Hostname nicht ermittelbar ist) und drei Modellvorschläge, aus denen einer gewählt werden KANN. Der vorbefüllte Wert ist ein echter Eingabewert und darf unverändert bestätigt werden. Alternativ kann der Nutzer "später via Anbieter" wählen, ohne ein Modell zu setzen.
 2. **Given** eine Vault liegt bereits auf Gerät A und wird als Datei auf Gerät B kopiert, **When** der Nutzer sie auf B das erste Mal öffnet, **Then** wird auf B derselbe Wizard gezeigt, obwohl auf A Anbietermodelle bereits konfiguriert sind — die Ersteinrichtung fragt trotzdem einen Gerätenamen für B ab und schlägt Modelle passend zu B's Hardware vor.
 3. **Given** der Nutzer öffnet eine Vault, für die auf diesem Gerät bereits ein Name gesetzt wurde, **When** die App startet, **Then** wird der Wizard NICHT gezeigt und der Nutzer landet direkt auf der Workspace-Landing.
 4. **Given** der Nutzer klickt "Abbrechen" oder verlässt die Wizard-Seite ohne Bestätigung, **When** er die App erneut öffnet, **Then** wird der Wizard erneut angezeigt, weil die Ersteinrichtung nicht abgeschlossen wurde.
@@ -110,7 +110,7 @@ Dieses Feature liefert **keinen** Retire-Vorgang. Es sorgt aber dafür, dass ein
 ### Edge Cases
 
 - **Erster Start ohne Netzwerk und ohne bereits konfigurierte Anbieter**: der Wizard muss weiterhin abschließbar sein — der Nutzer kann Modelle aus dem lokalen Katalog wählen (Download braucht Netzwerk, aber die Auswahl "ich richte später einen Anbieter ein" muss ohne Netz möglich sein).
-- **Hostname-Fallback nicht ermittelbar**: der Wizard zeigt einen generischen Platzhalter statt zu blockieren. Der Nutzer kann den Platzhalter unverändert bestätigen.
+- **Hostname-Fallback nicht ermittelbar**: der Wizard füllt den Alias mit einem generischen, lokalisierten Fallback vor, statt zu blockieren. Der Nutzer kann diesen Wert unverändert bestätigen.
 - **Kollision beim Adoption-Sync**: zwei Geräte adoptieren dieselbe Vault parallel und schreiben unterschiedliche Werte für vault-weite Preferences. Der letzte gewinnt (LWW auf CRDT-Ebene) — beide Geräte einigen sich.
 - **Zuletzt aktives Modell verweist auf ein Modell, das jetzt nicht mehr existiert (deinstalliert, Anbieter entfernt)**: die persistierte Einstellung wird nicht angefasst, der Session-Start greift automatisch auf die nächste Ebene der Fallback-Kette zurück. Wird das Modell später wieder verfügbar, funktioniert die alte Einstellung wieder.
 - **Gerätespezifische Standardeinstellung ohne last_active auf einem frisch adoptierten Gerät**: die Fallback-Kette springt direkt auf den Standard, dann auf den Vault-Standard, dann auf erstes verfügbares — nie auf ein Modell, das auf diesem Gerät nicht ladbar ist.

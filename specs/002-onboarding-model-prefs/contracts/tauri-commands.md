@@ -38,11 +38,11 @@ Setzt oder aktualisiert einen Preference-Eintrag.
 
 **Returns**: `void`.
 
-**Fehler**: 
+**Fehler**:
 - `HolziError::InvalidInput` wenn Key-Format ungültig.
 - `HolziError::CrdtInit` wenn DB-Zugriff scheitert.
 
-**Verhalten**: 
+**Verhalten**:
 - Sync-tracked via `haex_hlc_no_sync = current_hlc()`.
 - FK-Prüfung: wenn `scope.kind === 'device'` und diese UUID nicht in `known_devices` existiert → SQLite-FK-Fehler → propagiert als `HolziError::CrdtInit` (theoretisch nie erreichbar, weil Bootstrap den Sentinel + eigenes Device sichergestellt hat).
 
@@ -71,9 +71,9 @@ Führt die Session-Resolver-Kette (FR-014) aus und gibt zurück, welches Modell 
 
 **Fehler**: `HolziError::CrdtInit` bei DB-Zugriffsfehlern.
 
-**Verhalten**: 
+**Verhalten**:
 - Reine Read-Operation, KEIN Preference-Write.
-- Wenn `source === 'first_available'`, ist das eine passive Wahl — der Aufrufer (Frontend) schreibt kein `last_active_model_id` auf Basis dieses Ergebnisses. Erst wenn der Nutzer intentional handelt (send_message oder manueller Picker-Wechsel), erfolgt der Write.
+- Wenn `source === 'first_available'`, ist das eine passive Wahl — der Aufrufer (Frontend) schreibt kein `last_active_model_id` auf Basis dieses Ergebnisses. Der Write erfolgt ausschließlich nach einem erfolgreichen `send_message`; ein manueller Picker-Wechsel ohne Nachricht bleibt folgenlos.
 
 ### `current_device_info() -> DeviceInfoPayload`
 
@@ -96,7 +96,7 @@ Liefert Metadaten über das aktuelle Gerät im Kontext des aktiven Vaults.
 
 **Verwendung**:
 - Chat-/Workspace-/Settings-Route-Guard-Middleware ruft dies und prüft `alias === null`.
-- Onboarding-Wizard nutzt `hostname` als initial-Wert des Alias-Inputs; wenn `null`, greift Frontend auf `$t('onboarding.alias.defaultPlaceholder')` zurück.
+- Onboarding-Wizard nutzt `hostname` als initialen Wert des Alias-Inputs; wenn `null`, füllt das Frontend den Input mit dem lokalisierten Fallback-Wert aus `$t('onboarding.alias.defaultPlaceholder')` vor. Der Fallback ist damit ein echter Eingabewert und kein bloßer Placeholder.
 - Settings-Screen zeigt `alias` als Kontext-Titel (`$t('settings.header.forDevice', { alias })`).
 
 **Grund für nullable `hostname`**: Konsistent mit FR-020 (i18n-Boundary) — Backend liefert die rohe OS-Info, Frontend entscheidet über den lokalisierten Fallback-Text. Kein lokalisierter String im Backend.
@@ -129,7 +129,7 @@ Liefert drei Hardware-passende Modell-Vorschläge (Easy/Sweet/Max) für den Onbo
 ]
 ```
 
-**Fehler**: `HolziError::CatalogEntryNotFound` in dem Randfall, dass der Katalog nur zwei Einträge hat (dann wird Max = Sweet-Fallback verwendet und ein Fehler-Signal beibehalten). Frontend behandelt bei Empfangs-Fehler den Wizard mit "Katalog leer" — sollte in Prod nie eintreten weil `model_catalog.json` fünf Einträge shippt.
+**Fehler**: `HolziError::CatalogEntryNotFound` nur bei einem leeren oder anderweitig ungültigen Katalog, aus dem keine gültige Empfehlung erzeugt werden kann. Ein nicht-leerer gültiger Katalog mit weniger als drei Einträgen ist erfolgreich: fehlende Tiers werden nach dem Algorithmus mit dem besten verfügbaren Kandidaten wiederverwendet (bei zwei Einträgen z. B. Max = Sweet-Fallback). Das Frontend behandelt nur diesen echten Fehler als "Katalog leer".
 
 **Algorithmus**:
 1. Katalog-Einträge laden, per Fit klassifizieren.
@@ -141,7 +141,7 @@ Liefert drei Hardware-passende Modell-Vorschläge (Easy/Sweet/Max) für den Onbo
 
 ### `list_installed_models` (bestehend)
 
-**Verhaltens-Änderung**: statt DB-Query gegen `device_downloaded_models_no_sync` × `models`, wird jetzt `<AppLocalData>/models/` per `tokio::fs::read_dir` gescannt. Jedes Sub-Dir wird gegen `models::get_model(&slug)` gelookupt; nur Slugs mit passender `models`-Row werden zurückgegeben.
+**Verhaltens-Änderung**: statt DB-Query gegen `device_downloaded_models_no_sync` × `models`, wird jetzt `<AppLocalData>/models/` per `tokio::fs::read_dir` gescannt. Ein Sub-Dir wird nur berücksichtigt, wenn es eine vollständige `.gguf`-Datei enthält oder ein atomarer Completion-Marker deren Verfügbarkeit bestätigt; leere und unvollständige Download-Dirs werden übersprungen. Danach wird der Slug gegen `models::get_model(&slug)` gelookupt; nur Slugs mit passender `models`-Row werden zurückgegeben. Jeder `relativePath` muss auf eine tatsächlich verfügbare Modelldatei zeigen.
 
 **Return-Signatur** (bleibt gleich):
 
@@ -156,11 +156,11 @@ Liefert drei Hardware-passende Modell-Vorschläge (Easy/Sweet/Max) für den Onbo
 }[]
 ```
 
-**Fehler**: `HolziError::Io` wenn `AppLocalData/models/` nicht gelesen werden kann; sollte nur bei Filesystem-Corruption auftreten.
+**Fehler**: Wenn `AppLocalData/models/` noch nicht existiert, wird `[]` zurückgegeben (`tokio::fs::read_dir` liefert `NotFound` auf einer frischen Installation). Andere Fehler beim Lesen des Verzeichnisses werden als `HolziError::Io` weitergegeben.
 
 ### `send_message` (bestehend)
 
-**Verhaltens-Änderung**: nach erfolgreichem Message-Persistieren wird `preferences[('<my_device_uuid>', 'chat.last_active_model_id')] = <current_model_id>` gesetzt (FR-009 Bedingung "erfolgreiches Senden einer Nachricht"). Idempotent bei wiederholten Sends mit demselben Modell.
+**Verhaltens-Änderung**: User-Message und Update von `preferences[('<my_device_uuid>', 'chat.last_active_model_id')] = <current_model_id>` teilen eine atomare Accepted-Send-Transaktion. Erst wenn `stream_chat` erfolgreich gestartet wurde, wird die Transaktion committed; scheitert der Startup, werden Message und Preference gemeinsam zurückgerollt. Falls der Storage keine gemeinsame Transaktion über diesen Boundary zulässt, muss die Implementierung stattdessen einen stabilen Idempotency-Key und einen reparierbaren Preference-Pfad verwenden, sodass Retries weder eine bereits persistierte Message duplizieren noch einen Preference-Zustand ohne zugehörige Message hinterlassen. Der Write erfolgt ausschließlich nach erfolgreichem Senden einer Nachricht (FR-009).
 
 **Kein Return-Change**.
 

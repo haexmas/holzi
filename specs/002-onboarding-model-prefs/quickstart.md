@@ -37,7 +37,7 @@ Erwartetes Ergebnis: alle Test-Suites grün, `pnpm typecheck` exit 0.
 5. Ohne Alias-Änderung, ohne Modell-Wahl: klick "später via Anbieter".
 6. **Erwartung**: Nutzer landet auf `/workspace/genesis-test` mit dem Instanznamen als Überschrift und einem FAB unten rechts.
 7. `preferences`-Tabelle prüfen (via sqlite3-CLI oder DB-Tool nach Öffnen): sollte KEINE Zeile für `chat.default_model_id` haben.
-8. `known_devices.alias` prüfen: sollte den OS-Hostname enthalten (Placeholder-Wert wurde bestätigt).
+8. `known_devices.alias` prüfen: sollte den vorbefüllten OS-Hostname enthalten.
 
 ## Szenario 2: Genesis mit Modellwahl
 
@@ -46,7 +46,7 @@ Erwartetes Ergebnis: alle Test-Suites grün, `pnpm typecheck` exit 0.
 2. Alias auf "Laptop" ändern, Sweet-Modell wählen (klick auf Chip → Download startet).
 3. Download-Fortschritt sichtbar.
 4. Nach Download-Abschluss: automatischer Übergang zu `/workspace/genesis-test`.
-5. **Erwartung**: 
+5. **Erwartung**:
    - `known_devices.alias === 'Laptop'`
    - `preferences[('<my_uuid>', 'chat.default_model_id')]` enthält die Katalog-ID des Sweet-Modells (z.B. `qwen2.5-1.5b-instruct-q4_k_m`)
    - `preferences[..., 'chat.last_active_model_id']` ist NICHT gesetzt (Onboarding-Wahl ist explizit ein "Default", kein "aktives Modell").
@@ -63,8 +63,8 @@ Erwartetes Ergebnis: alle Test-Suites grün, `pnpm typecheck` exit 0.
 4. Im Wizard: Alias-Feld ist wieder mit OS-Hostname vorbefüllt (kann anders sein als Szenario 1 wenn "anderes Gerät" simuliert).
 5. **Kritisch**: Die 3 Modell-Vorschläge zeigen weiterhin die Katalog-Optionen — aber der Sidebar-Hint sollte klar sein "auf diesem Gerät noch keine Modelle installiert; auf einem anderen Gerät läuft bereits Sweet". (Optional; wenn nicht umgesetzt, wenigstens die Modell-Vorschläge zeigen.)
 6. "Später via Anbieter" wählen — der Sync sollte die Anbietermodelle aus Szenario 2 mitbringen (falls dort Anbieter konfiguriert waren; sonst leer).
-7. **Erwartung**: 
-   - `known_devices` hat jetzt ZWEI Zeilen für "genesis-test" (Sentinel-Zeile + Gerät-1-Zeile + Gerät-2-Zeile = 3 Zeilen technisch).
+7. **Erwartung**:
+   - `known_devices` hat jetzt DREI Zeilen für "genesis-test" (Sentinel-Zeile + Gerät-1-Zeile + Gerät-2-Zeile).
    - Auf Gerät 2 ist noch kein `chat.default_model_id` (`preferences` hat nur die alte Row vom Gerät 1 — sichtbar via `SELECT * FROM preferences`).
 8. FAB klicken → Chat öffnet. Session-Resolver: `last_active` (leer) → `default_device` für Gerät 2 (leer) → `default_vault` (leer) → `first_available` → lädt ein api_key-Modell wenn vorhanden, sonst zeigt "Kein Modell verfügbar" mit Hint "Anbieter hinzufügen".
 
@@ -75,7 +75,7 @@ Erwartetes Ergebnis: alle Test-Suites grün, `pnpm typecheck` exit 0.
 **Schritte**:
 1. App komplett schließen.
 2. App neu starten, Vault öffnen.
-3. **Erwartung**: 
+3. **Erwartung**:
    - Redirect zu `/workspace/genesis-test` (kein Onboarding, weil Alias gesetzt).
    - FAB klicken → Chat lädt AUTOMATISCH das Sweet-Modell (last_active greift, weil send_message es geschrieben hat).
    - Ladepanel zeigt "Lade Qwen 2.5 1.5B…" (Warm-Load, weil bereits einmal geladen — CUDA-Cache warm; Erstlade-Text nur beim allerersten Mal).
@@ -85,15 +85,14 @@ Erwartetes Ergebnis: alle Test-Suites grün, `pnpm typecheck` exit 0.
 **Voraussetzung**: Szenario 4 durchgelaufen, Chat läuft mit Sweet.
 
 **Schritte**:
-1. Im Sidebar-Picker das Easy-Modell wählen (manueller Wechsel).
-2. **Erwartung**: `preferences.chat.last_active_model_id` wird auf Easy-Katalog-ID gesetzt (manueller Picker-Wechsel = intentional).
+1. Im Sidebar-Picker das Easy-Modell wählen (manueller Wechsel, ohne Nachricht zu senden).
+2. **Erwartung**: `preferences.chat.last_active_model_id` bleibt auf der zuletzt erfolgreich verwendeten Sweet-Katalog-ID.
 3. App schließen ohne Nachricht zu senden.
 4. App neu starten, Vault öffnen, FAB → Chat.
-5. **Erwartung**: Easy lädt (last_active von Schritt 2 hat gewonnen). 
+5. **Erwartung**: Sweet lädt (der Picker-Wechsel ohne `send_message` hatte keinen Persistenz-Effekt).
 
-Wait — das ist ein interessanter Konflikt mit "Ausprobier-Klick zählt nicht als Nutzung". Aktuelle Spec-Regel FR-009: "manueller Modellwechsel im Picker" ODER "erfolgreiches Senden einer Nachricht". Der manueller Wechsel ZÄHLT als intentional. Wenn Nutzer "nur ausprobieren" will, muss er eben nicht wechseln, sondern nur die Sidebar öffnen und schauen. Wenn er wechselt, ist das ein intentional-Wahl.
+Damit verifiziert das Szenario FR-009: Ein Modellwechsel ohne erfolgreiches `send_message` gilt als Ausprobieren und ändert `chat.last_active_model_id` nicht.
 
-Diese Szenario-Beschreibung ist also korrekt — Easy lädt beim nächsten Start. SC-005 im Spec ("versehentlich 10s auf anderes Modell klickt und App schließt, kehrt zum vorherigen zurück") muss neu interpretiert werden: "versehentlich klickt" ist per FR-009 ein Wechsel. Zur Klarheit: SC-005 gilt für den Fall dass der Nutzer ohne send_message zurückwechselt vor dem App-Schließen — dann ist der letzte Wechsel entscheidend.
 
 ## Szenario 6: Explizit "Als Standard setzen" (device vs vault)
 
