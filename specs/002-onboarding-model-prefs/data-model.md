@@ -73,12 +73,12 @@ Keine — Preference-Rows sind zustandslos. Ihre Existenz ist der Zustand. Über
 |---|---|---|---|
 | `installation_uuid` | TEXT | NO (PK) | Local-only Lookup-Schlüssel; für Sentinel: nil-UUID. |
 | `vault_device_uuid` | TEXT | NO (UNIQUE) | CRDT-`device_id`; für Sentinel: nil-UUID; FK-Ziel für `preferences`. |
-| `alias` | TEXT | YES | Menschenlesbarer Gerätename; Nullness triggert das Onboarding. Wird im Wizard gesetzt und im Settings-Screen editierbar. |
+| `alias` | TEXT | YES | Menschenlesbarer Gerätename; Nullness triggert das Onboarding. Der Wizard hält den Wert zunächst nur lokal und persistiert ihn erst beim erfolgreichen Abschluss des zweiten Schritts; danach ist er im Settings-Screen editierbar. |
 | `first_seen` | INTEGER | NO | Epoch-ms des ersten Bootstrap; für Sentinel: 0. |
 
 **Neuer Trigger für Alias**:
 
-- Onboarding-Wizard MUSS `alias` setzen (FR-004) — nicht-leer.
+- Onboarding-Wizard MUSS `alias` beim Abschluss setzen (FR-004) — nicht-leer. Das Speichern wird bis nach der Modellwahl oder der expliziten Auswahl "später via Anbieter" zurückgestellt, damit ein Abbruch zwischen den Schritten `alias = NULL` lässt und das Onboarding erneut öffnet.
 - Settings-Screen erlaubt Rename via bestehendem `storage::known_devices::update_alias`.
 
 ---
@@ -93,7 +93,7 @@ Keine — Preference-Rows sind zustandslos. Ihre Existenz ist der Zustand. Über
 DROP TABLE device_downloaded_models_no_sync;
 ```
 
-Ersatz: `list_installed_models` scannt `<AppLocalData>/models/` per readdir. Ein Sub-Verzeichnis gilt nur als installiert, wenn es eine vollständige `.gguf`-Datei oder einen atomaren Completion-Marker mit verfügbarer Modelldatei enthält und sein Name als `models.id` in der `models`-Tabelle existiert. Fehlt das Root-Verzeichnis, ist die Liste leer; `size_bytes` wird per `fs::metadata` on-demand ermittelt. `sha256` und `verified_at` fallen ersatzlos weg (LocalModel-Load selbst ist Integritätscheck).
+Ersatz: `list_installed_models` scannt `<AppLocalData>/models/` per readdir. Ein Sub-Verzeichnis gilt nur als installiert, wenn eine vollständige reguläre `.gguf`-Datei vorhanden ist; Downloads und Importe veröffentlichen die finale Datei erst nach atomarem Rename, sodass temporäre `.part`-/`.tmp`-Dateien nicht zählen. Bei mehreren vollständigen `.gguf`-Dateien ist die lexikografisch kleinste UTF-8-Datei nach Dateiname kanonisch; `relativePath` und `size_bytes` beziehen sich immer auf diese Datei. Der Verzeichnisname muss als `models.id` existieren. Fehlt das Root-Verzeichnis, ist die Liste leer; `sha256` und `verified_at` fallen ersatzlos weg (LocalModel-Load selbst ist Integritätscheck).
 
 ---
 

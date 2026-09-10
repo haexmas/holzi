@@ -48,10 +48,10 @@ description: "Actionable, dependency-ordered task list for the onboarding-model-
 - [ ] T009 Delete `src-tauri/src/storage/device_downloaded_models.rs` (no longer needed once T004 is in effect; Filesystem-Scan replaces DB registry). **Depends on: T011, T012, T013, T014 completed — otherwise the crate does not compile because callers still reference the module.**
 - [ ] T010 Remove `pub mod device_downloaded_models;` from `src-tauri/src/storage/mod.rs`. **Depends on: T011, T012, T013, T014 completed.**
 - [ ] T011 Update `src-tauri/src/chat/commands.rs::load_local_model_by_id` to stop reading from `device_downloaded_models_no_sync`; instead resolve the file path from `<AppLocalData>/models/<slug>/` directly via `models::paths::model_dir(&slug)` (add helper if needed)
-- [ ] T012 Update `src-tauri/src/models/commands.rs::list_installed_models` to scan `<AppLocalData>/models/` per `tokio::fs::read_dir` and join with `models::get_model(&slug)`; drop `sha256`, `verified_at` from the returned payload (keeps `id`, `name`, `providerId`, `contextWindow`, `relativePath`, `sizeBytes`)
+- [ ] T012 Update `src-tauri/src/models/commands.rs::list_installed_models` to scan `<AppLocalData>/models/` per `tokio::fs::read_dir` and join with `models::get_model(&slug)`; count only final regular `.gguf` files published by atomic rename, choose the lexicographically smallest UTF-8 filename deterministically when several are present, and drop `sha256`, `verified_at` from the returned payload (keeps `id`, `name`, `providerId`, `contextWindow`, `relativePath`, `sizeBytes`)
 - [ ] T013 Update `src-tauri/src/models/commands.rs::register_downloaded` (called from `download_model_from_hf` and `import_model_from_file`) to only upsert into `models` — remove the `device_downloaded_models` write path
 - [ ] T014 Update `src-tauri/src/models/commands.rs::delete_installed_model` to delete the on-disk GGUF file only; no DB row to delete (the `models`-row stays as catalog metadata)
-- [ ] T015 Create `src-tauri/tests/preferences_roundtrip.rs` integration test: bootstrap-idempotent-sentinel (running bootstrap twice yields exactly one sentinel row); FK-cascade (deleting a `known_devices` row also deletes its preferences)
+- [ ] T015 Create `src-tauri/tests/preferences_roundtrip.rs` integration test: bootstrap-idempotent-sentinel (running bootstrap twice yields exactly one sentinel row); FK-cascade (deleting a `known_devices` row also deletes its preferences); sync-apply ordering (both child-before-parent and parent-before-child payloads are reordered and committed without orphan rows, while a missing parent is rejected)
 - [ ] T016 Run `cargo test --lib storage::preferences_tests` and `cargo test --test preferences_roundtrip` — all green before proceeding
 
 **Checkpoint**: Preferences infrastructure ready, sentinel bootstrap runs, `device_downloaded_models_no_sync` is gone, filesystem-scan works. User-story phases can begin.
@@ -86,7 +86,7 @@ description: "Actionable, dependency-ordered task list for the onboarding-model-
 - [ ] T028 [US1] Create `src/pages/onboarding/[instance].vue` — Wizard root that loads `currentDeviceInfoAsync()` on mount and renders sequential Alias step + Model step
 - [ ] T029 [P] [US1] Create `src/components/onboarding/AliasStep.vue` — Alias input prefilled mit `deviceInfo.hostname` (wenn null: `$t('onboarding.alias.defaultPlaceholder')`), required, validates non-whitespace on submit. Alle sichtbaren Labels/Buttons via `$t()`.
 - [ ] T030 [P] [US1] Create `src/components/onboarding/ModelChoiceStep.vue` — Renders three tier-chips (Easy/Sweet/Max) mit fit-badge; alle Labels (`$t('onboarding.model.tier.easy')`, `.sweet`, `.max`, `.laterViaProvider`) via i18n; Klick auf Chip triggert `useModels().downloadFromCatalogAsync`; "später via Anbieter"-Button überspringt Modell-Download ohne Preference-Write
-- [ ] T031 [US1] Wire wizard-completion: on submit, call `updateDeviceAliasAsync(alias)`, then if a model was chosen call `useModels().downloadFromCatalogAsync(entryId)` and after success call `set_pref('device', 'chat.default_model_id', catalog-id)`; then `navigateTo('/workspace/[instance]')`. Alle nutzer-sichtbaren Bestätigungs-/Fehlermeldungen via `$t()`.
+- [ ] T031 [US1] Wire wizard-completion: keep the alias local through the first step; after the model is downloaded and its device default is set, or after the explicit "später via Anbieter" choice, call `updateDeviceAliasAsync(alias)` as the final completion write and then `navigateTo('/workspace/[instance]')`. An exit between steps leaves `alias` NULL so the route guard reopens the wizard. Alle nutzer-sichtbaren Bestätigungs-/Fehlermeldungen via `$t()`.
 
 ### Workspace landing + FAB for US1
 
@@ -96,7 +96,7 @@ description: "Actionable, dependency-ordered task list for the onboarding-model-
 
 ### Route guarding for US1
 
-- [ ] T035 [US1] Create `src/middleware/onboarded.ts` — Nuxt named middleware: calls `currentDeviceInfoAsync()`; if `alias === null`, `return navigateTo('/onboarding/${instance}')`; skipped on onboarding route itself
+- [ ] T035 [US1] Create `src/middleware/onboarded.ts` — Nuxt named middleware: calls `currentDeviceInfoAsync()`; if `alias === null`, `return navigateTo('/onboarding/${instance}')`; skipped on onboarding route itself. Because the alias is persisted only at final wizard completion, this remains a complete onboarding marker.
 - [ ] T036 [US1] Attach the `onboarded` middleware to `/workspace/[instance].vue`, `/settings/[instance].vue`, and `/chat/[instance].vue`
 
 ### Verification for US1

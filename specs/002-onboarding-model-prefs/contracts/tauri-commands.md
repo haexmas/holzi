@@ -129,19 +129,20 @@ Liefert drei Hardware-passende Modell-Vorschläge (Easy/Sweet/Max) für den Onbo
 ]
 ```
 
-**Fehler**: `HolziError::CatalogEntryNotFound` nur bei einem leeren oder anderweitig ungültigen Katalog, aus dem keine gültige Empfehlung erzeugt werden kann. Ein nicht-leerer gültiger Katalog mit weniger als drei Einträgen ist erfolgreich: fehlende Tiers werden nach dem Algorithmus mit dem besten verfügbaren Kandidaten wiederverwendet (bei zwei Einträgen z. B. Max = Sweet-Fallback). Das Frontend behandelt nur diesen echten Fehler als "Katalog leer".
+**Fehler**: `HolziError::CatalogEntryNotFound` nur bei einem leeren oder anderweitig ungültigen Katalog, aus dem keine gültige Empfehlung erzeugt werden kann. Ein nicht-leerer gültiger Katalog ist immer erfolgreich und liefert genau drei Empfehlungen; bei weniger als drei Einträgen werden fehlende Tiers nach dem Algorithmus mit dem besten verfügbaren Kandidaten wiederverwendet (bei zwei Einträgen z. B. Max = Sweet-Fallback, bei einem Eintrag wird dieser für alle Tiers verwendet). Das Frontend behandelt nur diesen echten Fehler als "Katalog leer" und rendert gültige wiederverwendete Empfehlungen normal.
 
 **Algorithmus**:
 1. Katalog-Einträge laden, per Fit klassifizieren.
 2. Easy = kleinster `Fits`-Kandidat. Fallback: kleinster `Tight`, dann kleinster `Unknown`.
 3. Sweet = größter `Fits`-Kandidat. Fallback: Median-Kandidat.
 4. Max = größter `Fits`- ODER `Tight`-Kandidat. Fallback: größter overall.
+5. Falls ein Tier keinen eigenen Kandidaten hat, wird der bestimmte Fallback-Kandidat wiederverwendet; dadurch bleibt die Rückgabe auch für Kataloge mit einem oder zwei Einträgen bei drei Elementen.
 
 ## Geänderte Commands
 
 ### `list_installed_models` (bestehend)
 
-**Verhaltens-Änderung**: statt DB-Query gegen `device_downloaded_models_no_sync` × `models`, wird jetzt `<AppLocalData>/models/` per `tokio::fs::read_dir` gescannt. Ein Sub-Dir wird nur berücksichtigt, wenn es eine vollständige `.gguf`-Datei enthält oder ein atomarer Completion-Marker deren Verfügbarkeit bestätigt; leere und unvollständige Download-Dirs werden übersprungen. Danach wird der Slug gegen `models::get_model(&slug)` gelookupt; nur Slugs mit passender `models`-Row werden zurückgegeben. Jeder `relativePath` muss auf eine tatsächlich verfügbare Modelldatei zeigen.
+**Verhaltens-Änderung**: statt DB-Query gegen `device_downloaded_models_no_sync` × `models`, wird jetzt `<AppLocalData>/models/` per `tokio::fs::read_dir` gescannt. Ein Sub-Dir wird nur berücksichtigt, wenn es eine vollständige reguläre `.gguf`-Datei enthält; Downloads und Importe schreiben zunächst in eine temporäre Datei und veröffentlichen sie erst per atomarem Rename unter dem finalen `.gguf`-Namen. Temporäre Endungen wie `.part` oder `.tmp`, leere Verzeichnisse und unvollständige Download-Dirs werden übersprungen. Enthält ein Sub-Dir mehrere vollständige `.gguf`-Dateien, ist die lexikografisch kleinste UTF-8-Datei nach ihrem Dateinamen kanonisch. Danach wird der Slug gegen `models::get_model(&slug)` gelookupt; nur Slugs mit passender `models`-Row werden zurückgegeben. Jeder `relativePath` muss auf diese tatsächlich verfügbare kanonische Modelldatei zeigen.
 
 **Return-Signatur** (bleibt gleich):
 
@@ -151,7 +152,7 @@ Liefert drei Hardware-passende Modell-Vorschläge (Easy/Sweet/Max) für den Onbo
   name: string,
   providerId: string,
   contextWindow: number | null,
-  relativePath: string,       // rekonstruiert aus <slug>/<first-gguf-in-dir>
+  relativePath: string,       // <slug>/<lexikografisch kleinste vollständige .gguf-Datei>
   sizeBytes: number           // aus fs::metadata
 }[]
 ```

@@ -20,7 +20,7 @@ Alle offenen Klärfragen aus dem Spec sind in der Clarify-Session vom 2026-09-10
 **Rationale**:
 - haex-crdt's `CrdtTransformer` verarbeitet `ALTER TABLE` (bereits bewiesen in Migration 0009 `models.tokenizer_repo`) und `DROP TABLE` (unterstützt in `src/db/core/extract.rs:226` und `migrations/compat.rs:184`).
 - `CREATE TABLE` mit `FOREIGN KEY`-Klausel geht durch: haex-crdt's Transformer installiert seine CRDT-Metadaten-Spalten (`haex_hlc_no_sync`, `haex_column_hlcs_no_sync`, `haex_column_sigs_no_sync`) additiv, ohne die FK-Deklaration zu berühren.
-- `PRAGMA foreign_keys` ist beim App-Betrieb an (siehe [db/core/init.rs:61](../../../haex-crdt/src/db/core/init.rs)); wird während CRDT-Sync-Apply per RAII-Guard temporär off — dadurch scheitert ein Payload mit potenzieller Referential-Race-Condition nicht mitten im Apply. Vor dem Commit muss `apply_remote_changes` die Elternzeilen in `known_devices` vor den `preferences`-Zeilen anwenden oder die Reihenfolge explizit reparieren und per `PRAGMA foreign_key_check` validieren.
+- `PRAGMA foreign_keys` ist beim App-Betrieb an (siehe `haex-crdt/src/db/core/init.rs:61`); wird während CRDT-Sync-Apply per RAII-Guard temporär off — dadurch scheitert ein Payload mit potenzieller Referential-Race-Condition nicht mitten im Apply. `apply_remote_changes` staged den Payload, wendet `known_devices`-Elternzeilen unabhängig von der Eingangsreihenfolge vor `preferences`-Kindzeilen an und führt vor dem Commit `PRAGMA foreign_key_check` aus. Der Integrationstest deckt sowohl child-before-parent als auch parent-before-child ab; ein nach dem Staging fehlendes Elternobjekt wird verworfen statt als Orphan committed.
 
 **Alternatives considered**:
 - Migration ohne FK-Deklaration, nur Namenskonvention: verwirft die Hard-FK-Safety aus ADR-0001, die genau wegen bestehender Bug-Vorlage (`device_downloaded_models_no_sync` ohne device_id) gefordert wurde.
@@ -41,12 +41,13 @@ Alle offenen Klärfragen aus dem Spec sind in der Clarify-Session vom 2026-09-10
 
 ## Entscheidung 4: Filesystem-Scan für `list_installed_models`
 
-**Decision**: `tokio::fs::read_dir` unter `<AppLocalData>/models/`. Für jeden Sub-Dir wird der Slug als Modell-ID interpretiert, aber nur wenn eine vollständige `.gguf`-Datei oder ein atomarer Completion-Marker mit verfügbarer Modelldatei vorhanden ist. Modell-Metadaten kommen aus einem Lookup in der `models`-Tabelle (per `models_store::get_model(&id)`). Sub-Dirs ohne passende `models`-Row oder ohne verfügbare Modelldatei werden übersprungen; ein fehlendes Root-Verzeichnis ergibt eine leere Liste.
+**Decision**: `tokio::fs::read_dir` unter `<AppLocalData>/models/`. Für jeden Sub-Dir wird der Slug als Modell-ID interpretiert, aber nur wenn eine vollständige reguläre `.gguf`-Datei vorhanden ist. Download und Import schreiben temporär und veröffentlichen die Datei per atomarem Rename; bei mehreren vollständigen Dateien wird die lexikografisch kleinste UTF-8-Datei nach Dateiname als kanonische Datei gewählt. Modell-Metadaten kommen aus einem Lookup in der `models`-Tabelle (per `models_store::get_model(&id)`). Sub-Dirs ohne passende `models`-Row oder ohne verfügbare Modelldatei werden übersprungen; ein fehlendes Root-Verzeichnis ergibt eine leere Liste.
 
 **Rationale**:
 - Async-Konsistenz mit anderen Tauri-Command-Pfaden.
 - Kleine Katalog-Größe (~5-20 Modelle), Read-Dir ist im Millisekunden-Bereich.
 - Der `models`-Row-Lookup filtert Ghost-Dirs: wenn jemand manuell ein Verzeichnis anlegt, das nicht via `download_model_from_hf` oder `import_model_from_file` registriert wurde, wird es nicht als Installed gezählt (Sicherheits-/Konsistenz-Schutz).
+- Atomarer Rename verhindert, dass ein laufender Download als installiert erscheint; die lexikografische Auswahl verhindert, dass wechselnde `read_dir`-Reihenfolgen einen anderen `relativePath` liefern.
 - Verlust von `sha256`/`verified_at`: kein UI zeigt diese Werte aktiv; die praktische Integritätsprüfung ist der `LocalModel::load`-Aufruf selbst (mistralrs schlägt bei korrupter GGUF fehl).
 
 **Alternatives considered**:
