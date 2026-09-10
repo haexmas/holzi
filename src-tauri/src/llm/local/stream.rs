@@ -4,134 +4,32 @@
 //! Etappe 0 finding #5: TTFT is only observable via the streaming API;
 //! the non-streaming `send_chat_request` blocks until completion. This
 //! module always uses streaming.
+//!
+//! The public request / chunk / error types live in
+//! [`crate::adapters::types`] so both the local and remote paths speak
+//! the same shape; `LocalModel::stream_chat` returns an
+//! [`AdapterStream`] directly.
 
 use std::time::Instant;
 
 use mistralrs::{RequestBuilder, Response, TextMessageRole, TextMessages};
-use thiserror::Error;
 use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
 
 use super::LocalModel;
+use crate::adapters::types::{AdapterStream, ChatRequest, ChatRole, StreamChunk, StreamError};
 
-/// One event on the streaming channel returned by
-/// [`LocalModel::stream_chat`].
-#[derive(Debug, Clone)]
-pub enum StreamChunk {
-    /// Incremental content emitted by the model. `content` may be
-    /// empty for role-only frames; `reasoning` carries chain-of-thought
-    /// deltas from Harmony-format models and is `None` otherwise.
-    Delta {
-        content: String,
-        reasoning: Option<String>,
-    },
-    /// Final frame with token counts and TTFT. TTFT is measured from
-    /// the moment `stream_chat` starts polling until the first chunk
-    /// that carries non-empty content is observed. Token counts are
-    /// `Option`al because mistralrs 0.8.1 has been observed to close
-    /// the stream on CUDA without a `Response::Done` frame; the
-    /// synthetic Done we emit in that case cannot report counts.
-    Done {
-        finish_reason: Option<String>,
-        prompt_tokens: Option<usize>,
-        completion_tokens: Option<usize>,
-        ttft_ms: Option<u64>,
-        total_ms: u64,
-    },
-}
-
-/// Terminal errors emitted onto the receiver's `Err` branch.
-#[derive(Debug, Error, Clone)]
-pub enum StreamError {
-    #[error("mistralrs validation error: {0}")]
-    Validation(String),
-    #[error("mistralrs model error: {0}")]
-    Model(String),
-    #[error("mistralrs internal error: {0}")]
-    Internal(String),
-    #[error("stream ended without a Done frame")]
-    UnexpectedEnd,
-    #[error("stream_chat_request failed to start: {0}")]
-    StartFailed(String),
-}
-
-/// A single generation run. Drop or call [`GenerationHandle::abort`] to
-/// cancel; the spawned task terminates and the mistralrs sender closes.
-pub struct GenerationHandle {
-    rx: mpsc::UnboundedReceiver<Result<StreamChunk, StreamError>>,
-    task: JoinHandle<()>,
-}
-
-impl GenerationHandle {
-    /// Await the next chunk or error. Returns `None` once the stream
-    /// is exhausted (a `Done` chunk or an error was already delivered).
-    pub async fn next(&mut self) -> Option<Result<StreamChunk, StreamError>> {
-        self.rx.recv().await
-    }
-
-    /// Cancel the running generation. The spawned task is aborted and
-    /// subsequent `next()` calls return `None` once the channel drains.
-    /// Safe to call more than once. Takes `&self` so callers can still
-    /// drain any in-flight chunks after aborting.
-    pub fn abort(&self) {
-        self.task.abort();
-    }
-
-    /// Returns a cloneable, Send abort handle for the underlying task.
-    /// Chat commands stash this in shared state so an out-of-band
-    /// `abort_current_generation` call can cancel without owning the
-    /// full `GenerationHandle`.
-    pub fn abort_handle(&self) -> tokio::task::AbortHandle {
-        self.task.abort_handle()
-    }
-}
-
-impl Drop for GenerationHandle {
-    fn drop(&mut self) {
-        // Dropping the handle also drops the receiver, which closes the
-        // channel and causes the spawned task's `tx.send` to fail — but
-        // aborting explicitly is cheaper and shortens the tail on CUDA
-        // where a single decode step can take tens of ms.
-        self.task.abort();
-    }
-}
-
-/// Input for [`LocalModel::stream_chat`]. Kept minimal on purpose;
-/// sampling knobs land here as concrete needs surface in Slice (c).
-#[derive(Debug, Clone)]
-pub struct ChatRequest {
-    pub system_prompt: Option<String>,
-    pub messages: Vec<ChatMessage>,
-    /// Cap on completion tokens. `None` uses the model's default.
-    pub max_new_tokens: Option<usize>,
-}
-
-#[derive(Debug, Clone)]
-pub struct ChatMessage {
-    pub role: ChatRole,
-    pub content: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ChatRole {
-    User,
-    Assistant,
-}
-
-impl ChatRole {
-    fn to_mistralrs(self) -> TextMessageRole {
-        match self {
-            ChatRole::User => TextMessageRole::User,
-            ChatRole::Assistant => TextMessageRole::Assistant,
-        }
+fn role_to_mistralrs(role: ChatRole) -> TextMessageRole {
+    match role {
+        ChatRole::User => TextMessageRole::User,
+        ChatRole::Assistant => TextMessageRole::Assistant,
     }
 }
 
 impl LocalModel {
     /// Starts a streaming chat generation. Returns immediately; the
     /// generation runs on a background task and pushes into the
-    /// returned [`GenerationHandle`].
-    pub fn stream_chat(&self, req: ChatRequest) -> GenerationHandle {
+    /// returned [`AdapterStream`].
+    pub fn stream_chat(&self, req: ChatRequest) -> AdapterStream {
         let (tx, rx) = mpsc::unbounded_channel();
         let model = self.inner();
         let start = Instant::now();
@@ -142,8 +40,10 @@ impl LocalModel {
                 messages = messages.add_message(TextMessageRole::System, sys);
             }
             for m in &req.messages {
-                messages = messages.add_message(m.role.to_mistralrs(), &m.content);
+                messages = messages.add_message(role_to_mistralrs(m.role), &m.content);
             }
+            // `ChatRequest::model_id` is ignored here — for local runs
+            // the model is bound at `LocalAdapter::new` time.
 
             let mut builder = RequestBuilder::from(messages);
             if let Some(cap) = req.max_new_tokens {
@@ -258,6 +158,9 @@ impl LocalModel {
             }
         });
 
-        GenerationHandle { rx, task }
+        let abort = task.abort_handle();
+        // Only the abort handle is retained; `tokio::spawn` keeps the
+        // task running regardless of the JoinHandle being dropped.
+        AdapterStream::new(rx, abort)
     }
 }

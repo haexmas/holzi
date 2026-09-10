@@ -7,15 +7,13 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use haex_crdt::{
-    Database, DatabaseConfig, NoopSignatureProvider, SqlCipherKey, DEFAULT_TRIGGER_VERSION,
-};
+use haex_crdt::Database;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 use ts_rs::TS;
 
 use crate::error::{HolziError, Result};
-use crate::identity::{holzi_migration_source, installation_id_path, HolziBootstrap};
+use crate::identity::installation_id_path;
 use crate::state::{ActiveInstanceHandle, AppState};
 
 use super::events::emit_instance_list_changed;
@@ -23,6 +21,7 @@ use super::info::InstanceInfo;
 use super::paths::{
     get_app_local_data, get_instance_path, get_pending_marker_path, validate_instance_name,
 };
+use super::vault_config::vault_config;
 
 /// Minimum passphrase length. Kept low for the MVP; can be tightened
 /// later without a wire-contract change.
@@ -177,15 +176,7 @@ fn open_new_database(
     db_path: &Path,
     installation_id_file: &Path,
 ) -> Result<Arc<Database>> {
-    let config = DatabaseConfig {
-        path: db_path.to_path_buf(),
-        key: SqlCipherKey::new(passphrase),
-        create_if_missing: true,
-        bootstrap: Arc::new(HolziBootstrap::new(installation_id_file.to_path_buf())),
-        signature_provider: Arc::new(NoopSignatureProvider),
-        migration_source: holzi_migration_source(),
-        trigger_version: DEFAULT_TRIGGER_VERSION,
-    };
+    let config = vault_config(passphrase, db_path, installation_id_file, true);
     Ok(Arc::new(Database::open(config)?))
 }
 

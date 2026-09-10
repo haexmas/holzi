@@ -1,13 +1,8 @@
 //! Chat runtime and Tauri commands.
 //!
-//! Feature-gated behind `llm-cpu` because the local-model session
-//! carries an in-process `LocalModel`. Provider-backed chat (api_key,
-//! cli_delegate) lands in a later slice — the schema for `providers`
-//! is already in place.
+//! Provider-backed chat is available in every build. Only the local
+//! mistralrs loading path is feature-gated behind `llm-cpu`.
 
-#[cfg(feature = "llm-cpu")]
 pub mod commands;
-#[cfg(feature = "llm-cpu")]
 pub mod session;
-#[cfg(feature = "llm-cpu")]
 pub mod thread_commands;

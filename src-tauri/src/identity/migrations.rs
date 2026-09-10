@@ -11,7 +11,14 @@
 //! migration time, and the triggers installed by
 //! `ensure_triggers_initialized` inside `Database::open`. holzi does NOT
 //! call `install_crdt` (Etappe-0 finding: the transformer + trigger
-//! installer cover every non-`_no_sync` table automatically).
+//! installer cover every non-`_no_sync` *table* automatically).
+//!
+//! That automatic coverage stops at the table level. Each trigger bakes
+//! its tracked-*column* list in at creation time, and the installer
+//! early-returns on a vault whose stored trigger version is already
+//! current — so a migration that adds a column to an existing tracked
+//! table must bump [`HOLZI_TRIGGER_VERSION`] as well, or the new column
+//! stays untracked on every already-provisioned vault.
 //!
 //! `device_downloaded_models_no_sync` has the `_no_sync` suffix on the
 //! table name so haex-crdt skips it entirely — downloaded GGUF files are
@@ -22,6 +29,26 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use haex_crdt::{MigrationName, StaticMigrationSource};
+
+/// CRDT trigger-schema version holzi installs on open.
+///
+/// haex-crdt bakes the tracked-column list into each table's
+/// `AFTER UPDATE OF <cols>` trigger when the trigger is created, and
+/// `ensure_triggers_initialized` skips the rewrite entirely once the
+/// vault's stored version is >= the one passed in. A migration that adds
+/// a column to a CRDT-tracked table therefore leaves that column
+/// untracked on every already-provisioned vault — writes to it neither
+/// mark the row dirty nor record a per-column HLC, so the value never
+/// reaches another device.
+///
+/// Bump this whenever a migration alters the column shape of a
+/// CRDT-tracked (non-`_no_sync`) table, so `Database::open` recreates
+/// the triggers against the migrated schema.
+///
+/// - 1: `DEFAULT_TRIGGER_VERSION`, migrations 0001-0008.
+/// - 2: `0009_models_add_tokenizer_repo` added a column to `models`.
+/// - 3: `0010_providers_add_adapter` added a column to `providers`.
+pub const HOLZI_TRIGGER_VERSION: i32 = 3;
 
 /// Returns the frozen holzi migration set at the pinned haex-crdt revision.
 pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
@@ -164,6 +191,28 @@ pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
         "CREATE INDEX idx_chat_messages_thread \
          ON chat_messages (thread_id, created_at, id);"
             .to_string(),
+    );
+
+    // `load_local_model` needs a tokenizer repo to feed mistralrs. Until
+    // this migration it was looked up from the built-in catalog only,
+    // which meant arbitrary HuggingFace downloads (via
+    // `download_model_from_hf` with a caller-supplied `tokenizer_repo`)
+    // could not be loaded after a restart — the value was thrown away.
+    // Column is NULL for api_key/cli_delegate rows (they do not tokenize
+    // locally) and is set on download / import going forward. Pre-existing
+    // catalog rows are back-filled lazily by `models::commands` on the
+    // next `list_installed_models` call.
+    m.insert(
+        MigrationName::from("0009_models_add_tokenizer_repo"),
+        "ALTER TABLE models ADD COLUMN tokenizer_repo TEXT;".to_string(),
+    );
+
+    // API-key providers must retain the adapter/vendor they belong to. A
+    // nullable value keeps older rows readable while refresh rejects those
+    // rows until they are explicitly migrated to a supported adapter.
+    m.insert(
+        MigrationName::from("0010_providers_add_adapter"),
+        "ALTER TABLE providers ADD COLUMN adapter TEXT;".to_string(),
     );
 
     Arc::new(StaticMigrationSource(m))

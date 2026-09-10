@@ -19,6 +19,9 @@ use uuid::Uuid;
 pub struct Provider {
     pub id: Uuid,
     pub kind: ProviderKind,
+    /// Adapter/vendor discriminator for `api_key` providers, such as
+    /// `"anthropic"`. It is `None` for legacy rows and non-HTTP providers.
+    pub adapter: Option<String>,
     pub name: String,
     pub base_url: Option<String>,
     pub credentials: Option<Vec<u8>>,
@@ -57,14 +60,15 @@ impl ProviderKind {
 pub fn insert_provider(conn: &Connection, p: &Provider) -> Result<usize> {
     let sql = format!(
         "INSERT INTO providers \
-           (id, kind, name, base_url, credentials, created_at, {HLC_TIMESTAMP_COLUMN}) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, current_hlc())"
+           (id, kind, adapter, name, base_url, credentials, created_at, {HLC_TIMESTAMP_COLUMN}) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, current_hlc())"
     );
     conn.execute(
         &sql,
         params![
             p.id.to_string(),
             p.kind.as_str(),
+            p.adapter,
             p.name,
             p.base_url,
             p.credentials,
@@ -81,10 +85,19 @@ pub fn delete_provider(conn: &Connection, id: Uuid) -> Result<usize> {
     )
 }
 
+/// Persists a repaired adapter discriminator and marks the CRDT row dirty.
+pub fn set_adapter(conn: &Connection, id: Uuid, adapter: &str) -> Result<usize> {
+    let sql = format!(
+        "UPDATE providers SET adapter = ?1, {HLC_TIMESTAMP_COLUMN} = current_hlc() \
+         WHERE id = ?2"
+    );
+    conn.execute(&sql, params![adapter, id.to_string()])
+}
+
 /// Lists all providers ordered by creation time (oldest first).
 pub fn list_providers(conn: &Connection) -> Result<Vec<Provider>> {
     let mut stmt = conn.prepare(
-        "SELECT id, kind, name, base_url, credentials, created_at \
+        "SELECT id, kind, adapter, name, base_url, credentials, created_at \
          FROM providers ORDER BY created_at ASC",
     )?;
     let rows = stmt.query_map([], row_to_provider)?;
@@ -94,7 +107,7 @@ pub fn list_providers(conn: &Connection) -> Result<Vec<Provider>> {
 /// Fetches one provider by id.
 pub fn get_provider(conn: &Connection, id: Uuid) -> Result<Option<Provider>> {
     let mut stmt = conn.prepare(
-        "SELECT id, kind, name, base_url, credentials, created_at \
+        "SELECT id, kind, adapter, name, base_url, credentials, created_at \
          FROM providers WHERE id = ?1",
     )?;
     stmt.query_row(params![id.to_string()], row_to_provider)
@@ -119,9 +132,10 @@ fn row_to_provider(row: &haex_crdt::rusqlite::Row<'_>) -> Result<Provider> {
                 format!("unknown provider kind: {kind_str}").into(),
             )
         })?,
-        name: row.get(2)?,
-        base_url: row.get(3)?,
-        credentials: row.get(4)?,
-        created_at: row.get(5)?,
+        adapter: row.get(2)?,
+        name: row.get(3)?,
+        base_url: row.get(4)?,
+        credentials: row.get(5)?,
+        created_at: row.get(6)?,
     })
 }

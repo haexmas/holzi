@@ -61,9 +61,23 @@ futures = "0.3"
 # `sysinfo` and `reqwest` are unconditional — hardware info and provider
 # list are surfaced even in `--no-default-features` builds.
 sysinfo = "0.32"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "json"] }
+
+# `async-trait` lets provider adapters expose `async fn` in a `dyn`-safe
+# trait. The chat dispatch needs `Arc<dyn ProviderAdapter>` to swap
+# between local and api_key adapters at runtime; a native `async fn` in
+# trait would not satisfy dyn-compatibility.
+async-trait = "0.1"
+
+# SSE frame reassembly for adapters that stream tokens over
+# `text/event-stream` (Anthropic Messages API and every other api_key
+# vendor). Wraps `reqwest::Response::bytes_stream()`.
+eventsource-stream = "0.2"
 
 [dev-dependencies]
 tempfile = "3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "test-util"] }
 futures = "0.3"
+# HTTP mock server for adapter tests — spins a local listener on a
+# random port, allows scripted responses, and shuts down on Drop.
+wiremock = "0.6"

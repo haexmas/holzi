@@ -130,6 +130,7 @@ pub async fn download_model_from_hf(
         &relative,
         downloaded.bytes_written as i64,
         args.context_window,
+        Some(args.tokenizer_repo),
     )
     .await?;
 
@@ -167,6 +168,7 @@ pub async fn import_model_from_file(
         &relative,
         bytes as i64,
         args.context_window,
+        Some(args.tokenizer_repo),
     )
     .await
 }
@@ -175,6 +177,11 @@ pub async fn import_model_from_file(
 /// `device_downloaded_models_no_sync`. Rows without a filesystem
 /// registration are skipped — they represent catalog entries the user
 /// has not yet downloaded.
+///
+/// Also opportunistically back-fills `models.tokenizer_repo` for any
+/// catalog rows that predate migration 0009 (idempotent — the UPDATE
+/// only touches rows where the column is still NULL and the id
+/// matches a compiled-in catalog entry).
 #[tauri::command]
 pub async fn list_installed_models(
     state: State<'_, AppState>,
@@ -182,29 +189,33 @@ pub async fn list_installed_models(
     let db = active_database(&state)?;
     let payload = tauri::async_runtime::spawn_blocking(move || {
         db.with_connection(|conn| {
+            let catalog_repos: Vec<(&str, &str)> = catalog::entries()
+                .iter()
+                .map(|entry| (entry.id.as_str(), entry.tokenizer_repo.as_str()))
+                .collect();
+            models_store::backfill_tokenizer_repo(conn, &catalog_repos)
+                .map_err(haex_crdt::Error::from)?;
+
             let installed =
                 dm_store::list_downloaded_models(conn).map_err(haex_crdt::Error::from)?;
             let mut out = Vec::with_capacity(installed.len());
             for dm in installed {
-                let mut stmt = conn.prepare(
-                    "SELECT id, provider_id, name, context_window \
-                     FROM models WHERE id = ?1",
-                )?;
-                let row: Option<(String, String, String, Option<i64>)> = stmt
-                    .query_row(haex_crdt::rusqlite::params![dm.id], |r| {
-                        Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
-                    })
-                    .ok();
-                if let Some((id, provider_id, name, context_window)) = row {
-                    out.push(InstalledModelPayload {
-                        id,
-                        name,
-                        provider_id,
-                        context_window,
-                        relative_path: dm.relative_path,
-                        size_bytes: dm.size_bytes,
-                    });
-                }
+                // A downloaded file with no `models` row is a leftover the
+                // registry outlived; skip it. A genuine SQLite failure must
+                // still surface instead of silently shortening the list.
+                let Some(row) =
+                    models_store::get_model(conn, &dm.id).map_err(haex_crdt::Error::from)?
+                else {
+                    continue;
+                };
+                out.push(InstalledModelPayload {
+                    id: row.id,
+                    name: row.name,
+                    provider_id: row.provider_id.to_string(),
+                    context_window: row.context_window,
+                    relative_path: dm.relative_path,
+                    size_bytes: dm.size_bytes,
+                });
             }
             Ok(out)
         })
@@ -262,6 +273,7 @@ async fn register_downloaded(
     relative: &str,
     size_bytes: i64,
     context_window: Option<i64>,
+    tokenizer_repo: Option<String>,
 ) -> Result<InstalledModelPayload> {
     let db = active_database(state)?;
     let id_owned = id.to_string();
@@ -277,6 +289,7 @@ async fn register_downloaded(
                 name: name_owned.clone(),
                 context_window,
                 fetched_at: Some(now_ms()),
+                tokenizer_repo,
             };
             models_store::upsert_model(conn, &m).map_err(haex_crdt::Error::from)?;
             let dm = DownloadedModel {

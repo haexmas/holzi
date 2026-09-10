@@ -12,12 +12,18 @@ import {
 } from '~/composables/useChat'
 import { useModels, type InstalledModel } from '~/composables/useModels'
 import { useCatalog, type CatalogEntryWithFit } from '~/composables/useCatalog'
+import {
+  useProviders,
+  type Provider,
+  type ProviderModel,
+} from '~/composables/useProviders'
 import { useInstance } from '~/composables/useInstance'
 
 const route = useRoute()
 const chat = useChat()
 const models = useModels()
 const catalog = useCatalog()
+const providers = useProviders()
 const { closeAsync } = useInstance()
 const store = useInstancesStore()
 
@@ -29,12 +35,17 @@ const activeThreadId = ref<string | null>(null)
 const activeModel = ref<LoadedModelInfo | null>(null)
 const installedModels = ref<InstalledModel[]>([])
 const catalogEntries = ref<CatalogEntryWithFit[]>([])
+const providerList = ref<Provider[]>([])
+const providerModels = ref<Record<string, ProviderModel[]>>({})
 
 const streamingMessageId = ref<string | null>(null)
 const streamingBuffer = ref<string>('')
+const reasoningByMessage = ref<Record<string, string>>({})
+const expandedReasoning = ref<Set<string>>(new Set())
 
 type PendingStreamEvents = {
   tokens: string
+  reasoning: string
   complete?: MessageCompleteEvent
   error?: MessageErrorEvent
 }
@@ -60,12 +71,53 @@ const activeMessages = computed<Message[]>(() => {
   return messagesByThread.value[activeThreadId.value] ?? []
 })
 
-const noModelsInstalled = computed(() => installedModels.value.length === 0)
+const noModelsInstalled = computed(
+  () =>
+    installedModels.value.length === 0
+    && Object.values(providerModels.value).every((list) => list.length === 0),
+)
+
+/** Groups selectable models by provider for the picker's <optgroup>. */
+type ModelGroup = { providerId: string, providerName: string, models: { id: string, name: string }[] }
+const modelGroups = computed<ModelGroup[]>(() => {
+  const localGroup: ModelGroup | null = installedModels.value.length > 0
+    ? {
+        providerId: 'local',
+        providerName: 'Lokale Modelle',
+        models: installedModels.value.map((m) => ({ id: m.id, name: m.name })),
+      }
+    : null
+
+  const remoteGroups = providerList.value
+    .filter((p) => p.kind === 'api_key')
+    .map<ModelGroup>((p) => ({
+      providerId: p.id,
+      providerName: p.name,
+      models: (providerModels.value[p.id] ?? []).map((m) => ({ id: m.id, name: m.name })),
+    }))
+    .filter((g) => g.models.length > 0)
+
+  return localGroup ? [localGroup, ...remoteGroups] : remoteGroups
+})
 
 /** Refreshes the installed models and their catalog metadata together. */
 async function refreshInstalledAndCatalog() {
   installedModels.value = await models.listInstalledAsync()
   catalogEntries.value = await catalog.listAsync()
+}
+
+/** Refreshes the provider list and re-fetches api_key model caches. */
+async function refreshProviders() {
+  providerList.value = await providers.listAsync()
+  const next: Record<string, ProviderModel[]> = {}
+  await Promise.all(
+    providerList.value
+      .filter((p) => p.kind === 'api_key')
+      .map(async (p) => {
+        next[p.id] = await providers.listModelsAsync(p.id)
+      }),
+  )
+  providerModels.value = next
 }
 
 /** Refreshes the thread list and selects the first thread when needed. */
@@ -94,7 +146,7 @@ async function scrollToBottom() {
   if (el) el.scrollTop = el.scrollHeight
 }
 
-/** Loads the selected local model and exposes backend errors to the page. */
+/** Loads the selected model (local or api_key composite id). */
 async function loadModel(id: string) {
   lastError.value = null
   busy.value = true
@@ -171,10 +223,18 @@ async function send() {
     messagesByThread.value[result.threadId] = list
     streamingMessageId.value = result.assistantMessageId
     streamingBuffer.value = ''
+    reasoningByMessage.value = {
+      ...reasoningByMessage.value,
+      [result.assistantMessageId]: '',
+    }
     const pending = pendingStreamEvents.get(result.assistantMessageId)
     pendingStreamEvents.delete(result.assistantMessageId)
-    if (pending?.tokens) {
-      handleToken({ messageId: result.assistantMessageId, delta: pending.tokens })
+    if (pending?.tokens || pending?.reasoning) {
+      handleToken({
+        messageId: result.assistantMessageId,
+        delta: pending?.tokens ?? '',
+        reasoning: pending?.reasoning ? pending.reasoning : null,
+      })
     }
     if (pending?.error) {
       handleError(pending.error)
@@ -254,19 +314,28 @@ function fitLabel(f: CatalogEntryWithFit['fit']): string {
 function pendingFor(messageId: string): PendingStreamEvents {
   const existing = pendingStreamEvents.get(messageId)
   if (existing) return existing
-  const pending: PendingStreamEvents = { tokens: '' }
+  const pending: PendingStreamEvents = { tokens: '', reasoning: '' }
   pendingStreamEvents.set(messageId, pending)
   return pending
 }
 
 function applyToken(e: TokenEvent, threadId: string) {
-  streamingBuffer.value += e.delta
-  const list = messagesByThread.value[threadId] ?? []
-  const idx = list.findIndex((m) => m.id === e.messageId)
-  const existing = list[idx]
-  if (idx !== -1 && existing) {
-    list[idx] = { ...existing, content: existing.content + e.delta }
-    messagesByThread.value[threadId] = list
+  if (e.delta) {
+    streamingBuffer.value += e.delta
+    const list = messagesByThread.value[threadId] ?? []
+    const idx = list.findIndex((m) => m.id === e.messageId)
+    const existing = list[idx]
+    if (idx !== -1 && existing) {
+      list[idx] = { ...existing, content: existing.content + e.delta }
+      messagesByThread.value[threadId] = list
+    }
+  }
+  if (e.reasoning) {
+    const prev = reasoningByMessage.value[e.messageId] ?? ''
+    reasoningByMessage.value = {
+      ...reasoningByMessage.value,
+      [e.messageId]: prev + e.reasoning,
+    }
   }
   scrollToBottom()
 }
@@ -274,7 +343,9 @@ function applyToken(e: TokenEvent, threadId: string) {
 function handleToken(e: TokenEvent) {
   const threadId = activeThreadId.value
   if (streamingMessageId.value !== e.messageId || !threadId) {
-    pendingFor(e.messageId).tokens += e.delta
+    const pending = pendingFor(e.messageId)
+    if (e.delta) pending.tokens += e.delta
+    if (e.reasoning) pending.reasoning += e.reasoning
     return
   }
   applyToken(e, threadId)
@@ -332,6 +403,21 @@ function handleError(e: MessageErrorEvent) {
   applyError(e)
 }
 
+function toggleReasoning(messageId: string) {
+  const next = new Set(expandedReasoning.value)
+  if (next.has(messageId)) {
+    next.delete(messageId)
+  }
+  else {
+    next.add(messageId)
+  }
+  expandedReasoning.value = next
+}
+
+function reasoningFor(messageId: string): string {
+  return reasoningByMessage.value[messageId] ?? ''
+}
+
 onMounted(async () => {
   [unlistenToken, unlistenComplete, unlistenError] = await Promise.all([
     chat.onToken(handleToken),
@@ -341,6 +427,7 @@ onMounted(async () => {
 
   activeModel.value = await chat.activeModelInfoAsync()
   await refreshInstalledAndCatalog()
+  await refreshProviders()
   await refreshThreads()
 
   unlistenDownloadProgress = await models.onDownloadProgress((e) => {
@@ -382,7 +469,7 @@ onBeforeUnmount(() => {
         keins geladen
       </div>
       <select
-        v-if="installedModels.length > 0"
+        v-if="modelGroups.length > 0"
         class="text-sm bg-background border border-border rounded px-2 py-1"
         :value="activeModel?.modelId ?? ''"
         :disabled="busy"
@@ -391,13 +478,19 @@ onBeforeUnmount(() => {
         <option value="" disabled>
           Modell wählen …
         </option>
-        <option
-          v-for="m in installedModels"
-          :key="m.id"
-          :value="m.id"
+        <optgroup
+          v-for="group in modelGroups"
+          :key="group.providerId"
+          :label="group.providerName"
         >
-          {{ m.name }}
-        </option>
+          <option
+            v-for="m in group.models"
+            :key="m.id"
+            :value="m.id"
+          >
+            {{ m.name }}
+          </option>
+        </optgroup>
       </select>
       <div class="h-px bg-border my-2" />
       <div class="text-xs text-muted-foreground">
@@ -419,8 +512,14 @@ onBeforeUnmount(() => {
     </aside>
 
     <section class="flex-1 flex flex-col">
-      <div v-if="lastError" class="p-3 bg-destructive/10 text-destructive text-sm">
-        {{ lastError }}
+      <div v-if="lastError" class="p-3 bg-destructive/10 text-destructive text-sm flex items-start justify-between gap-2">
+        <span>{{ lastError }}</span>
+        <button
+          class="text-xs underline shrink-0"
+          @click="lastError = null"
+        >
+          schließen
+        </button>
       </div>
 
       <div v-if="noModelsInstalled" class="p-6 flex-1 overflow-y-auto">
@@ -429,7 +528,7 @@ onBeforeUnmount(() => {
         </h2>
         <p class="text-sm text-muted-foreground mb-6">
           Lade eines der unten vorgeschlagenen Modelle herunter, um lokal zu chatten.
-          Alternativ kannst du später einen API-Anbieter (Anthropic, OpenAI …) hinterlegen — der Weg ist in Vorbereitung.
+          Alternativ kannst du unter Einstellungen einen API-Anbieter (Anthropic …) hinterlegen — der Chat greift dann auf dessen Modelle zu.
         </p>
         <div class="space-y-2">
           <div
@@ -489,6 +588,24 @@ onBeforeUnmount(() => {
               :class="m.role === 'user' ? 'bg-accent' : 'bg-muted/50'"
             >
               {{ m.content || (streamingMessageId === m.id ? '…' : '') }}
+            </div>
+            <div
+              v-if="m.role === 'assistant' && reasoningFor(m.id)"
+              class="mt-1 text-xs"
+            >
+              <button
+                type="button"
+                class="text-muted-foreground hover:text-foreground underline"
+                @click="toggleReasoning(m.id)"
+              >
+                {{ expandedReasoning.has(m.id) ? 'Denkschritte ausblenden' : 'Denkschritte anzeigen' }}
+              </button>
+              <div
+                v-if="expandedReasoning.has(m.id)"
+                class="mt-1 whitespace-pre-wrap text-muted-foreground bg-muted/30 rounded px-2 py-1"
+              >
+                {{ reasoningFor(m.id) }}
+              </div>
             </div>
           </div>
         </div>
