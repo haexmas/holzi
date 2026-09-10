@@ -1,20 +1,23 @@
 //! Model-lifecycle + streaming chat commands.
 
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 use uuid::Uuid;
 
+use crate::adapters::local::LocalAdapter;
+use crate::adapters::types::{ChatMessage as LlmMessage, ChatRequest, ChatRole, StreamChunk};
 use crate::error::{HolziError, Result};
-use crate::llm::local::{
-    ChatMessage as LlmMessage, ChatRequest, ChatRole, LocalModel, StreamChunk,
-};
+use crate::llm::local::LocalModel;
 use crate::models::paths;
+use crate::providers::build_adapter;
 use crate::state::AppState;
 use crate::state_utils::active_database;
 use crate::storage::{
     chat_messages::{self as msg_store, ChatMessage, FinishReason, MessageRole},
     chat_threads::{self as thread_store, ChatThread},
-    device_downloaded_models, models as models_store,
+    device_downloaded_models, models as models_store, providers as providers_store,
 };
 
 use super::session::{ActiveSession, ChatState};
@@ -23,7 +26,7 @@ const EVENT_CHAT_TOKEN: &str = "chat-token";
 const EVENT_CHAT_MESSAGE_COMPLETE: &str = "chat-message-complete";
 const EVENT_CHAT_MESSAGE_ERROR: &str = "chat-message-error";
 
-/// Payload for `active_model_info` and `load_local_model`.
+/// Payload for `active_model_info` and `load_model`.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoadedModelInfo {
@@ -42,7 +45,7 @@ pub struct SendMessageArgs {
     /// Optional system prompt applied for this generation. Not
     /// persisted; a persistent system prompt is a later slice.
     pub system_prompt: Option<String>,
-    /// Cap on generated tokens. `None` uses the mistralrs default.
+    /// Cap on generated tokens. `None` uses the adapter default.
     pub max_new_tokens: Option<usize>,
 }
 
@@ -59,6 +62,10 @@ pub struct SendMessageResult {
 struct TokenEvent {
     message_id: Uuid,
     delta: String,
+    /// Reasoning-content delta from Harmony-format local models or
+    /// Anthropic `thinking_delta` events. `None` when the chunk has
+    /// no reasoning.
+    reasoning: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -79,18 +86,88 @@ struct MessageErrorEvent {
     reason: String,
 }
 
-/// Loads a downloaded local model into the active session. If another
-/// model was already loaded, it is dropped first.
+/// Loads a model (local catalog id or `<provider_id>:<remote_id>`) into
+/// the active session. If another model was already loaded, it is
+/// dropped first.
 #[tauri::command]
-pub async fn load_local_model(
+pub async fn load_model(
     app: AppHandle,
     state: State<'_, AppState>,
     chat: State<'_, ChatState>,
     model_id: String,
 ) -> Result<LoadedModelInfo> {
-    // Resolve the file path and metadata from the DB.
-    let db = active_database(&state)?;
-    let id_owned = model_id.clone();
+    let session = if let Some((provider_id_str, _remote_id)) = model_id.split_once(':') {
+        load_api_key_model(&state, &model_id, provider_id_str).await?
+    } else {
+        load_local_model_by_id(&app, &state, &model_id).await?
+    };
+
+    let name = resolve_display_name(&state, &model_id)
+        .await
+        .unwrap_or_else(|| session.model_id.clone());
+    let info = LoadedModelInfo {
+        model_id: session.model_id.clone(),
+        name,
+        tokenizer_repo: session.tokenizer_repo.clone(),
+        context_window: session.context_window,
+    };
+
+    let mut guard = chat.session.lock().map_err(|e| HolziError::CrdtInit {
+        reason: format!("chat.session mutex poisoned: {e}"),
+    })?;
+    *guard = Some(session);
+    Ok(info)
+}
+
+async fn load_api_key_model(
+    state: &State<'_, AppState>,
+    composite_id: &str,
+    provider_id_str: &str,
+) -> Result<ActiveSession> {
+    let provider_id = Uuid::parse_str(provider_id_str).map_err(|_| HolziError::InvalidInput {
+        reason: format!("bad composite model id: {composite_id}"),
+    })?;
+    let db = active_database(state)?;
+    let id_owned = composite_id.to_string();
+    let (provider, row) = tauri::async_runtime::spawn_blocking(move || {
+        db.with_connection(|conn| {
+            let provider = providers_store::get_provider(conn, provider_id)
+                .map_err(haex_crdt::Error::from)?
+                .ok_or_else(|| {
+                    haex_crdt::Error::from(haex_crdt::rusqlite::Error::QueryReturnedNoRows)
+                })?;
+            let row = models_store::get_model(conn, &id_owned)
+                .map_err(haex_crdt::Error::from)?
+                .ok_or_else(|| {
+                    haex_crdt::Error::from(haex_crdt::rusqlite::Error::QueryReturnedNoRows)
+                })?;
+            Ok((provider, row))
+        })
+    })
+    .await
+    .map_err(|e| HolziError::CrdtInit {
+        reason: format!("resolve api_key model join: {e}"),
+    })?
+    .map_err(|_| HolziError::ModelNotFound {
+        id: composite_id.to_string(),
+    })?;
+
+    let adapter = build_adapter(&provider)?;
+    Ok(ActiveSession {
+        model_id: composite_id.to_string(),
+        adapter: Arc::from(adapter),
+        tokenizer_repo: String::new(),
+        context_window: row.context_window,
+    })
+}
+
+async fn load_local_model_by_id(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+    model_id: &str,
+) -> Result<ActiveSession> {
+    let db = active_database(state)?;
+    let id_owned = model_id.to_string();
     let resolved = tauri::async_runtime::spawn_blocking(move || {
         db.with_connection(|conn| {
             let dm = device_downloaded_models::get_downloaded_model(conn, &id_owned)
@@ -103,30 +180,25 @@ pub async fn load_local_model(
                 .ok_or_else(|| {
                     haex_crdt::Error::from(haex_crdt::rusqlite::Error::QueryReturnedNoRows)
                 })?;
-            Ok((
-                dm.relative_path,
-                row.name,
-                row.context_window,
-                row.tokenizer_repo,
-            ))
+            Ok((dm.relative_path, row.context_window, row.tokenizer_repo))
         })
     })
     .await
     .map_err(|e| HolziError::CrdtInit {
-        reason: format!("resolve model join: {e}"),
+        reason: format!("resolve local model join: {e}"),
     })?
     .map_err(|_| HolziError::ModelNotFound {
-        id: model_id.clone(),
+        id: model_id.to_string(),
     })?;
-    let (relative_path, name, context_window, db_tokenizer_repo) = resolved;
+    let (relative_path, context_window, db_tokenizer_repo) = resolved;
 
-    let absolute = paths::resolve_relative(&app, &relative_path)?;
+    let absolute = paths::resolve_relative(app, &relative_path)?;
 
     // Prefer the persisted `tokenizer_repo` (migration 0009 onwards).
     // The catalog fallback covers pre-0009 rows the lazy backfill in
     // `list_installed_models` has not yet touched.
     let tokenizer_repo = db_tokenizer_repo
-        .or_else(|| crate::catalog::get(&model_id).map(|e| e.tokenizer_repo.clone()))
+        .or_else(|| crate::catalog::get(model_id).map(|e| e.tokenizer_repo.clone()))
         .ok_or_else(|| HolziError::InvalidInput {
             reason: format!("tokenizer_repo missing for model {model_id}"),
         })?;
@@ -137,24 +209,28 @@ pub async fn load_local_model(
             reason: format!("mistralrs load: {e}"),
         })?;
 
-    // Replace any previously-loaded session.
-    let session = ActiveSession {
-        model_id: model_id.clone(),
-        model,
-        tokenizer_repo: tokenizer_repo.clone(),
+    Ok(ActiveSession {
+        model_id: model_id.to_string(),
+        adapter: Arc::new(LocalAdapter::new(model)),
+        tokenizer_repo,
         context_window,
-    };
-    let info = LoadedModelInfo {
-        model_id: model_id.clone(),
-        name: name.clone(),
-        tokenizer_repo: tokenizer_repo.clone(),
-        context_window,
-    };
-    let mut guard = chat.session.lock().map_err(|e| HolziError::CrdtInit {
-        reason: format!("chat.session mutex poisoned: {e}"),
-    })?;
-    *guard = Some(session);
-    Ok(info)
+    })
+}
+
+async fn resolve_display_name(state: &State<'_, AppState>, model_id: &str) -> Option<String> {
+    let db = active_database(state).ok()?;
+    let id_owned = model_id.to_string();
+    let name = tauri::async_runtime::spawn_blocking(move || {
+        db.with_connection(|conn| {
+            Ok(models_store::get_model(conn, &id_owned)
+                .map_err(haex_crdt::Error::from)?
+                .map(|r| r.name))
+        })
+    })
+    .await
+    .ok()?
+    .ok()?;
+    name
 }
 
 /// Drops the current session, if any. Idempotent.
@@ -175,7 +251,7 @@ pub async fn active_model_info(chat: State<'_, ChatState>) -> Result<Option<Load
     })?;
     Ok(guard.as_ref().map(|s| LoadedModelInfo {
         model_id: s.model_id.clone(),
-        name: s.model_id.clone(), // TODO: cache display name in state
+        name: s.model_id.clone(),
         tokenizer_repo: s.tokenizer_repo.clone(),
         context_window: s.context_window,
     }))
@@ -196,7 +272,7 @@ pub async fn send_message(
             reason: format!("chat.session mutex poisoned: {e}"),
         })?;
         guard.clone().ok_or_else(|| HolziError::InvalidInput {
-            reason: "no local model loaded".into(),
+            reason: "no model loaded".into(),
         })?
     };
 
@@ -275,7 +351,17 @@ pub async fn send_message(
     })?
     .map_err(HolziError::from)?;
 
+    // For api_key models the adapter needs the raw remote id, not the
+    // composite one — split it off here so the adapter stays vendor-
+    // scoped and does not know about holzi's composite scheme.
+    let request_model_id = session
+        .model_id
+        .split_once(':')
+        .map(|(_, remote)| remote.to_string())
+        .unwrap_or_else(|| session.model_id.clone());
+
     let request = ChatRequest {
+        model_id: request_model_id,
         system_prompt: args.system_prompt.clone(),
         messages: history
             .iter()
@@ -294,10 +380,18 @@ pub async fn send_message(
         max_new_tokens: args.max_new_tokens,
     };
 
-    // Spawn generation. Its abort handle goes into ChatState so
-    // `abort_current_generation` can cancel out-of-band.
-    let mut handle = session.model.stream_chat(request);
-    let abort = handle.abort_handle();
+    // Start the generation. `stream_chat` may fail before the first
+    // byte (credential rejection, transport error); surface those to
+    // the caller instead of hiding them inside the streaming task.
+    let mut stream =
+        session
+            .adapter
+            .stream_chat(request)
+            .await
+            .map_err(|e| HolziError::InvalidInput {
+                reason: format!("adapter start: {e}"),
+            })?;
+    let abort = stream.abort_handle();
     {
         let mut g = chat
             .current_generation
@@ -323,16 +417,17 @@ pub async fn send_message(
         let mut error_reason: Option<String> = None;
         let mut saw_done = false;
 
-        while let Some(item) = handle.next().await {
+        while let Some(item) = stream.next().await {
             match item {
-                Ok(StreamChunk::Delta { content, .. }) => {
-                    if !content.is_empty() {
+                Ok(StreamChunk::Delta { content, reasoning }) => {
+                    if !content.is_empty() || reasoning.is_some() {
                         assembled.push_str(&content);
                         let _ = app_for_task.emit(
                             EVENT_CHAT_TOKEN,
                             TokenEvent {
                                 message_id: assistant_message_id,
                                 delta: content,
+                                reasoning,
                             },
                         );
                     }

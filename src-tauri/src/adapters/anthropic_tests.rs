@@ -2,10 +2,11 @@
 //! double. Each test spins its own server on a random port so tests
 //! can run in parallel without cross-talk.
 
-use wiremock::matchers::{header, method, path, query_param};
+use wiremock::matchers::{body_json, header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::anthropic::AnthropicAdapter;
+use super::types::{ChatMessage, ChatRequest, ChatRole, StreamChunk, StreamError};
 use super::{AdapterError, ProviderAdapter};
 
 const AUTH_HEADER: &str = "x-api-key";
@@ -186,6 +187,288 @@ async fn list_models_treats_zero_max_input_tokens_as_absent() {
     assert_eq!(models.len(), 1);
     assert!(models[0].context_window.is_none());
 }
+
+// ---------- stream_chat ----------
+
+fn sample_request(model: &str) -> ChatRequest {
+    ChatRequest {
+        model_id: model.to_string(),
+        system_prompt: None,
+        messages: vec![ChatMessage {
+            role: ChatRole::User,
+            content: "hi".to_string(),
+        }],
+        max_new_tokens: Some(128),
+    }
+}
+
+fn sse_body(events: &[(&str, serde_json::Value)]) -> String {
+    let mut out = String::new();
+    for (event, data) in events {
+        out.push_str(&format!("event: {event}\n"));
+        out.push_str(&format!("data: {}\n\n", data));
+    }
+    out
+}
+
+#[tokio::test]
+async fn stream_chat_emits_deltas_and_done_with_token_counts() {
+    let server = MockServer::start().await;
+    let body = sse_body(&[
+        (
+            "message_start",
+            serde_json::json!({
+                "type": "message_start",
+                "message": {
+                    "id": "msg_1",
+                    "usage": {"input_tokens": 12, "output_tokens": 0}
+                }
+            }),
+        ),
+        (
+            "content_block_delta",
+            serde_json::json!({
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "text_delta", "text": "Hello"}
+            }),
+        ),
+        (
+            "content_block_delta",
+            serde_json::json!({
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "text_delta", "text": " world"}
+            }),
+        ),
+        (
+            "message_delta",
+            serde_json::json!({
+                "type": "message_delta",
+                "delta": {"stop_reason": "end_turn"},
+                "usage": {"output_tokens": 3}
+            }),
+        ),
+        ("message_stop", serde_json::json!({"type": "message_stop"})),
+    ]);
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .and(header("x-api-key", "sk-test"))
+        .and(header("anthropic-version", "2023-06-01"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(body)
+                .insert_header("content-type", "text/event-stream"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let adapter = AnthropicAdapter::new(server.uri(), "sk-test".to_string()).unwrap();
+    let mut stream = adapter
+        .stream_chat(sample_request("claude-opus-5"))
+        .await
+        .expect("stream_chat starts");
+
+    let mut deltas: Vec<String> = Vec::new();
+    let mut finished: Option<(Option<usize>, Option<usize>, Option<String>)> = None;
+    while let Some(chunk) = stream.next().await {
+        match chunk.expect("no error frame") {
+            StreamChunk::Delta { content, reasoning } => {
+                assert!(reasoning.is_none(), "no thinking in this fixture");
+                if !content.is_empty() {
+                    deltas.push(content);
+                }
+            }
+            StreamChunk::Done {
+                prompt_tokens,
+                completion_tokens,
+                finish_reason,
+                ..
+            } => {
+                finished = Some((prompt_tokens, completion_tokens, finish_reason));
+                break;
+            }
+        }
+    }
+
+    assert_eq!(deltas.join(""), "Hello world");
+    let (pt, ct, fr) = finished.expect("Done frame arrived");
+    assert_eq!(pt, Some(12));
+    assert_eq!(ct, Some(3));
+    assert_eq!(fr.as_deref(), Some("end_turn"));
+}
+
+#[tokio::test]
+async fn stream_chat_surfaces_thinking_delta_as_reasoning() {
+    let server = MockServer::start().await;
+    let body = sse_body(&[
+        (
+            "message_start",
+            serde_json::json!({
+                "type": "message_start",
+                "message": {"id": "m", "usage": {"input_tokens": 4, "output_tokens": 0}}
+            }),
+        ),
+        (
+            "content_block_delta",
+            serde_json::json!({
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "thinking_delta", "thinking": "let me think"}
+            }),
+        ),
+        (
+            "content_block_delta",
+            serde_json::json!({
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "text_delta", "text": "42"}
+            }),
+        ),
+        ("message_stop", serde_json::json!({"type": "message_stop"})),
+    ]);
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(body)
+                .insert_header("content-type", "text/event-stream"),
+        )
+        .mount(&server)
+        .await;
+
+    let adapter = AnthropicAdapter::new(server.uri(), "sk-any".to_string()).unwrap();
+    let mut stream = adapter
+        .stream_chat(sample_request("claude-opus-5"))
+        .await
+        .unwrap();
+
+    let mut reasoning: Vec<String> = Vec::new();
+    let mut content: Vec<String> = Vec::new();
+    while let Some(chunk) = stream.next().await {
+        match chunk.unwrap() {
+            StreamChunk::Delta {
+                content: c,
+                reasoning: r,
+            } => {
+                if let Some(r) = r {
+                    reasoning.push(r);
+                }
+                if !c.is_empty() {
+                    content.push(c);
+                }
+            }
+            StreamChunk::Done { .. } => break,
+        }
+    }
+    assert_eq!(reasoning, vec!["let me think"]);
+    assert_eq!(content.join(""), "42");
+}
+
+#[tokio::test]
+async fn stream_chat_maps_401_to_invalid_credentials() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(ResponseTemplate::new(401).set_body_json(serde_json::json!({
+            "type": "error",
+            "error": {"type": "authentication_error", "message": "bad key"}
+        })))
+        .mount(&server)
+        .await;
+
+    let adapter = AnthropicAdapter::new(server.uri(), "sk-bad".to_string()).unwrap();
+    let result = adapter.stream_chat(sample_request("claude-opus-5")).await;
+    match result {
+        Err(AdapterError::InvalidCredentials) => {}
+        Err(other) => panic!("expected InvalidCredentials, got {other:?}"),
+        Ok(_) => panic!("expected error, got Ok"),
+    }
+}
+
+#[tokio::test]
+async fn stream_chat_delivers_sse_error_event_as_stream_error() {
+    let server = MockServer::start().await;
+    let body = sse_body(&[
+        (
+            "message_start",
+            serde_json::json!({
+                "type": "message_start",
+                "message": {"id": "m", "usage": {"input_tokens": 1, "output_tokens": 0}}
+            }),
+        ),
+        (
+            "error",
+            serde_json::json!({
+                "type": "error",
+                "error": {"type": "overloaded_error", "message": "overloaded"}
+            }),
+        ),
+    ]);
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(body)
+                .insert_header("content-type", "text/event-stream"),
+        )
+        .mount(&server)
+        .await;
+
+    let adapter = AnthropicAdapter::new(server.uri(), "sk-any".to_string()).unwrap();
+    let mut stream = adapter
+        .stream_chat(sample_request("claude-opus-5"))
+        .await
+        .unwrap();
+    let mut saw_error: Option<StreamError> = None;
+    while let Some(chunk) = stream.next().await {
+        match chunk {
+            Ok(_) => continue,
+            Err(e) => {
+                saw_error = Some(e);
+                break;
+            }
+        }
+    }
+    match saw_error {
+        Some(StreamError::Model(msg)) => assert!(msg.contains("overloaded"), "{msg}"),
+        other => panic!("expected Model error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn stream_chat_sends_request_body_with_model_and_stream_flag() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .and(body_json(serde_json::json!({
+            "model": "claude-opus-5",
+            "max_tokens": 128,
+            "messages": [{"role": "user", "content": "hi"}],
+            "stream": true,
+        })))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(sse_body(&[(
+                    "message_stop",
+                    serde_json::json!({"type": "message_stop"}),
+                )]))
+                .insert_header("content-type", "text/event-stream"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let adapter = AnthropicAdapter::new(server.uri(), "sk-any".to_string()).unwrap();
+    let mut stream = adapter
+        .stream_chat(sample_request("claude-opus-5"))
+        .await
+        .unwrap();
+    while stream.next().await.is_some() {}
+}
+
+// ---------- helpers ----------
 
 fn query_param_missing(name: &'static str) -> impl wiremock::Match {
     // wiremock has no built-in "must not be present" matcher, so build

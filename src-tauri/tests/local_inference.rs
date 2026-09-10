@@ -19,7 +19,8 @@ use std::env;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use holzi_lib::llm::local::{ChatMessage, ChatRequest, ChatRole, LocalModel, StreamChunk};
+use holzi_lib::adapters::types::{ChatMessage, ChatRequest, ChatRole, StreamChunk};
+use holzi_lib::llm::local::LocalModel;
 
 const DEFAULT_TOKENIZER: &str = "Qwen/Qwen2.5-0.5B-Instruct";
 const MAX_NEW_TOKENS: usize = 64;
@@ -55,6 +56,7 @@ async fn load_and_stream_generates_tokens() {
         .expect("model load");
 
     let mut handle = model.stream_chat(ChatRequest {
+        model_id: String::new(),
         system_prompt: Some("You are a terse assistant.".into()),
         messages: vec![ChatMessage {
             role: ChatRole::User,
@@ -102,6 +104,7 @@ async fn abort_stops_generation_before_completion() {
         .expect("model load");
 
     let mut handle = model.stream_chat(ChatRequest {
+        model_id: String::new(),
         system_prompt: None,
         messages: vec![ChatMessage {
             role: ChatRole::User,
@@ -127,7 +130,7 @@ async fn abort_stops_generation_before_completion() {
     }
     assert!(got_content, "no delta content arrived before abort");
 
-    handle.abort();
+    handle.abort_handle().abort();
 
     // After abort, the receiver must return `None` within a bounded
     // window. In-flight chunks may still arrive first; they are fine.

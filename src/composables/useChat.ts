@@ -45,6 +45,12 @@ export interface SendMessageResult {
 export interface TokenEvent {
   messageId: string
   delta: string
+  /**
+   * Reasoning-content delta (chain-of-thought for Harmony-format local
+   * models or Anthropic `thinking_delta` events). `null` for chunks
+   * that carry only regular content.
+   */
+  reasoning: string | null
 }
 
 export interface MessageCompleteEvent {
@@ -92,12 +98,17 @@ export function useChat() {
     return await invoke<void>('abort_current_generation')
   }
 
-  /** Loads an installed local model into the chat session. */
+  /**
+   * Loads a model into the chat session. Accepts either a local
+   * catalog id (`"llama-3.1-8b"`) or a composite api_key id
+   * (`"<provider_uuid>:claude-opus-5"`); the backend routes on the
+   * colon.
+   */
   async function loadModelAsync(modelId: string): Promise<LoadedModelInfo> {
-    return await invoke<LoadedModelInfo>('load_local_model', { modelId })
+    return await invoke<LoadedModelInfo>('load_model', { modelId })
   }
 
-  /** Unloads the local model currently held by the chat session. */
+  /** Unloads the model currently held by the chat session. */
   async function unloadModelAsync(): Promise<void> {
     return await invoke<void>('unload_local_model')
   }

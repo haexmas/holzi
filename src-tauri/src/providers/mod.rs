@@ -58,14 +58,29 @@ impl From<Provider> for ProviderPayload {
     }
 }
 
+/// Return value of [`add_provider`]. Carries the created provider plus
+/// an optional `refresh_error` set when the auto-refresh triggered
+/// after insert failed. The add itself always succeeds when the return
+/// is `Ok(_)` — a refresh failure never rolls back the row so the
+/// operator can retry manually with a fixed key.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddProviderResult {
+    pub provider: ProviderPayload,
+    pub model_count: Option<usize>,
+    pub refresh_error: Option<String>,
+}
+
 /// Adds a provider. Validates minimally: `api_key` needs `base_url` and
-/// a non-empty `api_key`; `local` needs neither. The frontend sees a
-/// `Provider` without the credentials blob.
+/// a non-empty `api_key`; `local` needs neither. For `api_key` providers
+/// the model catalog is refreshed inline; if that call fails the
+/// provider is kept and `refresh_error` is set so the frontend can
+/// toast it.
 #[tauri::command]
 pub async fn add_provider(
     state: State<'_, AppState>,
     args: AddProviderArgs,
-) -> Result<ProviderPayload> {
+) -> Result<AddProviderResult> {
     if args.name.trim().is_empty() {
         return Err(HolziError::InvalidInput {
             reason: "name is empty".into(),
@@ -107,8 +122,9 @@ pub async fn add_provider(
         created_at: now,
     };
     let inserted = provider.clone();
-    let inserted_payload = tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
+    let insert_db = db.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        insert_db.with_connection(|conn| {
             storage::insert_provider(conn, &inserted).map_err(haex_crdt::Error::from)?;
             Ok(())
         })
@@ -116,9 +132,27 @@ pub async fn add_provider(
     .await
     .map_err(|e| HolziError::CrdtInit {
         reason: format!("insert_provider join: {e}"),
-    })?;
-    inserted_payload.map_err(HolziError::from)?;
-    Ok(provider.into())
+    })?
+    .map_err(HolziError::from)?;
+
+    // Auto-refresh api_key providers so the model picker is populated
+    // immediately after the credentials land. Refresh failures are
+    // surfaced to the caller but do not undo the insert — the operator
+    // can retry `refresh_provider_models` after fixing the key.
+    let (model_count, refresh_error) = if matches!(provider.kind, ProviderKind::ApiKey) {
+        match do_refresh(&db, &provider).await {
+            Ok(count) => (Some(count), None),
+            Err(e) => (None, Some(format_holzi_error(&e))),
+        }
+    } else {
+        (None, None)
+    };
+
+    Ok(AddProviderResult {
+        provider: provider.into(),
+        model_count,
+        refresh_error,
+    })
 }
 
 /// Lists all providers configured on this instance.
@@ -177,10 +211,68 @@ pub async fn refresh_provider_models(
         reason: format!("provider {provider_id} not found"),
     })?;
 
-    let adapter = build_adapter(&provider)?;
+    let model_count = do_refresh(&db, &provider).await?;
+
+    Ok(RefreshProviderModelsResult {
+        provider_id,
+        model_count,
+        fetched_at: now_ms(),
+    })
+}
+
+/// Frontend view of a provider-scoped model row. Local providers
+/// intentionally return an empty list from this command — installed
+/// GGUFs come through `list_installed_models` and carry file-system
+/// info the api_key rows do not.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderModelPayload {
+    pub id: String,
+    pub name: String,
+    pub provider_id: Uuid,
+    pub context_window: Option<i64>,
+}
+
+/// Reads the cached models for one provider. Does NOT trigger a live
+/// fetch — call `refresh_provider_models` for that.
+#[tauri::command]
+pub async fn list_provider_models(
+    state: State<'_, AppState>,
+    provider_id: Uuid,
+) -> Result<Vec<ProviderModelPayload>> {
+    let db = active_database(&state)?;
+    let rows = tauri::async_runtime::spawn_blocking(move || {
+        db.with_connection(|conn| {
+            models_store::list_models_by_provider(conn, provider_id).map_err(haex_crdt::Error::from)
+        })
+    })
+    .await
+    .map_err(|e| HolziError::CrdtInit {
+        reason: format!("list_provider_models join: {e}"),
+    })?
+    .map_err(HolziError::from)?;
+    Ok(rows
+        .into_iter()
+        .map(|r| ProviderModelPayload {
+            id: r.id,
+            name: r.name,
+            provider_id: r.provider_id,
+            context_window: r.context_window,
+        })
+        .collect())
+}
+
+/// Shared refresh core used by both [`add_provider`] and
+/// [`refresh_provider_models`]. Returns the number of models cached.
+async fn do_refresh(
+    db: &std::sync::Arc<haex_crdt::Database>,
+    provider: &Provider,
+) -> Result<usize> {
+    let adapter = build_adapter(provider)?;
     let fetched = adapter.list_models().await.map_err(map_adapter_error)?;
 
     let fetched_at = now_ms();
+    let provider_id = provider.id;
     let rows: Vec<ModelRow> = fetched
         .into_iter()
         .map(|m| compose_model_row(provider_id, fetched_at, m))
@@ -201,18 +293,14 @@ pub async fn refresh_provider_models(
     })?
     .map_err(HolziError::from)?;
 
-    Ok(RefreshProviderModelsResult {
-        provider_id,
-        model_count,
-        fetched_at,
-    })
+    Ok(model_count)
 }
 
 /// Builds the right adapter for the provider's kind and credentials.
-/// Kept sync so the caller can decide how to schedule the network
-/// call. `Local` is rejected — refresh only makes sense for remote
-/// listings.
-fn build_adapter(provider: &Provider) -> Result<Box<dyn ProviderAdapter>> {
+/// `Local` is rejected here — the chat path uses `LocalAdapter`
+/// directly with an in-process `LocalModel`; refresh only makes sense
+/// for remote listings.
+pub(crate) fn build_adapter(provider: &Provider) -> Result<Box<dyn ProviderAdapter>> {
     match provider.kind {
         ProviderKind::ApiKey => {
             let base_url =
@@ -234,9 +322,10 @@ fn build_adapter(provider: &Provider) -> Result<Box<dyn ProviderAdapter>> {
                     reason: format!("api_key credentials are not UTF-8: {e}"),
                 })?
                 .to_string();
-            // Slice (a) only ships the Anthropic adapter. Additional
-            // api_key vendors (OpenAI, Google, Groq) each require their
-            // own listing endpoint and land as follow-up PRs.
+            // Slice (b) still only ships the Anthropic adapter for
+            // api_key providers. OpenAI / Google / Groq each require
+            // their own listing + Messages endpoint and land as
+            // follow-up PRs.
             let adapter =
                 AnthropicAdapter::new(base_url.to_string(), api_key).map_err(map_adapter_error)?;
             Ok(Box::new(adapter))
@@ -266,7 +355,7 @@ fn compose_model_row(provider_id: Uuid, fetched_at: i64, m: ProviderModel) -> Mo
     }
 }
 
-fn map_adapter_error(err: AdapterError) -> HolziError {
+pub(crate) fn map_adapter_error(err: AdapterError) -> HolziError {
     // Surface `InvalidCredentials` as its own kind so the frontend can
     // render "Ungültige Zugangsdaten" per plan §"Anbietermodelle".
     // Other adapter errors ride the generic `InvalidInput` bucket for
@@ -285,6 +374,13 @@ fn map_adapter_error(err: AdapterError) -> HolziError {
         AdapterError::Parse { reason } => HolziError::InvalidInput {
             reason: format!("provider response parse error: {reason}"),
         },
+    }
+}
+
+fn format_holzi_error(err: &HolziError) -> String {
+    match err {
+        HolziError::InvalidInput { reason } => reason.clone(),
+        other => other.to_string(),
     }
 }
 
