@@ -93,7 +93,7 @@ Keine — Preference-Rows sind zustandslos. Ihre Existenz ist der Zustand. Über
 DROP TABLE device_downloaded_models_no_sync;
 ```
 
-Ersatz: `list_installed_models` scannt `<AppLocalData>/models/` per readdir. Ein Sub-Verzeichnis gilt nur als installiert, wenn eine vollständige reguläre `.gguf`-Datei vorhanden ist; Downloads und Importe veröffentlichen die finale Datei erst nach atomarem Rename, sodass temporäre `.part`-/`.tmp`-Dateien nicht zählen. Bei mehreren vollständigen `.gguf`-Dateien ist die lexikografisch kleinste UTF-8-Datei nach Dateiname kanonisch; `relativePath` und `size_bytes` beziehen sich immer auf diese Datei. Der Verzeichnisname muss als `models.id` existieren. Fehlt das Root-Verzeichnis, ist die Liste leer; `sha256` und `verified_at` fallen ersatzlos weg (LocalModel-Load selbst ist Integritätscheck).
+Ersatz: `list_installed_models` scannt `<AppLocalData>/models/` per readdir. Ein Sub-Verzeichnis gilt nur als installiert, wenn eine vollständige reguläre `.gguf`-Datei vorhanden ist; Downloads und Importe veröffentlichen die finale Datei erst nach atomarem Rename, sodass temporäre `.part`-/`.tmp`-Dateien nicht zählen. Der gemeinsame Selector `models::paths::canonical_model_file` wählt bei mehreren vollständigen `.gguf`-Dateien die lexikografisch kleinste UTF-8-Datei nach Dateiname; `relativePath`, `size_bytes` und `LocalModel::load` beziehen sich immer auf diese Datei. Der Verzeichnisname muss als `models.id` existieren. Fehlt das Root-Verzeichnis, ist die Liste leer; `sha256` und `verified_at` fallen ersatzlos weg (LocalModel-Load selbst ist Integritätscheck).
 
 ---
 

@@ -47,7 +47,7 @@ Alle offenen Klärfragen aus dem Spec sind in der Clarify-Session vom 2026-09-10
 - Async-Konsistenz mit anderen Tauri-Command-Pfaden.
 - Kleine Katalog-Größe (~5-20 Modelle), Read-Dir ist im Millisekunden-Bereich.
 - Der `models`-Row-Lookup filtert Ghost-Dirs: wenn jemand manuell ein Verzeichnis anlegt, das nicht via `download_model_from_hf` oder `import_model_from_file` registriert wurde, wird es nicht als Installed gezählt (Sicherheits-/Konsistenz-Schutz).
-- Atomarer Rename verhindert, dass ein laufender Download als installiert erscheint; die lexikografische Auswahl verhindert, dass wechselnde `read_dir`-Reihenfolgen einen anderen `relativePath` liefern.
+- Atomarer Rename verhindert, dass ein laufender Download als installiert erscheint; die lexikografische Auswahl verhindert, dass wechselnde `read_dir`-Reihenfolgen einen anderen `relativePath` liefern. Die gemeinsame Selector-Routine wird auch vom lokalen Loader verwendet, damit Discovery und Laden niemals unterschiedliche Dateien wählen.
 - Verlust von `sha256`/`verified_at`: kein UI zeigt diese Werte aktiv; die praktische Integritätsprüfung ist der `LocalModel::load`-Aufruf selbst (mistralrs schlägt bei korrupter GGUF fehl).
 
 **Alternatives considered**:

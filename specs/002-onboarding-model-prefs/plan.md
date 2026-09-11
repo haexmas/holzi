@@ -74,6 +74,7 @@ src-tauri/src/
 │   ├── models.rs                 # unverändert
 │   └── (device_downloaded_models.rs wird gelöscht — Filesystem ist Wahrheit)
 ├── models/
+│   ├── paths.rs                  # + canonical_model_file für Loader und Discovery
 │   └── commands.rs               # + list_installed_models scannt Filesystem statt DB
 ├── chat/
 │   ├── commands.rs               # + resolve_default_model + Chain, + write last_active bei send_message
