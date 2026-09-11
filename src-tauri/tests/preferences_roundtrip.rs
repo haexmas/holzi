@@ -271,8 +271,12 @@ fn null_stored_value_folds_to_absent_on_get() {
 }
 
 #[test]
-/// Deleting a `known_devices` row cascades into `preferences`: every
-/// row scoped to that device disappears, other devices' rows stay.
+/// US5 forward-looking contract (spec 002 §FR-017): deleting a
+/// `known_devices` row cascades into `preferences`, every row scoped
+/// to that device disappears, and other devices' rows plus the vault-
+/// wide row stay intact. Formalises T060 — a later Retire operation
+/// can just `DELETE FROM known_devices` and the FK cascade handles the
+/// per-device preferences without the Retire code knowing this module.
 fn deleting_known_device_cascades_into_preferences() {
     let tmp = tempfile::tempdir().expect("tmp dir");
     let db_path = tmp.path().join("vault.db");

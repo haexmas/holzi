@@ -198,9 +198,12 @@ pub async fn import_model_from_file(
 /// authoritative for "installed here" (spec 002 §"Installed model" and
 /// ADR-0001). Discovery scans that root, resolves each slug's canonical
 /// file via [`paths::canonical_model_file`], and joins it with the
-/// synchronised `models` catalog row. A slug without a matching row is
-/// skipped — the catalog is the display metadata source and a stale
-/// on-disk file we do not know about should not appear as installed.
+/// synchronised `models` catalog row. Slugs without a matching row —
+/// and slugs whose canonical-file resolution errors (e.g. multiple
+/// finalised GGUFs in one slug directory) — are skipped rather than
+/// failing the whole call, mirroring the tolerance in
+/// `resolve_default_model` so one broken slug cannot make the entire
+/// installed-model list unavailable.
 ///
 /// Opportunistically back-fills `models.tokenizer_repo` for pre-0009
 /// catalog rows in the same call (idempotent).
@@ -236,24 +239,27 @@ pub async fn list_installed_models(
     slug_dirs.sort();
 
     // Resolve canonical files on the async runtime's blocking pool so
-    // syscalls do not hold the executor.
+    // syscalls do not hold the executor. Per-slug tolerance: a slug
+    // whose resolver errors (e.g. `canonical_model_file` ambiguity from
+    // two finalised GGUFs under one slug — see `paths::canonical_model_file`)
+    // is skipped so a single broken slug does not make the whole
+    // installed-model list unusable. Same shape as `resolve_default_model`
+    // which already skips such slugs via `if let Ok(Some(_))`.
     let app_for_scan = app.clone();
     let scan_slugs = slug_dirs.clone();
     let canonical_files = tauri::async_runtime::spawn_blocking(move || {
         let mut resolved: Vec<(String, paths::CanonicalModelFile)> = Vec::new();
         for slug in scan_slugs {
-            match paths::canonical_model_file(&app_for_scan, &slug) {
-                Ok(Some(cf)) => resolved.push((slug, cf)),
-                Ok(None) => {}
-                Err(e) => return Err(e),
+            if let Ok(Some(cf)) = paths::canonical_model_file(&app_for_scan, &slug) {
+                resolved.push((slug, cf));
             }
         }
-        Ok::<_, HolziError>(resolved)
+        resolved
     })
     .await
     .map_err(|e| HolziError::CrdtInit {
         reason: format!("list_installed_models scan join: {e}"),
-    })??;
+    })?;
 
     let payload = tauri::async_runtime::spawn_blocking(move || {
         db.with_connection(|conn| {

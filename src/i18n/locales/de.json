@@ -71,12 +71,53 @@
     },
     "noModel": "Kein Modell verfügbar"
   },
+  "settings": {
+    "header": {
+      "forDevice": "Einstellungen für: {alias}"
+    },
+    "alias": {
+      "title": "Gerätename",
+      "description": "Wie soll dieses Gerät im Vault heißen? Der Name erscheint in den Einstellungen und ist jederzeit änderbar.",
+      "label": "Gerätename",
+      "save": "Speichern",
+      "saved": "Gespeichert.",
+      "required": "Bitte einen Namen eingeben."
+    },
+    "default": {
+      "title": "Standard-Modell",
+      "description": "Wähle das Modell, das nach dem Öffnen dieses Vaults automatisch geladen wird — als Gerätestandard nur für dieses Gerät oder als Vault-weiter Standard für alle Geräte dieses Vaults.",
+      "current": {
+        "device": "Aktueller Gerätestandard",
+        "vault": "Aktueller Vault-weiter Standard",
+        "none": "nicht gesetzt"
+      },
+      "modelLabel": "Modell",
+      "modelPlaceholder": "Modell wählen …",
+      "modelGroup": {
+        "local": "Lokale Modelle"
+      },
+      "scope": {
+        "label": "Wirkungsbereich",
+        "device": "Nur dieses Gerät",
+        "vault": "Vault-weit"
+      },
+      "save": "Als Standard setzen",
+      "saved": "Standard gesetzt.",
+      "clear": "Diesen Standard löschen",
+      "cleared": "Standard gelöscht.",
+      "empty": "Es sind noch keine Modelle installiert oder Anbieter konfiguriert."
+    }
+  },
   "errors": {
     "openFailed": "Öffnen fehlgeschlagen",
     "nameConflict": "Eine Instanz mit diesem Namen existiert bereits",
     "invalidName": "Ungültiger Name",
     "weakPassphrase": "Passphrase erfüllt nicht die Richtlinie",
     "deviceInfoFailed": "Geräteinformationen konnten nicht geladen werden",
-    "aliasSaveFailed": "Gerätename konnte nicht gespeichert werden"
+    "aliasSaveFailed": "Gerätename konnte nicht gespeichert werden",
+    "prefSaveFailed": "Standard-Modell konnte nicht gespeichert werden",
+    "prefClearFailed": "Standard-Modell konnte nicht gelöscht werden",
+    "prefLoadFailed": "Standard-Modell konnte nicht geladen werden",
+    "modelListFailed": "Modell-Liste konnte nicht geladen werden"
   }
 }

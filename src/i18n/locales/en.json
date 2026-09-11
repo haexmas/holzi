@@ -71,12 +71,53 @@
     },
     "noModel": "No model available"
   },
+  "settings": {
+    "header": {
+      "forDevice": "Settings for: {alias}"
+    },
+    "alias": {
+      "title": "Device name",
+      "description": "What should this device be called in the vault? The name shows up in settings and can be changed any time.",
+      "label": "Device name",
+      "save": "Save",
+      "saved": "Saved.",
+      "required": "Please enter a name."
+    },
+    "default": {
+      "title": "Default model",
+      "description": "Pick the model that loads automatically when this vault opens — as a device default for this device only or as a vault-wide default for every device on this vault.",
+      "current": {
+        "device": "Current device default",
+        "vault": "Current vault-wide default",
+        "none": "not set"
+      },
+      "modelLabel": "Model",
+      "modelPlaceholder": "Pick a model …",
+      "modelGroup": {
+        "local": "Local models"
+      },
+      "scope": {
+        "label": "Scope",
+        "device": "This device only",
+        "vault": "Vault-wide"
+      },
+      "save": "Set as default",
+      "saved": "Default set.",
+      "clear": "Clear this default",
+      "cleared": "Default cleared.",
+      "empty": "No installed models or configured providers yet."
+    }
+  },
   "errors": {
     "openFailed": "Failed to open",
     "nameConflict": "An instance with that name already exists",
     "invalidName": "Invalid name",
     "weakPassphrase": "Passphrase does not meet policy",
     "deviceInfoFailed": "Failed to load device info",
-    "aliasSaveFailed": "Failed to save device name"
+    "aliasSaveFailed": "Failed to save device name",
+    "prefSaveFailed": "Failed to save default model",
+    "prefClearFailed": "Failed to clear default model",
+    "prefLoadFailed": "Failed to load default model",
+    "modelListFailed": "Failed to load model list"
   }
 }
