@@ -446,27 +446,21 @@ pub async fn send_message(
     let assistant_message_id = Uuid::new_v4();
     let now = now_ms();
 
-    // Persist thread (if new), the user message, and this device's
-    // `chat.last_active_model_id` under one DB lock. Spec 002 §FR-009:
-    // `chat.last_active_model_id` is written EXCLUSIVELY here, never
-    // by `load_model` — the message is the user's intent signal, a
-    // picker-only click is not.
-    //
-    // A full atomic-Accepted-Send transaction with an `idempotencyKey`
-    // (contracts/tauri-commands.md) is a follow-up: MVP-P1 keeps the
-    // existing send-then-stream flow and rolls back the message +
-    // preference together if the stream fails to start.
+    // Persist the thread (if new) and user message under one DB lock.
+    // Spec 002 §FR-009: `chat.last_active_model_id` is written
+    // EXCLUSIVELY here, never by `load_model` — the message is the user's
+    // intent signal, a picker-only click is not. The preference is
+    // committed after adapter startup succeeds so a failed send cannot
+    // roll back a newer overlapping send's value.
     let insert_db = db.clone();
     let content_owned = args.content.clone();
     let session_model_id = session.model_id.clone();
     let session_provider_id = session.provider_id;
     let is_new_thread = args.thread_id.is_none();
     let this_device = db.device_id();
-    let previous_last_active = tauri::async_runtime::spawn_blocking(move || {
+    let preference_model_id = session_model_id.clone();
+    tauri::async_runtime::spawn_blocking(move || {
         insert_db.with_connection(|conn| {
-            let previous_last_active =
-                preferences::get(conn, PrefScope::Device(this_device), PREF_LAST_ACTIVE_MODEL)
-                    .map_err(haex_crdt::Error::from)?;
             if is_new_thread {
                 thread_store::insert_thread(
                     conn,
@@ -506,14 +500,7 @@ pub async fn send_message(
                 created_at: now,
             };
             msg_store::insert_message(conn, &user_msg).map_err(haex_crdt::Error::from)?;
-            preferences::insert_or_update(
-                conn,
-                PrefScope::Device(this_device),
-                PREF_LAST_ACTIVE_MODEL,
-                &session_model_id,
-            )
-            .map_err(haex_crdt::Error::from)?;
-            Ok(previous_last_active)
+            Ok(())
         })
     })
     .await
@@ -580,23 +567,7 @@ pub async fn send_message(
                         thread_store::delete_thread(conn, thread_id)
                             .map_err(haex_crdt::Error::from)?;
                     }
-                    match previous_last_active {
-                        Some(value) => preferences::insert_or_update(
-                            conn,
-                            PrefScope::Device(this_device),
-                            PREF_LAST_ACTIVE_MODEL,
-                            &value,
-                        )
-                        .map(|_| ())
-                        .map_err(haex_crdt::Error::from),
-                        None => preferences::delete(
-                            conn,
-                            PrefScope::Device(this_device),
-                            PREF_LAST_ACTIVE_MODEL,
-                        )
-                        .map(|_| ())
-                        .map_err(haex_crdt::Error::from),
-                    }
+                    Ok(())
                 })
             })
             .await;
@@ -605,14 +576,14 @@ pub async fn send_message(
                 Ok(Err(cleanup_error)) => {
                     return Err(HolziError::CrdtInit {
                         reason: format!(
-                            "adapter start: {error}; failed to clean up staged message or restore preference: {cleanup_error}"
+                            "adapter start: {error}; failed to clean up staged message or thread: {cleanup_error}"
                         ),
                     });
                 }
                 Err(cleanup_error) => {
                     return Err(HolziError::CrdtInit {
                         reason: format!(
-                            "adapter start: {error}; failed to clean up staged message or restore preference: {cleanup_error}"
+                            "adapter start: {error}; failed to clean up staged message or thread: {cleanup_error}"
                         ),
                     });
                 }
@@ -622,6 +593,26 @@ pub async fn send_message(
             });
         }
     };
+
+    let preference_db = db.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        preference_db.with_connection(|conn| {
+            preferences::insert_or_update(
+                conn,
+                PrefScope::Device(this_device),
+                PREF_LAST_ACTIVE_MODEL,
+                &preference_model_id,
+            )
+            .map(|_| ())
+            .map_err(haex_crdt::Error::from)
+        })
+    })
+    .await
+    .map_err(|e| HolziError::CrdtInit {
+        reason: format!("persist last active model join: {e}"),
+    })?
+    .map_err(HolziError::from)?;
+
     let abort = stream.abort_handle();
     {
         let mut g = chat

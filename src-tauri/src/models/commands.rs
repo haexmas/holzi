@@ -101,6 +101,7 @@ pub async fn download_model_from_hf(
     state: State<'_, AppState>,
     args: DownloadFromHfArgs,
 ) -> Result<InstalledModelPayload> {
+    let _publication_lock = paths::acquire_model_publication_lock(&args.id).await?;
     if let Some(existing) = paths::canonical_model_file(&app, &args.id)? {
         if existing.filename != args.hf_filename {
             return Err(HolziError::InvalidInput {
@@ -164,6 +165,7 @@ pub async fn import_model_from_file(
         .ok_or_else(|| HolziError::InvalidInput {
             reason: "source path has no filename".into(),
         })?;
+    let _publication_lock = paths::acquire_model_publication_lock(&args.id).await?;
     if let Some(existing) = paths::canonical_model_file(&app, &args.id)? {
         if existing.filename != filename {
             return Err(HolziError::InvalidInput {

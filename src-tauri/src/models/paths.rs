@@ -7,13 +7,38 @@
 //! separators so the `slug/filename` join cannot escape the models
 //! directory.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use tauri::{path::BaseDirectory, AppHandle, Manager};
 
 use crate::error::{HolziError, Result};
 
 pub const MODELS_DIRECTORY: &str = "models";
+
+static MODEL_PUBLICATION_LOCKS: OnceLock<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>> =
+    OnceLock::new();
+
+/// Serializes finalized-file publication for one model slug within this
+/// process. The guard must be held from the finalized-file conflict check
+/// through the download/import and catalog registration.
+pub async fn acquire_model_publication_lock(
+    slug: &str,
+) -> Result<tokio::sync::OwnedMutexGuard<()>> {
+    validate_slug(slug)?;
+    let lock = {
+        let locks = MODEL_PUBLICATION_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
+        let mut locks = locks.lock().map_err(|e| HolziError::CrdtInit {
+            reason: format!("model publication lock map poisoned: {e}"),
+        })?;
+        locks
+            .entry(slug.to_string())
+            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+            .clone()
+    };
+    Ok(lock.lock_owned().await)
+}
 
 /// Resolves `<AppLocalData>/models/`. Creates the directory if missing.
 pub fn models_root(app: &AppHandle) -> Result<PathBuf> {

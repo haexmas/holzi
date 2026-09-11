@@ -174,6 +174,7 @@ async function loadModel(id: string) {
   catch (e: unknown) {
     lastError.value = errString(e)
     loadingPhase.value = null
+    activeModel.value = null
   }
   finally {
     busy.value = false
