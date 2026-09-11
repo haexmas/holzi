@@ -12,7 +12,11 @@
     "typecheck": "nuxt typecheck",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
+    "tauri:dev:cuda": "tauri dev -- --features llm-cuda",
+    "tauri:dev:metal": "tauri dev -- --features llm-metal",
     "tauri:build": "tauri build",
+    "tauri:build:cuda": "tauri build -- --features llm-cuda",
+    "tauri:build:metal": "tauri build -- --features llm-metal",
     "generate:ts-types": "cd src-tauri && cargo test export_bindings -- --nocapture && cd .. && sed -i -E 's/[[:space:]]+$//' src/types/bindings/*.ts"
   },
   "dependencies": {
