@@ -142,15 +142,13 @@ pub struct CanonicalModelFile {
 /// The scan filters to regular files with a `.gguf` extension whose
 /// filename is valid UTF-8, ignores in-flight downloads/imports
 /// (`.part`, `.tmp` and other non-`.gguf` sidecars), and returns the
-/// lexicographically smallest surviving filename. That deterministic
-/// tie-break means `list_installed_models` and `load_local_model_by_id`
-/// pick the same file regardless of `read_dir` ordering.
+/// returns an explicit ambiguity error when more than one finalised file is
+/// present. This prevents `list_installed_models` and
+/// `load_local_model_by_id` from silently operating on an arbitrary file.
 ///
 /// Returns `Ok(None)` when the slug directory is missing or holds no
-/// finalised `.gguf` file — the caller decides whether that is a
-/// "not installed" signal (`list_installed_models`) or a load error
-/// (`load_local_model_by_id`). Filesystem errors other than
-/// `NotFound` surface as [`HolziError::Io`].
+/// finalised `.gguf` file. Filesystem errors other than `NotFound` surface as
+/// [`HolziError::Io`].
 pub fn canonical_model_file(app: &AppHandle, slug: &str) -> Result<Option<CanonicalModelFile>> {
     validate_slug(slug)?;
     let dir = models_root(app)?.join(slug);
@@ -177,10 +175,14 @@ pub fn canonical_model_file(app: &AppHandle, slug: &str) -> Result<Option<Canoni
         let meta = entry.metadata().map_err(HolziError::from)?;
         let path = entry.path();
         let size = meta.len();
-        match &candidate {
-            Some((existing_name, _, _)) if existing_name.as_str() <= name => {}
-            _ => candidate = Some((name.to_string(), path, size)),
+        if candidate.is_some() {
+            return Err(HolziError::InvalidInput {
+                reason: format!(
+                    "multiple finalized GGUF files found for model slug '{slug}'; remove all but one"
+                ),
+            });
         }
+        candidate = Some((name.to_string(), path, size));
     }
 
     let Some((filename, absolute_path, size_bytes)) = candidate else {

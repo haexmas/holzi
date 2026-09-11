@@ -3,17 +3,15 @@
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, State};
 use uuid::Uuid;
 
 #[cfg(feature = "llm-cpu")]
 use crate::adapters::local::LocalAdapter;
 use crate::adapters::types::{ChatMessage as LlmMessage, ChatRequest, ChatRole, StreamChunk};
 use crate::error::{HolziError, Result};
-use crate::identity::{installation_id_path, read_or_mint_installation_uuid};
 #[cfg(feature = "llm-cpu")]
 use crate::llm::local::LocalModel;
-#[cfg(feature = "llm-cpu")]
 use crate::models::paths;
 use crate::providers::build_adapter;
 use crate::state::AppState;
@@ -208,8 +206,6 @@ pub async fn load_model(
         }
     };
 
-    emit_load_progress(&app, &model_id, &name, LoadPhase::Ready, None);
-
     let info = LoadedModelInfo {
         model_id: session.model_id.clone(),
         name,
@@ -221,6 +217,8 @@ pub async fn load_model(
         reason: format!("chat.session mutex poisoned: {e}"),
     })?;
     *guard = Some(session);
+    drop(guard);
+    emit_load_progress(&app, &model_id, &info.name, LoadPhase::Ready, None);
     Ok(info)
 }
 
@@ -464,8 +462,11 @@ pub async fn send_message(
     let session_provider_id = session.provider_id;
     let is_new_thread = args.thread_id.is_none();
     let this_device = db.device_id();
-    tauri::async_runtime::spawn_blocking(move || {
+    let previous_last_active = tauri::async_runtime::spawn_blocking(move || {
         insert_db.with_connection(|conn| {
+            let previous_last_active =
+                preferences::get(conn, PrefScope::Device(this_device), PREF_LAST_ACTIVE_MODEL)
+                    .map_err(haex_crdt::Error::from)?;
             if is_new_thread {
                 thread_store::insert_thread(
                     conn,
@@ -512,7 +513,7 @@ pub async fn send_message(
                 &session_model_id,
             )
             .map_err(haex_crdt::Error::from)?;
-            Ok(())
+            Ok(previous_last_active)
         })
     })
     .await
@@ -579,16 +580,42 @@ pub async fn send_message(
                         thread_store::delete_thread(conn, thread_id)
                             .map_err(haex_crdt::Error::from)?;
                     }
-                    Ok(())
+                    match previous_last_active {
+                        Some(value) => preferences::insert_or_update(
+                            conn,
+                            PrefScope::Device(this_device),
+                            PREF_LAST_ACTIVE_MODEL,
+                            &value,
+                        )
+                        .map(|_| ())
+                        .map_err(haex_crdt::Error::from),
+                        None => preferences::delete(
+                            conn,
+                            PrefScope::Device(this_device),
+                            PREF_LAST_ACTIVE_MODEL,
+                        )
+                        .map(|_| ())
+                        .map_err(haex_crdt::Error::from),
+                    }
                 })
             })
             .await;
-            if let Err(cleanup_error) = cleanup {
-                return Err(HolziError::CrdtInit {
-                    reason: format!(
-                        "adapter start: {error}; failed to clean up staged message: {cleanup_error}"
-                    ),
-                });
+            match cleanup {
+                Ok(Ok(())) => {}
+                Ok(Err(cleanup_error)) => {
+                    return Err(HolziError::CrdtInit {
+                        reason: format!(
+                            "adapter start: {error}; failed to clean up staged message or restore preference: {cleanup_error}"
+                        ),
+                    });
+                }
+                Err(cleanup_error) => {
+                    return Err(HolziError::CrdtInit {
+                        reason: format!(
+                            "adapter start: {error}; failed to clean up staged message or restore preference: {cleanup_error}"
+                        ),
+                    });
+                }
             }
             return Err(HolziError::InvalidInput {
                 reason: format!("adapter start: {error}"),
@@ -751,15 +778,6 @@ pub async fn resolve_default_model(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<ResolveDefaultModelResult> {
-    let installation_id_file =
-        installation_id_path(&app.path().app_local_data_dir().map_err(|e| {
-            HolziError::PathResolution {
-                reason: format!("app_local_data_dir: {e}"),
-            }
-        })?);
-    let installation_uuid =
-        read_or_mint_installation_uuid(&installation_id_file).map_err(HolziError::from)?;
-
     let db = active_database(&state)?;
     let this_device = db.device_id();
     let db_clone = db.clone();
@@ -799,7 +817,6 @@ pub async fn resolve_default_model(
                         candidate_pref(last_active),
                         candidate_pref(default_device),
                         candidate_pref(default_vault),
-                        installation_uuid,
                     ),
                     installed_local,
                     api_key_ids,
@@ -811,7 +828,22 @@ pub async fn resolve_default_model(
             reason: format!("resolve_default_model join: {e}"),
         })?
         .map_err(HolziError::from)?;
-    let (last_active, default_device, default_vault, _installation) = result;
+    let (last_active, default_device, default_vault) = result;
+
+    // Validate API-key candidates through the same provider-row, model-row,
+    // credential, legacy-repair, and adapter checks used by load_model.
+    let mut loadable_api_key_ids = Vec::new();
+    for composite_id in api_key_ids {
+        let Some((provider_id_str, _)) = composite_id.split_once(':') else {
+            continue;
+        };
+        if load_api_key_model(&state, &composite_id, provider_id_str)
+            .await
+            .is_ok()
+        {
+            loadable_api_key_ids.push(composite_id);
+        }
+    }
 
     // Filter installed_local down to those that actually have a
     // canonical file on disk right now.
@@ -822,7 +854,7 @@ pub async fn resolve_default_model(
         }
     }
     let is_loadable = |id: &str| -> bool {
-        api_key_ids.iter().any(|s| s == id) || loadable_local.iter().any(|s| s == id)
+        loadable_api_key_ids.iter().any(|s| s == id) || loadable_local.iter().any(|s| s == id)
     };
 
     if let Some(id) = last_active.filter(|id| is_loadable(id)) {
@@ -852,7 +884,7 @@ pub async fn resolve_default_model(
             source: ResolveSource::FirstAvailable,
         });
     }
-    if let Some(id) = api_key_ids.into_iter().next() {
+    if let Some(id) = loadable_api_key_ids.into_iter().next() {
         return Ok(ResolveDefaultModelResult {
             model_id: Some(id),
             source: ResolveSource::FirstAvailable,

@@ -23,7 +23,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
     const { currentDeviceInfoAsync } = useDevice()
     const info = await currentDeviceInfoAsync()
     if (info.alias === null) {
-      return navigateTo(`/onboarding/${instance}`)
+      return navigateTo(`/onboarding/${encodeURIComponent(instance)}`)
     }
   }
   catch {

@@ -101,6 +101,16 @@ pub async fn download_model_from_hf(
     state: State<'_, AppState>,
     args: DownloadFromHfArgs,
 ) -> Result<InstalledModelPayload> {
+    if let Some(existing) = paths::canonical_model_file(&app, &args.id)? {
+        if existing.filename != args.hf_filename {
+            return Err(HolziError::InvalidInput {
+                reason: format!(
+                    "model slug '{}' already has finalized GGUF '{}'; cannot add '{}'",
+                    args.id, existing.filename, args.hf_filename
+                ),
+            });
+        }
+    }
     let destination = paths::model_file_path(&app, &args.id, &args.hf_filename)?;
     let relative = paths::relative_path(&args.id, &args.hf_filename)?;
     let url = catalog::hf_resolve_url(&args.hf_repo, &args.hf_filename);
@@ -154,6 +164,16 @@ pub async fn import_model_from_file(
         .ok_or_else(|| HolziError::InvalidInput {
             reason: "source path has no filename".into(),
         })?;
+    if let Some(existing) = paths::canonical_model_file(&app, &args.id)? {
+        if existing.filename != filename {
+            return Err(HolziError::InvalidInput {
+                reason: format!(
+                    "model slug '{}' already has finalized GGUF '{}'; cannot add '{}'",
+                    args.id, existing.filename, filename
+                ),
+            });
+        }
+    }
     let destination = paths::model_file_path(&app, &args.id, &filename)?;
     let relative = paths::relative_path(&args.id, &filename)?;
 

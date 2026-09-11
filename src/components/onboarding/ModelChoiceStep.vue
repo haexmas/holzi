@@ -67,7 +67,11 @@ function fitLabelKey(fit: string): string {
     </p>
 
     <div class="flex items-center justify-between">
-      <UiButton variant="ghost" @click="emit('back')">
+      <UiButton
+        variant="ghost"
+        :disabled="downloadingId !== null"
+        @click="emit('back')"
+      >
         {{ t('onboarding.wizard.back') }}
       </UiButton>
       <UiButton

@@ -18,7 +18,7 @@ const { setPrefAsync } = usePreferences()
 
 const instanceName = computed(() => {
   const raw = route.params.instance
-  return typeof raw === 'string' ? decodeURIComponent(raw) : Array.isArray(raw) ? decodeURIComponent(raw[0] ?? '') : ''
+  return typeof raw === 'string' ? raw : Array.isArray(raw) ? (raw[0] ?? '') : ''
 })
 
 const step = ref<'alias' | 'model'>('alias')
