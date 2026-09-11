@@ -64,6 +64,11 @@ const pendingStreamEvents = new Map<string, PendingStreamEvents>()
 const input = ref('')
 const busy = ref(false)
 const lastError = ref<string | null>(null)
+const pendingSend = ref<{
+  threadId: string | null
+  content: string
+  idempotencyKey: string
+} | null>(null)
 
 let unlistenToken: UnlistenFn | null = null
 let unlistenComplete: UnlistenFn | null = null
@@ -201,17 +206,21 @@ async function downloadCatalogEntry(entry: CatalogEntryWithFit) {
 }
 
 /** Sends the current input and seeds local message placeholders for streaming. */
-async function send() {
-  const content = input.value.trim()
+async function send(retryPending = false) {
+  const retry = retryPending ? pendingSend.value : null
+  const content = retry?.content ?? input.value.trim()
   if (!content || busy.value) return
-  input.value = ''
+  if (!retry) input.value = ''
   busy.value = true
   lastError.value = null
+  const request = retry ?? {
+    threadId: activeThreadId.value,
+    content,
+    idempotencyKey: crypto.randomUUID(),
+  }
+  pendingSend.value = null
   try {
-    const result = await chat.sendMessageAsync({
-      threadId: activeThreadId.value,
-      content,
-    })
+    const result = await chat.sendMessageAsync(request)
     activeThreadId.value = result.threadId
     // Seed the assistant message placeholder so the UI can show
     // tokens as they stream in.
@@ -265,6 +274,10 @@ async function send() {
     await scrollToBottom()
   }
   catch (e: unknown) {
+    // The initial invoke may have been accepted even when its response was
+    // lost. Keep the exact same key available for a safe retry; stream
+    // errors are handled separately and deliberately do not retry.
+    pendingSend.value = request
     lastError.value = errString(e)
     busy.value = false
   }
@@ -579,12 +592,21 @@ onBeforeUnmount(() => {
     <section class="flex-1 flex flex-col">
       <div v-if="lastError" class="p-3 bg-destructive/10 text-destructive text-sm flex items-start justify-between gap-2">
         <span>{{ lastError }}</span>
-        <button
-          class="text-xs underline shrink-0"
-          @click="lastError = null"
-        >
-          schließen
-        </button>
+        <span class="flex gap-2 shrink-0">
+          <button
+            v-if="pendingSend"
+            class="text-xs underline"
+            @click="send(true)"
+          >
+            erneut versuchen
+          </button>
+          <button
+            class="text-xs underline"
+            @click="lastError = null"
+          >
+            schließen
+          </button>
+        </span>
       </div>
 
       <div v-if="loadingLabel" class="p-3 bg-blue-500/10 text-blue-800 text-sm" role="status">

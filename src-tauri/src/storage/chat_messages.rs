@@ -6,7 +6,7 @@
 //! `finish_reason` and token counts.
 
 use haex_crdt::crdt::columns::HLC_TIMESTAMP_COLUMN;
-use haex_crdt::rusqlite::{params, Connection, Result};
+use haex_crdt::rusqlite::{params, Connection, OptionalExtension, Result};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -23,6 +23,10 @@ pub struct ChatMessage {
     pub completion_tokens: Option<i64>,
     pub finish_reason: Option<FinishReason>,
     pub created_at: i64,
+    /// Set only on the user-message row of a `send_message` call
+    /// (contract §send_message). `None` for every assistant/system row
+    /// and for messages inserted before migration 0013.
+    pub idempotency_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -85,8 +89,8 @@ pub fn insert_message(conn: &Connection, m: &ChatMessage) -> Result<usize> {
         "INSERT INTO chat_messages \
            (id, thread_id, parent_id, role, content, \
             provider_id, model_id, prompt_tokens, completion_tokens, \
-            finish_reason, created_at, {HLC_TIMESTAMP_COLUMN}) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, current_hlc())"
+            finish_reason, created_at, idempotency_key, {HLC_TIMESTAMP_COLUMN}) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, current_hlc())"
     );
     conn.execute(
         &sql,
@@ -102,8 +106,22 @@ pub fn insert_message(conn: &Connection, m: &ChatMessage) -> Result<usize> {
             m.completion_tokens,
             m.finish_reason.map(|r| r.as_str()),
             m.created_at,
+            m.idempotency_key,
         ],
     )
+}
+
+/// Looks up the user-message row carrying the given `idempotency_key`,
+/// if any. Used by `send_message` to dedup retries before minting a new
+/// insert (contract §send_message).
+pub fn find_by_idempotency_key(conn: &Connection, key: &str) -> Result<Option<ChatMessage>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, thread_id, parent_id, role, content, \
+                provider_id, model_id, prompt_tokens, completion_tokens, \
+                finish_reason, created_at, idempotency_key \
+         FROM chat_messages WHERE idempotency_key = ?1",
+    )?;
+    stmt.query_row(params![key], row_to_message).optional()
 }
 
 /// Removes a message that was staged before adapter startup completed.
@@ -123,7 +141,7 @@ pub fn list_messages(conn: &Connection, thread_id: Uuid) -> Result<Vec<ChatMessa
     let mut stmt = conn.prepare(
         "SELECT id, thread_id, parent_id, role, content, \
                 provider_id, model_id, prompt_tokens, completion_tokens, \
-                finish_reason, created_at \
+                finish_reason, created_at, idempotency_key \
          FROM chat_messages WHERE thread_id = ?1 \
          ORDER BY created_at ASC, id ASC",
     )?;
@@ -154,6 +172,7 @@ fn row_to_message(row: &haex_crdt::rusqlite::Row<'_>) -> Result<ChatMessage> {
             Some(s) => Some(FinishReason::parse(s).ok_or_else(|| bad_enum(9, s))?),
         },
         created_at: row.get(10)?,
+        idempotency_key: row.get(11)?,
     })
 }
 

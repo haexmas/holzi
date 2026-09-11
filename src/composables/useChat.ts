@@ -34,12 +34,22 @@ export interface SendMessageArgs {
   content: string
   systemPrompt?: string
   maxNewTokens?: number
+  /**
+   * Stable across every retry of the same send. Defaults to a fresh
+   * `crypto.randomUUID()` when omitted — pass the same value back in
+   * on a frontend retry (e.g. after a network error) so the backend
+   * recognizes it and returns the original result instead of creating
+   * a second user message (contract §send_message).
+   */
+  idempotencyKey?: string
 }
 
 export interface SendMessageResult {
   threadId: string
   userMessageId: string
   assistantMessageId: string
+  /** The key used for this send; reuse it when retrying the same invoke. */
+  idempotencyKey: string
 }
 
 export interface TokenEvent {
@@ -100,7 +110,11 @@ export function useChat() {
 
   /** Persists a user turn and starts streaming the assistant response. */
   async function sendMessageAsync(args: SendMessageArgs): Promise<SendMessageResult> {
-    return await invoke<SendMessageResult>('send_message', { args })
+    const idempotencyKey = args.idempotencyKey ?? crypto.randomUUID()
+    const result = await invoke<Omit<SendMessageResult, 'idempotencyKey'>>('send_message', {
+      args: { ...args, idempotencyKey },
+    })
+    return { ...result, idempotencyKey }
   }
 
   /** Aborts the active generation, if one is running. */
