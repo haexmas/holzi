@@ -15,7 +15,13 @@ use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
+use crate::hardware::{classify, Fit, HardwareInfo, ModelFitInputs};
+
 const CATALOG_JSON: &str = include_str!("model_catalog.json");
+
+#[cfg(test)]
+mod catalog_tests;
+pub mod commands;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CatalogEntry {
@@ -89,9 +95,9 @@ pub async fn list_catalog() -> Vec<CatalogEntryWithFit> {
         .iter()
         .cloned()
         .map(|entry| {
-            let fit = crate::hardware::classify(
+            let fit = classify(
                 &hw,
-                crate::hardware::ModelFitInputs {
+                ModelFitInputs {
                     file_size_bytes: entry.approx_size_bytes,
                     context_window: Some(entry.context_window),
                 },
@@ -99,4 +105,99 @@ pub async fn list_catalog() -> Vec<CatalogEntryWithFit> {
             CatalogEntryWithFit { entry, fit }
         })
         .collect()
+}
+
+/// Which onboarding-tier a recommended model represents. See spec 002
+/// §"Onboarding" and data-model.md.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Tier {
+    /// Smallest catalog entry that fits.
+    Easy,
+    /// Largest catalog entry that fits.
+    Sweet,
+    /// Largest catalog entry that fits or is `Tight`.
+    Max,
+}
+
+/// One tier recommendation shown as a chip in the onboarding wizard.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TierRecommendation {
+    pub tier: Tier,
+    pub entry: CatalogEntry,
+    pub fit: Fit,
+}
+
+/// Picks three tier-labelled model suggestions for the onboarding
+/// wizard from the compiled catalog against the current hardware
+/// snapshot.
+///
+/// Algorithm (see `contracts/tauri-commands.md` §catalog_recommend_tiers):
+/// 1. Sort candidates ascending by `(approx_size_bytes, id)`.
+/// 2. `Easy` = smallest `Fits`; fallback smallest `Tight`, then
+///    `Unknown`, then `TooBig`, in that total order.
+/// 3. `Sweet` = largest `Fits`; fallback: median candidate at
+///    `(n - 1) / 2`.
+/// 4. `Max` = largest `Fits` or `Tight`; fallback: the resolved
+///    `Sweet`.
+/// 5. Missing tiers reuse their fallback so the return is always three
+///    recommendations for a non-empty catalog.
+///
+/// Returns `None` only when the catalog is empty (which never happens
+/// in production because `entries()` reads the built-in JSON blob).
+pub fn recommend_tiers(hw: &HardwareInfo) -> Option<[TierRecommendation; 3]> {
+    let mut sorted: Vec<(CatalogEntry, Fit)> = entries()
+        .iter()
+        .cloned()
+        .map(|entry| {
+            let fit = classify(
+                hw,
+                ModelFitInputs {
+                    file_size_bytes: entry.approx_size_bytes,
+                    context_window: Some(entry.context_window),
+                },
+            );
+            (entry, fit)
+        })
+        .collect();
+    if sorted.is_empty() {
+        return None;
+    }
+    sorted.sort_by(|a, b| {
+        a.0.approx_size_bytes
+            .cmp(&b.0.approx_size_bytes)
+            .then_with(|| a.0.id.cmp(&b.0.id))
+    });
+
+    let smallest_fits = sorted.iter().find(|(_, f)| *f == Fit::Fits);
+    let smallest_tight = sorted.iter().find(|(_, f)| *f == Fit::Tight);
+    let smallest_unknown = sorted.iter().find(|(_, f)| *f == Fit::Unknown);
+    let smallest_too_big = sorted.iter().find(|(_, f)| *f == Fit::TooBig);
+    let easy = smallest_fits
+        .or(smallest_tight)
+        .or(smallest_unknown)
+        .or(smallest_too_big)
+        .cloned()
+        .unwrap_or_else(|| sorted[0].clone());
+
+    let largest_fits = sorted.iter().rev().find(|(_, f)| *f == Fit::Fits);
+    let median = sorted[(sorted.len() - 1) / 2].clone();
+    let sweet = largest_fits.cloned().unwrap_or(median);
+
+    let largest_fits_or_tight = sorted
+        .iter()
+        .rev()
+        .find(|(_, f)| matches!(f, Fit::Fits | Fit::Tight));
+    let max = largest_fits_or_tight
+        .cloned()
+        .unwrap_or_else(|| sweet.clone());
+
+    let mk =
+        |tier: Tier, (entry, fit): (CatalogEntry, Fit)| TierRecommendation { tier, entry, fit };
+    Some([
+        mk(Tier::Easy, easy),
+        mk(Tier::Sweet, sweet),
+        mk(Tier::Max, max),
+    ])
 }

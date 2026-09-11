@@ -1,6 +1,7 @@
 pub mod adapters;
 pub mod catalog;
 pub mod chat;
+pub mod device;
 pub mod error;
 pub mod hardware;
 pub mod identity;
@@ -15,12 +16,15 @@ pub mod storage;
 pub use error::{HolziError, Result};
 pub use state::{ActiveInstanceHandle, AppState};
 
+use catalog::commands::catalog_recommend_tiers;
 use catalog::list_catalog;
 use chat::commands::{
-    abort_current_generation, active_model_info, load_model, send_message, unload_local_model,
+    abort_current_generation, active_model_info, load_model, resolve_default_model, send_message,
+    unload_local_model,
 };
 use chat::session::ChatState;
 use chat::thread_commands::{create_thread, list_messages, list_threads};
+use device::commands::{current_device_info, update_device_alias};
 use hardware::get_hardware_info;
 use instances::{
     cleanup_orphans_on_startup, close_instance, create_instance, list_instances, open_instance,
@@ -32,6 +36,7 @@ use models::commands::{
 use providers::{
     add_provider, delete_provider, list_provider_models, list_providers, refresh_provider_models,
 };
+use storage::preferences_commands::{clear_pref, get_pref, set_pref};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 /// Builds and starts the holzi Tauri application.
@@ -63,6 +68,7 @@ pub fn run() {
             close_instance,
             get_hardware_info,
             list_catalog,
+            catalog_recommend_tiers,
             add_provider,
             list_providers,
             delete_provider,
@@ -76,11 +82,17 @@ pub fn run() {
             load_model,
             unload_local_model,
             active_model_info,
+            resolve_default_model,
             send_message,
             abort_current_generation,
             create_thread,
             list_threads,
             list_messages,
+            current_device_info,
+            update_device_alias,
+            get_pref,
+            set_pref,
+            clear_pref,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

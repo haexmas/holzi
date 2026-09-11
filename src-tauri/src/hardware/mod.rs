@@ -22,6 +22,7 @@ use sysinfo::System;
 mod fit;
 #[cfg(test)]
 mod fit_tests;
+pub mod hostname;
 
 pub use fit::{classify, Fit, ModelFitInputs};
 

@@ -7,6 +7,8 @@ import {
   type Message,
   type MessageCompleteEvent,
   type MessageErrorEvent,
+  type ModelLoadPhase,
+  type ModelLoadProgressEvent,
   type Thread,
   type TokenEvent,
 } from '~/composables/useChat'
@@ -18,13 +20,20 @@ import {
   type ProviderModel,
 } from '~/composables/useProviders'
 import { useInstance } from '~/composables/useInstance'
+import { usePreferences } from '~/composables/usePreferences'
+
+definePageMeta({
+  middleware: ['onboarded'],
+})
 
 const route = useRoute()
+const { t } = useI18n()
 const chat = useChat()
 const models = useModels()
 const catalog = useCatalog()
 const providers = useProviders()
 const { closeAsync } = useInstance()
+const { resolveDefaultModelAsync } = usePreferences()
 const store = useInstancesStore()
 
 const instanceName = computed(() => String(route.params.instance ?? ''))
@@ -65,6 +74,15 @@ let unlistenDownloadComplete: UnlistenFn | null = null
 const downloadingId = ref<string | null>(null)
 const downloadProgressBytes = ref<number>(0)
 const downloadTotalBytes = ref<number | null>(null)
+
+// Structured loading state driven by the `model-load-progress` event.
+// Spec 002 §FR-015a: chat input stays disabled while `phase` is not
+// `ready`. The label is translated in the template via
+// `chat.loading.<phase>`.
+const loadingPhase = ref<ModelLoadPhase | null>(null)
+const loadingModelName = ref<string>('')
+const loadingProviderName = ref<string | null>(null)
+let unlistenLoadProgress: UnlistenFn | null = null
 
 const activeMessages = computed<Message[]>(() => {
   if (!activeThreadId.value) return []
@@ -155,6 +173,8 @@ async function loadModel(id: string) {
   }
   catch (e: unknown) {
     lastError.value = errString(e)
+    loadingPhase.value = null
+    activeModel.value = null
   }
   finally {
     busy.value = false
@@ -418,11 +438,39 @@ function reasoningFor(messageId: string): string {
   return reasoningByMessage.value[messageId] ?? ''
 }
 
+function onLoadProgress(e: ModelLoadProgressEvent) {
+  loadingPhase.value = e.phase
+  loadingModelName.value = e.modelName
+  loadingProviderName.value = e.providerName ?? null
+  if (e.phase === 'ready') {
+    // Small delay so the "Ready" state is visible before it hides.
+    // Kept synchronous — the user's next interaction shouldn't wait.
+    loadingPhase.value = null
+  }
+}
+
+/** Localised label for the current loading phase, if any. */
+const loadingLabel = computed<string | null>(() => {
+  const phase = loadingPhase.value
+  if (!phase || phase === 'ready') return null
+  const key
+    = phase === 'connecting'
+      ? 'chat.loading.connecting'
+      : phase === 'cuda-jit-warmup'
+        ? 'chat.loading.cudaJitWarmup'
+        : 'chat.loading.loading'
+  return t(key, {
+    modelName: loadingModelName.value,
+    providerName: loadingProviderName.value ?? '',
+  })
+})
+
 onMounted(async () => {
-  [unlistenToken, unlistenComplete, unlistenError] = await Promise.all([
+  [unlistenToken, unlistenComplete, unlistenError, unlistenLoadProgress] = await Promise.all([
     chat.onToken(handleToken),
     chat.onMessageComplete(handleComplete),
     chat.onMessageError(handleError),
+    chat.onModelLoadProgress(onLoadProgress),
   ])
 
   activeModel.value = await chat.activeModelInfoAsync()
@@ -439,12 +487,29 @@ onMounted(async () => {
   unlistenDownloadComplete = await models.onDownloadComplete(() => {
     // Handled inline in downloadCatalogEntry
   })
+
+  // Session-start resolver: pick the model per spec 002 §FR-014 and
+  // auto-load it. `first_available` is a passive pick — it must not
+  // echo back into last_active (the backend's load_model already
+  // skips that; the frontend just calls loadModelAsync).
+  if (!activeModel.value) {
+    try {
+      const resolved = await resolveDefaultModelAsync()
+      if (resolved.modelId) {
+        await loadModel(resolved.modelId)
+      }
+    }
+    catch (e: unknown) {
+      lastError.value = errString(e)
+    }
+  }
 })
 
 onBeforeUnmount(() => {
   unlistenToken?.()
   unlistenComplete?.()
   unlistenError?.()
+  unlistenLoadProgress?.()
   unlistenDownloadProgress?.()
   unlistenDownloadComplete?.()
 })
@@ -520,6 +585,10 @@ onBeforeUnmount(() => {
         >
           schließen
         </button>
+      </div>
+
+      <div v-if="loadingLabel" class="p-3 bg-blue-500/10 text-blue-800 text-sm" role="status">
+        {{ loadingLabel }}
       </div>
 
       <div v-if="noModelsInstalled" class="p-6 flex-1 overflow-y-auto">
@@ -618,7 +687,7 @@ onBeforeUnmount(() => {
             v-model="input"
             class="flex-1 bg-background border border-border rounded px-3 py-2 text-sm"
             placeholder="Nachricht schreiben …"
-            :disabled="busy && streamingMessageId === null"
+            :disabled="(busy && streamingMessageId === null) || loadingPhase !== null"
           >
           <UiButton
             v-if="streamingMessageId"
@@ -631,7 +700,7 @@ onBeforeUnmount(() => {
           <UiButton
             v-else
             type="submit"
-            :disabled="!input.trim() || busy"
+            :disabled="!input.trim() || busy || loadingPhase !== null"
           >
             Senden
           </UiButton>

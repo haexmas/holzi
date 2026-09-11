@@ -18,12 +18,65 @@
     },
     "lock": {
       "submit": "Sperren"
+    },
+    "wizard": {
+      "title": "Ersteinrichtung",
+      "subtitle": "Kurz einrichten, dann kann's losgehen.",
+      "next": "Weiter",
+      "back": "Zurück",
+      "finish": "Fertig",
+      "loadingDeviceInfo": "Geräteinformationen werden geladen…"
+    },
+    "alias": {
+      "label": "Gerätename",
+      "description": "Wie soll dieses Gerät im Vault heißen? Der Name ist später in den Einstellungen editierbar.",
+      "defaultPlaceholder": "Neues Gerät",
+      "required": "Bitte einen Namen eingeben."
+    },
+    "model": {
+      "title": "Modell auswählen",
+      "description": "Wähle ein passendes Modell für dieses Gerät — oder richte später einen Anbieter ein.",
+      "tier": {
+        "easy": "Leichtgewicht",
+        "sweet": "Empfohlen",
+        "max": "Maximum",
+        "laterViaProvider": "Später via Anbieter"
+      },
+      "fit": {
+        "fits": "Passt gut",
+        "tight": "Knapp",
+        "too_big": "Zu groß",
+        "unknown": "Unbekannt"
+      },
+      "downloading": "Lade Modell herunter…",
+      "downloadFailed": "Download fehlgeschlagen",
+      "empty": "Keine Katalog-Modelle verfügbar."
     }
+  },
+  "workspace": {
+    "heading": "Arbeitsbereich: {instance}",
+    "chatFab": {
+      "openTitle": "Chat öffnen"
+    },
+    "settings": {
+      "iconTitle": "Einstellungen"
+    }
+  },
+  "chat": {
+    "loading": {
+      "connecting": "Verbinde mit {providerName}…",
+      "loading": "Lade {modelName}…",
+      "cudaJitWarmup": "Optimiere GPU für erste Nutzung von {modelName}, dauert einmalig etwa 30 Sekunden…",
+      "ready": "Bereit"
+    },
+    "noModel": "Kein Modell verfügbar"
   },
   "errors": {
     "openFailed": "Öffnen fehlgeschlagen",
     "nameConflict": "Eine Instanz mit diesem Namen existiert bereits",
     "invalidName": "Ungültiger Name",
-    "weakPassphrase": "Passphrase erfüllt nicht die Richtlinie"
+    "weakPassphrase": "Passphrase erfüllt nicht die Richtlinie",
+    "deviceInfoFailed": "Geräteinformationen konnten nicht geladen werden",
+    "aliasSaveFailed": "Gerätename konnte nicht gespeichert werden"
   }
 }

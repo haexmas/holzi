@@ -16,7 +16,12 @@
 
 pub mod chat_messages;
 pub mod chat_threads;
-pub mod device_downloaded_models;
 pub mod known_devices;
 pub mod models;
+pub mod preferences;
+pub mod preferences_commands;
+#[cfg(test)]
+pub mod preferences_commands_tests;
+#[cfg(test)]
+pub mod preferences_tests;
 pub mod providers;

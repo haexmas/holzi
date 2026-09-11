@@ -14,6 +14,7 @@ use haex_crdt::{DatabaseBootstrap, Error as CrdtError, Result as CrdtResult};
 use uuid::Uuid;
 
 use super::installation::read_or_mint_installation_uuid;
+use super::VAULT_SCOPE_UUID;
 
 /// Bootstrap wired to a specific `<AppLocalData>/installation-id` path. In
 /// production the path is resolved from `AppHandle::path().app_local_data_dir()`;
@@ -44,6 +45,20 @@ impl HolziBootstrap {
 impl DatabaseBootstrap for HolziBootstrap {
     /// Ensures the installation, device, and vault identities exist before HLC setup.
     fn bootstrap(&self, tx: &Transaction<'_>) -> CrdtResult<Uuid> {
+        // 0. Vault-scope sentinel row (see ADR-0001 and spec 002
+        //    §"Vault Scope Sentinel"). Every device inserts it idempotently
+        //    on every open so vault-wide `preferences` rows have a valid
+        //    FK target under `known_devices(vault_device_uuid)`. The
+        //    values are byte-for-byte identical across devices, so parallel
+        //    sync inserts collapse conflict-free via LWW.
+        tx.execute(
+            "INSERT OR IGNORE INTO known_devices \
+             (installation_uuid, vault_device_uuid, alias, first_seen) \
+             VALUES (?1, ?2, NULL, 0)",
+            params![VAULT_SCOPE_UUID.to_string(), VAULT_SCOPE_UUID.to_string()],
+        )
+        .map_err(|e| CrdtError::Message(format!("known_devices sentinel insert: {e}")))?;
+
         // 1. Installation UUID from `<AppLocalData>/installation-id`, minted
         //    and fsynced on first open of this installation.
         let installation_uuid = read_or_mint_installation_uuid(&self.installation_id_path)

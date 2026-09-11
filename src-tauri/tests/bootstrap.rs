@@ -13,12 +13,12 @@ use std::thread;
 
 use haex_crdt::crdt::columns::HLC_TIMESTAMP_COLUMN;
 use haex_crdt::rusqlite::params;
-use haex_crdt::{
-    Database, DatabaseConfig, NoopSignatureProvider, ScanFilters, SqlCipherKey,
-    DEFAULT_TRIGGER_VERSION,
-};
+use haex_crdt::{Database, DatabaseConfig, NoopSignatureProvider, ScanFilters, SqlCipherKey};
 
-use holzi_lib::identity::{holzi_migration_source, installation_id_path, HolziBootstrap};
+use holzi_lib::identity::{
+    holzi_migration_source, installation_id_path, HolziBootstrap, HOLZI_TRIGGER_VERSION,
+    VAULT_SCOPE_UUID,
+};
 use holzi_lib::storage::known_devices;
 
 const PASSPHRASE: &str = "etappe1-integration-test";
@@ -36,8 +36,21 @@ fn make_config(
         bootstrap: Arc::new(HolziBootstrap::new(installation_id).with_alias("test")),
         signature_provider: Arc::new(NoopSignatureProvider),
         migration_source: holzi_migration_source(),
-        trigger_version: DEFAULT_TRIGGER_VERSION,
+        trigger_version: HOLZI_TRIGGER_VERSION,
     }
+}
+
+/// Number of real (non-sentinel) `known_devices` rows.
+fn count_real_known_devices(db: &Database) -> i64 {
+    db.with_connection(|c| {
+        c.query_row(
+            "SELECT COUNT(*) FROM known_devices WHERE vault_device_uuid != ?1",
+            params![VAULT_SCOPE_UUID.to_string()],
+            |r| r.get::<_, i64>(0),
+        )
+        .map_err(Into::into)
+    })
+    .expect("count known_devices")
 }
 
 #[test]
@@ -71,14 +84,13 @@ fn bootstrap_genesis_and_reopen_reuse_uuid() {
         .expect("vault_identity count");
     assert_eq!(ident_count, 1, "genesis must insert vault_identity");
 
-    // known_devices row for this installation present after genesis.
-    let known_count: i64 = db
-        .with_connection(|c| {
-            c.query_row("SELECT COUNT(*) FROM known_devices", [], |r| r.get(0))
-                .map_err(Into::into)
-        })
-        .expect("known_devices count");
-    assert_eq!(known_count, 1, "genesis must insert one known_devices row");
+    // known_devices row for this installation present after genesis
+    // (the sentinel row is filtered out — see spec 002 §"Vault Scope Sentinel").
+    assert_eq!(
+        count_real_known_devices(&db),
+        1,
+        "genesis must insert one real known_devices row (sentinel excluded)"
+    );
 
     drop(db);
 
@@ -97,15 +109,10 @@ fn bootstrap_genesis_and_reopen_reuse_uuid() {
         "reopen must reuse the vault_device_uuid from genesis"
     );
 
-    let known_count_after: i64 = db2
-        .with_connection(|c| {
-            c.query_row("SELECT COUNT(*) FROM known_devices", [], |r| r.get(0))
-                .map_err(Into::into)
-        })
-        .expect("known_devices count after reopen");
     assert_eq!(
-        known_count_after, 1,
-        "reopen must not insert a second known_devices row"
+        count_real_known_devices(&db2),
+        1,
+        "reopen must not insert a second real known_devices row"
     );
 }
 
