@@ -12,17 +12,110 @@
 
 use std::time::Instant;
 
-use mistralrs::{RequestBuilder, Response, TextMessageRole, TextMessages};
+use mistralrs::{
+    CalledFunction, Function, RequestBuilder, Response, TextMessageRole, Tool, ToolCallResponse,
+    ToolCallType, ToolType,
+};
 use tokio::sync::mpsc;
 
 use super::LocalModel;
-use crate::adapters::types::{AdapterStream, ChatRequest, ChatRole, StreamChunk, StreamError};
+use crate::adapters::types::{
+    AdapterStream, ChatRequest, ChatRole, StreamChunk, StreamError, ToolCall, ToolSpec,
+};
 
-fn role_to_mistralrs(role: ChatRole) -> TextMessageRole {
-    match role {
-        ChatRole::User => TextMessageRole::User,
-        ChatRole::Assistant => TextMessageRole::Assistant,
+/// JSON-Schema `input_schema` → mistralrs' `Function.parameters` shape
+/// (research.md §2). `None` when the schema is not a JSON object (should
+/// not happen for a well-formed `ToolSpec`, but mistralrs' type is an
+/// `Option` so there is no lossy fallback needed).
+fn to_mistralrs_tool(spec: &ToolSpec) -> Tool {
+    let parameters = spec
+        .input_schema
+        .as_object()
+        .map(|obj| obj.clone().into_iter().collect());
+    Tool {
+        tp: ToolType::Function,
+        function: Function {
+            description: Some(spec.description.clone()),
+            name: spec.name.clone(),
+            parameters,
+        },
     }
+}
+
+/// `ToolCallResponse.function.arguments` is a JSON string (research.md
+/// §2); a malformed one (should not happen) degrades to an empty object
+/// rather than dropping the call.
+fn from_mistralrs_tool_call(t: &ToolCallResponse) -> ToolCall {
+    let input = serde_json::from_str(&t.function.arguments).unwrap_or(serde_json::json!({}));
+    ToolCall {
+        id: t.id.clone(),
+        name: t.function.name.clone(),
+        input,
+    }
+}
+
+/// Builds the request, translating the flat per-row history (data-model.md)
+/// into mistralrs' message shape: consecutive `ToolCall` rows become one
+/// `add_message_with_tool_call`, and each `ToolResult` row becomes its own
+/// `add_tool_message` — mirroring the Anthropic adapter's grouping
+/// (research.md §1/§2 both being JSON-Schema/tool-call-shaped, just with
+/// different wire encodings).
+fn build_request(req: &ChatRequest) -> RequestBuilder {
+    let mut builder = RequestBuilder::new();
+    if let Some(sys) = req.system_prompt.as_ref() {
+        builder = builder.add_message(TextMessageRole::System, sys);
+    }
+
+    let mut i = 0;
+    while i < req.messages.len() {
+        match &req.messages[i].role {
+            ChatRole::User => {
+                builder = builder.add_message(TextMessageRole::User, &req.messages[i].content);
+                i += 1;
+            }
+            ChatRole::Assistant => {
+                builder =
+                    builder.add_message(TextMessageRole::Assistant, &req.messages[i].content);
+                i += 1;
+            }
+            ChatRole::ToolCall { .. } => {
+                let mut calls = Vec::new();
+                while let Some(ChatRole::ToolCall { id, name, input }) =
+                    req.messages.get(i).map(|m| &m.role)
+                {
+                    calls.push(ToolCallResponse {
+                        index: calls.len(),
+                        id: id.clone(),
+                        tp: ToolCallType::Function,
+                        function: CalledFunction {
+                            name: name.clone(),
+                            arguments: serde_json::to_string(input).unwrap_or_else(|_| "{}".to_string()),
+                        },
+                    });
+                    i += 1;
+                }
+                builder = builder.add_message_with_tool_call(TextMessageRole::Assistant, "", calls);
+            }
+            ChatRole::ToolResult { .. } => {
+                let ChatRole::ToolResult {
+                    call_id, content, ..
+                } = &req.messages[i].role
+                else {
+                    unreachable!()
+                };
+                builder = builder.add_tool_message(content, call_id);
+                i += 1;
+            }
+        }
+    }
+
+    if let Some(cap) = req.max_new_tokens {
+        builder = builder.set_sampler_max_len(cap);
+    }
+    if !req.tools.is_empty() {
+        builder = builder.set_tools(req.tools.iter().map(to_mistralrs_tool).collect());
+    }
+    builder
 }
 
 impl LocalModel {
@@ -35,20 +128,9 @@ impl LocalModel {
         let start = Instant::now();
 
         let task = tokio::spawn(async move {
-            let mut messages = TextMessages::new();
-            if let Some(sys) = req.system_prompt.as_ref() {
-                messages = messages.add_message(TextMessageRole::System, sys);
-            }
-            for m in &req.messages {
-                messages = messages.add_message(role_to_mistralrs(m.role), &m.content);
-            }
             // `ChatRequest::model_id` is ignored here — for local runs
             // the model is bound at `LocalAdapter::new` time.
-
-            let mut builder = RequestBuilder::from(messages);
-            if let Some(cap) = req.max_new_tokens {
-                builder = builder.set_sampler_max_len(cap);
-            }
+            let builder = build_request(&req);
 
             let mut stream = match model.stream_chat_request(builder).await {
                 Ok(s) => s,
@@ -62,6 +144,7 @@ impl LocalModel {
             let mut done_emitted = false;
             let mut delta_emitted = false;
             let mut last_finish_reason: Option<String> = None;
+            let mut tool_calls: Vec<ToolCall> = Vec::new();
 
             while let Some(response) = stream.next().await {
                 match response {
@@ -77,6 +160,9 @@ impl LocalModel {
                             }
                             if let Some(fr) = &choice.finish_reason {
                                 last_finish_reason = Some(fr.clone());
+                            }
+                            if let Some(calls) = &choice.delta.tool_calls {
+                                tool_calls.extend(calls.iter().map(from_mistralrs_tool_call));
                             }
                         }
                         if ttft_ms.is_none() && !content.is_empty() {
@@ -96,6 +182,22 @@ impl LocalModel {
                     Response::Done(final_resp) => {
                         let finish_reason =
                             final_resp.choices.first().map(|c| c.finish_reason.clone());
+                        // Deltas normally carry every tool call as they
+                        // stream in; fall back to the final aggregated
+                        // message in case a pipeline only populates it
+                        // there.
+                        if tool_calls.is_empty() {
+                            if let Some(calls) =
+                                final_resp.choices.first().and_then(|c| c.message.tool_calls.as_ref())
+                            {
+                                tool_calls.extend(calls.iter().map(from_mistralrs_tool_call));
+                            }
+                        }
+                        if !tool_calls.is_empty() {
+                            let _ = tx.send(Ok(StreamChunk::ToolCalls(std::mem::take(
+                                &mut tool_calls,
+                            ))));
+                        }
                         let done = StreamChunk::Done {
                             finish_reason,
                             prompt_tokens: Some(final_resp.usage.prompt_tokens),

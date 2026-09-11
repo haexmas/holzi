@@ -225,6 +225,7 @@ fn sample_request(model: &str) -> ChatRequest {
             content: "hi".to_string(),
         }],
         max_new_tokens: Some(128),
+        tools: Vec::new(),
     }
 }
 
@@ -315,6 +316,7 @@ async fn stream_chat_emits_deltas_and_done_with_token_counts() {
                 finished = Some((prompt_tokens, completion_tokens, finish_reason));
                 break;
             }
+            StreamChunk::ToolCalls(_) => panic!("this fixture emits no tool_use blocks"),
         }
     }
 
@@ -422,6 +424,7 @@ async fn stream_chat_surfaces_thinking_delta_as_reasoning() {
                 }
             }
             StreamChunk::Done { .. } => break,
+            StreamChunk::ToolCalls(_) => panic!("this fixture emits no tool_use blocks"),
         }
     }
     assert_eq!(reasoning, vec!["let me think"]);
@@ -527,6 +530,93 @@ async fn stream_chat_sends_request_body_with_model_and_stream_flag() {
         .stream_chat(sample_request("claude-opus-5"))
         .await
         .unwrap();
+    while stream.next().await.is_some() {}
+}
+
+#[tokio::test]
+/// Two ordered tool calls reconstruct as exactly one `assistant` message
+/// with two `tool_use` blocks followed by one `user` message with the
+/// matching `tool_result` blocks, in the same order and with matching ids
+/// (data-model.md's two-call example).
+async fn stream_chat_groups_ordered_tool_calls_and_results_into_two_messages() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .and(body_json(serde_json::json!({
+            "model": "claude-opus-5",
+            "max_tokens": 128,
+            "messages": [
+                {"role": "user", "content": "hi"},
+                {"role": "assistant", "content": [
+                    {"type": "tool_use", "id": "call-a", "name": "first", "input": {"x": 1}},
+                    {"type": "tool_use", "id": "call-b", "name": "second", "input": {"y": 2}},
+                ]},
+                {"role": "user", "content": [
+                    {"type": "tool_result", "tool_use_id": "call-a", "content": "result-a"},
+                    {"type": "tool_result", "tool_use_id": "call-b", "content": "result-b", "is_error": true},
+                ]},
+            ],
+            "stream": true,
+        })))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(sse_body(&[(
+                    "message_stop",
+                    serde_json::json!({"type": "message_stop"}),
+                )]))
+                .insert_header("content-type", "text/event-stream"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let adapter = AnthropicAdapter::new(server.uri(), "sk-any".to_string()).unwrap();
+    let request = ChatRequest {
+        model_id: "claude-opus-5".to_string(),
+        system_prompt: None,
+        messages: vec![
+            ChatMessage {
+                role: ChatRole::User,
+                content: "hi".to_string(),
+            },
+            ChatMessage {
+                role: ChatRole::ToolCall {
+                    id: "call-a".to_string(),
+                    name: "first".to_string(),
+                    input: serde_json::json!({"x": 1}),
+                },
+                content: String::new(),
+            },
+            ChatMessage {
+                role: ChatRole::ToolCall {
+                    id: "call-b".to_string(),
+                    name: "second".to_string(),
+                    input: serde_json::json!({"y": 2}),
+                },
+                content: String::new(),
+            },
+            ChatMessage {
+                role: ChatRole::ToolResult {
+                    call_id: "call-a".to_string(),
+                    content: "result-a".to_string(),
+                    is_error: false,
+                },
+                content: String::new(),
+            },
+            ChatMessage {
+                role: ChatRole::ToolResult {
+                    call_id: "call-b".to_string(),
+                    content: "result-b".to_string(),
+                    is_error: true,
+                },
+                content: String::new(),
+            },
+        ],
+        max_new_tokens: Some(128),
+        tools: Vec::new(),
+    };
+
+    let mut stream = adapter.stream_chat(request).await.unwrap();
     while stream.next().await.is_some() {}
 }
 

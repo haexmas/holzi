@@ -53,7 +53,8 @@ use haex_crdt::{MigrationName, StaticMigrationSource};
 ///   vault, not just genesis ones.
 /// - 5: `0013_chat_messages_add_idempotency_key` added a column to
 ///   `chat_messages`.
-pub const HOLZI_TRIGGER_VERSION: i32 = 5;
+/// - 6: `0014_chat_messages_tool_columns` added columns to `chat_messages`.
+pub const HOLZI_TRIGGER_VERSION: i32 = 6;
 
 /// Returns the frozen holzi migration set at the pinned haex-crdt revision.
 pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
@@ -266,6 +267,25 @@ pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
          --> statement-breakpoint\n\
          CREATE UNIQUE INDEX idx_chat_messages_idempotency_key \
          ON chat_messages (idempotency_key) WHERE idempotency_key IS NOT NULL;"
+            .to_string(),
+    );
+
+    // Agent tool loop (feature 003): a `tool_call` row carries `tool_name`,
+    // `tool_call_id`, `tool_input` and `tool_source`; its paired
+    // `tool_result` row carries `tool_call_id` and `tool_is_error`. All
+    // five are nullable — `user`/`assistant`/`system` rows leave them NULL
+    // (data-model.md). Bumps HOLZI_TRIGGER_VERSION to 6.
+    m.insert(
+        MigrationName::from("0014_chat_messages_tool_columns"),
+        "ALTER TABLE chat_messages ADD COLUMN tool_name TEXT;\n\
+         --> statement-breakpoint\n\
+         ALTER TABLE chat_messages ADD COLUMN tool_call_id TEXT;\n\
+         --> statement-breakpoint\n\
+         ALTER TABLE chat_messages ADD COLUMN tool_input TEXT;\n\
+         --> statement-breakpoint\n\
+         ALTER TABLE chat_messages ADD COLUMN tool_is_error INTEGER;\n\
+         --> statement-breakpoint\n\
+         ALTER TABLE chat_messages ADD COLUMN tool_source TEXT;"
             .to_string(),
     );
 
