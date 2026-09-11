@@ -1,6 +1,7 @@
 <!-- SPECKIT START -->
-Aktueller Feature-Plan: [specs/002-onboarding-model-prefs/plan.md](specs/002-onboarding-model-prefs/plan.md)
-Zugehörige Artefakte: [spec.md](specs/002-onboarding-model-prefs/spec.md), [research.md](specs/002-onboarding-model-prefs/research.md), [data-model.md](specs/002-onboarding-model-prefs/data-model.md), [contracts/tauri-commands.md](specs/002-onboarding-model-prefs/contracts/tauri-commands.md), [quickstart.md](specs/002-onboarding-model-prefs/quickstart.md)
+Aktueller Feature-Plan: [specs/003-agent-tool-loop/plan.md](specs/003-agent-tool-loop/plan.md)
+Zugehörige Artefakte: [spec.md](specs/003-agent-tool-loop/spec.md), [research.md](specs/003-agent-tool-loop/research.md), [data-model.md](specs/003-agent-tool-loop/data-model.md), [contracts/tauri-commands.md](specs/003-agent-tool-loop/contracts/tauri-commands.md), [quickstart.md](specs/003-agent-tool-loop/quickstart.md)
+Vorheriger Feature-Plan: [specs/002-onboarding-model-prefs/plan.md](specs/002-onboarding-model-prefs/plan.md)
 Konvention und Domain-Terme: [docs/adr/0001-device-scoped-data-convention.md](docs/adr/0001-device-scoped-data-convention.md), [CONTEXT.md](CONTEXT.md)
 <!-- SPECKIT END -->
 
