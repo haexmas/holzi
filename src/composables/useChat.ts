@@ -67,6 +67,16 @@ export interface MessageErrorEvent {
   reason: string
 }
 
+export type ModelLoadPhase = 'connecting' | 'loading' | 'cuda-jit-warmup' | 'ready'
+
+export interface ModelLoadProgressEvent {
+  modelId: string
+  modelName: string
+  phase: ModelLoadPhase
+  /** Present only when `phase === 'connecting'` (spec 002 §FR-015b). */
+  providerName?: string
+}
+
 /**
  * Chat runtime: thread + message CRUD, model load/unload, streaming
  * send with three companion Tauri events (`chat-token`,
@@ -143,6 +153,20 @@ export function useChat() {
     )
   }
 
+  /**
+   * Subscribes to `model-load-progress` and returns the unlisten
+   * function. Payload carries the semantic phase + parameters; the
+   * caller translates the label via `$t('chat.loading.<phase>', ...)`
+   * (spec 002 §FR-020 i18n boundary).
+   */
+  async function onModelLoadProgress(
+    handler: (e: ModelLoadProgressEvent) => void,
+  ): Promise<UnlistenFn> {
+    return await listen<ModelLoadProgressEvent>('model-load-progress', (ev) =>
+      handler(ev.payload),
+    )
+  }
+
   return {
     listThreadsAsync,
     listMessagesAsync,
@@ -155,5 +179,6 @@ export function useChat() {
     onToken,
     onMessageComplete,
     onMessageError,
+    onModelLoadProgress,
   }
 }

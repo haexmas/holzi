@@ -3,13 +3,14 @@
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use uuid::Uuid;
 
 #[cfg(feature = "llm-cpu")]
 use crate::adapters::local::LocalAdapter;
 use crate::adapters::types::{ChatMessage as LlmMessage, ChatRequest, ChatRole, StreamChunk};
 use crate::error::{HolziError, Result};
+use crate::identity::{installation_id_path, read_or_mint_installation_uuid};
 #[cfg(feature = "llm-cpu")]
 use crate::llm::local::LocalModel;
 #[cfg(feature = "llm-cpu")]
@@ -17,12 +18,12 @@ use crate::models::paths;
 use crate::providers::build_adapter;
 use crate::state::AppState;
 use crate::state_utils::active_database;
-#[cfg(feature = "llm-cpu")]
-use crate::storage::device_downloaded_models;
 use crate::storage::{
     chat_messages::{self as msg_store, ChatMessage, FinishReason, MessageRole},
     chat_threads::{self as thread_store, ChatThread},
-    models as models_store, providers as providers_store,
+    models as models_store, preferences,
+    preferences::PrefScope,
+    providers as providers_store,
 };
 
 use super::session::{ActiveSession, ChatState};
@@ -30,6 +31,77 @@ use super::session::{ActiveSession, ChatState};
 const EVENT_CHAT_TOKEN: &str = "chat-token";
 const EVENT_CHAT_MESSAGE_COMPLETE: &str = "chat-message-complete";
 const EVENT_CHAT_MESSAGE_ERROR: &str = "chat-message-error";
+const EVENT_MODEL_LOAD_PROGRESS: &str = "model-load-progress";
+
+const PREF_LAST_ACTIVE_MODEL: &str = "chat.last_active_model_id";
+const PREF_DEFAULT_MODEL: &str = "chat.default_model_id";
+
+/// Semantic phase of a model-load. See spec 002 §FR-015b + contracts.
+/// Backend never emits localised strings; frontend translates via
+/// `chat.loading.<phase>` (FR-020 i18n boundary).
+// `CudaJitWarmup` is only constructed under `feature = "llm-cuda"` —
+// `dead_code` fires on default-feature builds. The variant is part of
+// the wire contract (spec 002 §FR-015b), so silence the lint rather
+// than hide the enum behind a cfg.
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum LoadPhase {
+    Connecting,
+    Loading,
+    CudaJitWarmup,
+    Ready,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ModelLoadProgress {
+    model_id: String,
+    model_name: String,
+    phase: LoadPhase,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    provider_name: Option<String>,
+}
+
+/// Emits a `model-load-progress` event for the given phase. Frontend
+/// translates the label via `$t('chat.loading.<phase>', ...)` and
+/// gates the chat input on `phase === 'ready'`.
+fn emit_load_progress(
+    app: &AppHandle,
+    model_id: &str,
+    model_name: &str,
+    phase: LoadPhase,
+    provider_name: Option<String>,
+) {
+    let _ = app.emit(
+        EVENT_MODEL_LOAD_PROGRESS,
+        ModelLoadProgress {
+            model_id: model_id.to_string(),
+            model_name: model_name.to_string(),
+            phase,
+            provider_name,
+        },
+    );
+}
+
+/// Which fallback branch the session resolver picked. Wire payload for
+/// `resolve_default_model`.
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResolveSource {
+    LastActive,
+    DefaultDevice,
+    DefaultVault,
+    FirstAvailable,
+    None,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolveDefaultModelResult {
+    pub model_id: Option<String>,
+    pub source: ResolveSource,
+}
 
 /// Payload for `active_model_info` and `load_model`.
 #[derive(Debug, Clone, Serialize)]
@@ -94,6 +166,16 @@ struct MessageErrorEvent {
 /// Loads a model (local catalog id or `<provider_id>:<remote_id>`) into
 /// the active session. If another model was already loaded, it is
 /// dropped first.
+///
+/// Emits `model-load-progress` events with a structured payload
+/// (`{ modelId, modelName, phase, providerName? }`) around the load:
+/// `connecting` for api_key providers, `loading` or `cuda-jit-warmup`
+/// for local models, `ready` on success. Frontend translates the
+/// labels via `$t('chat.loading.<phase>', …)`.
+///
+/// Never writes `chat.last_active_model_id` — that preference is
+/// touched exclusively by a successful `send_message` (spec 002
+/// §FR-009 post-clarify correction).
 #[tauri::command]
 pub async fn load_model(
     app: AppHandle,
@@ -101,25 +183,33 @@ pub async fn load_model(
     chat: State<'_, ChatState>,
     model_id: String,
 ) -> Result<LoadedModelInfo> {
+    // Pre-fetch display metadata for the progress payload so the
+    // frontend does not have to look it up separately per event.
+    let name = resolve_display_name(&state, &model_id)
+        .await
+        .unwrap_or_else(|| model_id.clone());
+
     let session = if let Some((provider_id_str, _remote_id)) = model_id.split_once(':') {
+        let provider_name = resolve_provider_name(&state, provider_id_str).await;
+        emit_load_progress(&app, &model_id, &name, LoadPhase::Connecting, provider_name);
         load_api_key_model(&state, &model_id, provider_id_str).await?
     } else {
         #[cfg(feature = "llm-cpu")]
         {
+            let phase = local_load_phase();
+            emit_load_progress(&app, &model_id, &name, phase, None);
             load_local_model_by_id(&app, &state, &model_id).await?
         }
         #[cfg(not(feature = "llm-cpu"))]
         {
-            let _ = app;
             return Err(HolziError::InvalidInput {
                 reason: "local inference is not enabled in this build".into(),
             });
         }
     };
 
-    let name = resolve_display_name(&state, &model_id)
-        .await
-        .unwrap_or_else(|| session.model_id.clone());
+    emit_load_progress(&app, &model_id, &name, LoadPhase::Ready, None);
+
     let info = LoadedModelInfo {
         model_id: session.model_id.clone(),
         name,
@@ -132,6 +222,55 @@ pub async fn load_model(
     })?;
     *guard = Some(session);
     Ok(info)
+}
+
+/// Returns the provider's display name for a `<provider_uuid>:...`
+/// composite id. Best-effort — `None` when the row is missing.
+async fn resolve_provider_name(
+    state: &State<'_, AppState>,
+    provider_id_str: &str,
+) -> Option<String> {
+    let provider_id = Uuid::parse_str(provider_id_str).ok()?;
+    let db = active_database(state).ok()?;
+    let name = tauri::async_runtime::spawn_blocking(move || {
+        db.with_connection(|conn| {
+            Ok(providers_store::get_provider(conn, provider_id)
+                .map_err(haex_crdt::Error::from)?
+                .map(|p| p.name))
+        })
+    })
+    .await
+    .ok()?
+    .ok()?;
+    name
+}
+
+/// Picks the load-phase for a local model.
+///
+/// Heuristic: on a CUDA build without an existing NV compute cache we
+/// emit `cuda-jit-warmup` (the ~30 s kernel-JIT window per Etappe-0
+/// finding #4). On CPU/Metal builds we always emit `loading` — no
+/// comparable warmup exists there (spec 002 §FR-015c).
+#[cfg(feature = "llm-cpu")]
+fn local_load_phase() -> LoadPhase {
+    #[cfg(feature = "llm-cuda")]
+    {
+        if let Some(home) = std::env::var_os("HOME") {
+            let cache = std::path::PathBuf::from(home).join(".nv/ComputeCache");
+            let has_cache = std::fs::read_dir(&cache)
+                .map(|mut it| it.next().is_some())
+                .unwrap_or(false);
+            if !has_cache {
+                return LoadPhase::CudaJitWarmup;
+            }
+        } else {
+            // No HOME → we cannot tell. Prefer the warmup label so the
+            // user is not surprised by a long first-load without an
+            // explanation.
+            return LoadPhase::CudaJitWarmup;
+        }
+    }
+    LoadPhase::Loading
 }
 
 /// Resolves a provider-qualified model id and builds its remote adapter session.
@@ -181,27 +320,33 @@ async fn load_api_key_model(
 }
 
 /// Loads an installed local model and wraps it in an adapter-backed session.
+///
+/// Resolves the on-disk file via [`paths::canonical_model_file`] rather
+/// than a persisted `relative_path` — the filesystem is authoritative
+/// for what is installed (spec 002 §"Installed model"). Metadata
+/// (`context_window`, `tokenizer_repo`) still comes from the
+/// synchronised `models` catalog row.
 #[cfg(feature = "llm-cpu")]
 async fn load_local_model_by_id(
     app: &AppHandle,
     state: &State<'_, AppState>,
     model_id: &str,
 ) -> Result<ActiveSession> {
+    let canonical =
+        paths::canonical_model_file(app, model_id)?.ok_or_else(|| HolziError::ModelNotFound {
+            id: model_id.to_string(),
+        })?;
+
     let db = active_database(state)?;
     let id_owned = model_id.to_string();
-    let resolved = tauri::async_runtime::spawn_blocking(move || {
+    let row = tauri::async_runtime::spawn_blocking(move || {
         db.with_connection(|conn| {
-            let dm = device_downloaded_models::get_downloaded_model(conn, &id_owned)
-                .map_err(haex_crdt::Error::from)?
-                .ok_or_else(|| {
-                    haex_crdt::Error::from(haex_crdt::rusqlite::Error::QueryReturnedNoRows)
-                })?;
             let row = models_store::get_model(conn, &id_owned)
                 .map_err(haex_crdt::Error::from)?
                 .ok_or_else(|| {
                     haex_crdt::Error::from(haex_crdt::rusqlite::Error::QueryReturnedNoRows)
                 })?;
-            Ok((dm.relative_path, row.context_window, row.tokenizer_repo))
+            Ok((row.context_window, row.tokenizer_repo))
         })
     })
     .await
@@ -211,9 +356,7 @@ async fn load_local_model_by_id(
     .map_err(|_| HolziError::ModelNotFound {
         id: model_id.to_string(),
     })?;
-    let (relative_path, context_window, db_tokenizer_repo) = resolved;
-
-    let absolute = paths::resolve_relative(app, &relative_path)?;
+    let (context_window, db_tokenizer_repo) = row;
 
     // Prefer the persisted `tokenizer_repo` (migration 0009 onwards).
     // The catalog fallback covers pre-0009 rows the lazy backfill in
@@ -224,7 +367,7 @@ async fn load_local_model_by_id(
             reason: format!("tokenizer_repo missing for model {model_id}"),
         })?;
 
-    let model = LocalModel::load(&absolute, Some(&tokenizer_repo))
+    let model = LocalModel::load(&canonical.absolute_path, Some(&tokenizer_repo))
         .await
         .map_err(|e| HolziError::ModelDownload {
             reason: format!("mistralrs load: {e}"),
@@ -305,12 +448,22 @@ pub async fn send_message(
     let assistant_message_id = Uuid::new_v4();
     let now = now_ms();
 
-    // Persist thread (if new) and user message under one DB lock.
+    // Persist thread (if new), the user message, and this device's
+    // `chat.last_active_model_id` under one DB lock. Spec 002 §FR-009:
+    // `chat.last_active_model_id` is written EXCLUSIVELY here, never
+    // by `load_model` — the message is the user's intent signal, a
+    // picker-only click is not.
+    //
+    // A full atomic-Accepted-Send transaction with an `idempotencyKey`
+    // (contracts/tauri-commands.md) is a follow-up: MVP-P1 keeps the
+    // existing send-then-stream flow and rolls back the message +
+    // preference together if the stream fails to start.
     let insert_db = db.clone();
     let content_owned = args.content.clone();
     let session_model_id = session.model_id.clone();
     let session_provider_id = session.provider_id;
     let is_new_thread = args.thread_id.is_none();
+    let this_device = db.device_id();
     tauri::async_runtime::spawn_blocking(move || {
         insert_db.with_connection(|conn| {
             if is_new_thread {
@@ -352,6 +505,13 @@ pub async fn send_message(
                 created_at: now,
             };
             msg_store::insert_message(conn, &user_msg).map_err(haex_crdt::Error::from)?;
+            preferences::insert_or_update(
+                conn,
+                PrefScope::Device(this_device),
+                PREF_LAST_ACTIVE_MODEL,
+                &session_model_id,
+            )
+            .map_err(haex_crdt::Error::from)?;
             Ok(())
         })
     })
@@ -577,6 +737,130 @@ pub async fn send_message(
         thread_id,
         user_message_id,
         assistant_message_id,
+    })
+}
+
+/// Runs the session-start resolver chain (spec 002 §FR-014) and
+/// returns which model the caller should load, plus the branch that
+/// picked it. Pure read — no preferences are written along the chain.
+/// If the returned `source` is `FirstAvailable`, the caller MUST NOT
+/// echo the id back into `chat.last_active_model_id`; the passive
+/// selection is a "temporary choice for this session" (FR-015).
+#[tauri::command]
+pub async fn resolve_default_model(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<ResolveDefaultModelResult> {
+    let installation_id_file =
+        installation_id_path(&app.path().app_local_data_dir().map_err(|e| {
+            HolziError::PathResolution {
+                reason: format!("app_local_data_dir: {e}"),
+            }
+        })?);
+    let installation_uuid =
+        read_or_mint_installation_uuid(&installation_id_file).map_err(HolziError::from)?;
+
+    let db = active_database(&state)?;
+    let this_device = db.device_id();
+    let db_clone = db.clone();
+    let (result, installed_local_ids, api_key_ids) =
+        tauri::async_runtime::spawn_blocking(move || {
+            db_clone.with_connection(|conn| {
+                // 1. last_active on this device.
+                let last_active =
+                    preferences::get(conn, PrefScope::Device(this_device), PREF_LAST_ACTIVE_MODEL)
+                        .map_err(haex_crdt::Error::from)?;
+                // 2. default on this device.
+                let default_device =
+                    preferences::get(conn, PrefScope::Device(this_device), PREF_DEFAULT_MODEL)
+                        .map_err(haex_crdt::Error::from)?;
+                // 3. default vault-wide.
+                let default_vault = preferences::get(conn, PrefScope::Vault, PREF_DEFAULT_MODEL)
+                    .map_err(haex_crdt::Error::from)?;
+                // 4. Everything on this device that could load.
+                let all_models =
+                    models_store::list_all_models(conn).map_err(haex_crdt::Error::from)?;
+                let mut installed_local = Vec::new();
+                let mut api_key_ids = Vec::new();
+                for row in &all_models {
+                    if row.id.contains(':') {
+                        api_key_ids.push(row.id.clone());
+                    } else {
+                        // For local models the loadability check is
+                        // "canonical file exists". We do that outside
+                        // the DB call so `paths::canonical_model_file`
+                        // can use the AppHandle.
+                        installed_local.push(row.id.clone());
+                    }
+                }
+                let candidate_pref = |value: Option<String>| value.filter(|s| !s.is_empty());
+                Ok::<_, haex_crdt::Error>((
+                    (
+                        candidate_pref(last_active),
+                        candidate_pref(default_device),
+                        candidate_pref(default_vault),
+                        installation_uuid,
+                    ),
+                    installed_local,
+                    api_key_ids,
+                ))
+            })
+        })
+        .await
+        .map_err(|e| HolziError::CrdtInit {
+            reason: format!("resolve_default_model join: {e}"),
+        })?
+        .map_err(HolziError::from)?;
+    let (last_active, default_device, default_vault, _installation) = result;
+
+    // Filter installed_local down to those that actually have a
+    // canonical file on disk right now.
+    let mut loadable_local: Vec<String> = Vec::new();
+    for slug in installed_local_ids {
+        if let Ok(Some(_)) = paths::canonical_model_file(&app, &slug) {
+            loadable_local.push(slug);
+        }
+    }
+    let is_loadable = |id: &str| -> bool {
+        api_key_ids.iter().any(|s| s == id) || loadable_local.iter().any(|s| s == id)
+    };
+
+    if let Some(id) = last_active.filter(|id| is_loadable(id)) {
+        return Ok(ResolveDefaultModelResult {
+            model_id: Some(id),
+            source: ResolveSource::LastActive,
+        });
+    }
+    if let Some(id) = default_device.filter(|id| is_loadable(id)) {
+        return Ok(ResolveDefaultModelResult {
+            model_id: Some(id),
+            source: ResolveSource::DefaultDevice,
+        });
+    }
+    if let Some(id) = default_vault.filter(|id| is_loadable(id)) {
+        return Ok(ResolveDefaultModelResult {
+            model_id: Some(id),
+            source: ResolveSource::DefaultVault,
+        });
+    }
+    // First-available: prefer a local model (no network), else any
+    // api_key row. Deterministic within each bucket (models are
+    // ordered by name; loadable_local mirrors that order).
+    if let Some(id) = loadable_local.into_iter().next() {
+        return Ok(ResolveDefaultModelResult {
+            model_id: Some(id),
+            source: ResolveSource::FirstAvailable,
+        });
+    }
+    if let Some(id) = api_key_ids.into_iter().next() {
+        return Ok(ResolveDefaultModelResult {
+            model_id: Some(id),
+            source: ResolveSource::FirstAvailable,
+        });
+    }
+    Ok(ResolveDefaultModelResult {
+        model_id: None,
+        source: ResolveSource::None,
     })
 }
 

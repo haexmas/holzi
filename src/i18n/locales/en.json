@@ -18,12 +18,65 @@
     },
     "lock": {
       "submit": "Lock"
+    },
+    "wizard": {
+      "title": "First-time setup",
+      "subtitle": "A quick setup and you're ready to go.",
+      "next": "Next",
+      "back": "Back",
+      "finish": "Finish",
+      "loadingDeviceInfo": "Loading device info…"
+    },
+    "alias": {
+      "label": "Device name",
+      "description": "What should this device be called in the vault? You can rename it in settings later.",
+      "defaultPlaceholder": "New device",
+      "required": "Please enter a name."
+    },
+    "model": {
+      "title": "Pick a model",
+      "description": "Pick a model that fits this device — or set up a provider later.",
+      "tier": {
+        "easy": "Lightweight",
+        "sweet": "Recommended",
+        "max": "Maximum",
+        "laterViaProvider": "Later via provider"
+      },
+      "fit": {
+        "fits": "Good fit",
+        "tight": "Tight",
+        "too_big": "Too big",
+        "unknown": "Unknown"
+      },
+      "downloading": "Downloading model…",
+      "downloadFailed": "Download failed",
+      "empty": "No catalog models available."
     }
+  },
+  "workspace": {
+    "heading": "Workspace: {instance}",
+    "chatFab": {
+      "openTitle": "Open chat"
+    },
+    "settings": {
+      "iconTitle": "Settings"
+    }
+  },
+  "chat": {
+    "loading": {
+      "connecting": "Connecting to {providerName}…",
+      "loading": "Loading {modelName}…",
+      "cudaJitWarmup": "Optimising GPU for the first run of {modelName}, one-off ~30 seconds…",
+      "ready": "Ready"
+    },
+    "noModel": "No model available"
   },
   "errors": {
     "openFailed": "Failed to open",
     "nameConflict": "An instance with that name already exists",
     "invalidName": "Invalid name",
-    "weakPassphrase": "Passphrase does not meet policy"
+    "weakPassphrase": "Passphrase does not meet policy",
+    "deviceInfoFailed": "Failed to load device info",
+    "aliasSaveFailed": "Failed to save device name"
   }
 }

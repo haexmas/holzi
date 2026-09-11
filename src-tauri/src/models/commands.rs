@@ -15,10 +15,7 @@ use crate::error::{HolziError, Result};
 use crate::providers::local::ensure_local_provider;
 use crate::state::AppState;
 use crate::state_utils::active_database;
-use crate::storage::{
-    device_downloaded_models::{self as dm_store, DownloadedModel},
-    models::{self as models_store, ModelRow},
-};
+use crate::storage::models::{self as models_store, ModelRow};
 
 use super::{download, import, paths};
 
@@ -173,20 +170,69 @@ pub async fn import_model_from_file(
     .await
 }
 
-/// Lists all installed local models by joining `models` and
-/// `device_downloaded_models_no_sync`. Rows without a filesystem
-/// registration are skipped — they represent catalog entries the user
-/// has not yet downloaded.
+/// Lists all locally installed models on this device.
 ///
-/// Also opportunistically back-fills `models.tokenizer_repo` for any
-/// catalog rows that predate migration 0009 (idempotent — the UPDATE
-/// only touches rows where the column is still NULL and the id
-/// matches a compiled-in catalog entry).
+/// The filesystem under `<AppLocalData>/models/<slug>/<file.gguf>` is
+/// authoritative for "installed here" (spec 002 §"Installed model" and
+/// ADR-0001). Discovery scans that root, resolves each slug's canonical
+/// file via [`paths::canonical_model_file`], and joins it with the
+/// synchronised `models` catalog row. A slug without a matching row is
+/// skipped — the catalog is the display metadata source and a stale
+/// on-disk file we do not know about should not appear as installed.
+///
+/// Opportunistically back-fills `models.tokenizer_repo` for pre-0009
+/// catalog rows in the same call (idempotent).
 #[tauri::command]
 pub async fn list_installed_models(
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Vec<InstalledModelPayload>> {
     let db = active_database(&state)?;
+
+    // Enumerate the models root. A missing root means "nothing
+    // installed", not an error — fresh installs never open this dir.
+    let models_root = paths::models_root(&app)?;
+    let mut slug_dirs: Vec<String> = Vec::new();
+    match std::fs::read_dir(&models_root) {
+        Ok(entries) => {
+            for entry in entries {
+                let entry = entry.map_err(HolziError::from)?;
+                if !entry.file_type().map_err(HolziError::from)?.is_dir() {
+                    continue;
+                }
+                if let Some(name) = entry.file_name().to_str() {
+                    slug_dirs.push(name.to_string());
+                }
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(HolziError::from(e)),
+    }
+
+    // Deterministic ordering — the frontend can rely on stable listings
+    // between calls without sorting itself.
+    slug_dirs.sort();
+
+    // Resolve canonical files on the async runtime's blocking pool so
+    // syscalls do not hold the executor.
+    let app_for_scan = app.clone();
+    let scan_slugs = slug_dirs.clone();
+    let canonical_files = tauri::async_runtime::spawn_blocking(move || {
+        let mut resolved: Vec<(String, paths::CanonicalModelFile)> = Vec::new();
+        for slug in scan_slugs {
+            match paths::canonical_model_file(&app_for_scan, &slug) {
+                Ok(Some(cf)) => resolved.push((slug, cf)),
+                Ok(None) => {}
+                Err(e) => return Err(e),
+            }
+        }
+        Ok::<_, HolziError>(resolved)
+    })
+    .await
+    .map_err(|e| HolziError::CrdtInit {
+        reason: format!("list_installed_models scan join: {e}"),
+    })??;
+
     let payload = tauri::async_runtime::spawn_blocking(move || {
         db.with_connection(|conn| {
             let catalog_repos: Vec<(&str, &str)> = catalog::entries()
@@ -196,15 +242,10 @@ pub async fn list_installed_models(
             models_store::backfill_tokenizer_repo(conn, &catalog_repos)
                 .map_err(haex_crdt::Error::from)?;
 
-            let installed =
-                dm_store::list_downloaded_models(conn).map_err(haex_crdt::Error::from)?;
-            let mut out = Vec::with_capacity(installed.len());
-            for dm in installed {
-                // A downloaded file with no `models` row is a leftover the
-                // registry outlived; skip it. A genuine SQLite failure must
-                // still surface instead of silently shortening the list.
+            let mut out = Vec::with_capacity(canonical_files.len());
+            for (slug, cf) in canonical_files {
                 let Some(row) =
-                    models_store::get_model(conn, &dm.id).map_err(haex_crdt::Error::from)?
+                    models_store::get_model(conn, &slug).map_err(haex_crdt::Error::from)?
                 else {
                     continue;
                 };
@@ -213,8 +254,8 @@ pub async fn list_installed_models(
                     name: row.name,
                     provider_id: row.provider_id.to_string(),
                     context_window: row.context_window,
-                    relative_path: dm.relative_path,
-                    size_bytes: dm.size_bytes,
+                    relative_path: cf.relative_path,
+                    size_bytes: cf.size_bytes as i64,
                 });
             }
             Ok(out)
@@ -228,44 +269,32 @@ pub async fn list_installed_models(
     Ok(payload)
 }
 
-/// Removes both the registry row and the on-disk GGUF file.
+/// Removes the on-disk GGUF file for a model slug. The `models` row
+/// stays in place because it is synced catalog metadata; deleting the
+/// file only removes it from this device's installed list. Idempotent
+/// when the file is already absent.
 #[tauri::command]
 pub async fn delete_installed_model(
     app: AppHandle,
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
     id: String,
 ) -> Result<()> {
-    let db = active_database(&state)?;
-    let id_for_db = id.clone();
-    let existing = tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            let existing =
-                dm_store::get_downloaded_model(conn, &id_for_db).map_err(haex_crdt::Error::from)?;
-            dm_store::delete_downloaded_model(conn, &id_for_db).map_err(haex_crdt::Error::from)?;
-            Ok(existing)
-        })
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("delete_installed_model join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
-
-    if let Some(dm) = existing {
-        let path = paths::resolve_relative(&app, &dm.relative_path)?;
-        if path.is_file() {
-            tokio::fs::remove_file(&path)
-                .await
-                .map_err(|e| HolziError::Io {
-                    reason: format!("remove {}: {e}", path.display()),
-                })?;
-        }
-    }
+    let Some(canonical) = paths::canonical_model_file(&app, &id)? else {
+        return Ok(());
+    };
+    tokio::fs::remove_file(&canonical.absolute_path)
+        .await
+        .map_err(|e| HolziError::Io {
+            reason: format!("remove {}: {e}", canonical.absolute_path.display()),
+        })?;
     Ok(())
 }
 
-/// Shared post-download / post-import work: `models` upsert + registry
-/// row + ensure local provider. Executed under a single DB lock.
+/// Shared post-download / post-import work: `models` upsert + ensure
+/// local provider. The on-disk file is authoritative for "installed
+/// here" (spec 002 §"Installed model"); the caller has already written
+/// the finalised `.gguf` before invoking this helper, so there is no
+/// separate installed-registry to update.
 async fn register_downloaded(
     state: &State<'_, AppState>,
     id: &str,
@@ -292,14 +321,6 @@ async fn register_downloaded(
                 tokenizer_repo,
             };
             models_store::upsert_model(conn, &m).map_err(haex_crdt::Error::from)?;
-            let dm = DownloadedModel {
-                id: id_owned.clone(),
-                relative_path: relative_owned.clone(),
-                size_bytes,
-                sha256: None,
-                verified_at: now_ms(),
-            };
-            dm_store::upsert_downloaded_model(conn, &dm).map_err(haex_crdt::Error::from)?;
             Ok(InstalledModelPayload {
                 id: id_owned,
                 name: name_owned,

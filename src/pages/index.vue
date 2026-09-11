@@ -30,16 +30,16 @@ function onSelect(name: string) {
   unlockSheetOpen.value = true
 }
 
-/** Activates a newly created instance and opens its chat page. */
+/** Activates a newly created instance and opens its workspace-landing. */
 async function onCreated(name: string) {
   store.setActiveInstance(name)
-  await navigateTo(`/chat/${encodeURIComponent(name)}`)
+  await navigateTo(`/workspace/${encodeURIComponent(name)}`)
 }
 
-/** Activates an unlocked instance and opens its chat page. */
+/** Activates an unlocked instance and opens its workspace-landing. */
 async function onUnlocked(name: string) {
   store.setActiveInstance(name)
-  await navigateTo(`/chat/${encodeURIComponent(name)}`)
+  await navigateTo(`/workspace/${encodeURIComponent(name)}`)
 }
 </script>
 

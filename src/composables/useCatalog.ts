@@ -20,6 +20,14 @@ export interface CatalogEntryWithFit extends CatalogEntry {
   fit: Fit
 }
 
+export type Tier = 'easy' | 'sweet' | 'max'
+
+export interface TierRecommendation {
+  tier: Tier
+  entry: CatalogEntry
+  fit: Fit
+}
+
 /**
  * Reads the built-in model catalog, annotated per entry with a fit
  * verdict against the current hardware. Serves the onboarding wizard's
@@ -31,5 +39,14 @@ export function useCatalog() {
     return await invoke<CatalogEntryWithFit[]>('list_catalog')
   }
 
-  return { listAsync }
+  /**
+   * Returns exactly three tier-labelled recommendations
+   * (Easy/Sweet/Max) for the onboarding wizard. Backend implements
+   * the fallback rules from spec 002 §catalog_recommend_tiers.
+   */
+  async function recommendTiersAsync(): Promise<TierRecommendation[]> {
+    return await invoke<TierRecommendation[]>('catalog_recommend_tiers')
+  }
+
+  return { listAsync, recommendTiersAsync }
 }

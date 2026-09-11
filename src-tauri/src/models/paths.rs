@@ -119,3 +119,78 @@ fn bad_input(reason: impl Into<String>) -> HolziError {
 pub fn exists(p: &Path) -> bool {
     p.is_file()
 }
+
+/// A resolved on-disk model file plus its accessible metadata. Returned
+/// by [`canonical_model_file`] for both discovery (`list_installed_models`)
+/// and loading (`load_local_model_by_id`) so both paths agree on which
+/// file represents a slug.
+#[derive(Debug, Clone)]
+pub struct CanonicalModelFile {
+    /// Absolute path to the file on disk.
+    pub absolute_path: PathBuf,
+    /// `<slug>/<filename>` for display and portability.
+    pub relative_path: String,
+    /// File size in bytes from `fs::metadata`.
+    pub size_bytes: u64,
+    /// The finalised filename inside `<slug>/`.
+    pub filename: String,
+}
+
+/// Selects the canonical local GGUF file for a slug from
+/// `<AppLocalData>/models/<slug>/`.
+///
+/// The scan filters to regular files with a `.gguf` extension whose
+/// filename is valid UTF-8, ignores in-flight downloads/imports
+/// (`.part`, `.tmp` and other non-`.gguf` sidecars), and returns the
+/// lexicographically smallest surviving filename. That deterministic
+/// tie-break means `list_installed_models` and `load_local_model_by_id`
+/// pick the same file regardless of `read_dir` ordering.
+///
+/// Returns `Ok(None)` when the slug directory is missing or holds no
+/// finalised `.gguf` file — the caller decides whether that is a
+/// "not installed" signal (`list_installed_models`) or a load error
+/// (`load_local_model_by_id`). Filesystem errors other than
+/// `NotFound` surface as [`HolziError::Io`].
+pub fn canonical_model_file(app: &AppHandle, slug: &str) -> Result<Option<CanonicalModelFile>> {
+    validate_slug(slug)?;
+    let dir = models_root(app)?.join(slug);
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(HolziError::from(e)),
+    };
+
+    let mut candidate: Option<(String, PathBuf, u64)> = None;
+    for entry in entries {
+        let entry = entry.map_err(HolziError::from)?;
+        let file_type = entry.file_type().map_err(HolziError::from)?;
+        if !file_type.is_file() {
+            continue;
+        }
+        let file_name = entry.file_name();
+        let Some(name) = file_name.to_str() else {
+            continue;
+        };
+        if !name.to_ascii_lowercase().ends_with(".gguf") {
+            continue;
+        }
+        let meta = entry.metadata().map_err(HolziError::from)?;
+        let path = entry.path();
+        let size = meta.len();
+        match &candidate {
+            Some((existing_name, _, _)) if existing_name.as_str() <= name => {}
+            _ => candidate = Some((name.to_string(), path, size)),
+        }
+    }
+
+    let Some((filename, absolute_path, size_bytes)) = candidate else {
+        return Ok(None);
+    };
+    let relative_path = relative_path(slug, &filename)?;
+    Ok(Some(CanonicalModelFile {
+        absolute_path,
+        relative_path,
+        size_bytes,
+        filename,
+    }))
+}

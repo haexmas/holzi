@@ -48,7 +48,10 @@ use haex_crdt::{MigrationName, StaticMigrationSource};
 /// - 1: `DEFAULT_TRIGGER_VERSION`, migrations 0001-0008.
 /// - 2: `0009_models_add_tokenizer_repo` added a column to `models`.
 /// - 3: `0010_providers_add_adapter` added a column to `providers`.
-pub const HOLZI_TRIGGER_VERSION: i32 = 3;
+/// - 4: `0011_preferences` introduced a new CRDT-tracked table whose
+///   `AFTER UPDATE OF <cols>` trigger must be created on every existing
+///   vault, not just genesis ones.
+pub const HOLZI_TRIGGER_VERSION: i32 = 4;
 
 /// Returns the frozen holzi migration set at the pinned haex-crdt revision.
 pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
@@ -213,6 +216,41 @@ pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
     m.insert(
         MigrationName::from("0010_providers_add_adapter"),
         "ALTER TABLE providers ADD COLUMN adapter TEXT;".to_string(),
+    );
+
+    // Preferences — namespaced key/value entries per-device or vault-wide.
+    // Composite PK on `(vault_device_uuid, key)` with a hard FK to
+    // `known_devices(vault_device_uuid) ON DELETE CASCADE` implements the
+    // ADR-0001 convention: retiring a device automatically cleans up its
+    // preference rows without any Retire-command needing to know about
+    // this table. The nil UUID is the vault-scope sentinel — bootstrap
+    // ensures the sentinel row exists in `known_devices` so vault-wide
+    // preferences can reference it. Multi-statement via the drizzle
+    // breakpoint so the index lands with the table under one migration.
+    m.insert(
+        MigrationName::from("0011_preferences"),
+        "CREATE TABLE preferences (\
+            vault_device_uuid TEXT NOT NULL \
+              REFERENCES known_devices(vault_device_uuid) ON DELETE CASCADE, \
+            key TEXT NOT NULL, \
+            value TEXT, \
+            PRIMARY KEY (vault_device_uuid, key)\
+         );\n\
+         --> statement-breakpoint\n\
+         CREATE INDEX idx_preferences_key ON preferences (key, vault_device_uuid);"
+            .to_string(),
+    );
+
+    // Retires `device_downloaded_models_no_sync`. The filesystem under
+    // `<AppLocalData>/models/<slug>/<file.gguf>` is now the authority
+    // for "installed on this device" (spec 002 §"Installed model",
+    // data-model.md, research.md §Entscheidung 4). Callers move to the
+    // filesystem-scan path in `list_installed_models` and the shared
+    // `models::paths::canonical_model_file` selector before this
+    // migration removes the table.
+    m.insert(
+        MigrationName::from("0012_drop_device_downloaded_models_no_sync"),
+        "DROP TABLE device_downloaded_models_no_sync;".to_string(),
     );
 
     Arc::new(StaticMigrationSource(m))
