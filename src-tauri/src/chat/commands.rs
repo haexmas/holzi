@@ -122,6 +122,11 @@ pub struct SendMessageArgs {
     pub system_prompt: Option<String>,
     /// Cap on generated tokens. `None` uses the adapter default.
     pub max_new_tokens: Option<usize>,
+    /// Stable across every retry of the same user send (contract
+    /// §send_message). Non-empty; deduplicates a frontend retry of its
+    /// own `invoke()` call without resuming a failed generation — see
+    /// [`resolve_idempotent_send`].
+    pub idempotency_key: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -421,6 +426,77 @@ pub async fn active_model_info(chat: State<'_, ChatState>) -> Result<Option<Load
     }))
 }
 
+/// Deterministically derives the (user, assistant) message ids for a
+/// `send_message` call from its `idempotencyKey`. The same key always
+/// yields the same pair, so a retried `invoke()` can be recognised and
+/// answered with the original ids without any extra state — no cache,
+/// no second column (contract §send_message: "die zugehörigen
+/// User-/Assistant-IDs werden aus diesem Send-Vorgang wiederverwendet").
+pub fn derive_message_ids(idempotency_key: &str) -> (Uuid, Uuid) {
+    let user_message_id = Uuid::new_v5(&Uuid::NAMESPACE_OID, idempotency_key.as_bytes());
+    let assistant_message_id = Uuid::new_v5(
+        &Uuid::NAMESPACE_OID,
+        format!("{idempotency_key}:assistant").as_bytes(),
+    );
+    (user_message_id, assistant_message_id)
+}
+
+/// Outcome of deduping a `send_message` call against any prior send
+/// sharing the same `idempotencyKey`. This only guards against the
+/// frontend retrying its own uncertain `invoke()` call — it never
+/// resumes or restarts a generation that failed after the user message
+/// was accepted (see contracts/tauri-commands.md §send_message).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IdempotentSend {
+    /// No prior send used this key — proceed with a normal insert
+    /// using the given (deterministic) ids.
+    Fresh {
+        user_message_id: Uuid,
+        assistant_message_id: Uuid,
+    },
+    /// A prior send with this key already exists and matches the
+    /// requested thread/content — reuse its ids; insert nothing, start
+    /// no new stream.
+    Duplicate {
+        thread_id: Uuid,
+        user_message_id: Uuid,
+        assistant_message_id: Uuid,
+    },
+    /// A prior send with this key exists but its thread or content
+    /// differs from this request — the caller must reject with
+    /// `HolziError::InvalidInput`.
+    Mismatch,
+}
+
+/// Resolves a `send_message` call's idempotency against the DB.
+/// `requested_thread_id` is the caller's raw `args.thread_id`, not yet
+/// resolved to a real thread: `None` means "any thread", since a
+/// retried call may not know the thread a prior, possibly
+/// unacknowledged, attempt created.
+pub fn resolve_idempotent_send(
+    conn: &haex_crdt::rusqlite::Connection,
+    idempotency_key: &str,
+    requested_thread_id: Option<Uuid>,
+    content: &str,
+) -> haex_crdt::rusqlite::Result<IdempotentSend> {
+    let (user_message_id, assistant_message_id) = derive_message_ids(idempotency_key);
+    let Some(existing) = msg_store::find_by_idempotency_key(conn, idempotency_key)? else {
+        return Ok(IdempotentSend::Fresh {
+            user_message_id,
+            assistant_message_id,
+        });
+    };
+    let thread_matches = requested_thread_id.map_or(true, |t| t == existing.thread_id);
+    if !thread_matches || existing.content != content {
+        return Ok(IdempotentSend::Mismatch);
+    }
+    Ok(IdempotentSend::Duplicate {
+        thread_id: existing.thread_id,
+        user_message_id: existing.id,
+        assistant_message_id,
+    })
+}
+
 /// Persists a user message, spawns a streaming generation, returns
 /// both message ids so the frontend can subscribe. The assistant
 /// message is inserted on completion.
@@ -431,6 +507,12 @@ pub async fn send_message(
     chat: State<'_, ChatState>,
     args: SendMessageArgs,
 ) -> Result<SendMessageResult> {
+    if args.idempotency_key.trim().is_empty() {
+        return Err(HolziError::InvalidInput {
+            reason: "idempotencyKey must not be empty".into(),
+        });
+    }
+
     let session = {
         let guard = chat.session.lock().map_err(|e| HolziError::CrdtInit {
             reason: format!("chat.session mutex poisoned: {e}"),
@@ -441,9 +523,53 @@ pub async fn send_message(
     };
 
     let db = active_database(&state)?;
-    let thread_id = args.thread_id.unwrap_or_else(Uuid::new_v4);
-    let user_message_id = Uuid::new_v4();
-    let assistant_message_id = Uuid::new_v4();
+
+    // Dedup against any prior send sharing this idempotencyKey before
+    // minting anything new (contract §send_message). This only guards
+    // the frontend retrying its own uncertain `invoke()` call — it
+    // never resumes a generation that failed after acceptance.
+    let dedup_db = db.clone();
+    let dedup_key = args.idempotency_key.clone();
+    let dedup_thread_id = args.thread_id;
+    let dedup_content = args.content.clone();
+    let decision = tauri::async_runtime::spawn_blocking(move || {
+        dedup_db.with_connection(|conn| {
+            resolve_idempotent_send(conn, &dedup_key, dedup_thread_id, &dedup_content)
+                .map_err(haex_crdt::Error::from)
+        })
+    })
+    .await
+    .map_err(|e| HolziError::CrdtInit {
+        reason: format!("resolve_idempotent_send join: {e}"),
+    })?
+    .map_err(HolziError::from)?;
+
+    let (thread_id, user_message_id, assistant_message_id) = match decision {
+        IdempotentSend::Mismatch => {
+            return Err(HolziError::InvalidInput {
+                reason: "idempotencyKey already used with a different thread or content".into(),
+            });
+        }
+        IdempotentSend::Duplicate {
+            thread_id,
+            user_message_id,
+            assistant_message_id,
+        } => {
+            return Ok(SendMessageResult {
+                thread_id,
+                user_message_id,
+                assistant_message_id,
+            });
+        }
+        IdempotentSend::Fresh {
+            user_message_id,
+            assistant_message_id,
+        } => (
+            args.thread_id.unwrap_or_else(Uuid::new_v4),
+            user_message_id,
+            assistant_message_id,
+        ),
+    };
     let now = now_ms();
 
     // Persist the thread (if new) and user message under one DB lock.
@@ -454,6 +580,7 @@ pub async fn send_message(
     // roll back a newer overlapping send's value.
     let insert_db = db.clone();
     let content_owned = args.content.clone();
+    let idempotency_key_owned = args.idempotency_key.clone();
     let session_model_id = session.model_id.clone();
     let session_provider_id = session.provider_id;
     let is_new_thread = args.thread_id.is_none();
@@ -498,6 +625,7 @@ pub async fn send_message(
                 completion_tokens: None,
                 finish_reason: Some(FinishReason::Complete),
                 created_at: now,
+                idempotency_key: Some(idempotency_key_owned.clone()),
             };
             msg_store::insert_message(conn, &user_msg).map_err(haex_crdt::Error::from)?;
             Ok(())
@@ -696,6 +824,7 @@ pub async fn send_message(
                     completion_tokens: completion_tokens.map(|n| n as i64),
                     finish_reason: Some(finish_reason),
                     created_at: now2,
+                    idempotency_key: None,
                 };
                 msg_store::insert_message(conn, &msg).map_err(haex_crdt::Error::from)?;
                 thread_store::update_thread(

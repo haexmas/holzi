@@ -176,9 +176,14 @@ Liefert drei Hardware-passende Modell-Vorschläge (Easy/Sweet/Max) für den Onbo
 }
 ```
 
-Der Client erzeugt pro Nutzer-Sendevorgang einen neuen, opaken `idempotencyKey` und verwendet bei jedem Retry exakt denselben Key. Der Key wird zusammen mit der User-Message persistiert und ist eindeutig; die zugehörigen User-/Assistant-IDs werden aus diesem Send-Vorgang wiederverwendet. Ein Retry mit demselben Key und abweichendem Thread oder Inhalt ist `HolziError::InvalidInput`.
+Der `idempotencyKey` schützt ausschließlich gegen einen Retry des Frontends **seines eigenen** `invoke()`-Aufrufs (z.B. IPC-Hänger, App kurz reconnected) — nicht gegen eine ausbleibende LLM-Antwort. Scheitert die Generierung, bleibt es dabei: der Nutzer schickt eine neue Nachricht mit neuem `idempotencyKey`; ein automatisches Wiederaufnehmen/Neustarten eines fehlgeschlagenen Streams über denselben Key gibt es nicht (bewusst vereinfacht gegenüber einer früheren Contract-Fassung).
 
-**Verhaltens-Änderung**: User-Message und Update von `preferences[('<my_device_uuid>', 'chat.last_active_model_id')] = <current_model_id>` teilen eine atomare Accepted-Send-Transaktion. Die Transaktion dedupliziert zuerst über `idempotencyKey`; bei einem neuen Key werden Message, Preference und die stabilen Message-IDs gemeinsam angelegt. Erst wenn `stream_chat` erfolgreich gestartet wurde, wird die Transaktion committed; scheitert der Startup, werden Message und Preference gemeinsam zurückgerollt. Scheitert der Stream erst nach dem Commit, bleibt der Key als retry-fähige User-Message bestehen; ein erneuter Aufruf repariert den Preference-Zustand für genau diese Message und startet den Stream mit denselben IDs erneut. Dadurch erzeugen Retries weder doppelte User-Messages noch Preference-Zustände ohne zugehörige Message. Der Write erfolgt ausschließlich nach erfolgreichem Senden einer Nachricht (FR-009).
+Der Client erzeugt pro Nutzer-Sendevorgang einen neuen, opaken `idempotencyKey` und verwendet bei jedem Retry exakt denselben Key. `user_message_id` und `assistant_message_id` werden deterministisch aus dem Key abgeleitet (UUID v5) — derselbe Key liefert also unabhängig von DB-Zustand immer dieselben beiden IDs, ganz ohne zusätzlichen Cache oder eine zweite Spalte.
+
+**Verhaltens-Änderung**: Vor dem Insert prüft `send_message` per `idempotencyKey`, ob bereits eine User-Message mit diesem Key existiert:
+- **Kein Treffer**: normaler Ablauf — User-Message (inkl. `idempotencyKey`) und Thread werden mit den abgeleiteten IDs angelegt, danach `stream_chat` gestartet; scheitert der Adapter-Start, werden Message und ggf. neu angelegter Thread zurückgerollt (unverändert). Erst nach erfolgreichem Stream-Start wird `preferences[('<my_device_uuid>', 'chat.last_active_model_id')] = <current_model_id>` geschrieben (FR-009, unverändert).
+- **Treffer mit identischem Thread (oder `threadId: null`) und identischem Inhalt**: kein zweiter Insert, kein zweiter `stream_chat`-Aufruf, kein Preference-Write — es wird direkt dasselbe `SendMessageResult` wie beim ersten Mal zurückgegeben.
+- **Treffer mit abweichendem Thread oder Inhalt**: `HolziError::InvalidInput`.
 
 **Kein Return-Change**.
 

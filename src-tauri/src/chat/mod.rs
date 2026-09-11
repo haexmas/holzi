@@ -4,5 +4,7 @@
 //! mistralrs loading path is feature-gated behind `llm-cpu`.
 
 pub mod commands;
+#[cfg(test)]
+mod commands_tests;
 pub mod session;
 pub mod thread_commands;

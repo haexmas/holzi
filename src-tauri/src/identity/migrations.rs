@@ -51,7 +51,9 @@ use haex_crdt::{MigrationName, StaticMigrationSource};
 /// - 4: `0011_preferences` introduced a new CRDT-tracked table whose
 ///   `AFTER UPDATE OF <cols>` trigger must be created on every existing
 ///   vault, not just genesis ones.
-pub const HOLZI_TRIGGER_VERSION: i32 = 4;
+/// - 5: `0013_chat_messages_add_idempotency_key` added a column to
+///   `chat_messages`.
+pub const HOLZI_TRIGGER_VERSION: i32 = 5;
 
 /// Returns the frozen holzi migration set at the pinned haex-crdt revision.
 pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
@@ -251,6 +253,20 @@ pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
     m.insert(
         MigrationName::from("0012_drop_device_downloaded_models_no_sync"),
         "DROP TABLE device_downloaded_models_no_sync;".to_string(),
+    );
+
+    // idempotency_key — set only on the user-message row of a
+    // `send_message` call (contract §send_message). The partial unique
+    // index allows unlimited NULLs (assistant rows, and every
+    // pre-0013 message) while still rejecting two user messages that
+    // reuse the same key.
+    m.insert(
+        MigrationName::from("0013_chat_messages_add_idempotency_key"),
+        "ALTER TABLE chat_messages ADD COLUMN idempotency_key TEXT;\n\
+         --> statement-breakpoint\n\
+         CREATE UNIQUE INDEX idx_chat_messages_idempotency_key \
+         ON chat_messages (idempotency_key) WHERE idempotency_key IS NOT NULL;"
+            .to_string(),
     );
 
     Arc::new(StaticMigrationSource(m))
