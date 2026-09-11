@@ -317,6 +317,9 @@ async function lock() {
 function errString(e: unknown): string {
   if (typeof e === 'string') return e
   if (e && typeof e === 'object' && 'kind' in e) {
+    const kind = (e as { kind: unknown }).kind
+    if (kind === 'InvalidIdempotencyKey') return t('errors.invalidIdempotencyKey')
+    if (kind === 'IdempotencyKeyConflict') return t('errors.idempotencyKeyConflict')
     return JSON.stringify(e)
   }
   return String(e)
@@ -598,7 +601,7 @@ onBeforeUnmount(() => {
             class="text-xs underline"
             @click="send(true)"
           >
-            erneut versuchen
+            {{ t('chat.retry') }}
           </button>
           <button
             class="text-xs underline"
@@ -703,7 +706,7 @@ onBeforeUnmount(() => {
 
         <form
           class="p-3 border-t border-border flex gap-2"
-          @submit.prevent="send"
+          @submit.prevent="() => send()"
         >
           <input
             v-model="input"

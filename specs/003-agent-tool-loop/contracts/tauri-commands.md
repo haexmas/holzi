@@ -12,10 +12,11 @@ zurück. Rust-`snake_case` wird beim JSON-Payload zu `camelCase` per
 `idempotency_key` → `{ thread_id, user_message_id, assistant_message_id }`).
 
 **Verhalten geändert**: löst statt eines einzelnen LLM-Calls die Turn/Step-Loop aus (spec.md User
-Story 1+2). `assistant_message_id` bleibt die ID der *finalen* Antwort-Zeile; dazwischenliegende
-`tool_call`/`tool_result`-Zeilen (siehe data-model.md) bekommen eigene, neu geminted IDs, die über
-die neuen Events unten bekannt gegeben werden — kein Args/Result-Contract-Bruch, nur mehr Events pro
-Aufruf.
+Story 1+2). `assistant_message_id` wird zu Beginn des Requests genau einmal vorab geminted und
+bleibt über alle LLM-Retries hinweg stabil. Wenn eine finale Assistant-Zeile persistiert wird, ist
+es deren ID; dazwischenliegende `tool_call`/`tool_result`-Zeilen (siehe data-model.md) bekommen
+eigene, neu geminted IDs, die über die neuen Events unten bekannt gegeben werden — kein
+Args/Result-Contract-Bruch, nur mehr Events pro Aufruf.
 
 ### `abort_current_generation() -> ()`
 
@@ -42,18 +43,23 @@ zum `tool-permission-request`-Event unten.
 
 **Fehler**:
 - `HolziError::InvalidInput` wenn `requestId` keiner offenen Anfrage entspricht (bereits
-  beantwortet, oder der Turn wurde inzwischen abgebrochen — beides idempotent behandelt: kein
-  Fehler bei bereits durch Cancellation aufgelöster ID, `InvalidInput` nur bei nie existierter ID).
+  beantwortet, oder der Turn wurde inzwischen abgebrochen). Aufgelöste IDs werden als Tombstone
+  behalten: eine späte Antwort auf eine durch Cancellation aufgelöste ID ist erfolgreich und wird
+  als No-op behandelt; `InvalidInput` gilt nur für eine niemals bekannte ID.
 
-**Verhalten**: löst den in `ChatState.pending_tool_approvals` wartenden `oneshot::Sender` auf. Kein
-Timeout — die Anfrage bleibt offen, bis beantwortet oder der Turn abgebrochen wird (spec.md FR-005,
-Acceptance Scenario 5).
+**Verhalten**: löst den in `ChatState.pending_tool_approvals` wartenden `oneshot::Sender` auf und
+markiert bei Cancellation die Request-ID als aufgelöst. Kein Timeout — die Anfrage bleibt offen, bis
+beantwortet oder der Turn abgebrochen wird (spec.md FR-005, Acceptance Scenario 5). T027 testet
+jeweils eine Cancellation-resolved-ID und eine unbekannte ID.
 
 ## Neue Events (Backend → Frontend)
 
 Bestehende Events (`chat-token`, `chat-message-complete`, `chat-message-error`,
-`model-load-progress`) bleiben unverändert in Form und Bedeutung; sie feuern weiterhin pro Step statt
-nur einmal pro `send_message`-Aufruf (ein Turn kann mehrere Steps haben).
+`model-load-progress`) bleiben unverändert in Form und Bedeutung; die ersten drei feuern weiterhin
+pro Step statt nur einmal pro `send_message`-Aufruf (ein Turn kann mehrere Steps haben).
+`model-load-progress` bleibt ausschließlich dem Modell-Laden zugeordnet. `chat-message-complete` und
+`chat-message-error` beenden daher keinen Turn im Frontend; dafür gibt es das abschließende Event
+`chat-turn-complete`.
 
 ### `tool-permission-request`
 
@@ -72,11 +78,12 @@ Emittiert, wenn das Freigabe-Gate laut aktivem `chat.permission_mode` eine Best�
 
 ### `chat-tool-call`
 
-Eine `tool_call`-Zeile (data-model.md) wurde persistiert — Modell hat ein Tool aufgerufen, Freigabe
-(falls nötig) wurde bereits erteilt.
+Eine `tool_call`-Zeile (data-model.md) wurde persistiert — das Modell hat ein Tool aufgerufen. Das
+Event wird an dieser Persistenzgrenze emittiert, auch wenn der Aufruf anschließend im Plan-Modus
+blockiert wird; eine vorherige Freigabe ist keine Voraussetzung.
 
 ```typescript
-{ messageId: string, threadId: string, toolName: string, toolInput: unknown, toolSource: 'built_in' | 'mcp' | 'cli' }
+{ messageId: string, threadId: string, toolName: string, toolInput: unknown, toolSource: 'mcp' | 'cli' }
 ```
 
 ### `chat-tool-result`
@@ -97,6 +104,24 @@ Konversation sichtbar wird.
 ```typescript
 { threadId: string, assistantMessageId: string, attempt: number /* 1-basiert */ }
 ```
+
+### `chat-turn-complete`
+
+Wird genau einmal nach dem letzten Step eines `send_message`-Turns emittiert. Es folgt auf das
+jeweilige per-Step-Event und signalisiert dem Frontend erst dann, `streamingMessageId` und `busy` zu
+löschen. `chat-message-complete`/`chat-message-error` bleiben weiterhin pro Step erhalten.
+
+```typescript
+{
+  threadId: string,
+  assistantMessageId: string | null, // ID der terminalen assistant-Zeile, falls persistiert
+  finishReason: 'complete' | 'cancelled' | 'error' | 'tool_limit_reached',
+}
+```
+
+Bei `tool_limit_reached` wird eine terminale Assistant-Zeile mit der vorab geminteten
+`assistantMessageId` persistiert; diese ID stimmt mit `send_message` und dem Event überein. Bei
+`cancelled` oder einem Fehler ohne Assistant-Zeile ist `assistantMessageId` `null`.
 
 ## Geänderte Datentypen
 

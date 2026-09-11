@@ -6,7 +6,7 @@ Manuelle Verifikations-Schritte für Reviewer/Operator vor dem Merge. Automatisi
 ## Vorbereitung
 
 ```bash
-git switch 002-send-message-idempotency-key   # oder der tatsächliche Feature-Branch
+git switch 003-agent-tool-loop                # oder der tatsächliche Feature-Branch
 pnpm install
 cd src-tauri
 cargo test --lib
@@ -20,12 +20,13 @@ Erwartetes Ergebnis: alle Test-Suites grün, `pnpm typecheck` exit 0.
 
 ## Szenario 1: Assistant nutzt ein Tool (User Story 1)
 
-**Voraussetzung**: `chat.permission_mode = auto` (Settings), mindestens ein Safe-Tool verfügbar
-(Built-in oder ein konfigurierter MCP-Server).
+**Voraussetzung**: `chat.permission_mode = auto` (Settings), mindestens ein Tool verfügbar (Host-CLI
+oder ein konfigurierter MCP-Server). Für den automatisierten Safe-Pfad wird der test-only Stub aus
+T022A verwendet; der manuelle Lauf darf ein Risky-Tool verwenden und dessen Freigabe bestätigen.
 
 **Schritte**:
-1. Chat öffnen, eine Frage stellen, die das Tool erfordert (z.B. Inhalt einer Datei, auf die ein
-   Built-in-Tool Zugriff hat).
+1. Chat öffnen, eine Frage stellen, die das Tool erfordert (z.B. einen Kommandoaufruf oder eine
+   MCP-Abfrage).
 2. **Erwartung**: `chat-tool-call` und `chat-tool-result` Events feuern, bevor die finale Antwort
    erscheint; `list_messages` zeigt die `tool_call`/`tool_result`-Zeilen in der Kette.
 3. Die finale Antwort spiegelt das tatsächliche Tool-Ergebnis wider, nicht eine Vermutung.

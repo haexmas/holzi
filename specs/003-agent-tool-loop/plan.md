@@ -1,7 +1,6 @@
 # Implementation Plan: Agent Tool Loop
 
-**Branch**: `002-send-message-idempotency-key` (kein eigener Feature-Branch angelegt — kein
-`.specify/extensions.yml`-Hook aktiv) | **Date**: 2026-09-11 | **Spec**: [spec.md](spec.md)
+**Branch**: `003-agent-tool-loop` | **Date**: 2026-09-11 | **Spec**: [spec.md](spec.md)
 **Input**: Feature specification from `specs/003-agent-tool-loop/spec.md`
 
 ## Summary
@@ -9,7 +8,7 @@
 Der bestehende `send_message`-Ablauf (`src-tauri/src/chat/commands.rs`) ist heute linear: ein
 LLM-Call, ein Stream, fertig — kein Tool-Calling, kein Retry, keine Turn/Step-Struktur. Diese
 Erweiterung führt eine Turn/Step-Loop ein (ein Turn = eine oder mehrere Steps aus LLM-Request +
-optionalen Tool-Aufrufen), eine Tool-Registry (Built-in-Tools, MCP-Client-Tools, ein Host-CLI-Tool),
+optionalen Tool-Aufrufen), eine Tool-Registry (MCP-Client-Tools und ein Host-CLI-Tool),
 ein Freigabe-Gate mit drei Modi (Manual/Auto/Plan, analog Claude Codes Permission-Modes),
 automatische Retries auf LLM-Request-Ebene bei transienten Fehlern, und eine auf die ganze Turn/Loop
 ausgeweitete Cancellation. Scope ist ausdrücklich auf die `local`- und `api_key`-Provider begrenzt;
@@ -49,8 +48,8 @@ Turn-Loop MUST auf eine feste Rundenzahl begrenzt sein (FR-016); haex-crdt-kompa
 Schema-Änderungen (keine CRDT-Metadatenspalten anfassen, korrekte `haex_hlc_no_sync`-Injektion, wie
 bei jeder bisherigen Migration in `identity/migrations.rs`).
 **Scale/Scope**: Single-Nutzer, ein aktives Modell gleichzeitig (bestehende Invariante aus
-`ChatState`/`ActiveSession`), Tool-Registry-Größe klein (Host-CLI-Tool + wenige Built-ins + Tools
-aus vom Nutzer konfigurierten MCP-Servern).
+`ChatState`/`ActiveSession`), Tool-Registry-Größe klein (Host-CLI-Tool + Tools aus vom Nutzer
+konfigurierten MCP-Servern).
 
 ## Constitution Check
 
@@ -64,7 +63,7 @@ Revision `336eaf1e`):
 | I. No Secrets in Git | ✓ PASS | Kein Secret-Material in dieser Erweiterung. Vault-Credential-Handling für `cli_delegate` ist explizit außerhalb dieses Scopes (siehe Summary). |
 | II. No Local Absolute Paths in Versioned Config | ✓ PASS | Keine neuen versionierten Config-Dateien; MCP-Server-Konfiguration ist Laufzeit-/Vault-Zustand, kein Git-Artefakt. |
 | III. Project Identity Is Device-Independent | ✓ PASS | Neue `chat.permission_mode`-Preference nutzt die bestehende `PrefScope`/`vault_device_uuid`-Konvention unverändert. |
-| IV. Cross-Repo References Pin Immutable Revisions | ✓ PASS | `rmcp` wird per exaktem `crates.io`-Versions-Pin (`rmcp = "3.3.0"`, per `Cargo.lock` reproduzierbar) referenziert. Prinzip IV betrifft laut Konstitutionstext "External harness content" — die `.haex-hive`/`.spaex`-Atom-Ebene, nicht gewöhnliche Cargo-Dependencies — analog zu `mistralrs`/`serde`, die ebenfalls per Versions-Pin statt Git-SHA referenziert sind. |
+| IV. Cross-Repo References Pin Immutable Revisions | ✓ PASS | `rmcp` wird per exaktem `crates.io`-Versions-Pin (`rmcp = "=3.3.0"`, per `Cargo.lock` reproduzierbar) referenziert. Prinzip IV betrifft laut Konstitutionstext "External harness content" — die `.haex-hive`/`.spaex`-Atom-Ebene, nicht gewöhnliche Cargo-Dependencies — analog zu `mistralrs`/`serde`, die ebenfalls per Versions-Pin statt Git-SHA referenziert sind. |
 | V. External Sources Are Opt-in Per Project | ✓ PASS | N/A — kein externer Harness-Content betroffen. |
 | VI. Self-Modifying Instructions Are Always Review-Gated | ✓ PASS | Änderungen an `plans/001-desktop-mvp.md` (Revision der `cli_delegate`-Host-Auth-Zeile, siehe Design-Doku §8.3) laufen über PR-Review, nicht in dieser Spec selbst. |
 | VII. Relay Unavailability Never Blocks Local Work | ✓ PASS | Tool-Loop, Freigabe-Gate und Retries sind rein lokale/Provider-API-Vorgänge, unabhängig vom Sync-Relay. |

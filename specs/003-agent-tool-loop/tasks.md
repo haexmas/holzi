@@ -26,8 +26,8 @@ verification is manual per quickstart.md (kein Playwright in diesem Repo).
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-- [ ] T001 [P] Add `rmcp = "3.3.0"` to `[dependencies]` in `src-tauri/Cargo.toml` (research.md §3 — official Rust MCP SDK, pinned per Constitution Principle IV)
-- [ ] T002 [P] Create `src-tauri/src/chat/tools/mod.rs` with the `Tool` trait (`name`, `description`, `input_schema`, `risk_class() -> RiskClass`, `async execute(Value) -> ToolResult`), `RiskClass::{Safe, Risky}`, `ToolResult { content: String, is_error: bool }`, and an empty `ToolRegistry` struct (`Vec<Box<dyn Tool>>`, no tools registered yet); add `pub mod tools;` to `src-tauri/src/chat/mod.rs`
+- [ ] T001 [P] Add `rmcp = "=3.3.0"` to `[dependencies]` in `src-tauri/Cargo.toml` (research.md §3 — official Rust MCP SDK, exact pin)
+- [ ] T002 [P] Create `src-tauri/src/chat/tools/mod.rs` with the `Tool` trait (`name`, `description`, `input_schema`, `risk_class() -> RiskClass`, `async execute(Value) -> ToolResult`) using the existing `async-trait` pattern so `Box<dyn Tool>` is object-safe on Rust 1.77.2; add `RiskClass::{Safe, Risky}`, `ToolResult { content: String, is_error: bool }`, and an empty `ToolRegistry` struct (`Vec<Box<dyn Tool>>`, no tools registered yet); add `pub mod tools;` to `src-tauri/src/chat/mod.rs`
 
 **Checkpoint**: Module skeleton and pinned dependency in place. No behavior changes yet.
 
@@ -41,7 +41,7 @@ verification is manual per quickstart.md (kein Playwright in diesem Repo).
 
 - [ ] T003 Add Migration `0014_chat_messages_tool_columns` in `src-tauri/src/identity/migrations.rs`: `ALTER TABLE chat_messages ADD COLUMN` for `tool_name`, `tool_call_id`, `tool_input`, `tool_is_error`, `tool_source` (all nullable TEXT/INTEGER per data-model.md), each as its own `--> statement-breakpoint` step matching the `0013` migration's style
 - [ ] T004 Extend `MessageRole` in `src-tauri/src/storage/chat_messages.rs` with `ToolCall` and `ToolResult` variants; extend `ChatMessage` with `tool_name: Option<String>`, `tool_call_id: Option<String>`, `tool_input: Option<String>`, `tool_is_error: Option<bool>`, `tool_source: Option<String>`; update `insert_message`/row-mapping to read/write the new columns
-- [ ] T005 [P] Create `src-tauri/src/storage/chat_messages_tests.rs` covering: inserting a `ToolCall` row round-trips all tool fields; inserting a `ToolResult` row round-trips `tool_call_id`/`tool_is_error`; a pre-migration `User`/`Assistant` row still round-trips with all new fields `None`. Register `#[cfg(test)] mod chat_messages_tests;` in `src-tauri/src/storage/mod.rs`
+- [ ] T005 [P] Create `src-tauri/src/storage/chat_messages_tests.rs` covering: inserting a `ToolCall` row round-trips all tool fields; inserting a `ToolResult` row round-trips `tool_call_id`/`tool_is_error`; invalid rows are rejected when required role fields are missing, tool fields are present on non-tool roles, or fields from the wrong tool role are mixed; a pre-migration `User`/`Assistant` row still round-trips with all new fields `None`. Register `#[cfg(test)] mod chat_messages_tests;` in `src-tauri/src/storage/mod.rs`
 - [ ] T006 [P] Add `ToolSpec { name: String, description: String, input_schema: serde_json::Value }` and `ToolCall { id: String, name: String, input: serde_json::Value }` to `src-tauri/src/adapters/types.rs`; add `tools: Vec<ToolSpec>` to `ChatRequest`; extend `ChatRole`/`ChatMessage` with `ToolCall`/`ToolResult` variants (mirroring storage's roles, data-model.md); add `StreamChunk::ToolCalls(Vec<ToolCall>)` variant, emitted before `Done`
 - [ ] T007 Add `tool_registry: crate::chat::tools::ToolRegistry` and `pending_tool_approvals: Mutex<HashMap<Uuid, tokio::sync::oneshot::Sender<ApprovalDecision>>>` (new `ApprovalDecision::{Allow, Deny}` enum in `chat/tools/mod.rs`) to `ChatState` in `src-tauri/src/chat/session.rs`
 - [ ] T008 Add `FinishReason::ToolLimitReached` to `src-tauri/src/storage/chat_messages.rs`'s `FinishReason` enum (contracts/tauri-commands.md), including its `as_str`/parse mapping
@@ -61,6 +61,7 @@ verification is manual per quickstart.md (kein Playwright in diesem Repo).
 - [ ] T009 [P] [US1] Integration test in `src-tauri/tests/chat_tool_loop.rs`: a stubbed adapter emits one `ToolCalls` frame, the loop executes the tool, persists `tool_call`+`tool_result` rows, then a second step produces the final `assistant` row — assert row order and `parent_id` chain
 - [ ] T010 [P] [US1] Integration test in `src-tauri/tests/chat_tool_loop.rs`: a tool execution returns `is_error: true` — assert the response continues to a final answer instead of ending in `FinishReason::Error`
 - [ ] T011 [P] [US1] Integration test in `src-tauri/tests/chat_tool_loop.rs`: a stubbed adapter that always requests the same tool call exceeds the fixed round limit — assert `FinishReason::ToolLimitReached` and no further step runs
+- [ ] T011A [P] [US1] Adapter test in `src-tauri/src/adapters/anthropic_tests.rs`: two ordered `ToolCall` values reconstruct as exactly one assistant message with two `tool_use` blocks followed by one user message with matching `tool_result` blocks, preserving call order and IDs (data-model.md)
 
 ### Implementation for User Story 1
 
@@ -72,8 +73,8 @@ verification is manual per quickstart.md (kein Playwright in diesem Repo).
 - [ ] T017 [P] [US1] Create `src-tauri/src/chat/tools/mcp.rs`: using `rmcp`, connect to the user's configured MCP servers, call `tools/list`, wrap each returned tool as a `Tool` (`risk_class()` always `Risky` per design doc §4), forwarding `tools/call` in `execute()`
 - [ ] T018 [P] [US1] Create `src-tauri/src/chat/tools/mcp_tests.rs` against a minimal in-process test MCP server (or `rmcp`'s test utilities if available): tool discovery populates the registry; a disconnected/unavailable server surfaces as a tool execution error, not a panic (spec.md Edge Cases). Register `#[cfg(test)] mod mcp_tests;`
 - [ ] T019 [US1] Wire `ToolRegistry` population in `src-tauri/src/lib.rs`/`ChatState::new`: CLI tool registered unconditionally; MCP tools refreshed on server (re)connection; disambiguate a name collision between sources by prefixing the later-registered tool's name (data-model.md Edge Case)
-- [ ] T020 [US1] Emit `chat-tool-call`/`chat-tool-result` events (contracts/tauri-commands.md) from the turn loop (T012) at the point each row is persisted
-- [ ] T021 [US1] Update `src/composables/useChat.ts` to render `tool_call`/`tool_result` message rows and subscribe to the new events; add `de`/`en` i18n strings for tool-call/tool-result display
+- [ ] T020 [US1] Emit `chat-tool-call`/`chat-tool-result` events (contracts/tauri-commands.md) from the turn loop (T012) at the point each row is persisted; emit `chat-tool-call` even for a persisted Plan-mode-blocked call
+- [ ] T021 [US1] Update `src/composables/useChat.ts` to render `tool_call`/`tool_result` message rows and subscribe to the new events; keep `chat-message-complete`/`chat-message-error` per-step, subscribe to `chat-turn-complete`, and clear `streamingMessageId`/`busy` only on that final-turn event; add consumer coverage proving intermediate per-step events do not clear either state, plus `de`/`en` i18n strings for tool-call/tool-result display
 
 **Checkpoint**: Tool calls execute and are visible end-to-end, but every tool call is unconditionally allowed — Phase 4 (US2) is required before this is safe to ship (spec.md User Story 2 rationale).
 
@@ -119,7 +120,7 @@ verification is manual per quickstart.md (kein Playwright in diesem Repo).
 
 ### Implementation for User Story 3
 
-- [ ] T032 [US3] Extend `ChatState`/the turn loop (`src-tauri/src/chat/session.rs`, `chat/commands.rs`) to track the current tool execution's cancellation handle alongside the existing generation `AbortHandle`, so `abort_current_generation` also terminates an in-flight `tokio::process::Command` (T015) and drops any open `pending_tool_approvals` sender for the current turn
+- [ ] T032 [US3] Extend `ChatState`/the turn loop (`src-tauri/src/chat/session.rs`, `chat/commands.rs`) to track the current tool execution's cancellation handle alongside the existing generation `AbortHandle`; for an in-flight `tokio::process::Command` (T015), call `Child::kill().await` or `start_kill()` followed by `wait().await` (with `kill_on_drop(true)` only as fallback), and for MCP send `notifications/cancelled` with the original request ID while discarding late responses; preserve approval-sender cleanup and cancellation-resolved request IDs
 - [ ] T033 [US3] Confirm (add an assertion/test if none covers it) that no code path in the turn loop (T012) starts a further step after a `Cancelled` outcome — cancellation only ever ends the turn, per spec.md FR-011
 
 **Checkpoint**: Cancellation works uniformly across plain generation, a running tool, and a pending approval.
@@ -140,7 +141,7 @@ verification is manual per quickstart.md (kein Playwright in diesem Repo).
 
 ### Implementation for User Story 4
 
-- [ ] T037 [US4] Implement a bounded retry-with-backoff wrapper around the per-step adapter call in the turn loop (`src-tauri/src/chat/commands.rs`), using the error classification from T034; nothing is persisted for a failed attempt (design doc §3 invariant)
+- [ ] T037 [US4] Implement a bounded retry-with-backoff wrapper around the per-step adapter call in the turn loop (`src-tauri/src/chat/commands.rs`), using the error classification from T034; buffer each attempt's streamed tokens/reasoning and publish them only after that attempt succeeds, discard the buffer on failure, emit the transient `chat-retry` event between attempts, and persist nothing from a failed attempt (design doc §3 invariant)
 - [ ] T038 [US4] Emit the transient `chat-retry` event (contracts/tauri-commands.md) on each retry attempt; not persisted to `chat_messages`
 - [ ] T039 [P] [US4] Update `src/composables/useChat.ts` to show a subtle "retrying…" indicator on `chat-retry` without adding a message row; add `de`/`en` i18n strings
 
@@ -164,7 +165,7 @@ verification is manual per quickstart.md (kein Playwright in diesem Repo).
 - **Setup (Phase 1)**: no dependencies
 - **Foundational (Phase 2)**: depends on Setup — BLOCKS all user stories
 - **US1 (Phase 3)** and **US2 (Phase 4)**: both depend on Foundational; ship together as the MVP (spec.md explicitly ties them — tool execution without approval control is not an acceptable intermediate state)
-- **US3 (Phase 5)**: depends on Foundational + the turn loop existing (T012 from US1); independently testable once US1 lands, does not require US2
+- **US3 (Phase 5)**: depends on Foundational + the turn loop existing (T012 from US1) + US2's approval machinery (T026/T027), because cancellation also resolves pending approvals
 - **US4 (Phase 6)**: depends on Foundational + the turn loop existing (T012 from US1); independent of US2/US3
 - **Polish (Phase 7)**: depends on whichever stories are in scope for the release
 
@@ -178,9 +179,9 @@ verification is manual per quickstart.md (kein Playwright in diesem Repo).
 - T001/T002 in parallel
 - T005/T006 in parallel (different files); T004 blocks T005
 - T015-T018 (CLI tool + MCP tool + their tests) in parallel with each other, after T006/T007
-- T009-T011 (US1 tests) in parallel with each other before T012
+- T009-T011A (US1 tests) in parallel with each other before T012
 - T022, T022A, T023, T024, T024A, T024B (US2 tests) in parallel; T034-T036 (US4 tests) in parallel; T030-T031 (US3 tests) in parallel
-- US3 and US4 implementation phases can proceed in parallel with each other once US1's T012 lands (both only depend on the loop existing, not on each other or on US2)
+- US3 and US4 implementation phases can proceed in parallel with each other once US1's T012 and US2's T026/T027 land; US3 depends on US2 for approval cancellation, while US4 remains independent of US2/US3
 
 ---
 

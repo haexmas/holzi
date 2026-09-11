@@ -61,7 +61,7 @@ change).
 
 `src-tauri/src/storage/chat_messages.rs`: extend `MessageRole` with `ToolCall` and `ToolResult`;
 add nullable columns `tool_name`, `tool_call_id`, `tool_input` (JSON text), `tool_is_error`, and
-`tool_source` (`built_in` / `mcp` / `cli` / `acp_delegate` — see §8). Stays in the existing
+`tool_source` (`mcp` / `cli`; `cli_delegate` remains out of scope — see §8). Stays in the existing
 `parent_id` chain.
 
 **Retry interacts with persistence, not around it**: an LLM-request retry happens entirely before
@@ -72,15 +72,16 @@ commits neither system nor users" rule.
 ## 4. Tool registry
 
 A `Tool` trait: `name`, `description`, `input_schema`, `risk_class() -> Safe | Risky`, `async
-execute(input) -> ToolResult`. Three implementations behind it:
+execute(input) -> ToolResult`. Two source families sit behind it:
 
-- **Built-in** Rust tools (vault-scoped file read/write). `Safe` for reads, `Risky` for writes.
 - **MCP-client tools**, discovered per connected MCP server via `tools/list`, wrapped to the same
   trait. Default `Risky` — unknown server code — until a user explicitly allowlists one.
 - **Host-CLI tool**: one built-in tool spawning `tokio::process::Command`. Always `Risky`.
 
-The registry lives in `ChatState`, populated at app start (built-ins) and on MCP server connection
-(dynamic). Each step builds its `tools: Vec<ToolSpec>` from it.
+Individual vault-scoped read/write tools are deliberately deferred; they are a separate incremental
+feature built on this registry and are not part of this tool loop. The registry lives in `ChatState`,
+populated with the host-CLI tool at app start and with MCP tools on server connection (dynamic). Each
+step builds its `tools: Vec<ToolSpec>` from it.
 
 ## 5. Permission gate
 
@@ -108,11 +109,19 @@ decides whether to try again, same as any other tool-calling harness. No separat
 ## 7. Cancellation
 
 Matches Claude Code's own behavior (verified by inspection, not guessed): cancelling kills the
-running tool process immediately, ends the **whole turn** right there — no further step runs
+running local tool process immediately, ends the **whole turn** right there — no further step runs
 automatically — and returns control to the user. The cancellation is logged as `Cancelled` so a
 later "continue" has the context, but nothing resumes on its own. This is the existing
 `abort_current_generation` idea, widened from "abort the LLM stream" to "abort whatever the turn is
 currently doing" (LLM stream, tool subprocess, or an open permission wait).
+
+MCP cancellation is necessarily cooperative: for an in-flight `tools/call`, the client sends
+`notifications/cancelled` with the original JSON-RPC request ID. The client treats a late response
+for that cancelled ID as stale and discards it safely; it must not persist a result or emit a new
+tool event for the cancelled turn. The UI marks the local turn as `cancelled` and returns control to
+the user while the MCP server may still be finishing work in the background. This differs from the
+local host-CLI path, where the owned `tokio::process::Child` is explicitly killed and awaited before
+cancellation completes, so the subprocess is no longer running.
 
 ## 8. `cli_delegate` (Claude Code / Codex as backends)
 

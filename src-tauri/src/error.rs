@@ -98,6 +98,12 @@ pub enum HolziError {
     #[error("Model not found: {id}")]
     ModelNotFound { id: String },
 
+    #[error("Idempotency key must not be empty")]
+    InvalidIdempotencyKey,
+
+    #[error("Idempotency key conflicts with an existing request")]
+    IdempotencyKeyConflict,
+
     #[error("Invalid input: {reason}")]
     InvalidInput { reason: String },
 }
