@@ -26,3 +26,10 @@ fn user_and_assistant_ids_never_collide_for_the_same_key() {
     let (user_id, assistant_id) = derive_message_ids("same-key");
     assert_ne!(user_id, assistant_id);
 }
+
+#[test]
+fn role_namespaces_prevent_nested_key_collisions() {
+    let (_, assistant_id) = derive_message_ids("key");
+    let (nested_user_id, _) = derive_message_ids("key:assistant");
+    assert_ne!(assistant_id, nested_user_id);
+}

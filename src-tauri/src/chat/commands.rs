@@ -433,10 +433,13 @@ pub async fn active_model_info(chat: State<'_, ChatState>) -> Result<Option<Load
 /// no second column (contract §send_message: "die zugehörigen
 /// User-/Assistant-IDs werden aus diesem Send-Vorgang wiederverwendet").
 pub fn derive_message_ids(idempotency_key: &str) -> (Uuid, Uuid) {
-    let user_message_id = Uuid::new_v5(&Uuid::NAMESPACE_OID, idempotency_key.as_bytes());
+    let user_message_id = Uuid::new_v5(
+        &Uuid::NAMESPACE_OID,
+        format!("user:{idempotency_key}").as_bytes(),
+    );
     let assistant_message_id = Uuid::new_v5(
         &Uuid::NAMESPACE_OID,
-        format!("{idempotency_key}:assistant").as_bytes(),
+        format!("assistant:{idempotency_key}").as_bytes(),
     );
     (user_message_id, assistant_message_id)
 }
@@ -490,11 +493,136 @@ pub fn resolve_idempotent_send(
     if !thread_matches || existing.content != content {
         return Ok(IdempotentSend::Mismatch);
     }
+    // Rows written before the role-separated derivation used the raw key for
+    // the user id and `{key}:assistant` for the assistant id. Keep returning
+    // that pair for those rows so a retry remains byte-for-byte compatible.
+    let legacy_user_message_id = Uuid::new_v5(&Uuid::NAMESPACE_OID, idempotency_key.as_bytes());
+    let assistant_message_id = if existing.id == legacy_user_message_id {
+        Uuid::new_v5(
+            &Uuid::NAMESPACE_OID,
+            format!("{idempotency_key}:assistant").as_bytes(),
+        )
+    } else {
+        assistant_message_id
+    };
     Ok(IdempotentSend::Duplicate {
         thread_id: existing.thread_id,
         user_message_id: existing.id,
         assistant_message_id,
     })
+}
+
+/// Result of atomically resolving and persisting a fresh send.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PersistedSend {
+    Fresh {
+        thread_id: Uuid,
+        user_message_id: Uuid,
+        assistant_message_id: Uuid,
+    },
+    Duplicate {
+        thread_id: Uuid,
+        user_message_id: Uuid,
+        assistant_message_id: Uuid,
+    },
+    Mismatch,
+}
+
+/// Resolves, reserves, and persists a send in one SQLite transaction.
+///
+/// `BEGIN IMMEDIATE` closes the gap between the idempotency lookup and the
+/// unique-key insert. A concurrent loser therefore re-reads the committed
+/// winner and receives the same result instead of a primary-key/unique error.
+pub fn persist_send_transaction(
+    conn: &haex_crdt::rusqlite::Connection,
+    idempotency_key: &str,
+    requested_thread_id: Option<Uuid>,
+    content: &str,
+    provider_id: Option<Uuid>,
+    model_id: &str,
+    now: i64,
+) -> haex_crdt::rusqlite::Result<PersistedSend> {
+    conn.execute_batch("BEGIN IMMEDIATE")?;
+    let result = (|| {
+        let decision =
+            resolve_idempotent_send(conn, idempotency_key, requested_thread_id, content)?;
+        match decision {
+            IdempotentSend::Mismatch => Ok(PersistedSend::Mismatch),
+            IdempotentSend::Duplicate {
+                thread_id,
+                user_message_id,
+                assistant_message_id,
+            } => Ok(PersistedSend::Duplicate {
+                thread_id,
+                user_message_id,
+                assistant_message_id,
+            }),
+            IdempotentSend::Fresh {
+                user_message_id,
+                assistant_message_id,
+            } => {
+                let thread_id = requested_thread_id.unwrap_or_else(Uuid::new_v4);
+                if requested_thread_id.is_none() {
+                    thread_store::insert_thread(
+                        conn,
+                        &ChatThread {
+                            id: thread_id,
+                            title: default_thread_title(content),
+                            last_provider_id: provider_id,
+                            last_model_id: Some(model_id.to_string()),
+                            created_at: now,
+                            updated_at: now,
+                        },
+                    )?;
+                } else {
+                    thread_store::update_thread(
+                        conn,
+                        thread_id,
+                        &current_title(conn, thread_id).unwrap_or_default(),
+                        provider_id,
+                        Some(model_id),
+                        now,
+                    )?;
+                }
+                let parent_id = last_message_id(conn, thread_id)?;
+                msg_store::insert_message(
+                    conn,
+                    &ChatMessage {
+                        id: user_message_id,
+                        thread_id,
+                        parent_id,
+                        role: MessageRole::User,
+                        content: content.to_string(),
+                        provider_id,
+                        model_id: Some(model_id.to_string()),
+                        prompt_tokens: None,
+                        completion_tokens: None,
+                        finish_reason: Some(FinishReason::Complete),
+                        created_at: now,
+                        idempotency_key: Some(idempotency_key.to_string()),
+                    },
+                )?;
+                Ok(PersistedSend::Fresh {
+                    thread_id,
+                    user_message_id,
+                    assistant_message_id,
+                })
+            }
+        }
+    })();
+    match result {
+        Ok(result) => match conn.execute_batch("COMMIT") {
+            Ok(()) => Ok(result),
+            Err(error) => {
+                let _ = conn.execute_batch("ROLLBACK");
+                Err(error)
+            }
+        },
+        Err(error) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            Err(error)
+        }
+    }
 }
 
 /// Persists a user message, spawns a streaming generation, returns
@@ -512,15 +640,6 @@ pub async fn send_message(
             reason: "idempotencyKey must not be empty".into(),
         });
     }
-
-    let session = {
-        let guard = chat.session.lock().map_err(|e| HolziError::CrdtInit {
-            reason: format!("chat.session mutex poisoned: {e}"),
-        })?;
-        guard.clone().ok_or_else(|| HolziError::InvalidInput {
-            reason: "no model loaded".into(),
-        })?
-    };
 
     let db = active_database(&state)?;
 
@@ -544,7 +663,7 @@ pub async fn send_message(
     })?
     .map_err(HolziError::from)?;
 
-    let (thread_id, user_message_id, assistant_message_id) = match decision {
+    match decision {
         IdempotentSend::Mismatch => {
             return Err(HolziError::InvalidInput {
                 reason: "idempotencyKey already used with a different thread or content".into(),
@@ -561,81 +680,78 @@ pub async fn send_message(
                 assistant_message_id,
             });
         }
-        IdempotentSend::Fresh {
-            user_message_id,
-            assistant_message_id,
-        } => (
-            args.thread_id.unwrap_or_else(Uuid::new_v4),
-            user_message_id,
-            assistant_message_id,
-        ),
-    };
-    let now = now_ms();
+        IdempotentSend::Fresh { .. } => {}
+    }
 
-    // Persist the thread (if new) and user message under one DB lock.
+    let session = {
+        let guard = chat.session.lock().map_err(|e| HolziError::CrdtInit {
+            reason: format!("chat.session mutex poisoned: {e}"),
+        })?;
+        guard.clone().ok_or_else(|| HolziError::InvalidInput {
+            reason: "no model loaded".into(),
+        })?
+    };
+
+    let persist_key = args.idempotency_key.clone();
+    let persist_thread_id = args.thread_id;
+    let persist_content = args.content.clone();
+    let persist_provider_id = session.provider_id;
+    let persist_model_id = session.model_id.clone();
+    let persist_db = db.clone();
+    let persisted = tauri::async_runtime::spawn_blocking(move || {
+        persist_db.with_connection(|conn| {
+            persist_send_transaction(
+                conn,
+                &persist_key,
+                persist_thread_id,
+                &persist_content,
+                persist_provider_id,
+                &persist_model_id,
+                now_ms(),
+            )
+            .map_err(haex_crdt::Error::from)
+        })
+    })
+    .await
+    .map_err(|e| HolziError::CrdtInit {
+        reason: format!("persist send join: {e}"),
+    })?
+    .map_err(HolziError::from)?;
+
+    let (thread_id, user_message_id, assistant_message_id) = match persisted {
+        PersistedSend::Mismatch => {
+            return Err(HolziError::InvalidInput {
+                reason: "idempotencyKey already used with a different thread or content".into(),
+            });
+        }
+        PersistedSend::Duplicate {
+            thread_id,
+            user_message_id,
+            assistant_message_id,
+        } => {
+            return Ok(SendMessageResult {
+                thread_id,
+                user_message_id,
+                assistant_message_id,
+            });
+        }
+        PersistedSend::Fresh {
+            thread_id,
+            user_message_id,
+            assistant_message_id,
+        } => (thread_id, user_message_id, assistant_message_id),
+    };
+
+    // The thread and user message were persisted atomically above.
     // Spec 002 §FR-009: `chat.last_active_model_id` is written
     // EXCLUSIVELY here, never by `load_model` — the message is the user's
     // intent signal, a picker-only click is not. The preference is
     // committed after adapter startup succeeds so a failed send cannot
     // roll back a newer overlapping send's value.
-    let insert_db = db.clone();
-    let content_owned = args.content.clone();
-    let idempotency_key_owned = args.idempotency_key.clone();
     let session_model_id = session.model_id.clone();
-    let session_provider_id = session.provider_id;
-    let is_new_thread = args.thread_id.is_none();
     let this_device = db.device_id();
     let preference_model_id = session_model_id.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        insert_db.with_connection(|conn| {
-            if is_new_thread {
-                thread_store::insert_thread(
-                    conn,
-                    &ChatThread {
-                        id: thread_id,
-                        title: default_thread_title(&content_owned),
-                        last_provider_id: session_provider_id,
-                        last_model_id: Some(session_model_id.clone()),
-                        created_at: now,
-                        updated_at: now,
-                    },
-                )
-                .map_err(haex_crdt::Error::from)?;
-            } else {
-                thread_store::update_thread(
-                    conn,
-                    thread_id,
-                    &current_title(conn, thread_id).unwrap_or_default(),
-                    session_provider_id,
-                    Some(&session_model_id),
-                    now,
-                )
-                .map_err(haex_crdt::Error::from)?;
-            }
-            let parent_id = last_message_id(conn, thread_id)?;
-            let user_msg = ChatMessage {
-                id: user_message_id,
-                thread_id,
-                parent_id,
-                role: MessageRole::User,
-                content: content_owned.clone(),
-                provider_id: session_provider_id,
-                model_id: Some(session_model_id.clone()),
-                prompt_tokens: None,
-                completion_tokens: None,
-                finish_reason: Some(FinishReason::Complete),
-                created_at: now,
-                idempotency_key: Some(idempotency_key_owned.clone()),
-            };
-            msg_store::insert_message(conn, &user_msg).map_err(haex_crdt::Error::from)?;
-            Ok(())
-        })
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("insert user message join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
+    let is_new_thread = args.thread_id.is_none();
 
     // Build the request from full history + the just-inserted user turn.
     let history_db = db.clone();
@@ -1055,8 +1171,8 @@ fn current_title(conn: &haex_crdt::rusqlite::Connection, thread_id: Uuid) -> Opt
 fn last_message_id(
     conn: &haex_crdt::rusqlite::Connection,
     thread_id: Uuid,
-) -> haex_crdt::Result<Option<Uuid>> {
-    let msgs = msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)?;
+) -> haex_crdt::rusqlite::Result<Option<Uuid>> {
+    let msgs = msg_store::list_messages(conn, thread_id)?;
     Ok(msgs.last().map(|m| m.id))
 }
 

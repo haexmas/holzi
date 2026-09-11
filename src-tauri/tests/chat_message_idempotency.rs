@@ -7,12 +7,15 @@
 //! `src-tauri/src/storage/preferences_tests.rs` for the same split).
 
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Barrier};
 
 use haex_crdt::{Database, DatabaseConfig, NoopSignatureProvider, SqlCipherKey};
 use uuid::Uuid;
 
-use holzi_lib::chat::commands::{derive_message_ids, resolve_idempotent_send, IdempotentSend};
+use holzi_lib::chat::commands::{
+    derive_message_ids, persist_send_transaction, resolve_idempotent_send, IdempotentSend,
+    PersistedSend,
+};
 use holzi_lib::identity::{
     holzi_migration_source, installation_id_path, HolziBootstrap, HOLZI_TRIGGER_VERSION,
 };
@@ -249,6 +252,99 @@ fn resolve_duplicate_key_with_mismatched_thread_is_invalid_input() {
         )
         .unwrap();
         assert_eq!(decision, IdempotentSend::Mismatch);
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn legacy_key_retries_keep_the_original_assistant_id() {
+    let db = open_db();
+    let key = "legacy-key";
+    let thread_id = Uuid::new_v4();
+    let legacy_user_id = Uuid::new_v5(&Uuid::NAMESPACE_OID, key.as_bytes());
+    let legacy_assistant_id =
+        Uuid::new_v5(&Uuid::NAMESPACE_OID, format!("{key}:assistant").as_bytes());
+    db.with_connection(|conn| {
+        chat_messages::insert_message(
+            conn,
+            &sample_message(legacy_user_id, thread_id, "legacy content", Some(key)),
+        )
+        .unwrap();
+
+        assert_eq!(
+            resolve_idempotent_send(conn, key, Some(thread_id), "legacy content").unwrap(),
+            IdempotentSend::Duplicate {
+                thread_id,
+                user_message_id: legacy_user_id,
+                assistant_message_id: legacy_assistant_id,
+            }
+        );
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn concurrent_same_key_sends_return_one_fresh_and_one_duplicate() {
+    let db = Arc::new(open_db());
+    let start = Arc::new(Barrier::new(2));
+    let handles = (0..2)
+        .map(|_| {
+            let db = Arc::clone(&db);
+            let start = Arc::clone(&start);
+            std::thread::spawn(move || {
+                start.wait();
+                db.with_connection(|conn| {
+                    persist_send_transaction(
+                        conn,
+                        "concurrent-key",
+                        None,
+                        "same content",
+                        None,
+                        "test-model",
+                        1,
+                    )
+                    .map_err(haex_crdt::Error::from)
+                })
+                .unwrap()
+            })
+        })
+        .collect::<Vec<_>>();
+    let results = handles
+        .into_iter()
+        .map(|handle| handle.join().unwrap())
+        .collect::<Vec<_>>();
+
+    let fresh = results.iter().find_map(|result| match result {
+        PersistedSend::Fresh {
+            thread_id,
+            user_message_id,
+            assistant_message_id,
+        } => Some((*thread_id, *user_message_id, *assistant_message_id)),
+        _ => None,
+    });
+    let duplicate = results.iter().find_map(|result| match result {
+        PersistedSend::Duplicate {
+            thread_id,
+            user_message_id,
+            assistant_message_id,
+        } => Some((*thread_id, *user_message_id, *assistant_message_id)),
+        _ => None,
+    });
+    assert!(fresh.is_some(), "one concurrent send must reserve the key");
+    assert_eq!(
+        duplicate, fresh,
+        "the loser must receive the winner's result"
+    );
+
+    db.with_connection(|conn| {
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM chat_messages WHERE idempotency_key = ?1",
+            ["concurrent-key"],
+            |row| row.get(0),
+        )?;
+        assert_eq!(count, 1);
         Ok(())
     })
     .unwrap();

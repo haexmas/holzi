@@ -48,6 +48,8 @@ export interface SendMessageResult {
   threadId: string
   userMessageId: string
   assistantMessageId: string
+  /** The key used for this send; reuse it when retrying the same invoke. */
+  idempotencyKey: string
 }
 
 export interface TokenEvent {
@@ -109,7 +111,10 @@ export function useChat() {
   /** Persists a user turn and starts streaming the assistant response. */
   async function sendMessageAsync(args: SendMessageArgs): Promise<SendMessageResult> {
     const idempotencyKey = args.idempotencyKey ?? crypto.randomUUID()
-    return await invoke<SendMessageResult>('send_message', { args: { ...args, idempotencyKey } })
+    const result = await invoke<Omit<SendMessageResult, 'idempotencyKey'>>('send_message', {
+      args: { ...args, idempotencyKey },
+    })
+    return { ...result, idempotencyKey }
   }
 
   /** Aborts the active generation, if one is running. */
