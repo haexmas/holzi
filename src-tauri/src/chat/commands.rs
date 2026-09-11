@@ -636,9 +636,7 @@ pub async fn send_message(
     args: SendMessageArgs,
 ) -> Result<SendMessageResult> {
     if args.idempotency_key.trim().is_empty() {
-        return Err(HolziError::InvalidInput {
-            reason: "idempotencyKey must not be empty".into(),
-        });
+        return Err(HolziError::InvalidIdempotencyKey);
     }
 
     let db = active_database(&state)?;
@@ -665,9 +663,7 @@ pub async fn send_message(
 
     match decision {
         IdempotentSend::Mismatch => {
-            return Err(HolziError::InvalidInput {
-                reason: "idempotencyKey already used with a different thread or content".into(),
-            });
+            return Err(HolziError::IdempotencyKeyConflict);
         }
         IdempotentSend::Duplicate {
             thread_id,
@@ -720,9 +716,7 @@ pub async fn send_message(
 
     let (thread_id, user_message_id, assistant_message_id) = match persisted {
         PersistedSend::Mismatch => {
-            return Err(HolziError::InvalidInput {
-                reason: "idempotencyKey already used with a different thread or content".into(),
-            });
+            return Err(HolziError::IdempotencyKeyConflict);
         }
         PersistedSend::Duplicate {
             thread_id,

@@ -69,7 +69,8 @@
       "cudaJitWarmup": "Optimiere GPU für erste Nutzung von {modelName}, dauert einmalig etwa 30 Sekunden…",
       "ready": "Bereit"
     },
-    "noModel": "Kein Modell verfügbar"
+    "noModel": "Kein Modell verfügbar",
+    "retry": "Erneut versuchen"
   },
   "settings": {
     "header": {
@@ -118,6 +119,8 @@
     "prefSaveFailed": "Standard-Modell konnte nicht gespeichert werden",
     "prefClearFailed": "Standard-Modell konnte nicht gelöscht werden",
     "prefLoadFailed": "Standard-Modell konnte nicht geladen werden",
-    "modelListFailed": "Modell-Liste konnte nicht geladen werden"
+    "modelListFailed": "Modell-Liste konnte nicht geladen werden",
+    "invalidIdempotencyKey": "Der Sendevorgang ist ungültig.",
+    "idempotencyKeyConflict": "Dieser Sendevorgang wurde bereits mit anderen Daten verwendet."
   }
 }

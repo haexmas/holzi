@@ -69,7 +69,8 @@
       "cudaJitWarmup": "Optimising GPU for the first run of {modelName}, one-off ~30 seconds…",
       "ready": "Ready"
     },
-    "noModel": "No model available"
+    "noModel": "No model available",
+    "retry": "Try again"
   },
   "settings": {
     "header": {
@@ -118,6 +119,8 @@
     "prefSaveFailed": "Failed to save default model",
     "prefClearFailed": "Failed to clear default model",
     "prefLoadFailed": "Failed to load default model",
-    "modelListFailed": "Failed to load model list"
+    "modelListFailed": "Failed to load model list",
+    "invalidIdempotencyKey": "The send request is invalid.",
+    "idempotencyKeyConflict": "This send request was already used with different data."
   }
 }
