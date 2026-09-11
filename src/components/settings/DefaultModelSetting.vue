@@ -28,7 +28,9 @@ const loading = ref(true)
 const busy = ref(false)
 const savedFlash = ref<'saved' | 'cleared' | null>(null)
 const opError = ref<string | null>(null)
+const opErrorKind = ref<'save' | 'clear' | null>(null)
 const loadError = ref<string | null>(null)
+const modelListError = ref(false)
 
 type ModelGroup = {
   providerId: string
@@ -76,6 +78,7 @@ function modelDisplayName(id: string): string {
 async function reloadAsync() {
   loading.value = true
   loadError.value = null
+  modelListError.value = false
   try {
     const [installed, providers] = await Promise.all([
       listInstalledAsync(),
@@ -92,7 +95,7 @@ async function reloadAsync() {
             nextModels[p.id] = await listModelsAsync(p.id)
           }
           catch {
-            nextModels[p.id] = []
+            modelListError.value = true
           }
         }),
     )
@@ -130,6 +133,7 @@ async function onSave() {
   busy.value = true
   savedFlash.value = null
   opError.value = null
+  opErrorKind.value = null
   const scope
     = selectedScope.value === 'device'
       ? { kind: 'device' as const, uuid: props.deviceUuid }
@@ -145,6 +149,7 @@ async function onSave() {
     savedFlash.value = 'saved'
   }
   catch (e) {
+    opErrorKind.value = 'save'
     opError.value = e instanceof Error ? e.message : String(e)
   }
   finally {
@@ -156,6 +161,7 @@ async function onClear() {
   busy.value = true
   savedFlash.value = null
   opError.value = null
+  opErrorKind.value = null
   const scope
     = selectedScope.value === 'device'
       ? { kind: 'device' as const, uuid: props.deviceUuid }
@@ -172,6 +178,7 @@ async function onClear() {
     savedFlash.value = 'cleared'
   }
   catch (e) {
+    opErrorKind.value = 'clear'
     opError.value = e instanceof Error ? e.message : String(e)
   }
   finally {
@@ -213,35 +220,39 @@ onMounted(reloadAsync)
         </span>
       </div>
 
-      <div v-if="!hasAnyModel" class="text-sm text-neutral-500">
+      <p v-if="modelListError" class="text-sm text-red-500" role="alert">
+        {{ t('errors.modelListFailed') }}
+      </p>
+
+      <div v-if="!hasAnyModel && !modelListError" class="text-sm text-neutral-500">
         {{ t('settings.default.empty') }}
       </div>
 
-      <template v-else>
-        <fieldset class="flex flex-col gap-1">
-          <legend class="text-sm font-medium">
-            {{ t('settings.default.scope.label') }}
-          </legend>
-          <label class="flex items-center gap-2 text-sm">
-            <input
-              v-model="selectedScope"
-              type="radio"
-              value="device"
-              :disabled="busy"
-            >
-            {{ t('settings.default.scope.device') }}
-          </label>
-          <label class="flex items-center gap-2 text-sm">
-            <input
-              v-model="selectedScope"
-              type="radio"
-              value="vault"
-              :disabled="busy"
-            >
-            {{ t('settings.default.scope.vault') }}
-          </label>
-        </fieldset>
+      <fieldset class="flex flex-col gap-1">
+        <legend class="text-sm font-medium">
+          {{ t('settings.default.scope.label') }}
+        </legend>
+        <label class="flex items-center gap-2 text-sm">
+          <input
+            v-model="selectedScope"
+            type="radio"
+            value="device"
+            :disabled="busy"
+          >
+          {{ t('settings.default.scope.device') }}
+        </label>
+        <label class="flex items-center gap-2 text-sm">
+          <input
+            v-model="selectedScope"
+            type="radio"
+            value="vault"
+            :disabled="busy"
+          >
+          {{ t('settings.default.scope.vault') }}
+        </label>
+      </fieldset>
 
+      <template v-if="hasAnyModel">
         <label class="flex flex-col gap-1">
           <span class="text-sm font-medium">{{ t('settings.default.modelLabel') }}</span>
           <select
@@ -276,26 +287,29 @@ onMounted(reloadAsync)
           >
             {{ t('settings.default.save') }}
           </UiButton>
-          <UiButton
-            v-if="currentForScope"
-            type="button"
-            variant="outline"
-            :disabled="busy"
-            @click="onClear"
-          >
-            {{ t('settings.default.clear') }}
-          </UiButton>
-          <span v-if="savedFlash === 'saved'" class="text-xs text-green-600" role="status">
-            {{ t('settings.default.saved') }}
-          </span>
-          <span v-if="savedFlash === 'cleared'" class="text-xs text-green-600" role="status">
-            {{ t('settings.default.cleared') }}
-          </span>
-          <span v-if="opError" class="text-xs text-red-500" role="alert">
-            {{ t('errors.prefSaveFailed') }}: {{ opError }}
-          </span>
         </div>
       </template>
+
+      <div class="flex items-center gap-3 flex-wrap">
+        <UiButton
+          v-if="currentForScope"
+          type="button"
+          variant="outline"
+          :disabled="busy"
+          @click="onClear"
+        >
+          {{ t('settings.default.clear') }}
+        </UiButton>
+        <span v-if="savedFlash === 'saved'" class="text-xs text-green-600" role="status">
+          {{ t('settings.default.saved') }}
+        </span>
+        <span v-if="savedFlash === 'cleared'" class="text-xs text-green-600" role="status">
+          {{ t('settings.default.cleared') }}
+        </span>
+        <span v-if="opError" class="text-xs text-red-500" role="alert">
+          {{ t(opErrorKind === 'clear' ? 'errors.prefClearFailed' : 'errors.prefSaveFailed') }}: {{ opError }}
+        </span>
+      </div>
     </template>
   </section>
 </template>

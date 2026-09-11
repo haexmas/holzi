@@ -23,6 +23,7 @@ const deviceInfo = ref<DeviceInfo | null>(null)
 const loadError = ref<string | null>(null)
 
 async function reloadDeviceInfoAsync() {
+  loadError.value = null
   try {
     deviceInfo.value = await currentDeviceInfoAsync()
   }
