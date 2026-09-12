@@ -127,6 +127,9 @@ impl Tool for CliTool {
         // walks the OS's own parent-child process tree instead.
         #[cfg(unix)]
         cmd.process_group(0);
+        if cancel.is_cancelled() {
+            return ToolResult::error("tool_call_cancelled");
+        }
         let mut child = match cmd.spawn() {
             Ok(child) => child,
             Err(e) => return ToolResult::error(format!("failed to spawn command: {e}")),

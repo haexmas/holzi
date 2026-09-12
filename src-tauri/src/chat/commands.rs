@@ -1212,6 +1212,7 @@ enum ToolPlan {
     Ask {
         tool: Arc<dyn Tool>,
         rx: tokio::sync::oneshot::Receiver<ApprovalDecision>,
+        request_id: Uuid,
     },
     Deny(Arc<dyn Tool>),
     Unknown,
@@ -1328,18 +1329,25 @@ async fn run_step(
     loop {
         let mut live_stream = match stream.take() {
             Some(s) => s,
-            None => match session.adapter.stream_chat(request.clone()).await {
-                Ok(s) => {
-                    let mut generation = chat_state
-                        .current_generation
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner());
-                    *generation = Some(s.abort_handle());
-                    drop(generation);
-                    s
-                }
-                Err(e) => {
-                    match retry_or_bail(
+            None => {
+                let started = tokio::select! {
+                    biased;
+                    _ = cancel.cancelled() => {
+                        return StepOutcome::Cancelled(String::new());
+                    }
+                    result = session.adapter.stream_chat(request.clone()) => result,
+                };
+                match started {
+                    Ok(s) => {
+                        let mut generation = chat_state
+                            .current_generation
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner());
+                        *generation = Some(s.abort_handle());
+                        drop(generation);
+                        s
+                    }
+                    Err(e) => match retry_or_bail(
                         e.is_transient(),
                         format!("adapter start: {e}"),
                         &mut attempt,
@@ -1358,7 +1366,7 @@ async fn run_step(
                                 partial: String::new(),
                             }
                         }
-                    }
+                    },
                 }
             },
         };
@@ -1635,7 +1643,14 @@ pub async fn run_turn(
                             })
                             .expect("ToolPermissionRequestEvent always serializes"),
                         );
-                        plans.push((call, ToolPlan::Ask { tool, rx }));
+                        plans.push((
+                            call,
+                            ToolPlan::Ask {
+                                tool,
+                                rx,
+                                request_id,
+                            },
+                        ));
                     }
                 }
             }
@@ -1650,16 +1665,26 @@ pub async fn run_turn(
                                 let result = tool.execute(call.input.clone(), cancel).await;
                                 (call, result, source)
                             }
-                            ToolPlan::Ask { tool, rx } => {
+                            ToolPlan::Ask {
+                                tool,
+                                rx,
+                                request_id,
+                            } => {
                                 // `abort_turn` drops every pending sender
                                 // (T032), so a dropped-without-answer `rx`
                                 // below always means cancellation, never a
                                 // silent auto-decision (FR-005).
-                                match rx.await {
+                                let tool_cancel = cancel.clone();
+                                let decision = tokio::select! {
+                                    biased;
+                                    _ = cancel.cancelled() => Err(()),
+                                    decision = rx => decision.map_err(|_| ()),
+                                };
+                                match decision {
                                     Ok(ApprovalDecision::Allow) => {
                                         let source = tool.source();
                                         let result =
-                                            tool.execute(call.input.clone(), cancel).await;
+                                            tool.execute(call.input.clone(), tool_cancel).await;
                                         (call, result, source)
                                     }
                                     Ok(ApprovalDecision::Deny) => (
@@ -1667,11 +1692,18 @@ pub async fn run_turn(
                                         ToolExecResult::error("denied_by_user"),
                                         tool.source(),
                                     ),
-                                    Err(_) => (
-                                        call,
-                                        ToolExecResult::error("tool_call_cancelled"),
-                                        tool.source(),
-                                    ),
+                                    Err(_) => {
+                                        chat_state
+                                            .pending_tool_approvals
+                                            .lock()
+                                            .unwrap_or_else(|e| e.into_inner())
+                                            .remove(&request_id);
+                                        (
+                                            call,
+                                            ToolExecResult::error("tool_call_cancelled"),
+                                            tool.source(),
+                                        )
+                                    }
                                 }
                             }
                             ToolPlan::Deny(tool) => (

@@ -87,3 +87,57 @@ async fn cancellation_kills_the_process_and_reaps_it_without_a_zombie() {
         "cancellation must kill the process instead of waiting out the full sleep: took {elapsed:?}"
     );
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn cancellation_kills_a_descendant_process_too() {
+    let tool = CliTool;
+    let cancel = CancellationToken::new();
+    let cancel_for_execute = cancel.clone();
+    let pid_file = tempfile::NamedTempFile::new().expect("pid file");
+    let pid_path = pid_file.path().display().to_string();
+    let command = format!("sleep 5 & echo $! > '{pid_path}'; wait");
+    let execution = tokio::spawn(async move {
+        tool.execute(
+            serde_json::json!({ "command": command }),
+            cancel_for_execute,
+        )
+        .await
+    });
+
+    let descendant_pid = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        loop {
+            if let Ok(pid) = tokio::fs::read_to_string(&pid_path).await {
+                if let Ok(pid) = pid.trim().parse::<libc::pid_t>() {
+                    break pid;
+                }
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("command must start its descendant");
+
+    cancel.cancel();
+    let result = tokio::time::timeout(std::time::Duration::from_secs(2), execution)
+        .await
+        .expect("cancellation must finish the command")
+        .expect("command task must not panic");
+    assert!(result.is_error);
+    assert_eq!(result.content, "tool_call_cancelled");
+
+    let descendant_gone = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        loop {
+            // `kill(pid, 0)` checks existence without sending a signal.
+            if unsafe { libc::kill(descendant_pid, 0) } != 0 {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await;
+    assert!(
+        descendant_gone.is_ok(),
+        "cancellation must terminate the shell's descendant process"
+    );
+}

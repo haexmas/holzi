@@ -71,19 +71,11 @@ impl Tool for McpTool {
             Some(args) => params.with_arguments(args),
             None => params,
         };
+        if cancel.is_cancelled() {
+            return ToolResult::error("tool_call_cancelled");
+        }
         tokio::select! {
-            result = self.connection.call_tool(params) => {
-                match result {
-                    Ok(result) => {
-                        let content = content_to_string(&result.content);
-                        ToolResult {
-                            content,
-                            is_error: result.is_error.unwrap_or(false),
-                        }
-                    }
-                    Err(e) => ToolResult::error(format!("mcp tools/call failed: {e}")),
-                }
-            }
+            biased;
             _ = cancel.cancelled() => {
                 // Best-effort: `call_tool`'s multi-round convenience wrapper
                 // does not expose the raw JSON-RPC request id a
@@ -95,6 +87,18 @@ impl Tool for McpTool {
                 // `call_tool`'s retry loop over the raw cancellable-request
                 // API just to attach an id.
                 ToolResult::error("tool_call_cancelled")
+            }
+            result = self.connection.call_tool(params) => {
+                match result {
+                    Ok(result) => {
+                        let content = content_to_string(&result.content);
+                        ToolResult {
+                            content,
+                            is_error: result.is_error.unwrap_or(false),
+                        }
+                    }
+                    Err(e) => ToolResult::error(format!("mcp tools/call failed: {e}")),
+                }
             }
         }
     }

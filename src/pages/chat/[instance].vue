@@ -75,6 +75,7 @@ const expandedReasoning = ref<Set<string>>(new Set())
 type PendingStreamEvents = {
   tokens: string
   reasoning: string
+  retryReset?: boolean
   complete?: MessageCompleteEvent
   error?: MessageErrorEvent
   turnComplete?: TurnCompleteEvent
@@ -351,6 +352,13 @@ async function send(retryPending = false) {
     }
     const pending = pendingStreamEvents.get(result.assistantMessageId)
     pendingStreamEvents.delete(result.assistantMessageId)
+    if (pending?.retryReset) {
+      streamingBuffer.value = ''
+      reasoningByMessage.value = {
+        ...reasoningByMessage.value,
+        [result.assistantMessageId]: '',
+      }
+    }
     if (pending?.tokens || pending?.reasoning) {
       handleToken({
         messageId: result.assistantMessageId,
@@ -486,14 +494,17 @@ function handleToken(e: TokenEvent) {
 }
 
 /** `chat-retry`: the attempt whose partial text was already shown just
- * got discarded — clear it and show "retrying…" instead (T039). Only
- * handled for the message currently streaming; a retry landing in the
- * narrow pre-setup race window (see `pendingStreamEvents`) has no
- * rendered partial text to clear in the first place, so it is ignored
- * rather than added to that buffer too. */
+ * got discarded — clear it and show "retrying…" instead (T039). Preserve
+ * the reset when the event lands before `send()` installs its placeholder. */
 function handleRetry(e: RetryEvent) {
   const threadId = activeThreadId.value
-  if (streamingMessageId.value !== e.assistantMessageId || !threadId) return
+  if (streamingMessageId.value !== e.assistantMessageId || !threadId) {
+    const pending = pendingFor(e.assistantMessageId)
+    pending.tokens = ''
+    pending.reasoning = ''
+    pending.retryReset = true
+    return
+  }
   streamingBuffer.value = ''
   reasoningByMessage.value = { ...reasoningByMessage.value, [e.assistantMessageId]: '' }
   const list = messagesByThread.value[threadId] ?? []
