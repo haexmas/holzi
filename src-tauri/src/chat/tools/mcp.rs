@@ -16,6 +16,7 @@ use rmcp::service::RunningService;
 use rmcp::transport::{ConfigureCommandExt, TokioChildProcess};
 use rmcp::{RoleClient, ServiceExt};
 use serde_json::Value;
+use tokio_util::sync::CancellationToken;
 
 use super::{RiskClass, Tool, ToolResult};
 
@@ -63,22 +64,42 @@ impl Tool for McpTool {
         RiskClass::Risky
     }
 
-    async fn execute(&self, input: Value) -> ToolResult {
+    async fn execute(&self, input: Value, cancel: CancellationToken) -> ToolResult {
         let arguments = input.as_object().cloned();
         let params = CallToolRequestParams::new(self.mcp_tool_name.clone());
         let params = match arguments {
             Some(args) => params.with_arguments(args),
             None => params,
         };
-        match self.connection.call_tool(params).await {
-            Ok(result) => {
-                let content = content_to_string(&result.content);
-                ToolResult {
-                    content,
-                    is_error: result.is_error.unwrap_or(false),
+        if cancel.is_cancelled() {
+            return ToolResult::error("tool_call_cancelled");
+        }
+        tokio::select! {
+            biased;
+            _ = cancel.cancelled() => {
+                // Best-effort: `call_tool`'s multi-round convenience wrapper
+                // does not expose the raw JSON-RPC request id a
+                // spec-correct `notifications/cancelled` needs, and no
+                // product surface can even reach this path yet (MCP
+                // servers are not user-configurable in this feature,
+                // spec.md Assumptions). The in-flight call is dropped and
+                // any late response discarded, rather than reimplementing
+                // `call_tool`'s retry loop over the raw cancellable-request
+                // API just to attach an id.
+                ToolResult::error("tool_call_cancelled")
+            }
+            result = self.connection.call_tool(params) => {
+                match result {
+                    Ok(result) => {
+                        let content = content_to_string(&result.content);
+                        ToolResult {
+                            content,
+                            is_error: result.is_error.unwrap_or(false),
+                        }
+                    }
+                    Err(e) => ToolResult::error(format!("mcp tools/call failed: {e}")),
                 }
             }
-            Err(e) => ToolResult::error(format!("mcp tools/call failed: {e}")),
         }
     }
 }

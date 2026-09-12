@@ -347,12 +347,27 @@ impl ProviderAdapter for AnthropicAdapter {
                         break;
                     }
                     "error" => {
+                        let error_type = payload
+                            .pointer("/error/type")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default();
                         let message = payload
                             .pointer("/error/message")
                             .and_then(Value::as_str)
                             .unwrap_or("anthropic sse error")
                             .to_string();
-                        let _ = tx.send(Err(StreamError::Model(message)));
+                        // Anthropic's own transient categories (docs:
+                        // errors) — everything else (invalid_request_error,
+                        // authentication_error, permission_error,
+                        // not_found_error, ...) reproduces deterministically
+                        // for the same request (spec.md FR-012, T034).
+                        let err = match error_type {
+                            "overloaded_error" | "rate_limit_error" | "api_error" => {
+                                StreamError::Transient(message)
+                            }
+                            _ => StreamError::Model(message),
+                        };
+                        let _ = tx.send(Err(err));
                         done_emitted = true;
                         break;
                     }

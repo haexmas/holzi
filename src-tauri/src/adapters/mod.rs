@@ -62,6 +62,21 @@ pub enum AdapterError {
     Parse { reason: String },
 }
 
+impl AdapterError {
+    /// Eligible for the bounded automatic retry when re-starting a step
+    /// mid-turn after a transient [`StreamError`](crate::adapters::StreamError)
+    /// (spec.md FR-012, tasks.md T034): a transport failure, a rate limit
+    /// (429), or a 5xx. `InvalidCredentials`/`Parse` and other 4xx
+    /// statuses reproduce deterministically for the same request.
+    pub fn is_transient(&self) -> bool {
+        match self {
+            AdapterError::Http { .. } => true,
+            AdapterError::Status { status, .. } => *status == 429 || (500..600).contains(status),
+            AdapterError::InvalidCredentials | AdapterError::Parse { .. } => false,
+        }
+    }
+}
+
 /// Contract every provider adapter implements. Both the listing and the
 /// streaming paths funnel through this trait so `ChatState` can hold
 /// `Arc<dyn ProviderAdapter>` without knowing which vendor sits behind

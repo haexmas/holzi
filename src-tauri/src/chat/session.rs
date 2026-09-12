@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use tokio::sync::oneshot;
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::adapters::ProviderAdapter;
@@ -42,11 +43,16 @@ pub struct ActiveSession {
 /// `pending_tool_approvals` holds one `oneshot::Sender` per open
 /// `tool-permission-request`, resolved by `respond_tool_permission` or
 /// dropped on cancellation (data-model.md `PendingToolApproval`).
+/// `tool_cancellation` is the current turn's cancellation signal (T032):
+/// `abort_current_generation` fires it alongside aborting
+/// `current_generation`, so an in-flight `Tool::execute` or a pending
+/// approval wait ends immediately instead of only the LLM stream.
 pub struct ChatState {
     pub session: Mutex<Option<ActiveSession>>,
     pub current_generation: Mutex<Option<tokio::task::AbortHandle>>,
     pub tool_registry: Mutex<ToolRegistry>,
     pub pending_tool_approvals: Mutex<HashMap<Uuid, oneshot::Sender<ApprovalDecision>>>,
+    pub tool_cancellation: Mutex<Option<CancellationToken>>,
 }
 
 impl ChatState {
@@ -60,6 +66,7 @@ impl ChatState {
             current_generation: Mutex::new(None),
             tool_registry: Mutex::new(registry),
             pending_tool_approvals: Mutex::new(HashMap::new()),
+            tool_cancellation: Mutex::new(None),
         }
     }
 

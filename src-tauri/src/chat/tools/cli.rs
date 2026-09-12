@@ -17,6 +17,7 @@ use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::Command;
 use tokio::process::ChildStderr;
 use tokio::process::ChildStdout;
+use tokio_util::sync::CancellationToken;
 
 use super::{RiskClass, Tool, ToolResult};
 
@@ -95,23 +96,41 @@ impl Tool for CliTool {
         RiskClass::Risky
     }
 
-    async fn execute(&self, input: Value) -> ToolResult {
+    async fn execute(&self, input: Value, cancel: CancellationToken) -> ToolResult {
         let Some(command) = input.get("command").and_then(Value::as_str) else {
             return ToolResult::error("missing required \"command\" string input");
         };
 
-        // A shell (`sh -c`) is used deliberately so the model can rely on
-        // shell features (pipes, globs, redirection) — spec.md FR-015
-        // already accepts no command/working-directory restriction, so
-        // there is no additional risk introduced by going through a shell
-        // versus exec'ing a single argv.
-        let mut child = match Command::new("sh")
-            .arg("-c")
-            .arg(command)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-        {
+        // A shell (`sh -c` / `cmd /C`) is used deliberately so the model can
+        // rely on shell features (pipes, globs, redirection) — spec.md
+        // FR-015 already accepts no command/working-directory restriction,
+        // so there is no additional risk introduced by going through a
+        // shell versus exec'ing a single argv. Desktop-portable per plan.md
+        // Target Platform: every OS this feature targets has one of the two.
+        #[cfg(not(windows))]
+        let mut cmd = {
+            let mut cmd = Command::new("sh");
+            cmd.arg("-c").arg(command);
+            cmd
+        };
+        #[cfg(windows)]
+        let mut cmd = {
+            let mut cmd = Command::new("cmd");
+            cmd.arg("/C").arg(command);
+            cmd
+        };
+        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+        // Own process group so a kill can reach a grandchild the shell
+        // forks (e.g. for a pipeline) — `Child::kill` below only ever
+        // signals this one PID, never anything it spawned in turn (T032).
+        // Windows has no equivalent at spawn time; `taskkill /T` below
+        // walks the OS's own parent-child process tree instead.
+        #[cfg(unix)]
+        cmd.process_group(0);
+        if cancel.is_cancelled() {
+            return ToolResult::error("tool_call_cancelled");
+        }
+        let mut child = match cmd.spawn() {
             Ok(child) => child,
             Err(e) => return ToolResult::error(format!("failed to spawn command: {e}")),
         };
@@ -128,40 +147,81 @@ impl Tool for CliTool {
         let mut stdout_bytes = None;
         let mut stderr_bytes = None;
 
-        let execution = tokio::time::timeout(EXECUTION_TIMEOUT, async {
-            while stdout_bytes.is_none() || stderr_bytes.is_none() {
-                match (stdout_bytes.is_none(), stderr_bytes.is_none()) {
-                    (true, true) => tokio::select! {
-                        result = stdout_task.as_mut().unwrap() => {
-                            stdout_task = None;
+        enum Outcome {
+            Finished(Result<(std::process::ExitStatus, Vec<u8>, Vec<u8>), &'static str>),
+            TimedOut,
+            Cancelled,
+        }
+
+        let outcome = tokio::select! {
+            result = tokio::time::timeout(EXECUTION_TIMEOUT, async {
+                while stdout_bytes.is_none() || stderr_bytes.is_none() {
+                    match (stdout_bytes.is_none(), stderr_bytes.is_none()) {
+                        (true, true) => tokio::select! {
+                            result = stdout_task.as_mut().unwrap() => {
+                                stdout_task = None;
+                                stdout_bytes = Some(result.map_err(|_| "output reader task failed")??);
+                            }
+                            result = stderr_task.as_mut().unwrap() => {
+                                stderr_task = None;
+                                stderr_bytes = Some(result.map_err(|_| "output reader task failed")??);
+                            }
+                        },
+                        (true, false) => {
+                            let result = stdout_task.take().unwrap().await;
                             stdout_bytes = Some(result.map_err(|_| "output reader task failed")??);
                         }
-                        result = stderr_task.as_mut().unwrap() => {
-                            stderr_task = None;
+                        (false, true) => {
+                            let result = stderr_task.take().unwrap().await;
                             stderr_bytes = Some(result.map_err(|_| "output reader task failed")??);
                         }
-                    },
-                    (true, false) => {
-                        let result = stdout_task.take().unwrap().await;
-                        stdout_bytes = Some(result.map_err(|_| "output reader task failed")??);
+                        (false, false) => unreachable!(),
                     }
-                    (false, true) => {
-                        let result = stderr_task.take().unwrap().await;
-                        stderr_bytes = Some(result.map_err(|_| "output reader task failed")??);
-                    }
-                    (false, false) => unreachable!(),
+                }
+                let status = child
+                    .wait()
+                    .await
+                    .map_err(|_| "failed to wait for command")?;
+                Ok::<_, &'static str>((status, stdout_bytes.unwrap(), stderr_bytes.unwrap()))
+            }) => {
+                match result {
+                    Ok(inner) => Outcome::Finished(inner),
+                    Err(_) => Outcome::TimedOut,
                 }
             }
-            let status = child
-                .wait()
-                .await
-                .map_err(|_| "failed to wait for command")?;
-            Ok::<_, &'static str>((status, stdout_bytes.unwrap(), stderr_bytes.unwrap()))
-        })
-        .await;
+            _ = cancel.cancelled() => Outcome::Cancelled,
+        };
 
-        let failed = !matches!(&execution, Ok(Ok(_)));
+        let failed = !matches!(&outcome, Outcome::Finished(Ok(_)));
         if failed {
+            // `Child::kill` only signals this one PID — a grandchild the
+            // shell forked (e.g. one side of a pipeline) would otherwise
+            // survive, orphaned, running to completion on its own. Signal
+            // the whole group instead (`process_group(0)` at spawn made
+            // this PID its own group leader too, so this also covers the
+            // shell itself).
+            #[cfg(unix)]
+            if let Some(pid) = child.id() {
+                // SAFETY: FFI call with a plain integer PID and signal
+                // constant, no pointers involved.
+                unsafe {
+                    libc::kill(-(pid as libc::pid_t), libc::SIGKILL);
+                }
+            }
+            // Windows has no process-group signal; `taskkill /T` walks the
+            // OS's own parent-child tree from this PID instead, which
+            // covers `cmd /C`'s own children the same way the group kill
+            // does on Unix.
+            #[cfg(windows)]
+            if let Some(pid) = child.id() {
+                let _ = tokio::process::Command::new("taskkill")
+                    .args(["/T", "/F", "/PID", &pid.to_string()])
+                    .output()
+                    .await;
+            }
+            // Reap explicitly rather than relying on `Child`'s Drop — that
+            // fallback only sends the kill signal without waiting, which
+            // would leave a zombie until something else reaps it (T032).
             let _ = child.kill().await;
             let _ = child.wait().await;
             if let Some(task) = stdout_task {
@@ -174,8 +234,8 @@ impl Tool for CliTool {
             }
         }
 
-        match execution {
-            Ok(Ok((status, stdout, stderr))) => {
+        match outcome {
+            Outcome::Finished(Ok((status, stdout, stderr))) => {
                 let mut content = String::from_utf8_lossy(&stdout).into_owned();
                 if !stderr.is_empty() {
                     if !content.is_empty() {
@@ -196,8 +256,9 @@ impl Tool for CliTool {
                     ToolResult::error(content)
                 }
             }
-            Ok(Err(reason)) => ToolResult::error(reason),
-            Err(_) => ToolResult::error("command timed out after 30 seconds"),
+            Outcome::Finished(Err(reason)) => ToolResult::error(reason),
+            Outcome::TimedOut => ToolResult::error("command timed out after 30 seconds"),
+            Outcome::Cancelled => ToolResult::error("tool_call_cancelled"),
         }
     }
 }

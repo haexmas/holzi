@@ -110,7 +110,8 @@ pub enum StreamChunk {
     },
 }
 
-/// Terminal errors delivered on the stream's `Err` branch.
+/// Errors delivered on the stream's `Err` branch. Not all are terminal —
+/// see [`StreamError::is_transient`] (spec.md FR-012, tasks.md T034).
 #[derive(Debug, thiserror::Error, Clone)]
 pub enum StreamError {
     #[error("validation error: {0}")]
@@ -123,6 +124,27 @@ pub enum StreamError {
     UnexpectedEnd,
     #[error("failed to start generation: {0}")]
     StartFailed(String),
+    /// A provider-reported condition classified transient at the source
+    /// (e.g. Anthropic's `overloaded_error`/`rate_limit_error`/`api_error`
+    /// SSE `error` events) — distinct from `Model`, which is a
+    /// deterministic-for-this-request provider error.
+    #[error("transient provider error: {0}")]
+    Transient(String),
+}
+
+impl StreamError {
+    /// Eligible for the bounded automatic retry (spec.md FR-012): a
+    /// transport-level hiccup (`Internal` — e.g. an SSE decode failure from
+    /// a dropped connection; `UnexpectedEnd` — the stream closed before a
+    /// `Done` frame) or a provider-reported transient condition
+    /// (`Transient`). `Model`/`Validation`/`StartFailed` reproduce
+    /// deterministically for the same request, so retrying would not help.
+    pub fn is_transient(&self) -> bool {
+        matches!(
+            self,
+            StreamError::Transient(_) | StreamError::Internal(_) | StreamError::UnexpectedEnd
+        )
+    }
 }
 
 /// A live generation. Consume via [`next`](Self::next); cancel by

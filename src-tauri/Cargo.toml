@@ -56,6 +56,10 @@ mistralrs = { version = "0.8.1", optional = true }
 # transitively. The extra `sync` and `fs` features are cheap.
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "fs"] }
 futures = "0.3"
+# `CancellationToken` for cooperative cancellation of an in-flight tool
+# execution or a pending approval wait (spec.md FR-009/FR-010) — already a
+# real (non-transitive) dependency of `rmcp`, see its `service.rs`.
+tokio-util = "0.7"
 
 # Slice b: hardware detection and model catalog / download.
 # `sysinfo` and `reqwest` are unconditional — hardware info and provider
@@ -80,6 +84,12 @@ eventsource-stream = "0.2"
 # never a server itself, so the crate's default `server`/`schemars`
 # features are dropped.
 rmcp = { version = "=3.3.0", default-features = false, features = ["client", "transport-child-process"] }
+
+[target.'cfg(unix)'.dependencies]
+# Kills a whole process group (`kill(-pgid, SIGKILL)`) so a killed
+# `sh -c "..."` cannot leave behind a grandchild it forked — `Child::kill`
+# only ever signals the one PID it holds (chat/tools/cli.rs, T032).
+libc = "0.2"
 
 [dev-dependencies]
 tempfile = "3"

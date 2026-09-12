@@ -9,6 +9,7 @@ import {
   type MessageErrorEvent,
   type ModelLoadPhase,
   type ModelLoadProgressEvent,
+  type RetryEvent,
   type SendMessageArgs,
   type Thread,
   type TokenEvent,
@@ -64,11 +65,17 @@ const providerModels = ref<Record<string, ProviderModel[]>>({})
 const streamingMessageId = ref<string | null>(null)
 const streamingBuffer = ref<string>('')
 const reasoningByMessage = ref<Record<string, string>>({})
+// Set while an automatic LLM-request retry (spec.md FR-012) is between
+// attempts for the currently-streaming message — cleared the moment new
+// tokens arrive (the next attempt) or the turn ends. Never persisted;
+// `chat-retry` carries no message row of its own.
+const retryingMessageId = ref<string | null>(null)
 const expandedReasoning = ref<Set<string>>(new Set())
 
 type PendingStreamEvents = {
   tokens: string
   reasoning: string
+  retryReset?: boolean
   complete?: MessageCompleteEvent
   error?: MessageErrorEvent
   turnComplete?: TurnCompleteEvent
@@ -101,6 +108,7 @@ let unlistenComplete: UnlistenFn | null = null
 let unlistenError: UnlistenFn | null = null
 let unlistenToolCall: UnlistenFn | null = null
 let unlistenToolResult: UnlistenFn | null = null
+let unlistenRetry: UnlistenFn | null = null
 let unlistenTurnComplete: UnlistenFn | null = null
 let unlistenDownloadProgress: UnlistenFn | null = null
 let unlistenDownloadComplete: UnlistenFn | null = null
@@ -329,6 +337,7 @@ async function send(retryPending = false) {
     turnSetupPending.value = false
     streamingMessageId.value = result.assistantMessageId
     streamingBuffer.value = ''
+    retryingMessageId.value = null
     reasoningByMessage.value = {
       ...reasoningByMessage.value,
       [result.assistantMessageId]: '',
@@ -343,6 +352,13 @@ async function send(retryPending = false) {
     }
     const pending = pendingStreamEvents.get(result.assistantMessageId)
     pendingStreamEvents.delete(result.assistantMessageId)
+    if (pending?.retryReset) {
+      streamingBuffer.value = ''
+      reasoningByMessage.value = {
+        ...reasoningByMessage.value,
+        [result.assistantMessageId]: '',
+      }
+    }
     if (pending?.tokens || pending?.reasoning) {
       handleToken({
         messageId: result.assistantMessageId,
@@ -445,6 +461,7 @@ function pendingFor(messageId: string): PendingStreamEvents {
 }
 
 function applyToken(e: TokenEvent, threadId: string) {
+  if (retryingMessageId.value === e.messageId) retryingMessageId.value = null
   if (e.delta) {
     streamingBuffer.value += e.delta
     const list = messagesByThread.value[threadId] ?? []
@@ -474,6 +491,30 @@ function handleToken(e: TokenEvent) {
     return
   }
   applyToken(e, threadId)
+}
+
+/** `chat-retry`: the attempt whose partial text was already shown just
+ * got discarded — clear it and show "retrying…" instead (T039). Preserve
+ * the reset when the event lands before `send()` installs its placeholder. */
+function handleRetry(e: RetryEvent) {
+  const threadId = activeThreadId.value
+  if (streamingMessageId.value !== e.assistantMessageId || !threadId) {
+    const pending = pendingFor(e.assistantMessageId)
+    pending.tokens = ''
+    pending.reasoning = ''
+    pending.retryReset = true
+    return
+  }
+  streamingBuffer.value = ''
+  reasoningByMessage.value = { ...reasoningByMessage.value, [e.assistantMessageId]: '' }
+  const list = messagesByThread.value[threadId] ?? []
+  const idx = list.findIndex((m) => m.id === e.assistantMessageId)
+  const existing = list[idx]
+  if (idx !== -1 && existing) {
+    list[idx] = { ...existing, content: '' }
+    messagesByThread.value[threadId] = list
+  }
+  retryingMessageId.value = e.assistantMessageId
 }
 
 // `chat-message-complete` fires per step (a turn can have several); it no
@@ -598,6 +639,7 @@ function handleToolResult(e: ToolResultEvent, restoring = false) {
 function applyTurnComplete(e: TurnCompleteEvent) {
   streamingMessageId.value = null
   streamingBuffer.value = ''
+  retryingMessageId.value = null
   busy.value = false
   if (!e.assistantMessageId) return
   const list = messagesByThread.value[e.threadId] ?? []
@@ -705,6 +747,7 @@ onMounted(async () => {
     unlistenError,
     unlistenToolCall,
     unlistenToolResult,
+    unlistenRetry,
     unlistenTurnComplete,
     unlistenToolPermissionRequest,
     unlistenLoadProgress,
@@ -714,6 +757,7 @@ onMounted(async () => {
     chat.onMessageError(handleError),
     chat.onToolCall(handleToolCall),
     chat.onToolResult(handleToolResult),
+    chat.onRetry(handleRetry),
     chat.onTurnComplete(handleTurnComplete),
     chat.onToolPermissionRequest(handleToolPermissionRequest),
     chat.onModelLoadProgress(onLoadProgress),
@@ -769,6 +813,7 @@ onBeforeUnmount(() => {
   unlistenError?.()
   unlistenToolCall?.()
   unlistenToolResult?.()
+  unlistenRetry?.()
   unlistenTurnComplete?.()
   unlistenToolPermissionRequest?.()
   unlistenLoadProgress?.()
@@ -989,6 +1034,9 @@ onBeforeUnmount(() => {
                 </span>
                 <span v-if="m.finishReason === 'tool_limit_reached'" class="ml-2 text-amber-600">
                   {{ t('chat.tool.limitReached') }}
+                </span>
+                <span v-if="retryingMessageId === m.id" class="ml-2 text-muted-foreground italic">
+                  {{ t('chat.retrying') }}
                 </span>
               </template>
               </div>

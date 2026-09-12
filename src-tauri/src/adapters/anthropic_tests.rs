@@ -452,8 +452,7 @@ async fn stream_chat_maps_401_to_invalid_credentials() {
     }
 }
 
-#[tokio::test]
-async fn stream_chat_delivers_sse_error_event_as_stream_error() {
+async fn stream_chat_sse_error(error_type: &str, message: &str) -> StreamError {
     let server = MockServer::start().await;
     let body = sse_body(&[
         (
@@ -467,7 +466,7 @@ async fn stream_chat_delivers_sse_error_event_as_stream_error() {
             "error",
             serde_json::json!({
                 "type": "error",
-                "error": {"type": "overloaded_error", "message": "overloaded"}
+                "error": {"type": error_type, "message": message}
             }),
         ),
     ]);
@@ -496,10 +495,70 @@ async fn stream_chat_delivers_sse_error_event_as_stream_error() {
             }
         }
     }
-    match saw_error {
-        Some(StreamError::Model(msg)) => assert!(msg.contains("overloaded"), "{msg}"),
+    saw_error.expect("stream must deliver the SSE error event")
+}
+
+/// T034: Anthropic's own transient categories (overloaded/rate-limited/
+/// internal 5xx-equivalent) must classify as retry-eligible.
+#[tokio::test]
+async fn stream_chat_maps_overloaded_error_to_transient() {
+    let error = stream_chat_sse_error("overloaded_error", "overloaded").await;
+    match &error {
+        StreamError::Transient(msg) => assert!(msg.contains("overloaded"), "{msg}"),
+        other => panic!("expected Transient error, got {other:?}"),
+    }
+    assert!(error.is_transient());
+}
+
+#[tokio::test]
+async fn stream_chat_maps_rate_limit_error_to_transient() {
+    let error = stream_chat_sse_error("rate_limit_error", "rate limited").await;
+    assert!(matches!(error, StreamError::Transient(_)));
+    assert!(error.is_transient());
+}
+
+#[tokio::test]
+async fn stream_chat_maps_api_error_to_transient() {
+    let error = stream_chat_sse_error("api_error", "internal server error").await;
+    assert!(matches!(error, StreamError::Transient(_)));
+    assert!(error.is_transient());
+}
+
+/// T034: a request-shaped rejection (4xx-equivalent) must stay terminal —
+/// retrying the exact same request would just reproduce it.
+#[tokio::test]
+async fn stream_chat_maps_invalid_request_error_to_terminal_model_error() {
+    let error = stream_chat_sse_error("invalid_request_error", "bad request").await;
+    match &error {
+        StreamError::Model(msg) => assert!(msg.contains("bad request"), "{msg}"),
         other => panic!("expected Model error, got {other:?}"),
     }
+    assert!(!error.is_transient());
+}
+
+/// T034: `AdapterError`/`StreamError` classification used by the Phase 6
+/// retry wrapper (spec.md FR-012) — a pure unit test over the enum, no
+/// network involved.
+#[test]
+fn adapter_error_classifies_transient_vs_terminal() {
+    assert!(AdapterError::Http { reason: "connect timed out".into() }.is_transient());
+    assert!(AdapterError::Status { status: 429, body: String::new() }.is_transient());
+    assert!(AdapterError::Status { status: 500, body: String::new() }.is_transient());
+    assert!(AdapterError::Status { status: 503, body: String::new() }.is_transient());
+    assert!(!AdapterError::Status { status: 400, body: String::new() }.is_transient());
+    assert!(!AdapterError::Status { status: 404, body: String::new() }.is_transient());
+    assert!(!AdapterError::InvalidCredentials.is_transient());
+    assert!(!AdapterError::Parse { reason: "bad json".into() }.is_transient());
+}
+
+#[test]
+fn stream_error_classifies_transient_vs_terminal() {
+    assert!(StreamError::Transient("x".into()).is_transient());
+    assert!(StreamError::Internal("x".into()).is_transient());
+    assert!(StreamError::UnexpectedEnd.is_transient());
+    assert!(!StreamError::Model("x".into()).is_transient());
+    assert!(!StreamError::Validation("x".into()).is_transient());
+    assert!(!StreamError::StartFailed("x".into()).is_transient());
 }
 
 #[tokio::test]

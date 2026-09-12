@@ -15,11 +15,15 @@ use rmcp::model::{
 };
 use rmcp::service::{MaybeSendFuture, RequestContext, RoleServer, RunningService};
 use rmcp::{ErrorData as McpError, RoleClient, ServerHandler, ServiceExt};
+use tokio::sync::Notify;
+use tokio_util::sync::CancellationToken;
 
 use super::mcp::{tools_from_connection, McpServerConfig};
 
 #[derive(Clone, Default)]
-struct EchoServer;
+struct EchoServer {
+    call_started: Option<Arc<Notify>>,
+}
 
 impl ServerHandler for EchoServer {
     fn get_info(&self) -> ServerInfo {
@@ -70,7 +74,15 @@ impl ServerHandler for EchoServer {
                 request.name
             ))])
         };
-        std::future::ready(Ok(result.into()))
+        let call_started = self.call_started.clone();
+        async move {
+            if let Some(call_started) = call_started {
+                call_started.notify_one();
+                std::future::pending::<Result<CallToolResponse, McpError>>().await
+            } else {
+                Ok(result.into())
+            }
+        }
     }
 }
 
@@ -78,10 +90,12 @@ impl ServerHandler for EchoServer {
 /// a bare client (`()`, matching production's `().serve(transport)`) to
 /// the other end. Returns the server task's handle too, so a test can
 /// `.abort()` it to simulate the server disconnecting mid-conversation.
-async fn connect_in_memory() -> (RunningService<RoleClient, ()>, tokio::task::JoinHandle<()>) {
+async fn connect_in_memory(
+    server: EchoServer,
+) -> (RunningService<RoleClient, ()>, tokio::task::JoinHandle<()>) {
     let (server_io, client_io) = tokio::io::duplex(4096);
     let server_task = tokio::spawn(async move {
-        let _ = EchoServer
+        let _ = server
             .serve(server_io)
             .await
             .expect("server should start")
@@ -94,7 +108,7 @@ async fn connect_in_memory() -> (RunningService<RoleClient, ()>, tokio::task::Jo
 
 #[tokio::test]
 async fn tool_discovery_populates_the_registry() {
-    let (connection, _server_task) = connect_in_memory().await;
+    let (connection, _server_task) = connect_in_memory(EchoServer::default()).await;
     let connection = Arc::new(connection);
     let mut seen = HashSet::new();
     let tools = tools_from_connection("test-server", connection, &mut seen)
@@ -106,7 +120,10 @@ async fn tool_discovery_populates_the_registry() {
     assert_eq!(tools[0].source(), "mcp");
 
     let result = tools[0]
-        .execute(serde_json::json!({ "text": "hello mcp" }))
+        .execute(
+            serde_json::json!({ "text": "hello mcp" }),
+            CancellationToken::new(),
+        )
         .await;
     assert!(!result.is_error);
     assert_eq!(result.content, "hello mcp");
@@ -114,7 +131,7 @@ async fn tool_discovery_populates_the_registry() {
 
 #[tokio::test]
 async fn a_disconnected_server_surfaces_a_tool_error_not_a_panic() {
-    let (connection, server_task) = connect_in_memory().await;
+    let (connection, server_task) = connect_in_memory(EchoServer::default()).await;
     let connection = Arc::new(connection);
     let mut seen = HashSet::new();
     let tools = tools_from_connection("test-server", connection, &mut seen)
@@ -131,13 +148,52 @@ async fn a_disconnected_server_surfaces_a_tool_error_not_a_panic() {
     // instead of blocking the suite indefinitely.
     let outcome = tokio::time::timeout(
         std::time::Duration::from_secs(5),
-        tools[0].execute(serde_json::json!({ "text": "hello?" })),
+        tools[0].execute(
+            serde_json::json!({ "text": "hello?" }),
+            CancellationToken::new(),
+        ),
     )
     .await;
     match outcome {
         Ok(result) => assert!(result.is_error, "a call on a dead connection must not panic"),
         Err(_) => panic!("execute() hung instead of erroring on a dead connection"),
     }
+}
+
+#[tokio::test]
+async fn cancellation_ends_the_wait_without_erroring_on_the_transport() {
+    let call_started = Arc::new(Notify::new());
+    let (connection, server_task) = connect_in_memory(EchoServer {
+        call_started: Some(call_started.clone()),
+    })
+    .await;
+    let connection = Arc::new(connection);
+    let mut seen = HashSet::new();
+    let tools = tools_from_connection("test-server", connection, &mut seen)
+        .await
+        .expect("discovery succeeds");
+
+    let cancel = CancellationToken::new();
+    let cancel_for_execute = cancel.clone();
+    let tool = tools[0].clone();
+    let execution = tokio::spawn(async move {
+        tool.execute(
+            serde_json::json!({ "text": "hello mcp" }),
+            cancel_for_execute,
+        )
+        .await
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(2), call_started.notified())
+        .await
+        .expect("MCP handler must observe the in-flight call");
+    cancel.cancel();
+    let result = tokio::time::timeout(std::time::Duration::from_secs(2), execution)
+        .await
+        .expect("cancellation must finish the in-flight MCP call")
+        .expect("MCP execution task must not panic");
+    assert!(result.is_error);
+    assert_eq!(result.content, "tool_call_cancelled");
+    server_task.abort();
 }
 
 #[tokio::test]
