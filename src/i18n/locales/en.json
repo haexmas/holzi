@@ -70,6 +70,67 @@
       "ready": "Ready"
     },
     "noModel": "No model available",
+    "model": {
+      "label": "Model",
+      "choose": "Choose a model …",
+      "local": "Local models",
+      "notLoaded": "No model loaded",
+      "none": "None",
+      "selectPrompt": "Choose a model to start chatting."
+    },
+    "newChat": "New chat",
+    "newChatShort": "New",
+    "threads": {
+      "title": "Conversations",
+      "empty": "No conversations yet"
+    },
+    "settings": "Settings",
+    "lock": "Lock",
+    "close": "Close",
+    "send": "Send",
+    "cancel": "Cancel",
+    "download": "Download",
+    "tokens": "{count} tokens",
+    "errorLabel": "(error)",
+    "sender": {
+      "user": "You",
+      "assistant": "Assistant",
+      "system": "System"
+    },
+    "fit": {
+      "fits": "fits",
+      "tight": "tight fit",
+      "too_big": "too large",
+      "unknown": "unknown"
+    },
+    "catalog": {
+      "meta": "~{size} · Context {context} · {license} · {fit}"
+    },
+    "empty": {
+      "title": "What would you like to work on?",
+      "description": "Write a message to start chatting with {modelName}.",
+      "noModelsTitle": "Set up your first model",
+      "noModelsDescription": "Download one of the suggested models below to chat locally. Alternatively, add an API provider (Anthropic …) in Settings — the chat will then use its models."
+    },
+    "composer": {
+      "placeholder": "Message Holzi …",
+      "newlineHint": "Shift + Enter for a new line",
+      "settingsLabel": "Chat settings"
+    },
+    "effort": {
+      "label": "Effort",
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High"
+    },
+    "reasoning": {
+      "label": "Reasoning",
+      "auto": "Auto",
+      "on": "On",
+      "off": "Off",
+      "show": "Show reasoning",
+      "hide": "Hide reasoning"
+    },
     "retry": "Try again",
     "tool": {
       "call": "Tool call: {name}",

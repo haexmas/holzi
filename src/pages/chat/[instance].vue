@@ -9,6 +9,7 @@ import {
   type MessageErrorEvent,
   type ModelLoadPhase,
   type ModelLoadProgressEvent,
+  type SendMessageArgs,
   type Thread,
   type TokenEvent,
   type ToolCallEvent,
@@ -79,6 +80,13 @@ const pendingApprovalsByThread = new Map<string, PendingApproval[]>()
 
 const input = ref('')
 const busy = ref(false)
+const reasoningMode = ref<'auto' | 'on' | 'off'>('auto')
+const effortLevel = ref<'low' | 'medium' | 'high'>('medium')
+const effortTokens: Record<typeof effortLevel.value, number> = {
+  low: 1024,
+  medium: 4096,
+  high: 8192,
+}
 // True while `send()` has set `activeThreadId` but has not yet appended
 // this turn's user/assistant placeholder rows — a `chat-tool-call`/
 // `chat-tool-result` for that (already-active) thread can otherwise land
@@ -86,11 +94,7 @@ const busy = ref(false)
 // `sendMessageAsync`'s own await resolves).
 const turnSetupPending = ref(false)
 const lastError = ref<string | null>(null)
-const pendingSend = ref<{
-  threadId: string | null
-  content: string
-  idempotencyKey: string
-} | null>(null)
+const pendingSend = ref<SendMessageArgs | null>(null)
 
 let unlistenToken: UnlistenFn | null = null
 let unlistenComplete: UnlistenFn | null = null
@@ -131,7 +135,7 @@ const modelGroups = computed<ModelGroup[]>(() => {
   const localGroup: ModelGroup | null = installedModels.value.length > 0
     ? {
         providerId: 'local',
-        providerName: 'Lokale Modelle',
+        providerName: t('chat.model.local'),
         models: installedModels.value.map((m) => ({ id: m.id, name: m.name })),
       }
     : null
@@ -264,6 +268,7 @@ async function send(retryPending = false) {
   const request = retry ?? {
     threadId: activeThreadId.value,
     content,
+    maxNewTokens: effortTokens[effortLevel.value],
     idempotencyKey: crypto.randomUUID(),
   }
   pendingSend.value = null
@@ -422,13 +427,7 @@ function humanBytes(n: number | null): string {
 
 /** Maps a hardware-fit verdict to its localized display label. */
 function fitLabel(f: CatalogEntryWithFit['fit']): string {
-  return f === 'fits'
-    ? 'passt'
-    : f === 'tight'
-      ? 'passt knapp'
-      : f === 'too_big'
-        ? 'zu groß'
-        : 'unbekannt'
+  return t(`chat.fit.${f}`)
 }
 
 function pendingFor(messageId: string): PendingStreamEvents {
@@ -773,75 +772,95 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="flex h-screen">
-    <aside class="w-64 border-r border-border p-3 flex flex-col gap-2 overflow-y-auto">
-      <div class="text-sm font-semibold truncate" :title="instanceName">
-        {{ instanceName }}
+  <main class="flex h-screen min-h-0 bg-muted/20">
+    <aside class="hidden md:flex w-64 shrink-0 border-r border-border bg-background p-4 flex-col gap-4 overflow-y-auto">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="h-9 w-9 shrink-0 rounded-xl bg-foreground text-background flex items-center justify-center">
+          <Icon name="lucide:sparkles" class="h-4 w-4" />
+        </div>
+        <div class="min-w-0">
+          <div class="text-sm font-semibold">Holzi</div>
+          <div class="text-xs text-muted-foreground truncate" :title="instanceName">
+            {{ instanceName }}
+          </div>
+        </div>
       </div>
-      <UiButton size="sm" variant="outline" :disabled="busy" @click="newChat">
-        Neuer Chat
+
+      <UiButton class="w-full justify-start gap-2" variant="outline" :disabled="busy" @click="newChat">
+        <Icon name="lucide:plus" class="h-4 w-4" />
+        {{ t('chat.newChat') }}
       </UiButton>
-      <PermissionPrompt
-        :mode="permissionMode"
-        :pending-approvals="pendingApprovals"
-        @update:mode="updatePermissionMode"
-        @allow="respondToApproval($event, 'allow')"
-        @deny="respondToApproval($event, 'deny')"
-      />
-      <div class="text-xs text-muted-foreground mt-2">
-        Modell
+
+      <div class="flex items-center justify-between px-1">
+        <span class="text-xs font-medium text-muted-foreground">{{ t('chat.threads.title') }}</span>
+        <span class="text-[10px] text-muted-foreground">{{ threads.length }}</span>
       </div>
-      <div v-if="activeModel" class="text-sm truncate" :title="activeModel.name">
-        {{ activeModel.name }}
-      </div>
-      <div v-else class="text-xs text-muted-foreground italic">
-        keins geladen
-      </div>
-      <select
-        v-if="modelGroups.length > 0"
-        class="text-sm bg-background border border-border rounded px-2 py-1"
-        :value="activeModel?.modelId ?? ''"
-        :disabled="busy"
-        @change="(e) => loadModel((e.target as HTMLSelectElement).value)"
-      >
-        <option value="" disabled>
-          Modell wählen …
-        </option>
-        <optgroup
-          v-for="group in modelGroups"
-          :key="group.providerId"
-          :label="group.providerName"
+      <div class="space-y-1">
+        <button
+          v-for="t in threads"
+          :key="t.id"
+          class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-accent truncate transition-colors"
+          :class="{ 'bg-accent font-medium': activeThreadId === t.id }"
+          @click="selectThread(t.id)"
         >
-          <option
-            v-for="m in group.models"
-            :key="m.id"
-            :value="m.id"
-          >
-            {{ m.name }}
-          </option>
-        </optgroup>
-      </select>
-      <div class="h-px bg-border my-2" />
-      <div class="text-xs text-muted-foreground">
-        Verläufe
+          {{ t.title }}
+        </button>
+        <div v-if="threads.length === 0" class="px-3 py-2 text-xs text-muted-foreground">
+          {{ t('chat.threads.empty') }}
+        </div>
       </div>
-      <button
-        v-for="t in threads"
-        :key="t.id"
-        class="text-left text-sm px-2 py-1 rounded hover:bg-accent truncate"
-        :class="{ 'bg-accent': activeThreadId === t.id }"
-        @click="selectThread(t.id)"
-      >
-        {{ t.title }}
-      </button>
+
       <div class="flex-1" />
-      <UiButton size="sm" variant="ghost" @click="lock">
-        Sperren
+      <NuxtLink
+        :to="`/settings/${encodeURIComponent(instanceName)}`"
+        class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+      >
+        <Icon name="lucide:settings-2" class="h-4 w-4" />
+        {{ t('chat.settings') }}
+      </NuxtLink>
+      <UiButton class="justify-start gap-2" size="sm" variant="ghost" @click="lock">
+        <Icon name="lucide:lock-keyhole" class="h-4 w-4" />
+        {{ t('chat.lock') }}
       </UiButton>
     </aside>
 
-    <section class="flex-1 flex flex-col">
-      <div v-if="lastError" class="p-3 bg-destructive/10 text-destructive text-sm flex items-start justify-between gap-2">
+    <section class="min-w-0 flex-1 flex flex-col">
+      <header class="flex items-center justify-between gap-3 border-b border-border bg-background/90 px-4 py-3 backdrop-blur md:px-6">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2">
+            <div class="h-2 w-2 rounded-full" :class="activeModel ? 'bg-emerald-500' : 'bg-muted-foreground/40'" />
+            <h1 class="truncate text-sm font-semibold">
+              {{ activeThreadId ? (threads.find((thread) => thread.id === activeThreadId)?.title || t('chat.newChat')) : t('chat.newChat') }}
+            </h1>
+          </div>
+          <p class="mt-0.5 truncate text-xs text-muted-foreground">
+            {{ activeModel?.name || t('chat.model.notLoaded') }}
+          </p>
+        </div>
+        <div class="flex shrink-0 items-center gap-1 md:hidden">
+          <NuxtLink
+            :to="`/settings/${encodeURIComponent(instanceName)}`"
+            class="rounded-lg p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
+            :aria-label="t('chat.settings')"
+          >
+            <Icon name="lucide:settings-2" class="h-4 w-4" />
+          </NuxtLink>
+          <UiButton
+            size="sm"
+            variant="ghost"
+            :aria-label="t('chat.lock')"
+            @click="lock"
+          >
+            <Icon name="lucide:lock-keyhole" class="h-4 w-4" />
+          </UiButton>
+          <UiButton class="gap-2" size="sm" variant="outline" :disabled="busy" @click="newChat">
+            <Icon name="lucide:plus" class="h-4 w-4" />
+            {{ t('chat.newChatShort') }}
+          </UiButton>
+        </div>
+      </header>
+
+      <div v-if="lastError" class="border-b border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive flex items-start justify-between gap-2">
         <span>{{ lastError }}</span>
         <span class="flex gap-2 shrink-0">
           <button
@@ -855,22 +874,21 @@ onBeforeUnmount(() => {
             class="text-xs underline"
             @click="lastError = null"
           >
-            schließen
+            {{ t('chat.close') }}
           </button>
         </span>
       </div>
 
-      <div v-if="loadingLabel" class="p-3 bg-blue-500/10 text-blue-800 text-sm" role="status">
+      <div v-if="loadingLabel" class="border-b border-blue-500/20 bg-blue-500/10 p-3 text-sm text-blue-800" role="status">
         {{ loadingLabel }}
       </div>
 
-      <div v-if="noModelsInstalled" class="p-6 flex-1 overflow-y-auto">
+      <div v-if="noModelsInstalled" class="flex-1 overflow-y-auto p-6">
         <h2 class="text-lg font-semibold mb-4">
-          Erstes Modell einrichten
+          {{ t('chat.empty.noModelsTitle') }}
         </h2>
         <p class="text-sm text-muted-foreground mb-6">
-          Lade eines der unten vorgeschlagenen Modelle herunter, um lokal zu chatten.
-          Alternativ kannst du unter Einstellungen einen API-Anbieter (Anthropic …) hinterlegen — der Chat greift dann auf dessen Modelle zu.
+          {{ t('chat.empty.noModelsDescription') }}
         </p>
         <div class="space-y-2">
           <div
@@ -886,7 +904,7 @@ onBeforeUnmount(() => {
                 {{ e.hf_repo }}/{{ e.hf_filename }}
               </div>
               <div class="text-xs text-muted-foreground">
-                ~{{ humanBytes(e.approx_size_bytes) }} · Kontext {{ e.context_window.toLocaleString() }} · {{ e.license }} · {{ fitLabel(e.fit) }}
+                {{ t('chat.catalog.meta', { size: humanBytes(e.approx_size_bytes), context: e.context_window.toLocaleString(), license: e.license, fit: fitLabel(e.fit) }) }}
               </div>
             </div>
             <UiButton
@@ -898,25 +916,57 @@ onBeforeUnmount(() => {
                 {{ humanBytes(downloadProgressBytes) }} / {{ humanBytes(downloadTotalBytes) }}
               </template>
               <template v-else>
-                Herunterladen
+                {{ t('chat.download') }}
               </template>
             </UiButton>
           </div>
         </div>
       </div>
 
-      <div v-else-if="!activeModel" class="p-6 flex-1 flex items-center justify-center text-muted-foreground">
-        Wähle links ein Modell aus.
+      <div v-else-if="!activeModel" class="flex-1 flex items-center justify-center p-6 text-muted-foreground">
+        <div class="flex w-full max-w-sm flex-col gap-3">
+          <p>{{ t('chat.model.selectPrompt') }}</p>
+          <label for="chat-model-empty" class="sr-only">{{ t('chat.model.label') }}</label>
+          <select
+            id="chat-model-empty"
+            class="rounded-lg border border-border bg-background px-3 py-2 text-sm"
+            :value="activeModel?.modelId ?? ''"
+            :disabled="busy"
+            @change="(e) => loadModel((e.target as HTMLSelectElement).value)"
+          >
+            <option value="" disabled>{{ t('chat.model.choose') }}</option>
+            <optgroup v-for="group in modelGroups" :key="group.providerId" :label="group.providerName">
+              <option v-for="m in group.models" :key="m.id" :value="m.id">{{ m.name }}</option>
+            </optgroup>
+          </select>
+        </div>
       </div>
 
       <div v-else class="flex-1 flex flex-col overflow-hidden">
-        <div data-messages-scroll class="flex-1 overflow-y-auto p-4 space-y-4">
+        <div data-messages-scroll class="flex-1 min-h-0 overflow-y-auto px-4 py-6 md:px-8">
+          <div v-if="activeMessages.length === 0" class="mx-auto flex h-full max-w-3xl flex-col items-center justify-center text-center">
+            <div class="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-foreground text-background">
+              <Icon name="lucide:sparkles" class="h-5 w-5" />
+            </div>
+            <h2 class="text-xl font-semibold tracking-tight">{{ t('chat.empty.title') }}</h2>
+            <p class="mt-2 max-w-md text-sm text-muted-foreground">
+              {{ t('chat.empty.description', { modelName: activeModel.name }) }}
+            </p>
+          </div>
           <div
             v-for="m in activeMessages"
             :key="m.id"
-            class="max-w-3xl mx-auto"
+            class="mx-auto mb-6 flex max-w-3xl gap-3"
+            :class="m.role === 'user' ? 'justify-end' : 'justify-start'"
           >
-            <div class="text-xs text-muted-foreground mb-1">
+            <div
+              v-if="m.role !== 'user'"
+              class="mt-1 hidden h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-foreground text-background sm:flex"
+            >
+              <Icon :name="m.role === 'assistant' ? 'lucide:sparkles' : 'lucide:wrench'" class="h-3.5 w-3.5" />
+            </div>
+            <div class="min-w-0 max-w-[min(90%,48rem)]" :class="m.role === 'user' ? 'order-first' : ''">
+              <div class="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
               <template v-if="m.role === 'tool_call'">
                 {{ t('chat.tool.call', { name: m.toolName }) }}
               </template>
@@ -924,76 +974,144 @@ onBeforeUnmount(() => {
                 {{ m.toolIsError ? t('chat.tool.resultError') : t('chat.tool.result') }}
               </template>
               <template v-else>
-                {{ m.role === 'user' ? 'Du' : m.role === 'assistant' ? 'Assistent' : m.role }}
+                {{ m.role === 'user' ? t('chat.sender.user') : m.role === 'assistant' ? t('chat.sender.assistant') : t('chat.sender.system') }}
                 <span v-if="m.role === 'assistant' && m.completionTokens" class="ml-2">
-                  {{ m.completionTokens }} tokens
+                  {{ t('chat.tokens', { count: m.completionTokens }) }}
                 </span>
                 <span v-if="m.finishReason === 'error'" class="ml-2 text-destructive">
-                  (Fehler)
+                  {{ t('chat.errorLabel') }}
                 </span>
                 <span v-if="m.finishReason === 'tool_limit_reached'" class="ml-2 text-amber-600">
                   {{ t('chat.tool.limitReached') }}
                 </span>
               </template>
-            </div>
-            <div
-              class="whitespace-pre-wrap text-sm rounded px-3 py-2"
+              </div>
+              <div
+              class="whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm"
               :class="{
-                'bg-accent': m.role === 'user',
-                'bg-muted/50': m.role === 'assistant' || m.role === 'system',
-                'bg-muted/30 font-mono text-xs': m.role === 'tool_call' || (m.role === 'tool_result' && !m.toolIsError),
-                'bg-destructive/10 text-destructive font-mono text-xs': m.role === 'tool_result' && m.toolIsError,
+                'bg-foreground text-background': m.role === 'user',
+                'border border-border bg-background': m.role === 'assistant' || m.role === 'system',
+                'rounded-lg bg-muted/30 font-mono text-xs leading-5': m.role === 'tool_call' || (m.role === 'tool_result' && !m.toolIsError),
+                'rounded-lg bg-destructive/10 text-destructive font-mono text-xs leading-5': m.role === 'tool_result' && m.toolIsError,
               }"
-            >
+              >
               <template v-if="m.role === 'tool_call'">{{ m.toolInput }}</template>
               <template v-else>{{ m.content || (streamingMessageId === m.id ? '…' : '') }}</template>
-            </div>
-            <div
-              v-if="m.role === 'assistant' && reasoningFor(m.id)"
+              </div>
+              <div
+              v-if="reasoningMode !== 'off' && m.role === 'assistant' && reasoningFor(m.id)"
               class="mt-1 text-xs"
-            >
+              >
               <button
+                v-if="reasoningMode !== 'on'"
                 type="button"
                 class="text-muted-foreground hover:text-foreground underline"
                 @click="toggleReasoning(m.id)"
               >
-                {{ expandedReasoning.has(m.id) ? 'Denkschritte ausblenden' : 'Denkschritte anzeigen' }}
+                {{ expandedReasoning.has(m.id) ? t('chat.reasoning.hide') : t('chat.reasoning.show') }}
               </button>
               <div
-                v-if="expandedReasoning.has(m.id)"
+                v-if="reasoningMode === 'on' || expandedReasoning.has(m.id)"
                 class="mt-1 whitespace-pre-wrap text-muted-foreground bg-muted/30 rounded px-2 py-1"
               >
                 {{ reasoningFor(m.id) }}
+              </div>
               </div>
             </div>
           </div>
         </div>
 
         <form
-          class="p-3 border-t border-border flex gap-2"
+          class="border-t border-border bg-background/90 px-4 pb-4 pt-3 backdrop-blur md:px-8"
           @submit.prevent="() => send()"
         >
-          <input
-            v-model="input"
-            class="flex-1 bg-background border border-border rounded px-3 py-2 text-sm"
-            placeholder="Nachricht schreiben …"
-            :disabled="(busy && streamingMessageId === null) || loadingPhase !== null"
-          >
-          <UiButton
-            v-if="streamingMessageId"
-            variant="destructive"
-            type="button"
-            @click="abort"
-          >
-            Abbruch
-          </UiButton>
-          <UiButton
-            v-else
-            type="submit"
-            :disabled="!input.trim() || busy || loadingPhase !== null"
-          >
-            Senden
-          </UiButton>
+          <div class="mx-auto max-w-3xl">
+            <div class="rounded-2xl border border-border bg-background shadow-sm transition-shadow focus-within:border-foreground/30 focus-within:shadow-md">
+              <textarea
+                v-model="input"
+                rows="3"
+                class="block w-full resize-none bg-transparent px-4 pb-2 pt-3 text-sm leading-6 outline-none placeholder:text-muted-foreground"
+                :placeholder="t('chat.composer.placeholder')"
+                :disabled="(busy && streamingMessageId === null) || loadingPhase !== null"
+                @keydown.enter.exact.prevent="send()"
+              />
+              <div class="flex items-center justify-between gap-3 px-3 pb-3">
+                <div class="flex items-center gap-1 text-xs text-muted-foreground">
+                  <span class="hidden sm:inline">{{ t('chat.composer.newlineHint') }}</span>
+                </div>
+                <UiButton
+                  v-if="streamingMessageId"
+                  class="gap-2"
+                  size="sm"
+                  variant="destructive"
+                  type="button"
+                  @click="abort"
+                >
+                  <Icon name="lucide:square" class="h-3.5 w-3.5 fill-current" />
+                  {{ t('chat.cancel') }}
+                </UiButton>
+                <UiButton
+                  v-else
+                  class="gap-2"
+                  size="sm"
+                  type="submit"
+                  :disabled="!input.trim() || busy || loadingPhase !== null"
+                >
+                  {{ t('chat.send') }}
+                  <Icon name="lucide:arrow-up" class="h-3.5 w-3.5" />
+                </UiButton>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2 pt-3 text-xs" :aria-label="t('chat.composer.settingsLabel')">
+              <div class="flex items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5">
+                <Icon name="lucide:cpu" class="h-3.5 w-3.5 text-muted-foreground" />
+                <label for="chat-model" class="text-muted-foreground">{{ t('chat.model.label') }}</label>
+                <select
+                  id="chat-model"
+                  v-if="modelGroups.length > 0"
+                  class="max-w-40 bg-transparent font-medium outline-none"
+                  :value="activeModel?.modelId ?? ''"
+                  :disabled="busy"
+                  @change="(e) => loadModel((e.target as HTMLSelectElement).value)"
+                >
+                  <option value="" disabled>{{ t('chat.model.choose') }}</option>
+                  <optgroup v-for="group in modelGroups" :key="group.providerId" :label="group.providerName">
+                    <option v-for="m in group.models" :key="m.id" :value="m.id">{{ m.name }}</option>
+                  </optgroup>
+                </select>
+                <span v-else class="font-medium">{{ activeModel?.name || t('chat.model.none') }}</span>
+              </div>
+
+              <div class="flex items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5">
+                <Icon name="lucide:brain" class="h-3.5 w-3.5 text-muted-foreground" />
+                <label for="reasoning-mode" class="text-muted-foreground">{{ t('chat.reasoning.label') }}</label>
+                <select id="reasoning-mode" v-model="reasoningMode" class="bg-transparent font-medium outline-none" :disabled="busy">
+                  <option value="auto">{{ t('chat.reasoning.auto') }}</option>
+                  <option value="on">{{ t('chat.reasoning.on') }}</option>
+                  <option value="off">{{ t('chat.reasoning.off') }}</option>
+                </select>
+              </div>
+
+              <div class="flex items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5">
+                <Icon name="lucide:gauge" class="h-3.5 w-3.5 text-muted-foreground" />
+                <label for="effort-level" class="text-muted-foreground">{{ t('chat.effort.label') }}</label>
+                <select id="effort-level" v-model="effortLevel" class="bg-transparent font-medium outline-none" :disabled="busy">
+                  <option value="low">{{ t('chat.effort.low') }}</option>
+                  <option value="medium">{{ t('chat.effort.medium') }}</option>
+                  <option value="high">{{ t('chat.effort.high') }}</option>
+                </select>
+              </div>
+
+              <PermissionPrompt
+                :mode="permissionMode"
+                :pending-approvals="pendingApprovals"
+                @update:mode="updatePermissionMode"
+                @allow="respondToApproval($event, 'allow')"
+                @deny="respondToApproval($event, 'deny')"
+              />
+            </div>
+          </div>
         </form>
       </div>
     </section>
