@@ -114,14 +114,6 @@ impl ToolRegistry {
     pub fn iter(&self) -> impl Iterator<Item = &Arc<dyn Tool>> {
         self.tools.iter()
     }
-
-    pub fn is_empty(&self) -> bool {
-        self.tools.is_empty()
-    }
-
-    pub fn len(&self) -> usize {
-        self.tools.len()
-    }
 }
 
 /// Resolution of one `tool-permission-request` (contracts/tauri-commands.md

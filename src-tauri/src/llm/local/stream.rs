@@ -257,13 +257,23 @@ impl LocalModel {
             }
 
             if !done_emitted {
-                if delta_emitted {
+                // Mirrors the `Response::Done` handling above: a stream
+                // that closes without a final frame (see below) must not
+                // silently drop tool calls it already accumulated.
+                if !tool_call_fragments.is_empty() {
+                    let calls = tool_call_fragments
+                        .iter()
+                        .map(from_mistralrs_tool_call)
+                        .collect();
+                    let _ = tx.send(Ok(StreamChunk::ToolCalls(calls)));
+                }
+                if delta_emitted || !tool_call_fragments.is_empty() {
                     // mistralrs 0.8.1 has been observed to close the stream
                     // on CUDA without emitting a final `Response::Done`
                     // when the model hits its max_new_tokens cap. Treat a
-                    // clean stream close after we saw content as a
-                    // synthetic completion — token counts are unknown
-                    // because they only reach us in the Done frame.
+                    // clean stream close after we saw content or tool
+                    // calls as a synthetic completion — token counts are
+                    // unknown because they only reach us in the Done frame.
                     let synth = StreamChunk::Done {
                         finish_reason: last_finish_reason,
                         prompt_tokens: None,

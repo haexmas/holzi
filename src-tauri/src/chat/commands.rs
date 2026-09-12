@@ -1157,6 +1157,12 @@ pub async fn run_turn(
 ) {
     let mut parent_id = user_message_id;
     let mut rounds_used = 0usize;
+    // SQLite orders rows by `created_at, id`; UUIDv4 is random, so rows
+    // created in one millisecond must receive distinct logical timestamps
+    // to keep each call immediately before its result. Carried across tool
+    // rounds (not reset per round) so two rounds landing in the same
+    // millisecond still sort in round order.
+    let mut next_tool_created_at = now_ms();
 
     loop {
         let mut assembled = String::new();
@@ -1357,11 +1363,8 @@ pub async fn run_turn(
                 }))
                 .await;
 
-            // SQLite orders rows by `created_at, id`; UUIDv4 is random, so
-            // rows created in one millisecond must receive distinct logical
-            // timestamps to keep each call immediately before its result.
-            let mut next_tool_created_at = now_ms().saturating_add(1);
-            for (call, result, source) in executed {
+            next_tool_created_at = next_tool_created_at.max(now_ms()).saturating_add(1);
+            for (call, result, source) in &executed {
                 let tool_call_row_id = Uuid::new_v4();
                 let input_json =
                     serde_json::to_string(&call.input).unwrap_or_else(|_| "{}".to_string());
@@ -1456,7 +1459,15 @@ pub async fn run_turn(
                     })
                     .expect("ToolResultEvent always serializes"),
                 );
+            }
 
+            // Grouped by role in a separate pass (not interleaved above):
+            // both adapters' wire-format builders only merge strictly
+            // consecutive same-role rows into one message, so a round with
+            // several tool calls must land as one assistant tool-use
+            // message followed by one tool-result message, not call/result
+            // pairs per call.
+            for (call, _, _) in &executed {
                 request.messages.push(LlmMessage {
                     role: ChatRole::ToolCall {
                         id: call.id.clone(),
@@ -1465,6 +1476,8 @@ pub async fn run_turn(
                     },
                     content: String::new(),
                 });
+            }
+            for (call, result, _) in &executed {
                 request.messages.push(LlmMessage {
                     role: ChatRole::ToolResult {
                         call_id: call.id.clone(),
@@ -1550,13 +1563,14 @@ pub async fn run_turn(
                         finish_reason: Some(FinishReason::Error),
                         ..empty_tool_message(assistant_message_id, thread_id, Some(parent_id))
                     };
-                    let _ = persist_final_message(
+                    let persisted = persist_final_message(
                         db,
                         final_msg,
                         session.provider_id,
                         session.model_id.clone(),
                     )
-                    .await;
+                    .await
+                    .is_ok();
                     emit(
                         EVENT_CHAT_MESSAGE_ERROR,
                         serde_json::to_value(MessageErrorEvent {
@@ -1570,7 +1584,7 @@ pub async fn run_turn(
                         EVENT_CHAT_TURN_COMPLETE,
                         serde_json::to_value(TurnCompleteEvent {
                             thread_id,
-                            assistant_message_id: Some(assistant_message_id),
+                            assistant_message_id: persisted.then_some(assistant_message_id),
                             finish_reason: FinishReason::Error,
                         })
                         .expect("TurnCompleteEvent always serializes"),
