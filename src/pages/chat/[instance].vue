@@ -11,6 +11,10 @@ import {
   type ModelLoadProgressEvent,
   type Thread,
   type TokenEvent,
+  type ToolCallEvent,
+  type ToolPermissionRequestEvent,
+  type ToolResultEvent,
+  type TurnCompleteEvent,
 } from '~/composables/useChat'
 import { useModels, type InstalledModel } from '~/composables/useModels'
 import { useCatalog, type CatalogEntryWithFit } from '~/composables/useCatalog'
@@ -21,6 +25,8 @@ import {
 } from '~/composables/useProviders'
 import { useInstance } from '~/composables/useInstance'
 import { usePreferences } from '~/composables/usePreferences'
+import { useDevice } from '~/composables/useDevice'
+import PermissionPrompt, { type PendingApproval } from '~/components/chat/PermissionPrompt.vue'
 
 definePageMeta({
   middleware: ['onboarded'],
@@ -33,8 +39,15 @@ const models = useModels()
 const catalog = useCatalog()
 const providers = useProviders()
 const { closeAsync } = useInstance()
-const { resolveDefaultModelAsync } = usePreferences()
+const { getPrefAsync, setPrefAsync, resolveDefaultModelAsync } = usePreferences()
+const { currentDeviceInfoAsync } = useDevice()
 const store = useInstancesStore()
+
+const PERMISSION_MODE_KEY = 'chat.permission_mode'
+const permissionMode = ref<'manual' | 'auto' | 'plan'>('manual')
+const pendingApprovals = ref<PendingApproval[]>([])
+let deviceUuid = ''
+let unlistenToolPermissionRequest: UnlistenFn | null = null
 
 const instanceName = computed(() => String(route.params.instance ?? ''))
 
@@ -57,9 +70,12 @@ type PendingStreamEvents = {
   reasoning: string
   complete?: MessageCompleteEvent
   error?: MessageErrorEvent
+  turnComplete?: TurnCompleteEvent
 }
 
 const pendingStreamEvents = new Map<string, PendingStreamEvents>()
+const pendingToolEvents = new Map<string, Array<ToolCallEvent | ToolResultEvent>>()
+const pendingApprovalsByThread = new Map<string, PendingApproval[]>()
 
 const input = ref('')
 const busy = ref(false)
@@ -73,6 +89,9 @@ const pendingSend = ref<{
 let unlistenToken: UnlistenFn | null = null
 let unlistenComplete: UnlistenFn | null = null
 let unlistenError: UnlistenFn | null = null
+let unlistenToolCall: UnlistenFn | null = null
+let unlistenToolResult: UnlistenFn | null = null
+let unlistenTurnComplete: UnlistenFn | null = null
 let unlistenDownloadProgress: UnlistenFn | null = null
 let unlistenDownloadComplete: UnlistenFn | null = null
 
@@ -154,10 +173,29 @@ async function refreshThreads() {
 
 /** Selects a thread, loading its persisted messages on first access. */
 async function selectThread(id: string) {
+  const previousThreadId = activeThreadId.value
+  if (previousThreadId && previousThreadId !== id && pendingApprovals.value.length > 0) {
+    const queued = pendingApprovalsByThread.get(previousThreadId) ?? []
+    pendingApprovalsByThread.set(previousThreadId, [...queued, ...pendingApprovals.value])
+    pendingApprovals.value = []
+  }
   activeThreadId.value = id
   const existing = messagesByThread.value[id]
   if (!existing) {
     messagesByThread.value[id] = await chat.listMessagesAsync(id)
+  }
+  const queuedApprovals = pendingApprovalsByThread.get(id)
+  if (queuedApprovals) {
+    pendingApprovals.value = queuedApprovals
+    pendingApprovalsByThread.delete(id)
+  }
+  const queuedToolEvents = pendingToolEvents.get(id)
+  if (queuedToolEvents) {
+    pendingToolEvents.delete(id)
+    for (const event of queuedToolEvents) {
+      if ('toolName' in event) handleToolCall(event, true)
+      else handleToolResult(event, true)
+    }
   }
   await scrollToBottom()
 }
@@ -222,6 +260,11 @@ async function send(retryPending = false) {
   try {
     const result = await chat.sendMessageAsync(request)
     activeThreadId.value = result.threadId
+    const queuedApprovals = pendingApprovalsByThread.get(result.threadId)
+    if (queuedApprovals) {
+      pendingApprovals.value = queuedApprovals
+      pendingApprovalsByThread.delete(result.threadId)
+    }
     // Seed the assistant message placeholder so the UI can show
     // tokens as they stream in.
     const list = messagesByThread.value[result.threadId] ?? []
@@ -236,6 +279,11 @@ async function send(retryPending = false) {
       completionTokens: null,
       finishReason: 'complete',
       createdAt: Date.now(),
+      toolName: null,
+      toolCallId: null,
+      toolInput: null,
+      toolIsError: null,
+      toolSource: null,
     })
     list.push({
       id: result.assistantMessageId,
@@ -248,6 +296,11 @@ async function send(retryPending = false) {
       completionTokens: null,
       finishReason: null,
       createdAt: Date.now(),
+      toolName: null,
+      toolCallId: null,
+      toolInput: null,
+      toolIsError: null,
+      toolSource: null,
     })
     messagesByThread.value[result.threadId] = list
     streamingMessageId.value = result.assistantMessageId
@@ -255,6 +308,14 @@ async function send(retryPending = false) {
     reasoningByMessage.value = {
       ...reasoningByMessage.value,
       [result.assistantMessageId]: '',
+    }
+    const queuedToolEvents = pendingToolEvents.get(result.threadId)
+    if (queuedToolEvents) {
+      pendingToolEvents.delete(result.threadId)
+      for (const event of queuedToolEvents) {
+        if ('toolName' in event) handleToolCall(event, true)
+        else handleToolResult(event, true)
+      }
     }
     const pending = pendingStreamEvents.get(result.assistantMessageId)
     pendingStreamEvents.delete(result.assistantMessageId)
@@ -270,6 +331,9 @@ async function send(retryPending = false) {
     }
     else if (pending?.complete) {
       handleComplete(pending.complete)
+    }
+    if (pending?.turnComplete) {
+      handleTurnComplete(pending.turnComplete)
     }
     await scrollToBottom()
   }
@@ -295,6 +359,12 @@ async function abort() {
 
 /** Clears the active conversation so the next send creates a new thread. */
 async function newChat() {
+  if (busy.value) return
+  if (activeThreadId.value && pendingApprovals.value.length > 0) {
+    const queued = pendingApprovalsByThread.get(activeThreadId.value) ?? []
+    pendingApprovalsByThread.set(activeThreadId.value, [...queued, ...pendingApprovals.value])
+    pendingApprovals.value = []
+  }
   activeThreadId.value = null
   input.value = ''
   streamingMessageId.value = null
@@ -387,10 +457,12 @@ function handleToken(e: TokenEvent) {
   applyToken(e, threadId)
 }
 
+// `chat-message-complete` fires per step (a turn can have several); it no
+// longer clears `streamingMessageId`/`busy` or sets a terminal
+// `finishReason` itself — `chat-turn-complete` is the sole source for
+// both, since only it knows whether the turn actually ended in
+// `complete` vs. `tool_limit_reached` (contracts/tauri-commands.md).
 function applyComplete(e: MessageCompleteEvent) {
-  streamingMessageId.value = null
-  streamingBuffer.value = ''
-  busy.value = false
   const list = messagesByThread.value[e.threadId] ?? []
   const idx = list.findIndex((m) => m.id === e.messageId)
   const existing = list[idx]
@@ -399,7 +471,6 @@ function applyComplete(e: MessageCompleteEvent) {
       ...existing,
       promptTokens: e.promptTokens,
       completionTokens: e.completionTokens,
-      finishReason: 'complete',
     }
     messagesByThread.value[e.threadId] = list
   }
@@ -416,9 +487,6 @@ function handleComplete(e: MessageCompleteEvent) {
 }
 
 function applyError(e: MessageErrorEvent) {
-  streamingMessageId.value = null
-  streamingBuffer.value = ''
-  busy.value = false
   lastError.value = e.reason
   const list = messagesByThread.value[e.threadId] ?? []
   const idx = list.findIndex((m) => m.id === e.messageId)
@@ -437,6 +505,133 @@ function handleError(e: MessageErrorEvent) {
     return
   }
   applyError(e)
+}
+
+/** Appends a `tool_call`/`tool_result` row. Only applied when the event's
+ * own thread is the one currently open — unlike token/complete/error
+ * events, these carry no pre-known placeholder to buffer against, and the
+ * row is safely in `chat_messages` regardless; switching back to that
+ * thread reloads it via `selectThread`. */
+function handleToolCall(e: ToolCallEvent, restoring = false) {
+  if (!restoring && e.threadId !== activeThreadId.value) {
+    const queued = pendingToolEvents.get(e.threadId) ?? []
+    pendingToolEvents.set(e.threadId, [...queued, e])
+    return
+  }
+  const list = messagesByThread.value[e.threadId] ?? []
+  if (list.some((message) => message.id === e.messageId)) return
+  list.push({
+    id: e.messageId,
+    threadId: e.threadId,
+    parentId: null,
+    role: 'tool_call',
+    content: '',
+    modelId: null,
+    promptTokens: null,
+    completionTokens: null,
+    finishReason: null,
+    createdAt: Date.now(),
+    toolName: e.toolName,
+    toolCallId: null,
+    toolInput: JSON.stringify(e.toolInput),
+    toolIsError: null,
+    toolSource: e.toolSource,
+  })
+  messagesByThread.value[e.threadId] = list
+  scrollToBottom()
+}
+
+function handleToolResult(e: ToolResultEvent, restoring = false) {
+  if (!restoring && e.threadId !== activeThreadId.value) {
+    const queued = pendingToolEvents.get(e.threadId) ?? []
+    pendingToolEvents.set(e.threadId, [...queued, e])
+    return
+  }
+  const list = messagesByThread.value[e.threadId] ?? []
+  if (list.some((message) => message.id === e.messageId)) return
+  list.push({
+    id: e.messageId,
+    threadId: e.threadId,
+    parentId: null,
+    role: 'tool_result',
+    content: e.content,
+    modelId: null,
+    promptTokens: null,
+    completionTokens: null,
+    finishReason: null,
+    createdAt: Date.now(),
+    toolName: null,
+    toolCallId: e.toolCallId,
+    toolInput: null,
+    toolIsError: e.isError,
+    toolSource: null,
+  })
+  messagesByThread.value[e.threadId] = list
+  scrollToBottom()
+}
+
+// The sole place `streamingMessageId`/`busy` get cleared — a turn can
+// span several steps, so only its one terminal event may signal "done"
+// (contracts/tauri-commands.md).
+function applyTurnComplete(e: TurnCompleteEvent) {
+  streamingMessageId.value = null
+  streamingBuffer.value = ''
+  busy.value = false
+  if (!e.assistantMessageId) return
+  const list = messagesByThread.value[e.threadId] ?? []
+  const idx = list.findIndex((m) => m.id === e.assistantMessageId)
+  const existing = list[idx]
+  if (idx !== -1 && existing) {
+    list[idx] = { ...existing, finishReason: e.finishReason }
+    messagesByThread.value[e.threadId] = list
+  }
+}
+
+function handleToolPermissionRequest(e: ToolPermissionRequestEvent) {
+  const approval: PendingApproval = {
+    requestId: e.requestId,
+    toolName: e.toolName,
+    toolInput: e.toolInput,
+    riskClass: e.riskClass,
+  }
+  if (e.threadId !== activeThreadId.value) {
+    const queued = pendingApprovalsByThread.get(e.threadId) ?? []
+    pendingApprovalsByThread.set(e.threadId, [...queued, approval])
+    return
+  }
+  if (!pendingApprovals.value.some((item) => item.requestId === e.requestId)) {
+    pendingApprovals.value = [...pendingApprovals.value, approval]
+  }
+}
+
+async function respondToApproval(requestId: string, decision: 'allow' | 'deny') {
+  try {
+    await chat.respondToolPermissionAsync(requestId, decision)
+    pendingApprovals.value = pendingApprovals.value.filter((a) => a.requestId !== requestId)
+  }
+  catch (e: unknown) {
+    lastError.value = errString(e)
+  }
+}
+
+async function updatePermissionMode(mode: 'manual' | 'auto' | 'plan') {
+  permissionMode.value = mode
+  if (!deviceUuid) return
+  try {
+    await setPrefAsync({ kind: 'device', uuid: deviceUuid }, PERMISSION_MODE_KEY, mode)
+  }
+  catch (e: unknown) {
+    lastError.value = errString(e)
+  }
+}
+
+function handleTurnComplete(e: TurnCompleteEvent) {
+  if (e.assistantMessageId && streamingMessageId.value !== e.assistantMessageId) {
+    const pending = pendingFor(e.assistantMessageId)
+    pending.turnComplete = e
+    return
+  }
+  applyTurnComplete(e)
 }
 
 function toggleReasoning(messageId: string) {
@@ -482,12 +677,37 @@ const loadingLabel = computed<string | null>(() => {
 })
 
 onMounted(async () => {
-  [unlistenToken, unlistenComplete, unlistenError, unlistenLoadProgress] = await Promise.all([
+  [
+    unlistenToken,
+    unlistenComplete,
+    unlistenError,
+    unlistenToolCall,
+    unlistenToolResult,
+    unlistenTurnComplete,
+    unlistenToolPermissionRequest,
+    unlistenLoadProgress,
+  ] = await Promise.all([
     chat.onToken(handleToken),
     chat.onMessageComplete(handleComplete),
     chat.onMessageError(handleError),
+    chat.onToolCall(handleToolCall),
+    chat.onToolResult(handleToolResult),
+    chat.onTurnComplete(handleTurnComplete),
+    chat.onToolPermissionRequest(handleToolPermissionRequest),
     chat.onModelLoadProgress(onLoadProgress),
   ])
+
+  const device = await currentDeviceInfoAsync()
+  deviceUuid = device.vaultDeviceUuid
+  try {
+    const stored = await getPrefAsync({ kind: 'device', uuid: deviceUuid }, PERMISSION_MODE_KEY)
+    if (stored === 'manual' || stored === 'auto' || stored === 'plan') {
+      permissionMode.value = stored
+    }
+  }
+  catch {
+    // Keep the default ('manual') if the read fails.
+  }
 
   activeModel.value = await chat.activeModelInfoAsync()
   await refreshInstalledAndCatalog()
@@ -525,6 +745,10 @@ onBeforeUnmount(() => {
   unlistenToken?.()
   unlistenComplete?.()
   unlistenError?.()
+  unlistenToolCall?.()
+  unlistenToolResult?.()
+  unlistenTurnComplete?.()
+  unlistenToolPermissionRequest?.()
   unlistenLoadProgress?.()
   unlistenDownloadProgress?.()
   unlistenDownloadComplete?.()
@@ -537,9 +761,16 @@ onBeforeUnmount(() => {
       <div class="text-sm font-semibold truncate" :title="instanceName">
         {{ instanceName }}
       </div>
-      <UiButton size="sm" variant="outline" @click="newChat">
+      <UiButton size="sm" variant="outline" :disabled="busy" @click="newChat">
         Neuer Chat
       </UiButton>
+      <PermissionPrompt
+        :mode="permissionMode"
+        :pending-approvals="pendingApprovals"
+        @update:mode="updatePermissionMode"
+        @allow="respondToApproval($event, 'allow')"
+        @deny="respondToApproval($event, 'deny')"
+      />
       <div class="text-xs text-muted-foreground mt-2">
         Modell
       </div>
@@ -669,19 +900,36 @@ onBeforeUnmount(() => {
             class="max-w-3xl mx-auto"
           >
             <div class="text-xs text-muted-foreground mb-1">
-              {{ m.role === 'user' ? 'Du' : m.role === 'assistant' ? 'Assistent' : m.role }}
-              <span v-if="m.role === 'assistant' && m.completionTokens" class="ml-2">
-                {{ m.completionTokens }} tokens
-              </span>
-              <span v-if="m.finishReason === 'error'" class="ml-2 text-destructive">
-                (Fehler)
-              </span>
+              <template v-if="m.role === 'tool_call'">
+                {{ t('chat.tool.call', { name: m.toolName }) }}
+              </template>
+              <template v-else-if="m.role === 'tool_result'">
+                {{ m.toolIsError ? t('chat.tool.resultError') : t('chat.tool.result') }}
+              </template>
+              <template v-else>
+                {{ m.role === 'user' ? 'Du' : m.role === 'assistant' ? 'Assistent' : m.role }}
+                <span v-if="m.role === 'assistant' && m.completionTokens" class="ml-2">
+                  {{ m.completionTokens }} tokens
+                </span>
+                <span v-if="m.finishReason === 'error'" class="ml-2 text-destructive">
+                  (Fehler)
+                </span>
+                <span v-if="m.finishReason === 'tool_limit_reached'" class="ml-2 text-amber-600">
+                  {{ t('chat.tool.limitReached') }}
+                </span>
+              </template>
             </div>
             <div
               class="whitespace-pre-wrap text-sm rounded px-3 py-2"
-              :class="m.role === 'user' ? 'bg-accent' : 'bg-muted/50'"
+              :class="{
+                'bg-accent': m.role === 'user',
+                'bg-muted/50': m.role === 'assistant' || m.role === 'system',
+                'bg-muted/30 font-mono text-xs': m.role === 'tool_call' || (m.role === 'tool_result' && !m.toolIsError),
+                'bg-destructive/10 text-destructive font-mono text-xs': m.role === 'tool_result' && m.toolIsError,
+              }"
             >
-              {{ m.content || (streamingMessageId === m.id ? '…' : '') }}
+              <template v-if="m.role === 'tool_call'">{{ m.toolInput }}</template>
+              <template v-else>{{ m.content || (streamingMessageId === m.id ? '…' : '') }}</template>
             </div>
             <div
               v-if="m.role === 'assistant' && reasoningFor(m.id)"

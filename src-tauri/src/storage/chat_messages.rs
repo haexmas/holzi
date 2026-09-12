@@ -27,6 +27,18 @@ pub struct ChatMessage {
     /// (contract §send_message). `None` for every assistant/system row
     /// and for messages inserted before migration 0013.
     pub idempotency_key: Option<String>,
+    /// Tool name called. Set only on `role = ToolCall` (data-model.md).
+    pub tool_name: Option<String>,
+    /// Correlates a `ToolCall` row with its `ToolResult` row. Set on both
+    /// roles; no hard FK, same rationale as `parent_id`.
+    pub tool_call_id: Option<String>,
+    /// JSON text of the tool input. Set only on `role = ToolCall`.
+    pub tool_input: Option<String>,
+    /// `None`/`Some(false)` both mean "no error" (pre-migration rows have
+    /// `None`). Set only on `role = ToolResult`.
+    pub tool_is_error: Option<bool>,
+    /// `mcp` or `cli`. Set only on `role = ToolCall`.
+    pub tool_source: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -35,6 +47,8 @@ pub enum MessageRole {
     User,
     Assistant,
     System,
+    ToolCall,
+    ToolResult,
 }
 
 impl MessageRole {
@@ -43,6 +57,8 @@ impl MessageRole {
             MessageRole::User => "user",
             MessageRole::Assistant => "assistant",
             MessageRole::System => "system",
+            MessageRole::ToolCall => "tool_call",
+            MessageRole::ToolResult => "tool_result",
         }
     }
 
@@ -51,9 +67,74 @@ impl MessageRole {
             "user" => Some(MessageRole::User),
             "assistant" => Some(MessageRole::Assistant),
             "system" => Some(MessageRole::System),
+            "tool_call" => Some(MessageRole::ToolCall),
+            "tool_result" => Some(MessageRole::ToolResult),
             _ => None,
         }
     }
+}
+
+/// A `chat_messages` row's tool columns are inconsistent with its `role`
+/// (data-model.md validation rules). Surfaced from [`insert_message`] as a
+/// synthetic [`haex_crdt::rusqlite::Error::ToSqlConversionFailure`] — this
+/// module already does the equivalent for malformed reads (see
+/// [`bad_enum`]), so a write-side rejection follows the same pattern rather
+/// than widening `insert_message`'s return type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum ChatMessageValidationError {
+    #[error("tool_call row requires tool_name, tool_call_id, tool_input, and tool_source")]
+    ToolCallMissingFields,
+    #[error("tool_call row must not set tool_is_error")]
+    ToolCallHasToolIsError,
+    #[error("tool_result row requires tool_call_id and tool_is_error")]
+    ToolResultMissingFields,
+    #[error("tool_result row must not set tool_name, tool_input, or tool_source")]
+    ToolResultHasToolCallFields,
+    #[error("role {role:?} must not set any tool_* column")]
+    ToolColumnsOnNonToolRole { role: MessageRole },
+}
+
+/// Checks a message's tool columns against its `role` (data-model.md).
+/// Pure — no I/O, so it is covered directly by the colocated
+/// `chat_messages_tests` rather than the DB-backed integration suite.
+pub fn validate(m: &ChatMessage) -> std::result::Result<(), ChatMessageValidationError> {
+    match m.role {
+        MessageRole::ToolCall => {
+            if m.tool_name.is_none()
+                || m.tool_call_id.is_none()
+                || m.tool_input.is_none()
+                || m.tool_source.is_none()
+            {
+                return Err(ChatMessageValidationError::ToolCallMissingFields);
+            }
+            if m.tool_is_error.is_some() {
+                return Err(ChatMessageValidationError::ToolCallHasToolIsError);
+            }
+        }
+        MessageRole::ToolResult => {
+            if m.tool_call_id.is_none() || m.tool_is_error.is_none() {
+                return Err(ChatMessageValidationError::ToolResultMissingFields);
+            }
+            if m.tool_name.is_some() || m.tool_input.is_some() || m.tool_source.is_some() {
+                return Err(ChatMessageValidationError::ToolResultHasToolCallFields);
+            }
+        }
+        MessageRole::User | MessageRole::Assistant | MessageRole::System => {
+            if m.tool_name.is_some()
+                || m.tool_call_id.is_some()
+                || m.tool_input.is_some()
+                || m.tool_is_error.is_some()
+                || m.tool_source.is_some()
+            {
+                return Err(ChatMessageValidationError::ToolColumnsOnNonToolRole { role: m.role });
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validation_error(e: ChatMessageValidationError) -> haex_crdt::rusqlite::Error {
+    haex_crdt::rusqlite::Error::ToSqlConversionFailure(Box::new(e))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -62,6 +143,9 @@ pub enum FinishReason {
     Complete,
     Cancelled,
     Error,
+    /// The turn hit its fixed round cap without a final answer (spec.md
+    /// FR-016). Distinguishable from `Error` and `Cancelled` (contracts.md).
+    ToolLimitReached,
 }
 
 impl FinishReason {
@@ -70,6 +154,7 @@ impl FinishReason {
             FinishReason::Complete => "complete",
             FinishReason::Cancelled => "cancelled",
             FinishReason::Error => "error",
+            FinishReason::ToolLimitReached => "tool_limit_reached",
         }
     }
 
@@ -78,6 +163,7 @@ impl FinishReason {
             "complete" => Some(FinishReason::Complete),
             "cancelled" => Some(FinishReason::Cancelled),
             "error" => Some(FinishReason::Error),
+            "tool_limit_reached" => Some(FinishReason::ToolLimitReached),
             _ => None,
         }
     }
@@ -85,12 +171,16 @@ impl FinishReason {
 
 /// Inserts a finalised message. Always sets `haex_hlc_no_sync = current_hlc()`.
 pub fn insert_message(conn: &Connection, m: &ChatMessage) -> Result<usize> {
+    validate(m).map_err(validation_error)?;
     let sql = format!(
         "INSERT INTO chat_messages \
            (id, thread_id, parent_id, role, content, \
             provider_id, model_id, prompt_tokens, completion_tokens, \
-            finish_reason, created_at, idempotency_key, {HLC_TIMESTAMP_COLUMN}) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, current_hlc())"
+            finish_reason, created_at, idempotency_key, \
+            tool_name, tool_call_id, tool_input, tool_is_error, tool_source, \
+            {HLC_TIMESTAMP_COLUMN}) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, \
+                 ?13, ?14, ?15, ?16, ?17, current_hlc())"
     );
     conn.execute(
         &sql,
@@ -107,6 +197,11 @@ pub fn insert_message(conn: &Connection, m: &ChatMessage) -> Result<usize> {
             m.finish_reason.map(|r| r.as_str()),
             m.created_at,
             m.idempotency_key,
+            m.tool_name,
+            m.tool_call_id,
+            m.tool_input,
+            m.tool_is_error,
+            m.tool_source,
         ],
     )
 }
@@ -118,7 +213,8 @@ pub fn find_by_idempotency_key(conn: &Connection, key: &str) -> Result<Option<Ch
     let mut stmt = conn.prepare(
         "SELECT id, thread_id, parent_id, role, content, \
                 provider_id, model_id, prompt_tokens, completion_tokens, \
-                finish_reason, created_at, idempotency_key \
+                finish_reason, created_at, idempotency_key, \
+                tool_name, tool_call_id, tool_input, tool_is_error, tool_source \
          FROM chat_messages WHERE idempotency_key = ?1",
     )?;
     stmt.query_row(params![key], row_to_message).optional()
@@ -141,7 +237,8 @@ pub fn list_messages(conn: &Connection, thread_id: Uuid) -> Result<Vec<ChatMessa
     let mut stmt = conn.prepare(
         "SELECT id, thread_id, parent_id, role, content, \
                 provider_id, model_id, prompt_tokens, completion_tokens, \
-                finish_reason, created_at, idempotency_key \
+                finish_reason, created_at, idempotency_key, \
+                tool_name, tool_call_id, tool_input, tool_is_error, tool_source \
          FROM chat_messages WHERE thread_id = ?1 \
          ORDER BY created_at ASC, id ASC",
     )?;
@@ -173,6 +270,11 @@ fn row_to_message(row: &haex_crdt::rusqlite::Row<'_>) -> Result<ChatMessage> {
         },
         created_at: row.get(10)?,
         idempotency_key: row.get(11)?,
+        tool_name: row.get(12)?,
+        tool_call_id: row.get(13)?,
+        tool_input: row.get(14)?,
+        tool_is_error: row.get(15)?,
+        tool_source: row.get(16)?,
     })
 }
 

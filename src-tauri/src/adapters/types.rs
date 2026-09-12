@@ -5,22 +5,63 @@
 //! dispatch in `chat/commands.rs` does not special-case where the tokens
 //! come from.
 
+use serde_json::Value;
 use tokio::sync::mpsc;
 use tokio::task::AbortHandle;
 
 /// Which speaker a message belongs to. `System` is passed separately in
 /// [`ChatRequest::system_prompt`] because both mistralrs and Anthropic
 /// treat it as an out-of-band field rather than a message role.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// `ToolCall`/`ToolResult` carry their own payload directly (data-model.md)
+/// rather than reusing [`ChatMessage::content`] — each is its own flat
+/// entry in [`ChatRequest::messages`]; an adapter groups consecutive
+/// entries of the same kind into one wire-level message (research.md §1/§2,
+/// data-model.md's two-call example).
+#[derive(Debug, Clone, PartialEq)]
 pub enum ChatRole {
     User,
     Assistant,
+    ToolCall {
+        id: String,
+        name: String,
+        input: Value,
+    },
+    ToolResult {
+        call_id: String,
+        content: String,
+        is_error: bool,
+    },
 }
 
-#[derive(Debug, Clone)]
+/// `content` is only meaningful for `role: ChatRole::User | Assistant` —
+/// `ToolCall`/`ToolResult` carry their payload on the role variant itself
+/// and leave this empty.
+#[derive(Debug, Clone, PartialEq)]
 pub struct ChatMessage {
     pub role: ChatRole,
     pub content: String,
+}
+
+/// A tool an adapter may offer the model this step. Reused as-is for
+/// Anthropic's `input_schema` and mistralrs' `Function.parameters` — both
+/// are JSON-Schema-shaped (research.md §1/§2).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ToolSpec {
+    pub name: String,
+    pub description: String,
+    pub input_schema: Value,
+}
+
+/// One tool call the model produced. Reconstructed by an adapter from its
+/// own streamed wire format (buffered `input_json_delta`s for Anthropic,
+/// `ToolCallResponse` for mistralrs — research.md §1/§2) into this
+/// provider-neutral shape.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ToolCall {
+    pub id: String,
+    pub name: String,
+    pub input: Value,
 }
 
 /// Complete chat request handed to an adapter. `model_id` is the raw
@@ -37,11 +78,17 @@ pub struct ChatRequest {
     /// Anthropic Messages API requires the field, so the Anthropic
     /// adapter substitutes a conservative default in that case.
     pub max_new_tokens: Option<usize>,
+    /// Tools offered this step. Empty when no tools are registered, or
+    /// when the loaded local model's chat template does not support tool
+    /// calling (research.md §2 caveat) — an adapter never errors on an
+    /// empty list, it just never emits `StreamChunk::ToolCalls`.
+    pub tools: Vec<ToolSpec>,
 }
 
 /// One event on an [`AdapterStream`]. `Delta` carries either content,
-/// reasoning, or both; `Done` closes the stream with token counts and
-/// timing.
+/// reasoning, or both; `ToolCalls` precedes `Done` when the model stopped
+/// specifically to call one or more tools; `Done` closes the stream with
+/// token counts and timing.
 #[derive(Debug, Clone)]
 pub enum StreamChunk {
     Delta {
@@ -51,6 +98,7 @@ pub enum StreamChunk {
         /// do not surface reasoning.
         reasoning: Option<String>,
     },
+    ToolCalls(Vec<ToolCall>),
     Done {
         finish_reason: Option<String>,
         prompt_tokens: Option<usize>,

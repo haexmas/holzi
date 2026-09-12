@@ -70,7 +70,24 @@
       "ready": "Bereit"
     },
     "noModel": "Kein Modell verfügbar",
-    "retry": "Erneut versuchen"
+    "retry": "Erneut versuchen",
+    "tool": {
+      "call": "Tool-Aufruf: {name}",
+      "result": "Tool-Ergebnis",
+      "resultError": "Tool-Fehler",
+      "limitReached": "(Rundenlimit erreicht)"
+    },
+    "permission": {
+      "modeLabel": "Freigabe",
+      "manual": "Manuell",
+      "auto": "Automatisch",
+      "plan": "Plan",
+      "requestTitle": "Freigabe anfragen: {name}",
+      "risky": "Riskante Aktion",
+      "safe": "Unbedenkliche Aktion",
+      "allow": "Erlauben",
+      "deny": "Ablehnen"
+    }
   },
   "settings": {
     "header": {

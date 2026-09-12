@@ -19,8 +19,8 @@ pub use state::{ActiveInstanceHandle, AppState};
 use catalog::commands::catalog_recommend_tiers;
 use catalog::list_catalog;
 use chat::commands::{
-    abort_current_generation, active_model_info, load_model, resolve_default_model, send_message,
-    unload_local_model,
+    abort_current_generation, active_model_info, load_model, resolve_default_model,
+    respond_tool_permission, send_message, unload_local_model,
 };
 use chat::session::ChatState;
 use chat::thread_commands::{create_thread, list_messages, list_threads};
@@ -85,6 +85,7 @@ pub fn run() {
             resolve_default_model,
             send_message,
             abort_current_generation,
+            respond_tool_permission,
             create_thread,
             list_threads,
             list_messages,

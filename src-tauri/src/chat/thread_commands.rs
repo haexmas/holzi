@@ -118,6 +118,16 @@ pub struct MessagePayload {
     pub completion_tokens: Option<i64>,
     pub finish_reason: Option<String>,
     pub created_at: i64,
+    /// Set only when `role == "tool_call"` (data-model.md).
+    pub tool_name: Option<String>,
+    /// Correlates a `tool_call` row with its `tool_result` row.
+    pub tool_call_id: Option<String>,
+    /// JSON text of the tool input. Set only when `role == "tool_call"`.
+    pub tool_input: Option<String>,
+    /// Set only when `role == "tool_result"`.
+    pub tool_is_error: Option<bool>,
+    /// `mcp` or `cli`. Set only when `role == "tool_call"`.
+    pub tool_source: Option<String>,
 }
 
 impl From<ChatMessage> for MessagePayload {
@@ -130,6 +140,8 @@ impl From<ChatMessage> for MessagePayload {
                 crate::storage::chat_messages::MessageRole::User => "user".into(),
                 crate::storage::chat_messages::MessageRole::Assistant => "assistant".into(),
                 crate::storage::chat_messages::MessageRole::System => "system".into(),
+                crate::storage::chat_messages::MessageRole::ToolCall => "tool_call".into(),
+                crate::storage::chat_messages::MessageRole::ToolResult => "tool_result".into(),
             },
             content: m.content,
             model_id: m.model_id,
@@ -139,8 +151,16 @@ impl From<ChatMessage> for MessagePayload {
                 crate::storage::chat_messages::FinishReason::Complete => "complete".into(),
                 crate::storage::chat_messages::FinishReason::Cancelled => "cancelled".into(),
                 crate::storage::chat_messages::FinishReason::Error => "error".into(),
+                crate::storage::chat_messages::FinishReason::ToolLimitReached => {
+                    "tool_limit_reached".into()
+                }
             }),
             created_at: m.created_at,
+            tool_name: m.tool_name,
+            tool_call_id: m.tool_call_id,
+            tool_input: m.tool_input,
+            tool_is_error: m.tool_is_error,
+            tool_source: m.tool_source,
         }
     }
 }

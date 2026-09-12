@@ -16,7 +16,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use tokio::sync::mpsc;
 
-use super::types::{AdapterStream, ChatRequest, ChatRole, StreamChunk, StreamError};
+use super::types::{AdapterStream, ChatRequest, ChatRole, StreamChunk, StreamError, ToolCall};
 use super::{AdapterError, ProviderAdapter, ProviderModel};
 
 /// The pinned Anthropic API version. Per docs, additive optional
@@ -201,6 +201,12 @@ impl ProviderAdapter for AnthropicAdapter {
             let mut ttft_ms: Option<u64> = None;
             let mut finish_reason: Option<String> = None;
             let mut done_emitted = false;
+            // Buffers one in-progress `tool_use` content block per index
+            // (id, name, concatenated `partial_json`) until its
+            // `content_block_stop` closes it (research.md §1).
+            let mut tool_use_bufs: std::collections::BTreeMap<u64, (String, String, String)> =
+                std::collections::BTreeMap::new();
+            let mut tool_calls: Vec<ToolCall> = Vec::new();
 
             while let Some(event) = event_stream.next().await {
                 let event = match event {
@@ -221,6 +227,25 @@ impl ProviderAdapter for AnthropicAdapter {
                             .and_then(Value::as_u64)
                         {
                             prompt_tokens = Some(n as usize);
+                        }
+                    }
+                    "content_block_start" => {
+                        if payload.pointer("/content_block/type").and_then(Value::as_str)
+                            == Some("tool_use")
+                        {
+                            let index =
+                                payload.pointer("/index").and_then(Value::as_u64).unwrap_or(0);
+                            let id = payload
+                                .pointer("/content_block/id")
+                                .and_then(Value::as_str)
+                                .unwrap_or_default()
+                                .to_string();
+                            let name = payload
+                                .pointer("/content_block/name")
+                                .and_then(Value::as_str)
+                                .unwrap_or_default()
+                                .to_string();
+                            tool_use_bufs.insert(index, (id, name, String::new()));
                         }
                     }
                     "content_block_delta" => {
@@ -263,7 +288,31 @@ impl ProviderAdapter for AnthropicAdapter {
                                     }
                                 }
                             }
+                            "input_json_delta" => {
+                                let index = payload
+                                    .pointer("/index")
+                                    .and_then(Value::as_u64)
+                                    .unwrap_or(0);
+                                if let Some(partial) =
+                                    payload.pointer("/delta/partial_json").and_then(Value::as_str)
+                                {
+                                    if let Some(buf) = tool_use_bufs.get_mut(&index) {
+                                        buf.2.push_str(partial);
+                                    }
+                                }
+                            }
                             _ => {}
+                        }
+                    }
+                    "content_block_stop" => {
+                        let index = payload.pointer("/index").and_then(Value::as_u64).unwrap_or(0);
+                        if let Some((id, name, partial_json)) = tool_use_bufs.remove(&index) {
+                            let input: Value = if partial_json.trim().is_empty() {
+                                serde_json::json!({})
+                            } else {
+                                serde_json::from_str(&partial_json).unwrap_or(serde_json::json!({}))
+                            };
+                            tool_calls.push(ToolCall { id, name, input });
                         }
                     }
                     "message_delta" => {
@@ -281,6 +330,11 @@ impl ProviderAdapter for AnthropicAdapter {
                         }
                     }
                     "message_stop" => {
+                        if !tool_calls.is_empty() {
+                            let _ = tx.send(Ok(StreamChunk::ToolCalls(std::mem::take(
+                                &mut tool_calls,
+                            ))));
+                        }
                         let done = StreamChunk::Done {
                             finish_reason: finish_reason.clone(),
                             prompt_tokens,
@@ -317,19 +371,6 @@ impl ProviderAdapter for AnthropicAdapter {
 
 /// Serializes a provider-neutral chat request for Anthropic's Messages API.
 fn build_messages_body(req: &ChatRequest) -> Value {
-    let messages: Vec<Value> = req
-        .messages
-        .iter()
-        .map(|m| {
-            serde_json::json!({
-                "role": match m.role {
-                    ChatRole::User => "user",
-                    ChatRole::Assistant => "assistant",
-                },
-                "content": m.content,
-            })
-        })
-        .collect();
     let max_tokens = req
         .max_new_tokens
         .map(|n| n as u32)
@@ -337,13 +378,113 @@ fn build_messages_body(req: &ChatRequest) -> Value {
     let mut body = serde_json::json!({
         "model": req.model_id,
         "max_tokens": max_tokens,
-        "messages": messages,
+        "messages": build_messages(&req.messages),
         "stream": true,
     });
     if let Some(sys) = req.system_prompt.as_ref() {
         body["system"] = Value::String(sys.clone());
     }
+    if !req.tools.is_empty() {
+        let tools: Vec<Value> = req
+            .tools
+            .iter()
+            .map(|t| {
+                serde_json::json!({
+                    "name": t.name,
+                    "description": t.description,
+                    "input_schema": t.input_schema,
+                })
+            })
+            .collect();
+        body["tools"] = Value::Array(tools);
+    }
     body
+}
+
+/// Groups the flat, per-row `messages` history into Anthropic's wire
+/// shape: consecutive `ToolCall` rows become one `assistant` message with
+/// one `tool_use` block per call, and consecutive `ToolResult` rows become
+/// one `user` message with one `tool_result` block per call, in the same
+/// order (data-model.md's two-call example).
+fn build_messages(messages: &[super::types::ChatMessage]) -> Vec<Value> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < messages.len() {
+        match &messages[i].role {
+            ChatRole::User => {
+                out.push(serde_json::json!({"role": "user", "content": messages[i].content}));
+                i += 1;
+            }
+            ChatRole::Assistant => {
+                let text = messages[i].content.clone();
+                i += 1;
+
+                let mut blocks = Vec::new();
+                if !text.is_empty() {
+                    blocks.push(serde_json::json!({
+                        "type": "text",
+                        "text": text,
+                    }));
+                }
+                while let Some(ChatRole::ToolCall { id, name, input }) =
+                    messages.get(i).map(|m| &m.role)
+                {
+                    blocks.push(serde_json::json!({
+                        "type": "tool_use",
+                        "id": id,
+                        "name": name,
+                        "input": input,
+                    }));
+                    i += 1;
+                }
+                if blocks.is_empty() {
+                    continue;
+                }
+                if blocks.len() == 1 && !text.is_empty() {
+                    out.push(serde_json::json!({"role": "assistant", "content": text}));
+                } else {
+                    out.push(serde_json::json!({"role": "assistant", "content": blocks}));
+                }
+            }
+            ChatRole::ToolCall { .. } => {
+                let mut blocks = Vec::new();
+                while let Some(ChatRole::ToolCall { id, name, input }) =
+                    messages.get(i).map(|m| &m.role)
+                {
+                    blocks.push(serde_json::json!({
+                        "type": "tool_use",
+                        "id": id,
+                        "name": name,
+                        "input": input,
+                    }));
+                    i += 1;
+                }
+                out.push(serde_json::json!({"role": "assistant", "content": blocks}));
+            }
+            ChatRole::ToolResult { .. } => {
+                let mut blocks = Vec::new();
+                while let Some(ChatRole::ToolResult {
+                    call_id,
+                    content,
+                    is_error,
+                }) = messages.get(i).map(|m| &m.role)
+                {
+                    let mut block = serde_json::json!({
+                        "type": "tool_result",
+                        "tool_use_id": call_id,
+                        "content": content,
+                    });
+                    if *is_error {
+                        block["is_error"] = Value::Bool(true);
+                    }
+                    blocks.push(block);
+                    i += 1;
+                }
+                out.push(serde_json::json!({"role": "user", "content": blocks}));
+            }
+        }
+    }
+    out
 }
 
 /// Caps a provider-supplied error body before it travels into a

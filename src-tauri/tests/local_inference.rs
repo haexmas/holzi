@@ -63,6 +63,7 @@ async fn load_and_stream_generates_tokens() {
             content: "Reply with the single word: pong.".into(),
         }],
         max_new_tokens: Some(MAX_NEW_TOKENS),
+        tools: Vec::new(),
     });
 
     let mut total_content = String::new();
@@ -76,6 +77,9 @@ async fn load_and_stream_generates_tokens() {
                 saw_done = true;
                 ttft_ms = t;
                 break;
+            }
+            StreamChunk::ToolCalls(_) => {
+                panic!("this fixture's prompt does not request tool use")
             }
         }
     }
@@ -111,6 +115,7 @@ async fn abort_stops_generation_before_completion() {
             content: "Count from 1 to 500 in words, one number per line.".into(),
         }],
         max_new_tokens: Some(512),
+        tools: Vec::new(),
     });
 
     // Pull chunks until we get at least one non-empty delta so we know

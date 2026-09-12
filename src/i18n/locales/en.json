@@ -70,7 +70,24 @@
       "ready": "Ready"
     },
     "noModel": "No model available",
-    "retry": "Try again"
+    "retry": "Try again",
+    "tool": {
+      "call": "Tool call: {name}",
+      "result": "Tool result",
+      "resultError": "Tool error",
+      "limitReached": "(round limit reached)"
+    },
+    "permission": {
+      "modeLabel": "Approval",
+      "manual": "Manual",
+      "auto": "Auto",
+      "plan": "Plan",
+      "requestTitle": "Approve: {name}",
+      "risky": "Risky action",
+      "safe": "Safe action",
+      "allow": "Allow",
+      "deny": "Deny"
+    }
   },
   "settings": {
     "header": {

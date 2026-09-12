@@ -63,6 +63,11 @@ fn sample_message(
         finish_reason: Some(FinishReason::Complete),
         created_at: 0,
         idempotency_key: idempotency_key.map(|s| s.to_string()),
+        tool_name: None,
+        tool_call_id: None,
+        tool_input: None,
+        tool_is_error: None,
+        tool_source: None,
     }
 }
 

@@ -13,13 +13,23 @@ export interface Message {
   id: string
   threadId: string
   parentId: string | null
-  role: 'user' | 'assistant' | 'system'
+  role: 'user' | 'assistant' | 'system' | 'tool_call' | 'tool_result'
   content: string
   modelId: string | null
   promptTokens: number | null
   completionTokens: number | null
-  finishReason: 'complete' | 'cancelled' | 'error' | null
+  finishReason: 'complete' | 'cancelled' | 'error' | 'tool_limit_reached' | null
   createdAt: number
+  /** Set only when `role === 'tool_call'` (data-model.md). */
+  toolName: string | null
+  /** Correlates a `tool_call` row with its `tool_result` row. */
+  toolCallId: string | null
+  /** JSON text of the tool input. Set only when `role === 'tool_call'`. */
+  toolInput: string | null
+  /** Set only when `role === 'tool_result'`. */
+  toolIsError: boolean | null
+  /** `mcp` or `cli`. Set only when `role === 'tool_call'`. */
+  toolSource: string | null
 }
 
 export interface LoadedModelInfo {
@@ -77,6 +87,43 @@ export interface MessageErrorEvent {
   reason: string
 }
 
+export interface ToolCallEvent {
+  messageId: string
+  threadId: string
+  toolName: string
+  toolInput: unknown
+  toolSource: 'mcp' | 'cli'
+}
+
+export interface ToolResultEvent {
+  messageId: string
+  threadId: string
+  toolCallId: string
+  content: string
+  isError: boolean
+}
+
+export type RiskClass = 'safe' | 'risky'
+
+/** Fires when the Manual/Auto/Plan gate needs a human decision (contracts/
+ * tauri-commands.md). Answered via `respondToolPermissionAsync`. */
+export interface ToolPermissionRequestEvent {
+  requestId: string
+  threadId: string
+  toolName: string
+  toolInput: unknown
+  riskClass: RiskClass
+}
+
+/** Fires exactly once per `send_message` call, after that turn's last
+ * per-step event — the sole signal to clear `streamingMessageId`/`busy`,
+ * since a turn can span multiple steps (contracts/tauri-commands.md). */
+export interface TurnCompleteEvent {
+  threadId: string
+  assistantMessageId: string | null
+  finishReason: 'complete' | 'cancelled' | 'error' | 'tool_limit_reached'
+}
+
 export type ModelLoadPhase = 'connecting' | 'loading' | 'cuda-jit-warmup' | 'ready'
 
 export interface ModelLoadProgressEvent {
@@ -120,6 +167,16 @@ export function useChat() {
   /** Aborts the active generation, if one is running. */
   async function abortAsync(): Promise<void> {
     return await invoke<void>('abort_current_generation')
+  }
+
+  /** Resolves an open `tool-permission-request` (contracts §respond_tool_permission). */
+  async function respondToolPermissionAsync(
+    requestId: string,
+    decision: 'allow' | 'deny',
+  ): Promise<void> {
+    return await invoke<void>('respond_tool_permission', {
+      args: { requestId, decision },
+    })
   }
 
   /**
@@ -167,6 +224,41 @@ export function useChat() {
     )
   }
 
+  /** Subscribes to persisted tool calls and returns the unlisten function. */
+  async function onToolCall(
+    handler: (e: ToolCallEvent) => void,
+  ): Promise<UnlistenFn> {
+    return await listen<ToolCallEvent>('chat-tool-call', (ev) => handler(ev.payload))
+  }
+
+  /** Subscribes to persisted tool results and returns the unlisten function. */
+  async function onToolResult(
+    handler: (e: ToolResultEvent) => void,
+  ): Promise<UnlistenFn> {
+    return await listen<ToolResultEvent>('chat-tool-result', (ev) => handler(ev.payload))
+  }
+
+  /**
+   * Subscribes to the turn's terminal event and returns the unlisten
+   * function. This — not `chat-message-complete`/`chat-message-error` — is
+   * the signal to clear `streamingMessageId`/`busy`, since a turn can span
+   * multiple steps (contracts/tauri-commands.md).
+   */
+  async function onTurnComplete(
+    handler: (e: TurnCompleteEvent) => void,
+  ): Promise<UnlistenFn> {
+    return await listen<TurnCompleteEvent>('chat-turn-complete', (ev) => handler(ev.payload))
+  }
+
+  /** Subscribes to `tool-permission-request` and returns the unlisten function. */
+  async function onToolPermissionRequest(
+    handler: (e: ToolPermissionRequestEvent) => void,
+  ): Promise<UnlistenFn> {
+    return await listen<ToolPermissionRequestEvent>('tool-permission-request', (ev) =>
+      handler(ev.payload),
+    )
+  }
+
   /**
    * Subscribes to `model-load-progress` and returns the unlisten
    * function. Payload carries the semantic phase + parameters; the
@@ -187,12 +279,17 @@ export function useChat() {
     createThreadAsync,
     sendMessageAsync,
     abortAsync,
+    respondToolPermissionAsync,
     loadModelAsync,
     unloadModelAsync,
     activeModelInfoAsync,
     onToken,
     onMessageComplete,
     onMessageError,
+    onToolCall,
+    onToolResult,
+    onTurnComplete,
+    onToolPermissionRequest,
     onModelLoadProgress,
   }
 }

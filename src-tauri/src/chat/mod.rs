@@ -8,3 +8,4 @@ pub mod commands;
 mod commands_tests;
 pub mod session;
 pub mod thread_commands;
+pub mod tools;

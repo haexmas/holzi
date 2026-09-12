@@ -1,6 +1,9 @@
 # Agent Tool Loop — Turn/Step, Tools, Retries, Cancellation
 
-**Status**: Design, not yet implemented. Written 2026-09-11 from a brainstorming session triggered
+**Status**: §§1-7 (turn/step loop, tool registry, permission gate) implemented in
+[PR #32](https://github.com/haexmas/holzi/pull/32), covering tasks.md Phases 1-4 (T001-T029).
+Cancellation (§ retry/cancellation split, tasks.md Phase 5), retry (Phase 6), and polish (Phase 7)
+remain design-only. Written 2026-09-11 from a brainstorming session triggered
 by evaluating [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) as a
 reference. Conclusion: its turn/step + append-only-session-log pattern is worth adopting; its Cordis
 plugin architecture, subagent model, and Agent-SDK-based CLI integration are not (see §9).

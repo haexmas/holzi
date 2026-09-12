@@ -15,6 +15,8 @@
 //! §"Vault identity and device model".
 
 pub mod chat_messages;
+#[cfg(test)]
+mod chat_messages_tests;
 pub mod chat_threads;
 pub mod known_devices;
 pub mod models;

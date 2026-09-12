@@ -3,12 +3,18 @@
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, State};
+use serde_json::Value;
+use tauri::{AppHandle, Emitter, Manager, State};
 use uuid::Uuid;
 
 #[cfg(feature = "llm-cpu")]
 use crate::adapters::local::LocalAdapter;
-use crate::adapters::types::{ChatMessage as LlmMessage, ChatRequest, ChatRole, StreamChunk};
+use crate::adapters::types::{
+    ChatMessage as LlmMessage, ChatRequest, ChatRole, StreamChunk, ToolCall as LlmToolCall,
+    ToolSpec,
+};
+use crate::chat::tools::permission::{self, PermissionMode};
+use crate::chat::tools::{ApprovalDecision, Tool, ToolRegistry, ToolResult as ToolExecResult};
 use crate::error::{HolziError, Result};
 #[cfg(feature = "llm-cpu")]
 use crate::llm::local::LocalModel;
@@ -30,9 +36,24 @@ const EVENT_CHAT_TOKEN: &str = "chat-token";
 const EVENT_CHAT_MESSAGE_COMPLETE: &str = "chat-message-complete";
 const EVENT_CHAT_MESSAGE_ERROR: &str = "chat-message-error";
 const EVENT_MODEL_LOAD_PROGRESS: &str = "model-load-progress";
+const EVENT_CHAT_TOOL_CALL: &str = "chat-tool-call";
+const EVENT_CHAT_TOOL_RESULT: &str = "chat-tool-result";
+const EVENT_CHAT_TURN_COMPLETE: &str = "chat-turn-complete";
+const EVENT_TOOL_PERMISSION_REQUEST: &str = "tool-permission-request";
 
 const PREF_LAST_ACTIVE_MODEL: &str = "chat.last_active_model_id";
 const PREF_DEFAULT_MODEL: &str = "chat.default_model_id";
+/// Device preference read fresh before every tool call (T024B); parsed via
+/// `PermissionMode::parse`, defaulting to `Manual` when unset or invalid
+/// (spec.md Assumptions). No dedicated get/set command — read/written
+/// through the existing generic `get_pref`/`set_pref` (data-model.md).
+const PREF_PERMISSION_MODE: &str = "chat.permission_mode";
+
+/// Fixed cap on the number of tool-calling rounds within one turn
+/// (spec.md FR-016). A "round" is one step whose response contained at
+/// least one tool call. Reaching the cap ends the turn with
+/// `FinishReason::ToolLimitReached` instead of issuing a further step.
+pub const MAX_TOOL_ROUNDS: usize = 8;
 
 /// Semantic phase of a model-load. See spec 002 §FR-015b + contracts.
 /// Backend never emits localised strings; frontend translates via
@@ -164,6 +185,61 @@ struct MessageErrorEvent {
     message_id: Uuid,
     thread_id: Uuid,
     reason: String,
+}
+
+/// Payload for `chat-tool-call` (contracts/tauri-commands.md). Emitted at
+/// the persistence boundary — a `tool_call` row exists from this point,
+/// even if the call is later blocked under `plan` mode (Phase 4).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ToolCallEvent {
+    message_id: Uuid,
+    thread_id: Uuid,
+    tool_name: String,
+    tool_input: Value,
+    tool_source: String,
+}
+
+/// Payload for `chat-tool-result` (contracts/tauri-commands.md).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ToolResultEvent {
+    message_id: Uuid,
+    thread_id: Uuid,
+    tool_call_id: String,
+    content: String,
+    is_error: bool,
+}
+
+/// Payload for `tool-permission-request` (contracts/tauri-commands.md).
+/// Answered via `respond_tool_permission`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ToolPermissionRequestEvent {
+    request_id: Uuid,
+    thread_id: Uuid,
+    tool_name: String,
+    tool_input: Value,
+    risk_class: &'static str,
+}
+
+fn risk_class_str(risk: crate::chat::tools::RiskClass) -> &'static str {
+    match risk {
+        crate::chat::tools::RiskClass::Safe => "safe",
+        crate::chat::tools::RiskClass::Risky => "risky",
+    }
+}
+
+/// Payload for `chat-turn-complete` (contracts/tauri-commands.md). Fires
+/// exactly once per `send_message` call, after the last step's own
+/// per-step event — this is the frontend's sole signal to clear
+/// `streamingMessageId`/`busy`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TurnCompleteEvent {
+    thread_id: Uuid,
+    assistant_message_id: Option<Uuid>,
+    finish_reason: FinishReason,
 }
 
 /// Loads a model (local catalog id or `<provider_id>:<remote_id>`) into
@@ -600,6 +676,11 @@ pub fn persist_send_transaction(
                         finish_reason: Some(FinishReason::Complete),
                         created_at: now,
                         idempotency_key: Some(idempotency_key.to_string()),
+                        tool_name: None,
+                        tool_call_id: None,
+                        tool_input: None,
+                        tool_is_error: None,
+                        tool_source: None,
                     },
                 )?;
                 Ok(PersistedSend::Fresh {
@@ -623,6 +704,62 @@ pub fn persist_send_transaction(
             Err(error)
         }
     }
+}
+
+/// Converts persisted history rows into the adapter-neutral message shape
+/// an adapter groups into its own wire format (data-model.md). `System`
+/// rows are dropped — `system_prompt` carries system content out of band.
+fn history_to_messages(history: &[ChatMessage]) -> Vec<LlmMessage> {
+    history
+        .iter()
+        .filter_map(|m| match m.role {
+            MessageRole::User => Some(LlmMessage {
+                role: ChatRole::User,
+                content: m.content.clone(),
+            }),
+            MessageRole::Assistant => Some(LlmMessage {
+                role: ChatRole::Assistant,
+                content: m.content.clone(),
+            }),
+            MessageRole::System => None,
+            MessageRole::ToolCall => {
+                let input = m
+                    .tool_input
+                    .as_deref()
+                    .and_then(|s| serde_json::from_str(s).ok())
+                    .unwrap_or(Value::Object(Default::default()));
+                Some(LlmMessage {
+                    role: ChatRole::ToolCall {
+                        id: m.tool_call_id.clone().unwrap_or_default(),
+                        name: m.tool_name.clone().unwrap_or_default(),
+                        input,
+                    },
+                    content: String::new(),
+                })
+            }
+            MessageRole::ToolResult => Some(LlmMessage {
+                role: ChatRole::ToolResult {
+                    call_id: m.tool_call_id.clone().unwrap_or_default(),
+                    content: m.content.clone(),
+                    is_error: m.tool_is_error.unwrap_or(false),
+                },
+                content: String::new(),
+            }),
+        })
+        .collect()
+}
+
+/// Builds the `ToolSpec` list offered to the model this step from every
+/// tool currently in the registry.
+fn tool_specs(registry: &ToolRegistry) -> Vec<ToolSpec> {
+    registry
+        .iter()
+        .map(|t| ToolSpec {
+            name: t.name().to_string(),
+            description: t.description().to_string(),
+            input_schema: t.input_schema(),
+        })
+        .collect()
 }
 
 /// Persists a user message, spawns a streaming generation, returns
@@ -770,30 +907,25 @@ pub async fn send_message(
         .map(|(_, remote)| remote.to_string())
         .unwrap_or_else(|| session.model_id.clone());
 
+    let tools = {
+        let registry = chat.tool_registry.lock().map_err(|e| HolziError::CrdtInit {
+            reason: format!("chat.tool_registry mutex poisoned: {e}"),
+        })?;
+        tool_specs(&registry)
+    };
+
     let request = ChatRequest {
         model_id: request_model_id,
         system_prompt: args.system_prompt.clone(),
-        messages: history
-            .iter()
-            .filter_map(|m| match m.role {
-                MessageRole::User => Some(LlmMessage {
-                    role: ChatRole::User,
-                    content: m.content.clone(),
-                }),
-                MessageRole::Assistant => Some(LlmMessage {
-                    role: ChatRole::Assistant,
-                    content: m.content.clone(),
-                }),
-                MessageRole::System => None,
-            })
-            .collect(),
+        messages: history_to_messages(&history),
         max_new_tokens: args.max_new_tokens,
+        tools,
     };
 
     // Start the generation. `stream_chat` may fail before the first
     // byte (credential rejection, transport error); surface those to
     // the caller instead of hiding them inside the streaming task.
-    let mut stream = match session.adapter.stream_chat(request).await {
+    let stream = match session.adapter.stream_chat(request.clone()).await {
         Ok(stream) => stream,
         Err(error) => {
             let cleanup_db = db.clone();
@@ -870,10 +1002,168 @@ pub async fn send_message(
     let assistant_db = db.clone();
 
     tauri::async_runtime::spawn(async move {
+        let chat_state = app_for_task.state::<ChatState>();
+        let mut emit = |name: &'static str, payload: Value| {
+            let _ = app_for_task.emit(name, payload);
+        };
+        run_turn(
+            &assistant_db,
+            &chat_state,
+            &session_for_task,
+            thread_id,
+            user_message_id,
+            assistant_message_id,
+            request,
+            stream,
+            &mut emit,
+        )
+        .await;
+    });
+
+    Ok(SendMessageResult {
+        thread_id,
+        user_message_id,
+        assistant_message_id,
+    })
+}
+
+/// Persists one row. Used for every row except the turn's terminal
+/// assistant row, which also needs `chat_threads` updated atomically
+/// (see [`persist_final_message`]).
+async fn persist_message(
+    db: &haex_crdt::Database,
+    msg: ChatMessage,
+) -> std::result::Result<(), String> {
+    let db = db.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        db.with_connection(|conn| {
+            msg_store::insert_message(conn, &msg)
+                .map(|_| ())
+                .map_err(haex_crdt::Error::from)
+        })
+    })
+    .await
+    .map_err(|e| format!("persist join: {e}"))?
+    .map_err(|e| format!("persist failed: {e}"))
+}
+
+/// Persists the turn's terminal assistant row and updates `chat_threads`
+/// in the same connection call — mirrors the pre-tool-loop behavior where
+/// both happened atomically together.
+async fn persist_final_message(
+    db: &haex_crdt::Database,
+    msg: ChatMessage,
+    provider_id: Option<Uuid>,
+    model_id: String,
+) -> std::result::Result<(), String> {
+    let db = db.clone();
+    let thread_id = msg.thread_id;
+    let now = msg.created_at;
+    tauri::async_runtime::spawn_blocking(move || {
+        db.with_connection(|conn| {
+            msg_store::insert_message(conn, &msg).map_err(haex_crdt::Error::from)?;
+            thread_store::update_thread(
+                conn,
+                thread_id,
+                &current_title(conn, thread_id).unwrap_or_default(),
+                provider_id,
+                Some(&model_id),
+                now,
+            )
+            .map_err(haex_crdt::Error::from)
+        })
+    })
+    .await
+    .map_err(|e| format!("persist join: {e}"))?
+    .map_err(|e| format!("persist failed: {e}"))?;
+    Ok(())
+}
+
+/// Reads `chat.permission_mode` for this device, defaulting to `Manual`
+/// when unset or unparseable (spec.md Assumptions).
+async fn read_permission_mode(db: &haex_crdt::Database) -> PermissionMode {
+    let db = db.clone();
+    let this_device = db.device_id();
+    let raw = tauri::async_runtime::spawn_blocking(move || {
+        db.with_connection(|conn| {
+            preferences::get(conn, PrefScope::Device(this_device), PREF_PERMISSION_MODE)
+                .map_err(haex_crdt::Error::from)
+        })
+    })
+    .await
+    .ok()
+    .and_then(|r| r.ok())
+    .flatten();
+    raw.as_deref()
+        .and_then(PermissionMode::parse)
+        .unwrap_or_default()
+}
+
+/// What to do with one tool call, decided before any concurrent
+/// waiting/execution begins (see the comment at its only call site).
+enum ToolPlan {
+    Allow(Arc<dyn Tool>),
+    Ask {
+        tool: Arc<dyn Tool>,
+        rx: tokio::sync::oneshot::Receiver<ApprovalDecision>,
+    },
+    Deny(Arc<dyn Tool>),
+    Unknown,
+}
+
+fn empty_tool_message(id: Uuid, thread_id: Uuid, parent_id: Option<Uuid>) -> ChatMessage {
+    ChatMessage {
+        id,
+        thread_id,
+        parent_id,
+        role: MessageRole::User, // overwritten by every caller
+        content: String::new(),
+        provider_id: None,
+        model_id: None,
+        prompt_tokens: None,
+        completion_tokens: None,
+        finish_reason: None,
+        created_at: now_ms(),
+        idempotency_key: None,
+        tool_name: None,
+        tool_call_id: None,
+        tool_input: None,
+        tool_is_error: None,
+        tool_source: None,
+    }
+}
+
+/// Drives one `send_message` turn to completion: consumes the
+/// already-started first step's stream, executes any tool calls the model
+/// requests, issues further steps as needed (bounded by
+/// `MAX_TOOL_ROUNDS`), and persists every row along the way. Takes a plain
+/// `emit` callback rather than an `AppHandle` so it runs without a live
+/// Tauri app — `tests/chat_tool_loop.rs` passes a closure that records
+/// events instead of dispatching them; the production caller above wraps
+/// `app.emit`. `request` already carries the model/system-prompt/tools
+/// used for `stream`'s already-in-flight first step; its `messages` grow
+/// as tool rounds are appended for subsequent steps.
+#[allow(clippy::too_many_arguments)]
+pub async fn run_turn(
+    db: &haex_crdt::Database,
+    chat_state: &ChatState,
+    session: &ActiveSession,
+    thread_id: Uuid,
+    user_message_id: Uuid,
+    assistant_message_id: Uuid,
+    mut request: ChatRequest,
+    mut stream: crate::adapters::types::AdapterStream,
+    emit: &mut (dyn FnMut(&'static str, Value) + Send),
+) {
+    let mut parent_id = user_message_id;
+    let mut rounds_used = 0usize;
+
+    loop {
         let mut assembled = String::new();
         let mut prompt_tokens: Option<usize> = None;
         let mut completion_tokens: Option<usize> = None;
         let mut ttft_ms: Option<u64> = None;
+        let mut tool_calls: Vec<LlmToolCall> = Vec::new();
         let mut error_reason: Option<String> = None;
         let mut saw_done = false;
 
@@ -882,15 +1172,19 @@ pub async fn send_message(
                 Ok(StreamChunk::Delta { content, reasoning }) => {
                     if !content.is_empty() || reasoning.is_some() {
                         assembled.push_str(&content);
-                        let _ = app_for_task.emit(
+                        emit(
                             EVENT_CHAT_TOKEN,
-                            TokenEvent {
+                            serde_json::to_value(TokenEvent {
                                 message_id: assistant_message_id,
                                 delta: content,
                                 reasoning,
-                            },
+                            })
+                            .expect("TokenEvent always serializes"),
                         );
                     }
+                }
+                Ok(StreamChunk::ToolCalls(calls)) => {
+                    tool_calls = calls;
                 }
                 Ok(StreamChunk::Done {
                     prompt_tokens: pt,
@@ -911,6 +1205,384 @@ pub async fn send_message(
             }
         }
 
+        if error_reason.is_none() && !tool_calls.is_empty() {
+            // A step that ends by calling tools. Any text the model
+            // emitted first becomes its own interim assistant row
+            // (data-model.md's `assistant(*)` — optional, only present
+            // when the step actually produced text before its tool use).
+            if !assembled.is_empty() {
+                let interim_id = Uuid::new_v4();
+                let msg = ChatMessage {
+                    role: MessageRole::Assistant,
+                    content: assembled.clone(),
+                    provider_id: session.provider_id,
+                    model_id: Some(session.model_id.clone()),
+                    ..empty_tool_message(interim_id, thread_id, Some(parent_id))
+                };
+                if let Err(reason) = persist_message(db, msg).await {
+                    emit(
+                        EVENT_CHAT_MESSAGE_ERROR,
+                        serde_json::to_value(MessageErrorEvent {
+                            message_id: assistant_message_id,
+                            thread_id,
+                            reason,
+                        })
+                        .expect("MessageErrorEvent always serializes"),
+                    );
+                    emit(
+                        EVENT_CHAT_TURN_COMPLETE,
+                        serde_json::to_value(TurnCompleteEvent {
+                            thread_id,
+                            assistant_message_id: None,
+                            finish_reason: FinishReason::Error,
+                        })
+                        .expect("TurnCompleteEvent always serializes"),
+                    );
+                    return;
+                }
+                parent_id = interim_id;
+                request.messages.push(LlmMessage {
+                    role: ChatRole::Assistant,
+                    content: assembled,
+                });
+            }
+
+            // Decide + (for `Ask`) mint the approval wait sequentially —
+            // `emit` is a single `&mut` closure, not shareable across
+            // concurrent futures, so every `tool-permission-request` fires
+            // here, before any concurrent waiting/execution begins below.
+            // This is also what lets two independent Risky calls each get
+            // their own simultaneously-pending approval (T024A): each gets
+            // its own oneshot the moment its `Ask` is decided, well before
+            // either one's wait resolves.
+            let mut plans: Vec<(LlmToolCall, ToolPlan)> = Vec::with_capacity(tool_calls.len());
+            for call in tool_calls {
+                let tool = {
+                    let registry = chat_state
+                        .tool_registry
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner());
+                    registry.get(&call.name)
+                };
+                let Some(tool) = tool else {
+                    plans.push((call, ToolPlan::Unknown));
+                    continue;
+                };
+                // Read fresh per call, not cached for the round: a mode
+                // change must not retroactively affect a decision already
+                // made for an earlier call, but the very next tool use
+                // must observe it (T024B).
+                let mode = read_permission_mode(db).await;
+                match permission::decide(mode, tool.risk_class()) {
+                    permission::Decision::Allow => plans.push((call, ToolPlan::Allow(tool))),
+                    permission::Decision::Deny => plans.push((call, ToolPlan::Deny(tool))),
+                    permission::Decision::Ask => {
+                        let request_id = Uuid::new_v4();
+                        let (tx, rx) = tokio::sync::oneshot::channel();
+                        chat_state
+                            .pending_tool_approvals
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .insert(request_id, tx);
+                        emit(
+                            EVENT_TOOL_PERMISSION_REQUEST,
+                            serde_json::to_value(ToolPermissionRequestEvent {
+                                request_id,
+                                thread_id,
+                                tool_name: call.name.clone(),
+                                tool_input: call.input.clone(),
+                                risk_class: risk_class_str(tool.risk_class()),
+                            })
+                            .expect("ToolPermissionRequestEvent always serializes"),
+                        );
+                        plans.push((call, ToolPlan::Ask { tool, rx }));
+                    }
+                }
+            }
+
+            let executed: Vec<(LlmToolCall, ToolExecResult, &'static str)> =
+                futures::future::join_all(plans.into_iter().map(|(call, plan)| async move {
+                    match plan {
+                        ToolPlan::Allow(tool) => {
+                            let source = tool.source();
+                            let result = tool.execute(call.input.clone()).await;
+                            (call, result, source)
+                        }
+                        ToolPlan::Ask { tool, rx } => {
+                            // No cancellation race yet — Phase 5 (US3, out
+                            // of scope here) extends `ChatState`/the loop
+                            // to also resolve this wait on
+                            // `abort_current_generation` (T032).
+                            match rx.await {
+                                Ok(ApprovalDecision::Allow) => {
+                                    let source = tool.source();
+                                    let result = tool.execute(call.input.clone()).await;
+                                    (call, result, source)
+                                }
+                                Ok(ApprovalDecision::Deny) => (
+                                    call,
+                                    ToolExecResult::error("denied_by_user"),
+                                    tool.source(),
+                                ),
+                                Err(_) => (
+                                    call,
+                                    ToolExecResult::error("tool_call_cancelled"),
+                                    tool.source(),
+                                ),
+                            }
+                        }
+                        ToolPlan::Deny(tool) => (
+                            call,
+                            // Fixed, non-localized marker — the frontend
+                            // translates it (CONTEXT.md i18n boundary),
+                            // same convention as `LoadPhase` above.
+                            ToolExecResult::error("blocked_by_plan_mode"),
+                            tool.source(),
+                        ),
+                        ToolPlan::Unknown => {
+                            // The model named a tool no longer in the
+                            // registry (e.g. its MCP server disconnected
+                            // mid-conversation, spec.md Edge Cases) or one
+                            // that never existed. `cli` never disappears
+                            // (registered unconditionally, T019), so `mcp`
+                            // is the more plausible source to record here.
+                            let name = call.name.clone();
+                            (
+                                call,
+                                ToolExecResult::error(format!("unknown tool: {name}")),
+                                "mcp",
+                            )
+                        }
+                    }
+                }))
+                .await;
+
+            // SQLite orders rows by `created_at, id`; UUIDv4 is random, so
+            // rows created in one millisecond must receive distinct logical
+            // timestamps to keep each call immediately before its result.
+            let mut next_tool_created_at = now_ms().saturating_add(1);
+            for (call, result, source) in executed {
+                let tool_call_row_id = Uuid::new_v4();
+                let input_json =
+                    serde_json::to_string(&call.input).unwrap_or_else(|_| "{}".to_string());
+                let call_msg = ChatMessage {
+                    role: MessageRole::ToolCall,
+                    provider_id: session.provider_id,
+                    model_id: Some(session.model_id.clone()),
+                    tool_name: Some(call.name.clone()),
+                    tool_call_id: Some(call.id.clone()),
+                    tool_input: Some(input_json),
+                    tool_source: Some(source.to_string()),
+                    created_at: next_tool_created_at,
+                    ..empty_tool_message(tool_call_row_id, thread_id, Some(parent_id))
+                };
+                next_tool_created_at = next_tool_created_at.saturating_add(1);
+                if let Err(reason) = persist_message(db, call_msg).await {
+                    emit(
+                        EVENT_CHAT_MESSAGE_ERROR,
+                        serde_json::to_value(MessageErrorEvent {
+                            message_id: assistant_message_id,
+                            thread_id,
+                            reason,
+                        })
+                        .expect("MessageErrorEvent always serializes"),
+                    );
+                    emit(
+                        EVENT_CHAT_TURN_COMPLETE,
+                        serde_json::to_value(TurnCompleteEvent {
+                            thread_id,
+                            assistant_message_id: None,
+                            finish_reason: FinishReason::Error,
+                        })
+                        .expect("TurnCompleteEvent always serializes"),
+                    );
+                    return;
+                }
+                parent_id = tool_call_row_id;
+                emit(
+                    EVENT_CHAT_TOOL_CALL,
+                    serde_json::to_value(ToolCallEvent {
+                        message_id: tool_call_row_id,
+                        thread_id,
+                        tool_name: call.name.clone(),
+                        tool_input: call.input.clone(),
+                        tool_source: source.to_string(),
+                    })
+                    .expect("ToolCallEvent always serializes"),
+                );
+
+                let tool_result_row_id = Uuid::new_v4();
+                let result_msg = ChatMessage {
+                    role: MessageRole::ToolResult,
+                    content: result.content.clone(),
+                    provider_id: session.provider_id,
+                    model_id: Some(session.model_id.clone()),
+                    tool_call_id: Some(call.id.clone()),
+                    tool_is_error: Some(result.is_error),
+                    created_at: next_tool_created_at,
+                    ..empty_tool_message(tool_result_row_id, thread_id, Some(parent_id))
+                };
+                next_tool_created_at = next_tool_created_at.saturating_add(1);
+                if let Err(reason) = persist_message(db, result_msg).await {
+                    emit(
+                        EVENT_CHAT_MESSAGE_ERROR,
+                        serde_json::to_value(MessageErrorEvent {
+                            message_id: assistant_message_id,
+                            thread_id,
+                            reason,
+                        })
+                        .expect("MessageErrorEvent always serializes"),
+                    );
+                    emit(
+                        EVENT_CHAT_TURN_COMPLETE,
+                        serde_json::to_value(TurnCompleteEvent {
+                            thread_id,
+                            assistant_message_id: None,
+                            finish_reason: FinishReason::Error,
+                        })
+                        .expect("TurnCompleteEvent always serializes"),
+                    );
+                    return;
+                }
+                parent_id = tool_result_row_id;
+                emit(
+                    EVENT_CHAT_TOOL_RESULT,
+                    serde_json::to_value(ToolResultEvent {
+                        message_id: tool_result_row_id,
+                        thread_id,
+                        tool_call_id: call.id.clone(),
+                        content: result.content.clone(),
+                        is_error: result.is_error,
+                    })
+                    .expect("ToolResultEvent always serializes"),
+                );
+
+                request.messages.push(LlmMessage {
+                    role: ChatRole::ToolCall {
+                        id: call.id.clone(),
+                        name: call.name.clone(),
+                        input: call.input.clone(),
+                    },
+                    content: String::new(),
+                });
+                request.messages.push(LlmMessage {
+                    role: ChatRole::ToolResult {
+                        call_id: call.id.clone(),
+                        content: result.content.clone(),
+                        is_error: result.is_error,
+                    },
+                    content: String::new(),
+                });
+            }
+
+            rounds_used += 1;
+            if rounds_used >= MAX_TOOL_ROUNDS {
+                let final_msg = ChatMessage {
+                    role: MessageRole::Assistant,
+                    finish_reason: Some(FinishReason::ToolLimitReached),
+                    ..empty_tool_message(assistant_message_id, thread_id, Some(parent_id))
+                };
+                if let Err(reason) = persist_final_message(
+                    db,
+                    final_msg,
+                    session.provider_id,
+                    session.model_id.clone(),
+                )
+                .await
+                {
+                    emit(
+                        EVENT_CHAT_MESSAGE_ERROR,
+                        serde_json::to_value(MessageErrorEvent {
+                            message_id: assistant_message_id,
+                            thread_id,
+                            reason,
+                        })
+                        .expect("MessageErrorEvent always serializes"),
+                    );
+                    emit(
+                        EVENT_CHAT_TURN_COMPLETE,
+                        serde_json::to_value(TurnCompleteEvent {
+                            thread_id,
+                            assistant_message_id: None,
+                            finish_reason: FinishReason::Error,
+                        })
+                        .expect("TurnCompleteEvent always serializes"),
+                    );
+                    return;
+                }
+                emit(
+                    EVENT_CHAT_MESSAGE_COMPLETE,
+                    serde_json::to_value(MessageCompleteEvent {
+                        message_id: assistant_message_id,
+                        thread_id,
+                        prompt_tokens: None,
+                        completion_tokens: None,
+                        ttft_ms: None,
+                    })
+                    .expect("MessageCompleteEvent always serializes"),
+                );
+                emit(
+                    EVENT_CHAT_TURN_COMPLETE,
+                    serde_json::to_value(TurnCompleteEvent {
+                        thread_id,
+                        assistant_message_id: Some(assistant_message_id),
+                        finish_reason: FinishReason::ToolLimitReached,
+                    })
+                    .expect("TurnCompleteEvent always serializes"),
+                );
+                return;
+            }
+
+            match session.adapter.stream_chat(request.clone()).await {
+                Ok(next_stream) => {
+                    let next_abort = next_stream.abort_handle();
+                    let mut generation = chat_state
+                        .current_generation
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner());
+                    *generation = Some(next_abort);
+                    stream = next_stream;
+                    continue;
+                }
+                Err(error) => {
+                    let final_msg = ChatMessage {
+                        role: MessageRole::Assistant,
+                        finish_reason: Some(FinishReason::Error),
+                        ..empty_tool_message(assistant_message_id, thread_id, Some(parent_id))
+                    };
+                    let _ = persist_final_message(
+                        db,
+                        final_msg,
+                        session.provider_id,
+                        session.model_id.clone(),
+                    )
+                    .await;
+                    emit(
+                        EVENT_CHAT_MESSAGE_ERROR,
+                        serde_json::to_value(MessageErrorEvent {
+                            message_id: assistant_message_id,
+                            thread_id,
+                            reason: format!("adapter start: {error}"),
+                        })
+                        .expect("MessageErrorEvent always serializes"),
+                    );
+                    emit(
+                        EVENT_CHAT_TURN_COMPLETE,
+                        serde_json::to_value(TurnCompleteEvent {
+                            thread_id,
+                            assistant_message_id: Some(assistant_message_id),
+                            finish_reason: FinishReason::Error,
+                        })
+                        .expect("TurnCompleteEvent always serializes"),
+                    );
+                    return;
+                }
+            }
+        }
+
+        // Final step: a plain answer (no tool calls), a step-level
+        // adapter error, or cancellation (the stream closed without
+        // `Done` and without an error — `abort_current_generation`).
         let finish_reason = if error_reason.is_some() {
             FinishReason::Error
         } else if saw_done {
@@ -918,83 +1590,75 @@ pub async fn send_message(
         } else {
             FinishReason::Cancelled
         };
-        let now2 = now_ms();
-        let final_content = assembled.clone();
-        let insert_result = tauri::async_runtime::spawn_blocking(move || {
-            assistant_db.with_connection(|conn| {
-                let msg = ChatMessage {
-                    id: assistant_message_id,
-                    thread_id,
-                    parent_id: Some(user_message_id),
-                    role: MessageRole::Assistant,
-                    content: final_content,
-                    provider_id: session_for_task.provider_id,
-                    model_id: Some(session_for_task.model_id.clone()),
-                    prompt_tokens: prompt_tokens.map(|n| n as i64),
-                    completion_tokens: completion_tokens.map(|n| n as i64),
-                    finish_reason: Some(finish_reason),
-                    created_at: now2,
-                    idempotency_key: None,
-                };
-                msg_store::insert_message(conn, &msg).map_err(haex_crdt::Error::from)?;
-                thread_store::update_thread(
-                    conn,
-                    thread_id,
-                    &current_title(conn, thread_id).unwrap_or_default(),
-                    session_for_task.provider_id,
-                    Some(&session_for_task.model_id),
-                    now2,
-                )
-                .map_err(haex_crdt::Error::from)?;
-                Ok(())
-            })
-        })
-        .await;
-
-        let persist_error = match insert_result {
-            Err(e) => Some(format!("assistant persist join: {e}")),
-            Ok(Err(e)) => Some(format!("assistant persist failed: {e}")),
-            Ok(Ok(())) => None,
+        let final_msg = ChatMessage {
+            role: MessageRole::Assistant,
+            content: assembled,
+            provider_id: session.provider_id,
+            model_id: Some(session.model_id.clone()),
+            prompt_tokens: prompt_tokens.map(|n| n as i64),
+            completion_tokens: completion_tokens.map(|n| n as i64),
+            finish_reason: Some(finish_reason),
+            ..empty_tool_message(assistant_message_id, thread_id, Some(parent_id))
         };
-        if let Some(reason) = persist_error {
-            let _ = app_for_task.emit(
+        if let Err(reason) =
+            persist_final_message(db, final_msg, session.provider_id, session.model_id.clone())
+                .await
+        {
+            emit(
                 EVENT_CHAT_MESSAGE_ERROR,
-                MessageErrorEvent {
+                serde_json::to_value(MessageErrorEvent {
                     message_id: assistant_message_id,
                     thread_id,
                     reason,
-                },
+                })
+                .expect("MessageErrorEvent always serializes"),
+            );
+            emit(
+                EVENT_CHAT_TURN_COMPLETE,
+                serde_json::to_value(TurnCompleteEvent {
+                    thread_id,
+                    assistant_message_id: None,
+                    finish_reason: FinishReason::Error,
+                })
+                .expect("TurnCompleteEvent always serializes"),
             );
             return;
         }
+
         if let Some(reason) = error_reason {
-            let _ = app_for_task.emit(
+            emit(
                 EVENT_CHAT_MESSAGE_ERROR,
-                MessageErrorEvent {
+                serde_json::to_value(MessageErrorEvent {
                     message_id: assistant_message_id,
                     thread_id,
                     reason,
-                },
+                })
+                .expect("MessageErrorEvent always serializes"),
             );
         } else {
-            let _ = app_for_task.emit(
+            emit(
                 EVENT_CHAT_MESSAGE_COMPLETE,
-                MessageCompleteEvent {
+                serde_json::to_value(MessageCompleteEvent {
                     message_id: assistant_message_id,
                     thread_id,
                     prompt_tokens,
                     completion_tokens,
                     ttft_ms,
-                },
+                })
+                .expect("MessageCompleteEvent always serializes"),
             );
         }
-    });
-
-    Ok(SendMessageResult {
-        thread_id,
-        user_message_id,
-        assistant_message_id,
-    })
+        emit(
+            EVENT_CHAT_TURN_COMPLETE,
+            serde_json::to_value(TurnCompleteEvent {
+                thread_id,
+                assistant_message_id: Some(assistant_message_id),
+                finish_reason,
+            })
+            .expect("TurnCompleteEvent always serializes"),
+        );
+        return;
+    }
 }
 
 /// Runs the session-start resolver chain (spec 002 §FR-014) and
@@ -1139,6 +1803,56 @@ pub async fn abort_current_generation(chat: State<'_, ChatState>) -> Result<()> 
     if let Some(abort) = guard.take() {
         abort.abort();
     }
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RespondToolPermissionArgs {
+    pub request_id: Uuid,
+    pub decision: ApprovalDecisionWire,
+}
+
+/// Wire shape for `decision` — a bare string, no wrapper object, matching
+/// contracts/tauri-commands.md's `'allow' | 'deny'`.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ApprovalDecisionWire {
+    Allow,
+    Deny,
+}
+
+/// Resolves one open `tool-permission-request` (contracts/tauri-commands.md
+/// §respond_tool_permission). `InvalidInput` for a `request_id` that was
+/// never known — there is no cancellation-tombstone tracking yet (Phase 5,
+/// T032 adds resolving a pending request on abort; until then the only way
+/// an id leaves `pending_tool_approvals` is through this command itself).
+#[tauri::command]
+pub async fn respond_tool_permission(
+    chat: State<'_, ChatState>,
+    args: RespondToolPermissionArgs,
+) -> Result<()> {
+    let sender = {
+        let mut pending =
+            chat.pending_tool_approvals
+                .lock()
+                .map_err(|e| HolziError::CrdtInit {
+                    reason: format!("chat.pending_tool_approvals mutex poisoned: {e}"),
+                })?;
+        pending.remove(&args.request_id)
+    };
+    let Some(sender) = sender else {
+        return Err(HolziError::InvalidInput {
+            reason: format!("no pending tool permission request: {}", args.request_id),
+        });
+    };
+    let decision = match args.decision {
+        ApprovalDecisionWire::Allow => ApprovalDecision::Allow,
+        ApprovalDecisionWire::Deny => ApprovalDecision::Deny,
+    };
+    // The receiver may already be gone (e.g. the turn ended some other
+    // way) — that is not an error for the caller.
+    let _ = sender.send(decision);
     Ok(())
 }
 
