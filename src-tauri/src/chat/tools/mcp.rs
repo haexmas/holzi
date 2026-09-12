@@ -123,8 +123,8 @@ async fn connect(server: &McpServerConfig) -> Result<RunningService<RoleClient, 
     let command = tokio::process::Command::new(&server.command).configure(|cmd| {
         cmd.args(&args);
     });
-    let transport = TokioChildProcess::new(command)
-        .map_err(|e| format!("spawn {}: {e}", server.command))?;
+    let transport =
+        TokioChildProcess::new(command).map_err(|e| format!("spawn {}: {e}", server.command))?;
     ().serve(transport)
         .await
         .map_err(|e| format!("mcp handshake with {}: {e}", server.id))

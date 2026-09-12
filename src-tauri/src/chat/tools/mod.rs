@@ -101,7 +101,11 @@ impl ToolRegistry {
     /// Registers a tool. If `name()` collides with an already-registered
     /// tool, the newly-registered one wins the slot under its own name.
     pub fn register(&mut self, tool: Arc<dyn Tool>) {
-        if let Some(existing) = self.tools.iter_mut().find(|existing| existing.name() == tool.name()) {
+        if let Some(existing) = self
+            .tools
+            .iter_mut()
+            .find(|existing| existing.name() == tool.name())
+        {
             *existing = tool;
         } else {
             self.tools.push(tool);
