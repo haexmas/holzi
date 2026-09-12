@@ -129,6 +129,12 @@ const noModelsInstalled = computed(
     && Object.values(providerModels.value).every((list) => list.length === 0),
 )
 
+// Read through a computed rather than `activeModel?.modelId` directly in
+// the template — vue-tsc narrows `activeModel` to `never` at the model
+// picker's `v-else-if="!activeModel"` (a chained-`v-if` control-flow
+// quirk), which a plain computed's independent return type sidesteps.
+const activeModelId = computed(() => activeModel.value?.modelId ?? '')
+
 /** Groups selectable models by provider for the picker's <optgroup>. */
 type ModelGroup = { providerId: string, providerName: string, models: { id: string, name: string }[] }
 const modelGroups = computed<ModelGroup[]>(() => {
@@ -930,7 +936,7 @@ onBeforeUnmount(() => {
           <select
             id="chat-model-empty"
             class="rounded-lg border border-border bg-background px-3 py-2 text-sm"
-            :value="activeModel?.modelId ?? ''"
+            :value="activeModelId"
             :disabled="busy"
             @change="(e) => loadModel((e.target as HTMLSelectElement).value)"
           >
@@ -1071,7 +1077,7 @@ onBeforeUnmount(() => {
                   id="chat-model"
                   v-if="modelGroups.length > 0"
                   class="max-w-40 bg-transparent font-medium outline-none"
-                  :value="activeModel?.modelId ?? ''"
+                  :value="activeModelId"
                   :disabled="busy"
                   @change="(e) => loadModel((e.target as HTMLSelectElement).value)"
                 >
