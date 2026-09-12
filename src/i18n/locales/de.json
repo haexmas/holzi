@@ -70,6 +70,67 @@
       "ready": "Bereit"
     },
     "noModel": "Kein Modell verfügbar",
+    "model": {
+      "label": "Modell",
+      "choose": "Modell wählen …",
+      "local": "Lokale Modelle",
+      "notLoaded": "Kein Modell geladen",
+      "none": "Keins",
+      "selectPrompt": "Wähle ein Modell aus, um den Chat zu starten."
+    },
+    "newChat": "Neuer Chat",
+    "newChatShort": "Neu",
+    "threads": {
+      "title": "Verläufe",
+      "empty": "Noch keine Gespräche"
+    },
+    "settings": "Einstellungen",
+    "lock": "Sperren",
+    "close": "Schließen",
+    "send": "Senden",
+    "cancel": "Abbruch",
+    "download": "Herunterladen",
+    "tokens": "{count} Tokens",
+    "errorLabel": "(Fehler)",
+    "sender": {
+      "user": "Du",
+      "assistant": "Assistent",
+      "system": "System"
+    },
+    "fit": {
+      "fits": "passt",
+      "tight": "passt knapp",
+      "too_big": "zu groß",
+      "unknown": "unbekannt"
+    },
+    "catalog": {
+      "meta": "~{size} · Kontext {context} · {license} · {fit}"
+    },
+    "empty": {
+      "title": "Woran möchtest du arbeiten?",
+      "description": "Schreibe eine Nachricht, um den Chat mit {modelName} zu starten.",
+      "noModelsTitle": "Erstes Modell einrichten",
+      "noModelsDescription": "Lade eines der unten vorgeschlagenen Modelle herunter, um lokal zu chatten. Alternativ kannst du unter Einstellungen einen API-Anbieter (Anthropic …) hinterlegen — der Chat greift dann auf dessen Modelle zu."
+    },
+    "composer": {
+      "placeholder": "Nachricht an Holzi …",
+      "newlineHint": "Shift + Enter für eine neue Zeile",
+      "settingsLabel": "Chat-Einstellungen"
+    },
+    "effort": {
+      "label": "Effort",
+      "low": "Niedrig",
+      "medium": "Mittel",
+      "high": "Hoch"
+    },
+    "reasoning": {
+      "label": "Reasoning",
+      "auto": "Automatisch",
+      "on": "An",
+      "off": "Aus",
+      "show": "Denkschritte anzeigen",
+      "hide": "Denkschritte ausblenden"
+    },
     "retry": "Erneut versuchen",
     "tool": {
       "call": "Tool-Aufruf: {name}",
