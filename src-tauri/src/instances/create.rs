@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 use ts_rs::TS;
 
+use crate::chat::session::ChatState;
 use crate::error::{HolziError, Result};
 use crate::identity::installation_id_path;
 use crate::state::{ActiveInstanceHandle, AppState};
@@ -47,8 +48,10 @@ pub struct CreateInstanceResult {
 pub async fn create_instance(
     app: AppHandle,
     state: State<'_, AppState>,
+    chat: State<'_, ChatState>,
     args: CreateInstanceArgs,
 ) -> Result<CreateInstanceResult> {
+    let _operation = chat.acquire_operation()?;
     validate_instance_name(&args.name)?;
     if args.passphrase.len() < MIN_PASSPHRASE_LEN {
         return Err(HolziError::WeakPassphrase {
@@ -114,8 +117,12 @@ pub async fn create_instance(
     };
 
     match open_result {
-        Ok(db_arc) => match publish_active(state, &app, &args.name, &db_arc, &pending_marker) {
-            Ok(result) => Ok(result),
+        Ok(db_arc) => match publish_active(&state, &args.name, &db_arc, &pending_marker) {
+            Ok(result) => {
+                *chat.session.lock().unwrap_or_else(|e| e.into_inner()) = None;
+                emit_instance_list_changed(&app, "created", Some(args.name.clone()));
+                Ok(result)
+            }
             Err(e) => {
                 drop(db_arc);
                 let _ = std::fs::remove_file(&db_path);
@@ -133,8 +140,7 @@ pub async fn create_instance(
 
 /// Publishes a newly opened database as the active instance.
 fn publish_active(
-    state: State<'_, AppState>,
-    app: &AppHandle,
+    state: &AppState,
     name: &str,
     db_arc: &Arc<Database>,
     pending_marker: &Path,
@@ -149,16 +155,13 @@ fn publish_active(
         if guard.is_some() {
             return Err(HolziError::InstanceAlreadyActive);
         }
+        // Publication commits Genesis: a leftover marker would cause startup
+        // cleanup to delete this vault, so removal must succeed first.
+        std::fs::remove_file(pending_marker)?;
         *guard = Some(ActiveInstanceHandle {
             name: name.to_string(),
             database: Arc::clone(db_arc),
         });
-    }
-
-    // Marker removal is best-effort — a benign leftover marker triggers
-    // startup cleanup next boot, but the active runtime stays valid.
-    if let Err(e) = std::fs::remove_file(pending_marker) {
-        log::warn!("pending marker cleanup failed: {e}");
     }
 
     let info = InstanceInfo {
@@ -166,7 +169,6 @@ fn publish_active(
         alias: None,
         last_access: now_millis(),
     };
-    emit_instance_list_changed(app, "created", Some(name.to_string()));
     Ok(CreateInstanceResult { info })
 }
 
@@ -186,4 +188,43 @@ fn now_millis() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn genesis_is_not_published_if_pending_marker_cannot_be_removed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = open_new_database(
+            "test-passphrase",
+            &tmp.path().join("vault.db"),
+            &installation_id_path(tmp.path()),
+        )
+        .unwrap();
+        let marker = tmp.path().join("vault.db.pending");
+        std::fs::create_dir(&marker).unwrap(); // remove_file deterministically fails
+        let state = AppState::new();
+        assert!(publish_active(&state, "vault", &db, &marker).is_err());
+        assert!(state.active_instance.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn published_genesis_survives_startup_cleanup() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("vault.db");
+        let db =
+            open_new_database("test-passphrase", &path, &installation_id_path(tmp.path())).unwrap();
+        let marker = get_pending_marker_path(&path);
+        std::fs::write(&marker, "").unwrap();
+        let state = AppState::new();
+        publish_active(&state, "vault", &db, &marker).unwrap();
+        assert!(!marker.exists());
+        assert_eq!(
+            super::super::startup::cleanup_orphans_in_dir(tmp.path()).unwrap(),
+            0
+        );
+        assert!(path.is_file());
+    }
 }

@@ -20,7 +20,6 @@ const error = ref<string | null>(null)
 function reset() {
   passphrase.value = ''
   error.value = null
-  submitting.value = false
 }
 
 watch(() => props.open, (isOpen) => {
@@ -38,11 +37,11 @@ async function onSubmit() {
   submitting.value = true
   error.value = null
   try {
-    await openAsync({
+    const info = await openAsync({
       name: props.name,
       passphrase: passphrase.value,
     })
-    emit('unlocked', props.name)
+    emit('unlocked', info.name)
     emit('update:open', false)
   }
   catch {

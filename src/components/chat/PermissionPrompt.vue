@@ -12,6 +12,7 @@ const { t } = useI18n()
 
 defineProps<{
   mode: 'manual' | 'auto' | 'plan'
+  disabled?: boolean
   /** Oldest-first queue — only the first is shown; more than one can be
    * pending at once (spec.md Edge Case: independent tool calls each get
    * their own request). */
@@ -22,6 +23,7 @@ const emit = defineEmits<{
   'update:mode': [mode: 'manual' | 'auto' | 'plan']
   allow: [requestId: string]
   deny: [requestId: string]
+  cancel: []
 }>()
 </script>
 
@@ -32,6 +34,7 @@ const emit = defineEmits<{
       id="permission-mode"
       class="text-xs bg-background border border-border rounded px-2 py-1"
       :value="mode"
+      :disabled="disabled"
       @change="emit('update:mode', ($event.target as HTMLSelectElement).value as 'manual' | 'auto' | 'plan')"
     >
       <option value="manual">
@@ -62,6 +65,9 @@ const emit = defineEmits<{
       </div>
       <pre class="text-xs bg-muted/30 rounded p-2 overflow-x-auto whitespace-pre-wrap">{{ JSON.stringify(pendingApprovals[0].toolInput, null, 2) }}</pre>
       <div class="flex justify-end gap-2">
+        <UiButton size="sm" variant="outline" @click="emit('cancel')">
+          {{ t('chat.cancel') }}
+        </UiButton>
         <UiButton size="sm" variant="outline" @click="emit('deny', pendingApprovals[0].requestId)">
           {{ t('chat.permission.deny') }}
         </UiButton>
