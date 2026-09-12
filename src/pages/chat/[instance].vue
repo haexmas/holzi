@@ -79,6 +79,13 @@ const pendingApprovalsByThread = new Map<string, PendingApproval[]>()
 
 const input = ref('')
 const busy = ref(false)
+const reasoningMode = ref<'auto' | 'on' | 'off'>('auto')
+const effortLevel = ref<'low' | 'medium' | 'high'>('medium')
+const effortTokens: Record<typeof effortLevel.value, number> = {
+  low: 1024,
+  medium: 4096,
+  high: 8192,
+}
 // True while `send()` has set `activeThreadId` but has not yet appended
 // this turn's user/assistant placeholder rows — a `chat-tool-call`/
 // `chat-tool-result` for that (already-active) thread can otherwise land
@@ -264,6 +271,7 @@ async function send(retryPending = false) {
   const request = retry ?? {
     threadId: activeThreadId.value,
     content,
+    maxNewTokens: effortTokens[effortLevel.value],
     idempotencyKey: crypto.randomUUID(),
   }
   pendingSend.value = null
@@ -773,75 +781,78 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="flex h-screen">
-    <aside class="w-64 border-r border-border p-3 flex flex-col gap-2 overflow-y-auto">
-      <div class="text-sm font-semibold truncate" :title="instanceName">
-        {{ instanceName }}
+  <main class="flex h-screen min-h-0 bg-muted/20">
+    <aside class="hidden md:flex w-64 shrink-0 border-r border-border bg-background p-4 flex-col gap-4 overflow-y-auto">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="h-9 w-9 shrink-0 rounded-xl bg-foreground text-background flex items-center justify-center">
+          <Icon name="lucide:sparkles" class="h-4 w-4" />
+        </div>
+        <div class="min-w-0">
+          <div class="text-sm font-semibold">Holzi</div>
+          <div class="text-xs text-muted-foreground truncate" :title="instanceName">
+            {{ instanceName }}
+          </div>
+        </div>
       </div>
-      <UiButton size="sm" variant="outline" :disabled="busy" @click="newChat">
+
+      <UiButton class="w-full justify-start gap-2" variant="outline" :disabled="busy" @click="newChat">
+        <Icon name="lucide:plus" class="h-4 w-4" />
         Neuer Chat
       </UiButton>
-      <PermissionPrompt
-        :mode="permissionMode"
-        :pending-approvals="pendingApprovals"
-        @update:mode="updatePermissionMode"
-        @allow="respondToApproval($event, 'allow')"
-        @deny="respondToApproval($event, 'deny')"
-      />
-      <div class="text-xs text-muted-foreground mt-2">
-        Modell
+
+      <div class="flex items-center justify-between px-1">
+        <span class="text-xs font-medium text-muted-foreground">Verläufe</span>
+        <span class="text-[10px] text-muted-foreground">{{ threads.length }}</span>
       </div>
-      <div v-if="activeModel" class="text-sm truncate" :title="activeModel.name">
-        {{ activeModel.name }}
-      </div>
-      <div v-else class="text-xs text-muted-foreground italic">
-        keins geladen
-      </div>
-      <select
-        v-if="modelGroups.length > 0"
-        class="text-sm bg-background border border-border rounded px-2 py-1"
-        :value="activeModel?.modelId ?? ''"
-        :disabled="busy"
-        @change="(e) => loadModel((e.target as HTMLSelectElement).value)"
-      >
-        <option value="" disabled>
-          Modell wählen …
-        </option>
-        <optgroup
-          v-for="group in modelGroups"
-          :key="group.providerId"
-          :label="group.providerName"
+      <div class="space-y-1">
+        <button
+          v-for="t in threads"
+          :key="t.id"
+          class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-accent truncate transition-colors"
+          :class="{ 'bg-accent font-medium': activeThreadId === t.id }"
+          @click="selectThread(t.id)"
         >
-          <option
-            v-for="m in group.models"
-            :key="m.id"
-            :value="m.id"
-          >
-            {{ m.name }}
-          </option>
-        </optgroup>
-      </select>
-      <div class="h-px bg-border my-2" />
-      <div class="text-xs text-muted-foreground">
-        Verläufe
+          {{ t.title }}
+        </button>
+        <div v-if="threads.length === 0" class="px-3 py-2 text-xs text-muted-foreground">
+          Noch keine Gespräche
+        </div>
       </div>
-      <button
-        v-for="t in threads"
-        :key="t.id"
-        class="text-left text-sm px-2 py-1 rounded hover:bg-accent truncate"
-        :class="{ 'bg-accent': activeThreadId === t.id }"
-        @click="selectThread(t.id)"
-      >
-        {{ t.title }}
-      </button>
+
       <div class="flex-1" />
-      <UiButton size="sm" variant="ghost" @click="lock">
+      <NuxtLink
+        :to="`/settings/${encodeURIComponent(instanceName)}`"
+        class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+      >
+        <Icon name="lucide:settings-2" class="h-4 w-4" />
+        Einstellungen
+      </NuxtLink>
+      <UiButton class="justify-start gap-2" size="sm" variant="ghost" @click="lock">
+        <Icon name="lucide:lock-keyhole" class="h-4 w-4" />
         Sperren
       </UiButton>
     </aside>
 
-    <section class="flex-1 flex flex-col">
-      <div v-if="lastError" class="p-3 bg-destructive/10 text-destructive text-sm flex items-start justify-between gap-2">
+    <section class="min-w-0 flex-1 flex flex-col">
+      <header class="flex items-center justify-between gap-3 border-b border-border bg-background/90 px-4 py-3 backdrop-blur md:px-6">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2">
+            <div class="h-2 w-2 rounded-full" :class="activeModel ? 'bg-emerald-500' : 'bg-muted-foreground/40'" />
+            <h1 class="truncate text-sm font-semibold">
+              {{ activeThreadId ? (threads.find((thread) => thread.id === activeThreadId)?.title || 'Neuer Chat') : 'Neuer Chat' }}
+            </h1>
+          </div>
+          <p class="mt-0.5 truncate text-xs text-muted-foreground">
+            {{ activeModel?.name || 'Kein Modell geladen' }}
+          </p>
+        </div>
+        <UiButton class="shrink-0 gap-2 md:hidden" size="sm" variant="outline" :disabled="busy" @click="newChat">
+          <Icon name="lucide:plus" class="h-4 w-4" />
+          Neu
+        </UiButton>
+      </header>
+
+      <div v-if="lastError" class="border-b border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive flex items-start justify-between gap-2">
         <span>{{ lastError }}</span>
         <span class="flex gap-2 shrink-0">
           <button
@@ -860,11 +871,11 @@ onBeforeUnmount(() => {
         </span>
       </div>
 
-      <div v-if="loadingLabel" class="p-3 bg-blue-500/10 text-blue-800 text-sm" role="status">
+      <div v-if="loadingLabel" class="border-b border-blue-500/20 bg-blue-500/10 p-3 text-sm text-blue-800" role="status">
         {{ loadingLabel }}
       </div>
 
-      <div v-if="noModelsInstalled" class="p-6 flex-1 overflow-y-auto">
+      <div v-if="noModelsInstalled" class="flex-1 overflow-y-auto p-6">
         <h2 class="text-lg font-semibold mb-4">
           Erstes Modell einrichten
         </h2>
@@ -905,18 +916,35 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div v-else-if="!activeModel" class="p-6 flex-1 flex items-center justify-center text-muted-foreground">
-        Wähle links ein Modell aus.
+      <div v-else-if="!activeModel" class="flex-1 flex items-center justify-center p-6 text-muted-foreground">
+        Wähle unten ein Modell aus.
       </div>
 
       <div v-else class="flex-1 flex flex-col overflow-hidden">
-        <div data-messages-scroll class="flex-1 overflow-y-auto p-4 space-y-4">
+        <div data-messages-scroll class="flex-1 min-h-0 overflow-y-auto px-4 py-6 md:px-8">
+          <div v-if="activeMessages.length === 0" class="mx-auto flex h-full max-w-3xl flex-col items-center justify-center text-center">
+            <div class="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-foreground text-background">
+              <Icon name="lucide:sparkles" class="h-5 w-5" />
+            </div>
+            <h2 class="text-xl font-semibold tracking-tight">Woran möchtest du arbeiten?</h2>
+            <p class="mt-2 max-w-md text-sm text-muted-foreground">
+              Schreibe eine Nachricht, um den Chat mit {{ activeModel.name }} zu starten.
+            </p>
+          </div>
           <div
             v-for="m in activeMessages"
             :key="m.id"
-            class="max-w-3xl mx-auto"
+            class="mx-auto mb-6 flex max-w-3xl gap-3"
+            :class="m.role === 'user' ? 'justify-end' : 'justify-start'"
           >
-            <div class="text-xs text-muted-foreground mb-1">
+            <div
+              v-if="m.role !== 'user'"
+              class="mt-1 hidden h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-foreground text-background sm:flex"
+            >
+              <Icon :name="m.role === 'assistant' ? 'lucide:sparkles' : 'lucide:wrench'" class="h-3.5 w-3.5" />
+            </div>
+            <div class="min-w-0 max-w-[min(90%,48rem)]" :class="m.role === 'user' ? 'order-first' : ''">
+              <div class="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
               <template v-if="m.role === 'tool_call'">
                 {{ t('chat.tool.call', { name: m.toolName }) }}
               </template>
@@ -935,23 +963,23 @@ onBeforeUnmount(() => {
                   {{ t('chat.tool.limitReached') }}
                 </span>
               </template>
-            </div>
-            <div
-              class="whitespace-pre-wrap text-sm rounded px-3 py-2"
+              </div>
+              <div
+              class="whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm"
               :class="{
-                'bg-accent': m.role === 'user',
-                'bg-muted/50': m.role === 'assistant' || m.role === 'system',
-                'bg-muted/30 font-mono text-xs': m.role === 'tool_call' || (m.role === 'tool_result' && !m.toolIsError),
-                'bg-destructive/10 text-destructive font-mono text-xs': m.role === 'tool_result' && m.toolIsError,
+                'bg-foreground text-background': m.role === 'user',
+                'border border-border bg-background': m.role === 'assistant' || m.role === 'system',
+                'rounded-lg bg-muted/30 font-mono text-xs leading-5': m.role === 'tool_call' || (m.role === 'tool_result' && !m.toolIsError),
+                'rounded-lg bg-destructive/10 text-destructive font-mono text-xs leading-5': m.role === 'tool_result' && m.toolIsError,
               }"
-            >
+              >
               <template v-if="m.role === 'tool_call'">{{ m.toolInput }}</template>
               <template v-else>{{ m.content || (streamingMessageId === m.id ? '…' : '') }}</template>
-            </div>
-            <div
+              </div>
+              <div
               v-if="m.role === 'assistant' && reasoningFor(m.id)"
               class="mt-1 text-xs"
-            >
+              >
               <button
                 type="button"
                 class="text-muted-foreground hover:text-foreground underline"
@@ -965,35 +993,103 @@ onBeforeUnmount(() => {
               >
                 {{ reasoningFor(m.id) }}
               </div>
+              </div>
             </div>
           </div>
         </div>
 
         <form
-          class="p-3 border-t border-border flex gap-2"
+          class="border-t border-border bg-background/90 px-4 pb-4 pt-3 backdrop-blur md:px-8"
           @submit.prevent="() => send()"
         >
-          <input
-            v-model="input"
-            class="flex-1 bg-background border border-border rounded px-3 py-2 text-sm"
-            placeholder="Nachricht schreiben …"
-            :disabled="(busy && streamingMessageId === null) || loadingPhase !== null"
-          >
-          <UiButton
-            v-if="streamingMessageId"
-            variant="destructive"
-            type="button"
-            @click="abort"
-          >
-            Abbruch
-          </UiButton>
-          <UiButton
-            v-else
-            type="submit"
-            :disabled="!input.trim() || busy || loadingPhase !== null"
-          >
-            Senden
-          </UiButton>
+          <div class="mx-auto max-w-3xl">
+            <div class="rounded-2xl border border-border bg-background shadow-sm transition-shadow focus-within:border-foreground/30 focus-within:shadow-md">
+              <textarea
+                v-model="input"
+                rows="3"
+                class="block w-full resize-none bg-transparent px-4 pb-2 pt-3 text-sm leading-6 outline-none placeholder:text-muted-foreground"
+                placeholder="Nachricht an Holzi …"
+                :disabled="(busy && streamingMessageId === null) || loadingPhase !== null"
+                @keydown.enter.exact.prevent="send()"
+              />
+              <div class="flex items-center justify-between gap-3 px-3 pb-3">
+                <div class="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Icon name="lucide:paperclip" class="h-4 w-4" />
+                  <span class="hidden sm:inline">Shift + Enter für eine neue Zeile</span>
+                </div>
+                <UiButton
+                  v-if="streamingMessageId"
+                  class="gap-2"
+                  size="sm"
+                  variant="destructive"
+                  type="button"
+                  @click="abort"
+                >
+                  <Icon name="lucide:square" class="h-3.5 w-3.5 fill-current" />
+                  Abbruch
+                </UiButton>
+                <UiButton
+                  v-else
+                  class="gap-2"
+                  size="sm"
+                  type="submit"
+                  :disabled="!input.trim() || busy || loadingPhase !== null"
+                >
+                  Senden
+                  <Icon name="lucide:arrow-up" class="h-3.5 w-3.5" />
+                </UiButton>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2 pt-3 text-xs" aria-label="Chat-Einstellungen">
+              <div class="flex items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5">
+                <Icon name="lucide:cpu" class="h-3.5 w-3.5 text-muted-foreground" />
+                <label for="chat-model" class="text-muted-foreground">Modell</label>
+                <select
+                  id="chat-model"
+                  v-if="modelGroups.length > 0"
+                  class="max-w-40 bg-transparent font-medium outline-none"
+                  :value="activeModel?.modelId ?? ''"
+                  :disabled="busy"
+                  @change="(e) => loadModel((e.target as HTMLSelectElement).value)"
+                >
+                  <option value="" disabled>Modell wählen …</option>
+                  <optgroup v-for="group in modelGroups" :key="group.providerId" :label="group.providerName">
+                    <option v-for="m in group.models" :key="m.id" :value="m.id">{{ m.name }}</option>
+                  </optgroup>
+                </select>
+                <span v-else class="font-medium">{{ activeModel?.name || 'Keins' }}</span>
+              </div>
+
+              <div class="flex items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5">
+                <Icon name="lucide:brain" class="h-3.5 w-3.5 text-muted-foreground" />
+                <label for="reasoning-mode" class="text-muted-foreground">Reasoning</label>
+                <select id="reasoning-mode" v-model="reasoningMode" class="bg-transparent font-medium outline-none" :disabled="busy">
+                  <option value="auto">Automatisch</option>
+                  <option value="on">An</option>
+                  <option value="off">Aus</option>
+                </select>
+              </div>
+
+              <div class="flex items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5">
+                <Icon name="lucide:gauge" class="h-3.5 w-3.5 text-muted-foreground" />
+                <label for="effort-level" class="text-muted-foreground">Effort</label>
+                <select id="effort-level" v-model="effortLevel" class="bg-transparent font-medium outline-none" :disabled="busy">
+                  <option value="low">Niedrig</option>
+                  <option value="medium">Mittel</option>
+                  <option value="high">Hoch</option>
+                </select>
+              </div>
+
+              <PermissionPrompt
+                :mode="permissionMode"
+                :pending-approvals="pendingApprovals"
+                @update:mode="updatePermissionMode"
+                @allow="respondToApproval($event, 'allow')"
+                @deny="respondToApproval($event, 'deny')"
+              />
+            </div>
+          </div>
         </form>
       </div>
     </section>
