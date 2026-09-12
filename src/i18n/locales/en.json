@@ -92,6 +92,7 @@
     "download": "Download",
     "tokens": "{count} tokens",
     "errorLabel": "(error)",
+    "cancelledLabel": "(stopped)",
     "sender": {
       "user": "You",
       "assistant": "Assistant",

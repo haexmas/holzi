@@ -176,7 +176,11 @@ fn a_tool_result_row_must_not_carry_tool_call_fields() {
 
 #[test]
 fn user_assistant_and_system_rows_reject_any_tool_column() {
-    for role in [MessageRole::User, MessageRole::Assistant, MessageRole::System] {
+    for role in [
+        MessageRole::User,
+        MessageRole::Assistant,
+        MessageRole::System,
+    ] {
         let clean = base(role);
         assert_eq!(validate(&clean), Ok(()), "clean {role:?} row must pass");
 
@@ -196,7 +200,11 @@ fn a_pre_migration_row_with_every_new_field_none_is_valid() {
     // Rows inserted before migration 0014 read back with all five new
     // columns `None` — validate() must accept that shape unchanged for
     // every pre-existing role.
-    for role in [MessageRole::User, MessageRole::Assistant, MessageRole::System] {
+    for role in [
+        MessageRole::User,
+        MessageRole::Assistant,
+        MessageRole::System,
+    ] {
         assert_eq!(validate(&base(role)), Ok(()));
     }
 }

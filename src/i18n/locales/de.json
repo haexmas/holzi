@@ -92,6 +92,7 @@
     "download": "Herunterladen",
     "tokens": "{count} Tokens",
     "errorLabel": "(Fehler)",
+    "cancelledLabel": "(Abgebrochen)",
     "sender": {
       "user": "Du",
       "assistant": "Assistent",

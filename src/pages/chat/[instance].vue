@@ -48,8 +48,10 @@ const store = useInstancesStore()
 const PERMISSION_MODE_KEY = 'chat.permission_mode'
 const permissionMode = ref<'manual' | 'auto' | 'plan'>('manual')
 const pendingApprovals = ref<PendingApproval[]>([])
-let deviceUuid = ''
-let unlistenToolPermissionRequest: UnlistenFn | null = null
+const deviceUuid = ref('')
+const permissionModeSaving = ref(false)
+const unlisteners: UnlistenFn[] = []
+let unmounted = false
 
 const instanceName = computed(() => String(route.params.instance ?? ''))
 
@@ -63,6 +65,7 @@ const providerList = ref<Provider[]>([])
 const providerModels = ref<Record<string, ProviderModel[]>>({})
 
 const streamingMessageId = ref<string | null>(null)
+const streamingThreadId = ref<string | null>(null)
 const streamingBuffer = ref<string>('')
 const reasoningByMessage = ref<Record<string, string>>({})
 // Set while an automatic LLM-request retry (spec.md FR-012) is between
@@ -78,12 +81,12 @@ type PendingStreamEvents = {
   retryReset?: boolean
   complete?: MessageCompleteEvent
   error?: MessageErrorEvent
-  turnComplete?: TurnCompleteEvent
 }
 
 const pendingStreamEvents = new Map<string, PendingStreamEvents>()
 const pendingToolEvents = new Map<string, Array<ToolCallEvent | ToolResultEvent>>()
 const pendingApprovalsByThread = new Map<string, PendingApproval[]>()
+const pendingTurnCompletions = new Map<string, TurnCompleteEvent>()
 
 const input = ref('')
 const busy = ref(false)
@@ -103,15 +106,6 @@ const turnSetupPending = ref(false)
 const lastError = ref<string | null>(null)
 const pendingSend = ref<SendMessageArgs | null>(null)
 
-let unlistenToken: UnlistenFn | null = null
-let unlistenComplete: UnlistenFn | null = null
-let unlistenError: UnlistenFn | null = null
-let unlistenToolCall: UnlistenFn | null = null
-let unlistenToolResult: UnlistenFn | null = null
-let unlistenRetry: UnlistenFn | null = null
-let unlistenTurnComplete: UnlistenFn | null = null
-let unlistenDownloadProgress: UnlistenFn | null = null
-let unlistenDownloadComplete: UnlistenFn | null = null
 
 const downloadingId = ref<string | null>(null)
 const downloadProgressBytes = ref<number>(0)
@@ -124,7 +118,6 @@ const downloadTotalBytes = ref<number | null>(null)
 const loadingPhase = ref<ModelLoadPhase | null>(null)
 const loadingModelName = ref<string>('')
 const loadingProviderName = ref<string | null>(null)
-let unlistenLoadProgress: UnlistenFn | null = null
 
 const activeMessages = computed<Message[]>(() => {
   if (!activeThreadId.value) return []
@@ -296,10 +289,30 @@ async function send(retryPending = false) {
       pendingApprovals.value = [...queuedApprovals, ...pendingApprovals.value]
       pendingApprovalsByThread.delete(result.threadId)
     }
+    if (retry) {
+      // A replay returns the original IDs without emitting another turn.
+      // Recover a completed answer when the initial invoke response was lost.
+      const persisted = await chat.listMessagesAsync(result.threadId)
+      messagesByThread.value[result.threadId] = persisted
+      const completed = persisted.find((message) => message.id === result.assistantMessageId)
+      if (completed?.finishReason) {
+        streamingMessageId.value = result.assistantMessageId
+        streamingThreadId.value = result.threadId
+        turnSetupPending.value = false
+        pendingStreamEvents.delete(result.assistantMessageId)
+        pendingTurnCompletions.delete(result.threadId)
+        await handleTurnComplete({
+          threadId: result.threadId,
+          assistantMessageId: result.assistantMessageId,
+          finishReason: completed.finishReason,
+        })
+        return
+      }
+    }
     // Seed the assistant message placeholder so the UI can show
     // tokens as they stream in.
     const list = messagesByThread.value[result.threadId] ?? []
-    list.push({
+    if (!list.some((message) => message.id === result.userMessageId)) list.push({
       id: result.userMessageId,
       threadId: result.threadId,
       parentId: null,
@@ -316,7 +329,7 @@ async function send(retryPending = false) {
       toolIsError: null,
       toolSource: null,
     })
-    list.push({
+    if (!list.some((message) => message.id === result.assistantMessageId)) list.push({
       id: result.assistantMessageId,
       threadId: result.threadId,
       parentId: result.userMessageId,
@@ -336,6 +349,7 @@ async function send(retryPending = false) {
     messagesByThread.value[result.threadId] = list
     turnSetupPending.value = false
     streamingMessageId.value = result.assistantMessageId
+    streamingThreadId.value = result.threadId
     streamingBuffer.value = ''
     retryingMessageId.value = null
     reasoningByMessage.value = {
@@ -372,8 +386,16 @@ async function send(retryPending = false) {
     else if (pending?.complete) {
       handleComplete(pending.complete)
     }
-    if (pending?.turnComplete) {
-      handleTurnComplete(pending.turnComplete)
+    const completedTurn = pendingTurnCompletions.get(result.threadId)
+    pendingTurnCompletions.delete(result.threadId)
+    if (completedTurn) {
+      await handleTurnComplete(completedTurn)
+    }
+    else {
+      // A failed list refresh must not turn an accepted send into a retry.
+      await refreshThreads().catch((e: unknown) => {
+        lastError.value = errString(e)
+      })
     }
     await scrollToBottom()
   }
@@ -393,8 +415,8 @@ async function abort() {
   try {
     await chat.abortAsync()
   }
-  catch {
-    // ignore
+  catch (e: unknown) {
+    lastError.value = errString(e)
   }
 }
 
@@ -409,6 +431,7 @@ async function newChat() {
   activeThreadId.value = null
   input.value = ''
   streamingMessageId.value = null
+  streamingThreadId.value = null
   streamingBuffer.value = ''
 }
 
@@ -483,7 +506,7 @@ function applyToken(e: TokenEvent, threadId: string) {
 }
 
 function handleToken(e: TokenEvent) {
-  const threadId = activeThreadId.value
+  const threadId = streamingThreadId.value
   if (streamingMessageId.value !== e.messageId || !threadId) {
     const pending = pendingFor(e.messageId)
     if (e.delta) pending.tokens += e.delta
@@ -497,7 +520,7 @@ function handleToken(e: TokenEvent) {
  * got discarded — clear it and show "retrying…" instead (T039). Preserve
  * the reset when the event lands before `send()` installs its placeholder. */
 function handleRetry(e: RetryEvent) {
-  const threadId = activeThreadId.value
+  const threadId = streamingThreadId.value
   if (streamingMessageId.value !== e.assistantMessageId || !threadId) {
     const pending = pendingFor(e.assistantMessageId)
     pending.tokens = ''
@@ -636,18 +659,33 @@ function handleToolResult(e: ToolResultEvent, restoring = false) {
 // The sole place `streamingMessageId`/`busy` get cleared — a turn can
 // span several steps, so only its one terminal event may signal "done"
 // (contracts/tauri-commands.md).
-function applyTurnComplete(e: TurnCompleteEvent) {
-  streamingMessageId.value = null
-  streamingBuffer.value = ''
-  retryingMessageId.value = null
-  busy.value = false
-  if (!e.assistantMessageId) return
+async function applyTurnComplete(e: TurnCompleteEvent) {
+  pendingApprovalsByThread.delete(e.threadId)
+  if (activeThreadId.value === e.threadId) pendingApprovals.value = []
   const list = messagesByThread.value[e.threadId] ?? []
   const idx = list.findIndex((m) => m.id === e.assistantMessageId)
   const existing = list[idx]
   if (idx !== -1 && existing) {
     list[idx] = { ...existing, finishReason: e.finishReason }
     messagesByThread.value[e.threadId] = list
+  }
+  try {
+    // All rounds stream through one placeholder, whereas persistence has
+    // separate interim answers, tool rows, and the terminal answer.
+    messagesByThread.value[e.threadId] = await chat.listMessagesAsync(e.threadId)
+    pendingToolEvents.delete(e.threadId)
+    await refreshThreads()
+    await scrollToBottom()
+  }
+  catch (error: unknown) {
+    lastError.value = errString(error)
+  }
+  finally {
+    streamingMessageId.value = null
+    streamingThreadId.value = null
+    streamingBuffer.value = ''
+    retryingMessageId.value = null
+    busy.value = false
   }
 }
 
@@ -679,23 +717,30 @@ async function respondToApproval(requestId: string, decision: 'allow' | 'deny') 
 }
 
 async function updatePermissionMode(mode: 'manual' | 'auto' | 'plan') {
+  if (!deviceUuid.value || permissionModeSaving.value) return
+  const previousMode = permissionMode.value
   permissionMode.value = mode
-  if (!deviceUuid) return
+  permissionModeSaving.value = true
   try {
-    await setPrefAsync({ kind: 'device', uuid: deviceUuid }, PERMISSION_MODE_KEY, mode)
+    await setPrefAsync({ kind: 'device', uuid: deviceUuid.value }, PERMISSION_MODE_KEY, mode)
   }
   catch (e: unknown) {
+    permissionMode.value = previousMode
     lastError.value = errString(e)
+  }
+  finally {
+    permissionModeSaving.value = false
   }
 }
 
-function handleTurnComplete(e: TurnCompleteEvent) {
-  if (e.assistantMessageId && streamingMessageId.value !== e.assistantMessageId) {
-    const pending = pendingFor(e.assistantMessageId)
-    pending.turnComplete = e
+async function handleTurnComplete(e: TurnCompleteEvent) {
+  if (turnSetupPending.value) {
+    pendingTurnCompletions.set(e.threadId, e)
     return
   }
-  applyTurnComplete(e)
+  if (e.threadId !== streamingThreadId.value) return
+  if (e.assistantMessageId && streamingMessageId.value !== e.assistantMessageId) return
+  await applyTurnComplete(e)
 }
 
 function toggleReasoning(messageId: string) {
@@ -741,85 +786,69 @@ const loadingLabel = computed<string | null>(() => {
 })
 
 onMounted(async () => {
-  [
-    unlistenToken,
-    unlistenComplete,
-    unlistenError,
-    unlistenToolCall,
-    unlistenToolResult,
-    unlistenRetry,
-    unlistenTurnComplete,
-    unlistenToolPermissionRequest,
-    unlistenLoadProgress,
-  ] = await Promise.all([
-    chat.onToken(handleToken),
-    chat.onMessageComplete(handleComplete),
-    chat.onMessageError(handleError),
-    chat.onToolCall(handleToolCall),
-    chat.onToolResult(handleToolResult),
-    chat.onRetry(handleRetry),
-    chat.onTurnComplete(handleTurnComplete),
-    chat.onToolPermissionRequest(handleToolPermissionRequest),
-    chat.onModelLoadProgress(onLoadProgress),
-  ])
-
-  const device = await currentDeviceInfoAsync()
-  deviceUuid = device.vaultDeviceUuid
   try {
-    const stored = await getPrefAsync({ kind: 'device', uuid: deviceUuid }, PERMISSION_MODE_KEY)
-    if (stored === 'manual' || stored === 'auto' || stored === 'plan') {
-      permissionMode.value = stored
-    }
-  }
-  catch {
-    // Keep the default ('manual') if the read fails.
-  }
+    await Promise.all([
+      chat.onToken(handleToken),
+      chat.onMessageComplete(handleComplete),
+      chat.onMessageError(handleError),
+      chat.onToolCall(handleToolCall),
+      chat.onToolResult(handleToolResult),
+      chat.onRetry(handleRetry),
+      chat.onTurnComplete(handleTurnComplete),
+      chat.onToolPermissionRequest(handleToolPermissionRequest),
+      chat.onModelLoadProgress(onLoadProgress),
+      models.onDownloadProgress((e) => {
+        if (downloadingId.value === e.modelId) {
+          downloadProgressBytes.value = e.bytesDownloaded
+          downloadTotalBytes.value = e.bytesTotal
+        }
+      }),
+    ].map(async (subscription) => {
+      const unlisten = await subscription
+      // Registration can finish after navigation already disposed this page.
+      if (unmounted) unlisten()
+      else unlisteners.push(unlisten)
+    }))
+    if (unmounted) return
 
-  activeModel.value = await chat.activeModelInfoAsync()
-  await refreshInstalledAndCatalog()
-  await refreshProviders()
-  await refreshThreads()
-
-  unlistenDownloadProgress = await models.onDownloadProgress((e) => {
-    if (downloadingId.value === e.modelId) {
-      downloadProgressBytes.value = e.bytesDownloaded
-      downloadTotalBytes.value = e.bytesTotal
-    }
-  })
-  unlistenDownloadComplete = await models.onDownloadComplete(() => {
-    // Handled inline in downloadCatalogEntry
-  })
-
-  // Session-start resolver: pick the model per spec 002 §FR-014 and
-  // auto-load it. `first_available` is a passive pick — it must not
-  // echo back into last_active (the backend's load_model already
-  // skips that; the frontend just calls loadModelAsync).
-  if (!activeModel.value) {
+    const device = await currentDeviceInfoAsync()
     try {
+      const stored = await getPrefAsync({ kind: 'device', uuid: device.vaultDeviceUuid }, PERMISSION_MODE_KEY)
+      if (stored === 'manual' || stored === 'auto' || stored === 'plan') {
+        permissionMode.value = stored
+      }
+    }
+    catch {
+      // Keep the default ('manual') if the read fails.
+    }
+    if (unmounted) return
+    deviceUuid.value = device.vaultDeviceUuid
+
+    activeModel.value = await chat.activeModelInfoAsync()
+    await refreshInstalledAndCatalog()
+    await refreshProviders()
+    await refreshThreads()
+
+    // Session-start resolution loads without writing the remembered model.
+    if (!unmounted && !activeModel.value) {
       const resolved = await resolveDefaultModelAsync()
-      if (resolved.modelId) {
+      if (!unmounted && resolved.modelId) {
         await loadModel(resolved.modelId)
       }
     }
-    catch (e: unknown) {
-      lastError.value = errString(e)
-    }
+  }
+  catch (e: unknown) {
+    if (!unmounted) lastError.value = errString(e)
   }
 })
 
 onBeforeUnmount(() => {
-  unlistenToken?.()
-  unlistenComplete?.()
-  unlistenError?.()
-  unlistenToolCall?.()
-  unlistenToolResult?.()
-  unlistenRetry?.()
-  unlistenTurnComplete?.()
-  unlistenToolPermissionRequest?.()
-  unlistenLoadProgress?.()
-  unlistenDownloadProgress?.()
-  unlistenDownloadComplete?.()
+  unmounted = true
+  // Approval requests cannot be reconstructed by a freshly mounted chat page.
+  if (streamingMessageId.value || turnSetupPending.value) void abort()
+  for (const unlisten of unlisteners.splice(0)) unlisten()
 })
+
 </script>
 
 <template>
@@ -1032,6 +1061,9 @@ onBeforeUnmount(() => {
                 <span v-if="m.finishReason === 'error'" class="ml-2 text-destructive">
                   {{ t('chat.errorLabel') }}
                 </span>
+                <span v-if="m.finishReason === 'cancelled'" class="ml-2 text-muted-foreground">
+                  {{ t('chat.cancelledLabel') }}
+                </span>
                 <span v-if="m.finishReason === 'tool_limit_reached'" class="ml-2 text-amber-600">
                   {{ t('chat.tool.limitReached') }}
                 </span>
@@ -1094,7 +1126,7 @@ onBeforeUnmount(() => {
                   <span class="hidden sm:inline">{{ t('chat.composer.newlineHint') }}</span>
                 </div>
                 <UiButton
-                  v-if="streamingMessageId"
+                  v-if="streamingMessageId || turnSetupPending"
                   class="gap-2"
                   size="sm"
                   variant="destructive"
@@ -1160,9 +1192,11 @@ onBeforeUnmount(() => {
               <PermissionPrompt
                 :mode="permissionMode"
                 :pending-approvals="pendingApprovals"
+                :disabled="!deviceUuid || permissionModeSaving"
                 @update:mode="updatePermissionMode"
                 @allow="respondToApproval($event, 'allow')"
                 @deny="respondToApproval($event, 'deny')"
+                @cancel="abort"
               />
             </div>
           </div>

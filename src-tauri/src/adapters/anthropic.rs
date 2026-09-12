@@ -230,11 +230,15 @@ impl ProviderAdapter for AnthropicAdapter {
                         }
                     }
                     "content_block_start" => {
-                        if payload.pointer("/content_block/type").and_then(Value::as_str)
+                        if payload
+                            .pointer("/content_block/type")
+                            .and_then(Value::as_str)
                             == Some("tool_use")
                         {
-                            let index =
-                                payload.pointer("/index").and_then(Value::as_u64).unwrap_or(0);
+                            let index = payload
+                                .pointer("/index")
+                                .and_then(Value::as_u64)
+                                .unwrap_or(0);
                             let id = payload
                                 .pointer("/content_block/id")
                                 .and_then(Value::as_str)
@@ -293,8 +297,9 @@ impl ProviderAdapter for AnthropicAdapter {
                                     .pointer("/index")
                                     .and_then(Value::as_u64)
                                     .unwrap_or(0);
-                                if let Some(partial) =
-                                    payload.pointer("/delta/partial_json").and_then(Value::as_str)
+                                if let Some(partial) = payload
+                                    .pointer("/delta/partial_json")
+                                    .and_then(Value::as_str)
                                 {
                                     if let Some(buf) = tool_use_bufs.get_mut(&index) {
                                         buf.2.push_str(partial);
@@ -305,7 +310,10 @@ impl ProviderAdapter for AnthropicAdapter {
                         }
                     }
                     "content_block_stop" => {
-                        let index = payload.pointer("/index").and_then(Value::as_u64).unwrap_or(0);
+                        let index = payload
+                            .pointer("/index")
+                            .and_then(Value::as_u64)
+                            .unwrap_or(0);
                         if let Some((id, name, partial_json)) = tool_use_bufs.remove(&index) {
                             let input: Value = if partial_json.trim().is_empty() {
                                 serde_json::json!({})
@@ -331,9 +339,8 @@ impl ProviderAdapter for AnthropicAdapter {
                     }
                     "message_stop" => {
                         if !tool_calls.is_empty() {
-                            let _ = tx.send(Ok(StreamChunk::ToolCalls(std::mem::take(
-                                &mut tool_calls,
-                            ))));
+                            let _ = tx
+                                .send(Ok(StreamChunk::ToolCalls(std::mem::take(&mut tool_calls))));
                         }
                         let done = StreamChunk::Done {
                             finish_reason: finish_reason.clone(),

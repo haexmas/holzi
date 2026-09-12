@@ -6,7 +6,7 @@
 //! per device" constraint and the reality that a 7B GGUF plus a
 //! second GGUF would fight over VRAM/RAM.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use tokio::sync::oneshot;
@@ -48,10 +48,14 @@ pub struct ActiveSession {
 /// `current_generation`, so an in-flight `Tool::execute` or a pending
 /// approval wait ends immediately instead of only the LLM stream.
 pub struct ChatState {
+    /// Held across a model load, vault transition, or entire accepted turn.
+    operation: Arc<tokio::sync::Mutex<()>>,
     pub session: Mutex<Option<ActiveSession>>,
     pub current_generation: Mutex<Option<tokio::task::AbortHandle>>,
     pub tool_registry: Mutex<ToolRegistry>,
     pub pending_tool_approvals: Mutex<HashMap<Uuid, oneshot::Sender<ApprovalDecision>>>,
+    /// Session-lifetime tombstones make late replies to cancelled prompts harmless.
+    pub cancelled_tool_approvals: Mutex<HashSet<Uuid>>,
     pub tool_cancellation: Mutex<Option<CancellationToken>>,
 }
 
@@ -62,12 +66,24 @@ impl ChatState {
         let mut registry = ToolRegistry::new();
         registry.register(Arc::new(CliTool));
         Self {
+            operation: Arc::new(tokio::sync::Mutex::new(())),
             session: Mutex::new(None),
             current_generation: Mutex::new(None),
             tool_registry: Mutex::new(registry),
             pending_tool_approvals: Mutex::new(HashMap::new()),
+            cancelled_tool_approvals: Mutex::new(HashSet::new()),
             tool_cancellation: Mutex::new(None),
         }
+    }
+
+    /// Reject overlapping operations before they can replace another turn's
+    /// cancellation handles or carry a loaded adapter into a different vault.
+    pub fn acquire_operation(&self) -> crate::error::Result<tokio::sync::OwnedMutexGuard<()>> {
+        self.operation.clone().try_lock_owned().map_err(|_| {
+            crate::error::HolziError::InvalidInput {
+                reason: "a chat or vault operation is still in progress".into(),
+            }
+        })
     }
 
     /// Rebuilds the registry's MCP-sourced tools from a fresh `tools/list`
@@ -78,12 +94,10 @@ impl ChatState {
     /// whenever the user's configured server list changes.
     pub async fn refresh_mcp_tools(&self, servers: &[McpServerConfig]) {
         let cli_name = CliTool.name().to_string();
-        let discovered = mcp::discover_mcp_tools(servers, &std::collections::HashSet::from([cli_name])).await;
+        let discovered =
+            mcp::discover_mcp_tools(servers, &std::collections::HashSet::from([cli_name])).await;
 
-        let mut registry = self
-            .tool_registry
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut registry = self.tool_registry.lock().unwrap_or_else(|e| e.into_inner());
         registry.clear();
         registry.register(Arc::new(CliTool));
         for tool in discovered {

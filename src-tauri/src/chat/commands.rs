@@ -289,6 +289,7 @@ pub async fn load_model(
     chat: State<'_, ChatState>,
     model_id: String,
 ) -> Result<LoadedModelInfo> {
+    let _operation = chat.acquire_operation()?;
     // Pre-fetch display metadata for the progress payload so the
     // frontend does not have to look it up separately per event.
     let name = resolve_display_name(&state, &model_id)
@@ -508,6 +509,7 @@ async fn resolve_display_name(state: &State<'_, AppState>, model_id: &str) -> Op
 /// Drops the current session, if any. Idempotent.
 #[tauri::command]
 pub async fn unload_local_model(chat: State<'_, ChatState>) -> Result<()> {
+    let _operation = chat.acquire_operation()?;
     let mut guard = chat.session.lock().map_err(|e| HolziError::CrdtInit {
         reason: format!("chat.session mutex poisoned: {e}"),
     })?;
@@ -803,7 +805,21 @@ pub async fn send_message(
         return Err(HolziError::InvalidIdempotencyKey);
     }
 
+    // Reserve before reading the vault, while still letting an idempotent
+    // retry return its existing ids when a turn already owns the reservation.
+    let operation = chat.acquire_operation();
     let db = active_database(&state)?;
+    let cancel_token = CancellationToken::new();
+    if operation.is_ok() {
+        // Reserve cancellation before the first await, including DB staging.
+        // A busy idempotent replay must never replace the live turn's token.
+        *chat
+            .tool_cancellation
+            .lock()
+            .map_err(|e| HolziError::CrdtInit {
+                reason: format!("chat.tool_cancellation mutex poisoned: {e}"),
+            })? = Some(cancel_token.clone());
+    }
 
     // Dedup against any prior send sharing this idempotencyKey before
     // minting anything new (contract §send_message). This only guards
@@ -843,6 +859,7 @@ pub async fn send_message(
         IdempotentSend::Fresh { .. } => {}
     }
 
+    let operation = operation?;
     let session = {
         let guard = chat.session.lock().map_err(|e| HolziError::CrdtInit {
             reason: format!("chat.session mutex poisoned: {e}"),
@@ -935,9 +952,12 @@ pub async fn send_message(
         .unwrap_or_else(|| session.model_id.clone());
 
     let tools = {
-        let registry = chat.tool_registry.lock().map_err(|e| HolziError::CrdtInit {
-            reason: format!("chat.tool_registry mutex poisoned: {e}"),
-        })?;
+        let registry = chat
+            .tool_registry
+            .lock()
+            .map_err(|e| HolziError::CrdtInit {
+                reason: format!("chat.tool_registry mutex poisoned: {e}"),
+            })?;
         tool_specs(&registry)
     };
 
@@ -949,12 +969,28 @@ pub async fn send_message(
         tools,
     };
 
-    // Start the generation. `stream_chat` may fail before the first
-    // byte (credential rejection, transport error); surface those to
-    // the caller instead of hiding them inside the streaming task.
-    let stream = match session.adapter.stream_chat(request.clone()).await {
+    let mut attempt = 0;
+    let mut emit = |name: &'static str, payload: Value| {
+        let _ = app.emit(name, payload);
+    };
+    let stream = match start_step_stream(
+        &session,
+        &chat,
+        &request,
+        &cancel_token,
+        &mut attempt,
+        thread_id,
+        assistant_message_id,
+        &mut emit,
+    )
+    .await
+    {
         Ok(stream) => stream,
         Err(error) => {
+            let error = match error {
+                StreamStartError::Cancelled => "generation cancelled".to_string(),
+                StreamStartError::Failed(reason) => reason,
+            };
             let cleanup_db = db.clone();
             let cleanup = tauri::async_runtime::spawn_blocking(move || {
                 cleanup_db.with_connection(|conn| {
@@ -1010,35 +1046,12 @@ pub async fn send_message(
     })?
     .map_err(HolziError::from)?;
 
-    let abort = stream.abort_handle();
-    let cancel_token = CancellationToken::new();
-    {
-        let mut g = chat
-            .current_generation
-            .lock()
-            .map_err(|e| HolziError::CrdtInit {
-                reason: format!("chat.current_generation mutex poisoned: {e}"),
-            })?;
-        if let Some(prev) = g.take() {
-            prev.abort();
-        }
-        *g = Some(abort);
-    }
-    {
-        let mut g = chat
-            .tool_cancellation
-            .lock()
-            .map_err(|e| HolziError::CrdtInit {
-                reason: format!("chat.tool_cancellation mutex poisoned: {e}"),
-            })?;
-        *g = Some(cancel_token.clone());
-    }
-
     let app_for_task = app.clone();
     let session_for_task = session.clone();
     let assistant_db = db.clone();
 
     tauri::async_runtime::spawn(async move {
+        let _operation = operation;
         let chat_state = app_for_task.state::<ChatState>();
         let mut emit = |name: &'static str, payload: Value| {
             let _ = app_for_task.emit(name, payload);
@@ -1052,6 +1065,7 @@ pub async fn send_message(
             assistant_message_id,
             request,
             stream,
+            attempt,
             cancel_token,
             &mut emit,
         )
@@ -1099,16 +1113,19 @@ async fn persist_final_message(
     let now = msg.created_at;
     tauri::async_runtime::spawn_blocking(move || {
         db.with_connection(|conn| {
-            msg_store::insert_message(conn, &msg).map_err(haex_crdt::Error::from)?;
+            let tx = conn.unchecked_transaction()?;
+            let thread = thread_store::get_thread(&tx, thread_id)?
+                .ok_or(haex_crdt::rusqlite::Error::QueryReturnedNoRows)?;
+            msg_store::insert_message(&tx, &msg)?;
             thread_store::update_thread(
-                conn,
+                &tx,
                 thread_id,
-                &current_title(conn, thread_id).unwrap_or_default(),
+                &thread.title,
                 provider_id,
                 Some(&model_id),
                 now,
-            )
-            .map_err(haex_crdt::Error::from)
+            )?;
+            tx.commit().map_err(haex_crdt::Error::from)
         })
     })
     .await
@@ -1304,6 +1321,57 @@ async fn retry_or_bail(
     }
 }
 
+enum StreamStartError {
+    Cancelled,
+    Failed(String),
+}
+
+/// Shared by the initial send and subsequent steps; retries share the
+/// caller's budget with mid-stream failures and remain cancellable.
+#[allow(clippy::too_many_arguments)]
+async fn start_step_stream(
+    session: &ActiveSession,
+    chat_state: &ChatState,
+    request: &ChatRequest,
+    cancel: &CancellationToken,
+    attempt: &mut usize,
+    thread_id: Uuid,
+    assistant_message_id: Uuid,
+    emit: &mut (dyn FnMut(&'static str, Value) + Send),
+) -> std::result::Result<crate::adapters::types::AdapterStream, StreamStartError> {
+    loop {
+        let started = tokio::select! {
+            biased;
+            _ = cancel.cancelled() => return Err(StreamStartError::Cancelled),
+            result = session.adapter.stream_chat(request.clone()) => result,
+        };
+        match started {
+            Ok(stream) => {
+                *chat_state
+                    .current_generation
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner()) = Some(stream.abort_handle());
+                return Ok(stream);
+            }
+            Err(error) => match retry_or_bail(
+                error.is_transient(),
+                format!("adapter start: {error}"),
+                attempt,
+                cancel,
+                thread_id,
+                assistant_message_id,
+                emit,
+            )
+            .await
+            {
+                RetryDecision::Retry => continue,
+                RetryDecision::Cancelled => return Err(StreamStartError::Cancelled),
+                RetryDecision::Bail(reason) => return Err(StreamStartError::Failed(reason)),
+            },
+        }
+    }
+}
+
 /// Drives one step to completion, automatically retrying a transient
 /// failure — from either the initial `stream_chat` call or mid-stream —
 /// with backoff, up to `MAX_RETRY_ATTEMPTS` (spec.md FR-012). `stream`
@@ -1320,53 +1388,34 @@ async fn run_step(
     chat_state: &ChatState,
     request: &ChatRequest,
     mut stream: Option<crate::adapters::types::AdapterStream>,
+    mut attempt: usize,
     cancel: &CancellationToken,
     thread_id: Uuid,
     assistant_message_id: Uuid,
     emit: &mut (dyn FnMut(&'static str, Value) + Send),
 ) -> StepOutcome {
-    let mut attempt = 0usize;
     loop {
         let mut live_stream = match stream.take() {
             Some(s) => s,
-            None => {
-                let started = tokio::select! {
-                    biased;
-                    _ = cancel.cancelled() => {
-                        return StepOutcome::Cancelled(String::new());
+            None => match start_step_stream(
+                session,
+                chat_state,
+                request,
+                cancel,
+                &mut attempt,
+                thread_id,
+                assistant_message_id,
+                emit,
+            )
+            .await
+            {
+                Ok(stream) => stream,
+                Err(StreamStartError::Cancelled) => return StepOutcome::Cancelled(String::new()),
+                Err(StreamStartError::Failed(reason)) => {
+                    return StepOutcome::Error {
+                        reason,
+                        partial: String::new(),
                     }
-                    result = session.adapter.stream_chat(request.clone()) => result,
-                };
-                match started {
-                    Ok(s) => {
-                        let mut generation = chat_state
-                            .current_generation
-                            .lock()
-                            .unwrap_or_else(|e| e.into_inner());
-                        *generation = Some(s.abort_handle());
-                        drop(generation);
-                        s
-                    }
-                    Err(e) => match retry_or_bail(
-                        e.is_transient(),
-                        format!("adapter start: {e}"),
-                        &mut attempt,
-                        cancel,
-                        thread_id,
-                        assistant_message_id,
-                        emit,
-                    )
-                    .await
-                    {
-                        RetryDecision::Retry => continue,
-                        RetryDecision::Cancelled => return StepOutcome::Cancelled(String::new()),
-                        RetryDecision::Bail(msg) => {
-                            return StepOutcome::Error {
-                                reason: msg,
-                                partial: String::new(),
-                            }
-                        }
-                    },
                 }
             },
         };
@@ -1486,6 +1535,7 @@ pub async fn run_turn(
     assistant_message_id: Uuid,
     mut request: ChatRequest,
     stream: crate::adapters::types::AdapterStream,
+    initial_attempt: usize,
     cancel: CancellationToken,
     emit: &mut (dyn FnMut(&'static str, Value) + Send),
 ) {
@@ -1502,6 +1552,7 @@ pub async fn run_turn(
     // `run_step` starts a fresh `stream_chat` call itself — the same
     // uniform path a retry attempt also takes (T037).
     let mut next_stream = Some(stream);
+    let mut next_attempt = initial_attempt;
 
     loop {
         let outcome = run_step(
@@ -1509,28 +1560,42 @@ pub async fn run_turn(
             chat_state,
             &request,
             next_stream.take(),
+            std::mem::take(&mut next_attempt),
             &cancel,
             thread_id,
             assistant_message_id,
             emit,
         )
         .await;
-        let (assembled, tool_calls, prompt_tokens, completion_tokens, ttft_ms, error_reason, saw_done) =
-            match outcome {
-                StepOutcome::Success {
-                    assembled,
-                    tool_calls,
-                    prompt_tokens,
-                    completion_tokens,
-                    ttft_ms,
-                } => (assembled, tool_calls, prompt_tokens, completion_tokens, ttft_ms, None, true),
-                StepOutcome::Cancelled(partial) => {
-                    (partial, Vec::new(), None, None, None, None, false)
-                }
-                StepOutcome::Error { reason, partial } => {
-                    (partial, Vec::new(), None, None, None, Some(reason), false)
-                }
-            };
+        let (
+            assembled,
+            tool_calls,
+            prompt_tokens,
+            completion_tokens,
+            ttft_ms,
+            error_reason,
+            saw_done,
+        ) = match outcome {
+            StepOutcome::Success {
+                assembled,
+                tool_calls,
+                prompt_tokens,
+                completion_tokens,
+                ttft_ms,
+            } => (
+                assembled,
+                tool_calls,
+                prompt_tokens,
+                completion_tokens,
+                ttft_ms,
+                None,
+                true,
+            ),
+            StepOutcome::Cancelled(partial) => (partial, Vec::new(), None, None, None, None, false),
+            StepOutcome::Error { reason, partial } => {
+                (partial, Vec::new(), None, None, None, Some(reason), false)
+            }
+        };
 
         if error_reason.is_none() && !tool_calls.is_empty() {
             // A step that ends by calling tools. Any text the model
@@ -1693,11 +1758,16 @@ pub async fn run_turn(
                                         tool.source(),
                                     ),
                                     Err(_) => {
-                                        chat_state
+                                        let mut pending = chat_state
                                             .pending_tool_approvals
                                             .lock()
+                                            .unwrap_or_else(|e| e.into_inner());
+                                        chat_state
+                                            .cancelled_tool_approvals
+                                            .lock()
                                             .unwrap_or_else(|e| e.into_inner())
-                                            .remove(&request_id);
+                                            .insert(request_id);
+                                        pending.remove(&request_id);
                                         (
                                             call,
                                             ToolExecResult::error("tool_call_cancelled"),
@@ -2206,6 +2276,14 @@ pub fn abort_turn(chat_state: &ChatState) -> Result<()> {
                 .map_err(|e| HolziError::CrdtInit {
                     reason: format!("chat.pending_tool_approvals mutex poisoned: {e}"),
                 })?;
+        let mut cancelled =
+            chat_state
+                .cancelled_tool_approvals
+                .lock()
+                .map_err(|e| HolziError::CrdtInit {
+                    reason: format!("chat.cancelled_tool_approvals mutex poisoned: {e}"),
+                })?;
+        cancelled.extend(pending.keys().copied());
         pending.clear();
     }
     Ok(())
@@ -2232,26 +2310,37 @@ pub enum ApprovalDecisionWire {
     Deny,
 }
 
-/// Resolves one open `tool-permission-request` (contracts/tauri-commands.md
-/// §respond_tool_permission). `InvalidInput` for a `request_id` that was
-/// never known — there is no cancellation-tombstone tracking yet (Phase 5,
-/// T032 adds resolving a pending request on abort; until then the only way
-/// an id leaves `pending_tool_approvals` is through this command itself).
+/// Resolves one open permission request; a late reply to a cancelled
+/// request is a no-op, while an unknown id remains an input error.
 #[tauri::command]
 pub async fn respond_tool_permission(
     chat: State<'_, ChatState>,
     args: RespondToolPermissionArgs,
 ) -> Result<()> {
+    resolve_tool_permission(&chat, args)
+}
+
+fn resolve_tool_permission(chat: &ChatState, args: RespondToolPermissionArgs) -> Result<()> {
     let sender = {
-        let mut pending =
-            chat.pending_tool_approvals
-                .lock()
-                .map_err(|e| HolziError::CrdtInit {
-                    reason: format!("chat.pending_tool_approvals mutex poisoned: {e}"),
-                })?;
+        let mut pending = chat
+            .pending_tool_approvals
+            .lock()
+            .map_err(|e| HolziError::CrdtInit {
+                reason: format!("chat.pending_tool_approvals mutex poisoned: {e}"),
+            })?;
         pending.remove(&args.request_id)
     };
     let Some(sender) = sender else {
+        if chat
+            .cancelled_tool_approvals
+            .lock()
+            .map_err(|e| HolziError::CrdtInit {
+                reason: format!("chat.cancelled_tool_approvals mutex poisoned: {e}"),
+            })?
+            .contains(&args.request_id)
+        {
+            return Ok(());
+        }
         return Err(HolziError::InvalidInput {
             reason: format!("no pending tool permission request: {}", args.request_id),
         });
@@ -2300,3 +2389,7 @@ fn now_ms() -> i64 {
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0)
 }
+
+#[cfg(test)]
+#[path = "commands_tests.rs"]
+mod tests;

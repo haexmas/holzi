@@ -17,12 +17,18 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use holzi_lib::adapters::types::{ChatRequest, ToolCall as LlmToolCall, ToolSpec};
-use holzi_lib::adapters::{AdapterError, AdapterStream, ProviderAdapter, ProviderModel, StreamChunk, StreamError};
+use holzi_lib::adapters::{
+    AdapterError, AdapterStream, ProviderAdapter, ProviderModel, StreamChunk, StreamError,
+};
 use holzi_lib::chat::commands::{abort_turn, run_turn, MAX_RETRY_ATTEMPTS, MAX_TOOL_ROUNDS};
 use holzi_lib::chat::session::{ActiveSession, ChatState};
 use holzi_lib::chat::tools::{ApprovalDecision, RiskClass, Tool, ToolResult as ToolExecResult};
-use holzi_lib::identity::{holzi_migration_source, installation_id_path, HolziBootstrap, HOLZI_TRIGGER_VERSION};
-use holzi_lib::storage::chat_messages::{self as msg_store, ChatMessage, FinishReason, MessageRole};
+use holzi_lib::identity::{
+    holzi_migration_source, installation_id_path, HolziBootstrap, HOLZI_TRIGGER_VERSION,
+};
+use holzi_lib::storage::chat_messages::{
+    self as msg_store, ChatMessage, FinishReason, MessageRole,
+};
 use holzi_lib::storage::chat_threads::{self as thread_store, ChatThread};
 use holzi_lib::storage::preferences::{self, PrefScope};
 
@@ -34,9 +40,14 @@ const PREF_PERMISSION_MODE: &str = "chat.permission_mode";
 fn set_permission_mode(db: &Database, mode: &str) {
     let this_device = db.device_id();
     db.with_connection(|conn| {
-        preferences::insert_or_update(conn, PrefScope::Device(this_device), PREF_PERMISSION_MODE, mode)
-            .map(|_| ())
-            .map_err(haex_crdt::Error::from)
+        preferences::insert_or_update(
+            conn,
+            PrefScope::Device(this_device),
+            PREF_PERMISSION_MODE,
+            mode,
+        )
+        .map(|_| ())
+        .map_err(haex_crdt::Error::from)
     })
     .unwrap();
 }
@@ -263,6 +274,7 @@ fn spawn_turn(
             assistant_message_id,
             request,
             stream,
+            0,
             cancel_token,
             &mut emit,
         )
@@ -320,6 +332,7 @@ async fn run_scripted_turn(
         assistant_message_id,
         request,
         stream,
+        0,
         CancellationToken::new(),
         &mut emit,
     )
@@ -412,7 +425,10 @@ async fn tool_call_then_final_answer_persists_the_full_ordered_chain() {
     let (last_name, last_payload) = events.last().expect("at least one event");
     assert_eq!(last_name, "chat-turn-complete");
     assert_eq!(last_payload["finishReason"], "complete");
-    assert_eq!(last_payload["assistantMessageId"], assistant_message_id.to_string());
+    assert_eq!(
+        last_payload["assistantMessageId"],
+        assistant_message_id.to_string()
+    );
 }
 
 #[tokio::test]
@@ -513,7 +529,10 @@ async fn exceeding_the_round_limit_stops_with_tool_limit_reached() {
         .iter()
         .find(|m| m.id == assistant_message_id)
         .expect("terminal assistant row must be persisted");
-    assert_eq!(final_row.finish_reason, Some(FinishReason::ToolLimitReached));
+    assert_eq!(
+        final_row.finish_reason,
+        Some(FinishReason::ToolLimitReached)
+    );
 
     // Exactly MAX_TOOL_ROUNDS tool_call rows — no further step ran once
     // the cap was reached.
@@ -582,11 +601,17 @@ async fn manual_mode_emits_a_permission_request_for_a_safe_tool() {
     assert_eq!(payload["riskClass"], "safe");
     assert_eq!(payload["toolName"], "echo");
 
-    respond(&chat_state, extract_request_id(&payload), ApprovalDecision::Allow);
+    respond(
+        &chat_state,
+        extract_request_id(&payload),
+        ApprovalDecision::Allow,
+    );
     handle.await.unwrap();
 
     let rows = db
-        .with_connection(|conn| msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from))
+        .with_connection(|conn| {
+            msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)
+        })
         .unwrap();
     let tool_result = rows
         .iter()
@@ -641,11 +666,17 @@ async fn manual_mode_emits_a_permission_request_for_the_risky_cli_tool() {
     assert_eq!(payload["riskClass"], "risky");
     assert_eq!(payload["toolName"], "run_command");
 
-    respond(&chat_state, extract_request_id(&payload), ApprovalDecision::Allow);
+    respond(
+        &chat_state,
+        extract_request_id(&payload),
+        ApprovalDecision::Allow,
+    );
     handle.await.unwrap();
 
     let rows = db
-        .with_connection(|conn| msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from))
+        .with_connection(|conn| {
+            msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)
+        })
         .unwrap();
     let tool_result = rows
         .iter()
@@ -705,11 +736,17 @@ async fn denying_a_request_produces_an_error_result_and_the_turn_continues() {
     );
 
     let (_name, payload) = rx.recv().await.expect("an event must arrive");
-    respond(&chat_state, extract_request_id(&payload), ApprovalDecision::Deny);
+    respond(
+        &chat_state,
+        extract_request_id(&payload),
+        ApprovalDecision::Deny,
+    );
     handle.await.unwrap();
 
     let rows = db
-        .with_connection(|conn| msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from))
+        .with_connection(|conn| {
+            msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)
+        })
         .unwrap();
     let tool_result = rows
         .iter()
@@ -874,7 +911,11 @@ async fn aborting_during_tool_execution_kills_the_process_and_ends_the_turn() {
 
     let (name, payload) = rx.recv().await.expect("an event must arrive");
     assert_eq!(name, "tool-permission-request");
-    respond(&chat_state, extract_request_id(&payload), ApprovalDecision::Allow);
+    respond(
+        &chat_state,
+        extract_request_id(&payload),
+        ApprovalDecision::Allow,
+    );
 
     // Give the approved call a moment to actually spawn `sleep 5` before
     // aborting, so this exercises "kill a running process", not "cancel
@@ -891,10 +932,13 @@ async fn aborting_during_tool_execution_kills_the_process_and_ends_the_turn() {
     );
 
     let rows = db
-        .with_connection(|conn| msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from))
+        .with_connection(|conn| {
+            msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)
+        })
         .unwrap();
     assert!(
-        rows.iter().all(|m| m.role != MessageRole::ToolCall && m.role != MessageRole::ToolResult),
+        rows.iter()
+            .all(|m| m.role != MessageRole::ToolCall && m.role != MessageRole::ToolResult),
         "an interrupted round must leave no tool_call/tool_result rows"
     );
     let final_row = rows
@@ -903,7 +947,9 @@ async fn aborting_during_tool_execution_kills_the_process_and_ends_the_turn() {
         .expect("terminal assistant row");
     assert_eq!(final_row.finish_reason, Some(FinishReason::Cancelled));
     assert!(
-        !events_after(&mut rx).iter().any(|(n, _)| n == "chat-tool-call" || n == "chat-tool-result"),
+        !events_after(&mut rx)
+            .iter()
+            .any(|(n, _)| n == "chat-tool-call" || n == "chat-tool-result"),
         "no tool-call/tool-result event for an interrupted round"
     );
 }
@@ -963,10 +1009,13 @@ async fn aborting_a_pending_permission_request_cancels_the_turn_not_denies_it() 
     handle.await.unwrap();
 
     let rows = db
-        .with_connection(|conn| msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from))
+        .with_connection(|conn| {
+            msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)
+        })
         .unwrap();
     assert!(
-        rows.iter().all(|m| m.role != MessageRole::ToolCall && m.role != MessageRole::ToolResult),
+        rows.iter()
+            .all(|m| m.role != MessageRole::ToolCall && m.role != MessageRole::ToolResult),
         "an interrupted round must leave no tool_call/tool_result rows — no denial row either"
     );
     let final_row = rows
@@ -978,7 +1027,9 @@ async fn aborting_a_pending_permission_request_cancels_the_turn_not_denies_it() 
 
 /// Drains whatever is left in `rx` right now without blocking further —
 /// used after a turn has already finished to inspect the full event tail.
-fn events_after(rx: &mut tokio::sync::mpsc::UnboundedReceiver<(String, Value)>) -> Vec<(String, Value)> {
+fn events_after(
+    rx: &mut tokio::sync::mpsc::UnboundedReceiver<(String, Value)>,
+) -> Vec<(String, Value)> {
     let mut out = Vec::new();
     while let Ok(event) = rx.try_recv() {
         out.push(event);
@@ -1066,7 +1117,9 @@ async fn two_independent_risky_calls_each_get_their_own_pending_request() {
     handle.await.unwrap();
 
     let rows = db
-        .with_connection(|conn| msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from))
+        .with_connection(|conn| {
+            msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)
+        })
         .unwrap();
     let result_a = rows
         .iter()
@@ -1158,9 +1211,14 @@ async fn a_mode_change_while_pending_only_affects_the_next_tool_use() {
     );
 
     let rows = db
-        .with_connection(|conn| msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from))
+        .with_connection(|conn| {
+            msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)
+        })
         .unwrap();
-    let tool_call_rows = rows.iter().filter(|m| m.role == MessageRole::ToolCall).count();
+    let tool_call_rows = rows
+        .iter()
+        .filter(|m| m.role == MessageRole::ToolCall)
+        .count();
     assert_eq!(tool_call_rows, 2, "both rounds must have executed");
 }
 
@@ -1256,7 +1314,10 @@ async fn a_transient_failure_past_the_retry_limit_ends_with_error() {
         .expect("terminal assistant row");
     assert_eq!(final_row.finish_reason, Some(FinishReason::Error));
     assert_ne!(final_row.finish_reason, Some(FinishReason::Cancelled));
-    assert_ne!(final_row.finish_reason, Some(FinishReason::ToolLimitReached));
+    assert_ne!(
+        final_row.finish_reason,
+        Some(FinishReason::ToolLimitReached)
+    );
 
     let retry_events: Vec<_> = events.iter().filter(|(n, _)| n == "chat-retry").collect();
     assert_eq!(retry_events.len(), MAX_RETRY_ATTEMPTS, "{events:#?}");
