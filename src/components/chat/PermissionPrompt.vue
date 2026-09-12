@@ -27,8 +27,9 @@ const emit = defineEmits<{
 
 <template>
   <div class="flex items-center gap-2">
-    <label class="text-xs text-muted-foreground">{{ t('chat.permission.modeLabel') }}</label>
+    <label for="permission-mode" class="text-xs text-muted-foreground">{{ t('chat.permission.modeLabel') }}</label>
     <select
+      id="permission-mode"
       class="text-xs bg-background border border-border rounded px-2 py-1"
       :value="mode"
       @change="emit('update:mode', ($event.target as HTMLSelectElement).value as 'manual' | 'auto' | 'plan')"

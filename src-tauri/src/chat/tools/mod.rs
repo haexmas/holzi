@@ -92,12 +92,13 @@ impl ToolRegistry {
     }
 
     /// Registers a tool. If `name()` collides with an already-registered
-    /// tool, the newly-registered one wins the slot under its own name —
-    /// callers (T019) are responsible for pre-disambiguating MCP tool
-    /// names so a collision here would be a true error in that wiring,
-    /// not something this registry silently resolves either way.
+    /// tool, the newly-registered one wins the slot under its own name.
     pub fn register(&mut self, tool: Arc<dyn Tool>) {
-        self.tools.push(tool);
+        if let Some(existing) = self.tools.iter_mut().find(|existing| existing.name() == tool.name()) {
+            *existing = tool;
+        } else {
+            self.tools.push(tool);
+        }
     }
 
     /// Drops every currently-registered tool. Used before an MCP

@@ -27,8 +27,7 @@ gegen das Host-CLI-Tool. Für den automatisierten Safe-Pfad wird der test-only S
 verwendet; der manuelle Lauf bestätigt die Freigabe für das (immer `Risky`) CLI-Tool.
 
 **Schritte**:
-1. Chat öffnen, eine Frage stellen, die das Tool erfordert (z.B. einen Kommandoaufruf oder eine
-   MCP-Abfrage).
+1. Chat öffnen, eine Frage stellen, die das Host-CLI-Tool erfordert (z.B. einen Kommandoaufruf).
 2. **Erwartung**: `chat-tool-call` und `chat-tool-result` Events feuern, bevor die finale Antwort
    erscheint; `list_messages` zeigt die `tool_call`/`tool_result`-Zeilen in der Kette.
 3. Die finale Antwort spiegelt das tatsächliche Tool-Ergebnis wider, nicht eine Vermutung.
@@ -51,6 +50,10 @@ einen Fehler (`blocked_by_plan_mode`), die Antwort läuft trotzdem weiter.
 
 ## Szenario 3: Abbruch mitten in einer Aktion (User Story 3)
 
+**Außerhalb des Umfangs dieses PRs**: Die Abbruchbehandlung für laufende Tool-Aufrufe und offene
+Freigabeanfragen wird erst in Phase 5 (T032) implementiert. Die folgenden Schritte dokumentieren
+das geplante Verhalten und sind in diesem PR erwartete Fehlversuche.
+
 1. Eine Anfrage stellen, die einen (spürbar langsamen) Host-CLI-Aufruf auslöst, im `auto`-Modus
    freigeben.
 2. Während der Befehl läuft: `abort_current_generation` aufrufen (Stop-Button).
@@ -60,6 +63,10 @@ einen Fehler (`blocked_by_plan_mode`), die Antwort läuft trotzdem weiter.
    während der Ausführung. **Erwartung**: derselbe sofortige Abbruch, kein Hängenbleiben.
 
 ## Szenario 4: Automatischer Retry (User Story 4)
+
+**Außerhalb des Umfangs dieses PRs**: Automatische Retries werden erst in Phase 6 implementiert.
+Die folgenden Schritte dokumentieren das geplante Verhalten und sind in diesem PR erwartete
+Fehlversuche.
 
 Nicht deterministisch am UI allein zu erzwingen — im Test (`chat_tool_loop`-Suite) über einen
 Adapter-Test-Double simuliert, der beim ersten Versuch einen transienten Fehler liefert. Manuell

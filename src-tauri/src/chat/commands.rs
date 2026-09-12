@@ -1357,6 +1357,10 @@ pub async fn run_turn(
                 }))
                 .await;
 
+            // SQLite orders rows by `created_at, id`; UUIDv4 is random, so
+            // rows created in one millisecond must receive distinct logical
+            // timestamps to keep each call immediately before its result.
+            let mut next_tool_created_at = now_ms().saturating_add(1);
             for (call, result, source) in executed {
                 let tool_call_row_id = Uuid::new_v4();
                 let input_json =
@@ -1369,8 +1373,10 @@ pub async fn run_turn(
                     tool_call_id: Some(call.id.clone()),
                     tool_input: Some(input_json),
                     tool_source: Some(source.to_string()),
+                    created_at: next_tool_created_at,
                     ..empty_tool_message(tool_call_row_id, thread_id, Some(parent_id))
                 };
+                next_tool_created_at = next_tool_created_at.saturating_add(1);
                 if let Err(reason) = persist_message(db, call_msg).await {
                     emit(
                         EVENT_CHAT_MESSAGE_ERROR,
@@ -1413,8 +1419,10 @@ pub async fn run_turn(
                     model_id: Some(session.model_id.clone()),
                     tool_call_id: Some(call.id.clone()),
                     tool_is_error: Some(result.is_error),
+                    created_at: next_tool_created_at,
                     ..empty_tool_message(tool_result_row_id, thread_id, Some(parent_id))
                 };
+                next_tool_created_at = next_tool_created_at.saturating_add(1);
                 if let Err(reason) = persist_message(db, result_msg).await {
                     emit(
                         EVENT_CHAT_MESSAGE_ERROR,
@@ -1527,6 +1535,12 @@ pub async fn run_turn(
 
             match session.adapter.stream_chat(request.clone()).await {
                 Ok(next_stream) => {
+                    let next_abort = next_stream.abort_handle();
+                    let mut generation = chat_state
+                        .current_generation
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner());
+                    *generation = Some(next_abort);
                     stream = next_stream;
                     continue;
                 }

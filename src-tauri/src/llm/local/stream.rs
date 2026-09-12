@@ -144,7 +144,7 @@ impl LocalModel {
             let mut done_emitted = false;
             let mut delta_emitted = false;
             let mut last_finish_reason: Option<String> = None;
-            let mut tool_calls: Vec<ToolCall> = Vec::new();
+            let mut tool_call_fragments: Vec<ToolCallResponse> = Vec::new();
 
             while let Some(response) = stream.next().await {
                 match response {
@@ -162,7 +162,23 @@ impl LocalModel {
                                 last_finish_reason = Some(fr.clone());
                             }
                             if let Some(calls) = &choice.delta.tool_calls {
-                                tool_calls.extend(calls.iter().map(from_mistralrs_tool_call));
+                                for call in calls {
+                                    let existing = tool_call_fragments.iter_mut().find(|existing| {
+                                        existing.index == call.index
+                                            || (!call.id.is_empty() && existing.id == call.id)
+                                    });
+                                    if let Some(existing) = existing {
+                                        if existing.id.is_empty() {
+                                            existing.id = call.id.clone();
+                                        }
+                                        if existing.function.name.is_empty() {
+                                            existing.function.name = call.function.name.clone();
+                                        }
+                                        existing.function.arguments.push_str(&call.function.arguments);
+                                    } else {
+                                        tool_call_fragments.push(call.clone());
+                                    }
+                                }
                             }
                         }
                         if ttft_ms.is_none() && !content.is_empty() {
@@ -186,17 +202,19 @@ impl LocalModel {
                         // stream in; fall back to the final aggregated
                         // message in case a pipeline only populates it
                         // there.
-                        if tool_calls.is_empty() {
+                        if tool_call_fragments.is_empty() {
                             if let Some(calls) =
                                 final_resp.choices.first().and_then(|c| c.message.tool_calls.as_ref())
                             {
-                                tool_calls.extend(calls.iter().map(from_mistralrs_tool_call));
+                                tool_call_fragments.extend(calls.iter().cloned());
                             }
                         }
-                        if !tool_calls.is_empty() {
-                            let _ = tx.send(Ok(StreamChunk::ToolCalls(std::mem::take(
-                                &mut tool_calls,
-                            ))));
+                        if !tool_call_fragments.is_empty() {
+                            let calls = tool_call_fragments
+                                .iter()
+                                .map(from_mistralrs_tool_call)
+                                .collect();
+                            let _ = tx.send(Ok(StreamChunk::ToolCalls(calls)));
                         }
                         let done = StreamChunk::Done {
                             finish_reason,

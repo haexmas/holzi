@@ -128,11 +128,10 @@ pub(crate) async fn tools_from_connection(
     let mut tools: Vec<Arc<dyn Tool>> = Vec::new();
     for info in discovered {
         let raw_name = info.name.to_string();
-        let registry_name = if seen.contains(&raw_name) {
-            format!("mcp:{server_id}:{raw_name}")
-        } else {
-            raw_name.clone()
-        };
+        let mut registry_name = raw_name.clone();
+        while seen.contains(&registry_name) {
+            registry_name = format!("mcp:{server_id}:{registry_name}");
+        }
         seen.insert(registry_name.clone());
         tools.push(Arc::new(McpTool {
             registry_name,

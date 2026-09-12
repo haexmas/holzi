@@ -416,10 +416,35 @@ fn build_messages(messages: &[super::types::ChatMessage]) -> Vec<Value> {
                 i += 1;
             }
             ChatRole::Assistant => {
-                out.push(
-                    serde_json::json!({"role": "assistant", "content": messages[i].content}),
-                );
+                let text = messages[i].content.clone();
                 i += 1;
+
+                let mut blocks = Vec::new();
+                if !text.is_empty() {
+                    blocks.push(serde_json::json!({
+                        "type": "text",
+                        "text": text,
+                    }));
+                }
+                while let Some(ChatRole::ToolCall { id, name, input }) =
+                    messages.get(i).map(|m| &m.role)
+                {
+                    blocks.push(serde_json::json!({
+                        "type": "tool_use",
+                        "id": id,
+                        "name": name,
+                        "input": input,
+                    }));
+                    i += 1;
+                }
+                if blocks.is_empty() {
+                    continue;
+                }
+                if blocks.len() == 1 && !text.is_empty() {
+                    out.push(serde_json::json!({"role": "assistant", "content": text}));
+                } else {
+                    out.push(serde_json::json!({"role": "assistant", "content": blocks}));
+                }
             }
             ChatRole::ToolCall { .. } => {
                 let mut blocks = Vec::new();

@@ -35,3 +35,15 @@ async fn a_nonexistent_binary_is_a_tool_error_not_a_panic() {
         .await;
     assert!(result.is_error);
 }
+
+#[tokio::test]
+async fn excessive_output_is_rejected_without_buffering_unbounded_data() {
+    let tool = CliTool;
+    let result = tool
+        .execute(serde_json::json!({
+            "command": "head -c 1048577 /dev/zero"
+        }))
+        .await;
+    assert!(result.is_error);
+    assert!(result.content.contains("output exceeded"));
+}

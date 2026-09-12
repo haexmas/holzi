@@ -74,6 +74,8 @@ type PendingStreamEvents = {
 }
 
 const pendingStreamEvents = new Map<string, PendingStreamEvents>()
+const pendingToolEvents = new Map<string, Array<ToolCallEvent | ToolResultEvent>>()
+const pendingApprovalsByThread = new Map<string, PendingApproval[]>()
 
 const input = ref('')
 const busy = ref(false)
@@ -171,10 +173,29 @@ async function refreshThreads() {
 
 /** Selects a thread, loading its persisted messages on first access. */
 async function selectThread(id: string) {
+  const previousThreadId = activeThreadId.value
+  if (previousThreadId && previousThreadId !== id && pendingApprovals.value.length > 0) {
+    const queued = pendingApprovalsByThread.get(previousThreadId) ?? []
+    pendingApprovalsByThread.set(previousThreadId, [...queued, ...pendingApprovals.value])
+    pendingApprovals.value = []
+  }
   activeThreadId.value = id
   const existing = messagesByThread.value[id]
   if (!existing) {
     messagesByThread.value[id] = await chat.listMessagesAsync(id)
+  }
+  const queuedApprovals = pendingApprovalsByThread.get(id)
+  if (queuedApprovals) {
+    pendingApprovals.value = queuedApprovals
+    pendingApprovalsByThread.delete(id)
+  }
+  const queuedToolEvents = pendingToolEvents.get(id)
+  if (queuedToolEvents) {
+    pendingToolEvents.delete(id)
+    for (const event of queuedToolEvents) {
+      if ('toolName' in event) handleToolCall(event, true)
+      else handleToolResult(event, true)
+    }
   }
   await scrollToBottom()
 }
@@ -239,6 +260,11 @@ async function send(retryPending = false) {
   try {
     const result = await chat.sendMessageAsync(request)
     activeThreadId.value = result.threadId
+    const queuedApprovals = pendingApprovalsByThread.get(result.threadId)
+    if (queuedApprovals) {
+      pendingApprovals.value = queuedApprovals
+      pendingApprovalsByThread.delete(result.threadId)
+    }
     // Seed the assistant message placeholder so the UI can show
     // tokens as they stream in.
     const list = messagesByThread.value[result.threadId] ?? []
@@ -283,6 +309,14 @@ async function send(retryPending = false) {
       ...reasoningByMessage.value,
       [result.assistantMessageId]: '',
     }
+    const queuedToolEvents = pendingToolEvents.get(result.threadId)
+    if (queuedToolEvents) {
+      pendingToolEvents.delete(result.threadId)
+      for (const event of queuedToolEvents) {
+        if ('toolName' in event) handleToolCall(event, true)
+        else handleToolResult(event, true)
+      }
+    }
     const pending = pendingStreamEvents.get(result.assistantMessageId)
     pendingStreamEvents.delete(result.assistantMessageId)
     if (pending?.tokens || pending?.reasoning) {
@@ -325,6 +359,12 @@ async function abort() {
 
 /** Clears the active conversation so the next send creates a new thread. */
 async function newChat() {
+  if (busy.value) return
+  if (activeThreadId.value && pendingApprovals.value.length > 0) {
+    const queued = pendingApprovalsByThread.get(activeThreadId.value) ?? []
+    pendingApprovalsByThread.set(activeThreadId.value, [...queued, ...pendingApprovals.value])
+    pendingApprovals.value = []
+  }
   activeThreadId.value = null
   input.value = ''
   streamingMessageId.value = null
@@ -472,9 +512,14 @@ function handleError(e: MessageErrorEvent) {
  * events, these carry no pre-known placeholder to buffer against, and the
  * row is safely in `chat_messages` regardless; switching back to that
  * thread reloads it via `selectThread`. */
-function handleToolCall(e: ToolCallEvent) {
-  if (e.threadId !== activeThreadId.value) return
+function handleToolCall(e: ToolCallEvent, restoring = false) {
+  if (!restoring && e.threadId !== activeThreadId.value) {
+    const queued = pendingToolEvents.get(e.threadId) ?? []
+    pendingToolEvents.set(e.threadId, [...queued, e])
+    return
+  }
   const list = messagesByThread.value[e.threadId] ?? []
+  if (list.some((message) => message.id === e.messageId)) return
   list.push({
     id: e.messageId,
     threadId: e.threadId,
@@ -496,9 +541,14 @@ function handleToolCall(e: ToolCallEvent) {
   scrollToBottom()
 }
 
-function handleToolResult(e: ToolResultEvent) {
-  if (e.threadId !== activeThreadId.value) return
+function handleToolResult(e: ToolResultEvent, restoring = false) {
+  if (!restoring && e.threadId !== activeThreadId.value) {
+    const queued = pendingToolEvents.get(e.threadId) ?? []
+    pendingToolEvents.set(e.threadId, [...queued, e])
+    return
+  }
   const list = messagesByThread.value[e.threadId] ?? []
+  if (list.some((message) => message.id === e.messageId)) return
   list.push({
     id: e.messageId,
     threadId: e.threadId,
@@ -538,22 +588,26 @@ function applyTurnComplete(e: TurnCompleteEvent) {
 }
 
 function handleToolPermissionRequest(e: ToolPermissionRequestEvent) {
-  if (e.threadId !== activeThreadId.value) return
-  pendingApprovals.value = [
-    ...pendingApprovals.value,
-    {
-      requestId: e.requestId,
-      toolName: e.toolName,
-      toolInput: e.toolInput,
-      riskClass: e.riskClass,
-    },
-  ]
+  const approval: PendingApproval = {
+    requestId: e.requestId,
+    toolName: e.toolName,
+    toolInput: e.toolInput,
+    riskClass: e.riskClass,
+  }
+  if (e.threadId !== activeThreadId.value) {
+    const queued = pendingApprovalsByThread.get(e.threadId) ?? []
+    pendingApprovalsByThread.set(e.threadId, [...queued, approval])
+    return
+  }
+  if (!pendingApprovals.value.some((item) => item.requestId === e.requestId)) {
+    pendingApprovals.value = [...pendingApprovals.value, approval]
+  }
 }
 
 async function respondToApproval(requestId: string, decision: 'allow' | 'deny') {
-  pendingApprovals.value = pendingApprovals.value.filter((a) => a.requestId !== requestId)
   try {
     await chat.respondToolPermissionAsync(requestId, decision)
+    pendingApprovals.value = pendingApprovals.value.filter((a) => a.requestId !== requestId)
   }
   catch (e: unknown) {
     lastError.value = errString(e)
@@ -707,7 +761,7 @@ onBeforeUnmount(() => {
       <div class="text-sm font-semibold truncate" :title="instanceName">
         {{ instanceName }}
       </div>
-      <UiButton size="sm" variant="outline" @click="newChat">
+      <UiButton size="sm" variant="outline" :disabled="busy" @click="newChat">
         Neuer Chat
       </UiButton>
       <PermissionPrompt

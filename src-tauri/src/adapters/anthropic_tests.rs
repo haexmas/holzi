@@ -548,6 +548,7 @@ async fn stream_chat_groups_ordered_tool_calls_and_results_into_two_messages() {
             "messages": [
                 {"role": "user", "content": "hi"},
                 {"role": "assistant", "content": [
+                    {"type": "text", "text": "I will check that."},
                     {"type": "tool_use", "id": "call-a", "name": "first", "input": {"x": 1}},
                     {"type": "tool_use", "id": "call-b", "name": "second", "input": {"y": 2}},
                 ]},
@@ -578,6 +579,10 @@ async fn stream_chat_groups_ordered_tool_calls_and_results_into_two_messages() {
             ChatMessage {
                 role: ChatRole::User,
                 content: "hi".to_string(),
+            },
+            ChatMessage {
+                role: ChatRole::Assistant,
+                content: "I will check that.".to_string(),
             },
             ChatMessage {
                 role: ChatRole::ToolCall {
