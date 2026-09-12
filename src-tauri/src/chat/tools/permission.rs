@@ -26,14 +26,6 @@ impl PermissionMode {
             _ => None,
         }
     }
-
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Manual => "manual",
-            Self::Auto => "auto",
-            Self::Plan => "plan",
-        }
-    }
 }
 
 /// The gate's verdict for one tool call, before any human is involved.

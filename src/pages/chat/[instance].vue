@@ -79,6 +79,12 @@ const pendingApprovalsByThread = new Map<string, PendingApproval[]>()
 
 const input = ref('')
 const busy = ref(false)
+// True while `send()` has set `activeThreadId` but has not yet appended
+// this turn's user/assistant placeholder rows — a `chat-tool-call`/
+// `chat-tool-result` for that (already-active) thread can otherwise land
+// before the messages it belongs after (backend events can arrive before
+// `sendMessageAsync`'s own await resolves).
+const turnSetupPending = ref(false)
 const lastError = ref<string | null>(null)
 const pendingSend = ref<{
   threadId: string | null
@@ -186,7 +192,11 @@ async function selectThread(id: string) {
   }
   const queuedApprovals = pendingApprovalsByThread.get(id)
   if (queuedApprovals) {
-    pendingApprovals.value = queuedApprovals
+    // Merge, don't overwrite: a `tool-permission-request` for `id` may
+    // have already landed directly in `pendingApprovals` during the
+    // `listMessagesAsync` await above (its gate matches on
+    // `activeThreadId`, which was set synchronously before that await).
+    pendingApprovals.value = [...queuedApprovals, ...pendingApprovals.value]
     pendingApprovalsByThread.delete(id)
   }
   const queuedToolEvents = pendingToolEvents.get(id)
@@ -257,12 +267,14 @@ async function send(retryPending = false) {
     idempotencyKey: crypto.randomUUID(),
   }
   pendingSend.value = null
+  turnSetupPending.value = true
   try {
     const result = await chat.sendMessageAsync(request)
     activeThreadId.value = result.threadId
     const queuedApprovals = pendingApprovalsByThread.get(result.threadId)
     if (queuedApprovals) {
-      pendingApprovals.value = queuedApprovals
+      // Merge, don't overwrite: see the matching comment in `selectThread`.
+      pendingApprovals.value = [...queuedApprovals, ...pendingApprovals.value]
       pendingApprovalsByThread.delete(result.threadId)
     }
     // Seed the assistant message placeholder so the UI can show
@@ -303,6 +315,7 @@ async function send(retryPending = false) {
       toolSource: null,
     })
     messagesByThread.value[result.threadId] = list
+    turnSetupPending.value = false
     streamingMessageId.value = result.assistantMessageId
     streamingBuffer.value = ''
     reasoningByMessage.value = {
@@ -344,6 +357,7 @@ async function send(retryPending = false) {
     pendingSend.value = request
     lastError.value = errString(e)
     busy.value = false
+    turnSetupPending.value = false
   }
 }
 
@@ -507,13 +521,16 @@ function handleError(e: MessageErrorEvent) {
   applyError(e)
 }
 
-/** Appends a `tool_call`/`tool_result` row. Only applied when the event's
- * own thread is the one currently open — unlike token/complete/error
- * events, these carry no pre-known placeholder to buffer against, and the
+/** Appends a `tool_call`/`tool_result` row. Only applied once the event's
+ * own thread is the one currently open AND that thread's turn placeholder
+ * rows are in place — unlike token/complete/error events, these carry no
+ * pre-known placeholder to buffer against, so while `send()` is still
+ * setting one up (`turnSetupPending`) an event for the now-active thread
+ * would otherwise render above the user message that triggered it. The
  * row is safely in `chat_messages` regardless; switching back to that
  * thread reloads it via `selectThread`. */
 function handleToolCall(e: ToolCallEvent, restoring = false) {
-  if (!restoring && e.threadId !== activeThreadId.value) {
+  if (!restoring && (e.threadId !== activeThreadId.value || turnSetupPending.value)) {
     const queued = pendingToolEvents.get(e.threadId) ?? []
     pendingToolEvents.set(e.threadId, [...queued, e])
     return
@@ -542,7 +559,7 @@ function handleToolCall(e: ToolCallEvent, restoring = false) {
 }
 
 function handleToolResult(e: ToolResultEvent, restoring = false) {
-  if (!restoring && e.threadId !== activeThreadId.value) {
+  if (!restoring && (e.threadId !== activeThreadId.value || turnSetupPending.value)) {
     const queued = pendingToolEvents.get(e.threadId) ?? []
     pendingToolEvents.set(e.threadId, [...queued, e])
     return

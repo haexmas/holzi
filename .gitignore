@@ -38,3 +38,6 @@ src-tauri/gen/
 .env
 .env.*
 !.env.example
+
+# graphify skill output
+graphify-out/
