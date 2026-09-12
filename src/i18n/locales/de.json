@@ -132,6 +132,7 @@
       "hide": "Denkschritte ausblenden"
     },
     "retry": "Erneut versuchen",
+    "retrying": "Wird erneut versucht…",
     "tool": {
       "call": "Tool-Aufruf: {name}",
       "result": "Tool-Ergebnis",

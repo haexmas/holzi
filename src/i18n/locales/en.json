@@ -132,6 +132,7 @@
       "hide": "Hide reasoning"
     },
     "retry": "Try again",
+    "retrying": "Retrying…",
     "tool": {
       "call": "Tool call: {name}",
       "result": "Tool result",

@@ -13,11 +13,12 @@ use std::sync::{Arc, Mutex as StdMutex};
 use async_trait::async_trait;
 use haex_crdt::{Database, DatabaseConfig, NoopSignatureProvider, SqlCipherKey};
 use serde_json::Value;
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use holzi_lib::adapters::types::{ChatRequest, ToolCall as LlmToolCall, ToolSpec};
 use holzi_lib::adapters::{AdapterError, AdapterStream, ProviderAdapter, ProviderModel, StreamChunk, StreamError};
-use holzi_lib::chat::commands::{run_turn, MAX_TOOL_ROUNDS};
+use holzi_lib::chat::commands::{abort_turn, run_turn, MAX_RETRY_ATTEMPTS, MAX_TOOL_ROUNDS};
 use holzi_lib::chat::session::{ActiveSession, ChatState};
 use holzi_lib::chat::tools::{ApprovalDecision, RiskClass, Tool, ToolResult as ToolExecResult};
 use holzi_lib::identity::{holzi_migration_source, installation_id_path, HolziBootstrap, HOLZI_TRIGGER_VERSION};
@@ -189,7 +190,7 @@ impl Tool for ScriptedTool {
         self.risk_class
     }
 
-    async fn execute(&self, input: Value) -> ToolExecResult {
+    async fn execute(&self, input: Value, _cancel: CancellationToken) -> ToolExecResult {
         if self.fails {
             ToolExecResult::error("scripted failure")
         } else {
@@ -226,7 +227,11 @@ async fn session_with(adapter: StubAdapter) -> ActiveSession {
 /// `tool-permission-request` events while it is still awaiting them, and
 /// returns every emitted `(event, payload)` in arrival order via a channel
 /// instead of a `Vec` (unlike [`run_scripted_turn`], nothing here can wait
-/// for the whole turn to finish before observing events).
+/// for the whole turn to finish before observing events). Stashes a fresh
+/// `CancellationToken` into `chat_state.tool_cancellation` first, mirroring
+/// what `send_message` does in production, so a test can call
+/// `abort_turn(&chat_state)` exactly like a real `abort_current_generation`
+/// invocation (T032).
 #[allow(clippy::too_many_arguments)]
 fn spawn_turn(
     db: Database,
@@ -241,6 +246,9 @@ fn spawn_turn(
     tokio::task::JoinHandle<()>,
     tokio::sync::mpsc::UnboundedReceiver<(String, Value)>,
 ) {
+    let cancel_token = CancellationToken::new();
+    *chat_state.tool_cancellation.lock().unwrap() = Some(cancel_token.clone());
+
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     let handle = tokio::spawn(async move {
         let mut emit = move |name: &'static str, payload: Value| {
@@ -255,6 +263,7 @@ fn spawn_turn(
             assistant_message_id,
             request,
             stream,
+            cancel_token,
             &mut emit,
         )
         .await;
@@ -311,6 +320,7 @@ async fn run_scripted_turn(
         assistant_message_id,
         request,
         stream,
+        CancellationToken::new(),
         &mut emit,
     )
     .await;
@@ -822,6 +832,160 @@ async fn plan_mode_blocks_a_risky_tool_without_any_prompt() {
     assert_eq!(final_row.finish_reason, Some(FinishReason::Complete));
 }
 
+/// T030 (US3): aborting while the host-CLI tool is actually executing (as
+/// opposed to waiting on approval) kills the OS process and ends the turn
+/// as `Cancelled`, with no rows persisted for the interrupted round. Only
+/// one step is scripted — if the loop incorrectly proceeded to a further
+/// step after cancellation (T033), `StubAdapter` would panic on running out
+/// of scripted steps, and `handle.await.unwrap()` below would fail.
+#[tokio::test]
+async fn aborting_during_tool_execution_kills_the_process_and_ends_the_turn() {
+    let db = open_db();
+    let thread_id = Uuid::new_v4();
+    let user_message_id = Uuid::new_v4();
+    let assistant_message_id = Uuid::new_v4();
+    seed_thread(&db, thread_id, user_message_id);
+    // `auto` still asks for a `Risky` call (the CLI tool is always Risky,
+    // spec.md FR-015) — this only avoids a second, irrelevant prompt for
+    // the mode switcher itself; `manual` would behave identically here.
+    set_permission_mode(&db, "auto");
+
+    let chat_state = Arc::new(ChatState::new());
+
+    let adapter = StubAdapter::new(vec![vec![Ok(StreamChunk::ToolCalls(vec![LlmToolCall {
+        id: "call-1".to_string(),
+        name: "run_command".to_string(),
+        input: serde_json::json!({ "command": "sleep 5" }),
+    }]))]]);
+    let session = session_with(adapter).await;
+    let request = base_request();
+    let stream = session.adapter.stream_chat(request.clone()).await.unwrap();
+
+    let (handle, mut rx) = spawn_turn(
+        db.clone(),
+        chat_state.clone(),
+        session,
+        thread_id,
+        user_message_id,
+        assistant_message_id,
+        request,
+        stream,
+    );
+
+    let (name, payload) = rx.recv().await.expect("an event must arrive");
+    assert_eq!(name, "tool-permission-request");
+    respond(&chat_state, extract_request_id(&payload), ApprovalDecision::Allow);
+
+    // Give the approved call a moment to actually spawn `sleep 5` before
+    // aborting, so this exercises "kill a running process", not "cancel
+    // before it ever started".
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    let started = std::time::Instant::now();
+    abort_turn(&chat_state).unwrap();
+
+    handle.await.unwrap();
+    let elapsed = started.elapsed();
+    assert!(
+        elapsed < std::time::Duration::from_secs(2),
+        "abort must kill the sleeping process rather than waiting it out: took {elapsed:?}"
+    );
+
+    let rows = db
+        .with_connection(|conn| msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from))
+        .unwrap();
+    assert!(
+        rows.iter().all(|m| m.role != MessageRole::ToolCall && m.role != MessageRole::ToolResult),
+        "an interrupted round must leave no tool_call/tool_result rows"
+    );
+    let final_row = rows
+        .iter()
+        .find(|m| m.id == assistant_message_id)
+        .expect("terminal assistant row");
+    assert_eq!(final_row.finish_reason, Some(FinishReason::Cancelled));
+    assert!(
+        !events_after(&mut rx).iter().any(|(n, _)| n == "chat-tool-call" || n == "chat-tool-result"),
+        "no tool-call/tool-result event for an interrupted round"
+    );
+}
+
+/// T031 (US3): aborting while a `tool-permission-request` is still pending
+/// (never approved or denied) resolves the wait as cancelled, distinct
+/// from a user `Deny` — no `tool_result` row with a denial reason, and the
+/// turn ends as `Cancelled` rather than continuing (spec.md Acceptance
+/// Scenario, US3).
+#[tokio::test]
+async fn aborting_a_pending_permission_request_cancels_the_turn_not_denies_it() {
+    let db = open_db();
+    let thread_id = Uuid::new_v4();
+    let user_message_id = Uuid::new_v4();
+    let assistant_message_id = Uuid::new_v4();
+    seed_thread(&db, thread_id, user_message_id);
+    set_permission_mode(&db, "manual");
+
+    let chat_state = Arc::new(ChatState::new());
+    chat_state
+        .tool_registry
+        .lock()
+        .unwrap()
+        .register(Arc::new(ScriptedTool {
+            name: "echo",
+            risk_class: RiskClass::Safe,
+            fails: false,
+        }));
+
+    // Only one step scripted — see the T030 test above for why that also
+    // covers T033 (no further step after cancellation).
+    let adapter = StubAdapter::new(vec![vec![Ok(StreamChunk::ToolCalls(vec![LlmToolCall {
+        id: "call-1".to_string(),
+        name: "echo".to_string(),
+        input: serde_json::json!({}),
+    }]))]]);
+    let session = session_with(adapter).await;
+    let request = base_request();
+    let stream = session.adapter.stream_chat(request.clone()).await.unwrap();
+
+    let (handle, mut rx) = spawn_turn(
+        db.clone(),
+        chat_state.clone(),
+        session,
+        thread_id,
+        user_message_id,
+        assistant_message_id,
+        request,
+        stream,
+    );
+
+    let (name, _payload) = rx.recv().await.expect("an event must arrive");
+    assert_eq!(name, "tool-permission-request");
+
+    // Never respond — abort instead.
+    abort_turn(&chat_state).unwrap();
+    handle.await.unwrap();
+
+    let rows = db
+        .with_connection(|conn| msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from))
+        .unwrap();
+    assert!(
+        rows.iter().all(|m| m.role != MessageRole::ToolCall && m.role != MessageRole::ToolResult),
+        "an interrupted round must leave no tool_call/tool_result rows — no denial row either"
+    );
+    let final_row = rows
+        .iter()
+        .find(|m| m.id == assistant_message_id)
+        .expect("terminal assistant row");
+    assert_eq!(final_row.finish_reason, Some(FinishReason::Cancelled));
+}
+
+/// Drains whatever is left in `rx` right now without blocking further —
+/// used after a turn has already finished to inspect the full event tail.
+fn events_after(rx: &mut tokio::sync::mpsc::UnboundedReceiver<(String, Value)>) -> Vec<(String, Value)> {
+    let mut out = Vec::new();
+    while let Ok(event) = rx.try_recv() {
+        out.push(event);
+    }
+    out
+}
+
 #[tokio::test]
 async fn two_independent_risky_calls_each_get_their_own_pending_request() {
     let db = open_db();
@@ -998,4 +1162,136 @@ async fn a_mode_change_while_pending_only_affects_the_next_tool_use() {
         .unwrap();
     let tool_call_rows = rows.iter().filter(|m| m.role == MessageRole::ToolCall).count();
     assert_eq!(tool_call_rows, 2, "both rounds must have executed");
+}
+
+/// T035 (US4): a transient failure retries automatically and only the
+/// final, successful answer is ever persisted — no trace of the failed
+/// attempt (spec.md Acceptance Scenario 1). `tokio::time::pause` makes the
+/// retry backoff instant instead of a real 500ms wait.
+#[tokio::test]
+async fn a_transient_failure_retries_and_only_the_final_answer_persists() {
+    tokio::time::pause();
+    let db = open_db();
+    let thread_id = Uuid::new_v4();
+    let user_message_id = Uuid::new_v4();
+    let assistant_message_id = Uuid::new_v4();
+    seed_thread(&db, thread_id, user_message_id);
+
+    let chat_state = ChatState::new();
+    let adapter = StubAdapter::new(vec![
+        vec![Err(StreamError::Transient("hiccup".to_string()))],
+        vec![
+            Ok(StreamChunk::Delta {
+                content: "hi there".to_string(),
+                reasoning: None,
+            }),
+            Ok(StreamChunk::Done {
+                finish_reason: Some("end_turn".to_string()),
+                prompt_tokens: Some(1),
+                completion_tokens: Some(1),
+                ttft_ms: Some(1),
+                total_ms: 1,
+            }),
+        ],
+    ]);
+    let session = session_with(adapter).await;
+
+    let (rows, events) = run_scripted_turn(
+        &db,
+        &chat_state,
+        &session,
+        thread_id,
+        user_message_id,
+        assistant_message_id,
+    )
+    .await;
+
+    assert_eq!(rows.len(), 2, "{rows:#?}");
+    let final_row = rows
+        .iter()
+        .find(|m| m.id == assistant_message_id)
+        .expect("terminal assistant row");
+    assert_eq!(final_row.finish_reason, Some(FinishReason::Complete));
+    assert_eq!(final_row.content, "hi there");
+
+    let retry_events: Vec<_> = events.iter().filter(|(n, _)| n == "chat-retry").collect();
+    assert_eq!(retry_events.len(), 1, "{events:#?}");
+    assert_eq!(retry_events[0].1["attempt"], 1);
+}
+
+/// T036 (US4): a transient failure that keeps recurring past the retry
+/// budget ends the turn with `FinishReason::Error`, distinguishable from
+/// `Cancelled` and `ToolLimitReached` (spec.md Acceptance Scenario 2).
+#[tokio::test]
+async fn a_transient_failure_past_the_retry_limit_ends_with_error() {
+    tokio::time::pause();
+    let db = open_db();
+    let thread_id = Uuid::new_v4();
+    let user_message_id = Uuid::new_v4();
+    let assistant_message_id = Uuid::new_v4();
+    seed_thread(&db, thread_id, user_message_id);
+
+    let chat_state = ChatState::new();
+    // The original attempt plus every retry all fail transiently,
+    // exhausting the bounded budget.
+    let steps = (0..=MAX_RETRY_ATTEMPTS)
+        .map(|_| vec![Err(StreamError::Transient("still down".to_string()))])
+        .collect();
+    let adapter = StubAdapter::new(steps);
+    let session = session_with(adapter).await;
+
+    let (rows, events) = run_scripted_turn(
+        &db,
+        &chat_state,
+        &session,
+        thread_id,
+        user_message_id,
+        assistant_message_id,
+    )
+    .await;
+
+    let final_row = rows
+        .iter()
+        .find(|m| m.id == assistant_message_id)
+        .expect("terminal assistant row");
+    assert_eq!(final_row.finish_reason, Some(FinishReason::Error));
+    assert_ne!(final_row.finish_reason, Some(FinishReason::Cancelled));
+    assert_ne!(final_row.finish_reason, Some(FinishReason::ToolLimitReached));
+
+    let retry_events: Vec<_> = events.iter().filter(|(n, _)| n == "chat-retry").collect();
+    assert_eq!(retry_events.len(), MAX_RETRY_ATTEMPTS, "{events:#?}");
+}
+
+/// A terminal (non-transient) `StreamError` must never be retried, even
+/// with retry budget remaining — it would just reproduce deterministically.
+#[tokio::test]
+async fn a_terminal_stream_error_is_not_retried() {
+    let db = open_db();
+    let thread_id = Uuid::new_v4();
+    let user_message_id = Uuid::new_v4();
+    let assistant_message_id = Uuid::new_v4();
+    seed_thread(&db, thread_id, user_message_id);
+
+    let chat_state = ChatState::new();
+    let adapter = StubAdapter::new(vec![vec![Err(StreamError::Model(
+        "invalid request".to_string(),
+    ))]]);
+    let session = session_with(adapter).await;
+
+    let (rows, events) = run_scripted_turn(
+        &db,
+        &chat_state,
+        &session,
+        thread_id,
+        user_message_id,
+        assistant_message_id,
+    )
+    .await;
+
+    let final_row = rows
+        .iter()
+        .find(|m| m.id == assistant_message_id)
+        .expect("terminal assistant row");
+    assert_eq!(final_row.finish_reason, Some(FinishReason::Error));
+    assert!(!events.iter().any(|(n, _)| n == "chat-retry"));
 }

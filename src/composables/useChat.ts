@@ -124,6 +124,18 @@ export interface TurnCompleteEvent {
   finishReason: 'complete' | 'cancelled' | 'error' | 'tool_limit_reached'
 }
 
+/** Fires on each automatic retry attempt (spec.md FR-012/FR-013) — transient,
+ * never persisted to `chat_messages`. The frontend should clear whatever
+ * partial text it had already shown for `assistantMessageId` and show a
+ * "retrying…" indicator instead, since that text belongs to the discarded,
+ * now-being-retried attempt. */
+export interface RetryEvent {
+  threadId: string
+  assistantMessageId: string
+  /** 1-based. */
+  attempt: number
+}
+
 export type ModelLoadPhase = 'connecting' | 'loading' | 'cuda-jit-warmup' | 'ready'
 
 export interface ModelLoadProgressEvent {
@@ -250,6 +262,13 @@ export function useChat() {
     return await listen<TurnCompleteEvent>('chat-turn-complete', (ev) => handler(ev.payload))
   }
 
+  /** Subscribes to `chat-retry` and returns the unlisten function. */
+  async function onRetry(
+    handler: (e: RetryEvent) => void,
+  ): Promise<UnlistenFn> {
+    return await listen<RetryEvent>('chat-retry', (ev) => handler(ev.payload))
+  }
+
   /** Subscribes to `tool-permission-request` and returns the unlisten function. */
   async function onToolPermissionRequest(
     handler: (e: ToolPermissionRequestEvent) => void,
@@ -288,6 +307,7 @@ export function useChat() {
     onMessageError,
     onToolCall,
     onToolResult,
+    onRetry,
     onTurnComplete,
     onToolPermissionRequest,
     onModelLoadProgress,

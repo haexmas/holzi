@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde_json::Value;
+use tokio_util::sync::CancellationToken;
 
 /// Whether a tool call may run without confirmation under `auto` mode.
 /// See `permission::decide` for the full Manual/Auto/Plan matrix.
@@ -73,7 +74,13 @@ pub trait Tool: Send + Sync {
     /// §1/§2 — both are JSON-Schema-shaped).
     fn input_schema(&self) -> Value;
     fn risk_class(&self) -> RiskClass;
-    async fn execute(&self, input: Value) -> ToolResult;
+    /// `cancel` fires when `abort_current_generation` cancels the turn
+    /// this call belongs to (T032). Implementations that own a cancellable
+    /// resource (a child process, an MCP request) MUST race it against
+    /// `cancel.cancelled()` and tear that resource down on the spot —
+    /// dropping the returned future alone is not enough to, e.g., reap a
+    /// child process without leaving a zombie.
+    async fn execute(&self, input: Value, cancel: CancellationToken) -> ToolResult;
 }
 
 /// Every tool available this turn, from every source. Built once at
