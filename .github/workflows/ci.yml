@@ -34,7 +34,6 @@ jobs:
 
       - name: Validate documentation
         run: python3 scripts/ci/check-docs.py
-
   rust:
     name: Rust checks
     runs-on: ubuntu-24.04
@@ -45,13 +44,34 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           components: rustfmt, clippy
 
       - name: Check formatting
-        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet "${{ github.event.pull_request.base.sha }}...${{ github.sha }}" -- 'src-tauri/**/*.rs'; then
+            echo "No Rust files changed; formatting check skipped."
+          else
+            cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+          fi
 
       - name: Run tests with default features
         run: cargo test --manifest-path src-tauri/Cargo.toml --jobs 2
