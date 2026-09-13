@@ -1609,7 +1609,7 @@ async fn a_real_local_model_can_request_and_process_a_cli_command() {
             role: ChatRole::User,
             content: format!("Use run_command to execute exactly this harmless command: {expected_command}"),
         }],
-        max_new_tokens: Some(128),
+        max_new_tokens: Some(256),
         tools: vec![ToolSpec {
             name: "run_command".to_string(),
             description: "Runs a shell command on the user's device and returns its output."
