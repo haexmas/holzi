@@ -65,3 +65,20 @@ fn recommend_tiers_falls_back_when_hardware_unknown() {
     });
     assert_eq!(tiers[0].entry.id, sorted_ids[0]);
 }
+
+#[test]
+fn catalog_contains_the_selected_qwen3_profiles() {
+    let desktop = crate::catalog::get("qwen3-4b-instruct-q4_k_m").expect("desktop profile");
+    assert_eq!(desktop.family, "Qwen 3");
+    assert_eq!(desktop.parameters, "4B");
+    assert_eq!(desktop.hf_filename, "Qwen_Qwen3-4B-Q4_K_M.gguf");
+
+    let mobile = crate::catalog::get("qwen3-1.7b-instruct-q4_k_m").expect("mobile profile");
+    assert_eq!(mobile.family, "Qwen 3");
+    assert_eq!(mobile.parameters, "1.7B");
+
+    let low_memory =
+        crate::catalog::get("qwen3-0.6b-instruct-q4_k_m").expect("mobile low-memory profile");
+    assert_eq!(low_memory.family, "Qwen 3");
+    assert_eq!(low_memory.parameters, "0.6B");
+}

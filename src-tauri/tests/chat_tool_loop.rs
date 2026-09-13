@@ -1576,8 +1576,8 @@ async fn a_real_local_model_can_request_and_process_a_cli_command() {
     } else {
         PathBuf::from(configured_model_path)
     };
-    let tokenizer = env::var("HOLZI_TEST_GGUF_TOKENIZER")
-        .unwrap_or_else(|_| "Qwen/Qwen2.5-0.5B-Instruct".to_string());
+    let tokenizer =
+        env::var("HOLZI_TEST_GGUF_TOKENIZER").unwrap_or_else(|_| "Qwen/Qwen3-4B".to_string());
     let model = LocalModel::load(&model_path, Some(&tokenizer))
         .await
         .expect("real local model must load");

@@ -71,7 +71,14 @@ HOLZI_TEST_GGUF=~/path/to/model.gguf \
 ```
 
 `HOLZI_TEST_GGUF_TOKENIZER` overrides the tokenizer repo id (default:
-`Qwen/Qwen2.5-0.5B-Instruct`).
+`Qwen/Qwen3-4B`).
+
+### Local model presets
+
+Holzi uses Qwen3 as its local model family: Qwen3-4B Q4_K_M is the desktop
+preset, Qwen3-1.7B Q4_K_M is the smartphone preset, and Qwen3-0.6B Q4_K_M is
+the low-memory fallback. See [ADR-0002](docs/adr/0002-local-model-profiles.md)
+for the platform boundary and rationale.
 
 ### Running the real local CLI tool-loop test
 
