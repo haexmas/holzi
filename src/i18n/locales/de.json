@@ -149,7 +149,8 @@
       "risky": "Riskante Aktion",
       "safe": "Unbedenkliche Aktion",
       "allow": "Erlauben",
-      "deny": "Ablehnen"
+      "deny": "Ablehnen",
+      "stopGenerating": "Generierung abbrechen"
     }
   },
   "settings": {

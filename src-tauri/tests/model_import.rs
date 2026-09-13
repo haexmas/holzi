@@ -1,6 +1,6 @@
 //! Finalized model files must survive unsuccessful imports and self-imports.
 
-use holzi_lib::models::import::copy_into_managed;
+use holzi_lib::models::import::{cleanup_staging_in_dir, copy_into_managed};
 
 #[tokio::test]
 async fn reimporting_the_managed_file_preserves_its_contents() {
@@ -76,4 +76,20 @@ async fn failed_publication_preserves_destination_and_removes_staging() {
             Some("tmp")
         );
     }
+}
+
+#[test]
+fn startup_cleanup_removes_model_staging_files_only() {
+    let tmp = tempfile::tempdir().expect("temp dir");
+    let models = tmp.path().join("models");
+    let slug = models.join("model-slug");
+    std::fs::create_dir_all(&slug).expect("model directory");
+    std::fs::write(slug.join("model.gguf.tmp"), b"partial").expect("staging file");
+    std::fs::write(slug.join("model.gguf"), b"published").expect("model file");
+    std::fs::write(models.join("unrelated.tmp"), b"untouched").expect("unrelated file");
+
+    assert_eq!(cleanup_staging_in_dir(&models).expect("cleanup"), 1);
+    assert!(!slug.join("model.gguf.tmp").exists());
+    assert!(slug.join("model.gguf").exists());
+    assert!(models.join("unrelated.tmp").exists());
 }

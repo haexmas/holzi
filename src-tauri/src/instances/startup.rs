@@ -15,13 +15,16 @@ use crate::error::{HolziError, Result};
 
 use super::events::emit_instance_list_changed;
 use super::paths::{get_instances_directory, PENDING_MARKER_EXTENSION};
+use crate::models::{import, paths as model_paths};
 
 /// Tauri-facing entry. Resolves the instances directory and delegates
 /// to the pure `cleanup_orphans_in_dir` helper.
 pub fn cleanup_orphans_on_startup(app: &AppHandle) -> Result<()> {
     let dir = get_instances_directory(app)?;
     let removed = cleanup_orphans_in_dir(&dir)?;
-    if removed > 0 {
+    let models_root = model_paths::models_root(app)?;
+    let removed_model_staging = import::cleanup_staging_in_dir(&models_root)?;
+    if removed + removed_model_staging > 0 {
         emit_instance_list_changed(app, "startup-cleanup", None);
     }
     Ok(())

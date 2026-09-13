@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 
 use crate::catalog;
+use crate::chat::session::ChatState;
 use crate::error::{HolziError, Result};
 use crate::providers::local::ensure_local_provider;
 use crate::state::AppState;
@@ -76,6 +77,7 @@ pub struct ImportModelArgs {
 pub async fn download_model_from_catalog(
     app: AppHandle,
     state: State<'_, AppState>,
+    chat: State<'_, ChatState>,
     catalog_id: String,
 ) -> Result<InstalledModelPayload> {
     let entry =
@@ -92,7 +94,7 @@ pub async fn download_model_from_catalog(
         tokenizer_repo: entry.tokenizer_repo,
         context_window: Some(entry.context_window as i64),
     };
-    download_model_from_hf(app, state, args).await
+    download_model_from_hf(app, state, chat, args).await
 }
 
 /// Downloads a model from an arbitrary HuggingFace repo/filename pair.
@@ -100,8 +102,10 @@ pub async fn download_model_from_catalog(
 pub async fn download_model_from_hf(
     app: AppHandle,
     state: State<'_, AppState>,
+    chat: State<'_, ChatState>,
     args: DownloadFromHfArgs,
 ) -> Result<InstalledModelPayload> {
+    let _operation = chat.acquire_operation()?;
     let db = active_database(&state)?;
     let _publication_lock = paths::acquire_model_publication_lock(&args.id).await?;
     if let Some(existing) = paths::canonical_model_file(&app, &args.id)? {
@@ -153,8 +157,10 @@ pub async fn download_model_from_hf(
 pub async fn import_model_from_file(
     app: AppHandle,
     state: State<'_, AppState>,
+    chat: State<'_, ChatState>,
     args: ImportModelArgs,
 ) -> Result<InstalledModelPayload> {
+    let _operation = chat.acquire_operation()?;
     let db = active_database(&state)?;
     let source = PathBuf::from(&args.source_path);
     let filename = args

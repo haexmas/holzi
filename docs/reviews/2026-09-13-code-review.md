@@ -46,6 +46,7 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --jobs 2 -- -D w
 pnpm typecheck
 pnpm generate
 node scripts/check-chat-state.mjs
+git diff --check 4670cfb...HEAD
 python3 scripts/ci/test_check_docs.py
 python3 scripts/ci/check-docs.py
 ```
@@ -54,12 +55,12 @@ Results: 130 Rust tests passed with default CPU features (2 GGUF tests ignored),
 129 passed without default features, 11 frontend replay tests passed, and the
 documentation regression passed. Rustfmt, Clippy with warnings denied, Nuxt
 typecheck, static generation, documentation validation and patch whitespace
-checks all passed.
+checks (`git diff --check 4670cfb...HEAD`) all passed.
 
 The tests requiring an operator-provided GGUF remain ignored. CUDA/Metal hardware
-and a native interactive WebView were not exercised. The installed Node version
-22.17 emits the repository's engine warning (minimum supported 22.19); frontend
-checks still run. No new dependencies were added.
+and a native interactive WebView were not exercised. The frontend checks ran with
+Node 22.19.0, which satisfies the repository's engine constraint. No new
+dependencies were added.
 
 ## Maintainability exceptions and follow-up split plan
 

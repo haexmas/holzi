@@ -149,7 +149,8 @@
       "risky": "Risky action",
       "safe": "Safe action",
       "allow": "Allow",
-      "deny": "Deny"
+      "deny": "Deny",
+      "stopGenerating": "Stop generating"
     }
   },
   "settings": {

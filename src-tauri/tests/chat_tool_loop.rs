@@ -1277,6 +1277,71 @@ async fn a_transient_failure_retries_and_only_the_final_answer_persists() {
     assert_eq!(retry_events[0].1["attempt"], 1);
 }
 
+/// A retry consumed while recovering from one tool round must reduce the
+/// budget available to later rounds in the same turn.
+#[tokio::test]
+async fn retries_are_shared_across_tool_rounds() {
+    tokio::time::pause();
+    let db = open_db();
+    let thread_id = Uuid::new_v4();
+    let user_message_id = Uuid::new_v4();
+    let assistant_message_id = Uuid::new_v4();
+    seed_thread(&db, thread_id, user_message_id);
+    set_permission_mode(&db, "auto");
+
+    let chat_state = ChatState::new();
+    chat_state
+        .tool_registry
+        .lock()
+        .unwrap()
+        .register(Arc::new(ScriptedTool {
+            name: "echo",
+            risk_class: RiskClass::Safe,
+            fails: false,
+        }));
+
+    let adapter = StubAdapter::new(vec![
+        vec![Err(StreamError::Transient("first hiccup".to_string()))],
+        vec![Ok(StreamChunk::ToolCalls(vec![LlmToolCall {
+            id: "call-1".to_string(),
+            name: "echo".to_string(),
+            input: serde_json::json!({}),
+        }]))],
+        vec![Err(StreamError::Transient("second hiccup".to_string()))],
+        vec![Err(StreamError::Transient("third hiccup".to_string()))],
+        vec![Err(StreamError::Transient("fourth hiccup".to_string()))],
+        vec![Ok(StreamChunk::Done {
+            finish_reason: Some("end_turn".to_string()),
+            prompt_tokens: Some(1),
+            completion_tokens: Some(1),
+            ttft_ms: Some(1),
+            total_ms: 1,
+        })],
+    ]);
+    let session = session_with(adapter).await;
+
+    let (rows, events) = run_scripted_turn(
+        &db,
+        &chat_state,
+        &session,
+        thread_id,
+        user_message_id,
+        assistant_message_id,
+    )
+    .await;
+
+    let final_row = rows
+        .iter()
+        .find(|message| message.id == assistant_message_id)
+        .expect("terminal assistant row");
+    assert_eq!(final_row.finish_reason, Some(FinishReason::Error));
+    let retry_events: Vec<_> = events
+        .iter()
+        .filter(|(name, _)| name == "chat-retry")
+        .collect();
+    assert_eq!(retry_events.len(), MAX_RETRY_ATTEMPTS, "{events:#?}");
+}
+
 /// T036 (US4): a transient failure that keeps recurring past the retry
 /// budget ends the turn with `FinishReason::Error`, distinguishable from
 /// `Cancelled` and `ToolLimitReached` (spec.md Acceptance Scenario 2).

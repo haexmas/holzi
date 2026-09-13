@@ -66,7 +66,7 @@ const emit = defineEmits<{
       <pre class="text-xs bg-muted/30 rounded p-2 overflow-x-auto whitespace-pre-wrap">{{ JSON.stringify(pendingApprovals[0].toolInput, null, 2) }}</pre>
       <div class="flex justify-end gap-2">
         <UiButton size="sm" variant="outline" @click="emit('cancel')">
-          {{ t('chat.cancel') }}
+          {{ t('chat.permission.stopGenerating') }}
         </UiButton>
         <UiButton size="sm" variant="outline" @click="emit('deny', pendingApprovals[0].requestId)">
           {{ t('chat.permission.deny') }}

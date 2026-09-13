@@ -21,5 +21,16 @@ jobs:
       - name: Check patch whitespace
         run: git diff --check "${{ github.event.pull_request.base.sha }}...${{ github.sha }}"
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+
+      - name: Install frontend dependencies
+        run: corepack pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Check chat state
+        run: corepack pnpm check:chat-state
+
       - name: Validate documentation
         run: python3 scripts/ci/check-docs.py
