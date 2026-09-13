@@ -71,4 +71,33 @@ HOLZI_TEST_GGUF=~/path/to/model.gguf \
 ```
 
 `HOLZI_TEST_GGUF_TOKENIZER` overrides the tokenizer repo id (default:
-`Qwen/Qwen2.5-0.5B-Instruct`).
+`Qwen/Qwen3-4B`).
+
+### Local model presets
+
+Holzi uses Qwen3 as its local model family: Qwen3-4B Q4_K_M is the desktop
+preset, Qwen3-1.7B Q4_K_M is the smartphone preset, and Qwen3-0.6B Q4_K_M is
+the low-memory fallback. See [ADR-0002](docs/adr/0002-local-model-profiles.md)
+for the platform boundary and rationale.
+
+### Running the real local CLI tool-loop test
+
+The tool-loop suite contains one hardware/model-dependent acceptance test.
+It loads the GGUF, verifies that the model requests `run_command`, approves
+only the exact harmless fixture command, executes it through Holzi's real CLI
+tool, and verifies that the output is included in the final model response:
+
+```bash
+HOLZI_TEST_GGUF=~/path/to/tool-capable-model.gguf \
+  cargo test --manifest-path src-tauri/Cargo.toml \
+  --test chat_tool_loop \
+  a_real_local_model_can_request_and_process_a_cli_command \
+  -- --ignored --nocapture
+```
+
+The model must support tool calling. The test is ignored by default so normal
+developer test runs stay fast. CI runs the deterministic
+`ci_e2e_loaded_model_can_request_and_process_a_cli_command` test in the
+dedicated `local-cli-e2e` job; this keeps the CI gate independent of model
+sampling and network-hosted weights. For CUDA, add `--features llm-cuda`
+before `--test`.

@@ -3,7 +3,7 @@
 //! Skipped by default (marked `#[ignore]`) because it needs:
 //!   * a GGUF file on disk pointed to by `HOLZI_TEST_GGUF`
 //!   * optionally a tokenizer repo id in `HOLZI_TEST_GGUF_TOKENIZER`
-//!     (defaults to `Qwen/Qwen2.5-0.5B-Instruct`, matching the model
+//!     (defaults to `Qwen/Qwen3-4B`, matching the desktop model
 //!     that carried Etappe 0's baseline numbers)
 //!
 //! Run with:
@@ -22,7 +22,7 @@ use std::time::Duration;
 use holzi_lib::adapters::types::{ChatMessage, ChatRequest, ChatRole, StreamChunk};
 use holzi_lib::llm::local::LocalModel;
 
-const DEFAULT_TOKENIZER: &str = "Qwen/Qwen2.5-0.5B-Instruct";
+const DEFAULT_TOKENIZER: &str = "Qwen/Qwen3-4B";
 const MAX_NEW_TOKENS: usize = 64;
 const ABORT_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
 
