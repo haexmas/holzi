@@ -354,3 +354,31 @@ fn concurrent_same_key_sends_return_one_fresh_and_one_duplicate() {
     })
     .unwrap();
 }
+
+#[test]
+fn child_messages_sort_after_parents_when_clock_moves_backwards() {
+    let tmp = tempfile::tempdir().unwrap();
+    let db = Database::open(make_config(
+        tmp.path().join("vault.db"),
+        installation_id_path(tmp.path()),
+    ))
+    .unwrap();
+    let thread = Uuid::new_v4();
+    let mut parent = sample_message(Uuid::new_v4(), thread, "previous response", None);
+    parent.created_at = 5000;
+    let mut child = sample_message(Uuid::new_v4(), thread, "next turn", None);
+    child.parent_id = Some(parent.id);
+    child.created_at = 1000;
+    db.with_connection(|conn| {
+        chat_messages::insert_message(conn, &parent)?;
+        chat_messages::insert_message(conn, &child)?;
+        let rows = chat_messages::list_messages(conn, thread)?;
+        assert_eq!(
+            rows.iter().map(|m| m.id).collect::<Vec<_>>(),
+            vec![parent.id, child.id]
+        );
+        assert!(rows[1].created_at > rows[0].created_at);
+        Ok(())
+    })
+    .unwrap();
+}

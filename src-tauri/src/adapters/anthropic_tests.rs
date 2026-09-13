@@ -541,14 +541,40 @@ async fn stream_chat_maps_invalid_request_error_to_terminal_model_error() {
 /// network involved.
 #[test]
 fn adapter_error_classifies_transient_vs_terminal() {
-    assert!(AdapterError::Http { reason: "connect timed out".into() }.is_transient());
-    assert!(AdapterError::Status { status: 429, body: String::new() }.is_transient());
-    assert!(AdapterError::Status { status: 500, body: String::new() }.is_transient());
-    assert!(AdapterError::Status { status: 503, body: String::new() }.is_transient());
-    assert!(!AdapterError::Status { status: 400, body: String::new() }.is_transient());
-    assert!(!AdapterError::Status { status: 404, body: String::new() }.is_transient());
+    assert!(AdapterError::Http {
+        reason: "connect timed out".into()
+    }
+    .is_transient());
+    assert!(AdapterError::Status {
+        status: 429,
+        body: String::new()
+    }
+    .is_transient());
+    assert!(AdapterError::Status {
+        status: 500,
+        body: String::new()
+    }
+    .is_transient());
+    assert!(AdapterError::Status {
+        status: 503,
+        body: String::new()
+    }
+    .is_transient());
+    assert!(!AdapterError::Status {
+        status: 400,
+        body: String::new()
+    }
+    .is_transient());
+    assert!(!AdapterError::Status {
+        status: 404,
+        body: String::new()
+    }
+    .is_transient());
     assert!(!AdapterError::InvalidCredentials.is_transient());
-    assert!(!AdapterError::Parse { reason: "bad json".into() }.is_transient());
+    assert!(!AdapterError::Parse {
+        reason: "bad json".into()
+    }
+    .is_transient());
 }
 
 #[test]

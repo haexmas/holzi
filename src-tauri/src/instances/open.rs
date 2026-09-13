@@ -15,6 +15,7 @@ use serde::Deserialize;
 use tauri::{AppHandle, State};
 use ts_rs::TS;
 
+use crate::chat::session::ChatState;
 use crate::error::{HolziError, Result};
 use crate::identity::installation_id_path;
 use crate::state::{ActiveInstanceHandle, AppState};
@@ -39,8 +40,10 @@ pub struct OpenInstanceArgs {
 pub async fn open_instance(
     app: AppHandle,
     state: State<'_, AppState>,
+    chat: State<'_, ChatState>,
     args: OpenInstanceArgs,
 ) -> Result<InstanceInfo> {
+    let _operation = chat.acquire_operation()?;
     validate_instance_name(&args.name)?;
 
     let db_path = get_instance_path(&app, &args.name)?;
@@ -180,6 +183,7 @@ pub async fn open_instance(
         // MVP, tightens later once background tasks (relay, iroh) enter.
         drop(prev);
     }
+    *chat.session.lock().unwrap_or_else(|e| e.into_inner()) = None;
     *guard = Some(ActiveInstanceHandle {
         name: args.name.clone(),
         database: candidate,

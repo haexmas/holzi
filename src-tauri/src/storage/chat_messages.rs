@@ -170,6 +170,8 @@ impl FinishReason {
 }
 
 /// Inserts a finalised message. Always sets `haex_hlc_no_sync = current_hlc()`.
+/// A child must sort after its persisted parent, even when the wall clock
+/// moves backwards or an earlier tool round advanced logical timestamps.
 pub fn insert_message(conn: &Connection, m: &ChatMessage) -> Result<usize> {
     validate(m).map_err(validation_error)?;
     let sql = format!(
@@ -179,7 +181,9 @@ pub fn insert_message(conn: &Connection, m: &ChatMessage) -> Result<usize> {
             finish_reason, created_at, idempotency_key, \
             tool_name, tool_call_id, tool_input, tool_is_error, tool_source, \
             {HLC_TIMESTAMP_COLUMN}) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, \
+                 MAX(?11, COALESCE((SELECT created_at + 1 FROM chat_messages \
+                                   WHERE id = ?3 AND thread_id = ?2), ?11)), ?12, \
                  ?13, ?14, ?15, ?16, ?17, current_hlc())"
     );
     conn.execute(

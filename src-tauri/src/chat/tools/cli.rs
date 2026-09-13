@@ -7,16 +7,16 @@
 
 use async_trait::async_trait;
 use serde_json::Value;
+use std::process::Stdio;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc,
 };
-use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt};
-use tokio::process::Command;
 use tokio::process::ChildStderr;
 use tokio::process::ChildStdout;
+use tokio::process::Command;
 use tokio_util::sync::CancellationToken;
 
 use super::{RiskClass, Tool, ToolResult};
@@ -26,10 +26,7 @@ const DESCRIPTION: &str = "Runs a shell command on the user's device and returns
 const MAX_OUTPUT_BYTES: usize = 1024 * 1024;
 const EXECUTION_TIMEOUT: Duration = Duration::from_secs(30);
 
-async fn read_limited<R>(
-    mut reader: R,
-    total: Arc<AtomicUsize>,
-) -> Result<Vec<u8>, &'static str>
+async fn read_limited<R>(mut reader: R, total: Arc<AtomicUsize>) -> Result<Vec<u8>, &'static str>
 where
     R: AsyncRead + Unpin,
 {

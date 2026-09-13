@@ -74,8 +74,7 @@ fn build_request(req: &ChatRequest) -> RequestBuilder {
                 i += 1;
             }
             ChatRole::Assistant => {
-                builder =
-                    builder.add_message(TextMessageRole::Assistant, &req.messages[i].content);
+                builder = builder.add_message(TextMessageRole::Assistant, &req.messages[i].content);
                 i += 1;
             }
             ChatRole::ToolCall { .. } => {
@@ -89,7 +88,8 @@ fn build_request(req: &ChatRequest) -> RequestBuilder {
                         tp: ToolCallType::Function,
                         function: CalledFunction {
                             name: name.clone(),
-                            arguments: serde_json::to_string(input).unwrap_or_else(|_| "{}".to_string()),
+                            arguments: serde_json::to_string(input)
+                                .unwrap_or_else(|_| "{}".to_string()),
                         },
                     });
                     i += 1;
@@ -163,10 +163,11 @@ impl LocalModel {
                             }
                             if let Some(calls) = &choice.delta.tool_calls {
                                 for call in calls {
-                                    let existing = tool_call_fragments.iter_mut().find(|existing| {
-                                        existing.index == call.index
-                                            || (!call.id.is_empty() && existing.id == call.id)
-                                    });
+                                    let existing =
+                                        tool_call_fragments.iter_mut().find(|existing| {
+                                            existing.index == call.index
+                                                || (!call.id.is_empty() && existing.id == call.id)
+                                        });
                                     if let Some(existing) = existing {
                                         if existing.id.is_empty() {
                                             existing.id = call.id.clone();
@@ -174,7 +175,10 @@ impl LocalModel {
                                         if existing.function.name.is_empty() {
                                             existing.function.name = call.function.name.clone();
                                         }
-                                        existing.function.arguments.push_str(&call.function.arguments);
+                                        existing
+                                            .function
+                                            .arguments
+                                            .push_str(&call.function.arguments);
                                     } else {
                                         tool_call_fragments.push(call.clone());
                                     }
@@ -203,8 +207,10 @@ impl LocalModel {
                         // message in case a pipeline only populates it
                         // there.
                         if tool_call_fragments.is_empty() {
-                            if let Some(calls) =
-                                final_resp.choices.first().and_then(|c| c.message.tool_calls.as_ref())
+                            if let Some(calls) = final_resp
+                                .choices
+                                .first()
+                                .and_then(|c| c.message.tool_calls.as_ref())
                             {
                                 tool_call_fragments.extend(calls.iter().cloned());
                             }

@@ -8,6 +8,7 @@ tightening or rewording is the author's call, not the CI's.
 
 from pathlib import Path
 import re
+import subprocess
 import sys
 
 
@@ -30,8 +31,17 @@ def check_required_files(errors: list[str]) -> None:
 
 def check_local_markdown_links(errors: list[str]) -> None:
     link_pattern = re.compile(r"(?<!!)\[[^]]+\]\(([^)]+)\)")
-    for document in ROOT.rglob("*.md"):
-        if ".git" in document.parts:
+    documents = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "*.md"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split("\0")
+    for relative_path in documents:
+        document = ROOT / relative_path
+        # Git's index may still contain a document deleted in the working tree.
+        if not relative_path or not document.is_file():
             continue
         for raw_target in link_pattern.findall(document.read_text()):
             target = raw_target.strip().split(maxsplit=1)[0].strip("<>")

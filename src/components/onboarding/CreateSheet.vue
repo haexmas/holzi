@@ -23,7 +23,6 @@ function reset() {
   passphrase.value = ''
   passphraseConfirm.value = ''
   error.value = null
-  submitting.value = false
 }
 
 watch(() => props.open, (isOpen) => {

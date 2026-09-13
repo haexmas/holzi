@@ -155,7 +155,10 @@ async fn a_disconnected_server_surfaces_a_tool_error_not_a_panic() {
     )
     .await;
     match outcome {
-        Ok(result) => assert!(result.is_error, "a call on a dead connection must not panic"),
+        Ok(result) => assert!(
+            result.is_error,
+            "a call on a dead connection must not panic"
+        ),
         Err(_) => panic!("execute() hung instead of erroring on a dead connection"),
     }
 }

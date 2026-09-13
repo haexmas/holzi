@@ -3,6 +3,7 @@
 
 use tauri::{AppHandle, State};
 
+use crate::chat::session::ChatState;
 use crate::error::{HolziError, Result};
 use crate::state::AppState;
 
@@ -12,7 +13,12 @@ use super::events::emit_instance_list_changed;
 /// contract: no `Arc<Database>` clone survives in `AppState`. Errors with
 /// `CloseFailed` when another subsystem still holds a clone.
 #[tauri::command]
-pub async fn close_instance(app: AppHandle, state: State<'_, AppState>) -> Result<()> {
+pub async fn close_instance(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    chat: State<'_, ChatState>,
+) -> Result<()> {
+    let _operation = chat.acquire_operation()?;
     let handle_opt = {
         let mut guard = state
             .active_instance
@@ -57,6 +63,7 @@ pub async fn close_instance(app: AppHandle, state: State<'_, AppState>) -> Resul
         }
     }
 
+    *chat.session.lock().unwrap_or_else(|e| e.into_inner()) = None;
     emit_instance_list_changed(&app, "closed", Some(name));
     Ok(())
 }

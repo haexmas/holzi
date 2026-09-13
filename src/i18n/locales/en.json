@@ -92,6 +92,7 @@
     "download": "Download",
     "tokens": "{count} tokens",
     "errorLabel": "(error)",
+    "cancelledLabel": "(stopped)",
     "sender": {
       "user": "You",
       "assistant": "Assistant",
@@ -148,7 +149,8 @@
       "risky": "Risky action",
       "safe": "Safe action",
       "allow": "Allow",
-      "deny": "Deny"
+      "deny": "Deny",
+      "stopGenerating": "Stop generating"
     }
   },
   "settings": {
