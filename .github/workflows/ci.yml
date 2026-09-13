@@ -40,7 +40,14 @@ jobs:
           components: rustfmt, clippy
 
       - name: Check formatting
-        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet "${{ github.event.pull_request.base.sha }}...${{ github.sha }}" -- 'src-tauri/**/*.rs'; then
+            echo "No Rust files changed; formatting check skipped."
+          else
+            cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+          fi
 
       - name: Run tests with default features
         run: cargo test --manifest-path src-tauri/Cargo.toml --jobs 2
