@@ -1644,44 +1644,44 @@ async fn a_real_local_model_can_request_and_process_a_cli_command() {
     let mut generated_text = String::new();
     let mut observed_events = Vec::new();
     let mut observed_errors = Vec::new();
-    while let Some((event_name, payload)) =
-        tokio::time::timeout(std::time::Duration::from_secs(600), events.recv())
-            .await
-            .expect("real local tool turn must finish within ten minutes")
-    {
-        observed_events.push(event_name.clone());
-        if event_name == "chat-message-error" {
-            observed_errors.push(payload.clone());
-        }
-        if event_name == "chat-token" {
-            if let Some(delta) = payload["delta"].as_str() {
-                generated_text.push_str(delta);
+    tokio::time::timeout(std::time::Duration::from_secs(600), async {
+        while let Some((event_name, payload)) = events.recv().await {
+            observed_events.push(event_name.clone());
+            if event_name == "chat-message-error" {
+                observed_errors.push(payload.clone());
             }
-        }
-        if event_name != "tool-permission-request" {
-            if event_name == "chat-turn-complete" {
-                break;
+            if event_name == "chat-token" {
+                if let Some(delta) = payload["delta"].as_str() {
+                    generated_text.push_str(delta);
+                }
             }
-            continue;
-        }
+            if event_name != "tool-permission-request" {
+                if event_name == "chat-turn-complete" {
+                    break;
+                }
+                continue;
+            }
 
-        assert!(
-            !approved_one_expected_command,
-            "the model requested more than one command"
-        );
-        assert_eq!(payload["toolName"], "run_command");
-        assert_eq!(payload["riskClass"], "risky");
-        let request_id = extract_request_id(&payload);
-        let command = payload["toolInput"]["command"]
-            .as_str()
-            .expect("run_command input must contain a command string");
-        assert_eq!(
-            command, expected_command,
-            "refusing to approve an unexpected model-generated command"
-        );
-        respond(&chat_state, request_id, ApprovalDecision::Allow);
-        approved_one_expected_command = true;
-    }
+            assert!(
+                !approved_one_expected_command,
+                "the model requested more than one command"
+            );
+            assert_eq!(payload["toolName"], "run_command");
+            assert_eq!(payload["riskClass"], "risky");
+            let request_id = extract_request_id(&payload);
+            let command = payload["toolInput"]["command"]
+                .as_str()
+                .expect("run_command input must contain a command string");
+            assert_eq!(
+                command, expected_command,
+                "refusing to approve an unexpected model-generated command"
+            );
+            respond(&chat_state, request_id, ApprovalDecision::Allow);
+            approved_one_expected_command = true;
+        }
+    })
+    .await
+    .expect("real local tool turn must finish within ten minutes");
 
     handle
         .await
