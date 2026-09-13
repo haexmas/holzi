@@ -13,7 +13,7 @@ Thumbs.db
 .claude/
 
 # spaex advisory manifest lock
-.spaex.json.lock
+.spaex/manifest.json.lock
 .spaex/install.lock
 
 # Node

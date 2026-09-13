@@ -1,0 +1,18 @@
+{
+  "compounds": [
+    {
+      "molecules": [
+        "com.github.haexmas.atoms.general-coding",
+        "com.github.haexmas.atoms.graphify-first-authoring",
+        "com.github.haexmas.atoms.javascript-typescript",
+        "com.github.haexmas.atoms.ponytail",
+        "com.github.haexmas.atoms.rust"
+      ],
+      "revision": "9cac2b0d3e51bb85a9f74170969280bd639eb83f",
+      "source": "https://github.com/haexmas/atoms"
+    }
+  ],
+  "identity": "com.github.haexmas.holzi",
+  "spaex_min_version": ">=4.0.0",
+  "spaex_version": "4"
+}
