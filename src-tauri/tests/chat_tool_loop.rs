@@ -16,6 +16,10 @@ use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+#[cfg(feature = "llm-cpu")]
+use holzi_lib::adapters::local::LocalAdapter;
+#[cfg(feature = "llm-cpu")]
+use holzi_lib::adapters::types::{ChatMessage as LlmMessage, ChatRole};
 use holzi_lib::adapters::types::{ChatRequest, ToolCall as LlmToolCall, ToolSpec};
 use holzi_lib::adapters::{
     AdapterError, AdapterStream, ProviderAdapter, ProviderModel, StreamChunk, StreamError,
@@ -26,11 +30,16 @@ use holzi_lib::chat::tools::{ApprovalDecision, RiskClass, Tool, ToolResult as To
 use holzi_lib::identity::{
     holzi_migration_source, installation_id_path, HolziBootstrap, HOLZI_TRIGGER_VERSION,
 };
+#[cfg(feature = "llm-cpu")]
+use holzi_lib::llm::local::LocalModel;
 use holzi_lib::storage::chat_messages::{
     self as msg_store, ChatMessage, FinishReason, MessageRole,
 };
 use holzi_lib::storage::chat_threads::{self as thread_store, ChatThread};
 use holzi_lib::storage::preferences::{self, PrefScope};
+
+#[cfg(feature = "llm-cpu")]
+use std::env;
 
 /// Matches the private `chat.permission_mode` key in `chat/commands.rs`
 /// (data-model.md) — there is no dedicated get/set command, only the
@@ -52,6 +61,7 @@ fn set_permission_mode(db: &Database, mode: &str) {
     .unwrap();
 }
 
+// Test-only dummy key: the test vault is temporary and never contains user data.
 const PASSPHRASE: &str = "chat-tool-loop";
 
 fn make_config(db_path: PathBuf, installation_id: PathBuf) -> DatabaseConfig {
@@ -1420,4 +1430,298 @@ async fn a_terminal_stream_error_is_not_retried() {
         .expect("terminal assistant row");
     assert_eq!(final_row.finish_reason, Some(FinishReason::Error));
     assert!(!events.iter().any(|(n, _)| n == "chat-retry"));
+}
+
+/// CI-stable E2E coverage for the complete vault → loaded-model-session →
+/// real host CLI → follow-up response path. The adapter is scripted so CI
+/// tests the command/tool-loop wiring without depending on sampling behavior
+/// or a network-hosted model artifact; the ignored test below covers the
+/// additional real-GGUF boundary.
+#[tokio::test]
+async fn ci_e2e_loaded_model_can_request_and_process_a_cli_command() {
+    let db = open_db();
+    let thread_id = Uuid::new_v4();
+    let user_message_id = Uuid::new_v4();
+    let assistant_message_id = Uuid::new_v4();
+    seed_thread(&db, thread_id, user_message_id);
+    set_permission_mode(&db, "manual");
+
+    let marker = "HOLZI_CI_E2E_CLI_OK";
+    #[cfg(not(windows))]
+    let expected_command = format!("printf {marker}");
+    #[cfg(windows)]
+    let expected_command = format!("echo {marker}");
+
+    let adapter = StubAdapter::new(vec![
+        vec![Ok(StreamChunk::ToolCalls(vec![LlmToolCall {
+            id: "ci-cli-call".to_string(),
+            name: "run_command".to_string(),
+            input: serde_json::json!({"command": expected_command.clone()}),
+        }]))],
+        vec![
+            Ok(StreamChunk::Delta {
+                content: format!("CLI output: {marker}"),
+                reasoning: None,
+            }),
+            Ok(StreamChunk::Done {
+                finish_reason: Some("end_turn".to_string()),
+                prompt_tokens: Some(1),
+                completion_tokens: Some(4),
+                ttft_ms: Some(1),
+                total_ms: 1,
+            }),
+        ],
+    ]);
+    let session = session_with(adapter).await;
+    assert_eq!(session.model_id, "stub-model");
+
+    let request = ChatRequest {
+        model_id: session.model_id.clone(),
+        system_prompt: Some("Use run_command exactly once.".to_string()),
+        messages: Vec::new(),
+        max_new_tokens: Some(16),
+        tools: vec![ToolSpec {
+            name: "run_command".to_string(),
+            description: "Runs a shell command and returns its output.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {"command": {"type": "string"}},
+                "required": ["command"]
+            }),
+        }],
+    };
+    let stream = session
+        .adapter
+        .stream_chat(request.clone())
+        .await
+        .expect("the loaded test model must start streaming");
+    let chat_state = Arc::new(ChatState::new());
+    let (handle, mut events) = spawn_turn(
+        db.clone(),
+        chat_state.clone(),
+        session,
+        thread_id,
+        user_message_id,
+        assistant_message_id,
+        request,
+        stream,
+    );
+
+    let mut permission_request_seen = false;
+    while let Some((event_name, payload)) = events.recv().await {
+        if event_name != "tool-permission-request" {
+            continue;
+        }
+        assert!(
+            !permission_request_seen,
+            "the model requested more than one command"
+        );
+        permission_request_seen = true;
+        assert_eq!(payload["toolName"], "run_command");
+        assert_eq!(payload["riskClass"], "risky");
+        assert_eq!(
+            payload["toolInput"]["command"], expected_command,
+            "the fixture must approve only the expected harmless command"
+        );
+        respond(
+            &chat_state,
+            extract_request_id(&payload),
+            ApprovalDecision::Allow,
+        );
+    }
+    handle.await.expect("the CI E2E turn task must not panic");
+    assert!(permission_request_seen);
+
+    let rows = db
+        .with_connection(|conn| {
+            msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)
+        })
+        .expect("the encrypted vault must contain the completed turn");
+    let tool_call = rows
+        .iter()
+        .find(|message| message.role == MessageRole::ToolCall)
+        .expect("the CLI call must be persisted");
+    assert_eq!(tool_call.tool_source.as_deref(), Some("cli"));
+
+    let tool_result = rows
+        .iter()
+        .find(|message| message.role == MessageRole::ToolResult)
+        .expect("the CLI result must be persisted");
+    assert_eq!(tool_result.tool_source, None);
+    assert_eq!(tool_result.tool_is_error, Some(false));
+    assert!(tool_result.content.contains(marker));
+
+    let assistant = rows
+        .iter()
+        .find(|message| message.id == assistant_message_id)
+        .expect("the final model response must be persisted");
+    assert_eq!(assistant.finish_reason, Some(FinishReason::Complete));
+    assert!(assistant.content.contains(marker));
+}
+
+/// Real-model acceptance coverage for the complete local tool path. This is
+/// intentionally ignored in ordinary test runs: it loads a GGUF and may
+/// download the tokenizer on first use. The command is approved only after the
+/// test has verified the exact harmless fixture command proposed by the model.
+#[cfg(feature = "llm-cpu")]
+#[tokio::test]
+#[ignore = "requires HOLZI_TEST_GGUF pointing at a tool-capable GGUF"]
+async fn a_real_local_model_can_request_and_process_a_cli_command() {
+    let configured_model_path = env::var("HOLZI_TEST_GGUF")
+        .expect("HOLZI_TEST_GGUF must point at a tool-capable GGUF file");
+    let model_path = if let Some(rest) = configured_model_path.strip_prefix("~/") {
+        env::var_os("HOME")
+            .map(|home| PathBuf::from(home).join(rest))
+            .unwrap_or_else(|| PathBuf::from(configured_model_path))
+    } else {
+        PathBuf::from(configured_model_path)
+    };
+    let tokenizer = env::var("HOLZI_TEST_GGUF_TOKENIZER")
+        .unwrap_or_else(|_| "Qwen/Qwen2.5-0.5B-Instruct".to_string());
+    let model = LocalModel::load(&model_path, Some(&tokenizer))
+        .await
+        .expect("real local model must load");
+
+    let marker = "HOLZI_REAL_LLM_CLI_OK";
+    #[cfg(not(windows))]
+    let expected_command = format!("printf {marker}");
+    #[cfg(windows)]
+    let expected_command = format!("echo {marker}");
+
+    let db = open_db();
+    let thread_id = Uuid::new_v4();
+    let user_message_id = Uuid::new_v4();
+    let assistant_message_id = Uuid::new_v4();
+    seed_thread(&db, thread_id, user_message_id);
+
+    let chat_state = Arc::new(ChatState::new());
+    let session = ActiveSession {
+        model_id: "real-local-test-model".to_string(),
+        provider_id: None,
+        adapter: Arc::new(LocalAdapter::new(model)),
+        tokenizer_repo: tokenizer,
+        context_window: None,
+    };
+    let request = ChatRequest {
+        model_id: String::new(),
+        system_prompt: Some("You are an agent with a run_command tool. Use the tool when the user asks you to run a command. After the tool result, answer with the command output and nothing else.".to_string()),
+        messages: vec![LlmMessage {
+            role: ChatRole::User,
+            content: format!("Use run_command to execute exactly this harmless command: {expected_command}"),
+        }],
+        max_new_tokens: Some(128),
+        tools: vec![ToolSpec {
+            name: "run_command".to_string(),
+            description: "Runs a shell command on the user's device and returns its output."
+                .to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "command": { "type": "string" }
+                },
+                "required": ["command"]
+            }),
+        }],
+    };
+    let stream = session
+        .adapter
+        .stream_chat(request.clone())
+        .await
+        .expect("real local model must start streaming");
+
+    let (handle, mut events) = spawn_turn(
+        db.clone(),
+        chat_state.clone(),
+        session,
+        thread_id,
+        user_message_id,
+        assistant_message_id,
+        request,
+        stream,
+    );
+
+    let mut approved_one_expected_command = false;
+    let mut generated_text = String::new();
+    let mut observed_events = Vec::new();
+    let mut observed_errors = Vec::new();
+    while let Some((event_name, payload)) =
+        tokio::time::timeout(std::time::Duration::from_secs(600), events.recv())
+            .await
+            .expect("real local tool turn must finish within ten minutes")
+    {
+        observed_events.push(event_name.clone());
+        if event_name == "chat-message-error" {
+            observed_errors.push(payload.clone());
+        }
+        if event_name == "chat-token" {
+            if let Some(delta) = payload["delta"].as_str() {
+                generated_text.push_str(delta);
+            }
+        }
+        if event_name != "tool-permission-request" {
+            if event_name == "chat-turn-complete" {
+                break;
+            }
+            continue;
+        }
+
+        assert!(
+            !approved_one_expected_command,
+            "the model requested more than one command"
+        );
+        assert_eq!(payload["toolName"], "run_command");
+        assert_eq!(payload["riskClass"], "risky");
+        let request_id = extract_request_id(&payload);
+        let command = payload["toolInput"]["command"]
+            .as_str()
+            .expect("run_command input must contain a command string");
+        assert_eq!(
+            command, expected_command,
+            "refusing to approve an unexpected model-generated command"
+        );
+        respond(&chat_state, request_id, ApprovalDecision::Allow);
+        approved_one_expected_command = true;
+    }
+
+    handle
+        .await
+        .expect("real local tool turn task must not panic");
+    assert!(
+        approved_one_expected_command,
+        "the local model did not request run_command; events={observed_events:?}; errors={observed_errors:?}; generated={generated_text:?}"
+    );
+
+    let rows = db
+        .with_connection(|conn| {
+            msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)
+        })
+        .unwrap();
+    let tool_call = rows
+        .iter()
+        .find(|message| message.role == MessageRole::ToolCall)
+        .expect("the approved CLI call must be persisted");
+    assert_eq!(tool_call.tool_name.as_deref(), Some("run_command"));
+    assert_eq!(tool_call.tool_source.as_deref(), Some("cli"));
+    assert_eq!(
+        serde_json::from_str::<Value>(tool_call.tool_input.as_deref().unwrap()).unwrap()["command"],
+        expected_command
+    );
+
+    let tool_result = rows
+        .iter()
+        .find(|message| message.role == MessageRole::ToolResult)
+        .expect("the CLI result must be persisted");
+    assert_eq!(tool_result.tool_is_error, Some(false));
+    assert!(tool_result.content.contains(marker));
+
+    let assistant = rows
+        .iter()
+        .find(|message| message.id == assistant_message_id)
+        .expect("the model's post-tool answer must be persisted");
+    assert_eq!(assistant.finish_reason, Some(FinishReason::Complete));
+    assert!(
+        assistant.content.contains(marker),
+        "the model must process the CLI output in its final answer: {:?}",
+        assistant.content
+    );
 }

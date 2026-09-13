@@ -84,3 +84,35 @@ jobs:
 
       - name: Run Clippy without default features
         run: cargo clippy --manifest-path src-tauri/Cargo.toml --no-default-features --all-targets --jobs 2 -- -D warnings
+
+  local-cli-e2e:
+    name: Vault → model → CLI E2E
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+
+      - name: Run vault → loaded model session → CLI acceptance test
+        run: |
+          cargo test --manifest-path src-tauri/Cargo.toml \
+            --test chat_tool_loop \
+            ci_e2e_loaded_model_can_request_and_process_a_cli_command \
+            -- --nocapture
