@@ -6,6 +6,7 @@
    files would be stripped from the final CSS and dialogs/drawers would
    render as plain inline content. */
 @source "../../../node_modules/.c12/**/*.vue";
+@source "../../../node_modules/.c12/**/*.ts";
 
 @import "tw-animate-css";
 
