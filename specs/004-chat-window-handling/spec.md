@@ -352,7 +352,8 @@ sein.
 - **FR-020**: Alle Controls MÜSSEN einen zugänglichen Namen, Tastaturbedienung
   und eine Zustandsansage für Screenreader anbieten. Buttons dürfen auch im
   deaktivierten Zustand nicht durch globale Transparenzregeln unleserlich
-  werden.
+  werden und müssen sich durch einen gedämpften visuellen Zustand klar von
+  aktiven Buttons unterscheiden.
 - **FR-021**: Die bestehenden fachlichen Semantiken für Modellwahl, Effort,
   Freigabe, Abbruch und Tool-Loop DÜRFEN durch die neue Anordnung nicht
   verändert werden. Unterstützt das gewählte Modell Reasoning, wird es ohne

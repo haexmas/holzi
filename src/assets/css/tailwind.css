@@ -99,4 +99,8 @@
 [data-slot="button"]:disabled {
   opacity: 1;
   cursor: not-allowed;
+  background-color: var(--muted);
+  border-color: var(--border);
+  color: var(--muted-foreground);
+  box-shadow: none;
 }

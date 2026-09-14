@@ -20,7 +20,7 @@
 - [X] Settings-Button, Freigabe-Dropdown und Senden/Abbrechen liegen in einer Reihe unterhalb der Textarea.
 - [X] Das Settings-Popover öffnet sichtbar oberhalb der Reihe und wird nicht vom scrollenden Composer-Container abgeschnitten.
 - [X] Controls sind kompakt, responsive und zugänglich.
-- [X] Deaktivierte Buttons bleiben lesbar und verlieren nicht durch globale Transparenz ihren Textkontrast.
+- [X] Deaktivierte Buttons bleiben lesbar, verlieren nicht durch globale Transparenz ihren Textkontrast und sind visuell klar von aktiven Buttons unterschieden.
 - [X] Textarea wächst bis maximal 8 sichtbare Zeilen und scrollt danach intern.
 - [X] `Enter` und `Shift+Enter` behalten die festgelegte Semantik.
 
