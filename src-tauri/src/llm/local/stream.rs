@@ -54,6 +54,72 @@ fn from_mistralrs_tool_call(t: &ToolCallResponse) -> ToolCall {
     }
 }
 
+/// mistralrs 0.8.1's reasoning-mode content path never runs generated text
+/// through its own tool-call-tag stripping (unlike its non-reasoning path),
+/// so on a reasoning-capable Qwen-family model the literal `<tool_call>…
+/// </tool_call>` block the model emits to signal a tool call leaks straight
+/// into `delta.content`, right alongside the correctly-parsed
+/// `delta.tool_calls`. Upstream bug:
+/// <https://github.com/EricLBuehler/mistral.rs/issues/2427>. See
+/// `chat::commands::strip_leaked_tool_call_markup` for the persisted-
+/// message-side half of this workaround; this half stops the leak from
+/// ever reaching a live streamed delta in the first place.
+///
+/// Only called while `req.reasoning_requested` — the non-reasoning path
+/// never exhibits the leak, so there is nothing to buffer there.
+const REASONING_LEAK_OPEN: &str = "<tool_call>";
+const REASONING_LEAK_CLOSE: &str = "</tool_call>";
+
+/// Feeds newly-arrived `content` into `buffer` and returns whatever part of
+/// it is now safe to stream to the caller — i.e. text that cannot still
+/// turn into (or extend) a leaked tool-call tag once more chunks arrive.
+/// Anything held back stays in `buffer` for the next call.
+fn drain_reasoning_leak_buffer(buffer: &mut String, content: &str) -> String {
+    buffer.push_str(content);
+
+    let mut emit = String::new();
+    loop {
+        let Some(open_pos) = buffer.find(REASONING_LEAK_OPEN) else {
+            // No open tag anywhere in the buffer — but its tail might be
+            // the start of one that completes in a later chunk (e.g. this
+            // chunk ended with "<tool_c"). Hold that overlap back.
+            let hold = longest_prefix_overlap(buffer, REASONING_LEAK_OPEN);
+            let safe_len = buffer.len() - hold;
+            emit.push_str(&buffer[..safe_len]);
+            *buffer = buffer[safe_len..].to_string();
+            return emit;
+        };
+        // Whatever precedes the tag is definitely real content.
+        emit.push_str(&buffer[..open_pos]);
+        match buffer[open_pos..].find(REASONING_LEAK_CLOSE) {
+            Some(close_rel) => {
+                // Complete tagged block: drop it entirely and keep
+                // looking — the remainder may hold more real text, or
+                // another tag.
+                let close_end = open_pos + close_rel + REASONING_LEAK_CLOSE.len();
+                *buffer = buffer[close_end..].to_string();
+            }
+            None => {
+                // Tag still generating — hold everything from the open
+                // tag onward and wait for more chunks.
+                *buffer = buffer[open_pos..].to_string();
+                return emit;
+            }
+        }
+    }
+}
+
+/// Longest suffix of `text` that is also a prefix of `marker` — how many
+/// trailing bytes of `text` could still grow into `marker` if the next
+/// chunk continues it.
+fn longest_prefix_overlap(text: &str, marker: &str) -> usize {
+    let max = marker.len().min(text.len());
+    (1..=max)
+        .rev()
+        .find(|&len| text.ends_with(&marker[..len]))
+        .unwrap_or(0)
+}
+
 /// Builds the request, translating the flat per-row history (data-model.md)
 /// into mistralrs' message shape: consecutive `ToolCall` rows become one
 /// `add_message_with_tool_call`, and each `ToolResult` row becomes its own
@@ -148,6 +214,9 @@ impl LocalModel {
             let mut delta_emitted = false;
             let mut last_finish_reason: Option<String> = None;
             let mut tool_call_fragments: Vec<ToolCallResponse> = Vec::new();
+            // Only ever holds text back when `req.reasoning_requested` —
+            // see `drain_reasoning_leak_buffer`.
+            let mut leak_buffer = String::new();
 
             while let Some(response) = stream.next().await {
                 match response {
@@ -188,6 +257,15 @@ impl LocalModel {
                                 }
                             }
                         }
+                        // A reasoning-enabled local model can leak a raw
+                        // `<tool_call>` tag straight into `content` (see
+                        // `drain_reasoning_leak_buffer`); everything else
+                        // takes `content` as-is, same as before.
+                        let content = if req.reasoning_requested {
+                            drain_reasoning_leak_buffer(&mut leak_buffer, &content)
+                        } else {
+                            content
+                        };
                         if ttft_ms.is_none() && !content.is_empty() {
                             ttft_ms = Some(start.elapsed().as_millis() as u64);
                         }
@@ -217,6 +295,15 @@ impl LocalModel {
                             {
                                 tool_call_fragments.extend(calls.iter().cloned());
                             }
+                        }
+                        // Whatever the leak buffer is still holding back
+                        // never turned into (the rest of) a tag — flush it
+                        // as ordinary content before anything else.
+                        if !leak_buffer.is_empty() {
+                            let _ = tx.send(Ok(StreamChunk::Delta {
+                                content: std::mem::take(&mut leak_buffer),
+                                reasoning: None,
+                            }));
                         }
                         if !tool_call_fragments.is_empty() {
                             let calls = tool_call_fragments
@@ -268,7 +355,15 @@ impl LocalModel {
             if !done_emitted {
                 // Mirrors the `Response::Done` handling above: a stream
                 // that closes without a final frame (see below) must not
-                // silently drop tool calls it already accumulated.
+                // silently drop tool calls — or held-back leak-buffer
+                // content — it already accumulated.
+                if !leak_buffer.is_empty() {
+                    delta_emitted = true;
+                    let _ = tx.send(Ok(StreamChunk::Delta {
+                        content: std::mem::take(&mut leak_buffer),
+                        reasoning: None,
+                    }));
+                }
                 if !tool_call_fragments.is_empty() {
                     let calls = tool_call_fragments
                         .iter()
@@ -303,3 +398,7 @@ impl LocalModel {
         AdapterStream::new(rx, abort)
     }
 }
+
+#[cfg(test)]
+#[path = "stream_tests.rs"]
+mod tests;
