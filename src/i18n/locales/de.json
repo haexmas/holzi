@@ -220,6 +220,7 @@
       "placeholder": "z. B. llama gguf",
       "submit": "Suchen",
       "loading": "Suche läuft …",
+      "top": "Top 10 der meistgeladenen Modelle",
       "empty": "Keine Treffer.",
       "tooShort": "Bitte mindestens 2 Zeichen eingeben.",
       "error": "Suche fehlgeschlagen.",

@@ -22,6 +22,7 @@
 - Zusätzliche Klarstellung: Für installierte öffentliche Hugging-Face-Modelle soll die Modellverwaltung den gespeicherten Upstream-Branch bzw. Tag regelmäßig bzw. auf ausdrückliche Aktualisierung prüfen. Bei einer abweichenden neueren Commit-SHA wird der Nutzer sichtbar informiert und erhält eine Aktion zur Installation dieser Revision; ein automatisches Ersetzen findet nicht statt.
 - Zusätzliche Klarstellung: Vor jedem normalen Laden eines lokalen Modells muss Holzi den SHA-256-Hash der tatsächlich gefundenen Datei berechnen und gegen den gespeicherten Geräte-Hash prüfen. Bei einer Abweichung oder fehlender Integritätsbasis darf der normale Ladepfad das Modell nicht laden. Ein separater, ausdrücklich bestätigter Override darf die vorgefundene Datei als `untrusted` laden, ohne den gespeicherten Hash zu ändern.
 - Zusätzliche Klarstellung: Die freie Hugging-Face-Suche bietet Filter für Quantisierung, maximale GGUF-Dateigröße und Hardware-Passung. Dafür werden Dateidetails einschließlich Größe und Fit nach der Repository-Suche nachgeladen; ein gefilterter Treffer darf im anschließenden Datei-Picker nur noch passende Dateien anbieten. Dateien mit unbekannter Größe erfüllen einen gesetzten Größenhöchstwert nicht.
+- Zusätzliche Klarstellung: Beim Öffnen der freien Hugging-Face-Suche wird ohne Suchbegriff automatisch eine Top-10-Liste der meistgeladenen öffentlichen GGUF-Repositorys angezeigt. Die Liste ist nach Downloads absteigend sortiert; eine explizite Suchanfrage bleibt auf höchstens 20 Treffer begrenzt.
 
 ## Context
 
@@ -48,6 +49,7 @@ Ein Nutzer öffnet in der Modellverwaltung eine freie Suche, gibt beispielsweise
 5. **Given** der Nutzer hat das Onboarding abgeschlossen und bereits mindestens ein Modell installiert, **When** er den „Modelle verwalten"-Bereich erneut öffnet, **Then** stehen kuratierter Katalog, freie Suche, installierte Modelle und der Wechsel des aktiven Modells weiterhin zur Verfügung.
 6. **Given** ein Treffer der freien Suche entspricht exakt Repository-ID und Dateiname eines kuratierten Katalogeintrags, **When** die Ergebnisse angezeigt werden, **Then** bleibt der Treffer sichtbar, wird als „bereits im Katalog verfügbar" markiert und verlinkt auf den entsprechenden Katalogeintrag.
 7. **Given** die Suche liefert GGUF-Dateien mit unterschiedlichen Größen, Quantisierungen oder Hardware-Fits, **When** der Nutzer Filter setzt, **Then** werden nur Repositories mit mindestens einer passenden Datei angezeigt und der Datei-Picker bietet aus diesem Treffer nur passende Dateien an.
+8. **Given** der Nutzer öffnet die freie Hugging-Face-Suche ohne Suchbegriff, **When** die initiale Ansicht geladen wird, **Then** werden bis zu zehn der meistgeladenen öffentlichen GGUF-Repositorys angezeigt und können direkt gefiltert bzw. geöffnet werden.
 
 ### User Story 2 - Kompatible Datei auswählen und herunterladen (Priority: P1)
 
@@ -150,6 +152,7 @@ Ein Nutzer erkennt im dauerhaft erreichbaren „Modelle verwalten"-Bereich, auch
 - **FR-027**: Erfolgreiche Katalog-/HF-Downloads, Updates und lokale Importe MÜSSEN den SHA-256-Hash der final veröffentlichten Datei in `models.file_sha256` speichern. Der Hash beschreibt den Dateiinhalt und wird auf jedem Gerät gleich ermittelt.
 - **FR-028**: Für historische lokale Dateien ohne Integritätsmetadaten MUSS die Modellverwaltung denselben ausdrücklich bestätigten Integritätsdialog anbieten: unsicher laden, die Quelle reparieren (HF erneut herunterladen bzw. lokal neu importieren) oder ein anderes Modell auswählen.
 - **FR-029**: Die freie Hugging-Face-Suche MUSS Filter für Quantisierung, maximale GGUF-Dateigröße und Hardware-Passung anbieten. Die Filterentscheidung MUSS auf den normalisierten Dateikandidaten einschließlich nachgeladener Größen-/Fit-Metadaten beruhen; ein Repository wird nur angezeigt, wenn mindestens eine Datei alle gesetzten Filter erfüllt. Bei gesetzter Größenbegrenzung MÜSSEN Dateien ohne bekannte Größe ausgeschlossen werden. Die anschließende Dateiauswahl DARF die gesetzten Filter nicht umgehen.
+- **FR-030**: Die freie Hugging-Face-Suche MUSS beim Öffnen ohne Suchbegriff automatisch bis zu zehn meistgeladene öffentliche Repositorys mit installierbaren GGUF-Dateien anzeigen. Diese Default-Liste MUSS nach der Download-Metrik absteigend sortiert sein; explizite Suchanfragen MÜSSEN weiterhin bis zu 20 Treffer liefern können und die bestehende Mindestlänge von zwei Zeichen einhalten.
 
 ### Key Entities
 
@@ -174,6 +177,7 @@ Ein Nutzer erkennt im dauerhaft erreichbaren „Modelle verwalten"-Bereich, auch
 - **SC-008**: Ein installierter HF-Download enthält in allen erfolgreichen Testfällen eine konkrete Commit-SHA; ein simuliertes Upstream-Update wird in der Modellverwaltung erkannt und mit einer expliziten Installationsaktion angezeigt, ohne das bisherige Modell automatisch zu ersetzen.
 - **SC-009**: In allen erfolgreichen normalen lokalen Load-Testfällen wird die Datei vor dem Runtime-Start gehasht und gegen den gespeicherten Geräte-Hash geprüft; in allen Mismatch-/Missing-Hash-Fixtures startet über den normalen Ladepfad kein Runtime-Load. Ein separater Override-Test darf nur nach ausdrücklicher Bestätigung laden, markiert den Zustand als `untrusted` und verändert den gespeicherten Hash nicht.
 - **SC-010**: Nach einer HF-Suche kann ein Nutzer die Treffer nach Quantisierung, maximaler GGUF-Dateigröße und Hardware-Passung filtern; kein angezeigtes Repository enthält danach ausschließlich nicht passende Dateien, und der Datei-Picker bietet keine ausgefilterte Datei zur Installation an.
+- **SC-011**: Beim Öffnen der freien Suche erscheinen ohne weitere Eingabe bis zu zehn meistgeladene öffentliche Repositorys mit installierbaren GGUF-Dateien; die Liste bleibt filter- und auswählbar.
 
 ## Assumptions
 

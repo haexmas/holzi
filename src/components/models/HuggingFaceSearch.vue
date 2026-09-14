@@ -23,18 +23,13 @@ const sizeLimitOptions = [2, 4, 8, 16]
 const trimmedQuery = computed(() => query.value.trim())
 const queryTooShort = computed(() => trimmedQuery.value.length > 0 && trimmedQuery.value.length < 2)
 
-/**
- * Explicit submit only — no request fires on every keystroke (plan
- * §"Frontend-Modellverwaltung"). On failure the previous result list is
- * kept so a transient network error does not clear what the operator was
- * already looking at.
- */
-async function onSubmit() {
-  if (queryTooShort.value || trimmedQuery.value.length === 0 || loading.value) return
+/** Loads repositories and enriches them with file-level size/fit metadata. */
+async function loadResultsAsync(searchQuery?: string) {
+  if (loading.value) return
   loading.value = true
   errorKey.value = null
   try {
-    const searchResults = await searchAsync(trimmedQuery.value)
+    const searchResults = await searchAsync(searchQuery)
     // The search endpoint intentionally stays cheap and returns repository
     // siblings without file sizes. Enrich each hit at the resolved search
     // revision so size and hardware filters use real GGUF metadata.
@@ -56,6 +51,27 @@ async function onSubmit() {
   }
   finally {
     loading.value = false
+  }
+}
+
+/**
+ * Explicit submit only — no request fires on every keystroke (plan
+ * §"Frontend-Modellverwaltung"). On failure the previous result list is
+ * kept so a transient network error does not clear what the operator was
+ * already looking at.
+ */
+async function onSubmit() {
+  if (queryTooShort.value || trimmedQuery.value.length === 0 || loading.value) return
+  await loadResultsAsync(trimmedQuery.value)
+}
+
+async function retryAsync() {
+  if (loading.value) return
+  if (trimmedQuery.value.length > 0) {
+    await loadResultsAsync(trimmedQuery.value)
+  }
+  else {
+    await loadResultsAsync()
   }
 }
 
@@ -95,6 +111,10 @@ const filteredResults = computed(() => results.value
     files: result.files.filter(fileMatchesFilters),
   }))
   .filter((result) => result.files.length > 0))
+
+onMounted(() => {
+  void loadResultsAsync()
+})
 </script>
 
 <template>
@@ -120,13 +140,17 @@ const filteredResults = computed(() => results.value
 
     <p v-if="errorKey" class="flex items-center gap-2 text-sm text-red-500" role="alert">
       {{ t(errorKey) }}
-      <button type="button" class="underline" @click="onSubmit">
+      <button type="button" class="underline" @click="retryAsync">
         {{ t('models.search.retry') }}
       </button>
     </p>
 
     <p v-if="loading" class="text-sm text-neutral-500" role="status">
       {{ t('models.search.loading') }}
+    </p>
+
+    <p v-if="hasSearched && trimmedQuery.length === 0 && !errorKey" class="text-sm text-neutral-500">
+      {{ t('models.search.top') }}
     </p>
 
     <div v-if="results.length > 0" class="flex flex-wrap items-end gap-3 rounded-md border border-neutral-200 p-3">

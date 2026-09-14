@@ -346,7 +346,9 @@ async fn search_rejects_a_too_short_query_without_any_http_call() {
     // "no matching mock" and surface as a different error kind, proving
     // the short-circuit happened before any request was sent.
     let hf = HfClient::new(server.uri()).expect("client");
-    let err = search_models(&hf, "x", None).await.expect_err("too short");
+    let err = search_models(&hf, Some("x"), None)
+        .await
+        .expect_err("too short");
     assert!(matches!(err, HolziError::InvalidInput { .. }));
 }
 
@@ -370,7 +372,9 @@ async fn search_filters_out_repos_without_gguf_and_normalizes_hits() {
         .await;
 
     let hf = HfClient::new(server.uri()).expect("client");
-    let results = search_models(&hf, "llama", None).await.expect("search ok");
+    let results = search_models(&hf, Some("llama"), None)
+        .await
+        .expect("search ok");
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].repo_id, "owner/has-gguf");
     assert_eq!(results[0].files.len(), 1);
@@ -388,7 +392,7 @@ async fn search_returns_an_empty_list_for_no_hits() {
         .await;
 
     let hf = HfClient::new(server.uri()).expect("client");
-    let results = search_models(&hf, "nothing matches", None)
+    let results = search_models(&hf, Some("nothing matches"), None)
         .await
         .expect("search ok");
     assert!(results.is_empty());
@@ -413,8 +417,43 @@ async fn search_caps_results_at_the_default_limit_of_20() {
         .await;
 
     let hf = HfClient::new(server.uri()).expect("client");
-    let results = search_models(&hf, "many", None).await.expect("search ok");
+    let results = search_models(&hf, Some("many"), None)
+        .await
+        .expect("search ok");
     assert_eq!(results.len(), DEFAULT_LIMIT);
+}
+
+#[tokio::test]
+async fn search_without_query_returns_the_top_ten_downloaded_gguf_repositories() {
+    let server = MockServer::start().await;
+    let hits: Vec<serde_json::Value> = (0..12)
+        .map(|i| {
+            let mut hit = model_json(
+                &format!("owner/top-{i:02}"),
+                &"a".repeat(40),
+                &["model.gguf"],
+            );
+            hit["downloads"] = serde_json::json!(i);
+            hit
+        })
+        .collect();
+    Mock::given(method("GET"))
+        .and(path("/api/models"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!(hits)))
+        .mount(&server)
+        .await;
+
+    let hf = HfClient::new(server.uri()).expect("client");
+    let results = search_models(&hf, None, None)
+        .await
+        .expect("top-model search ok");
+    assert_eq!(results.len(), DEFAULT_TOP_LIMIT);
+    assert_eq!(results[0].repo_id, "owner/top-11");
+
+    let results = search_models(&hf, None, Some(DEFAULT_LIMIT))
+        .await
+        .expect("top-model search remains capped");
+    assert_eq!(results.len(), DEFAULT_TOP_LIMIT);
 }
 
 #[tokio::test]
@@ -426,7 +465,9 @@ async fn search_maps_http_error_status_and_rate_limit() {
         .mount(&server)
         .await;
     let hf = HfClient::new(server.uri()).expect("client");
-    let err = search_models(&hf, "llama", None).await.expect_err("503");
+    let err = search_models(&hf, Some("llama"), None)
+        .await
+        .expect_err("503");
     assert!(matches!(err, HolziError::HttpStatus { status: 503, .. }));
 }
 
@@ -439,7 +480,9 @@ async fn search_maps_429_to_rate_limited() {
         .mount(&server)
         .await;
     let hf = HfClient::new(server.uri()).expect("client");
-    let err = search_models(&hf, "llama", None).await.expect_err("429");
+    let err = search_models(&hf, Some("llama"), None)
+        .await
+        .expect_err("429");
     match err {
         HolziError::RateLimited {
             retry_after_seconds,

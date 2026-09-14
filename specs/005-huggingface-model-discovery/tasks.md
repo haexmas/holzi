@@ -58,6 +58,7 @@
 - [ ] T019 [US1] `src/components/models/HuggingFaceSearch.vue` und `src/components/models/HuggingFaceResult.vue` mit Suchfeld, Validierung, Ergebnisliste, Empty-/Offline-/Retry-Zustand und Repository-Auswahl implementieren.
 - [ ] T020 [US1] Den Einstieg zur freien Suche in `src/pages/settings/[instance].vue` oder einer eingebetteten Modellverwaltungs-Komponente ergänzen, ohne bestehende Alias-/Default-Settings zu verändern.
 - [ ] T021 [US1] Suche und Ergebnisdarstellung manuell nach `quickstart.md` prüfen und Query-Validierung, i18n-Key-Verwendung sowie keyboard-nutzbare Auswahl dokumentieren.
+- [ ] T063 [US1] Die freie Suche beim Öffnen ohne Query mit einer nach Downloads sortierten Top-10-Ansicht initialisieren; explizite Suchanfragen und Filter müssen weiterhin getrennt funktionieren.
 
 **Checkpoint**: Ein Nutzer kann öffentliche HF-Repositories suchen und passende GGUF-Dateien zur Installation auswählen.
 

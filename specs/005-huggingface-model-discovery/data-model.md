@@ -8,12 +8,16 @@ Nicht persistierte, validierte Suchanfrage.
 
 | Feld | Typ | Beschreibung |
 |---|---|---|
-| `query` | `string` | Getrimmter Suchbegriff, mindestens zwei Zeichen. |
+| `query` | `string?` | Optionaler getrimmter Suchbegriff, mindestens zwei Zeichen wenn gesetzt. Ohne Query wird die Top-10-Ansicht geladen. |
 | `page` | `number` | Positive Seite, standardmäßig 1. |
 | `limit` | `number` | Server-/Client-seitig begrenzte Trefferzahl, maximal 20. |
 
 Die Suche akzeptiert keinen freien URL- oder Dateipfad als Ersatz für einen
-Suchbegriff. Ein Repository-ID-ähnlicher Suchbegriff bleibt erlaubt.
+Suchbegriff. Ein Repository-ID-ähnlicher Suchbegriff bleibt erlaubt. Eine
+fehlende Query ist ausschließlich für die initiale Top-10-Ansicht zulässig;
+der Default sortiert öffentliche Treffer nach Downloads absteigend und
+begrenzt sie auf zehn Repositorys. Eine gesetzte Query liefert bis zu 20
+Treffer.
 
 ### `HuggingFaceModelResult`
 

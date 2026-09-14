@@ -709,7 +709,7 @@ impl HfClient {
         Self::new(DEFAULT_BASE_URL)
     }
 
-    async fn search(&self, query: &str, limit: usize) -> Result<Vec<RawModelInfo>> {
+    async fn search(&self, query: Option<&str>, limit: usize) -> Result<Vec<RawModelInfo>> {
         let mut url = Url::parse(&self.base_url).map_err(|e| HolziError::InvalidInput {
             reason: format!("invalid base url: {e}"),
         })?;
@@ -721,10 +721,17 @@ impl HfClient {
                 })?;
             segments.push("api").push("models");
         }
-        url.query_pairs_mut()
-            .append_pair("search", query)
-            .append_pair("limit", &limit.to_string())
-            .append_pair("full", "true");
+        {
+            let mut query_pairs = url.query_pairs_mut();
+            if let Some(query) = query {
+                query_pairs.append_pair("search", query);
+            }
+            query_pairs
+                .append_pair("limit", &limit.to_string())
+                .append_pair("sort", "downloads")
+                .append_pair("direction", "-1")
+                .append_pair("full", "true");
+        }
         let resp = self
             .client
             .get(url)
@@ -826,7 +833,10 @@ impl HfClient {
 // Orchestration (used directly by models::commands)
 // ---------------------------------------------------------------------
 
-fn validate_search_query(query: &str) -> Result<String> {
+fn validate_search_query(query: Option<&str>) -> Result<Option<String>> {
+    let Some(query) = query else {
+        return Ok(None);
+    };
     let trimmed = query.trim();
     if trimmed.chars().count() < 2 {
         return Err(HolziError::InvalidInput {
@@ -838,7 +848,7 @@ fn validate_search_query(query: &str) -> Result<String> {
             reason: "search query is too long".into(),
         });
     }
-    Ok(trimmed.to_string())
+    Ok(Some(trimmed.to_string()))
 }
 
 fn normalize_search_hit(hit: RawModelInfo) -> Option<HuggingFaceModelResult> {
@@ -905,17 +915,31 @@ fn normalize_search_hit(hit: RawModelInfo) -> Option<HuggingFaceModelResult> {
     })
 }
 
-/// `search_huggingface_models`: validates the query, fetches one page from
-/// the Hub, normalizes and GGUF-filters every hit, then deduplicates and
-/// deterministically sorts the result, capped at [`DEFAULT_LIMIT`].
+/// `search_huggingface_models`: validates an optional query, fetches one page
+/// from the Hub, normalizes and GGUF-filters every hit, then deduplicates and
+/// deterministically sorts the result. Without a query the Hub's download
+/// sort supplies the default top-model view, capped at ten entries; explicit
+/// searches retain the larger twenty-entry limit.
+pub const DEFAULT_TOP_LIMIT: usize = 10;
+
 pub async fn search_models(
     hf: &HfClient,
-    query: &str,
+    query: Option<&str>,
     limit: Option<usize>,
 ) -> Result<Vec<HuggingFaceModelResult>> {
     let query = validate_search_query(query)?;
-    let capped = limit.unwrap_or(DEFAULT_LIMIT).clamp(1, DEFAULT_LIMIT);
-    let hits = hf.search(&query, capped).await?;
+    let default_limit = if query.is_some() {
+        DEFAULT_LIMIT
+    } else {
+        DEFAULT_TOP_LIMIT
+    };
+    let max_limit = if query.is_some() {
+        DEFAULT_LIMIT
+    } else {
+        DEFAULT_TOP_LIMIT
+    };
+    let capped = limit.unwrap_or(default_limit).clamp(1, max_limit);
+    let hits = hf.search(query.as_deref(), capped).await?;
     let mut results: Vec<HuggingFaceModelResult> =
         hits.into_iter().filter_map(normalize_search_hit).collect();
     dedupe_and_sort(&mut results);
