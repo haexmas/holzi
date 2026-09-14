@@ -338,6 +338,13 @@ function onIntegrityChooseOther() {
   integrityDialog.value = null
 }
 
+function onIntegrityDialogOpenChange(open: boolean) {
+  if (!open) {
+    integrityDialog.value = null
+    integrityActionError.value = null
+  }
+}
+
 /** Downloads a catalog model, refreshes the lists, and loads the result. */
 async function downloadCatalogEntry(entry: CatalogEntryWithFit) {
   lastError.value = null
@@ -1319,7 +1326,7 @@ onBeforeUnmount(() => {
       :actual-sha256="integrityDialog.actual"
       :busy="integrityBusy"
       :action-error="integrityActionError"
-      @update:open="if (!$event) integrityDialog = null"
+      @update:open="onIntegrityDialogOpenChange"
       @load-untrusted="onIntegrityLoadUntrusted"
       @repair-source="onIntegrityRepairSource"
       @choose-other="onIntegrityChooseOther"
