@@ -232,6 +232,46 @@ Hugging-Face-Verbindung ist für deterministische Tests erforderlich.
 **Alternatives considered**: Live-Hub-Tests wären flakey, langsam und abhängig
 von externer Verfügbarkeit.
 
+## Entscheidung 12: Sicheres resumierbares HTTP-Downloadverhalten
+
+**Decision**: Ein laufender Modell-Download darf einen abgebrochenen Body aus
+seiner temporären `.part`-Datei fortsetzen. Ein Retry darf nur dann Bytes
+anhängen, wenn die vorherige Antwort einen `ETag` oder `Last-Modified`-
+Validator geliefert hat; die Anfrage sendet diesen Validator als `If-Range`.
+Fehlt der Validator, wird die `.part`-Datei verworfen und der Download bei
+Byte 0 neu gestartet.
+
+Eine `206 Partial Content`-Antwort wird nur akzeptiert, wenn ihr `Content-Range`
+parsebar ist, am angeforderten Offset beginnt, ein konsistentes Ende und einen
+konkreten Gesamtumfang angibt und zu einem vorhandenen `Content-Length` sowie
+zu einem bereits bekannten Gesamtumfang passt. Bei fehlenden oder
+widersprüchlichen Metadaten wird nicht angehängt, sondern bei Byte 0 neu
+begonnen oder ein strukturierter Fehler geliefert. Finalisiert wird nur, wenn
+die heruntergeladene Byte-Anzahl exakt dem validierten Gesamtumfang entspricht.
+
+Kurz beendete Bodies, 408, 429, 5xx und lesebezogene Timeouts bleiben innerhalb
+eines begrenzten Retry-Budgets retrybar; ein 416 beim Resume startet neu. Andere
+permanente HTTP-Fehler werden nicht unnötig wiederholt. Entity-Validatoren und
+Bereichsmetadaten sind flüchtige Transportdaten und werden nicht persistiert.
+
+**Rationale**:
+
+- Ein `Range`-Offset ohne Entity-Validator kann Bytes zweier verschiedener
+  Modellversionen unbemerkt zusammenfügen.
+- `Content-Length` beschreibt nur die Länge des aktuellen Response-Bodys;
+  `Content-Range` bestätigt zusätzlich dessen absolute Position und den
+  Gesamtumfang.
+- Exakte Finalisierungsbedingungen verhindern, dass ein sauber beendeter, aber
+  verkürzter Body als vollständiges GGUF veröffentlicht wird.
+
+**Alternatives considered**:
+
+- Resume ohne Validator: verworfen, weil ein CDN oder Hub zwischen Retries eine
+  andere Modellversion liefern kann.
+- `Content-Length` als Ersatz für `Content-Range`: verworfen, weil daraus bei
+  einer `206`-Antwort weder der absolute Startoffset noch die vollständige
+  Dateigröße zuverlässig hervorgeht.
+
 ## Ergebnis
 
 Die Planung kann auf der bestehenden Rust-/Nuxt-Struktur aufsetzen. Es sind

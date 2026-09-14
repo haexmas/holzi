@@ -136,7 +136,19 @@ Verhalten:
 3. Der Download schreibt in eine temporäre Datei, emittiert den bestehenden
    `model-download-progress`-Payload und berechnet den vollständigen
    `fileSha256`. Die Datei wird erst über den gemeinsamen
-   `download_to_file`-/`register_downloaded`-Pfad veröffentlicht.
+   `download_to_file`-/`register_downloaded`-Pfad veröffentlicht. Bricht der
+   Response-Body während desselben Vorgangs ab, darf `download_to_file` aus der
+   `.part`-Datei fortsetzen; ein `Range`-Retry ist nur mit `ETag` oder
+   `Last-Modified` der vorherigen Antwort und dem zugehörigen `If-Range`
+   zulässig. Ohne Validator beginnt der Retry bei Byte 0.
+   Eine `206 Partial Content`-Antwort wird nur angehängt, wenn ihr
+   `Content-Range` am angeforderten Offset beginnt und Ende, Gesamtumfang sowie
+   ein vorhandener `Content-Length` konsistent sind. Fehlende oder
+   widersprüchliche Bereichsmetadaten verwerfen den Teilstand und lösen einen
+   Neustart oder einen strukturierten Fehler aus; `Content-Length` allein darf
+   bei einem Resume nicht als Gesamtumfang verwendet werden. Die Datei wird
+   nur bei exakt vollständigem Gesamtumfang veröffentlicht. Diese Header werden
+   nicht als Modellmetadaten persistiert.
 4. `register_downloaded` macht Dateiveröffentlichung und
    `models_store::upsert_model` failure-atomic: Vor einem Update legt es die
    bisherige Datei und Metadaten in einem dauerhaft geschriebenen

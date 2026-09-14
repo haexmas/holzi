@@ -165,6 +165,11 @@ einschleusen.
 - Bestehenden `download_model_from_hf`-Pfad so erweitern, dass Discovery-
   Payloads direkt verwendet werden können und die bestehende Registrierung,
   Publication-Lock- und Progress-Semantik erhalten bleibt.
+- Den gemeinsamen Downloadpfad für laufende Body-Abbrüche resumierbar machen:
+  `Range` nur mit `ETag`/`Last-Modified` und `If-Range` senden, vollständige
+  `Content-Range`-Metadaten validieren, bei unsicherem Teilstand bei Byte 0
+  neu beginnen und nur exakt vollständige Bodies veröffentlichen. Die
+  Validatoren bleiben flüchtige HTTP-Transportdaten.
 - Neue Commands für Suche, Repository-/Datei-Details und optionalen
   Installations-Preview registrieren.
 - Einen Update-Check für installierte HF-Modelle mit `hf_revision_ref`
