@@ -2,6 +2,7 @@
 import type { UnlistenFn } from '@tauri-apps/api/event'
 import {
   hfErrorKey,
+  hfErrorDetail,
   useHuggingFace,
   type HuggingFaceFileCandidate,
   type HuggingFaceModelResult,
@@ -36,6 +37,7 @@ const tooBigConfirmed = ref(false)
 
 const installing = ref(false)
 const installErrorKey = ref<string | null>(null)
+const installErrorDetail = ref<string | null>(null)
 const downloadedBytes = ref(0)
 const downloadTotalBytes = ref<number | null>(null)
 
@@ -101,6 +103,7 @@ async function installAsync() {
   if (!preview.value || !selectedFile.value || !canInstall.value) return
   installing.value = true
   installErrorKey.value = null
+  installErrorDetail.value = null
   downloadedBytes.value = 0
   downloadTotalBytes.value = preview.value.sizeBytes
   try {
@@ -119,6 +122,7 @@ async function installAsync() {
   }
   catch (e) {
     installErrorKey.value = hfErrorKey(e)
+    installErrorDetail.value = hfErrorDetail(e)
   }
   finally {
     installing.value = false
@@ -264,6 +268,7 @@ onBeforeUnmount(() => {
 
           <p v-if="installErrorKey" class="text-sm text-red-500" role="alert">
             {{ t(installErrorKey) }}
+            <span v-if="installErrorDetail" class="block text-xs">{{ installErrorDetail }}</span>
           </p>
           <p v-if="installing" class="text-sm text-neutral-500" role="status">
             {{ t('models.filePicker.downloadProgress', { done: humanBytes(downloadedBytes), total: humanBytes(downloadTotalBytes) }) }}
