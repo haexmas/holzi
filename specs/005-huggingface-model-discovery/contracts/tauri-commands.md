@@ -98,8 +98,12 @@ einem strukturierten Fehler.
 ## `download_model_from_hf` (bestehend, erweitert)
 
 Der bestehende Command bleibt der einzige Downloadpfad für Hugging-Face-GGUFs.
-Die Argumente werden um Source-/Revision-Felder erweitert oder aus dem
-Preview-Contract intern erzeugt. Die Commit-SHA ist nach der Auflösung
+Die Argumente werden um Source-/Revision-Felder erweitert. Der Backend-Adapter
+übernimmt vor dem Aufruf die normalisierte Vorschau: Er validiert Repository-ID
+und Dateiname, löst die gewünschte Revision in eine Commit-SHA auf, übernimmt
+die daraus berechnete `modelId` und erzeugt daraus `DownloadFromHfArgs`. Ein
+vom Frontend gelieferter `id`-Wert ist nur zulässig, wenn er exakt dieser
+Preview-`modelId` entspricht. Die Commit-SHA ist nach der Auflösung
 verpflichtend:
 
 ```typescript
@@ -120,20 +124,32 @@ Verhalten:
 
 1. Repository-ID, Dateiname, Commit-SHA, optionaler Upstream-Ref, Slug und
    Tokenizer werden an der Trust-Boundary validiert. Ein Download ohne
-   aufgelöste Commit-SHA ist ungültig.
+   aufgelöste Commit-SHA ist ungültig. `id` muss die aus demselben validierten
+   Repository-/Dateiname-Paar abgeleitete `modelId` sein; abweichende IDs
+   werden vor Netzwerkzugriff und Veröffentlichung abgelehnt.
 2. `TooBig` wird ohne `forceTooBig === true` abgelehnt; `Fits`, `Tight` und
    `Unknown` behalten die im Preview ausgewiesene Semantik.
 3. Der Download schreibt in eine temporäre Datei, emittiert den bestehenden
-   `model-download-progress`-Payload und veröffentlicht erst nach vollständigem
-   Erfolg atomar.
-4. Danach wird genau eine gemeinsame `models`-Zeile mit Source-Metadaten
-   sowie dem berechneten `fileSha256` registriert und `model-download-complete`
-   emittiert.
-5. Fehler hinterlassen keinen installierten Eintrag. Bereits installierte
+   `model-download-progress`-Payload und berechnet den vollständigen
+   `fileSha256`. Die Datei wird erst über den gemeinsamen
+   `download_to_file`-/`register_downloaded`-Pfad veröffentlicht.
+4. `register_downloaded` macht Dateiveröffentlichung und
+   `models_store::upsert_model` failure-atomic: Vor einem Update legt es die
+   bisherige Datei und Metadaten in einem dauerhaft geschriebenen
+   Recovery-Journal mit Backup ab. Das Journal enthält die alten und neuen
+   SHA-/Source-Metadaten sowie den erwarteten Dateistatus. Erst nach
+   erfolgreichem `upsert_model` wird die neue Datei atomar an den kanonischen
+   Pfad publiziert; bei Fehlern oder Neustart stellt die Recovery entweder das
+   alte Paar oder das vollständig neue Paar her. Ein erfolgreich abgeschlossener
+   Vorgang entfernt Backup und Journal erst danach. So können weder neue Bytes
+   mit alter SHA noch alte Bytes mit neuer SHA bestehen bleiben.
+5. Nach erfolgreicher Transaktion wird genau eine gemeinsame `models`-Zeile
+   mit Source-Metadaten sichtbar und `model-download-complete` emittiert.
+6. Fehler hinterlassen keinen installierten Eintrag. Bereits installierte
    Modelle und deren Metadaten bleiben erhalten.
-6. Eine identische bereits installierte Quelle wird idempotent behandelt. Ein
+7. Eine identische bereits installierte Quelle wird idempotent behandelt. Ein
    vorhandener Slug mit anderer finaler GGUF-Datei wird als Konflikt abgelehnt.
-7. Ein Update mit derselben Modell-ID ersetzt die bestehende Datei erst nach
+8. Ein Update mit derselben Modell-ID ersetzt die bestehende Datei erst nach
    erfolgreicher atomarer Veröffentlichung und schreibt danach die neue SHA;
    bei Fehlern bleiben alte Datei und Metadaten gültig.
 
@@ -148,14 +164,26 @@ Verhalten:
   `fileSha256` und `integrityStatus`.
 - `load_model`: lädt über dieselbe lokale ID und denselben kanonischen Pfad;
   keine erneute Hub-Suche. Vor dem Load gilt die Integritätsprüfung oben.
-- `delete_installed_model`: löscht nur die lokale Datei; Source-/Provider-
-  Metadaten bleiben gemäß Spec 002 erhalten.
+- `delete_installed_model`: löscht die lokale Modell-Datei und den
+  Installations-/Download-Datensatz, behält aber die Source-/Provider-
+  Metadatenzeile gemäß Spec 002. Der fehlende lokale Pfad ist danach
+  autoritativ: `list_installed_models` lässt den Eintrag aus, `load_model`
+  liefert `ModelNotFound`, und eine spätere Installation darf dieselbe Quelle
+  erneut registrieren.
 - `download_model_from_catalog`: bleibt auf kuratierte Qwen3-Einträge begrenzt
-  und verwendet weiterhin den gemeinsamen HF-Downloadpfad.
+  und verwendet weiterhin den gemeinsamen HF-Downloadpfad. Der Adapter ruft
+  dafür dieselbe Preview-/Revisionsauflösung auf, übernimmt die aufgelöste
+  Commit-SHA und die Preview-`modelId` in `DownloadFromHfArgs`; ein zweiter
+  Datei-Downloadpfad ist nicht zulässig.
 - `check_huggingface_model_updates`: prüft installierte HF-Modelle mit
   gespeichertem `hfRevisionRef` gegen Hugging Faces aktuellen Commit und
-  liefert `HuggingFaceUpdateStatus[]`. Offline-/HTTP-Fehler sind retrybar und
-  ändern keine lokalen Modelldaten.
+  liefert `HuggingFaceUpdateStatus[]`. Installierte HF-Modelle ohne
+  `hfRevisionRef`, insbesondere direkte SHA-Pins, werden nicht in dieses Array
+  aufgenommen, weil für sie kein verfolgbarer Branch oder Tag existiert. Das
+  Frontend verwendet dieselbe Semantik: `checkUpdatesAsync()` liefert keinen
+  Platzhalterstatus für solche Modelle; sie bleiben als installiertes Modell
+  sichtbar, aber ohne automatische Update-Erwartung. Offline-/HTTP-Fehler sind
+  retrybar und ändern keine lokalen Modelldaten.
 
 `HuggingFaceUpdateStatus`:
 
@@ -195,7 +223,8 @@ kein normaler Load. Stattdessen wird ein strukturierter Fehler geliefert:
 }
 ```
 
-Die UI muss diesen Fehler als Entscheidungsdialog darstellen. Die explizite
+Die UI muss diesen Fehler als Entscheidungsdialog darstellen. Das Verbot gilt
+für den normalen Ladepfad. Die explizite
 Aktion `load_untrusted` ruft einen separaten, bestätigungspflichtigen Pfad
 `load_model_with_integrity_override(modelId)` auf. Dieser markiert
 `integrityStatus = 'untrusted'`, behält `fileSha256` unverändert und lädt die
@@ -208,6 +237,23 @@ die erwartete SHA stillschweigend aktualisieren.
 
 ## Frontend-Composable-Vertrag
 
+`useModels` bleibt der bestehende Installations- und Löschadapter:
+
+```typescript
+downloadFromHfAsync(args: HuggingFaceInstallRequest): Promise<InstalledModel>
+deleteAsync(modelId: string): Promise<void>
+```
+
+`downloadFromHfAsync` ruft nach der Vorschau den gemeinsamen
+`download_model_from_hf`-Command auf und mappt die UI-Absicht intern in
+`DownloadFromHfArgs`. Dabei sind die Preview-`modelId` und die aufgelöste
+Commit-SHA als `id` bzw. `hfRevision` verpflichtend; ein optionaler
+`hfRevisionRef` wird ebenfalls übernommen. `deleteAsync` löscht die lokale
+Datei und den Installations-/Download-Datensatz, behält die
+Source-/Provider-Metadatenzeile und lässt fehlende Dateien aus der installierten
+Liste aus; Laden liefert `ModelNotFound`, eine spätere Installation bleibt
+zulässig.
+
 `useHuggingFace()` kapselt:
 
 ```typescript
@@ -217,6 +263,9 @@ previewInstallAsync(args: PreviewInstallArgs): Promise<InstallPreview>
 downloadAsync(args: DownloadFromHfArgs): Promise<InstalledModel>
 checkUpdatesAsync(): Promise<HuggingFaceUpdateStatus[]>
 ```
+
+`checkUpdatesAsync()` enthält ausschließlich Modelle mit gespeichertem
+`hfRevisionRef`; direkte SHA-Pins werden wie im Backend-Contract ausgelassen.
 
 Alle Promises werden von aufrufenden Komponenten behandelt; bei unmount werden
 Event-Listener wie beim bestehenden `useModels`-Composable entfernt.
