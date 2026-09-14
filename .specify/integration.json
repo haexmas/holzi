@@ -1,4 +1,215 @@
 {
+  "version": "1.0.6",
+  "integration_state_schema": 1,
+  "installed_integrations": [
+    "claude",
+    "agy",
+    "alquimia",
+    "amp",
+    "auggie",
+    "bob",
+    "cline",
+    "codebuddy",
+    "codex",
+    "command-code",
+    "copilot",
+    "cursor-agent",
+    "devin",
+    "docker-agent",
+    "droid",
+    "dsh",
+    "firebender",
+    "forge",
+    "gemini",
+    "generic",
+    "goose",
+    "grok",
+    "hermes",
+    "junie",
+    "kilocode",
+    "kimi",
+    "kiro-cli",
+    "lingma",
+    "muse",
+    "omp",
+    "opencode",
+    "pi",
+    "qodercli",
+    "qwen",
+    "rovodev",
+    "shai",
+    "tabnine",
+    "trae",
+    "vibe",
+    "zcode",
+    "zed"
+  ],
+  "integration_settings": {
+    "agy": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "alquimia": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "amp": {
+      "script": "sh",
+      "invoke_separator": "."
+    },
+    "auggie": {
+      "script": "sh",
+      "invoke_separator": "."
+    },
+    "bob": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "cline": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "codebuddy": {
+      "script": "sh",
+      "invoke_separator": "."
+    },
+    "codex": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "command-code": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "copilot": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "cursor-agent": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "devin": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "docker-agent": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "droid": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "dsh": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "firebender": {
+      "script": "sh",
+      "invoke_separator": "."
+    },
+    "forge": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "gemini": {
+      "script": "sh",
+      "invoke_separator": "."
+    },
+    "generic": {
+      "script": "sh",
+      "raw_options": "--commands-dir .specify/commands",
+      "parsed_options": {
+        "commands_dir": ".specify/commands"
+      },
+      "invoke_separator": "."
+    },
+    "goose": {
+      "script": "sh",
+      "invoke_separator": "."
+    },
+    "grok": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "hermes": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "junie": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "kilocode": {
+      "script": "sh",
+      "invoke_separator": "."
+    },
+    "kimi": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "kiro-cli": {
+      "script": "sh",
+      "invoke_separator": "."
+    },
+    "lingma": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "muse": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "omp": {
+      "script": "sh",
+      "invoke_separator": "."
+    },
+    "opencode": {
+      "script": "sh",
+      "invoke_separator": "."
+    },
+    "pi": {
+      "script": "sh",
+      "invoke_separator": "."
+    },
+    "qodercli": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "qwen": {
+      "script": "sh",
+      "invoke_separator": "."
+    },
+    "rovodev": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "shai": {
+      "script": "sh",
+      "invoke_separator": "."
+    },
+    "tabnine": {
+      "script": "sh",
+      "invoke_separator": "."
+    },
+    "trae": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "vibe": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "zcode": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "zed": {
+      "script": "sh",
+      "invoke_separator": "-"
+    }
+  },
   "integration": "claude",
-  "version": "0.8.1.dev0"
+  "default_integration": "claude"
 }

@@ -1,0 +1,17 @@
+{
+  "integration": "forge",
+  "version": "1.0.6",
+  "installed_at": "2026-09-14T12:19:05.207638+00:00",
+  "files": {
+    ".forge/commands/speckit.analyze.md": "53b42145008a7e0477ced305d3663d1fd9d0e52d853f048217363299a19165fe",
+    ".forge/commands/speckit.clarify.md": "8c9ab6453da2bbe9b344b8d7dacece96837473d92968a11dd9eca0a1b8e75bbc",
+    ".forge/commands/speckit.constitution.md": "28e058c649c889c9f767464b2e260f2ee68a85d22235654b2f2d120c2fcd9343",
+    ".forge/commands/speckit.implement.md": "961f94835a71b29f54988c1b701f432f8665ccf7b7831050ad109621a98113a0",
+    ".forge/commands/speckit.converge.md": "0ae45305304092753fd942048250020be3b4cea00e163922ac04e77a913c2cca",
+    ".forge/commands/speckit.plan.md": "0638ccc5d9de500e22a66bb690cab7136161ae7e97c67e3301293cf3ab262ef8",
+    ".forge/commands/speckit.checklist.md": "37b3dc10fa999427109f8d174333fb573f3d5de0baa368444f7dc69edc97d10a",
+    ".forge/commands/speckit.specify.md": "3fc5d7b4c275841da21ce30e49e67fbb8849b30c616fb7cb6fedf3e5d1b0223b",
+    ".forge/commands/speckit.tasks.md": "24a0d100c81a9a7a334b1fe060e779edc611391dc1d9096f4ba015d82b36ce0f",
+    ".forge/commands/speckit.taskstoissues.md": "d24fef49a5adfaa257356ce35a0139b33affc0199a23960fdc485ad4bfd5187a"
+  }
+}

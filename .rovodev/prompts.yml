@@ -1,0 +1,31 @@
+prompts:
+- name: speckit-analyze
+  description: Invoke speckit-analyze skill
+  content_file: prompts/speckit-analyze.prompt.md
+- name: speckit-clarify
+  description: Invoke speckit-clarify skill
+  content_file: prompts/speckit-clarify.prompt.md
+- name: speckit-constitution
+  description: Invoke speckit-constitution skill
+  content_file: prompts/speckit-constitution.prompt.md
+- name: speckit-implement
+  description: Invoke speckit-implement skill
+  content_file: prompts/speckit-implement.prompt.md
+- name: speckit-converge
+  description: Invoke speckit-converge skill
+  content_file: prompts/speckit-converge.prompt.md
+- name: speckit-plan
+  description: Invoke speckit-plan skill
+  content_file: prompts/speckit-plan.prompt.md
+- name: speckit-checklist
+  description: Invoke speckit-checklist skill
+  content_file: prompts/speckit-checklist.prompt.md
+- name: speckit-specify
+  description: Invoke speckit-specify skill
+  content_file: prompts/speckit-specify.prompt.md
+- name: speckit-tasks
+  description: Invoke speckit-tasks skill
+  content_file: prompts/speckit-tasks.prompt.md
+- name: speckit-taskstoissues
+  description: Invoke speckit-taskstoissues skill
+  content_file: prompts/speckit-taskstoissues.prompt.md
