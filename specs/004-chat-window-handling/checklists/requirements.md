@@ -31,6 +31,12 @@
 - [X] Rust-Tests für Load-Status und Race-Verhalten vorhanden.
 - [X] `pnpm typecheck` erfolgreich.
 - [X] Deutsch und Englisch enthalten alle neuen UI-Schlüssel.
+- [X] PR-Review-Fixes für Modell-Capabilities, Anthropic-Thinking-Constraints,
+  Preload-Cancellation/DB-Lifetime, Status-Watermark und Active-Model-Refresh
+  umgesetzt und durch Tests abgesichert.
+- [X] PR-42-CI vollständig erfolgreich: Formatierung, Default-/No-Default-
+  Rust-Tests, beide Clippy-Läufe, Chat-State-/Dokumentationscheck und
+  Vault→Model→CLI-E2E.
 - [ ] Quickstart auf Desktop und schmalem Viewport durchgeführt.
 
 ## Deferred validation
