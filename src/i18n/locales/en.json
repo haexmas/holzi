@@ -124,7 +124,13 @@
     "composer": {
       "placeholder": "Message Holzi …",
       "newlineHint": "Shift + Enter for a new line",
-      "settingsLabel": "Chat settings"
+      "settingsLabel": "Chat settings",
+      "settingsButton": "Open model and effort settings",
+      "settingsPopover": {
+        "title": "Chat settings",
+        "modelLabel": "Model",
+        "effortLabel": "Effort"
+      }
     },
     "effort": {
       "label": "Effort",

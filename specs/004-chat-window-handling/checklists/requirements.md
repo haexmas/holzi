@@ -13,8 +13,14 @@
 
 ## Composer
 
-- [X] Modell-, Effort- und Freigabe-Control liegen im gemeinsamen Composer; Reasoning hat keinen eigenen Schalter.
+- [X] Ein gemeinsamer Settings-Button bündelt Modell und Effort in einem Popover.
+- [X] Der Modellname im geschlossenen Settings-Button ist auf maximal 20 Zeichen inklusive Ellipsis begrenzt, hat zusätzlich eine responsive Maximalbreite und bleibt vollständig zugänglich.
+- [X] Das Freigabe-Control bleibt ein eigenes Dropdown in der Reihenfolge Plan, Manuell, Automatisch.
+- [X] Modell- und Freigabeauswahl verwenden die Shadcn-Select-Komponenten; Effort verwendet einen verstärkten Shadcn-Slider.
+- [X] Settings-Button, Freigabe-Dropdown und Senden/Abbrechen liegen in einer Reihe unterhalb der Textarea.
+- [X] Das Settings-Popover öffnet sichtbar oberhalb der Reihe und wird nicht vom scrollenden Composer-Container abgeschnitten.
 - [X] Controls sind kompakt, responsive und zugänglich.
+- [X] Deaktivierte Buttons bleiben lesbar, verlieren nicht durch globale Transparenz ihren Textkontrast und sind visuell klar von aktiven Buttons unterschieden.
 - [X] Textarea wächst bis maximal 8 sichtbare Zeilen und scrollt danach intern.
 - [X] `Enter` und `Shift+Enter` behalten die festgelegte Semantik.
 

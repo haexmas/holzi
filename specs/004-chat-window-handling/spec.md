@@ -136,37 +136,48 @@ Load starten.
 
 Ein Nutzer möchte Modell, Effort und Freigabe schnell ändern, ohne
 unterhalb des Eingabefelds eine zweite Reihe großer Konfigurationskarten lesen
-zu müssen. Die Einstellungen liegen deshalb als kompakte, dezente Controls im
-Composer, ähnlich dem Bedienmuster aus Claude Code.
+zu müssen. Modell und Effort werden deshalb über einen gemeinsamen, kompakten
+Settings-Button in einem Popover gebündelt. Die Freigabe bleibt als eigenes
+Dropdown daneben bestehen; alle Controls liegen in einer Reihe unterhalb der
+Textarea, ähnlich dem Bedienmuster aus Codex.
 
 **Why this priority**: Die Konfiguration gehört funktional zur nächsten
 Nachricht und soll visuell nicht mit dem eigentlichen Chat konkurrieren.
 
 **Independent Test**: Den Composer auf Desktop und in schmaler Fensterbreite
-öffnen. Alle drei Controls müssen erreichbar, verständlich beschriftet und
-innerhalb des gemeinsamen Eingabefeld-Containers angeordnet sein.
+öffnen. Der gemeinsame Modell-/Effort-Button muss ein Popover öffnen, die
+Freigabe muss als separates Dropdown erreichbar sein, und alle Controls müssen
+verständlich beschriftet in einer Reihe unterhalb der Textarea angeordnet sein.
 
 **Acceptance Scenarios**:
 
-1. **Given** der Composer ist sichtbar, **Then** befinden sich Modell, Effort
-   und Freigabe in einer gemeinsamen, dezenten Composer-
-   Oberfläche und nicht als separate große Konfigurationsblöcke darunter.
-2. **Given** ein Control ist geschlossen, **Then** zeigt es nur sein Icon bzw.
-   seine kurze Bezeichnung und den aktuellen Wert; die verfügbaren Optionen
-   werden erst bei Interaktion sichtbar.
-3. **Given** der Nutzer öffnet ein Control, **When** er eine Option auswählt,
+1. **Given** der Composer ist sichtbar, **Then** befinden sich alle Controls
+   in einer durchgehenden Reihe direkt unterhalb der Textarea und innerhalb
+   derselben Composer-Oberfläche.
+2. **Given** der Settings-Button ist geschlossen, **Then** zeigt er kompakt
+   das aktuelle Modell und den aktuellen Effort-Wert an.
+3. **Given** der Nutzer öffnet den Settings-Button, **Then** öffnet sich ein
+   Popover mit Modellwahl und Effort-Auswahl; beide Werte können dort geändert
+   werden, ohne zwei separate Controls in der Composer-Reihe zu rendern. Die
+   Effort-Auswahl wird als deutlich greifbarer Slider dargestellt.
+4. **Given** der Nutzer öffnet das Freigabe-Control, **Then** bleibt dieses
+   ein eigenständiges Dropdown mit den Modi Plan, Manuell und Automatisch in
+   genau dieser Reihenfolge.
+5. **Given** der Nutzer öffnet ein Control, **When** er eine Option auswählt,
    **Then** wird der Wert unmittelbar aktualisiert und das Control wieder
    kompakt dargestellt.
-4. **Given** der Nutzer schreibt oder sendet eine Nachricht, **Then** bleiben
+6. **Given** der Nutzer schreibt oder sendet eine Nachricht, **Then** bleiben
    die Controls zugänglich, werden aber während eines laufenden, nicht
    unterbrechbaren Vorgangs entsprechend deaktiviert.
-5. **Given** ein schmales Fenster oder ein mobiles Layout, **Then** brechen die
-   Controls kontrolliert um oder öffnen als Popover/Sheet; sie dürfen den
-   Composer nicht horizontal unbedienbar machen.
-6. **Given** ein Control wird nur geöffnet und ohne Auswahl geschlossen,
+7. **Given** ein schmales Fenster oder ein mobiles Layout, **Then** bleibt die
+   Control-Reihe horizontal bedienbar; das Settings-Popover passt sich der
+   verfügbaren Breite an, öffnet sichtbar oberhalb der Reihe und darf nicht von
+   einem scrollenden Composer-Container abgeschnitten werden.
+8. **Given** ein Control wird nur geöffnet und ohne Auswahl geschlossen,
    **Then** bleibt der bisherige Wert unverändert.
-7. **Then** müssen alle Controls Tastatur- und Screenreader-bedienbar sein und
-   einen zugänglichen Namen sowie ihren aktuellen Wert vermitteln.
+9. **Then** müssen alle Controls Tastatur- und Screenreader-bedienbar sein und
+   einen zugänglichen Namen sowie ihren aktuellen Wert vermitteln. Auch
+   deaktivierte Buttons müssen lesbaren Text mit ausreichendem Kontrast zeigen.
 
 ### User Story 4 - Das Eingabefeld wächst mit mehrzeiligem Text (Priority: P1)
 
@@ -314,14 +325,35 @@ sein.
 
 - **FR-016**: Der Composer MUSS Eingabefeld, Konfigurations-Controls und
   Senden-/Abbrechen-Aktion in einer zusammengehörigen Oberfläche darstellen.
-- **FR-017**: Modell, Effort und Freigabe MÜSSEN als kompakte,
-  unaufdringliche Controls innerhalb des Composer-Containers erreichbar sein.
-- **FR-018**: Die Controls MÜSSEN ihren aktuellen Wert kompakt anzeigen und
+- **FR-017**: Modell und Effort MÜSSEN über genau einen gemeinsamen,
+  unaufdringlichen Settings-Button innerhalb des Composer-Containers erreichbar
+  sein.
+- **FR-017a**: Der Settings-Button MUSS ein Popover mit Modellwahl und
+  Effort-Auswahl öffnen; Modell und Effort DÜRFEN nicht als zwei separate
+  Controls in der Composer-Reihe erscheinen.
+- **FR-017b**: Der geschlossene Settings-Button MUSS den Modellnamen auf
+  maximal 20 Zeichen inklusive Ellipsis begrenzen und zusätzlich eine
+  responsive visuelle Maximalbreite verwenden; der vollständige Name MUSS über
+  den zugänglichen Namen und/oder einen Tooltip erreichbar sein.
+- **FR-018**: Die Freigabe MUSS als eigenes Dropdown mit den Modi Plan, Manuell
+  und Automatisch neben dem Settings-Button erreichbar sein. Die Optionen
+  MÜSSEN in genau dieser Reihenfolge erscheinen.
+- **FR-018a**: Die Controls MÜSSEN ihren aktuellen Wert kompakt anzeigen und
   Details bzw. Auswahloptionen erst nach Interaktion öffnen.
-- **FR-019**: Die Controls MÜSSEN auf Desktop und schmalen Viewports vollständig
-  bedienbar bleiben und dürfen den Composer nicht horizontal überlaufen lassen.
+- **FR-018b**: Modell- und Freigabeauswahl MÜSSEN die vorhandenen Shadcn-
+  Select-Komponenten verwenden und dürfen keine nativen Browser-Selectboxen
+  rendern. Die Effort-Auswahl MUSS die vorhandene Shadcn-Slider-Komponente mit
+  einem sichtbar verstärkten Track und Thumb verwenden.
+- **FR-019**: Settings-Button, Freigabe-Dropdown sowie Senden-/Abbrechen-Aktion
+  MÜSSEN in einer Reihe direkt unterhalb der Textarea angeordnet sein. Auf
+  schmalen Viewports MUSS diese Reihe bedienbar bleiben; das Popover MUSS sich
+  an die verfügbare Breite anpassen, sichtbar oberhalb der Reihe öffnen und darf
+  nicht durch einen scrollenden Composer-Container abgeschnitten werden.
 - **FR-020**: Alle Controls MÜSSEN einen zugänglichen Namen, Tastaturbedienung
-  und eine Zustandsansage für Screenreader anbieten.
+  und eine Zustandsansage für Screenreader anbieten. Buttons dürfen auch im
+  deaktivierten Zustand nicht durch globale Transparenzregeln unleserlich
+  werden und müssen sich durch einen gedämpften visuellen Zustand klar von
+  aktiven Buttons unterscheiden.
 - **FR-021**: Die bestehenden fachlichen Semantiken für Modellwahl, Effort,
   Freigabe, Abbruch und Tool-Loop DÜRFEN durch die neue Anordnung nicht
   verändert werden. Unterstützt das gewählte Modell Reasoning, wird es ohne
@@ -390,8 +422,10 @@ sein.
   verwirft sich beim Verlassen ohne Nachricht.
 - **Thread**: Eine persistierte Unterhaltung mit eigener ID und ihren
   Nachrichten. Bestehende Threads bleiben über die Historie erreichbar.
-- **Composer-Control**: Ein kompaktes Bedienelement für Modell, Effort oder
-  Freigabe innerhalb des Composer-Containers.
+- **Composer-Settings-Popover**: Ein gemeinsamer kompakter Settings-Button
+  für Modell und Effort. Er öffnet ein Popover mit beiden Einstellungen.
+- **Composer-Control**: Ein kompaktes Bedienelement für die separate Freigabe
+  innerhalb des Composer-Containers.
 - **Model-Load-Status**: Der global zum aktiven Vault gehörende strukturierte
   Zustand eines Hintergrund-Loads inklusive Modell-ID, Modellname, Phase und
   optionalem Fehler.
@@ -414,9 +448,9 @@ sein.
   entsteht kein zweiter Load desselben Modells.
 - **SC-004**: Der Vault-Open bleibt während des Modell-Loads bedienbar und
   blockiert nicht auf dessen Abschluss.
-- **SC-005**: Ein Nutzer kann Modell, Effort und Freigabe aus dem
-  Composer erreichen, ohne eine separate Konfigurationszeile unterhalb des
-  Eingabefelds öffnen zu müssen.
+- **SC-005**: Ein Nutzer kann Modell und Effort über genau einen gemeinsamen
+  Settings-Button sowie die Freigabe über ein separates Dropdown aus einer
+  Reihe direkt unterhalb der Textarea erreichen.
 - **SC-006**: Ein mehrzeiliger Prompt ist bis zu 8 sichtbaren Zeilen ohne
   internes Scrollen sichtbar; längere Prompts bleiben danach vollständig
   erreichbar.
@@ -446,6 +480,9 @@ sein.
 - Die minimale Textarea-Höhe und die exakten Pixelmaße der Controls werden im
   Plan festgelegt; die maximale Textarea-Höhe ist auf 8 sichtbare Zeilen
   begrenzt.
+- Modell und Effort teilen sich im Composer genau einen Settings-Button mit
+  Popover. Die Freigabe bleibt ein separates Dropdown; die Controls werden
+  nicht auf mehrere Reihen verteilt.
 
 ## Explicit Non-Goals
 

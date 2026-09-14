@@ -22,7 +22,7 @@ description: "Actionable, dependency-ordered task list for chat window and sessi
 
 - [X] T001 [P] Add `ModelLoadStatusPayload`, `ModelLoadErrorEvent`, and related load-phase types to `src/composables/useChat.ts` according to `specs/004-chat-window-handling/contracts/tauri-commands.md`.
 - [X] T002 [P] Add the new composer, model-load, and reasoning i18n keys to `src/i18n/locales/de.json` and `src/i18n/locales/en.json` with identical key trees.
-- [X] T003 [P] Create the feature-local component files `src/components/chat/ReasoningAccordion.vue` and `src/components/chat/ComposerControl.vue` with typed props/events and no hardcoded user-facing strings.
+- [X] T003 [P] Create the feature-local component files `src/components/chat/ReasoningAccordion.vue`, `src/components/chat/ComposerControl.vue`, and `src/components/chat/ComposerSettingsPopover.vue` with typed props/events and no hardcoded user-facing strings.
 
 **Checkpoint**: Shared types, locale keys, and component boundaries exist; no runtime behavior has changed.
 
@@ -94,11 +94,11 @@ description: "Actionable, dependency-ordered task list for chat window and sessi
 
 ### Implementation for User Story 3
 
-- [X] T025 [P] [US3] Implement the compact trigger/popover or select behavior in `src/components/chat/ComposerControl.vue`, including current-value display, focus handling, and accessible naming.
-- [X] T026 [US3] Move the model picker from the separate settings row into the unified Composer container in `src/pages/chat/[instance].vue` without changing model-selection semantics.
+- [X] T025 [P] [US3] Implement the single Model/Effort settings trigger and popover in `src/components/chat/ComposerSettingsPopover.vue`, including current-value display, focus handling, and accessible naming.
+- [X] T026 [US3] Move the model picker and Effort control into the single settings popover in `src/pages/chat/[instance].vue` without changing model-selection semantics.
 - [X] T027 [US3] Remove the Reasoning mode control/state from `src/pages/chat/[instance].vue` and keep Reasoning automatic for models that support it; preserve the existing Effort control values and disabled states.
 - [X] T028 [US3] Integrate `PermissionPrompt` into the compact Composer control area in `src/pages/chat/[instance].vue` without changing Spec 003 approval behavior.
-- [X] T029 [US3] Add responsive wrapping/popover behavior and keyboard focus styles in `src/components/chat/ComposerControl.vue` and `src/pages/chat/[instance].vue` so controls remain usable in narrow viewports.
+- [X] T029 [US3] Keep the Settings-Button, separate Permission-Dropdown, and send/cancel action in one responsive row below the textarea; make the Settings-Popover visible above the row, immune to composer overflow clipping, and adapt to narrow viewports while preserving keyboard focus styles.
 - [X] T030 [US3] Verify all new Composer labels and option text in `src/i18n/locales/de.json` and `src/i18n/locales/en.json`, excluding a Reasoning-mode label and including accessible labels and current-value announcements.
 - [ ] T031 [US3] Execute the Composer desktop, narrow-viewport, keyboard, and unchanged-value scenarios in `specs/004-chat-window-handling/quickstart.md`.
 
@@ -149,7 +149,7 @@ description: "Actionable, dependency-ordered task list for chat window and sessi
 **Purpose**: Validate the complete feature and reconcile the owning documentation.
 
 - [X] T044 [P] Update `specs/002-onboarding-model-prefs/spec.md` with an explicit cross-reference that Spec 004 supersedes its chat-entry, Composer, and Reasoning-visibility assumptions while preserving its model fallback contract.
-- [X] T045 [P] Run an automated `de`/`en` locale-key parity check against all new keys referenced by `src/pages/chat/[instance].vue`, `src/components/chat/ComposerControl.vue`, `src/components/chat/ReasoningAccordion.vue`, and `src/pages/workspace/[instance].vue`.
+- [X] T045 [P] Run an automated `de`/`en` locale-key parity check against all new keys referenced by `src/pages/chat/[instance].vue`, `src/components/chat/ComposerSettingsPopover.vue`, `src/components/chat/ComposerControl.vue`, `src/components/chat/ReasoningAccordion.vue`, and `src/pages/workspace/[instance].vue`.
 - [X] T046 Run `cargo test --lib` and the focused preload/new-thread integration suites from `src-tauri/tests/`.
 - [X] T047 Run `pnpm typecheck` and fix any binding/type regressions in `src/composables/useChat.ts` and the Chat pages.
 - [ ] T048 Execute the complete `specs/004-chat-window-handling/quickstart.md` on desktop and a narrow viewport; record any deviations in the checklist at `specs/004-chat-window-handling/checklists/requirements.md`.
@@ -194,7 +194,7 @@ Task: T003 Create chat component boundaries in src/components/chat/
 ## Parallel Example: UI Components
 
 ```text
-Task: T025 Implement ComposerControl.vue
+Task: T025 Implement ComposerSettingsPopover.vue
 Task: T032 Create useAutoResizeTextarea.ts
 Task: T037 Implement ReasoningAccordion.vue
 ```

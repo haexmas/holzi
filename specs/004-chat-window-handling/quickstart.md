@@ -50,13 +50,23 @@
 ## 3. Composer und Textarea
 
 1. Den Composer auf Desktop öffnen.
-2. Prüfen: Modell, Effort und Freigabe erscheinen kompakt innerhalb des
-   gemeinsamen Eingabecontainers; es gibt keinen separaten Reasoning-Schalter.
-3. Jedes Control öffnen, eine andere Option wählen und den Wert wieder ablesen.
-4. Einen Prompt mit mehreren `Shift+Enter`-Zeilen eingeben.
-5. Prüfen: Die Textarea wächst bis maximal 8 sichtbare Zeilen und scrollt
+2. Prüfen: Unterhalb der Textarea gibt es eine durchgehende Reihe mit genau
+   einem Settings-Button für Modell und Effort sowie einem separaten
+   Freigabe-Dropdown; es gibt keinen separaten Reasoning-Schalter.
+3. Den Settings-Button öffnen, Modell und Effort im gemeinsamen Popover ändern
+   und beide Werte wieder ablesen. Das Freigabe-Dropdown separat öffnen und
+   in der Reihenfolge Plan, Manuell, Automatisch wechseln. Prüfen, dass die Effort-
+   Auswahl als dicker, gut greifbarer Slider erscheint und beide Dropdowns
+   einheitlich im Shadcn-Stil aussehen.
+4. Falls ein langer Modellname verfügbar ist, prüfen: Der Name wird im
+   geschlossenen Button auf maximal 20 Zeichen inklusive Ellipsis begrenzt,
+   bleibt aber per Tooltip bzw.
+   Screenreader vollständig verständlich. Prüfen, dass sich das Popover sichtbar
+   oberhalb der Reihe öffnet und nicht abgeschnitten wird.
+5. Einen Prompt mit mehreren `Shift+Enter`-Zeilen eingeben.
+6. Prüfen: Die Textarea wächst bis maximal 8 sichtbare Zeilen und scrollt
    danach intern.
-6. Mit `Enter` senden und prüfen: Inhalt wird vollständig gesendet, Textarea
+7. Mit `Enter` senden und prüfen: Inhalt wird vollständig gesendet, Textarea
    leert sich und schrumpft zurück.
 7. Den Vorgang in einer schmalen Fensterbreite wiederholen.
 
