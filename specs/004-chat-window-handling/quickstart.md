@@ -55,7 +55,9 @@
    Freigabe-Dropdown; es gibt keinen separaten Reasoning-Schalter.
 3. Den Settings-Button öffnen, Modell und Effort im gemeinsamen Popover ändern
    und beide Werte wieder ablesen. Das Freigabe-Dropdown separat öffnen und
-   zwischen Plan, Manuell und Automatisch wechseln.
+   zwischen Plan, Manuell und Automatisch wechseln. Prüfen, dass die Effort-
+   Auswahl als dicker, gut greifbarer Slider erscheint und beide Dropdowns
+   einheitlich im Shadcn-Stil aussehen.
 4. Falls ein langer Modellname verfügbar ist, prüfen: Der Name wird im
    geschlossenen Button auf maximal 20 Zeichen inklusive Ellipsis begrenzt,
    bleibt aber per Tooltip bzw.
@@ -64,7 +66,7 @@
 5. Einen Prompt mit mehreren `Shift+Enter`-Zeilen eingeben.
 6. Prüfen: Die Textarea wächst bis maximal 8 sichtbare Zeilen und scrollt
    danach intern.
-6. Mit `Enter` senden und prüfen: Inhalt wird vollständig gesendet, Textarea
+7. Mit `Enter` senden und prüfen: Inhalt wird vollständig gesendet, Textarea
    leert sich und schrumpft zurück.
 7. Den Vorgang in einer schmalen Fensterbreite wiederholen.
 

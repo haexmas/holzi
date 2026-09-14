@@ -50,6 +50,14 @@ function updateEffort(value: number) {
   if (level) emit('update:effortLevel', level)
 }
 
+function updateModel(value: unknown) {
+  if (typeof value === 'string') emit('update:modelId', value)
+}
+
+function updateEffortFromSlider(value: unknown) {
+  if (Array.isArray(value) && typeof value[0] === 'number') updateEffort(value[0])
+}
+
 function positionPopover() {
   if (!isOpen.value || !trigger.value || !popover.value) return
 
@@ -157,21 +165,27 @@ onBeforeUnmount(() => {
         <label for="chat-model-popover" class="mb-1 block text-xs font-medium text-muted-foreground">
           {{ t('chat.composer.settingsPopover.modelLabel') }}
         </label>
-        <select
-          id="chat-model-popover"
-          class="mb-4 w-full rounded-lg border border-border bg-background px-2.5 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-          :value="modelId"
+        <ShadcnSelect
+          :model-value="modelId || undefined"
           :disabled="disabled || modelDisabled"
-          :aria-label="t('chat.composer.settingsPopover.modelLabel')"
-          @change="emit('update:modelId', ($event.target as HTMLSelectElement).value)"
+          @update:model-value="updateModel"
         >
-          <option value="" disabled>{{ t('chat.model.choose') }}</option>
-          <optgroup v-for="group in modelGroups" :key="group.providerId" :label="group.providerName">
-            <option v-for="model in group.models" :key="model.id" :value="model.id">
-              {{ model.name }}
-            </option>
-          </optgroup>
-        </select>
+          <ShadcnSelectTrigger
+            id="chat-model-popover"
+            :aria-label="t('chat.composer.settingsPopover.modelLabel')"
+            class="mb-4 h-9 w-full bg-background text-sm"
+          >
+            <ShadcnSelectValue :placeholder="t('chat.model.choose')" />
+          </ShadcnSelectTrigger>
+          <ShadcnSelectContent class="w-[min(20rem,calc(100vw-2rem))]">
+            <ShadcnSelectGroup v-for="group in modelGroups" :key="group.providerId">
+              <ShadcnSelectLabel>{{ group.providerName }}</ShadcnSelectLabel>
+              <ShadcnSelectItem v-for="model in group.models" :key="model.id" :value="model.id">
+                {{ model.name }}
+              </ShadcnSelectItem>
+            </ShadcnSelectGroup>
+          </ShadcnSelectContent>
+        </ShadcnSelect>
 
         <div class="flex items-center justify-between gap-3">
           <label for="effort-level-popover" class="text-xs font-medium text-muted-foreground">
@@ -181,19 +195,18 @@ onBeforeUnmount(() => {
             {{ effortLabel }}
           </output>
         </div>
-        <input
+        <ShadcnSlider
           id="effort-level-popover"
-          class="mt-2 w-full accent-foreground disabled:opacity-50"
-          type="range"
-          min="0"
-          max="2"
-          step="1"
-          :value="effortIndex"
+          class="mt-2 px-1 py-1 [&_[data-slot=slider-thumb]]:size-6 [&_[data-slot=slider-track]]:h-2.5"
+          :model-value="[effortIndex]"
+          :min="0"
+          :max="2"
+          :step="1"
           :disabled="disabled"
           :aria-label="t('chat.composer.settingsPopover.effortLabel')"
           :aria-valuetext="effortLabel"
-          @input="updateEffort(Number(($event.target as HTMLInputElement).value))"
-        >
+          @update:model-value="updateEffortFromSlider"
+        />
         <div class="mt-1 flex justify-between text-[10px] text-muted-foreground" aria-hidden="true">
           <span>{{ t('chat.effort.low') }}</span>
           <span>{{ t('chat.effort.medium') }}</span>

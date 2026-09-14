@@ -37,19 +37,14 @@ const emit = defineEmits<{
     :display-value="permissionModeLabel"
     icon="lucide:shield-check"
     control-id="permission-mode"
+    :options="[
+      { value: 'manual', label: t('chat.permission.manual') },
+      { value: 'auto', label: t('chat.permission.auto') },
+      { value: 'plan', label: t('chat.permission.plan') },
+    ]"
     :disabled="disabled"
     @update:value="emit('update:mode', $event as 'manual' | 'auto' | 'plan')"
-  >
-    <option value="manual">
-      {{ t('chat.permission.manual') }}
-    </option>
-    <option value="auto">
-      {{ t('chat.permission.auto') }}
-    </option>
-    <option value="plan">
-      {{ t('chat.permission.plan') }}
-    </option>
-  </ComposerControl>
+  />
 
   <div
     v-if="pendingApprovals[0]"

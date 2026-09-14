@@ -6,6 +6,7 @@ const props = defineProps<{
   icon?: string
   disabled?: boolean
   controlId?: string
+  options: { value: string, label: string }[]
 }>()
 
 const emit = defineEmits<{
@@ -13,22 +14,32 @@ const emit = defineEmits<{
 }>()
 
 const controlId = computed(() => props.controlId ?? `composer-control-${props.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`)
+
+function updateValue(nextValue: unknown) {
+  if (typeof nextValue === 'string') emit('update:value', nextValue)
+}
 </script>
 
 <template>
   <div class="flex min-w-0 shrink-0 items-center gap-1 rounded-xl border border-border/70 bg-muted/20 px-2 py-1">
-    <Icon v-if="icon" :name="icon" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-    <label :for="controlId" class="sr-only">{{ label }}</label>
-    <select
-      :id="controlId"
-      class="min-w-0 max-w-44 appearance-none bg-transparent px-1.5 py-0.5 text-xs font-medium text-foreground/80 outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
-      :value="value"
+    <ShadcnSelect
+      :model-value="value || undefined"
       :disabled="disabled"
-      :aria-label="(displayValue ?? value) ? `${label}: ${displayValue ?? value}` : label"
-      @change="emit('update:value', ($event.target as HTMLSelectElement).value)"
+      @update:model-value="updateValue"
     >
-      <slot />
-    </select>
-    <Icon name="lucide:chevron-down" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <ShadcnSelectTrigger
+        :id="controlId"
+        :aria-label="(displayValue ?? value) ? `${label}: ${displayValue ?? value}` : label"
+        class="h-7 w-auto min-w-0 max-w-44 gap-1 border-0 bg-transparent px-1.5 py-0 text-xs font-medium text-foreground/80 shadow-none focus:ring-0"
+      >
+        <Icon v-if="icon" :name="icon" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <ShadcnSelectValue :placeholder="displayValue ?? label" />
+      </ShadcnSelectTrigger>
+      <ShadcnSelectContent>
+        <ShadcnSelectItem v-for="option in options" :key="option.value" :value="option.value">
+          {{ option.label }}
+        </ShadcnSelectItem>
+      </ShadcnSelectContent>
+    </ShadcnSelect>
   </div>
 </template>

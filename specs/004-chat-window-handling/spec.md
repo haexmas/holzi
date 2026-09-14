@@ -158,7 +158,8 @@ verständlich beschriftet in einer Reihe unterhalb der Textarea angeordnet sein.
    das aktuelle Modell und den aktuellen Effort-Wert an.
 3. **Given** der Nutzer öffnet den Settings-Button, **Then** öffnet sich ein
    Popover mit Modellwahl und Effort-Auswahl; beide Werte können dort geändert
-   werden, ohne zwei separate Controls in der Composer-Reihe zu rendern.
+   werden, ohne zwei separate Controls in der Composer-Reihe zu rendern. Die
+   Effort-Auswahl wird als deutlich greifbarer Slider dargestellt.
 4. **Given** der Nutzer öffnet das Freigabe-Control, **Then** bleibt dieses
    ein eigenständiges Dropdown mit den Modi Plan, Manuell und Automatisch.
 5. **Given** der Nutzer öffnet ein Control, **When** er eine Option auswählt,
@@ -336,6 +337,10 @@ sein.
   und Automatisch neben dem Settings-Button erreichbar sein.
 - **FR-018a**: Die Controls MÜSSEN ihren aktuellen Wert kompakt anzeigen und
   Details bzw. Auswahloptionen erst nach Interaktion öffnen.
+- **FR-018b**: Modell- und Freigabeauswahl MÜSSEN die vorhandenen Shadcn-
+  Select-Komponenten verwenden und dürfen keine nativen Browser-Selectboxen
+  rendern. Die Effort-Auswahl MUSS die vorhandene Shadcn-Slider-Komponente mit
+  einem sichtbar verstärkten Track und Thumb verwenden.
 - **FR-019**: Settings-Button, Freigabe-Dropdown sowie Senden-/Abbrechen-Aktion
   MÜSSEN in einer Reihe direkt unterhalb der Textarea angeordnet sein. Auf
   schmalen Viewports MUSS diese Reihe bedienbar bleiben; das Popover MUSS sich
