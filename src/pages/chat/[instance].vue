@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref, nextTick } from 'vue'
 import type { UnlistenFn } from '@tauri-apps/api/event'
+import DOMPurify from 'dompurify'
+import { marked } from 'marked'
 import {
   useChat,
   type LoadedModelInfo,
@@ -952,6 +954,12 @@ function reasoningFor(messageId: string): string {
   return reasoningByMessage.value[messageId] ?? ''
 }
 
+function renderMarkdown(content: string): string {
+  return DOMPurify.sanitize(
+    marked.parse(content, { async: false, breaks: true }),
+  )
+}
+
 function onLoadProgress(e: ModelLoadProgressEvent) {
   loadErrorModelId.value = null
   loadingPhase.value = e.phase
@@ -1433,8 +1441,12 @@ onBeforeUnmount(() => {
                 </template>
               </div>
               <div
-                class="whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm"
+                class="rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm"
                 :class="{
+                  'whitespace-pre-wrap':
+                    m.role === 'user' ||
+                    m.role === 'tool_call' ||
+                    m.role === 'tool_result',
                   'bg-foreground text-background': m.role === 'user',
                   'border border-border bg-background':
                     m.role === 'assistant' || m.role === 'system',
@@ -1448,6 +1460,17 @@ onBeforeUnmount(() => {
                 <template v-if="m.role === 'tool_call'">{{
                   m.toolInput
                 }}</template>
+                <!-- eslint-disable vue/no-v-html -->
+                <div
+                  v-else-if="m.role === 'assistant' || m.role === 'system'"
+                  class="chat-markdown"
+                  v-html="
+                    renderMarkdown(
+                      m.content || (streamingMessageId === m.id ? '…' : ''),
+                    )
+                  "
+                />
+                <!-- eslint-enable vue/no-v-html -->
                 <template v-else>{{
                   m.content || (streamingMessageId === m.id ? '…' : '')
                 }}</template>
