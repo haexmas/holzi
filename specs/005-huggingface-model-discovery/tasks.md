@@ -71,7 +71,7 @@
 ### Tests für User Story 2
 
 - [ ] T022 [P] [US2] Tests für `preview_huggingface_install` mit validierter Quelle, Branch-/Tag-zu-SHA-Auflösung, direktem SHA-Pin, Kollision bestehender Slugs, fehlendem Tokenizer und idempotentem bereits installiertem Source-Key in `src-tauri/src/models/huggingface_tests.rs` ergänzen.
-- [ ] T023 [P] [US2] Download-/Registrierungstests in `src-tauri/src/models/commands_tests.rs` oder dem bestehenden Model-Testmodul ergänzen: Erfolg mit gepinnter SHA, Berechnung und Persistenz von `file_sha256`, Abbruch, HTTP-Fehler, kein finaler `.gguf`-Eintrag und Source-Metadaten-Roundtrip einschließlich `hf_revision_ref`.
+- [ ] T023 [P] [US2] Download-/Registrierungstests in `src-tauri/src/models/commands_tests.rs` oder dem bestehenden Model-Testmodul ergänzen: Erfolg mit gepinnter SHA, Berechnung und Persistenz von `file_sha256`, Abbruch, HTTP-Fehler, kein finaler `.gguf`-Eintrag und Source-Metadaten-Roundtrip einschließlich `hf_revision_ref`. Der Downloadpfad muss außerdem Resume mit Validator und `If-Range`, Neustart ohne Validator, kurze Bodies, fehlendes oder inkonsistentes `Content-Range`, transiente Retry-Statuscodes und das Nicht-Wiederholen permanenter Statuscodes abdecken.
 - [ ] T024 [P] [US2] Migration-/Storage-Tests in `src-tauri/tests/model_import.rs` oder einem neuen `src-tauri/tests/huggingface_models.rs` ergänzen, die Katalog-, Import- und HF-Zeilen gemeinsam über `list_installed_models` lesen.
 
 ### Implementierung für User Story 2
