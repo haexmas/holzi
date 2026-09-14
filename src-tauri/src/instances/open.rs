@@ -15,6 +15,7 @@ use serde::Deserialize;
 use tauri::{AppHandle, State};
 use ts_rs::TS;
 
+use crate::chat::commands::{emit_model_load_status, start_default_model_preload};
 use crate::chat::session::ChatState;
 use crate::error::{HolziError, Result};
 use crate::identity::installation_id_path;
@@ -164,6 +165,11 @@ pub async fn open_instance(
     })?;
     let candidate = candidate_result?;
 
+    // The candidate is valid, so the old Vault can be retired. Stop its
+    // preload before changing the active database and await only task
+    // termination, never the full model load.
+    chat.cancel_preload_and_wait().await;
+
     // Hold the state lock only for the atomic old-runtime drop/new-runtime
     // publish. The blocking SQLCipher open above cannot stall observers.
     let mut guard = state
@@ -188,7 +194,9 @@ pub async fn open_instance(
         name: args.name.clone(),
         database: candidate,
     });
+    chat.bump_vault_generation();
     drop(guard);
+    emit_model_load_status(&app, &chat);
 
     // Refresh mtime so `list_instances` shows this instance at the top.
     let _ = set_file_mtime(&db_path, FileTime::now());
@@ -202,6 +210,7 @@ pub async fn open_instance(
             .unwrap_or(0),
     };
     emit_instance_list_changed(&app, "opened", Some(args.name.clone()));
+    start_default_model_preload(app.clone(), chat.inner().clone());
     Ok(info)
 }
 

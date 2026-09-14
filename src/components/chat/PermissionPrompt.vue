@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { RiskClass } from '~/composables/useChat'
+import ComposerControl from './ComposerControl.vue'
 
 export interface PendingApproval {
   requestId: string
@@ -10,7 +11,7 @@ export interface PendingApproval {
 
 const { t } = useI18n()
 
-defineProps<{
+const props = defineProps<{
   mode: 'manual' | 'auto' | 'plan'
   disabled?: boolean
   /** Oldest-first queue — only the first is shown; more than one can be
@@ -18,6 +19,8 @@ defineProps<{
    * their own request). */
   pendingApprovals: PendingApproval[]
 }>()
+
+const permissionModeLabel = computed(() => t(`chat.permission.${props.mode}`))
 
 const emit = defineEmits<{
   'update:mode': [mode: 'manual' | 'auto' | 'plan']
@@ -28,26 +31,25 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="flex items-center gap-2">
-    <label for="permission-mode" class="text-xs text-muted-foreground">{{ t('chat.permission.modeLabel') }}</label>
-    <select
-      id="permission-mode"
-      class="text-xs bg-background border border-border rounded px-2 py-1"
-      :value="mode"
-      :disabled="disabled"
-      @change="emit('update:mode', ($event.target as HTMLSelectElement).value as 'manual' | 'auto' | 'plan')"
-    >
-      <option value="manual">
-        {{ t('chat.permission.manual') }}
-      </option>
-      <option value="auto">
-        {{ t('chat.permission.auto') }}
-      </option>
-      <option value="plan">
-        {{ t('chat.permission.plan') }}
-      </option>
-    </select>
-  </div>
+  <ComposerControl
+    :label="t('chat.permission.modeLabel')"
+    :value="mode"
+    :display-value="permissionModeLabel"
+    icon="lucide:shield-check"
+    control-id="permission-mode"
+    :disabled="disabled"
+    @update:value="emit('update:mode', $event as 'manual' | 'auto' | 'plan')"
+  >
+    <option value="manual">
+      {{ t('chat.permission.manual') }}
+    </option>
+    <option value="auto">
+      {{ t('chat.permission.auto') }}
+    </option>
+    <option value="plan">
+      {{ t('chat.permission.plan') }}
+    </option>
+  </ComposerControl>
 
   <div
     v-if="pendingApprovals[0]"

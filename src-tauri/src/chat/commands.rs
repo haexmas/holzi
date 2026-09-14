@@ -31,12 +31,13 @@ use crate::storage::{
     providers as providers_store,
 };
 
-use super::session::{ActiveSession, ChatState};
+use super::session::{ActiveSession, ChatState, ModelLoadStatus};
 
 const EVENT_CHAT_TOKEN: &str = "chat-token";
 const EVENT_CHAT_MESSAGE_COMPLETE: &str = "chat-message-complete";
 const EVENT_CHAT_MESSAGE_ERROR: &str = "chat-message-error";
 const EVENT_MODEL_LOAD_PROGRESS: &str = "model-load-progress";
+const EVENT_MODEL_LOAD_STATUS: &str = "model-load-status";
 const EVENT_CHAT_TOOL_CALL: &str = "chat-tool-call";
 const EVENT_CHAT_TOOL_RESULT: &str = "chat-tool-result";
 const EVENT_CHAT_TURN_COMPLETE: &str = "chat-turn-complete";
@@ -89,6 +90,10 @@ enum LoadPhase {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ModelLoadProgress {
+    #[serde(rename = "vaultGeneration")]
+    vault_generation: u64,
+    #[serde(rename = "loadId")]
+    load_id: u64,
     model_id: String,
     model_name: String,
     phase: LoadPhase,
@@ -96,11 +101,25 @@ struct ModelLoadProgress {
     provider_name: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ModelLoadErrorEvent {
+    vault_generation: u64,
+    load_id: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    model_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    model_name: Option<String>,
+    code: String,
+}
+
 /// Emits a `model-load-progress` event for the given phase. Frontend
 /// translates the label via `$t('chat.loading.<phase>', ...)` and
 /// gates the chat input on `phase === 'ready'`.
 fn emit_load_progress(
     app: &AppHandle,
+    vault_generation: u64,
+    load_id: u64,
     model_id: &str,
     model_name: &str,
     phase: LoadPhase,
@@ -109,12 +128,40 @@ fn emit_load_progress(
     let _ = app.emit(
         EVENT_MODEL_LOAD_PROGRESS,
         ModelLoadProgress {
+            vault_generation,
+            load_id,
             model_id: model_id.to_string(),
             model_name: model_name.to_string(),
             phase,
             provider_name,
         },
     );
+}
+
+fn emit_load_error(
+    app: &AppHandle,
+    vault_generation: u64,
+    load_id: u64,
+    model_id: Option<String>,
+    model_name: Option<String>,
+    code: impl Into<String>,
+) {
+    let _ = app.emit(
+        "model-load-error",
+        ModelLoadErrorEvent {
+            vault_generation,
+            load_id,
+            model_id,
+            model_name,
+            code: code.into(),
+        },
+    );
+}
+
+/// Publishes the authoritative model-load snapshot after lifecycle changes
+/// such as cancellation, unload, or a Vault transition.
+pub(crate) fn emit_model_load_status(app: &AppHandle, chat: &ChatState) {
+    let _ = app.emit(EVENT_MODEL_LOAD_STATUS, chat.model_load_status());
 }
 
 /// Which fallback branch the session resolver picked. Wire payload for
@@ -269,43 +316,128 @@ struct RetryEvent {
     attempt: usize,
 }
 
-/// Loads a model (local catalog id or `<provider_id>:<remote_id>`) into
-/// the active session. If another model was already loaded, it is
-/// dropped first.
-///
-/// Emits `model-load-progress` events with a structured payload
-/// (`{ modelId, modelName, phase, providerName? }`) around the load:
-/// `connecting` for api_key providers, `loading` or `cuda-jit-warmup`
-/// for local models, `ready` on success. Frontend translates the
-/// labels via `$t('chat.loading.<phase>', …)`.
-///
-/// Never writes `chat.last_active_model_id` — that preference is
-/// touched exclusively by a successful `send_message` (spec 002
-/// §FR-009 post-clarify correction).
-#[tauri::command]
-pub async fn load_model(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    chat: State<'_, ChatState>,
-    model_id: String,
-) -> Result<LoadedModelInfo> {
-    let _operation = chat.acquire_operation()?;
-    // Pre-fetch display metadata for the progress payload so the
-    // frontend does not have to look it up separately per event.
-    let name = resolve_display_name(&state, &model_id)
+#[derive(Clone, Copy)]
+struct LoadIdentity {
+    vault_generation: u64,
+    load_id: u64,
+}
+
+enum LoadOutcome {
+    Loaded(LoadedModelInfo),
+    Cancelled,
+}
+
+impl LoadPhase {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Connecting => "connecting",
+            Self::Loading => "loading",
+            Self::CudaJitWarmup => "cuda-jit-warmup",
+            Self::Ready => "ready",
+        }
+    }
+}
+
+fn cancelled(cancel: Option<&CancellationToken>) -> bool {
+    cancel.is_some_and(CancellationToken::is_cancelled)
+}
+
+fn publish_load_phase(
+    app: &AppHandle,
+    chat: &ChatState,
+    identity: LoadIdentity,
+    model_id: &str,
+    model_name: &str,
+    phase: LoadPhase,
+    provider_name: Option<String>,
+) -> bool {
+    if !chat.set_model_loading(
+        identity.vault_generation,
+        identity.load_id,
+        model_id.to_string(),
+        model_name.to_string(),
+        phase.as_str().to_string(),
+        provider_name.clone(),
+    ) {
+        return false;
+    }
+    emit_load_progress(
+        app,
+        identity.vault_generation,
+        identity.load_id,
+        model_id,
+        model_name,
+        phase,
+        provider_name,
+    );
+    true
+}
+
+/// Shared implementation for manual model selection and the Vault-open
+/// preload. The operation mutex is deliberately owned by the caller: the
+/// preload must remain cancellable while Vault lifecycle commands proceed.
+async fn load_model_inner(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+    chat: &ChatState,
+    model_id: &str,
+    identity: LoadIdentity,
+    cancel: Option<&CancellationToken>,
+) -> Result<LoadOutcome> {
+    if cancelled(cancel) || !chat.is_current_load(identity.vault_generation, identity.load_id) {
+        return Ok(LoadOutcome::Cancelled);
+    }
+
+    let name = resolve_display_name(state, model_id)
         .await
-        .unwrap_or_else(|| model_id.clone());
+        .unwrap_or_else(|| model_id.to_string());
 
     let session = if let Some((provider_id_str, _remote_id)) = model_id.split_once(':') {
-        let provider_name = resolve_provider_name(&state, provider_id_str).await;
-        emit_load_progress(&app, &model_id, &name, LoadPhase::Connecting, provider_name);
-        load_api_key_model(&state, &model_id, provider_id_str).await?
+        let provider_name = resolve_provider_name(state, provider_id_str).await;
+        if !publish_load_phase(
+            app,
+            chat,
+            LoadIdentity { ..identity },
+            model_id,
+            &name,
+            LoadPhase::Connecting,
+            provider_name,
+        ) || cancelled(cancel)
+        {
+            return Ok(LoadOutcome::Cancelled);
+        }
+        // This path only performs bounded database/adapter setup. Await it
+        // to completion so cancellation cannot drop a spawn_blocking DB read
+        // while a Vault close is waiting to release its Arc.
+        load_api_key_model(state, model_id, provider_id_str).await?
     } else {
         #[cfg(feature = "llm-cpu")]
         {
             let phase = local_load_phase();
-            emit_load_progress(&app, &model_id, &name, phase, None);
-            load_local_model_by_id(&app, &state, &model_id).await?
+            if !publish_load_phase(
+                app,
+                chat,
+                LoadIdentity { ..identity },
+                model_id,
+                &name,
+                phase,
+                None,
+            ) || cancelled(cancel)
+            {
+                return Ok(LoadOutcome::Cancelled);
+            }
+            // Resolve all database metadata before entering the cancellable
+            // model load. This guarantees that close never returns while a
+            // detached spawn_blocking task still retains the database Arc.
+            let metadata = resolve_local_model_metadata(app, state, model_id).await?;
+            let future = load_local_model_from_metadata(model_id, metadata);
+            match cancel {
+                Some(cancel) => tokio::select! {
+                    _ = cancel.cancelled() => return Ok(LoadOutcome::Cancelled),
+                    result = future => result?,
+                },
+                None => future.await?,
+            }
         }
         #[cfg(not(feature = "llm-cpu"))]
         {
@@ -315,20 +447,80 @@ pub async fn load_model(
         }
     };
 
+    if cancelled(cancel) || !chat.is_current_load(identity.vault_generation, identity.load_id) {
+        return Ok(LoadOutcome::Cancelled);
+    }
+
     let info = LoadedModelInfo {
         model_id: session.model_id.clone(),
         name,
         tokenizer_repo: session.tokenizer_repo.clone(),
         context_window: session.context_window,
     };
-
-    let mut guard = chat.session.lock().map_err(|e| HolziError::CrdtInit {
+    *chat.session.lock().map_err(|e| HolziError::CrdtInit {
         reason: format!("chat.session mutex poisoned: {e}"),
-    })?;
-    *guard = Some(session);
-    drop(guard);
-    emit_load_progress(&app, &model_id, &info.name, LoadPhase::Ready, None);
-    Ok(info)
+    })? = Some(session);
+    chat.set_model_ready(
+        identity.vault_generation,
+        identity.load_id,
+        info.model_id.clone(),
+        info.name.clone(),
+    );
+    emit_load_progress(
+        app,
+        identity.vault_generation,
+        identity.load_id,
+        model_id,
+        &info.name,
+        LoadPhase::Ready,
+        None,
+    );
+    Ok(LoadOutcome::Loaded(info))
+}
+
+/// Loads a model (local catalog id or `<provider_id>:<remote_id>`) into
+/// the active session. If another model was already loaded, it is dropped
+/// first. The preload, when present, is cancelled before acquiring the
+/// serialised manual-operation guard.
+#[tauri::command]
+pub async fn load_model(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    chat: State<'_, ChatState>,
+    model_id: String,
+) -> Result<LoadedModelInfo> {
+    chat.cancel_preload_and_wait().await;
+    emit_model_load_status(&app, &chat);
+    let _operation = chat.acquire_operation()?;
+    let (vault_generation, load_id) = chat.begin_model_load();
+    let identity = LoadIdentity {
+        vault_generation,
+        load_id,
+    };
+    match load_model_inner(&app, &state, &chat, &model_id, identity, None).await {
+        Ok(LoadOutcome::Loaded(info)) => Ok(info),
+        Ok(LoadOutcome::Cancelled) => Err(HolziError::InvalidInput {
+            reason: "model load was cancelled".into(),
+        }),
+        Err(error) => {
+            chat.set_model_error(
+                vault_generation,
+                load_id,
+                Some(model_id.clone()),
+                None,
+                "model_load_failed".into(),
+            );
+            emit_load_error(
+                &app,
+                vault_generation,
+                load_id,
+                Some(model_id),
+                None,
+                "model_load_failed",
+            );
+            Err(error)
+        }
+    }
 }
 
 /// Returns the provider's display name for a `<provider_uuid>:...`
@@ -434,11 +626,11 @@ async fn load_api_key_model(
 /// (`context_window`, `tokenizer_repo`) still comes from the
 /// synchronised `models` catalog row.
 #[cfg(feature = "llm-cpu")]
-async fn load_local_model_by_id(
+async fn resolve_local_model_metadata(
     app: &AppHandle,
     state: &State<'_, AppState>,
     model_id: &str,
-) -> Result<ActiveSession> {
+) -> Result<(std::path::PathBuf, Option<i64>, String)> {
     let canonical =
         paths::canonical_model_file(app, model_id)?.ok_or_else(|| HolziError::ModelNotFound {
             id: model_id.to_string(),
@@ -474,7 +666,15 @@ async fn load_local_model_by_id(
             reason: format!("tokenizer_repo missing for model {model_id}"),
         })?;
 
-    let model = LocalModel::load(&canonical.absolute_path, Some(&tokenizer_repo))
+    Ok((canonical.absolute_path, context_window, tokenizer_repo))
+}
+
+#[cfg(feature = "llm-cpu")]
+async fn load_local_model_from_metadata(
+    model_id: &str,
+    (path, context_window, tokenizer_repo): (std::path::PathBuf, Option<i64>, String),
+) -> Result<ActiveSession> {
+    let model = LocalModel::load(&path, Some(&tokenizer_repo))
         .await
         .map_err(|e| HolziError::ModelDownload {
             reason: format!("mistralrs load: {e}"),
@@ -508,7 +708,9 @@ async fn resolve_display_name(state: &State<'_, AppState>, model_id: &str) -> Op
 
 /// Drops the current session, if any. Idempotent.
 #[tauri::command]
-pub async fn unload_local_model(chat: State<'_, ChatState>) -> Result<()> {
+pub async fn unload_local_model(app: AppHandle, chat: State<'_, ChatState>) -> Result<()> {
+    chat.cancel_preload_and_wait().await;
+    emit_model_load_status(&app, &chat);
     let _operation = chat.acquire_operation()?;
     let mut guard = chat.session.lock().map_err(|e| HolziError::CrdtInit {
         reason: format!("chat.session mutex poisoned: {e}"),
@@ -791,6 +993,39 @@ fn tool_specs(registry: &ToolRegistry) -> Vec<ToolSpec> {
         .collect()
 }
 
+/// Returns true only for model families with a known native reasoning mode.
+/// Unknown/custom models stay conservative and can still render reasoning
+/// deltas if an adapter supplies them, but are not sent an explicit enable
+/// flag that their API may reject.
+pub fn model_supports_reasoning(model_id: &str) -> bool {
+    let id = model_id.to_ascii_lowercase();
+    // Some published checkpoints use a family name that is otherwise
+    // reasoning-capable but explicitly disable thinking. Keep these exact
+    // model exceptions ahead of the family fallback below.
+    const EXACT_CAPABILITIES: &[(&str, bool)] = &[
+        ("qwen3-4b-instruct-2507", false),
+        ("qwen3-30b-a3b-instruct-2507", false),
+        ("claude-haiku-4-5", true),
+        ("claude-haiku-4-5-20251001", true),
+    ];
+    if let Some((_, supported)) = EXACT_CAPABILITIES
+        .iter()
+        .find(|(known_id, _)| id == *known_id)
+    {
+        return *supported;
+    }
+    if id.contains("qwen3") && id.contains("instruct-2507") {
+        return false;
+    }
+    id.contains("qwen3")
+        || id.contains("deepseek-r1")
+        || id.contains("gpt-oss")
+        || id.contains("claude-3-7")
+        || id.contains("claude-sonnet-4")
+        || id.contains("claude-opus-4")
+        || id.contains("claude-haiku-4-5")
+}
+
 /// Persists a user message, spawns a streaming generation, returns
 /// both message ids so the frontend can subscribe. The assistant
 /// message is inserted on completion.
@@ -950,6 +1185,7 @@ pub async fn send_message(
         .split_once(':')
         .map(|(_, remote)| remote.to_string())
         .unwrap_or_else(|| session.model_id.clone());
+    let reasoning_requested = model_supports_reasoning(&request_model_id);
 
     let tools = {
         let registry = chat
@@ -965,6 +1201,7 @@ pub async fn send_message(
         model_id: request_model_id,
         system_prompt: args.system_prompt.clone(),
         messages: history_to_messages(&history),
+        reasoning_requested,
         max_new_tokens: args.max_new_tokens,
         tools,
     };
@@ -2233,6 +2470,125 @@ pub async fn resolve_default_model(
         model_id: None,
         source: ResolveSource::None,
     })
+}
+
+/// Resolves only local candidates for the background Vault-open preload.
+/// Provider preferences are skipped and the next fallback tier is checked.
+async fn resolve_default_local_model(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+) -> Result<Option<String>> {
+    let db = active_database(state)?;
+    let this_device = db.device_id();
+    let db_clone = db.clone();
+    let (preferences_to_try, installed_local_ids) =
+        tauri::async_runtime::spawn_blocking(move || {
+            db_clone.with_connection(|conn| {
+                let last_active =
+                    preferences::get(conn, PrefScope::Device(this_device), PREF_LAST_ACTIVE_MODEL)
+                        .map_err(haex_crdt::Error::from)?;
+                let default_device =
+                    preferences::get(conn, PrefScope::Device(this_device), PREF_DEFAULT_MODEL)
+                        .map_err(haex_crdt::Error::from)?;
+                let default_vault = preferences::get(conn, PrefScope::Vault, PREF_DEFAULT_MODEL)
+                    .map_err(haex_crdt::Error::from)?;
+                let local_ids = models_store::list_all_models(conn)
+                    .map_err(haex_crdt::Error::from)?
+                    .into_iter()
+                    .filter(|row| !row.id.contains(':'))
+                    .map(|row| row.id)
+                    .collect::<Vec<_>>();
+                Ok::<_, haex_crdt::Error>(([last_active, default_device, default_vault], local_ids))
+            })
+        })
+        .await
+        .map_err(|e| HolziError::CrdtInit {
+            reason: format!("resolve_default_local_model join: {e}"),
+        })?
+        .map_err(HolziError::from)?;
+
+    let loadable_local = installed_local_ids
+        .into_iter()
+        .filter(|id| {
+            paths::canonical_model_file(app, id)
+                .ok()
+                .flatten()
+                .is_some()
+        })
+        .collect::<Vec<_>>();
+    let is_loadable = |id: &str| loadable_local.iter().any(|candidate| candidate == id);
+
+    for preference in preferences_to_try.into_iter().flatten() {
+        if !preference.contains(':') && is_loadable(&preference) {
+            return Ok(Some(preference));
+        }
+    }
+    Ok(loadable_local.into_iter().next())
+}
+
+/// Starts the single background preload for the currently-published Vault.
+/// The task owns no operation mutex, so a Vault switch can cancel it promptly.
+pub fn start_default_model_preload(app: AppHandle, chat: ChatState) {
+    let cancel = CancellationToken::new();
+    let task_cancel = cancel.clone();
+    let task_chat = chat.clone();
+    let task_app = app.clone();
+    let join = tauri::async_runtime::spawn(async move {
+        let state = task_app.state::<AppState>();
+        let model_id = match resolve_default_local_model(&task_app, &state).await {
+            Ok(Some(model_id)) => model_id,
+            Ok(None) | Err(_) => return,
+        };
+        if task_cancel.is_cancelled() {
+            return;
+        }
+
+        let (vault_generation, load_id) = task_chat.begin_model_load();
+        let identity = LoadIdentity {
+            vault_generation,
+            load_id,
+        };
+        match load_model_inner(
+            &task_app,
+            &state,
+            &task_chat,
+            &model_id,
+            identity,
+            Some(&task_cancel),
+        )
+        .await
+        {
+            Ok(LoadOutcome::Loaded(_)) | Ok(LoadOutcome::Cancelled) => {}
+            Err(error) if !task_cancel.is_cancelled() => {
+                let model_name = resolve_display_name(&state, &model_id).await;
+                if task_chat.set_model_error(
+                    vault_generation,
+                    load_id,
+                    Some(model_id.clone()),
+                    model_name.clone(),
+                    "model_load_failed".into(),
+                ) {
+                    emit_load_error(
+                        &task_app,
+                        vault_generation,
+                        load_id,
+                        Some(model_id),
+                        model_name,
+                        "model_load_failed",
+                    );
+                }
+                log::warn!("background model preload failed: {error}");
+            }
+            Err(_) => {}
+        }
+    });
+    chat.install_preload_handle(cancel, join);
+}
+
+/// Read-only snapshot of the active Vault's model-load state.
+#[tauri::command]
+pub async fn model_load_status(chat: State<'_, ChatState>) -> Result<ModelLoadStatus> {
+    Ok(chat.model_load_status())
 }
 
 /// Cancels the in-flight generation, if any. Idempotent — safe to

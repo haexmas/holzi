@@ -7,8 +7,10 @@ import {
   type Message,
   type MessageCompleteEvent,
   type MessageErrorEvent,
+  type ModelLoadErrorEvent,
   type ModelLoadPhase,
   type ModelLoadProgressEvent,
+  type ModelLoadStatusPayload,
   type RetryEvent,
   type SendMessageArgs,
   type Thread,
@@ -29,6 +31,9 @@ import { useInstance } from '~/composables/useInstance'
 import { usePreferences } from '~/composables/usePreferences'
 import { useDevice } from '~/composables/useDevice'
 import PermissionPrompt, { type PendingApproval } from '~/components/chat/PermissionPrompt.vue'
+import ComposerControl from '~/components/chat/ComposerControl.vue'
+import ReasoningAccordion from '~/components/chat/ReasoningAccordion.vue'
+import { useAutoResizeTextarea } from '~/composables/useAutoResizeTextarea'
 
 definePageMeta({
   middleware: ['onboarded'],
@@ -41,7 +46,7 @@ const models = useModels()
 const catalog = useCatalog()
 const providers = useProviders()
 const { closeAsync } = useInstance()
-const { getPrefAsync, setPrefAsync, resolveDefaultModelAsync } = usePreferences()
+const { getPrefAsync, setPrefAsync } = usePreferences()
 const { currentDeviceInfoAsync } = useDevice()
 const store = useInstancesStore()
 
@@ -90,13 +95,13 @@ const pendingTurnCompletions = new Map<string, TurnCompleteEvent>()
 
 const input = ref('')
 const busy = ref(false)
-const reasoningMode = ref<'auto' | 'on' | 'off'>('auto')
 const effortLevel = ref<'low' | 'medium' | 'high'>('medium')
 const effortTokens: Record<typeof effortLevel.value, number> = {
   low: 1024,
   medium: 4096,
   high: 8192,
 }
+const effortLabel = computed(() => t(`chat.effort.${effortLevel.value}`))
 // True while `send()` has set `activeThreadId` but has not yet appended
 // this turn's user/assistant placeholder rows — a `chat-tool-call`/
 // `chat-tool-result` for that (already-active) thread can otherwise land
@@ -105,6 +110,8 @@ const effortTokens: Record<typeof effortLevel.value, number> = {
 const turnSetupPending = ref(false)
 const lastError = ref<string | null>(null)
 const pendingSend = ref<SendMessageArgs | null>(null)
+
+const { textareaRef, reset: resetTextarea } = useAutoResizeTextarea(input)
 
 
 const downloadingId = ref<string | null>(null)
@@ -118,6 +125,7 @@ const downloadTotalBytes = ref<number | null>(null)
 const loadingPhase = ref<ModelLoadPhase | null>(null)
 const loadingModelName = ref<string>('')
 const loadingProviderName = ref<string | null>(null)
+const loadErrorModelId = ref<string | null>(null)
 
 const activeMessages = computed<Message[]>(() => {
   if (!activeThreadId.value) return []
@@ -179,13 +187,9 @@ async function refreshProviders() {
   providerModels.value = next
 }
 
-/** Refreshes the thread list and selects the first thread when needed. */
+/** Refreshes the thread list without changing the active chat draft/thread. */
 async function refreshThreads() {
   threads.value = await chat.listThreadsAsync()
-  const first = threads.value[0]
-  if (!activeThreadId.value && first) {
-    await selectThread(first.id)
-  }
 }
 
 /** Selects a thread, loading its persisted messages on first access. */
@@ -231,6 +235,7 @@ async function scrollToBottom() {
 /** Loads the selected model (local or api_key composite id). */
 async function loadModel(id: string) {
   lastError.value = null
+  loadErrorModelId.value = null
   busy.value = true
   try {
     activeModel.value = await chat.loadModelAsync(id)
@@ -433,6 +438,10 @@ async function newChat() {
   streamingMessageId.value = null
   streamingThreadId.value = null
   streamingBuffer.value = ''
+  reasoningByMessage.value = {}
+  expandedReasoning.value = new Set()
+  pendingStreamEvents.clear()
+  void resetTextarea()
 }
 
 /** Closes the active instance and returns to the locked landing page. */
@@ -733,6 +742,12 @@ async function updatePermissionMode(mode: 'manual' | 'auto' | 'plan') {
   }
 }
 
+function updateEffortLevel(level: string) {
+  if (level === 'low' || level === 'medium' || level === 'high') {
+    effortLevel.value = level
+  }
+}
+
 async function handleTurnComplete(e: TurnCompleteEvent) {
   if (turnSetupPending.value) {
     pendingTurnCompletions.set(e.threadId, e)
@@ -743,14 +758,10 @@ async function handleTurnComplete(e: TurnCompleteEvent) {
   await applyTurnComplete(e)
 }
 
-function toggleReasoning(messageId: string) {
+function setReasoningExpanded(messageId: string, expanded: boolean) {
   const next = new Set(expandedReasoning.value)
-  if (next.has(messageId)) {
-    next.delete(messageId)
-  }
-  else {
-    next.add(messageId)
-  }
+  if (expanded) next.add(messageId)
+  else next.delete(messageId)
   expandedReasoning.value = next
 }
 
@@ -759,14 +770,52 @@ function reasoningFor(messageId: string): string {
 }
 
 function onLoadProgress(e: ModelLoadProgressEvent) {
+  loadErrorModelId.value = null
   loadingPhase.value = e.phase
   loadingModelName.value = e.modelName
   loadingProviderName.value = e.providerName ?? null
   if (e.phase === 'ready') {
-    // Small delay so the "Ready" state is visible before it hides.
-    // Kept synchronous — the user's next interaction shouldn't wait.
     loadingPhase.value = null
+    void refreshActiveModel()
   }
+}
+
+async function refreshActiveModel() {
+  try {
+    activeModel.value = await chat.activeModelInfoAsync()
+  }
+  catch (e: unknown) {
+    lastError.value = errString(e)
+  }
+}
+
+function onLoadStatus(status: ModelLoadStatusPayload) {
+  if (status.status === 'loading') {
+    loadErrorModelId.value = null
+    loadingPhase.value = status.phase
+    loadingModelName.value = status.modelName
+    loadingProviderName.value = status.providerName ?? null
+  }
+  else {
+    loadingPhase.value = null
+    loadingModelName.value = 'modelName' in status ? status.modelName ?? '' : ''
+    loadingProviderName.value = null
+    loadErrorModelId.value = status.status === 'error' ? status.modelId ?? null : null
+    if (status.status === 'error') lastError.value = t('chat.loading.error')
+    if (status.status === 'ready') void refreshActiveModel()
+  }
+}
+
+function onLoadError(event: ModelLoadErrorEvent) {
+  loadingPhase.value = null
+  loadErrorModelId.value = event.modelId ?? null
+  lastError.value = t('chat.loading.error')
+}
+
+async function retryModelLoad() {
+  const modelId = loadErrorModelId.value
+  if (!modelId) return
+  await loadModel(modelId)
 }
 
 /** Localised label for the current loading phase, if any. */
@@ -797,6 +846,8 @@ onMounted(async () => {
       chat.onTurnComplete(handleTurnComplete),
       chat.onToolPermissionRequest(handleToolPermissionRequest),
       chat.onModelLoadProgress(onLoadProgress),
+      chat.onModelLoadStatus(onLoadStatus),
+      chat.onModelLoadError(onLoadError),
       models.onDownloadProgress((e) => {
         if (downloadingId.value === e.modelId) {
           downloadProgressBytes.value = e.bytesDownloaded
@@ -824,18 +875,13 @@ onMounted(async () => {
     if (unmounted) return
     deviceUuid.value = device.vaultDeviceUuid
 
-    activeModel.value = await chat.activeModelInfoAsync()
+    const loadStatus = await chat.modelLoadStatusAsync()
+    if (loadStatus) onLoadStatus(loadStatus)
+    await refreshActiveModel()
     await refreshInstalledAndCatalog()
     await refreshProviders()
     await refreshThreads()
 
-    // Session-start resolution loads without writing the remembered model.
-    if (!unmounted && !activeModel.value) {
-      const resolved = await resolveDefaultModelAsync()
-      if (!unmounted && resolved.modelId) {
-        await loadModel(resolved.modelId)
-      }
-    }
   }
   catch (e: unknown) {
     if (!unmounted) lastError.value = errString(e)
@@ -949,6 +995,13 @@ onBeforeUnmount(() => {
             @click="send(true)"
           >
             {{ t('chat.retry') }}
+          </button>
+          <button
+            v-if="loadErrorModelId"
+            class="text-xs underline"
+            @click="retryModelLoad"
+          >
+            {{ t('chat.loading.retry') }}
           </button>
           <button
             class="text-xs underline"
@@ -1084,25 +1137,13 @@ onBeforeUnmount(() => {
               <template v-if="m.role === 'tool_call'">{{ m.toolInput }}</template>
               <template v-else>{{ m.content || (streamingMessageId === m.id ? '…' : '') }}</template>
               </div>
-              <div
-              v-if="reasoningMode !== 'off' && m.role === 'assistant' && reasoningFor(m.id)"
-              class="mt-1 text-xs"
-              >
-              <button
-                v-if="reasoningMode !== 'on'"
-                type="button"
-                class="text-muted-foreground hover:text-foreground underline"
-                @click="toggleReasoning(m.id)"
-              >
-                {{ expandedReasoning.has(m.id) ? t('chat.reasoning.hide') : t('chat.reasoning.show') }}
-              </button>
-              <div
-                v-if="reasoningMode === 'on' || expandedReasoning.has(m.id)"
-                class="mt-1 whitespace-pre-wrap text-muted-foreground bg-muted/30 rounded px-2 py-1"
-              >
-                {{ reasoningFor(m.id) }}
-              </div>
-              </div>
+              <ReasoningAccordion
+                v-if="m.role === 'assistant' && reasoningFor(m.id)"
+                :reasoning="reasoningFor(m.id)"
+                :label="t('chat.reasoning.title')"
+                :expanded="expandedReasoning.has(m.id)"
+                @update:expanded="setReasoningExpanded(m.id, $event)"
+              />
             </div>
           </div>
         </div>
@@ -1114,16 +1155,54 @@ onBeforeUnmount(() => {
           <div class="mx-auto max-w-3xl">
             <div class="rounded-2xl border border-border bg-background shadow-sm transition-shadow focus-within:border-foreground/30 focus-within:shadow-md">
               <textarea
+                ref="textareaRef"
                 v-model="input"
-                rows="3"
-                class="block w-full resize-none bg-transparent px-4 pb-2 pt-3 text-sm leading-6 outline-none placeholder:text-muted-foreground"
+                rows="1"
+                class="block w-full resize-none overflow-hidden bg-transparent px-4 pb-2 pt-3 text-sm leading-6 outline-none placeholder:text-muted-foreground"
                 :placeholder="t('chat.composer.placeholder')"
                 :disabled="(busy && streamingMessageId === null) || loadingPhase !== null"
                 @keydown.enter.exact.prevent="send()"
               />
-              <div class="flex items-center justify-between gap-3 px-3 pb-3">
-                <div class="flex items-center gap-1 text-xs text-muted-foreground">
-                  <span class="hidden sm:inline">{{ t('chat.composer.newlineHint') }}</span>
+              <div class="flex flex-wrap items-center justify-between gap-2 px-3 pb-3">
+                <div class="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 text-xs" :aria-label="t('chat.composer.settingsLabel')">
+                  <ComposerControl
+                    :label="t('chat.model.label')"
+                    :value="activeModelId"
+                    :display-value="activeModel?.name"
+                    icon="lucide:cpu"
+                    control-id="chat-model"
+                    :disabled="busy || modelGroups.length === 0"
+                    @update:value="loadModel"
+                  >
+                    <option value="" disabled>{{ t('chat.model.choose') }}</option>
+                    <optgroup v-for="group in modelGroups" :key="group.providerId" :label="group.providerName">
+                      <option v-for="m in group.models" :key="m.id" :value="m.id">{{ m.name }}</option>
+                    </optgroup>
+                  </ComposerControl>
+
+                  <ComposerControl
+                    :label="t('chat.effort.label')"
+                    :value="effortLevel"
+                    :display-value="effortLabel"
+                    icon="lucide:gauge"
+                    control-id="effort-level"
+                    :disabled="busy"
+                    @update:value="updateEffortLevel"
+                  >
+                    <option value="low">{{ t('chat.effort.low') }}</option>
+                    <option value="medium">{{ t('chat.effort.medium') }}</option>
+                    <option value="high">{{ t('chat.effort.high') }}</option>
+                  </ComposerControl>
+
+                  <PermissionPrompt
+                    :mode="permissionMode"
+                    :pending-approvals="pendingApprovals"
+                    :disabled="!deviceUuid || permissionModeSaving"
+                    @update:mode="updatePermissionMode"
+                    @allow="respondToApproval($event, 'allow')"
+                    @deny="respondToApproval($event, 'deny')"
+                    @cancel="abort"
+                  />
                 </div>
                 <UiButton
                   v-if="streamingMessageId || turnSetupPending"
@@ -1147,57 +1226,6 @@ onBeforeUnmount(() => {
                   <Icon name="lucide:arrow-up" class="h-3.5 w-3.5" />
                 </UiButton>
               </div>
-            </div>
-
-            <div class="flex flex-wrap items-center gap-2 pt-3 text-xs" :aria-label="t('chat.composer.settingsLabel')">
-              <div class="flex items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5">
-                <Icon name="lucide:cpu" class="h-3.5 w-3.5 text-muted-foreground" />
-                <label for="chat-model" class="text-muted-foreground">{{ t('chat.model.label') }}</label>
-                <select
-                  id="chat-model"
-                  v-if="modelGroups.length > 0"
-                  class="max-w-40 bg-transparent font-medium outline-none"
-                  :value="activeModelId"
-                  :disabled="busy"
-                  @change="(e) => loadModel((e.target as HTMLSelectElement).value)"
-                >
-                  <option value="" disabled>{{ t('chat.model.choose') }}</option>
-                  <optgroup v-for="group in modelGroups" :key="group.providerId" :label="group.providerName">
-                    <option v-for="m in group.models" :key="m.id" :value="m.id">{{ m.name }}</option>
-                  </optgroup>
-                </select>
-                <span v-else class="font-medium">{{ activeModel?.name || t('chat.model.none') }}</span>
-              </div>
-
-              <div class="flex items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5">
-                <Icon name="lucide:brain" class="h-3.5 w-3.5 text-muted-foreground" />
-                <label for="reasoning-mode" class="text-muted-foreground">{{ t('chat.reasoning.label') }}</label>
-                <select id="reasoning-mode" v-model="reasoningMode" class="bg-transparent font-medium outline-none" :disabled="busy">
-                  <option value="auto">{{ t('chat.reasoning.auto') }}</option>
-                  <option value="on">{{ t('chat.reasoning.on') }}</option>
-                  <option value="off">{{ t('chat.reasoning.off') }}</option>
-                </select>
-              </div>
-
-              <div class="flex items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5">
-                <Icon name="lucide:gauge" class="h-3.5 w-3.5 text-muted-foreground" />
-                <label for="effort-level" class="text-muted-foreground">{{ t('chat.effort.label') }}</label>
-                <select id="effort-level" v-model="effortLevel" class="bg-transparent font-medium outline-none" :disabled="busy">
-                  <option value="low">{{ t('chat.effort.low') }}</option>
-                  <option value="medium">{{ t('chat.effort.medium') }}</option>
-                  <option value="high">{{ t('chat.effort.high') }}</option>
-                </select>
-              </div>
-
-              <PermissionPrompt
-                :mode="permissionMode"
-                :pending-approvals="pendingApprovals"
-                :disabled="!deviceUuid || permissionModeSaving"
-                @update:mode="updatePermissionMode"
-                @allow="respondToApproval($event, 'allow')"
-                @deny="respondToApproval($event, 'deny')"
-                @cancel="abort"
-              />
             </div>
           </div>
         </form>

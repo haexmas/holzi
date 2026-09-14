@@ -28,6 +28,16 @@ fn user_and_assistant_ids_never_collide_for_the_same_key() {
 }
 
 #[test]
+fn reasoning_capability_is_derived_conservatively_from_the_model_id() {
+    assert!(model_supports_reasoning("Qwen/Qwen3-4B-Instruct"));
+    assert!(model_supports_reasoning("claude-sonnet-4-20250514"));
+    assert!(model_supports_reasoning("claude-haiku-4-5-20251001"));
+    assert!(!model_supports_reasoning("Qwen/Qwen2.5-0.5B-Instruct"));
+    assert!(!model_supports_reasoning("claude-3-5-sonnet"));
+    assert!(!model_supports_reasoning("Qwen/Qwen3-4B-Instruct-2507"));
+}
+
+#[test]
 fn role_namespaces_prevent_nested_key_collisions() {
     let (_, assistant_id) = derive_message_ids("key");
     let (nested_user_id, _) = derive_message_ids("key:assistant");
@@ -153,6 +163,7 @@ async fn initial_http_failures_use_the_same_bounded_retry_budget() {
             model_id: "test".into(),
             system_prompt: None,
             messages: Vec::new(),
+            reasoning_requested: false,
             max_new_tokens: None,
             tools: Vec::new(),
         };
@@ -203,6 +214,7 @@ async fn initial_request_can_be_cancelled_before_response_headers() {
             model_id: "test".into(),
             system_prompt: None,
             messages: Vec::new(),
+            reasoning_requested: false,
             max_new_tokens: None,
             tools: Vec::new(),
         };

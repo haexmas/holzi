@@ -5,6 +5,11 @@
 **Status**: Draft
 **Input**: Grill-Session vom 2026-09-10; Ergebnisse in [ADR-0001](../../docs/adr/0001-device-scoped-data-convention.md) und [CONTEXT.md](../../CONTEXT.md)
 
+> **Cross-reference:** Spec 004 (`specs/004-chat-window-handling`) supersedes
+> this document's assumptions about Chat entry, Composer layout, and
+> Reasoning visibility. The model fallback and persistence contract defined
+> here remains authoritative.
+
 ## Clarifications
 
 ### Session 2026-09-10

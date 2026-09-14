@@ -263,6 +263,52 @@ fn resolve_duplicate_key_with_mismatched_thread_is_invalid_input() {
 }
 
 #[test]
+fn a_null_thread_id_always_starts_a_new_thread() {
+    let db = open_db();
+    db.with_connection(|conn| {
+        let first = persist_send_transaction(
+            conn,
+            "new-chat-1",
+            None,
+            "first conversation",
+            None,
+            "model-a",
+            1,
+        )
+        .unwrap();
+        let second = persist_send_transaction(
+            conn,
+            "new-chat-2",
+            None,
+            "second conversation",
+            None,
+            "model-a",
+            2,
+        )
+        .unwrap();
+
+        let first_thread = match first {
+            PersistedSend::Fresh { thread_id, .. } => thread_id,
+            other => panic!("expected first send to be fresh, got {other:?}"),
+        };
+        let second_thread = match second {
+            PersistedSend::Fresh { thread_id, .. } => thread_id,
+            other => panic!("expected second send to be fresh, got {other:?}"),
+        };
+        assert_ne!(first_thread, second_thread);
+
+        let first_messages = chat_messages::list_messages(conn, first_thread).unwrap();
+        let second_messages = chat_messages::list_messages(conn, second_thread).unwrap();
+        assert_eq!(first_messages.len(), 1);
+        assert_eq!(second_messages.len(), 1);
+        assert_eq!(first_messages[0].content, "first conversation");
+        assert_eq!(second_messages[0].content, "second conversation");
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
 fn legacy_key_retries_keep_the_original_assistant_id() {
     let db = open_db();
     let key = "legacy-key";
