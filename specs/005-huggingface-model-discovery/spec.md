@@ -69,6 +69,10 @@ Ein Nutzer wählt aus einem Treffer eine konkrete GGUF-Datei, sieht die relevant
 3. **Given** der Download ist erfolgreich, **When** der Download abgeschlossen wird, **Then** wird das Modell in der bestehenden lokalen Modellverwaltung registriert, erscheint in der Modellliste und kann im Chat geladen werden.
 4. **Given** der Nutzer startet denselben Download erneut, **When** das Modell bereits mit derselben Datei installiert ist, **Then** wird kein zweiter unvollständiger Eintrag erzeugt und der Zustand wird idempotent behandelt.
 5. **Given** Download, Registrierung oder Modellprüfung schlägt fehl, **When** der Fehler angezeigt wird, **Then** bleiben bestehende installierte Modelle nutzbar und ein unvollständiger Download wird nicht als installiert angeboten.
+6. **Given** der Server kündigt zehn Bytes an, beendet den Body aber sauber nach vier Bytes, **When** der Download den Body erneut anfordert, **Then** wird der vier Byte große Teilstand niemals als vollständiges GGUF veröffentlicht; Holzi setzt mit einem sicheren Resume fort oder startet bei Byte 0 neu und veröffentlicht erst nach exakt zehn Bytes.
+7. **Given** ein Teilstand enthält bereits Bytes, aber die vorherige Antwort hatte weder `ETag` noch `Last-Modified`, **When** Holzi den Download wiederholt, **Then** sendet Holzi keinen `Range`-Request mit ungesichertem Offset, sondern verwirft den Teilstand und startet bei Byte 0.
+8. **Given** ein Retry liefert `206 Partial Content`, aber `Content-Range` fehlt, beginnt am falschen Offset, widerspricht dem bekannten Gesamtumfang oder passt nicht zu `Content-Length`, **When** Holzi die Antwort verarbeitet, **Then** hängt Holzi die Bytes nicht an und veröffentlicht keine verkürzte oder aus verschiedenen Ständen zusammengesetzte Datei; der Download startet neu oder liefert einen strukturierten Fehler.
+9. **Given** der Server liefert nach einem Resume-Versuch wegen eines geänderten Validators wieder `200 OK`, **When** Holzi die Antwort verarbeitet, **Then** verwirft Holzi den alten Teilstand und verarbeitet den vollständigen Body als neue Basis.
 
 ### User Story 3 - Modell-Metadaten und Runtime-Kompatibilität (Priority: P1)
 
