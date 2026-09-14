@@ -328,9 +328,10 @@ sein.
 - **FR-017a**: Der Settings-Button MUSS ein Popover mit Modellwahl und
   Effort-Auswahl öffnen; Modell und Effort DÜRFEN nicht als zwei separate
   Controls in der Composer-Reihe erscheinen.
-- **FR-017b**: Der geschlossene Settings-Button MUSS den Modellnamen mit einer
-  responsiven visuellen Maximalbreite und Ellipsis darstellen; der vollständige
-  Name MUSS über den zugänglichen Namen und/oder einen Tooltip erreichbar sein.
+- **FR-017b**: Der geschlossene Settings-Button MUSS den Modellnamen auf
+  maximal 20 Zeichen inklusive Ellipsis begrenzen und zusätzlich eine
+  responsive visuelle Maximalbreite verwenden; der vollständige Name MUSS über
+  den zugänglichen Namen und/oder einen Tooltip erreichbar sein.
 - **FR-018**: Die Freigabe MUSS als eigenes Dropdown mit den Modi Plan, Manuell
   und Automatisch neben dem Settings-Button erreichbar sein.
 - **FR-018a**: Die Controls MÜSSEN ihren aktuellen Wert kompakt anzeigen und

@@ -14,7 +14,7 @@
 ## Composer
 
 - [X] Ein gemeinsamer Settings-Button bündelt Modell und Effort in einem Popover.
-- [X] Der Modellname im geschlossenen Settings-Button hat eine responsive Maximalbreite mit Ellipsis und bleibt vollständig zugänglich.
+- [X] Der Modellname im geschlossenen Settings-Button ist auf maximal 20 Zeichen inklusive Ellipsis begrenzt, hat zusätzlich eine responsive Maximalbreite und bleibt vollständig zugänglich.
 - [X] Das Freigabe-Control bleibt ein eigenes Dropdown für Plan, Manuell und Automatisch.
 - [X] Settings-Button, Freigabe-Dropdown und Senden/Abbrechen liegen in einer Reihe unterhalb der Textarea.
 - [X] Das Settings-Popover öffnet sichtbar oberhalb der Reihe und wird nicht vom scrollenden Composer-Container abgeschnitten.

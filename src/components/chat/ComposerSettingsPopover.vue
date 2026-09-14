@@ -9,6 +9,8 @@ type ModelGroup = {
   models: { id: string, name: string }[]
 }
 
+const MODEL_NAME_MAX_LENGTH = 20
+
 const props = defineProps<{
   modelId: string
   modelName?: string
@@ -32,6 +34,14 @@ const popover = ref<HTMLElement | null>(null)
 const isOpen = ref(false)
 const popoverStyle = ref<Record<string, string>>({})
 const effortLevels: EffortLevel[] = ['low', 'medium', 'high']
+
+const truncatedModelName = computed(() => {
+  const name = props.modelName || t('chat.model.choose')
+  const characters = Array.from(name)
+  return characters.length > MODEL_NAME_MAX_LENGTH
+    ? `${characters.slice(0, MODEL_NAME_MAX_LENGTH - 1).join('')}…`
+    : name
+})
 
 const effortIndex = computed(() => effortLevels.indexOf(props.effortLevel))
 
@@ -124,7 +134,7 @@ onBeforeUnmount(() => {
       :disabled="disabled"
       @click="togglePopover"
     >
-      <span class="max-w-[8rem] truncate sm:max-w-[11rem] lg:max-w-[15rem]">{{ modelName || t('chat.model.choose') }}</span>
+      <span class="max-w-[8rem] truncate sm:max-w-[11rem] lg:max-w-[15rem]">{{ truncatedModelName }}</span>
       <span aria-hidden="true">·</span>
       <span class="shrink-0">{{ effortLabel }}</span>
       <Icon name="lucide:chevron-down" class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
