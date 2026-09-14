@@ -9,6 +9,23 @@ tags: [coding, maintainability, architecture, code-review, testing]
 When working in any codebase, optimize for code that another developer can
 understand, verify, change, and remove safely.
 
+## Make changes in repository-local worktrees
+
+- For any existing Git repository, all changes MUST be authored in a dedicated
+  repository-local worktree on a topic branch. This applies to source code,
+  tests, documentation, configuration, and generated files that are part of
+  the change.
+- A repository-local worktree is a directory registered for the target
+  repository by `git worktree list`. A copied directory or an unrelated clone
+  does not satisfy this requirement.
+- Before the first edit, verify the repository root, the active branch, and
+  the registered worktrees. If no suitable worktree exists, create one before
+  modifying files.
+- Keep the primary checkout reserved for inspection and worktree management;
+  do not author changes there. Read-only inspection of any checkout is fine.
+- Keep each task isolated in its own worktree and topic branch so that changes
+  can be reviewed, tested, committed, and removed independently.
+
 ## Lines of code are a signal, not a rule
 
 - Do not enforce a universal maximum for functions, files, or pull requests.
