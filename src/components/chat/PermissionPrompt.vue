@@ -38,9 +38,9 @@ const emit = defineEmits<{
     icon="lucide:shield-check"
     control-id="permission-mode"
     :options="[
+      { value: 'plan', label: t('chat.permission.plan') },
       { value: 'manual', label: t('chat.permission.manual') },
       { value: 'auto', label: t('chat.permission.auto') },
-      { value: 'plan', label: t('chat.permission.plan') },
     ]"
     :disabled="disabled"
     @update:value="emit('update:mode', $event as 'manual' | 'auto' | 'plan')"

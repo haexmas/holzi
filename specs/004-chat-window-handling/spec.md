@@ -161,7 +161,8 @@ verständlich beschriftet in einer Reihe unterhalb der Textarea angeordnet sein.
    werden, ohne zwei separate Controls in der Composer-Reihe zu rendern. Die
    Effort-Auswahl wird als deutlich greifbarer Slider dargestellt.
 4. **Given** der Nutzer öffnet das Freigabe-Control, **Then** bleibt dieses
-   ein eigenständiges Dropdown mit den Modi Plan, Manuell und Automatisch.
+   ein eigenständiges Dropdown mit den Modi Plan, Manuell und Automatisch in
+   genau dieser Reihenfolge.
 5. **Given** der Nutzer öffnet ein Control, **When** er eine Option auswählt,
    **Then** wird der Wert unmittelbar aktualisiert und das Control wieder
    kompakt dargestellt.
@@ -335,7 +336,8 @@ sein.
   responsive visuelle Maximalbreite verwenden; der vollständige Name MUSS über
   den zugänglichen Namen und/oder einen Tooltip erreichbar sein.
 - **FR-018**: Die Freigabe MUSS als eigenes Dropdown mit den Modi Plan, Manuell
-  und Automatisch neben dem Settings-Button erreichbar sein.
+  und Automatisch neben dem Settings-Button erreichbar sein. Die Optionen
+  MÜSSEN in genau dieser Reihenfolge erscheinen.
 - **FR-018a**: Die Controls MÜSSEN ihren aktuellen Wert kompakt anzeigen und
   Details bzw. Auswahloptionen erst nach Interaktion öffnen.
 - **FR-018b**: Modell- und Freigabeauswahl MÜSSEN die vorhandenen Shadcn-

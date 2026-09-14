@@ -55,7 +55,7 @@
    Freigabe-Dropdown; es gibt keinen separaten Reasoning-Schalter.
 3. Den Settings-Button öffnen, Modell und Effort im gemeinsamen Popover ändern
    und beide Werte wieder ablesen. Das Freigabe-Dropdown separat öffnen und
-   zwischen Plan, Manuell und Automatisch wechseln. Prüfen, dass die Effort-
+   in der Reihenfolge Plan, Manuell, Automatisch wechseln. Prüfen, dass die Effort-
    Auswahl als dicker, gut greifbarer Slider erscheint und beide Dropdowns
    einheitlich im Shadcn-Stil aussehen.
 4. Falls ein langer Modellname verfügbar ist, prüfen: Der Name wird im
