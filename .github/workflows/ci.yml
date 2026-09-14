@@ -32,6 +32,9 @@ jobs:
       - name: Check chat state
         run: corepack pnpm check:chat-state
 
+      - name: Typecheck frontend
+        run: corepack pnpm typecheck
+
       - name: Validate documentation
         run: python3 scripts/ci/check-docs.py
   rust:
