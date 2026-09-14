@@ -1200,12 +1200,13 @@ onBeforeUnmount(() => {
                 </UiButton>
                 <UiButton
                   v-else
-                  class="shrink-0 gap-2"
-                  size="sm"
+                  class="shrink-0"
+                  size="icon-sm"
                   type="submit"
                   :disabled="!input.trim() || busy || loadingPhase !== null"
+                  :aria-label="t('chat.send')"
+                  :title="t('chat.send')"
                 >
-                  {{ t('chat.send') }}
                   <Icon name="lucide:arrow-up" class="h-3.5 w-3.5" />
                 </UiButton>
               </div>
