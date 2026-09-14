@@ -98,7 +98,7 @@ description: "Actionable, dependency-ordered task list for chat window and sessi
 - [X] T026 [US3] Move the model picker and Effort control into the single settings popover in `src/pages/chat/[instance].vue` without changing model-selection semantics.
 - [X] T027 [US3] Remove the Reasoning mode control/state from `src/pages/chat/[instance].vue` and keep Reasoning automatic for models that support it; preserve the existing Effort control values and disabled states.
 - [X] T028 [US3] Integrate `PermissionPrompt` into the compact Composer control area in `src/pages/chat/[instance].vue` without changing Spec 003 approval behavior.
-- [X] T029 [US3] Keep the Settings-Button, separate Permission-Dropdown, and send/cancel action in one responsive row below the textarea; make the Settings-Popover adapt to narrow viewports and preserve keyboard focus styles.
+- [X] T029 [US3] Keep the Settings-Button, separate Permission-Dropdown, and send/cancel action in one responsive row below the textarea; make the Settings-Popover visible above the row, immune to composer overflow clipping, and adapt to narrow viewports while preserving keyboard focus styles.
 - [X] T030 [US3] Verify all new Composer labels and option text in `src/i18n/locales/de.json` and `src/i18n/locales/en.json`, excluding a Reasoning-mode label and including accessible labels and current-value announcements.
 - [ ] T031 [US3] Execute the Composer desktop, narrow-viewport, keyboard, and unchanged-value scenarios in `specs/004-chat-window-handling/quickstart.md`.
 

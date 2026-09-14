@@ -169,7 +169,8 @@ verständlich beschriftet in einer Reihe unterhalb der Textarea angeordnet sein.
    unterbrechbaren Vorgangs entsprechend deaktiviert.
 7. **Given** ein schmales Fenster oder ein mobiles Layout, **Then** bleibt die
    Control-Reihe horizontal bedienbar; das Settings-Popover passt sich der
-   verfügbaren Breite an und darf den Composer nicht unbedienbar machen.
+   verfügbaren Breite an, öffnet sichtbar oberhalb der Reihe und darf nicht von
+   einem scrollenden Composer-Container abgeschnitten werden.
 8. **Given** ein Control wird nur geöffnet und ohne Auswahl geschlossen,
    **Then** bleibt der bisherige Wert unverändert.
 9. **Then** müssen alle Controls Tastatur- und Screenreader-bedienbar sein und
@@ -327,14 +328,18 @@ sein.
 - **FR-017a**: Der Settings-Button MUSS ein Popover mit Modellwahl und
   Effort-Auswahl öffnen; Modell und Effort DÜRFEN nicht als zwei separate
   Controls in der Composer-Reihe erscheinen.
+- **FR-017b**: Der geschlossene Settings-Button MUSS den Modellnamen mit einer
+  responsiven visuellen Maximalbreite und Ellipsis darstellen; der vollständige
+  Name MUSS über den zugänglichen Namen und/oder einen Tooltip erreichbar sein.
 - **FR-018**: Die Freigabe MUSS als eigenes Dropdown mit den Modi Plan, Manuell
   und Automatisch neben dem Settings-Button erreichbar sein.
 - **FR-018a**: Die Controls MÜSSEN ihren aktuellen Wert kompakt anzeigen und
   Details bzw. Auswahloptionen erst nach Interaktion öffnen.
 - **FR-019**: Settings-Button, Freigabe-Dropdown sowie Senden-/Abbrechen-Aktion
   MÜSSEN in einer Reihe direkt unterhalb der Textarea angeordnet sein. Auf
-  schmalen Viewports MUSS diese Reihe bedienbar bleiben; das Popover darf sich
-  an die verfügbare Breite anpassen.
+  schmalen Viewports MUSS diese Reihe bedienbar bleiben; das Popover MUSS sich
+  an die verfügbare Breite anpassen, sichtbar oberhalb der Reihe öffnen und darf
+  nicht durch einen scrollenden Composer-Container abgeschnitten werden.
 - **FR-020**: Alle Controls MÜSSEN einen zugänglichen Namen, Tastaturbedienung
   und eine Zustandsansage für Screenreader anbieten.
 - **FR-021**: Die bestehenden fachlichen Semantiken für Modellwahl, Effort,

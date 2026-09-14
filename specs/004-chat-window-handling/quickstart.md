@@ -56,8 +56,12 @@
 3. Den Settings-Button öffnen, Modell und Effort im gemeinsamen Popover ändern
    und beide Werte wieder ablesen. Das Freigabe-Dropdown separat öffnen und
    zwischen Plan, Manuell und Automatisch wechseln.
-4. Einen Prompt mit mehreren `Shift+Enter`-Zeilen eingeben.
-5. Prüfen: Die Textarea wächst bis maximal 8 sichtbare Zeilen und scrollt
+4. Falls ein langer Modellname verfügbar ist, prüfen: Der Name wird im
+   geschlossenen Button mit Ellipsis begrenzt, bleibt aber per Tooltip bzw.
+   Screenreader vollständig verständlich. Prüfen, dass sich das Popover sichtbar
+   oberhalb der Reihe öffnet und nicht abgeschnitten wird.
+5. Einen Prompt mit mehreren `Shift+Enter`-Zeilen eingeben.
+6. Prüfen: Die Textarea wächst bis maximal 8 sichtbare Zeilen und scrollt
    danach intern.
 6. Mit `Enter` senden und prüfen: Inhalt wird vollständig gesendet, Textarea
    leert sich und schrumpft zurück.
