@@ -1,11 +1,19 @@
 <script setup lang="ts">
+import type { UnlistenFn } from '@tauri-apps/api/event'
 import { hfErrorKey, useHuggingFace, type HuggingFaceModelResult, type HuggingFaceUpdateStatus } from '~/composables/useHuggingFace'
-import { useModels, type InstalledModel } from '~/composables/useModels'
+import { useModels, type DownloadProgressEvent, type InstalledModel } from '~/composables/useModels'
 import { useCatalog, type CatalogEntryWithFit } from '~/composables/useCatalog'
 import { useChat } from '~/composables/useChat'
 
 const { t } = useI18n()
-const { listInstalledAsync, deleteAsync, downloadFromCatalogAsync, downloadFromHfAsync } = useModels()
+const {
+  listInstalledAsync,
+  deleteAsync,
+  downloadFromCatalogAsync,
+  downloadFromHfAsync,
+  onDownloadProgress,
+  onDownloadComplete,
+} = useModels()
 const { checkUpdatesAsync, installUpdateAsync } = useHuggingFace()
 const { listAsync: listCatalogAsync } = useCatalog()
 const { loadModelAsync, loadModelWithIntegrityOverrideAsync, activeModelInfoAsync } = useChat()
@@ -30,6 +38,10 @@ const installingUpdateId = ref<string | null>(null)
 const busyModelId = ref<string | null>(null)
 const deleteErrorKey = ref<string | null>(null)
 const loadErrorKey = ref<string | null>(null)
+const downloadStates = ref<Record<string, DownloadProgressEvent>>({})
+
+let unlistenDownloadProgress: UnlistenFn | null = null
+let unlistenDownloadComplete: UnlistenFn | null = null
 
 interface IntegrityDialogState {
   modelId: string
@@ -90,6 +102,7 @@ async function installUpdateForAsync(modelId: string) {
   }
   finally {
     installingUpdateId.value = null
+    clearDownloadState(modelId)
   }
 }
 
@@ -105,7 +118,42 @@ async function downloadCatalogEntryAsync(entry: CatalogEntryWithFit) {
   }
   finally {
     busyModelId.value = null
+    clearDownloadState(entry.id)
   }
+}
+
+function setDownloadState(event: DownloadProgressEvent) {
+  downloadStates.value = {
+    ...downloadStates.value,
+    [event.modelId]: event,
+  }
+}
+
+function clearDownloadState(modelId: string) {
+  if (!downloadStates.value[modelId]) return
+  const next = { ...downloadStates.value }
+  delete next[modelId]
+  downloadStates.value = next
+}
+
+function downloadPercent(modelId: string): number | null {
+  const state = downloadStates.value[modelId]
+  if (!state || state.bytesTotal === null || state.bytesTotal <= 0) return null
+  return Math.min(100, Math.max(0, Math.round((state.bytesDownloaded / state.bytesTotal) * 100)))
+}
+
+function downloadWidth(modelId: string): string {
+  return `${downloadPercent(modelId) ?? 35}%`
+}
+
+function humanBytes(n: number | null): string {
+  if (n === null) return t('models.filePicker.sizeUnknown')
+  const kb = 1024
+  const mb = kb * 1024
+  const gb = mb * 1024
+  if (n >= gb) return `${(n / gb).toFixed(1)} GB`
+  if (n >= mb) return `${(n / mb).toFixed(0)} MB`
+  return `${(n / kb).toFixed(0)} KB`
 }
 
 async function deleteModelAsync(id: string) {
@@ -204,6 +252,7 @@ async function onRepairSourceAsync() {
   }
   finally {
     integrityBusy.value = false
+    clearDownloadState(dialog.modelId)
   }
 }
 
@@ -220,16 +269,32 @@ function onIntegrityDialogOpenChange(open: boolean) {
 }
 
 function onFilePickerInstalled(_model: InstalledModel) {
+  clearDownloadState(_model.id)
   selectedRepo.value = null
   activeTab.value = 'installed'
   void reloadAsync()
 }
 
 onMounted(async () => {
+  unlistenDownloadProgress = await onDownloadProgress(setDownloadState)
+  unlistenDownloadComplete = await onDownloadComplete((model) => {
+    const state = downloadStates.value[model.id]
+    if (!state) return
+    setDownloadState({
+      modelId: model.id,
+      bytesDownloaded: model.sizeBytes,
+      bytesTotal: model.sizeBytes,
+    })
+  })
   await reloadAsync()
   // A management view visit is an explicit, user-visible update check. The
   // command is read-only and only checks models with a stored HF ref.
   await checkUpdatesNowAsync()
+})
+
+onBeforeUnmount(() => {
+  unlistenDownloadProgress?.()
+  unlistenDownloadComplete?.()
 })
 </script>
 
@@ -290,61 +355,77 @@ onMounted(async () => {
         <div
           v-for="model in installed"
           :key="model.id"
-          class="flex flex-col gap-1 rounded-md border border-neutral-300 p-3"
+          class="relative flex flex-col gap-1 overflow-hidden rounded-md border border-neutral-300 p-3"
         >
-          <div class="flex items-center justify-between gap-2">
-            <span class="font-medium">{{ model.name }}</span>
-            <span v-if="activeModelId === model.id" class="rounded bg-green-100 px-1.5 py-0.5 text-xs text-green-800">
-              {{ t('models.installed.active') }}
-            </span>
-          </div>
-          <div class="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-neutral-500">
-            <span>{{ t(`models.installed.source.${model.sourceKind}`) }}</span>
-            <span>{{ t(`models.installed.integrity.${model.integrityStatus}`) }}</span>
-          </div>
-          <div v-if="model.hfRevisionRef && updateStatuses[model.id]" class="text-xs">
-            <span v-if="updateStatuses[model.id]?.errorCode" class="text-red-500">
-              {{ t('models.update.error') }}
-            </span>
-            <span v-else-if="updateStatuses[model.id]?.updateAvailable" class="text-amber-600">
-              {{ t('models.update.available') }} ({{ t('models.update.oldRevision') }}:
-              {{ updateStatuses[model.id]?.installedRevision.slice(0, 8) }} →
-              {{ t('models.update.newRevision') }}: {{ updateStatuses[model.id]?.latestRevision?.slice(0, 8) }})
-            </span>
-            <span v-else class="text-neutral-500">{{ t('models.update.upToDate') }}</span>
-          </div>
-          <div v-else-if="model.sourceKind === 'huggingface' && !model.hfRevisionRef" class="text-xs text-neutral-500">
-            {{ t('models.update.notTrackable') }}
-          </div>
-          <div class="flex flex-wrap items-center gap-2 pt-1">
-            <UiButton
-              type="button"
-              size="sm"
-              :disabled="activeModelId === model.id"
-              :loading="busyModelId === model.id"
-              @click="loadModelHereAsync(model.id)"
-            >
-              {{ t('models.installed.load') }}
-            </UiButton>
-            <UiButton
-              v-if="updateStatuses[model.id]?.updateAvailable"
-              type="button"
-              size="sm"
-              variant="outline"
-              :loading="installingUpdateId === model.id"
-              @click="installUpdateForAsync(model.id)"
-            >
-              {{ t('models.update.install') }}
-            </UiButton>
-            <UiButton
-              type="button"
-              size="sm"
-              variant="ghost"
-              :loading="busyModelId === model.id"
-              @click="deleteModelAsync(model.id)"
-            >
-              {{ t('models.installed.delete') }}
-            </UiButton>
+          <div
+            v-if="downloadStates[model.id]"
+            class="pointer-events-none absolute inset-y-0 left-0 bg-blue-100/70 transition-[width] duration-150"
+            :class="downloadPercent(model.id) === null ? 'animate-pulse' : ''"
+            :style="{ width: downloadWidth(model.id) }"
+            role="progressbar"
+            :aria-valuenow="downloadPercent(model.id) ?? undefined"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            :aria-label="t('models.filePicker.downloadProgress', { done: humanBytes(downloadStates[model.id]?.bytesDownloaded ?? 0), total: humanBytes(downloadStates[model.id]?.bytesTotal ?? null) })"
+          />
+          <div class="relative z-10 flex flex-col gap-1">
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-medium">{{ model.name }}</span>
+              <span v-if="activeModelId === model.id" class="rounded bg-green-100 px-1.5 py-0.5 text-xs text-green-800">
+                {{ t('models.installed.active') }}
+              </span>
+            </div>
+            <div class="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-neutral-500">
+              <span>{{ t(`models.installed.source.${model.sourceKind}`) }}</span>
+              <span>{{ t(`models.installed.integrity.${model.integrityStatus}`) }}</span>
+            </div>
+            <div v-if="downloadStates[model.id]" class="text-xs text-blue-800" role="status">
+              {{ t('models.filePicker.downloadProgress', { done: humanBytes(downloadStates[model.id]?.bytesDownloaded ?? 0), total: humanBytes(downloadStates[model.id]?.bytesTotal ?? null) }) }}
+            </div>
+            <div v-if="model.hfRevisionRef && updateStatuses[model.id]" class="text-xs">
+              <span v-if="updateStatuses[model.id]?.errorCode" class="text-red-500">
+                {{ t('models.update.error') }}
+              </span>
+              <span v-else-if="updateStatuses[model.id]?.updateAvailable" class="text-amber-600">
+                {{ t('models.update.available') }} ({{ t('models.update.oldRevision') }}:
+                {{ updateStatuses[model.id]?.installedRevision.slice(0, 8) }} →
+                {{ t('models.update.newRevision') }}: {{ updateStatuses[model.id]?.latestRevision?.slice(0, 8) }})
+              </span>
+              <span v-else class="text-neutral-500">{{ t('models.update.upToDate') }}</span>
+            </div>
+            <div v-else-if="model.sourceKind === 'huggingface' && !model.hfRevisionRef" class="text-xs text-neutral-500">
+              {{ t('models.update.notTrackable') }}
+            </div>
+            <div class="flex flex-wrap items-center gap-2 pt-1">
+              <UiButton
+                type="button"
+                size="sm"
+                :disabled="activeModelId === model.id"
+                :loading="busyModelId === model.id"
+                @click="loadModelHereAsync(model.id)"
+              >
+                {{ t('models.installed.load') }}
+              </UiButton>
+              <UiButton
+                v-if="updateStatuses[model.id]?.updateAvailable"
+                type="button"
+                size="sm"
+                variant="outline"
+                :loading="installingUpdateId === model.id"
+                @click="installUpdateForAsync(model.id)"
+              >
+                {{ t('models.update.install') }}
+              </UiButton>
+              <UiButton
+                type="button"
+                size="sm"
+                variant="ghost"
+                :loading="busyModelId === model.id"
+                @click="deleteModelAsync(model.id)"
+              >
+                {{ t('models.installed.delete') }}
+              </UiButton>
+            </div>
           </div>
         </div>
       </div>
@@ -363,21 +444,37 @@ onMounted(async () => {
         <div
           v-for="entry in catalogEntries"
           :key="entry.id"
-          class="flex items-center justify-between gap-2 rounded-md border border-neutral-300 p-3"
+          class="relative flex items-center justify-between gap-2 overflow-hidden rounded-md border border-neutral-300 p-3"
         >
-          <div class="flex flex-col">
+          <div
+            v-if="downloadStates[entry.id]"
+            class="pointer-events-none absolute inset-y-0 left-0 bg-blue-100/70 transition-[width] duration-150"
+            :class="downloadPercent(entry.id) === null ? 'animate-pulse' : ''"
+            :style="{ width: downloadWidth(entry.id) }"
+            role="progressbar"
+            :aria-valuenow="downloadPercent(entry.id) ?? undefined"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            :aria-label="t('models.filePicker.downloadProgress', { done: humanBytes(downloadStates[entry.id]?.bytesDownloaded ?? 0), total: humanBytes(downloadStates[entry.id]?.bytesTotal ?? null) })"
+          />
+          <div class="relative z-10 flex flex-col">
             <span class="font-medium">{{ entry.name }}</span>
             <span class="text-xs text-neutral-500">{{ entry.parameters }} · {{ entry.quantization }} · {{ t(`models.filePicker.fit.${entry.fit}`) }}</span>
+            <span v-if="downloadStates[entry.id]" class="text-xs text-blue-800" role="status">
+              {{ t('models.filePicker.downloadProgress', { done: humanBytes(downloadStates[entry.id]?.bytesDownloaded ?? 0), total: humanBytes(downloadStates[entry.id]?.bytesTotal ?? null) }) }}
+            </span>
           </div>
-          <UiButton
-            type="button"
-            size="sm"
-            :disabled="installed.some((m) => m.id === entry.id)"
-            :loading="busyModelId === entry.id"
-            @click="downloadCatalogEntryAsync(entry)"
-          >
-            {{ installed.some((m) => m.id === entry.id) ? t('models.installed.active') : t('models.filePicker.install') }}
-          </UiButton>
+          <div class="relative z-10">
+            <UiButton
+              type="button"
+              size="sm"
+              :disabled="installed.some((m) => m.id === entry.id)"
+              :loading="busyModelId === entry.id"
+              @click="downloadCatalogEntryAsync(entry)"
+            >
+              {{ installed.some((m) => m.id === entry.id) ? t('models.installed.active') : t('models.filePicker.install') }}
+            </UiButton>
+          </div>
         </div>
       </div>
     </template>

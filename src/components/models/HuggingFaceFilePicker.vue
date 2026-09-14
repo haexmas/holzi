@@ -92,6 +92,11 @@ const canInstall = computed(() =>
   && !installing.value,
 )
 
+const downloadPercent = computed(() => {
+  if (downloadTotalBytes.value === null || downloadTotalBytes.value <= 0) return null
+  return Math.min(100, Math.max(0, Math.round((downloadedBytes.value / downloadTotalBytes.value) * 100)))
+})
+
 async function installAsync() {
   if (!preview.value || !selectedFile.value || !canInstall.value) return
   installing.value = true
@@ -137,7 +142,8 @@ onMounted(async () => {
     downloadedBytes.value = e.bytesDownloaded
     if (e.bytesTotal !== null) downloadTotalBytes.value = e.bytesTotal
   })
-  unlistenComplete = await onDownloadComplete(() => {
+  unlistenComplete = await onDownloadComplete((model) => {
+    if (model.id !== preview.value?.modelId) return
     downloadedBytes.value = downloadTotalBytes.value ?? downloadedBytes.value
   })
 })
@@ -188,73 +194,86 @@ onBeforeUnmount(() => {
       </button>
     </div>
 
-    <div v-if="selectedFile" class="flex flex-col gap-3 rounded-md border border-neutral-300 p-3">
-      <p v-if="loadingPreview" class="text-sm text-neutral-500" role="status">
-        {{ t('models.search.loading') }}
-      </p>
-      <p v-if="previewErrorKey" class="text-sm text-red-500" role="alert">
-        {{ t(previewErrorKey) }}
-      </p>
+    <div v-if="selectedFile" class="relative flex flex-col gap-3 overflow-hidden rounded-md border border-neutral-300 p-3">
+      <div
+        v-if="installing"
+        class="pointer-events-none absolute inset-y-0 left-0 bg-blue-100/70 transition-[width] duration-150"
+        :class="downloadPercent === null ? 'animate-pulse' : ''"
+        :style="{ width: `${downloadPercent ?? 35}%` }"
+        role="progressbar"
+        :aria-valuenow="downloadPercent ?? undefined"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        :aria-label="t('models.filePicker.downloadProgress', { done: humanBytes(downloadedBytes), total: humanBytes(downloadTotalBytes) })"
+      />
+      <div class="relative z-10 flex flex-col gap-3">
+        <p v-if="loadingPreview" class="text-sm text-neutral-500" role="status">
+          {{ t('models.search.loading') }}
+        </p>
+        <p v-if="previewErrorKey" class="text-sm text-red-500" role="alert">
+          {{ t(previewErrorKey) }}
+        </p>
 
-      <template v-if="preview">
-        <dl class="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-          <dt class="text-neutral-500">
-            {{ t('models.filePicker.size') }}
-          </dt>
-          <dd>{{ humanBytes(preview.sizeBytes) }}</dd>
-          <dt class="text-neutral-500">
-            {{ t('models.filePicker.quantization') }}
-          </dt>
-          <dd>{{ preview.quantization ?? t('models.filePicker.quantizationUnknown') }}</dd>
-          <dt class="text-neutral-500">
-            {{ t('models.filePicker.contextWindow') }}
-          </dt>
-          <dd>{{ preview.contextWindow ?? t('models.filePicker.contextWindowUnknown') }}</dd>
-          <dt class="text-neutral-500">
-            {{ t('models.filePicker.revision') }}
-          </dt>
-          <dd class="truncate font-mono">
-            {{ preview.revision }}
-          </dd>
-          <template v-if="preview.revisionRef">
+        <template v-if="preview">
+          <dl class="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
             <dt class="text-neutral-500">
-              {{ t('models.filePicker.revisionRef') }}
+              {{ t('models.filePicker.size') }}
             </dt>
-            <dd>{{ preview.revisionRef }}</dd>
-          </template>
-        </dl>
+            <dd>{{ humanBytes(preview.sizeBytes) }}</dd>
+            <dt class="text-neutral-500">
+              {{ t('models.filePicker.quantization') }}
+            </dt>
+            <dd>{{ preview.quantization ?? t('models.filePicker.quantizationUnknown') }}</dd>
+            <dt class="text-neutral-500">
+              {{ t('models.filePicker.contextWindow') }}
+            </dt>
+            <dd>{{ preview.contextWindow ?? t('models.filePicker.contextWindowUnknown') }}</dd>
+            <dt class="text-neutral-500">
+              {{ t('models.filePicker.revision') }}
+            </dt>
+            <dd class="truncate font-mono">
+              {{ preview.revision }}
+            </dd>
+            <template v-if="preview.revisionRef">
+              <dt class="text-neutral-500">
+                {{ t('models.filePicker.revisionRef') }}
+              </dt>
+              <dd>{{ preview.revisionRef }}</dd>
+            </template>
+          </dl>
 
-        <div v-if="preview.tokenizerRequired" class="flex flex-col gap-1">
-          <p class="text-xs text-amber-600">
-            {{ t('models.filePicker.tokenizerHint') }}
+          <div v-if="preview.tokenizerRequired" class="flex flex-col gap-1">
+            <p class="text-xs text-amber-600">
+              {{ t('models.filePicker.tokenizerHint') }}
+            </p>
+            <label class="flex flex-col gap-1">
+              <span class="text-sm font-medium">{{ t('models.filePicker.tokenizerRepoLabel') }}</span>
+              <ShadcnInput v-model="tokenizerRepoInput" :placeholder="t('models.filePicker.tokenizerRepoPlaceholder')" />
+            </label>
+          </div>
+
+          <div v-if="needsTooBigConfirmation" class="flex flex-col gap-1">
+            <p class="text-sm text-red-500" role="alert">
+              {{ t('models.filePicker.tooBigWarning') }}
+            </p>
+            <label class="flex items-center gap-2 text-sm">
+              <input v-model="tooBigConfirmed" type="checkbox">
+              {{ t('models.filePicker.tooBigConfirm') }}
+            </label>
+          </div>
+
+          <p v-if="installErrorKey" class="text-sm text-red-500" role="alert">
+            {{ t(installErrorKey) }}
           </p>
-          <label class="flex flex-col gap-1">
-            <span class="text-sm font-medium">{{ t('models.filePicker.tokenizerRepoLabel') }}</span>
-            <ShadcnInput v-model="tokenizerRepoInput" :placeholder="t('models.filePicker.tokenizerRepoPlaceholder')" />
-          </label>
-        </div>
-
-        <div v-if="needsTooBigConfirmation" class="flex flex-col gap-1">
-          <p class="text-sm text-red-500" role="alert">
-            {{ t('models.filePicker.tooBigWarning') }}
+          <p v-if="installing" class="text-sm text-neutral-500" role="status">
+            {{ t('models.filePicker.downloadProgress', { done: humanBytes(downloadedBytes), total: humanBytes(downloadTotalBytes) }) }}
           </p>
-          <label class="flex items-center gap-2 text-sm">
-            <input v-model="tooBigConfirmed" type="checkbox">
-            {{ t('models.filePicker.tooBigConfirm') }}
-          </label>
-        </div>
 
-        <p v-if="installErrorKey" class="text-sm text-red-500" role="alert">
-          {{ t(installErrorKey) }}
-        </p>
-        <p v-if="installing" class="text-sm text-neutral-500" role="status">
-          {{ t('models.filePicker.downloadProgress', { done: humanBytes(downloadedBytes), total: humanBytes(downloadTotalBytes) }) }}
-        </p>
-
-        <UiButton type="button" :disabled="!canInstall" :loading="installing" @click="installAsync">
-          {{ t('models.filePicker.install') }}
-        </UiButton>
-      </template>
+          <UiButton type="button" :disabled="!canInstall" :loading="installing" @click="installAsync">
+            {{ t('models.filePicker.install') }}
+          </UiButton>
+        </template>
+      </div>
     </div>
   </section>
 </template>
