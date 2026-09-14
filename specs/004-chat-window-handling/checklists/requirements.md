@@ -13,7 +13,9 @@
 
 ## Composer
 
-- [X] Modell-, Effort- und Freigabe-Control liegen im gemeinsamen Composer; Reasoning hat keinen eigenen Schalter.
+- [X] Ein gemeinsamer Settings-Button bündelt Modell und Effort in einem Popover.
+- [X] Das Freigabe-Control bleibt ein eigenes Dropdown für Plan, Manuell und Automatisch.
+- [X] Settings-Button, Freigabe-Dropdown und Senden/Abbrechen liegen in einer Reihe unterhalb der Textarea.
 - [X] Controls sind kompakt, responsive und zugänglich.
 - [X] Textarea wächst bis maximal 8 sichtbare Zeilen und scrollt danach intern.
 - [X] `Enter` und `Shift+Enter` behalten die festgelegte Semantik.

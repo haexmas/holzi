@@ -16,7 +16,7 @@ const controlId = computed(() => props.controlId ?? `composer-control-${props.la
 </script>
 
 <template>
-  <div class="flex min-w-0 items-center gap-1 rounded-xl border border-border/70 bg-muted/20 px-2 py-1">
+  <div class="flex min-w-0 shrink-0 items-center gap-1 rounded-xl border border-border/70 bg-muted/20 px-2 py-1">
     <Icon v-if="icon" :name="icon" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
     <label :for="controlId" class="sr-only">{{ label }}</label>
     <select

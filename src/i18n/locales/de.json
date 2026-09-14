@@ -124,7 +124,13 @@
     "composer": {
       "placeholder": "Nachricht an Holzi …",
       "newlineHint": "Shift + Enter für eine neue Zeile",
-      "settingsLabel": "Chat-Einstellungen"
+      "settingsLabel": "Chat-Einstellungen",
+      "settingsButton": "Modell- und Aufwandseinstellungen öffnen",
+      "settingsPopover": {
+        "title": "Chat-Einstellungen",
+        "modelLabel": "Modell",
+        "effortLabel": "Aufwand"
+      }
     },
     "effort": {
       "label": "Effort",

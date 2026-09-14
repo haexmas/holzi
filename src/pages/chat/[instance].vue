@@ -31,7 +31,7 @@ import { useInstance } from '~/composables/useInstance'
 import { usePreferences } from '~/composables/usePreferences'
 import { useDevice } from '~/composables/useDevice'
 import PermissionPrompt, { type PendingApproval } from '~/components/chat/PermissionPrompt.vue'
-import ComposerControl from '~/components/chat/ComposerControl.vue'
+import ComposerSettingsPopover from '~/components/chat/ComposerSettingsPopover.vue'
 import ReasoningAccordion from '~/components/chat/ReasoningAccordion.vue'
 import { useAutoResizeTextarea } from '~/composables/useAutoResizeTextarea'
 
@@ -1163,36 +1163,19 @@ onBeforeUnmount(() => {
                 :disabled="(busy && streamingMessageId === null) || loadingPhase !== null"
                 @keydown.enter.exact.prevent="send()"
               />
-              <div class="flex flex-wrap items-center justify-between gap-2 px-3 pb-3">
-                <div class="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 text-xs" :aria-label="t('chat.composer.settingsLabel')">
-                  <ComposerControl
-                    :label="t('chat.model.label')"
-                    :value="activeModelId"
-                    :display-value="activeModel?.name"
-                    icon="lucide:cpu"
-                    control-id="chat-model"
-                    :disabled="busy || modelGroups.length === 0"
-                    @update:value="loadModel"
-                  >
-                    <option value="" disabled>{{ t('chat.model.choose') }}</option>
-                    <optgroup v-for="group in modelGroups" :key="group.providerId" :label="group.providerName">
-                      <option v-for="m in group.models" :key="m.id" :value="m.id">{{ m.name }}</option>
-                    </optgroup>
-                  </ComposerControl>
-
-                  <ComposerControl
-                    :label="t('chat.effort.label')"
-                    :value="effortLevel"
-                    :display-value="effortLabel"
-                    icon="lucide:gauge"
-                    control-id="effort-level"
+              <div class="flex min-w-0 items-center gap-2 overflow-x-auto px-1 pb-1" :aria-label="t('chat.composer.settingsLabel')">
+                <div class="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto text-xs">
+                  <ComposerSettingsPopover
+                    :model-id="activeModelId"
+                    :model-name="activeModel?.name"
+                    :model-groups="modelGroups"
+                    :effort-level="effortLevel"
+                    :effort-label="effortLabel"
                     :disabled="busy"
-                    @update:value="updateEffortLevel"
-                  >
-                    <option value="low">{{ t('chat.effort.low') }}</option>
-                    <option value="medium">{{ t('chat.effort.medium') }}</option>
-                    <option value="high">{{ t('chat.effort.high') }}</option>
-                  </ComposerControl>
+                    :model-disabled="modelGroups.length === 0"
+                    @update:model-id="loadModel"
+                    @update:effort-level="updateEffortLevel"
+                  />
 
                   <PermissionPrompt
                     :mode="permissionMode"
@@ -1206,7 +1189,7 @@ onBeforeUnmount(() => {
                 </div>
                 <UiButton
                   v-if="streamingMessageId || turnSetupPending"
-                  class="gap-2"
+                  class="shrink-0 gap-2"
                   size="sm"
                   variant="destructive"
                   type="button"
@@ -1217,7 +1200,7 @@ onBeforeUnmount(() => {
                 </UiButton>
                 <UiButton
                   v-else
-                  class="gap-2"
+                  class="shrink-0 gap-2"
                   size="sm"
                   type="submit"
                   :disabled="!input.trim() || busy || loadingPhase !== null"

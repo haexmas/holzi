@@ -50,9 +50,12 @@
 ## 3. Composer und Textarea
 
 1. Den Composer auf Desktop öffnen.
-2. Prüfen: Modell, Effort und Freigabe erscheinen kompakt innerhalb des
-   gemeinsamen Eingabecontainers; es gibt keinen separaten Reasoning-Schalter.
-3. Jedes Control öffnen, eine andere Option wählen und den Wert wieder ablesen.
+2. Prüfen: Unterhalb der Textarea gibt es eine durchgehende Reihe mit genau
+   einem Settings-Button für Modell und Effort sowie einem separaten
+   Freigabe-Dropdown; es gibt keinen separaten Reasoning-Schalter.
+3. Den Settings-Button öffnen, Modell und Effort im gemeinsamen Popover ändern
+   und beide Werte wieder ablesen. Das Freigabe-Dropdown separat öffnen und
+   zwischen Plan, Manuell und Automatisch wechseln.
 4. Einen Prompt mit mehreren `Shift+Enter`-Zeilen eingeben.
 5. Prüfen: Die Textarea wächst bis maximal 8 sichtbare Zeilen und scrollt
    danach intern.
