@@ -16,6 +16,7 @@ const { downloadFromHfAsync, onDownloadProgress, onDownloadComplete } = useModel
 
 const props = defineProps<{
   repoId: string
+  allowedFilenames?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -40,6 +41,13 @@ const installErrorKey = ref<string | null>(null)
 const installErrorDetail = ref<string | null>(null)
 const downloadedBytes = ref(0)
 const downloadTotalBytes = ref<number | null>(null)
+
+const visibleFiles = computed(() => {
+  if (!details.value) return []
+  if (!props.allowedFilenames) return details.value.files
+  const allowed = new Set(props.allowedFilenames)
+  return details.value.files.filter((file) => allowed.has(file.filename))
+})
 
 let unlistenProgress: UnlistenFn | null = null
 let unlistenComplete: UnlistenFn | null = null
@@ -178,10 +186,13 @@ onBeforeUnmount(() => {
     <p v-if="details && details.files.length === 0" class="text-sm text-neutral-500">
       {{ t('models.result.noGgufFiles') }}
     </p>
+    <p v-else-if="details && visibleFiles.length === 0" class="text-sm text-neutral-500">
+      {{ t('models.search.filters.empty') }}
+    </p>
 
-    <div v-if="details" class="flex flex-col gap-2">
+    <div v-if="details && visibleFiles.length > 0" class="flex flex-col gap-2">
       <button
-        v-for="file in details.files"
+        v-for="file in visibleFiles"
         :key="file.filename"
         type="button"
         class="flex flex-col gap-1 rounded-md border p-3 text-left focus:outline-none focus:ring-2 focus:ring-blue-500"

@@ -448,6 +448,7 @@ onBeforeUnmount(() => {
         <ModelsHuggingFaceFilePicker
           v-if="selectedRepo"
           :repo-id="selectedRepo.repoId"
+          :allowed-filenames="selectedRepo.files.map((file) => file.filename)"
           @installed="onFilePickerInstalled"
           @back="selectedRepo = null"
         />

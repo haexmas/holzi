@@ -224,7 +224,23 @@
       "tooShort": "Please enter at least 2 characters.",
       "error": "Search failed.",
       "retry": "Retry",
-      "offline": "Could not reach Hugging Face — previous results stay visible."
+      "offline": "Could not reach Hugging Face — previous results stay visible.",
+      "filters": {
+        "title": "Filter results",
+        "all": "All",
+        "quantization": "Quantization",
+        "maxSize": "Maximum file size",
+        "maxSizeValue": "Up to {size} GB",
+        "fit": "Hardware fit",
+        "unknown": "Unknown",
+        "empty": "No result matches the selected filters.",
+        "fitValues": {
+          "fits": "Fits",
+          "tight": "Tight",
+          "too_big": "Too big",
+          "unknown": "Unknown"
+        }
+      }
     },
     "result": {
       "author": "Author",

@@ -21,6 +21,7 @@
 - Zusätzliche Klarstellung: Der dauerhaft erreichbare „Modelle verwalten"-Bereich (siehe oben) MUSS auch nach Abschluss des Onboardings das Entfernen installierter Modelle mit expliziter Bestätigung ermöglichen. Dabei werden ausschließlich die lokalen Modellbytes und der Installations-/Download-Datensatz gelöscht; synchronisierte/nicht-lokale Source-/Provider-Metadaten, andere lokale Modelle sowie die bestehende Fallback-/Last-Active-Semantik aus Spec 002 bleiben konsistent.
 - Zusätzliche Klarstellung: Für installierte öffentliche Hugging-Face-Modelle soll die Modellverwaltung den gespeicherten Upstream-Branch bzw. Tag regelmäßig bzw. auf ausdrückliche Aktualisierung prüfen. Bei einer abweichenden neueren Commit-SHA wird der Nutzer sichtbar informiert und erhält eine Aktion zur Installation dieser Revision; ein automatisches Ersetzen findet nicht statt.
 - Zusätzliche Klarstellung: Vor jedem normalen Laden eines lokalen Modells muss Holzi den SHA-256-Hash der tatsächlich gefundenen Datei berechnen und gegen den gespeicherten Geräte-Hash prüfen. Bei einer Abweichung oder fehlender Integritätsbasis darf der normale Ladepfad das Modell nicht laden. Ein separater, ausdrücklich bestätigter Override darf die vorgefundene Datei als `untrusted` laden, ohne den gespeicherten Hash zu ändern.
+- Zusätzliche Klarstellung: Die freie Hugging-Face-Suche bietet Filter für Quantisierung, maximale GGUF-Dateigröße und Hardware-Passung. Dafür werden Dateidetails einschließlich Größe und Fit nach der Repository-Suche nachgeladen; ein gefilterter Treffer darf im anschließenden Datei-Picker nur noch passende Dateien anbieten. Dateien mit unbekannter Größe erfüllen einen gesetzten Größenhöchstwert nicht.
 
 ## Context
 
@@ -46,6 +47,7 @@ Ein Nutzer öffnet in der Modellverwaltung eine freie Suche, gibt beispielsweise
 4. **Given** die Hugging-Face-Anfrage schlägt fehl oder läuft in ein Timeout, **When** die Suche abgeschlossen wird, **Then** bleibt die bisherige Ergebnisliste erhalten und der Nutzer kann erneut suchen.
 5. **Given** der Nutzer hat das Onboarding abgeschlossen und bereits mindestens ein Modell installiert, **When** er den „Modelle verwalten"-Bereich erneut öffnet, **Then** stehen kuratierter Katalog, freie Suche, installierte Modelle und der Wechsel des aktiven Modells weiterhin zur Verfügung.
 6. **Given** ein Treffer der freien Suche entspricht exakt Repository-ID und Dateiname eines kuratierten Katalogeintrags, **When** die Ergebnisse angezeigt werden, **Then** bleibt der Treffer sichtbar, wird als „bereits im Katalog verfügbar" markiert und verlinkt auf den entsprechenden Katalogeintrag.
+7. **Given** die Suche liefert GGUF-Dateien mit unterschiedlichen Größen, Quantisierungen oder Hardware-Fits, **When** der Nutzer Filter setzt, **Then** werden nur Repositories mit mindestens einer passenden Datei angezeigt und der Datei-Picker bietet aus diesem Treffer nur passende Dateien an.
 
 ### User Story 2 - Kompatible Datei auswählen und herunterladen (Priority: P1)
 
@@ -147,6 +149,7 @@ Ein Nutzer erkennt im dauerhaft erreichbaren „Modelle verwalten"-Bereich, auch
 - **FR-026**: Bei fehlender Datei, fehlendem gespeicherten Hash, Hash-Abweichung oder Hash-/Dateisystemfehler MUSS der normale Ladepfad mit einem strukturierten, lokalisierbaren Integritätsfehler abgebrochen werden. Der normale Pfad DARF die erwartete Referenz nicht automatisch aktualisieren und keinen Runtime-Load starten. Der separate, ausdrücklich bestätigte `load_model_with_integrity_override`-Pfad DARF die aktuell vorgefundene Datei als `untrusted` laden, MUSS aber `file_sha256` unverändert lassen.
 - **FR-027**: Erfolgreiche Katalog-/HF-Downloads, Updates und lokale Importe MÜSSEN den SHA-256-Hash der final veröffentlichten Datei in `models.file_sha256` speichern. Der Hash beschreibt den Dateiinhalt und wird auf jedem Gerät gleich ermittelt.
 - **FR-028**: Für historische lokale Dateien ohne Integritätsmetadaten MUSS die Modellverwaltung denselben ausdrücklich bestätigten Integritätsdialog anbieten: unsicher laden, die Quelle reparieren (HF erneut herunterladen bzw. lokal neu importieren) oder ein anderes Modell auswählen.
+- **FR-029**: Die freie Hugging-Face-Suche MUSS Filter für Quantisierung, maximale GGUF-Dateigröße und Hardware-Passung anbieten. Die Filterentscheidung MUSS auf den normalisierten Dateikandidaten einschließlich nachgeladener Größen-/Fit-Metadaten beruhen; ein Repository wird nur angezeigt, wenn mindestens eine Datei alle gesetzten Filter erfüllt. Bei gesetzter Größenbegrenzung MÜSSEN Dateien ohne bekannte Größe ausgeschlossen werden. Die anschließende Dateiauswahl DARF die gesetzten Filter nicht umgehen.
 
 ### Key Entities
 
@@ -170,6 +173,7 @@ Ein Nutzer erkennt im dauerhaft erreichbaren „Modelle verwalten"-Bereich, auch
 - **SC-007**: Ein Nutzer kann nach Abschluss des Onboardings jederzeit ein installiertes Modell im „Modelle verwalten"-Bereich mit Bestätigung entfernen, ohne dass andere lokale Modelle, synchronisierte Metadaten oder die Fallback-Kette beeinträchtigt werden.
 - **SC-008**: Ein installierter HF-Download enthält in allen erfolgreichen Testfällen eine konkrete Commit-SHA; ein simuliertes Upstream-Update wird in der Modellverwaltung erkannt und mit einer expliziten Installationsaktion angezeigt, ohne das bisherige Modell automatisch zu ersetzen.
 - **SC-009**: In allen erfolgreichen normalen lokalen Load-Testfällen wird die Datei vor dem Runtime-Start gehasht und gegen den gespeicherten Geräte-Hash geprüft; in allen Mismatch-/Missing-Hash-Fixtures startet über den normalen Ladepfad kein Runtime-Load. Ein separater Override-Test darf nur nach ausdrücklicher Bestätigung laden, markiert den Zustand als `untrusted` und verändert den gespeicherten Hash nicht.
+- **SC-010**: Nach einer HF-Suche kann ein Nutzer die Treffer nach Quantisierung, maximaler GGUF-Dateigröße und Hardware-Passung filtern; kein angezeigtes Repository enthält danach ausschließlich nicht passende Dateien, und der Datei-Picker bietet keine ausgefilterte Datei zur Installation an.
 
 ## Assumptions
 
