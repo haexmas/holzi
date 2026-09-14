@@ -48,7 +48,7 @@ Erwartetes Ergebnis: alle Test-Suites grün, `pnpm typecheck` exit 0.
 4. Nach Download-Abschluss: automatischer Übergang zu `/workspace/genesis-test`.
 5. **Erwartung**:
    - `known_devices.alias === 'Laptop'`
-   - `preferences[('<my_uuid>', 'chat.default_model_id')]` enthält die Katalog-ID des Sweet-Modells (z.B. `qwen2.5-1.5b-instruct-q4_k_m`)
+   - `preferences[('<my_uuid>', 'chat.default_model_id')]` enthält die Katalog-ID des Sweet-Modells (z.B. `qwen3-1.7b-instruct-q4_k_m`)
    - `preferences[..., 'chat.last_active_model_id']` ist NICHT gesetzt (Onboarding-Wahl ist explizit ein "Default", kein "aktives Modell").
 6. FAB klicken → Chat öffnet sich, das Sweet-Modell lädt automatisch mit sichtbarem Ladepanel ("Optimiere GPU für erste Nutzung von …" wenn CUDA-Erst-Load).
 
@@ -78,7 +78,7 @@ Erwartetes Ergebnis: alle Test-Suites grün, `pnpm typecheck` exit 0.
 3. **Erwartung**:
    - Redirect zu `/workspace/genesis-test` (kein Onboarding, weil Alias gesetzt).
    - FAB klicken → Chat lädt AUTOMATISCH das Sweet-Modell (last_active greift, weil send_message es geschrieben hat).
-   - Ladepanel zeigt "Lade Qwen 2.5 1.5B…" (Warm-Load, weil bereits einmal geladen — CUDA-Cache warm; Erstlade-Text nur beim allerersten Mal).
+   - Ladepanel zeigt "Lade Qwen3 1.7B…" (Warm-Load, weil bereits einmal geladen — CUDA-Cache warm; Erstlade-Text nur beim allerersten Mal).
 
 ## Szenario 5: Ausprobier-Wechsel vergisst sich
 
