@@ -5,9 +5,7 @@ import { invoke } from '@tauri-apps/api/core'
  * visible on every device; device-scoped rows apply only to their
  * device UUID.
  */
-export type PrefScope =
-  | { kind: 'vault' }
-  | { kind: 'device', uuid: string }
+export type PrefScope = { kind: 'vault' } | { kind: 'device'; uuid: string }
 
 /**
  * Which fallback branch the backend resolver picked. See spec 002
@@ -32,21 +30,33 @@ export interface ResolveDefaultModelResult {
  * api_key providers, catalog slug for local ones).
  */
 export function usePreferences() {
-  async function getPrefAsync(scope: PrefScope, key: string): Promise<string | null> {
+  async function getPrefAsync(
+    scope: PrefScope,
+    key: string,
+  ): Promise<string | null> {
     return await invoke<string | null>('get_pref', { args: { scope, key } })
   }
 
-  async function setPrefAsync(scope: PrefScope, key: string, value: string): Promise<void> {
-    await invoke<void>('set_pref', { args: { scope, key, value } })
+  async function setPrefAsync(
+    scope: PrefScope,
+    key: string,
+    value: string,
+  ): Promise<void> {
+    await invoke('set_pref', { args: { scope, key, value } })
   }
 
   async function clearPrefAsync(scope: PrefScope, key: string): Promise<void> {
-    await invoke<void>('clear_pref', { args: { scope, key } })
+    await invoke('clear_pref', { args: { scope, key } })
   }
 
   async function resolveDefaultModelAsync(): Promise<ResolveDefaultModelResult> {
     return await invoke<ResolveDefaultModelResult>('resolve_default_model')
   }
 
-  return { getPrefAsync, setPrefAsync, clearPrefAsync, resolveDefaultModelAsync }
+  return {
+    getPrefAsync,
+    setPrefAsync,
+    clearPrefAsync,
+    resolveDefaultModelAsync,
+  }
 }

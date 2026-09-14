@@ -136,7 +136,8 @@ export interface RetryEvent {
   attempt: number
 }
 
-export type ModelLoadPhase = 'connecting' | 'loading' | 'cuda-jit-warmup' | 'ready'
+export type ModelLoadPhase =
+  'connecting' | 'loading' | 'cuda-jit-warmup' | 'ready'
 
 export interface ModelLoadStatusIdle {
   status: 'idle'
@@ -203,13 +204,22 @@ export function useChat() {
   let latestVaultGeneration: number | null = null
   let latestLoadId = -1
 
-  function acceptsModelLoadEvent(event: { vaultGeneration: number, loadId: number }): boolean {
-    if (latestVaultGeneration === null || event.vaultGeneration > latestVaultGeneration) {
+  function acceptsModelLoadEvent(event: {
+    vaultGeneration: number
+    loadId: number
+  }): boolean {
+    if (
+      latestVaultGeneration === null ||
+      event.vaultGeneration > latestVaultGeneration
+    ) {
       latestVaultGeneration = event.vaultGeneration
       latestLoadId = event.loadId
       return true
     }
-    if (event.vaultGeneration < latestVaultGeneration || event.loadId < latestLoadId) {
+    if (
+      event.vaultGeneration < latestVaultGeneration ||
+      event.loadId < latestLoadId
+    ) {
       return false
     }
     latestLoadId = event.loadId
@@ -228,21 +238,28 @@ export function useChat() {
 
   /** Creates and returns an empty chat thread. */
   async function createThreadAsync(title?: string): Promise<Thread> {
-    return await invoke<Thread>('create_thread', { args: { title: title ?? null } })
+    return await invoke<Thread>('create_thread', {
+      args: { title: title ?? null },
+    })
   }
 
   /** Persists a user turn and starts streaming the assistant response. */
-  async function sendMessageAsync(args: SendMessageArgs): Promise<SendMessageResult> {
+  async function sendMessageAsync(
+    args: SendMessageArgs,
+  ): Promise<SendMessageResult> {
     const idempotencyKey = args.idempotencyKey ?? crypto.randomUUID()
-    const result = await invoke<Omit<SendMessageResult, 'idempotencyKey'>>('send_message', {
-      args: { ...args, idempotencyKey },
-    })
+    const result = await invoke<Omit<SendMessageResult, 'idempotencyKey'>>(
+      'send_message',
+      {
+        args: { ...args, idempotencyKey },
+      },
+    )
     return { ...result, idempotencyKey }
   }
 
   /** Aborts the active generation, if one is running. */
   async function abortAsync(): Promise<void> {
-    return await invoke<void>('abort_current_generation')
+    await invoke('abort_current_generation')
   }
 
   /** Resolves an open `tool-permission-request` (contracts §respond_tool_permission). */
@@ -250,7 +267,7 @@ export function useChat() {
     requestId: string,
     decision: 'allow' | 'deny',
   ): Promise<void> {
-    return await invoke<void>('respond_tool_permission', {
+    await invoke('respond_tool_permission', {
       args: { requestId, decision },
     })
   }
@@ -272,13 +289,17 @@ export function useChat() {
    * `untrusted` and loads the file currently on disk as-is; never touches
    * the expected `fileSha256`.
    */
-  async function loadModelWithIntegrityOverrideAsync(modelId: string): Promise<LoadedModelInfo> {
-    return await invoke<LoadedModelInfo>('load_model_with_integrity_override', { modelId })
+  async function loadModelWithIntegrityOverrideAsync(
+    modelId: string,
+  ): Promise<LoadedModelInfo> {
+    return await invoke<LoadedModelInfo>('load_model_with_integrity_override', {
+      modelId,
+    })
   }
 
   /** Unloads the model currently held by the chat session. */
   async function unloadModelAsync(): Promise<void> {
-    return await invoke<void>('unload_local_model')
+    await invoke('unload_local_model')
   }
 
   /** Returns metadata for the loaded model, or `null` when none is loaded. */
@@ -315,14 +336,18 @@ export function useChat() {
   async function onToolCall(
     handler: (e: ToolCallEvent) => void,
   ): Promise<UnlistenFn> {
-    return await listen<ToolCallEvent>('chat-tool-call', (ev) => handler(ev.payload))
+    return await listen<ToolCallEvent>('chat-tool-call', (ev) =>
+      handler(ev.payload),
+    )
   }
 
   /** Subscribes to persisted tool results and returns the unlisten function. */
   async function onToolResult(
     handler: (e: ToolResultEvent) => void,
   ): Promise<UnlistenFn> {
-    return await listen<ToolResultEvent>('chat-tool-result', (ev) => handler(ev.payload))
+    return await listen<ToolResultEvent>('chat-tool-result', (ev) =>
+      handler(ev.payload),
+    )
   }
 
   /**
@@ -334,7 +359,9 @@ export function useChat() {
   async function onTurnComplete(
     handler: (e: TurnCompleteEvent) => void,
   ): Promise<UnlistenFn> {
-    return await listen<TurnCompleteEvent>('chat-turn-complete', (ev) => handler(ev.payload))
+    return await listen<TurnCompleteEvent>('chat-turn-complete', (ev) =>
+      handler(ev.payload),
+    )
   }
 
   /** Subscribes to `chat-retry` and returns the unlisten function. */
@@ -348,8 +375,9 @@ export function useChat() {
   async function onToolPermissionRequest(
     handler: (e: ToolPermissionRequestEvent) => void,
   ): Promise<UnlistenFn> {
-    return await listen<ToolPermissionRequestEvent>('tool-permission-request', (ev) =>
-      handler(ev.payload),
+    return await listen<ToolPermissionRequestEvent>(
+      'tool-permission-request',
+      (ev) => handler(ev.payload),
     )
   }
 
@@ -371,10 +399,13 @@ export function useChat() {
   async function modelLoadStatusAsync(): Promise<ModelLoadStatusPayload | null> {
     const status = await invoke<ModelLoadStatusPayload>('model_load_status')
     const loadId = 'loadId' in status ? status.loadId : -1
-    if (latestVaultGeneration !== null && (
-      status.vaultGeneration < latestVaultGeneration
-      || (status.vaultGeneration === latestVaultGeneration && loadId < latestLoadId)
-    )) return null
+    if (
+      latestVaultGeneration !== null &&
+      (status.vaultGeneration < latestVaultGeneration ||
+        (status.vaultGeneration === latestVaultGeneration &&
+          loadId < latestLoadId))
+    )
+      return null
     latestVaultGeneration = status.vaultGeneration
     latestLoadId = loadId
     return status
@@ -387,7 +418,12 @@ export function useChat() {
     return await listen<ModelLoadStatusPayload>('model-load-status', (ev) => {
       const payload = ev.payload
       const loadId = 'loadId' in payload ? payload.loadId : -1
-      if (acceptsModelLoadEvent({ vaultGeneration: payload.vaultGeneration, loadId })) {
+      if (
+        acceptsModelLoadEvent({
+          vaultGeneration: payload.vaultGeneration,
+          loadId,
+        })
+      ) {
         handler(payload)
       }
     })

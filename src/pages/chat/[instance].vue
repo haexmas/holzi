@@ -31,7 +31,9 @@ import {
 import { useInstance } from '~/composables/useInstance'
 import { usePreferences } from '~/composables/usePreferences'
 import { useDevice } from '~/composables/useDevice'
-import PermissionPrompt, { type PendingApproval } from '~/components/chat/PermissionPrompt.vue'
+import PermissionPrompt, {
+  type PendingApproval,
+} from '~/components/chat/PermissionPrompt.vue'
 import ComposerSettingsPopover from '~/components/chat/ComposerSettingsPopover.vue'
 import ReasoningAccordion from '~/components/chat/ReasoningAccordion.vue'
 import { useAutoResizeTextarea } from '~/composables/useAutoResizeTextarea'
@@ -90,7 +92,10 @@ type PendingStreamEvents = {
 }
 
 const pendingStreamEvents = new Map<string, PendingStreamEvents>()
-const pendingToolEvents = new Map<string, Array<ToolCallEvent | ToolResultEvent>>()
+const pendingToolEvents = new Map<
+  string,
+  Array<ToolCallEvent | ToolResultEvent>
+>()
 const pendingApprovalsByThread = new Map<string, PendingApproval[]>()
 const pendingTurnCompletions = new Map<string, TurnCompleteEvent>()
 
@@ -114,7 +119,6 @@ const pendingSend = ref<SendMessageArgs | null>(null)
 
 const { textareaRef, reset: resetTextarea } = useAutoResizeTextarea(input)
 
-
 const downloadingId = ref<string | null>(null)
 const downloadProgressBytes = ref<number>(0)
 const downloadTotalBytes = ref<number | null>(null)
@@ -130,7 +134,8 @@ const loadErrorModelId = ref<string | null>(null)
 
 interface IntegrityDialogState {
   modelId: string
-  errorKind: 'ModelIntegrityMismatch' | 'ModelIntegrityUnknown' | 'ModelIntegrityError'
+  errorKind:
+    'ModelIntegrityMismatch' | 'ModelIntegrityUnknown' | 'ModelIntegrityError'
   expected: string | null
   actual: string | null
 }
@@ -145,8 +150,8 @@ const activeMessages = computed<Message[]>(() => {
 
 const noModelsInstalled = computed(
   () =>
-    installedModels.value.length === 0
-    && Object.values(providerModels.value).every((list) => list.length === 0),
+    installedModels.value.length === 0 &&
+    Object.values(providerModels.value).every((list) => list.length === 0),
 )
 
 // Read through a computed rather than `activeModel?.modelId` directly in
@@ -156,22 +161,33 @@ const noModelsInstalled = computed(
 const activeModelId = computed(() => activeModel.value?.modelId ?? '')
 
 /** Groups selectable models by provider for the picker's <optgroup>. */
-type ModelGroup = { providerId: string, providerName: string, models: { id: string, name: string }[] }
+type ModelGroup = {
+  providerId: string
+  providerName: string
+  models: { id: string; name: string }[]
+}
 const modelGroups = computed<ModelGroup[]>(() => {
-  const localGroup: ModelGroup | null = installedModels.value.length > 0
-    ? {
-        providerId: 'local',
-        providerName: t('chat.model.local'),
-        models: installedModels.value.map((m) => ({ id: m.id, name: m.name })),
-      }
-    : null
+  const localGroup: ModelGroup | null =
+    installedModels.value.length > 0
+      ? {
+          providerId: 'local',
+          providerName: t('chat.model.local'),
+          models: installedModels.value.map((m) => ({
+            id: m.id,
+            name: m.name,
+          })),
+        }
+      : null
 
   const remoteGroups = providerList.value
     .filter((p) => p.kind === 'api_key')
     .map<ModelGroup>((p) => ({
       providerId: p.id,
       providerName: p.name,
-      models: (providerModels.value[p.id] ?? []).map((m) => ({ id: m.id, name: m.name })),
+      models: (providerModels.value[p.id] ?? []).map((m) => ({
+        id: m.id,
+        name: m.name,
+      })),
     }))
     .filter((g) => g.models.length > 0)
 
@@ -206,9 +222,16 @@ async function refreshThreads() {
 /** Selects a thread, loading its persisted messages on first access. */
 async function selectThread(id: string) {
   const previousThreadId = activeThreadId.value
-  if (previousThreadId && previousThreadId !== id && pendingApprovals.value.length > 0) {
+  if (
+    previousThreadId &&
+    previousThreadId !== id &&
+    pendingApprovals.value.length > 0
+  ) {
     const queued = pendingApprovalsByThread.get(previousThreadId) ?? []
-    pendingApprovalsByThread.set(previousThreadId, [...queued, ...pendingApprovals.value])
+    pendingApprovalsByThread.set(previousThreadId, [
+      ...queued,
+      ...pendingApprovals.value,
+    ])
     pendingApprovals.value = []
   }
   activeThreadId.value = id
@@ -250,15 +273,13 @@ async function loadModel(id: string) {
   busy.value = true
   try {
     activeModel.value = await chat.loadModelAsync(id)
-  }
-  catch (e: unknown) {
+  } catch (e: unknown) {
     if (!openIntegrityDialog(id, e)) {
       lastError.value = errString(e)
     }
     loadingPhase.value = null
     activeModel.value = null
-  }
-  finally {
+  } finally {
     busy.value = false
   }
 }
@@ -270,9 +291,17 @@ async function loadModel(id: string) {
  * `false` for every other error so the caller falls back to `errString`.
  */
 function openIntegrityDialog(modelId: string, e: unknown): boolean {
-  const err = e as { kind?: string, expectedSha256?: string | null, actualSha256?: string | null }
+  const err = e as {
+    kind?: string
+    expectedSha256?: string | null
+    actualSha256?: string | null
+  }
   const kind = err.kind
-  if (kind !== 'ModelIntegrityMismatch' && kind !== 'ModelIntegrityUnknown' && kind !== 'ModelIntegrityError') {
+  if (
+    kind !== 'ModelIntegrityMismatch' &&
+    kind !== 'ModelIntegrityUnknown' &&
+    kind !== 'ModelIntegrityError'
+  ) {
     return false
   }
   integrityDialog.value = {
@@ -290,14 +319,14 @@ async function onIntegrityLoadUntrusted() {
   integrityBusy.value = true
   integrityActionError.value = null
   try {
-    activeModel.value = await chat.loadModelWithIntegrityOverrideAsync(integrityDialog.value.modelId)
+    activeModel.value = await chat.loadModelWithIntegrityOverrideAsync(
+      integrityDialog.value.modelId,
+    )
     integrityDialog.value = null
     await refreshInstalledAndCatalog()
-  }
-  catch (e) {
+  } catch (e) {
     integrityActionError.value = errString(e)
-  }
-  finally {
+  } finally {
     integrityBusy.value = false
   }
 }
@@ -310,7 +339,11 @@ async function onIntegrityRepairSource() {
   integrityBusy.value = true
   integrityActionError.value = null
   try {
-    if (model?.sourceKind === 'huggingface' && model.hfRepo && model.hfFilename) {
+    if (
+      model?.sourceKind === 'huggingface' &&
+      model.hfRepo &&
+      model.hfFilename
+    ) {
       await models.downloadFromHfAsync({
         repoId: model.hfRepo,
         filename: model.hfFilename,
@@ -320,15 +353,12 @@ async function onIntegrityRepairSource() {
       })
       integrityDialog.value = null
       await refreshInstalledAndCatalog()
-    }
-    else {
+    } else {
       integrityActionError.value = t('models.integrityDialog.actionFailed')
     }
-  }
-  catch (e) {
+  } catch (e) {
     integrityActionError.value = errString(e)
-  }
-  finally {
+  } finally {
     integrityBusy.value = false
   }
 }
@@ -355,11 +385,9 @@ async function downloadCatalogEntry(entry: CatalogEntryWithFit) {
     await models.downloadFromCatalogAsync(entry.id)
     await refreshInstalledAndCatalog()
     await loadModel(entry.id)
-  }
-  catch (e: unknown) {
+  } catch (e: unknown) {
     lastError.value = errString(e)
-  }
-  finally {
+  } finally {
     downloadingId.value = null
   }
 }
@@ -394,7 +422,9 @@ async function send(retryPending = false) {
       // Recover a completed answer when the initial invoke response was lost.
       const persisted = await chat.listMessagesAsync(result.threadId)
       messagesByThread.value[result.threadId] = persisted
-      const completed = persisted.find((message) => message.id === result.assistantMessageId)
+      const completed = persisted.find(
+        (message) => message.id === result.assistantMessageId,
+      )
       if (completed?.finishReason) {
         streamingMessageId.value = result.assistantMessageId
         streamingThreadId.value = result.threadId
@@ -412,40 +442,42 @@ async function send(retryPending = false) {
     // Seed the assistant message placeholder so the UI can show
     // tokens as they stream in.
     const list = messagesByThread.value[result.threadId] ?? []
-    if (!list.some((message) => message.id === result.userMessageId)) list.push({
-      id: result.userMessageId,
-      threadId: result.threadId,
-      parentId: null,
-      role: 'user',
-      content,
-      modelId: null,
-      promptTokens: null,
-      completionTokens: null,
-      finishReason: 'complete',
-      createdAt: Date.now(),
-      toolName: null,
-      toolCallId: null,
-      toolInput: null,
-      toolIsError: null,
-      toolSource: null,
-    })
-    if (!list.some((message) => message.id === result.assistantMessageId)) list.push({
-      id: result.assistantMessageId,
-      threadId: result.threadId,
-      parentId: result.userMessageId,
-      role: 'assistant',
-      content: '',
-      modelId: activeModel.value?.modelId ?? null,
-      promptTokens: null,
-      completionTokens: null,
-      finishReason: null,
-      createdAt: Date.now(),
-      toolName: null,
-      toolCallId: null,
-      toolInput: null,
-      toolIsError: null,
-      toolSource: null,
-    })
+    if (!list.some((message) => message.id === result.userMessageId))
+      list.push({
+        id: result.userMessageId,
+        threadId: result.threadId,
+        parentId: null,
+        role: 'user',
+        content,
+        modelId: null,
+        promptTokens: null,
+        completionTokens: null,
+        finishReason: 'complete',
+        createdAt: Date.now(),
+        toolName: null,
+        toolCallId: null,
+        toolInput: null,
+        toolIsError: null,
+        toolSource: null,
+      })
+    if (!list.some((message) => message.id === result.assistantMessageId))
+      list.push({
+        id: result.assistantMessageId,
+        threadId: result.threadId,
+        parentId: result.userMessageId,
+        role: 'assistant',
+        content: '',
+        modelId: activeModel.value?.modelId ?? null,
+        promptTokens: null,
+        completionTokens: null,
+        finishReason: null,
+        createdAt: Date.now(),
+        toolName: null,
+        toolCallId: null,
+        toolInput: null,
+        toolIsError: null,
+        toolSource: null,
+      })
     messagesByThread.value[result.threadId] = list
     turnSetupPending.value = false
     streamingMessageId.value = result.assistantMessageId
@@ -482,24 +514,21 @@ async function send(retryPending = false) {
     }
     if (pending?.error) {
       handleError(pending.error)
-    }
-    else if (pending?.complete) {
+    } else if (pending?.complete) {
       handleComplete(pending.complete)
     }
     const completedTurn = pendingTurnCompletions.get(result.threadId)
     pendingTurnCompletions.delete(result.threadId)
     if (completedTurn) {
       await handleTurnComplete(completedTurn)
-    }
-    else {
+    } else {
       // A failed list refresh must not turn an accepted send into a retry.
       await refreshThreads().catch((e: unknown) => {
         lastError.value = errString(e)
       })
     }
     await scrollToBottom()
-  }
-  catch (e: unknown) {
+  } catch (e: unknown) {
     // The initial invoke may have been accepted even when its response was
     // lost. Keep the exact same key available for a safe retry; stream
     // errors are handled separately and deliberately do not retry.
@@ -514,8 +543,7 @@ async function send(retryPending = false) {
 async function abort() {
   try {
     await chat.abortAsync()
-  }
-  catch (e: unknown) {
+  } catch (e: unknown) {
     lastError.value = errString(e)
   }
 }
@@ -525,7 +553,10 @@ async function newChat() {
   if (busy.value) return
   if (activeThreadId.value && pendingApprovals.value.length > 0) {
     const queued = pendingApprovalsByThread.get(activeThreadId.value) ?? []
-    pendingApprovalsByThread.set(activeThreadId.value, [...queued, ...pendingApprovals.value])
+    pendingApprovalsByThread.set(activeThreadId.value, [
+      ...queued,
+      ...pendingApprovals.value,
+    ])
     pendingApprovals.value = []
   }
   activeThreadId.value = null
@@ -545,26 +576,35 @@ async function lock() {
     await closeAsync()
     store.setActiveInstance(null)
     await navigateTo('/')
-  }
-  catch (e: unknown) {
+  } catch (e: unknown) {
     lastError.value = errString(e)
   }
 }
 
 /** Converts backend and JavaScript failures into displayable text. */
 const HF_ERROR_KINDS = new Set([
-  'InvalidInput', 'Network', 'Timeout', 'HttpStatus', 'RateLimited',
-  'UnsupportedFormat', 'TokenizerRequired', 'HardwareConfirmationRequired',
-  'ModelRegistrationFailed', 'ModelNotFound',
+  'InvalidInput',
+  'Network',
+  'Timeout',
+  'HttpStatus',
+  'RateLimited',
+  'UnsupportedFormat',
+  'TokenizerRequired',
+  'HardwareConfirmationRequired',
+  'ModelRegistrationFailed',
+  'ModelNotFound',
 ])
 
 function errString(e: unknown): string {
   if (typeof e === 'string') return e
   if (e && typeof e === 'object' && 'kind' in e) {
     const kind = (e as { kind: unknown }).kind
-    if (kind === 'InvalidIdempotencyKey') return t('errors.invalidIdempotencyKey')
-    if (kind === 'IdempotencyKeyConflict') return t('errors.idempotencyKeyConflict')
-    if (typeof kind === 'string' && HF_ERROR_KINDS.has(kind)) return t(hfErrorKey(e))
+    if (kind === 'InvalidIdempotencyKey')
+      return t('errors.invalidIdempotencyKey')
+    if (kind === 'IdempotencyKeyConflict')
+      return t('errors.idempotencyKeyConflict')
+    if (typeof kind === 'string' && HF_ERROR_KINDS.has(kind))
+      return t(hfErrorKey(e))
     return JSON.stringify(e)
   }
   return String(e)
@@ -582,8 +622,21 @@ function humanBytes(n: number | null): string {
 }
 
 function downloadProgressPercent(modelId: string): number | null {
-  if (downloadingId.value !== modelId || downloadTotalBytes.value === null || downloadTotalBytes.value <= 0) return null
-  return Math.min(100, Math.max(0, Math.round((downloadProgressBytes.value / downloadTotalBytes.value) * 100)))
+  if (
+    downloadingId.value !== modelId ||
+    downloadTotalBytes.value === null ||
+    downloadTotalBytes.value <= 0
+  )
+    return null
+  return Math.min(
+    100,
+    Math.max(
+      0,
+      Math.round(
+        (downloadProgressBytes.value / downloadTotalBytes.value) * 100,
+      ),
+    ),
+  )
 }
 
 /** Maps a hardware-fit verdict to its localized display label. */
@@ -645,7 +698,10 @@ function handleRetry(e: RetryEvent) {
     return
   }
   streamingBuffer.value = ''
-  reasoningByMessage.value = { ...reasoningByMessage.value, [e.assistantMessageId]: '' }
+  reasoningByMessage.value = {
+    ...reasoningByMessage.value,
+    [e.assistantMessageId]: '',
+  }
   const list = messagesByThread.value[threadId] ?? []
   const idx = list.findIndex((m) => m.id === e.assistantMessageId)
   const existing = list[idx]
@@ -715,7 +771,10 @@ function handleError(e: MessageErrorEvent) {
  * row is safely in `chat_messages` regardless; switching back to that
  * thread reloads it via `selectThread`. */
 function handleToolCall(e: ToolCallEvent, restoring = false) {
-  if (!restoring && (e.threadId !== activeThreadId.value || turnSetupPending.value)) {
+  if (
+    !restoring &&
+    (e.threadId !== activeThreadId.value || turnSetupPending.value)
+  ) {
     const queued = pendingToolEvents.get(e.threadId) ?? []
     pendingToolEvents.set(e.threadId, [...queued, e])
     return
@@ -744,7 +803,10 @@ function handleToolCall(e: ToolCallEvent, restoring = false) {
 }
 
 function handleToolResult(e: ToolResultEvent, restoring = false) {
-  if (!restoring && (e.threadId !== activeThreadId.value || turnSetupPending.value)) {
+  if (
+    !restoring &&
+    (e.threadId !== activeThreadId.value || turnSetupPending.value)
+  ) {
     const queued = pendingToolEvents.get(e.threadId) ?? []
     pendingToolEvents.set(e.threadId, [...queued, e])
     return
@@ -788,15 +850,15 @@ async function applyTurnComplete(e: TurnCompleteEvent) {
   try {
     // All rounds stream through one placeholder, whereas persistence has
     // separate interim answers, tool rows, and the terminal answer.
-    messagesByThread.value[e.threadId] = await chat.listMessagesAsync(e.threadId)
+    messagesByThread.value[e.threadId] = await chat.listMessagesAsync(
+      e.threadId,
+    )
     pendingToolEvents.delete(e.threadId)
     await refreshThreads()
     await scrollToBottom()
-  }
-  catch (error: unknown) {
+  } catch (error: unknown) {
     lastError.value = errString(error)
-  }
-  finally {
+  } finally {
     streamingMessageId.value = null
     streamingThreadId.value = null
     streamingBuffer.value = ''
@@ -822,12 +884,16 @@ function handleToolPermissionRequest(e: ToolPermissionRequestEvent) {
   }
 }
 
-async function respondToApproval(requestId: string, decision: 'allow' | 'deny') {
+async function respondToApproval(
+  requestId: string,
+  decision: 'allow' | 'deny',
+) {
   try {
     await chat.respondToolPermissionAsync(requestId, decision)
-    pendingApprovals.value = pendingApprovals.value.filter((a) => a.requestId !== requestId)
-  }
-  catch (e: unknown) {
+    pendingApprovals.value = pendingApprovals.value.filter(
+      (a) => a.requestId !== requestId,
+    )
+  } catch (e: unknown) {
     lastError.value = errString(e)
   }
 }
@@ -838,13 +904,15 @@ async function updatePermissionMode(mode: 'manual' | 'auto' | 'plan') {
   permissionMode.value = mode
   permissionModeSaving.value = true
   try {
-    await setPrefAsync({ kind: 'device', uuid: deviceUuid.value }, PERMISSION_MODE_KEY, mode)
-  }
-  catch (e: unknown) {
+    await setPrefAsync(
+      { kind: 'device', uuid: deviceUuid.value },
+      PERMISSION_MODE_KEY,
+      mode,
+    )
+  } catch (e: unknown) {
     permissionMode.value = previousMode
     lastError.value = errString(e)
-  }
-  finally {
+  } finally {
     permissionModeSaving.value = false
   }
 }
@@ -861,7 +929,8 @@ async function handleTurnComplete(e: TurnCompleteEvent) {
     return
   }
   if (e.threadId !== streamingThreadId.value) return
-  if (e.assistantMessageId && streamingMessageId.value !== e.assistantMessageId) return
+  if (e.assistantMessageId && streamingMessageId.value !== e.assistantMessageId)
+    return
   await applyTurnComplete(e)
 }
 
@@ -890,8 +959,7 @@ function onLoadProgress(e: ModelLoadProgressEvent) {
 async function refreshActiveModel() {
   try {
     activeModel.value = await chat.activeModelInfoAsync()
-  }
-  catch (e: unknown) {
+  } catch (e: unknown) {
     lastError.value = errString(e)
   }
 }
@@ -902,12 +970,13 @@ function onLoadStatus(status: ModelLoadStatusPayload) {
     loadingPhase.value = status.phase
     loadingModelName.value = status.modelName
     loadingProviderName.value = status.providerName ?? null
-  }
-  else {
+  } else {
     loadingPhase.value = null
-    loadingModelName.value = 'modelName' in status ? status.modelName ?? '' : ''
+    loadingModelName.value =
+      'modelName' in status ? (status.modelName ?? '') : ''
     loadingProviderName.value = null
-    loadErrorModelId.value = status.status === 'error' ? status.modelId ?? null : null
+    loadErrorModelId.value =
+      status.status === 'error' ? (status.modelId ?? null) : null
     if (status.status === 'error') lastError.value = t('chat.loading.error')
     if (status.status === 'ready') void refreshActiveModel()
   }
@@ -929,8 +998,8 @@ async function retryModelLoad() {
 const loadingLabel = computed<string | null>(() => {
   const phase = loadingPhase.value
   if (!phase || phase === 'ready') return null
-  const key
-    = phase === 'connecting'
+  const key =
+    phase === 'connecting'
       ? 'chat.loading.connecting'
       : phase === 'cuda-jit-warmup'
         ? 'chat.loading.cudaJitWarmup'
@@ -943,40 +1012,44 @@ const loadingLabel = computed<string | null>(() => {
 
 onMounted(async () => {
   try {
-    await Promise.all([
-      chat.onToken(handleToken),
-      chat.onMessageComplete(handleComplete),
-      chat.onMessageError(handleError),
-      chat.onToolCall(handleToolCall),
-      chat.onToolResult(handleToolResult),
-      chat.onRetry(handleRetry),
-      chat.onTurnComplete(handleTurnComplete),
-      chat.onToolPermissionRequest(handleToolPermissionRequest),
-      chat.onModelLoadProgress(onLoadProgress),
-      chat.onModelLoadStatus(onLoadStatus),
-      chat.onModelLoadError(onLoadError),
-      models.onDownloadProgress((e) => {
-        if (downloadingId.value === e.modelId) {
-          downloadProgressBytes.value = e.bytesDownloaded
-          downloadTotalBytes.value = e.bytesTotal
-        }
+    await Promise.all(
+      [
+        chat.onToken(handleToken),
+        chat.onMessageComplete(handleComplete),
+        chat.onMessageError(handleError),
+        chat.onToolCall(handleToolCall),
+        chat.onToolResult(handleToolResult),
+        chat.onRetry(handleRetry),
+        chat.onTurnComplete(handleTurnComplete),
+        chat.onToolPermissionRequest(handleToolPermissionRequest),
+        chat.onModelLoadProgress(onLoadProgress),
+        chat.onModelLoadStatus(onLoadStatus),
+        chat.onModelLoadError(onLoadError),
+        models.onDownloadProgress((e) => {
+          if (downloadingId.value === e.modelId) {
+            downloadProgressBytes.value = e.bytesDownloaded
+            downloadTotalBytes.value = e.bytesTotal
+          }
+        }),
+      ].map(async (subscription) => {
+        const unlisten = await subscription
+        // Registration can finish after navigation already disposed this page.
+        if (unmounted) unlisten()
+        else unlisteners.push(unlisten)
       }),
-    ].map(async (subscription) => {
-      const unlisten = await subscription
-      // Registration can finish after navigation already disposed this page.
-      if (unmounted) unlisten()
-      else unlisteners.push(unlisten)
-    }))
+    )
     if (unmounted) return
 
     const device = await currentDeviceInfoAsync()
     try {
-      const stored = await getPrefAsync({ kind: 'device', uuid: device.vaultDeviceUuid }, PERMISSION_MODE_KEY)
+      const stored = await getPrefAsync(
+        { kind: 'device', uuid: device.vaultDeviceUuid },
+        PERMISSION_MODE_KEY,
+      )
       if (stored === 'manual' || stored === 'auto' || stored === 'plan') {
         permissionMode.value = stored
       }
-    }
-    catch {
+    } catch {
       // Keep the default ('manual') if the read fails.
     }
     if (unmounted) return
@@ -988,9 +1061,7 @@ onMounted(async () => {
     await refreshInstalledAndCatalog()
     await refreshProviders()
     await refreshThreads()
-
-  }
-  catch (e: unknown) {
+  } catch (e: unknown) {
     if (!unmounted) lastError.value = errString(e)
   }
 })
@@ -1001,44 +1072,62 @@ onBeforeUnmount(() => {
   if (streamingMessageId.value || turnSetupPending.value) void abort()
   for (const unlisten of unlisteners.splice(0)) unlisten()
 })
-
 </script>
 
 <template>
   <main class="flex h-screen min-h-0 bg-muted/20">
-    <aside class="hidden md:flex w-64 shrink-0 border-r border-border bg-background p-4 flex-col gap-4 overflow-y-auto">
+    <aside
+      class="hidden md:flex w-64 shrink-0 border-r border-border bg-background p-4 flex-col gap-4 overflow-y-auto"
+    >
       <div class="flex items-center gap-3 min-w-0">
-        <div class="h-9 w-9 shrink-0 rounded-xl bg-foreground text-background flex items-center justify-center">
+        <div
+          class="h-9 w-9 shrink-0 rounded-xl bg-foreground text-background flex items-center justify-center"
+        >
           <Icon name="lucide:sparkles" class="h-4 w-4" />
         </div>
         <div class="min-w-0">
           <div class="text-sm font-semibold">Holzi</div>
-          <div class="text-xs text-muted-foreground truncate" :title="instanceName">
+          <div
+            class="text-xs text-muted-foreground truncate"
+            :title="instanceName"
+          >
             {{ instanceName }}
           </div>
         </div>
       </div>
 
-      <UiButton class="w-full justify-start gap-2" variant="outline" :disabled="busy" @click="newChat">
+      <UiButton
+        class="w-full justify-start gap-2"
+        variant="outline"
+        :disabled="busy"
+        @click="newChat"
+      >
         <Icon name="lucide:plus" class="h-4 w-4" />
         {{ t('chat.newChat') }}
       </UiButton>
 
       <div class="flex items-center justify-between px-1">
-        <span class="text-xs font-medium text-muted-foreground">{{ t('chat.threads.title') }}</span>
-        <span class="text-[10px] text-muted-foreground">{{ threads.length }}</span>
+        <span class="text-xs font-medium text-muted-foreground">{{
+          t('chat.threads.title')
+        }}</span>
+        <span class="text-[10px] text-muted-foreground">{{
+          threads.length
+        }}</span>
       </div>
       <div class="space-y-1">
         <button
-          v-for="t in threads"
-          :key="t.id"
+          v-for="thread in threads"
+          :key="thread.id"
           class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-accent truncate transition-colors"
-          :class="{ 'bg-accent font-medium': activeThreadId === t.id }"
-          @click="selectThread(t.id)"
+          :class="{ 'bg-accent font-medium': activeThreadId === thread.id }"
+          @click="selectThread(thread.id)"
         >
-          {{ t.title }}
+          {{ thread.title }}
         </button>
-        <div v-if="threads.length === 0" class="px-3 py-2 text-xs text-muted-foreground">
+        <div
+          v-if="threads.length === 0"
+          class="px-3 py-2 text-xs text-muted-foreground"
+        >
           {{ t('chat.threads.empty') }}
         </div>
       </div>
@@ -1051,19 +1140,34 @@ onBeforeUnmount(() => {
         <Icon name="lucide:settings-2" class="h-4 w-4" />
         {{ t('chat.settings') }}
       </NuxtLink>
-      <UiButton class="justify-start gap-2" size="sm" variant="ghost" @click="lock">
+      <UiButton
+        class="justify-start gap-2"
+        size="sm"
+        variant="ghost"
+        @click="lock"
+      >
         <Icon name="lucide:lock-keyhole" class="h-4 w-4" />
         {{ t('chat.lock') }}
       </UiButton>
     </aside>
 
     <section class="min-w-0 flex-1 flex flex-col">
-      <header class="flex items-center justify-between gap-3 border-b border-border bg-background/90 px-4 py-3 backdrop-blur md:px-6">
+      <header
+        class="flex items-center justify-between gap-3 border-b border-border bg-background/90 px-4 py-3 backdrop-blur md:px-6"
+      >
         <div class="min-w-0">
           <div class="flex items-center gap-2">
-            <div class="h-2 w-2 rounded-full" :class="activeModel ? 'bg-emerald-500' : 'bg-muted-foreground/40'" />
+            <div
+              class="h-2 w-2 rounded-full"
+              :class="activeModel ? 'bg-emerald-500' : 'bg-muted-foreground/40'"
+            />
             <h1 class="truncate text-sm font-semibold">
-              {{ activeThreadId ? (threads.find((thread) => thread.id === activeThreadId)?.title || t('chat.newChat')) : t('chat.newChat') }}
+              {{
+                activeThreadId
+                  ? threads.find((thread) => thread.id === activeThreadId)
+                      ?.title || t('chat.newChat')
+                  : t('chat.newChat')
+              }}
             </h1>
           </div>
           <p class="mt-0.5 truncate text-xs text-muted-foreground">
@@ -1086,14 +1190,23 @@ onBeforeUnmount(() => {
           >
             <Icon name="lucide:lock-keyhole" class="h-4 w-4" />
           </UiButton>
-          <UiButton class="gap-2" size="sm" variant="outline" :disabled="busy" @click="newChat">
+          <UiButton
+            class="gap-2"
+            size="sm"
+            variant="outline"
+            :disabled="busy"
+            @click="newChat"
+          >
             <Icon name="lucide:plus" class="h-4 w-4" />
             {{ t('chat.newChatShort') }}
           </UiButton>
         </div>
       </header>
 
-      <div v-if="lastError" class="border-b border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive flex items-start justify-between gap-2">
+      <div
+        v-if="lastError"
+        class="border-b border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive flex items-start justify-between gap-2"
+      >
         <span>{{ lastError }}</span>
         <span class="flex gap-2 shrink-0">
           <button
@@ -1110,16 +1223,17 @@ onBeforeUnmount(() => {
           >
             {{ t('chat.loading.retry') }}
           </button>
-          <button
-            class="text-xs underline"
-            @click="lastError = null"
-          >
+          <button class="text-xs underline" @click="lastError = null">
             {{ t('chat.close') }}
           </button>
         </span>
       </div>
 
-      <div v-if="loadingLabel" class="border-b border-blue-500/20 bg-blue-500/10 p-3 text-sm text-blue-800" role="status">
+      <div
+        v-if="loadingLabel"
+        class="border-b border-blue-500/20 bg-blue-500/10 p-3 text-sm text-blue-800"
+        role="status"
+      >
         {{ loadingLabel }}
       </div>
 
@@ -1139,7 +1253,9 @@ onBeforeUnmount(() => {
             <div
               v-if="downloadingId === e.id"
               class="pointer-events-none absolute inset-y-0 left-0 bg-blue-100/70 transition-[width] duration-150"
-              :class="downloadProgressPercent(e.id) === null ? 'animate-pulse' : ''"
+              :class="
+                downloadProgressPercent(e.id) === null ? 'animate-pulse' : ''
+              "
               :style="{ width: `${downloadProgressPercent(e.id) ?? 35}%` }"
               role="progressbar"
               :aria-valuenow="downloadProgressPercent(e.id) ?? undefined"
@@ -1155,7 +1271,14 @@ onBeforeUnmount(() => {
                 {{ e.hf_repo }}/{{ e.hf_filename }}
               </div>
               <div class="text-xs text-muted-foreground">
-                {{ t('chat.catalog.meta', { size: humanBytes(e.approx_size_bytes), context: e.context_window.toLocaleString(), license: e.license, fit: fitLabel(e.fit) }) }}
+                {{
+                  t('chat.catalog.meta', {
+                    size: humanBytes(e.approx_size_bytes),
+                    context: e.context_window.toLocaleString(),
+                    license: e.license,
+                    fit: fitLabel(e.fit),
+                  })
+                }}
               </div>
             </div>
             <div class="relative z-10">
@@ -1165,7 +1288,8 @@ onBeforeUnmount(() => {
                 @click="downloadCatalogEntry(e)"
               >
                 <template v-if="downloadingId === e.id">
-                  {{ humanBytes(downloadProgressBytes) }} / {{ humanBytes(downloadTotalBytes) }}
+                  {{ humanBytes(downloadProgressBytes) }} /
+                  {{ humanBytes(downloadTotalBytes) }}
                 </template>
                 <template v-else>
                   {{ t('chat.download') }}
@@ -1176,10 +1300,15 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div v-else-if="!activeModel" class="flex-1 flex items-center justify-center p-6 text-muted-foreground">
+      <div
+        v-else-if="!activeModel"
+        class="flex-1 flex items-center justify-center p-6 text-muted-foreground"
+      >
         <div class="flex w-full max-w-sm flex-col gap-3">
           <p>{{ t('chat.model.selectPrompt') }}</p>
-          <label for="chat-model-empty" class="sr-only">{{ t('chat.model.label') }}</label>
+          <label for="chat-model-empty" class="sr-only">{{
+            t('chat.model.label')
+          }}</label>
           <select
             id="chat-model-empty"
             class="rounded-lg border border-border bg-background px-3 py-2 text-sm"
@@ -1188,20 +1317,36 @@ onBeforeUnmount(() => {
             @change="(e) => loadModel((e.target as HTMLSelectElement).value)"
           >
             <option value="" disabled>{{ t('chat.model.choose') }}</option>
-            <optgroup v-for="group in modelGroups" :key="group.providerId" :label="group.providerName">
-              <option v-for="m in group.models" :key="m.id" :value="m.id">{{ m.name }}</option>
+            <optgroup
+              v-for="group in modelGroups"
+              :key="group.providerId"
+              :label="group.providerName"
+            >
+              <option v-for="m in group.models" :key="m.id" :value="m.id">
+                {{ m.name }}
+              </option>
             </optgroup>
           </select>
         </div>
       </div>
 
       <div v-else class="flex-1 flex flex-col overflow-hidden">
-        <div data-messages-scroll class="flex-1 min-h-0 overflow-y-auto px-4 py-6 md:px-8">
-          <div v-if="activeMessages.length === 0" class="mx-auto flex h-full max-w-3xl flex-col items-center justify-center text-center">
-            <div class="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-foreground text-background">
+        <div
+          data-messages-scroll
+          class="flex-1 min-h-0 overflow-y-auto px-4 py-6 md:px-8"
+        >
+          <div
+            v-if="activeMessages.length === 0"
+            class="mx-auto flex h-full max-w-3xl flex-col items-center justify-center text-center"
+          >
+            <div
+              class="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-foreground text-background"
+            >
               <Icon name="lucide:sparkles" class="h-5 w-5" />
             </div>
-            <h2 class="text-xl font-semibold tracking-tight">{{ t('chat.empty.title') }}</h2>
+            <h2 class="text-xl font-semibold tracking-tight">
+              {{ t('chat.empty.title') }}
+            </h2>
             <p class="mt-2 max-w-md text-sm text-muted-foreground">
               {{ t('chat.empty.description', { modelName: activeModel.name }) }}
             </p>
@@ -1216,46 +1361,89 @@ onBeforeUnmount(() => {
               v-if="m.role !== 'user'"
               class="mt-1 hidden h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-foreground text-background sm:flex"
             >
-              <Icon :name="m.role === 'assistant' ? 'lucide:sparkles' : 'lucide:wrench'" class="h-3.5 w-3.5" />
+              <Icon
+                :name="
+                  m.role === 'assistant' ? 'lucide:sparkles' : 'lucide:wrench'
+                "
+                class="h-3.5 w-3.5"
+              />
             </div>
-            <div class="min-w-0 max-w-[min(90%,48rem)]" :class="m.role === 'user' ? 'order-first' : ''">
-              <div class="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
-              <template v-if="m.role === 'tool_call'">
-                {{ t('chat.tool.call', { name: m.toolName }) }}
-              </template>
-              <template v-else-if="m.role === 'tool_result'">
-                {{ m.toolIsError ? t('chat.tool.resultError') : t('chat.tool.result') }}
-              </template>
-              <template v-else>
-                {{ m.role === 'user' ? t('chat.sender.user') : m.role === 'assistant' ? t('chat.sender.assistant') : t('chat.sender.system') }}
-                <span v-if="m.role === 'assistant' && m.completionTokens" class="ml-2">
-                  {{ t('chat.tokens', { count: m.completionTokens }) }}
-                </span>
-                <span v-if="m.finishReason === 'error'" class="ml-2 text-destructive">
-                  {{ t('chat.errorLabel') }}
-                </span>
-                <span v-if="m.finishReason === 'cancelled'" class="ml-2 text-muted-foreground">
-                  {{ t('chat.cancelledLabel') }}
-                </span>
-                <span v-if="m.finishReason === 'tool_limit_reached'" class="ml-2 text-amber-600">
-                  {{ t('chat.tool.limitReached') }}
-                </span>
-                <span v-if="retryingMessageId === m.id" class="ml-2 text-muted-foreground italic">
-                  {{ t('chat.retrying') }}
-                </span>
-              </template>
+            <div
+              class="min-w-0 max-w-[min(90%,48rem)]"
+              :class="m.role === 'user' ? 'order-first' : ''"
+            >
+              <div
+                class="mb-1 flex items-center gap-2 text-xs text-muted-foreground"
+              >
+                <template v-if="m.role === 'tool_call'">
+                  {{ t('chat.tool.call', { name: m.toolName }) }}
+                </template>
+                <template v-else-if="m.role === 'tool_result'">
+                  {{
+                    m.toolIsError
+                      ? t('chat.tool.resultError')
+                      : t('chat.tool.result')
+                  }}
+                </template>
+                <template v-else>
+                  {{
+                    m.role === 'user'
+                      ? t('chat.sender.user')
+                      : m.role === 'assistant'
+                        ? t('chat.sender.assistant')
+                        : t('chat.sender.system')
+                  }}
+                  <span
+                    v-if="m.role === 'assistant' && m.completionTokens"
+                    class="ml-2"
+                  >
+                    {{ t('chat.tokens', { count: m.completionTokens }) }}
+                  </span>
+                  <span
+                    v-if="m.finishReason === 'error'"
+                    class="ml-2 text-destructive"
+                  >
+                    {{ t('chat.errorLabel') }}
+                  </span>
+                  <span
+                    v-if="m.finishReason === 'cancelled'"
+                    class="ml-2 text-muted-foreground"
+                  >
+                    {{ t('chat.cancelledLabel') }}
+                  </span>
+                  <span
+                    v-if="m.finishReason === 'tool_limit_reached'"
+                    class="ml-2 text-amber-600"
+                  >
+                    {{ t('chat.tool.limitReached') }}
+                  </span>
+                  <span
+                    v-if="retryingMessageId === m.id"
+                    class="ml-2 text-muted-foreground italic"
+                  >
+                    {{ t('chat.retrying') }}
+                  </span>
+                </template>
               </div>
               <div
-              class="whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm"
-              :class="{
-                'bg-foreground text-background': m.role === 'user',
-                'border border-border bg-background': m.role === 'assistant' || m.role === 'system',
-                'rounded-lg bg-muted/30 font-mono text-xs leading-5': m.role === 'tool_call' || (m.role === 'tool_result' && !m.toolIsError),
-                'rounded-lg bg-destructive/10 text-destructive font-mono text-xs leading-5': m.role === 'tool_result' && m.toolIsError,
-              }"
+                class="whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm"
+                :class="{
+                  'bg-foreground text-background': m.role === 'user',
+                  'border border-border bg-background':
+                    m.role === 'assistant' || m.role === 'system',
+                  'rounded-lg bg-muted/30 font-mono text-xs leading-5':
+                    m.role === 'tool_call' ||
+                    (m.role === 'tool_result' && !m.toolIsError),
+                  'rounded-lg bg-destructive/10 text-destructive font-mono text-xs leading-5':
+                    m.role === 'tool_result' && m.toolIsError,
+                }"
               >
-              <template v-if="m.role === 'tool_call'">{{ m.toolInput }}</template>
-              <template v-else>{{ m.content || (streamingMessageId === m.id ? '…' : '') }}</template>
+                <template v-if="m.role === 'tool_call'">{{
+                  m.toolInput
+                }}</template>
+                <template v-else>{{
+                  m.content || (streamingMessageId === m.id ? '…' : '')
+                }}</template>
               </div>
               <ReasoningAccordion
                 v-if="m.role === 'assistant' && reasoningFor(m.id)"
@@ -1273,18 +1461,27 @@ onBeforeUnmount(() => {
           @submit.prevent="() => send()"
         >
           <div class="mx-auto max-w-3xl">
-            <div class="rounded-2xl border border-border bg-background shadow-sm transition-shadow focus-within:border-foreground/30 focus-within:shadow-md">
+            <div
+              class="rounded-2xl border border-border bg-background shadow-sm transition-shadow focus-within:border-foreground/30 focus-within:shadow-md"
+            >
               <textarea
                 ref="textareaRef"
                 v-model="input"
                 rows="1"
                 class="block w-full resize-none overflow-hidden bg-transparent px-4 pb-2 pt-3 text-sm leading-6 outline-none placeholder:text-muted-foreground"
                 :placeholder="t('chat.composer.placeholder')"
-                :disabled="(busy && streamingMessageId === null) || loadingPhase !== null"
+                :disabled="
+                  (busy && streamingMessageId === null) || loadingPhase !== null
+                "
                 @keydown.enter.exact.prevent="send()"
               />
-              <div class="flex min-w-0 items-center gap-2 overflow-x-auto px-1 pb-1" :aria-label="t('chat.composer.settingsLabel')">
-                <div class="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto text-xs">
+              <div
+                class="flex min-w-0 items-center gap-2 overflow-x-auto px-1 pb-1"
+                :aria-label="t('chat.composer.settingsLabel')"
+              >
+                <div
+                  class="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto text-xs"
+                >
                   <ComposerSettingsPopover
                     :model-id="activeModelId"
                     :model-name="activeModel?.name"

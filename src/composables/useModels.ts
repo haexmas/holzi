@@ -1,9 +1,13 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
-import type { HuggingFaceInstallRequest, InstallPreview } from '~/composables/useHuggingFace'
+import type {
+  HuggingFaceInstallRequest,
+  InstallPreview,
+} from '~/composables/useHuggingFace'
 
 /** `models.source_kind` — see storage/models.rs `SourceKind`. */
-export type ModelSourceKind = 'catalog' | 'huggingface' | 'imported' | 'provider'
+export type ModelSourceKind =
+  'catalog' | 'huggingface' | 'imported' | 'provider'
 /** `models.integrity_status` — see storage/models.rs `IntegrityStatus`. */
 export type ModelIntegrityStatus = 'verified' | 'untrusted' | 'unknown'
 
@@ -64,8 +68,12 @@ export function useModels() {
   }
 
   /** Downloads and registers one of the bundled catalog entries. */
-  async function downloadFromCatalogAsync(catalogId: string): Promise<InstalledModel> {
-    return await invoke<InstalledModel>('download_model_from_catalog', { catalogId })
+  async function downloadFromCatalogAsync(
+    catalogId: string,
+  ): Promise<InstalledModel> {
+    return await invoke<InstalledModel>('download_model_from_catalog', {
+      catalogId,
+    })
   }
 
   /**
@@ -76,19 +84,26 @@ export function useModels() {
    * `TokenizerRequired`-shaped errors from the backend if neither
    * `request.tokenizerRepo` nor the preview resolved one.
    */
-  async function downloadFromHfAsync(request: HuggingFaceInstallRequest): Promise<InstalledModel> {
-    const preview = await invoke<InstallPreview>('preview_huggingface_install', {
-      args: {
-        repoId: request.repoId,
-        filename: request.filename,
-        revision: request.revision,
-        tokenizerRepo: request.tokenizerRepo,
-        contextWindow: request.contextWindow,
+  async function downloadFromHfAsync(
+    request: HuggingFaceInstallRequest,
+  ): Promise<InstalledModel> {
+    const preview = await invoke<InstallPreview>(
+      'preview_huggingface_install',
+      {
+        args: {
+          repoId: request.repoId,
+          filename: request.filename,
+          revision: request.revision,
+          tokenizerRepo: request.tokenizerRepo,
+          contextWindow: request.contextWindow,
+        },
       },
-    })
+    )
     const tokenizerRepo = request.tokenizerRepo ?? preview.tokenizerRepo
     if (!tokenizerRepo) {
-      throw new Error('tokenizerRepo is required and could not be resolved automatically')
+      throw new Error(
+        'tokenizerRepo is required and could not be resolved automatically',
+      )
     }
     const args: DownloadFromHfArgs = {
       id: preview.modelId,
@@ -106,13 +121,15 @@ export function useModels() {
   }
 
   /** Copies a local GGUF file into managed storage and registers it. */
-  async function importFromFileAsync(args: ImportModelArgs): Promise<InstalledModel> {
+  async function importFromFileAsync(
+    args: ImportModelArgs,
+  ): Promise<InstalledModel> {
     return await invoke<InstalledModel>('import_model_from_file', { args })
   }
 
   /** Deletes an installed model and its download record. */
   async function deleteAsync(id: string): Promise<void> {
-    return await invoke<void>('delete_installed_model', { id })
+    await invoke('delete_installed_model', { id })
   }
 
   /**
@@ -123,9 +140,12 @@ export function useModels() {
   async function onDownloadProgress(
     handler: (event: DownloadProgressEvent) => void,
   ): Promise<UnlistenFn> {
-    return await listen<DownloadProgressEvent>('model-download-progress', (e) => {
-      handler(e.payload)
-    })
+    return await listen<DownloadProgressEvent>(
+      'model-download-progress',
+      (e) => {
+        handler(e.payload)
+      },
+    )
   }
 
   /** Subscribes to completed model downloads and returns the unlisten function. */

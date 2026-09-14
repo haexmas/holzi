@@ -13,7 +13,9 @@ export function useInstance() {
     return await invoke<InstanceInfo[]>('list_instances')
   }
 
-  async function createAsync(args: CreateInstanceArgs): Promise<CreateInstanceResult> {
+  async function createAsync(
+    args: CreateInstanceArgs,
+  ): Promise<CreateInstanceResult> {
     return await invoke<CreateInstanceResult>('create_instance', { args })
   }
 
@@ -22,7 +24,7 @@ export function useInstance() {
   }
 
   async function closeAsync(): Promise<void> {
-    return await invoke<void>('close_instance')
+    await invoke('close_instance')
   }
 
   return { listAsync, createAsync, openAsync, closeAsync }
