@@ -631,6 +631,111 @@ async fn manual_mode_emits_a_permission_request_for_a_safe_tool() {
     assert_eq!(tool_result.tool_is_error, Some(false));
 }
 
+/// Regression for a leaked mistralrs reasoning-mode `<tool_call>` tag
+/// (Qwen text convention): a reasoning-capable local model's `content` can
+/// carry the raw tag verbatim alongside a correctly-parsed `tool_calls`
+/// entry (`mistralrs-core` 0.8.1 does not run its reasoning-mode content
+/// path through its own tool-call-tag stripping). The interim assistant row
+/// persisted before the tool call must never show that raw markup.
+#[tokio::test]
+async fn a_leaked_tool_call_tag_is_stripped_from_the_interim_assistant_text() {
+    let db = open_db();
+    let thread_id = Uuid::new_v4();
+    let user_message_id = Uuid::new_v4();
+    let assistant_message_id = Uuid::new_v4();
+    seed_thread(&db, thread_id, user_message_id);
+    set_permission_mode(&db, "manual");
+
+    let chat_state = Arc::new(ChatState::new());
+    chat_state
+        .tool_registry
+        .lock()
+        .unwrap()
+        .register(Arc::new(ScriptedTool {
+            name: "echo",
+            risk_class: RiskClass::Safe,
+            fails: false,
+        }));
+
+    let adapter = StubAdapter::new(vec![
+        vec![
+            Ok(StreamChunk::Delta {
+                content:
+                    "<tool_call>\n{\"name\": \"echo\", \"arguments\": {\"x\": 1}}\n</tool_call>"
+                        .to_string(),
+                reasoning: None,
+            }),
+            Ok(StreamChunk::ToolCalls(vec![LlmToolCall {
+                id: "call-1".to_string(),
+                name: "echo".to_string(),
+                input: serde_json::json!({ "x": 1 }),
+            }])),
+        ],
+        vec![Ok(StreamChunk::Done {
+            finish_reason: Some("end_turn".to_string()),
+            prompt_tokens: Some(1),
+            completion_tokens: Some(1),
+            ttft_ms: Some(1),
+            total_ms: 1,
+        })],
+    ]);
+    let session = session_with(adapter).await;
+    let request = base_request();
+    let stream = session.adapter.stream_chat(request.clone()).await.unwrap();
+
+    let (handle, mut rx) = spawn_turn(
+        db.clone(),
+        chat_state.clone(),
+        session,
+        thread_id,
+        user_message_id,
+        assistant_message_id,
+        request,
+        stream,
+    );
+
+    // The raw tag streams live as a `chat-token` before the turn even knows
+    // it was a tool call (mirrors the reported bug: a brief flash while
+    // generating is a known, accepted residual — only the interim row this
+    // test guards below must never carry the leaked markup).
+    let (leak_name, leak_payload) = rx.recv().await.expect("an event must arrive");
+    assert_eq!(leak_name, "chat-token");
+    assert!(leak_payload["delta"]
+        .as_str()
+        .unwrap()
+        .contains("<tool_call>"));
+
+    let (name, payload) = rx.recv().await.expect("an event must arrive");
+    assert_eq!(name, "tool-permission-request");
+
+    respond(
+        &chat_state,
+        extract_request_id(&payload),
+        ApprovalDecision::Allow,
+    );
+    handle.await.unwrap();
+
+    let rows = db
+        .with_connection(|conn| {
+            msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)
+        })
+        .unwrap();
+    // The tag carried no real text of its own, so once stripped there is
+    // nothing left to show — no stray interim `Assistant` row at all, and
+    // certainly none containing the raw tag.
+    assert!(
+        rows.iter()
+            .all(|m| m.role != MessageRole::Assistant || !m.content.contains("<tool_call>")),
+        "{rows:#?}"
+    );
+    assert!(
+        !rows
+            .iter()
+            .any(|m| m.role == MessageRole::Assistant && m.id != assistant_message_id),
+        "no interim assistant row should exist once the leaked tag is stripped to nothing: {rows:#?}"
+    );
+}
+
 #[tokio::test]
 async fn manual_mode_emits_a_permission_request_for_the_risky_cli_tool() {
     let db = open_db();

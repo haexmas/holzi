@@ -291,6 +291,39 @@ fn risk_class_str(risk: crate::chat::tools::RiskClass) -> &'static str {
     }
 }
 
+/// Strips a leaked `<tool_call>…</tool_call>` block (the Qwen text
+/// convention) out of assistant text.
+///
+/// mistralrs 0.8.1's reasoning-mode content path (active whenever the
+/// current model has thinking enabled, see `model_supports_reasoning`)
+/// never runs generated text through its own tool-call-tag stripping the
+/// way its non-reasoning path does, so on a reasoning-capable Qwen-family
+/// model the raw tag the model emits to signal a tool call leaks into
+/// `content` right alongside the correctly-parsed `tool_calls`. Only call
+/// this once a step is already known to have produced `tool_calls` — at
+/// that point any `<tool_call>` markup still in the text is certainly
+/// leaked syntax, never legitimate prose.
+///
+/// Upstream bug: <https://github.com/EricLBuehler/mistral.rs/issues/2427>.
+/// Remove this workaround once a fixed `mistralrs` release lands.
+fn strip_leaked_tool_call_markup(text: &str) -> String {
+    const OPEN: &str = "<tool_call>";
+    const CLOSE: &str = "</tool_call>";
+
+    let mut result = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(open_pos) = rest.find(OPEN) {
+        result.push_str(&rest[..open_pos]);
+        rest = &rest[open_pos + OPEN.len()..];
+        rest = match rest.find(CLOSE) {
+            Some(close_pos) => &rest[close_pos + CLOSE.len()..],
+            None => "", // Unterminated tag: nothing legitimate follows it.
+        };
+    }
+    result.push_str(rest);
+    result.trim().to_string()
+}
+
 /// Payload for `chat-turn-complete` (contracts/tauri-commands.md). Fires
 /// exactly once per `send_message` call, after the last step's own
 /// per-step event — this is the frontend's sole signal to clear
@@ -2020,6 +2053,13 @@ pub async fn run_turn(
             // emitted first becomes its own interim assistant row
             // (data-model.md's `assistant(*)` — optional, only present
             // when the step actually produced text before its tool use).
+            //
+            // Strip first: a reasoning-capable local model can leak its raw
+            // `<tool_call>` tag into this text (see
+            // `strip_leaked_tool_call_markup`) — left in, that markup would
+            // otherwise be persisted and shown as if it were the model's
+            // own reply.
+            let assembled = strip_leaked_tool_call_markup(&assembled);
             if !assembled.is_empty() {
                 let interim_id = Uuid::new_v4();
                 let msg = ChatMessage {
