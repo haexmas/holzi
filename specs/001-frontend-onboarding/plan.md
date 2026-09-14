@@ -24,7 +24,7 @@ Deliver the holzi Tauri app's first-impression surfaces: a landing page with thr
 **Primary Dependencies**:
 - Nuxt modules: `@nuxtjs/i18n`, `@nuxt/icon`, `@pinia/nuxt`, `@vueuse/nuxt`.
 - Styling: Tailwind v4 via `@tailwindcss/vite`, `tw-animate-css`.
-- UI: `shadcn-vue` (Radix Vue-based, copy-in), `class-variance-authority`, `tailwind-merge`, `lucide-vue-next` (via `@nuxt/icon` iconify-json bundle), `html5-qrcode` (QR scanner in the Verbinden Sheet on every platform, same version haex-vault uses).
+- UI: `shadcn-vue` (Radix Vue-based, copy-in), `class-variance-authority`, `tailwind-merge`, `@lucide/vue`, `html5-qrcode` (QR scanner in the Verbinden Sheet on every platform, same version haex-vault uses).
 - Tauri plugins: `@tauri-apps/plugin-dialog` (file picker for Öffnen), `@tauri-apps/plugin-store` (only for non-secret preferences — not for instance list), `@tauri-apps/plugin-fs` (limited to `AppLocalData` scope).
 - Rust-side: [`haex-crdt` at `1c069ef0ea19143af2748f40fc41cba05c94dbe1` (`Cargo.toml`, package 0.4.0)](https://github.com/haexmas/haex-crdt/blob/1c069ef0ea19143af2748f40fc41cba05c94dbe1/Cargo.toml) as a git dependency, `tauri`, `serde`, `ts-rs` (for type sharing), `thiserror`.
 
