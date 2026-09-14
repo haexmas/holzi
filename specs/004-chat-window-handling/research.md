@@ -43,10 +43,21 @@ verbunden. Der Open-Command wartet nicht auf den Load.
 - ein Frontend-Aufruf aus mehreren Routen könnte sonst doppelte Loads erzeugen;
 - Genesis und bestehende Vaults erhalten dasselbe Verhalten.
 
-Der Preload darf nicht den Vault-Wechsel blockieren. Deshalb braucht die
-Implementierung eine Load-Generation bzw. ein Abbruchsignal: Ein veralteter
-Load darf nach einem Switch nicht mehr `ChatState.session` oder den sichtbaren
-Status der neuen Vault überschreiben.
+Der Preload darf nicht den Vault-Wechsel blockieren. Die Implementierung
+braucht dafür zwei unabhängige, sich ergänzende Mechanismen:
+
+1. Eine `vaultGeneration`, die verhindert, dass ein veralteter Load nach einem
+   Switch noch `ChatState.session` oder den sichtbaren Status der neuen Vault
+   überschreibt (Stale-Result-Schutz, siehe `data-model.md`).
+2. Eine verpflichtende Cancellation (`cancel_preload_and_wait`, FR-013), die
+   den noch laufenden Modell-Load selbst abbricht und ihr Ende abwartet, statt
+   nur sein Ergebnis zu verwerfen. Ohne Cancellation liefe ein nicht mehr
+   benötigter Load-Prozess weiter und würde Ressourcen (VRAM/RAM) belegen, die
+   das neue Modell braucht.
+
+Die `vaultGeneration` schützt vor spät eintreffenden Ergebnissen; die
+Cancellation beendet die zugrundeliegende Arbeit. Beide sind erforderlich und
+ersetzen einander nicht.
 
 **Verworfene Alternative**: Preload ausschließlich in der Workspace-Seite.
 Das wäre zwar einfach, würde aber bei direkter Chat-Navigation oder schnellem

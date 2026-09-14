@@ -326,6 +326,13 @@ sein.
   Freigabe, Abbruch und Tool-Loop DÜRFEN durch die neue Anordnung nicht
   verändert werden. Unterstützt das gewählte Modell Reasoning, wird es ohne
   separates Composer-Setting automatisch aktiviert.
+- **FR-021a**: Ob ein Modell Reasoning unterstützt, MUSS als serverseitige
+  Modell-Capability bekannt sein und über `ChatRequest` an den jeweiligen
+  Adapter weitergereicht werden, damit Adapter, die Reasoning nur nach
+  explizitem Request-Flag liefern (z. B. Anthropic `thinking`), es tatsächlich
+  aktivieren. Ist die Capability für das gewählte Modell unbekannt oder nicht
+  vorhanden, DARF kein Reasoning angefordert werden; FR-031 bleibt in diesem
+  Fall gültig.
 
 #### Wachsende Textarea
 
@@ -391,6 +398,9 @@ sein.
 - **Reasoning-Accordion**: Ein pro Assistant-Nachricht lokaler Disclosure-
   Bereich für nicht-leere Reasoning-Deltas. Sein Zustand wird in dieser Spec
   nicht persistiert.
+- **Reasoning-Capability**: Eine serverseitig aus dem gewählten Modell
+  abgeleitete Fähigkeit, die bestimmt, ob `ChatRequest` beim Adapter Reasoning
+  anfordert. Sie ist kein Composer-State und wird nicht vom Frontend gesetzt.
 
 ## Success Criteria
 

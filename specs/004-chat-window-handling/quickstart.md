@@ -7,6 +7,17 @@
 - Für Reasoning einen Adapter bzw. ein lokales Modell verwenden, das
   `reasoning`-Deltas liefert.
 
+### Setup-Varianten für Negativfälle
+
+- **Kein ladbares lokales Modell**: Alle lokalen Modelle deinstallieren bzw.
+  ihre Modelldatei entfernen, sodass `resolve_default_model` keinen lokalen
+  Kandidaten mehr findet.
+- **Nur Anbieter-Modell verfügbar**: Ausschließlich ein Anbieter-Modell (mit
+  hinterlegtem API-Key) als Präferenz (`last_active`, Device- oder
+  Vault-Default) setzen, ohne installiertes lokales Modell.
+- **Modell ohne Reasoning-Unterstützung**: Ein lokales Modell oder einen
+  Adapter verwenden, der keine `reasoning`-Deltas liefert.
+
 ## 1. Neuer Chat-Einstieg
 
 1. Einen Chat mit einer Nachricht senden.
@@ -27,11 +38,14 @@
 4. Während des Loads den Chat öffnen.
 5. Prüfen: Der Chat übernimmt den bestehenden Status und startet keinen zweiten
    Load.
-6. Einen Vault-Wechsel durchführen.
-7. Prüfen: Das Modell der neuen Vault wird geladen; ein verspätetes Ergebnis des
-   alten Loads wird nicht sichtbar aktiv.
-8. Einen Load-Fehler simulieren oder ein nicht ladbares Modell auswählen.
-9. Prüfen: Die Vault bleibt offen und ein alternatives Modell ist auswählbar.
+6. Während der Load aus Schritt 3 noch läuft (nicht abgeschlossen), einen
+   Vault-Wechsel durchführen.
+7. Prüfen: Der alte Load wird abgebrochen (`cancel_preload_and_wait`) statt im
+   Hintergrund weiterzulaufen.
+8. Prüfen: Das Modell der neuen Vault wird geladen; ein dennoch verspätet
+   eintreffendes Ergebnis des alten Loads wird nicht sichtbar aktiv.
+9. Einen Load-Fehler simulieren oder ein nicht ladbares Modell auswählen.
+10. Prüfen: Die Vault bleibt offen und ein alternatives Modell ist auswählbar.
 
 ## 3. Composer und Textarea
 

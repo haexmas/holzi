@@ -43,9 +43,10 @@ Liefert den aktuell bekannten Load-Zustand für den aktiven Vault.
 
 ```typescript
 type ModelLoadStatusPayload =
-  | { status: 'idle' }
+  | { status: 'idle'; vaultGeneration: number }
   | {
       status: 'loading'
+      vaultGeneration: number
       loadId: number
       modelId: string
       modelName: string
@@ -54,12 +55,14 @@ type ModelLoadStatusPayload =
     }
   | {
       status: 'ready'
+      vaultGeneration: number
       loadId: number
       modelId: string
       modelName: string
     }
   | {
       status: 'error'
+      vaultGeneration: number
       loadId: number
       modelId?: string
       modelName?: string
@@ -70,14 +73,26 @@ type ModelLoadStatusPayload =
 Der Command ist read-only und liefert `idle`, wenn keine aktive Vault oder kein
 aktiver Load vorhanden ist.
 
+`vaultGeneration` erhöht sich bei jedem Vault-Open oder -Wechsel und ist von
+`loadId` unabhängig: `loadId` ordnet Loads innerhalb derselben Vault-Generation,
+`vaultGeneration` grenzt eine Vault-Instanz gegen ihre Vorgänger ab. Ein Snapshot
+oder Event mit einer nicht mehr aktuellen `vaultGeneration` gehört zu einer
+bereits verlassenen Vault und wird verworfen, unabhängig davon, ob seine
+`loadId` numerisch neuer wäre als die zuletzt gesehene. Das schließt die Lücke,
+die reines `loadId`-Filtern beim Übergang über den `idle`-Status hätte: Ein neu
+gemounteter Client, der `idle` ohne bekannten `loadId`-Referenzwert sieht, kann
+sich trotzdem an `vaultGeneration` orientieren, statt ein verspätetes Event der
+vorherigen Vault fälschlich zu übernehmen.
+
 ## Bestehendes Event mit Korrelations-ID
 
 ### `model-load-progress`
 
-Der bestehende Payload wird um `loadId` ergänzt:
+Der bestehende Payload wird um `loadId` und `vaultGeneration` ergänzt:
 
 ```typescript
 {
+  vaultGeneration: number,
   loadId: number,
   modelId: string,
   modelName: string,
@@ -86,8 +101,9 @@ Der bestehende Payload wird um `loadId` ergänzt:
 }
 ```
 
-Das Frontend verwirft Events mit einer älteren `loadId` als dem zuletzt
-bekannten Load.
+Das Frontend verwirft Events, deren `vaultGeneration` nicht der aktuell
+aktiven Vault entspricht, sowie — innerhalb derselben Generation — Events mit
+einer älteren `loadId` als dem zuletzt bekannten Load.
 
 ## Neuer Fehler-Event
 
@@ -95,6 +111,7 @@ bekannten Load.
 
 ```typescript
 {
+  vaultGeneration: number,
   loadId: number,
   modelId?: string,
   modelName?: string,
@@ -115,14 +132,29 @@ Nach erfolgreicher Veröffentlichung einer neuen aktiven Vault starten
 start_default_model_preload(app_handle, app_state, chat_state)
 ```
 
-Der Helper:
+Jede aktive Vault trägt eine `vaultGeneration`, die beim Veröffentlichen der
+neuen aktiven Vault erhöht wird (`create_instance`/`open_instance`, vor dem
+Start des Preloads). Der Helper:
 
-1. erzeugt eine neue `loadId`;
-2. führt `resolve_default_model` aus;
-3. lädt nur den ersten ladbaren lokalen Kandidaten über die gemeinsame
-   Load-Funktion; ein Anbieter-Kandidat wird nicht proaktiv verbunden;
-4. veröffentlicht nur bei weiterhin gültiger `loadId` das Ergebnis;
+1. liest die aktuelle `vaultGeneration` und erzeugt eine neue `loadId`;
+2. führt `resolve_default_model` aus — dieselbe Fallback-Reihenfolge
+   (`LastActive` → `DefaultDevice` → `DefaultVault` → `FirstAvailable`) wie für
+   den manuellen Fall, aber lokal eingeschränkt: Liefert eine Präferenzstufe
+   eine `model_id`, die kein lokaler Kandidat ist (z. B. ein Anbieter-Modell
+   aus `LastActive`), gilt diese Stufe für den Preload als nicht erfüllt und
+   die Prüfung geht zur nächsten Stufe über, statt auf das Anbieter-Modell zu
+   laden oder abzubrechen. `FirstAvailable` bleibt dabei bereits lokal-first
+   (`loadable_local` vor `loadable_api_key_ids`);
+3. lädt den so gefundenen lokalen Kandidaten über die gemeinsame Load-Funktion;
+   ein Anbieter-Kandidat wird nicht proaktiv verbunden;
+4. veröffentlicht nur bei weiterhin gültiger `vaultGeneration` und `loadId` das
+   Ergebnis;
 5. setzt bei Fehlern den strukturierten Error-Status und lässt die Vault offen.
+
+Liefert Schritt 2 auf jeder Präferenzstufe ausschließlich Anbieter-Kandidaten
+oder gar keinen Kandidaten, startet kein Preload und der Status bleibt `idle`
+(kein `error`) — das deckt sowohl "kein ladbares Modell" (FR-015) als auch "nur
+ein Anbieter-Modell verfügbar" (Acceptance Scenario 7 in User Story 2) ab.
 
 Der Helper ist kein zusätzlicher Frontend-Command. Dadurch können Workspace und
 Chat nicht versehentlich mehrere konkurrierende Preloads anfordern.

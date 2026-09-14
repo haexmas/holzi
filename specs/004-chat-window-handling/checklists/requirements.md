@@ -9,6 +9,7 @@
 - [ ] Modell-Preload startet nach Genesis, Unlock und Vault-Wechsel.
 - [ ] Vault-Open wartet nicht auf den Modell-Load.
 - [ ] Veraltete Loads können keinen neuen aktiven Status überschreiben.
+- [ ] Ein erst nach Preload-Start gemounteter Chat liest den aktuellen Snapshot und bleibt nicht in einem falschen Ladezustand hängen.
 
 ## Composer
 

@@ -34,15 +34,15 @@ description: "Actionable, dependency-ordered task list for chat window and sessi
 
 **⚠️ CRITICAL**: No user story implementation may begin until this phase is complete.
 
-- [ ] T004 Add ephemeral `ModelLoadStatus`, monotonically increasing `load_id`, and a cancellable preload handle to `src-tauri/src/chat/session.rs`; keep all new state outside SQLite.
-- [ ] T005 Refactor `src-tauri/src/chat/commands.rs` so manual `load_model` and the internal preload share one model-load implementation, publish `model-load-progress` with `loadId`, and publish structured `model-load-error` on failure.
+- [ ] T004 Add ephemeral `ModelLoadStatus`, a monotonically increasing `vault_generation`, a monotonically increasing `load_id`, and a cancellable preload handle to `src-tauri/src/chat/session.rs`; keep all new state outside SQLite.
+- [ ] T005 Refactor `src-tauri/src/chat/commands.rs` so manual `load_model` and the internal preload share one model-load implementation, publish `model-load-progress` with `vaultGeneration` and `loadId`, and publish structured `model-load-error` on failure.
 - [ ] T006 Add the read-only `model_load_status` Tauri command to `src-tauri/src/chat/commands.rs` and register it in `src-tauri/src/lib.rs`.
-- [ ] T007 Add `modelLoadStatusAsync`, `onModelLoadProgress`, and `onModelLoadError` wrappers to `src/composables/useChat.ts`; ignore stale events by `loadId`.
-- [ ] T008 Implement `start_default_model_preload` and `cancel_preload_and_wait` in `src-tauri/src/chat/commands.rs` or the shared chat runtime module, using the existing resolver from Spec 002 and ensuring a preload does not hold `ChatState.operation` long enough to block Vault switching.
-- [ ] T009 Wire the preload start after active-instance publication in `src-tauri/src/instances/create.rs` and `src-tauri/src/instances/open.rs`; reset/invalidate the previous model session before publishing the new Vault.
+- [ ] T007 Add `modelLoadStatusAsync`, `onModelLoadProgress`, and `onModelLoadError` wrappers to `src/composables/useChat.ts`; ignore events whose `vaultGeneration` does not match the active Vault, and stale events by `loadId` within the same generation.
+- [ ] T008 Implement `start_default_model_preload` and `cancel_preload_and_wait` in `src-tauri/src/chat/commands.rs` or the shared chat runtime module, walking the Spec 002 resolver's fallback order restricted to local candidates (skip a preference tier that resolves to a provider model instead of falling back to it) per `specs/004-chat-window-handling/contracts/tauri-commands.md`, and ensuring a preload does not hold `ChatState.operation` long enough to block Vault switching.
+- [ ] T009 Wire the preload start after active-instance publication in `src-tauri/src/instances/create.rs` and `src-tauri/src/instances/open.rs`; in `open.rs`'s Vault-switch path, call and await `cancel_preload_and_wait` on any preload of the previous Vault, then bump `vaultGeneration`, before publishing the new Vault.
 - [ ] T010 Cancel and await any running preload before close or manual model replacement in `src-tauri/src/instances/close.rs` and `src-tauri/src/chat/commands.rs`.
-- [ ] T011 [P] Add unit coverage for `load_id` monotonicity, stale-result rejection, and status transitions in `src-tauri/src/chat/session_tests.rs`; register the test module in `src-tauri/src/chat/mod.rs`.
-- [ ] T012 Add lifecycle integration coverage in `src-tauri/tests/chat_model_preload.rs` for preload after Vault publication, no duplicate load when the Chat mounts, and cancellation during a Vault switch.
+- [ ] T011 [P] Add unit coverage for `vault_generation` and `load_id` monotonicity, stale-result rejection across a Vault switch, and status transitions in `src-tauri/src/chat/session_tests.rs`; register the test module in `src-tauri/src/chat/mod.rs`.
+- [ ] T012 Add lifecycle integration coverage in `src-tauri/tests/chat_model_preload.rs` for preload after Vault publication, no duplicate load when the Chat mounts, cancellation during a Vault switch, and a stale-`vaultGeneration` event from a cancelled preload not overwriting the new Vault's status.
 
 **Checkpoint**: A background preload can run, be observed by a later-mounted page, and be cancelled without publishing stale state or blocking Vault lifecycle operations.
 
@@ -79,7 +79,7 @@ description: "Actionable, dependency-ordered task list for chat window and sessi
 - [ ] T020 [US2] Replace Chat-page-only model resolution in `src/pages/chat/[instance].vue` with listener registration plus `modelLoadStatusAsync`; reuse the global ready session and show loading/error states until the current status is settled.
 - [ ] T021 [US2] Guard manual model selection in `src/pages/chat/[instance].vue` so selecting another model invalidates the current preload and cannot be overwritten by a stale completion.
 - [ ] T022 [US2] Add structured preload error localization and retry/model-selection affordances in `src/pages/chat/[instance].vue` and `src/i18n/locales/de.json`.
-- [ ] T023 [US2] Add test coverage in `src-tauri/tests/chat_model_preload.rs` for no candidate, local model ready, preload failure, and a second Vault replacing the first Vault's load.
+- [ ] T023 [US2] Add test coverage in `src-tauri/tests/chat_model_preload.rs` for no candidate, a provider-only candidate (preload stays `idle`, no proactive connection), local model ready, preload failure, and a second Vault replacing the first Vault's load.
 - [ ] T024 [US2] Execute the Vault-open and model-preload scenarios in `specs/004-chat-window-handling/quickstart.md` on the normal build and a local-model build.
 
 **Checkpoint**: Model startup begins at Vault-open, is visible to Workspace/Chat, and remains correct across failures and Vault switches.
@@ -137,7 +137,8 @@ description: "Actionable, dependency-ordered task list for chat window and sessi
 - [ ] T039 [US5] Remove the old `auto`/`on`/`off` display branching in `src/pages/chat/[instance].vue`; render the accordion solely when non-empty Reasoning deltas exist and never auto-expand it.
 - [ ] T040 [US5] Preserve live `TokenEvent.reasoning` updates while an accordion is open and clear per-message expansion state on new Chat entry/reload in `src/pages/chat/[instance].vue`.
 - [ ] T041 [US5] Confirm that `src/composables/useChat.ts` and `src/pages/chat/[instance].vue` do not add Reasoning persistence to `chat_messages` or alter Spec 003 stream/retry behavior.
-- [ ] T042 [US5] Execute the Reasoning accordion, independent expansion, streaming update, keyboard, and reload scenarios in `specs/004-chat-window-handling/quickstart.md`.
+- [ ] T042 [US5] Add the `reasoning_requested` capability field to `ChatRequest` in `src-tauri/src/adapters/types.rs`, resolve it from the selected model in `src-tauri/src/chat/commands.rs`, and add regression tests in `src-tauri/src/adapters/anthropic_tests.rs` (and the local adapter's tests) covering a reasoning-capable model, a non-capable model, and the resulting presence/absence of `StreamChunk::Delta.reasoning`.
+- [ ] T043 [US5] Execute the Reasoning accordion, independent expansion, streaming update, keyboard, and reload scenarios in `specs/004-chat-window-handling/quickstart.md`.
 
 **Checkpoint**: Every available Reasoning block is discoverable but collapsed by default, independently expandable, and non-invasive to the main response.
 
@@ -147,12 +148,12 @@ description: "Actionable, dependency-ordered task list for chat window and sessi
 
 **Purpose**: Validate the complete feature and reconcile the owning documentation.
 
-- [ ] T043 [P] Update `specs/002-onboarding-model-prefs/spec.md` with an explicit cross-reference that Spec 004 supersedes its chat-entry, Composer, and Reasoning-visibility assumptions while preserving its model fallback contract.
-- [ ] T044 [P] Run an automated `de`/`en` locale-key parity check against all new keys referenced by `src/pages/chat/[instance].vue`, `src/components/chat/ComposerControl.vue`, `src/components/chat/ReasoningAccordion.vue`, and `src/pages/workspace/[instance].vue`.
-- [ ] T045 Run `cargo test --lib` and the focused preload/new-thread integration suites from `src-tauri/tests/`.
-- [ ] T046 Run `pnpm typecheck` and fix any binding/type regressions in `src/composables/useChat.ts` and the Chat pages.
-- [ ] T047 Execute the complete `specs/004-chat-window-handling/quickstart.md` on desktop and a narrow viewport; record any deviations in the checklist at `specs/004-chat-window-handling/checklists/requirements.md`.
-- [ ] T048 Update `specs/004-chat-window-handling/checklists/requirements.md` with the completed validation state and any explicitly deferred findings.
+- [ ] T044 [P] Update `specs/002-onboarding-model-prefs/spec.md` with an explicit cross-reference that Spec 004 supersedes its chat-entry, Composer, and Reasoning-visibility assumptions while preserving its model fallback contract.
+- [ ] T045 [P] Run an automated `de`/`en` locale-key parity check against all new keys referenced by `src/pages/chat/[instance].vue`, `src/components/chat/ComposerControl.vue`, `src/components/chat/ReasoningAccordion.vue`, and `src/pages/workspace/[instance].vue`.
+- [ ] T046 Run `cargo test --lib` and the focused preload/new-thread integration suites from `src-tauri/tests/`.
+- [ ] T047 Run `pnpm typecheck` and fix any binding/type regressions in `src/composables/useChat.ts` and the Chat pages.
+- [ ] T048 Execute the complete `specs/004-chat-window-handling/quickstart.md` on desktop and a narrow viewport; record any deviations in the checklist at `specs/004-chat-window-handling/checklists/requirements.md`.
+- [ ] T049 Update `specs/004-chat-window-handling/checklists/requirements.md` with the completed validation state and any explicitly deferred findings.
 
 ---
 
@@ -180,7 +181,7 @@ description: "Actionable, dependency-ordered task list for chat window and sessi
 - T001, T002, and T003 can run in parallel.
 - T011 can run in parallel with T005-T010 after the runtime types are agreed.
 - T025, T032, and T037 can be prepared in parallel because they use separate component/composable files; their page integrations must be sequenced.
-- T043 and T044 can run in parallel with each other after implementation.
+- T044 and T045 can run in parallel with each other after implementation.
 
 ## Parallel Example: Shared Foundation
 
