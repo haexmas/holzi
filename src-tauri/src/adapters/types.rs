@@ -74,6 +74,10 @@ pub struct ChatRequest {
     pub model_id: String,
     pub system_prompt: Option<String>,
     pub messages: Vec<ChatMessage>,
+    /// Whether the selected model has a known native reasoning capability.
+    /// Adapters enable their provider-specific reasoning mode only when this
+    /// is true; the frontend never sets this flag directly.
+    pub reasoning_requested: bool,
     /// Cap on completion tokens. `None` uses each adapter's default;
     /// Anthropic Messages API requires the field, so the Anthropic
     /// adapter substitutes a conservative default in that case.

@@ -60,6 +60,11 @@
     },
     "settings": {
       "iconTitle": "Settings"
+    },
+    "modelPreload": {
+      "loading": "Preparing {modelName}…",
+      "ready": "{modelName} is ready",
+      "error": "The model could not be prepared"
     }
   },
   "chat": {
@@ -67,7 +72,10 @@
       "connecting": "Connecting to {providerName}…",
       "loading": "Loading {modelName}…",
       "cudaJitWarmup": "Optimising GPU for the first run of {modelName}, one-off ~30 seconds…",
-      "ready": "Ready"
+      "ready": "Ready",
+      "error": "Model could not be loaded",
+      "retry": "Try loading again",
+      "idle": "No local model preloaded"
     },
     "noModel": "No model available",
     "model": {
@@ -126,6 +134,7 @@
     },
     "reasoning": {
       "label": "Reasoning",
+      "title": "Show reasoning",
       "auto": "Auto",
       "on": "On",
       "off": "Off",

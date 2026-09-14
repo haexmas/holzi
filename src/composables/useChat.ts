@@ -138,12 +138,60 @@ export interface RetryEvent {
 
 export type ModelLoadPhase = 'connecting' | 'loading' | 'cuda-jit-warmup' | 'ready'
 
+export interface ModelLoadStatusIdle {
+  status: 'idle'
+  vaultGeneration: number
+}
+
+export interface ModelLoadStatusLoading {
+  status: 'loading'
+  vaultGeneration: number
+  loadId: number
+  modelId: string
+  modelName: string
+  phase: Exclude<ModelLoadPhase, 'ready'>
+  providerName?: string
+}
+
+export interface ModelLoadStatusReady {
+  status: 'ready'
+  vaultGeneration: number
+  loadId: number
+  modelId: string
+  modelName: string
+}
+
+export interface ModelLoadStatusError {
+  status: 'error'
+  vaultGeneration: number
+  loadId: number
+  modelId?: string
+  modelName?: string
+  code: string
+}
+
+export type ModelLoadStatusPayload =
+  | ModelLoadStatusIdle
+  | ModelLoadStatusLoading
+  | ModelLoadStatusReady
+  | ModelLoadStatusError
+
 export interface ModelLoadProgressEvent {
   modelId: string
   modelName: string
   phase: ModelLoadPhase
+  vaultGeneration: number
+  loadId: number
   /** Present only when `phase === 'connecting'` (spec 002 §FR-015b). */
   providerName?: string
+}
+
+export interface ModelLoadErrorEvent {
+  vaultGeneration: number
+  loadId: number
+  modelId?: string
+  modelName?: string
+  code: string
 }
 
 /**
@@ -152,6 +200,22 @@ export interface ModelLoadProgressEvent {
  * `chat-message-complete`, `chat-message-error`).
  */
 export function useChat() {
+  let latestVaultGeneration: number | null = null
+  let latestLoadId = -1
+
+  function acceptsModelLoadEvent(event: { vaultGeneration: number, loadId: number }): boolean {
+    if (latestVaultGeneration === null || event.vaultGeneration > latestVaultGeneration) {
+      latestVaultGeneration = event.vaultGeneration
+      latestLoadId = event.loadId
+      return true
+    }
+    if (event.vaultGeneration < latestVaultGeneration || event.loadId < latestLoadId) {
+      return false
+    }
+    latestLoadId = event.loadId
+    return true
+  }
+
   /** Lists chat threads for the active instance. */
   async function listThreadsAsync(): Promise<Thread[]> {
     return await invoke<Thread[]>('list_threads')
@@ -287,9 +351,26 @@ export function useChat() {
   async function onModelLoadProgress(
     handler: (e: ModelLoadProgressEvent) => void,
   ): Promise<UnlistenFn> {
-    return await listen<ModelLoadProgressEvent>('model-load-progress', (ev) =>
-      handler(ev.payload),
-    )
+    return await listen<ModelLoadProgressEvent>('model-load-progress', (ev) => {
+      if (acceptsModelLoadEvent(ev.payload)) handler(ev.payload)
+    })
+  }
+
+  /** Returns the current model-load state for the active Vault. */
+  async function modelLoadStatusAsync(): Promise<ModelLoadStatusPayload> {
+    const status = await invoke<ModelLoadStatusPayload>('model_load_status')
+    latestVaultGeneration = status.vaultGeneration
+    latestLoadId = 'loadId' in status ? status.loadId : -1
+    return status
+  }
+
+  /** Subscribes to structured model-load failures. */
+  async function onModelLoadError(
+    handler: (e: ModelLoadErrorEvent) => void,
+  ): Promise<UnlistenFn> {
+    return await listen<ModelLoadErrorEvent>('model-load-error', (ev) => {
+      if (acceptsModelLoadEvent(ev.payload)) handler(ev.payload)
+    })
   }
 
   return {
@@ -311,5 +392,7 @@ export function useChat() {
     onTurnComplete,
     onToolPermissionRequest,
     onModelLoadProgress,
+    modelLoadStatusAsync,
+    onModelLoadError,
   }
 }

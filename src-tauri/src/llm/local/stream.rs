@@ -112,6 +112,9 @@ fn build_request(req: &ChatRequest) -> RequestBuilder {
     if let Some(cap) = req.max_new_tokens {
         builder = builder.set_sampler_max_len(cap);
     }
+    if req.reasoning_requested {
+        builder = builder.enable_thinking(true);
+    }
     if !req.tools.is_empty() {
         builder = builder.set_tools(req.tools.iter().map(to_mistralrs_tool).collect());
     }

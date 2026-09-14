@@ -5,7 +5,7 @@
 use wiremock::matchers::{body_json, header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use super::anthropic::AnthropicAdapter;
+use super::anthropic::{build_messages_body, AnthropicAdapter};
 use super::types::{ChatMessage, ChatRequest, ChatRole, StreamChunk, StreamError};
 use super::{AdapterError, ProviderAdapter};
 
@@ -224,9 +224,24 @@ fn sample_request(model: &str) -> ChatRequest {
             role: ChatRole::User,
             content: "hi".to_string(),
         }],
+        reasoning_requested: false,
         max_new_tokens: Some(128),
         tools: Vec::new(),
     }
+}
+
+#[test]
+fn reasoning_capability_controls_anthropic_thinking_request() {
+    let mut request = sample_request("claude-sonnet-4-20250514");
+    let without_reasoning = build_messages_body(&request);
+    assert!(without_reasoning.get("thinking").is_none());
+
+    request.reasoning_requested = true;
+    let with_reasoning = build_messages_body(&request);
+    assert_eq!(with_reasoning["thinking"]["type"], "enabled");
+    assert!(with_reasoning["thinking"]["budget_tokens"]
+        .as_u64()
+        .is_some());
 }
 
 fn sse_body(events: &[(&str, serde_json::Value)]) -> String {
@@ -349,10 +364,9 @@ async fn stream_chat_reports_unexpected_end_after_delta() {
         .await;
 
     let adapter = AnthropicAdapter::new(server.uri(), "sk-any".to_string()).unwrap();
-    let mut stream = adapter
-        .stream_chat(sample_request("claude-opus-5"))
-        .await
-        .unwrap();
+    let mut request = sample_request("claude-opus-5");
+    request.reasoning_requested = true;
+    let mut stream = adapter.stream_chat(request).await.unwrap();
     let mut saw_unexpected_end = false;
     while let Some(chunk) = stream.next().await {
         if matches!(chunk, Err(StreamError::UnexpectedEnd)) {
@@ -403,10 +417,9 @@ async fn stream_chat_surfaces_thinking_delta_as_reasoning() {
         .await;
 
     let adapter = AnthropicAdapter::new(server.uri(), "sk-any".to_string()).unwrap();
-    let mut stream = adapter
-        .stream_chat(sample_request("claude-opus-5"))
-        .await
-        .unwrap();
+    let mut request = sample_request("claude-opus-5");
+    request.reasoning_requested = true;
+    let mut stream = adapter.stream_chat(request).await.unwrap();
 
     let mut reasoning: Vec<String> = Vec::new();
     let mut content: Vec<String> = Vec::new();
@@ -702,6 +715,7 @@ async fn stream_chat_groups_ordered_tool_calls_and_results_into_two_messages() {
                 content: String::new(),
             },
         ],
+        reasoning_requested: false,
         max_new_tokens: Some(128),
         tools: Vec::new(),
     };

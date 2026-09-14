@@ -194,6 +194,7 @@ impl ProviderAdapter for AnthropicAdapter {
         let start = Instant::now();
         let byte_stream = resp.bytes_stream();
 
+        let reasoning_requested = req.reasoning_requested;
         let task = tokio::spawn(async move {
             let mut event_stream = byte_stream.eventsource();
             let mut prompt_tokens: Option<usize> = None;
@@ -277,7 +278,7 @@ impl ProviderAdapter for AnthropicAdapter {
                                     }
                                 }
                             }
-                            "thinking_delta" => {
+                            "thinking_delta" if reasoning_requested => {
                                 if let Some(text) =
                                     payload.pointer("/delta/thinking").and_then(Value::as_str)
                                 {
@@ -392,7 +393,7 @@ impl ProviderAdapter for AnthropicAdapter {
 }
 
 /// Serializes a provider-neutral chat request for Anthropic's Messages API.
-fn build_messages_body(req: &ChatRequest) -> Value {
+pub(super) fn build_messages_body(req: &ChatRequest) -> Value {
     let max_tokens = req
         .max_new_tokens
         .map(|n| n as u32)
@@ -405,6 +406,12 @@ fn build_messages_body(req: &ChatRequest) -> Value {
     });
     if let Some(sys) = req.system_prompt.as_ref() {
         body["system"] = Value::String(sys.clone());
+    }
+    if req.reasoning_requested {
+        body["thinking"] = serde_json::json!({
+            "type": "enabled",
+            "budget_tokens": max_tokens.min(16_384).max(1_024),
+        });
     }
     if !req.tools.is_empty() {
         let tools: Vec<Value> = req

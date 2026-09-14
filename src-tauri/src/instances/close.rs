@@ -19,6 +19,7 @@ pub async fn close_instance(
     chat: State<'_, ChatState>,
 ) -> Result<()> {
     let _operation = chat.acquire_operation()?;
+    chat.cancel_preload_and_wait().await;
     let handle_opt = {
         let mut guard = state
             .active_instance
@@ -64,6 +65,7 @@ pub async fn close_instance(
     }
 
     *chat.session.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    chat.bump_vault_generation();
     emit_instance_list_changed(&app, "closed", Some(name));
     Ok(())
 }

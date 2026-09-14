@@ -62,6 +62,7 @@ async fn load_and_stream_generates_tokens() {
             role: ChatRole::User,
             content: "Reply with the single word: pong.".into(),
         }],
+        reasoning_requested: false,
         max_new_tokens: Some(MAX_NEW_TOKENS),
         tools: Vec::new(),
     });
@@ -114,6 +115,7 @@ async fn abort_stops_generation_before_completion() {
             role: ChatRole::User,
             content: "Count from 1 to 500 in words, one number per line.".into(),
         }],
+        reasoning_requested: false,
         max_new_tokens: Some(512),
         tools: Vec::new(),
     });
