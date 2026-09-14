@@ -1,0 +1,176 @@
+import { invoke } from '@tauri-apps/api/core'
+import type { DownloadFromHfArgs, InstalledModel } from '~/composables/useModels'
+
+/** Where a normalized quantization/context-window value came from. */
+export type MetadataProvenanceSource = 'hub_metadata' | 'filename_heuristic' | 'gguf_header' | 'unknown'
+
+export interface MetadataProvenance {
+  quantization: MetadataProvenanceSource
+  contextWindow: MetadataProvenanceSource
+}
+
+/** Existing hardware-fit classifier verdict (see useCatalog.ts). */
+export type HardwareFit = 'fits' | 'tight' | 'too_big' | 'unknown'
+
+export interface HuggingFaceFileCandidate {
+  repoId: string
+  filename: string
+  revision: string
+  revisionRef: string | null
+  sizeBytes: number | null
+  quantization: string | null
+  contextWindow: number | null
+  tokenizerRepo: string | null
+  tokenizerRequired: boolean
+  fit: HardwareFit
+  catalogMatch: boolean
+  catalogEntryId: string | null
+  metadataProvenance: MetadataProvenance
+}
+
+export interface HuggingFaceModelResult {
+  repoId: string
+  displayName: string
+  author: string | null
+  license: string | null
+  downloads: number | null
+  files: HuggingFaceFileCandidate[]
+  sourceRevision: string | null
+  revisionRef: string | null
+}
+
+export interface PreviewInstallArgs {
+  repoId: string
+  filename: string
+  revision?: string
+  tokenizerRepo?: string
+  contextWindow?: number | null
+}
+
+export interface InstallPreview {
+  modelId: string
+  name: string
+  repoId: string
+  filename: string
+  revision: string
+  revisionRef: string | null
+  sizeBytes: number | null
+  quantization: string | null
+  contextWindow: number | null
+  tokenizerRepo: string | null
+  tokenizerRequired: boolean
+  catalogMatch: boolean
+  catalogEntryId: string | null
+  metadataProvenance: MetadataProvenance
+  fit: HardwareFit
+  requiresExplicitTooBigConfirmation: boolean
+}
+
+/**
+ * UI-facing installation intent (data-model.md `HuggingFaceInstallRequest`).
+ * `useModels().downloadFromHfAsync` maps this into a `preview_huggingface_install`
+ * call followed by `download_model_from_hf`'s `DownloadFromHfArgs` — the
+ * caller never resolves a revision or derives a model id itself.
+ */
+export interface HuggingFaceInstallRequest {
+  repoId: string
+  filename: string
+  revision?: string
+  name: string
+  tokenizerRepo?: string
+  contextWindow?: number | null
+  forceTooBig?: boolean
+}
+
+export interface HuggingFaceUpdateStatus {
+  modelId: string
+  repoId: string
+  revisionRef: string
+  installedRevision: string
+  latestRevision: string | null
+  updateAvailable: boolean
+  checkedAt: string
+  errorCode: string | null
+}
+
+/**
+ * Thin wrapper around the free Hugging Face discovery/install commands.
+ * Stateless like every other composable in this project (`useModels`,
+ * `useInstance`) — loading/error/retry state lives in the component that
+ * calls it, e.g. `HuggingFaceSearch.vue`.
+ */
+export function useHuggingFace() {
+  /** Public repository search, capped server-side at 20 results/page. */
+  async function searchAsync(query: string, page?: number): Promise<HuggingFaceModelResult[]> {
+    return await invoke<HuggingFaceModelResult[]>('search_huggingface_models', { query, page })
+  }
+
+  /** Full file listing + metadata for one repository. */
+  async function detailsAsync(repoId: string, revision?: string): Promise<HuggingFaceModelResult> {
+    return await invoke<HuggingFaceModelResult>('get_huggingface_model_details', { repoId, revision })
+  }
+
+  /** Read-only preview: resolves the revision and classifies hardware fit. */
+  async function previewInstallAsync(args: PreviewInstallArgs): Promise<InstallPreview> {
+    return await invoke<InstallPreview>('preview_huggingface_install', { args })
+  }
+
+  /** Raw download call — callers normally go through `useModels().downloadFromHfAsync`. */
+  async function downloadAsync(args: DownloadFromHfArgs): Promise<InstalledModel> {
+    return await invoke<InstalledModel>('download_model_from_hf', { args })
+  }
+
+  /** Checks every installed HF model with a tracked ref for an upstream update. */
+  async function checkUpdatesAsync(): Promise<HuggingFaceUpdateStatus[]> {
+    return await invoke<HuggingFaceUpdateStatus[]>('check_huggingface_model_updates')
+  }
+
+  /** Installs the currently-checked update for an already-installed HF model. */
+  async function installUpdateAsync(modelId: string): Promise<InstalledModel> {
+    return await invoke<InstalledModel>('install_huggingface_update', { modelId })
+  }
+
+  return {
+    searchAsync,
+    detailsAsync,
+    previewInstallAsync,
+    downloadAsync,
+    checkUpdatesAsync,
+    installUpdateAsync,
+  }
+}
+
+/**
+ * Maps a structured `HolziError`-shaped rejection from any HF command to
+ * an i18n key under `errors.hf.*`. Backend errors carry no localized text
+ * (`serde(tag = "kind")` only) — this is the one place that translates the
+ * machine-readable `kind` into a UI-facing message key, mirroring the
+ * `errors.${kind}` pattern already used for instance-management errors.
+ */
+export function hfErrorKey(e: unknown): string {
+  const kind = e && typeof e === 'object' && 'kind' in e ? (e as { kind: unknown }).kind : undefined
+  switch (kind) {
+    case 'InvalidInput':
+      return 'errors.hf.invalidInput'
+    case 'Network':
+      return 'errors.hf.network'
+    case 'Timeout':
+      return 'errors.hf.timeout'
+    case 'HttpStatus':
+      return 'errors.hf.httpStatus'
+    case 'RateLimited':
+      return 'errors.hf.rateLimited'
+    case 'UnsupportedFormat':
+      return 'errors.hf.unsupportedFormat'
+    case 'TokenizerRequired':
+      return 'errors.hf.tokenizerRequired'
+    case 'HardwareConfirmationRequired':
+      return 'errors.hf.hardwareConfirmationRequired'
+    case 'ModelRegistrationFailed':
+      return 'errors.hf.modelRegistrationFailed'
+    case 'ModelNotFound':
+      return 'errors.hf.modelNotFound'
+    default:
+      return 'errors.hf.generic'
+  }
+}

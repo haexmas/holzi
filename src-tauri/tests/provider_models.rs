@@ -20,7 +20,7 @@ use haex_crdt::{
 use uuid::Uuid;
 
 use holzi_lib::identity::{holzi_migration_source, installation_id_path, HolziBootstrap};
-use holzi_lib::storage::models::{self as models_store, ModelRow};
+use holzi_lib::storage::models::{self as models_store, IntegrityStatus, ModelRow, SourceKind};
 
 const PASSPHRASE: &str = "provider-models-integration-test";
 
@@ -49,6 +49,13 @@ fn model(provider_id: Uuid, remote_id: &str) -> ModelRow {
         context_window: Some(200_000),
         fetched_at: Some(1),
         tokenizer_repo: None,
+        hf_repo: None,
+        hf_filename: None,
+        hf_revision: None,
+        hf_revision_ref: None,
+        file_sha256: None,
+        integrity_status: IntegrityStatus::Unknown,
+        source_kind: SourceKind::Provider,
     }
 }
 

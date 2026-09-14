@@ -205,6 +205,109 @@
       "empty": "No installed models or configured providers yet."
     }
   },
+  "models": {
+    "management": {
+      "title": "Manage models",
+      "description": "Catalog, free search and installed models in one place — regardless of onboarding status.",
+      "tabs": {
+        "catalog": "Catalog",
+        "search": "Search Hugging Face",
+        "installed": "Installed models"
+      }
+    },
+    "search": {
+      "title": "Search a model on Hugging Face",
+      "placeholder": "e.g. llama gguf",
+      "submit": "Search",
+      "loading": "Searching …",
+      "empty": "No results.",
+      "tooShort": "Please enter at least 2 characters.",
+      "error": "Search failed.",
+      "retry": "Retry",
+      "offline": "Could not reach Hugging Face — previous results stay visible."
+    },
+    "result": {
+      "author": "Author",
+      "downloads": "Downloads",
+      "licenseUnknown": "License not specified",
+      "catalogMatch": "Already in catalog",
+      "filesCount": "{count} GGUF file | {count} GGUF files",
+      "select": "Select",
+      "noGgufFiles": "No installable GGUF files in this repository."
+    },
+    "filePicker": {
+      "title": "Select a file",
+      "size": "Size",
+      "sizeUnknown": "unknown",
+      "quantization": "Quantization",
+      "quantizationUnknown": "unknown",
+      "contextWindow": "Context window",
+      "contextWindowUnknown": "unknown",
+      "fit": {
+        "fits": "Fits",
+        "tight": "Tight",
+        "too_big": "Too big",
+        "unknown": "Unknown"
+      },
+      "tooBigWarning": "This file is expected to significantly exceed the available memory.",
+      "tooBigConfirm": "Install anyway",
+      "tokenizerRequired": "Tokenizer repository required",
+      "tokenizerRepoLabel": "Tokenizer repository",
+      "tokenizerRepoPlaceholder": "owner/repo",
+      "tokenizerHint": "No safe tokenizer repository could be determined for this file. Please provide one manually.",
+      "revision": "Commit",
+      "revisionRef": "Tracked branch/tag",
+      "install": "Install",
+      "installing": "Installing …",
+      "downloadProgress": "{done} of {total}",
+      "installFailed": "Installation failed."
+    },
+    "installed": {
+      "title": "Installed models",
+      "empty": "No models installed yet.",
+      "source": {
+        "catalog": "Catalog",
+        "huggingface": "Hugging Face",
+        "imported": "Imported",
+        "provider": "Provider"
+      },
+      "integrity": {
+        "verified": "Verified",
+        "untrusted": "Untrusted",
+        "unknown": "Unchecked"
+      },
+      "delete": "Remove",
+      "deleteConfirm": "Really remove this model? Only the local file is deleted.",
+      "deleteFailed": "Failed to remove.",
+      "load": "Load",
+      "active": "Active",
+      "catalogLink": "View catalog entry"
+    },
+    "update": {
+      "checking": "Checking for updates …",
+      "checkNow": "Check for updates",
+      "available": "Update available",
+      "install": "Install update",
+      "installing": "Installing update …",
+      "upToDate": "Up to date",
+      "notTrackable": "Pinned directly — no automatic update check possible.",
+      "error": "Update check failed.",
+      "oldRevision": "Current",
+      "newRevision": "New"
+    },
+    "integrityDialog": {
+      "title": "Integrity check failed",
+      "mismatchDescription": "The local file does not match its expected hash. It may have been replaced or corrupted.",
+      "unknownDescription": "No expected hash is stored for this model.",
+      "errorDescription": "The file could not be checked.",
+      "expected": "Expected",
+      "actual": "Found",
+      "loadUntrusted": "Load anyway as untrusted",
+      "repairSource": "Re-download / re-import",
+      "chooseOther": "Choose another model",
+      "actionFailed": "Action failed."
+    }
+  },
   "errors": {
     "openFailed": "Failed to open",
     "nameConflict": "An instance with that name already exists",
@@ -217,6 +320,19 @@
     "prefLoadFailed": "Failed to load default model",
     "modelListFailed": "Failed to load model list",
     "invalidIdempotencyKey": "The send request is invalid.",
-    "idempotencyKeyConflict": "This send request was already used with different data."
+    "idempotencyKeyConflict": "This send request was already used with different data.",
+    "hf": {
+      "invalidInput": "Invalid input.",
+      "network": "Network error — please check your connection.",
+      "timeout": "The request timed out.",
+      "httpStatus": "Hugging Face responded with an error.",
+      "rateLimited": "Too many requests — please wait a moment and retry.",
+      "unsupportedFormat": "This file is not an installable GGUF.",
+      "tokenizerRequired": "A tokenizer repository is required.",
+      "hardwareConfirmationRequired": "This file needs explicit confirmation because of its size.",
+      "modelRegistrationFailed": "The installation could not be completed.",
+      "modelNotFound": "Model not found.",
+      "generic": "Unknown error."
+    }
   }
 }

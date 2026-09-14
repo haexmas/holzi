@@ -106,6 +106,48 @@ pub enum HolziError {
 
     #[error("Invalid input: {reason}")]
     InvalidInput { reason: String },
+
+    // --- HuggingFace discovery / install (spec 005) ---------------------
+    #[error("Network error contacting Hugging Face: {reason}")]
+    Network { reason: String },
+
+    #[error("Hugging Face request timed out: {reason}")]
+    Timeout { reason: String },
+
+    #[error("Hugging Face returned HTTP {status}: {reason}")]
+    HttpStatus { status: u16, reason: String },
+
+    #[error("Hugging Face rate-limited this request")]
+    RateLimited { retry_after_seconds: Option<u64> },
+
+    #[error("File is not an installable GGUF: {filename}")]
+    UnsupportedFormat { filename: String },
+
+    #[error("A tokenizer repository is required for {repo_id}")]
+    TokenizerRequired { repo_id: String },
+
+    #[error("Model size requires explicit hardware confirmation: {fit}")]
+    HardwareConfirmationRequired { fit: String },
+
+    #[error("Failed to register downloaded model: {reason}")]
+    ModelRegistrationFailed { reason: String },
+
+    // --- Local file integrity (spec 005 Entscheidung 6) ------------------
+    #[error("Model {model_id} local file does not match its expected hash")]
+    ModelIntegrityMismatch {
+        model_id: String,
+        expected_sha256: String,
+        actual_sha256: String,
+    },
+
+    #[error("Model {model_id} has no verifiable expected hash")]
+    ModelIntegrityUnknown {
+        model_id: String,
+        expected_sha256: Option<String>,
+    },
+
+    #[error("Model {model_id} could not be hashed: {reason}")]
+    ModelIntegrityError { model_id: String, reason: String },
 }
 
 pub type Result<T> = std::result::Result<T, HolziError>;

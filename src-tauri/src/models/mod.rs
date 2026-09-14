@@ -7,5 +7,7 @@
 
 pub mod commands;
 pub mod download;
+pub mod hash;
+pub mod huggingface;
 pub mod import;
 pub mod paths;

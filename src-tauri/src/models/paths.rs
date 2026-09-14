@@ -97,7 +97,10 @@ pub fn resolve_relative(app: &AppHandle, relative: &str) -> Result<PathBuf> {
     model_file_path(app, slug, filename)
 }
 
-fn validate_slug(slug: &str) -> Result<()> {
+/// `pub(crate)` so the HuggingFace discovery boundary (`models::huggingface`)
+/// can validate a derived model id / slug without a second path validator
+/// (spec 005 plan §"Graphify-Konsultation").
+pub(crate) fn validate_slug(slug: &str) -> Result<()> {
     if slug.is_empty() || slug.len() > 128 {
         return Err(bad_input("slug empty or too long"));
     }
@@ -113,7 +116,8 @@ fn validate_slug(slug: &str) -> Result<()> {
     Ok(())
 }
 
-fn validate_filename(filename: &str) -> Result<()> {
+/// `pub(crate)` — see [`validate_slug`].
+pub(crate) fn validate_filename(filename: &str) -> Result<()> {
     if filename.is_empty() || filename.len() > 255 {
         return Err(bad_input("filename empty or too long"));
     }

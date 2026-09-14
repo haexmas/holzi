@@ -383,7 +383,11 @@ async fn load_model_inner(
     model_id: &str,
     identity: LoadIdentity,
     cancel: Option<&CancellationToken>,
+    integrity_override: bool,
 ) -> Result<LoadOutcome> {
+    #[cfg(not(feature = "llm-cpu"))]
+    let _ = integrity_override;
+
     if cancelled(cancel) || !chat.is_current_load(identity.vault_generation, identity.load_id) {
         return Ok(LoadOutcome::Cancelled);
     }
@@ -429,7 +433,8 @@ async fn load_model_inner(
             // Resolve all database metadata before entering the cancellable
             // model load. This guarantees that close never returns while a
             // detached spawn_blocking task still retains the database Arc.
-            let metadata = resolve_local_model_metadata(app, state, model_id).await?;
+            let metadata =
+                resolve_local_model_metadata(app, state, model_id, integrity_override).await?;
             let future = load_local_model_from_metadata(model_id, metadata);
             match cancel {
                 Some(cancel) => tokio::select! {
@@ -482,12 +487,45 @@ async fn load_model_inner(
 /// the active session. If another model was already loaded, it is dropped
 /// first. The preload, when present, is cancelled before acquiring the
 /// serialised manual-operation guard.
+///
+/// For a local model this runs the mandatory pre-load integrity check
+/// (contracts/tauri-commands.md §"load_model und lokale Integritätsprüfung")
+/// — a hash mismatch, missing file, missing expected hash, or hashing
+/// error returns a structured `ModelIntegrity*` error instead of loading.
+/// The frontend renders that as a decision dialog; `load_untrusted` there
+/// calls [`load_model_with_integrity_override`] instead of retrying this
+/// command.
 #[tauri::command]
 pub async fn load_model(
     app: AppHandle,
     state: State<'_, AppState>,
     chat: State<'_, ChatState>,
     model_id: String,
+) -> Result<LoadedModelInfo> {
+    load_model_command(app, state, chat, model_id, false).await
+}
+
+/// Explicit, confirmation-gated bypass of the integrity check above
+/// (contracts/tauri-commands.md: the `load_untrusted` option of the
+/// integrity dialog). Loads whatever file is currently on disk and marks
+/// `integrityStatus = 'untrusted'`; `file_sha256` is left untouched, so
+/// the next normal `load_model` call will ask again.
+#[tauri::command]
+pub async fn load_model_with_integrity_override(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    chat: State<'_, ChatState>,
+    model_id: String,
+) -> Result<LoadedModelInfo> {
+    load_model_command(app, state, chat, model_id, true).await
+}
+
+async fn load_model_command(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    chat: State<'_, ChatState>,
+    model_id: String,
+    integrity_override: bool,
 ) -> Result<LoadedModelInfo> {
     chat.cancel_preload_and_wait().await;
     emit_model_load_status(&app, &chat);
@@ -497,7 +535,17 @@ pub async fn load_model(
         vault_generation,
         load_id,
     };
-    match load_model_inner(&app, &state, &chat, &model_id, identity, None).await {
+    match load_model_inner(
+        &app,
+        &state,
+        &chat,
+        &model_id,
+        identity,
+        None,
+        integrity_override,
+    )
+    .await
+    {
         Ok(LoadOutcome::Loaded(info)) => Ok(info),
         Ok(LoadOutcome::Cancelled) => Err(HolziError::InvalidInput {
             reason: "model load was cancelled".into(),
@@ -625,11 +673,20 @@ async fn load_api_key_model(
 /// for what is installed (spec 002 §"Installed model"). Metadata
 /// (`context_window`, `tokenizer_repo`) still comes from the
 /// synchronised `models` catalog row.
+///
+/// `integrity_override` is `true` only for the explicit
+/// `load_model_with_integrity_override` path (contracts/tauri-commands.md
+/// §"load_model und lokale Integritätsprüfung"): it skips the blocking
+/// hash comparison and marks the row `untrusted` instead of `verified`,
+/// but never skips the file-existence check and never rewrites
+/// `file_sha256` — only a successful download/update/import may do that
+/// (research.md Entscheidung 6).
 #[cfg(feature = "llm-cpu")]
 async fn resolve_local_model_metadata(
     app: &AppHandle,
     state: &State<'_, AppState>,
     model_id: &str,
+    integrity_override: bool,
 ) -> Result<(std::path::PathBuf, Option<i64>, String)> {
     let canonical =
         paths::canonical_model_file(app, model_id)?.ok_or_else(|| HolziError::ModelNotFound {
@@ -645,7 +702,7 @@ async fn resolve_local_model_metadata(
                 .ok_or_else(|| {
                     haex_crdt::Error::from(haex_crdt::rusqlite::Error::QueryReturnedNoRows)
                 })?;
-            Ok((row.context_window, row.tokenizer_repo))
+            Ok(row)
         })
     })
     .await
@@ -655,18 +712,125 @@ async fn resolve_local_model_metadata(
     .map_err(|_| HolziError::ModelNotFound {
         id: model_id.to_string(),
     })?;
-    let (context_window, db_tokenizer_repo) = row;
+
+    if integrity_override {
+        // Persist the explicit safety decision before loading. If this
+        // write fails, continuing would create a successful load that is
+        // no longer visibly marked as untrusted.
+        let db = active_database(state)?;
+        let id_for_update = model_id.to_string();
+        let status_update = tauri::async_runtime::spawn_blocking(move || {
+            db.with_connection(|conn| {
+                models_store::set_integrity_status(
+                    conn,
+                    &id_for_update,
+                    models_store::IntegrityStatus::Untrusted,
+                )
+                .map_err(haex_crdt::Error::from)
+            })
+        })
+        .await
+        .map_err(|e| HolziError::ModelIntegrityError {
+            model_id: model_id.to_string(),
+            reason: format!("persisting untrusted status task join: {e}"),
+        })?
+        .map_err(|e| HolziError::ModelIntegrityError {
+            model_id: model_id.to_string(),
+            reason: format!("persisting untrusted status: {e}"),
+        })?;
+        if status_update == 0 {
+            return Err(HolziError::ModelIntegrityError {
+                model_id: model_id.to_string(),
+                reason: "model row disappeared while marking it untrusted".into(),
+            });
+        }
+    } else {
+        verify_local_model_integrity(
+            state,
+            model_id,
+            &canonical.absolute_path,
+            row.file_sha256.as_deref(),
+        )
+        .await?;
+    }
 
     // Prefer the persisted `tokenizer_repo` (migration 0009 onwards).
     // The catalog fallback covers pre-0009 rows the lazy backfill in
     // `list_installed_models` has not yet touched.
-    let tokenizer_repo = db_tokenizer_repo
+    let tokenizer_repo = row
+        .tokenizer_repo
         .or_else(|| crate::catalog::get(model_id).map(|e| e.tokenizer_repo.clone()))
         .ok_or_else(|| HolziError::InvalidInput {
             reason: format!("tokenizer_repo missing for model {model_id}"),
         })?;
 
-    Ok((canonical.absolute_path, context_window, tokenizer_repo))
+    Ok((canonical.absolute_path, row.context_window, tokenizer_repo))
+}
+
+/// Mandatory pre-load integrity gate for local models (contracts/
+/// tauri-commands.md §"load_model und lokale Integritätsprüfung",
+/// research.md Entscheidung 6). Recomputes the full SHA-256 of the
+/// canonical file in a blocking task and compares it against
+/// `models.file_sha256`. Only an exact match lets the normal load
+/// proceed; every other outcome returns a structured error the frontend
+/// renders as the integrity decision dialog (`load_untrusted` /
+/// `repair_source` / `choose_other`).
+#[cfg(feature = "llm-cpu")]
+async fn verify_local_model_integrity(
+    state: &State<'_, AppState>,
+    model_id: &str,
+    absolute_path: &std::path::Path,
+    expected_sha256: Option<&str>,
+) -> Result<()> {
+    let Some(expected) = expected_sha256.filter(|s| crate::models::hash::is_valid_sha256_hex(s))
+    else {
+        return Err(HolziError::ModelIntegrityUnknown {
+            model_id: model_id.to_string(),
+            expected_sha256: expected_sha256.map(str::to_string),
+        });
+    };
+
+    let path_owned = absolute_path.to_path_buf();
+    let hash_result =
+        tauri::async_runtime::spawn_blocking(move || crate::models::hash::sha256_file(&path_owned))
+            .await
+            .map_err(|e| HolziError::ModelIntegrityError {
+                model_id: model_id.to_string(),
+                reason: format!("hashing task join: {e}"),
+            })?;
+
+    let actual = hash_result.map_err(|e| HolziError::ModelIntegrityError {
+        model_id: model_id.to_string(),
+        reason: e.to_string(),
+    })?;
+
+    if actual != expected {
+        return Err(HolziError::ModelIntegrityMismatch {
+            model_id: model_id.to_string(),
+            expected_sha256: expected.to_string(),
+            actual_sha256: actual,
+        });
+    }
+
+    // Match — record the confirmation so the model list reflects the
+    // latest check. Never touches `file_sha256` itself (Entscheidung 6).
+    // Best-effort: a failure here must not turn a successful integrity
+    // check into a blocked load.
+    if let Ok(db) = active_database(state) {
+        let id_for_update = model_id.to_string();
+        let _ = tauri::async_runtime::spawn_blocking(move || {
+            db.with_connection(|conn| {
+                models_store::set_integrity_status(
+                    conn,
+                    &id_for_update,
+                    models_store::IntegrityStatus::Verified,
+                )
+                .map_err(haex_crdt::Error::from)
+            })
+        })
+        .await;
+    }
+    Ok(())
 }
 
 #[cfg(feature = "llm-cpu")]
@@ -2555,6 +2719,7 @@ pub fn start_default_model_preload(app: AppHandle, chat: ChatState) {
             &model_id,
             identity,
             Some(&task_cancel),
+            false,
         )
         .await
         {

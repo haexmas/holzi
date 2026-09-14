@@ -1,5 +1,11 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import type { HuggingFaceInstallRequest, InstallPreview } from '~/composables/useHuggingFace'
+
+/** `models.source_kind` — see storage/models.rs `SourceKind`. */
+export type ModelSourceKind = 'catalog' | 'huggingface' | 'imported' | 'provider'
+/** `models.integrity_status` — see storage/models.rs `IntegrityStatus`. */
+export type ModelIntegrityStatus = 'verified' | 'untrusted' | 'unknown'
 
 export interface InstalledModel {
   id: string
@@ -8,6 +14,13 @@ export interface InstalledModel {
   contextWindow: number | null
   relativePath: string
   sizeBytes: number
+  sourceKind: ModelSourceKind
+  hfRepo: string | null
+  hfFilename: string | null
+  hfRevision: string | null
+  hfRevisionRef: string | null
+  fileSha256: string | null
+  integrityStatus: ModelIntegrityStatus
 }
 
 export interface DownloadProgressEvent {
@@ -21,8 +34,11 @@ export interface DownloadFromHfArgs {
   name: string
   hfRepo: string
   hfFilename: string
+  hfRevision: string
+  hfRevisionRef?: string | null
   tokenizerRepo: string
   contextWindow?: number | null
+  forceTooBig?: boolean
 }
 
 export interface ImportModelArgs {
@@ -50,8 +66,39 @@ export function useModels() {
     return await invoke<InstalledModel>('download_model_from_catalog', { catalogId })
   }
 
-  /** Downloads and registers a GGUF file from a HuggingFace repository. */
-  async function downloadFromHfAsync(args: DownloadFromHfArgs): Promise<InstalledModel> {
+  /**
+   * Installs a free HuggingFace GGUF: previews the install to resolve the
+   * revision to a commit SHA and derive the local model id, then calls
+   * the shared download command with that resolved contract
+   * (contracts/tauri-commands.md §"Frontend-Composable-Vertrag"). Throws
+   * `TokenizerRequired`-shaped errors from the backend if neither
+   * `request.tokenizerRepo` nor the preview resolved one.
+   */
+  async function downloadFromHfAsync(request: HuggingFaceInstallRequest): Promise<InstalledModel> {
+    const preview = await invoke<InstallPreview>('preview_huggingface_install', {
+      args: {
+        repoId: request.repoId,
+        filename: request.filename,
+        revision: request.revision,
+        tokenizerRepo: request.tokenizerRepo,
+        contextWindow: request.contextWindow,
+      },
+    })
+    const tokenizerRepo = request.tokenizerRepo ?? preview.tokenizerRepo
+    if (!tokenizerRepo) {
+      throw new Error('tokenizerRepo is required and could not be resolved automatically')
+    }
+    const args: DownloadFromHfArgs = {
+      id: preview.modelId,
+      name: request.name,
+      hfRepo: request.repoId,
+      hfFilename: request.filename,
+      hfRevision: preview.revision,
+      hfRevisionRef: preview.revisionRef,
+      tokenizerRepo,
+      contextWindow: request.contextWindow ?? preview.contextWindow,
+      forceTooBig: request.forceTooBig,
+    }
     return await invoke<InstalledModel>('download_model_from_hf', { args })
   }
 

@@ -19,8 +19,9 @@ pub use state::{ActiveInstanceHandle, AppState};
 use catalog::commands::catalog_recommend_tiers;
 use catalog::list_catalog;
 use chat::commands::{
-    abort_current_generation, active_model_info, load_model, model_load_status,
-    resolve_default_model, respond_tool_permission, send_message, unload_local_model,
+    abort_current_generation, active_model_info, load_model, load_model_with_integrity_override,
+    model_load_status, resolve_default_model, respond_tool_permission, send_message,
+    unload_local_model,
 };
 use chat::session::ChatState;
 use chat::thread_commands::{create_thread, list_messages, list_threads};
@@ -30,8 +31,10 @@ use instances::{
     cleanup_orphans_on_startup, close_instance, create_instance, list_instances, open_instance,
 };
 use models::commands::{
-    delete_installed_model, download_model_from_catalog, download_model_from_hf,
-    import_model_from_file, list_installed_models,
+    check_huggingface_model_updates, delete_installed_model, download_model_from_catalog,
+    download_model_from_hf, get_huggingface_model_details, import_model_from_file,
+    install_huggingface_update, list_installed_models, preview_huggingface_install,
+    search_huggingface_models,
 };
 use providers::{
     add_provider, delete_provider, list_provider_models, list_providers, refresh_provider_models,
@@ -79,7 +82,13 @@ pub fn run() {
             import_model_from_file,
             list_installed_models,
             delete_installed_model,
+            search_huggingface_models,
+            get_huggingface_model_details,
+            preview_huggingface_install,
+            install_huggingface_update,
+            check_huggingface_model_updates,
             load_model,
+            load_model_with_integrity_override,
             unload_local_model,
             active_model_info,
             model_load_status,
