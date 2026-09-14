@@ -39,6 +39,8 @@ export interface DownloadFromHfArgs {
   tokenizerRepo: string
   contextWindow?: number | null
   forceTooBig?: boolean
+  /** Bypass same-source idempotency for an explicit integrity repair. */
+  forceRepair?: boolean
 }
 
 export interface ImportModelArgs {
@@ -98,6 +100,7 @@ export function useModels() {
       tokenizerRepo,
       contextWindow: request.contextWindow ?? preview.contextWindow,
       forceTooBig: request.forceTooBig,
+      forceRepair: request.forceRepair,
     }
     return await invoke<InstalledModel>('download_model_from_hf', { args })
   }

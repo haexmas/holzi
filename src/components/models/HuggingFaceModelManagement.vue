@@ -248,6 +248,7 @@ async function onRepairSourceAsync() {
         revision: model.hfRevisionRef ?? undefined,
         name: model.name,
         contextWindow: model.contextWindow,
+        forceRepair: true,
       })
       integrityDialog.value = null
       await reloadAsync()

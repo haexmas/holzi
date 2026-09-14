@@ -119,7 +119,8 @@ verpflichtend:
   hfRevisionRef?: string | null,
   tokenizerRepo: string,
   contextWindow?: number | null,
-  forceTooBig?: boolean
+  forceTooBig?: boolean,
+  forceRepair?: boolean
 }
 ```
 
@@ -152,6 +153,8 @@ Verhalten:
    Modelle und deren Metadaten bleiben erhalten.
 7. Eine identische bereits installierte Quelle wird idempotent behandelt. Ein
    vorhandener Slug mit anderer finaler GGUF-Datei wird als Konflikt abgelehnt.
+   Die ausdrückliche Integritätsreparatur darf diese Abkürzung mit
+   `forceRepair === true` umgehen und lädt die gespeicherte Quelle erneut.
 8. Ein Update mit derselben Modell-ID ersetzt die bestehende Datei erst nach
    erfolgreicher atomarer Veröffentlichung und schreibt danach die neue SHA;
    bei Fehlern bleiben alte Datei und Metadaten gültig.

@@ -118,7 +118,10 @@ pub enum HolziError {
     HttpStatus { status: u16, reason: String },
 
     #[error("Hugging Face rate-limited this request")]
-    RateLimited { retry_after_seconds: Option<u64> },
+    RateLimited {
+        #[ts(type = "number | null")]
+        retry_after_seconds: Option<u64>,
+    },
 
     #[error("File is not an installable GGUF: {filename}")]
     UnsupportedFormat { filename: String },

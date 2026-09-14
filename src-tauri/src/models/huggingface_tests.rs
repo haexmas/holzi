@@ -848,3 +848,39 @@ async fn fetch_header_bytes_sends_a_range_request_and_returns_the_body() {
         .expect("range fetch ok");
     assert_eq!(bytes, b"GGUF-HEADER-BYTES".to_vec());
 }
+
+#[tokio::test]
+async fn fetch_header_bytes_rejects_a_full_response_that_ignored_the_range() {
+    let server = MockServer::start().await;
+    let sha = "4".repeat(40);
+    Mock::given(method("GET"))
+        .and(path(format!("/owner/name/resolve/{sha}/model.gguf")))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(b"too much body".to_vec()))
+        .mount(&server)
+        .await;
+    let hf = HfClient::new(server.uri()).expect("client");
+
+    let err = hf
+        .fetch_header_bytes("owner/name", &sha, "model.gguf", 4)
+        .await
+        .expect_err("full response must not be accepted as a range response");
+    assert!(matches!(err, HolziError::HttpStatus { status: 200, .. }));
+}
+
+#[tokio::test]
+async fn fetch_header_bytes_rejects_a_partial_response_over_the_header_limit() {
+    let server = MockServer::start().await;
+    let sha = "5".repeat(40);
+    Mock::given(method("GET"))
+        .and(path(format!("/owner/name/resolve/{sha}/model.gguf")))
+        .respond_with(ResponseTemplate::new(206).set_body_bytes(b"too much body".to_vec()))
+        .mount(&server)
+        .await;
+    let hf = HfClient::new(server.uri()).expect("client");
+
+    let err = hf
+        .fetch_header_bytes("owner/name", &sha, "model.gguf", 4)
+        .await
+        .expect_err("oversized range response must be rejected");
+    assert!(matches!(err, HolziError::HttpStatus { status: 206, .. }));
+}

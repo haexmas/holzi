@@ -80,6 +80,8 @@ export interface HuggingFaceInstallRequest {
   tokenizerRepo?: string
   contextWindow?: number | null
   forceTooBig?: boolean
+  /** Bypass same-source idempotency for an explicit integrity repair. */
+  forceRepair?: boolean
 }
 
 export interface HuggingFaceUpdateStatus {

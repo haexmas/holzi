@@ -81,6 +81,9 @@ pub struct DownloadFromHfArgs {
     pub context_window: Option<i64>,
     /// Required `true` to proceed when the file classifies as `TooBig`.
     pub force_too_big: Option<bool>,
+    /// Forces a fresh source download for an explicit integrity repair,
+    /// even when repository, filename and revision match the installed row.
+    pub force_repair: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -203,6 +206,7 @@ pub async fn download_model_from_catalog(
         tokenizer_repo: entry.tokenizer_repo,
         context_window: Some(entry.context_window as i64),
         force_too_big: Some(true),
+        force_repair: None,
     };
     download_from_hf_inner(app, state, chat, args, SourceKind::Catalog, false).await
 }
@@ -297,6 +301,7 @@ pub async fn install_huggingface_update(
         tokenizer_repo,
         context_window: row.context_window,
         force_too_big: Some(true),
+        force_repair: None,
     };
     download_from_hf_inner(app, state, chat, args, SourceKind::Huggingface, false).await
 }
@@ -412,7 +417,7 @@ async fn download_from_hf_inner(
             let same_source = row.hf_repo.as_deref() == Some(args.hf_repo.as_str())
                 && row.hf_filename.as_deref() == Some(args.hf_filename.as_str())
                 && row.hf_revision.as_deref() == Some(args.hf_revision.as_str());
-            if same_source {
+            if same_source && !args.force_repair.unwrap_or(false) {
                 return Ok(InstalledModelPayload {
                     id: row.id,
                     name: row.name,

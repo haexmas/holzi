@@ -24,6 +24,7 @@
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
+use futures::StreamExt;
 use reqwest::{Client, StatusCode, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -824,8 +825,37 @@ impl HfClient {
             .await
             .map_err(map_reqwest_err)?;
         let resp = finish_response(resp).await?;
-        let bytes = resp.bytes().await.map_err(map_reqwest_err)?;
-        Ok(bytes.to_vec())
+        if resp.status() != StatusCode::PARTIAL_CONTENT {
+            return Err(HolziError::HttpStatus {
+                status: resp.status().as_u16(),
+                reason: "range request must return HTTP 206 Partial Content".into(),
+            });
+        }
+        if resp
+            .content_length()
+            .is_some_and(|length| length > max_bytes)
+        {
+            return Err(HolziError::HttpStatus {
+                status: resp.status().as_u16(),
+                reason: format!("range response exceeds the {max_bytes}-byte header limit"),
+            });
+        }
+
+        let mut stream = resp.bytes_stream();
+        let mut bytes = Vec::new();
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(map_reqwest_err)?;
+            let remaining = max_bytes.saturating_sub(bytes.len() as u64);
+            if remaining == 0 {
+                break;
+            }
+            let take = remaining.min(chunk.len() as u64) as usize;
+            bytes.extend_from_slice(&chunk[..take]);
+            if take < chunk.len() {
+                break;
+            }
+        }
+        Ok(bytes)
     }
 }
 
@@ -1166,11 +1196,9 @@ pub async fn preview_install(
             } else {
                 MetadataProvenanceSource::Unknown
             },
-            context_window: if context_window.is_some() {
-                MetadataProvenanceSource::HubMetadata
-            } else {
-                MetadataProvenanceSource::Unknown
-            },
+            // This value is supplied by the caller, not read from Hub
+            // metadata; it therefore has no stronger provenance than unknown.
+            context_window: MetadataProvenanceSource::Unknown,
         },
         quantization,
         context_window,

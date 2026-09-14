@@ -805,6 +805,23 @@ async fn verify_local_model_integrity(
     })?;
 
     if actual != expected {
+        // Keep the persisted status aligned with the failed check. This is
+        // best-effort because the mismatch itself must remain the reported
+        // error and the expected file hash must never be rewritten here.
+        if let Ok(db) = active_database(state) {
+            let id_for_update = model_id.to_string();
+            let _ = tauri::async_runtime::spawn_blocking(move || {
+                db.with_connection(|conn| {
+                    models_store::set_integrity_status(
+                        conn,
+                        &id_for_update,
+                        models_store::IntegrityStatus::Untrusted,
+                    )
+                    .map_err(haex_crdt::Error::from)
+                })
+            })
+            .await;
+        }
         return Err(HolziError::ModelIntegrityMismatch {
             model_id: model_id.to_string(),
             expected_sha256: expected.to_string(),
