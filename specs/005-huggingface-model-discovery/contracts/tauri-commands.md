@@ -9,7 +9,7 @@ und Fehlercodes bzw. Parameter, keine lokalisierten UI-Texte.
 
 ```typescript
 {
-  query: string,
+  query?: string,
   page?: number,
   limit?: number
 }
@@ -17,9 +17,12 @@ und Fehlercodes bzw. Parameter, keine lokalisierten UI-Texte.
 
 **Returns**: `HuggingFaceModelResult[]`.
 
-Die Query wird getrimmt und auf mindestens zwei Zeichen validiert. Das Backend
-führt nur öffentliche Repository-Suche aus, begrenzt die Seite auf höchstens 20
-Treffer und sortiert Treffer deterministisch. Treffer ohne installierbare
+Wenn `query` gesetzt ist, wird sie getrimmt und auf mindestens zwei Zeichen
+validiert. Wenn `query` fehlt, liefert das Backend die zehn meistgeladenen
+öffentlichen Repository-Treffer als initiale Entdeckungsansicht; Hugging Face
+wird dafür nach Downloads absteigend sortiert angefragt. Explizite Suchen
+bleiben auf höchstens 20 Treffer begrenzt, der Top-10-Default auf höchstens 10.
+Beide Varianten werden deterministisch sortiert. Treffer ohne installierbare
 GGUF-Datei werden nicht zurückgegeben; falls Datei-Details einen zweiten
 Request benötigen, liefert der Command zunächst normalisierte Repository-
 Treffer mit `files` nach der Detailanreicherung. Exakte Katalogtreffer tragen
@@ -257,7 +260,7 @@ zulässig.
 `useHuggingFace()` kapselt:
 
 ```typescript
-searchAsync(query: string, page?: number): Promise<HuggingFaceModelResult[]>
+searchAsync(query?: string, page?: number): Promise<HuggingFaceModelResult[]>
 detailsAsync(repoId: string, revision?: string): Promise<HuggingFaceModelResult>
 previewInstallAsync(args: PreviewInstallArgs): Promise<InstallPreview>
 downloadAsync(args: DownloadFromHfArgs): Promise<InstalledModel>

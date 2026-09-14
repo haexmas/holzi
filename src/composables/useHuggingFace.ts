@@ -100,9 +100,12 @@ export interface HuggingFaceUpdateStatus {
  * calls it, e.g. `HuggingFaceSearch.vue`.
  */
 export function useHuggingFace() {
-  /** Public repository search, capped server-side at 20 results/page. */
-  async function searchAsync(query: string, page?: number): Promise<HuggingFaceModelResult[]> {
-    return await invoke<HuggingFaceModelResult[]>('search_huggingface_models', { query, page })
+  /** Public repository search; omitted query returns the default top-model view. */
+  async function searchAsync(query?: string, page?: number): Promise<HuggingFaceModelResult[]> {
+    const args: { query?: string, page?: number } = {}
+    if (query !== undefined) args.query = query
+    if (page !== undefined) args.page = page
+    return await invoke<HuggingFaceModelResult[]>('search_huggingface_models', args)
   }
 
   /** Full file listing + metadata for one repository. */
