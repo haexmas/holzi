@@ -1,11 +1,11 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /* Scan the UI layer so its Shadcn variant classes from Vue and TypeScript
    sources are emitted into the application stylesheet. */
 @source "../../../node_modules/.c12/**/*.vue";
 @source "../../../node_modules/.c12/**/*.ts";
 
-@import "tw-animate-css";
+@import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));
 

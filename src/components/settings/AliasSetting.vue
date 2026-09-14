@@ -37,11 +37,9 @@ async function onSubmit() {
     localValue.value = trimmed
     savedFlash.value = true
     emit('saved', trimmed)
-  }
-  catch (e) {
+  } catch (e) {
     saveError.value = e instanceof Error ? e.message : String(e)
-  }
-  finally {
+  } finally {
     busy.value = false
   }
 }
@@ -63,16 +61,25 @@ async function onSubmit() {
         class="border border-neutral-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
         :disabled="busy"
         :aria-invalid="showRequired && !localValue.trim() ? true : undefined"
-        @input="showRequired = false; savedFlash = false; saveError = null"
+        @input="
+          showRequired = false
+          savedFlash = false
+          saveError = null
+        "
+      />
+      <span
+        v-if="showRequired && !localValue.trim()"
+        class="text-xs text-red-500"
       >
-      <span v-if="showRequired && !localValue.trim()" class="text-xs text-red-500">
         {{ t('settings.alias.required') }}
       </span>
     </label>
     <div class="flex items-center gap-3">
       <UiButton
         type="submit"
-        :disabled="busy || !localValue.trim() || localValue.trim() === props.currentAlias"
+        :disabled="
+          busy || !localValue.trim() || localValue.trim() === props.currentAlias
+        "
       >
         {{ t('settings.alias.save') }}
       </UiButton>

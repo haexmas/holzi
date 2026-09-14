@@ -18,10 +18,12 @@ Deliver the holzi Tauri app's first-impression surfaces: a landing page with thr
 ## Technical Context
 
 **Language/Version**:
+
 - Frontend: TypeScript 5.x, Vue 3.5, Nuxt 4.
 - Backend: Rust (stable, per `rust-toolchain.toml` to be added), Tauri 2.
 
 **Primary Dependencies**:
+
 - Nuxt modules: `@nuxtjs/i18n`, `@nuxt/icon`, `@pinia/nuxt`, `@vueuse/nuxt`.
 - Styling: Tailwind v4 via `@tailwindcss/vite`, `tw-animate-css`.
 - UI: `shadcn-vue` (Radix Vue-based, copy-in), `class-variance-authority`, `tailwind-merge`, `@lucide/vue`, `html5-qrcode` (QR scanner in the Verbinden Sheet on every platform, same version haex-vault uses).
@@ -29,10 +31,12 @@ Deliver the holzi Tauri app's first-impression surfaces: a landing page with thr
 - Rust-side: [`haex-crdt` at `1c069ef0ea19143af2748f40fc41cba05c94dbe1` (`Cargo.toml`, package 0.4.0)](https://github.com/haexmas/haex-crdt/blob/1c069ef0ea19143af2748f40fc41cba05c94dbe1/Cargo.toml) as a git dependency, `tauri`, `serde`, `ts-rs` (for type sharing), `thiserror`.
 
 **Storage**:
+
 - Instance DBs: `<AppLocalData>/instances/<name>.db`, SQLCipher-encrypted, `haex-crdt`-managed.
 - No frontend-side persistence of instance state. Recent-list is a directory scan, not a JSON file.
 
 **Testing**:
+
 - Unit: Vitest for Vue composables, Pinia stores, and the `html5-qrcode` scanner lifecycle in `ConnectSheet`.
 - E2E: Playwright for the onboarding flows, including deterministic desktop QR-camera and scanner-teardown coverage.
 - Backend: `cargo test` for Rust commands; ts-rs bindings validated by a `test:constants` equivalent.
@@ -42,22 +46,25 @@ Deliver the holzi Tauri app's first-impression surfaces: a landing page with thr
 **Project Type**: Desktop-app (Tauri) with an embedded web frontend. Uses the "Web application" project structure inside `src/` (frontend) + `src-tauri/` (backend), matching `haex-vault`'s layout.
 
 **Performance Goals**:
+
 - Landing interactive ≤500ms on desktop, ≤1500ms on mid-range Android (SC-003).
 - Unlock ≤2s desktop / ≤4s mobile (SC-004).
 - No blocking network requests during app boot.
 
 **Constraints**:
+
 - Offline-capable: zero external CDN or icon-API traffic (SC-006, FR-027).
 - App must never write outside `<AppLocalData>/instances/` for instance data.
 - The frontend must never construct or receive managed-instance filesystem paths (FR-025); the external picker path is permitted only as the `import_instance_file` source argument.
 - Only one active instance at runtime (FR-022) — enforced backend-side by the state-locked atomic switch.
 
 **Scale/Scope**:
+
 - v1 typical operator: 1–3 instances on desktop, 1 on mobile. UI must render acceptably up to ~50 instances (SC-007 covers 10+; 50 is a soft ceiling).
 
 ## Constitution Check
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+_GATE: Must pass before Phase 0 research. Re-check after Phase 1 design._
 
 The repo's constitution reference is `.haex-hive.json → com.github.haexmas.haex-hive.constitution` (revision `336eaf1e`). The live speckit constitution in `.specify/memory/constitution.md` mirrors that pinned source so constitution-dependent gates have concrete rules. Gates that touch this feature:
 

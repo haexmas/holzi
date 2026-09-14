@@ -1,5 +1,5 @@
 ---
-description: "Task list for the frontend-onboarding feature (spec 001)"
+description: 'Task list for the frontend-onboarding feature (spec 001)'
 ---
 
 # Tasks: Frontend Onboarding — Landing, Create, Open, Connect

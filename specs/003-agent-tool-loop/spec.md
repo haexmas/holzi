@@ -18,7 +18,7 @@ still-partially-open-risk track and is explicitly out of scope here."
 - Q: Wie weit reicht der Zugriff des Host-CLI-Tools technisch — nur durch das Freigabe-Gate begrenzt, oder zusätzlich technisch eingeschränkt (Arbeitsverzeichnis, Befehls-Blacklist)? → A: Nur Freigabe-Gate — kein technisches Sandboxing; die Freigabe (Manual/Auto/Plan) ist der einzige Schutzmechanismus, wie bei Claude Codes eigenem Bash-Tool.
 - Q: Soll es eine harte Obergrenze für Tool-Nutzungs-Runden innerhalb einer einzelnen Antwort geben? → A: Ja, feste Obergrenze — nach einer festen Anzahl Runden bricht die Antwort mit einer klaren Fehlermeldung ab, analog zu Claude Codes `maxTurns`/`--max-turns` und zum bereits beschlossenen Retry-Limit (FR-012).
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Assistant completes a task using tools (Priority: P1)
 
@@ -149,7 +149,7 @@ in the conversation afterward.
   (e.g., a command that was already halfway done)? The system stops the process immediately but
   cannot undo an effect the action already had — this is a known limitation, not a defect.
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 ### Functional Requirements
 
@@ -192,7 +192,7 @@ in the conversation afterward.
   that maximum is reached without a final answer, the response MUST end with a clear "limit reached"
   message rather than continuing indefinitely.
 
-*Out of scope for this feature* (see `docs/plans/2026-09-11-agent-tool-loop-design.md` §8-9):
+_Out of scope for this feature_ (see `docs/plans/2026-09-11-agent-tool-loop-design.md` §8-9):
 delegating a response to an external CLI-based coding assistant (e.g. Claude Code, Codex) as a
 backend; any specific catalog of built-in tools beyond the host-command tool (individual read/write
 tools are separate, incremental feature work built on this same mechanism); remembering/persisting
@@ -210,7 +210,7 @@ an approval decision across future requests ("always allow this specific action"
   final answer, possibly spanning several rounds of tool use. Stopping applies to the whole response,
   not to one round within it.
 
-## Success Criteria *(mandatory)*
+## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
 

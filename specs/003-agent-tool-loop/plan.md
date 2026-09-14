@@ -53,21 +53,21 @@ konfigurierten MCP-Servern).
 
 ## Constitution Check
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+_GATE: Must pass before Phase 0 research. Re-check after Phase 1 design._
 
 Bewertung gegen holzi Constitution (`.specify/memory/constitution.md`, hard-pinned von haex-hive,
 Revision `336eaf1e`):
 
-| Prinzip | Status | Begründung |
-|---|---|---|
-| I. No Secrets in Git | ✓ PASS | Kein Secret-Material in dieser Erweiterung. Vault-Credential-Handling für `cli_delegate` ist explizit außerhalb dieses Scopes (siehe Summary). |
-| II. No Local Absolute Paths in Versioned Config | ✓ PASS | Keine neuen versionierten Config-Dateien; MCP-Server-Konfiguration ist Laufzeit-/Vault-Zustand, kein Git-Artefakt. |
-| III. Project Identity Is Device-Independent | ✓ PASS | Neue `chat.permission_mode`-Preference nutzt die bestehende `PrefScope`/`vault_device_uuid`-Konvention unverändert. |
-| IV. Cross-Repo References Pin Immutable Revisions | ✓ PASS | `rmcp` wird per exaktem `crates.io`-Versions-Pin (`rmcp = "=3.3.0"`, per `Cargo.lock` reproduzierbar) referenziert. Prinzip IV betrifft laut Konstitutionstext "External harness content" — die `.haex-hive`/`.spaex`-Atom-Ebene, nicht gewöhnliche Cargo-Dependencies — analog zu `mistralrs`/`serde`, die ebenfalls per Versions-Pin statt Git-SHA referenziert sind. |
-| V. External Sources Are Opt-in Per Project | ✓ PASS | N/A — kein externer Harness-Content betroffen. |
-| VI. Self-Modifying Instructions Are Always Review-Gated | ✓ PASS | Änderungen an `plans/001-desktop-mvp.md` (Revision der `cli_delegate`-Host-Auth-Zeile, siehe Design-Doku §8.3) laufen über PR-Review, nicht in dieser Spec selbst. |
-| VII. Relay Unavailability Never Blocks Local Work | ✓ PASS | Tool-Loop, Freigabe-Gate und Retries sind rein lokale/Provider-API-Vorgänge, unabhängig vom Sync-Relay. |
-| VIII. No Concealment Instructions in Agent Output | ✓ PASS | Freigabe-Anfragen und Tool-Ergebnisse sind laut FR-007 vollständig sichtbar; kein verstecktes Verhalten vorgesehen. |
+| Prinzip                                                 | Status | Begründung                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| I. No Secrets in Git                                    | ✓ PASS | Kein Secret-Material in dieser Erweiterung. Vault-Credential-Handling für `cli_delegate` ist explizit außerhalb dieses Scopes (siehe Summary).                                                                                                                                                                                                                          |
+| II. No Local Absolute Paths in Versioned Config         | ✓ PASS | Keine neuen versionierten Config-Dateien; MCP-Server-Konfiguration ist Laufzeit-/Vault-Zustand, kein Git-Artefakt.                                                                                                                                                                                                                                                      |
+| III. Project Identity Is Device-Independent             | ✓ PASS | Neue `chat.permission_mode`-Preference nutzt die bestehende `PrefScope`/`vault_device_uuid`-Konvention unverändert.                                                                                                                                                                                                                                                     |
+| IV. Cross-Repo References Pin Immutable Revisions       | ✓ PASS | `rmcp` wird per exaktem `crates.io`-Versions-Pin (`rmcp = "=3.3.0"`, per `Cargo.lock` reproduzierbar) referenziert. Prinzip IV betrifft laut Konstitutionstext "External harness content" — die `.haex-hive`/`.spaex`-Atom-Ebene, nicht gewöhnliche Cargo-Dependencies — analog zu `mistralrs`/`serde`, die ebenfalls per Versions-Pin statt Git-SHA referenziert sind. |
+| V. External Sources Are Opt-in Per Project              | ✓ PASS | N/A — kein externer Harness-Content betroffen.                                                                                                                                                                                                                                                                                                                          |
+| VI. Self-Modifying Instructions Are Always Review-Gated | ✓ PASS | Änderungen an `plans/001-desktop-mvp.md` (Revision der `cli_delegate`-Host-Auth-Zeile, siehe Design-Doku §8.3) laufen über PR-Review, nicht in dieser Spec selbst.                                                                                                                                                                                                      |
+| VII. Relay Unavailability Never Blocks Local Work       | ✓ PASS | Tool-Loop, Freigabe-Gate und Retries sind rein lokale/Provider-API-Vorgänge, unabhängig vom Sync-Relay.                                                                                                                                                                                                                                                                 |
+| VIII. No Concealment Instructions in Agent Output       | ✓ PASS | Freigabe-Anfragen und Tool-Ergebnisse sind laut FR-007 vollständig sichtbar; kein verstecktes Verhalten vorgesehen.                                                                                                                                                                                                                                                     |
 
 **Result**: Alle Gates PASS. Kein Complexity-Tracking-Eintrag nötig.
 
@@ -135,4 +135,4 @@ Top-Level-Struktur, kein separates Backend/Frontend-Splitting jenseits des Beste
 
 ## Complexity Tracking
 
-*Keine Einträge — Constitution Check hat keine Verstöße ergeben.*
+_Keine Einträge — Constitution Check hat keine Verstöße ergeben._

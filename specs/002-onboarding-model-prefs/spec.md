@@ -32,7 +32,7 @@ Die aktuelle Chat-Oberfläche hat zwei UX-Lücken, die sich beide besonders im A
 
 Zusätzlich fehlt eine menschliche Bezeichnung für die einzelnen Geräte eines Vaults — Cross-device-Anzeigen (welches Gerät hat wann was gemacht) müssten heute rohe UUIDs zeigen.
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Gerätebenennung und Modell beim ersten Öffnen auf einem Gerät (Priority: P1)
 
@@ -122,7 +122,7 @@ Dieses Feature liefert **keinen** Retire-Vorgang. Es sorgt aber dafür, dass ein
 - **Adoption der Vault während parallel eine Sync-Änderung läuft**: der Adoption-Pfad muss idempotent sein und darf keine Duplikate erzeugen (Details in ADR-0001).
 - **Nutzer schließt Wizard-Fenster ohne Interaktion**: die Ersteinrichtung wird nicht abgeschlossen, der Wizard erscheint beim nächsten Öffnen erneut.
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 ### Functional Requirements
 
@@ -179,13 +179,13 @@ Dieses Feature liefert **keinen** Retire-Vorgang. Es sorgt aber dafür, dass ein
 
 - **FR-020**: Alle nutzer-sichtbaren Texte dieses Features (Onboarding-Wizard-Labels, Workspace-Landing, Settings-Screen, Loading-Labels, Fehlermeldungen, Tier-Vorschlags-Chips) MÜSSEN über `@nuxtjs/i18n` internationalisiert werden. Backend-Commands und -Events liefern strukturierte Daten (Enum-Werte, IDs, Parameter), NIEMALS lokalisierte Strings. Alle Locale-Einträge werden in `de` und `en` gepflegt, konsistent mit der bestehenden App-Setup-Konvention.
 
-### Key Entities *(include if feature involves data)*
+### Key Entities _(include if feature involves data)_
 
 - **Präferenz-Eintrag**: Eine Einstellung, die entweder für ein spezifisches Gerät oder vault-weit gilt. Trägt einen Namespace-Schlüssel (z. B. "chat.default_model_id") und einen Textwert. Vault-weite Einträge sind auf allen Geräten sichtbar, gerätespezifische Einträge gelten nur auf ihrem Gerät. Wird ein Gerät retiriert, gehen seine gerätespezifischen Einträge mit.
 - **Gerätename (Alias)**: Ein menschenlesbarer Name für ein Gerät im Kontext einer Vault, im Wizard gesetzt und im Settings-Screen editierbar. Wird im Settings-Screen als Kontext-Anzeige verwendet ("Einstellungen für: MacBook Air"). Wird NICHT auf Chat-Messages angezeigt (Sessions sind device-portabel).
 - **Installiertes Modell**: Ein lokal verfügbares Modell, dessen Existenz aus der Anwesenheit einer Datei im dafür bestimmten lokalen Verzeichnis abgeleitet wird — nicht mehr aus einer separaten Registrierungstabelle.
 
-## Success Criteria *(mandatory)*
+## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
 

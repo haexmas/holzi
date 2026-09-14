@@ -17,7 +17,7 @@ This spec is the first surface-level feature spec; it consumes decisions from bo
 
 The operator chose **shadcn-vue** instead. Consequences accepted:
 
-- Look/Feel of haex-vault is a *target*, not a *derivation*. Achieved by borrowing haex-vault's layout structure, spacing, and copy hierarchy, but with shadcn-vue's own visual defaults as the starting palette.
+- Look/Feel of haex-vault is a _target_, not a _derivation_. Achieved by borrowing haex-vault's layout structure, spacing, and copy hierarchy, but with shadcn-vue's own visual defaults as the starting palette.
 - Component maintenance: shadcn-vue is copy-in, so every added component is source we own and update deliberately. `@nuxt/ui` upgrades via `pnpm update`.
 - More design control up front, more design work up front. Acceptable because holzi's surface is smaller than haex-vault's, so the upfront cost is bounded.
 
@@ -33,7 +33,7 @@ Rationale:
 - Symmetric with `haex-vault`, which manages a `vaults/` directory the same way.
 - Cost: two DBs open simultaneously would collide on relay ports and iroh endpoints. Enforcing single-active in `AppState` prevents that structurally.
 
-This revision does not touch `founding.md`'s trust boundaries — the *active* instance still binds one identity to one relay to one iroh peer.
+This revision does not touch `founding.md`'s trust boundaries — the _active_ instance still binds one identity to one relay to one iroh peer.
 
 ## File-handling: haex-vault pattern verbatim
 
@@ -103,7 +103,7 @@ copied database directly, without rekey or restore pairing. The direct-copy
 flow authenticates with the copied vault identity and reuses or mints the local
 `known_devices` row during pre-HLC bootstrap.
 
-Paper-seed is displayed for the operator to *record physically*. Copy-to-clipboard would:
+Paper-seed is displayed for the operator to _record physically_. Copy-to-clipboard would:
 
 - Leave the seed in the clipboard history and any clipboard manager.
 - Enable a silent screen-capture-based exfiltration if the host is compromised.

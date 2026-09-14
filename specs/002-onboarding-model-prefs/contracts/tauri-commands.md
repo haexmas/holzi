@@ -22,7 +22,10 @@ Liest genau einen Preference-Wert für den angegebenen Scope+Key.
 
 ```typescript
 const value = await invoke<string | null>('get_pref', {
-  args: { scope: { kind: 'device', uuid: '3f7c-...' }, key: 'chat.default_model_id' }
+  args: {
+    scope: { kind: 'device', uuid: '3f7c-...' },
+    key: 'chat.default_model_id',
+  },
 })
 ```
 
@@ -39,10 +42,12 @@ Setzt oder aktualisiert einen Preference-Eintrag.
 **Returns**: `void`.
 
 **Fehler**:
+
 - `HolziError::InvalidInput` wenn Key-Format ungültig.
 - `HolziError::CrdtInit` wenn DB-Zugriff scheitert.
 
 **Verhalten**:
+
 - Sync-tracked via `haex_hlc_no_sync = current_hlc()`.
 - FK-Prüfung: wenn `scope.kind === 'device'` und diese UUID nicht in `known_devices` existiert → SQLite-FK-Fehler → propagiert als `HolziError::CrdtInit` (theoretisch nie erreichbar, weil Bootstrap den Sentinel + eigenes Device sichergestellt hat).
 
@@ -72,6 +77,7 @@ Führt die Session-Resolver-Kette (FR-014) aus und gibt zurück, welches Modell 
 **Fehler**: `HolziError::CrdtInit` bei DB-Zugriffsfehlern.
 
 **Verhalten**:
+
 - Reine Read-Operation, KEIN Preference-Write.
 - Wenn `source === 'first_available'`, ist das eine passive Wahl — der Aufrufer (Frontend) schreibt kein `last_active_model_id` auf Basis dieses Ergebnisses. Der Write erfolgt ausschließlich nach einem erfolgreichen `send_message`; ein manueller Picker-Wechsel ohne Nachricht bleibt folgenlos.
 
@@ -95,6 +101,7 @@ Liefert Metadaten über das aktuelle Gerät im Kontext des aktiven Vaults.
 **Fehler**: `HolziError::CrdtInit` wenn kein aktiver Vault geöffnet oder Bootstrap noch nicht gelaufen.
 
 **Verwendung**:
+
 - Chat-/Workspace-/Settings-Route-Guard-Middleware ruft dies und prüft `alias === null`.
 - Onboarding-Wizard nutzt `hostname` als initialen Wert des Alias-Inputs; wenn `null`, füllt das Frontend den Input mit dem lokalisierten Fallback-Wert aus `$t('onboarding.alias.defaultPlaceholder')` vor. Der Fallback ist damit ein echter Eingabewert und kein bloßer Placeholder.
 - Settings-Screen zeigt `alias` als Kontext-Titel (`$t('settings.header.forDevice', { alias })`).
@@ -132,6 +139,7 @@ Liefert drei Hardware-passende Modell-Vorschläge (Easy/Sweet/Max) für den Onbo
 **Fehler**: `HolziError::CatalogEntryNotFound` nur bei einem leeren oder anderweitig ungültigen Katalog, aus dem keine gültige Empfehlung erzeugt werden kann. Ein nicht-leerer gültiger Katalog ist immer erfolgreich und liefert genau drei Empfehlungen; bei weniger als drei Einträgen werden fehlende Tiers nach dem Algorithmus mit dem besten verfügbaren Kandidaten wiederverwendet (bei zwei Einträgen z. B. Max = Sweet-Fallback, bei einem Eintrag wird dieser für alle Tiers verwendet). Das Frontend behandelt nur diesen echten Fehler als "Katalog leer" und rendert gültige wiederverwendete Empfehlungen normal.
 
 **Algorithmus**:
+
 1. Katalog-Einträge laden, per Fit klassifizieren und einmalig aufsteigend nach `(approx_size_bytes, id)` sortieren. Diese Reihenfolge ist die totale Ordnung für alle Ties und Fallbacks.
 2. Der Median ist bei `n` Einträgen der untere mittlere Eintrag an Index `(n - 1) / 2`; damit ist auch ein gerader Katalog eindeutig.
 3. Easy = kleinster `Fits`-Kandidat. Fallback: kleinster Kandidat aus `Tight`, dann `Unknown`, dann `TooBig`, jeweils in der totalen Ordnung.
@@ -181,6 +189,7 @@ Der `idempotencyKey` schützt ausschließlich gegen einen Retry des Frontends **
 Der Client erzeugt pro Nutzer-Sendevorgang einen neuen, opaken `idempotencyKey` und verwendet bei jedem Retry exakt denselben Key. `user_message_id` und `assistant_message_id` werden deterministisch aus dem Key abgeleitet (UUID v5) — derselbe Key liefert also unabhängig von DB-Zustand immer dieselben beiden IDs, ganz ohne zusätzlichen Cache oder eine zweite Spalte.
 
 **Verhaltens-Änderung**: Vor dem Insert prüft `send_message` per `idempotencyKey`, ob bereits eine User-Message mit diesem Key existiert:
+
 - **Kein Treffer**: normaler Ablauf — User-Message (inkl. `idempotencyKey`) und Thread werden mit den abgeleiteten IDs angelegt, danach `stream_chat` gestartet; scheitert der Adapter-Start, werden Message und ggf. neu angelegter Thread zurückgerollt (unverändert). Erst nach erfolgreichem Stream-Start wird `preferences[('<my_device_uuid>', 'chat.last_active_model_id')] = <current_model_id>` geschrieben (FR-009, unverändert).
 - **Treffer mit identischem Thread (oder `threadId: null`) und identischem Inhalt**: kein zweiter Insert, kein zweiter `stream_chat`-Aufruf, kein Preference-Write — es wird direkt dasselbe `SendMessageResult` wie beim ersten Mal zurückgegeben.
 - **Treffer mit abweichendem Thread oder Inhalt**: `HolziError::InvalidInput`.
@@ -212,12 +221,12 @@ Emittiert vom Backend während `load_model`-Ausführung. **Strukturierter Payloa
 
 **Frontend-Übersetzung** (Beispielhaft für deutsche Locale):
 
-| Phase | i18n-Key | Beispiel (de) |
-|---|---|---|
-| `connecting` | `chat.loading.connecting` | "Verbinde mit {providerName}…" |
-| `loading` | `chat.loading.loading` | "Lade {modelName}…" |
+| Phase             | i18n-Key                     | Beispiel (de)                                                                        |
+| ----------------- | ---------------------------- | ------------------------------------------------------------------------------------ |
+| `connecting`      | `chat.loading.connecting`    | "Verbinde mit {providerName}…"                                                       |
+| `loading`         | `chat.loading.loading`       | "Lade {modelName}…"                                                                  |
 | `cuda-jit-warmup` | `chat.loading.cudaJitWarmup` | "Optimiere GPU für erste Nutzung von {modelName}, dauert einmalig etwa 30 Sekunden…" |
-| `ready` | `chat.loading.ready` | "Bereit" (Signal: Ladepanel ausblenden) |
+| `ready`           | `chat.loading.ready`         | "Bereit" (Signal: Ladepanel ausblenden)                                              |
 
 Englische Locale-Einträge in derselben Struktur (`src/i18n/en/chat.json`).
 

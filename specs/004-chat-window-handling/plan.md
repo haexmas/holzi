@@ -31,18 +31,18 @@ Tool-Loop- und Turn-Semantik aus Spec 003 bleiben unverändert.
 
 ## Constitution Check
 
-*GATE: Vor Phase 0 und nach Phase 1 erneut prüfen.*
+_GATE: Vor Phase 0 und nach Phase 1 erneut prüfen._
 
-| Prinzip | Status | Begründung |
-|---|---|---|
-| I. No Secrets in Git | PASS | Die Änderung führt keine Secrets oder Test-Credentials ein. |
-| II. No Local Absolute Paths in Versioned Config | PASS | Dokumente verwenden nur repository-relative Pfade; Laufzeitpfade bleiben Resolver-Logik. |
-| III. Project Identity Is Device-Independent | PASS | Session-, Load- und UI-Zustände bleiben runtime-/gerätebezogen; Vault-Identität bleibt unverändert. |
-| IV. Cross-Repo References Pin Immutable Revisions | PASS | Keine neue externe Harness-Referenz. |
-| V. External Sources Are Opt-in Per Project | PASS | Kein externer Harness-Content betroffen. |
-| VI. Self-Modifying Instructions Are Always Review-Gated | PASS | Keine Constitution-, Skill- oder Agent-Instruktion wird geändert. |
-| VII. Relay Unavailability Never Blocks Local Work | PASS | Session-Entwurf, Composer und lokale Modell-Loads bleiben lokal nutzbar. |
-| VIII. No Concealment Instructions in Agent Output | PASS | Load-, Fehler- und Tool-Zustände bleiben nachvollziehbar. |
+| Prinzip                                                 | Status | Begründung                                                                                          |
+| ------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------- |
+| I. No Secrets in Git                                    | PASS   | Die Änderung führt keine Secrets oder Test-Credentials ein.                                         |
+| II. No Local Absolute Paths in Versioned Config         | PASS   | Dokumente verwenden nur repository-relative Pfade; Laufzeitpfade bleiben Resolver-Logik.            |
+| III. Project Identity Is Device-Independent             | PASS   | Session-, Load- und UI-Zustände bleiben runtime-/gerätebezogen; Vault-Identität bleibt unverändert. |
+| IV. Cross-Repo References Pin Immutable Revisions       | PASS   | Keine neue externe Harness-Referenz.                                                                |
+| V. External Sources Are Opt-in Per Project              | PASS   | Kein externer Harness-Content betroffen.                                                            |
+| VI. Self-Modifying Instructions Are Always Review-Gated | PASS   | Keine Constitution-, Skill- oder Agent-Instruktion wird geändert.                                   |
+| VII. Relay Unavailability Never Blocks Local Work       | PASS   | Session-Entwurf, Composer und lokale Modell-Loads bleiben lokal nutzbar.                            |
+| VIII. No Concealment Instructions in Agent Output       | PASS   | Load-, Fehler- und Tool-Zustände bleiben nachvollziehbar.                                           |
 
 **Result**: Alle Gates PASS; kein Complexity-Tracking-Eintrag erforderlich.
 

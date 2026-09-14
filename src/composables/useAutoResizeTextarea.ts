@@ -19,7 +19,10 @@ export function useAutoResizeTextarea(
     const textarea = textareaRef.value
     if (!textarea) return
     textarea.style.height = 'auto'
-    const height = Math.min(Math.max(textarea.scrollHeight, minHeight), maxHeight)
+    const height = Math.min(
+      Math.max(textarea.scrollHeight, minHeight),
+      maxHeight,
+    )
     isOverflowing.value = textarea.scrollHeight > maxHeight
     textarea.style.height = `${height}px`
     textarea.style.overflowY = isOverflowing.value ? 'auto' : 'hidden'

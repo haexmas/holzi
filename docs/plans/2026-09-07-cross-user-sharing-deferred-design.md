@@ -28,7 +28,7 @@ federation established.
 delegation chains). Can holzi have cross-user sharing without adopting either stack?
 
 **Yes.** What MLS and UCAN provide is replaceable with primitives holzi already needs for other
-reasons. What is *not* replaceable is the concepts: there is still a capability system and there is
+reasons. What is _not_ replaceable is the concepts: there is still a capability system and there is
 still group key management, just in a smaller, purpose-built form.
 
 ## 2. What is being dropped, and what it costs
@@ -57,7 +57,7 @@ later apply-time check to repair an unauthorized merge.
 
 **Cost**: no arbitrary-depth re-delegation. The known cases need none — a grant names a federation
 identity (§7), which spans that person's instances without any chain at all. Onward sharing between
-*people* is a separate question (§8 item 4); if it ever needs real depth, that is the point at which
+_people_ is a separate question (§8 item 4); if it ever needs real depth, that is the point at which
 UCAN becomes worth reconsidering.
 
 **MLS provides** epoch keys derived from group state, rotating on membership change, with forward
@@ -71,7 +71,11 @@ means minting a fresh key and re-wrapping to the remaining members.
 The plaintext passed to NIP-44 v2 is canonical UTF-8 JSON with exactly these fields:
 
 ```json
-{"content_key":"<base64 of exactly 32 bytes>","epoch":42,"space_id":"<canonical space id>"}
+{
+  "content_key": "<base64 of exactly 32 bytes>",
+  "epoch": 42,
+  "space_id": "<canonical space id>"
+}
 ```
 
 For each member, the wire envelope is canonical UTF-8 JSON with the following fields:
@@ -96,7 +100,7 @@ exists without rearchitecting the surrounding model.
 ## 3. Two classes of relay
 
 `founding.md` binds relay, device, and Tauri application one-to-one, and spec 001 refines this to
-"the *active* SQLite instance is the running relay endpoint is the running iroh peer". Sharing adds
+"the _active_ SQLite instance is the running relay endpoint is the running iroh peer". Sharing adds
 a second deployment shape that is **not** a peer:
 
 - **Peer relay** — inside the Tauri application, inside the SQLCipher boundary. Holds the
@@ -109,7 +113,7 @@ The one-to-one rule survives, restricted to peers. Buffer relays are not peers.
 
 Nostr gives integrity here for free: every event carries a Schnorr signature over its hash by its
 author, so a buffer relay that alters content produces an event every receiver rejects. What
-encryption does *not* prevent is **withholding** — a buffer relay can serve stale state. The
+encryption does _not_ prevent is **withholding** — a buffer relay can serve stale state. The
 mitigation is the same one `haex-vault` uses: HLC cursors and compaction anchors.
 
 ## 4. Data plane
@@ -214,7 +218,7 @@ transport- and identity-agnostic.
 
 ## 6. Scoping: what a member can actually see
 
-Membership answers *whether* a pubkey may subscribe to a space. Three further gates answer *what*
+Membership answers _whether_ a pubkey may subscribe to a space. Three further gates answer _what_
 is in it, and all of them apply **at the sender, before encryption**. A member never queries the
 owner's database; they receive a stream from which everything else was already excluded.
 
@@ -249,7 +253,7 @@ not a new format.
   attestations and revocations under the same key; the granter never has to act.
 
 **DIDs were considered and rejected.** In `haex-vault` they are load-bearing because UCAN's issuer
-and audience fields *are* DIDs. Without UCAN they stop paying for themselves: a `did:key` over the
+and audience fields _are_ DIDs. Without UCAN they stop paying for themselves: a `did:key` over the
 same secp256k1 key is the npub with an extra encoding to keep consistent, and the customary Ed25519
 `did:key` would introduce a second keypair that NIP-42 and NIP-44 cannot verify natively — working
 against the decision that Nostr carries authentication and authorization. Note also that

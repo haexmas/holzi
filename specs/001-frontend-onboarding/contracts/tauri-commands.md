@@ -181,19 +181,19 @@ The direct `haex-crdt::Error` variants map to `HolziError` as follows. Errors
 returned through haex-crdt's internal `DatabaseError` conversion are surfaced
 as `CrdtInit { reason }` until the crate exposes a typed top-level variant.
 
-| haex-crdt variant | HolziError variant | Notes |
-| --- | --- | --- |
-| `Sqlite(error)` | `CrdtSqlite { reason: error.to_string() }` | SQL/SQLCipher failure |
-| `Io(error)` | `CrdtIo { reason: error.to_string() }` | I/O failure |
-| `Hlc(reason)` | `CrdtHlc { reason }` | HLC/provider failure |
-| `DeviceIdMismatch { expected, supplied }` | `DeviceIdMismatch { expected, supplied }` | not expected in normal operation — haex-crdt 0.3.0+ removed `reconcile_device_id`; this maps only a defensive `HlcService::initialize_in_place` self-check |
-| `SignatureVerificationFailed { first_failed_change }` | `CrdtSignatureVerificationFailed { first_failed_change }` | remote batch is rejected atomically |
-| `UnexpectedSignatureUnderNoop` | `CrdtUnexpectedSignatureUnderNoop` | transport/provider configuration error |
-| `MigrationMissingFromSource { journal, name }` | `MigrationMissingFromSource { journal, name }` | catastrophic; source and journal are retained |
-| `MigrationContentDrift { name, expected, found }` | `MigrationContentDrift { name, expected, found }` | catastrophic; abort |
-| `MigrationCompatibility { reason }` | `MigrationCompatibility { reason }` | incompatible legacy schema |
-| `CrdtAlreadyInstalled { table }` | `CrdtAlreadyInstalled { table }` | logic error in holzi's bootstrap |
-| `Message(reason)` | `CrdtInit { reason }` | catch-all for the pinned crate's database-layer conversion |
+| haex-crdt variant                                     | HolziError variant                                        | Notes                                                                                                                                                      |
+| ----------------------------------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Sqlite(error)`                                       | `CrdtSqlite { reason: error.to_string() }`                | SQL/SQLCipher failure                                                                                                                                      |
+| `Io(error)`                                           | `CrdtIo { reason: error.to_string() }`                    | I/O failure                                                                                                                                                |
+| `Hlc(reason)`                                         | `CrdtHlc { reason }`                                      | HLC/provider failure                                                                                                                                       |
+| `DeviceIdMismatch { expected, supplied }`             | `DeviceIdMismatch { expected, supplied }`                 | not expected in normal operation — haex-crdt 0.3.0+ removed `reconcile_device_id`; this maps only a defensive `HlcService::initialize_in_place` self-check |
+| `SignatureVerificationFailed { first_failed_change }` | `CrdtSignatureVerificationFailed { first_failed_change }` | remote batch is rejected atomically                                                                                                                        |
+| `UnexpectedSignatureUnderNoop`                        | `CrdtUnexpectedSignatureUnderNoop`                        | transport/provider configuration error                                                                                                                     |
+| `MigrationMissingFromSource { journal, name }`        | `MigrationMissingFromSource { journal, name }`            | catastrophic; source and journal are retained                                                                                                              |
+| `MigrationContentDrift { name, expected, found }`     | `MigrationContentDrift { name, expected, found }`         | catastrophic; abort                                                                                                                                        |
+| `MigrationCompatibility { reason }`                   | `MigrationCompatibility { reason }`                       | incompatible legacy schema                                                                                                                                 |
+| `CrdtAlreadyInstalled { table }`                      | `CrdtAlreadyInstalled { table }`                          | logic error in holzi's bootstrap                                                                                                                           |
+| `Message(reason)`                                     | `CrdtInit { reason }`                                     | catch-all for the pinned crate's database-layer conversion                                                                                                 |
 
 At the pinned revision, filesystem-level lock collisions are converted inside
 haex-crdt to `Error::Message`, so Holzi MUST NOT claim a typed
@@ -416,7 +416,7 @@ pub struct TrashInstanceArgs {
 
 ---
 
-### `forget_instance` *(out of v1 scope)*
+### `forget_instance` _(out of v1 scope)_
 
 Not exposed in v1. Because the list is a directory scan, removing an item while retaining its file would require persistent exclusion metadata. The only v1 removal action is `move_instance_to_trash`.
 

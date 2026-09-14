@@ -213,12 +213,12 @@ Suche bleibt sichtbar und wird nicht automatisch mit dem Katalog verschmolzen.
 ## Entscheidung 10: Begrenztes Suchergebnis
 
 **Decision**: Die freie Suche liefert standardmäßig höchstens 20 normalisierte
-  Repository-Treffer pro Seite. Ein vom Client angefordertes Limit wird auf
-  diesen Maximalwert gekappt; Deduplizierung und deterministische Sortierung
-  erfolgen nach der Normalisierung.
+Repository-Treffer pro Seite. Ein vom Client angefordertes Limit wird auf
+diesen Maximalwert gekappt; Deduplizierung und deterministische Sortierung
+erfolgen nach der Normalisierung.
 
 **Rationale**: Ein konkretes Limit hält Payload und UI überschaubar und macht
-  Verhalten sowie Tests reproduzierbar.
+Verhalten sowie Tests reproduzierbar.
 
 ## Entscheidung 11: HTTP-Client als testbare Grenze
 

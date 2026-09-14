@@ -42,6 +42,7 @@ zum `tool-permission-request`-Event unten.
 **Returns**: `void`.
 
 **Fehler**:
+
 - `HolziError::InvalidInput` wenn `requestId` keiner offenen Anfrage entspricht (bereits
   beantwortet, oder der Turn wurde inzwischen abgebrochen). Aufgelöste IDs werden als Tombstone
   behalten: eine späte Antwort auf eine durch Cancellation aufgelöste ID ist erfolgreich und wird

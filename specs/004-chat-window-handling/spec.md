@@ -488,8 +488,7 @@ sein.
 
 - Persistenz von Reasoning-Text oder Accordion-Zuständen in `chat_messages`.
 - Änderung der Provider-Konfiguration oder des Modellkatalogs.
-- Änderung der Tool-Aufruf-, Freigabe-, Abbruch- oder Retry-Semantik aus Spec
-  003.
+- Änderung der Tool-Aufruf-, Freigabe-, Abbruch- oder Retry-Semantik aus Spec 003.
 - Vollständige Überarbeitung des Workspace-Dashboards.
 - Eine neue allgemeine Settings-Seite für Modell-, Reasoning- oder Effort-
   Optionen außerhalb des Chat-Composers.

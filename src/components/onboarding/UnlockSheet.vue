@@ -22,18 +22,19 @@ function reset() {
   error.value = null
 }
 
-watch(() => props.open, (isOpen) => {
-  if (!isOpen)
-    reset()
-})
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (!isOpen) reset()
+  },
+)
 
-const canSubmit = computed(() =>
-  passphrase.value.length > 0 && !submitting.value && props.name != null,
+const canSubmit = computed(
+  () => passphrase.value.length > 0 && !submitting.value && props.name != null,
 )
 
 async function onSubmit() {
-  if (!canSubmit.value || props.name == null)
-    return
+  if (!canSubmit.value || props.name == null) return
   submitting.value = true
   error.value = null
   try {
@@ -43,14 +44,12 @@ async function onSubmit() {
     })
     emit('unlocked', info.name)
     emit('update:open', false)
-  }
-  catch {
+  } catch {
     // Contract FR-021: NotFound and WrongPassphrase MUST both surface
     // as the same generic message on the frontend. Typed discriminator
     // stays in logs only.
     error.value = t('errors.openFailed')
-  }
-  finally {
+  } finally {
     submitting.value = false
   }
 }

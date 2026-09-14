@@ -4,9 +4,9 @@ Erstellt am 2026-09-07 als Antwort auf den Wunsch nach einem ersten Tauri-MVP mi
 
 Ablage und Vorrang: Nummerierte `specs/`-Artefakte einschließlich ihrer Verträge sind die normative Quelle für Produktverhalten; `docs/plans/` sind Architekturentwürfe; `plans/` ist eine beratende Roadmap. Kein Plan überschreibt eine Spec. Widersprüche werden zuerst in der zuständigen Spec per Review aufgelöst; bis dahin gilt die bestehende Spec. Dieser Ordner ist Beratungsgrundlage für die vorhandenen Speckit-Reviewstufen.
 
-| Plan | Priorität | Aufwand | Status | Gate |
-| --- | --- | --- | --- | --- |
-| [001: MVP mit lokalem Chat und Anbietermodellen](./001-desktop-mvp.md) | P1 | L | Draft (überarbeitet 2026-09-08) | Übernahme einer neuen Geräte-UUID in haex-crdt bleibt offen (blockiert nur den späteren Kopierweg, nicht den MVP) |
+| Plan                                                                   | Priorität | Aufwand | Status                          | Gate                                                                                                              |
+| ---------------------------------------------------------------------- | --------- | ------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| [001: MVP mit lokalem Chat und Anbietermodellen](./001-desktop-mvp.md) | P1        | L       | Draft (überarbeitet 2026-09-08) | Übernahme einer neuen Geräte-UUID in haex-crdt bleibt offen (blockiert nur den späteren Kopierweg, nicht den MVP) |
 
 Legende: Priorität `P1` (höchste) – `P3` (nachrangig); Aufwand `S` (klein), `M` (mittel), `L` (groß).
 

@@ -14,10 +14,16 @@ const { currentDeviceInfoAsync } = useDevice()
 
 const instanceName = computed(() => {
   const raw = route.params.instance
-  return typeof raw === 'string' ? raw : Array.isArray(raw) ? (raw[0] ?? '') : ''
+  return typeof raw === 'string'
+    ? raw
+    : Array.isArray(raw)
+      ? (raw[0] ?? '')
+      : ''
 })
 
-const backTarget = computed(() => `/workspace/${encodeURIComponent(instanceName.value)}`)
+const backTarget = computed(
+  () => `/workspace/${encodeURIComponent(instanceName.value)}`,
+)
 
 const deviceInfo = ref<DeviceInfo | null>(null)
 const loadError = ref<string | null>(null)
@@ -26,8 +32,7 @@ async function reloadDeviceInfoAsync() {
   loadError.value = null
   try {
     deviceInfo.value = await currentDeviceInfoAsync()
-  }
-  catch (e) {
+  } catch (e) {
     loadError.value = e instanceof Error ? e.message : String(e)
   }
 }
@@ -42,9 +47,7 @@ onMounted(reloadDeviceInfoAsync)
         <template v-if="deviceInfo?.alias">
           {{ t('settings.header.forDevice', { alias: deviceInfo.alias }) }}
         </template>
-        <template v-else>
-          &nbsp;
-        </template>
+        <template v-else> &nbsp; </template>
       </h1>
       <NuxtLink
         :to="backTarget"
@@ -65,14 +68,14 @@ onMounted(reloadDeviceInfoAsync)
         @saved="reloadDeviceInfoAsync"
       />
 
-      <hr class="border-neutral-200">
+      <hr class="border-neutral-200" />
 
       <SettingsDefaultModelSetting
         v-if="deviceInfo"
         :device-uuid="deviceInfo.vaultDeviceUuid"
       />
 
-      <hr class="border-neutral-200">
+      <hr class="border-neutral-200" />
 
       <ModelsHuggingFaceModelManagement />
     </div>

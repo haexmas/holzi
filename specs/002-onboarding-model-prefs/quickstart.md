@@ -30,6 +30,7 @@ Erwartetes Ergebnis: alle Test-Suites grün, `pnpm typecheck` exit 0.
 **Aufsetzen**: existierende Test-Instances-Ordner löschen (oder eine noch nicht verwendete Instanz-Namen benutzen).
 
 **Schritte**:
+
 1. `pnpm tauri:dev:cuda` starten (oder `pnpm tauri:dev` für CPU-only).
 2. In der Landing "Anlegen" klicken, Instanznamen "genesis-test" eingeben, Passphrase setzen, öffnen.
 3. **Erwartung**: Nutzer landet direkt auf `/onboarding/genesis-test`, NICHT auf `/chat/genesis-test`.
@@ -42,6 +43,7 @@ Erwartetes Ergebnis: alle Test-Suites grün, `pnpm typecheck` exit 0.
 ## Szenario 2: Genesis mit Modellwahl
 
 **Schritte**:
+
 1. Wie Szenario 1 bis Schritt 4.
 2. Alias auf "Laptop" ändern, Sweet-Modell wählen (klick auf Chip → Download startet).
 3. Download-Fortschritt sichtbar.
@@ -57,6 +59,7 @@ Erwartetes Ergebnis: alle Test-Suites grün, `pnpm typecheck` exit 0.
 **Aufsetzen**: Vault-Datei aus Szenario 2 (`<AppLocalData>/instances/genesis-test.db`) auf ein anderes System kopieren, oder — für lokale Simulation — den `<AppLocalData>/installation-id`-File temporär löschen (simuliert ein neues Gerät auf demselben Host).
 
 **Schritte** (auf "zweitem Gerät"):
+
 1. `pnpm tauri:dev:cuda` starten.
 2. Instanz-Landing zeigt "genesis-test" — anklicken, Passphrase eingeben.
 3. **Erwartung**: Redirect auf `/onboarding/genesis-test` (Adoption erkannt: neue `known_devices`-Zeile mit `alias === NULL` → Middleware routet).
@@ -73,6 +76,7 @@ Erwartetes Ergebnis: alle Test-Suites grün, `pnpm typecheck` exit 0.
 **Voraussetzung**: Szenario 2 ist durchlaufen, Sweet-Modell ist geladen und mindestens eine Nachricht gesendet.
 
 **Schritte**:
+
 1. App komplett schließen.
 2. App neu starten, Vault öffnen.
 3. **Erwartung**:
@@ -85,6 +89,7 @@ Erwartetes Ergebnis: alle Test-Suites grün, `pnpm typecheck` exit 0.
 **Voraussetzung**: Szenario 4 durchgelaufen, Chat läuft mit Sweet.
 
 **Schritte**:
+
 1. Im Sidebar-Picker das Easy-Modell wählen (manueller Wechsel, ohne Nachricht zu senden).
 2. **Erwartung**: `preferences.chat.last_active_model_id` bleibt auf der zuletzt erfolgreich verwendeten Sweet-Katalog-ID.
 3. App schließen ohne Nachricht zu senden.
@@ -93,12 +98,12 @@ Erwartetes Ergebnis: alle Test-Suites grün, `pnpm typecheck` exit 0.
 
 Damit verifiziert das Szenario FR-009: Ein Modellwechsel ohne erfolgreiches `send_message` gilt als Ausprobieren und ändert `chat.last_active_model_id` nicht.
 
-
 ## Szenario 6: Explizit "Als Standard setzen" (device vs vault)
 
 **Voraussetzung**: Szenario 2, mehrere Modelle verfügbar (installiertes Sweet plus einen konfigurierten Anbieter mit Modellen).
 
 **Schritte**:
+
 1. Aus dem Workspace zum Settings-Screen navigieren (Zahnrad-Icon im Header).
 2. **Erwartung**: Screen-Titel enthält Gerätename ("Einstellungen für: Laptop").
 3. "Standard-Modell"-Bereich zeigt aktuellen Wert und einen Modell-Selector plus Scope-Radio ("Dieses Gerät" / "Vault-weit").

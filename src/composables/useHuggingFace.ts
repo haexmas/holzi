@@ -1,8 +1,12 @@
 import { invoke } from '@tauri-apps/api/core'
-import type { DownloadFromHfArgs, InstalledModel } from '~/composables/useModels'
+import type {
+  DownloadFromHfArgs,
+  InstalledModel,
+} from '~/composables/useModels'
 
 /** Where a normalized quantization/context-window value came from. */
-export type MetadataProvenanceSource = 'hub_metadata' | 'filename_heuristic' | 'gguf_header' | 'unknown'
+export type MetadataProvenanceSource =
+  'hub_metadata' | 'filename_heuristic' | 'gguf_header' | 'unknown'
 
 export interface MetadataProvenance {
   quantization: MetadataProvenanceSource
@@ -103,36 +107,56 @@ export interface HuggingFaceUpdateStatus {
  */
 export function useHuggingFace() {
   /** Public repository search; omitted query returns the default top-model view. */
-  async function searchAsync(query?: string, page?: number): Promise<HuggingFaceModelResult[]> {
-    const args: { query?: string, page?: number } = {}
+  async function searchAsync(
+    query?: string,
+    page?: number,
+  ): Promise<HuggingFaceModelResult[]> {
+    const args: { query?: string; page?: number } = {}
     if (query !== undefined) args.query = query
     if (page !== undefined) args.page = page
-    return await invoke<HuggingFaceModelResult[]>('search_huggingface_models', args)
+    return await invoke<HuggingFaceModelResult[]>(
+      'search_huggingface_models',
+      args,
+    )
   }
 
   /** Full file listing + metadata for one repository. */
-  async function detailsAsync(repoId: string, revision?: string): Promise<HuggingFaceModelResult> {
-    return await invoke<HuggingFaceModelResult>('get_huggingface_model_details', { repoId, revision })
+  async function detailsAsync(
+    repoId: string,
+    revision?: string,
+  ): Promise<HuggingFaceModelResult> {
+    return await invoke<HuggingFaceModelResult>(
+      'get_huggingface_model_details',
+      { repoId, revision },
+    )
   }
 
   /** Read-only preview: resolves the revision and classifies hardware fit. */
-  async function previewInstallAsync(args: PreviewInstallArgs): Promise<InstallPreview> {
+  async function previewInstallAsync(
+    args: PreviewInstallArgs,
+  ): Promise<InstallPreview> {
     return await invoke<InstallPreview>('preview_huggingface_install', { args })
   }
 
   /** Raw download call — callers normally go through `useModels().downloadFromHfAsync`. */
-  async function downloadAsync(args: DownloadFromHfArgs): Promise<InstalledModel> {
+  async function downloadAsync(
+    args: DownloadFromHfArgs,
+  ): Promise<InstalledModel> {
     return await invoke<InstalledModel>('download_model_from_hf', { args })
   }
 
   /** Checks every installed HF model with a tracked ref for an upstream update. */
   async function checkUpdatesAsync(): Promise<HuggingFaceUpdateStatus[]> {
-    return await invoke<HuggingFaceUpdateStatus[]>('check_huggingface_model_updates')
+    return await invoke<HuggingFaceUpdateStatus[]>(
+      'check_huggingface_model_updates',
+    )
   }
 
   /** Installs the currently-checked update for an already-installed HF model. */
   async function installUpdateAsync(modelId: string): Promise<InstalledModel> {
-    return await invoke<InstalledModel>('install_huggingface_update', { modelId })
+    return await invoke<InstalledModel>('install_huggingface_update', {
+      modelId,
+    })
   }
 
   return {
@@ -195,18 +219,19 @@ export function hfErrorDetail(e: unknown): string | null {
   return null
 }
 
-function structuredHfError(e: unknown): { kind?: unknown, reason?: unknown } | null {
+function structuredHfError(
+  e: unknown,
+): { kind?: unknown; reason?: unknown } | null {
   if (e && typeof e === 'object' && 'kind' in e) {
-    return e as { kind?: unknown, reason?: unknown }
+    return e as { kind?: unknown; reason?: unknown }
   }
   if (typeof e !== 'string') return null
   try {
     const parsed: unknown = JSON.parse(e)
     if (parsed && typeof parsed === 'object' && 'kind' in parsed) {
-      return parsed as { kind?: unknown, reason?: unknown }
+      return parsed as { kind?: unknown; reason?: unknown }
     }
-  }
-  catch {
+  } catch {
     // The native bridge may return a plain string; the caller still gets the
     // localized generic error in that case.
   }

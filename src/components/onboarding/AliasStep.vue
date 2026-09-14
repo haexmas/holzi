@@ -11,7 +11,11 @@ const emit = defineEmits<{
   next: []
 }>()
 
-const localValue = ref(props.modelValue || props.hostnameHint || t('onboarding.alias.defaultPlaceholder'))
+const localValue = ref(
+  props.modelValue ||
+    props.hostnameHint ||
+    t('onboarding.alias.defaultPlaceholder'),
+)
 const showRequired = ref(false)
 
 watch(localValue, (v) => emit('update:modelValue', v))
@@ -43,8 +47,11 @@ function onSubmit() {
         class="border border-neutral-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
         :aria-invalid="showRequired && !localValue.trim() ? true : undefined"
         @input="showRequired = false"
+      />
+      <span
+        v-if="showRequired && !localValue.trim()"
+        class="text-xs text-red-500"
       >
-      <span v-if="showRequired && !localValue.trim()" class="text-xs text-red-500">
         {{ t('onboarding.alias.required') }}
       </span>
     </label>

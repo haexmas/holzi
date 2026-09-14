@@ -6,11 +6,11 @@
 
 Nicht persistierte, validierte Suchanfrage.
 
-| Feld | Typ | Beschreibung |
-|---|---|---|
+| Feld    | Typ       | Beschreibung                                                                                                         |
+| ------- | --------- | -------------------------------------------------------------------------------------------------------------------- |
 | `query` | `string?` | Optionaler getrimmter Suchbegriff, mindestens zwei Zeichen wenn gesetzt. Ohne Query wird die Top-10-Ansicht geladen. |
-| `page` | `number` | Positive Seite, standardmäßig 1. |
-| `limit` | `number` | Server-/Client-seitig begrenzte Trefferzahl, maximal 20. |
+| `page`  | `number`  | Positive Seite, standardmäßig 1.                                                                                     |
+| `limit` | `number`  | Server-/Client-seitig begrenzte Trefferzahl, maximal 20.                                                             |
 
 Die Suche akzeptiert keinen freien URL- oder Dateipfad als Ersatz für einen
 Suchbegriff. Ein Repository-ID-ähnlicher Suchbegriff bleibt erlaubt. Eine
@@ -23,16 +23,16 @@ Treffer.
 
 Normalisierte Darstellung eines öffentlichen Hugging-Face-Repositories.
 
-| Feld | Typ | Nullable | Beschreibung |
-|---|---|---:|---|
-| `repoId` | `string` | nein | Kanonische Repository-ID `owner/name`. |
-| `displayName` | `string` | nein | Anzeigename mit Fallback auf `repoId`. |
-| `author` | `string` | ja | Autor/Owner, sofern Hub ihn liefert. |
-| `license` | `string` | ja | Lizenzkennung oder `null`; UI zeigt dann „nicht angegeben“. |
-| `downloads` | `number` | ja | Hub-Metrik, nur als Zusatzinformation. |
-| `files` | `HuggingFaceFileCandidate[]` | nein | Nur installierbare GGUF-Kandidaten. |
-| `sourceRevision` | `string` | ja | Aufgelöste Commit-SHA des Detailstands, falls verfügbar. |
-| `revisionRef` | `string` | ja | Branch oder Tag, dessen aktuellen Stand die Verwaltung später prüfen kann. |
+| Feld             | Typ                          | Nullable | Beschreibung                                                               |
+| ---------------- | ---------------------------- | -------: | -------------------------------------------------------------------------- |
+| `repoId`         | `string`                     |     nein | Kanonische Repository-ID `owner/name`.                                     |
+| `displayName`    | `string`                     |     nein | Anzeigename mit Fallback auf `repoId`.                                     |
+| `author`         | `string`                     |       ja | Autor/Owner, sofern Hub ihn liefert.                                       |
+| `license`        | `string`                     |       ja | Lizenzkennung oder `null`; UI zeigt dann „nicht angegeben“.                |
+| `downloads`      | `number`                     |       ja | Hub-Metrik, nur als Zusatzinformation.                                     |
+| `files`          | `HuggingFaceFileCandidate[]` |     nein | Nur installierbare GGUF-Kandidaten.                                        |
+| `sourceRevision` | `string`                     |       ja | Aufgelöste Commit-SHA des Detailstands, falls verfügbar.                   |
+| `revisionRef`    | `string`                     |       ja | Branch oder Tag, dessen aktuellen Stand die Verwaltung später prüfen kann. |
 
 Repositories ohne `files` werden aus dem installierbaren Ergebnisstrom
 ausgeschlossen.
@@ -41,21 +41,21 @@ ausgeschlossen.
 
 Konkrete installierbare Datei innerhalb eines Repositories.
 
-| Feld | Typ | Nullable | Beschreibung |
-|---|---|---:|---|
-| `repoId` | `string` | nein | Quelle des Artefakts. |
-| `filename` | `string` | nein | Einzelner Dateiname ohne Pfadtraversal. |
-| `revision` | `string` | nein | Vor dem Download aufgelöste konkrete Commit-SHA. |
-| `revisionRef` | `string` | ja | Ursprünglich ausgewählter Branch/Tag; `null` bei direktem SHA-Pin. |
-| `sizeBytes` | `number` | ja | Hub-Größe, falls vorhanden. |
-| `quantization` | `string` | ja | Aus Metadaten/Dateiname normalisierte Quantisierung. |
-| `contextWindow` | `number` | ja | Nur wenn belastbar aus Metadaten ableitbar. |
-| `tokenizerRepo` | `string` | ja | Sicher ermitteltes Tokenizer-Repository. |
-| `tokenizerRequired` | `boolean` | nein | `true`, wenn Nutzerangabe vor Installation nötig ist. |
-| `fit` | `fits \| tight \| too_big \| unknown` | nein | Bestehender Hardware-Fit-Klassifikator. |
-| `catalogMatch` | `boolean` | nein | Exakter Repository-/Dateiname-Treffer eines Katalogeintrags. |
-| `catalogEntryId` | `string` | ja | Verlinkbarer Katalogeintrag bei `catalogMatch`. |
-| `metadataProvenance` | `object` | nein | Herkunft von Quantisierung/Kontext: `hub_metadata`, `filename_heuristic`, `gguf_header` oder `unknown`. |
+| Feld                 | Typ                                   | Nullable | Beschreibung                                                                                            |
+| -------------------- | ------------------------------------- | -------: | ------------------------------------------------------------------------------------------------------- |
+| `repoId`             | `string`                              |     nein | Quelle des Artefakts.                                                                                   |
+| `filename`           | `string`                              |     nein | Einzelner Dateiname ohne Pfadtraversal.                                                                 |
+| `revision`           | `string`                              |     nein | Vor dem Download aufgelöste konkrete Commit-SHA.                                                        |
+| `revisionRef`        | `string`                              |       ja | Ursprünglich ausgewählter Branch/Tag; `null` bei direktem SHA-Pin.                                      |
+| `sizeBytes`          | `number`                              |       ja | Hub-Größe, falls vorhanden.                                                                             |
+| `quantization`       | `string`                              |       ja | Aus Metadaten/Dateiname normalisierte Quantisierung.                                                    |
+| `contextWindow`      | `number`                              |       ja | Nur wenn belastbar aus Metadaten ableitbar.                                                             |
+| `tokenizerRepo`      | `string`                              |       ja | Sicher ermitteltes Tokenizer-Repository.                                                                |
+| `tokenizerRequired`  | `boolean`                             |     nein | `true`, wenn Nutzerangabe vor Installation nötig ist.                                                   |
+| `fit`                | `fits \| tight \| too_big \| unknown` |     nein | Bestehender Hardware-Fit-Klassifikator.                                                                 |
+| `catalogMatch`       | `boolean`                             |     nein | Exakter Repository-/Dateiname-Treffer eines Katalogeintrags.                                            |
+| `catalogEntryId`     | `string`                              |       ja | Verlinkbarer Katalogeintrag bei `catalogMatch`.                                                         |
+| `metadataProvenance` | `object`                              |     nein | Herkunft von Quantisierung/Kontext: `hub_metadata`, `filename_heuristic`, `gguf_header` oder `unknown`. |
 
 `filename` wird nicht als lokaler Pfad interpretiert. Die Download-URL wird im
 Backend aus validierter Repository-ID, Revision und Dateiname aufgebaut.
@@ -65,11 +65,11 @@ Backend aus validierter Repository-ID, Revision und Dateiname aufgebaut.
 Die bestehende lokale Modellansicht erhält die Integritätsdaten aus der
 gemeinsamen Modellzeile.
 
-| Feld | Typ | Nullable | Beschreibung |
-|---|---|---:|---|
-| `id` | `string` | nein | Lokale Modell-ID. |
-| `fileSha256` | `string` | ja | Erwarteter Hash der gespeicherten lokalen Datei. |
-| `integrityStatus` | `verified \| untrusted \| unknown` | nein | Sichtbarer Zustand für die Modellverwaltung. |
+| Feld              | Typ                                | Nullable | Beschreibung                                     |
+| ----------------- | ---------------------------------- | -------: | ------------------------------------------------ |
+| `id`              | `string`                           |     nein | Lokale Modell-ID.                                |
+| `fileSha256`      | `string`                           |       ja | Erwarteter Hash der gespeicherten lokalen Datei. |
+| `integrityStatus` | `verified \| untrusted \| unknown` |     nein | Sichtbarer Zustand für die Modellverwaltung.     |
 
 `fileSha256` ist der vollständige SHA-256-Hash des Datei-Inhalts. Er wird nicht
 aus Hugging-Face-Commit-SHAs, Dateigröße oder Dateiname abgeleitet.
@@ -79,26 +79,26 @@ aus Hugging-Face-Commit-SHAs, Dateigröße oder Dateiname abgeleitet.
 Persistierter Zustand der Datei-Integritätsprüfung innerhalb von
 `InstalledModel`.
 
-| Feld | Typ | Beschreibung |
-|---|---|---|
-| `fileSha256` | `string?` | Erwarteter SHA-256-Hash oder `null`, wenn für einen historischen Eintrag noch keiner gespeichert ist. |
-| `status` | `verified \| untrusted \| unknown` | Ergebnis bzw. bestätigter Ausnahmezustand der letzten Nutzerentscheidung. |
-| `actualSha256` | `string?` | Nur transient im Fehlerdialog; wird nicht als neue Referenz persistiert. |
+| Feld           | Typ                                | Beschreibung                                                                                          |
+| -------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `fileSha256`   | `string?`                          | Erwarteter SHA-256-Hash oder `null`, wenn für einen historischen Eintrag noch keiner gespeichert ist. |
+| `status`       | `verified \| untrusted \| unknown` | Ergebnis bzw. bestätigter Ausnahmezustand der letzten Nutzerentscheidung.                             |
+| `actualSha256` | `string?`                          | Nur transient im Fehlerdialog; wird nicht als neue Referenz persistiert.                              |
 
 ### `HuggingFaceInstallRequest`
 
 Nicht persistierte Installationsabsicht aus der UI.
 
-| Feld | Typ | Beschreibung |
-|---|---|---|
-| `repoId` | `string` | Validierte öffentliche Repository-ID. |
-| `filename` | `string` | Aus dem Ergebnis ausgewählter GGUF-Dateiname. |
-| `revision` | `string?` | Angeforderter Branch, Tag oder SHA; bei Abwesenheit wird der Default-Ref verwendet und anschließend auf eine SHA aufgelöst. |
-| `name` | `string` | Nutzer-/Hub-Anzeigename. |
-| `tokenizerRepo` | `string` | Validiertes Repository für lokale Tokenisierung. |
-| `contextWindow` | `number?` | Bekannter Wert, sonst `null`. |
-| `forceTooBig` | `boolean` | Nur nach expliziter Warnungsbestätigung erlaubt. |
-| `forceRepair` | `boolean?` | Nur für die explizite Integritätsreparatur; umgeht den identischen Source-Short-Circuit und lädt die gespeicherte HF-Quelle erneut. |
+| Feld            | Typ        | Beschreibung                                                                                                                        |
+| --------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `repoId`        | `string`   | Validierte öffentliche Repository-ID.                                                                                               |
+| `filename`      | `string`   | Aus dem Ergebnis ausgewählter GGUF-Dateiname.                                                                                       |
+| `revision`      | `string?`  | Angeforderter Branch, Tag oder SHA; bei Abwesenheit wird der Default-Ref verwendet und anschließend auf eine SHA aufgelöst.         |
+| `name`          | `string`   | Nutzer-/Hub-Anzeigename.                                                                                                            |
+| `tokenizerRepo` | `string`   | Validiertes Repository für lokale Tokenisierung.                                                                                    |
+| `contextWindow` | `number?`  | Bekannter Wert, sonst `null`.                                                                                                       |
+| `forceTooBig`   | `boolean`  | Nur nach expliziter Warnungsbestätigung erlaubt.                                                                                    |
+| `forceRepair`   | `boolean?` | Nur für die explizite Integritätsreparatur; umgeht den identischen Source-Short-Circuit und lädt die gespeicherte HF-Quelle erneut. |
 
 Die Backend-Grenze löst `revision` bzw. den Default-Ref vor dem Download in eine
 konkrete Commit-SHA auf und erzeugt daraus die bestehende interne
@@ -109,16 +109,16 @@ dieses Contracts.
 
 Nicht persistierter Status der Update-Prüfung für ein installiertes HF-Modell.
 
-| Feld | Typ | Nullable | Beschreibung |
-|---|---|---:|---|
-| `modelId` | `string` | nein | Deterministische, kollisionsresistente lokale Modell-ID aus Repository-ID und Dateiname. |
-| `repoId` | `string` | nein | Öffentliches HF-Repository. |
-| `revisionRef` | `string` | nein | Geprüfter Branch oder Tag; Statusobjekte existieren nur für Modelle mit gespeichertem Upstream-Ref. |
-| `installedRevision` | `string` | nein | Persistierte Commit-SHA. |
-| `latestRevision` | `string` | ja | Aktuelle Commit-SHA, falls erfolgreich ermittelt. |
-| `updateAvailable` | `boolean` | nein | `true`, wenn `latestRevision` von `installedRevision` abweicht. |
-| `checkedAt` | `string` | nein | Zeitpunkt der letzten Prüfung als ISO-8601-Wert. |
-| `errorCode` | `string` | ja | Retrybarer Fehler bei Offline-/HTTP-/Hub-Problemen. |
+| Feld                | Typ       | Nullable | Beschreibung                                                                                        |
+| ------------------- | --------- | -------: | --------------------------------------------------------------------------------------------------- |
+| `modelId`           | `string`  |     nein | Deterministische, kollisionsresistente lokale Modell-ID aus Repository-ID und Dateiname.            |
+| `repoId`            | `string`  |     nein | Öffentliches HF-Repository.                                                                         |
+| `revisionRef`       | `string`  |     nein | Geprüfter Branch oder Tag; Statusobjekte existieren nur für Modelle mit gespeichertem Upstream-Ref. |
+| `installedRevision` | `string`  |     nein | Persistierte Commit-SHA.                                                                            |
+| `latestRevision`    | `string`  |       ja | Aktuelle Commit-SHA, falls erfolgreich ermittelt.                                                   |
+| `updateAvailable`   | `boolean` |     nein | `true`, wenn `latestRevision` von `installedRevision` abweicht.                                     |
+| `checkedAt`         | `string`  |     nein | Zeitpunkt der letzten Prüfung als ISO-8601-Wert.                                                    |
+| `errorCode`         | `string`  |       ja | Retrybarer Fehler bei Offline-/HTTP-/Hub-Problemen.                                                 |
 
 ## Persistenzänderung: `models`
 
@@ -127,15 +127,15 @@ Provider- und lokale Modelle. Die Implementierung prüft vor der Migration, ob
 folgende Quellefelder bereits vorhanden sind; fehlende Felder werden als
 additive, CRDT-kompatible Migration ergänzt:
 
-| Feld | Typ | Nullable | Beschreibung |
-|---|---|---:|---|
-| `hf_repo` | `TEXT` | ja | Hugging-Face-Repository für lokale GGUFs. Für API-Provider `NULL`. |
-| `hf_filename` | `TEXT` | ja | Ausgewählte GGUF-Datei. Für API-Provider `NULL`. |
-| `hf_revision` | `TEXT` | ja | Beim Download verwendete konkrete Commit-SHA. |
-| `hf_revision_ref` | `TEXT` | ja | Optionaler Branch/Tag für spätere Update-Prüfungen. |
-| `file_sha256` | `TEXT` | ja | Erwarteter SHA-256-Hash der vollständigen lokalen Modell-Datei, exakt 64 Hex-Zeichen. |
-| `integrity_status` | `TEXT` | nein/Default | `verified`, `untrusted` oder `unknown`; ein bewusst akzeptierter Mismatch wird als `untrusted` markiert. |
-| `source_kind` | `TEXT` | nein/Default | `catalog`, `huggingface`, `imported` oder `provider`; bestehende Provider-Zeilen werden mit dem Literal `provider` zurückgefüllt. |
+| Feld               | Typ    |     Nullable | Beschreibung                                                                                                                      |
+| ------------------ | ------ | -----------: | --------------------------------------------------------------------------------------------------------------------------------- |
+| `hf_repo`          | `TEXT` |           ja | Hugging-Face-Repository für lokale GGUFs. Für API-Provider `NULL`.                                                                |
+| `hf_filename`      | `TEXT` |           ja | Ausgewählte GGUF-Datei. Für API-Provider `NULL`.                                                                                  |
+| `hf_revision`      | `TEXT` |           ja | Beim Download verwendete konkrete Commit-SHA.                                                                                     |
+| `hf_revision_ref`  | `TEXT` |           ja | Optionaler Branch/Tag für spätere Update-Prüfungen.                                                                               |
+| `file_sha256`      | `TEXT` |           ja | Erwarteter SHA-256-Hash der vollständigen lokalen Modell-Datei, exakt 64 Hex-Zeichen.                                             |
+| `integrity_status` | `TEXT` | nein/Default | `verified`, `untrusted` oder `unknown`; ein bewusst akzeptierter Mismatch wird als `untrusted` markiert.                          |
+| `source_kind`      | `TEXT` | nein/Default | `catalog`, `huggingface`, `imported` oder `provider`; bestehende Provider-Zeilen werden mit dem Literal `provider` zurückgefüllt. |
 
 `tokenizer_repo` und `context_window` werden weiterverwendet. Die bestehende
 `models.id` bleibt die Referenz für Preferences, Chat und lokalen Dateispeicher.

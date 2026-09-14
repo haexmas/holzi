@@ -68,7 +68,7 @@
    danach intern.
 7. Mit `Enter` senden und prüfen: Inhalt wird vollständig gesendet, Textarea
    leert sich und schrumpft zurück.
-7. Den Vorgang in einer schmalen Fensterbreite wiederholen.
+8. Den Vorgang in einer schmalen Fensterbreite wiederholen.
 
 ## 4. Reasoning-Accordion
 

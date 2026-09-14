@@ -27,6 +27,7 @@ gegen das Host-CLI-Tool. Für den automatisierten Safe-Pfad wird der test-only S
 verwendet; der manuelle Lauf bestätigt die Freigabe für das (immer `Risky`) CLI-Tool.
 
 **Schritte**:
+
 1. Chat öffnen, eine Frage stellen, die das Host-CLI-Tool erfordert (z.B. einen Kommandoaufruf).
 2. **Erwartung**: `chat-tool-call` und `chat-tool-result` Events feuern, bevor die finale Antwort
    erscheint; `list_messages` zeigt die `tool_call`/`tool_result`-Zeilen in der Kette.

@@ -1,7 +1,7 @@
 # Device-scoped data uses sync-tracked tables with a `vault_device_uuid` FK
 
 Holzi vaults sync via CRDT across a small set of devices belonging to one
-operator. Data that is *scoped to a specific device* (which model this
+operator. Data that is _scoped to a specific device_ (which model this
 device auto-loads, which GGUFs are installed on which laptop, later
 preferences like UI theme) needs to be distinguishable from vault-wide
 data even after the entire vault file is copied to another device. We
@@ -45,7 +45,7 @@ filter the sentinel out.
 
 - Persistent per-device data → CRDT-tracked table, composite PK on
   `vault_device_uuid`, hard FK to `known_devices(vault_device_uuid)
-  ON DELETE CASCADE`. No `_no_sync` suffix.
+ON DELETE CASCADE`. No `_no_sync` suffix.
 - `_no_sync` reserved for transient runtime state that would waste sync
   bandwidth even in principle (e.g. the planned
   `app_settings_no_sync` for in-flight generation buffers that either
@@ -72,7 +72,7 @@ filter the sentinel out.
 - `HolziBootstrap` grows an idempotent `INSERT OR IGNORE` for the
   sentinel row on every open.
 - Storage wrappers listing devices filter `WHERE vault_device_uuid !=
-  '00000000-0000-0000-0000-000000000000'`.
+'00000000-0000-0000-0000-000000000000'`.
 - Cross-device UIs display `known_devices.alias` (human name), never
   the raw UUID — this ADR is why the alias exists on that table.
 - `device_downloaded_models_no_sync` is dropped rather than retrofitted

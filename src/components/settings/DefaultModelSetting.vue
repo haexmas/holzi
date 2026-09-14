@@ -35,7 +35,7 @@ const modelListError = ref(false)
 type ModelGroup = {
   providerId: string
   providerName: string
-  models: { id: string, name: string }[]
+  models: { id: string; name: string }[]
 }
 
 const modelGroups = computed<ModelGroup[]>(() => {
@@ -60,10 +60,14 @@ const modelGroups = computed<ModelGroup[]>(() => {
   return groups
 })
 
-const hasAnyModel = computed(() => modelGroups.value.some((g) => g.models.length > 0))
+const hasAnyModel = computed(() =>
+  modelGroups.value.some((g) => g.models.length > 0),
+)
 
 const currentForScope = computed(() =>
-  selectedScope.value === 'device' ? currentDeviceDefault.value : currentVaultDefault.value,
+  selectedScope.value === 'device'
+    ? currentDeviceDefault.value
+    : currentVaultDefault.value,
 )
 
 /** Human-readable name for a stored model id, falling back to the raw id. */
@@ -93,8 +97,7 @@ async function reloadAsync() {
         .map(async (p) => {
           try {
             nextModels[p.id] = await listModelsAsync(p.id)
-          }
-          catch {
+          } catch {
             modelListError.value = true
           }
         }),
@@ -112,17 +115,16 @@ async function reloadAsync() {
     // the operator sees what is stored and edits deliberately.
     const seed = selectedScope.value === 'device' ? deviceVal : vaultVal
     selectedModelId.value = seed ?? ''
-  }
-  catch (e) {
+  } catch (e) {
     loadError.value = e instanceof Error ? e.message : String(e)
-  }
-  finally {
+  } finally {
     loading.value = false
   }
 }
 
 watch(selectedScope, (scope) => {
-  const seed = scope === 'device' ? currentDeviceDefault.value : currentVaultDefault.value
+  const seed =
+    scope === 'device' ? currentDeviceDefault.value : currentVaultDefault.value
   selectedModelId.value = seed ?? ''
   savedFlash.value = null
   opError.value = null
@@ -134,25 +136,22 @@ async function onSave() {
   savedFlash.value = null
   opError.value = null
   opErrorKind.value = null
-  const scope
-    = selectedScope.value === 'device'
+  const scope =
+    selectedScope.value === 'device'
       ? { kind: 'device' as const, uuid: props.deviceUuid }
       : { kind: 'vault' as const }
   try {
     await setPrefAsync(scope, PREF_KEY, selectedModelId.value)
     if (selectedScope.value === 'device') {
       currentDeviceDefault.value = selectedModelId.value
-    }
-    else {
+    } else {
       currentVaultDefault.value = selectedModelId.value
     }
     savedFlash.value = 'saved'
-  }
-  catch (e) {
+  } catch (e) {
     opErrorKind.value = 'save'
     opError.value = e instanceof Error ? e.message : String(e)
-  }
-  finally {
+  } finally {
     busy.value = false
   }
 }
@@ -162,26 +161,23 @@ async function onClear() {
   savedFlash.value = null
   opError.value = null
   opErrorKind.value = null
-  const scope
-    = selectedScope.value === 'device'
+  const scope =
+    selectedScope.value === 'device'
       ? { kind: 'device' as const, uuid: props.deviceUuid }
       : { kind: 'vault' as const }
   try {
     await clearPrefAsync(scope, PREF_KEY)
     if (selectedScope.value === 'device') {
       currentDeviceDefault.value = null
-    }
-    else {
+    } else {
       currentVaultDefault.value = null
     }
     selectedModelId.value = ''
     savedFlash.value = 'cleared'
-  }
-  catch (e) {
+  } catch (e) {
     opErrorKind.value = 'clear'
     opError.value = e instanceof Error ? e.message : String(e)
-  }
-  finally {
+  } finally {
     busy.value = false
   }
 }
@@ -210,13 +206,21 @@ onMounted(reloadAsync)
       <div class="flex flex-col gap-1 text-sm">
         <span>
           {{ t('settings.default.current.device') }}:
-          <strong v-if="currentDeviceDefault">{{ modelDisplayName(currentDeviceDefault) }}</strong>
-          <em v-else class="text-neutral-500">{{ t('settings.default.current.none') }}</em>
+          <strong v-if="currentDeviceDefault">{{
+            modelDisplayName(currentDeviceDefault)
+          }}</strong>
+          <em v-else class="text-neutral-500">{{
+            t('settings.default.current.none')
+          }}</em>
         </span>
         <span>
           {{ t('settings.default.current.vault') }}:
-          <strong v-if="currentVaultDefault">{{ modelDisplayName(currentVaultDefault) }}</strong>
-          <em v-else class="text-neutral-500">{{ t('settings.default.current.none') }}</em>
+          <strong v-if="currentVaultDefault">{{
+            modelDisplayName(currentVaultDefault)
+          }}</strong>
+          <em v-else class="text-neutral-500">{{
+            t('settings.default.current.none')
+          }}</em>
         </span>
       </div>
 
@@ -224,7 +228,10 @@ onMounted(reloadAsync)
         {{ t('errors.modelListFailed') }}
       </p>
 
-      <div v-if="!hasAnyModel && !modelListError" class="text-sm text-neutral-500">
+      <div
+        v-if="!hasAnyModel && !modelListError"
+        class="text-sm text-neutral-500"
+      >
         {{ t('settings.default.empty') }}
       </div>
 
@@ -238,7 +245,7 @@ onMounted(reloadAsync)
             type="radio"
             value="device"
             :disabled="busy"
-          >
+          />
           {{ t('settings.default.scope.device') }}
         </label>
         <label class="flex items-center gap-2 text-sm">
@@ -247,14 +254,16 @@ onMounted(reloadAsync)
             type="radio"
             value="vault"
             :disabled="busy"
-          >
+          />
           {{ t('settings.default.scope.vault') }}
         </label>
       </fieldset>
 
       <template v-if="hasAnyModel">
         <label class="flex flex-col gap-1">
-          <span class="text-sm font-medium">{{ t('settings.default.modelLabel') }}</span>
+          <span class="text-sm font-medium">{{
+            t('settings.default.modelLabel')
+          }}</span>
           <select
             v-model="selectedModelId"
             class="border border-neutral-300 rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -268,11 +277,7 @@ onMounted(reloadAsync)
               :key="group.providerId"
               :label="group.providerName"
             >
-              <option
-                v-for="m in group.models"
-                :key="m.id"
-                :value="m.id"
-              >
+              <option v-for="m in group.models" :key="m.id" :value="m.id">
                 {{ m.name }}
               </option>
             </optgroup>
@@ -282,7 +287,11 @@ onMounted(reloadAsync)
         <div class="flex items-center gap-3 flex-wrap">
           <UiButton
             type="button"
-            :disabled="busy || !selectedModelId || selectedModelId === (currentForScope ?? '')"
+            :disabled="
+              busy ||
+              !selectedModelId ||
+              selectedModelId === (currentForScope ?? '')
+            "
             @click="onSave"
           >
             {{ t('settings.default.save') }}
@@ -300,14 +309,28 @@ onMounted(reloadAsync)
         >
           {{ t('settings.default.clear') }}
         </UiButton>
-        <span v-if="savedFlash === 'saved'" class="text-xs text-green-600" role="status">
+        <span
+          v-if="savedFlash === 'saved'"
+          class="text-xs text-green-600"
+          role="status"
+        >
           {{ t('settings.default.saved') }}
         </span>
-        <span v-if="savedFlash === 'cleared'" class="text-xs text-green-600" role="status">
+        <span
+          v-if="savedFlash === 'cleared'"
+          class="text-xs text-green-600"
+          role="status"
+        >
           {{ t('settings.default.cleared') }}
         </span>
         <span v-if="opError" class="text-xs text-red-500" role="alert">
-          {{ t(opErrorKind === 'clear' ? 'errors.prefClearFailed' : 'errors.prefSaveFailed') }}: {{ opError }}
+          {{
+            t(
+              opErrorKind === 'clear'
+                ? 'errors.prefClearFailed'
+                : 'errors.prefSaveFailed',
+            )
+          }}: {{ opError }}
         </span>
       </div>
     </template>
