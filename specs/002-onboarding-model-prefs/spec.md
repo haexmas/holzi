@@ -152,7 +152,7 @@ Dieses Feature liefert **keinen** Retire-Vorgang. Es sorgt aber dafür, dass ein
 
 **Ladezustand während Session-Start**
 
-- **FR-015a**: Während der Session-Resolver ein Modell lädt, MUSS die Chat-Ansicht einen sichtbaren Ladezustand mit Modellnamen anzeigen. Der Chat DARF vor Fertigstellung der Ladung nicht interaktiv sein.
+- **FR-015a**: Während der Session-Resolver ein Modell lädt, MUSS die Chat-Ansicht einen sichtbaren Ladezustand mit Modellnamen anzeigen. Das Chat-Eingabefeld MUSS bereits sichtbar und editierbar sein, damit der Nutzer seine Frage formulieren kann; der Sendevorgang (einschließlich Enter) MUSS bis zur Fertigstellung der Ladung deaktiviert bleiben.
 - **FR-015b**: Der Ladezustand MUSS kontextuell beschriftet sein. Vier semantische Kategorien: `connecting` (api_key-Modelle, Beispieltext: "Verbinde mit \<Anbietername\>…"), `loading` (lokale Warm-Loads, Beispieltext: "Lade \<Modellname\>…"), `cuda-jit-warmup` (erster CUDA-Load pro Gerät und Modell, Beispieltext: "Optimiere GPU für erste Nutzung von \<Modellname\>, dauert einmalig etwa 30 Sekunden…" — siehe Etappe-0-Findung #4), `ready` (Signal zum Ausblenden). Das Backend liefert die semantische Kategorie plus die für die Beschriftung nötigen Parameter (Modellname, Anbietername), das Frontend übersetzt via `@nuxtjs/i18n` in die aktive Sprache.
 - **FR-015c**: Das System MUSS erkennen können, ob ein lokaler Modell-Load der "Erst-Load pro Gerät und Modell" ist, um die `cuda-jit-warmup`-Kategorie zu wählen. Diese Unterscheidung gilt vor allem für den CUDA-Pfad (JIT-Cache-Warmup als sichtbarer Kalt-Effekt); auf CPU-Only oder Metal-Builds fällt die Klassifizierung auf `loading` zurück, weil dort kein vergleichbarer Warmup-Effekt existiert.
 

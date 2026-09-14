@@ -98,10 +98,18 @@ function createChatState(
     `${compiled}
     return { send, selectThread, handleToken, handleRetry, handleTurnComplete,
       handleToolPermissionRequest, threads, messagesByThread, activeThreadId,
-      input, busy, pendingApprovals, streamingMessageId, lastError,
+      input, busy, activeModel, loadingPhase, modelLoadPending,
+      composerInputDisabled, sendDisabled, pendingApprovals, streamingMessageId, lastError,
       updatePermissionMode, permissionMode, permissionModeSaving };
   `,
   )(...Object.values(globals))
+  // Existing send-flow tests model a ready chat session unless they override it.
+  state.activeModel.value = {
+    modelId: 'model',
+    name: 'Model',
+    tokenizerRepo: 'tokenizer',
+    contextWindow: null,
+  }
   return { ...state, mount: () => mount(), unmount: () => unmount() }
 }
 
@@ -114,6 +122,38 @@ test('an accepted first send appears in the conversation list immediately', asyn
     ['a'],
   )
   assert.equal(state.busy.value, true)
+})
+
+test('keeps a draft editable while model loading blocks sending', async () => {
+  let sends = 0
+  const state = createChatState({
+    sendMessageAsync: async () => {
+      sends++
+      return { threadId: 'a', userMessageId: 'u', assistantMessageId: 'answer' }
+    },
+  })
+  state.input.value = 'Hello while loading'
+  state.activeModel.value = null
+  state.modelLoadPending.value = true
+  state.busy.value = true
+
+  assert.equal(state.composerInputDisabled.value, false)
+  assert.equal(state.sendDisabled.value, true)
+  await state.send()
+  assert.equal(sends, 0)
+  assert.equal(state.input.value, 'Hello while loading')
+
+  state.modelLoadPending.value = false
+  state.busy.value = false
+  state.activeModel.value = {
+    modelId: 'model',
+    name: 'Model',
+    tokenizerRepo: 'tokenizer',
+    contextWindow: null,
+  }
+  assert.equal(state.sendDisabled.value, false)
+  await state.send()
+  assert.equal(sends, 1)
 })
 
 test('tokens and retries stay with the generating thread after switching conversations', async () => {

@@ -103,6 +103,7 @@ const pendingTurnCompletions = new Map<string, TurnCompleteEvent>()
 
 const input = ref('')
 const busy = ref(false)
+const modelLoadPending = ref(false)
 const effortLevel = ref<'low' | 'medium' | 'high'>('medium')
 const effortTokens: Record<typeof effortLevel.value, number> = {
   low: 1024,
@@ -125,14 +126,25 @@ const downloadingId = ref<string | null>(null)
 const downloadProgressBytes = ref<number>(0)
 const downloadTotalBytes = ref<number | null>(null)
 
-// Structured loading state driven by the `model-load-progress` event.
-// Spec 002 §FR-015a: chat input stays disabled while `phase` is not
-// `ready`. The label is translated in the template via
-// `chat.loading.<phase>`.
+// Structured loading state driven by the `model-load-progress` event. The
+// composer stays available for drafting while sending remains blocked until
+// the load reaches `ready`.
 const loadingPhase = ref<ModelLoadPhase | null>(null)
 const loadingModelName = ref<string>('')
 const loadingProviderName = ref<string | null>(null)
 const loadErrorModelId = ref<string | null>(null)
+
+const composerInputDisabled = computed(
+  () =>
+    busy.value && !modelLoadPending.value && streamingMessageId.value === null,
+)
+const sendDisabled = computed(
+  () =>
+    !activeModel.value ||
+    busy.value ||
+    modelLoadPending.value ||
+    loadingPhase.value !== null,
+)
 
 interface IntegrityDialogState {
   modelId: string
@@ -272,6 +284,7 @@ async function scrollToBottom() {
 async function loadModel(id: string) {
   lastError.value = null
   loadErrorModelId.value = null
+  modelLoadPending.value = true
   busy.value = true
   try {
     activeModel.value = await chat.loadModelAsync(id)
@@ -283,6 +296,7 @@ async function loadModel(id: string) {
     activeModel.value = null
   } finally {
     busy.value = false
+    modelLoadPending.value = false
   }
 }
 
@@ -320,6 +334,7 @@ function openIntegrityDialog(modelId: string, e: unknown): boolean {
 /** "Trotzdem als unsicher laden" — bypasses the hash check for this load only. */
 async function onIntegrityLoadUntrusted() {
   if (!integrityDialog.value) return
+  modelLoadPending.value = true
   integrityBusy.value = true
   integrityActionError.value = null
   try {
@@ -332,6 +347,7 @@ async function onIntegrityLoadUntrusted() {
     integrityActionError.value = errString(e)
   } finally {
     integrityBusy.value = false
+    modelLoadPending.value = false
   }
 }
 
@@ -405,7 +421,7 @@ async function downloadCatalogEntry(entry: CatalogEntryWithFit) {
 async function send(retryPending = false) {
   const retry = retryPending ? pendingSend.value : null
   const content = retry?.content ?? input.value.trim()
-  if (!content || busy.value) return
+  if (!content || sendDisabled.value) return
   if (!retry) input.value = ''
   busy.value = true
   lastError.value = null
@@ -1316,7 +1332,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div
-        v-else-if="!activeModel"
+        v-else-if="!activeModel && !modelLoadPending && !loadingPhase"
         class="flex-1 flex items-center justify-center p-6 text-muted-foreground"
       >
         <div class="flex w-full max-w-sm flex-col gap-3">
@@ -1363,7 +1379,11 @@ onBeforeUnmount(() => {
               {{ t('chat.empty.title') }}
             </h2>
             <p class="mt-2 max-w-md text-sm text-muted-foreground">
-              {{ t('chat.empty.description', { modelName: activeModel.name }) }}
+              {{
+                t('chat.empty.description', {
+                  modelName: activeModel?.name ?? loadingModelName,
+                })
+              }}
             </p>
           </div>
           <div
@@ -1500,9 +1520,7 @@ onBeforeUnmount(() => {
                 rows="1"
                 class="block w-full resize-none overflow-hidden bg-transparent px-4 pb-2 pt-3 text-sm leading-6 outline-none placeholder:text-muted-foreground"
                 :placeholder="t('chat.composer.placeholder')"
-                :disabled="
-                  (busy && streamingMessageId === null) || loadingPhase !== null
-                "
+                :disabled="composerInputDisabled"
                 @keydown.enter.exact.prevent="send()"
               />
               <div
@@ -1550,7 +1568,7 @@ onBeforeUnmount(() => {
                   class="shrink-0"
                   size="icon-sm"
                   type="submit"
-                  :disabled="!input.trim() || busy || loadingPhase !== null"
+                  :disabled="!input.trim() || sendDisabled"
                   :aria-label="t('chat.send')"
                   :title="t('chat.send')"
                 >
