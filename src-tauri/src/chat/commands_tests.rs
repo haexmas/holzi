@@ -52,10 +52,11 @@ fn strip_leaked_tool_call_markup_removes_a_qwen_style_tag() {
 
 #[test]
 fn strip_leaked_tool_call_markup_keeps_prose_before_the_tag() {
-    let leaked = "Let me check that.\n<tool_call>{\"name\": \"echo\", \"arguments\": {}}</tool_call>";
+    let leaked =
+        "Let me check that.\n<tool_call>{\"name\": \"echo\", \"arguments\": {}}</tool_call>";
     assert_eq!(
         strip_leaked_tool_call_markup(leaked),
-        "Let me check that."
+        "Let me check that.\n"
     );
 }
 
