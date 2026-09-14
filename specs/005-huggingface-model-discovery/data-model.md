@@ -98,6 +98,7 @@ Nicht persistierte Installationsabsicht aus der UI.
 | `tokenizerRepo` | `string` | Validiertes Repository für lokale Tokenisierung. |
 | `contextWindow` | `number?` | Bekannter Wert, sonst `null`. |
 | `forceTooBig` | `boolean` | Nur nach expliziter Warnungsbestätigung erlaubt. |
+| `forceRepair` | `boolean?` | Nur für die explizite Integritätsreparatur; umgeht den identischen Source-Short-Circuit und lädt die gespeicherte HF-Quelle erneut. |
 
 Die Backend-Grenze löst `revision` bzw. den Default-Ref vor dem Download in eine
 konkrete Commit-SHA auf und erzeugt daraus die bestehende interne
