@@ -291,10 +291,12 @@ async function loadModel(id: string) {
  * `false` for every other error so the caller falls back to `errString`.
  */
 function openIntegrityDialog(modelId: string, e: unknown): boolean {
+  // `HolziError` is serialized with `#[serde(tag = "kind")]` only — no
+  // `rename_all`, so the hash fields arrive snake_cased (HolziError.ts).
   const err = e as {
     kind?: string
-    expectedSha256?: string | null
-    actualSha256?: string | null
+    expected_sha256?: string | null
+    actual_sha256?: string | null
   }
   const kind = err.kind
   if (
@@ -307,8 +309,8 @@ function openIntegrityDialog(modelId: string, e: unknown): boolean {
   integrityDialog.value = {
     modelId,
     errorKind: kind,
-    expected: err.expectedSha256 ?? null,
-    actual: err.actualSha256 ?? null,
+    expected: err.expected_sha256 ?? null,
+    actual: err.actual_sha256 ?? null,
   }
   return true
 }
@@ -347,9 +349,14 @@ async function onIntegrityRepairSource() {
       await models.downloadFromHfAsync({
         repoId: model.hfRepo,
         filename: model.hfFilename,
-        revision: model.hfRevisionRef ?? undefined,
+        // Repair reinstalls the stored source: the tracked ref when there
+        // is one, otherwise the pinned commit — never an implicit `main`.
+        revision: model.hfRevisionRef ?? model.hfRevision ?? undefined,
         name: model.name,
         contextWindow: model.contextWindow,
+        // Without this the backend's same-source short-circuit returns the
+        // existing row and the corrupt file is never replaced.
+        forceRepair: true,
       })
       integrityDialog.value = null
       await refreshInstalledAndCatalog()
