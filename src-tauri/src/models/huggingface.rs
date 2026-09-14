@@ -326,13 +326,18 @@ pub fn normalize_quantization_from_filename(filename: &str) -> Option<String> {
     let bytes = upper.as_bytes();
     let mut best: Option<&str> = None;
     for token in KNOWN_QUANTIZATIONS {
-        let Some(idx) = upper.find(token) else {
+        if best.is_some_and(|b| token.len() <= b.len()) {
             continue;
-        };
-        let before_ok = idx == 0 || !bytes[idx - 1].is_ascii_alphanumeric();
-        let after_idx = idx + token.len();
-        let after_ok = after_idx >= bytes.len() || !bytes[after_idx].is_ascii_alphanumeric();
-        if before_ok && after_ok && best.map_or(true, |b| token.len() > b.len()) {
+        }
+        // Every occurrence is checked, not just the first: a leading
+        // non-boundary hit (`XQ4_0Y-Q4_0.gguf`) must not hide the real one.
+        let matched = upper.match_indices(token).any(|(idx, _)| {
+            let before_ok = idx == 0 || !bytes[idx - 1].is_ascii_alphanumeric();
+            let after_idx = idx + token.len();
+            let after_ok = after_idx >= bytes.len() || !bytes[after_idx].is_ascii_alphanumeric();
+            before_ok && after_ok
+        });
+        if matched {
             best = Some(token);
         }
     }
@@ -958,17 +963,14 @@ pub async fn search_models(
     limit: Option<usize>,
 ) -> Result<Vec<HuggingFaceModelResult>> {
     let query = validate_search_query(query)?;
-    let default_limit = if query.is_some() {
-        DEFAULT_LIMIT
-    } else {
-        DEFAULT_TOP_LIMIT
-    };
+    // The cap doubles as the default, so an explicit search gets twenty
+    // results and the query-less discovery view ten.
     let max_limit = if query.is_some() {
         DEFAULT_LIMIT
     } else {
         DEFAULT_TOP_LIMIT
     };
-    let capped = limit.unwrap_or(default_limit).clamp(1, max_limit);
+    let capped = limit.unwrap_or(max_limit).clamp(1, max_limit);
     let hits = hf.search(query.as_deref(), capped).await?;
     let mut results: Vec<HuggingFaceModelResult> =
         hits.into_iter().filter_map(normalize_search_hit).collect();
