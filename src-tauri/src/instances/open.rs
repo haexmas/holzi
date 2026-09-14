@@ -15,7 +15,7 @@ use serde::Deserialize;
 use tauri::{AppHandle, State};
 use ts_rs::TS;
 
-use crate::chat::commands::start_default_model_preload;
+use crate::chat::commands::{emit_model_load_status, start_default_model_preload};
 use crate::chat::session::ChatState;
 use crate::error::{HolziError, Result};
 use crate::identity::installation_id_path;
@@ -196,6 +196,7 @@ pub async fn open_instance(
     });
     chat.bump_vault_generation();
     drop(guard);
+    emit_model_load_status(&app, &chat);
 
     // Refresh mtime so `list_instances` shows this instance at the top.
     let _ = set_file_mtime(&db_path, FileTime::now());

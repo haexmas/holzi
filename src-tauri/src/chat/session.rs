@@ -176,6 +176,7 @@ impl ChatState {
     pub fn bump_vault_generation(&self) -> u64 {
         let mut runtime = self.model_load.lock().unwrap_or_else(|e| e.into_inner());
         runtime.vault_generation = runtime.vault_generation.saturating_add(1);
+        runtime.next_load_id = runtime.next_load_id.saturating_add(1);
         runtime.status = ModelLoadStatus::Idle {
             vault_generation: runtime.vault_generation,
         };
@@ -279,7 +280,7 @@ impl ChatState {
             .preload = Some(PreloadHandle { cancel, join });
     }
 
-    /// Cancels an active preload and waits only for its task to terminate.
+    /// Cancels an active preload and waits for all of its child work to terminate.
     pub async fn cancel_preload_and_wait(&self) {
         let handle = self
             .model_load
@@ -289,8 +290,12 @@ impl ChatState {
             .take();
         if let Some(handle) = handle {
             handle.cancel.cancel();
-            handle.join.abort();
             let _ = handle.join.await;
+            let mut runtime = self.model_load.lock().unwrap_or_else(|e| e.into_inner());
+            runtime.next_load_id = runtime.next_load_id.saturating_add(1);
+            runtime.status = ModelLoadStatus::Idle {
+                vault_generation: runtime.vault_generation,
+            };
         }
     }
 

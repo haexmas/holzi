@@ -775,9 +775,17 @@ function onLoadProgress(e: ModelLoadProgressEvent) {
   loadingModelName.value = e.modelName
   loadingProviderName.value = e.providerName ?? null
   if (e.phase === 'ready') {
-    // Small delay so the "Ready" state is visible before it hides.
-    // Kept synchronous — the user's next interaction shouldn't wait.
     loadingPhase.value = null
+    void refreshActiveModel()
+  }
+}
+
+async function refreshActiveModel() {
+  try {
+    activeModel.value = await chat.activeModelInfoAsync()
+  }
+  catch (e: unknown) {
+    lastError.value = errString(e)
   }
 }
 
@@ -794,6 +802,7 @@ function onLoadStatus(status: ModelLoadStatusPayload) {
     loadingProviderName.value = null
     loadErrorModelId.value = status.status === 'error' ? status.modelId ?? null : null
     if (status.status === 'error') lastError.value = t('chat.loading.error')
+    if (status.status === 'ready') void refreshActiveModel()
   }
 }
 
@@ -837,6 +846,7 @@ onMounted(async () => {
       chat.onTurnComplete(handleTurnComplete),
       chat.onToolPermissionRequest(handleToolPermissionRequest),
       chat.onModelLoadProgress(onLoadProgress),
+      chat.onModelLoadStatus(onLoadStatus),
       chat.onModelLoadError(onLoadError),
       models.onDownloadProgress((e) => {
         if (downloadingId.value === e.modelId) {
@@ -865,8 +875,9 @@ onMounted(async () => {
     if (unmounted) return
     deviceUuid.value = device.vaultDeviceUuid
 
-    onLoadStatus(await chat.modelLoadStatusAsync())
-    activeModel.value = await chat.activeModelInfoAsync()
+    const loadStatus = await chat.modelLoadStatusAsync()
+    if (loadStatus) onLoadStatus(loadStatus)
+    await refreshActiveModel()
     await refreshInstalledAndCatalog()
     await refreshProviders()
     await refreshThreads()

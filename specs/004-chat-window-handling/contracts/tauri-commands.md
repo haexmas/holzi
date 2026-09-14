@@ -73,6 +73,18 @@ type ModelLoadStatusPayload =
 Der Command ist read-only und liefert `idle`, wenn keine aktive Vault oder kein
 aktiver Load vorhanden ist.
 
+## Lifecycle-Status-Event
+
+### `model-load-status`
+
+Bei einer Vault-Transition, beim Abbruch eines Preloads oder beim Entladen des
+aktiven Modells emittiert das Backend zusätzlich einen vollständigen
+`ModelLoadStatusPayload`-Snapshot. Chat und Workspace abonnieren dieses Event,
+damit ein sichtbarer Ladezustand sofort auf `idle` zurückgesetzt wird und nicht
+bis zum nächsten Snapshot-Aufruf bestehen bleibt. Der Snapshot wird mit
+denselben `vaultGeneration`-/`loadId`-Regeln wie die Fortschritts-Events gegen
+veraltete Zustände geschützt.
+
 `vaultGeneration` erhöht sich bei jedem Vault-Open oder -Wechsel und ist von
 `loadId` unabhängig: `loadId` ordnet Loads innerhalb derselben Vault-Generation,
 `vaultGeneration` grenzt eine Vault-Instanz gegen ihre Vorgänger ab. Ein Snapshot
@@ -164,9 +176,12 @@ Chat nicht versehentlich mehrere konkurrierende Preloads anfordern.
 `useChat` ergänzt:
 
 ```typescript
-async function modelLoadStatusAsync(): Promise<ModelLoadStatusPayload>
+async function modelLoadStatusAsync(): Promise<ModelLoadStatusPayload | null>
 async function onModelLoadProgress(
   handler: (event: ModelLoadProgressEvent) => void,
+): Promise<UnlistenFn>
+async function onModelLoadStatus(
+  handler: (event: ModelLoadStatusPayload) => void,
 ): Promise<UnlistenFn>
 async function onModelLoadError(
   handler: (event: ModelLoadErrorEvent) => void,

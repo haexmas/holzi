@@ -3,7 +3,7 @@
 
 use tauri::{AppHandle, State};
 
-use crate::chat::session::ChatState;
+use crate::chat::{commands::emit_model_load_status, session::ChatState};
 use crate::error::{HolziError, Result};
 use crate::state::AppState;
 
@@ -66,6 +66,7 @@ pub async fn close_instance(
 
     *chat.session.lock().unwrap_or_else(|e| e.into_inner()) = None;
     chat.bump_vault_generation();
+    emit_model_load_status(&app, &chat);
     emit_instance_list_changed(&app, "closed", Some(name));
     Ok(())
 }

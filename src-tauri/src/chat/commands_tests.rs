@@ -31,8 +31,10 @@ fn user_and_assistant_ids_never_collide_for_the_same_key() {
 fn reasoning_capability_is_derived_conservatively_from_the_model_id() {
     assert!(model_supports_reasoning("Qwen/Qwen3-4B-Instruct"));
     assert!(model_supports_reasoning("claude-sonnet-4-20250514"));
+    assert!(model_supports_reasoning("claude-haiku-4-5-20251001"));
     assert!(!model_supports_reasoning("Qwen/Qwen2.5-0.5B-Instruct"));
     assert!(!model_supports_reasoning("claude-3-5-sonnet"));
+    assert!(!model_supports_reasoning("Qwen/Qwen3-4B-Instruct-2507"));
 }
 
 #[test]

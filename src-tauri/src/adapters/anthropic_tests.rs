@@ -239,9 +239,16 @@ fn reasoning_capability_controls_anthropic_thinking_request() {
     request.reasoning_requested = true;
     let with_reasoning = build_messages_body(&request);
     assert_eq!(with_reasoning["thinking"]["type"], "enabled");
-    assert!(with_reasoning["thinking"]["budget_tokens"]
+    let budget = with_reasoning["thinking"]["budget_tokens"]
         .as_u64()
-        .is_some());
+        .expect("manual thinking has a budget");
+    assert!(budget >= 1024);
+    assert!(budget < with_reasoning["max_tokens"].as_u64().unwrap());
+
+    request.model_id = "claude-opus-4-7".to_string();
+    let adaptive = build_messages_body(&request);
+    assert_eq!(adaptive["thinking"]["type"], "adaptive");
+    assert!(adaptive["thinking"].get("budget_tokens").is_none());
 }
 
 fn sse_body(events: &[(&str, serde_json::Value)]) -> String {

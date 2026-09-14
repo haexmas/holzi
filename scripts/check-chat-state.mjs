@@ -18,7 +18,8 @@ function createChatState(overrides = {}, preferenceOverrides = {}, dependencyOve
   const chat = {
     ...Object.fromEntries(['onToken', 'onMessageComplete', 'onMessageError', 'onToolCall',
       'onToolResult', 'onRetry', 'onTurnComplete', 'onToolPermissionRequest',
-      'onModelLoadProgress'].map((name) => [name, async () => () => {}])),
+      'onModelLoadProgress', 'onModelLoadStatus', 'onModelLoadError'].map((name) => [name, async () => () => {}])),
+    modelLoadStatusAsync: async () => ({ status: 'idle', vaultGeneration: 0 }),
     activeModelInfoAsync: async () => ({ modelId: 'model' }),
     sendMessageAsync: async () => ({ threadId: 'a', userMessageId: 'u', assistantMessageId: 'answer' }),
     listThreadsAsync: async () => [{ id: 'a', title: 'New conversation' }],
@@ -40,6 +41,12 @@ function createChatState(overrides = {}, preferenceOverrides = {}, dependencyOve
     usePreferences: () => ({ getPrefAsync: async () => null, ...preferenceOverrides }),
     useDevice: () => ({ currentDeviceInfoAsync: async () => ({ vaultDeviceUuid: 'device' }) }),
     useInstancesStore: () => ({}),
+    useAutoResizeTextarea: () => ({
+      textareaRef: ref(null),
+      isOverflowing: ref(false),
+      resize: () => {},
+      reset: async () => {},
+    }),
     document: { querySelector: () => null },
     ...dependencyOverrides,
   }
@@ -185,7 +192,8 @@ test('listener registrations finishing after unmount are disposed without contin
   let deviceReads = 0
   const released = []
   const subscriptions = ['onToken', 'onMessageComplete', 'onMessageError', 'onToolCall',
-    'onToolResult', 'onRetry', 'onTurnComplete', 'onToolPermissionRequest', 'onModelLoadProgress']
+    'onToolResult', 'onRetry', 'onTurnComplete', 'onToolPermissionRequest',
+    'onModelLoadProgress', 'onModelLoadStatus']
   const state = createChatState({
     ...Object.fromEntries(subscriptions.map((name) => [name, async () => () => released.push(name)])),
     onToken: () => new Promise((resolve) => { finishRegistration = resolve }),

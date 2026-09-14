@@ -35,7 +35,9 @@ function updatePreloadStatus(status: ModelLoadStatusPayload) {
 
 function onLoadProgress(event: ModelLoadProgressEvent) {
   if (event.phase === 'ready') {
-    void chat.modelLoadStatusAsync().then(updatePreloadStatus).catch(() => undefined)
+    void chat.modelLoadStatusAsync().then((status) => {
+      if (status) updatePreloadStatus(status)
+    }).catch(() => undefined)
     return
   }
   updatePreloadStatus({
@@ -51,12 +53,19 @@ function onLoadProgress(event: ModelLoadProgressEvent) {
 
 function onLoadError(_event: ModelLoadErrorEvent) {
   preloadError.value = true
-  void chat.modelLoadStatusAsync().then(updatePreloadStatus).catch(() => undefined)
+  void chat.modelLoadStatusAsync().then((status) => {
+    if (status) updatePreloadStatus(status)
+  }).catch(() => undefined)
+}
+
+function onLoadStatus(status: ModelLoadStatusPayload) {
+  updatePreloadStatus(status)
 }
 
 onMounted(async () => {
   const subscriptions = await Promise.all([
     chat.onModelLoadProgress(onLoadProgress),
+    chat.onModelLoadStatus(onLoadStatus),
     chat.onModelLoadError(onLoadError),
   ])
   for (const unlisten of subscriptions) {
@@ -65,7 +74,8 @@ onMounted(async () => {
   }
   if (!unmounted) {
     try {
-      updatePreloadStatus(await chat.modelLoadStatusAsync())
+      const status = await chat.modelLoadStatusAsync()
+      if (status) updatePreloadStatus(status)
     }
     catch {
       // Workspace remains usable even when the status snapshot is unavailable.

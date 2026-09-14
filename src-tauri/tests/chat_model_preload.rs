@@ -21,6 +21,12 @@ async fn cancelling_a_preload_waits_for_its_task_to_terminate() {
     chat.cancel_preload_and_wait().await;
 
     assert!(cancel.is_cancelled());
+    assert!(matches!(
+        chat.model_load_status(),
+        ModelLoadStatus::Idle {
+            vault_generation: 0
+        }
+    ));
 }
 
 #[test]

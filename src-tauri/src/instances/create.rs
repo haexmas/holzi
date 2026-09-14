@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 use ts_rs::TS;
 
-use crate::chat::commands::start_default_model_preload;
+use crate::chat::commands::{emit_model_load_status, start_default_model_preload};
 use crate::chat::session::ChatState;
 use crate::error::{HolziError, Result};
 use crate::identity::installation_id_path;
@@ -123,6 +123,7 @@ pub async fn create_instance(
                 *chat.session.lock().unwrap_or_else(|e| e.into_inner()) = None;
                 emit_instance_list_changed(&app, "created", Some(args.name.clone()));
                 chat.bump_vault_generation();
+                emit_model_load_status(&app, &chat);
                 start_default_model_preload(app.clone(), chat.inner().clone());
                 Ok(result)
             }

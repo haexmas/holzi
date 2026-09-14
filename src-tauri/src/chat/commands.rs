@@ -37,6 +37,7 @@ const EVENT_CHAT_TOKEN: &str = "chat-token";
 const EVENT_CHAT_MESSAGE_COMPLETE: &str = "chat-message-complete";
 const EVENT_CHAT_MESSAGE_ERROR: &str = "chat-message-error";
 const EVENT_MODEL_LOAD_PROGRESS: &str = "model-load-progress";
+const EVENT_MODEL_LOAD_STATUS: &str = "model-load-status";
 const EVENT_CHAT_TOOL_CALL: &str = "chat-tool-call";
 const EVENT_CHAT_TOOL_RESULT: &str = "chat-tool-result";
 const EVENT_CHAT_TURN_COMPLETE: &str = "chat-turn-complete";
@@ -155,6 +156,12 @@ fn emit_load_error(
             code: code.into(),
         },
     );
+}
+
+/// Publishes the authoritative model-load snapshot after lifecycle changes
+/// such as cancellation, unload, or a Vault transition.
+pub(crate) fn emit_model_load_status(app: &AppHandle, chat: &ChatState) {
+    let _ = app.emit(EVENT_MODEL_LOAD_STATUS, chat.model_load_status());
 }
 
 /// Which fallback branch the session resolver picked. Wire payload for
@@ -399,14 +406,10 @@ async fn load_model_inner(
         {
             return Ok(LoadOutcome::Cancelled);
         }
-        let future = load_api_key_model(state, model_id, provider_id_str);
-        match cancel {
-            Some(cancel) => tokio::select! {
-                _ = cancel.cancelled() => return Ok(LoadOutcome::Cancelled),
-                result = future => result?,
-            },
-            None => future.await?,
-        }
+        // This path only performs bounded database/adapter setup. Await it
+        // to completion so cancellation cannot drop a spawn_blocking DB read
+        // while a Vault close is waiting to release its Arc.
+        load_api_key_model(state, model_id, provider_id_str).await?
     } else {
         #[cfg(feature = "llm-cpu")]
         {
@@ -423,7 +426,11 @@ async fn load_model_inner(
             {
                 return Ok(LoadOutcome::Cancelled);
             }
-            let future = load_local_model_by_id(app, state, model_id);
+            // Resolve all database metadata before entering the cancellable
+            // model load. This guarantees that close never returns while a
+            // detached spawn_blocking task still retains the database Arc.
+            let metadata = resolve_local_model_metadata(app, state, model_id).await?;
+            let future = load_local_model_from_metadata(model_id, metadata);
             match cancel {
                 Some(cancel) => tokio::select! {
                     _ = cancel.cancelled() => return Ok(LoadOutcome::Cancelled),
@@ -483,6 +490,7 @@ pub async fn load_model(
     model_id: String,
 ) -> Result<LoadedModelInfo> {
     chat.cancel_preload_and_wait().await;
+    emit_model_load_status(&app, &chat);
     let _operation = chat.acquire_operation()?;
     let (vault_generation, load_id) = chat.begin_model_load();
     let identity = LoadIdentity {
@@ -618,11 +626,11 @@ async fn load_api_key_model(
 /// (`context_window`, `tokenizer_repo`) still comes from the
 /// synchronised `models` catalog row.
 #[cfg(feature = "llm-cpu")]
-async fn load_local_model_by_id(
+async fn resolve_local_model_metadata(
     app: &AppHandle,
     state: &State<'_, AppState>,
     model_id: &str,
-) -> Result<ActiveSession> {
+) -> Result<(std::path::PathBuf, Option<i64>, String)> {
     let canonical =
         paths::canonical_model_file(app, model_id)?.ok_or_else(|| HolziError::ModelNotFound {
             id: model_id.to_string(),
@@ -658,7 +666,15 @@ async fn load_local_model_by_id(
             reason: format!("tokenizer_repo missing for model {model_id}"),
         })?;
 
-    let model = LocalModel::load(&canonical.absolute_path, Some(&tokenizer_repo))
+    Ok((canonical.absolute_path, context_window, tokenizer_repo))
+}
+
+#[cfg(feature = "llm-cpu")]
+async fn load_local_model_from_metadata(
+    model_id: &str,
+    (path, context_window, tokenizer_repo): (std::path::PathBuf, Option<i64>, String),
+) -> Result<ActiveSession> {
+    let model = LocalModel::load(&path, Some(&tokenizer_repo))
         .await
         .map_err(|e| HolziError::ModelDownload {
             reason: format!("mistralrs load: {e}"),
@@ -692,8 +708,9 @@ async fn resolve_display_name(state: &State<'_, AppState>, model_id: &str) -> Op
 
 /// Drops the current session, if any. Idempotent.
 #[tauri::command]
-pub async fn unload_local_model(chat: State<'_, ChatState>) -> Result<()> {
+pub async fn unload_local_model(app: AppHandle, chat: State<'_, ChatState>) -> Result<()> {
     chat.cancel_preload_and_wait().await;
+    emit_model_load_status(&app, &chat);
     let _operation = chat.acquire_operation()?;
     let mut guard = chat.session.lock().map_err(|e| HolziError::CrdtInit {
         reason: format!("chat.session mutex poisoned: {e}"),
@@ -982,12 +999,31 @@ fn tool_specs(registry: &ToolRegistry) -> Vec<ToolSpec> {
 /// flag that their API may reject.
 pub fn model_supports_reasoning(model_id: &str) -> bool {
     let id = model_id.to_ascii_lowercase();
+    // Some published checkpoints use a family name that is otherwise
+    // reasoning-capable but explicitly disable thinking. Keep these exact
+    // model exceptions ahead of the family fallback below.
+    const EXACT_CAPABILITIES: &[(&str, bool)] = &[
+        ("qwen3-4b-instruct-2507", false),
+        ("qwen3-30b-a3b-instruct-2507", false),
+        ("claude-haiku-4-5", true),
+        ("claude-haiku-4-5-20251001", true),
+    ];
+    if let Some((_, supported)) = EXACT_CAPABILITIES
+        .iter()
+        .find(|(known_id, _)| id == *known_id)
+    {
+        return *supported;
+    }
+    if id.contains("qwen3") && id.contains("instruct-2507") {
+        return false;
+    }
     id.contains("qwen3")
         || id.contains("deepseek-r1")
         || id.contains("gpt-oss")
         || id.contains("claude-3-7")
         || id.contains("claude-sonnet-4")
         || id.contains("claude-opus-4")
+        || id.contains("claude-haiku-4-5")
 }
 
 /// Persists a user message, spawns a streaming generation, returns

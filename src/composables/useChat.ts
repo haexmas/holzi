@@ -357,11 +357,29 @@ export function useChat() {
   }
 
   /** Returns the current model-load state for the active Vault. */
-  async function modelLoadStatusAsync(): Promise<ModelLoadStatusPayload> {
+  async function modelLoadStatusAsync(): Promise<ModelLoadStatusPayload | null> {
     const status = await invoke<ModelLoadStatusPayload>('model_load_status')
+    const loadId = 'loadId' in status ? status.loadId : -1
+    if (latestVaultGeneration !== null && (
+      status.vaultGeneration < latestVaultGeneration
+      || (status.vaultGeneration === latestVaultGeneration && loadId < latestLoadId)
+    )) return null
     latestVaultGeneration = status.vaultGeneration
-    latestLoadId = 'loadId' in status ? status.loadId : -1
+    latestLoadId = loadId
     return status
+  }
+
+  /** Subscribes to authoritative model-load snapshots emitted by lifecycle commands. */
+  async function onModelLoadStatus(
+    handler: (e: ModelLoadStatusPayload) => void,
+  ): Promise<UnlistenFn> {
+    return await listen<ModelLoadStatusPayload>('model-load-status', (ev) => {
+      const payload = ev.payload
+      const loadId = 'loadId' in payload ? payload.loadId : -1
+      if (acceptsModelLoadEvent({ vaultGeneration: payload.vaultGeneration, loadId })) {
+        handler(payload)
+      }
+    })
   }
 
   /** Subscribes to structured model-load failures. */
@@ -393,6 +411,7 @@ export function useChat() {
     onToolPermissionRequest,
     onModelLoadProgress,
     modelLoadStatusAsync,
+    onModelLoadStatus,
     onModelLoadError,
   }
 }
