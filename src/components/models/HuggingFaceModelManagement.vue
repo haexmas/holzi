@@ -212,6 +212,13 @@ function onChooseOther() {
   activeTab.value = 'installed'
 }
 
+function onIntegrityDialogOpenChange(open: boolean) {
+  if (!open) {
+    integrityDialog.value = null
+    integrityActionError.value = null
+  }
+}
+
 function onFilePickerInstalled(_model: InstalledModel) {
   selectedRepo.value = null
   activeTab.value = 'installed'
@@ -383,7 +390,7 @@ onMounted(async () => {
       :actual-sha256="integrityDialog.actual"
       :busy="integrityBusy"
       :action-error="integrityActionError"
-      @update:open="if (!$event) integrityDialog = null"
+      @update:open="onIntegrityDialogOpenChange"
       @load-untrusted="onLoadUntrustedAsync"
       @repair-source="onRepairSourceAsync"
       @choose-other="onChooseOther"
