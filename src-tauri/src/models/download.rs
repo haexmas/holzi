@@ -98,6 +98,18 @@ where
 
     for attempt in 0..MAX_TRANSFER_ATTEMPTS {
         let is_final_attempt = attempt + 1 >= MAX_TRANSFER_ATTEMPTS;
+        if bytes_downloaded > 0 && entity_validator.is_none() {
+            // Without a validator the bytes on disk cannot be tied to the
+            // entity a retry will serve, so appending a range would risk
+            // silently splicing two different model revisions.
+            restart_from_zero(&mut file, &part_path, &mut bytes_downloaded).await?;
+            bytes_total = None;
+            on_progress(DownloadProgress {
+                bytes_downloaded,
+                bytes_total,
+            });
+            last_report = Instant::now();
+        }
         let requested_offset = bytes_downloaded;
         file.seek(SeekFrom::Start(requested_offset))
             .await
@@ -105,9 +117,10 @@ where
 
         let mut request = client.get(url).header(ACCEPT_ENCODING, "identity");
         if requested_offset > 0 {
-            request = request.header(RANGE, format!("bytes={requested_offset}-"));
             if let Some(validator) = entity_validator.clone() {
-                request = request.header(IF_RANGE, validator);
+                request = request
+                    .header(RANGE, format!("bytes={requested_offset}-"))
+                    .header(IF_RANGE, validator);
             }
         }
 
@@ -162,6 +175,39 @@ where
             last_report = Instant::now();
         }
 
+        let response_length = resp.content_length();
+        let announced_total = if range_was_honored {
+            let parsed_range = resp
+                .headers()
+                .get(CONTENT_RANGE)
+                .and_then(|value| value.to_str().ok())
+                .and_then(parse_content_range)
+                .and_then(|(start, end, total)| {
+                    let range_length = end.checked_sub(start)?.checked_add(1)?;
+                    let starts_at_requested_offset = start == requested_offset;
+                    let matches_known_total = bytes_total.map_or(true, |known| known == total);
+                    let matches_response_length =
+                        response_length.map_or(true, |length| length == range_length);
+                    (starts_at_requested_offset && matches_known_total && matches_response_length)
+                        .then_some(total)
+                });
+            let Some(total) = parsed_range else {
+                restart_from_zero(&mut file, &part_path, &mut bytes_downloaded).await?;
+                entity_validator = None;
+                bytes_total = None;
+                last_failure = Some(format!(
+                    "GET {url} returned invalid Content-Range for offset {requested_offset}"
+                ));
+                if is_final_attempt {
+                    break;
+                }
+                tokio::time::sleep(RETRY_BACKOFF * u32::from(attempt + 1)).await;
+                continue;
+            };
+            Some(total)
+        } else {
+            response_length
+        };
         if entity_validator.is_none() {
             entity_validator = resp
                 .headers()
@@ -169,18 +215,6 @@ where
                 .or_else(|| resp.headers().get(LAST_MODIFIED))
                 .cloned();
         }
-
-        let response_length = resp.content_length();
-        let announced_total = if range_was_honored {
-            resp.headers()
-                .get(CONTENT_RANGE)
-                .and_then(|value| value.to_str().ok())
-                .and_then(|value| value.rsplit_once('/'))
-                .and_then(|(_, total)| total.parse::<u64>().ok())
-                .or_else(|| response_length.map(|length| requested_offset + length))
-        } else {
-            response_length
-        };
         // A retry whose response omits both headers must not erase a total the
         // UI is already rendering a determinate bar from.
         bytes_total = announced_total.or(bytes_total);
@@ -212,8 +246,8 @@ where
         // A body can also end cleanly while short of the announced size — a
         // server may answer a Range request with fewer bytes than asked for.
         // Treat that exactly like a stream error: retry, never finalize.
-        let short_body = bytes_total.is_some_and(|total| bytes_downloaded < total);
-        if stream_error.is_none() && !short_body {
+        let body_size_matches = bytes_total.map_or(true, |total| bytes_downloaded == total);
+        if stream_error.is_none() && body_size_matches {
             completed = true;
             break;
         }
@@ -286,6 +320,27 @@ async fn restart_from_zero(
         .map_err(|e| download_err(format!("seek {}: {e}", part_path.display())))?;
     *bytes_downloaded = 0;
     Ok(())
+}
+
+/// Parses a byte-oriented `Content-Range` with a concrete total size.
+fn parse_content_range(value: &str) -> Option<(u64, u64, u64)> {
+    let mut parts = value.split_whitespace();
+    if parts.next()? != "bytes" {
+        return None;
+    }
+    let range_and_total = parts.next()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    let (range, total) = range_and_total.split_once('/')?;
+    let (start, end) = range.split_once('-')?;
+    let start = start.parse::<u64>().ok()?;
+    let end = end.parse::<u64>().ok()?;
+    let total = total.parse::<u64>().ok()?;
+    if start > end || end >= total {
+        return None;
+    }
+    Some((start, end, total))
 }
 
 /// Statuses a CDN returns while it is briefly unable to serve, as opposed
