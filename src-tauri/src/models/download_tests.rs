@@ -31,7 +31,9 @@ async fn resumes_after_a_truncated_response_body() {
             "first request must not ask for a range: {request_text}"
         );
         first
-            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\nConnection: close\r\n\r\n0123")
+            .write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\nETag: \"v1\"\r\nConnection: close\r\n\r\n0123",
+            )
             .expect("write truncated response");
         drop(first);
 
@@ -83,7 +85,9 @@ async fn keeps_resuming_when_a_body_ends_cleanly_but_short() {
         let (mut first, _) = listener.accept().expect("first request");
         read_request_head(&mut first);
         first
-            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\nConnection: close\r\n\r\n0123")
+            .write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\nETag: \"v1\"\r\nConnection: close\r\n\r\n0123",
+            )
             .expect("write truncated response");
         drop(first);
 
@@ -174,4 +178,109 @@ async fn does_not_retry_a_permanent_status() {
         !destination.exists(),
         "a failed download must not finalize a file"
     );
+}
+
+#[tokio::test]
+async fn restarts_from_zero_when_a_partial_response_has_no_validator() {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind test server");
+    let address = listener.local_addr().expect("test server address");
+    let server = thread::spawn(move || {
+        let (mut first, _) = listener.accept().expect("first request");
+        read_request_head(&mut first);
+        first
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\nConnection: close\r\n\r\n0123")
+            .expect("write unvalidated truncated response");
+        drop(first);
+
+        let (mut second, _) = listener.accept().expect("restart request");
+        let request_text = read_request_head(&mut second);
+        assert!(
+            !request_text.contains("range: bytes="),
+            "a partial response without a validator must restart from zero: {request_text}"
+        );
+        assert!(
+            !request_text.contains("if-range:"),
+            "a restart must not send If-Range: {request_text}"
+        );
+        second
+            .write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\nConnection: close\r\n\r\n0123456789",
+            )
+            .expect("write complete response");
+    });
+
+    let workspace = tempfile::tempdir().expect("tempdir");
+    let destination = workspace.path().join("model.gguf");
+    let result = download_to_file(
+        &format!("http://{address}/model.gguf"),
+        destination.clone(),
+        |_| {},
+    )
+    .await
+    .expect("download should restart without a validator");
+
+    assert_eq!(result.bytes_written, 10);
+    assert_eq!(
+        std::fs::read(destination).expect("downloaded file"),
+        b"0123456789"
+    );
+    server.join().expect("test server thread");
+}
+
+#[tokio::test]
+async fn restarts_when_a_range_response_has_invalid_content_range() {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind test server");
+    let address = listener.local_addr().expect("test server address");
+    let server = thread::spawn(move || {
+        let (mut first, _) = listener.accept().expect("first request");
+        read_request_head(&mut first);
+        first
+            .write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\nETag: \"v1\"\r\nConnection: close\r\n\r\n0123",
+            )
+            .expect("write truncated response");
+        drop(first);
+
+        let (mut second, _) = listener.accept().expect("range request");
+        let request_text = read_request_head(&mut second);
+        assert!(
+            request_text.contains("range: bytes=4-"),
+            "the validated partial file should be resumed: {request_text}"
+        );
+        second
+            .write_all(
+                b"HTTP/1.1 206 Partial Content\r\nContent-Length: 2\r\nConnection: close\r\n\r\n45",
+            )
+            .expect("write response without content range");
+        drop(second);
+
+        let (mut third, _) = listener.accept().expect("restart request");
+        let request_text = read_request_head(&mut third);
+        assert!(
+            !request_text.contains("range: bytes="),
+            "invalid range metadata must restart from zero: {request_text}"
+        );
+        third
+            .write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\nETag: \"v1\"\r\nConnection: close\r\n\r\n0123456789",
+            )
+            .expect("write complete response");
+    });
+
+    let workspace = tempfile::tempdir().expect("tempdir");
+    let destination = workspace.path().join("model.gguf");
+    let result = download_to_file(
+        &format!("http://{address}/model.gguf"),
+        destination.clone(),
+        |_| {},
+    )
+    .await
+    .expect("download should reject invalid range metadata");
+
+    assert_eq!(result.bytes_written, 10);
+    assert_eq!(
+        std::fs::read(destination).expect("downloaded file"),
+        b"0123456789"
+    );
+    server.join().expect("test server thread");
 }
