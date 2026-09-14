@@ -92,3 +92,10 @@
     color: var(--color-foreground);
   }
 }
+
+/* Disabled actions stay visually disabled through the native state and cursor,
+   without lowering text contrast together with the button background. */
+[data-slot="button"]:disabled {
+  opacity: 1;
+  cursor: not-allowed;
+}

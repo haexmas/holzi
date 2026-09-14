@@ -175,7 +175,8 @@ verständlich beschriftet in einer Reihe unterhalb der Textarea angeordnet sein.
 8. **Given** ein Control wird nur geöffnet und ohne Auswahl geschlossen,
    **Then** bleibt der bisherige Wert unverändert.
 9. **Then** müssen alle Controls Tastatur- und Screenreader-bedienbar sein und
-   einen zugänglichen Namen sowie ihren aktuellen Wert vermitteln.
+   einen zugänglichen Namen sowie ihren aktuellen Wert vermitteln. Auch
+   deaktivierte Buttons müssen lesbaren Text mit ausreichendem Kontrast zeigen.
 
 ### User Story 4 - Das Eingabefeld wächst mit mehrzeiligem Text (Priority: P1)
 
@@ -347,7 +348,9 @@ sein.
   an die verfügbare Breite anpassen, sichtbar oberhalb der Reihe öffnen und darf
   nicht durch einen scrollenden Composer-Container abgeschnitten werden.
 - **FR-020**: Alle Controls MÜSSEN einen zugänglichen Namen, Tastaturbedienung
-  und eine Zustandsansage für Screenreader anbieten.
+  und eine Zustandsansage für Screenreader anbieten. Buttons dürfen auch im
+  deaktivierten Zustand nicht durch globale Transparenzregeln unleserlich
+  werden.
 - **FR-021**: Die bestehenden fachlichen Semantiken für Modellwahl, Effort,
   Freigabe, Abbruch und Tool-Loop DÜRFEN durch die neue Anordnung nicht
   verändert werden. Unterstützt das gewählte Modell Reasoning, wird es ohne
