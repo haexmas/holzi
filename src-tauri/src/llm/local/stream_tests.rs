@@ -17,10 +17,8 @@ fn emits_plain_content_immediately() {
 #[test]
 fn drops_a_tag_that_arrives_in_a_single_chunk() {
     let mut buffer = String::new();
-    let emitted = drain_reasoning_leak_buffer(
-        &mut buffer,
-        "<tool_call>{\"name\": \"echo\"}</tool_call>",
-    );
+    let emitted =
+        drain_reasoning_leak_buffer(&mut buffer, "<tool_call>{\"name\": \"echo\"}</tool_call>");
     assert_eq!(emitted, "");
     assert_eq!(buffer, "");
 }
@@ -56,7 +54,14 @@ fn drops_a_tag_split_across_many_chunks() {
     let mut buffer = String::new();
     let mut emitted = String::new();
     for piece in [
-        "Sure, ", "<tool", "_call>", "{\"name\":", " \"echo\"}", "</tool_", "call>", " done",
+        "Sure, ",
+        "<tool",
+        "_call>",
+        "{\"name\":",
+        " \"echo\"}",
+        "</tool_",
+        "call>",
+        " done",
     ] {
         emitted.push_str(&drain_reasoning_leak_buffer(&mut buffer, piece));
     }
@@ -81,13 +86,33 @@ fn holds_back_a_partial_open_tag_prefix() {
 }
 
 #[test]
+fn drops_a_confirmed_open_tag_at_stream_end() {
+    let mut buffer = String::from("<tool_call>{\"name\": \"echo\"");
+    assert_eq!(take_terminal_reasoning_leak_buffer(&mut buffer), None);
+    assert_eq!(buffer, "");
+}
+
+#[test]
+fn flushes_a_partial_open_tag_prefix_at_stream_end() {
+    let mut buffer = String::from("<tool_c");
+    assert_eq!(
+        take_terminal_reasoning_leak_buffer(&mut buffer),
+        Some(String::from("<tool_c"))
+    );
+    assert_eq!(buffer, "");
+}
+
+#[test]
 fn text_that_only_resembles_the_prefix_is_eventually_emitted() {
     // "<tool_c" looked like the start of a tag, but the next chunk takes a
     // different turn — never becomes `<tool_call>`, so it must not be
     // swallowed.
     let mut buffer = String::new();
     let mut emitted = String::new();
-    emitted.push_str(&drain_reasoning_leak_buffer(&mut buffer, "one moment <tool_c"));
+    emitted.push_str(&drain_reasoning_leak_buffer(
+        &mut buffer,
+        "one moment <tool_c",
+    ));
     emitted.push_str(&drain_reasoning_leak_buffer(&mut buffer, "hain of thought"));
     assert_eq!(emitted, "one moment <tool_chain of thought");
     assert_eq!(buffer, "");

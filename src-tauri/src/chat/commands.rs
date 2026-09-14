@@ -321,7 +321,7 @@ fn strip_leaked_tool_call_markup(text: &str) -> String {
         };
     }
     result.push_str(rest);
-    result.trim().to_string()
+    result
 }
 
 /// Payload for `chat-turn-complete` (contracts/tauri-commands.md). Fires
@@ -2060,7 +2060,7 @@ pub async fn run_turn(
             // otherwise be persisted and shown as if it were the model's
             // own reply.
             let assembled = strip_leaked_tool_call_markup(&assembled);
-            if !assembled.is_empty() {
+            if !assembled.trim().is_empty() {
                 let interim_id = Uuid::new_v4();
                 let msg = ChatMessage {
                     role: MessageRole::Assistant,

@@ -109,6 +109,17 @@ fn drain_reasoning_leak_buffer(buffer: &mut String, content: &str) -> String {
     }
 }
 
+/// Discards a confirmed but incomplete leaked tool-call block at stream end,
+/// while returning an incomplete marker-like prefix as ordinary prose.
+fn take_terminal_reasoning_leak_buffer(buffer: &mut String) -> Option<String> {
+    if buffer.is_empty() || buffer.starts_with(REASONING_LEAK_OPEN) {
+        buffer.clear();
+        None
+    } else {
+        Some(std::mem::take(buffer))
+    }
+}
+
 /// Longest suffix of `text` that is also a prefix of `marker` — how many
 /// trailing bytes of `text` could still grow into `marker` if the next
 /// chunk continues it.
@@ -299,9 +310,10 @@ impl LocalModel {
                         // Whatever the leak buffer is still holding back
                         // never turned into (the rest of) a tag — flush it
                         // as ordinary content before anything else.
-                        if !leak_buffer.is_empty() {
+                        if let Some(content) = take_terminal_reasoning_leak_buffer(&mut leak_buffer)
+                        {
                             let _ = tx.send(Ok(StreamChunk::Delta {
-                                content: std::mem::take(&mut leak_buffer),
+                                content,
                                 reasoning: None,
                             }));
                         }
@@ -357,10 +369,10 @@ impl LocalModel {
                 // that closes without a final frame (see below) must not
                 // silently drop tool calls — or held-back leak-buffer
                 // content — it already accumulated.
-                if !leak_buffer.is_empty() {
+                if let Some(content) = take_terminal_reasoning_leak_buffer(&mut leak_buffer) {
                     delta_emitted = true;
                     let _ = tx.send(Ok(StreamChunk::Delta {
-                        content: std::mem::take(&mut leak_buffer),
+                        content,
                         reasoning: None,
                     }));
                 }
