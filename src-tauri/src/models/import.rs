@@ -69,7 +69,11 @@ pub fn cleanup_staging_in_dir(models_root: &Path) -> Result<usize> {
             let Some(filename) = entry.file_name().to_str().map(str::to_owned) else {
                 continue;
             };
-            if file_type.is_file() && filename.ends_with(".tmp") {
+            if file_type.is_file()
+                && (filename.ends_with(".tmp")
+                    || filename.ends_with(".staging")
+                    || filename.ends_with(".staging.part"))
+            {
                 fs::remove_file(entry.path()).map_err(HolziError::from)?;
                 removed += 1;
             }

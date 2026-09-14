@@ -54,7 +54,8 @@ use haex_crdt::{MigrationName, StaticMigrationSource};
 /// - 5: `0013_chat_messages_add_idempotency_key` added a column to
 ///   `chat_messages`.
 /// - 6: `0014_chat_messages_tool_columns` added columns to `chat_messages`.
-pub const HOLZI_TRIGGER_VERSION: i32 = 6;
+/// - 7: `0015_models_add_huggingface_source` added columns to `models`.
+pub const HOLZI_TRIGGER_VERSION: i32 = 7;
 
 /// Returns the frozen holzi migration set at the pinned haex-crdt revision.
 pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
@@ -286,6 +287,40 @@ pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
          ALTER TABLE chat_messages ADD COLUMN tool_is_error INTEGER;\n\
          --> statement-breakpoint\n\
          ALTER TABLE chat_messages ADD COLUMN tool_source TEXT;"
+            .to_string(),
+    );
+
+    // Free HuggingFace model discovery (spec 005): additive source and
+    // integrity columns on the shared `models` row. `hf_revision` is the
+    // commit SHA resolved and used for the install; `hf_revision_ref` is
+    // the optional mutable branch/tag tracked for later update checks —
+    // both NULL for catalog/imported/provider rows. `file_sha256` is the
+    // full-file hash written only after a successful atomic publish;
+    // `load_model` recomputes and compares it before every local runtime
+    // load (research.md Entscheidung 6). `integrity_status` defaults to
+    // `unknown` for every pre-existing row — they predate hashing and have
+    // no `file_sha256` to verify against until their next
+    // download/update/import. `source_kind` defaults to `provider`; the
+    // existing `backfill_tokenizer_repo` idiom in `list_installed_models`
+    // gets a `backfill_source_kind` sibling that reclassifies local-provider
+    // rows into `catalog`/`imported` from the compiled catalog id list,
+    // since a SQL-only migration cannot see that list. Bumps
+    // HOLZI_TRIGGER_VERSION to 7.
+    m.insert(
+        MigrationName::from("0015_models_add_huggingface_source"),
+        "ALTER TABLE models ADD COLUMN hf_repo TEXT;\n\
+         --> statement-breakpoint\n\
+         ALTER TABLE models ADD COLUMN hf_filename TEXT;\n\
+         --> statement-breakpoint\n\
+         ALTER TABLE models ADD COLUMN hf_revision TEXT;\n\
+         --> statement-breakpoint\n\
+         ALTER TABLE models ADD COLUMN hf_revision_ref TEXT;\n\
+         --> statement-breakpoint\n\
+         ALTER TABLE models ADD COLUMN file_sha256 TEXT;\n\
+         --> statement-breakpoint\n\
+         ALTER TABLE models ADD COLUMN integrity_status TEXT NOT NULL DEFAULT 'unknown';\n\
+         --> statement-breakpoint\n\
+         ALTER TABLE models ADD COLUMN source_kind TEXT NOT NULL DEFAULT 'provider';"
             .to_string(),
     );
 

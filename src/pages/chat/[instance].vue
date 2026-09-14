@@ -21,6 +21,7 @@ import {
   type TurnCompleteEvent,
 } from '~/composables/useChat'
 import { useModels, type InstalledModel } from '~/composables/useModels'
+import { hfErrorKey } from '~/composables/useHuggingFace'
 import { useCatalog, type CatalogEntryWithFit } from '~/composables/useCatalog'
 import {
   useProviders,
@@ -126,6 +127,16 @@ const loadingPhase = ref<ModelLoadPhase | null>(null)
 const loadingModelName = ref<string>('')
 const loadingProviderName = ref<string | null>(null)
 const loadErrorModelId = ref<string | null>(null)
+
+interface IntegrityDialogState {
+  modelId: string
+  errorKind: 'ModelIntegrityMismatch' | 'ModelIntegrityUnknown' | 'ModelIntegrityError'
+  expected: string | null
+  actual: string | null
+}
+const integrityDialog = ref<IntegrityDialogState | null>(null)
+const integrityBusy = ref(false)
+const integrityActionError = ref<string | null>(null)
 
 const activeMessages = computed<Message[]>(() => {
   if (!activeThreadId.value) return []
@@ -241,13 +252,90 @@ async function loadModel(id: string) {
     activeModel.value = await chat.loadModelAsync(id)
   }
   catch (e: unknown) {
-    lastError.value = errString(e)
+    if (!openIntegrityDialog(id, e)) {
+      lastError.value = errString(e)
+    }
     loadingPhase.value = null
     activeModel.value = null
   }
   finally {
     busy.value = false
   }
+}
+
+/**
+ * Detects the three structured integrity error kinds `load_model` can
+ * return (spec 005 §"load_model und lokale Integritätsprüfung") and opens
+ * the decision dialog instead of showing a plain error string. Returns
+ * `false` for every other error so the caller falls back to `errString`.
+ */
+function openIntegrityDialog(modelId: string, e: unknown): boolean {
+  const err = e as { kind?: string, expectedSha256?: string | null, actualSha256?: string | null }
+  const kind = err.kind
+  if (kind !== 'ModelIntegrityMismatch' && kind !== 'ModelIntegrityUnknown' && kind !== 'ModelIntegrityError') {
+    return false
+  }
+  integrityDialog.value = {
+    modelId,
+    errorKind: kind,
+    expected: err.expectedSha256 ?? null,
+    actual: err.actualSha256 ?? null,
+  }
+  return true
+}
+
+/** "Trotzdem als unsicher laden" — bypasses the hash check for this load only. */
+async function onIntegrityLoadUntrusted() {
+  if (!integrityDialog.value) return
+  integrityBusy.value = true
+  integrityActionError.value = null
+  try {
+    activeModel.value = await chat.loadModelWithIntegrityOverrideAsync(integrityDialog.value.modelId)
+    integrityDialog.value = null
+    await refreshInstalledAndCatalog()
+  }
+  catch (e) {
+    integrityActionError.value = errString(e)
+  }
+  finally {
+    integrityBusy.value = false
+  }
+}
+
+/** "Erneut herunterladen / neu importieren" — re-installs from the model's stored HF source. */
+async function onIntegrityRepairSource() {
+  const dialog = integrityDialog.value
+  if (!dialog) return
+  const model = installedModels.value.find((m) => m.id === dialog.modelId)
+  integrityBusy.value = true
+  integrityActionError.value = null
+  try {
+    if (model?.sourceKind === 'huggingface' && model.hfRepo && model.hfFilename) {
+      await models.downloadFromHfAsync({
+        repoId: model.hfRepo,
+        filename: model.hfFilename,
+        revision: model.hfRevisionRef ?? undefined,
+        name: model.name,
+        contextWindow: model.contextWindow,
+      })
+      integrityDialog.value = null
+      await refreshInstalledAndCatalog()
+    }
+    else {
+      integrityActionError.value = t('models.integrityDialog.actionFailed')
+    }
+  }
+  catch (e) {
+    integrityActionError.value = errString(e)
+  }
+  finally {
+    integrityBusy.value = false
+  }
+}
+
+/** "Anderes Modell auswählen" — just closes the dialog; the picker is already visible. */
+function onIntegrityChooseOther() {
+  integrityDialog.value = null
 }
 
 /** Downloads a catalog model, refreshes the lists, and loads the result. */
@@ -457,12 +545,19 @@ async function lock() {
 }
 
 /** Converts backend and JavaScript failures into displayable text. */
+const HF_ERROR_KINDS = new Set([
+  'InvalidInput', 'Network', 'Timeout', 'HttpStatus', 'RateLimited',
+  'UnsupportedFormat', 'TokenizerRequired', 'HardwareConfirmationRequired',
+  'ModelRegistrationFailed', 'ModelNotFound',
+])
+
 function errString(e: unknown): string {
   if (typeof e === 'string') return e
   if (e && typeof e === 'object' && 'kind' in e) {
     const kind = (e as { kind: unknown }).kind
     if (kind === 'InvalidIdempotencyKey') return t('errors.invalidIdempotencyKey')
     if (kind === 'IdempotencyKeyConflict') return t('errors.idempotencyKeyConflict')
+    if (typeof kind === 'string' && HF_ERROR_KINDS.has(kind)) return t(hfErrorKey(e))
     return JSON.stringify(e)
   }
   return String(e)
@@ -1215,5 +1310,19 @@ onBeforeUnmount(() => {
         </form>
       </div>
     </section>
+
+    <ModelsModelIntegrityDialog
+      v-if="integrityDialog"
+      :open="integrityDialog !== null"
+      :error-kind="integrityDialog.errorKind"
+      :expected-sha256="integrityDialog.expected"
+      :actual-sha256="integrityDialog.actual"
+      :busy="integrityBusy"
+      :action-error="integrityActionError"
+      @update:open="if (!$event) integrityDialog = null"
+      @load-untrusted="onIntegrityLoadUntrusted"
+      @repair-source="onIntegrityRepairSource"
+      @choose-other="onIntegrityChooseOther"
+    />
   </main>
 </template>

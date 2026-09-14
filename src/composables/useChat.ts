@@ -265,6 +265,17 @@ export function useChat() {
     return await invoke<LoadedModelInfo>('load_model', { modelId })
   }
 
+  /**
+   * Explicit, confirmation-gated bypass of the pre-load integrity check
+   * (spec 005 §"load_model und lokale Integritätsprüfung") — the
+   * `load_untrusted` action of the integrity dialog. Marks the model
+   * `untrusted` and loads the file currently on disk as-is; never touches
+   * the expected `fileSha256`.
+   */
+  async function loadModelWithIntegrityOverrideAsync(modelId: string): Promise<LoadedModelInfo> {
+    return await invoke<LoadedModelInfo>('load_model_with_integrity_override', { modelId })
+  }
+
   /** Unloads the model currently held by the chat session. */
   async function unloadModelAsync(): Promise<void> {
     return await invoke<void>('unload_local_model')
@@ -399,6 +410,7 @@ export function useChat() {
     abortAsync,
     respondToolPermissionAsync,
     loadModelAsync,
+    loadModelWithIntegrityOverrideAsync,
     unloadModelAsync,
     activeModelInfoAsync,
     onToken,

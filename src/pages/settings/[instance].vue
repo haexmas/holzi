@@ -71,6 +71,10 @@ onMounted(reloadDeviceInfoAsync)
         v-if="deviceInfo"
         :device-uuid="deviceInfo.vaultDeviceUuid"
       />
+
+      <hr class="border-neutral-200">
+
+      <ModelsHuggingFaceModelManagement />
     </div>
   </main>
 </template>

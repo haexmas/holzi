@@ -17,7 +17,7 @@ use crate::adapters::{AdapterError, ProviderAdapter, ProviderModel};
 use crate::error::{HolziError, Result};
 use crate::state::AppState;
 use crate::state_utils::active_database;
-use crate::storage::models::{self as models_store, ModelRow};
+use crate::storage::models::{self as models_store, IntegrityStatus, ModelRow, SourceKind};
 use crate::storage::providers::{self as storage, Provider, ProviderKind};
 
 #[derive(Debug, Deserialize)]
@@ -431,6 +431,13 @@ fn compose_model_row(provider_id: Uuid, fetched_at: i64, m: ProviderModel) -> Mo
         // API providers do not need a local tokenizer — the vendor's
         // server-side tokenizer handles that.
         tokenizer_repo: None,
+        hf_repo: None,
+        hf_filename: None,
+        hf_revision: None,
+        hf_revision_ref: None,
+        file_sha256: None,
+        integrity_status: IntegrityStatus::Unknown,
+        source_kind: SourceKind::Provider,
     }
 }
 

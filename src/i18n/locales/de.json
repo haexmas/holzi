@@ -205,6 +205,109 @@
       "empty": "Es sind noch keine Modelle installiert oder Anbieter konfiguriert."
     }
   },
+  "models": {
+    "management": {
+      "title": "Modelle verwalten",
+      "description": "Katalog, freie Suche und installierte Modelle an einem Ort — unabhängig vom Onboarding-Status.",
+      "tabs": {
+        "catalog": "Katalog",
+        "search": "Hugging Face durchsuchen",
+        "installed": "Installierte Modelle"
+      }
+    },
+    "search": {
+      "title": "Modell von Hugging Face suchen",
+      "placeholder": "z. B. llama gguf",
+      "submit": "Suchen",
+      "loading": "Suche läuft …",
+      "empty": "Keine Treffer.",
+      "tooShort": "Bitte mindestens 2 Zeichen eingeben.",
+      "error": "Suche fehlgeschlagen.",
+      "retry": "Erneut versuchen",
+      "offline": "Keine Verbindung zu Hugging Face — vorherige Treffer bleiben sichtbar."
+    },
+    "result": {
+      "author": "Autor",
+      "downloads": "Downloads",
+      "licenseUnknown": "Lizenz nicht angegeben",
+      "catalogMatch": "Bereits im Katalog",
+      "filesCount": "{count} GGUF-Datei | {count} GGUF-Dateien",
+      "select": "Auswählen",
+      "noGgufFiles": "Keine installierbaren GGUF-Dateien in diesem Repository."
+    },
+    "filePicker": {
+      "title": "Datei auswählen",
+      "size": "Größe",
+      "sizeUnknown": "unbekannt",
+      "quantization": "Quantisierung",
+      "quantizationUnknown": "unbekannt",
+      "contextWindow": "Kontextfenster",
+      "contextWindowUnknown": "unbekannt",
+      "fit": {
+        "fits": "Passt",
+        "tight": "Knapp",
+        "too_big": "Zu groß",
+        "unknown": "Unbekannt"
+      },
+      "tooBigWarning": "Diese Datei überschreitet den verfügbaren Speicher voraussichtlich deutlich.",
+      "tooBigConfirm": "Trotzdem installieren",
+      "tokenizerRequired": "Tokenizer-Repository erforderlich",
+      "tokenizerRepoLabel": "Tokenizer-Repository",
+      "tokenizerRepoPlaceholder": "owner/repo",
+      "tokenizerHint": "Für diese Datei konnte kein sicheres Tokenizer-Repository ermittelt werden. Bitte manuell angeben.",
+      "revision": "Commit",
+      "revisionRef": "Verfolgter Branch/Tag",
+      "install": "Installieren",
+      "installing": "Wird installiert …",
+      "downloadProgress": "{done} von {total}",
+      "installFailed": "Installation fehlgeschlagen."
+    },
+    "installed": {
+      "title": "Installierte Modelle",
+      "empty": "Noch keine Modelle installiert.",
+      "source": {
+        "catalog": "Katalog",
+        "huggingface": "Hugging Face",
+        "imported": "Import",
+        "provider": "Anbieter"
+      },
+      "integrity": {
+        "verified": "Geprüft",
+        "untrusted": "Unsicher",
+        "unknown": "Ungeprüft"
+      },
+      "delete": "Entfernen",
+      "deleteConfirm": "Dieses Modell wirklich entfernen? Nur die lokale Datei wird gelöscht.",
+      "deleteFailed": "Entfernen fehlgeschlagen.",
+      "load": "Laden",
+      "active": "Aktiv",
+      "catalogLink": "Katalogeintrag anzeigen"
+    },
+    "update": {
+      "checking": "Prüfe auf Updates …",
+      "checkNow": "Auf Updates prüfen",
+      "available": "Update verfügbar",
+      "install": "Update installieren",
+      "installing": "Update wird installiert …",
+      "upToDate": "Aktuell",
+      "notTrackable": "Direkt gepinnt — kein automatischer Update-Check möglich.",
+      "error": "Update-Prüfung fehlgeschlagen.",
+      "oldRevision": "Bisher",
+      "newRevision": "Neu"
+    },
+    "integrityDialog": {
+      "title": "Integritätsprüfung fehlgeschlagen",
+      "mismatchDescription": "Die lokale Datei stimmt nicht mit dem erwarteten Hash überein. Sie könnte ausgetauscht oder beschädigt worden sein.",
+      "unknownDescription": "Für dieses Modell ist kein erwarteter Hash gespeichert.",
+      "errorDescription": "Die Datei konnte nicht geprüft werden.",
+      "expected": "Erwartet",
+      "actual": "Gefunden",
+      "loadUntrusted": "Trotzdem als unsicher laden",
+      "repairSource": "Erneut herunterladen / neu importieren",
+      "chooseOther": "Anderes Modell auswählen",
+      "actionFailed": "Aktion fehlgeschlagen."
+    }
+  },
   "errors": {
     "openFailed": "Öffnen fehlgeschlagen",
     "nameConflict": "Eine Instanz mit diesem Namen existiert bereits",
@@ -217,6 +320,19 @@
     "prefLoadFailed": "Standard-Modell konnte nicht geladen werden",
     "modelListFailed": "Modell-Liste konnte nicht geladen werden",
     "invalidIdempotencyKey": "Der Sendevorgang ist ungültig.",
-    "idempotencyKeyConflict": "Dieser Sendevorgang wurde bereits mit anderen Daten verwendet."
+    "idempotencyKeyConflict": "Dieser Sendevorgang wurde bereits mit anderen Daten verwendet.",
+    "hf": {
+      "invalidInput": "Ungültige Eingabe.",
+      "network": "Netzwerkfehler — bitte Verbindung prüfen.",
+      "timeout": "Zeitüberschreitung bei der Anfrage.",
+      "httpStatus": "Hugging Face antwortete mit einem Fehler.",
+      "rateLimited": "Zu viele Anfragen — bitte kurz warten und erneut versuchen.",
+      "unsupportedFormat": "Diese Datei ist kein installierbares GGUF.",
+      "tokenizerRequired": "Ein Tokenizer-Repository wird benötigt.",
+      "hardwareConfirmationRequired": "Diese Datei benötigt wegen ihrer Größe eine ausdrückliche Bestätigung.",
+      "modelRegistrationFailed": "Die Installation konnte nicht abgeschlossen werden.",
+      "modelNotFound": "Modell wurde nicht gefunden.",
+      "generic": "Unbekannter Fehler."
+    }
   }
 }
