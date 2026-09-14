@@ -581,6 +581,11 @@ function humanBytes(n: number | null): string {
   return (n / kb).toFixed(0) + ' KB'
 }
 
+function downloadProgressPercent(modelId: string): number | null {
+  if (downloadingId.value !== modelId || downloadTotalBytes.value === null || downloadTotalBytes.value <= 0) return null
+  return Math.min(100, Math.max(0, Math.round((downloadProgressBytes.value / downloadTotalBytes.value) * 100)))
+}
+
 /** Maps a hardware-fit verdict to its localized display label. */
 function fitLabel(f: CatalogEntryWithFit['fit']): string {
   return t(`chat.fit.${f}`)
@@ -1129,9 +1134,20 @@ onBeforeUnmount(() => {
           <div
             v-for="e in catalogEntries"
             :key="e.id"
-            class="border border-border rounded p-3 flex items-center justify-between gap-4"
+            class="relative overflow-hidden border border-border rounded p-3 flex items-center justify-between gap-4"
           >
-            <div class="flex-1 min-w-0">
+            <div
+              v-if="downloadingId === e.id"
+              class="pointer-events-none absolute inset-y-0 left-0 bg-blue-100/70 transition-[width] duration-150"
+              :class="downloadProgressPercent(e.id) === null ? 'animate-pulse' : ''"
+              :style="{ width: `${downloadProgressPercent(e.id) ?? 35}%` }"
+              role="progressbar"
+              :aria-valuenow="downloadProgressPercent(e.id) ?? undefined"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              :aria-label="`${humanBytes(downloadProgressBytes)} / ${humanBytes(downloadTotalBytes)}`"
+            />
+            <div class="relative z-10 flex-1 min-w-0">
               <div class="font-medium text-sm">
                 {{ e.name }}
               </div>
@@ -1142,18 +1158,20 @@ onBeforeUnmount(() => {
                 {{ t('chat.catalog.meta', { size: humanBytes(e.approx_size_bytes), context: e.context_window.toLocaleString(), license: e.license, fit: fitLabel(e.fit) }) }}
               </div>
             </div>
-            <UiButton
-              size="sm"
-              :disabled="downloadingId !== null"
-              @click="downloadCatalogEntry(e)"
-            >
-              <template v-if="downloadingId === e.id">
-                {{ humanBytes(downloadProgressBytes) }} / {{ humanBytes(downloadTotalBytes) }}
-              </template>
-              <template v-else>
-                {{ t('chat.download') }}
-              </template>
-            </UiButton>
+            <div class="relative z-10">
+              <UiButton
+                size="sm"
+                :disabled="downloadingId !== null"
+                @click="downloadCatalogEntry(e)"
+              >
+                <template v-if="downloadingId === e.id">
+                  {{ humanBytes(downloadProgressBytes) }} / {{ humanBytes(downloadTotalBytes) }}
+                </template>
+                <template v-else>
+                  {{ t('chat.download') }}
+                </template>
+              </UiButton>
+            </div>
           </div>
         </div>
       </div>
