@@ -13,6 +13,6 @@
     }
   ],
   "identity": "com.github.haexmas.holzi",
-  "spaex_min_version": ">=4.0.0",
+  "spaex_min_version": ">=4.2.0",
   "spaex_version": "4"
 }
