@@ -48,7 +48,7 @@ Konkrete installierbare Datei innerhalb eines Repositories.
 | `contextWindow` | `number` | ja | Nur wenn belastbar aus Metadaten ableitbar. |
 | `tokenizerRepo` | `string` | ja | Sicher ermitteltes Tokenizer-Repository. |
 | `tokenizerRequired` | `boolean` | nein | `true`, wenn Nutzerangabe vor Installation nötig ist. |
-| `fit` | `fits \\| tight \\| too_big \\| unknown` | nein | Bestehender Hardware-Fit-Klassifikator. |
+| `fit` | `fits \| tight \| too_big \| unknown` | nein | Bestehender Hardware-Fit-Klassifikator. |
 | `catalogMatch` | `boolean` | nein | Exakter Repository-/Dateiname-Treffer eines Katalogeintrags. |
 | `catalogEntryId` | `string` | ja | Verlinkbarer Katalogeintrag bei `catalogMatch`. |
 | `metadataProvenance` | `object` | nein | Herkunft von Quantisierung/Kontext: `hub_metadata`, `filename_heuristic`, `gguf_header` oder `unknown`. |
@@ -106,9 +106,9 @@ Nicht persistierter Status der Update-Prüfung für ein installiertes HF-Modell.
 
 | Feld | Typ | Nullable | Beschreibung |
 |---|---|---:|---|
-| `modelId` | `string` | nein | Deterministische lokale Modell-ID. |
+| `modelId` | `string` | nein | Deterministische, kollisionsresistente lokale Modell-ID aus Repository-ID und Dateiname. |
 | `repoId` | `string` | nein | Öffentliches HF-Repository. |
-| `revisionRef` | `string` | nein | Geprüfter Branch oder Tag. |
+| `revisionRef` | `string` | nein | Geprüfter Branch oder Tag; Statusobjekte existieren nur für Modelle mit gespeichertem Upstream-Ref. |
 | `installedRevision` | `string` | nein | Persistierte Commit-SHA. |
 | `latestRevision` | `string` | ja | Aktuelle Commit-SHA, falls erfolgreich ermittelt. |
 | `updateAvailable` | `boolean` | nein | `true`, wenn `latestRevision` von `installedRevision` abweicht. |
@@ -130,15 +130,31 @@ additive, CRDT-kompatible Migration ergänzt:
 | `hf_revision_ref` | `TEXT` | ja | Optionaler Branch/Tag für spätere Update-Prüfungen. |
 | `file_sha256` | `TEXT` | ja | Erwarteter SHA-256-Hash der vollständigen lokalen Modell-Datei, exakt 64 Hex-Zeichen. |
 | `integrity_status` | `TEXT` | nein/Default | `verified`, `untrusted` oder `unknown`; ein bewusst akzeptierter Mismatch wird als `untrusted` markiert. |
-| `source_kind` | `TEXT` | nein/Default | `catalog`, `huggingface`, `imported` oder bestehender Provider-Kontext. |
+| `source_kind` | `TEXT` | nein/Default | `catalog`, `huggingface`, `imported` oder `provider`; bestehende Provider-Zeilen werden mit dem Literal `provider` zurückgefüllt. |
 
 `tokenizer_repo` und `context_window` werden weiterverwendet. Die bestehende
 `models.id` bleibt die Referenz für Preferences, Chat und lokalen Dateispeicher.
+Für freie HF-Modelle wird sie als `hf-` plus kleingeschriebener Hex-SHA-256-
+Digest der versionierten, längenpräfixierten UTF-8-Kodierung von `(repoId,
+filename)` gebildet. Die kanonische Kodierung besteht aus dem festen Präfix
+`holzi-hf-model-id-v1`, je einem Big-Endian-`u32`-Byte-Längenpräfix und den
+jeweiligen UTF-8-Bytes von `repoId` und `filename`. Bei bereits vorhandener ID muss zusätzlich das
+persistierte Repository-/Dateiname-Paar übereinstimmen; andernfalls wird der
+Download als Konflikt abgelehnt.
+
+Die additive Migration setzt für alle bereits vorhandenen Modellzeilen ohne
+`source_kind`, die zu einem bestehenden API-/Provider-Modell gehören,
+`source_kind = 'provider'`. Neue Provider-Schreibpfade verwenden denselben
+Default explizit; Katalog-, HF- und Import-Schreibpfade setzen jeweils
+`catalog`, `huggingface` bzw. `imported`. Listing und Persistenz geben den
+gespeicherten Wert unverändert weiter und dürfen Provider-Zeilen nicht als
+`catalog` oder `huggingface` klassifizieren.
 
 Persistenzregeln:
 
-- Ein erfolgreicher Download schreibt Metadaten erst nach erfolgreicher
-  atomarer Dateiveröffentlichung.
+- Ein erfolgreicher Download veröffentlicht Datei und Metadaten als eine
+  journalierte, failure-atomare Transaktion; kein Zwischenzustand mit nur
+  neuer Datei oder nur neuen Metadaten darf nach außen sichtbar bleiben.
 - Ein fehlgeschlagener Download darf keine neue `models`-Zeile hinterlassen.
 - Ein Katalogeintrag bleibt `source_kind = catalog` und erhält seine bekannten
   Katalogfelder.
@@ -152,6 +168,10 @@ Persistenzregeln:
   `updateAvailable` werden nicht als neue lokale Modelldatei persistiert.
 - Ein Update verwendet dieselbe `models.id`; die alte Datei und SHA bleiben bis
   zum erfolgreichen atomaren Austausch gültig.
+- Der Updatepfad schreibt vor `upsert_model` ein Recovery-Journal mit Backup
+  und räumt es erst nach konsistenter Dateipublikation und Metadatenprüfung auf;
+  der Start bereinigt unvollständige Transaktionen durch Wiederherstellung des
+  alten oder Abschluss des vollständig neuen Datei-/Metadatenpaars.
 - Ein lokaler Load liest die kanonische Datei und `file_sha256` in derselben
   Ladeoperation; der berechnete Hash wird nicht aus Dateigröße, mtime oder
   Dateiname abgeleitet.

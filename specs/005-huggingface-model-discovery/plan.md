@@ -125,7 +125,12 @@ neue externe HTTP-Grenze (z. B. `search`, `details`, `normalize_files`) und ist
 kein Duplikat eines bestehenden Artefakts. Ein konkreter Rewrite-Call-Site ist
 `download_model_from_hf`: Der neue Settings-Flow ruft nach
 `preview_huggingface_install` denselben Command mit dem normalisierten
-`HuggingFaceInstallRequest` auf, statt einen zweiten Datei-Download zu starten.
+`HuggingFaceInstallRequest` auf. Das Backend mappt diese UI-Absicht vor dem
+Command-Aufruf in `DownloadFromHfArgs`, übernimmt die aus dem Preview
+abgeleitete `modelId` und löst die Revision über die Datenmodell-Konvertierung
+in eine konkrete Commit-SHA auf. So entsteht kein zweiter Datei-Download und
+die UI kann keine abweichende Modell-ID oder unaufgelöste Revision
+einschleusen.
 
 ## Umsetzungsphasen
 
