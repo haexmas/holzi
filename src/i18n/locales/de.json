@@ -224,7 +224,23 @@
       "tooShort": "Bitte mindestens 2 Zeichen eingeben.",
       "error": "Suche fehlgeschlagen.",
       "retry": "Erneut versuchen",
-      "offline": "Keine Verbindung zu Hugging Face — vorherige Treffer bleiben sichtbar."
+      "offline": "Keine Verbindung zu Hugging Face — vorherige Treffer bleiben sichtbar.",
+      "filters": {
+        "title": "Treffer filtern",
+        "all": "Alle",
+        "quantization": "Quantisierung",
+        "maxSize": "Maximale Dateigröße",
+        "maxSizeValue": "Bis {size} GB",
+        "fit": "Hardware-Passung",
+        "unknown": "Unbekannt",
+        "empty": "Kein Treffer passt zu den gewählten Filtern.",
+        "fitValues": {
+          "fits": "Passt",
+          "tight": "Knapp",
+          "too_big": "Zu groß",
+          "unknown": "Unbekannt"
+        }
+      }
     },
     "result": {
       "author": "Autor",
