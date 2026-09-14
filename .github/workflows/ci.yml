@@ -35,6 +35,9 @@ jobs:
       - name: Typecheck frontend
         run: corepack pnpm typecheck
 
+      - name: Lint frontend
+        run: corepack pnpm lint
+
       - name: Validate documentation
         run: python3 scripts/ci/check-docs.py
   rust:

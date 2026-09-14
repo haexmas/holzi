@@ -29,7 +29,7 @@ export function useDevice() {
   }
 
   async function updateDeviceAliasAsync(alias: string): Promise<void> {
-    await invoke<void>('update_device_alias', { args: { alias } })
+    await invoke('update_device_alias', { args: { alias } })
   }
 
   return { currentDeviceInfoAsync, updateDeviceAliasAsync }

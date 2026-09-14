@@ -10,9 +10,7 @@ export default defineNuxtConfig({
   // scaffolding, reka-ui config. Pinned by commit SHA so upstream
   // changes never surprise our build. Layer declares its peers; we
   // list them explicitly under `dependencies` below.
-  extends: [
-    'github:haex-space/haextension/packages/haex-ui#dfdf944',
-  ],
+  extends: ['github:haex-space/haextension/packages/haex-ui#dfdf944'],
   build: {
     transpile: ['reka-ui'],
   },
@@ -29,15 +27,12 @@ export default defineNuxtConfig({
   modules: [
     '@nuxtjs/i18n',
     '@nuxt/icon',
+    '@nuxt/eslint',
     '@pinia/nuxt',
     '@vueuse/nuxt',
   ],
-  components: [
-    { path: '~/components', pathPrefix: true },
-  ],
-  css: [
-    '~/assets/css/tailwind.css',
-  ],
+  components: [{ path: '~/components', pathPrefix: true }],
+  css: ['~/assets/css/tailwind.css'],
   vite: {
     plugins: [tailwindcss()],
     clearScreen: false,

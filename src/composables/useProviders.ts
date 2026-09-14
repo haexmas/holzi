@@ -64,16 +64,19 @@ export function useProviders() {
 
   /** Deletes a provider from the active instance. */
   async function deleteAsync(id: string): Promise<void> {
-    return await invoke<void>('delete_provider', { id })
+    await invoke('delete_provider', { id })
   }
 
   /** Re-fetches the given provider's model list and replaces its cache. */
   async function refreshModelsAsync(
     providerId: string,
   ): Promise<RefreshProviderModelsResult> {
-    return await invoke<RefreshProviderModelsResult>('refresh_provider_models', {
-      providerId,
-    })
+    return await invoke<RefreshProviderModelsResult>(
+      'refresh_provider_models',
+      {
+        providerId,
+      },
+    )
   }
 
   /** Reads the cached models for one provider. Does not trigger a fetch. */
@@ -81,5 +84,11 @@ export function useProviders() {
     return await invoke<ProviderModel[]>('list_provider_models', { providerId })
   }
 
-  return { listAsync, addAsync, deleteAsync, refreshModelsAsync, listModelsAsync }
+  return {
+    listAsync,
+    addAsync,
+    deleteAsync,
+    refreshModelsAsync,
+    listModelsAsync,
+  }
 }
