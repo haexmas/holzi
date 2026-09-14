@@ -63,18 +63,35 @@ pub fn cleanup_staging_in_dir(models_root: &Path) -> Result<usize> {
         if !slug_entry.file_type().map_err(HolziError::from)?.is_dir() {
             continue;
         }
+        // Collected first so the `.backup` decision below can see whether a
+        // finalized `.gguf` is present in this slug directory.
+        let mut files: Vec<(String, std::path::PathBuf)> = Vec::new();
         for entry in fs::read_dir(slug_entry.path()).map_err(HolziError::from)? {
             let entry = entry.map_err(HolziError::from)?;
-            let file_type = entry.file_type().map_err(HolziError::from)?;
+            if !entry.file_type().map_err(HolziError::from)?.is_file() {
+                continue;
+            }
             let Some(filename) = entry.file_name().to_str().map(str::to_owned) else {
                 continue;
             };
-            if file_type.is_file()
-                && (filename.ends_with(".tmp")
-                    || filename.ends_with(".staging")
-                    || filename.ends_with(".staging.part"))
-            {
-                fs::remove_file(entry.path()).map_err(HolziError::from)?;
+            files.push((filename, entry.path()));
+        }
+        let has_published_file = files
+            .iter()
+            .any(|(name, _)| name.to_ascii_lowercase().ends_with(".gguf"));
+
+        for (filename, path) in files {
+            let is_staging = filename.ends_with(".tmp")
+                || filename.ends_with(".staging")
+                || filename.ends_with(".staging.part");
+            // A `.backup` is the pre-update file `publish_staged_file` moved
+            // aside. Once a finalized `.gguf` exists the publication went
+            // through and the backup is dead weight (a full-size model file).
+            // Without one, the process died between the two renames and the
+            // backup is the only remaining copy — leave it for recovery.
+            let is_dead_backup = filename.ends_with(".backup") && has_published_file;
+            if is_staging || is_dead_backup {
+                fs::remove_file(&path).map_err(HolziError::from)?;
                 removed += 1;
             }
         }
