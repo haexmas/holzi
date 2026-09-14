@@ -11,17 +11,17 @@ calls before emitting `StreamChunk::ToolCalls`.
 .../agents-and-tools/tool-use/overview):
 
 - Request: a tool is `{"name", "description", "input_schema": {"type": "object", "properties": {...},
-  "required": [...]}}`.
+"required": [...]}}`.
 - `content_block_start` for a tool call: `{"type":"content_block_start","index":N,"content_block":
-  {"type":"tool_use","id":"toolu_01...","name":"...","input":{}}}` — `input` starts empty.
+{"type":"tool_use","id":"toolu_01...","name":"...","input":{}}}` — `input` starts empty.
 - `content_block_delta`: `{"type":"content_block_delta","index":N,"delta":{"type":"input_json_delta",
-  "partial_json":"..."}}` — field name is exactly `partial_json`; concatenate across deltas for one
+"partial_json":"..."}}` — field name is exactly `partial_json`; concatenate across deltas for one
   `index`, then `serde_json::from_str` once `content_block_stop` closes that index.
 - `message_delta` carries `stop_reason: "tool_use"` when the model stopped specifically to call a
   tool.
 - Round-trip: send back the prior assistant message unchanged (including its `tool_use` blocks),
   followed by a `user` message with `content: [{"type":"tool_result","tool_use_id":"...",
-  "content":"...","is_error":true}]` (`is_error` optional, omit when false).
+"content":"...","is_error":true}]` (`is_error` optional, omit when false).
 
 **Alternatives considered**: None — this is Anthropic's only tool-use wire format for the Messages
 API; no version negotiation needed.
@@ -35,16 +35,16 @@ falls back to 0.7.0 docs, and no `v0.8.1` git tag exists, so crates.io tarballs 
 reliable source):
 
 - `mistralrs_core::Tool { tp: ToolType, function: Function }`, `Function { description: Option<String>,
-  name: String, parameters: Option<HashMap<String, Value>> }` (JSON-Schema-shaped parameters).
+name: String, parameters: Option<HashMap<String, Value>> }` (JSON-Schema-shaped parameters).
 - `ToolChoice::{None, Auto, Tool(Tool)}`.
 - `RequestBuilder::set_tools(Vec<Tool>)`, `::set_tool_choice(ToolChoice)`,
   `::add_message_with_tool_call(role, content, Vec<ToolCallResponse>)`, `::add_tool_message(content,
-  tool_id)`.
+tool_id)`.
 - `Model::send_chat_request`/`stream_chat_request`: `ChatCompletionResponse.choices[0].message.
-  tool_calls: Option<Vec<ToolCallResponse>>`; the streamed `Delta` struct carries the same field, so
+tool_calls: Option<Vec<ToolCallResponse>>`; the streamed `Delta` struct carries the same field, so
   streaming tool calls are supported, not just the non-streaming path.
 - `ToolCallResponse { index, id, tp, function: CalledFunction { name, arguments } }` — `arguments` is
-  a JSON *string*, parsed with `serde_json::from_str` (matches how `ToolSpec`/`ToolCall` in
+  a JSON _string_, parsed with `serde_json::from_str` (matches how `ToolSpec`/`ToolCall` in
   `adapters/types.rs` are already planned to carry parsed `serde_json::Value`).
 
 **Rationale**: Confirmed end-to-end against mistralrs's own bundled `examples/advanced/tools/main.rs`.
@@ -52,7 +52,7 @@ This is a real Rust-API capability, not something only exposed through the HTTP 
 existing in-process `LocalAdapter` pattern (no sidecar) is preserved.
 
 **Caveat, carried into data-model.md and out of this feature's guaranteed scope**: whether a call
-actually results in a tool call depends on the *loaded model's* chat template and mistral.rs's
+actually results in a tool call depends on the _loaded model's_ chat template and mistral.rs's
 per-architecture tool-call parser (confirmed working for Llama 3.1/3.2, Hermes, Mistral
 function-calling variants). A model without tool-calling support simply never emits `tool_calls` —
 this is the mechanism by which "local models get tool support where the model supports it, and plain
@@ -81,10 +81,10 @@ research track (design doc §9).
 
 ## Summary of resolved Technical Context unknowns
 
-| Unknown from plan.md | Resolution |
-|---|---|
-| Anthropic tool-use wire format | §1 above — implement against the quoted JSON shapes |
+| Unknown from plan.md                 | Resolution                                                            |
+| ------------------------------------ | --------------------------------------------------------------------- |
+| Anthropic tool-use wire format       | §1 above — implement against the quoted JSON shapes                   |
 | mistralrs 0.8.1 tool-calling support | §2 above — native Rust API, `RequestBuilder`/`ChatCompletionResponse` |
-| MCP client dependency | §3 above — `rmcp` 3.3.0, pinned |
+| MCP client dependency                | §3 above — `rmcp` 3.3.0, pinned                                       |
 
 No unresolved `NEEDS CLARIFICATION` markers remain in `plan.md`'s Technical Context.

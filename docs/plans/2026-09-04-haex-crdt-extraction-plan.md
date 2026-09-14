@@ -96,7 +96,7 @@ Consumers implement it however they wish. `haex-vault` wraps its existing store-
 **Contract**:
 
 - The returned `Uuid` MUST be durable per physical device and stable across process restarts, OS reboots, and library upgrades within the same install. `uhlc::ID` uniqueness invariants depend on this, and `haex-crdt` persists HLC state (`haex_hlc_state`) keyed to this identity.
-- The provider MUST NOT return a freshly generated `Uuid` on each call. Consumers that don't yet have a persisted device UUID are responsible for minting and persisting one *before* handing a provider to `haex-crdt`.
+- The provider MUST NOT return a freshly generated `Uuid` on each call. Consumers that don't yet have a persisted device UUID are responsible for minting and persisting one _before_ handing a provider to `haex-crdt`.
 - `Store::open` records the `device_id` observed on first successful open in `haex_hlc_state`. On subsequent opens, if the supplied `DeviceIdProvider` returns a `Uuid` that differs from the recorded one, `Store::open` returns `Error::DeviceIdMismatch { expected, supplied }` rather than silently rewriting HLC state — mismatch is treated as a consumer bug or a moved-database scenario, and recovery is the consumer's decision.
 
 ### 4.2 `SignatureProvider`
@@ -186,25 +186,25 @@ pub type DirtyTablesCallback = Arc<dyn Fn(&[String]) + Send + Sync>;
 
 Working proposal; final paths decided at extraction time.
 
-| haex-vault path | haex-crdt path | Notes |
-| --- | --- | --- |
-| `src-tauri/src/database/mod.rs` (minus `#[tauri::command]`s) | `src/db/mod.rs` | Re-exports adjusted |
-| `src-tauri/src/database/core/*` | `src/db/core/*` | Whole subtree |
-| `src-tauri/src/database/vault_lock.rs` | `src/db/lock.rs` | `fs2`-based file lock |
-| `src-tauri/src/database/migrations/*` (minus Tauri loader) | `src/db/migrations/*` | Loader becomes trait consumer |
-| `src-tauri/src/database/connection_context.rs` | `src/db/connection_context.rs` | |
-| `src-tauri/src/database/row.rs`, `stats.rs`, `constants.rs`, `paths.rs`, `listing.rs`, `maintenance.rs`, `import_delete.rs`, `error.rs` | `src/db/*` | Direct move |
-| `src-tauri/src/crdt/hlc.rs` (minus AppHandle path) | `src/crdt/hlc.rs` | Uses `DeviceIdProvider` |
-| `src-tauri/src/crdt/trigger.rs` | `src/crdt/trigger.rs` | Direct move |
-| `src-tauri/src/crdt/scanner.rs` | `src/crdt/scanner.rs` | Direct move |
-| `src-tauri/src/crdt/cleanup.rs` | `src/crdt/cleanup.rs` | Direct move |
-| `src-tauri/src/crdt/transformer/*` | `src/crdt/transformer/*` | Direct move |
-| `src-tauri/src/crdt/insert_transformer.rs` | `src/crdt/insert_transformer.rs` | Direct move |
-| `src-tauri/src/crdt/commands/apply/*` (minus command shims) | `src/crdt/apply/*` | Rename from `commands/apply` |
-| `src-tauri/src/crdt/column_sig/*` | **stays in haex-vault** | Becomes `SignatureProvider` impl |
-| `src-tauri/src/crdt/registry_row_sig/*` | **stays in haex-vault** | Same |
-| Table name constants used by CRDT (`TABLE_CRDT_*`, `COL_CRDT_*`) | `src/db/constants.rs` | These name generic CRDT bookkeeping tables |
-| Vault-specific constants (`vault_settings_key`) | **stays in haex-vault** | |
+| haex-vault path                                                                                                                         | haex-crdt path                   | Notes                                      |
+| --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | ------------------------------------------ |
+| `src-tauri/src/database/mod.rs` (minus `#[tauri::command]`s)                                                                            | `src/db/mod.rs`                  | Re-exports adjusted                        |
+| `src-tauri/src/database/core/*`                                                                                                         | `src/db/core/*`                  | Whole subtree                              |
+| `src-tauri/src/database/vault_lock.rs`                                                                                                  | `src/db/lock.rs`                 | `fs2`-based file lock                      |
+| `src-tauri/src/database/migrations/*` (minus Tauri loader)                                                                              | `src/db/migrations/*`            | Loader becomes trait consumer              |
+| `src-tauri/src/database/connection_context.rs`                                                                                          | `src/db/connection_context.rs`   |                                            |
+| `src-tauri/src/database/row.rs`, `stats.rs`, `constants.rs`, `paths.rs`, `listing.rs`, `maintenance.rs`, `import_delete.rs`, `error.rs` | `src/db/*`                       | Direct move                                |
+| `src-tauri/src/crdt/hlc.rs` (minus AppHandle path)                                                                                      | `src/crdt/hlc.rs`                | Uses `DeviceIdProvider`                    |
+| `src-tauri/src/crdt/trigger.rs`                                                                                                         | `src/crdt/trigger.rs`            | Direct move                                |
+| `src-tauri/src/crdt/scanner.rs`                                                                                                         | `src/crdt/scanner.rs`            | Direct move                                |
+| `src-tauri/src/crdt/cleanup.rs`                                                                                                         | `src/crdt/cleanup.rs`            | Direct move                                |
+| `src-tauri/src/crdt/transformer/*`                                                                                                      | `src/crdt/transformer/*`         | Direct move                                |
+| `src-tauri/src/crdt/insert_transformer.rs`                                                                                              | `src/crdt/insert_transformer.rs` | Direct move                                |
+| `src-tauri/src/crdt/commands/apply/*` (minus command shims)                                                                             | `src/crdt/apply/*`               | Rename from `commands/apply`               |
+| `src-tauri/src/crdt/column_sig/*`                                                                                                       | **stays in haex-vault**          | Becomes `SignatureProvider` impl           |
+| `src-tauri/src/crdt/registry_row_sig/*`                                                                                                 | **stays in haex-vault**          | Same                                       |
+| Table name constants used by CRDT (`TABLE_CRDT_*`, `COL_CRDT_*`)                                                                        | `src/db/constants.rs`            | These name generic CRDT bookkeeping tables |
+| Vault-specific constants (`vault_settings_key`)                                                                                         | **stays in haex-vault**          |                                            |
 
 Tests travel with the modules. Integration tests in `src-tauri/tests/` that touch column_sig or registry_row_sig split: pure CRDT round-trips move to `tests/` in the new crate; sig-specific vectors stay in haex-vault.
 
@@ -261,7 +261,7 @@ Either way, `Store::hlc`, `apply_migrations`, `install_crdt`, `scan_local_change
 `install_crdt(table)` on a table that already contains rows MUST:
 
 1. Run inside a single `IMMEDIATE` transaction. Either the columns, triggers, and backfill all commit, or none do — a partial install that leaves rows without HLC metadata is not a reachable state.
-2. Add `haex_hlc`, `haex_column_hlcs`, `haex_column_sigs` if missing, then populate them for every pre-existing row: `haex_hlc` set to a freshly-issued HLC timestamp taken *inside* the transaction (all pre-existing rows share one causal instant, per the `HlcService`); `haex_column_hlcs` set to the same HLC for every non-metadata column; `haex_column_sigs` populated by calling `SignatureProvider::sign_column` per column (empty payload for `NoopSignatureProvider`).
+2. Add `haex_hlc`, `haex_column_hlcs`, `haex_column_sigs` if missing, then populate them for every pre-existing row: `haex_hlc` set to a freshly-issued HLC timestamp taken _inside_ the transaction (all pre-existing rows share one causal instant, per the `HlcService`); `haex_column_hlcs` set to the same HLC for every non-metadata column; `haex_column_sigs` populated by calling `SignatureProvider::sign_column` per column (empty payload for `NoopSignatureProvider`).
 3. Record every backfilled row in the local-changes journal so the next `scan_local_changes` returns them. `install_crdt` on an existing table is equivalent, sync-wise, to "these rows were just created here, first time"; peers receive them via the normal apply path.
 4. Refuse (`Error::CrdtAlreadyInstalled`) if the three metadata columns already exist, unless the caller passed `InstallCrdtOptions::allow_reinstall = true`, in which case only triggers are re-installed and no backfill runs.
 
@@ -282,14 +282,15 @@ Steps 1 and 2 are the invasive ones inside `haex-vault`. Step 3 is a repo-mechan
 - Tests that require UCAN identity or MLS group state stay in `haex-vault`.
 - After Step 2 above, `haex-vault`'s full test suite must still pass with `haex-crdt` as a workspace member. This is the acceptance bar for Step 3.
 - **Standalone-git-tag acceptance test (gates Step 3 → Step 4)**: before `haex-vault` flips its dependency from `path = "crates/haex-crdt"` to `git = "...", tag = "v0.1.0"`, a throwaway consumer crate in a clean directory (no workspace, no path deps) pulls `haex-crdt` from the tagged commit and exercises the following. The setup opens **two independent stores** on **two separate SQLCipher database files** in a `tempdir`, each configured with its own durable `DeviceIdProvider` returning a **distinct**, stable `Uuid` (`device_a`, `device_b`). Both stores share the same `MigrationSource` and use `NoopSignatureProvider`.
-    - (a) `Store::open` succeeds on both fresh databases.
-    - (b) Crate-owned bookkeeping migrations run on both (journal in `haex_crdt_migrations`).
-    - (c) A consumer-owned toy migration runs on both (journal in `haex_app_migrations`).
-    - (d) The toy CRDT-managed table is created on **both** stores through the shared `MigrationSource` (so the plain table exists on A and B). Store A is then pre-populated with rows via direct inserts *before* `install_crdt` runs on it, so step (d) exercises the backfill contract on A: `install_crdt(A, "toy")` succeeds inside its `IMMEDIATE` transaction, and `scan_local_changes(A)` returns the backfilled rows.
-    - (d′) Store B calls `install_crdt(B, "toy")` on the (empty) toy table before any apply, so B has the CRDT metadata columns, triggers, and local-changes journal wiring in place. Without this, apply on B would either fail (missing metadata columns) or succeed against a store that isn't actually CRDT-managed — neither would validate remote application.
-    - (e) End-to-end apply flow: store A does a local write against the CRDT-managed toy table; `scan_local_changes(A)` returns exactly that change (**assert scanned payload matches**); the change is handed to `apply_remote_changes(B)` (**assert it succeeds**); a fresh read from store B returns the applied row with A's HLC and author metadata (**assert readback**). Store A's HLC state remains bound to `device_a`; store B's to `device_b` — reopening either with the wrong `DeviceIdProvider` MUST return `Error::DeviceIdMismatch`.
+  - (a) `Store::open` succeeds on both fresh databases.
+  - (b) Crate-owned bookkeeping migrations run on both (journal in `haex_crdt_migrations`).
+  - (c) A consumer-owned toy migration runs on both (journal in `haex_app_migrations`).
+  - (d) The toy CRDT-managed table is created on **both** stores through the shared `MigrationSource` (so the plain table exists on A and B). Store A is then pre-populated with rows via direct inserts _before_ `install_crdt` runs on it, so step (d) exercises the backfill contract on A: `install_crdt(A, "toy")` succeeds inside its `IMMEDIATE` transaction, and `scan_local_changes(A)` returns the backfilled rows.
+  - (d′) Store B calls `install_crdt(B, "toy")` on the (empty) toy table before any apply, so B has the CRDT metadata columns, triggers, and local-changes journal wiring in place. Without this, apply on B would either fail (missing metadata columns) or succeed against a store that isn't actually CRDT-managed — neither would validate remote application.
+  - (e) End-to-end apply flow: store A does a local write against the CRDT-managed toy table; `scan_local_changes(A)` returns exactly that change (**assert scanned payload matches**); the change is handed to `apply_remote_changes(B)` (**assert it succeeds**); a fresh read from store B returns the applied row with A's HLC and author metadata (**assert readback**). Store A's HLC state remains bound to `device_a`; store B's to `device_b` — reopening either with the wrong `DeviceIdProvider` MUST return `Error::DeviceIdMismatch`.
 
   This is what proves the published git artifact is actually consumable, that remote-application works across independent stores, and that device-identity isolation holds — none of which the workspace-member test on its own establishes.
+
 - `holzi` writes its own small integration test that opens a `haex-crdt` `Store`, defines a toy CRDT-managed table, writes and re-reads a row. Once the standalone-git-tag test above exists, holzi's own test builds on it rather than re-scaffolding.
 
 ## 9. Versioning, release, distribution

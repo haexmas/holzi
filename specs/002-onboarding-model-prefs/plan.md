@@ -21,20 +21,20 @@ Ein Nutzer bekommt beim ersten Öffnen einer Vault auf einem Gerät (Genesis ode
 
 ## Constitution Check
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+_GATE: Must pass before Phase 0 research. Re-check after Phase 1 design._
 
 Bewertung gegen holzi Constitution (`.specify/memory/constitution.md`, hard-pinned von haex-hive):
 
-| Prinzip | Status | Begründung |
-|---|---|---|
-| I. No Secrets in Git | ✓ PASS | Feature führt `preferences`-Tabelle ein; keine Secrets. Keine Test-Fixture mit Credentials in Git. |
-| II. No Local Absolute Paths in Versioned Config | ✓ PASS | Keine neuen Config-Files. Bestehende `AppLocalData`-Resolver-Pfade bleiben zur Laufzeit, nicht im Git-Zustand. |
-| III. Project Identity Is Device-Independent | ✓ PASS | Feature bestätigt Prinzip explizit: `vault_device_uuid` (device-abhängig) ist getrennt von `vault_identity` (device-unabhängig). `preferences.scope`-Werte referenzieren nur ephemere Device-IDs, die per Adoption auf neuen Geräten frisch geminted werden. Keine Filesystem-Pfade in synchronisierten Zeilen. |
-| IV. Cross-Repo References Pin Immutable Revisions | ✓ PASS | Keine neuen Cross-Repo-Refs; haex-crdt bleibt auf `1c069ef` gepinnt. |
-| V. External Sources Are Opt-in Per Project | ✓ PASS | N/A für dieses Feature (keine externen Harness-Content). |
-| VI. Self-Modifying Instructions Are Always Review-Gated | ✓ PASS | Änderung an ADR-0001, CONTEXT.md und Plan geht durch PR-Review. |
-| VII. Relay Unavailability Never Blocks Local Work | ✓ PASS | Onboarding + Preferences funktionieren komplett offline (nur Modell-Download braucht Netz — bestehende Funktionalität, unverändert). |
-| VIII. No Concealment Instructions in Agent Output | ✓ PASS | Kein Concealment-Content. |
+| Prinzip                                                 | Status | Begründung                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| I. No Secrets in Git                                    | ✓ PASS | Feature führt `preferences`-Tabelle ein; keine Secrets. Keine Test-Fixture mit Credentials in Git.                                                                                                                                                                                                              |
+| II. No Local Absolute Paths in Versioned Config         | ✓ PASS | Keine neuen Config-Files. Bestehende `AppLocalData`-Resolver-Pfade bleiben zur Laufzeit, nicht im Git-Zustand.                                                                                                                                                                                                  |
+| III. Project Identity Is Device-Independent             | ✓ PASS | Feature bestätigt Prinzip explizit: `vault_device_uuid` (device-abhängig) ist getrennt von `vault_identity` (device-unabhängig). `preferences.scope`-Werte referenzieren nur ephemere Device-IDs, die per Adoption auf neuen Geräten frisch geminted werden. Keine Filesystem-Pfade in synchronisierten Zeilen. |
+| IV. Cross-Repo References Pin Immutable Revisions       | ✓ PASS | Keine neuen Cross-Repo-Refs; haex-crdt bleibt auf `1c069ef` gepinnt.                                                                                                                                                                                                                                            |
+| V. External Sources Are Opt-in Per Project              | ✓ PASS | N/A für dieses Feature (keine externen Harness-Content).                                                                                                                                                                                                                                                        |
+| VI. Self-Modifying Instructions Are Always Review-Gated | ✓ PASS | Änderung an ADR-0001, CONTEXT.md und Plan geht durch PR-Review.                                                                                                                                                                                                                                                 |
+| VII. Relay Unavailability Never Blocks Local Work       | ✓ PASS | Onboarding + Preferences funktionieren komplett offline (nur Modell-Download braucht Netz — bestehende Funktionalität, unverändert).                                                                                                                                                                            |
+| VIII. No Concealment Instructions in Agent Output       | ✓ PASS | Kein Concealment-Content.                                                                                                                                                                                                                                                                                       |
 
 **Result**: Alle Gates PASS. Keine Complexity Tracking-Einträge nötig.
 

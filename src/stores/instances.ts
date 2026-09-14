@@ -22,16 +22,14 @@ export const useInstancesStore = defineStore('instances', () => {
     try {
       instances.value = await listAsync()
       lastError.value = null
-    }
-    catch (e) {
+    } catch (e) {
       lastError.value = e instanceof Error ? e.message : String(e)
     }
     return instances.value
   }
 
   async function startListening() {
-    if (unlisten)
-      return
+    if (unlisten) return
     unlisten = await listen<InstanceListChangedPayload>(
       INSTANCE_LIST_CHANGED,
       () => {

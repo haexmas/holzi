@@ -238,6 +238,7 @@ aktuell vorgefundene Datei. `repair_source` verwendet bei HF-Modellen den
 gespeicherten Source-Contract und öffnet bei importierten Modellen den lokalen
 Dateiimport; `choose_other` öffnet den Modell-Picker. Keine dieser Aktionen darf
 die erwartete SHA stillschweigend aktualisieren.
+
 - `model-download-progress` und `model-download-complete`: Payload-Struktur
   bleibt kompatibel.
 

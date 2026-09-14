@@ -23,14 +23,14 @@ CREATE INDEX idx_preferences_key
 
 **Spalten**:
 
-| Name | Typ | Nullable | Beschreibung |
-|---|---|---|---|
-| `vault_device_uuid` | TEXT | NO | UUID eines Geräts aus `known_devices.vault_device_uuid`, ODER `'00000000-0000-0000-0000-000000000000'` (Sentinel für vault-weit). Hard-FK auf `known_devices(vault_device_uuid) ON DELETE CASCADE`. |
-| `key` | TEXT | NO | Dotted-namespaced Schlüsselname, z. B. `chat.default_model_id`, `chat.last_active_model_id`. Kein Format-Enforcement in SQL — Konvention lebt im Rust-Wrapper. |
-| `value` | TEXT | YES | Freier Textwert. `NULL` wird semantisch wie "absent" behandelt (Wrapper API surfaced sie nicht separat). Für Modell-IDs enthält der Wert die Composite-ID (`<provider_uuid>:<remote>` für api_key, Katalog-Slug für lokal). |
-| `haex_hlc_no_sync` | TEXT | (implicit) | Vom `CrdtTransformer` zur Migration-Time hinzugefügt. Storage-Wrapper setzt bei jedem Insert/Update `current_hlc()`. |
-| `haex_column_hlcs_no_sync` | TEXT | (implicit) | Column-HLC-Map, vom Transformer verwaltet. |
-| `haex_column_sigs_no_sync` | TEXT | (implicit) | Column-Signature-Map, vom Transformer verwaltet. |
+| Name                       | Typ  | Nullable   | Beschreibung                                                                                                                                                                                                                |
+| -------------------------- | ---- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vault_device_uuid`        | TEXT | NO         | UUID eines Geräts aus `known_devices.vault_device_uuid`, ODER `'00000000-0000-0000-0000-000000000000'` (Sentinel für vault-weit). Hard-FK auf `known_devices(vault_device_uuid) ON DELETE CASCADE`.                         |
+| `key`                      | TEXT | NO         | Dotted-namespaced Schlüsselname, z. B. `chat.default_model_id`, `chat.last_active_model_id`. Kein Format-Enforcement in SQL — Konvention lebt im Rust-Wrapper.                                                              |
+| `value`                    | TEXT | YES        | Freier Textwert. `NULL` wird semantisch wie "absent" behandelt (Wrapper API surfaced sie nicht separat). Für Modell-IDs enthält der Wert die Composite-ID (`<provider_uuid>:<remote>` für api_key, Katalog-Slug für lokal). |
+| `haex_hlc_no_sync`         | TEXT | (implicit) | Vom `CrdtTransformer` zur Migration-Time hinzugefügt. Storage-Wrapper setzt bei jedem Insert/Update `current_hlc()`.                                                                                                        |
+| `haex_column_hlcs_no_sync` | TEXT | (implicit) | Column-HLC-Map, vom Transformer verwaltet.                                                                                                                                                                                  |
+| `haex_column_sigs_no_sync` | TEXT | (implicit) | Column-Signature-Map, vom Transformer verwaltet.                                                                                                                                                                            |
 
 **Validierungsregeln** (Rust-Wrapper):
 
@@ -41,10 +41,10 @@ CREATE INDEX idx_preferences_key
 
 **Bekannte Keys** (dieses Feature nutzt zwei):
 
-| Key | Scope | Semantik |
-|---|---|---|
-| `chat.default_model_id` | device oder vault | Expliziter Standardmodell-Wunsch. Wird ausschließlich via Settings-Screen-Trigger gesetzt (FR-011). Kein Auto-Overwrite. |
-| `chat.last_active_model_id` | nur device | Zuletzt erfolgreich genutztes Modell. Auto-Write ausschließlich nach erfolgreichem `send_message` (FR-009/010); ein manueller Picker-Wechsel ohne Nachricht schreibt nicht. |
+| Key                         | Scope             | Semantik                                                                                                                                                                    |
+| --------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chat.default_model_id`     | device oder vault | Expliziter Standardmodell-Wunsch. Wird ausschließlich via Settings-Screen-Trigger gesetzt (FR-011). Kein Auto-Overwrite.                                                    |
+| `chat.last_active_model_id` | nur device        | Zuletzt erfolgreich genutztes Modell. Auto-Write ausschließlich nach erfolgreichem `send_message` (FR-009/010); ein manueller Picker-Wechsel ohne Nachricht schreibt nicht. |
 
 **State-Transitions**:
 
@@ -69,12 +69,12 @@ Keine — Preference-Rows sind zustandslos. Ihre Existenz ist der Zustand. Über
 
 **Existierende Spalten** (unverändert):
 
-| Name | Typ | Nullable | Beschreibung |
-|---|---|---|---|
-| `installation_uuid` | TEXT | NO (PK) | Local-only Lookup-Schlüssel; für Sentinel: nil-UUID. |
-| `vault_device_uuid` | TEXT | NO (UNIQUE) | CRDT-`device_id`; für Sentinel: nil-UUID; FK-Ziel für `preferences`. |
-| `alias` | TEXT | YES | Menschenlesbarer Gerätename; Nullness triggert das Onboarding. Der Wizard hält den Wert zunächst nur lokal und persistiert ihn erst beim erfolgreichen Abschluss des zweiten Schritts; danach ist er im Settings-Screen editierbar. |
-| `first_seen` | INTEGER | NO | Epoch-ms des ersten Bootstrap; für Sentinel: 0. |
+| Name                | Typ     | Nullable    | Beschreibung                                                                                                                                                                                                                        |
+| ------------------- | ------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `installation_uuid` | TEXT    | NO (PK)     | Local-only Lookup-Schlüssel; für Sentinel: nil-UUID.                                                                                                                                                                                |
+| `vault_device_uuid` | TEXT    | NO (UNIQUE) | CRDT-`device_id`; für Sentinel: nil-UUID; FK-Ziel für `preferences`.                                                                                                                                                                |
+| `alias`             | TEXT    | YES         | Menschenlesbarer Gerätename; Nullness triggert das Onboarding. Der Wizard hält den Wert zunächst nur lokal und persistiert ihn erst beim erfolgreichen Abschluss des zweiten Schritts; danach ist er im Settings-Screen editierbar. |
+| `first_seen`        | INTEGER | NO          | Epoch-ms des ersten Bootstrap; für Sentinel: 0.                                                                                                                                                                                     |
 
 **Neuer Trigger für Alias**:
 
@@ -189,7 +189,7 @@ export interface DeviceInfo {
 
 export interface TierRecommendation {
   tier: 'easy' | 'sweet' | 'max'
-  entry: CatalogEntryWithFit  // bereits existierend
+  entry: CatalogEntryWithFit // bereits existierend
   fit: CatalogEntryWithFit['fit']
 }
 ```

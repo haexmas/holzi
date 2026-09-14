@@ -1,6 +1,5 @@
 ---
-
-description: "Actionable, dependency-ordered task list for the onboarding-model-prefs feature"
+description: 'Actionable, dependency-ordered task list for the onboarding-model-prefs feature'
 ---
 
 # Tasks: Onboarding-Härtung und Modellwahl-Persistenz

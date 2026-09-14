@@ -19,7 +19,7 @@ before any network endpoint starts. No rekey or restore pairing is performed.
 The same notice applies to the shared-type, command, plan, quickstart, and
 task documents in this feature directory.
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 — Anlegen (Genesis of a new federation) (Priority: P1) 🎯 MVP
 
@@ -59,7 +59,7 @@ The operator has an instance file (`.db`) on the filesystem — moved from anoth
 
 The vault identity in the DB is authoritative and already carried across by the copy, so other replicas of the same vault accept a connection from this new install via proof-of-possession of the vault key. A vault-identity rotation rejects copies with the old key. The vault-device UUID is per-installation: same-installation copies reuse the local row, while different installations get different HLC node IDs.
 
-**Why this priority**: Local portability. Holzi has no export command because the `.db` file *is* the export; Öffnen is the corresponding import. Adopting a database copied from another machine is a supported way to add a replica.
+**Why this priority**: Local portability. Holzi has no export command because the `.db` file _is_ the export; Öffnen is the corresponding import. Adopting a database copied from another machine is a supported way to add a replica.
 
 **Independent Test**: Import a valid throwaway database from the same installation and verify copy (not move), unchanged source, immediate list refresh, and reuse of the existing local `known_devices` row and vault-device UUID. Repeat under a second installation and verify that unlocking inserts a new local row with a vault-device UUID distinct from the source's. Verify that reopening under either installation reuses its row and UUID. No second database is created.
 
@@ -111,7 +111,7 @@ This user story belongs to the superseded paper-seed/federation-root design and 
 - **Two instances open concurrently**: `open_instance` serializes the switch under the backend state lock. It validates credentials and starts the requested runtime as a private candidate while the current runtime remains active; only after every candidate startup step succeeds does it close the old runtime and publish the new one. A validation or candidate-startup failure leaves the old runtime and `AppState.active_instance` unchanged. The frontend does not call `close_instance` first; a concurrent request waits for the lock and then observes either the old or the new fully-active instance, never a half-switched or no-active state.
 - **Mobile foreground/background** for Anlegen: if the app is backgrounded during Genesis, the same pending-flag mechanism applies. No changes to relay-lifetime rules for mobile beyond `v1-scope-design.md §7`.
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 ### Functional Requirements
 
@@ -142,7 +142,7 @@ This user story belongs to the superseded paper-seed/federation-root design and 
 - **FR-015**: The Verbinden action MUST open a Sheet whose primary control is a QR scanner reading the pairing token from the joiner's camera via the standard `navigator.mediaDevices.getUserMedia()` Web API on every platform (desktop webcam or mobile camera, whichever the Tauri WebView exposes). The Sheet MUST also offer a text-input fallback for the same token so hosts without a usable camera can complete pairing. The parent device MUST expose a matching "Pairing anbieten" surface that renders the token as a QR code (and, for symmetry, as copyable text) for the joiner to scan; that parent-side surface lives outside this spec's landing scope and is covered by the federation-view spec.
 - **FR-016**: The Verbinden sheet MUST require: instance name (as FR-006), passphrase (as FR-006), and a non-empty pairing token supplied either by successful QR decoding or by the text-input fallback. Both acquisition paths MUST pass the same token string to `CreateMode::Join`.
 - **FR-017**: On submit, the backend MUST create a new local instance, generate device-scoped Nostr and iroh keypairs, connect to the parent device's relay using the token's contact hint, sign the canonical pairing transcript, wait for the parent's co-signature, and persist mutually signed `peer_instances` records into `haex-crdt`.
-- **FR-018**: *(historical — the superseded restore-pairing/rekey flow is out of scope; the QR/token Join flow in FR-015–FR-017 remains in MVP.)*
+- **FR-018**: _(historical — the superseded restore-pairing/rekey flow is out of scope; the QR/token Join flow in FR-015–FR-017 remains in MVP.)_
 
 **Zuletzt verwendet + Unlock**
 
@@ -166,7 +166,7 @@ This user story belongs to the superseded paper-seed/federation-root design and 
 - **CreateMode**: `Genesis | Join { token: string }` — the two v1 initialization modes across Anlegen + Verbinden. Backup restore is handled by Öffnen (import + open), not by Recover.
 - **PairingToken**: opaque short-lived value issued by a parent device, carrying (in encoded form) a Nostr contact hint, a one-time nonce, an expiry, and the current federation epoch.
 
-## Success Criteria *(mandatory)*
+## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
 
@@ -180,7 +180,7 @@ This user story belongs to the superseded paper-seed/federation-root design and 
 
 ## Assumptions
 
-- The founding-doc assertion "device equals relay equals Tauri application" (`founding.md` §2.2) is refined to: **the *active* instance equals the running Nostr relay endpoint equals the running iroh peer**. The Tauri application is a container that may hold multiple `.db` files on disk, with exactly one active at any given time. This revision was surfaced during the 2026-09-04 brainstorming and takes precedence for v1.
+- The founding-doc assertion "device equals relay equals Tauri application" (`founding.md` §2.2) is refined to: **the _active_ instance equals the running Nostr relay endpoint equals the running iroh peer**. The Tauri application is a container that may hold multiple `.db` files on disk, with exactly one active at any given time. This revision was surfaced during the 2026-09-04 brainstorming and takes precedence for v1.
 - `<AppLocalData>` on each platform is the app-private data directory Tauri resolves via `BaseDirectory::AppLocalData`: Linux `$XDG_DATA_HOME/<bundle_identifier>/` (normally `~/.local/share/<bundle_identifier>/`), macOS `~/Library/Application Support/<bundle_identifier>/`, Windows `%LOCALAPPDATA%\<bundle_identifier>\`, Android app-private storage, and iOS app-sandbox `Library/Application Support/<bundle_identifier>/`. The `<bundle_identifier>` is the identifier configured in `tauri.conf.json`; all platforms append it before `instances/`.
 - [`haex-crdt` at `1c069ef0ea19143af2748f40fc41cba05c94dbe1` (`Cargo.toml`, package 0.4.0)](https://github.com/haexmas/haex-crdt/blob/1c069ef0ea19143af2748f40fc41cba05c94dbe1/Cargo.toml), extracted from `haex-vault` per `v1-scope-design.md §5`, provides the SQLite + CRDT layer with SQLCipher at-rest. Its single database entry point, `Database::open(DatabaseConfig)`, accepts the passphrase (via `SqlCipherKey`), `DatabaseConfig::bootstrap`, a `SignatureProvider`, and a `MigrationSource`. Mode-specific orchestration (Genesis writes a self-record; Join runs the pairing transcript and applies mutually signed peer records) is Holzi's concern above that entry point, not a `haex-crdt` API. See `contracts/tauri-commands.md`.
 - Pairing offers QR scanning through the joiner's camera as the primary path, with text-token input as fallback. Both paths carry exactly the same encoded token; the QR is only a transport for that string. The scanner uses `html5-qrcode` on every platform (matching haex-vault); a mobile-native barcode plugin is documented as a contingency in [`research.md`](./research.md) and is not v1. The QR-rendering surface on the parent device (which produces the token the joiner scans) lives outside this spec's landing scope and is covered by the federation-view spec.

@@ -12,7 +12,8 @@ import { useModels, type InstalledModel } from '~/composables/useModels'
 
 const { t } = useI18n()
 const { detailsAsync, previewInstallAsync } = useHuggingFace()
-const { downloadFromHfAsync, onDownloadProgress, onDownloadComplete } = useModels()
+const { downloadFromHfAsync, onDownloadProgress, onDownloadComplete } =
+  useModels()
 
 const props = defineProps<{
   repoId: string
@@ -57,11 +58,9 @@ async function loadDetailsAsync() {
   detailsErrorKey.value = null
   try {
     details.value = await detailsAsync(props.repoId)
-  }
-  catch (e) {
+  } catch (e) {
     detailsErrorKey.value = hfErrorKey(e)
-  }
-  finally {
+  } finally {
     loadingDetails.value = false
   }
 }
@@ -82,29 +81,38 @@ async function selectFileAsync(file: HuggingFaceFileCandidate) {
       // into an untracked direct SHA pin and update checks would disappear.
       revision: file.revisionRef ?? undefined,
     })
-  }
-  catch (e) {
+  } catch (e) {
     previewErrorKey.value = hfErrorKey(e)
-  }
-  finally {
+  } finally {
     loadingPreview.value = false
   }
 }
 
 const effectiveTokenizerRepo = computed(
-  () => preview.value?.tokenizerRepo ?? (tokenizerRepoInput.value.trim() || null),
+  () =>
+    preview.value?.tokenizerRepo ?? (tokenizerRepoInput.value.trim() || null),
 )
-const needsTooBigConfirmation = computed(() => preview.value?.requiresExplicitTooBigConfirmation ?? false)
-const canInstall = computed(() =>
-  preview.value !== null
-  && effectiveTokenizerRepo.value !== null
-  && (!needsTooBigConfirmation.value || tooBigConfirmed.value)
-  && !installing.value,
+const needsTooBigConfirmation = computed(
+  () => preview.value?.requiresExplicitTooBigConfirmation ?? false,
+)
+const canInstall = computed(
+  () =>
+    preview.value !== null &&
+    effectiveTokenizerRepo.value !== null &&
+    (!needsTooBigConfirmation.value || tooBigConfirmed.value) &&
+    !installing.value,
 )
 
 const downloadPercent = computed(() => {
-  if (downloadTotalBytes.value === null || downloadTotalBytes.value <= 0) return null
-  return Math.min(100, Math.max(0, Math.round((downloadedBytes.value / downloadTotalBytes.value) * 100)))
+  if (downloadTotalBytes.value === null || downloadTotalBytes.value <= 0)
+    return null
+  return Math.min(
+    100,
+    Math.max(
+      0,
+      Math.round((downloadedBytes.value / downloadTotalBytes.value) * 100),
+    ),
+  )
 })
 
 async function installAsync() {
@@ -127,12 +135,10 @@ async function installAsync() {
       forceTooBig: tooBigConfirmed.value,
     })
     emit('installed', model)
-  }
-  catch (e) {
+  } catch (e) {
     installErrorKey.value = hfErrorKey(e)
     installErrorDetail.value = hfErrorDetail(e)
-  }
-  finally {
+  } finally {
     installing.value = false
   }
 }
@@ -183,10 +189,16 @@ onBeforeUnmount(() => {
     <p v-if="detailsErrorKey" class="text-sm text-red-500" role="alert">
       {{ t(detailsErrorKey) }}
     </p>
-    <p v-if="details && details.files.length === 0" class="text-sm text-neutral-500">
+    <p
+      v-if="details && details.files.length === 0"
+      class="text-sm text-neutral-500"
+    >
       {{ t('models.result.noGgufFiles') }}
     </p>
-    <p v-else-if="details && visibleFiles.length === 0" class="text-sm text-neutral-500">
+    <p
+      v-else-if="details && visibleFiles.length === 0"
+      class="text-sm text-neutral-500"
+    >
       {{ t('models.search.filters.empty') }}
     </p>
 
@@ -196,20 +208,37 @@ onBeforeUnmount(() => {
         :key="file.filename"
         type="button"
         class="flex flex-col gap-1 rounded-md border p-3 text-left focus:outline-none focus:ring-2 focus:ring-blue-500"
-        :class="selectedFile?.filename === file.filename ? 'border-blue-500' : 'border-neutral-300 hover:border-blue-500'"
+        :class="
+          selectedFile?.filename === file.filename
+            ? 'border-blue-500'
+            : 'border-neutral-300 hover:border-blue-500'
+        "
         @click="selectFileAsync(file)"
       >
         <span class="font-mono text-sm">{{ file.filename }}</span>
         <div class="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-neutral-500">
-          <span>{{ t('models.filePicker.size') }}: {{ humanBytes(file.sizeBytes) }}</span>
-          <span>{{ t('models.filePicker.quantization') }}: {{ file.quantization ?? t('models.filePicker.quantizationUnknown') }}</span>
+          <span
+            >{{ t('models.filePicker.size') }}:
+            {{ humanBytes(file.sizeBytes) }}</span
+          >
+          <span
+            >{{ t('models.filePicker.quantization') }}:
+            {{
+              file.quantization ?? t('models.filePicker.quantizationUnknown')
+            }}</span
+          >
           <span>{{ t(`models.filePicker.fit.${file.fit}`) }}</span>
-          <span v-if="file.catalogMatch">{{ t('models.result.catalogMatch') }}</span>
+          <span v-if="file.catalogMatch">{{
+            t('models.result.catalogMatch')
+          }}</span>
         </div>
       </button>
     </div>
 
-    <div v-if="selectedFile" class="relative flex flex-col gap-3 overflow-hidden rounded-md border border-neutral-300 p-3">
+    <div
+      v-if="selectedFile"
+      class="relative flex flex-col gap-3 overflow-hidden rounded-md border border-neutral-300 p-3"
+    >
       <div
         v-if="installing"
         class="pointer-events-none absolute inset-y-0 left-0 bg-blue-100/70 transition-[width] duration-150"
@@ -219,7 +248,12 @@ onBeforeUnmount(() => {
         :aria-valuenow="downloadPercent ?? undefined"
         aria-valuemin="0"
         aria-valuemax="100"
-        :aria-label="t('models.filePicker.downloadProgress', { done: humanBytes(downloadedBytes), total: humanBytes(downloadTotalBytes) })"
+        :aria-label="
+          t('models.filePicker.downloadProgress', {
+            done: humanBytes(downloadedBytes),
+            total: humanBytes(downloadTotalBytes),
+          })
+        "
       />
       <div class="relative z-10 flex flex-col gap-3">
         <p v-if="loadingPreview" class="text-sm text-neutral-500" role="status">
@@ -238,11 +272,21 @@ onBeforeUnmount(() => {
             <dt class="text-neutral-500">
               {{ t('models.filePicker.quantization') }}
             </dt>
-            <dd>{{ preview.quantization ?? t('models.filePicker.quantizationUnknown') }}</dd>
+            <dd>
+              {{
+                preview.quantization ??
+                t('models.filePicker.quantizationUnknown')
+              }}
+            </dd>
             <dt class="text-neutral-500">
               {{ t('models.filePicker.contextWindow') }}
             </dt>
-            <dd>{{ preview.contextWindow ?? t('models.filePicker.contextWindowUnknown') }}</dd>
+            <dd>
+              {{
+                preview.contextWindow ??
+                t('models.filePicker.contextWindowUnknown')
+              }}
+            </dd>
             <dt class="text-neutral-500">
               {{ t('models.filePicker.revision') }}
             </dt>
@@ -262,8 +306,13 @@ onBeforeUnmount(() => {
               {{ t('models.filePicker.tokenizerHint') }}
             </p>
             <label class="flex flex-col gap-1">
-              <span class="text-sm font-medium">{{ t('models.filePicker.tokenizerRepoLabel') }}</span>
-              <ShadcnInput v-model="tokenizerRepoInput" :placeholder="t('models.filePicker.tokenizerRepoPlaceholder')" />
+              <span class="text-sm font-medium">{{
+                t('models.filePicker.tokenizerRepoLabel')
+              }}</span>
+              <ShadcnInput
+                v-model="tokenizerRepoInput"
+                :placeholder="t('models.filePicker.tokenizerRepoPlaceholder')"
+              />
             </label>
           </div>
 
@@ -272,20 +321,32 @@ onBeforeUnmount(() => {
               {{ t('models.filePicker.tooBigWarning') }}
             </p>
             <label class="flex items-center gap-2 text-sm">
-              <input v-model="tooBigConfirmed" type="checkbox">
+              <input v-model="tooBigConfirmed" type="checkbox" />
               {{ t('models.filePicker.tooBigConfirm') }}
             </label>
           </div>
 
           <p v-if="installErrorKey" class="text-sm text-red-500" role="alert">
             {{ t(installErrorKey) }}
-            <span v-if="installErrorDetail" class="block text-xs">{{ installErrorDetail }}</span>
+            <span v-if="installErrorDetail" class="block text-xs">{{
+              installErrorDetail
+            }}</span>
           </p>
           <p v-if="installing" class="text-sm text-neutral-500" role="status">
-            {{ t('models.filePicker.downloadProgress', { done: humanBytes(downloadedBytes), total: humanBytes(downloadTotalBytes) }) }}
+            {{
+              t('models.filePicker.downloadProgress', {
+                done: humanBytes(downloadedBytes),
+                total: humanBytes(downloadTotalBytes),
+              })
+            }}
           </p>
 
-          <UiButton type="button" :disabled="!canInstall" :loading="installing" @click="installAsync">
+          <UiButton
+            type="button"
+            :disabled="!canInstall"
+            :loading="installing"
+            @click="installAsync"
+          >
             {{ t('models.filePicker.install') }}
           </UiButton>
         </template>

@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { UnlistenFn } from '@tauri-apps/api/event'
-import { useChat, type ModelLoadErrorEvent, type ModelLoadProgressEvent, type ModelLoadStatusPayload } from '~/composables/useChat'
+import {
+  useChat,
+  type ModelLoadErrorEvent,
+  type ModelLoadProgressEvent,
+  type ModelLoadStatusPayload,
+} from '~/composables/useChat'
 
 // Minimal workspace-landing stub for spec 002. Deliberately barebones
 // in this feature — the full workspace build-out (widgets, panels) is
@@ -23,10 +28,16 @@ let unmounted = false
 
 const instanceName = computed(() => {
   const raw = route.params.instance
-  return typeof raw === 'string' ? raw : Array.isArray(raw) ? (raw[0] ?? '') : ''
+  return typeof raw === 'string'
+    ? raw
+    : Array.isArray(raw)
+      ? (raw[0] ?? '')
+      : ''
 })
 
-const settingsTarget = computed(() => `/settings/${encodeURIComponent(instanceName.value)}`)
+const settingsTarget = computed(
+  () => `/settings/${encodeURIComponent(instanceName.value)}`,
+)
 
 function updatePreloadStatus(status: ModelLoadStatusPayload) {
   preloadStatus.value = status
@@ -35,9 +46,12 @@ function updatePreloadStatus(status: ModelLoadStatusPayload) {
 
 function onLoadProgress(event: ModelLoadProgressEvent) {
   if (event.phase === 'ready') {
-    void chat.modelLoadStatusAsync().then((status) => {
-      if (status) updatePreloadStatus(status)
-    }).catch(() => undefined)
+    void chat
+      .modelLoadStatusAsync()
+      .then((status) => {
+        if (status) updatePreloadStatus(status)
+      })
+      .catch(() => undefined)
     return
   }
   updatePreloadStatus({
@@ -53,9 +67,12 @@ function onLoadProgress(event: ModelLoadProgressEvent) {
 
 function onLoadError(_event: ModelLoadErrorEvent) {
   preloadError.value = true
-  void chat.modelLoadStatusAsync().then((status) => {
-    if (status) updatePreloadStatus(status)
-  }).catch(() => undefined)
+  void chat
+    .modelLoadStatusAsync()
+    .then((status) => {
+      if (status) updatePreloadStatus(status)
+    })
+    .catch(() => undefined)
 }
 
 function onLoadStatus(status: ModelLoadStatusPayload) {
@@ -76,8 +93,7 @@ onMounted(async () => {
     try {
       const status = await chat.modelLoadStatusAsync()
       if (status) updatePreloadStatus(status)
-    }
-    catch {
+    } catch {
       // Workspace remains usable even when the status snapshot is unavailable.
     }
   }
@@ -110,23 +126,43 @@ onBeforeUnmount(() => {
       class="mt-4 flex items-center gap-2 text-xs text-muted-foreground"
       role="status"
     >
-      <Icon name="lucide:loader-circle" class="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-      {{ t('workspace.modelPreload.loading', { modelName: preloadStatus.modelName }) }}
+      <Icon
+        name="lucide:loader-circle"
+        class="h-3.5 w-3.5 animate-spin"
+        aria-hidden="true"
+      />
+      {{
+        t('workspace.modelPreload.loading', {
+          modelName: preloadStatus.modelName,
+        })
+      }}
     </p>
     <p
       v-else-if="preloadStatus?.status === 'ready'"
       class="mt-4 flex items-center gap-2 text-xs text-muted-foreground"
       role="status"
     >
-      <Icon name="lucide:check-circle-2" class="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
-      {{ t('workspace.modelPreload.ready', { modelName: preloadStatus.modelName }) }}
+      <Icon
+        name="lucide:check-circle-2"
+        class="h-3.5 w-3.5 text-emerald-600"
+        aria-hidden="true"
+      />
+      {{
+        t('workspace.modelPreload.ready', {
+          modelName: preloadStatus.modelName,
+        })
+      }}
     </p>
     <p
       v-else-if="preloadError"
       class="mt-4 flex items-center gap-2 text-xs text-muted-foreground"
       role="status"
     >
-      <Icon name="lucide:circle-alert" class="h-3.5 w-3.5 text-amber-600" aria-hidden="true" />
+      <Icon
+        name="lucide:circle-alert"
+        class="h-3.5 w-3.5 text-amber-600"
+        aria-hidden="true"
+      />
       {{ t('workspace.modelPreload.error') }}
     </p>
 

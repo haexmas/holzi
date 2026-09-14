@@ -6,7 +6,7 @@ type EffortLevel = 'low' | 'medium' | 'high'
 type ModelGroup = {
   providerId: string
   providerName: string
-  models: { id: string, name: string }[]
+  models: { id: string; name: string }[]
 }
 
 const MODEL_NAME_MAX_LENGTH = 20
@@ -46,7 +46,10 @@ const truncatedModelName = computed(() => {
 const effortIndex = computed(() => effortLevels.indexOf(props.effortLevel))
 
 function updateEffort(value: number) {
-  const level = effortLevels[Math.max(0, Math.min(effortLevels.length - 1, Math.round(value)))]
+  const level =
+    effortLevels[
+      Math.max(0, Math.min(effortLevels.length - 1, Math.round(value)))
+    ]
   if (level) emit('update:effortLevel', level)
 }
 
@@ -55,7 +58,8 @@ function updateModel(value: unknown) {
 }
 
 function updateEffortFromSlider(value: unknown) {
-  if (Array.isArray(value) && typeof value[0] === 'number') updateEffort(value[0])
+  if (Array.isArray(value) && typeof value[0] === 'number')
+    updateEffort(value[0])
 }
 
 function positionPopover() {
@@ -94,10 +98,10 @@ function togglePopover() {
 
 function closeOnOutsideClick(event: PointerEvent) {
   if (
-    isOpen.value
-    && event.target instanceof Node
-    && !root.value?.contains(event.target)
-    && !popover.value?.contains(event.target)
+    isOpen.value &&
+    event.target instanceof Node &&
+    !root.value?.contains(event.target) &&
+    !popover.value?.contains(event.target)
   ) {
     closePopover()
   }
@@ -142,10 +146,16 @@ onBeforeUnmount(() => {
       :disabled="disabled"
       @click="togglePopover"
     >
-      <span class="max-w-[8rem] truncate sm:max-w-[11rem] lg:max-w-[15rem]">{{ truncatedModelName }}</span>
+      <span class="max-w-[8rem] truncate sm:max-w-[11rem] lg:max-w-[15rem]">{{
+        truncatedModelName
+      }}</span>
       <span aria-hidden="true">·</span>
       <span class="shrink-0">{{ effortLabel }}</span>
-      <Icon name="lucide:chevron-down" class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      <Icon
+        name="lucide:chevron-down"
+        class="h-3.5 w-3.5 shrink-0"
+        aria-hidden="true"
+      />
     </button>
 
     <Teleport to="body">
@@ -162,7 +172,10 @@ onBeforeUnmount(() => {
           {{ t('chat.composer.settingsPopover.title') }}
         </div>
 
-        <label for="chat-model-popover" class="mb-1 block text-xs font-medium text-muted-foreground">
+        <label
+          for="chat-model-popover"
+          class="mb-1 block text-xs font-medium text-muted-foreground"
+        >
           {{ t('chat.composer.settingsPopover.modelLabel') }}
         </label>
         <ShadcnSelect
@@ -178,9 +191,16 @@ onBeforeUnmount(() => {
             <ShadcnSelectValue :placeholder="t('chat.model.choose')" />
           </ShadcnSelectTrigger>
           <ShadcnSelectContent class="w-[min(20rem,calc(100vw-2rem))]">
-            <ShadcnSelectGroup v-for="group in modelGroups" :key="group.providerId">
+            <ShadcnSelectGroup
+              v-for="group in modelGroups"
+              :key="group.providerId"
+            >
               <ShadcnSelectLabel>{{ group.providerName }}</ShadcnSelectLabel>
-              <ShadcnSelectItem v-for="model in group.models" :key="model.id" :value="model.id">
+              <ShadcnSelectItem
+                v-for="model in group.models"
+                :key="model.id"
+                :value="model.id"
+              >
                 {{ model.name }}
               </ShadcnSelectItem>
             </ShadcnSelectGroup>
@@ -188,7 +208,10 @@ onBeforeUnmount(() => {
         </ShadcnSelect>
 
         <div class="flex items-center justify-between gap-3">
-          <label for="effort-level-popover" class="text-xs font-medium text-muted-foreground">
+          <label
+            for="effort-level-popover"
+            class="text-xs font-medium text-muted-foreground"
+          >
             {{ t('chat.composer.settingsPopover.effortLabel') }}
           </label>
           <output for="effort-level-popover" class="text-sm font-medium">
@@ -207,7 +230,10 @@ onBeforeUnmount(() => {
           :aria-valuetext="effortLabel"
           @update:model-value="updateEffortFromSlider"
         />
-        <div class="mt-1 flex justify-between text-[10px] text-muted-foreground" aria-hidden="true">
+        <div
+          class="mt-1 flex justify-between text-[10px] text-muted-foreground"
+          aria-hidden="true"
+        >
           <span>{{ t('chat.effort.low') }}</span>
           <span>{{ t('chat.effort.medium') }}</span>
           <span>{{ t('chat.effort.high') }}</span>

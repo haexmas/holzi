@@ -24,14 +24,14 @@ am Rust-seitigen `MessageRole`-Enum.
 
 **Neue/geänderte Spalten**:
 
-| Name | Typ | Nullable | Beschreibung |
-|---|---|---|---|
-| `role` | TEXT | NO | Bestehend. Neue Werte `tool_call` und `tool_result` neben `user`/`assistant`/`system`. |
-| `tool_name` | TEXT | YES | Nur bei `role = tool_call`. Name des aufgerufenen Tools. |
-| `tool_call_id` | TEXT | YES | Bei `role = tool_call`: die vom Adapter/Provider vergebene Call-ID (z.B. Anthropics `toolu_...`). Bei `role = tool_result`: dieselbe ID, verknüpft Ergebnis mit Aufruf — kein Hard-FK (gleiche Begründung wie bei `parent_id`: Verzweigung/Historie bleibt über Anwendungslogik, nicht SQL-FK, konsistent). |
-| `tool_input` | TEXT | YES | Nur bei `role = tool_call`. JSON-Text der Tool-Eingabe, wie vom Modell geliefert (nach Parsing aus `partial_json`/`arguments`-String). |
-| `tool_is_error` | INTEGER | YES | Nur bei `role = tool_result`. `0`/`1`/`NULL` (SQLite hat kein natives Bool); `NULL` bedeutet "kein Fehler" für vor dieser Migration angelegte Zeilen — Anwendungscode behandelt `NULL` und `0` gleich. |
-| `tool_source` | TEXT | YES | Nur bei `role = tool_call`. Einer von `mcp` / `cli`. (`built_in` und `acp_delegate` aus der Design-Doku sind für dieses Feature nicht erreichbar — `cli_delegate` ist out of scope, siehe spec.md.) |
+| Name            | Typ     | Nullable | Beschreibung                                                                                                                                                                                                                                                                                                |
+| --------------- | ------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `role`          | TEXT    | NO       | Bestehend. Neue Werte `tool_call` und `tool_result` neben `user`/`assistant`/`system`.                                                                                                                                                                                                                      |
+| `tool_name`     | TEXT    | YES      | Nur bei `role = tool_call`. Name des aufgerufenen Tools.                                                                                                                                                                                                                                                    |
+| `tool_call_id`  | TEXT    | YES      | Bei `role = tool_call`: die vom Adapter/Provider vergebene Call-ID (z.B. Anthropics `toolu_...`). Bei `role = tool_result`: dieselbe ID, verknüpft Ergebnis mit Aufruf — kein Hard-FK (gleiche Begründung wie bei `parent_id`: Verzweigung/Historie bleibt über Anwendungslogik, nicht SQL-FK, konsistent). |
+| `tool_input`    | TEXT    | YES      | Nur bei `role = tool_call`. JSON-Text der Tool-Eingabe, wie vom Modell geliefert (nach Parsing aus `partial_json`/`arguments`-String).                                                                                                                                                                      |
+| `tool_is_error` | INTEGER | YES      | Nur bei `role = tool_result`. `0`/`1`/`NULL` (SQLite hat kein natives Bool); `NULL` bedeutet "kein Fehler" für vor dieser Migration angelegte Zeilen — Anwendungscode behandelt `NULL` und `0` gleich.                                                                                                      |
+| `tool_source`   | TEXT    | YES      | Nur bei `role = tool_call`. Einer von `mcp` / `cli`. (`built_in` und `acp_delegate` aus der Design-Doku sind für dieses Feature nicht erreichbar — `cli_delegate` ist out of scope, siehe spec.md.)                                                                                                         |
 
 **Validierungsregeln** (Rust-Wrapper, `storage/chat_messages.rs`):
 
@@ -42,8 +42,8 @@ am Rust-seitigen `MessageRole`-Enum.
   Tool); `tool_name`, `tool_input` und `tool_source` sind `NULL`.
 - Bei `user`, `assistant` und `system` sind alle fünf Tool-Spalten `NULL`. Die Validierung akzeptiert
   weiterhin vor der Migration angelegte Nicht-Tool-Zeilen, deren neue Spalten automatisch `NULL` sind.
-- `parent_id`-Kette bleibt wie heute strikt linear pro Turn: `user` → `assistant`(*) → `tool_call` →
-  `tool_result` → `assistant`(*) → ... → finale `assistant`-Zeile ohne weiteren `tool_call`.
+- `parent_id`-Kette bleibt wie heute strikt linear pro Turn: `user` → `assistant`(_) → `tool_call` →
+  `tool_result` → `assistant`(_) → ... → finale `assistant`-Zeile ohne weiteren `tool_call`.
 
 **State-Transitions**: keine neuen — jede Zeile ist ab dem Insert final (bestehende
 Turn/Step-Loop-Semantik: nichts wird nachträglich verändert, ein Retry vor Erfolg erzeugt gar keine
@@ -58,8 +58,8 @@ Zeile, siehe `docs/plans/2026-09-11-agent-tool-loop-design.md` §3).
 
 ### `chat.permission_mode` (device-scoped, via bestehende `preferences`-Tabelle)
 
-| Key | Scope | Werte | Default |
-|---|---|---|---|
+| Key                    | Scope  | Werte                        | Default                              |
+| ---------------------- | ------ | ---------------------------- | ------------------------------------ |
 | `chat.permission_mode` | Device | `manual` \| `auto` \| `plan` | `manual` (siehe spec.md Assumptions) |
 
 Kein neues Storage-Konzept — nutzt `storage/preferences.rs`/`PrefScope::Device` exakt wie
@@ -71,13 +71,13 @@ Kein neues Storage-Konzept — nutzt `storage/preferences.rs`/`PrefScope::Device
 
 ### `Tool` (Trait, `chat/tools/mod.rs`)
 
-| Feld/Methode | Typ | Beschreibung |
-|---|---|---|
-| `name()` | `&str` | Eindeutig innerhalb der Registry für einen Turn (Kollisionsfall: siehe Edge Case unten). |
-| `description()` | `&str` | Geht unverändert in `ToolSpec.description`. |
-| `input_schema()` | `serde_json::Value` | JSON-Schema-Objekt, direkt in Anthropics `input_schema` bzw. mistralrs' `Function.parameters` wiederverwendbar (beide sind JSON-Schema-förmig, siehe research.md §1/§2). |
-| `risk_class()` | `RiskClass::{Safe, Risky}` | Bestimmt Freigabe-Verhalten (spec.md FR-003–FR-006). Das Host-CLI-Tool liefert immer `Risky` (FR-015). |
-| `execute(input)` | `async fn(Value) -> ToolResult` (via `async-trait`) | `ToolResult { content: String, is_error: bool }`; the trait remains object-safe for `Box<dyn Tool>`. |
+| Feld/Methode     | Typ                                                 | Beschreibung                                                                                                                                                             |
+| ---------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name()`         | `&str`                                              | Eindeutig innerhalb der Registry für einen Turn (Kollisionsfall: siehe Edge Case unten).                                                                                 |
+| `description()`  | `&str`                                              | Geht unverändert in `ToolSpec.description`.                                                                                                                              |
+| `input_schema()` | `serde_json::Value`                                 | JSON-Schema-Objekt, direkt in Anthropics `input_schema` bzw. mistralrs' `Function.parameters` wiederverwendbar (beide sind JSON-Schema-förmig, siehe research.md §1/§2). |
+| `risk_class()`   | `RiskClass::{Safe, Risky}`                          | Bestimmt Freigabe-Verhalten (spec.md FR-003–FR-006). Das Host-CLI-Tool liefert immer `Risky` (FR-015).                                                                   |
+| `execute(input)` | `async fn(Value) -> ToolResult` (via `async-trait`) | `ToolResult { content: String, is_error: bool }`; the trait remains object-safe for `Box<dyn Tool>`.                                                                     |
 
 **Edge Case Namenskollision** (aus spec.md Edge Cases nicht explizit behandelt, hier ergänzt): zwei
 Quellen (z.B. der Host-CLI und ein MCP-Server) liefern denselben `name()`. Registry-Aufbau MUST das
@@ -87,10 +87,10 @@ Fall irreführend.
 
 Für jedes disambiguierte MCP-Tool hält der Registry-Eintrag getrennt fest:
 
-| Registry-Wert | Bedeutung |
-|---|---|
-| `registry_name` | Präfixierter Name für ToolSpec, Registry-Lookup und Persistenz (z.B. `mcp:<server-id>:<tool-name>`). |
-| `mcp_tool_name` | Unveränderter Originalname aus `tools/list`, ausschließlich für `tools/call`. |
+| Registry-Wert    | Bedeutung                                                                                                |
+| ---------------- | -------------------------------------------------------------------------------------------------------- |
+| `registry_name`  | Präfixierter Name für ToolSpec, Registry-Lookup und Persistenz (z.B. `mcp:<server-id>:<tool-name>`).     |
+| `mcp_tool_name`  | Unveränderter Originalname aus `tools/list`, ausschließlich für `tools/call`.                            |
 | `mcp_connection` | Die konkrete Serververbindung, die `tools/list` geliefert hat und für `tools/call` wiederverwendet wird. |
 
 `Tool::name()`/die Persistenz verwenden `registry_name`; `execute()` verwendet dagegen immer
@@ -112,13 +112,13 @@ auflöst — der Loop interpretiert das als Cancellation, nicht als Deny, siehe 
 
 ### `ChatRequest`/`StreamChunk`-Erweiterung (`adapters/types.rs`)
 
-| Typ | Neues Feld/Variante |
-|---|---|
-| `ChatRequest` | `tools: Vec<ToolSpec>` |
+| Typ                              | Neues Feld/Variante                                                                                    |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `ChatRequest`                    | `tools: Vec<ToolSpec>`                                                                                 |
 | `ChatMessage::role` (`ChatRole`) | + `ToolCall { id, name, input }`, `ToolResult { call_id, content, is_error }` neben `User`/`Assistant` |
-| `StreamChunk` | + `ToolCalls(Vec<ToolCall>)`, vor `Done` |
-| `ToolSpec` (neu) | `{ name: String, description: String, input_schema: serde_json::Value }` |
-| `ToolCall` (neu) | `{ id: String, name: String, input: serde_json::Value }` |
+| `StreamChunk`                    | + `ToolCalls(Vec<ToolCall>)`, vor `Done`                                                               |
+| `ToolSpec` (neu)                 | `{ name: String, description: String, input_schema: serde_json::Value }`                               |
+| `ToolCall` (neu)                 | `{ id: String, name: String, input: serde_json::Value }`                                               |
 
 Bei `StreamChunk::ToolCalls(calls)` bleibt die Reihenfolge von `calls` verbindlich. Der Adapter
 rekonstruiert daraus für Anthropic genau zwei aufeinanderfolgende Nachrichten:
@@ -134,14 +134,20 @@ schematisch:
 
 ```json
 [
-  {"role":"assistant","content":[
-    {"type":"tool_use","id":"call-a","name":"first","input":{}},
-    {"type":"tool_use","id":"call-b","name":"second","input":{}}
-  ]},
-  {"role":"user","content":[
-    {"type":"tool_result","tool_use_id":"call-a","content":"result-a"},
-    {"type":"tool_result","tool_use_id":"call-b","content":"result-b"}
-  ]}
+  {
+    "role": "assistant",
+    "content": [
+      { "type": "tool_use", "id": "call-a", "name": "first", "input": {} },
+      { "type": "tool_use", "id": "call-b", "name": "second", "input": {} }
+    ]
+  },
+  {
+    "role": "user",
+    "content": [
+      { "type": "tool_result", "tool_use_id": "call-a", "content": "result-a" },
+      { "type": "tool_result", "tool_use_id": "call-b", "content": "result-b" }
+    ]
+  }
 ]
 ```
 

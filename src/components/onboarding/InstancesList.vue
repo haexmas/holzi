@@ -13,8 +13,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 function formatRelative(ms: number): string {
-  if (ms === 0)
-    return '—'
+  if (ms === 0) return '—'
   const d = new Date(ms)
   return d.toLocaleString()
 }
@@ -29,7 +28,7 @@ function formatRelative(ms: number): string {
       <li v-for="i in props.instances" :key="i.name">
         <button
           class="w-full text-left rounded-md border px-3 py-2 hover:bg-accent hover:text-accent-foreground transition-colors"
-          style="border-color: var(--color-border);"
+          style="border-color: var(--color-border)"
           @click="emit('select', i.name)"
         >
           <div class="font-medium">

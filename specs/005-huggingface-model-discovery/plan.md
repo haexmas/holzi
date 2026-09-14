@@ -30,20 +30,20 @@ führt keine zweite lokale Registry ein.
 
 ## Constitution Check
 
-*GATE: Vor Phase 0 und nach Phase 1 erneut prüfen.*
+_GATE: Vor Phase 0 und nach Phase 1 erneut prüfen._
 
-| Prinzip | Status | Begründung |
-|---|---|---|
-| I. No Secrets in Git | PASS | Der anonyme Zugriff verwendet keine Zugangsdaten; Tests nutzen keine realen Tokens. |
-| II. No Local Absolute Paths in Versioned Config | PASS | Dokumente verwenden nur repository-relative Pfade; lokale Zielpfade werden zur Laufzeit ermittelt. |
-| III. Project Identity Is Device-Independent | PASS | Hugging-Face-Quellen werden als Repository-/Datei-Metadaten gespeichert; lokale Modellpfade bleiben gerätebezogen. |
-| IV. Cross-Repo References Pin Immutable Revisions | PASS | Es wird keine neue externe Harness-Referenz eingeführt. Hub-Dateien sind Nutzerdaten, keine Projektabhängigkeit. |
-| V. External Sources Are Opt-in Per Project | PASS | Keine neue Harness- oder Skill-Quelle wird zugelassen. |
-| VI. Self-Modifying Instructions Are Always Review-Gated | PASS | Keine Agenten-, Skill- oder Constitution-Datei wird geändert. |
-| VII. Relay Unavailability Never Blocks Local Work | PASS | Katalog und installierte Modelle bleiben offline verfügbar; nur Discovery/Download benötigen Netzwerk. |
-| VIII. No Concealment Instructions in Agent Output | PASS | Download-, Validierungs- und Fehlerzustände werden sichtbar und strukturiert behandelt. |
-| 500 LoC boundary | PASS | Discovery, Normalisierung und Commands werden an bestehenden Modulgrenzen gehalten; keine künstliche Aufteilung nur nach Zeilenzahl. |
-| Graphify-first authoring | PASS | Vor der Planung wurde Graphify aktualisiert und zu bestehender Modellverwaltung, Commands und Frontend-Modellfluss konsultiert. |
+| Prinzip                                                 | Status | Begründung                                                                                                                           |
+| ------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| I. No Secrets in Git                                    | PASS   | Der anonyme Zugriff verwendet keine Zugangsdaten; Tests nutzen keine realen Tokens.                                                  |
+| II. No Local Absolute Paths in Versioned Config         | PASS   | Dokumente verwenden nur repository-relative Pfade; lokale Zielpfade werden zur Laufzeit ermittelt.                                   |
+| III. Project Identity Is Device-Independent             | PASS   | Hugging-Face-Quellen werden als Repository-/Datei-Metadaten gespeichert; lokale Modellpfade bleiben gerätebezogen.                   |
+| IV. Cross-Repo References Pin Immutable Revisions       | PASS   | Es wird keine neue externe Harness-Referenz eingeführt. Hub-Dateien sind Nutzerdaten, keine Projektabhängigkeit.                     |
+| V. External Sources Are Opt-in Per Project              | PASS   | Keine neue Harness- oder Skill-Quelle wird zugelassen.                                                                               |
+| VI. Self-Modifying Instructions Are Always Review-Gated | PASS   | Keine Agenten-, Skill- oder Constitution-Datei wird geändert.                                                                        |
+| VII. Relay Unavailability Never Blocks Local Work       | PASS   | Katalog und installierte Modelle bleiben offline verfügbar; nur Discovery/Download benötigen Netzwerk.                               |
+| VIII. No Concealment Instructions in Agent Output       | PASS   | Download-, Validierungs- und Fehlerzustände werden sichtbar und strukturiert behandelt.                                              |
+| 500 LoC boundary                                        | PASS   | Discovery, Normalisierung und Commands werden an bestehenden Modulgrenzen gehalten; keine künstliche Aufteilung nur nach Zeilenzahl. |
+| Graphify-first authoring                                | PASS   | Vor der Planung wurde Graphify aktualisiert und zu bestehender Modellverwaltung, Commands und Frontend-Modellfluss konsultiert.      |
 
 **Result**: Alle Gates PASS; kein Complexity-Tracking-Eintrag erforderlich.
 
@@ -112,13 +112,13 @@ autoritativen Installations-/Pfadgrenzen.
 Die Abfrage zu Modellverwaltung, Hugging-Face-Download und Picker hat folgende
 Kandidaten ergeben:
 
-| Kandidat | Bewertung | Erweiterung |
-|---|---|---|
-| `src-tauri/src/models/commands.rs` (`download_model_from_hf`) | passt: bestehender Download-/Registrierungsboundary | Discovery-Commands und normalisierte Installationsübergabe; erwartete Einsparung ca. 40–60 Zeilen gegenüber einem zweiten Downloadpfad |
-| `src-tauri/src/models/paths.rs` (`validate_slug`, `validate_filename`, `canonical_model_file`) | passt: bestehende lokale Sicherheits-/Dateiauswahlgrenze | unverändert wiederverwenden; kein paralleler Pfad-Validator |
-| `src-tauri/src/storage/models.rs` (`ModelRow`, `upsert_model`) | passt: gemeinsame Modellmetadaten | Source-Felder ergänzen; kein separates HF-Register |
-| `src/composables/useModels.ts` (`downloadFromHfAsync`) | passt: bestehender Installationsaufruf | Preview-/Source-Argumente erweitern; kein zweites Download-Composable |
-| `src/pages/chat/[instance].vue` (Modellgruppen/Refresh) | passt: bestehender Picker-Refresh | installierte HF-Modelle über dieselbe `InstalledModel`-Liste anzeigen |
+| Kandidat                                                                                       | Bewertung                                                | Erweiterung                                                                                                                            |
+| ---------------------------------------------------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `src-tauri/src/models/commands.rs` (`download_model_from_hf`)                                  | passt: bestehender Download-/Registrierungsboundary      | Discovery-Commands und normalisierte Installationsübergabe; erwartete Einsparung ca. 40–60 Zeilen gegenüber einem zweiten Downloadpfad |
+| `src-tauri/src/models/paths.rs` (`validate_slug`, `validate_filename`, `canonical_model_file`) | passt: bestehende lokale Sicherheits-/Dateiauswahlgrenze | unverändert wiederverwenden; kein paralleler Pfad-Validator                                                                            |
+| `src-tauri/src/storage/models.rs` (`ModelRow`, `upsert_model`)                                 | passt: gemeinsame Modellmetadaten                        | Source-Felder ergänzen; kein separates HF-Register                                                                                     |
+| `src/composables/useModels.ts` (`downloadFromHfAsync`)                                         | passt: bestehender Installationsaufruf                   | Preview-/Source-Argumente erweitern; kein zweites Download-Composable                                                                  |
+| `src/pages/chat/[instance].vue` (Modellgruppen/Refresh)                                        | passt: bestehender Picker-Refresh                        | installierte HF-Modelle über dieselbe `InstalledModel`-Liste anzeigen                                                                  |
 
 Der unabhängige Kandidat `src-tauri/src/models/huggingface.rs` kapselt nur die
 neue externe HTTP-Grenze (z. B. `search`, `details`, `normalize_files`) und ist
@@ -222,13 +222,13 @@ einschleusen.
 
 ## Constitution Check (nach Phase 1)
 
-| Prinzip | Status | Re-Check |
-|---|---|---|
-| Keine Secrets / keine lokalen Pfade | PASS | HF-Zugriff bleibt anonym; Zielpfade werden ausschließlich aus validierten Werten gebildet. |
-| Input-Validation und Fehlerbehandlung | PASS | Repository, Datei, URL, Dateiformat, Tokenizer und Fehlerzustände liegen an der Boundary. |
-| Async Rust | PASS | HTTP-/Dateioperationen bleiben async; CPU-/Dateisystem-Parsing wird nicht unkontrolliert auf dem Executor ausgeführt. |
-| Bestehende Artefakte erweitern | PASS | `useModels`, `download_model_from_hf`, `models.rs`, `paths.rs` und vorhandene UI-Flows werden wiederverwendet. |
-| Testbarkeit | PASS | HTTP-Grenze ist mockbar; Parser und Filter sind ohne Netzwerk testbar. |
+| Prinzip                               | Status | Re-Check                                                                                                              |
+| ------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------- |
+| Keine Secrets / keine lokalen Pfade   | PASS   | HF-Zugriff bleibt anonym; Zielpfade werden ausschließlich aus validierten Werten gebildet.                            |
+| Input-Validation und Fehlerbehandlung | PASS   | Repository, Datei, URL, Dateiformat, Tokenizer und Fehlerzustände liegen an der Boundary.                             |
+| Async Rust                            | PASS   | HTTP-/Dateioperationen bleiben async; CPU-/Dateisystem-Parsing wird nicht unkontrolliert auf dem Executor ausgeführt. |
+| Bestehende Artefakte erweitern        | PASS   | `useModels`, `download_model_from_hf`, `models.rs`, `paths.rs` und vorhandene UI-Flows werden wiederverwendet.        |
+| Testbarkeit                           | PASS   | HTTP-Grenze ist mockbar; Parser und Filter sind ohne Netzwerk testbar.                                                |
 
 **Result**: Keine neue Abweichung von Constitution oder Projektstruktur.
 

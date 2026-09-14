@@ -1,7 +1,5 @@
 ---
-
-description: "Actionable, dependency-ordered task list for chat window and session handling"
-
+description: 'Actionable, dependency-ordered task list for chat window and session handling'
 ---
 
 # Tasks: Chatfenster und Session-Handling
@@ -20,9 +18,9 @@ description: "Actionable, dependency-ordered task list for chat window and sessi
 
 **Purpose**: Establish the shared frontend contract and feature-local UI surface.
 
-- [X] T001 [P] Add `ModelLoadStatusPayload`, `ModelLoadErrorEvent`, and related load-phase types to `src/composables/useChat.ts` according to `specs/004-chat-window-handling/contracts/tauri-commands.md`.
-- [X] T002 [P] Add the new composer, model-load, and reasoning i18n keys to `src/i18n/locales/de.json` and `src/i18n/locales/en.json` with identical key trees.
-- [X] T003 [P] Create the feature-local component files `src/components/chat/ReasoningAccordion.vue`, `src/components/chat/ComposerControl.vue`, and `src/components/chat/ComposerSettingsPopover.vue` with typed props/events and no hardcoded user-facing strings.
+- [x] T001 [P] Add `ModelLoadStatusPayload`, `ModelLoadErrorEvent`, and related load-phase types to `src/composables/useChat.ts` according to `specs/004-chat-window-handling/contracts/tauri-commands.md`.
+- [x] T002 [P] Add the new composer, model-load, and reasoning i18n keys to `src/i18n/locales/de.json` and `src/i18n/locales/en.json` with identical key trees.
+- [x] T003 [P] Create the feature-local component files `src/components/chat/ReasoningAccordion.vue`, `src/components/chat/ComposerControl.vue`, and `src/components/chat/ComposerSettingsPopover.vue` with typed props/events and no hardcoded user-facing strings.
 
 **Checkpoint**: Shared types, locale keys, and component boundaries exist; no runtime behavior has changed.
 
@@ -34,14 +32,14 @@ description: "Actionable, dependency-ordered task list for chat window and sessi
 
 **⚠️ CRITICAL**: No user story implementation may begin until this phase is complete.
 
-- [X] T004 Add ephemeral `ModelLoadStatus`, a monotonically increasing `vault_generation`, a monotonically increasing `load_id`, and a cancellable preload handle to `src-tauri/src/chat/session.rs`; keep all new state outside SQLite.
-- [X] T005 Refactor `src-tauri/src/chat/commands.rs` so manual `load_model` and the internal preload share one model-load implementation, publish `model-load-progress` with `vaultGeneration` and `loadId`, and publish structured `model-load-error` on failure.
-- [X] T006 Add the read-only `model_load_status` Tauri command to `src-tauri/src/chat/commands.rs` and register it in `src-tauri/src/lib.rs`.
-- [X] T007 Add `modelLoadStatusAsync`, `onModelLoadProgress`, `onModelLoadStatus`, and `onModelLoadError` wrappers to `src/composables/useChat.ts`; ignore events and snapshots whose `vaultGeneration` does not match the active Vault, and stale events by `loadId` within the same generation.
-- [X] T008 Implement `start_default_model_preload` and `cancel_preload_and_wait` in `src-tauri/src/chat/commands.rs` or the shared chat runtime module, walking the Spec 002 resolver's fallback order restricted to local candidates (skip a preference tier that resolves to a provider model instead of falling back to it) per `specs/004-chat-window-handling/contracts/tauri-commands.md`, and ensuring a preload does not hold `ChatState.operation` long enough to block Vault switching.
-- [X] T009 Wire the preload start after active-instance publication in `src-tauri/src/instances/create.rs` and `src-tauri/src/instances/open.rs`; in `open.rs`'s Vault-switch path, call and await `cancel_preload_and_wait` on any preload of the previous Vault, then bump `vaultGeneration`, before publishing the new Vault.
-- [X] T010 Cancel and await any running preload before close or manual model replacement in `src-tauri/src/instances/close.rs` and `src-tauri/src/chat/commands.rs`.
-- [X] T011 [P] Add unit coverage for `vault_generation` and `load_id` monotonicity, stale-result rejection across a Vault switch, and status transitions in `src-tauri/src/chat/session_tests.rs`; register the test module in `src-tauri/src/chat/mod.rs`.
+- [x] T004 Add ephemeral `ModelLoadStatus`, a monotonically increasing `vault_generation`, a monotonically increasing `load_id`, and a cancellable preload handle to `src-tauri/src/chat/session.rs`; keep all new state outside SQLite.
+- [x] T005 Refactor `src-tauri/src/chat/commands.rs` so manual `load_model` and the internal preload share one model-load implementation, publish `model-load-progress` with `vaultGeneration` and `loadId`, and publish structured `model-load-error` on failure.
+- [x] T006 Add the read-only `model_load_status` Tauri command to `src-tauri/src/chat/commands.rs` and register it in `src-tauri/src/lib.rs`.
+- [x] T007 Add `modelLoadStatusAsync`, `onModelLoadProgress`, `onModelLoadStatus`, and `onModelLoadError` wrappers to `src/composables/useChat.ts`; ignore events and snapshots whose `vaultGeneration` does not match the active Vault, and stale events by `loadId` within the same generation.
+- [x] T008 Implement `start_default_model_preload` and `cancel_preload_and_wait` in `src-tauri/src/chat/commands.rs` or the shared chat runtime module, walking the Spec 002 resolver's fallback order restricted to local candidates (skip a preference tier that resolves to a provider model instead of falling back to it) per `specs/004-chat-window-handling/contracts/tauri-commands.md`, and ensuring a preload does not hold `ChatState.operation` long enough to block Vault switching.
+- [x] T009 Wire the preload start after active-instance publication in `src-tauri/src/instances/create.rs` and `src-tauri/src/instances/open.rs`; in `open.rs`'s Vault-switch path, call and await `cancel_preload_and_wait` on any preload of the previous Vault, then bump `vaultGeneration`, before publishing the new Vault.
+- [x] T010 Cancel and await any running preload before close or manual model replacement in `src-tauri/src/instances/close.rs` and `src-tauri/src/chat/commands.rs`.
+- [x] T011 [P] Add unit coverage for `vault_generation` and `load_id` monotonicity, stale-result rejection across a Vault switch, and status transitions in `src-tauri/src/chat/session_tests.rs`; register the test module in `src-tauri/src/chat/mod.rs`.
 - [ ] T012 Add lifecycle integration coverage in `src-tauri/tests/chat_model_preload.rs` for preload after Vault publication, no duplicate load when the Chat mounts, cancellation during a Vault switch, and a stale-`vaultGeneration` event from a cancelled preload not overwriting the new Vault's status.
 
 **Checkpoint**: A background preload can run, be observed by a later-mounted page, and be cancelled without publishing stale state or blocking Vault lifecycle operations.
@@ -56,11 +54,11 @@ description: "Actionable, dependency-ordered task list for chat window and sessi
 
 ### Implementation for User Story 1
 
-- [X] T013 [US1] Change `refreshThreads` in `src/pages/chat/[instance].vue` so loading the thread list never automatically selects the first persisted thread.
-- [X] T014 [US1] Initialize a transient new-chat draft in `src/pages/chat/[instance].vue` on every Chat entry and reset `activeThreadId`, input, pending stream state, and `expandedReasoning` for the draft.
-- [X] T015 [US1] Preserve explicit history selection in `src/pages/chat/[instance].vue`, including message loading, pending approval routing, and returning to the transient draft through the existing New Chat action.
-- [X] T016 [US1] Ensure the send path in `src/pages/chat/[instance].vue` sends `threadId: null` for the draft and refreshes history only after the backend returns the newly created thread.
-- [X] T017 [US1] Add a backend regression test in `src-tauri/tests/chat_message_idempotency.rs` or a new `src-tauri/tests/chat_new_thread.rs` proving that `threadId: null` creates a new thread and never appends to the most recent thread.
+- [x] T013 [US1] Change `refreshThreads` in `src/pages/chat/[instance].vue` so loading the thread list never automatically selects the first persisted thread.
+- [x] T014 [US1] Initialize a transient new-chat draft in `src/pages/chat/[instance].vue` on every Chat entry and reset `activeThreadId`, input, pending stream state, and `expandedReasoning` for the draft.
+- [x] T015 [US1] Preserve explicit history selection in `src/pages/chat/[instance].vue`, including message loading, pending approval routing, and returning to the transient draft through the existing New Chat action.
+- [x] T016 [US1] Ensure the send path in `src/pages/chat/[instance].vue` sends `threadId: null` for the draft and refreshes history only after the backend returns the newly created thread.
+- [x] T017 [US1] Add a backend regression test in `src-tauri/tests/chat_message_idempotency.rs` or a new `src-tauri/tests/chat_new_thread.rs` proving that `threadId: null` creates a new thread and never appends to the most recent thread.
 - [ ] T018 [US1] Document and execute the new-entry and abandoned-draft scenarios in `specs/004-chat-window-handling/quickstart.md` without leaving empty persisted threads.
 
 **Checkpoint**: Opening Chat always presents a new conversation; explicit history navigation and existing message persistence still work.
@@ -75,10 +73,10 @@ description: "Actionable, dependency-ordered task list for chat window and sessi
 
 ### Implementation for User Story 2
 
-- [X] T019 [US2] Update `src/pages/workspace/[instance].vue` to subscribe to and display a subtle localized preload status without making Workspace navigation dependent on model readiness.
-- [X] T020 [US2] Replace Chat-page-only model resolution in `src/pages/chat/[instance].vue` with listener registration plus `modelLoadStatusAsync`; reuse the global ready session and show loading/error states until the current status is settled.
-- [X] T021 [US2] Guard manual model selection in `src/pages/chat/[instance].vue` so selecting another model invalidates the current preload and cannot be overwritten by a stale completion.
-- [X] T022 [US2] Add structured preload error localization and retry/model-selection affordances in `src/pages/chat/[instance].vue` and `src/i18n/locales/de.json`.
+- [x] T019 [US2] Update `src/pages/workspace/[instance].vue` to subscribe to and display a subtle localized preload status without making Workspace navigation dependent on model readiness.
+- [x] T020 [US2] Replace Chat-page-only model resolution in `src/pages/chat/[instance].vue` with listener registration plus `modelLoadStatusAsync`; reuse the global ready session and show loading/error states until the current status is settled.
+- [x] T021 [US2] Guard manual model selection in `src/pages/chat/[instance].vue` so selecting another model invalidates the current preload and cannot be overwritten by a stale completion.
+- [x] T022 [US2] Add structured preload error localization and retry/model-selection affordances in `src/pages/chat/[instance].vue` and `src/i18n/locales/de.json`.
 - [ ] T023 [US2] Add test coverage in `src-tauri/tests/chat_model_preload.rs` for no candidate, a provider-only candidate (preload stays `idle`, no proactive connection), local model ready, preload failure, and a second Vault replacing the first Vault's load.
 - [ ] T024 [US2] Execute the Vault-open and model-preload scenarios in `specs/004-chat-window-handling/quickstart.md` on the normal build and a local-model build.
 
@@ -94,12 +92,12 @@ description: "Actionable, dependency-ordered task list for chat window and sessi
 
 ### Implementation for User Story 3
 
-- [X] T025 [P] [US3] Implement the single Model/Effort settings trigger and popover in `src/components/chat/ComposerSettingsPopover.vue`, including current-value display, focus handling, and accessible naming.
-- [X] T026 [US3] Move the model picker and Effort control into the single settings popover in `src/pages/chat/[instance].vue` without changing model-selection semantics.
-- [X] T027 [US3] Remove the Reasoning mode control/state from `src/pages/chat/[instance].vue` and keep Reasoning automatic for models that support it; preserve the existing Effort control values and disabled states.
-- [X] T028 [US3] Integrate `PermissionPrompt` into the compact Composer control area in `src/pages/chat/[instance].vue` without changing Spec 003 approval behavior.
-- [X] T029 [US3] Keep the Settings-Button, separate Permission-Dropdown, and send/cancel action in one responsive row below the textarea; make the Settings-Popover visible above the row, immune to composer overflow clipping, and adapt to narrow viewports while preserving keyboard focus styles.
-- [X] T030 [US3] Verify all new Composer labels and option text in `src/i18n/locales/de.json` and `src/i18n/locales/en.json`, excluding a Reasoning-mode label and including accessible labels and current-value announcements.
+- [x] T025 [P] [US3] Implement the single Model/Effort settings trigger and popover in `src/components/chat/ComposerSettingsPopover.vue`, including current-value display, focus handling, and accessible naming.
+- [x] T026 [US3] Move the model picker and Effort control into the single settings popover in `src/pages/chat/[instance].vue` without changing model-selection semantics.
+- [x] T027 [US3] Remove the Reasoning mode control/state from `src/pages/chat/[instance].vue` and keep Reasoning automatic for models that support it; preserve the existing Effort control values and disabled states.
+- [x] T028 [US3] Integrate `PermissionPrompt` into the compact Composer control area in `src/pages/chat/[instance].vue` without changing Spec 003 approval behavior.
+- [x] T029 [US3] Keep the Settings-Button, separate Permission-Dropdown, and send/cancel action in one responsive row below the textarea; make the Settings-Popover visible above the row, immune to composer overflow clipping, and adapt to narrow viewports while preserving keyboard focus styles.
+- [x] T030 [US3] Verify all new Composer labels and option text in `src/i18n/locales/de.json` and `src/i18n/locales/en.json`, excluding a Reasoning-mode label and including accessible labels and current-value announcements.
 - [ ] T031 [US3] Execute the Composer desktop, narrow-viewport, keyboard, and unchanged-value scenarios in `specs/004-chat-window-handling/quickstart.md`.
 
 **Checkpoint**: Composer configuration is compact and integrated; model, Effort, and Permission semantics remain unchanged, and supported models use Reasoning automatically.
@@ -114,10 +112,10 @@ description: "Actionable, dependency-ordered task list for chat window and sessi
 
 ### Implementation for User Story 4
 
-- [X] T032 [P] [US4] Create `src/composables/useAutoResizeTextarea.ts` with a typed resize handler that resets height, reads `scrollHeight`, clamps to min/max height, and exposes the overflow state.
-- [X] T033 [US4] Replace fixed `rows="3"` sizing and `resize-none` behavior in `src/pages/chat/[instance].vue` with `useAutoResizeTextarea`, a one-line minimum, and the planned bounded maximum height.
-- [X] T034 [US4] Preserve `Enter` to send and `Shift+Enter` for newline in `src/pages/chat/[instance].vue`, including disabled/loading/streaming states and focus retention after resize.
-- [X] T035 [US4] Reset the textarea height after successful send and after starting a new Chat draft in `src/pages/chat/[instance].vue`.
+- [x] T032 [P] [US4] Create `src/composables/useAutoResizeTextarea.ts` with a typed resize handler that resets height, reads `scrollHeight`, clamps to min/max height, and exposes the overflow state.
+- [x] T033 [US4] Replace fixed `rows="3"` sizing and `resize-none` behavior in `src/pages/chat/[instance].vue` with `useAutoResizeTextarea`, a one-line minimum, and the planned bounded maximum height.
+- [x] T034 [US4] Preserve `Enter` to send and `Shift+Enter` for newline in `src/pages/chat/[instance].vue`, including disabled/loading/streaming states and focus retention after resize.
+- [x] T035 [US4] Reset the textarea height after successful send and after starting a new Chat draft in `src/pages/chat/[instance].vue`.
 - [ ] T036 [US4] Execute the multiline, maximum-height, internal-scroll, send-reset, and narrow-viewport scenarios in `specs/004-chat-window-handling/quickstart.md`.
 
 **Checkpoint**: Long prompts remain readable and fully editable without making the Composer or viewport unusable.
@@ -132,12 +130,12 @@ description: "Actionable, dependency-ordered task list for chat window and sessi
 
 ### Implementation for User Story 5
 
-- [X] T037 [US5] Implement native disclosure semantics in `src/components/chat/ReasoningAccordion.vue` with `aria-expanded`, keyboard operation, localized label, and a bounded scrollable content region.
-- [X] T038 [US5] Integrate `ReasoningAccordion` into `src/pages/chat/[instance].vue` for non-empty reasoning only; keep the normal Assistant answer fully visible when collapsed.
-- [X] T039 [US5] Remove the old `auto`/`on`/`off` display branching in `src/pages/chat/[instance].vue`; render the accordion solely when non-empty Reasoning deltas exist and never auto-expand it.
-- [X] T040 [US5] Preserve live `TokenEvent.reasoning` updates while an accordion is open and clear per-message expansion state on new Chat entry/reload in `src/pages/chat/[instance].vue`.
-- [X] T041 [US5] Confirm that `src/composables/useChat.ts` and `src/pages/chat/[instance].vue` do not add Reasoning persistence to `chat_messages` or alter Spec 003 stream/retry behavior.
-- [X] T042 [US5] Add the `reasoning_requested` capability field to `ChatRequest` in `src-tauri/src/adapters/types.rs`, resolve it from the selected model in `src-tauri/src/chat/commands.rs`, and add regression tests in `src-tauri/src/adapters/anthropic_tests.rs` (and the local adapter's tests) covering a reasoning-capable model, a non-capable model, and the resulting presence/absence of `StreamChunk::Delta.reasoning`.
+- [x] T037 [US5] Implement native disclosure semantics in `src/components/chat/ReasoningAccordion.vue` with `aria-expanded`, keyboard operation, localized label, and a bounded scrollable content region.
+- [x] T038 [US5] Integrate `ReasoningAccordion` into `src/pages/chat/[instance].vue` for non-empty reasoning only; keep the normal Assistant answer fully visible when collapsed.
+- [x] T039 [US5] Remove the old `auto`/`on`/`off` display branching in `src/pages/chat/[instance].vue`; render the accordion solely when non-empty Reasoning deltas exist and never auto-expand it.
+- [x] T040 [US5] Preserve live `TokenEvent.reasoning` updates while an accordion is open and clear per-message expansion state on new Chat entry/reload in `src/pages/chat/[instance].vue`.
+- [x] T041 [US5] Confirm that `src/composables/useChat.ts` and `src/pages/chat/[instance].vue` do not add Reasoning persistence to `chat_messages` or alter Spec 003 stream/retry behavior.
+- [x] T042 [US5] Add the `reasoning_requested` capability field to `ChatRequest` in `src-tauri/src/adapters/types.rs`, resolve it from the selected model in `src-tauri/src/chat/commands.rs`, and add regression tests in `src-tauri/src/adapters/anthropic_tests.rs` (and the local adapter's tests) covering a reasoning-capable model, a non-capable model, and the resulting presence/absence of `StreamChunk::Delta.reasoning`.
 - [ ] T043 [US5] Execute the Reasoning accordion, independent expansion, streaming update, keyboard, and reload scenarios in `specs/004-chat-window-handling/quickstart.md`.
 
 **Checkpoint**: Every available Reasoning block is discoverable but collapsed by default, independently expandable, and non-invasive to the main response.
@@ -148,12 +146,12 @@ description: "Actionable, dependency-ordered task list for chat window and sessi
 
 **Purpose**: Validate the complete feature and reconcile the owning documentation.
 
-- [X] T044 [P] Update `specs/002-onboarding-model-prefs/spec.md` with an explicit cross-reference that Spec 004 supersedes its chat-entry, Composer, and Reasoning-visibility assumptions while preserving its model fallback contract.
-- [X] T045 [P] Run an automated `de`/`en` locale-key parity check against all new keys referenced by `src/pages/chat/[instance].vue`, `src/components/chat/ComposerSettingsPopover.vue`, `src/components/chat/ComposerControl.vue`, `src/components/chat/ReasoningAccordion.vue`, and `src/pages/workspace/[instance].vue`.
-- [X] T046 Run `cargo test --lib` and the focused preload/new-thread integration suites from `src-tauri/tests/`.
-- [X] T047 Run `pnpm typecheck` and fix any binding/type regressions in `src/composables/useChat.ts` and the Chat pages.
+- [x] T044 [P] Update `specs/002-onboarding-model-prefs/spec.md` with an explicit cross-reference that Spec 004 supersedes its chat-entry, Composer, and Reasoning-visibility assumptions while preserving its model fallback contract.
+- [x] T045 [P] Run an automated `de`/`en` locale-key parity check against all new keys referenced by `src/pages/chat/[instance].vue`, `src/components/chat/ComposerSettingsPopover.vue`, `src/components/chat/ComposerControl.vue`, `src/components/chat/ReasoningAccordion.vue`, and `src/pages/workspace/[instance].vue`.
+- [x] T046 Run `cargo test --lib` and the focused preload/new-thread integration suites from `src-tauri/tests/`.
+- [x] T047 Run `pnpm typecheck` and fix any binding/type regressions in `src/composables/useChat.ts` and the Chat pages.
 - [ ] T048 Execute the complete `specs/004-chat-window-handling/quickstart.md` on desktop and a narrow viewport; record any deviations in the checklist at `specs/004-chat-window-handling/checklists/requirements.md`.
-- [X] T049 Update `specs/004-chat-window-handling/checklists/requirements.md` with the completed validation state and any explicitly deferred findings.
+- [x] T049 Update `specs/004-chat-window-handling/checklists/requirements.md` with the completed validation state and any explicitly deferred findings.
 
 ---
 

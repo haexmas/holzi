@@ -8,15 +8,15 @@ Priorität P1 · Aufwand L · Integrationsrisiko mittel · Kategorie direction.
 
 Die Erstfassung entstand, bevor der Betreiber den MVP-Schnitt präzisiert hat. Sieben Festlegungen wurden am 2026-09-08 geändert; sie sind hier zusammengefasst, damit der Unterschied nachvollziehbar bleibt und nicht stillschweigend in spätere Reviews driftet.
 
-| Thema | Fassung 2026-09-07 | Festlegung 2026-09-08 | Begründung |
-| --- | --- | --- | --- |
-| Sync im MVP | „erst mit funktionierendem Zwei-Geräte-Sync fertig" | Sync ist **nicht** Teil des MVP | Betreiber will zuerst eine benutzbare Einzelgerät-App |
-| LLM-Runtime | `llama.cpp` als Tauri-Sidecar | `mistral.rs` in-process | iOS erlaubt keine fremden Subprozesse; ein Sidecar bedeutet zwei Runtimes |
-| Anbietermodelle | „Noch nicht im MVP: Cloudanbieter" | Anthropic, OpenAI, Google **ab Tag 1** | Betreiber will vorhandene Abos und Keys sofort nutzen |
-| Modellbezug | Offline-Modellpaket plus Import | On-Demand-Download aus dem Anbieterkatalog plus Import eigener GGUF | Ein gebündeltes Modell bläht das Paket; Download deckt mehr Hardwareklassen ab |
-| Dateikopie als Kopplung | „eine Dateikopie ersetzt Pairing nicht" | Dateikopie **und** Token-Kopplung sind beide zulässige Wege | Betreiber hält den Kopierweg für den bequemeren Regelfall |
-| Mobile | „beantwortet Mobile-Inferenz noch nicht" | Mobile wird im Datei- und Pfadmodell mitgedacht | Alle Modelldateien liegen unter `AppLocalData`, damit Android/iOS zugreifen können |
-| Modellliste | implizit gepflegt | Anbietermodelle werden **immer abgefragt**, nie hartkodiert | Neue Anbietermodelle sollen ohne Holzi-Update erscheinen |
+| Thema                   | Fassung 2026-09-07                                  | Festlegung 2026-09-08                                               | Begründung                                                                         |
+| ----------------------- | --------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Sync im MVP             | „erst mit funktionierendem Zwei-Geräte-Sync fertig" | Sync ist **nicht** Teil des MVP                                     | Betreiber will zuerst eine benutzbare Einzelgerät-App                              |
+| LLM-Runtime             | `llama.cpp` als Tauri-Sidecar                       | `mistral.rs` in-process                                             | iOS erlaubt keine fremden Subprozesse; ein Sidecar bedeutet zwei Runtimes          |
+| Anbietermodelle         | „Noch nicht im MVP: Cloudanbieter"                  | Anthropic, OpenAI, Google **ab Tag 1**                              | Betreiber will vorhandene Abos und Keys sofort nutzen                              |
+| Modellbezug             | Offline-Modellpaket plus Import                     | On-Demand-Download aus dem Anbieterkatalog plus Import eigener GGUF | Ein gebündeltes Modell bläht das Paket; Download deckt mehr Hardwareklassen ab     |
+| Dateikopie als Kopplung | „eine Dateikopie ersetzt Pairing nicht"             | Dateikopie **und** Token-Kopplung sind beide zulässige Wege         | Betreiber hält den Kopierweg für den bequemeren Regelfall                          |
+| Mobile                  | „beantwortet Mobile-Inferenz noch nicht"            | Mobile wird im Datei- und Pfadmodell mitgedacht                     | Alle Modelldateien liegen unter `AppLocalData`, damit Android/iOS zugreifen können |
+| Modellliste             | implizit gepflegt                                   | Anbietermodelle werden **immer abgefragt**, nie hartkodiert         | Neue Anbietermodelle sollen ohne Holzi-Update erscheinen                           |
 
 Unverändert gültig aus der Erstfassung: Schlüsselhaltung samt Konstitutionskorrektur, die Datenmodell-Grundsätze zu LWW und Elternbezügen, der Sync-Vertragskatalog, die Verifikationsgates und die Änderungsdisziplin.
 
@@ -34,13 +34,13 @@ Die Produktidee ist nachvollziehbar: eigene Instanzen, lokale Datenhaltung, expl
 
 Es existiert weiterhin kein Anwendungscode, kein `package.json` und kein `Cargo.toml`. Damit sind Build-, Laufzeit-, Sicherheits- und Leistungseigenschaften von Holzi noch nicht überprüfbar. Seit der Erstfassung ist allerdings der Vertrag für den Instanzlebenszyklus gemergt: [`specs/001-frontend-onboarding/contracts/tauri-commands.md`](../specs/001-frontend-onboarding/contracts/tauri-commands.md) beschreibt jetzt normativ die Provider-Traits, die holzi-eigene Migrationsebene, das Geräte-ID-Modell und die Fehlerabbildung gegen `haex-crdt` 0.4.0.
 
-| Befund | Bedeutung | Aufwand der Klärung | Änderungsrisiko | Beleg |
-| --- | --- | --- | --- | --- |
-| v1 umfasst wesentlich mehr als den ersten lokalen Chat | MVP-Schnitt explizit festhalten, bevor die bestehende Taskliste abgearbeitet wird | S | mittel | [`docs/plans/2026-09-04-v1-scope-design.md`](../docs/plans/2026-09-04-v1-scope-design.md), §§2, 11 |
-| Vertrag und Spec beschrieben den Kopierweg als Scope-Entscheidung statt als Abhängigkeitslücke | Mit dieser Überarbeitung bereinigt (Vertrag, v1-Scope, Spec, Tasks, Quickstart) | S | gering | `b4533a2`, Abschnitt Device-ID model |
-| Sync-Transport ist im Crate noch nicht vorhanden | Sync-Etappe erst nach geliefertem Ausbau planen; MVP nicht daran hängen | S | gering | [`haex-crdt`-Extraktionsplan](../docs/plans/2026-09-04-haex-crdt-extraction-plan.md) |
-| Kanonische Keychain-Pflicht geht über die erklärte Absicht „keine Secrets in Git" hinaus | Produktziel SQLite festhalten und Konstitution separat korrigieren | S | gering | Betreiber-Klarstellung; Abschnitt Schlüsselhaltung |
-| Laufzeit- und Testbasis fehlen | Ein kleiner realer Integrationsdurchlauf muss vor UI-Ausbau stehen | M | gering | [`README.md`](../README.md#status), [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) |
+| Befund                                                                                         | Bedeutung                                                                         | Aufwand der Klärung | Änderungsrisiko | Beleg                                                                                              |
+| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------- | --------------- | -------------------------------------------------------------------------------------------------- |
+| v1 umfasst wesentlich mehr als den ersten lokalen Chat                                         | MVP-Schnitt explizit festhalten, bevor die bestehende Taskliste abgearbeitet wird | S                   | mittel          | [`docs/plans/2026-09-04-v1-scope-design.md`](../docs/plans/2026-09-04-v1-scope-design.md), §§2, 11 |
+| Vertrag und Spec beschrieben den Kopierweg als Scope-Entscheidung statt als Abhängigkeitslücke | Mit dieser Überarbeitung bereinigt (Vertrag, v1-Scope, Spec, Tasks, Quickstart)   | S                   | gering          | `b4533a2`, Abschnitt Device-ID model                                                               |
+| Sync-Transport ist im Crate noch nicht vorhanden                                               | Sync-Etappe erst nach geliefertem Ausbau planen; MVP nicht daran hängen           | S                   | gering          | [`haex-crdt`-Extraktionsplan](../docs/plans/2026-09-04-haex-crdt-extraction-plan.md)               |
+| Kanonische Keychain-Pflicht geht über die erklärte Absicht „keine Secrets in Git" hinaus       | Produktziel SQLite festhalten und Konstitution separat korrigieren                | S                   | gering          | Betreiber-Klarstellung; Abschnitt Schlüsselhaltung                                                 |
+| Laufzeit- und Testbasis fehlen                                                                 | Ein kleiner realer Integrationsdurchlauf muss vor UI-Ausbau stehen                | M                   | gering          | [`README.md`](../README.md#status), [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)      |
 
 Die Befunde sind durch die gelesenen Dokumente/API belegt; Aufwand ist eine Planungsschätzung. Es werden keine Implementierungsfehler in noch nicht existierendem Code behauptet.
 
@@ -88,16 +88,16 @@ flowchart LR
 
 Die folgenden Modulnamen sind Zielvorschläge, keine vorhandenen APIs:
 
-| Bereich | Verantwortung / Zielort |
-| --- | --- |
-| Instanzlebenszyklus | `src-tauri/src/instances/`: Erstellen, Entsperren, Sperren, Crash-Aufräumen; Command-Verträge aus Spec 001 wiederverwenden |
-| Identität | `src-tauri/src/identity/`: die drei `haex-crdt`-Provider, Geräte-UUID-Verwaltung, Signierschlüssel. Auslagerung in eine eigene Crate `haex-identity` bleibt möglich, sobald die Trait-Fläche stabil ist |
-| Storage | `src-tauri/src/storage/`: Migrationen, Abfragen, CRDT-Write-Pfad und Tabellenfreigaben |
-| Lokale Inferenz | `src-tauri/src/llm/local/`: Modellladen, Backend-Auswahl, Streaming, Abbruch, Fehlerzustände |
-| Anbieter | `src-tauri/src/llm/remote/`: Anbieterkonfiguration, Modellabfrage, Streaming über die jeweilige API |
-| Chat | `src-tauri/src/chat/`: Prompt-Zusammenstellung, Persistenz und Generierungsaufträge |
-| Sync (später) | `src-tauri/src/sync/`: schmaler Adapter zum ausgebauten `haex-crdt` |
-| UI | `src/pages/`, `src/components/onboarding/`, ergänzend Chat/Modell-Komponenten und Pinia-Stores |
+| Bereich             | Verantwortung / Zielort                                                                                                                                                                                 |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Instanzlebenszyklus | `src-tauri/src/instances/`: Erstellen, Entsperren, Sperren, Crash-Aufräumen; Command-Verträge aus Spec 001 wiederverwenden                                                                              |
+| Identität           | `src-tauri/src/identity/`: die drei `haex-crdt`-Provider, Geräte-UUID-Verwaltung, Signierschlüssel. Auslagerung in eine eigene Crate `haex-identity` bleibt möglich, sobald die Trait-Fläche stabil ist |
+| Storage             | `src-tauri/src/storage/`: Migrationen, Abfragen, CRDT-Write-Pfad und Tabellenfreigaben                                                                                                                  |
+| Lokale Inferenz     | `src-tauri/src/llm/local/`: Modellladen, Backend-Auswahl, Streaming, Abbruch, Fehlerzustände                                                                                                            |
+| Anbieter            | `src-tauri/src/llm/remote/`: Anbieterkonfiguration, Modellabfrage, Streaming über die jeweilige API                                                                                                     |
+| Chat                | `src-tauri/src/chat/`: Prompt-Zusammenstellung, Persistenz und Generierungsaufträge                                                                                                                     |
+| Sync (später)       | `src-tauri/src/sync/`: schmaler Adapter zum ausgebauten `haex-crdt`                                                                                                                                     |
+| UI                  | `src/pages/`, `src/components/onboarding/`, ergänzend Chat/Modell-Komponenten und Pinia-Stores                                                                                                          |
 
 Rust besitzt Dateien, Datenbank, Schlüsselzugriffe und Netzwerk. Die WebView bekommt typisierte Commands und Events, keine beliebige SQL- oder Shell-Schnittstelle. Blockierende Datenbank- und Modelloperationen laufen außerhalb des UI-Threads. Ein Instanzwechsel oder Sperren beendet laufende Generierung; verspätete Events tragen Instanz- und Request-ID und dürfen keinen anderen Chat verändern.
 
@@ -107,16 +107,16 @@ Zunächst nur stabile IDs und kurze, atomare Schreibvorgänge. `haex-crdt` biete
 
 Alle zur Synchronisierung vorgesehenen Anwendungstabellen werden bereits im MVP über `install_crdt` installiert, obwohl noch nichts synchronisiert. Private und gerätelokale Tabellen bleiben gemäß dem Vertrag von `install_crdt` ausgeschlossen. Die drei `_no_sync`-Metadatenspalten der synchronisierbaren Tabellen ersparen später eine Schemamigration über gefüllte Tabellen.
 
-| Tabelle | CRDT | Inhalt |
-| --- | --- | --- |
-| `vault_identity` | ja | Vault-Identitäts-Keypair (Public + Private) für Proof-of-Possession-Auth zwischen Replikaten. Einmal bei Genesis geschrieben; wandert mit jeder Dateikopie mit |
-| `known_devices` | ja | Eine Zeile pro (Vault × Installation): `installation_uuid` (aus `<AppLocalData>/installation-id` gelesen, dient dem Bootstrap als unveränderliche Zeilenidentität), `vault_device_uuid` (HLC-Node-ID dieses Replikats), Alias, Erstöffnungszeitpunkt und iroh-Node-ID. Die UUID wird als `row_pks` übertragen, die übrigen Felder sind synchronisierbare Spalten. Beim ersten Öffnen einer neuen Installation wird eine neue Zeile eingefügt |
-| `providers` | ja | Anbieterkonfiguration einschließlich API-Schlüssel: Art (`local`, `api_key`, `cli_delegate`), Name, Basis-URL, Zugangsdaten. Betreiber-Entscheidung vom 2026-09-08: Schlüssel werden mitsynchronisiert, damit ein Anbieter einmal statt je Gerät eingerichtet wird — siehe Abschnitt Anbietermodelle |
-| `models` | ja | Abgefragter Modellkatalog als Cache mit Abrufzeitpunkt; lokale und Anbietermodelle in einer Tabelle |
-| `device_downloaded_models_no_sync` | nein | Lokal verifizierte GGUF-Dateien: Modell-ID, Pfad **relativ zu** `AppLocalData/models/`, Größe, Abrufdatum; nach Import oder Restore erneut prüfen |
-| `chat_threads` | ja | Gespräch: ID, Titel, zuletzt genutzter Anbieter und Modell, Zeitstempel |
-| `chat_messages` | ja | Abgeschlossene Nachricht: ID, Gespräch, Elternnachricht, Rolle, Inhalt, erzeugender Anbieter und Modell, Token-Zähler, Abschlussstatus |
-| `app_settings_no_sync` | nein | Gerätebezogene Vorbelegungen, Anbieter-Aktivierung je Gerät sowie lokale Generierungsaufträge und Zwischenstände. Keine Zugangsdaten — die liegen in `providers` |
+| Tabelle                            | CRDT | Inhalt                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ---------------------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vault_identity`                   | ja   | Vault-Identitäts-Keypair (Public + Private) für Proof-of-Possession-Auth zwischen Replikaten. Einmal bei Genesis geschrieben; wandert mit jeder Dateikopie mit                                                                                                                                                                                                                                                                               |
+| `known_devices`                    | ja   | Eine Zeile pro (Vault × Installation): `installation_uuid` (aus `<AppLocalData>/installation-id` gelesen, dient dem Bootstrap als unveränderliche Zeilenidentität), `vault_device_uuid` (HLC-Node-ID dieses Replikats), Alias, Erstöffnungszeitpunkt und iroh-Node-ID. Die UUID wird als `row_pks` übertragen, die übrigen Felder sind synchronisierbare Spalten. Beim ersten Öffnen einer neuen Installation wird eine neue Zeile eingefügt |
+| `providers`                        | ja   | Anbieterkonfiguration einschließlich API-Schlüssel: Art (`local`, `api_key`, `cli_delegate`), Name, Basis-URL, Zugangsdaten. Betreiber-Entscheidung vom 2026-09-08: Schlüssel werden mitsynchronisiert, damit ein Anbieter einmal statt je Gerät eingerichtet wird — siehe Abschnitt Anbietermodelle                                                                                                                                         |
+| `models`                           | ja   | Abgefragter Modellkatalog als Cache mit Abrufzeitpunkt; lokale und Anbietermodelle in einer Tabelle                                                                                                                                                                                                                                                                                                                                          |
+| `device_downloaded_models_no_sync` | nein | Lokal verifizierte GGUF-Dateien: Modell-ID, Pfad **relativ zu** `AppLocalData/models/`, Größe, Abrufdatum; nach Import oder Restore erneut prüfen                                                                                                                                                                                                                                                                                            |
+| `chat_threads`                     | ja   | Gespräch: ID, Titel, zuletzt genutzter Anbieter und Modell, Zeitstempel                                                                                                                                                                                                                                                                                                                                                                      |
+| `chat_messages`                    | ja   | Abgeschlossene Nachricht: ID, Gespräch, Elternnachricht, Rolle, Inhalt, erzeugender Anbieter und Modell, Token-Zähler, Abschlussstatus                                                                                                                                                                                                                                                                                                       |
+| `app_settings_no_sync`             | nein | Gerätebezogene Vorbelegungen, Anbieter-Aktivierung je Gerät sowie lokale Generierungsaufträge und Zwischenstände. Keine Zugangsdaten — die liegen in `providers`                                                                                                                                                                                                                                                                             |
 
 Zusätzlich, **außerhalb** aller Vaults: `<AppLocalData>/installation-id` als Datei mit einer einzigen zufälligen UUID. Wird beim ersten Holzi-Start auf einem Host geschrieben (fsync) und danach von jedem `open_instance` als Lookup-Key für `known_devices` gelesen. Verlässt das Gerät niemals; ist für alle Vaults auf diesem Host gleich.
 
@@ -130,7 +130,7 @@ Für die spätere Sync-Etappe: nur explizit freigegebene Tabellen und Spalten ge
 
 **Was `_no_sync` nicht leistet**: der Suffix hält Zeilen aus dem Sync-Kanal heraus — er schützt nicht gegen `cp`. „Gerätelokal" heißt hier „wandert nicht über den Sync", nicht „ist gegen Dateizugriff geschützt" — gegen Dateizugriff schützt allein SQLCipher. Für Holzi bleibt das Installation-spezifische bewusst als Datei **außerhalb** der Vault-DB (die Installations-UUID in `<AppLocalData>/installation-id`); die per-Vault-per-Installation-Identität in `known_devices` unterscheidet sich pro Replikat, weil die im Bootstrap gemintete Vault-Device-UUID zufällig ist. Die `installation_uuid`-Zeilenidentität wird als `row_pks` übertragen, nicht als veränderbares Spaltenfeld — die Cross-Vault-Unlinkability zwischen zwei Vaults desselben Users, die ein Ausschluss dieser Identität anstreben würde, wird nicht als Ziel geführt (siehe Contract §"Vault identity and device model" für die Begründung).
 
-**Anbieter-API-Schlüssel sind ausdrücklich Sync-Payload** (Betreiber-Entscheidung vom 2026-09-08). Sie unterscheiden sich kategorisch von privaten Instanzschlüsseln: letztere *sind* die Geräteidentität und müssen je Replikat verschieden sein, erstere sind Zugangsdaten zu einem externen Konto, das für alle Geräte dasselbe ist. Ein Anbieter wird damit einmal eingerichtet statt je Gerät.
+**Anbieter-API-Schlüssel sind ausdrücklich Sync-Payload** (Betreiber-Entscheidung vom 2026-09-08). Sie unterscheiden sich kategorisch von privaten Instanzschlüsseln: letztere _sind_ die Geräteidentität und müssen je Replikat verschieden sein, erstere sind Zugangsdaten zu einem externen Konto, das für alle Geräte dasselbe ist. Ein Anbieter wird damit einmal eingerichtet statt je Gerät.
 
 ## Lokale Inferenz: Runtime und Modellbezug
 
@@ -138,13 +138,13 @@ Für die spätere Sync-Etappe: nur explizit freigegebene Tabellen und Spalten ge
 
 Diese Wahl ersetzt die Sidecar-Empfehlung der Erstfassung. Der Trade-off ist real und wird hier festgehalten, damit er nicht später als übersehener Punkt zurückkommt:
 
-| | `mistral.rs` in-process (gewählt) | `llama.cpp` als Sidecar (Erstfassung) |
-| --- | --- | --- |
-| Prozess-Isolation bei OOM | keine — reißt die App mit | ja |
-| Quantisierungs-Abdeckung | gut | am breitesten |
-| Auf iOS lauffähig | ja | **nein** — keine fremden Subprozesse |
-| Auslieferung | ein Artefakt | Binary je Zielarchitektur bündeln |
-| Betriebsaufwand | keiner | Loopback-Port, Authentifizierung, verwaiste Prozesse vermeiden |
+|                           | `mistral.rs` in-process (gewählt) | `llama.cpp` als Sidecar (Erstfassung)                          |
+| ------------------------- | --------------------------------- | -------------------------------------------------------------- |
+| Prozess-Isolation bei OOM | keine — reißt die App mit         | ja                                                             |
+| Quantisierungs-Abdeckung  | gut                               | am breitesten                                                  |
+| Auf iOS lauffähig         | ja                                | **nein** — keine fremden Subprozesse                           |
+| Auslieferung              | ein Artefakt                      | Binary je Zielarchitektur bündeln                              |
+| Betriebsaufwand           | keiner                            | Loopback-Port, Authentifizierung, verwaiste Prozesse vermeiden |
 
 Ausschlaggebend war die iOS-Zeile: ein Sidecar bedeutet auf Dauer zwei Inferenz-Implementierungen. Der Preis dafür ist der Verzicht auf Prozess-Isolation — ein Modell, das den Speicher überschreitet, beendet die Anwendung statt nur den Runner. Das muss die Abnahme abdecken.
 
@@ -156,11 +156,11 @@ Ausschlaggebend war die iOS-Zeile: ein Sidecar bedeutet auf Dauer zwei Inferenz-
 
 Neben lokaler Inferenz stehen Anbietermodelle ab Tag 1 zur Verfügung. Drei Anbieterklassen:
 
-| Klasse | Authentifizierung | Abrechnung | Beispiel |
-| --- | --- | --- | --- |
-| `local` | keine | keine | `mistral.rs` mit lokaler GGUF |
-| `api_key` | Schlüssel in `providers`, geschützt durch SQLCipher | pro Token | Anthropic API, OpenAI API, Google Gemini API |
-| `cli_delegate` | Token/Session-Datei in der Vault-SQLite, ephemer pro Aufruf injiziert | vorhandenes Abonnement | `claude`, `codex` |
+| Klasse         | Authentifizierung                                                     | Abrechnung             | Beispiel                                     |
+| -------------- | --------------------------------------------------------------------- | ---------------------- | -------------------------------------------- |
+| `local`        | keine                                                                 | keine                  | `mistral.rs` mit lokaler GGUF                |
+| `api_key`      | Schlüssel in `providers`, geschützt durch SQLCipher                   | pro Token              | Anthropic API, OpenAI API, Google Gemini API |
+| `cli_delegate` | Token/Session-Datei in der Vault-SQLite, ephemer pro Aufruf injiziert | vorhandenes Abonnement | `claude`, `codex`                            |
 
 Die Klasse `cli_delegate` ist der Weg, ein bestehendes Abonnement zu nutzen. Holzi ruft das offizielle Kommandozeilenprogramm des Anbieters als Unterprozess auf. **Revidiert am 2026-09-11** (siehe [docs/plans/2026-09-11-agent-tool-loop-design.md](../docs/plans/2026-09-11-agent-tool-loop-design.md) §8.3-8.4): die ursprüngliche Annahme "das aufgerufene Programm authentifiziert selbst" — also eine bereits auf dem Host bestehende Login-Session (`claude login`/`codex login`) — widerspricht dem Portabilitätsziel, die Vault-Datei auf einen fremden Rechner mitzunehmen und dort ohne Host-seitige Vorbereitung nutzen zu können. Stattdessen führt der Setup-Flow `codex login` mit einem **vorab angelegten temporären Verzeichnis** als `CODEX_HOME` aus, liest ausschließlich `<temp>/auth.json`, speichert dessen Inhalt verschlüsselt in der Vault und entfernt das Verzeichnis garantiert sowohl bei Erfolg als auch bei jedem Fehler (RAII/`finally`). Die Host-Konfiguration (`~/.codex`) wird dabei weder gelesen noch beschrieben. Pro Aufruf wird ein frisches Temp-Verzeichnis (`CLAUDE_CONFIG_DIR`/`CODEX_HOME`) plus Prozess-`cwd` mit den Vault-Daten befüllt und danach gelöscht. **Holzi sieht dabei weiterhin keine Zugangsdaten außerhalb der eigenen verschlüsselten Vault.** Dieselben Temp-Verzeichnisse blockieren zugleich jede host-seitige `CLAUDE.md`/`AGENTS.md`/globale Settings-Discovery — Claude/Codex sehen ausschließlich, was holzi ihnen explizit übergibt.
 
@@ -178,12 +178,12 @@ Kein automatischer Modellwechsel und kein stillschweigendes Ausweichen zwischen 
 
 Zwei Begriffe, die auseinandergehalten werden müssen:
 
-| | Bereich | Synchronisiert | Im MVP |
-| --- | --- | --- | --- |
-| Installations-UUID (Geräteweit, in `<AppLocalData>/installation-id`) | pro Installation | nie | ja |
-| Vault-Device-UUID (HLC-Node-ID, in `known_devices`) | pro (Vault × Installation) | ja | ja |
-| Vault-Identity-Keypair (Auth zwischen Replikaten) | pro Vault | ja | ja |
-| Peer-Records und Berechtigungen | Föderation | ja, signierte öffentliche Datensätze | ja (Verbinden/Genesis); weiterer Sync-Ausbau folgt |
+|                                                                      | Bereich                    | Synchronisiert                       | Im MVP                                             |
+| -------------------------------------------------------------------- | -------------------------- | ------------------------------------ | -------------------------------------------------- |
+| Installations-UUID (Geräteweit, in `<AppLocalData>/installation-id`) | pro Installation           | nie                                  | ja                                                 |
+| Vault-Device-UUID (HLC-Node-ID, in `known_devices`)                  | pro (Vault × Installation) | ja                                   | ja                                                 |
+| Vault-Identity-Keypair (Auth zwischen Replikaten)                    | pro Vault                  | ja                                   | ja                                                 |
+| Peer-Records und Berechtigungen                                      | Föderation                 | ja, signierte öffentliche Datensätze | ja (Verbinden/Genesis); weiterer Sync-Ausbau folgt |
 
 Die Vault-Identity liegt als singleton `vault_identity`-Zeile in der DB und wird von jedem `cp` mitkopiert; sie ist damit automatisch auf jedem Replikat verfügbar. Der direkte Kopierweg authentifiziert den ersten Verbindungsaufbau per Proof-of-Possession dieses Schlüssels, ohne `peer_instances`, Attestierung oder Pairing zu benötigen. Eine Vault-Identity-Rotation ist die Revokationsgrenze: Kopien mit dem alten Schlüssel werden danach abgewiesen. Der separate Verbinden-Weg bleibt der zustimmungsbasierte Pairing-Ablauf.
 
@@ -193,12 +193,12 @@ Die **Vault-Device-UUID** ist die CRDT-Knotenidentität und **muss** je Replikat
 
 **Zwei Wege zu einem zweiten Replikat**, beide vorgesehen:
 
-| | Datei kopieren | Token-/QR-Kopplung (Verbinden, MVP) |
-| --- | --- | --- |
-| Zweites Gerät zur Kopplungszeit nötig | nein | ja |
-| Autorisierter Abschluss offline | ja, per Proof-of-Possession des Vault-Keys beim ersten Verbindungsaufbau | nein; Join benötigt einen erreichbaren Eltern-Peer |
-| Bestehendes Gerät kann Aufnahme vorab verweigern | nein | ja |
-| Andere Geräte erfahren davon | beim nächsten Abgleich | Eltern-Peer sofort, übrige beim Abgleich |
+|                                                  | Datei kopieren                                                           | Token-/QR-Kopplung (Verbinden, MVP)                |
+| ------------------------------------------------ | ------------------------------------------------------------------------ | -------------------------------------------------- |
+| Zweites Gerät zur Kopplungszeit nötig            | nein                                                                     | ja                                                 |
+| Autorisierter Abschluss offline                  | ja, per Proof-of-Possession des Vault-Keys beim ersten Verbindungsaufbau | nein; Join benötigt einen erreichbaren Eltern-Peer |
+| Bestehendes Gerät kann Aufnahme vorab verweigern | nein                                                                     | ja                                                 |
+| Andere Geräte erfahren davon                     | beim nächsten Abgleich                                                   | Eltern-Peer sofort, übrige beim Abgleich           |
 
 Der Kopierweg funktioniert mit [`haexmas/haex-crdt` bei `1c069ef0ea19143af2748f40fc41cba05c94dbe1` (`Cargo.toml`, Paket 0.4.0)](https://github.com/haexmas/haex-crdt/blob/1c069ef0ea19143af2748f40fc41cba05c94dbe1/Cargo.toml): Beim ersten Öffnen der Kopie auf einer neuen Installation findet `DatabaseBootstrap` keinen lokalen `known_devices`-Eintrag, mintet atomar einen frischen und gibt dessen UUID als HLC-Knoten-ID für diesen Open-Vorgang zurück. Kein Rekey, keine Attestierung, kein Token-Round-Trip. Die Vault-Identity ist bereits mitkopiert und autorisiert das neue Replikat gegenüber anderen.
 
@@ -214,16 +214,16 @@ Diese Etappe folgt **nach** dem MVP. Der Katalog bleibt unverändert gültig als
 
 Holzi besitzt seine Instanzen, sein Anwendungsschema, Modell-/Chatlogik und die Entscheidung, welche Peers welche Daten erhalten. `haex-crdt` soll die wiederverwendbare Synchronisierung liefern; Holzi besitzt und verdrahtet den Sync-Transport einschließlich der Scanner-/Apply-APIs. Offen bleiben die konkrete Transportwahl, das Verhalten des Vollabgleichs und die Cursorstrategie.
 
-| Vertragspunkt | Benötigtes Ergebnis |
-| --- | --- |
-| Initialisierung und Lebenszyklus | Sync an eine geöffnete Datenbank binden, starten, pausieren und sauber stoppen können |
-| Peer-Anbindung | Holzi verdrahtet Verbindungsaufbau, Kopplung und authentifizierten/verschlüsselten Transport |
-| Datenfreigabe | Holzi kann lokale Tabellen und Spalten sowohl beim Senden als auch beim Empfangen ausschließen |
-| Vertrauen | Peerfreigaben prüfen und widerrufen können; eine erkannte Peer-ID allein gewährt keinen Zugriff |
-| Wiederverbindung | Offline-Änderungen und unterbrochene Übertragungen zuverlässig nachholen |
-| Merge | Gleichzeitige Änderungen konvergieren; doppelte/umgeordnete Zustellung verursacht keinen Datenverlust |
-| Beobachtbarkeit | Status, Fehler und empfangene Änderungen an die Holzi-UI melden können |
-| Kompatibilität | Unterstützte Schema-/Protokollversionen und Verhalten bei inkompatiblen Daten dokumentieren |
+| Vertragspunkt                    | Benötigtes Ergebnis                                                                                   |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Initialisierung und Lebenszyklus | Sync an eine geöffnete Datenbank binden, starten, pausieren und sauber stoppen können                 |
+| Peer-Anbindung                   | Holzi verdrahtet Verbindungsaufbau, Kopplung und authentifizierten/verschlüsselten Transport          |
+| Datenfreigabe                    | Holzi kann lokale Tabellen und Spalten sowohl beim Senden als auch beim Empfangen ausschließen        |
+| Vertrauen                        | Peerfreigaben prüfen und widerrufen können; eine erkannte Peer-ID allein gewährt keinen Zugriff       |
+| Wiederverbindung                 | Offline-Änderungen und unterbrochene Übertragungen zuverlässig nachholen                              |
+| Merge                            | Gleichzeitige Änderungen konvergieren; doppelte/umgeordnete Zustellung verursacht keinen Datenverlust |
+| Beobachtbarkeit                  | Status, Fehler und empfangene Änderungen an die Holzi-UI melden können                                |
+| Kompatibilität                   | Unterstützte Schema-/Protokollversionen und Verhalten bei inkompatiblen Daten dokumentieren           |
 
 Gemeinsame Abnahme: zwei getrennte verschlüsselte SQLite-Dateien synchronisieren, Verbindung trennen, auf beiden Änderungen schreiben, wieder verbinden und Konvergenz nachweisen. Zusätzlich Duplikate, umgeordnete Zustellung, Neustart nach unterbrochenem Transfer, widerrufene Peers und den Ausschluss privater Schlüssel testen. Empfangen synchronisierter Chatdaten darf keine lokale LLM-Generierung starten.
 
@@ -321,17 +321,17 @@ Heute ausgeführt und erfolgreich:
 
 Heute existieren keine ausführbaren App-Tests. Folgende Befehle sind **Zielverträge, die im Scaffold erst eingerichtet werden müssen**, keine bereits erfolgreich ausgeführten Repository-Kommandos:
 
-| Gate | Geplanter Befehl | Erwartung |
-| --- | --- | --- |
-| Rust Storage/Instanz | `cargo test --manifest-path src-tauri/Cargo.toml --test instance_lifecycle` | obige Fehler- und Reopen-Fälle bestanden |
-| Rust CRDT-Schreibpfad | `cargo test --manifest-path src-tauri/Cargo.toml --test storage_write_path` | Schreibvorgänge tragen vollständige CRDT-Metadaten |
-| Lokale Inferenz | `cargo test --manifest-path src-tauri/Cargo.toml --test local_inference` | Laden, Streaming, Abbruch und Speichermangel enden definiert |
-| Anbieter | `cargo test --manifest-path src-tauri/Cargo.toml --test providers` | Modellabfrage, ungültige Zugangsdaten und Streaming gegen Testdouble |
-| Reales Modell | `pnpm test:llm-smoke` | ein explizit angegebenes lokales Modell antwortet; fehlendes Modell ist Fehler, kein Skip-Erfolg |
-| Frontend | `pnpm typecheck` und `pnpm test:unit` | Typprüfung und relevante UI-Zustände bestanden |
-| Web-UI | `pnpm test:e2e` | Playwright: Onboarding/Chat/Modellwahl, Offline-Assets; IPC-Mocks ausdrücklich als solche kennzeichnen |
-| Paket | `pnpm tauri build` | startbares Artefakt für die Zielarchitektur |
-| Native Abnahme | `pnpm test:native-smoke` | im Scaffold einzurichtender Plattformtest gegen echte App |
+| Gate                  | Geplanter Befehl                                                            | Erwartung                                                                                              |
+| --------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Rust Storage/Instanz  | `cargo test --manifest-path src-tauri/Cargo.toml --test instance_lifecycle` | obige Fehler- und Reopen-Fälle bestanden                                                               |
+| Rust CRDT-Schreibpfad | `cargo test --manifest-path src-tauri/Cargo.toml --test storage_write_path` | Schreibvorgänge tragen vollständige CRDT-Metadaten                                                     |
+| Lokale Inferenz       | `cargo test --manifest-path src-tauri/Cargo.toml --test local_inference`    | Laden, Streaming, Abbruch und Speichermangel enden definiert                                           |
+| Anbieter              | `cargo test --manifest-path src-tauri/Cargo.toml --test providers`          | Modellabfrage, ungültige Zugangsdaten und Streaming gegen Testdouble                                   |
+| Reales Modell         | `pnpm test:llm-smoke`                                                       | ein explizit angegebenes lokales Modell antwortet; fehlendes Modell ist Fehler, kein Skip-Erfolg       |
+| Frontend              | `pnpm typecheck` und `pnpm test:unit`                                       | Typprüfung und relevante UI-Zustände bestanden                                                         |
+| Web-UI                | `pnpm test:e2e`                                                             | Playwright: Onboarding/Chat/Modellwahl, Offline-Assets; IPC-Mocks ausdrücklich als solche kennzeichnen |
+| Paket                 | `pnpm tauri build`                                                          | startbares Artefakt für die Zielarchitektur                                                            |
+| Native Abnahme        | `pnpm test:native-smoke`                                                    | im Scaffold einzurichtender Plattformtest gegen echte App                                              |
 
 Für jedes Gate vor Implementierung konkrete Testdateien gemäß der Tabelle anlegen und dessen Existenz und Ergebnis im jeweiligen Slice nachweisen. Es gibt in Holzi noch kein Testmuster; für Storage am gepinnten externen `tests/end_to_end.rs` orientieren. Browserautomation mit gemocktem Tauri-IPC ersetzt den nativen Test nicht.
 

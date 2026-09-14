@@ -10,13 +10,15 @@ onMounted(async () => {
   let listenerError: unknown
   try {
     await store.startListening()
-  }
-  catch (e) {
+  } catch (e) {
     listenerError = e
   }
   await store.syncAsync()
   if (listenerError !== undefined) {
-    store.lastError = listenerError instanceof Error ? listenerError.message : String(listenerError)
+    store.lastError =
+      listenerError instanceof Error
+        ? listenerError.message
+        : String(listenerError)
   }
 })
 
@@ -44,7 +46,9 @@ async function onUnlocked(name: string) {
 </script>
 
 <template>
-  <main class="min-h-screen flex flex-col items-center justify-center gap-6 p-8">
+  <main
+    class="min-h-screen flex flex-col items-center justify-center gap-6 p-8"
+  >
     <div class="flex flex-col items-center gap-2">
       <h1 class="text-3xl font-semibold">
         {{ t('landing.welcome') }}
@@ -57,10 +61,7 @@ async function onUnlocked(name: string) {
       </UiButton>
     </div>
 
-    <OnboardingInstancesList
-      :instances="store.instances"
-      @select="onSelect"
-    />
+    <OnboardingInstancesList :instances="store.instances" @select="onSelect" />
 
     <p v-if="store.lastError" class="text-sm text-red-500" role="status">
       {{ store.lastError }}

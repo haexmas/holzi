@@ -50,25 +50,48 @@ const emit = defineEmits<{
     v-if="pendingApprovals[0]"
     class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
   >
-    <div class="bg-background border border-border rounded-lg p-4 max-w-md w-full space-y-3">
+    <div
+      class="bg-background border border-border rounded-lg p-4 max-w-md w-full space-y-3"
+    >
       <div class="text-sm font-semibold">
-        {{ t('chat.permission.requestTitle', { name: pendingApprovals[0].toolName }) }}
+        {{
+          t('chat.permission.requestTitle', {
+            name: pendingApprovals[0].toolName,
+          })
+        }}
       </div>
       <div
         class="text-xs"
-        :class="pendingApprovals[0].riskClass === 'risky' ? 'text-destructive' : 'text-muted-foreground'"
+        :class="
+          pendingApprovals[0].riskClass === 'risky'
+            ? 'text-destructive'
+            : 'text-muted-foreground'
+        "
       >
-        {{ pendingApprovals[0].riskClass === 'risky' ? t('chat.permission.risky') : t('chat.permission.safe') }}
+        {{
+          pendingApprovals[0].riskClass === 'risky'
+            ? t('chat.permission.risky')
+            : t('chat.permission.safe')
+        }}
       </div>
-      <pre class="text-xs bg-muted/30 rounded p-2 overflow-x-auto whitespace-pre-wrap">{{ JSON.stringify(pendingApprovals[0].toolInput, null, 2) }}</pre>
+      <pre
+        class="text-xs bg-muted/30 rounded p-2 overflow-x-auto whitespace-pre-wrap"
+        >{{ JSON.stringify(pendingApprovals[0].toolInput, null, 2) }}</pre>
       <div class="flex justify-end gap-2">
         <UiButton size="sm" variant="outline" @click="emit('cancel')">
           {{ t('chat.permission.stopGenerating') }}
         </UiButton>
-        <UiButton size="sm" variant="outline" @click="emit('deny', pendingApprovals[0].requestId)">
+        <UiButton
+          size="sm"
+          variant="outline"
+          @click="emit('deny', pendingApprovals[0].requestId)"
+        >
           {{ t('chat.permission.deny') }}
         </UiButton>
-        <UiButton size="sm" @click="emit('allow', pendingApprovals[0].requestId)">
+        <UiButton
+          size="sm"
+          @click="emit('allow', pendingApprovals[0].requestId)"
+        >
           {{ t('chat.permission.allow') }}
         </UiButton>
       </div>

@@ -13,9 +13,12 @@ import { useDevice } from '~/composables/useDevice'
 export default defineNuxtRouteMiddleware(async (to) => {
   const params = to.params
   const rawInstance = params.instance
-  const instance = typeof rawInstance === 'string'
-    ? rawInstance
-    : Array.isArray(rawInstance) ? (rawInstance[0] ?? '') : ''
+  const instance =
+    typeof rawInstance === 'string'
+      ? rawInstance
+      : Array.isArray(rawInstance)
+        ? (rawInstance[0] ?? '')
+        : ''
   if (!instance) {
     return
   }
@@ -25,8 +28,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
     if (info.alias === null) {
       return navigateTo(`/onboarding/${encodeURIComponent(instance)}`)
     }
-  }
-  catch {
+  } catch {
     // No active instance yet, or backend failure — fall through and
     // let the page's own error handling deal with it. The
     // /chat/[instance] page already surfaces a NoActiveInstance

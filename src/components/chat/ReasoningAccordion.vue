@@ -28,10 +28,16 @@ const expanded = computed({
       <span class="inline-flex items-center gap-1 rounded px-1 py-0.5">
         <Icon name="lucide:brain" class="h-3.5 w-3.5" aria-hidden="true" />
         {{ label }}
-        <Icon name="lucide:chevron-down" class="h-3.5 w-3.5" aria-hidden="true" />
+        <Icon
+          name="lucide:chevron-down"
+          class="h-3.5 w-3.5"
+          aria-hidden="true"
+        />
       </span>
     </summary>
-    <div class="mt-1 max-h-48 overflow-y-auto whitespace-pre-wrap rounded-lg bg-muted/30 px-2 py-1 text-muted-foreground">
+    <div
+      class="mt-1 max-h-48 overflow-y-auto whitespace-pre-wrap rounded-lg bg-muted/30 px-2 py-1 text-muted-foreground"
+    >
       {{ reasoning }}
     </div>
   </details>

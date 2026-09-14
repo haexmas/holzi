@@ -14,8 +14,9 @@ Emitted whenever a backend command changes instance-list-relevant state under `<
 
 ```ts
 type InstanceListChanged = {
-  reason: 'created' | 'opened' | 'closed' | 'imported' | 'trashed' | 'startup-cleanup'
-  affectedName?: string   // Present for single-instance mutations
+  reason:
+    'created' | 'opened' | 'closed' | 'imported' | 'trashed' | 'startup-cleanup'
+  affectedName?: string // Present for single-instance mutations
 }
 ```
 
@@ -29,7 +30,7 @@ Every in-scope mutation is owned by a Tauri command, so the command handler is t
 
 **Explicitly not in v1**: a filesystem watcher on the instances directory for changes made outside the app (CLI drop-in, third-party file managers). v1 has no CLI, no share-intent code path that bypasses `import_instance_file`, and no other in-scope mutator. If such a path is introduced later, a watcher with a debounce and platform-specific backend can reuse this event topic and payload envelope; its producer and new `reason` value must then be added to this contract.
 
-### `active-instance-changed` *(v1 optional)*
+### `active-instance-changed` _(v1 optional)_
 
 Emitted when `AppState.active_instance` transitions between `Some` and `None`, or between two `Some` values (after a close-and-open cycle).
 

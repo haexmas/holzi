@@ -11,7 +11,7 @@ plugin architecture, subagent model, and Agent-SDK-based CLI integration are not
 **Relationship to existing documents**:
 
 - [`CONTEXT.md`](../../CONTEXT.md) §"Chat runtime" defines `Adapter`, `Active Session`, `Session
-  Resolver` — this document extends that vocabulary with `Turn`, `Step`, `Tool`, `Permission Gate`.
+Resolver` — this document extends that vocabulary with `Turn`, `Step`, `Tool`, `Permission Gate`.
 - [`plans/001-desktop-mvp.md`](../../plans/001-desktop-mvp.md) already defines the three provider
   kinds (`local`, `api_key`, `cli_delegate`) and states `cli_delegate` must prove "reiner
   Chatbetrieb: keine Datei-/Shell-Tools, keine Hooks oder MCP-Ausführung" (line 167). §8 of this
@@ -142,7 +142,7 @@ for the Claude Code side**: verified verbatim at
 > use the API key authentication methods described in this document instead.
 
 holzi is exactly the "third party developer's product" this names, and holzi has no such approval.
-`claude-code-acp` is Agent-SDK-based, so it is out. Whether this clause also covers *this project's*
+`claude-code-acp` is Agent-SDK-based, so it is out. Whether this clause also covers _this project's_
 specific way of driving the raw `claude` CLI directly (not the SDK) is genuinely unclear from the
 docs and was not resolved here — **operator decision (2026-09-11): proceed anyway, accepting this as
 an open compliance risk**, using the raw-CLI path below rather than the SDK/ACP path specifically
@@ -160,9 +160,9 @@ mode. **Not yet verified against a real installation** — treat as the leading 
 confirmed fact.
 
 **Claude Code**: raw `claude -p` CLI, no SDK. This has no live mid-run round-trip — a `-p` invocation
-is one task in, one answer out. Tool access is therefore pre-approved *per invocation*, not
+is one task in, one answer out. Tool access is therefore pre-approved _per invocation_, not
 per-call: build a `--allowedTools`/`--mcp-config` whitelist from what the current permission mode
-would allow *before* starting the call, omitting anything that would need a live prompt. This is a
+would allow _before_ starting the call, omitting anything that would need a live prompt. This is a
 real capability gap versus the local/api_key tool loop's live approval, not a workaround to smooth
 over — Manual mode, in particular, cannot offer live per-call confirmation here the way it does for
 built-in/MCP tools.
@@ -181,13 +181,13 @@ authentifiziert selbst" / host-native login); that line needs updating alongside
   `CLAUDE_CONFIG_DIR=<tmp>`; Codex gets `CODEX_HOME=<tmp>` pre-populated with `auth.json`. The
   process's `cwd` is also the temp directory — a live Claude Code bug
   ([anthropics/claude-code#3833](https://github.com/anthropics/claude-code/issues/3833)) writes
-  `.claude/settings.local.json` into the *cwd* regardless of `CLAUDE_CONFIG_DIR`, so cwd must be
+  `.claude/settings.local.json` into the _cwd_ regardless of `CLAUDE_CONFIG_DIR`, so cwd must be
   disposable too. Delete the temp directory after the process exits.
 - Do not pass `--bare` to Claude Code — it ignores `CLAUDE_CODE_OAUTH_TOKEN`.
 
 ### 8.4 Host isolation (holzi as the only source of truth)
 
-Operator requirement (2026-09-11): Claude/Codex must see *only* what holzi gives them — no host
+Operator requirement (2026-09-11): Claude/Codex must see _only_ what holzi gives them — no host
 `CLAUDE.md`/`AGENTS.md`, no host user-global settings, no host project configuration. The mechanisms
 in §8.3 mostly already provide this as a side effect:
 
@@ -237,7 +237,7 @@ real installed CLI version before code is written against it:
    behavior)?
 2. Exact current flags: Claude Code's `--setting-sources`/equivalent, `--append-system-prompt`,
    `--mcp-config`/`--allowedTools` interaction in `-p` mode; Codex's system-prompt-equivalent flag.
-3. Whether `CLAUDE_CONFIG_DIR` and `CODEX_HOME` redirect *everything* (telemetry, cache, logs) or
+3. Whether `CLAUDE_CONFIG_DIR` and `CODEX_HOME` redirect _everything_ (telemetry, cache, logs) or
    only the documented subset — both official doc sources were incomplete on this.
 4. Whether driving the raw `claude` CLI (not the Agent SDK) for a third-party product's end users
    falls under the quoted Agent-SDK ToS clause (§8.1) — a question for Anthropic, not for docs

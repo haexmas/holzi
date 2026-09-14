@@ -18,7 +18,11 @@ const { setPrefAsync } = usePreferences()
 
 const instanceName = computed(() => {
   const raw = route.params.instance
-  return typeof raw === 'string' ? raw : Array.isArray(raw) ? (raw[0] ?? '') : ''
+  return typeof raw === 'string'
+    ? raw
+    : Array.isArray(raw)
+      ? (raw[0] ?? '')
+      : ''
 })
 
 const step = ref<'alias' | 'model'>('alias')
@@ -32,16 +36,17 @@ const loadError = ref<string | null>(null)
 onMounted(async () => {
   try {
     deviceInfo.value = await currentDeviceInfoAsync()
-    alias.value = deviceInfo.value?.alias ?? deviceInfo.value?.hostname ?? t('onboarding.alias.defaultPlaceholder')
-  }
-  catch (e) {
+    alias.value =
+      deviceInfo.value?.alias ??
+      deviceInfo.value?.hostname ??
+      t('onboarding.alias.defaultPlaceholder')
+  } catch (e) {
     loadError.value = e instanceof Error ? e.message : String(e)
     return
   }
   try {
     tiers.value = await recommendTiersAsync()
-  }
-  catch (e) {
+  } catch (e) {
     // Empty catalog only — the model step still lets the operator skip.
     tiers.value = []
     downloadError.value = e instanceof Error ? e.message : String(e)
@@ -59,8 +64,7 @@ async function finalizeAliasAsync() {
 async function completeWithoutModel() {
   try {
     await finalizeAliasAsync()
-  }
-  catch (e) {
+  } catch (e) {
     loadError.value = e instanceof Error ? e.message : String(e)
     return
   }
@@ -85,18 +89,18 @@ async function completeWithModel(rec: TierRecommendation) {
     )
     await finalizeAliasAsync()
     await navigateTo(`/workspace/${encodeURIComponent(instanceName.value)}`)
-  }
-  catch (e) {
+  } catch (e) {
     downloadError.value = e instanceof Error ? e.message : String(e)
-  }
-  finally {
+  } finally {
     downloadingId.value = null
   }
 }
 </script>
 
 <template>
-  <main class="min-h-screen flex flex-col items-center justify-center gap-6 p-6">
+  <main
+    class="min-h-screen flex flex-col items-center justify-center gap-6 p-6"
+  >
     <div class="w-full max-w-xl flex flex-col gap-4">
       <div>
         <h1 class="text-2xl font-semibold">

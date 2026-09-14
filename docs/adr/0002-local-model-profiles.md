@@ -7,11 +7,11 @@ Date: 2026-09-13
 
 Holzi uses Qwen3 as its default local model family:
 
-| Target | Preset | Quantization | Purpose |
-| --- | --- | --- | --- |
-| Desktop | Qwen3-4B | Q4_K_M | Default local assistant and tool-loop model |
-| Smartphone | Qwen3-1.7B | Q4_K_M | Default mobile assistant within a smaller memory budget |
-| Smartphone, low memory | Qwen3-0.6B | Q4_K_M | Fallback for constrained devices and smoke tests |
+| Target                 | Preset     | Quantization | Purpose                                                 |
+| ---------------------- | ---------- | ------------ | ------------------------------------------------------- |
+| Desktop                | Qwen3-4B   | Q4_K_M       | Default local assistant and tool-loop model             |
+| Smartphone             | Qwen3-1.7B | Q4_K_M       | Default mobile assistant within a smaller memory budget |
+| Smartphone, low memory | Qwen3-0.6B | Q4_K_M       | Fallback for constrained devices and smoke tests        |
 
 The desktop catalog contains all three Qwen3 GGUF profiles so hardware-fit
 recommendations can select a smaller model when the host cannot accommodate
