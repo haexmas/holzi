@@ -950,13 +950,13 @@ fn normalize_search_hit(hit: RawModelInfo) -> Option<HuggingFaceModelResult> {
     })
 }
 
+pub const DEFAULT_TOP_LIMIT: usize = 10;
+
 /// `search_huggingface_models`: validates an optional query, fetches one page
 /// from the Hub, normalizes and GGUF-filters every hit, then deduplicates and
 /// deterministically sorts the result. Without a query the Hub's download
 /// sort supplies the default top-model view, capped at ten entries; explicit
 /// searches retain the larger twenty-entry limit.
-pub const DEFAULT_TOP_LIMIT: usize = 10;
-
 pub async fn search_models(
     hf: &HfClient,
     query: Option<&str>,
