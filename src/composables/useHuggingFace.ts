@@ -148,7 +148,7 @@ export function useHuggingFace() {
  * `errors.${kind}` pattern already used for instance-management errors.
  */
 export function hfErrorKey(e: unknown): string {
-  const kind = e && typeof e === 'object' && 'kind' in e ? (e as { kind: unknown }).kind : undefined
+  const kind = structuredHfError(e)?.kind
   switch (kind) {
     case 'InvalidInput':
       return 'errors.hf.invalidInput'
@@ -166,6 +166,8 @@ export function hfErrorKey(e: unknown): string {
       return 'errors.hf.tokenizerRequired'
     case 'HardwareConfirmationRequired':
       return 'errors.hf.hardwareConfirmationRequired'
+    case 'ModelDownload':
+      return 'errors.hf.modelDownload'
     case 'ModelRegistrationFailed':
       return 'errors.hf.modelRegistrationFailed'
     case 'ModelNotFound':
@@ -173,4 +175,35 @@ export function hfErrorKey(e: unknown): string {
     default:
       return 'errors.hf.generic'
   }
+}
+
+/**
+ * Returns the backend's technical reason when Tauri rejected with a
+ * structured HolziError. Tauri can deliver that error either as an object or
+ * as a JSON string, so both forms are accepted here.
+ */
+export function hfErrorDetail(e: unknown): string | null {
+  const reason = structuredHfError(e)?.reason
+  if (typeof reason === 'string' && reason.length > 0) return reason
+  if (e instanceof Error && e.message.length > 0) return e.message
+  if (typeof e === 'string' && e.length > 0) return e
+  return null
+}
+
+function structuredHfError(e: unknown): { kind?: unknown, reason?: unknown } | null {
+  if (e && typeof e === 'object' && 'kind' in e) {
+    return e as { kind?: unknown, reason?: unknown }
+  }
+  if (typeof e !== 'string') return null
+  try {
+    const parsed: unknown = JSON.parse(e)
+    if (parsed && typeof parsed === 'object' && 'kind' in parsed) {
+      return parsed as { kind?: unknown, reason?: unknown }
+    }
+  }
+  catch {
+    // The native bridge may return a plain string; the caller still gets the
+    // localized generic error in that case.
+  }
+  return null
 }

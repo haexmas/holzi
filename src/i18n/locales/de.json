@@ -330,6 +330,7 @@
       "unsupportedFormat": "Diese Datei ist kein installierbares GGUF.",
       "tokenizerRequired": "Ein Tokenizer-Repository wird benötigt.",
       "hardwareConfirmationRequired": "Diese Datei benötigt wegen ihrer Größe eine ausdrückliche Bestätigung.",
+      "modelDownload": "Der Modelldownload ist fehlgeschlagen.",
       "modelRegistrationFailed": "Die Installation konnte nicht abgeschlossen werden.",
       "modelNotFound": "Modell wurde nicht gefunden.",
       "generic": "Unbekannter Fehler."

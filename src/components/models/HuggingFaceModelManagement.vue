@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { UnlistenFn } from '@tauri-apps/api/event'
-import { hfErrorKey, useHuggingFace, type HuggingFaceModelResult, type HuggingFaceUpdateStatus } from '~/composables/useHuggingFace'
+import { hfErrorDetail, hfErrorKey, useHuggingFace, type HuggingFaceModelResult, type HuggingFaceUpdateStatus } from '~/composables/useHuggingFace'
 import { useModels, type DownloadProgressEvent, type InstalledModel } from '~/composables/useModels'
 import { useCatalog, type CatalogEntryWithFit } from '~/composables/useCatalog'
 import { useChat } from '~/composables/useChat'
@@ -26,6 +26,7 @@ const catalogEntries = ref<CatalogEntryWithFit[]>([])
 const activeModelId = ref<string | null>(null)
 
 const listErrorKey = ref<string | null>(null)
+const listErrorDetail = ref<string | null>(null)
 const loading = ref(true)
 
 const selectedRepo = ref<HuggingFaceModelResult | null>(null)
@@ -33,6 +34,7 @@ const selectedRepo = ref<HuggingFaceModelResult | null>(null)
 const updateStatuses = ref<Record<string, HuggingFaceUpdateStatus>>({})
 const checkingUpdates = ref(false)
 const updateErrorKey = ref<string | null>(null)
+const updateErrorDetail = ref<string | null>(null)
 const installingUpdateId = ref<string | null>(null)
 
 const busyModelId = ref<string | null>(null)
@@ -56,6 +58,7 @@ const integrityActionError = ref<string | null>(null)
 async function reloadAsync() {
   loading.value = true
   listErrorKey.value = null
+  listErrorDetail.value = null
   try {
     const [installedList, catalogList, active] = await Promise.all([
       listInstalledAsync(),
@@ -68,6 +71,7 @@ async function reloadAsync() {
   }
   catch (e) {
     listErrorKey.value = hfErrorKey(e)
+    listErrorDetail.value = hfErrorDetail(e)
   }
   finally {
     loading.value = false
@@ -77,12 +81,14 @@ async function reloadAsync() {
 async function checkUpdatesNowAsync() {
   checkingUpdates.value = true
   updateErrorKey.value = null
+  updateErrorDetail.value = null
   try {
     const statuses = await checkUpdatesAsync()
     updateStatuses.value = Object.fromEntries(statuses.map((s) => [s.modelId, s]))
   }
   catch (e) {
     updateErrorKey.value = hfErrorKey(e)
+    updateErrorDetail.value = hfErrorDetail(e)
   }
   finally {
     checkingUpdates.value = false
@@ -92,6 +98,7 @@ async function checkUpdatesNowAsync() {
 async function installUpdateForAsync(modelId: string) {
   installingUpdateId.value = modelId
   updateErrorKey.value = null
+  updateErrorDetail.value = null
   try {
     await installUpdateAsync(modelId)
     await reloadAsync()
@@ -99,6 +106,7 @@ async function installUpdateForAsync(modelId: string) {
   }
   catch (e) {
     updateErrorKey.value = hfErrorKey(e)
+    updateErrorDetail.value = hfErrorDetail(e)
   }
   finally {
     installingUpdateId.value = null
@@ -109,12 +117,14 @@ async function installUpdateForAsync(modelId: string) {
 async function downloadCatalogEntryAsync(entry: CatalogEntryWithFit) {
   busyModelId.value = entry.id
   listErrorKey.value = null
+  listErrorDetail.value = null
   try {
     await downloadFromCatalogAsync(entry.id)
     await reloadAsync()
   }
   catch (e) {
     listErrorKey.value = hfErrorKey(e)
+    listErrorDetail.value = hfErrorDetail(e)
   }
   finally {
     busyModelId.value = null
@@ -216,7 +226,8 @@ async function onLoadUntrustedAsync() {
     await reloadAsync()
   }
   catch (e) {
-    integrityActionError.value = t(hfErrorKey(e))
+    const detail = hfErrorDetail(e)
+    integrityActionError.value = `${t(hfErrorKey(e))}${detail ? `: ${detail}` : ''}`
   }
   finally {
     integrityBusy.value = false
@@ -248,7 +259,8 @@ async function onRepairSourceAsync() {
     }
   }
   catch (e) {
-    integrityActionError.value = t(hfErrorKey(e))
+    const detail = hfErrorDetail(e)
+    integrityActionError.value = `${t(hfErrorKey(e))}${detail ? `: ${detail}` : ''}`
   }
   finally {
     integrityBusy.value = false
@@ -324,6 +336,7 @@ onBeforeUnmount(() => {
 
     <p v-if="listErrorKey" class="text-sm text-red-500" role="alert">
       {{ t(listErrorKey) }}
+      <span v-if="listErrorDetail" class="block text-xs">{{ listErrorDetail }}</span>
     </p>
 
     <div v-if="loading" class="text-sm text-neutral-500">
@@ -342,6 +355,7 @@ onBeforeUnmount(() => {
         </div>
         <p v-if="updateErrorKey" class="text-sm text-red-500" role="alert">
           {{ t(updateErrorKey) }}
+          <span v-if="updateErrorDetail" class="block text-xs">{{ updateErrorDetail }}</span>
         </p>
         <p v-if="loadErrorKey" class="text-sm text-red-500" role="alert">
           {{ t(loadErrorKey) }}
