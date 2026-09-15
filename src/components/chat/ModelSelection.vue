@@ -2,19 +2,17 @@
 /**
  * The chat page's "no model loaded yet" states: downloading a catalog
  * model when none are installed, or picking an installed/provider model
- * once at least one is available — plus the pre-load integrity dialog
- * (`ModelsModelIntegrityDialog`) that either path can trigger.
+ * once at least one is available.
  *
  * Extracted from `src/pages/chat/[instance].vue` (2026-09-15 review,
  * split step 4/4). Every ref that drives this UI (activeModel,
- * installedModels, catalogEntries, downloadingId, integrityDialog, ...)
+ * installedModels, catalogEntries, downloadingId, ...)
  * stays on the page — this component is markup plus pure display
  * helpers, driven entirely through props/emits, so nothing the 19
  * `check-chat-state.ts` replay tests or the composer/send-flow depends
  * on moved with it.
  */
 import type { CatalogEntryWithFit } from '~/composables/useCatalog'
-import type { ModelIntegrityFailure } from '~/composables/useModels'
 
 export type ModelGroup = {
   providerId: string
@@ -33,18 +31,11 @@ defineProps<{
   activeModelId: string
   busy: boolean
   modelGroups: ModelGroup[]
-  integrityDialog: ModelIntegrityFailure | null
-  integrityBusy: boolean
-  integrityActionError: string | null
 }>()
 
 const emit = defineEmits<{
   downloadCatalogEntry: [entry: CatalogEntryWithFit]
   loadModel: [id: string]
-  integrityDialogOpenChange: [open: boolean]
-  integrityLoadUntrusted: []
-  integrityRepairSource: []
-  integrityChooseOther: []
 }>()
 
 function onModelPicked(event: Event) {
@@ -202,18 +193,4 @@ function downloadProgressPercent(
       </select>
     </div>
   </div>
-
-  <ModelsModelIntegrityDialog
-    v-if="integrityDialog"
-    :open="integrityDialog !== null"
-    :error-kind="integrityDialog.errorKind"
-    :expected-sha256="integrityDialog.expected"
-    :actual-sha256="integrityDialog.actual"
-    :busy="integrityBusy"
-    :action-error="integrityActionError"
-    @update:open="emit('integrityDialogOpenChange', $event)"
-    @load-untrusted="emit('integrityLoadUntrusted')"
-    @repair-source="emit('integrityRepairSource')"
-    @choose-other="emit('integrityChooseOther')"
-  />
 </template>

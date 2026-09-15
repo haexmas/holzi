@@ -1145,15 +1145,8 @@ onBeforeUnmount(() => {
         :active-model-id="activeModelId"
         :busy="busy"
         :model-groups="modelGroups"
-        :integrity-dialog="integrityDialog"
-        :integrity-busy="integrityBusy"
-        :integrity-action-error="integrityActionError"
         @download-catalog-entry="downloadCatalogEntry"
         @load-model="loadModel"
-        @integrity-dialog-open-change="onIntegrityDialogOpenChange"
-        @integrity-load-untrusted="onIntegrityLoadUntrusted"
-        @integrity-repair-source="onIntegrityRepairSource"
-        @integrity-choose-other="onIntegrityChooseOther"
       />
 
       <div v-else class="flex-1 flex flex-col overflow-hidden">
