@@ -1,27 +1,31 @@
 <script setup lang="ts">
 /*
- * Maintainability exception (spaex 500-LoC rule): this page holds the
- * thread sidebar, the transcript, the composer, model selection and
- * download, and the whole streaming event surface (token, retry,
- * complete, error, tool call/result, turn complete, permission request,
- * model load) in one file.
+ * Maintainability exception (spaex 500-LoC rule): the 2026-09-15
+ * review's four-step split is done — see `scripts/check-chat-state.ts`'s,
+ * `useChatTranscript.ts`'s, `useThreadSidebar.ts`'s and
+ * `ModelSelection.vue`'s own history. At ~1400 lines this page is still
+ * over the limit: the composer/send flow (`send`, `abort`, `newChat`,
+ * `lock`, ~250 lines) and model lifecycle (`loadModel`, the integrity-
+ * dialog handlers, `downloadCatalogEntry`, `refreshInstalledAndCatalog`/
+ * `refreshProviders`, the `onLoad*` status handlers, ~300 lines) are
+ * still here, plus the `onMounted` wiring that ties the transcript and
+ * thread-sidebar composables together.
  *
- * It stays whole because `scripts/check-chat-state.ts` is its only
- * executable test: that harness extracts this `<script setup>` block,
- * transpiles it and executes it in a sandbox that resolves every
- * `~/composables/*` import to the real file (mocking only Tauri's own
- * `invoke`/`listen`, `onMounted`/`onBeforeUnmount`, and `dompurify`) — so
- * logic already in a composable stays under test. Splitting *this* file's
- * own logic into a new composable would still delete its coverage until
- * the extraction is done, so that must happen in one step per composable,
- * not incrementally.
+ * `ModelSelection.vue`'s own header already flagged why step 4 stopped
+ * short of moving that model lifecycle state out too: activeModel,
+ * installedModels, catalogEntries, providerList, providerModels and the
+ * download/integrity/load-status refs are read by composer logic
+ * (`sendDisabled`, `send()`'s persisted `modelId`) as much as by the
+ * model-management UI, so moving them into a plain composable would only
+ * duplicate state between this page and `ModelSelection.vue` — a Pinia
+ * store is the fit once that migration gets its own dedicated session.
  *
- * Concrete split plan, in order (steps 1-3 are done — see
- * `scripts/check-chat-state.ts`'s, `useChatTranscript.ts`'s and
- * `useThreadSidebar.ts`'s own history):
- *   4. Move model selection, download progress and the integrity dialog
- *      into a child component; it already shares
- *      `parseModelIntegrityFailure` with `HuggingFaceModelManagement.vue`.
+ * Concrete split plan, if this grows further before that migration:
+ * extract the composer/send flow (`send`, `abort`, `newChat`,
+ * `pendingSend`, `effortLevel`/`effortTokens`, `input`, `busy`,
+ * `turnSetupPending`) into a `useComposer` composable next to
+ * `useChatTranscript`/`useThreadSidebar`, taking the same instance
+ * (`chat`, `chatTranscript`) as a dependency.
  */
 import { computed, onMounted, onBeforeUnmount, ref, nextTick } from 'vue'
 import type { UnlistenFn } from '@tauri-apps/api/event'
@@ -60,6 +64,9 @@ import PermissionPrompt, {
 } from '~/components/chat/PermissionPrompt.vue'
 import ComposerSettingsPopover from '~/components/chat/ComposerSettingsPopover.vue'
 import ReasoningAccordion from '~/components/chat/ReasoningAccordion.vue'
+import ModelSelection, {
+  type ModelGroup,
+} from '~/components/chat/ModelSelection.vue'
 import { useAutoResizeTextarea } from '~/composables/useAutoResizeTextarea'
 
 definePageMeta({
@@ -264,11 +271,6 @@ const noModelsInstalled = computed(
 const activeModelId = computed(() => activeModel.value?.modelId ?? '')
 
 /** Groups selectable models by provider for the picker's <optgroup>. */
-type ModelGroup = {
-  providerId: string
-  providerName: string
-  models: { id: string; name: string }[]
-}
 const modelGroups = computed<ModelGroup[]>(() => {
   const localGroup: ModelGroup | null =
     installedModels.value.length > 0
@@ -659,40 +661,6 @@ function errString(e: unknown): string {
     return JSON.stringify(e)
   }
   return String(e)
-}
-
-/** Formats a byte count for the model download UI. */
-function humanBytes(n: number | null): string {
-  if (n === null) return '?'
-  const kb = 1024
-  const mb = kb * 1024
-  const gb = mb * 1024
-  if (n >= gb) return (n / gb).toFixed(1) + ' GB'
-  if (n >= mb) return (n / mb).toFixed(0) + ' MB'
-  return (n / kb).toFixed(0) + ' KB'
-}
-
-function downloadProgressPercent(modelId: string): number | null {
-  if (
-    downloadingId.value !== modelId ||
-    downloadTotalBytes.value === null ||
-    downloadTotalBytes.value <= 0
-  )
-    return null
-  return Math.min(
-    100,
-    Math.max(
-      0,
-      Math.round(
-        (downloadProgressBytes.value / downloadTotalBytes.value) * 100,
-      ),
-    ),
-  )
-}
-
-/** Maps a hardware-fit verdict to its localized display label. */
-function fitLabel(f: CatalogEntryWithFit['fit']): string {
-  return t(`chat.fit.${f}`)
 }
 
 function setReasoningExpanded(messageId: string, expanded: boolean) {
@@ -1164,98 +1132,29 @@ onBeforeUnmount(() => {
         {{ loadingLabel }}
       </div>
 
-      <div v-if="noModelsInstalled" class="flex-1 overflow-y-auto p-6">
-        <h2 class="text-lg font-semibold mb-4">
-          {{ t('chat.empty.noModelsTitle') }}
-        </h2>
-        <p class="text-sm text-muted-foreground mb-6">
-          {{ t('chat.empty.noModelsDescription') }}
-        </p>
-        <div class="space-y-2">
-          <div
-            v-for="e in catalogEntries"
-            :key="e.id"
-            class="relative overflow-hidden border border-border rounded p-3 flex items-center justify-between gap-4"
-          >
-            <div
-              v-if="downloadingId === e.id"
-              class="pointer-events-none absolute inset-y-0 left-0 bg-blue-100/70 transition-[width] duration-150"
-              :class="
-                downloadProgressPercent(e.id) === null ? 'animate-pulse' : ''
-              "
-              :style="{ width: `${downloadProgressPercent(e.id) ?? 35}%` }"
-              role="progressbar"
-              :aria-valuenow="downloadProgressPercent(e.id) ?? undefined"
-              aria-valuemin="0"
-              aria-valuemax="100"
-              :aria-label="`${humanBytes(downloadProgressBytes)} / ${humanBytes(downloadTotalBytes)}`"
-            />
-            <div class="relative z-10 flex-1 min-w-0">
-              <div class="font-medium text-sm">
-                {{ e.name }}
-              </div>
-              <div class="text-xs text-muted-foreground truncate">
-                {{ e.hf_repo }}/{{ e.hf_filename }}
-              </div>
-              <div class="text-xs text-muted-foreground">
-                {{
-                  t('chat.catalog.meta', {
-                    size: humanBytes(e.approx_size_bytes),
-                    context: e.context_window.toLocaleString(),
-                    license: e.license,
-                    fit: fitLabel(e.fit),
-                  })
-                }}
-              </div>
-            </div>
-            <div class="relative z-10">
-              <UiButton
-                size="sm"
-                :disabled="downloadingId !== null"
-                @click="downloadCatalogEntry(e)"
-              >
-                <template v-if="downloadingId === e.id">
-                  {{ humanBytes(downloadProgressBytes) }} /
-                  {{ humanBytes(downloadTotalBytes) }}
-                </template>
-                <template v-else>
-                  {{ t('chat.download') }}
-                </template>
-              </UiButton>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div
-        v-else-if="!activeModel && !modelLoadPending && !loadingPhase"
-        class="flex-1 flex items-center justify-center p-6 text-muted-foreground"
-      >
-        <div class="flex w-full max-w-sm flex-col gap-3">
-          <p>{{ t('chat.model.selectPrompt') }}</p>
-          <label for="chat-model-empty" class="sr-only">{{
-            t('chat.model.label')
-          }}</label>
-          <select
-            id="chat-model-empty"
-            class="rounded-lg border border-border bg-background px-3 py-2 text-sm"
-            :value="activeModelId"
-            :disabled="busy"
-            @change="(e) => loadModel((e.target as HTMLSelectElement).value)"
-          >
-            <option value="" disabled>{{ t('chat.model.choose') }}</option>
-            <optgroup
-              v-for="group in modelGroups"
-              :key="group.providerId"
-              :label="group.providerName"
-            >
-              <option v-for="m in group.models" :key="m.id" :value="m.id">
-                {{ m.name }}
-              </option>
-            </optgroup>
-          </select>
-        </div>
-      </div>
+      <ModelSelection
+        v-if="
+          noModelsInstalled ||
+          (!activeModel && !modelLoadPending && !loadingPhase)
+        "
+        :no-models-installed="noModelsInstalled"
+        :catalog-entries="catalogEntries"
+        :downloading-id="downloadingId"
+        :download-progress-bytes="downloadProgressBytes"
+        :download-total-bytes="downloadTotalBytes"
+        :active-model-id="activeModelId"
+        :busy="busy"
+        :model-groups="modelGroups"
+        :integrity-dialog="integrityDialog"
+        :integrity-busy="integrityBusy"
+        :integrity-action-error="integrityActionError"
+        @download-catalog-entry="downloadCatalogEntry"
+        @load-model="loadModel"
+        @integrity-dialog-open-change="onIntegrityDialogOpenChange"
+        @integrity-load-untrusted="onIntegrityLoadUntrusted"
+        @integrity-repair-source="onIntegrityRepairSource"
+        @integrity-choose-other="onIntegrityChooseOther"
+      />
 
       <div v-else class="flex-1 flex flex-col overflow-hidden">
         <div
