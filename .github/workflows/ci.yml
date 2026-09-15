@@ -38,6 +38,14 @@ jobs:
       - name: Lint frontend
         run: corepack pnpm lint
 
+      # Prettier's `semi: false` and Vue's template-expression parser
+      # disagree about multi-statement inline handlers: Vue collapses an
+      # attribute's newlines before parsing, so the inline form needs the
+      # `;` separators Prettier strips, and the result fails to compile.
+      # Keep such handlers in named functions — see AliasSetting.vue.
+      - name: Check frontend formatting
+        run: corepack pnpm format:check
+
       - name: Validate documentation
         run: python3 scripts/ci/check-docs.py
   rust:

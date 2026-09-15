@@ -81,6 +81,19 @@ const integrityDialog = ref<ModelIntegrityFailure | null>(null)
 const integrityBusy = ref(false)
 const integrityActionError = ref<string | null>(null)
 
+/**
+ * Switches tabs and drops the picked repository with it.
+ *
+ * A named handler rather than a multi-statement template expression: Vue
+ * collapses a template attribute's newlines before parsing it, so the
+ * inline form needs `;` separators that Prettier's `semi: false` strips,
+ * leaving markup the SFC compiler rejects.
+ */
+function selectTab(tab: Tab) {
+  activeTab.value = tab
+  selectedRepo.value = null
+}
+
 async function reloadAsync() {
   loading.value = true
   listErrorKey.value = null
@@ -343,10 +356,7 @@ onBeforeUnmount(() => {
             ? 'border-b-2 border-blue-500 font-medium'
             : 'text-neutral-500'
         "
-        @click="
-          activeTab = tab
-          selectedRepo = null
-        "
+        @click="selectTab(tab)"
       >
         {{ t(`models.management.tabs.${tab}`) }}
       </button>
