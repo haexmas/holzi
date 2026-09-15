@@ -1,12 +1,12 @@
 {
-  "generation_id": "g_20260915T082738Z_e3b0",
+  "generation_id": "g_20260915T104742Z_e3b0",
   "molecules": [
     {
       "id": "com.github.haexmas.atoms.general-coding",
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "8897bc556eef12947aa70e4be552dbabba02a679",
+      "revision": "f833bf3ffde379353a7060bb7967a584e2014757",
       "source": "https://github.com/haexmas/atoms"
     },
     {
@@ -14,7 +14,7 @@
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "8897bc556eef12947aa70e4be552dbabba02a679",
+      "revision": "f833bf3ffde379353a7060bb7967a584e2014757",
       "source": "https://github.com/haexmas/atoms"
     },
     {
@@ -22,7 +22,7 @@
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "8897bc556eef12947aa70e4be552dbabba02a679",
+      "revision": "f833bf3ffde379353a7060bb7967a584e2014757",
       "source": "https://github.com/haexmas/atoms"
     },
     {
@@ -30,7 +30,7 @@
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "8897bc556eef12947aa70e4be552dbabba02a679",
+      "revision": "f833bf3ffde379353a7060bb7967a584e2014757",
       "source": "https://github.com/haexmas/atoms"
     },
     {
@@ -38,17 +38,17 @@
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "8897bc556eef12947aa70e4be552dbabba02a679",
+      "revision": "f833bf3ffde379353a7060bb7967a584e2014757",
       "source": "https://github.com/haexmas/atoms"
     },
     {
       "id": "com.github.haexmas.atoms.speckit",
       "paths": [],
-      "revision": "8897bc556eef12947aa70e4be552dbabba02a679",
+      "revision": "f833bf3ffde379353a7060bb7967a584e2014757",
       "source": "https://github.com/haexmas/atoms",
       "speckit": {
         "cli_version": "not-run",
-        "declaration_fingerprint": "sha256:f2bd6f2487edf10b4f13cdba21b5987c3d59e59bf4952532e37c07ce450714a7",
+        "declaration_fingerprint": "sha256:decf9be6aa74e653d84405716abdf0b2c92502ea3eb95c6b3f834df25487f7c5",
         "outcomes": {
           "agy": "skipped",
           "alquimia": "skipped",
