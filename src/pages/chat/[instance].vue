@@ -7,16 +7,17 @@
  * model load) in one file.
  *
  * It stays whole because `scripts/check-chat-state.ts` is its only
- * executable test: that harness regex-extracts this `<script setup>`
- * block, strips every `import` line, transpiles what is left and replays
- * it against injected globals. Logic moved into a composable becomes an
- * import — invisible to all 19 replay tests, which cover exactly the
- * event-ordering and ownership rules that make this file long. Splitting
- * first would silently delete that coverage.
+ * executable test: that harness extracts this `<script setup>` block,
+ * transpiles it and executes it in a sandbox that resolves every
+ * `~/composables/*` import to the real file (mocking only Tauri's own
+ * `invoke`/`listen`, `onMounted`/`onBeforeUnmount`, and `dompurify`) — so
+ * logic already in a composable stays under test. Splitting *this* file's
+ * own logic into a new composable would still delete its coverage until
+ * the extraction is done, so that must happen in one step per composable,
+ * not incrementally.
  *
- * Concrete split plan, in order:
- *   1. Rework the harness to import the page's composables directly
- *      instead of stripping imports, so extracted state stays under test.
+ * Concrete split plan, in order (step 1, reworking the harness itself, is
+ * done — see `scripts/check-chat-state.ts`'s own history):
  *   2. Extract `useChatTranscript` — `pendingStreamEvents`,
  *      `pendingToolEvents`, `pendingTurnCompletions`, `turnTerminalWaiters`
  *      and the `apply*`/`handle*` event handlers.

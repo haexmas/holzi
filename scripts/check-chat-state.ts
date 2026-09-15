@@ -1,29 +1,49 @@
-// Run with `node scripts/check-chat-state.ts`. Replays real page handlers
-// with Tauri replaced at its IPC boundary; no browser or GPU is required.
+// Run with `node scripts/check-chat-state.ts`. Replays the real page and its
+// real composables (`useChat`, `useModels`, `useCatalog`, `useProviders`,
+// `useInstance`, `usePreferences`, `useDevice`, `useAutoResizeTextarea`),
+// with Tauri replaced at its actual IPC boundary (`invoke`/`listen` from
+// `@tauri-apps/api/core`/`event`). No browser or GPU is required.
 //
 // Maintainability exception (spaex 500-LoC rule): 19 replay tests plus the
 // `createChatState` scaffold that boots the page's real `<script setup>`
-// against injected globals. The scaffold's shape is dictated by the page
-// it replays, so it must move together with the page's own split; see the
-// plan in `src/pages/chat/[instance].vue`. Splitting these tests across
-// files before that would duplicate the scaffold.
+// against a sandboxed `require` — a hand-rolled CommonJS loader (using the
+// `typescript` package already a dependency here) that transpiles the page
+// and every composable it imports, then executes each in its own `new
+// Function('exports', 'require', code)` sandbox. Real composable imports
+// used to be stripped and replaced with hand-written fakes matching their
+// public method names; that made any logic later moved into a composable
+// invisible to these tests. Now only three things are faked: Tauri's own
+// `invoke`/`listen` (there is no backend here), `onMounted`/`onBeforeUnmount`
+// (no real Vue component instance exists to register them against — every
+// composable's calls are collected into one array `mount()`/`unmount()`
+// drain), and `dompurify` (needs a real DOM). Splitting the 19 cases across
+// files before the page itself is split would duplicate this scaffold; see
+// the plan in `src/pages/chat/[instance].vue`.
 //
-// Concrete split plan: once the harness imports the page's composables
-// instead of stripping imports (step 1 of the page's plan), move
-// `createChatState` into `scripts/lib/chat-state-harness.ts` and split
+// Concrete split plan: once the page is split (its own plan, steps 2-4),
+// move `createChatState` into `scripts/lib/chat-state-harness.ts` and split
 // the cases by the composable they exercise — transcript/event ordering,
 // thread sidebar, and composer/permission state.
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { dirname, resolve as resolvePath } from 'node:path'
 import { test } from 'node:test'
+import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
-import { computed, nextTick, ref } from 'vue'
+import { nextTick } from 'vue'
 
-const source = await readFile(
-  new URL('../src/pages/chat/[instance].vue', import.meta.url),
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const repoRoot = resolvePath(__dirname, '..')
+const nodeRequire = createRequire(import.meta.url)
+
+const pageSource = readFileSync(
+  resolvePath(repoRoot, 'src/pages/chat/[instance].vue'),
   'utf8',
 )
-const setupBlock = source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)
+const setupBlock = pageSource.match(
+  /<script setup lang="ts">([\s\S]*?)<\/script>/,
+)
 if (!setupBlock) {
   throw new Error(
     'No <script setup lang="ts"> block found in the chat page. These tests ' +
@@ -31,108 +51,122 @@ if (!setupBlock) {
       'removes all coverage — fix the pattern above rather than this message.',
   )
 }
-const setup = setupBlock[1]
-const compiled = ts.transpileModule(
-  setup.replace(/^import[\s\S]*?from '[^']+'\n/gm, ''),
-  {
-    compilerOptions: {
-      target: ts.ScriptTarget.ES2022,
-      module: ts.ModuleKind.None,
-    },
-  },
-).outputText
 
-function createChatState(
-  overrides = {},
-  preferenceOverrides = {},
-  dependencyOverrides = {},
-) {
-  let mount: (() => unknown) | undefined
-  let unmount: (() => unknown) | undefined
-  const chat = {
-    ...Object.fromEntries(
-      [
-        'onToken',
-        'onMessageComplete',
-        'onMessageError',
-        'onToolCall',
-        'onToolResult',
-        'onRetry',
-        'onTurnComplete',
-        'onToolPermissionRequest',
-        'onModelLoadProgress',
-        'onModelLoadStatus',
-        'onModelLoadError',
-      ].map((name) => [name, async () => () => {}]),
-    ),
-    modelLoadStatusAsync: async () => ({ status: 'idle', vaultGeneration: 0 }),
-    activeModelInfoAsync: async () => ({ modelId: 'model' }),
-    sendMessageAsync: async () => ({
-      threadId: 'a',
-      userMessageId: 'u',
-      assistantMessageId: 'answer',
-    }),
-    listThreadsAsync: async () => [
-      {
-        id: 'a',
-        title: 'New conversation',
-        lastModelId: null,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      },
-    ],
-    renameThreadAsync: async (threadId, title) => ({
-      id: threadId,
-      title,
+const CJS_OPTIONS = {
+  compilerOptions: {
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.CommonJS,
+    esModuleInterop: true,
+  },
+}
+
+const transpiledFileCache = new Map<string, string>()
+
+function transpileFile(absPath: string): string {
+  let cached = transpiledFileCache.get(absPath)
+  if (cached === undefined) {
+    cached = ts.transpileModule(
+      readFileSync(absPath, 'utf8'),
+      CJS_OPTIONS,
+    ).outputText
+    transpiledFileCache.set(absPath, cached)
+  }
+  return cached
+}
+
+const pageCode = ts.transpileModule(setupBlock[1], CJS_OPTIONS).outputText
+
+function composablePath(name: string): string {
+  return resolvePath(repoRoot, 'src/composables', `${name}.ts`)
+}
+
+/**
+ * Executes one real composable file's transpiled CommonJS output in its own
+ * sandbox and returns its exports. `req` is threaded through so a composable
+ * that itself imports another `~/composables/*` module (none do today, but
+ * a future page split may add one) resolves the same way as the page does.
+ *
+ * Returns whatever `Function`'s own call signature returns (loosely typed
+ * by design, like the rest of this sandbox — see `noImplicitAny` above).
+ */
+function runComposable(absPath: string, req: (specifier: string) => unknown) {
+  return new Function(
+    'exports',
+    'require',
+    `${transpileFile(absPath)}\nreturn exports;`,
+  )({}, req)
+}
+
+type InvokeHandler = (args?: unknown) => unknown
+
+/**
+ * Minimal Tauri IPC double. `invoke` dispatches by command name to a
+ * per-`createChatState` handler map (defaults below, overridable per test
+ * via `overrides`/`preferenceOverrides`, which replace a composable's
+ * *method* — the same shape as today's real `use*()` return value — not
+ * the `invoke` layer itself). `listen` just records subscribers and never
+ * fires them: every one of the 19 cases below drives page state by calling
+ * its returned handlers directly (e.g. `state.handleToken(...)`), so this
+ * only needs to resolve without hanging or throwing.
+ */
+function createTauriDouble(invokeHandlers: Record<string, InvokeHandler>) {
+  async function invoke(cmd: string, args?: unknown) {
+    const handler = invokeHandlers[cmd]
+    if (!handler) {
+      throw new Error(
+        `check-chat-state harness: no invoke handler for '${cmd}'`,
+      )
+    }
+    return handler(args)
+  }
+  async function listen(
+    _event: string,
+    _cb: (e: { payload: unknown }) => void,
+  ) {
+    return () => {}
+  }
+  return { invoke, listen }
+}
+
+/** Matches the page's default `createChatState()` mount flow — see the
+ * one test that awaits `mount()` to completion. */
+const DEFAULT_INVOKE_HANDLERS: Record<string, InvokeHandler> = {
+  list_threads: () => [
+    {
+      id: 'a',
+      title: 'New conversation',
       lastModelId: null,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-    }),
-    deleteThreadAsync: async () => {},
-    listMessagesAsync: async () => [],
-    ...overrides,
-  }
-  const globals = {
-    computed,
-    nextTick,
-    ref,
-    onMounted: (hook) => {
-      mount = hook
     },
-    onBeforeUnmount: (hook) => {
-      unmount = hook
-    },
-    definePageMeta: () => {},
-    useRoute: () => ({ params: { instance: 'vault' } }),
-    useI18n: () => ({ t: (key) => key }),
-    useChat: () => chat,
-    useModels: () => ({
-      listInstalledAsync: async () => [],
-      onDownloadProgress: async () => () => {},
-    }),
-    useCatalog: () => ({ listAsync: async () => [] }),
-    useProviders: () => ({ listAsync: async () => [] }),
-    useInstance: () => ({}),
-    usePreferences: () => ({
-      getPrefAsync: async () => null,
-      ...preferenceOverrides,
-    }),
-    useDevice: () => ({
-      currentDeviceInfoAsync: async () => ({ vaultDeviceUuid: 'device' }),
-    }),
-    useInstancesStore: () => ({}),
-    useAutoResizeTextarea: () => ({
-      textareaRef: ref(null),
-      isOverflowing: ref(false),
-      resize: () => {},
-      reset: async () => {},
-    }),
-    document: { querySelector: () => null },
-    ...dependencyOverrides,
-  }
-  const state = new Function(
-    ...Object.keys(globals),
-    `${compiled}
+  ],
+  list_messages: () => [],
+  rename_thread: (raw) => {
+    const { args } = raw as { args: { threadId: string; title: string } }
+    return {
+      id: args.threadId,
+      title: args.title,
+      lastModelId: null,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }
+  },
+  delete_thread: () => {},
+  send_message: () => ({
+    threadId: 'a',
+    userMessageId: 'u',
+    assistantMessageId: 'answer',
+  }),
+  active_model_info: () => ({ modelId: 'model' }),
+  model_load_status: () => ({ status: 'idle', vaultGeneration: 0 }),
+  get_pref: () => null,
+  list_installed_models: () => [],
+  list_catalog: () => [],
+  list_providers: () => [],
+  current_device_info: () => ({ vaultDeviceUuid: 'device' }),
+}
+
+const RETURN_STATEMENT = `
     return { send, selectThread, handleToken, handleRetry, handleTurnComplete,
       historyDuration, startEditing, saveThreadTitle, cancelEditing,
       requestDelete, confirmDelete,
@@ -142,8 +176,83 @@ function createChatState(
       composerInputDisabled, sendDisabled, pendingApprovals, streamingMessageId,
       streamingThreadId, lastError,
       updatePermissionMode, permissionMode, permissionModeSaving };
-  `,
-  )(...Object.values(globals))
+`
+
+function createChatState(
+  overrides: Record<string, unknown> = {},
+  preferenceOverrides: Record<string, unknown> = {},
+  dependencyOverrides: Record<string, (...args: unknown[]) => unknown> = {},
+) {
+  const tauri = createTauriDouble({ ...DEFAULT_INVOKE_HANDLERS })
+
+  const mountHooks: Array<() => unknown> = []
+  const unmountHooks: Array<() => unknown> = []
+  const vueDouble = {
+    ...(nodeRequire('vue') as object),
+    onMounted: (hook: () => unknown) => mountHooks.push(hook),
+    onBeforeUnmount: (hook: () => unknown) => unmountHooks.push(hook),
+  }
+
+  function req(specifier: string) {
+    if (specifier === 'vue') return vueDouble
+    if (specifier === '@tauri-apps/api/core') return { invoke: tauri.invoke }
+    if (specifier === '@tauri-apps/api/event') return { listen: tauri.listen }
+    if (specifier === 'dompurify') {
+      const identity = (html: string) => html
+      return { default: { sanitize: identity }, sanitize: identity }
+    }
+    if (specifier === 'marked') return nodeRequire('marked')
+    if (specifier.startsWith('~/composables/')) {
+      const name = specifier.slice('~/composables/'.length)
+      const real = runComposable(composablePath(name), req)
+      const override = dependencyOverrides[name]
+      return override ? { ...real, [name]: override } : real
+    }
+    // Only referenced as <template> tag names — never executed by the
+    // replayed script-setup body — so a dead stub is enough.
+    if (specifier.startsWith('~/components/')) return {}
+    throw new Error(
+      `check-chat-state harness: unexpected import '${specifier}'`,
+    )
+  }
+
+  const chat = {
+    ...runComposable(composablePath('useChat'), req).useChat(),
+    ...overrides,
+  }
+  const preferences = {
+    ...runComposable(composablePath('usePreferences'), req).usePreferences(),
+    ...preferenceOverrides,
+  }
+
+  function pageReq(specifier: string) {
+    if (specifier === '~/composables/useChat') return { useChat: () => chat }
+    if (specifier === '~/composables/usePreferences')
+      return { usePreferences: () => preferences }
+    return req(specifier)
+  }
+
+  // These four have no `import` statement in the page at all — real Nuxt
+  // auto-imports/macros with no module backing here — so they must be
+  // injected as bare names in scope rather than resolved through `require`.
+  const state = new Function(
+    'exports',
+    'require',
+    'definePageMeta',
+    'useRoute',
+    'useI18n',
+    'useInstancesStore',
+    'document',
+    `${pageCode}\n${RETURN_STATEMENT}`,
+  )(
+    {},
+    pageReq,
+    () => {},
+    () => ({ params: { instance: 'vault' } }),
+    () => ({ t: (key: string) => key }),
+    () => ({}),
+    { querySelector: () => null },
+  )
   // Existing send-flow tests model a ready chat session unless they override it.
   state.activeModel.value = {
     modelId: 'model',
@@ -151,18 +260,11 @@ function createChatState(
     tokenizerRepo: 'tokenizer',
     contextWindow: null,
   }
-  // The page registers both hooks in its `setup`. If a refactor ever drops
-  // one, fail with that sentence instead of `mount is not a function`.
+
   return {
     ...state,
-    mount: () => {
-      if (!mount) throw new Error('setup never registered onMounted')
-      return mount()
-    },
-    unmount: () => {
-      if (!unmount) throw new Error('setup never registered onBeforeUnmount')
-      return unmount()
-    },
+    mount: () => Promise.all(mountHooks.map((hook) => hook())),
+    unmount: () => Promise.all(unmountHooks.map((hook) => hook())),
   }
 }
 
