@@ -19,9 +19,11 @@ pub use state::{ActiveInstanceHandle, AppState};
 use catalog::commands::catalog_recommend_tiers;
 use catalog::list_catalog;
 use chat::commands::{
-    abort_current_generation, active_model_info, load_model, load_model_with_integrity_override,
-    model_load_status, resolve_default_model, respond_tool_permission, send_message,
-    unload_local_model,
+    abort_current_generation, model_load_status, resolve_default_model, respond_tool_permission,
+    send_message,
+};
+use chat::model_loading::{
+    active_model_info, load_model, load_model_with_integrity_override, unload_local_model,
 };
 use chat::session::ChatState;
 use chat::thread_commands::{

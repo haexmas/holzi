@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::storage::chat_messages::FinishReason;
 
-use super::commands::LoadPhase;
+use super::model_loading::LoadPhase;
 use super::session::ChatState;
 
 pub(crate) const EVENT_CHAT_TOKEN: &str = "chat-token";
