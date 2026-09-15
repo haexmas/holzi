@@ -141,11 +141,17 @@ compiling all 24 templates and by the parse errors disappearing from the build
 log, not by one green build. Whoever lands this should confirm a build in a
 normal checkout.
 
-For the same reason no full CI build job was added: it could not be proven
-green from here. `check:templates` covers the specific defect that escaped —
-a template the compiler rejects — but it is not a substitute for building, and
-a build job remains the obvious next step given that a broken build reached
-`main` unnoticed.
+A `Frontend build` job was then added and proven both ways with a real
+`node_modules`: `pnpm generate` exits 0 on this branch, and reintroducing the
+original tab handler makes it exit 1 with exactly the parse error. The 13 extra
+errors seen earlier were the symlink artifact alone. CI also now runs on pushes
+to `main` — a direct push was previously unchecked entirely — with the two
+diff-scoped steps skipped when there is no pull-request base, and the Rust job
+gained a cargo cache.
+
+`check:templates` is kept alongside the build: it isolates this specific class
+of defect in about a second and names the offending template line, where the
+build reports it only after installing and compiling everything.
 
 CUDA/Metal hardware and a native interactive WebView were not exercised, so the
 `probe_async` change is verified by its call sites and the test suite rather
