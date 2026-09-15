@@ -5,7 +5,8 @@
 **Status**: Draft
 **Input**: Chat-Historieneinträge sollen am rechten Rand die vergangene Dauer
 seit ihrer Eröffnung anzeigen sowie beim Hover ein Bearbeiten- und ein
-Löschen-Control anbieten.
+Löschen-Control direkt links neben der Zeit anbieten. Der Titel soll den
+verfügbaren horizontalen Raum möglichst vollständig nutzen.
 
 ## Beziehung zu bestehenden Specs
 
@@ -37,7 +38,8 @@ Chat-Einstieg, das Nachrichtenformat oder den Agent-Tool-Loop.
 
 Ein Nutzer möchte im Verlauf sofort erkennen, wann eine Unterhaltung begonnen
 hat, ohne den Eintrag erst öffnen zu müssen. Jeder Eintrag zeigt deshalb seine
-Eröffnungszeit kompakt am rechten Rand.
+Eröffnungszeit kompakt und rechtsbündig am rechten Rand; der Titel nutzt den
+übrigen horizontalen Raum.
 
 **Why this priority**: Die zeitliche Einordnung hilft, ähnliche oder alte
 Unterhaltungen schnell wiederzufinden und gibt dem Verlauf mehr Orientierung.
@@ -62,14 +64,15 @@ oder `5d` zeigen.
    der Verlauf aktualisiert wird, **Then** bleibt seine angezeigte
    Eröffnungszeit unverändert.
 5. **Given** der Verlauf enthält lange Titel oder ein schmales Fenster, **Then**
-   bleibt die Dauerangabe am rechten Rand sichtbar und wird nicht vom Titel
-   überdeckt.
+   nutzt der Titel den verfügbaren horizontalen Raum, wird bei Bedarf gekürzt
+   und lässt die rechtsbündige Dauerangabe sichtbar. Werden Aktionen angezeigt,
+   stehen sie zwischen Titel und Dauerangabe.
 
 ### User Story 2 - Verlaufseintrag umbenennen (Priority: P1)
 
 Ein Nutzer möchte einen automatisch oder unklar benannten Verlauf später
 verständlich benennen können. Beim Hover oder bei Tastaturfokus erscheint dafür
-ein Pencil-/Bearbeiten-Control direkt am Eintrag.
+ein Pencil-/Bearbeiten-Control direkt links neben der Dauerangabe.
 
 **Why this priority**: Aussagekräftige Titel machen den Verlauf dauerhaft
 durchsuch- und unterscheidbar, ohne den Gesprächsinhalt zu verändern.
@@ -83,7 +86,8 @@ die Eröffnungszeit unverändert bleiben.
 
 1. **Given** ein Verlaufseintrag ist nicht aktiv, **When** der Nutzer mit dem
    Mauszeiger darüber fährt oder ihn per Tastatur fokussiert, **Then** wird ein
-   eindeutig als Bearbeiten/Pencil erkennbares Control angeboten.
+   eindeutig als Bearbeiten/Pencil erkennbares Control zwischen Titel und
+   Dauerangabe angeboten.
 2. **Given** der Nutzer aktiviert Bearbeiten, **Then** wird der aktuelle Titel
    in einem fokussierten Eingabefeld editierbar, ohne den Eintrag zu öffnen.
 3. **Given** ein gültiger neuer Titel wurde eingegeben, **When** der Nutzer
@@ -106,8 +110,8 @@ die Eröffnungszeit unverändert bleiben.
 ### User Story 3 - Verlaufseintrag löschen (Priority: P1)
 
 Ein Nutzer möchte nicht mehr benötigte Unterhaltungen aus dem Verlauf
-entfernen. Beim Hover oder bei Tastaturfokus erscheint dafür ein Delete-
-Control.
+entfernen. Beim Hover oder bei Tastaturfokus erscheint dafür ein Delete-Control
+direkt links neben der Dauerangabe.
 
 **Why this priority**: Ein kontrollierbarer Verlauf verhindert, dass alte oder
 versehentlich angelegte Gespräche die Übersicht dauerhaft belasten.
@@ -120,7 +124,8 @@ Der Eintrag und seine Nachrichten dürfen nicht mehr erscheinen.
 
 1. **Given** ein Verlaufseintrag ist nicht aktiv, **When** der Nutzer mit dem
    Mauszeiger darüber fährt oder ihn per Tastatur fokussiert, **Then** wird ein
-   eindeutig als Löschen erkennbares Control angeboten.
+   eindeutig als Löschen erkennbares Control zwischen Titel und Dauerangabe
+   angeboten.
 2. **Given** der Nutzer aktiviert Löschen, **Then** wird vor der endgültigen
    Aktion eine Bestätigung mit ausreichendem Bezug auf den betroffenen Titel
    angezeigt.
@@ -153,8 +158,12 @@ Der Eintrag und seine Nachrichten dürfen nicht mehr erscheinen.
 - Bei einer lokalen Uhrzeitabweichung darf die Dauer nicht negativ oder
   irreführend erscheinen; ein zukünftiger Eröffnungszeitpunkt wird als `0min`
   behandelt.
-- Der Titel darf weder durch sehr lange Eingaben das Zeitfeld verdrängen noch
-  durch führende oder nachgestellte Leerzeichen ungewollt leer wirken.
+- Der Titel nutzt den verfügbaren horizontalen Raum und wird visuell gekürzt,
+  bevor er die Zeitangabe verdrängt. Beim Hover oder bei Tastaturfokus werden
+  Bearbeiten- und Löschen-Control zwischen Titel und Zeit eingeblendet; die
+  Zeit bleibt rechtsbündig sichtbar.
+- Der Titel darf durch führende oder nachgestellte Leerzeichen nicht
+  ungewollt leer wirken.
 - Bei einem bestätigten Löschen während eines laufenden Turns oder offenen
   Tool-Approvals wird zuerst abgebrochen und der terminale Zustand abgewartet.
   Erst ein erfolgreicher Abbruch erlaubt die Löschung; bei einem Fehler bleibt
@@ -187,11 +196,15 @@ Der Eintrag und seine Nachrichten dürfen nicht mehr erscheinen.
   Eröffnungszeitpunkt MÜSSEN als `0min` erscheinen. Der vollständige lokale
   Eröffnungszeitpunkt MUSS als ergänzende zugängliche Information verfügbar
   sein.
-- **FR-006**: Titel und Dauerangabe MÜSSEN auch bei langen Titeln und schmalen
-  Viewports getrennt lesbar bleiben; der Titel DARF die Zeitangabe nicht
-  überdecken.
+- **FR-006**: Der Titel MUSS den verfügbaren horizontalen Raum zwischen dem
+  linken Eintragsrand und der rechten Zeitspalte nutzen und bei Bedarf gekürzt
+  werden. Die Dauerangabe MUSS in einer eigenen, rechtsbündigen Spalte sichtbar
+  bleiben und DARF nicht vom Titel überdeckt werden. Bei eingeblendeten
+  Aktionen müssen diese zwischen Titel und Dauerangabe liegen.
 - **FR-007**: Jeder Verlaufseintrag MUSS beim Hover und bei Tastaturfokus ein
-  zugängliches Bearbeiten-Control mit Pencil-Semantik anbieten.
+  zugängliches Bearbeiten-Control mit Pencil-Semantik unmittelbar links neben
+  der Dauerangabe anbieten. Im nicht interaktiven Zustand dürfen die Aktionen
+  den Titel nicht dauerhaft um unnötigen horizontalen Platz verkürzen.
 - **FR-008**: Das Bearbeiten-Control MUSS den Titel editierbar machen, ohne
   Nachrichten, Eröffnungsdauer oder aktiven Gesprächskontext zu verändern.
 - **FR-009**: Ein Titel MUSS vor dem Speichern von äußeren Leerzeichen bereinigt
@@ -202,7 +215,8 @@ Der Eintrag und seine Nachrichten dürfen nicht mehr erscheinen.
 - **FR-011**: Der Editiermodus MUSS Speichern per `Enter` oder einer
   gleichwertigen Bestätigungsaktion und Verwerfen per `Escape` ermöglichen.
 - **FR-012**: Jeder Verlaufseintrag MUSS beim Hover und bei Tastaturfokus ein
-  zugängliches Löschen-Control anbieten.
+  zugängliches Löschen-Control unmittelbar links neben der Dauerangabe
+  anbieten.
 - **FR-013**: Die Löschaktion MUSS vor der endgültigen Ausführung eine
   Bestätigung verlangen und DARF bei Abbruch keine Daten verändern.
 - **FR-014**: Eine bestätigte Löschung MUSS den Thread und alle ihm
@@ -245,9 +259,11 @@ Der Eintrag und seine Nachrichten dürfen nicht mehr erscheinen.
 
 ### Measurable Outcomes
 
-- **SC-001**: In 100 % der geprüften Zustände zeigt jeder sichtbare
-  Verlaufseintrag am rechten Rand eine Dauer im Format `<Ganzzahl><Einheit>`;
-  kein Titel verdeckt sie.
+- **SC-001**: In 100 % der geprüften Zustände nutzt jeder sichtbare
+  Verlaufseintrag den verfügbaren horizontalen Raum für seinen Titel und zeigt
+  am rechten Rand eine rechtsbündige Dauer im Format `<Ganzzahl><Einheit>`;
+  kein Titel verdeckt sie. Bei Hover oder Fokus erscheinen die Aktionen links
+  neben dieser Dauer.
 - **SC-002**: In 100 % der geprüften Fälle bleibt die Dauer nach Umbenennen,
   neuem Nachrichtenversand und Neuladen auf demselben Eröffnungszeitpunkt
   basiert.

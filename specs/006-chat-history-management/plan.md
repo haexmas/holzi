@@ -8,7 +8,9 @@
 Die bestehende Thread-Historie wird um drei sichtbare Fähigkeiten ergänzt:
 eine laufend aktualisierte vergangene Dauer (`0min`, `1min`, `2h`, `5d`),
 Titelbearbeitung und bestätigtes Löschen eines Threads samt Nachrichten. Die
-Arbeit nutzt die vorhandenen Thread-Modelle und Chat-CRUD-Grenzen. Neue
+Historienzeile nutzt den verfügbaren Raum für den Titel, richtet die Dauer
+rechtsbündig aus und zeigt Bearbeiten/Löschen direkt links neben der Dauer an.
+Die Arbeit nutzt die vorhandenen Thread-Modelle und Chat-CRUD-Grenzen. Neue
 Persistenz für eine separate Session-Entität ist nicht vorgesehen.
 
 ## Technical Context
@@ -49,6 +51,10 @@ Command- und Frontend-Verträge in [contracts/tauri-commands.md](contracts/tauri
 - `ChatThread` bleibt die bestehende Quelle für Titel, Eröffnungszeit und
   Thread-ID. `ThreadPayload` muss die für die Dauer benötigte Information
   weiterhin liefern.
+- Die Historienzeile erhält eine flexible Titelspalte, eine feste
+  rechtsbündige Zeitspalte und einen dazwischenliegenden Aktionsbereich. Der
+  Aktionsbereich wird bei Hover oder Tastaturfokus eingeblendet und verkürzt
+  den Titel im ausgeblendeten Zustand nicht dauerhaft.
 - Die Dauer wird als flache, deterministische Präsentationsberechnung aus
   „jetzt minus Eröffnungszeit“ gebildet: ganze Minuten unter einer Stunde,
   ganze Stunden unter einem Tag, ganze Tage ab einem Tag; negative Werte
@@ -120,7 +126,8 @@ Anforderung nicht tragen.
 
 ### Phase 1 - Historien-UI und Duration
 
-- Thread-Zeilen um die sichtbare Dauer rechts ergänzen.
+- Thread-Zeilen um die sichtbare, rechtsbündige Dauer und den links daneben
+  eingeblendeten Aktionsbereich ergänzen; der Titel nutzt den übrigen Raum.
 - Deterministische Duration-Regeln sowie Aktualisierung an Minuten-, Stunden-
   und Tagesgrenzen abdecken.
 - Titel-Editiermodus mit Speichern/Verwerfen und zugänglichen Zuständen

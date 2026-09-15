@@ -1435,21 +1435,13 @@ onBeforeUnmount(() => {
           <template v-else>
             <button
               type="button"
-              class="min-w-0 flex-1 truncate px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              class="min-w-0 flex-1 truncate px-2 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               @click="selectThread(thread.id)"
             >
               <span class="truncate">{{ thread.title }}</span>
             </button>
-            <span
-              class="shrink-0 rounded pr-1 text-xs font-normal text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              tabindex="0"
-              :title="openingTimeLabel(thread.createdAt)"
-              :aria-label="`${t('chat.threads.duration', { duration: historyDurationLabel(thread.createdAt) })}, ${openingTimeLabel(thread.createdAt)}`"
-            >
-              {{ historyDurationLabel(thread.createdAt) }}
-            </span>
             <div
-              class="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+              class="flex max-w-0 shrink-0 items-center overflow-hidden opacity-0 transition-[max-width,opacity] duration-150 group-hover:max-w-14 group-hover:opacity-100 group-focus-within:max-w-14 group-focus-within:opacity-100"
             >
               <button
                 type="button"
@@ -1470,6 +1462,14 @@ onBeforeUnmount(() => {
                 <Icon name="lucide:trash-2" class="h-3.5 w-3.5" />
               </button>
             </div>
+            <span
+              class="w-8 shrink-0 rounded pr-1 text-right text-xs font-normal tabular-nums text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              tabindex="0"
+              :title="openingTimeLabel(thread.createdAt)"
+              :aria-label="`${t('chat.threads.duration', { duration: historyDurationLabel(thread.createdAt) })}, ${openingTimeLabel(thread.createdAt)}`"
+            >
+              {{ historyDurationLabel(thread.createdAt) }}
+            </span>
           </template>
         </div>
         <div

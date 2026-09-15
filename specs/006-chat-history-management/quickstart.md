@@ -17,8 +17,8 @@
 4. Einen Eintrag geöffnet lassen, bis die nächste Einheiten-Grenze erreicht ist.
 5. Prüfen: Die Dauer aktualisiert sich ohne manuellen Reload.
 6. Einen langen Titel bzw. eine schmale Fensterbreite verwenden.
-7. Prüfen: Titel und Dauer bleiben getrennt lesbar; die Dauer wird nicht
-   überdeckt.
+7. Prüfen: Der Titel nutzt den verfügbaren Raum, wird bei Bedarf gekürzt und
+   die Dauer bleibt rechtsbündig sichtbar.
 8. Einen fehlenden oder unbrauchbaren Eröffnungszeitpunkt simulieren.
 9. Prüfen: Der Eintrag zeigt weiterhin `0min` und keinen technischen Rohfehler.
 10. Tastaturfokus bzw. zugängliche Zusatzinformation der Dauer prüfen.
@@ -26,7 +26,9 @@
 ## 2. Titel ändern
 
 1. Einen Verlaufseintrag fokussieren oder mit dem Mauszeiger darüber fahren.
-2. Prüfen: Bearbeiten/Pencil ist erreichbar und verständlich beschriftet.
+2. Prüfen: Bearbeiten/Pencil erscheint direkt links neben der Dauer, ist
+   erreichbar und verständlich beschriftet. Im ausgeblendeten Zustand bleibt
+   mehr Platz für den Titel verfügbar.
 3. Einen neuen gültigen Titel eingeben und mit `Enter` speichern.
 4. Prüfen: Der neue Titel erscheint sofort nach erfolgreicher Persistenz und
    bleibt nach einem Reload erhalten.
@@ -40,7 +42,8 @@
 
 1. Einen nicht benötigten Thread fokussieren oder mit dem Mauszeiger darüber
    fahren.
-2. Prüfen: Löschen ist erreichbar und verständlich beschriftet.
+2. Prüfen: Löschen erscheint direkt links neben der Dauer, ist erreichbar und
+   verständlich beschriftet.
 3. Löschen aktivieren und die Bestätigung abbrechen.
 4. Prüfen: Thread, Nachrichten und Verlauf bleiben unverändert.
 5. Löschen erneut aktivieren und bestätigen.

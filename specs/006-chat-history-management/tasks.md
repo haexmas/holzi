@@ -55,7 +55,7 @@ change or validate.
 
 - [x] T009 [US1] Add a pure history-duration projection in `src/pages/chat/[instance].vue` that floors elapsed time, selects `min`/`h`/`d`, and clamps negative values to `0min`.
 - [x] T010 [US1] Add boundary-aware duration refresh state in `src/pages/chat/[instance].vue` so a visible entry updates at the next minute, hour, or day boundary and clears its scheduled work on unmount.
-- [x] T011 [US1] Render the duration for every persisted history row at the right edge in `src/pages/chat/[instance].vue`, preserving title visibility in narrow viewports.
+- [x] T011 [US1] Render the duration for every persisted history row in a right-aligned trailing column in `src/pages/chat/[instance].vue`, allowing the title to use the remaining width without being covered.
 - [x] T012 [US1] Add localized accessible full-opening-time information and visible focus/hover semantics for the duration in `src/pages/chat/[instance].vue`, using the keys from `src/i18n/locales/de.json` and `src/i18n/locales/en.json`.
 
 **Checkpoint**: User Story 1 is independently usable: every history row has a stable, compact duration that updates without reload and remains accessible.
@@ -77,7 +77,7 @@ change or validate.
 - [x] T014 [US2] Implement the validated `rename_thread` command in `src-tauri/src/chat/thread_commands.rs` by reusing the existing title-update storage candidate and returning the refreshed `ThreadPayload`.
 - [x] T015 [US2] Add the awaitable `renameThreadAsync` wrapper and precise `Thread` result typing to `src/composables/useChat.ts`.
 - [x] T016 [US2] Add one-entry-at-a-time inline title editing, focus transfer, `Enter` save, `Escape` cancel, and trimmed-length validation to `src/pages/chat/[instance].vue`.
-- [x] T017 [US2] Render the Pencil/Edit control on hover and keyboard focus with localized accessible naming and localized inline errors in `src/pages/chat/[instance].vue`, `src/i18n/locales/de.json`, and `src/i18n/locales/en.json`.
+- [x] T017 [US2] Render the Pencil/Edit control directly left of the duration on hover and keyboard focus with localized accessible naming and localized inline errors in `src/pages/chat/[instance].vue`, `src/i18n/locales/de.json`, and `src/i18n/locales/en.json`.
 - [x] T018 [US2] Refresh the history row from the successful rename result in `src/pages/chat/[instance].vue` without changing `createdAt`, loaded messages, or `activeThreadId`.
 
 **Checkpoint**: User Story 2 is independently usable: titles can be safely renamed, persisted, cancelled, and reached by keyboard without affecting conversation data.
@@ -98,7 +98,7 @@ change or validate.
 
 - [x] T020 [US3] Implement the validated `delete_thread` command in `src-tauri/src/chat/thread_commands.rs` using the atomic storage boundary from `src-tauri/src/storage/chat_threads.rs` and `src-tauri/src/storage/chat_messages.rs`.
 - [x] T021 [US3] Add the awaitable `deleteThreadAsync` wrapper to `src/composables/useChat.ts` and preserve structured command errors for the page.
-- [x] T022 [US3] Add the hover/focus Delete control and title-specific confirmation dialog to `src/pages/chat/[instance].vue` using localized text from `src/i18n/locales/de.json` and `src/i18n/locales/en.json`.
+- [x] T022 [US3] Add the hover/focus Delete control directly left of the duration and the title-specific confirmation dialog to `src/pages/chat/[instance].vue` using localized text from `src/i18n/locales/de.json` and `src/i18n/locales/en.json`.
 - [x] T023 [US3] Update `src/pages/chat/[instance].vue` only after successful deletion: remove the row and cached messages, clear the active thread when applicable, and show the new empty session without auto-selecting another thread.
 - [x] T024 [US3] Handle delete failures and concurrent busy/approval/streaming states in `src/pages/chat/[instance].vue`; when deleting the active thread, abort the running turn first, await its terminal state, and leave the history visible if cancellation fails.
 
@@ -115,7 +115,7 @@ change or validate.
 - [x] T027 [P] Update `specs/006-chat-history-management/quickstart.md` with any implementation-specific setup needed to create the `0min`, `1min`, `2h`, and `5d` duration cases.
 - [x] T028 Run `cargo test --manifest-path src-tauri/Cargo.toml --no-default-features` and record the result in `specs/006-chat-history-management/checklists/requirements.md`.
 - [x] T029 Run the repository-toolchain equivalents of `pnpm typecheck`, `pnpm lint`, and `node scripts/check-chat-state.mjs`; record the result in `specs/006-chat-history-management/checklists/requirements.md`.
-- [ ] T030 Execute the complete manual flow from `specs/006-chat-history-management/quickstart.md` on desktop and a narrow viewport, then record deviations in `specs/006-chat-history-management/checklists/requirements.md`.
+- [ ] T030 Execute the complete manual flow from `specs/006-chat-history-management/quickstart.md` on desktop and a narrow viewport, including verification that actions appear left of the duration without permanently consuming title space, then record deviations in `specs/006-chat-history-management/checklists/requirements.md`.
 
 ---
 

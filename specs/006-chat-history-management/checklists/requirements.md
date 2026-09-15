@@ -25,6 +25,8 @@ prüfen
 - [x] Primär-, Abbruch-, Fehler- und Recovery-Szenarien sind abgedeckt.
 - [x] Edge Cases für Zeit, lange Titel, Touch, laufende Turns und Sync sind
       beschrieben.
+- [x] Die Historienzeile beschreibt die flexible Titelspalte, die
+      rechtsbündige Dauer und die Aktionsposition direkt links neben der Zeit.
 - [x] Scope, Annahmen und Nicht-Ziele sind dokumentiert.
 
 ## Requirement Consistency
@@ -42,6 +44,8 @@ prüfen
 ## Accessibility & Internationalization
 
 - [x] Hover-Aktionen sind auch über Tastaturfokus erreichbar.
+- [x] Bearbeiten und Löschen erscheinen zwischen Titel und Dauer, ohne im
+      ausgeblendeten Zustand dauerhaft Titelplatz zu verbrauchen.
 - [x] Zugängliche Namen, Fokuszustände und Screenreader-Semantik sind
       spezifiziert.
 - [x] Deutsch und Englisch sind für neue sichtbare Texte und Fehlerfälle
