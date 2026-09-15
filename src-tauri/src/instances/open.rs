@@ -15,7 +15,8 @@ use serde::Deserialize;
 use tauri::{AppHandle, State};
 use ts_rs::TS;
 
-use crate::chat::commands::{emit_model_load_status, start_default_model_preload};
+use crate::chat::commands::start_default_model_preload;
+use crate::chat::events::emit_model_load_status;
 use crate::chat::session::ChatState;
 use crate::error::{HolziError, Result};
 use crate::identity::installation_id_path;

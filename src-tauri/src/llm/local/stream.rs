@@ -61,7 +61,7 @@ fn from_mistralrs_tool_call(t: &ToolCallResponse) -> ToolCall {
 /// into `delta.content`, right alongside the correctly-parsed
 /// `delta.tool_calls`. Upstream bug:
 /// <https://github.com/EricLBuehler/mistral.rs/issues/2427>. See
-/// `chat::commands::strip_leaked_tool_call_markup` for the persisted-
+/// `chat::events::strip_leaked_tool_call_markup` for the persisted-
 /// message-side half of this workaround; this half stops the leak from
 /// ever reaching a live streamed delta in the first place.
 ///

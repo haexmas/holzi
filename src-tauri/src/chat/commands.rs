@@ -12,12 +12,9 @@
 //! `commands_tests.rs` keep a single reviewable home.
 //!
 //! Concrete split plan — five mechanical PRs in this order, each keeping
-//! the registered command surface and every test unchanged:
+//! the registered command surface and every test unchanged. Step 1
+//! (`chat/events.rs`) is done; steps 2-5 remain:
 //!
-//! 1. `chat/events.rs`: the `EVENT_*` constants, all `*Event` payload
-//!    structs, `emit_load_progress`, `emit_load_error`,
-//!    `emit_model_load_status`, `risk_class_str` and
-//!    `strip_leaked_tool_call_markup` (~330 lines).
 //! 2. `chat/model_loading.rs`: `LoadPhase`, `LoadIdentity`, `LoadOutcome`,
 //!    `publish_load_phase`, `load_model_inner`, both `load_model*`
 //!    commands, `load_api_key_model`, `resolve_local_model_metadata`,
@@ -70,19 +67,15 @@ use crate::storage::{
     providers as providers_store,
 };
 
+use super::events::{
+    emit_load_error, emit_load_progress, emit_model_load_status, risk_class_str,
+    strip_leaked_tool_call_markup, MessageCompleteEvent, MessageErrorEvent, RetryEvent, TokenEvent,
+    ToolCallEvent, ToolPermissionRequestEvent, ToolResultEvent, TurnCompleteEvent,
+    EVENT_CHAT_MESSAGE_COMPLETE, EVENT_CHAT_MESSAGE_ERROR, EVENT_CHAT_RETRY, EVENT_CHAT_TOKEN,
+    EVENT_CHAT_TOOL_CALL, EVENT_CHAT_TOOL_RESULT, EVENT_CHAT_TURN_COMPLETE,
+    EVENT_TOOL_PERMISSION_REQUEST,
+};
 use super::session::{ActiveSession, ChatState, ModelLoadStatus};
-
-const EVENT_CHAT_TOKEN: &str = "chat-token";
-const EVENT_CHAT_MESSAGE_COMPLETE: &str = "chat-message-complete";
-const EVENT_CHAT_MESSAGE_ERROR: &str = "chat-message-error";
-const EVENT_MODEL_LOAD_PROGRESS: &str = "model-load-progress";
-const EVENT_MODEL_LOAD_STATUS: &str = "model-load-status";
-const EVENT_CHAT_TOOL_CALL: &str = "chat-tool-call";
-const EVENT_CHAT_TOOL_RESULT: &str = "chat-tool-result";
-const EVENT_CHAT_TURN_COMPLETE: &str = "chat-turn-complete";
-const EVENT_TOOL_PERMISSION_REQUEST: &str = "tool-permission-request";
-const EVENT_CHAT_RETRY: &str = "chat-retry";
-const EVENT_MODEL_LOAD_ERROR: &str = "model-load-error";
 
 const PREF_LAST_ACTIVE_MODEL: &str = "chat.last_active_model_id";
 const PREF_DEFAULT_MODEL: &str = "chat.default_model_id";
@@ -120,88 +113,11 @@ fn retry_backoff(attempt: usize) -> std::time::Duration {
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "kebab-case")]
-enum LoadPhase {
+pub(crate) enum LoadPhase {
     Connecting,
     Loading,
     CudaJitWarmup,
     Ready,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ModelLoadProgress {
-    #[serde(rename = "vaultGeneration")]
-    vault_generation: u64,
-    #[serde(rename = "loadId")]
-    load_id: u64,
-    model_id: String,
-    model_name: String,
-    phase: LoadPhase,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    provider_name: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ModelLoadErrorEvent {
-    vault_generation: u64,
-    load_id: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    model_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    model_name: Option<String>,
-    code: String,
-}
-
-/// Emits a `model-load-progress` event for the given phase. Frontend
-/// translates the label via `$t('chat.loading.<phase>', ...)` and
-/// gates the chat input on `phase === 'ready'`.
-fn emit_load_progress(
-    app: &AppHandle,
-    vault_generation: u64,
-    load_id: u64,
-    model_id: &str,
-    model_name: &str,
-    phase: LoadPhase,
-    provider_name: Option<String>,
-) {
-    let _ = app.emit(
-        EVENT_MODEL_LOAD_PROGRESS,
-        ModelLoadProgress {
-            vault_generation,
-            load_id,
-            model_id: model_id.to_string(),
-            model_name: model_name.to_string(),
-            phase,
-            provider_name,
-        },
-    );
-}
-
-fn emit_load_error(
-    app: &AppHandle,
-    vault_generation: u64,
-    load_id: u64,
-    model_id: Option<String>,
-    model_name: Option<String>,
-    code: impl Into<String>,
-) {
-    let _ = app.emit(
-        EVENT_MODEL_LOAD_ERROR,
-        ModelLoadErrorEvent {
-            vault_generation,
-            load_id,
-            model_id,
-            model_name,
-            code: code.into(),
-        },
-    );
-}
-
-/// Publishes the authoritative model-load snapshot after lifecycle changes
-/// such as cancellation, unload, or a Vault transition.
-pub(crate) fn emit_model_load_status(app: &AppHandle, chat: &ChatState) {
-    let _ = app.emit(EVENT_MODEL_LOAD_STATUS, chat.model_load_status());
 }
 
 /// Which fallback branch the session resolver picked. Wire payload for
@@ -257,136 +173,6 @@ pub struct SendMessageResult {
     pub thread_id: Uuid,
     pub user_message_id: Uuid,
     pub assistant_message_id: Uuid,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct TokenEvent {
-    message_id: Uuid,
-    delta: String,
-    /// Reasoning-content delta from Harmony-format local models or
-    /// Anthropic `thinking_delta` events. `None` when the chunk has
-    /// no reasoning.
-    reasoning: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct MessageCompleteEvent {
-    message_id: Uuid,
-    thread_id: Uuid,
-    prompt_tokens: Option<usize>,
-    completion_tokens: Option<usize>,
-    ttft_ms: Option<u64>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct MessageErrorEvent {
-    message_id: Uuid,
-    thread_id: Uuid,
-    reason: String,
-}
-
-/// Payload for `chat-tool-call` (contracts/tauri-commands.md). Emitted at
-/// the persistence boundary — a `tool_call` row exists from this point,
-/// even if the call is later blocked under `plan` mode (Phase 4).
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ToolCallEvent {
-    message_id: Uuid,
-    thread_id: Uuid,
-    tool_name: String,
-    tool_input: Value,
-    tool_source: String,
-}
-
-/// Payload for `chat-tool-result` (contracts/tauri-commands.md).
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ToolResultEvent {
-    message_id: Uuid,
-    thread_id: Uuid,
-    tool_call_id: String,
-    content: String,
-    is_error: bool,
-}
-
-/// Payload for `tool-permission-request` (contracts/tauri-commands.md).
-/// Answered via `respond_tool_permission`.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ToolPermissionRequestEvent {
-    request_id: Uuid,
-    thread_id: Uuid,
-    tool_name: String,
-    tool_input: Value,
-    risk_class: &'static str,
-}
-
-fn risk_class_str(risk: crate::chat::tools::RiskClass) -> &'static str {
-    match risk {
-        crate::chat::tools::RiskClass::Safe => "safe",
-        crate::chat::tools::RiskClass::Risky => "risky",
-    }
-}
-
-/// Strips a leaked `<tool_call>…</tool_call>` block (the Qwen text
-/// convention) out of assistant text.
-///
-/// mistralrs 0.8.1's reasoning-mode content path (active whenever the
-/// current model has thinking enabled, see `model_supports_reasoning`)
-/// never runs generated text through its own tool-call-tag stripping the
-/// way its non-reasoning path does, so on a reasoning-capable Qwen-family
-/// model the raw tag the model emits to signal a tool call leaks into
-/// `content` right alongside the correctly-parsed `tool_calls`. Only call
-/// this once a step is already known to have produced `tool_calls` — at
-/// that point any `<tool_call>` markup still in the text is certainly
-/// leaked syntax, never legitimate prose.
-///
-/// Upstream bug: <https://github.com/EricLBuehler/mistral.rs/issues/2427>.
-/// Remove this workaround once a fixed `mistralrs` release lands.
-fn strip_leaked_tool_call_markup(text: &str) -> String {
-    const OPEN: &str = "<tool_call>";
-    const CLOSE: &str = "</tool_call>";
-
-    let mut result = String::with_capacity(text.len());
-    let mut rest = text;
-    while let Some(open_pos) = rest.find(OPEN) {
-        result.push_str(&rest[..open_pos]);
-        rest = &rest[open_pos + OPEN.len()..];
-        rest = match rest.find(CLOSE) {
-            Some(close_pos) => &rest[close_pos + CLOSE.len()..],
-            None => "", // Unterminated tag: nothing legitimate follows it.
-        };
-    }
-    result.push_str(rest);
-    result
-}
-
-/// Payload for `chat-turn-complete` (contracts/tauri-commands.md). Fires
-/// exactly once per `send_message` call, after the last step's own
-/// per-step event — this is the frontend's sole signal to clear
-/// `streamingMessageId`/`busy`.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct TurnCompleteEvent {
-    thread_id: Uuid,
-    assistant_message_id: Option<Uuid>,
-    finish_reason: FinishReason,
-}
-
-/// Payload for `chat-retry` (contracts/tauri-commands.md). Transient, not
-/// persisted — informs the UI of an automatic retry attempt (spec.md
-/// FR-012/FR-013) without ever adding a `chat_messages` row for the
-/// discarded attempt.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct RetryEvent {
-    thread_id: Uuid,
-    assistant_message_id: Uuid,
-    /// 1-based.
-    attempt: usize,
 }
 
 #[derive(Clone, Copy)]

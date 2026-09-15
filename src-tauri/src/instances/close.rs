@@ -3,7 +3,7 @@
 
 use tauri::{AppHandle, State};
 
-use crate::chat::{commands::emit_model_load_status, session::ChatState};
+use crate::chat::{events::emit_model_load_status, session::ChatState};
 use crate::error::{HolziError, Result};
 use crate::state::AppState;
 
