@@ -16,11 +16,9 @@
  * the extraction is done, so that must happen in one step per composable,
  * not incrementally.
  *
- * Concrete split plan, in order (steps 1-2 are done — see
- * `scripts/check-chat-state.ts`'s and `useChatTranscript.ts`'s own
- * history):
- *   3. Extract `useThreadSidebar` — `threads`, title editing, delete
- *      confirmation, `selectThread` and the duration helpers.
+ * Concrete split plan, in order (steps 1-3 are done — see
+ * `scripts/check-chat-state.ts`'s, `useChatTranscript.ts`'s and
+ * `useThreadSidebar.ts`'s own history):
  *   4. Move model selection, download progress and the integrity dialog
  *      into a child component; it already shares
  *      `parseModelIntegrityFailure` with `HuggingFaceModelManagement.vue`.
@@ -38,9 +36,9 @@ import {
   type ModelLoadProgressEvent,
   type ModelLoadStatusPayload,
   type SendMessageArgs,
-  type Thread,
 } from '~/composables/useChat'
 import { useChatTranscript } from '~/composables/useChatTranscript'
+import { useThreadSidebar } from '~/composables/useThreadSidebar'
 import {
   parseModelIntegrityFailure,
   useModels,
@@ -89,19 +87,8 @@ let unmounted = false
 
 const instanceName = computed(() => String(route.params.instance ?? ''))
 
-const threads = ref<Thread[]>([])
 const messagesByThread = ref<Record<string, Message[]>>({})
 const activeThreadId = ref<string | null>(null)
-const durationNow = ref(Date.now())
-let durationRefreshTimer: ReturnType<typeof setTimeout> | null = null
-const editingThreadId = ref<string | null>(null)
-const draftTitle = ref('')
-const editTitleError = ref<string | null>(null)
-const editingTitleInput = ref<HTMLInputElement | null>(null)
-const renamingThreadId = ref<string | null>(null)
-const deleteCandidate = ref<Thread | null>(null)
-const deleteError = ref<string | null>(null)
-const deletingThread = ref(false)
 const activeModel = ref<LoadedModelInfo | null>(null)
 const installedModels = ref<InstalledModel[]>([])
 const catalogEntries = ref<CatalogEntryWithFit[]>([])
@@ -140,22 +127,17 @@ const turnSetupPending = ref(false)
 const lastError = ref<string | null>(null)
 const pendingSend = ref<SendMessageArgs | null>(null)
 
-const {
-  pendingStreamEvents,
-  pendingToolEvents,
-  pendingTurnCompletions,
-  turnTerminalWaiters,
-  handleToken,
-  handleRetry,
-  handleComplete,
-  handleError,
-  handleToolCall,
-  handleToolResult,
-  handleToolPermissionRequest,
-  handleTurnComplete,
-  waitForTurnTerminal,
-  hasPendingTurn,
-} = useChatTranscript(
+const { textareaRef, reset: resetTextarea } = useAutoResizeTextarea(input)
+
+// `chatTranscript.applyTurnComplete` needs `threadSidebar.refreshThreads`,
+// and `threadSidebar.confirmDelete`/`selectThread` need
+// `chatTranscript.hasPendingTurn`/`waitForTurnTerminal`/`handleToolCall`/
+// `handleToolResult` — a genuine circular dependency between the two
+// composables. Resolved with this indirection: `chatTranscript` is built
+// first against a placeholder that's swapped for the real function the
+// moment `threadSidebar` exists, before any asynchronous code can call it.
+let refreshThreadsForTranscript = async () => {}
+const chatTranscript = useChatTranscript(
   chat,
   messagesByThread,
   activeThreadId,
@@ -169,12 +151,72 @@ const {
   lastError,
   pendingApprovals,
   pendingApprovalsByThread,
-  refreshThreads,
+  () => refreshThreadsForTranscript(),
   scrollToBottom,
   errString,
 )
+const threadSidebar = useThreadSidebar(
+  chat,
+  chatTranscript,
+  t,
+  messagesByThread,
+  activeThreadId,
+  input,
+  streamingMessageId,
+  streamingThreadId,
+  streamingBuffer,
+  reasoningByMessage,
+  expandedReasoning,
+  pendingApprovals,
+  pendingApprovalsByThread,
+  resetTextarea,
+  scrollToBottom,
+)
+refreshThreadsForTranscript = threadSidebar.refreshThreads
 
-const { textareaRef, reset: resetTextarea } = useAutoResizeTextarea(input)
+const {
+  pendingStreamEvents,
+  pendingToolEvents,
+  pendingTurnCompletions,
+  turnTerminalWaiters,
+  handleToken,
+  handleRetry,
+  handleComplete,
+  handleError,
+  handleToolCall,
+  handleToolResult,
+  handleToolPermissionRequest,
+  handleTurnComplete,
+} = chatTranscript
+
+const {
+  threads,
+  editingThreadId,
+  draftTitle,
+  editTitleError,
+  editingTitleInput,
+  renamingThreadId,
+  deleteCandidate,
+  deleteError,
+  deletingThread,
+  // Not called directly on the page anymore (historyDurationLabel, its
+  // only caller, moved into the composable too) — kept here only because
+  // scripts/check-chat-state.ts replays it in isolation as a pure
+  // date-math function.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  historyDuration,
+  historyDurationLabel,
+  openingTimeLabel,
+  stopDurationRefresh,
+  refreshThreads,
+  startEditing,
+  cancelEditing,
+  saveThreadTitle,
+  requestDelete,
+  closeDeleteDialog,
+  confirmDelete,
+  selectThread,
+} = threadSidebar
 
 const downloadingId = ref<string | null>(null)
 const downloadProgressBytes = ref<number>(0)
@@ -214,82 +256,6 @@ const noModelsInstalled = computed(
     installedModels.value.length === 0 &&
     Object.values(providerModels.value).every((list) => list.length === 0),
 )
-
-type HistoryDurationUnit = 'min' | 'h' | 'd'
-
-type HistoryDuration = {
-  value: number
-  unit: HistoryDurationUnit
-}
-
-/** Projects a persisted Unix-millisecond opening time into the compact UI form. */
-function historyDuration(createdAt: number, now = Date.now()): HistoryDuration {
-  if (!Number.isFinite(createdAt) || createdAt < 0) {
-    return { value: 0, unit: 'min' }
-  }
-  const elapsedMs = Math.max(0, now - createdAt)
-  const minutes = Math.floor(elapsedMs / 60_000)
-  if (minutes < 60) return { value: minutes, unit: 'min' }
-  const hours = Math.floor(elapsedMs / 3_600_000)
-  if (hours < 24) return { value: hours, unit: 'h' }
-  return { value: Math.floor(elapsedMs / 86_400_000), unit: 'd' }
-}
-
-function historyDurationLabel(createdAt: number): string {
-  const duration = historyDuration(createdAt, durationNow.value)
-  return `${duration.value}${duration.unit}`
-}
-
-function openingTimeLabel(createdAt: number): string {
-  if (!Number.isFinite(createdAt) || createdAt < 0) {
-    return t('chat.threads.openedAtUnknown')
-  }
-  const date = new Date(createdAt)
-  if (Number.isNaN(date.getTime())) {
-    return t('chat.threads.openedAtUnknown')
-  }
-  return t('chat.threads.openedAt', {
-    date: date.toLocaleString(),
-  })
-}
-
-function nextDurationBoundary(createdAt: number, now: number): number | null {
-  if (!Number.isFinite(createdAt) || createdAt < 0) return null
-  if (createdAt > now) return createdAt
-  const elapsedMs = now - createdAt
-  const unitMs =
-    elapsedMs < 3_600_000
-      ? 60_000
-      : elapsedMs < 86_400_000
-        ? 3_600_000
-        : 86_400_000
-  return createdAt + (Math.floor(elapsedMs / unitMs) + 1) * unitMs
-}
-
-function scheduleDurationRefresh() {
-  if (durationRefreshTimer !== null) clearTimeout(durationRefreshTimer)
-  const now = Date.now()
-  const nextBoundary = threads.value
-    .map((thread) => nextDurationBoundary(thread.createdAt, now))
-    .filter((value): value is number => value !== null)
-    .reduce((nearest, value) => Math.min(nearest, value), Infinity)
-  if (!Number.isFinite(nextBoundary)) return
-  durationRefreshTimer = setTimeout(
-    () => {
-      durationNow.value = Date.now()
-      scheduleDurationRefresh()
-    },
-    Math.max(1_000, nextBoundary - now),
-  )
-  if (
-    typeof durationRefreshTimer === 'object' &&
-    durationRefreshTimer !== null &&
-    'unref' in durationRefreshTimer &&
-    typeof durationRefreshTimer.unref === 'function'
-  ) {
-    durationRefreshTimer.unref()
-  }
-}
 
 // Read through a computed rather than `activeModel?.modelId` directly in
 // the template — vue-tsc narrows `activeModel` to `never` at the model
@@ -349,165 +315,6 @@ async function refreshProviders() {
       }),
   )
   providerModels.value = next
-}
-
-/** Refreshes the thread list without changing the active chat draft/thread. */
-async function refreshThreads() {
-  threads.value = await chat.listThreadsAsync()
-  scheduleDurationRefresh()
-}
-
-function startEditing(thread: Thread) {
-  if (deletingThread.value || renamingThreadId.value) return
-  editingThreadId.value = thread.id
-  draftTitle.value = thread.title
-  editTitleError.value = null
-  void nextTick(() => {
-    editingTitleInput.value?.focus()
-    editingTitleInput.value?.select()
-  })
-}
-
-function cancelEditing() {
-  editingThreadId.value = null
-  draftTitle.value = ''
-  editTitleError.value = null
-}
-
-async function saveThreadTitle() {
-  const threadId = editingThreadId.value
-  if (!threadId || renamingThreadId.value) return
-  const title = draftTitle.value.trim()
-  if (!title) {
-    editTitleError.value = t('chat.threads.titleRequired')
-    return
-  }
-  const titleLength = [
-    ...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(
-      title,
-    ),
-  ].length
-  if (titleLength > 120) {
-    editTitleError.value = t('chat.threads.titleTooLong')
-    return
-  }
-  renamingThreadId.value = threadId
-  editTitleError.value = null
-  try {
-    const updated = await chat.renameThreadAsync(threadId, title)
-    threads.value = threads.value.map((thread) =>
-      thread.id === updated.id ? updated : thread,
-    )
-    cancelEditing()
-  } catch {
-    editTitleError.value = t('chat.threads.renameFailed')
-  } finally {
-    renamingThreadId.value = null
-  }
-}
-
-function requestDelete(thread: Thread) {
-  if (renamingThreadId.value || deletingThread.value) return
-  deleteCandidate.value = thread
-  deleteError.value = null
-}
-
-function closeDeleteDialog(open: boolean) {
-  if (!open && !deletingThread.value) {
-    deleteCandidate.value = null
-    deleteError.value = null
-  }
-}
-
-function clearDeletedThreadState(threadId: string) {
-  threads.value = threads.value.filter((thread) => thread.id !== threadId)
-  messagesByThread.value = Object.fromEntries(
-    Object.entries(messagesByThread.value).filter(([id]) => id !== threadId),
-  )
-  pendingApprovalsByThread.delete(threadId)
-  pendingToolEvents.delete(threadId)
-  pendingTurnCompletions.delete(threadId)
-  if (editingThreadId.value === threadId) cancelEditing()
-  if (activeThreadId.value !== threadId) return
-  activeThreadId.value = null
-  input.value = ''
-  streamingMessageId.value = null
-  streamingThreadId.value = null
-  streamingBuffer.value = ''
-  reasoningByMessage.value = {}
-  expandedReasoning.value = new Set()
-  pendingStreamEvents.clear()
-  void resetTextarea()
-}
-
-async function confirmDelete() {
-  const candidate = deleteCandidate.value
-  if (!candidate || deletingThread.value) return
-  deletingThread.value = true
-  deleteError.value = null
-  const needsAbort = hasPendingTurn(candidate.id)
-  try {
-    if (needsAbort) {
-      const terminal = waitForTurnTerminal(candidate.id)
-      try {
-        await chat.abortAsync()
-      } catch {
-        deleteError.value = t('chat.threads.deleteCancelFailed')
-        return
-      }
-      if (!(await terminal)) {
-        deleteError.value = t('chat.threads.deleteCancelFailed')
-        return
-      }
-    }
-    await chat.deleteThreadAsync(candidate.id)
-    clearDeletedThreadState(candidate.id)
-    deleteCandidate.value = null
-  } catch {
-    deleteError.value = t('chat.threads.deleteFailed')
-  } finally {
-    deletingThread.value = false
-  }
-}
-
-/** Selects a thread, loading its persisted messages on first access. */
-async function selectThread(id: string) {
-  const previousThreadId = activeThreadId.value
-  if (
-    previousThreadId &&
-    previousThreadId !== id &&
-    pendingApprovals.value.length > 0
-  ) {
-    const queued = pendingApprovalsByThread.get(previousThreadId) ?? []
-    pendingApprovalsByThread.set(previousThreadId, [
-      ...queued,
-      ...pendingApprovals.value,
-    ])
-    pendingApprovals.value = []
-  }
-  activeThreadId.value = id
-  const existing = messagesByThread.value[id]
-  if (!existing) {
-    messagesByThread.value[id] = await chat.listMessagesAsync(id)
-  }
-  const queuedApprovals = pendingApprovalsByThread.get(id)
-  if (queuedApprovals) {
-    // Merge, don't overwrite: a `tool-permission-request` for `id` may
-    // have already landed directly in `pendingApprovals` during the
-    // `listMessagesAsync` await above (its gate matches on
-    // `activeThreadId`, which was set synchronously before that await).
-    pendingApprovals.value = [...queuedApprovals, ...pendingApprovals.value]
-    pendingApprovalsByThread.delete(id)
-  }
-  const queuedToolEvents = pendingToolEvents.get(id)
-  if (queuedToolEvents) {
-    pendingToolEvents.delete(id)
-    for (const event of queuedToolEvents) {
-      if ('toolName' in event) handleToolCall(event, true)
-      else handleToolResult(event, true)
-    }
-  }
-  await scrollToBottom()
 }
 
 /** Scrolls the message viewport to its newest item after rendering. */
@@ -1067,8 +874,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   unmounted = true
-  if (durationRefreshTimer !== null) clearTimeout(durationRefreshTimer)
-  durationRefreshTimer = null
+  stopDurationRefresh()
   turnTerminalWaiters.clear()
   // Approval requests cannot be reconstructed by a freshly mounted chat page.
   if (streamingMessageId.value || turnSetupPending.value) void abort()
