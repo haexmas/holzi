@@ -57,6 +57,10 @@ Verlaufseinträge, damit die neue Historien-Spec daran anschließen kann?
 - Hover-Aktionen werden auch bei Tastaturfokus verlangt, damit die gewünschte
   Interaktion nicht ausschließlich von einer Maus oder einem Touch-Hover
   abhängt.
+- Für die Verlaufszeile wurde die Darstellung als flexible Titelspalte plus
+  feste rechtsbündige Zeitspalte gewählt. Bearbeiten und Löschen erscheinen im
+  Zwischenraum direkt links neben der Zeit; solange keine Aktion sichtbar ist,
+  verbrauchen sie keinen dauerhaften Platz der Titelspalte.
 - Bei einer Löschung während eines laufenden Turns wird zuerst abgebrochen und
   der terminale Zustand abgewartet. Erst ein erfolgreicher Abbruch erlaubt die
   anschließende Thread-Löschung; damit bleibt die Löschung bewusst explizit,
