@@ -15,11 +15,11 @@
 //!
 //! Concrete split plan: first move the fixture to
 //! `tests/common/tool_loop_fixture.rs` and pull it into this binary with
-//! `mod common;`, then split the cases into three binaries — tool-loop
-//! core (ordered chain, tool error, round limit), permission gating
-//! (manual/plan modes, denial, abort, concurrent requests, mid-turn mode
-//! change) and retry behavior (transient failure, shared budget, budget
-//! exhaustion, terminal error).
+//! `#[path = "common/tool_loop_fixture.rs"] mod tool_loop_fixture;`, then
+//! split the cases into three binaries — tool-loop core (ordered chain, tool
+//! error, round limit), permission gating (manual/plan modes, denial, abort,
+//! concurrent requests, mid-turn mode change) and retry behavior (transient
+//! failure, shared budget, budget exhaustion, terminal error).
 
 use std::collections::VecDeque;
 use std::path::PathBuf;
