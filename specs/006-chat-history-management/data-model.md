@@ -7,13 +7,13 @@
 Der bestehende Thread bleibt die persistierte Unterhaltung und wird im Verlauf
 als Eintrag dargestellt.
 
-| Feld                                | Bedeutung                                       | Änderbarkeit in diesem Feature           |
-| ----------------------------------- | ----------------------------------------------- | ---------------------------------------- |
-| `id`                                | Stabile Identität des Threads                   | unverändert                              |
-| `title`                             | Nutzerlesbarer Titel                            | über Umbenennen änderbar                 |
-| `created_at`                        | Eröffnungszeitpunkt der Unterhaltung            | unverändert; Basis der Duration          |
-| `updated_at`                        | Bestehende Änderungszeit für Verlaufssortierung | folgt der bestehenden Persistenzsemantik |
-| `last_provider_id`, `last_model_id` | Bestehende technische Metadaten                 | unverändert durch Historienverwaltung    |
+| Feld                                | Bedeutung                                           | Änderbarkeit in diesem Feature           |
+| ----------------------------------- | --------------------------------------------------- | ---------------------------------------- |
+| `id`                                | Stabile Identität des Threads                       | unverändert                              |
+| `title`                             | Nutzerlesbarer Titel                                | über Umbenennen änderbar                 |
+| `created_at`                        | Eröffnungszeitpunkt als Unix-Epoch in Millisekunden | unverändert; Basis der Duration          |
+| `updated_at`                        | Bestehende Änderungszeit für Verlaufssortierung     | folgt der bestehenden Persistenzsemantik |
+| `last_provider_id`, `last_model_id` | Bestehende technische Metadaten                     | unverändert durch Historienverwaltung    |
 
 ### ChatMessage
 
@@ -33,7 +33,8 @@ type HistoryDuration = {
 }
 ```
 
-Berechnung aus dem aktuellen Zeitpunkt und `created_at`:
+Berechnung aus dem aktuellen Zeitpunkt und `created_at` in Unix-Epoch-
+Millisekunden:
 
 | Vergangene Zeit                 | Einheit | Beispiel                |
 | ------------------------------- | ------- | ----------------------- |
@@ -42,9 +43,11 @@ Berechnung aus dem aktuellen Zeitpunkt und `created_at`:
 | `>= 24` Stunden                 | `d`     | `1d`, `5d`              |
 
 Die Zahl wird immer auf die volle Einheit abgerundet. Ein negativer Abstand
-wird als `0min` dargestellt. Die UI aktualisiert die Projektion spätestens an
-der nächsten relevanten Einheiten-Grenze. `min`, `h` und `d` sind feste
-kompakte Darstellungseinheiten; ergänzende Screenreader-Informationen werden
+wird als `0min` dargestellt. Ein fehlender, ungültiger oder sonst unbrauchbarer
+Zeitstempel wird ebenfalls als `{ value: 0, unit: 'min' }` dargestellt. Die UI
+aktualisiert die Projektion spätestens an der nächsten relevanten
+Einheiten-Grenze. `min`, `h` und `d` sind feste kompakte
+Darstellungseinheiten; ergänzende Screenreader-Informationen werden
 lokalisiert.
 
 ### HistoryEditState

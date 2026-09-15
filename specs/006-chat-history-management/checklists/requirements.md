@@ -19,6 +19,8 @@ prüfen
 - [x] Funktionale Anforderungen sind testbar und eindeutig formuliert.
 - [x] Das Dauerformat, die Einheiten, Rundung und das Verhalten bei
       Uhrabweichungen sind explizit festgelegt.
+- [x] Die Unix-Millisekunden-Zeitbasis und der `0min`-Fallback für unbrauchbare
+      Zeitstempel sind in Spec, Datenmodell und Contract konsistent festgelegt.
 - [x] Erfolgskriterien sind messbar und technologieagnostisch.
 - [x] Primär-, Abbruch-, Fehler- und Recovery-Szenarien sind abgedeckt.
 - [x] Edge Cases für Zeit, lange Titel, Touch, laufende Turns und Sync sind
