@@ -62,8 +62,8 @@ async function onSubmit() {
         :disabled="busy"
         :aria-invalid="showRequired && !localValue.trim() ? true : undefined"
         @input="
-          showRequired = false
-          savedFlash = false
+          showRequired = false;
+          savedFlash = false;
           saveError = null
         "
       />
