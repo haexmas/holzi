@@ -1,20 +1,21 @@
 {
-  "generation_id": "g_20260915T115008Z_e3b0",
+  "generation_id": "g_20260915T123047Z_e3b0",
   "molecules": [
     {
       "id": "com.github.haexmas.atoms.general-coding",
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "9c497039a508c1abbd32933570a8df53f9a2a9e4",
+      "revision": "1273ecd75ad0a644218e00146e4ad935b7605c9f",
       "source": "https://github.com/haexmas/atoms"
     },
     {
+      "hook_status": "ok",
       "id": "com.github.haexmas.atoms.graphify-first-authoring",
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "9c497039a508c1abbd32933570a8df53f9a2a9e4",
+      "revision": "1273ecd75ad0a644218e00146e4ad935b7605c9f",
       "source": "https://github.com/haexmas/atoms"
     },
     {
@@ -22,7 +23,7 @@
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "9c497039a508c1abbd32933570a8df53f9a2a9e4",
+      "revision": "1273ecd75ad0a644218e00146e4ad935b7605c9f",
       "source": "https://github.com/haexmas/atoms"
     },
     {
@@ -30,7 +31,7 @@
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "9c497039a508c1abbd32933570a8df53f9a2a9e4",
+      "revision": "1273ecd75ad0a644218e00146e4ad935b7605c9f",
       "source": "https://github.com/haexmas/atoms"
     },
     {
@@ -38,17 +39,17 @@
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "9c497039a508c1abbd32933570a8df53f9a2a9e4",
+      "revision": "1273ecd75ad0a644218e00146e4ad935b7605c9f",
       "source": "https://github.com/haexmas/atoms"
     },
     {
       "id": "com.github.haexmas.atoms.speckit",
       "paths": [],
-      "revision": "9c497039a508c1abbd32933570a8df53f9a2a9e4",
+      "revision": "1273ecd75ad0a644218e00146e4ad935b7605c9f",
       "source": "https://github.com/haexmas/atoms",
       "speckit": {
         "cli_version": "not-run",
-        "declaration_fingerprint": "sha256:dfaef91bbc23461ead7310049428556aa0e0e03a33e21a76395b6e620a34c542",
+        "declaration_fingerprint": "sha256:37f08b05b82f7c83475eb62b8d6c071970518a84ced7dca77f085ae9fbca7a96",
         "outcomes": {
           "agy": "skipped",
           "alquimia": "skipped",
