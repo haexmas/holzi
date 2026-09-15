@@ -8,6 +8,8 @@ use haex_crdt::rusqlite::{params, Connection, OptionalExtension, Result};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::storage::chat_messages;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatThread {
     pub id: Uuid,
@@ -45,6 +47,42 @@ pub fn delete_thread(conn: &Connection, id: Uuid) -> Result<usize> {
         "DELETE FROM chat_threads WHERE id = ?1",
         params![id.to_string()],
     )
+}
+
+/// Renames a thread without changing its opening time or recency ordering.
+pub fn rename_title(conn: &Connection, id: Uuid, title: &str) -> Result<usize> {
+    let sql = format!(
+        "UPDATE chat_threads SET title = ?1, {HLC_TIMESTAMP_COLUMN} = current_hlc() \
+         WHERE id = ?2"
+    );
+    conn.execute(&sql, params![title, id.to_string()])
+}
+
+/// Deletes a thread and its messages in one database transaction.
+///
+/// The boolean is false when the thread did not exist. In that case no
+/// message row is touched, even if a malformed database contains rows with
+/// the same thread id.
+pub fn delete_thread_and_messages(conn: &Connection, id: Uuid) -> Result<bool> {
+    let tx = conn.unchecked_transaction()?;
+    let exists: Option<i64> = tx
+        .query_row(
+            "SELECT 1 FROM chat_threads WHERE id = ?1",
+            params![id.to_string()],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if exists.is_none() {
+        return Ok(false);
+    }
+
+    chat_messages::delete_for_thread(&tx, id)?;
+    let deleted = delete_thread(&tx, id)?;
+    if deleted != 1 {
+        return Err(haex_crdt::rusqlite::Error::QueryReturnedNoRows);
+    }
+    tx.commit()?;
+    Ok(true)
 }
 
 /// Updates a thread's title, last provider/model pointer and

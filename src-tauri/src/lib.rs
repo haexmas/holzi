@@ -24,7 +24,9 @@ use chat::commands::{
     unload_local_model,
 };
 use chat::session::ChatState;
-use chat::thread_commands::{create_thread, list_messages, list_threads};
+use chat::thread_commands::{
+    create_thread, delete_thread, list_messages, list_threads, rename_thread,
+};
 use device::commands::{current_device_info, update_device_alias};
 use hardware::get_hardware_info;
 use instances::{
@@ -99,6 +101,8 @@ pub fn run() {
             create_thread,
             list_threads,
             list_messages,
+            rename_thread,
+            delete_thread,
             current_device_info,
             update_device_alias,
             get_pref,

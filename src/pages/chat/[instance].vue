@@ -68,6 +68,16 @@ const instanceName = computed(() => String(route.params.instance ?? ''))
 const threads = ref<Thread[]>([])
 const messagesByThread = ref<Record<string, Message[]>>({})
 const activeThreadId = ref<string | null>(null)
+const durationNow = ref(Date.now())
+let durationRefreshTimer: ReturnType<typeof setTimeout> | null = null
+const editingThreadId = ref<string | null>(null)
+const draftTitle = ref('')
+const editTitleError = ref<string | null>(null)
+const editingTitleInput = ref<HTMLInputElement | null>(null)
+const renamingThreadId = ref<string | null>(null)
+const deleteCandidate = ref<Thread | null>(null)
+const deleteError = ref<string | null>(null)
+const deletingThread = ref(false)
 const activeModel = ref<LoadedModelInfo | null>(null)
 const installedModels = ref<InstalledModel[]>([])
 const catalogEntries = ref<CatalogEntryWithFit[]>([])
@@ -100,6 +110,7 @@ const pendingToolEvents = new Map<
 >()
 const pendingApprovalsByThread = new Map<string, PendingApproval[]>()
 const pendingTurnCompletions = new Map<string, TurnCompleteEvent>()
+const turnTerminalWaiters = new Map<string, Set<() => void>>()
 
 const input = ref('')
 const busy = ref(false)
@@ -168,6 +179,78 @@ const noModelsInstalled = computed(
     Object.values(providerModels.value).every((list) => list.length === 0),
 )
 
+type HistoryDurationUnit = 'min' | 'h' | 'd'
+
+type HistoryDuration = {
+  value: number
+  unit: HistoryDurationUnit
+}
+
+/** Projects a persisted Unix-millisecond opening time into the compact UI form. */
+function historyDuration(createdAt: number, now = Date.now()): HistoryDuration {
+  if (!Number.isFinite(createdAt) || createdAt < 0) {
+    return { value: 0, unit: 'min' }
+  }
+  const elapsedMs = Math.max(0, now - createdAt)
+  const minutes = Math.floor(elapsedMs / 60_000)
+  if (minutes < 60) return { value: minutes, unit: 'min' }
+  const hours = Math.floor(elapsedMs / 3_600_000)
+  if (hours < 24) return { value: hours, unit: 'h' }
+  return { value: Math.floor(elapsedMs / 86_400_000), unit: 'd' }
+}
+
+function historyDurationLabel(createdAt: number): string {
+  const duration = historyDuration(createdAt, durationNow.value)
+  return `${duration.value}${duration.unit}`
+}
+
+function openingTimeLabel(createdAt: number): string {
+  if (!Number.isFinite(createdAt) || createdAt < 0) {
+    return t('chat.threads.openedAtUnknown')
+  }
+  return t('chat.threads.openedAt', {
+    date: new Date(createdAt).toLocaleString(),
+  })
+}
+
+function nextDurationBoundary(createdAt: number, now: number): number | null {
+  if (!Number.isFinite(createdAt) || createdAt < 0) return null
+  if (createdAt > now) return createdAt
+  const elapsedMs = now - createdAt
+  const unitMs =
+    elapsedMs < 3_600_000
+      ? 60_000
+      : elapsedMs < 86_400_000
+        ? 3_600_000
+        : 86_400_000
+  return createdAt + (Math.floor(elapsedMs / unitMs) + 1) * unitMs
+}
+
+function scheduleDurationRefresh() {
+  if (durationRefreshTimer !== null) clearTimeout(durationRefreshTimer)
+  const now = Date.now()
+  const nextBoundary = threads.value
+    .map((thread) => nextDurationBoundary(thread.createdAt, now))
+    .filter((value): value is number => value !== null)
+    .reduce((nearest, value) => Math.min(nearest, value), Infinity)
+  if (!Number.isFinite(nextBoundary)) return
+  durationRefreshTimer = setTimeout(
+    () => {
+      durationNow.value = Date.now()
+      scheduleDurationRefresh()
+    },
+    Math.max(1_000, nextBoundary - now),
+  )
+  if (
+    typeof durationRefreshTimer === 'object' &&
+    durationRefreshTimer !== null &&
+    'unref' in durationRefreshTimer &&
+    typeof durationRefreshTimer.unref === 'function'
+  ) {
+    durationRefreshTimer.unref()
+  }
+}
+
 // Read through a computed rather than `activeModel?.modelId` directly in
 // the template — vue-tsc narrows `activeModel` to `never` at the model
 // picker's `v-else-if="!activeModel"` (a chained-`v-if` control-flow
@@ -231,6 +314,150 @@ async function refreshProviders() {
 /** Refreshes the thread list without changing the active chat draft/thread. */
 async function refreshThreads() {
   threads.value = await chat.listThreadsAsync()
+  scheduleDurationRefresh()
+}
+
+function startEditing(thread: Thread) {
+  if (deletingThread.value) return
+  editingThreadId.value = thread.id
+  draftTitle.value = thread.title
+  editTitleError.value = null
+  void nextTick(() => {
+    editingTitleInput.value?.focus()
+    editingTitleInput.value?.select()
+  })
+}
+
+function cancelEditing() {
+  editingThreadId.value = null
+  draftTitle.value = ''
+  editTitleError.value = null
+}
+
+async function saveThreadTitle() {
+  const threadId = editingThreadId.value
+  if (!threadId || renamingThreadId.value) return
+  const title = draftTitle.value.trim()
+  if (!title) {
+    editTitleError.value = t('chat.threads.titleRequired')
+    return
+  }
+  if ([...title].length > 120) {
+    editTitleError.value = t('chat.threads.titleTooLong')
+    return
+  }
+  renamingThreadId.value = threadId
+  editTitleError.value = null
+  try {
+    const updated = await chat.renameThreadAsync(threadId, title)
+    threads.value = threads.value.map((thread) =>
+      thread.id === updated.id ? updated : thread,
+    )
+    cancelEditing()
+  } catch {
+    editTitleError.value = t('chat.threads.renameFailed')
+  } finally {
+    renamingThreadId.value = null
+  }
+}
+
+function requestDelete(thread: Thread) {
+  if (renamingThreadId.value || deletingThread.value) return
+  deleteCandidate.value = thread
+  deleteError.value = null
+}
+
+function closeDeleteDialog(open: boolean) {
+  if (!open && !deletingThread.value) {
+    deleteCandidate.value = null
+    deleteError.value = null
+  }
+}
+
+function hasPendingTurn(threadId: string): boolean {
+  return (
+    streamingThreadId.value === threadId ||
+    (turnSetupPending.value && activeThreadId.value === threadId) ||
+    pendingApprovalsByThread.has(threadId) ||
+    (activeThreadId.value === threadId && pendingApprovals.value.length > 0)
+  )
+}
+
+function waitForTurnTerminal(threadId: string): Promise<boolean> {
+  if (!hasPendingTurn(threadId)) return Promise.resolve(true)
+  return new Promise((resolve) => {
+    const waiters = turnTerminalWaiters.get(threadId) ?? new Set<() => void>()
+    const timeout = setTimeout(() => {
+      waiters.delete(finish)
+      if (waiters.size === 0) turnTerminalWaiters.delete(threadId)
+      resolve(false)
+    }, 10_000)
+    const finish = () => {
+      clearTimeout(timeout)
+      waiters.delete(finish)
+      if (waiters.size === 0) turnTerminalWaiters.delete(threadId)
+      resolve(true)
+    }
+    waiters.add(finish)
+    turnTerminalWaiters.set(threadId, waiters)
+  })
+}
+
+function resolveTurnTerminal(threadId: string) {
+  const waiters = turnTerminalWaiters.get(threadId)
+  if (!waiters) return
+  for (const waiter of [...waiters]) waiter()
+}
+
+function clearDeletedThreadState(threadId: string) {
+  threads.value = threads.value.filter((thread) => thread.id !== threadId)
+  messagesByThread.value = Object.fromEntries(
+    Object.entries(messagesByThread.value).filter(([id]) => id !== threadId),
+  )
+  pendingApprovalsByThread.delete(threadId)
+  pendingToolEvents.delete(threadId)
+  pendingTurnCompletions.delete(threadId)
+  if (editingThreadId.value === threadId) cancelEditing()
+  if (activeThreadId.value !== threadId) return
+  activeThreadId.value = null
+  input.value = ''
+  streamingMessageId.value = null
+  streamingThreadId.value = null
+  streamingBuffer.value = ''
+  reasoningByMessage.value = {}
+  expandedReasoning.value = new Set()
+  pendingStreamEvents.clear()
+  void resetTextarea()
+}
+
+async function confirmDelete() {
+  const candidate = deleteCandidate.value
+  if (!candidate || deletingThread.value) return
+  deletingThread.value = true
+  deleteError.value = null
+  const needsAbort = hasPendingTurn(candidate.id)
+  try {
+    if (needsAbort) {
+      const terminal = waitForTurnTerminal(candidate.id)
+      try {
+        await chat.abortAsync()
+      } catch {
+        deleteError.value = t('chat.threads.deleteCancelFailed')
+        return
+      }
+      if (!(await terminal)) {
+        deleteError.value = t('chat.threads.deleteCancelFailed')
+        return
+      }
+    }
+    await chat.deleteThreadAsync(candidate.id)
+    clearDeletedThreadState(candidate.id)
+    deleteCandidate.value = null
+  } catch {
+    deleteError.value = t('chat.threads.deleteFailed')
+  } finally {
+    deletingThread.value = false
+  }
 }
 
 /** Selects a thread, loading its persisted messages on first access. */
@@ -957,6 +1184,7 @@ async function handleTurnComplete(e: TurnCompleteEvent) {
   if (e.assistantMessageId && streamingMessageId.value !== e.assistantMessageId)
     return
   await applyTurnComplete(e)
+  resolveTurnTerminal(e.threadId)
 }
 
 function setReasoningExpanded(messageId: string, expanded: boolean) {
@@ -1099,6 +1327,9 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   unmounted = true
+  if (durationRefreshTimer !== null) clearTimeout(durationRefreshTimer)
+  durationRefreshTimer = null
+  turnTerminalWaiters.clear()
   // Approval requests cannot be reconstructed by a freshly mounted chat page.
   if (streamingMessageId.value || turnSetupPending.value) void abort()
   for (const unlisten of unlisteners.splice(0)) unlisten()
@@ -1146,15 +1377,92 @@ onBeforeUnmount(() => {
         }}</span>
       </div>
       <div class="space-y-1">
-        <button
+        <div
           v-for="thread in threads"
           :key="thread.id"
-          class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-accent truncate transition-colors"
+          class="group flex w-full min-w-0 items-center gap-1 rounded-lg text-sm transition-colors hover:bg-accent focus-within:bg-accent"
           :class="{ 'bg-accent font-medium': activeThreadId === thread.id }"
-          @click="selectThread(thread.id)"
         >
-          {{ thread.title }}
-        </button>
+          <template v-if="editingThreadId === thread.id">
+            <div class="min-w-0 flex-1 px-2 py-1.5">
+              <input
+                ref="editingTitleInput"
+                v-model="draftTitle"
+                class="w-full rounded border border-border bg-background px-2 py-1 text-sm outline-none focus:border-foreground/50"
+                :aria-label="t('chat.threads.editTitle')"
+                :disabled="renamingThreadId === thread.id"
+                @keydown.enter.prevent="saveThreadTitle"
+                @keydown.esc.prevent="cancelEditing"
+              />
+              <p
+                v-if="editTitleError"
+                class="mt-1 text-xs text-destructive"
+                role="alert"
+              >
+                {{ editTitleError }}
+              </p>
+            </div>
+            <button
+              type="button"
+              class="shrink-0 rounded p-1.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              :aria-label="t('chat.threads.saveTitle')"
+              :title="t('chat.threads.saveTitle')"
+              :disabled="renamingThreadId === thread.id"
+              @click.stop="saveThreadTitle"
+            >
+              <Icon name="lucide:check" class="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              class="mr-1 shrink-0 rounded p-1.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              :aria-label="t('chat.threads.cancelEdit')"
+              :title="t('chat.threads.cancelEdit')"
+              :disabled="renamingThreadId === thread.id"
+              @click.stop="cancelEditing"
+            >
+              <Icon name="lucide:x" class="h-4 w-4" />
+            </button>
+          </template>
+          <template v-else>
+            <button
+              type="button"
+              class="min-w-0 flex-1 truncate px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              @click="selectThread(thread.id)"
+            >
+              <span class="truncate">{{ thread.title }}</span>
+            </button>
+            <span
+              class="shrink-0 rounded pr-1 text-xs font-normal text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              tabindex="0"
+              :title="openingTimeLabel(thread.createdAt)"
+              :aria-label="`${t('chat.threads.duration', { duration: historyDurationLabel(thread.createdAt) })}, ${openingTimeLabel(thread.createdAt)}`"
+            >
+              {{ historyDurationLabel(thread.createdAt) }}
+            </span>
+            <div
+              class="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+            >
+              <button
+                type="button"
+                class="rounded p-1.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                :aria-label="t('chat.threads.editTitle')"
+                :title="t('chat.threads.editTitle')"
+                @click.stop="startEditing(thread)"
+              >
+                <Icon name="lucide:pencil" class="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                class="mr-1 rounded p-1.5 text-muted-foreground hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                :aria-label="t('chat.threads.deleteTitle')"
+                :title="t('chat.threads.deleteTitle')"
+                @click.stop="requestDelete(thread)"
+              >
+                <Icon name="lucide:trash-2" class="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </template>
+        </div>
         <div
           v-if="threads.length === 0"
           class="px-3 py-2 text-xs text-muted-foreground"
@@ -1181,6 +1489,48 @@ onBeforeUnmount(() => {
         {{ t('chat.lock') }}
       </UiButton>
     </aside>
+
+    <UiDrawerModal
+      v-if="deleteCandidate"
+      :open="deleteCandidate !== null"
+      :title="t('chat.threads.deleteDialogTitle')"
+      @update:open="closeDeleteDialog"
+    >
+      <template #content>
+        <div class="space-y-3 px-6 py-2">
+          <p class="text-sm">
+            {{
+              t('chat.threads.deleteConfirm', {
+                title: deleteCandidate.title,
+              })
+            }}
+          </p>
+          <p v-if="deleteError" class="text-sm text-destructive" role="alert">
+            {{ deleteError }}
+          </p>
+        </div>
+      </template>
+      <template #footer>
+        <div class="flex justify-end gap-2">
+          <UiButton
+            type="button"
+            variant="outline"
+            :disabled="deletingThread"
+            @click="closeDeleteDialog(false)"
+          >
+            {{ t('chat.cancel') }}
+          </UiButton>
+          <UiButton
+            type="button"
+            variant="destructive"
+            :loading="deletingThread"
+            @click="confirmDelete"
+          >
+            {{ t('chat.threads.deleteConfirmButton') }}
+          </UiButton>
+        </div>
+      </template>
+    </UiDrawerModal>
 
     <section class="min-w-0 flex-1 flex flex-col">
       <header
