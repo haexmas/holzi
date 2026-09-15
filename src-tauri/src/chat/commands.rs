@@ -1,4 +1,43 @@
 //! Model-lifecycle + streaming chat commands.
+//!
+//! Maintainability exception (spaex 500-LoC rule): at ~3000 lines this is
+//! the largest hand-maintained file in the repository. Model lifecycle,
+//! send admission and the turn/step loop are coupled through one shared
+//! layer — the `EVENT_*` names, every `*Event` payload struct, the
+//! `ChatState` operation reservation and the cancellation token — and
+//! moving any one of the three out before that layer has its own module
+//! would duplicate the payload definitions across the split. It stays
+//! whole until the ordered plan below runs, so the event-ordering and
+//! ownership guarantees covered by `tests/chat_tool_loop.rs` and
+//! `commands_tests.rs` keep a single reviewable home.
+//!
+//! Concrete split plan — five mechanical PRs in this order, each keeping
+//! the registered command surface and every test unchanged:
+//!
+//! 1. `chat/events.rs`: the `EVENT_*` constants, all `*Event` payload
+//!    structs, `emit_load_progress`, `emit_load_error`,
+//!    `emit_model_load_status`, `risk_class_str` and
+//!    `strip_leaked_tool_call_markup` (~330 lines).
+//! 2. `chat/model_loading.rs`: `LoadPhase`, `LoadIdentity`, `LoadOutcome`,
+//!    `publish_load_phase`, `load_model_inner`, both `load_model*`
+//!    commands, `load_api_key_model`, `resolve_local_model_metadata`,
+//!    `verify_local_model_integrity`, `load_local_model_from_metadata`,
+//!    `resolve_display_name`, `unload_local_model`, `active_model_info`
+//!    (~600 lines).
+//! 3. `chat/send_admission.rs`: `derive_message_ids`, `IdempotentSend`,
+//!    `resolve_idempotent_send`, `PersistedSend`,
+//!    `persist_send_transaction`, `default_thread_title`,
+//!    `last_message_id` (~260 lines).
+//! 4. `chat/turn.rs`: `ToolPlan`, `StepOutcome`, `RetryDecision`,
+//!    `retry_or_bail`, `StreamStartError`, `start_step_stream`,
+//!    `run_step`, `run_turn`, the three `persist_*` helpers and
+//!    `read_permission_mode` (~1050 lines).
+//! 5. `chat/default_model.rs`: `resolve_default_model`,
+//!    `resolve_default_local_model`, `start_default_model_preload`,
+//!    `model_load_status` (~250 lines).
+//!
+//! What remains here is `send_message`, the abort commands and the
+//! tool-permission commands — roughly 400 lines.
 
 use std::sync::Arc;
 

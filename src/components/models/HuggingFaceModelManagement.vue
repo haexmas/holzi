@@ -1,4 +1,20 @@
 <script setup lang="ts">
+/*
+ * Maintainability exception (spaex 500-LoC rule): ~300 lines of script
+ * plus ~290 of template covering three tabs that share `installed`,
+ * `activeModelId` and the download-progress subscription. Splitting the
+ * tabs now would lift that shared state into props and events without
+ * any test to hold the wiring in place — this component has no
+ * executable coverage yet.
+ *
+ * Concrete split plan: add a replay test for the installed-model tab
+ * first, then extract the catalog-download tab (`catalogEntries`,
+ * `downloadCatalogEntryAsync`, `downloadPercent`, `downloadWidth`,
+ * `humanBytes` and their markup) and the update-check panel
+ * (`updateStatuses`, `checkUpdatesNowAsync`, `installUpdateForAsync`)
+ * into child components, leaving the installed list, its delete/load
+ * actions and the integrity dialog here.
+ */
 import type { UnlistenFn } from '@tauri-apps/api/event'
 import {
   hfErrorDetail,

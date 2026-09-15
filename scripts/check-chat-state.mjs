@@ -1,5 +1,18 @@
 // Run with `node scripts/check-chat-state.mjs`. Replays real page handlers
 // with Tauri replaced at its IPC boundary; no browser or GPU is required.
+//
+// Maintainability exception (spaex 500-LoC rule): 19 replay tests plus the
+// `createChatState` scaffold that boots the page's real `<script setup>`
+// against injected globals. The scaffold's shape is dictated by the page
+// it replays, so it must move together with the page's own split; see the
+// plan in `src/pages/chat/[instance].vue`. Splitting these tests across
+// files before that would duplicate the scaffold.
+//
+// Concrete split plan: once the harness imports the page's composables
+// instead of stripping imports (step 1 of the page's plan), move
+// `createChatState` into `scripts/lib/chat-state-harness.mjs` and split
+// the cases by the composable they exercise — transcript/event ordering,
+// thread sidebar, and composer/permission state.
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { test } from 'node:test'

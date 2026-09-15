@@ -5,6 +5,21 @@
 //! real bootstrapped `Database` (needed for `current_hlc()`, same
 //! justification as `tests/chat_message_idempotency.rs`) so persisted rows
 //! and their `parent_id` chain can be asserted directly.
+//!
+//! Maintainability exception (spaex 500-LoC rule): the first ~360 lines
+//! are one fixture — `StubAdapter`, `ScriptedTool`, `open_db`,
+//! `seed_thread`, `session_with`, `spawn_turn`, `run_scripted_turn` —
+//! that every case below builds on. Splitting the cases before the
+//! fixture moves would copy it into each new test binary, where the
+//! copies would drift apart as the turn loop changes.
+//!
+//! Concrete split plan: first move the fixture to
+//! `tests/common/tool_loop_fixture.rs` and pull it into this binary with
+//! `mod common;`, then split the cases into three binaries — tool-loop
+//! core (ordered chain, tool error, round limit), permission gating
+//! (manual/plan modes, denial, abort, concurrent requests, mid-turn mode
+//! change) and retry behavior (transient failure, shared budget, budget
+//! exhaustion, terminal error).
 
 use std::collections::VecDeque;
 use std::path::PathBuf;

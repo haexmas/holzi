@@ -1,4 +1,31 @@
 <script setup lang="ts">
+/*
+ * Maintainability exception (spaex 500-LoC rule): this page holds the
+ * thread sidebar, the transcript, the composer, model selection and
+ * download, and the whole streaming event surface (token, retry,
+ * complete, error, tool call/result, turn complete, permission request,
+ * model load) in one file.
+ *
+ * It stays whole because `scripts/check-chat-state.mjs` is its only
+ * executable test: that harness regex-extracts this `<script setup>`
+ * block, strips every `import` line, transpiles what is left and replays
+ * it against injected globals. Logic moved into a composable becomes an
+ * import — invisible to all 19 replay tests, which cover exactly the
+ * event-ordering and ownership rules that make this file long. Splitting
+ * first would silently delete that coverage.
+ *
+ * Concrete split plan, in order:
+ *   1. Rework the harness to import the page's composables directly
+ *      instead of stripping imports, so extracted state stays under test.
+ *   2. Extract `useChatTranscript` — `pendingStreamEvents`,
+ *      `pendingToolEvents`, `pendingTurnCompletions`, `turnTerminalWaiters`
+ *      and the `apply*`/`handle*` event handlers.
+ *   3. Extract `useThreadSidebar` — `threads`, title editing, delete
+ *      confirmation, `selectThread` and the duration helpers.
+ *   4. Move model selection, download progress and the integrity dialog
+ *      into a child component; it already shares
+ *      `parseModelIntegrityFailure` with `HuggingFaceModelManagement.vue`.
+ */
 import { computed, onMounted, onBeforeUnmount, ref, nextTick } from 'vue'
 import type { UnlistenFn } from '@tauri-apps/api/event'
 import DOMPurify from 'dompurify'
