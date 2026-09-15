@@ -12,7 +12,7 @@ use std::sync::{Arc, Barrier};
 use haex_crdt::{Database, DatabaseConfig, NoopSignatureProvider, SqlCipherKey};
 use uuid::Uuid;
 
-use holzi_lib::chat::commands::{
+use holzi_lib::chat::send_admission::{
     derive_message_ids, persist_send_transaction, resolve_idempotent_send, IdempotentSend,
     PersistedSend,
 };

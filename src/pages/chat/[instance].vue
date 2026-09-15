@@ -1,30 +1,31 @@
 <script setup lang="ts">
 /*
- * Maintainability exception (spaex 500-LoC rule): this page holds the
- * thread sidebar, the transcript, the composer, model selection and
- * download, and the whole streaming event surface (token, retry,
- * complete, error, tool call/result, turn complete, permission request,
- * model load) in one file.
+ * Maintainability exception (spaex 500-LoC rule): the 2026-09-15
+ * review's four-step split is done — see `scripts/check-chat-state.ts`'s,
+ * `useChatTranscript.ts`'s, `useThreadSidebar.ts`'s and
+ * `ModelSelection.vue`'s own history. At ~1400 lines this page is still
+ * over the limit: the composer/send flow (`send`, `abort`, `newChat`,
+ * `lock`, ~250 lines) and model lifecycle (`loadModel`, the integrity-
+ * dialog handlers, `downloadCatalogEntry`, `refreshInstalledAndCatalog`/
+ * `refreshProviders`, the `onLoad*` status handlers, ~300 lines) are
+ * still here, plus the `onMounted` wiring that ties the transcript and
+ * thread-sidebar composables together.
  *
- * It stays whole because `scripts/check-chat-state.ts` is its only
- * executable test: that harness regex-extracts this `<script setup>`
- * block, strips every `import` line, transpiles what is left and replays
- * it against injected globals. Logic moved into a composable becomes an
- * import — invisible to all 19 replay tests, which cover exactly the
- * event-ordering and ownership rules that make this file long. Splitting
- * first would silently delete that coverage.
+ * `ModelSelection.vue`'s own header already flagged why step 4 stopped
+ * short of moving that model lifecycle state out too: activeModel,
+ * installedModels, catalogEntries, providerList, providerModels and the
+ * download/integrity/load-status refs are read by composer logic
+ * (`sendDisabled`, `send()`'s persisted `modelId`) as much as by the
+ * model-management UI, so moving them into a plain composable would only
+ * duplicate state between this page and `ModelSelection.vue` — a Pinia
+ * store is the fit once that migration gets its own dedicated session.
  *
- * Concrete split plan, in order:
- *   1. Rework the harness to import the page's composables directly
- *      instead of stripping imports, so extracted state stays under test.
- *   2. Extract `useChatTranscript` — `pendingStreamEvents`,
- *      `pendingToolEvents`, `pendingTurnCompletions`, `turnTerminalWaiters`
- *      and the `apply*`/`handle*` event handlers.
- *   3. Extract `useThreadSidebar` — `threads`, title editing, delete
- *      confirmation, `selectThread` and the duration helpers.
- *   4. Move model selection, download progress and the integrity dialog
- *      into a child component; it already shares
- *      `parseModelIntegrityFailure` with `HuggingFaceModelManagement.vue`.
+ * Concrete split plan, if this grows further before that migration:
+ * extract the composer/send flow (`send`, `abort`, `newChat`,
+ * `pendingSend`, `effortLevel`/`effortTokens`, `input`, `busy`,
+ * `turnSetupPending`) into a `useComposer` composable next to
+ * `useChatTranscript`/`useThreadSidebar`, taking the same instance
+ * (`chat`, `chatTranscript`) as a dependency.
  */
 import { computed, onMounted, onBeforeUnmount, ref, nextTick } from 'vue'
 import type { UnlistenFn } from '@tauri-apps/api/event'
@@ -34,21 +35,14 @@ import {
   useChat,
   type LoadedModelInfo,
   type Message,
-  type MessageCompleteEvent,
-  type MessageErrorEvent,
   type ModelLoadErrorEvent,
   type ModelLoadPhase,
   type ModelLoadProgressEvent,
   type ModelLoadStatusPayload,
-  type RetryEvent,
   type SendMessageArgs,
-  type Thread,
-  type TokenEvent,
-  type ToolCallEvent,
-  type ToolPermissionRequestEvent,
-  type ToolResultEvent,
-  type TurnCompleteEvent,
 } from '~/composables/useChat'
+import { useChatTranscript } from '~/composables/useChatTranscript'
+import { useThreadSidebar } from '~/composables/useThreadSidebar'
 import {
   parseModelIntegrityFailure,
   useModels,
@@ -70,6 +64,9 @@ import PermissionPrompt, {
 } from '~/components/chat/PermissionPrompt.vue'
 import ComposerSettingsPopover from '~/components/chat/ComposerSettingsPopover.vue'
 import ReasoningAccordion from '~/components/chat/ReasoningAccordion.vue'
+import ModelSelection, {
+  type ModelGroup,
+} from '~/components/chat/ModelSelection.vue'
 import { useAutoResizeTextarea } from '~/composables/useAutoResizeTextarea'
 
 definePageMeta({
@@ -97,19 +94,8 @@ let unmounted = false
 
 const instanceName = computed(() => String(route.params.instance ?? ''))
 
-const threads = ref<Thread[]>([])
 const messagesByThread = ref<Record<string, Message[]>>({})
 const activeThreadId = ref<string | null>(null)
-const durationNow = ref(Date.now())
-let durationRefreshTimer: ReturnType<typeof setTimeout> | null = null
-const editingThreadId = ref<string | null>(null)
-const draftTitle = ref('')
-const editTitleError = ref<string | null>(null)
-const editingTitleInput = ref<HTMLInputElement | null>(null)
-const renamingThreadId = ref<string | null>(null)
-const deleteCandidate = ref<Thread | null>(null)
-const deleteError = ref<string | null>(null)
-const deletingThread = ref(false)
 const activeModel = ref<LoadedModelInfo | null>(null)
 const installedModels = ref<InstalledModel[]>([])
 const catalogEntries = ref<CatalogEntryWithFit[]>([])
@@ -127,22 +113,7 @@ const reasoningByMessage = ref<Record<string, string>>({})
 const retryingMessageId = ref<string | null>(null)
 const expandedReasoning = ref<Set<string>>(new Set())
 
-type PendingStreamEvents = {
-  tokens: string
-  reasoning: string
-  retryReset?: boolean
-  complete?: MessageCompleteEvent
-  error?: MessageErrorEvent
-}
-
-const pendingStreamEvents = new Map<string, PendingStreamEvents>()
-const pendingToolEvents = new Map<
-  string,
-  Array<ToolCallEvent | ToolResultEvent>
->()
 const pendingApprovalsByThread = new Map<string, PendingApproval[]>()
-const pendingTurnCompletions = new Map<string, TurnCompleteEvent>()
-const turnTerminalWaiters = new Map<string, Set<() => void>>()
 
 const input = ref('')
 const busy = ref(false)
@@ -164,6 +135,95 @@ const lastError = ref<string | null>(null)
 const pendingSend = ref<SendMessageArgs | null>(null)
 
 const { textareaRef, reset: resetTextarea } = useAutoResizeTextarea(input)
+
+// `chatTranscript.applyTurnComplete` needs `threadSidebar.refreshThreads`,
+// and `threadSidebar.confirmDelete`/`selectThread` need
+// `chatTranscript.hasPendingTurn`/`waitForTurnTerminal`/`handleToolCall`/
+// `handleToolResult` — a genuine circular dependency between the two
+// composables. Resolved with this indirection: `chatTranscript` is built
+// first against a placeholder that's swapped for the real function the
+// moment `threadSidebar` exists, before any asynchronous code can call it.
+let refreshThreadsForTranscript = async () => {}
+const chatTranscript = useChatTranscript(
+  chat,
+  messagesByThread,
+  activeThreadId,
+  streamingMessageId,
+  streamingThreadId,
+  streamingBuffer,
+  reasoningByMessage,
+  retryingMessageId,
+  busy,
+  turnSetupPending,
+  lastError,
+  pendingApprovals,
+  pendingApprovalsByThread,
+  () => refreshThreadsForTranscript(),
+  scrollToBottom,
+  errString,
+)
+const threadSidebar = useThreadSidebar(
+  chat,
+  chatTranscript,
+  t,
+  messagesByThread,
+  activeThreadId,
+  input,
+  streamingMessageId,
+  streamingThreadId,
+  streamingBuffer,
+  reasoningByMessage,
+  expandedReasoning,
+  pendingApprovals,
+  pendingApprovalsByThread,
+  resetTextarea,
+  scrollToBottom,
+)
+refreshThreadsForTranscript = threadSidebar.refreshThreads
+
+const {
+  pendingStreamEvents,
+  pendingToolEvents,
+  pendingTurnCompletions,
+  turnTerminalWaiters,
+  handleToken,
+  handleRetry,
+  handleComplete,
+  handleError,
+  handleToolCall,
+  handleToolResult,
+  handleToolPermissionRequest,
+  handleTurnComplete,
+} = chatTranscript
+
+const {
+  threads,
+  editingThreadId,
+  draftTitle,
+  editTitleError,
+  editingTitleInput,
+  renamingThreadId,
+  deleteCandidate,
+  deleteError,
+  deletingThread,
+  // Not called directly on the page anymore (historyDurationLabel, its
+  // only caller, moved into the composable too) — kept here only because
+  // scripts/check-chat-state.ts replays it in isolation as a pure
+  // date-math function.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  historyDuration,
+  historyDurationLabel,
+  openingTimeLabel,
+  stopDurationRefresh,
+  refreshThreads,
+  startEditing,
+  cancelEditing,
+  saveThreadTitle,
+  requestDelete,
+  closeDeleteDialog,
+  confirmDelete,
+  selectThread,
+} = threadSidebar
 
 const downloadingId = ref<string | null>(null)
 const downloadProgressBytes = ref<number>(0)
@@ -204,82 +264,6 @@ const noModelsInstalled = computed(
     Object.values(providerModels.value).every((list) => list.length === 0),
 )
 
-type HistoryDurationUnit = 'min' | 'h' | 'd'
-
-type HistoryDuration = {
-  value: number
-  unit: HistoryDurationUnit
-}
-
-/** Projects a persisted Unix-millisecond opening time into the compact UI form. */
-function historyDuration(createdAt: number, now = Date.now()): HistoryDuration {
-  if (!Number.isFinite(createdAt) || createdAt < 0) {
-    return { value: 0, unit: 'min' }
-  }
-  const elapsedMs = Math.max(0, now - createdAt)
-  const minutes = Math.floor(elapsedMs / 60_000)
-  if (minutes < 60) return { value: minutes, unit: 'min' }
-  const hours = Math.floor(elapsedMs / 3_600_000)
-  if (hours < 24) return { value: hours, unit: 'h' }
-  return { value: Math.floor(elapsedMs / 86_400_000), unit: 'd' }
-}
-
-function historyDurationLabel(createdAt: number): string {
-  const duration = historyDuration(createdAt, durationNow.value)
-  return `${duration.value}${duration.unit}`
-}
-
-function openingTimeLabel(createdAt: number): string {
-  if (!Number.isFinite(createdAt) || createdAt < 0) {
-    return t('chat.threads.openedAtUnknown')
-  }
-  const date = new Date(createdAt)
-  if (Number.isNaN(date.getTime())) {
-    return t('chat.threads.openedAtUnknown')
-  }
-  return t('chat.threads.openedAt', {
-    date: date.toLocaleString(),
-  })
-}
-
-function nextDurationBoundary(createdAt: number, now: number): number | null {
-  if (!Number.isFinite(createdAt) || createdAt < 0) return null
-  if (createdAt > now) return createdAt
-  const elapsedMs = now - createdAt
-  const unitMs =
-    elapsedMs < 3_600_000
-      ? 60_000
-      : elapsedMs < 86_400_000
-        ? 3_600_000
-        : 86_400_000
-  return createdAt + (Math.floor(elapsedMs / unitMs) + 1) * unitMs
-}
-
-function scheduleDurationRefresh() {
-  if (durationRefreshTimer !== null) clearTimeout(durationRefreshTimer)
-  const now = Date.now()
-  const nextBoundary = threads.value
-    .map((thread) => nextDurationBoundary(thread.createdAt, now))
-    .filter((value): value is number => value !== null)
-    .reduce((nearest, value) => Math.min(nearest, value), Infinity)
-  if (!Number.isFinite(nextBoundary)) return
-  durationRefreshTimer = setTimeout(
-    () => {
-      durationNow.value = Date.now()
-      scheduleDurationRefresh()
-    },
-    Math.max(1_000, nextBoundary - now),
-  )
-  if (
-    typeof durationRefreshTimer === 'object' &&
-    durationRefreshTimer !== null &&
-    'unref' in durationRefreshTimer &&
-    typeof durationRefreshTimer.unref === 'function'
-  ) {
-    durationRefreshTimer.unref()
-  }
-}
-
 // Read through a computed rather than `activeModel?.modelId` directly in
 // the template — vue-tsc narrows `activeModel` to `never` at the model
 // picker's `v-else-if="!activeModel"` (a chained-`v-if` control-flow
@@ -287,11 +271,6 @@ function scheduleDurationRefresh() {
 const activeModelId = computed(() => activeModel.value?.modelId ?? '')
 
 /** Groups selectable models by provider for the picker's <optgroup>. */
-type ModelGroup = {
-  providerId: string
-  providerName: string
-  models: { id: string; name: string }[]
-}
 const modelGroups = computed<ModelGroup[]>(() => {
   const localGroup: ModelGroup | null =
     installedModels.value.length > 0
@@ -338,200 +317,6 @@ async function refreshProviders() {
       }),
   )
   providerModels.value = next
-}
-
-/** Refreshes the thread list without changing the active chat draft/thread. */
-async function refreshThreads() {
-  threads.value = await chat.listThreadsAsync()
-  scheduleDurationRefresh()
-}
-
-function startEditing(thread: Thread) {
-  if (deletingThread.value || renamingThreadId.value) return
-  editingThreadId.value = thread.id
-  draftTitle.value = thread.title
-  editTitleError.value = null
-  void nextTick(() => {
-    editingTitleInput.value?.focus()
-    editingTitleInput.value?.select()
-  })
-}
-
-function cancelEditing() {
-  editingThreadId.value = null
-  draftTitle.value = ''
-  editTitleError.value = null
-}
-
-async function saveThreadTitle() {
-  const threadId = editingThreadId.value
-  if (!threadId || renamingThreadId.value) return
-  const title = draftTitle.value.trim()
-  if (!title) {
-    editTitleError.value = t('chat.threads.titleRequired')
-    return
-  }
-  const titleLength = [
-    ...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(
-      title,
-    ),
-  ].length
-  if (titleLength > 120) {
-    editTitleError.value = t('chat.threads.titleTooLong')
-    return
-  }
-  renamingThreadId.value = threadId
-  editTitleError.value = null
-  try {
-    const updated = await chat.renameThreadAsync(threadId, title)
-    threads.value = threads.value.map((thread) =>
-      thread.id === updated.id ? updated : thread,
-    )
-    cancelEditing()
-  } catch {
-    editTitleError.value = t('chat.threads.renameFailed')
-  } finally {
-    renamingThreadId.value = null
-  }
-}
-
-function requestDelete(thread: Thread) {
-  if (renamingThreadId.value || deletingThread.value) return
-  deleteCandidate.value = thread
-  deleteError.value = null
-}
-
-function closeDeleteDialog(open: boolean) {
-  if (!open && !deletingThread.value) {
-    deleteCandidate.value = null
-    deleteError.value = null
-  }
-}
-
-function hasPendingTurn(threadId: string): boolean {
-  return (
-    streamingThreadId.value === threadId ||
-    (turnSetupPending.value && activeThreadId.value === threadId) ||
-    pendingApprovalsByThread.has(threadId) ||
-    (activeThreadId.value === threadId && pendingApprovals.value.length > 0)
-  )
-}
-
-function waitForTurnTerminal(threadId: string): Promise<boolean> {
-  if (!hasPendingTurn(threadId)) return Promise.resolve(true)
-  return new Promise((resolve) => {
-    const waiters = turnTerminalWaiters.get(threadId) ?? new Set<() => void>()
-    const timeout = setTimeout(() => {
-      waiters.delete(finish)
-      if (waiters.size === 0) turnTerminalWaiters.delete(threadId)
-      resolve(false)
-    }, 10_000)
-    const finish = () => {
-      clearTimeout(timeout)
-      waiters.delete(finish)
-      if (waiters.size === 0) turnTerminalWaiters.delete(threadId)
-      resolve(true)
-    }
-    waiters.add(finish)
-    turnTerminalWaiters.set(threadId, waiters)
-  })
-}
-
-function resolveTurnTerminal(threadId: string) {
-  const waiters = turnTerminalWaiters.get(threadId)
-  if (!waiters) return
-  for (const waiter of [...waiters]) waiter()
-}
-
-function clearDeletedThreadState(threadId: string) {
-  threads.value = threads.value.filter((thread) => thread.id !== threadId)
-  messagesByThread.value = Object.fromEntries(
-    Object.entries(messagesByThread.value).filter(([id]) => id !== threadId),
-  )
-  pendingApprovalsByThread.delete(threadId)
-  pendingToolEvents.delete(threadId)
-  pendingTurnCompletions.delete(threadId)
-  if (editingThreadId.value === threadId) cancelEditing()
-  if (activeThreadId.value !== threadId) return
-  activeThreadId.value = null
-  input.value = ''
-  streamingMessageId.value = null
-  streamingThreadId.value = null
-  streamingBuffer.value = ''
-  reasoningByMessage.value = {}
-  expandedReasoning.value = new Set()
-  pendingStreamEvents.clear()
-  void resetTextarea()
-}
-
-async function confirmDelete() {
-  const candidate = deleteCandidate.value
-  if (!candidate || deletingThread.value) return
-  deletingThread.value = true
-  deleteError.value = null
-  const needsAbort = hasPendingTurn(candidate.id)
-  try {
-    if (needsAbort) {
-      const terminal = waitForTurnTerminal(candidate.id)
-      try {
-        await chat.abortAsync()
-      } catch {
-        deleteError.value = t('chat.threads.deleteCancelFailed')
-        return
-      }
-      if (!(await terminal)) {
-        deleteError.value = t('chat.threads.deleteCancelFailed')
-        return
-      }
-    }
-    await chat.deleteThreadAsync(candidate.id)
-    clearDeletedThreadState(candidate.id)
-    deleteCandidate.value = null
-  } catch {
-    deleteError.value = t('chat.threads.deleteFailed')
-  } finally {
-    deletingThread.value = false
-  }
-}
-
-/** Selects a thread, loading its persisted messages on first access. */
-async function selectThread(id: string) {
-  const previousThreadId = activeThreadId.value
-  if (
-    previousThreadId &&
-    previousThreadId !== id &&
-    pendingApprovals.value.length > 0
-  ) {
-    const queued = pendingApprovalsByThread.get(previousThreadId) ?? []
-    pendingApprovalsByThread.set(previousThreadId, [
-      ...queued,
-      ...pendingApprovals.value,
-    ])
-    pendingApprovals.value = []
-  }
-  activeThreadId.value = id
-  const existing = messagesByThread.value[id]
-  if (!existing) {
-    messagesByThread.value[id] = await chat.listMessagesAsync(id)
-  }
-  const queuedApprovals = pendingApprovalsByThread.get(id)
-  if (queuedApprovals) {
-    // Merge, don't overwrite: a `tool-permission-request` for `id` may
-    // have already landed directly in `pendingApprovals` during the
-    // `listMessagesAsync` await above (its gate matches on
-    // `activeThreadId`, which was set synchronously before that await).
-    pendingApprovals.value = [...queuedApprovals, ...pendingApprovals.value]
-    pendingApprovalsByThread.delete(id)
-  }
-  const queuedToolEvents = pendingToolEvents.get(id)
-  if (queuedToolEvents) {
-    pendingToolEvents.delete(id)
-    for (const event of queuedToolEvents) {
-      if ('toolName' in event) handleToolCall(event, true)
-      else handleToolResult(event, true)
-    }
-  }
-  await scrollToBottom()
 }
 
 /** Scrolls the message viewport to its newest item after rendering. */
@@ -878,278 +663,15 @@ function errString(e: unknown): string {
   return String(e)
 }
 
-/** Formats a byte count for the model download UI. */
-function humanBytes(n: number | null): string {
-  if (n === null) return '?'
-  const kb = 1024
-  const mb = kb * 1024
-  const gb = mb * 1024
-  if (n >= gb) return (n / gb).toFixed(1) + ' GB'
-  if (n >= mb) return (n / mb).toFixed(0) + ' MB'
-  return (n / kb).toFixed(0) + ' KB'
+function setReasoningExpanded(messageId: string, expanded: boolean) {
+  const next = new Set(expandedReasoning.value)
+  if (expanded) next.add(messageId)
+  else next.delete(messageId)
+  expandedReasoning.value = next
 }
 
-function downloadProgressPercent(modelId: string): number | null {
-  if (
-    downloadingId.value !== modelId ||
-    downloadTotalBytes.value === null ||
-    downloadTotalBytes.value <= 0
-  )
-    return null
-  return Math.min(
-    100,
-    Math.max(
-      0,
-      Math.round(
-        (downloadProgressBytes.value / downloadTotalBytes.value) * 100,
-      ),
-    ),
-  )
-}
-
-/** Maps a hardware-fit verdict to its localized display label. */
-function fitLabel(f: CatalogEntryWithFit['fit']): string {
-  return t(`chat.fit.${f}`)
-}
-
-function pendingFor(messageId: string): PendingStreamEvents {
-  const existing = pendingStreamEvents.get(messageId)
-  if (existing) return existing
-  const pending: PendingStreamEvents = { tokens: '', reasoning: '' }
-  pendingStreamEvents.set(messageId, pending)
-  return pending
-}
-
-function applyToken(e: TokenEvent, threadId: string) {
-  if (retryingMessageId.value === e.messageId) retryingMessageId.value = null
-  if (e.delta) {
-    streamingBuffer.value += e.delta
-    const list = messagesByThread.value[threadId] ?? []
-    const idx = list.findIndex((m) => m.id === e.messageId)
-    const existing = list[idx]
-    if (idx !== -1 && existing) {
-      list[idx] = { ...existing, content: existing.content + e.delta }
-      messagesByThread.value[threadId] = list
-    }
-  }
-  if (e.reasoning) {
-    const prev = reasoningByMessage.value[e.messageId] ?? ''
-    reasoningByMessage.value = {
-      ...reasoningByMessage.value,
-      [e.messageId]: prev + e.reasoning,
-    }
-  }
-  scrollToBottom()
-}
-
-function handleToken(e: TokenEvent) {
-  const threadId = streamingThreadId.value
-  if (streamingMessageId.value !== e.messageId || !threadId) {
-    const pending = pendingFor(e.messageId)
-    if (e.delta) pending.tokens += e.delta
-    if (e.reasoning) pending.reasoning += e.reasoning
-    return
-  }
-  applyToken(e, threadId)
-}
-
-/** `chat-retry`: the attempt whose partial text was already shown just
- * got discarded — clear it and show "retrying…" instead (T039). Preserve
- * the reset when the event lands before `send()` installs its placeholder. */
-function handleRetry(e: RetryEvent) {
-  const threadId = streamingThreadId.value
-  if (streamingMessageId.value !== e.assistantMessageId || !threadId) {
-    const pending = pendingFor(e.assistantMessageId)
-    pending.tokens = ''
-    pending.reasoning = ''
-    pending.retryReset = true
-    return
-  }
-  streamingBuffer.value = ''
-  reasoningByMessage.value = {
-    ...reasoningByMessage.value,
-    [e.assistantMessageId]: '',
-  }
-  const list = messagesByThread.value[threadId] ?? []
-  const idx = list.findIndex((m) => m.id === e.assistantMessageId)
-  const existing = list[idx]
-  if (idx !== -1 && existing) {
-    list[idx] = { ...existing, content: '' }
-    messagesByThread.value[threadId] = list
-  }
-  retryingMessageId.value = e.assistantMessageId
-}
-
-// `chat-message-complete` fires per step (a turn can have several); it no
-// longer clears `streamingMessageId`/`busy` or sets a terminal
-// `finishReason` itself — `chat-turn-complete` is the sole source for
-// both, since only it knows whether the turn actually ended in
-// `complete` vs. `tool_limit_reached` (contracts/tauri-commands.md).
-function applyComplete(e: MessageCompleteEvent) {
-  const list = messagesByThread.value[e.threadId] ?? []
-  const idx = list.findIndex((m) => m.id === e.messageId)
-  const existing = list[idx]
-  if (idx !== -1 && existing) {
-    list[idx] = {
-      ...existing,
-      promptTokens: e.promptTokens,
-      completionTokens: e.completionTokens,
-    }
-    messagesByThread.value[e.threadId] = list
-  }
-}
-
-function handleComplete(e: MessageCompleteEvent) {
-  if (streamingMessageId.value !== e.messageId) {
-    const pending = pendingFor(e.messageId)
-    pending.complete = e
-    delete pending.error
-    return
-  }
-  applyComplete(e)
-}
-
-function applyError(e: MessageErrorEvent) {
-  lastError.value = e.reason
-  const list = messagesByThread.value[e.threadId] ?? []
-  const idx = list.findIndex((m) => m.id === e.messageId)
-  const existing = list[idx]
-  if (idx !== -1 && existing) {
-    list[idx] = { ...existing, finishReason: 'error' }
-    messagesByThread.value[e.threadId] = list
-  }
-}
-
-function handleError(e: MessageErrorEvent) {
-  if (streamingMessageId.value !== e.messageId) {
-    const pending = pendingFor(e.messageId)
-    pending.error = e
-    delete pending.complete
-    return
-  }
-  applyError(e)
-}
-
-/** Appends a `tool_call`/`tool_result` row. Only applied once the event's
- * own thread is the one currently open AND that thread's turn placeholder
- * rows are in place — unlike token/complete/error events, these carry no
- * pre-known placeholder to buffer against, so while `send()` is still
- * setting one up (`turnSetupPending`) an event for the now-active thread
- * would otherwise render above the user message that triggered it. The
- * row is safely in `chat_messages` regardless; switching back to that
- * thread reloads it via `selectThread`. */
-function handleToolCall(e: ToolCallEvent, restoring = false) {
-  if (
-    !restoring &&
-    (e.threadId !== activeThreadId.value || turnSetupPending.value)
-  ) {
-    const queued = pendingToolEvents.get(e.threadId) ?? []
-    pendingToolEvents.set(e.threadId, [...queued, e])
-    return
-  }
-  const list = messagesByThread.value[e.threadId] ?? []
-  if (list.some((message) => message.id === e.messageId)) return
-  list.push({
-    id: e.messageId,
-    threadId: e.threadId,
-    parentId: null,
-    role: 'tool_call',
-    content: '',
-    modelId: null,
-    promptTokens: null,
-    completionTokens: null,
-    finishReason: null,
-    createdAt: Date.now(),
-    toolName: e.toolName,
-    toolCallId: null,
-    toolInput: JSON.stringify(e.toolInput),
-    toolIsError: null,
-    toolSource: e.toolSource,
-  })
-  messagesByThread.value[e.threadId] = list
-  scrollToBottom()
-}
-
-function handleToolResult(e: ToolResultEvent, restoring = false) {
-  if (
-    !restoring &&
-    (e.threadId !== activeThreadId.value || turnSetupPending.value)
-  ) {
-    const queued = pendingToolEvents.get(e.threadId) ?? []
-    pendingToolEvents.set(e.threadId, [...queued, e])
-    return
-  }
-  const list = messagesByThread.value[e.threadId] ?? []
-  if (list.some((message) => message.id === e.messageId)) return
-  list.push({
-    id: e.messageId,
-    threadId: e.threadId,
-    parentId: null,
-    role: 'tool_result',
-    content: e.content,
-    modelId: null,
-    promptTokens: null,
-    completionTokens: null,
-    finishReason: null,
-    createdAt: Date.now(),
-    toolName: null,
-    toolCallId: e.toolCallId,
-    toolInput: null,
-    toolIsError: e.isError,
-    toolSource: null,
-  })
-  messagesByThread.value[e.threadId] = list
-  scrollToBottom()
-}
-
-// The sole place `streamingMessageId`/`busy` get cleared — a turn can
-// span several steps, so only its one terminal event may signal "done"
-// (contracts/tauri-commands.md).
-async function applyTurnComplete(e: TurnCompleteEvent) {
-  pendingApprovalsByThread.delete(e.threadId)
-  if (activeThreadId.value === e.threadId) pendingApprovals.value = []
-  const list = messagesByThread.value[e.threadId] ?? []
-  const idx = list.findIndex((m) => m.id === e.assistantMessageId)
-  const existing = list[idx]
-  if (idx !== -1 && existing) {
-    list[idx] = { ...existing, finishReason: e.finishReason }
-    messagesByThread.value[e.threadId] = list
-  }
-  try {
-    // All rounds stream through one placeholder, whereas persistence has
-    // separate interim answers, tool rows, and the terminal answer.
-    messagesByThread.value[e.threadId] = await chat.listMessagesAsync(
-      e.threadId,
-    )
-    pendingToolEvents.delete(e.threadId)
-    await refreshThreads()
-    await scrollToBottom()
-  } catch (error: unknown) {
-    lastError.value = errString(error)
-  } finally {
-    streamingMessageId.value = null
-    streamingThreadId.value = null
-    streamingBuffer.value = ''
-    retryingMessageId.value = null
-    busy.value = false
-  }
-}
-
-function handleToolPermissionRequest(e: ToolPermissionRequestEvent) {
-  const approval: PendingApproval = {
-    requestId: e.requestId,
-    toolName: e.toolName,
-    toolInput: e.toolInput,
-    riskClass: e.riskClass,
-  }
-  if (e.threadId !== activeThreadId.value) {
-    const queued = pendingApprovalsByThread.get(e.threadId) ?? []
-    pendingApprovalsByThread.set(e.threadId, [...queued, approval])
-    return
-  }
-  if (!pendingApprovals.value.some((item) => item.requestId === e.requestId)) {
-    pendingApprovals.value = [...pendingApprovals.value, approval]
-  }
+function reasoningFor(messageId: string): string {
+  return reasoningByMessage.value[messageId] ?? ''
 }
 
 async function respondToApproval(
@@ -1189,29 +711,6 @@ function updateEffortLevel(level: string) {
   if (level === 'low' || level === 'medium' || level === 'high') {
     effortLevel.value = level
   }
-}
-
-async function handleTurnComplete(e: TurnCompleteEvent) {
-  if (turnSetupPending.value) {
-    pendingTurnCompletions.set(e.threadId, e)
-    return
-  }
-  if (e.threadId !== streamingThreadId.value) return
-  if (e.assistantMessageId && streamingMessageId.value !== e.assistantMessageId)
-    return
-  await applyTurnComplete(e)
-  resolveTurnTerminal(e.threadId)
-}
-
-function setReasoningExpanded(messageId: string, expanded: boolean) {
-  const next = new Set(expandedReasoning.value)
-  if (expanded) next.add(messageId)
-  else next.delete(messageId)
-  expandedReasoning.value = next
-}
-
-function reasoningFor(messageId: string): string {
-  return reasoningByMessage.value[messageId] ?? ''
 }
 
 function renderMarkdown(content: string): string {
@@ -1343,8 +842,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   unmounted = true
-  if (durationRefreshTimer !== null) clearTimeout(durationRefreshTimer)
-  durationRefreshTimer = null
+  stopDurationRefresh()
   turnTerminalWaiters.clear()
   // Approval requests cannot be reconstructed by a freshly mounted chat page.
   if (streamingMessageId.value || turnSetupPending.value) void abort()
@@ -1634,98 +1132,22 @@ onBeforeUnmount(() => {
         {{ loadingLabel }}
       </div>
 
-      <div v-if="noModelsInstalled" class="flex-1 overflow-y-auto p-6">
-        <h2 class="text-lg font-semibold mb-4">
-          {{ t('chat.empty.noModelsTitle') }}
-        </h2>
-        <p class="text-sm text-muted-foreground mb-6">
-          {{ t('chat.empty.noModelsDescription') }}
-        </p>
-        <div class="space-y-2">
-          <div
-            v-for="e in catalogEntries"
-            :key="e.id"
-            class="relative overflow-hidden border border-border rounded p-3 flex items-center justify-between gap-4"
-          >
-            <div
-              v-if="downloadingId === e.id"
-              class="pointer-events-none absolute inset-y-0 left-0 bg-blue-100/70 transition-[width] duration-150"
-              :class="
-                downloadProgressPercent(e.id) === null ? 'animate-pulse' : ''
-              "
-              :style="{ width: `${downloadProgressPercent(e.id) ?? 35}%` }"
-              role="progressbar"
-              :aria-valuenow="downloadProgressPercent(e.id) ?? undefined"
-              aria-valuemin="0"
-              aria-valuemax="100"
-              :aria-label="`${humanBytes(downloadProgressBytes)} / ${humanBytes(downloadTotalBytes)}`"
-            />
-            <div class="relative z-10 flex-1 min-w-0">
-              <div class="font-medium text-sm">
-                {{ e.name }}
-              </div>
-              <div class="text-xs text-muted-foreground truncate">
-                {{ e.hf_repo }}/{{ e.hf_filename }}
-              </div>
-              <div class="text-xs text-muted-foreground">
-                {{
-                  t('chat.catalog.meta', {
-                    size: humanBytes(e.approx_size_bytes),
-                    context: e.context_window.toLocaleString(),
-                    license: e.license,
-                    fit: fitLabel(e.fit),
-                  })
-                }}
-              </div>
-            </div>
-            <div class="relative z-10">
-              <UiButton
-                size="sm"
-                :disabled="downloadingId !== null"
-                @click="downloadCatalogEntry(e)"
-              >
-                <template v-if="downloadingId === e.id">
-                  {{ humanBytes(downloadProgressBytes) }} /
-                  {{ humanBytes(downloadTotalBytes) }}
-                </template>
-                <template v-else>
-                  {{ t('chat.download') }}
-                </template>
-              </UiButton>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div
-        v-else-if="!activeModel && !modelLoadPending && !loadingPhase"
-        class="flex-1 flex items-center justify-center p-6 text-muted-foreground"
-      >
-        <div class="flex w-full max-w-sm flex-col gap-3">
-          <p>{{ t('chat.model.selectPrompt') }}</p>
-          <label for="chat-model-empty" class="sr-only">{{
-            t('chat.model.label')
-          }}</label>
-          <select
-            id="chat-model-empty"
-            class="rounded-lg border border-border bg-background px-3 py-2 text-sm"
-            :value="activeModelId"
-            :disabled="busy"
-            @change="(e) => loadModel((e.target as HTMLSelectElement).value)"
-          >
-            <option value="" disabled>{{ t('chat.model.choose') }}</option>
-            <optgroup
-              v-for="group in modelGroups"
-              :key="group.providerId"
-              :label="group.providerName"
-            >
-              <option v-for="m in group.models" :key="m.id" :value="m.id">
-                {{ m.name }}
-              </option>
-            </optgroup>
-          </select>
-        </div>
-      </div>
+      <ModelSelection
+        v-if="
+          noModelsInstalled ||
+          (!activeModel && !modelLoadPending && !loadingPhase)
+        "
+        :no-models-installed="noModelsInstalled"
+        :catalog-entries="catalogEntries"
+        :downloading-id="downloadingId"
+        :download-progress-bytes="downloadProgressBytes"
+        :download-total-bytes="downloadTotalBytes"
+        :active-model-id="activeModelId"
+        :busy="busy"
+        :model-groups="modelGroups"
+        @download-catalog-entry="downloadCatalogEntry"
+        @load-model="loadModel"
+      />
 
       <div v-else class="flex-1 flex flex-col overflow-hidden">
         <div
