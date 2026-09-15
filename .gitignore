@@ -12,6 +12,11 @@ Thumbs.db
 # See specify init warning: keep out of the repository.
 .claude/
 
+# Spec Kit agent skills are generated per developer by `spaex install`.
+.agents/skills/speckit-*/
+.specify/integrations/claude.manifest.json
+.specify/integrations/codex.manifest.json
+
 # spaex advisory manifest lock
 .spaex/manifest.json.lock
 .spaex/install.lock
