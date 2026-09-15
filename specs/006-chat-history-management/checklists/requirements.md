@@ -49,6 +49,12 @@ prüfen
 
 ## Notes
 
-- Die Spec ist bereit für einen technischen Plan. GUI-Details wie exakte
-  Icongröße und konkrete Dialoggestaltung bleiben dem Plan bzw. der
-  Implementierung überlassen, sofern sie die beschriebenen Verträge erfüllen.
+- Die Spec wurde als Umsetzungsgrundlage verwendet. GUI-Details wie exakte
+  Icongröße und konkrete Dialoggestaltung bleiben der Implementierung
+  überlassen, sofern sie die beschriebenen Verträge erfüllen.
+- Implementierung validiert: `cargo test --no-default-features` mit 151 Unit-
+  und allen Integrationstests, inklusive der neuen Thread-Management-Tests,
+  sowie `node scripts/check-chat-state.mjs` mit 19 bestandenen Tests.
+- Frontend-Prettier, ESLint und Nuxt-Typecheck wurden mit der installierten
+  Repository-Toolchain erfolgreich ausgeführt; der manuelle Desktop-/Narrow-
+  Viewport-Durchlauf bleibt für die Abnahme offen.

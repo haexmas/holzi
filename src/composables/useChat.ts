@@ -243,6 +243,21 @@ export function useChat() {
     })
   }
 
+  /** Persists a trimmed thread title and returns the refreshed thread. */
+  async function renameThreadAsync(
+    threadId: string,
+    title: string,
+  ): Promise<Thread> {
+    return await invoke<Thread>('rename_thread', {
+      args: { threadId, title },
+    })
+  }
+
+  /** Deletes one persisted thread and all of its messages. */
+  async function deleteThreadAsync(threadId: string): Promise<void> {
+    await invoke('delete_thread', { args: { threadId } })
+  }
+
   /** Persists a user turn and starts streaming the assistant response. */
   async function sendMessageAsync(
     args: SendMessageArgs,
@@ -442,6 +457,8 @@ export function useChat() {
     listThreadsAsync,
     listMessagesAsync,
     createThreadAsync,
+    renameThreadAsync,
+    deleteThreadAsync,
     sendMessageAsync,
     abortAsync,
     respondToolPermissionAsync,

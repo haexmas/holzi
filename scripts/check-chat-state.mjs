@@ -51,7 +51,23 @@ function createChatState(
       userMessageId: 'u',
       assistantMessageId: 'answer',
     }),
-    listThreadsAsync: async () => [{ id: 'a', title: 'New conversation' }],
+    listThreadsAsync: async () => [
+      {
+        id: 'a',
+        title: 'New conversation',
+        lastModelId: null,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    ],
+    renameThreadAsync: async (threadId, title) => ({
+      id: threadId,
+      title,
+      lastModelId: null,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }),
+    deleteThreadAsync: async () => {},
     listMessagesAsync: async () => [],
     ...overrides,
   }
@@ -97,9 +113,13 @@ function createChatState(
     ...Object.keys(globals),
     `${compiled}
     return { send, selectThread, handleToken, handleRetry, handleTurnComplete,
+      historyDuration, startEditing, saveThreadTitle, cancelEditing,
+      requestDelete, confirmDelete,
       handleToolPermissionRequest, threads, messagesByThread, activeThreadId,
-      input, busy, activeModel, loadingPhase, modelLoadPending,
-      composerInputDisabled, sendDisabled, pendingApprovals, streamingMessageId, lastError,
+      input, busy, activeModel, loadingPhase, modelLoadPending, draftTitle,
+      editingThreadId, editTitleError, deleteCandidate, deleteError,
+      composerInputDisabled, sendDisabled, pendingApprovals, streamingMessageId,
+      streamingThreadId, lastError,
       updatePermissionMode, permissionMode, permissionModeSaving };
   `,
   )(...Object.values(globals))
@@ -112,6 +132,195 @@ function createChatState(
   }
   return { ...state, mount: () => mount(), unmount: () => unmount() }
 }
+
+test('history durations use Unix milliseconds and compact thresholds', () => {
+  const state = createChatState()
+  const now = 10 * 86_400_000
+  assert.deepEqual(state.historyDuration(now - 30_000, now), {
+    value: 0,
+    unit: 'min',
+  })
+  assert.deepEqual(state.historyDuration(now - 60_000, now), {
+    value: 1,
+    unit: 'min',
+  })
+  assert.deepEqual(state.historyDuration(now - 2 * 3_600_000, now), {
+    value: 2,
+    unit: 'h',
+  })
+  assert.deepEqual(state.historyDuration(now - 5 * 86_400_000, now), {
+    value: 5,
+    unit: 'd',
+  })
+})
+
+test('history durations clamp future and unusable timestamps to zero minutes', () => {
+  const state = createChatState()
+  assert.deepEqual(state.historyDuration(Date.now() + 60_000), {
+    value: 0,
+    unit: 'min',
+  })
+  assert.deepEqual(state.historyDuration(-1), { value: 0, unit: 'min' })
+  assert.deepEqual(state.historyDuration(Number.NaN), {
+    value: 0,
+    unit: 'min',
+  })
+})
+
+test('renaming a history entry trims the title and updates only that row', async () => {
+  const calls = []
+  const state = createChatState({
+    renameThreadAsync: async (threadId, title) => {
+      calls.push({ threadId, title })
+      return {
+        id: threadId,
+        title,
+        lastModelId: null,
+        createdAt: 1_000,
+        updatedAt: 2_000,
+      }
+    },
+  })
+  state.threads.value = [
+    {
+      id: 'a',
+      title: 'Old title',
+      lastModelId: null,
+      createdAt: 1_000,
+      updatedAt: 2_000,
+    },
+    {
+      id: 'b',
+      title: 'Keep title',
+      lastModelId: null,
+      createdAt: 1_000,
+      updatedAt: 2_000,
+    },
+  ]
+  state.startEditing(state.threads.value[0])
+  state.draftTitle.value = '  New title  '
+  await state.saveThreadTitle()
+  assert.deepEqual(calls, [{ threadId: 'a', title: 'New title' }])
+  assert.equal(state.threads.value[0].title, 'New title')
+  assert.equal(state.threads.value[1].title, 'Keep title')
+  assert.equal(state.editingThreadId.value, null)
+})
+
+test('deleting the active history entry clears its cached session without selecting another', async () => {
+  let deletedId = null
+  const state = createChatState({
+    deleteThreadAsync: async (threadId) => {
+      deletedId = threadId
+    },
+  })
+  state.threads.value = [
+    {
+      id: 'a',
+      title: 'Active',
+      lastModelId: null,
+      createdAt: 1_000,
+      updatedAt: 2_000,
+    },
+    {
+      id: 'b',
+      title: 'Other',
+      lastModelId: null,
+      createdAt: 1_000,
+      updatedAt: 2_000,
+    },
+  ]
+  state.activeThreadId.value = 'a'
+  state.messagesByThread.value = { a: [{ id: 'message' }] }
+  state.requestDelete(state.threads.value[0])
+  await state.confirmDelete()
+  assert.equal(deletedId, 'a')
+  assert.deepEqual(
+    state.threads.value.map((thread) => thread.id),
+    ['b'],
+  )
+  assert.equal(state.activeThreadId.value, null)
+  assert.equal(state.messagesByThread.value.a, undefined)
+})
+
+test('deleting a running active thread aborts and waits before persistence', async () => {
+  let state
+  const events = []
+  const chat = {
+    abortAsync: async () => {
+      events.push('abort')
+      await state.handleTurnComplete({
+        threadId: 'a',
+        assistantMessageId: 'answer',
+        finishReason: 'cancelled',
+      })
+    },
+    deleteThreadAsync: async () => {
+      events.push('delete')
+    },
+  }
+  state = createChatState(chat)
+  state.threads.value = [
+    {
+      id: 'a',
+      title: 'Active',
+      lastModelId: null,
+      createdAt: 1_000,
+      updatedAt: 2_000,
+    },
+  ]
+  state.activeThreadId.value = 'a'
+  state.streamingThreadId.value = 'a'
+  state.streamingMessageId.value = 'answer'
+  state.requestDelete(state.threads.value[0])
+  await state.confirmDelete()
+  assert.deepEqual(events, ['abort', 'delete'])
+  assert.equal(state.threads.value.length, 0)
+})
+
+test('rename failures keep the previous title and edit mode available', async () => {
+  const state = createChatState({
+    renameThreadAsync: async () => {
+      throw new Error('persist failed')
+    },
+  })
+  state.threads.value = [
+    {
+      id: 'a',
+      title: 'Keep me',
+      lastModelId: null,
+      createdAt: 1_000,
+      updatedAt: 2_000,
+    },
+  ]
+  state.startEditing(state.threads.value[0])
+  state.draftTitle.value = 'New title'
+  await state.saveThreadTitle()
+  assert.equal(state.threads.value[0].title, 'Keep me')
+  assert.equal(state.editingThreadId.value, 'a')
+  assert.equal(state.editTitleError.value, 'chat.threads.renameFailed')
+})
+
+test('delete failures keep the history entry and its confirmation target', async () => {
+  const state = createChatState({
+    deleteThreadAsync: async () => {
+      throw new Error('persist failed')
+    },
+  })
+  state.threads.value = [
+    {
+      id: 'a',
+      title: 'Keep me',
+      lastModelId: null,
+      createdAt: 1_000,
+      updatedAt: 2_000,
+    },
+  ]
+  state.requestDelete(state.threads.value[0])
+  await state.confirmDelete()
+  assert.equal(state.threads.value[0].title, 'Keep me')
+  assert.equal(state.deleteCandidate.value.id, 'a')
+  assert.equal(state.deleteError.value, 'chat.threads.deleteFailed')
+})
 
 test('an accepted first send appears in the conversation list immediately', async () => {
   const state = createChatState()

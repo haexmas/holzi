@@ -54,6 +54,11 @@
 9. Prüfen: Nach erfolgreicher Löschung erscheint eine neue leere Session; kein
    anderer Thread wird automatisch geöffnet.
 
+Für reproduzierbare Dauerfälle verwendet `scripts/check-chat-state.mjs` feste
+Unix-Millisekunden-Zeitstempel und keine Wartezeiten. Ein manueller Durchlauf
+kann dieselben Fälle über entsprechend alte Test-Threads beziehungsweise
+einen unbrauchbaren `created_at`-Wert nachstellen.
+
 ## 4. Accessibility und Sprache
 
 1. Alle Bearbeiten- und Löschen-Aktionen ausschließlich per Tastatur bedienen.
