@@ -445,7 +445,12 @@ fn a_send_naming_an_unknown_thread_is_rejected_instead_of_orphaning_rows() {
         )
         .unwrap();
 
-        assert_eq!(decision, PersistedSend::UnknownThread);
+        assert_eq!(
+            decision,
+            PersistedSend::UnknownThread {
+                thread_id: missing_thread_id
+            }
+        );
         assert!(
             chat_messages::list_messages(conn, missing_thread_id)
                 .unwrap()

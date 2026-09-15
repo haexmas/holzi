@@ -1090,7 +1090,9 @@ pub enum PersistedSend {
     /// The caller named a thread that does not exist. The schema does not
     /// enforce foreign keys, so inserting anyway would strand the message
     /// rows under a `thread_id` `list_threads` can never return.
-    UnknownThread,
+    UnknownThread {
+        thread_id: Uuid,
+    },
 }
 
 /// Resolves, reserves, and persists a send in one SQLite transaction.
@@ -1145,7 +1147,7 @@ pub fn persist_send_transaction(
                     // otherwise succeed against a thread nothing can list.
                     Some(_) => {
                         let Some(existing) = thread_store::get_thread(conn, thread_id)? else {
-                            return Ok(PersistedSend::UnknownThread);
+                            return Ok(PersistedSend::UnknownThread { thread_id });
                         };
                         thread_store::update_thread(
                             conn,
@@ -1411,12 +1413,9 @@ pub async fn send_message(
         PersistedSend::Mismatch => {
             return Err(HolziError::IdempotencyKeyConflict);
         }
-        PersistedSend::UnknownThread => {
+        PersistedSend::UnknownThread { thread_id } => {
             return Err(HolziError::NotFound {
-                name: args
-                    .thread_id
-                    .map(|id| id.to_string())
-                    .unwrap_or_else(|| "<unknown thread>".to_string()),
+                name: thread_id.to_string(),
             });
         }
         PersistedSend::Duplicate {
