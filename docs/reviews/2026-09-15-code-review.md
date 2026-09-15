@@ -1,6 +1,9 @@
 # Full code review — 2026-09-15
 
-Reviewed baseline: `a874bd6` (main), approximately 21,000 lines of Rust and
+Reviewed baseline: `a874bd6` (main), later merged forward to `3bc687f`; the
+merge brought only a spaex atoms revision bump and left
+`.spaex/constitution.md` byte-identical, so nothing here was re-scoped.
+Approximately 21,000 lines of Rust and
 7,200 lines of frontend source, tests and build scripts. The review covered
 every Rust subsystem, the Vue pages/components and composables, persistence,
 the Tauri command surface, build scripts and the i18n locale pair, with a
@@ -116,9 +119,10 @@ cargo test --manifest-path src-tauri/Cargo.toml --jobs 2
 cargo test --manifest-path src-tauri/Cargo.toml --no-default-features --jobs 2
 pnpm lint
 pnpm typecheck
-node scripts/check-chat-state.ts
-node scripts/check-vue-templates.ts
+pnpm check:chat-state
+pnpm check:templates
 pnpm typecheck:scripts
+pnpm generate
 pnpm format:check
 python3 scripts/ci/test_check_docs.py
 python3 scripts/ci/check-docs.py
@@ -141,6 +145,18 @@ unchanged — but it means the template fix is verified by `pnpm check:templates
 compiling all 24 templates and by the parse errors disappearing from the build
 log, not by one green build. Whoever lands this should confirm a build in a
 normal checkout.
+
+The CI pipeline was then reworked around these findings and measured on real
+runs: wall clock fell from 19m42s to 2m0s once the cargo cache was warm. The
+Rust job became a matrix over the two feature sets, running in parallel; the
+`Vault → model → CLI E2E` job was removed because `cargo test` already runs the
+exact test it compiled 5m25s to execute; `CARGO_PROFILE_DEV_DEBUG` was set to
+`line-tables-only`, which matters less for build time than for staying under
+GitHub's 10 GB cache ceiling (the no-default target tree alone is 5.5 GB at the
+default); and `--jobs 2`, which had halved cargo's parallelism on a 4-vCPU
+runner without a stated reason, was removed. CI now also runs on pushes to
+`main`, and `main`'s branch protection finally requires the four checks — it
+previously required none, so nothing had ever blocked a red merge.
 
 A `Frontend build` job was then added and proven both ways with a real
 `node_modules`: `pnpm generate` exits 0 on this branch, and reintroducing the

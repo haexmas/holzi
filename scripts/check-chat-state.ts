@@ -10,7 +10,7 @@
 //
 // Concrete split plan: once the harness imports the page's composables
 // instead of stripping imports (step 1 of the page's plan), move
-// `createChatState` into `scripts/lib/chat-state-harness.mjs` and split
+// `createChatState` into `scripts/lib/chat-state-harness.ts` and split
 // the cases by the composable they exercise — transcript/event ordering,
 // thread sidebar, and composer/permission state.
 import assert from 'node:assert/strict'
