@@ -4,6 +4,7 @@
 //! mistralrs loading path is feature-gated behind `llm-cpu`.
 
 pub mod commands;
+pub mod default_model;
 pub mod events;
 pub mod model_loading;
 pub mod send_admission;

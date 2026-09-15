@@ -5,6 +5,19 @@
 //! Split out of `chat/commands.rs` (2026-09-15 review) — second of five
 //! steps. See `chat/commands.rs`'s own history for the rest of the split
 //! plan.
+//!
+//! Maintainability exception (spaex 500-LoC rule): at ~650 lines this is
+//! over the limit on its own. `resolve_local_model_metadata` and
+//! `verify_local_model_integrity` (roughly 170 of these lines) are a
+//! self-contained pair — the mandatory pre-load SHA-256 check and its
+//! `integrity_override` bypass — that only needs `AppState`/`paths`/
+//! `models_store`, not `ChatState` or the events layer the rest of this
+//! file shares with `load_model_inner`.
+//!
+//! Concrete split plan, if this grows further: move
+//! `resolve_local_model_metadata` and `verify_local_model_integrity` to a
+//! new `chat/model_integrity.rs`, bringing this file back under 500
+//! lines.
 
 use std::sync::Arc;
 

@@ -5,6 +5,21 @@
 //! Split out of `chat/commands.rs` (2026-09-15 review) — fourth of five
 //! steps. See `chat/commands.rs`'s own history for the rest of the split
 //! plan.
+//!
+//! Maintainability exception (spaex 500-LoC rule): `run_turn` alone is
+//! ~590 of these ~1100 lines. It is a single `loop { run_step(...); match
+//! outcome { ... } }` state machine — one step's `Success` carries a full
+//! sub-flow (persist the step, plan every tool call, wait out any
+//! `Manual`/`Plan` gating, execute, persist results, loop for another
+//! round or finish), alongside the `Cancelled` and `Error` arms. It
+//! stayed one function through this split because its match arms share
+//! `parent_id`/`rounds_used`/`next_tool_created_at` across iterations.
+//!
+//! Concrete split plan, if this grows further: extract each
+//! `StepOutcome` arm's body into its own `handle_success`/
+//! `handle_cancelled`/`handle_error` helper next to `run_turn`, each
+//! taking the loop state it needs by `&mut` reference, then keep
+//! `run_turn` itself to the loop and the dispatch between them.
 
 use std::sync::Arc;
 
