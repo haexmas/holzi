@@ -89,8 +89,26 @@ jobs:
         run: test -d .output/public/_nuxt
 
   rust:
-    name: Rust checks
+    # Two feature sets, two runners, in parallel. Previously one job ran
+    # all four cargo invocations back to back and took 19m42s; the
+    # default-features half dominates because it builds mistralrs.
+    name: Rust checks (${{ matrix.features }})
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - features: default
+            flags: ""
+          - features: no-default
+            flags: "--no-default-features"
+    env:
+      # Backtraces keep file and line, the compiler stops emitting full
+      # debug data. This matters less for build time than for cache size:
+      # the no-default target tree alone is 5.5 GB at the default
+      # `debuginfo=2`, and GitHub evicts caches over 10 GB per repository,
+      # which would silently turn the cache below into a no-op.
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
     steps:
       - name: Check out repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -121,8 +139,13 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: src-tauri
+          # The two feature sets produce different artifacts and must not
+          # share one cache entry.
+          shared-key: ${{ matrix.features }}
 
+      # Formatting does not depend on features, so it runs on one leg only.
       - name: Check formatting
+        if: matrix.features == 'default'
         shell: bash
         run: |
           set -euo pipefail
@@ -133,46 +156,10 @@ jobs:
             cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
           fi
 
-      - name: Run tests with default features
-        run: cargo test --manifest-path src-tauri/Cargo.toml --jobs 2
+      # Clippy reuses the dependency artifacts `cargo test` just built —
+      # it only wraps workspace crates — so the order here is deliberate.
+      - name: Run tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml ${{ matrix.flags }}
 
-      - name: Run tests without default features
-        run: cargo test --manifest-path src-tauri/Cargo.toml --no-default-features --jobs 2
-
-      - name: Run Clippy with default features
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --jobs 2 -- -D warnings
-
-      - name: Run Clippy without default features
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml --no-default-features --all-targets --jobs 2 -- -D warnings
-
-  local-cli-e2e:
-    name: Vault → model → CLI E2E
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          persist-credentials: false
-
-      - name: Install Linux build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends \
-            libwebkit2gtk-4.1-dev \
-            build-essential \
-            file \
-            libxdo-dev \
-            libssl-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev
-
-      - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
-
-      - name: Run vault → loaded model session → CLI acceptance test
-        run: |
-          cargo test --manifest-path src-tauri/Cargo.toml \
-            --test chat_tool_loop \
-            ci_e2e_loaded_model_can_request_and_process_a_cli_command \
-            -- --nocapture
+      - name: Run Clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml ${{ matrix.flags }} --all-targets -- -D warnings
