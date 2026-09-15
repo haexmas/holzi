@@ -90,7 +90,7 @@ tool, and verifies that the output is included in the final model response:
 ```bash
 HOLZI_TEST_GGUF=~/path/to/tool-capable-model.gguf \
   cargo test --manifest-path src-tauri/Cargo.toml \
-  --test chat_tool_loop \
+  --test chat_tool_loop_permissions \
   a_real_local_model_can_request_and_process_a_cli_command \
   -- --ignored --nocapture
 ```
