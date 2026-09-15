@@ -15,9 +15,9 @@ use std::sync::Arc;
 
 use holzi_lib::adapters::types::ToolCall as LlmToolCall;
 use holzi_lib::adapters::StreamChunk;
-use holzi_lib::chat::commands::MAX_TOOL_ROUNDS;
 use holzi_lib::chat::session::ChatState;
 use holzi_lib::chat::tools::RiskClass;
+use holzi_lib::chat::turn::MAX_TOOL_ROUNDS;
 use holzi_lib::storage::chat_messages::{FinishReason, MessageRole};
 use uuid::Uuid;
 

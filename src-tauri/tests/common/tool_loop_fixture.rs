@@ -22,9 +22,9 @@ use holzi_lib::adapters::types::{ChatRequest, ToolCall as LlmToolCall, ToolSpec}
 use holzi_lib::adapters::{
     AdapterError, AdapterStream, ProviderAdapter, ProviderModel, StreamChunk, StreamError,
 };
-use holzi_lib::chat::commands::{run_turn, MAX_TOOL_ROUNDS};
 use holzi_lib::chat::session::{ActiveSession, ChatState};
 use holzi_lib::chat::tools::{ApprovalDecision, RiskClass, Tool, ToolResult as ToolExecResult};
+use holzi_lib::chat::turn::{run_turn, MAX_TOOL_ROUNDS};
 use holzi_lib::identity::{
     holzi_migration_source, installation_id_path, HolziBootstrap, HOLZI_TRIGGER_VERSION,
 };

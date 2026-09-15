@@ -10,6 +10,7 @@ pub mod send_admission;
 pub mod session;
 pub mod thread_commands;
 pub mod tools;
+pub mod turn;
 
 #[cfg(test)]
 mod session_tests;
