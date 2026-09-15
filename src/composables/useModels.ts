@@ -27,6 +27,51 @@ export interface InstalledModel {
   integrityStatus: ModelIntegrityStatus
 }
 
+/** The three `HolziError` discriminants a pre-load integrity check can fail with. */
+export type ModelIntegrityErrorKind =
+  'ModelIntegrityMismatch' | 'ModelIntegrityUnknown' | 'ModelIntegrityError'
+
+/** A failed pre-load integrity check, ready to drive `ModelIntegrityDialog`. */
+export interface ModelIntegrityFailure {
+  modelId: string
+  errorKind: ModelIntegrityErrorKind
+  expected: string | null
+  actual: string | null
+}
+
+/**
+ * Recognizes an integrity failure in a rejected `load_model` call and
+ * narrows it to the dialog's state, or returns `null` when the rejection
+ * was something else and the caller should surface its own error.
+ *
+ * `HolziError` is serialized with `#[serde(tag = "kind")]` only — no
+ * `rename_all`, so the hash fields arrive snake_cased (HolziError.ts).
+ */
+export function parseModelIntegrityFailure(
+  modelId: string,
+  error: unknown,
+): ModelIntegrityFailure | null {
+  const err = error as {
+    kind?: string
+    expected_sha256?: string | null
+    actual_sha256?: string | null
+  }
+  const kind = err.kind
+  if (
+    kind !== 'ModelIntegrityMismatch' &&
+    kind !== 'ModelIntegrityUnknown' &&
+    kind !== 'ModelIntegrityError'
+  ) {
+    return null
+  }
+  return {
+    modelId,
+    errorKind: kind,
+    expected: err.expected_sha256 ?? null,
+    actual: err.actual_sha256 ?? null,
+  }
+}
+
 export interface DownloadProgressEvent {
   modelId: string
   bytesDownloaded: number

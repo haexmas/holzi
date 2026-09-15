@@ -3,6 +3,10 @@ name: CI
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+  # A direct push to main was previously unchecked. Both jobs below skip
+  # their diff-scoped steps when there is no pull-request base to diff against.
+  push:
+    branches: [main]
 
 permissions:
   contents: read
@@ -19,6 +23,7 @@ jobs:
           persist-credentials: false
 
       - name: Check patch whitespace
+        if: github.event_name == 'pull_request'
         run: git diff --check "${{ github.event.pull_request.base.sha }}...${{ github.sha }}"
 
       - name: Set up Node.js
@@ -32,17 +37,84 @@ jobs:
       - name: Check chat state
         run: corepack pnpm check:chat-state
 
+      # Neither `typecheck` nor `lint` parses template expressions, so an
+      # SFC the build cannot compile passes both — one did, and broke
+      # `pnpm generate` on main unnoticed. This compiles every template
+      # with the build's own compiler, without running a build.
+      - name: Check Vue templates compile
+        run: corepack pnpm check:templates
+
       - name: Typecheck frontend
         run: corepack pnpm typecheck
+
+      # `scripts/` sits outside the Nuxt source root, so the step above never
+      # sees it. Node runs these files as TypeScript directly (22.19+), which
+      # strips types without checking them.
+      - name: Typecheck tooling scripts
+        run: corepack pnpm typecheck:scripts
 
       - name: Lint frontend
         run: corepack pnpm lint
 
+      # Prettier's `semi: false` and Vue's template-expression parser
+      # disagree about multi-statement inline handlers: Vue collapses an
+      # attribute's newlines before parsing, so the inline form needs the
+      # `;` separators Prettier strips, and the result fails to compile.
+      # Keep such handlers in named functions — see AliasSetting.vue.
+      - name: Check frontend formatting
+        run: corepack pnpm format:check
+
       - name: Validate documentation
         run: python3 scripts/ci/check-docs.py
-  rust:
-    name: Rust checks
+  build:
+    name: Frontend build
     runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.19.0
+
+      - name: Install frontend dependencies
+        run: corepack pnpm install --frozen-lockfile --ignore-scripts
+
+      # `typecheck`, `lint` and `format:check` all passed while main could
+      # not be built: a template expression the SFC compiler rejects is
+      # invisible to every one of them. `check:templates` catches that one
+      # class of defect; only a real build catches the rest. This produces
+      # exactly what Tauri ships (`frontendDist: ../.output/public`).
+      - name: Build frontend
+        run: corepack pnpm generate
+
+      - name: Verify the bundle Tauri ships was produced
+        run: test -d .output/public/_nuxt
+
+  rust:
+    # Two feature sets, two runners, in parallel. Previously one job ran
+    # all four cargo invocations back to back and took 19m42s; the
+    # default-features half dominates because it builds mistralrs.
+    name: Rust checks (${{ matrix.features }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - features: default
+            flags: ''
+          - features: no-default
+            flags: '--no-default-features'
+    env:
+      # Backtraces keep file and line, the compiler stops emitting full
+      # debug data. This matters less for build time than for cache size:
+      # the no-default target tree alone is 5.5 GB at the default
+      # `debuginfo=2`, and GitHub evicts caches over 10 GB per repository,
+      # which would silently turn the cache below into a no-op.
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
     steps:
       - name: Check out repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -69,56 +141,31 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: src-tauri
+          # The two feature sets produce different artifacts and must not
+          # share one cache entry.
+          shared-key: ${{ matrix.features }}
+
+      # Formatting does not depend on features, so it runs on one leg only.
       - name: Check formatting
+        if: matrix.features == 'default'
         shell: bash
         run: |
           set -euo pipefail
-          if git diff --quiet "${{ github.event.pull_request.base.sha }}...${{ github.sha }}" -- 'src-tauri/**/*.rs'; then
+          base='${{ github.event.pull_request.base.sha }}'
+          if [ -n "$base" ] && git diff --quiet "$base...${{ github.sha }}" -- 'src-tauri/**/*.rs'; then
             echo "No Rust files changed; formatting check skipped."
           else
             cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
           fi
 
-      - name: Run tests with default features
-        run: cargo test --manifest-path src-tauri/Cargo.toml --jobs 2
+      # Clippy reuses the dependency artifacts `cargo test` just built —
+      # it only wraps workspace crates — so the order here is deliberate.
+      - name: Run tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml ${{ matrix.flags }}
 
-      - name: Run tests without default features
-        run: cargo test --manifest-path src-tauri/Cargo.toml --no-default-features --jobs 2
-
-      - name: Run Clippy with default features
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --jobs 2 -- -D warnings
-
-      - name: Run Clippy without default features
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml --no-default-features --all-targets --jobs 2 -- -D warnings
-
-  local-cli-e2e:
-    name: Vault → model → CLI E2E
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          persist-credentials: false
-
-      - name: Install Linux build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends \
-            libwebkit2gtk-4.1-dev \
-            build-essential \
-            file \
-            libxdo-dev \
-            libssl-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev
-
-      - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
-
-      - name: Run vault → loaded model session → CLI acceptance test
-        run: |
-          cargo test --manifest-path src-tauri/Cargo.toml \
-            --test chat_tool_loop \
-            ci_e2e_loaded_model_can_request_and_process_a_cli_command \
-            -- --nocapture
+      - name: Run Clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml ${{ matrix.flags }} --all-targets -- -D warnings

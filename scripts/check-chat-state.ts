@@ -1,5 +1,18 @@
-// Run with `node scripts/check-chat-state.mjs`. Replays real page handlers
+// Run with `node scripts/check-chat-state.ts`. Replays real page handlers
 // with Tauri replaced at its IPC boundary; no browser or GPU is required.
+//
+// Maintainability exception (spaex 500-LoC rule): 19 replay tests plus the
+// `createChatState` scaffold that boots the page's real `<script setup>`
+// against injected globals. The scaffold's shape is dictated by the page
+// it replays, so it must move together with the page's own split; see the
+// plan in `src/pages/chat/[instance].vue`. Splitting these tests across
+// files before that would duplicate the scaffold.
+//
+// Concrete split plan: once the harness imports the page's composables
+// instead of stripping imports (step 1 of the page's plan), move
+// `createChatState` into `scripts/lib/chat-state-harness.ts` and split
+// the cases by the composable they exercise — transcript/event ordering,
+// thread sidebar, and composer/permission state.
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { test } from 'node:test'
@@ -10,7 +23,15 @@ const source = await readFile(
   new URL('../src/pages/chat/[instance].vue', import.meta.url),
   'utf8',
 )
-const setup = source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)[1]
+const setupBlock = source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)
+if (!setupBlock) {
+  throw new Error(
+    'No <script setup lang="ts"> block found in the chat page. These tests ' +
+      'replay that block verbatim, so a renamed or reformatted tag silently ' +
+      'removes all coverage — fix the pattern above rather than this message.',
+  )
+}
+const setup = setupBlock[1]
 const compiled = ts.transpileModule(
   setup.replace(/^import[\s\S]*?from '[^']+'\n/gm, ''),
   {
@@ -26,8 +47,8 @@ function createChatState(
   preferenceOverrides = {},
   dependencyOverrides = {},
 ) {
-  let mount
-  let unmount
+  let mount: (() => unknown) | undefined
+  let unmount: (() => unknown) | undefined
   const chat = {
     ...Object.fromEntries(
       [
@@ -130,7 +151,19 @@ function createChatState(
     tokenizerRepo: 'tokenizer',
     contextWindow: null,
   }
-  return { ...state, mount: () => mount(), unmount: () => unmount() }
+  // The page registers both hooks in its `setup`. If a refactor ever drops
+  // one, fail with that sentence instead of `mount is not a function`.
+  return {
+    ...state,
+    mount: () => {
+      if (!mount) throw new Error('setup never registered onMounted')
+      return mount()
+    },
+    unmount: () => {
+      if (!unmount) throw new Error('setup never registered onBeforeUnmount')
+      return unmount()
+    },
+  }
 }
 
 test('history durations use Unix milliseconds and compact thresholds', () => {
@@ -168,7 +201,7 @@ test('history durations clamp future and unusable timestamps to zero minutes', (
 })
 
 test('renaming a history entry trims the title and updates only that row', async () => {
-  const calls = []
+  const calls: { threadId: string; title: string }[] = []
   const state = createChatState({
     renameThreadAsync: async (threadId, title) => {
       calls.push({ threadId, title })
@@ -243,8 +276,7 @@ test('deleting the active history entry clears its cached session without select
 })
 
 test('deleting a running active thread aborts and waits before persistence', async () => {
-  let state
-  const events = []
+  const events: string[] = []
   const chat = {
     abortAsync: async () => {
       events.push('abort')
@@ -258,7 +290,7 @@ test('deleting a running active thread aborts and waits before persistence', asy
       events.push('delete')
     },
   }
-  state = createChatState(chat)
+  const state = createChatState(chat)
   state.threads.value = [
     {
       id: 'a',
@@ -444,7 +476,7 @@ test('completion clears approvals queued on a background conversation', async ()
 })
 
 test('a terminal event before the invoke response cannot leave the composer busy', async () => {
-  let acceptSend
+  let acceptSend!: (value?: unknown) => void
   const state = createChatState({
     sendMessageAsync: () =>
       new Promise((resolve) => {
@@ -488,7 +520,7 @@ test('history refresh failure surfaces the error and still releases the composer
 
 test('replaying a lost invoke response recovers a completed turn without new events or duplicate rows', async () => {
   let attempts = 0
-  const requests = []
+  const requests: { idempotencyKey?: string }[] = []
   const persisted = [
     { id: 'u', role: 'user', content: 'Hello' },
     {
@@ -556,9 +588,9 @@ test('leaving while the initial request starts aborts before response IDs exist'
 })
 
 test('listener registrations finishing after unmount are disposed without continuing initialization', async () => {
-  let finishRegistration
+  let finishRegistration!: (value?: unknown) => void
   let deviceReads = 0
-  const released = []
+  const released: string[] = []
   const subscriptions = [
     'onToken',
     'onMessageComplete',
@@ -607,7 +639,7 @@ test('listener registrations finishing after unmount are disposed without contin
 })
 
 test('a failed permission save restores the persisted mode and prevents overlapping changes', async () => {
-  let rejectSave
+  let rejectSave!: (reason?: unknown) => void
   let writes = 0
   const state = createChatState(
     {},

@@ -1,4 +1,43 @@
 //! Model-lifecycle + streaming chat commands.
+//!
+//! Maintainability exception (spaex 500-LoC rule): at ~3000 lines this is
+//! the largest hand-maintained file in the repository. Model lifecycle,
+//! send admission and the turn/step loop are coupled through one shared
+//! layer — the `EVENT_*` names, every `*Event` payload struct, the
+//! `ChatState` operation reservation and the cancellation token — and
+//! moving any one of the three out before that layer has its own module
+//! would duplicate the payload definitions across the split. It stays
+//! whole until the ordered plan below runs, so the event-ordering and
+//! ownership guarantees covered by `tests/chat_tool_loop.rs` and
+//! `commands_tests.rs` keep a single reviewable home.
+//!
+//! Concrete split plan — five mechanical PRs in this order, each keeping
+//! the registered command surface and every test unchanged:
+//!
+//! 1. `chat/events.rs`: the `EVENT_*` constants, all `*Event` payload
+//!    structs, `emit_load_progress`, `emit_load_error`,
+//!    `emit_model_load_status`, `risk_class_str` and
+//!    `strip_leaked_tool_call_markup` (~330 lines).
+//! 2. `chat/model_loading.rs`: `LoadPhase`, `LoadIdentity`, `LoadOutcome`,
+//!    `publish_load_phase`, `load_model_inner`, both `load_model*`
+//!    commands, `load_api_key_model`, `resolve_local_model_metadata`,
+//!    `verify_local_model_integrity`, `load_local_model_from_metadata`,
+//!    `resolve_display_name`, `unload_local_model`, `active_model_info`
+//!    (~600 lines).
+//! 3. `chat/send_admission.rs`: `derive_message_ids`, `IdempotentSend`,
+//!    `resolve_idempotent_send`, `PersistedSend`,
+//!    `persist_send_transaction`, `default_thread_title`,
+//!    `last_message_id` (~260 lines).
+//! 4. `chat/turn.rs`: `ToolPlan`, `StepOutcome`, `RetryDecision`,
+//!    `retry_or_bail`, `StreamStartError`, `start_step_stream`,
+//!    `run_step`, `run_turn`, the three `persist_*` helpers and
+//!    `read_permission_mode` (~1050 lines).
+//! 5. `chat/default_model.rs`: `resolve_default_model`,
+//!    `resolve_default_local_model`, `start_default_model_preload`,
+//!    `model_load_status` (~250 lines).
+//!
+//! What remains here is `send_message`, the abort commands and the
+//! tool-permission commands — roughly 400 lines.
 
 use std::sync::Arc;
 
@@ -43,6 +82,7 @@ const EVENT_CHAT_TOOL_RESULT: &str = "chat-tool-result";
 const EVENT_CHAT_TURN_COMPLETE: &str = "chat-turn-complete";
 const EVENT_TOOL_PERMISSION_REQUEST: &str = "tool-permission-request";
 const EVENT_CHAT_RETRY: &str = "chat-retry";
+const EVENT_MODEL_LOAD_ERROR: &str = "model-load-error";
 
 const PREF_LAST_ACTIVE_MODEL: &str = "chat.last_active_model_id";
 const PREF_DEFAULT_MODEL: &str = "chat.default_model_id";
@@ -147,7 +187,7 @@ fn emit_load_error(
     code: impl Into<String>,
 ) {
     let _ = app.emit(
-        "model-load-error",
+        EVENT_MODEL_LOAD_ERROR,
         ModelLoadErrorEvent {
             vault_generation,
             load_id,
@@ -1047,6 +1087,12 @@ pub enum PersistedSend {
         assistant_message_id: Uuid,
     },
     Mismatch,
+    /// The caller named a thread that does not exist. The schema does not
+    /// enforce foreign keys, so inserting anyway would strand the message
+    /// rows under a `thread_id` `list_threads` can never return.
+    UnknownThread {
+        thread_id: Uuid,
+    },
 }
 
 /// Resolves, reserves, and persists a send in one SQLite transaction.
@@ -1083,8 +1129,8 @@ pub fn persist_send_transaction(
                 assistant_message_id,
             } => {
                 let thread_id = requested_thread_id.unwrap_or_else(Uuid::new_v4);
-                if requested_thread_id.is_none() {
-                    thread_store::insert_thread(
+                match requested_thread_id {
+                    None => thread_store::insert_thread(
                         conn,
                         &ChatThread {
                             id: thread_id,
@@ -1094,17 +1140,25 @@ pub fn persist_send_transaction(
                             created_at: now,
                             updated_at: now,
                         },
-                    )?;
-                } else {
-                    thread_store::update_thread(
-                        conn,
-                        thread_id,
-                        &current_title(conn, thread_id).unwrap_or_default(),
-                        provider_id,
-                        Some(model_id),
-                        now,
-                    )?;
-                }
+                    )?,
+                    // A named thread must already exist. `update_thread`
+                    // reports zero affected rows for an unknown id, and
+                    // without foreign keys the message insert below would
+                    // otherwise succeed against a thread nothing can list.
+                    Some(_) => {
+                        let Some(existing) = thread_store::get_thread(conn, thread_id)? else {
+                            return Ok(PersistedSend::UnknownThread { thread_id });
+                        };
+                        thread_store::update_thread(
+                            conn,
+                            thread_id,
+                            &existing.title,
+                            provider_id,
+                            Some(model_id),
+                            now,
+                        )?
+                    }
+                };
                 let parent_id = last_message_id(conn, thread_id)?;
                 msg_store::insert_message(
                     conn,
@@ -1358,6 +1412,11 @@ pub async fn send_message(
     let (thread_id, user_message_id, assistant_message_id) = match persisted {
         PersistedSend::Mismatch => {
             return Err(HolziError::IdempotencyKeyConflict);
+        }
+        PersistedSend::UnknownThread { thread_id } => {
+            return Err(HolziError::NotFound {
+                name: thread_id.to_string(),
+            });
         }
         PersistedSend::Duplicate {
             thread_id,
@@ -2951,16 +3010,6 @@ fn default_thread_title(first_message: &str) -> String {
     } else {
         s
     }
-}
-
-fn current_title(conn: &haex_crdt::rusqlite::Connection, thread_id: Uuid) -> Option<String> {
-    let mut stmt = conn
-        .prepare("SELECT title FROM chat_threads WHERE id = ?1")
-        .ok()?;
-    stmt.query_row(haex_crdt::rusqlite::params![thread_id.to_string()], |r| {
-        r.get::<_, String>(0)
-    })
-    .ok()
 }
 
 fn last_message_id(

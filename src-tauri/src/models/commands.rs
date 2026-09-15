@@ -149,7 +149,7 @@ pub async fn get_huggingface_model_details(
     revision: Option<String>,
 ) -> Result<huggingface::HuggingFaceModelResult> {
     let hf = huggingface::HfClient::production()?;
-    let hw = hardware::probe();
+    let hw = hardware::probe_async().await;
     huggingface::get_model_details(&hf, &hw, &repo_id, revision.as_deref()).await
 }
 
@@ -161,7 +161,7 @@ pub async fn preview_huggingface_install(
     args: PreviewHuggingFaceInstallArgs,
 ) -> Result<huggingface::InstallPreview> {
     let hf = huggingface::HfClient::production()?;
-    let hw = hardware::probe();
+    let hw = hardware::probe_async().await;
     huggingface::preview_install(
         &hf,
         &hw,
@@ -443,7 +443,7 @@ async fn download_from_hf_inner(
             huggingface::lookup_file_size(&hf, &args.hf_repo, &args.hf_revision, &args.hf_filename)
                 .await
         {
-            let hw = hardware::probe();
+            let hw = hardware::probe_async().await;
             let fit = classify(
                 &hw,
                 ModelFitInputs {

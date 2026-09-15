@@ -1,4 +1,31 @@
 <script setup lang="ts">
+/*
+ * Maintainability exception (spaex 500-LoC rule): this page holds the
+ * thread sidebar, the transcript, the composer, model selection and
+ * download, and the whole streaming event surface (token, retry,
+ * complete, error, tool call/result, turn complete, permission request,
+ * model load) in one file.
+ *
+ * It stays whole because `scripts/check-chat-state.ts` is its only
+ * executable test: that harness regex-extracts this `<script setup>`
+ * block, strips every `import` line, transpiles what is left and replays
+ * it against injected globals. Logic moved into a composable becomes an
+ * import — invisible to all 19 replay tests, which cover exactly the
+ * event-ordering and ownership rules that make this file long. Splitting
+ * first would silently delete that coverage.
+ *
+ * Concrete split plan, in order:
+ *   1. Rework the harness to import the page's composables directly
+ *      instead of stripping imports, so extracted state stays under test.
+ *   2. Extract `useChatTranscript` — `pendingStreamEvents`,
+ *      `pendingToolEvents`, `pendingTurnCompletions`, `turnTerminalWaiters`
+ *      and the `apply*`/`handle*` event handlers.
+ *   3. Extract `useThreadSidebar` — `threads`, title editing, delete
+ *      confirmation, `selectThread` and the duration helpers.
+ *   4. Move model selection, download progress and the integrity dialog
+ *      into a child component; it already shares
+ *      `parseModelIntegrityFailure` with `HuggingFaceModelManagement.vue`.
+ */
 import { computed, onMounted, onBeforeUnmount, ref, nextTick } from 'vue'
 import type { UnlistenFn } from '@tauri-apps/api/event'
 import DOMPurify from 'dompurify'
@@ -22,7 +49,12 @@ import {
   type ToolResultEvent,
   type TurnCompleteEvent,
 } from '~/composables/useChat'
-import { useModels, type InstalledModel } from '~/composables/useModels'
+import {
+  parseModelIntegrityFailure,
+  useModels,
+  type InstalledModel,
+  type ModelIntegrityFailure,
+} from '~/composables/useModels'
 import { hfErrorKey } from '~/composables/useHuggingFace'
 import { useCatalog, type CatalogEntryWithFit } from '~/composables/useCatalog'
 import {
@@ -157,14 +189,7 @@ const sendDisabled = computed(
     loadingPhase.value !== null,
 )
 
-interface IntegrityDialogState {
-  modelId: string
-  errorKind:
-    'ModelIntegrityMismatch' | 'ModelIntegrityUnknown' | 'ModelIntegrityError'
-  expected: string | null
-  actual: string | null
-}
-const integrityDialog = ref<IntegrityDialogState | null>(null)
+const integrityDialog = ref<ModelIntegrityFailure | null>(null)
 const integrityBusy = ref(false)
 const integrityActionError = ref<string | null>(null)
 
@@ -543,27 +568,9 @@ async function loadModel(id: string) {
  * `false` for every other error so the caller falls back to `errString`.
  */
 function openIntegrityDialog(modelId: string, e: unknown): boolean {
-  // `HolziError` is serialized with `#[serde(tag = "kind")]` only — no
-  // `rename_all`, so the hash fields arrive snake_cased (HolziError.ts).
-  const err = e as {
-    kind?: string
-    expected_sha256?: string | null
-    actual_sha256?: string | null
-  }
-  const kind = err.kind
-  if (
-    kind !== 'ModelIntegrityMismatch' &&
-    kind !== 'ModelIntegrityUnknown' &&
-    kind !== 'ModelIntegrityError'
-  ) {
-    return false
-  }
-  integrityDialog.value = {
-    modelId,
-    errorKind: kind,
-    expected: err.expected_sha256 ?? null,
-    actual: err.actual_sha256 ?? null,
-  }
+  const failure = parseModelIntegrityFailure(modelId, e)
+  if (!failure) return false
+  integrityDialog.value = failure
   return true
 }
 

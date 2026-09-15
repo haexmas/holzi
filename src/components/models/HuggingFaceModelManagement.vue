@@ -1,4 +1,20 @@
 <script setup lang="ts">
+/*
+ * Maintainability exception (spaex 500-LoC rule): ~300 lines of script
+ * plus ~290 of template covering three tabs that share `installed`,
+ * `activeModelId` and the download-progress subscription. Splitting the
+ * tabs now would lift that shared state into props and events without
+ * any test to hold the wiring in place — this component has no
+ * executable coverage yet.
+ *
+ * Concrete split plan: add a replay test for the installed-model tab
+ * first, then extract the catalog-download tab (`catalogEntries`,
+ * `downloadCatalogEntryAsync`, `downloadPercent`, `downloadWidth`,
+ * `humanBytes` and their markup) and the update-check panel
+ * (`updateStatuses`, `checkUpdatesNowAsync`, `installUpdateForAsync`)
+ * into child components, leaving the installed list, its delete/load
+ * actions and the integrity dialog here.
+ */
 import type { UnlistenFn } from '@tauri-apps/api/event'
 import {
   hfErrorDetail,
@@ -9,8 +25,10 @@ import {
 } from '~/composables/useHuggingFace'
 import {
   useModels,
+  parseModelIntegrityFailure,
   type DownloadProgressEvent,
   type InstalledModel,
+  type ModelIntegrityFailure,
 } from '~/composables/useModels'
 import { useCatalog, type CatalogEntryWithFit } from '~/composables/useCatalog'
 import { useChat } from '~/composables/useChat'
@@ -59,16 +77,22 @@ const downloadStates = ref<Record<string, DownloadProgressEvent>>({})
 let unlistenDownloadProgress: UnlistenFn | null = null
 let unlistenDownloadComplete: UnlistenFn | null = null
 
-interface IntegrityDialogState {
-  modelId: string
-  errorKind:
-    'ModelIntegrityMismatch' | 'ModelIntegrityUnknown' | 'ModelIntegrityError'
-  expected: string | null
-  actual: string | null
-}
-const integrityDialog = ref<IntegrityDialogState | null>(null)
+const integrityDialog = ref<ModelIntegrityFailure | null>(null)
 const integrityBusy = ref(false)
 const integrityActionError = ref<string | null>(null)
+
+/**
+ * Switches tabs and drops the picked repository with it.
+ *
+ * A named handler rather than a multi-statement template expression: Vue
+ * collapses a template attribute's newlines before parsing it, so the
+ * inline form needs `;` separators that Prettier's `semi: false` strips,
+ * leaving markup the SFC compiler rejects.
+ */
+function selectTab(tab: Tab) {
+  activeTab.value = tab
+  selectedRepo.value = null
+}
 
 async function reloadAsync() {
   loading.value = true
@@ -191,28 +215,10 @@ async function deleteModelAsync(id: string) {
   }
 }
 
-function openIntegrityDialog(modelId: string, e: unknown) {
-  // `HolziError` is serialized with `#[serde(tag = "kind")]` only — no
-  // `rename_all`, so the hash fields arrive snake_cased (HolziError.ts).
-  const err = e as {
-    kind?: string
-    expected_sha256?: string | null
-    actual_sha256?: string | null
-  }
-  const kind = err.kind
-  if (
-    kind !== 'ModelIntegrityMismatch' &&
-    kind !== 'ModelIntegrityUnknown' &&
-    kind !== 'ModelIntegrityError'
-  ) {
-    return false
-  }
-  integrityDialog.value = {
-    modelId,
-    errorKind: kind,
-    expected: err.expected_sha256 ?? null,
-    actual: err.actual_sha256 ?? null,
-  }
+function openIntegrityDialog(modelId: string, e: unknown): boolean {
+  const failure = parseModelIntegrityFailure(modelId, e)
+  if (!failure) return false
+  integrityDialog.value = failure
   return true
 }
 
@@ -350,10 +356,7 @@ onBeforeUnmount(() => {
             ? 'border-b-2 border-blue-500 font-medium'
             : 'text-neutral-500'
         "
-        @click="
-          activeTab = tab
-          selectedRepo = null
-        "
+        @click="selectTab(tab)"
       >
         {{ t(`models.management.tabs.${tab}`) }}
       </button>

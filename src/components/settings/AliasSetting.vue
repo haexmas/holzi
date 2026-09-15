@@ -23,6 +23,20 @@ watch(
   },
 )
 
+/**
+ * Clears the three transient field states as soon as the operator types.
+ *
+ * A named handler rather than a multi-statement template expression: Vue
+ * collapses a template attribute's newlines before parsing it, so the
+ * inline form needs `;` separators that Prettier's `semi: false` strips,
+ * leaving markup the SFC compiler rejects.
+ */
+function onInput() {
+  showRequired.value = false
+  savedFlash.value = false
+  saveError.value = null
+}
+
 async function onSubmit() {
   const trimmed = localValue.value.trim()
   if (!trimmed) {
@@ -61,11 +75,7 @@ async function onSubmit() {
         class="border border-neutral-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
         :disabled="busy"
         :aria-invalid="showRequired && !localValue.trim() ? true : undefined"
-        @input="
-          showRequired = false;
-          savedFlash = false;
-          saveError = null
-        "
+        @input="onInput"
       />
       <span
         v-if="showRequired && !localValue.trim()"

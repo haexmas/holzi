@@ -428,3 +428,42 @@ fn child_messages_sort_after_parents_when_clock_moves_backwards() {
     })
     .unwrap();
 }
+
+#[test]
+fn a_send_naming_an_unknown_thread_is_rejected_instead_of_orphaning_rows() {
+    let db = open_db();
+    db.with_connection(|conn| {
+        let missing_thread_id = Uuid::new_v4();
+        let decision = persist_send_transaction(
+            conn,
+            "unknown-thread-1",
+            Some(missing_thread_id),
+            "message for a thread that was never created",
+            None,
+            "model-a",
+            1,
+        )
+        .unwrap();
+
+        assert_eq!(
+            decision,
+            PersistedSend::UnknownThread {
+                thread_id: missing_thread_id
+            }
+        );
+        assert!(
+            chat_messages::list_messages(conn, missing_thread_id)
+                .unwrap()
+                .is_empty(),
+            "a rejected send must not leave message rows under the unknown thread"
+        );
+        assert!(
+            chat_messages::find_by_idempotency_key(conn, "unknown-thread-1")
+                .unwrap()
+                .is_none(),
+            "a rejected send must not reserve its idempotency key"
+        );
+        Ok(())
+    })
+    .unwrap();
+}
