@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use tauri::State;
+use unicode_segmentation::UnicodeSegmentation;
 use uuid::Uuid;
 
 use crate::error::{HolziError, Result};
@@ -33,7 +34,7 @@ pub struct DeleteThreadArgs {
 /// Trims and validates the user-visible thread title.
 pub fn validate_thread_title(title: &str) -> Result<String> {
     let trimmed = title.trim();
-    let length = trimmed.chars().count();
+    let length = trimmed.graphemes(true).count();
     if !(1..=120).contains(&length) {
         return Err(HolziError::InvalidInput {
             reason: "thread title must contain between 1 and 120 characters".into(),
