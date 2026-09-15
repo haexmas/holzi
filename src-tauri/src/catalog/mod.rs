@@ -86,11 +86,12 @@ pub struct CatalogEntryWithFit {
 }
 
 /// Tauri command: list the built-in catalog, annotated with a fit
-/// verdict against the current hardware. Blocks briefly (`nvidia-smi`
-/// on CUDA hosts, capped by [`crate::hardware::CUDA_PROBE_TIMEOUT`]).
+/// verdict against the current hardware. The hardware probe runs on the
+/// blocking pool (`nvidia-smi` on CUDA hosts is capped by
+/// [`crate::hardware::CUDA_PROBE_TIMEOUT`]).
 #[tauri::command]
 pub async fn list_catalog() -> Vec<CatalogEntryWithFit> {
-    let hw = crate::hardware::probe();
+    let hw = crate::hardware::probe_async().await;
     entries()
         .iter()
         .cloned()

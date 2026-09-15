@@ -30,8 +30,22 @@ pub use fit::{classify, Fit, ModelFitInputs};
 /// to size the model suggestions, and on demand from Settings.
 #[tauri::command]
 pub async fn get_hardware_info() -> HardwareInfo {
-    // Cheap enough to run inline — see `probe()` for cost analysis.
-    probe()
+    probe_async().await
+}
+
+/// [`probe`] off the async executor. Every caller inside an `async fn`
+/// must use this: `probe` reads `/proc` and, on CUDA builds, spawns
+/// `nvidia-smi` and polls it with a blocking sleep for up to
+/// [`CUDA_PROBE_TIMEOUT`], which would stall a Tokio worker thread.
+///
+/// Falls back to an inline probe when the blocking pool cannot run the
+/// task — a hardware snapshot is advisory, so a join failure must not
+/// fail the command that needed it.
+pub async fn probe_async() -> HardwareInfo {
+    match tauri::async_runtime::spawn_blocking(probe).await {
+        Ok(info) => info,
+        Err(_) => probe(),
+    }
 }
 
 /// Snapshot of the host relevant to the model catalog UI.
@@ -65,9 +79,9 @@ impl Backend {
     }
 }
 
-/// Probes the host. Fast enough to call on every catalog listing (the
-/// expensive branch is `nvidia-smi` on CUDA hosts, capped by a 500 ms
-/// wall clock via [`CUDA_PROBE_TIMEOUT`].
+/// Probes the host. Blocking: reads `/proc` via sysinfo and, on CUDA
+/// hosts, spawns `nvidia-smi` and polls it for up to
+/// [`CUDA_PROBE_TIMEOUT`]. Call [`probe_async`] from `async` code.
 pub fn probe() -> HardwareInfo {
     let mut sys = System::new();
     sys.refresh_memory();

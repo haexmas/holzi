@@ -113,6 +113,9 @@ pub(crate) fn validate_slug(slug: &str) -> Result<()> {
     {
         return Err(bad_input("slug may only contain [A-Za-z0-9_.-]"));
     }
+    if slug.contains("..") {
+        return Err(bad_input("slug cannot contain '..'"));
+    }
     Ok(())
 }
 
@@ -170,8 +173,8 @@ pub struct CanonicalModelFile {
 ///
 /// The scan filters to regular files with a `.gguf` extension whose
 /// filename is valid UTF-8, ignores in-flight downloads/imports
-/// (`.part`, `.tmp` and other non-`.gguf` sidecars), and returns the
-/// returns an explicit ambiguity error when more than one finalised file is
+/// (`.part`, `.tmp` and other non-`.gguf` sidecars), and returns an
+/// explicit ambiguity error when more than one finalised file is
 /// present. This prevents `list_installed_models` and
 /// `load_local_model_by_id` from silently operating on an arbitrary file.
 ///

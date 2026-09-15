@@ -43,6 +43,7 @@ const EVENT_CHAT_TOOL_RESULT: &str = "chat-tool-result";
 const EVENT_CHAT_TURN_COMPLETE: &str = "chat-turn-complete";
 const EVENT_TOOL_PERMISSION_REQUEST: &str = "tool-permission-request";
 const EVENT_CHAT_RETRY: &str = "chat-retry";
+const EVENT_MODEL_LOAD_ERROR: &str = "model-load-error";
 
 const PREF_LAST_ACTIVE_MODEL: &str = "chat.last_active_model_id";
 const PREF_DEFAULT_MODEL: &str = "chat.default_model_id";
@@ -147,7 +148,7 @@ fn emit_load_error(
     code: impl Into<String>,
 ) {
     let _ = app.emit(
-        "model-load-error",
+        EVENT_MODEL_LOAD_ERROR,
         ModelLoadErrorEvent {
             vault_generation,
             load_id,
@@ -1047,6 +1048,10 @@ pub enum PersistedSend {
         assistant_message_id: Uuid,
     },
     Mismatch,
+    /// The caller named a thread that does not exist. The schema does not
+    /// enforce foreign keys, so inserting anyway would strand the message
+    /// rows under a `thread_id` `list_threads` can never return.
+    UnknownThread,
 }
 
 /// Resolves, reserves, and persists a send in one SQLite transaction.
@@ -1083,8 +1088,8 @@ pub fn persist_send_transaction(
                 assistant_message_id,
             } => {
                 let thread_id = requested_thread_id.unwrap_or_else(Uuid::new_v4);
-                if requested_thread_id.is_none() {
-                    thread_store::insert_thread(
+                match requested_thread_id {
+                    None => thread_store::insert_thread(
                         conn,
                         &ChatThread {
                             id: thread_id,
@@ -1094,17 +1099,25 @@ pub fn persist_send_transaction(
                             created_at: now,
                             updated_at: now,
                         },
-                    )?;
-                } else {
-                    thread_store::update_thread(
-                        conn,
-                        thread_id,
-                        &current_title(conn, thread_id).unwrap_or_default(),
-                        provider_id,
-                        Some(model_id),
-                        now,
-                    )?;
-                }
+                    )?,
+                    // A named thread must already exist. `update_thread`
+                    // reports zero affected rows for an unknown id, and
+                    // without foreign keys the message insert below would
+                    // otherwise succeed against a thread nothing can list.
+                    Some(_) => {
+                        let Some(existing) = thread_store::get_thread(conn, thread_id)? else {
+                            return Ok(PersistedSend::UnknownThread);
+                        };
+                        thread_store::update_thread(
+                            conn,
+                            thread_id,
+                            &existing.title,
+                            provider_id,
+                            Some(model_id),
+                            now,
+                        )?
+                    }
+                };
                 let parent_id = last_message_id(conn, thread_id)?;
                 msg_store::insert_message(
                     conn,
@@ -1358,6 +1371,14 @@ pub async fn send_message(
     let (thread_id, user_message_id, assistant_message_id) = match persisted {
         PersistedSend::Mismatch => {
             return Err(HolziError::IdempotencyKeyConflict);
+        }
+        PersistedSend::UnknownThread => {
+            return Err(HolziError::NotFound {
+                name: args
+                    .thread_id
+                    .map(|id| id.to_string())
+                    .unwrap_or_else(|| "<unknown thread>".to_string()),
+            });
         }
         PersistedSend::Duplicate {
             thread_id,
@@ -2951,16 +2972,6 @@ fn default_thread_title(first_message: &str) -> String {
     } else {
         s
     }
-}
-
-fn current_title(conn: &haex_crdt::rusqlite::Connection, thread_id: Uuid) -> Option<String> {
-    let mut stmt = conn
-        .prepare("SELECT title FROM chat_threads WHERE id = ?1")
-        .ok()?;
-    stmt.query_row(haex_crdt::rusqlite::params![thread_id.to_string()], |r| {
-        r.get::<_, String>(0)
-    })
-    .ok()
 }
 
 fn last_message_id(

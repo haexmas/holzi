@@ -15,7 +15,7 @@ use super::{recommend_tiers, TierRecommendation};
 /// JSON blob is malformed.
 #[tauri::command]
 pub async fn catalog_recommend_tiers() -> Result<[TierRecommendation; 3]> {
-    let hw = hardware::probe();
+    let hw = hardware::probe_async().await;
     recommend_tiers(&hw).ok_or_else(|| HolziError::CatalogEntryNotFound {
         id: "<empty catalog>".to_string(),
     })

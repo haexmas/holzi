@@ -123,8 +123,8 @@ Same value. "Gerätename" as German UI label. `alias` as the
 
 All user-visible text uses `@nuxtjs/i18n`. Backend commands and
 events return structured data (enum values, IDs, parameters), never
-localized strings. Locale files under `src/i18n/de/*.json` and
-`src/i18n/en/*.json` — both languages MUST be maintained in lockstep
+localized strings. Locale files under `src/i18n/locales/de.json` and
+`src/i18n/locales/en.json` — both languages MUST be maintained in lockstep
 for every user-visible string introduced by a feature.
 _Avoid_: hardcoded German strings in `.vue` files or in backend
 event payloads.
