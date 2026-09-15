@@ -189,9 +189,10 @@ fn build_request(req: &ChatRequest) -> RequestBuilder {
     if let Some(cap) = req.max_new_tokens {
         builder = builder.set_sampler_max_len(cap);
     }
-    if req.reasoning_requested {
-        builder = builder.enable_thinking(true);
-    }
+    // mistralrs defaults an unspecified thinking flag to `true`. Set it
+    // explicitly so Qwen3 tool requests really use the structured
+    // tool-calling path selected by the chat command.
+    builder = builder.enable_thinking(req.reasoning_requested);
     if !req.tools.is_empty() {
         builder = builder.set_tools(req.tools.iter().map(to_mistralrs_tool).collect());
     }

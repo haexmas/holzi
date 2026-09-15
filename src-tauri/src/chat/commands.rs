@@ -1240,6 +1240,17 @@ pub fn model_supports_reasoning(model_id: &str) -> bool {
         || id.contains("claude-haiku-4-5")
 }
 
+/// Qwen3's native tool-call path must run with thinking disabled. The
+/// mistralrs tool-calling example deliberately leaves thinking unspecified;
+/// enabling it makes Qwen3 prone to spending the whole turn narrating a
+/// prospective tool call instead of emitting the structured call. Keep
+/// reasoning enabled for ordinary Qwen3 replies and other providers.
+fn reasoning_requested_for(model_id: &str, tools: &[ToolSpec]) -> bool {
+    let is_qwen3_tool_request =
+        model_id.to_ascii_lowercase().contains("qwen3") && !tools.is_empty();
+    model_supports_reasoning(model_id) && !is_qwen3_tool_request
+}
+
 /// Persists a user message, spawns a streaming generation, returns
 /// both message ids so the frontend can subscribe. The assistant
 /// message is inserted on completion.
@@ -1399,8 +1410,6 @@ pub async fn send_message(
         .split_once(':')
         .map(|(_, remote)| remote.to_string())
         .unwrap_or_else(|| session.model_id.clone());
-    let reasoning_requested = model_supports_reasoning(&request_model_id);
-
     let tools = {
         let registry = chat
             .tool_registry
@@ -1410,6 +1419,7 @@ pub async fn send_message(
             })?;
         tool_specs(&registry)
     };
+    let reasoning_requested = reasoning_requested_for(&request_model_id, &tools);
 
     let request = ChatRequest {
         model_id: request_model_id,

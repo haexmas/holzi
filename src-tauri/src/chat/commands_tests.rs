@@ -38,6 +38,19 @@ fn reasoning_capability_is_derived_conservatively_from_the_model_id() {
 }
 
 #[test]
+fn tool_requests_disable_reasoning_for_qwen_tool_call_compatibility() {
+    let tools = vec![ToolSpec {
+        name: "run_command".to_string(),
+        description: "Runs a shell command.".to_string(),
+        input_schema: serde_json::json!({"type": "object"}),
+    }];
+
+    assert!(!reasoning_requested_for("Qwen/Qwen3-4B", &tools));
+    assert!(reasoning_requested_for("Qwen/Qwen3-4B", &[]));
+    assert!(reasoning_requested_for("claude-sonnet-4-20250514", &[]));
+}
+
+#[test]
 fn role_namespaces_prevent_nested_key_collisions() {
     let (_, assistant_id) = derive_message_ids("key");
     let (nested_user_id, _) = derive_message_ids("key:assistant");
