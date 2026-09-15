@@ -1,5 +1,5 @@
 {
-  "generation_id": "g_20260915T082738Z_e3b0",
+  "generation_id": "g_20260915T091533Z_e3b0",
   "molecules": [
     {
       "id": "com.github.haexmas.atoms.general-coding",
@@ -47,52 +47,14 @@
       "revision": "8897bc556eef12947aa70e4be552dbabba02a679",
       "source": "https://github.com/haexmas/atoms",
       "speckit": {
-        "cli_version": "not-run",
+        "cli_version": "1.0.6",
         "declaration_fingerprint": "sha256:f2bd6f2487edf10b4f13cdba21b5987c3d59e59bf4952532e37c07ce450714a7",
         "outcomes": {
-          "agy": "skipped",
-          "alquimia": "skipped",
-          "amp": "skipped",
-          "auggie": "skipped",
-          "bob": "skipped",
-          "claude": "skipped",
-          "cline": "skipped",
-          "codebuddy": "skipped",
-          "codex": "skipped",
-          "command-code": "skipped",
-          "copilot": "skipped",
-          "cursor-agent": "skipped",
-          "devin": "skipped",
-          "docker-agent": "skipped",
-          "droid": "skipped",
-          "dsh": "skipped",
-          "firebender": "skipped",
-          "forge": "skipped",
-          "gemini": "skipped",
-          "generic": "skipped",
-          "goose": "skipped",
-          "grok": "skipped",
-          "hermes": "skipped",
-          "junie": "skipped",
-          "kilocode": "skipped",
-          "kimi": "skipped",
-          "kiro-cli": "skipped",
-          "lingma": "skipped",
-          "muse": "skipped",
-          "omp": "skipped",
-          "opencode": "skipped",
-          "pi": "skipped",
-          "qodercli": "skipped",
-          "qwen": "skipped",
-          "rovodev": "skipped",
-          "shai": "skipped",
-          "tabnine": "skipped",
-          "trae": "skipped",
-          "vibe": "skipped",
-          "zcode": "skipped",
-          "zed": "skipped"
+          "codex": "installed"
         },
-        "selected": []
+        "selected": [
+          "codex"
+        ]
       }
     }
   ],
