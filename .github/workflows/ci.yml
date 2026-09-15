@@ -32,6 +32,13 @@ jobs:
       - name: Check chat state
         run: corepack pnpm check:chat-state
 
+      # Neither `typecheck` nor `lint` parses template expressions, so an
+      # SFC the build cannot compile passes both — one did, and broke
+      # `pnpm generate` on main unnoticed. This compiles every template
+      # with the build's own compiler, without running a build.
+      - name: Check Vue templates compile
+        run: corepack pnpm check:templates
+
       - name: Typecheck frontend
         run: corepack pnpm typecheck
 

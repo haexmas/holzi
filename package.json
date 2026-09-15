@@ -9,6 +9,7 @@
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "check:chat-state": "node scripts/check-chat-state.mjs",
+    "check:templates": "node scripts/check-vue-templates.mjs",
     "postinstall": "nuxt prepare",
     "typecheck": "nuxt typecheck",
     "lint": "eslint .",
