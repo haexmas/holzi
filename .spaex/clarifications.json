@@ -1,23 +1,4 @@
 {
   "schema_version": 1,
-  "clarifications": {
-    "68db80441fd732105ceaee7aa28a70d70f9f671c0b2ff88db709f33d5628e851": {
-      "question": "Should meaningful helper extraction and refactoring of real repeated behavior remain allowed when not explicitly requested, or does the ponytail rule prohibiting unrequested abstractions take precedence?",
-      "cited_fragments": [
-        {
-          "molecule_id": "com.github.haexmas.atoms.general-coding",
-          "fragment_id": "general-coding",
-          "body_sha256": "dab224faa4686087f525133f3925f28cd335966bccb8ecc3116fdf70a9a08095"
-        },
-        {
-          "molecule_id": "com.github.haexmas.atoms.ponytail",
-          "fragment_id": "ponytail",
-          "body_sha256": "b57f736a83ddab7111d752008c3e131a157e646a6b47c9eb223f076c494685a8"
-        }
-      ],
-      "answer": "Meaningful helper extraction and refactoring remain allowed when they address real repeated behavior or clarify a coherent responsibility, but ponytail prohibits speculative or convenience abstractions. The agent must propose rather than automatically apply an unrequested refactor, and borderline or scope-expanding cases require operator escalation.",
-      "asked_at": "2026-09-14T20:27:06Z",
-      "answered_at": "2026-09-14T20:27:06Z"
-    }
-  }
+  "clarifications": {}
 }

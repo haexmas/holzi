@@ -88,6 +88,13 @@ understand, verify, change, and remove safely.
   language and repository convention. A module split is not complete if its
   tests, documentation, fixtures, and call sites are left misleadingly
   behind.
+- Test code MUST be maintained in files separate from production code in every
+  language. This applies to unit, integration, contract, and end-to-end tests.
+  A language-required test-module declaration or registration may remain in
+  the production file, but test bodies and test-only helpers MUST live in
+  dedicated test files. Do not place inline test modules or test functions in
+  production files. Follow the repository's convention for test-file placement
+  and naming.
 
 ## Duplication, abstraction, and comments
 

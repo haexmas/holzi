@@ -11,10 +11,13 @@ When testing a Rust codebase:
 - Test behavior and contracts, including important failure paths, rather than
   mirroring private implementation details. A test should fail when the
   promised behavior regresses.
-- Put focused unit tests in the module they test, usually behind
-  `#[cfg(test)]`. Use integration tests under `tests/` to exercise the public
-  API as an external consumer would. Use documentation tests for public
-  examples that should compile and remain correct.
+- Put focused unit-test implementations in dedicated files separate from
+  production code. For module-private unit tests, a small declaration such as
+  `#[cfg(test)] mod tests;` may remain in the module under test, with the test
+  implementation in the separate test file. Use integration tests under
+  `tests/` to exercise the public API as an external consumer would. Use
+  documentation tests for public examples that should compile and remain
+  correct.
 - Keep tests deterministic and isolated. Do not depend on test order, shared
   mutable state, wall-clock timing, network services, or a developer-specific
   filesystem. Inject clocks, ports, and external clients where the behavior

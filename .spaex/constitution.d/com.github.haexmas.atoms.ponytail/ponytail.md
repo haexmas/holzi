@@ -24,7 +24,11 @@ Bug fix = root cause, not symptom: a report names a symptom. Grep every caller o
 
 Rules:
 
-- No abstractions that weren't explicitly requested.
+- Do not introduce speculative abstractions or abstractions solely because a
+  change might be reusable. A concrete, domain-owned abstraction that
+  improves cohesion, removes real duplication, or makes a branch independently
+  testable is not premature; use it when the code evidence supports it, even
+  when the task did not name the extraction. Keep it as small as possible.
 - No new dependency if it can be avoided.
 - No boilerplate nobody asked for.
 - Deletion over addition. Boring over clever. Fewest files possible.
