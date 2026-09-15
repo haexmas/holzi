@@ -57,7 +57,7 @@
 9. Prüfen: Nach erfolgreicher Löschung erscheint eine neue leere Session; kein
    anderer Thread wird automatisch geöffnet.
 
-Für reproduzierbare Dauerfälle verwendet `scripts/check-chat-state.mjs` feste
+Für reproduzierbare Dauerfälle verwendet `scripts/check-chat-state.ts` feste
 Unix-Millisekunden-Zeitstempel und keine Wartezeiten. Ein manueller Durchlauf
 kann dieselben Fälle über entsprechend alte Test-Threads beziehungsweise
 einen unbrauchbaren `created_at`-Wert nachstellen.
@@ -77,5 +77,5 @@ einen unbrauchbaren `created_at`-Wert nachstellen.
 cargo test --manifest-path src-tauri/Cargo.toml
 pnpm typecheck
 pnpm lint
-node scripts/check-chat-state.mjs
+node scripts/check-chat-state.ts
 ```

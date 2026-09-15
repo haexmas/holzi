@@ -6,7 +6,7 @@
  * complete, error, tool call/result, turn complete, permission request,
  * model load) in one file.
  *
- * It stays whole because `scripts/check-chat-state.mjs` is its only
+ * It stays whole because `scripts/check-chat-state.ts` is its only
  * executable test: that harness regex-extracts this `<script setup>`
  * block, strips every `import` line, transpiles what is left and replays
  * it against injected globals. Logic moved into a composable becomes an

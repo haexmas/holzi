@@ -1,0 +1,31 @@
+{
+  // `scripts/` sits outside the Nuxt source root, so `.nuxt/tsconfig.json`
+  // does not include it and `pnpm typecheck` never sees these files. This
+  // project exists so the tooling scripts are type-checked too.
+  //
+  // `verbatimModuleSyntax` and `erasableSyntaxOnly` keep the sources inside
+  // what Node's type stripping can actually run: types are erased, never
+  // transformed, so `enum`, `namespace` and parameter properties are out and
+  // type-only imports must say `import type`.
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node"],
+    "strict": true,
+    // Explicit migration opt-out (spaex javascript-typescript MAY). The chat
+    // harness builds deliberately loose IPC doubles; annotating each mock
+    // would add noise without safety. Every other strict check stays on, and
+    // they earned their keep immediately: `strictNullChecks` caught the
+    // unguarded `source.match(...)[1]` and the two lifecycle hooks that are
+    // only defined if the page happens to register them.
+    "noImplicitAny": false,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "skipLibCheck": true
+  },
+  "include": ["scripts/**/*.ts"]
+}

@@ -47,6 +47,12 @@ jobs:
       - name: Typecheck frontend
         run: corepack pnpm typecheck
 
+      # `scripts/` sits outside the Nuxt source root, so the step above never
+      # sees it. Node runs these files as TypeScript directly (22.19+), which
+      # strips types without checking them.
+      - name: Typecheck tooling scripts
+        run: corepack pnpm typecheck:scripts
+
       - name: Lint frontend
         run: corepack pnpm lint
 

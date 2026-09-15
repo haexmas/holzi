@@ -1,4 +1,4 @@
-// Run with `node scripts/check-vue-templates.mjs`. Compiles every tracked
+// Run with `node scripts/check-vue-templates.ts`. Compiles every tracked
 // `.vue` file's template with the same compiler the build uses, without
 // running a build.
 //
@@ -13,8 +13,9 @@
 // leaving markup that will not compile. Put such handlers in a named function
 // in `<script setup>`; that is the only form Prettier and Vue agree on.
 //
-// `.mjs` to match `check-chat-state.mjs`: both run under plain `node` with no
-// build step or TypeScript runner.
+// Plain `node scripts/<name>.ts`: Node strips the types itself from 22.19
+// which is this repository's declared `engines` floor and the version CI
+// pins, so no bundler, runner or extra dependency is involved.
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { compileTemplate, parse } from 'vue/compiler-sfc'
@@ -30,7 +31,7 @@ if (files.length === 0) {
   process.exit(1)
 }
 
-const failures = []
+const failures: { filename: string; message: string }[] = []
 
 for (const filename of files) {
   const source = readFileSync(filename, 'utf8')
@@ -54,9 +55,13 @@ for (const filename of files) {
   }
 }
 
-function describe(error) {
-  const message = String(error?.message ?? error)
-  const line = error?.loc?.start?.line
+function describe(error: unknown) {
+  const detail = error as {
+    message?: string
+    loc?: { start?: { line?: number } }
+  }
+  const message = String(detail?.message ?? error)
+  const line = detail?.loc?.start?.line
   return line ? `${message} (template line ${line})` : message
 }
 
