@@ -29,9 +29,7 @@ export interface InstalledModel {
 
 /** The three `HolziError` discriminants a pre-load integrity check can fail with. */
 export type ModelIntegrityErrorKind =
-  | 'ModelIntegrityMismatch'
-  | 'ModelIntegrityUnknown'
-  | 'ModelIntegrityError'
+  'ModelIntegrityMismatch' | 'ModelIntegrityUnknown' | 'ModelIntegrityError'
 
 /** A failed pre-load integrity check, ready to drive `ModelIntegrityDialog`. */
 export interface ModelIntegrityFailure {
