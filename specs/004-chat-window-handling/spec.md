@@ -17,6 +17,9 @@ den Agent-Tool-Loop.
   erfolgreichem Vault-Open im Hintergrund startet.
 - [`003-agent-tool-loop`](../003-agent-tool-loop/spec.md) bleibt zuständig für
   Tool-Aufrufe, Freigaben, Abbruch, Retries und Antwort-Lifecycle.
+- [`006-chat-history-management`](../006-chat-history-management/spec.md) ist
+  maßgeblich für die Darstellung der vergangenen Thread-Dauer sowie das
+  Umbenennen und Löschen von Verlaufseinträgen.
 - Wo diese Spec Aussagen zur bisherigen unveränderten Chat-UX aus Spec 002
   konkretisiert, ist diese Spec für Chat-Einstieg, Composer und Reasoning-
   Darstellung maßgeblich.
