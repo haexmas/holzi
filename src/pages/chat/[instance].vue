@@ -208,8 +208,12 @@ function openingTimeLabel(createdAt: number): string {
   if (!Number.isFinite(createdAt) || createdAt < 0) {
     return t('chat.threads.openedAtUnknown')
   }
+  const date = new Date(createdAt)
+  if (Number.isNaN(date.getTime())) {
+    return t('chat.threads.openedAtUnknown')
+  }
   return t('chat.threads.openedAt', {
-    date: new Date(createdAt).toLocaleString(),
+    date: date.toLocaleString(),
   })
 }
 
@@ -318,7 +322,7 @@ async function refreshThreads() {
 }
 
 function startEditing(thread: Thread) {
-  if (deletingThread.value) return
+  if (deletingThread.value || renamingThreadId.value) return
   editingThreadId.value = thread.id
   draftTitle.value = thread.title
   editTitleError.value = null
@@ -342,7 +346,12 @@ async function saveThreadTitle() {
     editTitleError.value = t('chat.threads.titleRequired')
     return
   }
-  if ([...title].length > 120) {
+  const titleLength = [
+    ...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(
+      title,
+    ),
+  ].length
+  if (titleLength > 120) {
     editTitleError.value = t('chat.threads.titleTooLong')
     return
   }

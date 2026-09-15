@@ -44,6 +44,7 @@ filetime = "0.2"
 # Already present as a transitive dependency (rustls/haex-crdt); pinned
 # directly here because the model-integrity boundary calls it explicitly.
 sha2 = "0.10"
+unicode-segmentation = "1.13"
 
 # haex-crdt 0.4.0 pinned per plans/001-desktop-mvp.md.
 # `raw-connection` gives holzi's storage wrapper direct rusqlite access for

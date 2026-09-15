@@ -24,6 +24,16 @@ fn thread_title_validation_trims_and_enforces_visible_length() {
 }
 
 #[test]
+fn thread_title_validation_counts_grapheme_clusters() {
+    let title = "e\u{301}".repeat(120);
+    assert_eq!(validate_thread_title(&title).unwrap(), title);
+    assert!(matches!(
+        validate_thread_title(&"e\u{301}".repeat(121)),
+        Err(HolziError::InvalidInput { .. })
+    ));
+}
+
+#[test]
 fn same_key_yields_the_same_ids_every_time() {
     let first = derive_message_ids("abc-123");
     let second = derive_message_ids("abc-123");
