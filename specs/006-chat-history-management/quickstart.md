@@ -19,7 +19,9 @@
 6. Einen langen Titel bzw. eine schmale Fensterbreite verwenden.
 7. Prüfen: Titel und Dauer bleiben getrennt lesbar; die Dauer wird nicht
    überdeckt.
-8. Tastaturfokus bzw. zugängliche Zusatzinformation der Dauer prüfen.
+8. Einen fehlenden oder unbrauchbaren Eröffnungszeitpunkt simulieren.
+9. Prüfen: Der Eintrag zeigt weiterhin `0min` und keinen technischen Rohfehler.
+10. Tastaturfokus bzw. zugängliche Zusatzinformation der Dauer prüfen.
 
 ## 2. Titel ändern
 

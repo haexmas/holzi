@@ -48,6 +48,9 @@ Verlaufseinträge, damit die neue Historien-Spec daran anschließen kann?
   Eröffnungszeitpunkt meint und Titeländerungen die zeitliche Einordnung nicht
   verändern sollen. Sichtbar ist die daraus berechnete Dauer in den festen
   kompakten Einheiten `min`, `h` und `d`, zum Beispiel `1min`, `2h` und `5d`.
+- `created_at`/`createdAt` wird als Unix-Epoch in Millisekunden behandelt. Die
+  Duration-Berechnung clamp't negative oder unbrauchbare Werte auf `0min`,
+  damit jeder Verlaufseintrag im vereinbarten Format bleibt.
 - Löschen umfasst Thread und zugehörige Nachrichten als eine fachliche
   Aktion; ein verwaister Nachrichtenbestand wäre für den Nutzer nicht
   wiederherstellbar und nicht sichtbar verwaltbar.

@@ -10,7 +10,18 @@ sprachneutrale Codes; die sichtbaren Texte kommen aus der i18n-Schicht.
 
 Der bestehende Payload muss weiterhin mindestens `id`, `title`, `createdAt`
 und `updatedAt` liefern. `createdAt` ist die alleinige Quelle für die im
-Frontend berechnete Duration. Die bestehende Sortierung bleibt erhalten.
+Frontend berechnete Duration und wird als Unix-Epoch in Millisekunden
+übergeben. Die bestehende Sortierung bleibt erhalten.
+
+Die Berechnung folgt der bestehenden JavaScript-Zeitbasis:
+
+```typescript
+const elapsedMs = Math.max(0, Date.now() - createdAt)
+```
+
+Danach wird `elapsedMs` in volle Minuten, Stunden oder Tage umgerechnet und
+abgerundet. Fehlt `createdAt` oder ist der Wert unbrauchbar, wird die Duration
+als `0min` dargestellt.
 
 ## Neues Kommando: Titel ändern
 

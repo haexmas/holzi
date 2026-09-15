@@ -49,7 +49,7 @@ change or validate.
 
 ### Tests for User Story 1
 
-- [ ] T008 [P] [US1] Add deterministic duration-format assertions for minute/hour/day thresholds and future timestamps in `scripts/check-chat-state.mjs` without using wall-clock sleeps.
+- [ ] T008 [P] [US1] Add deterministic duration-format assertions for Unix-millisecond timestamps, minute/hour/day thresholds, future timestamps, and unusable timestamps falling back to `0min` in `scripts/check-chat-state.mjs` without using wall-clock sleeps.
 
 ### Implementation for User Story 1
 

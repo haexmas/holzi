@@ -149,8 +149,7 @@ Der Eintrag und seine Nachrichten dürfen nicht mehr erscheinen.
 ## Edge Cases
 
 - Ein Verlaufseintrag ohne für die Anzeige verwendbaren Eröffnungszeitpunkt
-  darf den Verlauf nicht unbrauchbar machen; die UI zeigt eine verständliche
-  Ersatzangabe und meldet keinen technischen Rohfehler.
+  wird als `0min` dargestellt und meldet keinen technischen Rohfehler.
 - Bei einer lokalen Uhrzeitabweichung darf die Dauer nicht negativ oder
   irreführend erscheinen; ein zukünftiger Eröffnungszeitpunkt wird als `0min`
   behandelt.
@@ -184,9 +183,10 @@ Der Eintrag und seine Nachrichten dürfen nicht mehr erscheinen.
   werden; Beispiele sind `0min`, `1min`, `2h` und `5d`.
 - **FR-005**: Die Dauer MUSS sich während der geöffneten Ansicht spätestens an
   der nächsten Einheiten-Grenze aktualisieren. Ein zukünftiger oder wegen
-  lokaler Uhrabweichung negativer Wert MUSS als `0min` erscheinen. Der
-  vollständige lokale Eröffnungszeitpunkt MUSS als ergänzende zugängliche
-  Information verfügbar sein.
+  lokaler Uhrabweichung negativer Wert sowie ein unbrauchbarer
+  Eröffnungszeitpunkt MÜSSEN als `0min` erscheinen. Der vollständige lokale
+  Eröffnungszeitpunkt MUSS als ergänzende zugängliche Information verfügbar
+  sein.
 - **FR-006**: Titel und Dauerangabe MÜSSEN auch bei langen Titeln und schmalen
   Viewports getrennt lesbar bleiben; der Titel DARF die Zeitangabe nicht
   überdecken.
@@ -273,6 +273,8 @@ Der Eintrag und seine Nachrichten dürfen nicht mehr erscheinen.
 
 - „Session eröffnet“ bezeichnet den persistierten Eröffnungszeitpunkt des
   Threads, nicht den letzten Zugriff oder die letzte Aktivität.
+- Der persistierte Eröffnungszeitpunkt wird als Unix-Epoch in Millisekunden an
+  die UI übergeben.
 - Die Standardansicht zeigt ausschließlich die vergangene Dauer. Sie nutzt
   `min`, `h` und `d` als feste kompakte Einheiten: unter einer Stunde Minuten,
   unter einem Tag Stunden, ab einem Tag Tage; die Werte werden abgerundet.
