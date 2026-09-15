@@ -99,9 +99,9 @@ jobs:
       matrix:
         include:
           - features: default
-            flags: ""
+            flags: ''
           - features: no-default
-            flags: "--no-default-features"
+            flags: '--no-default-features'
     env:
       # Backtraces keep file and line, the compiler stops emitting full
       # debug data. This matters less for build time than for cache size:
