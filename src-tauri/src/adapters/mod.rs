@@ -11,9 +11,14 @@
 
 pub mod anthropic;
 #[cfg(test)]
+mod anthropic_stream_tests;
+#[cfg(test)]
 mod anthropic_tests;
 #[cfg(feature = "llm-cpu")]
 pub mod local;
+pub mod request;
+#[cfg(test)]
+mod request_tests;
 pub mod types;
 
 pub use types::{AdapterStream, ChatMessage, ChatRequest, ChatRole, StreamChunk, StreamError};

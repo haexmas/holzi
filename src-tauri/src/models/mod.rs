@@ -9,5 +9,9 @@ pub mod commands;
 pub mod download;
 pub mod hash;
 pub mod huggingface;
+#[cfg(test)]
+mod huggingface_install_tests;
+#[cfg(test)]
+mod huggingface_search_tests;
 pub mod import;
 pub mod paths;

@@ -22,7 +22,12 @@ import {
   type ToolResultEvent,
   type TurnCompleteEvent,
 } from '~/composables/useChat'
-import { useModels, type InstalledModel } from '~/composables/useModels'
+import {
+  parseModelIntegrityFailure,
+  useModels,
+  type InstalledModel,
+  type ModelIntegrityFailure,
+} from '~/composables/useModels'
 import { hfErrorKey } from '~/composables/useHuggingFace'
 import { useCatalog, type CatalogEntryWithFit } from '~/composables/useCatalog'
 import {
@@ -157,14 +162,7 @@ const sendDisabled = computed(
     loadingPhase.value !== null,
 )
 
-interface IntegrityDialogState {
-  modelId: string
-  errorKind:
-    'ModelIntegrityMismatch' | 'ModelIntegrityUnknown' | 'ModelIntegrityError'
-  expected: string | null
-  actual: string | null
-}
-const integrityDialog = ref<IntegrityDialogState | null>(null)
+const integrityDialog = ref<ModelIntegrityFailure | null>(null)
 const integrityBusy = ref(false)
 const integrityActionError = ref<string | null>(null)
 
@@ -543,27 +541,9 @@ async function loadModel(id: string) {
  * `false` for every other error so the caller falls back to `errString`.
  */
 function openIntegrityDialog(modelId: string, e: unknown): boolean {
-  // `HolziError` is serialized with `#[serde(tag = "kind")]` only — no
-  // `rename_all`, so the hash fields arrive snake_cased (HolziError.ts).
-  const err = e as {
-    kind?: string
-    expected_sha256?: string | null
-    actual_sha256?: string | null
-  }
-  const kind = err.kind
-  if (
-    kind !== 'ModelIntegrityMismatch' &&
-    kind !== 'ModelIntegrityUnknown' &&
-    kind !== 'ModelIntegrityError'
-  ) {
-    return false
-  }
-  integrityDialog.value = {
-    modelId,
-    errorKind: kind,
-    expected: err.expected_sha256 ?? null,
-    actual: err.actual_sha256 ?? null,
-  }
+  const failure = parseModelIntegrityFailure(modelId, e)
+  if (!failure) return false
+  integrityDialog.value = failure
   return true
 }
 
