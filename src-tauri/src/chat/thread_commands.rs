@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use tauri::State;
+use unicode_segmentation::UnicodeSegmentation;
 use uuid::Uuid;
 
 use crate::error::{HolziError, Result};
@@ -15,6 +16,31 @@ use crate::storage::chat_threads::{self as thread_store, ChatThread};
 #[serde(rename_all = "camelCase")]
 pub struct CreateThreadArgs {
     pub title: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameThreadArgs {
+    pub thread_id: String,
+    pub title: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteThreadArgs {
+    pub thread_id: String,
+}
+
+/// Trims and validates the user-visible thread title.
+pub fn validate_thread_title(title: &str) -> Result<String> {
+    let trimmed = title.trim();
+    let length = trimmed.graphemes(true).count();
+    if !(1..=120).contains(&length) {
+        return Err(HolziError::InvalidInput {
+            reason: "thread title must contain between 1 and 120 characters".into(),
+        });
+    }
+    Ok(trimmed.to_string())
 }
 
 /// Creates an empty thread. Callers typically let `send_message`
@@ -81,6 +107,72 @@ pub async fn list_messages(
     })?
     .map_err(HolziError::from)?;
     Ok(rows.into_iter().map(Into::into).collect())
+}
+
+#[tauri::command]
+pub async fn rename_thread(
+    state: State<'_, AppState>,
+    args: RenameThreadArgs,
+) -> Result<ThreadPayload> {
+    let thread_id = Uuid::parse_str(&args.thread_id).map_err(|_| HolziError::InvalidInput {
+        reason: "threadId must be a valid UUID".into(),
+    })?;
+    let title = validate_thread_title(&args.title)?;
+    let db = active_database(&state)?;
+    let row = tauri::async_runtime::spawn_blocking(move || {
+        db.with_connection(|conn| {
+            if thread_store::get_thread(conn, thread_id)
+                .map_err(haex_crdt::Error::from)?
+                .is_none()
+            {
+                return Ok(None);
+            }
+            let updated = thread_store::rename_title(conn, thread_id, &title)
+                .map_err(haex_crdt::Error::from)?;
+            if updated != 1 {
+                return Ok(None);
+            }
+            Ok(thread_store::get_thread(conn, thread_id)
+                .map_err(haex_crdt::Error::from)?
+                .map(Into::into))
+        })
+    })
+    .await
+    .map_err(|e| HolziError::CrdtInit {
+        reason: format!("rename_thread join: {e}"),
+    })?
+    .map_err(HolziError::from)?;
+
+    row.ok_or_else(|| HolziError::NotFound {
+        name: thread_id.to_string(),
+    })
+}
+
+#[tauri::command]
+pub async fn delete_thread(state: State<'_, AppState>, args: DeleteThreadArgs) -> Result<()> {
+    let thread_id = Uuid::parse_str(&args.thread_id).map_err(|_| HolziError::InvalidInput {
+        reason: "threadId must be a valid UUID".into(),
+    })?;
+    let db = active_database(&state)?;
+    let deleted = tauri::async_runtime::spawn_blocking(move || {
+        db.with_connection(|conn| {
+            thread_store::delete_thread_and_messages(conn, thread_id)
+                .map_err(haex_crdt::Error::from)
+        })
+    })
+    .await
+    .map_err(|e| HolziError::CrdtInit {
+        reason: format!("delete_thread join: {e}"),
+    })?
+    .map_err(HolziError::from)?;
+
+    if deleted {
+        Ok(())
+    } else {
+        Err(HolziError::NotFound {
+            name: thread_id.to_string(),
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]

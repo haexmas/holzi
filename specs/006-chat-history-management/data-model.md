@@ -50,6 +50,13 @@ Einheiten-Grenze. `min`, `h` und `d` sind feste kompakte
 Darstellungseinheiten; ergänzende Screenreader-Informationen werden
 lokalisiert.
 
+Die Verlaufszeile stellt diese Projektion in drei visuellen Bereichen dar:
+Der Titel erhält den flexiblen verfügbaren Raum, die Bearbeiten-/Löschen-
+Aktionen erscheinen bei Hover oder Tastaturfokus direkt links neben der
+Dauer, und die Dauer bleibt in einer eigenen rechtsbündigen Spalte sichtbar.
+Im ausgeblendeten Zustand dürfen die Aktionen den Titel nicht dauerhaft
+verkürzen.
+
 ### HistoryEditState
 
 ```typescript

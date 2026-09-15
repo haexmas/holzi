@@ -90,7 +90,22 @@
     "newChatShort": "Neu",
     "threads": {
       "title": "Verläufe",
-      "empty": "Noch keine Gespräche"
+      "empty": "Noch keine Gespräche",
+      "duration": "{duration}",
+      "openedAt": "Eröffnet am {date}",
+      "openedAtUnknown": "Eröffnungszeit unbekannt",
+      "editTitle": "Titel bearbeiten",
+      "saveTitle": "Titel speichern",
+      "cancelEdit": "Bearbeitung abbrechen",
+      "deleteTitle": "Verlauf löschen",
+      "deleteDialogTitle": "Verlauf löschen",
+      "deleteConfirm": "Möchtest du „{title}“ wirklich löschen? Alle Nachrichten dieses Verlaufs werden dauerhaft entfernt.",
+      "deleteConfirmButton": "Löschen",
+      "deleteFailed": "Der Verlauf konnte nicht gelöscht werden.",
+      "deleteCancelFailed": "Der laufende Turn konnte nicht sicher beendet werden. Der Verlauf bleibt erhalten.",
+      "renameFailed": "Der Titel konnte nicht gespeichert werden.",
+      "titleRequired": "Bitte gib einen Titel ein.",
+      "titleTooLong": "Der Titel darf höchstens 120 Zeichen enthalten."
     },
     "settings": "Einstellungen",
     "lock": "Sperren",
