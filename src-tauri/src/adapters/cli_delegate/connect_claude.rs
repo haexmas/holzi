@@ -209,6 +209,7 @@ impl Drop for ClaudeConnectSession {
 }
 
 impl ClaudeConnectSession {
+    /// Returns the unique identifier for this connect attempt.
     pub fn id(&self) -> Uuid {
         self.id
     }

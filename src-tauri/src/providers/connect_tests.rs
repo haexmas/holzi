@@ -18,6 +18,7 @@ use super::connect::{
 };
 
 #[tokio::test]
+/// Completes the pending flow when the browser round-trip produces a token.
 async fn completes_when_the_token_arrives_without_a_manual_submission() {
     let (tx, rx) = mpsc::unbounded_channel();
     let token_ready = Arc::new(Notify::new());
@@ -44,6 +45,7 @@ async fn completes_when_the_token_arrives_without_a_manual_submission() {
 }
 
 #[tokio::test]
+/// Leaves state unchanged when manual submission has already consumed the session.
 async fn is_a_no_op_when_a_manual_submission_already_completed_the_flow() {
     let (_tx, rx) = mpsc::unbounded_channel::<ReaderEvent>();
     let token_ready = Arc::new(Notify::new());
@@ -61,6 +63,7 @@ async fn is_a_no_op_when_a_manual_submission_already_completed_the_flow() {
 }
 
 #[tokio::test]
+/// Leaves a newer pending attempt intact when an older watcher wakes up.
 async fn is_a_no_op_when_a_later_connect_attempt_replaced_the_session() {
     let (_stale_tx, stale_rx) = mpsc::unbounded_channel::<ReaderEvent>();
     let stale_token_ready = Arc::new(Notify::new());
@@ -83,6 +86,7 @@ async fn is_a_no_op_when_a_later_connect_attempt_replaced_the_session() {
 }
 
 #[tokio::test]
+/// Reports failure and clears the session when the flow ends without a token.
 async fn reports_failure_when_the_flow_ends_without_a_token() {
     let (tx, rx) = mpsc::unbounded_channel();
     let token_ready = Arc::new(Notify::new());
