@@ -465,12 +465,31 @@ the OS process is actually gone (spec.md Acceptance Scenario 1).
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T044 [P] Verify `de`/`en` i18n lockstep for every string added across T020/T028 (`CONTEXT.md`
-      i18n boundary requirement), the same check 003's T041 performed.
-- [ ] T045 [P] Run `specs/007-cli-delegate/quickstart.md` end-to-end manually (all 5 scenarios) with
-      whichever of `claude`/`codex` is installed, before merge.
-- [ ] T046 `cargo test --lib` and the new `src-tauri/tests/cli_delegate_*.rs` suites green; `pnpm
-typecheck` exit 0.
+- [x] T044 [P] Verified `de`/`en` i18n lockstep: both locale files flatten to exactly 283 keys with zero
+      divergence in either direction (script-checked, not eyeballed). Spot-checked every T020/T028
+      string individually for a non-empty, actually-translated value — the two identical pairs
+      (`chat.model.delegate.claude`/`.codex`, "Claude Code"/"Codex") are correctly untranslated product
+      names, not missed translations.
+- [ ] T045 [P] **Genuinely still open — cannot be completed without the operator.** Run
+      `specs/007-cli-delegate/quickstart.md` end-to-end manually (all 5 scenarios). Szenario 1/2
+      (connect a real subscription) need a human to actually complete a browser OAuth login — the
+      exact side effect this session deliberately avoided causing on its own throughout (mints a real,
+      unwanted long-lived credential against the operator's live subscription if done without asking).
+      Szenario 2's portability check additionally needs a **second machine** that has never run `claude
+      login`/`codex login`. Szenario 3 (live approval)/4 (host isolation)/5 (abort) are more mechanical
+      but still need a running `pnpm tauri dev`/`tauri:dev:cuda` instance and manual clicking, which is
+      also the operator's to drive. What automated coverage already substitutes for the *mechanism*
+      each scenario exercises: Szenario 1's tool-use round trip → `cli_delegate_claude.rs`/
+      `cli_delegate_codex_live.rs`; Szenario 2's credential portability → T022's note; Szenario 3's live
+      gate → `cli_delegate_approval.rs` (T029/T030) plus `approval_bridge_tests.rs` (T031/T032);
+      Szenario 4's isolation → research.md §3's live spike (T009), not yet a standing automated test
+      (T037/T038, also still open); Szenario 5's abort → the generic `AbortHandle`/`CancellationToken`
+      mechanism (T042/T043), not yet a dedicated integration test (T041, also still open). None of this
+      substitutes for actually running the real app once before merge.
+- [x] T046 `cargo test --lib` (201 passed), all non-`#[ignore]`d `src-tauri/tests/cli_delegate_*.rs`
+      suites (8 tests across 4 files, `cli_delegate_codex_live.rs`'s real-credential smoke test stays
+      `#[ignore]`d as designed), `cargo fmt -- --check`, `pnpm typecheck`, and `pnpm exec eslint .` all
+      green.
 
 ---
 
