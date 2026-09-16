@@ -96,6 +96,26 @@ pub(super) fn categorize_line(line: Option<&str>) -> Line {
     }
 }
 
+/// `turn/completed` fires for both a successful **and a failed** turn —
+/// there is no separate `turn/failed` notification on the actual wire for
+/// this case, only `turn.status` inside `turn/completed` distinguishes them
+/// (confirmed live: an authentication failure produces `turn/completed` with
+/// `status: "failed"` and a populated `turn.error`, research.md §6). Returns
+/// the failure message, or `None` for a normal completion.
+pub(super) fn turn_completed_failure(params: &Value) -> Option<String> {
+    let turn = params.get("turn")?;
+    if turn.get("status").and_then(Value::as_str) != Some("failed") {
+        return None;
+    }
+    Some(
+        turn.get("error")
+            .and_then(|error| error.get("message"))
+            .and_then(Value::as_str)
+            .unwrap_or("codex turn failed")
+            .to_string(),
+    )
+}
+
 async fn read_line(lines: &mut Lines<BufReader<ChildStdout>>) -> io::Result<Line> {
     Ok(categorize_line(lines.next_line().await?.as_deref()))
 }
@@ -389,6 +409,10 @@ pub(super) async fn spawn_codex_app_server(
                         ));
                     }
                     "turn/completed" => {
+                        if let Some(message) = turn_completed_failure(&params) {
+                            let _ = tx.send(Err(StreamError::Model(message)));
+                            break;
+                        }
                         let (prompt_tokens, completion_tokens) = last_usage.unwrap_or((None, None));
                         let _ = tx.send(Ok(StreamChunk::Done {
                             finish_reason: Some("complete".to_string()),
