@@ -29,6 +29,8 @@ mod codex_tests;
 mod mod_tests;
 pub(crate) mod permission_mcp_server;
 mod process;
+#[cfg(test)]
+mod process_tests;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

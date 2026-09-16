@@ -513,6 +513,9 @@ pub(crate) fn map_adapter_error(err: AdapterError) -> HolziError {
         AdapterError::Parse { reason } => HolziError::InvalidInput {
             reason: format!("provider response parse error: {reason}"),
         },
+        AdapterError::Unavailable { reason } => HolziError::InvalidInput {
+            reason: format!("backend unavailable: {reason}"),
+        },
     }
 }
 

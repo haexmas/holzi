@@ -29,6 +29,36 @@ verification is manual per quickstart.md (kein Playwright in diesem Repo).
   to describe the actual child-process-plus-local-socket-relay design — see data-model.md's
   "claude.rs"/"approval_bridge.rs" sections for the corrected architecture. Everything from the old
   T034 onward shifted by one (old T034→T035, old T035→T036, ..., old T045→T046).
+- **2026-09-16, mid-implementation reconciliation**: a large chunk of implementation (T033-T036,
+  T039-T040, T042) landed in a part of this session that got context-compacted before the phase
+  checkpoints below were updated to match. Reconciled by reading the actual code and running the
+  full test suite rather than trusting stale checkboxes. Notable divergences from the original plan,
+  kept because they're better, not reverted to match the plan:
+  - `list_models()` (T016) returns one real `ProviderModel` per connected vendor (flowing through the
+    existing `do_refresh`/`replace_provider_models` cache, composite id `<providerId>:claude` or
+    `<providerId>:codex`), not an empty `Vec` as data-model.md originally specified. The frontend
+    (T017/T018) was corrected to match — no separate `:delegate`-suffixed synthetic id.
+  - Cancellation (T041/T042) needed no delegate-specific tracking on `ChatState`/`session.rs` at all:
+    `AdapterStream` gained an optional `CancellationToken` (`adapters/types.rs`,
+    `AdapterStream::new_with_cancellation`) that the existing generic `abort_current_generation` /
+    `ChatState.current_generation` mechanism from 003 already drives unchanged. T042 is done through
+    this, not new session-level state.
+  - The Phase 3 "safe fail-closed stub, no approval bridge yet" design (T013's original scope) was
+    superseded before it shipped separately — `claude.rs`/`codex.rs` went straight to the real
+    approval bridge (T033-T036) in the same pass. Functionally strictly better (nothing ever shipped
+    in the degraded stub state), but it means the Phase 3/4 checkpoints below, which promised a
+    blunt-denial intermediate state, describe something that was skipped rather than something a
+    reviewer can currently observe — read them as historical intent, not current behavior.
+  - `codex.rs` was initially missing `req.system_prompt` entirely (no Codex equivalent of
+    `--append-system-prompt`) — found and fixed in this reconciliation pass (T039's Codex half),
+    using `ThreadStartParams.developerInstructions` (research.md §2 schema).
+  - Genuinely still open despite the above: T021-T032 (US2's whole connect flow; US3's *dedicated*
+    approval integration tests — `approval_bridge_tests.rs`'s one unit test covers the shared
+    live-round-trip mechanism both vendors call into, but not literally "a stub `claude`
+    binary"/"a stub `codex app-server`" end-to-end, nor the `decide()`-skips-the-live-round-trip and
+    posture-blocks-without-a-prompt cases specifically), T037/T038 (US4's dedicated isolation/cleanup
+    integration tests — the mechanisms are implemented and were verified manually during planning,
+    not by an automated test), T041 (dedicated cancellation integration test), T043-T046 (polish).
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -158,21 +188,21 @@ approval is cleanly declined (not hung, not silently allowed) (spec.md Acceptanc
 - [x] T016 [US1] Wire `CliDelegateAdapter::stream_chat`/`list_models` (`cli_delegate/mod.rs`) to
       dispatch to `claude.rs`/`codex.rs` by `DelegateVendor`; `list_models` returns `Ok(vec![])` for
       both (data-model.md — no per-refresh model catalog for delegates).
-- [ ] T017 [US1] Add delegate backend selection to the chat UI (`src/components/settings/
+- [x] T017 [US1] Add delegate backend selection to the chat UI (`src/components/settings/
 DefaultModelSetting.vue` or a new sibling component, per plan.md — first real caller of
       `src/composables/useProviders.ts`'s existing `list`/`add` methods for this provider kind),
       showing a `cli_delegate` provider as "not connected" when it has no stored credential (spec.md
       Acceptance Scenario 2).
-- [ ] T018 [US1] **(new, analyze finding G1)** Verify or wire that a response answered by a delegate
+- [x] T018 [US1] **(new, analyze finding G1)** Verify or wire that a response answered by a delegate
       backend visibly identifies which one (spec.md FR-005, Acceptance Scenario 3): confirm whether
       the existing `provider_id`/model linkage already surfaced on `chat_messages` is rendered by the
       current message-list UI; if not, add the minimal rendering needed (a label such as "via Claude
       Code"/"via Codex"). No new backend field expected — this is a frontend-display check first.
-- [ ] T019 [US1] **(new, analyze finding G2)** In `claude.rs`/`codex.rs`, catch a process-spawn
+- [x] T019 [US1] **(new, analyze finding G2)** In `claude.rs`/`codex.rs`, catch a process-spawn
       failure (binary not found / ENOENT) and map it to a distinct "backend not installed" error,
       separate from `AdapterError::InvalidCredentials` (spec.md FR-008, SC-006) — T026 (US2) only
       covers credential-related unavailability, not a missing binary.
-- [ ] T020 [P] [US1] Add `de`/`en` i18n strings (`src/i18n/locales/{de,en}.json`) for delegate backend
+- [x] T020 [P] [US1] Add `de`/`en` i18n strings (`src/i18n/locales/{de,en}.json`) for delegate backend
       labels, the "not connected" state, the backend-identity label (T018), and the "not installed"
       message (T019).
 
@@ -263,7 +293,7 @@ posture-blocked action is denied without ever surfacing a prompt (spec.md Accept
 
 ### Implementation for User Story 3
 
-- [ ] T033 [US3] Implement `src-tauri/src/adapters/cli_delegate/approval_bridge.rs`, running in the
+- [x] T033 [US3] Implement `src-tauri/src/adapters/cli_delegate/approval_bridge.rs`, running in the
       **main** process: `request_approval` (data-model.md) — register into
       `ChatState.pending_tool_approvals`, emit `tool-permission-request` (`events.rs:28`, unchanged
       payload shape), await the oneshot, fail-safe-deny if the sender is dropped (bridge/process
@@ -272,13 +302,13 @@ posture-blocked action is denied without ever surfacing a prompt (spec.md Accept
       invocation, and for each incoming `{tool_name, input}` message run `chat/tools/permission.rs`'s
       `decide()` first — `Allow`/`Deny` reply immediately (T032), only `Ask` calls `request_approval`
       (T029) — then remove the socket path on completion (RAII, like the temp directories).
-- [ ] T034 [US3] **(new — architecture fix, see revision notes)** Add a hidden internal-entrypoint
+- [x] T034 [US3] **(new — architecture fix, see revision notes)** Add a hidden internal-entrypoint
       branch to `src-tauri/src/lib.rs`/`main.rs`, checked first thing in `main()` before Tauri
       initializes: if invoked as `<self> --internal-cli-delegate-approval-bridge --socket <path>`,
       run only `cli_delegate::permission_mcp_server::run_bridge_process(path)` (T035) and exit —
       never start the GUI/Tauri runtime for this invocation. Smoke-test by running the built binary
       directly with the flag and confirming it exits cleanly with no window.
-- [ ] T035 [US3] (depends on T034) Implement `src-tauri/src/adapters/cli_delegate/
+- [x] T035 [US3] (depends on T034) Implement `src-tauri/src/adapters/cli_delegate/
 permission_mcp_server.rs`'s `run_bridge_process(socket_path)`, running in the **separate child
       process** that `claude` itself spawns (per MCP's stdio transport model — not in-process, see
       revision notes): an `rmcp` `server`+`transport-io` stdio MCP server (using this process's own
@@ -288,7 +318,7 @@ permission_mcp_server.rs`'s `run_bridge_process(socket_path)`, running in the **
       T013's `claude -p` command**: remove `--permission-prompts none`, add
       `--mcp-config`/`--permission-prompt-tool` pointed at `std::env::current_exe()` with the
       `--internal-cli-delegate-approval-bridge --socket <path>` args from T033's listener.
-- [ ] T036 [US3] (depends on T008) Replace T014's fail-closed `ServerRequest` stub in `codex.rs` with
+- [x] T036 [US3] (depends on T008) Replace T014's fail-closed `ServerRequest` stub in `codex.rs` with
       real handling: run `decide()` first (immediate `Allow`/`Deny`, T032), calling
       `approval_bridge::request_approval` only for `Ask` (T030), translating the decision into the
       matching `CommandExecutionApprovalDecision` response (`accept`/`decline`). No child-process/socket hop needed here — holzi already
@@ -323,11 +353,11 @@ Acceptance Scenarios 1-3).
 
 ### Implementation for User Story 4
 
-- [ ] T039 [US4] Pass holzi-supplied context explicitly via `--append-system-prompt` (`claude.rs`) and
+- [x] T039 [US4] Pass holzi-supplied context explicitly via `--append-system-prompt` (`claude.rs`) and
       Codex's equivalent turn-context field (`codex.rs`) rather than any file-based discovery (spec.md
       FR-010) — confirm/implement the Codex-side equivalent as part of this task (research.md §2
       flags Codex's system-prompt-equivalent flag as still unconfirmed).
-- [ ] T040 [US4] Add an RAII/drop-guard wrapper around each delegate invocation's temp directory in
+- [x] T040 [US4] Add an RAII/drop-guard wrapper around each delegate invocation's temp directory in
       both `claude.rs` and `codex.rs`, and around T033's approval-bridge socket, so cleanup runs on
       every exit path (success, error, panic unwind), not only the happy path (spec.md FR-003) —
       satisfies T038. Apply the same guard to `connect_cli_delegate`'s (T024) temp dir.
@@ -353,7 +383,7 @@ the OS process is actually gone (spec.md Acceptance Scenario 1).
 
 ### Implementation for User Story 5
 
-- [ ] T042 [US5] Track the delegate subprocess handle (both vendors, plus the Claude Code bridge child
+- [x] T042 [US5] Track the delegate subprocess handle (both vendors, plus the Claude Code bridge child
       process from T035 if currently running) on the in-flight session/turn state in
       `src-tauri/src/chat/session.rs`, mirroring how `chat/tools/cli.rs` tracks its child for
       cancellation.

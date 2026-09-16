@@ -84,7 +84,13 @@
       "local": "Local models",
       "notLoaded": "No model loaded",
       "none": "None",
-      "selectPrompt": "Choose a model to start chatting."
+      "selectPrompt": "Choose a model to start chatting.",
+      "delegate": {
+        "claude": "Claude Code",
+        "codex": "Codex"
+      },
+      "delegateNotConnected": "Not connected — connect in Settings",
+      "answeredByDelegate": "Answered by {name}"
     },
     "newChat": "New chat",
     "newChatShort": "New",

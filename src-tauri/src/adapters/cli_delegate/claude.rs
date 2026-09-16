@@ -20,7 +20,7 @@ use crate::adapters::types::{StreamChunk, StreamError};
 use crate::adapters::{AdapterError, AdapterStream, ChatRequest};
 
 use super::approval_bridge;
-use super::process::{configure_process_group, ChildLifecycle};
+use super::process::{configure_process_group, map_spawn_error, ChildLifecycle};
 use super::{build_transcript_prompt, DelegateChatContext};
 
 /// Caps how much of a `claude` stderr we keep around for an error
@@ -212,9 +212,7 @@ pub(super) async fn spawn_claude_invocation(
     configure_process_group(&mut cmd);
     cmd.env("CLAUDE_CODE_OAUTH_TOKEN", &token);
 
-    let mut child = ChildLifecycle::spawn(&mut cmd).map_err(|e| AdapterError::Http {
-        reason: format!("failed to spawn \"{binary}\": {e}"),
-    })?;
+    let mut child = ChildLifecycle::spawn(&mut cmd).map_err(|e| map_spawn_error(&binary, e))?;
 
     let mut stdin = child
         .child_mut()

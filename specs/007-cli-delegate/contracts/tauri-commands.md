@@ -48,9 +48,13 @@ intern genutzte Insert-Pfad, kein zweiter öffentlich beworbener Weg, dieselbe P
 ### `delete_provider(providerId) -> ()`
 
 **Unverändert, wiederverwendet für "disconnect"** (spec.md FR-013): eine `cli_delegate`-Provider-Zeile
-zu löschen _ist_ Disconnect — Delegates haben keinen persistenten Modellkatalog, der separat
-aufzuräumen wäre (`list_models` liefert für `cli_delegate` stets `Ok(vec![])`, data-model.md). Kein
-neuer `disconnect_cli_delegate`-Command nötig.
+zu löschen _ist_ Disconnect. `storage::delete_provider` löscht nur die `providers`-Zeile, ohne
+Cascade auf `models` — die eine gecachte Modell-Zeile pro Vendor (korrigiert während der
+Implementierung, data-model.md) bleibt als verwaiste Zeile zurück, exakt wie es heute schon für
+gelöschte `api_key`-Provider der Fall ist (bereits bestehendes, nicht `cli_delegate`-spezifisches
+Verhalten). Harmlos in der Praxis: `modelGroups` (`stores/models.ts`) iteriert immer über die
+aktuelle `providerList`, sodass eine verwaiste Zeile ohne zugehörigen Provider nie im Picker
+auftaucht. Kein neuer `disconnect_cli_delegate`-Command nötig.
 
 ### `abort_current_generation() -> ()`
 

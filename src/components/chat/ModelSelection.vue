@@ -176,7 +176,12 @@ function downloadProgressPercent(
           :key="group.providerId"
           :label="group.providerName"
         >
-          <option v-for="m in group.models" :key="m.id" :value="m.id">
+          <option
+            v-for="m in group.models"
+            :key="m.id"
+            :value="m.id"
+            :disabled="m.disabled"
+          >
             {{ m.name }}
           </option>
         </optgroup>

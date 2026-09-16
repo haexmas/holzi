@@ -86,15 +86,14 @@ async-trait = "0.1"
 eventsource-stream = "0.2"
 
 # Official Rust MCP SDK (research.md §3), pinned per Constitution
-# Principle IV. `client` + `transport-child-process` cover holzi acting as
-# an MCP client spawning user-configured stdio servers. `server` +
-# `transport-io` (spec 007-cli-delegate) additionally let holzi act as a
-# stdio MCP *server* itself: the permission-prompt-tool bridge process
-# `claude` spawns via `--mcp-config` speaks MCP over its own inherited
-# stdin/stdout (data-model.md "permission_mcp_server.rs") — this is a
-# genuinely separate child process, not the already-running Tauri
-# process, since that's how MCP's stdio transport works.
-rmcp = { version = "=3.3.0", default-features = false, features = ["client", "transport-child-process", "server", "transport-io"] }
+# Principle IV. `client` + `transport-child-process` are the only
+# features holzi needs — it is an MCP *client* spawning stdio servers,
+# never a server itself. `cli_delegate`'s Claude Code permission-prompt-tool
+# bridge (`adapters/cli_delegate/permission_mcp_server.rs`) speaks a
+# minimal hand-rolled stdio JSON-RPC loop instead of depending on rmcp's
+# `server`/`transport-io` features for one tool — considered and
+# rejected as unnecessary weight for that single-tool surface.
+rmcp = { version = "=3.3.0", default-features = false, features = ["client", "transport-child-process"] }
 
 # Per-invocation disposable CLAUDE_CONFIG_DIR/CODEX_HOME + cwd (spec
 # 007-cli-delegate FR-003) — was dev-dependency-only (tests used it for
@@ -110,11 +109,15 @@ libc = "0.2"
 [dev-dependencies]
 # `tempfile` moved to `[dependencies]` above — tests already get it
 # transitively, no separate dev-dependency entry needed.
-# rmcp's `server` feature is now a real (non-test-only) `[dependencies]`
-# feature (spec 007-cli-delegate) — no separate dev-dependency entry
-# needed here anymore; `chat/tools/mcp_tests.rs`'s in-memory `ServerHandler`
-# test and the new cli_delegate approval-bridge code both build against
-# the same main-dependency feature set.
+# Additive to the `[dependencies]` rmcp entry: test-only `server` support
+# (feature-unified into one build across dependencies + dev-dependencies)
+# lets `chat/tools/mcp_tests.rs` run a real, minimal `ServerHandler` over
+# an in-memory `tokio::io::duplex` pair — no child process needed to
+# exercise the real client-side tools/list + tools/call round trip.
+# `cli_delegate`'s own MCP server (permission_mcp_server.rs) does not use
+# this — it's a minimal hand-rolled stdio loop, not an rmcp `ServerHandler`
+# (Cargo.toml `[dependencies]` comment above).
+rmcp = { version = "=3.3.0", default-features = false, features = ["server"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "test-util"] }
 futures = "0.3"
 # HTTP mock server for adapter tests — spins a local listener on a

@@ -15,7 +15,7 @@ use crate::adapters::types::{StreamChunk, StreamError};
 use crate::adapters::{AdapterError, AdapterStream, ChatRequest};
 
 use super::approval_bridge;
-use super::process::{configure_process_group, ChildLifecycle};
+use super::process::{configure_process_group, map_spawn_error, ChildLifecycle};
 use super::{build_transcript_prompt, DelegateChatContext};
 
 const CLIENT_NAME: &str = "holzi";
@@ -237,9 +237,8 @@ pub(super) async fn spawn_codex_app_server(
 
     let mut command = build_command(&binary, &tmp);
     configure_process_group(&mut command);
-    let mut child = ChildLifecycle::spawn(&mut command).map_err(|error| AdapterError::Http {
-        reason: format!("failed to spawn \"{binary}\": {error}"),
-    })?;
+    let mut child =
+        ChildLifecycle::spawn(&mut command).map_err(|error| map_spawn_error(&binary, error))?;
     let mut stdin = child
         .child_mut()
         .stdin
@@ -286,6 +285,10 @@ pub(super) async fn spawn_codex_app_server(
                 "cwd": tmp.path().to_string_lossy(),
                 "approvalPolicy": "on-request",
                 "approvalsReviewer": "user",
+                // Codex's equivalent of Claude's `--append-system-prompt-file`
+                // (spec.md FR-010) — holzi passes context explicitly rather
+                // than relying on file-based discovery.
+                "developerInstructions": req.system_prompt.clone(),
             }),
             &context,
             original_thread_id,

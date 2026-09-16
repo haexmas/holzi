@@ -71,19 +71,29 @@ pub enum AdapterError {
     InvalidCredentials,
     #[error("failed to parse provider response: {reason}")]
     Parse { reason: String },
+    /// The backend itself isn't usable right now — distinct from
+    /// `InvalidCredentials` (spec 007-cli-delegate FR-008/SC-006): a
+    /// `cli_delegate` binary that isn't installed/on `PATH`, for
+    /// example. Reproduces deterministically for the same host state,
+    /// so never worth retrying.
+    #[error("backend unavailable: {reason}")]
+    Unavailable { reason: String },
 }
 
 impl AdapterError {
     /// Eligible for the bounded automatic retry when re-starting a step
     /// mid-turn after a transient [`StreamError`](crate::adapters::StreamError)
     /// (spec.md FR-012, tasks.md T034): a transport failure, a rate limit
-    /// (429), or a 5xx. `InvalidCredentials`/`Parse` and other 4xx
-    /// statuses reproduce deterministically for the same request.
+    /// (429), or a 5xx. `InvalidCredentials`/`Parse`/`Unavailable` and
+    /// other 4xx statuses reproduce deterministically for the same
+    /// request.
     pub fn is_transient(&self) -> bool {
         match self {
             AdapterError::Http { .. } => true,
             AdapterError::Status { status, .. } => *status == 429 || (500..600).contains(status),
-            AdapterError::InvalidCredentials | AdapterError::Parse { .. } => false,
+            AdapterError::InvalidCredentials
+            | AdapterError::Parse { .. }
+            | AdapterError::Unavailable { .. } => false,
         }
     }
 }

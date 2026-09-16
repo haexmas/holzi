@@ -26,8 +26,17 @@ import { useErrorString } from '~/composables/useErrorString'
 export type ModelGroup = {
   providerId: string
   providerName: string
-  models: { id: string; name: string }[]
+  models: { id: string; name: string; disabled?: boolean }[]
 }
+
+/**
+ * The two `cli_delegate` vendors (spec 007-cli-delegate). Always shown in
+ * the picker, connected or not — unlike `api_key` providers, which only
+ * appear once a row (and models) exist, a delegate vendor is a fixed,
+ * known option the user can discover before ever connecting one
+ * (spec.md FR-004, Acceptance Scenario 2).
+ */
+const DELEGATE_VENDORS = ['claude', 'codex'] as const
 
 /**
  * Model lifecycle: install/catalog/provider listing, load/unload, download
@@ -73,6 +82,10 @@ export const useModelsStore = defineStore('models', () => {
   const integrityBusy = ref(false)
   const integrityActionError = ref<string | null>(null)
 
+  // A connected `cli_delegate` provider's one cached model
+  // (`refreshProviders` below) already lands in `providerModels`, the
+  // same way an `api_key` provider's models do — so this check needs no
+  // separate delegate-specific case.
   const noModelsInstalled = computed(
     () =>
       installedModels.value.length === 0 &&
@@ -99,8 +112,14 @@ export const useModelsStore = defineStore('models', () => {
           }
         : null
 
+    // A connected `cli_delegate` provider gets one real cached model row
+    // (`<providerId>:<vendor>`, e.g. `<uuid>:claude`) via the same
+    // `list_models`/`replace_provider_models` refresh path `api_key`
+    // providers already use (`providers/mod.rs::compose_model_row`) —
+    // so it flows through `remoteGroups` unchanged, no separate
+    // synthesis needed for the connected case.
     const remoteGroups = providerList.value
-      .filter((p) => p.kind === 'api_key')
+      .filter((p) => p.kind === 'api_key' || p.kind === 'cli_delegate')
       .map<ModelGroup>((p) => ({
         providerId: p.id,
         providerName: p.name,
@@ -111,7 +130,37 @@ export const useModelsStore = defineStore('models', () => {
       }))
       .filter((g) => g.models.length > 0)
 
-    return localGroup ? [localGroup, ...remoteGroups] : remoteGroups
+    // Unlike `api_key`, a `cli_delegate` vendor the user hasn't connected
+    // yet has no `providers` row at all — nothing for `remoteGroups`
+    // above to find. Shown anyway, disabled, so it's discoverable
+    // (spec.md FR-004, Acceptance Scenario 2); connecting happens from
+    // Settings (tasks.md T027), not from this picker.
+    const notConnectedDelegateGroups: ModelGroup[] = DELEGATE_VENDORS.filter(
+      (vendor) =>
+        !providerList.value.some(
+          (p) =>
+            p.kind === 'cli_delegate' &&
+            p.adapter === vendor &&
+            p.hasCredentials,
+        ),
+    ).map((vendor) => {
+      const label = t(`chat.model.delegate.${vendor}`)
+      return {
+        providerId: `delegate-${vendor}`,
+        providerName: label,
+        models: [
+          {
+            id: `delegate-${vendor}:not-connected`,
+            name: t('chat.model.delegateNotConnected'),
+            disabled: true,
+          },
+        ],
+      }
+    })
+
+    return localGroup
+      ? [localGroup, ...remoteGroups, ...notConnectedDelegateGroups]
+      : [...remoteGroups, ...notConnectedDelegateGroups]
   })
 
   /** Localised label for the current loading phase, if any. */
@@ -136,13 +185,13 @@ export const useModelsStore = defineStore('models', () => {
     catalogEntries.value = await catalog.listAsync()
   }
 
-  /** Refreshes the provider list and re-fetches api_key model caches. */
+  /** Refreshes the provider list and re-fetches api_key/cli_delegate model caches. */
   async function refreshProviders() {
     providerList.value = await providers.listAsync()
     const next: Record<string, ProviderModel[]> = {}
     await Promise.all(
       providerList.value
-        .filter((p) => p.kind === 'api_key')
+        .filter((p) => p.kind === 'api_key' || p.kind === 'cli_delegate')
         .map(async (p) => {
           next[p.id] = await providers.listModelsAsync(p.id)
         }),
