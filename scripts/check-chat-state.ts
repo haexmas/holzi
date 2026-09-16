@@ -1,29 +1,29 @@
-// Run with `node scripts/check-chat-state.ts`. Replays the real page and its
+// Run with `node scripts/check-chat-state.ts`. Replays the real page, its
 // real composables (`useChat`, `useModels`, `useCatalog`, `useProviders`,
-// `useInstance`, `usePreferences`, `useDevice`, `useAutoResizeTextarea`),
-// with Tauri replaced at its actual IPC boundary (`invoke`/`listen` from
-// `@tauri-apps/api/core`/`event`). No browser or GPU is required.
+// `useInstance`, `usePreferences`, `useDevice`, `useAutoResizeTextarea`,
+// `useErrorString`) and the real `useModelsStore` (a genuine Pinia instance,
+// `createPinia`/`setActivePinia`, fresh per test) with Tauri replaced at its
+// actual IPC boundary (`invoke`/`listen` from `@tauri-apps/api/core`/
+// `event`). No browser or GPU is required.
 //
 // Maintainability exception (spaex 500-LoC rule): 19 replay tests plus the
 // `createChatState` scaffold that boots the page's real `<script setup>`
 // against a sandboxed `require` — a hand-rolled CommonJS loader (using the
-// `typescript` package already a dependency here) that transpiles the page
-// and every composable it imports, then executes each in its own `new
-// Function('exports', 'require', code)` sandbox. Real composable imports
-// used to be stripped and replaced with hand-written fakes matching their
-// public method names; that made any logic later moved into a composable
-// invisible to these tests. Now only three things are faked: Tauri's own
-// `invoke`/`listen` (there is no backend here), `onMounted`/`onBeforeUnmount`
-// (no real Vue component instance exists to register them against — every
-// composable's calls are collected into one array `mount()`/`unmount()`
-// drain), and `dompurify` (needs a real DOM). Splitting the 19 cases across
-// files before the page itself is split would duplicate this scaffold; see
-// the plan in `src/pages/chat/[instance].vue`.
+// `typescript` package already a dependency here) that transpiles the page,
+// the store and every composable either imports, then executes each in its
+// own `new Function('exports', 'require', ...)` sandbox. Real composable
+// imports used to be stripped and replaced with hand-written fakes matching
+// their public method names; that made any logic later moved into a
+// composable invisible to these tests. Now only three things are faked:
+// Tauri's own `invoke`/`listen` (there is no backend here),
+// `onMounted`/`onBeforeUnmount` (no real Vue component instance exists to
+// register them against — every composable's calls are collected into one
+// array `mount()`/`unmount()` drain), and `dompurify` (needs a real DOM).
 //
-// Concrete split plan: once the page is split (its own plan, steps 2-4),
-// move `createChatState` into `scripts/lib/chat-state-harness.ts` and split
-// the cases by the composable they exercise — transcript/event ordering,
-// thread sidebar, and composer/permission state.
+// Concrete split plan, if this grows further: move `createChatState` into
+// `scripts/lib/chat-state-harness.ts` and split the 19 cases by what they
+// exercise — transcript/event ordering, thread sidebar, model lifecycle,
+// and composer/permission state.
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -32,6 +32,9 @@ import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 import { nextTick } from 'vue'
+
+/** Same shape the page's own `useI18n()` gets — see the bare-globals list below. */
+const useI18nDouble = () => ({ t: (key: string) => key })
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolvePath(__dirname, '..')
@@ -93,8 +96,12 @@ function runComposable(absPath: string, req: (specifier: string) => unknown) {
   return new Function(
     'exports',
     'require',
+    // `useModelsStore` (and `useErrorString`, which it depends on) call the
+    // real ambient `useI18n()` — no `import` in their source, same as the
+    // page's own macros — so it's injected here too, not just for the page.
+    'useI18n',
     `${transpileFile(absPath)}\nreturn exports;`,
-  )({}, req)
+  )({}, req, useI18nDouble)
 }
 
 type InvokeHandler = (args?: unknown) => unknown
@@ -178,6 +185,12 @@ const RETURN_STATEMENT = `
       updatePermissionMode, permissionMode, permissionModeSaving };
 `
 
+/** Resolves a store module name to its source file in this checkout. */
+function storePath(name: string): string {
+  return resolvePath(repoRoot, 'src/stores', `${name}.ts`)
+}
+
+/** Boots the real chat page dependencies inside an isolated test sandbox. */
 function createChatState(
   overrides: Record<string, unknown> = {},
   preferenceOverrides: Record<string, unknown> = {},
@@ -193,8 +206,14 @@ function createChatState(
     onBeforeUnmount: (hook: () => unknown) => unmountHooks.push(hook),
   }
 
+  /**
+   * Resolves imports for the sandbox while sharing overridable chat and
+   * preference instances with the model store. This hoisted declaration is
+   * called only after those instances have been initialized below.
+   */
   function req(specifier: string) {
     if (specifier === 'vue') return vueDouble
+    if (specifier === 'pinia') return nodeRequire('pinia')
     if (specifier === '@tauri-apps/api/core') return { invoke: tauri.invoke }
     if (specifier === '@tauri-apps/api/event') return { listen: tauri.listen }
     if (specifier === 'dompurify') {
@@ -202,6 +221,9 @@ function createChatState(
       return { default: { sanitize: identity }, sanitize: identity }
     }
     if (specifier === 'marked') return nodeRequire('marked')
+    if (specifier === '~/composables/useChat') return { useChat: () => chat }
+    if (specifier === '~/composables/usePreferences')
+      return { usePreferences: () => preferences }
     if (specifier.startsWith('~/composables/')) {
       const name = specifier.slice('~/composables/'.length)
       const real = runComposable(composablePath(name), req)
@@ -225,14 +247,12 @@ function createChatState(
     ...preferenceOverrides,
   }
 
-  function pageReq(specifier: string) {
-    if (specifier === '~/composables/useChat') return { useChat: () => chat }
-    if (specifier === '~/composables/usePreferences')
-      return { usePreferences: () => preferences }
-    return req(specifier)
-  }
+  // A fresh Pinia per test, matching every other piece of state here.
+  const pinia = nodeRequire('pinia')
+  pinia.setActivePinia(pinia.createPinia())
+  const modelStore = runComposable(storePath('models'), req).useModelsStore()
 
-  // These four have no `import` statement in the page at all — real Nuxt
+  // These have no `import` statement in the page at all — real Nuxt
   // auto-imports/macros with no module backing here — so they must be
   // injected as bare names in scope rather than resolved through `require`.
   const state = new Function(
@@ -242,15 +262,19 @@ function createChatState(
     'useRoute',
     'useI18n',
     'useInstancesStore',
+    'useModelsStore',
+    'storeToRefs',
     'document',
     `${pageCode}\n${RETURN_STATEMENT}`,
   )(
     {},
-    pageReq,
+    req,
     () => {},
     () => ({ params: { instance: 'vault' } }),
-    () => ({ t: (key: string) => key }),
+    useI18nDouble,
     () => ({}),
+    () => modelStore,
+    pinia.storeToRefs,
     { querySelector: () => null },
   )
   // Existing send-flow tests model a ready chat session unless they override it.
@@ -263,10 +287,74 @@ function createChatState(
 
   return {
     ...state,
+    modelStore,
     mount: () => Promise.all(mountHooks.map((hook) => hook())),
     unmount: () => Promise.all(unmountHooks.map((hook) => hook())),
   }
 }
+
+test('model download failures use the localized Hugging Face message', async () => {
+  const state = createChatState(
+    {},
+    {},
+    {
+      useModels: () => ({
+        listInstalledAsync: async () => [],
+        onDownloadProgress: async () => () => {},
+        downloadFromCatalogAsync: async () => {
+          throw { kind: 'ModelDownload' }
+        },
+      }),
+    },
+  )
+
+  await state.modelStore.downloadCatalogEntry({
+    id: 'qwen3-0.6b',
+    approx_size_bytes: 1,
+  })
+
+  assert.equal(state.modelStore.lastError, 'errors.hf.modelDownload')
+})
+
+test('model initialization clears stale transient UI errors', async () => {
+  const state = createChatState()
+  state.modelStore.lastError = 'stale error'
+  state.modelStore.loadErrorModelId = 'stale-model'
+  state.modelStore.downloadingId = 'download-in-progress'
+  state.modelStore.integrityDialog = {
+    modelId: 'stale-model',
+    errorKind: 'HashMismatch',
+    expected: 'expected',
+    actual: 'actual',
+  }
+  state.modelStore.integrityActionError = 'stale action error'
+
+  await state.modelStore.initialize()
+
+  assert.equal(state.modelStore.lastError, null)
+  assert.equal(state.modelStore.loadErrorModelId, null)
+  assert.equal(state.modelStore.downloadingId, 'download-in-progress')
+  assert.equal(state.modelStore.integrityDialog, null)
+  assert.equal(state.modelStore.integrityActionError, null)
+})
+
+test('model initialization preserves an active integrity action', async () => {
+  const state = createChatState()
+  const dialog = {
+    modelId: 'repairing-model',
+    errorKind: 'HashMismatch',
+    expected: 'expected',
+    actual: 'actual',
+  }
+  state.modelStore.integrityDialog = dialog
+  state.modelStore.integrityBusy = true
+  state.modelStore.integrityActionError = 'action still running'
+
+  await state.modelStore.initialize()
+
+  assert.deepEqual(state.modelStore.integrityDialog, dialog)
+  assert.equal(state.modelStore.integrityActionError, 'action still running')
+})
 
 test('history durations use Unix milliseconds and compact thresholds', () => {
   const state = createChatState()

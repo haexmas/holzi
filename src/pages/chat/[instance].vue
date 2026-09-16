@@ -1,31 +1,24 @@
 <script setup lang="ts">
 /*
- * Maintainability exception (spaex 500-LoC rule): the 2026-09-15
- * review's four-step split is done — see `scripts/check-chat-state.ts`'s,
+ * Maintainability exception (spaex 500-LoC rule): the 2026-09-15/16
+ * review's split is done — see `scripts/check-chat-state.ts`'s,
  * `useChatTranscript.ts`'s, `useThreadSidebar.ts`'s and
- * `ModelSelection.vue`'s own history. At ~1400 lines this page is still
- * over the limit: the composer/send flow (`send`, `abort`, `newChat`,
- * `lock`, ~250 lines) and model lifecycle (`loadModel`, the integrity-
- * dialog handlers, `downloadCatalogEntry`, `refreshInstalledAndCatalog`/
- * `refreshProviders`, the `onLoad*` status handlers, ~300 lines) are
- * still here, plus the `onMounted` wiring that ties the transcript and
- * thread-sidebar composables together.
+ * `useModelsStore`'s own history (the deferred Pinia migration flagged in
+ * `ModelSelection.vue`'s prior header: activeModel, installedModels,
+ * catalogEntries, providerList, providerModels and the
+ * download/integrity/load-status state now live in `useModelsStore`,
+ * along with `loadModel`, the integrity-dialog handlers,
+ * `downloadCatalogEntry`, the refresh functions and the `onLoad*` status
+ * handlers — `ModelSelection.vue` reads the store directly). What's left
+ * on this page is the composer/send flow (`send`, `abort`, `newChat`,
+ * `lock`, ~250 lines) plus the `onMounted` wiring that ties the
+ * transcript, thread-sidebar and model-store together.
  *
- * `ModelSelection.vue`'s own header already flagged why step 4 stopped
- * short of moving that model lifecycle state out too: activeModel,
- * installedModels, catalogEntries, providerList, providerModels and the
- * download/integrity/load-status refs are read by composer logic
- * (`sendDisabled`, `send()`'s persisted `modelId`) as much as by the
- * model-management UI, so moving them into a plain composable would only
- * duplicate state between this page and `ModelSelection.vue` — a Pinia
- * store is the fit once that migration gets its own dedicated session.
- *
- * Concrete split plan, if this grows further before that migration:
- * extract the composer/send flow (`send`, `abort`, `newChat`,
- * `pendingSend`, `effortLevel`/`effortTokens`, `input`, `busy`,
- * `turnSetupPending`) into a `useComposer` composable next to
- * `useChatTranscript`/`useThreadSidebar`, taking the same instance
- * (`chat`, `chatTranscript`) as a dependency.
+ * Concrete split plan, if this grows further: extract the composer/send
+ * flow (`send`, `abort`, `newChat`, `pendingSend`,
+ * `effortLevel`/`effortTokens`, `input`, `busy`, `turnSetupPending`) into a
+ * `useComposer` composable next to `useChatTranscript`/`useThreadSidebar`,
+ * taking the same instance (`chat`, `chatTranscript`) as a dependency.
  */
 import { computed, onMounted, onBeforeUnmount, ref, nextTick } from 'vue'
 import type { UnlistenFn } from '@tauri-apps/api/event'
@@ -33,29 +26,12 @@ import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import {
   useChat,
-  type LoadedModelInfo,
   type Message,
-  type ModelLoadErrorEvent,
-  type ModelLoadPhase,
-  type ModelLoadProgressEvent,
-  type ModelLoadStatusPayload,
   type SendMessageArgs,
 } from '~/composables/useChat'
 import { useChatTranscript } from '~/composables/useChatTranscript'
 import { useThreadSidebar } from '~/composables/useThreadSidebar'
-import {
-  parseModelIntegrityFailure,
-  useModels,
-  type InstalledModel,
-  type ModelIntegrityFailure,
-} from '~/composables/useModels'
-import { hfErrorKey } from '~/composables/useHuggingFace'
-import { useCatalog, type CatalogEntryWithFit } from '~/composables/useCatalog'
-import {
-  useProviders,
-  type Provider,
-  type ProviderModel,
-} from '~/composables/useProviders'
+import { useErrorString } from '~/composables/useErrorString'
 import { useInstance } from '~/composables/useInstance'
 import { usePreferences } from '~/composables/usePreferences'
 import { useDevice } from '~/composables/useDevice'
@@ -64,9 +40,7 @@ import PermissionPrompt, {
 } from '~/components/chat/PermissionPrompt.vue'
 import ComposerSettingsPopover from '~/components/chat/ComposerSettingsPopover.vue'
 import ReasoningAccordion from '~/components/chat/ReasoningAccordion.vue'
-import ModelSelection, {
-  type ModelGroup,
-} from '~/components/chat/ModelSelection.vue'
+import ModelSelection from '~/components/chat/ModelSelection.vue'
 import { useAutoResizeTextarea } from '~/composables/useAutoResizeTextarea'
 
 definePageMeta({
@@ -76,13 +50,35 @@ definePageMeta({
 const route = useRoute()
 const { t } = useI18n()
 const chat = useChat()
-const models = useModels()
-const catalog = useCatalog()
-const providers = useProviders()
 const { closeAsync } = useInstance()
 const { getPrefAsync, setPrefAsync } = usePreferences()
 const { currentDeviceInfoAsync } = useDevice()
+const { errString } = useErrorString()
 const store = useInstancesStore()
+const modelStore = useModelsStore()
+const {
+  activeModel,
+  modelLoadPending,
+  loadingPhase,
+  loadingModelName,
+  loadErrorModelId,
+  loadingLabel,
+  noModelsInstalled,
+  activeModelId,
+  modelGroups,
+  integrityDialog,
+  integrityBusy,
+  integrityActionError,
+  lastError: modelLastError,
+} = storeToRefs(modelStore)
+const {
+  loadModel,
+  retryModelLoad,
+  onIntegrityLoadUntrusted,
+  onIntegrityRepairSource,
+  onIntegrityChooseOther,
+  onIntegrityDialogOpenChange,
+} = modelStore
 
 const PERMISSION_MODE_KEY = 'chat.permission_mode'
 const permissionMode = ref<'manual' | 'auto' | 'plan'>('manual')
@@ -96,11 +92,6 @@ const instanceName = computed(() => String(route.params.instance ?? ''))
 
 const messagesByThread = ref<Record<string, Message[]>>({})
 const activeThreadId = ref<string | null>(null)
-const activeModel = ref<LoadedModelInfo | null>(null)
-const installedModels = ref<InstalledModel[]>([])
-const catalogEntries = ref<CatalogEntryWithFit[]>([])
-const providerList = ref<Provider[]>([])
-const providerModels = ref<Record<string, ProviderModel[]>>({})
 
 const streamingMessageId = ref<string | null>(null)
 const streamingThreadId = ref<string | null>(null)
@@ -117,7 +108,6 @@ const pendingApprovalsByThread = new Map<string, PendingApproval[]>()
 
 const input = ref('')
 const busy = ref(false)
-const modelLoadPending = ref(false)
 const effortLevel = ref<'low' | 'medium' | 'high'>('medium')
 const effortTokens: Record<typeof effortLevel.value, number> = {
   low: 1024,
@@ -225,18 +215,6 @@ const {
   selectThread,
 } = threadSidebar
 
-const downloadingId = ref<string | null>(null)
-const downloadProgressBytes = ref<number>(0)
-const downloadTotalBytes = ref<number | null>(null)
-
-// Structured loading state driven by the `model-load-progress` event. The
-// composer stays available for drafting while sending remains blocked until
-// the load reaches `ready`.
-const loadingPhase = ref<ModelLoadPhase | null>(null)
-const loadingModelName = ref<string>('')
-const loadingProviderName = ref<string | null>(null)
-const loadErrorModelId = ref<string | null>(null)
-
 const composerInputDisabled = computed(
   () =>
     busy.value && !modelLoadPending.value && streamingMessageId.value === null,
@@ -249,200 +227,27 @@ const sendDisabled = computed(
     loadingPhase.value !== null,
 )
 
-const integrityDialog = ref<ModelIntegrityFailure | null>(null)
-const integrityBusy = ref(false)
-const integrityActionError = ref<string | null>(null)
+// Composer/thread errors (`lastError`) and model-lifecycle errors
+// (`modelStore.lastError`) are separate refs — Pinia setup stores can't
+// take page-local refs as constructor params — merged into the one banner
+// the template shows.
+const displayedError = computed(() => lastError.value || modelLastError.value)
+
+function dismissError() {
+  lastError.value = null
+  modelLastError.value = null
+}
 
 const activeMessages = computed<Message[]>(() => {
   if (!activeThreadId.value) return []
   return messagesByThread.value[activeThreadId.value] ?? []
 })
 
-const noModelsInstalled = computed(
-  () =>
-    installedModels.value.length === 0 &&
-    Object.values(providerModels.value).every((list) => list.length === 0),
-)
-
-// Read through a computed rather than `activeModel?.modelId` directly in
-// the template — vue-tsc narrows `activeModel` to `never` at the model
-// picker's `v-else-if="!activeModel"` (a chained-`v-if` control-flow
-// quirk), which a plain computed's independent return type sidesteps.
-const activeModelId = computed(() => activeModel.value?.modelId ?? '')
-
-/** Groups selectable models by provider for the picker's <optgroup>. */
-const modelGroups = computed<ModelGroup[]>(() => {
-  const localGroup: ModelGroup | null =
-    installedModels.value.length > 0
-      ? {
-          providerId: 'local',
-          providerName: t('chat.model.local'),
-          models: installedModels.value.map((m) => ({
-            id: m.id,
-            name: m.name,
-          })),
-        }
-      : null
-
-  const remoteGroups = providerList.value
-    .filter((p) => p.kind === 'api_key')
-    .map<ModelGroup>((p) => ({
-      providerId: p.id,
-      providerName: p.name,
-      models: (providerModels.value[p.id] ?? []).map((m) => ({
-        id: m.id,
-        name: m.name,
-      })),
-    }))
-    .filter((g) => g.models.length > 0)
-
-  return localGroup ? [localGroup, ...remoteGroups] : remoteGroups
-})
-
-/** Refreshes the installed models and their catalog metadata together. */
-async function refreshInstalledAndCatalog() {
-  installedModels.value = await models.listInstalledAsync()
-  catalogEntries.value = await catalog.listAsync()
-}
-
-/** Refreshes the provider list and re-fetches api_key model caches. */
-async function refreshProviders() {
-  providerList.value = await providers.listAsync()
-  const next: Record<string, ProviderModel[]> = {}
-  await Promise.all(
-    providerList.value
-      .filter((p) => p.kind === 'api_key')
-      .map(async (p) => {
-        next[p.id] = await providers.listModelsAsync(p.id)
-      }),
-  )
-  providerModels.value = next
-}
-
 /** Scrolls the message viewport to its newest item after rendering. */
 async function scrollToBottom() {
   await nextTick()
   const el = document.querySelector('[data-messages-scroll]')
   if (el) el.scrollTop = el.scrollHeight
-}
-
-/** Loads the selected model (local or api_key composite id). */
-async function loadModel(id: string) {
-  lastError.value = null
-  loadErrorModelId.value = null
-  modelLoadPending.value = true
-  busy.value = true
-  try {
-    activeModel.value = await chat.loadModelAsync(id)
-  } catch (e: unknown) {
-    if (!openIntegrityDialog(id, e)) {
-      lastError.value = errString(e)
-    }
-    loadingPhase.value = null
-    activeModel.value = null
-  } finally {
-    busy.value = false
-    modelLoadPending.value = false
-  }
-}
-
-/**
- * Detects the three structured integrity error kinds `load_model` can
- * return (spec 005 §"load_model und lokale Integritätsprüfung") and opens
- * the decision dialog instead of showing a plain error string. Returns
- * `false` for every other error so the caller falls back to `errString`.
- */
-function openIntegrityDialog(modelId: string, e: unknown): boolean {
-  const failure = parseModelIntegrityFailure(modelId, e)
-  if (!failure) return false
-  integrityDialog.value = failure
-  return true
-}
-
-/** "Trotzdem als unsicher laden" — bypasses the hash check for this load only. */
-async function onIntegrityLoadUntrusted() {
-  if (!integrityDialog.value) return
-  modelLoadPending.value = true
-  integrityBusy.value = true
-  integrityActionError.value = null
-  try {
-    activeModel.value = await chat.loadModelWithIntegrityOverrideAsync(
-      integrityDialog.value.modelId,
-    )
-    integrityDialog.value = null
-    await refreshInstalledAndCatalog()
-  } catch (e) {
-    integrityActionError.value = errString(e)
-  } finally {
-    integrityBusy.value = false
-    modelLoadPending.value = false
-  }
-}
-
-/** "Erneut herunterladen / neu importieren" — re-installs from the model's stored HF source. */
-async function onIntegrityRepairSource() {
-  const dialog = integrityDialog.value
-  if (!dialog) return
-  const model = installedModels.value.find((m) => m.id === dialog.modelId)
-  integrityBusy.value = true
-  integrityActionError.value = null
-  try {
-    if (
-      model?.sourceKind === 'huggingface' &&
-      model.hfRepo &&
-      model.hfFilename
-    ) {
-      await models.downloadFromHfAsync({
-        repoId: model.hfRepo,
-        filename: model.hfFilename,
-        // Repair reinstalls the stored source: the tracked ref when there
-        // is one, otherwise the pinned commit — never an implicit `main`.
-        revision: model.hfRevisionRef ?? model.hfRevision ?? undefined,
-        name: model.name,
-        contextWindow: model.contextWindow,
-        // Without this the backend's same-source short-circuit returns the
-        // existing row and the corrupt file is never replaced.
-        forceRepair: true,
-      })
-      integrityDialog.value = null
-      await refreshInstalledAndCatalog()
-    } else {
-      integrityActionError.value = t('models.integrityDialog.actionFailed')
-    }
-  } catch (e) {
-    integrityActionError.value = errString(e)
-  } finally {
-    integrityBusy.value = false
-  }
-}
-
-/** "Anderes Modell auswählen" — just closes the dialog; the picker is already visible. */
-function onIntegrityChooseOther() {
-  integrityDialog.value = null
-}
-
-function onIntegrityDialogOpenChange(open: boolean) {
-  if (!open) {
-    integrityDialog.value = null
-    integrityActionError.value = null
-  }
-}
-
-/** Downloads a catalog model, refreshes the lists, and loads the result. */
-async function downloadCatalogEntry(entry: CatalogEntryWithFit) {
-  lastError.value = null
-  downloadingId.value = entry.id
-  downloadProgressBytes.value = 0
-  downloadTotalBytes.value = entry.approx_size_bytes
-  try {
-    await models.downloadFromCatalogAsync(entry.id)
-    await refreshInstalledAndCatalog()
-    await loadModel(entry.id)
-  } catch (e: unknown) {
-    lastError.value = errString(e)
-  } finally {
-    downloadingId.value = null
-  }
 }
 
 /** Sends the current input and seeds local message placeholders for streaming. */
@@ -603,7 +408,7 @@ async function abort() {
 
 /** Clears the active conversation so the next send creates a new thread. */
 async function newChat() {
-  if (busy.value) return
+  if (busy.value || modelLoadPending.value) return
   if (activeThreadId.value && pendingApprovals.value.length > 0) {
     const queued = pendingApprovalsByThread.get(activeThreadId.value) ?? []
     pendingApprovalsByThread.set(activeThreadId.value, [
@@ -632,35 +437,6 @@ async function lock() {
   } catch (e: unknown) {
     lastError.value = errString(e)
   }
-}
-
-/** Converts backend and JavaScript failures into displayable text. */
-const HF_ERROR_KINDS = new Set([
-  'InvalidInput',
-  'Network',
-  'Timeout',
-  'HttpStatus',
-  'RateLimited',
-  'UnsupportedFormat',
-  'TokenizerRequired',
-  'HardwareConfirmationRequired',
-  'ModelRegistrationFailed',
-  'ModelNotFound',
-])
-
-function errString(e: unknown): string {
-  if (typeof e === 'string') return e
-  if (e && typeof e === 'object' && 'kind' in e) {
-    const kind = (e as { kind: unknown }).kind
-    if (kind === 'InvalidIdempotencyKey')
-      return t('errors.invalidIdempotencyKey')
-    if (kind === 'IdempotencyKeyConflict')
-      return t('errors.idempotencyKeyConflict')
-    if (typeof kind === 'string' && HF_ERROR_KINDS.has(kind))
-      return t(hfErrorKey(e))
-    return JSON.stringify(e)
-  }
-  return String(e)
 }
 
 function setReasoningExpanded(messageId: string, expanded: boolean) {
@@ -719,99 +495,28 @@ function renderMarkdown(content: string): string {
   )
 }
 
-function onLoadProgress(e: ModelLoadProgressEvent) {
-  loadErrorModelId.value = null
-  loadingPhase.value = e.phase
-  loadingModelName.value = e.modelName
-  loadingProviderName.value = e.providerName ?? null
-  if (e.phase === 'ready') {
-    loadingPhase.value = null
-    void refreshActiveModel()
-  }
-}
-
-async function refreshActiveModel() {
-  try {
-    activeModel.value = await chat.activeModelInfoAsync()
-  } catch (e: unknown) {
-    lastError.value = errString(e)
-  }
-}
-
-function onLoadStatus(status: ModelLoadStatusPayload) {
-  if (status.status === 'loading') {
-    loadErrorModelId.value = null
-    loadingPhase.value = status.phase
-    loadingModelName.value = status.modelName
-    loadingProviderName.value = status.providerName ?? null
-  } else {
-    loadingPhase.value = null
-    loadingModelName.value =
-      'modelName' in status ? (status.modelName ?? '') : ''
-    loadingProviderName.value = null
-    loadErrorModelId.value =
-      status.status === 'error' ? (status.modelId ?? null) : null
-    if (status.status === 'error') lastError.value = t('chat.loading.error')
-    if (status.status === 'ready') void refreshActiveModel()
-  }
-}
-
-function onLoadError(event: ModelLoadErrorEvent) {
-  loadingPhase.value = null
-  loadErrorModelId.value = event.modelId ?? null
-  lastError.value = t('chat.loading.error')
-}
-
-async function retryModelLoad() {
-  const modelId = loadErrorModelId.value
-  if (!modelId) return
-  await loadModel(modelId)
-}
-
-/** Localised label for the current loading phase, if any. */
-const loadingLabel = computed<string | null>(() => {
-  const phase = loadingPhase.value
-  if (!phase || phase === 'ready') return null
-  const key =
-    phase === 'connecting'
-      ? 'chat.loading.connecting'
-      : phase === 'cuda-jit-warmup'
-        ? 'chat.loading.cudaJitWarmup'
-        : 'chat.loading.loading'
-  return t(key, {
-    modelName: loadingModelName.value,
-    providerName: loadingProviderName.value ?? '',
-  })
-})
-
 onMounted(async () => {
   try {
-    await Promise.all(
-      [
-        chat.onToken(handleToken),
-        chat.onMessageComplete(handleComplete),
-        chat.onMessageError(handleError),
-        chat.onToolCall(handleToolCall),
-        chat.onToolResult(handleToolResult),
-        chat.onRetry(handleRetry),
-        chat.onTurnComplete(handleTurnComplete),
-        chat.onToolPermissionRequest(handleToolPermissionRequest),
-        chat.onModelLoadProgress(onLoadProgress),
-        chat.onModelLoadStatus(onLoadStatus),
-        chat.onModelLoadError(onLoadError),
-        models.onDownloadProgress((e) => {
-          if (downloadingId.value === e.modelId) {
-            downloadProgressBytes.value = e.bytesDownloaded
-            downloadTotalBytes.value = e.bytesTotal
-          }
+    await Promise.all([
+      Promise.all(
+        [
+          chat.onToken(handleToken),
+          chat.onMessageComplete(handleComplete),
+          chat.onMessageError(handleError),
+          chat.onToolCall(handleToolCall),
+          chat.onToolResult(handleToolResult),
+          chat.onRetry(handleRetry),
+          chat.onTurnComplete(handleTurnComplete),
+          chat.onToolPermissionRequest(handleToolPermissionRequest),
+        ].map(async (subscription) => {
+          const unlisten = await subscription
+          // Registration can finish after navigation already disposed this page.
+          if (unmounted) unlisten()
+          else unlisteners.push(unlisten)
         }),
-      ].map(async (subscription) => {
-        const unlisten = await subscription
-        // Registration can finish after navigation already disposed this page.
-        if (unmounted) unlisten()
-        else unlisteners.push(unlisten)
-      }),
-    )
+      ),
+      modelStore.startListening(),
+    ])
     if (unmounted) return
 
     const device = await currentDeviceInfoAsync()
@@ -829,11 +534,7 @@ onMounted(async () => {
     if (unmounted) return
     deviceUuid.value = device.vaultDeviceUuid
 
-    const loadStatus = await chat.modelLoadStatusAsync()
-    if (loadStatus) onLoadStatus(loadStatus)
-    await refreshActiveModel()
-    await refreshInstalledAndCatalog()
-    await refreshProviders()
+    await modelStore.initialize()
     await refreshThreads()
   } catch (e: unknown) {
     if (!unmounted) lastError.value = errString(e)
@@ -842,6 +543,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   unmounted = true
+  modelStore.stopListening()
   stopDurationRefresh()
   turnTerminalWaiters.clear()
   // Approval requests cannot be reconstructed by a freshly mounted chat page.
@@ -1099,10 +801,10 @@ onBeforeUnmount(() => {
       </header>
 
       <div
-        v-if="lastError"
+        v-if="displayedError"
         class="border-b border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive flex items-start justify-between gap-2"
       >
-        <span>{{ lastError }}</span>
+        <span>{{ displayedError }}</span>
         <span class="flex gap-2 shrink-0">
           <button
             v-if="pendingSend"
@@ -1118,7 +820,7 @@ onBeforeUnmount(() => {
           >
             {{ t('chat.loading.retry') }}
           </button>
-          <button class="text-xs underline" @click="lastError = null">
+          <button class="text-xs underline" @click="dismissError">
             {{ t('chat.close') }}
           </button>
         </span>
@@ -1137,16 +839,7 @@ onBeforeUnmount(() => {
           noModelsInstalled ||
           (!activeModel && !modelLoadPending && !loadingPhase)
         "
-        :no-models-installed="noModelsInstalled"
-        :catalog-entries="catalogEntries"
-        :downloading-id="downloadingId"
-        :download-progress-bytes="downloadProgressBytes"
-        :download-total-bytes="downloadTotalBytes"
-        :active-model-id="activeModelId"
         :busy="busy"
-        :model-groups="modelGroups"
-        @download-catalog-entry="downloadCatalogEntry"
-        @load-model="loadModel"
       />
 
       <div v-else class="flex-1 flex flex-col overflow-hidden">
