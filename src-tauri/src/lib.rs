@@ -81,6 +81,7 @@ pub fn run() {
     let builder = builder.manage(ChatState::new());
     let builder = builder.manage(DelegateConnectState::new());
     builder
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(

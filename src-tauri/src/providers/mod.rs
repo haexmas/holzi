@@ -5,6 +5,8 @@
 //! `cli_delegate` live invocation is spec 007-cli-delegate.
 
 pub mod connect;
+#[cfg(test)]
+mod connect_tests;
 pub mod local;
 #[cfg(test)]
 mod providers_tests;

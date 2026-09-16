@@ -240,6 +240,29 @@ the real `~/.claude/.credentials.json` / `~/.codex/auth.json` mtimes before and 
   performs the manual quickstart.md walkthrough (tasks.md T046) to confirm against a real completed
   flow.
 
+**Addendum, confirmed live 2026-09-16/17**: a real user completed the flow end-to-end. The final
+"here is your token" screen assumption above (`sk-ant-oat` prefix match) held up, but a different part
+of the design turned out to be wrong: Anthropic's current OAuth consent page, after "Authorize", shows
+a plain "you're all set, close this window" message and **never displays a code to copy back** —
+contradicting the "Paste code here if prompted" screen text seen during the truncated 2026-09-16 probe
+above. `submit_cli_delegate_code` alone therefore deadlocked permanently for a real user: nothing ever
+read the PTY session's event channel again after `connect_cli_delegate` returned `AwaitingCode`, so the
+token — which the underlying process still produces on its own once Anthropic's side of the OAuth
+round-trip resolves — sat unread forever. Fixed by a background task
+(`providers::connect::watch_claude_auto_completion`) that keeps watching the same session for that
+token and completes the flow itself; `submit_cli_delegate_code` is kept as a fallback in case some other
+`claude` CLI build still shows a code.
+
+Same live session also surfaced a second, independent bug in the same flow: the OAuth URL rendered in
+`ConnectDelegateProvider.vue` was not clickable at all. Holzi's webview never had permission to open an
+external URL in the system browser — no `tauri-plugin-opener` dependency, no `opener:*` capability in
+`capabilities/default.json`, and the tight default CSP (`default-src 'self'`) blocks a plain `<a
+target="_blank">` from navigating anywhere outside the app regardless. Fixed by adding
+`tauri-plugin-opener` (Rust crate + `@tauri-apps/plugin-opener` npm package, `opener:allow-open-url`
+capability) and routing both connect-flow link clicks through its `openUrl()` — this is unrelated to the
+`CLAUDE_CONFIG_DIR`/`CODEX_HOME` host-isolation mechanism (§3/§6 below), which was already correct and
+untouched by either fix.
+
 **Alternatives considered**: Have the user run `claude setup-token` in their own terminal and paste the
 resulting token into a plain text field (mirrors the existing `api_key` provider flow exactly, avoids
 the `portable-pty` dependency and all ANSI/OSC-8 parsing entirely) — this was the recommended option but
