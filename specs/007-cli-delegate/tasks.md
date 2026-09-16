@@ -418,17 +418,18 @@ Acceptance Scenarios 1-3).
       `.claude/settings.json`/`CLAUDE.md` planted outside the delegate's temp `cwd`, assert a delegate
       invocation's isolated `CLAUDE_CONFIG_DIR`/`cwd` never triggers the hook and never reads that
       content — the exact leak scenario found manually in research.md §3.
-- [x] T037b **(new — operator-requested negative control, research.md §6)** `tests/
-      cli_delegate_isolation_live.rs` (`#[ignore]`d, live, both vendors): a *wrong* credential in the
-      isolated `CLAUDE_CONFIG_DIR`/`CODEX_HOME` must make the invocation fail with a real `401`, on
-      this exact machine where the real `~/.claude`/`~/.codex` are both valid and already logged in —
-      proving isolation isn't a false positive where every other test's *valid*-credential pass
-      couldn't distinguish "used my isolated copy" from "silently used the host's real login". This is
-      distinct from T037's own scope (host **config/hooks** leaking in) — this is host **credentials**
-      never being a silent fallback. Found and fixed a real bug in the process: Codex's real wire
-      protocol reports a failed turn via `turn/completed`'s embedded `status: "failed"`, not a separate
-      `turn/failed` notification as the schema suggested — `codex.rs` was silently treating this as a
-      successful, empty `Done` before the fix (`turn_completed_failure`, unit-tested).
+- [x] T037b **(new — operator-requested negative control, research.md §6)** test
+      `src-tauri/tests/cli_delegate_isolation_live.rs` is `#[ignore]`d, live, and covers both vendors:
+      a _wrong_ credential in the isolated `CLAUDE_CONFIG_DIR`/`CODEX_HOME` must make the invocation
+      fail with a real `401`, on this exact machine where the real `~/.claude`/`~/.codex` are both valid
+      and already logged in — proving isolation isn't a false positive where every other test's
+      _valid_-credential pass couldn't distinguish "used my isolated copy" from "silently used the
+      host's real login". This is distinct from T037's own scope (host **config/hooks** leaking in) —
+      this is host **credentials** never being a silent fallback. Found and fixed a real bug in the
+      process: Codex's real wire protocol reports a failed turn via `turn/completed`'s embedded
+      `status: "failed"`, not a separate `turn/failed` notification as the schema suggested —
+      `codex.rs` was silently treating this as a successful, empty `Done` before the fix
+      (`turn_completed_failure`, unit-tested).
 - [ ] T038 [P] [US4] Integration test: after a delegate invocation completes (success and failure
       paths), assert its temp `CLAUDE_CONFIG_DIR`/`CODEX_HOME`/`cwd` directories **and** T033's
       approval-bridge socket path no longer exist on disk (spec.md FR-003).

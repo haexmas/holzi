@@ -259,21 +259,21 @@ stub, `cli_delegate_codex_live.rs`, `cli_delegate_connect.rs`) copies a **valid*
 isolated temp dir — a pass there cannot distinguish "used my isolated copy" from "ignored the isolated
 dir and used the host's real login," since both would produce the same successful answer. The decisive
 test is a negative control: put a **deliberately wrong** credential in the isolated dir and confirm the
-invocation *fails*, on this exact machine, where the real `~/.claude`/`~/.codex` are both valid and
+invocation _fails_, on this exact machine, where the real `~/.claude`/`~/.codex` are both valid and
 already logged in (this very research session runs under that real Claude Code login). Verified live
 2026-09-16, both vendors, via `tests/cli_delegate_isolation_live.rs` (`#[ignore]`d, run with
 `--ignored`):
 
 - **Codex**: a garbage `auth.json` (`{"tokens":{"access_token":"garbage-not-a-real-token"}}`) written
   into an isolated `CODEX_HOME` produces a genuine `401 Unauthorized: Missing bearer or basic
-  authentication in header` from `api.openai.com`/`wss://api.openai.com`, retried 5 times over
+authentication in header` from `api.openai.com`/`wss://api.openai.com`, retried 5 times over
   WebSocket then 5 more over HTTPS fallback (~16s total), before the turn ends in failure. The same
-  isolated-dir mechanism with the *real* `auth.json` copied in instead answers correctly ("pong") —
+  isolated-dir mechanism with the _real_ `auth.json` copied in instead answers correctly ("pong") —
   a clean contrasting pair, not just one passing test.
 - **Claude**: a garbage `CLAUDE_CODE_OAUTH_TOKEN` (`sk-ant-oat01-this-is-definitely-not-a-real-token`)
   with an isolated `CLAUDE_CONFIG_DIR` produces `"apiKeySource":"none"`, two `api_retry` events with
   `error_status:401`/`authentication_failed`, and a final result `"Failed to authenticate. API Error:
-  401 OAuth access token is invalid."` — never the host session's real answer.
+401 OAuth access token is invalid."` — never the host session's real answer.
 
 **A genuine bug was found and fixed via this check, not just a confirmation**: Codex's real wire
 protocol has **no separate `turn/failed` notification for this case** — the auth failure above arrived
@@ -300,7 +300,7 @@ can be started directly from holzi without possibly using the locally existing c
 | Host isolation + subscription credential mechanism | §3 — `CLAUDE_CONFIG_DIR` + disposable `cwd`, not `--bare`; verified for credentials, hooks, _and_ skills/plugins                                          |
 | Turn/step loop integration point                   | §4 — `ProviderAdapter::stream_chat`, no `turn.rs` changes                                                                                                 |
 | Connect-flow (US2) acquisition mechanism           | §5 — `claude setup-token` needs a PTY + paste-back code (`portable-pty`); `codex login --device-auth` is plain-text, no PTY, no paste-back                |
-| Isolation genuineness (negative control)           | §6 — verified with a *wrong* credential, both vendors; found and fixed a real bug (`turn/completed`'s embedded `status: "failed"` was previously ignored) |
+| Isolation genuineness (negative control)           | §6 — verified with a _wrong_ credential, both vendors; found and fixed a real bug (`turn/completed`'s embedded `status: "failed"` was previously ignored) |
 
 No unresolved `NEEDS CLARIFICATION` markers remain in `plan.md`'s Technical Context, and both of
 tasks.md's Phase 2 verification spikes (T008 Codex live round-trip, T009 Claude skills/plugins
