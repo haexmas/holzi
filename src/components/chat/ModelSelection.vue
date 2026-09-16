@@ -152,6 +152,23 @@ function downloadProgressPercent(
         </div>
       </div>
     </div>
+    <div v-if="modelGroups.length > 0" class="mt-6 space-y-2">
+      <div
+        v-for="group in modelGroups"
+        :key="group.providerId"
+        class="border border-border rounded p-3"
+        aria-disabled="true"
+      >
+        <div class="font-medium text-sm">{{ group.providerName }}</div>
+        <div
+          v-for="model in group.models"
+          :key="model.id"
+          class="text-sm text-muted-foreground"
+        >
+          {{ model.name }}
+        </div>
+      </div>
+    </div>
   </div>
 
   <div
@@ -176,7 +193,12 @@ function downloadProgressPercent(
           :key="group.providerId"
           :label="group.providerName"
         >
-          <option v-for="m in group.models" :key="m.id" :value="m.id">
+          <option
+            v-for="m in group.models"
+            :key="m.id"
+            :value="m.id"
+            :disabled="m.disabled"
+          >
             {{ m.name }}
           </option>
         </optgroup>

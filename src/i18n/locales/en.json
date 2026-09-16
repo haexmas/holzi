@@ -84,7 +84,13 @@
       "local": "Local models",
       "notLoaded": "No model loaded",
       "none": "None",
-      "selectPrompt": "Choose a model to start chatting."
+      "selectPrompt": "Choose a model to start chatting.",
+      "delegate": {
+        "claude": "Claude Code",
+        "codex": "Codex"
+      },
+      "delegateNotConnected": "Not connected — connect in Settings",
+      "answeredByDelegate": "Answered by {name}"
     },
     "newChat": "New chat",
     "newChatShort": "New",
@@ -218,6 +224,20 @@
       "clear": "Clear this default",
       "cleared": "Default cleared.",
       "empty": "No installed models or configured providers yet."
+    },
+    "cliDelegate": {
+      "title": "Connect a subscription",
+      "description": "Use your existing Claude Code or Codex subscription as a chat backend — no API key needed. Connecting works once per vault and follows the vault everywhere it's opened.",
+      "connect": "Connect",
+      "reconnect": "Reconnect",
+      "connected": "Connected",
+      "connecting": "Connecting…",
+      "openUrlPrompt": "Open this link to sign in, then paste the code it gives you back here:",
+      "enterCodePrompt": "Enter this code on that page:",
+      "codeInputLabel": "Authorization code",
+      "submitCode": "Submit code",
+      "success": "Connected.",
+      "error": "Connection failed"
     }
   },
   "models": {

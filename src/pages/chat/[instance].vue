@@ -66,6 +66,7 @@ const {
   noModelsInstalled,
   activeModelId,
   modelGroups,
+  providerList,
   integrityDialog,
   integrityBusy,
   integrityActionError,
@@ -448,6 +449,26 @@ function setReasoningExpanded(messageId: string, expanded: boolean) {
 
 function reasoningFor(messageId: string): string {
   return reasoningByMessage.value[messageId] ?? ''
+}
+
+/**
+ * Localized "Answered by Claude Code"/"Answered by Codex" label for a
+ * delegate-answered message, or `null` for any other backend (spec.md
+ * FR-005) — derived from the message's existing `modelId`
+ * (`<providerId>:claude`/`<providerId>:codex`, the real cached model row
+ * `providers/mod.rs::compose_model_row` produces), not a new field.
+ */
+function delegateAnsweredByLabel(modelId: string | null): string | null {
+  if (!modelId) return null
+  const [providerId, remoteId] = modelId.split(':')
+  if (remoteId !== 'claude' && remoteId !== 'codex') return null
+  const provider = providerList.value.find(
+    (p) => p.id === providerId && p.kind === 'cli_delegate',
+  )
+  if (!provider) return null
+  return t('chat.model.answeredByDelegate', {
+    name: t(`chat.model.delegate.${remoteId}`),
+  })
 }
 
 async function respondToApproval(
@@ -914,6 +935,15 @@ onBeforeUnmount(() => {
                     class="ml-2"
                   >
                     {{ t('chat.tokens', { count: m.completionTokens }) }}
+                  </span>
+                  <span
+                    v-if="
+                      m.role === 'assistant' &&
+                      delegateAnsweredByLabel(m.modelId)
+                    "
+                    class="ml-2"
+                  >
+                    {{ delegateAnsweredByLabel(m.modelId) }}
                   </span>
                   <span
                     v-if="m.finishReason === 'error'"

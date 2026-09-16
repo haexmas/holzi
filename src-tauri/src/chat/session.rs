@@ -14,7 +14,7 @@ use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::adapters::ProviderAdapter;
+use crate::adapters::{AbortHandle, ProviderAdapter};
 use crate::chat::tools::cli::CliTool;
 use crate::chat::tools::mcp::{self, McpServerConfig};
 use crate::chat::tools::{ApprovalDecision, Tool, ToolRegistry};
@@ -115,7 +115,7 @@ pub struct ChatState {
     /// Held across a model load, vault transition, or entire accepted turn.
     operation: Arc<tokio::sync::Mutex<()>>,
     pub session: Arc<Mutex<Option<ActiveSession>>>,
-    pub current_generation: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
+    pub current_generation: Arc<Mutex<Option<AbortHandle>>>,
     pub tool_registry: Arc<Mutex<ToolRegistry>>,
     pub pending_tool_approvals: Arc<Mutex<HashMap<Uuid, oneshot::Sender<ApprovalDecision>>>>,
     /// Session-lifetime tombstones make late replies to cancelled prompts harmless.

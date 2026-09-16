@@ -7,13 +7,17 @@
 //! runs in-process (`LocalAdapter`) or over HTTP (`AnthropicAdapter`).
 //! Additional `api_key` vendors (OpenAI, Google, Groq) land as their own
 //! follow-up PRs using the same trait surface. `cli_delegate` adapters
-//! require a separate design pass and are not yet represented here.
+//! (Claude Code, Codex — spec 007-cli-delegate) live in [`cli_delegate`];
+//! they drive an external CLI subprocess to completion per `stream_chat`
+//! call instead of a direct HTTP/in-process request, but otherwise
+//! implement the same trait.
 
 pub mod anthropic;
 #[cfg(test)]
 mod anthropic_stream_tests;
 #[cfg(test)]
 mod anthropic_tests;
+pub mod cli_delegate;
 #[cfg(feature = "llm-cpu")]
 pub mod local;
 pub mod request;
@@ -21,7 +25,9 @@ pub mod request;
 mod request_tests;
 pub mod types;
 
-pub use types::{AdapterStream, ChatMessage, ChatRequest, ChatRole, StreamChunk, StreamError};
+pub use types::{
+    AbortHandle, AdapterStream, ChatMessage, ChatRequest, ChatRole, StreamChunk, StreamError,
+};
 
 use async_trait::async_trait;
 
@@ -65,19 +71,29 @@ pub enum AdapterError {
     InvalidCredentials,
     #[error("failed to parse provider response: {reason}")]
     Parse { reason: String },
+    /// The backend itself isn't usable right now — distinct from
+    /// `InvalidCredentials` (spec 007-cli-delegate FR-008/SC-006): a
+    /// `cli_delegate` binary that isn't installed/on `PATH`, for
+    /// example. Reproduces deterministically for the same host state,
+    /// so never worth retrying.
+    #[error("backend unavailable: {reason}")]
+    Unavailable { reason: String },
 }
 
 impl AdapterError {
     /// Eligible for the bounded automatic retry when re-starting a step
     /// mid-turn after a transient [`StreamError`](crate::adapters::StreamError)
     /// (spec.md FR-012, tasks.md T034): a transport failure, a rate limit
-    /// (429), or a 5xx. `InvalidCredentials`/`Parse` and other 4xx
-    /// statuses reproduce deterministically for the same request.
+    /// (429), or a 5xx. `InvalidCredentials`/`Parse`/`Unavailable` and
+    /// other 4xx statuses reproduce deterministically for the same
+    /// request.
     pub fn is_transient(&self) -> bool {
         match self {
             AdapterError::Http { .. } => true,
             AdapterError::Status { status, .. } => *status == 429 || (500..600).contains(status),
-            AdapterError::InvalidCredentials | AdapterError::Parse { .. } => false,
+            AdapterError::InvalidCredentials
+            | AdapterError::Parse { .. }
+            | AdapterError::Unavailable { .. } => false,
         }
     }
 }

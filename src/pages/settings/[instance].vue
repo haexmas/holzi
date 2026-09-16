@@ -78,6 +78,10 @@ onMounted(reloadDeviceInfoAsync)
       <hr class="border-neutral-200" />
 
       <ModelsHuggingFaceModelManagement />
+
+      <hr class="border-neutral-200" />
+
+      <SettingsConnectDelegateProvider />
     </div>
   </main>
 </template>
