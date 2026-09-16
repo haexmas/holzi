@@ -33,9 +33,12 @@ routing, and a small fixed set of interrupt words. It explicitly does **not** co
 
 ## 2. Activation & platforms
 
-Push-to-talk (press/hold or toggle a mic control in the chat view). No voice activity detection, no
-wake word — the user explicitly starts and stops recording. This also means no streaming ASR is
-required: a full utterance is recorded, then transcribed once.
+Push-to-talk (press/hold or toggle a mic control in the chat view). No wake word — the user
+explicitly starts and stops recording. Normal dictation uses full-utterance STT after release; a
+small, local interrupt recognizer runs alongside capture so the three fixed interrupt words do not
+wait for the selected provider or a network round trip. It observes only the bounded recording,
+requires an end-of-utterance boundary, and cancels the active turn within one second of receiving
+the final local audio frame.
 
 In scope for both desktop and mobile (iOS/Android) from the start. Voice control is a
 foreground-only feature: if the app is backgrounded mid-recording (most relevant on mobile), the
@@ -49,24 +52,26 @@ mic control is only reachable while the app is focused.
 [Mic control, chat view]
       │ press/hold
       ▼
-[Audio capture (cpal, in-process)] ──► raw PCM buffer, held in memory, capped duration
-      │ release
-      ▼
-[STT provider: local (candle Whisper, bundled) or external API, user-configurable]
+[Audio capture (cpal, in-process)] ──► canonical PCM buffer, held in memory, capped duration
+      ├─ local bounded interrupt path (runs during capture)
+      │     └─ exact {STOP, HALT, ABBRECHEN} after end-of-utterance
+      │           → backend cancels the running agent turn immediately
       │
-      ├─ transcript exact-matches {STOP, HALT, ABBRECHEN} (case-insensitive, whole utterance)
-      │     └─ yes → interrupt the running agent turn immediately — local, deterministic,
-      │               never routed through any LLM
-      │
-      └─ no match → write transcript into the chat input field
+      └─ release → [STT provider: local (candle Whisper, bundled) or external API]
+                         │
+                         └─ no interrupt → write transcript into the chat input field
                        └─ auto-send setting (default: on) → existing send-message path,
                                                               same gating as typed input
 ```
 
-The interrupt-word check happens after transcription but is otherwise independent of which STT
-provider produced the text — local or external, the same three words trigger the same local
-matcher. Nothing about "controlling the app" is built beyond this: everything past "text is in the
-input field" is the existing, unmodified chat/agent pipeline.
+The interrupt path is deliberately separate from full-utterance transcription. A bounded local
+matcher receives the canonical capture frames while recording, confirms an exact whole-utterance
+match at the local end-of-utterance boundary, and lets the backend trigger the existing
+`CancellationToken` without waiting for the selected STT provider. The normal STT result still
+uses the same matcher for its `interrupt` wire field and is coalesced with the fast-path result;
+external-provider latency or failure can therefore affect dictation, but never delays an already
+recognized interrupt. Nothing about "controlling the app" is built beyond this: everything past
+"text is in the input field" is the existing, unmodified chat/agent pipeline.
 
 ## 4. STT as a provider capability
 
@@ -77,10 +82,17 @@ design extends that abstraction with a capability dimension (`chat` | `transcrip
 
 - Same `Provider` storage row and CRUD commands serve both capabilities. The existing `adapter`
   discriminator string continues to distinguish vendors within a capability.
-- A narrower adapter trait for transcription — `transcribe(pcm) -> Result<String>` — sits
+- A narrower adapter trait for transcription — `transcribe(audio: &CanonicalPcm) -> Result<String>` — sits
   alongside the existing `ProviderAdapter` (which is shaped around chat: streaming, context
   window). Forcing STT through `ProviderAdapter` as-is would mean fake/unused fields; a dedicated
   narrower trait avoids that.
+- Every adapter receives the same canonical audio contract: `CanonicalPcm` contains normalized
+  `f32` samples in `[-1.0, 1.0]`, mono, at exactly 16,000 Hz. The audio module converts each
+  device's native sample type, channel layout, and sample rate at the capture boundary. The
+  canonical value stays backend-local and in memory; the Tauri command contract refers to this
+  type rather than exposing an ambiguous raw buffer. `ExternalSttAdapter` converts it once at its
+  HTTP boundary to 16-kHz mono signed-16-bit PCM WAV for the multipart request; the local Whisper
+  adapter consumes the canonical `f32` samples directly.
 - `LocalWhisperAdapter`: candle-transformers Whisper, running on the same candle runtime already
   pulled in by `mistralrs` for local chat inference (`candle-core`/`candle-nn`, already in
   `src-tauri/Cargo.lock`). Pure Rust — no FFI, no separate cross-compilation path for iOS/Android

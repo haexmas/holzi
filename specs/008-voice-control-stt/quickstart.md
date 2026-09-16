@@ -20,8 +20,10 @@
 ## 2. Sprachlicher Interrupt (User Story 2)
 
 1. Eine Anfrage stellen, die eine längere Antwort auslöst.
-2. Während die Antwort läuft, "stop" (oder "halt"/"abbrechen") sprechen.
-3. Prüfen: Die Antwort bricht innerhalb einer Sekunde ab.
+2. Während die Antwort läuft, nur "stop" (oder "halt"/"abbrechen") sprechen und die lokale
+   End-of-Utterance-Grenze abwarten.
+3. Prüfen: Der lokale Fast-Path löst die Cancellation innerhalb einer Sekunde nach dem letzten
+   lokalen Audio-Frame aus; die Antwort bricht ab, auch wenn ein externer STT-Provider aktiv ist.
 4. Erneut eine längere Antwort anstoßen und stattdessen einen ganzen Satz diktieren, der eines der
    drei Wörter enthält (z. B. "bitte nicht mehr stoppen mitten im Satz").
 5. Prüfen: Die Antwort läuft ungestört weiter, der Satz landet stattdessen normal im Eingabefeld.

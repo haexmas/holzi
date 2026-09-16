@@ -26,7 +26,7 @@ parallel system." Full design write-up: `docs/plans/2026-09-16-voice-control-stt
   configured? → A: Yes — the recording control itself must visibly indicate, for as long as the
   external service is active, that voice audio is sent off-device.
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Dictate a chat message (Priority: P1)
 
@@ -128,7 +128,7 @@ one.
   Voice dictation works immediately using the bundled transcription capability, once microphone
   access is granted — no additional download or setup step is required.
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 ### Functional Requirements
 
@@ -189,15 +189,17 @@ one.
   "abbrechen") that, when spoken as the entire utterance, immediately stops an in-progress
   assistant response.
 
-## Success Criteria *(mandatory)*
+## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
 
 - **SC-001**: A user can dictate and send a typical one-sentence chat message using only the
   microphone control, with the transcribed text appearing in the input field within 5 seconds of
   releasing the control.
-- **SC-002**: Speaking an interrupt command stops an in-progress assistant response within one
-  second, regardless of what the assistant is doing at that moment.
+- **SC-002**: The bounded local interrupt path recognizes an exact interrupt utterance at its
+  end-of-utterance boundary and cancels an in-progress assistant response within one second of the
+  final local audio frame, regardless of the selected transcription provider or what the assistant
+  is doing. Full-utterance transcription may complete later and must not delay that cancellation.
 - **SC-003**: Voice dictation works correctly on a freshly installed instance, using only the
   bundled transcription capability, with no additional download or configuration beyond granting
   microphone access.

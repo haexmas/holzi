@@ -40,11 +40,13 @@ Transkriptions-Adapters; `pnpm typecheck`; das Repository hat aktuell keinen Fro
 neu ein Test-Framework einzuführen
 **Target Platform**: Tauri Desktop (Linux/macOS/Windows) und Mobile (iOS/Android) — beide von
 Beginn an, da Aktivierung reines Push-to-Talk ist (kein Streaming, keine plattformspezifische
-Always-on-Mic-Logik nötig)
+Always-on-Mic-Logik nötig). Die Mobile-Zusage gilt nur, wenn der in T032–T034 definierte
+Readiness-Gate (Berechtigungen, cpal-Backends und beide Build-Ziele) erfolgreich ist.
 **Project Type**: Tauri-App mit Rust-Backend und Nuxt-Frontend
 **Performance Goals**: SC-001 — Transkript erscheint innerhalb von 5s nach Loslassen der
-Mic-Kontrolle für eine typische Ein-Satz-Nachricht; SC-002 — ein Interrupt-Wort stoppt eine
-laufende Antwort innerhalb von 1s, unabhängig vom Zustand des Assistenten
+Mic-Kontrolle für eine typische Ein-Satz-Nachricht; SC-002 — der lokale Interrupt-Fast-Path
+stoppt eine laufende Antwort innerhalb von 1s nach dem finalen lokalen Audio-Frame, unabhängig vom
+Zustand des Assistenten oder dem gewählten STT-Provider
 **Constraints**: Lokale Transkription MUSS ohne Netzwerkzugriff funktionieren (FR-003); kein
 Audio-Persisting (FR-020); Sprachsteuerung nur im Vordergrund und nur in der Chat-Ansicht
 (FR-018); das mitgelieferte lokale Modell muss ohne Download sofort nutzbar sein (FR-010);
@@ -52,22 +54,35 @@ Interrupt-Erkennung darf nicht vom Zustand/der Verfügbarkeit des Assistenten ab
 **Scale/Scope**: Single-User-App; genau eine aktive Transkriptionsquelle zur Zeit; kurze
 Push-to-Talk-Äußerungen (Sekunden bis maximal ~60s gedeckelt), kein Streaming/Dauerlisten
 
+**Feature boundary**: `voice` ist ein unabhängiges Cargo-Feature. Es aktiviert `cpal`, die
+Aufnahme und die Voice-Commands; `llm-cpu` aktiviert zusätzlich den gebündelten Candle-Whisper-
+Adapter. Damit kompilieren `--no-default-features` und externe Transkription mit
+`--no-default-features --features voice` ohne ungelöste `cpal`- oder Candle-Referenzen. Wenn nur
+`voice` aktiv ist, bleibt der externe STT-Pfad verfügbar und die lokale Quelle meldet
+`LocalSttUnavailable`; im normalen Default-Build sind beide Features aktiv.
+
+**Mobile readiness gate**: Vor einer Implementierung, die iOS/Android als unterstützt ausweist,
+müssen Tauri-Mikrofonberechtigungen in den jeweiligen Plattform-Manifesten erklärt, die
+`cpal`-Backends für beide Zielplattformen verifiziert und erfolgreiche iOS- und Android-Builds
+ausgeführt werden (T032–T034). Schlägt ein Gate fehl, wird die Plattform aus dem Zielumfang
+genommen, bis die Lücke durch eine überprüfbare Änderung geschlossen ist.
+
 ## Constitution Check
 
-*GATE: Vor Phase 0 und nach Phase 1 erneut prüfen.*
+_GATE: Vor Phase 0 und nach Phase 1 erneut prüfen._
 
-| Prinzip | Status | Begründung |
-|---|---|---|
-| I. No Secrets in Git | PASS | Externe STT-Zugangsdaten laufen über den bestehenden Credential-Storage-Pfad der Provider; Tests verwenden keine echten Schlüssel. |
-| II. No Local Absolute Paths in Versioned Config | PASS | Alle Dokumente nutzen repo-relative Pfade. |
-| III. Project Identity Is Device-Independent | PASS | Kein neues Identitätskonzept; die Geräteklassen-Erkennung für die Modellgröße ist bereits bestehende, gerätelokale Logik aus spec 002. |
-| IV. Cross-Repo References Pin Immutable Revisions | PASS | `candle-transformers`/`cpal` sind normale Cargo-Abhängigkeiten mit gepinnter Version, keine Harness-Content-Referenz. |
-| V. External Sources Are Opt-in Per Project | PASS | Keine neue Harness-/Skill-Quelle. |
-| VI. Self-Modifying Instructions Are Always Review-Gated | PASS | Keine Constitution-/Skill-/Permission-Datei wird geändert. |
-| VII. Relay Unavailability Never Blocks Local Work | PASS | Die lokale Transkription funktioniert vollständig offline; nur der optionale externe Adapter braucht Netzwerk, und nur wenn der Nutzer ihn explizit aktiviert. |
-| VIII. No Concealment Instructions in Agent Output | PASS | Fehlerzustände (fehlende Mikrofon-Berechtigung, gescheiterte Transkription, ungültige externe Zugangsdaten) werden sichtbar gemeldet (FR-013, FR-015). |
-| 500 LoC boundary | PASS | Audio-Capture, STT-Adapter-Trait, lokaler Whisper-Adapter, externer Adapter und Interrupt-Matcher sind als separate, schmale Module geplant (siehe Projektstruktur unten); keine künstliche Aufteilung nur wegen Zeilenzahl. |
-| Graphify-first authoring | PASS | Vor der Planung gegen `graphify-out/graph.json` konsultiert: `ProviderAdapter`/`Provider` (`src-tauri/src/providers/mod.rs`) und `CancellationToken` in `ChatState`/`session.rs` (`src-tauri/src/chat/session.rs`) bestätigt als die zu erweiternden Kandidaten; für Audio-Aufnahme, lokale Whisper-Inferenz und Interrupt-Matching existiert im Graphen kein verwandter Kandidat (Suche nach "audio/cpal/microphone/whisper/speech-to-text" ergab keine Treffer außerhalb unrelated Text-Streaming-Code) — diese Teile sind bewusst neue, eigenständige Module. |
+| Prinzip                                                 | Status | Begründung                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| I. No Secrets in Git                                    | PASS   | Externe STT-Zugangsdaten laufen über den bestehenden Credential-Storage-Pfad der Provider; Tests verwenden keine echten Schlüssel.                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| II. No Local Absolute Paths in Versioned Config         | PASS   | Alle Dokumente nutzen repo-relative Pfade.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| III. Project Identity Is Device-Independent             | PASS   | Kein neues Identitätskonzept; die Geräteklassen-Erkennung für die Modellgröße ist bereits bestehende, gerätelokale Logik aus spec 002.                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| IV. Cross-Repo References Pin Immutable Revisions       | PASS   | `candle-transformers`/`cpal` sind normale Cargo-Abhängigkeiten mit gepinnter Version, keine Harness-Content-Referenz.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| V. External Sources Are Opt-in Per Project              | PASS   | Keine neue Harness-/Skill-Quelle.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| VI. Self-Modifying Instructions Are Always Review-Gated | PASS   | Keine Constitution-/Skill-/Permission-Datei wird geändert.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| VII. Relay Unavailability Never Blocks Local Work       | PASS   | Die lokale Transkription funktioniert vollständig offline; nur der optionale externe Adapter braucht Netzwerk, und nur wenn der Nutzer ihn explizit aktiviert.                                                                                                                                                                                                                                                                                                                                                                                                   |
+| VIII. No Concealment Instructions in Agent Output       | PASS   | Fehlerzustände (fehlende Mikrofon-Berechtigung, gescheiterte Transkription, ungültige externe Zugangsdaten) werden sichtbar gemeldet (FR-013, FR-015).                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 500 LoC boundary                                        | PASS   | Audio-Capture, STT-Adapter-Trait, lokaler Whisper-Adapter, externer Adapter und Interrupt-Matcher sind als separate, schmale Module geplant (siehe Projektstruktur unten); keine künstliche Aufteilung nur wegen Zeilenzahl.                                                                                                                                                                                                                                                                                                                                     |
+| Graphify-first authoring                                | PASS   | Vor der Planung gegen `graphify-out/graph.json` konsultiert: `ProviderAdapter`/`Provider` (`src-tauri/src/providers/mod.rs`) und `CancellationToken` in `ChatState`/`session.rs` (`src-tauri/src/chat/session.rs`) bestätigt als die zu erweiternden Kandidaten; für Audio-Aufnahme, lokale Whisper-Inferenz und Interrupt-Matching existiert im Graphen kein verwandter Kandidat (Suche nach "audio/cpal/microphone/whisper/speech-to-text" ergab keine Treffer außerhalb unrelated Text-Streaming-Code) — diese Teile sind bewusst neue, eigenständige Module. |
 
 **Result**: Alle Gates PASS; kein Complexity-Tracking-Eintrag erforderlich.
 
@@ -96,7 +111,7 @@ src-tauri/src/
 │   ├── mod.rs                   # cpal-Aufnahme: Start/Stop, In-Memory-PCM-Puffer, Max-Dauer-Cap
 │   └── audio_tests.rs
 ├── stt/
-│   ├── mod.rs                   # schmaler SttAdapter-Trait (transcribe(pcm) -> Result<String>)
+│   ├── mod.rs                   # CanonicalPcm + schmaler SttAdapter-Trait
 │   ├── local.rs                 # LocalWhisperAdapter (candle-transformers, gebündeltes Modell,
 │   │                             #   Tier-Wahl über bestehende Hardware-Erkennung aus spec 002)
 │   ├── local_tests.rs           # feste Audio-Fixture, bekanntes Transkript, kein Netzwerk
@@ -133,4 +148,4 @@ welcher STT-Adapter den Text geliefert hat.
 
 ## Complexity Tracking
 
-*Keine Gate-Verletzungen — dieser Abschnitt entfällt.*
+_Keine Gate-Verletzungen — dieser Abschnitt entfällt._

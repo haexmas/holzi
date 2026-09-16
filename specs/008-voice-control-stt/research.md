@@ -17,6 +17,7 @@ bestehenden candle-Stack. Teilt CPU/CUDA/Metal-Feature-Flags mit `llm-cpu`/`llm-
 Erfüllt die explizite Anforderung "muss überall laufen, pure Rust".
 
 **Alternatives considered**:
+
 - `whisper-rs` (FFI-Bindings auf whisper.cpp): ausgereifterer/schnellerer C++-Kern, aber eigener
   Build-/Cross-Compile-Pfad für Mobile zusätzlich zum candle-Stack — verworfen, widerspricht der
   "pure Rust überall"-Anforderung.
@@ -28,12 +29,21 @@ Erfüllt die explizite Anforderung "muss überall laufen, pure Rust".
 
 ## 2. Audio-Aufnahme: `cpal`
 
-**Decision**: Mikrofon-Aufnahme über `cpal`, plattformübergreifend (Desktop + iOS/Android), reiner
-In-Memory-PCM-Puffer während der Aufnahme.
+**Decision**: Mikrofon-Aufnahme über `cpal`, plattformübergreifend (Desktop + iOS/Android), mit
+einem reinen In-Memory-Puffer. Die Audio-Aufnahme konvertiert an ihrer Grenze jedes native
+Geräteformat in den kanonischen Vertrag `CanonicalPcm`: 16.000 Hz, mono, normalisierte `f32`
+Samples im Bereich `[-1.0, 1.0]`.
 
 **Rationale**: De-facto-Standard-Audio-I/O-Crate im Rust-Ökosystem, deckt alle Zielplattformen mit
 einer API ab. Push-to-Talk (kein Streaming, keine VAD) braucht keine zusätzliche
-Audio-Verarbeitung darüber hinaus.
+Audio-Verarbeitung darüber hinaus; der lokale Interrupt-Pfad liest während der Aufnahme dieselben
+kanonischen Frames.
+
+`SttAdapter::transcribe` nimmt ausschließlich `&CanonicalPcm` entgegen. Der lokale Whisper-Adapter
+verwendet die normalisierten `f32`-Samples direkt. Der externe Adapter kodiert genau dieses Objekt
+an der HTTP-Grenze als 16-kHz-mono-signed-16-bit-PCM-WAV im Multipart-Request. Der Tauri-Vertrag
+transportiert keine rohen Audiodaten über IPC: Der Puffer bleibt backend-lokal und wird nach dem
+Abschluss verworfen.
 
 **Alternatives considered**: Plattformspezifische native APIs direkt anzusprechen — verworfen,
 hätte pro Plattform eigenen Code gebraucht, ohne dass Push-to-Talk irgendeinen plattformspezifischen
@@ -42,7 +52,7 @@ Vorteil daraus zöge.
 ## 3. Transkription als Provider-Capability statt Parallelsystem
 
 **Decision**: `Provider`/`ProviderKind` bekommt eine Capability-Unterscheidung (`chat` |
-`transcription`); ein schmalerer `SttAdapter`-Trait (`transcribe(pcm) -> Result<String>`) sitzt
+`transcription`); ein schmalerer `SttAdapter`-Trait (`transcribe(audio: &CanonicalPcm) -> Result<String>`) sitzt
 neben dem bestehenden `ProviderAdapter` (der auf Chat-Semantik — Streaming, Kontextfenster —
 zugeschnitten ist).
 
@@ -59,13 +69,16 @@ dupliziert einen Nahezu-identischen Ablauf; verworfen nach expliziter Abwägung 
 ## 4. Interrupt-Wort-Erkennung: reine Funktion, angebunden an bestehendes Cancellation
 
 **Decision**: Der Interrupt-Matcher ist eine reine, deterministische Funktion (normalisiertes,
-vollständiges Transkript gegen `{stop, halt, abbrechen}`), die direkt das bestehende
-`CancellationToken` in `ChatState`/`session.rs` auslöst — unabhängig davon, welcher STT-Adapter
-(lokal oder extern) den Text geliefert hat, und unabhängig vom LLM-/Assistenten-Zustand.
+vollständiges Transkript gegen `{stop, halt, abbrechen}`). Eine lokale, bounded Fast-Path-Instanz
+wendet ihn bereits während der Aufnahme an und löst bei bestätigtem End-of-Utterance direkt das
+bestehende `CancellationToken` in `ChatState`/`session.rs` aus — unabhängig vom gewählten
+Transkriptions-Provider und vom LLM-/Assistenten-Zustand. Die vollständige STT-Antwort übernimmt
+dieses Ergebnis für die Rückgabe an das Frontend, ohne die Cancellation erneut auszulösen.
 
 **Rationale**: Verhindert das Deadlock-Risiko, bei dem ein Stop-Befehl selbst durch den gerade
-beschäftigten Assistenten laufen müsste. Kein Adapter, keine Provider-Zugehörigkeit — reine
-Textprüfung nach der Transkription, vor dem Schreiben ins Eingabefeld.
+beschäftigten Assistenten laufen müsste. Kein Adapter, keine Provider-Zugehörigkeit — reine lokale
+Textprüfung während bzw. nach der Transkription, vor dem Schreiben ins Eingabefeld. Die normale
+Transkription darf daher weiter extern laufen, ohne die Interrupt-Latenz zu bestimmen.
 
 **Alternatives considered**: LLM-basiertes Intent-Parsing für alle Sprachbefehle inkl. Stop —
 verworfen wegen des Deadlock-Risikos während laufender Generierung (siehe Design-Dokument §"one
