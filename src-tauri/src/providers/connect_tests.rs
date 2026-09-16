@@ -44,6 +44,28 @@ async fn completes_when_the_token_arrives_without_a_manual_submission() {
 }
 
 #[tokio::test]
+async fn drains_url_before_token_with_a_single_notification() {
+    let (tx, rx) = mpsc::unbounded_channel();
+    let token_ready = Arc::new(Notify::new());
+    let session = ClaudeConnectSession::new_for_test(rx, token_ready.clone());
+    let session_id = session.id();
+    let state = DelegateConnectState::new();
+    *state.pending_claude.lock().await = Some(session);
+
+    tx.send(ReaderEvent::Url("https://example.test/oauth".into()))
+        .unwrap();
+    tx.send(ReaderEvent::Token("sk-ant-oat01-test".into()))
+        .unwrap();
+    token_ready.notify_one();
+
+    let outcome = watch_claude_auto_completion(&state, session_id, token_ready).await;
+    assert!(matches!(
+        outcome,
+        ClaudeAutoCompleteOutcome::Completed(token) if token == b"sk-ant-oat01-test"
+    ));
+}
+
+#[tokio::test]
 async fn is_a_no_op_when_a_manual_submission_already_completed_the_flow() {
     let (_tx, rx) = mpsc::unbounded_channel::<ReaderEvent>();
     let token_ready = Arc::new(Notify::new());

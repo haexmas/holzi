@@ -254,10 +254,9 @@ token and completes the flow itself; `submit_cli_delegate_code` is kept as a fal
 `claude` CLI build still shows a code.
 
 Same live session also surfaced a second, independent bug in the same flow: the OAuth URL rendered in
-`ConnectDelegateProvider.vue` was not clickable at all. Holzi's webview never had permission to open an
-external URL in the system browser — no `tauri-plugin-opener` dependency, no `opener:*` capability in
-`capabilities/default.json`, and the tight default CSP (`default-src 'self'`) blocks a plain `<a
-target="_blank">` from navigating anywhere outside the app regardless. Fixed by adding
+`ConnectDelegateProvider.vue` was not clickable at all. Holzi's webview had no integration to request
+opening an external URL in the system browser — no `tauri-plugin-opener` dependency and no `opener:*`
+capability in `capabilities/default.json`. Fixed by adding
 `tauri-plugin-opener` (Rust crate + `@tauri-apps/plugin-opener` npm package, `opener:allow-open-url`
 capability) and routing both connect-flow link clicks through its `openUrl()` — this is unrelated to the
 `CLAUDE_CONFIG_DIR`/`CODEX_HOME` host-isolation mechanism (§3/§6 below), which was already correct and

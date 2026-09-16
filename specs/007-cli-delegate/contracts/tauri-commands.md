@@ -72,7 +72,8 @@ bereits am Ende von `connect_cli_delegate` selbst, da kein zweiter Command exist
 **Fehler**: `HolziError::InvalidInput` wenn kein Flow für `claude` aussteht (z. B. doppelter Aufruf,
 abgelaufener/bereits beendeter Prozess, **oder der Hintergrund-Task hat den Flow bereits automatisch
 abgeschlossen** — in diesem Fall hat das Frontend das `success`-Event bereits erhalten oder erhält es
-kurz danach), oder wenn der Code vom Kindprozess abgelehnt wird (falscher/abgelaufener Code) — keine
+kurz danach; bei erfolgreichem Provider-Upsert ist das ein `success`-Event, bei einem Upsert-Fehler ein
+`error`-Event), oder wenn der Code vom Kindprozess abgelehnt wird (falscher/abgelaufener Code) — keine
 Provider-Zeile wird in diesem Fall angelegt oder verändert, der Flow bleibt offen für einen erneuten
 `submit_cli_delegate_code`-Versuch.
 
@@ -115,7 +116,7 @@ Fortschritt während `connect_cli_delegate`/`submit_cli_delegate_code` läuft.
 {
   vendor: 'claude' | 'codex',
   status: 'awaiting_browser' | 'awaiting_code' | 'success' | 'error',
-  url?: string,      // nur bei 'awaiting_browser' — extrahierte OAuth-URL
+  url?: string,      // bei 'awaiting_browser' sowie bei 'awaiting_code' für vendor: 'claude' — extrahierte OAuth-URL
   code?: string,     // nur bei 'awaiting_browser' und vendor: 'codex' — Einmalcode zur Eingabe auf der Webseite
   message?: string,  // nur bei 'error'
 }

@@ -225,32 +225,40 @@ impl ClaudeConnectSession {
     /// Non-blocking check for a terminal event, collapsing the channel's
     /// `Disconnected` case (reader thread gone without sending one, which
     /// should not happen but is not a token either) into `Ended` like a
-    /// plain EOF. Only ever called after `token_ready` fires, so `Empty`
-    /// here means the woken event was `Url` (already drained by
-    /// `start_claude_connect` before any watcher exists) — a spurious
-    /// wake from this caller's point of view, not a bug.
+    /// plain EOF. Only ever called after `token_ready` fires, so it drains
+    /// queued non-terminal URL events before returning a terminal outcome.
     pub(crate) fn try_recv_terminal(&mut self) -> Option<TerminalOutcome> {
-        match self.events.try_recv() {
-            Ok(ReaderEvent::Token(token)) => Some(TerminalOutcome::Token(token)),
-            Ok(ReaderEvent::Eof) | Err(mpsc::error::TryRecvError::Disconnected) => {
-                Some(TerminalOutcome::Ended)
+        loop {
+            match self.events.try_recv() {
+                Ok(ReaderEvent::Token(token)) => return Some(TerminalOutcome::Token(token)),
+                Ok(ReaderEvent::Eof) | Err(mpsc::error::TryRecvError::Disconnected) => {
+                    return Some(TerminalOutcome::Ended);
+                }
+                Ok(ReaderEvent::Error(error)) => return Some(TerminalOutcome::Errored(error)),
+                Ok(ReaderEvent::Url(_)) => continue,
+                Err(mpsc::error::TryRecvError::Empty) => return None,
             }
-            Ok(ReaderEvent::Error(error)) => Some(TerminalOutcome::Errored(error)),
-            Ok(ReaderEvent::Url(_)) | Err(mpsc::error::TryRecvError::Empty) => None,
         }
     }
 
     /// Builds a session around an injected event channel instead of a real
     /// PTY/`claude` process, so `providers::connect`'s auto-completion
     /// watcher can be tested by feeding it `ReaderEvent`s directly. The
-    /// child is a real, disposable `sleep` process (`portable_pty::Child`
-    /// is already implemented for `std::process::Child`) purely so `Drop`
-    /// has something harmless to kill; nothing reads or writes through it.
+    /// child is a real, disposable platform-compatible process
+    /// (`portable_pty::Child` is already implemented for
+    /// `std::process::Child`) purely so `Drop` has something harmless to
+    /// kill; nothing reads or writes through it.
     #[cfg(test)]
     pub(crate) fn new_for_test(
         events: mpsc::UnboundedReceiver<ReaderEvent>,
         token_ready: Arc<Notify>,
     ) -> Self {
+        #[cfg(windows)]
+        let child = std::process::Command::new("timeout")
+            .args(["/T", "300", "/NOBREAK"])
+            .spawn()
+            .expect("spawn a disposable placeholder child for the test double");
+        #[cfg(not(windows))]
         let child = std::process::Command::new("sleep")
             .arg("300")
             .spawn()
