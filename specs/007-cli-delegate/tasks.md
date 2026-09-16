@@ -479,10 +479,10 @@ the OS process is actually gone (spec.md Acceptance Scenario 1).
       (connect a real subscription) need a human to actually complete a browser OAuth login — the
       exact side effect this session deliberately avoided causing on its own throughout (mints a real,
       unwanted long-lived credential against the operator's live subscription if done without asking).
-      Szenario 2's portability check additionally needs a **second machine** that has never run `claude
-      login`/`codex login`. Szenario 3 (live approval)/4 (host isolation)/5 (abort) are more mechanical
+      Szenario 2's portability check additionally needs a **second machine** that has never run a Claude
+      or Codex login. Szenario 3 (live approval)/4 (host isolation)/5 (abort) are more mechanical
       but still need a running `pnpm tauri dev`/`tauri:dev:cuda` instance and manual clicking, which is
-      also the operator's to drive. What automated coverage already substitutes for the *mechanism*
+      also the operator's to drive. What automated coverage already substitutes for the _mechanism_
       each scenario exercises: Szenario 1's tool-use round trip → `cli_delegate_claude.rs`/
       `cli_delegate_codex_live.rs`; Szenario 2's credential portability → T022's note; Szenario 3's live
       gate → `cli_delegate_approval.rs` (T029/T030) plus `approval_bridge_tests.rs` (T031/T032);
