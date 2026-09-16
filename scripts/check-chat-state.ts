@@ -287,10 +287,74 @@ function createChatState(
 
   return {
     ...state,
+    modelStore,
     mount: () => Promise.all(mountHooks.map((hook) => hook())),
     unmount: () => Promise.all(unmountHooks.map((hook) => hook())),
   }
 }
+
+test('model download failures use the localized Hugging Face message', async () => {
+  const state = createChatState(
+    {},
+    {},
+    {
+      useModels: () => ({
+        listInstalledAsync: async () => [],
+        onDownloadProgress: async () => () => {},
+        downloadFromCatalogAsync: async () => {
+          throw { kind: 'ModelDownload' }
+        },
+      }),
+    },
+  )
+
+  await state.modelStore.downloadCatalogEntry({
+    id: 'qwen3-0.6b',
+    approx_size_bytes: 1,
+  })
+
+  assert.equal(state.modelStore.lastError, 'errors.hf.modelDownload')
+})
+
+test('model initialization clears stale transient UI errors', async () => {
+  const state = createChatState()
+  state.modelStore.lastError = 'stale error'
+  state.modelStore.loadErrorModelId = 'stale-model'
+  state.modelStore.downloadingId = 'download-in-progress'
+  state.modelStore.integrityDialog = {
+    modelId: 'stale-model',
+    errorKind: 'HashMismatch',
+    expected: 'expected',
+    actual: 'actual',
+  }
+  state.modelStore.integrityActionError = 'stale action error'
+
+  await state.modelStore.initialize()
+
+  assert.equal(state.modelStore.lastError, null)
+  assert.equal(state.modelStore.loadErrorModelId, null)
+  assert.equal(state.modelStore.downloadingId, 'download-in-progress')
+  assert.equal(state.modelStore.integrityDialog, null)
+  assert.equal(state.modelStore.integrityActionError, null)
+})
+
+test('model initialization preserves an active integrity action', async () => {
+  const state = createChatState()
+  const dialog = {
+    modelId: 'repairing-model',
+    errorKind: 'HashMismatch',
+    expected: 'expected',
+    actual: 'actual',
+  }
+  state.modelStore.integrityDialog = dialog
+  state.modelStore.integrityBusy = true
+  state.modelStore.integrityActionError = 'action still running'
+
+  await state.modelStore.initialize()
+
+  assert.deepEqual(state.modelStore.integrityDialog, dialog)
+  assert.equal(state.modelStore.integrityActionError, 'action still running')
+})
 
 test('history durations use Unix milliseconds and compact thresholds', () => {
   const state = createChatState()

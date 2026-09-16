@@ -326,6 +326,12 @@ export const useModelsStore = defineStore('models', () => {
 
   /** Fetches the model-load snapshot and every installed/catalog/provider list. */
   async function initialize() {
+    lastError.value = null
+    loadErrorModelId.value = null
+    if (!integrityBusy.value) {
+      integrityDialog.value = null
+      integrityActionError.value = null
+    }
     const status = await chat.modelLoadStatusAsync()
     if (status) applyLoadStatus(status)
     await refreshActiveModel()

@@ -9,6 +9,7 @@ const HF_ERROR_KINDS = new Set([
   'UnsupportedFormat',
   'TokenizerRequired',
   'HardwareConfirmationRequired',
+  'ModelDownload',
   'ModelRegistrationFailed',
   'ModelNotFound',
 ])
