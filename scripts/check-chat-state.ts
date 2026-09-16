@@ -185,10 +185,12 @@ const RETURN_STATEMENT = `
       updatePermissionMode, permissionMode, permissionModeSaving };
 `
 
+/** Resolves a store module name to its source file in this checkout. */
 function storePath(name: string): string {
   return resolvePath(repoRoot, 'src/stores', `${name}.ts`)
 }
 
+/** Boots the real chat page dependencies inside an isolated test sandbox. */
 function createChatState(
   overrides: Record<string, unknown> = {},
   preferenceOverrides: Record<string, unknown> = {},
@@ -204,13 +206,11 @@ function createChatState(
     onBeforeUnmount: (hook: () => unknown) => unmountHooks.push(hook),
   }
 
-  // `req` is a hoisted function declaration — its body isn't evaluated until
-  // called, which happens only after `chat`/`preferences` below are
-  // initialized, so closing over them here ahead of their declaration is
-  // safe. Routing those two specifiers to one shared, overridable instance
-  // (rather than a fresh one per `require`) is what lets a test's
-  // `overrides`/`preferenceOverrides` reach `useModelsStore`'s own internal
-  // `useChat()`/`usePreferences()` calls the same way they reach the page's.
+  /**
+   * Resolves imports for the sandbox while sharing overridable chat and
+   * preference instances with the model store. This hoisted declaration is
+   * called only after those instances have been initialized below.
+   */
   function req(specifier: string) {
     if (specifier === 'vue') return vueDouble
     if (specifier === 'pinia') return nodeRequire('pinia')

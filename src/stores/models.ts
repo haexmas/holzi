@@ -150,6 +150,7 @@ export const useModelsStore = defineStore('models', () => {
     providerModels.value = next
   }
 
+  /** Refreshes the backend's currently active model snapshot. */
   async function refreshActiveModel() {
     activeModel.value = await chat.activeModelInfoAsync()
   }
@@ -247,6 +248,7 @@ export const useModelsStore = defineStore('models', () => {
     integrityDialog.value = null
   }
 
+  /** Clears integrity-dialog state when the dialog is dismissed. */
   function onIntegrityDialogOpenChange(open: boolean) {
     if (!open) {
       integrityDialog.value = null
@@ -271,6 +273,7 @@ export const useModelsStore = defineStore('models', () => {
     }
   }
 
+  /** Applies an incremental model-load progress event to store state. */
   function applyLoadProgress(e: ModelLoadProgressEvent) {
     loadErrorModelId.value = null
     loadingPhase.value = e.phase
@@ -284,6 +287,7 @@ export const useModelsStore = defineStore('models', () => {
     }
   }
 
+  /** Reconciles store state with a complete model-load status snapshot. */
   function applyLoadStatus(status: ModelLoadStatusPayload) {
     if (status.status === 'loading') {
       loadErrorModelId.value = null
@@ -306,12 +310,14 @@ export const useModelsStore = defineStore('models', () => {
     }
   }
 
+  /** Records a terminal model-load error event. */
   function applyLoadError(event: ModelLoadErrorEvent) {
     loadingPhase.value = null
     loadErrorModelId.value = event.modelId ?? null
     lastError.value = t('chat.loading.error')
   }
 
+  /** Retries the model most recently associated with a load error. */
   async function retryModelLoad() {
     const modelId = loadErrorModelId.value
     if (!modelId) return
@@ -358,6 +364,7 @@ export const useModelsStore = defineStore('models', () => {
     )
   }
 
+  /** Stops future subscriptions and disposes every active listener. */
   function stopListening() {
     stopped = true
     for (const unlisten of unlisteners.splice(0)) unlisten()

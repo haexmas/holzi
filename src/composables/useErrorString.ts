@@ -21,6 +21,7 @@ const HF_ERROR_KINDS = new Set([
 export function useErrorString() {
   const { t } = useI18n()
 
+  /** Maps a caught value to a localized or safely serialized error message. */
   function errString(e: unknown): string {
     if (typeof e === 'string') return e
     if (e && typeof e === 'object' && 'kind' in e) {
