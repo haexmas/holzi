@@ -4,46 +4,36 @@
  * model when none are installed, or picking an installed/provider model
  * once at least one is available.
  *
- * Extracted from `src/pages/chat/[instance].vue` (2026-09-15 review,
- * split step 4/4). Every ref that drives this UI (activeModel,
- * installedModels, catalogEntries, downloadingId, ...)
- * stays on the page — this component is markup plus pure display
- * helpers, driven entirely through props/emits, so nothing the 19
- * `check-chat-state.ts` replay tests or the composer/send-flow depends
- * on moved with it.
+ * Reads `useModelsStore` directly for its state (`catalogEntries`,
+ * `downloadingId`, `downloadProgressBytes`/`downloadTotalBytes`,
+ * `activeModelId`, `modelGroups`, `noModelsInstalled`) and calls its
+ * actions (`downloadCatalogEntry`, `loadModel`) directly — the only
+ * page-local thing this needs is `busy` (the composer's send-in-flight
+ * flag), which stays a prop since it has nothing to do with models.
  */
-import type { CatalogEntryWithFit } from '~/composables/useCatalog'
-
-export type ModelGroup = {
-  providerId: string
-  providerName: string
-  models: { id: string; name: string }[]
-}
-
 const { t } = useI18n()
+const modelStore = useModelsStore()
+const {
+  noModelsInstalled,
+  catalogEntries,
+  downloadingId,
+  downloadProgressBytes,
+  downloadTotalBytes,
+  activeModelId,
+  modelGroups,
+} = storeToRefs(modelStore)
+const { downloadCatalogEntry, loadModel } = modelStore
 
 defineProps<{
-  noModelsInstalled: boolean
-  catalogEntries: CatalogEntryWithFit[]
-  downloadingId: string | null
-  downloadProgressBytes: number
-  downloadTotalBytes: number | null
-  activeModelId: string
   busy: boolean
-  modelGroups: ModelGroup[]
-}>()
-
-const emit = defineEmits<{
-  downloadCatalogEntry: [entry: CatalogEntryWithFit]
-  loadModel: [id: string]
 }>()
 
 function onModelPicked(event: Event) {
-  emit('loadModel', (event.target as HTMLSelectElement).value)
+  void loadModel((event.target as HTMLSelectElement).value)
 }
 
 /** Maps a hardware-fit verdict to its localized display label. */
-function fitLabel(f: CatalogEntryWithFit['fit']): string {
+function fitLabel(f: (typeof catalogEntries.value)[number]['fit']): string {
   return t(`chat.fit.${f}`)
 }
 
@@ -149,7 +139,7 @@ function downloadProgressPercent(
           <UiButton
             size="sm"
             :disabled="downloadingId !== null"
-            @click="emit('downloadCatalogEntry', e)"
+            @click="downloadCatalogEntry(e)"
           >
             <template v-if="downloadingId === e.id">
               {{ humanBytes(downloadProgressBytes) }} /
