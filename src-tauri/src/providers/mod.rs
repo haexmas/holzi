@@ -1,9 +1,8 @@
 //! Provider commands: add / list / get / delete + refresh model listing.
 //!
 //! CRUD is provider-kind-agnostic; the refresh path dispatches on
-//! the persisted adapter discriminator to build the right adapter. Live invocation for
-//! `cli_delegate` still awaits its own design pass — refresh returns
-//! an error until then.
+//! the persisted adapter discriminator to build the right adapter.
+//! `cli_delegate` live invocation is spec 007-cli-delegate.
 
 pub mod local;
 #[cfg(test)]
@@ -15,6 +14,7 @@ use tauri::State;
 use uuid::Uuid;
 
 use crate::adapters::anthropic::AnthropicAdapter;
+use crate::adapters::cli_delegate::{CliDelegateAdapter, DelegateChatContext, DelegateVendor};
 use crate::adapters::{AdapterError, ProviderAdapter, ProviderModel};
 use crate::error::{HolziError, Result};
 use crate::state::AppState;
@@ -27,15 +27,15 @@ use crate::storage::providers::{self as storage, Provider, ProviderKind};
 pub struct AddProviderArgs {
     pub kind: ProviderKind,
     pub name: String,
-    /// Adapter/vendor for `api_key` providers. Only `anthropic` is currently
-    /// supported; the field is required so refresh cannot guess a protocol.
+    /// Adapter/vendor discriminator. API-key providers currently support
+    /// `anthropic`; CLI delegates support `claude` and `codex`.
     #[serde(default)]
     pub adapter: Option<String>,
-    /// Base URL for `api_key` providers (e.g. `https://api.anthropic.com`).
-    /// `None` for `local` and `cli_delegate`.
+    /// Base URL for API-key providers (e.g. `https://api.anthropic.com`) or
+    /// the executable name/path for a CLI delegate. `None` for `local`.
     pub base_url: Option<String>,
-    /// API key for `api_key` providers. Sent as UTF-8; storage is opaque
-    /// bytes. `None` for `local` and `cli_delegate`.
+    /// API key or CLI credential blob. Sent/stored as opaque UTF-8 bytes for
+    /// API-key providers and as vendor-specific bytes for CLI delegates.
     pub api_key: Option<String>,
 }
 
@@ -110,14 +110,34 @@ pub async fn add_provider(
             }
         }
         ProviderKind::CliDelegate => {
-            if args.adapter.is_some() {
-                return Err(HolziError::InvalidInput {
-                    reason: "adapter is only valid for api_key providers".into(),
-                });
+            // `adapter` is the vendor discriminator here (spec 007-cli-delegate
+            // data-model.md), the same column role `api_key` providers already
+            // use it for — not the "adapter is only for api_key" restriction
+            // this used to enforce.
+            match args.adapter.as_deref() {
+                Some(v) if crate::adapters::cli_delegate::DelegateVendor::parse(v).is_some() => {}
+                _ => {
+                    return Err(HolziError::InvalidInput {
+                        reason:
+                            "cli_delegate provider requires adapter to be \"claude\" or \"codex\""
+                                .into(),
+                    });
+                }
             }
             if args.base_url.as_deref().unwrap_or("").is_empty() {
                 return Err(HolziError::InvalidInput {
                     reason: "cli_delegate provider requires base_url (cli command)".into(),
+                });
+            }
+            if args
+                .api_key
+                .as_deref()
+                .map(str::trim)
+                .unwrap_or("")
+                .is_empty()
+            {
+                return Err(HolziError::InvalidInput {
+                    reason: "cli_delegate provider requires non-empty credentials".into(),
                 });
             }
         }
@@ -156,11 +176,14 @@ pub async fn add_provider(
     })?
     .map_err(HolziError::from)?;
 
-    // Auto-refresh api_key providers so the model picker is populated
+    // Auto-refresh remote providers so the model picker is populated
     // immediately after the credentials land. Refresh failures are
     // surfaced to the caller but do not undo the insert — the operator
     // can retry `refresh_provider_models` after fixing the key.
-    let (model_count, refresh_error) = if matches!(provider.kind, ProviderKind::ApiKey) {
+    let (model_count, refresh_error) = if matches!(
+        provider.kind,
+        ProviderKind::ApiKey | ProviderKind::CliDelegate
+    ) {
         match do_refresh(&db, &provider).await {
             Ok(count) => (Some(count), None),
             Err(e) => (None, Some(format_holzi_error(&e))),
@@ -287,7 +310,7 @@ pub async fn list_provider_models(
 /// [`refresh_provider_models`]. Returns the number of models cached.
 async fn do_refresh(db: &Arc<haex_crdt::Database>, provider: &Provider) -> Result<usize> {
     let provider = repair_legacy_adapter(db, provider).await?;
-    let adapter = build_adapter(&provider)?;
+    let adapter = build_adapter(&provider, None)?;
     let fetched = adapter.list_models().await.map_err(map_adapter_error)?;
 
     let fetched_at = now_ms();
@@ -359,7 +382,15 @@ fn legacy_adapter_for_url(base_url: Option<&str>) -> Option<&'static str> {
 /// `Local` is rejected here — the chat path uses `LocalAdapter`
 /// directly with an in-process `LocalModel`; refresh only makes sense
 /// for remote listings.
-pub(crate) fn build_adapter(provider: &Provider) -> Result<Box<dyn ProviderAdapter>> {
+///
+/// `delegate_chat_ctx` is only needed for a `cli_delegate` provider that
+/// will actually run `stream_chat` (real chat use, not just
+/// `list_models`) — pass `None` from a refresh-only call site such as
+/// [`do_refresh`] (spec 007-cli-delegate data-model.md).
+pub(crate) fn build_adapter(
+    provider: &Provider,
+    delegate_chat_ctx: Option<DelegateChatContext>,
+) -> Result<Box<dyn ProviderAdapter>> {
     match provider.kind {
         ProviderKind::ApiKey => {
             let base_url =
@@ -397,9 +428,29 @@ pub(crate) fn build_adapter(provider: &Provider) -> Result<Box<dyn ProviderAdapt
             };
             Ok(Box::new(adapter))
         }
-        ProviderKind::CliDelegate => Err(HolziError::InvalidInput {
-            reason: "cli_delegate refresh is not yet implemented".into(),
-        }),
+        ProviderKind::CliDelegate => {
+            let vendor = provider
+                .adapter
+                .as_deref()
+                .and_then(DelegateVendor::parse)
+                .ok_or_else(|| HolziError::InvalidInput {
+                    reason: "cli_delegate provider has an invalid or missing adapter".into(),
+                })?;
+            let credentials =
+                provider
+                    .credentials
+                    .clone()
+                    .ok_or_else(|| HolziError::InvalidInput {
+                        reason: "cli_delegate provider is missing credentials".into(),
+                    })?;
+            let binary = provider.base_url.clone().unwrap_or_default();
+            Ok(Box::new(CliDelegateAdapter::new(
+                vendor,
+                credentials,
+                binary,
+                delegate_chat_ctx,
+            )))
+        }
         ProviderKind::Local => Err(HolziError::InvalidInput {
             reason: "refresh does not apply to local providers".into(),
         }),

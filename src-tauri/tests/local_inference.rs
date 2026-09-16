@@ -57,6 +57,7 @@ async fn load_and_stream_generates_tokens() {
 
     let mut handle = model.stream_chat(ChatRequest {
         model_id: String::new(),
+        thread_id: None,
         system_prompt: Some("You are a terse assistant.".into()),
         messages: vec![ChatMessage {
             role: ChatRole::User,
@@ -110,6 +111,7 @@ async fn abort_stops_generation_before_completion() {
 
     let mut handle = model.stream_chat(ChatRequest {
         model_id: String::new(),
+        thread_id: None,
         system_prompt: None,
         messages: vec![ChatMessage {
             role: ChatRole::User,

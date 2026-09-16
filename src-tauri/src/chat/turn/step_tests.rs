@@ -54,6 +54,7 @@ async fn initial_http_failures_use_the_same_bounded_retry_budget() {
         };
         let request = ChatRequest {
             model_id: "test".into(),
+            thread_id: None,
             system_prompt: None,
             messages: Vec::new(),
             reasoning_requested: false,
@@ -105,6 +106,7 @@ async fn initial_request_can_be_cancelled_before_response_headers() {
     let task = tokio::spawn(async move {
         let request = ChatRequest {
             model_id: "test".into(),
+            thread_id: None,
             system_prompt: None,
             messages: Vec::new(),
             reasoning_requested: false,

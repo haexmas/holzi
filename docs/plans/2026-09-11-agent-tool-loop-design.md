@@ -159,13 +159,57 @@ own permission gate (§5) instead of the fail-closed/full-bypass (`--yolo`) dile
 mode. **Not yet verified against a real installation** — treat as the leading hypothesis, not a
 confirmed fact.
 
-**Claude Code**: raw `claude -p` CLI, no SDK. This has no live mid-run round-trip — a `-p` invocation
-is one task in, one answer out. Tool access is therefore pre-approved _per invocation_, not
-per-call: build a `--allowedTools`/`--mcp-config` whitelist from what the current permission mode
-would allow _before_ starting the call, omitting anything that would need a live prompt. This is a
-real capability gap versus the local/api_key tool loop's live approval, not a workaround to smooth
-over — Manual mode, in particular, cannot offer live per-call confirmation here the way it does for
-built-in/MCP tools.
+**Claude Code**: raw `claude -p` CLI, no SDK. ~~This has no live mid-run round-trip — a `-p`
+invocation is one task in, one answer out. Tool access is therefore pre-approved _per invocation_,
+not per-call... Manual mode, in particular, cannot offer live per-call confirmation here the way it
+does for built-in/MCP tools.~~ **Superseded 2026-09-16, see §8.2a** — this was wrong. `-p` mode does
+support a live per-tool-call approval round-trip, verified against a real installation.
+
+### 8.2a Verified update (2026-09-16, from spec 007-cli-delegate's clarification pass)
+
+§8.2's original claim above — that Claude Code's `-p` mode has no live mid-run round-trip and can
+only get a pre-call tool whitelist — was tested directly against an installed `claude` CLI (v2.1.241)
+and found **wrong**. `claude -p` supports `--permission-prompt-tool <mcp-tool-name>`: an MCP tool
+holzi provides and registers via `--mcp-config`, which Claude Code calls live, and blocks on, for
+each individual pending tool-use approval — the CLI-only equivalent of the Agent SDK's `canUseTool`
+callback. Verified end-to-end with a purpose-built stdio MCP server: a `-p` run with
+`--permission-mode default` requesting a `Bash` call genuinely paused mid-run, the MCP server
+received `{tool_name: "Bash", input: {command, description}, tool_use_id}` over `tools/call`, and the
+command only executed after the server responded `{"behavior":"allow","updatedInput":{...}}` (a
+4-second artificial delay in the test server's response was faithfully reflected in the run's total
+wall time). Conclusion: Claude Code needs no batch/pre-approval special-casing — it can use the same
+live per-call approval gate as Codex and the local/api_key tool loop, bridged through this MCP tool.
+
+Also verified in that same pass: an isolated, empty `CLAUDE_CONFIG_DIR` redirects both credential
+lookup (a `-p` run against it reported "not logged in" despite the host having a valid login) and
+host-level hook execution — a first, non-isolated test run picked up the operator's own
+`~/.claude/settings.json` (a `SessionStart` hook fired, and its `permissions.defaultMode: "auto"`
+silently changed the run's behavior); the isolated re-run showed neither. This supports §8.3/§8.4's
+mechanism (`CLAUDE_CONFIG_DIR` + disposable `cwd`) directly. Separately, current docs
+(`code.claude.com/docs/en/headless`, fetched 2026-09-16) recommend `--bare` for exactly this kind of
+scripted host-isolation, but `--bare` explicitly does not support subscription/OAuth login (API key
+only) — so this feature uses the `CLAUDE_CONFIG_DIR`/disposable-`cwd` mechanism instead of `--bare`,
+not because `--bare` is unverified but because it's the wrong tool for a subscription-based
+credential. Still unverified: whether this mechanism blocks every kind of discovery `--bare`
+guarantees (skills, plugins, MCP auto-discovery), or only what was tested (hooks, credentials,
+settings). See `specs/007-cli-delegate/spec.md` Assumptions for the fuller writeup.
+
+Codex's approval protocol was also checked, structurally, via the installed CLI itself: `codex
+app-server generate-json-schema --out <dir> --experimental` dumps the app-server's actual JSON-RPC
+schema, which confirms `ExecCommandApprovalRequest`, `ApplyPatchApprovalRequest`, and a
+`PermissionsRequestApprovalRequest`-shaped request are all members of the protocol's `ServerRequest`
+union (i.e. genuine server-initiated requests awaiting a client response), each paired with a
+response type carrying a `ReviewDecision` (`approved` / `approved_for_session` / `denied` / `abort` /
+`timed_out`). The `timed_out` variant in particular implies a real wait-then-timeout, not a
+fire-and-forget notification. This structurally confirms design doc §10 item 1's leading hypothesis
+without yet exercising a full live round-trip the way the Claude Code test above did — a cheap,
+worthwhile pre-implementation spike, not a re-opened unknown.
+
+Also newly relevant to §8.1's ToS question: current docs open the same headless-mode page with
+"This page covers using the Agent SDK via the CLI (`claude -p`)" — i.e. official docs now describe
+`-p` itself as an Agent SDK surface. §8.1's "genuinely unclear whether this also covers driving the
+raw CLI directly" is less unclear now; the operator's 2026-09-11 accept-the-risk decision stands, but
+on better-informed footing than when it was made.
 
 ### 8.3 Vault-portable credentials, zero host residue
 
@@ -234,14 +278,27 @@ real installed CLI version before code is written against it:
 
 1. Does `codex app-server --stdio`, held open by a persistent parent process, actually deliver live,
    answerable `approval` requests (as opposed to inheriting `codex exec`'s closed-stdin auto-reject
-   behavior)?
-2. Exact current flags: Claude Code's `--setting-sources`/equivalent, `--append-system-prompt`,
+   behavior)? **Structurally confirmed, behaviorally still open** (§8.2a): the protocol schema
+   generated from the installed CLI proves genuine server-initiated approval requests with a
+   timeout-capable response type exist; a live end-to-end round-trip (the way the Claude Code side
+   was tested) has not yet been exercised.
+2. Exact current flags: ~~Claude Code's `--setting-sources`/equivalent~~, `--append-system-prompt`,
    `--mcp-config`/`--allowedTools` interaction in `-p` mode; Codex's system-prompt-equivalent flag.
+   **Partially resolved 2026-09-16** (§8.2a): current docs confirm `--append-system-prompt` and
+   `--mcp-config`/`--allowedTools`/`--permission-prompt-tool` all exist and were exercised live; no
+   `--setting-sources` flag exists for the raw CLI — `--bare` is the closest documented mechanism, but
+   it drops subscription/OAuth login, an unresolved tension (§8.2a). Codex's equivalent still
+   unchecked.
 3. Whether `CLAUDE_CONFIG_DIR` and `CODEX_HOME` redirect _everything_ (telemetry, cache, logs) or
-   only the documented subset — both official doc sources were incomplete on this.
+   only the documented subset — both official doc sources were incomplete on this. **Partially
+   resolved 2026-09-16** (§8.2a): `CLAUDE_CONFIG_DIR` confirmed to redirect credential lookup; whether
+   it also redirects `~/.claude`-level hooks/settings discovery specifically is still unconfirmed.
+   `CODEX_HOME` untested.
 4. Whether driving the raw `claude` CLI (not the Agent SDK) for a third-party product's end users
    falls under the quoted Agent-SDK ToS clause (§8.1) — a question for Anthropic, not for docs
-   archaeology. Equivalent check not yet done for OpenAI/Codex at all.
+   archaeology. **Better-informed, still open** (§8.2a): current docs now describe `-p` itself as
+   "the Agent SDK via the CLI," making this more likely to apply than the 2026-09-11 framing assumed.
+   Equivalent check not yet done for OpenAI/Codex at all.
 5. `chat.permission_mode` UX details (how "Auto" surfaces a paused risky action, how a remembered
    allow/deny would work) are unspecified — out of scope for this document, first pass is
    ask-every-time-for-Risky in `Manual`/`Auto`.

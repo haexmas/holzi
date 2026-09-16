@@ -350,6 +350,7 @@ pub async fn send_message(
 
     let request = ChatRequest {
         model_id: request_model_id,
+        thread_id: Some(thread_id),
         system_prompt: args.system_prompt.clone(),
         messages: history_to_messages(&history),
         reasoning_requested,

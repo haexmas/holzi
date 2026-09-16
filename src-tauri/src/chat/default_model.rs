@@ -114,7 +114,7 @@ pub async fn resolve_default_model(
         let Some((provider_id_str, _)) = composite_id.split_once(':') else {
             continue;
         };
-        if load_api_key_model(&state, &composite_id, provider_id_str)
+        if load_api_key_model(&state, &composite_id, provider_id_str, None)
             .await
             .is_ok()
         {
