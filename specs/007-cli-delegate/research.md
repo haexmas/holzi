@@ -251,12 +251,12 @@ preferences.
 ## Summary of resolved Technical Context unknowns
 
 | Unknown                                            | Resolution                                                                                                                                                |
-| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Claude Code live approval capability               | §1 — `--permission-prompt-tool` + holzi-run MCP server, verified live                                                                                     |
 | Codex approval protocol shape                      | §2 — verified live: `item/commandExecution/requestApproval` + `CommandExecutionApprovalDecision`-shaped `{"decision":"accept"\|"decline"\|...}` responses |
 | Host isolation + subscription credential mechanism | §3 — `CLAUDE_CONFIG_DIR` + disposable `cwd`, not `--bare`; verified for credentials, hooks, _and_ skills/plugins                                          |
 | Turn/step loop integration point                   | §4 — `ProviderAdapter::stream_chat`, no `turn.rs` changes                                                                                                 |
-| Connect-flow (US2) acquisition mechanism           | §5 — `claude setup-token` needs a PTY + paste-back code (`portable-pty`); `codex login --device-auth` is plain-text, no PTY, no paste-back               |
+| Connect-flow (US2) acquisition mechanism           | §5 — `claude setup-token` needs a PTY + paste-back code (`portable-pty`); `codex login --device-auth` is plain-text, no PTY, no paste-back                |
 
 No unresolved `NEEDS CLARIFICATION` markers remain in `plan.md`'s Technical Context, and both of
 tasks.md's Phase 2 verification spikes (T008 Codex live round-trip, T009 Claude skills/plugins

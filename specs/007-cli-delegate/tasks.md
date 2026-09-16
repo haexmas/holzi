@@ -55,7 +55,7 @@ verification is manual per quickstart.md (kein Playwright in diesem Repo).
   - `codex.rs` was initially missing `req.system_prompt` entirely (no Codex equivalent of
     `--append-system-prompt`) — found and fixed in this reconciliation pass (T039's Codex half),
     using `ThreadStartParams.developerInstructions` (research.md §2 schema).
-  - Genuinely still open despite the above: T021-T032 (US2's whole connect flow; US3's *dedicated*
+  - Genuinely still open despite the above: T021-T032 (US2's whole connect flow; US3's _dedicated_
     approval integration tests — `approval_bridge_tests.rs`'s one unit test covers the shared
     live-round-trip mechanism both vendors call into, but not literally "a stub `claude`
     binary"/"a stub `codex app-server`" end-to-end, nor the `decide()`-skips-the-live-round-trip and
@@ -263,7 +263,7 @@ paste-back exchange, not the single-command "spawn, read URL, wait for exit" sha
 assumed — verified live by probing both CLIs directly (piped, non-PTY stdio produced zero bytes from
 `claude setup-token`, confirmed by `stat`-ing the real credential files before/after that no OAuth
 completed). `codex login --device-auth` (chosen over the default flow to avoid its local
-`localhost:1455` server dependency) *is* plain-text/pipe-friendly and fits the original single-command
+`localhost:1455` server dependency) _is_ plain-text/pipe-friendly and fits the original single-command
 shape. T024 is split into T024 (Codex, single command) and T024b/T025b (Claude, two commands) below;
 task numbers after T028 are unchanged.
 
@@ -329,27 +329,31 @@ posture-blocked action is denied without ever surfacing a prompt (spec.md Accept
 
 ### Tests for User Story 3
 
-- [x] T029 [P] [US3] `src-tauri/tests/cli_delegate_approval.rs::claude_approval_round_trips_through_the_
-      real_socket_and_bridge_child`: binds a real Unix socket via `approval_bridge::bind_socket`/
-      `start_listener` (bumped to `pub` for test reachability) and spawns the **actual compiled `holzi`
-      binary** (`env!("CARGO_BIN_EXE_holzi")`) with `--internal-cli-delegate-approval-bridge` — the exact
-      real child process `claude.rs` points `--mcp-config` at (T034/T035), not a simplified in-process
-      stand-in. The test itself plays the "claude" role (its own MCP client isn't holzi's code to test):
-      sends `initialize`/`notifications/initialized`/`tools/call`, asserts a `tool-permission-request`
-      event fires with the pending approval registered, resolves it, and asserts the bridge's blocked
+- [x] T029 [P] [US3] Integration test
+      `claude_approval_round_trips_through_the_real_socket_and_bridge_child` in
+      `src-tauri/tests/cli_delegate_approval.rs`: binds a real Unix socket via
+      `approval_bridge::bind_socket`/`start_listener` (bumped to `pub` for test reachability) and spawns
+      the **actual compiled `holzi` binary** (`env!("CARGO_BIN_EXE_holzi")`) with
+      `--internal-cli-delegate-approval-bridge` — the exact real child process `claude.rs` points
+      `--mcp-config` at (T034/T035), not a simplified in-process stand-in. The test itself plays the
+      "claude" role (its own MCP client isn't holzi's code to test): sends
+      `initialize`/`notifications/initialized`/`tools/call`, asserts a `tool-permission-request` event
+      fires with the pending approval registered, resolves it, and asserts the bridge's blocked
       `tools/call` reply only arrives afterward with `{"behavior":"allow",...}` — the exact live
       round-trip manually verified in research.md §1.
-- [x] T030 [P] [US3] (depends on T008) `cli_delegate_approval.rs::codex_command_approval_round_trips_
-      through_the_real_wire_protocol`: a Python stub `codex app-server` sends a real
+- [x] T030 [P] [US3] (depends on T008) Integration test
+      `codex_command_approval_round_trips_through_the_real_wire_protocol` in
+      `src-tauri/tests/cli_delegate_approval.rs`: a Python stub `codex app-server` sends a real
       `item/commandExecution/requestApproval` server-request over the same stdio `codex.rs` owns
       directly (no socket hop on this path), asserts the same `tool-permission-request`/pending-approval
-      bridge behavior, and that the reply is `{"decision": "accept"}` (`CommandExecutionApprovalDecision`
-      shape, research.md §2) only after the approval resolves.
-- [x] T031 [P] [US3] `approval_bridge_tests.rs::auto_mode_allow_on_a_safe_tool_skips_the_live_round_trip`
-      (new, alongside the pre-existing `chat/tools/permission_tests.rs` which already pinned `decide()`'s
-      pure matrix): opens a real vault, sets `chat.permission_mode = "auto"`, and asserts
-      `request_approval` with a Safe tool returns `Allow` without ever registering a `pending_tool_
-      approvals` entry or calling `emit` — the live round-trip path is reserved for `Ask` alone.
+      bridge behavior, and that the reply is `{"decision": "accept"}`
+      (`CommandExecutionApprovalDecision` shape, research.md §2) only after the approval resolves.
+- [x] T031 [P] [US3] `auto_mode_allow_on_a_safe_tool_skips_the_live_round_trip` in
+      `approval_bridge_tests.rs` (new, alongside the pre-existing `chat/tools/permission_tests.rs`
+      which already pinned `decide()`'s pure matrix): opens a real vault, sets
+      `chat.permission_mode = "auto"`, and asserts `request_approval` with a Safe tool returns `Allow`
+      without ever registering a `pending_tool_approvals` entry or calling `emit` — the live round-trip
+      path is reserved for `Ask` alone.
 - [x] T032 [P] [US3] **(new, analyze finding G4)**
       `approval_bridge_tests.rs::plan_mode_deny_on_a_risky_tool_skips_the_live_round_trip`: same
       assertion shape as T031 but `chat.permission_mode = "plan"` with a Risky tool, resolving to `Deny`
