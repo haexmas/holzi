@@ -169,7 +169,11 @@ pub(crate) async fn load_model_inner(
         let emit: crate::adapters::cli_delegate::EventEmitter = Arc::new(move |event, payload| {
             let _ = app_for_emit.emit(event, payload);
         });
-        let delegate_chat_ctx = Some((Arc::clone(&chat.pending_tool_approvals), emit));
+        let delegate_chat_ctx = Some(crate::adapters::cli_delegate::DelegateChatContext {
+            pending_tool_approvals: Arc::clone(&chat.pending_tool_approvals),
+            emit,
+            database: Some(active_database(state)?),
+        });
         load_api_key_model(state, model_id, provider_id_str, delegate_chat_ctx).await?
     } else {
         #[cfg(feature = "llm-cpu")]

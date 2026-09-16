@@ -15,7 +15,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::sync::{Arc, Mutex};
 
-use holzi_lib::adapters::cli_delegate::{CliDelegateAdapter, DelegateVendor};
+use holzi_lib::adapters::cli_delegate::{CliDelegateAdapter, DelegateChatContext, DelegateVendor};
 use holzi_lib::adapters::{ChatMessage, ChatRequest, ChatRole, ProviderAdapter, StreamChunk};
 
 /// Canned `stream-json` transcript matching the real event shapes
@@ -39,6 +39,7 @@ fn write_stub(dir: &std::path::Path) -> std::path::PathBuf {
 fn sample_request() -> ChatRequest {
     ChatRequest {
         model_id: "claude-delegate".to_string(),
+        thread_id: None,
         system_prompt: None,
         messages: vec![ChatMessage {
             role: ChatRole::User,
@@ -59,11 +60,11 @@ async fn stream_chat_yields_delta_then_done_and_never_tool_calls() {
         DelegateVendor::Claude,
         b"fake-oauth-token".to_vec(),
         stub.to_string_lossy().into_owned(),
-        Some(Arc::new(Mutex::new(HashMap::new()))),
-        // No real Tauri app needed — a plain closure satisfies
-        // `EventEmitter`, matching `tests/common/tool_loop_fixture.rs`'s
-        // own emit-closure pattern for the built-in tool loop.
-        Some(Arc::new(|_event: &str, _payload: serde_json::Value| {})),
+        Some(DelegateChatContext {
+            pending_tool_approvals: Arc::new(Mutex::new(HashMap::new())),
+            emit: Arc::new(|_event: &str, _payload: serde_json::Value| {}),
+            database: None,
+        }),
     );
 
     let mut stream = adapter

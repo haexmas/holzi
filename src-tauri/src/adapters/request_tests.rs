@@ -14,6 +14,7 @@ use super::ProviderAdapter;
 fn sample_request(model: &str) -> ChatRequest {
     ChatRequest {
         model_id: model.to_string(),
+        thread_id: None,
         system_prompt: None,
         messages: vec![ChatMessage {
             role: ChatRole::User,
@@ -127,6 +128,7 @@ async fn stream_chat_groups_ordered_tool_calls_and_results_into_two_messages() {
     let adapter = AnthropicAdapter::new(server.uri(), "sk-any".to_string()).unwrap();
     let request = ChatRequest {
         model_id: "claude-opus-5".to_string(),
+        thread_id: None,
         system_prompt: None,
         messages: vec![
             ChatMessage {

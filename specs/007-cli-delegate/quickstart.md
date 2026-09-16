@@ -16,19 +16,18 @@ cd src-tauri && cargo test --lib && cd ..
 pnpm typecheck
 ```
 
-## Pre-Implementation-Spikes (vor Task-Beginn, nicht erst beim Review)
+## Bereits abgeschlossene Verifikationen
 
-Diese zwei Punkte sind in research.md als "strukturell bestätigt, Verhalten noch nicht
-end-to-end getestet" markiert — vor dem ersten produktiven `codex.rs`/`claude.rs`-Task lohnt sich ein
-kurzer, isolierter Check, keine vollständige Feature-Implementierung:
+Die beiden ursprünglichen Pre-Implementation-Spikes wurden am 2026-09-16 live abgeschlossen und
+bleiben als Regressionserwartungen bestehen:
 
-1. **Codex-Live-Approval**: `codex app-server --stdio` in einem Skript ansprechen, einen Task
-   auslösen, der eine Shell-Aktion braucht, und bestätigen, dass tatsächlich ein
-   `ExecCommandApprovalRequest` (research.md §2) ankommt und der Prozess bis zur Antwort pausiert —
-   analog zum bereits durchgeführten Claude-Code-Test.
-2. **Claude-Code-Isolation, Skills/Plugins**: mit isoliertem `CLAUDE_CONFIG_DIR` prüfen, ob ein
-   host-seitiger Skill/Plugin (falls auf der Testmaschine vorhanden) ebenfalls nicht geladen wird —
-   Credentials und Hooks sind bereits bestätigt (research.md §3), Skills/Plugins nicht.
+1. **Codex-Live-Approval**: `codex app-server --stdio` pausiert bei
+   `item/commandExecution/requestApproval` und setzt nach `{"decision":"accept"}` fort;
+   `{"decision":"decline"}` verweigert die Aktion. Die Tests müssen diese Wire-Form verwenden,
+   nicht `ExecCommandApprovalRequest`/`ReviewDecision`.
+2. **Claude-Code-Isolation, Skills/Plugins**: ein isoliertes `CLAUDE_CONFIG_DIR` lädt keine
+   host-seitigen Skills oder Plugins (nur das CLI-Bundleset, null User-Plugins). Credentials und
+   Hooks bleiben ebenfalls isoliert. Diese drei Eigenschaften sind Regressionserwartungen.
 
 ## Szenario 1: Bestehendes Abo als Chat-Backend nutzen (User Story 1)
 
@@ -48,8 +47,8 @@ kurzer, isolierter Check, keine vollständige Feature-Implementierung:
 3. Dort holzi mit dieser Vault öffnen, denselben Delegate für eine Nachricht wählen.
 4. **Erwartung**: funktioniert ohne weiteren Login-Schritt auf der zweiten Maschine (spec.md
    Acceptance Scenario 2).
-5. Credential im Backend absichtlich ungültig machen (z.B. `codex logout` *auf der ursprünglichen
-   Maschine* ändert nichts an holzis eigener gespeicherter Kopie — stattdessen die gespeicherten Bytes
+5. Credential im Backend absichtlich ungültig machen (z.B. `codex logout` _auf der ursprünglichen
+   Maschine_ ändert nichts an holzis eigener gespeicherter Kopie — stattdessen die gespeicherten Bytes
    in der DB testweise verfälschen) und erneut senden. **Erwartung**: klare "Verbindung erneuern"-
    Führung statt Rohfehler (FR-014).
 

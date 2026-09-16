@@ -21,10 +21,10 @@ Claude Code specifically. That assumption was **empirically wrong**, discovered 
   exposing one tool named `approve`, `tools/call` handling it) was registered via a `--mcp-config`
   JSON file.
 - Running `claude -p "Run exactly this shell command using the Bash tool: touch
-  verify_delegate_test3.txt" --mcp-config mcp-config.json --permission-prompt-tool
-  mcp__approvalserver__approve --permission-mode default` produced a `tools/call` request to the test
+verify_delegate_test3.txt" --mcp-config mcp-config.json --permission-prompt-tool
+mcp__approvalserver__approve --permission-mode default` produced a `tools/call` request to the test
   server: `{"name":"approve","arguments":{"tool_name":"Bash","input":{"command":"touch
-  verify_delegate_test3.txt","description":"..."},"tool_use_id":"toolu_..."}}`.
+verify_delegate_test3.txt","description":"..."},"tool_use_id":"toolu_..."}}`.
 - The test server's handler slept 4 seconds before responding
   `{"behavior":"allow","updatedInput":{...}}` (wrapped in an MCP text content block). The overall
   `claude -p` run's wall time reflected that full 4-second wait, and `verify_delegate_test3.txt` was
@@ -63,10 +63,10 @@ shaped request) through the same `pending_tool_approvals` bridge as the Claude C
 subcommand of the installed CLI) dumps the actual protocol schema without needing external docs or a
 live conversation. It confirms:
 
-- `ServerRequest` (the union of requests the app-server sends *to* the client) includes
+- `ServerRequest` (the union of requests the app-server sends _to_ the client) includes
   `ExecCommandApprovalRequest`, `ApplyPatchApprovalRequest`, `Item/commandExecution/
-  requestApprovalRequest`, `Item/fileChange/requestApprovalRequest`, and `Item/permissions/
-  requestApprovalRequest` — i.e., approval requests are genuine server→client JSON-RPC requests
+requestApprovalRequest`, `Item/fileChange/requestApprovalRequest`, and `Item/permissions/
+requestApprovalRequest` — i.e., approval requests are genuine server→client JSON-RPC requests
   (carrying `itemId`, `threadId`, `turnId`, `startedAtMs`), not notifications.
 - The paired response type (`ExecCommandApprovalResponse`) carries a `ReviewDecision` enum:
   `approved`, `approved_for_session`, an execpolicy-amendment variant, a network-policy-amendment
@@ -81,7 +81,7 @@ This structurally confirms design doc §10 item 1's leading hypothesis, and was 
 `turn/start` with a prompt asking it to run `touch <file>`):
 
 - The actual wire method is **`item/commandExecution/requestApproval`** (matching the `Item/
-  commandExecution/requestApprovalRequest` `ServerRequest` variant found by schema alone) — **not**
+commandExecution/requestApprovalRequest` `ServerRequest` variant found by schema alone) — **not**
   the differently-named `ExecCommandApprovalRequest`/`ExecCommandApprovalResponse` pair the schema
   file of that name suggested. Both exist in the schema bundle; this installed version uses the
   `item/commandExecution/…` one on the wire.
@@ -125,7 +125,7 @@ OAUTH_TOKEN` (env var, from `claude setup-token`) — **not** `--bare`.
 isolation, but state explicitly: "bare mode doesn't use your subscription login... In bare mode,
 Claude Code never reads OAuth credentials or the system keychain. For the Anthropic API, set
 `ANTHROPIC_API_KEY`." Since this feature's entire premise (vs. the existing `api_key` provider) is
-reusing an existing *subscription*, `--bare` is the wrong tool here regardless of its isolation
+reusing an existing _subscription_, `--bare` is the wrong tool here regardless of its isolation
 strength. The non-`--bare` mechanism was verified directly instead:
 
 - Running `claude -p ... ` with `CLAUDE_CONFIG_DIR` pointed at a fresh empty directory produced
@@ -134,7 +134,7 @@ strength. The non-`--bare` mechanism was verified directly instead:
 - The same isolated run's event stream showed no `hook_started`/`hook_response` system events, while
   an otherwise-identical non-isolated run showed two (the operator's own `~/.claude/settings.json`
   `SessionStart` hook firing before `system/init`). This confirms `CLAUDE_CONFIG_DIR` also blocks
-  host-level *hook* execution, not just credential lookup.
+  host-level _hook_ execution, not just credential lookup.
 
 **Skills/plugins isolation, verified** (tasks.md T009, 2026-09-16): compared `system/init`'s `skills`/
 `plugins` fields between a non-isolated and an isolated run of the same `claude -p "say hi"` prompt.
@@ -181,12 +181,12 @@ the built-in tool-call machinery.
 
 ## Summary of resolved Technical Context unknowns
 
-| Unknown | Resolution |
-|---|---|
-| Claude Code live approval capability | §1 — `--permission-prompt-tool` + holzi-run MCP server, verified live |
-| Codex approval protocol shape | §2 — verified live: `item/commandExecution/requestApproval` + `CommandExecutionApprovalDecision`-shaped `{"decision":"accept"\|"decline"\|...}` responses |
-| Host isolation + subscription credential mechanism | §3 — `CLAUDE_CONFIG_DIR` + disposable `cwd`, not `--bare`; verified for credentials, hooks, *and* skills/plugins |
-| Turn/step loop integration point | §4 — `ProviderAdapter::stream_chat`, no `turn.rs` changes |
+| Unknown                                            | Resolution                                                                                                                                                |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude Code live approval capability               | §1 — `--permission-prompt-tool` + holzi-run MCP server, verified live                                                                                     |
+| Codex approval protocol shape                      | §2 — verified live: `item/commandExecution/requestApproval` + `CommandExecutionApprovalDecision`-shaped `{"decision":"accept"\|"decline"\|...}` responses |
+| Host isolation + subscription credential mechanism | §3 — `CLAUDE_CONFIG_DIR` + disposable `cwd`, not `--bare`; verified for credentials, hooks, _and_ skills/plugins                                          |
+| Turn/step loop integration point                   | §4 — `ProviderAdapter::stream_chat`, no `turn.rs` changes                                                                                                 |
 
 No unresolved `NEEDS CLARIFICATION` markers remain in `plan.md`'s Technical Context, and both of
 tasks.md's Phase 2 verification spikes (T008 Codex live round-trip, T009 Claude skills/plugins

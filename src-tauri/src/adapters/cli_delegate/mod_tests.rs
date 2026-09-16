@@ -73,3 +73,16 @@ fn build_adapter_errors_on_missing_credentials() {
         "unexpected error message: {message}"
     );
 }
+
+#[tokio::test]
+async fn delegate_exposes_one_synthetic_vendor_model() {
+    let provider = sample_provider(Some("codex"));
+    let adapter = build_adapter(&provider, None).expect("delegate adapter should build");
+    let models = adapter
+        .list_models()
+        .await
+        .expect("model listing should work");
+    assert_eq!(models.len(), 1);
+    assert_eq!(models[0].remote_id, "codex");
+    assert_eq!(models[0].display_name, "codex (CLI delegate)");
+}

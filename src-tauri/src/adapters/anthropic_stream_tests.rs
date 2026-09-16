@@ -12,6 +12,7 @@ use super::{AdapterError, ProviderAdapter};
 fn sample_request(model: &str) -> ChatRequest {
     ChatRequest {
         model_id: model.to_string(),
+        thread_id: None,
         system_prompt: None,
         messages: vec![ChatMessage {
             role: ChatRole::User,

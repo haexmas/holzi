@@ -7,7 +7,7 @@
 
 use serde_json::Value;
 use tokio::sync::mpsc;
-use tokio::task::AbortHandle;
+use tokio_util::sync::CancellationToken;
 
 /// Which speaker a message belongs to. `System` is passed separately in
 /// [`ChatRequest::system_prompt`] because both mistralrs and Anthropic
@@ -72,6 +72,8 @@ pub struct ToolCall {
 #[derive(Debug, Clone)]
 pub struct ChatRequest {
     pub model_id: String,
+    /// The holzi conversation id used for delegate approval events.
+    pub thread_id: Option<uuid::Uuid>,
     pub system_prompt: Option<String>,
     pub messages: Vec<ChatMessage>,
     /// Whether the selected model has a known native reasoning capability.
@@ -155,6 +157,23 @@ impl StreamError {
 /// dropping the value or invoking the [`abort_handle`](Self::abort_handle)
 /// out of band. Dropping aborts the underlying task, so callers who need
 /// to hand the abort out to shared state should clone the handle first.
+#[derive(Clone)]
+pub struct AbortHandle {
+    task: tokio::task::AbortHandle,
+    cancellation: Option<CancellationToken>,
+}
+
+impl AbortHandle {
+    pub fn abort(&self) {
+        if let Some(cancellation) = &self.cancellation {
+            cancellation.cancel();
+        } else {
+            self.task.abort();
+        }
+    }
+}
+
+/// A stream of chunks from an adapter-owned generation task.
 pub struct AdapterStream {
     rx: mpsc::UnboundedReceiver<Result<StreamChunk, StreamError>>,
     abort: AbortHandle,
@@ -165,9 +184,32 @@ impl AdapterStream {
     /// that writes to the sender and pass its abort handle here.
     pub fn new(
         rx: mpsc::UnboundedReceiver<Result<StreamChunk, StreamError>>,
-        abort: AbortHandle,
+        abort: tokio::task::AbortHandle,
     ) -> Self {
-        Self { rx, abort }
+        Self {
+            rx,
+            abort: AbortHandle {
+                task: abort,
+                cancellation: None,
+            },
+        }
+    }
+
+    /// Constructs a stream whose process-owning task cooperatively cleans up
+    /// before it exits. This is used by delegate subprocesses so cancellation
+    /// can terminate and reap their process group instead of aborting cleanup.
+    pub fn new_with_cancellation(
+        rx: mpsc::UnboundedReceiver<Result<StreamChunk, StreamError>>,
+        abort: tokio::task::AbortHandle,
+        cancellation: CancellationToken,
+    ) -> Self {
+        Self {
+            rx,
+            abort: AbortHandle {
+                task: abort,
+                cancellation: Some(cancellation),
+            },
+        }
     }
 
     /// Await the next chunk. Returns `None` after a `Done` frame or an

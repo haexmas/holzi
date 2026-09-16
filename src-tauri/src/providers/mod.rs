@@ -27,15 +27,15 @@ use crate::storage::providers::{self as storage, Provider, ProviderKind};
 pub struct AddProviderArgs {
     pub kind: ProviderKind,
     pub name: String,
-    /// Adapter/vendor for `api_key` providers. Only `anthropic` is currently
-    /// supported; the field is required so refresh cannot guess a protocol.
+    /// Adapter/vendor discriminator. API-key providers currently support
+    /// `anthropic`; CLI delegates support `claude` and `codex`.
     #[serde(default)]
     pub adapter: Option<String>,
-    /// Base URL for `api_key` providers (e.g. `https://api.anthropic.com`).
-    /// `None` for `local` and `cli_delegate`.
+    /// Base URL for API-key providers (e.g. `https://api.anthropic.com`) or
+    /// the executable name/path for a CLI delegate. `None` for `local`.
     pub base_url: Option<String>,
-    /// API key for `api_key` providers. Sent as UTF-8; storage is opaque
-    /// bytes. `None` for `local` and `cli_delegate`.
+    /// API key or CLI credential blob. Sent/stored as opaque UTF-8 bytes for
+    /// API-key providers and as vendor-specific bytes for CLI delegates.
     pub api_key: Option<String>,
 }
 
@@ -129,6 +129,17 @@ pub async fn add_provider(
                     reason: "cli_delegate provider requires base_url (cli command)".into(),
                 });
             }
+            if args
+                .api_key
+                .as_deref()
+                .map(str::trim)
+                .unwrap_or("")
+                .is_empty()
+            {
+                return Err(HolziError::InvalidInput {
+                    reason: "cli_delegate provider requires non-empty credentials".into(),
+                });
+            }
         }
         ProviderKind::Local => {
             // No requirements — one row per local runtime is enough.
@@ -165,11 +176,14 @@ pub async fn add_provider(
     })?
     .map_err(HolziError::from)?;
 
-    // Auto-refresh api_key providers so the model picker is populated
+    // Auto-refresh remote providers so the model picker is populated
     // immediately after the credentials land. Refresh failures are
     // surfaced to the caller but do not undo the insert — the operator
     // can retry `refresh_provider_models` after fixing the key.
-    let (model_count, refresh_error) = if matches!(provider.kind, ProviderKind::ApiKey) {
+    let (model_count, refresh_error) = if matches!(
+        provider.kind,
+        ProviderKind::ApiKey | ProviderKind::CliDelegate
+    ) {
         match do_refresh(&db, &provider).await {
             Ok(count) => (Some(count), None),
             Err(e) => (None, Some(format_holzi_error(&e))),
@@ -430,16 +444,11 @@ pub(crate) fn build_adapter(
                         reason: "cli_delegate provider is missing credentials".into(),
                     })?;
             let binary = provider.base_url.clone().unwrap_or_default();
-            let (pending_tool_approvals, emit) = match delegate_chat_ctx {
-                Some((pending, emit)) => (Some(pending), Some(emit)),
-                None => (None, None),
-            };
             Ok(Box::new(CliDelegateAdapter::new(
                 vendor,
                 credentials,
                 binary,
-                pending_tool_approvals,
-                emit,
+                delegate_chat_ctx,
             )))
         }
         ProviderKind::Local => Err(HolziError::InvalidInput {

@@ -28,7 +28,7 @@ für denselben Vendor aktualisiert `credentials` an Ort und Stelle statt eine zw
 
 - `HolziError::InvalidInput` wenn der Kindprozess (`claude setup-token`/`codex login`) nicht startet
   (Binary fehlt) — spec.md FR-008-artige Behandlung, aber am Setup- statt am Chat-Pfad.
-- Ein Fehlschlag *während* des Browser-Flows (Nutzer bricht ab, Timeout) liefert `InvalidInput` mit
+- Ein Fehlschlag _während_ des Browser-Flows (Nutzer bricht ab, Timeout) liefert `InvalidInput` mit
   einer erklärenden `reason`; es wird keine Provider-Zeile angelegt oder verändert.
 
 **Verhalten**: emittiert `delegate-connect-progress` (unten) während des Flows; der Command selbst
@@ -48,7 +48,7 @@ intern genutzte Insert-Pfad, kein zweiter öffentlich beworbener Weg, dieselbe P
 ### `delete_provider(providerId) -> ()`
 
 **Unverändert, wiederverwendet für "disconnect"** (spec.md FR-013): eine `cli_delegate`-Provider-Zeile
-zu löschen *ist* Disconnect — Delegates haben keinen persistenten Modellkatalog, der separat
+zu löschen _ist_ Disconnect — Delegates haben keinen persistenten Modellkatalog, der separat
 aufzuräumen wäre (`list_models` liefert für `cli_delegate` stets `Ok(vec![])`, data-model.md). Kein
 neuer `disconnect_cli_delegate`-Command nötig.
 

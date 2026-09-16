@@ -25,7 +25,9 @@ pub mod request;
 mod request_tests;
 pub mod types;
 
-pub use types::{AdapterStream, ChatMessage, ChatRequest, ChatRole, StreamChunk, StreamError};
+pub use types::{
+    AbortHandle, AdapterStream, ChatMessage, ChatRequest, ChatRole, StreamChunk, StreamError,
+};
 
 use async_trait::async_trait;
 

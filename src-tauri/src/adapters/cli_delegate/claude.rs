@@ -2,26 +2,26 @@
 //! `stream_chat` call to completion as a subprocess and translates its
 //! `--output-format stream-json` events into [`StreamChunk`]s.
 //!
-//! Phase 3 (US1) scope only: the command built here runs with
-//! `--permission-prompts none` — a safe, fail-closed default (anything
-//! needing approval is denied, the process never hangs waiting for a
-//! host that doesn't exist yet) — and no `--mcp-config`/
-//! `--permission-prompt-tool`. Phase 5 (US3, tasks.md T034/T035) edits
-//! [`build_command`] in place to remove `--permission-prompts none` and
-//! add the live approval bridge instead.
+//! The command uses an isolated configuration directory and routes Claude's
+//! live permission-prompt tool through the shared holzi approval bridge.
 
+use std::path::Path;
 use std::process::Stdio;
 use std::time::Instant;
 
+use serde_json::json;
 use tempfile::TempDir;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 
 use crate::adapters::types::{StreamChunk, StreamError};
 use crate::adapters::{AdapterError, AdapterStream, ChatRequest};
 
-use super::build_transcript_prompt;
+use super::approval_bridge;
+use super::process::{configure_process_group, ChildLifecycle};
+use super::{build_transcript_prompt, DelegateChatContext};
 
 /// Caps how much of a `claude` stderr we keep around for an error
 /// message — mirrors `chat/tools/cli.rs`'s own output cap, just applied
@@ -116,29 +116,29 @@ pub(super) fn parse_line(line: &str, ttft_ms: Option<u64>, total_ms: u64) -> Lin
 
 fn build_command(
     binary: &str,
-    prompt: &str,
-    system_prompt: Option<&str>,
+    mcp_config: &Path,
+    system_prompt_path: Option<&Path>,
     tmp: &TempDir,
 ) -> Command {
     let mut cmd = Command::new(binary);
     cmd.arg("-p")
-        .arg(prompt)
         .arg("--output-format")
         .arg("stream-json")
         .arg("--verbose")
         .arg("--include-partial-messages")
         .arg("--permission-mode")
         .arg("default")
-        // Phase 3 (US1) safe default — see this module's doc comment.
-        // Phase 5 (US3) replaces this with the live approval bridge.
-        .arg("--permission-prompts")
-        .arg("none");
-    if let Some(system_prompt) = system_prompt {
-        cmd.arg("--append-system-prompt").arg(system_prompt);
+        .arg("--mcp-config")
+        .arg(mcp_config)
+        .arg("--permission-prompt-tool")
+        .arg("mcp__holzi-approve__approve");
+    if let Some(system_prompt_path) = system_prompt_path {
+        cmd.arg("--append-system-prompt-file")
+            .arg(system_prompt_path);
     }
     cmd.env("CLAUDE_CONFIG_DIR", tmp.path())
         .current_dir(tmp.path())
-        .stdin(Stdio::null())
+        .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     cmd
@@ -149,6 +149,7 @@ pub(super) async fn spawn_claude_invocation(
     binary: String,
     credentials: Vec<u8>,
     req: ChatRequest,
+    context: DelegateChatContext,
 ) -> Result<AdapterStream, AdapterError> {
     let token = std::str::from_utf8(&credentials)
         .map_err(|_| AdapterError::InvalidCredentials)?
@@ -166,21 +167,89 @@ pub(super) async fn spawn_claude_invocation(
     })?;
 
     let prompt = build_transcript_prompt(&req);
-    let mut cmd = build_command(&binary, &prompt, req.system_prompt.as_deref(), &tmp);
+    let system_prompt_path = req.system_prompt.as_deref().map(|system_prompt| {
+        let path = tmp.path().join("system-prompt.txt");
+        (path, system_prompt)
+    });
+    if let Some((path, system_prompt)) = &system_prompt_path {
+        std::fs::write(path, system_prompt).map_err(|error| AdapterError::Http {
+            reason: format!("failed to write Claude system prompt: {error}"),
+        })?;
+    }
+    let socket_path = tmp.path().join("approval.sock");
+    let listener =
+        approval_bridge::bind_socket(&socket_path).map_err(|error| AdapterError::Http {
+            reason: format!("failed to create Claude approval socket: {error}"),
+        })?;
+    let listener_task = approval_bridge::start_listener(listener, context.clone(), req.thread_id);
+    let mcp_config_path = tmp.path().join("mcp-config.json");
+    let current_exe = std::env::current_exe().map_err(|error| AdapterError::Http {
+        reason: format!("failed to locate holzi executable for approval bridge: {error}"),
+    })?;
+    let mcp_config = json!({
+        "mcpServers": {
+            "holzi-approve": {
+                "command": current_exe,
+                "args": ["--internal-cli-delegate-approval-bridge", "--socket", socket_path]
+            }
+        }
+    });
+    std::fs::write(
+        &mcp_config_path,
+        serde_json::to_vec(&mcp_config).map_err(|error| AdapterError::Http {
+            reason: format!("failed to serialize Claude MCP config: {error}"),
+        })?,
+    )
+    .map_err(|error| AdapterError::Http {
+        reason: format!("failed to write Claude MCP config: {error}"),
+    })?;
+    let mut cmd = build_command(
+        &binary,
+        &mcp_config_path,
+        system_prompt_path.as_ref().map(|(path, _)| path.as_path()),
+        &tmp,
+    );
+    configure_process_group(&mut cmd);
     cmd.env("CLAUDE_CODE_OAUTH_TOKEN", &token);
 
-    let mut child = cmd.spawn().map_err(|e| AdapterError::Http {
+    let mut child = ChildLifecycle::spawn(&mut cmd).map_err(|e| AdapterError::Http {
         reason: format!("failed to spawn \"{binary}\": {e}"),
     })?;
 
-    let stdout = child.stdout.take().ok_or_else(|| AdapterError::Http {
-        reason: "failed to capture claude stdout".into(),
+    let mut stdin = child
+        .child_mut()
+        .stdin
+        .take()
+        .ok_or_else(|| AdapterError::Http {
+            reason: "failed to capture claude stdin".into(),
+        })?;
+    stdin
+        .write_all(prompt.as_bytes())
+        .await
+        .map_err(|error| AdapterError::Http {
+            reason: format!("failed to write Claude prompt: {error}"),
+        })?;
+    stdin.shutdown().await.map_err(|error| AdapterError::Http {
+        reason: format!("failed to close Claude prompt input: {error}"),
     })?;
-    let mut stderr = child.stderr.take().ok_or_else(|| AdapterError::Http {
-        reason: "failed to capture claude stderr".into(),
-    })?;
+    let stdout = child
+        .child_mut()
+        .stdout
+        .take()
+        .ok_or_else(|| AdapterError::Http {
+            reason: "failed to capture claude stdout".into(),
+        })?;
+    let mut stderr = child
+        .child_mut()
+        .stderr
+        .take()
+        .ok_or_else(|| AdapterError::Http {
+            reason: "failed to capture claude stderr".into(),
+        })?;
 
     let (tx, rx) = mpsc::unbounded_channel();
+    let cancellation = CancellationToken::new();
+    let task_cancellation = cancellation.clone();
     let join = tokio::spawn(async move {
         // Keep `tmp` alive for the whole process lifetime; it is removed
         // when this task ends, on every path below.
@@ -193,8 +262,9 @@ pub(super) async fn spawn_claude_invocation(
                 match stderr.read(&mut chunk).await {
                     Ok(0) | Err(_) => break,
                     Ok(n) => {
-                        if buf.len() < MAX_STDERR_BYTES {
-                            buf.extend_from_slice(&chunk[..n]);
+                        let remaining = MAX_STDERR_BYTES.saturating_sub(buf.len());
+                        if remaining > 0 {
+                            buf.extend_from_slice(&chunk[..n.min(remaining)]);
                         }
                     }
                 }
@@ -208,7 +278,18 @@ pub(super) async fn spawn_claude_invocation(
         let mut reader = BufReader::new(stdout).lines();
 
         loop {
-            match reader.next_line().await {
+            let line = tokio::select! {
+                _ = task_cancellation.cancelled() => {
+                    child.terminate_and_reap().await;
+                    stderr_task.abort();
+                    let _ = stderr_task.await;
+                    listener_task.abort();
+                    let _ = listener_task.await;
+                    return;
+                }
+                line = reader.next_line() => line,
+            };
+            match line {
                 Ok(Some(line)) => {
                     match parse_line(&line, ttft_ms, start.elapsed().as_millis() as u64) {
                         LineOutcome::Ignore => {}
@@ -220,7 +301,11 @@ pub(super) async fn spawn_claude_invocation(
                             if tx.send(Ok(chunk)).is_err() {
                                 // Receiver dropped (AdapterStream discarded) —
                                 // stop, the caller no longer wants output.
-                                let _ = child.start_kill();
+                                child.terminate_and_reap().await;
+                                stderr_task.abort();
+                                let _ = stderr_task.await;
+                                listener_task.abort();
+                                let _ = listener_task.await;
                                 return;
                             }
                             if is_done {
@@ -245,8 +330,12 @@ pub(super) async fn spawn_claude_invocation(
             }
         }
 
+        // A successful result is the end of this one-shot invocation, even
+        // if a CLI keeps its server loop alive after emitting it.
+        child.terminate_and_reap().await;
         let stderr_bytes = stderr_task.await.unwrap_or_default();
-        let _ = child.wait().await;
+        listener_task.abort();
+        let _ = listener_task.await;
 
         if !saw_result {
             let stderr_text = String::from_utf8_lossy(&stderr_bytes).trim().to_string();
@@ -259,5 +348,9 @@ pub(super) async fn spawn_claude_invocation(
         }
     });
 
-    Ok(AdapterStream::new(rx, join.abort_handle()))
+    Ok(AdapterStream::new_with_cancellation(
+        rx,
+        join.abort_handle(),
+        cancellation,
+    ))
 }

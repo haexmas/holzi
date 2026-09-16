@@ -287,9 +287,9 @@ _Out of scope for this feature_ (see `docs/plans/2026-09-11-agent-tool-loop-desi
 - Builds directly on the tool loop, permission gate, and turn/cancellation mechanics established in
   003-agent-tool-loop; this feature adds delegate backends as a new way to answer a turn, not a new
   turn model.
-- Codex's `app-server` protocol is assumed capable of live, answerable approval requests over a
-  persistent session — the design doc's leading hypothesis, not yet verified against a real
-  installation; verifying this is prerequisite implementation work, not a scope change here.
+- Codex's `app-server` protocol supports live, answerable approval requests over a persistent
+  session. This was verified against codex-cli 0.147.0 on 2026-09-16 using
+  `item/commandExecution/requestApproval` and `{"decision":"accept"|"decline"}` responses.
 - Claude Code's `-p` invocation supports a live, blocking, per-tool-call approval round-trip within a
   single call via `--permission-prompt-tool` (an MCP tool holzi provides) — verified directly against
   an installed CLI (v2.1.241) on 2026-09-16: a pending `Bash` call genuinely paused until the
@@ -303,6 +303,9 @@ _Out of scope for this feature_ (see `docs/plans/2026-09-11-agent-tool-loop-desi
   plugins, MCP auto-discovery) is equally blocked by this mechanism the way `--bare` guarantees, or
   only hooks/credentials/settings as tested — worth a narrow pre-implementation check, not a
   scope-affecting unknown.
+- The isolated `CLAUDE_CONFIG_DIR` also blocks host-level skills and plugins: the 2026-09-16
+  comparison found only the CLI's bundled skills and no user plugins in the isolated run. Regression
+  coverage retains this result alongside the existing credential and hook isolation checks.
 - The ToS-compliance question for driving the raw CLI as a third-party product is treated as an
   already-decided, accepted risk at the product level (design doc §8.1), not something this feature
   re-litigates before shipping — but current official docs (`code.claude.com/docs/en/headless`,

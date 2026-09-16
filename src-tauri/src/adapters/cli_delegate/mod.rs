@@ -15,6 +15,9 @@
 //! `crate::chat::tools::ApprovalDecision` (data-model.md
 //! "approval_bridge.rs").
 
+mod approval_bridge;
+#[cfg(test)]
+mod approval_bridge_tests;
 mod claude;
 #[cfg(test)]
 mod claude_tests;
@@ -24,6 +27,8 @@ mod codex_tests;
 #[cfg(test)]
 #[path = "mod_tests.rs"]
 mod mod_tests;
+pub(crate) mod permission_mcp_server;
+mod process;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -88,7 +93,12 @@ pub type EventEmitter = Arc<dyn Fn(&str, serde_json::Value) + Send + Sync>;
 /// What `build_adapter` needs, beyond the provider row itself, to
 /// construct a `CliDelegateAdapter` capable of real `stream_chat` (not
 /// just `list_models`) — see `CliDelegateAdapter`'s own doc comment.
-pub type DelegateChatContext = (PendingToolApprovals, EventEmitter);
+#[derive(Clone)]
+pub struct DelegateChatContext {
+    pub pending_tool_approvals: PendingToolApprovals,
+    pub emit: EventEmitter,
+    pub database: Option<Arc<haex_crdt::Database>>,
+}
 
 /// Which subscription vendor a `cli_delegate` provider row talks to.
 /// Parsed from `providers.adapter` (`storage/providers.rs`), mirroring
@@ -124,13 +134,9 @@ impl DelegateVendor {
 /// and held as `Arc<dyn ProviderAdapter>` on the active session, exactly
 /// like `AnthropicAdapter`/`LocalAdapter`.
 ///
-/// `pending_tool_approvals`/`emit` are `None` when built from a context
-/// that only ever calls `list_models` (the plain refresh/`do_refresh`
-/// path, `providers/mod.rs`) rather than actually running a chat turn —
-/// that path never needs the approval bridge. `stream_chat` (real chat
-/// use) requires both `Some`; `build_adapter`'s chat-loading call site
-/// (`chat/model_loading.rs::load_api_key_model`) always provides them
-/// (tasks.md T005).
+/// The chat context is absent when built from a refresh-only path
+/// (`providers/mod.rs::do_refresh`) and present when loaded for a real chat
+/// turn (`chat/model_loading.rs::load_api_key_model`).
 pub struct CliDelegateAdapter {
     vendor: DelegateVendor,
     /// Decrypted `providers.credentials`: a Claude OAuth token (UTF-8
@@ -140,8 +146,7 @@ pub struct CliDelegateAdapter {
     /// From `providers.base_url`; the `claude`/`codex` binary name or
     /// path to spawn. Falls back to `vendor.as_str()` when empty.
     binary: String,
-    pending_tool_approvals: Option<PendingToolApprovals>,
-    emit: Option<EventEmitter>,
+    chat_context: Option<DelegateChatContext>,
 }
 
 impl CliDelegateAdapter {
@@ -150,8 +155,7 @@ impl CliDelegateAdapter {
         vendor: DelegateVendor,
         credentials: Vec<u8>,
         binary: String,
-        pending_tool_approvals: Option<PendingToolApprovals>,
-        emit: Option<EventEmitter>,
+        chat_context: Option<DelegateChatContext>,
     ) -> Self {
         let binary = if binary.is_empty() {
             vendor.as_str().to_string()
@@ -162,26 +166,28 @@ impl CliDelegateAdapter {
             vendor,
             credentials,
             binary,
-            pending_tool_approvals,
-            emit,
+            chat_context,
         }
     }
 }
 
 #[async_trait]
 impl ProviderAdapter for CliDelegateAdapter {
-    /// Delegates have no per-refresh model catalog — the one connected
-    /// backend per vendor *is* the model (data-model.md). Mirrors
-    /// `LocalAdapter::list_models`'s existing empty-`Vec` convention.
+    /// A connected delegate exposes one synthetic model: its vendor is the
+    /// model, and the composite id is persisted by the provider refresh path.
     async fn list_models(&self) -> Result<Vec<ProviderModel>, AdapterError> {
-        Ok(vec![])
+        let vendor = self.vendor.as_str();
+        Ok(vec![ProviderModel {
+            remote_id: vendor.to_string(),
+            display_name: format!("{vendor} (CLI delegate)"),
+            context_window: None,
+        }])
     }
 
     async fn stream_chat(&self, req: ChatRequest) -> Result<AdapterStream, AdapterError> {
-        let (_pending, _emit) = self
-            .pending_tool_approvals
-            .as_ref()
-            .zip(self.emit.as_ref())
+        let context = self
+            .chat_context
+            .clone()
             .ok_or_else(|| AdapterError::Http {
                 reason: "cli_delegate adapter built without chat context (list_models-only \
                          construction)"
@@ -189,12 +195,22 @@ impl ProviderAdapter for CliDelegateAdapter {
             })?;
         match self.vendor {
             DelegateVendor::Claude => {
-                claude::spawn_claude_invocation(self.binary.clone(), self.credentials.clone(), req)
-                    .await
+                claude::spawn_claude_invocation(
+                    self.binary.clone(),
+                    self.credentials.clone(),
+                    req,
+                    context,
+                )
+                .await
             }
             DelegateVendor::Codex => {
-                codex::spawn_codex_app_server(self.binary.clone(), self.credentials.clone(), req)
-                    .await
+                codex::spawn_codex_app_server(
+                    self.binary.clone(),
+                    self.credentials.clone(),
+                    req,
+                    context,
+                )
+                .await
             }
         }
     }

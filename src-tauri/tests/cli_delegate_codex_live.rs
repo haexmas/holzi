@@ -12,7 +12,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use holzi_lib::adapters::cli_delegate::{CliDelegateAdapter, DelegateVendor};
+use holzi_lib::adapters::cli_delegate::{CliDelegateAdapter, DelegateChatContext, DelegateVendor};
 use holzi_lib::adapters::{ChatMessage, ChatRequest, ChatRole, ProviderAdapter, StreamChunk};
 
 #[tokio::test]
@@ -25,12 +25,16 @@ async fn spawn_codex_app_server_answers_a_real_question() {
         DelegateVendor::Codex,
         auth,
         "codex".to_string(),
-        Some(Arc::new(Mutex::new(HashMap::new()))),
-        Some(Arc::new(|_event: &str, _payload: serde_json::Value| {})),
+        Some(DelegateChatContext {
+            pending_tool_approvals: Arc::new(Mutex::new(HashMap::new())),
+            emit: Arc::new(|_event: &str, _payload: serde_json::Value| {}),
+            database: None,
+        }),
     );
 
     let request = ChatRequest {
         model_id: "codex-delegate".to_string(),
+        thread_id: None,
         system_prompt: None,
         messages: vec![ChatMessage {
             role: ChatRole::User,

@@ -1,38 +1,27 @@
-//! `codex app-server --stdio` process driver (tasks.md T014, T036).
-//!
-//! Speaks Codex's own JSON-RPC protocol directly, verified live against
-//! an installed CLI (research.md §2: `initialize` → `thread/start` →
-//! `turn/start`, streaming `item/agentMessage/delta` notifications,
-//! ending on `turn/completed`). Unlike the Claude Code path
-//! (`claude.rs`), no separate approval-bridge child process or IPC hop
-//! is needed — holzi owns this process's stdio pipes directly, so an
-//! approval request (`item/commandExecution/requestApproval` and
-//! friends) arrives as an ordinary server-to-client JSON-RPC request on
-//! the same stream `initialize`'s response came in on.
-//!
-//! Phase 3 (US1) scope only: [`respond_to_server_request`] answers every
-//! incoming approval request with a well-formed, safe fail-closed
-//! `{"decision":"decline"}` — a stub, not real bridging. Phase 5 (US3,
-//! tasks.md T036) replaces that one function's body with
-//! `approval_bridge::request_approval`.
+//! `codex app-server --stdio` process driver.
 
 use std::io;
 use std::process::Stdio;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 use tempfile::TempDir;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, Lines};
-use tokio::process::{ChildStderr, ChildStdin, ChildStdout, Command};
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader, Lines};
+use tokio::process::{ChildStdin, ChildStdout, Command};
 use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 
 use crate::adapters::types::{StreamChunk, StreamError};
 use crate::adapters::{AdapterError, AdapterStream, ChatRequest};
 
-use super::build_transcript_prompt;
+use super::approval_bridge;
+use super::process::{configure_process_group, ChildLifecycle};
+use super::{build_transcript_prompt, DelegateChatContext};
 
 const CLIENT_NAME: &str = "holzi";
 const CLIENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
+const MAX_STDERR_BYTES: usize = 64 * 1024;
 
 fn build_command(binary: &str, tmp: &TempDir) -> Command {
     let mut cmd = Command::new(binary);
@@ -45,50 +34,36 @@ fn build_command(binary: &str, tmp: &TempDir) -> Command {
     cmd
 }
 
-/// Pure request-envelope builder — unit-tested directly (tasks.md T012)
-/// against the `ClientRequest` shape confirmed via `codex app-server
-/// generate-json-schema` (research.md §2): `{"jsonrpc":"2.0","id":...,
-/// "method":...,"params":...}`.
 pub(super) fn build_request(id: i64, method: &str, params: Value) -> Value {
     json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params})
 }
 
 async fn write_message(stdin: &mut ChildStdin, value: &Value) -> io::Result<()> {
-    let mut line = serde_json::to_vec(value).expect("Value always serializes");
+    let mut line = serde_json::to_vec(value)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     line.push(b'\n');
     stdin.write_all(&line).await
 }
 
-/// One line read from the app-server, categorized.
 #[derive(Debug, PartialEq)]
 pub(super) enum Line {
-    /// A response to a request holzi sent (`id` + `result`/`error`).
     Response {
         id: i64,
         value: Value,
     },
-    /// A server-initiated request needing a reply (`id` + `method`).
-    /// `method`/`params` are unused until tasks.md T036 makes the
-    /// response method-specific instead of always declining.
-    #[allow(dead_code)]
     ServerRequest {
         id: Value,
         method: String,
         params: Value,
     },
-    /// A notification (`method`, no `id`).
     Notification {
         method: String,
         params: Value,
     },
-    /// A line that wasn't valid JSON, or had none of the shapes above.
     Unrecognized,
     Eof,
 }
 
-/// Pure JSON-RPC line classifier — no I/O, so it's directly
-/// unit-testable (tasks.md T012) against the wire shapes verified live
-/// in research.md §2, without spawning a real `codex` process.
 pub(super) fn categorize_line(line: Option<&str>) -> Line {
     let Some(line) = line else {
         return Line::Eof;
@@ -122,48 +97,67 @@ pub(super) fn categorize_line(line: Option<&str>) -> Line {
 }
 
 async fn read_line(lines: &mut Lines<BufReader<ChildStdout>>) -> io::Result<Line> {
-    let line = lines.next_line().await?;
-    Ok(categorize_line(line.as_deref()))
+    Ok(categorize_line(lines.next_line().await?.as_deref()))
 }
 
-/// Phase 3 (US1) fail-closed default for any approval-shaped server
-/// request. `decline` is a real, documented `CommandExecutionApprovalDecision`
-/// value ("user denied the command, the agent will continue the turn") —
-/// a well-formed denial, not the malformed-response accident research.md
-/// §2 found (which the server also treated as a rejection, but by
-/// deserialization failure rather than deliberately).
-async fn respond_to_server_request(stdin: &mut ChildStdin, id: Value) -> io::Result<()> {
+async fn respond_to_server_request(
+    stdin: &mut ChildStdin,
+    id: Value,
+    method: &str,
+    params: Value,
+    context: &DelegateChatContext,
+    thread_id: Option<uuid::Uuid>,
+) -> io::Result<()> {
+    let tool_name = match method {
+        "item/commandExecution/requestApproval" => "Bash",
+        "item/fileChange/requestApproval" => "Edit",
+        "item/permissions/requestApproval" => "Permissions",
+        _ => "Codex tool",
+    };
+    let decision = approval_bridge::request_approval(
+        &context.pending_tool_approvals,
+        &context.emit,
+        context.database.as_ref(),
+        thread_id,
+        tool_name.to_string(),
+        params,
+    )
+    .await;
+    let decision = match decision {
+        crate::chat::tools::ApprovalDecision::Allow => "accept",
+        crate::chat::tools::ApprovalDecision::Deny => "decline",
+    };
     write_message(
         stdin,
-        &json!({"jsonrpc": "2.0", "id": id, "result": {"decision": "decline"}}),
+        &json!({"jsonrpc": "2.0", "id": id, "result": {"decision": decision}}),
     )
     .await
 }
 
-/// Sends `method`/`params` as a request with a fresh id and waits for
-/// its matching response, transparently answering any server requests
-/// and ignoring notifications encountered while waiting — mirrors how
-/// holzi's research.md §2 spike drove `initialize`/`thread/start`/
-/// `turn/start` over the same interleaved stream.
 async fn call(
     stdin: &mut ChildStdin,
     lines: &mut Lines<BufReader<ChildStdout>>,
     next_id: &mut i64,
     method: &str,
     params: Value,
+    context: &DelegateChatContext,
+    thread_id: Option<uuid::Uuid>,
 ) -> Result<Value, AdapterError> {
     let id = *next_id;
     *next_id += 1;
     write_message(stdin, &build_request(id, method, params))
         .await
-        .map_err(|e| AdapterError::Http {
-            reason: format!("failed to write {method} request: {e}"),
+        .map_err(|error| AdapterError::Http {
+            reason: format!("failed to write {method} request: {error}"),
         })?;
     loop {
-        match read_line(lines).await.map_err(|e| AdapterError::Http {
-            reason: format!("failed to read app-server response to {method}: {e}"),
+        match read_line(lines).await.map_err(|error| AdapterError::Http {
+            reason: format!("failed to read app-server response to {method}: {error}"),
         })? {
-            Line::Response { id: rid, value } if rid == id => {
+            Line::Response {
+                id: response_id,
+                value,
+            } if response_id == id => {
                 if let Some(error) = value.get("error") {
                     return Err(AdapterError::Http {
                         reason: format!("codex {method} failed: {error}"),
@@ -171,8 +165,12 @@ async fn call(
                 }
                 return Ok(value.get("result").cloned().unwrap_or(Value::Null));
             }
-            Line::ServerRequest { id: sid, .. } => {
-                let _ = respond_to_server_request(stdin, sid).await;
+            Line::ServerRequest { id, method, params } => {
+                respond_to_server_request(stdin, id, &method, params, context, thread_id)
+                    .await
+                    .map_err(|error| AdapterError::Http {
+                        reason: format!("failed to answer Codex approval request: {error}"),
+                    })?;
             }
             Line::Eof => {
                 return Err(AdapterError::Http {
@@ -184,103 +182,174 @@ async fn call(
     }
 }
 
+async fn call_with_timeout(
+    stdin: &mut ChildStdin,
+    lines: &mut Lines<BufReader<ChildStdout>>,
+    next_id: &mut i64,
+    method: &str,
+    params: Value,
+    context: &DelegateChatContext,
+    thread_id: Option<uuid::Uuid>,
+) -> Result<Value, AdapterError> {
+    tokio::time::timeout(
+        HANDSHAKE_TIMEOUT,
+        call(stdin, lines, next_id, method, params, context, thread_id),
+    )
+    .await
+    .map_err(|_| AdapterError::Http {
+        reason: format!("codex {method} handshake timed out after {HANDSHAKE_TIMEOUT:?}"),
+    })?
+}
+
+async fn read_limited<R: AsyncRead + Unpin>(mut reader: R) -> Vec<u8> {
+    let mut output = Vec::new();
+    let mut buffer = [0_u8; 4096];
+    while let Ok(read) = reader.read(&mut buffer).await {
+        if read == 0 {
+            break;
+        }
+        let remaining = MAX_STDERR_BYTES.saturating_sub(output.len());
+        if remaining > 0 {
+            output.extend_from_slice(&buffer[..read.min(remaining)]);
+        }
+    }
+    output
+}
+
 /// Starts one isolated Codex app-server session and exposes its output as an adapter stream.
 pub(super) async fn spawn_codex_app_server(
     binary: String,
     credentials: Vec<u8>,
     req: ChatRequest,
+    context: DelegateChatContext,
 ) -> Result<AdapterStream, AdapterError> {
     if credentials.is_empty() {
         return Err(AdapterError::InvalidCredentials);
     }
-
-    // Disposable per-invocation CODEX_HOME + cwd (spec 007-cli-delegate
-    // FR-002/FR-003), pre-populated with the vault's stored `auth.json` —
-    // removed when `tmp` drops at the end of the spawned task below.
-    let tmp = TempDir::new().map_err(|e| AdapterError::Http {
-        reason: format!("failed to create temp dir for codex invocation: {e}"),
+    let tmp = TempDir::new().map_err(|error| AdapterError::Http {
+        reason: format!("failed to create temp dir for codex invocation: {error}"),
     })?;
-    std::fs::write(tmp.path().join("auth.json"), &credentials).map_err(|e| AdapterError::Http {
-        reason: format!("failed to write codex auth.json: {e}"),
+    std::fs::write(tmp.path().join("auth.json"), &credentials).map_err(|error| {
+        AdapterError::Http {
+            reason: format!("failed to write codex auth.json: {error}"),
+        }
     })?;
 
-    let mut child = build_command(&binary, &tmp)
-        .spawn()
-        .map_err(|e| AdapterError::Http {
-            reason: format!("failed to spawn \"{binary}\": {e}"),
-        })?;
-    let mut stdin = child.stdin.take().ok_or_else(|| AdapterError::Http {
-        reason: "failed to capture codex stdin".into(),
+    let mut command = build_command(&binary, &tmp);
+    configure_process_group(&mut command);
+    let mut child = ChildLifecycle::spawn(&mut command).map_err(|error| AdapterError::Http {
+        reason: format!("failed to spawn \"{binary}\": {error}"),
     })?;
-    let stdout = child.stdout.take().ok_or_else(|| AdapterError::Http {
-        reason: "failed to capture codex stdout".into(),
-    })?;
-    let stderr: ChildStderr = child.stderr.take().ok_or_else(|| AdapterError::Http {
-        reason: "failed to capture codex stderr".into(),
-    })?;
-    let mut lines = BufReader::new(stdout).lines();
-
-    let mut next_id: i64 = 1;
-    call(
-        &mut stdin,
-        &mut lines,
-        &mut next_id,
-        "initialize",
-        json!({"clientInfo": {"name": CLIENT_NAME, "version": CLIENT_VERSION}}),
-    )
-    .await?;
-
-    let thread_result = call(
-        &mut stdin,
-        &mut lines,
-        &mut next_id,
-        "thread/start",
-        json!({
-            "cwd": tmp.path().to_string_lossy(),
-            // Explicit even though "user" is already the documented
-            // default (research.md §2) — removes any doubt from a
-            // possibly customized config, the same host-leakage concern
-            // already found on the Claude Code side (research.md §3).
-            "approvalPolicy": "on-request",
-            "approvalsReviewer": "user",
-        }),
-    )
-    .await?;
-    let thread_id = thread_result
-        .get("thread")
-        .and_then(|t| t.get("id"))
-        .and_then(Value::as_str)
+    let mut stdin = child
+        .child_mut()
+        .stdin
+        .take()
         .ok_or_else(|| AdapterError::Http {
-            reason: "codex thread/start response missing thread.id".into(),
-        })?
-        .to_string();
+            reason: "failed to capture codex stdin".into(),
+        })?;
+    let stdout = child
+        .child_mut()
+        .stdout
+        .take()
+        .ok_or_else(|| AdapterError::Http {
+            reason: "failed to capture codex stdout".into(),
+        })?;
+    let stderr = child
+        .child_mut()
+        .stderr
+        .take()
+        .ok_or_else(|| AdapterError::Http {
+            reason: "failed to capture codex stderr".into(),
+        })?;
+    let stderr_task = tokio::spawn(read_limited(stderr));
+    let mut lines = BufReader::new(stdout).lines();
+    let mut next_id = 1_i64;
+    let original_thread_id = req.thread_id;
 
-    let prompt = build_transcript_prompt(&req);
-    call(
-        &mut stdin,
-        &mut lines,
-        &mut next_id,
-        "turn/start",
-        json!({
-            "threadId": thread_id,
-            "input": [{"type": "text", "text": prompt}],
-        }),
-    )
-    .await?;
+    let handshake = async {
+        call_with_timeout(
+            &mut stdin,
+            &mut lines,
+            &mut next_id,
+            "initialize",
+            json!({"clientInfo": {"name": CLIENT_NAME, "version": CLIENT_VERSION}}),
+            &context,
+            original_thread_id,
+        )
+        .await?;
+        let thread_result = call_with_timeout(
+            &mut stdin,
+            &mut lines,
+            &mut next_id,
+            "thread/start",
+            json!({
+                "cwd": tmp.path().to_string_lossy(),
+                "approvalPolicy": "on-request",
+                "approvalsReviewer": "user",
+            }),
+            &context,
+            original_thread_id,
+        )
+        .await?;
+        let codex_thread_id = thread_result
+            .get("thread")
+            .and_then(|thread| thread.get("id"))
+            .and_then(Value::as_str)
+            .ok_or_else(|| AdapterError::Http {
+                reason: "codex thread/start response missing thread.id".into(),
+            })?
+            .to_string();
+        let prompt = build_transcript_prompt(&req);
+        call_with_timeout(
+            &mut stdin,
+            &mut lines,
+            &mut next_id,
+            "turn/start",
+            json!({
+                "threadId": codex_thread_id,
+                "input": [{"type": "text", "text": prompt}],
+            }),
+            &context,
+            original_thread_id,
+        )
+        .await
+    };
+    if let Err(error) = handshake.await {
+        child.terminate_and_reap().await;
+        stderr_task.abort();
+        let _ = stderr_task.await;
+        return Err(error);
+    }
 
     let (tx, rx) = mpsc::unbounded_channel();
+    let cancellation = CancellationToken::new();
+    let task_cancellation = cancellation.clone();
     let join = tokio::spawn(async move {
         let _tmp = tmp;
-        let _stderr = stderr; // drained implicitly by drop; diagnostics only matter on failure
-
         let start = Instant::now();
         let mut ttft_ms = None;
         let mut last_usage: Option<(Option<usize>, Option<usize>)> = None;
-
         loop {
-            match read_line(&mut lines).await {
-                Ok(Line::ServerRequest { id, .. }) => {
-                    let _ = respond_to_server_request(&mut stdin, id).await;
+            let line = tokio::select! {
+                _ = task_cancellation.cancelled() => {
+                    child.terminate_and_reap().await;
+                    stderr_task.abort();
+                    let _ = stderr_task.await;
+                    return;
+                }
+                line = read_line(&mut lines) => line,
+            };
+            match line {
+                Ok(Line::ServerRequest { id, method, params }) => {
+                    let _ = respond_to_server_request(
+                        &mut stdin,
+                        id,
+                        &method,
+                        params,
+                        &context,
+                        original_thread_id,
+                    )
+                    .await;
                 }
                 Ok(Line::Notification { method, params }) => match method.as_str() {
                     "item/agentMessage/delta" => {
@@ -297,21 +366,23 @@ pub(super) async fn spawn_codex_app_server(
                             }))
                             .is_err()
                         {
-                            let _ = child.start_kill();
+                            child.terminate_and_reap().await;
+                            stderr_task.abort();
+                            let _ = stderr_task.await;
                             return;
                         }
                     }
                     "thread/tokenUsage/updated" => {
-                        let usage = params.get("tokenUsage").and_then(|u| u.get("last"));
+                        let usage = params.get("tokenUsage").and_then(|value| value.get("last"));
                         last_usage = Some((
                             usage
-                                .and_then(|u| u.get("inputTokens"))
+                                .and_then(|value| value.get("inputTokens"))
                                 .and_then(Value::as_u64)
-                                .map(|v| v as usize),
+                                .map(|value| value as usize),
                             usage
-                                .and_then(|u| u.get("outputTokens"))
+                                .and_then(|value| value.get("outputTokens"))
                                 .and_then(Value::as_u64)
-                                .map(|v| v as usize),
+                                .map(|value| value as usize),
                         ));
                     }
                     "turn/completed" => {
@@ -341,17 +412,25 @@ pub(super) async fn spawn_codex_app_server(
                     break;
                 }
                 Ok(_) => {}
-                Err(e) => {
+                Err(error) => {
                     let _ = tx.send(Err(StreamError::Internal(format!(
-                        "failed to read codex stdout: {e}"
+                        "failed to read codex stdout: {error}"
                     ))));
                     break;
                 }
             }
         }
-
-        let _ = child.wait().await;
+        // `app-server` is persistent by design; a completed turn does not
+        // imply that the process exits. End this one-shot adapter stream by
+        // terminating and reaping the whole process group before draining
+        // the bounded stderr task.
+        child.terminate_and_reap().await;
+        let _stderr_bytes = stderr_task.await.unwrap_or_default();
     });
 
-    Ok(AdapterStream::new(rx, join.abort_handle()))
+    Ok(AdapterStream::new_with_cancellation(
+        rx,
+        join.abort_handle(),
+        cancellation,
+    ))
 }

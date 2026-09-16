@@ -13,7 +13,7 @@ delegate adapter drives its own subprocess to completion and streams the result 
 `StreamChunk::Delta`/`Done`, the same escape hatch non-tool-calling local models already use. The
 genuinely new work is (1) spawning and talking to `claude -p`/`codex app-server --stdio` as
 subprocesses with vault-portable, host-isolated credentials, and (2) bridging each backend's own live
-approval mechanism into holzi's *existing* `tool-permission-request`/`respond_tool_permission` gate
+approval mechanism into holzi's _existing_ `tool-permission-request`/`respond_tool_permission` gate
 from 003-agent-tool-loop, so Manual/Auto/Plan apply identically to delegate tool use — confirmed
 feasible for both backends by live verification against installed CLIs during this planning session
 (see [research.md](research.md)), which overturned this feature's own draft assumption that Claude
@@ -24,9 +24,9 @@ Code would need a separate "upfront batch approval" design.
 **Language/Version**: Rust 1.77.2, edition 2021 (backend, `src-tauri`), TypeScript 5 (frontend, Nuxt
 4 SPA) — unchanged from 003-agent-tool-loop.
 **Primary Dependencies**: `tokio::process` (already used by `chat/tools/cli.rs`'s host-command tool)
-for spawning `claude`/`codex` subprocesses. `rmcp` 3.3.0 (already pinned for the MCP *client* path)
+for spawning `claude`/`codex` subprocesses. `rmcp` 3.3.0 (already pinned for the MCP _client_ path)
 gains real (non-test-only) use of its `server` + `transport-io` features: MCP's stdio transport means
-`claude` spawns the `--mcp-config` server as *its own* child process, not something reachable
+`claude` spawns the `--mcp-config` server as _its own_ child process, not something reachable
 in-process — so holzi's permission-prompt-tool MCP server actually runs in a small separate process
 (the holzi binary re-invoked with a hidden internal flag via `std::env::current_exe()`, never
 initializing Tauri/GUI), which then relays each approval request back to the main process over a
@@ -76,21 +76,21 @@ keeping cancellation/host-isolation uniform with the existing host-CLI tool's pe
 
 ## Constitution Check
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+_GATE: Must pass before Phase 0 research. Re-check after Phase 1 design._
 
 Evaluated against the holzi Constitution (`.specify/memory/constitution.md`, hard-pinned from
 haex-hive, revision `336eaf1e`):
 
-| Principle | Status | Rationale |
-|---|---|---|
-| I. No Secrets in Git | ✓ PASS | Delegate credentials (Claude OAuth token / Codex `auth.json`) are stored the same way existing `api_key` credentials already are: an encrypted-at-rest SQLite/SQLCipher column (`providers.credentials`), never a git-committed file. No new secret-handling pattern introduced. |
-| II. No Local Absolute Paths in Versioned Config | ✓ PASS | Per-invocation temp directories (`CLAUDE_CONFIG_DIR`/`CODEX_HOME`, disposable `cwd`) are runtime state, not versioned config. |
-| III. Project Identity Is Device-Independent | ✓ PASS | No changes to project-identity or device-scoping mechanisms; delegate credentials live in the same vault-scoped `providers` table as existing credentials. |
-| IV. Cross-Repo References Pin Immutable Revisions | ✓ PASS | `rmcp`'s `server` feature moves from test-only to a real dependency use, still under the existing exact version pin (`=3.3.0`) — no new external harness content, same reasoning 003's plan.md already applied to this same dependency. |
-| V. External Sources Are Opt-in Per Project | ✓ PASS | N/A — no external harness content involved. |
-| VI. Self-Modifying Instructions Are Always Review-Gated | ✓ PASS | This planning session's edits to `docs/plans/2026-09-11-agent-tool-loop-design.md` (§8.2a addendum, §10 updates) and `specs/007-cli-delegate/spec.md` (clarification supersession) land through this feature's normal PR review, not silently. |
-| VII. Relay Unavailability Never Blocks Local Work | ✓ PASS | Delegate calls are local subprocess + local vault reads/writes, independent of holzi's sync relay. |
-| VIII. No Concealment Instructions in Agent Output | ✓ PASS | FR-005 requires every delegate response to visibly identify its backend and record its tool use; no hidden behavior introduced. |
+| Principle                                               | Status | Rationale                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| I. No Secrets in Git                                    | ✓ PASS | Delegate credentials (Claude OAuth token / Codex `auth.json`) are stored the same way existing `api_key` credentials already are: an encrypted-at-rest SQLite/SQLCipher column (`providers.credentials`), never a git-committed file. No new secret-handling pattern introduced. |
+| II. No Local Absolute Paths in Versioned Config         | ✓ PASS | Per-invocation temp directories (`CLAUDE_CONFIG_DIR`/`CODEX_HOME`, disposable `cwd`) are runtime state, not versioned config.                                                                                                                                                    |
+| III. Project Identity Is Device-Independent             | ✓ PASS | No changes to project-identity or device-scoping mechanisms; delegate credentials live in the same vault-scoped `providers` table as existing credentials.                                                                                                                       |
+| IV. Cross-Repo References Pin Immutable Revisions       | ✓ PASS | `rmcp`'s `server` feature moves from test-only to a real dependency use, still under the existing exact version pin (`=3.3.0`) — no new external harness content, same reasoning 003's plan.md already applied to this same dependency.                                          |
+| V. External Sources Are Opt-in Per Project              | ✓ PASS | N/A — no external harness content involved.                                                                                                                                                                                                                                      |
+| VI. Self-Modifying Instructions Are Always Review-Gated | ✓ PASS | This planning session's edits to `docs/plans/2026-09-11-agent-tool-loop-design.md` (§8.2a addendum, §10 updates) and `specs/007-cli-delegate/spec.md` (clarification supersession) land through this feature's normal PR review, not silently.                                   |
+| VII. Relay Unavailability Never Blocks Local Work       | ✓ PASS | Delegate calls are local subprocess + local vault reads/writes, independent of holzi's sync relay.                                                                                                                                                                               |
+| VIII. No Concealment Instructions in Agent Output       | ✓ PASS | FR-005 requires every delegate response to visibly identify its backend and record its tool use; no hidden behavior introduced.                                                                                                                                                  |
 
 **Result**: All gates PASS. No Complexity Tracking entry needed.
 
@@ -184,4 +184,4 @@ structure otherwise, no separate backend/frontend split beyond what already exis
 
 ## Complexity Tracking
 
-*No entries — Constitution Check found no violations.*
+_No entries — Constitution Check found no violations._

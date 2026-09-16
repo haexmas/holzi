@@ -12,6 +12,7 @@ inline `#[cfg(test)] mod tests`, plus integration tests under `src-tauri/tests/`
 verification is manual per quickstart.md (kein Playwright in diesem Repo).
 
 **Revision notes**:
+
 - **2026-09-16, post `/speckit.analyze`**: fixed two issues the analysis pass found in the first
   draft: (1) the Claude Code command built in Phase 3 (US1) referenced
   `--mcp-config`/`--permission-prompt-tool` before the server implementing that tool existed (US3) —
@@ -20,7 +21,7 @@ verification is manual per quickstart.md (kein Playwright in diesem Repo).
   approval gate) ships alongside US1 for safety — the MVP now explicitly includes US3. Four coverage
   gaps were also added as new tasks (T018, T019, T023, T032 below).
 - **2026-09-16, during implementation start**: discovered MCP's stdio transport means `claude` spawns
-  the `--mcp-config` server as *its own child process* — not something reachable in-process the way
+  the `--mcp-config` server as _its own child process_ — not something reachable in-process the way
   the first draft of `permission_mcp_server.rs` assumed. Per operator direction, no HTTP-server-based
   fix (a pure-Rust IPC mechanism is preferred, independent of the fact that `cli_delegate` is already
   desktop-only regardless of this choice, since subprocess spawning itself is impossible on mobile).
@@ -51,7 +52,7 @@ verification is manual per quickstart.md (kein Playwright in diesem Repo).
       add the `net` feature to the main `[dependencies]` `tokio` entry (Unix domain sockets / Windows
       named pipes for the approval-bridge IPC hop, data-model.md — no new crate needed).
 - [x] T002 [P] Create `src-tauri/src/adapters/cli_delegate/mod.rs` with `DelegateVendor::{Claude,
-      Codex}` (`parse`/`as_str`, mirroring `ProviderKind` in `storage/providers.rs`) and an empty
+Codex}` (`parse`/`as_str`, mirroring `ProviderKind` in `storage/providers.rs`) and an empty
       `CliDelegateAdapter` struct; register `pub mod cli_delegate;` in `src-tauri/src/adapters/mod.rs`
       and update its module doc comment (lines 9-10, currently: "`cli_delegate` adapters require a
       separate design pass and are not yet represented here").
@@ -80,7 +81,7 @@ every user story builds on.
       `src-tauri/src/chat/model_loading.rs` (data-model.md "Signatur-Änderung").
 - [x] T006 Implement `build_adapter`'s `ProviderKind::CliDelegate` branch (`providers/mod.rs`,
       currently `Err(HolziError::InvalidInput { reason: "cli_delegate refresh is not yet
-      implemented" })`): parse `DelegateVendor` from `provider.adapter`, decrypt `provider.credentials`,
+implemented" })`): parse `DelegateVendor` from `provider.adapter`, decrypt `provider.credentials`,
       construct `CliDelegateAdapter` with the handles from T005.
 - [x] T007 [P] Create `src-tauri/src/adapters/cli_delegate/mod_tests.rs`: `DelegateVendor::parse`/
       `as_str` round-trip for both vendors and reject unknown strings; `build_adapter` constructs a
@@ -92,7 +93,7 @@ every user story builds on.
       — the same way the Claude Code round-trip was already confirmed manually. Also determine
       Codex's safe fail-closed default for an unhandled `ServerRequest` approval (used by T014 before
       T036 wires real approval — e.g. does an unanswered request time out with `ReviewDecision::
-      timed_out` on its own, or must the client actively respond `denied`?). Record both outcomes as
+timed_out` on its own, or must the client actively respond `denied`?). Record both outcomes as
       an addendum in research.md §2. **Gates**: T014, T030, T036 (all Codex-specific work) — do not
       start those until this spike's outcome is recorded.
 - [x] T009 [P] **Spike** (research.md §3): with an isolated `CLAUDE_CONFIG_DIR`, confirm a host-level
@@ -158,7 +159,7 @@ approval is cleanly declined (not hung, not silently allowed) (spec.md Acceptanc
       dispatch to `claude.rs`/`codex.rs` by `DelegateVendor`; `list_models` returns `Ok(vec![])` for
       both (data-model.md — no per-refresh model catalog for delegates).
 - [ ] T017 [US1] Add delegate backend selection to the chat UI (`src/components/settings/
-      DefaultModelSetting.vue` or a new sibling component, per plan.md — first real caller of
+DefaultModelSetting.vue` or a new sibling component, per plan.md — first real caller of
       `src/composables/useProviders.ts`'s existing `list`/`add` methods for this provider kind),
       showing a `cli_delegate` provider as "not connected" when it has no stored credential (spec.md
       Acceptance Scenario 2).
@@ -202,13 +203,13 @@ Acceptance Scenario 2).
       before"), authenticates successfully using only the stored credential bytes.
 - [ ] T023 [P] [US2] **(new, analyze finding G3)** Integration test: start a delegate-backed response,
       then delete/disconnect its `providers` row while that response is still in flight (spec.md
-      FR-013, Edge Cases) — assert the in-flight response completes normally and only a *subsequent*
+      FR-013, Edge Cases) — assert the in-flight response completes normally and only a _subsequent_
       request is affected by the disconnect.
 
 ### Implementation for User Story 2
 
 - [ ] T024 [US2] Implement the `connect_cli_delegate` Tauri command in `src-tauri/src/providers/
-      mod.rs`: spawn `claude setup-token`/`codex login` in an isolated temp dir, capture the
+mod.rs`: spawn `claude setup-token`/`codex login` in an isolated temp dir, capture the
       resulting token/`auth.json`, upsert the `providers` row via the existing insert path, emit
       `delegate-connect-progress` events (contracts/tauri-commands.md) including the OAuth URL to
       open; guarantee temp-dir cleanup on every exit path.
@@ -250,8 +251,8 @@ posture-blocked action is denied without ever surfacing a prompt (spec.md Accept
       manually verified in research.md §1. Exercises the real child-process-plus-socket path (T034,
       T035), not a simplified in-process stand-in.
 - [ ] T030 [P] [US3] (depends on T008) Integration test (Codex path): a stub `codex app-server` sends
-      an `ExecCommandApprovalRequest`; assert the same bridge behavior and that the reply carries the
-      correct `ReviewDecision`.
+      an `item/commandExecution/requestApproval` request; assert the same bridge behavior and that
+      the reply carries the correct `CommandExecutionApprovalDecision` (`accept` or `decline`).
 - [ ] T031 [P] [US3] Unit test: `chat/tools/permission.rs`'s existing `decide()` is evaluated before
       any live request is made — `Decision::Allow`/`Deny` resolve without ever reaching
       `approval_bridge.rs`'s live round-trip (data-model.md).
@@ -278,7 +279,7 @@ posture-blocked action is denied without ever surfacing a prompt (spec.md Accept
       never start the GUI/Tauri runtime for this invocation. Smoke-test by running the built binary
       directly with the flag and confirming it exits cleanly with no window.
 - [ ] T035 [US3] (depends on T034) Implement `src-tauri/src/adapters/cli_delegate/
-      permission_mcp_server.rs`'s `run_bridge_process(socket_path)`, running in the **separate child
+permission_mcp_server.rs`'s `run_bridge_process(socket_path)`, running in the **separate child
       process** that `claude` itself spawns (per MCP's stdio transport model — not in-process, see
       revision notes): an `rmcp` `server`+`transport-io` stdio MCP server (using this process's own
       inherited stdin/stdout, which is what `claude` actually talks to) exposing one `approve` tool;
@@ -290,7 +291,7 @@ posture-blocked action is denied without ever surfacing a prompt (spec.md Accept
 - [ ] T036 [US3] (depends on T008) Replace T014's fail-closed `ServerRequest` stub in `codex.rs` with
       real handling: run `decide()` first (immediate `Allow`/`Deny`, T032), calling
       `approval_bridge::request_approval` only for `Ask` (T030), translating the decision into the
-      matching `ReviewDecision` response. No child-process/socket hop needed here — holzi already
+      matching `CommandExecutionApprovalDecision` response (`accept`/`decline`). No child-process/socket hop needed here — holzi already
       owns this process's stdio directly (unlike the Claude Code path, T034/T035).
 
 **Checkpoint**: spec.md SC-003 (100% of blocked sensitive actions actually blocked) now holds for
@@ -371,7 +372,7 @@ the OS process is actually gone (spec.md Acceptance Scenario 1).
 - [ ] T045 [P] Run `specs/007-cli-delegate/quickstart.md` end-to-end manually (all 5 scenarios) with
       whichever of `claude`/`codex` is installed, before merge.
 - [ ] T046 `cargo test --lib` and the new `src-tauri/tests/cli_delegate_*.rs` suites green; `pnpm
-      typecheck` exit 0.
+typecheck` exit 0.
 
 ---
 
@@ -396,7 +397,7 @@ the OS process is actually gone (spec.md Acceptance Scenario 1).
 - **T005** (signature threading) must land before T006 (adapter construction) and before any of
   T013/T014 (which need the handles T006 passes to `CliDelegateAdapter::new`).
 - **T034** (hidden internal entrypoint) must land before **T035** (the process it invokes).
-- **T013** (Claude base command, `--permission-prompts none`) is *modified in place* by **T035**
+- **T013** (Claude base command, `--permission-prompts none`) is _modified in place_ by **T035**
   (removes that flag, adds the live `--mcp-config`/`--permission-prompt-tool` bridge) — not a fresh
   file, an edit to the same command-building code. Same relationship between **T014**'s fail-closed
   stub and **T036**'s real bridging for Codex.

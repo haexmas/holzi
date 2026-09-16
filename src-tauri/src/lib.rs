@@ -46,6 +46,36 @@ use storage::preferences_commands::{clear_pref, get_pref, set_pref};
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 /// Builds and starts the holzi Tauri application.
 pub fn run() {
+    let mut args = std::env::args().skip(1);
+    if args.next().as_deref() == Some("--internal-cli-delegate-approval-bridge") {
+        let Some(socket_flag) = args.next().filter(|arg| arg == "--socket") else {
+            eprintln!("missing --socket for CLI delegate approval bridge");
+            return;
+        };
+        let _ = socket_flag;
+        let Some(socket_path) = args.next() else {
+            eprintln!("missing socket path for CLI delegate approval bridge");
+            return;
+        };
+        let runtime = match tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+        {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                eprintln!("failed to start approval bridge runtime: {error}");
+                return;
+            }
+        };
+        if let Err(error) = runtime.block_on(
+            adapters::cli_delegate::permission_mcp_server::run_bridge_process(
+                std::path::Path::new(&socket_path),
+            ),
+        ) {
+            eprintln!("CLI delegate approval bridge failed: {error}");
+        }
+        return;
+    }
     let builder = tauri::Builder::default().manage(AppState::new());
     let builder = builder.manage(ChatState::new());
     builder
