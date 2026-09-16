@@ -22,7 +22,7 @@
 use std::sync::Arc;
 
 use serde::Serialize;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -165,7 +165,16 @@ pub(crate) async fn load_model_inner(
         // This path only performs bounded database/adapter setup. Await it
         // to completion so cancellation cannot drop a spawn_blocking DB read
         // while a Vault close is waiting to release its Arc.
-        load_api_key_model(state, model_id, provider_id_str).await?
+        let app_for_emit = app.clone();
+        let emit: crate::adapters::cli_delegate::EventEmitter = Arc::new(move |event, payload| {
+            let _ = app_for_emit.emit(event, payload);
+        });
+        let delegate_chat_ctx = Some(crate::adapters::cli_delegate::DelegateChatContext {
+            pending_tool_approvals: Arc::clone(&chat.pending_tool_approvals),
+            emit,
+            database: Some(active_database(state)?),
+        });
+        load_api_key_model(state, model_id, provider_id_str, delegate_chat_ctx).await?
     } else {
         #[cfg(feature = "llm-cpu")]
         {
@@ -373,10 +382,18 @@ fn local_load_phase() -> LoadPhase {
 }
 
 /// Resolves a provider-qualified model id and builds its remote adapter session.
+///
+/// `delegate_chat_ctx` is only actually needed for a `cli_delegate`
+/// provider — it becomes that adapter's live approval-bridge handles
+/// (spec 007-cli-delegate data-model.md "Signatur-Änderung"); an
+/// `api_key` provider's `build_adapter` branch ignores it. Pass `None`
+/// from a call site that only checks whether a model *would* load
+/// (`default_model.rs`'s loadability scan never calls `stream_chat`).
 pub(crate) async fn load_api_key_model(
     state: &State<'_, AppState>,
     composite_id: &str,
     provider_id_str: &str,
+    delegate_chat_ctx: Option<crate::adapters::cli_delegate::DelegateChatContext>,
 ) -> Result<ActiveSession> {
     let provider_id = Uuid::parse_str(provider_id_str).map_err(|_| HolziError::InvalidInput {
         reason: format!("bad composite model id: {composite_id}"),
@@ -408,7 +425,7 @@ pub(crate) async fn load_api_key_model(
     })?;
 
     let provider = crate::providers::repair_legacy_adapter(&db, &provider).await?;
-    let adapter = build_adapter(&provider)?;
+    let adapter = build_adapter(&provider, delegate_chat_ctx)?;
     Ok(ActiveSession {
         model_id: composite_id.to_string(),
         provider_id: Some(provider_id),
