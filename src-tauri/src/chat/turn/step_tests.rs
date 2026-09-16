@@ -1,51 +1,9 @@
 use super::*;
-use crate::chat::commands::abort_turn;
-use crate::storage::chat_threads::ChatThread;
 
-#[tokio::test]
-async fn failed_thread_update_rolls_back_final_assistant_message() {
-    let (tmp, db, thread_id) = tokio::task::spawn_blocking(|| {
-            let tmp = tempfile::tempdir().unwrap();
-            let db = haex_crdt::Database::open(crate::instances::vault_config::vault_config(
-                "test-passphrase", &tmp.path().join("vault.db"),
-                &crate::identity::installation_id_path(tmp.path()), true,
-            )).unwrap();
-            let thread_id = Uuid::new_v4();
-            db.with_connection(|conn| {
-                thread_store::insert_thread(conn, &ChatThread {
-                    id: thread_id, title: "Keep me".into(), last_provider_id: None,
-                    last_model_id: None, created_at: 0, updated_at: 0,
-                })?;
-                conn.execute_batch("CREATE TRIGGER reject_thread_update BEFORE UPDATE ON chat_threads BEGIN SELECT RAISE(ABORT, 'injected update failure'); END;")?;
-                Ok(())
-            }).unwrap();
-            (tmp, db, thread_id)
-        }).await.unwrap();
-    let message = ChatMessage {
-        role: MessageRole::Assistant,
-        finish_reason: Some(FinishReason::Complete),
-        content: "answer".into(),
-        ..empty_tool_message(Uuid::new_v4(), thread_id, None)
-    };
-    assert!(persist_final_message(&db, message, None, "test".into())
-        .await
-        .is_err());
-    tokio::task::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            assert!(msg_store::list_messages(conn, thread_id)?.is_empty());
-            assert_eq!(
-                thread_store::get_thread(conn, thread_id)?.unwrap().title,
-                "Keep me"
-            );
-            Ok(())
-        })
-        .unwrap();
-        drop(db);
-        drop(tmp);
-    })
-    .await
-    .unwrap();
-}
+use std::sync::Arc;
+
+use crate::chat::commands::abort_turn;
+
 struct StartAdapter {
     attempts: std::sync::atomic::AtomicUsize,
     entered: tokio::sync::Notify,

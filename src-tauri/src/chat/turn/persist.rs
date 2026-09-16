@@ -1,0 +1,201 @@
+//! Row persistence for one turn, plus the event helpers every terminal
+//! path shares.
+//!
+//! Split out of `chat/turn.rs` (2026-09-16); see
+//! `docs/plans/2026-09-16-turn-module-split-design.md`.
+
+use serde::Serialize;
+use uuid::Uuid;
+
+use crate::chat::events::{
+    MessageCompleteEvent, MessageErrorEvent, TurnCompleteEvent, EVENT_CHAT_MESSAGE_COMPLETE,
+    EVENT_CHAT_MESSAGE_ERROR, EVENT_CHAT_TURN_COMPLETE,
+};
+use crate::storage::chat_messages::{self as msg_store, ChatMessage, FinishReason, MessageRole};
+use crate::storage::chat_threads as thread_store;
+
+use super::{now_ms, TurnRunner};
+
+/// Persists one row. Used for every row except the turn's terminal
+/// assistant row, which also needs `chat_threads` updated atomically
+/// (see [`persist_final_message`]).
+pub(super) async fn persist_message(
+    db: &haex_crdt::Database,
+    msg: ChatMessage,
+) -> std::result::Result<(), String> {
+    let db = db.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        db.with_connection(|conn| {
+            msg_store::insert_message(conn, &msg)
+                .map(|_| ())
+                .map_err(haex_crdt::Error::from)
+        })
+    })
+    .await
+    .map_err(|e| format!("persist join: {e}"))?
+    .map_err(|e| format!("persist failed: {e}"))
+}
+
+/// Persists the turn's terminal assistant row and updates `chat_threads`
+/// in the same connection call — mirrors the pre-tool-loop behavior where
+/// both happened atomically together.
+pub(super) async fn persist_final_message(
+    db: &haex_crdt::Database,
+    msg: ChatMessage,
+    provider_id: Option<Uuid>,
+    model_id: String,
+) -> std::result::Result<(), String> {
+    let db = db.clone();
+    let thread_id = msg.thread_id;
+    let now = msg.created_at;
+    tauri::async_runtime::spawn_blocking(move || {
+        db.with_connection(|conn| {
+            let tx = conn.unchecked_transaction()?;
+            let thread = thread_store::get_thread(&tx, thread_id)?
+                .ok_or(haex_crdt::rusqlite::Error::QueryReturnedNoRows)?;
+            msg_store::insert_message(&tx, &msg)?;
+            thread_store::update_thread(
+                &tx,
+                thread_id,
+                &thread.title,
+                provider_id,
+                Some(&model_id),
+                now,
+            )?;
+            tx.commit().map_err(haex_crdt::Error::from)
+        })
+    })
+    .await
+    .map_err(|e| format!("persist join: {e}"))?
+    .map_err(|e| format!("persist failed: {e}"))?;
+    Ok(())
+}
+
+pub(super) fn empty_tool_message(
+    id: Uuid,
+    thread_id: Uuid,
+    parent_id: Option<Uuid>,
+) -> ChatMessage {
+    ChatMessage {
+        id,
+        thread_id,
+        parent_id,
+        role: MessageRole::User, // overwritten by every caller
+        content: String::new(),
+        provider_id: None,
+        model_id: None,
+        prompt_tokens: None,
+        completion_tokens: None,
+        finish_reason: None,
+        created_at: now_ms(),
+        idempotency_key: None,
+        tool_name: None,
+        tool_call_id: None,
+        tool_input: None,
+        tool_is_error: None,
+        tool_source: None,
+    }
+}
+
+impl TurnRunner<'_> {
+    /// Emits one chat event. Every payload type in `chat::events` is a
+    /// plain derive-`Serialize` struct of owned scalars and `Value`s, so
+    /// `to_value` cannot fail; the panic names the type should that ever
+    /// stop being true.
+    pub(super) fn emit_event<T: Serialize>(&mut self, name: &'static str, payload: T) {
+        let value = serde_json::to_value(payload)
+            .unwrap_or_else(|e| panic!("{} must serialize: {e}", std::any::type_name::<T>()));
+        (self.emit)(name, value);
+    }
+
+    /// Ends the turn after a persistence failure: the
+    /// `chat-message-error` + `chat-turn-complete{Error}` pair that every
+    /// such failure emitted inline before this helper existed. The
+    /// terminal event deliberately carries no `assistant_message_id` —
+    /// nothing was written.
+    pub(super) fn fail(&mut self, reason: String) {
+        let (thread_id, message_id) = (self.thread_id, self.assistant_message_id);
+        self.emit_event(
+            EVENT_CHAT_MESSAGE_ERROR,
+            MessageErrorEvent {
+                message_id,
+                thread_id,
+                reason,
+            },
+        );
+        self.emit_event(
+            EVENT_CHAT_TURN_COMPLETE,
+            TurnCompleteEvent {
+                thread_id,
+                assistant_message_id: None,
+                finish_reason: FinishReason::Error,
+            },
+        );
+    }
+
+    /// Advances the turn's logical clock past both wall-clock time and the
+    /// last row it issued, and returns the new value.
+    ///
+    /// SQLite orders rows by `created_at, id`; UUIDv4 is random, so rows
+    /// created in one millisecond must receive distinct logical timestamps
+    /// to keep each call immediately before its result. The `max(now_ms())`
+    /// keeps the clock honest across slower rounds; the `+1` keeps a fast
+    /// round from colliding with the row it just wrote — without it,
+    /// `(created_at, id)` would fall back to comparing random UUIDs and
+    /// could sort a terminal row before the round it concludes.
+    pub(super) fn bump_created_at(&mut self) -> i64 {
+        self.next_created_at = self.next_created_at.max(now_ms()).saturating_add(1);
+        self.next_created_at
+    }
+
+    /// Ends a turn as `Cancelled` from inside a tool round, persisting a
+    /// terminal assistant row with no content (spec.md FR-009–FR-011).
+    /// Mirrors the per-step event pair the plain-generation cancellation
+    /// path already emits (`chat-message-complete` then
+    /// `chat-turn-complete`, not `chat-message-error` — cancelling is not
+    /// itself an error).
+    pub(super) async fn end_cancelled(&mut self) {
+        let created_at = self.bump_created_at();
+        let (thread_id, message_id) = (self.thread_id, self.assistant_message_id);
+        let final_msg = ChatMessage {
+            role: MessageRole::Assistant,
+            finish_reason: Some(FinishReason::Cancelled),
+            created_at,
+            ..empty_tool_message(message_id, thread_id, Some(self.parent_id))
+        };
+        match persist_final_message(
+            self.db,
+            final_msg,
+            self.session.provider_id,
+            self.session.model_id.clone(),
+        )
+        .await
+        {
+            Ok(()) => {
+                self.emit_event(
+                    EVENT_CHAT_MESSAGE_COMPLETE,
+                    MessageCompleteEvent {
+                        message_id,
+                        thread_id,
+                        prompt_tokens: None,
+                        completion_tokens: None,
+                        ttft_ms: None,
+                    },
+                );
+                self.emit_event(
+                    EVENT_CHAT_TURN_COMPLETE,
+                    TurnCompleteEvent {
+                        thread_id,
+                        assistant_message_id: Some(message_id),
+                        finish_reason: FinishReason::Cancelled,
+                    },
+                );
+            }
+            Err(reason) => self.fail(reason),
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "persist_tests.rs"]
+mod tests;
