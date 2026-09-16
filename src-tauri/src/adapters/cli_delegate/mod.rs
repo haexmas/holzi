@@ -15,7 +15,7 @@
 //! `crate::chat::tools::ApprovalDecision` (data-model.md
 //! "approval_bridge.rs").
 
-mod approval_bridge;
+pub mod approval_bridge;
 #[cfg(test)]
 mod approval_bridge_tests;
 mod claude;
@@ -24,11 +24,19 @@ mod claude_tests;
 mod codex;
 #[cfg(test)]
 mod codex_tests;
+pub mod connect_claude;
+#[cfg(test)]
+mod connect_claude_tests;
+pub mod connect_codex;
+#[cfg(test)]
+mod connect_codex_tests;
 #[cfg(test)]
 #[path = "mod_tests.rs"]
 mod mod_tests;
 pub(crate) mod permission_mcp_server;
 mod process;
+#[cfg(test)]
+mod process_tests;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

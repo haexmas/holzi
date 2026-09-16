@@ -1,0 +1,299 @@
+//! `claude setup-token` connect-flow driver (spec 007-cli-delegate US2).
+//!
+//! A raw-ANSI Ink TUI, not a line-oriented CLI — piped, non-PTY stdio
+//! produces zero output (research.md §5, live-verified). This runs the
+//! process inside a real PTY (`portable-pty`) instead, extracts the OAuth URL
+//! from an OSC 8 terminal hyperlink escape sequence, and — once the caller
+//! collects the authorization code the user copies back from the browser —
+//! writes it to the PTY and scrapes the resulting long-lived token from the
+//! subsequent output.
+
+use std::io::{Read, Write};
+use std::time::Duration;
+
+use portable_pty::{native_pty_system, Child, CommandBuilder, PtySize};
+use tempfile::TempDir;
+use tokio::sync::mpsc;
+
+use crate::adapters::AdapterError;
+
+const URL_TIMEOUT: Duration = Duration::from_secs(30);
+/// Generous: covers the time the user spends in the browser plus copying the
+/// code back.
+const TOKEN_TIMEOUT: Duration = Duration::from_secs(10 * 60);
+
+fn pty_size() -> PtySize {
+    PtySize {
+        rows: 40,
+        cols: 120,
+        pixel_width: 0,
+        pixel_height: 0,
+    }
+}
+
+enum ReaderEvent {
+    Url(String),
+    Token(String),
+    Eof,
+    Error(String),
+}
+
+/// Extracts the URI from the first OSC 8 terminal hyperlink escape sequence
+/// in `buf`: `\x1b]8;<params>;<uri><BEL or ST>`. `claude setup-token`
+/// re-emits the whole URL inside this payload on every redraw even though the
+/// *visible* text is word-wrapped differently each time (research.md §5) —
+/// this scans raw bytes for that reason, rather than the rendered/wrapped
+/// text. Pure and unit-testable.
+pub(super) fn extract_osc8_url(buf: &[u8]) -> Option<String> {
+    const OSC8_PREFIX: &[u8] = b"\x1b]8;";
+    let prefix_at = find_subslice(buf, OSC8_PREFIX)?;
+    let after_prefix = prefix_at + OSC8_PREFIX.len();
+    let params_end = after_prefix + buf[after_prefix..].iter().position(|&b| b == b';')?;
+    let uri_start = params_end + 1;
+    let uri_end = uri_start
+        + buf[uri_start..]
+            .iter()
+            .position(|&b| b == 0x07 || b == b'\\')?;
+    std::str::from_utf8(&buf[uri_start..uri_end])
+        .ok()
+        .map(str::to_string)
+        .filter(|s| !s.is_empty())
+}
+
+fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack.windows(needle.len()).position(|w| w == needle)
+}
+
+/// Strips CSI (`\x1b[...<letter>`) and OSC (`\x1b]...BEL`) escape sequences,
+/// leaving plain content. Used only for scraping the final token screen — the
+/// URL step reads OSC 8 payloads from raw bytes instead via
+/// [`extract_osc8_url`], since stripping would destroy exactly what it needs.
+fn strip_ansi(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '\u{1b}' {
+            out.push(c);
+            continue;
+        }
+        match chars.peek() {
+            Some('[') => {
+                chars.next();
+                for next in chars.by_ref() {
+                    if next.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            }
+            Some(']') => {
+                chars.next();
+                for next in chars.by_ref() {
+                    if next == '\u{7}' {
+                        break;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Scans ANSI-stripped output for Anthropic's documented long-lived OAuth
+/// token prefix. research.md §5: the exact final-screen layout is not
+/// live-verified (completing the flow would mint a real credential against
+/// the operator's subscription), so this is deliberately a tolerant pattern
+/// match rather than a screen-position assumption. Pure and unit-testable.
+pub(super) fn extract_oauth_token(buf: &[u8]) -> Option<String> {
+    const PREFIX: &str = "sk-ant-oat";
+    let text = strip_ansi(&String::from_utf8_lossy(buf));
+    let start = text.find(PREFIX)?;
+    let token: String = text[start..]
+        .chars()
+        .take_while(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+        .collect();
+    (token.len() > PREFIX.len()).then_some(token)
+}
+
+fn spawn_reader_thread(mut reader: Box<dyn Read + Send>) -> mpsc::UnboundedReceiver<ReaderEvent> {
+    let (tx, rx) = mpsc::unbounded_channel();
+    std::thread::spawn(move || {
+        let mut buf: Vec<u8> = Vec::new();
+        let mut url_sent = false;
+        let mut chunk = [0_u8; 4096];
+        loop {
+            match reader.read(&mut chunk) {
+                Ok(0) => {
+                    let _ = tx.send(ReaderEvent::Eof);
+                    return;
+                }
+                Ok(n) => {
+                    buf.extend_from_slice(&chunk[..n]);
+                    if !url_sent {
+                        if let Some(url) = extract_osc8_url(&buf) {
+                            url_sent = true;
+                            if tx.send(ReaderEvent::Url(url)).is_err() {
+                                return;
+                            }
+                        }
+                    }
+                    if let Some(token) = extract_oauth_token(&buf) {
+                        let _ = tx.send(ReaderEvent::Token(token));
+                        return;
+                    }
+                }
+                Err(error) => {
+                    let _ = tx.send(ReaderEvent::Error(error.to_string()));
+                    return;
+                }
+            }
+        }
+    });
+    rx
+}
+
+/// A `claude setup-token` flow paused after showing the OAuth URL, waiting
+/// for the user's authorization code via [`submit_claude_code`].
+pub struct ClaudeConnectSession {
+    child: Box<dyn Child + Send + Sync>,
+    writer: Box<dyn Write + Send>,
+    events: mpsc::UnboundedReceiver<ReaderEvent>,
+    _config_dir: TempDir,
+}
+
+impl Drop for ClaudeConnectSession {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+    }
+}
+
+fn is_missing_binary(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref::<std::io::Error>()
+        .is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound)
+}
+
+/// Spawns `claude setup-token` in a PTY inside an isolated `CLAUDE_CONFIG_DIR`
+/// (spec.md FR-003) and waits for the OAuth URL to appear.
+pub async fn start_claude_connect(
+    binary: &str,
+) -> Result<(ClaudeConnectSession, String), AdapterError> {
+    let binary_owned = binary.to_string();
+    let mut session = tokio::task::spawn_blocking(move || {
+        let config_dir = TempDir::new().map_err(|error| AdapterError::Http {
+            reason: format!("failed to create temp CLAUDE_CONFIG_DIR: {error}"),
+        })?;
+
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(pty_size())
+            .map_err(|error| AdapterError::Http {
+                reason: format!("failed to allocate a pty: {error}"),
+            })?;
+
+        let mut cmd = CommandBuilder::new(&binary_owned);
+        cmd.arg("setup-token");
+        cmd.env("CLAUDE_CONFIG_DIR", config_dir.path());
+        cmd.cwd(config_dir.path());
+
+        let child = pair.slave.spawn_command(cmd).map_err(|error| {
+            if is_missing_binary(&error) {
+                AdapterError::Unavailable {
+                    reason: format!("\"{binary_owned}\" is not installed or not on PATH"),
+                }
+            } else {
+                AdapterError::Http {
+                    reason: format!("failed to spawn \"{binary_owned} setup-token\": {error}"),
+                }
+            }
+        })?;
+        drop(pair.slave);
+
+        let reader = pair
+            .master
+            .try_clone_reader()
+            .map_err(|error| AdapterError::Http {
+                reason: format!("failed to open pty reader: {error}"),
+            })?;
+        let writer = pair
+            .master
+            .take_writer()
+            .map_err(|error| AdapterError::Http {
+                reason: format!("failed to open pty writer: {error}"),
+            })?;
+
+        Ok::<_, AdapterError>(ClaudeConnectSession {
+            child,
+            writer,
+            events: spawn_reader_thread(reader),
+            _config_dir: config_dir,
+        })
+    })
+    .await
+    .map_err(|error| AdapterError::Http {
+        reason: format!("connect task join failed: {error}"),
+    })??;
+
+    let url = tokio::time::timeout(URL_TIMEOUT, async {
+        loop {
+            match session.events.recv().await {
+                Some(ReaderEvent::Url(url)) => return Ok(url),
+                Some(ReaderEvent::Token(_)) => continue,
+                Some(ReaderEvent::Eof) => {
+                    return Err(AdapterError::Http {
+                        reason: "claude setup-token exited before showing a login URL".into(),
+                    })
+                }
+                Some(ReaderEvent::Error(error)) => {
+                    return Err(AdapterError::Http { reason: error })
+                }
+                None => {
+                    return Err(AdapterError::Http {
+                        reason: "claude setup-token's output stream ended unexpectedly".into(),
+                    })
+                }
+            }
+        }
+    })
+    .await
+    .map_err(|_| AdapterError::Http {
+        reason: format!("timed out after {URL_TIMEOUT:?} waiting for the login URL"),
+    })??;
+
+    Ok((session, url))
+}
+
+/// Submits the authorization code the user copied back from the browser,
+/// then waits for the resulting long-lived OAuth token.
+pub async fn submit_claude_code(
+    session: &mut ClaudeConnectSession,
+    code: &str,
+) -> Result<Vec<u8>, AdapterError> {
+    let mut line = code.trim().as_bytes().to_vec();
+    line.push(b'\r');
+    session
+        .writer
+        .write_all(&line)
+        .map_err(|error| AdapterError::Http {
+            reason: format!("failed to submit the authorization code: {error}"),
+        })?;
+
+    let token = tokio::time::timeout(TOKEN_TIMEOUT, async {
+        loop {
+            match session.events.recv().await {
+                Some(ReaderEvent::Token(token)) => return Ok(token),
+                Some(ReaderEvent::Url(_)) => continue,
+                Some(ReaderEvent::Eof) | None => return Err(AdapterError::InvalidCredentials),
+                Some(ReaderEvent::Error(error)) => {
+                    return Err(AdapterError::Http { reason: error })
+                }
+            }
+        }
+    })
+    .await
+    .map_err(|_| AdapterError::Http {
+        reason: format!("timed out after {TOKEN_TIMEOUT:?} waiting for the login token"),
+    })??;
+
+    Ok(token.into_bytes())
+}

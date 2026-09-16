@@ -38,6 +38,7 @@ use models::commands::{
     install_huggingface_update, list_installed_models, preview_huggingface_install,
     search_huggingface_models,
 };
+use providers::connect::{connect_cli_delegate, submit_cli_delegate_code, DelegateConnectState};
 use providers::{
     add_provider, delete_provider, list_provider_models, list_providers, refresh_provider_models,
 };
@@ -78,6 +79,7 @@ pub fn run() {
     }
     let builder = tauri::Builder::default().manage(AppState::new());
     let builder = builder.manage(ChatState::new());
+    let builder = builder.manage(DelegateConnectState::new());
     builder
         .setup(|app| {
             if cfg!(debug_assertions) {
@@ -107,6 +109,8 @@ pub fn run() {
             add_provider,
             list_providers,
             delete_provider,
+            connect_cli_delegate,
+            submit_cli_delegate_code,
             refresh_provider_models,
             list_provider_models,
             download_model_from_catalog,

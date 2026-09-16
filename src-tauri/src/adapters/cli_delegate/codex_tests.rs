@@ -4,7 +4,7 @@
 
 use serde_json::json;
 
-use super::codex::{build_request, categorize_line, Line};
+use super::codex::{build_request, categorize_line, turn_completed_failure, Line};
 
 #[test]
 fn build_request_matches_the_client_request_envelope() {
@@ -47,6 +47,46 @@ fn a_notification_has_no_id() {
         Line::Notification { method, .. } => assert_eq!(method, "turn/completed"),
         other => panic!("expected Notification, got {other:?}"),
     }
+}
+
+#[test]
+fn turn_completed_with_status_failed_reports_the_error_message() {
+    // Verbatim shape observed live from a genuine auth failure (garbage
+    // credential in an isolated CODEX_HOME, research.md §6) -- codex has
+    // no separate `turn/failed` notification for this case, only
+    // `turn.status` inside `turn/completed` distinguishes it.
+    let params = json!({
+        "threadId": "t",
+        "turn": {
+            "id": "u",
+            "status": "failed",
+            "error": {"message": "unexpected status 401 Unauthorized: Missing bearer or basic authentication in header"}
+        }
+    });
+    assert_eq!(
+        turn_completed_failure(&params).as_deref(),
+        Some(
+            "unexpected status 401 Unauthorized: Missing bearer or basic authentication in header"
+        )
+    );
+}
+
+#[test]
+fn turn_completed_with_status_completed_reports_no_failure() {
+    let params = json!({
+        "threadId": "t",
+        "turn": {"id": "u", "status": "completed", "error": null, "items": []}
+    });
+    assert_eq!(turn_completed_failure(&params), None);
+}
+
+#[test]
+fn turn_completed_failed_without_an_error_message_still_reports_a_failure() {
+    let params = json!({"turn": {"id": "u", "status": "failed"}});
+    assert_eq!(
+        turn_completed_failure(&params).as_deref(),
+        Some("codex turn failed")
+    );
 }
 
 #[test]

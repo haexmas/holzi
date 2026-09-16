@@ -15,13 +15,13 @@ use crate::adapters::types::{StreamChunk, StreamError};
 use crate::adapters::{AdapterError, AdapterStream, ChatRequest};
 
 use super::approval_bridge;
-use super::process::{configure_process_group, ChildLifecycle};
+use super::process::{configure_process_group, map_spawn_error, ChildLifecycle};
 use super::{build_transcript_prompt, DelegateChatContext};
 
 const CLIENT_NAME: &str = "holzi";
 const CLIENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
-const MAX_STDERR_BYTES: usize = 64 * 1024;
+pub(super) const MAX_STDERR_BYTES: usize = 64 * 1024;
 
 fn build_command(binary: &str, tmp: &TempDir) -> Command {
     let mut cmd = Command::new(binary);
@@ -94,6 +94,26 @@ pub(super) fn categorize_line(line: Option<&str>) -> Line {
         },
         (None, None) => Line::Unrecognized,
     }
+}
+
+/// `turn/completed` fires for both a successful **and a failed** turn —
+/// there is no separate `turn/failed` notification on the actual wire for
+/// this case, only `turn.status` inside `turn/completed` distinguishes them
+/// (confirmed live: an authentication failure produces `turn/completed` with
+/// `status: "failed"` and a populated `turn.error`, research.md §6). Returns
+/// the failure message, or `None` for a normal completion.
+pub(super) fn turn_completed_failure(params: &Value) -> Option<String> {
+    let turn = params.get("turn")?;
+    if turn.get("status").and_then(Value::as_str) != Some("failed") {
+        return None;
+    }
+    Some(
+        turn.get("error")
+            .and_then(|error| error.get("message"))
+            .and_then(Value::as_str)
+            .unwrap_or("codex turn failed")
+            .to_string(),
+    )
 }
 
 async fn read_line(lines: &mut Lines<BufReader<ChildStdout>>) -> io::Result<Line> {
@@ -201,7 +221,7 @@ async fn call_with_timeout(
     })?
 }
 
-async fn read_limited<R: AsyncRead + Unpin>(mut reader: R) -> Vec<u8> {
+pub(super) async fn read_limited<R: AsyncRead + Unpin>(mut reader: R) -> Vec<u8> {
     let mut output = Vec::new();
     let mut buffer = [0_u8; 4096];
     while let Ok(read) = reader.read(&mut buffer).await {
@@ -237,9 +257,8 @@ pub(super) async fn spawn_codex_app_server(
 
     let mut command = build_command(&binary, &tmp);
     configure_process_group(&mut command);
-    let mut child = ChildLifecycle::spawn(&mut command).map_err(|error| AdapterError::Http {
-        reason: format!("failed to spawn \"{binary}\": {error}"),
-    })?;
+    let mut child =
+        ChildLifecycle::spawn(&mut command).map_err(|error| map_spawn_error(&binary, error))?;
     let mut stdin = child
         .child_mut()
         .stdin
@@ -286,6 +305,10 @@ pub(super) async fn spawn_codex_app_server(
                 "cwd": tmp.path().to_string_lossy(),
                 "approvalPolicy": "on-request",
                 "approvalsReviewer": "user",
+                // Codex's equivalent of Claude's `--append-system-prompt-file`
+                // (spec.md FR-010) — holzi passes context explicitly rather
+                // than relying on file-based discovery.
+                "developerInstructions": req.system_prompt.clone(),
             }),
             &context,
             original_thread_id,
@@ -386,6 +409,10 @@ pub(super) async fn spawn_codex_app_server(
                         ));
                     }
                     "turn/completed" => {
+                        if let Some(message) = turn_completed_failure(&params) {
+                            let _ = tx.send(Err(StreamError::Model(message)));
+                            break;
+                        }
                         let (prompt_tokens, completion_tokens) = last_usage.unwrap_or((None, None));
                         let _ = tx.send(Ok(StreamChunk::Done {
                             finish_reason: Some("complete".to_string()),

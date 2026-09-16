@@ -51,9 +51,14 @@ Aus `provider.adapter` geparst (analog zu `ProviderKind::parse`), bestimmt Dispa
 
 ### `CliDelegateAdapter` (`adapters/cli_delegate/mod.rs`)
 
-Implementiert `ProviderAdapter` (`list_models` liefert `Ok(vec![])` — Delegate-"Modelle" sind keine
-per-Refresh gelistete Katalog-Ware, sondern die eine feste Verbindung des jeweiligen Vendors, analog
-zu `LocalAdapter::list_models`).
+Implementiert `ProviderAdapter`. **Korrigiert während der Implementierung**: `list_models` liefert
+nicht `Ok(vec![])`, sondern genau ein synthetisches `ProviderModel` (`remote_id = vendor.as_str()`,
+z.B. `"claude"`) — läuft dadurch durch den bestehenden `do_refresh`/`replace_provider_models`-Cache-
+Pfad wie ein `api_key`-Provider und bekommt eine echte, gecachte `models`-Zeile mit der üblichen
+`<provider_id>:<remote_id>`-Composite-ID. Das Frontend (`stores/models.ts`) verlässt sich auf genau
+diese Zeile, statt selbst eine `:delegate`-ID zu synthetisieren — einfacher als der ursprünglich hier
+beschriebene Plan, da kein separater Frontend-Sonderfall für "verbunden" nötig ist, nur noch für
+"nicht verbunden" (kein `providers`-Zeile vorhanden).
 
 | Feld                     | Typ                                                            | Herkunft                                                                                                                                                    |
 | ------------------------ | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |

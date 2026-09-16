@@ -84,7 +84,13 @@
       "local": "Lokale Modelle",
       "notLoaded": "Kein Modell geladen",
       "none": "Keins",
-      "selectPrompt": "Wähle ein Modell aus, um den Chat zu starten."
+      "selectPrompt": "Wähle ein Modell aus, um den Chat zu starten.",
+      "delegate": {
+        "claude": "Claude Code",
+        "codex": "Codex"
+      },
+      "delegateNotConnected": "Nicht verbunden — in den Einstellungen verbinden",
+      "answeredByDelegate": "Beantwortet von {name}"
     },
     "newChat": "Neuer Chat",
     "newChatShort": "Neu",
@@ -218,6 +224,20 @@
       "clear": "Diesen Standard löschen",
       "cleared": "Standard gelöscht.",
       "empty": "Es sind noch keine Modelle installiert oder Anbieter konfiguriert."
+    },
+    "cliDelegate": {
+      "title": "Abo verbinden",
+      "description": "Nutze dein bestehendes Claude-Code- oder Codex-Abo als Chat-Backend — kein API-Key nötig. Die Verbindung wird einmal pro Vault hergestellt und begleitet den Vault überallhin, wo er geöffnet wird.",
+      "connect": "Verbinden",
+      "reconnect": "Erneut verbinden",
+      "connected": "Verbunden",
+      "connecting": "Verbindung wird hergestellt…",
+      "openUrlPrompt": "Öffne diesen Link zum Anmelden und füge den dort angezeigten Code danach hier ein:",
+      "enterCodePrompt": "Gib diesen Code auf der Seite ein:",
+      "codeInputLabel": "Autorisierungscode",
+      "submitCode": "Code einreichen",
+      "success": "Verbunden.",
+      "error": "Verbindung fehlgeschlagen"
     }
   },
   "models": {
