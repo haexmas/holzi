@@ -241,6 +241,15 @@ _Out of scope for this feature_ (see `docs/plans/2026-09-11-agent-tool-loop-desi
 - Any delegate provider beyond Claude Code and Codex.
 - Remembering or persisting an individual approval decision across future requests — an inherited
   limitation from 003-agent-tool-loop, unchanged here.
+- Using a delegate backend from a mobile (iOS/Android) holzi instance. Spawning `claude`/`codex` as a
+  subprocess is categorically impossible on mobile OS sandboxing, with no workaround at the
+  implementation level — this feature is desktop-only (plan.md Technical Context). Reverse-engineering
+  each vendor's private subscription-authenticated HTTP API to bypass the subprocess requirement was
+  considered and rejected (2026-09-16, operator decision): it would be a materially larger ToS risk
+  than the already-accepted raw-CLI risk (no official software involved at all) against an
+  undocumented, unversioned protocol. Mobile access is intended as a later, separate feature: a mobile
+  instance relaying chat and approval prompts to a desktop-hosted delegate session over holzi's
+  planned peer-sync layer (iroh) — not addressed by this spec.
 
 ### Key Entities
 

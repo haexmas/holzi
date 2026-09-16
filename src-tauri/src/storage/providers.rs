@@ -11,16 +11,19 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Provider row as stored in SQLite. `credentials` is opaque bytes — for
-/// `api_key` providers it is the API key (SQLCipher protects at rest,
-/// and the deferred sync payload transports it only over the encrypted
-/// channel per plan §"Anbietermodelle"). For `local` and `cli_delegate`
-/// providers it is `None`.
+/// `api_key` providers it is the API key, and for `cli_delegate`
+/// providers (spec 007-cli-delegate) it is a Claude OAuth token or a
+/// Codex `auth.json`'s raw bytes, depending on `adapter` (SQLCipher
+/// protects at rest either way, and the deferred sync payload transports
+/// it only over the encrypted channel per plan §"Anbietermodelle"). For
+/// `local` providers it is `None`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Provider {
     pub id: Uuid,
     pub kind: ProviderKind,
-    /// Adapter/vendor discriminator for `api_key` providers, such as
-    /// `"anthropic"`. It is `None` for legacy rows and non-HTTP providers.
+    /// Vendor discriminator: for `api_key` providers a vendor like
+    /// `"anthropic"`; for `cli_delegate` providers (spec 007-cli-delegate)
+    /// `"claude"` or `"codex"`. `None` for legacy rows and `local`.
     pub adapter: Option<String>,
     pub name: String,
     pub base_url: Option<String>,

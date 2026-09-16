@@ -67,26 +67,26 @@ every user story builds on.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T003 Update `add_provider`'s validation in `src-tauri/src/providers/mod.rs` (~lines 112-123):
+- [x] T003 Update `add_provider`'s validation in `src-tauri/src/providers/mod.rs` (~lines 112-123):
       replace the current rejection of `adapter` for `ProviderKind::CliDelegate` with a check that
       `adapter ∈ {"claude", "codex"}` (data-model.md).
-- [ ] T004 [P] Update the doc comment on `credentials` in `src-tauri/src/storage/providers.rs`
+- [x] T004 [P] Update the doc comment on `credentials` in `src-tauri/src/storage/providers.rs`
       (lines 13-17): remove "For local and cli_delegate providers it is `None`" for the
       `cli_delegate` half — it now holds the encrypted Claude OAuth token / Codex `auth.json` bytes.
-- [ ] T005 Thread `pending_tool_approvals: Arc<Mutex<HashMap<Uuid, oneshot::Sender<ApprovalDecision>>>>`
+- [x] T005 Thread `pending_tool_approvals: Arc<Mutex<HashMap<Uuid, oneshot::Sender<ApprovalDecision>>>>`
       (already on `ChatState`, `session.rs:120`) and `app: &AppHandle` (already available in
       `load_model_inner`, `model_loading.rs:132`) through `load_api_key_model` into
       `build_adapter(provider: &Provider, ...)` in `src-tauri/src/providers/mod.rs` and
       `src-tauri/src/chat/model_loading.rs` (data-model.md "Signatur-Änderung").
-- [ ] T006 Implement `build_adapter`'s `ProviderKind::CliDelegate` branch (`providers/mod.rs`,
+- [x] T006 Implement `build_adapter`'s `ProviderKind::CliDelegate` branch (`providers/mod.rs`,
       currently `Err(HolziError::InvalidInput { reason: "cli_delegate refresh is not yet
       implemented" })`): parse `DelegateVendor` from `provider.adapter`, decrypt `provider.credentials`,
       construct `CliDelegateAdapter` with the handles from T005.
-- [ ] T007 [P] Create `src-tauri/src/adapters/cli_delegate/mod_tests.rs`: `DelegateVendor::parse`/
+- [x] T007 [P] Create `src-tauri/src/adapters/cli_delegate/mod_tests.rs`: `DelegateVendor::parse`/
       `as_str` round-trip for both vendors and reject unknown strings; `build_adapter` constructs a
       `CliDelegateAdapter` for a well-formed `cli_delegate` row and still errors for a malformed
       `adapter` value. Register `#[cfg(test)] #[path = "mod_tests.rs"] mod mod_tests;` appropriately.
-- [ ] T008 [P] **Spike** (research.md §2): against a real authenticated `codex` installation, drive
+- [x] T008 [P] **Spike** (research.md §2): against a real authenticated `codex` installation, drive
       `codex app-server --stdio` through a task that triggers a command execution and confirm an
       `ExecCommandApprovalRequest` is delivered live and the process genuinely blocks until answered
       — the same way the Claude Code round-trip was already confirmed manually. Also determine
@@ -95,7 +95,7 @@ every user story builds on.
       timed_out` on its own, or must the client actively respond `denied`?). Record both outcomes as
       an addendum in research.md §2. **Gates**: T014, T030, T036 (all Codex-specific work) — do not
       start those until this spike's outcome is recorded.
-- [ ] T009 [P] **Spike** (research.md §3): with an isolated `CLAUDE_CONFIG_DIR`, confirm a host-level
+- [x] T009 [P] **Spike** (research.md §3): with an isolated `CLAUDE_CONFIG_DIR`, confirm a host-level
       skill or plugin (not just hooks/credentials/settings, already confirmed) is also not discovered
       by a `-p` run. Record the outcome as an addendum in research.md §3. **Gates**: T037.
 

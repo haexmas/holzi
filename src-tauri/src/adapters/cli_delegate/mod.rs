@@ -15,17 +15,31 @@
 //! `crate::chat::tools::ApprovalDecision` (data-model.md
 //! "approval_bridge.rs").
 
-// `claude`/`codex` submodules land in tasks.md T013/T014; `mod_tests`
-// lands in T007.
+// `claude`/`codex` submodules land in tasks.md T013/T014.
+#[cfg(test)]
+#[path = "mod_tests.rs"]
+mod mod_tests;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use async_trait::async_trait;
 use tauri::AppHandle;
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
+use super::{AdapterError, AdapterStream, ChatRequest, ProviderAdapter, ProviderModel};
 use crate::chat::tools::ApprovalDecision;
+
+/// Shared shape of `ChatState.pending_tool_approvals` (`chat/session.rs`),
+/// reused verbatim rather than re-declared so the type stays in lockstep
+/// with the built-in tool loop's own map.
+pub type PendingToolApprovals = Arc<Mutex<HashMap<Uuid, oneshot::Sender<ApprovalDecision>>>>;
+
+/// What `build_adapter` needs, beyond the provider row itself, to
+/// construct a `CliDelegateAdapter` capable of real `stream_chat` (not
+/// just `list_models`) — see `CliDelegateAdapter`'s own doc comment.
+pub type DelegateChatContext = (PendingToolApprovals, AppHandle);
 
 /// Which subscription vendor a `cli_delegate` provider row talks to.
 /// Parsed from `providers.adapter` (`storage/providers.rs`), mirroring
@@ -54,25 +68,18 @@ impl DelegateVendor {
     }
 }
 
-/// One approval request the delegate's own tool use raised, awaiting a
-/// live decision through holzi's approval gate (data-model.md
-/// "approval_bridge.rs"). Shared shape for both vendors — Claude Code's
-/// MCP permission-prompt-tool bridge and Codex's `ServerRequest`
-/// approval handling both resolve into this before crossing into
-/// `pending_tool_approvals`.
-pub struct PendingDelegateApproval {
-    pub tool_name: String,
-    pub tool_input: serde_json::Value,
-}
-
 /// `ProviderAdapter` implementation for a `cli_delegate` provider row.
 /// Constructed once per model load (`build_adapter`, `providers/mod.rs`)
 /// and held as `Arc<dyn ProviderAdapter>` on the active session, exactly
 /// like `AnthropicAdapter`/`LocalAdapter`.
 ///
-/// Fields are populated by `build_adapter`'s `CliDelegate` branch — see
-/// tasks.md T006 (construction) and T005 (threading `pending_tool_approvals`/
-/// `app` through from `load_model_inner`).
+/// `pending_tool_approvals`/`app_handle` are `None` when built from a
+/// context that only ever calls `list_models` (the plain
+/// refresh/`do_refresh` path, `providers/mod.rs`) rather than actually
+/// running a chat turn — that path never needs the approval bridge.
+/// `stream_chat` (real chat use) requires both `Some`; `build_adapter`'s
+/// chat-loading call site (`chat/model_loading.rs::load_api_key_model`)
+/// always provides them (tasks.md T005).
 pub struct CliDelegateAdapter {
     vendor: DelegateVendor,
     /// Decrypted `providers.credentials`: a Claude OAuth token (UTF-8
@@ -82,15 +89,8 @@ pub struct CliDelegateAdapter {
     /// From `providers.base_url`; the `claude`/`codex` binary name or
     /// path to spawn. Falls back to `vendor.as_str()` when empty.
     binary: String,
-    /// Same `ChatState.pending_tool_approvals` map the built-in tool
-    /// loop already uses (`chat/session.rs`) — threaded through so a
-    /// delegate's own tool use can raise a live `tool-permission-request`
-    /// through the identical gate, not a parallel mechanism.
-    pending_tool_approvals: Arc<Mutex<HashMap<Uuid, oneshot::Sender<ApprovalDecision>>>>,
-    /// Needed to emit `tool-permission-request` (`events.rs`) while
-    /// `stream_chat` is still running, before it has returned anything
-    /// to the turn loop.
-    app_handle: AppHandle,
+    pending_tool_approvals: Option<PendingToolApprovals>,
+    app_handle: Option<AppHandle>,
 }
 
 impl CliDelegateAdapter {
@@ -98,8 +98,8 @@ impl CliDelegateAdapter {
         vendor: DelegateVendor,
         credentials: Vec<u8>,
         binary: String,
-        pending_tool_approvals: Arc<Mutex<HashMap<Uuid, oneshot::Sender<ApprovalDecision>>>>,
-        app_handle: AppHandle,
+        pending_tool_approvals: Option<PendingToolApprovals>,
+        app_handle: Option<AppHandle>,
     ) -> Self {
         let binary = if binary.is_empty() {
             vendor.as_str().to_string()
@@ -113,5 +113,36 @@ impl CliDelegateAdapter {
             pending_tool_approvals,
             app_handle,
         }
+    }
+}
+
+#[async_trait]
+impl ProviderAdapter for CliDelegateAdapter {
+    /// Delegates have no per-refresh model catalog — the one connected
+    /// backend per vendor *is* the model (data-model.md). Mirrors
+    /// `LocalAdapter::list_models`'s existing empty-`Vec` convention.
+    async fn list_models(&self) -> Result<Vec<ProviderModel>, AdapterError> {
+        Ok(vec![])
+    }
+
+    /// Real dispatch to `claude.rs`/`codex.rs` lands in tasks.md T013-T016;
+    /// until then this is a placeholder so `CliDelegateAdapter` can be
+    /// constructed (T006) without every downstream task landing at once.
+    async fn stream_chat(&self, _req: ChatRequest) -> Result<AdapterStream, AdapterError> {
+        let (_pending, _app) = self
+            .pending_tool_approvals
+            .as_ref()
+            .zip(self.app_handle.as_ref())
+            .ok_or_else(|| AdapterError::Http {
+                reason: "cli_delegate adapter built without chat context (list_models-only \
+                         construction)"
+                    .into(),
+            })?;
+        Err(AdapterError::Http {
+            reason: format!(
+                "cli_delegate ({}) stream_chat not yet implemented — tasks.md T013-T016",
+                self.vendor.as_str()
+            ),
+        })
     }
 }

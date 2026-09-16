@@ -75,11 +75,40 @@ live conversation. It confirms:
   out before reaching a decision"). The existence of a timeout outcome is strong structural evidence
   of a real wait, not a static or fire-and-forget check.
 
-This structurally confirms design doc §10 item 1's leading hypothesis. **Not yet exercised**: an
-actual live round-trip the way §1's Claude Code test was (would need a real Codex-authenticated
-session driving a task that triggers `ExecCommandApprovalRequest`) — a cheap, worthwhile
-pre-implementation spike (first integration test written for `codex.rs`), not a blocking unknown for
-planning purposes.
+This structurally confirms design doc §10 item 1's leading hypothesis, and was then verified with a
+**real live round-trip** (tasks.md T008, 2026-09-16) against this machine's already-authenticated
+`codex` (0.147.0), using a hand-rolled Python JSON-RPC driver (`initialize` → `thread/start` →
+`turn/start` with a prompt asking it to run `touch <file>`):
+
+- The actual wire method is **`item/commandExecution/requestApproval`** (matching the `Item/
+  commandExecution/requestApprovalRequest` `ServerRequest` variant found by schema alone) — **not**
+  the differently-named `ExecCommandApprovalRequest`/`ExecCommandApprovalResponse` pair the schema
+  file of that name suggested. Both exist in the schema bundle; this installed version uses the
+  `item/commandExecution/…` one on the wire.
+- The **response shape is also different from what `ExecCommandApprovalResponse` suggested**: the
+  server expects `{"decision": <value>}` where `<value>` is one of `accept`, `acceptForSession`,
+  `acceptWithExecpolicyAmendment`, `applyNetworkPolicyAmendment`, `decline`, `cancel` (matching
+  `CommandExecutionApprovalDecision`, found alongside the request params in the same schema file,
+  not `ReviewDecision`'s `approved`/`denied`/`abort`/`timed_out` naming). Responding with
+  `{"decision":"approved"}` (the `ReviewDecision`-shaped guess) triggered a server-side
+  deserialization error, logged to stderr, and the server treated the malformed response as a
+  rejection ("approval request failed") — a real, observed fail-safe default worth relying on
+  deliberately, not just noting.
+- **Genuinely blocking, confirmed via timing**: the handler was made to `sleep(3)` before responding.
+  The thread's status flipped to `{"type":"active","activeFlags":["waitingOnApproval"]}` immediately
+  after the request arrived and stayed there for the full 3 seconds; the command only executed (file
+  created, non-null `processId`) after the correctly-shaped `{"decision":"accept"}` response was
+  sent. This rules out a fire-and-forget notification or a pre-computed/cached decision.
+- `approvalPolicy: "on-request"` and `approvalsReviewer: "user"` in `thread/start`'s params were both
+  needed to route the request back to the client at all (per `ApprovalsReviewer`'s doc comment,
+  `"user"` is already the default, but setting it explicitly removes any doubt from a possibly
+  customized `~/.codex/config.toml` — the same host-config-leakage risk already found on the Claude
+  Code side, research.md §3).
+
+**Decision, updated**: `codex.rs` (tasks.md T014/T036) must speak the `item/commandExecution/
+requestApproval` / `item/fileChange/requestApproval` / `item/permissions/requestApproval` wire
+methods with `CommandExecutionApprovalDecision`-shaped responses (`accept`/`decline` at minimum),
+**not** the `ExecCommandApprovalRequest`/`ReviewDecision` pair originally assumed from schema alone.
 
 **Alternatives considered**: `codex exec` (headless mode) — rejected per the design doc's existing
 finding ([openai/codex#24135](https://github.com/openai/codex/issues/24135)): closed stdin means any
@@ -107,11 +136,15 @@ strength. The non-`--bare` mechanism was verified directly instead:
   `SessionStart` hook firing before `system/init`). This confirms `CLAUDE_CONFIG_DIR` also blocks
   host-level *hook* execution, not just credential lookup.
 
-**Not yet verified**: whether this mechanism blocks every kind of host-level discovery `--bare`
-guarantees (skills, plugins, MCP auto-discovery specifically), or only what was directly tested
-(credentials, hooks, and — by construction, since `cwd` is a fresh empty directory — project-local
-`.claude/settings.json`/`.mcp.json`/`CLAUDE.md` discovery). Worth a narrow pre-implementation check
-covering skills/plugins specifically; not expected to change the chosen mechanism.
+**Skills/plugins isolation, verified** (tasks.md T009, 2026-09-16): compared `system/init`'s `skills`/
+`plugins` fields between a non-isolated and an isolated run of the same `claude -p "say hi"` prompt.
+Non-isolated: 47 skills including the operator's personal ones (`brainstorming`, `diagnose`,
+`graphify`, etc.) and one real plugin loaded (`superpowers`, `/home/haex/.claude/skills/superpowers`,
+v4.1.1). Isolated (`CLAUDE_CONFIG_DIR` pointed at a fresh empty directory): exactly 15 skills — all of
+them the CLI's own bundled/built-in set (`deep-research`, `dataviz`, `doctor`, etc.), none of the
+operator's personal ones — and zero plugins. This confirms the isolation mechanism blocks user-level
+skill and plugin discovery too, not only credentials/hooks/settings — the last previously-unverified
+category from `--bare`'s guarantee list.
 
 **Alternatives considered**: `--bare` + `ANTHROPIC_API_KEY` — rejected, collapses this feature into
 the existing `api_key` provider and abandons the "bring your subscription" value proposition (spec.md
@@ -151,11 +184,10 @@ the built-in tool-call machinery.
 | Unknown | Resolution |
 |---|---|
 | Claude Code live approval capability | §1 — `--permission-prompt-tool` + holzi-run MCP server, verified live |
-| Codex approval protocol shape | §2 — `ServerRequest` approval variants, schema-confirmed from installed CLI |
-| Host isolation + subscription credential mechanism | §3 — `CLAUDE_CONFIG_DIR` + disposable `cwd`, not `--bare`; verified for credentials + hooks |
+| Codex approval protocol shape | §2 — verified live: `item/commandExecution/requestApproval` + `CommandExecutionApprovalDecision`-shaped `{"decision":"accept"\|"decline"\|...}` responses |
+| Host isolation + subscription credential mechanism | §3 — `CLAUDE_CONFIG_DIR` + disposable `cwd`, not `--bare`; verified for credentials, hooks, *and* skills/plugins |
 | Turn/step loop integration point | §4 — `ProviderAdapter::stream_chat`, no `turn.rs` changes |
 
-No unresolved `NEEDS CLARIFICATION` markers remain in `plan.md`'s Technical Context. Two narrow,
-explicitly-scoped pre-implementation spikes remain (Codex live round-trip, §2; Claude Code
-skills/plugins isolation coverage, §3) — neither blocks planning, both are cheap first steps in
-`tasks.md`.
+No unresolved `NEEDS CLARIFICATION` markers remain in `plan.md`'s Technical Context, and both of
+tasks.md's Phase 2 verification spikes (T008 Codex live round-trip, T009 Claude skills/plugins
+isolation) completed 2026-09-16 with live-verified, not just schema/doc-inferred, results.
