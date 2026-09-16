@@ -22,7 +22,7 @@
 use std::sync::Arc;
 
 use serde::Serialize;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -165,7 +165,11 @@ pub(crate) async fn load_model_inner(
         // This path only performs bounded database/adapter setup. Await it
         // to completion so cancellation cannot drop a spawn_blocking DB read
         // while a Vault close is waiting to release its Arc.
-        let delegate_chat_ctx = Some((Arc::clone(&chat.pending_tool_approvals), app.clone()));
+        let app_for_emit = app.clone();
+        let emit: crate::adapters::cli_delegate::EventEmitter = Arc::new(move |event, payload| {
+            let _ = app_for_emit.emit(event, payload);
+        });
+        let delegate_chat_ctx = Some((Arc::clone(&chat.pending_tool_approvals), emit));
         load_api_key_model(state, model_id, provider_id_str, delegate_chat_ctx).await?
     } else {
         #[cfg(feature = "llm-cpu")]

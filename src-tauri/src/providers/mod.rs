@@ -430,8 +430,8 @@ pub(crate) fn build_adapter(
                         reason: "cli_delegate provider is missing credentials".into(),
                     })?;
             let binary = provider.base_url.clone().unwrap_or_default();
-            let (pending_tool_approvals, app_handle) = match delegate_chat_ctx {
-                Some((pending, app)) => (Some(pending), Some(app)),
+            let (pending_tool_approvals, emit) = match delegate_chat_ctx {
+                Some((pending, emit)) => (Some(pending), Some(emit)),
                 None => (None, None),
             };
             Ok(Box::new(CliDelegateAdapter::new(
@@ -439,7 +439,7 @@ pub(crate) fn build_adapter(
                 credentials,
                 binary,
                 pending_tool_approvals,
-                app_handle,
+                emit,
             )))
         }
         ProviderKind::Local => Err(HolziError::InvalidInput {

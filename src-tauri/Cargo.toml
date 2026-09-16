@@ -96,6 +96,11 @@ eventsource-stream = "0.2"
 # process, since that's how MCP's stdio transport works.
 rmcp = { version = "=3.3.0", default-features = false, features = ["client", "transport-child-process", "server", "transport-io"] }
 
+# Per-invocation disposable CLAUDE_CONFIG_DIR/CODEX_HOME + cwd (spec
+# 007-cli-delegate FR-003) — was dev-dependency-only (tests used it for
+# fixtures); cli_delegate's production code needs it too.
+tempfile = "3"
+
 [target.'cfg(unix)'.dependencies]
 # Kills a whole process group (`kill(-pgid, SIGKILL)`) so a killed
 # `sh -c "..."` cannot leave behind a grandchild it forked — `Child::kill`
@@ -103,7 +108,8 @@ rmcp = { version = "=3.3.0", default-features = false, features = ["client", "tr
 libc = "0.2"
 
 [dev-dependencies]
-tempfile = "3"
+# `tempfile` moved to `[dependencies]` above — tests already get it
+# transitively, no separate dev-dependency entry needed.
 # rmcp's `server` feature is now a real (non-test-only) `[dependencies]`
 # feature (spec 007-cli-delegate) — no separate dev-dependency entry
 # needed here anymore; `chat/tools/mcp_tests.rs`'s in-memory `ServerHandler`

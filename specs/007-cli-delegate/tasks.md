@@ -120,23 +120,23 @@ approval is cleanly declined (not hung, not silently allowed) (spec.md Acceptanc
 
 ### Tests for User Story 1
 
-- [ ] T010 [P] [US1] Integration test `src-tauri/tests/cli_delegate_claude.rs`: point
+- [x] T010 [P] [US1] Integration test `src-tauri/tests/cli_delegate_claude.rs`: point
       `CliDelegateAdapter` (Claude vendor) at a small stub script standing in for the real `claude`
       binary that emits a canned `--output-format stream-json` transcript (shape captured in
       research.md §1); assert `stream_chat` yields the expected `StreamChunk::Delta`/`Done` sequence
       and never `ToolCalls`.
-- [ ] T011 [P] [US1] Unit test `src-tauri/src/adapters/cli_delegate/claude_tests.rs`: the NDJSON
+- [x] T011 [P] [US1] Unit test `src-tauri/src/adapters/cli_delegate/claude_tests.rs`: the NDJSON
       `stream-json` parser turns `content_block_delta`/`text_delta` events into `Delta` chunks and a
       terminal `result` event into `Done`; a malformed/truncated line surfaces as
       `AdapterError::Parse` rather than panicking.
-- [ ] T012 [P] [US1] Unit test `src-tauri/src/adapters/cli_delegate/codex_tests.rs`: the hand-rolled
+- [x] T012 [P] [US1] Unit test `src-tauri/src/adapters/cli_delegate/codex_tests.rs`: the hand-rolled
       JSON-RPC framing serializes a request and parses a response/`ServerRequest` correctly, using
       fixtures based on `codex app-server generate-json-schema`'s output (research.md §2) as
       reference shapes.
 
 ### Implementation for User Story 1
 
-- [ ] T013 [US1] Implement `spawn_claude_invocation` in `src-tauri/src/adapters/cli_delegate/claude.rs`:
+- [x] T013 [US1] Implement `spawn_claude_invocation` in `src-tauri/src/adapters/cli_delegate/claude.rs`:
       build the `claude -p` `tokio::process::Command` (argv per data-model.md) **with
       `--permission-prompts none` and without `--mcp-config`/`--permission-prompt-tool`** — a safe,
       fail-closed default (anything needing approval is denied, never hangs waiting for a host that
@@ -145,16 +145,16 @@ approval is cleanly declined (not hung, not silently allowed) (spec.md Acceptanc
       disposable `cwd`, `CLAUDE_CODE_OAUTH_TOKEN` from decrypted credentials, guaranteed cleanup on
       every exit path — mirror `chat/tools/cli.rs`'s existing process-group setup and kill-on-cancel
       pattern.
-- [ ] T014 [US1] (depends on T008) Implement `spawn_codex_app_server` in
+- [x] T014 [US1] (depends on T008) Implement `spawn_codex_app_server` in
       `src-tauri/src/adapters/cli_delegate/codex.rs`: `codex app-server --stdio` process spawn, a
       fresh temp `CODEX_HOME` pre-populated with the decrypted `auth.json` bytes, disposable `cwd`,
       guaranteed cleanup; implement the JSON-RPC initialize handshake and turn/response parsing,
       mapping Codex's own answer events to `StreamChunk::Delta`/`Done` (research.md §2, §4). **Any
       incoming `ServerRequest` needing an approval decision gets T008's determined safe fail-closed
       response** (a stub, not real bridging) until T036 (US3) replaces it.
-- [ ] T015 [US1] Implement the `stream-json` NDJSON parser in `claude.rs` per T011's expected
+- [x] T015 [US1] Implement the `stream-json` NDJSON parser in `claude.rs` per T011's expected
       behavior.
-- [ ] T016 [US1] Wire `CliDelegateAdapter::stream_chat`/`list_models` (`cli_delegate/mod.rs`) to
+- [x] T016 [US1] Wire `CliDelegateAdapter::stream_chat`/`list_models` (`cli_delegate/mod.rs`) to
       dispatch to `claude.rs`/`codex.rs` by `DelegateVendor`; `list_models` returns `Ok(vec![])` for
       both (data-model.md — no per-refresh model catalog for delegates).
 - [ ] T017 [US1] Add delegate backend selection to the chat UI (`src/components/settings/
