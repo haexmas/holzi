@@ -5,12 +5,23 @@ zurück. `snake_case` ↔ `camelCase` per `#[serde(rename_all = "camelCase")]`, 
 
 ## Neue Commands
 
-### `connect_cli_delegate(args) -> Provider`
+### `connect_cli_delegate(args) -> ConnectCliDelegateResult`
 
-Startet und schließt den einmaligen Verbindungs-Flow ab (spec.md FR-001, User Story 2). Läuft in
-einem frischen, temporären Verzeichnis (`CLAUDE_CONFIG_DIR`/`CODEX_HOME` + `cwd`, research.md §3):
-für `claude` ein `claude setup-token`-Kindprozess, für `codex` ein `codex login`-Kindprozess — beides
-Browser-basierte OAuth-Flows, die eine URL ausgeben, die der Nutzer öffnen muss.
+Startet den einmaligen Verbindungs-Flow (spec.md FR-001, User Story 2). Läuft in einem frischen,
+temporären Verzeichnis (`CLAUDE_CONFIG_DIR`/`CODEX_HOME` + `cwd`, research.md §3). **Die beiden
+Vendoren haben unterschiedliche Mechanik** (research.md §5, live verifiziert 2026-09-16 — nicht wie
+ursprünglich angenommen ein einheitlicher "Kindprozess gibt URL aus"-Flow):
+
+- **`claude`**: `claude setup-token` läuft in einer PTY (`portable-pty` — echtes TUI, kein
+  zeilenorientiertes stdout; per-`--ax-screen-reader` piped stdio liefert nachweislich 0 Bytes). Die
+  OAuth-URL wird aus einer OSC-8-Hyperlink-Sequenz im PTY-Output extrahiert. Der Flow **pausiert**
+  danach und wartet auf `submit_cli_delegate_code` (unten) — der Command selbst löst bereits nach dem
+  Emittieren der URL auf, er wartet NICHT bis zum Login-Abschluss.
+- **`codex`**: `codex login --device-auth` läuft über normales piped stdio (kein PTY nötig, verifiziert
+  plain-text). URL **und** Einmalcode werden aus stdout extrahiert und beide in
+  `delegate-connect-progress` emittiert. Kein zweiter Command nötig — der Prozess pollt selbst bis der
+  Nutzer den Code auf der Webseite eingegeben hat, schreibt dann `auth.json` und beendet sich mit Exit
+  0; `connect_cli_delegate` wartet intern darauf und schließt den Provider-Upsert direkt ab.
 
 **Args**:
 
@@ -18,22 +29,46 @@ Browser-basierte OAuth-Flows, die eine URL ausgeben, die der Nutzer öffnen muss
 { vendor: 'claude' | 'codex', name: string }
 ```
 
-**Returns**: die neu angelegte oder aktualisierte `Provider`-Zeile (`kind: 'cli_delegate'`,
-`adapter: vendor`). **Upsert-Semantik**: genau eine `cli_delegate`-Provider-Zeile pro Vendor,
-analog zum bestehenden `local`-Provider-Singleton-Muster (`providers/local.rs`) — ein erneuter Aufruf
-für denselben Vendor aktualisiert `credentials` an Ort und Stelle statt eine zweite Zeile anzulegen
-(das bedient auch FR-014: reconnect ist derselbe Command, keine separate "reconnect"-Route).
+**Returns**:
+
+```typescript
+{ status: 'awaiting_code', vendor: 'claude' }               // claude: Code-Eingabe aussteht
+| { status: 'connected', provider: Provider }                 // codex: sofort fertig
+```
 
 **Fehler**:
 
-- `HolziError::InvalidInput` wenn der Kindprozess (`claude setup-token`/`codex login`) nicht startet
-  (Binary fehlt) — spec.md FR-008-artige Behandlung, aber am Setup- statt am Chat-Pfad.
-- Ein Fehlschlag _während_ des Browser-Flows (Nutzer bricht ab, Timeout) liefert `InvalidInput` mit
+- `HolziError::InvalidInput` wenn der Kindprozess (`claude setup-token`/`codex login --device-auth`)
+  nicht startet (Binary fehlt) — spec.md FR-008-artige Behandlung, aber am Setup- statt am Chat-Pfad.
+- Ein Fehlschlag beim Extrahieren der URL (unerwartetes CLI-Output-Format) liefert `InvalidInput` mit
   einer erklärenden `reason`; es wird keine Provider-Zeile angelegt oder verändert.
 
-**Verhalten**: emittiert `delegate-connect-progress` (unten) während des Flows; der Command selbst
-löst erst nach Erfolg oder endgültigem Fehlschlag auf. Das temporäre Verzeichnis wird garantiert
-entfernt (RAII/`finally`), auch bei Fehschlag (research.md §3, spec.md FR-003).
+**Verhalten**: emittiert `delegate-connect-progress` (unten) während des Flows. Für `codex` läuft der
+gesamte Flow innerhalb dieses einen Commands; für `claude` hält der Command den laufenden PTY-Kindprozess
+in In-Memory-State (`ChatState`-artig, siehe data-model.md), bis `submit_cli_delegate_code` oder ein
+Timeout/Abbruch ihn beendet. Das temporäre Verzeichnis wird garantiert entfernt (RAII/`finally`), auch
+bei Fehschlag (research.md §3, spec.md FR-003).
+
+### `submit_cli_delegate_code(code: string) -> Provider` (nur Claude)
+
+Schließt einen laufenden, per `connect_cli_delegate(vendor: 'claude', ...)` gestarteten Flow ab: schreibt
+`code` (plus Zeilenumbruch) in die PTY-stdin des wartenden `claude setup-token`-Prozesses, liest dessen
+weiteren Output, extrahiert den finalen Langzeit-Token (Anthropics `sk-ant-oat`-Präfix, research.md §5 —
+das exakte Erfolgsbild ist nicht live verifiziert, siehe dortige Einschränkung) und schließt den
+Provider-Upsert ab.
+
+**Returns**: die neu angelegte oder aktualisierte `Provider`-Zeile (`kind: 'cli_delegate'`,
+`adapter: 'claude'`). **Upsert-Semantik**: genau eine `cli_delegate`-Provider-Zeile pro Vendor, analog
+zum bestehenden `local`-Provider-Singleton-Muster (`providers/local.rs`) — ein erneuter `connect_cli_
+delegate`+`submit_cli_delegate_code`-Durchlauf für denselben Vendor aktualisiert `credentials` an Ort
+und Stelle statt eine zweite Zeile anzulegen (das bedient auch FR-014: reconnect ist derselbe
+Command-Paar, keine separate "reconnect"-Route). Dieselbe Upsert-Semantik gilt für `codex`, dort aber
+bereits am Ende von `connect_cli_delegate` selbst, da kein zweiter Command existiert.
+
+**Fehler**: `HolziError::InvalidInput` wenn kein Flow für `claude` aussteht (z. B. doppelter Aufruf,
+abgelaufener/bereits beendeter Prozess), oder wenn der Code vom Kindprozess abgelehnt wird (falscher/
+abgelaufener Code) — keine Provider-Zeile wird in diesem Fall angelegt oder verändert, der Flow bleibt
+offen für einen erneuten `submit_cli_delegate_code`-Versuch.
 
 ## Geänderte Commands
 
@@ -68,16 +103,21 @@ aufgelöst (bestehendes Verhalten aus 003, unverändert).
 
 ### `delegate-connect-progress`
 
-Fortschritt während `connect_cli_delegate` läuft.
+Fortschritt während `connect_cli_delegate`/`submit_cli_delegate_code` läuft.
 
 ```typescript
 {
   vendor: 'claude' | 'codex',
-  status: 'awaiting_browser' | 'success' | 'error',
-  url?: string,      // nur bei 'awaiting_browser' — vom Kindprozess ausgegebene OAuth-URL
+  status: 'awaiting_browser' | 'awaiting_code' | 'success' | 'error',
+  url?: string,      // nur bei 'awaiting_browser' — extrahierte OAuth-URL
+  code?: string,     // nur bei 'awaiting_browser' und vendor: 'codex' — Einmalcode zur Eingabe auf der Webseite
   message?: string,  // nur bei 'error'
 }
 ```
+
+`awaiting_code` ist Claude-spezifisch und markiert den Punkt, an dem das Frontend die Code-Eingabe
+anzeigen und auf `submit_cli_delegate_code` warten muss — für `codex` wird dieser Status nie emittiert,
+da der Prozess selbst pollt statt einen eingegebenen Code entgegenzunehmen.
 
 ## Nicht geänderte Contracts (zur Klarstellung)
 
@@ -93,6 +133,8 @@ Fortschritt während `connect_cli_delegate` läuft.
   erzeugt dieselben Zeilenarten mit neuem `toolSource`-Wert (`cli_delegate:claude`/`cli_delegate:codex`,
   data-model.md) statt `mcp`/`cli` — reine Werterweiterung, kein Schema- oder Event-Bruch.
 - **`list_providers`/`list_provider_models`/`refresh_provider_models`**: unverändert in Form.
-  `refresh_provider_models` bleibt für `cli_delegate` bedeutungslos (liefert `Ok(vec![])`, wie
-  `local` heute schon) statt eines Fehlers — kleine Verhaltensänderung gegenüber dem heutigen
-  `build_adapter`-Fehlerfall, aber keine Signatur-/Contract-Änderung.
+  `refresh_provider_models` liefert für `cli_delegate` **ein** synthetisches Modell pro verbundenem
+  Vendor zurück (korrigiert während der Implementierung — `CliDelegateAdapter::list_models()`, nicht
+  `Ok(vec![])`, data-model.md), fließt durch denselben `do_refresh`/`replace_provider_models`-Cache-Pfad
+  wie bei `api_key`-Providern — kleine Verhaltensänderung gegenüber dem heutigen `build_adapter`-
+  Fehlerfall, aber keine Signatur-/Contract-Änderung.

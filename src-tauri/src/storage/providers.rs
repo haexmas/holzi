@@ -97,6 +97,34 @@ pub fn set_adapter(conn: &Connection, id: Uuid, adapter: &str) -> Result<usize> 
     conn.execute(&sql, params![adapter, id.to_string()])
 }
 
+/// Overwrites a provider's stored credentials in place (spec 007-cli-delegate
+/// `connect_cli_delegate`/`submit_cli_delegate_code` upsert semantics,
+/// contracts/tauri-commands.md — a reconnect updates the existing
+/// `cli_delegate` row instead of inserting a duplicate).
+pub fn update_credentials(conn: &Connection, id: Uuid, credentials: &[u8]) -> Result<usize> {
+    let sql = format!(
+        "UPDATE providers SET credentials = ?1, {HLC_TIMESTAMP_COLUMN} = current_hlc() \
+         WHERE id = ?2"
+    );
+    conn.execute(&sql, params![credentials, id.to_string()])
+}
+
+/// Finds the singleton `cli_delegate` provider row for one vendor, if any
+/// (mirrors `providers::local::find_local_provider`'s one-row-per-kind
+/// pattern, scoped further by `adapter`).
+pub fn find_cli_delegate_provider(conn: &Connection, vendor: &str) -> Result<Option<Uuid>> {
+    let mut stmt = conn.prepare(
+        "SELECT id FROM providers WHERE kind = ?1 AND adapter = ?2 \
+         ORDER BY created_at ASC LIMIT 1",
+    )?;
+    let raw: Option<String> = stmt
+        .query_row(params![ProviderKind::CliDelegate.as_str(), vendor], |r| {
+            r.get(0)
+        })
+        .optional()?;
+    Ok(raw.and_then(|s| Uuid::parse_str(&s).ok()))
+}
+
 /// Lists all providers ordered by creation time (oldest first).
 pub fn list_providers(conn: &Connection) -> Result<Vec<Provider>> {
     let mut stmt = conn.prepare(

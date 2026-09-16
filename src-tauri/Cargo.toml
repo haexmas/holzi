@@ -100,6 +100,18 @@ rmcp = { version = "=3.3.0", default-features = false, features = ["client", "tr
 # fixtures); cli_delegate's production code needs it too.
 tempfile = "3"
 
+# `claude setup-token` is a raw-ANSI Ink TUI, not a line-oriented CLI — piped,
+# non-PTY stdio produces zero output (research.md §5, live-verified). Only
+# cli_delegate's connect flow (US2) needs a real PTY; the chat-invocation path
+# (claude -p) uses plain piped stdio as before. Cross-platform (wezterm's
+# crate — Unix PTYs + Windows ConPTY).
+portable-pty = "0.9"
+# portable-pty's own error type (`spawn_command`/`openpty`/...) — already a
+# transitive dependency, added directly so connect_claude.rs can downcast a
+# spawn failure to the underlying `std::io::Error` (ENOENT detection,
+# mirroring `process.rs::map_spawn_error`'s plain-`tokio::process` version).
+anyhow = "1"
+
 [target.'cfg(unix)'.dependencies]
 # Kills a whole process group (`kill(-pgid, SIGKILL)`) so a killed
 # `sh -c "..."` cannot leave behind a grandchild it forked — `Child::kill`

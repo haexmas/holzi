@@ -24,6 +24,12 @@ mod claude_tests;
 mod codex;
 #[cfg(test)]
 mod codex_tests;
+pub mod connect_claude;
+#[cfg(test)]
+mod connect_claude_tests;
+pub mod connect_codex;
+#[cfg(test)]
+mod connect_codex_tests;
 #[cfg(test)]
 #[path = "mod_tests.rs"]
 mod mod_tests;

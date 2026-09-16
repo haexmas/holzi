@@ -21,7 +21,7 @@ use super::{build_transcript_prompt, DelegateChatContext};
 const CLIENT_NAME: &str = "holzi";
 const CLIENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
-const MAX_STDERR_BYTES: usize = 64 * 1024;
+pub(super) const MAX_STDERR_BYTES: usize = 64 * 1024;
 
 fn build_command(binary: &str, tmp: &TempDir) -> Command {
     let mut cmd = Command::new(binary);
@@ -201,7 +201,7 @@ async fn call_with_timeout(
     })?
 }
 
-async fn read_limited<R: AsyncRead + Unpin>(mut reader: R) -> Vec<u8> {
+pub(super) async fn read_limited<R: AsyncRead + Unpin>(mut reader: R) -> Vec<u8> {
     let mut output = Vec::new();
     let mut buffer = [0_u8; 4096];
     while let Ok(read) = reader.read(&mut buffer).await {

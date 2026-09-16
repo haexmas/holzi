@@ -4,6 +4,7 @@
 //! the persisted adapter discriminator to build the right adapter.
 //! `cli_delegate` live invocation is spec 007-cli-delegate.
 
+pub mod connect;
 pub mod local;
 #[cfg(test)]
 mod providers_tests;

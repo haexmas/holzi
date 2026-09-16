@@ -38,11 +38,14 @@ verification is manual per quickstart.md (kein Playwright in diesem Repo).
     existing `do_refresh`/`replace_provider_models` cache, composite id `<providerId>:claude` or
     `<providerId>:codex`), not an empty `Vec` as data-model.md originally specified. The frontend
     (T017/T018) was corrected to match — no separate `:delegate`-suffixed synthetic id.
-  - Cancellation (T041/T042) needed no delegate-specific tracking on `ChatState`/`session.rs` at all:
-    `AdapterStream` gained an optional `CancellationToken` (`adapters/types.rs`,
-    `AdapterStream::new_with_cancellation`) that the existing generic `abort_current_generation` /
-    `ChatState.current_generation` mechanism from 003 already drives unchanged. T042 is done through
-    this, not new session-level state.
+  - Cancellation (T041/T042/T043) needed no delegate-specific tracking on `ChatState`/`session.rs`,
+    nor any delegate-specific branch in `chat/commands.rs`, at all: `AdapterStream` gained an optional
+    `CancellationToken` (`adapters/types.rs`, `AdapterStream::new_with_cancellation`) that the existing
+    generic `abort_current_generation` / `ChatState.current_generation` mechanism from 003 already
+    drives unchanged. Both `claude.rs` and `codex.rs` race this token inside their streaming loop
+    (`tokio::select!` against `task_cancellation.cancelled()`) and call `child.terminate_and_reap()`
+    on cancel. T042 and T043 are done through this, not new session-level state or a new
+    `abort_current_generation` branch.
   - The Phase 3 "safe fail-closed stub, no approval bridge yet" design (T013's original scope) was
     superseded before it shipped separately — `claude.rs`/`codex.rs` went straight to the real
     approval bridge (T033-T036) in the same pass. Functionally strictly better (nothing ever shipped
@@ -58,7 +61,8 @@ verification is manual per quickstart.md (kein Playwright in diesem Repo).
     binary"/"a stub `codex app-server`" end-to-end, nor the `decide()`-skips-the-live-round-trip and
     posture-blocks-without-a-prompt cases specifically), T037/T038 (US4's dedicated isolation/cleanup
     integration tests — the mechanisms are implemented and were verified manually during planning,
-    not by an automated test), T041 (dedicated cancellation integration test), T043-T046 (polish).
+    not by an automated test), T041 (dedicated cancellation integration test — T043's implementation
+    itself is done, see above), T044-T046 (polish).
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -223,11 +227,19 @@ Acceptance Scenario 2).
 
 ### Tests for User Story 2
 
-- [ ] T021 [P] [US2] Integration test `src-tauri/tests/cli_delegate_connect.rs`: `connect_cli_delegate`
-      against a stub login binary that prints a fake token/`auth.json` to stdout — assert a
-      `providers` row is inserted with `kind = CliDelegate`, `adapter = <vendor>`, non-`None`
-      `credentials`; a second call for the same vendor updates that row in place instead of inserting
-      a duplicate (upsert semantics, contracts/tauri-commands.md).
+- [ ] T021 [P] [US2] Integration test `src-tauri/tests/cli_delegate_connect.rs` (Codex path):
+      `connect_cli_delegate(vendor: 'codex')` against a stub `codex`-shaped binary that, run with
+      `login --device-auth`, prints a fake URL/code to stdout then writes a fake `auth.json` and exits
+      0 — assert a `providers` row is inserted with `kind = CliDelegate`, `adapter = 'codex'`,
+      non-`None` `credentials`, and that a `delegate-connect-progress` event with the URL/code was
+      emitted before completion; a second call for the same vendor updates that row in place instead
+      of inserting a duplicate (upsert semantics, contracts/tauri-commands.md).
+- [ ] T021b [P] [US2] Integration test (Claude path): `connect_cli_delegate(vendor: 'claude')` against
+      a stub PTY-driven binary (a small script run under a real pty, matching research.md §5's
+      confirmed shape: prints an OSC-8-wrapped URL, then blocks reading a line from its own stdin)
+      asserts `status: 'awaiting_code'` and a `delegate-connect-progress` event with the extracted URL;
+      `submit_cli_delegate_code` with a fake code, where the stub then prints a fake `sk-ant-oat`-
+      prefixed token and exits 0, asserts the upserted `providers` row.
 - [ ] T022 [P] [US2] Integration test: a connected delegate credential, read back and used with a
       freshly-isolated `CLAUDE_CONFIG_DIR`/`CODEX_HOME` (simulating "never logged into that provider
       before"), authenticates successfully using only the stored credential bytes.
@@ -238,22 +250,57 @@ Acceptance Scenario 2).
 
 ### Implementation for User Story 2
 
-- [ ] T024 [US2] Implement the `connect_cli_delegate` Tauri command in `src-tauri/src/providers/
-mod.rs`: spawn `claude setup-token`/`codex login` in an isolated temp dir, capture the
-      resulting token/`auth.json`, upsert the `providers` row via the existing insert path, emit
-      `delegate-connect-progress` events (contracts/tauri-commands.md) including the OAuth URL to
-      open; guarantee temp-dir cleanup on every exit path.
-- [ ] T025 [US2] Register `connect_cli_delegate` in `src-tauri/src/lib.rs`'s `invoke_handler`.
-- [ ] T026 [US2] Map a delegate auth failure (subprocess reports not logged in / a non-zero exit tied
-      to credentials) to `AdapterError::InvalidCredentials` in `claude.rs`/`codex.rs`, reusing the
-      existing error taxonomy (spec.md FR-014) — no new error variant.
-- [ ] T027 [US2] Build `src/components/settings/ConnectDelegateProvider.vue` (new — first "add/connect
-      provider" UI in the app, per plan.md): shows the OAuth URL from `delegate-connect-progress`,
-      success/error states, and a "reconnect" action reachable when a request surfaces
-      `InvalidCredentials` for a `cli_delegate` provider (spec.md FR-014).
-- [ ] T028 [P] [US2] Add `de`/`en` i18n strings for the connect flow (URL prompt, success, error,
-      reconnect messaging) — fixed reason strings from the backend, localized text only in the
-      frontend (`CONTEXT.md` i18n boundary, same rule 003 followed).
+**Revised 2026-09-16** (research.md §5): `claude setup-token` needed a real PTY and a two-step
+paste-back exchange, not the single-command "spawn, read URL, wait for exit" shape T024 originally
+assumed — verified live by probing both CLIs directly (piped, non-PTY stdio produced zero bytes from
+`claude setup-token`, confirmed by `stat`-ing the real credential files before/after that no OAuth
+completed). `codex login --device-auth` (chosen over the default flow to avoid its local
+`localhost:1455` server dependency) *is* plain-text/pipe-friendly and fits the original single-command
+shape. T024 is split into T024 (Codex, single command) and T024b/T025b (Claude, two commands) below;
+task numbers after T028 are unchanged.
+
+- [x] T024 [US2] Implement the Codex half of `connect_cli_delegate`
+      (`src-tauri/src/adapters/cli_delegate/connect_codex.rs::run_device_auth` +
+      `providers/connect.rs`): spawn `codex login --device-auth` in an isolated `CODEX_HOME`, parse the
+      URL and one-time code from its plain stdout, emit `delegate-connect-progress`
+      (`status: 'awaiting_browser'`, both `url` and `code`), wait for the child to exit 0, read the
+      resulting `<CODEX_HOME>/auth.json` bytes as `credentials`, upsert the `providers` row; guarantee
+      temp-dir cleanup on every exit path (success, non-zero exit, timeout).
+- [x] T024b [US2] Added the `portable-pty` dependency (`src-tauri/Cargo.toml`, plus `anyhow` directly
+      for downcasting its spawn-error type) and implemented the Claude half
+      (`adapters/cli_delegate/connect_claude.rs::start_claude_connect`): spawns `claude setup-token`
+      inside a PTY in an isolated `CLAUDE_CONFIG_DIR`, scans the raw PTY output for an OSC 8 hyperlink
+      escape sequence to extract the OAuth URL (unit-tested against the exact live-captured byte shape,
+      `connect_claude_tests.rs`), emits `delegate-connect-progress` (`status: 'awaiting_code'`, `url`),
+      and holds the running PTY session in a new `DelegateConnectState` (Tauri-managed, mirrors
+      `ChatState`'s pattern) pending `submit_cli_delegate_code`.
+- [x] T025b [US2] Implemented `submit_cli_delegate_code` (`providers/connect.rs`): writes the given code
+      plus a line ending to the pending Claude PTY session's stdin
+      (`connect_claude.rs::submit_claude_code`), reads subsequent output, extracts the final long-lived
+      token via an `sk-ant-oat`-prefixed pattern match (research.md §5 notes this exact screen format is
+      not live-verified — this is deliberately a tolerant match, not a screen-position assumption; a
+      timeout or EOF before a token appears maps to `InvalidCredentials` rather than returning a
+      wrong/partial string), upserts the `providers` row. A failed attempt keeps the session pending for
+      a retry (the CLI commonly re-prompts on a bad code) instead of tearing it down.
+- [x] T025 [US2] Registered `connect_cli_delegate`, `submit_cli_delegate_code`, and the new
+      `DelegateConnectState` in `src-tauri/src/lib.rs`'s `invoke_handler`/`.manage(...)`.
+- [x] T026 [US2] A delegate auth failure (Codex: non-zero exit from `--device-auth`; Claude: no token
+      appears before `submit_cli_delegate_code`'s timeout/EOF) maps to `AdapterError::InvalidCredentials`
+      in the two connect-flow drivers, reusing the existing error taxonomy (spec.md FR-014) via
+      `providers::map_adapter_error` — no new error variant, no separate mapping code needed in
+      `claude.rs`/`codex.rs` (those already handle the chat-invocation path's own credential errors).
+- [x] T027 [US2] Built `src/components/settings/ConnectDelegateProvider.vue` (new — first "add/connect
+      provider" UI in the app, per plan.md; wired into `pages/settings/[instance].vue`): shows the OAuth
+      URL from `delegate-connect-progress` for both vendors, the one-time code for Codex (display-only,
+      entered on the OAuth page — not typed into holzi), a code-entry field for Claude that calls
+      `submit_cli_delegate_code`, success/error states, and a "Reconnect" label shown instead of
+      "Connect" whenever a `cli_delegate` provider row already exists for that vendor (spec.md FR-014 —
+      same command pair either way, no separate reconnect route to gate on).
+- [x] T028 [P] [US2] Added `de`/`en` i18n strings under `settings.cliDelegate.*` for the connect flow
+      (URL prompt, Codex one-time-code display, Claude code-entry prompt, success, error, connect/
+      reconnect labels) — fixed reason strings from the backend, localized text only in the frontend
+      (`CONTEXT.md` i18n boundary, same rule 003 followed). Reused the pre-existing
+      `chat.model.delegate.{claude,codex}` keys for vendor display names instead of duplicating them.
 
 **Checkpoint**: US1+US2 together let a user connect and use a delegate backend, with sensitive
 actions safely denied by default. **Still not the full MVP** — Phase 5 (US3) is required before
@@ -387,7 +434,8 @@ the OS process is actually gone (spec.md Acceptance Scenario 1).
       process from T035 if currently running) on the in-flight session/turn state in
       `src-tauri/src/chat/session.rs`, mirroring how `chat/tools/cli.rs` tracks its child for
       cancellation.
-- [ ] T043 [US5] Extend `abort_current_generation` (`src-tauri/src/chat/commands.rs`) to kill the
+- [x] T043 [US5] **(done via the generic mechanism, see revision notes — no `chat/commands.rs` change
+      needed)** Extend `abort_current_generation` (`src-tauri/src/chat/commands.rs`) to kill the
       tracked delegate process group(s) (matching `cli.rs`'s existing SIGKILL/`taskkill` pattern) when
       the active session's backend is a delegate.
 
