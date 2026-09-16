@@ -184,6 +184,7 @@ async fn call(
     }
 }
 
+/// Starts one isolated Codex app-server session and exposes its output as an adapter stream.
 pub(super) async fn spawn_codex_app_server(
     binary: String,
     credentials: Vec<u8>,

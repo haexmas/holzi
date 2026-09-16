@@ -144,6 +144,7 @@ fn build_command(
     cmd
 }
 
+/// Starts one isolated Claude Code invocation and exposes its output as an adapter stream.
 pub(super) async fn spawn_claude_invocation(
     binary: String,
     credentials: Vec<u8>,

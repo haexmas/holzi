@@ -101,6 +101,7 @@ pub enum DelegateVendor {
 }
 
 impl DelegateVendor {
+    /// Returns the stable provider discriminator used in storage and executable defaults.
     pub fn as_str(self) -> &'static str {
         match self {
             DelegateVendor::Claude => "claude",
@@ -108,6 +109,7 @@ impl DelegateVendor {
         }
     }
 
+    /// Parses a stored provider discriminator into a supported delegate vendor.
     pub fn parse(s: &str) -> Option<Self> {
         match s {
             "claude" => Some(DelegateVendor::Claude),
@@ -143,6 +145,7 @@ pub struct CliDelegateAdapter {
 }
 
 impl CliDelegateAdapter {
+    /// Creates an adapter for a connected CLI delegate provider.
     pub fn new(
         vendor: DelegateVendor,
         credentials: Vec<u8>,
