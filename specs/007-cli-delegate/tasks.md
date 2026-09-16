@@ -11,13 +11,23 @@ description: 'Actionable, dependency-ordered task list for the CLI delegate back
 inline `#[cfg(test)] mod tests`, plus integration tests under `src-tauri/tests/`). Frontend
 verification is manual per quickstart.md (kein Playwright in diesem Repo).
 
-**Revision note (2026-09-16, post `/speckit.analyze`)**: this version fixes two issues the analysis
-pass found in the first draft: (1) the Claude Code command built in Phase 3 (US1) referenced
-`--mcp-config`/`--permission-prompt-tool` before the server implementing that tool existed (US3) —
-Phase 3 now builds a safe, fail-closed default instead and US3 upgrades it; (2) "MVP First" wrongly
-scoped the MVP to US1+US2 alone, contradicting spec.md's own priority rationale that US3 (the
-approval gate) ships alongside US1 for safety — the MVP now explicitly includes US3. Four coverage
-gaps were also added as new tasks (T018, T019, T023, T032 below).
+**Revision notes**:
+- **2026-09-16, post `/speckit.analyze`**: fixed two issues the analysis pass found in the first
+  draft: (1) the Claude Code command built in Phase 3 (US1) referenced
+  `--mcp-config`/`--permission-prompt-tool` before the server implementing that tool existed (US3) —
+  Phase 3 now builds a safe, fail-closed default instead and US3 upgrades it; (2) "MVP First" wrongly
+  scoped the MVP to US1+US2 alone, contradicting spec.md's own priority rationale that US3 (the
+  approval gate) ships alongside US1 for safety — the MVP now explicitly includes US3. Four coverage
+  gaps were also added as new tasks (T018, T019, T023, T032 below).
+- **2026-09-16, during implementation start**: discovered MCP's stdio transport means `claude` spawns
+  the `--mcp-config` server as *its own child process* — not something reachable in-process the way
+  the first draft of `permission_mcp_server.rs` assumed. Per operator direction, no HTTP-server-based
+  fix (a pure-Rust IPC mechanism is preferred, independent of the fact that `cli_delegate` is already
+  desktop-only regardless of this choice, since subprocess spawning itself is impossible on mobile).
+  Fixed by adding one new task (T034, a hidden internal CLI entrypoint) and rewriting T035 (was T034)
+  to describe the actual child-process-plus-local-socket-relay design — see data-model.md's
+  "claude.rs"/"approval_bridge.rs" sections for the corrected architecture. Everything from the old
+  T034 onward shifted by one (old T034→T035, old T035→T036, ..., old T045→T046).
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -34,16 +44,19 @@ gaps were also added as new tasks (T018, T019, T023, T032 below).
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-- [ ] T001 [P] Move `rmcp`'s `server` feature from the test-only `[dev-dependencies]` entry to the
-      real `[dependencies]` entry in `src-tauri/Cargo.toml`, still pinned `=3.3.0` (research.md §1) —
-      needed for a real (non-test) stdio MCP server, not just the existing in-memory test transport.
-- [ ] T002 [P] Create `src-tauri/src/adapters/cli_delegate/mod.rs` with `DelegateVendor::{Claude,
+- [x] T001 [P] In `src-tauri/Cargo.toml`: move `rmcp`'s `server` feature from the test-only
+      `[dev-dependencies]` entry to the real `[dependencies]` entry, add the `transport-io` feature
+      alongside it (needed for a stdio MCP server running on a process's own inherited stdin/stdout,
+      not just the existing in-memory test transport), still pinned `=3.3.0` (research.md §1). Also
+      add the `net` feature to the main `[dependencies]` `tokio` entry (Unix domain sockets / Windows
+      named pipes for the approval-bridge IPC hop, data-model.md — no new crate needed).
+- [x] T002 [P] Create `src-tauri/src/adapters/cli_delegate/mod.rs` with `DelegateVendor::{Claude,
       Codex}` (`parse`/`as_str`, mirroring `ProviderKind` in `storage/providers.rs`) and an empty
       `CliDelegateAdapter` struct; register `pub mod cli_delegate;` in `src-tauri/src/adapters/mod.rs`
       and update its module doc comment (lines 9-10, currently: "`cli_delegate` adapters require a
       separate design pass and are not yet represented here").
 
-**Checkpoint**: Module skeleton and dependency change in place. No behavior changes yet.
+**Checkpoint**: Module skeleton and dependency changes in place. No behavior changes yet.
 
 ---
 
@@ -78,13 +91,13 @@ every user story builds on.
       `ExecCommandApprovalRequest` is delivered live and the process genuinely blocks until answered
       — the same way the Claude Code round-trip was already confirmed manually. Also determine
       Codex's safe fail-closed default for an unhandled `ServerRequest` approval (used by T014 before
-      T035 wires real approval — e.g. does an unanswered request time out with `ReviewDecision::
+      T036 wires real approval — e.g. does an unanswered request time out with `ReviewDecision::
       timed_out` on its own, or must the client actively respond `denied`?). Record both outcomes as
-      an addendum in research.md §2. **Gates**: T014, T030, T035 (all Codex-specific work) — do not
+      an addendum in research.md §2. **Gates**: T014, T030, T036 (all Codex-specific work) — do not
       start those until this spike's outcome is recorded.
 - [ ] T009 [P] **Spike** (research.md §3): with an isolated `CLAUDE_CONFIG_DIR`, confirm a host-level
       skill or plugin (not just hooks/credentials/settings, already confirmed) is also not discovered
-      by a `-p` run. Record the outcome as an addendum in research.md §3. **Gates**: T036.
+      by a `-p` run. Record the outcome as an addendum in research.md §3. **Gates**: T037.
 
 **Checkpoint**: Schema, adapter-construction wiring, and both verification spikes complete. User
 story implementation can begin.
@@ -127,7 +140,7 @@ approval is cleanly declined (not hung, not silently allowed) (spec.md Acceptanc
       build the `claude -p` `tokio::process::Command` (argv per data-model.md) **with
       `--permission-prompts none` and without `--mcp-config`/`--permission-prompt-tool`** — a safe,
       fail-closed default (anything needing approval is denied, never hangs waiting for a host that
-      doesn't exist yet). T034 (US3) removes `--permission-prompts none` and adds the real
+      doesn't exist yet). T035 (US3) removes `--permission-prompts none` and adds the real
       `--mcp-config`/`--permission-prompt-tool` bridge. Also: fresh temp `CLAUDE_CONFIG_DIR` +
       disposable `cwd`, `CLAUDE_CODE_OAUTH_TOKEN` from decrypted credentials, guaranteed cleanup on
       every exit path — mirror `chat/tools/cli.rs`'s existing process-group setup and kill-on-cancel
@@ -138,7 +151,7 @@ approval is cleanly declined (not hung, not silently allowed) (spec.md Acceptanc
       guaranteed cleanup; implement the JSON-RPC initialize handshake and turn/response parsing,
       mapping Codex's own answer events to `StreamChunk::Delta`/`Done` (research.md §2, §4). **Any
       incoming `ServerRequest` needing an approval decision gets T008's determined safe fail-closed
-      response** (a stub, not real bridging) until T035 (US3) replaces it.
+      response** (a stub, not real bridging) until T036 (US3) replaces it.
 - [ ] T015 [US1] Implement the `stream-json` NDJSON parser in `claude.rs` per T011's expected
       behavior.
 - [ ] T016 [US1] Wire `CliDelegateAdapter::stream_chat`/`list_models` (`cli_delegate/mod.rs`) to
@@ -156,7 +169,7 @@ approval is cleanly declined (not hung, not silently allowed) (spec.md Acceptanc
       Code"/"via Codex"). No new backend field expected — this is a frontend-display check first.
 - [ ] T019 [US1] **(new, analyze finding G2)** In `claude.rs`/`codex.rs`, catch a process-spawn
       failure (binary not found / ENOENT) and map it to a distinct "backend not installed" error,
-      separate from `AdapterError::InvalidCredentials` (spec.md FR-008, SC-006) — T023 (US2) only
+      separate from `AdapterError::InvalidCredentials` (spec.md FR-008, SC-006) — T026 (US2) only
       covers credential-related unavailability, not a missing binary.
 - [ ] T020 [P] [US1] Add `de`/`en` i18n strings (`src/i18n/locales/{de,en}.json`) for delegate backend
       labels, the "not connected" state, the backend-identity label (T018), and the "not installed"
@@ -234,7 +247,8 @@ posture-blocked action is denied without ever surfacing a prompt (spec.md Accept
       `claude` binary requests a `tools/call` against the permission MCP tool; assert
       `approval_bridge.rs` registers a `pending_tool_approvals` entry, emits `tool-permission-request`,
       and the stub only resumes after `respond_tool_permission` answers — the exact live round-trip
-      manually verified in research.md §1.
+      manually verified in research.md §1. Exercises the real child-process-plus-socket path (T034,
+      T035), not a simplified in-process stand-in.
 - [ ] T030 [P] [US3] (depends on T008) Integration test (Codex path): a stub `codex app-server` sends
       an `ExecCommandApprovalRequest`; assert the same bridge behavior and that the reply carries the
       correct `ReviewDecision`.
@@ -248,20 +262,36 @@ posture-blocked action is denied without ever surfacing a prompt (spec.md Accept
 
 ### Implementation for User Story 3
 
-- [ ] T033 [US3] Implement `request_approval` in `src-tauri/src/adapters/cli_delegate/
-      approval_bridge.rs` (data-model.md): register into `ChatState.pending_tool_approvals`, emit
-      `tool-permission-request` (`events.rs:28`, unchanged payload shape), await the oneshot,
-      fail-safe-deny if the sender is dropped (bridge/process crash — spec.md Edge Cases).
-- [ ] T034 [US3] Implement `src-tauri/src/adapters/cli_delegate/permission_mcp_server.rs`: an
-      `rmcp`-`server`-feature stdio MCP server exposing one `approve` tool, started per invocation.
-      **Update T013's `claude -p` command**: remove `--permission-prompts none`, add
-      `--mcp-config`/`--permission-prompt-tool` pointed at this server. The server's `tools/call`
-      handler runs `chat/tools/permission.rs`'s `decide()` first — `Allow`/`Deny` resolve immediately
-      (T032), only `Ask` calls `approval_bridge::request_approval` (T029).
-- [ ] T035 [US3] (depends on T008) Replace T014's fail-closed `ServerRequest` stub in `codex.rs` with
+- [ ] T033 [US3] Implement `src-tauri/src/adapters/cli_delegate/approval_bridge.rs`, running in the
+      **main** process: `request_approval` (data-model.md) — register into
+      `ChatState.pending_tool_approvals`, emit `tool-permission-request` (`events.rs:28`, unchanged
+      payload shape), await the oneshot, fail-safe-deny if the sender is dropped (bridge/process
+      crash — spec.md Edge Cases). Also `start_approval_socket_listener`: create a fresh temp Unix
+      domain socket (Windows: named pipe) via `tokio::net`, listen for the duration of one delegate
+      invocation, and for each incoming `{tool_name, input}` message run `chat/tools/permission.rs`'s
+      `decide()` first — `Allow`/`Deny` reply immediately (T032), only `Ask` calls `request_approval`
+      (T029) — then remove the socket path on completion (RAII, like the temp directories).
+- [ ] T034 [US3] **(new — architecture fix, see revision notes)** Add a hidden internal-entrypoint
+      branch to `src-tauri/src/lib.rs`/`main.rs`, checked first thing in `main()` before Tauri
+      initializes: if invoked as `<self> --internal-cli-delegate-approval-bridge --socket <path>`,
+      run only `cli_delegate::permission_mcp_server::run_bridge_process(path)` (T035) and exit —
+      never start the GUI/Tauri runtime for this invocation. Smoke-test by running the built binary
+      directly with the flag and confirming it exits cleanly with no window.
+- [ ] T035 [US3] (depends on T034) Implement `src-tauri/src/adapters/cli_delegate/
+      permission_mcp_server.rs`'s `run_bridge_process(socket_path)`, running in the **separate child
+      process** that `claude` itself spawns (per MCP's stdio transport model — not in-process, see
+      revision notes): an `rmcp` `server`+`transport-io` stdio MCP server (using this process's own
+      inherited stdin/stdout, which is what `claude` actually talks to) exposing one `approve` tool;
+      its `tools/call` handler connects to `socket_path` (`tokio::net`), sends `{tool_name, input}` as
+      one JSON line, reads back the decision, and returns the corresponding MCP tool result. **Update
+      T013's `claude -p` command**: remove `--permission-prompts none`, add
+      `--mcp-config`/`--permission-prompt-tool` pointed at `std::env::current_exe()` with the
+      `--internal-cli-delegate-approval-bridge --socket <path>` args from T033's listener.
+- [ ] T036 [US3] (depends on T008) Replace T014's fail-closed `ServerRequest` stub in `codex.rs` with
       real handling: run `decide()` first (immediate `Allow`/`Deny`, T032), calling
       `approval_bridge::request_approval` only for `Ask` (T030), translating the decision into the
-      matching `ReviewDecision` response.
+      matching `ReviewDecision` response. No child-process/socket hop needed here — holzi already
+      owns this process's stdio directly (unlike the Claude Code path, T034/T035).
 
 **Checkpoint**: spec.md SC-003 (100% of blocked sensitive actions actually blocked) now holds for
 both delegate backends via live approval, not blanket denial. **US1+US2+US3 together are the MVP** —
@@ -281,27 +311,27 @@ Acceptance Scenarios 1-3).
 
 ### Tests for User Story 4
 
-- [ ] T036 [P] [US4] (depends on T009) Integration test: with a fake `~/.claude/settings.json` (a
+- [ ] T037 [P] [US4] (depends on T009) Integration test: with a fake `~/.claude/settings.json` (a
       `SessionStart` hook plus a permissive `defaultMode`) and a fake project-local
       `.claude/settings.json`/`CLAUDE.md` planted outside the delegate's temp `cwd`, assert a delegate
       invocation's isolated `CLAUDE_CONFIG_DIR`/`cwd` never triggers the hook and never reads that
       content — the exact leak scenario found manually in research.md §3.
-- [ ] T037 [P] [US4] Integration test: after a delegate invocation completes (success and failure
-      paths), assert its temp `CLAUDE_CONFIG_DIR`/`CODEX_HOME`/`cwd` directories no longer exist on
-      disk (spec.md FR-003).
+- [ ] T038 [P] [US4] Integration test: after a delegate invocation completes (success and failure
+      paths), assert its temp `CLAUDE_CONFIG_DIR`/`CODEX_HOME`/`cwd` directories **and** T033's
+      approval-bridge socket path no longer exist on disk (spec.md FR-003).
 
 ### Implementation for User Story 4
 
-- [ ] T038 [US4] Pass holzi-supplied context explicitly via `--append-system-prompt` (`claude.rs`) and
+- [ ] T039 [US4] Pass holzi-supplied context explicitly via `--append-system-prompt` (`claude.rs`) and
       Codex's equivalent turn-context field (`codex.rs`) rather than any file-based discovery (spec.md
       FR-010) — confirm/implement the Codex-side equivalent as part of this task (research.md §2
       flags Codex's system-prompt-equivalent flag as still unconfirmed).
-- [ ] T039 [US4] Add an RAII/drop-guard wrapper around each delegate invocation's temp directory in
-      both `claude.rs` and `codex.rs` so cleanup runs on every exit path (success, error, panic
-      unwind), not only the happy path (spec.md FR-003) — satisfies T037. Apply the same guard to
-      `connect_cli_delegate`'s (T024) temp dir.
+- [ ] T040 [US4] Add an RAII/drop-guard wrapper around each delegate invocation's temp directory in
+      both `claude.rs` and `codex.rs`, and around T033's approval-bridge socket, so cleanup runs on
+      every exit path (success, error, panic unwind), not only the happy path (spec.md FR-003) —
+      satisfies T038. Apply the same guard to `connect_cli_delegate`'s (T024) temp dir.
 
-**Checkpoint**: T036/T037 pass — host machine state verified to never leak in or out.
+**Checkpoint**: T037/T038 pass — host machine state verified to never leak in or out.
 
 ---
 
@@ -315,17 +345,19 @@ the OS process is actually gone (spec.md Acceptance Scenario 1).
 
 ### Tests for User Story 5
 
-- [ ] T040 [P] [US5] Integration test: stop a running delegate-backed response mid-call and assert the
+- [ ] T041 [P] [US5] Integration test: stop a running delegate-backed response mid-call and assert the
       underlying OS process is terminated (not just the stream dropped) — check process exit,
-      matching `chat/tools/cli.rs`'s existing process-group-kill test pattern.
+      matching `chat/tools/cli.rs`'s existing process-group-kill test pattern. For the Claude Code
+      path, also assert the T035 bridge child process (if still running) is not left orphaned.
 
 ### Implementation for User Story 5
 
-- [ ] T041 [US5] Track the delegate subprocess handle (both vendors) on the in-flight session/turn
-      state in `src-tauri/src/chat/session.rs`, mirroring how `chat/tools/cli.rs` tracks its child for
+- [ ] T042 [US5] Track the delegate subprocess handle (both vendors, plus the Claude Code bridge child
+      process from T035 if currently running) on the in-flight session/turn state in
+      `src-tauri/src/chat/session.rs`, mirroring how `chat/tools/cli.rs` tracks its child for
       cancellation.
-- [ ] T042 [US5] Extend `abort_current_generation` (`src-tauri/src/chat/commands.rs`) to kill the
-      tracked delegate process group (matching `cli.rs`'s existing SIGKILL/`taskkill` pattern) when
+- [ ] T043 [US5] Extend `abort_current_generation` (`src-tauri/src/chat/commands.rs`) to kill the
+      tracked delegate process group(s) (matching `cli.rs`'s existing SIGKILL/`taskkill` pattern) when
       the active session's backend is a delegate.
 
 **Checkpoint**: All five user stories independently functional.
@@ -334,11 +366,11 @@ the OS process is actually gone (spec.md Acceptance Scenario 1).
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T043 [P] Verify `de`/`en` i18n lockstep for every string added across T020/T028 (`CONTEXT.md`
+- [ ] T044 [P] Verify `de`/`en` i18n lockstep for every string added across T020/T028 (`CONTEXT.md`
       i18n boundary requirement), the same check 003's T041 performed.
-- [ ] T044 [P] Run `specs/007-cli-delegate/quickstart.md` end-to-end manually (all 5 scenarios) with
+- [ ] T045 [P] Run `specs/007-cli-delegate/quickstart.md` end-to-end manually (all 5 scenarios) with
       whichever of `claude`/`codex` is installed, before merge.
-- [ ] T045 `cargo test --lib` and the new `src-tauri/tests/cli_delegate_*.rs` suites green; `pnpm
+- [ ] T046 `cargo test --lib` and the new `src-tauri/tests/cli_delegate_*.rs` suites green; `pnpm
       typecheck` exit 0.
 
 ---
@@ -358,16 +390,17 @@ the OS process is actually gone (spec.md Acceptance Scenario 1).
 
 ### Specific Task Dependencies (beyond phase order)
 
-- **T008** (Codex live-approval spike) gates T014, T030, T035 — every Codex-specific
+- **T008** (Codex live-approval spike) gates T014, T030, T036 — every Codex-specific
   implementation/test task. Claude-only work (T013, T015, T020 etc.) is unaffected.
-- **T009** (Claude skills/plugins isolation spike) gates T036.
+- **T009** (Claude skills/plugins isolation spike) gates T037.
 - **T005** (signature threading) must land before T006 (adapter construction) and before any of
   T013/T014 (which need the handles T006 passes to `CliDelegateAdapter::new`).
-- **T013** (Claude base command, `--permission-prompts none`) is *modified in place* by **T034**
+- **T034** (hidden internal entrypoint) must land before **T035** (the process it invokes).
+- **T013** (Claude base command, `--permission-prompts none`) is *modified in place* by **T035**
   (removes that flag, adds the live `--mcp-config`/`--permission-prompt-tool` bridge) — not a fresh
   file, an edit to the same command-building code. Same relationship between **T014**'s fail-closed
-  stub and **T035**'s real bridging for Codex.
-- **T013**/**T014** (process spawning) must land before **T041** (needs a process handle to track).
+  stub and **T036**'s real bridging for Codex.
+- **T013**/**T014** (process spawning) must land before **T042** (needs a process handle to track).
 
 ### Parallel Opportunities
 

@@ -25,14 +25,21 @@ Code would need a separate "upfront batch approval" design.
 4 SPA) — unchanged from 003-agent-tool-loop.
 **Primary Dependencies**: `tokio::process` (already used by `chat/tools/cli.rs`'s host-command tool)
 for spawning `claude`/`codex` subprocesses. `rmcp` 3.3.0 (already pinned for the MCP *client* path)
-gains real (non-test-only) use of its `server` feature: holzi runs a small in-process stdio MCP
-server per Claude Code invocation, registered via `--mcp-config`, that Claude Code calls through
-`--permission-prompt-tool` for each pending approval — see [research.md](research.md) §1. No MCP
-dependency needed for Codex: `codex app-server --stdio` speaks its own JSON-RPC protocol directly
-(hand-rolled newline-delimited JSON-RPC framing, no crate), verified against the installed CLI's own
-`codex app-server generate-json-schema` output — see [research.md](research.md) §2. Parsing Claude
-Code's `--output-format stream-json` (newline-delimited JSON events) is new parsing code, structurally
-similar to but distinct from `adapters/anthropic.rs`'s SSE parsing.
+gains real (non-test-only) use of its `server` + `transport-io` features: MCP's stdio transport means
+`claude` spawns the `--mcp-config` server as *its own* child process, not something reachable
+in-process — so holzi's permission-prompt-tool MCP server actually runs in a small separate process
+(the holzi binary re-invoked with a hidden internal flag via `std::env::current_exe()`, never
+initializing Tauri/GUI), which then relays each approval request back to the main process over a
+local Unix-domain-socket/named-pipe hop using `tokio::net` (feature `net`, newly added — no new
+crate; a local-HTTP-server alternative was considered and explicitly rejected per operator direction:
+prefer a pure-Rust IPC mechanism over spawning an HTTP stack, even though this whole feature is
+desktop-only regardless of that choice, since subprocess spawning itself is impossible on mobile).
+Codex needs no such bridge: holzi already owns its `app-server --stdio` pipe directly. No MCP
+dependency needed for Codex either way: `codex app-server --stdio` speaks its own JSON-RPC protocol
+directly (hand-rolled newline-delimited JSON-RPC framing, no crate), verified against the installed
+CLI's own `codex app-server generate-json-schema` output — see [research.md](research.md) §2. Parsing
+Claude Code's `--output-format stream-json` (newline-delimited JSON events) is new parsing code,
+structurally similar to but distinct from `adapters/anthropic.rs`'s SSE parsing.
 **Storage**: SQLite via SQLCipher through haex-crdt. `storage/providers.rs`'s `ProviderKind::CliDelegate`
 variant and `credentials: Option<Vec<u8>>` column already exist (Etappe-2 groundwork, unused since);
 this feature is what actually populates `credentials` for `CliDelegate` rows (a Claude OAuth token or
@@ -118,11 +125,14 @@ src-tauri/src/
 │   │   │                                #   stream-json NDJSON parsing -> StreamChunk::Delta/Done
 │   │   ├── codex.rs                     # `codex app-server --stdio` JSON-RPC session driver: temp CODEX_HOME,
 │   │   │                                #   request/response framing, ServerRequest approval routing
-│   │   ├── approval_bridge.rs           # Shared: translates a pending approval (either backend) into
+│   │   ├── approval_bridge.rs           # Runs in the MAIN process: socket/named-pipe listener +
+│   │   │                                #   translates a pending approval (either backend) into
 │   │   │                                #   ChatState.pending_tool_approvals + tool-permission-request event,
 │   │   │                                #   reusing turn.rs's existing oneshot-channel mechanism unchanged
-│   │   ├── permission_mcp_server.rs     # rmcp `server`-feature stdio MCP server exposing the one
-│   │   │                                #   `--permission-prompt-tool` tool for the Claude Code path
+│   │   ├── permission_mcp_server.rs     # Runs in the SEPARATE bridge child process (see lib.rs below) —
+│   │   │                                #   rmcp `server`+`transport-io` stdio MCP server exposing the one
+│   │   │                                #   `--permission-prompt-tool` tool; relays each call to
+│   │   │                                #   approval_bridge.rs's listener over the socket/pipe
 │   │   └── *_tests.rs                   # per module, repo convention (no inline #[cfg(test)] mod tests)
 │   ├── mod.rs                           # + cli_delegate module registration (doc comment at mod.rs:9-10 updated)
 │   └── types.rs                         # unchanged — StreamChunk::{Delta,Done} already sufficient (research.md §4)
@@ -143,9 +153,12 @@ src-tauri/src/
 │   └── session.rs                       # pending_tool_approvals reused unchanged; + tracking of the delegate
 │                                         #   subprocess handle so Story 5 (stop) can kill it, mirroring cli.rs's
 │                                         #   process-group kill pattern
-└── identity/
-    └── migrations.rs                    # no new migration expected (credentials/adapter columns already exist);
-                                          #   confirmed/revisited in data-model.md
+├── identity/
+│   └── migrations.rs                    # no new migration expected (credentials/adapter columns already exist);
+│                                         #   confirmed/revisited in data-model.md
+└── lib.rs / main.rs                     # + a hidden internal-entrypoint branch, checked before Tauri init:
+                                          #   `--internal-cli-delegate-approval-bridge --socket <path>` runs only
+                                          #   permission_mcp_server::run_bridge_process(), then exits — no GUI
 
 src/
 ├── composables/
@@ -162,8 +175,12 @@ src/
 protocol/approval-bridge logic, mirroring how 003 isolated its new tool-registry logic in
 `chat/tools/` rather than inflating existing files. `turn.rs` and `chat/tools/permission.rs` are
 reused unmodified — the delegate adapters are additive at the `ProviderAdapter` boundary and at the
-approval-bridge boundary, not a parallel execution path. No new top-level structure, no separate
-backend/frontend split beyond what already exists.
+approval-bridge boundary, not a parallel execution path. The one exception is the hidden
+`lib.rs`/`main.rs` entrypoint branch for the approval-bridge child process — unavoidable given MCP's
+stdio transport model (`claude` spawns the server named in `--mcp-config` as its own child, so that
+code cannot simply live in-process), kept to the smallest possible surface (one flag check before
+Tauri initializes, delegating immediately to `cli_delegate::permission_mcp_server`). No new top-level
+structure otherwise, no separate backend/frontend split beyond what already exists.
 
 ## Complexity Tracking
 

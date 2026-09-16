@@ -7,13 +7,17 @@
 //! runs in-process (`LocalAdapter`) or over HTTP (`AnthropicAdapter`).
 //! Additional `api_key` vendors (OpenAI, Google, Groq) land as their own
 //! follow-up PRs using the same trait surface. `cli_delegate` adapters
-//! require a separate design pass and are not yet represented here.
+//! (Claude Code, Codex — spec 007-cli-delegate) live in [`cli_delegate`];
+//! they drive an external CLI subprocess to completion per `stream_chat`
+//! call instead of a direct HTTP/in-process request, but otherwise
+//! implement the same trait.
 
 pub mod anthropic;
 #[cfg(test)]
 mod anthropic_stream_tests;
 #[cfg(test)]
 mod anthropic_tests;
+pub mod cli_delegate;
 #[cfg(feature = "llm-cpu")]
 pub mod local;
 pub mod request;

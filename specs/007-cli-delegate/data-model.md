@@ -76,11 +76,22 @@ Implementierungsdetail von tasks.md, nicht dieses Dokuments).
 
 ### `claude.rs` — Prozess- und Stream-Modell
 
+**Wichtige Korrektur (2026-09-16, während der Implementierung entdeckt)**: MCPs Stdio-Transport
+bedeutet, dass `claude` den in `--mcp-config` benannten `"command"` **als eigenen Kindprozess**
+startet — nicht ein In-Prozess-Objekt innerhalb des schon laufenden Tauri-Prozesses (verifiziert im
+research.md-§1-Testaufbau: der Test-MCP-Server lief als eigener `node`-Prozess). Ein separater
+Prozess hat keinen direkten Zugriff auf `ChatState`/`pending_tool_approvals`. Zusätzliche
+Randbedingung (Betreiber-Vorgabe): keine HTTP-Server-Lösung (auch wenn `cli_delegate` ohnehin
+Desktop-only ist, da Subprozess-Spawning auf Mobile generell unmöglich ist) — reine Rust-Lösung ohne
+neue schwere Abhängigkeit. Codex braucht diese Brücke **nicht**: holzi hält dessen
+`app-server --stdio`-Pipe bereits selbst (siehe `codex.rs` unten), keine zusätzliche IPC-Hop nötig.
+
 | Typ/Funktion                  | Beschreibung                                                                                                                                                                                                 |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `spawn_claude_invocation(...)` | Baut `tokio::process::Command`: `claude -p <prompt> --output-format stream-json --verbose --include-partial-messages --permission-mode default --mcp-config <tmp>/mcp-config.json --permission-prompt-tool mcp__holzi__approve --append-system-prompt <context>`, `env(CLAUDE_CONFIG_DIR, <tmp>)`, `env(CLAUDE_CODE_OAUTH_TOKEN, <credentials>)`, `current_dir(<tmp>)` — Muster identisch zu `chat/tools/cli.rs`s bestehendem Prozess-Setup (Prozessgruppe, Timeout, Kill-on-cancel), nur mit anderem Binary/Argumenten. |
+| `spawn_claude_invocation(...)` | Baut `tokio::process::Command`: `claude -p <prompt> --output-format stream-json --verbose --include-partial-messages --permission-mode default --mcp-config <tmp>/mcp-config.json --permission-prompt-tool mcp__holzi-approve__approve --append-system-prompt <context>`, `env(CLAUDE_CONFIG_DIR, <tmp>)`, `env(CLAUDE_CODE_OAUTH_TOKEN, <credentials>)`, `current_dir(<tmp>)` — Muster identisch zu `chat/tools/cli.rs`s bestehendem Prozess-Setup (Prozessgruppe, Timeout, Kill-on-cancel), nur mit anderem Binary/Argumenten. Vor dem Spawn: startet den Approval-Socket-Listener (siehe `approval_bridge.rs`) und schreibt `<tmp>/mcp-config.json` mit `"command"` = `std::env::current_exe()` (der eigene holzi-Binary-Pfad) und `"args"` = `["--internal-cli-delegate-approval-bridge", "--socket", <socket-pfad>]`. |
 | NDJSON-Parser                  | Liest `stream-json`-Zeilen (`{"type":"assistant"/"stream_event"/"result"/...}`, research.md §1 zeigt reale Beispiel-Events); `content_block_delta`/`text_delta` → `StreamChunk::Delta`; abschließende `result`-Zeile → `StreamChunk::Done`. Kein `StreamChunk::ToolCalls` (research.md §4). |
-| `PermissionMcpServer`          | Ein einziges rmcp-`server`-Feature-basiertes stdio-Objekt, pro Aufruf frisch gestartet, das genau ein Tool (`approve`) exponiert; dessen `tools/call`-Handler ist `approval_bridge.rs`s gemeinsame Logik (siehe unten). |
+| `permission_mcp_server::run_bridge_process(socket_path)` | Läuft **im separaten Kindprozess** (siehe `lib.rs`-Einstiegspunkt unten). Ein rmcp-`server`+`transport-io`-basierter Stdio-MCP-Server (eigenes geerbtes stdin/stdout — das ist, womit `claude` tatsächlich spricht) mit genau einem Tool (`approve`). Dessen `tools/call`-Handler verbindet sich seinerseits als Client zum `socket_path` (Unix-Domain-Socket unter Unix, Named Pipe unter Windows — `tokio::net`, Feature `net`, kein neues Crate), schickt `{tool_name, input}` als eine JSON-Zeile, liest eine JSON-Zeile mit der Entscheidung zurück, formt daraus die MCP-Tool-Antwort. |
+| `lib.rs`/`main.rs`-Einstiegspunkt | Ganz am Anfang von `main()`, vor `tauri::Builder::default()...run()`: wenn `std::env::args().nth(1) == Some("--internal-cli-delegate-approval-bridge")`, läuft stattdessen nur `permission_mcp_server::run_bridge_process(socket_path)` und der Prozess beendet sich danach — kein Tauri-/GUI-Start. Analog zu bekannten Rust-CLI-Mustern (verstecktes internes Subcommand über den eigenen Binary-Pfad), plattformunabhängig auf allen Desktop-Targets. |
 
 ### `codex.rs` — Prozess- und Session-Modell
 
@@ -91,7 +102,7 @@ Implementierungsdetail von tasks.md, nicht dieses Dokuments).
 | Approval-Routing                  | `ExecCommandApprovalRequest`/`ApplyPatchApprovalRequest`/`PermissionsRequestApprovalRequest` (research.md §2) → dieselbe `approval_bridge.rs`-Logik → Antwort mit `ReviewDecision::{approved, denied{rejection}}`. |
 | Textausgabe                       | Codex' eigene Antwort-/Text-Events → `StreamChunk::Delta`/`Done`, analog zu `claude.rs`. Exaktes Event-Schema ist Implementierungsdetail von tasks.md (Codex-Live-Spike, research.md §2). |
 
-### `approval_bridge.rs` — gemeinsame Logik beider Backends
+### `approval_bridge.rs` — gemeinsame Logik beider Backends, läuft im Hauptprozess
 
 ```rust
 async fn request_approval(
@@ -102,6 +113,16 @@ async fn request_approval(
     tool_input: serde_json::Value,
 ) -> ApprovalDecision
 ```
+
+Zusätzlich (neu, siehe Korrektur oben): `start_approval_socket_listener(pending, app, thread_id) ->
+(SocketPath, JoinHandle)` — legt einen frischen temporären Socket-/Pipe-Pfad an, `bind`et/`listen`et
+darauf (`tokio::net::UnixListener` unter Unix, `tokio::net::windows::named_pipe` unter Windows), und
+akzeptiert für die Dauer eines Delegate-Aufrufs Verbindungen vom Bridge-Kindprozess. Für jede
+eingehende `{tool_name, input}`-Zeile: ruft zuerst `chat/tools/permission.rs::decide()` auf; bei
+`Allow`/`Deny` antwortet sofort ohne `request_approval` (data-model.md-Edge-Case
+FR-007/analyze-Finding G4); bei `Ask` ruft `request_approval` und schickt dessen Ergebnis als
+JSON-Zeile zurück. Wird nach Abschluss des Delegate-Aufrufs geschlossen, der temporäre Socket-Pfad
+entfernt (RAII, wie die übrigen temporären Verzeichnisse).
 
 Erzeugt eine neue `Uuid`, einen `oneshot::channel`, registriert den Sender in `pending` (exakt wie
 `turn.rs`s bestehender `Ask`-Zweig, `turn.rs:669-719`), emittiert `tool-permission-request`

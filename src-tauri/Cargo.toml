@@ -58,8 +58,10 @@ haex-crdt = { git = "https://github.com/haexmas/haex-crdt", rev = "1c069ef0ea191
 mistralrs = { version = "0.8.1", optional = true }
 # Tokio is unconditional: reqwest and the download commands need an async
 # runtime even without local inference, and Tauri already pulls tokio in
-# transitively. The extra `sync` and `fs` features are cheap.
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "fs"] }
+# transitively. The extra `sync` and `fs` features are cheap. `net` is for
+# the cli_delegate approval-bridge IPC hop (Unix domain socket / Windows
+# named pipe, spec 007-cli-delegate data-model.md) — no separate crate.
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "fs", "net"] }
 futures = "0.3"
 # `CancellationToken` for cooperative cancellation of an in-flight tool
 # execution or a pending approval wait (spec.md FR-009/FR-010) — already a
@@ -84,11 +86,15 @@ async-trait = "0.1"
 eventsource-stream = "0.2"
 
 # Official Rust MCP SDK (research.md §3), pinned per Constitution
-# Principle IV. `client` + `transport-child-process` are the only
-# features holzi needs — it is an MCP *client* spawning stdio servers,
-# never a server itself, so the crate's default `server`/`schemars`
-# features are dropped.
-rmcp = { version = "=3.3.0", default-features = false, features = ["client", "transport-child-process"] }
+# Principle IV. `client` + `transport-child-process` cover holzi acting as
+# an MCP client spawning user-configured stdio servers. `server` +
+# `transport-io` (spec 007-cli-delegate) additionally let holzi act as a
+# stdio MCP *server* itself: the permission-prompt-tool bridge process
+# `claude` spawns via `--mcp-config` speaks MCP over its own inherited
+# stdin/stdout (data-model.md "permission_mcp_server.rs") — this is a
+# genuinely separate child process, not the already-running Tauri
+# process, since that's how MCP's stdio transport works.
+rmcp = { version = "=3.3.0", default-features = false, features = ["client", "transport-child-process", "server", "transport-io"] }
 
 [target.'cfg(unix)'.dependencies]
 # Kills a whole process group (`kill(-pgid, SIGKILL)`) so a killed
@@ -98,12 +104,11 @@ libc = "0.2"
 
 [dev-dependencies]
 tempfile = "3"
-# Additive to the `[dependencies]` rmcp entry: test-only `server` support
-# (feature-unified into one build across dependencies + dev-dependencies)
-# lets `chat/tools/mcp_tests.rs` run a real, minimal `ServerHandler` over
-# an in-memory `tokio::io::duplex` pair — no child process needed to
-# exercise the real client-side tools/list + tools/call round trip.
-rmcp = { version = "=3.3.0", default-features = false, features = ["server"] }
+# rmcp's `server` feature is now a real (non-test-only) `[dependencies]`
+# feature (spec 007-cli-delegate) — no separate dev-dependency entry
+# needed here anymore; `chat/tools/mcp_tests.rs`'s in-memory `ServerHandler`
+# test and the new cli_delegate approval-bridge code both build against
+# the same main-dependency feature set.
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "test-util"] }
 futures = "0.3"
 # HTTP mock server for adapter tests — spins a local listener on a
