@@ -1,6 +1,9 @@
 use std::collections::HashMap;
+use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
+use haex_crdt::{Database, DatabaseConfig, NoopSignatureProvider, SqlCipherKey};
 use serde_json::Value;
 use tokio::sync::{oneshot, Mutex as AsyncMutex};
 use uuid::Uuid;
@@ -8,6 +11,33 @@ use uuid::Uuid;
 use super::approval_bridge::request_approval;
 use super::{EventEmitter, PendingToolApprovals};
 use crate::chat::tools::ApprovalDecision;
+use crate::identity::{holzi_migration_source, installation_id_path, HolziBootstrap};
+use crate::storage::preferences::{self, PrefScope};
+
+const PASSPHRASE: &str = "approval-bridge-posture-test";
+
+fn open_vault(dir: &Path) -> Database {
+    let installation_id = installation_id_path(dir);
+    Database::open(DatabaseConfig {
+        path: dir.join("vault.db"),
+        key: SqlCipherKey::new(PASSPHRASE),
+        create_if_missing: true,
+        bootstrap: Arc::new(HolziBootstrap::new(installation_id).with_alias("test")),
+        signature_provider: Arc::new(NoopSignatureProvider),
+        migration_source: holzi_migration_source(),
+        trigger_version: haex_crdt::DEFAULT_TRIGGER_VERSION,
+    })
+    .expect("vault open")
+}
+
+fn never_emitting() -> (EventEmitter, Arc<AtomicBool>) {
+    let called = Arc::new(AtomicBool::new(false));
+    let flag = Arc::clone(&called);
+    let emit: EventEmitter = Arc::new(move |_event: &str, _payload: Value| {
+        flag.store(true, Ordering::SeqCst);
+    });
+    (emit, called)
+}
 
 #[tokio::test]
 async fn manual_approval_uses_the_existing_pending_request_flow() {
@@ -58,5 +88,93 @@ async fn manual_approval_uses_the_existing_pending_request_flow() {
     assert_eq!(
         task.await.expect("approval task should finish"),
         ApprovalDecision::Allow
+    );
+}
+
+/// tasks.md T031: `Decision::Allow` (Auto posture, a Safe tool) must resolve
+/// without ever registering a pending approval or emitting
+/// `tool-permission-request` — the live round trip this module exists for is
+/// reserved for `Decision::Ask` only.
+#[tokio::test]
+async fn auto_mode_allow_on_a_safe_tool_skips_the_live_round_trip() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db = Arc::new(open_vault(dir.path()));
+    db.with_connection(|conn| {
+        preferences::insert_or_update(
+            conn,
+            PrefScope::Device(db.device_id()),
+            "chat.permission_mode",
+            "auto",
+        )
+        .map_err(haex_crdt::Error::from)?;
+        Ok(())
+    })
+    .expect("set permission mode");
+
+    let pending: PendingToolApprovals = Arc::new(Mutex::new(HashMap::new()));
+    let (emit, emitted) = never_emitting();
+
+    let decision = request_approval(
+        &pending,
+        &emit,
+        Some(&db),
+        Some(Uuid::nil()),
+        "Read".to_string(), // in `is_risky_tool`'s safe list
+        serde_json::json!({"path": "/tmp/x"}),
+    )
+    .await;
+
+    assert_eq!(decision, ApprovalDecision::Allow);
+    assert!(
+        pending.lock().expect("pending lock").is_empty(),
+        "Allow must never register a pending approval"
+    );
+    assert!(
+        !emitted.load(Ordering::SeqCst),
+        "Allow must never emit tool-permission-request"
+    );
+}
+
+/// tasks.md T031/T032: `Decision::Deny` (Plan posture, a Risky tool) must
+/// also resolve without a live round trip — this is the "posture blocks
+/// without ever surfacing a prompt" guarantee (spec.md FR-007/SC-003)
+/// distinct from a live `Ask` that a human then denies.
+#[tokio::test]
+async fn plan_mode_deny_on_a_risky_tool_skips_the_live_round_trip() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db = Arc::new(open_vault(dir.path()));
+    db.with_connection(|conn| {
+        preferences::insert_or_update(
+            conn,
+            PrefScope::Device(db.device_id()),
+            "chat.permission_mode",
+            "plan",
+        )
+        .map_err(haex_crdt::Error::from)?;
+        Ok(())
+    })
+    .expect("set permission mode");
+
+    let pending: PendingToolApprovals = Arc::new(Mutex::new(HashMap::new()));
+    let (emit, emitted) = never_emitting();
+
+    let decision = request_approval(
+        &pending,
+        &emit,
+        Some(&db),
+        Some(Uuid::nil()),
+        "Bash".to_string(), // not in the safe list => Risky
+        serde_json::json!({"command": "rm -rf /"}),
+    )
+    .await;
+
+    assert_eq!(decision, ApprovalDecision::Deny);
+    assert!(
+        pending.lock().expect("pending lock").is_empty(),
+        "Deny must never register a pending approval"
+    );
+    assert!(
+        !emitted.load(Ordering::SeqCst),
+        "Deny must never emit tool-permission-request"
     );
 }

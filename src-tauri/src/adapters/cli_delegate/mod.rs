@@ -15,7 +15,7 @@
 //! `crate::chat::tools::ApprovalDecision` (data-model.md
 //! "approval_bridge.rs").
 
-mod approval_bridge;
+pub mod approval_bridge;
 #[cfg(test)]
 mod approval_bridge_tests;
 mod claude;

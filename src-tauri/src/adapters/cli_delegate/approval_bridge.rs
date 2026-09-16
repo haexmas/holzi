@@ -22,7 +22,7 @@ struct ApprovalRequest {
 
 /// Applies holzi's existing permission posture and, for `Ask`, waits on the
 /// same oneshot map used by the built-in tool loop.
-pub(super) async fn request_approval(
+pub async fn request_approval(
     pending: &PendingToolApprovals,
     emit: &EventEmitter,
     database: Option<&Arc<haex_crdt::Database>>,
@@ -98,13 +98,13 @@ fn is_risky_tool(name: &str) -> bool {
 }
 
 #[cfg(unix)]
-pub(super) fn bind_socket(path: &std::path::Path) -> io::Result<tokio::net::UnixListener> {
+pub fn bind_socket(path: &std::path::Path) -> io::Result<tokio::net::UnixListener> {
     std::fs::remove_file(path).ok();
     tokio::net::UnixListener::bind(path)
 }
 
 #[cfg(unix)]
-pub(super) fn start_listener(
+pub fn start_listener(
     listener: tokio::net::UnixListener,
     context: DelegateChatContext,
     thread_id: Option<Uuid>,
@@ -151,7 +151,7 @@ pub(super) fn start_listener(
 }
 
 #[cfg(not(unix))]
-pub(super) fn bind_socket(_path: &std::path::Path) -> io::Result<()> {
+pub fn bind_socket(_path: &std::path::Path) -> io::Result<()> {
     Err(io::Error::new(
         io::ErrorKind::Unsupported,
         "CLI delegate approval sockets are not implemented on this target",
@@ -159,7 +159,7 @@ pub(super) fn bind_socket(_path: &std::path::Path) -> io::Result<()> {
 }
 
 #[cfg(not(unix))]
-pub(super) fn start_listener(
+pub fn start_listener(
     _listener: (),
     _context: DelegateChatContext,
     _thread_id: Option<Uuid>,

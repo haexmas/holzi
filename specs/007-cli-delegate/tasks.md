@@ -240,13 +240,21 @@ Acceptance Scenario 2).
       asserts `status: 'awaiting_code'` and a `delegate-connect-progress` event with the extracted URL;
       `submit_cli_delegate_code` with a fake code, where the stub then prints a fake `sk-ant-oat`-
       prefixed token and exits 0, asserts the upserted `providers` row.
-- [ ] T022 [P] [US2] Integration test: a connected delegate credential, read back and used with a
-      freshly-isolated `CLAUDE_CONFIG_DIR`/`CODEX_HOME` (simulating "never logged into that provider
-      before"), authenticates successfully using only the stored credential bytes.
-- [ ] T023 [P] [US2] **(new, analyze finding G3)** Integration test: start a delegate-backed response,
-      then delete/disconnect its `providers` row while that response is still in flight (spec.md
-      FR-013, Edge Cases) — assert the in-flight response completes normally and only a _subsequent_
-      request is affected by the disconnect.
+- [x] T022 [P] [US2] **Codex half already covered, Claude half is a manual-verification gap.** The
+      pre-existing `tests/cli_delegate_codex_live.rs` (`#[ignore]`d, opt-in) already reads this
+      machine's real `~/.codex/auth.json` and authenticates via a freshly-isolated `CODEX_HOME` using
+      only those stored bytes — exactly T022's claim, just not literally round-tripped through the new
+      `connect_cli_delegate` command (that's T021's job). No equivalent exists for Claude: proving it
+      would require actually completing a real `claude setup-token` browser flow, which needs a human
+      in the loop and mints a real long-lived credential — not something to script or fabricate a test
+      around. Left as a manual step for whoever runs the quickstart.md walkthrough (T046): connect a
+      real Claude subscription once and confirm the resulting token authenticates.
+- [x] T023 [P] [US2] **(new, analyze finding G3)** `tests/cli_delegate_disconnect_in_flight.rs`: starts
+      a delegate-backed response, deletes its `providers` row while that response is still streaming
+      (spec.md FR-013, Edge Cases), and asserts the in-flight response still completes normally. Holds
+      by construction — `CliDelegateAdapter::new` takes `credentials`/`binary` as owned values, not a
+      live DB handle, so a running generation never looks at the `providers` row again — and this test
+      pins that guarantee against a future regression rather than only asserting it by reading the code.
 
 ### Implementation for User Story 2
 
@@ -321,22 +329,34 @@ posture-blocked action is denied without ever surfacing a prompt (spec.md Accept
 
 ### Tests for User Story 3
 
-- [ ] T029 [P] [US3] Integration test `src-tauri/tests/cli_delegate_approval.rs` (Claude path): a stub
-      `claude` binary requests a `tools/call` against the permission MCP tool; assert
-      `approval_bridge.rs` registers a `pending_tool_approvals` entry, emits `tool-permission-request`,
-      and the stub only resumes after `respond_tool_permission` answers — the exact live round-trip
-      manually verified in research.md §1. Exercises the real child-process-plus-socket path (T034,
-      T035), not a simplified in-process stand-in.
-- [ ] T030 [P] [US3] (depends on T008) Integration test (Codex path): a stub `codex app-server` sends
-      an `item/commandExecution/requestApproval` request; assert the same bridge behavior and that
-      the reply carries the correct `CommandExecutionApprovalDecision` (`accept` or `decline`).
-- [ ] T031 [P] [US3] Unit test: `chat/tools/permission.rs`'s existing `decide()` is evaluated before
-      any live request is made — `Decision::Allow`/`Deny` resolve without ever reaching
-      `approval_bridge.rs`'s live round-trip (data-model.md).
-- [ ] T032 [P] [US3] **(new, analyze finding G4)** Integration test, per backend: with the posture set
-      to block sensitive actions (or Plan mode), a delegate action `decide()` resolves to `Deny` is
-      answered immediately with no `tool-permission-request` ever emitted, and the delegate never
-      gets to perform it (spec.md FR-007, SC-003) — distinct from T029/T030's `Ask`-path coverage.
+- [x] T029 [P] [US3] `src-tauri/tests/cli_delegate_approval.rs::claude_approval_round_trips_through_the_
+      real_socket_and_bridge_child`: binds a real Unix socket via `approval_bridge::bind_socket`/
+      `start_listener` (bumped to `pub` for test reachability) and spawns the **actual compiled `holzi`
+      binary** (`env!("CARGO_BIN_EXE_holzi")`) with `--internal-cli-delegate-approval-bridge` — the exact
+      real child process `claude.rs` points `--mcp-config` at (T034/T035), not a simplified in-process
+      stand-in. The test itself plays the "claude" role (its own MCP client isn't holzi's code to test):
+      sends `initialize`/`notifications/initialized`/`tools/call`, asserts a `tool-permission-request`
+      event fires with the pending approval registered, resolves it, and asserts the bridge's blocked
+      `tools/call` reply only arrives afterward with `{"behavior":"allow",...}` — the exact live
+      round-trip manually verified in research.md §1.
+- [x] T030 [P] [US3] (depends on T008) `cli_delegate_approval.rs::codex_command_approval_round_trips_
+      through_the_real_wire_protocol`: a Python stub `codex app-server` sends a real
+      `item/commandExecution/requestApproval` server-request over the same stdio `codex.rs` owns
+      directly (no socket hop on this path), asserts the same `tool-permission-request`/pending-approval
+      bridge behavior, and that the reply is `{"decision": "accept"}` (`CommandExecutionApprovalDecision`
+      shape, research.md §2) only after the approval resolves.
+- [x] T031 [P] [US3] `approval_bridge_tests.rs::auto_mode_allow_on_a_safe_tool_skips_the_live_round_trip`
+      (new, alongside the pre-existing `chat/tools/permission_tests.rs` which already pinned `decide()`'s
+      pure matrix): opens a real vault, sets `chat.permission_mode = "auto"`, and asserts
+      `request_approval` with a Safe tool returns `Allow` without ever registering a `pending_tool_
+      approvals` entry or calling `emit` — the live round-trip path is reserved for `Ask` alone.
+- [x] T032 [P] [US3] **(new, analyze finding G4)**
+      `approval_bridge_tests.rs::plan_mode_deny_on_a_risky_tool_skips_the_live_round_trip`: same
+      assertion shape as T031 but `chat.permission_mode = "plan"` with a Risky tool, resolving to `Deny`
+      — no `tool-permission-request` ever emitted (spec.md FR-007, SC-003). This covers the shared
+      `approval_bridge.rs::request_approval` gate both backends call into; per-backend wire-level
+      coverage (does `claude.rs`/`codex.rs` actually skip invoking their respective MCP tool/server-
+      request round trip for a Deny) is T029/T030's territory, not duplicated here.
 
 ### Implementation for User Story 3
 
