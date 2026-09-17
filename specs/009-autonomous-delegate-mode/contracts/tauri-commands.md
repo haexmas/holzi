@@ -6,18 +6,23 @@ command's args and reuses the existing generic preference commands unchanged.
 
 ## Changed command: `send_message`
 
-`SendMessageArgs` (`src-tauri/src/chat/commands.rs:50-66`) gains one new optional field:
+The public `SendMessageArgs` accepted by `useChat().sendMessageAsync` has one new optional field;
+the composable also normalizes the retry key before invoking Tauri:
 
 ```typescript
 {
-  threadId: string | null,
+  threadId?: string | null,
   content: string,
-  systemPrompt: string | null,
-  maxNewTokens: number | null,
-  idempotencyKey: string,
-  autonomyMode: 'standard' | 'ungated' | 'gated_permissive' | null   // NEW
+  systemPrompt?: string,
+  maxNewTokens?: number,
+  idempotencyKey?: string,
+  autonomyMode?: 'standard' | 'ungated' | 'gated_permissive' | null   // NEW
 }
 ```
+
+`sendMessageAsync` fills an omitted `idempotencyKey` with a fresh UUID before the Tauri invoke.
+The backend therefore receives that key on the normalized payload, while the other optional fields
+may remain omitted and deserialize as their existing `Option` values.
 
 **Contract**:
 

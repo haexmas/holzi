@@ -181,11 +181,12 @@ src-tauri/src/
 │       │                                 #   Ungated never reaches this function for Claude (no bridge
 │       │                                 #   spawned) and never receives a callback for Codex
 │       │                                 #   (approvalPolicy:"never" means Codex itself never asks)
-│       └── mod.rs                       # CliDelegateAdapter::stream_chat (mod.rs:195-224): thread
-│                                         #   req.autonomy_mode into spawn_claude_invocation /
-│                                         #   spawn_codex_app_server as a new parameter (no existing
-│                                         #   config struct to extend — both currently take positional
-│                                         #   scalars, per research.md §1)
+│       └── mod.rs                       # CliDelegateAdapter::stream_chat (mod.rs:195-224): use the
+│                                         #   existing ChatRequest context for autonomy branching;
+│                                         #   spawn_claude_invocation / spawn_codex_app_server read
+│                                         #   req.autonomy_mode directly, with no separate mode
+│                                         #   parameter (workspace root remains an explicit evaluator
+│                                         #   input, per research.md §1)
 ├── storage/
 │   └── chat_messages.rs                 # migration 0017 adds nullable `autonomy_mode` beside
 │                                         #   the existing `tool_source` column, satisfying spec

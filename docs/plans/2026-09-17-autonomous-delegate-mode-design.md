@@ -67,8 +67,8 @@ it entirely. Two variants follow directly from that, both operator-selectable pe
   Claude Code's `--permission-prompt-tool` MCP server, Codex's `app-server` approval subscription —
   but swap the decision function. Instead of parking on a `oneshot` and waiting for a human (shipped
   default), the bridge auto-responds "allow" immediately for everything **except** an
-  operator-configured deny/notify list (e.g. writes outside the invocation's workspace root, network
-  egress, credential-file paths), which either hard-blocks or fires a non-blocking notification.
+  operator-configured deny list (e.g. writes outside the invocation's workspace root, network
+  egress, credential-file paths), which hard-blocks the matching action.
   Same per-call round-trip cost the shipped feature already pays, but for that cost: a full persisted
   tool-call log for free, reusing the exact `ChatMessage::ToolCall`/`ToolResult` rows and
   `tool_source` discrimination the built-in tool loop already writes

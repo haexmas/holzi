@@ -33,6 +33,11 @@ only the delegate's final response is persisted as the ordinary assistant messag
 `autonomy_mode` column is set on that assistant message row itself (so "which mode did this turn use"
 is answerable even when no tool-call rows exist for it), not only on tool-call rows.
 
+The nullable value is carried through `ChatMessage`, the history SQL projection, `row_to_message`,
+and the `MessagePayload` DTO to the frontend `Message` type. The existing history endpoint and its
+overall shape remain unchanged; legacy and non-delegate rows expose `autonomy_mode: null` internally
+and `autonomyMode: null` on the camelCase frontend payload.
+
 ## New Rust types (runtime, `adapters/cli_delegate/autonomy.rs`)
 
 ### `AutonomyMode`
@@ -113,10 +118,13 @@ has no `Ask` outcome — `gated-permissive` never produces a human-facing pause 
 returns the same two-variant `ApprovalDecision` type `approval_bridge.rs` already defines, simply
 never constructing the case that would trigger a UI prompt.
 
-`NetworkAccess` enforcement is intentionally limited to the structured Codex network signal, the
-recognized Claude `WebFetch`/`WebSearch` tools, and the documented command patterns. FR-007 and
-SC-003 apply completely to actions that match those signals; this phase does not claim detection or
-blocking of every possible network-capable command.
+`NetworkAccess` enforcement is intentionally limited to approval callback payloads that reach
+`approval_bridge::request_approval`: the structured Codex network signal, recognized Claude
+`WebFetch`/`WebSearch` tools, and the documented command patterns. An unclassifiable Claude command
+payload fails closed when `NetworkAccess` is enabled. FR-007 and SC-003 apply to actions presented
+through that callback boundary and matching those documented signals; this phase does not expand
+evaluator routing or claim detection and blocking of every possible network-capable command outside
+that boundary.
 
 ## Changed entity: `preferences` (existing table, one new key, no schema change)
 

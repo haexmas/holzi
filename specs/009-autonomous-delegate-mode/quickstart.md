@@ -62,8 +62,8 @@ research.md for the full evidence trail:
 1. In settings, enable the `network_access` deny rule for delegate connections.
 2. Send a `gated-permissive` request that would need network access (e.g. "fetch
    https://example.com and summarize it") using **Codex** first.
-3. **Expect**: the network action is blocked; the delegate is told it wasn't available; the turn
-   completes rather than crashing.
+3. **Expect**: the matching approval callback is blocked; the delegate is told the action wasn't
+   available; the turn completes rather than crashing.
 4. Repeat with **Claude Code**.
 5. **Expect**: same outcome via the recognized tool-name/command-text match (data-model.md). An
    unrecognized Claude command whose network intent cannot be classified must also be denied

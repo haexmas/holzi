@@ -60,7 +60,7 @@ quickstart.md.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T002 [P] Define `AutonomyMode` enum (`Standard` default / `Ungated` / `GatedPermissive`,
+- [ ] T002 Define `AutonomyMode` enum (`Standard` default / `Ungated` / `GatedPermissive`,
       `#[serde(rename_all = "snake_case")]`) in `src-tauri/src/adapters/cli_delegate/autonomy.rs`
       (data-model.md).
 - [ ] T003 Add `autonomy_mode: AutonomyMode` field (`#[serde(default)]`) to `ChatRequest` in
@@ -75,13 +75,13 @@ quickstart.md.
       `autonomy_mode: Option<AutonomyMode>` (wire name `autonomyMode` via the struct's existing
       `#[serde(rename_all = "camelCase")]`); thread it into the `ChatRequest` built inside
       `send_message` (contracts/tauri-commands.md).
-- [ ] T006 [P] Define `DenyCategory` enum (`WorkspaceEscape` / `NetworkAccess` / `CredentialPaths`,
+- [ ] T006 Define `DenyCategory` enum (`WorkspaceEscape` / `NetworkAccess` / `CredentialPaths`,
       `#[serde(rename_all = "snake_case")]`) in `autonomy.rs` (data-model.md).
-- [ ] T007 [P] Define `ApprovalRequestPayload` enum (`ClaudeToolCall { tool_name, input }` /
+- [ ] T007 Define `ApprovalRequestPayload` enum (`ClaudeToolCall { tool_name, input }` /
       `CodexCommandExecution { command, cwd, network }` / `CodexFileChange` with no fields) in
       `autonomy.rs` (data-model.md — `CodexFileChange` is deliberately field-less, matching the real
       schema gap found in research.md §3, not a placeholder to fill in later).
-- [ ] T008 Implement `evaluate_deny_rules(enabled: &[DenyCategory], payload: &ApprovalRequestPayload,
+- [ ] T008 Implement `evaluate_deny_rules(enabled: &[DenyCategory], request: &ApprovalRequestPayload,
 workspace_root: &Path) -> ApprovalDecision` in `autonomy.rs` per the matching table in
       data-model.md. The payload enum identifies the vendor, so no redundant vendor parameter is
       accepted. Use the explicit invocation root for workspace checks; never derive it from the
@@ -89,7 +89,7 @@ workspace_root: &Path) -> ApprovalDecision` in `autonomy.rs` per the matching ta
       matches, `Deny` otherwise, and **`Deny` for any enabled `WorkspaceEscape`/`CredentialPaths`
       category against a `CodexFileChange` payload regardless of content** (spec FR-015 — cannot
       evaluate, fail closed, not a bug to "fix" by adding fields that don't exist upstream).
-- [ ] T009 [P] Define an `AutonomyUnavailable { vendor: DelegateVendor, mode: AutonomyMode }` error
+- [ ] T009 Define an `AutonomyUnavailable { vendor: DelegateVendor, mode: AutonomyMode }` error
       type in `autonomy.rs` (spec FR-013/SC-006) and a `classify_autonomy_spawn_error(vendor, mode,
 raw_error: &str) -> Option<AutonomyUnavailable>` helper: recognizes Claude Code's
       "unknown option"-shaped stderr for an unsupported `--permission-mode` value and Codex's
@@ -100,7 +100,7 @@ raw_error: &str) -> Option<AutonomyUnavailable>` helper: recognizes Claude Code'
       classes (spec FR-008 precedent), so this feature does not invent a second detection strategy;
       the command boundary preserves the exact `InvalidInput` wire shape in
       `contracts/tauri-commands.md`.
-- [ ] T010 [P] Define `const PREF_DENY_RULES: &str = "cli_delegate.deny_rules";` plus
+- [ ] T010 Define `const PREF_DENY_RULES: &str = "cli_delegate.deny_rules";` plus
       `get_deny_rules(conn, device_id) -> Result<Vec<DenyCategory>, DenyRulesError>` /
       `set_deny_rules(conn, device_id, categories: &[DenyCategory]) -> Result<(), DenyRulesError>`
       helpers over `storage::preferences::{get, insert_or_update}` with `PrefScope::Device` in
@@ -113,7 +113,9 @@ raw_error: &str) -> Option<AutonomyUnavailable>` helper: recognizes Claude Code'
       the data-model.md table, explicitly asserting the `CodexFileChange` fail-closed case for
       `WorkspaceEscape`/`CredentialPaths` (FR-015) and the "no enabled categories → always `Allow`"
       empty-rule-set edge case (spec's own documented edge case), explicit workspace-root handling,
-      and malformed preference JSON returning an error; plus unit tests for
+      and malformed preference JSON returning an error. Include a separate `ClaudeToolCall` case with
+      an unrecognized action whose network intent cannot be classified while `NetworkAccess` is
+      enabled, asserting fail-closed `Deny`. Also add unit tests for
       `classify_autonomy_spawn_error` against representative Claude "unknown option" and Codex
       RPC-error strings.
 
@@ -178,9 +180,10 @@ something else.
       `"sandbox": "workspace-write"` (a field 007 never sends today); `Standard`/`GatedPermissive`
       keep `"approvalPolicy": "on-request"` unchanged (research.md §2 — verified against the real
       `ThreadStartParams` schema, not the standalone `codex exec` CLI's flags).
-- [ ] T019 [US1] `approval_bridge::request_approval` (approval_bridge.rs:25-68): add an
-      `AutonomyMode` parameter and thread the invocation workspace root into this flow as a separate
-      value (do not add it to `ApprovalRequestPayload`); for `GatedPermissive`, skip
+- [ ] T019 [US1] `approval_bridge::request_approval` (approval_bridge.rs:25-68): use the autonomy
+      mode from the existing `ChatRequest` context captured by `CliDelegateAdapter::stream_chat` and
+      thread the invocation workspace root into this flow as a separate value (do not add the mode or
+      root to `ApprovalRequestPayload`); for `GatedPermissive`, skip
       `permission::decide(mode, risk)` and
       instead build the appropriate `ApprovalRequestPayload` (T007) from `tool_name`/`input` and call
       `autonomy::evaluate_deny_rules` (T008) with T010's persisted deny rules and the invocation's
@@ -192,10 +195,10 @@ something else.
       deny-rule value must never become an empty permissive rule set. This satisfies FR-010
       independently of the channel-based mechanism (T016 tests this explicitly).
 - [ ] T020 [US1] `mod.rs::CliDelegateAdapter::stream_chat` (mod.rs:195-224) and the
-      `spawn_claude_invocation`/`spawn_codex_app_server` signatures (claude.rs:148-153,
-      codex.rs:240-245): add `req.autonomy_mode` as a new parameter and thread the invocation
-      workspace root separately through every T019 caller (research.md §1 — no existing config
-      struct to extend, both take positional scalars today).
+      `spawn_claude_invocation`/`spawn_codex_app_server` call path (claude.rs:148-153,
+      codex.rs:240-245): retain the existing `ChatRequest` context so each function reads
+      `req.autonomy_mode` directly; do not add a separate `AutonomyMode` parameter. Thread the
+      invocation workspace root separately through every T019 caller (research.md §1).
 - [ ] T021 [US1] In `mod.rs`, gate the `approval_bridge::bind_socket`/`start_listener`/MCP-config-file
       setup (currently unconditional in `spawn_claude_invocation`, claude.rs:179-199-ish) behind
       `req.autonomy_mode != AutonomyMode::Ungated` for the Claude path specifically — `Ungated` never
@@ -233,14 +236,17 @@ honestly, and `standard` is regression-free.
 
 - [ ] T025 [US2] Apply migration `0017` (T004); run the full `cargo test --lib` suite to confirm the
       `HOLZI_TRIGGER_VERSION` bump doesn't break existing CRDT sync/migration tests.
-- [ ] T026 [US2] Wherever 007 already persists `cli_delegate:claude`/`cli_delegate:codex`
-      `tool_source` rows and the delegate's final assistant message (the turn-persistence path a
-      delegate invocation's `AdapterStream` feeds into): also set the new `autonomy_mode` column
-      from `req.autonomy_mode` on every row for that turn, including the assistant-message row for
-      `Ungated` (T024's requirement — the label must exist even with zero tool-call rows).
-- [ ] T027 [US2] Frontend: wherever 007's FR-005 "make clear which backend answered" label is
-      already rendered in chat history, add the `autonomy_mode` label alongside it (new i18n strings
-      per T041 in Polish).
+- [ ] T026 [US2] Propagate nullable `autonomy_mode` through the persistence chain: add it to
+      `ChatMessage`, the chat-message insert/update values, the history SQL SELECT, `row_to_message`,
+      and the `MessagePayload` DTO. Set it from `req.autonomy_mode` on every row for a delegate turn,
+      including the assistant-message row for `Ungated`; preserve `NULL` for legacy rows,
+      non-delegate rows, and rows created before migration 0017. The existing history endpoint remains
+      unchanged apart from exposing this additive nullable field.
+- [ ] T027 [US2] Frontend: add the nullable `autonomyMode` field (serialized from internal
+      `autonomy_mode` by the existing camelCase `MessagePayload`) to the frontend `Message` type and
+      consume it wherever 007's FR-005 "make clear which backend answered" label is already rendered
+      in chat history, adding the autonomy-mode label alongside it. Add the required German and
+      English locale strings listed by T040; preserve `null` for legacy and non-delegate messages.
 
 **Checkpoint**: User Stories 1 AND 2 (the full MVP) independently functional together.
 
@@ -255,15 +261,16 @@ documented per-vendor/per-action-type asymmetry (FR-015) holding exactly as spec
 
 ### Tests for User Story 3
 
-- [ ] T028 [P] [US3] Integration test: enabling `network_access` blocks a Codex call carrying
-      `networkApprovalContext` and a Claude `WebFetch`-tool call, under `gated-permissive`, for both
-      vendors.
+- [ ] T028 [P] [US3] Integration test: enabling `network_access` blocks approval callbacks for a
+      Codex call carrying `networkApprovalContext` and a Claude `WebFetch`-tool call, under
+      `gated-permissive`, for both vendors.
 - [ ] T029 [P] [US3] Integration test: enabling `workspace_escape`, a Codex **file-change** approval
-      (not command execution) is denied per FR-015's fail-closed rule — the specific case
+      callback (not command execution) is denied per FR-015's fail-closed rule — the specific case
       quickstart.md Scenario 3 steps 6-7 call out. Must fail if a future change accidentally starts
       allowing it through.
-- [ ] T030 [P] [US3] Integration test: no deny rules configured → every action proceeds under
-      `gated-permissive` (end-to-end version of T011's unit-level empty-set case).
+- [ ] T030 [P] [US3] Integration test: no deny rules configured → every documented approval callback
+      payload proceeds under `gated-permissive` (end-to-end version of T011's unit-level empty-set
+      case).
 
 ### Implementation for User Story 3
 
@@ -274,12 +281,13 @@ documented per-vendor/per-action-type asymmetry (FR-015) holding exactly as spec
 - [ ] T032 [US3] Wire Codex's `respond_to_server_request` dispatch (codex.rs:123-155) to build
       `ApprovalRequestPayload::CodexCommandExecution { command, cwd, network }` from
       `CommandExecutionRequestApprovalParams` and `ApprovalRequestPayload::CodexFileChange` (no
-      fields) from `FileChangeRequestApprovalParams`, passed into T019's `evaluate_deny_rules` call
-      together with the invocation workspace root.
+      fields) from `FileChangeRequestApprovalParams`, passed into T019's approval-callback
+      `evaluate_deny_rules` call together with the invocation workspace root.
 - [ ] T033 [US3] Wire Claude's MCP `tools/call` handler (`permission_mcp_server.rs`'s
       `call_approval`/`approval_bridge.rs`'s `request_approval`) to build
       `ApprovalRequestPayload::ClaudeToolCall { tool_name, input }` from the incoming arguments,
-      passed into T019's `evaluate_deny_rules` call together with the invocation workspace root.
+      passed into T019's approval-callback `evaluate_deny_rules` call together with the invocation
+      workspace root.
 
 **Checkpoint**: User Stories 1-3 independently functional — deny rules enforceable with the
 documented asymmetry, not a silent gap.
@@ -353,9 +361,10 @@ documented asymmetry, not a silent gap.
       (CONTEXT.md's lockstep requirement).
 - [ ] T041 Execute quickstart.md's 5 scenarios manually end-to-end, on whichever of Claude
       Code/Codex is actually installed for review; record which vendor(s) were exercised.
-- [ ] T042 [P] Update `docs/plans/2026-09-17-autonomous-delegate-mode-design.md`'s status header to
-      point at this shipped feature, mirroring how 007-cli-delegate's own design doc predecessor was
-      updated once its spec/tasks existed.
+- [ ] T042 [P] After the implementation tasks are complete and the feature is no longer in planning,
+      update `docs/plans/2026-09-17-autonomous-delegate-mode-design.md`'s status header to point at
+      the implemented feature, mirroring how 007-cli-delegate's own design-doc predecessor was
+      updated. Until then, retain the current deferred-design status.
 
 ---
 
@@ -386,8 +395,10 @@ documented asymmetry, not a silent gap.
 
 ### Parallel Opportunities
 
-- T002, T004, T005, T006, T007, T009, T010 (Phase 2) touch disjoint files/regions and can run in
-  parallel once T001 exists.
+- T004 and T005 (Phase 2) touch disjoint files and can run in parallel with the serialized
+  `autonomy.rs` work. T002, T006, T007, T009, and T010 are intentionally not marked `[P]` because
+  they all modify `autonomy.rs`; apply them sequentially once T001 exists. T008 follows T007 and
+  remains non-parallel with that same-file sequence.
 - Within each user story's Tests subsection, all `[P]`-marked tasks target different new test files
   and can run in parallel.
 - US3's T031 (frontend settings) and T032/T033 (backend payload wiring) can run in parallel — no
@@ -401,14 +412,17 @@ documented asymmetry, not a silent gap.
 ## Parallel Example: Phase 2 (Foundational)
 
 ```bash
-# After T001 (module file exists), launch together:
+# After T001, keep same-file autonomy.rs work serialized:
 Task: "Define AutonomyMode enum in src-tauri/src/adapters/cli_delegate/autonomy.rs"
-Task: "Add migration 0017_chat_messages_add_autonomy_mode in src-tauri/src/identity/migrations.rs"
-Task: "Extend SendMessageArgs in src-tauri/src/chat/commands.rs"
 Task: "Define DenyCategory enum in src-tauri/src/adapters/cli_delegate/autonomy.rs"
 Task: "Define ApprovalRequestPayload enum in src-tauri/src/adapters/cli_delegate/autonomy.rs"
+Task: "Implement evaluate_deny_rules in src-tauri/src/adapters/cli_delegate/autonomy.rs"
 Task: "Define AutonomyUnavailable + classify_autonomy_spawn_error in src-tauri/src/adapters/cli_delegate/autonomy.rs"
 Task: "Define deny-rule preference helpers in src-tauri/src/adapters/cli_delegate/autonomy.rs"
+
+# These disjoint-file tasks can run alongside that sequence:
+Task: "Add migration 0017_chat_messages_add_autonomy_mode in src-tauri/src/identity/migrations.rs"
+Task: "Extend SendMessageArgs in src-tauri/src/chat/commands.rs"
 ```
 
 ---
@@ -437,7 +451,8 @@ Task: "Define deny-rule preference helpers in src-tauri/src/adapters/cli_delegat
 ### Notes
 
 - Every implementation task in US1-US3 references an exact existing file:line from plan.md/
-  research.md — none of them are "create X from scratch," they are all bounded edits to
-  007-cli-delegate's existing code, matching this feature's additive-only Constitution Check result.
+  research.md. The plan intentionally creates new feature-owned files where required — including
+  `autonomy.rs`, `autonomy_tests.rs`, `DelegateDenyRulesSetting.vue`, and the integration-test files
+  named by T012/T013 — while other tasks remain bounded edits to 007-cli-delegate's existing code.
 - Verify each user story's tests fail before its implementation tasks land, per repo convention.
 - Commit after each task or logical group; stop at any checkpoint to validate a story independently.
