@@ -2,7 +2,7 @@
 
 ## Changed entities (existing schema, additive migration 0017)
 
-### `chat_messages` (existing, `tool_source` column)
+### `chat_messages` (new `autonomy_mode` column)
 
 Migration `0017_chat_messages_add_autonomy_mode` adds a nullable `autonomy_mode TEXT` column;
 `tool_source` remains free-text `TEXT NULL` (`chat/tools/mod.rs:69`'s own doc comment: extensible
@@ -85,7 +85,11 @@ pub fn evaluate_deny_rules(
 ```
 
 Where `ApprovalRequestPayload` is a small enum capturing exactly what each vendor's approval
-callback actually provides (not a lowest-common-denominator struct that would hide the asymmetry):
+callback actually provides (not a lowest-common-denominator struct that would hide the asymmetry).
+The payload variants already identify the vendor, so there is no separate `DelegateVendor`
+parameter. `workspace_root` is selected for this invocation and threaded explicitly through the
+approval flow; the evaluator never derives it from the ambient process working directory, and it is
+not added to `ApprovalRequestPayload`.
 
 ```rust
 pub enum ApprovalRequestPayload {
@@ -109,6 +113,11 @@ has no `Ask` outcome — `gated-permissive` never produces a human-facing pause 
 returns the same two-variant `ApprovalDecision` type `approval_bridge.rs` already defines, simply
 never constructing the case that would trigger a UI prompt.
 
+`NetworkAccess` enforcement is intentionally limited to the structured Codex network signal, the
+recognized Claude `WebFetch`/`WebSearch` tools, and the documented command patterns. FR-007 and
+SC-003 apply completely to actions that match those signals; this phase does not claim detection or
+blocking of every possible network-capable command.
+
 ## Changed entity: `preferences` (existing table, one new key, no schema change)
 
 | Key                       | Scope               | Value shape                                                                              | Written by                                             | Read by                                                                                             |
@@ -120,12 +129,24 @@ Follows exactly the `chat.permission_mode` precedent (`PrefScope::Device`, own l
 module — matching the codebase's existing convention of not centralizing preference keys, per
 research.md §5).
 
+The backend helpers use fallible APIs:
+
+```rust
+get_deny_rules(conn, device_id) -> Result<Vec<DenyCategory>>
+set_deny_rules(conn, device_id, categories: &[DenyCategory]) -> Result<()>
+```
+
+An absent preference or a valid empty JSON array returns an empty list. Malformed JSON returns an
+error; it must not silently disable the operator's deny rules. The gated-permissive approval flow
+maps that parsing error to `ApprovalDecision::Deny` under FR-010.
+
 ## State/lifecycle notes
 
-- `AutonomyMode` has no persisted lifecycle — it exists only for the duration of one `ChatRequest`
-  and the `AdapterStream` it produces (spec FR-008: never carried into a later request).
-- `DenyCategory` set has no versioning/migration concern beyond the standard preference
-  read-fallback (`preferences::get` returning `None` when absent, per `preferences.rs:89-99`) —
-  treated identically to "empty array configured."
+- The `AutonomyMode` selection has no persisted lifecycle — it exists only for one `ChatRequest` and
+  its `AdapterStream` (spec FR-008: never carried into a later request). The mode actually used is
+  still recorded on that request's message rows for history.
+- `DenyCategory` set has no versioning/migration concern beyond an absent preference
+  (`preferences::get` returning `None`, per `preferences.rs:89-99`), which is treated identically to
+  a valid empty array. A present malformed value is an error and fails closed in the approval flow.
 - No new state machine, no new entity relationships beyond the ones `chat_messages`/`preferences`
   already have with `known_devices`/`chat_threads`.

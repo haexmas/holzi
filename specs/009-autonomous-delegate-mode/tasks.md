@@ -157,8 +157,9 @@ something else.
 - [ ] T015 [P] [US1] Integration test: stub `claude`/`codex` binaries that reject the `Ungated`-mode
       flag/field the way an older installed version would (unknown-option stderr for Claude; an RPC
       error response for Codex), request `Ungated` mode, and confirm `send_message` returns the
-      specific autonomy-unavailable error — not a silent fallback to `Standard` and not a generic
-      spawn-failure message (spec FR-013/SC-006 edge case; exercises T009's classifier end-to-end).
+      exact `HolziError::InvalidInput` envelope from contracts/tauri-commands.md, including the
+      required vendor and mode — not a silent fallback to `Standard` and not a generic spawn-failure
+      message (spec FR-013/SC-006 edge case; exercises T009's classifier end-to-end).
 - [ ] T016 [P] [US1] Integration test: force the `cli_delegate.deny_rules` preference read to fail
       (or inject a failure at a test-only seam around `evaluate_deny_rules`) during a
       `GatedPermissive` invocation, and confirm the pending action resolves to `Deny` — not `Allow`,
@@ -178,21 +179,23 @@ something else.
       keep `"approvalPolicy": "on-request"` unchanged (research.md §2 — verified against the real
       `ThreadStartParams` schema, not the standalone `codex exec` CLI's flags).
 - [ ] T019 [US1] `approval_bridge::request_approval` (approval_bridge.rs:25-68): add an
-      `AutonomyMode` parameter; for `GatedPermissive`, skip `permission::decide(mode, risk)` and
+      `AutonomyMode` parameter and thread the invocation workspace root into this flow as a separate
+      value (do not add it to `ApprovalRequestPayload`); for `GatedPermissive`, skip
+      `permission::decide(mode, risk)` and
       instead build the appropriate `ApprovalRequestPayload` (T007) from `tool_name`/`input` and call
       `autonomy::evaluate_deny_rules` (T008) with T010's persisted deny rules and the invocation's
       explicit workspace root — never populating
       `pending_tool_approvals` or emitting `tool-permission-request` for this mode; `Standard` keeps
       calling `permission::decide` exactly as today. **This path bypasses the `Ask`-branch's existing
       `receiver.await.unwrap_or(Deny)` fail-safe (approval_bridge.rs:65) entirely, so it MUST provide
-      its own**: wrap the preference read (T010) and the `evaluate_deny_rules` call so any error —
-      not just a matched deny rule — resolves to `Deny`, satisfying FR-010 independently of the
-      channel-based mechanism (T016 tests this explicitly).
+      its own**: map T010 parsing/read errors and evaluator errors to `Deny`; a malformed persisted
+      deny-rule value must never become an empty permissive rule set. This satisfies FR-010
+      independently of the channel-based mechanism (T016 tests this explicitly).
 - [ ] T020 [US1] `mod.rs::CliDelegateAdapter::stream_chat` (mod.rs:195-224) and the
       `spawn_claude_invocation`/`spawn_codex_app_server` signatures (claude.rs:148-153,
-      codex.rs:240-245): add `req.autonomy_mode` as a new parameter threaded through to T017/T018/T019's
-      call sites (research.md §1 — no existing config struct to extend, both take positional
-      scalars today).
+      codex.rs:240-245): add `req.autonomy_mode` as a new parameter and thread the invocation
+      workspace root separately through every T019 caller (research.md §1 — no existing config
+      struct to extend, both take positional scalars today).
 - [ ] T021 [US1] In `mod.rs`, gate the `approval_bridge::bind_socket`/`start_listener`/MCP-config-file
       setup (currently unconditional in `spawn_claude_invocation`, claude.rs:179-199-ish) behind
       `req.autonomy_mode != AutonomyMode::Ungated` for the Claude path specifically — `Ungated` never
@@ -200,8 +203,10 @@ something else.
 - [ ] T022 [US1] In `spawn_claude_invocation`/`spawn_codex_app_server` (claude.rs, codex.rs): when
       `req.autonomy_mode != Standard` and the underlying process/RPC call fails, run the failure
       through T009's `classify_autonomy_spawn_error` before falling through to the existing generic
-      error path; on a match, return the specific "autonomy mode unavailable for this backend" error
-      (contracts/tauri-commands.md) instead of a generic spawn-failure message.
+      error path; on a match, return `AdapterError::Unavailable` with the exact
+      `autonomy mode '<mode>' is unavailable for '<vendor>': <detail>` reason so the existing provider
+      mapping produces contracts/tauri-commands.md's `HolziError::InvalidInput` envelope. Do not add a
+      `HolziError` variant or regenerate bindings for this internal classification.
 
 **Checkpoint**: User Story 1 fully functional and independently testable — both new modes suppress
 approval for both vendors without weakening host isolation, an unsupported CLI version fails

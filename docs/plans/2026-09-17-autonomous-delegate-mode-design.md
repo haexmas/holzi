@@ -178,9 +178,10 @@ default, A as an explicit further escalation — a product call, not settled her
    posture the operator sets once and forgets, but wrong for "let this agent run unsupervised" — a
    silently-persisted autonomous default is the failure mode most worth avoiding here (operator turns
    it on for one task, forgets, a later unrelated request runs autonomously unexpectedly). The chosen
-   mode should persist on that turn's own record (alongside the existing backend-identity metadata,
-   FR-005) so conversation history shows which mode a given delegate turn actually ran under — no new
-   storage mechanism, reuses the same place backend attribution already lives.
+   mode should be recorded in that turn's own `chat_messages.autonomy_mode` field (alongside the
+   existing backend-identity metadata, FR-005) so conversation history shows which mode a given
+   delegate turn actually ran under; this requires the additive migration `0017` selected by the
+   feature data model.
 
 ## 5. What this explicitly does not do
 

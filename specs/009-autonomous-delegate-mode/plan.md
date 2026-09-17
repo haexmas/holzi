@@ -33,9 +33,9 @@ device-scoped preference key,
 `cli_delegate.deny_rules` (JSON array of category identifiers, e.g.
 `["workspace_escape","network_access","credential_paths"]`), read/written through the existing
 generic `get_pref`/`set_pref` Tauri commands exactly like `chat.permission_mode` is today
-(`preferences_commands.rs:59-136`). Autonomy Mode itself is **not** persisted (spec FR-008) — it
-travels as a per-request field on `ChatRequest` (the same struct already threaded through every
-`ProviderAdapter::stream_chat` call, `adapters/mod.rs`), not a preference.
+(`preferences_commands.rs:59-136`). The selected mode travels as a per-request field on
+`ChatRequest` and is never persisted as a preference or carried into the next request (spec FR-008);
+only the mode actually used is recorded on that request's message rows for audit/history.
 **Testing**: `cargo test --lib` / `cargo test --test <name>`; new tests in sibling `*_tests.rs` files
 (repo convention, no inline `#[cfg(test)] mod tests`, no exception found anywhere in the codebase).
 `pnpm typecheck` for the new composer control. Live-CLI verification spikes (flag/schema behavior)
