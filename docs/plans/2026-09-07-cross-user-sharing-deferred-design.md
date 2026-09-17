@@ -327,38 +327,44 @@ listed in §8.
 **Buffer relay, concretely — "Holzi Relay".** The operator's stated target: a multi-tenant,
 self-hosted sync server where multiple unrelated users' vaults sync through one deployment, with
 none able to read another's data, including the operator of that deployment. This is exactly the
-buffer relay of §3. Useful sibling reference: `haex-sync-server` already implements the same
-zero-knowledge pattern for HaexHub on a different stack (Supabase/Postgres RLS + JWT instead of
-NIP-42 + signed membership projections) — client-side encryption, server stores ciphertext plus
-per-user row-level security, the server never holds a decryption key. This confirms the pattern is
-practical, not just designed on paper. The Nostr-based mechanism in §3-§4 is holzi's own design, not
-a port of that implementation.
+buffer relay of §3. Useful sibling reference: `haex-sync-server` provides a concrete implementation
+of the general client-encrypted relay shape for HaexHub on a different stack (Supabase/Postgres
+policies and authenticated API routes rather than holzi's NIP-42 plus signed membership
+projections). The server stores ciphertext and encrypted key material, but does not hold the
+decryption key. This is evidence that the general relay shape is implementable, not validation of
+holzi's different Nostr authorization model. The Nostr-based mechanism in §3-§4 is holzi's own
+design, not a port of that implementation.
 
 **The metadata caveat needs to be stated plainly, not just listed as open.** §8 item 2 already flags
 "metadata exposure at the buffer relay" as open, but softly. Restated directly because a plain
 reading of "nobody can read another user's data, not even the operator" oversells the design as it
 stands: that guarantee holds for *content* — ciphertext stays ciphertext. It does not hold for *the
 participant set* — the buffer relay operator sees which pubkeys sync into which space, the same
-trade `haex-sync-server`'s per-user RLS filtering makes (its operator can see which `user_id` owns
-which encrypted rows, even without their content). True metadata-level unlinkability — hiding who
-talks to whom, not just what they say — is a materially harder problem (mixnet/onion-routing class)
-and is not something this design attempts, or should attempt, without a specific driver for it.
+kind of trade `haex-sync-server` makes (its operator can see which `user_id` owns which encrypted
+rows, among other sync metadata, even without their content). True metadata-level unlinkability —
+hiding who talks to whom, not just what they say — is a materially harder problem
+(mixnet/onion-routing class) and is not something this design attempts without a specific driver
+for it.
 
 **Cross-user sharing, concretely — calendar and todo/shopping-list entries.** The row-register
 mechanism in §6 item 2 was designed abstractly ("row R belongs to space X"); the concrete driver
 surfaced in this session is sharing individual calendar entries or todo/shopping-list items with
 another operator, with read or write rights, without exposing the rest of that table. This is
-exactly what table whitelist plus row register already provide — no design change needed, just
-confirmation that the granularity matches the use case. Two things worth flagging against this
-specific driver:
+what the table whitelist plus row register can provide for inclusion granularity; the read/write
+rights remain capabilities on the space member record, not per-row ACLs. No design change is
+proposed here, just confirmation that the granularity can match the use case. Two things worth
+flagging against this specific driver:
 
 - **Sequencing dependency, not a design gap.** holzi has no calendar, todo, or shopping-list
-  application yet (`README.md`'s current scope is chat/models/providers only). The sharing mechanism
-  is table-agnostic — any future app module just adds its tables to `SPACE_SCOPED_CRDT_TABLES` and
-  builds a row-registration UI — but there is nothing to register until those app modules exist. Not
-  a blocker to this design; a build-order note.
+  application yet. The current application scope covers chat/models/providers and the surrounding
+  Tauri, relay, iroh, MCP, and device-lifecycle surfaces, but none of those modules provides rows
+  for these use cases. The sharing mechanism is table-agnostic — a future app module would need to
+  add its tables to Holzi's eventual equivalent of `SPACE_SCOPED_CRDT_TABLES`, implement the
+  sender-side filtering, and build a row-registration UI. There is nothing to register until those
+  app modules exist. Not a blocker to this design; a build-order note.
 - **Re-delegation (§8 item 4) is the open question this driver makes concrete.** A shared family
   calendar plausibly wants re-sharing (share with a partner, partner re-shares with the kids); a
   shared todo list with a coworker plausibly does not. §7's federation identity, as designed,
   provides none — a grant reaches one person's own devices, never a chain to a second person. Worth
-  deciding per-app once an app actually needs it, rather than as one global answer now.
+  deciding in the context of the app that needs it, rather than adding a global answer to this
+  deferred design now.
