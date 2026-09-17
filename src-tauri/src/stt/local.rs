@@ -43,18 +43,18 @@ const CONFIG_FILENAME: &str = "config.json";
 const TOKENIZER_FILENAME: &str = "tokenizer.json";
 const WEIGHTS_FILENAME: &str = "model.safetensors";
 
-/// Whisper's 99 supported language codes (`multilingual.rs` in candle's own
-/// whisper example), used only to build the `<|xx|>` token-id list for
-/// language detection — no display names needed here.
-const LANGUAGES: [&str; 99] = [
-    "en", "zh", "de", "es", "ru", "ko", "fr", "ja", "pt", "tr", "pl", "ca", "nl", "ar", "sv", "it",
-    "id", "hi", "fi", "vi", "he", "uk", "el", "ms", "cs", "ro", "da", "hu", "ta", "no", "th", "ur",
-    "hr", "bg", "lt", "la", "mi", "ml", "cy", "sk", "te", "fa", "lv", "bn", "sr", "az", "sl", "kn",
-    "et", "mk", "br", "eu", "is", "hy", "ne", "mn", "bs", "kk", "sq", "sw", "gl", "mr", "pa", "si",
-    "km", "sn", "yo", "so", "af", "oc", "ka", "be", "tg", "sd", "gu", "am", "yi", "lo", "uz", "fo",
-    "ht", "ps", "tk", "nn", "mt", "sa", "lb", "my", "bo", "tl", "mg", "as", "tt", "haw", "ln",
-    "ha", "ba", "jw", "su",
-];
+/// Candidate languages for `detect_language`, restricted to the app's own
+/// supported UI locales (`nuxt.config.ts`'s `i18n.locales` — keep in sync if
+/// that list ever grows) instead of Whisper's full 99-language set.
+///
+/// The `tiny` model's language-ID is weak on short, largely-silence-padded
+/// push-to-talk clips (verified 2026-09-17: a spoken German command was
+/// detected as English) — scoring all 99 `<|xx|>` tokens gives a short,
+/// ambiguous utterance 98 ways to lose to some other language by a small
+/// margin. Restricting the argmax to only the languages we actually care
+/// about can only help: it removes irrelevant distractors, never the
+/// correct answer, from the comparison.
+const SUPPORTED_LANGUAGES: [&str; 2] = ["de", "en"];
 
 /// The bundled local STT adapter, resolved via
 /// `providers::local::ensure_local_transcription_provider`'s `"whisper-local"`
@@ -224,14 +224,15 @@ fn transcribe_samples(inner: &mut Inner, samples: &[f32]) -> Result<String, SttE
 
 /// Mirrors candle's whisper example `multilingual::detect_language`: a
 /// single decoder step over just `[sot_token]`, picking whichever `<|xx|>`
-/// language token scores highest.
+/// language token scores highest — restricted to [`SUPPORTED_LANGUAGES`]
+/// rather than Whisper's full language set.
 fn detect_language(
     inner: &mut Inner,
     audio_features: &Tensor,
     sot_token: u32,
 ) -> Result<u32, SttError> {
     let device = &inner.device;
-    let language_token_ids = LANGUAGES
+    let language_token_ids = SUPPORTED_LANGUAGES
         .iter()
         .map(|code| token_id(&inner.tokenizer, &format!("<|{code}|>")))
         .collect::<Result<Vec<_>, _>>()?;
