@@ -14,9 +14,13 @@ ursprünglich angenommen ein einheitlicher "Kindprozess gibt URL aus"-Flow):
 
 - **`claude`**: `claude setup-token` läuft in einer PTY (`portable-pty` — echtes TUI, kein
   zeilenorientiertes stdout; per-`--ax-screen-reader` piped stdio liefert nachweislich 0 Bytes). Die
-  OAuth-URL wird aus einer OSC-8-Hyperlink-Sequenz im PTY-Output extrahiert. Der Flow **pausiert**
-  danach und wartet auf `submit_cli_delegate_code` (unten) — der Command selbst löst bereits nach dem
-  Emittieren der URL auf, er wartet NICHT bis zum Login-Abschluss.
+  OAuth-URL wird aus einer OSC-8-Hyperlink-Sequenz im PTY-Output extrahiert. Der Command selbst löst
+  bereits nach dem Emittieren der URL auf, er wartet NICHT bis zum Login-Abschluss — der eigentliche
+  Abschluss läuft danach im Hintergrund weiter (live verifiziert 2026-09-16/17, research.md §5-Addendum):
+  Anthropics aktuelle OAuth-Seite zeigt entgegen der ursprünglichen Annahme **keinen** Code zum
+  Zurückkopieren mehr an, daher liest ein Hintergrund-Task den weiterlaufenden PTY-Output selbständig
+  und schließt den Flow ab, sobald der Token von selbst erscheint. `submit_cli_delegate_code` (unten)
+  bleibt als Fallback bestehen, falls eine andere `claude`-CLI-Version doch einen Code anzeigt.
 - **`codex`**: `codex login --device-auth` läuft über normales piped stdio (kein PTY nötig, verifiziert
   plain-text). URL **und** Einmalcode werden aus stdout extrahiert und beide in
   `delegate-connect-progress` emittiert. Kein zweiter Command nötig — der Prozess pollt selbst bis der
@@ -66,9 +70,12 @@ Command-Paar, keine separate "reconnect"-Route). Dieselbe Upsert-Semantik gilt f
 bereits am Ende von `connect_cli_delegate` selbst, da kein zweiter Command existiert.
 
 **Fehler**: `HolziError::InvalidInput` wenn kein Flow für `claude` aussteht (z. B. doppelter Aufruf,
-abgelaufener/bereits beendeter Prozess), oder wenn der Code vom Kindprozess abgelehnt wird (falscher/
-abgelaufener Code) — keine Provider-Zeile wird in diesem Fall angelegt oder verändert, der Flow bleibt
-offen für einen erneuten `submit_cli_delegate_code`-Versuch.
+abgelaufener/bereits beendeter Prozess, **oder der Hintergrund-Task hat den Flow bereits automatisch
+abgeschlossen** — in diesem Fall hat das Frontend das `success`-Event bereits erhalten oder erhält es
+kurz danach; bei erfolgreichem Provider-Upsert ist das ein `success`-Event, bei einem Upsert-Fehler ein
+`error`-Event), oder wenn der Code vom Kindprozess abgelehnt wird (falscher/abgelaufener Code) — keine
+Provider-Zeile wird in diesem Fall angelegt oder verändert, der Flow bleibt offen für einen erneuten
+`submit_cli_delegate_code`-Versuch.
 
 ## Geänderte Commands
 
@@ -109,15 +116,29 @@ Fortschritt während `connect_cli_delegate`/`submit_cli_delegate_code` läuft.
 {
   vendor: 'claude' | 'codex',
   status: 'awaiting_browser' | 'awaiting_code' | 'success' | 'error',
-  url?: string,      // nur bei 'awaiting_browser' — extrahierte OAuth-URL
+  url?: string,      // bei 'awaiting_browser' sowie bei 'awaiting_code' für vendor: 'claude' — extrahierte OAuth-URL
   code?: string,     // nur bei 'awaiting_browser' und vendor: 'codex' — Einmalcode zur Eingabe auf der Webseite
   message?: string,  // nur bei 'error'
 }
 ```
 
-`awaiting_code` ist Claude-spezifisch und markiert den Punkt, an dem das Frontend die Code-Eingabe
-anzeigen und auf `submit_cli_delegate_code` warten muss — für `codex` wird dieser Status nie emittiert,
-da der Prozess selbst pollt statt einen eingegebenen Code entgegenzunehmen.
+`awaiting_code` ist Claude-spezifisch und markiert den Punkt, an dem das Frontend die
+Code-Eingabe als Fallback anzeigen kann — für `codex` wird dieser Status nie emittiert, da der Prozess
+selbst pollt statt einen eingegebenen Code entgegenzunehmen. Für `claude` folgt darauf normalerweise
+direkt ein `success`- (oder `error`-)Event vom Hintergrund-Task, ganz ohne `submit_cli_delegate_code`;
+das Frontend muss auf `success`/`error` hören statt sich allein auf die Rückgabe von
+`submit_cli_delegate_code` zu verlassen.
+
+## Neue Tauri-Capability
+
+### `opener:allow-open-url`
+
+Die im UI angezeigte OAuth-URL (`url`-Feld von `delegate-connect-progress`, oben) wird vom Frontend über
+`@tauri-apps/plugin-opener`s `openUrl()` im System-Browser geöffnet statt per `<a target="_blank">` —
+letzteres bleibt in der Webview ohne diese Capability wirkungslos (Standard-CSP `default-src 'self'`
+blockiert externe Navigation ohnehin). Erfordert `tauri-plugin-opener` registriert in `lib.rs` sowie
+`opener:allow-open-url` in `capabilities/default.json`. Betrifft beide Vendoren gleichermaßen (`codex`
+zeigt seine Geräte-Code-URL genauso an), ist aber durch den `claude`-Flow hier aufgefallen.
 
 ## Nicht geänderte Contracts (zur Klarstellung)
 

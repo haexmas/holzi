@@ -9,11 +9,13 @@
 //! subsequent output.
 
 use std::io::{Read, Write};
+use std::sync::Arc;
 use std::time::Duration;
 
 use portable_pty::{native_pty_system, Child, CommandBuilder, PtySize};
 use tempfile::TempDir;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Notify};
+use uuid::Uuid;
 
 use crate::adapters::AdapterError;
 
@@ -31,11 +33,25 @@ fn pty_size() -> PtySize {
     }
 }
 
-enum ReaderEvent {
+/// Crate-visible (not just `cli_delegate`-visible) because
+/// `providers::connect`'s background auto-completion watcher
+/// (`try_recv_terminal`) and its tests construct these directly to drive
+/// a `ClaudeConnectSession` test double without a real PTY/process.
+pub(crate) enum ReaderEvent {
     Url(String),
     Token(String),
     Eof,
     Error(String),
+}
+
+/// A `ReaderEvent` collapsed to the three outcomes that end a connect
+/// flow, for `ClaudeConnectSession::try_recv_terminal`'s non-blocking
+/// poll — used by `providers::connect`'s background auto-completion
+/// watcher (see its doc comment for why the poll must be non-blocking).
+pub(crate) enum TerminalOutcome {
+    Token(String),
+    Ended,
+    Errored(String),
 }
 
 /// Extracts the URI from the first OSC 8 terminal hyperlink escape sequence
@@ -115,7 +131,16 @@ pub(super) fn extract_oauth_token(buf: &[u8]) -> Option<String> {
     (token.len() > PREFIX.len()).then_some(token)
 }
 
-fn spawn_reader_thread(mut reader: Box<dyn Read + Send>) -> mpsc::UnboundedReceiver<ReaderEvent> {
+/// `token_ready` is notified exactly once, right after the terminal event
+/// (`Token`/`Eof`/`Error`) that ends this thread is pushed onto `tx` — never
+/// for `Url`, which `start_claude_connect`'s own wait loop already drains
+/// before anyone else can observe this channel. This lets a background
+/// watcher (`providers::connect`) learn a token arrived without polling or
+/// blocking on `events.recv()` itself (see `ClaudeConnectSession::token_ready`).
+fn spawn_reader_thread(
+    mut reader: Box<dyn Read + Send>,
+    token_ready: Arc<Notify>,
+) -> mpsc::UnboundedReceiver<ReaderEvent> {
     let (tx, rx) = mpsc::unbounded_channel();
     std::thread::spawn(move || {
         let mut buf: Vec<u8> = Vec::new();
@@ -125,6 +150,7 @@ fn spawn_reader_thread(mut reader: Box<dyn Read + Send>) -> mpsc::UnboundedRecei
             match reader.read(&mut chunk) {
                 Ok(0) => {
                     let _ = tx.send(ReaderEvent::Eof);
+                    token_ready.notify_one();
                     return;
                 }
                 Ok(n) => {
@@ -139,11 +165,13 @@ fn spawn_reader_thread(mut reader: Box<dyn Read + Send>) -> mpsc::UnboundedRecei
                     }
                     if let Some(token) = extract_oauth_token(&buf) {
                         let _ = tx.send(ReaderEvent::Token(token));
+                        token_ready.notify_one();
                         return;
                     }
                 }
                 Err(error) => {
                     let _ = tx.send(ReaderEvent::Error(error.to_string()));
+                    token_ready.notify_one();
                     return;
                 }
             }
@@ -153,17 +181,97 @@ fn spawn_reader_thread(mut reader: Box<dyn Read + Send>) -> mpsc::UnboundedRecei
 }
 
 /// A `claude setup-token` flow paused after showing the OAuth URL, waiting
-/// for the user's authorization code via [`submit_claude_code`].
+/// for either the user's authorization code via [`submit_claude_code`] or
+/// the token arriving on its own (`providers::connect`'s background
+/// watcher) — the current Anthropic OAuth page never shows a code to paste
+/// back, so the browser round-trip alone must be able to finish the flow.
 pub struct ClaudeConnectSession {
+    /// Identifies this specific connect attempt. `DelegateConnectState`
+    /// only ever holds one pending Claude session at a time — starting a
+    /// new `connect_cli_delegate(claude)` call replaces it — so a
+    /// background watcher spawned for an earlier attempt compares this
+    /// against the id it was given to detect it's been superseded rather
+    /// than acting on a session that isn't the one it was watching.
+    id: Uuid,
     child: Box<dyn Child + Send + Sync>,
     writer: Box<dyn Write + Send>,
     events: mpsc::UnboundedReceiver<ReaderEvent>,
+    /// Notified once, right when a terminal `ReaderEvent` lands in
+    /// `events` — see [`Self::token_ready`].
+    token_ready: Arc<Notify>,
     _config_dir: TempDir,
 }
 
 impl Drop for ClaudeConnectSession {
     fn drop(&mut self) {
         let _ = self.child.kill();
+    }
+}
+
+impl ClaudeConnectSession {
+    /// Returns the unique identifier for this connect attempt.
+    pub fn id(&self) -> Uuid {
+        self.id
+    }
+
+    /// A clone of the notifier a background watcher awaits instead of
+    /// calling `events.recv()` directly — that call would block
+    /// indefinitely while the watcher holds `DelegateConnectState`'s
+    /// mutex, starving a concurrent manual `submit_cli_delegate_code`
+    /// call of the same lock it needs to submit a pasted code.
+    pub fn token_ready(&self) -> Arc<Notify> {
+        self.token_ready.clone()
+    }
+
+    /// Non-blocking check for a terminal event, collapsing the channel's
+    /// `Disconnected` case (reader thread gone without sending one, which
+    /// should not happen but is not a token either) into `Ended` like a
+    /// plain EOF. Only ever called after `token_ready` fires, so it drains
+    /// queued non-terminal URL events before returning a terminal outcome.
+    pub(crate) fn try_recv_terminal(&mut self) -> Option<TerminalOutcome> {
+        loop {
+            match self.events.try_recv() {
+                Ok(ReaderEvent::Token(token)) => return Some(TerminalOutcome::Token(token)),
+                Ok(ReaderEvent::Eof) | Err(mpsc::error::TryRecvError::Disconnected) => {
+                    return Some(TerminalOutcome::Ended);
+                }
+                Ok(ReaderEvent::Error(error)) => return Some(TerminalOutcome::Errored(error)),
+                Ok(ReaderEvent::Url(_)) => continue,
+                Err(mpsc::error::TryRecvError::Empty) => return None,
+            }
+        }
+    }
+
+    /// Builds a session around an injected event channel instead of a real
+    /// PTY/`claude` process, so `providers::connect`'s auto-completion
+    /// watcher can be tested by feeding it `ReaderEvent`s directly. The
+    /// child is a real, disposable platform-compatible process
+    /// (`portable_pty::Child` is already implemented for
+    /// `std::process::Child`) purely so `Drop` has something harmless to
+    /// kill; nothing reads or writes through it.
+    #[cfg(test)]
+    pub(crate) fn new_for_test(
+        events: mpsc::UnboundedReceiver<ReaderEvent>,
+        token_ready: Arc<Notify>,
+    ) -> Self {
+        #[cfg(windows)]
+        let child = std::process::Command::new("timeout")
+            .args(["/T", "300", "/NOBREAK"])
+            .spawn()
+            .expect("spawn a disposable placeholder child for the test double");
+        #[cfg(not(windows))]
+        let child = std::process::Command::new("sleep")
+            .arg("300")
+            .spawn()
+            .expect("spawn a disposable placeholder child for the test double");
+        Self {
+            id: Uuid::new_v4(),
+            child: Box::new(child),
+            writer: Box::new(std::io::sink()),
+            events,
+            token_ready,
+            _config_dir: TempDir::new().expect("allocate a temp dir for the test double"),
+        }
     }
 }
 
@@ -222,10 +330,13 @@ pub async fn start_claude_connect(
                 reason: format!("failed to open pty writer: {error}"),
             })?;
 
+        let token_ready = Arc::new(Notify::new());
         Ok::<_, AdapterError>(ClaudeConnectSession {
+            id: Uuid::new_v4(),
             child,
             writer,
-            events: spawn_reader_thread(reader),
+            events: spawn_reader_thread(reader, token_ready.clone()),
+            token_ready,
             _config_dir: config_dir,
         })
     })

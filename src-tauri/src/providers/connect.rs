@@ -5,17 +5,23 @@
 //! The two vendors have different acquisition shapes (research.md §5):
 //! `codex login --device-auth` is plain-text and completes end-to-end inside
 //! one command; `claude setup-token` needs a real pty and pauses after
-//! showing the OAuth URL, so a second command (`submit_cli_delegate_code`)
-//! is needed to hand back the authorization code the user copies from the
-//! browser.
+//! showing the OAuth URL. The current Anthropic OAuth page never shows a
+//! code to paste back (only research.md §5's never-verified assumption that
+//! it would), so completion is primarily automatic: `connect_cli_delegate`
+//! spawns a background watcher (`watch_claude_auto_completion`) that
+//! detects the token once the browser round-trip finishes on its own.
+//! `submit_cli_delegate_code` still exists as a fallback for a code shown by
+//! some other `claude` CLI version/build.
+
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, State};
-use tokio::sync::Mutex as AsyncMutex;
+use tauri::{AppHandle, Emitter, Manager, State};
+use tokio::sync::{Mutex as AsyncMutex, Notify};
 use uuid::Uuid;
 
 use crate::adapters::cli_delegate::connect_claude::{
-    start_claude_connect, submit_claude_code, ClaudeConnectSession,
+    start_claude_connect, submit_claude_code, ClaudeConnectSession, TerminalOutcome,
 };
 use crate::adapters::cli_delegate::connect_codex::run_device_auth;
 use crate::adapters::cli_delegate::DelegateVendor;
@@ -47,14 +53,20 @@ fn emit_progress(app: &AppHandle, progress: DelegateConnectProgress) {
     }
 }
 
-/// Holds a paused Claude connect flow between `connect_cli_delegate` and
-/// `submit_cli_delegate_code` (contracts/tauri-commands.md). Only one flow
-/// can be pending at a time; starting a new `connect_cli_delegate(claude)`
-/// call implicitly abandons any previous unsubmitted flow — its PTY child is
-/// killed by `ClaudeConnectSession`'s `Drop`.
+/// Holds a paused Claude connect flow between `connect_cli_delegate`,
+/// `submit_cli_delegate_code`, and the background `watch_claude_auto_completion`
+/// task (contracts/tauri-commands.md). Only one flow can be pending at a
+/// time; starting a new `connect_cli_delegate(claude)` call implicitly
+/// abandons any previous unsubmitted flow — its PTY child is killed by
+/// `ClaudeConnectSession`'s `Drop`, and the old watcher notices via its
+/// session id no longer matching (`watch_claude_auto_completion`).
+///
+/// `pending_claude` is `pub(super)` (not private) so `connect_tests` can
+/// seed and inspect it directly with a `ClaudeConnectSession` test double,
+/// without a real PTY/`claude` process.
 #[derive(Default)]
 pub struct DelegateConnectState {
-    pending_claude: AsyncMutex<Option<ClaudeConnectSession>>,
+    pub(super) pending_claude: AsyncMutex<Option<ClaudeConnectSession>>,
 }
 
 impl DelegateConnectState {
@@ -102,6 +114,8 @@ pub async fn connect_cli_delegate(
             let (session, url) = start_claude_connect("claude")
                 .await
                 .map_err(map_adapter_error)?;
+            let session_id = session.id();
+            let token_ready = session.token_ready();
             *connect_state.pending_claude.lock().await = Some(session);
             emit_progress(
                 &app,
@@ -113,6 +127,7 @@ pub async fn connect_cli_delegate(
                     message: None,
                 },
             );
+            spawn_claude_auto_completion(app.clone(), args.name, session_id, token_ready);
             Ok(ConnectCliDelegateResult::AwaitingCode { vendor: "claude" })
         }
         DelegateVendor::Codex => {
@@ -149,6 +164,123 @@ pub async fn connect_cli_delegate(
             })
         }
     }
+}
+
+/// Outcome of [`watch_claude_auto_completion`].
+pub(super) enum ClaudeAutoCompleteOutcome {
+    /// The token arrived; `Vec<u8>` is the credential blob to persist.
+    Completed(Vec<u8>),
+    /// The flow ended (PTY EOF or a reader error) before ever producing a
+    /// token — the underlying process is gone, so no code submission could
+    /// complete it either.
+    Failed(String),
+    /// Another caller already claimed the session (a manual
+    /// `submit_cli_delegate_code` call finished first), or a later
+    /// `connect_cli_delegate(claude)` call replaced it — nothing to do.
+    Superseded,
+}
+
+/// Waits for a Claude connect session to reach a terminal state without a
+/// manual `submit_cli_delegate_code` call — the fix for the deadlock where
+/// nothing ever read the session's event channel again once
+/// `connect_cli_delegate` returned `AwaitingCode`, so a token produced by
+/// the browser round-trip completing on its own sat unread forever.
+///
+/// Never awaits `events.recv()` directly while holding `connect_state`'s
+/// mutex — that would block a concurrent manual `submit_cli_delegate_code`
+/// call from ever acquiring the same lock to submit a pasted code,
+/// recreating the deadlock this exists to fix, just on the other caller.
+/// Instead it waits on `token_ready` (no lock held) and only takes the
+/// lock for a brief non-blocking check. `submit_cli_delegate_code` already
+/// holds the lock for its whole attempt, so whichever side gets there
+/// first "wins": this watcher simply finds `pending_claude` empty (or
+/// holding a session from a later, superseding connect attempt) and
+/// reports `Superseded`.
+pub(super) async fn watch_claude_auto_completion(
+    connect_state: &DelegateConnectState,
+    session_id: Uuid,
+    token_ready: Arc<Notify>,
+) -> ClaudeAutoCompleteOutcome {
+    loop {
+        token_ready.notified().await;
+        let mut guard = connect_state.pending_claude.lock().await;
+        let Some(session) = guard.as_mut() else {
+            return ClaudeAutoCompleteOutcome::Superseded;
+        };
+        if session.id() != session_id {
+            return ClaudeAutoCompleteOutcome::Superseded;
+        }
+        match session.try_recv_terminal() {
+            Some(TerminalOutcome::Token(token)) => {
+                guard.take();
+                return ClaudeAutoCompleteOutcome::Completed(token.into_bytes());
+            }
+            Some(TerminalOutcome::Ended) => {
+                guard.take();
+                return ClaudeAutoCompleteOutcome::Failed(
+                    "claude setup-token ended before producing a token".into(),
+                );
+            }
+            Some(TerminalOutcome::Errored(error)) => {
+                guard.take();
+                return ClaudeAutoCompleteOutcome::Failed(error);
+            }
+            None => continue,
+        }
+    }
+}
+
+/// Spawns [`watch_claude_auto_completion`] and, once it resolves, does
+/// whatever `connect_cli_delegate`/`submit_cli_delegate_code` would have
+/// done on success or failure: upsert the credential and emit the same
+/// `success`/`error` `delegate-connect-progress` the frontend already
+/// listens for. A `Superseded` outcome emits nothing — the flow that
+/// superseded this one owns reporting its own result.
+fn spawn_claude_auto_completion(
+    app: AppHandle,
+    name: String,
+    session_id: Uuid,
+    token_ready: Arc<Notify>,
+) {
+    tauri::async_runtime::spawn(async move {
+        let connect_state = app.state::<DelegateConnectState>();
+        let outcome = watch_claude_auto_completion(&connect_state, session_id, token_ready).await;
+        match outcome {
+            ClaudeAutoCompleteOutcome::Completed(token) => {
+                let state = app.state::<AppState>();
+                let progress = match upsert_delegate_provider(&state, "claude", name, token).await {
+                    Ok(_provider) => DelegateConnectProgress {
+                        vendor: "claude",
+                        status: "success",
+                        url: None,
+                        code: None,
+                        message: None,
+                    },
+                    Err(error) => DelegateConnectProgress {
+                        vendor: "claude",
+                        status: "error",
+                        url: None,
+                        code: None,
+                        message: Some(super::format_holzi_error(&error)),
+                    },
+                };
+                emit_progress(&app, progress);
+            }
+            ClaudeAutoCompleteOutcome::Failed(message) => {
+                emit_progress(
+                    &app,
+                    DelegateConnectProgress {
+                        vendor: "claude",
+                        status: "error",
+                        url: None,
+                        code: None,
+                        message: Some(message),
+                    },
+                );
+            }
+            ClaudeAutoCompleteOutcome::Superseded => {}
+        }
+    });
 }
 
 #[derive(Debug, Deserialize)]
