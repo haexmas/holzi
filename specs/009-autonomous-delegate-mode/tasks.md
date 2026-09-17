@@ -112,10 +112,11 @@ raw_error: &str) -> Option<AutonomyUnavailable>` helper: recognizes Claude Code'
       `evaluate_deny_rules` covering all 3 categories × all 3 `ApprovalRequestPayload` variants from
       the data-model.md table, explicitly asserting the `CodexFileChange` fail-closed case for
       `WorkspaceEscape`/`CredentialPaths` (FR-015) and the "no enabled categories → always `Allow`"
-      empty-rule-set edge case (spec's own documented edge case), explicit workspace-root handling,
-      and malformed preference JSON returning an error. Include a separate `ClaudeToolCall` case with
-      an unrecognized action whose network intent cannot be classified while `NetworkAccess` is
-      enabled, asserting fail-closed `Deny`. Also add unit tests for
+      empty-rule-set edge case (spec's own documented edge case). Include a separate
+      `ClaudeToolCall` case with `NetworkAccess` enabled and an unrecognized Claude approval action
+      whose network intent cannot be classified, and assert `Deny`; this is an evaluator behavior
+      test, distinct from T019's evaluator-error mapping. Also cover explicit workspace-root handling
+      and malformed preference JSON returning an error; plus unit tests for
       `classify_autonomy_spawn_error` against representative Claude "unknown option" and Codex
       RPC-error strings.
 
@@ -170,7 +171,8 @@ something else.
 
 ### Implementation for User Story 1
 
-- [ ] T017 [US1] `claude.rs::build_command` (claude.rs:117-145): branch on `req.autonomy_mode` —
+- [ ] T017 [US1] `claude.rs::spawn_claude_invocation` and its command construction
+      (claude.rs:117-153): read `req.autonomy_mode` directly —
       `Ungated` replaces `.arg("--permission-mode").arg("default")` with
       `.arg("--permission-mode").arg("bypassPermissions")` and omits the
       `--mcp-config`/`--permission-prompt-tool` args; `Standard`/`GatedPermissive` keep today's
@@ -194,11 +196,11 @@ something else.
       its own**: map T010 parsing/read errors and evaluator errors to `Deny`; a malformed persisted
       deny-rule value must never become an empty permissive rule set. This satisfies FR-010
       independently of the channel-based mechanism (T016 tests this explicitly).
-- [ ] T020 [US1] `mod.rs::CliDelegateAdapter::stream_chat` (mod.rs:195-224) and the
-      `spawn_claude_invocation`/`spawn_codex_app_server` call path (claude.rs:148-153,
-      codex.rs:240-245): retain the existing `ChatRequest` context so each function reads
-      `req.autonomy_mode` directly; do not add a separate `AutonomyMode` parameter. Thread the
-      invocation workspace root separately through every T019 caller (research.md §1).
+- [ ] T020 [US1] Keep `mod.rs::CliDelegateAdapter::stream_chat` (mod.rs:195-224) passing its existing
+      `ChatRequest` into `spawn_claude_invocation`/`spawn_codex_app_server` (claude.rs:148-153,
+      codex.rs:240-245); both spawn functions read `req.autonomy_mode` directly. Do not add a
+      separate `AutonomyMode` parameter. Thread only the invocation workspace root separately through
+      every T019 caller.
 - [ ] T021 [US1] In `mod.rs`, gate the `approval_bridge::bind_socket`/`start_listener`/MCP-config-file
       setup (currently unconditional in `spawn_claude_invocation`, claude.rs:179-199-ish) behind
       `req.autonomy_mode != AutonomyMode::Ungated` for the Claude path specifically — `Ungated` never
@@ -236,17 +238,19 @@ honestly, and `standard` is regression-free.
 
 - [ ] T025 [US2] Apply migration `0017` (T004); run the full `cargo test --lib` suite to confirm the
       `HOLZI_TRIGGER_VERSION` bump doesn't break existing CRDT sync/migration tests.
-- [ ] T026 [US2] Propagate nullable `autonomy_mode` through the persistence chain: add it to
-      `ChatMessage`, the chat-message insert/update values, the history SQL SELECT, `row_to_message`,
-      and the `MessagePayload` DTO. Set it from `req.autonomy_mode` on every row for a delegate turn,
-      including the assistant-message row for `Ungated`; preserve `NULL` for legacy rows,
-      non-delegate rows, and rows created before migration 0017. The existing history endpoint remains
-      unchanged apart from exposing this additive nullable field.
-- [ ] T027 [US2] Frontend: add the nullable `autonomyMode` field (serialized from internal
-      `autonomy_mode` by the existing camelCase `MessagePayload`) to the frontend `Message` type and
-      consume it wherever 007's FR-005 "make clear which backend answered" label is already rendered
-      in chat history, adding the autonomy-mode label alongside it. Add the required German and
-      English locale strings listed by T040; preserve `null` for legacy and non-delegate messages.
+- [ ] T026 [US2] Wherever 007 already persists `cli_delegate:claude`/`cli_delegate:codex`
+      `tool_source` rows and the delegate's final assistant message (the turn-persistence path a
+      delegate invocation's `AdapterStream` feeds into): also set the new `autonomy_mode` column
+      from `req.autonomy_mode` on every row for that turn, including the assistant-message row for
+      `Ungated` (T024's requirement — the label must exist even with zero tool-call rows). Extend the
+      existing history read path without adding an endpoint: add nullable `autonomy_mode` to storage
+      `ChatMessage`, the `list_messages` SQL projection, `row_to_message`, and `MessagePayload`,
+      preserving `NULL` for legacy and non-delegate rows rather than defaulting it to `Standard`.
+- [ ] T027 [US2] Frontend: wherever 007's FR-005 "make clear which backend answered" label is
+      already rendered in chat history, add nullable `autonomyMode` to the frontend `Message` type
+      and render its label alongside the backend label only when persisted. Preserve `null` for legacy
+      and non-delegate rows. Add the new strings to the supported German and English locales as
+      required by T040.
 
 **Checkpoint**: User Stories 1 AND 2 (the full MVP) independently functional together.
 
@@ -261,16 +265,17 @@ documented per-vendor/per-action-type asymmetry (FR-015) holding exactly as spec
 
 ### Tests for User Story 3
 
-- [ ] T028 [P] [US3] Integration test: enabling `network_access` blocks approval callbacks for a
-      Codex call carrying `networkApprovalContext` and a Claude `WebFetch`-tool call, under
-      `gated-permissive`, for both vendors.
+- [ ] T028 [P] [US3] Integration test: enabling `network_access` denies a Codex
+      `requestApproval` callback carrying `networkApprovalContext` and a Claude approval callback for
+      a recognized `WebFetch` tool under `gated-permissive`; assert against these documented vendor
+      signals rather than claiming interception of every delegate tool call.
 - [ ] T029 [P] [US3] Integration test: enabling `workspace_escape`, a Codex **file-change** approval
       callback (not command execution) is denied per FR-015's fail-closed rule — the specific case
       quickstart.md Scenario 3 steps 6-7 call out. Must fail if a future change accidentally starts
       allowing it through.
-- [ ] T030 [P] [US3] Integration test: no deny rules configured → every documented approval callback
-      payload proceeds under `gated-permissive` (end-to-end version of T011's unit-level empty-set
-      case).
+- [ ] T030 [P] [US3] Integration test: no deny rules configured → every approval callback processed
+      by `approval_bridge::request_approval` proceeds under `gated-permissive` (end-to-end version of
+      T011's unit-level empty-set case).
 
 ### Implementation for User Story 3
 
@@ -361,10 +366,9 @@ documented asymmetry, not a silent gap.
       (CONTEXT.md's lockstep requirement).
 - [ ] T041 Execute quickstart.md's 5 scenarios manually end-to-end, on whichever of Claude
       Code/Codex is actually installed for review; record which vendor(s) were exercised.
-- [ ] T042 [P] After the implementation tasks are complete and the feature is no longer in planning,
-      update `docs/plans/2026-09-17-autonomous-delegate-mode-design.md`'s status header to point at
-      the implemented feature, mirroring how 007-cli-delegate's own design-doc predecessor was
-      updated. Until then, retain the current deferred-design status.
+- [ ] T042 [P] Update `docs/plans/2026-09-17-autonomous-delegate-mode-design.md`'s status header to
+      link to `specs/009-autonomous-delegate-mode/` as the planned implementation while this task list
+      remains incomplete. Defer any `shipped` status until implementation and validation are complete.
 
 ---
 
@@ -390,15 +394,14 @@ documented asymmetry, not a silent gap.
 - T010 (deny-rule preference helpers) blocks T019 (reads persisted rules) and T031 (writes them).
 - T004 (migration) blocks T025 (apply) and T026 (write the column) and T023/T024 (assert on it).
 - T007 (ApprovalRequestPayload) blocks T008, T032, T033.
-- T020 (threading `autonomy_mode` into the spawn functions) blocks T021, T022, and every US1 test
+- T020 (reading `req.autonomy_mode` in the spawn functions) blocks T021, T022, and every US1 test
   (T012-T016).
 
 ### Parallel Opportunities
 
-- T004 and T005 (Phase 2) touch disjoint files and can run in parallel with the serialized
-  `autonomy.rs` work. T002, T006, T007, T009, and T010 are intentionally not marked `[P]` because
-  they all modify `autonomy.rs`; apply them sequentially once T001 exists. T008 follows T007 and
-  remains non-parallel with that same-file sequence.
+- T002, T006, T007, T009, and T010 all edit `autonomy.rs` and must be performed serially. T004 can run
+  in parallel with that lane because it edits the migration; once T003 is complete, T005 can also run
+  in parallel because it edits `chat/commands.rs`.
 - Within each user story's Tests subsection, all `[P]`-marked tasks target different new test files
   and can run in parallel.
 - US3's T031 (frontend settings) and T032/T033 (backend payload wiring) can run in parallel — no
@@ -412,16 +415,13 @@ documented asymmetry, not a silent gap.
 ## Parallel Example: Phase 2 (Foundational)
 
 ```bash
-# After T001, keep same-file autonomy.rs work serialized:
-Task: "Define AutonomyMode enum in src-tauri/src/adapters/cli_delegate/autonomy.rs"
-Task: "Define DenyCategory enum in src-tauri/src/adapters/cli_delegate/autonomy.rs"
-Task: "Define ApprovalRequestPayload enum in src-tauri/src/adapters/cli_delegate/autonomy.rs"
-Task: "Implement evaluate_deny_rules in src-tauri/src/adapters/cli_delegate/autonomy.rs"
-Task: "Define AutonomyUnavailable + classify_autonomy_spawn_error in src-tauri/src/adapters/cli_delegate/autonomy.rs"
-Task: "Define deny-rule preference helpers in src-tauri/src/adapters/cli_delegate/autonomy.rs"
+# After T001 (module file exists), use one serialized autonomy.rs lane:
+Task: "Define AutonomyMode, DenyCategory, ApprovalRequestPayload, the deny-rule evaluator, error classifier, and preference helpers in src-tauri/src/adapters/cli_delegate/autonomy.rs, in task order"
 
-# These disjoint-file tasks can run alongside that sequence:
+# This disjoint migration can run in parallel with that lane:
 Task: "Add migration 0017_chat_messages_add_autonomy_mode in src-tauri/src/identity/migrations.rs"
+
+# After T003, this disjoint command change can run in parallel with remaining autonomy.rs work:
 Task: "Extend SendMessageArgs in src-tauri/src/chat/commands.rs"
 ```
 
@@ -450,9 +450,9 @@ Task: "Extend SendMessageArgs in src-tauri/src/chat/commands.rs"
 
 ### Notes
 
-- Every implementation task in US1-US3 references an exact existing file:line from plan.md/
-  research.md. The plan intentionally creates new feature-owned files where required — including
-  `autonomy.rs`, `autonomy_tests.rs`, `DelegateDenyRulesSetting.vue`, and the integration-test files
-  named by T012/T013 — while other tasks remain bounded edits to 007-cli-delegate's existing code.
+- Work in US1-US3 is bounded and additive. Tasks that create files from scratch are called out
+  explicitly, including T012/T013's delegate-autonomy integration test files and T031's
+  `DelegateDenyRulesSetting.vue`; the remaining tasks reference the existing integration points in
+  plan.md/research.md.
 - Verify each user story's tests fail before its implementation tasks land, per repo convention.
 - Commit after each task or logical group; stop at any checkpoint to validate a story independently.

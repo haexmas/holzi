@@ -6,8 +6,8 @@ command's args and reuses the existing generic preference commands unchanged.
 
 ## Changed command: `send_message`
 
-The public `SendMessageArgs` accepted by `useChat().sendMessageAsync` has one new optional field;
-the composable also normalizes the retry key before invoking Tauri:
+`SendMessageArgs` (`src-tauri/src/chat/commands.rs:50-66`) gains one new optional field. The public
+`useChat` caller shape remains partially optional:
 
 ```typescript
 {
@@ -20,9 +20,8 @@ the composable also normalizes the retry key before invoking Tauri:
 }
 ```
 
-`sendMessageAsync` fills an omitted `idempotencyKey` with a fresh UUID before the Tauri invoke.
-The backend therefore receives that key on the normalized payload, while the other optional fields
-may remain omitted and deserialize as their existing `Option` values.
+This is the caller-facing shape, not a fully normalized payload. `sendMessageAsync` fills only an
+omitted `idempotencyKey` before invoking Tauri; it forwards the other optional fields as supplied.
 
 **Contract**:
 
@@ -56,7 +55,12 @@ may remain omitted and deserialize as their existing `Option` values.
 
 **No change** to `SendMessageResult` — the response shape is identical; which autonomy mode a turn
 used is discoverable from the persisted message record (data-model.md's new `autonomy_mode` column),
-not from the command's return value.
+not from the command's return value. The existing `list_messages` history endpoint also remains
+unchanged. Its existing row/DTO mappings must expose the additive field: nullable `autonomy_mode`
+flows through storage `ChatMessage`, the history SQL projection, `row_to_message`, `MessagePayload`,
+and the frontend `Message` type. Those mappings preserve `null` for legacy and non-delegate rows
+rather than normalizing it to `standard`, so history rendering reflects only a mode actually
+persisted for that turn.
 
 ## Unchanged commands, reused as-is
 
