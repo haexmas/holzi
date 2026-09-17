@@ -81,32 +81,39 @@ quickstart.md.
       `CodexCommandExecution { command, cwd, network }` / `CodexFileChange` with no fields) in
       `autonomy.rs` (data-model.md — `CodexFileChange` is deliberately field-less, matching the real
       schema gap found in research.md §3, not a placeholder to fill in later).
-- [ ] T008 Implement `evaluate_deny_rules(enabled: &[DenyCategory], payload: &ApprovalRequestPayload) -> ApprovalDecision`
-      in `autonomy.rs` per the matching table in data-model.md — `Allow` if no enabled category
+- [ ] T008 Implement `evaluate_deny_rules(enabled: &[DenyCategory], payload: &ApprovalRequestPayload,
+workspace_root: &Path) -> ApprovalDecision` in `autonomy.rs` per the matching table in
+      data-model.md. The payload enum identifies the vendor, so no redundant vendor parameter is
+      accepted. Use the explicit invocation root for workspace checks; never derive it from the
+      ambient working directory. Return `Allow` if no enabled category
       matches, `Deny` otherwise, and **`Deny` for any enabled `WorkspaceEscape`/`CredentialPaths`
       category against a `CodexFileChange` payload regardless of content** (spec FR-015 — cannot
       evaluate, fail closed, not a bug to "fix" by adding fields that don't exist upstream).
 - [ ] T009 [P] Define an `AutonomyUnavailable { vendor: DelegateVendor, mode: AutonomyMode }` error
       type in `autonomy.rs` (spec FR-013/SC-006) and a `classify_autonomy_spawn_error(vendor, mode,
-      raw_error: &str) -> Option<AutonomyUnavailable>` helper: recognizes Claude Code's
+raw_error: &str) -> Option<AutonomyUnavailable>` helper: recognizes Claude Code's
       "unknown option"-shaped stderr for an unsupported `--permission-mode` value and Codex's
       `thread/start` JSON-RPC error response for an unrecognized `approvalPolicy`/`sandbox` field,
       mapping either to `AutonomyUnavailable` instead of a generic spawn failure. This is
       **reactive** (attempt the call, classify the failure) rather than a proactive CLI-version
       probe — matches how 007 already surfaces "backend unavailable" for its own other failure
-      classes (spec FR-008 precedent), so this feature does not invent a second detection strategy.
+      classes (spec FR-008 precedent), so this feature does not invent a second detection strategy;
+      the command boundary preserves the exact `InvalidInput` wire shape in
+      `contracts/tauri-commands.md`.
 - [ ] T010 [P] Define `const PREF_DENY_RULES: &str = "cli_delegate.deny_rules";` plus
-      `get_deny_rules(conn, device_id) -> Vec<DenyCategory>` / `set_deny_rules(conn, device_id,
-      categories: &[DenyCategory])` helpers over `storage::preferences::{get, insert_or_update}`
-      with `PrefScope::Device` in `autonomy.rs` (research.md §5 — JSON-encode/decode the array into
-      the preference's `String` value; absent or unparseable value behaves as an empty list, not an
-      error).
+      `get_deny_rules(conn, device_id) -> Result<Vec<DenyCategory>, DenyRulesError>` /
+      `set_deny_rules(conn, device_id, categories: &[DenyCategory]) -> Result<(), DenyRulesError>`
+      helpers over `storage::preferences::{get, insert_or_update}` with `PrefScope::Device` in
+      `autonomy.rs`. JSON-decode the preference's `String` value; absent, SQL `NULL`, and valid
+      empty arrays return an empty list, while malformed JSON or unknown categories returns an
+      error. `set_deny_rules` propagates serialization and storage errors.
 - [ ] T011 [P] Create `src-tauri/src/adapters/cli_delegate/autonomy_tests.rs` (register via
       `#[cfg(test)] #[path = "autonomy_tests.rs"] mod autonomy_tests;`): unit tests for
       `evaluate_deny_rules` covering all 3 categories × all 3 `ApprovalRequestPayload` variants from
       the data-model.md table, explicitly asserting the `CodexFileChange` fail-closed case for
       `WorkspaceEscape`/`CredentialPaths` (FR-015) and the "no enabled categories → always `Allow`"
-      empty-rule-set edge case (spec's own documented edge case); plus unit tests for
+      empty-rule-set edge case (spec's own documented edge case), explicit workspace-root handling,
+      and malformed preference JSON returning an error; plus unit tests for
       `classify_autonomy_spawn_error` against representative Claude "unknown option" and Codex
       RPC-error strings.
 
@@ -173,7 +180,8 @@ something else.
 - [ ] T019 [US1] `approval_bridge::request_approval` (approval_bridge.rs:25-68): add an
       `AutonomyMode` parameter; for `GatedPermissive`, skip `permission::decide(mode, risk)` and
       instead build the appropriate `ApprovalRequestPayload` (T007) from `tool_name`/`input` and call
-      `autonomy::evaluate_deny_rules` (T008) with T010's persisted deny rules — never populating
+      `autonomy::evaluate_deny_rules` (T008) with T010's persisted deny rules and the invocation's
+      explicit workspace root — never populating
       `pending_tool_approvals` or emitting `tool-permission-request` for this mode; `Standard` keeps
       calling `permission::decide` exactly as today. **This path bypasses the `Ask`-branch's existing
       `receiver.await.unwrap_or(Deny)` fail-safe (approval_bridge.rs:65) entirely, so it MUST provide
@@ -261,11 +269,12 @@ documented per-vendor/per-action-type asymmetry (FR-015) holding exactly as spec
 - [ ] T032 [US3] Wire Codex's `respond_to_server_request` dispatch (codex.rs:123-155) to build
       `ApprovalRequestPayload::CodexCommandExecution { command, cwd, network }` from
       `CommandExecutionRequestApprovalParams` and `ApprovalRequestPayload::CodexFileChange` (no
-      fields) from `FileChangeRequestApprovalParams`, passed into T019's `evaluate_deny_rules` call.
+      fields) from `FileChangeRequestApprovalParams`, passed into T019's `evaluate_deny_rules` call
+      together with the invocation workspace root.
 - [ ] T033 [US3] Wire Claude's MCP `tools/call` handler (`permission_mcp_server.rs`'s
       `call_approval`/`approval_bridge.rs`'s `request_approval`) to build
       `ApprovalRequestPayload::ClaudeToolCall { tool_name, input }` from the incoming arguments,
-      passed into T019's `evaluate_deny_rules` call.
+      passed into T019's `evaluate_deny_rules` call together with the invocation workspace root.
 
 **Checkpoint**: User Stories 1-3 independently functional — deny rules enforceable with the
 documented asymmetry, not a silent gap.
@@ -335,6 +344,7 @@ documented asymmetry, not a silent gap.
       `DelegateAutonomyControl.vue`, deny-category labels/descriptions on
       `DelegateDenyRulesSetting.vue`, the "autonomy mode unavailable for this backend" message from
       contracts/tauri-commands.md/T022) exists in both `src/i18n/locales/de.json` and `en.json`
+      and `useErrorString` maps the exact `InvalidInput.reason` prefix from the contract to that key
       (CONTEXT.md's lockstep requirement).
 - [ ] T041 Execute quickstart.md's 5 scenarios manually end-to-end, on whichever of Claude
       Code/Codex is actually installed for review; record which vendor(s) were exercised.

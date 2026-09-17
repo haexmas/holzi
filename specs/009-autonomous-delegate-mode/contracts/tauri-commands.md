@@ -34,9 +34,20 @@ command's args and reuses the existing generic preference commands unchanged.
   the frontend enforcing that; an out-of-band or stale value is simply inert for those adapters.
 - If `autonomyMode` requests `ungated` or `gated_permissive` for a delegate backend whose installed
   CLI version does not support the required native mechanism (spec edge case, FR-013), `send_message`
-  returns an error result identifying autonomy mode as unavailable for that backend, the same
-  `HolziError` shape 007-cli-delegate already uses for "backend unavailable" (no new error variant
-  needed if 007's existing variant is generic enough — confirmed at tasks time, not assumed here).
+  returns this exact existing error shape (the command boundary maps
+  `AdapterError::Unavailable` to `HolziError::InvalidInput`):
+
+  ```json
+  {
+    "kind": "InvalidInput",
+    "reason": "adapter start: backend unavailable: autonomy mode unavailable: vendor=<vendor>; mode=<mode>"
+  }
+  ```
+
+  `<vendor>` is `claude` or `codex`, and `<mode>` is `ungated` or `gated_permissive`. The frontend
+  recognizes the `reason` prefix `adapter start: backend unavailable: autonomy mode unavailable:`
+  and maps it to the localized `errors.autonomyUnavailable` message; other `InvalidInput` errors
+  keep their existing mapping. No new `HolziError` variant or generated binding is introduced.
 
 **No change** to `SendMessageResult` — the response shape is identical; which autonomy mode a turn
 used is discoverable from the persisted message record (data-model.md's new `autonomy_mode` column),

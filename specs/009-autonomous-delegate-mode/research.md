@@ -22,7 +22,7 @@ spec Assumptions).
 
 **Alternatives considered**: A new parameter on `CliDelegateAdapter::new`, stored as an adapter
 field. Rejected — the adapter is constructed once per connected provider, not once per request
-(confirmed: `mod.rs:162-179`), so autonomy mode (a *per-request* choice, spec FR-008) does not
+(confirmed: `mod.rs:162-179`), so autonomy mode (a _per-request_ choice, spec FR-008) does not
 belong on the adapter's own construction-time state; it would have to be re-threaded into
 `stream_chat` as an override anyway, which is what putting it on `ChatRequest` already gives for
 free.
@@ -60,7 +60,7 @@ about `ungated` changes that architectural choice, it only changes two fields in
 already-open session's start params. Also considered: Codex's own `approvalsReviewer: "auto_review"`
 (an automatic reviewing subagent) as the mechanism for `gated-permissive` instead of holzi's own deny
 list. Rejected per the spec clarification: the operator explicitly wants holzi's own, small,
-inspectable deny list as an *additional* filter over the delegate's own judgment, not a second
+inspectable deny list as an _additional_ filter over the delegate's own judgment, not a second
 AI-driven reviewer whose logic holzi does not control or see.
 
 ## 3. Per-vendor Deny Rule evaluability — the FileChange path gap
@@ -80,7 +80,7 @@ own documented tool schemas for `Write`/`Edit` carry `file_path` the same way).
 (today: Codex `FileChangeRequestApprovalParams` against the workspace-escape or credential-path
 categories), treat the call as denied rather than allow it through unverified — same fail-safe
 default as an evaluator failure (spec FR-010), now generalized as spec FR-015. This needs no schema
-fix upstream, drops no category for the vendor/action-type combination that *can* evaluate it
+fix upstream, drops no category for the vendor/action-type combination that _can_ evaluate it
 (Claude Code entirely; Codex command execution), and never silently under-enforces a rule the
 operator explicitly turned on.
 
