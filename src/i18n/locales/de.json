@@ -187,6 +187,16 @@
       "allow": "Erlauben",
       "deny": "Ablehnen",
       "stopGenerating": "Generierung abbrechen"
+    },
+    "autonomy": {
+      "modeLabel": "Autonomie",
+      "standard": "Standard",
+      "ungated": "Ungegated",
+      "gated_permissive": "Gegated (permissiv)",
+      "audit": {
+        "gated_permissive_call_permitted": "Erlaubt",
+        "denied_by_deny_rule": "Durch Verbotsregel abgelehnt"
+      }
     }
   },
   "settings": {
@@ -239,6 +249,20 @@
       "submitCode": "Code einreichen",
       "success": "Verbunden.",
       "error": "Verbindung fehlgeschlagen"
+    },
+    "denyRules": {
+      "title": "Verbotsregeln für Delegaten",
+      "description": "Aktionen, die für einen verbundenen Delegaten auch unter einem sonst autonomen Modus tabu bleiben – gilt für dieses Gerät.",
+      "workspace_escape": "Workspace verlassen",
+      "workspace_escapeDescription": "Dateizugriffe außerhalb des Arbeitsverzeichnisses des Aufrufs blockieren.",
+      "network_access": "Netzwerkzugriff",
+      "network_accessDescription": "Aktionen blockieren, die auf das Netzwerk zugreifen.",
+      "credential_paths": "Zugangsdaten-Pfade",
+      "credential_pathsDescription": "Zugriff auf übliche Zugangsdaten-/Geheimnis-Dateipfade blockieren (.ssh, .aws, .env, …).",
+      "save": "Speichern",
+      "saved": "Gespeichert.",
+      "saveFailed": "Verbotsregeln konnten nicht gespeichert werden.",
+      "loadFailed": "Verbotsregeln konnten nicht geladen werden."
     }
   },
   "models": {
@@ -392,6 +416,7 @@
     "modelListFailed": "Modell-Liste konnte nicht geladen werden",
     "invalidIdempotencyKey": "Der Sendevorgang ist ungültig.",
     "idempotencyKeyConflict": "Dieser Sendevorgang wurde bereits mit anderen Daten verwendet.",
+    "autonomyUnavailable": "Dieser Autonomie-Modus ist für das verbundene Backend nicht verfügbar. Aktualisiere es oder nutze stattdessen Standard.",
     "hf": {
       "invalidInput": "Ungültige Eingabe.",
       "network": "Netzwerkfehler — bitte Verbindung prüfen.",

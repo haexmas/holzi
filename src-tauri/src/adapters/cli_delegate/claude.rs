@@ -20,8 +20,9 @@ use crate::adapters::types::{StreamChunk, StreamError};
 use crate::adapters::{AdapterError, AdapterStream, ChatRequest};
 
 use super::approval_bridge;
+use super::autonomy::{self, AutonomyMode};
 use super::process::{configure_process_group, map_spawn_error, ChildLifecycle};
-use super::{build_transcript_prompt, DelegateChatContext};
+use super::{build_transcript_prompt, DelegateChatContext, DelegateVendor};
 
 /// Caps how much of a `claude` stderr we keep around for an error
 /// message — mirrors `chat/tools/cli.rs`'s own output cap, just applied
@@ -116,22 +117,33 @@ pub(super) fn parse_line(line: &str, ttft_ms: Option<u64>, total_ms: u64) -> Lin
 
 fn build_command(
     binary: &str,
-    mcp_config: &Path,
+    mcp_config: Option<&Path>,
     system_prompt_path: Option<&Path>,
     tmp: &TempDir,
+    autonomy_mode: AutonomyMode,
 ) -> Command {
     let mut cmd = Command::new(binary);
     cmd.arg("-p")
         .arg("--output-format")
         .arg("stream-json")
         .arg("--verbose")
-        .arg("--include-partial-messages")
-        .arg("--permission-mode")
-        .arg("default")
-        .arg("--mcp-config")
-        .arg(mcp_config)
-        .arg("--permission-prompt-tool")
-        .arg("mcp__holzi-approve__approve");
+        .arg("--include-partial-messages");
+    if autonomy_mode == AutonomyMode::Ungated {
+        // Native full-autonomy mechanism (research.md §2): no bridge is
+        // spawned for this mode at all, so there is no approval tool to
+        // wire up either. `Standard`/`GatedPermissive` keep today's exact
+        // command — only the approval *decision function* changes for
+        // `GatedPermissive` (approval_bridge.rs), not the invocation.
+        cmd.arg("--permission-mode").arg("bypassPermissions");
+    } else {
+        let mcp_config = mcp_config.expect("mcp_config is required outside Ungated mode");
+        cmd.arg("--permission-mode")
+            .arg("default")
+            .arg("--mcp-config")
+            .arg(mcp_config)
+            .arg("--permission-prompt-tool")
+            .arg("mcp__holzi-approve__approve");
+    }
     if let Some(system_prompt_path) = system_prompt_path {
         cmd.arg("--append-system-prompt-file")
             .arg(system_prompt_path);
@@ -142,6 +154,44 @@ fn build_command(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     cmd
+}
+
+/// Terminates `child`, drains `stderr_task`, and classifies the collected
+/// stderr against `autonomy_mode` (tasks.md T009/T022): a recognized
+/// unsupported-mode rejection becomes `AdapterError::Unavailable`;
+/// otherwise `fallback` (with the stderr text appended, if any) becomes
+/// the reason of a generic `AdapterError::Http` — matching the exact
+/// wording each of this function's two call sites already used before
+/// this classification existed. Only ever called for `Ungated`
+/// (`GatedPermissive` sends identical flags to `Standard`, so it can never
+/// hit this path).
+async fn classify_exit_error(
+    child: &mut ChildLifecycle,
+    stderr_task: tokio::task::JoinHandle<Vec<u8>>,
+    listener_task: Option<tokio::task::JoinHandle<()>>,
+    autonomy_mode: AutonomyMode,
+    fallback: &str,
+) -> AdapterError {
+    child.terminate_and_reap().await;
+    let stderr_bytes = stderr_task.await.unwrap_or_default();
+    if let Some(task) = listener_task {
+        task.abort();
+        let _ = task.await;
+    }
+    let stderr_text = String::from_utf8_lossy(&stderr_bytes).trim().to_string();
+    if let Some(unavailable) =
+        autonomy::classify_autonomy_spawn_error(DelegateVendor::Claude, autonomy_mode, &stderr_text)
+    {
+        return AdapterError::Unavailable {
+            reason: unavailable.to_string(),
+        };
+    }
+    let reason = if stderr_text.is_empty() {
+        fallback.to_string()
+    } else {
+        format!("{fallback}: {stderr_text}")
+    };
+    AdapterError::Http { reason }
 }
 
 /// Starts one isolated Claude Code invocation and exposes its output as an adapter stream.
@@ -176,38 +226,54 @@ pub(super) async fn spawn_claude_invocation(
             reason: format!("failed to write Claude system prompt: {error}"),
         })?;
     }
-    let socket_path = tmp.path().join("approval.sock");
-    let listener =
-        approval_bridge::bind_socket(&socket_path).map_err(|error| AdapterError::Http {
-            reason: format!("failed to create Claude approval socket: {error}"),
+    let autonomy_mode = req.autonomy_mode;
+    // `Ungated` never needs a bridge process at all — Claude is told to
+    // bypass permissions entirely, so there is no approval tool call to
+    // relay (tasks.md T021).
+    let (mcp_config_path, listener_task) = if autonomy_mode == AutonomyMode::Ungated {
+        (None, None)
+    } else {
+        let socket_path = tmp.path().join("approval.sock");
+        let listener =
+            approval_bridge::bind_socket(&socket_path).map_err(|error| AdapterError::Http {
+                reason: format!("failed to create Claude approval socket: {error}"),
+            })?;
+        let listener_task = approval_bridge::start_listener(
+            listener,
+            context.clone(),
+            req.thread_id,
+            autonomy_mode,
+            tmp.path().to_path_buf(),
+        );
+        let mcp_config_path = tmp.path().join("mcp-config.json");
+        let current_exe = std::env::current_exe().map_err(|error| AdapterError::Http {
+            reason: format!("failed to locate holzi executable for approval bridge: {error}"),
         })?;
-    let listener_task = approval_bridge::start_listener(listener, context.clone(), req.thread_id);
-    let mcp_config_path = tmp.path().join("mcp-config.json");
-    let current_exe = std::env::current_exe().map_err(|error| AdapterError::Http {
-        reason: format!("failed to locate holzi executable for approval bridge: {error}"),
-    })?;
-    let mcp_config = json!({
-        "mcpServers": {
-            "holzi-approve": {
-                "command": current_exe,
-                "args": ["--internal-cli-delegate-approval-bridge", "--socket", socket_path]
+        let mcp_config = json!({
+            "mcpServers": {
+                "holzi-approve": {
+                    "command": current_exe,
+                    "args": ["--internal-cli-delegate-approval-bridge", "--socket", socket_path]
+                }
             }
-        }
-    });
-    std::fs::write(
-        &mcp_config_path,
-        serde_json::to_vec(&mcp_config).map_err(|error| AdapterError::Http {
-            reason: format!("failed to serialize Claude MCP config: {error}"),
-        })?,
-    )
-    .map_err(|error| AdapterError::Http {
-        reason: format!("failed to write Claude MCP config: {error}"),
-    })?;
+        });
+        std::fs::write(
+            &mcp_config_path,
+            serde_json::to_vec(&mcp_config).map_err(|error| AdapterError::Http {
+                reason: format!("failed to serialize Claude MCP config: {error}"),
+            })?,
+        )
+        .map_err(|error| AdapterError::Http {
+            reason: format!("failed to write Claude MCP config: {error}"),
+        })?;
+        (Some(mcp_config_path), Some(listener_task))
+    };
     let mut cmd = build_command(
         &binary,
-        &mcp_config_path,
+        mcp_config_path.as_deref(),
         system_prompt_path.as_ref().map(|(path, _)| path.as_path()),
         &tmp,
+        autonomy_mode,
     );
     configure_process_group(&mut cmd);
     cmd.env("CLAUDE_CODE_OAUTH_TOKEN", &token);
@@ -221,15 +287,6 @@ pub(super) async fn spawn_claude_invocation(
         .ok_or_else(|| AdapterError::Http {
             reason: "failed to capture claude stdin".into(),
         })?;
-    stdin
-        .write_all(prompt.as_bytes())
-        .await
-        .map_err(|error| AdapterError::Http {
-            reason: format!("failed to write Claude prompt: {error}"),
-        })?;
-    stdin.shutdown().await.map_err(|error| AdapterError::Http {
-        reason: format!("failed to close Claude prompt input: {error}"),
-    })?;
     let stdout = child
         .child_mut()
         .stdout
@@ -245,6 +302,102 @@ pub(super) async fn spawn_claude_invocation(
             reason: "failed to capture claude stderr".into(),
         })?;
 
+    // Spawned before writing the prompt: an installed `claude` too old to
+    // accept `bypassPermissions` can reject it and exit immediately, on its
+    // own argument parser, before ever reading stdin — which surfaces as a
+    // broken-pipe *write* failure below, not a read/EOF one. Both early-exit
+    // shapes route through `classify_exit_error` so either is classified
+    // the same way (tasks.md T009/T022, spec FR-013/SC-006).
+    let stderr_task = tokio::spawn(async move {
+        let mut buf = Vec::new();
+        let mut chunk = [0_u8; 4096];
+        loop {
+            match stderr.read(&mut chunk).await {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    let remaining = MAX_STDERR_BYTES.saturating_sub(buf.len());
+                    if remaining > 0 {
+                        buf.extend_from_slice(&chunk[..n.min(remaining)]);
+                    }
+                }
+            }
+        }
+        buf
+    });
+
+    if let Err(error) = stdin.write_all(prompt.as_bytes()).await {
+        if autonomy_mode == AutonomyMode::Ungated {
+            return Err(classify_exit_error(
+                &mut child,
+                stderr_task,
+                listener_task,
+                autonomy_mode,
+                &format!("failed to write Claude prompt: {error}"),
+            )
+            .await);
+        }
+        return Err(AdapterError::Http {
+            reason: format!("failed to write Claude prompt: {error}"),
+        });
+    }
+    if let Err(error) = stdin.shutdown().await {
+        if autonomy_mode == AutonomyMode::Ungated {
+            return Err(classify_exit_error(
+                &mut child,
+                stderr_task,
+                listener_task,
+                autonomy_mode,
+                &format!("failed to close Claude prompt input: {error}"),
+            )
+            .await);
+        }
+        return Err(AdapterError::Http {
+            reason: format!("failed to close Claude prompt input: {error}"),
+        });
+    }
+    // `shutdown()` alone does not release the underlying pipe fd — only
+    // `Drop` does. The success path used to return (and thus drop `stdin`)
+    // almost immediately after this point, so the child always saw EOF
+    // quickly; the `Ungated` peek-ahead below now keeps this function
+    // running longer, so `stdin` must be dropped explicitly or a child that
+    // actually reads its prompt from stdin (any real `claude`, and any
+    // stub written to behave like one) deadlocks waiting for EOF.
+    drop(stdin);
+
+    let mut reader = BufReader::new(stdout).lines();
+
+    // Reactive classification (spec FR-013/SC-006, tasks.md T009/T022): a
+    // slower-to-reject `claude` may accept the prompt write but still exit
+    // before emitting any `stream-json` line. Unlike Codex's synchronous
+    // `thread/start`, Claude has no separate handshake call to fail — the
+    // only way to detect this before committing to the stream is to race
+    // "first line" against "process already exited" once, here, before
+    // returning. `GatedPermissive` sends the exact same flags as `Standard`
+    // (only the approval bridge's decision function differs), so it can
+    // never hit this path and is not worth the same peek — scoped to
+    // `Ungated` only.
+    let mut peeked_line: Option<String> = None;
+    if autonomy_mode == AutonomyMode::Ungated {
+        match reader.next_line().await {
+            Ok(Some(line)) => peeked_line = Some(line),
+            Ok(None) => {
+                return Err(classify_exit_error(
+                    &mut child,
+                    stderr_task,
+                    listener_task,
+                    autonomy_mode,
+                    "claude exited without producing a result",
+                )
+                .await);
+            }
+            Err(e) => {
+                return Err(AdapterError::Http {
+                    reason: format!("failed to read claude stdout: {e}"),
+                })
+            }
+        }
+    }
+
     let (tx, rx) = mpsc::unbounded_channel();
     let cancellation = CancellationToken::new();
     let task_cancellation = cancellation.clone();
@@ -253,39 +406,30 @@ pub(super) async fn spawn_claude_invocation(
         // when this task ends, on every path below.
         let _tmp = tmp;
 
-        let stderr_task = tokio::spawn(async move {
-            let mut buf = Vec::new();
-            let mut chunk = [0_u8; 4096];
-            loop {
-                match stderr.read(&mut chunk).await {
-                    Ok(0) | Err(_) => break,
-                    Ok(n) => {
-                        let remaining = MAX_STDERR_BYTES.saturating_sub(buf.len());
-                        if remaining > 0 {
-                            buf.extend_from_slice(&chunk[..n.min(remaining)]);
-                        }
-                    }
-                }
-            }
-            buf
-        });
-
         let start = Instant::now();
         let mut ttft_ms = None;
         let mut saw_result = false;
-        let mut reader = BufReader::new(stdout).lines();
+        let mut peeked_line = peeked_line;
 
         loop {
-            let line = tokio::select! {
-                _ = task_cancellation.cancelled() => {
-                    child.terminate_and_reap().await;
-                    stderr_task.abort();
-                    let _ = stderr_task.await;
-                    listener_task.abort();
-                    let _ = listener_task.await;
-                    return;
+            // The line already consumed by the peek-ahead above (if any)
+            // must be processed first, before reading any further.
+            let line = if let Some(line) = peeked_line.take() {
+                Ok(Some(line))
+            } else {
+                tokio::select! {
+                    _ = task_cancellation.cancelled() => {
+                        child.terminate_and_reap().await;
+                        stderr_task.abort();
+                        let _ = stderr_task.await;
+                        if let Some(task) = listener_task {
+                            task.abort();
+                            let _ = task.await;
+                        }
+                        return;
+                    }
+                    line = reader.next_line() => line,
                 }
-                line = reader.next_line() => line,
             };
             match line {
                 Ok(Some(line)) => {
@@ -302,8 +446,10 @@ pub(super) async fn spawn_claude_invocation(
                                 child.terminate_and_reap().await;
                                 stderr_task.abort();
                                 let _ = stderr_task.await;
-                                listener_task.abort();
-                                let _ = listener_task.await;
+                                if let Some(task) = listener_task {
+                                    task.abort();
+                                    let _ = task.await;
+                                }
                                 return;
                             }
                             if is_done {
@@ -332,8 +478,10 @@ pub(super) async fn spawn_claude_invocation(
         // if a CLI keeps its server loop alive after emitting it.
         child.terminate_and_reap().await;
         let stderr_bytes = stderr_task.await.unwrap_or_default();
-        listener_task.abort();
-        let _ = listener_task.await;
+        if let Some(task) = listener_task {
+            task.abort();
+            let _ = task.await;
+        }
 
         if !saw_result {
             let stderr_text = String::from_utf8_lossy(&stderr_bytes).trim().to_string();

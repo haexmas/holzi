@@ -204,6 +204,7 @@ pub fn persist_send_transaction(
                         tool_input: None,
                         tool_is_error: None,
                         tool_source: None,
+                        autonomy_mode: None,
                     },
                 )?;
                 Ok(PersistedSend::Fresh {

@@ -140,6 +140,7 @@ impl TurnRunner<'_> {
         };
         let created_at = self.bump_created_at();
         let (thread_id, message_id) = (self.thread_id, self.assistant_message_id);
+        let autonomy_mode = persist::autonomy_mode_label(self.request.autonomy_mode);
         let final_msg = ChatMessage {
             role: MessageRole::Assistant,
             content: step.assembled,
@@ -149,6 +150,7 @@ impl TurnRunner<'_> {
             completion_tokens: step.completion_tokens.map(|n| n as i64),
             finish_reason: Some(finish_reason),
             created_at,
+            autonomy_mode,
             ..empty_tool_message(message_id, thread_id, Some(self.parent_id))
         };
         if let Err(reason) = persist_final_message(

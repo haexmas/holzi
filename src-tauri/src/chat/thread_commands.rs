@@ -220,6 +220,10 @@ pub struct MessagePayload {
     pub tool_is_error: Option<bool>,
     /// `mcp` or `cli`. Set only when `role == "tool_call"`.
     pub tool_source: Option<String>,
+    /// Which `AutonomyMode` the turn ran under (spec
+    /// 009-autonomous-delegate-mode): `"standard"` / `"ungated"` /
+    /// `"gated_permissive"`. `null` for legacy and non-delegate rows.
+    pub autonomy_mode: Option<String>,
 }
 
 impl From<ChatMessage> for MessagePayload {
@@ -253,6 +257,7 @@ impl From<ChatMessage> for MessagePayload {
             tool_input: m.tool_input,
             tool_is_error: m.tool_is_error,
             tool_source: m.tool_source,
+            autonomy_mode: m.autonomy_mode,
         }
     }
 }

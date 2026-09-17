@@ -68,6 +68,7 @@ fn sample_message(
         tool_input: None,
         tool_is_error: None,
         tool_source: None,
+        autonomy_mode: None,
     }
 }
 

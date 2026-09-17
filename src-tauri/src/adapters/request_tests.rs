@@ -23,7 +23,8 @@ fn sample_request(model: &str) -> ChatRequest {
         reasoning_requested: false,
         max_new_tokens: Some(128),
         tools: Vec::new(),
-    }
+        autonomy_mode: Default::default(),
+}
 }
 
 #[test]
@@ -175,7 +176,8 @@ async fn stream_chat_groups_ordered_tool_calls_and_results_into_two_messages() {
         reasoning_requested: false,
         max_new_tokens: Some(128),
         tools: Vec::new(),
-    };
+        autonomy_mode: Default::default(),
+};
 
     let mut stream = adapter.stream_chat(request).await.unwrap();
     while stream.next().await.is_some() {}

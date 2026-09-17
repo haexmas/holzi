@@ -35,6 +35,7 @@ use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use holzi_lib::adapters::cli_delegate::approval_bridge::{bind_socket, start_listener};
+use holzi_lib::adapters::cli_delegate::autonomy::AutonomyMode;
 use holzi_lib::adapters::cli_delegate::{
     CliDelegateAdapter, DelegateChatContext, DelegateVendor, EventEmitter, PendingToolApprovals,
 };
@@ -125,6 +126,7 @@ sys.stdin.readline()
             reasoning_requested: false,
             max_new_tokens: None,
             tools: Vec::new(),
+            autonomy_mode: Default::default(),
         })
         .await
         .expect("stream_chat should start");
@@ -193,7 +195,13 @@ async fn claude_approval_round_trips_through_the_real_socket_and_bridge_child() 
     };
 
     let listener = bind_socket(&socket_path).expect("bind approval socket");
-    let listener_task = start_listener(listener, context, Some(Uuid::nil()));
+    let listener_task = start_listener(
+        listener,
+        context,
+        Some(Uuid::nil()),
+        AutonomyMode::Standard,
+        dir.path().to_path_buf(),
+    );
 
     // The real hidden entrypoint (T034), run as the actual compiled `holzi`
     // binary — exactly what `claude.rs` points `--mcp-config` at, not a

@@ -28,6 +28,7 @@ fn base(role: MessageRole) -> ChatMessage {
         tool_input: None,
         tool_is_error: None,
         tool_source: None,
+        autonomy_mode: None,
     }
 }
 

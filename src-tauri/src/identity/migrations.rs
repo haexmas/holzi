@@ -56,7 +56,9 @@ use haex_crdt::{MigrationName, StaticMigrationSource};
 /// - 6: `0014_chat_messages_tool_columns` added columns to `chat_messages`.
 /// - 7: `0015_models_add_huggingface_source` added columns to `models`.
 /// - 8: `0016_providers_add_capability` added a column to `providers`.
-pub const HOLZI_TRIGGER_VERSION: i32 = 8;
+/// - 9: `0017_chat_messages_add_autonomy_mode` added a column to
+///   `chat_messages`.
+pub const HOLZI_TRIGGER_VERSION: i32 = 9;
 
 /// Returns the frozen holzi migration set at the pinned haex-crdt revision.
 pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
@@ -335,6 +337,15 @@ pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
     m.insert(
         MigrationName::from("0016_providers_add_capability"),
         "ALTER TABLE providers ADD COLUMN capability TEXT NOT NULL DEFAULT 'chat';".to_string(),
+    );
+
+    // Autonomous Delegate Mode (spec 009): a `chat_messages` row now records
+    // which `AutonomyMode` its turn ran under — `standard`/`ungated`/
+    // `gated_permissive`, or `NULL` for legacy and non-delegate rows
+    // (data-model.md Decision B). Bumps HOLZI_TRIGGER_VERSION to 9.
+    m.insert(
+        MigrationName::from("0017_chat_messages_add_autonomy_mode"),
+        "ALTER TABLE chat_messages ADD COLUMN autonomy_mode TEXT;".to_string(),
     );
 
     Arc::new(StaticMigrationSource(m))

@@ -9,6 +9,7 @@ use tokio::sync::{oneshot, Mutex as AsyncMutex};
 use uuid::Uuid;
 
 use super::approval_bridge::request_approval;
+use super::autonomy::{ApprovalRequestPayload, AutonomyMode};
 use super::{EventEmitter, PendingToolApprovals};
 use crate::chat::tools::ApprovalDecision;
 use crate::identity::{holzi_migration_source, installation_id_path, HolziBootstrap};
@@ -64,8 +65,14 @@ async fn manual_approval_uses_the_existing_pending_request_flow() {
             &emit_for_request,
             None,
             Some(Uuid::nil()),
+            AutonomyMode::Standard,
+            Path::new("/tmp"),
             "Bash".to_string(),
             serde_json::json!({"command": "echo test"}),
+            ApprovalRequestPayload::ClaudeToolCall {
+                tool_name: "Bash".to_string(),
+                input: serde_json::json!({"command": "echo test"}),
+            },
         )
         .await
     });
@@ -119,8 +126,14 @@ async fn auto_mode_allow_on_a_safe_tool_skips_the_live_round_trip() {
         &emit,
         Some(&db),
         Some(Uuid::nil()),
+        AutonomyMode::Standard,
+        Path::new("/tmp"),
         "Read".to_string(), // in `is_risky_tool`'s safe list
         serde_json::json!({"path": "/tmp/x"}),
+        ApprovalRequestPayload::ClaudeToolCall {
+            tool_name: "Read".to_string(),
+            input: serde_json::json!({"path": "/tmp/x"}),
+        },
     )
     .await;
 
@@ -163,8 +176,14 @@ async fn plan_mode_deny_on_a_risky_tool_skips_the_live_round_trip() {
         &emit,
         Some(&db),
         Some(Uuid::nil()),
+        AutonomyMode::Standard,
+        Path::new("/tmp"),
         "Bash".to_string(), // not in the safe list => Risky
         serde_json::json!({"command": "rm -rf /"}),
+        ApprovalRequestPayload::ClaudeToolCall {
+            tool_name: "Bash".to_string(),
+            input: serde_json::json!({"command": "rm -rf /"}),
+        },
     )
     .await;
 

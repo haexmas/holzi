@@ -1,10 +1,12 @@
 # Autonomous Delegate Mode — Full-Autonomy Extension to CLI Delegate
 
-**Status**: Deferred design capture. Written 2026-09-17 from a session that started by comparing
-holzi's architecture to OpenClaw 2.0's ACP/CLI-backend model. Not scoped for implementation.
-Extends shipped `specs/007-cli-delegate/` rather than revising it — every acceptance scenario and
-functional requirement in that spec continues to hold exactly as shipped unless Autonomous Mode is
-explicitly selected.
+**Status**: In implementation as [`specs/009-autonomous-delegate-mode/`](../../specs/009-autonomous-delegate-mode/)
+(spec/plan/tasks reviewed and merged via PR #79). Not yet `shipped` — that status is deferred until
+the task list there is complete and validated (quickstart.md's 5 scenarios run against a real
+connected delegate). Originally written 2026-09-17 from a session that started by comparing holzi's
+architecture to OpenClaw 2.0's ACP/CLI-backend model. Extends shipped `specs/007-cli-delegate/`
+rather than revising it — every acceptance scenario and functional requirement in that spec
+continues to hold exactly as shipped unless Autonomous Mode is explicitly selected.
 
 **Relationship to existing documents**:
 

@@ -901,6 +901,7 @@ async fn ci_e2e_loaded_model_can_request_and_process_a_cli_command() {
                 "required": ["command"]
             }),
         }],
+        autonomy_mode: Default::default(),
     };
     let stream = session
         .adapter
@@ -1036,6 +1037,7 @@ async fn a_real_local_model_can_request_and_process_a_cli_command() {
                 "required": ["command"]
             }),
         }],
+        autonomy_mode: Default::default(),
     };
     let stream = session
         .adapter

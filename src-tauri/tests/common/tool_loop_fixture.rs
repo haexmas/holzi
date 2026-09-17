@@ -112,6 +112,7 @@ pub fn seed_thread(db: &Database, thread_id: Uuid, user_message_id: Uuid) {
                 tool_input: None,
                 tool_is_error: None,
                 tool_source: None,
+                autonomy_mode: None,
             },
         )?;
         Ok(())
@@ -226,6 +227,7 @@ pub fn base_request() -> ChatRequest {
             description: "echoes".to_string(),
             input_schema: serde_json::json!({ "type": "object" }),
         }],
+        autonomy_mode: Default::default(),
     }
 }
 

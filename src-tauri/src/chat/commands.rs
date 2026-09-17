@@ -28,6 +28,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+use crate::adapters::cli_delegate::autonomy::AutonomyMode;
 use crate::adapters::types::{ChatMessage as LlmMessage, ChatRequest, ChatRole, ToolSpec};
 use crate::chat::tools::{ApprovalDecision, ToolRegistry};
 use crate::error::{HolziError, Result};
@@ -63,6 +64,11 @@ pub struct SendMessageArgs {
     /// own `invoke()` call without resuming a failed generation — see
     /// [`resolve_idempotent_send`].
     pub idempotency_key: String,
+    /// Per-request autonomy posture for a `cli_delegate` backend (spec
+    /// 009-autonomous-delegate-mode). `None` behaves identically to
+    /// `Some(AutonomyMode::Standard)`; never persisted (FR-008) and ignored
+    /// entirely by non-delegate adapters.
+    pub autonomy_mode: Option<AutonomyMode>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -356,6 +362,7 @@ pub async fn send_message(
         reasoning_requested,
         max_new_tokens: args.max_new_tokens,
         tools,
+        autonomy_mode: args.autonomy_mode.unwrap_or_default(),
     };
 
     let mut attempt = 0;

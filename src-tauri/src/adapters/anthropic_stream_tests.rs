@@ -21,6 +21,7 @@ fn sample_request(model: &str) -> ChatRequest {
         reasoning_requested: false,
         max_new_tokens: Some(128),
         tools: Vec::new(),
+        autonomy_mode: Default::default(),
     }
 }
 
