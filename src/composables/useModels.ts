@@ -102,24 +102,46 @@ export interface ImportModelArgs {
 }
 
 /**
+ * Shared shape behind every "list installed tiers of a built-in catalog /
+ * download one" composable (spec 010): `useModels` (chat/agent models) and
+ * `useSttModels` (speech-to-text models) both need exactly this pair,
+ * against different Tauri commands and entry types — parameterized here so
+ * neither file duplicates the implementation.
+ */
+export function makeInstalledModelsComposable<TModel>(
+  listInstalledCommand: string,
+  downloadFromCatalogCommand: string,
+) {
+  return function useGeneratedInstalledModels() {
+    /** Lists models that are already fully installed on this device. */
+    async function listInstalledAsync(): Promise<TModel[]> {
+      return await invoke<TModel[]>(listInstalledCommand)
+    }
+
+    /** Downloads and registers one of the bundled catalog entries. */
+    async function downloadFromCatalogAsync(
+      catalogId: string,
+    ): Promise<TModel> {
+      return await invoke<TModel>(downloadFromCatalogCommand, { catalogId })
+    }
+
+    return { listInstalledAsync, downloadFromCatalogAsync }
+  }
+}
+
+const useInstalledChatModels = makeInstalledModelsComposable<InstalledModel>(
+  'list_installed_models',
+  'download_model_from_catalog',
+)
+
+/**
  * Thin wrapper around the model management commands and the two
  * progress-related Tauri events (`model-download-progress`,
  * `model-download-complete`).
  */
 export function useModels() {
-  /** Lists models that are available in the managed local model directory. */
-  async function listInstalledAsync(): Promise<InstalledModel[]> {
-    return await invoke<InstalledModel[]>('list_installed_models')
-  }
-
-  /** Downloads and registers one of the bundled catalog entries. */
-  async function downloadFromCatalogAsync(
-    catalogId: string,
-  ): Promise<InstalledModel> {
-    return await invoke<InstalledModel>('download_model_from_catalog', {
-      catalogId,
-    })
-  }
+  const { listInstalledAsync, downloadFromCatalogAsync } =
+    useInstalledChatModels()
 
   /**
    * Installs a free HuggingFace GGUF: previews the install to resolve the

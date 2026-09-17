@@ -17,6 +17,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::hardware::{classify, Fit, HardwareInfo, ModelFitInputs};
 
+pub use crate::hardware::tiers::Tier;
+
 const CATALOG_JSON: &str = include_str!("model_catalog.json");
 
 #[cfg(test)]
@@ -108,19 +110,6 @@ pub async fn list_catalog() -> Vec<CatalogEntryWithFit> {
         .collect()
 }
 
-/// Which onboarding-tier a recommended model represents. See spec 002
-/// §"Onboarding" and data-model.md.
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum Tier {
-    /// Smallest catalog entry that fits.
-    Easy,
-    /// Largest catalog entry that fits.
-    Sweet,
-    /// Largest catalog entry that fits or is `Tight`.
-    Max,
-}
-
 /// One tier recommendation shown as a chip in the onboarding wizard.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -148,7 +137,7 @@ pub struct TierRecommendation {
 /// Returns `None` only when the catalog is empty (which never happens
 /// in production because `entries()` reads the built-in JSON blob).
 pub fn recommend_tiers(hw: &HardwareInfo) -> Option<[TierRecommendation; 3]> {
-    let mut sorted: Vec<(CatalogEntry, Fit)> = entries()
+    let candidates: Vec<(CatalogEntry, Fit)> = entries()
         .iter()
         .cloned()
         .map(|entry| {
@@ -162,43 +151,7 @@ pub fn recommend_tiers(hw: &HardwareInfo) -> Option<[TierRecommendation; 3]> {
             (entry, fit)
         })
         .collect();
-    if sorted.is_empty() {
-        return None;
-    }
-    sorted.sort_by(|a, b| {
-        a.0.approx_size_bytes
-            .cmp(&b.0.approx_size_bytes)
-            .then_with(|| a.0.id.cmp(&b.0.id))
-    });
-
-    let smallest_fits = sorted.iter().find(|(_, f)| *f == Fit::Fits);
-    let smallest_tight = sorted.iter().find(|(_, f)| *f == Fit::Tight);
-    let smallest_unknown = sorted.iter().find(|(_, f)| *f == Fit::Unknown);
-    let smallest_too_big = sorted.iter().find(|(_, f)| *f == Fit::TooBig);
-    let easy = smallest_fits
-        .or(smallest_tight)
-        .or(smallest_unknown)
-        .or(smallest_too_big)
-        .cloned()
-        .unwrap_or_else(|| sorted[0].clone());
-
-    let largest_fits = sorted.iter().rev().find(|(_, f)| *f == Fit::Fits);
-    let median = sorted[(sorted.len() - 1) / 2].clone();
-    let sweet = largest_fits.cloned().unwrap_or(median);
-
-    let largest_fits_or_tight = sorted
-        .iter()
-        .rev()
-        .find(|(_, f)| matches!(f, Fit::Fits | Fit::Tight));
-    let max = largest_fits_or_tight
-        .cloned()
-        .unwrap_or_else(|| sweet.clone());
-
-    let mk =
-        |tier: Tier, (entry, fit): (CatalogEntry, Fit)| TierRecommendation { tier, entry, fit };
-    Some([
-        mk(Tier::Easy, easy),
-        mk(Tier::Sweet, sweet),
-        mk(Tier::Max, max),
-    ])
+    let picked =
+        crate::hardware::tiers::pick_three(candidates, |e| e.approx_size_bytes, |e| e.id.as_str())?;
+    Some(picked.map(|(tier, entry, fit)| TierRecommendation { tier, entry, fit }))
 }

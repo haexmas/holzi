@@ -55,7 +55,12 @@ use providers::{
     add_provider, delete_provider, list_provider_models, list_providers, refresh_provider_models,
 };
 use storage::preferences_commands::{clear_pref, get_pref, set_pref};
-use voice::{cancel_voice_recording, start_voice_recording, stop_voice_recording};
+use stt::commands::{
+    download_stt_model, list_installed_stt_models, list_stt_catalog, stt_recommend_tiers,
+};
+use voice::{
+    cancel_voice_recording, invalidate_stt_model_cache, start_voice_recording, stop_voice_recording,
+};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 /// Builds and starts the holzi Tauri application.
@@ -93,7 +98,6 @@ pub fn run() {
     let builder = tauri::Builder::default().manage(AppState::new());
     let builder = builder.manage(ChatState::new());
     let builder = builder.manage(DelegateConnectState::new());
-    #[cfg(feature = "voice")]
     let builder = builder.manage(voice::VoiceState::new());
     builder
         .plugin(tauri_plugin_opener::init())
@@ -161,6 +165,11 @@ pub fn run() {
             start_voice_recording,
             stop_voice_recording,
             cancel_voice_recording,
+            invalidate_stt_model_cache,
+            list_stt_catalog,
+            stt_recommend_tiers,
+            list_installed_stt_models,
+            download_stt_model,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

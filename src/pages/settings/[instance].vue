@@ -77,6 +77,13 @@ onMounted(reloadDeviceInfoAsync)
 
       <hr class="border-neutral-200" />
 
+      <SettingsSttModelSetting
+        v-if="deviceInfo"
+        :device-uuid="deviceInfo.vaultDeviceUuid"
+      />
+
+      <hr class="border-neutral-200" />
+
       <ModelsHuggingFaceModelManagement />
 
       <hr class="border-neutral-200" />

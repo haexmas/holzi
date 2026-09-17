@@ -23,6 +23,9 @@ mod fit;
 #[cfg(test)]
 mod fit_tests;
 pub mod hostname;
+pub mod tiers;
+#[cfg(test)]
+mod tiers_tests;
 
 pub use fit::{classify, Fit, ModelFitInputs};
 

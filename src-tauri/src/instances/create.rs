@@ -18,6 +18,7 @@ use crate::chat::session::ChatState;
 use crate::error::{HolziError, Result};
 use crate::identity::installation_id_path;
 use crate::state::{ActiveInstanceHandle, AppState};
+use crate::voice::VoiceState;
 
 use super::events::emit_instance_list_changed;
 use super::info::InstanceInfo;
@@ -51,6 +52,7 @@ pub async fn create_instance(
     app: AppHandle,
     state: State<'_, AppState>,
     chat: State<'_, ChatState>,
+    voice: State<'_, VoiceState>,
     args: CreateInstanceArgs,
 ) -> Result<CreateInstanceResult> {
     let _operation = chat.acquire_operation()?;
@@ -122,6 +124,7 @@ pub async fn create_instance(
         Ok(db_arc) => match publish_active(&state, &args.name, &db_arc, &pending_marker) {
             Ok(result) => {
                 *chat.session.lock().unwrap_or_else(|e| e.into_inner()) = None;
+                voice.invalidate_whisper_cache().await;
                 emit_instance_list_changed(&app, "created", Some(args.name.clone()));
                 chat.bump_vault_generation();
                 emit_model_load_status(&app, &chat);

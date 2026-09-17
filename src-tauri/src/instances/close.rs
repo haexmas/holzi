@@ -6,6 +6,7 @@ use tauri::{AppHandle, State};
 use crate::chat::{events::emit_model_load_status, session::ChatState};
 use crate::error::{HolziError, Result};
 use crate::state::AppState;
+use crate::voice::VoiceState;
 
 use super::events::emit_instance_list_changed;
 
@@ -17,6 +18,7 @@ pub async fn close_instance(
     app: AppHandle,
     state: State<'_, AppState>,
     chat: State<'_, ChatState>,
+    voice: State<'_, VoiceState>,
 ) -> Result<()> {
     let _operation = chat.acquire_operation()?;
     chat.cancel_preload_and_wait().await;
@@ -65,6 +67,7 @@ pub async fn close_instance(
     }
 
     *chat.session.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    voice.invalidate_whisper_cache().await;
     chat.bump_vault_generation();
     emit_model_load_status(&app, &chat);
     emit_instance_list_changed(&app, "closed", Some(name));

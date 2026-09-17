@@ -24,7 +24,7 @@ build the onboarding step or the Settings section without it existing first.
 
 ## Phase 1: Setup
 
-- [ ] T001 [P] Create `src-tauri/src/stt/stt_catalog.json` with three entries (`whisper-tiny`,
+- [x] T001 [P] Create `src-tauri/src/stt/stt_catalog.json` with three entries (`whisper-tiny`,
       `whisper-base`, `whisper-small`) — `id`, `name`, `hf_repo`, `hf_revision`, `approx_size_bytes`
       (sum of all three files, not just weights), `license`. Use the pinned revisions and sizes
       already resolved in [research.md §6](research.md#6-gepinnte-revisionen-für-whisper-basewhisper-small):
@@ -43,7 +43,7 @@ end-to-end until this phase is done.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T002 [P] Extract the sort/pick algorithm inside `catalog::recommend_tiers`
+- [x] T002 [P] Extract the sort/pick algorithm inside `catalog::recommend_tiers`
       (`src-tauri/src/catalog/mod.rs:150`) into a new generic helper in
       `src-tauri/src/hardware/tiers.rs` (e.g. a generic `pick_three` returning three
       `(Tier, T, Fit)` tuples), moving the
@@ -52,13 +52,13 @@ end-to-end until this phase is done.
       `catalog/catalog_tests.rs` already covers for the LLM catalog. Update
       `catalog::recommend_tiers` to call the new helper — this must be a behavior-preserving
       refactor; the existing `catalog_tests.rs` suite passes unmodified.
-- [ ] T003 [P] Create `src-tauri/src/stt/catalog.rs` mirroring `catalog/mod.rs`: `SttCatalogEntry`
+- [x] T003 [P] Create `src-tauri/src/stt/catalog.rs` mirroring `catalog/mod.rs`: `SttCatalogEntry`
       struct (per [data-model.md](data-model.md#neue-entität-sttcatalogentry-statischer-katalog-kein-db-table)),
       `entries()`/`get(id)` reading `stt_catalog.json` (T001) via `OnceLock`, `CatalogEntryWithFit`,
       and `recommend_tiers(&HardwareInfo)` built on `hardware::tiers::pick_three` (T002). Add
       `src-tauri/src/stt/catalog_tests.rs`. Register the module in `src-tauri/src/stt/mod.rs`.
       (depends on T001, T002)
-- [ ] T004 In `src-tauri/src/stt/local.rs`: remove the `WHISPER_REPO`/`WHISPER_REVISION`/
+- [x] T004 In `src-tauri/src/stt/local.rs`: remove the `WHISPER_REPO`/`WHISPER_REVISION`/
       `WHISPER_DIR` constants and the `model_dir()` function. Change `LocalWhisperAdapter::load`,
       `load_from_dir`, and `ensure_model_files` to take a `&stt::catalog::SttCatalogEntry` instead
       of reading the removed constants, resolving the canonical model directory via
@@ -74,7 +74,7 @@ end-to-end until this phase is done.
       check the only remaining reference to the old path. Update
       `src-tauri/src/stt/local_tests.rs`'s fixtures to pass an entry instead of relying on removed
       constants, and cover zero-byte/partial files plus the legacy migration. (depends on T003)
-- [ ] T005 [P] Add `list_installed_stt_models` (checks, for every `stt::catalog::entries()` item,
+- [x] T005 [P] Add `list_installed_stt_models` (checks, for every `stt::catalog::entries()` item,
       whether `config.json`/`tokenizer.json`/`model.safetensors` all satisfy the shared
       `is_complete_model` predicate under its slug dir via `models::paths`) and the Tauri commands `list_stt_catalog`, `stt_recommend_tiers`,
       `list_installed_stt_models`, `download_stt_model` in new `src-tauri/src/stt/commands.rs`,
@@ -83,11 +83,11 @@ end-to-end until this phase is done.
       the same legacy-preserving directory resolution as `load` and the status listing, and calls
       `ensure_model_files` (T004) so incomplete files are repaired rather than treated as installed.
       (depends on T003, T004)
-- [ ] T006 [P] Add `src-tauri/src/stt/commands_tests.rs` covering `list_installed_stt_models`
+- [x] T006 [P] Add `src-tauri/src/stt/commands_tests.rs` covering `list_installed_stt_models`
       (no files / zero-byte files / partial files / all files present, per catalog entry) and `download_stt_model`'s
       `CatalogEntryNotFound` path for an unknown id — mirroring how `models/commands_tests.rs`
       covers the analogous chat-model commands. (depends on T005)
-- [ ] T007 [P] In `src-tauri/src/voice.rs`: add an `invalidate_stt_model_cache` Tauri command and a
+- [x] T007 [P] In `src-tauri/src/voice.rs`: add an `invalidate_stt_model_cache` Tauri command and a
       `VoiceState` method that resets the cached `whisper: AsyncMutex<Option<Arc<LocalWhisperAdapter>>>`
       to `None` in the `voice` + `llm-cpu` build. Keep the command registered in all feature sets:
       the `voice`-without-`llm-cpu` implementation and the `voice`-disabled stub return successful
@@ -96,20 +96,24 @@ end-to-end until this phase is done.
       `"whisper-tiny"` entry when the preference is missing, empty, or names an unknown id — this
       preserves today's behavior exactly for anyone who never touches the new setting (FR-007).
       (depends on T003, T004)
-- [ ] T008 [P] Extend `src-tauri/src/voice_tests.rs` with cases for T007's new behavior: preference
+- [x] T008 [P] Extend `src-tauri/src/voice_tests.rs` with cases for T007's new behavior: preference
       missing/empty/unknown-id all resolve to `whisper-tiny`, a valid preference resolves to that
       entry, and `invalidate_stt_model_cache` actually clears a previously-populated cache slot
       (assert the next `resolve_local_adapter` call reloads rather than reusing the old `Arc`). Add
       a no-default-feature compile/test assertion that the command is still registered and is a
       successful no-op. (depends on T007)
-- [ ] T009 Register the four commands from T005 and `invalidate_stt_model_cache` from T007 in
+- [x] T009 Register the four commands from T005 and `invalidate_stt_model_cache` from T007 in
       `src-tauri/src/lib.rs`'s `generate_handler!`. (depends on T005, T007)
-- [ ] T010 Regenerate ts-rs bindings (`pnpm generate:ts-types`) so `SttCatalogEntry`,
-      `CatalogEntryWithFit`-equivalent, and the tier-recommendation wire type get TypeScript
-      interfaces under `src/types/bindings/`. Before committing, revert the unrelated
-      trailing-whitespace diff `cargo test` leaves in `src/types/bindings/InstanceInfo.ts` — a
-      known pre-existing quirk of this repo's ts-rs setup, not something to fix here. (depends on T005)
-- [ ] T011 [P] Refactor `src/composables/useCatalog.ts` and the `listInstalledAsync`/
+- [x] T010 ~~Regenerate ts-rs bindings~~ — verified this doesn't apply: neither
+      `catalog::CatalogEntry`/`TierRecommendation` (the LLM catalog this feature mirrors) nor the
+      new `SttCatalogEntry`/`SttTierRecommendation` derive `ts_rs::TS` (`ts-rs` is only used for
+      `HolziError` and `instances::`); the frontend hand-writes matching TS interfaces in
+      `useCatalog.ts`/`useSttCatalog.ts` instead (T011), consistent with the existing pattern. Ran
+      `cargo test --features llm-cpu export_bindings` to confirm: only the known unrelated
+      trailing-whitespace diff in `src/types/bindings/InstanceInfo.ts` appeared, no new binding
+      files — reverted that diff (`git checkout -- src/types/bindings/InstanceInfo.ts`).
+      (depends on T005)
+- [x] T011 [P] Refactor `src/composables/useCatalog.ts` and the `listInstalledAsync`/
       `downloadFromCatalogAsync` pair in `src/composables/useModels.ts` into small generic factory
       functions parameterized by Tauri command name (and TS entry type via generics), so a second
       catalog/model-list pair can be created without duplicating the implementation. Add
@@ -133,15 +137,15 @@ today's default-download behavior.
 step appears after the model step, that choosing a tier downloads it and makes it active, and that
 skipping still leaves dictation fully working via the built-in default.
 
-- [ ] T012 [P] [US1] Add `onboarding.sttModel.*` keys to `src/i18n/locales/en.json` and `de.json`,
+- [x] T012 [P] [US1] Add `onboarding.sttModel.*` keys to `src/i18n/locales/en.json` and `de.json`,
       mirroring the existing `onboarding.model.*` keys one for one (title, description, tier
       labels reused from `onboarding.model.tier.*`/`onboarding.model.fit.*` since they're generic
       enough, downloading/downloadFailed/empty strings).
-- [ ] T013 [US1] Create `src/components/onboarding/SttModelChoiceStep.vue`, mirroring
+- [x] T013 [US1] Create `src/components/onboarding/SttModelChoiceStep.vue`, mirroring
       `src/components/onboarding/ModelChoiceStep.vue` structurally (tier chips from
       `useSttCatalog().recommendTiersAsync()`, `choose`/`skip`/`back` emits, downloading/error
       state), using the T012 i18n keys and the T011 composables. (depends on T011, T012)
-- [ ] T014 [US1] Wire the new step into `src/pages/onboarding/[instance].vue`: extend `step` to
+- [x] T014 [US1] Wire the new step into `src/pages/onboarding/[instance].vue`: extend `step` to
       `'alias' | 'model' | 'sttModel'`; after the existing model step's `completeWithModel`/
       `completeWithoutModel` paths, transition to `'sttModel'` instead of navigating to the
       workspace directly; on STT choose, call `useSttModels().downloadFromCatalogAsync(id)` then
@@ -166,10 +170,10 @@ part of first-run onboarding, with no regression for a skipped/pre-feature devic
 **Independent Test**: From Settings, switch the active model to a different tier (downloading it
 if needed) and confirm the next dictation uses it without restarting the app.
 
-- [ ] T016 [P] [US2] Add `settings.sttModel.*` keys to `src/i18n/locales/en.json` and `de.json`,
+- [x] T016 [P] [US2] Add `settings.sttModel.*` keys to `src/i18n/locales/en.json` and `de.json`,
       mirroring `settings.default.*` (device-scoped only — no vault-wide variant, per
       [data-model.md](data-model.md#neue-preference-voicestt_model_id)).
-- [ ] T017 [US2] Create `src/components/settings/SttModelSetting.vue`, mirroring
+- [x] T017 [US2] Create `src/components/settings/SttModelSetting.vue`, mirroring
       `src/components/settings/DefaultModelSetting.vue`'s structure (current-value display, list of
       options, save button, busy/error/saved-flash states) but simplified to the single
       device-only scope: show the active model via `getPrefAsync` for `voice.stt_model_id` (displaying
@@ -178,7 +182,7 @@ if needed) and confirm the next dictation uses it without restarting the app.
       `useSttModels().listInstalledAsync()`; switching calls `downloadFromCatalogAsync` (no-op if
       already installed) → `setPrefAsync(..., 'voice.stt_model_id', id)` →
       `invoke('invalidate_stt_model_cache')`. (depends on T007, T011, T016)
-- [ ] T018 [US2] Wire `SettingsSttModelSetting` into `src/pages/settings/[instance].vue`, next to
+- [x] T018 [US2] Wire `SettingsSttModelSetting` into `src/pages/settings/[instance].vue`, next to
       the existing `SettingsDefaultModelSetting`. (depends on T017)
 - [ ] T019 [US2] Manual verification: run [quickstart.md §2](quickstart.md#2-nachträglich-wechseln-user-story-2)
       end to end — switch to a not-yet-downloaded tier, then to an already-installed one (**time
@@ -196,7 +200,7 @@ if needed) and confirm the next dictation uses it without restarting the app.
       dictation, switching the active model mid-transcription. Confirm the T013 download-error/skip
       affordance (mirrored from `ModelChoiceStep.vue`) already covers the onboarding failure case;
       add handling only if it doesn't.
-- [ ] T021 [P] Run `cargo test --features llm-cpu` (covers T002/T003/T004/T006/T008's new/updated
+- [x] T021 [P] Run `cargo test --features llm-cpu` (covers T002/T003/T004/T006/T008's new/updated
       test files), `pnpm typecheck`, and `pnpm lint:rust`; fix any fallout.
 
 ---

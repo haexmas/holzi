@@ -8,8 +8,16 @@
 use std::io::Read;
 use std::path::Path;
 
+use super::catalog::SttCatalogEntry;
 use super::local::{ensure_model_files, LocalWhisperAdapter};
 use super::{CanonicalPcm, SttAdapter};
+
+fn whisper_tiny_entry() -> SttCatalogEntry {
+    super::catalog::get("whisper-tiny")
+        .expect("catalog should parse")
+        .expect("whisper-tiny catalog entry")
+        .clone()
+}
 
 /// Minimal RIFF/WAVE chunk walker for the checked-in fixture only — reads
 /// 16-bit PCM straight into normalized `f32`. Not a general decoder: the
@@ -58,7 +66,7 @@ async fn transcribes_known_fixture() {
 
     let model_dir = std::env::temp_dir().join("holzi-whisper-tiny-test-cache");
     std::fs::create_dir_all(&model_dir).unwrap();
-    ensure_model_files(&model_dir)
+    ensure_model_files(&model_dir, &whisper_tiny_entry())
         .await
         .expect("failed to fetch whisper-tiny fixture cache");
 
@@ -100,7 +108,7 @@ async fn transcribes_german_fixture() {
 
     let model_dir = std::env::temp_dir().join("holzi-whisper-tiny-test-cache");
     std::fs::create_dir_all(&model_dir).unwrap();
-    ensure_model_files(&model_dir)
+    ensure_model_files(&model_dir, &whisper_tiny_entry())
         .await
         .expect("failed to fetch whisper-tiny fixture cache");
 
@@ -117,4 +125,142 @@ async fn transcribes_german_fixture() {
         text.contains("öffentlichem"),
         "unexpected transcript: {text}"
     );
+}
+
+/// Spec 010: `is_complete_file`/`is_complete_model` guard against a
+/// previous run's interrupted/truncated download (or a hand-deleted file)
+/// being mistaken for an installed one. No network involved — pure
+/// filesystem checks.
+mod completeness {
+    use std::path::Path;
+
+    use tempfile::tempdir;
+
+    use super::super::local::{is_complete_file, is_complete_model};
+
+    const CONFIG_FILENAME: &str = "config.json";
+    const TOKENIZER_FILENAME: &str = "tokenizer.json";
+    const WEIGHTS_FILENAME: &str = "model.safetensors";
+
+    fn write(dir: &Path, filename: &str, contents: &[u8]) {
+        std::fs::write(dir.join(filename), contents).unwrap();
+    }
+
+    #[test]
+    fn missing_file_is_incomplete() {
+        let dir = tempdir().unwrap();
+        assert!(!is_complete_file(&dir.path().join("config.json")));
+    }
+
+    #[test]
+    fn zero_byte_file_is_incomplete() {
+        let dir = tempdir().unwrap();
+        write(dir.path(), "config.json", b"");
+        assert!(!is_complete_file(&dir.path().join("config.json")));
+    }
+
+    #[test]
+    fn nonempty_file_is_complete() {
+        let dir = tempdir().unwrap();
+        write(dir.path(), "config.json", b"{}");
+        assert!(is_complete_file(&dir.path().join("config.json")));
+    }
+
+    #[test]
+    fn model_with_one_missing_file_is_incomplete() {
+        let dir = tempdir().unwrap();
+        write(dir.path(), CONFIG_FILENAME, b"{}");
+        write(dir.path(), TOKENIZER_FILENAME, b"{}");
+        // WEIGHTS_FILENAME intentionally absent.
+        assert!(!is_complete_model(dir.path()));
+    }
+
+    #[test]
+    fn model_with_one_zero_byte_file_is_incomplete() {
+        let dir = tempdir().unwrap();
+        write(dir.path(), CONFIG_FILENAME, b"{}");
+        write(dir.path(), TOKENIZER_FILENAME, b"{}");
+        write(dir.path(), WEIGHTS_FILENAME, b""); // truncated download
+        assert!(!is_complete_model(dir.path()));
+    }
+
+    #[test]
+    fn model_with_all_three_nonempty_files_is_complete() {
+        let dir = tempdir().unwrap();
+        write(dir.path(), CONFIG_FILENAME, b"{}");
+        write(dir.path(), TOKENIZER_FILENAME, b"{}");
+        write(dir.path(), WEIGHTS_FILENAME, b"weights");
+        assert!(is_complete_model(dir.path()));
+    }
+}
+
+/// Spec 010: a complete legacy `whisper-tiny` install is migrated into the
+/// canonical directory; an incomplete one is left alone. No network
+/// involved — pure filesystem checks via the `&Path`-based
+/// `migrate_legacy_if_present` (the `AppHandle`-resolving wrapper,
+/// `resolve_or_migrate_model_dir`, isn't unit-tested here for the same
+/// reason no other `AppHandle`-taking function in this codebase is: there
+/// is no Tauri app mocking convention in this repo).
+mod legacy_migration {
+    use tempfile::tempdir;
+
+    use super::super::local::{is_complete_model, migrate_legacy_if_present};
+
+    const CONFIG_FILENAME: &str = "config.json";
+    const TOKENIZER_FILENAME: &str = "tokenizer.json";
+    const WEIGHTS_FILENAME: &str = "model.safetensors";
+
+    #[test]
+    fn complete_legacy_install_is_copied_into_canonical_dir() {
+        let legacy = tempdir().unwrap();
+        let canonical = tempdir().unwrap();
+        std::fs::write(legacy.path().join(CONFIG_FILENAME), b"{}").unwrap();
+        std::fs::write(legacy.path().join(TOKENIZER_FILENAME), b"{}").unwrap();
+        std::fs::write(legacy.path().join(WEIGHTS_FILENAME), b"weights").unwrap();
+
+        migrate_legacy_if_present(legacy.path(), canonical.path()).unwrap();
+
+        assert!(is_complete_model(canonical.path()));
+        assert_eq!(
+            std::fs::read(canonical.path().join(WEIGHTS_FILENAME)).unwrap(),
+            b"weights"
+        );
+    }
+
+    #[test]
+    fn incomplete_legacy_install_is_not_copied() {
+        let legacy = tempdir().unwrap();
+        let canonical = tempdir().unwrap();
+        std::fs::write(legacy.path().join(CONFIG_FILENAME), b"{}").unwrap();
+        // Legacy install missing tokenizer/weights — not complete.
+
+        migrate_legacy_if_present(legacy.path(), canonical.path()).unwrap();
+
+        assert!(!canonical.path().join(CONFIG_FILENAME).exists());
+        assert!(!is_complete_model(canonical.path()));
+    }
+
+    #[test]
+    fn does_not_itself_guard_against_overwriting_an_already_complete_canonical_dir() {
+        // `migrate_legacy_if_present` only checks *legacy*'s completeness —
+        // it is `resolve_or_migrate_model_dir` that guards the call with
+        // `!is_complete_model(&dir)` so this is never reached once the
+        // canonical dir is already complete. Documented here so that
+        // invariant stays visible next to the function it protects.
+        let legacy = tempdir().unwrap();
+        let canonical = tempdir().unwrap();
+        std::fs::write(legacy.path().join(CONFIG_FILENAME), b"legacy").unwrap();
+        std::fs::write(legacy.path().join(TOKENIZER_FILENAME), b"legacy").unwrap();
+        std::fs::write(legacy.path().join(WEIGHTS_FILENAME), b"legacy").unwrap();
+        std::fs::write(canonical.path().join(CONFIG_FILENAME), b"canonical").unwrap();
+        std::fs::write(canonical.path().join(TOKENIZER_FILENAME), b"canonical").unwrap();
+        std::fs::write(canonical.path().join(WEIGHTS_FILENAME), b"canonical").unwrap();
+
+        migrate_legacy_if_present(legacy.path(), canonical.path()).unwrap();
+
+        assert_eq!(
+            std::fs::read(canonical.path().join(CONFIG_FILENAME)).unwrap(),
+            b"legacy"
+        );
+    }
 }

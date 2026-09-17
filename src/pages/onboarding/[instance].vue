@@ -1,19 +1,23 @@
 <script setup lang="ts">
 import type { DeviceInfo } from '~/composables/useDevice'
 import type { TierRecommendation } from '~/composables/useCatalog'
+import type { SttCatalogEntry } from '~/composables/useSttCatalog'
 
-// Onboarding wizard for spec 002 US1. The middleware only sends us
-// here while `alias` is still `null` on this device. We keep the
-// entered alias local until the second step commits (either a model
-// download finishes OR the operator chose "later via provider"); only
-// then do we persist the alias and route to /workspace/[instance]. An
-// exit between steps therefore leaves the vault in "still onboarding"
-// state and the wizard re-opens next launch.
+// Onboarding wizard for spec 002 US1, extended by spec 010 with a third
+// step (speech-to-text model choice). The middleware only sends us here
+// while `alias` is still `null` on this device. We keep the entered alias
+// local until the final step commits (a chosen/skipped chat model,
+// followed by a chosen/skipped STT model); only then do we persist the
+// alias and route to /workspace/[instance]. An exit between steps
+// therefore leaves the vault in "still onboarding" state and the wizard
+// re-opens next launch.
 const route = useRoute()
 const { t } = useI18n()
 const { currentDeviceInfoAsync, updateDeviceAliasAsync } = useDevice()
 const { recommendTiersAsync } = useCatalog()
 const { downloadFromCatalogAsync } = useModels()
+const { recommendTiersAsync: recommendSttTiersAsync } = useSttCatalog()
+const { downloadFromCatalogAsync: downloadSttFromCatalogAsync } = useSttModels()
 const { setPrefAsync } = usePreferences()
 
 const instanceName = computed(() => {
@@ -25,12 +29,15 @@ const instanceName = computed(() => {
       : ''
 })
 
-const step = ref<'alias' | 'model'>('alias')
+const step = ref<'alias' | 'model' | 'sttModel'>('alias')
 const deviceInfo = ref<DeviceInfo | null>(null)
 const alias = ref('')
 const tiers = ref<TierRecommendation[]>([])
 const downloadingId = ref<string | null>(null)
 const downloadError = ref<string | null>(null)
+const sttTiers = ref<TierRecommendation<SttCatalogEntry>[]>([])
+const sttDownloadingId = ref<string | null>(null)
+const sttDownloadError = ref<string | null>(null)
 const loadError = ref<string | null>(null)
 
 onMounted(async () => {
@@ -51,6 +58,12 @@ onMounted(async () => {
     tiers.value = []
     downloadError.value = e instanceof Error ? e.message : String(e)
   }
+  try {
+    sttTiers.value = await recommendSttTiersAsync()
+  } catch (e) {
+    sttTiers.value = []
+    sttDownloadError.value = e instanceof Error ? e.message : String(e)
+  }
 })
 
 async function finalizeAliasAsync() {
@@ -61,7 +74,7 @@ async function finalizeAliasAsync() {
   await updateDeviceAliasAsync(trimmed)
 }
 
-async function completeWithoutModel() {
+async function finishOnboardingAsync() {
   try {
     await finalizeAliasAsync()
   } catch (e) {
@@ -87,12 +100,35 @@ async function completeWithModel(rec: TierRecommendation) {
       'chat.default_model_id',
       installed.id,
     )
-    await finalizeAliasAsync()
-    await navigateTo(`/workspace/${encodeURIComponent(instanceName.value)}`)
+    step.value = 'sttModel'
   } catch (e) {
     downloadError.value = e instanceof Error ? e.message : String(e)
   } finally {
     downloadingId.value = null
+  }
+}
+
+async function completeSttWithModel(rec: TierRecommendation<SttCatalogEntry>) {
+  const info = deviceInfo.value
+  if (!info) {
+    return
+  }
+  sttDownloadingId.value = rec.entry.id
+  sttDownloadError.value = null
+  try {
+    const installed = await downloadSttFromCatalogAsync(rec.entry.id)
+    // Device-scoped only — no vault-wide variant (data-model.md), the
+    // transcription hardware is tied to this device.
+    await setPrefAsync(
+      { kind: 'device', uuid: info.vaultDeviceUuid },
+      'voice.stt_model_id',
+      installed.id,
+    )
+    await finishOnboardingAsync()
+  } catch (e) {
+    sttDownloadError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    sttDownloadingId.value = null
   }
 }
 </script>
@@ -127,13 +163,22 @@ async function completeWithModel(rec: TierRecommendation) {
           @next="step = 'model'"
         />
         <OnboardingModelChoiceStep
-          v-else
+          v-else-if="step === 'model'"
           :tiers="tiers"
           :downloading-id="downloadingId"
           :download-error="downloadError"
           @choose="completeWithModel"
-          @skip="completeWithoutModel"
+          @skip="step = 'sttModel'"
           @back="step = 'alias'"
+        />
+        <OnboardingSttModelChoiceStep
+          v-else
+          :tiers="sttTiers"
+          :downloading-id="sttDownloadingId"
+          :download-error="sttDownloadError"
+          @choose="completeSttWithModel"
+          @skip="finishOnboardingAsync"
+          @back="step = 'model'"
         />
       </template>
     </div>
