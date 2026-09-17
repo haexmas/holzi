@@ -24,24 +24,8 @@ import { computed, onMounted, onBeforeUnmount, ref, nextTick } from 'vue'
 import type { UnlistenFn } from '@tauri-apps/api/event'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
-import {
-  useChat,
-  type Message,
-  type SendMessageArgs,
-} from '~/composables/useChat'
-import { useChatTranscript } from '~/composables/useChatTranscript'
-import { useThreadSidebar } from '~/composables/useThreadSidebar'
-import { useErrorString } from '~/composables/useErrorString'
-import { useInstance } from '~/composables/useInstance'
-import { usePreferences } from '~/composables/usePreferences'
-import { useDevice } from '~/composables/useDevice'
-import PermissionPrompt, {
-  type PendingApproval,
-} from '~/components/chat/PermissionPrompt.vue'
-import ComposerSettingsPopover from '~/components/chat/ComposerSettingsPopover.vue'
-import ReasoningAccordion from '~/components/chat/ReasoningAccordion.vue'
-import ModelSelection from '~/components/chat/ModelSelection.vue'
-import { useAutoResizeTextarea } from '~/composables/useAutoResizeTextarea'
+import type { Message, SendMessageArgs } from '~/composables/useChat'
+import type { PendingApproval } from '~/components/chat/PermissionPrompt.vue'
 
 definePageMeta({
   middleware: ['onboarded'],
@@ -855,7 +839,7 @@ onBeforeUnmount(() => {
         {{ loadingLabel }}
       </div>
 
-      <ModelSelection
+      <ChatModelSelection
         v-if="
           noModelsInstalled ||
           (!activeModel && !modelLoadPending && !loadingPhase)
@@ -1006,7 +990,7 @@ onBeforeUnmount(() => {
                   m.content || (streamingMessageId === m.id ? '…' : '')
                 }}</template>
               </div>
-              <ReasoningAccordion
+              <ChatReasoningAccordion
                 v-if="m.role === 'assistant' && reasoningFor(m.id)"
                 :reasoning="reasoningFor(m.id)"
                 :label="t('chat.reasoning.title')"
@@ -1041,7 +1025,7 @@ onBeforeUnmount(() => {
                 <div
                   class="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto text-xs"
                 >
-                  <ComposerSettingsPopover
+                  <ChatComposerSettingsPopover
                     :model-id="activeModelId"
                     :model-name="activeModel?.name"
                     :model-groups="modelGroups"
@@ -1053,7 +1037,7 @@ onBeforeUnmount(() => {
                     @update:effort-level="updateEffortLevel"
                   />
 
-                  <PermissionPrompt
+                  <ChatPermissionPrompt
                     :mode="permissionMode"
                     :pending-approvals="pendingApprovals"
                     :disabled="!deviceUuid || permissionModeSaving"

@@ -16,22 +16,16 @@
  * actions and the integrity dialog here.
  */
 import type { UnlistenFn } from '@tauri-apps/api/event'
-import {
-  hfErrorDetail,
-  hfErrorKey,
-  useHuggingFace,
-  type HuggingFaceModelResult,
-  type HuggingFaceUpdateStatus,
+import type {
+  HuggingFaceModelResult,
+  HuggingFaceUpdateStatus,
 } from '~/composables/useHuggingFace'
-import {
-  useModels,
-  parseModelIntegrityFailure,
-  type DownloadProgressEvent,
-  type InstalledModel,
-  type ModelIntegrityFailure,
+import type {
+  DownloadProgressEvent,
+  InstalledModel,
+  ModelIntegrityFailure,
 } from '~/composables/useModels'
-import { useCatalog, type CatalogEntryWithFit } from '~/composables/useCatalog'
-import { useChat } from '~/composables/useChat'
+import type { CatalogEntryWithFit } from '~/composables/useCatalog'
 
 const { t } = useI18n()
 const {

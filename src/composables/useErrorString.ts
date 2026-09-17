@@ -1,5 +1,3 @@
-import { hfErrorKey } from '~/composables/useHuggingFace'
-
 const HF_ERROR_KINDS = new Set([
   'InvalidInput',
   'Network',
