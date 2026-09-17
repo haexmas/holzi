@@ -1,0 +1,67 @@
+# Contracts: Tauri Commands & Events (Autonomous Delegate Mode)
+
+All commands are async, run in Tauri's `invoke_handler`, return `Result<T, HolziError>`. No new
+dedicated commands are introduced by this feature (research.md §5) — it changes one existing
+command's args and reuses the existing generic preference commands unchanged.
+
+## Changed command: `send_message`
+
+`SendMessageArgs` (`src-tauri/src/chat/commands.rs:50-66`) gains one new optional field:
+
+```typescript
+{
+  threadId: string | null,
+  content: string,
+  systemPrompt: string | null,
+  maxNewTokens: number | null,
+  idempotencyKey: string,
+  autonomyMode: 'standard' | 'ungated' | 'gated_permissive' | null   // NEW
+}
+```
+
+**Contract**:
+
+- `autonomyMode: null` (or the field omitted, since it is `Option<AutonomyMode>` server-side)
+  behaves identically to today's shipped `send_message` — `AutonomyMode::default()` is `Standard`
+  (spec FR-002).
+- A non-null value is threaded into the `ChatRequest` built for this single send (data-model.md) and
+  applies only to this one request — `SendMessageArgs` carries no "remember this" flag, matching
+  spec FR-008's never-persisted requirement structurally, not just by frontend convention.
+- If `autonomyMode` is non-`standard` and the resolved backend for this request is **not** a
+  `cli_delegate` provider, the value is ignored (not an error) — `local`/`api_key` adapters do not
+  read this field at all (data-model.md). The frontend is expected not to surface the control in that
+  case (plan.md's `DelegateAutonomyControl.vue` visibility rule), but the backend does not depend on
+  the frontend enforcing that; an out-of-band or stale value is simply inert for those adapters.
+- If `autonomyMode` requests `ungated` or `gated_permissive` for a delegate backend whose installed
+  CLI version does not support the required native mechanism (spec edge case, FR-013), `send_message`
+  returns an error result identifying autonomy mode as unavailable for that backend, the same
+  `HolziError` shape 007-cli-delegate already uses for "backend unavailable" (no new error variant
+  needed if 007's existing variant is generic enough — confirmed at tasks time, not assumed here).
+
+**No change** to `SendMessageResult` — the response shape is identical; which autonomy mode a turn
+used is discoverable from the persisted message record (data-model.md's new `autonomy_mode` column),
+not from the command's return value.
+
+## Unchanged commands, reused as-is
+
+- `get_pref` / `set_pref` / `clear_pref` (`preferences_commands.rs:59-136`) — used unchanged for
+  reading/writing the new `cli_delegate.deny_rules` device preference (data-model.md). No new
+  command needed; `DelegateDenyRulesSetting.vue` calls these exactly like `DefaultModelSetting.vue`
+  already does for its own preference.
+- `respond_tool_permission` (`RespondToolPermissionArgs`, `commands.rs:532`) — **not used** by either
+  new autonomy mode. `ungated` never creates a pending approval to respond to; `gated_permissive`'s
+  `evaluate_deny_rules` (data-model.md) resolves synchronously inside `approval_bridge.rs` without
+  ever emitting a `tool-permission-request` event or populating `pending_tool_approvals` for that
+  call — there is nothing for this command to respond to in either mode. Confirming this at tasks
+  time (a test that a `gated_permissive` run emits zero `tool-permission-request` events) is the
+  cheapest way to prove the "no human pause" requirement (spec FR-003/FR-004) rather than only
+  testing the end-to-end absence of a UI prompt.
+
+## Events
+
+No new event kind. The existing `tool-permission-request` event (`events.rs:28`, per 007's own
+contract) is simply never emitted for a `gated_permissive` or `ungated` turn — its absence, not a new
+payload shape, is the observable contract this feature adds (verified by the test above). Persisted
+tool-call rows for a `gated_permissive` turn use the existing chat-history read path unchanged
+(data-model.md's new `autonomy_mode` column is additive to an existing row shape, not a new query
+surface).
