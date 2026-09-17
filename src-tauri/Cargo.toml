@@ -51,6 +51,7 @@ voice = ["dep:cpal"]
 [dependencies]
 tauri = { version = "2.6.2", features = [] }
 tauri-plugin-log = "2"
+tauri-plugin-opener = "2.5.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "2"

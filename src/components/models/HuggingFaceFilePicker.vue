@@ -1,14 +1,11 @@
 <script setup lang="ts">
 import type { UnlistenFn } from '@tauri-apps/api/event'
-import {
-  hfErrorKey,
-  hfErrorDetail,
-  useHuggingFace,
-  type HuggingFaceFileCandidate,
-  type HuggingFaceModelResult,
-  type InstallPreview,
+import type {
+  HuggingFaceFileCandidate,
+  HuggingFaceModelResult,
+  InstallPreview,
 } from '~/composables/useHuggingFace'
-import { useModels, type InstalledModel } from '~/composables/useModels'
+import type { InstalledModel } from '~/composables/useModels'
 
 const { t } = useI18n()
 const { detailsAsync, previewInstallAsync } = useHuggingFace()

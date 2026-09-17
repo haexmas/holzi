@@ -96,6 +96,7 @@ pub fn run() {
     #[cfg(feature = "voice")]
     let builder = builder.manage(voice::VoiceState::new());
     builder
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(

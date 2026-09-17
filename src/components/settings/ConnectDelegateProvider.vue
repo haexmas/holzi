@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { UnlistenFn } from '@tauri-apps/api/event'
+import { openUrl } from '@tauri-apps/plugin-opener'
 import type { DelegateVendor, Provider } from '~/composables/useProviders'
 
 const { t } = useI18n()
@@ -121,14 +122,23 @@ async function onSubmitCode(vendor: DelegateVendor) {
 
 onMounted(async () => {
   await reloadAsync()
-  unlisten = await onDelegateConnectProgress((event) => {
+  unlisten = await onDelegateConnectProgress(async (event) => {
     if (
       event.status === 'awaiting_browser' ||
       event.status === 'awaiting_code'
     ) {
       progressUrl[event.vendor] = event.url ?? null
       progressCode[event.vendor] = event.code ?? null
+    } else if (event.status === 'success') {
+      // Claude can complete on its own once the browser round-trip
+      // finishes, without any submitCliDelegateCodeAsync call ever
+      // resolving — this event is the only signal for that case.
+      awaitingCode[event.vendor] = false
+      connecting[event.vendor] = false
+      await reloadAsync()
+      successFlash[event.vendor] = true
     } else if (event.status === 'error') {
+      awaitingCode[event.vendor] = false
       opError[event.vendor] = event.message ?? null
       connecting[event.vendor] = false
     }
@@ -174,15 +184,17 @@ onBeforeUnmount(() => {
         </div>
 
         <template v-if="awaitingCode[vendor]">
+          <p class="text-sm text-neutral-500">
+            {{ t('settings.cliDelegate.awaitingAuto') }}
+          </p>
           <p class="text-sm">
             {{ t('settings.cliDelegate.openUrlPrompt') }}
           </p>
           <a
             v-if="progressUrl[vendor]"
             :href="progressUrl[vendor]!"
-            target="_blank"
-            rel="noopener"
             class="text-sm underline text-blue-600 hover:text-blue-800 break-all"
+            @click.prevent="openUrl(progressUrl[vendor]!)"
           >
             {{ progressUrl[vendor] }}
           </a>
@@ -216,9 +228,8 @@ onBeforeUnmount(() => {
           <template v-if="progressUrl[vendor]">
             <a
               :href="progressUrl[vendor]!"
-              target="_blank"
-              rel="noopener"
               class="text-sm underline text-blue-600 hover:text-blue-800 break-all"
+              @click.prevent="openUrl(progressUrl[vendor]!)"
             >
               {{ progressUrl[vendor] }}
             </a>

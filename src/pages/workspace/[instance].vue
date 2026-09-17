@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { UnlistenFn } from '@tauri-apps/api/event'
-import {
-  useChat,
-  type ModelLoadErrorEvent,
-  type ModelLoadProgressEvent,
-  type ModelLoadStatusPayload,
+import type {
+  ModelLoadErrorEvent,
+  ModelLoadProgressEvent,
+  ModelLoadStatusPayload,
 } from '~/composables/useChat'
 
 // Minimal workspace-landing stub for spec 002. Deliberately barebones
