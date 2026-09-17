@@ -1,21 +1,21 @@
 {
-  "generation_id": "g_20260915T123047Z_e3b0",
+  "generation_id": "g_20260917T151925Z_e3b0",
   "molecules": [
     {
       "id": "com.github.haexmas.atoms.general-coding",
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "1273ecd75ad0a644218e00146e4ad935b7605c9f",
+      "revision": "cc9e9935998732f7a09486a68dd4c74859481c98",
       "source": "https://github.com/haexmas/atoms"
     },
     {
-      "hook_status": "ok",
+      "hook_status": "failed",
       "id": "com.github.haexmas.atoms.graphify-first-authoring",
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "1273ecd75ad0a644218e00146e4ad935b7605c9f",
+      "revision": "cc9e9935998732f7a09486a68dd4c74859481c98",
       "source": "https://github.com/haexmas/atoms"
     },
     {
@@ -23,7 +23,7 @@
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "1273ecd75ad0a644218e00146e4ad935b7605c9f",
+      "revision": "cc9e9935998732f7a09486a68dd4c74859481c98",
       "source": "https://github.com/haexmas/atoms"
     },
     {
@@ -31,7 +31,7 @@
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "1273ecd75ad0a644218e00146e4ad935b7605c9f",
+      "revision": "cc9e9935998732f7a09486a68dd4c74859481c98",
       "source": "https://github.com/haexmas/atoms"
     },
     {
@@ -39,61 +39,23 @@
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "1273ecd75ad0a644218e00146e4ad935b7605c9f",
+      "revision": "cc9e9935998732f7a09486a68dd4c74859481c98",
       "source": "https://github.com/haexmas/atoms"
     },
     {
       "id": "com.github.haexmas.atoms.speckit",
       "paths": [],
-      "revision": "1273ecd75ad0a644218e00146e4ad935b7605c9f",
+      "revision": "cc9e9935998732f7a09486a68dd4c74859481c98",
       "source": "https://github.com/haexmas/atoms",
       "speckit": {
-        "cli_version": "not-run",
-        "declaration_fingerprint": "sha256:37f08b05b82f7c83475eb62b8d6c071970518a84ced7dca77f085ae9fbca7a96",
+        "cli_version": "1.0.6",
+        "declaration_fingerprint": "sha256:71da49e0df1330c7d65e8ddc6cedc01636c4f0ea1e84e5b19ab974a56541625e",
         "outcomes": {
-          "agy": "skipped",
-          "alquimia": "skipped",
-          "amp": "skipped",
-          "auggie": "skipped",
-          "bob": "skipped",
-          "claude": "skipped",
-          "cline": "skipped",
-          "codebuddy": "skipped",
-          "codex": "skipped",
-          "command-code": "skipped",
-          "copilot": "skipped",
-          "cursor-agent": "skipped",
-          "devin": "skipped",
-          "docker-agent": "skipped",
-          "droid": "skipped",
-          "dsh": "skipped",
-          "firebender": "skipped",
-          "forge": "skipped",
-          "gemini": "skipped",
-          "generic": "skipped",
-          "goose": "skipped",
-          "grok": "skipped",
-          "hermes": "skipped",
-          "junie": "skipped",
-          "kilocode": "skipped",
-          "kimi": "skipped",
-          "kiro-cli": "skipped",
-          "lingma": "skipped",
-          "muse": "skipped",
-          "omp": "skipped",
-          "opencode": "skipped",
-          "pi": "skipped",
-          "qodercli": "skipped",
-          "qwen": "skipped",
-          "rovodev": "skipped",
-          "shai": "skipped",
-          "tabnine": "skipped",
-          "trae": "skipped",
-          "vibe": "skipped",
-          "zcode": "skipped",
-          "zed": "skipped"
+          "claude": "installed"
         },
-        "selected": []
+        "selected": [
+          "claude"
+        ]
       }
     }
   ],
