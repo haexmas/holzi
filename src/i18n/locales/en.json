@@ -51,6 +51,14 @@
       "downloading": "Downloading model…",
       "downloadFailed": "Download failed",
       "empty": "No catalog models available."
+    },
+    "sttModel": {
+      "title": "Pick a speech-to-text model",
+      "description": "Pick a model for offline dictation that fits this device — or decide later.",
+      "downloading": "Downloading speech-to-text model…",
+      "downloadFailed": "Download failed",
+      "empty": "No speech-to-text models available.",
+      "skip": "Decide later"
     }
   },
   "workspace": {
@@ -224,6 +232,16 @@
       "clear": "Clear this default",
       "cleared": "Default cleared.",
       "empty": "No installed models or configured providers yet."
+    },
+    "sttModel": {
+      "title": "Speech-to-text model",
+      "description": "Pick which local model is used for dictation on this device.",
+      "current": "Active model",
+      "modelLabel": "Model",
+      "save": "Switch",
+      "saved": "Switched.",
+      "downloading": "Downloading…",
+      "downloadFailed": "Download failed"
     },
     "cliDelegate": {
       "title": "Connect a subscription",

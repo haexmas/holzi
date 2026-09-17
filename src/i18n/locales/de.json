@@ -51,6 +51,14 @@
       "downloading": "Lade Modell herunter…",
       "downloadFailed": "Download fehlgeschlagen",
       "empty": "Keine Katalog-Modelle verfügbar."
+    },
+    "sttModel": {
+      "title": "Sprach-zu-Text-Modell auswählen",
+      "description": "Wähle ein Modell für die Offline-Diktierfunktion, das zu diesem Gerät passt — oder entscheide später.",
+      "downloading": "Lade Sprach-zu-Text-Modell herunter…",
+      "downloadFailed": "Download fehlgeschlagen",
+      "empty": "Keine Sprach-zu-Text-Modelle verfügbar.",
+      "skip": "Später entscheiden"
     }
   },
   "workspace": {
@@ -224,6 +232,16 @@
       "clear": "Diesen Standard löschen",
       "cleared": "Standard gelöscht.",
       "empty": "Es sind noch keine Modelle installiert oder Anbieter konfiguriert."
+    },
+    "sttModel": {
+      "title": "Sprach-zu-Text-Modell",
+      "description": "Wähle, welches lokale Modell für die Diktierfunktion auf diesem Gerät verwendet wird.",
+      "current": "Aktives Modell",
+      "modelLabel": "Modell",
+      "save": "Wechseln",
+      "saved": "Gewechselt.",
+      "downloading": "Lade herunter…",
+      "downloadFailed": "Download fehlgeschlagen"
     },
     "cliDelegate": {
       "title": "Abo verbinden",
