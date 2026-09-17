@@ -167,59 +167,69 @@ fn transcribe_samples(inner: &mut Inner, samples: &[f32]) -> Result<String, SttE
     let no_timestamps_token = token_id(&inner.tokenizer, m::NO_TIMESTAMPS_TOKEN)?;
     let eot_token = token_id(&inner.tokenizer, m::EOT_TOKEN)?;
 
-    // One encoder pass feeds both language detection and the decode loop
-    // below (candle's own whisper example runs the encoder twice — once
-    // per use — since it calls them as two independently invoked steps;
-    // reusing the tensor here is equivalent and avoids the redundant pass).
-    let audio_features = inner
-        .model
-        .encoder
-        .forward(&mel, true)
-        .map_err(tensor_err)?;
-    let language_token = detect_language(inner, &audio_features, sot_token)?;
+    let (_, _, frame_count) = mel.dims3().map_err(tensor_err)?;
+    let mut decoded_chunks = Vec::new();
+    for start in (0..frame_count).step_by(m::N_FRAMES) {
+        let chunk_len = (frame_count - start).min(m::N_FRAMES);
+        let mel_chunk = mel.narrow(2, start, chunk_len).map_err(tensor_err)?;
 
-    let mut tokens = vec![
-        sot_token,
-        language_token,
-        transcribe_token,
-        no_timestamps_token,
-    ];
-    let sample_len = inner.model.config.max_target_positions / 2;
+        // Flush the encoder and decoder caches for every independent audio
+        // segment. Whisper's positional embedding only supports N_FRAMES,
+        // while Capture permits recordings up to 60 seconds.
+        let audio_features = inner
+            .model
+            .encoder
+            .forward(&mel_chunk, true)
+            .map_err(tensor_err)?;
+        let language_token = detect_language(inner, &audio_features, sot_token)?;
 
-    for i in 0..sample_len {
-        let tokens_t = Tensor::new(tokens.as_slice(), &inner.device)
-            .and_then(|t| t.unsqueeze(0))
-            .map_err(tensor_err)?;
-        let ys = inner
-            .model
-            .decoder
-            .forward(&tokens_t, &audio_features, i == 0)
-            .map_err(tensor_err)?;
-        let (_, seq_len, _) = ys.dims3().map_err(tensor_err)?;
-        let logits = inner
-            .model
-            .decoder
-            .final_linear(&ys.i((..1, seq_len - 1..)).map_err(tensor_err)?)
-            .map_err(tensor_err)?
-            .i(0)
-            .map_err(tensor_err)?
-            .i(0)
-            .map_err(tensor_err)?;
-        let logits_v: Vec<f32> = logits.to_vec1().map_err(tensor_err)?;
-        let next_token = argmax(&logits_v);
-        tokens.push(next_token);
-        if next_token == eot_token || tokens.len() > inner.model.config.max_target_positions {
-            break;
+        let mut tokens = vec![
+            sot_token,
+            language_token,
+            transcribe_token,
+            no_timestamps_token,
+        ];
+        let sample_len = inner.model.config.max_target_positions / 2;
+
+        for i in 0..sample_len {
+            let tokens_t = Tensor::new(tokens.as_slice(), &inner.device)
+                .and_then(|t| t.unsqueeze(0))
+                .map_err(tensor_err)?;
+            let ys = inner
+                .model
+                .decoder
+                .forward(&tokens_t, &audio_features, i == 0)
+                .map_err(tensor_err)?;
+            let (_, seq_len, _) = ys.dims3().map_err(tensor_err)?;
+            let logits = inner
+                .model
+                .decoder
+                .final_linear(&ys.i((..1, seq_len - 1..)).map_err(tensor_err)?)
+                .map_err(tensor_err)?
+                .i(0)
+                .map_err(tensor_err)?
+                .i(0)
+                .map_err(tensor_err)?;
+            let logits_v: Vec<f32> = logits.to_vec1().map_err(tensor_err)?;
+            let next_token = argmax(&logits_v);
+            tokens.push(next_token);
+            if next_token == eot_token || tokens.len() > inner.model.config.max_target_positions {
+                break;
+            }
+        }
+
+        let text = inner
+            .tokenizer
+            .decode(&tokens, true)
+            .map_err(|e| SttError::Failed {
+                reason: format!("tokenizer decode: {e}"),
+            })?;
+        if !text.trim().is_empty() {
+            decoded_chunks.push(text.trim().to_string());
         }
     }
 
-    let text = inner
-        .tokenizer
-        .decode(&tokens, true)
-        .map_err(|e| SttError::Failed {
-            reason: format!("tokenizer decode: {e}"),
-        })?;
-    Ok(text.trim().to_string())
+    Ok(decoded_chunks.join(" "))
 }
 
 /// Mirrors candle's whisper example `multilingual::detect_language`: a

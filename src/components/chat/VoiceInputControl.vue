@@ -114,7 +114,12 @@ function describeError(e: unknown): string {
 }
 
 async function startRecording() {
-  if (disposed || state.value !== 'idle') return
+  if (
+    disposed ||
+    startPending ||
+    (state.value !== 'idle' && state.value !== 'error')
+  )
+    return
   errorMessage.value = null
   noSpeechDetected.value = false
   startPending = true
@@ -145,6 +150,7 @@ async function finishRecording(result?: TranscriptionResult | null) {
       result === undefined
         ? await invoke<TranscriptionResult>('stop_voice_recording')
         : result
+    if (disposed) return
     if (transcription === null) {
       state.value = 'error'
       errorMessage.value = t('voiceControl.error.generic')
@@ -158,6 +164,7 @@ async function finishRecording(result?: TranscriptionResult | null) {
     }
     emit('transcript', transcription.text, autoSend.value)
   } catch (e) {
+    if (disposed) return
     state.value = 'error'
     errorMessage.value = describeError(e)
   }
