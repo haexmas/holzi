@@ -34,7 +34,10 @@ use crate::models::download::download_to_file;
 use super::{CanonicalPcm, SttAdapter, SttError};
 
 const WHISPER_REPO: &str = "openai/whisper-tiny";
-const WHISPER_DIR: &str = "whisper/tiny";
+// Pinned to the reviewed model revision so config, tokenizer, and weights
+// can never be mixed across mutable `main` updates.
+const WHISPER_REVISION: &str = "169d4a4341b33bc18d8881c4b69c2e104e1cc0af";
+const WHISPER_DIR: &str = "whisper/tiny/169d4a4341b33bc18d8881c4b69c2e104e1cc0af";
 
 const CONFIG_FILENAME: &str = "config.json";
 const TOKENIZER_FILENAME: &str = "tokenizer.json";
@@ -302,7 +305,8 @@ pub async fn ensure_model_files(dir: &Path) -> Result<(), SttError> {
         if dest.exists() {
             continue;
         }
-        let url = format!("https://huggingface.co/{WHISPER_REPO}/resolve/main/{filename}");
+        let url =
+            format!("https://huggingface.co/{WHISPER_REPO}/resolve/{WHISPER_REVISION}/{filename}");
         download_to_file(&url, dest, |_progress| {})
             .await
             .map_err(|e| SttError::LocalUnavailable {

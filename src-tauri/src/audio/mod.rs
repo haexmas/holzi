@@ -81,6 +81,13 @@ impl Capture {
             (MAX_RECORDING_SECS * input_rate as u64) as usize * channels as usize;
 
         let stream = match sample_format {
+            cpal::SampleFormat::I8 => build_capture_stream::<i8>(
+                &device,
+                &stream_config,
+                Arc::clone(&raw_buffer),
+                Arc::clone(&capped),
+                max_input_samples,
+            ),
             cpal::SampleFormat::F32 => build_capture_stream::<f32>(
                 &device,
                 &stream_config,
@@ -95,7 +102,63 @@ impl Capture {
                 Arc::clone(&capped),
                 max_input_samples,
             ),
+            cpal::SampleFormat::I24 => build_capture_stream::<cpal::I24>(
+                &device,
+                &stream_config,
+                Arc::clone(&raw_buffer),
+                Arc::clone(&capped),
+                max_input_samples,
+            ),
+            cpal::SampleFormat::I32 => build_capture_stream::<i32>(
+                &device,
+                &stream_config,
+                Arc::clone(&raw_buffer),
+                Arc::clone(&capped),
+                max_input_samples,
+            ),
+            cpal::SampleFormat::I64 => build_capture_stream::<i64>(
+                &device,
+                &stream_config,
+                Arc::clone(&raw_buffer),
+                Arc::clone(&capped),
+                max_input_samples,
+            ),
+            cpal::SampleFormat::U8 => build_capture_stream::<u8>(
+                &device,
+                &stream_config,
+                Arc::clone(&raw_buffer),
+                Arc::clone(&capped),
+                max_input_samples,
+            ),
             cpal::SampleFormat::U16 => build_capture_stream::<u16>(
+                &device,
+                &stream_config,
+                Arc::clone(&raw_buffer),
+                Arc::clone(&capped),
+                max_input_samples,
+            ),
+            cpal::SampleFormat::U24 => build_capture_stream::<cpal::U24>(
+                &device,
+                &stream_config,
+                Arc::clone(&raw_buffer),
+                Arc::clone(&capped),
+                max_input_samples,
+            ),
+            cpal::SampleFormat::U32 => build_capture_stream::<u32>(
+                &device,
+                &stream_config,
+                Arc::clone(&raw_buffer),
+                Arc::clone(&capped),
+                max_input_samples,
+            ),
+            cpal::SampleFormat::U64 => build_capture_stream::<u64>(
+                &device,
+                &stream_config,
+                Arc::clone(&raw_buffer),
+                Arc::clone(&capped),
+                max_input_samples,
+            ),
+            cpal::SampleFormat::F64 => build_capture_stream::<f64>(
                 &device,
                 &stream_config,
                 Arc::clone(&raw_buffer),

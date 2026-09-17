@@ -36,27 +36,37 @@ const errorMessage = ref<string | null>(null)
 const noSpeechDetected = ref(false)
 
 let unlistenCapped: (() => void) | null = null
+let disposed = false
+let startPending = false
 
 onMounted(async () => {
   try {
     const stored = await getPrefAsync({ kind: 'vault' }, AUTO_SEND_PREF_KEY)
     // No stored value yet -> the documented default (FR-005: on).
-    autoSend.value = stored === null ? true : stored === 'true'
+    if (!disposed) autoSend.value = stored === null ? true : stored === 'true'
   } catch {
     // A failed preference read must not block dictation — keep the default.
   }
-  unlistenCapped = await listen('voice-recording-capped', () => {
-    // Race note (contracts/tauri-commands.md): this event can arrive
-    // before a manual `stop_voice_recording` call this component is
-    // already awaiting. `finishRecording` is idempotent against that —
-    // the backend coalesces both into one stop, so a second call here
-    // just re-awaits the same result.
-    if (state.value === 'recording') finishRecording()
-  })
+  const unlisten = await listen<TranscriptionResult | null>(
+    'voice-recording-capped',
+    ({ payload }) => {
+      if (disposed || state.value !== 'recording') return
+      void finishRecording(payload)
+    },
+  )
+  if (disposed) unlisten()
+  else unlistenCapped = unlisten
 })
 
 onBeforeUnmount(() => {
+  disposed = true
   unlistenCapped?.()
+  unlistenCapped = null
+  if (startPending || state.value === 'recording') {
+    void invoke('cancel_voice_recording').catch(() => {
+      // The component is already going away; cancellation is best-effort.
+    })
+  }
 })
 
 async function toggleAutoSend() {
@@ -104,29 +114,49 @@ function describeError(e: unknown): string {
 }
 
 async function startRecording() {
-  if (state.value !== 'idle') return
+  if (disposed || state.value !== 'idle') return
   errorMessage.value = null
   noSpeechDetected.value = false
+  startPending = true
   try {
     await invoke('start_voice_recording')
+    if (disposed) {
+      await invoke('cancel_voice_recording').catch(() => {
+        // onBeforeUnmount also cancels; this covers a late start completion.
+      })
+      return
+    }
     state.value = 'recording'
   } catch (e) {
-    state.value = 'error'
-    errorMessage.value = describeError(e)
+    if (!disposed) {
+      state.value = 'error'
+      errorMessage.value = describeError(e)
+    }
+  } finally {
+    startPending = false
   }
 }
 
-async function finishRecording() {
+async function finishRecording(result?: TranscriptionResult | null) {
+  if (disposed) return
   state.value = 'transcribing'
   try {
-    const result = await invoke<TranscriptionResult>('stop_voice_recording')
+    const transcription =
+      result === undefined
+        ? await invoke<TranscriptionResult>('stop_voice_recording')
+        : result
+    if (transcription === null) {
+      state.value = 'error'
+      errorMessage.value = t('voiceControl.error.generic')
+      return
+    }
     state.value = 'idle'
-    if (result.interrupt) return
-    if (!result.text.trim()) {
+    if (transcription.interrupt) return
+    if (!transcription.text.trim()) {
       noSpeechDetected.value = true
       return
     }
-    emit('transcript', result.text, autoSend.value)
+    emit('transcript', transcription.text, autoSend.value)
   } catch (e) {
     state.value = 'error'
     errorMessage.value = describeError(e)

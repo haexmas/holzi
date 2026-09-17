@@ -115,17 +115,18 @@ chat input field and is sent through the normal chat path.
 
 - [x] T010 [P] [US1] `LocalWhisperAdapter` test against a small fixed audio fixture (checked into
       the repo, e.g. `src-tauri/src/stt/fixtures/`) with a known expected transcript, in
-      `src-tauri/src/stt/local_tests.rs`. No real microphone, no network.
+      `src-tauri/src/stt/local_tests.rs`. No real microphone; the test permits the approved
+      first-use download of the pinned tiny model and then exercises the cached files.
 
 ### Implementation for User Story 1
 
-- [x] T011 [US1] Implement `LocalWhisperAdapter` in `src-tauri/src/stt/local.rs`: loads the bundled
+- [x] T011 [US1] Implement `LocalWhisperAdapter` in `src-tauri/src/stt/local.rs`: loads the local
       Whisper checkpoint and implements `SttAdapter::transcribe(&CanonicalPcm)` via
       `candle-transformers`, gated with `llm-cpu` (depends on T004, T010).
-- [x] T012 [US1] Bundle the Whisper checkpoint(s) as Tauri resources (`src-tauri/resources/whisper/`,
-      declared in `tauri.conf.json` `bundle.resources`) so they ship inside the installer rather
-      than being downloaded at first run (FR-010); select the tier (tiny/base/small) at load time
-      using the existing hardware-detection logic from spec 002 (depends on T011).
+- [x] T012 [US1] Download the pinned tiny Whisper checkpoint files on first use into
+      `<AppLocalData>/whisper/tiny/<revision>/` and reuse them for subsequent transcriptions.
+      This approved MVP behavior avoids bundling a large checkpoint and uses the tiny tier on
+      every device; hardware-based tier selection is deferred (depends on T011).
 - [x] T013 [US1] Wire `stop_voice_recording` (T009) to dispatch to the currently active
       `SttAdapter` — defaulting to `LocalWhisperAdapter` via `ensure_local_transcription_provider`
       (T005) — and return the `TranscriptionResult` shape from the contract (depends on T009, T011,

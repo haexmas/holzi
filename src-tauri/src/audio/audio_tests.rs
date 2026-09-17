@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use cpal::{Sample, I24, U24};
 
 use super::{downmix_to_mono, resample_linear};
 use crate::stt::{CanonicalPcm, SttAdapter, SttError};
@@ -70,4 +71,20 @@ async fn converted_buffer_reaches_stt_adapter_unchanged() {
     stub.transcribe(&pcm).await.unwrap();
 
     assert_eq!(stub.received.into_inner().unwrap(), Some(expected));
+
+    // Keep every PCM format accepted by Capture::start covered at the
+    // conversion boundary. The stream callback uses the same `FromSample`
+    // conversions for the native values supplied by CPAL.
+    let converted = [
+        f32::from_sample(0i8),
+        f32::from_sample(I24::new(0).expect("zero is within I24 range")),
+        f32::from_sample(0i32),
+        f32::from_sample(0i64),
+        f32::from_sample(128u8),
+        f32::from_sample(U24::new(0).expect("zero is within U24 range")),
+        f32::from_sample(0u32),
+        f32::from_sample(0u64),
+        f32::from_sample(0.0f64),
+    ];
+    assert!(converted.iter().all(|sample| sample.is_finite()));
 }

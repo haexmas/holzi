@@ -162,11 +162,11 @@ mod imp {
         }
     }
 
-    /// Polls the max-duration cap (FR-017) and, once hit, emits
-    /// `voice-recording-capped` and runs the same coalesced stop path a
-    /// manual `stop_voice_recording` call would. Exits once the recording
-    /// is no longer active for any reason (manually stopped, cancelled, or
-    /// already transcribing).
+    /// Polls the max-duration cap (FR-017), runs the same coalesced stop path
+    /// a manual `stop_voice_recording` call would, and emits the completed
+    /// result as the event payload. Emitting the result after `do_stop`
+    /// completes lets the renderer consume it without issuing a second stop
+    /// request after the slot has returned to `Idle`.
     fn spawn_cap_watcher(app: AppHandle) {
         tauri::async_runtime::spawn(async move {
             loop {
@@ -186,12 +186,22 @@ mod imp {
                     }
                 };
                 if capped {
-                    let _ = app.emit("voice-recording-capped", ());
-                    let _ = do_stop(&app, &voice).await;
+                    let outcome = do_stop(&app, &voice).await;
+                    let payload = capped_event_payload(outcome);
+                    let _ = app.emit("voice-recording-capped", payload);
                     return;
                 }
             }
         });
+    }
+
+    /// Converts the completed cap-watcher outcome into the optional event
+    /// payload consumed by the renderer. Failed transcriptions use `None` so
+    /// the renderer can enter its generic error state without retrying stop.
+    pub(crate) fn capped_event_payload(
+        outcome: crate::error::Result<TranscriptionResultWire>,
+    ) -> Option<TranscriptionResultWire> {
+        outcome.ok()
     }
 
     /// Resolves the active transcription adapter and runs it. US3 (external
@@ -237,6 +247,10 @@ mod imp {
         }
     }
 }
+
+#[cfg(all(test, feature = "voice"))]
+#[path = "voice_tests.rs"]
+mod voice_tests;
 
 #[cfg(feature = "voice")]
 pub use imp::{
