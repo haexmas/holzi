@@ -26,25 +26,27 @@ bridge wiring as 007's shipped default, only the decision function changes (see 
 `ungated` mode needs no bridge process at all for Claude Code (its `--mcp-config`/
 `--permission-prompt-tool` args are simply omitted) and no schema/library change for Codex (the
 existing `thread/start` JSON-RPC call already accepts the fields needed — see below).
-**Storage**: SQLite via SQLCipher through haex-crdt, via the existing generic `preferences` table
-(`storage/preferences.rs`) — no schema change. One new device-scoped preference key,
+**Storage**: SQLite via SQLCipher through haex-crdt. Planned additive migration
+`0017_chat_messages_add_autonomy_mode` adds `chat_messages.autonomy_mode TEXT NULL` so every delegate
+turn can record its mode independently of `tool_source`. The existing generic `preferences` table
+(`storage/preferences.rs`) needs no schema change; it gains one new device-scoped preference key,
 `cli_delegate.deny_rules` (JSON array of category identifiers, e.g.
 `["workspace_escape","network_access","credential_paths"]`), read/written through the existing
 generic `get_pref`/`set_pref` Tauri commands exactly like `chat.permission_mode` is today
-(`preferences_commands.rs:59-136`). Autonomy Mode itself is **not** persisted (spec FR-008) — it
-travels as a per-request field on `ChatRequest` (the same struct already threaded through every
-`ProviderAdapter::stream_chat` call, `adapters/mod.rs`), not a preference.
+(`preferences_commands.rs:59-136`). The selected mode travels as a per-request field on
+`ChatRequest` and is never persisted as a preference or carried into the next request (spec FR-008);
+only the mode actually used is recorded on that request's message rows for audit/history.
 **Testing**: `cargo test --lib` / `cargo test --test <name>`; new tests in sibling `*_tests.rs` files
 (repo convention, no inline `#[cfg(test)] mod tests`, no exception found anywhere in the codebase).
 `pnpm typecheck` for the new composer control. Live-CLI verification spikes (flag/schema behavior)
 already run during the 2026-09-17 design session — see `docs/plans/2026-09-17-autonomous-delegate-mode-design.md`
 and [research.md](research.md) §1-2 — are not repeated as automated tests (they test vendor CLI
-behavior, not holzi's own code) but their *results* are hard-coded as the two vendor branches below.
+behavior, not holzi's own code) but their _results_ are hard-coded as the two vendor branches below.
 **Target Platform**: Desktop only — unchanged from 007-cli-delegate (spec FR-012); no new
 mobile-adjacent code path.
 **Performance Goals**: Stopping an autonomous delegate response terminates the subprocess within the
 same short window 007's existing kill path already achieves (spec SC-005) — no new, independent
-target; `ungated` mode has strictly *less* per-call overhead than `standard`/`gated-permissive`
+target; `ungated` mode has strictly _less_ per-call overhead than `standard`/`gated-permissive`
 (no bridge round-trip), not a regression risk.
 **Constraints**: `ungated` and `gated-permissive` MUST NOT weaken 007's host-isolation guarantee
 (`CLAUDE_CONFIG_DIR`/`CODEX_HOME` + disposable `cwd`) — re-verified live under both vendors' native
@@ -61,7 +63,7 @@ no general-purpose rule engine.
 
 - **Claude Code** (`claude.rs::build_command`, currently claude.rs:117-145): replace the hardcoded
   `.arg("--permission-mode").arg("default")` with `.arg("--permission-mode").arg("bypassPermissions")`
-  and *omit* `.arg("--mcp-config").arg(mcp_config)` / `.arg("--permission-prompt-tool").arg("mcp__holzi-approve__approve")`
+  and _omit_ `.arg("--mcp-config").arg(mcp_config)` / `.arg("--permission-prompt-tool").arg("mcp__holzi-approve__approve")`
   entirely for this mode — confirmed via `claude --help` (v2.1.274) that `bypassPermissions` is a
   valid `--permission-mode` enum value, and confirmed live (design doc §4 item 5) that host isolation
   holds under it.
@@ -96,35 +98,35 @@ machinery simply never invoked for this mode (no human turn in this loop by desi
 
 ### Per-vendor Deny Rule evaluability (verified against real schemas this session — a real asymmetry, not assumed uniform)
 
-| Category | Claude Code | Codex |
-|---|---|---|
-| Workspace-root escape (write/read outside the invocation's workspace) | Evaluable — file-editing tool `input` carries `file_path` directly | Evaluable for `CommandExecutionRequestApprovalParams` (`command`, `cwd` fields present) but **not evaluable** for `FileChangeRequestApprovalParams` — that payload (verified via `FileChangeRequestApprovalParams.json` schema) carries no path at all, only `itemId`/`reason`/`threadId`/`turnId`/`grantRoot`. A Codex file-change deny rule cannot be enforced from the approval payload alone with today's schema. |
-| Network access | Heuristic only — matched against `Bash`/`WebFetch` tool name and command text (Claude's approval payload has no structured network field) | Structured and reliable — `CommandExecutionRequestApprovalParams.networkApprovalContext` (`host`, `protocol`) is present precisely when the call is network-triggered |
-| Credential/secret-path patterns (`.ssh`, `.aws`, `.env`, `id_rsa`, …) | Evaluable — same `file_path`/`command` text matching as workspace-root escape | Evaluable for `CommandExecutionRequestApprovalParams` (`command` text), **not evaluable** for `FileChangeRequestApprovalParams` for the same reason as workspace-root escape |
+| Category                                                              | Claude Code                                                                                                                               | Codex                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Workspace-root escape (write/read outside the invocation's workspace) | Evaluable — file-editing tool `input` carries `file_path` directly                                                                        | Evaluable for `CommandExecutionRequestApprovalParams` (`command`, `cwd` fields present) but **not evaluable** for `FileChangeRequestApprovalParams` — that payload (verified via `FileChangeRequestApprovalParams.json` schema) carries no path at all, only `itemId`/`reason`/`threadId`/`turnId`/`grantRoot`. A Codex file-change deny rule cannot be enforced from the approval payload alone with today's schema. |
+| Network access                                                        | Heuristic only — matched against `Bash`/`WebFetch` tool name and command text (Claude's approval payload has no structured network field) | Structured and reliable — `CommandExecutionRequestApprovalParams.networkApprovalContext` (`host`, `protocol`) is present precisely when the call is network-triggered                                                                                                                                                                                                                                                 |
+| Credential/secret-path patterns (`.ssh`, `.aws`, `.env`, `id_rsa`, …) | Evaluable — same `file_path`/`command` text matching as workspace-root escape                                                             | Evaluable for `CommandExecutionRequestApprovalParams` (`command` text), **not evaluable** for `FileChangeRequestApprovalParams` for the same reason as workspace-root escape                                                                                                                                                                                                                                          |
 
-This table is a Phase 1 design finding, not yet resolved — see research.md §3 for the options
-(request a schema fix upstream, treat every Codex `FileChangeRequestApprovalParams` as an unmatchable
-"cannot verify — deny by fail-safe" case, or drop the two path-dependent categories for Codex file
-changes specifically while keeping them for Claude and for Codex command execution). This must be
-settled before `/speckit.tasks`, since it changes FR-004/FR-007's implementation shape for one vendor.
+This Phase 1 design finding is resolved by FR-015: when an enabled `WorkspaceEscape` or
+`CredentialPaths` rule is evaluated against a field-less Codex `FileChangeRequestApprovalParams`,
+the action is denied fail-closed. The implementation does not request an upstream schema change or
+drop either category; evaluable Claude and Codex command actions retain their normal matching logic.
+T008 defines this behavior, with unit coverage in T011 and the Codex file-change regression in T029.
 
 ## Constitution Check
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+_GATE: Must pass before Phase 0 research. Re-check after Phase 1 design._
 
 Evaluated against the holzi Constitution (`.specify/memory/constitution.md`, hard-pinned from
 haex-hive, revision `336eaf1e`):
 
-| Principle | Status | Rationale |
-|---|---|---|
-| I. No Secrets in Git | ✓ PASS | No new secret-handling surface — Deny Rules are non-secret category identifiers in a preference row; delegate credentials are unchanged from 007. |
-| II. No Local Absolute Paths in Versioned Config | ✓ PASS | Nothing new is versioned; workspace-root/deny-rule state is runtime preference data, not committed config. |
-| III. Project Identity Is Device-Independent | ✓ PASS | `cli_delegate.deny_rules` is device-scoped exactly like `chat.permission_mode`, following the existing `PrefScope::Device` pattern — no new identity concept. |
-| IV. Cross-Repo References Pin Immutable Revisions | ✓ PASS | No new external harness content or dependency; `rmcp`'s existing pin is untouched. |
-| V. External Sources Are Opt-in Per Project | ✓ PASS | N/A — no external harness content involved. |
-| VI. Self-Modifying Instructions Are Always Review-Gated | ✓ PASS | This feature's docs/spec edits land through normal PR review like any other change. |
-| VII. Relay Unavailability Never Blocks Local Work | ✓ PASS | Autonomy mode and deny-rule evaluation are local subprocess + local preference reads, independent of holzi's sync relay. |
-| VIII. No Concealment Instructions in Agent Output | ✓ PASS | Spec FR-005 requires every gated-permissive turn to record every tool call and to make the active autonomy mode visible; `ungated` runs are explicitly documented (spec US2 scenario 2) as intentionally not producing a per-call record, which is disclosed to the user via the visible mode label, not concealed. |
+| Principle                                               | Status | Rationale                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| I. No Secrets in Git                                    | ✓ PASS | No new secret-handling surface — Deny Rules are non-secret category identifiers in a preference row; delegate credentials are unchanged from 007.                                                                                                                                                                   |
+| II. No Local Absolute Paths in Versioned Config         | ✓ PASS | Nothing new is versioned; workspace-root/deny-rule state is runtime preference data, not committed config.                                                                                                                                                                                                          |
+| III. Project Identity Is Device-Independent             | ✓ PASS | `cli_delegate.deny_rules` is device-scoped exactly like `chat.permission_mode`, following the existing `PrefScope::Device` pattern — no new identity concept.                                                                                                                                                       |
+| IV. Cross-Repo References Pin Immutable Revisions       | ✓ PASS | No new external harness content or dependency; `rmcp`'s existing pin is untouched.                                                                                                                                                                                                                                  |
+| V. External Sources Are Opt-in Per Project              | ✓ PASS | N/A — no external harness content involved.                                                                                                                                                                                                                                                                         |
+| VI. Self-Modifying Instructions Are Always Review-Gated | ✓ PASS | This feature's docs/spec edits land through normal PR review like any other change.                                                                                                                                                                                                                                 |
+| VII. Relay Unavailability Never Blocks Local Work       | ✓ PASS | Autonomy mode and deny-rule evaluation are local subprocess + local preference reads, independent of holzi's sync relay.                                                                                                                                                                                            |
+| VIII. No Concealment Instructions in Agent Output       | ✓ PASS | Spec FR-005 requires every gated-permissive turn to record every tool call and to make the active autonomy mode visible; `ungated` runs are explicitly documented (spec US2 scenario 2) as intentionally not producing a per-call record, which is disclosed to the user via the visible mode label, not concealed. |
 
 **Result**: All gates PASS. No Complexity Tracking entry needed.
 
@@ -185,10 +187,8 @@ src-tauri/src/
 │                                         #   config struct to extend — both currently take positional
 │                                         #   scalars, per research.md §1)
 ├── storage/
-│   └── chat_messages.rs                 # no schema change — reuses existing free-text `tool_source`
-│                                         #   column (already documented as extensible per
-│                                         #   chat/tools/mod.rs:69) to additionally carry which
-│                                         #   AutonomyMode a delegate turn ran under, satisfying spec
+│   └── chat_messages.rs                 # read/write migration 0017's nullable `autonomy_mode`
+│                                         #   column independently of `tool_source`, satisfying spec
 │                                         #   FR-005's "make clear which mode a turn ran under"
 └── chat/
     └── turn/
@@ -220,7 +220,7 @@ src/
 │                                        #   `updatePermissionMode` (lines 483-500) but writing into
 │                                        #   the outgoing ChatRequest instead of a persisted preference
 │                                        #   (per spec FR-008 — never persisted)
-└── i18n/{de,en}/*.json                  # + strings: autonomy mode labels/descriptions, deny-rule
+└── i18n/locales/{de,en}.json            # + strings: autonomy mode labels/descriptions, deny-rule
                                          #   category labels, "not available for this backend" message
 ```
 
@@ -236,4 +236,4 @@ rather than introducing a new UI pattern.
 
 ## Complexity Tracking
 
-*No entries — Constitution Check found no violations.*
+_No entries — Constitution Check found no violations._

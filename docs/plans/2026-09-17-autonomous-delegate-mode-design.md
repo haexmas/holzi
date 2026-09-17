@@ -33,9 +33,10 @@ explicit opt-in, not a replacement.
 
 A second invocation mode for delegate backends (Claude Code, Codex), alongside the shipped default.
 In Autonomous Mode, native tool calls the delegate makes proceed without holzi pausing them for
-human approval, instead of holzi's live per-tool-call gate. Chosen explicitly per connection or per
-request by the operator — never a silent global default — mirroring how `chat.permission_mode` is
-already explicit and device-scoped rather than inherited.
+human approval, instead of holzi's live per-tool-call gate. Chosen explicitly by the operator for
+each request only — never connection-scoped or carried into a later request — matching the
+request-scoped application of `chat.permission_mode` while keeping the autonomy selection itself
+ephemeral.
 
 Framing: this is not a revision to the Manual/Auto/Plan posture used everywhere else (built-in
 tools, local, api_key). Those keep behaving exactly as shipped. Autonomous Mode is delegate-specific
@@ -45,8 +46,8 @@ and orthogonal — a choice available only when the selected backend is a connec
 
 Operator statement that drove this design: agents should keep their autonomy; holzi routing calls
 through itself is acceptable only if it is useful for testing specific permissions, otherwise skip
-it entirely. Two variants follow directly from that, both operator-selectable per connection or per
-request:
+it entirely. Two variants follow directly from that, both operator-selectable for one request at a
+time:
 
 - **Variant A — Ungated.** Spawn the delegate CLI with its own native full-autonomy flag. No
   `--permission-prompt-tool` bridge, no `app-server` approval subscription. holzi captures only the
@@ -57,16 +58,10 @@ request:
     not separately tested). No independent OS-level sandbox flag was found in `--help` — under this
     variant, whatever runs is not confined by anything holzi controls beyond the process's own `cwd`
     and env.
-  - **Codex** has a richer axis than a single bypass flag: approval policy
-    (`-a/--ask-for-approval untrusted|on-request|never`) is independent from sandboxing
-    (`-s/--sandbox read-only|workspace-write|danger-full-access`), plus an explicit workspace root
-    (`-C/--cd <DIR>`, `--add-dir <DIR>`). `--dangerously-bypass-approvals-and-sandbox` collapses both
-    axes to "no approval, no sandbox" in one flag — Codex's own docs call it "EXTREMELY DANGEROUS."
-    **`-a never -s workspace-write -C <root>` is very likely the better default for Codex's Variant
-    A**: identical "never asks" behavior, but OS-level sandboxing still confines writes/exec to the
-    given root instead of relying on holzi to enforce that itself. Not yet exercised end-to-end
-    (confirmed from `--help` semantics, not from a live constrained run) — a cheap follow-up spike,
-    not a re-opened unknown given `-s`/`-C` are simple, independently documented flags.
+  - **Codex** keeps the shipped `codex app-server --stdio` transport. Variant A changes the existing
+    `thread/start` request to set `"approvalPolicy": "never"`, `"sandbox": "workspace-write"`, and
+    `"cwd"` to the invocation's workspace root. Approval bypass, sandbox confinement, and root
+    scoping therefore remain explicit properties of the same app-server session.
 - **Variant B — Gated-but-permissive.** Reuse the exact bridge 007-cli-delegate already built —
   Claude Code's `--permission-prompt-tool` MCP server, Codex's `app-server` approval subscription —
   but swap the decision function. Instead of parking on a `oneshot` and waiting for a human (shipped
@@ -88,8 +83,8 @@ default, A as an explicit further escalation — a product call, not settled her
 ## 3. What does not change
 
 - **Host isolation is non-negotiable and orthogonal to "ungated."** "Autonomous" describes only the
-  tool-call-*approval* axis (§2): whether holzi pauses a call for a human decision. It says nothing
-  about the tool-call-*discovery* axis, which stays exactly as 007-cli-delegate shipped it in both
+  tool-call-_approval_ axis (§2): whether holzi pauses a call for a human decision. It says nothing
+  about the tool-call-_discovery_ axis, which stays exactly as 007-cli-delegate shipped it in both
   variants, including Variant A: every invocation still gets `CLAUDE_CONFIG_DIR`/`CODEX_HOME` pointed
   at an empty, disposable directory and a disposable `cwd`, so the delegate sees only holzi's own
   instance — holzi's own `CLAUDE.md`/`AGENTS.md`-equivalent context, injected explicitly (spec 007
@@ -110,13 +105,11 @@ default, A as an explicit further escalation — a product call, not settled her
 ## 4. Open design questions
 
 1. **Workspace confinement.** Partially answered 2026-09-17 for Codex, still open for Claude Code.
-   Codex's `-s/--sandbox {read-only,workspace-write,danger-full-access}` plus `-C/--cd`/`--add-dir`
-   give an OS-level confinement primitive independent of holzi's own logic — Variant A for Codex can
-   keep `workspace-write` sandboxing while still never prompting (`-a never`), so confinement does
-   not have to be holzi's problem alone. No equivalent flag surfaced in Claude Code's `--help` — for
-   Claude Code, Variant A still has no interception point and no OS-level fallback, so a filesystem
-   escape there is bounded only by whatever `cwd`/`--add-dir`-equivalent (none found) or OS-level
-   sandboxing (e.g. a container) holzi wraps around the process itself. Variant B *could* enforce a
+   Codex Variant A keeps `workspace-write` confinement while never prompting by setting `sandbox`,
+   `approvalPolicy`, and the invocation-root `cwd` together in `thread/start`, so confinement does
+   not have to be holzi's problem alone. Claude Code Variant A still has no interception point and no
+   equivalent OS-level fallback, so a filesystem escape there is bounded only by the process `cwd`
+   or OS-level sandboxing (e.g. a container) holzi wraps around the process itself. Variant B _could_ enforce a
    workspace-root check inside its deny-list logic for either vendor, since it sees every write/exec
    call before approving. This gap is the strongest argument for defaulting Claude Code specifically
    to B rather than A.
@@ -134,11 +127,11 @@ default, A as an explicit further escalation — a product call, not settled her
    Tested against Claude Code v2.1.274 with a purpose-built stdio MCP server standing in for
    `permission_mcp_server.rs`/`approval_bridge.rs` (same protocol, logs every call, always allows).
    Methodology used a positive control to avoid a false negative: an initial attempt with the
-   top-level agent told to spawn a subagent running a bare `echo` command logged *zero* approval
+   top-level agent told to spawn a subagent running a bare `echo` command logged _zero_ approval
    calls — but a control run putting that same bare `echo` directly at the top level (no subagent at
-   all) *also* logged zero calls, showing the command itself was never gated under
+   all) _also_ logged zero calls, showing the command itself was never gated under
    `--permission-mode default`, independent of subagent involvement. Re-run with a mutating command
-   (`echo hello > file.txt`, which the earlier control confirmed *does* trigger approval at the top
+   (`echo hello > file.txt`, which the earlier control confirmed _does_ trigger approval at the top
    level) routed through a subagent instead: the bridge received exactly one `Bash` call carrying
    that command, `subagent_stats` confirmed one subagent spawned and completed, and the file was
    written only after the bridge's "allow" response — i.e. the subagent's own mutating action
@@ -151,7 +144,7 @@ default, A as an explicit further escalation — a product call, not settled her
    only on that one device (same "files never live in the CRDT-synced database" principle as
    [`2026-09-07-cross-user-sharing-deferred-design.md`](./2026-09-07-cross-user-sharing-deferred-design.md)
    §5). With Variant B, the turn/tool-call transcript is an ordinary `chat_messages` row set and
-   therefore syncs per-vault like any other conversation — other paired devices see *that* an
+   therefore syncs per-vault like any other conversation — other paired devices see _that_ an
    autonomous run happened and roughly what it did, even without the changed files themselves. With
    Variant A, only the delegate's final-output text (the turn's assistant message) syncs — a
    summary, not a tool-by-tool record.
@@ -169,21 +162,22 @@ default, A as an explicit further escalation — a product call, not settled her
    `CODEX_HOME` override was not bypassed by the `$HOME/.codex` default fallback. This was
    specifically the risk flagged by the operator mid-design ("holzi darf nicht direkt den
    Host-Claude/Codex nutzen, sondern seine eigene Instanz/CLAUDE/AGENTS.md") — confirmed closed, not
-   just assumed. Not covered by this spike: whether *skills* or *plugins* discovery (as opposed to
+   just assumed. Not covered by this spike: whether _skills_ or _plugins_ discovery (as opposed to
    settings/hooks/AGENTS.md) behaves the same way under the bypass flags — 007's own research only
    checked this for its default (gated) invocation shape, not for either Variant A flag combination.
 6. **Where this posture lives in the UI/data model — proposed resolution, needs operator sign-off.**
    Recommend **per-request, not a persisted device preference**. Spec 007's `Delegate Invocation` is
    already a per-request entity (backend choice itself is made per request, FR-004) — the autonomy
    mode fits naturally as a second selector shown only when a delegate backend is chosen, defaulting
-   every time to `Gated` (007's shipped behavior, unchanged). Deliberately *not* modeled as a
+   every time to `Gated` (007's shipped behavior, unchanged). Deliberately _not_ modeled as a
    `chat.permission_mode`-style sticky device preference: that pattern is right for a general risk
    posture the operator sets once and forgets, but wrong for "let this agent run unsupervised" — a
    silently-persisted autonomous default is the failure mode most worth avoiding here (operator turns
    it on for one task, forgets, a later unrelated request runs autonomously unexpectedly). The chosen
-   mode should persist on that turn's own record (alongside the existing backend-identity metadata,
-   FR-005) so conversation history shows which mode a given delegate turn actually ran under — no new
-   storage mechanism, reuses the same place backend attribution already lives.
+   mode should be recorded in that turn's own `chat_messages.autonomy_mode` field (alongside the
+   existing backend-identity metadata, FR-005) so conversation history shows which mode a given
+   delegate turn actually ran under; this requires the additive migration `0017` selected by the
+   feature data model.
 
 ## 5. What this explicitly does not do
 

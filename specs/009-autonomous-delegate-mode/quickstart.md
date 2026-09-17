@@ -68,7 +68,7 @@ research.md for the full evidence trail:
 5. **Expect**: same outcome via the heuristic tool-name/command-text match (data-model.md) — note in
    the review whether the heuristic held for the exact prompt used, since it is not as structurally
    reliable as Codex's `networkApprovalContext` field (research.md §3).
-6. Enable `workspace_escape` instead, and with **Codex specifically**, trigger a *file write*
+6. Enable `workspace_escape` instead, and with **Codex specifically**, trigger a _file write_
    (not a command execution) outside the workspace root.
 7. **Expect** (spec FR-015, the known asymmetry): the write is denied — not because it was matched
    against the workspace boundary, but because Codex's file-change approval payload cannot be
@@ -88,5 +88,5 @@ research.md for the full evidence trail:
    multi-file task).
 2. Stop it mid-run from the UI.
 3. **Expect**: the underlying delegate process actually terminates (check with `ps`/`pgrep
-   claude`/`pgrep codex` that no orphaned process remains) within the same short window stopping
+claude`/`pgrep codex` that no orphaned process remains) within the same short window stopping
    already takes for `local`/`api_key` backends.
