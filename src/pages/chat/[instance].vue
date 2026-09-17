@@ -41,6 +41,7 @@ import PermissionPrompt, {
 import ComposerSettingsPopover from '~/components/chat/ComposerSettingsPopover.vue'
 import ReasoningAccordion from '~/components/chat/ReasoningAccordion.vue'
 import ModelSelection from '~/components/chat/ModelSelection.vue'
+import VoiceInputControl from '~/components/chat/VoiceInputControl.vue'
 import { useAutoResizeTextarea } from '~/composables/useAutoResizeTextarea'
 
 definePageMeta({
