@@ -66,6 +66,32 @@ mod imp {
                 whisper: AsyncMutex::new(None),
             }
         }
+
+        /// Clears the cached Whisper adapter so the next
+        /// `resolve_local_adapter` call reloads instead of reusing a stale
+        /// instance (spec 010's `invalidate_stt_model_cache`). A no-op
+        /// when `llm-cpu` isn't compiled in — there is no cache to clear.
+        pub(crate) async fn invalidate_whisper_cache(&self) {
+            #[cfg(feature = "llm-cpu")]
+            {
+                *self.whisper.lock().await = None;
+            }
+        }
+
+        /// Test-only: whether the Whisper adapter cache currently holds a
+        /// loaded instance. Always `false` when `llm-cpu` isn't compiled
+        /// in.
+        #[cfg(test)]
+        pub(crate) async fn has_cached_whisper_adapter(&self) -> bool {
+            #[cfg(feature = "llm-cpu")]
+            {
+                self.whisper.lock().await.is_some()
+            }
+            #[cfg(not(feature = "llm-cpu"))]
+            {
+                false
+            }
+        }
     }
 
     impl Default for VoiceState {
@@ -102,6 +128,20 @@ mod imp {
         voice: State<'_, VoiceState>,
     ) -> Result<TranscriptionResultWire> {
         do_stop(&app, &voice).await
+    }
+
+    /// Spec 010: clears the warm-cached Whisper adapter so the next
+    /// `resolve_local_adapter` call picks up a change to the
+    /// `voice.stt_model_id` preference instead of continuing to serve the
+    /// previously-loaded tier for the rest of the process lifetime.
+    /// Registered in every feature combination (mirrors
+    /// `start_voice_recording`'s registration discipline) so the frontend
+    /// can call it unconditionally after a Settings switch; a build
+    /// without `llm-cpu` has no cache to clear and is a successful no-op.
+    #[tauri::command]
+    pub async fn invalidate_stt_model_cache(voice: State<'_, VoiceState>) -> Result<()> {
+        voice.invalidate_whisper_cache().await;
+        Ok(())
     }
 
     #[tauri::command]
@@ -220,6 +260,73 @@ mod imp {
         Ok(TranscriptionResultWire { text, interrupt })
     }
 
+    /// Device-scoped preference naming which STT catalog tier is active
+    /// (spec 010). Missing/empty/unknown-id all fall back to the smallest
+    /// built-in tier — see [`resolve_stt_catalog_entry`].
+    #[cfg(feature = "llm-cpu")]
+    const STT_MODEL_PREF_KEY: &str = "voice.stt_model_id";
+
+    /// Fallback tier for anyone who never sets [`STT_MODEL_PREF_KEY`] —
+    /// identical to this feature's pre-spec-010 hardcoded behavior
+    /// (FR-007).
+    #[cfg(feature = "llm-cpu")]
+    const DEFAULT_STT_MODEL_ID: &str = "whisper-tiny";
+
+    /// Best-effort read of this device's [`STT_MODEL_PREF_KEY`]. Any
+    /// failure along the way (no active vault, no `known_devices` row yet,
+    /// a DB error) folds into `None` — the caller falls back to the
+    /// default tier exactly as if the preference were simply unset, since
+    /// a transcription must never fail just because preference resolution
+    /// did.
+    #[cfg(feature = "llm-cpu")]
+    async fn read_stt_model_pref(app: &AppHandle) -> Option<String> {
+        let state = app.state::<crate::state::AppState>();
+        let db = crate::state_utils::active_database(&state).ok()?;
+        let device_uuid = crate::device::commands::resolve_vault_device_uuid(app, &db)
+            .await
+            .ok()?;
+        let scope = crate::storage::preferences::PrefScope::Device(device_uuid);
+        let key = STT_MODEL_PREF_KEY.to_string();
+        let joined = tauri::async_runtime::spawn_blocking(move || {
+            db.with_connection(|conn| {
+                crate::storage::preferences::get(conn, scope, &key).map_err(haex_crdt::Error::from)
+            })
+        })
+        .await
+        .ok()?;
+        joined.ok()?
+    }
+
+    /// Resolves a raw preference read (possibly missing/empty/unknown) to
+    /// the STT catalog entry it should mean, falling back to
+    /// [`DEFAULT_STT_MODEL_ID`] — preserves today's behavior exactly for
+    /// anyone who never touches the new setting (FR-007). Pure/`AppHandle`-
+    /// free on purpose, split out from [`resolve_stt_catalog_entry`] so the
+    /// fallback rules are directly unit-testable (`voice_tests.rs`) without
+    /// a Tauri `AppHandle` — this codebase has no mocking convention for
+    /// that type.
+    #[cfg(feature = "llm-cpu")]
+    pub(crate) fn resolve_stt_catalog_entry_from_pref(
+        pref: Option<String>,
+    ) -> &'static crate::stt::catalog::SttCatalogEntry {
+        let default = || {
+            crate::stt::catalog::get(DEFAULT_STT_MODEL_ID)
+                .expect("built-in STT catalog must contain the default tier")
+        };
+        match pref.filter(|id| !id.is_empty()) {
+            Some(id) => crate::stt::catalog::get(&id).unwrap_or_else(default),
+            None => default(),
+        }
+    }
+
+    /// Resolves the active STT catalog entry for this device: the
+    /// [`STT_MODEL_PREF_KEY`] preference if it names a known catalog
+    /// entry, otherwise [`DEFAULT_STT_MODEL_ID`].
+    #[cfg(feature = "llm-cpu")]
+    async fn resolve_stt_catalog_entry(app: &AppHandle) -> &'static crate::stt::catalog::SttCatalogEntry {
+        resolve_stt_catalog_entry_from_pref(read_stt_model_pref(app).await)
+    }
+
     /// Loads the bundled Whisper model on first use and keeps it warm
     /// (`voice.whisper`) — reloading it per transcription would blow
     /// SC-001's 5-second budget. Returns a trait object so the
@@ -235,7 +342,8 @@ mod imp {
             if let Some(adapter) = guard.as_ref() {
                 return Ok(Arc::clone(adapter) as Arc<dyn crate::stt::SttAdapter>);
             }
-            let adapter = Arc::new(crate::stt::local::LocalWhisperAdapter::load(app).await?);
+            let entry = resolve_stt_catalog_entry(app).await;
+            let adapter = Arc::new(crate::stt::local::LocalWhisperAdapter::load(app, entry).await?);
             *guard = Some(Arc::clone(&adapter));
             Ok(adapter as Arc<dyn crate::stt::SttAdapter>)
         }
@@ -254,8 +362,8 @@ mod voice_tests;
 
 #[cfg(feature = "voice")]
 pub use imp::{
-    cancel_voice_recording, start_voice_recording, stop_voice_recording, TranscriptionResultWire,
-    VoiceState,
+    cancel_voice_recording, invalidate_stt_model_cache, start_voice_recording,
+    stop_voice_recording, TranscriptionResultWire, VoiceState,
 };
 
 #[cfg(not(feature = "voice"))]
@@ -282,10 +390,21 @@ mod stub {
     pub async fn cancel_voice_recording() -> Result<()> {
         Err(voice_disabled())
     }
+
+    /// Successful no-op — there is no cache to invalidate when `voice`
+    /// isn't compiled in at all, and the frontend must be able to call
+    /// this unconditionally after a Settings switch (spec 010).
+    #[tauri::command]
+    pub async fn invalidate_stt_model_cache() -> Result<()> {
+        Ok(())
+    }
 }
 
 #[cfg(not(feature = "voice"))]
-pub use stub::{cancel_voice_recording, start_voice_recording, stop_voice_recording};
+pub use stub::{
+    cancel_voice_recording, invalidate_stt_model_cache, start_voice_recording,
+    stop_voice_recording,
+};
 
 #[cfg(not(feature = "voice"))]
 #[derive(Debug, Clone, serde::Serialize)]

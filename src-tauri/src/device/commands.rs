@@ -6,6 +6,9 @@
 //! decision ("alias == null → route to /onboarding"). Alias-rename is
 //! the settings-screen entry point and the wizard's final commit step.
 
+use std::sync::Arc;
+
+use haex_crdt::Database;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
@@ -95,6 +98,58 @@ pub async fn current_device_info(
         alias,
         hostname: hostname::suggested_alias(),
     })
+}
+
+/// Resolves this installation's `known_devices.vault_device_uuid` for the
+/// active vault — the UUID device-scoped preferences and other per-device
+/// state key on. A lighter-weight sibling of [`current_device_info`] for
+/// backend-internal callers (spec 010's `voice::resolve_local_adapter`)
+/// that need "this device"'s identity without a frontend-supplied UUID and
+/// don't need the alias/hostname `current_device_info` also returns.
+pub async fn resolve_vault_device_uuid(app: &AppHandle, db: &Arc<Database>) -> Result<Uuid> {
+    let installation_id_file =
+        installation_id_path(&app.path().app_local_data_dir().map_err(|e| {
+            HolziError::PathResolution {
+                reason: format!("app_local_data_dir: {e}"),
+            }
+        })?);
+    let installation_uuid =
+        read_or_mint_installation_uuid(&installation_id_file).map_err(HolziError::from)?;
+
+    let db = Arc::clone(db);
+    let raw = tauri::async_runtime::spawn_blocking(move || {
+        db.with_connection(|conn| {
+            use haex_crdt::rusqlite::{params, OptionalExtension};
+            let raw: Option<String> = conn
+                .query_row(
+                    "SELECT vault_device_uuid FROM known_devices WHERE installation_uuid = ?1",
+                    params![installation_uuid.to_string()],
+                    |r| r.get(0),
+                )
+                .optional()
+                .map_err(haex_crdt::Error::from)?;
+            Ok(raw)
+        })
+    })
+    .await
+    .map_err(|e| HolziError::CrdtInit {
+        reason: format!("resolve_vault_device_uuid join: {e}"),
+    })?
+    .map_err(HolziError::from)?;
+
+    let vault_device_uuid = raw.ok_or_else(|| HolziError::CrdtInit {
+        reason: format!("no known_devices row for installation {installation_uuid}"),
+    })?;
+    let vault_device_uuid =
+        Uuid::parse_str(&vault_device_uuid).map_err(|e| HolziError::CrdtInit {
+            reason: format!("stored vault_device_uuid parse: {e}"),
+        })?;
+    if vault_device_uuid == VAULT_SCOPE_UUID {
+        return Err(HolziError::CrdtInit {
+            reason: "installation UUID resolved to the vault-scope sentinel".into(),
+        });
+    }
+    Ok(vault_device_uuid)
 }
 
 #[derive(Debug, Deserialize)]

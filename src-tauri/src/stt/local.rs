@@ -5,18 +5,20 @@
 //! **Deviation from spec.md FR-010/SC-003 and quickstart.md, decided with
 //! the operator 2026-09-17**: the spec calls for the model to ship inside
 //! the installer with zero first-run download. This implementation instead
-//! downloads the bundled model into `<AppLocalData>/whisper/tiny/` the
-//! first time it is needed (mirroring how `models::huggingface`/
+//! downloads the bundled model on demand (mirroring how `models::huggingface`/
 //! `models::download` already fetch GGUF chat models), to avoid committing
 //! a large binary checkpoint into git history. After that first download,
 //! transcription is fully offline (FR-003/SC-004 still hold).
 //!
-//! Only the `tiny` (multilingual) tier is used for every device — FR-011's
-//! per-device tiering assumed a reusable hardware-tier selector from spec
-//! 002 that, on inspection, does not exist as a standalone function
-//! (`catalog::recommend_tiers` is hardcoded to the LLM catalog's
-//! `CatalogEntry` type). Building a general-purpose tier selector is out of
-//! scope for this pass; every device gets the smallest multilingual model.
+//! **Spec 010 update**: which tier (`tiny`/`base`/`small`) is loaded is now a
+//! per-device choice (`voice.stt_model_id` preference, resolved in
+//! `voice.rs`) instead of hardcoded to `tiny` for every device — the
+//! previous per-device-tiering gap this module used to document is closed by
+//! `stt::catalog`'s generalized tier selector. Model files also moved off a
+//! Whisper-specific path onto the same generic `models::paths` root chat
+//! models already use — see `resolve_or_migrate_model_dir` below for the
+//! one remaining reference to the old path, kept only to migrate an
+//! already-downloaded install.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex as StdMutex};
@@ -30,14 +32,18 @@ use tauri::{AppHandle, Manager};
 use tokenizers::Tokenizer;
 
 use crate::models::download::download_to_file;
+use crate::models::paths as model_paths;
 
+use super::catalog::SttCatalogEntry;
 use super::{CanonicalPcm, SttAdapter, SttError};
 
-const WHISPER_REPO: &str = "openai/whisper-tiny";
-// Pinned to the reviewed model revision so config, tokenizer, and weights
-// can never be mixed across mutable `main` updates.
-const WHISPER_REVISION: &str = "169d4a4341b33bc18d8881c4b69c2e104e1cc0af";
-const WHISPER_DIR: &str = "whisper/tiny/169d4a4341b33bc18d8881c4b69c2e104e1cc0af";
+/// Legacy path this feature's pre-spec-010 implementation downloaded
+/// `whisper-tiny` into, before STT models moved onto the shared
+/// `models::paths` root chat models already use (research.md §4). This is
+/// the *only* remaining reference to that path — [`resolve_or_migrate_model_dir`]
+/// uses it solely to migrate an already-downloaded install instead of
+/// silently abandoning it.
+const LEGACY_WHISPER_TINY_DIR: &str = "whisper/tiny/169d4a4341b33bc18d8881c4b69c2e104e1cc0af";
 
 const CONFIG_FILENAME: &str = "config.json";
 const TOKENIZER_FILENAME: &str = "tokenizer.json";
@@ -73,11 +79,12 @@ struct Inner {
 }
 
 impl LocalWhisperAdapter {
-    /// Ensures the bundled model is present under `<AppLocalData>/whisper/tiny/`
-    /// (downloading any missing file once) and loads it into memory.
-    pub async fn load(app: &AppHandle) -> Result<Self, SttError> {
-        let dir = model_dir(app)?;
-        ensure_model_files(&dir).await?;
+    /// Ensures `entry`'s files are present under its `models::paths` slug
+    /// directory (downloading any missing/incomplete file, migrating a
+    /// legacy install first if applicable) and loads it into memory.
+    pub async fn load(app: &AppHandle, entry: &SttCatalogEntry) -> Result<Self, SttError> {
+        let dir = resolve_or_migrate_model_dir(app, entry)?;
+        ensure_model_files(&dir, entry).await?;
         tauri::async_runtime::spawn_blocking(move || Self::load_from_dir(&dir))
             .await
             .map_err(|e| SttError::LocalUnavailable {
@@ -290,34 +297,91 @@ fn tensor_err(e: candle::Error) -> SttError {
     }
 }
 
-/// Resolves `<AppLocalData>/whisper/tiny/`, creating it if missing.
-fn model_dir(app: &AppHandle) -> Result<PathBuf, SttError> {
-    let dir = app
-        .path()
-        .resolve(WHISPER_DIR, BaseDirectory::AppLocalData)
-        .map_err(|e| SttError::LocalUnavailable {
-            reason: format!("resolve whisper model dir: {e}"),
-        })?;
-    std::fs::create_dir_all(&dir).map_err(|e| SttError::LocalUnavailable {
-        reason: format!("create whisper model dir: {e}"),
+/// A file counts as a complete download only if it exists, is a regular
+/// file, and has nonzero size — guards against a previous run's
+/// interrupted/truncated download (or a hand-deleted/corrupted file) being
+/// mistaken for an installed one. No content validation beyond that.
+pub fn is_complete_file(path: &Path) -> bool {
+    std::fs::metadata(path)
+        .map(|m| m.is_file() && m.len() > 0)
+        .unwrap_or(false)
+}
+
+/// A model directory is complete only when all three files Whisper needs
+/// are each individually complete (see [`is_complete_file`]). Shared with
+/// `stt::commands::list_installed_stt_models`, which uses the same
+/// predicate so listing, loading, and downloading always agree on the same
+/// installed/not-installed state.
+pub fn is_complete_model(dir: &Path) -> bool {
+    [CONFIG_FILENAME, TOKENIZER_FILENAME, WEIGHTS_FILENAME]
+        .iter()
+        .all(|filename| is_complete_file(&dir.join(filename)))
+}
+
+/// Resolves `entry`'s canonical `models::paths` slug directory, creating it
+/// if missing. If that directory isn't already complete and `entry` is
+/// `whisper-tiny`, first checks the pre-spec-010
+/// [`LEGACY_WHISPER_TINY_DIR`] for a complete install and copies its files
+/// into the canonical directory — best-effort: on any copy failure the
+/// canonical directory is left as-is and `ensure_model_files` downloads
+/// whatever didn't make it across. An incomplete legacy install is never
+/// treated as valid and is left untouched.
+///
+/// Called before every disk-touching operation (load, install-status
+/// listing, download) so all three agree on the same installed state.
+pub fn resolve_or_migrate_model_dir(
+    app: &AppHandle,
+    entry: &SttCatalogEntry,
+) -> Result<PathBuf, SttError> {
+    let dir = model_paths::slug_dir(app, &entry.id).map_err(|e| SttError::LocalUnavailable {
+        reason: format!("resolve model dir for {}: {e}", entry.id),
     })?;
+
+    if entry.id == "whisper-tiny" && !is_complete_model(&dir) {
+        if let Ok(legacy_dir) = app
+            .path()
+            .resolve(LEGACY_WHISPER_TINY_DIR, BaseDirectory::AppLocalData)
+        {
+            migrate_legacy_if_present(&legacy_dir, &dir);
+        }
+    }
+
     Ok(dir)
 }
 
+/// Copies a complete legacy install's files into `canonical_dir`,
+/// best-effort (a failed individual copy just leaves that file for
+/// `ensure_model_files` to download fresh). No-op if `legacy_dir` isn't
+/// itself a complete install — an incomplete legacy install is never
+/// treated as valid. Split out from [`resolve_or_migrate_model_dir`] as a
+/// pure `&Path`-based helper so it's unit-testable without a Tauri
+/// `AppHandle` — `pub` for the same reason as [`ensure_model_files`].
+pub fn migrate_legacy_if_present(legacy_dir: &Path, canonical_dir: &Path) {
+    if !is_complete_model(legacy_dir) {
+        return;
+    }
+    for filename in [CONFIG_FILENAME, TOKENIZER_FILENAME, WEIGHTS_FILENAME] {
+        let _ = std::fs::copy(legacy_dir.join(filename), canonical_dir.join(filename));
+    }
+}
+
 /// Downloads whichever of `config.json`/`tokenizer.json`/`model.safetensors`
-/// is not already present under `dir`. Idempotent — a second call with all
-/// three files already on disk makes no network request at all (FR-003
+/// isn't already complete under `dir` (see [`is_complete_file`]) from
+/// `entry`'s pinned HuggingFace revision. Idempotent — a second call with
+/// all three files already complete makes no network request at all (FR-003
 /// continues to hold once the first download completes). `pub` (rather than
 /// private) so `local_tests.rs` can prime a fixture cache directly, without
 /// needing an `AppHandle` the way [`LocalWhisperAdapter::load`] does.
-pub async fn ensure_model_files(dir: &Path) -> Result<(), SttError> {
+pub async fn ensure_model_files(dir: &Path, entry: &SttCatalogEntry) -> Result<(), SttError> {
     for filename in [CONFIG_FILENAME, TOKENIZER_FILENAME, WEIGHTS_FILENAME] {
         let dest = dir.join(filename);
-        if dest.exists() {
+        if is_complete_file(&dest) {
             continue;
         }
-        let url =
-            format!("https://huggingface.co/{WHISPER_REPO}/resolve/{WHISPER_REVISION}/{filename}");
+        let url = format!(
+            "https://huggingface.co/{}/resolve/{}/{filename}",
+            entry.hf_repo, entry.hf_revision
+        );
         download_to_file(&url, dest, |_progress| {})
             .await
             .map_err(|e| SttError::LocalUnavailable {

@@ -9,6 +9,12 @@
 
 use async_trait::async_trait;
 
+pub mod catalog;
+#[cfg(test)]
+mod catalog_tests;
+pub mod commands;
+#[cfg(test)]
+mod commands_tests;
 pub mod interrupt;
 #[cfg(test)]
 mod interrupt_tests;
