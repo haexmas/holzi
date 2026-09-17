@@ -53,27 +53,34 @@ zwei Stellen mit identischer, nicht-trivialer Sortier-/Fallback-Logik).
 
 **Decision**: STT-Modelle liegen unter demselben Wurzelverzeichnis wie Chat-Modelle
 (`<AppLocalData>/models/<slug>/`, `MODELS_DIRECTORY` unverändert "models"), aufgelöst über die
-bestehenden generischen Helfer `models::paths::slug_dir`/`model_file_path`. Kein Umbenennen des
-Wurzelverzeichnisses, keine Migration.
+bestehenden generischen Helfer `models::paths::slug_dir`/`model_file_path`. Vor dem ersten
+Download wird eine vollständige Installation des bisherigen Default-Pfads erkannt und einmalig
+in den neuen kanonischen Slug-Pfad übernommen; dadurch bleibt die bestehende Offline-Nutzung
+erhalten, ohne den neuen Storage-Layer Whisper-spezifisch zu machen.
 
 **Rationale**: Operator-Entscheidung, in zwei Schritten präzisiert: zuerst der Wunsch nach einem
 gemeinsamen, nicht Whisper-spezifischen Verzeichnis (weil das lokale STT-Backend nicht dauerhaft
 Whisper bleiben muss), dann die Vereinfachung, dass der bereits existierende Name "models" dafür
-ausreicht — keine Umbenennung zu "llmModels" nötig, damit auch keine Migration bestehender
-Downloads. `models::paths` war bereits vollständig backend-agnostisch (`<root>/<slug>/<filename>`);
-der bisherige `WHISPER_DIR`/`model_dir()`-Sonderweg in `stt/local.rs` war unnötig.
+ausreicht — keine Umbenennung zu "llmModels" nötig und keine Migration bestehender Chat-Downloads.
+`models::paths` war bereits vollständig backend-agnostisch (`<root>/<slug>/<filename>`);
+der bisherige `WHISPER_DIR`/`model_dir()`-Sonderweg in `stt/local.rs` war unnötig. Die alte
+Pfadprüfung ist ausschließlich eine zeitlich begrenzte Kompatibilitätsregel im STT-Ladepfad und
+kein neuer Storage-Abstraktionsvertrag.
 
 **Alternatives considered**:
+
 - Neues Wurzelverzeichnis `llmModels` mit Migration bestehender Installationen — verworfen, da der
   Operator den bestehenden Namen ausdrücklich beibehalten wollte.
 - Separates STT-eigenes Wurzelverzeichnis (z. B. weiterhin `whisper/`) — verworfen, widerspricht
   der Anforderung, keine Backend-spezifische Struktur festzuschreiben.
 
-**Bekannter Nebeneffekt**: Der bereits gemergte Code lädt aktuell nach
-`<AppLocalData>/whisper/tiny/<rev>/`. Dieser Pfad wird mit dieser Spec verwaist; da es sich um ein
-frisch gemergtes Feature (heute) mit nur `whisper-tiny` (~150 MB) handelt, wird bewusst keine
-Migrationslogik gebaut — ein erneuter Download ist güns­tig genug, um die Komplexität nicht zu
-rechtfertigen.
+**Kompatibilität für bestehende Installationen**: Der bereits gemergte Code lädt aktuell nach
+`<AppLocalData>/whisper/tiny/<rev>/`. Bevor der Installationsstatus oder für `whisper-tiny` ein
+Netzwerkzugriff erfolgt, prüft die Implementierung dort dieselbe Vollständigkeitsbedingung wie im
+neuen Slug-Verzeichnis. Ist der Legacy-Ordner vollständig, werden die drei Dateien in den kanonischen
+`<AppLocalData>/models/whisper-tiny/`-Ordner übernommen; eine unvollständige Legacy-Installation
+wird nicht als gültig behandelt und nur über die normale Downloadlogik ergänzt. Nach der
+erfolgreichen Übernahme melden Listing, Laden und Offline-Betrieb denselben Installationszustand.
 
 ## 5. Keine Vereinheitlichung mit der `models`-DB-Tabelle
 
@@ -101,16 +108,18 @@ Onboarding-/Settings-STT-Anzeige gebraucht wird (siehe Punkt 7).
 `169d4a4341b33bc18d8881c4b69c2e104e1cc0af`) werden `base` und `small` auf den zum Zeitpunkt dieser
 Planung aktuellen `main`-Commit von `openai/whisper-base` bzw. `openai/whisper-small` gepinnt:
 
-| Tier  | Repo                   | Revision (SHA)                            | `model.safetensors` | `config.json` | `tokenizer.json` |
-| ----- | ---------------------- | ------------------------------------------ | -------------------: | -------------: | -----------------: |
-| tiny  | `openai/whisper-tiny`  | `169d4a4341b33bc18d8881c4b69c2e104e1cc0af` (bestehend) |          151 061 672 B |          ~1 983 B |          2 480 466 B |
-| base  | `openai/whisper-base`  | `e37978b90ca9030d5170a5c07aadb050351a65bb` |          290 403 936 B |             1 983 B |          2 480 466 B |
-| small | `openai/whisper-small` | `973afd24965f72e36ca33b3055d56a652f456b4d` |          966 995 080 B |             1 967 B |          2 480 466 B |
+| Tier  | Repo                   | Revision (SHA)                                         | `model.safetensors` | `config.json` | `tokenizer.json` |
+| ----- | ---------------------- | ------------------------------------------------------ | ------------------: | ------------: | ---------------: |
+| tiny  | `openai/whisper-tiny`  | `169d4a4341b33bc18d8881c4b69c2e104e1cc0af` (bestehend) |       151 061 672 B |       1 983 B |      2 480 466 B |
+| base  | `openai/whisper-base`  | `e37978b90ca9030d5170a5c07aadb050351a65bb`             |       290 403 936 B |       1 983 B |      2 480 466 B |
+| small | `openai/whisper-small` | `973afd24965f72e36ca33b3055d56a652f456b4d`             |       966 995 080 B |       1 967 B |      2 480 466 B |
 
-Verifiziert per HuggingFace API (`GET /api/models/<repo>`) und `HEAD`-Request (mit Redirect) auf
-`resolve/main/<file>` am 2026-09-17: alle drei Repos haben identisches Dateilayout
-(`config.json`/`tokenizer.json`/`model.safetensors` vorhanden, `safetensors`-Tag gesetzt), sodass
-`LocalWhisperAdapter::load_from_dir` ohne Änderung auch `base`/`small` laden können sollte.
+Verifiziert am 2026-09-17 pro Katalog-Pin: `GET /api/models/<repo>/revision/<sha>` bestätigte die
+jeweilige SHA, die drei Dateien und den `safetensors`-Tag; `HEAD`-Requests (mit Redirect) auf
+`resolve/<sha>/<file>` bestätigten die folgenden Größen. Es wurde kein `main`-Branch als
+Nachweis verwendet. Damit haben alle drei Repositories am jeweils gepinnten Stand dasselbe
+Dateilayout, sodass `LocalWhisperAdapter::load_from_dir` ohne Änderung auch `base`/`small`
+laden können sollte.
 
 **Rationale**: Gleiches Pinning-Prinzip wie bei `tiny` — Config, Tokenizer und Gewichte dürfen nie
 über einen sich bewegenden `main`-Branch auseinanderlaufen.
@@ -127,7 +136,9 @@ Speicherbedarf widerspiegelt — Detail für `data-model.md`.
 
 **Decision**: Ein neuer Tauri-Command (`invalidate_stt_model_cache`) leert
 `VoiceState.whisper` (`AsyncMutex<Option<Arc<LocalWhisperAdapter>>>`, `voice.rs:58`), nachdem
-Settings die aktive Preference erfolgreich gewechselt hat.
+Settings die aktive Preference erfolgreich gewechselt hat. Der Command bleibt in allen Builds
+registriert; mit `voice` und `llm-cpu` leert er den Cache, mit `voice` ohne `llm-cpu` und ohne
+`voice` ist er ein erfolgreicher No-op ohne Zugriff auf das nicht kompilierte Feld.
 
 **Rationale**: `resolve_local_adapter` (`voice.rs:228`) lädt den Adapter einmalig und hält ihn für
 die Prozesslaufzeit warm (Modell-Load kostet Sekunden). Ohne explizite Invalidierung würde ein

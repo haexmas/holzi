@@ -5,7 +5,7 @@
 **Status**: Draft
 **Input**: User description: "Let users choose their local speech-to-text (STT) model, with the same workflow the app already uses for the local chat/agent model — a hardware-fit-annotated tier catalog picked once during first-run onboarding and changeable later in Settings. STT model storage must not be Whisper-specific, since the local transcription backend could change later. External/API-based transcription providers stay out of scope (that's the separate, still-unbuilt US3 of spec 008)."
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Pick an STT model during first-run onboarding (Priority: P1)
 
@@ -46,7 +46,7 @@ A user who already completed onboarding (or skipped the STT step) opens Settings
 - What happens if the currently active STT model's files are missing or corrupted on disk when a dictation starts (e.g. deleted by hand)? (Falls back to re-downloading the active tier rather than failing silently.)
 - What happens if a user switches the active STT model while a recording/transcription is already in progress? (The in-flight transcription completes using the model that was active when it started; the switch takes effect starting with the next recording.)
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 ### Functional Requirements
 
@@ -65,7 +65,7 @@ A user who already completed onboarding (or skipped the STT step) opens Settings
 - **STT Model Tier**: One selectable local speech-to-text model option — a display name, an approximate size/resource footprint, and a hardware-fit verdict for the current device. Analogous to a chat/agent model catalog entry, but for transcription.
 - **Active STT Model (per device)**: The one STT Model Tier currently in effect for a given device, persisted as a device-scoped setting, defaulting to the smallest built-in tier when never explicitly chosen.
 
-## Success Criteria *(mandatory)*
+## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
 

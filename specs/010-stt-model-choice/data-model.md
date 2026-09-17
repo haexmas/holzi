@@ -11,14 +11,14 @@ Analog zu `catalog::CatalogEntry` (`src-tauri/src/catalog/mod.rs:27`), aber ohne
 GGUF-spezifischen Felder (`hf_filename`, `tokenizer_repo`, `context_window`), die für den
 mehrdateiigen Whisper-Ladepfad nicht zutreffen:
 
-| Feld                | Typ      | Beschreibung                                                                                   |
-| ------------------- | -------- | ------------------------------------------------------------------------------------------------ |
-| `id`                | `String` | Stabile ID, zugleich der `models::paths`-Slug (z. B. `"whisper-tiny"`).                          |
-| `name`              | `String` | Anzeigename (z. B. "Whisper Tiny (mehrsprachig)").                                                |
-| `hf_repo`           | `String` | HuggingFace-Repo (z. B. `"openai/whisper-tiny"`).                                                 |
-| `hf_revision`       | `String` | Gepinnter Commit-SHA (siehe research.md §6) — nie `"main"`.                                       |
+| Feld                | Typ      | Beschreibung                                                                                                                                                                               |
+| ------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                | `String` | Stabile ID, zugleich der `models::paths`-Slug (z. B. `"whisper-tiny"`).                                                                                                                    |
+| `name`              | `String` | Anzeigename (z. B. "Whisper Tiny (mehrsprachig)").                                                                                                                                         |
+| `hf_repo`           | `String` | HuggingFace-Repo (z. B. `"openai/whisper-tiny"`).                                                                                                                                          |
+| `hf_revision`       | `String` | Gepinnter Commit-SHA (siehe research.md §6) — nie `"main"`.                                                                                                                                |
 | `approx_size_bytes` | `u64`    | Summe aller drei benötigten Dateien (`config.json` + `tokenizer.json` + `model.safetensors`), nicht nur der Gewichte — das ist der tatsächliche Speicherbedarf für den Hardware-Fit-Check. |
-| `license`           | `String` | Wie beim LLM-Katalog (hier: MIT, wie alle `openai/whisper-*`-Repos).                              |
+| `license`           | `String` | Lizenz des HuggingFace-Repositories (für die drei `openai/whisper-*`-Repos: Apache-2.0).                                                                                                   |
 
 Persistiert als `src-tauri/src/stt/stt_catalog.json`, geparst genau wie `model_catalog.json`
 (`OnceLock`, `include_str!`). Die drei benötigten Dateinamen (`config.json`/`tokenizer.json`/
@@ -44,9 +44,9 @@ unterschiedliche TS-Interfaces auf Frontend-Seite haben).
 
 ## Neue Preference: `voice.stt_model_id`
 
-| Scope    | Key               | Wert                                                    | Default bei Fehlen                          |
-| -------- | ----------------- | -------------------------------------------------------- | --------------------------------------------- |
-| `device` | `voice.stt_model_id` | Ein `SttCatalogEntry.id` (z. B. `"whisper-base"`)       | `"whisper-tiny"` (kleinster Tier, bisheriges Verhalten) |
+| Scope    | Key                  | Wert                                              | Default bei Fehlen                                      |
+| -------- | -------------------- | ------------------------------------------------- | ------------------------------------------------------- |
+| `device` | `voice.stt_model_id` | Ein `SttCatalogEntry.id` (z. B. `"whisper-base"`) | `"whisper-tiny"` (kleinster Tier, bisheriges Verhalten) |
 
 Läuft über die bestehenden generischen `get_pref`/`set_pref`-Commands
 (`src-tauri/src/storage/preferences_commands.rs`) — keine neue Pref-Infrastruktur, analog zu
@@ -65,17 +65,25 @@ Beide Sorten koexistieren nebeneinander im selben Wurzelverzeichnis, ohne dass e
 anderen weiß — `canonical_model_file` (Chat-spezifisch, filtert auf `.gguf`) ignoriert
 STT-Slug-Verzeichnisse automatisch, da dort keine `.gguf`-Datei liegt.
 
-**Installations-Check** (Ersatz für eine DB-Zeile): `list_installed_stt_models` prüft pro
-Katalog-Eintrag, ob alle drei erwarteten Dateien im Slug-Verzeichnis vorhanden sind (Größe > 0,
-keine Content-Validierung) — exakt das Kriterium, das `ensure_model_files`
-(`stt/local.rs::ensure_model_files`) heute schon implizit für "ist bereits heruntergeladen"
-verwendet.
+**Installations-Check** (Ersatz für eine DB-Zeile): Beide Flows verwenden dieselbe
+Vollständigkeitsprüfung. Die elementare Predicate-Funktion `is_complete_file(path)` liefert nur
+dann `true`, wenn `metadata()` erfolgreich ist, der Pfad eine reguläre Datei bezeichnet und
+`len() > 0` gilt. `is_complete_model(dir)` wendet dieses Predicate auf
+`config.json`/`tokenizer.json`/`model.safetensors` an und liefert nur dann `true`, wenn alle drei
+Dateien vollständig sind. `list_installed_stt_models` nutzt `is_complete_model`; `ensure_model_files`
+überspringt einzelne Dateien nur bei `is_complete_file == true` und lädt jede andere Datei neu.
+Damit bleiben leere oder abgeschnittene Dateien nicht fälschlich als installiert bestehen. Es
+findet weiterhin keine Content-Validierung statt. Vor dem Status-Check normalisiert der Listing-
+Command dieselbe vollständige Legacy-Installation wie Download und Laden in den kanonischen
+Slug-Pfad, sodass eine vorhandene Installation nicht erst durch einen Downloadversuch sichtbar
+wird.
 
 ## Laufzeit-Zustand: `VoiceState`-Cache-Invalidierung
 
 Kein neues Datenmodell, aber eine neue Übergangsregel: `VoiceState.whisper`
 (`AsyncMutex<Option<Arc<LocalWhisperAdapter>>>`) wird von `None` → `Some(adapter für Slug X)` beim
 ersten `resolve_local_adapter`-Aufruf nach Start oder nach einer Invalidierung. Ein erfolgreicher
-`invalidate_stt_model_cache`-Aufruf setzt ihn zurück auf `None`; der nächste
+`invalidate_stt_model_cache`-Aufruf setzt ihn zurück auf `None` (im `llm-cpu`-losen Build ist der
+Command ein erfolgreicher No-op); der nächste
 `resolve_local_adapter`-Aufruf lädt dann den zu diesem Zeitpunkt in `voice.stt_model_id`
 eingetragenen Slug.

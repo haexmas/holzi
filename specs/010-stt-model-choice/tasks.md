@@ -45,8 +45,8 @@ end-to-end until this phase is done.
 
 - [ ] T002 [P] Extract the sort/pick algorithm inside `catalog::recommend_tiers`
       (`src-tauri/src/catalog/mod.rs:150`) into a new generic helper in
-      `src-tauri/src/hardware/tiers.rs` (e.g. `pick_three<T: Clone>(candidates: Vec<(T, Fit)>, size_of:
-      impl Fn(&T) -> u64, id_of: impl Fn(&T) -> &str) -> Option<[(Tier, T, Fit); 3]>`), moving the
+      `src-tauri/src/hardware/tiers.rs` (e.g. a generic `pick_three` returning three
+      `(Tier, T, Fit)` tuples), moving the
       `Tier` enum alongside it if that avoids a `catalog` → `hardware` dependency inversion. Add
       `src-tauri/src/hardware/tiers_tests.rs` covering the same Easy/Sweet/Max fallback cases
       `catalog/catalog_tests.rs` already covers for the LLM catalog. Update
@@ -61,25 +61,37 @@ end-to-end until this phase is done.
 - [ ] T004 In `src-tauri/src/stt/local.rs`: remove the `WHISPER_REPO`/`WHISPER_REVISION`/
       `WHISPER_DIR` constants and the `model_dir()` function. Change `LocalWhisperAdapter::load`,
       `load_from_dir`, and `ensure_model_files` to take a `&stt::catalog::SttCatalogEntry` instead
-      of reading the removed constants, resolving the model directory via
+      of reading the removed constants, resolving the canonical model directory via
       `models::paths::slug_dir(app, &entry.id)` / `model_file_path` (existing helpers, unchanged) —
       the download URL becomes `https://huggingface.co/{entry.hf_repo}/resolve/{entry.hf_revision}/{filename}`
-      as before, just parameterized. Update `src-tauri/src/stt/local_tests.rs`'s fixtures to pass an
-      entry instead of relying on the removed constants. (depends on T003)
+      as before, just parameterized. Add a shared `resolve_or_migrate_model_dir` compatibility
+      resolver plus `is_complete_file`/`is_complete_model` helpers:
+      each file must be a regular file with size > 0, and `ensure_model_files` must redownload every
+      file failing that predicate. Before downloading `whisper-tiny`, if the canonical directory
+      is incomplete, detect a complete legacy
+      `<AppLocalData>/whisper/tiny/<old-revision>/` installation and copy it into the canonical
+      directory; run the same resolver before status listing and loading, and make this compatibility
+      check the only remaining reference to the old path. Update
+      `src-tauri/src/stt/local_tests.rs`'s fixtures to pass an entry instead of relying on removed
+      constants, and cover zero-byte/partial files plus the legacy migration. (depends on T003)
 - [ ] T005 [P] Add `list_installed_stt_models` (checks, for every `stt::catalog::entries()` item,
-      whether `config.json`/`tokenizer.json`/`model.safetensors` all exist under its slug dir via
-      `models::paths`) and the Tauri commands `list_stt_catalog`, `stt_recommend_tiers`,
+      whether `config.json`/`tokenizer.json`/`model.safetensors` all satisfy the shared
+      `is_complete_model` predicate under its slug dir via `models::paths`) and the Tauri commands `list_stt_catalog`, `stt_recommend_tiers`,
       `list_installed_stt_models`, `download_stt_model` in new `src-tauri/src/stt/commands.rs`,
       per [contracts/tauri-commands.md](contracts/tauri-commands.md). `download_stt_model` resolves
-      the catalog entry via `stt::catalog::get` (404s as `CatalogEntryNotFound` if unknown) and
-      calls `ensure_model_files` (T004). (depends on T003, T004)
+      the catalog entry via `stt::catalog::get` (404s as `CatalogEntryNotFound` if unknown), invokes
+      the same legacy-preserving directory resolution as `load` and the status listing, and calls
+      `ensure_model_files` (T004) so incomplete files are repaired rather than treated as installed.
+      (depends on T003, T004)
 - [ ] T006 [P] Add `src-tauri/src/stt/commands_tests.rs` covering `list_installed_stt_models`
-      (no files / partial files / all files present, per catalog entry) and `download_stt_model`'s
+      (no files / zero-byte files / partial files / all files present, per catalog entry) and `download_stt_model`'s
       `CatalogEntryNotFound` path for an unknown id — mirroring how `models/commands_tests.rs`
       covers the analogous chat-model commands. (depends on T005)
 - [ ] T007 [P] In `src-tauri/src/voice.rs`: add an `invalidate_stt_model_cache` Tauri command and a
       `VoiceState` method that resets the cached `whisper: AsyncMutex<Option<Arc<LocalWhisperAdapter>>>`
-      to `None`. Change `resolve_local_adapter` to read the device-scoped `voice.stt_model_id`
+      to `None` in the `voice` + `llm-cpu` build. Keep the command registered in all feature sets:
+      the `voice`-without-`llm-cpu` implementation and the `voice`-disabled stub return successful
+      no-ops without accessing the cfg-disabled cache field. Change `resolve_local_adapter` to read the device-scoped `voice.stt_model_id`
       preference before loading, resolve it via `stt::catalog::get`, and fall back to the
       `"whisper-tiny"` entry when the preference is missing, empty, or names an unknown id — this
       preserves today's behavior exactly for anyone who never touches the new setting (FR-007).
@@ -87,8 +99,9 @@ end-to-end until this phase is done.
 - [ ] T008 [P] Extend `src-tauri/src/voice_tests.rs` with cases for T007's new behavior: preference
       missing/empty/unknown-id all resolve to `whisper-tiny`, a valid preference resolves to that
       entry, and `invalidate_stt_model_cache` actually clears a previously-populated cache slot
-      (assert the next `resolve_local_adapter` call reloads rather than reusing the old `Arc`).
-      (depends on T007)
+      (assert the next `resolve_local_adapter` call reloads rather than reusing the old `Arc`). Add
+      a no-default-feature compile/test assertion that the command is still registered and is a
+      successful no-op. (depends on T007)
 - [ ] T009 Register the four commands from T005 and `invalidate_stt_model_cache` from T007 in
       `src-tauri/src/lib.rs`'s `generate_handler!`. (depends on T005, T007)
 - [ ] T010 Regenerate ts-rs bindings (`pnpm generate:ts-types`) so `SttCatalogEntry`,
@@ -132,9 +145,9 @@ skipping still leaves dictation fully working via the built-in default.
       `'alias' | 'model' | 'sttModel'`; after the existing model step's `completeWithModel`/
       `completeWithoutModel` paths, transition to `'sttModel'` instead of navigating to the
       workspace directly; on STT choose, call `useSttModels().downloadFromCatalogAsync(id)` then
-      `setPrefAsync({kind:'device', uuid: info.vaultDeviceUuid}, 'voice.stt_model_id',
-      installed.id)`, then navigate to the workspace; on STT skip, navigate to the workspace exactly
-      as today (no new preference written, so `resolve_local_adapter`'s T007 fallback applies).
+      `setPrefAsync` for `voice.stt_model_id`, then navigate to the workspace; on STT skip, navigate
+      to the workspace exactly as today (no new preference written, so `resolve_local_adapter`'s
+      T007 fallback applies).
       (depends on T013)
 - [ ] T015 [US1] Manual verification: run [quickstart.md §1](quickstart.md#1-erstwahl-beim-onboarding-user-story-1)
       end to end — both the "choose a tier" path and the "decide later" skip path, on a fresh
@@ -159,8 +172,8 @@ if needed) and confirm the next dictation uses it without restarting the app.
 - [ ] T017 [US2] Create `src/components/settings/SttModelSetting.vue`, mirroring
       `src/components/settings/DefaultModelSetting.vue`'s structure (current-value display, list of
       options, save button, busy/error/saved-flash states) but simplified to the single
-      device-only scope: show the active model (`getPrefAsync({kind:'device', uuid: deviceUuid},
-      'voice.stt_model_id')`, displaying `whisper-tiny` when unset), list catalog entries via
+      device-only scope: show the active model via `getPrefAsync` for `voice.stt_model_id` (displaying
+      `whisper-tiny` when unset), list catalog entries via
       `useSttCatalog().listAsync()` marked installed/not-installed via
       `useSttModels().listInstalledAsync()`; switching calls `downloadFromCatalogAsync` (no-op if
       already installed) → `setPrefAsync(..., 'voice.stt_model_id', id)` →

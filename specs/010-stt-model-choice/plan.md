@@ -52,21 +52,21 @@ neue Vue-Komponenten (Onboarding-Step, Settings-Abschnitt), zwei generalisierte 
 
 ## Constitution Check
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+_GATE: Must pass before Phase 0 research. Re-check after Phase 1 design._
 
 Geprüft gegen `.specify/memory/constitution.md` (haex-hive, Version 1.4.0). Keines der acht
 NON-NEGOTIABLE-Prinzipien ist berührt:
 
-| Prinzip                                         | Berührt? | Begründung                                                                                     |
-| ------------------------------------------------ | :------: | ------------------------------------------------------------------------------------------------ |
-| I. No Secrets in Git                             |    ✗    | Keine Credentials/Keys im Scope (externe Provider explizit ausgeschlossen, FR-009).               |
-| II. No Local Absolute Paths in Versioned Config  |    ✗    | Katalog-JSON enthält nur Repo-IDs/Revisions/Größen, keine Pfade.                                   |
-| III. Project Identity Is Device-Independent      |    ✗    | Nicht berührt — kein Projekt-Identity-Bezug.                                                       |
-| IV. Cross-Repo References Pin Immutable Revisions |    ✗    | Erfüllt sogar zusätzlich: `hf_revision` wird für `base`/`small` neu gepinnt (siehe research.md §6), nicht auf `main`. |
-| V. External Sources Are Opt-in Per Project        |    ✗    | Kein `.haex-hive.json`-Atom betroffen.                                                             |
-| VI. Self-Modifying Instructions Are Review-Gated  |    ✗    | Keine Skill-/Constitution-/Permission-Änderung.                                                    |
-| VII. Relay Unavailability Never Blocks Local Work |    ✗    | Feature ist rein lokal (Katalog, Preferences, Dateisystem); kein Relay-Bezug.                      |
-| VIII. No Concealment Instructions in Agent Output |    ✗    | Nicht berührt.                                                                                     |
+| Prinzip                                           | Berührt? | Begründung                                                                                                            |
+| ------------------------------------------------- | :------: | --------------------------------------------------------------------------------------------------------------------- |
+| I. No Secrets in Git                              |    ✗     | Keine Credentials/Keys im Scope (externe Provider explizit ausgeschlossen, FR-009).                                   |
+| II. No Local Absolute Paths in Versioned Config   |    ✗     | Katalog-JSON enthält nur Repo-IDs/Revisions/Größen, keine Pfade.                                                      |
+| III. Project Identity Is Device-Independent       |    ✗     | Nicht berührt — kein Projekt-Identity-Bezug.                                                                          |
+| IV. Cross-Repo References Pin Immutable Revisions |    ✗     | Erfüllt sogar zusätzlich: `hf_revision` wird für `base`/`small` neu gepinnt (siehe research.md §6), nicht auf `main`. |
+| V. External Sources Are Opt-in Per Project        |    ✗     | Kein `.haex-hive.json`-Atom betroffen.                                                                                |
+| VI. Self-Modifying Instructions Are Review-Gated  |    ✗     | Keine Skill-/Constitution-/Permission-Änderung.                                                                       |
+| VII. Relay Unavailability Never Blocks Local Work |    ✗     | Feature ist rein lokal (Katalog, Preferences, Dateisystem); kein Relay-Bezug.                                         |
+| VIII. No Concealment Instructions in Agent Output |    ✗     | Nicht berührt.                                                                                                        |
 
 **Ergebnis**: PASS, keine Verletzung, kein Eintrag in Complexity Tracking nötig.
 
@@ -82,7 +82,7 @@ specs/010-stt-model-choice/
 ├── quickstart.md         # Phase 1 output
 ├── contracts/
 │   └── tauri-commands.md
-└── tasks.md              # Phase 2 output (/speckit.tasks — not yet created)
+└── tasks.md              # Phase 2 output (/speckit.tasks)
 ```
 
 ### Source Code (repository root)
@@ -133,4 +133,4 @@ bleibt.
 
 ## Complexity Tracking
 
-*Keine Einträge — Constitution Check hat keine Verletzung ergeben.*
+_Keine Einträge — Constitution Check hat keine Verletzung ergeben._
