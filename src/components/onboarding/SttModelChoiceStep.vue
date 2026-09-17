@@ -24,7 +24,8 @@ function fitLabelKey(fit: string): string {
   return `onboarding.model.fit.${fit}`
 }
 
-/** Rough MB/GB display — good enough for three fixed catalog entries. */
+// ponytail: fixed three-tier catalog only; use localized Intl.NumberFormat
+// when the catalog becomes user-configurable or exposes additional units.
 function formatSize(bytes: number): string {
   const mb = bytes / (1024 * 1024)
   if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`

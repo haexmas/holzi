@@ -40,7 +40,9 @@ async function reloadAsync() {
     ])
     catalog.value = entries
     installedIds.value = new Set(installed.map((m) => m.id))
-    activeId.value = pref ?? DEFAULT_ID
+    const normalizedActiveId =
+      pref && entries.some((entry) => entry.id === pref) ? pref : DEFAULT_ID
+    activeId.value = normalizedActiveId
     selectedId.value = activeId.value
   } catch (e) {
     loadError.value = e instanceof Error ? e.message : String(e)

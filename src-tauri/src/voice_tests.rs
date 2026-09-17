@@ -36,13 +36,20 @@ mod stt_catalog_entry_resolution {
 
     #[test]
     fn missing_preference_falls_back_to_whisper_tiny() {
-        assert_eq!(resolve_stt_catalog_entry_from_pref(None).id, "whisper-tiny");
+        assert_eq!(
+            resolve_stt_catalog_entry_from_pref(None)
+                .expect("default catalog entry")
+                .id,
+            "whisper-tiny"
+        );
     }
 
     #[test]
     fn empty_preference_falls_back_to_whisper_tiny() {
         assert_eq!(
-            resolve_stt_catalog_entry_from_pref(Some(String::new())).id,
+            resolve_stt_catalog_entry_from_pref(Some(String::new()))
+                .expect("default catalog entry")
+                .id,
             "whisper-tiny"
         );
     }
@@ -50,7 +57,9 @@ mod stt_catalog_entry_resolution {
     #[test]
     fn unknown_preference_falls_back_to_whisper_tiny() {
         assert_eq!(
-            resolve_stt_catalog_entry_from_pref(Some("does-not-exist".to_string())).id,
+            resolve_stt_catalog_entry_from_pref(Some("does-not-exist".to_string()))
+                .expect("default catalog entry")
+                .id,
             "whisper-tiny"
         );
     }
@@ -58,7 +67,9 @@ mod stt_catalog_entry_resolution {
     #[test]
     fn valid_preference_resolves_to_that_entry() {
         assert_eq!(
-            resolve_stt_catalog_entry_from_pref(Some("whisper-base".to_string())).id,
+            resolve_stt_catalog_entry_from_pref(Some("whisper-base".to_string()))
+                .expect("valid catalog entry")
+                .id,
             "whisper-base"
         );
     }

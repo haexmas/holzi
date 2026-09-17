@@ -21,6 +21,7 @@ use crate::chat::session::ChatState;
 use crate::error::{HolziError, Result};
 use crate::identity::installation_id_path;
 use crate::state::{ActiveInstanceHandle, AppState};
+use crate::voice::VoiceState;
 
 use super::events::emit_instance_list_changed;
 use super::info::InstanceInfo;
@@ -43,6 +44,7 @@ pub async fn open_instance(
     app: AppHandle,
     state: State<'_, AppState>,
     chat: State<'_, ChatState>,
+    voice: State<'_, VoiceState>,
     args: OpenInstanceArgs,
 ) -> Result<InstanceInfo> {
     let _operation = chat.acquire_operation()?;
@@ -173,30 +175,32 @@ pub async fn open_instance(
 
     // Hold the state lock only for the atomic old-runtime drop/new-runtime
     // publish. The blocking SQLCipher open above cannot stall observers.
-    let mut guard = state
-        .active_instance
-        .lock()
-        .map_err(|e| HolziError::CrdtInit {
-            reason: format!("active_instance mutex poisoned: {e}"),
-        })?;
+    {
+        let mut guard = state
+            .active_instance
+            .lock()
+            .map_err(|e| HolziError::CrdtInit {
+                reason: format!("active_instance mutex poisoned: {e}"),
+            })?;
 
-    // Candidate is up — drop the previous handle (releases fs2 lock)
-    // and publish the new one atomically.
-    let previous = guard.take();
-    if let Some(prev) = previous {
-        // The previous handle's Arc drops when `prev` goes out of scope.
-        // A rare failure to release the fs2 lock here (subsystem still
-        // holding a clone) would let both Arcs live on — acceptable for
-        // MVP, tightens later once background tasks (relay, iroh) enter.
-        drop(prev);
+        // Candidate is up — drop the previous handle (releases fs2 lock)
+        // and publish the new one atomically.
+        let previous = guard.take();
+        if let Some(prev) = previous {
+            // The previous handle's Arc drops when `prev` goes out of scope.
+            // A rare failure to release the fs2 lock here (subsystem still
+            // holding a clone) would let both Arcs live on — acceptable for
+            // MVP, tightens later once background tasks (relay, iroh) enter.
+            drop(prev);
+        }
+        *chat.session.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        *guard = Some(ActiveInstanceHandle {
+            name: args.name.clone(),
+            database: candidate,
+        });
     }
-    *chat.session.lock().unwrap_or_else(|e| e.into_inner()) = None;
-    *guard = Some(ActiveInstanceHandle {
-        name: args.name.clone(),
-        database: candidate,
-    });
     chat.bump_vault_generation();
-    drop(guard);
+    voice.invalidate_whisper_cache().await;
     emit_model_load_status(&app, &chat);
 
     // Refresh mtime so `list_instances` shows this instance at the top.

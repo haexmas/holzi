@@ -59,8 +59,7 @@ use stt::commands::{
     download_stt_model, list_installed_stt_models, list_stt_catalog, stt_recommend_tiers,
 };
 use voice::{
-    cancel_voice_recording, invalidate_stt_model_cache, start_voice_recording,
-    stop_voice_recording,
+    cancel_voice_recording, invalidate_stt_model_cache, start_voice_recording, stop_voice_recording,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -99,7 +98,6 @@ pub fn run() {
     let builder = tauri::Builder::default().manage(AppState::new());
     let builder = builder.manage(ChatState::new());
     let builder = builder.manage(DelegateConnectState::new());
-    #[cfg(feature = "voice")]
     let builder = builder.manage(voice::VoiceState::new());
     builder
         .plugin(tauri_plugin_opener::init())

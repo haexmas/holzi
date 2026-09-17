@@ -151,10 +151,7 @@ pub fn recommend_tiers(hw: &HardwareInfo) -> Option<[TierRecommendation; 3]> {
             (entry, fit)
         })
         .collect();
-    let picked = crate::hardware::tiers::pick_three(
-        candidates,
-        |e| e.approx_size_bytes,
-        |e| e.id.as_str(),
-    )?;
+    let picked =
+        crate::hardware::tiers::pick_three(candidates, |e| e.approx_size_bytes, |e| e.id.as_str())?;
     Some(picked.map(|(tier, entry, fit)| TierRecommendation { tier, entry, fit }))
 }

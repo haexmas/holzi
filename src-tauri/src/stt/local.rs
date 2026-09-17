@@ -83,7 +83,15 @@ impl LocalWhisperAdapter {
     /// directory (downloading any missing/incomplete file, migrating a
     /// legacy install first if applicable) and loads it into memory.
     pub async fn load(app: &AppHandle, entry: &SttCatalogEntry) -> Result<Self, SttError> {
-        let dir = resolve_or_migrate_model_dir(app, entry)?;
+        let app_for_dir = app.clone();
+        let entry_for_dir = entry.clone();
+        let dir = tauri::async_runtime::spawn_blocking(move || {
+            resolve_or_migrate_model_dir(&app_for_dir, &entry_for_dir)
+        })
+        .await
+        .map_err(|e| SttError::LocalUnavailable {
+            reason: format!("resolve Whisper model directory: {e}"),
+        })??;
         ensure_model_files(&dir, entry).await?;
         tauri::async_runtime::spawn_blocking(move || Self::load_from_dir(&dir))
             .await
@@ -338,12 +346,13 @@ pub fn resolve_or_migrate_model_dir(
     })?;
 
     if entry.id == "whisper-tiny" && !is_complete_model(&dir) {
-        if let Ok(legacy_dir) = app
+        let legacy_dir = app
             .path()
             .resolve(LEGACY_WHISPER_TINY_DIR, BaseDirectory::AppLocalData)
-        {
-            migrate_legacy_if_present(&legacy_dir, &dir);
-        }
+            .map_err(|e| SttError::LocalUnavailable {
+                reason: format!("resolve legacy Whisper model directory: {e}"),
+            })?;
+        migrate_legacy_if_present(&legacy_dir, &dir)?;
     }
 
     Ok(dir)
@@ -356,13 +365,22 @@ pub fn resolve_or_migrate_model_dir(
 /// treated as valid. Split out from [`resolve_or_migrate_model_dir`] as a
 /// pure `&Path`-based helper so it's unit-testable without a Tauri
 /// `AppHandle` — `pub` for the same reason as [`ensure_model_files`].
-pub fn migrate_legacy_if_present(legacy_dir: &Path, canonical_dir: &Path) {
+pub fn migrate_legacy_if_present(legacy_dir: &Path, canonical_dir: &Path) -> Result<(), SttError> {
     if !is_complete_model(legacy_dir) {
-        return;
+        return Ok(());
     }
     for filename in [CONFIG_FILENAME, TOKENIZER_FILENAME, WEIGHTS_FILENAME] {
-        let _ = std::fs::copy(legacy_dir.join(filename), canonical_dir.join(filename));
+        std::fs::copy(legacy_dir.join(filename), canonical_dir.join(filename)).map_err(|e| {
+            SttError::LocalUnavailable {
+                reason: format!(
+                    "migrate {} to {}: {e}",
+                    legacy_dir.join(filename).display(),
+                    canonical_dir.join(filename).display()
+                ),
+            }
+        })?;
     }
+    Ok(())
 }
 
 /// Downloads whichever of `config.json`/`tokenizer.json`/`model.safetensors`

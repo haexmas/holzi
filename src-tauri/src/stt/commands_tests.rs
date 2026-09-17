@@ -18,7 +18,7 @@ const WEIGHTS_FILENAME: &str = "model.safetensors";
 
 #[test]
 fn scan_installed_returns_empty_when_no_directories_resolve() {
-    let entries = super::catalog::entries();
+    let entries = super::catalog::entries().expect("catalog should parse");
     let installed = scan_installed(entries, |_entry| None);
     assert!(installed.is_empty());
 }
@@ -30,7 +30,7 @@ fn scan_installed_skips_an_entry_with_zero_byte_files() {
     std::fs::write(dir.path().join(TOKENIZER_FILENAME), b"{}").unwrap();
     std::fs::write(dir.path().join(WEIGHTS_FILENAME), b"").unwrap(); // truncated — zero bytes
 
-    let entries = super::catalog::entries();
+    let entries = super::catalog::entries().expect("catalog should parse");
     let target = &entries[0];
     let installed = scan_installed(std::slice::from_ref(target), |_| {
         Some(dir.path().to_path_buf())
@@ -45,7 +45,7 @@ fn scan_installed_skips_an_entry_with_a_missing_file() {
     std::fs::write(dir.path().join(TOKENIZER_FILENAME), b"{}").unwrap();
     // WEIGHTS_FILENAME intentionally never written.
 
-    let entries = super::catalog::entries();
+    let entries = super::catalog::entries().expect("catalog should parse");
     let target = &entries[0];
     let installed = scan_installed(std::slice::from_ref(target), |_| {
         Some(dir.path().to_path_buf())
@@ -60,7 +60,7 @@ fn scan_installed_includes_an_entry_with_all_three_files_present() {
     std::fs::write(dir.path().join(TOKENIZER_FILENAME), b"{}").unwrap();
     std::fs::write(dir.path().join(WEIGHTS_FILENAME), b"weights").unwrap();
 
-    let entries = super::catalog::entries();
+    let entries = super::catalog::entries().expect("catalog should parse");
     let target = &entries[0];
     let installed = scan_installed(std::slice::from_ref(target), |_| {
         Some(dir.path().to_path_buf())
@@ -78,7 +78,7 @@ fn scan_installed_checks_every_entry_independently() {
     let incomplete = tempdir().unwrap();
     std::fs::write(incomplete.path().join(CONFIG_FILENAME), b"{}").unwrap();
 
-    let entries = super::catalog::entries();
+    let entries = super::catalog::entries().expect("catalog should parse");
     assert!(
         entries.len() >= 2,
         "catalog must have at least two tiers for this test"
@@ -102,8 +102,8 @@ fn resolve_catalog_entry_finds_a_known_id() {
 
 #[test]
 fn resolve_catalog_entry_reports_not_found_for_an_unknown_id() {
-    let err = resolve_catalog_entry("whisper-does-not-exist")
-        .expect_err("unknown id must be rejected");
+    let err =
+        resolve_catalog_entry("whisper-does-not-exist").expect_err("unknown id must be rejected");
     match err {
         crate::error::HolziError::CatalogEntryNotFound { id } => {
             assert_eq!(id, "whisper-does-not-exist");

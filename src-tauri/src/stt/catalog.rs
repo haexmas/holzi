@@ -22,6 +22,7 @@ use crate::hardware::{classify, Fit, HardwareInfo, ModelFitInputs};
 const STT_CATALOG_JSON: &str = include_str!("stt_catalog.json");
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all(serialize = "camelCase", deserialize = "snake_case"))]
 pub struct SttCatalogEntry {
     /// Stable id, also the `models::paths` slug this entry's files live
     /// under (e.g. `"whisper-tiny"`).
@@ -43,22 +44,26 @@ struct RawSttCatalog {
     models: Vec<SttCatalogEntry>,
 }
 
-static STT_CATALOG: OnceLock<Vec<SttCatalogEntry>> = OnceLock::new();
+static STT_CATALOG: OnceLock<Result<Vec<SttCatalogEntry>, String>> = OnceLock::new();
 
 /// Returns the curated list, cheap-copied per call.
-pub fn entries() -> &'static [SttCatalogEntry] {
+pub fn entries() -> Result<&'static [SttCatalogEntry], crate::stt::SttError> {
     STT_CATALOG
         .get_or_init(|| {
-            let raw: RawSttCatalog = serde_json::from_str(STT_CATALOG_JSON)
-                .expect("built-in STT catalog JSON must be valid at compile time");
-            raw.models
+            serde_json::from_str::<RawSttCatalog>(STT_CATALOG_JSON)
+                .map(|raw| raw.models)
+                .map_err(|e| format!("parse built-in STT catalog: {e}"))
         })
-        .as_slice()
+        .as_ref()
+        .map(Vec::as_slice)
+        .map_err(|reason| crate::stt::SttError::Failed {
+            reason: reason.clone(),
+        })
 }
 
 /// Fetches one entry by id.
-pub fn get(id: &str) -> Option<&'static SttCatalogEntry> {
-    entries().iter().find(|e| e.id == id)
+pub fn get(id: &str) -> Result<Option<&'static SttCatalogEntry>, crate::stt::SttError> {
+    Ok(entries()?.iter().find(|e| e.id == id))
 }
 
 /// Catalog entry enriched with the hardware fit classification. Shown on
@@ -96,15 +101,17 @@ fn fit_for(hw: &HardwareInfo, entry: &SttCatalogEntry) -> Fit {
 
 /// Lists every catalog entry annotated with a fit verdict against the given
 /// hardware snapshot.
-pub fn entries_with_fit(hw: &HardwareInfo) -> Vec<SttCatalogEntryWithFit> {
-    entries()
+pub fn entries_with_fit(
+    hw: &HardwareInfo,
+) -> Result<Vec<SttCatalogEntryWithFit>, crate::stt::SttError> {
+    Ok(entries()?
         .iter()
         .cloned()
         .map(|entry| {
             let fit = fit_for(hw, &entry);
             SttCatalogEntryWithFit { entry, fit }
         })
-        .collect()
+        .collect())
 }
 
 /// Picks three tier-labelled model suggestions for the onboarding wizard's
@@ -112,8 +119,10 @@ pub fn entries_with_fit(hw: &HardwareInfo) -> Vec<SttCatalogEntryWithFit> {
 /// `hardware::tiers::pick_three`). Returns `None` only when the catalog is
 /// empty (never happens in production — the built-in JSON always has three
 /// entries).
-pub fn recommend_tiers(hw: &HardwareInfo) -> Option<[SttTierRecommendation; 3]> {
-    let candidates: Vec<(SttCatalogEntry, Fit)> = entries()
+pub fn recommend_tiers(
+    hw: &HardwareInfo,
+) -> Result<Option<[SttTierRecommendation; 3]>, crate::stt::SttError> {
+    let candidates: Vec<(SttCatalogEntry, Fit)> = entries()?
         .iter()
         .cloned()
         .map(|entry| {
@@ -121,6 +130,10 @@ pub fn recommend_tiers(hw: &HardwareInfo) -> Option<[SttTierRecommendation; 3]> 
             (entry, fit)
         })
         .collect();
-    let picked = pick_three(candidates, |e| e.approx_size_bytes, |e| e.id.as_str())?;
-    Some(picked.map(|(tier, entry, fit)| SttTierRecommendation { tier, entry, fit }))
+    let Some(picked) = pick_three(candidates, |e| e.approx_size_bytes, |e| e.id.as_str()) else {
+        return Ok(None);
+    };
+    Ok(Some(picked.map(|(tier, entry, fit)| {
+        SttTierRecommendation { tier, entry, fit }
+    })))
 }

@@ -40,12 +40,39 @@ fn everything_fits_easy_is_smallest_sweet_and_max_are_largest() {
         ("large", 3, Fit::Fits),
     ]);
     let [easy, sweet, max] = pick_three(input, size_of, id_of).expect("non-empty");
-    assert_eq!(easy, (Tier::Easy, Candidate { id: "small", size: 1 }, Fit::Fits));
+    assert_eq!(
+        easy,
+        (
+            Tier::Easy,
+            Candidate {
+                id: "small",
+                size: 1
+            },
+            Fit::Fits
+        )
+    );
     assert_eq!(
         sweet,
-        (Tier::Sweet, Candidate { id: "large", size: 3 }, Fit::Fits)
+        (
+            Tier::Sweet,
+            Candidate {
+                id: "large",
+                size: 3
+            },
+            Fit::Fits
+        )
     );
-    assert_eq!(max, (Tier::Max, Candidate { id: "large", size: 3 }, Fit::Fits));
+    assert_eq!(
+        max,
+        (
+            Tier::Max,
+            Candidate {
+                id: "large",
+                size: 3
+            },
+            Fit::Fits
+        )
+    );
 }
 
 #[test]
@@ -76,10 +103,7 @@ fn returns_three_even_with_a_single_candidate() {
 
 #[test]
 fn sorts_by_size_then_id_for_deterministic_ties() {
-    let input = candidates(&[
-        ("b", 1, Fit::TooBig),
-        ("a", 1, Fit::TooBig),
-    ]);
+    let input = candidates(&[("b", 1, Fit::TooBig), ("a", 1, Fit::TooBig)]);
     let [easy, ..] = pick_three(input, size_of, id_of).expect("non-empty");
     // Same size -> tie-broken by id ascending -> "a" sorts first.
     assert_eq!(easy.1.id, "a");

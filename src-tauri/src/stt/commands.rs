@@ -26,9 +26,9 @@ pub struct InstalledSttModel {
 /// verdict against the current hardware. Mirrors `list_catalog`
 /// (`catalog/commands.rs`) for the LLM catalog.
 #[tauri::command]
-pub async fn list_stt_catalog() -> Vec<SttCatalogEntryWithFit> {
+pub async fn list_stt_catalog() -> Result<Vec<SttCatalogEntryWithFit>> {
     let hw = hardware::probe_async().await;
-    catalog::entries_with_fit(&hw)
+    Ok(catalog::entries_with_fit(&hw)?)
 }
 
 /// Tauri command: exactly three tier-labelled STT recommendations for the
@@ -36,7 +36,7 @@ pub async fn list_stt_catalog() -> Vec<SttCatalogEntryWithFit> {
 #[tauri::command]
 pub async fn stt_recommend_tiers() -> Result<[SttTierRecommendation; 3]> {
     let hw = hardware::probe_async().await;
-    catalog::recommend_tiers(&hw).ok_or_else(|| HolziError::CatalogEntryNotFound {
+    catalog::recommend_tiers(&hw)?.ok_or_else(|| HolziError::CatalogEntryNotFound {
         id: "<empty stt catalog>".to_string(),
     })
 }
@@ -76,8 +76,27 @@ pub fn scan_installed(
 #[cfg(feature = "llm-cpu")]
 #[tauri::command]
 pub async fn list_installed_stt_models(app: AppHandle) -> Result<Vec<InstalledSttModel>> {
-    Ok(scan_installed(catalog::entries(), |entry| {
-        super::local::resolve_or_migrate_model_dir(&app, entry).ok()
+    let entries = catalog::entries()?;
+    let app_for_scan = app.clone();
+    let resolved = tauri::async_runtime::spawn_blocking(move || {
+        entries
+            .iter()
+            .map(|entry| {
+                super::local::resolve_or_migrate_model_dir(&app_for_scan, entry)
+                    .map(|dir| (entry.id.clone(), dir))
+            })
+            .collect::<std::result::Result<Vec<_>, _>>()
+    })
+    .await
+    .map_err(|e| HolziError::CrdtInit {
+        reason: format!("resolve installed STT model directories: {e}"),
+    })??;
+
+    Ok(scan_installed(entries, |entry| {
+        resolved
+            .iter()
+            .find(|(id, _)| id == &entry.id)
+            .map(|(_, dir)| dir.clone())
     }))
 }
 
@@ -95,7 +114,7 @@ pub async fn list_installed_stt_models() -> Result<Vec<InstalledSttModel>> {
 /// Pure/`AppHandle`-free on purpose so the error-mapping is directly
 /// unit-testable. `pub` for the same reason as [`scan_installed`].
 pub fn resolve_catalog_entry(catalog_id: &str) -> Result<&'static SttCatalogEntry> {
-    catalog::get(catalog_id).ok_or_else(|| HolziError::CatalogEntryNotFound {
+    catalog::get(catalog_id)?.ok_or_else(|| HolziError::CatalogEntryNotFound {
         id: catalog_id.to_string(),
     })
 }
@@ -110,7 +129,14 @@ pub fn resolve_catalog_entry(catalog_id: &str) -> Result<&'static SttCatalogEntr
 #[tauri::command]
 pub async fn download_stt_model(app: AppHandle, catalog_id: String) -> Result<InstalledSttModel> {
     let entry = resolve_catalog_entry(&catalog_id)?;
-    let dir = super::local::resolve_or_migrate_model_dir(&app, entry)?;
+    let app_for_dir = app.clone();
+    let dir = tauri::async_runtime::spawn_blocking(move || {
+        super::local::resolve_or_migrate_model_dir(&app_for_dir, entry)
+    })
+    .await
+    .map_err(|e| HolziError::CrdtInit {
+        reason: format!("resolve STT model directory: {e}"),
+    })??;
     super::local::ensure_model_files(&dir, entry).await?;
     Ok(InstalledSttModel {
         id: entry.id.clone(),

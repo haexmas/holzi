@@ -272,19 +272,24 @@ mod imp {
     #[cfg(feature = "llm-cpu")]
     const DEFAULT_STT_MODEL_ID: &str = "whisper-tiny";
 
-    /// Best-effort read of this device's [`STT_MODEL_PREF_KEY`]. Any
-    /// failure along the way (no active vault, no `known_devices` row yet,
-    /// a DB error) folds into `None` — the caller falls back to the
-    /// default tier exactly as if the preference were simply unset, since
-    /// a transcription must never fail just because preference resolution
-    /// did.
+    /// Reads this device's [`STT_MODEL_PREF_KEY`] from the active vault.
+    /// Missing preferences return `Ok(None)`; infrastructure failures retain
+    /// their cause so a broken active-vault/device lookup is diagnosable.
     #[cfg(feature = "llm-cpu")]
-    async fn read_stt_model_pref(app: &AppHandle) -> Option<String> {
+    async fn read_stt_model_pref(
+        app: &AppHandle,
+    ) -> std::result::Result<Option<String>, crate::stt::SttError> {
         let state = app.state::<crate::state::AppState>();
-        let db = crate::state_utils::active_database(&state).ok()?;
+        let db = crate::state_utils::active_database(&state).map_err(|e| {
+            crate::stt::SttError::LocalUnavailable {
+                reason: format!("resolve active vault for STT preference: {e}"),
+            }
+        })?;
         let device_uuid = crate::device::commands::resolve_vault_device_uuid(app, &db)
             .await
-            .ok()?;
+            .map_err(|e| crate::stt::SttError::LocalUnavailable {
+                reason: format!("resolve device for STT preference: {e}"),
+            })?;
         let scope = crate::storage::preferences::PrefScope::Device(device_uuid);
         let key = STT_MODEL_PREF_KEY.to_string();
         let joined = tauri::async_runtime::spawn_blocking(move || {
@@ -293,8 +298,12 @@ mod imp {
             })
         })
         .await
-        .ok()?;
-        joined.ok()?
+        .map_err(|e| crate::stt::SttError::LocalUnavailable {
+            reason: format!("read STT preference task: {e}"),
+        })?;
+        joined.map_err(|e| crate::stt::SttError::LocalUnavailable {
+            reason: format!("read STT preference: {e}"),
+        })
     }
 
     /// Resolves a raw preference read (possibly missing/empty/unknown) to
@@ -308,13 +317,20 @@ mod imp {
     #[cfg(feature = "llm-cpu")]
     pub(crate) fn resolve_stt_catalog_entry_from_pref(
         pref: Option<String>,
-    ) -> &'static crate::stt::catalog::SttCatalogEntry {
+    ) -> std::result::Result<&'static crate::stt::catalog::SttCatalogEntry, crate::stt::SttError>
+    {
         let default = || {
-            crate::stt::catalog::get(DEFAULT_STT_MODEL_ID)
-                .expect("built-in STT catalog must contain the default tier")
+            crate::stt::catalog::get(DEFAULT_STT_MODEL_ID)?.ok_or_else(|| {
+                crate::stt::SttError::Failed {
+                    reason: format!("STT catalog is missing {DEFAULT_STT_MODEL_ID}"),
+                }
+            })
         };
         match pref.filter(|id| !id.is_empty()) {
-            Some(id) => crate::stt::catalog::get(&id).unwrap_or_else(default),
+            Some(id) => match crate::stt::catalog::get(&id)? {
+                Some(entry) => Ok(entry),
+                None => default(),
+            },
             None => default(),
         }
     }
@@ -323,8 +339,11 @@ mod imp {
     /// [`STT_MODEL_PREF_KEY`] preference if it names a known catalog
     /// entry, otherwise [`DEFAULT_STT_MODEL_ID`].
     #[cfg(feature = "llm-cpu")]
-    async fn resolve_stt_catalog_entry(app: &AppHandle) -> &'static crate::stt::catalog::SttCatalogEntry {
-        resolve_stt_catalog_entry_from_pref(read_stt_model_pref(app).await)
+    async fn resolve_stt_catalog_entry(
+        app: &AppHandle,
+    ) -> std::result::Result<&'static crate::stt::catalog::SttCatalogEntry, crate::stt::SttError>
+    {
+        resolve_stt_catalog_entry_from_pref(read_stt_model_pref(app).await?)
     }
 
     /// Loads the bundled Whisper model on first use and keeps it warm
@@ -342,7 +361,7 @@ mod imp {
             if let Some(adapter) = guard.as_ref() {
                 return Ok(Arc::clone(adapter) as Arc<dyn crate::stt::SttAdapter>);
             }
-            let entry = resolve_stt_catalog_entry(app).await;
+            let entry = resolve_stt_catalog_entry(app).await?;
             let adapter = Arc::new(crate::stt::local::LocalWhisperAdapter::load(app, entry).await?);
             *guard = Some(Arc::clone(&adapter));
             Ok(adapter as Arc<dyn crate::stt::SttAdapter>)
@@ -369,6 +388,20 @@ pub use imp::{
 #[cfg(not(feature = "voice"))]
 mod stub {
     use crate::error::{HolziError, Result};
+
+    /// State placeholder for builds without voice support. Instance
+    /// lifecycle commands still receive this state so they can invalidate
+    /// the cache uniformly across feature combinations.
+    #[derive(Default)]
+    pub struct VoiceState;
+
+    impl VoiceState {
+        pub fn new() -> Self {
+            Self
+        }
+
+        pub(crate) async fn invalidate_whisper_cache(&self) {}
+    }
 
     fn voice_disabled() -> HolziError {
         HolziError::InvalidInput {
@@ -403,7 +436,7 @@ mod stub {
 #[cfg(not(feature = "voice"))]
 pub use stub::{
     cancel_voice_recording, invalidate_stt_model_cache, start_voice_recording,
-    stop_voice_recording,
+    stop_voice_recording, VoiceState,
 };
 
 #[cfg(not(feature = "voice"))]
