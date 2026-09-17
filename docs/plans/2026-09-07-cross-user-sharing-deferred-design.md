@@ -316,3 +316,49 @@ One live tension: this session's stated priority was a closed federation in whic
 refuses oversized cross-device MCP results rather than falling back to blobs. "Fetch my photos from
 my phone" needs blob transfer. Either that v1 line moves, or the closed federation ships without
 files. That decision belongs in the v1 scope document, not here.
+
+## 10. Addendum (2026-09-17): concrete drivers from a follow-up session
+
+Written from a session that started by comparing holzi to OpenClaw 2.0 and to
+[`haex-space/haex-sync-server`](https://github.com/haex-space/haex-sync-server). No architectural
+decision here changes; this section adds concrete use cases and sharpens one open question already
+listed in §8.
+
+**Buffer relay, concretely — "Holzi Relay".** The operator's stated target: a multi-tenant,
+self-hosted sync server where multiple unrelated users' vaults sync through one deployment, with
+none able to read another's data, including the operator of that deployment. This is exactly the
+buffer relay of §3. Useful sibling reference: `haex-sync-server` already implements the same
+zero-knowledge pattern for HaexHub on a different stack (Supabase/Postgres RLS + JWT instead of
+NIP-42 + signed membership projections) — client-side encryption, server stores ciphertext plus
+per-user row-level security, the server never holds a decryption key. This confirms the pattern is
+practical, not just designed on paper. The Nostr-based mechanism in §3-§4 is holzi's own design, not
+a port of that implementation.
+
+**The metadata caveat needs to be stated plainly, not just listed as open.** §8 item 2 already flags
+"metadata exposure at the buffer relay" as open, but softly. Restated directly because a plain
+reading of "nobody can read another user's data, not even the operator" oversells the design as it
+stands: that guarantee holds for *content* — ciphertext stays ciphertext. It does not hold for *the
+participant set* — the buffer relay operator sees which pubkeys sync into which space, the same
+trade `haex-sync-server`'s per-user RLS filtering makes (its operator can see which `user_id` owns
+which encrypted rows, even without their content). True metadata-level unlinkability — hiding who
+talks to whom, not just what they say — is a materially harder problem (mixnet/onion-routing class)
+and is not something this design attempts, or should attempt, without a specific driver for it.
+
+**Cross-user sharing, concretely — calendar and todo/shopping-list entries.** The row-register
+mechanism in §6 item 2 was designed abstractly ("row R belongs to space X"); the concrete driver
+surfaced in this session is sharing individual calendar entries or todo/shopping-list items with
+another operator, with read or write rights, without exposing the rest of that table. This is
+exactly what table whitelist plus row register already provide — no design change needed, just
+confirmation that the granularity matches the use case. Two things worth flagging against this
+specific driver:
+
+- **Sequencing dependency, not a design gap.** holzi has no calendar, todo, or shopping-list
+  application yet (`README.md`'s current scope is chat/models/providers only). The sharing mechanism
+  is table-agnostic — any future app module just adds its tables to `SPACE_SCOPED_CRDT_TABLES` and
+  builds a row-registration UI — but there is nothing to register until those app modules exist. Not
+  a blocker to this design; a build-order note.
+- **Re-delegation (§8 item 4) is the open question this driver makes concrete.** A shared family
+  calendar plausibly wants re-sharing (share with a partner, partner re-shares with the kids); a
+  shared todo list with a coworker plausibly does not. §7's federation identity, as designed,
+  provides none — a grant reaches one person's own devices, never a chain to a second person. Worth
+  deciding per-app once an app actually needs it, rather than as one global answer now.
