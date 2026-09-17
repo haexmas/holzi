@@ -151,6 +151,22 @@ pub enum HolziError {
 
     #[error("Model {model_id} could not be hashed: {reason}")]
     ModelIntegrityError { model_id: String, reason: String },
+
+    // --- Voice control (spec 008) -----------------------------------------
+    #[error("Microphone permission is required")]
+    PermissionDenied,
+
+    #[error("A voice recording is already in progress")]
+    AlreadyRecording,
+
+    #[error("No microphone input device is available")]
+    DeviceUnavailable,
+
+    #[error("No voice recording is in progress")]
+    NotRecording,
+
+    #[error("Transcription failed: {reason}")]
+    TranscriptionFailed { reason: String },
 }
 
 pub type Result<T> = std::result::Result<T, HolziError>;

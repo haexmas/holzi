@@ -382,6 +382,17 @@ async function send(retryPending = false) {
   }
 }
 
+/**
+ * Writes a dictated transcript into the composer (FR-004) and, when
+ * auto-send is on, sends it immediately through the same path as manually
+ * typed input (FR-005) — same gating as pressing Enter, so it silently
+ * stays in the field if e.g. no model is loaded yet.
+ */
+function onVoiceTranscript(text: string, autoSend: boolean) {
+  input.value = text
+  if (autoSend) send()
+}
+
 /** Requests cancellation of the active generation. */
 async function abort() {
   try {
@@ -1047,6 +1058,7 @@ onBeforeUnmount(() => {
                     @cancel="abort"
                   />
                 </div>
+                <ChatVoiceInputControl @transcript="onVoiceTranscript" />
                 <UiButton
                   v-if="streamingMessageId || turnSetupPending"
                   class="shrink-0 gap-2"

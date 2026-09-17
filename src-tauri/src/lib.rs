@@ -1,4 +1,6 @@
 pub mod adapters;
+#[cfg(feature = "voice")]
+pub mod audio;
 pub mod catalog;
 pub mod chat;
 pub mod device;
@@ -12,6 +14,16 @@ pub mod providers;
 pub mod state;
 pub mod state_utils;
 pub mod storage;
+// Unconditional (unlike `audio`, above): `stt::mod`/`stt::interrupt` are
+// plain, dependency-free types the `llm-cpu`-only `stt::local` adapter
+// (candle Whisper) and future `voice`-gated commands both need. Keeping
+// them out of the `voice` gate means `stt::local`'s tests run under
+// `--features llm-cpu` alone, without pulling in `cpal` (and its ALSA/
+// CoreAudio/WASAPI system dependency) at all.
+pub mod stt;
+// Unconditional like `stt`, above — see `voice.rs`'s module doc for why
+// the stub commands live in the same file as the real ones.
+pub mod voice;
 
 pub use error::{HolziError, Result};
 pub use state::{ActiveInstanceHandle, AppState};
@@ -43,6 +55,7 @@ use providers::{
     add_provider, delete_provider, list_provider_models, list_providers, refresh_provider_models,
 };
 use storage::preferences_commands::{clear_pref, get_pref, set_pref};
+use voice::{cancel_voice_recording, start_voice_recording, stop_voice_recording};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 /// Builds and starts the holzi Tauri application.
@@ -80,6 +93,8 @@ pub fn run() {
     let builder = tauri::Builder::default().manage(AppState::new());
     let builder = builder.manage(ChatState::new());
     let builder = builder.manage(DelegateConnectState::new());
+    #[cfg(feature = "voice")]
+    let builder = builder.manage(voice::VoiceState::new());
     builder
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
@@ -143,6 +158,9 @@ pub fn run() {
             get_pref,
             set_pref,
             clear_pref,
+            start_voice_recording,
+            stop_voice_recording,
+            cancel_voice_recording,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

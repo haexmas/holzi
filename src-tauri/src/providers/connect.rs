@@ -28,7 +28,7 @@ use crate::adapters::cli_delegate::DelegateVendor;
 use crate::error::{HolziError, Result};
 use crate::state::AppState;
 use crate::state_utils::active_database;
-use crate::storage::providers::{self as storage, Provider, ProviderKind};
+use crate::storage::providers::{self as storage, Provider, ProviderCapability, ProviderKind};
 
 use super::{map_adapter_error, ProviderPayload};
 
@@ -363,6 +363,7 @@ async fn upsert_delegate_provider(
                         base_url: Some(vendor_owned),
                         credentials: Some(credentials),
                         created_at: super::now_ms(),
+                        capability: ProviderCapability::Chat,
                     };
                     storage::insert_provider(conn, &provider).map_err(haex_crdt::Error::from)?;
                     Ok(Some(provider))

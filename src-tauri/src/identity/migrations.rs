@@ -55,7 +55,8 @@ use haex_crdt::{MigrationName, StaticMigrationSource};
 ///   `chat_messages`.
 /// - 6: `0014_chat_messages_tool_columns` added columns to `chat_messages`.
 /// - 7: `0015_models_add_huggingface_source` added columns to `models`.
-pub const HOLZI_TRIGGER_VERSION: i32 = 7;
+/// - 8: `0016_providers_add_capability` added a column to `providers`.
+pub const HOLZI_TRIGGER_VERSION: i32 = 8;
 
 /// Returns the frozen holzi migration set at the pinned haex-crdt revision.
 pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
@@ -322,6 +323,18 @@ pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
          --> statement-breakpoint\n\
          ALTER TABLE models ADD COLUMN source_kind TEXT NOT NULL DEFAULT 'provider';"
             .to_string(),
+    );
+
+    // Voice control (spec 008): a provider row now serves either the `chat`
+    // capability (existing rows) or the new `transcription` capability (the
+    // bundled local Whisper adapter, and optionally a user-configured
+    // external STT service). `find_local_provider` narrows on this column
+    // too (providers/local.rs) — without it, adding the local transcription
+    // row would make that lookup ambiguous between the two `kind = 'local'`
+    // rows. Bumps HOLZI_TRIGGER_VERSION to 8.
+    m.insert(
+        MigrationName::from("0016_providers_add_capability"),
+        "ALTER TABLE providers ADD COLUMN capability TEXT NOT NULL DEFAULT 'chat';".to_string(),
     );
 
     Arc::new(StaticMigrationSource(m))

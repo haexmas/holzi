@@ -16,19 +16,37 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.3.0", features = [] }
 
 [features]
-# Default enables local inference on CPU so a fresh `cargo build` yields a
-# working Chat pipeline out of the box. Set `--no-default-features` to skip
-# mistralrs (and its candle dependency tree) while iterating on non-LLM code.
-default = ["llm-cpu"]
+# Default enables local inference on CPU and voice control so a fresh
+# `cargo build` yields a working Chat pipeline plus mic dictation out of the
+# box. Set `--no-default-features` to skip mistralrs/candle and cpal entirely
+# while iterating on unrelated code.
+default = ["llm-cpu", "voice"]
 
 # Local inference via mistralrs 0.8.x (in-process, per plan §"Lokale Inferenz").
-llm-cpu = ["dep:mistralrs"]
+# Also gates the local Whisper STT adapter (spec 008): it shares the same
+# candle-core/candle-nn runtime mistralrs already pulls in, via
+# candle-transformers, so it is pinned to llm-cpu rather than its own
+# feature. A `voice`-only build (no llm-cpu) keeps the STT trait, audio
+# capture, and interrupt matcher compilable but has no local transcription
+# backend at runtime (`SttError::LocalSttUnavailable`).
+llm-cpu = [
+    "dep:mistralrs",
+    "dep:candle",
+    "dep:candle-nn",
+    "dep:candle-transformers",
+    "dep:tokenizers",
+]
 # CUDA build. Needs nvcc + CUDA toolkit >= 12.0 present at build time
 # (Etappe 0 finding #3). Not enabled by default; opt in via
 # `cargo build --features llm-cuda`.
 llm-cuda = ["llm-cpu", "mistralrs/cuda"]
 # Metal build (Apple GPU). Same relationship to `llm-cpu` as CUDA.
 llm-metal = ["llm-cpu", "mistralrs/metal"]
+
+# Voice control (spec 008): mic capture (cpal) + the STT pipeline scaffolding
+# (audio module, interrupt matcher, voice Tauri commands). Independent of
+# llm-cpu — see the llm-cpu comment above for what running without it means.
+voice = ["dep:cpal"]
 
 [dependencies]
 tauri = { version = "2.6.2", features = [] }
@@ -112,6 +130,22 @@ portable-pty = "0.9"
 # spawn failure to the underlying `std::io::Error` (ENOENT detection,
 # mirroring `process.rs::map_spawn_error`'s plain-`tokio::process` version).
 anyhow = "1"
+
+# Cross-platform microphone capture for voice control (spec 008), gated by
+# the `voice` feature. Pure Rust, no separate cross-compile path for mobile.
+cpal = { version = "0.17.1", optional = true }
+# Local Whisper STT (spec 008), gated by `llm-cpu` (see its feature comment
+# above) — `candle`/`candle-nn` pinned to 0.10.2 to match the version
+# mistralrs 0.8.1 already resolves to, so only one candle version tree
+# exists. `candle-core` is renamed to `candle` (matching candle's own
+# examples) since that is the crate's own `use candle::...` import path.
+candle = { version = "0.10.2", package = "candle-core", optional = true }
+candle-nn = { version = "0.10.2", optional = true }
+candle-transformers = { version = "0.10.2", optional = true }
+# Whisper's tokenizer (tokenizer.json, GPT-2-style BPE). `fancy-regex` matches
+# the pure-Rust regex engine candle's own whisper example uses instead of the
+# C-backed `onig` feature.
+tokenizers = { version = "0.23.2", default-features = false, features = ["fancy-regex"], optional = true }
 
 [target.'cfg(unix)'.dependencies]
 # Kills a whole process group (`kill(-pgid, SIGKILL)`) so a killed

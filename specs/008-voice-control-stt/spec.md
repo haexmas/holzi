@@ -150,11 +150,15 @@ one.
 - **FR-009**: An utterance that contains an interrupt word only as part of a longer sentence MUST
   be treated as normal dictated content (User Story 1), not as an interrupt command.
 - **FR-010**: The system MUST offer a bundled transcription capability that requires no user setup
-  or download beyond granting microphone access.
+  or download beyond granting microphone access. **Deviation (2026-09-17, operator decision,
+  see tasks.md's implementation note)**: the current implementation downloads the model on first
+  use instead, to avoid committing a large binary checkpoint into git history. SC-003 below carries
+  the same deviation.
 - **FR-011**: The system MUST size the bundled transcription capability appropriately for the
   device it runs on (e.g., a lighter-weight version on constrained/mobile hardware than on
   desktop hardware), consistent with how locally run assistant models are already sized per
-  device.
+  device. **Not implemented**: every device currently gets the same `tiny` model — see tasks.md's
+  implementation note.
 - **FR-012**: The system MUST let users configure an external transcription service (with its own
   credentials) as an alternative to the bundled capability, and switch between them.
 - **FR-013**: The system MUST request microphone access through the platform's standard permission
@@ -202,7 +206,8 @@ one.
   is doing. Full-utterance transcription may complete later and must not delay that cancellation.
 - **SC-003**: Voice dictation works correctly on a freshly installed instance, using only the
   bundled transcription capability, with no additional download or configuration beyond granting
-  microphone access.
+  microphone access. **Deviation**: see FR-010's note — the first dictation after a fresh install
+  triggers a one-time model download instead.
 - **SC-004**: A short dictated utterance is transcribed correctly without any network activity
   when no external transcription service is configured.
 - **SC-005**: A user can switch between the bundled and an external transcription source, and

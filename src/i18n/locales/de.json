@@ -361,6 +361,24 @@
       "actionFailed": "Aktion fehlgeschlagen."
     }
   },
+  "voiceControl": {
+    "mic": {
+      "start": "Diktieren",
+      "stop": "Aufnahme beenden",
+      "cancel": "Abbrechen"
+    },
+    "autoSend": {
+      "onLabel": "Automatisches Senden an",
+      "offLabel": "Automatisches Senden aus"
+    },
+    "noSpeechDetected": "Keine Sprache erkannt",
+    "error": {
+      "deviceUnavailable": "Kein Mikrofon verfügbar",
+      "alreadyRecording": "Es läuft bereits eine Aufnahme",
+      "transcriptionFailed": "Transkription fehlgeschlagen",
+      "generic": "Sprachaufnahme fehlgeschlagen"
+    }
+  },
   "errors": {
     "openFailed": "Öffnen fehlgeschlagen",
     "nameConflict": "Eine Instanz mit diesem Namen existiert bereits",
