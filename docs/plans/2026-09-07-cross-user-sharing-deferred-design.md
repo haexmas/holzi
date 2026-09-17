@@ -338,8 +338,8 @@ design, not a port of that implementation.
 **The metadata caveat needs to be stated plainly, not just listed as open.** §8 item 2 already flags
 "metadata exposure at the buffer relay" as open, but softly. Restated directly because a plain
 reading of "nobody can read another user's data, not even the operator" oversells the design as it
-stands: that guarantee holds for *content* — ciphertext stays ciphertext. It does not hold for *the
-participant set* — the buffer relay operator sees which pubkeys sync into which space, the same
+stands: that guarantee holds for _content_ — ciphertext stays ciphertext. It does not hold for _the
+participant set_ — the buffer relay operator sees which pubkeys sync into which space, the same
 kind of trade `haex-sync-server` makes (its operator can see which `user_id` owns which encrypted
 rows, among other sync metadata, even without their content). True metadata-level unlinkability —
 hiding who talks to whom, not just what they say — is a materially harder problem
