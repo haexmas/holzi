@@ -1,10 +1,8 @@
 <script setup lang="ts">
-import {
-  hfErrorKey,
-  useHuggingFace,
-  type HardwareFit,
-  type HuggingFaceFileCandidate,
-  type HuggingFaceModelResult,
+import type {
+  HardwareFit,
+  HuggingFaceFileCandidate,
+  HuggingFaceModelResult,
 } from '~/composables/useHuggingFace'
 
 const { t } = useI18n()

@@ -8,8 +8,6 @@
 // enforced by omission: only `/workspace`, `/settings`, and `/chat`
 // call it.
 
-import { useDevice } from '~/composables/useDevice'
-
 export default defineNuxtRouteMiddleware(async (to) => {
   const params = to.params
   const rawInstance = params.instance

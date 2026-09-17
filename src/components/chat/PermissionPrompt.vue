@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { RiskClass } from '~/composables/useChat'
-import ComposerControl from './ComposerControl.vue'
 
 export interface PendingApproval {
   requestId: string
@@ -45,7 +44,7 @@ function onUpdateOpen(open: boolean) {
 </script>
 
 <template>
-  <ComposerControl
+  <ChatComposerControl
     :label="t('chat.permission.modeLabel')"
     :value="mode"
     :display-value="permissionModeLabel"

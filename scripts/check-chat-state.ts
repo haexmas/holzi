@@ -92,7 +92,12 @@ function composablePath(name: string): string {
  * Returns whatever `Function`'s own call signature returns (loosely typed
  * by design, like the rest of this sandbox — see `noImplicitAny` above).
  */
-function runComposable(absPath: string, req: (specifier: string) => unknown) {
+function runComposable(
+  absPath: string,
+  req: (specifier: string) => unknown,
+  autoImports: Record<string, unknown> = {},
+) {
+  const autoImportNames = Object.keys(autoImports)
   return new Function(
     'exports',
     'require',
@@ -100,8 +105,9 @@ function runComposable(absPath: string, req: (specifier: string) => unknown) {
     // real ambient `useI18n()` — no `import` in their source, same as the
     // page's own macros — so it's injected here too, not just for the page.
     'useI18n',
+    ...autoImportNames,
     `${transpileFile(absPath)}\nreturn exports;`,
-  )({}, req, useI18nDouble)
+  )({}, req, useI18nDouble, ...autoImportNames.map((name) => autoImports[name]))
 }
 
 type InvokeHandler = (args?: unknown) => unknown
@@ -226,7 +232,15 @@ function createChatState(
       return { usePreferences: () => preferences }
     if (specifier.startsWith('~/composables/')) {
       const name = specifier.slice('~/composables/'.length)
-      const real = runComposable(composablePath(name), req)
+      const real = runComposable(
+        composablePath(name),
+        req,
+        name === 'useErrorString'
+          ? {
+              hfErrorKey: req('~/composables/useHuggingFace').hfErrorKey,
+            }
+          : {},
+      )
       const override = dependencyOverrides[name]
       return override ? { ...real, [name]: override } : real
     }
@@ -250,7 +264,15 @@ function createChatState(
   // A fresh Pinia per test, matching every other piece of state here.
   const pinia = nodeRequire('pinia')
   pinia.setActivePinia(pinia.createPinia())
-  const modelStore = runComposable(storePath('models'), req).useModelsStore()
+  const modelStore = runComposable(storePath('models'), req, {
+    useChat: () => chat,
+    useModels: () => req('~/composables/useModels').useModels(),
+    useCatalog: () => req('~/composables/useCatalog').useCatalog(),
+    useProviders: () => req('~/composables/useProviders').useProviders(),
+    useErrorString: () => req('~/composables/useErrorString').useErrorString(),
+    parseModelIntegrityFailure: req('~/composables/useModels')
+      .parseModelIntegrityFailure,
+  }).useModelsStore()
 
   // These have no `import` statement in the page at all — real Nuxt
   // auto-imports/macros with no module backing here — so they must be
@@ -261,6 +283,14 @@ function createChatState(
     'definePageMeta',
     'useRoute',
     'useI18n',
+    'useChat',
+    'useInstance',
+    'usePreferences',
+    'useDevice',
+    'useErrorString',
+    'useAutoResizeTextarea',
+    'useChatTranscript',
+    'useThreadSidebar',
     'useInstancesStore',
     'useModelsStore',
     'storeToRefs',
@@ -272,6 +302,14 @@ function createChatState(
     () => {},
     () => ({ params: { instance: 'vault' } }),
     useI18nDouble,
+    () => chat,
+    req('~/composables/useInstance').useInstance,
+    () => preferences,
+    req('~/composables/useDevice').useDevice,
+    req('~/composables/useErrorString').useErrorString,
+    req('~/composables/useAutoResizeTextarea').useAutoResizeTextarea,
+    req('~/composables/useChatTranscript').useChatTranscript,
+    req('~/composables/useThreadSidebar').useThreadSidebar,
     () => ({}),
     () => modelStore,
     pinia.storeToRefs,

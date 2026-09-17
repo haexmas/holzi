@@ -1,27 +1,19 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { UnlistenFn } from '@tauri-apps/api/event'
-import {
-  useChat,
-  type LoadedModelInfo,
-  type ModelLoadErrorEvent,
-  type ModelLoadPhase,
-  type ModelLoadProgressEvent,
-  type ModelLoadStatusPayload,
+import type {
+  LoadedModelInfo,
+  ModelLoadErrorEvent,
+  ModelLoadPhase,
+  ModelLoadProgressEvent,
+  ModelLoadStatusPayload,
 } from '~/composables/useChat'
-import {
-  parseModelIntegrityFailure,
-  useModels,
-  type InstalledModel,
-  type ModelIntegrityFailure,
+import type {
+  InstalledModel,
+  ModelIntegrityFailure,
 } from '~/composables/useModels'
-import { useCatalog, type CatalogEntryWithFit } from '~/composables/useCatalog'
-import {
-  useProviders,
-  type Provider,
-  type ProviderModel,
-} from '~/composables/useProviders'
-import { useErrorString } from '~/composables/useErrorString'
+import type { CatalogEntryWithFit } from '~/composables/useCatalog'
+import type { Provider, ProviderModel } from '~/composables/useProviders'
 
 export type ModelGroup = {
   providerId: string
