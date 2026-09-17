@@ -360,6 +360,24 @@
       "actionFailed": "Action failed."
     }
   },
+  "voiceControl": {
+    "mic": {
+      "start": "Dictate",
+      "stop": "Stop recording",
+      "cancel": "Cancel"
+    },
+    "autoSend": {
+      "onLabel": "Auto-send on",
+      "offLabel": "Auto-send off"
+    },
+    "noSpeechDetected": "No speech detected",
+    "error": {
+      "deviceUnavailable": "No microphone available",
+      "alreadyRecording": "A recording is already in progress",
+      "transcriptionFailed": "Transcription failed",
+      "generic": "Voice recording failed"
+    }
+  },
   "errors": {
     "openFailed": "Failed to open",
     "nameConflict": "An instance with that name already exists",

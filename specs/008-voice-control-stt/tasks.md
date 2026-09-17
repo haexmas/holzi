@@ -12,6 +12,22 @@ per user story, matching how prior specs (e.g. 005) verify their frontend.
 **Organization**: Tasks are grouped by user story (spec.md: US1/US2 both P1, US3 P2) so each story
 is independently implementable and testable.
 
+**2026-09-17 implementation note**: this pass implements Phases 1–3 (Setup, Foundational, US1 —
+the dictate-and-send MVP) only, per an explicit operator scope decision. Phase 4 (US2, voice
+interrupt), Phase 5 (US3, external transcription provider), and the Final Phase (polish + mobile
+readiness gate) are **not implemented** and remain unchecked below. Two further operator decisions
+changed how US1 itself was built, deviating from what this file and the rest of `specs/008-...`
+originally specified:
+
+- **Model delivery** (deviates from FR-010/SC-003 and quickstart.md's "no download" framing): the
+  bundled Whisper model is downloaded into `<AppLocalData>/whisper/tiny/` on first use instead of
+  being bundled as a Tauri resource in the installer, to avoid committing a ~75MB binary checkpoint
+  into git history. See `src-tauri/src/stt/local.rs`'s module doc for the full rationale. FR-003/
+  SC-004 (offline transcription once configured) still hold after the first download.
+- **Model tier**: only the `tiny` multilingual model is used for every device. FR-011's per-device
+  tiering assumed a reusable hardware-tier selector from spec 002 that, on inspection, does not
+  exist as a standalone function — building one was out of scope for this pass.
+
 ## Format: `[ID] [P?] [Story] Description`
 
 - **[P]**: Can run in parallel (different files, no dependency on an incomplete task)
@@ -19,7 +35,7 @@ is independently implementable and testable.
 
 ## Phase 1: Setup
 
-- [ ] T001 Add an independent `voice` Cargo feature and gate `cpal`, the audio module, and the
+- [x] T001 Add an independent `voice` Cargo feature and gate `cpal`, the audio module, and the
       voice commands behind it. Gate `candle-transformers` and `LocalWhisperAdapter` behind the
       existing `llm-cpu` feature, with both features enabled by default. Verify that
       `cargo build --no-default-features` has no voice references and that
@@ -37,39 +53,39 @@ is independently implementable and testable.
 **Purpose**: Shared infrastructure every user story needs. No user story can be verified
 end-to-end until this phase is done.
 
-- [ ] T002 [P] Add a `capability` column (`chat` | `transcription`, `NOT NULL DEFAULT 'chat'`) to
+- [x] T002 [P] Add a `capability` column (`chat` | `transcription`, `NOT NULL DEFAULT 'chat'`) to
       the `providers` table via a new migration (alongside the existing migrations referenced from
       `src-tauri/src/storage/providers.rs`), backfilling existing rows to `chat`.
-- [ ] T003 Update `find_local_provider` in `src-tauri/src/providers/local.rs` to filter on
+- [x] T003 Update `find_local_provider` in `src-tauri/src/providers/local.rs` to filter on
       `kind = 'local' AND capability = 'chat'` (depends on T002 — once a local _transcription_
       provider row exists, the old unqualified `kind = 'local'` query can return the wrong row
       depending on `created_at` ordering).
-- [ ] T004 [P] Define `CanonicalPcm` and the `SttAdapter` trait
+- [x] T004 [P] Define `CanonicalPcm` and the `SttAdapter` trait
       (`transcribe(audio: &CanonicalPcm) -> Result<String, SttError>`) in
       `src-tauri/src/stt/mod.rs` — 16 kHz, mono, normalized `f32` samples in `[-1.0, 1.0]`,
       narrower than `ProviderAdapter` (no streaming, no context window). Define `SttError` as the
       STT-facing mapping of the existing `AdapterError`: preserve `InvalidCredentials` for
       external 401/403 responses, map transport/timeouts consistently, and map all adapter failures
       at the command boundary to `TranscriptionFailed { reason }`.
-- [ ] T005 Implement `ensure_local_transcription_provider` in `src-tauri/src/providers/local.rs`,
+- [x] T005 Implement `ensure_local_transcription_provider` in `src-tauri/src/providers/local.rs`,
       mirroring `ensure_local_provider` (kind `Local`, capability `Transcription`, adapter
       `"whisper-local"`, name `"Gebündelt (offline)"`); idempotent, singleton row (depends on T002,
       and touches the same file as T003 — sequenced after it).
-- [ ] T006 [P] Implement audio capture in `src-tauri/src/audio/mod.rs`: `cpal`-based start/stop/
+- [x] T006 [P] Implement audio capture in `src-tauri/src/audio/mod.rs`: `cpal`-based start/stop/
       cancel against an in-memory `CanonicalPcm` buffer, converting native sample types, channel
       counts, and sample rates at the capture boundary. Enforce the maximum recording duration
       (FR-017) by stopping capture (not the session) once the cap is hit. Add focused tests for
       non-default sample rates and channel counts, asserting that the converted canonical buffer
       reaches `SttAdapter::transcribe`.
-- [ ] T007 [P] Implement the interrupt matcher in `src-tauri/src/stt/interrupt.rs`:
+- [x] T007 [P] Implement the interrupt matcher in `src-tauri/src/stt/interrupt.rs`:
       `match_interrupt(transcript: &str) -> Option<InterruptCommand>`, normalizing (trim,
       lowercase) and requiring the **entire** transcript to equal `"stop"`, `"halt"`, or
       `"abbrechen"` (FR-007, FR-009).
-- [ ] T008 Unit tests for the interrupt matcher in `src-tauri/src/stt/interrupt_tests.rs`: exact
+- [x] T008 Unit tests for the interrupt matcher in `src-tauri/src/stt/interrupt_tests.rs`: exact
       matches for all three words and their case variants; a sentence merely containing one of the
       words (e.g. "bitte nicht mehr stoppen mitten im Satz") must NOT match; empty string must not
       match (depends on T007).
-- [ ] T009 Register the `start_voice_recording`, `stop_voice_recording`, and
+- [x] T009 Register the `start_voice_recording`, `stop_voice_recording`, and
       `cancel_voice_recording` Tauri commands (per
       [contracts/tauri-commands.md](contracts/tauri-commands.md)) in `src-tauri/src/lib.rs`, wiring
       them to the audio module (T006) and the interrupt matcher (T007), gated with the `voice`
@@ -77,6 +93,10 @@ end-to-end until this phase is done.
       `voice-interrupt-detected` for the local fast path. Transcription dispatch itself is stubbed
       to a `NoProviderConfigured`/`LocalSttUnavailable` error until US1 wires the local adapter;
       the `voice`-only build must retain external STT support (depends on T004, T006, T007).
+      **Partial**: `voice-recording-capped` is implemented; `voice-interrupt-detected` and the
+      "local fast path during capture" are not — both are US2 (T019) work, out of scope for this
+      pass. `match_interrupt` still runs on the final transcript so the `TranscriptionResult` wire
+      shape matches the contract, but nothing consumes it to cancel a turn yet.
 
 **Checkpoint**: Schema, adapter trait, audio capture, interrupt matching, and command scaffolding
 exist. No story is end-to-end functional yet — that starts in Phase 3.
@@ -93,34 +113,43 @@ chat input field and is sent through the normal chat path.
 
 ### Tests for User Story 1
 
-- [ ] T010 [P] [US1] `LocalWhisperAdapter` test against a small fixed audio fixture (checked into
+- [x] T010 [P] [US1] `LocalWhisperAdapter` test against a small fixed audio fixture (checked into
       the repo, e.g. `src-tauri/src/stt/fixtures/`) with a known expected transcript, in
       `src-tauri/src/stt/local_tests.rs`. No real microphone, no network.
 
 ### Implementation for User Story 1
 
-- [ ] T011 [US1] Implement `LocalWhisperAdapter` in `src-tauri/src/stt/local.rs`: loads the bundled
+- [x] T011 [US1] Implement `LocalWhisperAdapter` in `src-tauri/src/stt/local.rs`: loads the bundled
       Whisper checkpoint and implements `SttAdapter::transcribe(&CanonicalPcm)` via
       `candle-transformers`, gated with `llm-cpu` (depends on T004, T010).
-- [ ] T012 [US1] Bundle the Whisper checkpoint(s) as Tauri resources (`src-tauri/resources/whisper/`,
+- [x] T012 [US1] Bundle the Whisper checkpoint(s) as Tauri resources (`src-tauri/resources/whisper/`,
       declared in `tauri.conf.json` `bundle.resources`) so they ship inside the installer rather
       than being downloaded at first run (FR-010); select the tier (tiny/base/small) at load time
       using the existing hardware-detection logic from spec 002 (depends on T011).
-- [ ] T013 [US1] Wire `stop_voice_recording` (T009) to dispatch to the currently active
+- [x] T013 [US1] Wire `stop_voice_recording` (T009) to dispatch to the currently active
       `SttAdapter` — defaulting to `LocalWhisperAdapter` via `ensure_local_transcription_provider`
       (T005) — and return the `TranscriptionResult` shape from the contract (depends on T009, T011,
       T012).
-- [ ] T014 [P] [US1] `VoiceInputControl.vue` mic control in `src/components/chat/`: idle/recording/
+- [x] T014 [P] [US1] `VoiceInputControl.vue` mic control in `src/components/chat/`: idle/recording/
       transcribing/error states, calling `start_voice_recording`/`stop_voice_recording`, writing a
       non-interrupt `text` result into the existing chat input field.
-- [ ] T015 [US1] Auto-send wiring: read/write the `voice.auto_send` preference (vault-scoped) via
+- [x] T015 [US1] Auto-send wiring: read/write the `voice.auto_send` preference (vault-scoped) via
       the existing `get_pref`/`set_pref` commands; when enabled (default), send the transcribed
       message through the existing send-message path immediately; when disabled, leave it editable
       in the input field (FR-005, FR-006) (depends on T014).
-- [ ] T016 [US1] Empty-transcript handling: when `text` is empty (no speech detected), leave the
+- [x] T016 [US1] Empty-transcript handling: when `text` is empty (no speech detected), leave the
       input field and message history untouched, and show a non-blocking indicator ("keine Sprache
       erkannt") (FR-014) (depends on T014).
-- [ ] T017 [US1] Manual verification: run [quickstart.md](quickstart.md) §1 end to end.
+- [ ] T017 [US1] Manual verification: run [quickstart.md](quickstart.md) §1 end to end. **Not run**
+      — the sandboxed environment this pass ran in has no real microphone, so the actual
+      press-mic/speak/see-it-transcribed loop still needs a human on real hardware. Everything
+      short of that is verified: `cargo build`/`cargo test`/`cargo clippy --all-targets -D warnings`
+      all pass on every feature combination (`--no-default-features`, `--features llm-cpu`,
+      `--features voice`, and plain default `llm-cpu`+`voice` together, 213 tests), including
+      `stt::local_tests::transcribes_known_fixture` — a real download of `openai/whisper-tiny` plus
+      real CPU inference against a checked-in audio fixture, run explicitly with
+      `cargo test --features llm-cpu -- --ignored`. Frontend `pnpm typecheck`/`lint`/`format:check`/
+      `check:templates`/`generate` all pass too.
 
 **Checkpoint**: User Story 1 is fully functional and independently testable/demoable (MVP).
 

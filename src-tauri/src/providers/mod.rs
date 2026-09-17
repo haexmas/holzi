@@ -21,7 +21,7 @@ use crate::error::{HolziError, Result};
 use crate::state::AppState;
 use crate::state_utils::active_database;
 use crate::storage::models::{self as models_store, IntegrityStatus, ModelRow, SourceKind};
-use crate::storage::providers::{self as storage, Provider, ProviderKind};
+use crate::storage::providers::{self as storage, Provider, ProviderCapability, ProviderKind};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -162,6 +162,11 @@ pub async fn add_provider(
         base_url: args.base_url,
         credentials: args.api_key.map(|k| k.into_bytes()),
         created_at: now,
+        // `add_provider` only ever creates chat providers today (spec 008's
+        // transcription capability is additive but not yet exposed through
+        // this command — the bundled STT row comes from
+        // `ensure_local_transcription_provider` instead).
+        capability: ProviderCapability::Chat,
     };
     let inserted = provider.clone();
     let insert_db = db.clone();

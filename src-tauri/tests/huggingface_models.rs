@@ -19,7 +19,7 @@ use holzi_lib::identity::{
     holzi_migration_source, installation_id_path, HolziBootstrap, HOLZI_TRIGGER_VERSION,
 };
 use holzi_lib::storage::models::{self as models_store, IntegrityStatus, ModelRow, SourceKind};
-use holzi_lib::storage::providers::{insert_provider, Provider, ProviderKind};
+use holzi_lib::storage::providers::{insert_provider, Provider, ProviderCapability, ProviderKind};
 use uuid::Uuid;
 
 async fn open_test_db(name: &str) -> (tempfile::TempDir, Arc<Database>) {
@@ -96,6 +96,7 @@ async fn catalog_import_and_huggingface_rows_coexist_and_roundtrip() {
                     base_url: None,
                     credentials: None,
                     created_at: 0,
+                    capability: ProviderCapability::Chat,
                 },
             )?;
             models_store::upsert_model(conn, &catalog_row("qwen3-0.6b", provider_id))?;
@@ -175,6 +176,7 @@ async fn a_hash_mismatch_is_never_silently_upgraded_to_verified() {
                     base_url: None,
                     credentials: None,
                     created_at: 0,
+                    capability: ProviderCapability::Chat,
                 },
             )?;
             models_store::upsert_model(conn, &hf_row("hf-freerepo", provider_id))?;
@@ -234,6 +236,7 @@ async fn backfill_source_kind_reclassifies_local_rows_but_never_touches_a_provid
                     base_url: None,
                     credentials: None,
                     created_at: 0,
+                    capability: ProviderCapability::Chat,
                 },
             )?;
             insert_provider(
@@ -246,6 +249,7 @@ async fn backfill_source_kind_reclassifies_local_rows_but_never_touches_a_provid
                     base_url: None,
                     credentials: None,
                     created_at: 0,
+                    capability: ProviderCapability::Chat,
                 },
             )?;
             // Pre-0015 rows: migration default `source_kind = provider`

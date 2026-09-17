@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use super::DelegateVendor;
 use crate::providers::build_adapter;
-use crate::storage::providers::{Provider, ProviderKind};
+use crate::storage::providers::{Provider, ProviderCapability, ProviderKind};
 
 #[test]
 fn delegate_vendor_round_trips() {
@@ -31,6 +31,7 @@ fn sample_provider(adapter: Option<&str>) -> Provider {
         base_url: Some("claude".to_string()),
         credentials: Some(b"fake-oauth-token".to_vec()),
         created_at: 0,
+        capability: ProviderCapability::Chat,
     }
 }
 

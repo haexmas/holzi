@@ -22,7 +22,7 @@ use uuid::Uuid;
 use holzi_lib::adapters::cli_delegate::{CliDelegateAdapter, DelegateChatContext, DelegateVendor};
 use holzi_lib::adapters::{ChatMessage, ChatRequest, ChatRole, ProviderAdapter, StreamChunk};
 use holzi_lib::identity::{holzi_migration_source, installation_id_path, HolziBootstrap};
-use holzi_lib::storage::providers::{self as storage, Provider, ProviderKind};
+use holzi_lib::storage::providers::{self as storage, Provider, ProviderCapability, ProviderKind};
 
 const PASSPHRASE: &str = "cli-delegate-disconnect-in-flight-test";
 const STUB_TRANSCRIPT: &str = r#"{"type":"system","subtype":"init"}
@@ -71,6 +71,7 @@ async fn disconnect_during_a_response_does_not_affect_that_response() {
         base_url: Some("claude".to_string()),
         credentials: Some(b"fake-token".to_vec()),
         created_at: 0,
+        capability: ProviderCapability::Chat,
     };
     db.with_connection(|conn| {
         storage::insert_provider(conn, &provider).map_err(haex_crdt::Error::from)?;

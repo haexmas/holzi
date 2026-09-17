@@ -29,6 +29,11 @@ pub struct Provider {
     pub base_url: Option<String>,
     pub credentials: Option<Vec<u8>>,
     pub created_at: i64,
+    /// What this row is used for — orthogonal to `kind` (spec 008: a
+    /// `Local` row can be either the chat model or the bundled Whisper
+    /// transcription adapter). Defaults to `Chat` for every row that
+    /// predates this column (migration `0016_providers_add_capability`).
+    pub capability: ProviderCapability,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -58,13 +63,41 @@ impl ProviderKind {
     }
 }
 
+/// What a provider row is used for (spec 008 data-model.md
+/// §"Schemaänderung: providers.capability"). Orthogonal to `ProviderKind` —
+/// e.g. a `Local` row can be the chat model (`Chat`) or the bundled Whisper
+/// adapter (`Transcription`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderCapability {
+    Chat,
+    Transcription,
+}
+
+impl ProviderCapability {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            ProviderCapability::Chat => "chat",
+            ProviderCapability::Transcription => "transcription",
+        }
+    }
+
+    fn parse(s: &str) -> Option<Self> {
+        match s {
+            "chat" => Some(ProviderCapability::Chat),
+            "transcription" => Some(ProviderCapability::Transcription),
+            _ => None,
+        }
+    }
+}
+
 /// Inserts a provider row. Always sets `haex_hlc_no_sync = current_hlc()`
 /// so the write is visible to the sync scanner (Etappe-0 finding #2).
 pub fn insert_provider(conn: &Connection, p: &Provider) -> Result<usize> {
     let sql = format!(
         "INSERT INTO providers \
-           (id, kind, adapter, name, base_url, credentials, created_at, {HLC_TIMESTAMP_COLUMN}) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, current_hlc())"
+           (id, kind, adapter, name, base_url, credentials, created_at, capability, {HLC_TIMESTAMP_COLUMN}) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, current_hlc())"
     );
     conn.execute(
         &sql,
@@ -76,6 +109,7 @@ pub fn insert_provider(conn: &Connection, p: &Provider) -> Result<usize> {
             p.base_url,
             p.credentials,
             p.created_at,
+            p.capability.as_str(),
         ],
     )
 }
@@ -125,10 +159,32 @@ pub fn find_cli_delegate_provider(conn: &Connection, vendor: &str) -> Result<Opt
     Ok(raw.and_then(|s| Uuid::parse_str(&s).ok()))
 }
 
+/// Finds the singleton row for one `(kind, capability)` pair, if any —
+/// shared by `providers::local::find_local_provider` (capability `chat`)
+/// and `find_local_transcription_provider` (capability `transcription`).
+/// Without the `capability` filter, two `kind = 'local'` rows exist once a
+/// local transcription provider is created (spec 008 data-model.md), and
+/// which one an unqualified `kind`-only query returns would depend on
+/// `created_at` ordering.
+pub fn find_provider_by_kind_and_capability(
+    conn: &Connection,
+    kind: ProviderKind,
+    capability: ProviderCapability,
+) -> Result<Option<Uuid>> {
+    let mut stmt = conn.prepare(
+        "SELECT id FROM providers WHERE kind = ?1 AND capability = ?2 \
+         ORDER BY created_at ASC LIMIT 1",
+    )?;
+    let raw: Option<String> = stmt
+        .query_row(params![kind.as_str(), capability.as_str()], |r| r.get(0))
+        .optional()?;
+    Ok(raw.and_then(|s| Uuid::parse_str(&s).ok()))
+}
+
 /// Lists all providers ordered by creation time (oldest first).
 pub fn list_providers(conn: &Connection) -> Result<Vec<Provider>> {
     let mut stmt = conn.prepare(
-        "SELECT id, kind, adapter, name, base_url, credentials, created_at \
+        "SELECT id, kind, adapter, name, base_url, credentials, created_at, capability \
          FROM providers ORDER BY created_at ASC",
     )?;
     let rows = stmt.query_map([], row_to_provider)?;
@@ -138,7 +194,7 @@ pub fn list_providers(conn: &Connection) -> Result<Vec<Provider>> {
 /// Fetches one provider by id.
 pub fn get_provider(conn: &Connection, id: Uuid) -> Result<Option<Provider>> {
     let mut stmt = conn.prepare(
-        "SELECT id, kind, adapter, name, base_url, credentials, created_at \
+        "SELECT id, kind, adapter, name, base_url, credentials, created_at, capability \
          FROM providers WHERE id = ?1",
     )?;
     stmt.query_row(params![id.to_string()], row_to_provider)
@@ -148,6 +204,7 @@ pub fn get_provider(conn: &Connection, id: Uuid) -> Result<Option<Provider>> {
 fn row_to_provider(row: &haex_crdt::rusqlite::Row<'_>) -> Result<Provider> {
     let id_str: String = row.get(0)?;
     let kind_str: String = row.get(1)?;
+    let capability_str: String = row.get(7)?;
     Ok(Provider {
         id: Uuid::parse_str(&id_str).map_err(|e| {
             haex_crdt::rusqlite::Error::FromSqlConversionFailure(
@@ -168,5 +225,12 @@ fn row_to_provider(row: &haex_crdt::rusqlite::Row<'_>) -> Result<Provider> {
         base_url: row.get(4)?,
         credentials: row.get(5)?,
         created_at: row.get(6)?,
+        capability: ProviderCapability::parse(&capability_str).ok_or_else(|| {
+            haex_crdt::rusqlite::Error::FromSqlConversionFailure(
+                7,
+                haex_crdt::rusqlite::types::Type::Text,
+                format!("unknown provider capability: {capability_str}").into(),
+            )
+        })?,
     })
 }
