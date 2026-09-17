@@ -346,41 +346,36 @@ pub fn resolve_or_migrate_model_dir(
     })?;
 
     if entry.id == "whisper-tiny" && !is_complete_model(&dir) {
-        let legacy_dir = app
+        // Best-effort: a legacy dir we can't even resolve is treated the
+        // same as "no legacy install" rather than failing the whole call —
+        // self-healing (a normal download) always remains available.
+        if let Ok(legacy_dir) = app
             .path()
             .resolve(LEGACY_WHISPER_TINY_DIR, BaseDirectory::AppLocalData)
-            .map_err(|e| SttError::LocalUnavailable {
-                reason: format!("resolve legacy Whisper model directory: {e}"),
-            })?;
-        migrate_legacy_if_present(&legacy_dir, &dir)?;
+        {
+            migrate_legacy_if_present(&legacy_dir, &dir);
+        }
     }
 
     Ok(dir)
 }
 
 /// Copies a complete legacy install's files into `canonical_dir`,
-/// best-effort (a failed individual copy just leaves that file for
-/// `ensure_model_files` to download fresh). No-op if `legacy_dir` isn't
-/// itself a complete install — an incomplete legacy install is never
-/// treated as valid. Split out from [`resolve_or_migrate_model_dir`] as a
-/// pure `&Path`-based helper so it's unit-testable without a Tauri
-/// `AppHandle` — `pub` for the same reason as [`ensure_model_files`].
-pub fn migrate_legacy_if_present(legacy_dir: &Path, canonical_dir: &Path) -> Result<(), SttError> {
+/// best-effort: a failed individual copy just leaves that file missing/
+/// incomplete for `ensure_model_files` to download fresh afterward — a
+/// model that isn't fully available is always self-healed by a normal
+/// download, never a hard failure. No-op if `legacy_dir` isn't itself a
+/// complete install — an incomplete legacy install is never treated as
+/// valid. Split out from [`resolve_or_migrate_model_dir`] as a pure
+/// `&Path`-based helper so it's unit-testable without a Tauri `AppHandle`
+/// — `pub` for the same reason as [`ensure_model_files`].
+pub fn migrate_legacy_if_present(legacy_dir: &Path, canonical_dir: &Path) {
     if !is_complete_model(legacy_dir) {
-        return Ok(());
+        return;
     }
     for filename in [CONFIG_FILENAME, TOKENIZER_FILENAME, WEIGHTS_FILENAME] {
-        std::fs::copy(legacy_dir.join(filename), canonical_dir.join(filename)).map_err(|e| {
-            SttError::LocalUnavailable {
-                reason: format!(
-                    "migrate {} to {}: {e}",
-                    legacy_dir.join(filename).display(),
-                    canonical_dir.join(filename).display()
-                ),
-            }
-        })?;
+        let _ = std::fs::copy(legacy_dir.join(filename), canonical_dir.join(filename));
     }
-    Ok(())
 }
 
 /// Downloads whichever of `config.json`/`tokenizer.json`/`model.safetensors`

@@ -218,7 +218,7 @@ mod legacy_migration {
         std::fs::write(legacy.path().join(TOKENIZER_FILENAME), b"{}").unwrap();
         std::fs::write(legacy.path().join(WEIGHTS_FILENAME), b"weights").unwrap();
 
-        migrate_legacy_if_present(legacy.path(), canonical.path()).unwrap();
+        migrate_legacy_if_present(legacy.path(), canonical.path());
 
         assert!(is_complete_model(canonical.path()));
         assert_eq!(
@@ -234,7 +234,7 @@ mod legacy_migration {
         std::fs::write(legacy.path().join(CONFIG_FILENAME), b"{}").unwrap();
         // Legacy install missing tokenizer/weights — not complete.
 
-        migrate_legacy_if_present(legacy.path(), canonical.path()).unwrap();
+        migrate_legacy_if_present(legacy.path(), canonical.path());
 
         assert!(!canonical.path().join(CONFIG_FILENAME).exists());
         assert!(!is_complete_model(canonical.path()));
@@ -256,7 +256,7 @@ mod legacy_migration {
         std::fs::write(canonical.path().join(TOKENIZER_FILENAME), b"canonical").unwrap();
         std::fs::write(canonical.path().join(WEIGHTS_FILENAME), b"canonical").unwrap();
 
-        migrate_legacy_if_present(legacy.path(), canonical.path()).unwrap();
+        migrate_legacy_if_present(legacy.path(), canonical.path());
 
         assert_eq!(
             std::fs::read(canonical.path().join(CONFIG_FILENAME)).unwrap(),
