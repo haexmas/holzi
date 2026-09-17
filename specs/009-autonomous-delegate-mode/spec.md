@@ -5,11 +5,11 @@
 **Status**: Draft
 **Input**: User description: "Autonomous delegate mode: let a connected CLI delegate backend (Claude
 Code or Codex, from 007-cli-delegate) run with its own native tool autonomy instead of holzi's live
-per-tool-call approval gate, chosen explicitly per request/connection rather than as a new global
+per-tool-call approval gate, chosen explicitly per request rather than as a new global
 default. Two variants: an ungated mode that spawns the delegate with its own native full-autonomy
 flag and only captures final output, and a gated-but-permissive mode that reuses 007's existing
 --permission-prompt-tool/app-server approval bridge but auto-allows everything except an
-operator-configured deny/notify list, giving a full persisted tool-call audit log for the same
+operator-configured deny list, giving a full persisted tool-call audit log for the same
 latency cost 007 already pays. This does not change any of 007-cli-delegate's shipped behavior (its
 live per-tool-call approval stays the default); it is a second, explicit opt-in. Does not reintroduce
 ACP (already rejected for Claude Code's Agent-SDK ToS clause). Desktop-only, same as 007. Full prior
@@ -99,16 +99,19 @@ the feature already delivers its core value (Story 1) without it, since a user w
 restriction at all can use the ungated mode instead.
 
 **Independent Test**: Configure a rule blocking one category of action, run a gated-but-permissive
-request that would trigger it, and confirm that action is blocked while everything else proceeds
-without a pause.
+request that produces a vendor approval callback carrying the documented matching signal, and
+confirm that callback is denied while non-matching approval callbacks proceed without a pause.
 
 **Acceptance Scenarios**:
 
-1. **Given** a deny rule is configured for a category of action, **When** the delegate attempts an
-   action matching that category during a gated-but-permissive run, **Then** it is not permitted,
-   and the run continues rather than ending outright.
-2. **Given** no configured rule matches an attempted action, **When** the delegate attempts it,
-   **Then** it proceeds without a pause.
+1. **Given** a deny rule is configured for a category of action, **When** a vendor approval callback
+   processed by `approval_bridge::request_approval` carries a documented signal matching that
+   category during a gated-but-permissive run, **Then** the requested action is not permitted, and
+   the run continues rather than ending outright.
+2. **Given** an approval callback reaches `approval_bridge::request_approval` and no configured rule
+   matches its documented signals, **When** the bridge evaluates it, **Then** it proceeds without a
+   pause. Delegate tool calls for which the vendor emits no approval callback are outside deny-rule
+   evaluation and are not claimed as intercepted by this story.
 
 ---
 
@@ -195,8 +198,11 @@ it, and confirm the underlying process actually terminates.
   under.
 - **FR-006**: In the ungated mode, the system MUST NOT require a per-tool-call record — only the
   delegate's final response needs to be persisted.
-- **FR-007**: An action matching a configured deny rule MUST NOT be permitted to run; the delegate
-  MUST be informed the action was not available, and the run MUST continue rather than end outright.
+- **FR-007**: An action represented by a vendor approval callback processed by
+  `approval_bridge::request_approval` whose documented signals match a configured deny rule MUST NOT
+  be permitted to run; the delegate MUST be informed the action was not available, and the run MUST
+  continue rather than end outright. This requirement does not claim interception of tool calls for
+  which the vendor emits no approval callback.
 - **FR-008**: The system MUST NOT let a previously selected autonomy mode silently apply to a later,
   unrelated request — each delegate-backed request MUST start from the standard behavior unless
   autonomy is explicitly selected for that specific request.
@@ -216,9 +222,9 @@ it, and confirm the underlying process actually terminates.
 - **FR-014**: Configured deny rules MUST persist as a device-wide setting and MUST apply
   automatically to every gated-but-permissive run until the operator changes them — independent of,
   and not reset by, the per-request autonomy mode selection in FR-008.
-- **FR-015**: If an enabled deny rule cannot be evaluated against a particular action because the
-  backend does not expose enough detail about that action, the system MUST treat it as denied rather
-  than allow it through unverified.
+- **FR-015**: If an enabled deny rule cannot be evaluated against a particular approval callback
+  because the backend does not expose enough detail in that callback, the system MUST treat it as
+  denied rather than allow it through unverified.
 
 ### Key Entities
 
@@ -238,8 +244,10 @@ it, and confirm the underlying process actually terminates.
   being interrupted for approval on any individual action along the way.
 - **SC-002**: A user reviewing a gated-but-permissive run afterward can see every action the delegate
   took during that run.
-- **SC-003**: An action matching a configured deny rule is blocked 100% of the time during a
-  gated-but-permissive run, with no exceptions.
+- **SC-003**: A vendor approval callback processed by `approval_bridge::request_approval` whose
+  documented signals match a configured deny rule is denied 100% of the time during a
+  gated-but-permissive run, with no exceptions; no claim is made for tool calls that emit no approval
+  callback.
 - **SC-004**: A user who does not explicitly choose an autonomous mode always experiences the
   existing, unchanged per-action approval behavior — with no exceptions and no drift over time.
 - **SC-005**: A user who stops an autonomous response sees the underlying process actually end,

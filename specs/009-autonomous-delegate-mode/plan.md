@@ -166,8 +166,8 @@ src-tauri/src/
 │       ├── autonomy_tests.rs            # NEW — per-vendor deny-category matching unit tests, incl.
 │       │                                 #   the Codex FileChange non-evaluability case as an explicit
 │       │                                 #   documented behavior, not a silent gap
-│       ├── claude.rs                    # build_command (claude.rs:117-145): branch on
-│       │                                 #   `req.autonomy_mode` — Ungated swaps the permission-mode
+│       ├── claude.rs                    # spawn_claude_invocation (claude.rs:148-153) reads the
+│       │                                 #   existing `req.autonomy_mode` — Ungated swaps the permission-mode
 │       │                                 #   arg and omits --mcp-config/--permission-prompt-tool;
 │       │                                 #   Standard/GatedPermissive unchanged
 │       ├── codex.rs                     # spawn_codex_app_server's thread/start params (codex.rs:299-316):
@@ -181,11 +181,11 @@ src-tauri/src/
 │       │                                 #   Ungated never reaches this function for Claude (no bridge
 │       │                                 #   spawned) and never receives a callback for Codex
 │       │                                 #   (approvalPolicy:"never" means Codex itself never asks)
-│       └── mod.rs                       # CliDelegateAdapter::stream_chat (mod.rs:195-224): thread
-│                                         #   req.autonomy_mode into spawn_claude_invocation /
-│                                         #   spawn_codex_app_server as a new parameter (no existing
-│                                         #   config struct to extend — both currently take positional
-│                                         #   scalars, per research.md §1)
+│       └── mod.rs                       # CliDelegateAdapter::stream_chat (mod.rs:195-224) continues
+│                                         #   passing its existing ChatRequest into
+│                                         #   spawn_claude_invocation / spawn_codex_app_server; each
+│                                         #   spawn function reads `req.autonomy_mode` directly, with
+│                                         #   no separate AutonomyMode parameter
 ├── storage/
 │   └── chat_messages.rs                 # migration 0017 adds nullable `autonomy_mode` beside
 │                                         #   the existing `tool_source` column, satisfying spec

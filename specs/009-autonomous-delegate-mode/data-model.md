@@ -33,6 +33,12 @@ only the delegate's final response is persisted as the ordinary assistant messag
 `autonomy_mode` column is set on that assistant message row itself (so "which mode did this turn use"
 is answerable even when no tool-call rows exist for it), not only on tool-call rows.
 
+The existing `list_messages` history endpoint is not replaced or given a new request/response
+surface. Its current read chain is extended additively: storage `ChatMessage`, the history SQL
+projection, `row_to_message`, `MessagePayload`, and the frontend `Message` type each carry nullable
+`autonomy_mode`. Reads preserve `NULL`/`null` for legacy and non-delegate rows; they must not infer
+`Standard`, because no mode was persisted for those rows.
+
 ## New Rust types (runtime, `adapters/cli_delegate/autonomy.rs`)
 
 ### `AutonomyMode`
@@ -91,6 +97,12 @@ parameter. `workspace_root` is selected for this invocation and threaded explici
 approval flow; the evaluator never derives it from the ambient process working directory, and it is
 not added to `ApprovalRequestPayload`.
 
+This is deliberately an approval-callback evaluator, not a router for every delegate tool call.
+Only actions delivered by a vendor approval callback and processed by
+`approval_bridge::request_approval` reach `evaluate_deny_rules`; a tool call the vendor executes
+without such a callback is outside this evaluator's scope. Matching therefore promises enforcement
+only against the documented signals present on those callbacks.
+
 ```rust
 pub enum ApprovalRequestPayload {
     ClaudeToolCall { tool_name: String, input: Value },       // has file_path when input is a file-editing tool's input
@@ -113,10 +125,12 @@ has no `Ask` outcome — `gated-permissive` never produces a human-facing pause 
 returns the same two-variant `ApprovalDecision` type `approval_bridge.rs` already defines, simply
 never constructing the case that would trigger a UI prompt.
 
-`NetworkAccess` enforcement is intentionally limited to the structured Codex network signal, the
-recognized Claude `WebFetch`/`WebSearch` tools, and the documented command patterns. FR-007 and
-SC-003 apply completely to actions that match those signals; this phase does not claim detection or
-blocking of every possible network-capable command.
+`NetworkAccess` enforcement is intentionally limited to approval callbacks carrying the structured
+Codex network signal, recognized Claude `WebFetch`/`WebSearch` tool names, or documented command
+patterns. An unrecognized Claude approval action whose network intent cannot be classified fails
+closed while `NetworkAccess` is enabled. FR-007 and SC-003 apply completely to callbacks matching
+these signals (including that fail-closed case); this phase does not claim detection or blocking of
+tool calls for which the vendor emits no approval callback.
 
 ## Changed entity: `preferences` (existing table, one new key, no schema change)
 

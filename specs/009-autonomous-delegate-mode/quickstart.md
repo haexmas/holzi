@@ -60,14 +60,15 @@ research.md for the full evidence trail:
 ## Scenario 3: A deny rule holds even under otherwise-full permissiveness (User Story 3)
 
 1. In settings, enable the `network_access` deny rule for delegate connections.
-2. Send a `gated-permissive` request that would need network access (e.g. "fetch
-   https://example.com and summarize it") using **Codex** first.
+2. Send a `gated-permissive` request that causes **Codex** to emit a `requestApproval` callback with
+   `networkApprovalContext` (e.g. "fetch https://example.com and summarize it").
 3. **Expect**: the network action is blocked; the delegate is told it wasn't available; the turn
    completes rather than crashing.
-4. Repeat with **Claude Code**.
-5. **Expect**: same outcome via the recognized tool-name/command-text match (data-model.md). An
-   unrecognized Claude command whose network intent cannot be classified must also be denied
+4. Repeat with a **Claude Code** approval callback for a recognized `WebFetch` tool.
+5. **Expect**: same outcome via the recognized tool-name/command-text signal (data-model.md). An
+   unrecognized Claude approval action whose network intent cannot be classified must also be denied
    fail-closed; Codex's `networkApprovalContext` remains the structured signal (research.md §3).
+   Tool calls for which the vendor emits no approval callback are outside this evaluator's scope.
 6. Enable `workspace_escape` instead, and with **Codex specifically**, trigger a _file write_
    (not a command execution) outside the workspace root.
 7. **Expect** (spec FR-015, the known asymmetry): the write is denied — not because it was matched
