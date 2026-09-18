@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use rmcp::model::{
     CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, ListToolsResult,
-    PaginatedRequestParams, ServerInfo, Tool as McpToolInfo,
+    PaginatedRequestParams, ServerConfig, Tool as McpToolInfo,
 };
 use rmcp::service::{MaybeSendFuture, RequestContext, RoleServer, RunningService};
 use rmcp::{ErrorData as McpError, RoleClient, ServerHandler, ServiceExt};
@@ -26,8 +26,8 @@ struct EchoServer {
 }
 
 impl ServerHandler for EchoServer {
-    fn get_info(&self) -> ServerInfo {
-        ServerInfo::default()
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::default()
     }
 
     fn list_tools(

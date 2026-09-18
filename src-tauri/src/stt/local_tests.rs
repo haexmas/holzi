@@ -48,8 +48,10 @@ fn read_wav_as_canonical_pcm(path: &Path) -> CanonicalPcm {
     }
     let data = data.expect("fixture wav has no data chunk");
     let samples = data
-        .chunks_exact(2)
-        .map(|b| i16::from_le_bytes([b[0], b[1]]) as f32 / i16::MAX as f32)
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|b| i16::from_le_bytes(*b) as f32 / i16::MAX as f32)
         .collect();
     CanonicalPcm { samples }
 }

@@ -74,7 +74,7 @@ pub fn resolve_idempotent_send(
             assistant_message_id,
         });
     };
-    let thread_matches = requested_thread_id.map_or(true, |t| t == existing.thread_id);
+    let thread_matches = requested_thread_id.is_none_or(|t| t == existing.thread_id);
     if !thread_matches || existing.content != content {
         return Ok(IdempotentSend::Mismatch);
     }
