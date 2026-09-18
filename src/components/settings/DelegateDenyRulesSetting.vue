@@ -26,6 +26,7 @@ const savedFlash = ref(false)
 const opError = ref<string | null>(null)
 const loadError = ref<string | null>(null)
 
+/** Reloads and validates the device-scoped deny-rule selection. */
 async function reloadAsync() {
   loading.value = true
   loadError.value = null
@@ -49,6 +50,7 @@ async function reloadAsync() {
   }
 }
 
+/** Applies one checkbox change to the local selection. */
 function toggle(category: string, checked: boolean) {
   const next = new Set(selected.value)
   if (checked) next.add(category)
@@ -57,6 +59,7 @@ function toggle(category: string, checked: boolean) {
   savedFlash.value = false
 }
 
+/** Persists the current deny-rule selection for this device. */
 async function onSave() {
   busy.value = true
   savedFlash.value = false

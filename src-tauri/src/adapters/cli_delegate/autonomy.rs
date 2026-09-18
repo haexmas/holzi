@@ -26,6 +26,7 @@ pub enum AutonomyMode {
 }
 
 impl AutonomyMode {
+    /// Returns the stable wire/storage label for this autonomy posture.
     pub fn as_str(self) -> &'static str {
         match self {
             AutonomyMode::Standard => "standard",
@@ -89,6 +90,7 @@ pub enum ApprovalRequestPayload {
 /// (research.md §4's named examples — not an exhaustive list by design).
 const CREDENTIAL_PATH_PATTERNS: &[&str] = &[".ssh/", ".aws/", ".env", "id_rsa"];
 
+/// Reports whether a supplied path or command mentions a protected credential path.
 fn matches_credential_pattern(value: Option<&str>) -> bool {
     value
         .map(|v| {
@@ -175,6 +177,7 @@ fn resolve_physically(path: &str, workspace_root: &Path) -> PathBuf {
     }
 }
 
+/// Checks physical containment within an existing, canonical workspace root.
 fn is_within_workspace(candidate: &str, workspace_root: &Path) -> bool {
     let Ok(canonical_root) = workspace_root.canonicalize() else {
         return false;
@@ -182,6 +185,7 @@ fn is_within_workspace(candidate: &str, workspace_root: &Path) -> bool {
     resolve_physically(candidate, workspace_root).starts_with(canonical_root)
 }
 
+/// Evaluates one enabled deny category against a normalized vendor request.
 fn category_denies(
     category: DenyCategory,
     request: &ApprovalRequestPayload,

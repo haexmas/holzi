@@ -498,6 +498,7 @@ const isDelegateModel = computed(() => {
   )
 })
 
+/** Translates gated-permissive audit markers for transcript display. */
 function toolResultContentLabel(m: Message): string {
   if (m.role === 'tool_result' && DENY_AUDIT_MARKERS.has(m.content)) {
     return t(`chat.autonomy.audit.${m.content}`)

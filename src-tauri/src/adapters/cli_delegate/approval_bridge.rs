@@ -254,6 +254,7 @@ async fn persist_gated_permissive_record(
     .is_ok_and(|result| result.is_ok())
 }
 
+/// Returns the current Unix timestamp in milliseconds for ordered audit rows.
 fn now_ms() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

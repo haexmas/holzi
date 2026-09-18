@@ -24,16 +24,19 @@ fn workspace_root() -> &'static Path {
         .path()
 }
 
+/// Returns the shared test workspace as UTF-8 for JSON approval payloads.
 fn workspace_str() -> &'static str {
     workspace_root()
         .to_str()
         .expect("workspace path is valid UTF-8")
 }
 
+/// Builds a path beneath the shared test workspace.
 fn workspace_path(rel: &str) -> String {
     format!("{}/{rel}", workspace_str())
 }
 
+/// Builds a Claude approval payload for deny-rule unit tests.
 fn claude_call(tool_name: &str, input: serde_json::Value) -> ApprovalRequestPayload {
     ApprovalRequestPayload::ClaudeToolCall {
         tool_name: tool_name.to_string(),
@@ -41,6 +44,7 @@ fn claude_call(tool_name: &str, input: serde_json::Value) -> ApprovalRequestPayl
     }
 }
 
+/// Builds a Codex command approval payload for deny-rule unit tests.
 fn codex_command(
     command: &str,
     cwd: Option<&str>,
@@ -54,6 +58,7 @@ fn codex_command(
 }
 
 #[test]
+/// Verifies that an empty deny-rule set permits every request shape.
 fn empty_rule_set_always_allows() {
     let request = claude_call("Bash", json!({"command": "curl https://example.com"}));
     assert_eq!(

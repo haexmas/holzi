@@ -27,6 +27,7 @@ use holzi_lib::storage::chat_threads::{self, ChatThread};
 
 const PASSPHRASE: &str = "cli-delegate-autonomy-audit-trail";
 
+/// Opens an isolated vault containing the production migration set.
 fn open_vault(dir: &Path) -> Database {
     let installation_id = installation_id_path(dir);
     Database::open(DatabaseConfig {
@@ -41,6 +42,7 @@ fn open_vault(dir: &Path) -> Database {
     .expect("vault open")
 }
 
+/// Writes an executable delegate stub into the test directory.
 fn write_stub(dir: &Path, name: &str, script: &str) -> PathBuf {
     let path = dir.join(name);
     fs::write(&path, script).expect("write stub script");
@@ -50,6 +52,7 @@ fn write_stub(dir: &Path, name: &str, script: &str) -> PathBuf {
     path
 }
 
+/// Creates an event emitter backed by an inspectable channel.
 fn channel_emitter() -> (EventEmitter, mpsc::UnboundedReceiver<(String, Value)>) {
     let (tx, rx) = mpsc::unbounded_channel();
     let emit: EventEmitter = Arc::new(move |event: &str, payload: Value| {
@@ -58,6 +61,7 @@ fn channel_emitter() -> (EventEmitter, mpsc::UnboundedReceiver<(String, Value)>)
     (emit, rx)
 }
 
+/// Consumes a delegate stream and asserts that it terminates with `Done`.
 async fn drain_to_done(mut stream: holzi_lib::adapters::AdapterStream) {
     while let Some(chunk) = stream.next().await {
         match chunk.expect("no stream error expected") {
