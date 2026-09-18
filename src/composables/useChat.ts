@@ -30,6 +30,10 @@ export interface Message {
   toolIsError: boolean | null
   /** `mcp` or `cli`. Set only when `role === 'tool_call'`. */
   toolSource: string | null
+  /** Which autonomy mode the turn ran under (spec
+   * 009-autonomous-delegate-mode). `null` for legacy and non-delegate
+   * rows — never inferred as `'standard'`. */
+  autonomyMode: 'standard' | 'ungated' | 'gated_permissive' | null
 }
 
 export interface LoadedModelInfo {
@@ -52,6 +56,13 @@ export interface SendMessageArgs {
    * a second user message (contract §send_message).
    */
   idempotencyKey?: string
+  /**
+   * Per-request autonomy posture for a `cli_delegate` backend (spec
+   * 009-autonomous-delegate-mode). Omitted or `null` behaves identically
+   * to `'standard'` — never persisted as a preference (FR-008), and
+   * ignored entirely by non-delegate backends.
+   */
+  autonomyMode?: 'standard' | 'ungated' | 'gated_permissive' | null
 }
 
 export interface SendMessageResult {

@@ -425,10 +425,12 @@ pub(crate) async fn load_api_key_model(
     })?;
 
     let provider = crate::providers::repair_legacy_adapter(&db, &provider).await?;
+    let provider_kind = provider.kind;
     let adapter = build_adapter(&provider, delegate_chat_ctx)?;
     Ok(ActiveSession {
         model_id: composite_id.to_string(),
         provider_id: Some(provider_id),
+        provider_kind,
         adapter: Arc::from(adapter),
         tokenizer_repo: String::new(),
         context_window: row.context_window,
@@ -633,6 +635,7 @@ async fn load_local_model_from_metadata(
     Ok(ActiveSession {
         model_id: model_id.to_string(),
         provider_id: None,
+        provider_kind: crate::storage::providers::ProviderKind::Local,
         adapter: Arc::new(LocalAdapter::new(model)),
         tokenizer_repo,
         context_window,

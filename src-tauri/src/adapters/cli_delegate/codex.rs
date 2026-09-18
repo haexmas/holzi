@@ -1,6 +1,7 @@
 //! `codex app-server --stdio` process driver.
 
 use std::io;
+use std::path::Path;
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 
@@ -15,8 +16,9 @@ use crate::adapters::types::{StreamChunk, StreamError};
 use crate::adapters::{AdapterError, AdapterStream, ChatRequest};
 
 use super::approval_bridge;
+use super::autonomy::{self, ApprovalRequestPayload, AutonomyMode, NetworkContext};
 use super::process::{configure_process_group, map_spawn_error, ChildLifecycle};
-use super::{build_transcript_prompt, DelegateChatContext};
+use super::{build_transcript_prompt, DelegateChatContext, DelegateVendor};
 
 const CLIENT_NAME: &str = "holzi";
 const CLIENT_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -120,6 +122,51 @@ async fn read_line(lines: &mut Lines<BufReader<ChildStdout>>) -> io::Result<Line
     Ok(categorize_line(lines.next_line().await?.as_deref()))
 }
 
+/// Builds the deny-rule evaluator's view of a Codex approval callback
+/// (data-model.md): `CodexCommandExecution` when the schema actually
+/// carries its required fields (research.md §2: a genuine
+/// `item/commandExecution/requestApproval` callback always has `command`
+/// and `cwd`), `CodexFileChange` (field-less — research.md §3) for a
+/// file-change callback, and `CodexUnevaluable` for anything else —
+/// an unrecognized approval kind, or a `commandExecution` callback missing
+/// either required field. Defaulting the latter to an empty command used to
+/// evaluate as "safe" against every deny category regardless of content;
+/// `CodexUnevaluable` instead fails closed like `CodexFileChange` (code
+/// review, spec FR-015).
+pub(super) fn build_codex_payload(method: &str, params: &Value) -> ApprovalRequestPayload {
+    match method {
+        "item/commandExecution/requestApproval" => {
+            match (
+                params.get("command").and_then(Value::as_str),
+                // Require an actual string, not just a present key: `Some`
+                // on a `null`/object/number `cwd` used to fall through to
+                // `cwd: None`, which `WorkspaceEscape` treats as "nothing to
+                // check" (allow) rather than "unevaluable" (deny) — code
+                // review.
+                params.get("cwd").and_then(Value::as_str),
+            ) {
+                (Some(command), Some(cwd)) => ApprovalRequestPayload::CodexCommandExecution {
+                    command: command.to_string(),
+                    cwd: Some(cwd.to_string()),
+                    network: params
+                        .get("networkApprovalContext")
+                        .map(|ctx| NetworkContext {
+                            host: ctx.get("host").and_then(Value::as_str).map(String::from),
+                            protocol: ctx
+                                .get("protocol")
+                                .and_then(Value::as_str)
+                                .map(String::from),
+                        }),
+                },
+                _ => ApprovalRequestPayload::CodexUnevaluable,
+            }
+        }
+        "item/fileChange/requestApproval" => ApprovalRequestPayload::CodexFileChange,
+        _ => ApprovalRequestPayload::CodexUnevaluable,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 async fn respond_to_server_request(
     stdin: &mut ChildStdin,
     id: Value,
@@ -127,6 +174,8 @@ async fn respond_to_server_request(
     params: Value,
     context: &DelegateChatContext,
     thread_id: Option<uuid::Uuid>,
+    autonomy_mode: AutonomyMode,
+    workspace_root: &Path,
 ) -> io::Result<()> {
     let tool_name = match method {
         "item/commandExecution/requestApproval" => "Bash",
@@ -134,13 +183,17 @@ async fn respond_to_server_request(
         "item/permissions/requestApproval" => "Permissions",
         _ => "Codex tool",
     };
+    let payload = build_codex_payload(method, &params);
     let decision = approval_bridge::request_approval(
         &context.pending_tool_approvals,
         &context.emit,
         context.database.as_ref(),
         thread_id,
+        autonomy_mode,
+        workspace_root,
         tool_name.to_string(),
         params,
+        payload,
     )
     .await;
     let decision = match decision {
@@ -154,6 +207,7 @@ async fn respond_to_server_request(
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn call(
     stdin: &mut ChildStdin,
     lines: &mut Lines<BufReader<ChildStdout>>,
@@ -162,6 +216,8 @@ async fn call(
     params: Value,
     context: &DelegateChatContext,
     thread_id: Option<uuid::Uuid>,
+    autonomy_mode: AutonomyMode,
+    workspace_root: &Path,
 ) -> Result<Value, AdapterError> {
     let id = *next_id;
     *next_id += 1;
@@ -186,11 +242,20 @@ async fn call(
                 return Ok(value.get("result").cloned().unwrap_or(Value::Null));
             }
             Line::ServerRequest { id, method, params } => {
-                respond_to_server_request(stdin, id, &method, params, context, thread_id)
-                    .await
-                    .map_err(|error| AdapterError::Http {
-                        reason: format!("failed to answer Codex approval request: {error}"),
-                    })?;
+                respond_to_server_request(
+                    stdin,
+                    id,
+                    &method,
+                    params,
+                    context,
+                    thread_id,
+                    autonomy_mode,
+                    workspace_root,
+                )
+                .await
+                .map_err(|error| AdapterError::Http {
+                    reason: format!("failed to answer Codex approval request: {error}"),
+                })?;
             }
             Line::Eof => {
                 return Err(AdapterError::Http {
@@ -202,6 +267,7 @@ async fn call(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn call_with_timeout(
     stdin: &mut ChildStdin,
     lines: &mut Lines<BufReader<ChildStdout>>,
@@ -210,10 +276,22 @@ async fn call_with_timeout(
     params: Value,
     context: &DelegateChatContext,
     thread_id: Option<uuid::Uuid>,
+    autonomy_mode: AutonomyMode,
+    workspace_root: &Path,
 ) -> Result<Value, AdapterError> {
     tokio::time::timeout(
         HANDSHAKE_TIMEOUT,
-        call(stdin, lines, next_id, method, params, context, thread_id),
+        call(
+            stdin,
+            lines,
+            next_id,
+            method,
+            params,
+            context,
+            thread_id,
+            autonomy_mode,
+            workspace_root,
+        ),
     )
     .await
     .map_err(|_| AdapterError::Http {
@@ -284,6 +362,8 @@ pub(super) async fn spawn_codex_app_server(
     let mut lines = BufReader::new(stdout).lines();
     let mut next_id = 1_i64;
     let original_thread_id = req.thread_id;
+    let autonomy_mode = req.autonomy_mode;
+    let workspace_root = tmp.path().to_path_buf();
 
     let handshake = async {
         call_with_timeout(
@@ -294,24 +374,41 @@ pub(super) async fn spawn_codex_app_server(
             json!({"clientInfo": {"name": CLIENT_NAME, "version": CLIENT_VERSION}}),
             &context,
             original_thread_id,
+            autonomy_mode,
+            &workspace_root,
         )
         .await?;
+        // `Ungated` sets the delegate's own native full-autonomy mechanism
+        // (research.md §2): `approvalPolicy: "never"` means Codex never
+        // emits an approval callback at all, and `sandbox` is made
+        // explicit rather than left to Codex's default so a future
+        // upstream default change cannot silently widen `ungated` further.
+        // `Standard`/`GatedPermissive` keep today's exact params — only
+        // the approval *decision function* changes for `GatedPermissive`
+        // (approval_bridge.rs), not what Codex asks approval for.
+        let mut thread_start_params = json!({
+            "cwd": tmp.path().to_string_lossy(),
+            "approvalPolicy": "on-request",
+            "approvalsReviewer": "user",
+            // Codex's equivalent of Claude's `--append-system-prompt-file`
+            // (spec.md FR-010) — holzi passes context explicitly rather
+            // than relying on file-based discovery.
+            "developerInstructions": req.system_prompt.clone(),
+        });
+        if autonomy_mode == AutonomyMode::Ungated {
+            thread_start_params["approvalPolicy"] = json!("never");
+            thread_start_params["sandbox"] = json!("workspace-write");
+        }
         let thread_result = call_with_timeout(
             &mut stdin,
             &mut lines,
             &mut next_id,
             "thread/start",
-            json!({
-                "cwd": tmp.path().to_string_lossy(),
-                "approvalPolicy": "on-request",
-                "approvalsReviewer": "user",
-                // Codex's equivalent of Claude's `--append-system-prompt-file`
-                // (spec.md FR-010) — holzi passes context explicitly rather
-                // than relying on file-based discovery.
-                "developerInstructions": req.system_prompt.clone(),
-            }),
+            thread_start_params,
             &context,
             original_thread_id,
+            autonomy_mode,
+            &workspace_root,
         )
         .await?;
         let codex_thread_id = thread_result
@@ -334,6 +431,8 @@ pub(super) async fn spawn_codex_app_server(
             }),
             &context,
             original_thread_id,
+            autonomy_mode,
+            &workspace_root,
         )
         .await
     };
@@ -341,6 +440,22 @@ pub(super) async fn spawn_codex_app_server(
         child.terminate_and_reap().await;
         stderr_task.abort();
         let _ = stderr_task.await;
+        // Reactive classification (spec FR-013/SC-006, tasks.md T009/T022):
+        // an installed `codex` too old to accept `approvalPolicy`/`sandbox`
+        // rejects `thread/start` with a JSON-RPC error, which surfaces here
+        // synchronously — before any stream is returned — unlike Claude's
+        // equivalent case (see the peek-ahead below).
+        if autonomy_mode != AutonomyMode::Standard {
+            if let Some(unavailable) = autonomy::classify_autonomy_spawn_error(
+                DelegateVendor::Codex,
+                autonomy_mode,
+                &error.to_string(),
+            ) {
+                return Err(AdapterError::Unavailable {
+                    reason: unavailable.to_string(),
+                });
+            }
+        }
         return Err(error);
     }
 
@@ -371,6 +486,8 @@ pub(super) async fn spawn_codex_app_server(
                         params,
                         &context,
                         original_thread_id,
+                        autonomy_mode,
+                        &workspace_root,
                     )
                     .await;
                 }

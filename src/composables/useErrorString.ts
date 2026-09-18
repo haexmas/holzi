@@ -1,3 +1,11 @@
+/** contracts/tauri-commands.md (spec 009-autonomous-delegate-mode): the
+ * `send_message` `InvalidInput` reason prefix for an autonomy mode the
+ * connected delegate's installed CLI does not support (FR-013/SC-006).
+ * Checked before the generic `InvalidInput` fallback below — other
+ * `InvalidInput` errors keep their existing mapping. */
+const AUTONOMY_UNAVAILABLE_PREFIX =
+  'adapter start: backend unavailable: autonomy mode unavailable:'
+
 const HF_ERROR_KINDS = new Set([
   'InvalidInput',
   'Network',
@@ -25,10 +33,17 @@ export function useErrorString() {
     if (typeof e === 'string') return e
     if (e && typeof e === 'object' && 'kind' in e) {
       const kind = (e as { kind: unknown }).kind
+      const reason = (e as { reason?: unknown }).reason
       if (kind === 'InvalidIdempotencyKey')
         return t('errors.invalidIdempotencyKey')
       if (kind === 'IdempotencyKeyConflict')
         return t('errors.idempotencyKeyConflict')
+      if (
+        kind === 'InvalidInput' &&
+        typeof reason === 'string' &&
+        reason.startsWith(AUTONOMY_UNAVAILABLE_PREFIX)
+      )
+        return t('errors.autonomyUnavailable')
       if (typeof kind === 'string' && HF_ERROR_KINDS.has(kind))
         return t(hfErrorKey(e))
       return JSON.stringify(e)

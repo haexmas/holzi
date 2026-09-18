@@ -9,6 +9,8 @@ use serde_json::Value;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
+use super::cli_delegate::autonomy::AutonomyMode;
+
 /// Which speaker a message belongs to. `System` is passed separately in
 /// [`ChatRequest::system_prompt`] because both mistralrs and Anthropic
 /// treat it as an out-of-band field rather than a message role.
@@ -89,6 +91,11 @@ pub struct ChatRequest {
     /// calling (research.md §2 caveat) — an adapter never errors on an
     /// empty list, it just never emits `StreamChunk::ToolCalls`.
     pub tools: Vec<ToolSpec>,
+    /// Per-request autonomy posture for `cli_delegate` adapters (spec
+    /// 009-autonomous-delegate-mode); every other adapter receives it like
+    /// any other field but never reads it. Defaults to `Standard`, which is
+    /// byte-for-byte today's shipped behavior.
+    pub autonomy_mode: AutonomyMode,
 }
 
 /// One event on an [`AdapterStream`]. `Delta` carries either content,

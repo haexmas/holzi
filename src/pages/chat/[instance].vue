@@ -67,6 +67,12 @@ const {
 
 const PERMISSION_MODE_KEY = 'chat.permission_mode'
 const permissionMode = ref<'manual' | 'auto' | 'plan'>('manual')
+// Per-request only (spec 009-autonomous-delegate-mode FR-008): never
+// persisted, never read from a preference on mount — resets to
+// 'standard' after every send (T035).
+const autonomyMode = ref<'standard' | 'ungated' | 'gated_permissive'>(
+  'standard',
+)
 const pendingApprovals = ref<PendingApproval[]>([])
 const deviceUuid = ref('')
 const permissionModeSaving = ref(false)
@@ -248,8 +254,10 @@ async function send(retryPending = false) {
     content,
     maxNewTokens: effortTokens[effortLevel.value],
     idempotencyKey: crypto.randomUUID(),
+    autonomyMode: isDelegateModel.value ? autonomyMode.value : null,
   }
   pendingSend.value = null
+  if (!retry) autonomyMode.value = 'standard'
   turnSetupPending.value = true
   try {
     const result = await chat.sendMessageAsync(request)
@@ -302,6 +310,7 @@ async function send(retryPending = false) {
         toolInput: null,
         toolIsError: null,
         toolSource: null,
+        autonomyMode: null,
       })
     if (!list.some((message) => message.id === result.assistantMessageId))
       list.push({
@@ -320,6 +329,7 @@ async function send(retryPending = false) {
         toolInput: null,
         toolIsError: null,
         toolSource: null,
+        autonomyMode: request.autonomyMode ?? null,
       })
     messagesByThread.value[result.threadId] = list
     turnSetupPending.value = false
@@ -464,6 +474,36 @@ function delegateAnsweredByLabel(modelId: string | null): string | null {
   return t('chat.model.answeredByDelegate', {
     name: t(`chat.model.delegate.${remoteId}`),
   })
+}
+
+/** Markers `approval_bridge.rs` persists as a `gated-permissive` audit
+ * row's content (spec 009-autonomous-delegate-mode US2) — fixed and
+ * non-localized on the wire, translated here at the same i18n boundary
+ * other fixed markers use (CONTEXT.md). */
+const DENY_AUDIT_MARKERS = new Set([
+  'gated_permissive_call_permitted',
+  'denied_by_deny_rule',
+])
+
+/** Whether the active model resolves to a `cli_delegate` provider — reuses
+ * `delegateAnsweredByLabel`'s own provider lookup (spec
+ * 009-autonomous-delegate-mode: the autonomy control only makes sense for
+ * a delegate backend). */
+const isDelegateModel = computed(() => {
+  const modelId = activeModel.value?.modelId ?? null
+  if (!modelId) return false
+  const [providerId] = modelId.split(':')
+  return providerList.value.some(
+    (p) => p.id === providerId && p.kind === 'cli_delegate',
+  )
+})
+
+/** Translates gated-permissive audit markers for transcript display. */
+function toolResultContentLabel(m: Message): string {
+  if (m.role === 'tool_result' && DENY_AUDIT_MARKERS.has(m.content)) {
+    return t(`chat.autonomy.audit.${m.content}`)
+  }
+  return m.content || (streamingMessageId.value === m.id ? '…' : '')
 }
 
 async function respondToApproval(
@@ -941,6 +981,12 @@ onBeforeUnmount(() => {
                     {{ delegateAnsweredByLabel(m.modelId) }}
                   </span>
                   <span
+                    v-if="m.role === 'assistant' && m.autonomyMode"
+                    class="ml-2"
+                  >
+                    {{ t(`chat.autonomy.${m.autonomyMode}`) }}
+                  </span>
+                  <span
                     v-if="m.finishReason === 'error'"
                     class="ml-2 text-destructive"
                   >
@@ -997,9 +1043,7 @@ onBeforeUnmount(() => {
                   "
                 />
                 <!-- eslint-enable vue/no-v-html -->
-                <template v-else>{{
-                  m.content || (streamingMessageId === m.id ? '…' : '')
-                }}</template>
+                <template v-else>{{ toolResultContentLabel(m) }}</template>
               </div>
               <ChatReasoningAccordion
                 v-if="m.role === 'assistant' && reasoningFor(m.id)"
@@ -1056,6 +1100,13 @@ onBeforeUnmount(() => {
                     @allow="respondToApproval($event, 'allow')"
                     @deny="respondToApproval($event, 'deny')"
                     @cancel="abort"
+                  />
+
+                  <ChatDelegateAutonomyControl
+                    v-if="isDelegateModel"
+                    :mode="autonomyMode"
+                    :disabled="busy"
+                    @update:mode="autonomyMode = $event"
                   />
                 </div>
                 <ChatVoiceInputControl @transcript="onVoiceTranscript" />

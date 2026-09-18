@@ -7,6 +7,7 @@
 use serde::Serialize;
 use uuid::Uuid;
 
+use crate::adapters::cli_delegate::autonomy::AutonomyMode;
 use crate::chat::events::{
     MessageCompleteEvent, MessageErrorEvent, TurnCompleteEvent, EVENT_CHAT_MESSAGE_COMPLETE,
     EVENT_CHAT_MESSAGE_ERROR, EVENT_CHAT_TURN_COMPLETE,
@@ -94,7 +95,19 @@ pub(super) fn empty_tool_message(
         tool_input: None,
         tool_is_error: None,
         tool_source: None,
+        autonomy_mode: None,
     }
+}
+
+/// The label persisted on a turn's assistant/cancellation row (spec
+/// 009-autonomous-delegate-mode FR-005): `Some` only for a non-default
+/// mode. `Standard` stays `None` rather than being spelled out —
+/// indistinguishable in practice from a non-delegate turn (which never
+/// sets a non-default mode at all), and carries no "this ran unsupervised"
+/// information FR-005 cares about either way. A free function (not a
+/// `TurnRunner` method) so it is unit-testable without constructing one.
+pub(super) fn autonomy_mode_label(mode: AutonomyMode) -> Option<String> {
+    (mode != AutonomyMode::Standard).then(|| mode.as_str().to_string())
 }
 
 impl TurnRunner<'_> {
@@ -157,10 +170,12 @@ impl TurnRunner<'_> {
     pub(super) async fn end_cancelled(&mut self) {
         let created_at = self.bump_created_at();
         let (thread_id, message_id) = (self.thread_id, self.assistant_message_id);
+        let autonomy_mode = autonomy_mode_label(self.request.autonomy_mode);
         let final_msg = ChatMessage {
             role: MessageRole::Assistant,
             finish_reason: Some(FinishReason::Cancelled),
             created_at,
+            autonomy_mode,
             ..empty_tool_message(message_id, thread_id, Some(self.parent_id))
         };
         match persist_final_message(

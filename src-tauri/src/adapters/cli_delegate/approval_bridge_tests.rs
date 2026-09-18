@@ -9,9 +9,11 @@ use tokio::sync::{oneshot, Mutex as AsyncMutex};
 use uuid::Uuid;
 
 use super::approval_bridge::request_approval;
+use super::autonomy::{ApprovalRequestPayload, AutonomyMode};
 use super::{EventEmitter, PendingToolApprovals};
 use crate::chat::tools::ApprovalDecision;
 use crate::identity::{holzi_migration_source, installation_id_path, HolziBootstrap};
+use crate::storage::chat_messages::{self as msg_store, MessageRole};
 use crate::storage::preferences::{self, PrefScope};
 
 const PASSPHRASE: &str = "approval-bridge-posture-test";
@@ -64,8 +66,14 @@ async fn manual_approval_uses_the_existing_pending_request_flow() {
             &emit_for_request,
             None,
             Some(Uuid::nil()),
+            AutonomyMode::Standard,
+            Path::new("/tmp"),
             "Bash".to_string(),
             serde_json::json!({"command": "echo test"}),
+            ApprovalRequestPayload::ClaudeToolCall {
+                tool_name: "Bash".to_string(),
+                input: serde_json::json!({"command": "echo test"}),
+            },
         )
         .await
     });
@@ -119,8 +127,14 @@ async fn auto_mode_allow_on_a_safe_tool_skips_the_live_round_trip() {
         &emit,
         Some(&db),
         Some(Uuid::nil()),
+        AutonomyMode::Standard,
+        Path::new("/tmp"),
         "Read".to_string(), // in `is_risky_tool`'s safe list
         serde_json::json!({"path": "/tmp/x"}),
+        ApprovalRequestPayload::ClaudeToolCall {
+            tool_name: "Read".to_string(),
+            input: serde_json::json!({"path": "/tmp/x"}),
+        },
     )
     .await;
 
@@ -163,8 +177,14 @@ async fn plan_mode_deny_on_a_risky_tool_skips_the_live_round_trip() {
         &emit,
         Some(&db),
         Some(Uuid::nil()),
+        AutonomyMode::Standard,
+        Path::new("/tmp"),
         "Bash".to_string(), // not in the safe list => Risky
         serde_json::json!({"command": "rm -rf /"}),
+        ApprovalRequestPayload::ClaudeToolCall {
+            tool_name: "Bash".to_string(),
+            input: serde_json::json!({"command": "rm -rf /"}),
+        },
     )
     .await;
 
@@ -177,4 +197,98 @@ async fn plan_mode_deny_on_a_risky_tool_skips_the_live_round_trip() {
         !emitted.load(Ordering::SeqCst),
         "Deny must never emit tool-permission-request"
     );
+}
+
+/// spec FR-005/US2, plus the code review's transaction/redaction fix:
+/// a `gated-permissive` call persists exactly one `tool_call`/`tool_result`
+/// audit row pair, and the call row never carries the raw tool input (it
+/// can contain command arguments, file contents, or credentials).
+#[tokio::test]
+async fn gated_permissive_allow_persists_an_audit_pair_without_raw_input() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db = Arc::new(open_vault(dir.path()));
+    // No deny rules configured — spec's documented "fully permissive" edge
+    // case (`PREF_DENY_RULES` left unset).
+
+    let pending: PendingToolApprovals = Arc::new(Mutex::new(HashMap::new()));
+    let (emit, emitted) = never_emitting();
+    let thread_id = Uuid::new_v4();
+    let secret_input =
+        serde_json::json!({"command": "curl -H 'Authorization: Bearer sekret' https://internal"});
+
+    let decision = request_approval(
+        &pending,
+        &emit,
+        Some(&db),
+        Some(thread_id),
+        AutonomyMode::GatedPermissive,
+        Path::new("/tmp"),
+        "Bash".to_string(),
+        secret_input.clone(),
+        ApprovalRequestPayload::ClaudeToolCall {
+            tool_name: "Bash".to_string(),
+            input: secret_input,
+        },
+    )
+    .await;
+
+    assert_eq!(decision, ApprovalDecision::Allow);
+    assert!(
+        !emitted.load(Ordering::SeqCst),
+        "gated-permissive must never emit tool-permission-request"
+    );
+
+    let rows = db
+        .with_connection(|conn| {
+            msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)
+        })
+        .expect("list persisted audit rows");
+    assert_eq!(rows.len(), 2, "expected exactly one call/result row pair");
+    let call_row = rows
+        .iter()
+        .find(|m| m.role == MessageRole::ToolCall)
+        .expect("call row persisted");
+    let result_row = rows
+        .iter()
+        .find(|m| m.role == MessageRole::ToolResult)
+        .expect("result row persisted");
+    assert!(
+        !call_row
+            .tool_input
+            .as_deref()
+            .unwrap_or_default()
+            .contains("sekret"),
+        "the secret itself must not leak into the audit row"
+    );
+    assert_eq!(call_row.tool_call_id, result_row.tool_call_id);
+    assert_eq!(result_row.tool_is_error, Some(false));
+}
+
+/// If no thread is available to persist the audit record against, the
+/// call must be denied rather than silently allowed unaudited (the same
+/// fail-closed reasoning the transaction fix applies to a commit failure).
+#[tokio::test]
+async fn gated_permissive_denies_when_there_is_no_thread_to_audit_against() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db = Arc::new(open_vault(dir.path()));
+    let pending: PendingToolApprovals = Arc::new(Mutex::new(HashMap::new()));
+    let (emit, _emitted) = never_emitting();
+
+    let decision = request_approval(
+        &pending,
+        &emit,
+        Some(&db),
+        None,
+        AutonomyMode::GatedPermissive,
+        Path::new("/tmp"),
+        "Bash".to_string(),
+        serde_json::json!({"command": "echo hi"}),
+        ApprovalRequestPayload::ClaudeToolCall {
+            tool_name: "Bash".to_string(),
+            input: serde_json::json!({"command": "echo hi"}),
+        },
+    )
+    .await;
+
+    assert_eq!(decision, ApprovalDecision::Deny);
 }

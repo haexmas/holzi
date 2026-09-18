@@ -89,6 +89,13 @@ onMounted(reloadDeviceInfoAsync)
       <hr class="border-neutral-200" />
 
       <SettingsConnectDelegateProvider />
+
+      <hr class="border-neutral-200" />
+
+      <SettingsDelegateDenyRulesSetting
+        v-if="deviceInfo"
+        :device-uuid="deviceInfo.vaultDeviceUuid"
+      />
     </div>
   </main>
 </template>

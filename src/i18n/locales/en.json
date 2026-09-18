@@ -195,6 +195,16 @@
       "allow": "Allow",
       "deny": "Deny",
       "stopGenerating": "Stop generating"
+    },
+    "autonomy": {
+      "modeLabel": "Autonomy",
+      "standard": "Standard",
+      "ungated": "Ungated",
+      "gated_permissive": "Gated (permissive)",
+      "audit": {
+        "gated_permissive_call_permitted": "Permitted",
+        "denied_by_deny_rule": "Denied by deny rule"
+      }
     }
   },
   "settings": {
@@ -257,6 +267,20 @@
       "submitCode": "Submit code",
       "success": "Connected.",
       "error": "Connection failed"
+    },
+    "denyRules": {
+      "title": "Delegate deny rules",
+      "description": "Actions that stay off-limits for a connected delegate even under an otherwise autonomous mode — applies to this device.",
+      "workspace_escape": "Workspace escape",
+      "workspace_escapeDescription": "Block file access outside the invocation's own workspace.",
+      "network_access": "Network access",
+      "network_accessDescription": "Block actions that reach the network.",
+      "credential_paths": "Credential paths",
+      "credential_pathsDescription": "Block access to common credential/secret file paths (.ssh, .aws, .env, …).",
+      "save": "Save",
+      "saved": "Saved.",
+      "saveFailed": "Failed to save deny rules.",
+      "loadFailed": "Failed to load deny rules."
     }
   },
   "models": {
@@ -410,6 +434,7 @@
     "modelListFailed": "Failed to load model list",
     "invalidIdempotencyKey": "The send request is invalid.",
     "idempotencyKeyConflict": "This send request was already used with different data.",
+    "autonomyUnavailable": "This autonomy mode is not available for the connected backend. Update it, or use Standard instead.",
     "hf": {
       "invalidInput": "Invalid input.",
       "network": "Network error — please check your connection.",

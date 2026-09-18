@@ -33,6 +33,7 @@ use holzi_lib::storage::chat_messages::{
 };
 use holzi_lib::storage::chat_threads::{self as thread_store, ChatThread};
 use holzi_lib::storage::preferences::{self, PrefScope};
+use holzi_lib::storage::providers::ProviderKind;
 
 /// Matches the private `chat.permission_mode` key in `chat/commands.rs`
 /// (data-model.md) — there is no dedicated get/set command, only the
@@ -112,6 +113,7 @@ pub fn seed_thread(db: &Database, thread_id: Uuid, user_message_id: Uuid) {
                 tool_input: None,
                 tool_is_error: None,
                 tool_source: None,
+                autonomy_mode: None,
             },
         )?;
         Ok(())
@@ -226,6 +228,7 @@ pub fn base_request() -> ChatRequest {
             description: "echoes".to_string(),
             input_schema: serde_json::json!({ "type": "object" }),
         }],
+        autonomy_mode: Default::default(),
     }
 }
 
@@ -233,6 +236,7 @@ pub async fn session_with(adapter: StubAdapter) -> ActiveSession {
     ActiveSession {
         model_id: "stub-model".to_string(),
         provider_id: None,
+        provider_kind: ProviderKind::Local,
         adapter: Arc::new(adapter),
         tokenizer_repo: String::new(),
         context_window: None,

@@ -39,6 +39,12 @@ pub struct ChatMessage {
     pub tool_is_error: Option<bool>,
     /// `mcp` or `cli`. Set only on `role = ToolCall`.
     pub tool_source: Option<String>,
+    /// Which `AutonomyMode` (spec 009-autonomous-delegate-mode) the turn
+    /// ran under: `"standard"` / `"ungated"` / `"gated_permissive"`. `NULL`
+    /// for legacy rows and for any row not produced by a `cli_delegate`
+    /// backend running a non-default mode (data-model.md) — never inferred
+    /// as `"standard"` for those.
+    pub autonomy_mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -180,11 +186,12 @@ pub fn insert_message(conn: &Connection, m: &ChatMessage) -> Result<usize> {
             provider_id, model_id, prompt_tokens, completion_tokens, \
             finish_reason, created_at, idempotency_key, \
             tool_name, tool_call_id, tool_input, tool_is_error, tool_source, \
+            autonomy_mode, \
             {HLC_TIMESTAMP_COLUMN}) \
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, \
                  MAX(?11, COALESCE((SELECT created_at + 1 FROM chat_messages \
                                    WHERE id = ?3 AND thread_id = ?2), ?11)), ?12, \
-                 ?13, ?14, ?15, ?16, ?17, current_hlc())"
+                 ?13, ?14, ?15, ?16, ?17, ?18, current_hlc())"
     );
     conn.execute(
         &sql,
@@ -206,6 +213,7 @@ pub fn insert_message(conn: &Connection, m: &ChatMessage) -> Result<usize> {
             m.tool_input,
             m.tool_is_error,
             m.tool_source,
+            m.autonomy_mode,
         ],
     )
 }
@@ -218,7 +226,8 @@ pub fn find_by_idempotency_key(conn: &Connection, key: &str) -> Result<Option<Ch
         "SELECT id, thread_id, parent_id, role, content, \
                 provider_id, model_id, prompt_tokens, completion_tokens, \
                 finish_reason, created_at, idempotency_key, \
-                tool_name, tool_call_id, tool_input, tool_is_error, tool_source \
+                tool_name, tool_call_id, tool_input, tool_is_error, tool_source, \
+                autonomy_mode \
          FROM chat_messages WHERE idempotency_key = ?1",
     )?;
     stmt.query_row(params![key], row_to_message).optional()
@@ -250,7 +259,8 @@ pub fn list_messages(conn: &Connection, thread_id: Uuid) -> Result<Vec<ChatMessa
         "SELECT id, thread_id, parent_id, role, content, \
                 provider_id, model_id, prompt_tokens, completion_tokens, \
                 finish_reason, created_at, idempotency_key, \
-                tool_name, tool_call_id, tool_input, tool_is_error, tool_source \
+                tool_name, tool_call_id, tool_input, tool_is_error, tool_source, \
+                autonomy_mode \
          FROM chat_messages WHERE thread_id = ?1 \
          ORDER BY created_at ASC, id ASC",
     )?;
@@ -287,6 +297,7 @@ fn row_to_message(row: &haex_crdt::rusqlite::Row<'_>) -> Result<ChatMessage> {
         tool_input: row.get(14)?,
         tool_is_error: row.get(15)?,
         tool_source: row.get(16)?,
+        autonomy_mode: row.get(17)?,
     })
 }
 

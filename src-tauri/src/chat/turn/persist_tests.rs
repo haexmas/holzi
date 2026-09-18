@@ -1,6 +1,24 @@
 use super::*;
 
+use crate::adapters::cli_delegate::autonomy::AutonomyMode;
 use crate::storage::chat_threads::ChatThread;
+
+#[test]
+fn autonomy_mode_label_is_none_for_standard() {
+    assert_eq!(autonomy_mode_label(AutonomyMode::Standard), None);
+}
+
+#[test]
+fn autonomy_mode_label_is_some_for_non_standard_modes() {
+    assert_eq!(
+        autonomy_mode_label(AutonomyMode::Ungated),
+        Some("ungated".to_string())
+    );
+    assert_eq!(
+        autonomy_mode_label(AutonomyMode::GatedPermissive),
+        Some("gated_permissive".to_string())
+    );
+}
 
 #[tokio::test]
 async fn failed_thread_update_rolls_back_final_assistant_message() {

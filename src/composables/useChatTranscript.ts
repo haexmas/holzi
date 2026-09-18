@@ -252,6 +252,7 @@ export function useChatTranscript(
       toolInput: JSON.stringify(e.toolInput),
       toolIsError: null,
       toolSource: e.toolSource,
+      autonomyMode: null,
     })
     messagesByThread.value[e.threadId] = list
     scrollToBottom()
@@ -284,6 +285,7 @@ export function useChatTranscript(
       toolInput: null,
       toolIsError: e.isError,
       toolSource: null,
+      autonomyMode: null,
     })
     messagesByThread.value[e.threadId] = list
     scrollToBottom()

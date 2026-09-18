@@ -18,6 +18,7 @@
 pub mod approval_bridge;
 #[cfg(test)]
 mod approval_bridge_tests;
+pub mod autonomy;
 mod claude;
 #[cfg(test)]
 mod claude_tests;
