@@ -3,14 +3,30 @@
     ".envrc": "sha256:1d26c74fd25a4c3dbb09e029fc609588da499fd4af2a41c88f6316c7f8c54cf1",
     "flake.nix": "sha256:3f806a5d54b015a219a7520336e7c2b56c5d6d8a73475cf4e5d304eee718abc5"
   },
-  "generation_id": "g_20260918T101827Z_e3b0",
+  "generation_id": "g_20260918T110932Z_e3b0",
   "molecules": [
+    {
+      "id": "com.github.haexmas.atoms.coding-guideline-javascript-typescript",
+      "paths": [
+        ".spaex/constitution.md"
+      ],
+      "revision": "7c1a7e136d4a1b4c0bef85688f37e6def023f93a",
+      "source": "https://github.com/haexmas/atoms"
+    },
+    {
+      "id": "com.github.haexmas.atoms.coding-guideline-rust",
+      "paths": [
+        ".spaex/constitution.md"
+      ],
+      "revision": "7c1a7e136d4a1b4c0bef85688f37e6def023f93a",
+      "source": "https://github.com/haexmas/atoms"
+    },
     {
       "id": "com.github.haexmas.atoms.general-coding",
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "fb56b3737d2f738b315ee58ee6de74b71e6296ac",
+      "revision": "7c1a7e136d4a1b4c0bef85688f37e6def023f93a",
       "source": "https://github.com/haexmas/atoms"
     },
     {
@@ -19,7 +35,7 @@
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "fb56b3737d2f738b315ee58ee6de74b71e6296ac",
+      "revision": "7c1a7e136d4a1b4c0bef85688f37e6def023f93a",
       "source": "https://github.com/haexmas/atoms"
     },
     {
@@ -27,16 +43,7 @@
       "paths": [
         ".spaex/generated/nix-packages.json"
       ],
-      "revision": "fb56b3737d2f738b315ee58ee6de74b71e6296ac",
-      "source": "https://github.com/haexmas/atoms"
-    },
-    {
-      "id": "com.github.haexmas.atoms.javascript-typescript",
-      "paths": [
-        ".spaex/constitution.md",
-        ".spaex/generated/nix-packages.json"
-      ],
-      "revision": "fb56b3737d2f738b315ee58ee6de74b71e6296ac",
+      "revision": "7c1a7e136d4a1b4c0bef85688f37e6def023f93a",
       "source": "https://github.com/haexmas/atoms"
     },
     {
@@ -46,7 +53,23 @@
         ".envrc",
         "flake.nix"
       ],
-      "revision": "fb56b3737d2f738b315ee58ee6de74b71e6296ac",
+      "revision": "7c1a7e136d4a1b4c0bef85688f37e6def023f93a",
+      "source": "https://github.com/haexmas/atoms"
+    },
+    {
+      "id": "com.github.haexmas.atoms.nix-nodejs",
+      "paths": [
+        ".spaex/generated/nix-packages.json"
+      ],
+      "revision": "7c1a7e136d4a1b4c0bef85688f37e6def023f93a",
+      "source": "https://github.com/haexmas/atoms"
+    },
+    {
+      "id": "com.github.haexmas.atoms.nix-rust",
+      "paths": [
+        ".spaex/generated/nix-packages.json"
+      ],
+      "revision": "7c1a7e136d4a1b4c0bef85688f37e6def023f93a",
       "source": "https://github.com/haexmas/atoms"
     },
     {
@@ -54,31 +77,24 @@
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "fb56b3737d2f738b315ee58ee6de74b71e6296ac",
-      "source": "https://github.com/haexmas/atoms"
-    },
-    {
-      "id": "com.github.haexmas.atoms.rust",
-      "paths": [
-        ".spaex/constitution.md",
-        ".spaex/generated/nix-packages.json"
-      ],
-      "revision": "fb56b3737d2f738b315ee58ee6de74b71e6296ac",
+      "revision": "7c1a7e136d4a1b4c0bef85688f37e6def023f93a",
       "source": "https://github.com/haexmas/atoms"
     },
     {
       "id": "com.github.haexmas.atoms.speckit",
       "paths": [],
-      "revision": "fb56b3737d2f738b315ee58ee6de74b71e6296ac",
+      "revision": "7c1a7e136d4a1b4c0bef85688f37e6def023f93a",
       "source": "https://github.com/haexmas/atoms",
       "speckit": {
         "cli_version": "1.0.6",
-        "declaration_fingerprint": "sha256:69c9873076f9b5e4f8448f6df1e0507200dceb6599b4cf2762a7095d47d6b818",
+        "declaration_fingerprint": "sha256:62298fc8d1c26f4e8b847e1b882bbb1717ae859c44060ef401c19ccc820d4224",
         "outcomes": {
-          "claude": "installed"
+          "claude": "installed",
+          "codex": "installed"
         },
         "selected": [
-          "claude"
+          "claude",
+          "codex"
         ]
       }
     }
