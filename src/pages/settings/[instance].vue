@@ -10,6 +10,7 @@ definePageMeta({
 
 const route = useRoute()
 const { t } = useI18n()
+const { errString } = useErrorString()
 const { currentDeviceInfoAsync } = useDevice()
 
 const instanceName = computed(() => {
@@ -33,7 +34,7 @@ async function reloadDeviceInfoAsync() {
   try {
     deviceInfo.value = await currentDeviceInfoAsync()
   } catch (e) {
-    loadError.value = e instanceof Error ? e.message : String(e)
+    loadError.value = errString(e)
   }
 }
 

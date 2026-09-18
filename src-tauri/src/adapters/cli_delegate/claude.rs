@@ -122,6 +122,7 @@ pub(super) fn parse_line(line: &str, ttft_ms: Option<u64>, total_ms: u64) -> Lin
 
 fn build_command(
     binary: &str,
+    model: &str,
     mcp_config: Option<&Path>,
     system_prompt_path: Option<&Path>,
     tmp: &TempDir,
@@ -133,6 +134,13 @@ fn build_command(
         .arg("stream-json")
         .arg("--verbose")
         .arg("--include-partial-messages");
+    // `req.model_id` is one of `CLAUDE_MODEL_ALIASES` (mod.rs) — the model
+    // picker only ever offers those, but an empty id (e.g. a session
+    // loaded before this feature existed) falls back to the CLI's own
+    // default rather than passing `--model ""`.
+    if !model.is_empty() {
+        cmd.arg("--model").arg(model);
+    }
     if autonomy_mode == AutonomyMode::Ungated {
         // Native full-autonomy mechanism (research.md §2): no bridge is
         // spawned for this mode at all, so there is no approval tool to
@@ -278,6 +286,7 @@ pub(super) async fn spawn_claude_invocation(
     };
     let mut cmd = build_command(
         &binary,
+        &req.model_id,
         mcp_config_path.as_deref(),
         system_prompt_path.as_ref().map(|(path, _)| path.as_path()),
         &tmp,

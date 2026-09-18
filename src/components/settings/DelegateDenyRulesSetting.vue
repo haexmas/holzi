@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const { t } = useI18n()
+const { errString } = useErrorString()
 const { getPrefAsync, setPrefAsync } = usePreferences()
 
 const props = defineProps<{
@@ -44,7 +45,7 @@ async function reloadAsync() {
       : []
     selected.value = new Set(validItems)
   } catch (e) {
-    loadError.value = e instanceof Error ? e.message : String(e)
+    loadError.value = errString(e)
   } finally {
     loading.value = false
   }
@@ -72,7 +73,7 @@ async function onSave() {
     )
     savedFlash.value = true
   } catch (e) {
-    opError.value = e instanceof Error ? e.message : String(e)
+    opError.value = errString(e)
   } finally {
     busy.value = false
   }

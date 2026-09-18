@@ -3,6 +3,7 @@ import type { InstalledModel } from '~/composables/useModels'
 import type { Provider, ProviderModel } from '~/composables/useProviders'
 
 const { t } = useI18n()
+const { errString } = useErrorString()
 const { getPrefAsync, setPrefAsync, clearPrefAsync } = usePreferences()
 const { listInstalledAsync } = useModels()
 const { listAsync: listProvidersAsync, listModelsAsync } = useProviders()
@@ -116,7 +117,7 @@ async function reloadAsync() {
     const seed = selectedScope.value === 'device' ? deviceVal : vaultVal
     selectedModelId.value = seed ?? ''
   } catch (e) {
-    loadError.value = e instanceof Error ? e.message : String(e)
+    loadError.value = errString(e)
   } finally {
     loading.value = false
   }
@@ -150,7 +151,7 @@ async function onSave() {
     savedFlash.value = 'saved'
   } catch (e) {
     opErrorKind.value = 'save'
-    opError.value = e instanceof Error ? e.message : String(e)
+    opError.value = errString(e)
   } finally {
     busy.value = false
   }
@@ -176,7 +177,7 @@ async function onClear() {
     savedFlash.value = 'cleared'
   } catch (e) {
     opErrorKind.value = 'clear'
-    opError.value = e instanceof Error ? e.message : String(e)
+    opError.value = errString(e)
   } finally {
     busy.value = false
   }

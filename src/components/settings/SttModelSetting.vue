@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import type { SttCatalogEntry } from '~/composables/useSttCatalog'
 
 const { t } = useI18n()
+const { errString } = useErrorString()
 const { getPrefAsync, setPrefAsync } = usePreferences()
 const { listAsync: listSttCatalogAsync } = useSttCatalog()
 const { listInstalledAsync, downloadFromCatalogAsync } = useSttModels()
@@ -45,7 +46,7 @@ async function reloadAsync() {
     activeId.value = normalizedActiveId
     selectedId.value = activeId.value
   } catch (e) {
-    loadError.value = e instanceof Error ? e.message : String(e)
+    loadError.value = errString(e)
   } finally {
     loading.value = false
   }
@@ -68,7 +69,7 @@ async function onSwitch() {
     installedIds.value = new Set([...installedIds.value, installed.id])
     savedFlash.value = true
   } catch (e) {
-    opError.value = e instanceof Error ? e.message : String(e)
+    opError.value = errString(e)
   } finally {
     busy.value = false
   }

@@ -13,6 +13,7 @@ import type { SttCatalogEntry } from '~/composables/useSttCatalog'
 // re-opens next launch.
 const route = useRoute()
 const { t } = useI18n()
+const { errString } = useErrorString()
 const { currentDeviceInfoAsync, updateDeviceAliasAsync } = useDevice()
 const { recommendTiersAsync } = useCatalog()
 const { downloadFromCatalogAsync } = useModels()
@@ -48,7 +49,7 @@ onMounted(async () => {
       deviceInfo.value?.hostname ??
       t('onboarding.alias.defaultPlaceholder')
   } catch (e) {
-    loadError.value = e instanceof Error ? e.message : String(e)
+    loadError.value = errString(e)
     return
   }
   try {
@@ -56,13 +57,13 @@ onMounted(async () => {
   } catch (e) {
     // Empty catalog only — the model step still lets the operator skip.
     tiers.value = []
-    downloadError.value = e instanceof Error ? e.message : String(e)
+    downloadError.value = errString(e)
   }
   try {
     sttTiers.value = await recommendSttTiersAsync()
   } catch (e) {
     sttTiers.value = []
-    sttDownloadError.value = e instanceof Error ? e.message : String(e)
+    sttDownloadError.value = errString(e)
   }
 })
 
@@ -78,7 +79,7 @@ async function finishOnboardingAsync() {
   try {
     await finalizeAliasAsync()
   } catch (e) {
-    loadError.value = e instanceof Error ? e.message : String(e)
+    loadError.value = errString(e)
     return
   }
   await navigateTo(`/workspace/${encodeURIComponent(instanceName.value)}`)
@@ -102,7 +103,7 @@ async function completeWithModel(rec: TierRecommendation) {
     )
     step.value = 'sttModel'
   } catch (e) {
-    downloadError.value = e instanceof Error ? e.message : String(e)
+    downloadError.value = errString(e)
   } finally {
     downloadingId.value = null
   }
@@ -126,7 +127,7 @@ async function completeSttWithModel(rec: TierRecommendation<SttCatalogEntry>) {
     )
     await finishOnboardingAsync()
   } catch (e) {
-    sttDownloadError.value = e instanceof Error ? e.message : String(e)
+    sttDownloadError.value = errString(e)
   } finally {
     sttDownloadingId.value = null
   }

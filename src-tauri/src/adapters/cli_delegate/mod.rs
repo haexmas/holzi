@@ -180,17 +180,44 @@ impl CliDelegateAdapter {
     }
 }
 
+/// Model aliases the installed `claude` CLI's `--model` flag accepts
+/// (`claude --help`: "Provide an alias for the latest model (e.g. 'fable',
+/// 'opus', or 'sonnet') or a model's full name"). Each `remote_id` here is
+/// passed straight through as `ChatRequest.model_id` down to
+/// `claude::spawn_claude_invocation`'s `--model` argument — there is no
+/// separate mapping step.
+const CLAUDE_MODEL_ALIASES: [(&str, &str); 4] = [
+    ("sonnet", "Claude Sonnet"),
+    ("opus", "Claude Opus"),
+    ("haiku", "Claude Haiku"),
+    ("fable", "Claude Fable"),
+];
+
 #[async_trait]
 impl ProviderAdapter for CliDelegateAdapter {
-    /// A connected delegate exposes one synthetic model: its vendor is the
-    /// model, and the composite id is persisted by the provider refresh path.
+    /// Claude exposes the CLI's own model aliases so the operator can pick
+    /// which one answers; Codex still exposes one synthetic model per
+    /// vendor (its composite id is persisted by the provider refresh path)
+    /// since its CLI has no equivalent per-request model flag wired up yet.
     async fn list_models(&self) -> Result<Vec<ProviderModel>, AdapterError> {
-        let vendor = self.vendor.as_str();
-        Ok(vec![ProviderModel {
-            remote_id: vendor.to_string(),
-            display_name: format!("{vendor} (CLI delegate)"),
-            context_window: None,
-        }])
+        match self.vendor {
+            DelegateVendor::Claude => Ok(CLAUDE_MODEL_ALIASES
+                .iter()
+                .map(|(remote_id, display_name)| ProviderModel {
+                    remote_id: remote_id.to_string(),
+                    display_name: display_name.to_string(),
+                    context_window: None,
+                })
+                .collect()),
+            DelegateVendor::Codex => {
+                let vendor = self.vendor.as_str();
+                Ok(vec![ProviderModel {
+                    remote_id: vendor.to_string(),
+                    display_name: format!("{vendor} (CLI delegate)"),
+                    context_window: None,
+                }])
+            }
+        }
     }
 
     async fn stream_chat(&self, req: ChatRequest) -> Result<AdapterStream, AdapterError> {

@@ -4,6 +4,7 @@ import { openUrl } from '@tauri-apps/plugin-opener'
 import type { DelegateVendor, Provider } from '~/composables/useProviders'
 
 const { t } = useI18n()
+const { errString } = useErrorString()
 const {
   listAsync,
   connectCliDelegateAsync,
@@ -64,7 +65,7 @@ async function reloadAsync() {
   try {
     providerList.value = await listAsync()
   } catch (e) {
-    loadError.value = e instanceof Error ? e.message : String(e)
+    loadError.value = errString(e)
   } finally {
     loading.value = false
   }
@@ -95,7 +96,7 @@ async function onConnect(vendor: DelegateVendor) {
       connecting[vendor] = false
     }
   } catch (e) {
-    opError[vendor] = e instanceof Error ? e.message : String(e)
+    opError[vendor] = errString(e)
     connecting[vendor] = false
   }
 }
@@ -116,7 +117,7 @@ async function onSubmitCode(vendor: DelegateVendor) {
     // The backend keeps the flow open on failure (a rejected code commonly
     // re-prompts rather than exiting) — stay in the code-entry state so the
     // operator can retry without restarting the whole connect flow.
-    opError[vendor] = e instanceof Error ? e.message : String(e)
+    opError[vendor] = errString(e)
   }
 }
 

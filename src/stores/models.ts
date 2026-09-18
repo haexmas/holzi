@@ -104,12 +104,15 @@ export const useModelsStore = defineStore('models', () => {
           }
         : null
 
-    // A connected `cli_delegate` provider gets one real cached model row
-    // (`<providerId>:<vendor>`, e.g. `<uuid>:claude`) via the same
-    // `list_models`/`replace_provider_models` refresh path `api_key`
-    // providers already use (`providers/mod.rs::compose_model_row`) —
-    // so it flows through `remoteGroups` unchanged, no separate
-    // synthesis needed for the connected case.
+    // A connected `cli_delegate` provider gets real cached model rows
+    // (`<providerId>:<remoteId>`, e.g. `<uuid>:sonnet` — one per model
+    // alias for Claude, one synthetic `<uuid>:codex` row for Codex) via
+    // the same `list_models`/`replace_provider_models` refresh path
+    // `api_key` providers already use
+    // (`providers/mod.rs::compose_model_row`,
+    // `adapters/cli_delegate/mod.rs::list_models`) — so it flows through
+    // `remoteGroups` unchanged, no separate synthesis needed for the
+    // connected case.
     const remoteGroups = providerList.value
       .filter((p) => p.kind === 'api_key' || p.kind === 'cli_delegate')
       .map<ModelGroup>((p) => ({

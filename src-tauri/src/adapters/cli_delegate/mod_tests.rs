@@ -87,3 +87,15 @@ async fn delegate_exposes_one_synthetic_vendor_model() {
     assert_eq!(models[0].remote_id, "codex");
     assert_eq!(models[0].display_name, "codex (CLI delegate)");
 }
+
+#[tokio::test]
+async fn delegate_exposes_claude_model_aliases() {
+    let provider = sample_provider(Some("claude"));
+    let adapter = build_adapter(&provider, None).expect("delegate adapter should build");
+    let models = adapter
+        .list_models()
+        .await
+        .expect("model listing should work");
+    let remote_ids: Vec<&str> = models.iter().map(|m| m.remote_id.as_str()).collect();
+    assert_eq!(remote_ids, vec!["sonnet", "opus", "haiku", "fable"]);
+}
