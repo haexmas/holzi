@@ -4,12 +4,14 @@
       "molecules": [
         "com.github.haexmas.atoms.general-coding",
         "com.github.haexmas.atoms.graphify-first-authoring",
+        "com.github.haexmas.atoms.holzi",
         "com.github.haexmas.atoms.javascript-typescript",
+        "com.github.haexmas.atoms.nix-devshell-base",
         "com.github.haexmas.atoms.ponytail",
         "com.github.haexmas.atoms.rust",
         "com.github.haexmas.atoms.speckit"
       ],
-      "revision": "cc9e9935998732f7a09486a68dd4c74859481c98",
+      "revision": "fb56b3737d2f738b315ee58ee6de74b71e6296ac",
       "source": "https://github.com/haexmas/atoms"
     }
   ],

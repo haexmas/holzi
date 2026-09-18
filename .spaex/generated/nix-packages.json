@@ -1,0 +1,18 @@
+[
+  "alsa-lib",
+  "cargo",
+  "clippy",
+  "curl",
+  "file",
+  "libayatana-appindicator",
+  "librsvg",
+  "nodejs_22",
+  "openssl",
+  "pkg-config",
+  "pnpm",
+  "rustc",
+  "rustfmt",
+  "webkitgtk_4_1",
+  "wget",
+  "xdotool"
+]
