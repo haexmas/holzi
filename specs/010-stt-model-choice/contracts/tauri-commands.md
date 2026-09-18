@@ -68,14 +68,11 @@ Array<{ id: string; name: string }>
 ```
 
 Katalog-Einträge, deren benötigte Dateien bereits vollständig im jeweiligen Slug-Verzeichnis
-liegen. Vor dem Scan normalisiert der Command eine eventuell vorhandene vollständige Legacy-
-Installation des bisherigen `whisper-tiny`-Pfads in den kanonischen Slug-Pfad; dadurch zeigen
-Listing, Laden und Download denselben Zustand. Vollständig bedeutet für jede erwartete Datei
-`metadata().is_file()` und `len() > 0`; der Command verwendet dafür dieselbe
-`is_complete_file`-/`is_complete_model`-Prüfung wie `ensure_model_files` (siehe
+liegen. Vollständig bedeutet für jede erwartete Datei `metadata().is_file()` und `len() > 0`; der
+Command verwendet dafür dieselbe `is_complete_file`-/`is_complete_model`-Prüfung wie
+`ensure_model_files` (siehe
 [data-model.md](../data-model.md#dateisystem-layout-kein-neues-konzept-nur-neue-nutzung)). Kein
-DB-Table dahinter — reiner Dateisystem-Scan über die Katalog-IDs, abgesehen von dieser einmaligen
-Kompatibilitätsübernahme.
+DB-Table dahinter — reiner Dateisystem-Scan über die Katalog-IDs.
 
 ## `download_stt_model`
 
