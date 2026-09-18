@@ -10,6 +10,17 @@
 # this is optional once any of those pieces are in play.
 set -euo pipefail
 
+# Everything below is Linux/Nix-devShell-specific (GTK pkg-config lookups,
+# Mesa/GBM paths, ...). Outside that combination -- macOS (tauri:dev:metal
+# already bypasses this script, but a plain `tauri:dev`/`tauri:build` on
+# macOS would still route through it), or a Linux shell that never entered
+# the Nix devShell -- none of it applies, and `set -e` would otherwise abort
+# on the first pkg-config call for a package that isn't installed there.
+# `IN_NIX_SHELL` is set unconditionally by `nix develop`/`direnv use flake`.
+if [ "$(uname -s)" != "Linux" ] || [ -z "${IN_NIX_SHELL:-}" ]; then
+  exec "$@"
+fi
+
 # Nix's gdk-pixbuf doesn't register png/jpeg (built-in, but not listed in
 # its own loaders.cache) *or* svg (a separate package, librsvg, whose own
 # setup-hook points GDK_PIXBUF_MODULE_FILE at an svg-only cache that

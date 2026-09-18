@@ -30,6 +30,18 @@ fn configure_nix_devshell_linker() {
     if !is_linux || !is_nix_toolchain() {
         return;
     }
+    // The interpreter path below is x86-64-specific. flake.nix's
+    // `eachDefaultSystem` also exposes aarch64-linux, where it would embed
+    // the wrong ELF interpreter into an AArch64 binary; fail loudly instead
+    // of silently shipping a binary that can't start. Cargo's own target
+    // arch, not the build host's -- moot for now since cross-compiling this
+    // crate isn't set up, but correct if that ever changes.
+    let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+    assert_eq!(
+        target_arch, "x86_64",
+        "configure_nix_devshell_linker: no known host dynamic-linker path for \
+         CARGO_CFG_TARGET_ARCH={target_arch:?} (only x86_64 is supported)"
+    );
     // FHS `/lib64` path (Arch/CachyOS/Fedora-style hosts, per Etappe-0
     // finding #3's target machine); Debian/Ubuntu-style hosts use
     // `/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2` instead — moot here since
@@ -52,6 +64,13 @@ fn configure_nix_devshell_linker() {
     if std::env::var_os("CARGO_FEATURE_LLM_CUDA").is_some() {
         println!("cargo:rustc-link-arg=-fuse-ld=lld");
     }
+
+    // Tells `lib.rs` this binary needs the `LD_LIBRARY_PATH` the Nix devShell
+    // exports (flake.nix's shellHook) to resolve the Nix-provided GTK stack
+    // this interpreter override doesn't otherwise cover — and, precisely
+    // because it does, must scrub that variable from its own environment
+    // before Tauri/GTK/WebKit spawn any child process (see the call site).
+    println!("cargo:rustc-env=HOLZI_NIX_DEVSHELL_LINKER=1");
 }
 
 /// `RUSTC` is set by Cargo for build scripts, but isn't guaranteed to be an
