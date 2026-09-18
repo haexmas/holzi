@@ -42,8 +42,13 @@ fn open_vault_with_deny_rules(dir: &Path, categories: &[&str]) -> Database {
     .expect("vault open");
     let json = serde_json::to_string(categories).unwrap();
     db.with_connection(|conn| {
-        preferences::insert_or_update(conn, PrefScope::Device(db.device_id()), PREF_DENY_RULES, &json)
-            .map_err(haex_crdt::Error::from)
+        preferences::insert_or_update(
+            conn,
+            PrefScope::Device(db.device_id()),
+            PREF_DENY_RULES,
+            &json,
+        )
+        .map_err(haex_crdt::Error::from)
     })
     .expect("set deny rules");
     db
@@ -166,10 +171,12 @@ async fn network_access_deny_rule_blocks_a_codex_command_with_network_context() 
 
     let (_events, thread_id) = run_codex_turn(&db, &stub).await;
 
-    let recorded = fs::read_to_string(&marker)
-        .expect("stub should have recorded the reply");
+    let recorded = fs::read_to_string(&marker).expect("stub should have recorded the reply");
     let recorded: Value = serde_json::from_str(&recorded).expect("recorded reply is JSON");
-    assert_eq!(recorded["decision"], "decline", "network_access must deny a networked command");
+    assert_eq!(
+        recorded["decision"], "decline",
+        "network_access must deny a networked command"
+    );
 
     let messages = db
         .with_connection(|conn| list_messages(conn, thread_id).map_err(haex_crdt::Error::from))
@@ -184,7 +191,10 @@ async fn network_access_deny_rule_blocks_a_codex_command_with_network_context() 
 #[tokio::test]
 async fn workspace_escape_deny_rule_fails_closed_on_a_codex_file_change() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let db = Arc::new(open_vault_with_deny_rules(dir.path(), &["workspace_escape"]));
+    let db = Arc::new(open_vault_with_deny_rules(
+        dir.path(),
+        &["workspace_escape"],
+    ));
     let marker = dir.path().join("decision.txt");
     let stub = write_stub(
         dir.path(),
@@ -198,8 +208,7 @@ async fn workspace_escape_deny_rule_fails_closed_on_a_codex_file_change() {
 
     run_codex_turn(&db, &stub).await;
 
-    let recorded = fs::read_to_string(&marker)
-        .expect("stub should have recorded the reply");
+    let recorded = fs::read_to_string(&marker).expect("stub should have recorded the reply");
     let recorded: Value = serde_json::from_str(&recorded).expect("recorded reply is JSON");
     assert_eq!(
         recorded["decision"], "decline",
@@ -241,8 +250,7 @@ async fn malformed_deny_rules_preference_fails_closed_to_deny() {
 
     run_codex_turn(&db, &stub).await;
 
-    let recorded = fs::read_to_string(&marker)
-        .expect("stub should have recorded the reply");
+    let recorded = fs::read_to_string(&marker).expect("stub should have recorded the reply");
     let recorded: Value = serde_json::from_str(&recorded).expect("recorded reply is JSON");
     assert_eq!(
         recorded["decision"], "decline",
@@ -267,8 +275,7 @@ async fn network_access_deny_rule_allows_a_codex_command_without_network_context
 
     run_codex_turn(&db, &stub).await;
 
-    let recorded = fs::read_to_string(&marker)
-        .expect("stub should have recorded the reply");
+    let recorded = fs::read_to_string(&marker).expect("stub should have recorded the reply");
     let recorded: Value = serde_json::from_str(&recorded).expect("recorded reply is JSON");
     assert_eq!(
         recorded["decision"], "accept",

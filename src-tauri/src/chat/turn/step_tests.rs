@@ -3,6 +3,7 @@ use super::*;
 use std::sync::Arc;
 
 use crate::chat::commands::abort_turn;
+use crate::storage::providers::ProviderKind;
 
 struct StartAdapter {
     attempts: std::sync::atomic::AtomicUsize,
@@ -48,6 +49,7 @@ async fn initial_http_failures_use_the_same_bounded_retry_budget() {
         let session = ActiveSession {
             model_id: "test".into(),
             provider_id: None,
+            provider_kind: ProviderKind::Local,
             adapter: adapter.clone(),
             tokenizer_repo: String::new(),
             context_window: None,
@@ -96,6 +98,7 @@ async fn initial_request_can_be_cancelled_before_response_headers() {
     let session = ActiveSession {
         model_id: "test".into(),
         provider_id: None,
+        provider_kind: ProviderKind::Local,
         adapter: adapter.clone(),
         tokenizer_repo: String::new(),
         context_window: None,

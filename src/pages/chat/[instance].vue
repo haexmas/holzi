@@ -254,7 +254,7 @@ async function send(retryPending = false) {
     content,
     maxNewTokens: effortTokens[effortLevel.value],
     idempotencyKey: crypto.randomUUID(),
-    autonomyMode: autonomyMode.value,
+    autonomyMode: isDelegateModel.value ? autonomyMode.value : null,
   }
   pendingSend.value = null
   if (!retry) autonomyMode.value = 'standard'

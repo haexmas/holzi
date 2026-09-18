@@ -58,6 +58,8 @@ use holzi_lib::chat::session::ActiveSession;
 #[cfg(feature = "llm-cpu")]
 use holzi_lib::llm::local::LocalModel;
 #[cfg(feature = "llm-cpu")]
+use holzi_lib::storage::providers::ProviderKind;
+#[cfg(feature = "llm-cpu")]
 use std::env;
 #[cfg(feature = "llm-cpu")]
 use std::path::PathBuf;
@@ -1011,6 +1013,7 @@ async fn a_real_local_model_can_request_and_process_a_cli_command() {
     let session = ActiveSession {
         model_id: "real-local-test-model".to_string(),
         provider_id: None,
+        provider_kind: ProviderKind::Local,
         adapter: Arc::new(LocalAdapter::new(model)),
         tokenizer_repo: tokenizer,
         context_window: None,

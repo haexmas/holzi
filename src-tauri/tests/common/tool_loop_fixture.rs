@@ -33,6 +33,7 @@ use holzi_lib::storage::chat_messages::{
 };
 use holzi_lib::storage::chat_threads::{self as thread_store, ChatThread};
 use holzi_lib::storage::preferences::{self, PrefScope};
+use holzi_lib::storage::providers::ProviderKind;
 
 /// Matches the private `chat.permission_mode` key in `chat/commands.rs`
 /// (data-model.md) — there is no dedicated get/set command, only the
@@ -235,6 +236,7 @@ pub async fn session_with(adapter: StubAdapter) -> ActiveSession {
     ActiveSession {
         model_id: "stub-model".to_string(),
         provider_id: None,
+        provider_kind: ProviderKind::Local,
         adapter: Arc::new(adapter),
         tokenizer_repo: String::new(),
         context_window: None,

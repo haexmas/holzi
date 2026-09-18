@@ -153,7 +153,11 @@ sys.stdin.readline()
         .iter()
         .filter(|m| m.role == MessageRole::ToolResult)
         .collect();
-    assert_eq!(result_rows.len(), 2, "two tool calls => two tool_result rows");
+    assert_eq!(
+        result_rows.len(),
+        2,
+        "two tool calls => two tool_result rows"
+    );
 }
 
 /// This adapter-level test proves the structural half of FR-006 — an

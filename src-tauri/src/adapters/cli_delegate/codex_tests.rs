@@ -4,7 +4,10 @@
 
 use serde_json::json;
 
-use super::codex::{build_request, categorize_line, turn_completed_failure, Line};
+use super::autonomy::ApprovalRequestPayload;
+use super::codex::{
+    build_codex_payload, build_request, categorize_line, turn_completed_failure, Line,
+};
 
 #[test]
 fn build_request_matches_the_client_request_envelope() {
@@ -97,4 +100,52 @@ fn eof_and_blank_and_malformed_lines_do_not_panic() {
         categorize_line(Some("not json")),
         Line::Unrecognized
     ));
+}
+
+// --- build_codex_payload fail-closed cases (code review) ---
+
+#[test]
+fn command_execution_payload_carries_command_and_cwd() {
+    let params = json!({"command": "ls -la", "cwd": "/workspace"});
+    match build_codex_payload("item/commandExecution/requestApproval", &params) {
+        ApprovalRequestPayload::CodexCommandExecution { command, cwd, .. } => {
+            assert_eq!(command, "ls -la");
+            assert_eq!(cwd.as_deref(), Some("/workspace"));
+        }
+        other => panic!("expected CodexCommandExecution, got {other:?}"),
+    }
+}
+
+#[test]
+fn file_change_payload_has_no_fields() {
+    assert_eq!(
+        build_codex_payload("item/fileChange/requestApproval", &json!({})),
+        ApprovalRequestPayload::CodexFileChange
+    );
+}
+
+#[test]
+fn command_execution_missing_command_is_unevaluable_not_empty() {
+    let params = json!({"cwd": "/workspace"});
+    assert_eq!(
+        build_codex_payload("item/commandExecution/requestApproval", &params),
+        ApprovalRequestPayload::CodexUnevaluable
+    );
+}
+
+#[test]
+fn command_execution_missing_cwd_is_unevaluable_not_empty() {
+    let params = json!({"command": "ls -la"});
+    assert_eq!(
+        build_codex_payload("item/commandExecution/requestApproval", &params),
+        ApprovalRequestPayload::CodexUnevaluable
+    );
+}
+
+#[test]
+fn unrecognized_method_is_unevaluable() {
+    assert_eq!(
+        build_codex_payload("item/permissions/requestApproval", &json!({})),
+        ApprovalRequestPayload::CodexUnevaluable
+    );
 }

@@ -74,6 +74,15 @@ pub enum ApprovalRequestPayload {
     /// Deliberately field-less: `FileChangeRequestApprovalParams` exposes
     /// no path (research.md §3) — not a placeholder to fill in later.
     CodexFileChange,
+    /// A Codex approval callback whose method holzi does not recognize, or
+    /// whose `item/commandExecution/requestApproval` params are missing a
+    /// field research.md §2 says the real schema always carries
+    /// (`command`/`cwd`) — schema drift, not a legitimate empty command.
+    /// Treated like `CodexFileChange`: no reliable signal for any deny
+    /// category, so every category fails closed (FR-015) rather than
+    /// evaluating against a guessed-empty payload that could bypass every
+    /// enabled rule.
+    CodexUnevaluable,
 }
 
 /// Fixed glob-like substrings for the `CredentialPaths` category
@@ -82,7 +91,11 @@ const CREDENTIAL_PATH_PATTERNS: &[&str] = &[".ssh/", ".aws/", ".env", "id_rsa"];
 
 fn matches_credential_pattern(value: Option<&str>) -> bool {
     value
-        .map(|v| CREDENTIAL_PATH_PATTERNS.iter().any(|pattern| v.contains(pattern)))
+        .map(|v| {
+            CREDENTIAL_PATH_PATTERNS
+                .iter()
+                .any(|pattern| v.contains(pattern))
+        })
         .unwrap_or(false)
 }
 
@@ -123,8 +136,45 @@ fn resolve_lexically(path: &str, workspace_root: &Path) -> PathBuf {
     normalized
 }
 
+/// Resolves `path` (via [`resolve_lexically`]) and then collapses any
+/// symlink in its *existing* prefix by walking up to the nearest ancestor
+/// that is actually on disk, canonicalizing that, and re-appending the
+/// remaining not-yet-created components lexically — a `Write`/`Edit`
+/// target frequently does not exist yet, so a plain `canonicalize()` on
+/// the full path would just fail. Falls back to the lexical form only if
+/// no ancestor at all can be canonicalized (e.g. a bogus root); the
+/// caller's containment check still runs against that fallback, it just
+/// can't benefit from symlink resolution in that degenerate case.
+///
+/// This closes the gap a lexical-only check has: a symlink placed inside
+/// the workspace pointing outside it (`workspace_root/link -> /etc`) would
+/// otherwise let `workspace_root/link/passwd` pass as "inside" even though
+/// the real, OS-resolved target is `/etc/passwd` (code review).
+fn resolve_physically(path: &str, workspace_root: &Path) -> PathBuf {
+    let lexical = resolve_lexically(path, workspace_root);
+    let mut existing: &Path = &lexical;
+    let mut trailing: Vec<&std::ffi::OsStr> = Vec::new();
+    loop {
+        if let Ok(mut resolved) = existing.canonicalize() {
+            trailing.reverse();
+            resolved.extend(trailing);
+            return resolved;
+        }
+        match (existing.file_name(), existing.parent()) {
+            (Some(name), Some(parent)) => {
+                trailing.push(name);
+                existing = parent;
+            }
+            _ => return lexical,
+        }
+    }
+}
+
 fn is_within_workspace(candidate: &str, workspace_root: &Path) -> bool {
-    resolve_lexically(candidate, workspace_root).starts_with(workspace_root)
+    let Ok(canonical_root) = workspace_root.canonicalize() else {
+        return false;
+    };
+    resolve_physically(candidate, workspace_root).starts_with(canonical_root)
 }
 
 fn category_denies(
@@ -150,11 +200,11 @@ fn category_denies(
         // FR-015: no path field on this payload at all — cannot evaluate,
         // fail closed rather than allow an unverifiable call through.
         (DenyCategory::WorkspaceEscape, ApprovalRequestPayload::CodexFileChange) => true,
+        // Same fail-closed reasoning as `CodexFileChange`: schema drift or
+        // an unrecognized approval kind leaves nothing reliable to check.
+        (DenyCategory::WorkspaceEscape, ApprovalRequestPayload::CodexUnevaluable) => true,
 
-        (
-            DenyCategory::CredentialPaths,
-            ApprovalRequestPayload::ClaudeToolCall { input, .. },
-        ) => {
+        (DenyCategory::CredentialPaths, ApprovalRequestPayload::ClaudeToolCall { input, .. }) => {
             matches_credential_pattern(input.get("file_path").and_then(Value::as_str))
                 || matches_credential_pattern(input.get("command").and_then(Value::as_str))
         }
@@ -164,17 +214,21 @@ fn category_denies(
         ) => matches_credential_pattern(Some(command.as_str())),
         // FR-015: same unevaluable-payload gap as WorkspaceEscape.
         (DenyCategory::CredentialPaths, ApprovalRequestPayload::CodexFileChange) => true,
+        (DenyCategory::CredentialPaths, ApprovalRequestPayload::CodexUnevaluable) => true,
 
-        (
-            DenyCategory::NetworkAccess,
-            ApprovalRequestPayload::ClaudeToolCall { tool_name, .. },
-        ) => claude_network_denied(tool_name),
+        (DenyCategory::NetworkAccess, ApprovalRequestPayload::ClaudeToolCall { tool_name, .. }) => {
+            claude_network_denied(tool_name)
+        }
         (
             DenyCategory::NetworkAccess,
             ApprovalRequestPayload::CodexCommandExecution { network, .. },
         ) => network.is_some(),
         // Not a network-triggered approval kind; category does not apply.
         (DenyCategory::NetworkAccess, ApprovalRequestPayload::CodexFileChange) => false,
+        // Unlike `CodexFileChange`, this payload shape carries no guarantee
+        // the underlying action isn't network-triggered — FR-015 fail
+        // closed applies here too.
+        (DenyCategory::NetworkAccess, ApprovalRequestPayload::CodexUnevaluable) => true,
     }
 }
 
@@ -244,9 +298,19 @@ pub fn classify_autonomy_spawn_error(
             raw_error.contains("--permission-mode") && raw_error.contains("invalid")
         }
         // An old `codex app-server` rejects an unrecognized `thread/start`
-        // field with a JSON-RPC error mentioning the field name.
+        // field with a JSON-RPC "invalid params" error mentioning the field
+        // name, e.g. `{"code":-32602,"message":"unknown field
+        // \"approvalPolicy\""}`. Requiring both the field name and an
+        // invalid/unknown-field indication (rather than the field name
+        // alone) keeps an unrelated failure — e.g. "sandbox initialization
+        // failed: permission denied" — classified as the transient error it
+        // actually is, instead of a false "mode unavailable" (code review).
         DelegateVendor::Codex => {
-            raw_error.contains("approvalPolicy") || raw_error.contains("sandbox")
+            let names_field = raw_error.contains("approvalPolicy") || raw_error.contains("sandbox");
+            let rejected_as_unknown = raw_error.contains("unknown field")
+                || raw_error.contains("invalid params")
+                || raw_error.contains("-32602");
+            names_field && rejected_as_unknown
         }
     };
     recognized.then_some(AutonomyUnavailable { vendor, mode })

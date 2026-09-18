@@ -18,6 +18,7 @@ use crate::adapters::{AbortHandle, ProviderAdapter};
 use crate::chat::tools::cli::CliTool;
 use crate::chat::tools::mcp::{self, McpServerConfig};
 use crate::chat::tools::{ApprovalDecision, Tool, ToolRegistry};
+use crate::storage::providers::ProviderKind;
 
 /// Structured lifecycle state shared by the Workspace and Chat views.
 #[derive(Debug, Clone, Serialize)]
@@ -93,6 +94,13 @@ pub struct ActiveSession {
     pub model_id: String,
     /// Provider UUID for API-key sessions; `None` for local sessions.
     pub provider_id: Option<Uuid>,
+    /// Resolved once at load time so callers don't need a second DB round
+    /// trip just to tell a `cli_delegate` session apart from an `api_key`
+    /// one (both carry `provider_id: Some(_)`) — needed to scope
+    /// `ChatRequest.autonomy_mode` to `cli_delegate` sessions only (code
+    /// review: a non-delegate session must never carry a non-`Standard`
+    /// autonomy label).
+    pub provider_kind: ProviderKind,
     pub adapter: Arc<dyn ProviderAdapter>,
     /// Only meaningful for local models; api_key rows carry an empty
     /// string because the vendor's server-side tokenizer handles it.

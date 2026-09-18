@@ -34,6 +34,7 @@ use crate::chat::tools::{ApprovalDecision, ToolRegistry};
 use crate::error::{HolziError, Result};
 use crate::state::AppState;
 use crate::state_utils::active_database;
+use crate::storage::providers::ProviderKind;
 use crate::storage::{
     chat_messages::{self as msg_store, ChatMessage, MessageRole},
     chat_threads as thread_store, preferences,
@@ -362,7 +363,16 @@ pub async fn send_message(
         reasoning_requested,
         max_new_tokens: args.max_new_tokens,
         tools,
-        autonomy_mode: args.autonomy_mode.unwrap_or_default(),
+        // Only a `cli_delegate` session actually has an autonomy posture to
+        // apply — a `local`/`api_key` turn must never carry a non-`Standard`
+        // label just because the frontend happened to send one (code
+        // review; `TurnRunner`/persistence take whatever `ChatRequest`
+        // carries at face value).
+        autonomy_mode: if session.provider_kind == ProviderKind::CliDelegate {
+            args.autonomy_mode.unwrap_or_default()
+        } else {
+            AutonomyMode::Standard
+        },
     };
 
     let mut attempt = 0;

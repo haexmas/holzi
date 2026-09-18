@@ -81,7 +81,10 @@ EOF
 
     match result {
         Err(AdapterError::Unavailable { reason }) => {
-            assert!(reason.contains("claude"), "reason should name the vendor: {reason}");
+            assert!(
+                reason.contains("claude"),
+                "reason should name the vendor: {reason}"
+            );
             assert!(
                 reason.contains("ungated"),
                 "reason should name the requested mode: {reason}"
@@ -148,7 +151,10 @@ sys.stdin.readline()
 
     match result {
         Err(AdapterError::Unavailable { reason }) => {
-            assert!(reason.contains("codex"), "reason should name the vendor: {reason}");
+            assert!(
+                reason.contains("codex"),
+                "reason should name the vendor: {reason}"
+            );
             assert!(
                 reason.contains("ungated"),
                 "reason should name the requested mode: {reason}"

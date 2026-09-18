@@ -7,7 +7,7 @@
 
 use std::path::Path;
 use std::process::Stdio;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use serde_json::json;
 use tempfile::TempDir;
@@ -28,6 +28,11 @@ use super::{build_transcript_prompt, DelegateChatContext, DelegateVendor};
 /// message — mirrors `chat/tools/cli.rs`'s own output cap, just applied
 /// to diagnostics rather than command output.
 const MAX_STDERR_BYTES: usize = 64 * 1024;
+
+/// Bounds the `Ungated` "first line vs. early exit" startup probe (see its
+/// call site below) — mirrors `codex.rs`'s `HANDSHAKE_TIMEOUT` for the
+/// analogous wait on Codex's own startup handshake.
+const STARTUP_PROBE_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// What one `stream-json` line means for the stream. `pub(super)` so
 /// `claude_tests.rs` can exercise it directly without spawning a real
@@ -156,15 +161,18 @@ fn build_command(
     cmd
 }
 
-/// Terminates `child`, drains `stderr_task`, and classifies the collected
-/// stderr against `autonomy_mode` (tasks.md T009/T022): a recognized
-/// unsupported-mode rejection becomes `AdapterError::Unavailable`;
-/// otherwise `fallback` (with the stderr text appended, if any) becomes
-/// the reason of a generic `AdapterError::Http` — matching the exact
-/// wording each of this function's two call sites already used before
-/// this classification existed. Only ever called for `Ungated`
-/// (`GatedPermissive` sends identical flags to `Standard`, so it can never
-/// hit this path).
+/// Terminates `child`, drains `stderr_task`, aborts `listener_task` (if
+/// any), and classifies the collected stderr against `autonomy_mode`
+/// (tasks.md T009/T022): a recognized unsupported-mode rejection becomes
+/// `AdapterError::Unavailable`; otherwise `fallback` (with the stderr text
+/// appended, if any) becomes the reason of a generic `AdapterError::Http`.
+/// Called on every startup failure path below regardless of mode — a
+/// spawned child and its background tasks must not be left running just
+/// because the failure happened before the `Ungated`-only peek-ahead
+/// (code review). The unsupported-mode classification itself still only
+/// ever matches in practice for `Ungated`: `Standard`/`GatedPermissive`
+/// send `--permission-mode default`, a value every `claude` accepts, so
+/// their failures always fall through to the generic `Http` case.
 async fn classify_exit_error(
     child: &mut ChildLifecycle,
     stderr_task: tokio::task::JoinHandle<Vec<u8>>,
@@ -326,34 +334,24 @@ pub(super) async fn spawn_claude_invocation(
     });
 
     if let Err(error) = stdin.write_all(prompt.as_bytes()).await {
-        if autonomy_mode == AutonomyMode::Ungated {
-            return Err(classify_exit_error(
-                &mut child,
-                stderr_task,
-                listener_task,
-                autonomy_mode,
-                &format!("failed to write Claude prompt: {error}"),
-            )
-            .await);
-        }
-        return Err(AdapterError::Http {
-            reason: format!("failed to write Claude prompt: {error}"),
-        });
+        return Err(classify_exit_error(
+            &mut child,
+            stderr_task,
+            listener_task,
+            autonomy_mode,
+            &format!("failed to write Claude prompt: {error}"),
+        )
+        .await);
     }
     if let Err(error) = stdin.shutdown().await {
-        if autonomy_mode == AutonomyMode::Ungated {
-            return Err(classify_exit_error(
-                &mut child,
-                stderr_task,
-                listener_task,
-                autonomy_mode,
-                &format!("failed to close Claude prompt input: {error}"),
-            )
-            .await);
-        }
-        return Err(AdapterError::Http {
-            reason: format!("failed to close Claude prompt input: {error}"),
-        });
+        return Err(classify_exit_error(
+            &mut child,
+            stderr_task,
+            listener_task,
+            autonomy_mode,
+            &format!("failed to close Claude prompt input: {error}"),
+        )
+        .await);
     }
     // `shutdown()` alone does not release the underlying pipe fd — only
     // `Drop` does. The success path used to return (and thus drop `stdin`)
@@ -378,9 +376,9 @@ pub(super) async fn spawn_claude_invocation(
     // `Ungated` only.
     let mut peeked_line: Option<String> = None;
     if autonomy_mode == AutonomyMode::Ungated {
-        match reader.next_line().await {
-            Ok(Some(line)) => peeked_line = Some(line),
-            Ok(None) => {
+        match tokio::time::timeout(STARTUP_PROBE_TIMEOUT, reader.next_line()).await {
+            Ok(Ok(Some(line))) => peeked_line = Some(line),
+            Ok(Ok(None)) => {
                 return Err(classify_exit_error(
                     &mut child,
                     stderr_task,
@@ -390,10 +388,26 @@ pub(super) async fn spawn_claude_invocation(
                 )
                 .await);
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 return Err(AdapterError::Http {
                     reason: format!("failed to read claude stdout: {e}"),
                 })
+            }
+            // A silent `claude` that neither emits output nor exits would
+            // otherwise hang this probe indefinitely — cancellation aside
+            // (the caller can still drop this future), nothing else here
+            // bounds the wait (code review).
+            Err(_) => {
+                return Err(classify_exit_error(
+                    &mut child,
+                    stderr_task,
+                    listener_task,
+                    autonomy_mode,
+                    &format!(
+                        "claude produced no output within {STARTUP_PROBE_TIMEOUT:?} of starting"
+                    ),
+                )
+                .await);
             }
         }
     }

@@ -124,35 +124,40 @@ async fn read_line(lines: &mut Lines<BufReader<ChildStdout>>) -> io::Result<Line
 
 /// Builds the deny-rule evaluator's view of a Codex approval callback
 /// (data-model.md): `CodexCommandExecution` when the schema actually
-/// carries the fields (`command`/`cwd`/`networkApprovalContext`),
-/// `CodexFileChange` (field-less — research.md §3) for a file-change
-/// callback, and an empty/neutral `CodexCommandExecution` for any other
-/// approval kind (`item/permissions/requestApproval` and unrecognized
-/// methods) — none of the three deny categories match empty content, so
-/// this stays a safe no-op under `GatedPermissive` rather than a guess.
-fn build_codex_payload(method: &str, params: &Value) -> ApprovalRequestPayload {
+/// carries its required fields (research.md §2: a genuine
+/// `item/commandExecution/requestApproval` callback always has `command`
+/// and `cwd`), `CodexFileChange` (field-less — research.md §3) for a
+/// file-change callback, and `CodexUnevaluable` for anything else —
+/// an unrecognized approval kind, or a `commandExecution` callback missing
+/// either required field. Defaulting the latter to an empty command used to
+/// evaluate as "safe" against every deny category regardless of content;
+/// `CodexUnevaluable` instead fails closed like `CodexFileChange` (code
+/// review, spec FR-015).
+pub(super) fn build_codex_payload(method: &str, params: &Value) -> ApprovalRequestPayload {
     match method {
-        "item/commandExecution/requestApproval" => ApprovalRequestPayload::CodexCommandExecution {
-            command: params
-                .get("command")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_string(),
-            cwd: params
-                .get("cwd")
-                .and_then(Value::as_str)
-                .map(|s| s.to_string()),
-            network: params.get("networkApprovalContext").map(|ctx| NetworkContext {
-                host: ctx.get("host").and_then(Value::as_str).map(String::from),
-                protocol: ctx.get("protocol").and_then(Value::as_str).map(String::from),
-            }),
-        },
+        "item/commandExecution/requestApproval" => {
+            match (
+                params.get("command").and_then(Value::as_str),
+                params.get("cwd"),
+            ) {
+                (Some(command), Some(cwd)) => ApprovalRequestPayload::CodexCommandExecution {
+                    command: command.to_string(),
+                    cwd: cwd.as_str().map(|s| s.to_string()),
+                    network: params
+                        .get("networkApprovalContext")
+                        .map(|ctx| NetworkContext {
+                            host: ctx.get("host").and_then(Value::as_str).map(String::from),
+                            protocol: ctx
+                                .get("protocol")
+                                .and_then(Value::as_str)
+                                .map(String::from),
+                        }),
+                },
+                _ => ApprovalRequestPayload::CodexUnevaluable,
+            }
+        }
         "item/fileChange/requestApproval" => ApprovalRequestPayload::CodexFileChange,
-        _ => ApprovalRequestPayload::CodexCommandExecution {
-            command: String::new(),
-            cwd: None,
-            network: None,
-        },
+        _ => ApprovalRequestPayload::CodexUnevaluable,
     }
 }
 
@@ -436,9 +441,11 @@ pub(super) async fn spawn_codex_app_server(
         // synchronously — before any stream is returned — unlike Claude's
         // equivalent case (see the peek-ahead below).
         if autonomy_mode != AutonomyMode::Standard {
-            if let Some(unavailable) =
-                autonomy::classify_autonomy_spawn_error(DelegateVendor::Codex, autonomy_mode, &error.to_string())
-            {
+            if let Some(unavailable) = autonomy::classify_autonomy_spawn_error(
+                DelegateVendor::Codex,
+                autonomy_mode,
+                &error.to_string(),
+            ) {
                 return Err(AdapterError::Unavailable {
                     reason: unavailable.to_string(),
                 });

@@ -21,6 +21,15 @@ use super::{DelegateChatContext, EventEmitter, PendingToolApprovals};
 /// `blocked_by_plan_mode`/`tool_call_cancelled` (CONTEXT.md).
 const MARKER_DENIED_BY_DENY_RULE: &str = "denied_by_deny_rule";
 const MARKER_PERMITTED: &str = "gated_permissive_call_permitted";
+/// Unlike the two markers above, this fills the call row's `tool_input` —
+/// a slot the frontend renders verbatim as data, not through a translated
+/// label, so it is plain, already-legible text rather than an i18n key.
+/// `ChatMessage`'s own validation requires a `ToolCall` row to carry *some*
+/// `tool_input` (`storage::chat_messages::validate`), so this stands in for
+/// the raw call input the audit trail deliberately no longer persists
+/// (code review: it can carry command arguments, file contents, or
+/// credentials).
+const REDACTED_TOOL_INPUT: &str = "[redacted]";
 
 const PREF_PERMISSION_MODE: &str = "chat.permission_mode";
 
@@ -53,7 +62,6 @@ pub async fn request_approval(
             workspace_root,
             thread_id,
             &tool_name,
-            &input,
             &payload,
         )
         .await;
@@ -107,13 +115,11 @@ pub async fn request_approval(
 /// only mode with a per-tool-call record at all (`Ungated` has none,
 /// FR-006; `Standard`'s own tool activity, when it has any, is recorded by
 /// the built-in tool loop instead).
-#[allow(clippy::too_many_arguments)]
 async fn gated_permissive_decision(
     database: Option<&Arc<haex_crdt::Database>>,
     workspace_root: &Path,
     thread_id: Option<Uuid>,
     tool_name: &str,
-    input: &Value,
     payload: &ApprovalRequestPayload,
 ) -> ApprovalDecision {
     let Some(database) = database else {
@@ -123,8 +129,9 @@ async fn gated_permissive_decision(
     let rules = tauri::async_runtime::spawn_blocking({
         let database = Arc::clone(database);
         move || {
-            database
-                .with_connection(|conn| Ok::<_, haex_crdt::Error>(autonomy::get_deny_rules(conn, device_id)))
+            database.with_connection(|conn| {
+                Ok::<_, haex_crdt::Error>(autonomy::get_deny_rules(conn, device_id))
+            })
         }
     })
     .await
@@ -137,36 +144,46 @@ async fn gated_permissive_decision(
         None => ApprovalDecision::Deny,
     };
 
-    persist_gated_permissive_record(database, thread_id, tool_name, input, payload, decision).await;
+    let persisted =
+        persist_gated_permissive_record(database, thread_id, tool_name, payload, decision).await;
 
-    decision
+    // The audit record is the only proof this decision was ever made (spec
+    // FR-005/US2). If it could not be committed, treat the call as denied
+    // rather than let an unaudited `Allow` through.
+    if persisted {
+        decision
+    } else {
+        ApprovalDecision::Deny
+    }
 }
 
 /// Persists one `tool_call`/`tool_result` row pair recording a
 /// `gated-permissive` approval callback and holzi's decision on it — the
 /// only outcome holzi itself observes at this boundary; the delegate
 /// executes the tool in its own process, so no actual tool output is
-/// available to record (unlike the built-in tool loop's own rows). Best
-/// effort: a persistence failure here must not change the approval
-/// decision already made, so errors are swallowed rather than propagated.
+/// available to record (unlike the built-in tool loop's own rows). Both
+/// rows commit in one transaction — a partial pair (a call row with no
+/// matching result) would misrepresent the audit trail just as badly as
+/// losing it entirely. Returns whether the transaction committed; the
+/// caller denies the call outright when it did not (spec FR-005/US2: an
+/// unaudited `Allow` is not an acceptable outcome).
 async fn persist_gated_permissive_record(
     database: &Arc<haex_crdt::Database>,
     thread_id: Option<Uuid>,
     tool_name: &str,
-    input: &Value,
     payload: &ApprovalRequestPayload,
     decision: ApprovalDecision,
-) {
+) -> bool {
     let Some(thread_id) = thread_id else {
-        return;
+        return false;
     };
     let tool_source = match payload {
         ApprovalRequestPayload::ClaudeToolCall { .. } => "cli_delegate:claude",
         ApprovalRequestPayload::CodexCommandExecution { .. }
-        | ApprovalRequestPayload::CodexFileChange => "cli_delegate:codex",
+        | ApprovalRequestPayload::CodexFileChange
+        | ApprovalRequestPayload::CodexUnevaluable => "cli_delegate:codex",
     };
     let call_id = Uuid::new_v4().to_string();
-    let tool_input = serde_json::to_string(input).unwrap_or_else(|_| "{}".to_string());
     // Distinct, increasing timestamps so the call row reliably sorts before
     // its result under `list_messages`'s `created_at ASC, id ASC` ordering
     // (the same reason `tool_round.rs::persist_round` bumps its own clock
@@ -191,7 +208,11 @@ async fn persist_gated_permissive_record(
         idempotency_key: None,
         tool_name: Some(tool_name.to_string()),
         tool_call_id: Some(call_id.clone()),
-        tool_input: Some(tool_input),
+        // Never the raw call input: it can carry command arguments, file
+        // contents, or credential-bearing text (code review). The decision
+        // was made against the typed, already-vetted `ApprovalRequestPayload`,
+        // not this row, so the audit trail needs the outcome, not the input.
+        tool_input: Some(REDACTED_TOOL_INPUT.to_string()),
         tool_is_error: None,
         tool_source: Some(tool_source.to_string()),
         autonomy_mode: Some(AutonomyMode::GatedPermissive.as_str().to_string()),
@@ -221,14 +242,16 @@ async fn persist_gated_permissive_record(
     };
 
     let database = Arc::clone(database);
-    let _ = tauri::async_runtime::spawn_blocking(move || {
+    tauri::async_runtime::spawn_blocking(move || {
         database.with_connection(|conn| {
-            msg_store::insert_message(conn, &call_row)?;
-            msg_store::insert_message(conn, &result_row)?;
-            Ok::<_, haex_crdt::Error>(())
+            let tx = conn.unchecked_transaction()?;
+            msg_store::insert_message(&tx, &call_row)?;
+            msg_store::insert_message(&tx, &result_row)?;
+            tx.commit().map_err(haex_crdt::Error::from)
         })
     })
-    .await;
+    .await
+    .is_ok_and(|result| result.is_ok())
 }
 
 fn now_ms() -> i64 {

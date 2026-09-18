@@ -31,7 +31,9 @@ quickstart.md.
   "gated-but-permissive" vs "gated-permissive" spelling drift, the unenumerated credential-path glob
   list) were intentionally left unfixed in this revision — not asked for, not blocking.
 
-- **2026-09-17, `/speckit.implement`**: MVP (US1+US2) and US3 implemented and passing, plus two
+- **2026-09-17, `/speckit.implement`**: MVP (US1+US2) and US3 implementation complete; validation
+  pending (T014, T024, T041 remain unchecked below — see their entries for what's outstanding),
+  plus two
   corrections discovered mid-implementation (both against the actually-shipped 007 code, not this
   spec's own review): (a) 007 never actually persisted any per-tool-call record for a delegate
   invocation (only its final response) — data-model.md's "007 already added `cli_delegate:*`
@@ -127,12 +129,13 @@ raw_error: &str) -> Option<AutonomyUnavailable>` helper: recognizes Claude Code'
       the command boundary preserves the exact `InvalidInput` wire shape in
       `contracts/tauri-commands.md`.
 - [X] T010 Define `const PREF_DENY_RULES: &str = "cli_delegate.deny_rules";` plus
-      `get_deny_rules(conn, device_id) -> Result<Vec<DenyCategory>, DenyRulesError>` /
-      `set_deny_rules(conn, device_id, categories: &[DenyCategory]) -> Result<(), DenyRulesError>`
-      helpers over `storage::preferences::{get, insert_or_update}` with `PrefScope::Device` in
-      `autonomy.rs`. JSON-decode the preference's `String` value; absent, SQL `NULL`, and valid
-      empty arrays return an empty list, while malformed JSON or unknown categories returns an
-      error. `set_deny_rules` propagates serialization and storage errors.
+      `get_deny_rules(conn, device_id) -> Result<Vec<DenyCategory>, DenyRulesError>` over
+      `storage::preferences::get` with `PrefScope::Device` in `autonomy.rs`. No `set_deny_rules`
+      helper (see the 2026-09-17 `/speckit.implement` revision note above): the frontend writes
+      the preference directly through the existing generic `set_pref` command, the same way
+      `chat.permission_mode` has no Rust-side setter either. JSON-decode the preference's `String`
+      value; absent, SQL `NULL`, and valid empty arrays return an empty list, while malformed JSON
+      or unknown categories returns an error (`DenyRulesError`).
 - [X] T011 [P] Create `src-tauri/src/adapters/cli_delegate/autonomy_tests.rs` (register via
       `#[cfg(test)] #[path = "autonomy_tests.rs"] mod autonomy_tests;`): unit tests for
       `evaluate_deny_rules` covering all 3 categories × all 3 `ApprovalRequestPayload` variants from

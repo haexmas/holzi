@@ -17,6 +17,7 @@ const CATEGORIES = [
   'network_access',
   'credential_paths',
 ] as const
+const VALID_CATEGORIES = new Set<string>(CATEGORIES)
 
 const selected = ref<Set<string>>(new Set())
 const loading = ref(true)
@@ -34,7 +35,13 @@ async function reloadAsync() {
       PREF_KEY,
     )
     const parsed: unknown = raw ? JSON.parse(raw) : []
-    selected.value = new Set(Array.isArray(parsed) ? parsed : [])
+    const validItems = Array.isArray(parsed)
+      ? parsed.filter(
+          (item): item is string =>
+            typeof item === 'string' && VALID_CATEGORIES.has(item),
+        )
+      : []
+    selected.value = new Set(validItems)
   } catch (e) {
     loadError.value = e instanceof Error ? e.message : String(e)
   } finally {
