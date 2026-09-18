@@ -227,13 +227,13 @@ fn build_capture_stream<T>(
     raw_buffer: Arc<StdMutex<Vec<f32>>>,
     capped: Arc<AtomicBool>,
     max_input_samples: usize,
-) -> Result<cpal::Stream, cpal::BuildStreamError>
+) -> Result<cpal::Stream, cpal::Error>
 where
     T: SizedSample,
     f32: FromSample<T>,
 {
     device.build_input_stream(
-        config,
+        *config,
         move |data: &[T], _: &cpal::InputCallbackInfo| {
             if capped.load(Ordering::Relaxed) {
                 return;

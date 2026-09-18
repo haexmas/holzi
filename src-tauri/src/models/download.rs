@@ -185,9 +185,9 @@ where
                 .and_then(|(start, end, total)| {
                     let range_length = end.checked_sub(start)?.checked_add(1)?;
                     let starts_at_requested_offset = start == requested_offset;
-                    let matches_known_total = bytes_total.map_or(true, |known| known == total);
+                    let matches_known_total = bytes_total.is_none_or(|known| known == total);
                     let matches_response_length =
-                        response_length.map_or(true, |length| length == range_length);
+                        response_length.is_none_or(|length| length == range_length);
                     (starts_at_requested_offset && matches_known_total && matches_response_length)
                         .then_some(total)
                 });
@@ -246,7 +246,7 @@ where
         // A body can also end cleanly while short of the announced size — a
         // server may answer a Range request with fewer bytes than asked for.
         // Treat that exactly like a stream error: retry, never finalize.
-        let body_size_matches = bytes_total.map_or(true, |total| bytes_downloaded == total);
+        let body_size_matches = bytes_total.is_none_or(|total| bytes_downloaded == total);
         if stream_error.is_none() && body_size_matches {
             completed = true;
             break;

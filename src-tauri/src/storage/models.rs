@@ -355,8 +355,7 @@ pub fn backfill_source_kind(
              WHERE provider_id = ?1 AND source_kind = 'provider'"
         )
     } else {
-        let placeholders = std::iter::repeat("?")
-            .take(catalog_ids.len())
+        let placeholders = std::iter::repeat_n("?", catalog_ids.len())
             .collect::<Vec<_>>()
             .join(", ");
         format!(
