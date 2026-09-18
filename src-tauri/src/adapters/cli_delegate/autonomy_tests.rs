@@ -332,6 +332,20 @@ fn credential_paths_claude_denies_ssh_file_path() {
 }
 
 #[test]
+fn credential_paths_denies_a_windows_style_backslash_and_uppercase_path() {
+    // Patterns are lowercase, forward-slash Unix paths (code review): a
+    // differently-cased, backslash-separated path must still match.
+    let request = claude_call(
+        "Read",
+        json!({"file_path": r"C:\Users\me\.AWS\Credentials"}),
+    );
+    assert_eq!(
+        evaluate_deny_rules(&[DenyCategory::CredentialPaths], &request, workspace_root()),
+        ApprovalDecision::Deny
+    );
+}
+
+#[test]
 fn credential_paths_claude_denies_command_touching_env_file() {
     let request = claude_call("Bash", json!({"command": "cat .env"}));
     assert_eq!(

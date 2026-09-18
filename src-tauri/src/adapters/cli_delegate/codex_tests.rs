@@ -143,6 +143,19 @@ fn command_execution_missing_cwd_is_unevaluable_not_empty() {
 }
 
 #[test]
+fn command_execution_null_cwd_is_unevaluable_not_none() {
+    // A `cwd` key that is present but not a string (`null`, a number, an
+    // object) must not fall through to `cwd: None` — `WorkspaceEscape`
+    // treats `None` as "nothing to check" (allow) rather than "unevaluable"
+    // (deny), so this would otherwise bypass the category (code review).
+    let params = json!({"command": "ls -la", "cwd": null});
+    assert_eq!(
+        build_codex_payload("item/commandExecution/requestApproval", &params),
+        ApprovalRequestPayload::CodexUnevaluable
+    );
+}
+
+#[test]
 fn unrecognized_method_is_unevaluable() {
     assert_eq!(
         build_codex_payload("item/permissions/requestApproval", &json!({})),

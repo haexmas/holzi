@@ -138,11 +138,16 @@ pub(super) fn build_codex_payload(method: &str, params: &Value) -> ApprovalReque
         "item/commandExecution/requestApproval" => {
             match (
                 params.get("command").and_then(Value::as_str),
-                params.get("cwd"),
+                // Require an actual string, not just a present key: `Some`
+                // on a `null`/object/number `cwd` used to fall through to
+                // `cwd: None`, which `WorkspaceEscape` treats as "nothing to
+                // check" (allow) rather than "unevaluable" (deny) — code
+                // review.
+                params.get("cwd").and_then(Value::as_str),
             ) {
                 (Some(command), Some(cwd)) => ApprovalRequestPayload::CodexCommandExecution {
                     command: command.to_string(),
-                    cwd: cwd.as_str().map(|s| s.to_string()),
+                    cwd: Some(cwd.to_string()),
                     network: params
                         .get("networkApprovalContext")
                         .map(|ctx| NetworkContext {

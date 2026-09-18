@@ -92,9 +92,14 @@ const CREDENTIAL_PATH_PATTERNS: &[&str] = &[".ssh/", ".aws/", ".env", "id_rsa"];
 fn matches_credential_pattern(value: Option<&str>) -> bool {
     value
         .map(|v| {
+            // Patterns are lowercase, forward-slash Unix paths; normalize
+            // the candidate the same way so a Windows-style path
+            // (`C:\Users\me\.aws\credentials`) or a differently-cased
+            // component doesn't bypass the check (code review).
+            let normalized = v.replace('\\', "/").to_ascii_lowercase();
             CREDENTIAL_PATH_PATTERNS
                 .iter()
-                .any(|pattern| v.contains(pattern))
+                .any(|pattern| normalized.contains(pattern))
         })
         .unwrap_or(false)
 }
