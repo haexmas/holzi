@@ -9,7 +9,17 @@
   outputs = { self, nixpkgs, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
       let
-        pkgs = import nixpkgs { inherit system; };
+        # Blanket allow, not a per-package predicate: `cudatoolkit` (pulled
+        # in by consumers like `com.github.haexmas.atoms.holzi` for local
+        # CUDA builds) is a meta-package bundling several separately
+        # unfree-licensed sub-derivations (cuda_nvcc, cuda_cuobjdump, ...),
+        # so scoping to one name is not enough and the set of names is not
+        # stable across nixpkgs bumps. Revisit if a consumer ever needs
+        # finer-grained control.
+        pkgs = import nixpkgs {
+          inherit system;
+          config.allowUnfree = true;
+        };
 
         # spaex regenerates this from every currently-adopted molecule's
         # `nix_packages` fragment (spaex Spec 027's composable atom
@@ -20,11 +30,28 @@
           if builtins.pathExists generatedPackagesPath
           then builtins.fromJSON (builtins.readFile generatedPackagesPath)
           else [ ];
-        packages = map (name: pkgs.${name}) packageNames;
+        # A plain name ("gtk3") indexes pkgs directly; a dotted name
+        # ("gcc.cc.lib", "dbus.lib") walks nested attrs — needed because some
+        # nixpkgs packages split their shared libraries into a non-default
+        # output (e.g. plain `glib` resolves to its "bin" output, not the
+        # one containing libglib-2.0.so; `dbus`'s library lives in `.lib`,
+        # not its default "out").
+        resolvePackage = name: pkgs.lib.getAttrFromPath (pkgs.lib.splitString "." name) pkgs;
+        packages = map resolvePackage packageNames;
       in
       {
         devShells.default = pkgs.mkShell {
           inherit packages;
+          # Nix's own dynamic linker doesn't consult the host's ld.so.cache,
+          # so anything the devShell's packages provide at runtime (not just
+          # build time) needs to be on LD_LIBRARY_PATH explicitly — RPATH
+          # alone isn't reliable here since Tauri's own build process
+          # overwrites it with a bundle-relative convention. Generic by
+          # construction: driven entirely by whatever nix_packages molecules
+          # contribute, no per-package or per-consumer special-casing.
+          shellHook = ''
+            export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath packages}:$LD_LIBRARY_PATH"
+          '';
         };
       });
 }
