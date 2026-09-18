@@ -70,9 +70,7 @@ pub fn scan_installed(
 
 /// Tauri command: catalog entries whose files are already fully installed
 /// on this device. No DB table behind this — a directory-existence scan
-/// (data-model.md), migrating a complete legacy `whisper-tiny` install
-/// into the canonical location first if one is found (only relevant for
-/// that one entry).
+/// (data-model.md).
 #[cfg(feature = "llm-cpu")]
 #[tauri::command]
 pub async fn list_installed_stt_models(app: AppHandle) -> Result<Vec<InstalledSttModel>> {
@@ -82,7 +80,7 @@ pub async fn list_installed_stt_models(app: AppHandle) -> Result<Vec<InstalledSt
         entries
             .iter()
             .map(|entry| {
-                super::local::resolve_or_migrate_model_dir(&app_for_scan, entry)
+                super::local::resolve_model_dir(&app_for_scan, entry)
                     .map(|dir| (entry.id.clone(), dir))
             })
             .collect::<std::result::Result<Vec<_>, _>>()
@@ -131,7 +129,7 @@ pub async fn download_stt_model(app: AppHandle, catalog_id: String) -> Result<In
     let entry = resolve_catalog_entry(&catalog_id)?;
     let app_for_dir = app.clone();
     let dir = tauri::async_runtime::spawn_blocking(move || {
-        super::local::resolve_or_migrate_model_dir(&app_for_dir, entry)
+        super::local::resolve_model_dir(&app_for_dir, entry)
     })
     .await
     .map_err(|e| HolziError::CrdtInit {

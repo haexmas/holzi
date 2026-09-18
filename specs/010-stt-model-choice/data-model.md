@@ -73,10 +73,7 @@ dann `true`, wenn `metadata()` erfolgreich ist, der Pfad eine reguläre Datei be
 Dateien vollständig sind. `list_installed_stt_models` nutzt `is_complete_model`; `ensure_model_files`
 überspringt einzelne Dateien nur bei `is_complete_file == true` und lädt jede andere Datei neu.
 Damit bleiben leere oder abgeschnittene Dateien nicht fälschlich als installiert bestehen. Es
-findet weiterhin keine Content-Validierung statt. Vor dem Status-Check normalisiert der Listing-
-Command dieselbe vollständige Legacy-Installation wie Download und Laden in den kanonischen
-Slug-Pfad, sodass eine vorhandene Installation nicht erst durch einen Downloadversuch sichtbar
-wird.
+findet weiterhin keine Content-Validierung statt.
 
 ## Laufzeit-Zustand: `VoiceState`-Cache-Invalidierung
 

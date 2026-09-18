@@ -64,23 +64,19 @@ end-to-end until this phase is done.
       of reading the removed constants, resolving the canonical model directory via
       `models::paths::slug_dir(app, &entry.id)` / `model_file_path` (existing helpers, unchanged) —
       the download URL becomes `https://huggingface.co/{entry.hf_repo}/resolve/{entry.hf_revision}/{filename}`
-      as before, just parameterized. Add a shared `resolve_or_migrate_model_dir` compatibility
-      resolver plus `is_complete_file`/`is_complete_model` helpers:
-      each file must be a regular file with size > 0, and `ensure_model_files` must redownload every
-      file failing that predicate. Before downloading `whisper-tiny`, if the canonical directory
-      is incomplete, detect a complete legacy
-      `<AppLocalData>/whisper/tiny/<old-revision>/` installation and copy it into the canonical
-      directory; run the same resolver before status listing and loading, and make this compatibility
-      check the only remaining reference to the old path. Update
+      as before, just parameterized. Add a shared `resolve_model_dir` resolver plus
+      `is_complete_file`/`is_complete_model` helpers: each file must be a regular file with size > 0,
+      and `ensure_model_files` must redownload every file failing that predicate. Run the same
+      resolver before status listing, loading, and downloading. Update
       `src-tauri/src/stt/local_tests.rs`'s fixtures to pass an entry instead of relying on removed
-      constants, and cover zero-byte/partial files plus the legacy migration. (depends on T003)
+      constants, and cover zero-byte/partial files. (depends on T003)
 - [x] T005 [P] Add `list_installed_stt_models` (checks, for every `stt::catalog::entries()` item,
       whether `config.json`/`tokenizer.json`/`model.safetensors` all satisfy the shared
       `is_complete_model` predicate under its slug dir via `models::paths`) and the Tauri commands `list_stt_catalog`, `stt_recommend_tiers`,
       `list_installed_stt_models`, `download_stt_model` in new `src-tauri/src/stt/commands.rs`,
       per [contracts/tauri-commands.md](contracts/tauri-commands.md). `download_stt_model` resolves
       the catalog entry via `stt::catalog::get` (404s as `CatalogEntryNotFound` if unknown), invokes
-      the same legacy-preserving directory resolution as `load` and the status listing, and calls
+      the same directory resolution as `load` and the status listing, and calls
       `ensure_model_files` (T004) so incomplete files are repaired rather than treated as installed.
       (depends on T003, T004)
 - [x] T006 [P] Add `src-tauri/src/stt/commands_tests.rs` covering `list_installed_stt_models`

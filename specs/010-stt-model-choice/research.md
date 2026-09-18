@@ -53,34 +53,26 @@ zwei Stellen mit identischer, nicht-trivialer Sortier-/Fallback-Logik).
 
 **Decision**: STT-Modelle liegen unter demselben Wurzelverzeichnis wie Chat-Modelle
 (`<AppLocalData>/models/<slug>/`, `MODELS_DIRECTORY` unverändert "models"), aufgelöst über die
-bestehenden generischen Helfer `models::paths::slug_dir`/`model_file_path`. Vor dem ersten
-Download wird eine vollständige Installation des bisherigen Default-Pfads erkannt und einmalig
-in den neuen kanonischen Slug-Pfad übernommen; dadurch bleibt die bestehende Offline-Nutzung
-erhalten, ohne den neuen Storage-Layer Whisper-spezifisch zu machen.
+bestehenden generischen Helfer `models::paths::slug_dir`/`model_file_path`.
 
 **Rationale**: Operator-Entscheidung, in zwei Schritten präzisiert: zuerst der Wunsch nach einem
 gemeinsamen, nicht Whisper-spezifischen Verzeichnis (weil das lokale STT-Backend nicht dauerhaft
 Whisper bleiben muss), dann die Vereinfachung, dass der bereits existierende Name "models" dafür
-ausreicht — keine Umbenennung zu "llmModels" nötig und keine Migration bestehender Chat-Downloads.
-`models::paths` war bereits vollständig backend-agnostisch (`<root>/<slug>/<filename>`);
-der bisherige `WHISPER_DIR`/`model_dir()`-Sonderweg in `stt/local.rs` war unnötig. Die alte
-Pfadprüfung ist ausschließlich eine zeitlich begrenzte Kompatibilitätsregel im STT-Ladepfad und
-kein neuer Storage-Abstraktionsvertrag.
+ausreicht — keine Umbenennung zu "llmModels" nötig. `models::paths` war bereits vollständig
+backend-agnostisch (`<root>/<slug>/<filename>`); der bisherige `WHISPER_DIR`/`model_dir()`-Sonderweg
+in `stt/local.rs` war unnötig.
 
 **Alternatives considered**:
 
-- Neues Wurzelverzeichnis `llmModels` mit Migration bestehender Installationen — verworfen, da der
-  Operator den bestehenden Namen ausdrücklich beibehalten wollte.
+- Neues Wurzelverzeichnis `llmModels` — verworfen, da der Operator den bestehenden Namen
+  ausdrücklich beibehalten wollte.
 - Separates STT-eigenes Wurzelverzeichnis (z. B. weiterhin `whisper/`) — verworfen, widerspricht
   der Anforderung, keine Backend-spezifische Struktur festzuschreiben.
-
-**Kompatibilität für bestehende Installationen**: Der bereits gemergte Code lädt aktuell nach
-`<AppLocalData>/whisper/tiny/<rev>/`. Bevor der Installationsstatus oder für `whisper-tiny` ein
-Netzwerkzugriff erfolgt, prüft die Implementierung dort dieselbe Vollständigkeitsbedingung wie im
-neuen Slug-Verzeichnis. Ist der Legacy-Ordner vollständig, werden die drei Dateien in den kanonischen
-`<AppLocalData>/models/whisper-tiny/`-Ordner übernommen; eine unvollständige Legacy-Installation
-wird nicht als gültig behandelt und nur über die normale Downloadlogik ergänzt. Nach der
-erfolgreichen Übernahme melden Listing, Laden und Offline-Betrieb denselben Installationszustand.
+- Migration einer bereits unter dem alten `<AppLocalData>/whisper/tiny/<rev>/`-Pfad
+  heruntergeladenen Installation in den neuen Slug-Pfad — ursprünglich vorgesehen, dann verworfen:
+  es gibt keine Nutzer und damit keine bestehenden Installationen, die migriert werden müssten.
+  Der alte Pfad wird nirgends mehr referenziert; ein fehlendes Modell wird immer per normalem
+  Download unter dem kanonischen Slug-Pfad neu geladen.
 
 ## 5. Keine Vereinheitlichung mit der `models`-DB-Tabelle
 

@@ -16,9 +16,7 @@
 //! previous per-device-tiering gap this module used to document is closed by
 //! `stt::catalog`'s generalized tier selector. Model files also moved off a
 //! Whisper-specific path onto the same generic `models::paths` root chat
-//! models already use — see `resolve_or_migrate_model_dir` below for the
-//! one remaining reference to the old path, kept only to migrate an
-//! already-downloaded install.
+//! models already use.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex as StdMutex};
@@ -27,8 +25,7 @@ use async_trait::async_trait;
 use candle::{Device, IndexOp, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::models::whisper::{self as m, audio, Config};
-use tauri::path::BaseDirectory;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use tokenizers::Tokenizer;
 
 use crate::models::download::download_to_file;
@@ -36,14 +33,6 @@ use crate::models::paths as model_paths;
 
 use super::catalog::SttCatalogEntry;
 use super::{CanonicalPcm, SttAdapter, SttError};
-
-/// Legacy path this feature's pre-spec-010 implementation downloaded
-/// `whisper-tiny` into, before STT models moved onto the shared
-/// `models::paths` root chat models already use (research.md §4). This is
-/// the *only* remaining reference to that path — [`resolve_or_migrate_model_dir`]
-/// uses it solely to migrate an already-downloaded install instead of
-/// silently abandoning it.
-const LEGACY_WHISPER_TINY_DIR: &str = "whisper/tiny/169d4a4341b33bc18d8881c4b69c2e104e1cc0af";
 
 const CONFIG_FILENAME: &str = "config.json";
 const TOKENIZER_FILENAME: &str = "tokenizer.json";
@@ -80,13 +69,13 @@ struct Inner {
 
 impl LocalWhisperAdapter {
     /// Ensures `entry`'s files are present under its `models::paths` slug
-    /// directory (downloading any missing/incomplete file, migrating a
-    /// legacy install first if applicable) and loads it into memory.
+    /// directory (downloading any missing/incomplete file) and loads it
+    /// into memory.
     pub async fn load(app: &AppHandle, entry: &SttCatalogEntry) -> Result<Self, SttError> {
         let app_for_dir = app.clone();
         let entry_for_dir = entry.clone();
         let dir = tauri::async_runtime::spawn_blocking(move || {
-            resolve_or_migrate_model_dir(&app_for_dir, &entry_for_dir)
+            resolve_model_dir(&app_for_dir, &entry_for_dir)
         })
         .await
         .map_err(|e| SttError::LocalUnavailable {
@@ -327,60 +316,14 @@ pub fn is_complete_model(dir: &Path) -> bool {
 }
 
 /// Resolves `entry`'s canonical `models::paths` slug directory, creating it
-/// if missing. If that directory isn't already complete and `entry` is
-/// `whisper-tiny`, first checks the pre-spec-010
-/// [`LEGACY_WHISPER_TINY_DIR`] for a complete install and copies its files
-/// into the canonical directory — best-effort: on any copy failure the
-/// canonical directory is left as-is and `ensure_model_files` downloads
-/// whatever didn't make it across. An incomplete legacy install is never
-/// treated as valid and is left untouched.
+/// if missing.
 ///
 /// Called before every disk-touching operation (load, install-status
 /// listing, download) so all three agree on the same installed state.
-pub fn resolve_or_migrate_model_dir(
-    app: &AppHandle,
-    entry: &SttCatalogEntry,
-) -> Result<PathBuf, SttError> {
-    let dir = model_paths::slug_dir(app, &entry.id).map_err(|e| SttError::LocalUnavailable {
+pub fn resolve_model_dir(app: &AppHandle, entry: &SttCatalogEntry) -> Result<PathBuf, SttError> {
+    model_paths::slug_dir(app, &entry.id).map_err(|e| SttError::LocalUnavailable {
         reason: format!("resolve model dir for {}: {e}", entry.id),
-    })?;
-
-    if entry.id == "whisper-tiny" && !is_complete_model(&dir) {
-        let legacy_dir = app
-            .path()
-            .resolve(LEGACY_WHISPER_TINY_DIR, BaseDirectory::AppLocalData)
-            .map_err(|e| SttError::LocalUnavailable {
-                reason: format!("resolve legacy Whisper model directory: {e}"),
-            })?;
-        migrate_legacy_if_present(&legacy_dir, &dir)?;
-    }
-
-    Ok(dir)
-}
-
-/// Copies a complete legacy install's files into `canonical_dir`,
-/// best-effort (a failed individual copy just leaves that file for
-/// `ensure_model_files` to download fresh). No-op if `legacy_dir` isn't
-/// itself a complete install — an incomplete legacy install is never
-/// treated as valid. Split out from [`resolve_or_migrate_model_dir`] as a
-/// pure `&Path`-based helper so it's unit-testable without a Tauri
-/// `AppHandle` — `pub` for the same reason as [`ensure_model_files`].
-pub fn migrate_legacy_if_present(legacy_dir: &Path, canonical_dir: &Path) -> Result<(), SttError> {
-    if !is_complete_model(legacy_dir) {
-        return Ok(());
-    }
-    for filename in [CONFIG_FILENAME, TOKENIZER_FILENAME, WEIGHTS_FILENAME] {
-        std::fs::copy(legacy_dir.join(filename), canonical_dir.join(filename)).map_err(|e| {
-            SttError::LocalUnavailable {
-                reason: format!(
-                    "migrate {} to {}: {e}",
-                    legacy_dir.join(filename).display(),
-                    canonical_dir.join(filename).display()
-                ),
-            }
-        })?;
-    }
-    Ok(())
+    })
 }
 
 /// Downloads whichever of `config.json`/`tokenizer.json`/`model.safetensors`
