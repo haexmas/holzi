@@ -105,14 +105,14 @@ export const useModelsStore = defineStore('models', () => {
         : null
 
     // A connected `cli_delegate` provider gets real cached model rows
-    // (`<providerId>:<remoteId>`, e.g. `<uuid>:sonnet` — one per model
-    // alias for Claude, one synthetic `<uuid>:codex` row for Codex) via
-    // the same `list_models`/`replace_provider_models` refresh path
-    // `api_key` providers already use
-    // (`providers/mod.rs::compose_model_row`,
+    // (`<providerId>:<remoteId>`) via the same `list_models`/
+    // `replace_provider_models` refresh path `api_key` providers already
+    // use (`providers/mod.rs::compose_model_row`,
     // `adapters/cli_delegate/mod.rs::list_models`) — so it flows through
     // `remoteGroups` unchanged, no separate synthesis needed for the
-    // connected case.
+    // connected case. Claude's rows come straight from Anthropic's own
+    // `/v1/models` API (e.g. `<uuid>:claude-opus-5`), Codex still gets one
+    // synthetic `<uuid>:codex` row.
     const remoteGroups = providerList.value
       .filter((p) => p.kind === 'api_key' || p.kind === 'cli_delegate')
       .map<ModelGroup>((p) => ({

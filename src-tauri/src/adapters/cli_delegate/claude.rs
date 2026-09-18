@@ -134,10 +134,12 @@ fn build_command(
         .arg("stream-json")
         .arg("--verbose")
         .arg("--include-partial-messages");
-    // `req.model_id` is one of `CLAUDE_MODEL_ALIASES` (mod.rs) — the model
-    // picker only ever offers those, but an empty id (e.g. a session
-    // loaded before this feature existed) falls back to the CLI's own
-    // default rather than passing `--model ""`.
+    // `req.model_id` is a real Anthropic model id from `fetch_claude_models`
+    // (mod.rs) — `claude --help` documents `--model` as accepting either a
+    // short alias or "a model's full name", and the id the models API
+    // returns satisfies the latter. An empty id (e.g. a session loaded
+    // before this feature existed) falls back to the CLI's own default
+    // rather than passing `--model ""`.
     if !model.is_empty() {
         cmd.arg("--model").arg(model);
     }

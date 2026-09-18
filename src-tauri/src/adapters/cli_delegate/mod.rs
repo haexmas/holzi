@@ -180,35 +180,57 @@ impl CliDelegateAdapter {
     }
 }
 
-/// Model aliases the installed `claude` CLI's `--model` flag accepts
-/// (`claude --help`: "Provide an alias for the latest model (e.g. 'fable',
-/// 'opus', or 'sonnet') or a model's full name"). Each `remote_id` here is
-/// passed straight through as `ChatRequest.model_id` down to
-/// `claude::spawn_claude_invocation`'s `--model` argument — there is no
-/// separate mapping step.
-const CLAUDE_MODEL_ALIASES: [(&str, &str); 4] = [
-    ("sonnet", "Claude Sonnet"),
-    ("opus", "Claude Opus"),
-    ("haiku", "Claude Haiku"),
-    ("fable", "Claude Fable"),
-];
+/// Anthropic's public API base URL. The `cli_delegate` provider row's own
+/// `base_url` field holds the `claude` executable name/path (see
+/// `CliDelegateAdapter::binary`), not an API endpoint, so the models-API
+/// lookup below uses this fixed constant instead.
+const CLAUDE_API_BASE_URL: &str = "https://api.anthropic.com";
+
+/// Fetches Claude's live model catalog via Anthropic's `/v1/models` API
+/// (the same endpoint and pagination `AnthropicAdapter` uses for
+/// `api_key` providers — see `anthropic::fetch_models`), authenticated
+/// with the OAuth access token `claude setup-token` issued instead of a
+/// metered API key. A connected delegate therefore always reflects
+/// whatever models the subscription currently has, with no hardcoded
+/// list to fall out of date. A free function (rather than inlined into
+/// `list_models`) so it is directly unit-testable against a wiremock
+/// server without needing a full `CliDelegateAdapter`.
+async fn fetch_claude_models(
+    base_url: &str,
+    oauth_token: &str,
+) -> Result<Vec<ProviderModel>, AdapterError> {
+    let client = reqwest::Client::builder()
+        .user_agent(concat!("holzi/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .map_err(|e| AdapterError::Http {
+            reason: format!("build reqwest client: {e}"),
+        })?;
+    crate::adapters::anthropic::fetch_models(
+        &client,
+        base_url,
+        &crate::adapters::anthropic::ModelsAuth::OAuthBearer(oauth_token.to_string()),
+    )
+    .await
+}
 
 #[async_trait]
 impl ProviderAdapter for CliDelegateAdapter {
-    /// Claude exposes the CLI's own model aliases so the operator can pick
-    /// which one answers; Codex still exposes one synthetic model per
-    /// vendor (its composite id is persisted by the provider refresh path)
-    /// since its CLI has no equivalent per-request model flag wired up yet.
+    /// Claude's model list comes straight from Anthropic's own API (see
+    /// `fetch_claude_models`) rather than a hardcoded list. Codex still
+    /// exposes one synthetic model per vendor (its composite id is
+    /// persisted by the provider refresh path) since it has no equivalent
+    /// models API wired up yet.
     async fn list_models(&self) -> Result<Vec<ProviderModel>, AdapterError> {
         match self.vendor {
-            DelegateVendor::Claude => Ok(CLAUDE_MODEL_ALIASES
-                .iter()
-                .map(|(remote_id, display_name)| ProviderModel {
-                    remote_id: remote_id.to_string(),
-                    display_name: display_name.to_string(),
-                    context_window: None,
-                })
-                .collect()),
+            DelegateVendor::Claude => {
+                let token = std::str::from_utf8(&self.credentials)
+                    .map_err(|_| AdapterError::InvalidCredentials)?
+                    .trim();
+                if token.is_empty() {
+                    return Err(AdapterError::InvalidCredentials);
+                }
+                fetch_claude_models(CLAUDE_API_BASE_URL, token).await
+            }
             DelegateVendor::Codex => {
                 let vendor = self.vendor.as_str();
                 Ok(vec![ProviderModel {

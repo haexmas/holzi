@@ -82,78 +82,120 @@ struct ModelInfo {
     max_input_tokens: Option<i64>,
 }
 
-#[async_trait]
-impl ProviderAdapter for AnthropicAdapter {
-    async fn list_models(&self) -> Result<Vec<ProviderModel>, AdapterError> {
-        let endpoint = format!("{}/v1/models", self.base_url.trim_end_matches('/'));
-        let limit_str = PAGE_LIMIT.to_string();
-        let mut out: Vec<ProviderModel> = Vec::new();
-        let mut after_id: Option<String> = None;
+/// How a caller of [`fetch_models`] authenticates to `/v1/models`. Both
+/// variants hit the exact same public endpoint (docs.claude.com/en/api/
+/// models-list) — only the credential shape differs: a metered API key
+/// (`api_key`-kind providers) vs. the OAuth access token `claude
+/// setup-token` issues for a subscription (`cli_delegate` providers,
+/// which have no API key of their own — see `cli_delegate::fetch_claude_models`).
+pub(crate) enum ModelsAuth {
+    ApiKey(String),
+    /// `anthropic-beta: oauth-2025-04-20` is required alongside the
+    /// bearer token — without it the API treats the request as
+    /// unauthenticated `x-api-key` traffic and rejects it, since OAuth
+    /// bearer auth is otherwise opt-in per request.
+    OAuthBearer(String),
+}
 
-        loop {
-            let mut query: Vec<(&str, &str)> = vec![("limit", limit_str.as_str())];
-            if let Some(after) = after_id.as_deref() {
-                query.push(("after_id", after));
-            }
-            let resp = self
-                .client
+impl ModelsAuth {
+    fn apply(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        match self {
+            ModelsAuth::ApiKey(key) => req.header("x-api-key", key),
+            ModelsAuth::OAuthBearer(token) => req
+                .header("authorization", format!("Bearer {token}"))
+                .header("anthropic-beta", "oauth-2025-04-20"),
+        }
+    }
+}
+
+/// Fetches the live model catalog from `/v1/models`, paginating on
+/// `has_more`. Shared by [`AnthropicAdapter::list_models`] and the
+/// `cli_delegate` Claude adapter (`cli_delegate::fetch_claude_models`) so
+/// neither provider kind hardcodes a model list — both always reflect
+/// whatever Anthropic's API currently reports.
+pub(crate) async fn fetch_models(
+    client: &Client,
+    base_url: &str,
+    auth: &ModelsAuth,
+) -> Result<Vec<ProviderModel>, AdapterError> {
+    let endpoint = format!("{}/v1/models", base_url.trim_end_matches('/'));
+    let limit_str = PAGE_LIMIT.to_string();
+    let mut out: Vec<ProviderModel> = Vec::new();
+    let mut after_id: Option<String> = None;
+
+    loop {
+        let mut query: Vec<(&str, &str)> = vec![("limit", limit_str.as_str())];
+        if let Some(after) = after_id.as_deref() {
+            query.push(("after_id", after));
+        }
+        let req = auth.apply(
+            client
                 .get(&endpoint)
                 .timeout(REQUEST_TIMEOUT)
                 .query(&query)
-                .header("x-api-key", &self.api_key)
-                .header("anthropic-version", ANTHROPIC_VERSION)
-                .send()
-                .await
-                .map_err(|e| AdapterError::Http {
-                    reason: format!("GET {endpoint}: {e}"),
-                })?;
+                .header("anthropic-version", ANTHROPIC_VERSION),
+        );
+        let resp = req.send().await.map_err(|e| AdapterError::Http {
+            reason: format!("GET {endpoint}: {e}"),
+        })?;
 
-            let status = resp.status();
-            if !status.is_success() {
-                let body = truncate_body(resp.text().await.unwrap_or_default());
-                return Err(match status.as_u16() {
-                    401 | 403 => AdapterError::InvalidCredentials,
-                    other => AdapterError::Status {
-                        status: other,
-                        body,
-                    },
+        let status = resp.status();
+        if !status.is_success() {
+            let body = truncate_body(resp.text().await.unwrap_or_default());
+            return Err(match status.as_u16() {
+                401 | 403 => AdapterError::InvalidCredentials,
+                other => AdapterError::Status {
+                    status: other,
+                    body,
+                },
+            });
+        }
+
+        let page: ListModelsPage = resp.json().await.map_err(|e| AdapterError::Parse {
+            reason: format!("decode /v1/models: {e}"),
+        })?;
+        for m in page.data {
+            out.push(ProviderModel {
+                remote_id: m.id,
+                display_name: m.display_name,
+                context_window: m.max_input_tokens.filter(|n| *n > 0),
+            });
+        }
+        if !page.has_more {
+            break;
+        }
+        // Only follow the cursor when it actually advances. A
+        // provider that keeps answering `has_more: true` with a
+        // missing or unchanged `last_id` would otherwise spin
+        // forever, re-fetching the same page and growing `out`
+        // without bound.
+        match page.last_id {
+            Some(id) if after_id.as_deref() != Some(id.as_str()) => after_id = Some(id),
+            Some(_) => {
+                return Err(AdapterError::Parse {
+                    reason: "pagination response has_more=true without an advancing last_id"
+                        .into(),
                 });
             }
-
-            let page: ListModelsPage = resp.json().await.map_err(|e| AdapterError::Parse {
-                reason: format!("decode /v1/models: {e}"),
-            })?;
-            for m in page.data {
-                out.push(ProviderModel {
-                    remote_id: m.id,
-                    display_name: m.display_name,
-                    context_window: m.max_input_tokens.filter(|n| *n > 0),
+            None => {
+                return Err(AdapterError::Parse {
+                    reason: "pagination response has_more=true without last_id".into(),
                 });
-            }
-            if !page.has_more {
-                break;
-            }
-            // Only follow the cursor when it actually advances. A
-            // provider that keeps answering `has_more: true` with a
-            // missing or unchanged `last_id` would otherwise spin
-            // forever, re-fetching the same page and growing `out`
-            // without bound.
-            match page.last_id {
-                Some(id) if after_id.as_deref() != Some(id.as_str()) => after_id = Some(id),
-                Some(_) => {
-                    return Err(AdapterError::Parse {
-                        reason: "pagination response has_more=true without an advancing last_id"
-                            .into(),
-                    });
-                }
-                None => {
-                    return Err(AdapterError::Parse {
-                        reason: "pagination response has_more=true without last_id".into(),
-                    });
-                }
             }
         }
-        Ok(out)
+    }
+    Ok(out)
+}
+
+#[async_trait]
+impl ProviderAdapter for AnthropicAdapter {
+    async fn list_models(&self) -> Result<Vec<ProviderModel>, AdapterError> {
+        fetch_models(
+            &self.client,
+            &self.base_url,
+            &ModelsAuth::ApiKey(self.api_key.clone()),
+        )
+        .await
     }
 
     async fn stream_chat(&self, req: ChatRequest) -> Result<AdapterStream, AdapterError> {
