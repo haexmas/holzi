@@ -1,11 +1,16 @@
 <script setup lang="ts">
 /*
- * Maintainability exception (spaex 500-LoC rule): ~300 lines of script
+ * Maintainability exception (spaex 500-LoC rule): ~270 lines of script
  * plus ~290 of template covering three tabs that share `installed`,
- * `activeModelId` and the download-progress subscription. Splitting the
- * tabs now would lift that shared state into props and events without
- * any test to hold the wiring in place — this component has no
- * executable coverage yet.
+ * `activeModelId` and the download-progress subscription. `installed`,
+ * `catalogEntries`, `activeModelId` and the integrity-dialog flow are
+ * `useModelsStore()` state now, not owned here (they used to be a second,
+ * independent copy of exactly what the chat page's store already
+ * tracks) — but splitting the tabs still means lifting the
+ * component-local half of that shared state (`busyModelId`,
+ * `downloadStates`, the HF-search/update-check state) into props and
+ * events without any test to hold the wiring in place, since this
+ * component has no executable coverage yet.
  *
  * Concrete split plan: add a replay test for the installed-model tab
  * first, then extract the catalog-download tab (`catalogEntries`,
@@ -23,33 +28,45 @@ import type {
 import type {
   DownloadProgressEvent,
   InstalledModel,
-  ModelIntegrityFailure,
 } from '~/composables/useModels'
 import type { CatalogEntryWithFit } from '~/composables/useCatalog'
 
 const { t } = useI18n()
 const {
-  listInstalledAsync,
   deleteAsync,
   downloadFromCatalogAsync,
-  downloadFromHfAsync,
   onDownloadProgress,
   onDownloadComplete,
 } = useModels()
 const { checkUpdatesAsync, installUpdateAsync } = useHuggingFace()
-const { listAsync: listCatalogAsync } = useCatalog()
+
+// Installed/catalog lists, the active model and the integrity-dialog flow
+// all come straight from the same store the chat page uses — this used
+// to be a second, independent copy of that exact state (its own
+// `activeModelId`, its own `loadModelAsync`/integrity-dialog handling),
+// which meant a fix to one side (e.g. the active model's display name)
+// silently didn't apply to the other.
+const modelStore = useModelsStore()
 const {
-  loadModelAsync,
-  loadModelWithIntegrityOverrideAsync,
-  activeModelInfoAsync,
-} = useChat()
+  installedModels: installed,
+  catalogEntries,
+  activeModelId,
+  integrityDialog,
+  integrityBusy,
+  integrityActionError,
+} = storeToRefs(modelStore)
+const {
+  loadModel: loadModelAsync,
+  refreshInstalledAndCatalog,
+  refreshActiveModel,
+  onIntegrityLoadUntrusted: onLoadUntrustedAsync,
+  onIntegrityRepairSource,
+  onIntegrityChooseOther,
+  onIntegrityDialogOpenChange,
+} = modelStore
 
 type Tab = 'catalog' | 'search' | 'installed'
 const activeTab = ref<Tab>('installed')
-
-const installed = ref<InstalledModel[]>([])
-const catalogEntries = ref<CatalogEntryWithFit[]>([])
-const activeModelId = ref<string | null>(null)
 
 const listErrorKey = ref<string | null>(null)
 const listErrorDetail = ref<string | null>(null)
@@ -65,15 +82,15 @@ const installingUpdateId = ref<string | null>(null)
 
 const busyModelId = ref<string | null>(null)
 const deleteErrorKey = ref<string | null>(null)
-const loadErrorKey = ref<string | null>(null)
+// The store's own `lastError` is already a resolved, display-ready
+// string (unlike `listErrorKey`/`deleteErrorKey` below, which are i18n
+// keys rendered through `t()`) — `loadModelAsync` is the store's action,
+// so its failure reads the same way the chat page shows it.
+const loadErrorMessage = ref<string | null>(null)
 const downloadStates = ref<Record<string, DownloadProgressEvent>>({})
 
 let unlistenDownloadProgress: UnlistenFn | null = null
 let unlistenDownloadComplete: UnlistenFn | null = null
-
-const integrityDialog = ref<ModelIntegrityFailure | null>(null)
-const integrityBusy = ref(false)
-const integrityActionError = ref<string | null>(null)
 
 /**
  * Switches tabs and drops the picked repository with it.
@@ -93,14 +110,7 @@ async function reloadAsync() {
   listErrorKey.value = null
   listErrorDetail.value = null
   try {
-    const [installedList, catalogList, active] = await Promise.all([
-      listInstalledAsync(),
-      listCatalogAsync(),
-      activeModelInfoAsync(),
-    ])
-    installed.value = installedList
-    catalogEntries.value = catalogList
-    activeModelId.value = active?.modelId ?? null
+    await Promise.all([refreshInstalledAndCatalog(), refreshActiveModel()])
   } catch (e) {
     listErrorKey.value = hfErrorKey(e)
     listErrorDetail.value = hfErrorDetail(e)
@@ -209,93 +219,47 @@ async function deleteModelAsync(id: string) {
   }
 }
 
-function openIntegrityDialog(modelId: string, e: unknown): boolean {
-  const failure = parseModelIntegrityFailure(modelId, e)
-  if (!failure) return false
-  integrityDialog.value = failure
-  return true
-}
-
+/**
+ * The load itself, and any integrity failure it hits, are handled by the
+ * store's own `loadModel` — it never throws, only ever sets its
+ * `integrityDialog` (handled by the dialog below, wired to the store's
+ * own actions) or `lastError`. `activeModelId` picks up the new model on
+ * its own once `loadModel` resolves, being a computed over the store's
+ * `activeModel`.
+ */
 async function loadModelHereAsync(id: string) {
   busyModelId.value = id
-  loadErrorKey.value = null
+  loadErrorMessage.value = null
   try {
     await loadModelAsync(id)
-    activeModelId.value = id
-  } catch (e) {
-    if (!openIntegrityDialog(id, e)) {
-      loadErrorKey.value = hfErrorKey(e)
+    if (!integrityDialog.value && modelStore.lastError) {
+      loadErrorMessage.value = modelStore.lastError
     }
   } finally {
     busyModelId.value = null
   }
 }
 
-async function onLoadUntrustedAsync() {
-  if (!integrityDialog.value) return
-  integrityBusy.value = true
-  integrityActionError.value = null
-  try {
-    await loadModelWithIntegrityOverrideAsync(integrityDialog.value.modelId)
-    activeModelId.value = integrityDialog.value.modelId
-    integrityDialog.value = null
-    await reloadAsync()
-  } catch (e) {
-    const detail = hfErrorDetail(e)
-    integrityActionError.value = `${t(hfErrorKey(e))}${detail ? `: ${detail}` : ''}`
-  } finally {
-    integrityBusy.value = false
-  }
-}
-
+/**
+ * "Erneut herunterladen" — delegates the actual repair to the store, then
+ * clears this component's own `downloadStates` entry for the repaired
+ * model. The store has no way to do this itself: `downloadStates` (and the
+ * progress-bar overlay it drives) is private to this component, populated
+ * by its own `onDownloadProgress`/`onDownloadComplete` listeners — a
+ * repair re-downloads under the same model id, so without this the
+ * card's progress overlay is left showing stale "download in progress" /
+ * 100% state indefinitely (until the component happens to remount).
+ */
 async function onRepairSourceAsync() {
-  const dialog = integrityDialog.value
-  if (!dialog) return
-  const model = installed.value.find((m) => m.id === dialog.modelId)
-  integrityBusy.value = true
-  integrityActionError.value = null
-  try {
-    if (
-      model?.sourceKind === 'huggingface' &&
-      model.hfRepo &&
-      model.hfFilename
-    ) {
-      await downloadFromHfAsync({
-        repoId: model.hfRepo,
-        filename: model.hfFilename,
-        // Repair reinstalls the stored source: the tracked ref when there
-        // is one, otherwise the pinned commit — never an implicit `main`.
-        revision: model.hfRevisionRef ?? model.hfRevision ?? undefined,
-        name: model.name,
-        contextWindow: model.contextWindow,
-        forceRepair: true,
-      })
-      integrityDialog.value = null
-      await reloadAsync()
-    } else {
-      // Imported models have no remote source to re-fetch automatically;
-      // the operator must re-run the local file import.
-      integrityActionError.value = t('models.integrityDialog.actionFailed')
-    }
-  } catch (e) {
-    const detail = hfErrorDetail(e)
-    integrityActionError.value = `${t(hfErrorKey(e))}${detail ? `: ${detail}` : ''}`
-  } finally {
-    integrityBusy.value = false
-    clearDownloadState(dialog.modelId)
-  }
+  const modelId = integrityDialog.value?.modelId
+  await onIntegrityRepairSource()
+  if (modelId) clearDownloadState(modelId)
 }
 
+/** Closing the dialog after "pick another model" also returns to the installed tab. */
 function onChooseOther() {
-  integrityDialog.value = null
+  onIntegrityChooseOther()
   activeTab.value = 'installed'
-}
-
-function onIntegrityDialogOpenChange(open: boolean) {
-  if (!open) {
-    integrityDialog.value = null
-    integrityActionError.value = null
-  }
 }
 
 function onFilePickerInstalled(_model: InstalledModel) {
@@ -389,8 +353,8 @@ onBeforeUnmount(() => {
             updateErrorDetail
           }}</span>
         </p>
-        <p v-if="loadErrorKey" class="text-sm text-red-500" role="alert">
-          {{ t(loadErrorKey) }}
+        <p v-if="loadErrorMessage" class="text-sm text-red-500" role="alert">
+          {{ loadErrorMessage }}
         </p>
         <p v-if="deleteErrorKey" class="text-sm text-red-500" role="alert">
           {{ t(deleteErrorKey) }}

@@ -26,6 +26,7 @@ import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import type { Message, SendMessageArgs } from '~/composables/useChat'
 import type { PendingApproval } from '~/components/chat/PermissionPrompt.vue'
+import { isAutonomyMode } from '~/composables/usePreferences'
 
 definePageMeta({
   middleware: ['onboarded'],
@@ -48,7 +49,8 @@ const {
   loadErrorModelId,
   loadingLabel,
   noModelsInstalled,
-  activeModelId,
+  displayModelId,
+  displayModelName,
   modelGroups,
   providerList,
   integrityDialog,
@@ -67,12 +69,17 @@ const {
 
 const PERMISSION_MODE_KEY = 'chat.permission_mode'
 const permissionMode = ref<'manual' | 'auto' | 'plan'>('manual')
-// Per-request only (spec 009-autonomous-delegate-mode FR-008): never
-// persisted, never read from a preference on mount — resets to
-// 'standard' after every send (T035).
+const AUTONOMY_MODE_KEY = 'chat.autonomy_mode'
+// Device-scoped default, configured on the Settings page only — no
+// per-chat override control (deliberately simplified UX: a second,
+// delegate-only permission-style menu next to the composer's manual/
+// auto/plan control was confusing). Starts fail-closed until the preference
+// read confirms either the stored value or the unset default ('ungated').
 const autonomyMode = ref<'standard' | 'ungated' | 'gated_permissive'>(
   'standard',
 )
+const autonomyPreferenceLoading = ref(true)
+const autonomyPreferenceError = ref<string | null>(null)
 const pendingApprovals = ref<PendingApproval[]>([])
 const deviceUuid = ref('')
 const permissionModeSaving = ref(false)
@@ -215,7 +222,10 @@ const sendDisabled = computed(
     !activeModel.value ||
     busy.value ||
     modelLoadPending.value ||
-    loadingPhase.value !== null,
+    loadingPhase.value !== null ||
+    (isDelegateModel.value &&
+      (autonomyPreferenceLoading.value ||
+        autonomyPreferenceError.value !== null)),
 )
 
 // Composer/thread errors (`lastError`) and model-lifecycle errors
@@ -233,6 +243,17 @@ const activeMessages = computed<Message[]>(() => {
   if (!activeThreadId.value) return []
   return messagesByThread.value[activeThreadId.value] ?? []
 })
+
+// The chat window (sidebar, header, composer) is always reachable the
+// instant the chat page opens; only the message area itself falls back to
+// the catalog-download state, and only when literally no model is
+// installed/configured anywhere. Picking among models that DO exist
+// happens exclusively through the composer's own model control
+// (`ChatComposerSettingsPopover`) — `modelStore.initialize()` already
+// auto-loads the first available one (spec 002 §FR-014) when nothing is
+// active yet, so there is no separate "choose a model" prompt to show
+// here for that case.
+const showModelSelection = computed(() => noModelsInstalled.value)
 
 /** Scrolls the message viewport to its newest item after rendering. */
 async function scrollToBottom() {
@@ -257,7 +278,6 @@ async function send(retryPending = false) {
     autonomyMode: isDelegateModel.value ? autonomyMode.value : null,
   }
   pendingSend.value = null
-  if (!retry) autonomyMode.value = 'standard'
   turnSetupPending.value = true
   try {
     const result = await chat.sendMessageAsync(request)
@@ -543,6 +563,23 @@ async function updatePermissionMode(mode: 'manual' | 'auto' | 'plan') {
   }
 }
 
+async function reloadAutonomyMode(uuid: string) {
+  autonomyPreferenceLoading.value = true
+  autonomyPreferenceError.value = null
+  try {
+    const stored = await getPrefAsync(
+      { kind: 'device', uuid },
+      AUTONOMY_MODE_KEY,
+    )
+    autonomyMode.value = isAutonomyMode(stored) ? stored : 'ungated'
+  } catch (e: unknown) {
+    autonomyMode.value = 'standard'
+    autonomyPreferenceError.value = errString(e)
+  } finally {
+    autonomyPreferenceLoading.value = false
+  }
+}
+
 function updateEffortLevel(level: string) {
   if (level === 'low' || level === 'medium' || level === 'high') {
     effortLevel.value = level
@@ -580,19 +617,21 @@ onMounted(async () => {
     if (unmounted) return
 
     const device = await currentDeviceInfoAsync()
-    try {
-      const stored = await getPrefAsync(
+    const [permissionResult] = await Promise.allSettled([
+      getPrefAsync(
         { kind: 'device', uuid: device.vaultDeviceUuid },
         PERMISSION_MODE_KEY,
-      )
+      ),
+    ])
+    if (permissionResult.status === 'fulfilled') {
+      const stored = permissionResult.value
       if (stored === 'manual' || stored === 'auto' || stored === 'plan') {
         permissionMode.value = stored
       }
-    } catch {
-      // Keep the default ('manual') if the read fails.
     }
     if (unmounted) return
     deviceUuid.value = device.vaultDeviceUuid
+    await reloadAutonomyMode(device.vaultDeviceUuid)
 
     await modelStore.initialize()
     await refreshThreads()
@@ -887,6 +926,24 @@ onBeforeUnmount(() => {
       </div>
 
       <div
+        v-if="autonomyPreferenceError"
+        class="border-b border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive flex items-start justify-between gap-2"
+        role="alert"
+      >
+        <span
+          >{{ t('settings.autonomyMode.loadFailed') }}:
+          {{ autonomyPreferenceError }}</span
+        >
+        <button
+          class="text-xs underline shrink-0"
+          :disabled="autonomyPreferenceLoading"
+          @click="reloadAutonomyMode(deviceUuid)"
+        >
+          {{ t('chat.loading.retry') }}
+        </button>
+      </div>
+
+      <div
         v-if="loadingLabel"
         class="border-b border-blue-500/20 bg-blue-500/10 p-3 text-sm text-blue-800"
         role="status"
@@ -894,170 +951,165 @@ onBeforeUnmount(() => {
         {{ loadingLabel }}
       </div>
 
-      <ChatModelSelection
-        v-if="
-          noModelsInstalled ||
-          (!activeModel && !modelLoadPending && !loadingPhase)
-        "
-        :busy="busy"
-      />
-
-      <div v-else class="flex-1 flex flex-col overflow-hidden">
+      <div class="flex-1 flex flex-col overflow-hidden">
         <div
           data-messages-scroll
           class="flex-1 min-h-0 overflow-y-auto px-4 py-6 md:px-8"
         >
-          <div
-            v-if="activeMessages.length === 0"
-            class="mx-auto flex h-full max-w-3xl flex-col items-center justify-center text-center"
-          >
+          <ChatModelSelection v-if="showModelSelection" />
+          <template v-else>
             <div
-              class="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-foreground text-background"
-            >
-              <Icon name="lucide:sparkles" class="h-5 w-5" />
-            </div>
-            <h2 class="text-xl font-semibold tracking-tight">
-              {{ t('chat.empty.title') }}
-            </h2>
-            <p class="mt-2 max-w-md text-sm text-muted-foreground">
-              {{
-                t('chat.empty.description', {
-                  modelName: activeModel?.name ?? loadingModelName,
-                })
-              }}
-            </p>
-          </div>
-          <div
-            v-for="m in activeMessages"
-            :key="m.id"
-            class="mx-auto mb-6 flex max-w-3xl gap-3"
-            :class="m.role === 'user' ? 'justify-end' : 'justify-start'"
-          >
-            <div
-              v-if="m.role !== 'user'"
-              class="mt-1 hidden h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-foreground text-background sm:flex"
-            >
-              <Icon
-                :name="
-                  m.role === 'assistant' ? 'lucide:sparkles' : 'lucide:wrench'
-                "
-                class="h-3.5 w-3.5"
-              />
-            </div>
-            <div
-              class="min-w-0 max-w-[min(90%,48rem)]"
-              :class="m.role === 'user' ? 'order-first' : ''"
+              v-if="activeMessages.length === 0"
+              class="mx-auto flex h-full max-w-3xl flex-col items-center justify-center text-center"
             >
               <div
-                class="mb-1 flex items-center gap-2 text-xs text-muted-foreground"
+                class="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-foreground text-background"
               >
-                <template v-if="m.role === 'tool_call'">
-                  {{ t('chat.tool.call', { name: m.toolName }) }}
-                </template>
-                <template v-else-if="m.role === 'tool_result'">
-                  {{
-                    m.toolIsError
-                      ? t('chat.tool.resultError')
-                      : t('chat.tool.result')
-                  }}
-                </template>
-                <template v-else>
-                  {{
-                    m.role === 'user'
-                      ? t('chat.sender.user')
-                      : m.role === 'assistant'
-                        ? t('chat.sender.assistant')
-                        : t('chat.sender.system')
-                  }}
-                  <span
-                    v-if="m.role === 'assistant' && m.completionTokens"
-                    class="ml-2"
-                  >
-                    {{ t('chat.tokens', { count: m.completionTokens }) }}
-                  </span>
-                  <span
-                    v-if="
-                      m.role === 'assistant' &&
-                      delegateAnsweredByLabel(m.modelId)
-                    "
-                    class="ml-2"
-                  >
-                    {{ delegateAnsweredByLabel(m.modelId) }}
-                  </span>
-                  <span
-                    v-if="m.role === 'assistant' && m.autonomyMode"
-                    class="ml-2"
-                  >
-                    {{ t(`chat.autonomy.${m.autonomyMode}`) }}
-                  </span>
-                  <span
-                    v-if="m.finishReason === 'error'"
-                    class="ml-2 text-destructive"
-                  >
-                    {{ t('chat.errorLabel') }}
-                  </span>
-                  <span
-                    v-if="m.finishReason === 'cancelled'"
-                    class="ml-2 text-muted-foreground"
-                  >
-                    {{ t('chat.cancelledLabel') }}
-                  </span>
-                  <span
-                    v-if="m.finishReason === 'tool_limit_reached'"
-                    class="ml-2 text-amber-600"
-                  >
-                    {{ t('chat.tool.limitReached') }}
-                  </span>
-                  <span
-                    v-if="retryingMessageId === m.id"
-                    class="ml-2 text-muted-foreground italic"
-                  >
-                    {{ t('chat.retrying') }}
-                  </span>
-                </template>
+                <Icon name="lucide:sparkles" class="h-5 w-5" />
               </div>
+              <h2 class="text-xl font-semibold tracking-tight">
+                {{ t('chat.empty.title') }}
+              </h2>
+              <p class="mt-2 max-w-md text-sm text-muted-foreground">
+                {{
+                  t('chat.empty.description', {
+                    modelName: activeModel?.name ?? loadingModelName,
+                  })
+                }}
+              </p>
+            </div>
+            <div
+              v-for="m in activeMessages"
+              :key="m.id"
+              class="mx-auto mb-6 flex max-w-3xl gap-3"
+              :class="m.role === 'user' ? 'justify-end' : 'justify-start'"
+            >
               <div
-                class="rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm"
-                :class="{
-                  'whitespace-pre-wrap':
-                    m.role === 'user' ||
-                    m.role === 'tool_call' ||
-                    m.role === 'tool_result',
-                  'bg-foreground text-background': m.role === 'user',
-                  'border border-border bg-background':
-                    m.role === 'assistant' || m.role === 'system',
-                  'rounded-lg bg-muted/30 font-mono text-xs leading-5':
-                    m.role === 'tool_call' ||
-                    (m.role === 'tool_result' && !m.toolIsError),
-                  'rounded-lg bg-destructive/10 text-destructive font-mono text-xs leading-5':
-                    m.role === 'tool_result' && m.toolIsError,
-                }"
+                v-if="m.role !== 'user'"
+                class="mt-1 hidden h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-foreground text-background sm:flex"
               >
-                <template v-if="m.role === 'tool_call'">{{
-                  m.toolInput
-                }}</template>
-                <!-- eslint-disable vue/no-v-html -->
-                <div
-                  v-else-if="m.role === 'assistant' || m.role === 'system'"
-                  class="chat-markdown"
-                  v-html="
-                    renderMarkdown(
-                      m.content || (streamingMessageId === m.id ? '…' : ''),
-                    )
+                <Icon
+                  :name="
+                    m.role === 'assistant' ? 'lucide:sparkles' : 'lucide:wrench'
                   "
+                  class="h-3.5 w-3.5"
                 />
-                <!-- eslint-enable vue/no-v-html -->
-                <template v-else>{{ toolResultContentLabel(m) }}</template>
               </div>
-              <ChatReasoningAccordion
-                v-if="m.role === 'assistant' && reasoningFor(m.id)"
-                :reasoning="reasoningFor(m.id)"
-                :label="t('chat.reasoning.title')"
-                :expanded="expandedReasoning.has(m.id)"
-                @update:expanded="setReasoningExpanded(m.id, $event)"
-              />
+              <div
+                class="min-w-0 max-w-[min(90%,48rem)]"
+                :class="m.role === 'user' ? 'order-first' : ''"
+              >
+                <div
+                  class="mb-1 flex items-center gap-2 text-xs text-muted-foreground"
+                >
+                  <template v-if="m.role === 'tool_call'">
+                    {{ t('chat.tool.call', { name: m.toolName }) }}
+                  </template>
+                  <template v-else-if="m.role === 'tool_result'">
+                    {{
+                      m.toolIsError
+                        ? t('chat.tool.resultError')
+                        : t('chat.tool.result')
+                    }}
+                  </template>
+                  <template v-else>
+                    {{
+                      m.role === 'user'
+                        ? t('chat.sender.user')
+                        : m.role === 'assistant'
+                          ? t('chat.sender.assistant')
+                          : t('chat.sender.system')
+                    }}
+                    <span
+                      v-if="m.role === 'assistant' && m.completionTokens"
+                      class="ml-2"
+                    >
+                      {{ t('chat.tokens', { count: m.completionTokens }) }}
+                    </span>
+                    <span
+                      v-if="
+                        m.role === 'assistant' &&
+                        delegateAnsweredByLabel(m.modelId)
+                      "
+                      class="ml-2"
+                    >
+                      {{ delegateAnsweredByLabel(m.modelId) }}
+                    </span>
+                    <span
+                      v-if="m.role === 'assistant' && m.autonomyMode"
+                      class="ml-2"
+                    >
+                      {{ t(`chat.autonomy.${m.autonomyMode}`) }}
+                    </span>
+                    <span
+                      v-if="m.finishReason === 'error'"
+                      class="ml-2 text-destructive"
+                    >
+                      {{ t('chat.errorLabel') }}
+                    </span>
+                    <span
+                      v-if="m.finishReason === 'cancelled'"
+                      class="ml-2 text-muted-foreground"
+                    >
+                      {{ t('chat.cancelledLabel') }}
+                    </span>
+                    <span
+                      v-if="m.finishReason === 'tool_limit_reached'"
+                      class="ml-2 text-amber-600"
+                    >
+                      {{ t('chat.tool.limitReached') }}
+                    </span>
+                    <span
+                      v-if="retryingMessageId === m.id"
+                      class="ml-2 text-muted-foreground italic"
+                    >
+                      {{ t('chat.retrying') }}
+                    </span>
+                  </template>
+                </div>
+                <div
+                  class="rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm"
+                  :class="{
+                    'whitespace-pre-wrap':
+                      m.role === 'user' ||
+                      m.role === 'tool_call' ||
+                      m.role === 'tool_result',
+                    'bg-foreground text-background': m.role === 'user',
+                    'border border-border bg-background':
+                      m.role === 'assistant' || m.role === 'system',
+                    'rounded-lg bg-muted/30 font-mono text-xs leading-5':
+                      m.role === 'tool_call' ||
+                      (m.role === 'tool_result' && !m.toolIsError),
+                    'rounded-lg bg-destructive/10 text-destructive font-mono text-xs leading-5':
+                      m.role === 'tool_result' && m.toolIsError,
+                  }"
+                >
+                  <template v-if="m.role === 'tool_call'">{{
+                    m.toolInput
+                  }}</template>
+                  <!-- eslint-disable vue/no-v-html -->
+                  <div
+                    v-else-if="m.role === 'assistant' || m.role === 'system'"
+                    class="chat-markdown"
+                    v-html="
+                      renderMarkdown(
+                        m.content || (streamingMessageId === m.id ? '…' : ''),
+                      )
+                    "
+                  />
+                  <!-- eslint-enable vue/no-v-html -->
+                  <template v-else>{{ toolResultContentLabel(m) }}</template>
+                </div>
+                <ChatReasoningAccordion
+                  v-if="m.role === 'assistant' && reasoningFor(m.id)"
+                  :reasoning="reasoningFor(m.id)"
+                  :label="t('chat.reasoning.title')"
+                  :expanded="expandedReasoning.has(m.id)"
+                  @update:expanded="setReasoningExpanded(m.id, $event)"
+                />
+              </div>
             </div>
-          </div>
+          </template>
         </div>
 
         <form
@@ -1085,13 +1137,15 @@ onBeforeUnmount(() => {
                   class="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto text-xs"
                 >
                   <ChatComposerSettingsPopover
-                    :model-id="activeModelId"
-                    :model-name="activeModel?.name"
+                    :model-id="displayModelId"
+                    :model-name="displayModelName"
                     :model-groups="modelGroups"
                     :effort-level="effortLevel"
                     :effort-label="effortLabel"
                     :disabled="busy"
-                    :model-disabled="modelGroups.length === 0"
+                    :model-disabled="
+                      modelGroups.length === 0 || modelLoadPending
+                    "
                     @update:model-id="loadModel"
                     @update:effort-level="updateEffortLevel"
                   />
@@ -1104,13 +1158,6 @@ onBeforeUnmount(() => {
                     @allow="respondToApproval($event, 'allow')"
                     @deny="respondToApproval($event, 'deny')"
                     @cancel="abort"
-                  />
-
-                  <ChatDelegateAutonomyControl
-                    v-if="isDelegateModel"
-                    :mode="autonomyMode"
-                    :disabled="busy"
-                    @update:mode="autonomyMode = $event"
                   />
                 </div>
                 <ChatVoiceInputControl @transcript="onVoiceTranscript" />

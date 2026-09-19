@@ -93,6 +93,13 @@ onMounted(reloadDeviceInfoAsync)
 
       <hr class="border-neutral-200" />
 
+      <SettingsAutonomyModeSetting
+        v-if="deviceInfo"
+        :device-uuid="deviceInfo.vaultDeviceUuid"
+      />
+
+      <hr class="border-neutral-200" />
+
       <SettingsDelegateDenyRulesSetting
         v-if="deviceInfo"
         :device-uuid="deviceInfo.vaultDeviceUuid"

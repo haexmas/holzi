@@ -6,7 +6,7 @@
 // actual IPC boundary (`invoke`/`listen` from `@tauri-apps/api/core`/
 // `event`). No browser or GPU is required.
 //
-// Maintainability exception (spaex 500-LoC rule): 19 replay tests plus the
+// Maintainability exception (spaex 500-LoC rule): 25 replay tests plus the
 // `createChatState` scaffold that boots the page's real `<script setup>`
 // against a sandboxed `require` — a hand-rolled CommonJS loader (using the
 // `typescript` package already a dependency here) that transpiles the page,
@@ -21,7 +21,7 @@
 // array `mount()`/`unmount()` drain), and `dompurify` (needs a real DOM).
 //
 // Concrete split plan, if this grows further: move `createChatState` into
-// `scripts/lib/chat-state-harness.ts` and split the 19 cases by what they
+// `scripts/lib/chat-state-harness.ts` and split the 25 cases by what they
 // exercise — transcript/event ordering, thread sidebar, model lifecycle,
 // and composer/permission state.
 import assert from 'node:assert/strict'
@@ -177,6 +177,11 @@ const DEFAULT_INVOKE_HANDLERS: Record<string, InvokeHandler> = {
   list_catalog: () => [],
   list_providers: () => [],
   current_device_info: () => ({ vaultDeviceUuid: 'device' }),
+  // Inert by default: `active_model_info` above already returns a truthy
+  // model, so `models.ts`'s `autoLoadFirstAvailableModel()` short-circuits
+  // before ever calling this — only reached by a test that overrides
+  // `active_model_info` to simulate nothing being active yet.
+  resolve_default_model: () => ({ modelId: null, source: 'none' }),
 }
 
 const RETURN_STATEMENT = `
@@ -228,8 +233,16 @@ function createChatState(
     }
     if (specifier === 'marked') return nodeRequire('marked')
     if (specifier === '~/composables/useChat') return { useChat: () => chat }
-    if (specifier === '~/composables/usePreferences')
-      return { usePreferences: () => preferences }
+    if (specifier === '~/composables/usePreferences') {
+      // `usePreferences()` itself is overridden below to share the one
+      // `preferences` instance every consumer in this sandbox sees, but its
+      // other named exports (`AUTONOMY_MODES`/`isAutonomyMode`) are plain,
+      // side-effect-free values — running the real module for those costs
+      // nothing and means the page's replayed autonomy-mode validation
+      // exercises the actual shared helper instead of a hand-duplicated one.
+      const real = runComposable(composablePath('usePreferences'), req)
+      return { ...real, usePreferences: () => preferences }
+    }
     if (specifier.startsWith('~/composables/')) {
       const name = specifier.slice('~/composables/'.length)
       const real = runComposable(
@@ -270,6 +283,7 @@ function createChatState(
     useCatalog: () => req('~/composables/useCatalog').useCatalog(),
     useProviders: () => req('~/composables/useProviders').useProviders(),
     useErrorString: () => req('~/composables/useErrorString').useErrorString(),
+    usePreferences: () => preferences,
     parseModelIntegrityFailure: req('~/composables/useModels')
       .parseModelIntegrityFailure,
   }).useModelsStore()
@@ -392,6 +406,84 @@ test('model initialization preserves an active integrity action', async () => {
 
   assert.deepEqual(state.modelStore.integrityDialog, dialog)
   assert.equal(state.modelStore.integrityActionError, 'action still running')
+})
+
+test('model initialization auto-loads the first available model when nothing is active yet (spec 002 FR-014)', async () => {
+  const state = createChatState(
+    {
+      activeModelInfoAsync: async () => null,
+      loadModelAsync: async (modelId: string) => ({
+        modelId,
+        name: 'Auto Picked',
+        tokenizerRepo: '',
+        contextWindow: null,
+      }),
+    },
+    {
+      resolveDefaultModelAsync: async () => ({
+        modelId: 'auto-picked',
+        source: 'first_available',
+      }),
+    },
+  )
+
+  await state.modelStore.initialize()
+
+  assert.equal(state.modelStore.activeModel?.modelId, 'auto-picked')
+})
+
+test('model initialization skips the auto-load fallback when a model is already active', async () => {
+  let loadModelCalls = 0
+  const state = createChatState({
+    loadModelAsync: async (modelId: string) => {
+      loadModelCalls++
+      return { modelId, name: modelId, tokenizerRepo: '', contextWindow: null }
+    },
+  })
+
+  await state.modelStore.initialize()
+
+  assert.equal(state.modelStore.activeModel?.modelId, 'model')
+  assert.equal(loadModelCalls, 0)
+})
+
+test('picking a model updates the composer display before load_model resolves', async () => {
+  let resolveLoad: () => void = () => {}
+  const state = createChatState({
+    loadModelAsync: (modelId: string) =>
+      new Promise((resolve) => {
+        resolveLoad = () =>
+          resolve({
+            modelId,
+            name: 'Qwen 3 4B',
+            tokenizerRepo: '',
+            contextWindow: null,
+          })
+      }),
+  })
+  state.modelStore.installedModels = [{ id: 'qwen3-4b', name: 'Qwen 3 4B' }]
+
+  // `createChatState()` seeds a baseline active model ('model'/'Model') so
+  // this starts from the realistic case: switching away from an already-
+  // loaded model, not just picking a first one.
+  const loadPromise = state.modelStore.loadModel('qwen3-4b')
+
+  // Synchronous portion of `loadModel` (everything before its first
+  // `await`) has already run by the time the call above returns — the
+  // composer's display fields must reflect the pick immediately, without
+  // waiting for `load_model`'s round trip. `activeModel` itself stays on
+  // the previous model until the load actually resolves (`sendDisabled`
+  // depends on that distinction).
+  assert.equal(state.modelStore.displayModelId, 'qwen3-4b')
+  assert.equal(state.modelStore.displayModelName, 'Qwen 3 4B')
+  assert.equal(state.modelStore.activeModel?.modelId, 'model')
+
+  resolveLoad()
+  await loadPromise
+
+  assert.equal(state.modelStore.activeModel?.modelId, 'qwen3-4b')
+  assert.equal(state.modelStore.displayModelId, 'qwen3-4b')
+  assert.equal(state.modelStore.displayModelName, 'Qwen 3 4B')
 })
 
 test('history durations use Unix milliseconds and compact thresholds', () => {

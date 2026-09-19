@@ -87,12 +87,10 @@
     },
     "noModel": "Kein Modell verfügbar",
     "model": {
-      "label": "Modell",
       "choose": "Modell wählen …",
       "local": "Lokale Modelle",
       "notLoaded": "Kein Modell geladen",
       "none": "Keins",
-      "selectPrompt": "Wähle ein Modell aus, um den Chat zu starten.",
       "delegate": {
         "claude": "Claude Code",
         "codex": "Codex"
@@ -197,7 +195,6 @@
       "stopGenerating": "Generierung abbrechen"
     },
     "autonomy": {
-      "modeLabel": "Autonomie",
       "standard": "Standard",
       "ungated": "Ungegated",
       "gated_permissive": "Gegated (permissiv)",
@@ -267,6 +264,17 @@
       "submitCode": "Code einreichen",
       "success": "Verbunden.",
       "error": "Verbindung fehlgeschlagen"
+    },
+    "autonomyMode": {
+      "title": "Autonomie für Delegaten",
+      "description": "Legt fest, wie viel Freiheit ein verbundener Delegat (Claude Code oder Codex) standardmäßig beim Ausführen von Tools bekommt. Gilt nur, sobald ein Delegat verbunden ist, und für dieses Gerät.",
+      "standardDescription": "Tool-Aufrufe durchlaufen dieselbe Freigabe-Regel wie bei allen anderen Modellen (Manuell/Automatisch/Plan, im Chat einstellbar).",
+      "ungatedDescription": "Der Delegat läuft komplett eigenständig, mit seinem eigenen vollständigen Autonomie-Mechanismus — Holzi greift nicht ein und fragt nicht nach.",
+      "gated_permissiveDescription": "Der Delegat darf frei agieren, aber die unten festgelegten Verbotsregeln bleiben tabu — ohne Rückfrage, jede Aktion wird protokolliert.",
+      "save": "Speichern",
+      "saved": "Gespeichert.",
+      "saveFailed": "Autonomie-Voreinstellung konnte nicht gespeichert werden.",
+      "loadFailed": "Autonomie-Voreinstellung konnte nicht geladen werden."
     },
     "denyRules": {
       "title": "Verbotsregeln für Delegaten",

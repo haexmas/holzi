@@ -67,8 +67,13 @@ pub struct SendMessageArgs {
     pub idempotency_key: String,
     /// Per-request autonomy posture for a `cli_delegate` backend (spec
     /// 009-autonomous-delegate-mode). `None` behaves identically to
-    /// `Some(AutonomyMode::Standard)`; never persisted (FR-008) and ignored
-    /// entirely by non-delegate adapters.
+    /// `Some(AutonomyMode::Standard)` and is ignored entirely by
+    /// non-delegate adapters. As of the spec's 2026-09-19 amendment the
+    /// frontend now sources this from a persisted device preference
+    /// (`chat.autonomy_mode`, defaulting to `Ungated`) and always sends a
+    /// concrete value for a delegate model — this `None`/`Standard`
+    /// fallback is a defensive default for an omitted field, not the
+    /// product-level default (see `AutonomyMode`'s own doc comment).
     pub autonomy_mode: Option<AutonomyMode>,
 }
 

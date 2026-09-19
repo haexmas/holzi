@@ -1,36 +1,27 @@
 <script setup lang="ts">
 /**
- * The chat page's "no model loaded yet" states: downloading a catalog
- * model when none are installed, or picking an installed/provider model
- * once at least one is available.
+ * The chat page's "nothing installed/configured yet" state, rendered
+ * inline inside the message area — never blocking the composer or thread
+ * sidebar, so the chat window itself is reachable the instant the page
+ * opens. Only shown when literally no model exists anywhere (parent gates
+ * on `noModelsInstalled`); picking among models that DO exist happens
+ * exclusively through the composer's own model control
+ * (`ChatComposerSettingsPopover`) — see `[instance].vue`.
  *
  * Reads `useModelsStore` directly for its state (`catalogEntries`,
  * `downloadingId`, `downloadProgressBytes`/`downloadTotalBytes`,
- * `activeModelId`, `modelGroups`, `noModelsInstalled`) and calls its
- * actions (`downloadCatalogEntry`, `loadModel`) directly — the only
- * page-local thing this needs is `busy` (the composer's send-in-flight
- * flag), which stays a prop since it has nothing to do with models.
+ * `modelGroups`) and calls its `downloadCatalogEntry` action directly.
  */
 const { t } = useI18n()
 const modelStore = useModelsStore()
 const {
-  noModelsInstalled,
   catalogEntries,
   downloadingId,
   downloadProgressBytes,
   downloadTotalBytes,
-  activeModelId,
   modelGroups,
 } = storeToRefs(modelStore)
-const { downloadCatalogEntry, loadModel } = modelStore
-
-defineProps<{
-  busy: boolean
-}>()
-
-function onModelPicked(event: Event) {
-  void loadModel((event.target as HTMLSelectElement).value)
-}
+const { downloadCatalogEntry } = modelStore
 
 /** Maps a hardware-fit verdict to its localized display label. */
 function fitLabel(f: (typeof catalogEntries.value)[number]['fit']): string {
@@ -68,7 +59,7 @@ function downloadProgressPercent(
 </script>
 
 <template>
-  <div v-if="noModelsInstalled" class="flex-1 overflow-y-auto p-6">
+  <div class="mx-auto w-full max-w-2xl py-6">
     <h2 class="text-lg font-semibold mb-4">
       {{ t('chat.empty.noModelsTitle') }}
     </h2>
@@ -168,41 +159,6 @@ function downloadProgressPercent(
           {{ model.name }}
         </div>
       </div>
-    </div>
-  </div>
-
-  <div
-    v-else
-    class="flex-1 flex items-center justify-center p-6 text-muted-foreground"
-  >
-    <div class="flex w-full max-w-sm flex-col gap-3">
-      <p>{{ t('chat.model.selectPrompt') }}</p>
-      <label for="chat-model-empty" class="sr-only">{{
-        t('chat.model.label')
-      }}</label>
-      <select
-        id="chat-model-empty"
-        class="rounded-lg border border-border bg-background px-3 py-2 text-sm"
-        :value="activeModelId"
-        :disabled="busy"
-        @change="onModelPicked"
-      >
-        <option value="" disabled>{{ t('chat.model.choose') }}</option>
-        <optgroup
-          v-for="group in modelGroups"
-          :key="group.providerId"
-          :label="group.providerName"
-        >
-          <option
-            v-for="m in group.models"
-            :key="m.id"
-            :value="m.id"
-            :disabled="m.disabled"
-          >
-            {{ m.name }}
-          </option>
-        </optgroup>
-      </select>
     </div>
   </div>
 </template>
