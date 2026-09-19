@@ -68,6 +68,7 @@ async fn drain_to_done(mut stream: holzi_lib::adapters::AdapterStream) {
             StreamChunk::Done { .. } => return,
             StreamChunk::ToolCalls(_) => panic!("a delegate must never emit ToolCalls"),
             StreamChunk::Delta { .. } => {}
+            StreamChunk::AgentActivity { .. } => {}
         }
     }
     panic!("stream ended without a Done chunk");
@@ -131,12 +132,14 @@ sys.stdin.readline()
             system_prompt: None,
             messages: vec![ChatMessage {
                 role: ChatRole::User,
+                attachments: Vec::new(),
                 content: "hi".to_string(),
             }],
             reasoning_requested: false,
             max_new_tokens: None,
             tools: Vec::new(),
             autonomy_mode: AutonomyMode::GatedPermissive,
+            effort_level: Default::default(),
         })
         .await
         .expect("stream_chat should start");
@@ -250,12 +253,14 @@ sys.stdin.readline()
             system_prompt: None,
             messages: vec![ChatMessage {
                 role: ChatRole::User,
+                attachments: Vec::new(),
                 content: "hi".to_string(),
             }],
             reasoning_requested: false,
             max_new_tokens: None,
             tools: Vec::new(),
             autonomy_mode: AutonomyMode::Ungated,
+            effort_level: Default::default(),
         })
         .await
         .expect("stream_chat should start");

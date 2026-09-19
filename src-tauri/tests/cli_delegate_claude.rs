@@ -43,12 +43,14 @@ fn sample_request() -> ChatRequest {
         system_prompt: None,
         messages: vec![ChatMessage {
             role: ChatRole::User,
+            attachments: Vec::new(),
             content: "hi".to_string(),
         }],
         reasoning_requested: false,
         max_new_tokens: None,
         tools: Vec::new(),
         autonomy_mode: Default::default(),
+        effort_level: Default::default(),
     }
 }
 
@@ -83,6 +85,7 @@ async fn stream_chat_yields_delta_then_done_and_never_tool_calls() {
                 break;
             }
             StreamChunk::ToolCalls(_) => panic!("a delegate must never emit ToolCalls"),
+            StreamChunk::AgentActivity { .. } => {}
         }
     }
 

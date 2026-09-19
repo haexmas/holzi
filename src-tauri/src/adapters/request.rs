@@ -7,9 +7,11 @@
 //! from `anthropic.rs` so the transport and SSE-decoding side of the
 //! adapter stays readable on its own.
 
+use base64::Engine;
 use serde_json::Value;
 
-use super::types::{ChatRequest, ChatRole};
+use super::effort;
+use super::types::{Attachment, AttachmentKind, ChatRequest, ChatRole};
 
 /// Fallback `max_tokens` cap sent when the request does not carry one.
 /// Anthropic Messages API requires the field, so we substitute a
@@ -54,6 +56,19 @@ pub(super) fn build_messages_body(req: &ChatRequest) -> Value {
                     .clamp(MIN_MANUAL_THINKING_BUDGET, MAX_MANUAL_THINKING_BUDGET),
             })
         };
+    }
+    // Real, provider-native reasoning-effort override (spec
+    // 011-composer-toolbar-parity), independent of `thinking`/
+    // `reasoning_requested` above (research.md §1: "effort works with or
+    // without thinking"). Never sent for a model outside the curated
+    // support table — unlike Claude Code's own `--effort` flag, the direct
+    // API is not documented to fall back gracefully on an unsupported
+    // value.
+    if let Some(requested) = req.effort_level {
+        let supported = effort::anthropic_supported_levels(&req.model_id);
+        if let Some(clamped) = effort::clamp(requested, supported) {
+            body["output_config"] = serde_json::json!({"effort": clamped.as_str()});
+        }
     }
     if !req.tools.is_empty() {
         let tools: Vec<Value> = req
@@ -110,7 +125,15 @@ fn build_messages(messages: &[super::types::ChatMessage]) -> Vec<Value> {
     while i < messages.len() {
         match &messages[i].role {
             ChatRole::User => {
-                out.push(serde_json::json!({"role": "user", "content": messages[i].content}));
+                let content = if messages[i].attachments.is_empty() {
+                    Value::String(messages[i].content.clone())
+                } else {
+                    Value::Array(user_content_blocks(
+                        &messages[i].content,
+                        &messages[i].attachments,
+                    ))
+                };
+                out.push(serde_json::json!({"role": "user", "content": content}));
                 i += 1;
             }
             ChatRole::Assistant => {
@@ -183,4 +206,56 @@ fn build_messages(messages: &[super::types::ChatMessage]) -> Vec<Value> {
         }
     }
     out
+}
+
+/// Builds a `user` message's `content` block array (research.md §3):
+/// the message's own text, if any, followed by one block per attachment.
+/// Only called when at least one attachment is present — a plain-text
+/// user message with no attachments stays a bare string (`build_messages`
+/// above), matching the wire shape every other adapter/test already
+/// expects for the common case.
+fn user_content_blocks(text: &str, attachments: &[Attachment]) -> Vec<Value> {
+    let mut blocks = Vec::new();
+    if !text.is_empty() {
+        blocks.push(serde_json::json!({"type": "text", "text": text}));
+    }
+    for attachment in attachments {
+        blocks.push(attachment_block(attachment));
+    }
+    blocks
+}
+
+/// One Anthropic content block for a single attachment (research.md §3):
+/// base64 `image`/`document` blocks for binary kinds, and a plain
+/// appended `text` block for `Text` — Anthropic's Messages API has no
+/// dedicated "plain text attachment" block, and inlining is simpler and
+/// cheaper than wrapping it as a base64 `document` just to unwrap it again
+/// on the model's side.
+fn attachment_block(attachment: &Attachment) -> Value {
+    match attachment.kind {
+        AttachmentKind::Image => serde_json::json!({
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": attachment.media_type,
+                "data": base64::engine::general_purpose::STANDARD.encode(&attachment.bytes),
+            },
+        }),
+        AttachmentKind::Document => serde_json::json!({
+            "type": "document",
+            "source": {
+                "type": "base64",
+                "media_type": attachment.media_type,
+                "data": base64::engine::general_purpose::STANDARD.encode(&attachment.bytes),
+            },
+        }),
+        AttachmentKind::Text => serde_json::json!({
+            "type": "text",
+            "text": format!(
+                "[Attached file: {}]\n{}",
+                attachment.name,
+                String::from_utf8_lossy(&attachment.bytes),
+            ),
+        }),
+    }
 }

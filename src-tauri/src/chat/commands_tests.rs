@@ -42,6 +42,38 @@ fn reasoning_capability_is_derived_conservatively_from_the_model_id() {
 }
 
 #[test]
+fn effort_levels_are_empty_for_local_and_missing_providers() {
+    assert!(effort_levels_for(Some(ProviderKind::Local), None, "any-model").is_empty());
+    assert!(effort_levels_for(None, None, "any-model").is_empty());
+}
+
+#[test]
+fn effort_levels_for_anthropic_api_key_provider_follow_the_model_table() {
+    let levels = effort_levels_for(
+        Some(ProviderKind::ApiKey),
+        Some("anthropic"),
+        "claude-sonnet-5",
+    );
+    assert!(levels.contains(&EffortLevel::XHigh));
+}
+
+#[test]
+fn effort_levels_for_claude_delegate_are_always_the_full_set() {
+    let levels = effort_levels_for(
+        Some(ProviderKind::CliDelegate),
+        Some("claude"),
+        "whatever-model",
+    );
+    assert!(levels.contains(&EffortLevel::Max));
+    assert!(levels.contains(&EffortLevel::XHigh));
+}
+
+#[test]
+fn effort_levels_for_codex_delegate_are_empty() {
+    assert!(effort_levels_for(Some(ProviderKind::CliDelegate), Some("codex"), "codex").is_empty());
+}
+
+#[test]
 fn tool_requests_disable_reasoning_for_qwen_tool_call_compatibility() {
     let tools = vec![ToolSpec {
         name: "run_command".to_string(),

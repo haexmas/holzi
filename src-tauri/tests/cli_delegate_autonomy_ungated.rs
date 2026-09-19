@@ -46,12 +46,14 @@ fn base_request(model_id: &str, autonomy_mode: AutonomyMode) -> ChatRequest {
         system_prompt: None,
         messages: vec![ChatMessage {
             role: ChatRole::User,
+            attachments: Vec::new(),
             content: "hi".to_string(),
         }],
         reasoning_requested: false,
         max_new_tokens: None,
         tools: Vec::new(),
         autonomy_mode,
+        effort_level: Default::default(),
     }
 }
 
@@ -61,6 +63,7 @@ async fn drain_to_done(mut stream: holzi_lib::adapters::AdapterStream) {
             StreamChunk::Done { .. } => return,
             StreamChunk::ToolCalls(_) => panic!("a delegate must never emit ToolCalls"),
             StreamChunk::Delta { .. } => {}
+            StreamChunk::AgentActivity { .. } => {}
         }
     }
     panic!("stream ended without a Done chunk");

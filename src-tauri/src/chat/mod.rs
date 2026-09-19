@@ -3,6 +3,7 @@
 //! Provider-backed chat is available in every build. Only the local
 //! mistralrs loading path is feature-gated behind `llm-cpu`.
 
+pub mod attachments;
 pub mod commands;
 pub mod default_model;
 pub mod events;

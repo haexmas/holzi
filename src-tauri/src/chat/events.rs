@@ -28,6 +28,7 @@ pub(crate) const EVENT_CHAT_TURN_COMPLETE: &str = "chat-turn-complete";
 pub(crate) const EVENT_TOOL_PERMISSION_REQUEST: &str = "tool-permission-request";
 pub(crate) const EVENT_CHAT_RETRY: &str = "chat-retry";
 const EVENT_MODEL_LOAD_ERROR: &str = "model-load-error";
+pub(crate) const EVENT_CHAT_AGENT_ACTIVITY: &str = "chat-agent-activity";
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -221,6 +222,19 @@ pub(crate) struct TurnCompleteEvent {
     pub(crate) thread_id: Uuid,
     pub(crate) assistant_message_id: Option<Uuid>,
     pub(crate) finish_reason: FinishReason,
+}
+
+/// Payload for `chat-agent-activity` (spec 011-composer-toolbar-parity,
+/// contracts/tauri-commands.md). Only ever emitted while a Claude Code
+/// delegate response is streaming — `batch_size` is set only on the update
+/// where a new batch of that many sub-agents was just confirmed dispatched.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct AgentActivityEvent {
+    pub(crate) message_id: Uuid,
+    pub(crate) active_count: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) batch_size: Option<usize>,
 }
 
 /// Payload for `chat-retry` (contracts/tauri-commands.md). Transient, not

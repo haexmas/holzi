@@ -43,6 +43,11 @@ export interface LoadedModelInfo {
   contextWindow: number | null
 }
 
+/** Real, provider-native reasoning-effort level (spec 011-composer-toolbar-parity),
+ * matching Anthropic's `output_config.effort` and Claude Code's `--effort`
+ * value set exactly (research.md §1) — never a holzi-internal relabeling. */
+export type EffortLevel = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+
 export interface SendMessageArgs {
   threadId?: string | null
   content: string
@@ -63,6 +68,16 @@ export interface SendMessageArgs {
    * ignored entirely by non-delegate backends.
    */
   autonomyMode?: 'standard' | 'ungated' | 'gated_permissive' | null
+  /**
+   * Real reasoning-effort override (spec 011-composer-toolbar-parity).
+   * `null`/omitted means "no override" — the model/backend's own default
+   * applies. Never persisted, same as today's effort setting.
+   */
+  effortLevel?: EffortLevel | null
+  /** Files attached to this message (spec 011-composer-toolbar-parity),
+   * identified by the path the file picker returned. Scoped to this one
+   * send (FR-017) — never carried over to a later message. */
+  attachments?: AttachmentInput[]
 }
 
 export interface SendMessageResult {
@@ -71,6 +86,28 @@ export interface SendMessageResult {
   assistantMessageId: string
   /** The key used for this send; reuse it when retrying the same invoke. */
   idempotencyKey: string
+  /** Names of attachments that could not be read at send time and were
+   * excluded (FR-018) — the rest of the message still sent. */
+  excludedAttachments: string[]
+}
+
+export interface AttachmentInput {
+  path: string
+}
+
+export type AttachmentKind = 'image' | 'document' | 'text'
+
+/** Result of `inspect_attachment` (spec 011-composer-toolbar-parity,
+ * contracts/tauri-commands.md) — called right after the file picker
+ * resolves a path, before the file is staged in the composer. */
+export interface AttachmentInfo {
+  name: string
+  sizeBytes: number
+  /** `null` when the file's extension isn't a supported attachment type
+   * at all (`usable` is then always `false`). */
+  kind: AttachmentKind | null
+  usable: boolean
+  reason?: string
 }
 
 export interface TokenEvent {
@@ -112,6 +149,16 @@ export interface ToolResultEvent {
   toolCallId: string
   content: string
   isError: boolean
+}
+
+/** Fires while a Claude Code delegate response has sub-agents running
+ * (spec 011-composer-toolbar-parity) — never emitted by any other backend.
+ * `batchSize` is present only on the update where a new batch of that many
+ * sub-agents was just confirmed dispatched. */
+export interface AgentActivityEvent {
+  messageId: string
+  activeCount: number
+  batchSize?: number
 }
 
 export type RiskClass = 'safe' | 'risky'
@@ -288,6 +335,29 @@ export function useChat() {
     await invoke('abort_current_generation')
   }
 
+  /**
+   * Returns the reasoning-effort levels the given model/backend actually
+   * supports (contracts/tauri-commands.md `get_effort_levels`) — `[]` when
+   * it supports none, in which case the effort control should be hidden
+   * entirely rather than shown inert.
+   */
+  async function getEffortLevelsAsync(modelId: string): Promise<EffortLevel[]> {
+    return await invoke<EffortLevel[]>('get_effort_levels', { modelId })
+  }
+
+  /**
+   * Classifies a file the user is about to attach and reports whether the
+   * given model/backend can actually use it (contracts/tauri-commands.md
+   * `inspect_attachment`). Called right after the file picker resolves a
+   * path, before it's added to the composer's attachment list.
+   */
+  async function inspectAttachmentAsync(
+    path: string,
+    modelId: string,
+  ): Promise<AttachmentInfo> {
+    return await invoke<AttachmentInfo>('inspect_attachment', { path, modelId })
+  }
+
   /** Resolves an open `tool-permission-request` (contracts §respond_tool_permission). */
   async function respondToolPermissionAsync(
     requestId: string,
@@ -390,6 +460,15 @@ export function useChat() {
     )
   }
 
+  /** Subscribes to `chat-agent-activity` and returns the unlisten function. */
+  async function onAgentActivity(
+    handler: (e: AgentActivityEvent) => void,
+  ): Promise<UnlistenFn> {
+    return await listen<AgentActivityEvent>('chat-agent-activity', (ev) =>
+      handler(ev.payload),
+    )
+  }
+
   /** Subscribes to `chat-retry` and returns the unlisten function. */
   async function onRetry(
     handler: (e: RetryEvent) => void,
@@ -472,6 +551,8 @@ export function useChat() {
     deleteThreadAsync,
     sendMessageAsync,
     abortAsync,
+    getEffortLevelsAsync,
+    inspectAttachmentAsync,
     respondToolPermissionAsync,
     loadModelAsync,
     loadModelWithIntegrityOverrideAsync,
@@ -482,6 +563,7 @@ export function useChat() {
     onMessageError,
     onToolCall,
     onToolResult,
+    onAgentActivity,
     onRetry,
     onTurnComplete,
     onToolPermissionRequest,

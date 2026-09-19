@@ -29,12 +29,14 @@ fn sample_request() -> ChatRequest {
         system_prompt: None,
         messages: vec![ChatMessage {
             role: ChatRole::User,
+            attachments: Vec::new(),
             content: "Reply with exactly the word: pong".to_string(),
         }],
         reasoning_requested: false,
         max_new_tokens: None,
         tools: Vec::new(),
         autonomy_mode: Default::default(),
+        effort_level: Default::default(),
     }
 }
 
@@ -85,6 +87,7 @@ async fn codex_with_a_wrong_credential_fails_instead_of_using_the_hosts_real_log
             }
             Ok(StreamChunk::ToolCalls(_)) => panic!("a delegate must never emit ToolCalls"),
             Ok(StreamChunk::Delta { .. }) => {}
+            Ok(StreamChunk::AgentActivity { .. }) => {}
         }
     }
     assert!(
@@ -129,6 +132,7 @@ async fn claude_with_a_wrong_token_fails_instead_of_using_the_hosts_real_login()
             }
             Ok(StreamChunk::ToolCalls(_)) => panic!("a delegate must never emit ToolCalls"),
             Ok(StreamChunk::Delta { .. }) => {}
+            Ok(StreamChunk::AgentActivity { .. }) => {}
         }
     }
     assert!(

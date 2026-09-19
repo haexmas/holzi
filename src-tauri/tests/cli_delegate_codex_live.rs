@@ -38,12 +38,14 @@ async fn spawn_codex_app_server_answers_a_real_question() {
         system_prompt: None,
         messages: vec![ChatMessage {
             role: ChatRole::User,
+            attachments: Vec::new(),
             content: "Reply with exactly the word: pong".to_string(),
         }],
         reasoning_requested: false,
         max_new_tokens: None,
         tools: Vec::new(),
         autonomy_mode: Default::default(),
+        effort_level: Default::default(),
     };
 
     let mut stream = adapter
@@ -61,6 +63,7 @@ async fn spawn_codex_app_server_answers_a_real_question() {
                 break;
             }
             StreamChunk::ToolCalls(_) => panic!("a delegate must never emit ToolCalls"),
+            StreamChunk::AgentActivity { .. } => {}
         }
     }
 

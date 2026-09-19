@@ -29,6 +29,7 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::adapters::cli_delegate::autonomy::AutonomyMode;
+use crate::adapters::effort::EffortLevel;
 use crate::adapters::types::{ChatMessage as LlmMessage, ChatRequest, ChatRole, ToolSpec};
 use crate::chat::tools::{ApprovalDecision, ToolRegistry};
 use crate::error::{HolziError, Result};
@@ -75,6 +76,27 @@ pub struct SendMessageArgs {
     /// fallback is a defensive default for an omitted field, not the
     /// product-level default (see `AutonomyMode`'s own doc comment).
     pub autonomy_mode: Option<AutonomyMode>,
+    /// Real, provider-native reasoning-effort override (spec
+    /// 011-composer-toolbar-parity). `None` means "no override" — see
+    /// `ChatRequest::effort_level`. Never persisted, mirroring today's
+    /// effort setting.
+    pub effort_level: Option<EffortLevel>,
+    /// Files attached to this message (spec 011-composer-toolbar-parity).
+    /// Scoped to this one send — never persisted or carried over to a
+    /// later message (FR-017). Each path was already validated once via
+    /// `inspect_attachment`; `send_message` re-validates at send time
+    /// (FR-018) rather than trusting that earlier check.
+    #[serde(default)]
+    pub attachments: Vec<AttachmentInput>,
+}
+
+/// One attachment the frontend picked, identified by its filesystem path
+/// (contracts/tauri-commands.md `send_message`). Content is read fresh by
+/// `send_message` itself, not carried over the wire from the frontend.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AttachmentInput {
+    pub path: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -83,6 +105,13 @@ pub struct SendMessageResult {
     pub thread_id: Uuid,
     pub user_message_id: Uuid,
     pub assistant_message_id: Uuid,
+    /// Names of attachments that were staged but could not be read at send
+    /// time (FR-018 — e.g. deleted from disk after being attached) and
+    /// were therefore excluded; the rest of the message still sent. Empty
+    /// on the common path, and always empty for a duplicate/idempotent
+    /// retry (nothing new was read for those).
+    #[serde(default)]
+    pub excluded_attachments: Vec<String>,
 }
 
 /// Converts persisted history rows into the adapter-neutral message shape
@@ -94,10 +123,12 @@ fn history_to_messages(history: &[ChatMessage]) -> Vec<LlmMessage> {
         .filter_map(|m| match m.role {
             MessageRole::User => Some(LlmMessage {
                 role: ChatRole::User,
+                attachments: Vec::new(),
                 content: m.content.clone(),
             }),
             MessageRole::Assistant => Some(LlmMessage {
                 role: ChatRole::Assistant,
+                attachments: Vec::new(),
                 content: m.content.clone(),
             }),
             MessageRole::System => None,
@@ -113,6 +144,7 @@ fn history_to_messages(history: &[ChatMessage]) -> Vec<LlmMessage> {
                         name: m.tool_name.clone().unwrap_or_default(),
                         input,
                     },
+                    attachments: Vec::new(),
                     content: String::new(),
                 })
             }
@@ -122,6 +154,7 @@ fn history_to_messages(history: &[ChatMessage]) -> Vec<LlmMessage> {
                     content: m.content.clone(),
                     is_error: m.tool_is_error.unwrap_or(false),
                 },
+                attachments: Vec::new(),
                 content: String::new(),
             }),
         })
@@ -183,6 +216,137 @@ fn reasoning_requested_for(model_id: &str, tools: &[ToolSpec]) -> bool {
     let is_qwen3_tool_request =
         model_id.to_ascii_lowercase().contains("qwen3") && !tools.is_empty();
     model_supports_reasoning(model_id) && !is_qwen3_tool_request
+}
+
+/// Pure resolution of which effort levels apply to a provider row (spec
+/// 011-composer-toolbar-parity, contracts/tauri-commands.md
+/// `get_effort_levels`). `kind: None` is a bare/local composite id (no
+/// provider row at all) — always no levels. Split out from
+/// [`get_effort_levels`] so it is directly unit-testable without a
+/// database, mirroring `reasoning_requested_for`/`model_supports_reasoning`
+/// above.
+fn effort_levels_for(
+    kind: Option<ProviderKind>,
+    adapter: Option<&str>,
+    model_id: &str,
+) -> Vec<EffortLevel> {
+    match kind {
+        Some(ProviderKind::ApiKey) if adapter == Some("anthropic") => {
+            crate::adapters::effort::anthropic_supported_levels(model_id).to_vec()
+        }
+        Some(ProviderKind::CliDelegate) if adapter == Some("claude") => {
+            crate::adapters::effort::claude_delegate_levels().to_vec()
+        }
+        // Local models, non-Anthropic api_key vendors (none exist yet), and
+        // the Codex delegate have no controllable effort level (spec.md
+        // Out of scope) — FR-003 hides the control entirely for these.
+        Some(ProviderKind::ApiKey)
+        | Some(ProviderKind::CliDelegate)
+        | Some(ProviderKind::Local)
+        | None => Vec::new(),
+    }
+}
+
+/// Returns the reasoning-effort levels the given model/backend actually
+/// supports, as their wire-level strings (contracts/tauri-commands.md) —
+/// `[]` when it supports none, in which case the frontend hides the effort
+/// control entirely (FR-003). `model_id` is the same composite id
+/// (`"<provider-uuid>:<remote-id>"`) or bare local id used by
+/// `load_model`/`active_model_info`.
+#[tauri::command]
+pub async fn get_effort_levels(
+    state: State<'_, AppState>,
+    model_id: String,
+) -> Result<Vec<String>> {
+    let Some((provider_id_str, remote_id)) = model_id.split_once(':') else {
+        return Ok(Vec::new());
+    };
+    let provider_id = Uuid::parse_str(provider_id_str).map_err(|_| HolziError::InvalidInput {
+        reason: format!("bad composite model id: {model_id}"),
+    })?;
+    let remote_id = remote_id.to_string();
+    let db = active_database(&state)?;
+    let provider = tauri::async_runtime::spawn_blocking(move || {
+        db.with_connection(|conn| {
+            crate::storage::providers::get_provider(conn, provider_id)
+                .map_err(haex_crdt::Error::from)
+        })
+    })
+    .await
+    .map_err(|e| HolziError::CrdtInit {
+        reason: format!("get_provider join: {e}"),
+    })?
+    .map_err(HolziError::from)?;
+    let levels = match provider {
+        Some(p) => effort_levels_for(Some(p.kind), p.adapter.as_deref(), &remote_id),
+        None => Vec::new(),
+    };
+    Ok(levels.into_iter().map(|l| l.as_str().to_string()).collect())
+}
+
+/// Classifies a file the user is about to attach and reports whether the
+/// currently selected model/backend can actually use it (spec
+/// 011-composer-toolbar-parity, contracts/tauri-commands.md
+/// `inspect_attachment`) — called right after the file picker resolves, so
+/// the composer can show the reason before the message is sent (FR-015/
+/// FR-016). `model_id` is the same composite/local id `get_effort_levels`
+/// takes. Errors only when `path` itself cannot be read/stat'd at all; an
+/// oversized or unsupported-type file still resolves normally with
+/// `usable: false`.
+#[tauri::command]
+pub async fn inspect_attachment(
+    state: State<'_, AppState>,
+    path: String,
+    model_id: String,
+) -> Result<crate::chat::attachments::AttachmentInfo> {
+    let mut info = tauri::async_runtime::spawn_blocking({
+        let path = path.clone();
+        move || crate::chat::attachments::classify_attachment(std::path::Path::new(&path))
+    })
+    .await
+    .map_err(|e| HolziError::CrdtInit {
+        reason: format!("classify_attachment join: {e}"),
+    })??;
+
+    let Some(kind) = info.kind else {
+        return Ok(info);
+    };
+    let (provider_kind, adapter) = if let Some((provider_id_str, _)) = model_id.split_once(':') {
+        let provider_id =
+            Uuid::parse_str(provider_id_str).map_err(|_| HolziError::InvalidInput {
+                reason: format!("bad composite model id: {model_id}"),
+            })?;
+        let db = active_database(&state)?;
+        let provider = tauri::async_runtime::spawn_blocking(move || {
+            db.with_connection(|conn| {
+                crate::storage::providers::get_provider(conn, provider_id)
+                    .map_err(haex_crdt::Error::from)
+            })
+        })
+        .await
+        .map_err(|e| HolziError::CrdtInit {
+            reason: format!("get_provider join: {e}"),
+        })?
+        .map_err(HolziError::from)?;
+        match provider {
+            Some(p) => (Some(p.kind), p.adapter),
+            None => (None, None),
+        }
+    } else {
+        (Some(ProviderKind::Local), None)
+    };
+
+    let usable = match provider_kind {
+        Some(kind_provider) => {
+            crate::chat::attachments::usability_for(&kind.into(), kind_provider, adapter.as_deref())
+        }
+        None => false,
+    };
+    if !usable {
+        info.usable = false;
+        info.reason = Some("not usable by the selected model".to_string());
+    }
+    Ok(info)
 }
 
 /// Persists a user message, spawns a streaming generation, returns
@@ -248,6 +412,7 @@ pub async fn send_message(
                 thread_id,
                 user_message_id,
                 assistant_message_id,
+                excluded_attachments: Vec::new(),
             });
         }
         IdempotentSend::Fresh { .. } => {}
@@ -307,6 +472,7 @@ pub async fn send_message(
                 thread_id,
                 user_message_id,
                 assistant_message_id,
+                excluded_attachments: Vec::new(),
             });
         }
         PersistedSend::Fresh {
@@ -360,11 +526,45 @@ pub async fn send_message(
     };
     let reasoning_requested = reasoning_requested_for(&request_model_id, &tools);
 
+    // Re-read each attachment fresh at send time (FR-018) rather than
+    // trusting the earlier `inspect_attachment` check — a file can vanish
+    // or change in between. A failure excludes just that one attachment
+    // (reported back via `excluded_attachments`) instead of failing the
+    // whole send.
+    let attachment_paths: Vec<String> = args.attachments.iter().map(|a| a.path.clone()).collect();
+    let (read_attachments, excluded_attachments) =
+        tauri::async_runtime::spawn_blocking(move || {
+            let mut read = Vec::new();
+            let mut excluded = Vec::new();
+            for path in attachment_paths {
+                match crate::chat::attachments::read_attachment_content(std::path::Path::new(&path))
+                {
+                    Ok(attachment) => read.push(attachment),
+                    Err(_) => excluded.push(
+                        std::path::Path::new(&path)
+                            .file_name()
+                            .map(|n| n.to_string_lossy().into_owned())
+                            .unwrap_or(path),
+                    ),
+                }
+            }
+            (read, excluded)
+        })
+        .await
+        .map_err(|e| HolziError::CrdtInit {
+            reason: format!("attachment read join: {e}"),
+        })?;
+
+    let mut messages = history_to_messages(&history);
+    if let Some(current_turn_message) = messages.last_mut() {
+        current_turn_message.attachments = read_attachments;
+    }
+
     let request = ChatRequest {
         model_id: request_model_id,
         thread_id: Some(thread_id),
         system_prompt: args.system_prompt.clone(),
-        messages: history_to_messages(&history),
+        messages,
         reasoning_requested,
         max_new_tokens: args.max_new_tokens,
         tools,
@@ -378,6 +578,7 @@ pub async fn send_message(
         } else {
             AutonomyMode::Standard
         },
+        effort_level: args.effort_level,
     };
 
     let mut attempt = 0;
@@ -487,6 +688,7 @@ pub async fn send_message(
         thread_id,
         user_message_id,
         assistant_message_id,
+        excluded_attachments,
     })
 }
 

@@ -10,6 +10,7 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 use super::cli_delegate::autonomy::AutonomyMode;
+use super::effort::EffortLevel;
 
 /// Which speaker a message belongs to. `System` is passed separately in
 /// [`ChatRequest::system_prompt`] because both mistralrs and Anthropic
@@ -36,13 +37,37 @@ pub enum ChatRole {
     },
 }
 
+/// A file the user attached to a message (spec 011-composer-toolbar-parity).
+/// Built by `chat::attachments::read_attachment_content` from a path the
+/// frontend picked; never persisted (spec.md Out of scope) — populated only
+/// on the current turn's user message, `content` and `media_type` already
+/// resolved so adapters never need to touch the filesystem themselves.
+#[derive(Debug, Clone, PartialEq)]
+pub enum AttachmentKind {
+    Image,
+    Document,
+    Text,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Attachment {
+    pub name: String,
+    pub kind: AttachmentKind,
+    /// e.g. `"image/png"`, `"application/pdf"`, `"text/plain"`.
+    pub media_type: String,
+    pub bytes: Vec<u8>,
+}
+
 /// `content` is only meaningful for `role: ChatRole::User | Assistant` —
 /// `ToolCall`/`ToolResult` carry their payload on the role variant itself
-/// and leave this empty.
+/// and leave this empty. `attachments` is only ever populated on the
+/// current turn's `User` message (spec 011-composer-toolbar-parity);
+/// historical rows always carry an empty list.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ChatMessage {
     pub role: ChatRole,
     pub content: String,
+    pub attachments: Vec<Attachment>,
 }
 
 /// A tool an adapter may offer the model this step. Reused as-is for
@@ -96,6 +121,13 @@ pub struct ChatRequest {
     /// any other field but never reads it. Defaults to `Standard`, which is
     /// byte-for-byte today's shipped behavior.
     pub autonomy_mode: AutonomyMode,
+    /// Real, provider-native reasoning-effort override (spec
+    /// 011-composer-toolbar-parity). `None` means "no override" — the
+    /// direct-API adapter omits `output_config.effort` (API default
+    /// applies) and the Claude Code delegate omits `--effort` (CLI default
+    /// applies). Independent of `reasoning_requested`/`max_new_tokens`
+    /// (FR-006) and of the local adapter, which never reads this field.
+    pub effort_level: Option<EffortLevel>,
 }
 
 /// One event on an [`AdapterStream`]. `Delta` carries either content,
@@ -112,6 +144,15 @@ pub enum StreamChunk {
         reasoning: Option<String>,
     },
     ToolCalls(Vec<ToolCall>),
+    /// Live sub-agent activity for a Claude Code delegate response (spec
+    /// 011-composer-toolbar-parity) — only ever produced by that adapter;
+    /// every other adapter's `StreamChunk` stream simply never contains
+    /// this variant. `batch_size` is set only on the chunk where a new
+    /// batch of that many sub-agents was just confirmed dispatched.
+    AgentActivity {
+        active_count: usize,
+        batch_size: Option<usize>,
+    },
     Done {
         finish_reason: Option<String>,
         prompt_tokens: Option<usize>,

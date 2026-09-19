@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-
-type EffortLevel = 'low' | 'medium' | 'high'
+import type { EffortLevel } from '~/composables/useChat'
 
 type ModelGroup = {
   providerId: string
@@ -10,12 +9,19 @@ type ModelGroup = {
 }
 
 const MODEL_NAME_MAX_LENGTH = 20
+/** Sentinel `ShadcnSelect` value for "no override" (`effortLevel: null`) —
+ * Reka UI's Select works over strings, so `null` never appears on the wire
+ * between this component and its select. */
+const AUTO_VALUE = 'auto'
 
 const props = defineProps<{
   modelId: string
   modelName?: string
   modelGroups: ModelGroup[]
-  effortLevel: EffortLevel
+  /** Levels the active model/backend actually supports; empty hides the
+   * effort section entirely (spec 011-composer-toolbar-parity FR-003). */
+  effortLevels: EffortLevel[]
+  effortLevel: EffortLevel | null
   effortLabel: string
   disabled?: boolean
   modelDisabled?: boolean
@@ -25,7 +31,7 @@ const { t } = useI18n()
 
 const emit = defineEmits<{
   'update:modelId': [modelId: string]
-  'update:effortLevel': [effortLevel: EffortLevel]
+  'update:effortLevel': [effortLevel: EffortLevel | null]
 }>()
 
 const root = ref<HTMLElement | null>(null)
@@ -33,7 +39,6 @@ const trigger = ref<HTMLButtonElement | null>(null)
 const popover = ref<HTMLElement | null>(null)
 const isOpen = ref(false)
 const popoverStyle = ref<Record<string, string>>({})
-const effortLevels: EffortLevel[] = ['low', 'medium', 'high']
 
 const truncatedModelName = computed(() => {
   const name = props.modelName || t('chat.model.choose')
@@ -43,23 +48,16 @@ const truncatedModelName = computed(() => {
     : name
 })
 
-const effortIndex = computed(() => effortLevels.indexOf(props.effortLevel))
-
-function updateEffort(value: number) {
-  const level =
-    effortLevels[
-      Math.max(0, Math.min(effortLevels.length - 1, Math.round(value)))
-    ]
-  if (level) emit('update:effortLevel', level)
-}
-
 function updateModel(value: unknown) {
   if (typeof value === 'string') emit('update:modelId', value)
 }
 
-function updateEffortFromSlider(value: unknown) {
-  if (Array.isArray(value) && typeof value[0] === 'number')
-    updateEffort(value[0])
+function updateEffort(value: unknown) {
+  if (typeof value !== 'string') return
+  emit(
+    'update:effortLevel',
+    value === AUTO_VALUE ? null : (value as EffortLevel),
+  )
 }
 
 function positionPopover() {
@@ -226,36 +224,38 @@ onBeforeUnmount(() => {
           </ShadcnSelectContent>
         </ShadcnSelect>
 
-        <div class="flex items-center justify-between gap-3">
+        <div v-if="effortLevels.length" class="mt-1">
           <label
             for="effort-level-popover"
-            class="text-xs font-medium text-muted-foreground"
+            class="mb-1 block text-xs font-medium text-muted-foreground"
           >
             {{ t('chat.composer.settingsPopover.effortLabel') }}
           </label>
-          <output for="effort-level-popover" class="text-sm font-medium">
-            {{ effortLabel }}
-          </output>
-        </div>
-        <ShadcnSlider
-          id="effort-level-popover"
-          class="mt-2 px-1 py-1 [&_[data-slot=slider-thumb]]:size-6 [&_[data-slot=slider-track]]:h-2.5"
-          :model-value="[effortIndex]"
-          :min="0"
-          :max="2"
-          :step="1"
-          :disabled="disabled"
-          :aria-label="t('chat.composer.settingsPopover.effortLabel')"
-          :aria-valuetext="effortLabel"
-          @update:model-value="updateEffortFromSlider"
-        />
-        <div
-          class="mt-1 flex justify-between text-[10px] text-muted-foreground"
-          aria-hidden="true"
-        >
-          <span>{{ t('chat.effort.low') }}</span>
-          <span>{{ t('chat.effort.medium') }}</span>
-          <span>{{ t('chat.effort.high') }}</span>
+          <ShadcnSelect
+            :model-value="effortLevel ?? AUTO_VALUE"
+            :disabled="disabled"
+            @update:model-value="updateEffort"
+          >
+            <ShadcnSelectTrigger
+              id="effort-level-popover"
+              :aria-label="t('chat.composer.settingsPopover.effortLabel')"
+              class="h-9 w-full bg-background text-sm"
+            >
+              <ShadcnSelectValue />
+            </ShadcnSelectTrigger>
+            <ShadcnSelectContent>
+              <ShadcnSelectItem :value="AUTO_VALUE">
+                {{ t('chat.effort.auto') }}
+              </ShadcnSelectItem>
+              <ShadcnSelectItem
+                v-for="level in effortLevels"
+                :key="level"
+                :value="level"
+              >
+                {{ t(`chat.effort.${level}`) }}
+              </ShadcnSelectItem>
+            </ShadcnSelectContent>
+          </ShadcnSelect>
         </div>
       </div>
     </Teleport>

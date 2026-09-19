@@ -76,6 +76,10 @@
     }
   },
   "chat": {
+    "agentActivity": {
+      "count": "{count} Agent | {count} Agenten",
+      "batchTitle": "Batch aus {count} gemeinsam gestarteten Agenten"
+    },
     "loading": {
       "connecting": "Verbinde mit {providerName}…",
       "loading": "Lade {modelName}…",
@@ -157,13 +161,22 @@
         "title": "Chat-Einstellungen",
         "modelLabel": "Modell",
         "effortLabel": "Aufwand"
+      },
+      "attachments": {
+        "attachButton": "Dateien anhängen",
+        "filterName": "Anhänge",
+        "remove": "{name} entfernen",
+        "excluded": "Konnte nicht angehängt werden: {names}"
       }
     },
     "effort": {
       "label": "Effort",
+      "auto": "Automatisch",
       "low": "Niedrig",
       "medium": "Mittel",
-      "high": "Hoch"
+      "high": "Hoch",
+      "xhigh": "Sehr hoch",
+      "max": "Maximal"
     },
     "reasoning": {
       "label": "Reasoning",

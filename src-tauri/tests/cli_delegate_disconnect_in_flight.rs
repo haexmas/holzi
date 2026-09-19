@@ -100,12 +100,14 @@ async fn disconnect_during_a_response_does_not_affect_that_response() {
             system_prompt: None,
             messages: vec![ChatMessage {
                 role: ChatRole::User,
+                attachments: Vec::new(),
                 content: "hi".to_string(),
             }],
             reasoning_requested: false,
             max_new_tokens: None,
             tools: Vec::new(),
             autonomy_mode: Default::default(),
+            effort_level: Default::default(),
         })
         .await
         .expect("stream_chat should start");
@@ -136,6 +138,7 @@ async fn disconnect_during_a_response_does_not_affect_that_response() {
                 break;
             }
             StreamChunk::ToolCalls(_) => panic!("a delegate must never emit ToolCalls"),
+            StreamChunk::AgentActivity { .. } => {}
         }
     }
 

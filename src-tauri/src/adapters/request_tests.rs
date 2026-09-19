@@ -7,8 +7,9 @@ use wiremock::matchers::{body_json, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::anthropic::AnthropicAdapter;
+use super::effort::EffortLevel;
 use super::request::build_messages_body;
-use super::types::{ChatMessage, ChatRequest, ChatRole};
+use super::types::{Attachment, AttachmentKind, ChatMessage, ChatRequest, ChatRole};
 use super::ProviderAdapter;
 
 fn sample_request(model: &str) -> ChatRequest {
@@ -18,12 +19,14 @@ fn sample_request(model: &str) -> ChatRequest {
         system_prompt: None,
         messages: vec![ChatMessage {
             role: ChatRole::User,
+            attachments: Vec::new(),
             content: "hi".to_string(),
         }],
         reasoning_requested: false,
         max_new_tokens: Some(128),
         tools: Vec::new(),
         autonomy_mode: Default::default(),
+        effort_level: Default::default(),
     }
 }
 
@@ -46,6 +49,84 @@ fn reasoning_capability_controls_anthropic_thinking_request() {
     let adaptive = build_messages_body(&request);
     assert_eq!(adaptive["thinking"]["type"], "adaptive");
     assert!(adaptive["thinking"].get("budget_tokens").is_none());
+}
+
+#[test]
+fn effort_level_is_omitted_when_not_requested() {
+    let request = sample_request("claude-sonnet-5");
+    let body = build_messages_body(&request);
+    assert!(body.get("output_config").is_none());
+}
+
+#[test]
+fn effort_level_is_sent_when_the_model_supports_it() {
+    let mut request = sample_request("claude-sonnet-5");
+    request.effort_level = Some(EffortLevel::XHigh);
+    let body = build_messages_body(&request);
+    assert_eq!(body["output_config"]["effort"], "xhigh");
+}
+
+#[test]
+fn effort_level_clamps_down_for_a_model_without_that_level() {
+    let mut request = sample_request("claude-opus-4-6");
+    request.effort_level = Some(EffortLevel::XHigh);
+    let body = build_messages_body(&request);
+    // claude-opus-4-6 supports `max` but not `xhigh` (research.md §1) — the
+    // request must clamp down to the nearest supported level, never send
+    // an unsupported one.
+    assert_eq!(body["output_config"]["effort"], "high");
+}
+
+#[test]
+fn effort_level_is_never_sent_for_a_model_outside_the_support_table() {
+    let mut request = sample_request("claude-3-5-sonnet-20241022");
+    request.effort_level = Some(EffortLevel::Low);
+    let body = build_messages_body(&request);
+    assert!(body.get("output_config").is_none());
+}
+
+#[test]
+fn a_user_message_with_no_attachments_stays_a_plain_string() {
+    let request = sample_request("claude-sonnet-5");
+    let body = build_messages_body(&request);
+    assert_eq!(body["messages"][0]["content"], "hi");
+}
+
+#[test]
+fn an_image_attachment_becomes_a_base64_image_block_alongside_the_text() {
+    let mut request = sample_request("claude-sonnet-5");
+    request.messages[0].attachments.push(Attachment {
+        name: "photo.png".to_string(),
+        kind: AttachmentKind::Image,
+        media_type: "image/png".to_string(),
+        bytes: vec![1, 2, 3],
+    });
+    let body = build_messages_body(&request);
+    let content = &body["messages"][0]["content"];
+    assert_eq!(content[0]["type"], "text");
+    assert_eq!(content[0]["text"], "hi");
+    assert_eq!(content[1]["type"], "image");
+    assert_eq!(content[1]["source"]["media_type"], "image/png");
+    assert!(!content[1]["source"]["data"].as_str().unwrap().is_empty());
+}
+
+#[test]
+fn a_text_attachment_is_inlined_as_an_extra_text_block() {
+    let mut request = sample_request("claude-sonnet-5");
+    request.messages[0].attachments.push(Attachment {
+        name: "notes.txt".to_string(),
+        kind: AttachmentKind::Text,
+        media_type: "text/plain".to_string(),
+        bytes: b"hello from a file".to_vec(),
+    });
+    let body = build_messages_body(&request);
+    let content = &body["messages"][0]["content"];
+    assert_eq!(content[1]["type"], "text");
+    assert!(content[1]["text"].as_str().unwrap().contains("notes.txt"));
+    assert!(content[1]["text"]
+        .as_str()
+        .unwrap()
+        .contains("hello from a file"));
 }
 
 fn sse_body(events: &[(&str, serde_json::Value)]) -> String {
@@ -134,10 +215,12 @@ async fn stream_chat_groups_ordered_tool_calls_and_results_into_two_messages() {
         messages: vec![
             ChatMessage {
                 role: ChatRole::User,
+                attachments: Vec::new(),
                 content: "hi".to_string(),
             },
             ChatMessage {
                 role: ChatRole::Assistant,
+                attachments: Vec::new(),
                 content: "I will check that.".to_string(),
             },
             ChatMessage {
@@ -146,6 +229,7 @@ async fn stream_chat_groups_ordered_tool_calls_and_results_into_two_messages() {
                     name: "first".to_string(),
                     input: serde_json::json!({"x": 1}),
                 },
+                attachments: Vec::new(),
                 content: String::new(),
             },
             ChatMessage {
@@ -154,6 +238,7 @@ async fn stream_chat_groups_ordered_tool_calls_and_results_into_two_messages() {
                     name: "second".to_string(),
                     input: serde_json::json!({"y": 2}),
                 },
+                attachments: Vec::new(),
                 content: String::new(),
             },
             ChatMessage {
@@ -162,6 +247,7 @@ async fn stream_chat_groups_ordered_tool_calls_and_results_into_two_messages() {
                     content: "result-a".to_string(),
                     is_error: false,
                 },
+                attachments: Vec::new(),
                 content: String::new(),
             },
             ChatMessage {
@@ -170,6 +256,7 @@ async fn stream_chat_groups_ordered_tool_calls_and_results_into_two_messages() {
                     content: "result-b".to_string(),
                     is_error: true,
                 },
+                attachments: Vec::new(),
                 content: String::new(),
             },
         ],
@@ -177,6 +264,7 @@ async fn stream_chat_groups_ordered_tool_calls_and_results_into_two_messages() {
         max_new_tokens: Some(128),
         tools: Vec::new(),
         autonomy_mode: Default::default(),
+        effort_level: Default::default(),
     };
 
     let mut stream = adapter.stream_chat(request).await.unwrap();

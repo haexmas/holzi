@@ -18,6 +18,9 @@ mod anthropic_stream_tests;
 #[cfg(test)]
 mod anthropic_tests;
 pub mod cli_delegate;
+pub mod effort;
+#[cfg(test)]
+mod effort_tests;
 #[cfg(feature = "llm-cpu")]
 pub mod local;
 pub mod request;
@@ -26,7 +29,8 @@ mod request_tests;
 pub mod types;
 
 pub use types::{
-    AbortHandle, AdapterStream, ChatMessage, ChatRequest, ChatRole, StreamChunk, StreamError,
+    AbortHandle, AdapterStream, Attachment, AttachmentKind, ChatMessage, ChatRequest, ChatRole,
+    StreamChunk, StreamError,
 };
 
 use async_trait::async_trait;
