@@ -162,6 +162,7 @@ impl TurnRunner<'_> {
         self.parent_id = interim_id;
         self.request.messages.push(LlmMessage {
             role: ChatRole::Assistant,
+            attachments: Vec::new(),
             content: assembled,
         });
         Ok(())
@@ -401,6 +402,7 @@ impl TurnRunner<'_> {
                     name: call.name.clone(),
                     input: call.input.clone(),
                 },
+                attachments: Vec::new(),
                 content: String::new(),
             });
         }
@@ -411,6 +413,7 @@ impl TurnRunner<'_> {
                     content: result.content.clone(),
                     is_error: result.is_error,
                 },
+                attachments: Vec::new(),
                 content: String::new(),
             });
         }

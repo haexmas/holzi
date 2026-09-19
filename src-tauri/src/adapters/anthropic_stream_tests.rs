@@ -16,12 +16,14 @@ fn sample_request(model: &str) -> ChatRequest {
         system_prompt: None,
         messages: vec![ChatMessage {
             role: ChatRole::User,
+            attachments: Vec::new(),
             content: "hi".to_string(),
         }],
         reasoning_requested: false,
         max_new_tokens: Some(128),
         tools: Vec::new(),
         autonomy_mode: Default::default(),
+        effort_level: Default::default(),
     }
 }
 
@@ -113,6 +115,9 @@ async fn stream_chat_emits_deltas_and_done_with_token_counts() {
                 break;
             }
             StreamChunk::ToolCalls(_) => panic!("this fixture emits no tool_use blocks"),
+            StreamChunk::AgentActivity { .. } => {
+                panic!("the direct Anthropic API adapter never emits agent activity")
+            }
         }
     }
 
@@ -219,6 +224,9 @@ async fn stream_chat_surfaces_thinking_delta_as_reasoning() {
             }
             StreamChunk::Done { .. } => break,
             StreamChunk::ToolCalls(_) => panic!("this fixture emits no tool_use blocks"),
+            StreamChunk::AgentActivity { .. } => {
+                panic!("the direct Anthropic API adapter never emits agent activity")
+            }
         }
     }
     assert_eq!(reasoning, vec!["let me think"]);

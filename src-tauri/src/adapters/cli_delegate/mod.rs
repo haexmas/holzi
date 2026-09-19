@@ -38,6 +38,9 @@ pub(crate) mod permission_mcp_server;
 mod process;
 #[cfg(test)]
 mod process_tests;
+mod subagents;
+#[cfg(test)]
+mod subagents_tests;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -63,6 +66,13 @@ pub(super) fn build_transcript_prompt(req: &ChatRequest) -> String {
             ChatRole::User => {
                 prompt.push_str("Human: ");
                 prompt.push_str(&message.content);
+                // Attachment bytes are written into the invocation's own
+                // working directory (spawn_claude_invocation) — mention
+                // each by its in-sandbox filename so Claude Code's own
+                // Read tool can find it (research.md §3).
+                for attachment in &message.attachments {
+                    prompt.push_str(&format!("\n[Attached file: {}]", attachment.name));
+                }
                 prompt.push_str("\n\n");
             }
             ChatRole::Assistant => {

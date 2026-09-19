@@ -121,12 +121,14 @@ sys.stdin.readline()
             system_prompt: None,
             messages: vec![ChatMessage {
                 role: ChatRole::User,
+                attachments: Vec::new(),
                 content: "hi".to_string(),
             }],
             reasoning_requested: false,
             max_new_tokens: None,
             tools: Vec::new(),
             autonomy_mode: Default::default(),
+            effort_level: Default::default(),
         })
         .await
         .expect("stream_chat should start");
@@ -144,6 +146,7 @@ sys.stdin.readline()
                     break;
                 }
                 StreamChunk::ToolCalls(_) => panic!("a delegate must never emit ToolCalls"),
+                StreamChunk::AgentActivity { .. } => {}
             }
         }
         (text, saw_done)

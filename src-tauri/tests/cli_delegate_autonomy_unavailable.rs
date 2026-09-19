@@ -70,12 +70,14 @@ EOF
             system_prompt: None,
             messages: vec![ChatMessage {
                 role: ChatRole::User,
+                attachments: Vec::new(),
                 content: "hi".to_string(),
             }],
             reasoning_requested: false,
             max_new_tokens: None,
             tools: Vec::new(),
             autonomy_mode: AutonomyMode::Ungated,
+            effort_level: Default::default(),
         })
         .await;
 
@@ -140,12 +142,14 @@ sys.stdin.readline()
             system_prompt: None,
             messages: vec![ChatMessage {
                 role: ChatRole::User,
+                attachments: Vec::new(),
                 content: "hi".to_string(),
             }],
             reasoning_requested: false,
             max_new_tokens: None,
             tools: Vec::new(),
             autonomy_mode: AutonomyMode::Ungated,
+            effort_level: Default::default(),
         })
         .await;
 

@@ -25,12 +25,14 @@ use tokio::process::Command;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
+use crate::adapters::effort::EffortLevel;
 use crate::adapters::types::{StreamChunk, StreamError};
 use crate::adapters::{AdapterError, AdapterStream, ChatRequest};
 
 use super::approval_bridge;
 use super::autonomy::{self, AutonomyMode};
 use super::process::{configure_process_group, map_spawn_error, ChildLifecycle};
+use super::subagents;
 use super::{build_transcript_prompt, DelegateChatContext, DelegateVendor};
 
 /// Caps how much of a `claude` stderr we keep around for an error
@@ -58,11 +60,46 @@ pub(super) enum LineOutcome {
     Error(StreamError),
 }
 
+/// Every `tool_use`-typed content block's `id` in a stream-json
+/// `message.content` array (research.md §2 shape).
+fn tool_use_ids(content: &serde_json::Value) -> Vec<String> {
+    content
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|block| block.get("type").and_then(|t| t.as_str()) == Some("tool_use"))
+        .filter_map(|block| block.get("id").and_then(|id| id.as_str()))
+        .map(str::to_string)
+        .collect()
+}
+
+/// Every `tool_result`-typed content block's `tool_use_id` in a
+/// stream-json `message.content` array (research.md §2 shape).
+fn tool_result_ids(content: &serde_json::Value) -> Vec<String> {
+    content
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|block| block.get("type").and_then(|t| t.as_str()) == Some("tool_result"))
+        .filter_map(|block| block.get("tool_use_id").and_then(|id| id.as_str()))
+        .map(str::to_string)
+        .collect()
+}
+
 /// Pure NDJSON-line parser — no I/O, so it's directly unit-testable
 /// (tasks.md T011) against the real event shapes captured in
 /// research.md §1. `ttft_ms` is `Some` only the first time a `Delta` is
 /// produced (time-to-first-token), computed by the caller from `start`.
-pub(super) fn parse_line(line: &str, ttft_ms: Option<u64>, total_ms: u64) -> LineOutcome {
+/// `tracker` accumulates sub-agent activity across the whole invocation
+/// (research.md §2, spec 011-composer-toolbar-parity) — owned by the
+/// caller, threaded through one line at a time so this function stays a
+/// pure, directly unit-testable parser (tasks.md T011's own rationale).
+pub(super) fn parse_line(
+    line: &str,
+    ttft_ms: Option<u64>,
+    total_ms: u64,
+    tracker: &mut subagents::Tracker,
+) -> LineOutcome {
     if line.trim().is_empty() {
         return LineOutcome::Ignore;
     }
@@ -73,6 +110,45 @@ pub(super) fn parse_line(line: &str, ttft_ms: Option<u64>, total_ms: u64) -> Lin
         }
     };
     match value.get("type").and_then(|v| v.as_str()) {
+        Some("assistant") | Some("user") => {
+            let message_type = value.get("type").and_then(|v| v.as_str());
+            let parent_tool_use_id = value.get("parent_tool_use_id").and_then(|v| v.as_str());
+            let content = value
+                .pointer("/message/content")
+                .cloned()
+                .unwrap_or_default();
+            let event = if let Some(parent_id) = parent_tool_use_id {
+                // Any message belonging to a sub-agent — including its very
+                // first ("prompt") message — confirms that its parent
+                // tool_use id spawned one (research.md §2).
+                tracker.observe_parent_reference(parent_id)
+            } else if message_type == Some("assistant") {
+                tracker.observe_top_level_tool_use(&tool_use_ids(&content));
+                subagents::TrackerEvent::None
+            } else {
+                // Rare (multiple sub-agents in the same batch finishing on
+                // the same stream-json line): keep the last real update —
+                // still the correct, current active count either way.
+                let mut event = subagents::TrackerEvent::None;
+                for id in tool_result_ids(&content) {
+                    let this_event = tracker.observe_tool_result(&id);
+                    if !matches!(this_event, subagents::TrackerEvent::None) {
+                        event = this_event;
+                    }
+                }
+                event
+            };
+            match event {
+                subagents::TrackerEvent::Update {
+                    active_count,
+                    batch_size,
+                } => LineOutcome::Chunk(StreamChunk::AgentActivity {
+                    active_count,
+                    batch_size,
+                }),
+                subagents::TrackerEvent::None => LineOutcome::Ignore,
+            }
+        }
         Some("stream_event") => {
             let Some(delta) = value
                 .get("event")
@@ -136,6 +212,7 @@ pub(super) fn build_command(
     system_prompt_path: Option<&Path>,
     tmp: &TempDir,
     autonomy_mode: AutonomyMode,
+    effort_level: Option<EffortLevel>,
 ) -> Command {
     let mut cmd = Command::new(binary);
     cmd.arg("-p")
@@ -156,6 +233,13 @@ pub(super) fn build_command(
     // a real alias `claude` itself accepts.
     if !model.is_empty() && model != DelegateVendor::Claude.as_str() {
         cmd.arg("--model").arg(model);
+    }
+    // Real Claude Code CLI flag (research.md §1), sent unconditionally when
+    // set — unlike the direct Anthropic API, `claude` itself falls back to
+    // "the highest supported level at or below the requested one" per
+    // model, so holzi does not gate this by model id.
+    if let Some(level) = effort_level {
+        cmd.arg("--effort").arg(level.as_str());
     }
     if autonomy_mode == AutonomyMode::Ungated {
         // Native full-autonomy mechanism (research.md §2): no bridge is
@@ -243,6 +327,22 @@ pub(super) async fn spawn_claude_invocation(
     })?;
 
     let prompt = build_transcript_prompt(&req);
+    // Attachment bytes go into the same disposable working directory the
+    // process already runs in — Claude Code's own Read tool can then find
+    // them by the filename `build_transcript_prompt` just mentioned
+    // (research.md §3), with no dedicated CLI attachment flag needed.
+    for message in &req.messages {
+        for attachment in &message.attachments {
+            std::fs::write(tmp.path().join(&attachment.name), &attachment.bytes).map_err(
+                |error| AdapterError::Http {
+                    reason: format!(
+                        "failed to write attachment {} for claude invocation: {error}",
+                        attachment.name
+                    ),
+                },
+            )?;
+        }
+    }
     let system_prompt_path = req.system_prompt.as_deref().map(|system_prompt| {
         let path = tmp.path().join("system-prompt.txt");
         (path, system_prompt)
@@ -301,6 +401,7 @@ pub(super) async fn spawn_claude_invocation(
         system_prompt_path.as_ref().map(|(path, _)| path.as_path()),
         &tmp,
         autonomy_mode,
+        req.effort_level,
     );
     configure_process_group(&mut cmd);
     cmd.env("CLAUDE_CODE_OAUTH_TOKEN", &token);
@@ -443,6 +544,7 @@ pub(super) async fn spawn_claude_invocation(
         let mut ttft_ms = None;
         let mut saw_result = false;
         let mut peeked_line = peeked_line;
+        let mut agent_tracker = subagents::Tracker::new();
 
         loop {
             // The line already consumed by the peek-ahead above (if any)
@@ -466,7 +568,12 @@ pub(super) async fn spawn_claude_invocation(
             };
             match line {
                 Ok(Some(line)) => {
-                    match parse_line(&line, ttft_ms, start.elapsed().as_millis() as u64) {
+                    match parse_line(
+                        &line,
+                        ttft_ms,
+                        start.elapsed().as_millis() as u64,
+                        &mut agent_tracker,
+                    ) {
                         LineOutcome::Ignore => {}
                         LineOutcome::Chunk(chunk) => {
                             if matches!(chunk, StreamChunk::Delta { .. }) && ttft_ms.is_none() {

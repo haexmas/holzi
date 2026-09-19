@@ -4,13 +4,21 @@
 
 use super::autonomy::AutonomyMode;
 use super::claude::{build_command, parse_line, LineOutcome};
+use super::subagents::Tracker;
 use super::DelegateVendor;
+use crate::adapters::effort::EffortLevel;
 use crate::adapters::types::{StreamChunk, StreamError};
+
+/// Convenience wrapper for tests that don't care about cross-line
+/// sub-agent tracking state — a fresh `Tracker` per call.
+fn parse(line: &str, ttft_ms: Option<u64>, total_ms: u64) -> LineOutcome {
+    parse_line(line, ttft_ms, total_ms, &mut Tracker::new())
+}
 
 #[test]
 fn text_delta_becomes_a_content_chunk() {
     let line = r#"{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"hello"}}}"#;
-    match parse_line(line, None, 10) {
+    match parse(line, None, 10) {
         LineOutcome::Chunk(StreamChunk::Delta { content, reasoning }) => {
             assert_eq!(content, "hello");
             assert!(reasoning.is_none());
@@ -22,7 +30,7 @@ fn text_delta_becomes_a_content_chunk() {
 #[test]
 fn thinking_delta_becomes_a_reasoning_chunk() {
     let line = r#"{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"thinking_delta","text":"pondering"}}}"#;
-    match parse_line(line, None, 10) {
+    match parse(line, None, 10) {
         LineOutcome::Chunk(StreamChunk::Delta { content, reasoning }) => {
             assert_eq!(content, "");
             assert_eq!(reasoning.as_deref(), Some("pondering"));
@@ -37,7 +45,7 @@ fn successful_result_becomes_done() {
         r#""is_error":false"#,
         r#""type":"result","is_error":false"#,
     );
-    match parse_line(&line, Some(5), 42) {
+    match parse(&line, Some(5), 42) {
         LineOutcome::Chunk(StreamChunk::Done {
             finish_reason,
             prompt_tokens,
@@ -58,7 +66,7 @@ fn successful_result_becomes_done() {
 #[test]
 fn errored_result_becomes_a_model_error() {
     let line = r#"{"type":"result","is_error":true,"subtype":"error","result":"something broke"}"#;
-    match parse_line(line, None, 10) {
+    match parse(line, None, 10) {
         LineOutcome::Error(StreamError::Model(message)) => {
             assert_eq!(message, "something broke");
         }
@@ -69,31 +77,170 @@ fn errored_result_becomes_a_model_error() {
 #[test]
 fn unrelated_system_events_are_ignored() {
     let line = r#"{"type":"system","subtype":"status","status":"requesting"}"#;
-    assert!(matches!(parse_line(line, None, 10), LineOutcome::Ignore));
+    assert!(matches!(parse(line, None, 10), LineOutcome::Ignore));
 }
 
 #[test]
 fn blank_lines_are_ignored() {
-    assert!(matches!(parse_line("", None, 10), LineOutcome::Ignore));
-    assert!(matches!(parse_line("   ", None, 10), LineOutcome::Ignore));
+    assert!(matches!(parse("", None, 10), LineOutcome::Ignore));
+    assert!(matches!(parse("   ", None, 10), LineOutcome::Ignore));
 }
 
 #[test]
 fn malformed_json_surfaces_as_an_internal_stream_error_not_a_panic() {
     let line = r#"{"type":"stream_event", this is not valid json"#;
-    match parse_line(line, None, 10) {
+    match parse(line, None, 10) {
         LineOutcome::Error(StreamError::Internal(_)) => {}
         _ => panic!("expected an Internal stream error for malformed JSON"),
     }
 }
 
+#[test]
+fn a_top_level_assistant_message_with_no_tool_use_is_ignored() {
+    let line = r#"{"type":"assistant","parent_tool_use_id":null,"message":{"role":"assistant","content":[{"type":"text","text":"hi"}]}}"#;
+    assert!(matches!(parse(line, None, 10), LineOutcome::Ignore));
+}
+
+#[test]
+fn a_top_level_tool_use_dispatch_alone_is_ignored_until_referenced() {
+    // Dispatching a tool_use (of any kind — this parser doesn't need to
+    // know it's specifically the `Agent` tool) doesn't yet mean a
+    // sub-agent started; only a later message referencing it as
+    // `parent_tool_use_id` confirms that (research.md §2).
+    let line = r#"{"type":"assistant","parent_tool_use_id":null,"message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Agent","input":{}}]}}"#;
+    assert!(matches!(parse(line, None, 10), LineOutcome::Ignore));
+}
+
+#[test]
+fn a_sub_agents_first_message_confirms_one_active_agent() {
+    let mut tracker = Tracker::new();
+    let dispatch = r#"{"type":"assistant","parent_tool_use_id":null,"message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Agent","input":{}}]}}"#;
+    assert!(matches!(
+        parse_line(dispatch, None, 10, &mut tracker),
+        LineOutcome::Ignore
+    ));
+
+    let sub_agent_prompt = r#"{"type":"user","parent_tool_use_id":"toolu_1","message":{"role":"user","content":[{"type":"text","text":"do the thing"}]}}"#;
+    match parse_line(sub_agent_prompt, None, 10, &mut tracker) {
+        LineOutcome::Chunk(StreamChunk::AgentActivity {
+            active_count,
+            batch_size,
+        }) => {
+            assert_eq!(active_count, 1);
+            assert_eq!(batch_size, Some(1));
+        }
+        _ => panic!("expected an AgentActivity chunk"),
+    }
+}
+
+#[test]
+fn two_sub_agents_dispatched_together_report_one_batch_of_two() {
+    let mut tracker = Tracker::new();
+    let dispatch = r#"{"type":"assistant","parent_tool_use_id":null,"message":{"role":"assistant","content":[
+        {"type":"tool_use","id":"toolu_1","name":"Agent","input":{}},
+        {"type":"tool_use","id":"toolu_2","name":"Agent","input":{}}
+    ]}}"#;
+    assert!(matches!(
+        parse_line(dispatch, None, 10, &mut tracker),
+        LineOutcome::Ignore
+    ));
+
+    let first_prompt =
+        r#"{"type":"user","parent_tool_use_id":"toolu_1","message":{"role":"user","content":[]}}"#;
+    match parse_line(first_prompt, None, 10, &mut tracker) {
+        LineOutcome::Chunk(StreamChunk::AgentActivity {
+            active_count,
+            batch_size,
+        }) => {
+            assert_eq!(active_count, 1);
+            assert_eq!(batch_size, Some(2));
+        }
+        _ => panic!("expected an AgentActivity chunk"),
+    }
+
+    let second_prompt =
+        r#"{"type":"user","parent_tool_use_id":"toolu_2","message":{"role":"user","content":[]}}"#;
+    match parse_line(second_prompt, None, 10, &mut tracker) {
+        LineOutcome::Chunk(StreamChunk::AgentActivity {
+            active_count,
+            batch_size,
+        }) => {
+            assert_eq!(active_count, 2);
+            assert_eq!(batch_size, None);
+        }
+        _ => panic!("expected an AgentActivity chunk"),
+    }
+}
+
+#[test]
+fn a_main_thread_tool_result_ends_the_sub_agent() {
+    let mut tracker = Tracker::new();
+    let dispatch = r#"{"type":"assistant","parent_tool_use_id":null,"message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Agent","input":{}}]}}"#;
+    parse_line(dispatch, None, 10, &mut tracker);
+    let prompt =
+        r#"{"type":"user","parent_tool_use_id":"toolu_1","message":{"role":"user","content":[]}}"#;
+    parse_line(prompt, None, 10, &mut tracker);
+
+    let result = r#"{"type":"user","parent_tool_use_id":null,"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"done"}]}}"#;
+    match parse_line(result, None, 10, &mut tracker) {
+        LineOutcome::Chunk(StreamChunk::AgentActivity {
+            active_count,
+            batch_size,
+        }) => {
+            assert_eq!(active_count, 0);
+            assert_eq!(batch_size, None);
+        }
+        _ => panic!("expected an AgentActivity chunk"),
+    }
+}
+
+#[test]
+fn a_main_thread_tool_result_for_a_plain_tool_is_ignored() {
+    // Not every tool call is a sub-agent — an ordinary tool's result on the
+    // main thread must not be misreported as agent activity.
+    let mut tracker = Tracker::new();
+    let result = r#"{"type":"user","parent_tool_use_id":null,"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_plain","content":"ok"}]}}"#;
+    assert!(matches!(
+        parse_line(result, None, 10, &mut tracker),
+        LineOutcome::Ignore
+    ));
+}
+
 fn model_args(model: &str) -> Vec<String> {
+    args_with_effort(model, None)
+}
+
+fn args_with_effort(model: &str, effort_level: Option<EffortLevel>) -> Vec<String> {
     let tmp = tempfile::TempDir::new().expect("tempdir");
-    let cmd = build_command("claude", model, None, None, &tmp, AutonomyMode::Ungated);
+    let cmd = build_command(
+        "claude",
+        model,
+        None,
+        None,
+        &tmp,
+        AutonomyMode::Ungated,
+        effort_level,
+    );
     cmd.as_std()
         .get_args()
         .map(|a| a.to_string_lossy().into_owned())
         .collect()
+}
+
+#[test]
+fn an_effort_level_is_passed_through_as_the_effort_flag() {
+    let args = args_with_effort("claude-opus-5", Some(EffortLevel::XHigh));
+    let flag = args.iter().position(|a| a == "--effort");
+    assert_eq!(
+        flag.and_then(|i| args.get(i + 1)).map(String::as_str),
+        Some("xhigh"),
+    );
+}
+
+#[test]
+fn no_effort_level_omits_the_effort_flag() {
+    let args = model_args("claude-opus-5");
+    assert!(!args.iter().any(|a| a == "--effort"));
 }
 
 #[test]

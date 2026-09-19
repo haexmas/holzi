@@ -16,16 +16,22 @@
  *
  * Concrete split plan, if this grows further: extract the composer/send
  * flow (`send`, `abort`, `newChat`, `pendingSend`,
- * `effortLevel`/`effortTokens`, `input`, `busy`, `turnSetupPending`) into a
+ * `effortLevel`/`effortLevels`, `input`, `busy`, `turnSetupPending`) into a
  * `useComposer` composable next to `useChatTranscript`/`useThreadSidebar`,
  * taking the same instance (`chat`, `chatTranscript`) as a dependency.
  */
-import { computed, onMounted, onBeforeUnmount, ref, nextTick } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, nextTick, watch } from 'vue'
 import type { UnlistenFn } from '@tauri-apps/api/event'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
-import type { Message, SendMessageArgs } from '~/composables/useChat'
+import type {
+  AgentActivityEvent,
+  EffortLevel,
+  Message,
+  SendMessageArgs,
+} from '~/composables/useChat'
 import type { PendingApproval } from '~/components/chat/PermissionPrompt.vue'
+import type { ComposerAttachment } from '~/components/chat/ComposerAttachments.vue'
 
 definePageMeta({
   middleware: ['onboarded'],
@@ -99,13 +105,28 @@ const pendingApprovalsByThread = new Map<string, PendingApproval[]>()
 
 const input = ref('')
 const busy = ref(false)
-const effortLevel = ref<'low' | 'medium' | 'high'>('medium')
-const effortTokens: Record<typeof effortLevel.value, number> = {
-  low: 1024,
-  medium: 4096,
-  high: 8192,
-}
-const effortLabel = computed(() => t(`chat.effort.${effortLevel.value}`))
+// `null` is "Auto" — no override, the active model/backend's own default
+// applies (spec 011-composer-toolbar-parity FR-005). Replaces the former
+// low/medium/high slider, which only ever changed `maxNewTokens` and was
+// never actually sent to a `cli_delegate` backend at all.
+const effortLevel = ref<EffortLevel | null>(null)
+// Levels the active model/backend actually supports; empty hides the
+// effort control entirely (FR-003). Refreshed whenever the active model
+// changes, see the `activeModelId` watcher below.
+const effortLevels = ref<EffortLevel[]>([])
+const effortLabel = computed(() =>
+  t(`chat.effort.${effortLevel.value ?? 'auto'}`),
+)
+// Live sub-agent activity for the Claude Code delegate (spec
+// 011-composer-toolbar-parity Story 2) — reset at the start of every send
+// and when the current turn ends (see the `onTurnComplete` wrapping below),
+// so a stale count never survives into the next turn.
+const activeAgentCount = ref(0)
+const lastAgentBatchSize = ref<number | null>(null)
+// Files staged for the message currently being composed (spec
+// 011-composer-toolbar-parity Story 3) — scoped to this one send (FR-017),
+// cleared alongside `input` once it goes out.
+const attachments = ref<ComposerAttachment[]>([])
 // True while `send()` has set `activeThreadId` but has not yet appended
 // this turn's user/assistant placeholder rows — a `chat-tool-call`/
 // `chat-tool-result` for that (already-active) thread can otherwise land
@@ -249,19 +270,30 @@ async function send(retryPending = false) {
   if (!retry) input.value = ''
   busy.value = true
   lastError.value = null
+  activeAgentCount.value = 0
+  lastAgentBatchSize.value = null
   const request = retry ?? {
     threadId: activeThreadId.value,
     content,
-    maxNewTokens: effortTokens[effortLevel.value],
     idempotencyKey: crypto.randomUUID(),
     autonomyMode: isDelegateModel.value ? autonomyMode.value : null,
+    effortLevel: effortLevel.value,
+    attachments: attachments.value.map((a) => ({ path: a.path })),
   }
   pendingSend.value = null
-  if (!retry) autonomyMode.value = 'standard'
+  if (!retry) {
+    autonomyMode.value = 'standard'
+    attachments.value = []
+  }
   turnSetupPending.value = true
   try {
     const result = await chat.sendMessageAsync(request)
     activeThreadId.value = result.threadId
+    if (result.excludedAttachments.length > 0) {
+      lastError.value = t('chat.composer.attachments.excluded', {
+        names: result.excludedAttachments.join(', '),
+      })
+    }
     const queuedApprovals = pendingApprovalsByThread.get(result.threadId)
     if (queuedApprovals) {
       // Merge, don't overwrite: see the matching comment in `selectThread`.
@@ -543,10 +575,77 @@ async function updatePermissionMode(mode: 'manual' | 'auto' | 'plan') {
   }
 }
 
-function updateEffortLevel(level: string) {
-  if (level === 'low' || level === 'medium' || level === 'high') {
-    effortLevel.value = level
+function updateEffortLevel(level: EffortLevel | null) {
+  effortLevel.value = level
+}
+
+/** Refreshes `effortLevels` for the newly active model/backend and resets
+ * `effortLevel` to "Auto" if the current choice is no longer offered
+ * (spec 011-composer-toolbar-parity FR-002/FR-003). */
+async function refreshEffortLevels() {
+  const modelId = activeModelId.value
+  if (!modelId) {
+    effortLevels.value = []
+    effortLevel.value = null
+    return
   }
+  try {
+    effortLevels.value = await chat.getEffortLevelsAsync(modelId)
+  } catch {
+    // A failed lookup is treated the same as "no effort control for this
+    // selection" — never blocks the composer from being usable.
+    effortLevels.value = []
+  }
+  if (effortLevel.value && !effortLevels.value.includes(effortLevel.value)) {
+    effortLevel.value = null
+  }
+}
+
+/** Adds newly picked files to the composer's attachment list, classifying
+ * each against the active model/backend (spec 011-composer-toolbar-parity
+ * Story 3). Duplicate paths are allowed — each gets its own entry (spec.md
+ * Edge Cases). */
+async function addAttachments(paths: string[]) {
+  for (const path of paths) {
+    try {
+      const info = await chat.inspectAttachmentAsync(path, activeModelId.value)
+      attachments.value.push({ id: crypto.randomUUID(), path, info })
+    } catch (e: unknown) {
+      lastError.value = errString(e)
+    }
+  }
+}
+
+function removeAttachment(id: string) {
+  attachments.value = attachments.value.filter((a) => a.id !== id)
+}
+
+/** Re-evaluates every staged attachment's usability against the newly
+ * active model/backend (spec.md Edge Cases: switching models/backends
+ * after attaching but before sending). */
+async function refreshAttachmentUsability() {
+  const modelId = activeModelId.value
+  await Promise.all(
+    attachments.value.map(async (attachment) => {
+      try {
+        attachment.info = await chat.inspectAttachmentAsync(attachment.path, modelId)
+      } catch {
+        // The file may have disappeared since it was attached — leave its
+        // last-known info in place; send-time re-validation (FR-018)
+        // handles the actual exclusion.
+      }
+    }),
+  )
+}
+
+watch(activeModelId, refreshAttachmentUsability)
+
+watch(activeModelId, refreshEffortLevels, { immediate: true })
+
+/** Updates the live sub-agent indicator (spec 011-composer-toolbar-parity). */
+function handleAgentActivity(e: AgentActivityEvent) {
+  activeAgentCount.value = e.activeCount
+  if (e.batchSize !== undefined) lastAgentBatchSize.value = e.batchSize
 }
 
 function renderMarkdown(content: string): string {
@@ -566,7 +665,16 @@ onMounted(async () => {
           chat.onToolCall(handleToolCall),
           chat.onToolResult(handleToolResult),
           chat.onRetry(handleRetry),
-          chat.onTurnComplete(handleTurnComplete),
+          chat.onAgentActivity(handleAgentActivity),
+          chat.onTurnComplete((e) => {
+            // A turn ending — successfully, cancelled, or errored — is the
+            // authoritative point to clear any lingering agent-activity
+            // state (FR-011), the same signal that already clears
+            // `streamingMessageId`/`busy`.
+            activeAgentCount.value = 0
+            lastAgentBatchSize.value = null
+            return handleTurnComplete(e)
+          }),
           chat.onToolPermissionRequest(handleToolPermissionRequest),
         ].map(async (subscription) => {
           const unlisten = await subscription
@@ -1084,10 +1192,23 @@ onBeforeUnmount(() => {
                 <div
                   class="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto text-xs"
                 >
+                  <ChatComposerAttachments
+                    :attachments="attachments"
+                    :disabled="busy"
+                    @add="addAttachments"
+                    @remove="removeAttachment"
+                  />
+
+                  <ChatAgentActivityIndicator
+                    :count="activeAgentCount"
+                    :last-batch-size="lastAgentBatchSize"
+                  />
+
                   <ChatComposerSettingsPopover
                     :model-id="activeModelId"
                     :model-name="activeModel?.name"
                     :model-groups="modelGroups"
+                    :effort-levels="effortLevels"
                     :effort-level="effortLevel"
                     :effort-label="effortLabel"
                     :disabled="busy"

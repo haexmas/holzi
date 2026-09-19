@@ -61,12 +61,14 @@ async fn load_and_stream_generates_tokens() {
         system_prompt: Some("You are a terse assistant.".into()),
         messages: vec![ChatMessage {
             role: ChatRole::User,
+            attachments: Vec::new(),
             content: "Reply with the single word: pong.".into(),
         }],
         reasoning_requested: false,
         max_new_tokens: Some(MAX_NEW_TOKENS),
         tools: Vec::new(),
         autonomy_mode: Default::default(),
+        effort_level: Default::default(),
     });
 
     let mut total_content = String::new();
@@ -83,6 +85,9 @@ async fn load_and_stream_generates_tokens() {
             }
             StreamChunk::ToolCalls(_) => {
                 panic!("this fixture's prompt does not request tool use")
+            }
+            StreamChunk::AgentActivity { .. } => {
+                panic!("the local adapter never emits agent activity")
             }
         }
     }
@@ -116,12 +121,14 @@ async fn abort_stops_generation_before_completion() {
         system_prompt: None,
         messages: vec![ChatMessage {
             role: ChatRole::User,
+            attachments: Vec::new(),
             content: "Count from 1 to 500 in words, one number per line.".into(),
         }],
         reasoning_requested: false,
         max_new_tokens: Some(512),
         tools: Vec::new(),
         autonomy_mode: Default::default(),
+        effort_level: Default::default(),
     });
 
     // Pull chunks until we get at least one non-empty delta so we know

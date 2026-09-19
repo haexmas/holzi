@@ -10,7 +10,10 @@ use uuid::Uuid;
 use crate::adapters::types::{
     AdapterStream, ChatRequest, StreamChunk, StreamError, ToolCall as LlmToolCall,
 };
-use crate::chat::events::{RetryEvent, TokenEvent, EVENT_CHAT_RETRY, EVENT_CHAT_TOKEN};
+use crate::chat::events::{
+    AgentActivityEvent, RetryEvent, TokenEvent, EVENT_CHAT_AGENT_ACTIVITY, EVENT_CHAT_RETRY,
+    EVENT_CHAT_TOKEN,
+};
 use crate::chat::session::{ActiveSession, ChatState};
 
 use super::TurnRunner;
@@ -370,6 +373,19 @@ impl TurnRunner<'_> {
                     }
                 }
                 Some(Ok(StreamChunk::ToolCalls(calls))) => pass.tool_calls = calls,
+                Some(Ok(StreamChunk::AgentActivity {
+                    active_count,
+                    batch_size,
+                })) => {
+                    self.emit_event(
+                        EVENT_CHAT_AGENT_ACTIVITY,
+                        AgentActivityEvent {
+                            message_id: assistant_message_id,
+                            active_count,
+                            batch_size,
+                        },
+                    );
+                }
                 Some(Ok(StreamChunk::Done {
                     prompt_tokens,
                     completion_tokens,

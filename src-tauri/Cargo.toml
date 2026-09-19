@@ -63,6 +63,11 @@ filetime = "0.2"
 # Already present as a transitive dependency (rustls/haex-crdt); pinned
 # directly here because the model-integrity boundary calls it explicitly.
 sha2 = "0.11"
+# Base64-encodes image/document attachment bytes for Anthropic's Messages
+# API content blocks (spec 011-composer-toolbar-parity). Already present as
+# a transitive dependency; pinned directly here for the same reason as
+# sha2 above.
+base64 = "0.22"
 unicode-segmentation = "1.13"
 
 # haex-crdt 0.4.0, originally pinned per plans/001-desktop-mvp.md at commit

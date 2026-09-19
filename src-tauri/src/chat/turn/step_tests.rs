@@ -63,6 +63,7 @@ async fn initial_http_failures_use_the_same_bounded_retry_budget() {
             max_new_tokens: None,
             tools: Vec::new(),
             autonomy_mode: Default::default(),
+            effort_level: Default::default(),
         };
         let mut attempts = 0;
         let mut events = Vec::new();
@@ -117,6 +118,7 @@ async fn initial_request_can_be_cancelled_before_response_headers() {
             max_new_tokens: None,
             tools: Vec::new(),
             autonomy_mode: Default::default(),
+            effort_level: Default::default(),
         };
         start_step_stream(
             &session,
