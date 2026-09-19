@@ -11,6 +11,7 @@ interface InstanceListChangedPayload {
 
 export const useInstancesStore = defineStore('instances', () => {
   const { listAsync } = useInstance()
+  const { errString } = useErrorString()
 
   const instances = ref<InstanceInfo[]>([])
   const activeInstance = ref<string | null>(null)
@@ -23,7 +24,7 @@ export const useInstancesStore = defineStore('instances', () => {
       instances.value = await listAsync()
       lastError.value = null
     } catch (e) {
-      lastError.value = e instanceof Error ? e.message : String(e)
+      lastError.value = errString(e)
     }
     return instances.value
   }

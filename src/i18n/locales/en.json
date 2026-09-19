@@ -432,6 +432,7 @@
     "prefClearFailed": "Failed to clear default model",
     "prefLoadFailed": "Failed to load default model",
     "modelListFailed": "Failed to load model list",
+    "invalidInput": "Invalid input.",
     "invalidIdempotencyKey": "The send request is invalid.",
     "idempotencyKeyConflict": "This send request was already used with different data.",
     "autonomyUnavailable": "This autonomy mode is not available for the connected backend. Update it, or use Standard instead.",

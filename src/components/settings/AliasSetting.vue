@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const { t } = useI18n()
+const { errString } = useErrorString()
 const { updateDeviceAliasAsync } = useDevice()
 
 const props = defineProps<{
@@ -52,7 +53,7 @@ async function onSubmit() {
     savedFlash.value = true
     emit('saved', trimmed)
   } catch (e) {
-    saveError.value = e instanceof Error ? e.message : String(e)
+    saveError.value = errString(e)
   } finally {
     busy.value = false
   }

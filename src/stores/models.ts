@@ -104,12 +104,15 @@ export const useModelsStore = defineStore('models', () => {
           }
         : null
 
-    // A connected `cli_delegate` provider gets one real cached model row
-    // (`<providerId>:<vendor>`, e.g. `<uuid>:claude`) via the same
-    // `list_models`/`replace_provider_models` refresh path `api_key`
-    // providers already use (`providers/mod.rs::compose_model_row`) —
-    // so it flows through `remoteGroups` unchanged, no separate
-    // synthesis needed for the connected case.
+    // A connected `cli_delegate` provider gets real cached model rows
+    // (`<providerId>:<remoteId>`) via the same `list_models`/
+    // `replace_provider_models` refresh path `api_key` providers already
+    // use (`providers/mod.rs::compose_model_row`,
+    // `adapters/cli_delegate/mod.rs::list_models`) — so it flows through
+    // `remoteGroups` unchanged, no separate synthesis needed for the
+    // connected case. Claude's rows come straight from Anthropic's own
+    // `/v1/models` API (e.g. `<uuid>:claude-opus-5`), Codex still gets one
+    // synthetic `<uuid>:codex` row.
     const remoteGroups = providerList.value
       .filter((p) => p.kind === 'api_key' || p.kind === 'cli_delegate')
       .map<ModelGroup>((p) => ({
@@ -177,17 +180,33 @@ export const useModelsStore = defineStore('models', () => {
     catalogEntries.value = await catalog.listAsync()
   }
 
-  /** Refreshes the provider list and re-fetches api_key/cli_delegate model caches. */
+  /**
+   * Refreshes the provider list and re-fetches api_key/cli_delegate model
+   * caches. Each provider's fetch is isolated: one provider being
+   * unreachable (expired delegate token, network blip) must not blank out
+   * every other provider's already-known models or abort the caller's
+   * broader `initialize()` sequence.
+   */
   async function refreshProviders() {
     providerList.value = await providers.listAsync()
-    const next: Record<string, ProviderModel[]> = {}
-    await Promise.all(
-      providerList.value
-        .filter((p) => p.kind === 'api_key' || p.kind === 'cli_delegate')
-        .map(async (p) => {
-          next[p.id] = await providers.listModelsAsync(p.id)
-        }),
+    const relevant = providerList.value.filter(
+      (p) => p.kind === 'api_key' || p.kind === 'cli_delegate',
     )
+    const next: Record<string, ProviderModel[]> = {}
+    const results = await Promise.allSettled(
+      relevant.map(async (p) => {
+        next[p.id] = await providers.listModelsAsync(p.id)
+      }),
+    )
+    // A provider whose fetch failed this round keeps its last-known models
+    // instead of being blanked out — `next` only ever holds currently
+    // relevant providers, so one no longer connected still drops out below.
+    for (const p of relevant) {
+      if (!(p.id in next)) next[p.id] = providerModels.value[p.id] ?? []
+    }
+    const failure = results.find((r) => r.status === 'rejected') as
+      PromiseRejectedResult | undefined
+    if (failure) lastError.value = errString(failure.reason)
     providerModels.value = next
   }
 

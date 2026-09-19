@@ -432,6 +432,7 @@
     "prefClearFailed": "Standard-Modell konnte nicht gelöscht werden",
     "prefLoadFailed": "Standard-Modell konnte nicht geladen werden",
     "modelListFailed": "Modell-Liste konnte nicht geladen werden",
+    "invalidInput": "Ungültige Eingabe.",
     "invalidIdempotencyKey": "Der Sendevorgang ist ungültig.",
     "idempotencyKeyConflict": "Dieser Sendevorgang wurde bereits mit anderen Daten verwendet.",
     "autonomyUnavailable": "Dieser Autonomie-Modus ist für das verbundene Backend nicht verfügbar. Aktualisiere es oder nutze stattdessen Standard.",

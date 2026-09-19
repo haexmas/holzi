@@ -2,6 +2,8 @@
 //! construction path (tasks.md T007).
 
 use uuid::Uuid;
+use wiremock::matchers::{header, method, path};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::DelegateVendor;
 use crate::providers::build_adapter;
@@ -86,4 +88,65 @@ async fn delegate_exposes_one_synthetic_vendor_model() {
     assert_eq!(models.len(), 1);
     assert_eq!(models[0].remote_id, "codex");
     assert_eq!(models[0].display_name, "codex (CLI delegate)");
+}
+
+#[tokio::test]
+async fn claude_model_list_comes_from_the_models_api_via_oauth_bearer() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/models"))
+        .and(header("authorization", "Bearer test-oauth-token"))
+        .and(header("anthropic-beta", "oauth-2025-04-20"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": [
+                {
+                    "id": "claude-opus-5",
+                    "display_name": "Claude Opus 5",
+                    "type": "model",
+                    "created_at": "2026-07-24T00:00:00Z",
+                    "max_input_tokens": 200000,
+                },
+                {
+                    "id": "claude-sonnet-5",
+                    "display_name": "Claude Sonnet 5",
+                    "type": "model",
+                    "created_at": "2026-07-24T00:00:00Z",
+                    "max_input_tokens": 200000,
+                }
+            ],
+            "has_more": false,
+            "first_id": "claude-opus-5",
+            "last_id": "claude-sonnet-5"
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    // Not routed through `CliDelegateAdapter`/`build_adapter`: the provider
+    // row's `base_url` holds the `claude` binary path, not an API endpoint,
+    // so `fetch_claude_models` takes the base URL directly — that's what
+    // makes it testable against a wiremock server in the first place.
+    let models = super::fetch_claude_models(&server.uri(), "test-oauth-token")
+        .await
+        .expect("fetch_claude_models should succeed");
+
+    assert_eq!(models.len(), 2);
+    assert_eq!(models[0].remote_id, "claude-opus-5");
+    assert_eq!(models[0].display_name, "Claude Opus 5");
+    assert_eq!(models[1].remote_id, "claude-sonnet-5");
+}
+
+#[tokio::test]
+async fn claude_model_list_rejects_empty_credentials() {
+    let mut provider = sample_provider(Some("claude"));
+    provider.credentials = Some(b"   ".to_vec());
+    let adapter = build_adapter(&provider, None).expect("delegate adapter should build");
+    let err = adapter
+        .list_models()
+        .await
+        .expect_err("blank credentials must be rejected before any network call");
+    assert!(matches!(
+        err,
+        crate::adapters::AdapterError::InvalidCredentials
+    ));
 }

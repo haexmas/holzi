@@ -41,6 +41,7 @@ mod process_tests;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use async_trait::async_trait;
 use tokio::sync::oneshot;
@@ -180,17 +181,78 @@ impl CliDelegateAdapter {
     }
 }
 
+/// Anthropic's public API base URL. The `cli_delegate` provider row's own
+/// `base_url` field holds the `claude` executable name/path (see
+/// `CliDelegateAdapter::binary`), not an API endpoint, so the models-API
+/// lookup below uses this fixed constant instead.
+const CLAUDE_API_BASE_URL: &str = "https://api.anthropic.com";
+
+/// Decodes and validates a `cli_delegate` provider's stored Claude OAuth
+/// token: UTF-8, trimmed, and non-empty. Shared by `list_models`'s model
+/// catalog refresh and `claude::spawn_claude_invocation`'s real chat turn
+/// so both reject a blank/invalid token the same way instead of drifting
+/// if one copy's validation changes and the other doesn't.
+fn decode_claude_oauth_token(credentials: &[u8]) -> Result<String, AdapterError> {
+    let token = std::str::from_utf8(credentials)
+        .map_err(|_| AdapterError::InvalidCredentials)?
+        .trim()
+        .to_string();
+    if token.is_empty() {
+        return Err(AdapterError::InvalidCredentials);
+    }
+    Ok(token)
+}
+
+/// Fetches Claude's live model catalog via Anthropic's `/v1/models` API
+/// (the same endpoint and pagination `AnthropicAdapter` uses for
+/// `api_key` providers — see `anthropic::fetch_models`), authenticated
+/// with the OAuth access token `claude setup-token` issued instead of a
+/// metered API key. A connected delegate therefore always reflects
+/// whatever models the subscription currently has, with no hardcoded
+/// list to fall out of date. A free function (rather than inlined into
+/// `list_models`) so it is directly unit-testable against a wiremock
+/// server without needing a full `CliDelegateAdapter`.
+async fn fetch_claude_models(
+    base_url: &str,
+    oauth_token: &str,
+) -> Result<Vec<ProviderModel>, AdapterError> {
+    let client = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(15))
+        .user_agent(concat!("holzi/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .map_err(|e| AdapterError::Http {
+            reason: format!("build reqwest client: {e}"),
+        })?;
+    crate::adapters::anthropic::fetch_models(
+        &client,
+        base_url,
+        &crate::adapters::anthropic::ModelsAuth::OAuthBearer(oauth_token.to_string()),
+    )
+    .await
+}
+
 #[async_trait]
 impl ProviderAdapter for CliDelegateAdapter {
-    /// A connected delegate exposes one synthetic model: its vendor is the
-    /// model, and the composite id is persisted by the provider refresh path.
+    /// Claude's model list comes straight from Anthropic's own API (see
+    /// `fetch_claude_models`) rather than a hardcoded list. Codex still
+    /// exposes one synthetic model per vendor (its composite id is
+    /// persisted by the provider refresh path) since it has no equivalent
+    /// models API wired up yet.
     async fn list_models(&self) -> Result<Vec<ProviderModel>, AdapterError> {
-        let vendor = self.vendor.as_str();
-        Ok(vec![ProviderModel {
-            remote_id: vendor.to_string(),
-            display_name: format!("{vendor} (CLI delegate)"),
-            context_window: None,
-        }])
+        match self.vendor {
+            DelegateVendor::Claude => {
+                let token = decode_claude_oauth_token(&self.credentials)?;
+                fetch_claude_models(CLAUDE_API_BASE_URL, &token).await
+            }
+            DelegateVendor::Codex => {
+                let vendor = self.vendor.as_str();
+                Ok(vec![ProviderModel {
+                    remote_id: vendor.to_string(),
+                    display_name: format!("{vendor} (CLI delegate)"),
+                    context_window: None,
+                }])
+            }
+        }
     }
 
     async fn stream_chat(&self, req: ChatRequest) -> Result<AdapterStream, AdapterError> {
