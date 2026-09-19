@@ -6,6 +6,10 @@
     "codex"
   ],
   "integration_settings": {
+    "claude": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
     "codex": {
       "script": "sh",
       "invoke_separator": "-"
