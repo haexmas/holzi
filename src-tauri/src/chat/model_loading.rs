@@ -675,16 +675,33 @@ pub async fn unload_local_model(app: AppHandle, chat: State<'_, ChatState>) -> R
     Ok(())
 }
 
-/// Introspection — `None` when no model is loaded.
+/// Introspection — `None` when no model is loaded. `name` is resolved the
+/// same way `load_model_inner` resolves it (`resolve_display_name`), not
+/// read off `ActiveSession` directly — that struct carries no display-name
+/// field of its own, only `model_id`, so a naive read used to surface the
+/// raw id (a `<provider-uuid>:<remote-id>` composite for `cli_delegate`
+/// models) as the "name" instead.
 #[tauri::command]
-pub async fn active_model_info(chat: State<'_, ChatState>) -> Result<Option<LoadedModelInfo>> {
-    let guard = chat.session.lock().map_err(|e| HolziError::CrdtInit {
-        reason: format!("chat.session mutex poisoned: {e}"),
-    })?;
-    Ok(guard.as_ref().map(|s| LoadedModelInfo {
-        model_id: s.model_id.clone(),
-        name: s.model_id.clone(),
-        tokenizer_repo: s.tokenizer_repo.clone(),
-        context_window: s.context_window,
+pub async fn active_model_info(
+    state: State<'_, AppState>,
+    chat: State<'_, ChatState>,
+) -> Result<Option<LoadedModelInfo>> {
+    let session = {
+        let guard = chat.session.lock().map_err(|e| HolziError::CrdtInit {
+            reason: format!("chat.session mutex poisoned: {e}"),
+        })?;
+        guard.clone()
+    };
+    let Some(session) = session else {
+        return Ok(None);
+    };
+    let name = resolve_display_name(&state, &session.model_id)
+        .await
+        .unwrap_or_else(|| session.model_id.clone());
+    Ok(Some(LoadedModelInfo {
+        model_id: session.model_id,
+        name,
+        tokenizer_repo: session.tokenizer_repo,
+        context_window: session.context_window,
     }))
 }
