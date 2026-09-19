@@ -70,6 +70,13 @@ export const useModelsStore = defineStore('models', () => {
   const loadingPhase = ref<ModelLoadPhase | null>(null)
   const loadingModelName = ref('')
   const loadingProviderName = ref<string | null>(null)
+  // Which model `loadModel()` is currently targeting — set synchronously,
+  // before the `load_model` round trip even starts, purely from
+  // `modelGroups` (already fetched). Backs `displayModelId`/
+  // `displayModelName` below so the composer reflects a fresh pick
+  // immediately instead of only once the load resolves or the backend's
+  // first `model-load-progress` event arrives.
+  const loadingModelId = ref<string | null>(null)
   const loadErrorModelId = ref<string | null>(null)
 
   const integrityDialog = ref<ModelIntegrityFailure | null>(null)
@@ -160,6 +167,32 @@ export const useModelsStore = defineStore('models', () => {
       : [...remoteGroups, ...notConnectedDelegateGroups]
   })
 
+  /** Looks up a picker entry's friendly name across every group. */
+  function findModelName(id: string): string {
+    for (const group of modelGroups.value) {
+      const found = group.models.find((m) => m.id === id)
+      if (found) return found.name
+    }
+    return id
+  }
+
+  // What the composer's model control should show: the model a load is
+  // currently targeting, if any, else the actually-active one. Without
+  // this, picking a new model left the composer showing the previous one
+  // (or nothing) until `load_model`'s round trip resolved — `activeModel`
+  // itself stays untouched until then, on purpose (`sendDisabled` etc.
+  // must keep treating a pending load as "not ready").
+  const displayModelId = computed(() =>
+    modelLoadPending.value && loadingModelId.value
+      ? loadingModelId.value
+      : activeModelId.value,
+  )
+  const displayModelName = computed(() =>
+    modelLoadPending.value && loadingModelId.value
+      ? loadingModelName.value
+      : (activeModel.value?.name ?? undefined),
+  )
+
   /** Localised label for the current loading phase, if any. */
   const loadingLabel = computed<string | null>(() => {
     const phase = loadingPhase.value
@@ -235,6 +268,8 @@ export const useModelsStore = defineStore('models', () => {
     lastError.value = null
     loadErrorModelId.value = null
     modelLoadPending.value = true
+    loadingModelId.value = id
+    loadingModelName.value = findModelName(id)
     try {
       activeModel.value = await chat.loadModelAsync(id)
     } catch (e: unknown) {
@@ -245,6 +280,7 @@ export const useModelsStore = defineStore('models', () => {
       activeModel.value = null
     } finally {
       modelLoadPending.value = false
+      loadingModelId.value = null
     }
   }
 
@@ -489,6 +525,8 @@ export const useModelsStore = defineStore('models', () => {
     integrityActionError,
     noModelsInstalled,
     activeModelId,
+    displayModelId,
+    displayModelName,
     modelGroups,
     loadingLabel,
     refreshInstalledAndCatalog,

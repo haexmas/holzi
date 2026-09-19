@@ -439,6 +439,45 @@ test('model initialization skips the auto-load fallback when a model is already 
   assert.equal(loadModelCalls, 0)
 })
 
+test('picking a model updates the composer display before load_model resolves', async () => {
+  let resolveLoad: () => void = () => {}
+  const state = createChatState({
+    loadModelAsync: (modelId: string) =>
+      new Promise((resolve) => {
+        resolveLoad = () =>
+          resolve({
+            modelId,
+            name: 'Qwen 3 4B',
+            tokenizerRepo: '',
+            contextWindow: null,
+          })
+      }),
+  })
+  state.modelStore.installedModels = [{ id: 'qwen3-4b', name: 'Qwen 3 4B' }]
+
+  // `createChatState()` seeds a baseline active model ('model'/'Model') so
+  // this starts from the realistic case: switching away from an already-
+  // loaded model, not just picking a first one.
+  const loadPromise = state.modelStore.loadModel('qwen3-4b')
+
+  // Synchronous portion of `loadModel` (everything before its first
+  // `await`) has already run by the time the call above returns — the
+  // composer's display fields must reflect the pick immediately, without
+  // waiting for `load_model`'s round trip. `activeModel` itself stays on
+  // the previous model until the load actually resolves (`sendDisabled`
+  // depends on that distinction).
+  assert.equal(state.modelStore.displayModelId, 'qwen3-4b')
+  assert.equal(state.modelStore.displayModelName, 'Qwen 3 4B')
+  assert.equal(state.modelStore.activeModel?.modelId, 'model')
+
+  resolveLoad()
+  await loadPromise
+
+  assert.equal(state.modelStore.activeModel?.modelId, 'qwen3-4b')
+  assert.equal(state.modelStore.displayModelId, 'qwen3-4b')
+  assert.equal(state.modelStore.displayModelName, 'Qwen 3 4B')
+})
+
 test('history durations use Unix milliseconds and compact thresholds', () => {
   const state = createChatState()
   const now = 10 * 86_400_000

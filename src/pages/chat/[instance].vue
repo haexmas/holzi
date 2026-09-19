@@ -48,7 +48,8 @@ const {
   loadErrorModelId,
   loadingLabel,
   noModelsInstalled,
-  activeModelId,
+  displayModelId,
+  displayModelName,
   modelGroups,
   providerList,
   integrityDialog,
@@ -1105,8 +1106,8 @@ onBeforeUnmount(() => {
                   class="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto text-xs"
                 >
                   <ChatComposerSettingsPopover
-                    :model-id="activeModelId"
-                    :model-name="activeModel?.name"
+                    :model-id="displayModelId"
+                    :model-name="displayModelName"
                     :model-groups="modelGroups"
                     :effort-level="effortLevel"
                     :effort-label="effortLabel"
