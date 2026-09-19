@@ -191,7 +191,7 @@ onBeforeUnmount(() => {
             <ShadcnSelectValue :placeholder="t('chat.model.choose')" />
           </ShadcnSelectTrigger>
           <ShadcnSelectContent
-            class="w-[min(20rem,calc(100vw-2rem))] max-h-[--reka-select-content-available-height]"
+            class="w-[min(20rem,calc(100vw-2rem))] max-h-[60vh] !overflow-y-auto"
           >
             <ShadcnSelectGroup
               v-for="group in modelGroups"
