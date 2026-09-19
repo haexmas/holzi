@@ -9,6 +9,7 @@
 //! backend) and [`usability_for`] ("can the *currently selected*
 //! model/backend use it" — FR-015, independent of the file itself).
 
+use std::io::Read;
 use std::path::Path;
 
 use serde::Serialize;
@@ -165,9 +166,25 @@ pub fn read_attachment_content(path: &Path) -> Result<Attachment> {
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let bytes = std::fs::read(path).map_err(|e| HolziError::InvalidInput {
+    let cap = max_bytes_for(&kind);
+    let mut file = std::fs::File::open(path).map_err(|e| HolziError::InvalidInput {
         reason: format!("failed to read attachment {}: {e}", path.display()),
     })?;
+    let mut bytes = Vec::new();
+    file.take(cap + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|e| HolziError::InvalidInput {
+            reason: format!("failed to read attachment {}: {e}", path.display()),
+        })?;
+    if bytes.len() as u64 > cap {
+        return Err(HolziError::InvalidInput {
+            reason: format!(
+                "attachment {} exceeds the {} limit for this file type",
+                path.display(),
+                human_bytes(cap)
+            ),
+        });
+    }
     Ok(Attachment {
         name,
         kind,

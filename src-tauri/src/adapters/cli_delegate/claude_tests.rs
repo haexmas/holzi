@@ -131,6 +131,25 @@ fn a_sub_agents_first_message_confirms_one_active_agent() {
         }
         _ => panic!("expected an AgentActivity chunk"),
     }
+
+    let nested_dispatch = r#"{"type":"assistant","parent_tool_use_id":"toolu_1","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_2","name":"Agent","input":{}}]}}"#;
+    assert!(matches!(
+        parse_line(nested_dispatch, None, 10, &mut tracker),
+        LineOutcome::Ignore
+    ));
+
+    let nested_prompt =
+        r#"{"type":"user","parent_tool_use_id":"toolu_2","message":{"role":"user","content":[]}}"#;
+    match parse_line(nested_prompt, None, 10, &mut tracker) {
+        LineOutcome::Chunk(StreamChunk::AgentActivity {
+            active_count,
+            batch_size,
+        }) => {
+            assert_eq!(active_count, 2);
+            assert_eq!(batch_size, Some(1));
+        }
+        _ => panic!("expected nested AgentActivity chunk"),
+    }
 }
 
 #[test]

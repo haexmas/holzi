@@ -61,6 +61,7 @@ use crate::chat::tools::ApprovalDecision;
 /// (research.md §3), so relying on it would find nothing even if used.
 pub(super) fn build_transcript_prompt(req: &ChatRequest) -> String {
     let mut prompt = String::new();
+    let mut attachment_index = 0;
     for message in &req.messages {
         match &message.role {
             ChatRole::User => {
@@ -71,7 +72,11 @@ pub(super) fn build_transcript_prompt(req: &ChatRequest) -> String {
                 // each by its in-sandbox filename so Claude Code's own
                 // Read tool can find it (research.md §3).
                 for attachment in &message.attachments {
-                    prompt.push_str(&format!("\n[Attached file: {}]", attachment.name));
+                    prompt.push_str(&format!(
+                        "\n[Attached file: attachment-{attachment_index}-{}]",
+                        attachment.name
+                    ));
+                    attachment_index += 1;
                 }
                 prompt.push_str("\n\n");
             }

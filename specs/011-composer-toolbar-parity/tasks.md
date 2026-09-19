@@ -1,5 +1,5 @@
 ---
-description: "Task list for Composer Toolbar Parity"
+description: 'Task list for Composer Toolbar Parity'
 ---
 
 # Tasks: Composer Toolbar Parity (Real Effort, Sub-Agent Activity, Attachments)
@@ -76,12 +76,12 @@ backends with no such control don't show one.
 - [x] T008 [US1] Add an `effort_level: Option<EffortLevel>` parameter to
       `build_command` and its caller `spawn_claude_invocation`
       (`src-tauri/src/adapters/cli_delegate/claude.rs`); append `--effort
-      <level>` when set. Makes T003 pass.
+<level>` when set. Makes T003 pass.
 - [x] T009 [US1] Add `effort_level: Option<EffortLevel>` to `SendMessageArgs`
       (`src-tauri/src/chat/commands.rs`) and thread it into the `ChatRequest`
       built in `send_message`.
 - [x] T010 [US1] Implement the `get_effort_levels(model_id: String) ->
-      Result<Vec<String>>` Tauri command (`src-tauri/src/chat/commands.rs`,
+Result<Vec<String>>` Tauri command (`src-tauri/src/chat/commands.rs`,
       alongside `send_message`), resolving the provider row via
       `storage::providers::get_provider` for a composite id and returning
       `[]` for a bare (local) id — contracts/tauri-commands.md. Makes T004
@@ -148,14 +148,14 @@ disappears once they finish or the response is stopped.
       `mod subagents;`/`mod subagents_tests;` in
       `src-tauri/src/adapters/cli_delegate/mod.rs`. Makes T016 pass.
 - [x] T019 [US2] Add `StreamChunk::AgentActivity { active_count: usize,
-      batch_size: Option<usize> }` to `src-tauri/src/adapters/types.rs`.
+batch_size: Option<usize> }` to `src-tauri/src/adapters/types.rs`.
 - [x] T020 [US2] Extend `parse_line`'s signature with a `&mut
-      subagents::Tracker` parameter and add the `assistant`/`user` line
+subagents::Tracker` parameter and add the `assistant`/`user` line
       branches (`src-tauri/src/adapters/cli_delegate/claude.rs`); update its
       one call site in `spawn_claude_invocation` to own a `Tracker` across
       the read loop. Makes T017 pass.
 - [x] T021 [US2] Add `EVENT_CHAT_AGENT_ACTIVITY` and `AgentActivityEvent
-      { message_id, active_count, batch_size }` to
+{ message_id, active_count, batch_size }` to
       `src-tauri/src/chat/events.rs` (contracts/tauri-commands.md).
 - [x] T022 [US2] Add the `StreamChunk::AgentActivity` match arm to
       `consume_stream` in `src-tauri/src/chat/turn/step.rs`, emitting
@@ -221,7 +221,7 @@ attachments reach the model, unusable ones are flagged before send.
       `read_attachment_content`, dropping and reporting (not failing the
       whole send on) any that fail re-validation (FR-018).
 - [x] T034 [US3] Implement the `inspect_attachment(path: String) ->
-      Result<AttachmentInfo>` Tauri command
+Result<AttachmentInfo>` Tauri command
       (`src-tauri/src/chat/commands.rs`), using `classify_attachment` +
       `usability_for` against the currently active model/provider (same
       resolution as T010's `get_effort_levels`); register in
@@ -256,7 +256,7 @@ attachments reach the model, unusable ones are flagged before send.
       sync across T014/T026/T038.
 - [x] T041 Run the full quickstart.md walkthrough (§1–§4) end-to-end.
 - [x] T042 Final full-suite pass: `cargo test --lib`, `cargo test --test
-      cli_delegate_claude`, `pnpm typecheck`.
+cli_delegate_claude`, `pnpm typecheck`.
 
 ---
 

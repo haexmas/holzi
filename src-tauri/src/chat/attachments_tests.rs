@@ -40,6 +40,7 @@ fn an_oversized_text_file_is_rejected_with_a_specific_reason() {
     let info = classify_attachment(&path).expect("classify");
     assert!(!info.usable);
     assert!(info.reason.as_deref().unwrap().contains("exceeds"));
+    assert!(read_attachment_content(&path).is_err());
 }
 
 #[test]

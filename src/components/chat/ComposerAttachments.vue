@@ -78,7 +78,11 @@ async function pickFiles() {
         <button
           type="button"
           class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
-          :aria-label="t('chat.composer.attachments.remove', { name: attachment.info.name })"
+          :aria-label="
+            t('chat.composer.attachments.remove', {
+              name: attachment.info.name,
+            })
+          "
           @click="emit('remove', attachment.id)"
         >
           <Icon name="lucide:x" class="h-3 w-3" aria-hidden="true" />

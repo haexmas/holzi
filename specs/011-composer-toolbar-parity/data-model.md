@@ -87,7 +87,7 @@ pub(super) enum TrackerEvent {
   returns `Update` with the new `active.len()` and, if this is the first
   promotion for that id's batch, `batch_size` = how many pending ids shared
   that batch id (computed by counting, not stored redundantly). Already-
-  active ids (a sub-agent's *own* further messages also carry the same
+  active ids (a sub-agent's _own_ further messages also carry the same
   `parent_tool_use_id`) are a no-op past the first promotion.
 - `observe_tool_result(&mut self, tool_use_id: &str) -> TrackerEvent`:
   called for a main-thread (`parent_tool_use_id: null`) `tool_result` block.
@@ -154,7 +154,7 @@ pub struct Attachment {
   bytes; each adapter encodes to whatever its wire format needs).
 
 `ChatMessage.attachments: Vec<Attachment>` (`types.rs`) — only ever
-populated on the *current* turn's user message, built fresh in
+populated on the _current_ turn's user message, built fresh in
 `commands.rs::send_message` from `SendMessageArgs.attachments` (a
 `Vec<AttachmentInput { path: String }>`, frontend sends just the picked
 paths). `history_to_messages` (existing function, `commands.rs`) continues

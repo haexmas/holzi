@@ -13,7 +13,7 @@ page): a top-level request field `output_config.effort`, values `low` /
 `claude-fable-5-1`, `claude-mythos-5-1`, `claude-fable-5`, `claude-mythos-5`,
 `claude-mythos-preview`, `claude-opus-5`, `claude-opus-4-8`,
 `claude-opus-4-7`, `claude-opus-4-6`, `claude-opus-4-5-20251101`,
-`claude-sonnet-5`, `claude-sonnet-4-6`. `xhigh` is a *strict subset* of that
+`claude-sonnet-5`, `claude-sonnet-4-6`. `xhigh` is a _strict subset_ of that
 list (fable-5.1, mythos-5.1, fable-5, mythos-5, opus-5, opus-4-8, opus-4-7,
 sonnet-5 — notably **not** opus-4-6/sonnet-4.6, which support `max` but not
 `xhigh`; the two knobs are not simply nested tiers). Setting `high` is
@@ -45,12 +45,12 @@ relationship).
 `code.claude.com/docs/en/headless` ("Follow subagent messages"): every
 `assistant`/`user` message in `--output-format stream-json` output carries a
 `parent_tool_use_id` field. `null` means "main conversation"; a non-null
-value is "the ID of the [Agent tool call](/docs/en/sub-agents) that spawned
+value is "the ID of the [Agent tool call](https://code.claude.com/docs/en/sub-agents) that spawned
 it". Multiple sub-agents can be dispatched together from one assistant turn
 (several `tool_use` blocks in one `assistant` message) and run concurrently
 — this is exactly spec.md's "batch" concept, and it falls out for free: the
 set of sub-agent-spawning `tool_use` blocks inside one `assistant` line
-*is* one batch, with no extra correlation bookkeeping needed beyond "which
+_is_ one batch, with no extra correlation bookkeeping needed beyond "which
 line did these ids come from." Nesting is supported too (a sub-agent's own
 `parent_tool_use_id`-tagged messages can themselves parent further
 sub-agents), which spec.md's Edge Cases explicitly scope to "counted in the
@@ -78,7 +78,7 @@ confirms the gap FR-007 closes is real, not hypothetical.
 `content` array — this is standard, stable Messages API surface, not a new
 capability; `request.rs::build_messages` already builds a `content` array
 for non-trivial user turns (its `tool_result` branch), so adding
-image/document blocks to the *current* user message is additive there.
+image/document blocks to the _current_ user message is additive there.
 
 **Claude Code delegate**: no dedicated "attach a file" flag exists for `-p`
 mode. `claude.rs` already creates a disposable per-invocation temp directory

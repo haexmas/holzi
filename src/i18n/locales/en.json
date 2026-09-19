@@ -91,12 +91,10 @@
     },
     "noModel": "No model available",
     "model": {
-      "label": "Model",
       "choose": "Choose a model …",
       "local": "Local models",
       "notLoaded": "No model loaded",
       "none": "None",
-      "selectPrompt": "Choose a model to start chatting.",
       "delegate": {
         "claude": "Claude Code",
         "codex": "Codex"
@@ -210,7 +208,6 @@
       "stopGenerating": "Stop generating"
     },
     "autonomy": {
-      "modeLabel": "Autonomy",
       "standard": "Standard",
       "ungated": "Ungated",
       "gated_permissive": "Gated (permissive)",
@@ -280,6 +277,17 @@
       "submitCode": "Submit code",
       "success": "Connected.",
       "error": "Connection failed"
+    },
+    "autonomyMode": {
+      "title": "Delegate autonomy",
+      "description": "Sets how much freedom a connected delegate (Claude Code or Codex) gets by default when executing tools. Only applies once a delegate is connected, and for this device.",
+      "standardDescription": "Tool calls go through the same approval rule as every other model (Manual/Auto/Plan, adjustable in chat).",
+      "ungatedDescription": "The delegate runs fully on its own, using its own native full-autonomy mechanism — Holzi does not intervene or ask.",
+      "gated_permissiveDescription": "The delegate can act freely, but the deny rules set below stay off-limits — no prompts, every action is logged.",
+      "save": "Save",
+      "saved": "Saved.",
+      "saveFailed": "Failed to save the autonomy default.",
+      "loadFailed": "Failed to load the autonomy default."
     },
     "denyRules": {
       "title": "Delegate deny rules",

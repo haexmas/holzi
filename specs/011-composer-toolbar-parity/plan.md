@@ -102,16 +102,16 @@ _GATE: Must pass before Phase 0 research. Re-check after Phase 1 design._
 Evaluated against the holzi Constitution (`.specify/memory/constitution.md`,
 hard-pinned from haex-hive, revision `336eaf1e`):
 
-| Principle | Status | Rationale |
-| --- | --- | --- |
-| I. No Secrets in Git | ✓ PASS | No new credential or secret material. Attachment bytes are transient (read from disk at send time, never persisted, never logged). |
-| II. No Local Absolute Paths in Versioned Config | ✓ PASS | An attachment's filesystem path is per-invocation runtime state passed over Tauri IPC and into a request body/subprocess arg — never written into any versioned file. |
-| III. Project Identity Is Device-Independent | ✓ PASS | No change to project/device identity or vault scoping. |
-| IV. Cross-Repo References Pin Immutable Revisions | ✓ PASS | No new external harness content. `base64` is a new *direct* Cargo dependency, but not new external content — already resolved transitively (see Technical Context), same pattern this file already uses for `sha2`. |
-| V. External Sources Are Opt-in Per Project | ✓ PASS | N/A. |
-| VI. Self-Modifying Instructions Are Always Review-Gated | ✓ PASS | This spec/plan land through normal PR review like any other feature. |
-| VII. Relay Unavailability Never Blocks Local Work | ✓ PASS | Effort levels, sub-agent tracking, and attachment reading are all local computation/subprocess/HTTP-adapter concerns, independent of holzi's sync relay. |
-| VIII. No Concealment Instructions in Agent Output | ✓ PASS | The agent-activity indicator's entire purpose is *more* visibility into delegate behavior, not less; no hidden behavior introduced. |
+| Principle                                               | Status | Rationale                                                                                                                                                                                                           |
+| ------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| I. No Secrets in Git                                    | ✓ PASS | No new credential or secret material. Attachment bytes are transient (read from disk at send time, never persisted, never logged).                                                                                  |
+| II. No Local Absolute Paths in Versioned Config         | ✓ PASS | An attachment's filesystem path is per-invocation runtime state passed over Tauri IPC and into a request body/subprocess arg — never written into any versioned file.                                               |
+| III. Project Identity Is Device-Independent             | ✓ PASS | No change to project/device identity or vault scoping.                                                                                                                                                              |
+| IV. Cross-Repo References Pin Immutable Revisions       | ✓ PASS | No new external harness content. `base64` is a new _direct_ Cargo dependency, but not new external content — already resolved transitively (see Technical Context), same pattern this file already uses for `sha2`. |
+| V. External Sources Are Opt-in Per Project              | ✓ PASS | N/A.                                                                                                                                                                                                                |
+| VI. Self-Modifying Instructions Are Always Review-Gated | ✓ PASS | This spec/plan land through normal PR review like any other feature.                                                                                                                                                |
+| VII. Relay Unavailability Never Blocks Local Work       | ✓ PASS | Effort levels, sub-agent tracking, and attachment reading are all local computation/subprocess/HTTP-adapter concerns, independent of holzi's sync relay.                                                            |
+| VIII. No Concealment Instructions in Agent Output       | ✓ PASS | The agent-activity indicator's entire purpose is _more_ visibility into delegate behavior, not less; no hidden behavior introduced.                                                                                 |
 
 **Result**: All gates PASS. No Complexity Tracking entry needed.
 

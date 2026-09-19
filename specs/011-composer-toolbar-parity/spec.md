@@ -4,10 +4,11 @@
 **Created**: 2026-09-19
 **Status**: Draft
 **Input**: User description: "I want our input toolbar's design to move closer to Claude Code's own.
+
 1. The effort control should correspond to the model's actual effort. 2. When several (sub-)agents
-are spawned, I want that shown in batches too. 3. I want a '+' button to hand additional documents to
-the agent." Confirmed with the user: implement through the full spec-kit flow, and go end-to-end on
-all three (real backend semantics, not a visual-only pass).
+   are spawned, I want that shown in batches too. 3. I want a '+' button to hand additional documents to
+   the agent." Confirmed with the user: implement through the full spec-kit flow, and go end-to-end on
+   all three (real backend semantics, not a visual-only pass).
 
 ## User Scenarios & Testing _(mandatory)_
 

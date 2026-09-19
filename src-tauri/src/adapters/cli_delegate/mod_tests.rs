@@ -5,7 +5,8 @@ use uuid::Uuid;
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use super::DelegateVendor;
+use super::{build_transcript_prompt, DelegateVendor};
+use crate::adapters::types::{Attachment, AttachmentKind, ChatMessage, ChatRequest, ChatRole};
 use crate::providers::build_adapter;
 use crate::storage::providers::{Provider, ProviderCapability, ProviderKind};
 
@@ -22,6 +23,42 @@ fn delegate_vendor_rejects_unknown_strings() {
     assert_eq!(DelegateVendor::parse("anthropic"), None);
     assert_eq!(DelegateVendor::parse(""), None);
     assert_eq!(DelegateVendor::parse("Claude"), None);
+}
+
+#[test]
+fn transcript_gives_duplicate_attachment_names_unique_sandbox_names() {
+    let request = ChatRequest {
+        model_id: "claude-opus-5".to_string(),
+        thread_id: None,
+        system_prompt: None,
+        messages: vec![ChatMessage {
+            role: ChatRole::User,
+            content: "read both files".to_string(),
+            attachments: vec![
+                Attachment {
+                    name: "report.txt".to_string(),
+                    kind: AttachmentKind::Text,
+                    media_type: "text/plain".to_string(),
+                    bytes: b"first".to_vec(),
+                },
+                Attachment {
+                    name: "report.txt".to_string(),
+                    kind: AttachmentKind::Text,
+                    media_type: "text/plain".to_string(),
+                    bytes: b"second".to_vec(),
+                },
+            ],
+        }],
+        reasoning_requested: false,
+        max_new_tokens: None,
+        tools: Vec::new(),
+        autonomy_mode: Default::default(),
+        effort_level: Default::default(),
+    };
+
+    let prompt = build_transcript_prompt(&request);
+    assert!(prompt.contains("attachment-0-report.txt"));
+    assert!(prompt.contains("attachment-1-report.txt"));
 }
 
 fn sample_provider(adapter: Option<&str>) -> Provider {

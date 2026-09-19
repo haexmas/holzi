@@ -45,7 +45,7 @@ interface AttachmentInfo {
 - Rejects (throws) only for a file that cannot be read/stat'd at all (e.g.
   vanished between picking and inspecting); an oversized or wrong-type file
   still resolves normally with `usable: false` and a specific `reason`, so
-  the composer can show *why* rather than a generic failure.
+  the composer can show _why_ rather than a generic failure.
 - Usability (`usable`) is evaluated against the **currently active**
   model/backend at the moment of the call — re-evaluated by the frontend
   (a fresh call per attachment) whenever the active model changes while
@@ -81,7 +81,7 @@ interface SendMessageArgs {
 interface AgentActivityEvent {
   messageId: string
   activeCount: number
-  batchSize: number | null   // set only on the update where a new batch started
+  batchSize: number | null // set only on the update where a new batch started
 }
 ```
 
@@ -95,5 +95,5 @@ interface AgentActivityEvent {
   other per-turn UI state, and this feature's `activeAgentCount` reset is
   wired into that exact same reset point (FR-011) — `activeCount` reaching
   `0` mid-stream (last sub-agent in a batch finishes, more text follows)
-  and the turn *ending* are different things and both are handled, but only
+  and the turn _ending_ are different things and both are handled, but only
   the latter needs a new code path (the existing one), not this event.

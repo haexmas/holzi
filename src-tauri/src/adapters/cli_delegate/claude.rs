@@ -121,7 +121,14 @@ pub(super) fn parse_line(
                 // Any message belonging to a sub-agent — including its very
                 // first ("prompt") message — confirms that its parent
                 // tool_use id spawned one (research.md §2).
-                tracker.observe_parent_reference(parent_id)
+                let event = tracker.observe_parent_reference(parent_id);
+                if message_type == Some("assistant") {
+                    // Sub-agents can dispatch further agents. Register those
+                    // ids before their first child message references them,
+                    // while preserving the promotion event for this line.
+                    tracker.observe_top_level_tool_use(&tool_use_ids(&content));
+                }
+                event
             } else if message_type == Some("assistant") {
                 tracker.observe_top_level_tool_use(&tool_use_ids(&content));
                 subagents::TrackerEvent::None
@@ -331,16 +338,19 @@ pub(super) async fn spawn_claude_invocation(
     // process already runs in — Claude Code's own Read tool can then find
     // them by the filename `build_transcript_prompt` just mentioned
     // (research.md §3), with no dedicated CLI attachment flag needed.
+    let mut attachment_index = 0;
     for message in &req.messages {
         for attachment in &message.attachments {
-            std::fs::write(tmp.path().join(&attachment.name), &attachment.bytes).map_err(
-                |error| AdapterError::Http {
+            let sandbox_name = format!("attachment-{attachment_index}-{}", attachment.name);
+            attachment_index += 1;
+            std::fs::write(tmp.path().join(&sandbox_name), &attachment.bytes).map_err(|error| {
+                AdapterError::Http {
                     reason: format!(
                         "failed to write attachment {} for claude invocation: {error}",
                         attachment.name
                     ),
-                },
-            )?;
+                }
+            })?;
         }
     }
     let system_prompt_path = req.system_prompt.as_deref().map(|system_prompt| {
