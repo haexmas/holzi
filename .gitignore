@@ -20,6 +20,7 @@ Thumbs.db
 # spaex advisory manifest lock
 .spaex/manifest.json.lock
 .spaex/install.lock
+.spaex/composer.log
 
 # Node
 node_modules/
