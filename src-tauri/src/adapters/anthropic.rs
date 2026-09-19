@@ -173,8 +173,7 @@ pub(crate) async fn fetch_models(
             Some(id) if after_id.as_deref() != Some(id.as_str()) => after_id = Some(id),
             Some(_) => {
                 return Err(AdapterError::Parse {
-                    reason: "pagination response has_more=true without an advancing last_id"
-                        .into(),
+                    reason: "pagination response has_more=true without an advancing last_id".into(),
                 });
             }
             None => {
