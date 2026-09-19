@@ -9,6 +9,7 @@ const {
   listAsync,
   connectCliDelegateAsync,
   submitCliDelegateCodeAsync,
+  refreshModelsAsync,
   onDelegateConnectProgress,
 } = useProviders()
 
@@ -43,6 +44,18 @@ const opError = reactive<Record<DelegateVendor, string | null>>({
   codex: null,
 })
 const successFlash = reactive<Record<DelegateVendor, boolean>>({
+  claude: false,
+  codex: false,
+})
+const refreshingModels = reactive<Record<DelegateVendor, boolean>>({
+  claude: false,
+  codex: false,
+})
+const modelsRefreshError = reactive<Record<DelegateVendor, string | null>>({
+  claude: null,
+  codex: null,
+})
+const modelsRefreshSuccess = reactive<Record<DelegateVendor, boolean>>({
   claude: false,
   codex: false,
 })
@@ -118,6 +131,28 @@ async function onSubmitCode(vendor: DelegateVendor) {
     // re-prompts rather than exiting) — stay in the code-entry state so the
     // operator can retry without restarting the whole connect flow.
     opError[vendor] = errString(e)
+  }
+}
+
+/**
+ * Re-fetches the connected provider's live model catalog (spec: Claude's
+ * comes from Anthropic's `/v1/models`). Separate from `onConnect` — this
+ * needs no OAuth round trip, just `refresh_provider_models` against the
+ * already-stored credentials.
+ */
+async function onRefreshModels(vendor: DelegateVendor) {
+  const provider = connectedProvider(vendor)
+  if (!provider) return
+  modelsRefreshError[vendor] = null
+  modelsRefreshSuccess[vendor] = false
+  refreshingModels[vendor] = true
+  try {
+    await refreshModelsAsync(provider.id)
+    modelsRefreshSuccess[vendor] = true
+  } catch (e) {
+    modelsRefreshError[vendor] = errString(e)
+  } finally {
+    refreshingModels[vendor] = false
   }
 }
 
@@ -254,6 +289,19 @@ onBeforeUnmount(() => {
                   : t('settings.cliDelegate.connect')
               }}
             </UiButton>
+            <UiButton
+              v-if="connectedProvider(vendor)"
+              type="button"
+              variant="outline"
+              :disabled="refreshingModels[vendor]"
+              @click="onRefreshModels(vendor)"
+            >
+              {{
+                refreshingModels[vendor]
+                  ? t('settings.cliDelegate.refreshingModels')
+                  : t('settings.cliDelegate.refreshModels')
+              }}
+            </UiButton>
           </div>
         </template>
 
@@ -266,6 +314,21 @@ onBeforeUnmount(() => {
         </span>
         <span v-if="opError[vendor]" class="text-xs text-red-500" role="alert">
           {{ t('settings.cliDelegate.error') }}: {{ opError[vendor] }}
+        </span>
+        <span
+          v-if="modelsRefreshSuccess[vendor]"
+          class="text-xs text-green-600"
+          role="status"
+        >
+          {{ t('settings.cliDelegate.modelsRefreshed') }}
+        </span>
+        <span
+          v-if="modelsRefreshError[vendor]"
+          class="text-xs text-red-500"
+          role="alert"
+        >
+          {{ t('settings.cliDelegate.refreshModelsError') }}:
+          {{ modelsRefreshError[vendor] }}
         </span>
       </div>
     </div>

@@ -266,7 +266,11 @@
       "codeInputLabel": "Authorization code",
       "submitCode": "Submit code",
       "success": "Connected.",
-      "error": "Connection failed"
+      "error": "Connection failed",
+      "refreshModels": "Refresh models",
+      "refreshingModels": "Refreshing models…",
+      "modelsRefreshed": "Models refreshed.",
+      "refreshModelsError": "Refresh failed"
     },
     "denyRules": {
       "title": "Delegate deny rules",

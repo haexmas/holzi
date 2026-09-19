@@ -266,7 +266,11 @@
       "codeInputLabel": "Autorisierungscode",
       "submitCode": "Code einreichen",
       "success": "Verbunden.",
-      "error": "Verbindung fehlgeschlagen"
+      "error": "Verbindung fehlgeschlagen",
+      "refreshModels": "Modelle aktualisieren",
+      "refreshingModels": "Modelle werden aktualisiert…",
+      "modelsRefreshed": "Modelle aktualisiert.",
+      "refreshModelsError": "Aktualisieren fehlgeschlagen"
     },
     "denyRules": {
       "title": "Verbotsregeln für Delegaten",
