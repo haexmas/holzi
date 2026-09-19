@@ -26,6 +26,7 @@ import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import type { Message, SendMessageArgs } from '~/composables/useChat'
 import type { PendingApproval } from '~/components/chat/PermissionPrompt.vue'
+import { isAutonomyMode } from '~/composables/usePreferences'
 
 definePageMeta({
   middleware: ['onboarded'],
@@ -591,31 +592,41 @@ onMounted(async () => {
     if (unmounted) return
 
     const device = await currentDeviceInfoAsync()
-    try {
-      const stored = await getPrefAsync(
+    // Independent device-scoped prefs — read concurrently rather than one
+    // round trip after the other.
+    const [permissionResult, autonomyResult] = await Promise.allSettled([
+      getPrefAsync(
         { kind: 'device', uuid: device.vaultDeviceUuid },
         PERMISSION_MODE_KEY,
-      )
+      ),
+      getPrefAsync(
+        { kind: 'device', uuid: device.vaultDeviceUuid },
+        AUTONOMY_MODE_KEY,
+      ),
+    ])
+    if (permissionResult.status === 'fulfilled') {
+      const stored = permissionResult.value
       if (stored === 'manual' || stored === 'auto' || stored === 'plan') {
         permissionMode.value = stored
       }
-    } catch {
-      // Keep the default ('manual') if the read fails.
     }
-    try {
-      const storedAutonomy = await getPrefAsync(
-        { kind: 'device', uuid: device.vaultDeviceUuid },
-        AUTONOMY_MODE_KEY,
-      )
-      if (
-        storedAutonomy === 'standard' ||
-        storedAutonomy === 'ungated' ||
-        storedAutonomy === 'gated_permissive'
-      ) {
-        autonomyMode.value = storedAutonomy
+    // Keep the default ('manual') if the read fails.
+    if (autonomyResult.status === 'fulfilled') {
+      const stored = autonomyResult.value
+      // A `null`/unrecognised value means the preference is genuinely
+      // unset — keep the spec'd default ('ungated').
+      if (isAutonomyMode(stored)) {
+        autonomyMode.value = stored
       }
-    } catch {
-      // Keep the default ('ungated') if the read fails.
+    } else {
+      // A real read failure (vault I/O, CRDT error) is not the same as
+      // "no preference stored yet" — silently falling back to the initial
+      // 'ungated' default here would fail OPEN for a connected delegate
+      // (the least-gated option) on a transient error. Fail safe to
+      // 'standard' instead, and surface the failure so it isn't mistaken
+      // for an ordinary empty-vault state during triage.
+      autonomyMode.value = 'standard'
+      lastError.value = errString(autonomyResult.reason)
     }
     if (unmounted) return
     deviceUuid.value = device.vaultDeviceUuid
@@ -1112,7 +1123,9 @@ onBeforeUnmount(() => {
                     :effort-level="effortLevel"
                     :effort-label="effortLabel"
                     :disabled="busy"
-                    :model-disabled="modelGroups.length === 0"
+                    :model-disabled="
+                      modelGroups.length === 0 || modelLoadPending
+                    "
                     @update:model-id="loadModel"
                     @update:effort-level="updateEffortLevel"
                   />

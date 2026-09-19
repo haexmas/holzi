@@ -15,7 +15,17 @@ use crate::storage::preferences::{self, PrefScope};
 use super::DelegateVendor;
 
 /// Per-request posture for a `cli_delegate` invocation (spec FR-001/FR-002).
-/// Carried on `ChatRequest`, never persisted as a preference (FR-008).
+/// Carried on `ChatRequest`. `#[default]` is `Standard`, matching
+/// `ChatRequest::autonomy_mode`'s own `None` fallback in `chat/commands.rs`
+/// — but as of the 2026-09-19 amendment to spec 009 this is no longer the
+/// product-level default: the frontend now reads a real, persisted
+/// device-scoped preference (`chat.autonomy_mode`, `AutonomyModeSetting.vue`)
+/// defaulting to `Ungated` there, and always sends a concrete value for a
+/// `cli_delegate` model, so `unwrap_or_default()`'s `Standard` fallback below
+/// is only ever reached by a caller that omits `autonomy_mode` outright
+/// (this frontend never does, post-amendment) — FR-002/FR-008's "never
+/// persisted, no silent carry-over" premise is explicitly superseded, see
+/// the spec's amendment section.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AutonomyMode {

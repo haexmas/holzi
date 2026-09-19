@@ -181,14 +181,19 @@ export const useModelsStore = defineStore('models', () => {
   // this, picking a new model left the composer showing the previous one
   // (or nothing) until `load_model`'s round trip resolved — `activeModel`
   // itself stays untouched until then, on purpose (`sendDisabled` etc.
-  // must keep treating a pending load as "not ready").
+  // must keep treating a pending load as "not ready"). `loadingModelId` is
+  // set/cleared in lockstep by every load path — `loadModel`,
+  // `onIntegrityLoadUntrusted`, and the backend-driven
+  // `applyLoadProgress`/`applyLoadStatus`/`applyLoadError` handlers below
+  // (the vault-open preload never calls `loadModel` at all) — so checking
+  // it alone is sufficient; the extra `modelLoadPending.value &&` this used
+  // to require was redundant for the frontend-initiated path and actively
+  // wrong for the backend-initiated one.
   const displayModelId = computed(() =>
-    modelLoadPending.value && loadingModelId.value
-      ? loadingModelId.value
-      : activeModelId.value,
+    loadingModelId.value ? loadingModelId.value : activeModelId.value,
   )
   const displayModelName = computed(() =>
-    modelLoadPending.value && loadingModelId.value
+    loadingModelId.value
       ? loadingModelName.value
       : (activeModel.value?.name ?? undefined),
   )
@@ -277,30 +282,53 @@ export const useModelsStore = defineStore('models', () => {
         lastError.value = errString(e)
       }
       loadingPhase.value = null
-      activeModel.value = null
+      // The backend never touches its existing session unless this load
+      // fully succeeds (`load_model_inner` only swaps `chat.session` at
+      // the very end) — so unconditionally nulling `activeModel` here is
+      // wrong whenever this call was switching away from an already-good
+      // model, including when the failure is the backend rejecting this
+      // request in favor of a *different* load that's genuinely in
+      // flight (the operation mutex, or the vault-open preload's own
+      // generation counter racing this call — see
+      // `autoLoadFirstAvailableModel`). Re-read backend truth instead of
+      // guessing "nothing is active".
+      await refreshActiveModel().catch(() => {})
     } finally {
       modelLoadPending.value = false
       loadingModelId.value = null
+      loadingModelName.value = ''
     }
   }
 
   /** "Trotzdem als unsicher laden" — bypasses the hash check for this load only. */
   async function onIntegrityLoadUntrusted() {
     if (!integrityDialog.value) return
+    const modelId = integrityDialog.value.modelId
     modelLoadPending.value = true
+    loadingModelId.value = modelId
+    loadingModelName.value = findModelName(modelId)
     integrityBusy.value = true
     integrityActionError.value = null
     try {
-      activeModel.value = await chat.loadModelWithIntegrityOverrideAsync(
-        integrityDialog.value.modelId,
-      )
+      activeModel.value =
+        await chat.loadModelWithIntegrityOverrideAsync(modelId)
       integrityDialog.value = null
-      await refreshInstalledAndCatalog()
+      try {
+        await refreshInstalledAndCatalog()
+      } catch (e) {
+        // The override load itself already succeeded and the dialog is
+        // gone by now — this failure has nowhere left to render as
+        // `integrityActionError`, so it goes through the page's general
+        // error banner instead of being silently dropped.
+        lastError.value = errString(e)
+      }
     } catch (e) {
       integrityActionError.value = errString(e)
     } finally {
       integrityBusy.value = false
       modelLoadPending.value = false
+      loadingModelId.value = null
+      loadingModelName.value = ''
     }
   }
 
@@ -330,7 +358,15 @@ export const useModelsStore = defineStore('models', () => {
           forceRepair: true,
         })
         integrityDialog.value = null
-        await refreshInstalledAndCatalog()
+        try {
+          await refreshInstalledAndCatalog()
+        } catch (e) {
+          // Same rationale as `onIntegrityLoadUntrusted`: the repair itself
+          // already succeeded and the dialog is already gone, so a refresh
+          // failure here goes through the general error banner instead of
+          // a now-unreachable `integrityActionError`.
+          lastError.value = errString(e)
+        }
       } else {
         integrityActionError.value = t('models.integrityDialog.actionFailed')
       }
@@ -376,9 +412,17 @@ export const useModelsStore = defineStore('models', () => {
     loadErrorModelId.value = null
     loadingPhase.value = e.phase
     loadingModelName.value = e.modelName
+    // Backend-driven loads — chiefly the vault-open background preload,
+    // which never goes through `loadModel()` at all — would otherwise
+    // leave `loadingModelId` unset, so `displayModelId`/`displayModelName`
+    // fall back to the (still empty) active model and the composer shows
+    // "Choose a model" the whole time a preload that the loading banner
+    // already reports is running.
+    loadingModelId.value = e.modelId
     loadingProviderName.value = e.providerName ?? null
     if (e.phase === 'ready') {
       loadingPhase.value = null
+      loadingModelId.value = null
       void refreshActiveModel().catch((e: unknown) => {
         lastError.value = errString(e)
       })
@@ -391,11 +435,13 @@ export const useModelsStore = defineStore('models', () => {
       loadErrorModelId.value = null
       loadingPhase.value = status.phase
       loadingModelName.value = status.modelName
+      loadingModelId.value = status.modelId
       loadingProviderName.value = status.providerName ?? null
     } else {
       loadingPhase.value = null
       loadingModelName.value =
         'modelName' in status ? (status.modelName ?? '') : ''
+      loadingModelId.value = null
       loadingProviderName.value = null
       loadErrorModelId.value =
         status.status === 'error' ? (status.modelId ?? null) : null
@@ -411,6 +457,7 @@ export const useModelsStore = defineStore('models', () => {
   /** Records a terminal model-load error event. */
   function applyLoadError(event: ModelLoadErrorEvent) {
     loadingPhase.value = null
+    loadingModelId.value = null
     loadErrorModelId.value = event.modelId ?? null
     lastError.value = t('chat.loading.error')
   }
@@ -452,20 +499,33 @@ export const useModelsStore = defineStore('models', () => {
    * no-op; the composer's own model control remains the only place to
    * pick one by hand.
    */
-  async function autoLoadFirstAvailableModel() {
-    if (
-      activeModel.value ||
+  function shouldSkipAutoLoad(): boolean {
+    return (
+      activeModel.value !== null ||
       modelLoadPending.value ||
       loadingPhase.value !== null
     )
-      return
+  }
+
+  async function autoLoadFirstAvailableModel() {
+    if (shouldSkipAutoLoad()) return
     let result: ResolveDefaultModelResult
     try {
       result = await resolveDefaultModelAsync()
-    } catch {
+    } catch (e) {
+      // A genuine resolver failure (backend/IPC error) must not look
+      // identical to "nothing is loadable yet" — the latter is a normal,
+      // silent no-op; the former is worth surfacing so it doesn't get
+      // mistaken for an empty vault during triage.
+      lastError.value = errString(e)
       return
     }
-    if (result.modelId) await loadModel(result.modelId)
+    // Re-check: the resolver call above is a real IPC/DB round trip, and
+    // something else — a manual pick from the composer, the vault-open
+    // background preload reaching this device first — may have started
+    // or finished a load while we were awaiting it.
+    if (!result.modelId || shouldSkipAutoLoad()) return
+    await loadModel(result.modelId)
   }
 
   let stopped = false

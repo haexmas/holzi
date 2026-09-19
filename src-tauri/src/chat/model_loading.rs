@@ -6,8 +6,8 @@
 //! steps. See `chat/commands.rs`'s own history for the rest of the split
 //! plan.
 //!
-//! Maintainability exception (spaex 500-LoC rule): at ~650 lines this is
-//! over the limit on its own. `resolve_local_model_metadata` and
+//! Maintainability exception (spaex 500-LoC rule): at ~730 lines this is
+//! well over the limit on its own. `resolve_local_model_metadata` and
 //! `verify_local_model_integrity` (roughly 170 of these lines) are a
 //! self-contained pair — the mandatory pre-load SHA-256 check and its
 //! `integrity_override` bypass — that only needs `AppState`/`paths`/
@@ -16,8 +16,10 @@
 //!
 //! Concrete split plan, if this grows further: move
 //! `resolve_local_model_metadata` and `verify_local_model_integrity` to a
-//! new `chat/model_integrity.rs`, bringing this file back under 500
-//! lines.
+//! new `chat/model_integrity.rs` — that alone gets this file to roughly
+//! 560 lines, still over the limit, so a second extraction (e.g. the
+//! display-name/provider-name resolution helpers) would be needed to
+//! actually reach 500.
 
 use std::sync::Arc;
 
@@ -647,19 +649,39 @@ pub(crate) async fn resolve_display_name(
     state: &State<'_, AppState>,
     model_id: &str,
 ) -> Option<String> {
-    let db = active_database(state).ok()?;
+    let db = match active_database(state) {
+        Ok(db) => db,
+        Err(e) => {
+            log::warn!("resolve_display_name: no active database for {model_id}: {e}");
+            return None;
+        }
+    };
     let id_owned = model_id.to_string();
-    let name = tauri::async_runtime::spawn_blocking(move || {
+    let query = tauri::async_runtime::spawn_blocking(move || {
         db.with_connection(|conn| {
             Ok(models_store::get_model(conn, &id_owned)
                 .map_err(haex_crdt::Error::from)?
                 .map(|r| r.name))
         })
     })
-    .await
-    .ok()?
-    .ok()?;
-    name
+    .await;
+    // Every branch below falls back to `None` (the caller then shows the
+    // raw model id), but logs first: a DB query failure or a
+    // `spawn_blocking` join failure is a real bug worth noticing, not the
+    // same "this model just has no cached row" case a plain lookup miss
+    // is — silently collapsing all three made a DB hiccup indistinguishable
+    // from an expected miss.
+    match query {
+        Ok(Ok(name)) => name,
+        Ok(Err(e)) => {
+            log::warn!("resolve_display_name: db query failed for {model_id}: {e}");
+            None
+        }
+        Err(e) => {
+            log::warn!("resolve_display_name: spawn_blocking join failed for {model_id}: {e}");
+            None
+        }
+    }
 }
 
 /// Drops the current session, if any. Idempotent.

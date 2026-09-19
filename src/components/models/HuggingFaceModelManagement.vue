@@ -60,7 +60,7 @@ const {
   refreshInstalledAndCatalog,
   refreshActiveModel,
   onIntegrityLoadUntrusted: onLoadUntrustedAsync,
-  onIntegrityRepairSource: onRepairSourceAsync,
+  onIntegrityRepairSource,
   onIntegrityChooseOther,
   onIntegrityDialogOpenChange,
 } = modelStore
@@ -238,6 +238,22 @@ async function loadModelHereAsync(id: string) {
   } finally {
     busyModelId.value = null
   }
+}
+
+/**
+ * "Erneut herunterladen" — delegates the actual repair to the store, then
+ * clears this component's own `downloadStates` entry for the repaired
+ * model. The store has no way to do this itself: `downloadStates` (and the
+ * progress-bar overlay it drives) is private to this component, populated
+ * by its own `onDownloadProgress`/`onDownloadComplete` listeners — a
+ * repair re-downloads under the same model id, so without this the
+ * card's progress overlay is left showing stale "download in progress" /
+ * 100% state indefinitely (until the component happens to remount).
+ */
+async function onRepairSourceAsync() {
+  const modelId = integrityDialog.value?.modelId
+  await onIntegrityRepairSource()
+  if (modelId) clearDownloadState(modelId)
 }
 
 /** Closing the dialog after "pick another model" also returns to the installed tab. */

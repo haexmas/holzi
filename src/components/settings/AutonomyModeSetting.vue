@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import {
+  AUTONOMY_MODES,
+  isAutonomyMode,
+  type AutonomyMode,
+} from '~/composables/usePreferences'
+
 const { t } = useI18n()
 const { errString } = useErrorString()
 const { getPrefAsync, setPrefAsync } = usePreferences()
@@ -12,8 +18,7 @@ const props = defineProps<{
 // writes it directly through the generic `set_pref` command.
 const PREF_KEY = 'chat.autonomy_mode'
 
-const MODES = ['standard', 'ungated', 'gated_permissive'] as const
-type AutonomyMode = (typeof MODES)[number]
+const MODES = AUTONOMY_MODES
 const DEFAULT_MODE: AutonomyMode = 'ungated'
 
 const selected = ref<AutonomyMode>(DEFAULT_MODE)
@@ -32,10 +37,7 @@ async function reloadAsync() {
       { kind: 'device', uuid: props.deviceUuid },
       PREF_KEY,
     )
-    selected.value =
-      raw === 'standard' || raw === 'ungated' || raw === 'gated_permissive'
-        ? raw
-        : DEFAULT_MODE
+    selected.value = isAutonomyMode(raw) ? raw : DEFAULT_MODE
   } catch (e) {
     loadError.value = errString(e)
   } finally {

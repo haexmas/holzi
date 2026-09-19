@@ -26,8 +26,8 @@ Settings page (`settings.autonomyMode`, preference key `chat.autonomy_mode`), de
 selected → existing live approval behavior") and **FR-008**/User Story 4 ("autonomy never silently
 carries over" — it now deliberately does, as an explicit, always-visible Settings default rather
 than an easy-to-forget per-request toggle). The rest of this spec — the ungated/gated-permissive
-mechanics themselves (FR-003 through FR-007, FR-009 through FR-013) — is unaffected; only *how the
-mode is selected* changed.
+mechanics themselves (FR-003 through FR-007, FR-009 through FR-013) — is unaffected; only _how the
+mode is selected_ changed.
 
 ## Clarifications
 

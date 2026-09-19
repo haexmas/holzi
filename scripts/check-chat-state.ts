@@ -6,7 +6,7 @@
 // actual IPC boundary (`invoke`/`listen` from `@tauri-apps/api/core`/
 // `event`). No browser or GPU is required.
 //
-// Maintainability exception (spaex 500-LoC rule): 19 replay tests plus the
+// Maintainability exception (spaex 500-LoC rule): 25 replay tests plus the
 // `createChatState` scaffold that boots the page's real `<script setup>`
 // against a sandboxed `require` — a hand-rolled CommonJS loader (using the
 // `typescript` package already a dependency here) that transpiles the page,
@@ -21,7 +21,7 @@
 // array `mount()`/`unmount()` drain), and `dompurify` (needs a real DOM).
 //
 // Concrete split plan, if this grows further: move `createChatState` into
-// `scripts/lib/chat-state-harness.ts` and split the 19 cases by what they
+// `scripts/lib/chat-state-harness.ts` and split the 25 cases by what they
 // exercise — transcript/event ordering, thread sidebar, model lifecycle,
 // and composer/permission state.
 import assert from 'node:assert/strict'
@@ -233,8 +233,16 @@ function createChatState(
     }
     if (specifier === 'marked') return nodeRequire('marked')
     if (specifier === '~/composables/useChat') return { useChat: () => chat }
-    if (specifier === '~/composables/usePreferences')
-      return { usePreferences: () => preferences }
+    if (specifier === '~/composables/usePreferences') {
+      // `usePreferences()` itself is overridden below to share the one
+      // `preferences` instance every consumer in this sandbox sees, but its
+      // other named exports (`AUTONOMY_MODES`/`isAutonomyMode`) are plain,
+      // side-effect-free values — running the real module for those costs
+      // nothing and means the page's replayed autonomy-mode validation
+      // exercises the actual shared helper instead of a hand-duplicated one.
+      const real = runComposable(composablePath('usePreferences'), req)
+      return { ...real, usePreferences: () => preferences }
+    }
     if (specifier.startsWith('~/composables/')) {
       const name = specifier.slice('~/composables/'.length)
       const real = runComposable(
