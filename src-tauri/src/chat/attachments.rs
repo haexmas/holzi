@@ -167,7 +167,7 @@ pub fn read_attachment_content(path: &Path) -> Result<Attachment> {
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
     let cap = max_bytes_for(&kind);
-    let mut file = std::fs::File::open(path).map_err(|e| HolziError::InvalidInput {
+    let file = std::fs::File::open(path).map_err(|e| HolziError::InvalidInput {
         reason: format!("failed to read attachment {}: {e}", path.display()),
     })?;
     let mut bytes = Vec::new();
