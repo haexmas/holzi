@@ -14,6 +14,7 @@ import type {
 } from '~/composables/useModels'
 import type { CatalogEntryWithFit } from '~/composables/useCatalog'
 import type { Provider, ProviderModel } from '~/composables/useProviders'
+import type { ResolveDefaultModelResult } from '~/composables/usePreferences'
 
 export type ModelGroup = {
   providerId: string
@@ -47,6 +48,7 @@ export const useModelsStore = defineStore('models', () => {
   const models = useModels()
   const catalog = useCatalog()
   const providers = useProviders()
+  const { resolveDefaultModelAsync } = usePreferences()
   const { t } = useI18n()
   const { errString } = useErrorString()
 
@@ -397,6 +399,37 @@ export const useModelsStore = defineStore('models', () => {
     await refreshActiveModel()
     await refreshInstalledAndCatalog()
     await refreshProviders()
+    await autoLoadFirstAvailableModel()
+  }
+
+  /**
+   * Session-start fallback (spec 002 §FR-014's last step): once every list
+   * above is fresh, auto-loads whichever model the backend resolver picks
+   * — this device's last-active model, then its default, then the vault
+   * default, then simply the first available one. A newly-connected
+   * provider's models only exist in that resolver's view *after*
+   * `refreshProviders()` has fetched and cached them once, which is why
+   * this runs here rather than as part of the vault-open background
+   * preload (`start_default_model_preload`, Rust) — that one only sees
+   * whatever was already cached before this page ever mounted. A `null`
+   * result (`source: 'none'`) means nothing is loadable yet, so this is a
+   * no-op; the composer's own model control remains the only place to
+   * pick one by hand.
+   */
+  async function autoLoadFirstAvailableModel() {
+    if (
+      activeModel.value ||
+      modelLoadPending.value ||
+      loadingPhase.value !== null
+    )
+      return
+    let result: ResolveDefaultModelResult
+    try {
+      result = await resolveDefaultModelAsync()
+    } catch {
+      return
+    }
+    if (result.modelId) await loadModel(result.modelId)
   }
 
   let stopped = false

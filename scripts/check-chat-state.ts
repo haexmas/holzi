@@ -177,6 +177,11 @@ const DEFAULT_INVOKE_HANDLERS: Record<string, InvokeHandler> = {
   list_catalog: () => [],
   list_providers: () => [],
   current_device_info: () => ({ vaultDeviceUuid: 'device' }),
+  // Inert by default: `active_model_info` above already returns a truthy
+  // model, so `models.ts`'s `autoLoadFirstAvailableModel()` short-circuits
+  // before ever calling this — only reached by a test that overrides
+  // `active_model_info` to simulate nothing being active yet.
+  resolve_default_model: () => ({ modelId: null, source: 'none' }),
 }
 
 const RETURN_STATEMENT = `
@@ -270,6 +275,7 @@ function createChatState(
     useCatalog: () => req('~/composables/useCatalog').useCatalog(),
     useProviders: () => req('~/composables/useProviders').useProviders(),
     useErrorString: () => req('~/composables/useErrorString').useErrorString(),
+    usePreferences: () => preferences,
     parseModelIntegrityFailure: req('~/composables/useModels')
       .parseModelIntegrityFailure,
   }).useModelsStore()
@@ -392,6 +398,45 @@ test('model initialization preserves an active integrity action', async () => {
 
   assert.deepEqual(state.modelStore.integrityDialog, dialog)
   assert.equal(state.modelStore.integrityActionError, 'action still running')
+})
+
+test('model initialization auto-loads the first available model when nothing is active yet (spec 002 FR-014)', async () => {
+  const state = createChatState(
+    {
+      activeModelInfoAsync: async () => null,
+      loadModelAsync: async (modelId: string) => ({
+        modelId,
+        name: 'Auto Picked',
+        tokenizerRepo: '',
+        contextWindow: null,
+      }),
+    },
+    {
+      resolveDefaultModelAsync: async () => ({
+        modelId: 'auto-picked',
+        source: 'first_available',
+      }),
+    },
+  )
+
+  await state.modelStore.initialize()
+
+  assert.equal(state.modelStore.activeModel?.modelId, 'auto-picked')
+})
+
+test('model initialization skips the auto-load fallback when a model is already active', async () => {
+  let loadModelCalls = 0
+  const state = createChatState({
+    loadModelAsync: async (modelId: string) => {
+      loadModelCalls++
+      return { modelId, name: modelId, tokenizerRepo: '', contextWindow: null }
+    },
+  })
+
+  await state.modelStore.initialize()
+
+  assert.equal(state.modelStore.activeModel?.modelId, 'model')
+  assert.equal(loadModelCalls, 0)
 })
 
 test('history durations use Unix milliseconds and compact thresholds', () => {
