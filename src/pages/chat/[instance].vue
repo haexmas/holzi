@@ -234,6 +234,17 @@ const activeMessages = computed<Message[]>(() => {
   return messagesByThread.value[activeThreadId.value] ?? []
 })
 
+// The chat window (sidebar, header, composer) is always reachable the
+// instant the chat page opens; only the message area itself falls back to
+// the model picker/catalog-download state instead of blocking the whole
+// page (users landed on a full "choose a model" screen before this, with
+// no way back to a chat that was mid-configuration).
+const showModelSelection = computed(
+  () =>
+    noModelsInstalled.value ||
+    (!activeModel.value && !modelLoadPending.value && !loadingPhase.value),
+)
+
 /** Scrolls the message viewport to its newest item after rendering. */
 async function scrollToBottom() {
   await nextTick()
@@ -894,170 +905,165 @@ onBeforeUnmount(() => {
         {{ loadingLabel }}
       </div>
 
-      <ChatModelSelection
-        v-if="
-          noModelsInstalled ||
-          (!activeModel && !modelLoadPending && !loadingPhase)
-        "
-        :busy="busy"
-      />
-
-      <div v-else class="flex-1 flex flex-col overflow-hidden">
+      <div class="flex-1 flex flex-col overflow-hidden">
         <div
           data-messages-scroll
           class="flex-1 min-h-0 overflow-y-auto px-4 py-6 md:px-8"
         >
-          <div
-            v-if="activeMessages.length === 0"
-            class="mx-auto flex h-full max-w-3xl flex-col items-center justify-center text-center"
-          >
+          <ChatModelSelection v-if="showModelSelection" :busy="busy" />
+          <template v-else>
             <div
-              class="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-foreground text-background"
-            >
-              <Icon name="lucide:sparkles" class="h-5 w-5" />
-            </div>
-            <h2 class="text-xl font-semibold tracking-tight">
-              {{ t('chat.empty.title') }}
-            </h2>
-            <p class="mt-2 max-w-md text-sm text-muted-foreground">
-              {{
-                t('chat.empty.description', {
-                  modelName: activeModel?.name ?? loadingModelName,
-                })
-              }}
-            </p>
-          </div>
-          <div
-            v-for="m in activeMessages"
-            :key="m.id"
-            class="mx-auto mb-6 flex max-w-3xl gap-3"
-            :class="m.role === 'user' ? 'justify-end' : 'justify-start'"
-          >
-            <div
-              v-if="m.role !== 'user'"
-              class="mt-1 hidden h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-foreground text-background sm:flex"
-            >
-              <Icon
-                :name="
-                  m.role === 'assistant' ? 'lucide:sparkles' : 'lucide:wrench'
-                "
-                class="h-3.5 w-3.5"
-              />
-            </div>
-            <div
-              class="min-w-0 max-w-[min(90%,48rem)]"
-              :class="m.role === 'user' ? 'order-first' : ''"
+              v-if="activeMessages.length === 0"
+              class="mx-auto flex h-full max-w-3xl flex-col items-center justify-center text-center"
             >
               <div
-                class="mb-1 flex items-center gap-2 text-xs text-muted-foreground"
+                class="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-foreground text-background"
               >
-                <template v-if="m.role === 'tool_call'">
-                  {{ t('chat.tool.call', { name: m.toolName }) }}
-                </template>
-                <template v-else-if="m.role === 'tool_result'">
-                  {{
-                    m.toolIsError
-                      ? t('chat.tool.resultError')
-                      : t('chat.tool.result')
-                  }}
-                </template>
-                <template v-else>
-                  {{
-                    m.role === 'user'
-                      ? t('chat.sender.user')
-                      : m.role === 'assistant'
-                        ? t('chat.sender.assistant')
-                        : t('chat.sender.system')
-                  }}
-                  <span
-                    v-if="m.role === 'assistant' && m.completionTokens"
-                    class="ml-2"
-                  >
-                    {{ t('chat.tokens', { count: m.completionTokens }) }}
-                  </span>
-                  <span
-                    v-if="
-                      m.role === 'assistant' &&
-                      delegateAnsweredByLabel(m.modelId)
-                    "
-                    class="ml-2"
-                  >
-                    {{ delegateAnsweredByLabel(m.modelId) }}
-                  </span>
-                  <span
-                    v-if="m.role === 'assistant' && m.autonomyMode"
-                    class="ml-2"
-                  >
-                    {{ t(`chat.autonomy.${m.autonomyMode}`) }}
-                  </span>
-                  <span
-                    v-if="m.finishReason === 'error'"
-                    class="ml-2 text-destructive"
-                  >
-                    {{ t('chat.errorLabel') }}
-                  </span>
-                  <span
-                    v-if="m.finishReason === 'cancelled'"
-                    class="ml-2 text-muted-foreground"
-                  >
-                    {{ t('chat.cancelledLabel') }}
-                  </span>
-                  <span
-                    v-if="m.finishReason === 'tool_limit_reached'"
-                    class="ml-2 text-amber-600"
-                  >
-                    {{ t('chat.tool.limitReached') }}
-                  </span>
-                  <span
-                    v-if="retryingMessageId === m.id"
-                    class="ml-2 text-muted-foreground italic"
-                  >
-                    {{ t('chat.retrying') }}
-                  </span>
-                </template>
+                <Icon name="lucide:sparkles" class="h-5 w-5" />
               </div>
+              <h2 class="text-xl font-semibold tracking-tight">
+                {{ t('chat.empty.title') }}
+              </h2>
+              <p class="mt-2 max-w-md text-sm text-muted-foreground">
+                {{
+                  t('chat.empty.description', {
+                    modelName: activeModel?.name ?? loadingModelName,
+                  })
+                }}
+              </p>
+            </div>
+            <div
+              v-for="m in activeMessages"
+              :key="m.id"
+              class="mx-auto mb-6 flex max-w-3xl gap-3"
+              :class="m.role === 'user' ? 'justify-end' : 'justify-start'"
+            >
               <div
-                class="rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm"
-                :class="{
-                  'whitespace-pre-wrap':
-                    m.role === 'user' ||
-                    m.role === 'tool_call' ||
-                    m.role === 'tool_result',
-                  'bg-foreground text-background': m.role === 'user',
-                  'border border-border bg-background':
-                    m.role === 'assistant' || m.role === 'system',
-                  'rounded-lg bg-muted/30 font-mono text-xs leading-5':
-                    m.role === 'tool_call' ||
-                    (m.role === 'tool_result' && !m.toolIsError),
-                  'rounded-lg bg-destructive/10 text-destructive font-mono text-xs leading-5':
-                    m.role === 'tool_result' && m.toolIsError,
-                }"
+                v-if="m.role !== 'user'"
+                class="mt-1 hidden h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-foreground text-background sm:flex"
               >
-                <template v-if="m.role === 'tool_call'">{{
-                  m.toolInput
-                }}</template>
-                <!-- eslint-disable vue/no-v-html -->
-                <div
-                  v-else-if="m.role === 'assistant' || m.role === 'system'"
-                  class="chat-markdown"
-                  v-html="
-                    renderMarkdown(
-                      m.content || (streamingMessageId === m.id ? '…' : ''),
-                    )
+                <Icon
+                  :name="
+                    m.role === 'assistant' ? 'lucide:sparkles' : 'lucide:wrench'
                   "
+                  class="h-3.5 w-3.5"
                 />
-                <!-- eslint-enable vue/no-v-html -->
-                <template v-else>{{ toolResultContentLabel(m) }}</template>
               </div>
-              <ChatReasoningAccordion
-                v-if="m.role === 'assistant' && reasoningFor(m.id)"
-                :reasoning="reasoningFor(m.id)"
-                :label="t('chat.reasoning.title')"
-                :expanded="expandedReasoning.has(m.id)"
-                @update:expanded="setReasoningExpanded(m.id, $event)"
-              />
+              <div
+                class="min-w-0 max-w-[min(90%,48rem)]"
+                :class="m.role === 'user' ? 'order-first' : ''"
+              >
+                <div
+                  class="mb-1 flex items-center gap-2 text-xs text-muted-foreground"
+                >
+                  <template v-if="m.role === 'tool_call'">
+                    {{ t('chat.tool.call', { name: m.toolName }) }}
+                  </template>
+                  <template v-else-if="m.role === 'tool_result'">
+                    {{
+                      m.toolIsError
+                        ? t('chat.tool.resultError')
+                        : t('chat.tool.result')
+                    }}
+                  </template>
+                  <template v-else>
+                    {{
+                      m.role === 'user'
+                        ? t('chat.sender.user')
+                        : m.role === 'assistant'
+                          ? t('chat.sender.assistant')
+                          : t('chat.sender.system')
+                    }}
+                    <span
+                      v-if="m.role === 'assistant' && m.completionTokens"
+                      class="ml-2"
+                    >
+                      {{ t('chat.tokens', { count: m.completionTokens }) }}
+                    </span>
+                    <span
+                      v-if="
+                        m.role === 'assistant' &&
+                        delegateAnsweredByLabel(m.modelId)
+                      "
+                      class="ml-2"
+                    >
+                      {{ delegateAnsweredByLabel(m.modelId) }}
+                    </span>
+                    <span
+                      v-if="m.role === 'assistant' && m.autonomyMode"
+                      class="ml-2"
+                    >
+                      {{ t(`chat.autonomy.${m.autonomyMode}`) }}
+                    </span>
+                    <span
+                      v-if="m.finishReason === 'error'"
+                      class="ml-2 text-destructive"
+                    >
+                      {{ t('chat.errorLabel') }}
+                    </span>
+                    <span
+                      v-if="m.finishReason === 'cancelled'"
+                      class="ml-2 text-muted-foreground"
+                    >
+                      {{ t('chat.cancelledLabel') }}
+                    </span>
+                    <span
+                      v-if="m.finishReason === 'tool_limit_reached'"
+                      class="ml-2 text-amber-600"
+                    >
+                      {{ t('chat.tool.limitReached') }}
+                    </span>
+                    <span
+                      v-if="retryingMessageId === m.id"
+                      class="ml-2 text-muted-foreground italic"
+                    >
+                      {{ t('chat.retrying') }}
+                    </span>
+                  </template>
+                </div>
+                <div
+                  class="rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm"
+                  :class="{
+                    'whitespace-pre-wrap':
+                      m.role === 'user' ||
+                      m.role === 'tool_call' ||
+                      m.role === 'tool_result',
+                    'bg-foreground text-background': m.role === 'user',
+                    'border border-border bg-background':
+                      m.role === 'assistant' || m.role === 'system',
+                    'rounded-lg bg-muted/30 font-mono text-xs leading-5':
+                      m.role === 'tool_call' ||
+                      (m.role === 'tool_result' && !m.toolIsError),
+                    'rounded-lg bg-destructive/10 text-destructive font-mono text-xs leading-5':
+                      m.role === 'tool_result' && m.toolIsError,
+                  }"
+                >
+                  <template v-if="m.role === 'tool_call'">{{
+                    m.toolInput
+                  }}</template>
+                  <!-- eslint-disable vue/no-v-html -->
+                  <div
+                    v-else-if="m.role === 'assistant' || m.role === 'system'"
+                    class="chat-markdown"
+                    v-html="
+                      renderMarkdown(
+                        m.content || (streamingMessageId === m.id ? '…' : ''),
+                      )
+                    "
+                  />
+                  <!-- eslint-enable vue/no-v-html -->
+                  <template v-else>{{ toolResultContentLabel(m) }}</template>
+                </div>
+                <ChatReasoningAccordion
+                  v-if="m.role === 'assistant' && reasoningFor(m.id)"
+                  :reasoning="reasoningFor(m.id)"
+                  :label="t('chat.reasoning.title')"
+                  :expanded="expandedReasoning.has(m.id)"
+                  @update:expanded="setReasoningExpanded(m.id, $event)"
+                />
+              </div>
             </div>
-          </div>
+          </template>
         </div>
 
         <form

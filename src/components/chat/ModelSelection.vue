@@ -1,8 +1,10 @@
 <script setup lang="ts">
 /**
- * The chat page's "no model loaded yet" states: downloading a catalog
- * model when none are installed, or picking an installed/provider model
- * once at least one is available.
+ * The chat page's "no model loaded yet" states, rendered inline inside the
+ * message area — never blocking the composer or thread sidebar, so the
+ * chat window itself is reachable the instant the page opens: downloading
+ * a catalog model when none are installed, or picking an installed/
+ * provider model once at least one is available.
  *
  * Reads `useModelsStore` directly for its state (`catalogEntries`,
  * `downloadingId`, `downloadProgressBytes`/`downloadTotalBytes`,
@@ -68,7 +70,7 @@ function downloadProgressPercent(
 </script>
 
 <template>
-  <div v-if="noModelsInstalled" class="flex-1 overflow-y-auto p-6">
+  <div v-if="noModelsInstalled" class="mx-auto w-full max-w-2xl py-6">
     <h2 class="text-lg font-semibold mb-4">
       {{ t('chat.empty.noModelsTitle') }}
     </h2>
@@ -173,9 +175,9 @@ function downloadProgressPercent(
 
   <div
     v-else
-    class="flex-1 flex items-center justify-center p-6 text-muted-foreground"
+    class="mx-auto flex h-full max-w-sm flex-col items-center justify-center gap-3 py-10 text-center text-muted-foreground"
   >
-    <div class="flex w-full max-w-sm flex-col gap-3">
+    <div class="flex w-full flex-col gap-3">
       <p>{{ t('chat.model.selectPrompt') }}</p>
       <label for="chat-model-empty" class="sr-only">{{
         t('chat.model.label')
