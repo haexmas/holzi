@@ -96,12 +96,29 @@ function togglePopover() {
   else openPopover()
 }
 
+/**
+ * Reka's Select (and any other Popper-based reka component) teleports its
+ * floating content to `document.body` on its own — a sibling of this
+ * popover's own `<Teleport>`, not a descendant of `popover`/`root`.
+ * Without this check, pointerdown on a dropdown item counted as
+ * "outside," closing (and unmounting) this whole panel before the
+ * Select's own click could commit the new value — the pick never reached
+ * `updateModel`.
+ */
+function isInsideRekaPopperContent(target: Node): boolean {
+  return (
+    target instanceof Element &&
+    target.closest('[data-reka-popper-content-wrapper]') !== null
+  )
+}
+
 function closeOnOutsideClick(event: PointerEvent) {
   if (
     isOpen.value &&
     event.target instanceof Node &&
     !root.value?.contains(event.target) &&
-    !popover.value?.contains(event.target)
+    !popover.value?.contains(event.target) &&
+    !isInsideRekaPopperContent(event.target)
   ) {
     closePopover()
   }
