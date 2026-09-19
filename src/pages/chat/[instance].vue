@@ -67,12 +67,12 @@ const {
 
 const PERMISSION_MODE_KEY = 'chat.permission_mode'
 const permissionMode = ref<'manual' | 'auto' | 'plan'>('manual')
-// Per-request only (spec 009-autonomous-delegate-mode FR-008): never
-// persisted, never read from a preference on mount — resets to
-// 'standard' after every send (T035).
-const autonomyMode = ref<'standard' | 'ungated' | 'gated_permissive'>(
-  'standard',
-)
+const AUTONOMY_MODE_KEY = 'chat.autonomy_mode'
+// Device-scoped default, configured on the Settings page only — no
+// per-chat override control (deliberately simplified UX: a second,
+// delegate-only permission-style menu next to the composer's manual/
+// auto/plan control was confusing). Defaults to 'ungated' when unset.
+const autonomyMode = ref<'standard' | 'ungated' | 'gated_permissive'>('ungated')
 const pendingApprovals = ref<PendingApproval[]>([])
 const deviceUuid = ref('')
 const permissionModeSaving = ref(false)
@@ -236,14 +236,14 @@ const activeMessages = computed<Message[]>(() => {
 
 // The chat window (sidebar, header, composer) is always reachable the
 // instant the chat page opens; only the message area itself falls back to
-// the model picker/catalog-download state instead of blocking the whole
-// page (users landed on a full "choose a model" screen before this, with
-// no way back to a chat that was mid-configuration).
-const showModelSelection = computed(
-  () =>
-    noModelsInstalled.value ||
-    (!activeModel.value && !modelLoadPending.value && !loadingPhase.value),
-)
+// the catalog-download state, and only when literally no model is
+// installed/configured anywhere. Picking among models that DO exist
+// happens exclusively through the composer's own model control
+// (`ChatComposerSettingsPopover`) — `modelStore.initialize()` already
+// auto-loads the first available one (spec 002 §FR-014) when nothing is
+// active yet, so there is no separate "choose a model" prompt to show
+// here for that case.
+const showModelSelection = computed(() => noModelsInstalled.value)
 
 /** Scrolls the message viewport to its newest item after rendering. */
 async function scrollToBottom() {
@@ -268,7 +268,6 @@ async function send(retryPending = false) {
     autonomyMode: isDelegateModel.value ? autonomyMode.value : null,
   }
   pendingSend.value = null
-  if (!retry) autonomyMode.value = 'standard'
   turnSetupPending.value = true
   try {
     const result = await chat.sendMessageAsync(request)
@@ -602,6 +601,21 @@ onMounted(async () => {
     } catch {
       // Keep the default ('manual') if the read fails.
     }
+    try {
+      const storedAutonomy = await getPrefAsync(
+        { kind: 'device', uuid: device.vaultDeviceUuid },
+        AUTONOMY_MODE_KEY,
+      )
+      if (
+        storedAutonomy === 'standard' ||
+        storedAutonomy === 'ungated' ||
+        storedAutonomy === 'gated_permissive'
+      ) {
+        autonomyMode.value = storedAutonomy
+      }
+    } catch {
+      // Keep the default ('ungated') if the read fails.
+    }
     if (unmounted) return
     deviceUuid.value = device.vaultDeviceUuid
 
@@ -910,7 +924,7 @@ onBeforeUnmount(() => {
           data-messages-scroll
           class="flex-1 min-h-0 overflow-y-auto px-4 py-6 md:px-8"
         >
-          <ChatModelSelection v-if="showModelSelection" :busy="busy" />
+          <ChatModelSelection v-if="showModelSelection" />
           <template v-else>
             <div
               v-if="activeMessages.length === 0"
@@ -1110,13 +1124,6 @@ onBeforeUnmount(() => {
                     @allow="respondToApproval($event, 'allow')"
                     @deny="respondToApproval($event, 'deny')"
                     @cancel="abort"
-                  />
-
-                  <ChatDelegateAutonomyControl
-                    v-if="isDelegateModel"
-                    :mode="autonomyMode"
-                    :disabled="busy"
-                    @update:mode="autonomyMode = $event"
                   />
                 </div>
                 <ChatVoiceInputControl @transcript="onVoiceTranscript" />

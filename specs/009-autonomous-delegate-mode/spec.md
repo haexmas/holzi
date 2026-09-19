@@ -16,6 +16,19 @@ ACP (already rejected for Claude Code's Agent-SDK ToS clause). Desktop-only, sam
 design exploration, including empirical verification against installed Claude Code v2.1.274 and
 Codex v0.147.0, is captured in `docs/plans/2026-09-17-autonomous-delegate-mode-design.md`."
 
+## Amendment (2026-09-19)
+
+Operator decision: the per-request autonomy picker in the chat composer added the user's second
+permission-style menu next to Manual/Auto/Plan, which was confusing rather than useful. It has been
+removed from the composer. Autonomy mode is now a single device-scoped default, chosen on the
+Settings page (`settings.autonomyMode`, preference key `chat.autonomy_mode`), defaulting to
+`ungated` — not `standard` — when unset. This directly supersedes **FR-002** ("no autonomy mode
+selected → existing live approval behavior") and **FR-008**/User Story 4 ("autonomy never silently
+carries over" — it now deliberately does, as an explicit, always-visible Settings default rather
+than an easy-to-forget per-request toggle). The rest of this spec — the ungated/gated-permissive
+mechanics themselves (FR-003 through FR-007, FR-009 through FR-013) — is unaffected; only *how the
+mode is selected* changed.
+
 ## Clarifications
 
 ### Session 2026-09-17
