@@ -2,7 +2,9 @@
 //! (tasks.md T011). Event shapes are the real ones captured live in
 //! research.md §1, not invented fixtures.
 
-use super::claude::{parse_line, LineOutcome};
+use super::autonomy::AutonomyMode;
+use super::claude::{build_command, parse_line, LineOutcome};
+use super::DelegateVendor;
 use crate::adapters::types::{StreamChunk, StreamError};
 
 #[test]
@@ -83,4 +85,38 @@ fn malformed_json_surfaces_as_an_internal_stream_error_not_a_panic() {
         LineOutcome::Error(StreamError::Internal(_)) => {}
         _ => panic!("expected an Internal stream error for malformed JSON"),
     }
+}
+
+fn model_args(model: &str) -> Vec<String> {
+    let tmp = tempfile::TempDir::new().expect("tempdir");
+    let cmd = build_command("claude", model, None, None, &tmp, AutonomyMode::Ungated);
+    cmd.as_std()
+        .get_args()
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect()
+}
+
+#[test]
+fn a_real_model_id_is_passed_through_as_the_model_flag() {
+    let args = model_args("claude-opus-5");
+    let flag = args.iter().position(|a| a == "--model");
+    assert_eq!(
+        flag.and_then(|i| args.get(i + 1)).map(String::as_str),
+        Some("claude-opus-5"),
+    );
+}
+
+#[test]
+fn an_empty_model_id_omits_the_model_flag() {
+    assert!(!model_args("").contains(&"--model".to_string()));
+}
+
+#[test]
+fn the_legacy_synthetic_vendor_id_omits_the_model_flag() {
+    // Pre-refresh sessions persisted `DelegateVendor::Claude.as_str()`
+    // ("claude") as their model id, back when `list_models` returned one
+    // synthetic entry instead of real Anthropic model ids — that id isn't
+    // a real `--model` value the CLI accepts, so it must fall back to the
+    // CLI's own default exactly like an empty id does.
+    assert!(!model_args(DelegateVendor::Claude.as_str()).contains(&"--model".to_string()));
 }

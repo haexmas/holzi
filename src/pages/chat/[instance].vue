@@ -460,19 +460,23 @@ function reasoningFor(messageId: string): string {
  * Localized "Answered by Claude Code"/"Answered by Codex" label for a
  * delegate-answered message, or `null` for any other backend (spec.md
  * FR-005) — derived from the message's existing `modelId`
- * (`<providerId>:claude`/`<providerId>:codex`, the real cached model row
- * `providers/mod.rs::compose_model_row` produces), not a new field.
+ * (`<providerId>:<remoteId>`) via the provider's `adapter` (the stable
+ * `claude`/`codex` vendor discriminator, `DelegateVendor::as_str()`), not
+ * `remoteId` — Claude's `remoteId` is a real Anthropic model id (e.g.
+ * `claude-opus-5`) rather than a fixed vendor tag, so it can't be
+ * compared against `'claude'`/`'codex'` directly.
  */
 function delegateAnsweredByLabel(modelId: string | null): string | null {
   if (!modelId) return null
-  const [providerId, remoteId] = modelId.split(':')
-  if (remoteId !== 'claude' && remoteId !== 'codex') return null
+  const [providerId] = modelId.split(':')
   const provider = providerList.value.find(
     (p) => p.id === providerId && p.kind === 'cli_delegate',
   )
   if (!provider) return null
+  const vendor = provider.adapter
+  if (vendor !== 'claude' && vendor !== 'codex') return null
   return t('chat.model.answeredByDelegate', {
-    name: t(`chat.model.delegate.${remoteId}`),
+    name: t(`chat.model.delegate.${vendor}`),
   })
 }
 

@@ -51,7 +51,7 @@
           # contribute, no per-package or per-consumer special-casing.
           shellHook = ''
             export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath packages}:$LD_LIBRARY_PATH"
-          '' + pkgs.lib.optionalString (builtins.elem "cudatoolkit" packageNames) ''
+          '' + pkgs.lib.optionalString (builtins.elem pkgs.cudatoolkit packages) ''
             # `cudarc` (pulled in by `mistralrs/cuda`) looks for one of
             # CUDA_HOME/CUDA_PATH/CUDA_ROOT/CUDA_TOOLKIT_ROOT_DIR at build time to
             # find -lcudart/-lnvrtc/-lcurand/-lcublas/-lcublasLt — unlike

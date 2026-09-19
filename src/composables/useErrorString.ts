@@ -43,12 +43,20 @@ export function useErrorString() {
         return t('errors.invalidIdempotencyKey')
       if (kind === 'IdempotencyKeyConflict')
         return t('errors.idempotencyKeyConflict')
-      if (
-        kind === 'InvalidInput' &&
-        typeof reason === 'string' &&
-        reason.startsWith(AUTONOMY_UNAVAILABLE_PREFIX)
-      )
-        return t('errors.autonomyUnavailable')
+      if (kind === 'InvalidInput' && typeof reason === 'string') {
+        if (reason.startsWith(AUTONOMY_UNAVAILABLE_PREFIX))
+          return t('errors.autonomyUnavailable')
+        // Generic across providers/chat/voice/device commands (see
+        // `HF_ERROR_KINDS`'s own comment) — a localized label plus the
+        // backend's own reason, the same "translated frame + raw detail"
+        // shape `HuggingFaceModelManagement.vue` builds by hand from
+        // `hfErrorKey`/`hfErrorDetail`, so a real reason like "claude not
+        // found on PATH" stays visible instead of being replaced outright
+        // by a canned message.
+        return reason.length > 0
+          ? `${t('errors.invalidInput')}: ${reason}`
+          : t('errors.invalidInput')
+      }
       if (typeof kind === 'string' && HF_ERROR_KINDS.has(kind))
         return t(hfErrorKey(e))
       // HolziError variants serialize as `{ kind, ...fields }` with no

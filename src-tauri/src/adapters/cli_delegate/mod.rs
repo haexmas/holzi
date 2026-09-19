@@ -41,6 +41,7 @@ mod process_tests;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use async_trait::async_trait;
 use tokio::sync::oneshot;
@@ -186,6 +187,22 @@ impl CliDelegateAdapter {
 /// lookup below uses this fixed constant instead.
 const CLAUDE_API_BASE_URL: &str = "https://api.anthropic.com";
 
+/// Decodes and validates a `cli_delegate` provider's stored Claude OAuth
+/// token: UTF-8, trimmed, and non-empty. Shared by `list_models`'s model
+/// catalog refresh and `claude::spawn_claude_invocation`'s real chat turn
+/// so both reject a blank/invalid token the same way instead of drifting
+/// if one copy's validation changes and the other doesn't.
+fn decode_claude_oauth_token(credentials: &[u8]) -> Result<String, AdapterError> {
+    let token = std::str::from_utf8(credentials)
+        .map_err(|_| AdapterError::InvalidCredentials)?
+        .trim()
+        .to_string();
+    if token.is_empty() {
+        return Err(AdapterError::InvalidCredentials);
+    }
+    Ok(token)
+}
+
 /// Fetches Claude's live model catalog via Anthropic's `/v1/models` API
 /// (the same endpoint and pagination `AnthropicAdapter` uses for
 /// `api_key` providers — see `anthropic::fetch_models`), authenticated
@@ -200,6 +217,7 @@ async fn fetch_claude_models(
     oauth_token: &str,
 ) -> Result<Vec<ProviderModel>, AdapterError> {
     let client = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(15))
         .user_agent(concat!("holzi/", env!("CARGO_PKG_VERSION")))
         .build()
         .map_err(|e| AdapterError::Http {
@@ -223,13 +241,8 @@ impl ProviderAdapter for CliDelegateAdapter {
     async fn list_models(&self) -> Result<Vec<ProviderModel>, AdapterError> {
         match self.vendor {
             DelegateVendor::Claude => {
-                let token = std::str::from_utf8(&self.credentials)
-                    .map_err(|_| AdapterError::InvalidCredentials)?
-                    .trim();
-                if token.is_empty() {
-                    return Err(AdapterError::InvalidCredentials);
-                }
-                fetch_claude_models(CLAUDE_API_BASE_URL, token).await
+                let token = decode_claude_oauth_token(&self.credentials)?;
+                fetch_claude_models(CLAUDE_API_BASE_URL, &token).await
             }
             DelegateVendor::Codex => {
                 let vendor = self.vendor.as_str();
