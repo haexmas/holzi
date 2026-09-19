@@ -78,6 +78,7 @@ export const useModelsStore = defineStore('models', () => {
   // first `model-load-progress` event arrives.
   const loadingModelId = ref<string | null>(null)
   const loadErrorModelId = ref<string | null>(null)
+  let loadingModelToken = 0
 
   const integrityDialog = ref<ModelIntegrityFailure | null>(null)
   const integrityBusy = ref(false)
@@ -255,6 +256,29 @@ export const useModelsStore = defineStore('models', () => {
     activeModel.value = await chat.activeModelInfoAsync()
   }
 
+  function beginLoadingModel(id: string, name: string): number {
+    loadingModelToken += 1
+    loadingModelId.value = id
+    loadingModelName.value = name
+    return loadingModelToken
+  }
+
+  function clearLoadingModel(token?: number) {
+    if (token !== undefined && token !== loadingModelToken) return
+    loadingModelToken += 1
+    loadingModelId.value = null
+    loadingModelName.value = ''
+  }
+
+  async function finishLoadingModel(token: number) {
+    try {
+      await refreshActiveModel()
+      clearLoadingModel(token)
+    } catch (e: unknown) {
+      lastError.value = errString(e)
+    }
+  }
+
   /**
    * Detects the three structured integrity error kinds `load_model` can
    * return (spec 005 §"load_model und lokale Integritätsprüfung") and opens
@@ -273,8 +297,7 @@ export const useModelsStore = defineStore('models', () => {
     lastError.value = null
     loadErrorModelId.value = null
     modelLoadPending.value = true
-    loadingModelId.value = id
-    loadingModelName.value = findModelName(id)
+    const loadToken = beginLoadingModel(id, findModelName(id))
     try {
       activeModel.value = await chat.loadModelAsync(id)
     } catch (e: unknown) {
@@ -295,8 +318,7 @@ export const useModelsStore = defineStore('models', () => {
       await refreshActiveModel().catch(() => {})
     } finally {
       modelLoadPending.value = false
-      loadingModelId.value = null
-      loadingModelName.value = ''
+      clearLoadingModel(loadToken)
     }
   }
 
@@ -305,8 +327,7 @@ export const useModelsStore = defineStore('models', () => {
     if (!integrityDialog.value) return
     const modelId = integrityDialog.value.modelId
     modelLoadPending.value = true
-    loadingModelId.value = modelId
-    loadingModelName.value = findModelName(modelId)
+    const loadToken = beginLoadingModel(modelId, findModelName(modelId))
     integrityBusy.value = true
     integrityActionError.value = null
     try {
@@ -327,8 +348,7 @@ export const useModelsStore = defineStore('models', () => {
     } finally {
       integrityBusy.value = false
       modelLoadPending.value = false
-      loadingModelId.value = null
-      loadingModelName.value = ''
+      clearLoadingModel(loadToken)
     }
   }
 
@@ -418,14 +438,11 @@ export const useModelsStore = defineStore('models', () => {
     // fall back to the (still empty) active model and the composer shows
     // "Choose a model" the whole time a preload that the loading banner
     // already reports is running.
-    loadingModelId.value = e.modelId
+    const loadToken = beginLoadingModel(e.modelId, e.modelName)
     loadingProviderName.value = e.providerName ?? null
     if (e.phase === 'ready') {
       loadingPhase.value = null
-      loadingModelId.value = null
-      void refreshActiveModel().catch((e: unknown) => {
-        lastError.value = errString(e)
-      })
+      void finishLoadingModel(loadToken)
     }
   }
 
@@ -435,29 +452,31 @@ export const useModelsStore = defineStore('models', () => {
       loadErrorModelId.value = null
       loadingPhase.value = status.phase
       loadingModelName.value = status.modelName
-      loadingModelId.value = status.modelId
+      beginLoadingModel(status.modelId, status.modelName)
       loadingProviderName.value = status.providerName ?? null
     } else {
       loadingPhase.value = null
       loadingModelName.value =
         'modelName' in status ? (status.modelName ?? '') : ''
-      loadingModelId.value = null
       loadingProviderName.value = null
       loadErrorModelId.value =
         status.status === 'error' ? (status.modelId ?? null) : null
-      if (status.status === 'error') lastError.value = t('chat.loading.error')
-      if (status.status === 'ready') {
-        void refreshActiveModel().catch((e: unknown) => {
-          lastError.value = errString(e)
-        })
+      if (status.status === 'error') {
+        clearLoadingModel()
+        lastError.value = t('chat.loading.error')
       }
+      if (status.status === 'ready') {
+        const loadToken = beginLoadingModel(status.modelId, status.modelName)
+        void finishLoadingModel(loadToken)
+      }
+      if (status.status === 'idle') clearLoadingModel()
     }
   }
 
   /** Records a terminal model-load error event. */
   function applyLoadError(event: ModelLoadErrorEvent) {
     loadingPhase.value = null
-    loadingModelId.value = null
+    clearLoadingModel()
     loadErrorModelId.value = event.modelId ?? null
     lastError.value = t('chat.loading.error')
   }

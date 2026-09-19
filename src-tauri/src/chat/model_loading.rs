@@ -708,6 +708,7 @@ pub async fn active_model_info(
     state: State<'_, AppState>,
     chat: State<'_, ChatState>,
 ) -> Result<Option<LoadedModelInfo>> {
+    let _operation = chat.acquire_operation()?;
     let session = {
         let guard = chat.session.lock().map_err(|e| HolziError::CrdtInit {
             reason: format!("chat.session mutex poisoned: {e}"),

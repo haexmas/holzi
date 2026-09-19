@@ -73,8 +73,13 @@ const AUTONOMY_MODE_KEY = 'chat.autonomy_mode'
 // Device-scoped default, configured on the Settings page only — no
 // per-chat override control (deliberately simplified UX: a second,
 // delegate-only permission-style menu next to the composer's manual/
-// auto/plan control was confusing). Defaults to 'ungated' when unset.
-const autonomyMode = ref<'standard' | 'ungated' | 'gated_permissive'>('ungated')
+// auto/plan control was confusing). Starts fail-closed until the preference
+// read confirms either the stored value or the unset default ('ungated').
+const autonomyMode = ref<'standard' | 'ungated' | 'gated_permissive'>(
+  'standard',
+)
+const autonomyPreferenceLoading = ref(true)
+const autonomyPreferenceError = ref<string | null>(null)
 const pendingApprovals = ref<PendingApproval[]>([])
 const deviceUuid = ref('')
 const permissionModeSaving = ref(false)
@@ -217,7 +222,10 @@ const sendDisabled = computed(
     !activeModel.value ||
     busy.value ||
     modelLoadPending.value ||
-    loadingPhase.value !== null,
+    loadingPhase.value !== null ||
+    (isDelegateModel.value &&
+      (autonomyPreferenceLoading.value ||
+        autonomyPreferenceError.value !== null)),
 )
 
 // Composer/thread errors (`lastError`) and model-lifecycle errors
@@ -555,6 +563,23 @@ async function updatePermissionMode(mode: 'manual' | 'auto' | 'plan') {
   }
 }
 
+async function reloadAutonomyMode(uuid: string) {
+  autonomyPreferenceLoading.value = true
+  autonomyPreferenceError.value = null
+  try {
+    const stored = await getPrefAsync(
+      { kind: 'device', uuid },
+      AUTONOMY_MODE_KEY,
+    )
+    autonomyMode.value = isAutonomyMode(stored) ? stored : 'ungated'
+  } catch (e: unknown) {
+    autonomyMode.value = 'standard'
+    autonomyPreferenceError.value = errString(e)
+  } finally {
+    autonomyPreferenceLoading.value = false
+  }
+}
+
 function updateEffortLevel(level: string) {
   if (level === 'low' || level === 'medium' || level === 'high') {
     effortLevel.value = level
@@ -592,16 +617,10 @@ onMounted(async () => {
     if (unmounted) return
 
     const device = await currentDeviceInfoAsync()
-    // Independent device-scoped prefs — read concurrently rather than one
-    // round trip after the other.
-    const [permissionResult, autonomyResult] = await Promise.allSettled([
+    const [permissionResult] = await Promise.allSettled([
       getPrefAsync(
         { kind: 'device', uuid: device.vaultDeviceUuid },
         PERMISSION_MODE_KEY,
-      ),
-      getPrefAsync(
-        { kind: 'device', uuid: device.vaultDeviceUuid },
-        AUTONOMY_MODE_KEY,
       ),
     ])
     if (permissionResult.status === 'fulfilled') {
@@ -610,26 +629,9 @@ onMounted(async () => {
         permissionMode.value = stored
       }
     }
-    // Keep the default ('manual') if the read fails.
-    if (autonomyResult.status === 'fulfilled') {
-      const stored = autonomyResult.value
-      // A `null`/unrecognised value means the preference is genuinely
-      // unset — keep the spec'd default ('ungated').
-      if (isAutonomyMode(stored)) {
-        autonomyMode.value = stored
-      }
-    } else {
-      // A real read failure (vault I/O, CRDT error) is not the same as
-      // "no preference stored yet" — silently falling back to the initial
-      // 'ungated' default here would fail OPEN for a connected delegate
-      // (the least-gated option) on a transient error. Fail safe to
-      // 'standard' instead, and surface the failure so it isn't mistaken
-      // for an ordinary empty-vault state during triage.
-      autonomyMode.value = 'standard'
-      lastError.value = errString(autonomyResult.reason)
-    }
     if (unmounted) return
     deviceUuid.value = device.vaultDeviceUuid
+    await reloadAutonomyMode(device.vaultDeviceUuid)
 
     await modelStore.initialize()
     await refreshThreads()
@@ -921,6 +923,24 @@ onBeforeUnmount(() => {
             {{ t('chat.close') }}
           </button>
         </span>
+      </div>
+
+      <div
+        v-if="autonomyPreferenceError"
+        class="border-b border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive flex items-start justify-between gap-2"
+        role="alert"
+      >
+        <span
+          >{{ t('settings.autonomyMode.loadFailed') }}:
+          {{ autonomyPreferenceError }}</span
+        >
+        <button
+          class="text-xs underline shrink-0"
+          :disabled="autonomyPreferenceLoading"
+          @click="reloadAutonomyMode(deviceUuid)"
+        >
+          {{ t('chat.loading.retry') }}
+        </button>
       </div>
 
       <div
