@@ -9,6 +9,7 @@ pub mod hardware;
 pub mod identity;
 pub mod instances;
 pub mod llm;
+pub mod model_capabilities;
 pub mod models;
 pub mod providers;
 pub mod state;

@@ -52,6 +52,7 @@ use uuid::Uuid;
 
 use super::{AdapterError, AdapterStream, ChatRequest, ChatRole, ProviderAdapter, ProviderModel};
 use crate::chat::tools::ApprovalDecision;
+use crate::model_capabilities::ModelCapabilities;
 
 /// Builds the plain-text transcript both `claude -p` and `codex`'s
 /// `turn/start` receive as their conversation input. Holzi remains the
@@ -265,6 +266,9 @@ impl ProviderAdapter for CliDelegateAdapter {
                     remote_id: vendor.to_string(),
                     display_name: format!("{vendor} (CLI delegate)"),
                     context_window: None,
+                    // Codex exposes no capability metadata yet: not determined,
+                    // which is not the same as unsupported.
+                    capabilities: ModelCapabilities::default(),
                 }])
             }
         }

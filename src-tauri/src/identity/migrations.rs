@@ -58,7 +58,8 @@ use haex_crdt::{MigrationName, StaticMigrationSource};
 /// - 8: `0016_providers_add_capability` added a column to `providers`.
 /// - 9: `0017_chat_messages_add_autonomy_mode` added a column to
 ///   `chat_messages`.
-pub const HOLZI_TRIGGER_VERSION: i32 = 9;
+/// - 10: `0018_models_add_capabilities` added a column to `models`.
+pub const HOLZI_TRIGGER_VERSION: i32 = 10;
 
 /// Returns the frozen holzi migration set at the pinned haex-crdt revision.
 pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
@@ -346,6 +347,17 @@ pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
     m.insert(
         MigrationName::from("0017_chat_messages_add_autonomy_mode"),
         "ALTER TABLE chat_messages ADD COLUMN autonomy_mode TEXT;".to_string(),
+    );
+
+    // Unified model capabilities (spec 012): one JSON `ModelCapabilities`
+    // record per model (reasoning control, accepted attachment kinds, an
+    // adapter hint). `NULL` means "not determined yet" — never "unsupported"
+    // — so pre-existing rows need no backfill here; provider rows are filled
+    // by their next refresh and local rows by `backfill_local_capabilities`.
+    // Bumps HOLZI_TRIGGER_VERSION to 10.
+    m.insert(
+        MigrationName::from("0018_models_add_capabilities"),
+        "ALTER TABLE models ADD COLUMN capabilities_json TEXT;".to_string(),
     );
 
     Arc::new(StaticMigrationSource(m))

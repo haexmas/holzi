@@ -499,6 +499,8 @@ fn compose_model_row(provider_id: Uuid, fetched_at: i64, m: ProviderModel) -> Mo
         file_sha256: None,
         integrity_status: IntegrityStatus::Unknown,
         source_kind: SourceKind::Provider,
+        // An all-`None` answer is stored as SQL NULL ("not determined").
+        capabilities: (!m.capabilities.is_undetermined()).then_some(m.capabilities),
     }
 }
 

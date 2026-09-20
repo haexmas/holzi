@@ -19,6 +19,7 @@ use tokio::sync::mpsc;
 use super::request::build_messages_body;
 use super::types::{AdapterStream, ChatRequest, StreamChunk, StreamError, ToolCall};
 use super::{AdapterError, ProviderAdapter, ProviderModel};
+use crate::model_capabilities::ModelCapabilities;
 
 /// The pinned Anthropic API version. Per docs, additive optional
 /// inputs and outputs are allowed inside a version without breaking
@@ -159,6 +160,8 @@ pub(crate) async fn fetch_models(
                 remote_id: m.id,
                 display_name: m.display_name,
                 context_window: m.max_input_tokens.filter(|n| *n > 0),
+                // Placeholder until the wire mapping lands (spec 012 T023).
+                capabilities: ModelCapabilities::default(),
             });
         }
         if !page.has_more {

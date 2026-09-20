@@ -24,6 +24,7 @@ use crate::catalog;
 use crate::chat::session::ChatState;
 use crate::error::{HolziError, Result};
 use crate::hardware::{self, classify, Fit, ModelFitInputs};
+use crate::model_capabilities::ModelCapabilities;
 use crate::providers::local::ensure_local_provider;
 use crate::state::AppState;
 use crate::state_utils::active_database;
@@ -646,6 +647,10 @@ pub async fn list_installed_models(
             let catalog_ids: Vec<&str> = catalog::entries().iter().map(|e| e.id.as_str()).collect();
             models_store::backfill_source_kind(conn, local_provider_id, &catalog_ids)
                 .map_err(haex_crdt::Error::from)?;
+            // Models registered before capabilities existed have no provider
+            // refresh to fill them (spec 012).
+            models_store::backfill_local_capabilities(conn, local_provider_id)
+                .map_err(haex_crdt::Error::from)?;
 
             let mut out = Vec::with_capacity(canonical_files.len());
             for (slug, cf) in canonical_files {
@@ -800,6 +805,10 @@ async fn register_downloaded(args: RegisterDownloadedArgs) -> Result<InstalledMo
                     file_sha256: Some(file_sha256.clone()),
                     integrity_status: IntegrityStatus::Verified,
                     source_kind,
+                    // The one creation site every download/import path shares:
+                    // a local model has no provider to ask, so its record is
+                    // derived here (spec 012).
+                    capabilities: Some(ModelCapabilities::local(&id)),
                 };
                 models_store::upsert_model(conn, &m).map_err(haex_crdt::Error::from)?;
                 Ok(InstalledModelPayload {

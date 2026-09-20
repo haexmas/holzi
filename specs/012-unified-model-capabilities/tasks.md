@@ -49,11 +49,11 @@ split. No user-visible behavior changes yet.
 
 ### Backend: record and storage
 
-- [ ] T003 [P] In `src-tauri/src/adapters/types.rs` extend the existing `AttachmentKind` (variants
+- [x] T003 [P] In `src-tauri/src/adapters/types.rs` extend the existing `AttachmentKind` (variants
       `Image | Document | Text`) with `Eq, Serialize, Deserialize` and
       `#[serde(rename_all = "snake_case")]` — do not add a second enum (graphify-first: extend the
       existing candidate).
-- [ ] T004 Create `src-tauri/src/model_capabilities.rs` (top-level leaf module) and register
+- [x] T004 Create `src-tauri/src/model_capabilities.rs` (top-level leaf module) and register
       `pub mod model_capabilities;` in `src-tauri/src/lib.rs`. Implement per data-model.md:
       `ModelCapabilities { reasoning: Option<ReasoningControl>, accepted_attachment_kinds: Option<Vec<AttachmentKind>>, thinking_style: Option<ThinkingStyle> }` deriving
       `Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize` (`ProviderModel` already derives
@@ -63,29 +63,28 @@ split. No user-visible behavior changes yet.
       JSON fields are ignored"**. **"`Presets.options` is non-empty by construction (an empty list
       maps to `Unavailable`/`ModelManaged` at the adapter boundary)"** — enforce with a
       `ReasoningControl::presets(options)` constructor that returns `Unavailable` for an empty list. Because serde bypasses that constructor, also add `ModelCapabilities::normalized(self) -> Self` mapping a `Presets` with empty `options` to `Unavailable` (everything else unchanged); every reader of stored or received JSON calls it (T008).
-      Add `is_undetermined()` (true when all three fields are `None`) and
+      Add `ModelCapabilities::local(model_id)` (the record for a built-in model, shared by registration and the backfill), `is_undetermined()` (true when all three fields are `None`) and
       `ReasoningControl::offers(&self, id: &str) -> bool`. Add
       `local_model_reasoning(model_id: &str) -> ReasoningControl` — the body of
-      `chat::commands::model_supports_reasoning` moved verbatim, returning `ModelManaged` when it
-      was `true` and `Unavailable` otherwise, with a `ponytail:` comment (naive id heuristic; upgrade
+      `chat::commands::model_supports_reasoning` moved without its Anthropic-specific branches (`claude-*` ids get their record from the provider's live answer, FR-019), returning `ModelManaged` when it was `true` and `Unavailable` otherwise, with a `ponytail:` comment (naive id heuristic; upgrade
       path: read the GGUF chat template). Declare the test module via
       `#[cfg(test)] #[path = "model_capabilities_tests.rs"] mod model_capabilities_tests;`.
       The original `model_supports_reasoning` stays until T027 deletes it.
-- [ ] T005 [P] Create `src-tauri/src/model_capabilities_tests.rs`: `None` (not determined) stays
+- [x] T005 [P] Create `src-tauri/src/model_capabilities_tests.rs`: `None` (not determined) stays
       distinct from `Some(Unavailable)` after a JSON round-trip; serialized shape equals the examples
       in contracts/capabilities-json.md; unknown extra JSON fields are ignored; missing fields
       default to `None`; `ReasoningControl::presets(vec![])` yields `Unavailable`; `normalized` maps an empty `Presets` to `Unavailable` and leaves all other values unchanged; `offers` is true only for ids in `Presets`; `is_undetermined` semantics; `local_model_reasoning` cases **moved**
       from `src-tauri/src/chat/commands_tests.rs::reasoning_capability_is_derived_conservatively_from_the_model_id`
       (delete the original there in T022 so nothing is duplicated).
-- [ ] T006 In `src-tauri/src/identity/migrations.rs` add migration
+- [x] T006 In `src-tauri/src/identity/migrations.rs` add migration
       `0018_models_add_capabilities` = `ALTER TABLE models ADD COLUMN capabilities_json TEXT;` (nullable,
       no default, with a comment stating `NULL` means not determined), bump `HOLZI_TRIGGER_VERSION`
       from 9 to 10, and add the `- 10:` line to the version list in the constant's doc comment
       (mandatory because `models` is CRDT-tracked, see the file's own rule).
-- [ ] T007 [P] Extend `src-tauri/tests/vault_upgrade.rs` following its existing pattern: a vault
+- [x] T007 [P] Extend `src-tauri/tests/vault_upgrade.rs` following its existing pattern: a vault
       provisioned at trigger version 9 reopens at 10 and a `capabilities_json` write on `models`
       produces a sync payload row (proves the trigger regeneration).
-- [ ] T008 In `src-tauri/src/storage/models.rs`: add `capabilities: Option<ModelCapabilities>` to
+- [x] T008 In `src-tauri/src/storage/models.rs`: add `capabilities: Option<ModelCapabilities>` to
       `ModelRow`; append `capabilities_json` to `SELECT_COLUMNS` and to `upsert_model` (new `?14`
       parameter; in `ON CONFLICT` overwrite **unconditionally** like `context_window` — **not**
       `COALESCE`); in `row_to_model` parse leniently: **"Unparseable JSON → `None` + `log::warn!`
@@ -94,34 +93,26 @@ split. No user-visible behavior changes yet.
       sibling of `backfill_source_kind`: for each row of the local provider whose `capabilities_json IS NULL`, write `ModelCapabilities { reasoning: Some(local_model_reasoning(&id)), accepted_attachment_kinds: Some(vec![]), thinking_style: None }` with
       `{HLC_TIMESTAMP_COLUMN} = current_hlc()`; idempotent; never touches provider-kind rows or rows
       already determined. Declare `#[cfg(test)] #[path = "models_tests.rs"] mod models_tests;`.
-- [ ] T009 [P] Create `src-tauri/src/storage/models_tests.rs`: populated record round-trips through
-      `upsert_model`/`get_model`/`list_models_by_provider`/`list_all_models`; a row with `NULL`
-      column reads `capabilities: None`; malformed JSON reads `None` while every other column is
-      intact and the row is still listed (FR-021); a stored `presets` with `options: []` reads back as `Unavailable`; a second upsert **replaces** the first entirely
-      (including replacing with `None`); `backfill_local_capabilities` fills only `NULL` local rows,
-      is idempotent, and leaves `api_key`/`cli_delegate` rows and already-determined rows untouched.
-- [ ] T010 In `src-tauri/src/adapters/mod.rs` add `pub capabilities: ModelCapabilities` to
+- [x] T009 [P] Cover the storage layer. Unit tests in `src-tauri/src/storage/models_tests.rs` for the pure column codec (`capabilities_from_column`/`capabilities_to_column`: round trip, `NULL`, malformed JSON → `None`, stored empty `presets` → `Unavailable`). Because `upsert_model` and the backfill need `current_hlc()` from an open vault, the database-backed cases live in the new integration test `src-tauri/tests/model_capabilities_storage.rs`: a populated record round-trips through `get_model`/`list_models_by_provider`/`list_all_models`; an undetermined record is stored as `NULL`; a second upsert **replaces** the first entirely (including with `None`); a corrupt stored value reads `None` while every other column is intact and the row stays listed (FR-021); `backfill_local_capabilities` fills only `NULL` local rows, is idempotent, and leaves `api_key`/`cli_delegate` rows and already-determined rows untouched.
+- [x] T010 In `src-tauri/src/adapters/mod.rs` add `pub capabilities: ModelCapabilities` to
       `ProviderModel` (doc: `ModelCapabilities::default()` means "everything not determined"); set
       `ModelCapabilities::default()` in the two existing literals —
       `src-tauri/src/adapters/anthropic.rs` (replaced in T023) and the Codex arm of
       `src-tauri/src/adapters/cli_delegate/mod.rs::list_models`.
-- [ ] T011 In `src-tauri/src/providers/mod.rs::compose_model_row` set
+- [x] T011 In `src-tauri/src/providers/mod.rs::compose_model_row` set
       `capabilities: (!m.capabilities.is_undetermined()).then_some(m.capabilities)` (an all-`None`
       record persists as SQL `NULL`, see contracts/capabilities-json.md). Then fix every remaining
       `ModelRow` literal mechanically with `capabilities: None`, driven by `cargo build --tests`:
       `src-tauri/src/providers/mod.rs` (2nd literal), `src-tauri/src/models/commands.rs` (`register_downloaded`, temporarily `capabilities: None` until T012), `src-tauri/src/storage/models.rs`,
       `src-tauri/tests/huggingface_models.rs` (9), `src-tauri/tests/provider_models.rs` (2).
-- [ ] T012 In `src-tauri/src/models/commands.rs`: `register_downloaded` builds its `ModelRow` with
+- [x] T012 In `src-tauri/src/models/commands.rs`: `register_downloaded` builds its `ModelRow` with
       the local record from T008 (`local_model_reasoning(&id)`, `Some(vec![])`, `None`) — this is the
       single creation site shared by every download/import path; in `list_installed_models` call
       `models_store::backfill_local_capabilities(conn, local_provider_id)` right after
       `backfill_source_kind` (same error mapping). Add a `ponytail:` comment on the lazy backfill
       (runs on every listing; ceiling: one indexed `IS NULL` scan; upgrade path: one-time migration hook).
-- [ ] T013 [P] Extend `src-tauri/src/models/commands_tests.rs`: a newly registered local model row
-      carries `local_model_reasoning(id)` and `Some([])` attachments; a legacy local row with `NULL`
-      capabilities is filled by `list_installed_models`' backfill (reasoning family →
-      `ModelManaged`, other → `Unavailable`) and a second listing changes nothing.
-- [ ] T014 Backend foundation checkpoint: `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`,
+- [x] T013 [P] Extend `src-tauri/src/models/commands_tests.rs`: registering a local model records `ModelCapabilities::local(id)` (reasoning family → `ModelManaged`, other → `Unavailable`, attachments `Some([])`). The lazy backfill's behavior is covered by T009's integration test; the one-line call from `list_installed_models` needs a Tauri `AppHandle` and has no unit seam.
+- [x] T014 Backend foundation checkpoint: `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`,
       `cargo build --manifest-path src-tauri/Cargo.toml --tests`, `cargo test --manifest-path src-tauri/Cargo.toml` all green. Commit: `feat(models): persist a per-model capability record`.
 
 ### Frontend: behavior-preserving store split (parallel with the backend group)
