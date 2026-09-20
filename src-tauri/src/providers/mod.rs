@@ -3,6 +3,14 @@
 //! CRUD is provider-kind-agnostic; the refresh path dispatches on
 //! the persisted adapter discriminator to build the right adapter.
 //! `cli_delegate` live invocation is spec 007-cli-delegate.
+//!
+//! Maintainability exception (spaex 500-LoC rule): the add/list/get/delete
+//! commands and the refresh path share the same `db`/adapter construction
+//! and error mapping, so they have stayed together as the file grew past 500
+//! lines. Concrete split plan, if this grows further: move `do_refresh`,
+//! `compose_model_row` and the model-list payload structs into a
+//! `providers/refresh.rs` next to `providers/connect.rs`, leaving the
+//! provider CRUD commands here.
 
 pub mod connect;
 #[cfg(test)]
@@ -20,6 +28,7 @@ use crate::adapters::anthropic::AnthropicAdapter;
 use crate::adapters::cli_delegate::{CliDelegateAdapter, DelegateChatContext, DelegateVendor};
 use crate::adapters::{AdapterError, ProviderAdapter, ProviderModel};
 use crate::error::{HolziError, Result};
+use crate::model_capabilities::ModelCapabilities;
 use crate::state::AppState;
 use crate::state_utils::active_database;
 use crate::storage::models::{self as models_store, IntegrityStatus, ModelRow, SourceKind};
@@ -283,6 +292,8 @@ pub struct ProviderModelPayload {
     pub name: String,
     pub provider_id: Uuid,
     pub context_window: Option<i64>,
+    /// What this model supports (spec 012); `None` means not determined.
+    pub capabilities: Option<ModelCapabilities>,
 }
 
 /// Reads the cached models for one provider. Does NOT trigger a live
@@ -310,6 +321,7 @@ pub async fn list_provider_models(
             name: r.name,
             provider_id: r.provider_id,
             context_window: r.context_window,
+            capabilities: r.capabilities,
         })
         .collect())
 }
@@ -479,7 +491,7 @@ fn validate_adapter(adapter: Option<&str>) -> Result<()> {
     }
 }
 
-fn compose_model_row(provider_id: Uuid, fetched_at: i64, m: ProviderModel) -> ModelRow {
+pub(crate) fn compose_model_row(provider_id: Uuid, fetched_at: i64, m: ProviderModel) -> ModelRow {
     // Composite id per plan §"Datenmodell". Keeps the same remote id
     // distinguishable when the operator configures two accounts with
     // the same provider.

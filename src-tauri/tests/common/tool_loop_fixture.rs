@@ -229,7 +229,8 @@ pub fn base_request() -> ChatRequest {
             input_schema: serde_json::json!({ "type": "object" }),
         }],
         autonomy_mode: Default::default(),
-        effort_level: Default::default(),
+        reasoning_option: Default::default(),
+        capabilities: Default::default(),
     }
 }
 

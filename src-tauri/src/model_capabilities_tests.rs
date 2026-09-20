@@ -188,3 +188,10 @@ fn local_records_are_determined_and_accept_no_attachments() {
     assert_eq!(caps.accepted_attachment_kinds, Some(Vec::new()));
     assert_eq!(caps.thinking_style, None);
 }
+
+#[test]
+fn only_selectable_and_model_managed_reasoning_counts_as_reasoning() {
+    assert!(ReasoningControl::ModelManaged.reasons());
+    assert!(ReasoningControl::presets(vec![option("low")]).reasons());
+    assert!(!ReasoningControl::Unavailable.reasons());
+}

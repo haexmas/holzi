@@ -29,16 +29,16 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::adapters::cli_delegate::autonomy::AutonomyMode;
-use crate::adapters::effort::EffortLevel;
 use crate::adapters::types::{ChatMessage as LlmMessage, ChatRequest, ChatRole, ToolSpec};
 use crate::chat::tools::{ApprovalDecision, ToolRegistry};
 use crate::error::{HolziError, Result};
+use crate::model_capabilities::ModelCapabilities;
 use crate::state::AppState;
 use crate::state_utils::active_database;
 use crate::storage::providers::ProviderKind;
 use crate::storage::{
     chat_messages::{self as msg_store, ChatMessage, MessageRole},
-    chat_threads as thread_store, preferences,
+    chat_threads as thread_store, models as models_store, preferences,
     preferences::PrefScope,
 };
 
@@ -76,11 +76,11 @@ pub struct SendMessageArgs {
     /// fallback is a defensive default for an omitted field, not the
     /// product-level default (see `AutonomyMode`'s own doc comment).
     pub autonomy_mode: Option<AutonomyMode>,
-    /// Real, provider-native reasoning-effort override (spec
-    /// 011-composer-toolbar-parity). `None` means "no override" — see
-    /// `ChatRequest::effort_level`. Never persisted, mirroring today's
-    /// effort setting.
-    pub effort_level: Option<EffortLevel>,
+    /// The selected reasoning option as a provider-native id (spec 012).
+    /// `None` means Auto. Validated against the model's cached options in
+    /// [`send_message`]; an option the model no longer offers is dropped,
+    /// not an error. Never persisted with the message.
+    pub reasoning_option: Option<String>,
     /// Files attached to this message (spec 011-composer-toolbar-parity).
     /// Scoped to this one send — never persisted or carried over to a
     /// later message (FR-017). Each path was already validated once via
@@ -174,131 +174,61 @@ fn tool_specs(registry: &ToolRegistry) -> Vec<ToolSpec> {
         .collect()
 }
 
-/// Returns true only for model families with a known native reasoning mode.
-/// Unknown/custom models stay conservative and can still render reasoning
-/// deltas if an adapter supplies them, but are not sent an explicit enable
-/// flag that their API may reject.
-pub fn model_supports_reasoning(model_id: &str) -> bool {
-    let id = model_id.to_ascii_lowercase();
-    // Some published checkpoints use a family name that is otherwise
-    // reasoning-capable but explicitly disable thinking. Keep these exact
-    // model exceptions ahead of the family fallback below.
-    const EXACT_CAPABILITIES: &[(&str, bool)] = &[
-        ("qwen3-4b-instruct-2507", false),
-        ("qwen3-30b-a3b-instruct-2507", false),
-        ("claude-haiku-4-5", true),
-        ("claude-haiku-4-5-20251001", true),
-    ];
-    if let Some((_, supported)) = EXACT_CAPABILITIES
-        .iter()
-        .find(|(known_id, _)| id == *known_id)
-    {
-        return *supported;
-    }
-    if id.contains("qwen3") && id.contains("instruct-2507") {
-        return false;
-    }
-    id.contains("qwen3")
-        || id.contains("deepseek-r1")
-        || id.contains("gpt-oss")
-        || id.contains("claude-3-7")
-        || id.contains("claude-sonnet-4")
-        || id.contains("claude-opus-4")
-        || id.contains("claude-haiku-4-5")
-}
-
-/// Qwen3's native tool-call path must run with thinking disabled. The
-/// mistralrs tool-calling example deliberately leaves thinking unspecified;
-/// enabling it makes Qwen3 prone to spending the whole turn narrating a
-/// prospective tool call instead of emitting the structured call. Keep
-/// reasoning enabled for ordinary Qwen3 replies and other providers.
-fn reasoning_requested_for(model_id: &str, tools: &[ToolSpec]) -> bool {
+/// Whether reasoning is requested and shown for this request: the model's
+/// cached record says it reasons (spec 012 FR-023), except for Qwen3's native
+/// tool-call path, which must run with thinking disabled. The mistralrs
+/// tool-calling example deliberately leaves thinking unspecified; enabling it
+/// makes Qwen3 prone to spending the whole turn narrating a prospective tool
+/// call instead of emitting the structured call. Reasoning stays enabled for
+/// ordinary Qwen3 replies and for every other model. A model whose reasoning
+/// control is not determined requests none.
+fn reasoning_requested_for(
+    capabilities: Option<&ModelCapabilities>,
+    model_id: &str,
+    tools: &[ToolSpec],
+) -> bool {
     let is_qwen3_tool_request =
         model_id.to_ascii_lowercase().contains("qwen3") && !tools.is_empty();
-    model_supports_reasoning(model_id) && !is_qwen3_tool_request
+    let reasons = capabilities
+        .and_then(|c| c.reasoning.as_ref())
+        .is_some_and(|control| control.reasons());
+    reasons && !is_qwen3_tool_request
 }
 
-/// Pure resolution of which effort levels apply to a provider row (spec
-/// 011-composer-toolbar-parity, contracts/tauri-commands.md
-/// `get_effort_levels`). `kind: None` is a bare/local composite id (no
-/// provider row at all) — always no levels. Split out from
-/// [`get_effort_levels`] so it is directly unit-testable without a
-/// database, mirroring `reasoning_requested_for`/`model_supports_reasoning`
-/// above.
-fn effort_levels_for(
-    kind: Option<ProviderKind>,
-    adapter: Option<&str>,
-    model_id: &str,
-) -> Vec<EffortLevel> {
-    match kind {
-        Some(ProviderKind::ApiKey) if adapter == Some("anthropic") => {
-            crate::adapters::effort::anthropic_supported_levels(model_id).to_vec()
-        }
-        Some(ProviderKind::CliDelegate) if adapter == Some("claude") => {
-            crate::adapters::effort::claude_delegate_levels().to_vec()
-        }
-        // Local models, non-Anthropic api_key vendors (none exist yet), and
-        // the Codex delegate have no controllable effort level (spec.md
-        // Out of scope) — FR-003 hides the control entirely for these.
-        Some(ProviderKind::ApiKey)
-        | Some(ProviderKind::CliDelegate)
-        | Some(ProviderKind::Local)
-        | None => Vec::new(),
-    }
-}
-
-/// Returns the reasoning-effort levels the given model/backend actually
-/// supports, as their wire-level strings (contracts/tauri-commands.md) —
-/// `[]` when it supports none, in which case the frontend hides the effort
-/// control entirely (FR-003). `model_id` is the same composite id
-/// (`"<provider-uuid>:<remote-id>"`) or bare local id used by
-/// `load_model`/`active_model_info`.
-#[tauri::command]
-pub async fn get_effort_levels(
-    state: State<'_, AppState>,
-    model_id: String,
-) -> Result<Vec<String>> {
-    let Some((provider_id_str, remote_id)) = model_id.split_once(':') else {
-        return Ok(Vec::new());
-    };
-    let provider_id = Uuid::parse_str(provider_id_str).map_err(|_| HolziError::InvalidInput {
-        reason: format!("bad composite model id: {model_id}"),
-    })?;
-    let remote_id = remote_id.to_string();
-    let db = active_database(&state)?;
-    let provider = tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            crate::storage::providers::get_provider(conn, provider_id)
-                .map_err(haex_crdt::Error::from)
-        })
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("get_provider join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
-    let levels = match provider {
-        Some(p) => effort_levels_for(Some(p.kind), p.adapter.as_deref(), &remote_id),
-        None => Vec::new(),
-    };
-    Ok(levels.into_iter().map(|l| l.as_str().to_string()).collect())
+/// Keeps the requested reasoning option only if this model's cached options
+/// offer it (spec 012 FR-013). Anything else — no record, a model without
+/// selectable options, an option the provider has since dropped — resolves
+/// to `None`, so the model's own default applies and a stale id never
+/// reaches a provider.
+fn validated_reasoning_option(
+    capabilities: Option<&ModelCapabilities>,
+    requested: Option<String>,
+) -> Option<String> {
+    let requested = requested?;
+    capabilities
+        .and_then(|c| c.reasoning.as_ref())
+        .filter(|control| control.offers(&requested))
+        .map(|_| requested)
 }
 
 /// Classifies a file the user is about to attach and reports whether the
-/// currently selected model/backend can actually use it (spec
+/// currently selected model can actually use it (spec
 /// 011-composer-toolbar-parity, contracts/tauri-commands.md
 /// `inspect_attachment`) — called right after the file picker resolves, so
 /// the composer can show the reason before the message is sent (FR-015/
-/// FR-016). `model_id` is the same composite/local id `get_effort_levels`
-/// takes. Errors only when `path` itself cannot be read/stat'd at all; an
-/// oversized or unsupported-type file still resolves normally with
-/// `usable: false`.
+/// FR-016). `model_id` is the same composite/local id `load_model`/
+/// `active_model_info` use; usability comes from that model's cached
+/// capabilities (spec 012), read once. Errors only when `path` itself cannot
+/// be read/stat'd at all; an oversized or unsupported-type file still
+/// resolves normally with `usable: false`.
 #[tauri::command]
 pub async fn inspect_attachment(
     state: State<'_, AppState>,
     path: String,
     model_id: String,
 ) -> Result<crate::chat::attachments::AttachmentInfo> {
+    use crate::chat::attachments::{usability_for, AttachmentUsability};
+
     let mut info = tauri::async_runtime::spawn_blocking({
         let path = path.clone();
         move || crate::chat::attachments::classify_attachment(std::path::Path::new(&path))
@@ -311,40 +241,29 @@ pub async fn inspect_attachment(
     let Some(kind) = info.kind else {
         return Ok(info);
     };
-    let (provider_kind, adapter) = if let Some((provider_id_str, _)) = model_id.split_once(':') {
-        let provider_id =
-            Uuid::parse_str(provider_id_str).map_err(|_| HolziError::InvalidInput {
-                reason: format!("bad composite model id: {model_id}"),
-            })?;
-        let db = active_database(&state)?;
-        let provider = tauri::async_runtime::spawn_blocking(move || {
-            db.with_connection(|conn| {
-                crate::storage::providers::get_provider(conn, provider_id)
-                    .map_err(haex_crdt::Error::from)
-            })
+    let db = active_database(&state)?;
+    let capabilities = tauri::async_runtime::spawn_blocking(move || {
+        db.with_connection(|conn| {
+            models_store::get_model(conn, &model_id).map_err(haex_crdt::Error::from)
         })
-        .await
-        .map_err(|e| HolziError::CrdtInit {
-            reason: format!("get_provider join: {e}"),
-        })?
-        .map_err(HolziError::from)?;
-        match provider {
-            Some(p) => (Some(p.kind), p.adapter),
-            None => (None, None),
-        }
-    } else {
-        (Some(ProviderKind::Local), None)
-    };
+    })
+    .await
+    .map_err(|e| HolziError::CrdtInit {
+        reason: format!("get_model join: {e}"),
+    })?
+    .map_err(HolziError::from)?
+    .and_then(|row| row.capabilities);
 
-    let usable = match provider_kind {
-        Some(kind_provider) => {
-            crate::chat::attachments::usability_for(&kind.into(), kind_provider, adapter.as_deref())
+    match usability_for(&kind.into(), capabilities.as_ref()) {
+        AttachmentUsability::Usable => {}
+        AttachmentUsability::NotAccepted => {
+            info.usable = false;
+            info.reason = Some("not usable by the selected model".to_string());
         }
-        None => false,
-    };
-    if !usable {
-        info.usable = false;
-        info.reason = Some("not usable by the selected model".to_string());
+        AttachmentUsability::Undetermined => {
+            info.usable = false;
+            info.reason = Some("attachment support for this model is not yet known".to_string());
+        }
     }
     Ok(info)
 }
@@ -495,10 +414,17 @@ pub async fn send_message(
 
     // Build the request from full history + the just-inserted user turn.
     let history_db = db.clone();
-    let history = tauri::async_runtime::spawn_blocking(move || {
+    let capabilities_model_id = session.model_id.clone();
+    let (history, model_capabilities) = tauri::async_runtime::spawn_blocking(move || {
         history_db.with_connection(|conn| {
             let msgs = msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)?;
-            Ok(msgs)
+            // The selected model's cached capabilities, read in this same
+            // blocking lookup (spec 012): one snapshot drives reasoning,
+            // the validated option and the serializer.
+            let capabilities = models_store::get_model(conn, &capabilities_model_id)
+                .map_err(haex_crdt::Error::from)?
+                .and_then(|row| row.capabilities);
+            Ok((msgs, capabilities))
         })
     })
     .await
@@ -524,7 +450,10 @@ pub async fn send_message(
             })?;
         tool_specs(&registry)
     };
-    let reasoning_requested = reasoning_requested_for(&request_model_id, &tools);
+    let reasoning_requested =
+        reasoning_requested_for(model_capabilities.as_ref(), &request_model_id, &tools);
+    let reasoning_option =
+        validated_reasoning_option(model_capabilities.as_ref(), args.reasoning_option.clone());
 
     // Re-read each attachment fresh at send time (FR-018) rather than
     // trusting the earlier `inspect_attachment` check — a file can vanish
@@ -578,7 +507,8 @@ pub async fn send_message(
         } else {
             AutonomyMode::Standard
         },
-        effort_level: args.effort_level,
+        reasoning_option,
+        capabilities: model_capabilities,
     };
 
     let mut attempt = 0;

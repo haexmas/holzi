@@ -77,7 +77,8 @@ EOF
             max_new_tokens: None,
             tools: Vec::new(),
             autonomy_mode: AutonomyMode::Ungated,
-            effort_level: Default::default(),
+            reasoning_option: Default::default(),
+            capabilities: Default::default(),
         })
         .await;
 
@@ -149,7 +150,8 @@ sys.stdin.readline()
             max_new_tokens: None,
             tools: Vec::new(),
             autonomy_mode: AutonomyMode::Ungated,
-            effort_level: Default::default(),
+            reasoning_option: Default::default(),
+            capabilities: Default::default(),
         })
         .await;
 

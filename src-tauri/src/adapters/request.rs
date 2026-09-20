@@ -2,7 +2,7 @@
 //!
 //! Turns a provider-neutral [`ChatRequest`] into the vendor's wire body:
 //! the `max_tokens`/`thinking` interplay, the adaptive-vs-manual
-//! thinking decision per model generation, and the regrouping of
+//! thinking decision (read from the model's cached capabilities), and the regrouping of
 //! holzi's flat per-row history into Anthropic's block shape. Kept apart
 //! from `anthropic.rs` so the transport and SSE-decoding side of the
 //! adapter stays readable on its own.
@@ -10,8 +10,8 @@
 use base64::Engine;
 use serde_json::Value;
 
-use super::effort;
 use super::types::{Attachment, AttachmentKind, ChatRequest, ChatRole};
+use crate::model_capabilities::ThinkingStyle;
 
 /// Fallback `max_tokens` cap sent when the request does not carry one.
 /// Anthropic Messages API requires the field, so we substitute a
@@ -27,8 +27,15 @@ pub(super) fn build_messages_body(req: &ChatRequest) -> Value {
         .max_new_tokens
         .map(|n| n as u32)
         .unwrap_or(DEFAULT_MAX_TOKENS);
-    let adaptive_thinking = req.reasoning_requested && supports_adaptive_thinking(&req.model_id);
-    let manual_thinking = req.reasoning_requested && !adaptive_thinking;
+    // How this model wants thinking requested comes from its cached
+    // capabilities (spec 012), not from its id. A model whose style is not
+    // determined is sent no `thinking` field at all — never a shape it might
+    // reject.
+    let capabilities = req.capabilities.as_ref();
+    let thinking_style = capabilities.and_then(|c| c.thinking_style);
+    let adaptive_thinking =
+        req.reasoning_requested && thinking_style == Some(ThinkingStyle::Adaptive);
+    let manual_thinking = req.reasoning_requested && thinking_style == Some(ThinkingStyle::Manual);
     // Anthropic requires a manual thinking budget to be >= 1024 and strictly
     // lower than max_tokens. Preserve the caller's cap whenever possible,
     // reserving one output token for small reasoning requests.
@@ -46,29 +53,26 @@ pub(super) fn build_messages_body(req: &ChatRequest) -> Value {
     if let Some(sys) = req.system_prompt.as_ref() {
         body["system"] = Value::String(sys.clone());
     }
-    if req.reasoning_requested {
-        body["thinking"] = if adaptive_thinking {
-            serde_json::json!({"type": "adaptive"})
-        } else {
-            serde_json::json!({
-                "type": "enabled",
-                "budget_tokens": (max_tokens - 1)
-                    .clamp(MIN_MANUAL_THINKING_BUDGET, MAX_MANUAL_THINKING_BUDGET),
-            })
-        };
+    if adaptive_thinking {
+        body["thinking"] = serde_json::json!({"type": "adaptive"});
+    } else if manual_thinking {
+        body["thinking"] = serde_json::json!({
+            "type": "enabled",
+            "budget_tokens": (max_tokens - 1)
+                .clamp(MIN_MANUAL_THINKING_BUDGET, MAX_MANUAL_THINKING_BUDGET),
+        });
     }
-    // Real, provider-native reasoning-effort override (spec
-    // 011-composer-toolbar-parity), independent of `thinking`/
-    // `reasoning_requested` above (research.md §1: "effort works with or
-    // without thinking"). Never sent for a model outside the curated
-    // support table — unlike Claude Code's own `--effort` flag, the direct
-    // API is not documented to fall back gracefully on an unsupported
-    // value.
-    if let Some(requested) = req.effort_level {
-        let supported = effort::anthropic_supported_levels(&req.model_id);
-        if let Some(clamped) = effort::clamp(requested, supported) {
-            body["output_config"] = serde_json::json!({"effort": clamped.as_str()});
-        }
+    // The selected reasoning option, independent of `thinking` above (effort
+    // works with or without thinking). Sent only when it is one of this
+    // model's own cached options — `send_message` already validated it, and
+    // an option the model does not offer must never reach the provider.
+    let offered_effort = capabilities
+        .and_then(|c| c.reasoning.as_ref())
+        .zip(req.reasoning_option.as_deref())
+        .filter(|(control, id)| control.offers(id))
+        .map(|(_, id)| id);
+    if let Some(id) = offered_effort {
+        body["output_config"] = serde_json::json!({"effort": id});
     }
     if !req.tools.is_empty() {
         let tools: Vec<Value> = req
@@ -85,33 +89,6 @@ pub(super) fn build_messages_body(req: &ChatRequest) -> Value {
         body["tools"] = Value::Array(tools);
     }
     body
-}
-
-/// Claude 4.7 and newer use Anthropic's adaptive thinking API. Older Claude
-/// models that expose extended thinking still use the manual budget form.
-fn supports_adaptive_thinking(model_id: &str) -> bool {
-    let lower_model_id = model_id.to_ascii_lowercase();
-    let parts: Vec<_> = lower_model_id.split('-').collect();
-    let Some((major_index, major)) = parts
-        .iter()
-        .enumerate()
-        .find_map(|(index, part)| part.parse::<u32>().ok().map(|major| (index, major)))
-    else {
-        return false;
-    };
-    if parts.first() != Some(&"claude") || major_index < 2 {
-        return false;
-    }
-    if major > 4 {
-        return true;
-    }
-    major == 4
-        && parts
-            .get(major_index + 1)
-            .and_then(|minor| minor.parse::<u32>().ok())
-            // Date-stamped ids such as `claude-sonnet-4-20250514` are
-            // legacy manual-thinking models, not Claude 4.7 variants.
-            .is_some_and(|minor| (7..100).contains(&minor))
 }
 
 /// Groups the flat, per-row `messages` history into Anthropic's wire

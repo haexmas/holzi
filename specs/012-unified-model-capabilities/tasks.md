@@ -155,20 +155,20 @@ states.
 
 ### Tests for User Story 1 (write first; expected to fail until the implementation tasks land)
 
-- [ ] T018 [P] [US1] Create `src-tauri/src/adapters/anthropic_capabilities_tests.rs` (declared from `anthropic_capabilities.rs` with the repository's `#[cfg(test)] #[path = ...]` idiom) and test `map_capabilities` directly with the seven cases listed in contracts/capabilities-json.md (full adaptive tree; effort without `xhigh` + manual thinking; thinking without effort → `ModelManaged`; neither → `Unavailable`; capabilities object absent → all `None`; `pdf_input` absent → attachments `None`; unknown extra leaves ignored). In `src-tauri/src/adapters/anthropic_tests.rs` add one wiremock end-to-end case proving `fetch_models` returns the mapped capabilities for a full-tree listing and still succeeds for a listing whose capabilities object is absent.
-- [ ] T019 [P] [US1] In `src-tauri/src/adapters/request_tests.rs` update fixtures to the new
+- [x] T018 [P] [US1] Create `src-tauri/src/adapters/anthropic_capabilities_tests.rs` (declared from `anthropic_capabilities.rs` with the repository's `#[cfg(test)] #[path = ...]` idiom) and test `map_capabilities` directly with the seven cases listed in contracts/capabilities-json.md (full adaptive tree; effort without `xhigh` + manual thinking; thinking without effort → `ModelManaged`; neither → `Unavailable`; capabilities object absent → all `None`; `pdf_input` absent → attachments `None`; unknown extra leaves ignored). In `src-tauri/src/adapters/anthropic_tests.rs` add one wiremock end-to-end case proving `fetch_models` returns the mapped capabilities for a full-tree listing and still succeeds for a listing whose capabilities object is absent.
+- [x] T019 [P] [US1] In `src-tauri/src/adapters/request_tests.rs` update fixtures to the new
       `ChatRequest` fields and prove: `Presets` + valid `reasoning_option` → `output_config.effort` equals the option id; absent or not-offered option →
       no `output_config`; `thinking_style: Adaptive` → `{"type":"adaptive"}`; `Manual` → the existing
       budget form with its `max_tokens`/budget clamps; reasoning `None`/`Unavailable` or
       `thinking_style: None` → no `thinking` field. Remove the `supports_adaptive_thinking` tests.
-- [ ] T020 [P] [US1] In `src-tauri/src/adapters/cli_delegate/claude_tests.rs` update the three
+- [x] T020 [P] [US1] In `src-tauri/src/adapters/cli_delegate/claude_tests.rs` update the three
       `EffortLevel` uses: `--effort` receives the validated option id string unchanged; no
       `--effort` when `None`.
-- [ ] T021 [P] [US1] In `src-tauri/src/adapters/cli_delegate/mod_tests.rs` extend the existing
+- [x] T021 [P] [US1] In `src-tauri/src/adapters/cli_delegate/mod_tests.rs` extend the existing
       Claude-delegate model-list test through the shared `fetch_models` path so the returned
       `ProviderModel`s carry the mapped capabilities (no change needed in `cli_delegate` production
       code), and fix the `ChatRequest` literal.
-- [ ] T022 [P] [US1] In `src-tauri/src/chat/commands_tests.rs` delete the tests of `effort_levels_for` and the moved
+- [x] T022 [P] [US1] In `src-tauri/src/chat/commands_tests.rs` delete the tests of `effort_levels_for` and the moved
       reasoning-derivation test (now in T005); add tests for the new pure helpers: `reasoning_requested_for` is true for `Presets`/`ModelManaged`, false
       for `Unavailable`/`None`, and false for a qwen3 request with tools; option validation keeps an
       id only when it is in `Presets.options`. In `src-tauri/src/chat/attachments_tests.rs` replace the four `usability_for` cases with:
@@ -176,19 +176,19 @@ states.
 
 ### Implementation: backend consumers
 
-- [ ] T023 [US1] Create `src-tauri/src/adapters/anthropic_capabilities.rs` (keeps `anthropic.rs`, 448 lines today, under the 500-LoC boundary) holding the `pub(super)` wire structs (`image_input`, `pdf_input`, `thinking{supported, types{enabled, adaptive}}`, `effort{supported, low..max}`; **every nested field `#[serde(default)]`**) and `pub(super) fn map_capabilities(&WireCapabilities) -> ModelCapabilities` implementing research.md R3 verbatim (`Presets` in order low, medium, high, xhigh, max with ids = wire names, built through `ReasoningControl::presets`; else `ModelManaged`; else `Unavailable`; missing subtree → `None`; `thinking_style` Adaptive over Manual; attachments `Some([Text] + Image + Document)` only when **both** `image_input` and `pdf_input` are present, else `None`). Register `mod anthropic_capabilities;` in `src-tauri/src/adapters/mod.rs`; in `anthropic.rs` add `#[serde(default)] capabilities: Option<WireCapabilities>` to `ModelInfo` and call `map_capabilities` once in `fetch_models` (replacing the T010 placeholder). Add a `ponytail:` comment on the whole-list attachment granularity (ceiling: one missing key undetermines all kinds; upgrade path: per-kind fallback, research R3).
-- [ ] T024 [US1] In `src-tauri/src/adapters/types.rs` replace `ChatRequest.effort_level: Option<EffortLevel>` with `reasoning_option: Option<String>` and add `capabilities: Option<ModelCapabilities>`; drop the `EffortLevel` import. In
+- [x] T023 [US1] Create `src-tauri/src/adapters/anthropic_capabilities.rs` (keeps `anthropic.rs`, 448 lines today, under the 500-LoC boundary) holding the `pub(super)` wire structs (`image_input`, `pdf_input`, `thinking{supported, types{enabled, adaptive}}`, `effort{supported, low..max}`; **every nested field `#[serde(default)]`**) and `pub(super) fn map_capabilities(&WireCapabilities) -> ModelCapabilities` implementing research.md R3 verbatim (`Presets` in order low, medium, high, xhigh, max with ids = wire names, built through `ReasoningControl::presets`; else `ModelManaged`; else `Unavailable`; missing subtree → `None`; `thinking_style` Adaptive over Manual; attachments `Some([Text] + Image + Document)` only when **both** `image_input` and `pdf_input` are present, else `None`). Register `mod anthropic_capabilities;` in `src-tauri/src/adapters/mod.rs`; in `anthropic.rs` add `#[serde(default)] capabilities: Option<WireCapabilities>` to `ModelInfo` and call `map_capabilities` once in `fetch_models` (replacing the T010 placeholder). Add a `ponytail:` comment on the whole-list attachment granularity (ceiling: one missing key undetermines all kinds; upgrade path: per-kind fallback, research R3).
+- [x] T024 [US1] In `src-tauri/src/adapters/types.rs` replace `ChatRequest.effort_level: Option<EffortLevel>` with `reasoning_option: Option<String>` and add `capabilities: Option<ModelCapabilities>`; drop the `EffortLevel` import. In
       `src-tauri/src/adapters/cli_delegate/claude.rs` change `spawn_claude_invocation`'s
       `effort_level` parameter to `Option<&str>` and pass `req.reasoning_option.as_deref()`.
-- [ ] T025 [US1] In `src-tauri/src/adapters/request.rs` make the serializer read `req.capabilities`
+- [x] T025 [US1] In `src-tauri/src/adapters/request.rs` make the serializer read `req.capabilities`
       and `req.reasoning_option`: send `thinking` only when reasoning is `Presets | ModelManaged`
       **and** `thinking_style` is `Some` (`Adaptive` → `{"type":"adaptive"}`, `Manual` → existing
       budget form); send `output_config.effort` only when `reasoning_option` is one of the model's
       `Presets` ids; delete `supports_adaptive_thinking` and the `effort` import.
-- [ ] T026 [US1] In `src-tauri/src/chat/attachments.rs` change `usability_for` (keep the name —
+- [x] T026 [US1] In `src-tauri/src/chat/attachments.rs` change `usability_for` (keep the name —
       extend the existing candidate) to `usability_for(kind: &AttachmentKind, capabilities: Option<&ModelCapabilities>) -> AttachmentUsability` with a three-variant enum
       (`Usable`, `NotAccepted`, `Undetermined`); update its doc comment.
-- [ ] T027 [US1] In `src-tauri/src/chat/commands.rs`: rename `SendMessageArgs.effort_level` to
+- [x] T027 [US1] In `src-tauri/src/chat/commands.rs`: rename `SendMessageArgs.effort_level` to
       `reasoning_option: Option<String>`; in `send_message`'s existing blocking lookup also read
       `models_store::get_model(conn, &session.model_id)` (local and composite ids both resolve) and
       derive from that **one** snapshot `reasoning_requested` (`Presets | ModelManaged`, keeping the
@@ -200,20 +200,20 @@ states.
       `"attachment support for this model is not yet known"` (undetermined). Delete
       `get_effort_levels`, `effort_levels_for`, `model_supports_reasoning` and the
       `EffortLevel` import.
-- [ ] T028 [US1] Remove the `get_effort_levels` import and registration in `src-tauri/src/lib.rs`;
+- [x] T028 [US1] Remove the `get_effort_levels` import and registration in `src-tauri/src/lib.rs`;
       delete `src-tauri/src/adapters/effort.rs` and `src-tauri/src/adapters/effort_tests.rs` and their
       `pub mod effort;` / `mod effort_tests;` lines in `src-tauri/src/adapters/mod.rs`.
-- [ ] T029 [US1] Mechanical (no behavior change beyond the T024 field swap; call it out as mechanical in the PR description): replace `effort_level: None` with `reasoning_option: None, capabilities: None` in every remaining `ChatRequest` literal, iterating `cargo build --manifest-path src-tauri/Cargo.toml --tests` until clean. Measured sites (17 files):
+- [x] T029 [US1] Mechanical (no behavior change beyond the T024 field swap; call it out as mechanical in the PR description): replace `effort_level: None` with `reasoning_option: None, capabilities: None` in every remaining `ChatRequest` literal, iterating `cargo build --manifest-path src-tauri/Cargo.toml --tests` until clean. Measured sites (17 files):
       `src-tauri/src/adapters/anthropic_stream_tests.rs`, `src-tauri/src/chat/turn/step_tests.rs`,
       `src-tauri/tests/common/tool_loop_fixture.rs`, `src-tauri/tests/chat_tool_loop_permissions.rs`,
       `src-tauri/tests/cli_delegate_{approval,autonomy_audit_trail,autonomy_deny_rules, autonomy_gated_permissive,autonomy_unavailable,autonomy_ungated,claude,codex_live, disconnect_in_flight,isolation_live}.rs`, `src-tauri/tests/local_inference.rs`.
-- [ ] T030 [US1] Expose capabilities to the frontend: add `capabilities: Option<ModelCapabilities>`
+- [x] T030 [US1] Expose capabilities to the frontend: add `capabilities: Option<ModelCapabilities>`
       to `InstalledModelPayload` (`src-tauri/src/models/commands.rs`, filled from the row) and to
       `ProviderModelPayload` (`src-tauri/src/providers/mod.rs`, filled in `list_provider_models`);
       add a maintainability-exception header to `src-tauri/src/providers/mod.rs` (562 lines): reason
       it stays together and a concrete split plan (extract `do_refresh` + payload structs), matching
       the header style in `src-tauri/src/chat/commands.rs`.
-- [ ] T031 [US1] Backend checkpoint: `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`,
+- [x] T031 [US1] Backend checkpoint: `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`,
       `cargo test --manifest-path src-tauri/Cargo.toml`, `pnpm lint:rust`. Commit:
       `feat(chat): drive effort, reasoning and attachments from cached model capabilities`.
 
@@ -316,7 +316,7 @@ learned capabilities survive failures.
       `NULL` provider row makes it determined; a refresh that returns partial/absent capability data
       **replaces** the stored record with the new (undetermined) answer, no stale merging; a **failed**
       refresh leaves the stored capabilities and rows intact (FR-010).
-- [ ] T047 [P] [US3] In `src-tauri/src/adapters/cli_delegate/mod_tests.rs` assert the Codex
+- [x] T047 [P] [US3] In `src-tauri/src/adapters/cli_delegate/mod_tests.rs` assert the Codex
       delegate's synthetic model has `ModelCapabilities::default()` (`is_undetermined()`), is
       **not** `Some(Unavailable)`, and persists as SQL `NULL` via `compose_model_row`; add a doc
       comment on the Codex arm of `src-tauri/src/adapters/cli_delegate/mod.rs::list_models` stating

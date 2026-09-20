@@ -13,14 +13,12 @@
 //! implement the same trait.
 
 pub mod anthropic;
+mod anthropic_capabilities;
 #[cfg(test)]
 mod anthropic_stream_tests;
 #[cfg(test)]
 mod anthropic_tests;
 pub mod cli_delegate;
-pub mod effort;
-#[cfg(test)]
-mod effort_tests;
 #[cfg(feature = "llm-cpu")]
 pub mod local;
 pub mod request;

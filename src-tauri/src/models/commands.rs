@@ -53,6 +53,8 @@ pub struct InstalledModelPayload {
     pub hf_revision_ref: Option<String>,
     pub file_sha256: Option<String>,
     pub integrity_status: IntegrityStatus,
+    /// What this model supports (spec 012); `None` means not determined.
+    pub capabilities: Option<ModelCapabilities>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -433,6 +435,7 @@ async fn download_from_hf_inner(
                     hf_revision_ref: row.hf_revision_ref,
                     file_sha256: row.file_sha256,
                     integrity_status: row.integrity_status,
+                    capabilities: row.capabilities,
                 });
             }
         }
@@ -673,6 +676,7 @@ pub async fn list_installed_models(
                     hf_revision_ref: row.hf_revision_ref,
                     file_sha256: row.file_sha256,
                     integrity_status: row.integrity_status,
+                    capabilities: row.capabilities,
                 });
             }
             Ok(out)
@@ -825,6 +829,7 @@ async fn register_downloaded(args: RegisterDownloadedArgs) -> Result<InstalledMo
                     hf_revision_ref,
                     file_sha256: Some(file_sha256),
                     integrity_status: IntegrityStatus::Verified,
+                    capabilities: m.capabilities,
                 })
             })
             .map_err(HolziError::from)

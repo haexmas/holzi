@@ -79,6 +79,17 @@ impl ReasoningControl {
         }
     }
 
+    /// True when the model reasons at all — the user can choose how
+    /// (`Presets`) or the model decides on its own (`ModelManaged`). This is
+    /// what decides whether reasoning is requested and shown while it answers
+    /// (spec 012 FR-023).
+    pub fn reasons(&self) -> bool {
+        matches!(
+            self,
+            ReasoningControl::Presets { .. } | ReasoningControl::ModelManaged
+        )
+    }
+
     /// True when `id` is one of the options this control currently offers.
     pub fn offers(&self, id: &str) -> bool {
         match self {
