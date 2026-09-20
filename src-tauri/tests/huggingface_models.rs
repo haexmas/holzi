@@ -58,6 +58,7 @@ fn hf_row(id: &str, provider_id: Uuid) -> ModelRow {
         file_sha256: Some("b".repeat(64)),
         integrity_status: IntegrityStatus::Verified,
         source_kind: SourceKind::Huggingface,
+        capabilities: None,
     }
 }
 
@@ -76,6 +77,7 @@ fn catalog_row(id: &str, provider_id: Uuid) -> ModelRow {
         file_sha256: Some("c".repeat(64)),
         integrity_status: IntegrityStatus::Verified,
         source_kind: SourceKind::Catalog,
+        capabilities: None,
     }
 }
 
@@ -115,6 +117,7 @@ async fn catalog_import_and_huggingface_rows_coexist_and_roundtrip() {
                 file_sha256: Some("d".repeat(64)),
                 integrity_status: IntegrityStatus::Verified,
                 source_kind: SourceKind::Imported,
+                capabilities: None,
             };
             models_store::upsert_model(conn, &imported)?;
             Ok::<_, haex_crdt::Error>(())
@@ -281,6 +284,7 @@ async fn backfill_source_kind_reclassifies_local_rows_but_never_touches_a_provid
                 file_sha256: None,
                 integrity_status: IntegrityStatus::Unknown,
                 source_kind: SourceKind::Provider,
+                capabilities: None,
             };
             models_store::upsert_model(conn, &legacy_catalog)?;
             models_store::upsert_model(conn, &legacy_import)?;

@@ -9,7 +9,8 @@
 //! lockstep — writes to it never mark the row dirty and never record a
 //! per-column HLC, so the value silently fails to reach other devices.
 //!
-//! Migration `0009_models_add_tokenizer_repo` is exactly that case.
+//! Migration `0009_models_add_tokenizer_repo` is exactly that case, and so
+//! is `0018_models_add_capabilities`.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -25,6 +26,7 @@ use holzi_lib::instances::vault_config::vault_config;
 
 const PASSPHRASE: &str = "vault-upgrade-integration-test";
 const TOKENIZER_MIGRATION: &str = "0009_models_add_tokenizer_repo";
+const CAPABILITIES_MIGRATION: &str = "0018_models_add_capabilities";
 
 /// Opens the vault under `dir` with `source` at `trigger_version`.
 fn open_vault(
@@ -46,13 +48,17 @@ fn open_vault(
     .expect("vault open")
 }
 
-/// The production migration set with `0009` removed, standing in for a
+/// The production migration set without `migration`, standing in for a
 /// vault provisioned before that migration shipped.
-fn pre_0009_source() -> Arc<StaticMigrationSource> {
+fn source_without(migration: &str) -> Arc<StaticMigrationSource> {
     let mut m: BTreeMap<MigrationName, String> = holzi_migration_source().0.clone();
-    m.remove(&MigrationName::from(TOKENIZER_MIGRATION))
-        .expect("0009 must exist in the production migration set");
+    m.remove(&MigrationName::from(migration))
+        .unwrap_or_else(|| panic!("{migration} must exist in the production migration set"));
     Arc::new(StaticMigrationSource(m))
+}
+
+fn pre_0009_source() -> Arc<StaticMigrationSource> {
+    source_without(TOKENIZER_MIGRATION)
 }
 
 /// The SQL of the `models` UPDATE trigger as currently installed.
@@ -120,5 +126,37 @@ fn reopening_without_a_version_bump_leaves_tokenizer_repo_untracked() {
         "ensure_triggers_initialized is expected to early-return here; if this \
          now passes, haex-crdt changed its upgrade semantics and \
          HOLZI_TRIGGER_VERSION may no longer be needed"
+    );
+}
+
+/// Same upgrade path for `0018_models_add_capabilities`: a vault provisioned
+/// before it must have `capabilities_json` tracked after reopening through
+/// the production config, or a capability refresh on one device would never
+/// reach the user's other devices.
+#[test]
+fn reopening_a_pre_0018_vault_tracks_capabilities_json() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db_path = dir.path().join("vault.db");
+    let installation_id = installation_id_path(dir.path());
+
+    let old = open_vault(
+        dir.path(),
+        source_without(CAPABILITIES_MIGRATION),
+        DEFAULT_TRIGGER_VERSION,
+    );
+    assert!(
+        !models_update_trigger_sql(&old).contains("capabilities_json"),
+        "precondition: the pre-0018 trigger must not know the column yet"
+    );
+    drop(old);
+
+    let upgraded = Database::open(vault_config(PASSPHRASE, &db_path, &installation_id, false))
+        .expect("reopen upgraded vault");
+    let sql = models_update_trigger_sql(&upgraded);
+    assert!(
+        sql.contains("capabilities_json"),
+        "0018 added `capabilities_json` to the CRDT-tracked `models` table, but the \
+         production open path left the trigger untracked — capability records will \
+         not sync. Bump HOLZI_TRIGGER_VERSION.\n{sql}"
     );
 }

@@ -8,34 +8,18 @@ import type {
   ModelLoadProgressEvent,
   ModelLoadStatusPayload,
 } from '~/composables/useChat'
-import type {
-  InstalledModel,
-  ModelIntegrityFailure,
-} from '~/composables/useModels'
 import type { CatalogEntryWithFit } from '~/composables/useCatalog'
-import type { Provider, ProviderModel } from '~/composables/useProviders'
 import type { ResolveDefaultModelResult } from '~/composables/usePreferences'
-
-export type ModelGroup = {
-  providerId: string
-  providerName: string
-  models: { id: string; name: string; disabled?: boolean }[]
-}
-
-/**
- * The two `cli_delegate` vendors (spec 007-cli-delegate). Always shown in
- * the picker, connected or not — unlike `api_key` providers, which only
- * appear once a row (and models) exist, a delegate vendor is a fixed,
- * known option the user can discover before ever connecting one
- * (spec.md FR-004, Acceptance Scenario 2).
- */
-const DELEGATE_VENDORS = ['claude', 'codex'] as const
+import { useModelInventory } from '~/composables/useModelInventory'
+import { useModelIntegrity } from '~/composables/useModelIntegrity'
 
 /**
  * Model lifecycle: install/catalog/provider listing, load/unload, download
  * progress, and the pre-load integrity dialog. Exactly one model is ever
  * active at a time, so this is a plain singleton store rather than
- * something keyed by id.
+ * something keyed by id. The lists/picker grouping and the integrity dialog
+ * live in `useModelInventory`/`useModelIntegrity` (spaex 500-LoC boundary);
+ * this store owns the load lifecycle and re-exports their state unchanged.
  *
  * `busy` and `lastError` for the composer/send flow stay on the chat page —
  * they're shared with logic that has nothing to do with models, and Pinia
@@ -53,12 +37,23 @@ export const useModelsStore = defineStore('models', () => {
   const { errString } = useErrorString()
 
   const activeModel = ref<LoadedModelInfo | null>(null)
-  const installedModels = ref<InstalledModel[]>([])
-  const catalogEntries = ref<CatalogEntryWithFit[]>([])
-  const providerList = ref<Provider[]>([])
-  const providerModels = ref<Record<string, ProviderModel[]>>({})
   const modelLoadPending = ref(false)
   const lastError = ref<string | null>(null)
+  const setError = (message: string) => {
+    lastError.value = message
+  }
+
+  const {
+    installedModels,
+    catalogEntries,
+    providerList,
+    providerModels,
+    noModelsInstalled,
+    modelGroups,
+    findModelName,
+    refreshInstalledAndCatalog,
+    refreshProviders,
+  } = useModelInventory({ models, catalog, providers, t, errString, setError })
 
   const downloadingId = ref<string | null>(null)
   const downloadProgressBytes = ref(0)
@@ -80,102 +75,11 @@ export const useModelsStore = defineStore('models', () => {
   const loadErrorModelId = ref<string | null>(null)
   let loadingModelToken = 0
 
-  const integrityDialog = ref<ModelIntegrityFailure | null>(null)
-  const integrityBusy = ref(false)
-  const integrityActionError = ref<string | null>(null)
-
-  // A connected `cli_delegate` provider's one cached model
-  // (`refreshProviders` below) already lands in `providerModels`, the
-  // same way an `api_key` provider's models do — so this check needs no
-  // separate delegate-specific case.
-  const noModelsInstalled = computed(
-    () =>
-      installedModels.value.length === 0 &&
-      Object.values(providerModels.value).every((list) => list.length === 0),
-  )
-
   // Read through a computed rather than `activeModel?.modelId` directly in
   // the template — vue-tsc narrows `activeModel` to `never` at the model
   // picker's `v-else-if="!activeModel"` (a chained-`v-if` control-flow
   // quirk), which a plain computed's independent return type sidesteps.
   const activeModelId = computed(() => activeModel.value?.modelId ?? '')
-
-  /** Groups selectable models by provider for the picker's <optgroup>. */
-  const modelGroups = computed<ModelGroup[]>(() => {
-    const localGroup: ModelGroup | null =
-      installedModels.value.length > 0
-        ? {
-            providerId: 'local',
-            providerName: t('chat.model.local'),
-            models: installedModels.value.map((m) => ({
-              id: m.id,
-              name: m.name,
-            })),
-          }
-        : null
-
-    // A connected `cli_delegate` provider gets real cached model rows
-    // (`<providerId>:<remoteId>`) via the same `list_models`/
-    // `replace_provider_models` refresh path `api_key` providers already
-    // use (`providers/mod.rs::compose_model_row`,
-    // `adapters/cli_delegate/mod.rs::list_models`) — so it flows through
-    // `remoteGroups` unchanged, no separate synthesis needed for the
-    // connected case. Claude's rows come straight from Anthropic's own
-    // `/v1/models` API (e.g. `<uuid>:claude-opus-5`), Codex still gets one
-    // synthetic `<uuid>:codex` row.
-    const remoteGroups = providerList.value
-      .filter((p) => p.kind === 'api_key' || p.kind === 'cli_delegate')
-      .map<ModelGroup>((p) => ({
-        providerId: p.id,
-        providerName: p.name,
-        models: (providerModels.value[p.id] ?? []).map((m) => ({
-          id: m.id,
-          name: m.name,
-        })),
-      }))
-      .filter((g) => g.models.length > 0)
-
-    // Unlike `api_key`, a `cli_delegate` vendor the user hasn't connected
-    // yet has no `providers` row at all — nothing for `remoteGroups`
-    // above to find. Shown anyway, disabled, so it's discoverable
-    // (spec.md FR-004, Acceptance Scenario 2); connecting happens from
-    // Settings (tasks.md T027), not from this picker.
-    const notConnectedDelegateGroups: ModelGroup[] = DELEGATE_VENDORS.filter(
-      (vendor) =>
-        !providerList.value.some(
-          (p) =>
-            p.kind === 'cli_delegate' &&
-            p.adapter === vendor &&
-            p.hasCredentials,
-        ),
-    ).map((vendor) => {
-      const label = t(`chat.model.delegate.${vendor}`)
-      return {
-        providerId: `delegate-${vendor}`,
-        providerName: label,
-        models: [
-          {
-            id: `delegate-${vendor}:not-connected`,
-            name: t('chat.model.delegateNotConnected'),
-            disabled: true,
-          },
-        ],
-      }
-    })
-
-    return localGroup
-      ? [localGroup, ...remoteGroups, ...notConnectedDelegateGroups]
-      : [...remoteGroups, ...notConnectedDelegateGroups]
-  })
-
-  /** Looks up a picker entry's friendly name across every group. */
-  function findModelName(id: string): string {
-    for (const group of modelGroups.value) {
-      const found = group.models.find((m) => m.id === id)
-      if (found) return found.name
-    }
-    return id
-  }
 
   // What the composer's model control should show: the model a load is
   // currently targeting, if any, else the actually-active one. Without
@@ -215,42 +119,6 @@ export const useModelsStore = defineStore('models', () => {
     })
   })
 
-  /** Refreshes the installed models and their catalog metadata together. */
-  async function refreshInstalledAndCatalog() {
-    installedModels.value = await models.listInstalledAsync()
-    catalogEntries.value = await catalog.listAsync()
-  }
-
-  /**
-   * Refreshes the provider list and re-fetches api_key/cli_delegate model
-   * caches. Each provider's fetch is isolated: one provider being
-   * unreachable (expired delegate token, network blip) must not blank out
-   * every other provider's already-known models or abort the caller's
-   * broader `initialize()` sequence.
-   */
-  async function refreshProviders() {
-    providerList.value = await providers.listAsync()
-    const relevant = providerList.value.filter(
-      (p) => p.kind === 'api_key' || p.kind === 'cli_delegate',
-    )
-    const next: Record<string, ProviderModel[]> = {}
-    const results = await Promise.allSettled(
-      relevant.map(async (p) => {
-        next[p.id] = await providers.listModelsAsync(p.id)
-      }),
-    )
-    // A provider whose fetch failed this round keeps its last-known models
-    // instead of being blanked out — `next` only ever holds currently
-    // relevant providers, so one no longer connected still drops out below.
-    for (const p of relevant) {
-      if (!(p.id in next)) next[p.id] = providerModels.value[p.id] ?? []
-    }
-    const failure = results.find((r) => r.status === 'rejected') as
-      PromiseRejectedResult | undefined
-    if (failure) lastError.value = errString(failure.reason)
-    providerModels.value = next
-  }
-
   /** Refreshes the backend's currently active model snapshot. */
   async function refreshActiveModel() {
     activeModel.value = await chat.activeModelInfoAsync()
@@ -279,18 +147,29 @@ export const useModelsStore = defineStore('models', () => {
     }
   }
 
-  /**
-   * Detects the three structured integrity error kinds `load_model` can
-   * return (spec 005 §"load_model und lokale Integritätsprüfung") and opens
-   * the decision dialog instead of showing a plain error string. Returns
-   * `false` for every other error so the caller falls back to `lastError`.
-   */
-  function openIntegrityDialog(modelId: string, e: unknown): boolean {
-    const failure = parseModelIntegrityFailure(modelId, e)
-    if (!failure) return false
-    integrityDialog.value = failure
-    return true
-  }
+  const {
+    integrityDialog,
+    integrityBusy,
+    integrityActionError,
+    openIntegrityDialog,
+    onIntegrityLoadUntrusted,
+    onIntegrityRepairSource,
+    onIntegrityChooseOther,
+    onIntegrityDialogOpenChange,
+  } = useModelIntegrity({
+    chat,
+    models,
+    t,
+    errString,
+    installedModels,
+    activeModel,
+    modelLoadPending,
+    findModelName,
+    beginLoadingModel,
+    clearLoadingModel,
+    refreshInstalledAndCatalog,
+    setError,
+  })
 
   /** Loads the selected model (local or api_key composite id). */
   async function loadModel(id: string) {
@@ -319,94 +198,6 @@ export const useModelsStore = defineStore('models', () => {
     } finally {
       modelLoadPending.value = false
       clearLoadingModel(loadToken)
-    }
-  }
-
-  /** "Trotzdem als unsicher laden" — bypasses the hash check for this load only. */
-  async function onIntegrityLoadUntrusted() {
-    if (!integrityDialog.value) return
-    const modelId = integrityDialog.value.modelId
-    modelLoadPending.value = true
-    const loadToken = beginLoadingModel(modelId, findModelName(modelId))
-    integrityBusy.value = true
-    integrityActionError.value = null
-    try {
-      activeModel.value =
-        await chat.loadModelWithIntegrityOverrideAsync(modelId)
-      integrityDialog.value = null
-      try {
-        await refreshInstalledAndCatalog()
-      } catch (e) {
-        // The override load itself already succeeded and the dialog is
-        // gone by now — this failure has nowhere left to render as
-        // `integrityActionError`, so it goes through the page's general
-        // error banner instead of being silently dropped.
-        lastError.value = errString(e)
-      }
-    } catch (e) {
-      integrityActionError.value = errString(e)
-    } finally {
-      integrityBusy.value = false
-      modelLoadPending.value = false
-      clearLoadingModel(loadToken)
-    }
-  }
-
-  /** "Erneut herunterladen / neu importieren" — re-installs from the model's stored HF source. */
-  async function onIntegrityRepairSource() {
-    const dialog = integrityDialog.value
-    if (!dialog) return
-    const model = installedModels.value.find((m) => m.id === dialog.modelId)
-    integrityBusy.value = true
-    integrityActionError.value = null
-    try {
-      if (
-        model?.sourceKind === 'huggingface' &&
-        model.hfRepo &&
-        model.hfFilename
-      ) {
-        await models.downloadFromHfAsync({
-          repoId: model.hfRepo,
-          filename: model.hfFilename,
-          // Repair reinstalls the stored source: the tracked ref when there
-          // is one, otherwise the pinned commit — never an implicit `main`.
-          revision: model.hfRevisionRef ?? model.hfRevision ?? undefined,
-          name: model.name,
-          contextWindow: model.contextWindow,
-          // Without this the backend's same-source short-circuit returns the
-          // existing row and the corrupt file is never replaced.
-          forceRepair: true,
-        })
-        integrityDialog.value = null
-        try {
-          await refreshInstalledAndCatalog()
-        } catch (e) {
-          // Same rationale as `onIntegrityLoadUntrusted`: the repair itself
-          // already succeeded and the dialog is already gone, so a refresh
-          // failure here goes through the general error banner instead of
-          // a now-unreachable `integrityActionError`.
-          lastError.value = errString(e)
-        }
-      } else {
-        integrityActionError.value = t('models.integrityDialog.actionFailed')
-      }
-    } catch (e) {
-      integrityActionError.value = errString(e)
-    } finally {
-      integrityBusy.value = false
-    }
-  }
-
-  /** "Anderes Modell auswählen" — just closes the dialog; the picker is already visible. */
-  function onIntegrityChooseOther() {
-    integrityDialog.value = null
-  }
-
-  /** Clears integrity-dialog state when the dialog is dismissed. */
-  function onIntegrityDialogOpenChange(open: boolean) {
-    if (!open) {
-      integrityDialog.value = null
-      integrityActionError.value = null
     }
   }
 

@@ -5,6 +5,7 @@
 //! dispatch in `chat/commands.rs` does not special-case where the tokens
 //! come from.
 
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -42,7 +43,8 @@ pub enum ChatRole {
 /// frontend picked; never persisted (spec.md Out of scope) — populated only
 /// on the current turn's user message, `content` and `media_type` already
 /// resolved so adapters never need to touch the filesystem themselves.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum AttachmentKind {
     Image,
     Document,

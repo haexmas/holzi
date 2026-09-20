@@ -35,6 +35,8 @@ pub use types::{
 
 use async_trait::async_trait;
 
+use crate::model_capabilities::ModelCapabilities;
+
 /// One model as reported by a provider. Provider-agnostic subset of
 /// what a listing endpoint returns; storage enrichment (composite id,
 /// fetched_at) lives adjacent in `providers::mod` so this stays free of
@@ -52,6 +54,11 @@ pub struct ProviderModel {
     /// provider does not surface it. Persisted into
     /// `models.context_window`.
     pub context_window: Option<i64>,
+    /// What the provider says this model supports. The default record
+    /// (`ModelCapabilities::default()`) means everything is not determined
+    /// — an adapter that cannot tell says so rather than claiming
+    /// "unsupported". Persisted into `models.capabilities_json`.
+    pub capabilities: ModelCapabilities,
 }
 
 /// Errors an adapter can return from the pre-stream request path. All
