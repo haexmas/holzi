@@ -31,11 +31,11 @@ storage, local-model population and the behavior-preserving store split that eve
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirm the work happens in `.worktrees/012-unified-model-capabilities` on branch
+- [x] T001 Confirm the work happens in `.worktrees/012-unified-model-capabilities` on branch
       `012-unified-model-capabilities` (`git worktree list`, `git branch --show-current`); run a real
       `pnpm install` there — never symlink `node_modules` from another checkout. Run all dev/build
       commands inside the Nix dev shell (`IN_NIX_SHELL` set).
-- [ ] T002 Record the baseline before any edit: `cargo test --manifest-path src-tauri/Cargo.toml`
+- [x] T002 Record the baseline before any edit: `cargo test --manifest-path src-tauri/Cargo.toml`
       pass count, `pnpm check:chat-state` test count, `pnpm typecheck`, `pnpm lint`,
       `pnpm format:check` all green. Keep the numbers for T017 (the store split must not change the
       harness count).
@@ -126,7 +126,7 @@ split. No user-visible behavior changes yet.
 
 ### Frontend: behavior-preserving store split (parallel with the backend group)
 
-- [ ] T015 [P] Create `src/composables/useModelInventory.ts` and move out of `src/stores/models.ts`:
+- [x] T015 [P] Create `src/composables/useModelInventory.ts` and move out of `src/stores/models.ts`:
       `installedModels`, `catalogEntries`, `providerList`, `providerModels`,
       `refreshInstalledAndCatalog`, `refreshProviders`, `modelGroups`, `noModelsInstalled`,
       `findModelName` and the `DELEGATE_VENDORS`/`ModelGroup` definitions. It takes its
@@ -135,13 +135,13 @@ split. No user-visible behavior changes yet.
       harness's generic `~/composables/*` branch loads it unchanged. The store imports it explicitly
       (`import { useModelInventory } from '~/composables/useModelInventory'`) and re-exports the
       identical public names.
-- [ ] T016 Create `src/composables/useModelIntegrity.ts` and move `integrityDialog`,
+- [x] T016 Create `src/composables/useModelIntegrity.ts` and move `integrityDialog`,
       `integrityBusy`, `integrityActionError` and the five `onIntegrity*` handlers out of
       `src/stores/models.ts` (parameters: `chat`, `models`, `t`, `errString`, `installedModels`,
       `refreshInstalledAndCatalog`, `setError`, and the load-state hooks `beginLoadingModel`/
       `clearLoadingModel` it uses today). Same conventions as T015; explicit import in the store;
       identical public API.
-- [ ] T017 Verify the split is behavior-preserving: `pnpm check:chat-state` reports the **same test
+- [x] T017 Verify the split is behavior-preserving: `pnpm check:chat-state` reports the **same test
       count as T002** and all pass, `pnpm typecheck`, `pnpm check:templates`, `pnpm lint`,
       `pnpm format:check`; `wc -l src/stores/models.ts src/composables/useModelInventory.ts src/composables/useModelIntegrity.ts` — each under 500. Commit:
       `refactor(models): split the models store into inventory and integrity composables`.
