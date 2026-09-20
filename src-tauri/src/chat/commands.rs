@@ -457,24 +457,36 @@ pub async fn send_message(
 
     // Re-read each attachment fresh at send time (FR-018) rather than
     // trusting the earlier `inspect_attachment` check — a file can vanish
-    // or change in between. A failure excludes just that one attachment
-    // (reported back via `excluded_attachments`) instead of failing the
-    // whole send.
+    // or change in between. The selected model's cached capability snapshot
+    // is checked here too, because the model may have changed since inspect.
+    // A failure or unsupported kind excludes just that one attachment
+    // (reported back via `excluded_attachments`) instead of failing the whole
+    // send.
     let attachment_paths: Vec<String> = args.attachments.iter().map(|a| a.path.clone()).collect();
+    let attachment_capabilities = model_capabilities.clone();
     let (read_attachments, excluded_attachments) =
         tauri::async_runtime::spawn_blocking(move || {
             let mut read = Vec::new();
             let mut excluded = Vec::new();
             for path in attachment_paths {
+                let file_name = std::path::Path::new(&path)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path.clone());
                 match crate::chat::attachments::read_attachment_content(std::path::Path::new(&path))
                 {
-                    Ok(attachment) => read.push(attachment),
-                    Err(_) => excluded.push(
-                        std::path::Path::new(&path)
-                            .file_name()
-                            .map(|n| n.to_string_lossy().into_owned())
-                            .unwrap_or(path),
-                    ),
+                    Ok(attachment)
+                        if matches!(
+                            crate::chat::attachments::usability_for(
+                                &attachment.kind,
+                                attachment_capabilities.as_ref(),
+                            ),
+                            crate::chat::attachments::AttachmentUsability::Usable
+                        ) =>
+                    {
+                        read.push(attachment)
+                    }
+                    Ok(_) | Err(_) => excluded.push(file_name),
                 }
             }
             (read, excluded)

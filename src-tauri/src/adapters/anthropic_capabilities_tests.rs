@@ -158,11 +158,29 @@ fn unknown_capability_leaves_are_ignored() {
 }
 
 #[test]
-fn supported_effort_with_no_supported_level_is_not_a_selectable_control() {
+fn supported_effort_with_all_levels_explicitly_disabled_is_model_managed() {
     let caps = map(json!({
         "thinking": { "supported": true, "types": { "adaptive": leaf(true) } },
-        "effort": { "supported": true, "low": leaf(false) },
+        "effort": {
+            "supported": true,
+            "low": leaf(false), "medium": leaf(false), "high": leaf(false),
+            "xhigh": leaf(false), "max": leaf(false),
+        },
     }));
 
     assert_eq!(caps.reasoning, Some(ReasoningControl::ModelManaged));
+}
+
+#[test]
+fn supported_effort_with_missing_level_is_not_determined() {
+    let caps = map(json!({
+        "thinking": { "supported": true, "types": { "adaptive": leaf(true) } },
+        "effort": {
+            "supported": true,
+            "low": leaf(false), "medium": leaf(false), "high": leaf(false),
+            "xhigh": leaf(false),
+        },
+    }));
+
+    assert_eq!(caps.reasoning, None);
 }

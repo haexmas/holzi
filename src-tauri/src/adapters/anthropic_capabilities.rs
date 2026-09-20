@@ -96,6 +96,17 @@ fn reasoning(wire: &WireCapabilities) -> Option<ReasoningControl> {
         if !options.is_empty() {
             return Some(ReasoningControl::presets(options));
         }
+
+        // `effort.supported: true` with missing level leaves is partial data,
+        // not an authoritative statement that the model manages effort.
+        let levels_complete = wire.effort.as_ref().is_some_and(|effort| {
+            effort_levels(effort)
+                .iter()
+                .all(|(_, leaf)| Leaf::supported(leaf).is_some())
+        });
+        if !levels_complete {
+            return None;
+        }
     }
     // Both answers must be present before claiming the user has no say; a
     // missing subtree stays "not determined".
