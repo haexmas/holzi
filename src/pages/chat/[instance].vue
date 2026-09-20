@@ -16,7 +16,7 @@
  *
  * Concrete split plan, if this grows further: extract the composer/send
  * flow (`send`, `abort`, `newChat`, `pendingSend`,
- * `effortLevel`/`effortLevels`, `input`, `busy`, `turnSetupPending`) into a
+ * `input`, `busy`, `turnSetupPending`) into a
  * `useComposer` composable next to `useChatTranscript`/`useThreadSidebar`,
  * taking the same instance (`chat`, `chatTranscript`) as a dependency.
  */
@@ -26,7 +26,6 @@ import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import type {
   AgentActivityEvent,
-  EffortLevel,
   Message,
   SendMessageArgs,
 } from '~/composables/useChat'
@@ -57,6 +56,9 @@ const {
   noModelsInstalled,
   displayModelId,
   displayModelName,
+  effortLevel,
+  effortOptions,
+  effortState,
   modelGroups,
   providerList,
   integrityDialog,
@@ -71,6 +73,7 @@ const {
   onIntegrityRepairSource,
   onIntegrityChooseOther,
   onIntegrityDialogOpenChange,
+  updateEffortLevel,
 } = modelStore
 
 const PERMISSION_MODE_KEY = 'chat.permission_mode'
@@ -112,18 +115,28 @@ const pendingApprovalsByThread = new Map<string, PendingApproval[]>()
 
 const input = ref('')
 const busy = ref(false)
-// `null` is "Auto" — no override, the active model/backend's own default
-// applies (spec 011-composer-toolbar-parity FR-005). Replaces the former
-// low/medium/high slider, which only ever changed `maxNewTokens` and was
-// never actually sent to a `cli_delegate` backend at all.
-const effortLevel = ref<EffortLevel | null>(null)
-// Levels the active model/backend actually supports; empty hides the
-// effort control entirely (FR-003). Refreshed whenever the displayed model
-// changes, see the `displayModelId` watcher below.
-const effortLevels = ref<EffortLevel[]>([])
-const effortLabel = computed(() =>
-  t(`chat.effort.${effortLevel.value ?? 'auto'}`),
+// The selected reasoning option and the displayed model's offered options
+// live in the models store (spec 012): the model determines which choices are
+// valid, and the store owns the effective value. `null` is Auto.
+/** An option's display text: the known-id translation, else the provider's own label. */
+function effortOptionLabel(option: { id: string; label: string }): string {
+  const key = `chat.effort.${option.id}`
+  const translated = t(key)
+  return translated === key ? option.label : translated
+}
+const effortChoices = computed(() =>
+  effortOptions.value.map((option) => ({
+    id: option.id,
+    label: effortOptionLabel(option),
+  })),
 )
+// Trigger text for the active choice; empty unless the control is selectable.
+const effortLabel = computed(() => {
+  if (effortState.value !== 'selectable') return ''
+  const id = effortLevel.value
+  if (id === null) return t('chat.effort.auto')
+  return effortChoices.value.find((choice) => choice.id === id)?.label ?? id
+})
 // Live sub-agent activity for the Claude Code delegate (spec
 // 011-composer-toolbar-parity Story 2) — reset at the start of every send
 // and when the current turn ends (see the `onTurnComplete` wrapping below),
@@ -298,7 +311,7 @@ async function send(retryPending = false) {
     content,
     idempotencyKey: crypto.randomUUID(),
     autonomyMode: isDelegateModel.value ? autonomyMode.value : null,
-    effortLevel: effortLevel.value,
+    reasoningOption: effortLevel.value,
     attachments: attachments.value.map((a) => ({ path: a.path })),
   }
   pendingSend.value = null
@@ -606,32 +619,6 @@ async function reloadAutonomyMode(uuid: string) {
   }
 }
 
-function updateEffortLevel(level: EffortLevel | null) {
-  effortLevel.value = level
-}
-
-/** Refreshes `effortLevels` for the newly displayed model and resets
- * `effortLevel` to "Auto" if the current choice is no longer offered
- * (spec 011-composer-toolbar-parity FR-002/FR-003). */
-async function refreshEffortLevels() {
-  const modelId = displayModelId.value
-  if (!modelId) {
-    effortLevels.value = []
-    effortLevel.value = null
-    return
-  }
-  try {
-    effortLevels.value = await chat.getEffortLevelsAsync(modelId)
-  } catch {
-    // A failed lookup is treated the same as "no effort control for this
-    // selection" — never blocks the composer from being usable.
-    effortLevels.value = []
-  }
-  if (effortLevel.value && !effortLevels.value.includes(effortLevel.value)) {
-    effortLevel.value = null
-  }
-}
-
 /** Adds newly picked files to the composer's attachment list, classifying
  * each against the displayed model/backend (spec 011-composer-toolbar-parity
  * Story 3). Duplicate paths are allowed — each gets its own entry (spec.md
@@ -671,7 +658,6 @@ async function refreshAttachmentUsability() {
 }
 
 watch(displayModelId, refreshAttachmentUsability)
-watch(displayModelId, refreshEffortLevels, { immediate: true })
 
 /** Updates the live sub-agent indicator (spec 011-composer-toolbar-parity). */
 function handleAgentActivity(e: AgentActivityEvent) {
@@ -1254,9 +1240,10 @@ onBeforeUnmount(() => {
                     :model-id="displayModelId"
                     :model-name="displayModelName"
                     :model-groups="modelGroups"
-                    :effort-levels="effortLevels"
+                    :effort-choices="effortChoices"
                     :effort-level="effortLevel"
                     :effort-label="effortLabel"
+                    :effort-state="effortState"
                     :disabled="busy"
                     :model-disabled="
                       modelGroups.length === 0 || modelLoadPending

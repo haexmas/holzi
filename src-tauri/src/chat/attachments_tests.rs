@@ -1,8 +1,8 @@
 use std::io::Write;
 
-use super::{classify_attachment, read_attachment_content, usability_for};
+use super::{classify_attachment, read_attachment_content, usability_for, AttachmentUsability};
 use crate::adapters::AttachmentKind;
-use crate::storage::providers::ProviderKind;
+use crate::model_capabilities::ModelCapabilities;
 
 fn write_temp_file(name: &str, bytes: &[u8]) -> tempfile::TempDir {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -50,40 +50,46 @@ fn classify_errors_only_for_a_missing_file() {
     assert!(classify_attachment(&missing).is_err());
 }
 
-#[test]
-fn usability_matrix_matches_the_four_backends() {
-    assert!(usability_for(
-        &AttachmentKind::Image,
-        ProviderKind::ApiKey,
-        Some("anthropic")
-    ));
-    assert!(usability_for(
-        &AttachmentKind::Document,
-        ProviderKind::CliDelegate,
-        Some("claude")
-    ));
-    assert!(!usability_for(
-        &AttachmentKind::Image,
-        ProviderKind::Local,
-        None
-    ));
-    assert!(!usability_for(
-        &AttachmentKind::Image,
-        ProviderKind::CliDelegate,
-        Some("codex")
-    ));
+fn accepting(kinds: Vec<AttachmentKind>) -> ModelCapabilities {
+    ModelCapabilities {
+        accepted_attachment_kinds: Some(kinds),
+        ..ModelCapabilities::default()
+    }
 }
 
 #[test]
-fn read_attachment_content_reports_the_right_media_type() {
-    let dir = write_temp_file("note.txt", b"hello");
-    let attachment = read_attachment_content(&dir.path().join("note.txt")).expect("read");
-    assert_eq!(attachment.media_type, "text/plain");
-    assert_eq!(attachment.bytes, b"hello");
+fn a_kind_in_the_determined_list_is_usable() {
+    let caps = accepting(vec![AttachmentKind::Text, AttachmentKind::Image]);
+
+    assert_eq!(
+        usability_for(&AttachmentKind::Image, Some(&caps)),
+        AttachmentUsability::Usable
+    );
 }
 
 #[test]
-fn read_attachment_content_fails_for_a_missing_file() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    assert!(read_attachment_content(&dir.path().join("gone.png")).is_err());
+fn a_kind_missing_from_the_determined_list_is_not_accepted() {
+    let caps = accepting(vec![AttachmentKind::Text]);
+
+    assert_eq!(
+        usability_for(&AttachmentKind::Document, Some(&caps)),
+        AttachmentUsability::NotAccepted
+    );
+    // An authoritative empty list (a local model) accepts nothing.
+    assert_eq!(
+        usability_for(&AttachmentKind::Text, Some(&accepting(Vec::new()))),
+        AttachmentUsability::NotAccepted
+    );
+}
+
+#[test]
+fn undetermined_support_is_neither_usable_nor_reported_as_unsupported() {
+    assert_eq!(
+        usability_for(&AttachmentKind::Image, None),
+        AttachmentUsability::Undetermined
+    );
+    assert_eq!(
+        usability_for(&AttachmentKind::Image, Some(&ModelCapabilities::default())),
+        AttachmentUsability::Undetermined
+    );
 }

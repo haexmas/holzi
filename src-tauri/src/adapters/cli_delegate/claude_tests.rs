@@ -6,7 +6,6 @@ use super::autonomy::AutonomyMode;
 use super::claude::{build_command, parse_line, LineOutcome};
 use super::subagents::Tracker;
 use super::DelegateVendor;
-use crate::adapters::effort::EffortLevel;
 use crate::adapters::types::{StreamChunk, StreamError};
 
 /// Convenience wrapper for tests that don't care about cross-line
@@ -229,7 +228,7 @@ fn model_args(model: &str) -> Vec<String> {
     args_with_effort(model, None)
 }
 
-fn args_with_effort(model: &str, effort_level: Option<EffortLevel>) -> Vec<String> {
+fn args_with_effort(model: &str, reasoning_option: Option<&str>) -> Vec<String> {
     let tmp = tempfile::TempDir::new().expect("tempdir");
     let cmd = build_command(
         "claude",
@@ -238,7 +237,7 @@ fn args_with_effort(model: &str, effort_level: Option<EffortLevel>) -> Vec<Strin
         None,
         &tmp,
         AutonomyMode::Ungated,
-        effort_level,
+        reasoning_option,
     );
     cmd.as_std()
         .get_args()
@@ -247,8 +246,8 @@ fn args_with_effort(model: &str, effort_level: Option<EffortLevel>) -> Vec<Strin
 }
 
 #[test]
-fn an_effort_level_is_passed_through_as_the_effort_flag() {
-    let args = args_with_effort("claude-opus-5", Some(EffortLevel::XHigh));
+fn a_reasoning_option_id_is_passed_through_as_the_effort_flag_unchanged() {
+    let args = args_with_effort("claude-opus-5", Some("xhigh"));
     let flag = args.iter().position(|a| a == "--effort");
     assert_eq!(
         flag.and_then(|i| args.get(i + 1)).map(String::as_str),
@@ -257,7 +256,7 @@ fn an_effort_level_is_passed_through_as_the_effort_flag() {
 }
 
 #[test]
-fn no_effort_level_omits_the_effort_flag() {
+fn no_reasoning_option_omits_the_effort_flag() {
     let args = model_args("claude-opus-5");
     assert!(!args.iter().any(|a| a == "--effort"));
 }

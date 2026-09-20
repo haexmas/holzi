@@ -1,5 +1,9 @@
 import { computed, ref } from 'vue'
-import type { InstalledModel, useModels } from '~/composables/useModels'
+import type {
+  InstalledModel,
+  ModelCapabilities,
+  useModels,
+} from '~/composables/useModels'
 import type { CatalogEntryWithFit, useCatalog } from '~/composables/useCatalog'
 import type {
   Provider,
@@ -136,6 +140,25 @@ export function useModelInventory(deps: ModelInventoryDeps) {
     return id
   }
 
+  /**
+   * The cached capabilities of one picker model, straight from the lists the
+   * store already fetched — no IPC and no second cache. `undefined` means no
+   * row matches (nothing selected, lists still loading, the disabled
+   * "not connected" placeholder); `null` means a row exists whose
+   * capabilities are not determined.
+   */
+  function capabilitiesFor(
+    modelId: string,
+  ): ModelCapabilities | null | undefined {
+    const installed = installedModels.value.find((m) => m.id === modelId)
+    if (installed) return installed.capabilities ?? null
+    for (const list of Object.values(providerModels.value)) {
+      const found = list.find((m) => m.id === modelId)
+      if (found) return found.capabilities ?? null
+    }
+    return undefined
+  }
+
   /** Refreshes the installed models and their catalog metadata together. */
   async function refreshInstalledAndCatalog() {
     installedModels.value = await models.listInstalledAsync()
@@ -180,6 +203,7 @@ export function useModelInventory(deps: ModelInventoryDeps) {
     noModelsInstalled,
     modelGroups,
     findModelName,
+    capabilitiesFor,
     refreshInstalledAndCatalog,
     refreshProviders,
   }

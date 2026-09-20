@@ -149,7 +149,8 @@ async fn run_codex_turn(
             max_new_tokens: None,
             tools: Vec::new(),
             autonomy_mode: AutonomyMode::GatedPermissive,
-            effort_level: Default::default(),
+            reasoning_option: Default::default(),
+            capabilities: Default::default(),
         })
         .await
         .expect("stream_chat should start");

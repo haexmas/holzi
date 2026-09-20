@@ -10,6 +10,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::anthropic::AnthropicAdapter;
 use super::{AdapterError, ProviderAdapter};
+use crate::model_capabilities::{ReasoningControl, ThinkingStyle};
 
 const AUTH_HEADER: &str = "x-api-key";
 const VERSION_HEADER: &str = "anthropic-version";
@@ -232,4 +233,67 @@ fn query_param_missing(name: &'static str) -> impl wiremock::Match {
         }
     }
     Missing(name)
+}
+
+/// End to end through the HTTP listing: the live capability tree becomes the
+/// persisted record, and a model whose entry carries no `capabilities` object
+/// still lists successfully as "not determined" (spec 012, FR-002/FR-003).
+/// The mapping's own cases live in `anthropic_capabilities_tests.rs`.
+#[tokio::test]
+async fn list_models_maps_live_capabilities_and_tolerates_their_absence() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/models"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": [
+                {
+                    "id": "claude-opus-5",
+                    "display_name": "Claude Opus 5",
+                    "max_input_tokens": 1000000,
+                    "capabilities": {
+                        "image_input": { "supported": true },
+                        "pdf_input": { "supported": true },
+                        "thinking": {
+                            "supported": true,
+                            "types": {
+                                "enabled": { "supported": false },
+                                "adaptive": { "supported": true }
+                            }
+                        },
+                        "effort": {
+                            "supported": true,
+                            "low": { "supported": true },
+                            "medium": { "supported": true },
+                            "high": { "supported": true },
+                            "xhigh": { "supported": false },
+                            "max": { "supported": true }
+                        }
+                    }
+                },
+                { "id": "claude-legacy", "display_name": "Claude Legacy" }
+            ],
+            "has_more": false
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let adapter = AnthropicAdapter::new(server.uri(), "sk-test-key".to_string()).unwrap();
+    let models = adapter.list_models().await.expect("list_models succeeds");
+
+    assert_eq!(models.len(), 2);
+    let opus = &models[0].capabilities;
+    assert_eq!(opus.thinking_style, Some(ThinkingStyle::Adaptive));
+    assert!(matches!(
+        &opus.reasoning,
+        Some(ReasoningControl::Presets { options }) if options.len() == 4
+    ));
+    assert_eq!(
+        opus.accepted_attachment_kinds.as_ref().map(Vec::len),
+        Some(3)
+    );
+    assert!(
+        models[1].capabilities.is_undetermined(),
+        "an entry without a capabilities object is not determined, not unsupported"
+    );
 }

@@ -53,7 +53,8 @@ fn transcript_gives_duplicate_attachment_names_unique_sandbox_names() {
         max_new_tokens: None,
         tools: Vec::new(),
         autonomy_mode: Default::default(),
-        effort_level: Default::default(),
+        reasoning_option: Default::default(),
+        capabilities: Default::default(),
     };
 
     let prompt = build_transcript_prompt(&request);
@@ -127,6 +128,24 @@ async fn delegate_exposes_one_synthetic_vendor_model() {
     assert_eq!(models[0].display_name, "codex (CLI delegate)");
 }
 
+/// Codex exposes no capability metadata yet, so its model is *not
+/// determined* — which is different from "unsupported" (spec 012 FR-007) and
+/// must be stored as SQL NULL rather than as a determined-negative record.
+#[tokio::test]
+async fn codex_model_capabilities_are_not_determined_rather_than_unsupported() {
+    let provider = sample_provider(Some("codex"));
+    let adapter = build_adapter(&provider, None).expect("delegate adapter should build");
+    let models = adapter.list_models().await.expect("model listing");
+
+    let caps = &models[0].capabilities;
+    assert!(caps.is_undetermined());
+    assert_eq!(caps.reasoning, None, "not Some(Unavailable)");
+    assert_eq!(caps.accepted_attachment_kinds, None, "not Some(vec![])");
+
+    let row = crate::providers::compose_model_row(provider.id, 0, models[0].clone());
+    assert_eq!(row.capabilities, None, "persisted as NULL");
+}
+
 #[tokio::test]
 async fn claude_model_list_comes_from_the_models_api_via_oauth_bearer() {
     let server = MockServer::start().await;
@@ -142,6 +161,25 @@ async fn claude_model_list_comes_from_the_models_api_via_oauth_bearer() {
                     "type": "model",
                     "created_at": "2026-07-24T00:00:00Z",
                     "max_input_tokens": 200000,
+                    "capabilities": {
+                        "image_input": { "supported": true },
+                        "pdf_input": { "supported": true },
+                        "thinking": {
+                            "supported": true,
+                            "types": {
+                                "enabled": { "supported": false },
+                                "adaptive": { "supported": true }
+                            }
+                        },
+                        "effort": {
+                            "supported": true,
+                            "low": { "supported": true },
+                            "medium": { "supported": true },
+                            "high": { "supported": true },
+                            "xhigh": { "supported": true },
+                            "max": { "supported": true }
+                        }
+                    }
                 },
                 {
                     "id": "claude-sonnet-5",
@@ -171,6 +209,24 @@ async fn claude_model_list_comes_from_the_models_api_via_oauth_bearer() {
     assert_eq!(models[0].remote_id, "claude-opus-5");
     assert_eq!(models[0].display_name, "Claude Opus 5");
     assert_eq!(models[1].remote_id, "claude-sonnet-5");
+
+    // The delegate lists models through the same `fetch_models` the API-key
+    // provider uses, so it carries the mapped live capabilities with no
+    // delegate-specific code (spec 012 FR-003): the real supported levels
+    // instead of a hardcoded "always all five".
+    let opus = &models[0].capabilities;
+    assert!(matches!(
+        &opus.reasoning,
+        Some(crate::model_capabilities::ReasoningControl::Presets { options }) if options.len() == 5
+    ));
+    assert_eq!(
+        opus.thinking_style,
+        Some(crate::model_capabilities::ThinkingStyle::Adaptive)
+    );
+    assert!(
+        models[1].capabilities.is_undetermined(),
+        "an entry without a capabilities object is not determined"
+    );
 }
 
 #[tokio::test]

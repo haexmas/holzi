@@ -68,7 +68,8 @@ async fn load_and_stream_generates_tokens() {
         max_new_tokens: Some(MAX_NEW_TOKENS),
         tools: Vec::new(),
         autonomy_mode: Default::default(),
-        effort_level: Default::default(),
+        reasoning_option: Default::default(),
+        capabilities: Default::default(),
     });
 
     let mut total_content = String::new();
@@ -128,7 +129,8 @@ async fn abort_stops_generation_before_completion() {
         max_new_tokens: Some(512),
         tools: Vec::new(),
         autonomy_mode: Default::default(),
-        effort_level: Default::default(),
+        reasoning_option: Default::default(),
+        capabilities: Default::default(),
     });
 
     // Pull chunks until we get at least one non-empty delta so we know

@@ -6,7 +6,7 @@
 // actual IPC boundary (`invoke`/`listen` from `@tauri-apps/api/core`/
 // `event`). No browser or GPU is required.
 //
-// Maintainability exception (spaex 500-LoC rule): 25 replay tests plus the
+// Maintainability exception (spaex 500-LoC rule): 31 replay tests plus the
 // `createChatState` scaffold that boots the page's real `<script setup>`
 // against a sandboxed `require` — a hand-rolled CommonJS loader (using the
 // `typescript` package already a dependency here) that transpiles the page,
@@ -21,7 +21,7 @@
 // array `mount()`/`unmount()` drain), and `dompurify` (needs a real DOM).
 //
 // Concrete split plan, if this grows further: move `createChatState` into
-// `scripts/lib/chat-state-harness.ts` and split the 25 cases by what they
+// `scripts/lib/chat-state-harness.ts` and split the 31 cases by what they
 // exercise — transcript/event ordering, thread sidebar, model lifecycle,
 // and composer/permission state.
 import assert from 'node:assert/strict'
@@ -122,8 +122,12 @@ type InvokeHandler = (args?: unknown) => unknown
  * its returned handlers directly (e.g. `state.handleToken(...)`), so this
  * only needs to resolve without hanging or throwing.
  */
-function createTauriDouble(invokeHandlers: Record<string, InvokeHandler>) {
+function createTauriDouble(
+  invokeHandlers: Record<string, InvokeHandler>,
+  invokeLog?: string[],
+) {
   async function invoke(cmd: string, args?: unknown) {
+    invokeLog?.push(cmd)
     const handler = invokeHandlers[cmd]
     if (!handler) {
       throw new Error(
@@ -206,8 +210,9 @@ function createChatState(
   overrides: Record<string, unknown> = {},
   preferenceOverrides: Record<string, unknown> = {},
   dependencyOverrides: Record<string, (...args: unknown[]) => unknown> = {},
+  invokeLog?: string[],
 ) {
-  const tauri = createTauriDouble({ ...DEFAULT_INVOKE_HANDLERS })
+  const tauri = createTauriDouble({ ...DEFAULT_INVOKE_HANDLERS }, invokeLog)
 
   const mountHooks: Array<() => unknown> = []
   const unmountHooks: Array<() => unknown> = []
@@ -982,4 +987,181 @@ test('a failed permission save restores the persisted mode and prevents overlapp
   assert.equal(state.permissionMode.value, 'manual')
   assert.equal(state.permissionModeSaving.value, false)
   assert.match(state.lastError.value, /preference write failed/)
+})
+
+// --- Spec 012: model capabilities drive the composer's effort control -------
+
+/** A determined capability record offering the given reasoning option ids. */
+const presetsCapabilities = (...ids: string[]) => ({
+  reasoning: {
+    kind: 'presets',
+    options: ids.map((id) => ({ id, label: id })),
+  },
+  acceptedAttachmentKinds: ['text', 'image'],
+  thinkingStyle: 'adaptive',
+})
+const localModel = (id: string, capabilities: unknown) => ({
+  id,
+  name: id,
+  providerId: 'local',
+  contextWindow: null,
+  capabilities,
+})
+const providerModel = (id: string, capabilities: unknown) => ({
+  id,
+  name: id,
+  providerId: 'p1',
+  contextWindow: null,
+  capabilities,
+})
+const showModel = (
+  state: ReturnType<typeof createChatState>,
+  modelId: string,
+) => {
+  state.activeModel.value = {
+    modelId,
+    name: modelId,
+    tokenizerRepo: '',
+    contextWindow: null,
+  }
+}
+
+test('the effort options offered follow the displayed model', async () => {
+  const state = createChatState()
+  state.modelStore.installedModels = [
+    localModel('local-a', presetsCapabilities('low', 'high')),
+  ]
+  state.modelStore.providerModels = {
+    p1: [
+      providerModel(
+        'p1:opus',
+        presetsCapabilities('low', 'medium', 'high', 'xhigh', 'max'),
+      ),
+    ],
+  }
+
+  showModel(state, 'p1:opus')
+  await nextTick()
+  assert.equal(state.modelStore.effortState, 'selectable')
+  assert.deepEqual(
+    state.modelStore.effortOptions.map((o: { id: string }) => o.id),
+    ['low', 'medium', 'high', 'xhigh', 'max'],
+  )
+
+  showModel(state, 'local-a')
+  await nextTick()
+  assert.deepEqual(
+    state.modelStore.effortOptions.map((o: { id: string }) => o.id),
+    ['low', 'high'],
+  )
+})
+
+test('the effort control is hidden, managed or unknown by what the model says, and hidden for an unresolved model', async () => {
+  const state = createChatState()
+  state.modelStore.installedModels = [
+    localModel('no-reasoning', {
+      reasoning: { kind: 'unavailable' },
+      acceptedAttachmentKinds: [],
+      thinkingStyle: null,
+    }),
+    localModel('reasons-alone', {
+      reasoning: { kind: 'model_managed' },
+      acceptedAttachmentKinds: [],
+      thinkingStyle: null,
+    }),
+    localModel('not-determined', null),
+    localModel('empty-presets', presetsCapabilities()),
+  ]
+
+  const stateFor = async (modelId: string) => {
+    showModel(state, modelId)
+    await nextTick()
+    return state.modelStore.effortState
+  }
+
+  assert.equal(await stateFor('no-reasoning'), 'hidden')
+  assert.equal(await stateFor('reasons-alone'), 'managed')
+  assert.equal(await stateFor('not-determined'), 'unknown')
+  assert.equal(await stateFor('empty-presets'), 'hidden')
+  // No row for this id (lists still loading, or the disabled "not
+  // connected" placeholder): never described as "not yet known".
+  assert.equal(await stateFor('delegate-claude:not-connected'), 'hidden')
+})
+
+test('a selection is accepted only from the offered options and is sent as the reasoning option', async () => {
+  const requests: Array<{ reasoningOption?: string | null }> = []
+  const state = createChatState({
+    sendMessageAsync: async (request: { reasoningOption?: string | null }) => {
+      requests.push(request)
+      return { threadId: 'a', userMessageId: 'u', assistantMessageId: 'answer' }
+    },
+  })
+  state.modelStore.installedModels = [
+    localModel('model', presetsCapabilities('low', 'high')),
+  ]
+  await nextTick()
+
+  state.modelStore.updateEffortLevel('xhigh')
+  assert.equal(state.modelStore.effortLevel, null, 'not offered: rejected')
+  state.modelStore.updateEffortLevel('high')
+  assert.equal(state.modelStore.effortLevel, 'high')
+
+  state.input.value = 'Hello'
+  await state.send()
+  assert.equal(requests[0].reasoningOption, 'high')
+
+  state.modelStore.updateEffortLevel(null)
+  assert.equal(state.modelStore.effortLevel, null)
+})
+
+test('switching models starts on Auto instead of carrying the previous choice over', async () => {
+  const state = createChatState()
+  state.modelStore.installedModels = [
+    localModel('a', presetsCapabilities('low', 'high')),
+    localModel('b', presetsCapabilities('low', 'high')),
+  ]
+  showModel(state, 'a')
+  await nextTick()
+  state.modelStore.updateEffortLevel('high')
+  assert.equal(state.modelStore.effortLevel, 'high')
+
+  showModel(state, 'b')
+  await nextTick()
+
+  assert.equal(state.modelStore.effortLevel, null)
+})
+
+test('a capability refresh that removes the selected option falls back to Auto', async () => {
+  const state = createChatState()
+  state.modelStore.installedModels = [
+    localModel('model', presetsCapabilities('low', 'high', 'max')),
+  ]
+  await nextTick()
+  state.modelStore.updateEffortLevel('max')
+  assert.equal(state.modelStore.effortLevel, 'max')
+
+  state.modelStore.installedModels = [
+    localModel('model', presetsCapabilities('low', 'high')),
+  ]
+  await nextTick()
+
+  assert.equal(state.modelStore.effortLevel, null)
+})
+
+test('switching the displayed model triggers no capability lookup', async () => {
+  const invokeLog: string[] = []
+  const state = createChatState({}, {}, {}, invokeLog)
+  state.modelStore.installedModels = [
+    localModel('a', presetsCapabilities('low')),
+    localModel('b', presetsCapabilities('high')),
+  ]
+  await nextTick()
+  invokeLog.length = 0
+
+  showModel(state, 'a')
+  await nextTick()
+  showModel(state, 'b')
+  await nextTick()
+
+  assert.deepEqual(invokeLog, [])
 })

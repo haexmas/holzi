@@ -11,7 +11,7 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 use super::cli_delegate::autonomy::AutonomyMode;
-use super::effort::EffortLevel;
+use crate::model_capabilities::ModelCapabilities;
 
 /// Which speaker a message belongs to. `System` is passed separately in
 /// [`ChatRequest::system_prompt`] because both mistralrs and Anthropic
@@ -105,9 +105,10 @@ pub struct ChatRequest {
     pub thread_id: Option<uuid::Uuid>,
     pub system_prompt: Option<String>,
     pub messages: Vec<ChatMessage>,
-    /// Whether the selected model has a known native reasoning capability.
-    /// Adapters enable their provider-specific reasoning mode only when this
-    /// is true; the frontend never sets this flag directly.
+    /// Whether the selected model's cached capabilities say it reasons
+    /// (user-selectable or model-managed). Adapters enable their
+    /// provider-specific reasoning mode only when this is true; the
+    /// frontend never sets this flag directly.
     pub reasoning_requested: bool,
     /// Cap on completion tokens. `None` uses each adapter's default;
     /// Anthropic Messages API requires the field, so the Anthropic
@@ -123,13 +124,18 @@ pub struct ChatRequest {
     /// any other field but never reads it. Defaults to `Standard`, which is
     /// byte-for-byte today's shipped behavior.
     pub autonomy_mode: AutonomyMode,
-    /// Real, provider-native reasoning-effort override (spec
-    /// 011-composer-toolbar-parity). `None` means "no override" — the
-    /// direct-API adapter omits `output_config.effort` (API default
-    /// applies) and the Claude Code delegate omits `--effort` (CLI default
-    /// applies). Independent of `reasoning_requested`/`max_new_tokens`
-    /// (FR-006) and of the local adapter, which never reads this field.
-    pub effort_level: Option<EffortLevel>,
+    /// The user's selected reasoning option as a provider-native id, already
+    /// validated by `send_message` against this model's cached options
+    /// (spec 012 FR-013). `None` means "no override" — the direct-API
+    /// adapter omits `output_config.effort` (API default applies) and the
+    /// Claude Code delegate omits `--effort` (CLI default applies).
+    /// Independent of `reasoning_requested`/`max_new_tokens` and of the
+    /// local adapter, which never reads this field.
+    pub reasoning_option: Option<String>,
+    /// The selected model's cached capabilities, resolved once by
+    /// `send_message` so no adapter re-derives them from the model id.
+    /// `None` when the model has no row or nothing is determined.
+    pub capabilities: Option<ModelCapabilities>,
 }
 
 /// One event on an [`AdapterStream`]. `Delta` carries either content,
