@@ -1,3 +1,15 @@
+/*
+ * Chat IPC wrappers and the wire/event types they exchange.
+ *
+ * Maintainability exception (spaex 500-LoC rule): the interface
+ * declarations below mirror the backend's command and event payloads one to
+ * one, and the `useChat()` wrappers are thin `invoke`/`listen` calls over
+ * them, so the file grew past 500 lines without gaining unrelated
+ * responsibilities. Concrete split plan, if this grows further: move the
+ * wire/event interface declarations (`Thread` through `ModelLoadErrorEvent`)
+ * into a type-only `useChatTypes.ts` re-exported from here, leaving the
+ * command and event wrappers in `useChat()`.
+ */
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 
@@ -43,11 +55,6 @@ export interface LoadedModelInfo {
   contextWindow: number | null
 }
 
-/** Real, provider-native reasoning-effort level (spec 011-composer-toolbar-parity),
- * matching Anthropic's `output_config.effort` and Claude Code's `--effort`
- * value set exactly (research.md §1) — never a holzi-internal relabeling. */
-export type EffortLevel = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
-
 export interface SendMessageArgs {
   threadId?: string | null
   content: string
@@ -69,11 +76,12 @@ export interface SendMessageArgs {
    */
   autonomyMode?: 'standard' | 'ungated' | 'gated_permissive' | null
   /**
-   * Real reasoning-effort override (spec 011-composer-toolbar-parity).
-   * `null`/omitted means "no override" — the model/backend's own default
-   * applies. Never persisted, same as today's effort setting.
+   * The selected reasoning option as a provider-native id (spec 012).
+   * `null`/omitted means Auto — the model's own default applies. The backend
+   * validates it against the model's cached options and drops one that is no
+   * longer offered. Never persisted with the message.
    */
-  effortLevel?: EffortLevel | null
+  reasoningOption?: string | null
   /** Files attached to this message (spec 011-composer-toolbar-parity),
    * identified by the path the file picker returned. Scoped to this one
    * send (FR-017) — never carried over to a later message. */
@@ -336,16 +344,6 @@ export function useChat() {
   }
 
   /**
-   * Returns the reasoning-effort levels the given model/backend actually
-   * supports (contracts/tauri-commands.md `get_effort_levels`) — `[]` when
-   * it supports none, in which case the effort control should be hidden
-   * entirely rather than shown inert.
-   */
-  async function getEffortLevelsAsync(modelId: string): Promise<EffortLevel[]> {
-    return await invoke<EffortLevel[]>('get_effort_levels', { modelId })
-  }
-
-  /**
    * Classifies a file the user is about to attach and reports whether the
    * given model/backend can actually use it (contracts/tauri-commands.md
    * `inspect_attachment`). Called right after the file picker resolves a
@@ -551,7 +549,6 @@ export function useChat() {
     deleteThreadAsync,
     sendMessageAsync,
     abortAsync,
-    getEffortLevelsAsync,
     inspectAttachmentAsync,
     respondToolPermissionAsync,
     loadModelAsync,

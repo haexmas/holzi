@@ -176,7 +176,9 @@
       "medium": "Medium",
       "high": "High",
       "xhigh": "Extra high",
-      "max": "Max"
+      "max": "Max",
+      "managed": "Managed by the model",
+      "unknown": "Not yet known — refresh models in Settings"
     },
     "reasoning": {
       "label": "Reasoning",
@@ -276,7 +278,11 @@
       "codeInputLabel": "Authorization code",
       "submitCode": "Submit code",
       "success": "Connected.",
-      "error": "Connection failed"
+      "error": "Connection failed",
+      "refreshModels": "Refresh models",
+      "refreshing": "Refreshing…",
+      "refreshed": "Models updated.",
+      "refreshFailed": "Could not refresh models"
     },
     "autonomyMode": {
       "title": "Delegate autonomy",

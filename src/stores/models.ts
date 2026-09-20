@@ -12,6 +12,7 @@ import type { CatalogEntryWithFit } from '~/composables/useCatalog'
 import type { ResolveDefaultModelResult } from '~/composables/usePreferences'
 import { useModelInventory } from '~/composables/useModelInventory'
 import { useModelIntegrity } from '~/composables/useModelIntegrity'
+import { useReasoningPreference } from '~/composables/useReasoningPreference'
 
 /**
  * Model lifecycle: install/catalog/provider listing, load/unload, download
@@ -51,6 +52,7 @@ export const useModelsStore = defineStore('models', () => {
     noModelsInstalled,
     modelGroups,
     findModelName,
+    capabilitiesFor,
     refreshInstalledAndCatalog,
     refreshProviders,
   } = useModelInventory({ models, catalog, providers, t, errString, setError })
@@ -102,6 +104,20 @@ export const useModelsStore = defineStore('models', () => {
       ? loadingModelName.value
       : (activeModel.value?.name ?? undefined),
   )
+
+  // The displayed model's cached capabilities, read from the lists above —
+  // no IPC and no second cache. `undefined` = no resolved row.
+  const displayModelRecord = computed(() =>
+    capabilitiesFor(displayModelId.value),
+  )
+  const displayModelCapabilities = computed(
+    () => displayModelRecord.value ?? null,
+  )
+  const { effortLevel, effortOptions, effortState, updateEffortLevel } =
+    useReasoningPreference({
+      modelId: displayModelId,
+      capabilities: displayModelRecord,
+    })
 
   /** Localised label for the current loading phase, if any. */
   const loadingLabel = computed<string | null>(() => {
@@ -397,6 +413,11 @@ export const useModelsStore = defineStore('models', () => {
     activeModelId,
     displayModelId,
     displayModelName,
+    displayModelCapabilities,
+    effortLevel,
+    effortOptions,
+    effortState,
+    updateEffortLevel,
     modelGroups,
     loadingLabel,
     refreshInstalledAndCatalog,

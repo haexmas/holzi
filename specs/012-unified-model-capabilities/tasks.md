@@ -219,19 +219,19 @@ states.
 
 ### Implementation: frontend
 
-- [ ] T032 [P] [US1] In `src/composables/useModels.ts` add the TS mirrors `ModelCapabilities`,
+- [x] T032 [P] [US1] In `src/composables/useModels.ts` add the TS mirrors `ModelCapabilities`,
       `ReasoningControl` (discriminated on `kind`: `unavailable | model_managed | presets`) and
       `ReasoningOption`; add `capabilities: ModelCapabilities | null` to `InstalledModel` there and
       to `ProviderModel` in `src/composables/useProviders.ts` (type-only import).
-- [ ] T033 [US1] Add the US1 harness cases to `scripts/check-chat-state.ts` (write before T034–T036;
+- [x] T033 [US1] Add the US1 harness cases to `scripts/check-chat-state.ts` (write before T034–T036;
       they fail until then): options offered change with the displayed model (`Presets` A vs B);
       `Unavailable` → `effortState` `hidden`; `ModelManaged` → `managed`; a row whose `capabilities` is `null` → `unknown`; no resolved model row (lists still loading, nothing selected, the `delegate-*:not-connected` placeholder) → `hidden`, never `unknown`; a
       selection made from `Presets` is sent as `reasoningOption` by `send()`; switching models issues
       no additional capability-related `invoke` (SC-005). Extend the fixture lists
       (`list_installed_models`, `list_providers`, `list_provider_models`) with capability payloads.
-- [ ] T034 [US1] In `src/composables/useModelInventory.ts` add `capabilitiesFor(modelId)` (lookup across `installedModels` and `providerModels`, no IPC; `null` when no row matches). Create `src/composables/useReasoningPreference.ts` with the **in-memory** part: `effortLevel: Ref<string | null>`, `effortState` and `updateEffortLevel(id | null)` that accepts only `null` or an id offered by the current `Presets`, and resets to `null` when a capability change removes the selected option (persistence arrives in US2). `effortState` is `'hidden'` when no model row is resolved or when reasoning is `Unavailable` (or a `Presets` with no options), `'managed'` for `ModelManaged`, `'unknown'` **only** when a row exists and its `capabilities` (or its `reasoning`) is `null`, otherwise `'selectable'`. Wire both into `src/stores/models.ts`, which exports `displayModelCapabilities` (`computed` over `displayModelId` and `capabilitiesFor`), `effortState`, `effortLevel`, `updateEffortLevel`. Keep `models.ts` under 500 lines.
-- [ ] T035 [US1] In `src/composables/useChat.ts` delete `getEffortLevelsAsync` and the `EffortLevel` type; rename the `sendMessageAsync` argument `effortLevel` → `reasoningOption: string | null`. The file is 575 lines with no exception on record: add a maintainability-exception header with a concrete split plan (move the wire/event interface declarations — `Thread` through `ModelLoadErrorEvent`, roughly lines 4–255 — into a type-only `src/composables/useChatTypes.ts` re-exported from `useChat.ts`, leaving the ~320-line command wrappers), in the style of the header in `src-tauri/src/chat/commands.rs`.
-- [ ] T036 [US1] In `src/pages/chat/[instance].vue` remove the page-local `effortLevel`,
+- [x] T034 [US1] In `src/composables/useModelInventory.ts` add `capabilitiesFor(modelId)` (lookup across `installedModels` and `providerModels`, no IPC; `null` when no row matches). Create `src/composables/useReasoningPreference.ts` with the **in-memory** part: `effortLevel: Ref<string | null>`, `effortState` and `updateEffortLevel(id | null)` that accepts only `null` or an id offered by the current `Presets`, and resets to `null` when a capability change removes the selected option (persistence arrives in US2). `effortState` is `'hidden'` when no model row is resolved or when reasoning is `Unavailable` (or a `Presets` with no options), `'managed'` for `ModelManaged`, `'unknown'` **only** when a row exists and its `capabilities` (or its `reasoning`) is `null`, otherwise `'selectable'`. Wire both into `src/stores/models.ts`, which exports `displayModelCapabilities` (`computed` over `displayModelId` and `capabilitiesFor`), `effortState`, `effortLevel`, `updateEffortLevel`. Keep `models.ts` under 500 lines.
+- [x] T035 [US1] In `src/composables/useChat.ts` delete `getEffortLevelsAsync` and the `EffortLevel` type; rename the `sendMessageAsync` argument `effortLevel` → `reasoningOption: string | null`. The file is 575 lines with no exception on record: add a maintainability-exception header with a concrete split plan (move the wire/event interface declarations — `Thread` through `ModelLoadErrorEvent`, roughly lines 4–255 — into a type-only `src/composables/useChatTypes.ts` re-exported from `useChat.ts`, leaving the ~320-line command wrappers), in the style of the header in `src-tauri/src/chat/commands.rs`.
+- [x] T036 [US1] In `src/pages/chat/[instance].vue` remove the page-local `effortLevel`,
       `effortLevels`, `updateEffortLevel`, `refreshEffortLevels`, the `EffortLevel` import and the
       `watch(displayModelId, refreshEffortLevels, ...)` line; read `effortLevel`, `effortState`,
       `updateEffortLevel` and the options from `modelStore`; the effort label uses
@@ -239,20 +239,20 @@ states.
       i18n key; `send()` sends `reasoningOption: modelStore.effortLevel`. Leave
       `refreshAttachmentUsability`/`inspectAttachmentAsync` untouched. Keep the page's maintainability
       header accurate.
-- [ ] T037 [P] [US1] In `src/components/chat/ComposerSettingsPopover.vue` replace the fixed
+- [x] T037 [P] [US1] In `src/components/chat/ComposerSettingsPopover.vue` replace the fixed
       `effortLevels`/`effortIndex` model with the offered options (`{ id, label }[]`) plus an
       `effortState` prop: `hidden` renders nothing, `managed`/`unknown` render a disabled control with
       the state label (the `unknown` label points to the provider refresh in Settings), `selectable`
       renders the options plus Auto. Props only — no store access inside the component.
-- [ ] T038 [P] [US1] Add i18n keys to both `src/i18n/locales/en.json` and `de.json`:
+- [x] T038 [P] [US1] Add i18n keys to both `src/i18n/locales/en.json` and `de.json`:
       `chat.effort.managed`, `chat.effort.unknown` (with the "refresh models in Settings" hint) and
       `settings.cliDelegate.refreshModels`, `.refreshing`, `.refreshed`, `.refreshFailed`.
-- [ ] T039 [US1] In `src/components/settings/ConnectDelegateProvider.vue` add a "Refresh models"
+- [x] T039 [US1] In `src/components/settings/ConnectDelegateProvider.vue` add a "Refresh models"
       button next to the existing reconnect action for each connected provider, calling
       `refreshModelsAsync(provider.id)` from `useProviders()` (its first caller). States: idle,
       in-flight (button disabled, progress shown), success (brief confirmation), failure (message via
       `errString`; previous capabilities untouched). No store coupling — the chat page's `initialize()` re-reads the lists on mount. The repository has no component test runner, so these states are verified manually (T041, T055); the only logic is one call to an existing command.
-- [ ] T040 [US1] Frontend checkpoint: `pnpm check:chat-state`, `pnpm typecheck`,
+- [x] T040 [US1] Frontend checkpoint: `pnpm check:chat-state`, `pnpm typecheck`,
       `pnpm typecheck:scripts`, `pnpm check:templates`, `pnpm lint`, `pnpm format:check`. Commit:
       `feat(chat): show model-specific effort states and add a provider refresh action`.
 - [ ] T041 [US1] Manual validation in the real app (quickstart §2 steps 2–7) and the one-off record-shape checks (quickstart §3): capture a live `GET /v1/models` response with an API key **and** one with the OAuth bearer the Claude Code delegate uses, and confirm both contain `pdf_input` and the `thinking`/`effort` subtrees. If `pdf_input` is absent, apply the per-kind fallback from research R3. If the OAuth listing lacks `capabilities`, try `GET /v1/models/{id}` with the same bearer; if neither returns them, stop and amend the spec (FR-003) rather than reintroducing a static table (FR-019). If no credentials or dev shell are available, state exactly which steps were not run.

@@ -176,7 +176,9 @@
       "medium": "Mittel",
       "high": "Hoch",
       "xhigh": "Sehr hoch",
-      "max": "Maximal"
+      "max": "Maximal",
+      "managed": "Vom Modell gesteuert",
+      "unknown": "Noch nicht bekannt – Modelle in den Einstellungen aktualisieren"
     },
     "reasoning": {
       "label": "Reasoning",
@@ -276,7 +278,11 @@
       "codeInputLabel": "Autorisierungscode",
       "submitCode": "Code einreichen",
       "success": "Verbunden.",
-      "error": "Verbindung fehlgeschlagen"
+      "error": "Verbindung fehlgeschlagen",
+      "refreshModels": "Modelle aktualisieren",
+      "refreshing": "Wird aktualisiert…",
+      "refreshed": "Modelle aktualisiert.",
+      "refreshFailed": "Modelle konnten nicht aktualisiert werden"
     },
     "autonomyMode": {
       "title": "Autonomie für Delegaten",

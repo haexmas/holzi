@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import type { ModelCapabilities } from '~/composables/useModels'
 
 export type ProviderKind = 'local' | 'api_key' | 'cli_delegate'
 
@@ -41,6 +42,7 @@ export interface ProviderModel {
   name: string
   providerId: string
   contextWindow: number | null
+  capabilities: ModelCapabilities | null
 }
 
 export interface RefreshProviderModelsResult {
