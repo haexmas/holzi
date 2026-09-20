@@ -312,16 +312,13 @@ learned capabilities survive failures.
 
 ### Tests for User Story 3
 
-- [ ] T046 [P] [US3] In `src-tauri/tests/provider_models.rs` add: a successful refresh of a legacy
-      `NULL` provider row makes it determined; a refresh that returns partial/absent capability data
-      **replaces** the stored record with the new (undetermined) answer, no stale merging; a **failed**
-      refresh leaves the stored capabilities and rows intact (FR-010).
+- [x] T046 [P] [US3] Cover refreshing against a real vault and a Wiremock provider in `src-tauri/src/providers/providers_tests.rs` (beside `do_refresh`, which is private): a successful refresh of a legacy `NULL` provider row makes it determined; a refresh that returns absent capability data **replaces** the stored record with the new (undetermined) answer, no stale merging; a **failed** refresh leaves the stored capabilities intact (FR-010).
 - [x] T047 [P] [US3] In `src-tauri/src/adapters/cli_delegate/mod_tests.rs` assert the Codex
       delegate's synthetic model has `ModelCapabilities::default()` (`is_undetermined()`), is
       **not** `Some(Unavailable)`, and persists as SQL `NULL` via `compose_model_row`; add a doc
       comment on the Codex arm of `src-tauri/src/adapters/cli_delegate/mod.rs::list_models` stating
       "not determined until Codex exposes capability metadata".
-- [ ] T048 [P] [US3] In `scripts/check-chat-state.ts` add cases: an undetermined model (`None` and
+- [x] T048 [P] [US3] In `scripts/check-chat-state.ts` add cases: an undetermined model (`None` and
       an Anthropic-partial record) yields `effortState: 'unknown'` and never reports `unavailable`
       anywhere; an attachment inspected against an undetermined model surfaces the "not yet known"
       reason rather than the "not usable" one; a local `ModelManaged` row yields `managed`, a local
@@ -329,8 +326,8 @@ learned capabilities survive failures.
 
 ### Implementation for User Story 3
 
-- [ ] T049 [US3] Verify in `src/pages/chat/[instance].vue` that `refreshAttachmentUsability` shows the backend `reason` unchanged (no client-side remapping to a generic text), so the undetermined case reads "not yet known" exactly as T027 returns it; if it remaps, pass the backend reason through.
-- [ ] T050 [US3] Story checkpoint: `cargo test --manifest-path src-tauri/Cargo.toml`,
+- [x] T049 [US3] Verify in `src/pages/chat/[instance].vue` that `refreshAttachmentUsability` shows the backend `reason` unchanged (no client-side remapping to a generic text), so the undetermined case reads "not yet known" exactly as T027 returns it; if it remaps, pass the backend reason through.
+- [x] T050 [US3] Story checkpoint: `cargo test --manifest-path src-tauri/Cargo.toml`,
       `pnpm check:chat-state`, `pnpm typecheck`, `pnpm lint`, then manual validation quickstart §2
       steps 1, 3, 5–7. Commit: `test(chat): cover undetermined capability states`.
 
@@ -340,13 +337,13 @@ learned capabilities survive failures.
 
 ## Phase 6: Polish and cross-cutting
 
-- [ ] T051 [P] Legacy-removal check (FR-019): `rg -n "get_effort_levels|effort_levels_for|model_supports_reasoning|supports_adaptive_thinking|anthropic_supported_levels|claude_delegate_levels|getEffortLevelsAsync|EffortLevel" src src-tauri/src src-tauri/tests scripts`
+- [x] T051 [P] Legacy-removal check (FR-019): `rg -n "get_effort_levels|effort_levels_for|model_supports_reasoning|supports_adaptive_thinking|anthropic_supported_levels|claude_delegate_levels|getEffortLevelsAsync|EffortLevel" src src-tauri/src src-tauri/tests scripts`
       returns nothing outside historical `specs/` and `docs/`, and `rg -n "ProviderKind|adapter ===|adapter ==" src-tauri/src/chat/commands.rs src/pages/chat src/components/chat src/composables/useReasoningPreference.ts src/composables/useModelInventory.ts` shows no capability decision keyed on provider kind (FR-020, SC-007; only the unrelated autonomy-mode delegate checks may remain); fix stale doc comments that still
       mention them (e.g. in `src-tauri/src/chat/attachments.rs`, `src-tauri/src/adapters/types.rs`).
-- [ ] T052 [P] Diff the `en.json` and `de.json` key trees to confirm the new keys (T038) exist in
+- [x] T052 [P] Diff the `en.json` and `de.json` key trees to confirm the new keys (T038) exist in
       both.
-- [ ] T053 [P] Size audit: `wc -l` on every file touched; new files, `src/stores/models.ts` and `src-tauri/src/adapters/anthropic.rs` stay under 500 lines; `scripts/check-chat-state.ts` header states its new size and its cap — **no further cases are added to this file after this feature; the next change must first extract `createChatState` into `scripts/lib/chat-state-harness.ts` per the header's split plan** (plan.md Complexity Tracking).
-- [ ] T054 Run the complete CI-parity set from quickstart §1 once more end to end:
+- [x] T053 [P] Size audit: `wc -l` on every file touched; new files, `src/stores/models.ts` and `src-tauri/src/adapters/anthropic.rs` stay under 500 lines; `scripts/check-chat-state.ts` header states its new size and its cap — **no further cases are added to this file after this feature; the next change must first extract `createChatState` into `scripts/lib/chat-state-harness.ts` per the header's split plan** (plan.md Complexity Tracking).
+- [x] T054 Run the complete CI-parity set from quickstart §1 once more end to end:
       `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`, `cargo test --manifest-path src-tauri/Cargo.toml`, `pnpm lint:rust`, `pnpm check:chat-state`, `pnpm check:templates`,
       `pnpm typecheck`, `pnpm typecheck:scripts`, `pnpm lint`, `pnpm format:check` — and report exactly
       what ran and anything that could not run.

@@ -6,7 +6,7 @@
 // actual IPC boundary (`invoke`/`listen` from `@tauri-apps/api/core`/
 // `event`). No browser or GPU is required.
 //
-// Maintainability exception (spaex 500-LoC rule): 41 replay tests plus the
+// Maintainability exception (spaex 500-LoC rule): 43 replay tests plus the
 // `createChatState` scaffold that boots the page's real `<script setup>`
 // against a sandboxed `require` — a hand-rolled CommonJS loader (using the
 // `typescript` package already a dependency here) that transpiles the page,
@@ -21,9 +21,12 @@
 // array `mount()`/`unmount()` drain), and `dompurify` (needs a real DOM).
 //
 // Concrete split plan, if this grows further: move `createChatState` into
-// `scripts/lib/chat-state-harness.ts` and split the 41 cases by what they
+// `scripts/lib/chat-state-harness.ts` and split the 43 cases by what they
 // exercise — transcript/event ordering, thread sidebar, model lifecycle,
-// and composer/permission state.
+// and composer/permission state. That extraction is now due: spec 012 added
+// the last cases this file takes before it, so the next change that needs a
+// new case must first do the extraction (specs/012-unified-model-capabilities,
+// plan.md Complexity Tracking).
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -197,7 +200,8 @@ const RETURN_STATEMENT = `
       editingThreadId, editTitleError, deleteCandidate, deleteError,
       composerInputDisabled, sendDisabled, pendingApprovals, streamingMessageId,
       streamingThreadId, lastError,
-      updatePermissionMode, permissionMode, permissionModeSaving };
+      updatePermissionMode, permissionMode, permissionModeSaving,
+      addAttachments, attachments };
 `
 
 /** Resolves a store module name to its source file in this checkout. */
@@ -1421,4 +1425,50 @@ test('no preference is read or written before the device is known, and the choic
 
   assert.equal(state.modelStore.effortLevel, 'low')
   assert.deepEqual(prefs.calls, [])
+})
+
+// --- Spec 012: not yet known is never presented as unsupported -------------
+
+test('a model with undetermined capabilities is reported as unknown in every shape, never as unavailable', async () => {
+  const state = createChatState()
+  state.modelStore.installedModels = [
+    localModel('no-capabilities', null),
+    // Attachments determined, reasoning not: the reasoning control is still
+    // not known, and must not be inferred from the attachment answer.
+    localModel('partial', {
+      reasoning: null,
+      acceptedAttachmentKinds: ['text'],
+      thinkingStyle: null,
+    }),
+    localModel('nothing-determined', {
+      reasoning: null,
+      acceptedAttachmentKinds: null,
+      thinkingStyle: null,
+    }),
+  ]
+
+  for (const modelId of ['no-capabilities', 'partial', 'nothing-determined']) {
+    showModel(state, modelId)
+    await nextTick()
+    assert.equal(state.modelStore.effortState, 'unknown', modelId)
+    assert.deepEqual(state.modelStore.effortOptions, [], modelId)
+  }
+})
+
+test('the backend reason for an undetermined attachment reaches the composer unchanged', async () => {
+  const reason = 'attachment support for this model is not yet known'
+  const state = createChatState({
+    inspectAttachmentAsync: async () => ({
+      name: 'photo.png',
+      kind: 'image',
+      usable: false,
+      reason,
+    }),
+  })
+
+  await state.addAttachments(['/tmp/photo.png'])
+
+  assert.equal(state.attachments.value.length, 1)
+  assert.equal(state.attachments.value[0].info.usable, false)
+  assert.equal(state.attachments.value[0].info.reason, reason)
 })
