@@ -33,7 +33,13 @@ export const useModelsStore = defineStore('models', () => {
   const models = useModels()
   const catalog = useCatalog()
   const providers = useProviders()
-  const { resolveDefaultModelAsync } = usePreferences()
+  const {
+    resolveDefaultModelAsync,
+    getPrefAsync,
+    setPrefAsync,
+    clearPrefAsync,
+  } = usePreferences()
+  const { currentDeviceInfoAsync } = useDevice()
   const { t } = useI18n()
   const { errString } = useErrorString()
 
@@ -43,6 +49,10 @@ export const useModelsStore = defineStore('models', () => {
   const setError = (message: string) => {
     lastError.value = message
   }
+  // This vault device's uuid — the scope of the per-model reasoning
+  // preference. Resolved once at the start of `initialize()`; nothing
+  // device-scoped is read or written before it is known.
+  const vaultDeviceUuid = ref<string | null>(null)
 
   const {
     installedModels,
@@ -117,6 +127,10 @@ export const useModelsStore = defineStore('models', () => {
     useReasoningPreference({
       modelId: displayModelId,
       capabilities: displayModelRecord,
+      deviceUuid: vaultDeviceUuid,
+      preferences: { getPrefAsync, setPrefAsync, clearPrefAsync },
+      errString,
+      setError,
     })
 
   /** Localised label for the current loading phase, if any. */
@@ -299,6 +313,13 @@ export const useModelsStore = defineStore('models', () => {
   async function initialize() {
     lastError.value = null
     loadErrorModelId.value = null
+    // First, so the displayed model's saved reasoning option can load as soon
+    // as the active model is known below.
+    try {
+      vaultDeviceUuid.value = (await currentDeviceInfoAsync()).vaultDeviceUuid
+    } catch (e: unknown) {
+      lastError.value = errString(e)
+    }
     if (!integrityBusy.value) {
       integrityDialog.value = null
       integrityActionError.value = null

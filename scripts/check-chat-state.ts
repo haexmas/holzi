@@ -6,7 +6,7 @@
 // actual IPC boundary (`invoke`/`listen` from `@tauri-apps/api/core`/
 // `event`). No browser or GPU is required.
 //
-// Maintainability exception (spaex 500-LoC rule): 31 replay tests plus the
+// Maintainability exception (spaex 500-LoC rule): 41 replay tests plus the
 // `createChatState` scaffold that boots the page's real `<script setup>`
 // against a sandboxed `require` — a hand-rolled CommonJS loader (using the
 // `typescript` package already a dependency here) that transpiles the page,
@@ -21,7 +21,7 @@
 // array `mount()`/`unmount()` drain), and `dompurify` (needs a real DOM).
 //
 // Concrete split plan, if this grows further: move `createChatState` into
-// `scripts/lib/chat-state-harness.ts` and split the 31 cases by what they
+// `scripts/lib/chat-state-harness.ts` and split the 41 cases by what they
 // exercise — transcript/event ordering, thread sidebar, model lifecycle,
 // and composer/permission state.
 import assert from 'node:assert/strict'
@@ -289,6 +289,7 @@ function createChatState(
     useProviders: () => req('~/composables/useProviders').useProviders(),
     useErrorString: () => req('~/composables/useErrorString').useErrorString(),
     usePreferences: () => preferences,
+    useDevice: () => req('~/composables/useDevice').useDevice(),
     parseModelIntegrityFailure: req('~/composables/useModels')
       .parseModelIntegrityFailure,
   }).useModelsStore()
@@ -1164,4 +1165,260 @@ test('switching the displayed model triggers no capability lookup', async () => 
   await nextTick()
 
   assert.deepEqual(invokeLog, [])
+})
+
+// --- Spec 012: the effort choice is remembered per model and device --------
+
+const EFFORT_KEY = (modelId: string) => `chat.reasoning_option.${modelId}`
+
+/** An in-memory preference backend recording every call the store makes. */
+function createPrefStore(initial: Record<string, string> = {}) {
+  const map = new Map(Object.entries(initial))
+  const calls: Array<{ op: string; scope: unknown; key: string }> = []
+  const overrides = {
+    getPrefAsync: async (scope: unknown, key: string) => {
+      calls.push({ op: 'get', scope, key })
+      return map.get(key) ?? null
+    },
+    setPrefAsync: async (scope: unknown, key: string, value: string) => {
+      calls.push({ op: 'set', scope, key })
+      map.set(key, value)
+    },
+    clearPrefAsync: async (scope: unknown, key: string) => {
+      calls.push({ op: 'clear', scope, key })
+      map.delete(key)
+    },
+  }
+  return { map, calls, overrides }
+}
+
+/** Lets pending promise chains and Vue watchers run to completion. */
+async function flush() {
+  for (let i = 0; i < 12; i++) {
+    await Promise.resolve()
+    await nextTick()
+  }
+}
+
+/** Boots a store whose first displayed model is `first`, then initializes it. */
+async function initializedStore(options: {
+  prefs: ReturnType<typeof createPrefStore>
+  installed: unknown[]
+  first: string
+}) {
+  const state = createChatState(
+    {
+      activeModelInfoAsync: async () => ({
+        modelId: options.first,
+        name: options.first,
+        tokenizerRepo: '',
+        contextWindow: null,
+      }),
+    },
+    options.prefs.overrides,
+    {
+      useModels: () => ({
+        listInstalledAsync: async () => options.installed,
+        onDownloadProgress: async () => () => {},
+      }),
+    },
+  )
+  await state.modelStore.initialize()
+  await flush()
+  return state
+}
+
+test('a saved option is restored for the model shown first, read under this device and the model key', async () => {
+  const prefs = createPrefStore({ [EFFORT_KEY('a')]: 'high' })
+  const state = await initializedStore({
+    prefs,
+    installed: [localModel('a', presetsCapabilities('low', 'high'))],
+    first: 'a',
+  })
+
+  assert.equal(state.modelStore.effortLevel, 'high')
+  assert.deepEqual(
+    prefs.calls.find((c) => c.op === 'get' && c.key === EFFORT_KEY('a')),
+    {
+      op: 'get',
+      scope: { kind: 'device', uuid: 'device' },
+      key: EFFORT_KEY('a'),
+    },
+  )
+})
+
+test('each model restores its own saved option and a fresh store restores it after a restart', async () => {
+  const saved = {
+    [EFFORT_KEY('a')]: 'high',
+    [EFFORT_KEY('b')]: 'low',
+  }
+  const installed = [
+    localModel('a', presetsCapabilities('low', 'high')),
+    localModel('b', presetsCapabilities('low', 'high')),
+  ]
+  const state = await initializedStore({
+    prefs: createPrefStore(saved),
+    installed,
+    first: 'a',
+  })
+
+  showModel(state, 'b')
+  await flush()
+  assert.equal(state.modelStore.effortLevel, 'low')
+  showModel(state, 'a')
+  await flush()
+  assert.equal(state.modelStore.effortLevel, 'high')
+
+  const restarted = await initializedStore({
+    prefs: createPrefStore(saved),
+    installed,
+    first: 'b',
+  })
+  assert.equal(restarted.modelStore.effortLevel, 'low')
+})
+
+test('choosing an option stores it and choosing Auto clears it so nothing is stored', async () => {
+  const prefs = createPrefStore()
+  const state = await initializedStore({
+    prefs,
+    installed: [localModel('a', presetsCapabilities('low', 'high'))],
+    first: 'a',
+  })
+
+  await state.modelStore.updateEffortLevel('high')
+  assert.equal(prefs.map.get(EFFORT_KEY('a')), 'high')
+
+  await state.modelStore.updateEffortLevel(null)
+  assert.equal(state.modelStore.effortLevel, null)
+  assert.equal(prefs.map.has(EFFORT_KEY('a')), false)
+})
+
+test('a saved option the model no longer offers falls back to Auto and clears the stale key', async () => {
+  const prefs = createPrefStore({ [EFFORT_KEY('a')]: 'max' })
+  const state = await initializedStore({
+    prefs,
+    installed: [localModel('a', presetsCapabilities('low', 'high'))],
+    first: 'a',
+  })
+
+  assert.equal(state.modelStore.effortLevel, null)
+  assert.equal(prefs.map.has(EFFORT_KEY('a')), false)
+})
+
+test('a capability refresh that removes the chosen option falls back to Auto and clears the stored choice', async () => {
+  const prefs = createPrefStore()
+  const state = await initializedStore({
+    prefs,
+    installed: [localModel('a', presetsCapabilities('low', 'high', 'max'))],
+    first: 'a',
+  })
+  await state.modelStore.updateEffortLevel('max')
+  assert.equal(prefs.map.get(EFFORT_KEY('a')), 'max')
+
+  state.modelStore.installedModels = [
+    localModel('a', presetsCapabilities('low', 'high')),
+  ]
+  await flush()
+
+  assert.equal(state.modelStore.effortLevel, null)
+  assert.equal(prefs.map.has(EFFORT_KEY('a')), false)
+})
+
+test('a saved option is kept, not cleared, while the model capabilities are still loading', async () => {
+  const prefs = createPrefStore({ [EFFORT_KEY('a')]: 'high' })
+  // The lists arrive empty: the row for 'a' is unresolved when the saved
+  // option is read, so it cannot be validated yet.
+  const state = await initializedStore({ prefs, installed: [], first: 'a' })
+  assert.equal(state.modelStore.effortLevel, null)
+  assert.equal(prefs.map.get(EFFORT_KEY('a')), 'high', 'must not be cleared')
+
+  state.modelStore.installedModels = [
+    localModel('a', presetsCapabilities('low', 'high')),
+  ]
+  await flush()
+
+  assert.equal(state.modelStore.effortLevel, 'high')
+})
+
+test('a slow preference read for the previous model cannot overwrite the newly selected model', async () => {
+  const prefs = createPrefStore({
+    [EFFORT_KEY('a')]: 'high',
+    [EFFORT_KEY('b')]: 'low',
+  })
+  let releaseA: () => void = () => {}
+  const realGet = prefs.overrides.getPrefAsync
+  prefs.overrides.getPrefAsync = async (scope: unknown, key: string) => {
+    if (key === EFFORT_KEY('a')) {
+      await new Promise<void>((resolve) => {
+        releaseA = resolve
+      })
+    }
+    return realGet(scope, key)
+  }
+  const state = await initializedStore({
+    prefs,
+    installed: [
+      localModel('a', presetsCapabilities('low', 'high')),
+      localModel('b', presetsCapabilities('low', 'high')),
+    ],
+    first: 'a',
+  })
+
+  showModel(state, 'b')
+  await flush()
+  assert.equal(state.modelStore.effortLevel, 'low')
+  releaseA()
+  await flush()
+
+  assert.equal(state.modelStore.effortLevel, 'low')
+})
+
+test('a failed save rolls back to the previous choice and reports the failure', async () => {
+  const prefs = createPrefStore()
+  prefs.overrides.setPrefAsync = async () => {
+    throw new Error('disk full')
+  }
+  const state = await initializedStore({
+    prefs,
+    installed: [localModel('a', presetsCapabilities('low', 'high'))],
+    first: 'a',
+  })
+
+  await state.modelStore.updateEffortLevel('high')
+
+  assert.equal(state.modelStore.effortLevel, null)
+  assert.match(String(state.modelStore.lastError), /disk full/)
+})
+
+test('the same remote model reached through two connections stores its choice separately', async () => {
+  const prefs = createPrefStore()
+  const state = await initializedStore({
+    prefs,
+    installed: [],
+    first: 'p1:opus',
+  })
+  state.modelStore.providerModels = {
+    p1: [providerModel('p1:opus', presetsCapabilities('low', 'high'))],
+    p2: [providerModel('p2:opus', presetsCapabilities('low', 'high'))],
+  }
+  await flush()
+
+  await state.modelStore.updateEffortLevel('high')
+
+  assert.equal(prefs.map.get(EFFORT_KEY('p1:opus')), 'high')
+  assert.equal(prefs.map.has(EFFORT_KEY('p2:opus')), false)
+})
+
+test('no preference is read or written before the device is known, and the choice still works in memory', async () => {
+  const prefs = createPrefStore({ [EFFORT_KEY('model')]: 'high' })
+  const state = createChatState({}, prefs.overrides)
+  state.modelStore.installedModels = [
+    localModel('model', presetsCapabilities('low', 'high')),
+  ]
+  await flush()
+
+  await state.modelStore.updateEffortLevel('low')
+
+  assert.equal(state.modelStore.effortLevel, 'low')
+  assert.deepEqual(prefs.calls, [])
 })

@@ -270,7 +270,7 @@ restored on switch and restart, and falls back to Auto when no longer offered.
 
 ### Tests for User Story 2
 
-- [ ] T042 [US2] Add the US2 harness cases to `scripts/check-chat-state.ts` (and the one-line
+- [x] T042 [US2] Add the US2 harness cases to `scripts/check-chat-state.ts` (and the one-line
       `useDevice` auto-import for the store in `createChatState`, plus stateful `set_pref` /
       `clear_pref` / `get_pref` invoke handlers): a saved valid option is restored when the same
       model is selected again and after a fresh store (restart); each of two models restores its own
@@ -283,7 +283,7 @@ restored on switch and restart, and falls back to Auto when no longer offered.
 
 ### Implementation for User Story 2
 
-- [ ] T043 [US2] Extend `src/composables/useReasoningPreference.ts` with persistence. Key:
+- [x] T043 [US2] Extend `src/composables/useReasoningPreference.ts` with persistence. Key:
       **`chat.reasoning_option.<model-id>`** (composite `{provider_id}:{remote_id}` for provider
       models, plain id for local), scope `{ kind: 'device', uuid: vaultDeviceUuid }`, value = the
       option id, **"absent means Auto"**. `loadEffortPreference(modelId)`: monotonically increasing
@@ -293,8 +293,8 @@ restored on switch and restart, and falls back to Auto when no longer offered.
       the store's `lastError`. A watcher on the display model's capabilities revalidates the active
       model's effective and stored option (FR-017). Take `usePreferences` functions, the device UUID
       ref, `displayModelId` and `setError` as parameters (no auto-imports).
-- [ ] T044 [US2] In `src/stores/models.ts` resolve `useDevice().currentDeviceInfoAsync()` **as the first step of `initialize()`** (before `refreshActiveModel()`, which sets the first display model) and keep `vaultDeviceUuid`; run no preference read or write until it is set; trigger `loadEffortPreference` on `displayModelId` changes (including the initial value) **and once more when the UUID becomes available** for an already-displayed model. A failed device lookup surfaces through `lastError` and leaves the in-memory behavior working.
-- [ ] T045 [US2] Story checkpoint: `pnpm check:chat-state`, `pnpm typecheck`, `pnpm check:templates`,
+- [x] T044 [US2] In `src/stores/models.ts` resolve `useDevice().currentDeviceInfoAsync()` **as the first step of `initialize()`** (before `refreshActiveModel()`, which sets the first display model) and keep `vaultDeviceUuid`; run no preference read or write until it is set; trigger `loadEffortPreference` on `displayModelId` changes (including the initial value) **and once more when the UUID becomes available** for an already-displayed model. A failed device lookup surfaces through `lastError` and leaves the in-memory behavior working.
+- [x] T045 [US2] Story checkpoint: `pnpm check:chat-state`, `pnpm typecheck`, `pnpm check:templates`,
       `pnpm lint`, `pnpm format:check`, then manual validation quickstart §2 steps 8–11. Commit:
       `feat(chat): remember the reasoning option per model and device`.
 
