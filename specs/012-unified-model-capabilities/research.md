@@ -70,16 +70,16 @@ Source: Anthropic Models API, `GET /v1/models` (also used by the Claude Code del
 `xhigh` and `max`; the adapter preserves any additional option key and does not turn the current
 Anthropic vocabulary into a shared enum.
 
-| Wire                                                | → Record                                                                     |
-| --------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Wire                                                                | → Record                                                         |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | `effort.supported == true` and ≥1 provider-native level `supported` | `Presets`, options in provider response order (ids = wire names) |
-| else `thinking.supported == true`                   | `ModelManaged`                                                               |
-| else both leaves present and false                  | `Unavailable`                                                                |
-| `thinking`/`effort` subtree missing                 | `reasoning = None`                                                           |
-| `thinking.types.adaptive.supported`                 | `thinking_style = Adaptive`                                                  |
-| else `thinking.types.enabled.supported`             | `thinking_style = Manual`                                                    |
-| `image_input` **and** `pdf_input` both present      | `Some([Text] + Image if supported + Document if supported)`                  |
-| either key missing                                  | `accepted_attachment_kinds = None`                                           |
+| else `thinking.supported == true`                                   | `ModelManaged`                                                   |
+| else both leaves present and false                                  | `Unavailable`                                                    |
+| `thinking`/`effort` subtree missing                                 | `reasoning = None`                                               |
+| `thinking.types.adaptive.supported`                                 | `thinking_style = Adaptive`                                      |
+| else `thinking.types.enabled.supported`                             | `thinking_style = Manual`                                        |
+| `image_input` **and** `pdf_input` both present                      | `Some([Text] + Image if supported + Document if supported)`      |
+| either key missing                                                  | `accepted_attachment_kinds = None`                               |
 
 `Text` is always included once attachment support is determined: text files are inlined as a plain
 text block (`request.rs`, `AttachmentKind::Text`), which every message-capable model accepts. All
