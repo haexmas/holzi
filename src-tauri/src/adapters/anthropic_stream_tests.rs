@@ -23,7 +23,8 @@ fn sample_request(model: &str) -> ChatRequest {
         max_new_tokens: Some(128),
         tools: Vec::new(),
         autonomy_mode: Default::default(),
-        effort_level: Default::default(),
+        reasoning_option: Default::default(),
+        capabilities: Default::default(),
     }
 }
 

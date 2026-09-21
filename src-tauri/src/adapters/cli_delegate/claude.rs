@@ -25,7 +25,6 @@ use tokio::process::Command;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-use crate::adapters::effort::EffortLevel;
 use crate::adapters::types::{StreamChunk, StreamError};
 use crate::adapters::{AdapterError, AdapterStream, ChatRequest};
 
@@ -219,7 +218,7 @@ pub(super) fn build_command(
     system_prompt_path: Option<&Path>,
     tmp: &TempDir,
     autonomy_mode: AutonomyMode,
-    effort_level: Option<EffortLevel>,
+    reasoning_option: Option<&str>,
 ) -> Command {
     let mut cmd = Command::new(binary);
     cmd.arg("-p")
@@ -241,12 +240,10 @@ pub(super) fn build_command(
     if !model.is_empty() && model != DelegateVendor::Claude.as_str() {
         cmd.arg("--model").arg(model);
     }
-    // Real Claude Code CLI flag (research.md §1), sent unconditionally when
-    // set — unlike the direct Anthropic API, `claude` itself falls back to
-    // "the highest supported level at or below the requested one" per
-    // model, so holzi does not gate this by model id.
-    if let Some(level) = effort_level {
-        cmd.arg("--effort").arg(level.as_str());
+    // Real Claude Code CLI flag, passed through as the option id
+    // `send_message` already validated against this model's cached options.
+    if let Some(level) = reasoning_option {
+        cmd.arg("--effort").arg(level);
     }
     if autonomy_mode == AutonomyMode::Ungated {
         // Native full-autonomy mechanism (research.md §2): no bridge is
@@ -411,7 +408,7 @@ pub(super) async fn spawn_claude_invocation(
         system_prompt_path.as_ref().map(|(path, _)| path.as_path()),
         &tmp,
         autonomy_mode,
-        req.effort_level,
+        req.reasoning_option.as_deref(),
     );
     configure_process_group(&mut cmd);
     cmd.env("CLAUDE_CODE_OAUTH_TOKEN", &token);

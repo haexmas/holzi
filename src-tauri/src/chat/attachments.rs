@@ -16,7 +16,7 @@ use serde::Serialize;
 
 use crate::adapters::{Attachment, AttachmentKind};
 use crate::error::{HolziError, Result};
-use crate::storage::providers::ProviderKind;
+use crate::model_capabilities::ModelCapabilities;
 
 /// Anthropic's own published per-content-type limits (research.md §4) —
 /// reused rather than inventing holzi-specific numbers.
@@ -139,20 +139,30 @@ pub fn classify_attachment(path: &Path) -> Result<AttachmentInfo> {
     })
 }
 
-/// "Can the currently selected model/backend use a file of this kind" —
-/// FR-015, independent of the file itself. `kind` is accepted for a
-/// forward-compatible signature (a future backend might support only some
-/// kinds) but every backend that supports attachments at all supports all
-/// three kinds today (data-model.md).
+/// Whether the selected model can use an attachment of a given kind, decided
+/// from its cached capabilities (spec 012), never from its provider.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AttachmentUsability {
+    /// The model's determined accepted kinds include this one.
+    Usable,
+    /// The model's determined accepted kinds do not include this one.
+    NotAccepted,
+    /// Attachment support has not been determined for this model (no row, or
+    /// the provider has not been asked yet) — not the same as unsupported.
+    Undetermined,
+}
+
+/// "Can the currently selected model use a file of this kind" — FR-015,
+/// independent of the file itself.
 pub fn usability_for(
-    _kind: &AttachmentKind,
-    provider_kind: ProviderKind,
-    adapter: Option<&str>,
-) -> bool {
-    matches!(
-        (provider_kind, adapter),
-        (ProviderKind::ApiKey, Some("anthropic")) | (ProviderKind::CliDelegate, Some("claude"))
-    )
+    kind: &AttachmentKind,
+    capabilities: Option<&ModelCapabilities>,
+) -> AttachmentUsability {
+    match capabilities.and_then(|c| c.accepted_attachment_kinds.as_ref()) {
+        Some(kinds) if kinds.contains(kind) => AttachmentUsability::Usable,
+        Some(_) => AttachmentUsability::NotAccepted,
+        None => AttachmentUsability::Undetermined,
+    }
 }
 
 /// Re-stats and re-reads the file at send time (FR-018 — a file can vanish

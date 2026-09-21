@@ -183,7 +183,7 @@ pub(crate) fn risk_class_str(risk: crate::chat::tools::RiskClass) -> &'static st
 /// convention) out of assistant text.
 ///
 /// mistralrs 0.8.1's reasoning-mode content path (active whenever the
-/// current model has thinking enabled, see `model_supports_reasoning`)
+/// current model has thinking enabled, see `reasoning_requested_for`)
 /// never runs generated text through its own tool-call-tag stripping the
 /// way its non-reasoning path does, so on a reasoning-capable Qwen-family
 /// model the raw tag the model emits to signal a tool call leaks into

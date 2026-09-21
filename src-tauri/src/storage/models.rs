@@ -12,6 +12,8 @@ use haex_crdt::rusqlite::{params, Connection, OptionalExtension, Result};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::model_capabilities::ModelCapabilities;
+
 /// Where a `models` row's file came from. Persisted in `source_kind`
 /// (migration `0015_models_add_huggingface_source`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -117,10 +119,14 @@ pub struct ModelRow {
     pub file_sha256: Option<String>,
     pub integrity_status: IntegrityStatus,
     pub source_kind: SourceKind,
+    /// What this model supports (spec 012). Stored as JSON in
+    /// `capabilities_json`; `None` means not determined — never "unsupported".
+    pub capabilities: Option<ModelCapabilities>,
 }
 
 const SELECT_COLUMNS: &str = "id, provider_id, name, context_window, fetched_at, tokenizer_repo, \
-     hf_repo, hf_filename, hf_revision, hf_revision_ref, file_sha256, integrity_status, source_kind";
+     hf_repo, hf_filename, hf_revision, hf_revision_ref, file_sha256, integrity_status, source_kind, \
+     capabilities_json";
 
 /// Inserts or updates a model row while preserving CRDT column metadata on
 /// conflicts. Always sets `haex_hlc_no_sync = current_hlc()` (Etappe-0
@@ -132,13 +138,18 @@ const SELECT_COLUMNS: &str = "id, provider_id, name, context_window, fetched_at,
 /// `None`s, or a download/update/import's freshly computed source +
 /// `file_sha256`). A narrower in-place status change (e.g. the integrity
 /// override) uses [`set_integrity_status`] instead of a full upsert.
+///
+/// `capabilities_json` is overwritten unconditionally too: a refresh
+/// replaces what was known about a model entirely, so a stale answer is
+/// never merged with a newer one. An undetermined record is stored as SQL
+/// `NULL`, not as a JSON object of nulls.
 pub fn upsert_model(conn: &Connection, m: &ModelRow) -> Result<usize> {
     let sql = format!(
         "INSERT INTO models \
            (id, provider_id, name, context_window, fetched_at, tokenizer_repo, \
             hf_repo, hf_filename, hf_revision, hf_revision_ref, file_sha256, \
-            integrity_status, source_kind, {HLC_TIMESTAMP_COLUMN}) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, current_hlc()) \
+            integrity_status, source_kind, capabilities_json, {HLC_TIMESTAMP_COLUMN}) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, current_hlc()) \
          ON CONFLICT(id) DO UPDATE SET \
            provider_id = excluded.provider_id, \
            name = excluded.name, \
@@ -152,8 +163,10 @@ pub fn upsert_model(conn: &Connection, m: &ModelRow) -> Result<usize> {
            file_sha256 = excluded.file_sha256, \
            integrity_status = excluded.integrity_status, \
            source_kind = excluded.source_kind, \
+           capabilities_json = excluded.capabilities_json, \
            {HLC_TIMESTAMP_COLUMN} = current_hlc()"
     );
+    let capabilities_json = capabilities_to_column(m.capabilities.as_ref())?;
     conn.execute(
         &sql,
         params![
@@ -170,8 +183,38 @@ pub fn upsert_model(conn: &Connection, m: &ModelRow) -> Result<usize> {
             m.file_sha256,
             m.integrity_status.as_str(),
             m.source_kind.as_str(),
+            capabilities_json,
         ],
     )
+}
+
+/// Serializes a record for `capabilities_json`; an undetermined (or absent)
+/// record becomes SQL `NULL`.
+fn capabilities_to_column(capabilities: Option<&ModelCapabilities>) -> Result<Option<String>> {
+    capabilities
+        .filter(|c| !c.is_undetermined())
+        .map(serde_json::to_string)
+        .transpose()
+        .map_err(|e| haex_crdt::rusqlite::Error::ToSqlConversionFailure(Box::new(e)))
+}
+
+/// Reads `capabilities_json` leniently: a value that cannot be parsed reads
+/// as "not determined" and is logged with the model id and the parse error,
+/// so one corrupt row can never make the model list fail to load (spec 012
+/// FR-021). The parsed record is normalized, restoring the "presets are
+/// never empty" invariant that serde bypasses.
+pub(crate) fn capabilities_from_column(
+    model_id: &str,
+    raw: Option<String>,
+) -> Option<ModelCapabilities> {
+    let raw = raw?;
+    match serde_json::from_str::<ModelCapabilities>(&raw) {
+        Ok(capabilities) => Some(capabilities.normalized()),
+        Err(error) => {
+            log::warn!("ignoring unreadable capabilities_json for model {model_id}: {error}");
+            None
+        }
+    }
 }
 
 /// Lists all models for a provider, ordered by name.
@@ -371,12 +414,44 @@ pub fn backfill_source_kind(
     Ok(updated)
 }
 
+/// Fills `capabilities_json` for local-provider rows that still have it
+/// `NULL` — models registered before migration `0018`, which have no
+/// provider refresh to fill them. A sibling of [`backfill_source_kind`]:
+/// idempotent (only rows still at `NULL` are selected) and driven by the
+/// local provider's own rows, so `api_key`/`cli_delegate` rows — whose
+/// `NULL` honestly means "not refreshed yet" — are never touched.
+///
+/// ponytail: runs on every installed-model listing. Ceiling: one scan of
+/// the (small) set of local rows per call. Upgrade path: a one-time
+/// post-migration hook.
+pub fn backfill_local_capabilities(conn: &Connection, local_provider_id: Uuid) -> Result<usize> {
+    let pending: Vec<String> = {
+        let mut stmt = conn.prepare(
+            "SELECT id FROM models WHERE provider_id = ?1 AND capabilities_json IS NULL",
+        )?;
+        let rows = stmt.query_map(params![local_provider_id.to_string()], |r| r.get(0))?;
+        rows.collect::<Result<_>>()?
+    };
+    let sql = format!(
+        "UPDATE models SET capabilities_json = ?1, {HLC_TIMESTAMP_COLUMN} = current_hlc() \
+         WHERE id = ?2 AND capabilities_json IS NULL"
+    );
+    let mut updated = 0usize;
+    for id in pending {
+        let json = capabilities_to_column(Some(&ModelCapabilities::local(&id)))?;
+        updated += conn.execute(&sql, params![json, id])?;
+    }
+    Ok(updated)
+}
+
 fn row_to_model(row: &haex_crdt::rusqlite::Row<'_>) -> Result<ModelRow> {
     let provider_id_str: String = row.get(1)?;
     let integrity_status_str: String = row.get(11)?;
     let source_kind_str: String = row.get(12)?;
+    let id: String = row.get(0)?;
+    let capabilities = capabilities_from_column(&id, row.get(13)?);
     Ok(ModelRow {
-        id: row.get(0)?,
+        id,
         provider_id: Uuid::parse_str(&provider_id_str).map_err(|e| {
             haex_crdt::rusqlite::Error::FromSqlConversionFailure(
                 1,
@@ -395,5 +470,10 @@ fn row_to_model(row: &haex_crdt::rusqlite::Row<'_>) -> Result<ModelRow> {
         file_sha256: row.get(10)?,
         integrity_status: IntegrityStatus::from_str(&integrity_status_str),
         source_kind: SourceKind::from_str(&source_kind_str),
+        capabilities,
     })
 }
+
+#[cfg(test)]
+#[path = "models_tests.rs"]
+mod models_tests;

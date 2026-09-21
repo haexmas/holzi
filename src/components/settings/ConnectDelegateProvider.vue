@@ -9,6 +9,7 @@ const {
   listAsync,
   connectCliDelegateAsync,
   submitCliDelegateCodeAsync,
+  refreshModelsAsync,
   onDelegateConnectProgress,
 } = useProviders()
 
@@ -46,6 +47,20 @@ const successFlash = reactive<Record<DelegateVendor, boolean>>({
   claude: false,
   codex: false,
 })
+// "Refresh models" (spec 012 FR-022): re-fetches a connected provider's
+// models and their capabilities without a new sign-in.
+const refreshing = reactive<Record<DelegateVendor, boolean>>({
+  claude: false,
+  codex: false,
+})
+const refreshed = reactive<Record<DelegateVendor, boolean>>({
+  claude: false,
+  codex: false,
+})
+const refreshError = reactive<Record<DelegateVendor, string | null>>({
+  claude: null,
+  codex: null,
+})
 
 let unlisten: UnlistenFn | null = null
 
@@ -78,6 +93,30 @@ function resetVendorState(vendor: DelegateVendor) {
   codeInput[vendor] = ''
   opError[vendor] = null
   successFlash[vendor] = false
+  refreshed[vendor] = false
+  refreshError[vendor] = null
+}
+
+/**
+ * Re-fetches the connected provider's models. The chat page re-reads its
+ * model lists on mount, so this needs no store coupling; on failure the
+ * previously stored capabilities stay untouched (the backend keeps the old
+ * cache when a refresh fails).
+ */
+async function onRefreshModels(vendor: DelegateVendor) {
+  const provider = connectedProvider(vendor)
+  if (!provider) return
+  refreshed[vendor] = false
+  refreshError[vendor] = null
+  refreshing[vendor] = true
+  try {
+    await refreshModelsAsync(provider.id)
+    refreshed[vendor] = true
+  } catch (e) {
+    refreshError[vendor] = errString(e)
+  } finally {
+    refreshing[vendor] = false
+  }
 }
 
 async function onConnect(vendor: DelegateVendor) {
@@ -254,6 +293,19 @@ onBeforeUnmount(() => {
                   : t('settings.cliDelegate.connect')
               }}
             </UiButton>
+            <UiButton
+              v-if="connectedProvider(vendor)"
+              type="button"
+              variant="outline"
+              :disabled="refreshing[vendor]"
+              @click="onRefreshModels(vendor)"
+            >
+              {{
+                refreshing[vendor]
+                  ? t('settings.cliDelegate.refreshing')
+                  : t('settings.cliDelegate.refreshModels')
+              }}
+            </UiButton>
           </div>
         </template>
 
@@ -263,6 +315,21 @@ onBeforeUnmount(() => {
           role="status"
         >
           {{ t('settings.cliDelegate.success') }}
+        </span>
+        <span
+          v-if="refreshed[vendor]"
+          class="text-xs text-green-600"
+          role="status"
+        >
+          {{ t('settings.cliDelegate.refreshed') }}
+        </span>
+        <span
+          v-if="refreshError[vendor]"
+          class="text-xs text-red-500"
+          role="alert"
+        >
+          {{ t('settings.cliDelegate.refreshFailed') }}:
+          {{ refreshError[vendor] }}
         </span>
         <span v-if="opError[vendor]" class="text-xs text-red-500" role="alert">
           {{ t('settings.cliDelegate.error') }}: {{ opError[vendor] }}

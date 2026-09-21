@@ -25,8 +25,11 @@ at the adapter boundary), and `ModelCapabilities::normalized()` maps a stored or
 
 ### ReasoningOption
 
-`{ id: String, label: String }`. `id` is the provider-native wire value (Anthropic: `low`, `medium`,
-`high`, `xhigh`, `max`) and is what is validated, persisted and sent. `label` is a display fallback.
+`{ id: String, label: String }`. `id` is an opaque provider-native wire value (for example
+`minimal`, `balanced`, `deep`, or a numeric-budget identifier) and is what is validated, persisted
+and sent. The adapter MUST preserve the provider's response order. `label` is the adapter-provided
+display fallback (the provider-native `id` when the wire response has no separate label); the shared
+model does not interpret or normalize it.
 
 ### ThinkingStyle
 

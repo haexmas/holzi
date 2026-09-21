@@ -18,10 +18,10 @@ is deleted.
 
 ### `send_message(args)`
 
-| Field             | Before                                                    | After                                         |
-| ----------------- | --------------------------------------------------------- | --------------------------------------------- |
-| `effortLevel`     | `"low" \| "medium" \| "high" \| "xhigh" \| "max" \| null` | removed                                       |
-| `reasoningOption` | —                                                         | `string \| null`, a provider-native option id |
+| Field             | Before                           | After                                         |
+| ----------------- | -------------------------------- | --------------------------------------------- |
+| `effortLevel`     | fixed global level union \| null | removed                                       |
+| `reasoningOption` | —                                | `string \| null`, a provider-native option id |
 
 Semantics: `null` or omitted → Auto. The backend reads the cached model row once and keeps the id
 only if it is one of that model's current `Presets` options; otherwise it is dropped and the model's
@@ -69,7 +69,7 @@ preference through the existing `usePreferences()` API), `current_device_info`.
 | `useProviders().refreshModelsAsync`    | unchanged; gains its first caller (FR-022)                                                                                         |
 | `useModelsStore()`                     | adds `displayModelCapabilities`, `effortState`, `effortLevel`, `updateEffortLevel`; existing exports keep their names and behavior |
 | `InstalledModel`, `ProviderModel` (TS) | gain `capabilities: ModelCapabilities \| null`                                                                                     |
-| `ComposerSettingsPopover` props        | `effortLevels: string[]` + `effortLevel: string \| null` + new `effortState`; still plain props                                    |
+| `ComposerSettingsPopover` props        | `effortOptions: { id: string; label: string }[]` + `effortLevel: string \| null` + new `effortState`; still plain props            |
 
 ## Settings UI contract (FR-022)
 

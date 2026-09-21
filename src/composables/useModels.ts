@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import type { AttachmentKind } from '~/composables/useChat'
 import type {
   HuggingFaceInstallRequest,
   InstallPreview,
@@ -10,6 +11,29 @@ export type ModelSourceKind =
   'catalog' | 'huggingface' | 'imported' | 'provider'
 /** `models.integrity_status` — see storage/models.rs `IntegrityStatus`. */
 export type ModelIntegrityStatus = 'verified' | 'untrusted' | 'unknown'
+
+/** One selectable reasoning option: a provider-native id plus a label. */
+export interface ReasoningOption {
+  id: string
+  label: string
+}
+
+/**
+ * A model's answer to "can the user influence reasoning?" (spec 012; mirrors
+ * `model_capabilities.rs`). Absent (`null` on the capabilities) means not
+ * determined — never the same as `unavailable`.
+ */
+export type ReasoningControl =
+  | { kind: 'unavailable' }
+  | { kind: 'model_managed' }
+  | { kind: 'presets'; options: ReasoningOption[] }
+
+/** What one provider/model pair supports; every field `null` = not determined. */
+export interface ModelCapabilities {
+  reasoning: ReasoningControl | null
+  acceptedAttachmentKinds: AttachmentKind[] | null
+  thinkingStyle: 'adaptive' | 'manual' | null
+}
 
 export interface InstalledModel {
   id: string
@@ -25,6 +49,7 @@ export interface InstalledModel {
   hfRevisionRef: string | null
   fileSha256: string | null
   integrityStatus: ModelIntegrityStatus
+  capabilities: ModelCapabilities | null
 }
 
 /** The three `HolziError` discriminants a pre-load integrity check can fail with. */

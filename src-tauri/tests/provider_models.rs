@@ -56,6 +56,7 @@ fn model(provider_id: Uuid, remote_id: &str) -> ModelRow {
         file_sha256: None,
         integrity_status: IntegrityStatus::Unknown,
         source_kind: SourceKind::Provider,
+        capabilities: None,
     }
 }
 

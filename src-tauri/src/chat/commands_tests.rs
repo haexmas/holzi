@@ -4,6 +4,7 @@
 
 use super::*;
 use crate::chat::thread_commands::validate_thread_title;
+use crate::model_capabilities::{ReasoningControl, ReasoningOption};
 
 #[test]
 fn thread_title_validation_trims_and_enforces_visible_length() {
@@ -31,59 +32,127 @@ fn thread_title_validation_counts_grapheme_clusters() {
     ));
 }
 
-#[test]
-fn reasoning_capability_is_derived_conservatively_from_the_model_id() {
-    assert!(model_supports_reasoning("Qwen/Qwen3-4B-Instruct"));
-    assert!(model_supports_reasoning("claude-sonnet-4-20250514"));
-    assert!(model_supports_reasoning("claude-haiku-4-5-20251001"));
-    assert!(!model_supports_reasoning("Qwen/Qwen2.5-0.5B-Instruct"));
-    assert!(!model_supports_reasoning("claude-3-5-sonnet"));
-    assert!(!model_supports_reasoning("Qwen/Qwen3-4B-Instruct-2507"));
+fn record(reasoning: Option<ReasoningControl>) -> ModelCapabilities {
+    ModelCapabilities {
+        reasoning,
+        ..ModelCapabilities::default()
+    }
+}
+
+fn presets(ids: &[&str]) -> ReasoningControl {
+    ReasoningControl::presets(
+        ids.iter()
+            .map(|id| ReasoningOption {
+                id: id.to_string(),
+                label: id.to_string(),
+            })
+            .collect(),
+    )
+}
+
+fn run_command_tool() -> Vec<ToolSpec> {
+    vec![ToolSpec {
+        name: "run_command".to_string(),
+        description: "Runs a shell command.".to_string(),
+        input_schema: serde_json::json!({"type": "object"}),
+    }]
 }
 
 #[test]
-fn effort_levels_are_empty_for_local_and_missing_providers() {
-    assert!(effort_levels_for(Some(ProviderKind::Local), None, "any-model").is_empty());
-    assert!(effort_levels_for(None, None, "any-model").is_empty());
+fn reasoning_is_requested_when_the_cached_record_says_the_model_reasons() {
+    let selectable = record(Some(presets(&["low", "high"])));
+    let managed = record(Some(ReasoningControl::ModelManaged));
+
+    assert!(reasoning_requested_for(
+        Some(&selectable),
+        "claude-opus-5",
+        &[]
+    ));
+    assert!(reasoning_requested_for(
+        Some(&managed),
+        "Qwen/Qwen3-4B",
+        &[]
+    ));
 }
 
 #[test]
-fn effort_levels_for_anthropic_api_key_provider_follow_the_model_table() {
-    let levels = effort_levels_for(
-        Some(ProviderKind::ApiKey),
-        Some("anthropic"),
-        "claude-sonnet-5",
-    );
-    assert!(levels.contains(&EffortLevel::XHigh));
-}
+fn reasoning_is_not_requested_for_unavailable_or_undetermined_models() {
+    let unavailable = record(Some(ReasoningControl::Unavailable));
+    let undetermined = record(None);
 
-#[test]
-fn effort_levels_for_claude_delegate_are_always_the_full_set() {
-    let levels = effort_levels_for(
-        Some(ProviderKind::CliDelegate),
-        Some("claude"),
-        "whatever-model",
-    );
-    assert!(levels.contains(&EffortLevel::Max));
-    assert!(levels.contains(&EffortLevel::XHigh));
-}
-
-#[test]
-fn effort_levels_for_codex_delegate_are_empty() {
-    assert!(effort_levels_for(Some(ProviderKind::CliDelegate), Some("codex"), "codex").is_empty());
+    assert!(!reasoning_requested_for(
+        Some(&unavailable),
+        "claude-3-5-sonnet",
+        &[]
+    ));
+    assert!(!reasoning_requested_for(
+        Some(&undetermined),
+        "claude-opus-5",
+        &[]
+    ));
+    assert!(!reasoning_requested_for(None, "claude-opus-5", &[]));
 }
 
 #[test]
 fn tool_requests_disable_reasoning_for_qwen_tool_call_compatibility() {
-    let tools = vec![ToolSpec {
-        name: "run_command".to_string(),
-        description: "Runs a shell command.".to_string(),
-        input_schema: serde_json::json!({"type": "object"}),
-    }];
+    let managed = record(Some(ReasoningControl::ModelManaged));
 
-    assert!(!reasoning_requested_for("Qwen/Qwen3-4B", &tools));
-    assert!(reasoning_requested_for("Qwen/Qwen3-4B", &[]));
-    assert!(reasoning_requested_for("claude-sonnet-4-20250514", &[]));
+    assert!(!reasoning_requested_for(
+        Some(&managed),
+        "Qwen/Qwen3-4B",
+        &run_command_tool()
+    ));
+    assert!(reasoning_requested_for(
+        Some(&managed),
+        "Qwen/Qwen3-4B",
+        &[]
+    ));
+    assert!(reasoning_requested_for(
+        Some(&managed),
+        "deepseek-r1-distill",
+        &run_command_tool()
+    ));
+}
+
+#[test]
+fn a_reasoning_option_is_kept_only_when_the_model_offers_it() {
+    let caps = record(Some(presets(&["low", "high"])));
+
+    assert_eq!(
+        validated_reasoning_option(Some(&caps), Some("high".to_string())),
+        Some("high".to_string())
+    );
+    assert_eq!(
+        validated_reasoning_option(Some(&caps), Some("xhigh".to_string())),
+        None,
+        "an option the provider no longer offers is dropped, not sent"
+    );
+    assert_eq!(validated_reasoning_option(Some(&caps), None), None);
+}
+
+#[test]
+fn a_reasoning_option_is_dropped_without_selectable_options() {
+    let requested = || Some("high".to_string());
+
+    assert_eq!(validated_reasoning_option(None, requested()), None);
+    assert_eq!(
+        validated_reasoning_option(Some(&record(None)), requested()),
+        None
+    );
+    assert_eq!(
+        validated_reasoning_option(
+            Some(&record(Some(ReasoningControl::ModelManaged))),
+            requested()
+        ),
+        None
+    );
+    assert_eq!(
+        validated_reasoning_option(
+            Some(&record(Some(ReasoningControl::Unavailable))),
+            requested()
+        ),
+        None
+    );
 }
 
 #[tokio::test]

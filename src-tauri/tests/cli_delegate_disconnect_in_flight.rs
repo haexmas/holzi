@@ -107,7 +107,8 @@ async fn disconnect_during_a_response_does_not_affect_that_response() {
             max_new_tokens: None,
             tools: Vec::new(),
             autonomy_mode: Default::default(),
-            effort_level: Default::default(),
+            reasoning_option: Default::default(),
+            capabilities: Default::default(),
         })
         .await
         .expect("stream_chat should start");

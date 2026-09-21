@@ -53,7 +53,8 @@ fn base_request(model_id: &str, autonomy_mode: AutonomyMode) -> ChatRequest {
         max_new_tokens: None,
         tools: Vec::new(),
         autonomy_mode,
-        effort_level: Default::default(),
+        reasoning_option: Default::default(),
+        capabilities: Default::default(),
     }
 }
 

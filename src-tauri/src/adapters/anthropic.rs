@@ -16,6 +16,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use tokio::sync::mpsc;
 
+use super::anthropic_capabilities::{map_capabilities, WireCapabilities};
 use super::request::build_messages_body;
 use super::types::{AdapterStream, ChatRequest, StreamChunk, StreamError, ToolCall};
 use super::{AdapterError, ProviderAdapter, ProviderModel};
@@ -80,6 +81,10 @@ struct ModelInfo {
     /// context.
     #[serde(default)]
     max_input_tokens: Option<i64>,
+    /// Per-model capability tree (effort levels, thinking, image/PDF input).
+    /// Absent on responses that omit it, which maps to "not determined".
+    #[serde(default)]
+    capabilities: Option<WireCapabilities>,
 }
 
 /// How a caller of [`fetch_models`] authenticates to `/v1/models`. Both
@@ -159,6 +164,7 @@ pub(crate) async fn fetch_models(
                 remote_id: m.id,
                 display_name: m.display_name,
                 context_window: m.max_input_tokens.filter(|n| *n > 0),
+                capabilities: map_capabilities(&m.capabilities.unwrap_or_default()),
             });
         }
         if !page.has_more {

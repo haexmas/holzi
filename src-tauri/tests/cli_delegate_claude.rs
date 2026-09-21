@@ -50,7 +50,8 @@ fn sample_request() -> ChatRequest {
         max_new_tokens: None,
         tools: Vec::new(),
         autonomy_mode: Default::default(),
-        effort_level: Default::default(),
+        reasoning_option: Default::default(),
+        capabilities: Default::default(),
     }
 }
 

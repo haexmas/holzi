@@ -65,18 +65,21 @@ Source: Anthropic Models API, `GET /v1/models` (also used by the Claude Code del
 `cli_delegate::fetch_claude_models`, which calls the same `anthropic::fetch_models` — no change in
 `cli_delegate`). Response per model: `capabilities.image_input.supported`,
 `capabilities.pdf_input.supported`, `capabilities.thinking.{supported, types.{enabled,adaptive}.supported}`,
-`capabilities.effort.{supported, low|medium|high|xhigh|max}.supported`.
+`capabilities.effort.supported` plus provider-native option keys whose values contain
+`supported`. The wire names are data, not a closed set: the adapter preserves every option key,
+including names or numeric-budget identifiers introduced by the provider, and does not turn the
+current Anthropic vocabulary into a shared enum.
 
-| Wire                                                | → Record                                                                     |
-| --------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `effort.supported == true` and ≥1 level `supported` | `Presets`, options in order low, medium, high, xhigh, max (ids = wire names) |
-| else `thinking.supported == true`                   | `ModelManaged`                                                               |
-| else both leaves present and false                  | `Unavailable`                                                                |
-| `thinking`/`effort` subtree missing                 | `reasoning = None`                                                           |
-| `thinking.types.adaptive.supported`                 | `thinking_style = Adaptive`                                                  |
-| else `thinking.types.enabled.supported`             | `thinking_style = Manual`                                                    |
-| `image_input` **and** `pdf_input` both present      | `Some([Text] + Image if supported + Document if supported)`                  |
-| either key missing                                  | `accepted_attachment_kinds = None`                                           |
+| Wire                                                                | → Record                                                         |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `effort.supported == true` and ≥1 provider-native level `supported` | `Presets`, options in provider response order (ids = wire names) |
+| else `thinking.supported == true`                                   | `ModelManaged`                                                   |
+| else both leaves present and false                                  | `Unavailable`                                                    |
+| `thinking`/`effort` subtree missing                                 | `reasoning = None`                                               |
+| `thinking.types.adaptive.supported`                                 | `thinking_style = Adaptive`                                      |
+| else `thinking.types.enabled.supported`                             | `thinking_style = Manual`                                        |
+| `image_input` **and** `pdf_input` both present                      | `Some([Text] + Image if supported + Document if supported)`      |
+| either key missing                                                  | `accepted_attachment_kinds = None`                               |
 
 `Text` is always included once attachment support is determined: text files are inlined as a plain
 text block (`request.rs`, `AttachmentKind::Text`), which every message-capable model accepts. All
@@ -229,10 +232,7 @@ new hidden network behavior outside this spec).
 ## R10. Effort UI states (from the clarification)
 
 Composer settings popover (`ComposerSettingsPopover.vue`, plain props today) gains one derived
-`effortState`: `hidden` (Unavailable, or no resolved model row — lists still loading, nothing selected), `disabled-managed` (ModelManaged), `disabled-unknown` (a row exists and its capabilities are `None`), `selectable` (Presets). Labels for known ids reuse `chat.effort.<id>` (verified keys:
-auto, low, medium, high, xhigh, max); an unknown provider-native id falls back to the record's
-`label`. New keys: managed-by-model label, not-yet-known label with refresh hint. The popover keeps
-taking props; only its parent's data source changes (plan, Frontend design).
+`effortState`: `hidden` (Unavailable, or no resolved model row — lists still loading, nothing selected), `disabled-managed` (ModelManaged), `disabled-unknown` (a row exists and its capabilities are `None`), `selectable` (Presets). Every offered option uses its provider-native `id`; its adapter-provided `label` is the display fallback and defaults to that id when the wire response has no separate label. Optional localized aliases are presentation-only and MUST NOT constrain which ids are accepted or offered. New keys: managed-by-model label, not-yet-known label with refresh hint. The popover keeps taking props; only its parent's data source changes (plan, Frontend design).
 
 ## R11. Testing approach
 
