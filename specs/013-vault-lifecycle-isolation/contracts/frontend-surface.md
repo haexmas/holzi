@@ -22,8 +22,10 @@ the user sees, how errors read, and how long a secret lives in the interface.
 A static page, `closing.html`, shown by the backend navigation. It shows **only a spinner and no
 text** (operator decision 2026-09-21), so nothing is localized. The spinner is pure CSS in an inline
 `<style>` (a rotating ring), with no script, no image or GIF, no external resource and no vault
-data. Its background follows `prefers-color-scheme` so dark mode gets no white flash. Its placement
-in the build output is verified in a task (research R4, **Open**); the fallback is a blank page.
+data. Its background follows `prefers-color-scheme` and matches the app's light and dark
+backgrounds, so dark mode gets no white flash; `prefers-reduced-motion` slows the rotation but never
+hides the spinner. It lives at `public/closing.html` in the repository root and is served by
+`pnpm dev` and present in the built output (research R4, **Outcome**); the fallback is a blank page.
 
 ## Errors (`useErrorString`)
 

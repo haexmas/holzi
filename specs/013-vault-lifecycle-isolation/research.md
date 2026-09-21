@@ -137,9 +137,13 @@ the wrapper (R3); long-running requests are cancelled through the session token 
 their response reaches no page. If the reviewer wants a typed error even for those, the follow-up is
 migrating commands to an extractor (R3 alternatives).
 
-**Open**: where a static file is served from. The Nuxt config sets `srcDir: 'src/'` and there is no
-`public/` directory today. The task verifies the placement so the built output contains
-`closing.html` next to the app, and uses `about:blank` if that fails (same effect, no spinner).
+**Outcome (2026-09-21)**: the page lives at `public/closing.html` in the repository root, next to
+`src/`. Nuxt 4 resolves its `public/` directory against the repository root, not against `srcDir`, so
+`src/public/` is not used. Both places that matter were checked: `pnpm dev` serves
+`http://localhost:3030/closing.html` as `text/html` (HTTP 200), and `pnpm generate`, the command
+named in `beforeBuildCommand`, puts the file at `.output/public/closing.html`, which is the
+`frontendDist` folder Tauri embeds. The `about:blank` fallback stays in the code for the case that
+the navigation to the page fails.
 
 ## R5 — Tracking work and draining
 

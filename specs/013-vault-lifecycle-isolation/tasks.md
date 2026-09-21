@@ -247,14 +247,14 @@ download; press close repeatedly; close by window; the process ends within about
 
 ### Manual checks that decide the design (record each outcome)
 
-- [ ] T032 [US1] Research R4: find where a static file must live so it is served in `pnpm dev` and
+- [x] T032 [US1] Research R4: find where a static file must live so it is served in `pnpm dev` and
       present in the built output. Try `public/closing.html` at the repository root and
       `src/public/closing.html` (the Nuxt config sets `srcDir: 'src/'`). Check
       `http://localhost:3030/closing.html` under `pnpm dev` and `.output/public/closing.html` after the
       build command named in `src-tauri/tauri.conf.json` (`beforeBuildCommand`). Keep the location
       that works. Replace **Open** in `research.md` R4 with the **Outcome**. If neither works, record
       that `about:blank` is used.
-- [ ] T033 [US1] Create `closing.html` at the location found in T032: a centered spinner and nothing
+- [x] T033 [US1] Create `closing.html` at the location found in T032: a centered spinner and nothing
       else, **no text of any kind** (operator decision 2026-09-21, so nothing needs translating).
       Pure CSS: a bordered ring turned by a `@keyframes` rotation in an inline `<style>`
       (`style-src` allows `'unsafe-inline'`), no script (the CSP is `script-src 'self'`), no image,
