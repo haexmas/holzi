@@ -142,14 +142,14 @@ the wrapper over the Tauri mock runtime; the app behaves exactly as before.
 
 ### Preparation
 
-- [ ] T016 Graphify consultation before authoring the new named artifacts (`VaultGate::run`,
+- [x] T016 Graphify consultation before authoring the new named artifacts (`VaultGate::run`,
       `CloseEffects`, `retry_while_locked`, `VaultDb`). The worktree has no `graphify-out/`, so run
       the queries from the primary checkout snapshot (read only): "run a future until a cancellation
       token fires", "retry an operation until a file lock is free", "abstract the side effects of
       closing so tests can record them", "wrap a shared handle with a drop guard counter". Add the
       candidates and decisions to the table in `research.md` R10. If a query fails or returns
       nonsense, warn, continue, and flag the skipped consultation in the same table (constitution).
-- [ ] T017 Confirm the app-scoped allow-list by reading each command (do not trust the list). Locate
+- [x] T017 Confirm the app-scoped allow-list by reading each command (do not trust the list). Locate
       each with `rg -n "fn <name>" src-tauri/src`: `close_instance`, `list_instances`,
       `get_hardware_info`, `list_catalog`, `catalog_recommend_tiers`, `list_stt_catalog`,
       `stt_recommend_tiers`. For each, check that neither it nor any helper it calls reaches
@@ -331,7 +331,8 @@ download; press close repeatedly; close by window; the process ends within about
       `VaultClosed`: `load_model_command` in `src-tauri/src/chat/model_loading.rs`, the transfer in
       `download_from_hf_inner` and `import_model_from_file` (`src-tauri/src/models/commands.rs`, the copy or
       download loop in `src-tauri/src/models/download.rs`), `refresh_provider_models` in `src-tauri/src/providers/mod.rs`,
-      voice start and stop in `src-tauri/src/voice.rs`, and the connect commands in `src-tauri/src/providers/connect.rs`.
+      voice start and stop in `src-tauri/src/voice.rs`, the connect commands in `src-tauri/src/providers/connect.rs`,
+      and `download_stt_model` in `src-tauri/src/stt/commands.rs` (found in T017: it is a long download).
       These are one-line call-site edits; the oversized files must not grow.
 - [ ] T044 [US1] Create `src-tauri/src/vault_gate/children.rs` with `ChildRegistry` (data-model.md),
       held by `VaultGate`: `register(pid)` returns a guard that unregisters on drop, and `kill_all()`

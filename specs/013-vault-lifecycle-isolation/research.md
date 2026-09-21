@@ -95,6 +95,20 @@ works, but an extractor must be added to every command and cannot cover a comman
 `list_instances`, `get_hardware_info`, `list_catalog`, `catalog_recommend_tiers`, `list_stt_catalog`,
 `stt_recommend_tiers`. The list is confirmed command by command in tasks.
 
+**Allow-list verdicts** (confirmed by reading each command and its helpers, task T017):
+
+| Command                     | Reaches vault, chat or `AppState`?                              | Verdict                                                                                     |
+| --------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `close_instance`            | Yes, by design: it ends the session                             | Allow: a close must always be accepted (FR-002)                                             |
+| `list_instances`            | No: scans the instances folder with `AppHandle` only            | Allow                                                                                       |
+| `get_hardware_info`         | No: hardware probe                                              | Allow                                                                                       |
+| `list_catalog`              | No: compiled catalog plus hardware probe                        | Allow                                                                                       |
+| `catalog_recommend_tiers`   | No: compiled catalog plus hardware probe                        | Allow                                                                                       |
+| `list_stt_catalog`          | No: compiled STT catalog plus hardware probe                    | Allow                                                                                       |
+| `stt_recommend_tiers`       | No: compiled STT catalog plus hardware probe                    | Allow                                                                                       |
+| `list_installed_stt_models` | No: directory scan of the STT model folders                     | Deny (default): not needed on the unlock screen, onboarding runs inside a vault             |
+| `download_stt_model`        | No vault data, but a long network download to the shared folder | Deny (default): FR-003 wants downloads cancelled on close; T043 makes it stop with the gate |
+
 **Limit found**: the wrapper cannot see or replace the _response_ of a request that is already
 executing (`InvokeResolver` cannot be wrapped from outside Tauri). See R4 for how FR-001 and FR-009
 are met anyway.
@@ -277,13 +291,23 @@ an explicit close. The builder needs `.build(context)?.run(callback)` instead of
 
 Queries on the repository graph (snapshot of the primary checkout, used as is for a linked worktree):
 
-| Need                       | Candidates found                                                                             | Outcome                                                  |
-| -------------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| Close and cancel work      | `close_instance`, `ChatState`, `abort_turn`, preload handle, `AppState`                      | Extend these; no parallel close path                     |
-| Tracked background tasks   | `spawn_cap_watcher`, `spawn_turn` (test fixture), `cli_delegate/process.rs` (`kill_on_drop`) | None is a tracker; `VaultGate` is new, reuses the tokens |
-| Secret hygiene             | none (only the passphrase refs in the two sheets)                                            | New: `Zeroizing`, redacted `Debug`                       |
-| Cross-process file locking | none in holzi (`fs2` only inside haex-crdt)                                                  | New small helper next to the publication lock            |
-| Startup cleanup gate       | `instances/startup.rs` cleans unconditionally                                                | New `instances/presence.rs`; the cleanup is its callback |
+| Need                         | Candidates found                                                                                           | Outcome                                                  |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Close and cancel work        | `close_instance`, `ChatState`, `abort_turn`, preload handle, `AppState`                                    | Extend these; no parallel close path                     |
+| Tracked background tasks     | `spawn_cap_watcher`, `spawn_turn` (test fixture), `cli_delegate/process.rs` (`kill_on_drop`)               | None is a tracker; `VaultGate` is new, reuses the tokens |
+| Secret hygiene               | none (only the passphrase refs in the two sheets)                                                          | New: `Zeroizing`, redacted `Debug`                       |
+| Cross-process file locking   | none in holzi (`fs2` only inside haex-crdt)                                                                | New small helper next to the publication lock            |
+| Startup cleanup gate         | `instances/startup.rs` cleans unconditionally                                                              | New `instances/presence.rs`; the cleanup is its callback |
+| Run a future until a token   | none reusable: `chat/tools/cli.rs` selects on its cancellation token inline                                | New `VaultGate::run`                                     |
+| Retry until a lock is free   | `retry_or_bail`, `retry_backoff`, `RetryDecision` in `chat/turn/step.rs` retry provider streams, not locks | New `retry_while_locked` (Stage 5)                       |
+| Close effects behind a trait | none                                                                                                       | New `CloseEffects` (Stage 3)                             |
+| Handle with a drop guard     | only `ClaudeConnectSession`'s own `Drop`; `abort_turn` in `chat/commands.rs` is reused                     | New `VaultDb`                                            |
+
+The four queries of task T016 ("run a future until a cancellation token fires", "retry an operation
+until a file lock is free", "abstract the side effects of closing so tests can record them", "wrap a
+shared handle with a drop guard counter") returned only broad results (breadth-first traversals from
+generic terms over 4986 nodes). The candidates in the four rows above were confirmed by reading the
+code, so no existing helper is paralleled.
 
 ## R11 — Test approach
 
