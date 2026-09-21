@@ -105,8 +105,8 @@ exist. No story is end-to-end functional yet — that starts in Phase 3.
 
 ## Phase 3: User Story 1 - Dictate a chat message (Priority: P1) 🎯 MVP
 
-**Goal**: Press-hold-release the mic control, speak a sentence, see it transcribed into the chat
-input field and sent (auto-send default on).
+**Goal**: Press the mic control, speak a sentence, press send, and see it transcribed into the chat
+input field and sent (auto-send default on). Cancel discards the recording instead.
 
 **Independent Test**: Record a short spoken sentence via the mic control; verify it appears in the
 chat input field and is sent through the normal chat path.
@@ -133,7 +133,8 @@ chat input field and is sent through the normal chat path.
       T012).
 - [x] T014 [P] [US1] `VoiceInputControl.vue` mic control in `src/components/chat/`: idle/recording/
       transcribing/error states, calling `start_voice_recording`/`stop_voice_recording`, writing a
-      non-interrupt `text` result into the existing chat input field.
+      non-interrupt `text` result into the existing chat input field. While recording, the mic
+      button gives way to icon-only cancel and send buttons (FR-022 to FR-024).
 - [x] T015 [US1] Auto-send wiring: read/write the `voice.auto_send` preference (vault-scoped) via
       the existing `get_pref`/`set_pref` commands; when enabled (default), send the transcribed
       message through the existing send-message path immediately; when disabled, leave it editable

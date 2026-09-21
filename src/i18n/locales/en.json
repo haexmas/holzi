@@ -426,9 +426,12 @@
   },
   "voiceControl": {
     "mic": {
-      "hold": "Hold to speak",
-      "release": "Release to finish, release elsewhere to discard"
+      "start": "Dictate",
+      "cancel": "Cancel recording",
+      "finishAndSend": "Stop recording and send",
+      "finishAndInsert": "Stop recording and insert text"
     },
+    "recording": "Recording",
     "autoSend": {
       "onLabel": "Auto-send on",
       "offLabel": "Auto-send off"

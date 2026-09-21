@@ -426,9 +426,12 @@
   },
   "voiceControl": {
     "mic": {
-      "hold": "Zum Sprechen gedrückt halten",
-      "release": "Loslassen zum Beenden, daneben loslassen zum Verwerfen"
+      "start": "Diktieren",
+      "cancel": "Aufnahme abbrechen",
+      "finishAndSend": "Aufnahme beenden und senden",
+      "finishAndInsert": "Aufnahme beenden und Text einfügen"
     },
+    "recording": "Aufnahme läuft",
     "autoSend": {
       "onLabel": "Automatisches Senden an",
       "offLabel": "Automatisches Senden aus"

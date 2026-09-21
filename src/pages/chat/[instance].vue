@@ -111,6 +111,8 @@ const expandedReasoning = ref<Set<string>>(new Set())
 const pendingApprovalsByThread = new Map<string, PendingApproval[]>()
 
 const input = ref('')
+/** True while the voice control is recording: it then provides the send button. */
+const voiceRecording = ref(false)
 const busy = ref(false)
 // `null` is "Auto" — no override, the active model/backend's own default
 // applies (spec 011-composer-toolbar-parity FR-005). Replaces the former
@@ -1275,30 +1277,38 @@ onBeforeUnmount(() => {
                     @cancel="abort"
                   />
                 </div>
-                <ChatVoiceInputControl @transcript="onVoiceTranscript" />
-                <UiButton
-                  v-if="streamingMessageId || turnSetupPending"
-                  class="shrink-0"
-                  size="icon-sm"
-                  variant="destructive"
-                  type="button"
-                  :aria-label="t('chat.cancel')"
-                  :title="t('chat.cancel')"
-                  @click="abort"
-                >
-                  <Icon name="lucide:square" class="h-3.5 w-3.5 fill-current" />
-                </UiButton>
-                <UiButton
-                  v-else
-                  class="shrink-0"
-                  size="icon-sm"
-                  type="submit"
-                  :disabled="!input.trim() || sendDisabled"
-                  :aria-label="t('chat.send')"
-                  :title="t('chat.send')"
-                >
-                  <Icon name="lucide:arrow-up" class="h-3.5 w-3.5" />
-                </UiButton>
+                <ChatVoiceInputControl
+                  v-model:recording="voiceRecording"
+                  @transcript="onVoiceTranscript"
+                />
+                <template v-if="!voiceRecording">
+                  <UiButton
+                    v-if="streamingMessageId || turnSetupPending"
+                    class="shrink-0"
+                    size="icon-sm"
+                    variant="destructive"
+                    type="button"
+                    :aria-label="t('chat.cancel')"
+                    :title="t('chat.cancel')"
+                    @click="abort"
+                  >
+                    <Icon
+                      name="lucide:square"
+                      class="h-3.5 w-3.5 fill-current"
+                    />
+                  </UiButton>
+                  <UiButton
+                    v-else
+                    class="shrink-0"
+                    size="icon-sm"
+                    type="submit"
+                    :disabled="!input.trim() || sendDisabled"
+                    :aria-label="t('chat.send')"
+                    :title="t('chat.send')"
+                  >
+                    <Icon name="lucide:arrow-up" class="h-3.5 w-3.5" />
+                  </UiButton>
+                </template>
               </div>
             </div>
           </div>

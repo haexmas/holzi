@@ -9,13 +9,17 @@
 
 ## 1. Diktieren und Senden (User Story 1)
 
-1. Chat-Ansicht öffnen, Mic-Kontrolle drücken/halten, einen kurzen Satz sprechen, loslassen.
+1. Chat-Ansicht öffnen, Mic-Kontrolle drücken, einen kurzen Satz sprechen, Senden-Icon drücken.
+   Während der Aufnahme ist die Mic-Kontrolle verschwunden; sichtbar sind nur ein Abbrechen- und
+   ein Senden-Icon, beide ohne Beschriftung.
 2. Prüfen: Transkript erscheint im Eingabefeld und wird (Default: Auto-Send an) automatisch
    abgeschickt.
 3. Auto-Send in den Einstellungen deaktivieren, erneut diktieren.
 4. Prüfen: Transkript bleibt editierbar im Eingabefeld stehen, wird nicht automatisch gesendet.
-5. Eine Aufnahme mit reiner Stille/Hintergrundrauschen machen.
-6. Prüfen: Eingabefeld bleibt unverändert, nichts wird gesendet.
+5. Erneut aufnehmen und stattdessen das Abbrechen-Icon drücken: die Aufnahme wird verworfen,
+   nichts wird transkribiert, ins Eingabefeld geschrieben oder gesendet.
+6. Eine Aufnahme mit reiner Stille/Hintergrundrauschen machen.
+7. Prüfen: Eingabefeld bleibt unverändert, nichts wird gesendet.
 
 ## 2. Sprachlicher Interrupt (User Story 2)
 
@@ -49,7 +53,7 @@
   möglich.
 - Während einer laufenden Aufnahme die App in den Hintergrund schicken (Mobile): Aufnahme wird
   verworfen, nichts wird transkribiert.
-- Aufnahme über das konfigurierte Maximum hinaus halten: Aufnahme stoppt automatisch, das bis
+- Aufnahme über das konfigurierte Maximum hinaus laufen lassen: Aufnahme stoppt automatisch, das bis
   dahin Aufgenommene wird transkribiert.
 - Erste Nutzung nach frischer Installation, ohne jede Konfiguration: Diktieren funktioniert direkt
   nach Erteilen der Mikrofon-Berechtigung, ohne Download oder Einrichtung (SC-003).
