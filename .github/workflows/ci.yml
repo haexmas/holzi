@@ -40,6 +40,12 @@ jobs:
       - name: Check vault lifecycle
         run: corepack pnpm check:vault-lifecycle
 
+      # The end-to-end suite's own logic (process control, driver client,
+      # stand-in provider, report). Needs no display and no application; the
+      # scenarios themselves run through `pnpm test:e2e`.
+      - name: Check e2e helpers
+        run: corepack pnpm check:e2e-lib
+
       # Neither `typecheck` nor `lint` parses template expressions, so an
       # SFC the build cannot compile passes both — one did, and broke
       # `pnpm generate` on main unnoticed. This compiles every template
