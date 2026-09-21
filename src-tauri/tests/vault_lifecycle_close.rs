@@ -273,10 +273,9 @@ async fn phase_one_runs_its_effects_once_and_in_order() {
     // A preload is running: it has its own token.
     let preload = CancellationToken::new();
     *session.recorder.preload_token.lock().unwrap() = Some(preload.clone());
-    session.chat.install_preload_handle(
-        preload,
-        tauri::async_runtime::spawn(std::future::pending::<()>()),
-    );
+    session
+        .chat
+        .install_preload_handle(preload, tokio::spawn(std::future::pending::<()>()));
     let context = session.context(ClosePolicy::Exit);
 
     assert!(begin_close(&context));

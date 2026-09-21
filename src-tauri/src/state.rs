@@ -74,6 +74,12 @@ impl AppState {
             .map(|active| Arc::clone(&active.database)))
     }
 
+    /// The gate whose tracker counts this state's database handles, for commands that race their
+    /// long work against the close.
+    pub fn gate(&self) -> &VaultGate {
+        &self.gate
+    }
+
     /// The name of the active instance, if any.
     pub fn active_name(&self) -> Result<Option<String>> {
         Ok(self.slot("")?.as_ref().map(|active| active.name.clone()))

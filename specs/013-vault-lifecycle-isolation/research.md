@@ -174,6 +174,15 @@ cancellation token) instead of adding a second mechanism, and the tracker replac
 engine's own threads, audio capture threads). They are bounded by the 3 s limit, after which the
 process ends. This is the reason the process ends on close at all.
 
+**Residuals (recorded 2026-09-21, T042)**: the reader thread in
+`adapters/cli_delegate/connect_claude.rs` (a plain `std::thread` reading the PTY of a
+`claude setup-token` flow) is not converted: it has no gate to register with, holds no vault data
+(only the URL and the token that flow produces) and ends with the PTY or the process. The
+`claude setup-token` child itself is not in the `ChildRegistry` either; it ends when the process
+does, because its terminal closes. `gate.run` drops the future of a long command at the close, so
+a `spawn_blocking` closure such as the model file copy keeps running until the process ends, and
+the staging file it leaves is removed by the next start-up cleanup.
+
 **Open**: whether dropping the local inference stream stops the engine promptly
 (`llm/local/stream.rs` spawns the reader task; the engine thread is inside mistralrs). If it does
 not, the 3 s limit covers it; the quickstart measures it.

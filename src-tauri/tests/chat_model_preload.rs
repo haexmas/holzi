@@ -13,7 +13,7 @@ async fn cancelling_a_preload_waits_for_its_task_to_terminate() {
     let chat = ChatState::new();
     let cancel = CancellationToken::new();
     let task_cancel = cancel.clone();
-    let join = tauri::async_runtime::spawn(async move {
+    let join = tokio::spawn(async move {
         task_cancel.cancelled().await;
     });
     chat.install_preload_handle(cancel.clone(), join);

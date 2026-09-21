@@ -76,23 +76,33 @@ impl VaultGate {
     }
 }
 
-/// Runs `action` on a plain thread after `grace`. The thread depends on neither tokio nor the
-/// window event loop, so a hung exit path cannot keep the process alive. If no thread can be
-/// started the action runs at once: a forced end that never runs is worse than an early one.
+/// Runs `action` on a plain thread after `grace`, for the forced end of the process. See
+/// [`on_plain_thread`].
 pub fn hard_end_after<F>(grace: Duration, action: F)
+where
+    F: FnOnce() + Send + 'static,
+{
+    on_plain_thread("vault-hard-end", grace, action);
+}
+
+/// Runs `action` on a plain thread named `name` after `delay`. The thread depends on neither
+/// tokio nor the window event loop, so a hung runtime or exit path cannot keep it from running. If
+/// no thread can be started the action runs at once: an action that never runs is worse than an
+/// early one.
+pub fn on_plain_thread<F>(name: &str, delay: Duration, action: F)
 where
     F: FnOnce() + Send + 'static,
 {
     let slot = Arc::new(Mutex::new(Some(action)));
     let thread_slot = Arc::clone(&slot);
     let spawned = std::thread::Builder::new()
-        .name("vault-hard-end".into())
+        .name(name.into())
         .spawn(move || {
-            std::thread::sleep(grace);
+            std::thread::sleep(delay);
             run_once(&thread_slot);
         });
     if let Err(error) = spawned {
-        log::error!("could not start the forced-end thread, ending now: {error}");
+        log::error!("could not start the {name} thread, running its action now: {error}");
         run_once(&slot);
     }
 }

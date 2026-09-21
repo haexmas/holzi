@@ -299,7 +299,7 @@ async fn load_model_command(
         vault_generation,
         load_id,
     };
-    match load_model_inner(
+    let load = load_model_inner(
         &app,
         &state,
         &chat,
@@ -307,9 +307,8 @@ async fn load_model_command(
         identity,
         None,
         integrity_override,
-    )
-    .await
-    {
+    );
+    match state.gate().run(load).await? {
         Ok(LoadOutcome::Loaded(info)) => Ok(info),
         Ok(LoadOutcome::Cancelled) => Err(HolziError::InvalidInput {
             reason: "model load was cancelled".into(),

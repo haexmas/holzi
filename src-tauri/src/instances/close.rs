@@ -20,8 +20,8 @@ use crate::chat::session::ChatState;
 use crate::error::Result;
 use crate::state::AppState;
 use crate::vault_gate::{
-    close_policy, hard_end_after, CloseEffects, ClosePolicy, DrainOutcome, VaultGate,
-    COOPERATIVE_WINDOW, HARD_END_GRACE, TOTAL_LIMIT,
+    close_policy, hard_end_after, on_plain_thread, CloseEffects, ClosePolicy, DrainOutcome,
+    VaultGate, COOPERATIVE_WINDOW, HARD_END_GRACE, TOTAL_LIMIT,
 };
 use crate::voice::VoiceState;
 
@@ -129,9 +129,9 @@ pub async fn finish_close(ctx: &CloseContext<'_>) -> DrainOutcome {
         Ok(handle) => drop(handle),
         Err(error) => log::warn!("could not release the vault: {error}"),
     }
-    // The cache holds no vault data and the process is ending, so it is only tidied, and only for
-    // as long as the forced end would wait anyway.
-    let _ = tokio::time::timeout(ctx.timings.grace, ctx.voice.invalidate_whisper_cache()).await;
+    // Releases the microphone and frees the cached model. Nothing here holds vault data and the
+    // process is ending, so it is bounded by the time the forced end would wait anyway.
+    let _ = tokio::time::timeout(ctx.timings.grace, ctx.voice.reset_for_close()).await;
     ctx.effects.request_end(ctx.policy);
     ctx.arm_forced_end(ctx.timings.grace);
     outcome
@@ -179,6 +179,24 @@ pub fn start_close(app: &AppHandle, policy: ClosePolicy) -> bool {
         });
     }
     started
+}
+
+/// The user leaves by closing the window or quitting from the system menu (FR-007). Both take the
+/// same close as the lock control, with the exit policy, so a running reply is cancelled and the
+/// process ends within the same limits. Returns whether the request was taken over, in which case
+/// the caller keeps the window and the app alive until the close has ended the process; `false`
+/// once a close is already running, so the process can then end.
+pub fn take_over_exit(app: &AppHandle) -> bool {
+    if app.state::<VaultGate>().is_closing() {
+        return false;
+    }
+    let handle = app.clone();
+    // On a plain thread, not the async runtime: a stuck runtime must not be able to keep the user
+    // from leaving.
+    on_plain_thread("vault-close", Duration::ZERO, move || {
+        start_close(&handle, ClosePolicy::Exit);
+    });
+    true
 }
 
 /// Closes the vault and ends the app process. Idempotent, never refused, and it returns as soon

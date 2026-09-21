@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use tokio::time::Instant;
 
-use super::{hard_end_after, DrainOutcome, COOPERATIVE_WINDOW, TOTAL_LIMIT};
+use super::{hard_end_after, on_plain_thread, DrainOutcome, COOPERATIVE_WINDOW, TOTAL_LIMIT};
 use crate::vault_gate::VaultGate;
 
 fn gate_on_this_runtime() -> VaultGate {
@@ -126,6 +126,21 @@ fn the_forced_end_runs_once_after_the_grace_period_and_never_before() {
         ran_at.recv_timeout(Duration::from_millis(100)).is_err(),
         "the action runs once"
     );
+}
+
+#[test]
+fn an_action_on_a_plain_thread_runs_once_on_a_thread_of_that_name() {
+    let (ran, ran_on) = mpsc::channel();
+    on_plain_thread("vault-test", Duration::ZERO, move || {
+        ran.send(std::thread::current().name().map(str::to_owned))
+            .expect("report the run");
+    });
+
+    let thread = ran_on
+        .recv_timeout(Duration::from_secs(5))
+        .expect("the action runs");
+    assert_eq!(thread.as_deref(), Some("vault-test"));
+    assert!(ran_on.recv_timeout(Duration::from_millis(100)).is_err());
 }
 
 #[cfg(unix)]

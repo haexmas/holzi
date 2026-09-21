@@ -604,7 +604,7 @@ pub async fn send_message(
     let session_for_task = session.clone();
     let assistant_db = db.clone();
 
-    tauri::async_runtime::spawn(async move {
+    state.gate().spawn(async move {
         let _operation = operation;
         let chat_state = app_for_task.state::<ChatState>();
         let mut emit = |name: &'static str, payload: Value| {
@@ -624,7 +624,7 @@ pub async fn send_message(
             &mut emit,
         )
         .await;
-    });
+    })?;
 
     Ok(SendMessageResult {
         thread_id,

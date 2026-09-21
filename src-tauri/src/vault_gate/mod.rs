@@ -28,7 +28,9 @@ use crate::error::{HolziError, Result};
 
 pub use children::{ChildGuard, ChildRegistry};
 pub use db::VaultDb;
-pub use drain::{hard_end_after, DrainOutcome, COOPERATIVE_WINDOW, HARD_END_GRACE, TOTAL_LIMIT};
+pub use drain::{
+    hard_end_after, on_plain_thread, DrainOutcome, COOPERATIVE_WINDOW, HARD_END_GRACE, TOTAL_LIMIT,
+};
 pub use invoke::APP_SCOPED_COMMANDS;
 
 /// Where the app process is in its one-session life. It only moves forward.

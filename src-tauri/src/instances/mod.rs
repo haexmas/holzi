@@ -16,7 +16,7 @@ mod info;
 mod list;
 mod open;
 
-pub use close::{close_instance, start_close};
+pub use close::{close_instance, start_close, take_over_exit};
 pub use create::create_instance;
 pub use info::InstanceInfo;
 pub use list::list_instances;

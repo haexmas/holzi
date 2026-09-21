@@ -113,8 +113,9 @@ pub async fn connect_cli_delegate(
 
     match vendor {
         DelegateVendor::Claude => {
-            let (session, url) = start_claude_connect("claude")
-                .await
+            let (session, url) = gate
+                .run(start_claude_connect("claude"))
+                .await?
                 .map_err(map_adapter_error)?;
             let session_id = session.id();
             let token_ready = session.token_ready();
@@ -134,20 +135,21 @@ pub async fn connect_cli_delegate(
         }
         DelegateVendor::Codex => {
             let app_for_prompt = app.clone();
-            let credentials = run_device_auth("codex", &gate.children(), move |prompt| {
-                emit_progress(
-                    &app_for_prompt,
-                    DelegateConnectProgress {
-                        vendor: "codex",
-                        status: "awaiting_browser",
-                        url: Some(prompt.url.clone()),
-                        code: Some(prompt.code.clone()),
-                        message: None,
-                    },
-                );
-            })
-            .await
-            .map_err(map_adapter_error)?;
+            let credentials = gate
+                .run(run_device_auth("codex", &gate.children(), move |prompt| {
+                    emit_progress(
+                        &app_for_prompt,
+                        DelegateConnectProgress {
+                            vendor: "codex",
+                            status: "awaiting_browser",
+                            url: Some(prompt.url.clone()),
+                            code: Some(prompt.code.clone()),
+                            message: None,
+                        },
+                    );
+                }))
+                .await?
+                .map_err(map_adapter_error)?;
 
             let provider =
                 upsert_delegate_provider(&state, "codex", args.name, credentials).await?;
@@ -244,7 +246,9 @@ fn spawn_claude_auto_completion(
     session_id: Uuid,
     token_ready: Arc<Notify>,
 ) {
-    tauri::async_runtime::spawn(async move {
+    // A closing gate refuses the watcher; the flow is over with the vault then.
+    let gate = app.state::<VaultGate>().inner().clone();
+    let _ = gate.spawn(async move {
         let connect_state = app.state::<DelegateConnectState>();
         let outcome = watch_claude_auto_completion(&connect_state, session_id, token_ready).await;
         match outcome {
@@ -301,6 +305,7 @@ pub struct SubmitCliDelegateCodeArgs {
 pub async fn submit_cli_delegate_code(
     app: AppHandle,
     state: State<'_, AppState>,
+    gate: State<'_, VaultGate>,
     connect_state: State<'_, DelegateConnectState>,
     args: SubmitCliDelegateCodeArgs,
 ) -> Result<ProviderPayload> {
@@ -309,7 +314,10 @@ pub async fn submit_cli_delegate_code(
         reason: "no claude connect flow is currently awaiting a code".into(),
     })?;
 
-    let token = match submit_claude_code(&mut session, &args.code).await {
+    let token = match gate
+        .run(submit_claude_code(&mut session, &args.code))
+        .await?
+    {
         Ok(token) => token,
         Err(error) => {
             *guard = Some(session);

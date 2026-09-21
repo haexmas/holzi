@@ -216,7 +216,7 @@ async fn cancel_preload_fires_the_signal_without_waiting_for_the_preload() {
     let chat = ChatState::new();
     let cancel = CancellationToken::new();
     // A preload that ignores the signal and never ends.
-    let join = tauri::async_runtime::spawn(std::future::pending::<()>());
+    let join = tokio::spawn(std::future::pending::<()>());
     chat.install_preload_handle(cancel.clone(), join);
 
     chat.cancel_preload();

@@ -323,7 +323,7 @@ download; press close repeatedly; close by window; the process ends within about
       `acquire_operation`.
 - [x] T041 [US1] Delete `CloseFailed` from `src-tauri/src/error.rs`, remove the stale doc comment in
       `src-tauri/src/state.rs`, and regenerate the bindings (see the format notes at the top).
-- [ ] T042 [US1] Register session-scoped tasks with the gate and add the token where work runs long:
+- [x] T042 [US1] Register session-scoped tasks with the gate and add the token where work runs long:
       the chat turn task (`src-tauri/src/chat/commands.rs`, the `spawn` around line 607) and the preload
       (`src-tauri/src/chat/default_model.rs`, keep its own token and join handle and also register it), both
       voice tasks (`src-tauri/src/voice.rs`, around lines 179 and 211) and the provider connect completion
@@ -331,7 +331,7 @@ download; press close repeatedly; close by window; the process ends within about
       `src-tauri/src/adapters/cli_delegate/connect_claude.rs` (the `std::thread::spawn` near line 145): convert
       to `gate.spawn_blocking` only if trivial; otherwise leave it and record it as a residual that the
       3 s limit covers.
-- [ ] T043 [US1] Make long-running commands stop on close with `gate.run(...)`, returning
+- [x] T043 [US1] Make long-running commands stop on close with `gate.run(...)`, returning
       `VaultClosed`: `load_model_command` in `src-tauri/src/chat/model_loading.rs`, the transfer in
       `download_from_hf_inner` and `import_model_from_file` (`src-tauri/src/models/commands.rs`, the copy or
       download loop in `src-tauri/src/models/download.rs`), `refresh_provider_models` in `src-tauri/src/providers/mod.rs`,
@@ -352,7 +352,7 @@ download; press close repeatedly; close by window; the process ends within about
       process groups and `taskkill`; ceiling "a descendant that left its group survives"; upgrade
       path "a Windows Job Object with kill-on-close, and `PR_SET_PDEATHSIG` on Linux". Keep the file
       under 500 lines.
-- [ ] T045 [US1] In `src-tauri/src/lib.rs` switch from `.run(context)` to `.build(context)?.run(callback)` and
+- [x] T045 [US1] In `src-tauri/src/lib.rs` switch from `.run(context)` to `.build(context)?.run(callback)` and
       handle FR-007: on `WindowEvent::CloseRequested` and on `RunEvent::ExitRequested` (unless its
       code is `RESTART_EXIT_CODE` or the gate is already closing), prevent the default, run the same
       close task with policy `Exit`, and exit when it finishes. Wire the real `CloseEffects`.

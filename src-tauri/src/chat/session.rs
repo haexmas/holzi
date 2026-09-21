@@ -81,7 +81,7 @@ struct ModelLoadRuntime {
 
 struct PreloadHandle {
     cancel: CancellationToken,
-    join: tauri::async_runtime::JoinHandle<()>,
+    join: tokio::task::JoinHandle<()>,
 }
 
 /// Metadata about the currently-loaded model. Both the local and
@@ -296,7 +296,7 @@ impl ChatState {
     pub fn install_preload_handle(
         &self,
         cancel: CancellationToken,
-        join: tauri::async_runtime::JoinHandle<()>,
+        join: tokio::task::JoinHandle<()>,
     ) {
         self.model_load
             .lock()
