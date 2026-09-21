@@ -216,8 +216,9 @@ failing scenario uploads its kept material.
 **Running the suite**
 
 - **FR-001**: One documented command, run from the development shell, MUST run every scenario and end
-  with a status that is failing if and only if a scenario failed. Skipped scenarios MUST be listed with
-  their reason and MUST NOT count as passed.
+  with a status that is failing if and only if a scenario or a preflight check failed. Missing required
+  tools and driver/web-view version mismatches MUST fail the preflight before any scenario starts.
+  Skipped scenarios MUST be listed with their reason and MUST NOT count as passed.
 - **FR-002**: The suite MUST run the real application as built for a user, with its embedded
   interface. A development server or a browser stand-in for the interface is not sufficient.
 - **FR-003**: A run MUST NOT open any window on the maintainer's desktop.
