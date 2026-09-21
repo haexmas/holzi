@@ -108,6 +108,7 @@ pub fn begin_close(ctx: &CloseContext<'_>) -> bool {
     if let Err(error) = abort_turn(ctx.chat) {
         log::warn!("could not cancel the running turn: {error}");
     }
+    ctx.voice.cancel_for_close();
     ctx.chat.cancel_preload();
     ctx.effects.show_closing_page();
     ctx.effects.announce_closed(name);

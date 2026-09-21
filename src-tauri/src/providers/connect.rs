@@ -114,7 +114,7 @@ pub async fn connect_cli_delegate(
     match vendor {
         DelegateVendor::Claude => {
             let (session, url) = gate
-                .run(start_claude_connect("claude"))
+                .run(start_claude_connect("claude", gate.children()))
                 .await?
                 .map_err(map_adapter_error)?;
             let session_id = session.id();

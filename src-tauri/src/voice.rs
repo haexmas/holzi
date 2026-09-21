@@ -17,7 +17,7 @@
 
 #[cfg(feature = "voice")]
 mod imp {
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
 
     use serde::Serialize;
     use tauri::{AppHandle, Emitter, Manager, State};
@@ -51,7 +51,7 @@ mod imp {
     /// pending transcription at a time (contracts/tauri-commands.md
     /// `start_voice_recording`).
     pub struct VoiceState {
-        slot: AsyncMutex<VoiceSlot>,
+        slot: Mutex<VoiceSlot>,
         /// The bundled Whisper model, loaded once on first use and kept
         /// warm — reloading it (a multi-second operation) per transcription
         /// would blow SC-001's 5-second budget.
@@ -62,7 +62,7 @@ mod imp {
     impl VoiceState {
         pub fn new() -> Self {
             Self {
-                slot: AsyncMutex::new(VoiceSlot::Idle),
+                slot: Mutex::new(VoiceSlot::Idle),
                 #[cfg(feature = "llm-cpu")]
                 whisper: AsyncMutex::new(None),
             }
@@ -80,8 +80,8 @@ mod imp {
         }
 
         /// Stops a recording that is still running, if any. Idempotent.
-        async fn cancel_recording(&self) {
-            let mut slot = self.slot.lock().await;
+        fn cancel_recording(&self) {
+            let mut slot = self.slot.lock().unwrap_or_else(|e| e.into_inner());
             if let VoiceSlot::Recording(_) = &*slot {
                 let VoiceSlot::Recording(capture) = std::mem::replace(&mut *slot, VoiceSlot::Idle)
                 else {
@@ -94,8 +94,14 @@ mod imp {
         /// For the close (spec 013): releases the microphone and frees the cached Whisper model
         /// while the process finishes ending.
         pub(crate) async fn reset_for_close(&self) {
-            self.cancel_recording().await;
+            self.cancel_recording();
             self.invalidate_whisper_cache().await;
+        }
+
+        /// Cancels an active capture synchronously during close phase 1, so no microphone stream
+        /// can survive while the gate drains the remaining tracked work.
+        pub(crate) fn cancel_for_close(&self) {
+            self.cancel_recording();
         }
 
         /// Test-only: whether the Whisper adapter cache currently holds a
@@ -122,24 +128,28 @@ mod imp {
 
     #[tauri::command]
     pub async fn start_voice_recording(app: AppHandle, voice: State<'_, VoiceState>) -> Result<()> {
-        {
-            let mut slot = voice.slot.lock().await;
-            if !matches!(&*slot, VoiceSlot::Idle) {
-                return Err(HolziError::AlreadyRecording);
-            }
-            let capture = crate::audio::Capture::start().map_err(|e| match e {
-                crate::audio::AudioError::DeviceUnavailable => HolziError::DeviceUnavailable,
-                // cpal does not surface a distinct OS-permission-denied error
-                // uniformly across desktop backends; a dedicated
-                // `PermissionDenied` UX needs real platform permission
-                // integration (tracked with the T032/T033 mobile gate).
-                crate::audio::AudioError::ConfigUnavailable { .. }
-                | crate::audio::AudioError::StartFailed { .. } => HolziError::DeviceUnavailable,
-            })?;
-            *slot = VoiceSlot::Recording(capture);
-        }
-        spawn_cap_watcher(app);
-        Ok(())
+        let app_for_watcher = app.clone();
+        app.state::<VaultGate>()
+            .run(async move {
+                let mut slot = voice.slot.lock().unwrap_or_else(|e| e.into_inner());
+                if !matches!(&*slot, VoiceSlot::Idle) {
+                    return Err(HolziError::AlreadyRecording);
+                }
+                let capture = crate::audio::Capture::start().map_err(|e| match e {
+                    crate::audio::AudioError::DeviceUnavailable => HolziError::DeviceUnavailable,
+                    // cpal does not surface a distinct OS-permission-denied error
+                    // uniformly across desktop backends; a dedicated
+                    // `PermissionDenied` UX needs real platform permission
+                    // integration (tracked with the T032/T033 mobile gate).
+                    crate::audio::AudioError::ConfigUnavailable { .. }
+                    | crate::audio::AudioError::StartFailed { .. } => HolziError::DeviceUnavailable,
+                })?;
+                *slot = VoiceSlot::Recording(capture);
+                drop(slot);
+                spawn_cap_watcher(app_for_watcher);
+                Ok(())
+            })
+            .await?
     }
 
     #[tauri::command]
@@ -168,7 +178,7 @@ mod imp {
     pub async fn cancel_voice_recording(voice: State<'_, VoiceState>) -> Result<()> {
         // Idempotent: cancelling while idle or already transcribing is not
         // an error (contracts/tauri-commands.md).
-        voice.cancel_recording().await;
+        voice.cancel_recording();
         Ok(())
     }
 
@@ -181,7 +191,7 @@ mod imp {
     /// (data-model.md "Backend-seitig wird der Puffer... atomar...").
     async fn do_stop(app: &AppHandle, voice: &VoiceState) -> Result<TranscriptionResultWire> {
         let mut rx = {
-            let mut slot = voice.slot.lock().await;
+            let mut slot = voice.slot.lock().unwrap_or_else(|e| e.into_inner());
             match std::mem::replace(&mut *slot, VoiceSlot::Idle) {
                 VoiceSlot::Idle => return Err(HolziError::NotRecording),
                 VoiceSlot::Recording(capture) => {
@@ -193,7 +203,8 @@ mod imp {
                         let voice_task = app_task.state::<VoiceState>();
                         let result = run_transcription(&app_task, &voice_task, pcm).await;
                         let _ = tx.send(Some(result));
-                        *voice_task.slot.lock().await = VoiceSlot::Idle;
+                        *voice_task.slot.lock().unwrap_or_else(|e| e.into_inner()) =
+                            VoiceSlot::Idle;
                     })?;
                     rx
                 }
@@ -228,7 +239,7 @@ mod imp {
                 tokio::time::sleep(CAP_POLL_INTERVAL).await;
                 let voice = app.state::<VoiceState>();
                 let capped = {
-                    let slot = voice.slot.lock().await;
+                    let slot = voice.slot.lock().unwrap_or_else(|e| e.into_inner());
                     match &*slot {
                         VoiceSlot::Recording(capture) => {
                             if capture.has_capped() {
@@ -418,6 +429,8 @@ mod stub {
         pub(crate) async fn invalidate_whisper_cache(&self) {}
 
         pub(crate) async fn reset_for_close(&self) {}
+
+        pub(crate) fn cancel_for_close(&self) {}
     }
 
     fn voice_disabled() -> HolziError {

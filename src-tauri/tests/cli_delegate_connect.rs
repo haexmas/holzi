@@ -102,7 +102,7 @@ exit 1
 "#,
     );
 
-    let (mut session, url) = start_claude_connect(stub.to_str().unwrap())
+    let (mut session, url) = start_claude_connect(stub.to_str().unwrap(), ChildRegistry::default())
         .await
         .expect("claude setup-token should start and report a url");
     assert_eq!(url, "https://claude.com/fake/oauth?state=abc");
