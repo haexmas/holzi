@@ -114,6 +114,8 @@ const expandedReasoning = ref<Set<string>>(new Set())
 const pendingApprovalsByThread = new Map<string, PendingApproval[]>()
 
 const input = ref('')
+/** True while the voice control is recording: it then provides the send button. */
+const voiceRecording = ref(false)
 const busy = ref(false)
 // The selected reasoning option and the displayed model's offered options
 // live in the models store (spec 012): the model determines which choices are
@@ -1202,7 +1204,7 @@ onBeforeUnmount(() => {
 
         <form
           class="border-t border-border bg-background/90 px-4 pb-4 pt-3 backdrop-blur md:px-8"
-          @submit.prevent="() => send()"
+          @submit.prevent="!voiceRecording && send()"
         >
           <div class="mx-auto max-w-3xl">
             <div
@@ -1215,7 +1217,7 @@ onBeforeUnmount(() => {
                 class="block w-full resize-none overflow-hidden bg-transparent px-4 pb-2 pt-3 text-sm leading-6 outline-none placeholder:text-muted-foreground"
                 :placeholder="t('chat.composer.placeholder')"
                 :disabled="composerInputDisabled"
-                @keydown.enter.exact.prevent="send()"
+                @keydown.enter.exact.prevent="!voiceRecording && send()"
               />
               <div
                 class="flex min-w-0 items-center gap-2 overflow-x-auto px-1 pb-1"
@@ -1262,29 +1264,38 @@ onBeforeUnmount(() => {
                     @cancel="abort"
                   />
                 </div>
-                <ChatVoiceInputControl @transcript="onVoiceTranscript" />
-                <UiButton
-                  v-if="streamingMessageId || turnSetupPending"
-                  class="shrink-0 gap-2"
-                  size="sm"
-                  variant="destructive"
-                  type="button"
-                  @click="abort"
-                >
-                  <Icon name="lucide:square" class="h-3.5 w-3.5 fill-current" />
-                  {{ t('chat.cancel') }}
-                </UiButton>
-                <UiButton
-                  v-else
-                  class="shrink-0"
-                  size="icon-sm"
-                  type="submit"
-                  :disabled="!input.trim() || sendDisabled"
-                  :aria-label="t('chat.send')"
-                  :title="t('chat.send')"
-                >
-                  <Icon name="lucide:arrow-up" class="h-3.5 w-3.5" />
-                </UiButton>
+                <ChatVoiceInputControl
+                  v-model:recording="voiceRecording"
+                  @transcript="onVoiceTranscript"
+                />
+                <template v-if="!voiceRecording">
+                  <UiButton
+                    v-if="streamingMessageId || turnSetupPending"
+                    class="shrink-0"
+                    size="icon-sm"
+                    variant="destructive"
+                    type="button"
+                    :aria-label="t('chat.cancel')"
+                    :title="t('chat.cancel')"
+                    @click="abort"
+                  >
+                    <Icon
+                      name="lucide:square"
+                      class="h-3.5 w-3.5 fill-current"
+                    />
+                  </UiButton>
+                  <UiButton
+                    v-else
+                    class="shrink-0"
+                    size="icon-sm"
+                    type="submit"
+                    :disabled="!input.trim() || sendDisabled"
+                    :aria-label="t('chat.send')"
+                    :title="t('chat.send')"
+                  >
+                    <Icon name="lucide:arrow-up" class="h-3.5 w-3.5" />
+                  </UiButton>
+                </template>
               </div>
             </div>
           </div>

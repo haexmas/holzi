@@ -69,14 +69,14 @@ Aufnahme selbst wird gespeichert):
 | Zustand        | Bedeutung                                                                                                                |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `idle`         | Bereit, keine Aufnahme läuft.                                                                                            |
-| `recording`    | Aufnahme aktiv (Push-to-Talk gehalten/umgeschaltet).                                                                     |
+| `recording`    | Aufnahme aktiv (per Mic-Kontrolle gestartet); sichtbar sind nur noch Abbrechen- und Senden-Icon.                         |
 | `transcribing` | Aufnahme beendet, Transkription läuft.                                                                                   |
 | `error`        | Mikrofon-Berechtigung fehlt, Transkription fehlgeschlagen, oder externer Dienst nicht erreichbar/ungültige Zugangsdaten. |
 
 Backend-seitig wird der Puffer beim ersten Stop atomar aus `recording` in
 `pending-transcription` überführt. Weitere Stop-Aufrufe erhalten dasselbe laufende Ergebnis; sie
 starten weder eine zweite Transkription noch liefern sie `NotRecording`. Das verhindert die Race
-zwischen `voice-recording-capped` und manuellem Loslassen.
+zwischen `voice-recording-capped` und manuellem Senden.
 
 Ein zusätzliches sichtbares Merkmal (nicht ein eigener State) markiert, wenn die aktuell aktive
 Quelle extern ist — sichtbar in jedem Nicht-`idle`-Zustand, solange `voice.active_stt_provider`

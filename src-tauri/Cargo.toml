@@ -182,3 +182,37 @@ futures = "0.3"
 # HTTP mock server for adapter tests — spins a local listener on a
 # random port, allows scripted responses, and shuts down on Drop.
 wiremock = "0.6"
+
+# Local Whisper (spec 008) runs candle's CPU kernels in-process. At the default
+# dev `opt-level = 0` those kernels are unusably slow — measured 137 s to
+# transcribe an 11 s clip with whisper-small in `tauri dev` — so the numeric
+# crates on the inference hot path are built optimized even in dev builds. Only
+# these are listed (not `"*"`) to keep the dev-build cost of everything else
+# (tauri, wry, mistralrs' non-numeric crates, ...) unchanged. `gemm*` appears
+# in two versions in Cargo.lock; a bare name applies to all of them.
+[profile.dev.package.candle-core]
+opt-level = 3
+[profile.dev.package.candle-nn]
+opt-level = 3
+[profile.dev.package.candle-transformers]
+opt-level = 3
+[profile.dev.package.gemm]
+opt-level = 3
+[profile.dev.package.gemm-common]
+opt-level = 3
+[profile.dev.package.gemm-f16]
+opt-level = 3
+[profile.dev.package.gemm-f32]
+opt-level = 3
+[profile.dev.package.gemm-f64]
+opt-level = 3
+[profile.dev.package.gemm-c32]
+opt-level = 3
+[profile.dev.package.gemm-c64]
+opt-level = 3
+[profile.dev.package.half]
+opt-level = 3
+[profile.dev.package.rayon]
+opt-level = 3
+[profile.dev.package.rayon-core]
+opt-level = 3

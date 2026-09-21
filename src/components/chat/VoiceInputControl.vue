@@ -1,10 +1,20 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 
 /**
- * Mic control for voice dictation (spec 008-voice-control-stt, T014).
+ * Voice dictation controls (spec 008-voice-control-stt, T014).
+ *
+ * A toggle whose icon-only buttons follow the recording state:
+ * - idle/error: the auto-send switch and the mic button, which starts a
+ *   recording;
+ * - recording: only cancel (discards, nothing is transcribed or sent) and
+ *   send (ends the recording and transcribes it; the text is sent when
+ *   auto-send is on, otherwise it is placed in the input field);
+ * - transcribing: a spinner.
+ * `recording` tells the composer to hide its own send button meanwhile,
+ * because the send button here takes its place.
  *
  * US2 (the "stop"/"halt"/"abbrechen" interrupt fast path cancelling an
  * in-progress assistant turn) and US3 (choosing an external transcription
@@ -27,6 +37,8 @@ const emit = defineEmits<{
   transcript: [text: string, autoSend: boolean]
 }>()
 
+const recording = defineModel<boolean>('recording', { default: false })
+
 const { t } = useI18n()
 const { getPrefAsync, setPrefAsync } = usePreferences()
 
@@ -34,6 +46,16 @@ const state = ref<RecordingState>('idle')
 const autoSend = ref(true)
 const errorMessage = ref<string | null>(null)
 const noSpeechDetected = ref(false)
+
+const finishLabel = computed(() =>
+  autoSend.value
+    ? t('voiceControl.mic.finishAndSend')
+    : t('voiceControl.mic.finishAndInsert'),
+)
+
+watch(state, (value) => (recording.value = value === 'recording'), {
+  immediate: true,
+})
 
 let unlistenCapped: (() => void) | null = null
 let disposed = false
@@ -177,71 +199,76 @@ async function cancelRecording() {
     state.value = 'idle'
   }
 }
-
-function onMicClick() {
-  if (state.value === 'idle' || state.value === 'error') startRecording()
-  else if (state.value === 'recording') finishRecording()
-}
 </script>
 
 <template>
   <div class="flex shrink-0 items-center gap-1.5">
-    <button
-      type="button"
-      class="flex h-6 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-      :class="{ 'text-muted-foreground/50': autoSend }"
-      :aria-pressed="autoSend"
-      :aria-label="
-        autoSend
-          ? t('voiceControl.autoSend.onLabel')
-          : t('voiceControl.autoSend.offLabel')
-      "
-      :title="
-        autoSend
-          ? t('voiceControl.autoSend.onLabel')
-          : t('voiceControl.autoSend.offLabel')
-      "
-      @click="toggleAutoSend"
-    >
-      <Icon
-        :name="autoSend ? 'lucide:zap' : 'lucide:zap-off'"
-        class="h-3.5 w-3.5"
-      />
-    </button>
-    <UiButton
-      type="button"
-      size="icon-sm"
-      :variant="state === 'recording' ? 'destructive' : 'secondary'"
-      :disabled="state === 'transcribing'"
-      :aria-label="
-        state === 'recording'
-          ? t('voiceControl.mic.stop')
-          : t('voiceControl.mic.start')
-      "
-      :title="
-        state === 'recording'
-          ? t('voiceControl.mic.stop')
-          : t('voiceControl.mic.start')
-      "
-      @click="onMicClick"
-    >
-      <Icon
-        :name="state === 'transcribing' ? 'lucide:loader-2' : 'lucide:mic'"
-        class="h-3.5 w-3.5"
-        :class="{
-          'animate-spin': state === 'transcribing',
-          'animate-pulse text-destructive-foreground': state === 'recording',
-        }"
-      />
-    </UiButton>
-    <button
-      v-if="state === 'recording'"
-      type="button"
-      class="text-xs text-muted-foreground underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-      @click="cancelRecording"
-    >
-      {{ t('voiceControl.mic.cancel') }}
-    </button>
+    <template v-if="state === 'recording'">
+      <span
+        role="status"
+        class="mr-0.5 flex h-2 w-2 shrink-0 animate-pulse rounded-full bg-destructive"
+      >
+        <span class="sr-only">{{ t('voiceControl.recording') }}</span>
+      </span>
+      <UiButton
+        type="button"
+        size="icon-sm"
+        variant="secondary"
+        :aria-label="t('voiceControl.mic.cancel')"
+        :title="t('voiceControl.mic.cancel')"
+        @click="cancelRecording"
+      >
+        <Icon name="lucide:x" class="h-3.5 w-3.5" />
+      </UiButton>
+      <UiButton
+        type="button"
+        size="icon-sm"
+        :aria-label="finishLabel"
+        :title="finishLabel"
+        @click="finishRecording()"
+      >
+        <Icon name="lucide:arrow-up" class="h-3.5 w-3.5" />
+      </UiButton>
+    </template>
+    <template v-else>
+      <button
+        type="button"
+        class="flex h-6 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        :class="{ 'text-muted-foreground/50': autoSend }"
+        :aria-pressed="autoSend"
+        :aria-label="
+          autoSend
+            ? t('voiceControl.autoSend.onLabel')
+            : t('voiceControl.autoSend.offLabel')
+        "
+        :title="
+          autoSend
+            ? t('voiceControl.autoSend.onLabel')
+            : t('voiceControl.autoSend.offLabel')
+        "
+        @click="toggleAutoSend"
+      >
+        <Icon
+          :name="autoSend ? 'lucide:zap' : 'lucide:zap-off'"
+          class="h-3.5 w-3.5"
+        />
+      </button>
+      <UiButton
+        type="button"
+        size="icon-sm"
+        variant="secondary"
+        :disabled="state === 'transcribing'"
+        :aria-label="t('voiceControl.mic.start')"
+        :title="t('voiceControl.mic.start')"
+        @click="startRecording"
+      >
+        <Icon
+          :name="state === 'transcribing' ? 'lucide:loader-2' : 'lucide:mic'"
+          class="h-3.5 w-3.5"
+          :class="{ 'animate-spin': state === 'transcribing' }"
+        />
+      </UiButton>
+    </template>
     <span
       v-if="noSpeechDetected"
       class="text-xs text-muted-foreground"

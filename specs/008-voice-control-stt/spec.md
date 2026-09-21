@@ -30,15 +30,19 @@ parallel system." Full design write-up: `docs/plans/2026-09-16-voice-control-stt
 
 ### User Story 1 - Dictate a chat message (Priority: P1)
 
-A user in the chat view presses and holds (or toggles) a microphone control, speaks a message,
-and releases it. The spoken words appear as text in the chat message field and — unless the user
-has turned automatic sending off — are sent to the assistant just as if typed and submitted.
+A user in the chat view presses a microphone control to start recording and speaks a message.
+While the recording runs, the microphone control gives way to two icon-only controls: cancel and
+send. Pressing send ends the recording; the spoken words then appear as text in the chat message
+field and — unless the user has turned automatic sending off — are sent to the assistant just as
+if typed and submitted. Pressing cancel discards the recording instead, and nothing is
+transcribed, written to the input field or sent.
 
 **Why this priority**: This is the entire point of the feature. Without it, there is nothing to
 ship.
 
-**Independent Test**: Press the microphone control, speak a short sentence, release it. Verify
-the sentence appears in the input field and (with default settings) is sent as a chat message.
+**Independent Test**: Press the microphone control, speak a short sentence, press the send
+control. Verify the sentence appears in the input field and (with default settings) is sent as a
+chat message.
 
 **Acceptance Scenarios**:
 
@@ -51,6 +55,11 @@ the sentence appears in the input field and (with default settings) is sent as a
    the text remains in the input field, editable, until the user sends it manually.
 4. **Given** a recording captured only silence or background noise, **When** transcription
    completes, **Then** the input field is left unchanged and nothing is sent.
+5. **Given** a recording is in progress, **When** the user looks at the chat controls, **Then** the
+   microphone control is not shown and only an icon-only cancel control and an icon-only send
+   control are offered for the recording.
+6. **Given** a recording is in progress, **When** the user presses cancel, **Then** the recording
+   is discarded, nothing is transcribed, and nothing is written to the input field or sent.
 
 ---
 
@@ -121,7 +130,7 @@ one.
   busy.
 - What happens if the app loses focus or is sent to the background while a recording is in
   progress? The in-progress recording is discarded, not transcribed.
-- What happens if a recording runs unusually long (the user forgets to release/stop it)? The
+- What happens if a recording runs unusually long (the user forgets to stop it)? The
   system stops recording automatically after a fixed maximum duration and transcribes what was
   captured.
 - What happens on the very first run after installation, before the user has configured anything?
@@ -132,8 +141,8 @@ one.
 
 ### Functional Requirements
 
-- **FR-001**: Users MUST be able to start and stop a voice recording via a dedicated control in
-  the chat view.
+- **FR-001**: Users MUST be able to start a voice recording via a dedicated control in the chat
+  view, and to end it either by sending it or by cancelling it (FR-022, FR-023).
 - **FR-002**: The system MUST transcribe a completed recording into text.
 - **FR-003**: Unless an external transcription service has been explicitly configured and
   activated, transcription MUST happen without the recorded audio leaving the device.
@@ -182,6 +191,15 @@ one.
 - **FR-021**: Whenever an external transcription service is the active source, the recording
   control MUST visibly indicate this for as long as it remains active — not only at the point the
   service was configured.
+- **FR-022**: While a recording is in progress, the microphone control MUST give way to exactly two
+  controls, one to cancel and one to send, and both MUST be icon-only: they carry no text label,
+  and their meaning is exposed through an accessible name and a tooltip. The chat view's other
+  send and stop-response controls MUST NOT be offered while the recording runs.
+- **FR-023**: Cancelling a recording MUST discard it without transcribing it, and MUST NOT send or
+  write anything to the input field.
+- **FR-024**: Sending a recording MUST end it and transcribe it; the transcript is then handled as
+  FR-004 to FR-006 describe (sent when automatic sending is enabled, otherwise placed in the input
+  field).
 
 ### Key Entities
 
@@ -199,7 +217,7 @@ one.
 
 - **SC-001**: A user can dictate and send a typical one-sentence chat message using only the
   microphone control, with the transcribed text appearing in the input field within 5 seconds of
-  releasing the control.
+  pressing send.
 - **SC-002**: The bounded local interrupt path recognizes an exact interrupt utterance at its
   end-of-utterance boundary and cancels an in-progress assistant response within one second of the
   final local audio frame, regardless of the selected transcription provider or what the assistant
@@ -221,8 +239,9 @@ one.
   interrupt actions, not a general app-control mechanism. Controlling other parts of the app by
   voice is out of scope and expected to happen later, if at all, through the assistant's own
   existing tool-use capability rather than through new voice-specific commands.
-- Activation is push-to-talk only (explicit start/stop by the user); there is no wake word and no
-  always-listening mode.
+- Activation is explicit only: the user starts every recording with the microphone control and
+  ends it with send or cancel; there is no wake word and no always-listening mode. Recording is a
+  toggle, not press-and-hold, on desktop and mobile alike.
 - The feature targets both desktop and mobile platforms from the start. On all platforms, voice
   input requires the app to be in the foreground.
 - The three interrupt words are fixed for this feature and are not user-customizable.

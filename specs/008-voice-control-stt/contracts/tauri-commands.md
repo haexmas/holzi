@@ -50,7 +50,7 @@ Fehlschlag (FR-020).
 
 Der Übergang von `recording` nach `pending-transcription` ist atomar. Der erste Stop-Aufruf
 übernimmt den Puffer und startet genau eine Transkription; gleichzeitige Aufrufe (einschließlich
-des Cap-Listeners und eines manuellen Loslassens) warten auf dasselbe Ergebnis. Sie liefern weder
+des Cap-Listeners und eines manuellen Sendens) warten auf dasselbe Ergebnis. Sie liefern weder
 `NotRecording` noch transkribieren oder senden den Puffer ein zweites Mal. Das gilt auch, wenn der
 Cap-Listener eintrifft, während ein vorheriger Frontend-`stop_voice_recording`-Await noch läuft.
 

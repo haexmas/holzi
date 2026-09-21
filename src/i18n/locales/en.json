@@ -433,9 +433,11 @@
   "voiceControl": {
     "mic": {
       "start": "Dictate",
-      "stop": "Stop recording",
-      "cancel": "Cancel"
+      "cancel": "Cancel recording",
+      "finishAndSend": "Stop recording and send",
+      "finishAndInsert": "Stop recording and insert text"
     },
+    "recording": "Recording",
     "autoSend": {
       "onLabel": "Auto-send on",
       "offLabel": "Auto-send off"
