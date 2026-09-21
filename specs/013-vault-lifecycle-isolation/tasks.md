@@ -211,7 +211,7 @@ the wrapper over the Tauri mock runtime; the app behaves exactly as before.
       `invoke.message.command()`; in `Closing` and not allow-listed it calls
       `invoke.resolver.reject(HolziError::VaultClosed)` and returns `true`, otherwise it calls the
       inner handler.
-- [ ] T026 Add `VaultClosed` and `VaultAlreadyActive` to `src-tauri/src/error.rs` (fieldless; messages "The
+- [x] T026 Add `VaultClosed` and `VaultAlreadyActive` to `src-tauri/src/error.rs` (fieldless; messages "The
       vault is closed" and "A vault is already open in this app process"). Do not remove
       `CloseFailed` yet. Regenerate the bindings (see the format notes at the top) and commit them.
 - [ ] T027 Encapsulate the vault state. In `src-tauri/src/state.rs` make `active_instance` private and add the
