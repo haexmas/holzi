@@ -49,7 +49,7 @@ side, US5 reads never fail.
       `active_model_info` fix without the operation slot (FR-025, `fedcfa8`), and the `tauri` `test`
       dev-dependency (own commit). The spike lives only on the local branch `spike/vault-gateway` and
       never merges; read it with `git show spike/vault-gateway:src-tauri/tests/spike_vault_gateway.rs`.
-- [ ] T003 Record the baseline in the "Baseline" section at the end of this file before any edit:
+- [x] T003 Record the baseline in the "Baseline" section at the end of this file before any edit:
       `cargo test --manifest-path src-tauri/Cargo.toml` pass count, `pnpm check:chat-state` test count,
       and the results of `pnpm typecheck`, `pnpm typecheck:scripts`, `pnpm lint`,
       `pnpm format:check`, plus `wc -l` of the six oversized files listed above.
@@ -666,8 +666,15 @@ Task: "T067 src-tauri/src/instances/presence_tests.rs"
 
 _Filled in during T003, T004, T013, T036, T058 and T088._
 
-- Test counts and command results: (pending)
-- Line counts of the oversized files before and after: (pending)
+- Test counts and command results (2026-09-21, before any change of PR B): `cargo test` 459 passed,
+  0 failed, 8 ignored across 28 test binaries; `pnpm check:chat-state` 45 passed, 0 failed;
+  `pnpm check:templates`, `pnpm typecheck`, `pnpm typecheck:scripts`, `pnpm lint` and
+  `pnpm format:check` all exit 0. A cargo target copied with `cp --reflink` from another worktree
+  needs a `cargo clean -p` for `tauri` and the four `tauri-plugin-*` crates first when the source
+  worktree is gone, because their cached build script outputs hold absolute paths.
+- Line counts of the oversized files, before (after: pending, T086): `models/commands.rs` 966,
+  `chat/commands.rs` 759, `chat/model_loading.rs` 736, `providers/mod.rs` 576,
+  `src/pages/chat/[instance].vue` 1320, `scripts/check-chat-state.ts` 1550.
 - Fix commit routing and account decision (2026-09-21): `fedcfa8` goes into PR A with the docs; any
   available `gh` account may be used, restoring the previously active one afterwards.
 - Passphrase leak review: (pending)
