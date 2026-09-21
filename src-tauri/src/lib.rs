@@ -22,6 +22,7 @@ pub mod storage;
 // `--features llm-cpu` alone, without pulling in `cpal` (and its ALSA/
 // CoreAudio/WASAPI system dependency) at all.
 pub mod stt;
+pub mod vault_gate;
 // Unconditional like `stt`, above — see `voice.rs`'s module doc for why
 // the stub commands live in the same file as the real ones.
 pub mod voice;
