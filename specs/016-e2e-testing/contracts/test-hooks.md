@@ -14,10 +14,10 @@ They are part of this contract now: renaming one means updating the helpers in t
 | Control                          | Hook                                               | Where                                       |
 | -------------------------------- | -------------------------------------------------- | ------------------------------------------- |
 | Unlock: passphrase field         | `#unlock-passphrase`                               | `src/components/onboarding/UnlockSheet.vue` |
-| Unlock: submit button            | `button[form="unlock-form"]`                       | same                                        |
+| Unlock: submit button            | `[form="unlock-form"]`                             | same                                        |
 | Create: name field               | `#create-name`                                     | `src/components/onboarding/CreateSheet.vue` |
 | Create: passphrase, confirmation | `#create-passphrase`, `#create-passphrase-confirm` | same                                        |
-| Create: submit button            | `button[form="create-form"]`                       | same                                        |
+| Create: submit button            | `[form="create-form"]`                             | same                                        |
 | Closing page: the spinner        | `.ring`                                            | `public/closing.html`                       |
 | Where the app is                 | `location.pathname` (`/workspace/…`, `/chat/…`)    | routes                                      |
 

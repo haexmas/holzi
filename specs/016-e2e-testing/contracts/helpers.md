@@ -61,8 +61,9 @@ scenario(name: string, options: { needs?: { closeBehavior: 'exit' | 'relaunch' }
 
 `scripts/e2e/lib/close-promises.ts` exports the numbers a scenario asserts against: process end within
 4 seconds, provider connection closed within 1 second of the press, relaunch within 10 seconds. They come
-from spec 013 (drain ladder: 1 s cooperative, 3 s total, 0.5 s grace) and are multiplied by
-`E2E_TIME_SCALE`.
+from spec 013 (drain ladder: 1 s cooperative, 3 s total, 0.5 s grace) and remain fixed for conformance.
+`E2E_TIME_SCALE` may scale generic scenario and run timeouts only; a scaled run is non-conformant and
+reports its scale.
 
 ## Rules for scenarios
 

@@ -8,12 +8,12 @@ are the spec's Key Entities made concrete; the shapes that leave the process are
 
 ## Application under test
 
-| Field               | Type                                | Rule                                                                                                                    |
-| ------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `path`              | absolute path, resolved at run time | Must exist and be executable. Never written to a committed file.                                                        |
-| `source`            | `built` or `given`                  | `built` when the suite ran the debug build, `given` when `--app` was used.                                              |
-| `closeBehavior`     | `exit` or `relaunch`                | From `--close-behavior`, else from the path (`/debug/` is `exit`, `/release/` is `relaunch`), else the preflight fails. |
-| `closeBehaviorFrom` | `flag` or `path`                    | Reported so a wrong value can be traced.                                                                                |
+| Field               | Type                                | Rule                                                                                                                                                                                                |
+| ------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `path`              | absolute path, resolved at run time | Must exist and be executable. Never written to a committed file.                                                                                                                                    |
+| `source`            | `built` or `given`                  | `built` when the suite ran the debug build, `given` when `--app` was used.                                                                                                                          |
+| `closeBehavior`     | `exit` or `relaunch`                | From `--close-behavior`, else from the path (`/debug/` is `exit`, `/release/` is `relaunch`), else the preflight fails. An explicit value that conflicts with `/debug/` or `/release/` is rejected. |
+| `closeBehaviorFrom` | `flag` or `path`                    | Reported so a wrong value can be traced.                                                                                                                                                            |
 
 ## Tool check
 
@@ -43,20 +43,22 @@ Key step names (FR-020): `instance-ready`, `unlocked`, `reply-streaming`, `press
 
 ## Isolated instance
 
-| Field                 | Type                                | Rule                                                                                                                                                        |
-| --------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `root`                | directory under the run's directory | Created empty at start, removed at the end (FR-006). Holds `data`, `config`, `cache`, `run` and `home`.                                                     |
-| `env`                 | map                                 | `XDG_DATA_HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`, `XDG_RUNTIME_DIR`, `HOME` inside `root`; `DBUS_SESSION_BUS_ADDRESS=disabled:`; `HOLZI_E2E_RUN`.       |
-| `colorScheme`         | `light` or `dark`, default `light`  | Written as `gtk-3.0/settings.ini` in `config` before the start.                                                                                             |
-| `ports`               | `{ driver, native }`                | Free when chosen; one retry with new ports if the driver does not listen.                                                                                   |
-| `marker`              | `HOLZI_E2E_RUN` value               | `<runner pid>:<runner start time>:<random>`. Identical for every process the run starts.                                                                    |
-| `driverPid`, `appPid` | numbers                             | `appPid` is the marked process whose executable is the application under test, found after the session starts. It is the pid "the process ended" refers to. |
-| `sessionId`           | string or absent                    | Absent before the session starts and after it ends.                                                                                                         |
-| `reusesRoot`          | optional path                       | Lets a fresh instance start over an earlier instance's data (relaunch check, research R11).                                                                 |
+| Field                 | Type                                | Rule                                                                                                                                                                                                                                                                                                                       |
+| --------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `root`                | directory under the run's directory | Created empty at start, and removed by its owning teardown (FR-006). Holds `data`, `config`, `cache`, `run` and `home`; a root reused by a fresh instance stays available until that fresh instance has verified it.                                                                                                       |
+| `env`                 | map                                 | `XDG_DATA_HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`, `XDG_RUNTIME_DIR`, `HOME` inside `root`; `DBUS_SESSION_BUS_ADDRESS=disabled:`; `HOLZI_E2E_RUN`.                                                                                                                                                                      |
+| `colorScheme`         | `light` or `dark`, default `light`  | Written as `gtk-3.0/settings.ini` in `config` before the start.                                                                                                                                                                                                                                                            |
+| `ports`               | `{ driver, native }`                | Free when chosen; one retry with new ports if the driver does not listen.                                                                                                                                                                                                                                                  |
+| `marker`              | `HOLZI_E2E_RUN` value               | `<runner pid>:<runner start time>:<random>`. Identical for every process the run starts.                                                                                                                                                                                                                                   |
+| `driverPid`, `appPid` | numbers                             | `appPid` is the marked process whose executable is the application under test, found after the session starts. It is the pid "the process ended" refers to.                                                                                                                                                                |
+| `sessionId`           | string or absent                    | Absent before the session starts and after it ends.                                                                                                                                                                                                                                                                        |
+| `reusesRoot`          | optional path                       | Lets a fresh instance start over an earlier instance's data (relaunch check, research R11). The earlier instance leaves the root in place when it stops; the fresh instance owns it through verification and its teardown removes it. If the fresh instance never takes ownership, the run-level cleanup removes the root. |
 
 State: `created` to `starting` to `ready` to `ended` (the application ended by itself) or `stopped`
 (the suite stopped it). A start that does not reach `ready` within its deadline is `stopped` and fails
-the scenario. Teardown always leaves the instance `ended` or `stopped` and its `root` removed.
+the scenario. Teardown leaves the instance `ended` or `stopped`; ordinary teardown removes its root,
+while teardown of an instance whose root is being reused transfers cleanup to the fresh owner described
+above.
 
 ## Stand-in provider
 

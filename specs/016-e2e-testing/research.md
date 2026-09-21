@@ -91,14 +91,16 @@ builds a release profile itself. `--app <path>` skips the build and tests that b
 2026-09-21).
 
 The close behavior of a binary is taken from its path (`/release/` means relaunch, `/debug/` means
-exit) and can be given explicitly with `--close-behavior exit|relaunch`. A path with neither segment and
-no explicit value fails the preflight and says how to state it. The report names the binary, the source
-of the value and the value.
+exit) and can be given explicitly with `--close-behavior exit|relaunch`. An explicit value that conflicts
+with `/release/` or `/debug/` is rejected during preflight. A path with neither segment and no explicit
+value fails the preflight and says how to state it. The report names the binary, the source of the value
+and the value.
 
 **Rationale**: The policy is a compile-time choice in `vault_gate::close_policy()` (debug: exit,
 release: relaunch), and exposing it from the application would be an application change the spec puts
-out of scope. A wrong declaration is not silent: the relaunch scenario fails, not passes, when nothing
-relaunches, and its message names both possible causes (a regression, or a wrong declaration).
+out of scope. Rejecting a conflicting declaration prevents a path-derived release or debug build from
+being silently classified as the other behavior. For a path with neither segment, the report keeps the
+operator-supplied declaration visible so a relaunch failure can be diagnosed against that declaration.
 
 **Consequences**: Only the relaunch scenario needs a relaunching build. The other close scenarios track
 the pid of the process they started, so "the process ended" means that pid, in both kinds of build.
@@ -252,8 +254,8 @@ operator, not hidden.
 ## R12 Reaching controls: hooks
 
 **Decision**: Use what already exists and add only what is missing, as `data-testid` attributes with
-kebab-case names. Existing stable hooks: `#unlock-passphrase`, `button[form="unlock-form"]`,
-`#create-name`, `#create-passphrase`, `#create-passphrase-confirm`, `button[form="create-form"]`, and
+kebab-case names. Existing stable hooks: `#unlock-passphrase`, `[form="unlock-form"]`,
+`#create-name`, `#create-passphrase`, `#create-passphrase-confirm`, `[form="create-form"]`, and
 the closing page's `.ring`. Missing: the instance entry, the open-chat button and the lock control (two
 buttons, one in the sidebar and one in the header, of which one is displayed at a given width). Details
 in [contracts/test-hooks.md](contracts/test-hooks.md).
@@ -268,14 +270,16 @@ boundary. Two attribute lines are added (see Complexity Tracking in the plan).
 
 **Decision**: The numbers are the promises of spec 013 and are kept in one file,
 `scripts/e2e/lib/close-promises.ts`: process ends within 4 seconds (the drain ladder is 1 s cooperative,
-3 s total, 0.5 s grace), provider connection closes within 1 second, relaunch within 10 seconds. Waits are
-polls with a deadline, never fixed sleeps. `E2E_TIME_SCALE` (default 1) multiplies every deadline for a
-loaded machine.
+3 s total, 0.5 s grace), provider connection closes within 1 second, relaunch within 10 seconds. These
+three conformance deadlines are fixed. Waits are polls with a deadline, never fixed sleeps. `E2E_TIME_SCALE`
+(default 1) may multiply generic scenario and run timeouts for loaded-machine diagnostics; such a run is
+marked non-conformant and reports its scale separately.
 
 **Rationale**: The elapsed time is the subject of the test, so a wall-clock assertion cannot be avoided,
-but a fixed sleep can, and the scale factor keeps a slow machine from switching the suite off. The
-constitution's rule against depending on wall-clock timing is written for Rust unit tests; it is
-recorded in the plan's Complexity Tracking so the exception is visible.
+but a fixed sleep can. Generic diagnostic timeouts may be scaled on a loaded machine, while the fixed
+conformance deadlines still prove the spec-013 promises. The constitution's rule against depending on
+wall-clock timing is written for Rust unit tests; it is recorded in the plan's Complexity Tracking so the
+exception is visible.
 
 ## R14 Diagnostics and the report
 

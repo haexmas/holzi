@@ -24,7 +24,8 @@ Nix shell the bridge script runs the command unchanged.
 | `--run-timeout <seconds>`         | Whole-run limit. Default 600.                                                                                    |
 
 Environment: `E2E_APP` (same as `--app`), `E2E_ARTIFACTS_DIR` (run directory root),
-`E2E_TIME_SCALE` (multiplies every deadline, default 1).
+`E2E_TIME_SCALE` (multiplies generic scenario and run timeouts, default 1; close-promise conformance
+deadlines remain fixed, and a scaled run is marked non-conformant with its scale in the report).
 
 ## Order of work
 

@@ -28,13 +28,18 @@ commands below describe the intended use.
 | `pnpm check:e2e-lib`                           | The helpers' own fast checks. No display, no application. Also run by CI.            |
 
 In an ordinary run (debug build) the relaunch scenario is listed as skipped with its reason. To run it,
-build a release with `pnpm tauri:build`, then pass its path with `--app`.
+build the same release artifact used by T067 with `pnpm tauri build --no-bundle`, then pass
+`<target>/release/holzi` with `--app` (`<target>` is `CARGO_TARGET_DIR` when set, otherwise
+`src-tauri/target`).
 
 ## Expected result of the first full run
 
 - Every scenario prints one line; the close scenarios each finish in under 30 seconds.
 - The relaunch scenario is skipped with the reason that the build exits on close.
-- Exit status 0. No window appeared on your desktop. `pgrep -af tauri-driver` prints nothing.
+- Exit status 0. No window appeared on your desktop. Read the run marker from the printed run directory's
+  `report.json`, then verify that no process from this run remains:
+  `marker=$(node --input-type=module -e 'import { readFileSync } from "node:fs"; console.log(JSON.parse(readFileSync(process.argv[1], "utf8")).runMarker)' <run-directory>/report.json); ! grep -l "HOLZI_E2E_RUN=$marker" /proc/*/environ 2>/dev/null`.
+  This ignores unrelated `tauri-driver` processes.
 
 ## Proving the success criteria
 

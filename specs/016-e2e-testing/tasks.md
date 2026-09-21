@@ -49,8 +49,9 @@ two P1 stories (US1 and US2) with their prerequisites are the MVP.
   the graphify queries in that stage's first task, from the primary checkout (read-only inspection is
   allowed; a linked worktree has no graph of its own) and note in the PR description which candidates
   were evaluated and why none was extended.
-- Waits are polls with a deadline, never fixed sleeps. Every deadline is multiplied by
-  `E2E_TIME_SCALE` (default 1).
+- Waits are polls with a deadline, never fixed sleeps. Generic scenario and run timeouts may be multiplied
+  by `E2E_TIME_SCALE` (default 1); the 4-second, 1-second and 10-second close promises remain fixed for
+  conformance. A run with a scale other than 1 is marked non-conformant and reports the scale.
 - Contract between the command and the scenario files, by environment: `E2E_RUN_DIR`, `E2E_APP`,
   `E2E_CLOSE_BEHAVIOR`, `E2E_TOOLS` (JSON of resolved tool paths), `E2E_SCENARIO_TIMEOUT_MS`,
   `E2E_TIME_SCALE` and `HOLZI_E2E_RUN` (the marker). Each is written once by `cli.ts` (T029) and read
@@ -246,7 +247,8 @@ kept running.
       (`pnpm tauri build --debug --no-bundle` in the repository root, default features, output to
       `build.log` in the run directory). It never builds a release profile (FR-004, clarified 2026-09-21).
 - [ ] T028 [US1] `scripts/e2e/lib/report.ts` (after T025): read the result files, print the summary,
-      write `report.json`, map the outcome to the exit status.
+      write `report.json` with the run marker and conformance status/scale, and map the outcome to the exit
+      status.
 - [ ] T029 [US1] `scripts/e2e/cli.ts` (after T027, T028): options `--app`, `--close-behavior`, `--grep`,
       `--keep`, `--scenario-timeout`, `--run-timeout` and the environment `E2E_APP`, `E2E_ARTIFACTS_DIR`,
       `E2E_TIME_SCALE`; run id from a timestamp plus a random suffix; the order of work of
@@ -354,7 +356,7 @@ runs in the suite (SC-005).
       streams and frees the port.
 - [ ] T041 [P] [US3] `scripts/e2e/lib/flows.test.ts` against the fake driver: `createAndUnlock` issues the
       backend call `create_instance`, clicks the `instance-entry` whose `data-instance-name` is the
-      name, types the generated passphrase into `#unlock-passphrase`, clicks `button[form="unlock-form"]`
+      name, types the generated passphrase into `#unlock-passphrase`, clicks `[form="unlock-form"]`
       (never a key press: Enter did not submit the form in the spike) and waits for `/workspace/`;
       `openChat` clicks `open-chat` and waits for `/chat/`; `connectProvider` issues `add_provider`
       (`kind: 'api_key'`, `adapter: 'anthropic'`, the provider's base address, a generated key) then
@@ -458,8 +460,9 @@ sees its connection close within 1 second of the press. Weaken the behavior on p
       `graphify query "close promises drain ladder deadlines"` and
       `graphify query "assert a process ended within a deadline"`; note the candidates.
 - [ ] T060 [P] [US2] `scripts/e2e/lib/close-promises.test.ts`: the process ends within 4 seconds, the
-      provider connection closes within 1 second of the press, the relaunch within 10 seconds; each is
-      multiplied by `E2E_TIME_SCALE`.
+      provider connection closes within 1 second of the press, and the relaunch within 10 seconds; these
+      thresholds stay fixed for conformance. A run with `E2E_TIME_SCALE` other than 1 is explicitly
+      non-conformant and reports its scale rather than changing these assertions.
 - [ ] T061 [P] [US2] `scripts/e2e/lib/close-promises.ts`: the three numbers, with a comment naming their
       source (spec 013: drain ladder 1 s cooperative, 3 s total, 0.5 s grace).
 - [ ] T062 [US2] `scripts/e2e/scenarios/lock-while-streaming.test.ts`: provider `stream-forever`;
@@ -513,8 +516,8 @@ sees its connection close within 1 second of the press. Weaken the behavior on p
       (records `relaunch-seen`); (3) the screen shows a painted window (T070), if T068 allowed it;
       (4) stop that process, start a fresh instance with `reusesRoot` over the same data and check that
       `instance-entry` for the created name is displayed and `location.pathname` is `/`, which is what
-      the relaunched window shows. If the application does not relaunch, the failure message names both
-      causes: a regression, or a wrong `--close-behavior` declaration.
+      the relaunched window shows. If the application does not relaunch, the failure message names that
+      the release binary did not relaunch.
 - [ ] T073 [US2] Run the relaunch scenario against the release build, record the result and time, and
       against the debug build, where it must be reported as skipped with its reason. Commit
       `feat(e2e): check the relaunch after a lock` and open the Stage 3 pull request (T059 to T073) after

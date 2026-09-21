@@ -16,6 +16,8 @@ scenarios too.
 ```jsonc
 {
   "runId": "20260921-231500-ab12cd",
+  "runMarker": "<runner pid>:<runner start time>:<random>",
+  "conformance": { "status": "conformant | non-conformant", "timeScale": 1 },
   "status": "passed | failed | preflight-failed | build-failed | interrupted",
   "application": {
     "path": "…",
