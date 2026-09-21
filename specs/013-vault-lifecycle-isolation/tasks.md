@@ -265,7 +265,7 @@ download; press close repeatedly; close by window; the process ends within about
 
 ### Tests for User Story 1 (write first; expected to fail until the implementation tasks land)
 
-- [ ] T034 [P] [US1] In `src-tauri/src/chat/session_tests.rs` add cases for `ChatState::reset_for_close`: it
+- [x] T034 [P] [US1] In `src-tauri/src/chat/session_tests.rs` add cases for `ChatState::reset_for_close`: it
       clears the loaded session, both approval maps, the tool cancellation slot, the current
       generation handle and the tool registry, and is idempotent.
 - [ ] T035 [P] [US1] Create `src-tauri/tests/vault_lifecycle_close.rs` using a recorder implementation of the
@@ -294,7 +294,7 @@ download; press close repeatedly; close by window; the process ends within about
 
 ### Implementation for User Story 1
 
-- [ ] T038 [US1] Add `ChatState::reset_for_close` in `src-tauri/src/chat/session.rs` (currently 345 lines)
+- [x] T038 [US1] Add `ChatState::reset_for_close` in `src-tauri/src/chat/session.rs` (currently 345 lines)
       reusing the existing fields and `abort_turn` semantics; do not duplicate the abort logic.
 - [ ] T039 [US1] Define the close effects: a small trait `CloseEffects` in
       `src-tauri/src/vault_gate/mod.rs` with four methods (show the closing page, emit

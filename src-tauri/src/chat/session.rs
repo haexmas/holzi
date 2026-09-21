@@ -307,6 +307,49 @@ impl ChatState {
         }
     }
 
+    /// Empties everything a vault session can leave in this state, for the close (spec 013). The
+    /// caller has already cancelled the turn through `abort_turn`; this only forgets what is
+    /// left: the loaded model, the turn's abort handle and cancellation slot, both approval maps,
+    /// and every tool a server contributed. The always-present host-CLI tool stays, as after
+    /// [`ChatState::new`]. Dropping the session is what releases the database handle a delegate
+    /// adapter holds, so the close calls this before it waits for the drain. Idempotent.
+    pub fn reset_for_close(&self) {
+        // Take each value out under its lock and drop it after the guard is gone, so no drop of
+        // an adapter or tool ever runs while a lock is held.
+        let session = self
+            .session
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        let generation = self
+            .current_generation
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        let cancellation = self
+            .tool_cancellation
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        let pending = std::mem::take(
+            &mut *self
+                .pending_tool_approvals
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()),
+        );
+        self.cancelled_tool_approvals
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
+        let mut host_only = ToolRegistry::new();
+        host_only.register(Arc::new(CliTool));
+        let tools = std::mem::replace(
+            &mut *self.tool_registry.lock().unwrap_or_else(|e| e.into_inner()),
+            host_only,
+        );
+        drop((session, generation, cancellation, pending, tools));
+    }
+
     /// Reject overlapping operations before they can replace another turn's
     /// cancellation handles or carry a loaded adapter into a different vault.
     pub fn acquire_operation(&self) -> crate::error::Result<tokio::sync::OwnedMutexGuard<()>> {
