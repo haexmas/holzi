@@ -26,12 +26,12 @@ const expanded = computed({
       :aria-expanded="expanded"
     >
       <span class="inline-flex items-center gap-1 rounded px-1 py-0.5">
-        <Icon name="lucide:brain" class="h-3.5 w-3.5" aria-hidden="true" />
+        <Icon name="lucide:brain" class="h-3.5 w-3.5" :aria-hidden="true" />
         {{ label }}
         <Icon
           name="lucide:chevron-down"
           class="h-3.5 w-3.5"
-          aria-hidden="true"
+          :aria-hidden="true"
         />
       </span>
     </summary>

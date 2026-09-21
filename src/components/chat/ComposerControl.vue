@@ -44,7 +44,7 @@ function updateValue(nextValue: unknown) {
           v-if="icon"
           :name="icon"
           class="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-          aria-hidden="true"
+          :aria-hidden="true"
         />
         <ShadcnSelectValue :placeholder="displayValue ?? label" />
       </ShadcnSelectTrigger>

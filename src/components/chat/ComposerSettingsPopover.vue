@@ -169,7 +169,7 @@ onBeforeUnmount(() => {
       <Icon
         name="lucide:chevron-down"
         class="h-3.5 w-3.5 shrink-0"
-        aria-hidden="true"
+        :aria-hidden="true"
       />
     </button>
 
