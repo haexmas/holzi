@@ -55,8 +55,9 @@ API-key Anthropic provider.
    _disabled_ with the "not yet known — refresh in Settings" label; attachments are declined with
    the "not yet known" reason; no reasoning output is requested.
 2. Settings → connected Claude provider → **Refresh models**. Expect progress, then success.
-3. Back in chat. Expect: the effort control lists exactly the levels that model supports (a model
-   without `xhigh`/`max` shows fewer than five), attachments accept images/PDF per the model.
+3. Back in chat. Expect: the effort control lists exactly the provider-native options that model
+   reports, in provider order; a model with fewer reported options shows fewer choices. Attachments
+   accept images/PDF per the model.
 
 **Story 1 — composer matches the model.**
 
@@ -68,13 +69,14 @@ API-key Anthropic provider.
 
 **Story 2 — per-model memory.**
 
-8. Set High on model A and a different level on model B. Switch A ↔ B, then restart the app.
+8. Set one provider-native option on model A and a different option on model B. Switch A ↔ B, then
+   restart the app.
    Expect each model restores its own choice.
 9. Choose Auto on model A, restart. Expect Auto.
 10. (Removed option) After changing a stored preference to a level the provider no longer offers
     (or refreshing after a provider change), reopen the model. Expect Auto, and the stale key gone.
-11. Send a message with High selected on a delegate model; confirm the request used that level
-    (delegate `--effort` receives the option id unchanged).
+11. Send a message with a provider-native option selected on a delegate model; confirm the request
+    used that option (delegate `--effort` receives the option id unchanged).
 
 ## 3. Record-shape check (one-off)
 

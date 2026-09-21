@@ -49,12 +49,12 @@ provider's model list and confirm a changed capability shows up without updating
 
 **Acceptance Scenarios**:
 
-1. **Given** a directly connected Claude model that supports only some effort levels, **When** the
-   user opens the effort control, **Then** only the levels that model supports (plus Auto) are
-   offered.
-2. **Given** the Claude Code delegate is connected and the selected model lacks the highest effort
-   levels, **When** the user opens the effort control, **Then** only the supported levels are
-   offered, not the full set.
+1. **Given** a directly connected Claude model that reports a provider-native set of reasoning
+   options, **When** the user opens the effort control, **Then** only those options (plus Auto) are
+   offered, in the order reported by the provider.
+2. **Given** the Claude Code delegate is connected and the selected model reports a subset of the
+   provider's reasoning options, **When** the user opens the effort control, **Then** only the
+   reported options are offered, not a fixed global set.
 3. **Given** a model the provider reports as having no controllable reasoning, **When** the user
    opens the composer, **Then** the effort control is hidden for that model.
 4. **Given** a model the provider reports as managing its own reasoning with no user-selectable
@@ -71,8 +71,9 @@ provider's model list and confirm a changed capability shows up without updating
 
 ### User Story 2 - Each model remembers its own effort choice (Priority: P2)
 
-A user who prefers high effort on one model and the provider default on another should not have to
-re-select each time they switch. The effort choice is a personal, per-model preference: it is
+A user who prefers one provider-native reasoning option on one model and the provider default on
+another should not have to re-select each time they switch. The effort choice is a personal,
+per-model preference: it is
 remembered on this device for each model separately, restored when that model is selected again, and
 never applied to a model that does not offer it.
 
@@ -86,7 +87,7 @@ from what a model supports and confirm the model falls back to Auto and forgets 
 
 **Acceptance Scenarios**:
 
-1. **Given** the user chose "High" for model A and a different level for model B, **When** they
+1. **Given** the user chose one provider-native option for model A and a different option for model B, **When** they
    switch between A and B (and restart the app), **Then** each model shows its own saved choice.
 2. **Given** the user has never made a choice for a model, **When** they send a message, **Then** the
    provider's own default behavior (Auto) is used and nothing is stored for that model.
@@ -174,7 +175,9 @@ unchanged and attachments are reported as unsupported.
   model list is refreshed.
 - **FR-004**: A model's reasoning control MUST be exactly one of: not determined, unavailable,
   model-managed (the model decides; the user cannot choose), or a list of selectable options, each
-  with a stable identifier and a display label in the provider's own vocabulary. A list with no options MUST be treated as unavailable.
+  with an opaque, stable provider-native identifier and a display label in the provider's own
+  vocabulary. The system MUST preserve the provider's option order and MUST NOT require a shared
+  enum or canonical set of level names. A list with no options MUST be treated as unavailable.
 - **FR-005**: The composer MUST offer only the reasoning options present in the selected model's
   record (plus Auto, meaning "leave it to the model's default"), and MUST NOT present an active
   control whose choice would have no effect. The control MUST be hidden when reasoning is
@@ -255,8 +258,11 @@ unchanged and attachments are reported as unsupported.
 
 ### Measurable Outcomes
 
-- **SC-001**: For every supported provider/model combination covered by verification, the effort
-  options and attachment acceptance shown in the composer match the provider's reported capabilities for that model in 100% of cases. The verification matrix is: a Claude model with and one without the highest effort levels through an API key, the same two through the Claude Code delegate, a built-in reasoning model, a built-in non-reasoning model, and a Codex model.
+- **SC-001**: For every supported provider/model combination covered by verification, the provider-native
+  reasoning options and attachment acceptance shown in the composer match the provider's reported
+  capabilities for that model in 100% of cases. The verification matrix is: Claude models with
+  different provider-reported option sets through an API key and the Claude Code delegate, a
+  built-in reasoning model, a built-in non-reasoning model, and a Codex model.
 - **SC-002**: After one manual refresh, a newly released or changed Claude model shows correct options
   with no application update.
 - **SC-003**: In verification, a model switch never applies one model's effort choice to another, and
@@ -288,9 +294,10 @@ unchanged and attachments are reported as unsupported.
   their reasoning is model-managed rather than absent.
 - Effort preferences follow the project's existing device-scoped data convention (ADR 0001): they
   belong to this device and are not shared across devices, while capability facts follow the model.
-- Sending to the Claude Code delegate keeps its current behavior of handing the chosen level to the
-  delegate as-is; only what the composer offers changes. This is a disclosed user-visible change: the
-  delegate's model may now show fewer levels than the previous always-full set.
+- Sending to the Claude Code delegate keeps its current behavior of handing the chosen provider-native
+  option id to the delegate as-is; only what the composer offers changes. This is a disclosed
+  user-visible change: the delegate's model may now show fewer options than the previous always-full
+  set.
 - Attachment failure wording and ordering in the composer is otherwise unchanged; only the
   undetermined case gains its own reason.
 - Splitting the oversized model-selection code into focused parts is a required, behavior-preserving

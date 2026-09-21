@@ -10,7 +10,10 @@ payloads (no separate mapping DTO). Structs use `rename_all = "camelCase"`; enum
 {
   "reasoning": {
     "kind": "presets",
-    "options": [{ "id": "low", "label": "low" } /* … */],
+    "options": [
+      { "id": "minimal", "label": "minimal" },
+      { "id": "deep", "label": "deep" },
+    ],
   },
   //          | { "kind": "unavailable" } | { "kind": "model_managed" } | null   (null = not determined)
   "acceptedAttachmentKinds": ["text", "image", "document"], // [] = none; null = not determined
@@ -20,23 +23,24 @@ payloads (no separate mapping DTO). Structs use `rename_all = "camelCase"`; enum
 
 ## Examples
 
-| Case                                         | Record                                                                                                                                                    |
-| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Newer Claude model                           | `{"reasoning":{"kind":"presets","options":[low,medium,high,xhigh,max]},"acceptedAttachmentKinds":["text","image","document"],"thinkingStyle":"adaptive"}` |
-| Claude model with effort but manual thinking | `{"reasoning":{"kind":"presets","options":[low,medium,high,max]},…,"thinkingStyle":"manual"}`                                                             |
-| Claude model that thinks but has no effort   | `{"reasoning":{"kind":"model_managed"},…,"thinkingStyle":"manual"}`                                                                                       |
-| Local Qwen3 (reasoning family)               | `{"reasoning":{"kind":"model_managed"},"acceptedAttachmentKinds":[],"thinkingStyle":null}`                                                                |
-| Local model, no reasoning                    | `{"reasoning":{"kind":"unavailable"},"acceptedAttachmentKinds":[],"thinkingStyle":null}`                                                                  |
-| Codex delegate model                         | `{"reasoning":null,"acceptedAttachmentKinds":null,"thinkingStyle":null}` (Rust writes `NULL` column for an all-`None` record)                             |
+| Case                                       | Record                                                                                                                                                                                          |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Provider model with selectable options     | `{"reasoning":{"kind":"presets","options":[{"id":"minimal","label":"minimal"},{"id":"deep","label":"deep"}]},"acceptedAttachmentKinds":["text","image","document"],"thinkingStyle":"adaptive"}` |
+| Provider model with another option set     | `{"reasoning":{"kind":"presets","options":[{"id":"balanced","label":"balanced"}]},…,"thinkingStyle":"manual"}`                                                                                  |
+| Claude model that thinks but has no effort | `{"reasoning":{"kind":"model_managed"},…,"thinkingStyle":"manual"}`                                                                                                                             |
+| Local Qwen3 (reasoning family)             | `{"reasoning":{"kind":"model_managed"},"acceptedAttachmentKinds":[],"thinkingStyle":null}`                                                                                                      |
+| Local model, no reasoning                  | `{"reasoning":{"kind":"unavailable"},"acceptedAttachmentKinds":[],"thinkingStyle":null}`                                                                                                        |
+| Codex delegate model                       | `{"reasoning":null,"acceptedAttachmentKinds":null,"thinkingStyle":null}` (Rust writes `NULL` column for an all-`None` record)                                                                   |
 
 ## Anthropic wire → record (used as the wiremock fixture set)
 
 Input is `GET /v1/models` `data[i].capabilities`. See `research.md` R3 for the full table. Required
 fixture cases for `anthropic_tests.rs`:
 
-1. Full tree, adaptive + all effort levels → `Presets` (5 options), `Adaptive`, kinds incl. `Document`.
-2. Effort without `xhigh` (levels: low, medium, high, max), `enabled` thinking only → `Presets`
-   (4 options), `Manual`.
+1. Full tree, adaptive + all provider-reported options → `Presets` (all supported options),
+   `Adaptive`, kinds incl. `Document`.
+2. Effort with a provider-native subset (for example `minimal`, `balanced`, `deep`), `enabled`
+   thinking only → `Presets` in the exact wire order, `Manual`.
 3. `thinking.supported = true`, `effort.supported = false` → `ModelManaged`.
 4. `thinking.supported = false`, `effort.supported = false` → `Unavailable`, `thinkingStyle = null`.
 5. `capabilities` object absent → all three fields `None`; the listing still succeeds.
