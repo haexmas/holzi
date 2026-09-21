@@ -91,9 +91,10 @@ attempt still behave as before.
 
 ### Implementation for Stage 1
 
-- [ ] T008 [US3] In `src-tauri/Cargo.toml` add `zeroize` 1.x as a direct dependency with the `serde`
+- [x] T008 [US3] In `src-tauri/Cargo.toml` add `zeroize` 1.x as a direct dependency with the `serde`
       feature. Verify with `cargo metadata` that it still resolves to 1.9.0 and that the
-      `Cargo.lock` diff is only holzi's own dependency list (no new package). Commit
+      `Cargo.lock` diff is only holzi's own dependency list and `zeroize` listing `serde` (no new
+      package). Commit
       `build(deps): depend on zeroize directly`.
 - [ ] T009 [US3] Create `src-tauri/src/instances/passphrase.rs` (declare it in `src-tauri/src/instances/mod.rs`): a
       newtype `Passphrase(Zeroizing<String>)`. Data-model rule verbatim: "Erased on drop; never

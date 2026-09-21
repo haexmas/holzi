@@ -70,6 +70,10 @@ sha2 = "0.11"
 # sha2 above.
 base64 = "0.22"
 unicode-segmentation = "1.13"
+# Erases the vault passphrase from memory when it is dropped (spec 013, FR-014).
+# Already in the lock as a transitive dependency; the `serde` feature lets the
+# argument types deserialize straight into the erasing wrapper.
+zeroize = { version = "1", features = ["serde"] }
 
 # haex-crdt 0.4.0, originally pinned per plans/001-desktop-mvp.md at commit
 # 1c069ef; bumped to main's current HEAD (no tagged releases past v0.1.0
