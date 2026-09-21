@@ -25,10 +25,10 @@ small and concrete:
   connection disappears
   with the atomic-switch path. The `SqlCipherKey` wipe is an upstream change in haex-crdt.
 - **Several processes side by side.** A clear message for a vault held elsewhere, a short retry while
-  that process finishes closing, a cross-process lock for model publication, and a portable presence
-  lock whose platform adapter atomically downgrades exclusive cleanup ownership to lifetime shared
-  presence, keeping a starting process from deleting another process's work in progress. The vault
-  list refreshes on focus.
+  that process finishes closing, a cross-process lock for model publication, a presence lock
+  (exclusive while the startup cleanup runs, then shared for the life of the process) that keeps a
+  starting process from deleting another process's work in progress, and a vault list that refreshes
+  on focus.
 
 The spike (kept on the local branch `spike/vault-gateway`, never merged) proved the gate, the
 cancellation and the bounded drain against Tauri's real IPC path; its epoch and scoped-store parts
@@ -101,25 +101,25 @@ _GATE: passed before Phase 0; re-checked after Phase 1 design (below). Sources: 
 | `/speckit-plan` checks against constitution                           | ✅ This table; no unjustified violation.                                                                                                                                                                                        |
 
 **Post-design re-check**: the design added `VaultGate` (with `VaultDb`, the wrapper and the drain),
-the `Passphrase` newtype, `PublicationLock` and `ProcessPresence`. Each is a concrete, tested unit
+the `Passphrase` newtype, `PublicationLock`, `ProcessPresence` and `ChildRegistry`. Each is a concrete, tested unit
 tied to a requirement; none is speculative. The only open constitutional item is the
 oversized-file handling, which stays a documented, non-growing exception.
 
 ## Requirement coverage
 
-| Spec items                     | Delivered by                                                                                                      |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| FR-001, FR-002, FR-006, SC-001 | Gateway wrapper + infallible `close_instance` + closing page ([contracts](contracts/tauri-commands.md))           |
-| FR-003, FR-004, FR-005, SC-002 | Cancellation token, `TaskTracker`, drain ladder, `ClosePolicy`, forced end ([data-model](data-model.md), R2, R5)  |
-| FR-007                         | Window-close and exit hooks reusing the same close task (R9)                                                      |
-| FR-008                         | Cancelled turns and transfers keep their existing "cancelled, not complete" persistence; verified in quickstart 1 |
-| FR-009                         | Page replacement by the backend, spinner only ([frontend contract](contracts/frontend-surface.md))                |
-| FR-010, FR-011, FR-012, SC-003 | `VaultAlreadyActive`, removal of the atomic switch, process boundary (R6)                                         |
-| FR-013..FR-017, SC-004, SC-005 | `Passphrase` newtype, no clones, no validation connection, form clearing, upstream key wipe (R7)                  |
-| FR-018..FR-023, SC-006, SC-007 | Error mapping, open-time retry, `PublicationLock`, focus refresh, debug-only logging (R8)                         |
-| FR-024                         | No change to the models directory layout                                                                          |
-| FR-026, SC-010                 | `ProcessPresence` lock; startup cleanup runs only as its callback when the process is alone (R8)                  |
-| FR-025, SC-008                 | Already on the branch (`active_model_info` takes no operation slot)                                               |
+| Spec items                     | Delivered by                                                                                                                      |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| FR-001, FR-002, FR-006, SC-001 | Gateway wrapper + infallible `close_instance` + closing page ([contracts](contracts/tauri-commands.md))                           |
+| FR-003, FR-004, FR-005, SC-002 | Cancellation token, `TaskTracker`, drain ladder, `ClosePolicy`, forced end, `ChildRegistry` ([data-model](data-model.md), R2, R5) |
+| FR-007                         | Window-close and exit hooks reusing the same close task (R9)                                                                      |
+| FR-008                         | Cancelled turns and transfers keep their existing "cancelled, not complete" persistence; verified in quickstart 1                 |
+| FR-009                         | Page replacement by the backend, spinner only ([frontend contract](contracts/frontend-surface.md))                                |
+| FR-010, FR-011, FR-012, SC-003 | `VaultAlreadyActive`, removal of the atomic switch, process boundary (R6)                                                         |
+| FR-013..FR-017, SC-004, SC-005 | `Passphrase` newtype, no clones, no validation connection, form clearing, upstream key wipe (R7)                                  |
+| FR-018..FR-023, SC-006, SC-007 | Error mapping, open-time retry, `PublicationLock`, focus refresh, debug-only logging (R8)                                         |
+| FR-024                         | No change to the models directory layout                                                                                          |
+| FR-026, SC-010                 | `ProcessPresence` lock; startup cleanup runs only as its callback when the process is alone (R8)                                  |
+| FR-025, SC-008                 | Already on the branch (`active_model_info` takes no operation slot)                                                               |
 
 ## Project Structure
 
@@ -148,6 +148,7 @@ src-tauri/
 │   │   ├── mod.rs                      #   VaultGate, VaultPhase, ClosePolicy
 │   │   ├── db.rs                       #   VaultDb (Arc<Database> + tracker token)
 │   │   ├── drain.rs                    #   ladder: cooperative -> abort -> report
+│   │   ├── children.rs                 #   ChildRegistry: kill every child process group before the end
 │   │   ├── invoke.rs                   #   handler wrapper + app-scoped allow-list
 │   │   └── *_tests.rs                  #   sibling test files
 │   ├── state.rs                        # active_instance private; database()/install()/take()

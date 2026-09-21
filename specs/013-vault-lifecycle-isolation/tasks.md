@@ -188,7 +188,7 @@ the wrapper over the Tauri mock runtime; the app behaves exactly as before.
       runtime, registers the abort handle and prunes finished handles), `run(fut)` (races the future
       against the token and returns `Err(HolziError::VaultClosed)` when the token wins), and a way to
       hand out a tracker token. Also `ClosePolicy` (`Relaunch` | `Exit`) and `close_policy()` (debug
-      builds return `Exit` until T046 says otherwise). Keep every new file under 500 lines.
+      builds return `Exit` until T048 says otherwise). Keep every new file under 500 lines.
 - [ ] T023 Create `src-tauri/src/vault_gate/drain.rs`: the ladder from research R5 (fire the token, wait up to
       the cooperative window, abort registered tasks, wait until the total limit) returning
       `DrainOutcome` (`Drained` | `DrainedAfterAbort` | `Stuck`, exactly the data-model table). The
@@ -263,7 +263,7 @@ download; press close repeatedly; close by window; the process ends within about
       clears the loaded session, both approval maps, the tool cancellation slot, the current
       generation handle and the tool registry, and is idempotent.
 - [ ] T035 [P] [US1] Create `src-tauri/tests/vault_lifecycle_close.rs` using a recorder implementation of the
-      close effects (defined in T038), a gate, a `ChatState`, a `VoiceState` and a throwaway
+      close effects (defined in T039), a gate, a `ChatState`, a `VoiceState` and a throwaway
       database: (a) `close_instance` returns `Ok` at once while a tracked task that never finishes
       and a held operation slot exist (the old "operation still in progress" failure, FR-002);
       (b) a second call is `Ok` and repeats no effect; (c) phase 1 effects happen once and in order:
@@ -279,11 +279,18 @@ download; press close repeatedly; close by window; the process ends within about
       downloads. Add a case to the existing sibling test files if a gap exists, and record the
       finding either way in the Baseline section.
 
+- [ ] T037 [P] [US1] Create `src-tauri/src/vault_gate/children_tests.rs`: after `register` of a
+      spawned child (its own process group) `kill_all` ends it and a grandchild its shell started;
+      a second `kill_all` is harmless; a child registered after `kill_all` is killed at once;
+      dropping the guard removes the entry. Unix only (`#[cfg(unix)]`), using `sh` with a background
+      `sleep`. Add a case to `src-tauri/src/vault_gate/drain_tests.rs`: the ladder calls `kill_all`
+      before it returns `DrainedAfterAbort` or `Stuck`.
+
 ### Implementation for User Story 1
 
-- [ ] T037 [US1] Add `ChatState::reset_for_close` in `src-tauri/src/chat/session.rs` (currently 345 lines)
+- [ ] T038 [US1] Add `ChatState::reset_for_close` in `src-tauri/src/chat/session.rs` (currently 345 lines)
       reusing the existing fields and `abort_turn` semantics; do not duplicate the abort logic.
-- [ ] T038 [US1] Define the close effects: a small trait `CloseEffects` in
+- [ ] T039 [US1] Define the close effects: a small trait `CloseEffects` in
       `src-tauri/src/vault_gate/mod.rs` with four methods (show the closing page, emit
       `instance-list-changed` for a closed vault, request the end of the process for a
       `ClosePolicy`, force the end of the process for a `ClosePolicy`). Implement it
@@ -292,8 +299,9 @@ download; press close repeatedly; close by window; the process ends within about
       `about:blank`), emit the event, and end the process with `AppHandle::request_restart()` for
       `Relaunch` or `AppHandle::exit(0)` for `Exit` (never `restart()`, research R2). The forced end
       is `tauri::process::restart(&app.env())` for `Relaunch` and `std::process::exit(0)` for
-      `Exit`. Failures are logged, never returned.
-- [ ] T039 [US1] Rewrite `src-tauri/src/instances/close.rs` per `contracts/tauri-commands.md`. Phase
+      `Exit`; it first calls `ChildRegistry::kill_all`, because a forced end skips the `Drop`-based
+      kills. Failures are logged, never returned.
+- [ ] T040 [US1] Rewrite `src-tauri/src/instances/close.rs` per `contracts/tauri-commands.md`. Phase
       1 is synchronous and infallible: `gate.request_close()`, fire the token, `abort_turn` (reuse
       the existing function in `src-tauri/src/chat/commands.rs`, do not copy it), the page effect,
       the event, start phase 2, return `Ok(())`. Phase 2 (background, on a plain
@@ -303,9 +311,9 @@ download; press close repeatedly; close by window; the process ends within about
       `VoiceState::invalidate_whisper_cache`, then request the end of the process and arm the forced
       end with `hard_end_after` and `CloseEffects::force_end`. The command no longer calls
       `acquire_operation`.
-- [ ] T040 [US1] Delete `CloseFailed` from `src-tauri/src/error.rs`, remove the stale doc comment in
+- [ ] T041 [US1] Delete `CloseFailed` from `src-tauri/src/error.rs`, remove the stale doc comment in
       `src-tauri/src/state.rs`, and regenerate bindings with `pnpm generate:ts-types`.
-- [ ] T041 [US1] Register session-scoped tasks with the gate and add the token where work runs long:
+- [ ] T042 [US1] Register session-scoped tasks with the gate and add the token where work runs long:
       the chat turn task (`src-tauri/src/chat/commands.rs`, the `spawn` around line 607) and the preload
       (`src-tauri/src/chat/default_model.rs`, keep its own token and join handle and also register it), both
       voice tasks (`src-tauri/src/voice.rs`, around lines 179 and 211) and the provider connect completion
@@ -313,23 +321,37 @@ download; press close repeatedly; close by window; the process ends within about
       `src-tauri/src/adapters/cli_delegate/connect_claude.rs` (the `std::thread::spawn` near line 145): convert
       to `gate.spawn_blocking` only if trivial; otherwise leave it and record it as a residual that the
       3 s limit covers.
-- [ ] T042 [US1] Make long-running commands stop on close with `gate.run(...)`, returning
+- [ ] T043 [US1] Make long-running commands stop on close with `gate.run(...)`, returning
       `VaultClosed`: `load_model_command` in `src-tauri/src/chat/model_loading.rs`, the transfer in
       `download_from_hf_inner` and `import_model_from_file` (`src-tauri/src/models/commands.rs`, the copy or
       download loop in `src-tauri/src/models/download.rs`), `refresh_provider_models` in `src-tauri/src/providers/mod.rs`,
       voice start and stop in `src-tauri/src/voice.rs`, and the connect commands in `src-tauri/src/providers/connect.rs`.
       These are one-line call-site edits; the oversized files must not grow.
-- [ ] T043 [US1] In `src-tauri/src/lib.rs` switch from `.run(context)` to `.build(context)?.run(callback)` and
+- [ ] T044 [US1] Create `src-tauri/src/vault_gate/children.rs` with `ChildRegistry` (data-model.md),
+      held by `VaultGate`: `register(pid)` returns a guard that unregisters on drop, and `kill_all()`
+      kills every registered process group and makes later registrations kill at once. Register every
+      child started for the vault, reaching the registry the way the code reaches its cancellation
+      token: the tool shell in `src-tauri/src/chat/tools/cli.rs` (around line 109, already its own
+      process group), `ChildLifecycle::spawn` in `src-tauri/src/adapters/cli_delegate/process.rs`, and
+      the MCP server in `src-tauri/src/chat/tools/mcp.rs` (around line 123: read how
+      `TokioChildProcess` exposes the pid, and start the server as its own process group if it is
+      not yet). `kill_all` reuses what `cli.rs` already does: `libc::kill(-pid, SIGKILL)` on Unix and
+      `taskkill /T /F` on Windows, with no new dependency. Call it at the end of the drain ladder and
+      from `CloseEffects::force_end` right before the process ends. Add a `ponytail:` comment:
+      process groups and `taskkill`; ceiling "a descendant that left its group survives"; upgrade
+      path "a Windows Job Object with kill-on-close, and `PR_SET_PDEATHSIG` on Linux". Keep the file
+      under 500 lines.
+- [ ] T045 [US1] In `src-tauri/src/lib.rs` switch from `.run(context)` to `.build(context)?.run(callback)` and
       handle FR-007: on `WindowEvent::CloseRequested` and on `RunEvent::ExitRequested` (unless its
       code is `RESTART_EXIT_CODE` or the gate is already closing), prevent the default, run the same
       close task with policy `Exit`, and exit when it finishes. Wire the real `CloseEffects`.
-- [ ] T044 [US1] Frontend: make the lock flows do one thing. `lock()` in
+- [ ] T046 [US1] Frontend: make the lock flows do one thing. `lock()` in
       `src/pages/chat/[instance].vue` (around line 499) and `onLock()` in
       `src/pages/federation/[instance].vue` call `closeAsync()`, swallow a rejection, and no longer
       call `store.setActiveInstance(null)` or `navigateTo('/')`. The backend replaces the page
       (research R4), so the frontend keeps no closing state and shows no overlay (operator decision
       2026-09-21). The chat page must end up with no more lines than before.
-- [ ] T045 [US1] Add the script-setup sandbox to the harness: a helper in
+- [ ] T047 [US1] Add the script-setup sandbox to the harness: a helper in
       `scripts/lib/chat-state-harness.ts` (or a sibling file) that loads a small `.vue` file's
       `<script setup>` block, injecting `defineProps`, `defineEmits`, `ref`, `computed`, `watch`,
       `onBeforeUnmount`, `useI18n`, `useInstance`, `useInstancesStore` and `navigateTo`, and returns
@@ -337,23 +359,23 @@ download; press close repeatedly; close by window; the process ends within about
       chat page `lock()` (add `lock` to the returned bindings) and the federation `onLock()` call
       `close_instance` once, swallow a rejected close, never navigate and never clear the active
       instance.
-- [ ] T046 [US1] Manual check, research R2: run `pnpm tauri:dev`, unlock a scratch vault, close it with
+- [ ] T048 [US1] Manual check, research R2: run `pnpm tauri:dev`, unlock a scratch vault, close it with
       relaunch forced, and observe whether the dev runner keeps going, restarts the app or stops.
       Record the outcome in `research.md` R2 and set `close_policy()` accordingly (debug builds stay
       `Exit` unless the relaunch works).
-- [ ] T047 [US1] Manual check, research R5: with a small local model, start a long generation, close,
+- [ ] T049 [US1] Manual check, research R5: with a small local model, start a long generation, close,
       and record how long until the process ends and whether the engine stopped on its own. Record it
       in `research.md` R5. If it exceeds 3 s the limit still ends the process; note the residual.
-- [ ] T048 [US1] Run quickstart scenarios 1, 2, 3 and 8 and record pass/fail with dates in a new
+- [ ] T050 [US1] Run quickstart scenarios 1, 2, 3 and 8 and record pass/fail with dates in a new
       "Validation record" section at the end of `quickstart.md`.
-- [ ] T049 [US1] Retire the spike: map each spike test on `spike/vault-gateway` to its replacement
+- [ ] T051 [US1] Retire the spike: map each spike test on `spike/vault-gateway` to its replacement
       (extractor accept and reject to `src-tauri/tests/vault_gateway.rs`, in-flight end to
       `src-tauri/tests/vault_lifecycle_close.rs`, drain ladder to
       `src-tauri/src/vault_gate/drain_tests.rs`; the epoch test is not needed) and confirm every
       behavior it proved is covered. The file is not on this branch. Once PR D is merged, delete the
       local branch with `git branch -D spike/vault-gateway`. Keep the `tauri` `test` dev-dependency.
-- [ ] T050 [US1] **Checkpoint Stage 3 (MVP)**: full CI parity (see T085), revert the binding
-      whitespace churn (format notes at the top) after committing the intended T040 bindings.
+- [ ] T052 [US1] **Checkpoint Stage 3 (MVP)**: full CI parity (see T087), revert the binding
+      whitespace churn (format notes at the top) after committing the intended T041 bindings.
       Commits: `feat(vault): close is immediate, infallible and ends the process`,
       `feat(ui): replace the page with a closing spinner`.
 
@@ -369,42 +391,42 @@ creating while one exists is refused.
 
 ### Tests for User Story 2 (write first)
 
-- [ ] T051 [P] [US2] Create `src-tauri/tests/vault_single_session.rs` over the mock runtime: with the gate
+- [ ] T053 [P] [US2] Create `src-tauri/tests/vault_single_session.rs` over the mock runtime: with the gate
       `Active`, `open_instance` and `create_instance` return `VaultAlreadyActive`; with the gate
       `Closing` they return `VaultClosed`; in both cases no file or directory is created (call with
       a temporary data location and assert it stays empty, so the gate check must run before any path
       is resolved). Add a case for FR-010: a failed open (wrong passphrase) leaves the gate `Idle`, and
       an open that follows succeeds.
-- [ ] T052 [P] [US2] In `src-tauri/src/vault_gate/gate_tests.rs` add: `AppState::install` publishes the handle
+- [ ] T054 [P] [US2] In `src-tauri/src/vault_gate/gate_tests.rs` add: `AppState::install` publishes the handle
       and calls `begin_session` atomically, so two concurrent installs leave exactly one winner and
       the loser's handle is dropped.
 
 ### Implementation for User Story 2
 
-- [ ] T053 [US2] `src-tauri/src/instances/open.rs`: check `gate.ensure_can_open()` first, before path
+- [ ] T055 [US2] `src-tauri/src/instances/open.rs`: check `gate.ensure_can_open()` first, before path
       resolution. Delete the "already active with the same name" credential branch with its second
       SQLite connection, and the atomic-switch block that drops the previous handle. Publish with
       `AppState::install` (which calls `begin_session` under the same lock). The passphrase is now a
       plain move into the blocking open task (drop the `Arc` from T011). The file must be shorter
       than before.
-- [ ] T054 [US2] `src-tauri/src/instances/create.rs`: the same early gate check and `AppState::install`.
-- [ ] T055 [US2] `AppState::install` in `src-tauri/src/state.rs`: hold the state lock, call
+- [ ] T056 [US2] `src-tauri/src/instances/create.rs`: the same early gate check and `AppState::install`.
+- [ ] T057 [US2] `AppState::install` in `src-tauri/src/state.rs`: hold the state lock, call
       `gate.begin_session()`, and publish only on success; return `VaultAlreadyActive` or
       `VaultClosed` otherwise.
-- [ ] T056 [US2] Confirm no frontend path opens a vault while one exists: search `src` for
+- [ ] T058 [US2] Confirm no frontend path opens a vault while one exists: search `src` for
       `openAsync` and read `src/pages/index.vue` and `src/components/onboarding/UnlockSheet.vue`.
       Record the finding in the Baseline section; change nothing unless a path exists.
-- [ ] T057 [P] [US2] Write `docs/adr/0003-one-vault-session-per-app-process.md` in the format of the
+- [ ] T059 [P] [US2] Write `docs/adr/0003-one-vault-session-per-app-process.md` in the format of the
       existing ADRs (Status accepted, Date, Decision, Rationale): one app process serves at most one
       vault session, closing ends the process, supersedes spec 001 FR-022. Include a short "adding
       work later" note: session-scoped work uses `gate.spawn` and `gate.run`; a new command is gated
       by default and is only allow-listed if it never touches the vault.
-- [ ] T058 [P] [US2] Add a supersession note to `specs/001-frontend-onboarding/contracts/tauri-commands.md`
+- [ ] T060 [P] [US2] Add a supersession note to `specs/001-frontend-onboarding/contracts/tauri-commands.md`
       (the `open_instance` and `close_instance` sections) and to FR-022 in
       `specs/001-frontend-onboarding/spec.md`, pointing to spec 013 FR-010 and ADR 0003. Keep the
       files Prettier-clean.
-- [ ] T059 [US2] Run quickstart scenario 4 and record it in the Validation record.
-- [ ] T060 [US2] **Checkpoint Stage 4**: full CI parity. Commit
+- [ ] T061 [US2] Run quickstart scenario 4 and record it in the Validation record.
+- [ ] T062 [US2] **Checkpoint Stage 4**: full CI parity. Commit
       `refactor(instances): one vault session per app process`.
 
 ---
@@ -419,84 +441,84 @@ vault list, and a startup cleanup that never deletes another process's work in p
 
 ### Tests for User Story 4 (write first)
 
-- [ ] T061 [P] [US4] Create `src-tauri/src/instances/lock_retry_tests.rs` with paused time: the helper retries
+- [ ] T063 [P] [US4] Create `src-tauri/src/instances/lock_retry_tests.rs` with paused time: the helper retries
       while the error is `VaultAlreadyOpenElsewhere`, returns the value once the error clears, returns
       the error after the window, returns `VaultClosed` if the gate starts closing during the wait,
       and does not retry any other error.
-- [ ] T062 [P] [US4] Create `src-tauri/src/models/paths_tests.rs` (declare it in `src-tauri/src/models/paths.rs` with the
+- [ ] T064 [P] [US4] Create `src-tauri/src/models/paths_tests.rs` (declare it in `src-tauri/src/models/paths.rs` with the
       `#[path]` idiom): a second acquisition of the same slug waits while the first lock is held,
       succeeds after it drops, and returns `VaultClosed` when the cancellation token fires while
       waiting. Data-model rule verbatim: "Holds the in-process mutex guard for the slug **and** an
       exclusive lock on `<models>/.locks/<slug>.lock`. Both release on drop. Acquiring polls
       asynchronously so a close can cancel the wait."
-- [ ] T063 [P] [US4] Add cases to `src-tauri/src/models/commands_tests.rs` and the existing import tests: the
+- [ ] T065 [P] [US4] Add cases to `src-tauri/src/models/commands_tests.rs` and the existing import tests: the
       installed-slug scan (`src-tauri/src/models/commands.rs`, around line 597) and `cleanup_staging_in_dir`
       (`src-tauri/src/models/import.rs`, around line 61) ignore a `.locks` directory and never treat its files as
       models or staging leftovers.
-- [ ] T064 [P] [US4] In `scripts/check-vault-lifecycle.ts` add: `useErrorString` maps
+- [ ] T066 [P] [US4] In `scripts/check-vault-lifecycle.ts` add: `useErrorString` maps
       `VaultAlreadyOpenElsewhere`, `VaultAlreadyActive` and `VaultClosed` to their `errors.*` keys;
       `UnlockSheet` shows the dedicated message for `VaultAlreadyOpenElsewhere` and still shows the
       generic `errors.openFailed` for `WrongPassphrase` and `NotFound` (spec 001 FR-021); `pages/index.vue`
       re-syncs the list on window focus and when the unlock sheet opens.
-- [ ] T065 [P] [US4] Create `src-tauri/src/instances/presence_tests.rs` (declare it in
+- [ ] T067 [P] [US4] Create `src-tauri/src/instances/presence_tests.rs` (declare it in
       `src-tauri/src/instances/presence.rs` with the `#[path]` idiom) over a temporary data location:
       the first `announce` runs its callback while it is the only process; a second `announce` while
       the first handle is alive does not run its callback; after the first handle drops, a new
-      `announce` runs its callback again; the callback runs before the platform adapter's atomic
-      exclusive-to-shared downgrade, so a concurrent starter cannot begin work in between. Exercise
-      the adapter on Linux, macOS and Windows in CI and assert that no unlock/relock gap is exposed.
-      Add a case to
-      `src-tauri/src/instances/startup_tests.rs`: with a `.pending` marker, its `.db` and a model
-      staging leftover in place, running startup cleanup through `announce` removes them when alone
-      and removes nothing while another presence is alive (FR-026, SC-010).
+      `announce` runs its callback again; while a callback is still running, a second `announce` on
+      another thread does not return, and returns without running its callback once the first has
+      finished (channels, no sleeps). Add a case to `src-tauri/src/instances/startup_tests.rs`: with
+      a `.pending` marker, its `.db` and a model staging leftover in place, running startup cleanup
+      through `announce` removes them when alone and removes nothing while another presence is alive
+      (FR-026, SC-010).
 
 ### Implementation for User Story 4
 
-- [ ] T066 [US4] Create `src-tauri/src/instances/lock_retry.rs` with `retry_while_locked` (an attempt closure, a
+- [ ] T068 [US4] Create `src-tauri/src/instances/lock_retry.rs` with `retry_while_locked` (an attempt closure, a
       window, a poll interval and the gate token). Add a `ponytail:` comment: fixed 100 ms poll
       inside a 3 s window, ceiling "adds up to one poll interval of latency", upgrade path "none
       needed". Declare `lock_retry_tests.rs` with the `#[path]` idiom.
-- [ ] T067 [US4] Use it in `src-tauri/src/instances/open.rs`: attempts that fail with
+- [ ] T069 [US4] Use it in `src-tauri/src/instances/open.rs`: attempts that fail with
       `HolziError::VaultAlreadyOpenElsewhere` are retried for up to 3 s, polling with an async sleep
       between blocking attempts so a close can interrupt, then the error is returned.
-- [ ] T068 [US4] Implement `PublicationLock` in `src-tauri/src/models/paths.rs`: the guard returned by
+- [ ] T070 [US4] Implement `PublicationLock` in `src-tauri/src/models/paths.rs`: the guard returned by
       `acquire_model_publication_lock`, taking `(app, slug, cancellation token)`. It holds the
       in-process mutex guard and an exclusive lock on `<models>/.locks/<slug>.lock` (create the
-      directory and file), taken with `std::fs::File::try_lock` and polled with an async sleep; the
+      directory, and open the file for read and write because Windows refuses locks on append-only
+      handles), taken with `std::fs::File::try_lock` and polled with an async sleep; the
       wait ends with `VaultClosed` if the token fires. Add a `ponytail:` comment on the poll (fixed
       50 ms; ceiling "latency of one interval"; upgrade "none needed"). Update the two call sites in
       `src-tauri/src/models/commands.rs` (around lines 393 and 535) without net line growth.
-- [ ] T069 [US4] Make the scans skip dot directories: `src-tauri/src/models/commands.rs` around line 597 and
+- [ ] T071 [US4] Make the scans skip dot directories: `src-tauri/src/models/commands.rs` around line 597 and
       `src-tauri/src/models/import.rs` around line 61.
-- [ ] T070 [US4] Create `src-tauri/src/instances/presence.rs` with `ProcessPresence` (data-model.md):
+- [ ] T072 [US4] Create `src-tauri/src/instances/presence.rs` with `ProcessPresence` (data-model.md):
       `announce(dir, on_alone)` opens `presence.lock` in the app local data directory (the same
-      directory `create_instance` uses for the installation id file) and uses a platform adapter
-      exposing `try_lock_exclusive` and an atomic `downgrade_to_shared` operation. When exclusive
-      acquisition succeeds it runs `on_alone` while still holding cleanup ownership, so nobody else
-      can start work in between, then downgrades that held lock in place and retains it for the
-      process lifetime. When exclusive acquisition fails it waits for shared presence and skips
-      `on_alone`. Do not unlock and relock, or invoke a generic lock operation twice on an already
-      locked handle. The handle lives in managed state, and the OS drops the lock when the process
-      ends or crashes. Add a `ponytail:` comment: cleanup only runs when
-      the process is alone; ceiling "leftovers of a crashed process stay while other processes
-      overlap"; upgrade path "per-item locks". Keep the file under 500 lines and test the adapter on
-      Linux, macOS and Windows.
-- [ ] T071 [US4] Gate the startup cleanup: in `src-tauri/src/lib.rs` `setup`, pass the existing
+      directory `create_instance` uses for the installation id file) for read and write, and follows
+      the steps in data-model.md: an exclusive `File::try_lock`, `on_alone` while holding it, then
+      `unlock` and only then `lock_shared`; or `lock_shared` without the callback when the exclusive
+      attempt fails. Never lock a handle that already holds a lock, and state the invariant in a
+      comment (no process starts work before it holds its shared lock). The handle lives in managed
+      state, and the OS drops the lock when the process ends or crashes. `std` defines these calls on
+      Linux, macOS and Windows but CI runs Linux only, so run the presence test once by hand on a
+      Windows or macOS machine when one is available and record it in the Validation record. Add a
+      `ponytail:` comment: cleanup only runs when the process is alone; ceiling "leftovers of a
+      crashed process stay while other processes overlap"; upgrade path "per-item locks". Keep the
+      file under 500 lines.
+- [ ] T073 [US4] Gate the startup cleanup: in `src-tauri/src/lib.rs` `setup`, pass the existing
       `cleanup_orphans_on_startup` (which stays as it is in `src-tauri/src/instances/startup.rs`,
       covering both `cleanup_orphans_in_dir` and `cleanup_staging_in_dir`) to
       `ProcessPresence::announce` as the callback and manage the returned handle. The relaunch after
       a close runs while the old process is still draining, so it skips the cleanup; that is
       intended. No other production code may call the two cleanup functions.
-- [ ] T072 [US4] Frontend errors: add the three kinds to `src/composables/useErrorString.ts`, add
+- [ ] T074 [US4] Frontend errors: add the three kinds to `src/composables/useErrorString.ts`, add
       `errors.vaultAlreadyOpenElsewhere`, `errors.vaultAlreadyActive` and `errors.vaultClosed` with
       the texts from `contracts/frontend-surface.md` to `src/i18n/locales/de.json` and `en.json`, and
       make `UnlockSheet.vue` show the dedicated message for `VaultAlreadyOpenElsewhere` only.
-- [ ] T073 [US4] `src/pages/index.vue`: re-sync the vault list on window `focus` and on
+- [ ] T075 [US4] `src/pages/index.vue`: re-sync the vault list on window `focus` and on
       `visibilitychange`, and when the unlock sheet opens; remove the listeners on unmount.
-- [ ] T074 [US4] Run quickstart scenario 6 (two processes, same vault twice, list refresh, concurrent
+- [ ] T076 [US4] Run quickstart scenario 6 (two processes, same vault twice, list refresh, concurrent
       model install, and a third start during a download and a vault creation) and record it in the
       Validation record.
-- [ ] T075 [US4] **Checkpoint Stage 5**: full CI parity. Commit
+- [ ] T077 [US4] **Checkpoint Stage 5**: full CI parity. Commit
       `feat(instances): support independent app processes side by side`.
 
 ---
@@ -510,24 +532,24 @@ chat view never errors on overlapping reads.
 
 ### Tests (write first)
 
-- [ ] T076 [P] [US3] In `scripts/check-vault-lifecycle.ts`, using the script-setup sandbox from T045:
+- [ ] T078 [P] [US3] In `scripts/check-vault-lifecycle.ts`, using the script-setup sandbox from T047:
       for `UnlockSheet` and `CreateSheet`, the field is cleared after a successful unlock or create
       (before the `unlocked` or `created` event is emitted), cleared when the sheet is dismissed,
       and kept after a failed attempt; and the serialized state of every Pinia store never contains
       the passphrase marker. A close needs no case here: the backend discards the page.
-- [ ] T077 [P] [US5] In the same file: with a backend double that answers the first
+- [ ] T079 [P] [US5] In the same file: with a backend double that answers the first
       `active_model_info` slowly, `initialize()` issues overlapping reads, resolves, re-reads the
       providers and leaves the effort control selectable. Add a comment naming the incident (a read
       that took the exclusive operation slot aborted `initialize()`).
 
 ### Implementation
 
-- [ ] T078 [US3] Add the explicit clears in `src/components/onboarding/UnlockSheet.vue` and
+- [ ] T080 [US3] Add the explicit clears in `src/components/onboarding/UnlockSheet.vue` and
       `CreateSheet.vue`: on success before emitting. The existing `reset()` on dismissal stays, and a
       close needs no clear because the page is discarded. Keep `v-model` on `UiInputPassword` (an
       external component) unchanged.
-- [ ] T079 [US3] Run quickstart scenarios 5 and 7 and record them in the Validation record.
-- [ ] T080 [US3] **Checkpoint Stage 6**: full CI parity. Commit
+- [ ] T081 [US3] Run quickstart scenarios 5 and 7 and record them in the Validation record.
+- [ ] T082 [US3] **Checkpoint Stage 6**: full CI parity. Commit
       `test(ui): cover passphrase lifetime and overlapping model reads`.
 
 ---
@@ -540,59 +562,59 @@ and does not block Stages 1 to 6.
 **Independent test**: the haex-crdt tests pass, and holzi builds and passes its suite against the
 pinned commit.
 
-- [ ] T081 [US3] In the haex-crdt repository (separate; the operator allows any available `gh`
+- [ ] T083 [US3] In the haex-crdt repository (separate; the operator allows any available `gh`
       account, T004): change `SqlCipherKey` to wrap
       `Zeroizing<String>`, remove `Clone` or make it clone into another `Zeroizing`, add `zeroize` to
       its `Cargo.toml`, and add a test that the key type erases on drop and that `as_str()` still
       returns the key. Get it merged and note the **full 40-character commit SHA**.
-- [ ] T082 [US3] In holzi's `src-tauri/Cargo.toml` bump the `haex-crdt` `rev` to that full SHA (constitution:
+- [ ] T084 [US3] In holzi's `src-tauri/Cargo.toml` bump the `haex-crdt` `rev` to that full SHA (constitution:
       immutable references), run `cargo update -p haex-crdt`, and confirm the `Cargo.lock` diff is only
       that entry. Fix compile fallout, most likely in `src-tauri/src/instances/vault_config.rs` if `Clone` was
       removed.
-- [ ] T083 [US3] Run the whole suite including `src-tauri/tests/vault_upgrade.rs` and
+- [ ] T085 [US3] Run the whole suite including `src-tauri/tests/vault_upgrade.rs` and
       `src-tauri/tests/preferences_roundtrip.rs` against the new revision, and quickstart scenario 5.
-- [ ] T084 [US3] **Checkpoint Stage 7**: commit `build(deps): pin haex-crdt with an erasing SqlCipherKey`.
+- [ ] T086 [US3] **Checkpoint Stage 7**: commit `build(deps): pin haex-crdt with an erasing SqlCipherKey`.
 
 ---
 
 ## Phase 9: Polish and cross-cutting
 
-- [ ] T085 Full CI parity from a clean state: `cargo fmt --check`, `pnpm lint:rust` (both feature
+- [ ] T087 Full CI parity from a clean state: `cargo fmt --check`, `pnpm lint:rust` (both feature
       sets, `-D warnings`), `cargo test`, `pnpm check:chat-state`, `pnpm check:vault-lifecycle`,
       `pnpm check:templates`, `pnpm typecheck`, `pnpm typecheck:scripts`, `pnpm lint`,
       `pnpm format:check`. Then `git checkout -- src/types/bindings/` unless a binding change is
       intended.
-- [ ] T086 Compare `wc -l` of the six oversized files with the T003 baseline: none may have grown, and
+- [ ] T088 Compare `wc -l` of the six oversized files with the T003 baseline: none may have grown, and
       every new file must be under 500 lines. Record the numbers in the Baseline section.
-- [ ] T087 [P] Bring `plan.md`, `research.md`, `data-model.md` and `contracts/` in line with what was
-      built (signatures, the `CloseEffects` trait, outcomes of T032, T046 and T047). Run
+- [ ] T089 [P] Bring `plan.md`, `research.md`, `data-model.md` and `contracts/` in line with what was
+      built (signatures, the `CloseEffects` trait, outcomes of T032, T048 and T049). Run
       `pnpm exec prettier --write specs/013-vault-lifecycle-isolation` twice and confirm it is stable.
-- [ ] T088 Traceability: for FR-001 to FR-026 and SC-001 to SC-010, write down the test or the recorded
+- [ ] T090 Traceability: for FR-001 to FR-026 and SC-001 to SC-010, write down the test or the recorded
       manual result that covers it in the Validation record. A gap is either closed or reported.
-- [ ] T089 Run `/speckit-analyze` for a cross-artifact consistency check (the constitution requires it
+- [ ] T091 Run `/speckit-analyze` for a cross-artifact consistency check (the constitution requires it
       to check plans against the constitution) and fix findings.
-- [ ] T090 Open the PRs in the structure below, after asking the operator (account and push). Rebase-
+- [ ] T092 Open the PRs in the structure below, after asking the operator (account and push). Rebase-
       merge or merge-commit, never squash. Merge-commit subjects use a Conventional Commits header.
 
 ---
 
 ## Dependencies & Execution Order
 
-- **Setup first.** T005 and T006 are prerequisites for every frontend test (T045, T064, T076, T077).
+- **Setup first.** T005 and T006 are prerequisites for every frontend test (T047, T066, T078, T079).
 - **Stage 1 (Phase 2)** has no dependency on the gate and may land before, or in parallel with,
   Phase 3. It is ordered first because the operator asked for the stages in that order.
 - **Phase 3 (Stage 2)** blocks Stages 3, 4 and 5: they use `VaultGate`, `VaultDb` and the wrapper.
-- **US1 (Stage 3)** needs Phase 3. Within it: T032 and T033 (page) and the tests T034 to T036 come
-  first; T037 to T043 are backend and mostly sequential because they share `close.rs`, `lib.rs` and
-  the gate; T044 and T045 (frontend) can run in parallel with T041 to T043. T046 and
-  T047 need the implementation. T049 (spike retirement) needs T035 and T021 green.
-- **US2 (Stage 4)** needs Stage 3's `AppState` and gate. T053 and T054 shrink `open.rs` and
-  `create.rs`; T057 and T058 (docs) are independent.
-- **US4 (Stage 5)** needs Stage 4 for the open-time retry (T067) but its `PublicationLock` and scan
-  changes (T068, T069) and the presence lock with the gated cleanup (T070, T071) only need Phase 3
+- **US1 (Stage 3)** needs Phase 3. Within it: T032 and T033 (page) and the tests T034 to T037 come
+  first; T038 to T045 are backend and mostly sequential because they share `close.rs`, `lib.rs` and
+  the gate; T046 and T047 (frontend) can run in parallel with T042 to T045. T048 and
+  T049 need the implementation. T051 (spike retirement) needs T035 and T021 green.
+- **US2 (Stage 4)** needs Stage 3's `AppState` and gate. T055 and T056 shrink `open.rs` and
+  `create.rs`; T059 and T060 (docs) are independent.
+- **US4 (Stage 5)** needs Stage 4 for the open-time retry (T069) but its `PublicationLock` and scan
+  changes (T070, T071) and the presence lock with the gated cleanup (T072, T073) only need Phase 3
   and can start earlier.
-- **Stage 6** needs T045 (sandbox).
-- **Stage 7** is independent of holzi's stages; only T082 to T084 need the upstream commit.
+- **Stage 6** needs T047 (sandbox).
+- **Stage 7** is independent of holzi's stages; only T084 to T086 need the upstream commit.
 - Tasks touching `src-tauri/src/vault_gate/mod.rs`, `src-tauri/src/instances/open.rs`, `src-tauri/src/lib.rs` or
   `scripts/check-vault-lifecycle.ts` are sequential with each other.
 
@@ -608,17 +630,18 @@ Task: "T021 src-tauri/tests/vault_gateway.rs"
 # User Story 1 — tests, different files:
 Task: "T034 src-tauri/src/chat/session_tests.rs"
 Task: "T035 src-tauri/tests/vault_lifecycle_close.rs"
+Task: "T037 src-tauri/src/vault_gate/children_tests.rs"
 
 # User Story 4 — tests, different files:
-Task: "T061 src-tauri/src/instances/lock_retry_tests.rs"
-Task: "T062 src-tauri/src/models/paths_tests.rs"
-Task: "T063 src-tauri/src/models/commands_tests.rs and import tests"
-Task: "T065 src-tauri/src/instances/presence_tests.rs"
+Task: "T063 src-tauri/src/instances/lock_retry_tests.rs"
+Task: "T064 src-tauri/src/models/paths_tests.rs"
+Task: "T065 src-tauri/src/models/commands_tests.rs and import tests"
+Task: "T067 src-tauri/src/instances/presence_tests.rs"
 ```
 
 ## Implementation Strategy
 
-1. **MVP = Phase 1 + Phase 3 + User Story 1.** After T050 a close cannot fail, cancels the work,
+1. **MVP = Phase 1 + Phase 3 + User Story 1.** After T052 a close cannot fail, cancels the work,
    replaces the page and ends the process within seconds. Validate and demo here. Stage 1 (secret
    hygiene) can ship before it as a small, independent PR.
 2. **Increment 2 = US2** (one vault per process, ADR, supersession notes).
@@ -630,18 +653,18 @@ Task: "T065 src-tauri/src/instances/presence_tests.rs"
    - PR A: spec, plan and tasks, plus the fix commit `fedcfa8` (operator decision, T004).
    - PR B: T005 to T006 (harness extraction) and Stage 1, T007 to T015.
    - PR C: Stage 2, T016 to T031 (behavior-preserving foundation).
-   - PR D: User Story 1, T032 to T050 (MVP; one PR because the frontend lock flow and the backend
+   - PR D: User Story 1, T032 to T052 (MVP; one PR because the frontend lock flow and the backend
      close must ship together).
-   - PR E: User Story 2, T051 to T060.
-   - PR F: User Story 4, T061 to T075.
-   - PR G: Stage 6, T076 to T080.
-   - PR H: Stage 7, T081 to T084, after the upstream merge.
-6. One commit per checkpoint (T015, T031, T050, T060, T075, T080, T084), Conventional Commits, no
+   - PR E: User Story 2, T053 to T062.
+   - PR F: User Story 4, T063 to T077.
+   - PR G: Stage 6, T078 to T082.
+   - PR H: Stage 7, T083 to T086, after the upstream merge.
+6. One commit per checkpoint (T015, T031, T052, T062, T077, T082, T086), Conventional Commits, no
    agent trailers. Each checkpoint compiles and passes its own commands.
 
 ## Baseline
 
-_Filled in during T003, T004, T013, T036, T056 and T086._
+_Filled in during T003, T004, T013, T036, T058 and T088._
 
 - Test counts and command results: (pending)
 - Line counts of the oversized files before and after: (pending)
@@ -653,4 +676,4 @@ _Filled in during T003, T004, T013, T036, T056 and T086._
 
 ## Validation record
 
-_Filled in by T048, T059, T074, T079, T083 and T088._
+_Filled in by T050, T061, T076, T081, T085 and T090._

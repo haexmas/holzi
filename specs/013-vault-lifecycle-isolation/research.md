@@ -52,16 +52,24 @@ not be verified from source are marked **Open** and carry a manual check in
 **Last resort** (operator, 2026-09-21): `AppHandle::exit` and `request_restart` only post the request
 to the window event loop, and Tauri ends the process directly only when posting fails
 (`app.rs`, `exit` and `request_restart`). If the event loop hangs, the process would stay alive with
-the vault open. Before the normal or forced process termination, every child started for the vault
-must be registered with a process-group handle (Unix) or a Job Object (Windows). The close ladder
-cancels cooperatively, terminates those groups/jobs, waits for their exit, and force-stops any
-remaining descendants before ending the app. About 0.5 s after the request, a plain thread still
-ends the process forcibly if the event loop itself hangs:
+the vault open. So about 0.5 s after the request, a plain thread ends the process forcibly:
 `std::process::exit(0)` for `Exit` and `tauri::process::restart(&app.env())` for `Relaunch`
 (`Manager::env` and `tauri::process::restart` are public API). The forced end skips destructors, so
 SQLCipher does not overwrite its key blocks, but the operating system reclaims the memory; SQLite
-recovers from its journal at the next open. Child-process cleanup must complete before that forced
-exit, so no descendant can continue tool execution after vault close.
+recovers from its journal at the next open.
+
+**Child processes** (PR review, 2026-09-21): a forced end also skips the `Drop`-based kills that stop
+children today (`ChildLifecycle` in `cli_delegate/process.rs`, `kill_on_drop`). A child that ignored
+the cancellation would then outlive the app and could keep running a tool after the close, against
+FR-003 and the edge case that a running tool or child process is stopped with the session.
+**Decision**: a `ChildRegistry` in the gate. Every child started for the vault (the tool shell in
+`chat/tools/cli.rs`, delegated CLIs, MCP servers in `chat/tools/mcp.rs`) is its own process group and
+is registered. The drain ladder calls `kill_all` at its end, and the forced end calls it right before
+it ends the process. `kill_all` reuses what the code already does (`libc::kill(-pid, SIGKILL)` on
+Unix, `taskkill /T /F` on Windows in `cli.rs`), so there is no new dependency. **Limit**: a
+descendant that left its process group survives. **Upgrade path**: a Windows Job Object with
+kill-on-close and `PR_SET_PDEATHSIG` on Linux, which would also cover a killed app; not adopted
+because it needs platform-specific code and a new Windows dependency.
 
 **Open**: how `tauri dev` reacts to the relaunch (whether the dev runner re-attaches, restarts or
 stops). Until verified, debug builds default to `Exit`; release builds default to relaunch. The
@@ -137,7 +145,7 @@ migrating commands to an extractor (R3 alternatives).
 **Drain ladder** (spike-proven, on the local branch `spike/vault-gateway`): fire the token; wait up to
 1 s for cooperative stop; abort registered async tasks; wait until 3 s in total; then end the
 process regardless. Cooperative cleanup that must run (killing a child's process group in
-`chat/tools/cli.rs`) observes the token; delegated CLI processes already use `kill_on_drop`.
+`chat/tools/cli.rs`) observes the token; delegated CLI processes already use `kill_on_drop`, and the `ChildRegistry` (R2) covers what those miss.
 
 **Rationale**: It reuses the existing cancellation pieces (`abort_turn`, preload token, tool
 cancellation token) instead of adding a second mechanism, and the tracker replaces the
@@ -234,15 +242,20 @@ because the interface runtime cannot wipe either way and the process ending is t
   with a relaunch after every close, a starting process could delete a vault another process is still
   creating (the creator goes on writing to an unlinked file and the vault vanishes) or a download
   another process has been writing for hours (the final publish then fails).
-  **Decision** (operator, 2026-09-21): a portable presence lock. Each process opens
-  `<app local data>/presence.lock` and uses a platform adapter to acquire an exclusive lock, run the
-  cleanup **while it holds that lock**, and atomically downgrade the same held lock to shared
-  presence. The adapter must not unlock/relock or invoke a generic lock operation twice on an already
-  locked handle; its Unix and Windows implementations provide the no-gap conversion explicitly. The
-  OS drops the lock when the process ends or crashes. A process that cannot get the exclusive lock
-  waits for shared presence and skips the cleanup. The relaunch after a close overlaps the draining
-  old process, so it skips the cleanup too, which is fine because nothing was orphaned. Half-created
-  vaults are never listed
+  **Decision** (operator, 2026-09-21): a presence lock. Each process opens
+  `<app local data>/presence.lock` (read and write, because Windows refuses locks on append-only
+  handles) and tries an exclusive `File::try_lock`. When it gets the lock it runs the cleanup **while
+  it holds it**, then calls `unlock` and only then `lock_shared`, and keeps that shared lock for the
+  rest of its life. A process that does not get the exclusive lock waits in `lock_shared` and skips
+  the cleanup. The code never locks a handle that already holds a lock, which `std` leaves
+  unspecified and possibly deadlocking (PR review finding). An atomic exclusive-to-shared downgrade
+  is neither available nor needed: `std` has no such call, Windows `LockFileEx` has no conversion,
+  and `flock(2)` documents its conversion as not guaranteed to be atomic. It is not needed because
+  **no process starts work before it holds its shared lock**: whoever holds the exclusive lock, or
+  sits between `unlock` and `lock_shared`, has started no work, and whoever has started work holds a
+  shared lock, which makes every other exclusive attempt fail. The OS drops the lock when the process
+  ends or crashes. The relaunch after a close overlaps the draining old process, so it skips the
+  cleanup too, which is fine because nothing was orphaned. Half-created vaults are never listed
   (`list_instances` skips `.pending`) and staging files are not `.gguf`, so leftovers are harmless
   until the next start that is alone. **Alternatives**: a lock per leftover (precise, but downloads
   would have to hold a lock for hours or a new lock kind is needed); an age threshold (a guess that a

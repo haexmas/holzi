@@ -95,20 +95,34 @@ Returned by `acquire_model_publication_lock`. Holds the in-process mutex guard f
 exclusive lock on `<models>/.locks/<slug>.lock`. Both release on drop. Acquiring polls
 asynchronously so a close can cancel the wait.
 
+## ChildRegistry (new)
+
+Owned by `VaultGate`. Holds the process id of every child process started for the vault (tool shells,
+delegated CLIs, MCP servers), each one its own process group. `register(pid)` returns a guard that
+removes the entry on drop. `kill_all()` kills every registered group (Unix `kill(-pid, SIGKILL)`,
+Windows `taskkill /T /F`) and makes any later registration kill at once. The drain ladder calls it
+at its end and the forced end calls it right before the process ends, so no child outlives the vault
+session (FR-003).
+
 ## ProcessPresence (new)
 
-Managed state holding the open handle of `<app local data>/presence.lock`. `announce(dir, on_alone)`
-uses a platform adapter with two explicit operations: `try_lock_exclusive` and
-`downgrade_to_shared`. The adapter must convert the held exclusive lock to a shared lock in one
-OS-level operation (on Unix, the `flock(LOCK_SH)` conversion; on Windows, the corresponding native
-lock conversion), with no unlock/relock interval. It must not call a generic lock method twice on
-the same already-locked handle, because that is unspecified and can deadlock on some platforms.
+Managed state holding the open handle of `<app local data>/presence.lock`, opened for read and write
+because Windows refuses locks on append-only handles. `announce(dir, on_alone)`:
 
-When exclusive acquisition succeeds, `announce` runs `on_alone` (the startup cleanup) while still
-holding exclusive ownership, then performs the atomic downgrade and retains that handle for the
-life of the process. When exclusive acquisition fails, it waits for a shared lock and skips
-`on_alone`. The OS drops the lock when the process ends or crashes, so a crashed process never
-blocks cleanup for later starts. It holds no vault data and is independent of the vault gate.
+1. tries an exclusive `File::try_lock`;
+2. when that succeeds, runs `on_alone` (the startup cleanup) while it holds the lock, then calls
+   `unlock` and only then `lock_shared`;
+3. when it fails, calls `lock_shared` (which waits for a starter that is cleaning up) and skips
+   `on_alone`;
+4. keeps the shared lock for the life of the process.
+
+A handle that already holds a lock is never locked again, because `std` leaves that unspecified and
+possibly deadlocking. There is no atomic exclusive-to-shared downgrade, and none is needed: **no
+process starts work before it holds its shared lock**. Whoever sits between `unlock` and
+`lock_shared` has nothing to lose, and whoever has work holds a shared lock, which makes every other
+exclusive attempt fail. The OS drops the lock when the process ends or crashes, so a crashed process
+never blocks the cleanup for later starts. It holds no vault data and is independent of the vault
+gate.
 
 ## Frontend: no closing state
 

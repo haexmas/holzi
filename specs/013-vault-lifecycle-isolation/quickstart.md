@@ -35,7 +35,9 @@ Each scenario names the spec items it covers. Steps are observable actions, not 
 3. Expect: the window shows only a spinner within a moment; the reply and the download stop; no
    further text appears; within about 4 seconds the app process has ended and (release build) the
    unlock screen is back. No error is shown and nothing needs to be pressed twice.
-4. After the relaunch, open the vault: the interrupted reply is not shown as complete, and no
+4. While the reply runs, have the agent start a long command through the shell tool, for example
+   `sleep 300`. After the close, no such process remains: `pgrep -f "sleep 300"` prints nothing.
+5. After the relaunch, open the vault: the interrupted reply is not shown as complete, and no
    partial model is listed as installed (FR-008).
 
 ### 2. Close cannot be refused (FR-002)
