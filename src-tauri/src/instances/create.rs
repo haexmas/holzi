@@ -22,6 +22,7 @@ use crate::voice::VoiceState;
 
 use super::events::emit_instance_list_changed;
 use super::info::InstanceInfo;
+use super::passphrase::Passphrase;
 use super::paths::{
     get_app_local_data, get_instance_path, get_pending_marker_path, validate_instance_name,
 };
@@ -36,7 +37,8 @@ const MIN_PASSPHRASE_LEN: usize = 8;
 #[serde(rename_all = "camelCase")]
 pub struct CreateInstanceArgs {
     pub name: String,
-    pub passphrase: String,
+    #[ts(type = "string")]
+    pub passphrase: Passphrase,
 }
 
 #[derive(Debug, Serialize, TS)]
@@ -57,7 +59,7 @@ pub async fn create_instance(
 ) -> Result<CreateInstanceResult> {
     let _operation = chat.acquire_operation()?;
     validate_instance_name(&args.name)?;
-    if args.passphrase.len() < MIN_PASSPHRASE_LEN {
+    if args.passphrase.as_str().len() < MIN_PASSPHRASE_LEN {
         return Err(HolziError::WeakPassphrase {
             reason: format!("passphrase must be at least {MIN_PASSPHRASE_LEN} characters"),
         });
@@ -102,11 +104,12 @@ pub async fn create_instance(
         })?;
 
     // From here on, any early return MUST clean up the marker + .db.
-    let passphrase = args.passphrase.clone();
+    // Moved into the blocking task: the last owner erases it when the task ends.
+    let passphrase = args.passphrase;
     let open_path = db_path.clone();
     let open_installation_id_file = installation_id_file.clone();
     let open_result = match tauri::async_runtime::spawn_blocking(move || {
-        open_new_database(&passphrase, &open_path, &open_installation_id_file)
+        open_new_database(passphrase.as_str(), &open_path, &open_installation_id_file)
     })
     .await
     {
