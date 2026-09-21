@@ -65,7 +65,7 @@ side, US5 reads never fail.
       where possible; `check-chat-state.ts` must get shorter. Update its header comment (extraction
       done). `pnpm typecheck:scripts` already covers `scripts/**/*.ts`. Commit
       `refactor(scripts): extract the chat-state replay harness`.
-- [ ] T006 Depends on T005. Create `scripts/check-vault-lifecycle.ts` importing the shared harness,
+- [x] T006 Depends on T005. Create `scripts/check-vault-lifecycle.ts` importing the shared harness,
       with one smoke case that boots `createChatState()`. Add `"check:vault-lifecycle"` to
       `package.json` next to `check:chat-state` and a step after it in `.github/workflows/ci.yml`
       (same shape as the `check:chat-state` step). New frontend cases in later phases go in this file,
