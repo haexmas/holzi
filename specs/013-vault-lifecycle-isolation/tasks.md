@@ -706,6 +706,26 @@ _Filled in during T003, T004, T013, T036, T058 and T088._
   leftover at the next start-up. The one uncovered case, a transfer dropped mid-way as `gate.run`
   does, now has `a_download_dropped_mid_transfer_leaves_no_finalized_file` in
   `models/download_tests.rs`.
+- Spike retirement mapping (T051, 2026-09-21; the spike file is only on the local branch
+  `spike/vault-gateway`): `extractor_accepts_only_the_current_epoch_and_reports_typed_errors` is
+  replaced by `src-tauri/tests/vault_gateway.rs` (the wrapper passes in `Idle` and `Active`, answers
+  `VaultClosed` once closing, keeps the allow-list, denies an unknown command; the epoch header is
+  not needed with one vault per process). `closing_the_vault_terminates_an_in_flight_request_immediately`
+  is replaced by `a_request_running_when_the_close_starts_ends_with_vault_closed` and
+  `close_returns_at_once_while_work_never_finishes_and_the_operation_slot_is_held` in
+  `src-tauri/tests/vault_lifecycle_close.rs`. `drain_ladder_cooperative_then_abort_then_reports_stuck_blocking_work`
+  is replaced by the ladder cases in `src-tauri/src/vault_gate/drain_tests.rs`, including the tracked
+  blocking closure. `epochs_are_unique_ordered_and_never_reused_even_for_the_same_vault` needs no
+  replacement. Still to do after PR D is merged: `git branch -D spike/vault-gateway`.
+- Stage 3 checkpoint numbers (2026-09-21, before the manual checks T048 to T050): `cargo test` 520
+  passed, 0 failed, 8 ignored across 30 binaries (483 passed with `--no-default-features`);
+  `cargo clippy --all-targets -- -D warnings` clean with default features and with
+  `--no-default-features`; `cargo fmt --check` clean; `pnpm check:chat-state` 45 passed,
+  `pnpm check:vault-lifecycle` 5 passed; `check:templates`, `typecheck`, `typecheck:scripts`, `lint`
+  and `format:check` exit 0. Oversized files after: `models/commands.rs` 966, `chat/commands.rs` 759,
+  `chat/model_loading.rs` 736, `providers/mod.rs` 573, `src/pages/chat/[instance].vue` 1316. Sabotage
+  checks that went red as expected: no child kill at the abort rung (3 ladder tests), the drain before
+  `reset_for_close` (the loaded-model test), navigation put back into both lock flows (4 replay cases).
 - Frontend open-path finding: (pending)
 
 ## Validation record
