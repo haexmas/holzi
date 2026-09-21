@@ -279,7 +279,7 @@ download; press close repeatedly; close by window; the process ends within about
       does not end the process; (e) the database is dropped only after every `VaultDb` clone is dropped, and always
       before the process end; (f) after the close, the wrapper rejects a vault command over the mock
       runtime; (g) a turn started before the close is cancelled through the token.
-- [ ] T036 [P] [US1] Verify FR-008 by reading, then test any gap: `src-tauri/src/chat/turn/persist.rs` for how
+- [x] T036 [P] [US1] Verify FR-008 by reading, then test any gap: `src-tauri/src/chat/turn/persist.rs` for how
       a cancelled turn persists (it must not look complete), and the staging cleanup in
       `src-tauri/src/models/download.rs` and `cleanup_staging_in_dir` in `src-tauri/src/models/import.rs` for partial
       downloads. Add a case to the existing sibling test files if a gap exists, and record the
@@ -695,7 +695,17 @@ _Filled in during T003, T004, T013, T036, T058 and T088._
   paths. rusqlite quotes and escapes the `PRAGMA key` value, so a SQLite error text cannot echo it.
   Residual copies stay as documented in research R7: the SQL text inside rusqlite, the IPC body and
   the frontend strings.
-- FR-008 finding: (pending)
+- FR-008 finding (T036, 2026-09-21): no gap in the code, one test added. A reply is only inserted
+  when the turn completes: admission (`send_admission.rs`) writes the user message, and the
+  assistant row comes from `persist_final_message` at the end of the turn. A turn that the close
+  cancels through `abort_turn` ends with a persisted `FinishReason::Cancelled` row (covered by
+  `tests/chat_tool_loop_permissions.rs`), and one that the drain aborts before that leaves no
+  assistant row at all, so neither can look complete. A download writes `<staging>.part` and renames
+  it only when the announced size is met; the staging name (`.<file>.<uuid>.staging`) never ends in
+  `.gguf`, so no partial file is listed as installed, and `cleanup_staging_in_dir` removes the
+  leftover at the next start-up. The one uncovered case, a transfer dropped mid-way as `gate.run`
+  does, now has `a_download_dropped_mid_transfer_leaves_no_finalized_file` in
+  `models/download_tests.rs`.
 - Frontend open-path finding: (pending)
 
 ## Validation record

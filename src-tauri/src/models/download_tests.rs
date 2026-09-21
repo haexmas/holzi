@@ -1,6 +1,7 @@
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::thread;
+use std::time::Duration;
 
 use super::download_to_file;
 
@@ -282,5 +283,48 @@ async fn restarts_when_a_range_response_has_invalid_content_range() {
         std::fs::read(destination).expect("downloaded file"),
         b"0123456789"
     );
+    server.join().expect("test server thread");
+}
+
+/// Closing the vault drops a running transfer (`VaultGate::run`, spec 013 FR-008). Only the
+/// `.part` sidecar may remain: nothing that looks like an installed model.
+#[tokio::test]
+async fn a_download_dropped_mid_transfer_leaves_no_finalized_file() {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind test server");
+    let address = listener.local_addr().expect("test server address");
+    let (release, released) = std::sync::mpsc::channel::<()>();
+    let server = thread::spawn(move || {
+        let (mut request, _) = listener.accept().expect("request");
+        read_request_head(&mut request);
+        request
+            .write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\nETag: \"v1\"\r\nConnection: close\r\n\r\n0123",
+            )
+            .expect("write the first bytes");
+        // The body stays unfinished until the test is done.
+        let _ = released.recv();
+    });
+
+    let workspace = tempfile::tempdir().expect("tempdir");
+    let destination = workspace.path().join("model.gguf");
+    let outcome = tokio::time::timeout(
+        Duration::from_millis(300),
+        download_to_file(
+            &format!("http://{address}/model.gguf"),
+            destination.clone(),
+            |_| {},
+        ),
+    )
+    .await;
+
+    assert!(
+        outcome.is_err(),
+        "the transfer was still running when it was dropped"
+    );
+    assert!(
+        !destination.exists(),
+        "a dropped transfer must never leave a finalized file"
+    );
+    release.send(()).expect("release the server");
     server.join().expect("test server thread");
 }
