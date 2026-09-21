@@ -98,11 +98,17 @@ asynchronously so a close can cancel the wait.
 ## ProcessPresence (new)
 
 Managed state holding the open handle of `<app local data>/presence.lock`. `announce(dir, on_alone)`
-tries an exclusive `File::try_lock`; when it succeeds it runs `on_alone` (the startup cleanup) while
-still holding the lock, then keeps a shared lock for the life of the process. When the exclusive
-attempt fails it waits for the shared lock and skips `on_alone`. The OS drops the lock when the
-process ends or crashes, so a crashed process never blocks the cleanup for later starts. It holds no
-vault data and is independent of the vault gate.
+uses a platform adapter with two explicit operations: `try_lock_exclusive` and
+`downgrade_to_shared`. The adapter must convert the held exclusive lock to a shared lock in one
+OS-level operation (on Unix, the `flock(LOCK_SH)` conversion; on Windows, the corresponding native
+lock conversion), with no unlock/relock interval. It must not call a generic lock method twice on
+the same already-locked handle, because that is unspecified and can deadlock on some platforms.
+
+When exclusive acquisition succeeds, `announce` runs `on_alone` (the startup cleanup) while still
+holding exclusive ownership, then performs the atomic downgrade and retains that handle for the
+life of the process. When exclusive acquisition fails, it waits for a shared lock and skips
+`on_alone`. The OS drops the lock when the process ends or crashes, so a crashed process never
+blocks cleanup for later starts. It holds no vault data and is independent of the vault gate.
 
 ## Frontend: no closing state
 

@@ -442,8 +442,10 @@ vault list, and a startup cleanup that never deletes another process's work in p
       `src-tauri/src/instances/presence.rs` with the `#[path]` idiom) over a temporary data location:
       the first `announce` runs its callback while it is the only process; a second `announce` while
       the first handle is alive does not run its callback; after the first handle drops, a new
-      `announce` runs its callback again; the callback runs before the lock is downgraded, so a
-      concurrent starter cannot begin work in between. Add a case to
+      `announce` runs its callback again; the callback runs before the platform adapter's atomic
+      exclusive-to-shared downgrade, so a concurrent starter cannot begin work in between. Exercise
+      the adapter on Linux, macOS and Windows in CI and assert that no unlock/relock gap is exposed.
+      Add a case to
       `src-tauri/src/instances/startup_tests.rs`: with a `.pending` marker, its `.db` and a model
       staging leftover in place, running startup cleanup through `announce` removes them when alone
       and removes nothing while another presence is alive (FR-026, SC-010).
@@ -468,14 +470,17 @@ vault list, and a startup cleanup that never deletes another process's work in p
       `src-tauri/src/models/import.rs` around line 61.
 - [ ] T070 [US4] Create `src-tauri/src/instances/presence.rs` with `ProcessPresence` (data-model.md):
       `announce(dir, on_alone)` opens `presence.lock` in the app local data directory (the same
-      directory `create_instance` uses for the installation id file) and tries an exclusive
-      `File::try_lock`. When it succeeds it runs `on_alone` while still holding the lock, so nobody
-      else can start work in between. It then holds a shared lock on the same handle for the rest of
-      the process; when the exclusive attempt fails it waits for the shared lock, which ends as soon
-      as the other starter finishes its cleanup. The handle lives in managed state, and the OS drops
-      the lock when the process ends or crashes. Add a `ponytail:` comment: cleanup only runs when
+      directory `create_instance` uses for the installation id file) and uses a platform adapter
+      exposing `try_lock_exclusive` and an atomic `downgrade_to_shared` operation. When exclusive
+      acquisition succeeds it runs `on_alone` while still holding cleanup ownership, so nobody else
+      can start work in between, then downgrades that held lock in place and retains it for the
+      process lifetime. When exclusive acquisition fails it waits for shared presence and skips
+      `on_alone`. Do not unlock and relock, or invoke a generic lock operation twice on an already
+      locked handle. The handle lives in managed state, and the OS drops the lock when the process
+      ends or crashes. Add a `ponytail:` comment: cleanup only runs when
       the process is alone; ceiling "leftovers of a crashed process stay while other processes
-      overlap"; upgrade path "per-item locks". Keep the file under 500 lines.
+      overlap"; upgrade path "per-item locks". Keep the file under 500 lines and test the adapter on
+      Linux, macOS and Windows.
 - [ ] T071 [US4] Gate the startup cleanup: in `src-tauri/src/lib.rs` `setup`, pass the existing
       `cleanup_orphans_on_startup` (which stays as it is in `src-tauri/src/instances/startup.rs`,
       covering both `cleanup_orphans_in_dir` and `cleanup_staging_in_dir`) to

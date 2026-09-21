@@ -25,9 +25,10 @@ small and concrete:
   connection disappears
   with the atomic-switch path. The `SqlCipherKey` wipe is an upstream change in haex-crdt.
 - **Several processes side by side.** A clear message for a vault held elsewhere, a short retry while
-  that process finishes closing, a cross-process lock for model publication, a presence lock that
-  keeps a starting process from deleting another process's work in progress, and a vault list that
-  refreshes on focus.
+  that process finishes closing, a cross-process lock for model publication, and a portable presence
+  lock whose platform adapter atomically downgrades exclusive cleanup ownership to lifetime shared
+  presence, keeping a starting process from deleting another process's work in progress. The vault
+  list refreshes on focus.
 
 The spike (kept on the local branch `spike/vault-gateway`, never merged) proved the gate, the
 cancellation and the bounded drain against Tauri's real IPC path; its epoch and scoped-store parts

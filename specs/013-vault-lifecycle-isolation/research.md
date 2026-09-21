@@ -52,12 +52,16 @@ not be verified from source are marked **Open** and carry a manual check in
 **Last resort** (operator, 2026-09-21): `AppHandle::exit` and `request_restart` only post the request
 to the window event loop, and Tauri ends the process directly only when posting fails
 (`app.rs`, `exit` and `request_restart`). If the event loop hangs, the process would stay alive with
-the vault open. So about 0.5 s after the request, a plain thread ends the process forcibly:
+the vault open. Before the normal or forced process termination, every child started for the vault
+must be registered with a process-group handle (Unix) or a Job Object (Windows). The close ladder
+cancels cooperatively, terminates those groups/jobs, waits for their exit, and force-stops any
+remaining descendants before ending the app. About 0.5 s after the request, a plain thread still
+ends the process forcibly if the event loop itself hangs:
 `std::process::exit(0)` for `Exit` and `tauri::process::restart(&app.env())` for `Relaunch`
 (`Manager::env` and `tauri::process::restart` are public API). The forced end skips destructors, so
 SQLCipher does not overwrite its key blocks, but the operating system reclaims the memory; SQLite
-recovers from its journal at the next open. A child process that ignored the earlier cancellation may
-outlive it, which is accepted because the ladder already tried to stop it.
+recovers from its journal at the next open. Child-process cleanup must complete before that forced
+exit, so no descendant can continue tool execution after vault close.
 
 **Open**: how `tauri dev` reacts to the relaunch (whether the dev runner re-attaches, restarts or
 stops). Until verified, debug builds default to `Exit`; release builds default to relaunch. The
@@ -230,12 +234,15 @@ because the interface runtime cannot wipe either way and the process ending is t
   with a relaunch after every close, a starting process could delete a vault another process is still
   creating (the creator goes on writing to an unlinked file and the vault vanishes) or a download
   another process has been writing for hours (the final publish then fails).
-  **Decision** (operator, 2026-09-21): a presence lock. Each process opens
-  `<app local data>/presence.lock`, tries an exclusive `File::try_lock`, runs the cleanup **while it
-  holds that lock** when it got it, and then keeps a shared lock for the rest of its life. The OS
-  drops the lock when the process ends or crashes. A process that cannot get the exclusive lock skips
-  the cleanup. The relaunch after a close overlaps the draining old process, so it skips the cleanup
-  too, which is fine because nothing was orphaned. Half-created vaults are never listed
+  **Decision** (operator, 2026-09-21): a portable presence lock. Each process opens
+  `<app local data>/presence.lock` and uses a platform adapter to acquire an exclusive lock, run the
+  cleanup **while it holds that lock**, and atomically downgrade the same held lock to shared
+  presence. The adapter must not unlock/relock or invoke a generic lock operation twice on an already
+  locked handle; its Unix and Windows implementations provide the no-gap conversion explicitly. The
+  OS drops the lock when the process ends or crashes. A process that cannot get the exclusive lock
+  waits for shared presence and skips the cleanup. The relaunch after a close overlaps the draining
+  old process, so it skips the cleanup too, which is fine because nothing was orphaned. Half-created
+  vaults are never listed
   (`list_instances` skips `.pending`) and staging files are not `.gguf`, so leftovers are harmless
   until the next start that is alone. **Alternatives**: a lock per leftover (precise, but downloads
   would have to hold a lock for hours or a new lock kind is needed); an age threshold (a guess that a
