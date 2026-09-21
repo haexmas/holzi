@@ -9,7 +9,9 @@
 //! mapping serves the direct API-key path and the Claude Code delegate,
 //! which lists models through the same endpoint.
 
-use serde::Deserialize;
+use serde::de::{MapAccess, Visitor};
+use serde::{Deserialize, Deserializer};
+use std::fmt;
 
 use crate::adapters::AttachmentKind;
 use crate::model_capabilities::{
@@ -43,18 +45,54 @@ struct Thinking {
     types: Option<ThinkingTypes>,
 }
 
-#[derive(Debug, Default, Deserialize)]
-#[serde(default)]
+#[derive(Debug, Default)]
 struct Effort {
     supported: Option<bool>,
-    low: Option<Leaf>,
-    medium: Option<Leaf>,
-    high: Option<Leaf>,
-    xhigh: Option<Leaf>,
-    max: Option<Leaf>,
+    /// Provider-native option names in the order reported by the provider.
+    /// Anthropic currently reports names such as `low` and `max`, but the
+    /// adapter must not turn that current vocabulary into a global enum.
+    levels: Vec<(String, Leaf)>,
 }
 
-/// The wire `capabilities` object. Unknown leaves are ignored.
+impl<'de> Deserialize<'de> for Effort {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct EffortVisitor;
+
+        impl<'de> Visitor<'de> for EffortVisitor {
+            type Value = Effort;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("an effort capability object")
+            }
+
+            fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
+            where
+                M: MapAccess<'de>,
+            {
+                let mut supported = None;
+                let mut levels = Vec::new();
+
+                while let Some(key) = map.next_key::<String>()? {
+                    if key == "supported" {
+                        supported = map.next_value()?;
+                    } else {
+                        levels.push((key, map.next_value()?));
+                    }
+                }
+
+                Ok(Effort { supported, levels })
+            }
+        }
+
+        deserializer.deserialize_map(EffortVisitor)
+    }
+}
+
+/// The wire `capabilities` object. Unknown top-level leaves are ignored;
+/// effort keys are provider-native and are preserved as selectable options.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub(super) struct WireCapabilities {
@@ -62,18 +100,6 @@ pub(super) struct WireCapabilities {
     pdf_input: Option<Leaf>,
     thinking: Option<Thinking>,
     effort: Option<Effort>,
-}
-
-/// Effort levels in display order, paired with their wire names (which are
-/// also the option ids that are validated, persisted and sent).
-fn effort_levels(effort: &Effort) -> [(&'static str, &Option<Leaf>); 5] {
-    [
-        ("low", &effort.low),
-        ("medium", &effort.medium),
-        ("high", &effort.high),
-        ("xhigh", &effort.xhigh),
-        ("max", &effort.max),
-    ]
 }
 
 fn reasoning(wire: &WireCapabilities) -> Option<ReasoningControl> {
@@ -84,27 +110,27 @@ fn reasoning(wire: &WireCapabilities) -> Option<ReasoningControl> {
         let options: Vec<ReasoningOption> = wire
             .effort
             .as_ref()
-            .map(effort_levels)
+            .map(|effort| &effort.levels)
             .into_iter()
             .flatten()
-            .filter(|(_, leaf)| Leaf::supported(leaf) == Some(true))
+            .filter(|(_, leaf)| leaf.supported == Some(true))
             .map(|(id, _)| ReasoningOption {
-                id: id.to_string(),
-                label: id.to_string(),
+                id: id.clone(),
+                label: id.clone(),
             })
             .collect();
         if !options.is_empty() {
             return Some(ReasoningControl::presets(options));
         }
 
-        // `effort.supported: true` with missing level leaves is partial data,
-        // not an authoritative statement that the model manages effort.
-        let levels_complete = wire.effort.as_ref().is_some_and(|effort| {
-            effort_levels(effort)
-                .iter()
-                .all(|(_, leaf)| Leaf::supported(leaf).is_some())
-        });
-        if !levels_complete {
+        // `effort.supported: true` without any provider-native level leaves
+        // is partial data, not an authoritative statement that the model
+        // manages effort.
+        if wire
+            .effort
+            .as_ref()
+            .is_none_or(|effort| effort.levels.is_empty())
+        {
             return None;
         }
     }

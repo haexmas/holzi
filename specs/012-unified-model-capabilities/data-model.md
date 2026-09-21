@@ -25,8 +25,9 @@ at the adapter boundary), and `ModelCapabilities::normalized()` maps a stored or
 
 ### ReasoningOption
 
-`{ id: String, label: String }`. `id` is the provider-native wire value (Anthropic: `low`, `medium`,
-`high`, `xhigh`, `max`) and is what is validated, persisted and sent. `label` is a display fallback.
+`{ id: String, label: String }`. `id` is the provider-native wire value (for example Anthropic's
+`low` or another provider's `minimal`, `balanced`, or numeric-budget identifier) and is what is
+validated, persisted and sent. `label` is a display fallback.
 
 ### ThinkingStyle
 

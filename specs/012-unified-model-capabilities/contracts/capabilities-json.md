@@ -41,7 +41,8 @@ fixture cases for `anthropic_tests.rs`:
 4. `thinking.supported = false`, `effort.supported = false` → `Unavailable`, `thinkingStyle = null`.
 5. `capabilities` object absent → all three fields `None`; the listing still succeeds.
 6. `image_input` present, `pdf_input` absent → `acceptedAttachmentKinds = None` (FR-002).
-7. Extra unknown capability leaves → ignored, no parse error.
+7. An unknown top-level capability leaf is ignored, while an unknown provider-native effort key
+   with `supported: true` becomes a selectable option and is preserved unchanged.
 
 ## Compatibility
 

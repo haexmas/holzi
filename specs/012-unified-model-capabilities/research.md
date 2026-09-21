@@ -65,11 +65,14 @@ Source: Anthropic Models API, `GET /v1/models` (also used by the Claude Code del
 `cli_delegate::fetch_claude_models`, which calls the same `anthropic::fetch_models` — no change in
 `cli_delegate`). Response per model: `capabilities.image_input.supported`,
 `capabilities.pdf_input.supported`, `capabilities.thinking.{supported, types.{enabled,adaptive}.supported}`,
-`capabilities.effort.{supported, low|medium|high|xhigh|max}.supported`.
+`capabilities.effort.supported` plus provider-native option keys whose values contain
+`supported`. The Anthropic API currently documents names such as `low`, `medium`, `high`,
+`xhigh` and `max`; the adapter preserves any additional option key and does not turn the current
+Anthropic vocabulary into a shared enum.
 
 | Wire                                                | → Record                                                                     |
 | --------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `effort.supported == true` and ≥1 level `supported` | `Presets`, options in order low, medium, high, xhigh, max (ids = wire names) |
+| `effort.supported == true` and ≥1 provider-native level `supported` | `Presets`, options in provider response order (ids = wire names) |
 | else `thinking.supported == true`                   | `ModelManaged`                                                               |
 | else both leaves present and false                  | `Unavailable`                                                                |
 | `thinking`/`effort` subtree missing                 | `reasoning = None`                                                           |

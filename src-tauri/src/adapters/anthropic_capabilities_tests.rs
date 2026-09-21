@@ -140,17 +140,22 @@ fn a_missing_pdf_key_undetermines_attachments_but_not_reasoning() {
 }
 
 #[test]
-fn unknown_capability_leaves_are_ignored() {
+fn provider_native_effort_names_are_preserved() {
     let caps = map(json!({
         "image_input": leaf(false),
         "pdf_input": leaf(false),
         "structured_outputs": leaf(true),
         "batch": leaf(true),
         "thinking": { "supported": false, "future_field": { "x": 1 } },
-        "effort": { "supported": false, "ultra": leaf(true) },
+        "effort": {
+            "supported": true,
+            "minimal": leaf(true),
+            "balanced": leaf(false),
+            "deep": leaf(true),
+        },
     }));
 
-    assert_eq!(caps.reasoning, Some(ReasoningControl::Unavailable));
+    assert_eq!(option_ids(&caps), ["minimal", "deep"]);
     assert_eq!(
         caps.accepted_attachment_kinds,
         Some(vec![AttachmentKind::Text])
@@ -172,14 +177,10 @@ fn supported_effort_with_all_levels_explicitly_disabled_is_model_managed() {
 }
 
 #[test]
-fn supported_effort_with_missing_level_is_not_determined() {
+fn supported_effort_without_provider_native_levels_is_not_determined() {
     let caps = map(json!({
         "thinking": { "supported": true, "types": { "adaptive": leaf(true) } },
-        "effort": {
-            "supported": true,
-            "low": leaf(false), "medium": leaf(false), "high": leaf(false),
-            "xhigh": leaf(false),
-        },
+        "effort": { "supported": true },
     }));
 
     assert_eq!(caps.reasoning, None);
