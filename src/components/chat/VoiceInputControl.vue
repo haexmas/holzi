@@ -1,10 +1,17 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import { useEventListener } from '@vueuse/core'
 
 /**
  * Mic control for voice dictation (spec 008-voice-control-stt, T014).
+ *
+ * Push-to-talk on every platform, desktop included: audio is recorded only
+ * while the mic button is held (pointer, or Space/Enter on the focused
+ * button). Releasing over the button ends the recording and transcribes it;
+ * releasing anywhere else, pressing Escape or losing window focus discards
+ * it. There is no click-to-toggle mode and no separate cancel button.
  *
  * US2 (the "stop"/"halt"/"abbrechen" interrupt fast path cancelling an
  * in-progress assistant turn) and US3 (choosing an external transcription
@@ -15,6 +22,7 @@ import { listen } from '@tauri-apps/api/event'
  */
 
 type RecordingState = 'idle' | 'recording' | 'transcribing' | 'error'
+type Release = 'send' | 'discard'
 
 type TranscriptionResult = {
   text: string
@@ -22,6 +30,12 @@ type TranscriptionResult = {
 }
 
 const AUTO_SEND_PREF_KEY = 'voice.auto_send'
+
+/**
+ * A hold shorter than this is a stray tap, not dictation: it is discarded
+ * (a sub-300 ms clip only makes Whisper hallucinate) and the hold hint shows.
+ */
+const MIN_HOLD_MS = 300
 
 const emit = defineEmits<{
   transcript: [text: string, autoSend: boolean]
@@ -34,10 +48,33 @@ const state = ref<RecordingState>('idle')
 const autoSend = ref(true)
 const errorMessage = ref<string | null>(null)
 const noSpeechDetected = ref(false)
+const tooShort = ref(false)
+/** The pointer is held outside the mic button, so releasing now discards. */
+const releaseDiscards = ref(false)
 
 let unlistenCapped: (() => void) | null = null
 let disposed = false
 let startPending = false
+/** A press is down and its release has not been handled yet. */
+let holding = false
+let holdStartedAt = 0
+/** The pressed button while the hold is pointer-driven; null for a key hold. */
+let holdTarget: HTMLElement | null = null
+let holdPointerId: number | null = null
+/** A release that arrived while `start_voice_recording` was still in flight. */
+let earlyRelease: Release | null = null
+
+const micIcon = computed(() => {
+  if (state.value === 'transcribing') return 'lucide:loader-2'
+  return state.value === 'recording' && releaseDiscards.value
+    ? 'lucide:x'
+    : 'lucide:mic'
+})
+const micLabel = computed(() =>
+  state.value === 'recording'
+    ? t('voiceControl.mic.release')
+    : t('voiceControl.mic.hold'),
+)
 
 onMounted(async () => {
   try {
@@ -51,6 +88,7 @@ onMounted(async () => {
     'voice-recording-capped',
     ({ payload }) => {
       if (disposed || state.value !== 'recording') return
+      endHold()
       void finishRecording(payload)
     },
   )
@@ -60,6 +98,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   disposed = true
+  endHold()
   unlistenCapped?.()
   unlistenCapped = null
   if (startPending || state.value === 'recording') {
@@ -113,15 +152,25 @@ function describeError(e: unknown): string {
   }
 }
 
-async function startRecording() {
+async function startRecording(
+  target: HTMLElement | null,
+  pointerId: number | null,
+) {
   if (
     disposed ||
     startPending ||
     (state.value !== 'idle' && state.value !== 'error')
   )
     return
+  holding = true
+  holdStartedAt = performance.now()
+  holdTarget = target
+  holdPointerId = pointerId
+  earlyRelease = null
+  releaseDiscards.value = false
   errorMessage.value = null
   noSpeechDetected.value = false
+  tooShort.value = false
   startPending = true
   try {
     await invoke('start_voice_recording')
@@ -139,6 +188,10 @@ async function startRecording() {
     }
   } finally {
     startPending = false
+  }
+  // Released while the start was still in flight: settle it now.
+  if (!holding && state.value === 'recording') {
+    await settle(earlyRelease ?? 'send')
   }
 }
 
@@ -178,10 +231,95 @@ async function cancelRecording() {
   }
 }
 
-function onMicClick() {
-  if (state.value === 'idle' || state.value === 'error') startRecording()
-  else if (state.value === 'recording') finishRecording()
+function endHold() {
+  holding = false
+  holdTarget = null
+  holdPointerId = null
+  releaseDiscards.value = false
 }
+
+/** Ends the current hold. A no-op when no press is waiting for its release. */
+function release(kind: Release) {
+  if (!holding) return
+  endHold()
+  if (startPending) {
+    earlyRelease = kind
+    return
+  }
+  if (state.value === 'recording') void settle(kind)
+}
+
+async function settle(kind: Release) {
+  const tap = performance.now() - holdStartedAt < MIN_HOLD_MS
+  if (kind === 'send' && !tap) {
+    await finishRecording()
+    return
+  }
+  tooShort.value = kind === 'send'
+  await cancelRecording()
+}
+
+function pointerOverTarget(e: PointerEvent): boolean {
+  const rect = holdTarget?.getBoundingClientRect()
+  return (
+    !!rect &&
+    e.clientX >= rect.left &&
+    e.clientX <= rect.right &&
+    e.clientY >= rect.top &&
+    e.clientY <= rect.bottom
+  )
+}
+
+function onPointerDown(e: PointerEvent) {
+  // Primary button, touch or pen only: a right-click must not record.
+  if (e.button !== 0) return
+  const target = e.currentTarget as HTMLElement
+  // Keeps pointer events flowing to us when the pointer leaves the button
+  // (or the window) mid-hold, so the release is never lost.
+  target.setPointerCapture(e.pointerId)
+  void startRecording(target, e.pointerId)
+}
+
+function isHoldKey(e: KeyboardEvent) {
+  return e.key === ' ' || e.key === 'Enter'
+}
+
+function onKeyDown(e: KeyboardEvent) {
+  if (!isHoldKey(e)) return
+  e.preventDefault()
+  if (!e.repeat) void startRecording(null, null)
+}
+
+function onKeyUp(e: KeyboardEvent) {
+  if (!isHoldKey(e)) return
+  e.preventDefault()
+  if (!holdTarget) release('send')
+}
+
+// A key hold ends when the button loses focus: its keyup would go elsewhere.
+function onBlur() {
+  if (!holdTarget) release('discard')
+}
+
+useEventListener(window, 'pointermove', (e) => {
+  if (holdTarget && e.pointerId === holdPointerId) {
+    releaseDiscards.value = !pointerOverTarget(e)
+  }
+})
+useEventListener(window, 'pointerup', (e) => {
+  if (holdTarget && e.pointerId === holdPointerId) {
+    release(pointerOverTarget(e) ? 'send' : 'discard')
+  }
+})
+useEventListener(window, 'pointercancel', (e) => {
+  if (holdTarget && e.pointerId === holdPointerId) release('discard')
+})
+useEventListener(window, 'keydown', (e) => {
+  if (e.key === 'Escape') release('discard')
+})
+// A hold cannot survive the window losing focus: its release would go
+// undelivered and the recording would run until the length cap.
+useEventListener(window, 'blur', () => release('discard'))
 </script>
 
 <template>
@@ -211,43 +349,37 @@ function onMicClick() {
     <UiButton
       type="button"
       size="icon-sm"
+      class="touch-none select-none"
       :variant="state === 'recording' ? 'destructive' : 'secondary'"
       :disabled="state === 'transcribing'"
-      :aria-label="
-        state === 'recording'
-          ? t('voiceControl.mic.stop')
-          : t('voiceControl.mic.start')
-      "
-      :title="
-        state === 'recording'
-          ? t('voiceControl.mic.stop')
-          : t('voiceControl.mic.start')
-      "
-      @click="onMicClick"
+      :aria-pressed="state === 'recording'"
+      :aria-label="micLabel"
+      :title="micLabel"
+      @pointerdown="onPointerDown"
+      @keydown="onKeyDown"
+      @keyup="onKeyUp"
+      @blur="onBlur"
+      @contextmenu.prevent
     >
       <Icon
-        :name="state === 'transcribing' ? 'lucide:loader-2' : 'lucide:mic'"
+        :name="micIcon"
         class="h-3.5 w-3.5"
         :class="{
           'animate-spin': state === 'transcribing',
-          'animate-pulse text-destructive-foreground': state === 'recording',
+          'animate-pulse text-destructive-foreground':
+            state === 'recording' && !releaseDiscards,
         }"
       />
     </UiButton>
-    <button
-      v-if="state === 'recording'"
-      type="button"
-      class="text-xs text-muted-foreground underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-      @click="cancelRecording"
-    >
-      {{ t('voiceControl.mic.cancel') }}
-    </button>
     <span
       v-if="noSpeechDetected"
       class="text-xs text-muted-foreground"
       role="status"
     >
       {{ t('voiceControl.noSpeechDetected') }}
+    </span>
+    <span v-if="tooShort" class="text-xs text-muted-foreground" role="status">
+      {{ t('voiceControl.mic.hold') }}
     </span>
     <span v-if="errorMessage" class="text-xs text-destructive" role="alert">
       {{ errorMessage }}

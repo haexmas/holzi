@@ -1278,14 +1278,15 @@ onBeforeUnmount(() => {
                 <ChatVoiceInputControl @transcript="onVoiceTranscript" />
                 <UiButton
                   v-if="streamingMessageId || turnSetupPending"
-                  class="shrink-0 gap-2"
-                  size="sm"
+                  class="shrink-0"
+                  size="icon-sm"
                   variant="destructive"
                   type="button"
+                  :aria-label="t('chat.cancel')"
+                  :title="t('chat.cancel')"
                   @click="abort"
                 >
                   <Icon name="lucide:square" class="h-3.5 w-3.5 fill-current" />
-                  {{ t('chat.cancel') }}
                 </UiButton>
                 <UiButton
                   v-else

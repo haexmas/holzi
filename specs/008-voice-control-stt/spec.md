@@ -30,9 +30,11 @@ parallel system." Full design write-up: `docs/plans/2026-09-16-voice-control-stt
 
 ### User Story 1 - Dictate a chat message (Priority: P1)
 
-A user in the chat view presses and holds (or toggles) a microphone control, speaks a message,
-and releases it. The spoken words appear as text in the chat message field and — unless the user
-has turned automatic sending off — are sent to the assistant just as if typed and submitted.
+A user in the chat view presses and holds a microphone control, speaks a message, and releases
+it. The spoken words appear as text in the chat message field and — unless the user has turned
+automatic sending off — are sent to the assistant just as if typed and submitted. Releasing
+anywhere other than over the control (or pressing Escape) discards the recording instead. There is
+no click-to-toggle mode, on desktop or mobile.
 
 **Why this priority**: This is the entire point of the feature. Without it, there is nothing to
 ship.
