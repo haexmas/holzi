@@ -33,12 +33,13 @@ side, US5 reads never fail.
 - Inside the Nix dev shell: `nix develop --command scripts/with-nix-host-bridge.sh cargo ...` for
   Rust, `nix develop --command pnpm ...` for the frontend.
 - `pnpm generate:ts-types` calls plain `cargo`, which fails in the Nix dev shell without the host
-  bridge. Run its two steps by hand: the export test through
+  bridge. Wherever a task says to regenerate the bindings, run the script's two steps by hand: the
+  export test through
   `nix develop --command scripts/with-nix-host-bridge.sh cargo test --manifest-path src-tauri/Cargo.toml export_bindings`,
   then `sed -i -E 's/[[:space:]]+$//' src/types/bindings/*.ts`.
 - `cargo test` rewrites `src/types/bindings/*.ts` with trailing whitespace. After ordinary test runs,
-  `git checkout -- src/types/bindings/`. When a task intentionally changes a binding, run
-  `pnpm generate:ts-types` instead (it strips the whitespace) and commit the result.
+  `git checkout -- src/types/bindings/`. When a task intentionally changes a binding, regenerate it
+  with the two steps above (the second one strips the whitespace) and commit the result.
 - **Oversized files must not grow** (line counts recorded in T003): `models/commands.rs`,
   `chat/commands.rs`, `chat/model_loading.rs`, `providers/mod.rs`, `src/pages/chat/[instance].vue`,
   `scripts/check-chat-state.ts`. Edit call sites in place; new logic goes into new small files.
@@ -121,7 +122,7 @@ attempt still behave as before.
       search for passphrase over `src-tauri/src`, checking `log::`, `format!`, `to_string`,
       `Display` and error construction. Record "no leak found" or the fixes made in the Baseline
       section. Errors such as `HolziError::WrongPassphrase` must stay fieldless.
-- [x] T014 [US3] Run `pnpm generate:ts-types` and confirm `src/types/bindings/OpenInstanceArgs.ts`
+- [x] T014 [US3] Regenerate the bindings (see the format notes at the top) and confirm `src/types/bindings/OpenInstanceArgs.ts`
       and `CreateInstanceArgs.ts` are unchanged (still `string`). Any other diff is investigated,
       not committed blindly.
 - [x] T015 [US3] **Checkpoint Stage 1**: `cargo fmt --check`, `pnpm lint:rust` (both feature sets),
@@ -212,7 +213,7 @@ the wrapper over the Tauri mock runtime; the app behaves exactly as before.
       inner handler.
 - [ ] T026 Add `VaultClosed` and `VaultAlreadyActive` to `src-tauri/src/error.rs` (fieldless; messages "The
       vault is closed" and "A vault is already open in this app process"). Do not remove
-      `CloseFailed` yet. Run `pnpm generate:ts-types` and commit the regenerated bindings.
+      `CloseFailed` yet. Regenerate the bindings (see the format notes at the top) and commit them.
 - [ ] T027 Encapsulate the vault state. In `src-tauri/src/state.rs` make `active_instance` private and add the
       methods from the data-model table (`database`, `install`, `take`); `AppState::new` takes a
       `VaultGate` clone so `active_database(&State<AppState>)` in `src-tauri/src/state_utils.rs` keeps its
@@ -317,7 +318,7 @@ download; press close repeatedly; close by window; the process ends within about
       end with `hard_end_after` and `CloseEffects::force_end`. The command no longer calls
       `acquire_operation`.
 - [ ] T041 [US1] Delete `CloseFailed` from `src-tauri/src/error.rs`, remove the stale doc comment in
-      `src-tauri/src/state.rs`, and regenerate bindings with `pnpm generate:ts-types`.
+      `src-tauri/src/state.rs`, and regenerate the bindings (see the format notes at the top).
 - [ ] T042 [US1] Register session-scoped tasks with the gate and add the token where work runs long:
       the chat turn task (`src-tauri/src/chat/commands.rs`, the `spawn` around line 607) and the preload
       (`src-tauri/src/chat/default_model.rs`, keep its own token and join handle and also register it), both
