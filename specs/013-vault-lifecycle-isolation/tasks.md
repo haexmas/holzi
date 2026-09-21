@@ -142,14 +142,14 @@ the wrapper over the Tauri mock runtime; the app behaves exactly as before.
 
 ### Preparation
 
-- [ ] T016 Graphify consultation before authoring the new named artifacts (`VaultGate::run`,
+- [x] T016 Graphify consultation before authoring the new named artifacts (`VaultGate::run`,
       `CloseEffects`, `retry_while_locked`, `VaultDb`). The worktree has no `graphify-out/`, so run
       the queries from the primary checkout snapshot (read only): "run a future until a cancellation
       token fires", "retry an operation until a file lock is free", "abstract the side effects of
       closing so tests can record them", "wrap a shared handle with a drop guard counter". Add the
       candidates and decisions to the table in `research.md` R10. If a query fails or returns
       nonsense, warn, continue, and flag the skipped consultation in the same table (constitution).
-- [ ] T017 Confirm the app-scoped allow-list by reading each command (do not trust the list). Locate
+- [x] T017 Confirm the app-scoped allow-list by reading each command (do not trust the list). Locate
       each with `rg -n "fn <name>" src-tauri/src`: `close_instance`, `list_instances`,
       `get_hardware_info`, `list_catalog`, `catalog_recommend_tiers`, `list_stt_catalog`,
       `stt_recommend_tiers`. For each, check that neither it nor any helper it calls reaches
@@ -160,23 +160,23 @@ the wrapper over the Tauri mock runtime; the app behaves exactly as before.
 
 ### Tests for Stage 2 (write first; expected to fail until the implementation tasks land)
 
-- [ ] T018 [P] Create `src-tauri/src/vault_gate/gate_tests.rs`, quoting the data-model rules: "`phase` only
+- [x] T018 [P] Create `src-tauri/src/vault_gate/gate_tests.rs`, quoting the data-model rules: "`phase` only
       moves forward (`Idle` → `Active` → `Closing`), and `Idle` → `Closing` is allowed"; "`cancel`
       fires at most once, on the first transition into `Closing`"; "A second close request changes
       nothing and reports that a close is already running (FR-002)". Also: `begin_session` while
       `Active` is `VaultAlreadyActive`, while `Closing` is `VaultClosed`; `begin_session` from `Idle`
       succeeds exactly once when two threads race.
-- [ ] T019 [P] Create `src-tauri/src/vault_gate/drain_tests.rs` with `#[tokio::test(start_paused = true)]` and a
+- [x] T019 [P] Create `src-tauri/src/vault_gate/drain_tests.rs` with `#[tokio::test(start_paused = true)]` and a
       blocking closure that waits on a channel the test releases, so no wall-clock sleeps are needed:
       a cooperative task yields `Drained`; a task that ignores the token yields `DrainedAfterAbort`;
       a blocking closure still running at the limit yields `Stuck`, and the call returns within the
       total limit (about 3 s of virtual time). Add a plain `#[test]` for the forced end: the action
       given to `hard_end_after` runs once after the grace period and never before it (a few
       milliseconds of real time, waiting on a channel, not a sleep).
-- [ ] T020 [P] Create `src-tauri/src/vault_gate/db_tests.rs`: a `VaultDb` clone keeps the tracker non-empty
+- [x] T020 [P] Create `src-tauri/src/vault_gate/db_tests.rs`: a `VaultDb` clone keeps the tracker non-empty
       while any clone is alive and lets it empty after the last drop; `Deref` reaches the `Database`.
       Open a throwaway SQLCipher database the way `src-tauri/src/instances/startup_tests.rs` does (`tempfile`).
-- [ ] T021 [P] Create `src-tauri/tests/vault_gateway.rs` over the Tauri mock runtime (the `tauri` `test`
+- [x] T021 [P] Create `src-tauri/tests/vault_gateway.rs` over the Tauri mock runtime (the `tauri` `test`
       dev-dependency is already present): in `Idle` and `Active` every command passes; in `Closing`
       a non-allow-listed command is rejected at once with `{"kind":"VaultClosed"}` and its body never
       runs (assert with a counter), an allow-listed command passes, and a command that is not in
@@ -184,7 +184,7 @@ the wrapper over the Tauri mock runtime; the app behaves exactly as before.
 
 ### Implementation for Stage 2
 
-- [ ] T022 Create `src-tauri/src/vault_gate/mod.rs` (declare `mod vault_gate;` in `src-tauri/src/lib.rs`): `VaultGate`,
+- [x] T022 Create `src-tauri/src/vault_gate/mod.rs` (declare `mod vault_gate;` in `src-tauri/src/lib.rs`): `VaultGate`,
       cheap to `Clone` (fields behind `Arc`), with `phase: Mutex<VaultPhase>` (short-held std
       mutex), `cancel: CancellationToken`, `tasks: TaskTracker`, `aborts: Mutex<Vec<AbortHandle>>`.
       `VaultPhase` is the enum `Idle | Active | Closing`. API: `begin_session()`,
@@ -195,7 +195,7 @@ the wrapper over the Tauri mock runtime; the app behaves exactly as before.
       against the token and returns `Err(HolziError::VaultClosed)` when the token wins), and a way to
       hand out a tracker token. Also `ClosePolicy` (`Relaunch` | `Exit`) and `close_policy()` (debug
       builds return `Exit` until T048 says otherwise). Keep every new file under 500 lines.
-- [ ] T023 Create `src-tauri/src/vault_gate/drain.rs`: the ladder from research R5 (fire the token, wait up to
+- [x] T023 Create `src-tauri/src/vault_gate/drain.rs`: the ladder from research R5 (fire the token, wait up to
       the cooperative window, abort registered tasks, wait until the total limit) returning
       `DrainOutcome` (`Drained` | `DrainedAfterAbort` | `Stuck`, exactly the data-model table). The
       deadlines are named constants with a `ponytail:` comment: fixed 1 s and 3 s, ceiling "not
@@ -204,34 +204,34 @@ the wrapper over the Tauri mock runtime; the app behaves exactly as before.
       of the window event loop) that waits the grace period and then runs `action`. Its named
       constant is 500 ms, with a `ponytail:` comment: fixed 0.5 s, ceiling "a stuck exit path costs
       half a second more", upgrade path "none needed".
-- [ ] T024 Create `src-tauri/src/vault_gate/db.rs`: `VaultDb { db: Arc<Database>, _token: TaskTrackerToken }`
+- [x] T024 Create `src-tauri/src/vault_gate/db.rs`: `VaultDb { db: Arc<Database>, _token: TaskTrackerToken }`
       with `Clone` and `Deref<Target = Database>`, exactly the data-model entity.
-- [ ] T025 Create `src-tauri/src/vault_gate/invoke.rs`: `APP_SCOPED_COMMANDS` (the list confirmed in T017) and
+- [x] T025 Create `src-tauri/src/vault_gate/invoke.rs`: `APP_SCOPED_COMMANDS` (the list confirmed in T017) and
       `VaultGate::wrap`, returning a closure `Fn(Invoke<R>) -> bool`. It reads the name with
       `invoke.message.command()`; in `Closing` and not allow-listed it calls
       `invoke.resolver.reject(HolziError::VaultClosed)` and returns `true`, otherwise it calls the
       inner handler.
-- [ ] T026 Add `VaultClosed` and `VaultAlreadyActive` to `src-tauri/src/error.rs` (fieldless; messages "The
+- [x] T026 Add `VaultClosed` and `VaultAlreadyActive` to `src-tauri/src/error.rs` (fieldless; messages "The
       vault is closed" and "A vault is already open in this app process"). Do not remove
       `CloseFailed` yet. Regenerate the bindings (see the format notes at the top) and commit them.
-- [ ] T027 Encapsulate the vault state. In `src-tauri/src/state.rs` make `active_instance` private and add the
+- [x] T027 Encapsulate the vault state. In `src-tauri/src/state.rs` make `active_instance` private and add the
       methods from the data-model table (`database`, `install`, `take`); `AppState::new` takes a
       `VaultGate` clone so `active_database(&State<AppState>)` in `src-tauri/src/state_utils.rs` keeps its
       signature and now returns a `VaultDb` (or `VaultClosed` / `NoActiveInstance`). `install` will
       call `begin_session` under the same lock in Stage 4; for now it publishes only.
-- [ ] T028 In `src-tauri/src/lib.rs` build the gate once, pass a clone to `AppState::new`, `.manage(gate)`, and
+- [x] T028 In `src-tauri/src/lib.rs` build the gate once, pass a clone to `AppState::new`, `.manage(gate)`, and
       register `invoke_handler(gate.wrap(tauri::generate_handler![...]))`. The handler list itself
       is unchanged.
-- [ ] T029 Compiler-driven sweep to `VaultDb`: the callers in `src-tauri/src/chat/model_loading.rs`,
+- [x] T029 Compiler-driven sweep to `VaultDb`: the callers in `src-tauri/src/chat/model_loading.rs`,
       `src-tauri/src/chat/default_model.rs`, `src-tauri/src/chat/commands.rs`, `src-tauri/src/chat/thread_commands.rs`,
       `src-tauri/src/models/commands.rs`, `src-tauri/src/providers/mod.rs`, `src-tauri/src/providers/connect.rs`,
       `src-tauri/src/storage/preferences_commands.rs`, `src-tauri/src/device/commands.rs` and `src-tauri/src/voice.rs`. Change
       types only (for example `Arc<Database>` parameters); no logic change and no net line growth in
       the oversized files. `src-tauri/src/instances/{open,create,close}.rs` keep reading the state through the
       new methods.
-- [ ] T030 [P] Update `data-model.md` where the implementation differs from it (for example
+- [x] T030 [P] Update `data-model.md` where the implementation differs from it (for example
       `AppState` holds a gate clone, so `active_database` keeps its signature; `VaultDb` handling).
-- [ ] T031 **Checkpoint Stage 2**: `cargo fmt --check`, `pnpm lint:rust`, `cargo test`,
+- [x] T031 **Checkpoint Stage 2**: `cargo fmt --check`, `pnpm lint:rust`, `cargo test`,
       `git checkout -- src/types/bindings/` (after committing the intended T026 bindings). Behavior is
       unchanged for users. Commit `feat(vault-gate): route every request through one gateway`.
 
@@ -331,7 +331,8 @@ download; press close repeatedly; close by window; the process ends within about
       `VaultClosed`: `load_model_command` in `src-tauri/src/chat/model_loading.rs`, the transfer in
       `download_from_hf_inner` and `import_model_from_file` (`src-tauri/src/models/commands.rs`, the copy or
       download loop in `src-tauri/src/models/download.rs`), `refresh_provider_models` in `src-tauri/src/providers/mod.rs`,
-      voice start and stop in `src-tauri/src/voice.rs`, and the connect commands in `src-tauri/src/providers/connect.rs`.
+      voice start and stop in `src-tauri/src/voice.rs`, the connect commands in `src-tauri/src/providers/connect.rs`,
+      and `download_stt_model` in `src-tauri/src/stt/commands.rs` (found in T017: it is a long download).
       These are one-line call-site edits; the oversized files must not grow.
 - [ ] T044 [US1] Create `src-tauri/src/vault_gate/children.rs` with `ChildRegistry` (data-model.md),
       held by `VaultGate`: `register(pid)` returns a guard that unregisters on drop, and `kill_all()`

@@ -24,6 +24,7 @@ use holzi_lib::adapters::{ChatMessage, ChatRequest, ChatRole, ProviderAdapter, S
 use holzi_lib::identity::{holzi_migration_source, installation_id_path, HolziBootstrap};
 use holzi_lib::storage::chat_messages::{list_messages, MessageRole};
 use holzi_lib::storage::preferences::{self, PrefScope};
+use holzi_lib::vault_gate::VaultGate;
 
 const PASSPHRASE: &str = "cli-delegate-autonomy-deny-rules";
 const PREF_DENY_RULES: &str = "cli_delegate.deny_rules";
@@ -132,7 +133,11 @@ async fn run_codex_turn(
         Some(DelegateChatContext {
             pending_tool_approvals: pending,
             emit,
-            database: Some(Arc::clone(db)),
+            database: Some(
+                VaultGate::new()
+                    .vault_db(Arc::clone(db))
+                    .expect("open gate"),
+            ),
         }),
     );
     let stream = adapter

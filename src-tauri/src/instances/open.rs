@@ -77,18 +77,7 @@ pub async fn open_instance(
     // Database::open acquires the active database's advisory lock, so an
     // already-active request for the same name needs a credential check that
     // does not mount a second Database handle.
-    let active_database = {
-        let guard = state
-            .active_instance
-            .lock()
-            .map_err(|e| HolziError::CrdtInit {
-                reason: format!("active_instance mutex poisoned: {e}"),
-            })?;
-        guard
-            .as_ref()
-            .filter(|active| active.name == args.name)
-            .map(|active| Arc::clone(&active.database))
-    };
+    let active_database = state.active_database_named(&args.name)?;
 
     if let Some(_active_database) = active_database {
         let passphrase = Arc::clone(&passphrase);
@@ -133,17 +122,7 @@ pub async fn open_instance(
 
         // The active slot may have changed while the read-only validation ran.
         // Only return the existing instance if it is still the requested one.
-        let guard = state
-            .active_instance
-            .lock()
-            .map_err(|e| HolziError::CrdtInit {
-                reason: format!("active_instance mutex poisoned: {e}"),
-            })?;
-        if guard
-            .as_ref()
-            .is_some_and(|active| active.name == args.name)
-        {
-            drop(guard);
+        if state.is_active_named(&args.name)? {
             let _ = set_file_mtime(&db_path, FileTime::now());
             let info = InstanceInfo {
                 name: args.name.clone(),
@@ -178,30 +157,18 @@ pub async fn open_instance(
 
     // Hold the state lock only for the atomic old-runtime drop/new-runtime
     // publish. The blocking SQLCipher open above cannot stall observers.
-    {
-        let mut guard = state
-            .active_instance
-            .lock()
-            .map_err(|e| HolziError::CrdtInit {
-                reason: format!("active_instance mutex poisoned: {e}"),
-            })?;
-
-        // Candidate is up — drop the previous handle (releases fs2 lock)
-        // and publish the new one atomically.
-        let previous = guard.take();
-        if let Some(prev) = previous {
-            // The previous handle's Arc drops when `prev` goes out of scope.
-            // A rare failure to release the fs2 lock here (subsystem still
-            // holding a clone) would let both Arcs live on — acceptable for
-            // MVP, tightens later once background tasks (relay, iroh) enter.
-            drop(prev);
-        }
-        *chat.session.lock().unwrap_or_else(|e| e.into_inner()) = None;
-        *guard = Some(ActiveInstanceHandle {
+    // Candidate is up — drop the previous handle (releases fs2 lock) and
+    // publish the new one atomically. The previous handle's Arc drops inside
+    // `switch_to`. A rare failure to release the fs2 lock there (subsystem
+    // still holding a clone) would let both Arcs live on — acceptable for
+    // MVP, tightens later once background tasks (relay, iroh) enter.
+    state.switch_to(
+        ActiveInstanceHandle {
             name: args.name.clone(),
             database: candidate,
-        });
-    }
+        },
+        || *chat.session.lock().unwrap_or_else(|e| e.into_inner()) = None,
+    )?;
     chat.bump_vault_generation();
     voice.invalidate_whisper_cache().await;
     emit_model_load_status(&app, &chat);

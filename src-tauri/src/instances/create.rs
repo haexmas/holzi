@@ -67,16 +67,8 @@ pub async fn create_instance(
 
     // Refuse if another instance is currently active — one active
     // instance per process (FR-022).
-    {
-        let guard = state
-            .active_instance
-            .lock()
-            .map_err(|e| HolziError::CrdtInit {
-                reason: format!("active_instance mutex poisoned: {e}"),
-            })?;
-        if guard.is_some() {
-            return Err(HolziError::InstanceAlreadyActive);
-        }
+    if state.has_active()? {
+        return Err(HolziError::InstanceAlreadyActive);
     }
 
     let db_path = get_instance_path(&app, &args.name)?;
@@ -156,24 +148,15 @@ fn publish_active(
     db_arc: &Arc<Database>,
     pending_marker: &Path,
 ) -> Result<CreateInstanceResult> {
-    {
-        let mut guard = state
-            .active_instance
-            .lock()
-            .map_err(|e| HolziError::CrdtInit {
-                reason: format!("active_instance mutex poisoned during publish: {e}"),
-            })?;
-        if guard.is_some() {
-            return Err(HolziError::InstanceAlreadyActive);
-        }
-        // Publication commits Genesis: a leftover marker would cause startup
-        // cleanup to delete this vault, so removal must succeed first.
-        std::fs::remove_file(pending_marker)?;
-        *guard = Some(ActiveInstanceHandle {
+    state.install(
+        ActiveInstanceHandle {
             name: name.to_string(),
             database: Arc::clone(db_arc),
-        });
-    }
+        },
+        // Publication commits Genesis: a leftover marker would cause startup
+        // cleanup to delete this vault, so removal must succeed first.
+        || Ok(std::fs::remove_file(pending_marker)?),
+    )?;
 
     let info = InstanceInfo {
         name: name.to_string(),
