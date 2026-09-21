@@ -703,12 +703,18 @@ pub async fn unload_local_model(app: AppHandle, chat: State<'_, ChatState>) -> R
 /// field of its own, only `model_id`, so a naive read used to surface the
 /// raw id (a `<provider-uuid>:<remote-id>` composite for `cli_delegate`
 /// models) as the "name" instead.
+///
+/// Read-only, so it deliberately does not take the operation slot
+/// (`ChatState::acquire_operation`): that slot is an exclusive try-lock for
+/// loads, vault transitions and whole turns, so a reader holding it made two
+/// overlapping reads — the chat page issues one from the load-status handler
+/// and one from `initialize()` — reject each other, and made every read fail
+/// while a turn was running.
 #[tauri::command]
 pub async fn active_model_info(
     state: State<'_, AppState>,
     chat: State<'_, ChatState>,
 ) -> Result<Option<LoadedModelInfo>> {
-    let _operation = chat.acquire_operation()?;
     let session = {
         let guard = chat.session.lock().map_err(|e| HolziError::CrdtInit {
             reason: format!("chat.session mutex poisoned: {e}"),
