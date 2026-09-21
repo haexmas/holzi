@@ -64,30 +64,30 @@ two P1 stories (US1 and US2) with their prerequisites are the MVP.
 **Purpose**: haexmas/atoms#32 is merged as `d5c48d0eb6662da84086bf69a3ca041a494e2b26`; holzi still pins
 the older revision, so the shell has no `tauri-driver`, no `WebKitWebDriver` and no `xvfb-run`.
 
-- [ ] T001 Work in `.worktrees/016-e2e-testing` with a real `pnpm install` (no symlinked
+- [x] T001 Work in `.worktrees/016-e2e-testing` with a real `pnpm install` (no symlinked
       `node_modules`). This branch, `016-e2e-testing-plan`, carries the plan and these tasks; each
       later stage starts from the updated `origin/main` on its own branch (`016-e2e-stage0-tools`,
       `016-e2e-stage1-command`, `016-e2e-stage2-helpers`, `016-e2e-stage3-close`,
       `016-e2e-stage4-validation`, `016-e2e-stage5-ci`), created after the previous stage merged.
-- [ ] T002 Record the baseline in the "Baseline" section at the end of this file before any edit:
+- [x] T002 Record the baseline in the "Baseline" section at the end of this file before any edit:
       `pnpm typecheck:scripts`, `pnpm lint`, `pnpm format:check`, `pnpm check:chat-state`,
       `pnpm check:vault-lifecycle`, `pnpm check:templates` results, and `wc -l` of
       `src/pages/chat/[instance].vue` (1316 at planning time), `src/components/onboarding/InstancesList.vue`
       (44) and `src/components/workspace/ChatFab.vue` (20).
-- [ ] T003 In a clone of `https://github.com/haexmas/atoms`, list what arrives with the new pin:
+- [x] T003 In a clone of `https://github.com/haexmas/atoms`, list what arrives with the new pin:
       `git log --oneline 1a292194da6a279eb382e562870fed1c41ebdf8e..d5c48d0eb6662da84086bf69a3ca041a494e2b26`.
       Put the list in the PR description. Anything besides #32 that changes a delivered file is noted
       there and checked in T005.
-- [ ] T004 In `.spaex/manifest.json` change the `revision` of the entry whose `source` is
+- [x] T004 In `.spaex/manifest.json` change the `revision` of the entry whose `source` is
       `https://github.com/haexmas/atoms` from `1a292194da6a279eb382e562870fed1c41ebdf8e` to the full
       hash `d5c48d0eb6662da84086bf69a3ca041a494e2b26` (a branch or `HEAD` is not allowed for a pin,
       constitution IV; the old value occurs once). Then run `spaex install` from the worktree root.
-- [ ] T005 Review the diff `spaex install` produced. Expected: `flake.nix` (now reads
+- [x] T005 Review the diff `spaex install` produced. Expected: `flake.nix` (now reads
       `.devshell/packages.nix`), the new `.devshell/packages.nix`, `.spaex/generated/nix-packages.json`
       (gains `xvfb-run`) and the manifest. Any other changed file is listed in the commit body and
       justified or reverted. No absolute path or secret may appear in a delivered file. Confirm
       `git ls-files .devshell/packages.nix` lists it (the flake reads only tracked files).
-- [ ] T006 Verify the tools in the shell. Run the block below through
+- [x] T006 Verify the tools in the shell. Run the block below through
       `nix develop --command scripts/with-nix-host-bridge.sh bash -c '<block>'`. Each tool prints a path
       in the Nix store and the two versions are equal (2.52.6 at planning time). The first
       `nix develop` after the pin builds `tauri-driver` from source and takes several minutes. Record
@@ -99,7 +99,7 @@ the older revision, so the shell has no `tauri-driver`, no `WebKitWebDriver` and
       pkg-config --modversion webkit2gtk-4.1
       ```
 
-- [ ] T007 Commit `chore(spaex): pin atoms at the revision that delivers the e2e tools` (body: the T003
+- [x] T007 Commit `chore(spaex): pin atoms at the revision that delivers the e2e tools` (body: the T003
       list and the T005 review). Push and open the Stage 0 PR after asking the operator.
 
 **Checkpoint**: the shell provides the three tools and the version file; nothing else changed.
@@ -686,8 +686,53 @@ T063 window-close-while-streaming   T064 closing-page   T065 lock-twice
 
 ## Baseline
 
-_To be filled by T002 and T085._
+Recorded at T002 on 2026-09-22, branch `016-e2e-stage0-tools` from `origin/main` at `8e0b00b`, before any edit.
+
+| Check                                                      | Result                   |
+| ---------------------------------------------------------- | ------------------------ |
+| `pnpm typecheck:scripts`, `pnpm lint`, `pnpm format:check` | pass                     |
+| `pnpm check:chat-state`                                    | 45 tests, 45 pass        |
+| `pnpm check:vault-lifecycle`                               | 5 tests, 5 pass          |
+| `pnpm check:templates`                                     | 33 Vue templates compile |
+
+| File                                          | Lines |
+| --------------------------------------------- | ----- |
+| `src/pages/chat/[instance].vue`               | 1316  |
+| `src/components/onboarding/InstancesList.vue` | 44    |
+| `src/components/workspace/ChatFab.vue`        | 20    |
+
+_T085 adds the closing numbers here._
 
 ## Validation record
 
-_To be filled by T006, T031, T036, T052, T058, T066, T067, T068, T073 to T083 and T088._
+### Stage 0 (T003 to T006), 2026-09-22
+
+- **T003** The atoms range `1a292194…..d5c48d0e…` holds two commits: `480a0e37` (the tooling change) and
+  `d5c48d0e` (the merge of haexmas/atoms#32). Nothing else arrives with the new pin.
+- **T004** The `revision` in `.spaex/manifest.json` is now the full hash
+  `d5c48d0eb6662da84086bf69a3ca041a494e2b26`. `spaex install` first stopped with
+  `pinned-revision-not-found`; `git fetch origin` in spaex's own publisher clone under
+  `~/.local/share/spaex/repos/` fixed that. The installed run used
+  `spaex install --speckit-agents claude,codex --no-install-hooks`: the Spec Kit selection is what the
+  lock recorded before (a bare `spaex install` refuses to run without one), and the hooks were skipped
+  because the graphify hook refuses any branch that is not `main`, which would only have recorded a
+  branch-specific failure. `install.lock` therefore keeps its earlier hook state.
+- **T005** Changed by the install: `flake.nix` (reads `.devshell/packages.nix`), the new
+  `.devshell/packages.nix`, `.spaex/generated/nix-packages.json` (gains `xvfb-run`),
+  `.spaex/manifest.json` and `.spaex/install.lock` (tracked despite its ignore rule: new revisions, the
+  new file's hash, a new generation id and the Spec Kit declaration fingerprint). No other tracked file
+  changed. No absolute path in any delivered file. `git ls-files .devshell/packages.nix` lists it.
+- **T006** In the shell, through the host bridge:
+
+  ```text
+  tauri-driver     /nix/store/…-tauri-driver-2.0.6/bin/tauri-driver
+  WebKitWebDriver  /nix/store/…-webkit-webdriver-2.52.6/bin/WebKitWebDriver
+  xvfb-run         /nix/store/…-xvfb-run-1+g87f6705/bin/xvfb-run
+  driver version file:                       2.52.6
+  pkg-config --modversion webkit2gtk-4.1:    2.52.6
+  ```
+
+  `tauri-driver --help` lists `--port`, `--native-port` and `--native-driver`, the options the suite
+  passes.
+
+_Filled by later tasks: T031, T036, T052, T058, T066, T067, T068, T073 to T083 and T088._
