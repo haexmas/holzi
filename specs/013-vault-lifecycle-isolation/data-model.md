@@ -9,12 +9,14 @@ types that carry the passphrase. There is no schema change and no migration.
 
 The single owner of "may requests be answered, and what is still running".
 
-| Field    | Type                      | Meaning                                                                               |
-| -------- | ------------------------- | ------------------------------------------------------------------------------------- |
-| `phase`  | `VaultPhase`              | Where the process is in its one-session life. Guarded by one short-held std `Mutex`.  |
-| `cancel` | `CancellationToken`       | Fired once when the close starts. Children are handed to tasks that need to clean up. |
-| `tasks`  | `TaskTracker`             | Counts session-scoped tasks, blocking work and every live `VaultDb`. Closed on close. |
-| `aborts` | `Mutex<Vec<AbortHandle>>` | Abort handles of registered async tasks, used by the second rung of the drain.        |
+| Field        | Type                      | Meaning                                                                               |
+| ------------ | ------------------------- | ------------------------------------------------------------------------------------- |
+| `phase`      | `VaultPhase`              | Where the process is in its one-session life. Guarded by one short-held std `Mutex`.  |
+| `cancel`     | `CancellationToken`       | Fired once when the close starts. Children are handed to tasks that need to clean up. |
+| `tasks`      | `TaskTracker`             | Counts session-scoped tasks, blocking work and every live `VaultDb`. Closed on close. |
+| `aborts`     | `Mutex<Vec<AbortHandle>>` | Abort handles of registered async tasks, used by the second rung of the drain.        |
+| `children`   | `ChildRegistry`           | The child processes started for the vault (see below).                                |
+| `forced_end` | `AtomicBool`              | Claimed by the first forced end, so it runs once however often it is armed.           |
 
 The policy (relaunch or exit, see `ClosePolicy` below) is not a gate field: `close_policy()` is a
 function of the build. The gate also holds a `runtime: Option<Handle>` for tracked work; `None`
@@ -53,7 +55,9 @@ A failed open leaves the gate in `Idle`, so the user can retry a wrong passphras
 until the relaunch under the dev runner is verified (research R2). Window close and quit use `Exit`
 regardless, because the user asked to leave. The forced end uses the same policy: `Exit` calls
 `std::process::exit(0)` and `Relaunch` calls `tauri::process::restart`, about 0.5 s after the normal
-request, and only if the process is still alive.
+request, and only if the process is still alive. A second forced end is armed with phase 1, at the
+drain limit plus 0.5 s, for a background phase that never gets to run; the two share one claim on
+the gate, so the forced end runs once.
 
 ## CloseOutcome / DrainOutcome
 
@@ -87,13 +91,14 @@ tracker can empty and the drain can take the `Arc` out of `AppState` and drop it
 `active_database(&State<AppState>)` keeps its signature and now returns a `VaultDb`. Access goes
 through methods:
 
-| Method                                                                 | Used by                  | Behavior                                                                                                                    |
-| ---------------------------------------------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| `database()`                                                           | `active_database`        | Returns a `VaultDb` (one tracker token per call), `VaultClosed` once the gate is closing, or `NoActiveInstance`.            |
-| `active_database_named(name)`, `is_active_named(name)`, `has_active()` | `open`, `create`         | Read-only questions about the slot.                                                                                         |
-| `install(handle, commit)`                                              | `create`, close rollback | Publishes the handle if the slot is empty and runs `commit` under the same lock right before; Stage 4 adds `begin_session`. |
-| `switch_to(handle, while_locked)`                                      | `open`                   | The atomic switch of spec 001: drops the previous handle, runs `while_locked`, publishes. Stage 4 removes it.               |
-| `take()`                                                               | the close task           | Removes the handle so the drain can drop it after clones end.                                                               |
+| Method                                                                 | Used by           | Behavior                                                                                                                    |
+| ---------------------------------------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `database()`                                                           | `active_database` | Returns a `VaultDb` (one tracker token per call), `VaultClosed` once the gate is closing, or `NoActiveInstance`.            |
+| `active_database_named(name)`, `is_active_named(name)`, `has_active()` | `open`, `create`  | Read-only questions about the slot.                                                                                         |
+| `install(handle, commit)`                                              | `create`          | Publishes the handle if the slot is empty and runs `commit` under the same lock right before; Stage 4 adds `begin_session`. |
+| `switch_to(handle, while_locked)`                                      | `open`            | The atomic switch of spec 001: drops the previous handle, runs `while_locked`, publishes. Stage 4 removes it.               |
+| `take()`                                                               | the close task    | Removes the handle so the drain can drop it after clones end.                                                               |
+| `active_name()`                                                        | the close task    | The vault's name for the list-changed event.                                                                                |
 
 ## Secret-carrying argument types
 
@@ -115,8 +120,10 @@ Owned by `VaultGate`. Holds the process id of every child process started for th
 delegated CLIs, MCP servers), each one its own process group. `register(pid)` returns a guard that
 removes the entry on drop. `kill_all()` kills every registered group (Unix `kill(-pid, SIGKILL)`,
 Windows `taskkill /T /F`) and makes any later registration kill at once. The drain ladder calls it
-at its end and the forced end calls it right before the process ends, so no child outlives the vault
-session (FR-003).
+when it aborts, so a thread waiting for its child is freed instead of holding the drain to the limit,
+and on every other path too. The forced end calls it right before the process ends, so no child
+outlives the vault session (FR-003). A process id that could name more than one group (0, 1 or above
+`i32::MAX`) is never signalled.
 
 ## ProcessPresence (new)
 

@@ -64,8 +64,9 @@ the cancellation would then outlive the app and could keep running a tool after 
 FR-003 and the edge case that a running tool or child process is stopped with the session.
 **Decision**: a `ChildRegistry` in the gate. Every child started for the vault (the tool shell in
 `chat/tools/cli.rs`, delegated CLIs, MCP servers in `chat/tools/mcp.rs`) is its own process group and
-is registered. The drain ladder calls `kill_all` at its end, and the forced end calls it right before
-it ends the process. `kill_all` reuses what the code already does (`libc::kill(-pid, SIGKILL)` on
+is registered. The drain ladder calls `kill_all` when it aborts (a thread that waits for its child
+cannot be aborted and would hold the drain to the limit) and on its other paths, and the forced end
+calls it right before it ends the process. `kill_all` reuses what the code already does (`libc::kill(-pid, SIGKILL)` on
 Unix, `taskkill /T /F` on Windows in `cli.rs`), so there is no new dependency. **Limit**: a
 descendant that left its process group survives. **Upgrade path**: a Windows Job Object with
 kill-on-close and `PR_SET_PDEATHSIG` on Linux, which would also cover a killed app; not adopted
@@ -137,9 +138,13 @@ the wrapper (R3); long-running requests are cancelled through the session token 
 their response reaches no page. If the reviewer wants a typed error even for those, the follow-up is
 migrating commands to an extractor (R3 alternatives).
 
-**Open**: where a static file is served from. The Nuxt config sets `srcDir: 'src/'` and there is no
-`public/` directory today. The task verifies the placement so the built output contains
-`closing.html` next to the app, and uses `about:blank` if that fails (same effect, no spinner).
+**Outcome (2026-09-21)**: the page lives at `public/closing.html` in the repository root, next to
+`src/`. Nuxt 4 resolves its `public/` directory against the repository root, not against `srcDir`, so
+`src/public/` is not used. Both places that matter were checked: `pnpm dev` serves
+`http://localhost:3030/closing.html` as `text/html` (HTTP 200), and `pnpm generate`, the command
+named in `beforeBuildCommand`, puts the file at `.output/public/closing.html`, which is the
+`frontendDist` folder Tauri embeds. The `about:blank` fallback stays in the code for the case that
+the navigation to the page fails.
 
 ## R5 — Tracking work and draining
 
@@ -168,6 +173,15 @@ cancellation token) instead of adding a second mechanism, and the tracker replac
 **What cannot be stopped in-process**: blocking threads (a long SQLite call, local inference on the
 engine's own threads, audio capture threads). They are bounded by the 3 s limit, after which the
 process ends. This is the reason the process ends on close at all.
+
+**Residuals (recorded 2026-09-21, T042)**: the reader thread in
+`adapters/cli_delegate/connect_claude.rs` (a plain `std::thread` reading the PTY of a
+`claude setup-token` flow) is not converted: it has no gate to register with, holds no vault data
+(only the URL and the token that flow produces) and ends with the PTY or the process. The
+`claude setup-token` child itself is not in the `ChildRegistry` either; it ends when the process
+does, because its terminal closes. `gate.run` drops the future of a long command at the close, so
+a `spawn_blocking` closure such as the model file copy keeps running until the process ends, and
+the staging file it leaves is removed by the next start-up cleanup.
 
 **Open**: whether dropping the local inference stream stops the engine promptly
 (`llm/local/stream.rs` spawns the reader task; the engine thread is inside mistralrs). If it does

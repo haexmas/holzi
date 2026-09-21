@@ -1,9 +1,11 @@
 //! The drain ladder and the forced end (research R5, data-model.md `DrainOutcome`).
 //!
 //! After a close starts, the drain gives tracked work a cooperative window to stop by itself,
-//! then aborts the registered async tasks, then reports. Blocking threads cannot be aborted, so
-//! the ladder says so ([`DrainOutcome::Stuck`]) instead of pretending; ending the process is the
-//! final answer, never a retry for the user.
+//! then aborts the registered async tasks and ends every registered child process, then reports.
+//! Children go at the abort rung, not only at the end, because a thread that waits for its child
+//! cannot be aborted and would otherwise hold the drain until the limit. Blocking threads cannot
+//! be aborted, so the ladder says so ([`DrainOutcome::Stuck`]) instead of pretending; ending the
+//! process is the final answer, never a retry for the user.
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -40,13 +42,16 @@ impl VaultGate {
     }
 
     /// Runs the ladder: fire the token (idempotent), wait up to `cooperative`, abort registered
-    /// tasks, wait until `total` has passed since the start.
+    /// tasks and end the registered children, wait until `total` has passed since the start.
+    /// Children are ended on every path, so none outlives the session and a late registration is
+    /// killed at once.
     pub async fn drain_with(&self, cooperative: Duration, total: Duration) -> DrainOutcome {
         self.request_close();
         if tokio::time::timeout(cooperative, self.inner.tasks.wait())
             .await
             .is_ok()
         {
+            self.inner.children.kill_all();
             return DrainOutcome::Drained;
         }
         for abort in self
@@ -58,6 +63,7 @@ impl VaultGate {
         {
             abort.abort();
         }
+        self.inner.children.kill_all();
         let remaining = total.saturating_sub(cooperative);
         if tokio::time::timeout(remaining, self.inner.tasks.wait())
             .await
@@ -70,23 +76,33 @@ impl VaultGate {
     }
 }
 
-/// Runs `action` on a plain thread after `grace`. The thread depends on neither tokio nor the
-/// window event loop, so a hung exit path cannot keep the process alive. If no thread can be
-/// started the action runs at once: a forced end that never runs is worse than an early one.
+/// Runs `action` on a plain thread after `grace`, for the forced end of the process. See
+/// [`on_plain_thread`].
 pub fn hard_end_after<F>(grace: Duration, action: F)
+where
+    F: FnOnce() + Send + 'static,
+{
+    on_plain_thread("vault-hard-end", grace, action);
+}
+
+/// Runs `action` on a plain thread named `name` after `delay`. The thread depends on neither
+/// tokio nor the window event loop, so a hung runtime or exit path cannot keep it from running. If
+/// no thread can be started the action runs at once: an action that never runs is worse than an
+/// early one.
+pub fn on_plain_thread<F>(name: &str, delay: Duration, action: F)
 where
     F: FnOnce() + Send + 'static,
 {
     let slot = Arc::new(Mutex::new(Some(action)));
     let thread_slot = Arc::clone(&slot);
     let spawned = std::thread::Builder::new()
-        .name("vault-hard-end".into())
+        .name(name.into())
         .spawn(move || {
-            std::thread::sleep(grace);
+            std::thread::sleep(delay);
             run_once(&thread_slot);
         });
     if let Err(error) = spawned {
-        log::error!("could not start the forced-end thread, ending now: {error}");
+        log::error!("could not start the {name} thread, running its action now: {error}");
         run_once(&slot);
     }
 }

@@ -44,7 +44,6 @@ const { closeAsync } = useInstance()
 const { getPrefAsync, setPrefAsync } = usePreferences()
 const { currentDeviceInfoAsync } = useDevice()
 const { errString } = useErrorString()
-const store = useInstancesStore()
 const modelStore = useModelsStore()
 const {
   activeModel,
@@ -495,15 +494,12 @@ async function newChat() {
   void resetTextarea()
 }
 
-/** Closes the active instance and returns to the locked landing page. */
+/**
+ * Asks the backend to close the vault. It replaces this page with a spinner and ends the process
+ * (spec 013), so nothing is navigated or cleared here and a failed call has nothing to show.
+ */
 async function lock() {
-  try {
-    await closeAsync()
-    store.setActiveInstance(null)
-    await navigateTo('/')
-  } catch (e: unknown) {
-    lastError.value = errString(e)
-  }
+  await closeAsync().catch(() => {})
 }
 
 function setReasoningExpanded(messageId: string, expanded: boolean) {

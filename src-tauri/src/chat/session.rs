@@ -19,6 +19,7 @@ use crate::chat::tools::cli::CliTool;
 use crate::chat::tools::mcp::{self, McpServerConfig};
 use crate::chat::tools::{ApprovalDecision, Tool, ToolRegistry};
 use crate::storage::providers::ProviderKind;
+use crate::vault_gate::ChildRegistry;
 
 /// Structured lifecycle state shared by the Workspace and Chat views.
 #[derive(Debug, Clone, Serialize)]
@@ -80,7 +81,7 @@ struct ModelLoadRuntime {
 
 struct PreloadHandle {
     cancel: CancellationToken,
-    join: tauri::async_runtime::JoinHandle<()>,
+    join: tokio::task::JoinHandle<()>,
 }
 
 /// Metadata about the currently-loaded model. Both the local and
@@ -130,6 +131,8 @@ pub struct ChatState {
     pub cancelled_tool_approvals: Arc<Mutex<HashSet<Uuid>>>,
     pub tool_cancellation: Arc<Mutex<Option<CancellationToken>>>,
     model_load: Arc<Mutex<ModelLoadRuntime>>,
+    /// Where the tools register the child processes they start, so ending the vault ends them.
+    children: ChildRegistry,
 }
 
 impl Clone for ChatState {
@@ -143,6 +146,7 @@ impl Clone for ChatState {
             cancelled_tool_approvals: Arc::clone(&self.cancelled_tool_approvals),
             tool_cancellation: Arc::clone(&self.tool_cancellation),
             model_load: Arc::clone(&self.model_load),
+            children: self.children.clone(),
         }
     }
 }
@@ -151,8 +155,14 @@ impl ChatState {
     /// The host-CLI tool is registered unconditionally and immediately —
     /// unlike MCP tools it is never connection-dependent (T019).
     pub fn new() -> Self {
+        Self::with_children(ChildRegistry::default())
+    }
+
+    /// Like [`ChatState::new`], with the tools registering their child processes in `children`,
+    /// which is the registry of the vault gate.
+    pub fn with_children(children: ChildRegistry) -> Self {
         let mut registry = ToolRegistry::new();
-        registry.register(Arc::new(CliTool));
+        registry.register(Arc::new(CliTool::new(children.clone())));
         Self {
             operation: Arc::new(tokio::sync::Mutex::new(())),
             session: Arc::new(Mutex::new(None)),
@@ -169,7 +179,13 @@ impl ChatState {
                 },
                 preload: None,
             })),
+            children,
         }
+    }
+
+    /// The registry the tools of this state register their child processes in.
+    pub fn children(&self) -> &ChildRegistry {
+        &self.children
     }
 
     /// Returns the current active-Vault generation.
@@ -280,12 +296,27 @@ impl ChatState {
     pub fn install_preload_handle(
         &self,
         cancel: CancellationToken,
-        join: tauri::async_runtime::JoinHandle<()>,
+        join: tokio::task::JoinHandle<()>,
     ) {
         self.model_load
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .preload = Some(PreloadHandle { cancel, join });
+    }
+
+    /// Fires the cancellation of an active preload without waiting for it. The close uses this:
+    /// the gate's drain is what waits, within its own limit, so a preload that ignores the signal
+    /// can never hold the close up.
+    pub fn cancel_preload(&self) {
+        if let Some(preload) = self
+            .model_load
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .preload
+            .as_ref()
+        {
+            preload.cancel.cancel();
+        }
     }
 
     /// Cancels an active preload and waits for all of its child work to terminate.
@@ -307,6 +338,49 @@ impl ChatState {
         }
     }
 
+    /// Empties everything a vault session can leave in this state, for the close (spec 013). The
+    /// caller has already cancelled the turn through `abort_turn`; this only forgets what is
+    /// left: the loaded model, the turn's abort handle and cancellation slot, both approval maps,
+    /// and every tool a server contributed. The always-present host-CLI tool stays, as after
+    /// [`ChatState::new`]. Dropping the session is what releases the database handle a delegate
+    /// adapter holds, so the close calls this before it waits for the drain. Idempotent.
+    pub fn reset_for_close(&self) {
+        // Take each value out under its lock and drop it after the guard is gone, so no drop of
+        // an adapter or tool ever runs while a lock is held.
+        let session = self
+            .session
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        let generation = self
+            .current_generation
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        let cancellation = self
+            .tool_cancellation
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        let pending = std::mem::take(
+            &mut *self
+                .pending_tool_approvals
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()),
+        );
+        self.cancelled_tool_approvals
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
+        let mut host_only = ToolRegistry::new();
+        host_only.register(Arc::new(CliTool::new(self.children.clone())));
+        let tools = std::mem::replace(
+            &mut *self.tool_registry.lock().unwrap_or_else(|e| e.into_inner()),
+            host_only,
+        );
+        drop((session, generation, cancellation, pending, tools));
+    }
+
     /// Reject overlapping operations before they can replace another turn's
     /// cancellation handles or carry a loaded adapter into a different vault.
     pub fn acquire_operation(&self) -> crate::error::Result<tokio::sync::OwnedMutexGuard<()>> {
@@ -324,13 +398,17 @@ impl ChatState {
     /// (spec.md Assumptions) — a future settings surface would call this
     /// whenever the user's configured server list changes.
     pub async fn refresh_mcp_tools(&self, servers: &[McpServerConfig]) {
-        let cli_name = CliTool.name().to_string();
-        let discovered =
-            mcp::discover_mcp_tools(servers, &std::collections::HashSet::from([cli_name])).await;
+        let cli_name = CliTool::default().name().to_string();
+        let discovered = mcp::discover_mcp_tools(
+            servers,
+            &std::collections::HashSet::from([cli_name]),
+            &self.children,
+        )
+        .await;
 
         let mut registry = self.tool_registry.lock().unwrap_or_else(|e| e.into_inner());
         registry.clear();
-        registry.register(Arc::new(CliTool));
+        registry.register(Arc::new(CliTool::new(self.children.clone())));
         for tool in discovered {
             registry.register(tool);
         }

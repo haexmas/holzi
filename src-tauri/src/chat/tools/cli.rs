@@ -20,6 +20,7 @@ use tokio::process::Command;
 use tokio_util::sync::CancellationToken;
 
 use super::{RiskClass, Tool, ToolResult};
+use crate::vault_gate::ChildRegistry;
 
 const NAME: &str = "run_command";
 const DESCRIPTION: &str = "Runs a shell command on the user's device and returns its output.";
@@ -55,8 +56,18 @@ where
 }
 
 /// Registered unconditionally in every `ChatState` (T019) — unlike MCP
-/// tools, this one is never connection-dependent.
-pub struct CliTool;
+/// tools, this one is never connection-dependent. Every shell it starts is registered with the
+/// vault gate's child registry, so ending the vault ends the shell and what it started.
+#[derive(Default)]
+pub struct CliTool {
+    children: ChildRegistry,
+}
+
+impl CliTool {
+    pub fn new(children: ChildRegistry) -> Self {
+        Self { children }
+    }
+}
 
 fn input_schema() -> Value {
     serde_json::json!({
@@ -131,6 +142,9 @@ impl Tool for CliTool {
             Ok(child) => child,
             Err(e) => return ToolResult::error(format!("failed to spawn command: {e}")),
         };
+
+        // Registered from the first moment the shell exists; the entry goes as soon as it is reaped.
+        let child_registration = child.id().map(|pid| self.children.register(pid));
 
         let Some(stdout): Option<ChildStdout> = child.stdout.take() else {
             return ToolResult::error("failed to capture command stdout");
@@ -230,6 +244,8 @@ impl Tool for CliTool {
                 let _ = task.await;
             }
         }
+
+        drop(child_registration);
 
         match outcome {
             Outcome::Finished(Ok((status, stdout, stderr))) => {

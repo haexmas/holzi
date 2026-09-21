@@ -50,6 +50,36 @@ use super::turn::{now_ms, run_turn, start_step_stream, StreamStartError};
 
 pub(crate) const PREF_LAST_ACTIVE_MODEL: &str = "chat.last_active_model_id";
 
+/// Removes the user turn and, when this send created it, its empty thread after startup failed
+/// before `run_turn` could persist the assistant row.
+async fn cleanup_staged_send(
+    db: crate::vault_gate::VaultDb,
+    user_message_id: Uuid,
+    thread_id: Uuid,
+    is_new_thread: bool,
+) -> Result<()> {
+    let cleanup = tauri::async_runtime::spawn_blocking(move || {
+        db.with_connection(|conn| {
+            msg_store::delete_message(conn, user_message_id).map_err(haex_crdt::Error::from)?;
+            if is_new_thread {
+                thread_store::delete_thread(conn, thread_id).map_err(haex_crdt::Error::from)?;
+            }
+            Ok(())
+        })
+    })
+    .await;
+
+    match cleanup {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(error)) => Err(HolziError::CrdtInit {
+            reason: format!("failed to clean up staged message or thread: {error}"),
+        }),
+        Err(error) => Err(HolziError::CrdtInit {
+            reason: format!("failed to clean up staged message or thread: {error}"),
+        }),
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SendMessageArgs {
@@ -545,35 +575,12 @@ pub async fn send_message(
                 StreamStartError::Cancelled => "generation cancelled".to_string(),
                 StreamStartError::Failed(reason) => reason,
             };
-            let cleanup_db = db.clone();
-            let cleanup = tauri::async_runtime::spawn_blocking(move || {
-                cleanup_db.with_connection(|conn| {
-                    msg_store::delete_message(conn, user_message_id)
-                        .map_err(haex_crdt::Error::from)?;
-                    if is_new_thread {
-                        thread_store::delete_thread(conn, thread_id)
-                            .map_err(haex_crdt::Error::from)?;
-                    }
-                    Ok(())
-                })
-            })
-            .await;
-            match cleanup {
-                Ok(Ok(())) => {}
-                Ok(Err(cleanup_error)) => {
-                    return Err(HolziError::CrdtInit {
-                        reason: format!(
-                            "adapter start: {error}; failed to clean up staged message or thread: {cleanup_error}"
-                        ),
-                    });
-                }
-                Err(cleanup_error) => {
-                    return Err(HolziError::CrdtInit {
-                        reason: format!(
-                            "adapter start: {error}; failed to clean up staged message or thread: {cleanup_error}"
-                        ),
-                    });
-                }
+            if let Err(cleanup_error) =
+                cleanup_staged_send(db.clone(), user_message_id, thread_id, is_new_thread).await
+            {
+                return Err(HolziError::CrdtInit {
+                    reason: format!("adapter start: {error}; {cleanup_error}"),
+                });
             }
             return Err(HolziError::InvalidInput {
                 reason: format!("adapter start: {error}"),
@@ -604,7 +611,7 @@ pub async fn send_message(
     let session_for_task = session.clone();
     let assistant_db = db.clone();
 
-    tauri::async_runtime::spawn(async move {
+    let spawn_result = state.gate().spawn(async move {
         let _operation = operation;
         let chat_state = app_for_task.state::<ChatState>();
         let mut emit = |name: &'static str, payload: Value| {
@@ -625,6 +632,16 @@ pub async fn send_message(
         )
         .await;
     });
+    if let Err(error) = spawn_result {
+        if let Err(cleanup_error) =
+            cleanup_staged_send(db, user_message_id, thread_id, is_new_thread).await
+        {
+            return Err(HolziError::CrdtInit {
+                reason: format!("generation spawn rejected: {error}; {cleanup_error}"),
+            });
+        }
+        return Err(error);
+    }
 
     Ok(SendMessageResult {
         thread_id,

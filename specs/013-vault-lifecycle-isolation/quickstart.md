@@ -96,5 +96,4 @@ bounded ending as scenario 1, with exit (no relaunch).
 | Check                                                       | Where recorded               |
 | ----------------------------------------------------------- | ---------------------------- |
 | Relaunch under `tauri dev` (does the dev runner re-attach?) | research R2, policy function |
-| `closing.html` present in the built output next to the app  | research R4                  |
 | Local inference stop time after cancel                      | research R5                  |

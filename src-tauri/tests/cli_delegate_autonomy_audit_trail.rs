@@ -120,6 +120,7 @@ sys.stdin.readline()
         b"fake-auth".to_vec(),
         stub.to_str().unwrap().to_string(),
         Some(DelegateChatContext {
+            children: Default::default(),
             pending_tool_approvals: pending,
             emit,
             database: Some(
@@ -237,6 +238,7 @@ sys.stdin.readline()
         b"fake-auth".to_vec(),
         stub.to_str().unwrap().to_string(),
         Some(DelegateChatContext {
+            children: Default::default(),
             pending_tool_approvals: pending,
             emit,
             database: Some(

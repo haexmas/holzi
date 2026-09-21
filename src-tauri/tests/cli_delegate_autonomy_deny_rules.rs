@@ -131,6 +131,7 @@ async fn run_codex_turn(
         b"fake-auth".to_vec(),
         stub.to_str().unwrap().to_string(),
         Some(DelegateChatContext {
+            children: Default::default(),
             pending_tool_approvals: pending,
             emit,
             database: Some(

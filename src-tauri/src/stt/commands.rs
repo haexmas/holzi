@@ -7,10 +7,12 @@
 use std::path::PathBuf;
 
 #[cfg(feature = "llm-cpu")]
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 use crate::error::{HolziError, Result};
 use crate::hardware;
+#[cfg(feature = "llm-cpu")]
+use crate::vault_gate::VaultGate;
 
 use super::catalog::{self, SttCatalogEntry, SttCatalogEntryWithFit, SttTierRecommendation};
 
@@ -135,7 +137,9 @@ pub async fn download_stt_model(app: AppHandle, catalog_id: String) -> Result<In
     .map_err(|e| HolziError::CrdtInit {
         reason: format!("resolve STT model directory: {e}"),
     })??;
-    super::local::ensure_model_files(&dir, entry).await?;
+    app.state::<VaultGate>()
+        .run(super::local::ensure_model_files(&dir, entry))
+        .await??;
     Ok(InstalledSttModel {
         id: entry.id.clone(),
         name: entry.name.clone(),

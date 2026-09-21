@@ -247,14 +247,14 @@ download; press close repeatedly; close by window; the process ends within about
 
 ### Manual checks that decide the design (record each outcome)
 
-- [ ] T032 [US1] Research R4: find where a static file must live so it is served in `pnpm dev` and
+- [x] T032 [US1] Research R4: find where a static file must live so it is served in `pnpm dev` and
       present in the built output. Try `public/closing.html` at the repository root and
       `src/public/closing.html` (the Nuxt config sets `srcDir: 'src/'`). Check
       `http://localhost:3030/closing.html` under `pnpm dev` and `.output/public/closing.html` after the
       build command named in `src-tauri/tauri.conf.json` (`beforeBuildCommand`). Keep the location
       that works. Replace **Open** in `research.md` R4 with the **Outcome**. If neither works, record
       that `about:blank` is used.
-- [ ] T033 [US1] Create `closing.html` at the location found in T032: a centered spinner and nothing
+- [x] T033 [US1] Create `closing.html` at the location found in T032: a centered spinner and nothing
       else, **no text of any kind** (operator decision 2026-09-21, so nothing needs translating).
       Pure CSS: a bordered ring turned by a `@keyframes` rotation in an inline `<style>`
       (`style-src` allows `'unsafe-inline'`), no script (the CSP is `script-src 'self'`), no image,
@@ -265,10 +265,10 @@ download; press close repeatedly; close by window; the process ends within about
 
 ### Tests for User Story 1 (write first; expected to fail until the implementation tasks land)
 
-- [ ] T034 [P] [US1] In `src-tauri/src/chat/session_tests.rs` add cases for `ChatState::reset_for_close`: it
+- [x] T034 [P] [US1] In `src-tauri/src/chat/session_tests.rs` add cases for `ChatState::reset_for_close`: it
       clears the loaded session, both approval maps, the tool cancellation slot, the current
       generation handle and the tool registry, and is idempotent.
-- [ ] T035 [P] [US1] Create `src-tauri/tests/vault_lifecycle_close.rs` using a recorder implementation of the
+- [x] T035 [P] [US1] Create `src-tauri/tests/vault_lifecycle_close.rs` using a recorder implementation of the
       close effects (defined in T039), a gate, a `ChatState`, a `VoiceState` and a throwaway
       database: (a) `close_instance` returns `Ok` at once while a tracked task that never finishes
       and a held operation slot exist (the old "operation still in progress" failure, FR-002);
@@ -279,24 +279,25 @@ download; press close repeatedly; close by window; the process ends within about
       does not end the process; (e) the database is dropped only after every `VaultDb` clone is dropped, and always
       before the process end; (f) after the close, the wrapper rejects a vault command over the mock
       runtime; (g) a turn started before the close is cancelled through the token.
-- [ ] T036 [P] [US1] Verify FR-008 by reading, then test any gap: `src-tauri/src/chat/turn/persist.rs` for how
+- [x] T036 [P] [US1] Verify FR-008 by reading, then test any gap: `src-tauri/src/chat/turn/persist.rs` for how
       a cancelled turn persists (it must not look complete), and the staging cleanup in
       `src-tauri/src/models/download.rs` and `cleanup_staging_in_dir` in `src-tauri/src/models/import.rs` for partial
       downloads. Add a case to the existing sibling test files if a gap exists, and record the
       finding either way in the Baseline section.
 
-- [ ] T037 [P] [US1] Create `src-tauri/src/vault_gate/children_tests.rs`: after `register` of a
+- [x] T037 [P] [US1] Create `src-tauri/src/vault_gate/children_tests.rs`: after `register` of a
       spawned child (its own process group) `kill_all` ends it and a grandchild its shell started;
       a second `kill_all` is harmless; a child registered after `kill_all` is killed at once;
       dropping the guard removes the entry. Unix only (`#[cfg(unix)]`), using `sh` with a background
-      `sleep`. Add a case to `src-tauri/src/vault_gate/drain_tests.rs`: the ladder calls `kill_all`
-      before it returns `DrainedAfterAbort` or `Stuck`.
+      `sleep`. Add cases to `src-tauri/src/vault_gate/drain_tests.rs`: the ladder calls `kill_all`
+      before it returns `Drained`, `DrainedAfterAbort` or `Stuck`, and at the abort rung, so a thread
+      that waits for its child is freed.
 
 ### Implementation for User Story 1
 
-- [ ] T038 [US1] Add `ChatState::reset_for_close` in `src-tauri/src/chat/session.rs` (currently 345 lines)
+- [x] T038 [US1] Add `ChatState::reset_for_close` in `src-tauri/src/chat/session.rs` (currently 345 lines)
       reusing the existing fields and `abort_turn` semantics; do not duplicate the abort logic.
-- [ ] T039 [US1] Define the close effects: a small trait `CloseEffects` in
+- [x] T039 [US1] Define the close effects: a small trait `CloseEffects` in
       `src-tauri/src/vault_gate/mod.rs` with four methods (show the closing page, emit
       `instance-list-changed` for a closed vault, request the end of the process for a
       `ClosePolicy`, force the end of the process for a `ClosePolicy`). Implement it
@@ -307,19 +308,22 @@ download; press close repeatedly; close by window; the process ends within about
       is `tauri::process::restart(&app.env())` for `Relaunch` and `std::process::exit(0)` for
       `Exit`; it first calls `ChildRegistry::kill_all`, because a forced end skips the `Drop`-based
       kills. Failures are logged, never returned.
-- [ ] T040 [US1] Rewrite `src-tauri/src/instances/close.rs` per `contracts/tauri-commands.md`. Phase
+- [x] T040 [US1] Rewrite `src-tauri/src/instances/close.rs` per `contracts/tauri-commands.md`. Phase
       1 is synchronous and infallible: `gate.request_close()`, fire the token, `abort_turn` (reuse
       the existing function in `src-tauri/src/chat/commands.rs`, do not copy it), the page effect,
-      the event, start phase 2, return `Ok(())`. Phase 2 (background, on a plain
-      `tauri::async_runtime::spawn`, not tracked, because it is the task that drains the tracker):
-      cancel the preload and wait, run the drain ladder, take the database out with
-      `AppState::take`, drop it, call `ChatState::reset_for_close` and
-      `VoiceState::invalidate_whisper_cache`, then request the end of the process and arm the forced
-      end with `hard_end_after` and `CloseEffects::force_end`. The command no longer calls
+      the event, arm the outer forced end, start phase 2, return `Ok(())`. Phase 2
+      (background, on a plain `tauri::async_runtime::spawn`, not tracked, because it is the task
+      that drains the tracker): call `ChatState::reset_for_close` **first** (a delegate adapter in
+      the session holds a `VaultDb`, so the drain would never finish otherwise), run the drain
+      ladder, take the database out with `AppState::take`, drop it, call
+      `VoiceState::invalidate_whisper_cache` (bounded), then request the end of the process and arm
+      the forced end with `hard_end_after` and `CloseEffects::force_end`. The preload is cancelled
+      in phase 1 without waiting (`ChatState::cancel_preload`): the drain waits for it, so a
+      preload that ignores the signal cannot hold the close up. The command no longer calls
       `acquire_operation`.
-- [ ] T041 [US1] Delete `CloseFailed` from `src-tauri/src/error.rs`, remove the stale doc comment in
+- [x] T041 [US1] Delete `CloseFailed` from `src-tauri/src/error.rs`, remove the stale doc comment in
       `src-tauri/src/state.rs`, and regenerate the bindings (see the format notes at the top).
-- [ ] T042 [US1] Register session-scoped tasks with the gate and add the token where work runs long:
+- [x] T042 [US1] Register session-scoped tasks with the gate and add the token where work runs long:
       the chat turn task (`src-tauri/src/chat/commands.rs`, the `spawn` around line 607) and the preload
       (`src-tauri/src/chat/default_model.rs`, keep its own token and join handle and also register it), both
       voice tasks (`src-tauri/src/voice.rs`, around lines 179 and 211) and the provider connect completion
@@ -327,14 +331,14 @@ download; press close repeatedly; close by window; the process ends within about
       `src-tauri/src/adapters/cli_delegate/connect_claude.rs` (the `std::thread::spawn` near line 145): convert
       to `gate.spawn_blocking` only if trivial; otherwise leave it and record it as a residual that the
       3 s limit covers.
-- [ ] T043 [US1] Make long-running commands stop on close with `gate.run(...)`, returning
+- [x] T043 [US1] Make long-running commands stop on close with `gate.run(...)`, returning
       `VaultClosed`: `load_model_command` in `src-tauri/src/chat/model_loading.rs`, the transfer in
       `download_from_hf_inner` and `import_model_from_file` (`src-tauri/src/models/commands.rs`, the copy or
       download loop in `src-tauri/src/models/download.rs`), `refresh_provider_models` in `src-tauri/src/providers/mod.rs`,
       voice start and stop in `src-tauri/src/voice.rs`, the connect commands in `src-tauri/src/providers/connect.rs`,
       and `download_stt_model` in `src-tauri/src/stt/commands.rs` (found in T017: it is a long download).
       These are one-line call-site edits; the oversized files must not grow.
-- [ ] T044 [US1] Create `src-tauri/src/vault_gate/children.rs` with `ChildRegistry` (data-model.md),
+- [x] T044 [US1] Create `src-tauri/src/vault_gate/children.rs` with `ChildRegistry` (data-model.md),
       held by `VaultGate`: `register(pid)` returns a guard that unregisters on drop, and `kill_all()`
       kills every registered process group and makes later registrations kill at once. Register every
       child started for the vault, reaching the registry the way the code reaches its cancellation
@@ -343,22 +347,22 @@ download; press close repeatedly; close by window; the process ends within about
       the MCP server in `src-tauri/src/chat/tools/mcp.rs` (around line 123: read how
       `TokioChildProcess` exposes the pid, and start the server as its own process group if it is
       not yet). `kill_all` reuses what `cli.rs` already does: `libc::kill(-pid, SIGKILL)` on Unix and
-      `taskkill /T /F` on Windows, with no new dependency. Call it at the end of the drain ladder and
-      from `CloseEffects::force_end` right before the process ends. Add a `ponytail:` comment:
+      `taskkill /T /F` on Windows, with no new dependency. Call it at the abort rung of the drain ladder
+      (and on its other paths) and from `CloseEffects::force_end` right before the process ends. Add a `ponytail:` comment:
       process groups and `taskkill`; ceiling "a descendant that left its group survives"; upgrade
       path "a Windows Job Object with kill-on-close, and `PR_SET_PDEATHSIG` on Linux". Keep the file
       under 500 lines.
-- [ ] T045 [US1] In `src-tauri/src/lib.rs` switch from `.run(context)` to `.build(context)?.run(callback)` and
+- [x] T045 [US1] In `src-tauri/src/lib.rs` switch from `.run(context)` to `.build(context)?.run(callback)` and
       handle FR-007: on `WindowEvent::CloseRequested` and on `RunEvent::ExitRequested` (unless its
       code is `RESTART_EXIT_CODE` or the gate is already closing), prevent the default, run the same
       close task with policy `Exit`, and exit when it finishes. Wire the real `CloseEffects`.
-- [ ] T046 [US1] Frontend: make the lock flows do one thing. `lock()` in
+- [x] T046 [US1] Frontend: make the lock flows do one thing. `lock()` in
       `src/pages/chat/[instance].vue` (around line 499) and `onLock()` in
       `src/pages/federation/[instance].vue` call `closeAsync()`, swallow a rejection, and no longer
       call `store.setActiveInstance(null)` or `navigateTo('/')`. The backend replaces the page
       (research R4), so the frontend keeps no closing state and shows no overlay (operator decision
       2026-09-21). The chat page must end up with no more lines than before.
-- [ ] T047 [US1] Add the script-setup sandbox to the harness: a helper in
+- [x] T047 [US1] Add the script-setup sandbox to the harness: a helper in
       `scripts/lib/chat-state-harness.ts` (or a sibling file) that loads a small `.vue` file's
       `<script setup>` block, injecting `defineProps`, `defineEmits`, `ref`, `computed`, `watch`,
       `onBeforeUnmount`, `useI18n`, `useInstance`, `useInstancesStore` and `navigateTo`, and returns
@@ -691,7 +695,37 @@ _Filled in during T003, T004, T013, T036, T058 and T088._
   paths. rusqlite quotes and escapes the `PRAGMA key` value, so a SQLite error text cannot echo it.
   Residual copies stay as documented in research R7: the SQL text inside rusqlite, the IPC body and
   the frontend strings.
-- FR-008 finding: (pending)
+- FR-008 finding (T036, 2026-09-21): no gap in the code, one test added. A reply is only inserted
+  when the turn completes: admission (`send_admission.rs`) writes the user message, and the
+  assistant row comes from `persist_final_message` at the end of the turn. A turn that the close
+  cancels through `abort_turn` ends with a persisted `FinishReason::Cancelled` row (covered by
+  `tests/chat_tool_loop_permissions.rs`), and one that the drain aborts before that leaves no
+  assistant row at all, so neither can look complete. A download writes `<staging>.part` and renames
+  it only when the announced size is met; the staging name (`.<file>.<uuid>.staging`) never ends in
+  `.gguf`, so no partial file is listed as installed, and `cleanup_staging_in_dir` removes the
+  leftover at the next start-up. The one uncovered case, a transfer dropped mid-way as `gate.run`
+  does, now has `a_download_dropped_mid_transfer_leaves_no_finalized_file` in
+  `models/download_tests.rs`.
+- Spike retirement mapping (T051, 2026-09-21; the spike file is only on the local branch
+  `spike/vault-gateway`): `extractor_accepts_only_the_current_epoch_and_reports_typed_errors` is
+  replaced by `src-tauri/tests/vault_gateway.rs` (the wrapper passes in `Idle` and `Active`, answers
+  `VaultClosed` once closing, keeps the allow-list, denies an unknown command; the epoch header is
+  not needed with one vault per process). `closing_the_vault_terminates_an_in_flight_request_immediately`
+  is replaced by `a_request_running_when_the_close_starts_ends_with_vault_closed` and
+  `close_returns_at_once_while_work_never_finishes_and_the_operation_slot_is_held` in
+  `src-tauri/tests/vault_lifecycle_close.rs`. `drain_ladder_cooperative_then_abort_then_reports_stuck_blocking_work`
+  is replaced by the ladder cases in `src-tauri/src/vault_gate/drain_tests.rs`, including the tracked
+  blocking closure. `epochs_are_unique_ordered_and_never_reused_even_for_the_same_vault` needs no
+  replacement. Still to do after PR D is merged: `git branch -D spike/vault-gateway`.
+- Stage 3 checkpoint numbers (2026-09-21, before the manual checks T048 to T050): `cargo test` 520
+  passed, 0 failed, 8 ignored across 30 binaries (483 passed with `--no-default-features`);
+  `cargo clippy --all-targets -- -D warnings` clean with default features and with
+  `--no-default-features`; `cargo fmt --check` clean; `pnpm check:chat-state` 45 passed,
+  `pnpm check:vault-lifecycle` 5 passed; `check:templates`, `typecheck`, `typecheck:scripts`, `lint`
+  and `format:check` exit 0. Oversized files after: `models/commands.rs` 966, `chat/commands.rs` 759,
+  `chat/model_loading.rs` 736, `providers/mod.rs` 573, `src/pages/chat/[instance].vue` 1316. Sabotage
+  checks that went red as expected: no child kill at the abort rung (3 ladder tests), the drain before
+  `reset_for_close` (the loaded-model test), navigation put back into both lock flows (4 replay cases).
 - Frontend open-path finding: (pending)
 
 ## Validation record

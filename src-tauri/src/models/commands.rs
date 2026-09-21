@@ -476,7 +476,7 @@ async fn download_from_hf_inner(
     let app_for_progress = app.clone();
     let model_id_for_progress = args.id.clone();
 
-    let downloaded = download::download_to_file(&url, staging, move |p| {
+    let transfer = download::download_to_file(&url, staging, move |p| {
         let _ = app_for_progress.emit(
             EVENT_PROGRESS,
             ProgressEvent {
@@ -485,8 +485,8 @@ async fn download_from_hf_inner(
                 bytes_total: p.bytes_total,
             },
         );
-    })
-    .await?;
+    });
+    let downloaded = state.gate().run(transfer).await??;
 
     let payload = register_downloaded(RegisterDownloadedArgs {
         db,
@@ -546,8 +546,8 @@ pub async fn import_model_from_file(
     let destination = paths::model_file_path(&app, &args.id, &filename)?;
     let staging = staging_path(&destination);
     let relative = paths::relative_path(&args.id, &filename)?;
-
-    let bytes = import::copy_into_managed(&source, staging.clone()).await?;
+    let copy = import::copy_into_managed(&source, staging.clone());
+    let bytes = state.gate().run(copy).await??;
     register_downloaded(RegisterDownloadedArgs {
         db,
         id: args.id,

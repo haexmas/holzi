@@ -15,6 +15,7 @@ use crate::models::paths;
 use crate::state::AppState;
 use crate::state_utils::active_database;
 use crate::storage::{models as models_store, preferences, preferences::PrefScope};
+use crate::vault_gate::VaultGate;
 
 use super::commands::PREF_LAST_ACTIVE_MODEL;
 use super::events::emit_load_error;
@@ -234,7 +235,9 @@ pub fn start_default_model_preload(app: AppHandle, chat: ChatState) {
     let task_cancel = cancel.clone();
     let task_chat = chat.clone();
     let task_app = app.clone();
-    let join = tauri::async_runtime::spawn(async move {
+    // Tracked by the gate, so the close waits for it and aborts it; it also keeps its own token
+    // and join handle, which a vault switch used before and the close still cancels through.
+    let spawned = app.state::<VaultGate>().spawn(async move {
         let state = task_app.state::<AppState>();
         let model_id = match resolve_default_local_model(&task_app, &state).await {
             Ok(Some(model_id)) => model_id,
@@ -284,7 +287,10 @@ pub fn start_default_model_preload(app: AppHandle, chat: ChatState) {
             Err(_) => {}
         }
     });
-    chat.install_preload_handle(cancel, join);
+    match spawned {
+        Ok(join) => chat.install_preload_handle(cancel, join),
+        Err(_) => log::info!("no preload: the vault is closing"),
+    }
 }
 
 /// Read-only snapshot of the active Vault's model-load state.

@@ -43,9 +43,6 @@ pub enum HolziError {
     #[error("File is not a valid holzi instance: {reason}")]
     NotAValidInstance { reason: String },
 
-    #[error("Failed to close active instance: {reason}")]
-    CloseFailed { reason: String },
-
     #[error("SQLCipher error from haex-crdt: {reason}")]
     CrdtSqlite { reason: String },
 

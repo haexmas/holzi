@@ -65,6 +65,7 @@ async fn stream_chat_yields_delta_then_done_and_never_tool_calls() {
         b"fake-oauth-token".to_vec(),
         stub.to_string_lossy().into_owned(),
         Some(DelegateChatContext {
+            children: Default::default(),
             pending_tool_approvals: Arc::new(Mutex::new(HashMap::new())),
             emit: Arc::new(|_event: &str, _payload: serde_json::Value| {}),
             database: None,

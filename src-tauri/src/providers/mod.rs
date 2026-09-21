@@ -272,7 +272,7 @@ pub async fn refresh_provider_models(
         reason: format!("provider {provider_id} not found"),
     })?;
 
-    let model_count = do_refresh(&db, &provider).await?;
+    let model_count = state.gate().run(do_refresh(&db, &provider)).await??;
 
     Ok(RefreshProviderModelsResult {
         provider_id,

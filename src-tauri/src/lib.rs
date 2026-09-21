@@ -124,7 +124,7 @@ pub fn run() {
     let gate = vault_gate::VaultGate::new();
     let builder = tauri::Builder::default().manage(AppState::new(gate.clone()));
     let builder = builder.manage(gate.clone());
-    let builder = builder.manage(ChatState::new());
+    let builder = builder.manage(ChatState::with_children(gate.children()));
     let builder = builder.manage(DelegateConnectState::new());
     let builder = builder.manage(voice::VoiceState::new());
     builder
@@ -201,6 +201,26 @@ pub fn run() {
             list_installed_stt_models,
             download_stt_model,
         ]))
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| match event {
+            // Closing the window or quitting from the system menu is the user leaving: it goes
+            // through the same close as the lock control, and the process ends when it is done
+            // (spec 013 FR-007). A relaunch is the app restarting itself and must pass.
+            tauri::RunEvent::WindowEvent {
+                event: tauri::WindowEvent::CloseRequested { api, .. },
+                ..
+            } => {
+                if instances::take_over_exit(app) {
+                    api.prevent_close();
+                }
+            }
+            tauri::RunEvent::ExitRequested { code, api, .. } => {
+                let relaunching = code == Some(tauri::RESTART_EXIT_CODE);
+                if !relaunching && instances::take_over_exit(app) {
+                    api.prevent_exit();
+                }
+            }
+            _ => {}
+        });
 }

@@ -87,6 +87,7 @@ async fn disconnect_during_a_response_does_not_affect_that_response() {
         provider.credentials.clone().unwrap(),
         stub.to_str().unwrap().to_string(),
         Some(DelegateChatContext {
+            children: Default::default(),
             pending_tool_approvals: Arc::new(Mutex::new(HashMap::new())),
             emit: Arc::new(|_event: &str, _payload: serde_json::Value| {}),
             database: None,

@@ -175,6 +175,7 @@ pub(crate) async fn load_model_inner(
             pending_tool_approvals: Arc::clone(&chat.pending_tool_approvals),
             emit,
             database: Some(active_database(state)?),
+            children: chat.children().clone(),
         });
         load_api_key_model(state, model_id, provider_id_str, delegate_chat_ctx).await?
     } else {
@@ -298,7 +299,7 @@ async fn load_model_command(
         vault_generation,
         load_id,
     };
-    match load_model_inner(
+    let load = load_model_inner(
         &app,
         &state,
         &chat,
@@ -306,9 +307,8 @@ async fn load_model_command(
         identity,
         None,
         integrity_override,
-    )
-    .await
-    {
+    );
+    match state.gate().run(load).await? {
         Ok(LoadOutcome::Loaded(info)) => Ok(info),
         Ok(LoadOutcome::Cancelled) => Err(HolziError::InvalidInput {
             reason: "model load was cancelled".into(),
