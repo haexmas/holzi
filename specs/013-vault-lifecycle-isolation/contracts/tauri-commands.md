@@ -44,14 +44,21 @@ pub async fn close_instance(app: AppHandle, gate: State<'_, VaultGate>, ...) -> 
 | `CloseFailed`  | when a subsystem still held a clone                                | removed; a stuck subsystem is answered by ending the process          |
 
 **Phase 1 (synchronous, cannot fail)**: flip the gate to `Closing`; fire the cancellation token;
-call `abort_turn`; navigate the webview to the closing page; emit `instance-list-changed`
-`{ reason: "closed" }`; start phase 2; return `Ok(())`.
+arm the outer forced end (the drain limit plus the grace period from now); call `abort_turn` and
+fire the preload's own cancellation; navigate the webview to the closing page; emit
+`instance-list-changed` `{ reason: "closed" }`; start phase 2; return `Ok(())`.
 
-**Phase 2 (background task)**: cancel the preload and wait for it; wait for the tracker up to
-about 1 s; abort registered tasks; wait until about 3 s in total; take the database out of
-`AppState` and drop it; clear the loaded session, the tool registry, the approval maps and the
-whisper cache; request the end of the process and arm the forced end, which ends it about 0.5 s
-later if it is still alive. Ending the process does not wait for anything that outlived the limit.
+**Phase 2 (background task)**: let go of the loaded session, the tool registry and the approval
+maps first, because a delegate adapter inside the session holds a database handle and the tracker
+cannot empty while it lives; wait for the tracker up to about 1 s; abort registered tasks and end
+the registered child processes; wait until about 3 s in total; take the database out of `AppState`
+and drop it; clear the whisper cache (bounded); request the end of the process and arm the forced
+end, which ends it about 0.5 s later if it is still alive. Ending the process does not wait for
+anything that outlived the limit.
+
+The outer forced end covers a phase 2 that never gets to run, for example because the async runtime
+is blocked. Both forced ends share one claim on the gate, so the process is ended by force at most
+once.
 
 ## `open_instance` (changed)
 

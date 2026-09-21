@@ -304,6 +304,21 @@ impl ChatState {
             .preload = Some(PreloadHandle { cancel, join });
     }
 
+    /// Fires the cancellation of an active preload without waiting for it. The close uses this:
+    /// the gate's drain is what waits, within its own limit, so a preload that ignores the signal
+    /// can never hold the close up.
+    pub fn cancel_preload(&self) {
+        if let Some(preload) = self
+            .model_load
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .preload
+            .as_ref()
+        {
+            preload.cancel.cancel();
+        }
+    }
+
     /// Cancels an active preload and waits for all of its child work to terminate.
     pub async fn cancel_preload_and_wait(&self) {
         let handle = self

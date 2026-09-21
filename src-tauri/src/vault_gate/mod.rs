@@ -14,6 +14,7 @@ mod drain;
 mod invoke;
 
 use std::future::Future;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use haex_crdt::Database;
@@ -60,6 +61,23 @@ pub fn close_policy() -> ClosePolicy {
     }
 }
 
+/// The effects of a close that reach outside the process's own state, behind a trait so a test
+/// can record them instead of changing a window or ending the test process (spec 013, T039).
+/// Every method returns at once and none can fail: a failure is logged inside the implementation,
+/// because a close that can be refused is exactly what this feature removes.
+pub trait CloseEffects: Send + Sync + 'static {
+    /// Replaces the page with the closing spinner, so nothing of the vault stays on screen.
+    fn show_closing_page(&self);
+    /// Tells listeners that the vault `name` was closed (`instance-list-changed`).
+    fn announce_closed(&self, name: Option<String>);
+    /// Asks the event loop to end the process the normal way, for `policy`.
+    fn request_end(&self, policy: ClosePolicy);
+    /// Ends the process now, for `policy`, whatever is still running: the last resort that runs on
+    /// a plain thread when the normal end did not happen. It first ends every registered child
+    /// process, because ending the process skips the `Drop`-based kills.
+    fn force_end(&self, policy: ClosePolicy);
+}
+
 /// The gate. Cheap to clone; every clone is the same gate.
 #[derive(Clone)]
 pub struct VaultGate {
@@ -77,6 +95,8 @@ struct Inner {
     aborts: Mutex<Vec<AbortHandle>>,
     /// The child processes started for the vault, ended by the drain ladder and the forced end.
     children: ChildRegistry,
+    /// Set by whoever gets to run the forced end, so it runs once however often it is armed.
+    forced_end: AtomicBool,
     /// Runtime that runs tracked work. `None` means Tauri's own async runtime.
     runtime: Option<Handle>,
 }
@@ -143,6 +163,7 @@ impl VaultGate {
                 tasks: TaskTracker::new(),
                 aborts: Mutex::new(Vec::new()),
                 children: ChildRegistry::default(),
+                forced_end: AtomicBool::new(false),
                 runtime,
             }),
         }
@@ -202,6 +223,12 @@ impl VaultGate {
     /// The registry of child processes this gate ends when the close runs out of patience.
     pub fn children(&self) -> ChildRegistry {
         self.inner.children.clone()
+    }
+
+    /// Claims the forced end of the process. Only the first caller gets `true`, so however many
+    /// deadlines are armed, the forced end runs once.
+    pub fn claim_forced_end(&self) -> bool {
+        !self.inner.forced_end.swap(true, Ordering::SeqCst)
     }
 
     /// The token that fires when the close starts.

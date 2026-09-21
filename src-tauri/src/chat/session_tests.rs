@@ -210,3 +210,19 @@ fn reset_for_close_on_a_fresh_state_changes_nothing() {
         vec!["run_command".to_string()]
     );
 }
+
+#[tokio::test]
+async fn cancel_preload_fires_the_signal_without_waiting_for_the_preload() {
+    let chat = ChatState::new();
+    let cancel = CancellationToken::new();
+    // A preload that ignores the signal and never ends.
+    let join = tauri::async_runtime::spawn(std::future::pending::<()>());
+    chat.install_preload_handle(cancel.clone(), join);
+
+    chat.cancel_preload();
+
+    assert!(cancel.is_cancelled());
+    // Firing it again, and firing it with no preload installed, are harmless.
+    chat.cancel_preload();
+    ChatState::new().cancel_preload();
+}

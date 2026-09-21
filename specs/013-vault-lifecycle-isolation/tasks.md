@@ -268,7 +268,7 @@ download; press close repeatedly; close by window; the process ends within about
 - [x] T034 [P] [US1] In `src-tauri/src/chat/session_tests.rs` add cases for `ChatState::reset_for_close`: it
       clears the loaded session, both approval maps, the tool cancellation slot, the current
       generation handle and the tool registry, and is idempotent.
-- [ ] T035 [P] [US1] Create `src-tauri/tests/vault_lifecycle_close.rs` using a recorder implementation of the
+- [x] T035 [P] [US1] Create `src-tauri/tests/vault_lifecycle_close.rs` using a recorder implementation of the
       close effects (defined in T039), a gate, a `ChatState`, a `VoiceState` and a throwaway
       database: (a) `close_instance` returns `Ok` at once while a tracked task that never finishes
       and a held operation slot exist (the old "operation still in progress" failure, FR-002);
@@ -297,7 +297,7 @@ download; press close repeatedly; close by window; the process ends within about
 
 - [x] T038 [US1] Add `ChatState::reset_for_close` in `src-tauri/src/chat/session.rs` (currently 345 lines)
       reusing the existing fields and `abort_turn` semantics; do not duplicate the abort logic.
-- [ ] T039 [US1] Define the close effects: a small trait `CloseEffects` in
+- [x] T039 [US1] Define the close effects: a small trait `CloseEffects` in
       `src-tauri/src/vault_gate/mod.rs` with four methods (show the closing page, emit
       `instance-list-changed` for a closed vault, request the end of the process for a
       `ClosePolicy`, force the end of the process for a `ClosePolicy`). Implement it
@@ -308,17 +308,20 @@ download; press close repeatedly; close by window; the process ends within about
       is `tauri::process::restart(&app.env())` for `Relaunch` and `std::process::exit(0)` for
       `Exit`; it first calls `ChildRegistry::kill_all`, because a forced end skips the `Drop`-based
       kills. Failures are logged, never returned.
-- [ ] T040 [US1] Rewrite `src-tauri/src/instances/close.rs` per `contracts/tauri-commands.md`. Phase
+- [x] T040 [US1] Rewrite `src-tauri/src/instances/close.rs` per `contracts/tauri-commands.md`. Phase
       1 is synchronous and infallible: `gate.request_close()`, fire the token, `abort_turn` (reuse
       the existing function in `src-tauri/src/chat/commands.rs`, do not copy it), the page effect,
-      the event, start phase 2, return `Ok(())`. Phase 2 (background, on a plain
-      `tauri::async_runtime::spawn`, not tracked, because it is the task that drains the tracker):
-      cancel the preload and wait, run the drain ladder, take the database out with
-      `AppState::take`, drop it, call `ChatState::reset_for_close` and
-      `VoiceState::invalidate_whisper_cache`, then request the end of the process and arm the forced
-      end with `hard_end_after` and `CloseEffects::force_end`. The command no longer calls
+      the event, arm the outer forced end, start phase 2, return `Ok(())`. Phase 2
+      (background, on a plain `tauri::async_runtime::spawn`, not tracked, because it is the task
+      that drains the tracker): call `ChatState::reset_for_close` **first** (a delegate adapter in
+      the session holds a `VaultDb`, so the drain would never finish otherwise), run the drain
+      ladder, take the database out with `AppState::take`, drop it, call
+      `VoiceState::invalidate_whisper_cache` (bounded), then request the end of the process and arm
+      the forced end with `hard_end_after` and `CloseEffects::force_end`. The preload is cancelled
+      in phase 1 without waiting (`ChatState::cancel_preload`): the drain waits for it, so a
+      preload that ignores the signal cannot hold the close up. The command no longer calls
       `acquire_operation`.
-- [ ] T041 [US1] Delete `CloseFailed` from `src-tauri/src/error.rs`, remove the stale doc comment in
+- [x] T041 [US1] Delete `CloseFailed` from `src-tauri/src/error.rs`, remove the stale doc comment in
       `src-tauri/src/state.rs`, and regenerate the bindings (see the format notes at the top).
 - [ ] T042 [US1] Register session-scoped tasks with the gate and add the token where work runs long:
       the chat turn task (`src-tauri/src/chat/commands.rs`, the `spawn` around line 607) and the preload
@@ -335,7 +338,7 @@ download; press close repeatedly; close by window; the process ends within about
       voice start and stop in `src-tauri/src/voice.rs`, the connect commands in `src-tauri/src/providers/connect.rs`,
       and `download_stt_model` in `src-tauri/src/stt/commands.rs` (found in T017: it is a long download).
       These are one-line call-site edits; the oversized files must not grow.
-- [ ] T044 [US1] Create `src-tauri/src/vault_gate/children.rs` with `ChildRegistry` (data-model.md),
+- [x] T044 [US1] Create `src-tauri/src/vault_gate/children.rs` with `ChildRegistry` (data-model.md),
       held by `VaultGate`: `register(pid)` returns a guard that unregisters on drop, and `kill_all()`
       kills every registered process group and makes later registrations kill at once. Register every
       child started for the vault, reaching the registry the way the code reaches its cancellation

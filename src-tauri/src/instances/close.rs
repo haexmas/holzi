@@ -1,70 +1,190 @@
-//! `close_instance` — drop the active instance's Arc, releasing haex-crdt's
-//! fs2 lock. Idempotent.
+//! `close_instance`: closing the vault ends the app process, and nothing can refuse it
+//! (spec 013 US1, FR-001 to FR-009, contracts/tauri-commands.md).
+//!
+//! **Phase 1** ([`begin_close`]) is synchronous and cannot fail: the gate shuts, the cancellation
+//! token fires, the turn and the preload are cancelled, the page is replaced by the closing
+//! spinner and the list-changed event goes out. The command returns as soon as it is done.
+//! **Phase 2** ([`finish_close`]) runs in the background: it lets go of the session, drains the
+//! tracked work within the ladder's limits, drops the database, and asks for the end of the
+//! process. Two deadlines back it up, both ending the process from a plain thread: one armed with
+//! phase 1, for a phase 2 that never gets to run, and one armed right after the end request, for
+//! an event loop that does not end the process (SC-002).
 
-use tauri::{AppHandle, State};
+use std::sync::Arc;
+use std::time::Duration;
 
-use crate::chat::{events::emit_model_load_status, session::ChatState};
-use crate::error::{HolziError, Result};
+use tauri::{AppHandle, Manager};
+
+use crate::chat::commands::abort_turn;
+use crate::chat::session::ChatState;
+use crate::error::Result;
 use crate::state::AppState;
+use crate::vault_gate::{
+    close_policy, hard_end_after, CloseEffects, ClosePolicy, DrainOutcome, VaultGate,
+    COOPERATIVE_WINDOW, HARD_END_GRACE, TOTAL_LIMIT,
+};
 use crate::voice::VoiceState;
 
-use super::events::emit_instance_list_changed;
+use super::close_effects::AppCloseEffects;
 
-/// Closes the currently-active instance if any. Postcondition per
-/// contract: no `Arc<Database>` clone survives in `AppState`. Errors with
-/// `CloseFailed` when another subsystem still holds a clone.
-#[tauri::command]
-pub async fn close_instance(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    chat: State<'_, ChatState>,
-    voice: State<'_, VoiceState>,
-) -> Result<()> {
-    let _operation = chat.acquire_operation()?;
-    chat.cancel_preload_and_wait().await;
-    let handle_opt = state.take().map_err(|e| HolziError::CloseFailed {
-        reason: format!("could not take the active instance: {e}"),
-    })?;
+/// The deadlines of one close.
+#[derive(Debug, Clone, Copy)]
+pub struct CloseTimings {
+    /// How long tracked work gets to stop by itself.
+    pub cooperative: Duration,
+    /// The most the drain waits in total, from the close request.
+    pub total: Duration,
+    /// How long the normal end of the process gets before a plain thread forces it.
+    pub grace: Duration,
+}
 
-    let Some(handle) = handle_opt else {
-        // Idempotent close on empty state.
-        return Ok(());
+impl CloseTimings {
+    /// The deadlines of a real close (research R5).
+    pub const PRODUCTION: Self = Self {
+        cooperative: COOPERATIVE_WINDOW,
+        total: TOTAL_LIMIT,
+        grace: HARD_END_GRACE,
     };
+}
 
-    let name = handle.name.clone();
+/// Everything a close touches.
+pub struct CloseContext<'a> {
+    gate: &'a VaultGate,
+    app_state: &'a AppState,
+    chat: &'a ChatState,
+    voice: &'a VoiceState,
+    effects: Arc<dyn CloseEffects>,
+    policy: ClosePolicy,
+    timings: CloseTimings,
+}
 
-    // Verify that our Arc is the only strong reference — if any subsystem
-    // still holds a clone the fs2 lock stays held and a subsequent open
-    // of the same file would deadlock.
-    match std::sync::Arc::try_unwrap(handle.database) {
-        Ok(db) => {
-            drop(db);
-        }
-        Err(arc) => {
-            let strong = std::sync::Arc::strong_count(&arc);
-            // Put the handle back — closing "half" would leave AppState
-            // desynced from the actual DB state.
-            state
-                .install(
-                    super::super::state::ActiveInstanceHandle {
-                        name: name.clone(),
-                        database: arc,
-                    },
-                    || Ok(()),
-                )
-                .map_err(|e| HolziError::CloseFailed {
-                    reason: format!("could not restore the active instance on rollback: {e}"),
-                })?;
-            return Err(HolziError::CloseFailed {
-                reason: format!("{strong} database Arc clones still outstanding"),
-            });
+impl<'a> CloseContext<'a> {
+    pub fn new(
+        gate: &'a VaultGate,
+        app_state: &'a AppState,
+        chat: &'a ChatState,
+        voice: &'a VoiceState,
+        effects: Arc<dyn CloseEffects>,
+        policy: ClosePolicy,
+        timings: CloseTimings,
+    ) -> Self {
+        Self {
+            gate,
+            app_state,
+            chat,
+            voice,
+            effects,
+            policy,
+            timings,
         }
     }
 
-    *chat.session.lock().unwrap_or_else(|e| e.into_inner()) = None;
-    voice.invalidate_whisper_cache().await;
-    chat.bump_vault_generation();
-    emit_model_load_status(&app, &chat);
-    emit_instance_list_changed(&app, "closed", Some(name));
+    /// Ends the process by force after `grace`, at most once per process however often this is
+    /// armed.
+    fn arm_forced_end(&self, grace: Duration) {
+        let gate = self.gate.clone();
+        let effects = Arc::clone(&self.effects);
+        let policy = self.policy;
+        hard_end_after(grace, move || {
+            if gate.claim_forced_end() {
+                effects.force_end(policy);
+            }
+        });
+    }
+}
+
+/// Phase 1. Returns whether this call started the close; a repeated call changes nothing and
+/// repeats no effect (FR-002).
+pub fn begin_close(ctx: &CloseContext<'_>) -> bool {
+    // Shuts the gate and fires the token in one step; from here every new request is refused.
+    if !ctx.gate.request_close() {
+        return false;
+    }
+    ctx.arm_forced_end(ctx.timings.total + ctx.timings.grace);
+    let name = ctx.app_state.active_name().unwrap_or_else(|error| {
+        log::warn!("could not read the active vault name: {error}");
+        None
+    });
+    if let Err(error) = abort_turn(ctx.chat) {
+        log::warn!("could not cancel the running turn: {error}");
+    }
+    ctx.chat.cancel_preload();
+    ctx.effects.show_closing_page();
+    ctx.effects.announce_closed(name);
+    true
+}
+
+/// Phase 2. Returns how the drain ended, for logs and tests; the process ends either way.
+pub async fn finish_close(ctx: &CloseContext<'_>) -> DrainOutcome {
+    // The loaded model goes first: a delegate adapter holds a `VaultDb`, and the drain cannot
+    // finish while one is alive.
+    ctx.chat.reset_for_close();
+    let outcome = ctx
+        .gate
+        .drain_with(ctx.timings.cooperative, ctx.timings.total)
+        .await;
+    // Whatever cooperated is gone; let go of the state's own reference too, so the database
+    // closes and SQLCipher wipes its key before the process ends.
+    match ctx.app_state.take() {
+        Ok(handle) => drop(handle),
+        Err(error) => log::warn!("could not release the vault: {error}"),
+    }
+    // The cache holds no vault data and the process is ending, so it is only tidied, and only for
+    // as long as the forced end would wait anyway.
+    let _ = tokio::time::timeout(ctx.timings.grace, ctx.voice.invalidate_whisper_cache()).await;
+    ctx.effects.request_end(ctx.policy);
+    ctx.arm_forced_end(ctx.timings.grace);
+    outcome
+}
+
+/// Starts the close of this app process: phase 1 now, phase 2 in the background. Returns whether
+/// this call started it.
+pub fn start_close(app: &AppHandle, policy: ClosePolicy) -> bool {
+    let gate = app.state::<VaultGate>();
+    let effects: Arc<dyn CloseEffects> =
+        Arc::new(AppCloseEffects::new(app.clone(), gate.children()));
+    let started = {
+        let app_state = app.state::<AppState>();
+        let chat = app.state::<ChatState>();
+        let voice = app.state::<VoiceState>();
+        begin_close(&CloseContext::new(
+            &gate,
+            &app_state,
+            &chat,
+            &voice,
+            Arc::clone(&effects),
+            policy,
+            CloseTimings::PRODUCTION,
+        ))
+    };
+    if started {
+        let app = app.clone();
+        // Not tracked: this is the task that waits for the tracker to empty.
+        tauri::async_runtime::spawn(async move {
+            let gate = app.state::<VaultGate>();
+            let app_state = app.state::<AppState>();
+            let chat = app.state::<ChatState>();
+            let voice = app.state::<VoiceState>();
+            let outcome = finish_close(&CloseContext::new(
+                &gate,
+                &app_state,
+                &chat,
+                &voice,
+                effects,
+                policy,
+                CloseTimings::PRODUCTION,
+            ))
+            .await;
+            log::info!("vault close drained: {outcome:?}");
+        });
+    }
+    started
+}
+
+/// Closes the vault and ends the app process. Idempotent, never refused, and it returns as soon
+/// as phase 1 is done; a second call reports success and changes nothing.
+#[tauri::command]
+pub async fn close_instance(app: AppHandle) -> Result<()> {
+    start_close(&app, close_policy());
     Ok(())
 }

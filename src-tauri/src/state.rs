@@ -21,9 +21,9 @@ use crate::vault_gate::{VaultDb, VaultGate};
 pub struct ActiveInstanceHandle {
     /// Instance name (matches the file basename without `.db`).
     pub name: String,
-    /// haex-crdt handle. All backend subsystems that need DB access
-    /// clone the `Arc`; `close_instance` cannot succeed until every clone
-    /// has been dropped (per contract postcondition on `CloseFailed`).
+    /// haex-crdt handle. Requests get it through [`AppState::database`] as a tracked
+    /// [`VaultDb`]; the close drops this reference once every tracked clone is gone, or at the
+    /// drain limit, and the process ends either way.
     pub database: Arc<Database>,
 }
 
@@ -72,6 +72,11 @@ impl AppState {
             .as_ref()
             .filter(|active| active.name == name)
             .map(|active| Arc::clone(&active.database)))
+    }
+
+    /// The name of the active instance, if any.
+    pub fn active_name(&self) -> Result<Option<String>> {
+        Ok(self.slot("")?.as_ref().map(|active| active.name.clone()))
     }
 
     /// Whether the active instance is named `name`.
