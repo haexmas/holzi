@@ -60,7 +60,7 @@ async function pickFiles() {
       :title="t('chat.composer.attachments.attachButton')"
       @click="pickFiles"
     >
-      <Icon name="lucide:plus" class="h-4 w-4" aria-hidden="true" />
+      <Icon name="lucide:plus" class="h-4 w-4" :aria-hidden="true" />
     </button>
 
     <div
@@ -85,7 +85,7 @@ async function pickFiles() {
           "
           @click="emit('remove', attachment.id)"
         >
-          <Icon name="lucide:x" class="h-3 w-3" aria-hidden="true" />
+          <Icon name="lucide:x" class="h-3 w-3" :aria-hidden="true" />
         </button>
       </div>
     </div>

@@ -128,7 +128,7 @@ onBeforeUnmount(() => {
       <Icon
         name="lucide:loader-circle"
         class="h-3.5 w-3.5 animate-spin"
-        aria-hidden="true"
+        :aria-hidden="true"
       />
       {{
         t('workspace.modelPreload.loading', {
@@ -144,7 +144,7 @@ onBeforeUnmount(() => {
       <Icon
         name="lucide:check-circle-2"
         class="h-3.5 w-3.5 text-emerald-600"
-        aria-hidden="true"
+        :aria-hidden="true"
       />
       {{
         t('workspace.modelPreload.ready', {
@@ -160,7 +160,7 @@ onBeforeUnmount(() => {
       <Icon
         name="lucide:circle-alert"
         class="h-3.5 w-3.5 text-amber-600"
-        aria-hidden="true"
+        :aria-hidden="true"
       />
       {{ t('workspace.modelPreload.error') }}
     </p>
