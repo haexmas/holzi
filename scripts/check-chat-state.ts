@@ -1012,10 +1012,14 @@ const localModel = (id: string, capabilities: unknown) => ({
   contextWindow: null,
   capabilities,
 })
-const providerModel = (id: string, capabilities: unknown) => ({
+const providerModel = (
+  providerId: string,
+  id: string,
+  capabilities: unknown,
+) => ({
   id,
   name: id,
-  providerId: 'p1',
+  providerId,
   contextWindow: null,
   capabilities,
 })
@@ -1039,6 +1043,7 @@ test('the effort options offered follow the displayed model', async () => {
   state.modelStore.providerModels = {
     p1: [
       providerModel(
+        'p1',
         'p1:opus',
         presetsCapabilities('low', 'medium', 'high', 'xhigh', 'max'),
       ),
@@ -1402,15 +1407,86 @@ test('the same remote model reached through two connections stores its choice se
     first: 'p1:opus',
   })
   state.modelStore.providerModels = {
-    p1: [providerModel('p1:opus', presetsCapabilities('low', 'high'))],
-    p2: [providerModel('p2:opus', presetsCapabilities('low', 'high'))],
+    p1: [providerModel('p1', 'p1:opus', presetsCapabilities('low', 'high'))],
+    p2: [providerModel('p2', 'p2:opus', presetsCapabilities('low', 'high'))],
   }
   await flush()
 
   await state.modelStore.updateEffortLevel('high')
+  showModel(state, 'p2:opus')
+  await flush()
+  await state.modelStore.updateEffortLevel('low')
+
+  showModel(state, 'p1:opus')
+  await flush()
+  assert.equal(state.modelStore.effortLevel, 'high')
+  showModel(state, 'p2:opus')
+  await flush()
+  assert.equal(state.modelStore.effortLevel, 'low')
 
   assert.equal(prefs.map.get(EFFORT_KEY('p1:opus')), 'high')
-  assert.equal(prefs.map.has(EFFORT_KEY('p2:opus')), false)
+  assert.equal(prefs.map.get(EFFORT_KEY('p2:opus')), 'low')
+})
+
+test('preference mutations for one model are persisted in call order', async () => {
+  const prefs = createPrefStore()
+  let releaseFirst!: () => void
+  let writes = 0
+  const realSet = prefs.overrides.setPrefAsync
+  prefs.overrides.setPrefAsync = async (scope, key, value) => {
+    writes++
+    if (writes === 1) {
+      await new Promise<void>((resolve) => {
+        releaseFirst = resolve
+      })
+    }
+    await realSet(scope, key, value)
+  }
+  const state = await initializedStore({
+    prefs,
+    installed: [localModel('a', presetsCapabilities('low', 'high'))],
+    first: 'a',
+  })
+
+  const first = state.modelStore.updateEffortLevel('low')
+  await flush()
+  const second = state.modelStore.updateEffortLevel('high')
+  await flush()
+
+  assert.equal(writes, 1, 'the second write must wait for the first')
+  releaseFirst()
+  await Promise.all([first, second])
+  assert.equal(prefs.map.get(EFFORT_KEY('a')), 'high')
+})
+
+test('capability reconciliation queues its clear behind a pending model write', async () => {
+  const prefs = createPrefStore()
+  let releaseWrite!: () => void
+  const realSet = prefs.overrides.setPrefAsync
+  prefs.overrides.setPrefAsync = async (scope, key, value) => {
+    await new Promise<void>((resolve) => {
+      releaseWrite = resolve
+    })
+    await realSet(scope, key, value)
+  }
+  const state = await initializedStore({
+    prefs,
+    installed: [localModel('a', presetsCapabilities('low', 'high', 'max'))],
+    first: 'a',
+  })
+
+  const saving = state.modelStore.updateEffortLevel('max')
+  await flush()
+  state.modelStore.installedModels = [
+    localModel('a', presetsCapabilities('low', 'high')),
+  ]
+  await flush()
+  assert.equal(prefs.map.has(EFFORT_KEY('a')), false)
+
+  releaseWrite()
+  await saving
+  await flush()
+  assert.equal(prefs.map.has(EFFORT_KEY('a')), false)
 })
 
 test('no preference is read or written before the device is known, and the choice still works in memory', async () => {

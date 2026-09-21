@@ -70,6 +70,10 @@ export function useReasoningPreference(deps: ReasoningPreferenceDeps) {
   // Monotonic guard: a read that finishes after the model changed, or after
   // the user already chose, must not overwrite the newer state.
   let loadToken = 0
+  // Preference writes for one model must commit in call order. Different
+  // models use independent queues, so switching models does not serialize
+  // unrelated preference changes.
+  const mutationQueues = new Map<string, Promise<void>>()
 
   const control = computed(() => capabilities.value?.reasoning ?? null)
 
@@ -97,14 +101,33 @@ export function useReasoningPreference(deps: ReasoningPreferenceDeps) {
     return uuid ? { kind: 'device', uuid } : null
   }
 
+  function enqueueMutation(
+    forModel: string,
+    mutation: () => Promise<void>,
+  ): Promise<void> {
+    const previous = mutationQueues.get(forModel) ?? Promise.resolve()
+    const next = previous.catch(() => undefined).then(mutation)
+    mutationQueues.set(forModel, next)
+    void next
+      .finally(() => {
+        if (mutationQueues.get(forModel) === next) {
+          mutationQueues.delete(forModel)
+        }
+      })
+      .catch(() => undefined)
+    return next
+  }
+
   async function clearStored(forModel: string) {
     const target = scope()
     if (!target || !forModel) return
-    try {
-      await preferences.clearPrefAsync(target, prefKey(forModel))
-    } catch (e) {
-      setError(errString(e))
-    }
+    await enqueueMutation(forModel, async () => {
+      try {
+        await preferences.clearPrefAsync(target, prefKey(forModel))
+      } catch (e) {
+        setError(errString(e))
+      }
+    })
   }
 
   /**
@@ -171,11 +194,13 @@ export function useReasoningPreference(deps: ReasoningPreferenceDeps) {
     const target = scope()
     if (!forModel || !target) return
     try {
-      if (optionId === null) {
-        await preferences.clearPrefAsync(target, prefKey(forModel))
-      } else {
-        await preferences.setPrefAsync(target, prefKey(forModel), optionId)
-      }
+      await enqueueMutation(forModel, async () => {
+        if (optionId === null) {
+          await preferences.clearPrefAsync(target, prefKey(forModel))
+        } else {
+          await preferences.setPrefAsync(target, prefKey(forModel), optionId)
+        }
+      })
     } catch (e) {
       if (modelId.value === forModel && effortLevel.value === optionId) {
         effortLevel.value = previousLevel

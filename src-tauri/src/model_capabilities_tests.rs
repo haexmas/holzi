@@ -89,6 +89,48 @@ fn unknown_fields_are_ignored_and_missing_fields_default_to_not_determined() {
 }
 
 #[test]
+fn partial_nested_reasoning_data_keeps_sibling_capabilities() {
+    let partial: ModelCapabilities = serde_json::from_value(json!({
+        "reasoning": {
+            "kind": "presets",
+            "options": [{}],
+        },
+        "acceptedAttachmentKinds": ["image"],
+        "thinkingStyle": "manual",
+    }))
+    .unwrap();
+
+    assert_eq!(
+        partial.reasoning,
+        Some(ReasoningControl::Presets {
+            options: vec![ReasoningOption {
+                id: String::new(),
+                label: String::new(),
+            }],
+        })
+    );
+    assert_eq!(
+        partial.accepted_attachment_kinds,
+        Some(vec![AttachmentKind::Image])
+    );
+    assert_eq!(partial.thinking_style, Some(ThinkingStyle::Manual));
+
+    let missing_options: ModelCapabilities = serde_json::from_value(json!({
+        "reasoning": { "kind": "presets" },
+        "acceptedAttachmentKinds": ["text"],
+    }))
+    .unwrap();
+    assert_eq!(
+        missing_options.normalized().reasoning,
+        Some(ReasoningControl::Unavailable)
+    );
+    assert_eq!(
+        missing_options.accepted_attachment_kinds,
+        Some(vec![AttachmentKind::Text])
+    );
+}
+
+#[test]
 fn an_empty_option_list_never_becomes_a_selectable_control() {
     assert_eq!(
         ReasoningControl::presets(Vec::new()),

@@ -48,14 +48,19 @@ pub enum ReasoningControl {
     /// Determined: the user may pick one of these provider-native options.
     /// Non-empty by construction ([`ReasoningControl::presets`]) and by
     /// [`ModelCapabilities::normalized`] for values read from storage.
-    Presets { options: Vec<ReasoningOption> },
+    Presets {
+        #[serde(default)]
+        options: Vec<ReasoningOption>,
+    },
 }
 
 /// One selectable reasoning option. `id` is the provider-native wire value
 /// that is validated, persisted and sent; `label` is a display fallback.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReasoningOption {
+    #[serde(default)]
     pub id: String,
+    #[serde(default)]
     pub label: String,
 }
 
