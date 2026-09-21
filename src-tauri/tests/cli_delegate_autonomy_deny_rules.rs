@@ -133,7 +133,11 @@ async fn run_codex_turn(
         Some(DelegateChatContext {
             pending_tool_approvals: pending,
             emit,
-            database: Some(VaultGate::new().vault_db(Arc::clone(db))),
+            database: Some(
+                VaultGate::new()
+                    .vault_db(Arc::clone(db))
+                    .expect("open gate"),
+            ),
         }),
     );
     let stream = adapter

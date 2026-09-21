@@ -122,7 +122,11 @@ sys.stdin.readline()
         Some(DelegateChatContext {
             pending_tool_approvals: pending,
             emit,
-            database: Some(VaultGate::new().vault_db(Arc::clone(&db))),
+            database: Some(
+                VaultGate::new()
+                    .vault_db(Arc::clone(&db))
+                    .expect("open gate"),
+            ),
         }),
     );
 
@@ -235,7 +239,11 @@ sys.stdin.readline()
         Some(DelegateChatContext {
             pending_tool_approvals: pending,
             emit,
-            database: Some(VaultGate::new().vault_db(Arc::clone(&db))),
+            database: Some(
+                VaultGate::new()
+                    .vault_db(Arc::clone(&db))
+                    .expect("open gate"),
+            ),
         }),
     );
 

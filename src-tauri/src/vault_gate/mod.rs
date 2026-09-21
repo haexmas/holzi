@@ -65,7 +65,7 @@ pub struct VaultGate {
 }
 
 struct Inner {
-    /// Held only for a phase read or transition, never across an await.
+    /// Held for phase reads, admission and transition, never across an await.
     phase: Mutex<VaultPhase>,
     /// Fires once, on the first transition into `Closing`.
     cancel: CancellationToken,
@@ -75,6 +75,49 @@ struct Inner {
     aborts: Mutex<Vec<AbortHandle>>,
     /// Runtime that runs tracked work. `None` means Tauri's own async runtime.
     runtime: Option<Handle>,
+}
+
+pub(crate) struct Admission<'a> {
+    gate: &'a VaultGate,
+    _phase: MutexGuard<'a, VaultPhase>,
+}
+
+impl Admission<'_> {
+    pub(crate) fn tracker_token(&self) -> TaskTrackerToken {
+        self.gate.inner.tasks.token()
+    }
+
+    pub(crate) fn vault_db(&self, db: Arc<Database>) -> VaultDb {
+        VaultDb::new(db, self.tracker_token())
+    }
+
+    pub(crate) fn spawn<F>(&self, fut: F) -> JoinHandle<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        let handle = self.gate.inner.tasks.spawn_on(fut, &self.gate.runtime());
+        let mut aborts = self
+            .gate
+            .inner
+            .aborts
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        aborts.retain(|abort| !abort.is_finished());
+        aborts.push(handle.abort_handle());
+        handle
+    }
+
+    pub(crate) fn spawn_blocking<F, R>(&self, work: F) -> JoinHandle<R>
+    where
+        F: FnOnce() -> R + Send + 'static,
+        R: Send + 'static,
+    {
+        self.gate
+            .inner
+            .tasks
+            .spawn_blocking_on(work, &self.gate.runtime())
+    }
 }
 
 impl VaultGate {
@@ -146,7 +189,6 @@ impl VaultGate {
             return false;
         }
         *phase = VaultPhase::Closing;
-        drop(phase);
         self.inner.cancel.cancel();
         self.inner.tasks.close();
         true
@@ -158,13 +200,13 @@ impl VaultGate {
     }
 
     /// A token that keeps the tracker non-empty until it is dropped.
-    pub fn tracker_token(&self) -> TaskTrackerToken {
-        self.inner.tasks.token()
+    pub fn tracker_token(&self) -> Result<TaskTrackerToken> {
+        self.with_admission(|admission| Ok(admission.tracker_token()))
     }
 
     /// Wraps a database handle so the tracker counts it while any clone is alive.
-    pub fn vault_db(&self, db: Arc<Database>) -> VaultDb {
-        VaultDb::new(db, self.tracker_token())
+    pub fn vault_db(&self, db: Arc<Database>) -> Result<VaultDb> {
+        self.with_admission(|admission| Ok(admission.vault_db(db)))
     }
 
     /// Whether no tracked work and no `VaultDb` is alive.
@@ -180,37 +222,47 @@ impl VaultGate {
     }
 
     /// Runs `fut` as tracked, abortable session work.
-    pub fn spawn<F>(&self, fut: F) -> JoinHandle<F::Output>
+    pub fn spawn<F>(&self, fut: F) -> Result<JoinHandle<F::Output>>
     where
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        let handle = self.inner.tasks.spawn_on(fut, &self.runtime());
-        let mut aborts = self.inner.aborts.lock().unwrap_or_else(|e| e.into_inner());
-        aborts.retain(|abort| !abort.is_finished());
-        aborts.push(handle.abort_handle());
-        drop(aborts);
-        handle
+        self.with_admission(|admission| Ok(admission.spawn(fut)))
     }
 
     /// Runs `work` on the blocking pool, tracked. The drain waits for the closure itself,
     /// because aborting the outer task cannot stop a running thread.
-    pub fn spawn_blocking<F, R>(&self, work: F) -> JoinHandle<R>
+    pub fn spawn_blocking<F, R>(&self, work: F) -> Result<JoinHandle<R>>
     where
         F: FnOnce() -> R + Send + 'static,
         R: Send + 'static,
     {
-        self.inner.tasks.spawn_blocking_on(work, &self.runtime())
+        self.with_admission(|admission| Ok(admission.spawn_blocking(work)))
     }
 
     /// Races `fut` against the close: the future is dropped and `VaultClosed` returned once the
     /// close has started, even if its result was ready at the same moment (FR-001).
     pub async fn run<F: Future>(&self, fut: F) -> Result<F::Output> {
+        self.with_admission(|_| Ok(()))?;
         tokio::select! {
             biased;
             _ = self.inner.cancel.cancelled() => Err(HolziError::VaultClosed),
             out = fut => Ok(out),
         }
+    }
+
+    pub(crate) fn with_admission<T>(
+        &self,
+        operation: impl FnOnce(&Admission<'_>) -> Result<T>,
+    ) -> Result<T> {
+        let phase = self.phase_lock();
+        if *phase == VaultPhase::Closing {
+            return Err(HolziError::VaultClosed);
+        }
+        operation(&Admission {
+            gate: self,
+            _phase: phase,
+        })
     }
 }
 

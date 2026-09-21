@@ -142,7 +142,9 @@ async fn registration_records_capabilities_derived_from_the_local_model_id() {
             .await
             .expect("stage bytes");
         register_downloaded(RegisterDownloadedArgs {
-            db: VaultGate::new().vault_db(Arc::clone(&db)),
+            db: VaultGate::new()
+                .vault_db(Arc::clone(&db))
+                .expect("open gate"),
             id: id.into(),
             name: id.into(),
             relative: format!("{id}/model.gguf"),

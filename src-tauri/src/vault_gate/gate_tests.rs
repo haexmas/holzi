@@ -145,3 +145,16 @@ async fn run_returns_the_output_while_open_and_vault_closed_once_closing() {
         Err(HolziError::VaultClosed)
     ));
 }
+
+#[tokio::test]
+async fn admission_rejects_new_tasks_after_close() {
+    let gate = VaultGate::new();
+    gate.request_close();
+
+    assert!(matches!(gate.tracker_token(), Err(HolziError::VaultClosed)));
+    assert!(matches!(gate.spawn(async {}), Err(HolziError::VaultClosed)));
+    assert!(matches!(
+        gate.spawn_blocking(|| {}),
+        Err(HolziError::VaultClosed)
+    ));
+}

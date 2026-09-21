@@ -58,12 +58,11 @@ impl AppState {
     /// The active vault's database as a tracked handle, [`HolziError::VaultClosed`] once a close
     /// has started, or [`HolziError::NoActiveInstance`] if no instance is open.
     pub fn database(&self) -> Result<VaultDb> {
-        if self.gate.is_closing() {
-            return Err(HolziError::VaultClosed);
-        }
-        let guard = self.slot("")?;
-        let handle = guard.as_ref().ok_or(HolziError::NoActiveInstance)?;
-        Ok(self.gate.vault_db(Arc::clone(&handle.database)))
+        self.gate.with_admission(|admission| {
+            let guard = self.slot("")?;
+            let handle = guard.as_ref().ok_or(HolziError::NoActiveInstance)?;
+            Ok(admission.vault_db(Arc::clone(&handle.database)))
+        })
     }
 
     /// The database of the active instance if it is named `name`.

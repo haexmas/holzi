@@ -26,7 +26,7 @@ fn a_clone_keeps_the_tracker_busy_until_the_last_clone_drops() {
     let gate = VaultGate::new();
     assert!(gate.is_idle(), "nothing uses the database yet");
 
-    let first = gate.vault_db(db);
+    let first = gate.vault_db(db).expect("open gate");
     let second = first.clone();
     assert!(!gate.is_idle());
 
@@ -41,9 +41,21 @@ fn deref_reaches_the_database() {
     let (_tmp, db) = open_throwaway();
     let expected = db.device_id();
     let gate = VaultGate::new();
-    let vault_db = gate.vault_db(db);
+    let vault_db = gate.vault_db(db).expect("open gate");
 
     assert_eq!(vault_db.device_id(), expected);
     let database: &Database = &vault_db;
     assert_eq!(database.device_id(), expected);
+}
+
+#[test]
+fn a_closing_gate_rejects_new_database_handles() {
+    let (_tmp, db) = open_throwaway();
+    let gate = VaultGate::new();
+    gate.request_close();
+
+    assert!(matches!(
+        gate.vault_db(db),
+        Err(crate::error::HolziError::VaultClosed)
+    ));
 }

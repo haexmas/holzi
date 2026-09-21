@@ -27,7 +27,8 @@ async fn a_task_that_stops_on_the_token_yields_drained() {
     gate.spawn(async move {
         token.cancelled().await;
         flag.store(true, Ordering::SeqCst);
-    });
+    })
+    .expect("open gate");
 
     let started = Instant::now();
     let outcome = gate.drain().await;
@@ -44,7 +45,8 @@ async fn a_task_that_ignores_the_token_yields_drained_after_abort() {
         loop {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
-    });
+    })
+    .expect("open gate");
 
     let started = Instant::now();
     let outcome = gate.drain().await;
@@ -61,7 +63,7 @@ async fn a_task_that_ignores_the_token_yields_drained_after_abort() {
 async fn work_that_outlives_the_limit_yields_stuck_within_the_limit() {
     let gate = gate_on_this_runtime();
     // Stands for un-abortable native work: a plain thread that holds a tracker token.
-    let token = gate.tracker_token();
+    let token = gate.tracker_token().expect("open gate");
     let (release, released) = mpsc::channel::<()>();
     let thread = std::thread::spawn(move || {
         let _held = token;
@@ -86,7 +88,8 @@ async fn a_tracked_blocking_closure_is_reported_stuck_and_waited_for_once_releas
     let (release, released) = mpsc::channel::<()>();
     gate.spawn_blocking(move || {
         let _ = released.recv();
-    });
+    })
+    .expect("open gate");
 
     let outcome = gate
         .drain_with(Duration::from_millis(50), Duration::from_millis(150))

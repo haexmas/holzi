@@ -155,9 +155,14 @@ async fn a_refresh_makes_a_not_yet_determined_row_determined() {
     let provider = anthropic_provider(server.uri());
     seed(&db, &provider, None);
 
-    do_refresh(&VaultGate::new().vault_db(Arc::clone(&db)), &provider)
-        .await
-        .expect("refresh succeeds");
+    do_refresh(
+        &VaultGate::new()
+            .vault_db(Arc::clone(&db))
+            .expect("open gate"),
+        &provider,
+    )
+    .await
+    .expect("refresh succeeds");
 
     let caps = stored_capabilities(&db, &provider).expect("now determined");
     assert!(matches!(
@@ -187,9 +192,14 @@ async fn a_refresh_with_absent_capabilities_replaces_the_stored_record() {
         Some(ModelCapabilities::local("Qwen3-4B-Instruct")),
     );
 
-    do_refresh(&VaultGate::new().vault_db(Arc::clone(&db)), &provider)
-        .await
-        .expect("refresh succeeds");
+    do_refresh(
+        &VaultGate::new()
+            .vault_db(Arc::clone(&db))
+            .expect("open gate"),
+        &provider,
+    )
+    .await
+    .expect("refresh succeeds");
 
     assert_eq!(stored_capabilities(&db, &provider), None);
 }
@@ -205,7 +215,13 @@ async fn a_failed_refresh_keeps_the_stored_capabilities() {
     let learned = ModelCapabilities::local("Qwen3-4B-Instruct");
     seed(&db, &provider, Some(learned.clone()));
 
-    let result = do_refresh(&VaultGate::new().vault_db(Arc::clone(&db)), &provider).await;
+    let result = do_refresh(
+        &VaultGate::new()
+            .vault_db(Arc::clone(&db))
+            .expect("open gate"),
+        &provider,
+    )
+    .await;
 
     assert!(result.is_err(), "the listing failed");
     assert_eq!(stored_capabilities(&db, &provider), Some(learned));
