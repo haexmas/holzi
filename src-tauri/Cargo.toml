@@ -93,7 +93,7 @@ futures = "0.3"
 # `CancellationToken` for cooperative cancellation of an in-flight tool
 # execution or a pending approval wait (spec.md FR-009/FR-010) — already a
 # real (non-transitive) dependency of `rmcp`, see its `service.rs`.
-tokio-util = "0.7"
+tokio-util = { version = "0.7", features = ["rt"] }
 
 # Slice b: hardware detection and model catalog / download.
 # `sysinfo` and `reqwest` are unconditional — hardware info and provider
@@ -166,6 +166,8 @@ tokenizers = { version = "0.23.2", default-features = false, features = ["fancy-
 libc = "0.2"
 
 [dev-dependencies]
+# Mock runtime for IPC-level tests of the vault gateway (spec 013).
+tauri = { version = "2.6.2", features = ["test"] }
 # `tempfile` moved to `[dependencies]` above — tests already get it
 # transitively, no separate dev-dependency entry needed.
 # Additive to the `[dependencies]` rmcp entry: test-only `server` support
