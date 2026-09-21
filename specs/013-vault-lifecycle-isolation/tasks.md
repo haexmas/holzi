@@ -57,7 +57,7 @@ side, US5 reads never fail.
       with the docs, and any available `gh` account may be used for pushes and PRs, including the
       haex-crdt repository. The `haexhub` account is read-only on this repository, so pushes use
       `haexmas`; restore the previously active account afterwards. Recorded in the Baseline section.
-- [ ] T005 [P] Extract the replay harness. Create `scripts/lib/chat-state-harness.ts` and move into
+- [x] T005 [P] Extract the replay harness. Create `scripts/lib/chat-state-harness.ts` and move into
       it, from `scripts/check-chat-state.ts`, the sandbox machinery: the transpile cache,
       `runComposable`, `createTauriDouble`, `DEFAULT_INVOKE_HANDLERS`, `RETURN_STATEMENT`,
       `createChatState`, `flush` and any helper they need. Export what the test bodies use. Test
