@@ -127,3 +127,99 @@ fn the_forced_end_runs_once_after_the_grace_period_and_never_before() {
         "the action runs once"
     );
 }
+
+#[cfg(unix)]
+mod children {
+    //! The ladder ends every registered child (spec 013 FR-003, T037).
+
+    use std::os::unix::process::{CommandExt, ExitStatusExt};
+    use std::process::{Child, Command};
+
+    use super::*;
+
+    fn long_lived_child() -> Child {
+        Command::new("sleep")
+            .arg("60")
+            .process_group(0)
+            .spawn()
+            .expect("spawn sleep")
+    }
+
+    /// Blocks until the child is gone; the ladder already sent the kill, so this is quick.
+    fn killed_by_the_ladder(mut child: Child) -> bool {
+        child.wait().expect("wait").signal() == Some(libc::SIGKILL)
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_drained_close_still_ends_a_registered_child() {
+        let gate = gate_on_this_runtime();
+        let child = long_lived_child();
+        let _guard = gate.children().register(child.id());
+
+        let outcome = gate.drain().await;
+
+        assert_eq!(outcome, DrainOutcome::Drained);
+        assert!(killed_by_the_ladder(child));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn the_ladder_ends_a_registered_child_before_it_returns_drained_after_abort() {
+        let gate = gate_on_this_runtime();
+        gate.spawn(async {
+            loop {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .expect("open gate");
+        let child = long_lived_child();
+        let _guard = gate.children().register(child.id());
+
+        let outcome = gate.drain().await;
+
+        assert_eq!(outcome, DrainOutcome::DrainedAfterAbort);
+        assert!(killed_by_the_ladder(child));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn the_ladder_ends_a_registered_child_before_it_returns_stuck() {
+        let gate = gate_on_this_runtime();
+        let token = gate.tracker_token().expect("open gate");
+        let (release, released) = mpsc::channel::<()>();
+        let thread = std::thread::spawn(move || {
+            let _held = token;
+            let _ = released.recv();
+        });
+        let child = long_lived_child();
+        let _guard = gate.children().register(child.id());
+
+        let outcome = gate.drain().await;
+
+        assert_eq!(outcome, DrainOutcome::Stuck);
+        assert!(killed_by_the_ladder(child));
+        release.send(()).expect("release the thread");
+        thread.join().expect("thread ends");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn ending_the_child_at_the_abort_rung_frees_work_that_was_waiting_for_it() {
+        let gate = VaultGate::with_runtime(tokio::runtime::Handle::current());
+        let mut child = long_lived_child();
+        let guard = gate.children().register(child.id());
+        // A blocking thread that only ends once its child is gone, and cannot be aborted.
+        gate.spawn_blocking(move || {
+            let _ = child.wait();
+            drop(guard);
+        })
+        .expect("open gate");
+
+        let outcome = gate
+            .drain_with(Duration::from_millis(50), Duration::from_secs(5))
+            .await;
+
+        assert_eq!(
+            outcome,
+            DrainOutcome::DrainedAfterAbort,
+            "killing the child at the abort rung lets the waiting thread finish"
+        );
+    }
+}

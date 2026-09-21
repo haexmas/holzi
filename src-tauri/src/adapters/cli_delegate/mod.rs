@@ -53,7 +53,7 @@ use uuid::Uuid;
 use super::{AdapterError, AdapterStream, ChatRequest, ChatRole, ProviderAdapter, ProviderModel};
 use crate::chat::tools::ApprovalDecision;
 use crate::model_capabilities::ModelCapabilities;
-use crate::vault_gate::VaultDb;
+use crate::vault_gate::{ChildRegistry, VaultDb};
 
 /// Builds the plain-text transcript both `claude -p` and `codex`'s
 /// `turn/start` receive as their conversation input. Holzi remains the
@@ -125,6 +125,8 @@ pub struct DelegateChatContext {
     pub pending_tool_approvals: PendingToolApprovals,
     pub emit: EventEmitter,
     pub database: Option<VaultDb>,
+    /// Where the delegated CLI's process registers, so ending the vault ends it.
+    pub children: ChildRegistry,
 }
 
 /// Which subscription vendor a `cli_delegate` provider row talks to.

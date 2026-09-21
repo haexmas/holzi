@@ -115,8 +115,10 @@ Owned by `VaultGate`. Holds the process id of every child process started for th
 delegated CLIs, MCP servers), each one its own process group. `register(pid)` returns a guard that
 removes the entry on drop. `kill_all()` kills every registered group (Unix `kill(-pid, SIGKILL)`,
 Windows `taskkill /T /F`) and makes any later registration kill at once. The drain ladder calls it
-at its end and the forced end calls it right before the process ends, so no child outlives the vault
-session (FR-003).
+when it aborts, so a thread waiting for its child is freed instead of holding the drain to the limit,
+and on every other path too. The forced end calls it right before the process ends, so no child
+outlives the vault session (FR-003). A process id that could name more than one group (0, 1 or above
+`i32::MAX`) is never signalled.
 
 ## ProcessPresence (new)
 

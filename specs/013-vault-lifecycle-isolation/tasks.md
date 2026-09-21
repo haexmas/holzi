@@ -285,12 +285,13 @@ download; press close repeatedly; close by window; the process ends within about
       downloads. Add a case to the existing sibling test files if a gap exists, and record the
       finding either way in the Baseline section.
 
-- [ ] T037 [P] [US1] Create `src-tauri/src/vault_gate/children_tests.rs`: after `register` of a
+- [x] T037 [P] [US1] Create `src-tauri/src/vault_gate/children_tests.rs`: after `register` of a
       spawned child (its own process group) `kill_all` ends it and a grandchild its shell started;
       a second `kill_all` is harmless; a child registered after `kill_all` is killed at once;
       dropping the guard removes the entry. Unix only (`#[cfg(unix)]`), using `sh` with a background
-      `sleep`. Add a case to `src-tauri/src/vault_gate/drain_tests.rs`: the ladder calls `kill_all`
-      before it returns `DrainedAfterAbort` or `Stuck`.
+      `sleep`. Add cases to `src-tauri/src/vault_gate/drain_tests.rs`: the ladder calls `kill_all`
+      before it returns `Drained`, `DrainedAfterAbort` or `Stuck`, and at the abort rung, so a thread
+      that waits for its child is freed.
 
 ### Implementation for User Story 1
 
@@ -343,8 +344,8 @@ download; press close repeatedly; close by window; the process ends within about
       the MCP server in `src-tauri/src/chat/tools/mcp.rs` (around line 123: read how
       `TokioChildProcess` exposes the pid, and start the server as its own process group if it is
       not yet). `kill_all` reuses what `cli.rs` already does: `libc::kill(-pid, SIGKILL)` on Unix and
-      `taskkill /T /F` on Windows, with no new dependency. Call it at the end of the drain ladder and
-      from `CloseEffects::force_end` right before the process ends. Add a `ponytail:` comment:
+      `taskkill /T /F` on Windows, with no new dependency. Call it at the abort rung of the drain ladder
+      (and on its other paths) and from `CloseEffects::force_end` right before the process ends. Add a `ponytail:` comment:
       process groups and `taskkill`; ceiling "a descendant that left its group survives"; upgrade
       path "a Windows Job Object with kill-on-close, and `PR_SET_PDEATHSIG` on Linux". Keep the file
       under 500 lines.

@@ -108,6 +108,7 @@ sys.stdin.readline()
         b"fake-auth".to_vec(),
         stub.to_str().unwrap().to_string(),
         Some(DelegateChatContext {
+            children: Default::default(),
             pending_tool_approvals: Arc::clone(&pending),
             emit,
             database: None, // Manual mode => always Ask, forcing the live round trip
@@ -193,6 +194,7 @@ async fn claude_approval_round_trips_through_the_real_socket_and_bridge_child() 
     let pending: PendingToolApprovals = Arc::new(Mutex::new(HashMap::new()));
     let (emit, mut events) = channel_emitter();
     let context = DelegateChatContext {
+        children: Default::default(),
         pending_tool_approvals: Arc::clone(&pending),
         emit,
         database: None, // Manual mode => always Ask

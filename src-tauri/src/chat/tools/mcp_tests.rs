@@ -19,6 +19,7 @@ use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 
 use super::mcp::{tools_from_connection, McpServerConfig};
+use crate::vault_gate::ChildRegistry;
 
 #[derive(Clone, Default)]
 struct EchoServer {
@@ -111,7 +112,7 @@ async fn tool_discovery_populates_the_registry() {
     let (connection, _server_task) = connect_in_memory(EchoServer::default()).await;
     let connection = Arc::new(connection);
     let mut seen = HashSet::new();
-    let tools = tools_from_connection("test-server", connection, &mut seen)
+    let tools = tools_from_connection("test-server", connection, &mut seen, None)
         .await
         .expect("discovery succeeds");
 
@@ -134,7 +135,7 @@ async fn a_disconnected_server_surfaces_a_tool_error_not_a_panic() {
     let (connection, server_task) = connect_in_memory(EchoServer::default()).await;
     let connection = Arc::new(connection);
     let mut seen = HashSet::new();
-    let tools = tools_from_connection("test-server", connection, &mut seen)
+    let tools = tools_from_connection("test-server", connection, &mut seen, None)
         .await
         .expect("discovery succeeds");
     assert_eq!(tools.len(), 1);
@@ -172,7 +173,7 @@ async fn cancellation_ends_the_wait_without_erroring_on_the_transport() {
     .await;
     let connection = Arc::new(connection);
     let mut seen = HashSet::new();
-    let tools = tools_from_connection("test-server", connection, &mut seen)
+    let tools = tools_from_connection("test-server", connection, &mut seen, None)
         .await
         .expect("discovery succeeds");
 
@@ -206,6 +207,7 @@ async fn an_unspawnable_command_is_skipped_without_panicking() {
         command: "definitely-not-a-real-binary-xyz".to_string(),
         args: vec![],
     }];
-    let tools = super::mcp::discover_mcp_tools(&servers, &HashSet::new()).await;
+    let tools =
+        super::mcp::discover_mcp_tools(&servers, &HashSet::new(), &ChildRegistry::default()).await;
     assert!(tools.is_empty());
 }

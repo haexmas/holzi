@@ -64,8 +64,9 @@ the cancellation would then outlive the app and could keep running a tool after 
 FR-003 and the edge case that a running tool or child process is stopped with the session.
 **Decision**: a `ChildRegistry` in the gate. Every child started for the vault (the tool shell in
 `chat/tools/cli.rs`, delegated CLIs, MCP servers in `chat/tools/mcp.rs`) is its own process group and
-is registered. The drain ladder calls `kill_all` at its end, and the forced end calls it right before
-it ends the process. `kill_all` reuses what the code already does (`libc::kill(-pid, SIGKILL)` on
+is registered. The drain ladder calls `kill_all` when it aborts (a thread that waits for its child
+cannot be aborted and would hold the drain to the limit) and on its other paths, and the forced end
+calls it right before it ends the process. `kill_all` reuses what the code already does (`libc::kill(-pid, SIGKILL)` on
 Unix, `taskkill /T /F` on Windows in `cli.rs`), so there is no new dependency. **Limit**: a
 descendant that left its process group survives. **Upgrade path**: a Windows Job Object with
 kill-on-close and `PR_SET_PDEATHSIG` on Linux, which would also cover a killed app; not adopted

@@ -26,6 +26,7 @@ async fn spawn_codex_app_server_answers_a_real_question() {
         auth,
         "codex".to_string(),
         Some(DelegateChatContext {
+            children: Default::default(),
             pending_tool_approvals: Arc::new(Mutex::new(HashMap::new())),
             emit: Arc::new(|_event: &str, _payload: serde_json::Value| {}),
             database: None,

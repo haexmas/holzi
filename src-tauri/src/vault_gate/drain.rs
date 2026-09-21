@@ -1,9 +1,11 @@
 //! The drain ladder and the forced end (research R5, data-model.md `DrainOutcome`).
 //!
 //! After a close starts, the drain gives tracked work a cooperative window to stop by itself,
-//! then aborts the registered async tasks, then reports. Blocking threads cannot be aborted, so
-//! the ladder says so ([`DrainOutcome::Stuck`]) instead of pretending; ending the process is the
-//! final answer, never a retry for the user.
+//! then aborts the registered async tasks and ends every registered child process, then reports.
+//! Children go at the abort rung, not only at the end, because a thread that waits for its child
+//! cannot be aborted and would otherwise hold the drain until the limit. Blocking threads cannot
+//! be aborted, so the ladder says so ([`DrainOutcome::Stuck`]) instead of pretending; ending the
+//! process is the final answer, never a retry for the user.
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -40,13 +42,16 @@ impl VaultGate {
     }
 
     /// Runs the ladder: fire the token (idempotent), wait up to `cooperative`, abort registered
-    /// tasks, wait until `total` has passed since the start.
+    /// tasks and end the registered children, wait until `total` has passed since the start.
+    /// Children are ended on every path, so none outlives the session and a late registration is
+    /// killed at once.
     pub async fn drain_with(&self, cooperative: Duration, total: Duration) -> DrainOutcome {
         self.request_close();
         if tokio::time::timeout(cooperative, self.inner.tasks.wait())
             .await
             .is_ok()
         {
+            self.inner.children.kill_all();
             return DrainOutcome::Drained;
         }
         for abort in self
@@ -58,6 +63,7 @@ impl VaultGate {
         {
             abort.abort();
         }
+        self.inner.children.kill_all();
         let remaining = total.saturating_sub(cooperative);
         if tokio::time::timeout(remaining, self.inner.tasks.wait())
             .await

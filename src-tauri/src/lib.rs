@@ -124,7 +124,7 @@ pub fn run() {
     let gate = vault_gate::VaultGate::new();
     let builder = tauri::Builder::default().manage(AppState::new(gate.clone()));
     let builder = builder.manage(gate.clone());
-    let builder = builder.manage(ChatState::new());
+    let builder = builder.manage(ChatState::with_children(gate.children()));
     let builder = builder.manage(DelegateConnectState::new());
     let builder = builder.manage(voice::VoiceState::new());
     builder

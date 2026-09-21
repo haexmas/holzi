@@ -19,6 +19,7 @@ use crate::chat::tools::cli::CliTool;
 use crate::chat::tools::mcp::{self, McpServerConfig};
 use crate::chat::tools::{ApprovalDecision, Tool, ToolRegistry};
 use crate::storage::providers::ProviderKind;
+use crate::vault_gate::ChildRegistry;
 
 /// Structured lifecycle state shared by the Workspace and Chat views.
 #[derive(Debug, Clone, Serialize)]
@@ -130,6 +131,8 @@ pub struct ChatState {
     pub cancelled_tool_approvals: Arc<Mutex<HashSet<Uuid>>>,
     pub tool_cancellation: Arc<Mutex<Option<CancellationToken>>>,
     model_load: Arc<Mutex<ModelLoadRuntime>>,
+    /// Where the tools register the child processes they start, so ending the vault ends them.
+    children: ChildRegistry,
 }
 
 impl Clone for ChatState {
@@ -143,6 +146,7 @@ impl Clone for ChatState {
             cancelled_tool_approvals: Arc::clone(&self.cancelled_tool_approvals),
             tool_cancellation: Arc::clone(&self.tool_cancellation),
             model_load: Arc::clone(&self.model_load),
+            children: self.children.clone(),
         }
     }
 }
@@ -151,8 +155,14 @@ impl ChatState {
     /// The host-CLI tool is registered unconditionally and immediately —
     /// unlike MCP tools it is never connection-dependent (T019).
     pub fn new() -> Self {
+        Self::with_children(ChildRegistry::default())
+    }
+
+    /// Like [`ChatState::new`], with the tools registering their child processes in `children`,
+    /// which is the registry of the vault gate.
+    pub fn with_children(children: ChildRegistry) -> Self {
         let mut registry = ToolRegistry::new();
-        registry.register(Arc::new(CliTool));
+        registry.register(Arc::new(CliTool::new(children.clone())));
         Self {
             operation: Arc::new(tokio::sync::Mutex::new(())),
             session: Arc::new(Mutex::new(None)),
@@ -169,7 +179,13 @@ impl ChatState {
                 },
                 preload: None,
             })),
+            children,
         }
+    }
+
+    /// The registry the tools of this state register their child processes in.
+    pub fn children(&self) -> &ChildRegistry {
+        &self.children
     }
 
     /// Returns the current active-Vault generation.
@@ -342,7 +358,7 @@ impl ChatState {
             .unwrap_or_else(|e| e.into_inner())
             .clear();
         let mut host_only = ToolRegistry::new();
-        host_only.register(Arc::new(CliTool));
+        host_only.register(Arc::new(CliTool::new(self.children.clone())));
         let tools = std::mem::replace(
             &mut *self.tool_registry.lock().unwrap_or_else(|e| e.into_inner()),
             host_only,
@@ -367,13 +383,17 @@ impl ChatState {
     /// (spec.md Assumptions) — a future settings surface would call this
     /// whenever the user's configured server list changes.
     pub async fn refresh_mcp_tools(&self, servers: &[McpServerConfig]) {
-        let cli_name = CliTool.name().to_string();
-        let discovered =
-            mcp::discover_mcp_tools(servers, &std::collections::HashSet::from([cli_name])).await;
+        let cli_name = CliTool::default().name().to_string();
+        let discovered = mcp::discover_mcp_tools(
+            servers,
+            &std::collections::HashSet::from([cli_name]),
+            &self.children,
+        )
+        .await;
 
         let mut registry = self.tool_registry.lock().unwrap_or_else(|e| e.into_inner());
         registry.clear();
-        registry.register(Arc::new(CliTool));
+        registry.register(Arc::new(CliTool::new(self.children.clone())));
         for tool in discovered {
             registry.register(tool);
         }

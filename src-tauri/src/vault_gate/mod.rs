@@ -8,6 +8,7 @@
 //! invoke-handler wrapper ([`VaultGate::wrap`]) makes every command default-deny once a close
 //! has started.
 
+mod children;
 mod db;
 mod drain;
 mod invoke;
@@ -24,6 +25,7 @@ use tokio_util::task::TaskTracker;
 
 use crate::error::{HolziError, Result};
 
+pub use children::{ChildGuard, ChildRegistry};
 pub use db::VaultDb;
 pub use drain::{hard_end_after, DrainOutcome, COOPERATIVE_WINDOW, HARD_END_GRACE, TOTAL_LIMIT};
 pub use invoke::APP_SCOPED_COMMANDS;
@@ -73,6 +75,8 @@ struct Inner {
     tasks: TaskTracker,
     /// Abort handles of tracked async tasks, used by the second rung of the drain.
     aborts: Mutex<Vec<AbortHandle>>,
+    /// The child processes started for the vault, ended by the drain ladder and the forced end.
+    children: ChildRegistry,
     /// Runtime that runs tracked work. `None` means Tauri's own async runtime.
     runtime: Option<Handle>,
 }
@@ -138,6 +142,7 @@ impl VaultGate {
                 cancel: CancellationToken::new(),
                 tasks: TaskTracker::new(),
                 aborts: Mutex::new(Vec::new()),
+                children: ChildRegistry::default(),
                 runtime,
             }),
         }
@@ -192,6 +197,11 @@ impl VaultGate {
         self.inner.cancel.cancel();
         self.inner.tasks.close();
         true
+    }
+
+    /// The registry of child processes this gate ends when the close runs out of patience.
+    pub fn children(&self) -> ChildRegistry {
+        self.inner.children.clone()
     }
 
     /// The token that fires when the close starts.

@@ -175,6 +175,7 @@ pub(crate) async fn load_model_inner(
             pending_tool_approvals: Arc::clone(&chat.pending_tool_approvals),
             emit,
             database: Some(active_database(state)?),
+            children: chat.children().clone(),
         });
         load_api_key_model(state, model_id, provider_id_str, delegate_chat_ctx).await?
     } else {

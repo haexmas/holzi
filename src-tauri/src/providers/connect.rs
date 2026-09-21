@@ -29,6 +29,7 @@ use crate::error::{HolziError, Result};
 use crate::state::AppState;
 use crate::state_utils::active_database;
 use crate::storage::providers::{self as storage, Provider, ProviderCapability, ProviderKind};
+use crate::vault_gate::VaultGate;
 
 use super::{map_adapter_error, ProviderPayload};
 
@@ -102,6 +103,7 @@ pub enum ConnectCliDelegateResult {
 pub async fn connect_cli_delegate(
     app: AppHandle,
     state: State<'_, AppState>,
+    gate: State<'_, VaultGate>,
     connect_state: State<'_, DelegateConnectState>,
     args: ConnectCliDelegateArgs,
 ) -> Result<ConnectCliDelegateResult> {
@@ -132,7 +134,7 @@ pub async fn connect_cli_delegate(
         }
         DelegateVendor::Codex => {
             let app_for_prompt = app.clone();
-            let credentials = run_device_auth("codex", move |prompt| {
+            let credentials = run_device_auth("codex", &gate.children(), move |prompt| {
                 emit_progress(
                     &app_for_prompt,
                     DelegateConnectProgress {

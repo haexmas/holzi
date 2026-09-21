@@ -1,6 +1,7 @@
 use tokio::process::{Child, Command};
 
 use crate::adapters::AdapterError;
+use crate::vault_gate::{ChildGuard, ChildRegistry};
 
 /// Maps a `Command::spawn` failure to a distinct "backend not installed"
 /// error (spec 007-cli-delegate FR-008/SC-006) when the binary itself
@@ -24,13 +25,19 @@ pub(super) fn map_spawn_error(binary: &str, error: std::io::Error) -> AdapterErr
 /// last-resort guard for task abortion.
 pub(super) struct ChildLifecycle {
     child: Child,
+    /// Keeps the child registered with the vault gate while it can run, so the drain ladder and
+    /// the forced end reach its process group even though they skip the `Drop` kill below.
+    registration: Option<ChildGuard>,
 }
 
 impl ChildLifecycle {
-    pub(super) fn spawn(command: &mut Command) -> std::io::Result<Self> {
+    pub(super) fn spawn(command: &mut Command, children: &ChildRegistry) -> std::io::Result<Self> {
         command.kill_on_drop(true);
+        let child = command.spawn()?;
+        let registration = child.id().map(|pid| children.register(pid));
         Ok(Self {
-            child: command.spawn()?,
+            child,
+            registration,
         })
     }
 
@@ -42,6 +49,8 @@ impl ChildLifecycle {
         kill_process_group(self.child.id());
         let _ = self.child.kill().await;
         let _ = self.child.wait().await;
+        // Reaped: the process id may be handed on, so it must not stay registered.
+        self.registration = None;
     }
 }
 
