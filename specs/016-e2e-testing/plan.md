@@ -92,9 +92,14 @@ scripts/e2e/
 │   ├── webdriver.ts                # Minimal W3C client over fetch
 │   ├── instance.ts                 # Isolated instance: directories, environment, screen, driver, session
 │   ├── provider.ts                 # Stand-in provider
-│   ├── scenario.ts                 # scenario(): context, deadline, timeline, artifacts, skip rule
+│   ├── page.ts                     # Interaction helpers: invoke, click, type, press, navigate, close window
+│   ├── flows.ts                    # createAndUnlock, openChat, connectProvider, startReply
+│   ├── scenario.ts                 # scenario(): context, deadline, timeline, skip rule, failure hook
+│   ├── artifacts.ts                # Material kept for a failed scenario
+│   ├── framebuffer.ts              # Reads the virtual screen's XWD image (relaunch check)
 │   ├── report.ts                   # report.json and the printed summary
 │   ├── close-promises.ts           # The numbers from spec 013: 4 s, 1 s, 10 s
+│   ├── fake-driver.testlib.ts      # Test-only fake of the WebDriver server
 │   └── *.test.ts                   # Fast checks of the above, no display, no application
 └── scenarios/
     ├── smoke-start.test.ts
@@ -121,14 +126,14 @@ src/pages/chat/[instance].vue                    # + data-testid on the two lock
 
 Each stage is a pull request that can be reviewed and used on its own. Task numbering and detail come with `/speckit-tasks`.
 
-| Stage | Delivers                                                                                                                                                                                                                                                      | Stories and requirements                                   |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| 0     | Move holzi's atoms pin to `d5c48d0eb6662da84086bf69a3ca041a494e2b26`, run `spaex install`, commit the delivered `flake.nix`, `.devshell/packages.nix` and generated files. Check `tauri-driver`, `WebKitWebDriver` and `xvfb-run` are on `PATH` in the shell. | FR-012                                                     |
-| 1     | The command: options, preflight, orphan sweep, build or `--app`, cleanup on every ending, exit statuses, summary. The process marker, ports, W3C client and isolated instance. One smoke scenario. Helper checks and `check:e2e-lib` in CI.                   | US1, US5; FR-001 to FR-005, FR-008 to FR-012               |
-| 2     | The scenario wrapper with deadline, timeline and failure material; the report; the stand-in provider; the interface helpers; the three hooks; `create-and-unlock` as the model scenario; `scripts/e2e/README.md`.                                             | US3, US4; FR-006, FR-007, FR-013 to FR-015, FR-019, FR-020 |
-| 3     | The close scenarios: lock while streaming, window close, closing page (light and dark), lock twice; then the relaunch scenario, which starts with the two checks the plan leaves open (a release build can be driven; the relaunch window can be observed).   | US2; FR-016 to FR-018                                      |
-| 4     | Proof of the success criteria: 20 runs with 10 killed (SC-002), each promise broken on purpose (SC-003), three seeded failures (SC-004), a contributor writes the SC-005 scenario, a missing tool and a version mismatch (SC-006).                            | SC-001 to SC-007                                           |
-| 5     | The optional CI job on Ubuntu, publishing the run directory on failure. Separable; nothing above waits for it.                                                                                                                                                | US6; FR-021                                                |
+| Stage | Delivers                                                                                                                                                                                                                                                                                                                             | Stories and requirements                                   |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| 0     | Move holzi's atoms pin to `d5c48d0eb6662da84086bf69a3ca041a494e2b26`, run `spaex install`, commit the delivered `flake.nix`, `.devshell/packages.nix` and generated files. Check `tauri-driver`, `WebKitWebDriver` and `xvfb-run` are on `PATH` in the shell.                                                                        | FR-012                                                     |
+| 1     | The command: options, preflight with the version check, orphan sweep, build or `--app`, cleanup on every ending, exit statuses, summary. The process marker, ports, W3C client, isolated instance and the core of the scenario wrapper (deadline, teardown, skip rule). One smoke scenario. Helper checks and `check:e2e-lib` in CI. | US1, US5; FR-001 to FR-005, FR-008 to FR-011               |
+| 2     | The interaction helpers and flows; the stand-in provider; the three hooks; `create-and-unlock` as the model scenario; `scripts/e2e/README.md`; failure material, the timeline and the report's step times.                                                                                                                           | US3, US4; FR-006, FR-007, FR-013 to FR-015, FR-019, FR-020 |
+| 3     | The close scenarios: lock while streaming, window close, closing page (light and dark), lock twice; then the relaunch scenario, which starts with the two checks the plan leaves open (a release build can be driven; the relaunch window can be observed).                                                                          | US2; FR-016 to FR-018                                      |
+| 4     | Proof of the success criteria: 20 runs with 10 killed (SC-002), each promise broken on purpose (SC-003), three seeded failures (SC-004), a contributor writes the SC-005 scenario, a missing tool and a version mismatch (SC-006).                                                                                                   | SC-001 to SC-007                                           |
+| 5     | The optional CI job on Ubuntu, publishing the run directory on failure. Separable; nothing above waits for it.                                                                                                                                                                                                                       | US6; FR-021                                                |
 
 Stage 3's relaunch scenario can land in a later pull request than the other four if its two open checks take time; the other scenarios do not depend on it.
 
