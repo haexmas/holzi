@@ -15,6 +15,7 @@ use crate::chat::tools::ApprovalDecision;
 use crate::identity::{holzi_migration_source, installation_id_path, HolziBootstrap};
 use crate::storage::chat_messages::{self as msg_store, MessageRole};
 use crate::storage::preferences::{self, PrefScope};
+use crate::vault_gate::VaultGate;
 
 const PASSPHRASE: &str = "approval-bridge-posture-test";
 
@@ -106,7 +107,7 @@ async fn manual_approval_uses_the_existing_pending_request_flow() {
 #[tokio::test]
 async fn auto_mode_allow_on_a_safe_tool_skips_the_live_round_trip() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let db = Arc::new(open_vault(dir.path()));
+    let db = VaultGate::new().vault_db(Arc::new(open_vault(dir.path())));
     db.with_connection(|conn| {
         preferences::insert_or_update(
             conn,
@@ -156,7 +157,7 @@ async fn auto_mode_allow_on_a_safe_tool_skips_the_live_round_trip() {
 #[tokio::test]
 async fn plan_mode_deny_on_a_risky_tool_skips_the_live_round_trip() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let db = Arc::new(open_vault(dir.path()));
+    let db = VaultGate::new().vault_db(Arc::new(open_vault(dir.path())));
     db.with_connection(|conn| {
         preferences::insert_or_update(
             conn,
@@ -206,7 +207,7 @@ async fn plan_mode_deny_on_a_risky_tool_skips_the_live_round_trip() {
 #[tokio::test]
 async fn gated_permissive_allow_persists_an_audit_pair_without_raw_input() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let db = Arc::new(open_vault(dir.path()));
+    let db = VaultGate::new().vault_db(Arc::new(open_vault(dir.path())));
     // No deny rules configured — spec's documented "fully permissive" edge
     // case (`PREF_DENY_RULES` left unset).
 
@@ -270,7 +271,7 @@ async fn gated_permissive_allow_persists_an_audit_pair_without_raw_input() {
 #[tokio::test]
 async fn gated_permissive_denies_when_there_is_no_thread_to_audit_against() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let db = Arc::new(open_vault(dir.path()));
+    let db = VaultGate::new().vault_db(Arc::new(open_vault(dir.path())));
     let pending: PendingToolApprovals = Arc::new(Mutex::new(HashMap::new()));
     let (emit, _emitted) = never_emitting();
 

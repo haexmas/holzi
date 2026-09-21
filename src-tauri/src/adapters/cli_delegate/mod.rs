@@ -53,6 +53,7 @@ use uuid::Uuid;
 use super::{AdapterError, AdapterStream, ChatRequest, ChatRole, ProviderAdapter, ProviderModel};
 use crate::chat::tools::ApprovalDecision;
 use crate::model_capabilities::ModelCapabilities;
+use crate::vault_gate::VaultDb;
 
 /// Builds the plain-text transcript both `claude -p` and `codex`'s
 /// `turn/start` receive as their conversation input. Holzi remains the
@@ -123,7 +124,7 @@ pub type EventEmitter = Arc<dyn Fn(&str, serde_json::Value) + Send + Sync>;
 pub struct DelegateChatContext {
     pub pending_tool_approvals: PendingToolApprovals,
     pub emit: EventEmitter,
-    pub database: Option<Arc<haex_crdt::Database>>,
+    pub database: Option<VaultDb>,
 }
 
 /// Which subscription vendor a `cli_delegate` provider row talks to.

@@ -214,24 +214,24 @@ the wrapper over the Tauri mock runtime; the app behaves exactly as before.
 - [x] T026 Add `VaultClosed` and `VaultAlreadyActive` to `src-tauri/src/error.rs` (fieldless; messages "The
       vault is closed" and "A vault is already open in this app process"). Do not remove
       `CloseFailed` yet. Regenerate the bindings (see the format notes at the top) and commit them.
-- [ ] T027 Encapsulate the vault state. In `src-tauri/src/state.rs` make `active_instance` private and add the
+- [x] T027 Encapsulate the vault state. In `src-tauri/src/state.rs` make `active_instance` private and add the
       methods from the data-model table (`database`, `install`, `take`); `AppState::new` takes a
       `VaultGate` clone so `active_database(&State<AppState>)` in `src-tauri/src/state_utils.rs` keeps its
       signature and now returns a `VaultDb` (or `VaultClosed` / `NoActiveInstance`). `install` will
       call `begin_session` under the same lock in Stage 4; for now it publishes only.
-- [ ] T028 In `src-tauri/src/lib.rs` build the gate once, pass a clone to `AppState::new`, `.manage(gate)`, and
+- [x] T028 In `src-tauri/src/lib.rs` build the gate once, pass a clone to `AppState::new`, `.manage(gate)`, and
       register `invoke_handler(gate.wrap(tauri::generate_handler![...]))`. The handler list itself
       is unchanged.
-- [ ] T029 Compiler-driven sweep to `VaultDb`: the callers in `src-tauri/src/chat/model_loading.rs`,
+- [x] T029 Compiler-driven sweep to `VaultDb`: the callers in `src-tauri/src/chat/model_loading.rs`,
       `src-tauri/src/chat/default_model.rs`, `src-tauri/src/chat/commands.rs`, `src-tauri/src/chat/thread_commands.rs`,
       `src-tauri/src/models/commands.rs`, `src-tauri/src/providers/mod.rs`, `src-tauri/src/providers/connect.rs`,
       `src-tauri/src/storage/preferences_commands.rs`, `src-tauri/src/device/commands.rs` and `src-tauri/src/voice.rs`. Change
       types only (for example `Arc<Database>` parameters); no logic change and no net line growth in
       the oversized files. `src-tauri/src/instances/{open,create,close}.rs` keep reading the state through the
       new methods.
-- [ ] T030 [P] Update `data-model.md` where the implementation differs from it (for example
+- [x] T030 [P] Update `data-model.md` where the implementation differs from it (for example
       `AppState` holds a gate clone, so `active_database` keeps its signature; `VaultDb` handling).
-- [ ] T031 **Checkpoint Stage 2**: `cargo fmt --check`, `pnpm lint:rust`, `cargo test`,
+- [x] T031 **Checkpoint Stage 2**: `cargo fmt --check`, `pnpm lint:rust`, `cargo test`,
       `git checkout -- src/types/bindings/` (after committing the intended T026 bindings). Behavior is
       unchanged for users. Commit `feat(vault-gate): route every request through one gateway`.
 

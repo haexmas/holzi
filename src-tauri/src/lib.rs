@@ -119,7 +119,11 @@ pub fn run() {
         }
         return;
     }
-    let builder = tauri::Builder::default().manage(AppState::new());
+    // One gate per app process: it is managed as state and wraps the invoke handler below, so
+    // every request passes through it.
+    let gate = vault_gate::VaultGate::new();
+    let builder = tauri::Builder::default().manage(AppState::new(gate.clone()));
+    let builder = builder.manage(gate.clone());
     let builder = builder.manage(ChatState::new());
     let builder = builder.manage(DelegateConnectState::new());
     let builder = builder.manage(voice::VoiceState::new());
@@ -143,7 +147,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
+        .invoke_handler(gate.wrap(tauri::generate_handler![
             list_instances,
             create_instance,
             open_instance,
@@ -196,7 +200,7 @@ pub fn run() {
             stt_recommend_tiers,
             list_installed_stt_models,
             download_stt_model,
-        ])
+        ]))
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

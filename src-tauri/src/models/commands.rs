@@ -14,7 +14,6 @@
 //! and make failure-atomic behavior harder to review.
 
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
@@ -29,6 +28,7 @@ use crate::providers::local::ensure_local_provider;
 use crate::state::AppState;
 use crate::state_utils::active_database;
 use crate::storage::models::{self as models_store, IntegrityStatus, ModelRow, SourceKind};
+use crate::vault_gate::VaultDb;
 
 use super::{download, hash, huggingface, import, paths};
 
@@ -405,7 +405,7 @@ async fn download_from_hf_inner(
         // source (repo + filename + revision) is already installed under
         // this id — skip the network round-trip entirely.
         let id_for_lookup = args.id.clone();
-        let db_for_lookup = Arc::clone(&db);
+        let db_for_lookup = db.clone();
         let existing_row = tauri::async_runtime::spawn_blocking(move || {
             db_for_lookup.with_connection(|conn| {
                 models_store::get_model(conn, &id_for_lookup).map_err(haex_crdt::Error::from)
@@ -714,7 +714,7 @@ pub async fn delete_installed_model(
 }
 
 struct RegisterDownloadedArgs {
-    db: Arc<haex_crdt::Database>,
+    db: VaultDb,
     id: String,
     name: String,
     relative: String,

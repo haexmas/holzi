@@ -15,7 +15,10 @@ The single owner of "may requests be answered, and what is still running".
 | `cancel` | `CancellationToken`       | Fired once when the close starts. Children are handed to tasks that need to clean up. |
 | `tasks`  | `TaskTracker`             | Counts session-scoped tasks, blocking work and every live `VaultDb`. Closed on close. |
 | `aborts` | `Mutex<Vec<AbortHandle>>` | Abort handles of registered async tasks, used by the second rung of the drain.        |
-| `policy` | `ClosePolicy`             | What ends the process: relaunch or exit. Fixed per build (see research R2).           |
+
+The policy (relaunch or exit, see `ClosePolicy` below) is not a gate field: `close_policy()` is a
+function of the build. The gate also holds a `runtime: Option<Handle>` for tracked work; `None`
+means Tauri's async runtime, and tests pass their own so paused time applies to the tasks they spawn.
 
 Validation rules:
 
@@ -23,6 +26,8 @@ Validation rules:
   (closing before any vault is open, for example a window close on the unlock screen).
 - `cancel` fires at most once, on the first transition into `Closing`.
 - A second close request changes nothing and reports that a close is already running (FR-002).
+- `run` races a future against the token and prefers the close when both are ready, so no result
+  reaches the interface after the close started (FR-001).
 
 ## VaultPhase
 
@@ -61,6 +66,9 @@ user, because the process ends either way.
 | `DrainedAfterAbort` | The tracker emptied after registered tasks were aborted (within about 3 s).  |
 | `Stuck`             | Something un-abortable was still running at the 3 s limit. The process ends. |
 
+The deadlines are named constants: `COOPERATIVE_WINDOW` (1 s), `TOTAL_LIMIT` (3 s) and
+`HARD_END_GRACE` (0.5 s, the wait before `hard_end_after` forces the end).
+
 ## VaultDb (replaces the bare `Arc<Database>` returned by `active_database`)
 
 | Field    | Type               | Meaning                                                              |
@@ -68,18 +76,24 @@ user, because the process ends either way.
 | `db`     | `Arc<Database>`    | The one connection's handle.                                         |
 | `_token` | `TaskTrackerToken` | Keeps the tracker non-empty while any clone of this handle is alive. |
 
-`Clone` (callers clone into `spawn_blocking` closures) and `Deref<Target = Database>`. When the last
-clone drops, the tracker can empty and the drain can take the `Arc` out of `AppState` and drop it.
+`Clone` (callers clone into `spawn_blocking` closures) and `Deref<Target = Database>`. The token type
+is `tokio_util::task::task_tracker::TaskTrackerToken`, whose `Clone` takes a fresh token, so every
+clone counts. `VaultGate::vault_db(arc)` is the only constructor. When the last clone drops, the
+tracker can empty and the drain can take the `Arc` out of `AppState` and drop it.
 
 ## AppState (existing, encapsulated)
 
-`active_instance` becomes private to `state.rs`. Access goes through methods:
+`active_instance` is private to `state.rs`, and `AppState::new` takes a clone of the gate, so
+`active_database(&State<AppState>)` keeps its signature and now returns a `VaultDb`. Access goes
+through methods:
 
-| Method            | Used by           | Behavior                                                        |
-| ----------------- | ----------------- | --------------------------------------------------------------- |
-| `database(gate)`  | `active_database` | Returns a `VaultDb` or `VaultClosed` / `NoActiveInstance`.      |
-| `install(handle)` | `open`, `create`  | Publishes the opened database; only valid while gate is `Idle`. |
-| `take()`          | the close task    | Removes the handle so the drain can drop it after clones end.   |
+| Method                                                                 | Used by                  | Behavior                                                                                                                    |
+| ---------------------------------------------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `database()`                                                           | `active_database`        | Returns a `VaultDb` (one tracker token per call), `VaultClosed` once the gate is closing, or `NoActiveInstance`.            |
+| `active_database_named(name)`, `is_active_named(name)`, `has_active()` | `open`, `create`         | Read-only questions about the slot.                                                                                         |
+| `install(handle, commit)`                                              | `create`, close rollback | Publishes the handle if the slot is empty and runs `commit` under the same lock right before; Stage 4 adds `begin_session`. |
+| `switch_to(handle, while_locked)`                                      | `open`                   | The atomic switch of spec 001: drops the previous handle, runs `while_locked`, publishes. Stage 4 removes it.               |
+| `take()`                                                               | the close task           | Removes the handle so the drain can drop it after clones end.                                                               |
 
 ## Secret-carrying argument types
 

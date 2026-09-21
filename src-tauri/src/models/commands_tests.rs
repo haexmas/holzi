@@ -8,6 +8,7 @@ use crate::identity::{
 use crate::model_capabilities::{ModelCapabilities, ReasoningControl};
 use crate::state::{ActiveInstanceHandle, AppState};
 use crate::storage::models::{self, SourceKind};
+use crate::vault_gate::VaultGate;
 
 use super::{register_downloaded, RegisterDownloadedArgs};
 
@@ -48,24 +49,26 @@ async fn registration_keeps_the_vault_captured_before_a_transfer() {
         .await
         .expect("open join");
 
-    let state = AppState::new();
-    *state.active_instance.lock().expect("state") = Some(ActiveInstanceHandle {
-        name: "original".into(),
-        database: Arc::clone(&original),
-    });
-    let captured = Arc::clone(
-        &state
-            .active_instance
-            .lock()
-            .expect("state")
-            .as_ref()
-            .expect("active")
-            .database,
-    );
-    *state.active_instance.lock().expect("state") = Some(ActiveInstanceHandle {
-        name: "replacement".into(),
-        database: Arc::clone(&replacement),
-    });
+    let state = AppState::default();
+    state
+        .install(
+            ActiveInstanceHandle {
+                name: "original".into(),
+                database: Arc::clone(&original),
+            },
+            || Ok(()),
+        )
+        .expect("install the original vault");
+    let captured = state.database().expect("active");
+    state
+        .switch_to(
+            ActiveInstanceHandle {
+                name: "replacement".into(),
+                database: Arc::clone(&replacement),
+            },
+            || {},
+        )
+        .expect("switch to the replacement vault");
 
     register_downloaded(RegisterDownloadedArgs {
         db: captured,
@@ -139,7 +142,7 @@ async fn registration_records_capabilities_derived_from_the_local_model_id() {
             .await
             .expect("stage bytes");
         register_downloaded(RegisterDownloadedArgs {
-            db: Arc::clone(&db),
+            db: VaultGate::new().vault_db(Arc::clone(&db)),
             id: id.into(),
             name: id.into(),
             relative: format!("{id}/model.gguf"),

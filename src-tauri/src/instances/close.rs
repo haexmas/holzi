@@ -22,15 +22,9 @@ pub async fn close_instance(
 ) -> Result<()> {
     let _operation = chat.acquire_operation()?;
     chat.cancel_preload_and_wait().await;
-    let handle_opt = {
-        let mut guard = state
-            .active_instance
-            .lock()
-            .map_err(|e| HolziError::CloseFailed {
-                reason: format!("active_instance mutex poisoned: {e}"),
-            })?;
-        guard.take()
-    };
+    let handle_opt = state.take().map_err(|e| HolziError::CloseFailed {
+        reason: format!("could not take the active instance: {e}"),
+    })?;
 
     let Some(handle) = handle_opt else {
         // Idempotent close on empty state.
@@ -50,16 +44,17 @@ pub async fn close_instance(
             let strong = std::sync::Arc::strong_count(&arc);
             // Put the handle back — closing "half" would leave AppState
             // desynced from the actual DB state.
-            let mut guard = state
-                .active_instance
-                .lock()
+            state
+                .install(
+                    super::super::state::ActiveInstanceHandle {
+                        name: name.clone(),
+                        database: arc,
+                    },
+                    || Ok(()),
+                )
                 .map_err(|e| HolziError::CloseFailed {
-                    reason: format!("active_instance mutex poisoned on rollback: {e}"),
+                    reason: format!("could not restore the active instance on rollback: {e}"),
                 })?;
-            *guard = Some(super::super::state::ActiveInstanceHandle {
-                name: name.clone(),
-                database: arc,
-            });
             return Err(HolziError::CloseFailed {
                 reason: format!("{strong} database Arc clones still outstanding"),
             });
