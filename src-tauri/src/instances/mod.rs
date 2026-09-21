@@ -3,6 +3,7 @@
 //! Contract: `specs/001-frontend-onboarding/contracts/tauri-commands.md`.
 //! One file per command mirrors haex-vault's convention.
 
+pub mod passphrase;
 pub mod paths;
 pub mod startup;
 pub mod vault_config;

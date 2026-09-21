@@ -25,6 +25,7 @@ use crate::voice::VoiceState;
 
 use super::events::emit_instance_list_changed;
 use super::info::InstanceInfo;
+use super::passphrase::Passphrase;
 use super::paths::{
     get_app_local_data, get_instance_path, get_pending_marker_path, validate_instance_name,
 };
@@ -35,7 +36,8 @@ use super::vault_config::vault_config;
 #[serde(rename_all = "camelCase")]
 pub struct OpenInstanceArgs {
     pub name: String,
-    pub passphrase: String,
+    #[ts(type = "string")]
+    pub passphrase: Passphrase,
 }
 
 /// Opens an encrypted instance and makes it the active application instance.
@@ -68,6 +70,10 @@ pub async fn open_instance(
         });
     }
 
+    // One shared handle to the passphrase: clones of the `Arc` are handles, not copies of the
+    // secret, and the last one dropped erases it.
+    let passphrase = Arc::new(args.passphrase);
+
     // Database::open acquires the active database's advisory lock, so an
     // already-active request for the same name needs a credential check that
     // does not mount a second Database handle.
@@ -85,7 +91,7 @@ pub async fn open_instance(
     };
 
     if let Some(_active_database) = active_database {
-        let passphrase = args.passphrase.clone();
+        let passphrase = Arc::clone(&passphrase);
         let validation_path = db_path.clone();
         let validation = tauri::async_runtime::spawn_blocking(move || {
             let connection = rusqlite::Connection::open_with_flags(
@@ -93,15 +99,13 @@ pub async fn open_instance(
                 rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
             );
             let result = match connection {
-                Ok(connection) => {
-                    connection
-                        .pragma_update(None, "key", passphrase)
-                        .and_then(|()| {
-                            connection.query_row("SELECT count(*) FROM sqlite_master", [], |row| {
-                                row.get::<_, i64>(0)
-                            })
+                Ok(connection) => connection
+                    .pragma_update(None, "key", passphrase.as_str())
+                    .and_then(|()| {
+                        connection.query_row("SELECT count(*) FROM sqlite_master", [], |row| {
+                            row.get::<_, i64>(0)
                         })
-                }
+                    }),
                 Err(e) => Err(e),
             };
 
@@ -156,11 +160,10 @@ pub async fn open_instance(
 
     // Open the candidate without holding active_instance. Failure to open the
     // candidate leaves the previous runtime intact (contract postcondition).
-    let passphrase = args.passphrase.clone();
     let open_path = db_path.clone();
     let open_installation_id_file = installation_id_file.clone();
     let candidate_result = tauri::async_runtime::spawn_blocking(move || {
-        open_existing_database(&passphrase, &open_path, &open_installation_id_file)
+        open_existing_database(passphrase.as_str(), &open_path, &open_installation_id_file)
     })
     .await
     .map_err(|e| HolziError::CrdtInit {

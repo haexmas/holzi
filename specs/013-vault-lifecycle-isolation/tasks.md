@@ -32,9 +32,14 @@ side, US5 reads never fail.
   (constitution MUST NOT). Work lands on `main` through a PR from this branch; no squash-merge.
 - Inside the Nix dev shell: `nix develop --command scripts/with-nix-host-bridge.sh cargo ...` for
   Rust, `nix develop --command pnpm ...` for the frontend.
+- `pnpm generate:ts-types` calls plain `cargo`, which fails in the Nix dev shell without the host
+  bridge. Wherever a task says to regenerate the bindings, run the script's two steps by hand: the
+  export test through
+  `nix develop --command scripts/with-nix-host-bridge.sh cargo test --manifest-path src-tauri/Cargo.toml export_bindings`,
+  then `sed -i -E 's/[[:space:]]+$//' src/types/bindings/*.ts`.
 - `cargo test` rewrites `src/types/bindings/*.ts` with trailing whitespace. After ordinary test runs,
-  `git checkout -- src/types/bindings/`. When a task intentionally changes a binding, run
-  `pnpm generate:ts-types` instead (it strips the whitespace) and commit the result.
+  `git checkout -- src/types/bindings/`. When a task intentionally changes a binding, regenerate it
+  with the two steps above (the second one strips the whitespace) and commit the result.
 - **Oversized files must not grow** (line counts recorded in T003): `models/commands.rs`,
   `chat/commands.rs`, `chat/model_loading.rs`, `providers/mod.rs`, `src/pages/chat/[instance].vue`,
   `scripts/check-chat-state.ts`. Edit call sites in place; new logic goes into new small files.
@@ -49,7 +54,7 @@ side, US5 reads never fail.
       `active_model_info` fix without the operation slot (FR-025, `fedcfa8`), and the `tauri` `test`
       dev-dependency (own commit). The spike lives only on the local branch `spike/vault-gateway` and
       never merges; read it with `git show spike/vault-gateway:src-tauri/tests/spike_vault_gateway.rs`.
-- [ ] T003 Record the baseline in the "Baseline" section at the end of this file before any edit:
+- [x] T003 Record the baseline in the "Baseline" section at the end of this file before any edit:
       `cargo test --manifest-path src-tauri/Cargo.toml` pass count, `pnpm check:chat-state` test count,
       and the results of `pnpm typecheck`, `pnpm typecheck:scripts`, `pnpm lint`,
       `pnpm format:check`, plus `wc -l` of the six oversized files listed above.
@@ -57,7 +62,7 @@ side, US5 reads never fail.
       with the docs, and any available `gh` account may be used for pushes and PRs, including the
       haex-crdt repository. The `haexhub` account is read-only on this repository, so pushes use
       `haexmas`; restore the previously active account afterwards. Recorded in the Baseline section.
-- [ ] T005 [P] Extract the replay harness. Create `scripts/lib/chat-state-harness.ts` and move into
+- [x] T005 [P] Extract the replay harness. Create `scripts/lib/chat-state-harness.ts` and move into
       it, from `scripts/check-chat-state.ts`, the sandbox machinery: the transpile cache,
       `runComposable`, `createTauriDouble`, `DEFAULT_INVOKE_HANDLERS`, `RETURN_STATEMENT`,
       `createChatState`, `flush` and any helper they need. Export what the test bodies use. Test
@@ -65,7 +70,7 @@ side, US5 reads never fail.
       where possible; `check-chat-state.ts` must get shorter. Update its header comment (extraction
       done). `pnpm typecheck:scripts` already covers `scripts/**/*.ts`. Commit
       `refactor(scripts): extract the chat-state replay harness`.
-- [ ] T006 Depends on T005. Create `scripts/check-vault-lifecycle.ts` importing the shared harness,
+- [x] T006 Depends on T005. Create `scripts/check-vault-lifecycle.ts` importing the shared harness,
       with one smoke case that boots `createChatState()`. Add `"check:vault-lifecycle"` to
       `package.json` next to `check:chat-state` and a step after it in `.github/workflows/ci.yml`
       (same shape as the `check:chat-state` step). New frontend cases in later phases go in this file,
@@ -83,7 +88,7 @@ attempt still behave as before.
 
 ### Tests for Stage 1 (write first; expected to fail until the implementation tasks land)
 
-- [ ] T007 [P] [US3] Create `src-tauri/src/instances/passphrase_tests.rs` with cases: (a) `{:?}` and
+- [x] T007 [P] [US3] Create `src-tauri/src/instances/passphrase_tests.rs` with cases: (a) `{:?}` and
       `{:#?}` of `Passphrase`, `OpenInstanceArgs` and `CreateInstanceArgs`, built from a distinctive
       literal, never contain the literal and do contain `<redacted>`; (b) `Passphrase` deserializes
       from a JSON string; (c) calling `zeroize()` on a `Passphrase` leaves `as_str()` empty; (d) a
@@ -91,35 +96,36 @@ attempt still behave as before.
 
 ### Implementation for Stage 1
 
-- [ ] T008 [US3] In `src-tauri/Cargo.toml` add `zeroize` 1.x as a direct dependency with the `serde`
+- [x] T008 [US3] In `src-tauri/Cargo.toml` add `zeroize` 1.x as a direct dependency with the `serde`
       feature. Verify with `cargo metadata` that it still resolves to 1.9.0 and that the
-      `Cargo.lock` diff is only holzi's own dependency list (no new package). Commit
+      `Cargo.lock` diff is only holzi's own dependency list and `zeroize` listing `serde` (no new
+      package). Commit
       `build(deps): depend on zeroize directly`.
-- [ ] T009 [US3] Create `src-tauri/src/instances/passphrase.rs` (declare it in `src-tauri/src/instances/mod.rs`): a
+- [x] T009 [US3] Create `src-tauri/src/instances/passphrase.rs` (declare it in `src-tauri/src/instances/mod.rs`): a
       newtype `Passphrase(Zeroizing<String>)`. Data-model rule verbatim: "Erased on drop; never
       cloned; excluded from `Debug` (prints `<redacted>`)". No `Clone`. `Deserialize` from a string,
       `as_str()`, `From<&str>`, `From<String>`, `Zeroize` delegating to the inner string, and
       `ZeroizeOnDrop`. Declare `passphrase_tests.rs` at the bottom with the `#[path]` idiom.
-- [ ] T010 [US3] Change `OpenInstanceArgs` (`src-tauri/src/instances/open.rs`, around line 34) and
+- [x] T010 [US3] Change `OpenInstanceArgs` (`src-tauri/src/instances/open.rs`, around line 34) and
       `CreateInstanceArgs` (`src-tauri/src/instances/create.rs`) to `passphrase: Passphrase`, keeping the wire
       shape `{ name, passphrase }` and adding `#[ts(type = "string")]` so the binding stays `string`.
       Keeping `#[derive(Debug)]` is now safe because the field type redacts.
-- [ ] T011 [US3] Remove every passphrase `String` clone. In `src-tauri/src/instances/open.rs` move
+- [x] T011 [US3] Remove every passphrase `String` clone. In `src-tauri/src/instances/open.rs` move
       `args.passphrase` into an `Arc<Passphrase>` shared by the validation task and the open task
       (Arc clones are handles, not copies) and pass `as_str()` to `pragma_update` and
       `open_existing_database`. In `src-tauri/src/instances/create.rs` move the passphrase into the blocking
       open task (the clone near line 105). No `.clone()` on the secret remains.
-- [ ] T012 [US3] Compiler-driven sweep of tests and fixtures that build these args: run
+- [x] T012 [US3] Compiler-driven sweep of tests and fixtures that build these args: run
       `rg -n "OpenInstanceArgs|CreateInstanceArgs" src-tauri/src src-tauri/tests` and switch the
       literals to `Passphrase::from(...)`.
-- [ ] T013 [US3] Review every use of the passphrase for leaks (FR-015): a case-insensitive `rg`
+- [x] T013 [US3] Review every use of the passphrase for leaks (FR-015): a case-insensitive `rg`
       search for passphrase over `src-tauri/src`, checking `log::`, `format!`, `to_string`,
       `Display` and error construction. Record "no leak found" or the fixes made in the Baseline
       section. Errors such as `HolziError::WrongPassphrase` must stay fieldless.
-- [ ] T014 [US3] Run `pnpm generate:ts-types` and confirm `src/types/bindings/OpenInstanceArgs.ts`
+- [x] T014 [US3] Regenerate the bindings (see the format notes at the top) and confirm `src/types/bindings/OpenInstanceArgs.ts`
       and `CreateInstanceArgs.ts` are unchanged (still `string`). Any other diff is investigated,
       not committed blindly.
-- [ ] T015 [US3] **Checkpoint Stage 1**: `cargo fmt --check`, `pnpm lint:rust` (both feature sets),
+- [x] T015 [US3] **Checkpoint Stage 1**: `cargo fmt --check`, `pnpm lint:rust` (both feature sets),
       `cargo test`, then `git checkout -- src/types/bindings/`. Commit
       `feat(instances): keep the vault passphrase in an erasing, redacted type`.
 
@@ -207,7 +213,7 @@ the wrapper over the Tauri mock runtime; the app behaves exactly as before.
       inner handler.
 - [ ] T026 Add `VaultClosed` and `VaultAlreadyActive` to `src-tauri/src/error.rs` (fieldless; messages "The
       vault is closed" and "A vault is already open in this app process"). Do not remove
-      `CloseFailed` yet. Run `pnpm generate:ts-types` and commit the regenerated bindings.
+      `CloseFailed` yet. Regenerate the bindings (see the format notes at the top) and commit them.
 - [ ] T027 Encapsulate the vault state. In `src-tauri/src/state.rs` make `active_instance` private and add the
       methods from the data-model table (`database`, `install`, `take`); `AppState::new` takes a
       `VaultGate` clone so `active_database(&State<AppState>)` in `src-tauri/src/state_utils.rs` keeps its
@@ -312,7 +318,7 @@ download; press close repeatedly; close by window; the process ends within about
       end with `hard_end_after` and `CloseEffects::force_end`. The command no longer calls
       `acquire_operation`.
 - [ ] T041 [US1] Delete `CloseFailed` from `src-tauri/src/error.rs`, remove the stale doc comment in
-      `src-tauri/src/state.rs`, and regenerate bindings with `pnpm generate:ts-types`.
+      `src-tauri/src/state.rs`, and regenerate the bindings (see the format notes at the top).
 - [ ] T042 [US1] Register session-scoped tasks with the gate and add the token where work runs long:
       the chat turn task (`src-tauri/src/chat/commands.rs`, the `spawn` around line 607) and the preload
       (`src-tauri/src/chat/default_model.rs`, keep its own token and join handle and also register it), both
@@ -666,11 +672,24 @@ Task: "T067 src-tauri/src/instances/presence_tests.rs"
 
 _Filled in during T003, T004, T013, T036, T058 and T088._
 
-- Test counts and command results: (pending)
-- Line counts of the oversized files before and after: (pending)
+- Test counts and command results (2026-09-21, before any change of PR B): `cargo test` 459 passed,
+  0 failed, 8 ignored across 28 test binaries; `pnpm check:chat-state` 45 passed, 0 failed;
+  `pnpm check:templates`, `pnpm typecheck`, `pnpm typecheck:scripts`, `pnpm lint` and
+  `pnpm format:check` all exit 0. A cargo target copied with `cp --reflink` from another worktree
+  needs a `cargo clean -p` for `tauri` and the four `tauri-plugin-*` crates first when the source
+  worktree is gone, because their cached build script outputs hold absolute paths.
+- Line counts of the oversized files, before (after: pending, T086): `models/commands.rs` 966,
+  `chat/commands.rs` 759, `chat/model_loading.rs` 736, `providers/mod.rs` 576,
+  `src/pages/chat/[instance].vue` 1320, `scripts/check-chat-state.ts` 1550.
 - Fix commit routing and account decision (2026-09-21): `fedcfa8` goes into PR A with the docs; any
   available `gh` account may be used, restoring the previously active one afterwards.
-- Passphrase leak review: (pending)
+- Passphrase leak review (T013, 2026-09-21): no leak found. The value appears only in the
+  `Passphrase` type, `vault_config`, the two open and create tasks and the `pragma_update` call.
+  `Debug` is redacted, `HolziError::WrongPassphrase` is fieldless and `WeakPassphrase` carries only
+  the length rule. The only logging in `src-tauri/src/instances` prints event errors and file
+  paths. rusqlite quotes and escapes the `PRAGMA key` value, so a SQLite error text cannot echo it.
+  Residual copies stay as documented in research R7: the SQL text inside rusqlite, the IPC body and
+  the frontend strings.
 - FR-008 finding: (pending)
 - Frontend open-path finding: (pending)
 
