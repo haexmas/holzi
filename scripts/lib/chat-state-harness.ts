@@ -171,6 +171,7 @@ const DEFAULT_INVOKE_HANDLERS: Record<string, InvokeHandler> = {
   list_installed_models: () => [],
   list_catalog: () => [],
   list_providers: () => [],
+  close_instance: () => {},
   current_device_info: () => ({ vaultDeviceUuid: 'device' }),
   // Inert by default: `active_model_info` above already returns a truthy
   // model, so `models.ts`'s `autoLoadFirstAvailableModel()` short-circuits
@@ -189,12 +190,18 @@ const RETURN_STATEMENT = `
       composerInputDisabled, sendDisabled, pendingApprovals, streamingMessageId,
       streamingThreadId, lastError,
       updatePermissionMode, permissionMode, permissionModeSaving,
-      addAttachments, attachments };
+      addAttachments, attachments, lock };
 `
 
 /** Resolves a store module name to its source file in this checkout. */
 function storePath(name: string): string {
   return resolvePath(repoRoot, 'src/stores', `${name}.ts`)
+}
+
+/** Page-level doubles a case can watch: the instances store and `navigateTo` (spec 013). */
+export interface PageGlobals {
+  instancesStore?: object
+  navigateTo?: (to: string) => unknown
 }
 
 /** Boots the real chat page dependencies inside an isolated test sandbox. */
@@ -203,6 +210,7 @@ export function createChatState(
   preferenceOverrides: Record<string, unknown> = {},
   dependencyOverrides: Record<string, (...args: unknown[]) => unknown> = {},
   invokeLog?: string[],
+  pageGlobals: PageGlobals = {},
 ) {
   const tauri = createTauriDouble({ ...DEFAULT_INVOKE_HANDLERS }, invokeLog)
 
@@ -306,6 +314,7 @@ export function createChatState(
     'useInstancesStore',
     'useModelsStore',
     'storeToRefs',
+    'navigateTo',
     'document',
     `${pageCode}\n${RETURN_STATEMENT}`,
   )(
@@ -322,9 +331,10 @@ export function createChatState(
     req('~/composables/useAutoResizeTextarea').useAutoResizeTextarea,
     req('~/composables/useChatTranscript').useChatTranscript,
     req('~/composables/useThreadSidebar').useThreadSidebar,
-    () => ({}),
+    () => pageGlobals.instancesStore ?? {},
     () => modelStore,
     pinia.storeToRefs,
+    pageGlobals.navigateTo ?? (() => {}),
     { querySelector: () => null },
   )
   // Existing send-flow tests model a ready chat session unless they override it.

@@ -2,18 +2,13 @@
 const route = useRoute()
 const { t } = useI18n()
 const { closeAsync } = useInstance()
-const store = useInstancesStore()
 
 const name = computed(() => String(route.params.instance ?? ''))
 
+// The backend replaces this page with a spinner and ends the process (spec 013), so nothing is
+// navigated or cleared here and a failed call has nothing to show.
 async function onLock() {
-  try {
-    await closeAsync()
-    store.setActiveInstance(null)
-    await navigateTo('/')
-  } catch (e) {
-    console.error('close failed', e)
-  }
+  await closeAsync().catch(() => {})
 }
 </script>
 

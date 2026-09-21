@@ -356,13 +356,13 @@ download; press close repeatedly; close by window; the process ends within about
       handle FR-007: on `WindowEvent::CloseRequested` and on `RunEvent::ExitRequested` (unless its
       code is `RESTART_EXIT_CODE` or the gate is already closing), prevent the default, run the same
       close task with policy `Exit`, and exit when it finishes. Wire the real `CloseEffects`.
-- [ ] T046 [US1] Frontend: make the lock flows do one thing. `lock()` in
+- [x] T046 [US1] Frontend: make the lock flows do one thing. `lock()` in
       `src/pages/chat/[instance].vue` (around line 499) and `onLock()` in
       `src/pages/federation/[instance].vue` call `closeAsync()`, swallow a rejection, and no longer
       call `store.setActiveInstance(null)` or `navigateTo('/')`. The backend replaces the page
       (research R4), so the frontend keeps no closing state and shows no overlay (operator decision
       2026-09-21). The chat page must end up with no more lines than before.
-- [ ] T047 [US1] Add the script-setup sandbox to the harness: a helper in
+- [x] T047 [US1] Add the script-setup sandbox to the harness: a helper in
       `scripts/lib/chat-state-harness.ts` (or a sibling file) that loads a small `.vue` file's
       `<script setup>` block, injecting `defineProps`, `defineEmits`, `ref`, `computed`, `watch`,
       `onBeforeUnmount`, `useI18n`, `useInstance`, `useInstancesStore` and `navigateTo`, and returns
