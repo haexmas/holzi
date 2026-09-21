@@ -6,7 +6,7 @@
 // actual IPC boundary (`invoke`/`listen` from `@tauri-apps/api/core`/
 // `event`). No browser or GPU is required.
 //
-// Maintainability exception (spaex 500-LoC rule): 25 replay tests plus the
+// Maintainability exception (spaex 500-LoC rule): 43 replay tests plus the
 // `createChatState` scaffold that boots the page's real `<script setup>`
 // against a sandboxed `require` — a hand-rolled CommonJS loader (using the
 // `typescript` package already a dependency here) that transpiles the page,
@@ -21,9 +21,12 @@
 // array `mount()`/`unmount()` drain), and `dompurify` (needs a real DOM).
 //
 // Concrete split plan, if this grows further: move `createChatState` into
-// `scripts/lib/chat-state-harness.ts` and split the 25 cases by what they
+// `scripts/lib/chat-state-harness.ts` and split the 43 cases by what they
 // exercise — transcript/event ordering, thread sidebar, model lifecycle,
-// and composer/permission state.
+// and composer/permission state. That extraction is now due: spec 012 added
+// the last cases this file takes before it, so the next change that needs a
+// new case must first do the extraction (specs/012-unified-model-capabilities,
+// plan.md Complexity Tracking).
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -122,8 +125,12 @@ type InvokeHandler = (args?: unknown) => unknown
  * its returned handlers directly (e.g. `state.handleToken(...)`), so this
  * only needs to resolve without hanging or throwing.
  */
-function createTauriDouble(invokeHandlers: Record<string, InvokeHandler>) {
+function createTauriDouble(
+  invokeHandlers: Record<string, InvokeHandler>,
+  invokeLog?: string[],
+) {
   async function invoke(cmd: string, args?: unknown) {
+    invokeLog?.push(cmd)
     const handler = invokeHandlers[cmd]
     if (!handler) {
       throw new Error(
@@ -193,7 +200,8 @@ const RETURN_STATEMENT = `
       editingThreadId, editTitleError, deleteCandidate, deleteError,
       composerInputDisabled, sendDisabled, pendingApprovals, streamingMessageId,
       streamingThreadId, lastError,
-      updatePermissionMode, permissionMode, permissionModeSaving };
+      updatePermissionMode, permissionMode, permissionModeSaving,
+      addAttachments, attachments };
 `
 
 /** Resolves a store module name to its source file in this checkout. */
@@ -206,8 +214,9 @@ function createChatState(
   overrides: Record<string, unknown> = {},
   preferenceOverrides: Record<string, unknown> = {},
   dependencyOverrides: Record<string, (...args: unknown[]) => unknown> = {},
+  invokeLog?: string[],
 ) {
-  const tauri = createTauriDouble({ ...DEFAULT_INVOKE_HANDLERS })
+  const tauri = createTauriDouble({ ...DEFAULT_INVOKE_HANDLERS }, invokeLog)
 
   const mountHooks: Array<() => unknown> = []
   const unmountHooks: Array<() => unknown> = []
@@ -284,6 +293,7 @@ function createChatState(
     useProviders: () => req('~/composables/useProviders').useProviders(),
     useErrorString: () => req('~/composables/useErrorString').useErrorString(),
     usePreferences: () => preferences,
+    useDevice: () => req('~/composables/useDevice').useDevice(),
     parseModelIntegrityFailure: req('~/composables/useModels')
       .parseModelIntegrityFailure,
   }).useModelsStore()
@@ -982,4 +992,483 @@ test('a failed permission save restores the persisted mode and prevents overlapp
   assert.equal(state.permissionMode.value, 'manual')
   assert.equal(state.permissionModeSaving.value, false)
   assert.match(state.lastError.value, /preference write failed/)
+})
+
+// --- Spec 012: model capabilities drive the composer's effort control -------
+
+/** A determined capability record offering the given reasoning option ids. */
+const presetsCapabilities = (...ids: string[]) => ({
+  reasoning: {
+    kind: 'presets',
+    options: ids.map((id) => ({ id, label: id })),
+  },
+  acceptedAttachmentKinds: ['text', 'image'],
+  thinkingStyle: 'adaptive',
+})
+const localModel = (id: string, capabilities: unknown) => ({
+  id,
+  name: id,
+  providerId: 'local',
+  contextWindow: null,
+  capabilities,
+})
+const providerModel = (id: string, capabilities: unknown) => ({
+  id,
+  name: id,
+  providerId: 'p1',
+  contextWindow: null,
+  capabilities,
+})
+const showModel = (
+  state: ReturnType<typeof createChatState>,
+  modelId: string,
+) => {
+  state.activeModel.value = {
+    modelId,
+    name: modelId,
+    tokenizerRepo: '',
+    contextWindow: null,
+  }
+}
+
+test('the effort options offered follow the displayed model', async () => {
+  const state = createChatState()
+  state.modelStore.installedModels = [
+    localModel('local-a', presetsCapabilities('low', 'high')),
+  ]
+  state.modelStore.providerModels = {
+    p1: [
+      providerModel(
+        'p1:opus',
+        presetsCapabilities('low', 'medium', 'high', 'xhigh', 'max'),
+      ),
+    ],
+  }
+
+  showModel(state, 'p1:opus')
+  await nextTick()
+  assert.equal(state.modelStore.effortState, 'selectable')
+  assert.deepEqual(
+    state.modelStore.effortOptions.map((o: { id: string }) => o.id),
+    ['low', 'medium', 'high', 'xhigh', 'max'],
+  )
+
+  showModel(state, 'local-a')
+  await nextTick()
+  assert.deepEqual(
+    state.modelStore.effortOptions.map((o: { id: string }) => o.id),
+    ['low', 'high'],
+  )
+})
+
+test('the effort control is hidden, managed or unknown by what the model says, and hidden for an unresolved model', async () => {
+  const state = createChatState()
+  state.modelStore.installedModels = [
+    localModel('no-reasoning', {
+      reasoning: { kind: 'unavailable' },
+      acceptedAttachmentKinds: [],
+      thinkingStyle: null,
+    }),
+    localModel('reasons-alone', {
+      reasoning: { kind: 'model_managed' },
+      acceptedAttachmentKinds: [],
+      thinkingStyle: null,
+    }),
+    localModel('not-determined', null),
+    localModel('empty-presets', presetsCapabilities()),
+  ]
+
+  const stateFor = async (modelId: string) => {
+    showModel(state, modelId)
+    await nextTick()
+    return state.modelStore.effortState
+  }
+
+  assert.equal(await stateFor('no-reasoning'), 'hidden')
+  assert.equal(await stateFor('reasons-alone'), 'managed')
+  assert.equal(await stateFor('not-determined'), 'unknown')
+  assert.equal(await stateFor('empty-presets'), 'hidden')
+  // No row for this id (lists still loading, or the disabled "not
+  // connected" placeholder): never described as "not yet known".
+  assert.equal(await stateFor('delegate-claude:not-connected'), 'hidden')
+})
+
+test('a selection is accepted only from the offered options and is sent as the reasoning option', async () => {
+  const requests: Array<{ reasoningOption?: string | null }> = []
+  const state = createChatState({
+    sendMessageAsync: async (request: { reasoningOption?: string | null }) => {
+      requests.push(request)
+      return { threadId: 'a', userMessageId: 'u', assistantMessageId: 'answer' }
+    },
+  })
+  state.modelStore.installedModels = [
+    localModel('model', presetsCapabilities('low', 'high')),
+  ]
+  await nextTick()
+
+  state.modelStore.updateEffortLevel('xhigh')
+  assert.equal(state.modelStore.effortLevel, null, 'not offered: rejected')
+  state.modelStore.updateEffortLevel('high')
+  assert.equal(state.modelStore.effortLevel, 'high')
+
+  state.input.value = 'Hello'
+  await state.send()
+  assert.equal(requests[0].reasoningOption, 'high')
+
+  state.modelStore.updateEffortLevel(null)
+  assert.equal(state.modelStore.effortLevel, null)
+})
+
+test('switching models starts on Auto instead of carrying the previous choice over', async () => {
+  const state = createChatState()
+  state.modelStore.installedModels = [
+    localModel('a', presetsCapabilities('low', 'high')),
+    localModel('b', presetsCapabilities('low', 'high')),
+  ]
+  showModel(state, 'a')
+  await nextTick()
+  state.modelStore.updateEffortLevel('high')
+  assert.equal(state.modelStore.effortLevel, 'high')
+
+  showModel(state, 'b')
+  await nextTick()
+
+  assert.equal(state.modelStore.effortLevel, null)
+})
+
+test('a capability refresh that removes the selected option falls back to Auto', async () => {
+  const state = createChatState()
+  state.modelStore.installedModels = [
+    localModel('model', presetsCapabilities('low', 'high', 'max')),
+  ]
+  await nextTick()
+  state.modelStore.updateEffortLevel('max')
+  assert.equal(state.modelStore.effortLevel, 'max')
+
+  state.modelStore.installedModels = [
+    localModel('model', presetsCapabilities('low', 'high')),
+  ]
+  await nextTick()
+
+  assert.equal(state.modelStore.effortLevel, null)
+})
+
+test('switching the displayed model triggers no capability lookup', async () => {
+  const invokeLog: string[] = []
+  const state = createChatState({}, {}, {}, invokeLog)
+  state.modelStore.installedModels = [
+    localModel('a', presetsCapabilities('low')),
+    localModel('b', presetsCapabilities('high')),
+  ]
+  await nextTick()
+  invokeLog.length = 0
+
+  showModel(state, 'a')
+  await nextTick()
+  showModel(state, 'b')
+  await nextTick()
+
+  assert.deepEqual(invokeLog, [])
+})
+
+// --- Spec 012: the effort choice is remembered per model and device --------
+
+const EFFORT_KEY = (modelId: string) => `chat.reasoning_option.${modelId}`
+
+/** An in-memory preference backend recording every call the store makes. */
+function createPrefStore(initial: Record<string, string> = {}) {
+  const map = new Map(Object.entries(initial))
+  const calls: Array<{ op: string; scope: unknown; key: string }> = []
+  const overrides = {
+    getPrefAsync: async (scope: unknown, key: string) => {
+      calls.push({ op: 'get', scope, key })
+      return map.get(key) ?? null
+    },
+    setPrefAsync: async (scope: unknown, key: string, value: string) => {
+      calls.push({ op: 'set', scope, key })
+      map.set(key, value)
+    },
+    clearPrefAsync: async (scope: unknown, key: string) => {
+      calls.push({ op: 'clear', scope, key })
+      map.delete(key)
+    },
+  }
+  return { map, calls, overrides }
+}
+
+/** Lets pending promise chains and Vue watchers run to completion. */
+async function flush() {
+  for (let i = 0; i < 12; i++) {
+    await Promise.resolve()
+    await nextTick()
+  }
+}
+
+/** Boots a store whose first displayed model is `first`, then initializes it. */
+async function initializedStore(options: {
+  prefs: ReturnType<typeof createPrefStore>
+  installed: unknown[]
+  first: string
+}) {
+  const state = createChatState(
+    {
+      activeModelInfoAsync: async () => ({
+        modelId: options.first,
+        name: options.first,
+        tokenizerRepo: '',
+        contextWindow: null,
+      }),
+    },
+    options.prefs.overrides,
+    {
+      useModels: () => ({
+        listInstalledAsync: async () => options.installed,
+        onDownloadProgress: async () => () => {},
+      }),
+    },
+  )
+  await state.modelStore.initialize()
+  await flush()
+  return state
+}
+
+test('a saved option is restored for the model shown first, read under this device and the model key', async () => {
+  const prefs = createPrefStore({ [EFFORT_KEY('a')]: 'high' })
+  const state = await initializedStore({
+    prefs,
+    installed: [localModel('a', presetsCapabilities('low', 'high'))],
+    first: 'a',
+  })
+
+  assert.equal(state.modelStore.effortLevel, 'high')
+  assert.deepEqual(
+    prefs.calls.find((c) => c.op === 'get' && c.key === EFFORT_KEY('a')),
+    {
+      op: 'get',
+      scope: { kind: 'device', uuid: 'device' },
+      key: EFFORT_KEY('a'),
+    },
+  )
+})
+
+test('each model restores its own saved option and a fresh store restores it after a restart', async () => {
+  const saved = {
+    [EFFORT_KEY('a')]: 'high',
+    [EFFORT_KEY('b')]: 'low',
+  }
+  const installed = [
+    localModel('a', presetsCapabilities('low', 'high')),
+    localModel('b', presetsCapabilities('low', 'high')),
+  ]
+  const state = await initializedStore({
+    prefs: createPrefStore(saved),
+    installed,
+    first: 'a',
+  })
+
+  showModel(state, 'b')
+  await flush()
+  assert.equal(state.modelStore.effortLevel, 'low')
+  showModel(state, 'a')
+  await flush()
+  assert.equal(state.modelStore.effortLevel, 'high')
+
+  const restarted = await initializedStore({
+    prefs: createPrefStore(saved),
+    installed,
+    first: 'b',
+  })
+  assert.equal(restarted.modelStore.effortLevel, 'low')
+})
+
+test('choosing an option stores it and choosing Auto clears it so nothing is stored', async () => {
+  const prefs = createPrefStore()
+  const state = await initializedStore({
+    prefs,
+    installed: [localModel('a', presetsCapabilities('low', 'high'))],
+    first: 'a',
+  })
+
+  await state.modelStore.updateEffortLevel('high')
+  assert.equal(prefs.map.get(EFFORT_KEY('a')), 'high')
+
+  await state.modelStore.updateEffortLevel(null)
+  assert.equal(state.modelStore.effortLevel, null)
+  assert.equal(prefs.map.has(EFFORT_KEY('a')), false)
+})
+
+test('a saved option the model no longer offers falls back to Auto and clears the stale key', async () => {
+  const prefs = createPrefStore({ [EFFORT_KEY('a')]: 'max' })
+  const state = await initializedStore({
+    prefs,
+    installed: [localModel('a', presetsCapabilities('low', 'high'))],
+    first: 'a',
+  })
+
+  assert.equal(state.modelStore.effortLevel, null)
+  assert.equal(prefs.map.has(EFFORT_KEY('a')), false)
+})
+
+test('a capability refresh that removes the chosen option falls back to Auto and clears the stored choice', async () => {
+  const prefs = createPrefStore()
+  const state = await initializedStore({
+    prefs,
+    installed: [localModel('a', presetsCapabilities('low', 'high', 'max'))],
+    first: 'a',
+  })
+  await state.modelStore.updateEffortLevel('max')
+  assert.equal(prefs.map.get(EFFORT_KEY('a')), 'max')
+
+  state.modelStore.installedModels = [
+    localModel('a', presetsCapabilities('low', 'high')),
+  ]
+  await flush()
+
+  assert.equal(state.modelStore.effortLevel, null)
+  assert.equal(prefs.map.has(EFFORT_KEY('a')), false)
+})
+
+test('a saved option is kept, not cleared, while the model capabilities are still loading', async () => {
+  const prefs = createPrefStore({ [EFFORT_KEY('a')]: 'high' })
+  // The lists arrive empty: the row for 'a' is unresolved when the saved
+  // option is read, so it cannot be validated yet.
+  const state = await initializedStore({ prefs, installed: [], first: 'a' })
+  assert.equal(state.modelStore.effortLevel, null)
+  assert.equal(prefs.map.get(EFFORT_KEY('a')), 'high', 'must not be cleared')
+
+  state.modelStore.installedModels = [
+    localModel('a', presetsCapabilities('low', 'high')),
+  ]
+  await flush()
+
+  assert.equal(state.modelStore.effortLevel, 'high')
+})
+
+test('a slow preference read for the previous model cannot overwrite the newly selected model', async () => {
+  const prefs = createPrefStore({
+    [EFFORT_KEY('a')]: 'high',
+    [EFFORT_KEY('b')]: 'low',
+  })
+  let releaseA: () => void = () => {}
+  const realGet = prefs.overrides.getPrefAsync
+  prefs.overrides.getPrefAsync = async (scope: unknown, key: string) => {
+    if (key === EFFORT_KEY('a')) {
+      await new Promise<void>((resolve) => {
+        releaseA = resolve
+      })
+    }
+    return realGet(scope, key)
+  }
+  const state = await initializedStore({
+    prefs,
+    installed: [
+      localModel('a', presetsCapabilities('low', 'high')),
+      localModel('b', presetsCapabilities('low', 'high')),
+    ],
+    first: 'a',
+  })
+
+  showModel(state, 'b')
+  await flush()
+  assert.equal(state.modelStore.effortLevel, 'low')
+  releaseA()
+  await flush()
+
+  assert.equal(state.modelStore.effortLevel, 'low')
+})
+
+test('a failed save rolls back to the previous choice and reports the failure', async () => {
+  const prefs = createPrefStore()
+  prefs.overrides.setPrefAsync = async () => {
+    throw new Error('disk full')
+  }
+  const state = await initializedStore({
+    prefs,
+    installed: [localModel('a', presetsCapabilities('low', 'high'))],
+    first: 'a',
+  })
+
+  await state.modelStore.updateEffortLevel('high')
+
+  assert.equal(state.modelStore.effortLevel, null)
+  assert.match(String(state.modelStore.lastError), /disk full/)
+})
+
+test('the same remote model reached through two connections stores its choice separately', async () => {
+  const prefs = createPrefStore()
+  const state = await initializedStore({
+    prefs,
+    installed: [],
+    first: 'p1:opus',
+  })
+  state.modelStore.providerModels = {
+    p1: [providerModel('p1:opus', presetsCapabilities('low', 'high'))],
+    p2: [providerModel('p2:opus', presetsCapabilities('low', 'high'))],
+  }
+  await flush()
+
+  await state.modelStore.updateEffortLevel('high')
+
+  assert.equal(prefs.map.get(EFFORT_KEY('p1:opus')), 'high')
+  assert.equal(prefs.map.has(EFFORT_KEY('p2:opus')), false)
+})
+
+test('no preference is read or written before the device is known, and the choice still works in memory', async () => {
+  const prefs = createPrefStore({ [EFFORT_KEY('model')]: 'high' })
+  const state = createChatState({}, prefs.overrides)
+  state.modelStore.installedModels = [
+    localModel('model', presetsCapabilities('low', 'high')),
+  ]
+  await flush()
+
+  await state.modelStore.updateEffortLevel('low')
+
+  assert.equal(state.modelStore.effortLevel, 'low')
+  assert.deepEqual(prefs.calls, [])
+})
+
+// --- Spec 012: not yet known is never presented as unsupported -------------
+
+test('a model with undetermined capabilities is reported as unknown in every shape, never as unavailable', async () => {
+  const state = createChatState()
+  state.modelStore.installedModels = [
+    localModel('no-capabilities', null),
+    // Attachments determined, reasoning not: the reasoning control is still
+    // not known, and must not be inferred from the attachment answer.
+    localModel('partial', {
+      reasoning: null,
+      acceptedAttachmentKinds: ['text'],
+      thinkingStyle: null,
+    }),
+    localModel('nothing-determined', {
+      reasoning: null,
+      acceptedAttachmentKinds: null,
+      thinkingStyle: null,
+    }),
+  ]
+
+  for (const modelId of ['no-capabilities', 'partial', 'nothing-determined']) {
+    showModel(state, modelId)
+    await nextTick()
+    assert.equal(state.modelStore.effortState, 'unknown', modelId)
+    assert.deepEqual(state.modelStore.effortOptions, [], modelId)
+  }
+})
+
+test('the backend reason for an undetermined attachment reaches the composer unchanged', async () => {
+  const reason = 'attachment support for this model is not yet known'
+  const state = createChatState({
+    inspectAttachmentAsync: async () => ({
+      name: 'photo.png',
+      kind: 'image',
+      usable: false,
+      reason,
+    }),
+  })
+
+  await state.addAttachments(['/tmp/photo.png'])
+
+  assert.equal(state.attachments.value.length, 1)
+  assert.equal(state.attachments.value[0].info.usable, false)
+  assert.equal(state.attachments.value[0].info.reason, reason)
 })

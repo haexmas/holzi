@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import type { EffortLevel } from '~/composables/useChat'
+import type { EffortState } from '~/composables/useReasoningPreference'
 
 type ModelGroup = {
   providerId: string
@@ -18,11 +18,17 @@ const props = defineProps<{
   modelId: string
   modelName?: string
   modelGroups: ModelGroup[]
-  /** Levels the active model/backend actually supports; empty hides the
-   * effort section entirely (spec 011-composer-toolbar-parity FR-003). */
-  effortLevels: EffortLevel[]
-  effortLevel: EffortLevel | null
+  /** Options the displayed model offers, already labelled for display. Only
+   * used while `effortState` is `selectable`. */
+  effortChoices: { id: string; label: string }[]
+  /** The effective option id; `null` is Auto. */
+  effortLevel: string | null
+  /** Trigger text for the current choice; empty when there is no active
+   * choice to show (spec 012 FR-005). */
   effortLabel: string
+  /** `hidden` renders nothing; `managed`/`unknown` render a disabled control
+   * with a state label; `selectable` renders the options plus Auto. */
+  effortState: EffortState
   disabled?: boolean
   modelDisabled?: boolean
 }>()
@@ -31,7 +37,7 @@ const { t } = useI18n()
 
 const emit = defineEmits<{
   'update:modelId': [modelId: string]
-  'update:effortLevel': [effortLevel: EffortLevel | null]
+  'update:effortLevel': [effortLevel: string | null]
 }>()
 
 const root = ref<HTMLElement | null>(null)
@@ -54,10 +60,7 @@ function updateModel(value: unknown) {
 
 function updateEffort(value: unknown) {
   if (typeof value !== 'string') return
-  emit(
-    'update:effortLevel',
-    value === AUTO_VALUE ? null : (value as EffortLevel),
-  )
+  emit('update:effortLevel', value === AUTO_VALUE ? null : value)
 }
 
 function positionPopover() {
@@ -154,7 +157,14 @@ onBeforeUnmount(() => {
       type="button"
       class="flex max-w-[min(17rem,calc(100vw-7rem))] cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-muted-foreground outline-none transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none"
       :class="{ 'pointer-events-none opacity-50': disabled }"
-      :aria-label="`${t('chat.composer.settingsButton')}: ${modelName ?? t('chat.model.choose')}, ${effortLabel}`"
+      :aria-label="
+        [
+          `${t('chat.composer.settingsButton')}: ${modelName ?? t('chat.model.choose')}`,
+          effortLabel,
+        ]
+          .filter(Boolean)
+          .join(', ')
+      "
       :title="modelName || t('chat.model.choose')"
       :aria-expanded="isOpen"
       aria-haspopup="dialog"
@@ -164,8 +174,10 @@ onBeforeUnmount(() => {
       <span class="max-w-[8rem] truncate sm:max-w-[11rem] lg:max-w-[15rem]">{{
         truncatedModelName
       }}</span>
-      <span aria-hidden="true">·</span>
-      <span class="shrink-0">{{ effortLabel }}</span>
+      <template v-if="effortLabel">
+        <span aria-hidden="true">·</span>
+        <span class="shrink-0">{{ effortLabel }}</span>
+      </template>
       <Icon
         name="lucide:chevron-down"
         class="h-3.5 w-3.5 shrink-0"
@@ -224,7 +236,7 @@ onBeforeUnmount(() => {
           </ShadcnSelectContent>
         </ShadcnSelect>
 
-        <div v-if="effortLevels.length" class="mt-1">
+        <div v-if="effortState !== 'hidden'" class="mt-1">
           <label
             for="effort-level-popover"
             class="mb-1 block text-xs font-medium text-muted-foreground"
@@ -232,6 +244,7 @@ onBeforeUnmount(() => {
             {{ t('chat.composer.settingsPopover.effortLabel') }}
           </label>
           <ShadcnSelect
+            v-if="effortState === 'selectable'"
             :model-value="effortLevel ?? AUTO_VALUE"
             :disabled="disabled"
             @update:model-value="updateEffort"
@@ -248,13 +261,30 @@ onBeforeUnmount(() => {
                 {{ t('chat.effort.auto') }}
               </ShadcnSelectItem>
               <ShadcnSelectItem
-                v-for="level in effortLevels"
-                :key="level"
-                :value="level"
+                v-for="choice in effortChoices"
+                :key="choice.id"
+                :value="choice.id"
               >
-                {{ t(`chat.effort.${level}`) }}
+                {{ choice.label }}
               </ShadcnSelectItem>
             </ShadcnSelectContent>
+          </ShadcnSelect>
+          <!-- Nothing to choose, but worth saying why: the model reasons on
+               its own, or its capabilities are not known yet (spec 012). -->
+          <ShadcnSelect v-else disabled>
+            <ShadcnSelectTrigger
+              id="effort-level-popover"
+              :aria-label="t('chat.composer.settingsPopover.effortLabel')"
+              class="h-9 w-full bg-background text-sm"
+            >
+              <ShadcnSelectValue
+                :placeholder="
+                  effortState === 'managed'
+                    ? t('chat.effort.managed')
+                    : t('chat.effort.unknown')
+                "
+              />
+            </ShadcnSelectTrigger>
           </ShadcnSelect>
         </div>
       </div>

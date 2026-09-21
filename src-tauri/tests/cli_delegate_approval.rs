@@ -128,7 +128,8 @@ sys.stdin.readline()
             max_new_tokens: None,
             tools: Vec::new(),
             autonomy_mode: Default::default(),
-            effort_level: Default::default(),
+            reasoning_option: Default::default(),
+            capabilities: Default::default(),
         })
         .await
         .expect("stream_chat should start");

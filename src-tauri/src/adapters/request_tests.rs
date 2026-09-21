@@ -7,10 +7,12 @@ use wiremock::matchers::{body_json, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::anthropic::AnthropicAdapter;
-use super::effort::EffortLevel;
 use super::request::build_messages_body;
 use super::types::{Attachment, AttachmentKind, ChatMessage, ChatRequest, ChatRole};
 use super::ProviderAdapter;
+use crate::model_capabilities::{
+    ModelCapabilities, ReasoningControl, ReasoningOption, ThinkingStyle,
+};
 
 fn sample_request(model: &str) -> ChatRequest {
     ChatRequest {
@@ -26,63 +28,140 @@ fn sample_request(model: &str) -> ChatRequest {
         max_new_tokens: Some(128),
         tools: Vec::new(),
         autonomy_mode: Default::default(),
-        effort_level: Default::default(),
+        reasoning_option: Default::default(),
+        capabilities: Default::default(),
+    }
+}
+
+fn capabilities(
+    reasoning: Option<ReasoningControl>,
+    thinking_style: Option<ThinkingStyle>,
+) -> Option<ModelCapabilities> {
+    Some(ModelCapabilities {
+        reasoning,
+        thinking_style,
+        ..ModelCapabilities::default()
+    })
+}
+
+fn presets(ids: &[&str]) -> Option<ReasoningControl> {
+    Some(ReasoningControl::presets(
+        ids.iter()
+            .map(|id| ReasoningOption {
+                id: id.to_string(),
+                label: id.to_string(),
+            })
+            .collect(),
+    ))
+}
+
+#[test]
+fn a_manual_thinking_style_requests_a_budgeted_thinking_block() {
+    let mut request = sample_request("claude-sonnet-4-20250514");
+    request.capabilities = capabilities(
+        Some(ReasoningControl::ModelManaged),
+        Some(ThinkingStyle::Manual),
+    );
+    assert!(build_messages_body(&request).get("thinking").is_none());
+
+    request.reasoning_requested = true;
+    let body = build_messages_body(&request);
+
+    assert_eq!(body["thinking"]["type"], "enabled");
+    let budget = body["thinking"]["budget_tokens"]
+        .as_u64()
+        .expect("manual thinking has a budget");
+    assert!(budget >= 1024);
+    assert!(budget < body["max_tokens"].as_u64().unwrap());
+}
+
+#[test]
+fn an_adaptive_thinking_style_requests_adaptive_thinking_without_a_budget() {
+    let mut request = sample_request("claude-opus-4-7");
+    request.reasoning_requested = true;
+    request.capabilities = capabilities(presets(&["low", "high"]), Some(ThinkingStyle::Adaptive));
+
+    let body = build_messages_body(&request);
+
+    assert_eq!(body["thinking"]["type"], "adaptive");
+    assert!(body["thinking"].get("budget_tokens").is_none());
+}
+
+#[test]
+fn an_undetermined_thinking_style_sends_no_thinking_field_even_when_reasoning_is_requested() {
+    for caps in [
+        None,
+        capabilities(Some(ReasoningControl::ModelManaged), None),
+        capabilities(None, None),
+    ] {
+        let mut request = sample_request("claude-opus-5");
+        request.reasoning_requested = true;
+        request.capabilities = caps;
+
+        assert!(build_messages_body(&request).get("thinking").is_none());
     }
 }
 
 #[test]
-fn reasoning_capability_controls_anthropic_thinking_request() {
+fn manual_thinking_raises_max_tokens_to_leave_room_for_the_budget() {
     let mut request = sample_request("claude-sonnet-4-20250514");
-    let without_reasoning = build_messages_body(&request);
-    assert!(without_reasoning.get("thinking").is_none());
-
     request.reasoning_requested = true;
-    let with_reasoning = build_messages_body(&request);
-    assert_eq!(with_reasoning["thinking"]["type"], "enabled");
-    let budget = with_reasoning["thinking"]["budget_tokens"]
-        .as_u64()
-        .expect("manual thinking has a budget");
-    assert!(budget >= 1024);
-    assert!(budget < with_reasoning["max_tokens"].as_u64().unwrap());
+    request.max_new_tokens = Some(128);
+    request.capabilities = capabilities(
+        Some(ReasoningControl::ModelManaged),
+        Some(ThinkingStyle::Manual),
+    );
 
-    request.model_id = "claude-opus-4-7".to_string();
-    let adaptive = build_messages_body(&request);
-    assert_eq!(adaptive["thinking"]["type"], "adaptive");
-    assert!(adaptive["thinking"].get("budget_tokens").is_none());
-}
-
-#[test]
-fn effort_level_is_omitted_when_not_requested() {
-    let request = sample_request("claude-sonnet-5");
     let body = build_messages_body(&request);
-    assert!(body.get("output_config").is_none());
+
+    assert!(body["max_tokens"].as_u64().unwrap() > 1024);
 }
 
 #[test]
-fn effort_level_is_sent_when_the_model_supports_it() {
+fn no_reasoning_option_means_no_output_config() {
     let mut request = sample_request("claude-sonnet-5");
-    request.effort_level = Some(EffortLevel::XHigh);
-    let body = build_messages_body(&request);
-    assert_eq!(body["output_config"]["effort"], "xhigh");
+    request.capabilities = capabilities(presets(&["low", "high"]), Some(ThinkingStyle::Adaptive));
+
+    assert!(build_messages_body(&request).get("output_config").is_none());
 }
 
 #[test]
-fn effort_level_clamps_down_for_a_model_without_that_level() {
+fn an_offered_reasoning_option_is_sent_as_its_own_id() {
+    let mut request = sample_request("claude-sonnet-5");
+    request.capabilities = capabilities(presets(&["low", "high", "max"]), None);
+    request.reasoning_option = Some("max".to_string());
+
+    assert_eq!(
+        build_messages_body(&request)["output_config"]["effort"],
+        "max"
+    );
+}
+
+#[test]
+fn an_option_the_model_does_not_offer_is_never_sent() {
+    // A stale selection (the provider dropped `xhigh`) must not reach the
+    // provider even if it slipped past the caller's own validation.
     let mut request = sample_request("claude-opus-4-6");
-    request.effort_level = Some(EffortLevel::XHigh);
-    let body = build_messages_body(&request);
-    // claude-opus-4-6 supports `max` but not `xhigh` (research.md §1) — the
-    // request must clamp down to the nearest supported level, never send
-    // an unsupported one.
-    assert_eq!(body["output_config"]["effort"], "high");
+    request.capabilities = capabilities(presets(&["low", "medium", "high", "max"]), None);
+    request.reasoning_option = Some("xhigh".to_string());
+
+    assert!(build_messages_body(&request).get("output_config").is_none());
 }
 
 #[test]
-fn effort_level_is_never_sent_for_a_model_outside_the_support_table() {
-    let mut request = sample_request("claude-3-5-sonnet-20241022");
-    request.effort_level = Some(EffortLevel::Low);
-    let body = build_messages_body(&request);
-    assert!(body.get("output_config").is_none());
+fn a_reasoning_option_is_ignored_without_selectable_options() {
+    for caps in [
+        None,
+        capabilities(Some(ReasoningControl::ModelManaged), None),
+        capabilities(Some(ReasoningControl::Unavailable), None),
+        capabilities(None, None),
+    ] {
+        let mut request = sample_request("claude-3-5-sonnet-20241022");
+        request.reasoning_option = Some("low".to_string());
+        request.capabilities = caps;
+
+        assert!(build_messages_body(&request).get("output_config").is_none());
+    }
 }
 
 #[test]
@@ -264,7 +343,8 @@ async fn stream_chat_groups_ordered_tool_calls_and_results_into_two_messages() {
         max_new_tokens: Some(128),
         tools: Vec::new(),
         autonomy_mode: Default::default(),
-        effort_level: Default::default(),
+        reasoning_option: Default::default(),
+        capabilities: Default::default(),
     };
 
     let mut stream = adapter.stream_chat(request).await.unwrap();

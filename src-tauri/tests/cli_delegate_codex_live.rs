@@ -45,7 +45,8 @@ async fn spawn_codex_app_server_answers_a_real_question() {
         max_new_tokens: None,
         tools: Vec::new(),
         autonomy_mode: Default::default(),
-        effort_level: Default::default(),
+        reasoning_option: Default::default(),
+        capabilities: Default::default(),
     };
 
     let mut stream = adapter

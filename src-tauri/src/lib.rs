@@ -9,6 +9,7 @@ pub mod hardware;
 pub mod identity;
 pub mod instances;
 pub mod llm;
+pub mod model_capabilities;
 pub mod models;
 pub mod providers;
 pub mod state;
@@ -31,8 +32,7 @@ pub use state::{ActiveInstanceHandle, AppState};
 use catalog::commands::catalog_recommend_tiers;
 use catalog::list_catalog;
 use chat::commands::{
-    abort_current_generation, get_effort_levels, inspect_attachment, respond_tool_permission,
-    send_message,
+    abort_current_generation, inspect_attachment, respond_tool_permission, send_message,
 };
 use chat::default_model::{model_load_status, resolve_default_model};
 use chat::model_loading::{
@@ -174,7 +174,6 @@ pub fn run() {
             model_load_status,
             resolve_default_model,
             send_message,
-            get_effort_levels,
             inspect_attachment,
             abort_current_generation,
             respond_tool_permission,
