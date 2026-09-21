@@ -111,13 +111,13 @@ the older revision, so the shell has no `tauri-driver`, no `WebKitWebDriver` and
 **Purpose**: what every story needs to start, drive and clean up an application. Nothing here runs the
 application yet.
 
-- [ ] T008 Start branch `016-e2e-stage1-command` from the updated `origin/main`. Graphify first, from the
+- [x] T008 Start branch `016-e2e-stage1-command` from the updated `origin/main`. Graphify first, from the
       primary checkout: `graphify query "spawn a child process and wait until it is ready"`,
       `graphify query "temporary directory created and removed by a test"`,
       `graphify query "http client for a json wire protocol"`,
       `graphify query "read environment of a process"`. Evaluate every candidate, including unexported
       ones; expected outcome (plan, research R9): none can be extended.
-- [ ] T009 In `package.json` add `"test:e2e": "scripts/with-nix-host-bridge.sh node scripts/e2e/cli.ts"` and
+- [x] T009 In `package.json` add `"test:e2e": "scripts/with-nix-host-bridge.sh node scripts/e2e/cli.ts"` and
       `"check:e2e-lib": "node --test scripts/e2e/lib/*.test.ts"`. Confirm on Node 22.19 that
       `node --test` runs `.ts` files by type stripping without a flag and that
       `pnpm typecheck:scripts` (whose `tsconfig.scripts.json` includes `scripts/**/*.ts`) type-checks the
@@ -125,7 +125,7 @@ application yet.
 
 ### Tests for the foundation (write first; expected to fail until the implementation tasks land)
 
-- [ ] T010 [P] `scripts/e2e/lib/processes.test.ts`. Linux only: skip with a reason elsewhere. Cases:
+- [x] T010 [P] `scripts/e2e/lib/processes.test.ts`. Linux only: skip with a reason elsewhere. Cases:
       the marker is `<runner pid>:<runner start time>:<random>` and parses back, the start time read
       from field 22 of `/proc/self/stat`; a child spawned with the marker is found by the scan and one
       without is not; the application process is the marked one whose `/proc/<pid>/exe` equals the given
@@ -134,10 +134,10 @@ application yet.
       and another live runner are not; `sweepOrphans` stops only orphans and reports them, never an
       unmarked process; `stopRun(marker)` stops every process of that marker; `stopGroup` stops a
       detached group including a grandchild. Use short-lived `sleep` children; no fixed sleeps.
-- [ ] T011 [P] `scripts/e2e/lib/ports.test.ts`: `freePort()` returns an integer from 1024 to 65535 that can
+- [x] T011 [P] `scripts/e2e/lib/ports.test.ts`: `freePort()` returns an integer from 1024 to 65535 that can
       be bound at once; `withPortRetry` retries exactly once when the operation fails with an
       address-in-use error and rethrows the second failure with the port in the message.
-- [ ] T012 [P] `scripts/e2e/lib/webdriver.test.ts` and the test-only helper
+- [x] T012 [P] `scripts/e2e/lib/webdriver.test.ts` and the test-only helper
       `scripts/e2e/lib/fake-driver.testlib.ts`: a local HTTP server speaking the W3C calls the client
       uses (new session, delete session, execute sync and async, find element, element click, element
       value, screenshot, close window, navigate). Cases: the new-session body is
@@ -146,7 +146,7 @@ application yet.
       `element-6066-11e4-a52e-4f735466cecf`; `invoke` resolves `{ ok: true, data }` or
       `{ ok: false, error }`; when the server drops the connection or answers 500 during a call, `invoke`
       with `expectEnd` resolves `{ ended: true }` and without it throws an error that names the command.
-- [ ] T013 [P] `scripts/e2e/lib/instance.test.ts`, pure parts only (no real tools): `buildInstanceEnv` puts
+- [x] T013 [P] `scripts/e2e/lib/instance.test.ts`, pure parts only (no real tools): `buildInstanceEnv` puts
       `XDG_DATA_HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`, `XDG_RUNTIME_DIR` and `HOME` inside the
       instance root, sets `DBUS_SESSION_BUS_ADDRESS` to `disabled:` and `HOLZI_E2E_RUN` to the marker,
       and does not pass through the parent's `XDG_*` or `HOME` (set sentinels in the test); `prepareRoot`
@@ -155,7 +155,7 @@ application yet.
       for the default `light`; `removeRoot` deletes the tree; with `reusesRoot` the tree is not emptied;
       `driverCommand` yields `xvfb-run -a -s "-screen 0 1280x800x24" tauri-driver --port <p> --native-port <n> --native-driver <path>`
       with the given ports and paths.
-- [ ] T014 [P] `scripts/e2e/lib/scenario.test.ts` with a fake instance factory: `needs.closeBehavior`
+- [x] T014 [P] `scripts/e2e/lib/scenario.test.ts` with a fake instance factory: `needs.closeBehavior`
       different from the application's means the body never runs and the result is `skipped` with the
       reason "the build exits on close; this scenario needs one that relaunches" (and its reverse);
       a throwing body gives `failed` and every registered teardown ran exactly once, in reverse order; a
@@ -166,27 +166,27 @@ application yet.
       `atMs` from one monotonic clock; the result is written to `<E2E_RUN_DIR>/results/<name>.json`
       with `name`, `status`, `durationMs`, `skipReason` and `steps`; a duplicate scenario name is an
       error.
-- [ ] T015 [P] `scripts/e2e/lib/preflight.test.ts`, tool resolution only for now: `resolveTools` returns
+- [x] T015 [P] `scripts/e2e/lib/preflight.test.ts`, tool resolution only for now: `resolveTools` returns
       the absolute path of `tauri-driver`, `WebKitWebDriver` and `xvfb-run` for those present on a given
       `PATH` (temporary directory with executable stubs) and lists the missing ones; a directory or a
       non-executable file of that name does not count; no shell is used.
 
 ### Implementation for the foundation
 
-- [ ] T016 [P] `scripts/e2e/lib/processes.ts`: `newMarker`, `parseMarker`, `scanMarked` (reads
+- [x] T016 [P] `scripts/e2e/lib/processes.ts`: `newMarker`, `parseMarker`, `scanMarked` (reads
       `/proc/<pid>/environ`, same user only, unreadable entries skipped), `findApplicationProcesses`,
       `sweepOrphans`, `stopRun`, `stopGroup`, `spawnMarked` (detached, own process group, output to a
       log file with a timestamp per line). Identification is by marker and executable only, never by
       name or command line (FR-008). `ponytail:` at the scan: linear in the number of processes.
-- [ ] T017 [P] `scripts/e2e/lib/ports.ts`: `freePort` (bind port 0, release, return) and `withPortRetry`.
+- [x] T017 [P] `scripts/e2e/lib/ports.ts`: `freePort` (bind port 0, release, return) and `withPortRetry`.
       `ponytail:` at `freePort`: the port can be taken between release and use; one retry, upgrade path is
       to pass an already bound socket if the driver ever supports it.
-- [ ] T018 [P] `scripts/e2e/lib/webdriver.ts`: the minimal W3C client over global `fetch`, with the calls
+- [x] T018 [P] `scripts/e2e/lib/webdriver.ts`: the minimal W3C client over global `fetch`, with the calls
       listed in T012 and `invoke` as an async script that calls `window.__TAURI_INTERNALS__.invoke` and
       resolves to an object instead of throwing. No dependency.
-- [ ] T019 [P] `scripts/e2e/lib/preflight.ts`: `resolveTools(pathEnv)` and the tool names as constants.
+- [x] T019 [P] `scripts/e2e/lib/preflight.ts`: `resolveTools(pathEnv)` and the tool names as constants.
       The version check follows in T034; keep the file's exports so T034 only adds.
-- [ ] T020 `scripts/e2e/lib/instance.ts` (after T016 to T019): `buildInstanceEnv`, `prepareRoot`,
+- [x] T020 `scripts/e2e/lib/instance.ts` (after T016 to T019): `buildInstanceEnv`, `prepareRoot`,
       `removeRoot`, `driverCommand`, `startInstance` (free ports, spawn marked with an own virtual
       screen, wait for the driver port with a deadline, open the session, find `appPid` as the marked
       process whose executable is the application, record `instance-ready`), `stop`, and for now
@@ -195,15 +195,15 @@ application yet.
       set in data-model.md. `colorScheme` is "`light` or `dark`, default `light`". `ponytail:` at the
       one virtual screen per instance. If the file nears 400 lines, split the session code into
       `scripts/e2e/lib/session.ts`.
-- [ ] T021 `scripts/e2e/lib/scenario.ts` (after T020): `scenario(name, options, body)` on top of `node:test`,
+- [x] T021 `scripts/e2e/lib/scenario.ts` (after T020): `scenario(name, options, body)` on top of `node:test`,
       the context (`ctx.app`, `ctx.startInstance`, `ctx.step`, `ctx.waitFor`, `ctx.credentials` with a
       passphrase and a provider key generated per run), deadline, teardown in reverse order, the skip
       rule for `needs`, and the result file. Reads the environment listed in the Format section.
       Failure material is added in T057, so keep an `onFailure` extension point.
-- [ ] T022 In `.github/workflows/ci.yml`, documentation job, add after the "Check vault lifecycle" step:
+- [x] T022 In `.github/workflows/ci.yml`, documentation job, add after the "Check vault lifecycle" step:
       a step "Check e2e helpers" running `corepack pnpm check:e2e-lib`, with a comment saying it needs
       no display and no application.
-- [ ] T023 Checkpoint: `pnpm check:e2e-lib`, `pnpm typecheck:scripts`, `pnpm lint`, `pnpm format:check`
+- [x] T023 Checkpoint: `pnpm check:e2e-lib`, `pnpm typecheck:scripts`, `pnpm lint`, `pnpm format:check`
       pass. Commit `feat(e2e): process control, driver client and isolated instances`.
 
 **Checkpoint**: the foundation is tested in isolation; nothing runs the application yet.
@@ -221,19 +221,19 @@ kept running.
 
 ### Tests for User Story 1 (write first)
 
-- [ ] T024 [P] [US1] `scripts/e2e/lib/build.test.ts`: the target directory is `CARGO_TARGET_DIR` if set, else
+- [x] T024 [P] [US1] `scripts/e2e/lib/build.test.ts`: the target directory is `CARGO_TARGET_DIR` if set, else
       `src-tauri/target`, and the binary `<target>/debug/holzi`; `--app` skips the build and must exist and
       be executable; the close behavior is `--close-behavior` if given (`closeBehaviorFrom: flag`), else
       `relaunch` for a path containing `/release/` and `exit` for `/debug/` (`closeBehaviorFrom: path`),
       else an error that says how to state it with `--close-behavior`; a build failure error carries the
       last 40 lines of the build output and the path of `build.log`.
-- [ ] T025 [P] [US1] `scripts/e2e/lib/report.test.ts`: from result files the summary prints one line per
+- [x] T025 [P] [US1] `scripts/e2e/lib/report.test.ts`: from result files the summary prints one line per
       scenario with status, name and duration, and skipped scenarios with their reason; the run status is
       `passed` only if no scenario failed; a scenario file that ended without writing a result counts as
       `failed` with the message "no result written"; the exit statuses are the table of contracts/cli.md
       (0 no scenario failed, 1 failed or timed out, 2 preflight failed, 3 build failed, 130 interrupted,
       143 terminated); `report.json` has the fields of contracts/report.md.
-- [ ] T026 [P] [US1] `scripts/e2e/lib/cli.test.ts` with injected steps: the order is preflight, sweep,
+- [x] T026 [P] [US1] `scripts/e2e/lib/cli.test.ts` with injected steps: the order is preflight, sweep,
       build (unless `--app` or `E2E_APP`), scenarios, sweep by marker, summary; a failing preflight
       starts nothing and exits 2; a failing build exits 3 and runs no scenario; `--grep` becomes the
       runner's name filter; SIGINT and SIGTERM stop the run's processes first and exit 130 and 143;
@@ -243,29 +243,29 @@ kept running.
 
 ### Implementation for User Story 1
 
-- [ ] T027 [US1] `scripts/e2e/lib/build.ts`: `resolveApplication` and `buildDebugApplication`
+- [x] T027 [US1] `scripts/e2e/lib/build.ts`: `resolveApplication` and `buildDebugApplication`
       (`pnpm tauri build --debug --no-bundle` in the repository root, default features, output to
       `build.log` in the run directory). It never builds a release profile (FR-004, clarified 2026-09-21).
-- [ ] T028 [US1] `scripts/e2e/lib/report.ts` (after T025): read the result files, print the summary,
+- [x] T028 [US1] `scripts/e2e/lib/report.ts` (after T025): read the result files, print the summary,
       write `report.json` with the run marker and conformance status/scale, and map the outcome to the exit
       status.
-- [ ] T029 [US1] `scripts/e2e/cli.ts` (after T027, T028): options `--app`, `--close-behavior`, `--grep`,
+- [x] T029 [US1] `scripts/e2e/cli.ts` (after T027, T028): options `--app`, `--close-behavior`, `--grep`,
       `--keep`, `--scenario-timeout`, `--run-timeout` and the environment `E2E_APP`, `E2E_ARTIFACTS_DIR`,
       `E2E_TIME_SCALE`; run id from a timestamp plus a random suffix; the order of work of
       contracts/cli.md; it runs `node --test --test-concurrency=1` over `scripts/e2e/scenarios/*.test.ts`
       in a marked, detached group with the environment of the Format section; signal handling and the
       final sweep run on every path. The preflight call is a stub until T035 (tool resolution only).
-- [ ] T030 [US1] `scripts/e2e/scenarios/smoke-start.test.ts`: start an instance, wait until
+- [x] T030 [US1] `scripts/e2e/scenarios/smoke-start.test.ts`: start an instance, wait until
       `document.readyState` is `complete` and `location.pathname` is `/`, take a screenshot, end. No
       hook and no text is used.
-- [ ] T031 [US1] Manual verification of the independent test, recorded in the "Validation record": start
+- [x] T031 [US1] Manual verification of the independent test, recorded in the "Validation record": start
       your own Holzi (for example `pnpm tauri:dev`) and note a checksum listing of its data directory;
       run `pnpm test:e2e --grep smoke`; then check no window appeared on the desktop, no process with a
       run marker remains (`grep -l HOLZI_E2E_RUN /proc/*/environ 2>/dev/null` prints nothing), the
       listing is unchanged and your Holzi still runs. Repeat with Ctrl-C at a random moment, and with
       `kill -9` on the runner followed by a second run: the second run's sweep reports and removes the
       leftovers, and the run passes.
-- [ ] T032 [US1] Checkpoint: `pnpm check:e2e-lib`, `pnpm typecheck:scripts`, `pnpm lint`,
+- [x] T032 [US1] Checkpoint: `pnpm check:e2e-lib`, `pnpm typecheck:scripts`, `pnpm lint`,
       `pnpm format:check`. Commit `feat(e2e): run the suite with one command`.
 
 **Checkpoint**: one command runs the smoke scenario safely; the version check is still missing.
@@ -282,7 +282,7 @@ stops the run within 10 seconds with exit status 2, a message naming problem and
 
 ### Tests for User Story 5 (write first)
 
-- [ ] T033 [P] [US5] Extend `scripts/e2e/lib/preflight.test.ts`: the driver version is read from
+- [x] T033 [P] [US5] Extend `scripts/e2e/lib/preflight.test.ts`: the driver version is read from
       `share/webkit-webdriver/version` next to the `bin/` directory the driver was found in (use the path
       as found on `PATH`, not the symlink target: the delivered driver is a symlink into another
       package); without that file it falls back to the installed package version of `webkit2gtk-driver`
@@ -298,17 +298,17 @@ stops the run within 10 seconds with exit status 2, a message naming problem and
 
 ### Implementation for User Story 5
 
-- [ ] T034 [US5] `scripts/e2e/lib/preflight.ts`: add `checkPreflight` returning the tool check of
+- [x] T034 [US5] `scripts/e2e/lib/preflight.ts`: add `checkPreflight` returning the tool check of
       data-model.md, with the messages above. It reports before anything is started.
-- [ ] T035 [US5] Wire `checkPreflight` into `scripts/e2e/cli.ts` in place of the stub of T029 and add the
+- [x] T035 [US5] Wire `checkPreflight` into `scripts/e2e/cli.ts` in place of the stub of T029 and add the
       cases to `scripts/e2e/lib/cli.test.ts`: a failed tool check exits 2 before the sweep and the build,
       starts no process, and prints the messages; a passing check passes the resolved tool paths on in
       `E2E_TOOLS`.
-- [ ] T036 [US5] Manual trials (SC-006), recorded: run with a `PATH` that lacks `xvfb-run`; then with
+- [x] T036 [US5] Manual trials (SC-006), recorded: run with a `PATH` that lacks `xvfb-run`; then with
       `WebKitWebDriver` resolving to a stub whose version file says another version. Each: exit status 2
       within 10 seconds, the message names the tool or shows both versions and the remedy, and
       `ps` shows nothing started by the run.
-- [ ] T037 [US5] Checkpoint and Stage 1 pull request (T008 to T037): all checks of T032, commit
+- [x] T037 [US5] Checkpoint and Stage 1 pull request (T008 to T037): all checks of T032, commit
       `feat(e2e): check tools and versions before starting`. Open the PR after asking the operator.
 
 **Checkpoint**: Stage 1 is complete: one safe command with an early, clear stop.
@@ -735,4 +735,32 @@ _T085 adds the closing numbers here._
   `tauri-driver --help` lists `--port`, `--native-port` and `--native-driver`, the options the suite
   passes.
 
-_Filled by later tasks: T031, T036, T052, T058, T066, T067, T068, T073 to T083 and T088._
+### Stage 1 (T008 to T037), 2026-09-22
+
+- **T008** Graphify, from the primary checkout: the candidates for spawning a process were the Rust
+  `process.rs` (`cli_delegate`) and its `spawn`, for reading process state the same file, for a wire
+  protocol client the Rust adapters, and for waiting `waitForTurnTerminal` in the chat composable. All are
+  Rust or frontend code in other processes; none can serve a Node runner, so nothing was extended.
+- **T031** Run against a debug binary of the spike (`--app`) and then against the debug build the command
+  made itself in this worktree (`pnpm test:e2e --grep smoke`, built from a reflink copy of an earlier
+  build cache): `passed smoke-start`, 6.1 s, exit 0. Environment of the application, read from `/proc`
+  during a run: `DISPLAY=:99` (the virtual screen), `GDK_BACKEND=x11`, no `WAYLAND_DISPLAY`, `HOME`,
+  `XDG_DATA_HOME` and `XDG_RUNTIME_DIR` inside the instance root, `DBUS_SESSION_BUS_ADDRESS=disabled:`
+  and the marker. A checksum listing of the maintainer's data directory is identical before and after.
+  No Holzi of the maintainer was running at the time, so "kept running" is not shown; that the desktop
+  stayed free of a window is shown by the environment, not by eye.
+  - Ctrl-C (SIGINT) at about 4 s: exit status 130, no process with a run marker left.
+  - `kill -9` on the runner at about 4 s: 9 marked processes stayed behind; the next run reported
+    "removed 9 leftover process(es) of an earlier killed run", passed, and left none.
+- **T035** The cases the task lists already exist in `scripts/e2e/lib/cli.test.ts`: a failed tool check
+  exits 2 before the sweep and the build and starts nothing, and a passing one hands the tool paths on
+  in `E2E_TOOLS`.
+- **T036** Missing `xvfb-run` (its directory removed from `PATH`): exit status 2 after 844 ms, message
+  names the tool and the remedy, no marked process. A driver whose version file says 2.44.2 against the
+  web view's 2.52.6: exit status 2 after 820 ms, message shows both versions and the remedy, no marked
+  process.
+- **T032 and T037** One commit covers both checkpoints, because the command imports the preflight it was
+  going to stub. The environment of the application also pins `GDK_BACKEND=x11` and drops the display
+  variables of the parent; `data-model.md` and `research.md` R5 say so.
+
+_Filled by later tasks: T052, T058, T066, T067, T068, T073 to T083 and T088._

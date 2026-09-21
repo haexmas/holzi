@@ -121,6 +121,9 @@ application is started with:
   maintainer's home or runtime directory;
 - `DBUS_SESSION_BUS_ADDRESS=disabled:`, so the application never reaches the maintainer's desktop
   session (E2, E3).
+- `GDK_BACKEND=x11`, with `DISPLAY`, `WAYLAND_DISPLAY` and `XAUTHORITY` not passed on, so GTK can only
+  use the instance's own virtual screen and never a Wayland session (FR-003). The application's
+  environment was read from `/proc` during a run to confirm it (`DISPLAY=:99`, no `WAYLAND_DISPLAY`).
 
 **Rationale**: E1 and E2 show a real leak the spec did not name: the application asks the desktop's
 portal for its colour scheme, so a test's result depended on the maintainer's desktop settings, and a
