@@ -15,6 +15,15 @@ cancelled, the window shows only a spinner while it closes, and a relaunch bring
 Writing further scenarios must be short, failures must leave enough to diagnose them, and the tools
 must come from the project's Nix development shell."
 
+## Clarifications
+
+### Session 2026-09-21
+
+- Q: Should the default run also build and test a release-profile build so the relaunch scenario runs, or
+  only the fast debug build? → A: The suite always builds and tests the debug build. A release build is
+  tested only when one is built (a release), by pointing the suite at it; the relaunch scenario runs then
+  and is reported as skipped in an ordinary run.
+
 ## User Scenarios & Testing _(mandatory)_
 
 The users are the maintainers and contributors who write and run these tests. Each story below can
@@ -167,8 +176,8 @@ failing scenario uploads its kept material.
 
 **Acceptance Scenarios**:
 
-1. **Given** a clean runner, **When** the job runs, **Then** the suite runs the same scenarios and the
-   job fails exactly when a scenario fails.
+1. **Given** a clean runner, **When** the job runs, **Then** the suite runs the same scenarios as the
+   ordinary local run (against the debug build) and the job fails exactly when a scenario fails.
 2. **Given** a failing scenario, **When** the job ends, **Then** the kept material is available as a
    downloadable result of the job.
 
@@ -183,8 +192,9 @@ failing scenario uploads its kept material.
   it started before.
 - The application never shows a window, crashes at start or hangs: the scenario fails at its time
   limit with the output, and the run continues with the next scenario.
-- A scenario needs the build that relaunches on close, but only the build that exits is available (or
-  the reverse): the scenario is reported as skipped with the reason, never as passed.
+- A scenario needs the build that relaunches on close, but only the build that exits is available (the
+  normal case in an ordinary run, which uses the debug build), or the reverse: the scenario is reported
+  as skipped with the reason, never as passed.
 - The application's texts are German by default and may change: no scenario depends on a displayed
   text or on the interface language.
 - Submitting a form with the keyboard did not work through the driver in the spike, clicking the
@@ -211,9 +221,10 @@ failing scenario uploads its kept material.
 - **FR-002**: The suite MUST run the real application as built for a user, with its embedded
   interface. A development server or a browser stand-in for the interface is not sufficient.
 - **FR-003**: A run MUST NOT open any window on the maintainer's desktop.
-- **FR-004**: By default the suite MUST build the application under test itself, and it MUST accept a
-  path to an already built application and then skip the build. The report MUST name the application
-  used and which close behavior (relaunch or exit) it has.
+- **FR-004**: By default the suite MUST build the debug-profile application itself and test that. It
+  MUST NOT build a release-profile application on its own. It MUST accept a path to an already built
+  application, for example a release build made for a release, and then skip the build and test that
+  one. The report MUST name the application used and which close behavior (relaunch or exit) it has.
 - **FR-005**: The suite MUST enforce a time limit per scenario and per run. A scenario that reaches
   its limit fails with a diagnostic, its instance is removed, and the run continues.
 
@@ -300,8 +311,10 @@ failing scenario uploads its kept material.
 
 ### Measurable Outcomes
 
-- **SC-001**: From a clean checkout inside the development shell, one command runs the five close
-  scenarios to the end with no manual step, in under 5 minutes not counting the first build.
+- **SC-001**: From a clean checkout inside the development shell, one command runs the close scenarios
+  that apply to the debug build (four of the five; the relaunch scenario is reported as skipped with its
+  reason) to the end with no manual step, in under 5 minutes not counting the build. Given a release
+  build by path, the same command runs all five.
 - **SC-002**: Across 20 consecutive runs, including 10 that are killed at random points, no process
   started by the suite is left behind, no window ever appears on the desktop, the data of a Holzi
   running at the time is unchanged in every run, and every run after a killed one starts normally.
@@ -327,8 +340,9 @@ failing scenario uploads its kept material.
   having its own data, ports and virtual screen keeps that door open.
 - The behavior under test exists: spec 013 is merged (pull request 112). Its close policy is exit in a
   debug build and relaunch in a release build, so the relaunch scenario needs a release-profile build.
-  The runner builds the kind a scenario needs or takes one by path; how the default set is chosen
-  between the fast loop and the full set is left to the plan.
+  The ordinary run uses the debug build, which keeps it fast enough to run before every push. The
+  release build is tested when a release is built, by giving the suite its path (see FR-004). There is
+  no release workflow in the repository yet, so wiring the suite into one is left to whoever adds it.
 - A spike on the maintainer's machine (throwaway branch `spike/e2e-rig`) showed the approach works: the
   Tauri WebDriver bridge and the WebKit driver started the real debug binary on a virtual screen (session
   start about 3 seconds), backend commands could be called from the page, real clicks and typing worked,
