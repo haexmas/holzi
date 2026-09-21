@@ -120,10 +120,8 @@ fn partial_nested_reasoning_data_keeps_sibling_capabilities() {
         "acceptedAttachmentKinds": ["text"],
     }))
     .unwrap();
-    assert_eq!(
-        missing_options.normalized().reasoning,
-        Some(ReasoningControl::Unavailable)
-    );
+    let normalized = missing_options.clone().normalized();
+    assert_eq!(normalized.reasoning, Some(ReasoningControl::Unavailable));
     assert_eq!(
         missing_options.accepted_attachment_kinds,
         Some(vec![AttachmentKind::Text])
