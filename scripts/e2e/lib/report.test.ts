@@ -163,7 +163,42 @@ describe('formatSummary', () => {
       text,
       /skipped\s+b\s+the build exits on close; this scenario needs one that relaunches/,
     )
-    assert.match(text, /failed\s+c\s+14\.0 s\s+process still running/)
+    assert.match(
+      text,
+      /failed\s+c\s+14\.0 s\s+failed at: process still running/,
+    )
+  })
+
+  it('names the failed step and the material directory on their own line', () => {
+    const report = buildReport(facts({ expected: ['a'] }), [
+      result('a', 'failed', {
+        durationMs: 4000,
+        error: 'process 123 did not end within 4000 ms',
+        failedStep: 'process-ended',
+        material: '/run/a',
+      }),
+    ])
+    const text = formatSummary(report).join('\n')
+    assert.match(text, /failed\s+a\s+4\.0 s\s+failed at: process-ended/)
+    assert.match(text, /material: \/run\/a/)
+  })
+
+  it('shows press to process end for a passing scenario with both steps', () => {
+    const report = buildReport(facts({ expected: ['a'] }), [
+      result('a', 'passed', {
+        durationMs: 9100,
+        steps: [
+          { name: 'press', atMs: 6100, at: '2026-01-01T00:00:06.100Z' },
+          {
+            name: 'process-ended',
+            atMs: 6700,
+            at: '2026-01-01T00:00:06.700Z',
+          },
+        ],
+      }),
+    ])
+    const text = formatSummary(report).join('\n')
+    assert.match(text, /passed\s+a\s+9\.1 s\s+press to process end 0\.6 s/)
   })
 
   it('names the application, its close behavior and the totals', () => {

@@ -3,7 +3,7 @@
 // outside; `scenario` registers it with Node's test runner.
 import { test } from 'node:test'
 import { randomBytes } from 'node:crypto'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { removeRoot, startInstance } from './instance.ts'
 import type { ColorScheme, Instance } from './instance.ts'
@@ -11,6 +11,7 @@ import { toTools } from './preflight.ts'
 import type { Tools } from './preflight.ts'
 import { startProvider } from './provider.ts'
 import type { Behavior, Provider } from './provider.ts'
+import { captureFailure } from './artifacts.ts'
 
 export type CloseBehavior = 'exit' | 'relaunch'
 export type ScenarioStatus = 'passed' | 'failed' | 'skipped'
@@ -44,6 +45,10 @@ export interface ScenarioResult {
   skipReason?: string
   error?: string
   steps: Step[]
+  /** The last step reached before a failure, or the failing wait's own description. Failed status only. */
+  failedStep?: string
+  /** Where the kept material for a failure is. Failed status only. */
+  material?: string
 }
 
 export interface ScenarioOptions {
@@ -68,6 +73,7 @@ export interface FailureInfo {
   error: unknown
   steps: Step[]
   instances: Instance[]
+  providers: Provider[]
   deadlineMs?: number
 }
 
@@ -107,7 +113,14 @@ export interface ScenarioContext {
   credentials(): { passphrase: string; providerKey: string }
 }
 
-class WaitTimeoutError extends Error {}
+class WaitTimeoutError extends Error {
+  description: string
+
+  constructor(message: string, description: string) {
+    super(message)
+    this.description = description
+  }
+}
 class ScenarioDeadlineError extends Error {}
 
 const sleep = (ms: number) =>
@@ -149,6 +162,12 @@ function describeObserved(value: unknown): string {
   }
 }
 
+/** The last step reached before the failure, or the failing wait's own description (contracts/report.md). */
+function failedStepFor(failure: unknown, steps: Step[]): string | undefined {
+  if (failure instanceof WaitTimeoutError) return failure.description
+  return steps.length > 0 ? steps[steps.length - 1]?.name : undefined
+}
+
 function writeResult(env: E2EEnv, result: ScenarioResult) {
   mkdirSync(join(env.runDir, 'results'), { recursive: true })
   writeFileSync(
@@ -185,6 +204,7 @@ export async function runScenario(
   const controller = new AbortController()
   const teardowns: Array<() => Promise<void> | void> = []
   const instances: Instance[] = []
+  const providers: Provider[] = []
   let instanceCount = 0
 
   const step = (stepName: string, detail?: string) => {
@@ -217,13 +237,18 @@ export async function runScenario(
       const interval = Math.min(waitOptions.intervalMs ?? 50, 50)
       const end = performance.now() + limit
       for (;;) {
-        if (controller.signal.aborted)
-          throw new WaitTimeoutError(`stopped while waiting for ${description}`)
+        if (controller.signal.aborted) {
+          throw new WaitTimeoutError(
+            `stopped while waiting for ${description}`,
+            description,
+          )
+        }
         const observed = await predicate()
         if (observed) return observed
         if (performance.now() >= end) {
           throw new WaitTimeoutError(
             `timed out after ${limit} ms waiting for ${description} (last observed: ${describeObserved(observed)})`,
+            description,
           )
         }
         await sleep(interval)
@@ -254,6 +279,7 @@ export async function runScenario(
     },
     async provider(behavior) {
       const started = await startProvider(behavior)
+      providers.push(started)
       teardowns.push(() => started.close())
       return started
     },
@@ -288,6 +314,7 @@ export async function runScenario(
         error: failure,
         steps,
         instances,
+        providers,
         deadlineMs:
           failure instanceof ScenarioDeadlineError ? limit : undefined,
       })
@@ -309,14 +336,21 @@ export async function runScenario(
     return finish({
       status: 'failed',
       error: failure instanceof Error ? failure.message : String(failure),
+      failedStep: failedStepFor(failure, steps),
+      material: join(env.runDir, name),
     })
   }
   if (teardownErrors.length > 0) {
     return finish({
       status: 'failed',
       error: `teardown failed: ${teardownErrors.join('; ')}`,
+      material: join(env.runDir, name),
     })
   }
+  // Nothing to show for a pass: the material (the instance's own continuous driver.log, and anything a
+  // failure would have added) is removed unless the maintainer asked to keep it too (contracts/report.md).
+  if (!env.keep)
+    rmSync(join(env.runDir, name), { recursive: true, force: true })
   return finish({ status: 'passed' })
 }
 
@@ -372,6 +406,16 @@ export function scenario(
           colorScheme: request.colorScheme,
           reuse: request.reuse,
           step: request.step,
+        }),
+      onFailure: (info) =>
+        captureFailure({
+          runDir: info.env.runDir,
+          scenario: info.scenario,
+          error: info.error,
+          steps: info.steps,
+          deadlineMs: info.deadlineMs,
+          instances: info.instances,
+          providers: info.providers,
         }),
     })
     if (result.status === 'skipped') t.skip(result.skipReason)
