@@ -142,18 +142,50 @@ describe('runScenario', () => {
 
   it('marks a scenario failed when its teardown fails even though the body passed', () =>
     withRunDir(async (runDir) => {
+      let seenFailure: string | undefined
       const result = await runScenario(
         'teardown-fails',
         {},
         async (ctx) => {
+          ctx.step('ready')
           ctx.onTeardown(async () => {
             throw new Error('could not stop it')
           })
         },
-        depsFor(runDir),
+        depsFor(runDir, {
+          onFailure: async (info) => {
+            seenFailure = `${info.error instanceof Error ? info.error.message : info.error}:${info.failedStep}`
+          },
+        }),
       )
       assert.equal(result.status, 'failed')
       assert.match(result.error ?? '', /teardown failed: could not stop it/)
+      assert.equal(result.failedStep, 'ready')
+      assert.equal(seenFailure, 'teardown failed: could not stop it:ready')
+    }))
+
+  it('names an instance that was still starting when a deadline was reached', () =>
+    withRunDir(async (runDir) => {
+      let seenFailure: string | undefined
+      const result = await runScenario(
+        'starting-instance',
+        { timeoutMs: 20 },
+        async (ctx) => {
+          await ctx.startInstance()
+        },
+        depsFor(runDir, {
+          startInstance: async () =>
+            await new Promise<Instance>(() => {
+              // Deliberately never resolves: this models a driver/app that never becomes ready.
+            }),
+          onFailure: async (info) => {
+            seenFailure = info.failedStep
+          },
+        }),
+      )
+      assert.equal(result.status, 'failed')
+      assert.equal(result.failedStep, 'instance-ready')
+      assert.equal(seenFailure, 'instance-ready')
     }))
 
   it('calls the failure hook before teardown', () =>

@@ -151,9 +151,14 @@ function seconds(ms: number): string {
 
 /** "press to process end 0.6 s", when both steps were recorded (contracts/report.md "Key steps"). */
 function pressToEndText(steps: Step[]): string | undefined {
-  const press = steps.find((s) => s.name === 'press')
-  const ended = steps.find((s) => s.name === 'process-ended')
-  if (press === undefined || ended === undefined) return undefined
+  const ended = [...steps].reverse().find((s) => s.name === 'process-ended')
+  if (ended === undefined) return undefined
+  const endedIndex = steps.lastIndexOf(ended)
+  const press = steps
+    .slice(0, endedIndex)
+    .reverse()
+    .find((s) => s.name === 'press')
+  if (press === undefined) return undefined
   return `press to process end ${seconds(ended.atMs - press.atMs)}`
 }
 

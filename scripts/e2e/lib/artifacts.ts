@@ -13,6 +13,7 @@ export interface CaptureFailureOptions {
   scenario: string
   error: unknown
   steps: Step[]
+  failedStep?: string
   deadlineMs?: number
   instances: Instance[]
   providers: Provider[]
@@ -62,6 +63,9 @@ export async function captureFailure(
         {
           steps: options.steps,
           error: describeError(options.error),
+          ...(options.failedStep === undefined
+            ? {}
+            : { failedStep: options.failedStep }),
           ...(options.deadlineMs === undefined
             ? {}
             : { deadlineMs: options.deadlineMs }),

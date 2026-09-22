@@ -1,6 +1,12 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { captureFailure } from './artifacts.ts'
@@ -37,6 +43,7 @@ describe('captureFailure', () => {
         runDir,
         scenario: 'a',
         error: new Error('boom'),
+        failedStep: 'instance-ready',
         steps: [
           { name: 'instance-ready', atMs: 10, at: '2026-01-01T00:00:00.000Z' },
         ],
@@ -51,6 +58,7 @@ describe('captureFailure', () => {
         { name: 'instance-ready', atMs: 10, at: '2026-01-01T00:00:00.000Z' },
       ])
       assert.equal(timeline.error, 'boom')
+      assert.equal(timeline.failedStep, 'instance-ready')
       assert.equal(timeline.deadlineMs, 4000)
     }))
 
@@ -141,13 +149,17 @@ describe('captureFailure', () => {
     }))
 
   it('never throws even if the run directory itself cannot be created', async () => {
-    await captureFailure({
-      runDir: '/nonexistent/no/permission/path',
-      scenario: 'a',
-      error: new Error('x'),
-      steps: [],
-      instances: [],
-      providers: [],
+    await withRunDir(async (runDir) => {
+      const file = join(runDir, 'not-a-directory')
+      writeFileSync(file, '')
+      await captureFailure({
+        runDir: file,
+        scenario: 'a',
+        error: new Error('x'),
+        steps: [],
+        instances: [],
+        providers: [],
+      })
     })
   })
 })

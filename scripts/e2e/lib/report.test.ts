@@ -188,6 +188,12 @@ describe('formatSummary', () => {
       result('a', 'passed', {
         durationMs: 9100,
         steps: [
+          { name: 'press', atMs: 100, at: '2026-01-01T00:00:00.100Z' },
+          {
+            name: 'process-ended',
+            atMs: 200,
+            at: '2026-01-01T00:00:00.200Z',
+          },
           { name: 'press', atMs: 6100, at: '2026-01-01T00:00:06.100Z' },
           {
             name: 'process-ended',

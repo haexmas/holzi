@@ -74,13 +74,14 @@ export interface FailureInfo {
   steps: Step[]
   instances: Instance[]
   providers: Provider[]
+  failedStep?: string
   deadlineMs?: number
 }
 
 export interface RunDeps {
   env: E2EEnv
   startInstance: (request: StartInstanceRequest) => Promise<Instance>
-  /** Called before teardown when a scenario fails or reaches its deadline. */
+  /** Called before teardown for body failures and after teardown for teardown failures. */
   onFailure?: (info: FailureInfo) => Promise<void>
 }
 
@@ -163,9 +164,13 @@ function describeObserved(value: unknown): string {
 }
 
 /** The last step reached before the failure, or the failing wait's own description (contracts/report.md). */
-function failedStepFor(failure: unknown, steps: Step[]): string | undefined {
+function failedStepFor(
+  failure: unknown,
+  steps: Step[],
+  pendingStep?: string,
+): string | undefined {
   if (failure instanceof WaitTimeoutError) return failure.description
-  return steps.length > 0 ? steps[steps.length - 1]?.name : undefined
+  return steps.length > 0 ? steps[steps.length - 1]?.name : pendingStep
 }
 
 function writeResult(env: E2EEnv, result: ScenarioResult) {
@@ -205,6 +210,7 @@ export async function runScenario(
   const teardowns: Array<() => Promise<void> | void> = []
   const instances: Instance[] = []
   const providers: Provider[] = []
+  let pendingStep: string | undefined
   let instanceCount = 0
 
   const step = (stepName: string, detail?: string) => {
@@ -259,23 +265,28 @@ export async function runScenario(
       const root =
         instanceOptions.reusesRoot ??
         join(env.runDir, 'instances', `${name}-${instanceCount}`)
-      const instance = await deps.startInstance({
-        scenario: name,
-        root,
-        logFile: join(env.runDir, name, 'driver.log'),
-        colorScheme: instanceOptions.colorScheme,
-        reuse: instanceOptions.reusesRoot !== undefined,
-        env,
-        step,
-      })
-      instances.push(instance)
-      // The root is removed with the scenario, not when the instance stops, so a fresh instance can reuse it.
-      teardowns.push(async () => {
-        await instance.stop()
-        removeRoot(root)
-      })
-      step('instance-ready')
-      return instance
+      pendingStep = 'instance-ready'
+      try {
+        const instance = await deps.startInstance({
+          scenario: name,
+          root,
+          logFile: join(env.runDir, name, 'driver.log'),
+          colorScheme: instanceOptions.colorScheme,
+          reuse: instanceOptions.reusesRoot !== undefined,
+          env,
+          step,
+        })
+        instances.push(instance)
+        // The root is removed with the scenario, not when the instance stops, so a fresh instance can reuse it.
+        teardowns.push(async () => {
+          await instance.stop()
+          removeRoot(root)
+        })
+        step('instance-ready')
+        return instance
+      } finally {
+        pendingStep = undefined
+      }
     },
     async provider(behavior) {
       const started = await startProvider(behavior)
@@ -307,6 +318,7 @@ export async function runScenario(
   }
 
   if (failure !== undefined && deps.onFailure !== undefined) {
+    const failedStep = failedStepFor(failure, steps, pendingStep)
     try {
       await deps.onFailure({
         scenario: name,
@@ -315,6 +327,7 @@ export async function runScenario(
         steps,
         instances,
         providers,
+        failedStep,
         deadlineMs:
           failure instanceof ScenarioDeadlineError ? limit : undefined,
       })
@@ -333,17 +346,38 @@ export async function runScenario(
   }
 
   if (failure !== undefined) {
+    const failedStep = failedStepFor(failure, steps, pendingStep)
     return finish({
       status: 'failed',
       error: failure instanceof Error ? failure.message : String(failure),
-      failedStep: failedStepFor(failure, steps),
+      failedStep,
       material: join(env.runDir, name),
     })
   }
   if (teardownErrors.length > 0) {
+    const teardownFailure = new Error(
+      `teardown failed: ${teardownErrors.join('; ')}`,
+    )
+    const failedStep = failedStepFor(teardownFailure, steps)
+    if (deps.onFailure !== undefined) {
+      try {
+        await deps.onFailure({
+          scenario: name,
+          env,
+          error: teardownFailure,
+          steps,
+          instances,
+          providers,
+          failedStep,
+        })
+      } catch {
+        // Diagnostics must never hide the failure they describe.
+      }
+    }
     return finish({
       status: 'failed',
-      error: `teardown failed: ${teardownErrors.join('; ')}`,
+      error: teardownFailure.message,
+      failedStep,
       material: join(env.runDir, name),
     })
   }
@@ -413,6 +447,7 @@ export function scenario(
           scenario: info.scenario,
           error: info.error,
           steps: info.steps,
+          failedStep: info.failedStep,
           deadlineMs: info.deadlineMs,
           instances: info.instances,
           providers: info.providers,
