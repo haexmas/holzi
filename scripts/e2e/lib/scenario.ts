@@ -3,12 +3,15 @@
 // outside; `scenario` registers it with Node's test runner.
 import { test } from 'node:test'
 import { randomBytes } from 'node:crypto'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { removeRoot, startInstance } from './instance.ts'
 import type { ColorScheme, Instance } from './instance.ts'
 import { toTools } from './preflight.ts'
 import type { Tools } from './preflight.ts'
+import { startProvider } from './provider.ts'
+import type { Behavior, Provider } from './provider.ts'
+import { captureFailure } from './artifacts.ts'
 
 export type CloseBehavior = 'exit' | 'relaunch'
 export type ScenarioStatus = 'passed' | 'failed' | 'skipped'
@@ -42,6 +45,10 @@ export interface ScenarioResult {
   skipReason?: string
   error?: string
   steps: Step[]
+  /** The last step reached before a failure, or the failing wait's own description. Failed status only. */
+  failedStep?: string
+  /** Where the kept material for a failure is. Failed status only. */
+  material?: string
 }
 
 export interface ScenarioOptions {
@@ -56,6 +63,8 @@ export interface StartInstanceRequest {
   colorScheme?: ColorScheme
   reuse: boolean
   env: E2EEnv
+  /** Records a timeline entry on the scenario that made the request. */
+  step: (name: string, detail?: string) => void
 }
 
 export interface FailureInfo {
@@ -64,13 +73,15 @@ export interface FailureInfo {
   error: unknown
   steps: Step[]
   instances: Instance[]
+  providers: Provider[]
+  failedStep?: string
   deadlineMs?: number
 }
 
 export interface RunDeps {
   env: E2EEnv
   startInstance: (request: StartInstanceRequest) => Promise<Instance>
-  /** Called before teardown when a scenario fails or reaches its deadline. */
+  /** Called before teardown for body failures and after teardown for teardown failures. */
   onFailure?: (info: FailureInfo) => Promise<void>
 }
 
@@ -97,11 +108,20 @@ export interface ScenarioContext {
     colorScheme?: ColorScheme
     reusesRoot?: string
   }): Promise<Instance>
+  /** Starts a stand-in model provider ([stand-in-provider.md](stand-in-provider.md)); ended with the context. */
+  provider(behavior?: Behavior): Promise<Provider>
   /** A passphrase and a provider key generated for this run; no credential is ever committed. */
   credentials(): { passphrase: string; providerKey: string }
 }
 
-class WaitTimeoutError extends Error {}
+class WaitTimeoutError extends Error {
+  description: string
+
+  constructor(message: string, description: string) {
+    super(message)
+    this.description = description
+  }
+}
 class ScenarioDeadlineError extends Error {}
 
 const sleep = (ms: number) =>
@@ -143,6 +163,16 @@ function describeObserved(value: unknown): string {
   }
 }
 
+/** The last step reached before the failure, or the failing wait's own description (contracts/report.md). */
+function failedStepFor(
+  failure: unknown,
+  steps: Step[],
+  pendingStep?: string,
+): string | undefined {
+  if (failure instanceof WaitTimeoutError) return failure.description
+  return steps.length > 0 ? steps[steps.length - 1]?.name : pendingStep
+}
+
 function writeResult(env: E2EEnv, result: ScenarioResult) {
   mkdirSync(join(env.runDir, 'results'), { recursive: true })
   writeFileSync(
@@ -179,6 +209,8 @@ export async function runScenario(
   const controller = new AbortController()
   const teardowns: Array<() => Promise<void> | void> = []
   const instances: Instance[] = []
+  const providers: Provider[] = []
+  let pendingStep: string | undefined
   let instanceCount = 0
 
   const step = (stepName: string, detail?: string) => {
@@ -211,13 +243,18 @@ export async function runScenario(
       const interval = Math.min(waitOptions.intervalMs ?? 50, 50)
       const end = performance.now() + limit
       for (;;) {
-        if (controller.signal.aborted)
-          throw new WaitTimeoutError(`stopped while waiting for ${description}`)
+        if (controller.signal.aborted) {
+          throw new WaitTimeoutError(
+            `stopped while waiting for ${description}`,
+            description,
+          )
+        }
         const observed = await predicate()
         if (observed) return observed
         if (performance.now() >= end) {
           throw new WaitTimeoutError(
             `timed out after ${limit} ms waiting for ${description} (last observed: ${describeObserved(observed)})`,
+            description,
           )
         }
         await sleep(interval)
@@ -228,22 +265,34 @@ export async function runScenario(
       const root =
         instanceOptions.reusesRoot ??
         join(env.runDir, 'instances', `${name}-${instanceCount}`)
-      const instance = await deps.startInstance({
-        scenario: name,
-        root,
-        logFile: join(env.runDir, name, 'driver.log'),
-        colorScheme: instanceOptions.colorScheme,
-        reuse: instanceOptions.reusesRoot !== undefined,
-        env,
-      })
-      instances.push(instance)
-      // The root is removed with the scenario, not when the instance stops, so a fresh instance can reuse it.
-      teardowns.push(async () => {
-        await instance.stop()
-        removeRoot(root)
-      })
-      step('instance-ready')
-      return instance
+      pendingStep = 'instance-ready'
+      try {
+        const instance = await deps.startInstance({
+          scenario: name,
+          root,
+          logFile: join(env.runDir, name, 'driver.log'),
+          colorScheme: instanceOptions.colorScheme,
+          reuse: instanceOptions.reusesRoot !== undefined,
+          env,
+          step,
+        })
+        instances.push(instance)
+        // The root is removed with the scenario, not when the instance stops, so a fresh instance can reuse it.
+        teardowns.push(async () => {
+          await instance.stop()
+          removeRoot(root)
+        })
+        step('instance-ready')
+        return instance
+      } finally {
+        pendingStep = undefined
+      }
+    },
+    async provider(behavior) {
+      const started = await startProvider(behavior)
+      providers.push(started)
+      teardowns.push(() => started.close())
+      return started
     },
   }
 
@@ -269,6 +318,7 @@ export async function runScenario(
   }
 
   if (failure !== undefined && deps.onFailure !== undefined) {
+    const failedStep = failedStepFor(failure, steps, pendingStep)
     try {
       await deps.onFailure({
         scenario: name,
@@ -276,6 +326,8 @@ export async function runScenario(
         error: failure,
         steps,
         instances,
+        providers,
+        failedStep,
         deadlineMs:
           failure instanceof ScenarioDeadlineError ? limit : undefined,
       })
@@ -294,17 +346,45 @@ export async function runScenario(
   }
 
   if (failure !== undefined) {
+    const failedStep = failedStepFor(failure, steps, pendingStep)
     return finish({
       status: 'failed',
       error: failure instanceof Error ? failure.message : String(failure),
+      failedStep,
+      material: join(env.runDir, name),
     })
   }
   if (teardownErrors.length > 0) {
+    const teardownFailure = new Error(
+      `teardown failed: ${teardownErrors.join('; ')}`,
+    )
+    const failedStep = failedStepFor(teardownFailure, steps)
+    if (deps.onFailure !== undefined) {
+      try {
+        await deps.onFailure({
+          scenario: name,
+          env,
+          error: teardownFailure,
+          steps,
+          instances,
+          providers,
+          failedStep,
+        })
+      } catch {
+        // Diagnostics must never hide the failure they describe.
+      }
+    }
     return finish({
       status: 'failed',
-      error: `teardown failed: ${teardownErrors.join('; ')}`,
+      error: teardownFailure.message,
+      failedStep,
+      material: join(env.runDir, name),
     })
   }
+  // Nothing to show for a pass: the material (the instance's own continuous driver.log, and anything a
+  // failure would have added) is removed unless the maintainer asked to keep it too (contracts/report.md).
+  if (!env.keep)
+    rmSync(join(env.runDir, name), { recursive: true, force: true })
   return finish({ status: 'passed' })
 }
 
@@ -359,6 +439,18 @@ export function scenario(
           logFile: request.logFile,
           colorScheme: request.colorScheme,
           reuse: request.reuse,
+          step: request.step,
+        }),
+      onFailure: (info) =>
+        captureFailure({
+          runDir: info.env.runDir,
+          scenario: info.scenario,
+          error: info.error,
+          steps: info.steps,
+          failedStep: info.failedStep,
+          deadlineMs: info.deadlineMs,
+          instances: info.instances,
+          providers: info.providers,
         }),
     })
     if (result.status === 'skipped') t.skip(result.skipReason)

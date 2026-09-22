@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ApplicationInfo } from './build.ts'
 import type { ToolFacts } from './preflight.ts'
-import type { ScenarioResult } from './scenario.ts'
+import type { ScenarioResult, Step } from './scenario.ts'
 
 export type RunOutcome =
   'completed' | 'preflight-failed' | 'build-failed' | 'interrupted'
@@ -26,10 +26,8 @@ export interface RunFacts {
   runLimitReached?: boolean
 }
 
-export interface ReportScenario extends ScenarioResult {
-  failedStep?: string
-  material?: string
-}
+/** `failedStep` and `material` are computed by `runScenario` itself, for a failed scenario only. */
+export type ReportScenario = ScenarioResult
 
 export interface Report {
   runId: string
@@ -151,14 +149,45 @@ function seconds(ms: number): string {
   return `${(ms / 1000).toFixed(1)} s`
 }
 
+/** "press to process end 0.6 s", when both steps were recorded (contracts/report.md "Key steps"). */
+function pressToEndText(steps: Step[]): string | undefined {
+  const ended = [...steps].reverse().find((s) => s.name === 'process-ended')
+  if (ended === undefined) return undefined
+  const endedIndex = steps.lastIndexOf(ended)
+  const press = steps
+    .slice(0, endedIndex)
+    .reverse()
+    .find((s) => s.name === 'press')
+  if (press === undefined) return undefined
+  return `press to process end ${seconds(ended.atMs - press.atMs)}`
+}
+
 export function formatSummary(report: Report): string[] {
   const width = Math.max(0, ...report.scenarios.map((s) => s.name.length))
-  const lines = report.scenarios.map((s) => {
+  const lines: string[] = []
+  for (const s of report.scenarios) {
     const head = `${s.status.padEnd(7)} ${s.name.padEnd(width)}`
-    if (s.status === 'skipped') return `${head}   ${s.skipReason ?? ''}`
-    const detail = s.status === 'failed' ? `   ${s.error ?? ''}` : ''
-    return `${head} ${seconds(s.durationMs).padStart(7)}${detail}`
-  })
+    if (s.status === 'skipped') {
+      lines.push(`${head}   ${s.skipReason ?? ''}`)
+      continue
+    }
+    const time = seconds(s.durationMs).padStart(7)
+    if (s.status === 'failed') {
+      lines.push(
+        `${head} ${time}   failed at: ${s.failedStep ?? s.error ?? ''}`,
+      )
+      if (s.material !== undefined) {
+        lines.push(
+          `${' '.repeat(head.length + 1 + time.length)}   material: ${s.material}`,
+        )
+      }
+      continue
+    }
+    const pressToEnd = pressToEndText(s.steps)
+    lines.push(
+      `${head} ${time}${pressToEnd === undefined ? '' : `   ${pressToEnd}`}`,
+    )
+  }
   const count = (status: string) =>
     report.scenarios.filter((s) => s.status === status).length
   const result =

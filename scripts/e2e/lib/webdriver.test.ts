@@ -51,6 +51,18 @@ describe('WebDriverClient', () => {
     )
   })
 
+  it('reads whether an element is displayed', async () => {
+    driver.onDisplayed((id) => id === 'shown')
+    assert.equal(await client.isDisplayed('shown'), true)
+    assert.equal(await client.isDisplayed('hidden'), false)
+    assert.ok(
+      driver.requests.some(
+        (r) =>
+          r.method === 'GET' && r.path.endsWith('/element/shown/displayed'),
+      ),
+    )
+  })
+
   it('sends script, window, navigation and screenshot calls', async () => {
     driver.onExecute((kind) =>
       kind === 'sync'

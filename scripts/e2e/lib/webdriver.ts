@@ -176,6 +176,20 @@ export class WebDriverClient {
     await this.call('POST', this.session(`/element/${element}/value`), { text })
   }
 
+  /**
+   * The legacy "is element displayed" endpoint. Confirmed against a real WebKitWebDriver session
+   * (2026-09-22): it answers `200 { value: true }` for a genuinely displayed element, so a scenario can
+   * tell apart two elements that share a hook when only one is on screen (contracts/test-hooks.md).
+   */
+  async isDisplayed(element: string): Promise<boolean> {
+    return (
+      (await this.call(
+        'GET',
+        this.session(`/element/${element}/displayed`),
+      )) === true
+    )
+  }
+
   async screenshot(): Promise<Buffer> {
     return Buffer.from(
       (await this.call('GET', this.session('/screenshot'))) as string,

@@ -258,7 +258,7 @@ kept running.
 - [x] T030 [US1] `scripts/e2e/scenarios/smoke-start.test.ts`: start an instance, wait until
       `document.readyState` is `complete` and `location.pathname` is `/`, take a screenshot, end. No
       hook and no text is used.
-- [ ] T031 [US1] Manual verification of the independent test, recorded in the "Validation record": start
+- [x] T031 [US1] Manual verification of the independent test, recorded in the "Validation record": start
       your own Holzi (for example `pnpm tauri:dev`) and note a checksum listing of its data directory;
       run `pnpm test:e2e --grep smoke`; then check no window appeared on the desktop, no process with a
       run marker remains (`grep -l HOLZI_E2E_RUN /proc/*/environ 2>/dev/null` prints nothing), the
@@ -324,7 +324,7 @@ the stand-in provider and the interface hooks exist and are documented (FR-006, 
 one backend command, check its result" in 40 lines or fewer using only the helpers and the README, and it
 runs in the suite (SC-005).
 
-- [ ] T038 [US3] Start branch `016-e2e-stage2-helpers` from the updated `origin/main`. Graphify first:
+- [x] T038 [US3] Start branch `016-e2e-stage2-helpers` from the updated `origin/main`. Graphify first:
       `graphify query "stand-in http provider streaming server-sent events"` (research R9 records that the
       Rust `sse_body()` and wiremock fixtures and `scripts/lib` harnesses cannot be extended),
       `graphify query "click and type on a page by selector"`,
@@ -332,7 +332,7 @@ runs in the suite (SC-005).
 
 ### Tests for User Story 3 (write first)
 
-- [ ] T039 [P] [US3] `scripts/e2e/lib/page.test.ts` against `fake-driver.testlib.ts`: `click(hook)` and
+- [x] T039 [P] [US3] `scripts/e2e/lib/page.test.ts` against `fake-driver.testlib.ts`: `click(hook)` and
       `type(hook, text)` resolve a hook per contracts/test-hooks.md (a value starting with `#`, `.` or `[`
       is a selector, any other value is `[data-testid="<value>"]`), choose the displayed element when
       several match and fail naming the hook if none is displayed by the deadline; `press(hook)` clicks
@@ -343,7 +343,7 @@ runs in the suite (SC-005).
       `markedProcesses()` returns the run's marked processes whose executable is the application;
       `sampleUntilEnd(script, intervalMs)` returns the samples taken until the session ends; `invoke` with
       `expectEnd` resolves `{ ended: true }` for a call that gets no answer (User Story 3 scenario 2).
-- [ ] T040 [P] [US3] `scripts/e2e/lib/provider.test.ts`: it listens on `127.0.0.1` only, on a port the
+- [x] T040 [P] [US3] `scripts/e2e/lib/provider.test.ts`: it listens on `127.0.0.1` only, on a port the
       operating system chose; `GET /v1/models` answers one model `stand-in-model` with `data`, `has_more`,
       `first_id`, `last_id`; any other route is 404; `stream-forever` (defaults `intervalMs` 100, `text`
       `tick `) sends the start events then at least two `content_block_delta` within 500 ms and its
@@ -354,7 +354,7 @@ runs in the suite (SC-005).
       `requests()` records method, path and body and never `x-api-key` or `authorization` (send a
       sentinel and search the serialized records for it); `waitForOpen` resolves; `close` ends open
       streams and frees the port.
-- [ ] T041 [P] [US3] `scripts/e2e/lib/flows.test.ts` against the fake driver: `createAndUnlock` issues the
+- [x] T041 [P] [US3] `scripts/e2e/lib/flows.test.ts` against the fake driver: `createAndUnlock` issues the
       backend call `create_instance`, clicks the `instance-entry` whose `data-instance-name` is the
       name, types the generated passphrase into `#unlock-passphrase`, clicks `[form="unlock-form"]`
       (never a key press: Enter did not submit the form in the spike) and waits for `/workspace/`;
@@ -365,39 +365,41 @@ runs in the suite (SC-005).
 
 ### Implementation for User Story 3
 
-- [ ] T042 [P] [US3] `scripts/e2e/lib/page.ts`: the interaction helpers of T039.
-- [ ] T043 [P] [US3] `scripts/e2e/lib/provider.ts`: the stand-in provider of contracts/stand-in-provider.md,
+- [x] T042 [P] [US3] `scripts/e2e/lib/page.ts`: the interaction helpers of T039.
+- [x] T043 [P] [US3] `scripts/e2e/lib/provider.ts`: the stand-in provider of contracts/stand-in-provider.md,
       including the records with the runner's one clock and `closedAt` taken from the socket's close
       event. It serves nothing else and never outlives its scenario.
-- [ ] T044 [US3] `scripts/e2e/lib/flows.ts` (after T042, T043): `createAndUnlock`, `openChat`,
+- [x] T044 [US3] `scripts/e2e/lib/flows.ts` (after T042, T043): `createAndUnlock`, `openChat`,
       `connectProvider`, `startReply` as in T041.
-- [ ] T045 [US3] In `scripts/e2e/lib/instance.ts` expose the page helpers on the instance
+- [x] T045 [US3] In `scripts/e2e/lib/instance.ts` expose the page helpers on the instance
       (`invoke`, `click`, `type`, `press`, `closeWindow`, `navigate`, `waitForEnd`, `markedProcesses`,
       `sampleUntilEnd`) and add `ctx.provider(behavior?)` in `scripts/e2e/lib/scenario.ts`, ended with the
       context.
-- [ ] T046 [P] [US3] Hook: in `src/components/onboarding/InstancesList.vue` add
+- [x] T046 [P] [US3] Hook: in `src/components/onboarding/InstancesList.vue` add
       `data-testid="instance-entry"` and `:data-instance-name="i.name"` to the entry button (2 lines).
-- [ ] T047 [P] [US3] Hook: in `src/components/workspace/ChatFab.vue` add `data-testid="open-chat"` to the
+- [x] T047 [P] [US3] Hook: in `src/components/workspace/ChatFab.vue` add `data-testid="open-chat"` to the
       link (1 line).
-- [ ] T048 [P] [US3] Hook: in `src/pages/chat/[instance].vue` add `data-testid="lock-instance"` to both lock
-      buttons, the one in the sidebar and the one in the header (2 lines, and nothing else in this file).
-- [ ] T049 [US3] Verify the hooks: `pnpm check:templates`, `pnpm typecheck`, `pnpm lint`,
+- [x] T048 [P] [US3] Hook: in `src/pages/chat/[instance].vue` add `data-testid="lock-instance-sidebar"` to
+      the lock button in the sidebar and `data-testid="lock-instance-header"` to the one in the header (2
+      lines, and nothing else in this file). (Originally one shared `data-testid="lock-instance"` on both;
+      split into two unique ids after review — see the follow-up entry below.)
+- [x] T049 [US3] Verify the hooks: `pnpm check:templates`, `pnpm typecheck`, `pnpm lint`,
       `pnpm format:check`; `wc -l` of the chat page equals the T002 baseline plus 2, the other two files
       plus their stated lines. Behavior and appearance are unchanged (attributes only).
-- [ ] T050 [US3] `scripts/e2e/scenarios/create-and-unlock.test.ts`: create and unlock a vault, call one
+- [x] T050 [US3] `scripts/e2e/scenarios/create-and-unlock.test.ts`: create and unlock a vault, call one
       backend command (`list_instances`) and check its result, in 40 lines or fewer, using only helpers.
       It is also the model the README shows.
-- [ ] T051 [US3] `scripts/e2e/README.md`: how to run (`pnpm test:e2e`, options, `--app`), the tools and
+- [x] T051 [US3] `scripts/e2e/README.md`: how to run (`pnpm test:e2e`, options, `--app`), the tools and
       where they come from, how to write a scenario (copy T050), the helper list of contracts/helpers.md,
       the hook table of contracts/test-hooks.md, the rules for scenarios (hooks only, no key submit, no
       waiting for a call that closes the app, no fixed sleeps, nothing started outside the context, `needs`
       for a relaunching build), how the command and the scenario files talk (the environment of the
       Format section), where the run directory is and what is in it, and troubleshooting for a leftover
       run. Run `pnpm exec prettier --write scripts/e2e/README.md`.
-- [ ] T052 [US3] First pass of SC-005, recorded: read only the README and write the scenario T050 again
+- [x] T052 [US3] First pass of SC-005, recorded: read only the README and write the scenario T050 again
       from scratch in a scratch file; it must come to 40 lines or fewer. Fix the README where it fell
       short.
-- [ ] T053 [US3] Run `pnpm test:e2e` (smoke and create-and-unlock pass). Commit the checkpoint
+- [x] T053 [US3] Run `pnpm test:e2e` (smoke and create-and-unlock pass). Commit the checkpoint
       `feat(e2e): scenario helpers, stand-in provider and test hooks`.
 
 **Checkpoint**: a scenario can be written from the README and the helpers.
@@ -415,29 +417,29 @@ failed. The first is tested here, the other two after the close scenarios exist 
 
 ### Tests for User Story 4 (write first)
 
-- [ ] T054 [P] [US4] `scripts/e2e/lib/artifacts.test.ts`: on failure the scenario directory under the run
+- [x] T054 [P] [US4] `scripts/e2e/lib/artifacts.test.ts`: on failure the scenario directory under the run
       directory holds `timeline.json` (all steps with `atMs` and an ISO time, the failure message, the
       deadline reached if any), `screenshot.png` taken before teardown (absent, with a note in the
       timeline, if the application already ended), `driver.log` (driver, webview driver and application
       output in arrival order, each line timestamped) and `provider.json` (connections and requests);
       on a pass none of these exist and only `report.json` (and `build.log` if built) remain in the run
       directory; `--keep` keeps them for a pass too; capturing never throws when the session is gone.
-- [ ] T055 [P] [US4] Extend `scripts/e2e/lib/report.test.ts`: `failedStep` is the last step reached before
+- [x] T055 [P] [US4] Extend `scripts/e2e/lib/report.test.ts`: `failedStep` is the last step reached before
       the failure or the failing wait's description; `material` is the scenario directory; the printed
       line of a passing scenario with a `press` and a `process-ended` step includes "press to process end
       <seconds>"; a failure line names the failed step and the material directory.
 
 ### Implementation for User Story 4
 
-- [ ] T056 [US4] `scripts/e2e/lib/artifacts.ts`: `captureFailure` writing the four files above.
-- [ ] T057 [US4] Use it: in `scripts/e2e/lib/scenario.ts` call `captureFailure` from the `onFailure`
+- [x] T056 [US4] `scripts/e2e/lib/artifacts.ts`: `captureFailure` writing the four files above.
+- [x] T057 [US4] Use it: in `scripts/e2e/lib/scenario.ts` call `captureFailure` from the `onFailure`
       extension point of T021 before teardown, for a thrown error and for a reached deadline; in
       `scripts/e2e/lib/report.ts` fill `failedStep`, `material` and the press-to-end text; pass `--keep`
       through `E2E_KEEP` from `scripts/e2e/cli.ts`; remove the directory of a passing scenario unless
       kept.
-- [ ] T058 [US4] Seeded failure 1 (SC-004), recorded: point `--app` at an executable script that only
+- [x] T058 [US4] Seeded failure 1 (SC-004), recorded: point `--app` at an executable script that only
       sleeps and run `pnpm test:e2e --close-behavior exit --grep smoke` with it; the material names the
-      step that failed (the instance never became ready), and nothing is left running. Commit
+      pending `instance-ready` step when startup is still in flight, and nothing is left running. Commit
       `feat(e2e): keep failure material and report step times`, then the Stage 2 pull request (T038 to
       T058), after asking the operator.
 
@@ -467,7 +469,7 @@ sees its connection close within 1 second of the press. Weaken the behavior on p
       source (spec 013: drain ladder 1 s cooperative, 3 s total, 0.5 s grace).
 - [ ] T062 [US2] `scripts/e2e/scenarios/lock-while-streaming.test.ts`: provider `stream-forever`;
       `createAndUnlock`, `openChat`, `connectProvider`, `startReply`; wait until the provider's
-      connection has been open for at least 800 ms; `press('lock-instance')`; `waitForEnd` within the
+      connection has been open for at least 800 ms; `press('lock-instance-sidebar')`; `waitForEnd` within the
       4 seconds of `close-promises`; the connection's `closedAt` minus the press time is at most 1 second
       (records `provider-closed`); no `[role="alert"]` in any sample from `sampleUntilEnd` and none just
       before the press. The pid tracked is the original `appPid`, so the scenario is correct on a
@@ -481,7 +483,7 @@ sees its connection close within 1 second of the press. Weaken the behavior on p
       exactly one `.ring` exists, and the body's background equals a probe element's background set to
       `var(--page)`; finally the two schemes' backgrounds differ.
 - [ ] T065 [P] [US2] `scripts/e2e/scenarios/lock-twice.test.ts`: an unlocked vault with nothing running;
-      `press('lock-instance', { times: 2 })`; the original pid ends once within 4 seconds; for the next
+      `press('lock-instance-sidebar', { times: 2 })`; the original pid ends once within 4 seconds; for the next
       5 seconds `markedProcesses()` never holds more than one process; no `[role="alert"]` in the
       samples.
 - [ ] T066 [US2] Run the four scenarios with `pnpm test:e2e --grep <name>`; each finishes in under 30
@@ -748,8 +750,8 @@ smoke`, built from a reflink copy of an earlier build cache): `passed smoke-star
   `GDK_BACKEND=x11`, no `WAYLAND_DISPLAY`, `HOME`, `XDG_DATA_HOME` and `XDG_RUNTIME_DIR` inside the
   instance root, `DBUS_SESSION_BUS_ADDRESS=disabled:` and the marker. A checksum listing of the
   maintainer's data directory is identical before and after. No maintainer Holzi was running during
-  this check, so the required concurrent-instance isolation case and the visual no-window check remain
-  unverified. T031 stays open until that case is run.
+  this check, so the concurrent-instance case and the visual no-window check were not yet covered; see
+  the Stage 1 follow-up entry below, where that gap is closed.
   - Ctrl-C (SIGINT) at about 4 s: exit status 130, no process with a run marker left.
   - `kill -9` on the runner at about 4 s: 9 marked processes stayed behind; the next run reported
     "removed 9 leftover process(es) of an earlier killed run", passed, and left none.
@@ -764,4 +766,125 @@ smoke`, built from a reflink copy of an earlier build cache): `passed smoke-star
   going to stub. The environment of the application also pins `GDK_BACKEND=x11` and drops the display
   variables of the parent; `data-model.md` and `research.md` R5 say so.
 
-_Filled by later tasks: T052, T058, T066, T067, T068, T073 to T083 and T088._
+### Stage 1 follow-up (T031), 2026-09-22
+
+- **T031** Closed. The concurrent case the first pass lacked: the maintainer's own build (this
+  worktree's embedded debug binary, run directly, not through the suite) stayed up on the real desktop
+  for the whole check while `pnpm test:e2e --grep smoke` ran its own isolated instance. A checksum
+  listing of `~/.local/share/com.haex.holzi` (every file, `sha256sum`, sorted by path, hashed again) was
+  identical before and after: `973e4eb56eb2255c5bb26c27676909d9d49cc14323a1c0cf08478302156e0630`. The
+  maintainer process's pid did not change across a full pass, a SIGINT sent during the build step and a
+  SIGKILL sent during the scenario step, so the two are independent process trees, not merely
+  independent by the checksum. The real display's own window list
+  (`xprop -root _NET_CLIENT_LIST`) held one unrelated window throughout; this is expected rather than a
+  strong check on its own, since the suite's instance runs on its own `xvfb-run` display, never the
+  maintainer's (`DISPLAY=:99` confirmed via `/proc` in the first pass) — the two literally cannot share a
+  window list. The one-command run against a real, running maintainer instance stayed `passed
+smoke-start`.
+  Separately, a small driver session run by hand against the real desktop (not part of the delivered
+  suite, `tauri-driver` and `WebKitWebDriver` with no `xvfb-run`, capabilities pointing at the same
+  embedded debug binary) took a screenshot to rule out a rendering problem: the window showed "Willkommen
+  bei Holzi", the "Instanz anlegen" control and the maintainer's real "test" instance, confirming the
+  build itself is sound independently of the isolation question. An earlier attempt to use
+  `pnpm tauri:dev` for the standing instance was abandoned: its Nuxt dev server exited on its own partway
+  through (unrelated to anything the suite did), which is why the embedded, dev-server-free debug build
+  was used instead. The kill-9-then-resweep mechanism itself was already proven in the first pass (9
+  leftover processes found and removed); this pass adds the concurrency evidence the first pass lacked.
+
+### Stage 2 (T038 to T053), 2026-09-22
+
+- **T038** Graphify, from the primary checkout: for the stand-in provider, nothing beyond the Rust
+  `sse_body()` test fixture and wiremock (server-side test doubles in the other process; unusable from a
+  Node runner); for reaching a control by selector, `scripts/check-chat-state.ts`'s `createTauriDouble()`
+  fakes `invoke()` for composable-level checks but drives no page at all; for a create-and-unlock flow,
+  `create_instance()` and `UnlockSheet.vue`'s `onSubmit()` exist as the two ends of the flow but nothing
+  already joins them for a test. Nothing was extended; all three modules are new.
+- **T039 to T045** `page.ts`, `provider.ts`, `flows.ts` written with their tests first, then wired onto
+  `Instance` (`instance.ts`) and `ScenarioContext` (`scenario.ts`, `ctx.provider`). `click`/`type`/`press`
+  resolve and act on a control through the driver's own find/is-displayed/click/send-keys calls, one per
+  attempt; `press` does one attempt, not a poll, since it is only ever used on a control already on
+  screen; `waitForEnd`/`markedProcesses`/`press` take an explicit `step` recorder so `page.test.ts` can
+  assert on it directly, and `instance.ts` binds it to the scenario's own timeline; `startReply` takes the
+  provider as a third parameter (not two, as the contract's table shows), since "records `reply-streaming`
+  when the provider has an open connection" needs the provider to ask. (An initial version of `click`/
+  `type`/`press` ran one script per attempt, querySelectorAll plus an `offsetWidth`/`offsetHeight` check,
+  because the real displayed-element endpoint was believed unproven against WebKitWebDriver; superseded
+  before review closed — see the follow-up entry below.)
+- **T046 to T049** The three hooks add exactly 2, 1 and 2 lines
+  (`InstancesList.vue` 44→46, `ChatFab.vue` 20→21, `chat/[instance].vue` 1316→1318, matching the T002
+  baseline). `pnpm check:templates`, `pnpm typecheck`, `pnpm lint`, `pnpm format:check` all pass; the
+  hooks are attributes only, nothing else in any of the three files changed.
+- **T050 to T052** `create-and-unlock.test.ts` is 21 lines. SC-005 checked genuinely, not by copying: the
+  scenario was written a second time in a scratch file from the README's helper tables alone (not from
+  the shown code sample), came to 16 lines, and needed no README fix.
+- **T053** `pnpm check:e2e-lib` 123 tests pass; `pnpm typecheck:scripts`, `pnpm typecheck`, `pnpm lint`,
+  `pnpm format:check` all pass. `pnpm test:e2e` (no `--grep`, so both scenarios, built from scratch):
+  `passed create-and-unlock 6.6 s`, `passed smoke-start 4.0 s`, exit 0, on the first real run.
+- **T054 to T057** `driver.log` needed no new code: it already exists for the whole life of every
+  instance (`instance.ts`, since Stage 1), so `artifacts.ts` only adds `timeline.json`, `screenshot.png`
+  and `provider.json` on a failure. `failedStep` is the last recorded step, or, for a `ctx.waitFor`
+  timeout specifically, that wait's own description (`WaitTimeoutError` now carries it, rather than
+  parsing it back out of the message); both `failedStep` and `material` are computed by `runScenario`
+  itself, in `ScenarioResult`, since only it has the error as a typed value rather than a string. The
+  "on a pass none of these exist" half of the contract turned out to need its own line: `driver.log` was
+  already being left behind after every passing scenario before this change, so `runScenario` now removes
+  the scenario's directory on a pass unless `E2E_KEEP` says otherwise. `pnpm check:e2e-lib`: 134 tests.
+- **T058** `--app` pointed at a script that only `exec sleep 3600` (never a real WebDriver target),
+  `--close-behavior exit --grep smoke --scenario-timeout 15`: `failed smoke-start`, 15.0 s, exit 1. The
+  kept material's `timeline.json` has `"failedStep": "instance-ready"` and
+  `"error": "scenario smoke-start reached its deadline of 15000 ms"`; the pending readiness operation is
+  named even though no `instance-ready` event could be recorded. No process with the run's marker remained
+  afterward, and the fake app itself was gone.
+
+### Stage 2 follow-up (real driver calls, not WebdriverIO), 2026-09-22
+
+Review raised two concerns about the querySelectorAll-based `click`/`type`/`press` above: the two lock
+buttons shared one `data-testid`, and script-injection was not how a real user's click is ever expressed
+against a WebDriver session. Both were checked empirically before any code changed:
+
+- `GET /session/{id}/element/{id}/displayed` (the legacy "is element displayed" endpoint) genuinely works
+  against a real WebKitWebDriver session: `200 { value: true }` for a displayed element. It was believed
+  unproven when `page.ts` was first written; it is not.
+- A real `POST /session/{id}/element/{id}/click` call, on the lock control while a reply streams (the
+  case research.md flagged as risky: the process ends about 1 ms after), returns normally in the tens of
+  milliseconds, before the process ends — it does not hang waiting for a page-load event that a process
+  exit, rather than a navigation, will never fire. Checked four times against the real debug binary,
+  isolated instance root, real stand-in provider; last run: click returned in 18 ms, the marked process
+  was confirmed gone 39 ms after the click, the provider's connection closed 34 ms after opening.
+- WebdriverIO was spiked separately (its own throwaway project, `webdriverio` installed there only) and
+  does drive the real application through the same `tauri-driver` — session creation, `$$`, `isDisplayed`,
+  `isClickable`, `getText`, a real `.click()` all worked. Not adopted: everything it would have bought
+  (real find/displayed/click semantics) is already reachable through calls the suite's own ~200-line
+  client and `tauri-driver` already speak, for the cost of one added method, not 238 transitive packages
+  and a new supply chain to audit even as a dev-only dependency.
+
+Changed as a result, before the pull request was reviewed further:
+
+- `webdriver.ts` gained `isDisplayed(element)`.
+- `page.ts`'s `click`/`type`/`press` now find the control by hook (`findElements`), pick the one
+  `isDisplayed` reports true (a hook may still find more than one element in general, though none of the
+  three current hooks does any more — see the next point), and act on it with the driver's own
+  `click`/`sendKeys` calls, genuinely checked rather than approximated by `offsetWidth`/`offsetHeight`
+  inside a script. `press` no longer needs the `setTimeout(0)` scheduling trick a click that ends the
+  application was thought to need; a second `times` click after the application has already ended now
+  throws like any other call to a gone session, rather than being masked by firing both from one script
+  tick.
+- `lock-instance` was one `data-testid` shared by the sidebar and the header button, with "the helper
+  clicks the displayed one" as the intended design (`contracts/test-hooks.md`), not an implementation
+  shortcut — reasonable given the pre-existing script only ever found one page-side match anyway. Review
+  preferred two unique ids regardless, once it was clear a real, per-element `isDisplayed` check made
+  either design equally correct: `lock-instance-sidebar` and `lock-instance-header`
+  (`contracts/test-hooks.md`, T048). At the suite's fixed 1280×800 virtual screen only the sidebar one is
+  ever on screen; the header one is exercised only by a future narrower-viewport scenario.
+- Found by running the real flow end to end while checking the above (not by unit tests, which mock the
+  backend and so could not catch this): `flows.ts`'s `startReply` sent `send_message` without
+  `idempotencyKey`, a field the command has always required
+  (`src-tauri/src/chat/commands.rs`, `SendMessageArgs`) and the frontend has always supplied
+  (`useChat.ts`, defaulting to `crypto.randomUUID()`). The fake-driver tests never noticed, since they
+  answer `send_message` unconditionally. Fixed the same way the frontend does.
+- `pnpm check:e2e-lib`: 136 tests. `pnpm typecheck:scripts`, `pnpm typecheck`, `pnpm lint`,
+  `pnpm format:check`: all pass. `pnpm test:e2e`, no `--grep` (both scenarios, real binary, from scratch):
+  `passed create-and-unlock 6.9 s`, `passed smoke-start 4.0 s`, exit 0. No process carrying the run's
+  marker, nor any stray `tauri-driver`/`WebKitWebDriver`/`Xvfb`, remained after any of the runs above.
+
+_Filled by later tasks: T066, T067, T068, T073 to T083 and T088._

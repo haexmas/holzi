@@ -1,6 +1,13 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { effectiveTimeoutMs, registerName, runScenario } from './scenario.ts'
@@ -135,18 +142,50 @@ describe('runScenario', () => {
 
   it('marks a scenario failed when its teardown fails even though the body passed', () =>
     withRunDir(async (runDir) => {
+      let seenFailure: string | undefined
       const result = await runScenario(
         'teardown-fails',
         {},
         async (ctx) => {
+          ctx.step('ready')
           ctx.onTeardown(async () => {
             throw new Error('could not stop it')
           })
         },
-        depsFor(runDir),
+        depsFor(runDir, {
+          onFailure: async (info) => {
+            seenFailure = `${info.error instanceof Error ? info.error.message : info.error}:${info.failedStep}`
+          },
+        }),
       )
       assert.equal(result.status, 'failed')
       assert.match(result.error ?? '', /teardown failed: could not stop it/)
+      assert.equal(result.failedStep, 'ready')
+      assert.equal(seenFailure, 'teardown failed: could not stop it:ready')
+    }))
+
+  it('names an instance that was still starting when a deadline was reached', () =>
+    withRunDir(async (runDir) => {
+      let seenFailure: string | undefined
+      const result = await runScenario(
+        'starting-instance',
+        { timeoutMs: 20 },
+        async (ctx) => {
+          await ctx.startInstance()
+        },
+        depsFor(runDir, {
+          startInstance: async () =>
+            await new Promise<Instance>(() => {
+              // Deliberately never resolves: this models a driver/app that never becomes ready.
+            }),
+          onFailure: async (info) => {
+            seenFailure = info.failedStep
+          },
+        }),
+      )
+      assert.equal(result.status, 'failed')
+      assert.equal(result.failedStep, 'instance-ready')
+      assert.equal(seenFailure, 'instance-ready')
     }))
 
   it('calls the failure hook before teardown', () =>
@@ -164,6 +203,72 @@ describe('runScenario', () => {
         }),
       )
       assert.deepEqual(order, ['failure-hook', 'teardown'])
+    }))
+
+  it('passes the instances and providers started so far to the failure hook', () =>
+    withRunDir(async (runDir) => {
+      let seenProviders: unknown
+      await runScenario(
+        'hook-providers',
+        {},
+        async (ctx) => {
+          await ctx.provider()
+          throw new Error('x')
+        },
+        depsFor(runDir, {
+          onFailure: async (info) => {
+            seenProviders = info.providers
+          },
+        }),
+      )
+      assert.equal((seenProviders as unknown[]).length, 1)
+    }))
+
+  it('records the failed step from the last one reached, or from a timed-out wait', () =>
+    withRunDir(async (runDir) => {
+      const fromStep = await runScenario(
+        'failed-after-step',
+        {},
+        async (ctx) => {
+          ctx.step('unlocked')
+          throw new Error('x')
+        },
+        depsFor(runDir),
+      )
+      assert.equal(fromStep.failedStep, 'unlocked')
+      assert.equal(fromStep.material, join(runDir, 'failed-after-step'))
+
+      const fromWait = await runScenario(
+        'failed-in-wait',
+        { timeoutMs: 10_000 },
+        async (ctx) => {
+          await ctx.waitFor('the reply to arrive', () => false, {
+            timeoutMs: 30,
+          })
+        },
+        depsFor(runDir),
+      )
+      assert.equal(fromWait.failedStep, 'the reply to arrive')
+    }))
+
+  it('removes the scenario directory after a pass, unless the run keeps it', () =>
+    withRunDir(async (runDir) => {
+      const material = join(runDir, 'kept-check')
+      mkdirSync(material, { recursive: true })
+      writeFileSync(join(material, 'driver.log'), 'hello')
+
+      await runScenario('kept-check', {}, async () => {}, depsFor(runDir))
+      assert.equal(existsSync(material), false)
+
+      mkdirSync(material, { recursive: true })
+      writeFileSync(join(material, 'driver.log'), 'hello')
+      await runScenario(
+        'kept-check',
+        {},
+        async () => {},
+        depsFor(runDir, {}, { keep: true }),
+      )
+      assert.equal(existsSync(material), true)
     }))
 
   it('starts an instance through the context, records instance-ready and stops it in teardown', () =>
@@ -216,6 +321,25 @@ describe('runScenario', () => {
       assert.equal(written.status, 'passed')
       assert.equal(typeof written.durationMs, 'number')
       assert.ok(Array.isArray(written.steps))
+    }))
+
+  it('starts a stand-in provider through the context and closes it in teardown', () =>
+    withRunDir(async (runDir) => {
+      let baseUrl = ''
+      const result = await runScenario(
+        'uses-provider',
+        {},
+        async (ctx) => {
+          const provider = await ctx.provider()
+          baseUrl = provider.baseUrl
+          assert.match(baseUrl, /^http:\/\/127\.0\.0\.1:\d+$/)
+          const response = await fetch(`${baseUrl}/v1/models`)
+          assert.equal(response.status, 200)
+        },
+        depsFor(runDir),
+      )
+      assert.equal(result.status, 'passed')
+      await assert.rejects(fetch(baseUrl))
     }))
 })
 

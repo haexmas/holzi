@@ -58,12 +58,12 @@ scenario still passes.
 
 ## Material kept for a failure
 
-| File             | Content                                                                                                                                |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `timeline.json`  | All steps with `atMs` and an ISO time, plus the failure message and the deadline that was reached, if any.                             |
-| `screenshot.png` | The window at the moment of failure, taken before teardown. Absent, with a note in the timeline, if the application had already ended. |
-| `driver.log`     | Output of the driver, the webview driver and the application, in the order it arrived, each line with its time.                        |
-| `provider.json`  | The stand-in provider's connections and requests.                                                                                      |
+| File             | Content                                                                                                                                                         |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `timeline.json`  | All steps with `atMs` and an ISO time, plus the failed step when an operation was still pending, the failure message and the deadline that was reached, if any. |
+| `screenshot.png` | The window at the moment of failure, taken before teardown. Absent, with a note in the timeline, if the application had already ended.                          |
+| `driver.log`     | Output of the driver, the webview driver and the application, in the order it arrived, each line with its time.                                                 |
+| `provider.json`  | The stand-in provider's connections and requests.                                                                                                               |
 
 ## Printed summary
 
