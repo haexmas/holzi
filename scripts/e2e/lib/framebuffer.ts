@@ -11,6 +11,11 @@
 
 const FIXED_HEADER_SIZE = 100 // 25 CARD32 fields
 const COLOR_ENTRY_SIZE = 12 // XWDColor: pixel (4) + red/green/blue (2 each) + flags + pad (1 each)
+// T068 measured 295 non-zero bytes while the screen was cleared and about 1.90 MB after the
+// replacement window painted. A 1% ratio leaves a wide margin between those observed states.
+// ponytail: This is calibrated to the current 1280x800 capture; replace it with a
+// region-aware metric if the UI later paints less than 1% of the screen.
+const MIN_PAINTED_BYTE_RATIO = 0.01
 
 const OFFSET = {
   headerSize: 0,
@@ -74,7 +79,17 @@ export function readFramebuffer(buffer: Buffer): Framebuffer {
   return { header, pixels: buffer.subarray(pixelsStart, pixelsEnd) }
 }
 
-/** Whether the pixel data holds anything but zero bytes - a screen nothing has drawn to yet is blank. */
+/** Whether enough pixel bytes are non-zero to represent a painted window, not a transient clear. */
 export function isPainted(fb: Framebuffer): boolean {
-  return fb.pixels.some((byte) => byte !== 0)
+  const minimumNonZeroBytes = Math.max(
+    1,
+    Math.ceil(fb.pixels.length * MIN_PAINTED_BYTE_RATIO),
+  )
+  let nonZeroBytes = 0
+  for (const byte of fb.pixels) {
+    if (byte !== 0 && ++nonZeroBytes >= minimumNonZeroBytes) {
+      return true
+    }
+  }
+  return false
 }

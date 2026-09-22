@@ -980,9 +980,11 @@ smoke-start`, 6.0 s, exit 0, correctly reported as "closes by relaunch, from pat
   `byte_order` field (which only describes the pixel data) — confirmed against a real `Xvfb` 21.1.24
   capture in T068 (`header_size` 160, `colormap_entries` 256, and `header_size + colormap_entries*12 +
 bytes_per_line*height` matching the observed file size exactly). `readFramebuffer` parses the header and
-  slices out just the pixel data (past the header and the colormap); `isPainted` reports whether that
-  slice holds anything but zero bytes. A dedicated test confirms header/colormap bytes (e.g. the window
-  name) are never mistaken for painted pixels. 8 tests, synthetic buffers built in the test file itself, no
+  slices out just the pixel data (past the header and the colormap); `isPainted` requires at least 1% of
+  the pixel bytes to be non-zero, separating the 295-byte cleared-screen capture from the roughly 1.90 MB
+  painted capture recorded in T068. Dedicated tests cover the cleared-screen margin and confirm
+  header/colormap bytes (e.g. the window name) are never mistaken for painted pixels. 9 tests, synthetic
+  buffers built in the test file itself, no
   real `Xvfb` needed to run them.
 - **T071** `driverCommand` takes an optional `framebufferDir`; when given, `-fbdir <dir>` is appended
   inside the same `-s "-screen 0 1280x800x24 ..."` string (not as a separate `xvfb-run` argument — the

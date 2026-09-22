@@ -124,6 +124,18 @@ describe('isPainted', () => {
     assert.equal(isPainted(readFramebuffer(buffer)), false)
   })
 
+  it('keeps a cleared screen with a small non-zero region as not painted', () => {
+    const buffer = buildXwd({
+      width: 1280,
+      height: 800,
+      bitsPerPixel: 32,
+      bytesPerLine: 5120,
+      colormapEntries: 256,
+      fillPixels: (pixels) => pixels.fill(0x01, 0, 295),
+    })
+    assert.equal(isPainted(readFramebuffer(buffer)), false)
+  })
+
   it('reports an image with a window-sized non-blank region as painted', () => {
     const buffer = buildXwd({
       width: 1280,
