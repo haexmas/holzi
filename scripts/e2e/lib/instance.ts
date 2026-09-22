@@ -25,6 +25,8 @@ import {
 } from './processes.ts'
 import type { Tools } from './preflight.ts'
 import { WebDriverClient } from './webdriver.ts'
+import { createPage } from './page.ts'
+import type { Page, StepRecorder } from './page.ts'
 
 export type ColorScheme = 'light' | 'dark'
 
@@ -165,9 +167,11 @@ export interface StartInstanceOptions {
   /** How long the driver and the session may take to come up. */
   startLimitMs?: number
   parentEnv?: NodeJS.ProcessEnv
+  /** Records a timeline entry on the scenario that started this instance. Default: does nothing. */
+  step?: StepRecorder
 }
 
-export interface Instance {
+export interface Instance extends Page {
   root: string
   marker: string
   logFile: string
@@ -175,12 +179,12 @@ export interface Instance {
   driverPid: number
   /** The pid of the application process this instance started. */
   pid: number
-  client: WebDriverClient
-  exec<T = unknown>(script: string, args?: unknown[]): Promise<T>
   screenshot(): Promise<Buffer>
   alive(): boolean
   /** End the session and everything the instance started. Safe to call more than once. */
   stop(): Promise<void>
+  /** Records a timeline entry on the scenario that started this instance (used by scripts/e2e/lib/flows.ts). */
+  step: StepRecorder
 }
 
 async function launchDriver(
@@ -280,18 +284,26 @@ export async function startInstance(
     )
   }
   const appPid = pid
+  const step: StepRecorder = options.step ?? (() => {})
+  const page: Page = createPage({
+    client,
+    appPid,
+    marker: options.marker,
+    executable,
+    step,
+  })
 
   return {
+    ...page,
     root: options.root,
     marker: options.marker,
     logFile: options.logFile,
     ports,
     driverPid,
     pid: appPid,
-    client,
-    exec: (script, args) => client.execute(script, args),
     screenshot: () => client.screenshot(),
     alive: () => pidAlive(appPid),
     stop,
+    step,
   }
 }

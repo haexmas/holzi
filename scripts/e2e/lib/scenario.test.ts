@@ -217,6 +217,25 @@ describe('runScenario', () => {
       assert.equal(typeof written.durationMs, 'number')
       assert.ok(Array.isArray(written.steps))
     }))
+
+  it('starts a stand-in provider through the context and closes it in teardown', () =>
+    withRunDir(async (runDir) => {
+      let baseUrl = ''
+      const result = await runScenario(
+        'uses-provider',
+        {},
+        async (ctx) => {
+          const provider = await ctx.provider()
+          baseUrl = provider.baseUrl
+          assert.match(baseUrl, /^http:\/\/127\.0\.0\.1:\d+$/)
+          const response = await fetch(`${baseUrl}/v1/models`)
+          assert.equal(response.status, 200)
+        },
+        depsFor(runDir),
+      )
+      assert.equal(result.status, 'passed')
+      await assert.rejects(fetch(baseUrl))
+    }))
 })
 
 describe('waitFor', () => {

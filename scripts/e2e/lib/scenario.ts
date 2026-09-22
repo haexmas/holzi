@@ -9,6 +9,8 @@ import { removeRoot, startInstance } from './instance.ts'
 import type { ColorScheme, Instance } from './instance.ts'
 import { toTools } from './preflight.ts'
 import type { Tools } from './preflight.ts'
+import { startProvider } from './provider.ts'
+import type { Behavior, Provider } from './provider.ts'
 
 export type CloseBehavior = 'exit' | 'relaunch'
 export type ScenarioStatus = 'passed' | 'failed' | 'skipped'
@@ -56,6 +58,8 @@ export interface StartInstanceRequest {
   colorScheme?: ColorScheme
   reuse: boolean
   env: E2EEnv
+  /** Records a timeline entry on the scenario that made the request. */
+  step: (name: string, detail?: string) => void
 }
 
 export interface FailureInfo {
@@ -97,6 +101,8 @@ export interface ScenarioContext {
     colorScheme?: ColorScheme
     reusesRoot?: string
   }): Promise<Instance>
+  /** Starts a stand-in model provider ([stand-in-provider.md](stand-in-provider.md)); ended with the context. */
+  provider(behavior?: Behavior): Promise<Provider>
   /** A passphrase and a provider key generated for this run; no credential is ever committed. */
   credentials(): { passphrase: string; providerKey: string }
 }
@@ -235,6 +241,7 @@ export async function runScenario(
         colorScheme: instanceOptions.colorScheme,
         reuse: instanceOptions.reusesRoot !== undefined,
         env,
+        step,
       })
       instances.push(instance)
       // The root is removed with the scenario, not when the instance stops, so a fresh instance can reuse it.
@@ -244,6 +251,11 @@ export async function runScenario(
       })
       step('instance-ready')
       return instance
+    },
+    async provider(behavior) {
+      const started = await startProvider(behavior)
+      teardowns.push(() => started.close())
+      return started
     },
   }
 
@@ -359,6 +371,7 @@ export function scenario(
           logFile: request.logFile,
           colorScheme: request.colorScheme,
           reuse: request.reuse,
+          step: request.step,
         }),
     })
     if (result.status === 'skipped') t.skip(result.skipReason)
