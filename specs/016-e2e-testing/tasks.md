@@ -541,10 +541,11 @@ go to the "Validation record". Branch `016-e2e-stage4-validation`; a pull reques
       (`sleep $((RANDOM % 25))` before the kill), with your own Holzi running throughout. After each run:
       no marked process remains once the next run's sweep has run, no window appeared, your Holzi still
       runs and its data listing is unchanged, and every run after a killed one starts normally.
-- [x] T076 Confirm the isolation of FR-006 on a real run: while a scenario runs, `ls` the maintainer's
-      data, config, cache and runtime directories and home for changes made by it (none), and confirm
-      no `xdg-desktop-portal` process was started by the run.
-- [x] T077 SC-003, in a scratch change reverted after each trial: (a) do not cancel the stream when the
+- [x] T076 Confirm the isolation of FR-006 on a real run: while a scenario runs, capture top-level
+      listings of the maintainer's data, config, cache and runtime directories and home for changes
+      made by it (none), and confirm no `xdg-desktop-portal` process was started by the run. If only
+      top-level listings are captured, limit the conclusion to unchanged top-level entries.
+- [ ] T077 SC-003, in a scratch change reverted after each trial: (a) do not cancel the stream when the
       vault closes, expect `lock-while-streaming` and `window-close-while-streaming` to fail; (b) do not
       replace the page by the closing page, expect `closing-page` to fail; (c) make the process not end,
       expect `lock-while-streaming` and `lock-twice` to fail; (d) make a release build not relaunch,
@@ -1091,8 +1092,10 @@ connection closed before message completed)` (225763 lines in that one driver.lo
   itself to run the command, not from anything the application or the suite wrote; not a Holzi isolation
   concern. The three real `xdg-desktop-portal`/`-gtk`/`-cosmic` processes already running (the
   maintainer's own desktop session) kept the exact same pids throughout — no new one was started by the
-  run. FR-006 holds on a real run, not just by the architecture's own design (`buildInstanceEnv` already
-  redirects every one of these locations for the instance itself, per Stage 1).
+  run. This establishes that the captured top-level entries stayed unchanged on a real run; it does not
+  establish that files inside already-existing child directories stayed unchanged, because no recursive
+  manifests were captured. The architecture still redirects every one of these locations for the instance
+  itself (`buildInstanceEnv`, per Stage 1), but that is separate from the scope of this runtime observation.
 
 ### Stage 4, SC-003 seeded failures (T077), trial (a), 2026-09-22
 
@@ -1193,25 +1196,27 @@ connection closed before message completed)` (225763 lines in that one driver.lo
     again (`lock-twice` 9.9 s, `lock-while-streaming` 5.9 s, both `press to process end` back to
     ~0.1 s), `relaunch-after-lock` still correctly skipped on a debug build. Confirmed clean again with
     the same process check.
-  - **What this proves for SC-003**: the promise holds — a process that does not end after the lock
-    control is caught — but the suite currently catches it through the same generic per-scenario
-    deadline that would also fire for an unrelated hang, rather than through `waitForEnd`'s own faster,
-    specific check. That is a real, minor gap in diagnostic precision for this one failure mode
-    (a maintainer reading the report sees "press timed out after 60 s" rather than "the process did not
-    end"), not a gap in detection itself. Recorded here rather than silently treated as equivalent to
-    trial (a)/(b)'s cleaner failures.
+  - **What this proves for SC-003**: the lock path catches a process that does not end after the lock
+    control, but the suite currently catches it through the same generic per-scenario deadline that
+    would also fire for an unrelated hang, rather than through `waitForEnd`'s own faster, specific
+    check. That is a real, minor gap in diagnostic precision for this one failure mode (a maintainer
+    reading the report sees "press timed out after 60 s" rather than "the process did not end"), and
+    the window-close path remains unvalidated under this seed because it did not reach `begin_close`.
+    T077 therefore remains incomplete until trial (a) exercises that path or the task is explicitly
+    re-scoped.
 
 - **Trial (d), "a release build does not relaunch"**: made both `close_effects.rs`'s `request_end`
   and `force_end` treat `ClosePolicy::Relaunch` the same as `Exit` (scratch change, reverted), built a
   release binary (`pnpm tauri build --no-bundle`, ~1m confirmed cargo time on top of the frontend
   build), ran `--grep relaunch`: `relaunch-after-lock` **failed as intended**, cleanly and specifically
   this time — `timed out after 10000 ms waiting for a new marked process of the same binary to appear
-  after the relaunch` — unlike trial (c), the failure landed exactly on the check the promise is about,
+after the relaunch` — unlike trial (c), the failure landed exactly on the check the promise is about,
   not a generic deadline. No leftover processes afterward (checked the same way as every other trial).
   Reverted, rebuilt release, reran: `relaunch-after-lock` passes again (11.4 s, `press to process end`
-  back to ~0.1 s). **T077 is now complete: all four trials (a)-(d) seed a real absence of the promise
-  they target and the suite catches every one of them**, with trial (c)'s one caveat about diagnostic
-  precision recorded above rather than glossed over.
+  back to ~0.1 s). Trials (b)-(d) and the lock half of trial (a) are recorded above, but **T077 remains
+  incomplete**: `window-close-while-streaming` still passed when cancellation was removed, and its
+  close path did not reach `begin_close`. The suite therefore has not yet demonstrated that it catches
+  the cancellation regression through both close paths.
 
 ### Stage 4, a look beyond T077: does state actually stay isolated between vault sessions, 2026-09-22
 
@@ -1225,7 +1230,7 @@ T077 (a) investigation traced the cancellation architecture before trusting it.
   (reaching grandchildren a child itself spawned, e.g. an agent's own shell), is called on **every**
   drain outcome — `Drained`, `DrainedAfterAbort`, and `Stuck` alike (`drain.rs:54,66`), not only the
   slow path — and `drain_tests.rs`'s `children` module proves this for all three outcomes with a real
-  spawned `sleep`, plus a fourth test proving a child registered *after* `kill_all()` is still killed at
+  spawned `sleep`, plus a fourth test proving a child registered _after_ `kill_all()` is still killed at
   once. Nothing here needs a new E2E check; it is already exercised more precisely at the unit level
   than an E2E scenario could manage (E2E has no way to assert a specific grandchild pid died).
 - **A real, more significant finding, upstream of spec 016 entirely**: `instances/open.rs`'s
@@ -1233,11 +1238,11 @@ T077 (a) investigation traced the cancellation architecture before trusting it.
   already active, it cancels the old vault's preload, drops the old database handle, clears
   `chat.session`, bumps a `vault_generation` counter and invalidates the whisper cache, then publishes
   the new vault, all **without ending the process**. `state.rs`'s `switch_to` doc comment says outright:
-  *"Stage 4 of spec 013 removes it together with the switch itself."* Checked spec 013's own
+  _"Stage 4 of spec 013 removes it together with the switch itself."_ Checked spec 013's own
   `tasks.md`: **Phase 5, "A new vault never sees anything from the previous one" (User Story 2, **P1**,
   FR-010 to FR-012, SC-003) is entirely unimplemented — T053 through T062 are all still `[ ]`.** Its own
-  goal statement is almost the operator's sentence verbatim: *"one app process serves at most one vault
-  session; opening or creating while one exists is refused."* The gate-level primitives this phase needs
+  goal statement is almost the operator's sentence verbatim: _"one app process serves at most one vault
+  session; opening or creating while one exists is refused."_ The gate-level primitives this phase needs
   already exist and are unit-tested (`ensure_can_open`/`begin_session`, `HolziError::VaultAlreadyActive`/
   `VaultClosed`, commit `b99bb68`), but `open.rs`/`create.rs` were never switched over to use them (T055
   to T057), so today a second `open_instance` call is not refused — it is served by the ad hoc cleanup
