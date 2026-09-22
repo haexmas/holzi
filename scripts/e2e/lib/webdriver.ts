@@ -23,10 +23,14 @@ export class WebDriverError extends Error {
 
 /** The session or the application behind it is gone, or the driver cannot be reached. */
 export class SessionGoneError extends Error {
-  constructor(message: string) {
+  constructor(message: string, options: { retryable?: boolean } = {}) {
     super(message)
     this.name = 'SessionGoneError'
+    this.retryable = options.retryable ?? false
   }
+
+  /** Whether the request may succeed after the driver finishes starting its native backend. */
+  readonly retryable: boolean
 }
 
 const GONE_CODES = new Set([
@@ -67,6 +71,7 @@ export class WebDriverClient {
     } catch (error) {
       throw new SessionGoneError(
         `${method} ${path} got no answer: ${(error as Error).message}`,
+        { retryable: true },
       )
     }
     const text = await response.text()
