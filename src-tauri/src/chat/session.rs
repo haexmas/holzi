@@ -109,17 +109,39 @@ pub struct ActiveSession {
     pub context_window: Option<i64>,
 }
 
-/// Tauri-managed state for the chat runtime. `session` is the loaded
-/// model; `current_generation` is an abort handle for the in-flight
-/// streaming task, if any. Both are optional — an idle app has neither.
-/// `tool_registry` holds every callable tool (host-CLI + MCP);
-/// `pending_tool_approvals` holds one `oneshot::Sender` per open
-/// `tool-permission-request`, resolved by `respond_tool_permission` or
-/// dropped on cancellation (data-model.md `PendingToolApproval`).
-/// `tool_cancellation` is the current turn's cancellation signal (T032):
-/// `abort_current_generation` fires it alongside aborting
-/// `current_generation`, so an in-flight `Tool::execute` or a pending
-/// approval wait ends immediately instead of only the LLM stream.
+/// Tauri-managed state for the chat runtime. `session` is the loaded model.
+///
+/// `turn_cancellation` is the current turn's own cancellation signal (T032, renamed from
+/// `tool_cancellation` — spec 016 E2E testing, Stage 4 SC-003: the old name undersold what it
+/// does). `run_turn` is handed a clone of it as `cancel` and races every step of the LLM stream
+/// against it directly (`chat/turn/step.rs`'s `select!`), so this is what actually stops the
+/// stream promptly when `abort_current_generation` cancels the turn — not just an in-flight
+/// `Tool::execute` call or a pending approval wait, though it stops those too. Once that `select!`
+/// exits, the [`AdapterStream`](crate::adapters::AdapterStream) it was reading from goes out of
+/// scope and drops, which aborts the adapter's own generation task as a side effect
+/// (`AdapterStream::drop`) — so cancelling this one token alone is normally enough to unwind
+/// everything on its own.
+///
+/// `current_generation` holds a clone of that same `AdapterStream`'s [`AbortHandle`] directly,
+/// fetched once the stream starts.
+/// `abort_turn` calls both it and `turn_cancellation.cancel()` together: this one lets the
+/// generation task be ended right away, without waiting for `chat/turn/step.rs`'s loop to
+/// actually observe the cancelled token and unwind first — in measurement this made no observable
+/// difference (the cooperative path above is already fast), but it removes the dependency on that
+/// unwind ever happening promptly.
+///
+/// The vault gate's own drain ladder (`vault_gate/drain.rs`) is a third, independent backstop: it
+/// aborts every task tracked via `VaultGate::spawn` — including whichever task is running
+/// `run_turn` itself, one level further out than either of the above — about a second after a
+/// close starts, if neither of the first two paths already ended things by then. Three seeded E2E
+/// failure trials (tasks.md, Stage 4 SC-003) found that disabling any one or two of the three still
+/// left the promise ("the reply is cancelled when the vault closes") holding; only disabling all
+/// three at once broke it.
+///
+/// `tool_registry` holds every callable tool (host-CLI + MCP); `pending_tool_approvals` holds one
+/// `oneshot::Sender` per open `tool-permission-request`, resolved by `respond_tool_permission` or
+/// dropped on cancellation (data-model.md `PendingToolApproval`). `session` and
+/// `current_generation` are both optional — an idle app has neither.
 pub struct ChatState {
     /// Held across a model load, vault transition, or entire accepted turn.
     operation: Arc<tokio::sync::Mutex<()>>,
@@ -129,7 +151,7 @@ pub struct ChatState {
     pub pending_tool_approvals: Arc<Mutex<HashMap<Uuid, oneshot::Sender<ApprovalDecision>>>>,
     /// Session-lifetime tombstones make late replies to cancelled prompts harmless.
     pub cancelled_tool_approvals: Arc<Mutex<HashSet<Uuid>>>,
-    pub tool_cancellation: Arc<Mutex<Option<CancellationToken>>>,
+    pub turn_cancellation: Arc<Mutex<Option<CancellationToken>>>,
     model_load: Arc<Mutex<ModelLoadRuntime>>,
     /// Where the tools register the child processes they start, so ending the vault ends them.
     children: ChildRegistry,
@@ -144,7 +166,7 @@ impl Clone for ChatState {
             tool_registry: Arc::clone(&self.tool_registry),
             pending_tool_approvals: Arc::clone(&self.pending_tool_approvals),
             cancelled_tool_approvals: Arc::clone(&self.cancelled_tool_approvals),
-            tool_cancellation: Arc::clone(&self.tool_cancellation),
+            turn_cancellation: Arc::clone(&self.turn_cancellation),
             model_load: Arc::clone(&self.model_load),
             children: self.children.clone(),
         }
@@ -170,7 +192,7 @@ impl ChatState {
             tool_registry: Arc::new(Mutex::new(registry)),
             pending_tool_approvals: Arc::new(Mutex::new(HashMap::new())),
             cancelled_tool_approvals: Arc::new(Mutex::new(HashSet::new())),
-            tool_cancellation: Arc::new(Mutex::new(None)),
+            turn_cancellation: Arc::new(Mutex::new(None)),
             model_load: Arc::new(Mutex::new(ModelLoadRuntime {
                 vault_generation: 0,
                 next_load_id: 0,
@@ -358,7 +380,7 @@ impl ChatState {
             .unwrap_or_else(|e| e.into_inner())
             .take();
         let cancellation = self
-            .tool_cancellation
+            .turn_cancellation
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .take();

@@ -321,10 +321,10 @@ pub async fn send_message(
         // Reserve cancellation before the first await, including DB staging.
         // A busy idempotent replay must never replace the live turn's token.
         *chat
-            .tool_cancellation
+            .turn_cancellation
             .lock()
             .map_err(|e| HolziError::CrdtInit {
-                reason: format!("chat.tool_cancellation mutex poisoned: {e}"),
+                reason: format!("chat.turn_cancellation mutex poisoned: {e}"),
             })? = Some(cancel_token.clone());
     }
 
@@ -668,14 +668,16 @@ pub fn abort_turn(chat_state: &ChatState) -> Result<()> {
             abort.abort();
         }
     }
-    // Ends any in-flight `Tool::execute` (T032) — CLI/MCP implementations
-    // race their own work against this signal and tear it down on the spot.
+    // The turn's own cooperative signal: `chat/turn/step.rs`'s streaming loop races every step
+    // against this token directly, so this is what actually stops the LLM stream promptly, not
+    // just an in-flight `Tool::execute` (T032, CLI/MCP implementations race their own work
+    // against it too and tear it down on the spot).
     {
         let guard = chat_state
-            .tool_cancellation
+            .turn_cancellation
             .lock()
             .map_err(|e| HolziError::CrdtInit {
-                reason: format!("chat.tool_cancellation mutex poisoned: {e}"),
+                reason: format!("chat.turn_cancellation mutex poisoned: {e}"),
             })?;
         if let Some(token) = guard.as_ref() {
             token.cancel();
