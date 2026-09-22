@@ -7,11 +7,11 @@ own Holzi data. Background and design decisions: [`specs/016-e2e-testing/`](../.
 ## Running
 
 ```sh
-pnpm test:e2e
+nix develop --command scripts/with-nix-host-bridge.sh pnpm test:e2e
 ```
 
-From the dev shell (`nix develop`), or through `scripts/with-nix-host-bridge.sh` directly, the way
-`tauri:dev` and `tauri:build` run. This builds the debug application, starts a virtual screen per
+(`pnpm test:e2e` alone works too, from inside a `nix develop` shell already wrapped the same way, the
+way `tauri:dev` and `tauri:build` run.) This builds the debug application, starts a virtual screen per
 scenario, runs every `scripts/e2e/scenarios/*.test.ts` file, prints a summary, and cleans up.
 
 Common options:
@@ -36,7 +36,9 @@ and the fix.
 
 ## Writing a scenario
 
-Copy [`scenarios/create-and-unlock.test.ts`](scenarios/create-and-unlock.test.ts):
+Copy [`scenarios/create-and-unlock.test.ts`](scenarios/create-and-unlock.test.ts), reproduced verbatim
+below so this section stays useful on its own — but the linked file is the source of truth if the two
+ever drift:
 
 ```ts
 import assert from 'node:assert/strict'
@@ -66,9 +68,26 @@ The file name and the string passed to `scenario(...)` must match (`pnpm test:e2
 starts anything). `node --test scripts/e2e/lib/*.test.ts` (`pnpm check:e2e-lib`) does not run scenario
 files; only `pnpm test:e2e` does, since a scenario needs the built application and the tools.
 
+`list_instances` above is one _backend command_ among others — a Rust function marked
+`#[tauri::command]` and listed in `invoke_handler(generate_handler![...])` in `src-tauri/src/lib.rs`;
+that list names every command a scenario can call through `instance.invoke`. A "vault" is called an
+_instance_ everywhere in this API (`ctx.startInstance`, `list_instances`, `createAndUnlock`) — there is
+no separate "vault" type to look for.
+
+To run only your new scenario against the application you already have built, without rebuilding:
+
+```sh
+nix develop --command scripts/with-nix-host-bridge.sh pnpm test:e2e --app <path to a built binary> --grep <your scenario's name>
+```
+
+A simple scenario like the one above typically finishes in 5-15 s; if it is still running well past
+that, something is stuck rather than merely slow.
+
 ## Helpers
 
-The full contract, with every promise: [`contracts/helpers.md`](../../specs/016-e2e-testing/contracts/helpers.md).
+The tables below are enough to write an ordinary scenario; open
+[`contracts/helpers.md`](../../specs/016-e2e-testing/contracts/helpers.md) only for a promise not
+covered here (edge cases, exact error shapes).
 
 On the context (`ctx`, the argument to a scenario's body):
 
@@ -118,8 +137,10 @@ connection, not as one that quietly finished.
 ## Hooks
 
 Every control a scenario needs is reachable without depending on displayed text or the interface
-language (the interface is German by default). Full table:
-[`contracts/test-hooks.md`](../../specs/016-e2e-testing/contracts/test-hooks.md).
+language (the interface is German by default). Open
+[`contracts/test-hooks.md`](../../specs/016-e2e-testing/contracts/test-hooks.md) for the full,
+authoritative list of existing hooks before adding a new `data-testid`, so you don't duplicate one that
+already exists.
 
 ```ts
 instance.click('lock-instance-sidebar') // [data-testid="lock-instance-sidebar"]
