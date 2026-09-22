@@ -258,7 +258,7 @@ kept running.
 - [x] T030 [US1] `scripts/e2e/scenarios/smoke-start.test.ts`: start an instance, wait until
       `document.readyState` is `complete` and `location.pathname` is `/`, take a screenshot, end. No
       hook and no text is used.
-- [x] T031 [US1] Manual verification of the independent test, recorded in the "Validation record": start
+- [ ] T031 [US1] Manual verification of the independent test, recorded in the "Validation record": start
       your own Holzi (for example `pnpm tauri:dev`) and note a checksum listing of its data directory;
       run `pnpm test:e2e --grep smoke`; then check no window appeared on the desktop, no process with a
       run marker remains (`grep -l HOLZI_E2E_RUN /proc/*/environ 2>/dev/null` prints nothing), the
@@ -741,14 +741,15 @@ _T085 adds the closing numbers here._
   `process.rs` (`cli_delegate`) and its `spawn`, for reading process state the same file, for a wire
   protocol client the Rust adapters, and for waiting `waitForTurnTerminal` in the chat composable. All are
   Rust or frontend code in other processes; none can serve a Node runner, so nothing was extended.
-- **T031** Run against a debug binary of the spike (`--app`) and then against the debug build the command
-  made itself in this worktree (`pnpm test:e2e --grep smoke`, built from a reflink copy of an earlier
-  build cache): `passed smoke-start`, 6.1 s, exit 0. Environment of the application, read from `/proc`
-  during a run: `DISPLAY=:99` (the virtual screen), `GDK_BACKEND=x11`, no `WAYLAND_DISPLAY`, `HOME`,
-  `XDG_DATA_HOME` and `XDG_RUNTIME_DIR` inside the instance root, `DBUS_SESSION_BUS_ADDRESS=disabled:`
-  and the marker. A checksum listing of the maintainer's data directory is identical before and after.
-  No Holzi of the maintainer was running at the time, so "kept running" is not shown; that the desktop
-  stayed free of a window is shown by the environment, not by eye.
+- **T031** Partial validation only: the smoke scenario passed against a debug binary of the spike
+  (`--app`) and against the debug build the command made itself in this worktree (`pnpm test:e2e --grep
+smoke`, built from a reflink copy of an earlier build cache): `passed smoke-start`, 6.1 s, exit 0.
+  The application environment was read from `/proc`: `DISPLAY=:99` (the virtual screen),
+  `GDK_BACKEND=x11`, no `WAYLAND_DISPLAY`, `HOME`, `XDG_DATA_HOME` and `XDG_RUNTIME_DIR` inside the
+  instance root, `DBUS_SESSION_BUS_ADDRESS=disabled:` and the marker. A checksum listing of the
+  maintainer's data directory is identical before and after. No maintainer Holzi was running during
+  this check, so the required concurrent-instance isolation case and the visual no-window check remain
+  unverified. T031 stays open until that case is run.
   - Ctrl-C (SIGINT) at about 4 s: exit status 130, no process with a run marker left.
   - `kill -9` on the runner at about 4 s: 9 marked processes stayed behind; the next run reported
     "removed 9 leftover process(es) of an earlier killed run", passed, and left none.

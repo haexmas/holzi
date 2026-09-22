@@ -7,7 +7,9 @@ import {
   mkdirSync,
   readdirSync,
   realpathSync,
+  readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs'
 import net from 'node:net'
@@ -141,7 +143,11 @@ function portOpen(port: number): Promise<boolean> {
 }
 
 function hasEnded(child: ChildProcess): boolean {
-  return child.exitCode !== null || child.signalCode !== null
+  return (
+    child.pid === undefined ||
+    child.exitCode !== null ||
+    child.signalCode !== null
+  )
 }
 
 export interface StartInstanceOptions {
@@ -185,6 +191,9 @@ async function launchDriver(
   return withPortRetry(async () => {
     const ports = { driver: await freePort(), native: await freePort() }
     const { command, args } = driverCommand(options.tools, ports)
+    const logOffset = existsSync(options.logFile)
+      ? statSync(options.logFile).size
+      : 0
     const started = spawnMarked(command, args, {
       env,
       logFile: options.logFile,
@@ -192,12 +201,26 @@ async function launchDriver(
     const end = Date.now() + limitMs
     for (;;) {
       if (hasEnded(started.child)) {
-        // The driver died before it listened: most likely a port taken in the meantime.
-        throw new PortInUseError(ports.driver)
+        await started.closed
+        const output = readFileSync(options.logFile)
+          .subarray(logOffset)
+          .toString()
+        if (
+          /(?:eaddrinuse|(?:address|port).{0,40}(?:already in use|in use)|(?:already in use|in use).{0,40}(?:address|port))/i.test(
+            output,
+          )
+        ) {
+          throw new PortInUseError(ports.driver)
+        }
+        throw new Error(
+          `driver exited before listening on port ${ports.driver} (see ${options.logFile})\n${output.trim()}`,
+        )
       }
       if (await portOpen(ports.driver)) return { ...started, ports }
       if (Date.now() >= end) {
-        await stopGroup(started.child.pid ?? 0)
+        if (started.child.pid !== undefined) {
+          await stopGroup(started.child.pid)
+        }
         throw new Error(
           `tauri-driver did not listen on port ${ports.driver} within ${limitMs} ms (see ${options.logFile})`,
         )

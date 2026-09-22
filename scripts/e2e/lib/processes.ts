@@ -195,6 +195,7 @@ export async function stopGroup(
   pgid: number,
   options: StopOptions = {},
 ): Promise<void> {
+  if (!Number.isInteger(pgid) || pgid <= 1) return
   const graceMs = options.graceMs ?? 1500
   const groupAlive = () => {
     try {

@@ -155,6 +155,16 @@ describe(
       assert.ok(await waitGone(grandchild))
     })
 
+    it('ignores invalid process group ids', async () => {
+      const child = sleeper(undefined, true)
+      for (const pgid of [0, 1, -1, 1.5, Number.NaN]) {
+        await stopGroup(pgid)
+        assert.ok(pidAlive(child.pid), `group ${pgid} must not be signalled`)
+      }
+      await stopGroup(child.pid, { graceMs: 200 })
+      assert.ok(await waitGone(child.pid))
+    })
+
     it('spawns in its own group and logs each output line with a time and its stream', async () => {
       const dir = mkdtempSync(join(tmpdir(), 'e2e-processes-'))
       try {
