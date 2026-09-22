@@ -65,6 +65,8 @@ export interface StartInstanceRequest {
   env: E2EEnv
   /** Records a timeline entry on the scenario that made the request. */
   step: (name: string, detail?: string) => void
+  /** Keeps the screen's current XWD image at `<framebufferDir>/Xvfb_screen0` (research R11, T068). */
+  framebufferDir?: string
 }
 
 export interface FailureInfo {
@@ -107,6 +109,8 @@ export interface ScenarioContext {
   startInstance(options?: {
     colorScheme?: ColorScheme
     reusesRoot?: string
+    /** Keeps the screen's current XWD image at `<framebufferDir>/Xvfb_screen0` (research R11, T068). */
+    framebufferDir?: string
   }): Promise<Instance>
   /** Starts a stand-in model provider ([stand-in-provider.md](stand-in-provider.md)); ended with the context. */
   provider(behavior?: Behavior): Promise<Provider>
@@ -275,6 +279,7 @@ export async function runScenario(
           reuse: instanceOptions.reusesRoot !== undefined,
           env,
           step,
+          framebufferDir: instanceOptions.framebufferDir,
         })
         instances.push(instance)
         // The root is removed with the scenario, not when the instance stops, so a fresh instance can reuse it.
@@ -440,6 +445,7 @@ export function scenario(
           colorScheme: request.colorScheme,
           reuse: request.reuse,
           step: request.step,
+          framebufferDir: request.framebufferDir,
         }),
       onFailure: (info) =>
         captureFailure({

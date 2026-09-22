@@ -164,6 +164,21 @@ describe('driverCommand', () => {
       ],
     })
   })
+
+  it("adds -fbdir inside the screen's own server-args string, not as a separate xvfb-run argument", () => {
+    const tools = {
+      tauriDriver: '/t/tauri-driver',
+      webKitWebDriver: '/t/WebKitWebDriver',
+      xvfbRun: '/t/xvfb-run',
+    }
+    const { args } = driverCommand(
+      tools,
+      { driver: 1111, native: 2222 },
+      { framebufferDir: '/scratch/fb' },
+    )
+    assert.equal(args[1], '-s')
+    assert.equal(args[2], '-screen 0 1280x800x24 -fbdir /scratch/fb')
+  })
 })
 
 describe('newSessionWithRetry', () => {
