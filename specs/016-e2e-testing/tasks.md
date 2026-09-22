@@ -458,35 +458,35 @@ press the lock control: the scenario passes only if the process ends within 4 se
 sees its connection close within 1 second of the press. Weaken the behavior on purpose and it fails
 (T077).
 
-- [ ] T059 [US2] Start branch `016-e2e-stage3-close` from the updated `origin/main`. Graphify first:
+- [x] T059 [US2] Start branch `016-e2e-stage3-close` from the updated `origin/main`. Graphify first:
       `graphify query "close promises drain ladder deadlines"` and
       `graphify query "assert a process ended within a deadline"`; note the candidates.
-- [ ] T060 [P] [US2] `scripts/e2e/lib/close-promises.test.ts`: the process ends within 4 seconds, the
+- [x] T060 [P] [US2] `scripts/e2e/lib/close-promises.test.ts`: the process ends within 4 seconds, the
       provider connection closes within 1 second of the press, and the relaunch within 10 seconds; these
       thresholds stay fixed for conformance. A run with `E2E_TIME_SCALE` other than 1 is explicitly
       non-conformant and reports its scale rather than changing these assertions.
-- [ ] T061 [P] [US2] `scripts/e2e/lib/close-promises.ts`: the three numbers, with a comment naming their
+- [x] T061 [P] [US2] `scripts/e2e/lib/close-promises.ts`: the three numbers, with a comment naming their
       source (spec 013: drain ladder 1 s cooperative, 3 s total, 0.5 s grace).
-- [ ] T062 [US2] `scripts/e2e/scenarios/lock-while-streaming.test.ts`: provider `stream-forever`;
+- [x] T062 [US2] `scripts/e2e/scenarios/lock-while-streaming.test.ts`: provider `stream-forever`;
       `createAndUnlock`, `openChat`, `connectProvider`, `startReply`; wait until the provider's
       connection has been open for at least 800 ms; `press('lock-instance-sidebar')`; `waitForEnd` within the
       4 seconds of `close-promises`; the connection's `closedAt` minus the press time is at most 1 second
       (records `provider-closed`); no `[role="alert"]` in any sample from `sampleUntilEnd` and none just
       before the press. The pid tracked is the original `appPid`, so the scenario is correct on a
       relaunching build too.
-- [ ] T063 [P] [US2] `scripts/e2e/scenarios/window-close-while-streaming.test.ts`: the same state, then
+- [x] T063 [P] [US2] `scripts/e2e/scenarios/window-close-while-streaming.test.ts`: the same state, then
       `closeWindow()` instead of the press; the same three outcomes.
-- [ ] T064 [P] [US2] `scripts/e2e/scenarios/closing-page.test.ts`: for `colorScheme` `light` and `dark`,
+- [x] T064 [P] [US2] `scripts/e2e/scenarios/closing-page.test.ts`: for `colorScheme` `light` and `dark`,
       each in its own instance: `navigate('tauri://localhost/closing.html')`; first assert that
       `matchMedia('(prefers-color-scheme: dark)').matches` equals the requested scheme (a scheme that did
       not apply is a clear failure, research R7); then `document.body.textContent.trim()` is empty,
       exactly one `.ring` exists, and the body's background equals a probe element's background set to
       `var(--page)`; finally the two schemes' backgrounds differ.
-- [ ] T065 [P] [US2] `scripts/e2e/scenarios/lock-twice.test.ts`: an unlocked vault with nothing running;
+- [x] T065 [P] [US2] `scripts/e2e/scenarios/lock-twice.test.ts`: an unlocked vault with nothing running;
       `press('lock-instance-sidebar', { times: 2 })`; the original pid ends once within 4 seconds; for the next
       5 seconds `markedProcesses()` never holds more than one process; no `[role="alert"]` in the
       samples.
-- [ ] T066 [US2] Run the four scenarios with `pnpm test:e2e --grep <name>`; each finishes in under 30
+- [x] T066 [US2] Run the four scenarios with `pnpm test:e2e --grep <name>`; each finishes in under 30
       seconds (SC-007). Record the durations and the `press to process end` times in the "Validation
       record". Commit `feat(e2e): check the vault close promises of spec 013`.
 
@@ -887,4 +887,46 @@ Changed as a result, before the pull request was reviewed further:
   `passed create-and-unlock 6.9 s`, `passed smoke-start 4.0 s`, exit 0. No process carrying the run's
   marker, nor any stray `tauri-driver`/`WebKitWebDriver`/`Xvfb`, remained after any of the runs above.
 
-_Filled by later tasks: T066, T067, T068, T073 to T083 and T088._
+### Stage 3, close scenarios (T059 to T066), 2026-09-22
+
+- **T059** Branch `016-e2e-stage3-close` started from updated `origin/main` (PR #117 merged). Graphify
+  from the primary checkout: both queries ("close promises drain ladder deadlines",
+  "assert a process ended within a deadline") returned nodes from before spec 013/016 existed — the
+  primary checkout is still on an unrelated branch (`fix/active-model-info-lock`), so its graph predates
+  `src-tauri/src/vault_gate/` and `scripts/e2e/` entirely and had nothing relevant to extend from. Read
+  `src-tauri/src/vault_gate/drain.rs` directly instead: `COOPERATIVE_WINDOW` 1 s, `TOTAL_LIMIT` 3 s,
+  `HARD_END_GRACE` 500 ms.
+- **T060/T061** `close-promises.ts` exports the three scenario deadlines (`PROCESS_END_LIMIT_MS` 4000,
+  `PROVIDER_CLOSE_LIMIT_MS` 1000, `RELAUNCH_LIMIT_MS` 10000) with the drain ladder's own numbers as their
+  documented source; `close-promises.test.ts` checks the three values.
+- **T062 to T065** `lock-while-streaming.test.ts`, `window-close-while-streaming.test.ts`,
+  `closing-page.test.ts`, `lock-twice.test.ts` written. Three real bugs surfaced while getting them to
+  pass for real, none catchable by the fake-driver unit tests:
+  - Reading a provider connection's `closedAt` once, synchronously, right after `waitForEnd` is a real
+    race: when the process ends within a few milliseconds of the press (window close: confirmed 0 ms),
+    the socket's own "close" event has no realistic chance to reach this process's event loop yet.
+    `lock-while-streaming` and `window-close-while-streaming` now `ctx.waitFor` it (fixed, up to
+    `PROVIDER_CLOSE_LIMIT_MS`) instead of reading it once.
+  - `lock-twice.test.ts` pressed the lock control right after `createAndUnlock` without `openChat` first
+    — the lock hooks only exist on the chat page, not the workspace page. Missing `openChat(instance)`,
+    not an application defect.
+  - `press(hook, { times: 2 })`'s second click can find the session already gone (handled since the
+    Stage 2 follow-up) or, seen for real running the full suite together, a **stale element reference**
+    instead: under load the page's DOM can be torn down before the driver reports the whole session gone.
+    `page.ts`'s `press` now treats a stale element reference (and "no such element") the same as a gone
+    session for any click past the first.
+  - Running the whole suite together (not `--grep`-isolated) surfaced a real, reproducible race in
+    `tauri-driver` itself: its own port can answer, satisfying `launchDriver`'s readiness poll, before
+    its connection to the native `WebKitWebDriver` behind it is actually ready, so the very first
+    `POST /session` can fail with `got no answer` even though the driver is otherwise healthy. Reproduced
+    twice, always on the run's first scenario. `instance.ts`'s `startInstance` now retries `newSession`
+    once after a short pause on exactly this failure (`newSessionWithRetry`); any other error, or a
+    second failure, still fails at once.
+- **T066** `pnpm check:e2e-lib`: 144 tests. `pnpm typecheck:scripts`, `pnpm typecheck`, `pnpm lint`,
+  `pnpm format:check`: all pass. Each scenario alone via `--grep`: `lock-while-streaming` 7.9 s (press to
+  process end 0.1 s), `window-close-while-streaming` 5.8 s, `closing-page` 9.9 s, `lock-twice` 11.9 s. The
+  full suite (all six scenarios, no `--grep`) run twice in a row after the fixes above: both times
+  `passed` for all six, `press to process end` between 0.0 s and 0.1 s. No process carrying the run's
+  marker, nor any stray `tauri-driver`/`WebKitWebDriver`/`Xvfb`, remained after either run.
+
+_Filled by later tasks: T067, T068, T073 to T083 and T088._
