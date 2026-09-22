@@ -1012,6 +1012,8 @@ relaunch-after-lock`, no `--app`): `skipped`, "the build exits on close; this sc
   relaunches" — correct, not a pass or a fail. Full lib suite: 154 tests; typecheck/lint/format all pass.
   Full scenario suite (all seven test files — `closing-page` runs two color schemes as one file) against
   the release build, no `--grep`: all seven `passed`, 57.4 s total, no leftover marked process or
-  `tauri-driver`/`WebKitWebDriver`/`Xvfb`. Stage 3 is now complete end to end (T059 to T073).
+  `tauri-driver`/`WebKitWebDriver`/`Xvfb`. Stage 3 is now complete end to end (T059 to T073). Pushed as
+  `016-e2e-stage3-relaunch`, PR #119 opened (https://github.com/haexmas/holzi/pull/119) — the second half
+  of Stage 3 (T067 to T073), following #118's first half (T059 to T066) per the split agreed there.
 
 _Filled by later tasks: T074 to T083 and T088._
