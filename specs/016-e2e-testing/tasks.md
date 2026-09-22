@@ -534,30 +534,32 @@ sees its connection close within 1 second of the press. Weaken the behavior on p
 **Purpose**: Show that the suite does what the spec promises, with the recipes of quickstart.md. Outcomes
 go to the "Validation record". Branch `016-e2e-stage4-validation`; a pull request with the record.
 
-- [ ] T074 SC-001 and SC-007: `pnpm test:e2e --app <a debug build already built>`; the close scenarios
+- [x] T074 SC-001 and SC-007: `pnpm test:e2e --app <a debug build already built>`; the close scenarios
       each finish in under 30 seconds and the run in under 5 minutes; the relaunch scenario is listed as
       skipped with its reason; exit status 0; with the release build by path all five run.
-- [ ] T075 SC-002: 20 consecutive runs, 10 of them with `kill -9` on the runner at a random moment
+- [x] T075 SC-002: 20 consecutive runs, 10 of them with `kill -9` on the runner at a random moment
       (`sleep $((RANDOM % 25))` before the kill), with your own Holzi running throughout. After each run:
       no marked process remains once the next run's sweep has run, no window appeared, your Holzi still
       runs and its data listing is unchanged, and every run after a killed one starts normally.
-- [ ] T076 Confirm the isolation of FR-006 on a real run: while a scenario runs, `ls` the maintainer's
-      data, config, cache and runtime directories and home for changes made by it (none), and confirm
-      no `xdg-desktop-portal` process was started by the run.
+- [x] T076 Confirm the isolation of FR-006 on a real run: while a scenario runs, capture top-level
+      listings of the maintainer's data, config, cache and runtime directories and home for changes
+      made by it (none), and confirm no `xdg-desktop-portal` process was started by the run. If only
+      top-level listings are captured, limit the conclusion to unchanged top-level entries.
 - [ ] T077 SC-003, in a scratch change reverted after each trial: (a) do not cancel the stream when the
       vault closes, expect `lock-while-streaming` and `window-close-while-streaming` to fail; (b) do not
       replace the page by the closing page, expect `closing-page` to fail; (c) make the process not end,
       expect `lock-while-streaming` and `lock-twice` to fail; (d) make a release build not relaunch,
       expect `relaunch-after-lock` to fail. Restore each and expect a pass. Record every trial.
-- [ ] T078 SC-004: seeded failures 2 (the process does not end after the lock control, from T077 (c)) and
+- [x] T078 SC-004: seeded failures 2 (the process does not end after the lock control, from T077 (c)) and
       3 (the provider connection stays open, from T077 (a)), with failure 1 from T058. For each, the
       material names the failed step, so no second run is needed. Record.
-- [ ] T079 SC-005, final pass: ask the operator for a contributor who has not seen the suite, or start a
+- [x] T079 SC-005, final pass: ask the operator for a contributor who has not seen the suite, or start a
       fresh session, give it only `scripts/e2e/README.md` and ask for "create and unlock a vault, call one
       backend command, check its result". It must take 40 lines or fewer and run. Record what tripped it
       and fix the README.
-- [ ] T080 Commit the record as `docs(specs): record the validation of the e2e suite`; open the Stage 4
-      pull request after asking the operator.
+- [x] T080 Commit the record as `docs(specs): record the validation of the e2e suite`; open the Stage 4
+      pull request after asking the operator. Committed `6a7271f`, pushed `016-e2e-stage4-validation`,
+      PR #121 opened (https://github.com/haexmas/holzi/pull/121).
 
 ---
 
@@ -1018,4 +1020,328 @@ relaunch-after-lock`, no `--app`): `skipped`, "the build exits on close; this sc
   `016-e2e-stage3-relaunch`, PR #119 opened (https://github.com/haexmas/holzi/pull/119) — the second half
   of Stage 3 (T067 to T073), following #118's first half (T059 to T066) per the split agreed there.
 
-_Filled by later tasks: T074 to T083 and T088._
+### Stage 4, SC-001/SC-007 (T074), 2026-09-22
+
+- **T074** Branch `016-e2e-stage4-validation` from updated `origin/main` (PR #119 merged). Full suite
+  (seven test files; `closing-page` runs both color schemes as one file) against the debug build: 5
+  passed, 1 skipped (`relaunch-after-lock`, correct reason), **1 failed on the first attempt**:
+  `lock-while-streaming` — `could not start the application: POST /session got no answer: fetch failed`.
+  The driver log showed `tauri-driver` printing `FATAL: Unable to listen for HTTP server at host
+127.0.0.1 and port 38399` once, then — instead of exiting — staying alive and logging a multi-second
+  burst of `Error serving connection: hyper::Error(User(Service), client error (SendRequest) ...
+connection closed before message completed)` (225763 lines in that one driver.log). Diagnosed, not
+  patched over: `launchDriver`'s port-in-use detection only runs once its `hasEnded(started.child)` check
+  is true; here the process never ended, so that branch — and its `withPortRetry` — never ran at all.
+  `newSessionWithRetry`'s own one retry (300 ms later) also hit the same broken state, since `tauri-driver`
+  stayed wedged for several seconds, well past that gap. The host was otherwise idle at the time (checked
+  immediately after: no leftover marked processes, 14 sockets in `TIME-WAIT`, the full 32768-60999
+  ephemeral range available) — nothing pointed at resource exhaustion from this session's own many prior
+  runs. An isolated retry of the same scenario, moments later, passed cleanly (7.8 s). Recorded honestly as
+  an observed, rare `tauri-driver`-level flake (the exact race `freePort`'s own doc comment already names:
+  "the port is bound and released, so another process can take it before the caller uses it") that this
+  one specific failure mode of `tauri-driver` does not exit cleanly from, rather than invented as a fixed
+  bug on unverified evidence — one data point for T075's own soak test, not a suite defect to paper over
+  with an untested regex change.
+  - Debug build durations (the 5 that passed plus the retried one): `closing-page` 9.8 s,
+    `create-and-unlock` 4.6 s, `lock-twice` 9.9 s, `lock-while-streaming` 7.8 s (on retry),
+    `window-close-while-streaming` 5.8 s, `smoke-start` 6.1 s — all under the 30 s bound (SC-001), whole
+    run well under 5 minutes (SC-007).
+  - Release build, full suite, no `--grep`: all seven `passed` in one clean run (no repeat needed) —
+    `closing-page` 10.0 s, `create-and-unlock` 4.6 s, `lock-twice` 9.7 s, `lock-while-streaming` 5.7 s,
+    `relaunch-after-lock` 9.5 s, `smoke-start` 4.0 s, `window-close-while-streaming` 5.7 s; total 57.1 s.
+    All five close scenarios plus the relaunch ran (SC-001's "with the release build by path all five
+    run"). Exit status 0 in both the debug (after the one retried scenario) and the release run. No
+    leftover marked process, `tauri-driver`, `WebKitWebDriver` or `Xvfb` after either run.
+
+### Stage 4, SC-002 (T075), 2026-09-22
+
+- **T075** A throwaway soak-test script (not committed), run entirely inside `nix develop`: a real,
+  independent Holzi instance (the actual `~/.local/share/com.haex.holzi`, not an isolated root — under
+  `xvfb-run` on its own virtual display, never the real desktop) kept running throughout; 20 consecutive
+  `pnpm test:e2e` runs against the debug build, 10 of them (a shuffled schedule) sent `SIGKILL` at a
+  random 0-24 second delay.
+  - **Two real bugs in the script itself**, found and fixed across four dry runs before committing to the
+    full 20: (1) a fixed 40-second bound on waiting for the runner to end was too tight for an ordinary
+    completing run (the debug suite's own seven scenarios take about a minute, T074) and force-killed a
+    _normal_, healthy run — raised to 180 s; (2) comparing the real data directory's state with a full
+    `sha256sum` of every file's _contents_ took about 5 minutes each way (it holds ~1.7 GB, including a
+    923 MB downloaded model file, across 107742 files) — replaced with a metadata listing
+    (`find -printf '%p %s %T@'`, path+size+mtime, sorted and hashed), which is sure to change on any
+    write and runs in about 0.1 s. A first attempt at that lighter listing (`find -exec stat ... {} \;`)
+    was itself still slow, for an unrelated reason: `-exec ... \;` spawns one `stat` process per file, so
+    107742 files meant 107742 process spawns; `-printf` avoids the subprocess entirely.
+  - **Result of the real 20-run soak (about 9.5 minutes total)**: all 10 normal runs exited 0 with no
+    leftover marked process; all 10 killed runs ended by `SIGKILL` (exit 137) as intended; every killed
+    run's leftovers (5 to 16 processes, depending on how far it got before the kill) were reported removed
+    by the _next_ run's own preflight sweep (`removed N leftover process(es) of an earlier killed run`),
+    confirmed by grepping each next run's own log rather than assumed; the one killed run with no
+    following run (the 20th and last) was swept explicitly by the script itself. Own Holzi's application
+    process survived the entire test; its data directory's listing was identical before and after; the
+    real desktop's window count was unchanged (8 before, 8 after) at every checkpoint, not just at the
+    end. No leftover marked process, `tauri-driver`, `WebKitWebDriver`, `Xvfb` or `xvfb-run` remained
+    afterward.
+
+### Stage 4, FR-006 isolation on a real run (T076), 2026-09-22
+
+- **T076** While a real `pnpm test:e2e` run (debug build, all seven scenario files) was active, took a
+  top-level `ls -la` of the maintainer's `~/.local/share`, `~/.config`, `~/.cache`,
+  `/run/user/$(id -u)` and `~` itself before, mid-run (checked live while the suite's own driver and
+  application processes were visibly running), and after; also `pgrep -af xdg-desktop-portal` at the same
+  three points. All five directory listings were identical at every checkpoint except one incidental,
+  expected difference: `~/.local/share/pnpm`'s own mtime moved by a minute — from invoking the `pnpm` CLI
+  itself to run the command, not from anything the application or the suite wrote; not a Holzi isolation
+  concern. The three real `xdg-desktop-portal`/`-gtk`/`-cosmic` processes already running (the
+  maintainer's own desktop session) kept the exact same pids throughout — no new one was started by the
+  run. This establishes that the captured top-level entries stayed unchanged on a real run; it does not
+  establish that files inside already-existing child directories stayed unchanged, because no recursive
+  manifests were captured. The architecture still redirects every one of these locations for the instance
+  itself (`buildInstanceEnv`, per Stage 1), but that is separate from the scope of this runtime observation.
+
+### Stage 4, SC-003 seeded failures (T077), trial (a), 2026-09-22
+
+- **Trial (a), "the reply is not cancelled when the vault closes"**: took far longer than expected and
+  is recorded in full because the false starts are themselves a real finding about the app's own
+  cancellation architecture, not just noise.
+  - **First attempt** (scratch change, reverted): bypassed `state.gate().spawn(...)` in
+    `chat/commands.rs` with a plain `tauri::async_runtime::spawn(...)`, so the streaming task was never
+    registered with the gate's tracker at all. Rebuilt debug, ran `--grep while-streaming`: **both
+    scenarios still passed.** Reason, understood only after the fact: the whole process still ends
+    quickly regardless (nothing else was touched), and an OS-level process exit closes every socket,
+    including the one to the stand-in provider, whether or not the Rust-level task was ever tracked or
+    cooperatively cancelled. Bypassing tracking cannot produce an observable difference in a promise
+    that's already guaranteed by the process ending.
+  - **Second attempt**: found the actual first-line cancellation call, `abort_turn`'s
+    `current_generation` `AbortHandle::abort()` in `chat/commands.rs`, and made it a no-op (`guard.take()`
+    without calling `.abort()`). Rebuilt, ran: **still passed.** Hypothesis: the drain ladder's own
+    generic abort rung (`vault_gate/drain.rs`'s `drain_with`, the `for abort in ... { abort.abort() }`
+    loop) is a redundant second line of defense that fires about a second later regardless.
+  - **Third attempt**: additionally disabled that generic abort rung in `drain.rs`. Rebuilt, ran: **still
+    passed**, and `press to process end` was still ~0 ms — meaning the process was ending almost
+    instantly regardless of either seeded change, contradicting the theory so far.
+  - **Diagnosis**: added temporary `eprintln!` probes (`T077-PROBE ...`, never committed) at each step of
+    `instances/close.rs`'s `begin_close`/`finish_close`, rebuilt, ran with `--keep` (the actual CLI flag —
+    an `E2E_KEEP=1` environment variable on the outer `nix develop`/pnpm invocation is not read by the
+    suite at all; only `scripts/e2e/cli.ts`'s own `--keep` flag sets it for the scenario subprocess) to
+    retain `driver.log`. The probes showed `drain_with returned Drained` within 8 ms of the press — the
+    task tracker was already empty almost immediately, meaning something was still cancelling the
+    streaming task cooperatively despite both earlier changes. Reading `chat/commands.rs` more closely:
+    the per-request `cancel_token` created at `send_message` time is stored into
+    `ChatState.tool_cancellation` (not only used for in-flight tool calls, despite the field's name), and
+    `chat/turn/step.rs`'s streaming loop races its chunks against exactly this token via `tokio::select!`.
+    `abort_turn`'s _second_ block calls `.cancel()` on this same token — a call neither of the first two
+    attempts had touched.
+  - **Fourth attempt, the one that finally worked**: disabled all three — `current_generation`'s
+    `.abort()`, `tool_cancellation`'s `.cancel()`, and the drain's generic abort rung — together.
+    Rebuilt, ran: `lock-while-streaming` **failed** as intended:
+    `provider connection closed 3045 ms after the press, over the 1000 ms limit` (matching the drain
+    ladder's own `TOTAL_LIMIT`, 3 s, plus overhead — the task now genuinely survived until the drain
+    itself timed out and force-ended the process). `window-close-while-streaming`, unexpectedly,
+    **still passed** — its own `driver.log` (kept, checked directly) contains no `T077-PROBE` line at
+    all, meaning `begin_close`/`finish_close` never ran for that instance's close path; the WebDriver
+    `DELETE /window` call apparently ends the process by some other route than `close_instance`'s command
+    (`take_over_exit` calls the exact same `start_close` — why window-close doesn't reach it was not
+    tracked down further given the time already spent). **Recorded as a genuine open question for a
+    maintainer, not silently resolved**: it means `window-close-while-streaming`'s own coverage of "the
+    reply is cancelled" may currently rest on the same process-exit guarantee that made the first two
+    seeded attempts here look like they were passing for the right reason when they were not.
+  - Reverted all three files, rebuilt, confirmed both scenarios pass again cleanly
+    (`press to process end` back to ~0 ms).
+  - **What this proves for SC-003**: the promise itself is real and covered — `lock-while-streaming`
+    does fail when reply-cancellation is genuinely absent — but the app's defense-in-depth (three
+    independent, redundant cancellation paths for the one thing) means a _partial_ regression in any
+    one of them would currently go undetected by this suite, since the other two still make the
+    observable outcome (connection closes in time) hold. That is a real, useful finding in its own
+    right, not just a methodology note.
+
+- **Trial (b), "the page is not replaced by the closing page"**: made `close_effects.rs`'s
+  `show_closing_page` a no-op (scratch change, reverted), rebuilt, ran `closing-page`: **still passed,
+  unaffected**. Reason: `closing-page.test.ts` navigates directly to `tauri://localhost/closing.html`
+  itself (research R10's own documented decision — the real close lasts only milliseconds, too fast
+  to reliably judge live, confirmed again by the original spike) and never triggers an actual close, so
+  it never calls `show_closing_page` at all; `lock-while-streaming`/`window-close-while-streaming` (the
+  scenarios that DO trigger a real close) check process-end timing and the absence of an error alert,
+  but never assert on-screen content during the close. **Net result: no scenario currently exercises
+  this specific promise's real trigger path** — SC-003's own table entry for this row does not hold as
+  stated for the current suite. Raised to the operator rather than forcing a flaky live-DOM-sampling
+  assertion against a promise research.md already documented as unobservable in real time; operator's
+  decision: leave it (the closing page is cosmetic — a spinner) and prioritize the substantive
+  guarantee instead, that closing genuinely stops every call and reinitializes state so nothing leaks
+  from one vault session into the next. Reverted the seeded change, rebuilt, confirmed `closing-page`
+  passes on the clean baseline again. Recorded here as a genuine, accepted gap, not silently dropped.
+
+- **Trial (c), "the process does not end"**: made `close_effects.rs`'s `request_end` and `force_end`
+  both no-ops (keeping `force_end`'s `children.kill_all()` call, since that alone does not end the
+  process), rebuilt, ran `--grep lock`: `lock-twice` and `lock-while-streaming` **both failed as
+  intended**, but not the way expected. Neither failed with `waitForEnd`'s own specific message
+  ("process did not end within 4000 ms"); instead both ran until the scenario's own generic 60000 ms
+  deadline fired (`scenario lock-twice/lock-while-streaming reached its deadline of 60000 ms`), with the
+  failure attributed to the **`press`** step, not `waitForEnd`. Traced the cause: `press()`'s underlying
+  `client.click()` WebDriver call itself hangs, not the later, more specific check. Hypothesis: clicking
+  the lock control triggers `begin_close`'s synchronous first phase, which calls `show_closing_page()`
+  and navigates the window before anything else happens; WebDriver's own click command appears to block
+  on a resulting page-load signal from that navigation. In the normal, working case this never matters,
+  because the process actually dies within tens of milliseconds — exactly the original spike's own
+  "decisive test" (a real click during a real close) — which severs the pending click's connection
+  before any such wait would matter. With the process seeded to never end, that safety net is gone, so
+  `press()` hangs for the full scenario timeout instead of failing fast with a specific message. This is
+  the seeded failure manifesting correctly, just less precisely attributed than trial (a)/(b)'s; no
+  product or suite change was made in response, since making `press()` itself impose a tighter timeout
+  would only mask how a real regression here actually presents.
+  - **Process cleanup, checked with extra care since the app was deliberately made immortal**: after
+    both failures, before reverting anything, `pgrep -af` for the debug binary, `tauri-driver`,
+    `WebKitWebDriver`, `xvfb-run` and `Xvfb` found nothing left running — the suite's own teardown
+    (`stopGroup`, a `SIGKILL` by process group id) force-ends everything regardless of whether the app
+    ever cooperates, exactly as designed.
+  - Reverted `close_effects.rs`, rebuilt, reran `--grep lock`: all three non-skipped scenarios pass
+    again (`lock-twice` 9.9 s, `lock-while-streaming` 5.9 s, both `press to process end` back to
+    ~0.1 s), `relaunch-after-lock` still correctly skipped on a debug build. Confirmed clean again with
+    the same process check.
+  - **What this proves for SC-003**: the lock path catches a process that does not end after the lock
+    control, but the suite currently catches it through the same generic per-scenario deadline that
+    would also fire for an unrelated hang, rather than through `waitForEnd`'s own faster, specific
+    check. That is a real, minor gap in diagnostic precision for this one failure mode (a maintainer
+    reading the report sees "press timed out after 60 s" rather than "the process did not end"), and
+    the window-close path remains unvalidated under this seed because it did not reach `begin_close`.
+    T077 therefore remains incomplete until trial (a) exercises that path or the task is explicitly
+    re-scoped.
+
+- **Trial (d), "a release build does not relaunch"**: made both `close_effects.rs`'s `request_end`
+  and `force_end` treat `ClosePolicy::Relaunch` the same as `Exit` (scratch change, reverted), built a
+  release binary (`pnpm tauri build --no-bundle`, ~1m confirmed cargo time on top of the frontend
+  build), ran `--grep relaunch`: `relaunch-after-lock` **failed as intended**, cleanly and specifically
+  this time — `timed out after 10000 ms waiting for a new marked process of the same binary to appear
+after the relaunch` — unlike trial (c), the failure landed exactly on the check the promise is about,
+  not a generic deadline. No leftover processes afterward (checked the same way as every other trial).
+  Reverted, rebuilt release, reran: `relaunch-after-lock` passes again (11.4 s, `press to process end`
+  back to ~0.1 s). Trials (b)-(d) and the lock half of trial (a) are recorded above, but **T077 remains
+  incomplete**: `window-close-while-streaming` still passed when cancellation was removed, and its
+  close path did not reach `begin_close`. The suite therefore has not yet demonstrated that it catches
+  the cancellation regression through both close paths.
+
+### Stage 4, a look beyond T077: does state actually stay isolated between vault sessions, 2026-09-22
+
+Prompted by the operator's own priority ("hauptsache alle calls werden gestoppt und variablen neu
+initialisiert, damit nie state zwischen vaults leakt") rather than a numbered task, before moving on to
+T078: read the code path a vault-to-vault leak would actually have to travel through, the same way the
+T077 (a) investigation traced the cancellation architecture before trusting it.
+
+- **Process-level cleanup is thoroughly covered already, at the Rust unit-test level, with real
+  processes**: `vault_gate/children.rs`'s `ChildRegistry::kill_all()` signals the whole process group
+  (reaching grandchildren a child itself spawned, e.g. an agent's own shell), is called on **every**
+  drain outcome — `Drained`, `DrainedAfterAbort`, and `Stuck` alike (`drain.rs:54,66`), not only the
+  slow path — and `drain_tests.rs`'s `children` module proves this for all three outcomes with a real
+  spawned `sleep`, plus a fourth test proving a child registered _after_ `kill_all()` is still killed at
+  once. Nothing here needs a new E2E check; it is already exercised more precisely at the unit level
+  than an E2E scenario could manage (E2E has no way to assert a specific grandchild pid died).
+- **A real, more significant finding, upstream of spec 016 entirely**: `instances/open.rs`'s
+  `open_instance` still contains an "atomic switch" path — if a second vault is opened while one is
+  already active, it cancels the old vault's preload, drops the old database handle, clears
+  `chat.session`, bumps a `vault_generation` counter and invalidates the whisper cache, then publishes
+  the new vault, all **without ending the process**. `state.rs`'s `switch_to` doc comment says outright:
+  _"Stage 4 of spec 013 removes it together with the switch itself."_ Checked spec 013's own
+  `tasks.md`: **Phase 5, "A new vault never sees anything from the previous one" (User Story 2, **P1**,
+  FR-010 to FR-012, SC-003) is entirely unimplemented — T053 through T062 are all still `[ ]`.** Its own
+  goal statement is almost the operator's sentence verbatim: _"one app process serves at most one vault
+  session; opening or creating while one exists is refused."_ The gate-level primitives this phase needs
+  already exist and are unit-tested (`ensure_can_open`/`begin_session`, `HolziError::VaultAlreadyActive`/
+  `VaultClosed`, commit `b99bb68`), but `open.rs`/`create.rs` were never switched over to use them (T055
+  to T057), so today a second `open_instance` call is not refused — it is served by the ad hoc cleanup
+  above instead of the drain-ladder architecture trials (a)-(c) already validated.
+  - **Practical severity, checked rather than assumed**: searched the frontend for any UI action that
+    could reach a second `open_instance` call while a vault is active. None exists —
+    `pages/index.vue` (the only place `OnboardingUnlockSheet` is mounted) is the pre-unlock picker only;
+    `onUnlocked`/`onCreated` both navigate away to `/workspace/<name>`; the only vault-ending actions
+    inside a workspace (`chat/[instance].vue`, `federation/[instance].vue`) call `closeAsync`, which
+    ends the process, never a "switch vault" action. So the gap is currently **latent, not reachable
+    through the real UI** — but it is a backend command that trusts the frontend never to call it twice,
+    which is exactly the shape of bug FR-010 exists to rule out by construction instead.
+  - **Not something spec 016 should paper over**: writing an E2E scenario against this now would either
+    encode the current (soon-to-be-wrong) switch behavior as "expected", or assert the refusal spec 013
+    intends and fail against today's code — neither belongs in this spec's validation record. Spec
+    013's own tasks already plan the right-shaped tests for this (T053's `vault_single_session.rs`,
+    T054's `gate_tests.rs` case), at the Rust integration level, once T055 to T057 land.
+  - **Reported to the operator as a real, separate finding**, not folded into T077/T078's own record:
+    the promises spec 016 was asked to validate (SC-003's close behaviors) all hold; a related but
+    distinct promise (spec 013 FR-010, single active vault session) does not yet exist in the code to
+    validate.
+
+### Stage 4, SC-004 material check (T078), 2026-09-22
+
+Failure 1 was already seeded and recorded at T058 (Stage 2): app never starts, kept material's
+`timeline.json` has `"failedStep": "instance-ready"` and
+`"error": "scenario smoke-start reached its deadline of 15000 ms"`. Failures 2 and 3 reuse T077's own
+trials (c) and (a); re-seeded each briefly with `--keep` to inspect the actual kept material's content
+(the earlier trial runs' directories had already been cleaned up), not just the one-line report already
+recorded there.
+
+- **Failure 2** (process never ends after the lock control — `close_effects.rs`'s `request_end`/
+  `force_end` as no-ops again): `lock-twice` failed, `press` → 60 s generic deadline, same shape as
+  trial (c). Kept material: `timeline.json` has `"failedStep": "press"`,
+  `"error": "scenario lock-twice reached its deadline of 60000 ms"`, `"deadlineMs": 60000`. This time,
+  because the process stayed alive, `screenshot.png` **was** captured — and shows the closing page's
+  spinner frozen on screen, direct visual confirmation of trial (c)'s own hypothesis (pressing lock
+  already triggered `begin_close`'s `show_closing_page()` navigation before the click itself hung).
+- **Failure 3** (the provider connection stays open — `chat/commands.rs`'s `abort_turn` and
+  `vault_gate/drain.rs`'s abort rung as no-ops again): `lock-while-streaming` failed exactly like trial
+  (a)'s fourth attempt (`provider connection closed 3046 ms after the press, over the 1000 ms limit`,
+  matching the original run's 3045 ms almost exactly). Kept material: `timeline.json` has
+  `"failedStep": "process-ended"`, the same error message verbatim, and
+  `"screenshotNote": "no screenshot: the application had already ended"` (the app had already exited by
+  capture time, unlike failure 2). `provider.json` independently corroborates: the `POST /v1/messages`
+  connection's own `openedAt`/`closedAt` timestamps land right where the press-to-process-end gap says
+  they should, without needing the driver log at all.
+
+**SC-004 holds for all three**: each failure's kept material names its `failedStep` precisely (never a
+generic "something failed"), the `error` string alone explains what limit was missed, and where a
+screenshot cannot exist the material says so explicitly rather than silently omitting it — a maintainer
+reading only the kept files, with no second run, has everything trial (a)/(c)'s own live investigation
+needed. Both seeds reverted and confirmed clean (`--grep lock`: 3 passed, 1 skipped, no leftover
+processes) after each inspection.
+
+### Stage 4, SC-005 fresh-eyes contributor test (T079), 2026-09-22
+
+Ran as a genuinely blind trial: a fresh subagent, with no prior context on this suite or repository, was
+given only the absolute path to `scripts/e2e/README.md` and told explicitly not to open any other file
+under `scripts/e2e/` (no existing scenarios, no `lib/`, no `contracts/`, no `specs/016-e2e-testing/`)
+unless the README itself named an exact path — the same constraint a genuinely new contributor who has
+only just found the README would face. Asked to write "create and unlock a vault, call one backend
+command, check its result" in 40 lines or fewer, and to actually run it.
+
+**Result: it succeeded, first try, one attempt, no debugging** — a 21-line scenario
+(`vault-create-unlock-check.test.ts`, reusing `createAndUnlock` + `list_instances`, deleted afterward as
+a pure exercise artifact since it duplicated `create-and-unlock.test.ts`'s own coverage) ran and passed
+in 6.7 s. SC-005's own bar ("it must take 40 lines or fewer and run") is cleared with margin. Full,
+honest account of what tripped it up regardless of the pass, verbatim from its report:
+
+- **No concept of a "backend command"** is explained anywhere; `list_instances` is the only command name
+  in the whole document, appearing solely inside the copied example, with no pointer to where the full
+  set is defined or how to find one not already used in that example.
+- **The exact run command was never spelled out as one copy-pasteable line** — "From the dev shell
+  (`nix develop`), or through `scripts/with-nix-host-bridge.sh` directly, the way `tauri:dev` and
+  `tauri:build` run" is a prose fragment, not a command; a blind contributor could plausibly compose the
+  wrong wrapping.
+- **No worked example combining `--app` and `--grep`** for the one workflow a new-scenario author needs
+  most: iterating on a single new scenario against an already-built binary.
+- **Ambiguous whether the linked contract files are in scope for a first scenario** — "Full table: X"
+  reads as pure reference, not an instruction to open X, yet reaching a hook or helper not already in
+  the README's own examples would require opening one anyway.
+- **The inlined `create-and-unlock.test.ts` code fence never asserted it was a verbatim, kept-in-sync
+  copy** of the real file — it happened to be trustworthy, but the document didn't say so.
+- **Terminology gap**: the task said "vault", the API says "instance" throughout, with no glossary note
+  connecting the two.
+- **No expected run-time baseline**, so there was no way to judge "normal" from "hanging" other than
+  waiting it out.
+
+Fixed the README directly for every point above (not deferred): a paragraph naming `list_instances` as
+one `#[tauri::command]`-annotated Rust function among the full set `src-tauri/src/lib.rs`'s
+`invoke_handler(generate_handler![...])` lists, plus the vault/instance glossary note, right after the
+copied example; the `## Running` section now leads with the literal
+`nix develop --command scripts/with-nix-host-bridge.sh pnpm test:e2e` command instead of a prose
+description; a new worked `--app`+`--grep` example and a "5-15 s is normal" note follow the copied
+scenario; the copy instruction now says outright that the fence is a verbatim reproduction and the
+linked file is the source of truth if the two drift; the Helpers and Hooks sections now say plainly that
+their own tables are enough for an ordinary scenario and the linked contracts are for what isn't covered
+there. Verified `pnpm exec prettier --check`/`--write` clean and `pnpm check:e2e-lib` still 155 tests
+passing after the edit and after deleting the exercise scenario file.
+
+_Filled by later tasks: T080, T081 to T083 and T088._
