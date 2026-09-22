@@ -24,7 +24,7 @@ import {
   stopGroup,
 } from './processes.ts'
 import type { Tools } from './preflight.ts'
-import { WebDriverClient } from './webdriver.ts'
+import { SessionGoneError, WebDriverClient } from './webdriver.ts'
 import { createPage } from './page.ts'
 import type { Page, StepRecorder } from './page.ts'
 
@@ -234,6 +234,25 @@ async function launchDriver(
   })
 }
 
+/**
+ * The driver's own port can answer (satisfying `launchDriver`'s poll) before its connection to the
+ * native webview driver is ready behind it: seen for real, under load, as `POST /session got no answer`
+ * - a `SessionGoneError`, even though the port itself was open a moment before. One short retry covers
+ * it in practice; any other error, or a second failure, is not retried and reaches the caller as is.
+ */
+export async function newSessionWithRetry(
+  client: WebDriverClient,
+  app: string,
+): Promise<void> {
+  try {
+    await client.newSession(app)
+  } catch (error) {
+    if (!(error instanceof SessionGoneError)) throw error
+    await sleep(300)
+    await client.newSession(app)
+  }
+}
+
 export async function startInstance(
   options: StartInstanceOptions,
 ): Promise<Instance> {
@@ -261,7 +280,7 @@ export async function startInstance(
 
   let pid: number | undefined
   try {
-    await client.newSession(options.app)
+    await newSessionWithRetry(client, options.app)
     // ponytail: a poll with a fixed deadline; the application appears within milliseconds of the session.
     const end = Date.now() + 5000
     while (pid === undefined && Date.now() < end) {

@@ -29,6 +29,13 @@ export interface FakeDriver {
   onFind(finder: (using: string, value: string) => string[]): void
   /** Whether a given element id is displayed. The default says every element is. */
   onDisplayed(displayed: (id: string) => boolean): void
+  /**
+   * Whether a click on the given element succeeds, drops the connection (gone-session style), or
+   * answers with a stale element reference (the element was found, but the DOM moved on since).
+   */
+  onClick(click: (id: string) => 'ok' | 'drop' | 'stale'): void
+  /** Whether a `POST /session` (new session) succeeds or drops the connection. */
+  onNewSession(newSession: () => 'ok' | 'drop'): void
   close(): Promise<void>
 }
 
@@ -39,6 +46,8 @@ export async function startFakeDriver(): Promise<FakeDriver> {
     kind === 'async' ? { value: { ok: true, data: null } } : { value: null }
   let finder: (using: string, value: string) => string[] = () => ['el-1']
   let displayed: (id: string) => boolean = () => true
+  let click: (id: string) => 'ok' | 'drop' | 'stale' = () => 'ok'
+  let newSession: () => 'ok' | 'drop' = () => 'ok'
 
   const server = http.createServer((req, res) => {
     const chunks: Buffer[] = []
@@ -54,8 +63,13 @@ export async function startFakeDriver(): Promise<FakeDriver> {
         res.end(JSON.stringify({ value }))
       }
       const base = `/session/${sessionId}`
-      if (method === 'POST' && path === '/session')
+      if (method === 'POST' && path === '/session') {
+        if (newSession() === 'drop') {
+          req.socket.destroy()
+          return
+        }
         return reply({ sessionId, capabilities: {} })
+      }
       if (method === 'DELETE' && path === base) return reply(null)
       if (method === 'POST' && path === `${base}/timeouts`) return reply(null)
       const exec = path.match(new RegExp(`^${base}/execute/(sync|async)$`))
@@ -84,7 +98,19 @@ export async function startFakeDriver(): Promise<FakeDriver> {
         const { using, value } = body as { using: string; value: string }
         return reply(finder(using, value).map((id) => ({ [ELEMENT_KEY]: id })))
       }
-      if (method === 'POST' && /\/element\/[^/]+\/(click|value)$/.test(path))
+      const clickMatch = path.match(/\/element\/([^/]+)\/click$/)
+      if (method === 'POST' && clickMatch) {
+        const outcome = click(clickMatch[1])
+        if (outcome === 'drop') {
+          req.socket.destroy()
+          return
+        }
+        if (outcome === 'stale') {
+          return reply({ error: 'stale element reference', message: '' }, 404)
+        }
+        return reply(null)
+      }
+      if (method === 'POST' && /\/element\/[^/]+\/value$/.test(path))
         return reply(null)
       const displayedMatch = path.match(/\/element\/([^/]+)\/displayed$/)
       if (method === 'GET' && displayedMatch)
@@ -113,6 +139,12 @@ export async function startFakeDriver(): Promise<FakeDriver> {
     },
     onDisplayed(next) {
       displayed = next
+    },
+    onClick(next) {
+      click = next
+    },
+    onNewSession(next) {
+      newSession = next
     },
     close: () =>
       new Promise<void>((resolve) => {

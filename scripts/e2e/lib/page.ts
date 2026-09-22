@@ -11,9 +11,24 @@ import type {
   InvokeResult,
   WebDriverClient,
 } from './webdriver.ts'
-import { SessionGoneError } from './webdriver.ts'
+import { SessionGoneError, WebDriverError } from './webdriver.ts'
 import { findByMarker, pidAlive } from './processes.ts'
 import type { MarkedProcess } from './processes.ts'
+
+/**
+ * Whether `error` is a legitimate way for a click past the first to land once the application is already
+ * on its way out: the session itself may already be gone, or - observed for real, under load, where the
+ * DOM was torn down before the session was - the element the earlier click found is now a stale
+ * reference (or gone outright). Anything else is a real failure and still propagates.
+ */
+function isGoneMidPress(error: unknown): boolean {
+  return (
+    error instanceof SessionGoneError ||
+    (error instanceof WebDriverError &&
+      (error.code === 'stale element reference' ||
+        error.code === 'no such element'))
+  )
+}
 
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms))
@@ -91,8 +106,7 @@ export async function type(
 }
 
 export interface PressOptions {
-  /** Click this many times in a row (the lock-twice check). Default 1. A second click after the first
-   * already ended the application throws, same as any other call made once the session is gone. */
+  /** Click this many times in a row (the lock-twice check). Default 1. */
   times?: number
   step: StepRecorder
 }
@@ -101,6 +115,12 @@ export interface PressOptions {
  * Clicks the displayed control found by hook, `options.times` times in a row. The control must already
  * be displayed; unlike `click`, this does not poll for it, so a scenario relying on it being on screen
  * right now gets a clear failure instead of a silent wait.
+ *
+ * A click past the first can find the application already ending, because the first one already ended
+ * it (the lock-twice check's very point): the session itself may be gone, or - seen for real, under
+ * load - only the element it found is now stale, the DOM having been torn down first. Either quietly
+ * stops the remaining clicks, rather than failing the call. A click that fails for any other reason
+ * still throws.
  */
 export async function press(
   client: WebDriverClient,
@@ -113,7 +133,14 @@ export async function press(
     throw new Error(`hook "${hook}" (selector ${selector}) is not displayed`)
   }
   const times = options.times ?? 1
-  for (let i = 0; i < times; i++) await client.click(element)
+  for (let i = 0; i < times; i++) {
+    try {
+      await client.click(element)
+    } catch (error) {
+      if (i > 0 && isGoneMidPress(error)) break
+      throw error
+    }
+  }
   options.step('press', hook)
 }
 

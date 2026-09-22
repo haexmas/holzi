@@ -124,6 +124,7 @@ describe('press', () => {
   it('clicks once and records the step, without polling', async () => {
     driver.onFind(() => ['el-1'])
     driver.onDisplayed(() => true)
+    driver.onClick(() => 'ok')
     const steps: Array<[string, string | undefined]> = []
     const before = driver.requests.length
     await press(client, 'lock-instance', {
@@ -139,12 +140,56 @@ describe('press', () => {
   it('with times: 2 clicks the same element twice', async () => {
     driver.onFind(() => ['el-1'])
     driver.onDisplayed(() => true)
+    driver.onClick(() => 'ok')
     const before = driver.requests.length
     await press(client, 'lock-instance', { times: 2, step: () => {} })
     const clicks = driver.requests
       .slice(before)
       .filter((r) => r.path.endsWith('/click'))
     assert.equal(clicks.length, 2)
+  })
+
+  it('stops quietly when a later click finds the session already gone', async () => {
+    driver.onFind(() => ['el-1'])
+    driver.onDisplayed(() => true)
+    let calls = 0
+    driver.onClick(() => {
+      calls += 1
+      return calls === 1 ? 'ok' : 'drop'
+    })
+    const steps: Array<[string, string | undefined]> = []
+    await press(client, 'lock-instance', {
+      times: 3,
+      step: (name, detail) => steps.push([name, detail]),
+    })
+    assert.equal(calls, 2) // the third click is never sent once the second finds the session gone
+    assert.deepEqual(steps, [['press', 'lock-instance']])
+  })
+
+  it('also stops quietly on a stale element reference (seen under load: the DOM moved on before the session was gone)', async () => {
+    driver.onFind(() => ['el-1'])
+    driver.onDisplayed(() => true)
+    let calls = 0
+    driver.onClick(() => {
+      calls += 1
+      return calls === 1 ? 'ok' : 'stale'
+    })
+    const steps: Array<[string, string | undefined]> = []
+    await press(client, 'lock-instance', {
+      times: 2,
+      step: (name, detail) => steps.push([name, detail]),
+    })
+    assert.equal(calls, 2)
+    assert.deepEqual(steps, [['press', 'lock-instance']])
+  })
+
+  it('still throws if the very first click fails', async () => {
+    driver.onFind(() => ['el-1'])
+    driver.onDisplayed(() => true)
+    driver.onClick(() => 'drop')
+    await assert.rejects(
+      press(client, 'lock-instance', { times: 2, step: () => {} }),
+    )
   })
 
   it('fails at once, without polling, when the control is not displayed', async () => {

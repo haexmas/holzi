@@ -1,4 +1,4 @@
-import { describe, it } from 'node:test'
+import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   mkdirSync,
@@ -14,9 +14,13 @@ import { join } from 'node:path'
 import {
   buildInstanceEnv,
   driverCommand,
+  newSessionWithRetry,
   prepareRoot,
   removeRoot,
 } from './instance.ts'
+import { WebDriverClient } from './webdriver.ts'
+import { startFakeDriver } from './fake-driver.testlib.ts'
+import type { FakeDriver } from './fake-driver.testlib.ts'
 
 function scratch(): string {
   return mkdtempSync(join(tmpdir(), 'e2e-instance-'))
@@ -159,5 +163,38 @@ describe('driverCommand', () => {
         '/t/WebKitWebDriver',
       ],
     })
+  })
+})
+
+describe('newSessionWithRetry', () => {
+  let driver: FakeDriver
+  let client: WebDriverClient
+
+  beforeEach(async () => {
+    driver = await startFakeDriver()
+    client = new WebDriverClient(driver.url)
+  })
+
+  afterEach(() => driver.close())
+
+  it('succeeds at once when the first attempt does', async () => {
+    await newSessionWithRetry(client, '/some/app')
+    assert.equal(client.sessionId, driver.sessionId)
+  })
+
+  it('retries once when the driver answers before its native connection is ready', async () => {
+    let calls = 0
+    driver.onNewSession(() => {
+      calls += 1
+      return calls === 1 ? 'drop' : 'ok'
+    })
+    await newSessionWithRetry(client, '/some/app')
+    assert.equal(calls, 2)
+    assert.equal(client.sessionId, driver.sessionId)
+  })
+
+  it('does not retry a second failure', async () => {
+    driver.onNewSession(() => 'drop')
+    await assert.rejects(newSessionWithRetry(client, '/some/app'))
   })
 })
