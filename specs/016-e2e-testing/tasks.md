@@ -258,7 +258,7 @@ kept running.
 - [x] T030 [US1] `scripts/e2e/scenarios/smoke-start.test.ts`: start an instance, wait until
       `document.readyState` is `complete` and `location.pathname` is `/`, take a screenshot, end. No
       hook and no text is used.
-- [ ] T031 [US1] Manual verification of the independent test, recorded in the "Validation record": start
+- [x] T031 [US1] Manual verification of the independent test, recorded in the "Validation record": start
       your own Holzi (for example `pnpm tauri:dev`) and note a checksum listing of its data directory;
       run `pnpm test:e2e --grep smoke`; then check no window appeared on the desktop, no process with a
       run marker remains (`grep -l HOLZI_E2E_RUN /proc/*/environ 2>/dev/null` prints nothing), the
@@ -748,8 +748,8 @@ smoke`, built from a reflink copy of an earlier build cache): `passed smoke-star
   `GDK_BACKEND=x11`, no `WAYLAND_DISPLAY`, `HOME`, `XDG_DATA_HOME` and `XDG_RUNTIME_DIR` inside the
   instance root, `DBUS_SESSION_BUS_ADDRESS=disabled:` and the marker. A checksum listing of the
   maintainer's data directory is identical before and after. No maintainer Holzi was running during
-  this check, so the required concurrent-instance isolation case and the visual no-window check remain
-  unverified. T031 stays open until that case is run.
+  this check, so the concurrent-instance case and the visual no-window check were not yet covered; see
+  the Stage 1 follow-up entry below, where that gap is closed.
   - Ctrl-C (SIGINT) at about 4 s: exit status 130, no process with a run marker left.
   - `kill -9` on the runner at about 4 s: 9 marked processes stayed behind; the next run reported
     "removed 9 leftover process(es) of an earlier killed run", passed, and left none.
@@ -763,5 +763,30 @@ smoke`, built from a reflink copy of an earlier build cache): `passed smoke-star
 - **T032 and T037** One commit covers both checkpoints, because the command imports the preflight it was
   going to stub. The environment of the application also pins `GDK_BACKEND=x11` and drops the display
   variables of the parent; `data-model.md` and `research.md` R5 say so.
+
+### Stage 1 follow-up (T031), 2026-09-22
+
+- **T031** Closed. The concurrent case the first pass lacked: the maintainer's own build (this
+  worktree's embedded debug binary, run directly, not through the suite) stayed up on the real desktop
+  for the whole check while `pnpm test:e2e --grep smoke` ran its own isolated instance. A checksum
+  listing of `~/.local/share/com.haex.holzi` (every file, `sha256sum`, sorted by path, hashed again) was
+  identical before and after: `973e4eb56eb2255c5bb26c27676909d9d49cc14323a1c0cf08478302156e0630`. The
+  maintainer process's pid did not change across a full pass, a SIGINT sent during the build step and a
+  SIGKILL sent during the scenario step, so the two are independent process trees, not merely
+  independent by the checksum. The real display's own window list
+  (`xprop -root _NET_CLIENT_LIST`) held one unrelated window throughout; this is expected rather than a
+  strong check on its own, since the suite's instance runs on its own `xvfb-run` display, never the
+  maintainer's (`DISPLAY=:99` confirmed via `/proc` in the first pass) — the two literally cannot share a
+  window list. The one-command run against a real, running maintainer instance stayed `passed
+  smoke-start`.
+  Separately, a small driver session run by hand against the real desktop (not part of the delivered
+  suite, `tauri-driver` and `WebKitWebDriver` with no `xvfb-run`, capabilities pointing at the same
+  embedded debug binary) took a screenshot to rule out a rendering problem: the window showed "Willkommen
+  bei Holzi", the "Instanz anlegen" control and the maintainer's real "test" instance, confirming the
+  build itself is sound independently of the isolation question. An earlier attempt to use
+  `pnpm tauri:dev` for the standing instance was abandoned: its Nuxt dev server exited on its own partway
+  through (unrelated to anything the suite did), which is why the embedded, dev-server-free debug build
+  was used instead. The kill-9-then-resweep mechanism itself was already proven in the first pass (9
+  leftover processes found and removed); this pass adds the concurrency evidence the first pass lacked.
 
 _Filled by later tasks: T052, T058, T066, T067, T068, T073 to T083 and T088._
