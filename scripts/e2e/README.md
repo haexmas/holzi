@@ -122,7 +122,7 @@ language (the interface is German by default). Full table:
 [`contracts/test-hooks.md`](../../specs/016-e2e-testing/contracts/test-hooks.md).
 
 ```ts
-instance.click('lock-instance') // [data-testid="lock-instance"], the displayed one
+instance.click('lock-instance-sidebar') // [data-testid="lock-instance-sidebar"]
 instance.click('#unlock-passphrase') // a selector starting with # . [ is used as is
 ```
 

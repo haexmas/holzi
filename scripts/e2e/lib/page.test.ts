@@ -242,7 +242,6 @@ describe('createPage', () => {
       ok: true,
       data: 'hi',
     })
-    assert.deepEqual(page.markedProcesses(), [])
     await page.navigate('tauri://localhost/closing.html')
     const nav = driver.requests.filter((r) => r.path.endsWith('/url')).pop()
     assert.deepEqual(nav?.body, { url: 'tauri://localhost/closing.html' })

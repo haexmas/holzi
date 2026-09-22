@@ -884,7 +884,7 @@ onBeforeUnmount(() => {
         class="justify-start gap-2"
         size="sm"
         variant="ghost"
-        data-testid="lock-instance"
+        data-testid="lock-instance-sidebar"
         @click="lock"
       >
         <Icon name="lucide:lock-keyhole" class="h-4 w-4" />
@@ -968,7 +968,7 @@ onBeforeUnmount(() => {
           <UiButton
             size="sm"
             variant="ghost"
-            data-testid="lock-instance"
+            data-testid="lock-instance-header"
             :aria-label="t('chat.lock')"
             @click="lock"
           >

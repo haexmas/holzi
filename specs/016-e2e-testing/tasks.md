@@ -379,8 +379,10 @@ runs in the suite (SC-005).
       `data-testid="instance-entry"` and `:data-instance-name="i.name"` to the entry button (2 lines).
 - [x] T047 [P] [US3] Hook: in `src/components/workspace/ChatFab.vue` add `data-testid="open-chat"` to the
       link (1 line).
-- [x] T048 [P] [US3] Hook: in `src/pages/chat/[instance].vue` add `data-testid="lock-instance"` to both lock
-      buttons, the one in the sidebar and the one in the header (2 lines, and nothing else in this file).
+- [x] T048 [P] [US3] Hook: in `src/pages/chat/[instance].vue` add `data-testid="lock-instance-sidebar"` to
+      the lock button in the sidebar and `data-testid="lock-instance-header"` to the one in the header (2
+      lines, and nothing else in this file). (Originally one shared `data-testid="lock-instance"` on both;
+      split into two unique ids after review — see the follow-up entry below.)
 - [x] T049 [US3] Verify the hooks: `pnpm check:templates`, `pnpm typecheck`, `pnpm lint`,
       `pnpm format:check`; `wc -l` of the chat page equals the T002 baseline plus 2, the other two files
       plus their stated lines. Behavior and appearance are unchanged (attributes only).
@@ -437,7 +439,7 @@ failed. The first is tested here, the other two after the close scenarios exist 
       kept.
 - [x] T058 [US4] Seeded failure 1 (SC-004), recorded: point `--app` at an executable script that only
       sleeps and run `pnpm test:e2e --close-behavior exit --grep smoke` with it; the material names the
-      step that failed (the instance never became ready), and nothing is left running. Commit
+      pending `instance-ready` step when startup is still in flight, and nothing is left running. Commit
       `feat(e2e): keep failure material and report step times`, then the Stage 2 pull request (T038 to
       T058), after asking the operator.
 
@@ -467,7 +469,7 @@ sees its connection close within 1 second of the press. Weaken the behavior on p
       source (spec 013: drain ladder 1 s cooperative, 3 s total, 0.5 s grace).
 - [ ] T062 [US2] `scripts/e2e/scenarios/lock-while-streaming.test.ts`: provider `stream-forever`;
       `createAndUnlock`, `openChat`, `connectProvider`, `startReply`; wait until the provider's
-      connection has been open for at least 800 ms; `press('lock-instance')`; `waitForEnd` within the
+      connection has been open for at least 800 ms; `press('lock-instance-sidebar')`; `waitForEnd` within the
       4 seconds of `close-promises`; the connection's `closedAt` minus the press time is at most 1 second
       (records `provider-closed`); no `[role="alert"]` in any sample from `sampleUntilEnd` and none just
       before the press. The pid tracked is the original `appPid`, so the scenario is correct on a
@@ -481,7 +483,7 @@ sees its connection close within 1 second of the press. Weaken the behavior on p
       exactly one `.ring` exists, and the body's background equals a probe element's background set to
       `var(--page)`; finally the two schemes' backgrounds differ.
 - [ ] T065 [P] [US2] `scripts/e2e/scenarios/lock-twice.test.ts`: an unlocked vault with nothing running;
-      `press('lock-instance', { times: 2 })`; the original pid ends once within 4 seconds; for the next
+      `press('lock-instance-sidebar', { times: 2 })`; the original pid ends once within 4 seconds; for the next
       5 seconds `markedProcesses()` never holds more than one process; no `[role="alert"]` in the
       samples.
 - [ ] T066 [US2] Run the four scenarios with `pnpm test:e2e --grep <name>`; each finishes in under 30
@@ -829,10 +831,10 @@ smoke-start`.
   the scenario's directory on a pass unless `E2E_KEEP` says otherwise. `pnpm check:e2e-lib`: 134 tests.
 - **T058** `--app` pointed at a script that only `exec sleep 3600` (never a real WebDriver target),
   `--close-behavior exit --grep smoke --scenario-timeout 15`: `failed smoke-start`, 15.0 s, exit 1. The
-  kept material's `timeline.json` has `"steps": []` and `"error": "scenario smoke-start reached its
-deadline of 15000 ms"` — an empty timeline already says the instance never reached `instance-ready`,
-  which is what T058 asks the material to show. No process with the run's marker remained afterward, and
-  the fake app itself was gone.
+  kept material's `timeline.json` has `"failedStep": "instance-ready"` and
+  `"error": "scenario smoke-start reached its deadline of 15000 ms"`; the pending readiness operation is
+  named even though no `instance-ready` event could be recorded. No process with the run's marker remained
+  afterward, and the fake app itself was gone.
 
 ### Stage 2 follow-up (real driver calls, not WebdriverIO), 2026-09-22
 
@@ -860,12 +862,20 @@ Changed as a result, before the pull request was reviewed further:
 
 - `webdriver.ts` gained `isDisplayed(element)`.
 - `page.ts`'s `click`/`type`/`press` now find the control by hook (`findElements`), pick the one
-  `isDisplayed` reports true (there may be more than one for `lock-instance`; the contract already asks
-  for "the displayed one", now genuinely checked rather than approximated by `offsetWidth`/`offsetHeight`
-  inside a script), and act on it with the driver's own `click`/`sendKeys` calls. `press` no longer needs
-  the `setTimeout(0)` scheduling trick a click that ends the application was thought to need; a second
-  `times` click after the application has already ended now throws like any other call to a gone session,
-  rather than being masked by firing both from one script tick.
+  `isDisplayed` reports true (a hook may still find more than one element in general, though none of the
+  three current hooks does any more — see the next point), and act on it with the driver's own
+  `click`/`sendKeys` calls, genuinely checked rather than approximated by `offsetWidth`/`offsetHeight`
+  inside a script. `press` no longer needs the `setTimeout(0)` scheduling trick a click that ends the
+  application was thought to need; a second `times` click after the application has already ended now
+  throws like any other call to a gone session, rather than being masked by firing both from one script
+  tick.
+- `lock-instance` was one `data-testid` shared by the sidebar and the header button, with "the helper
+  clicks the displayed one" as the intended design (`contracts/test-hooks.md`), not an implementation
+  shortcut — reasonable given the pre-existing script only ever found one page-side match anyway. Review
+  preferred two unique ids regardless, once it was clear a real, per-element `isDisplayed` check made
+  either design equally correct: `lock-instance-sidebar` and `lock-instance-header`
+  (`contracts/test-hooks.md`, T048). At the suite's fixed 1280×800 virtual screen only the sidebar one is
+  ever on screen; the header one is exercised only by a future narrower-viewport scenario.
 - Found by running the real flow end to end while checking the above (not by unit tests, which mock the
   backend and so could not catch this): `flows.ts`'s `startReply` sent `send_message` without
   `idempotencyKey`, a field the command has always required

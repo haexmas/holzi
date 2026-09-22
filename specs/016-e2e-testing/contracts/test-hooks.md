@@ -23,14 +23,19 @@ They are part of this contract now: renaming one means updating the helpers in t
 
 ## Hooks to add
 
-| Hook                                                             | Element                                                                                                                                | File                                                     | Lines added |
-| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ----------- |
-| `data-testid="instance-entry"` and `data-instance-name="<name>"` | The button of each instance in the start list                                                                                          | `src/components/onboarding/InstancesList.vue` (44 lines) | 2           |
-| `data-testid="open-chat"`                                        | The round button on the workspace page that opens the chat                                                                             | `src/components/workspace/ChatFab.vue` (20 lines)        | 1           |
-| `data-testid="lock-instance"`                                    | The lock button in the sidebar and the one in the header (only one is displayed at a given width; the helper clicks the displayed one) | `src/pages/chat/[instance].vue` (1316 lines)             | 2           |
+| Hook                                                             | Element                                                           | File                                                     | Lines added |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------- | ----------- |
+| `data-testid="instance-entry"` and `data-instance-name="<name>"` | The button of each instance in the start list                     | `src/components/onboarding/InstancesList.vue` (44 lines) | 2           |
+| `data-testid="open-chat"`                                        | The round button on the workspace page that opens the chat        | `src/components/workspace/ChatFab.vue` (20 lines)        | 1           |
+| `data-testid="lock-instance-sidebar"`                            | The lock button in the sidebar, shown from the `md` breakpoint up | `src/pages/chat/[instance].vue` (1316 lines)             | 1           |
+| `data-testid="lock-instance-header"`                             | The lock button in the header, shown below the `md` breakpoint    | same                                                     | 1           |
 
 `data-instance-name` carries the instance's name, which is data, not interface text, so an entry can be
 found by name without reading what is displayed.
+
+The two lock hooks are separate, not a shared one: at the suite's fixed virtual screen (1280×800, above
+the `md` breakpoint) only `lock-instance-sidebar` is ever on screen; `lock-instance-header` exists for a
+narrower viewport, not yet exercised by a scenario.
 
 Not added now: hooks for the composer, the message list or settings. Each scenario that needs one adds
 it with the scenario, so no hook exists without a use.
@@ -38,7 +43,7 @@ it with the scenario, so no hook exists without a use.
 ## Finding a control
 
 ```ts
-instance.click('lock-instance') // [data-testid="lock-instance"], the displayed one
+instance.click('open-chat') // [data-testid="open-chat"]
 instance.click('#unlock-passphrase') // a selector starting with # . [ is used as is
 ```
 
