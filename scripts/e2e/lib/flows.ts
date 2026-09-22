@@ -2,7 +2,7 @@
 // what almost every scenario needs, so a scenario itself stays short. Field names mirror the frontend's
 // own command wrappers (src/composables/useInstance.ts, useProviders.ts, useChat.ts), duck-typed here
 // rather than imported, since scripts/e2e runs outside the frontend's own build.
-import { randomBytes } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import type { InvokeOptions, InvokeResult } from './webdriver.ts'
 import type { StepRecorder } from './page.ts'
 import type { Provider } from './provider.ts'
@@ -135,7 +135,9 @@ export async function startReply(
 ): Promise<void> {
   unwrap(
     'send_message',
-    await instance.invoke('send_message', { args: { content: text } }),
+    await instance.invoke('send_message', {
+      args: { content: text, idempotencyKey: randomUUID() },
+    }),
   )
   await provider.waitForOpen()
   instance.step('reply-streaming')

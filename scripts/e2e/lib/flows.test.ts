@@ -45,45 +45,41 @@ beforeEach(() => {
 
 describe('createAndUnlock', () => {
   it('creates the instance, unlocks it and waits for the workspace address, recording unlocked', async () => {
-    let path = '/'
-    const calls: string[] = []
+    driver.onFind(() => ['el-1'])
+    driver.onDisplayed(() => true)
     driver.onExecute((kind, script) => {
       if (kind === 'async') {
-        calls.push('create_instance')
         assert.match(script, /create_instance/)
         assert.match(script, /"name":"test"/)
         return { value: { ok: true, data: { info: { name: 'test' } } } }
       }
-      if (script === 'return location.pathname') return { value: path }
-      calls.push('click-or-type')
-      path = '/workspace/test'
-      return { value: true }
+      return { value: '/workspace/test' }
     })
     await createAndUnlock(instance, { name: 'test' })
     assert.deepEqual(steps, [['unlocked', undefined]])
-    assert.deepEqual(calls, [
-      'create_instance',
-      'click-or-type',
-      'click-or-type',
-      'click-or-type',
-    ])
+    const clicks = driver.requests.filter((r) => r.path.endsWith('/click'))
+    assert.equal(clicks.length, 2) // the instance entry, then the unlock submit
+    const typed = driver.requests.find((r) => r.path.endsWith('/value'))
+    assert.equal(typeof (typed?.body as { text?: string })?.text, 'string')
+    assert.ok((typed?.body as { text: string }).text.length > 0)
   })
 
   it('escapes a quote in the name for the data-instance-name selector', async () => {
-    let sawEntryScript = ''
-    driver.onExecute((kind, script) => {
-      if (kind === 'async') return { value: { ok: true, data: {} } }
-      if (script === 'return location.pathname')
-        return { value: '/workspace/x' }
-      if (script.includes('data-instance-name')) sawEntryScript = script
-      return { value: true }
+    let seenValue = ''
+    driver.onFind((_using, value) => {
+      if (value.includes('data-instance-name')) seenValue = value
+      return ['el-1']
     })
+    driver.onDisplayed(() => true)
+    driver.onExecute((kind) =>
+      kind === 'async'
+        ? { value: { ok: true, data: {} } }
+        : { value: '/workspace/x' },
+    )
     await createAndUnlock(instance, { name: 'a"b' })
-    const expectedSelector =
-      '[data-testid="instance-entry"][data-instance-name="a\\"b"]'
-    assert.ok(
-      sawEntryScript.includes(JSON.stringify(expectedSelector)),
-      sawEntryScript,
+    assert.equal(
+      seenValue,
+      '[data-testid="instance-entry"][data-instance-name="a\\"b"]',
     )
   })
 
@@ -98,13 +94,15 @@ describe('createAndUnlock', () => {
 
 describe('openChat', () => {
   it('clicks open-chat and waits for the chat address', async () => {
-    let path = '/workspace/test'
-    driver.onExecute((kind, script) => {
-      if (script === 'return location.pathname') return { value: path }
-      path = '/chat/test'
-      return { value: true }
-    })
+    driver.onFind(() => ['el-1'])
+    driver.onDisplayed(() => true)
+    driver.onExecute(() => ({ value: '/chat/test' }))
     await openChat(instance)
+    assert.ok(
+      driver.requests.some(
+        (r) => r.method === 'POST' && r.path.endsWith('/element/el-1/click'),
+      ),
+    )
   })
 })
 
