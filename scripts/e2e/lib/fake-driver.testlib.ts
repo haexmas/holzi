@@ -27,6 +27,8 @@ export interface FakeDriver {
   onExecute(handler: ExecuteHandler): void
   /** Which element ids a lookup by `using` and `value` returns. The default is one element, `el-1`. */
   onFind(finder: (using: string, value: string) => string[]): void
+  /** Whether a given element id is displayed. The default says every element is. */
+  onDisplayed(displayed: (id: string) => boolean): void
   close(): Promise<void>
 }
 
@@ -36,6 +38,7 @@ export async function startFakeDriver(): Promise<FakeDriver> {
   let handler: ExecuteHandler = (kind) =>
     kind === 'async' ? { value: { ok: true, data: null } } : { value: null }
   let finder: (using: string, value: string) => string[] = () => ['el-1']
+  let displayed: (id: string) => boolean = () => true
 
   const server = http.createServer((req, res) => {
     const chunks: Buffer[] = []
@@ -83,6 +86,9 @@ export async function startFakeDriver(): Promise<FakeDriver> {
       }
       if (method === 'POST' && /\/element\/[^/]+\/(click|value)$/.test(path))
         return reply(null)
+      const displayedMatch = path.match(/\/element\/([^/]+)\/displayed$/)
+      if (method === 'GET' && displayedMatch)
+        return reply(displayed(displayedMatch[1]))
       if (method === 'GET' && path === `${base}/screenshot`)
         return reply(Buffer.from('png').toString('base64'))
       if (method === 'DELETE' && path === `${base}/window`) return reply([])
@@ -104,6 +110,9 @@ export async function startFakeDriver(): Promise<FakeDriver> {
     },
     onFind(next) {
       finder = next
+    },
+    onDisplayed(next) {
+      displayed = next
     },
     close: () =>
       new Promise<void>((resolve) => {
