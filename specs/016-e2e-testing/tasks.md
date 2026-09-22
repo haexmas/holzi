@@ -798,16 +798,16 @@ smoke-start`.
   `create_instance()` and `UnlockSheet.vue`'s `onSubmit()` exist as the two ends of the flow but nothing
   already joins them for a test. Nothing was extended; all three modules are new.
 - **T039 to T045** `page.ts`, `provider.ts`, `flows.ts` written with their tests first, then wired onto
-  `Instance` (`instance.ts`) and `ScenarioContext` (`scenario.ts`, `ctx.provider`). Design notes not
-  spelled out in the contract: `click`/`type`/`press` resolve and act on the page in one script per
-  attempt (querySelectorAll plus an `offsetWidth`/`offsetHeight` check, entirely inside the executed
-  script) rather than through the driver's separate find/displayed/click calls, since the fake driver
-  exercises only the calling convention and the real displayed-element endpoint was never proven against
-  WebKitWebDriver; `press` does one attempt, not a poll, since it is only ever used on a control already
-  on screen; `waitForEnd`/`markedProcesses`/`press` take an explicit `step` recorder so `page.test.ts` can
+  `Instance` (`instance.ts`) and `ScenarioContext` (`scenario.ts`, `ctx.provider`). `click`/`type`/`press`
+  resolve and act on a control through the driver's own find/is-displayed/click/send-keys calls, one per
+  attempt; `press` does one attempt, not a poll, since it is only ever used on a control already on
+  screen; `waitForEnd`/`markedProcesses`/`press` take an explicit `step` recorder so `page.test.ts` can
   assert on it directly, and `instance.ts` binds it to the scenario's own timeline; `startReply` takes the
   provider as a third parameter (not two, as the contract's table shows), since "records `reply-streaming`
-  when the provider has an open connection" needs the provider to ask.
+  when the provider has an open connection" needs the provider to ask. (An initial version of `click`/
+  `type`/`press` ran one script per attempt, querySelectorAll plus an `offsetWidth`/`offsetHeight` check,
+  because the real displayed-element endpoint was believed unproven against WebKitWebDriver; superseded
+  before review closed — see the follow-up entry below.)
 - **T046 to T049** The three hooks add exactly 2, 1 and 2 lines
   (`InstancesList.vue` 44→46, `ChatFab.vue` 20→21, `chat/[instance].vue` 1316→1318, matching the T002
   baseline). `pnpm check:templates`, `pnpm typecheck`, `pnpm lint`, `pnpm format:check` all pass; the
@@ -833,5 +833,48 @@ smoke-start`.
 deadline of 15000 ms"` — an empty timeline already says the instance never reached `instance-ready`,
   which is what T058 asks the material to show. No process with the run's marker remained afterward, and
   the fake app itself was gone.
+
+### Stage 2 follow-up (real driver calls, not WebdriverIO), 2026-09-22
+
+Review raised two concerns about the querySelectorAll-based `click`/`type`/`press` above: the two lock
+buttons shared one `data-testid`, and script-injection was not how a real user's click is ever expressed
+against a WebDriver session. Both were checked empirically before any code changed:
+
+- `GET /session/{id}/element/{id}/displayed` (the legacy "is element displayed" endpoint) genuinely works
+  against a real WebKitWebDriver session: `200 { value: true }` for a displayed element. It was believed
+  unproven when `page.ts` was first written; it is not.
+- A real `POST /session/{id}/element/{id}/click` call, on the lock control while a reply streams (the
+  case research.md flagged as risky: the process ends about 1 ms after), returns normally in the tens of
+  milliseconds, before the process ends — it does not hang waiting for a page-load event that a process
+  exit, rather than a navigation, will never fire. Checked four times against the real debug binary,
+  isolated instance root, real stand-in provider; last run: click returned in 18 ms, the marked process
+  was confirmed gone 39 ms after the click, the provider's connection closed 34 ms after opening.
+- WebdriverIO was spiked separately (its own throwaway project, `webdriverio` installed there only) and
+  does drive the real application through the same `tauri-driver` — session creation, `$$`, `isDisplayed`,
+  `isClickable`, `getText`, a real `.click()` all worked. Not adopted: everything it would have bought
+  (real find/displayed/click semantics) is already reachable through calls the suite's own ~200-line
+  client and `tauri-driver` already speak, for the cost of one added method, not 238 transitive packages
+  and a new supply chain to audit even as a dev-only dependency.
+
+Changed as a result, before the pull request was reviewed further:
+
+- `webdriver.ts` gained `isDisplayed(element)`.
+- `page.ts`'s `click`/`type`/`press` now find the control by hook (`findElements`), pick the one
+  `isDisplayed` reports true (there may be more than one for `lock-instance`; the contract already asks
+  for "the displayed one", now genuinely checked rather than approximated by `offsetWidth`/`offsetHeight`
+  inside a script), and act on it with the driver's own `click`/`sendKeys` calls. `press` no longer needs
+  the `setTimeout(0)` scheduling trick a click that ends the application was thought to need; a second
+  `times` click after the application has already ended now throws like any other call to a gone session,
+  rather than being masked by firing both from one script tick.
+- Found by running the real flow end to end while checking the above (not by unit tests, which mock the
+  backend and so could not catch this): `flows.ts`'s `startReply` sent `send_message` without
+  `idempotencyKey`, a field the command has always required
+  (`src-tauri/src/chat/commands.rs`, `SendMessageArgs`) and the frontend has always supplied
+  (`useChat.ts`, defaulting to `crypto.randomUUID()`). The fake-driver tests never noticed, since they
+  answer `send_message` unconditionally. Fixed the same way the frontend does.
+- `pnpm check:e2e-lib`: 136 tests. `pnpm typecheck:scripts`, `pnpm typecheck`, `pnpm lint`,
+  `pnpm format:check`: all pass. `pnpm test:e2e`, no `--grep` (both scenarios, real binary, from scratch):
+  `passed create-and-unlock 6.9 s`, `passed smoke-start 4.0 s`, exit 0. No process carrying the run's
+  marker, nor any stray `tauri-driver`/`WebKitWebDriver`/`Xvfb`, remained after any of the runs above.
 
 _Filled by later tasks: T066, T067, T068, T073 to T083 and T088._
