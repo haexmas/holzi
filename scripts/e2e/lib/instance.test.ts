@@ -197,4 +197,17 @@ describe('newSessionWithRetry', () => {
     driver.onNewSession(() => 'drop')
     await assert.rejects(newSessionWithRetry(client, '/some/app'))
   })
+
+  it('does not retry a definitive session creation failure', async () => {
+    let calls = 0
+    driver.onNewSession(() => {
+      calls += 1
+      return 'not-created'
+    })
+    await assert.rejects(
+      newSessionWithRetry(client, '/some/app'),
+      /session not created/,
+    )
+    assert.equal(calls, 1)
+  })
 })

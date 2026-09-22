@@ -247,7 +247,7 @@ export async function newSessionWithRetry(
   try {
     await client.newSession(app)
   } catch (error) {
-    if (!(error instanceof SessionGoneError)) throw error
+    if (!(error instanceof SessionGoneError) || !error.retryable) throw error
     await sleep(300)
     await client.newSession(app)
   }

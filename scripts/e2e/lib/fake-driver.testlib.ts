@@ -34,8 +34,8 @@ export interface FakeDriver {
    * answers with a stale element reference (the element was found, but the DOM moved on since).
    */
   onClick(click: (id: string) => 'ok' | 'drop' | 'stale'): void
-  /** Whether a `POST /session` (new session) succeeds or drops the connection. */
-  onNewSession(newSession: () => 'ok' | 'drop'): void
+  /** Whether a `POST /session` (new session) succeeds, drops the connection, or is rejected. */
+  onNewSession(newSession: () => 'ok' | 'drop' | 'not-created'): void
   close(): Promise<void>
 }
 
@@ -47,7 +47,7 @@ export async function startFakeDriver(): Promise<FakeDriver> {
   let finder: (using: string, value: string) => string[] = () => ['el-1']
   let displayed: (id: string) => boolean = () => true
   let click: (id: string) => 'ok' | 'drop' | 'stale' = () => 'ok'
-  let newSession: () => 'ok' | 'drop' = () => 'ok'
+  let newSession: () => 'ok' | 'drop' | 'not-created' = () => 'ok'
 
   const server = http.createServer((req, res) => {
     const chunks: Buffer[] = []
@@ -64,10 +64,19 @@ export async function startFakeDriver(): Promise<FakeDriver> {
       }
       const base = `/session/${sessionId}`
       if (method === 'POST' && path === '/session') {
-        if (newSession() === 'drop') {
+        const outcome = newSession()
+        if (outcome === 'drop') {
           req.socket.destroy()
           return
         }
+        if (outcome === 'not-created')
+          return reply(
+            {
+              error: 'session not created',
+              message: 'native driver unavailable',
+            },
+            500,
+          )
         return reply({ sessionId, capabilities: {} })
       }
       if (method === 'DELETE' && path === base) return reply(null)
