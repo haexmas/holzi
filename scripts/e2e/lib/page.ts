@@ -1,7 +1,11 @@
-// The interaction surface a scenario drives: reach a control by its stable hook (contracts/test-hooks.md),
-// never by displayed text, and press a control that may close or replace the page before a normal call
-// could return (research: pressing Enter did not submit the unlock form; the page a closing invoke()
-// replaces gets no reply).
+// The interaction surface a scenario drives: reach a control by its stable hook (contracts/test-hooks.md)
+// through the driver's own find/displayed/click/send-keys calls, never by displayed text and never by
+// running a lookup script on the page. The "is element displayed" endpoint (used to tell apart two
+// elements that share a hook when only one is on screen) was confirmed against a real WebKitWebDriver
+// session on 2026-09-22; a real `click()` call was confirmed on the same date to return promptly (tens of
+// milliseconds) even when the click ends the application, so it needs no special scheduling either
+// (research: pressing Enter did not submit the unlock form; the page a closing invoke() replaces gets no
+// reply, which is why `exec`/`invoke` still go through a script).
 import type {
   InvokeOptions,
   InvokeResult,
@@ -27,51 +31,35 @@ export function toSelector(hook: string): string {
     : `[data-testid="${hook}"]`
 }
 
-function displayedElementExpr(selector: string): string {
-  return `(function () {
-    var els = document.querySelectorAll(${JSON.stringify(selector)})
-    for (var i = 0; i < els.length; i++) {
-      if (els[i].offsetWidth > 0 && els[i].offsetHeight > 0) return els[i]
+/** Every element id found for hook that is genuinely displayed right now (there may be several ids for
+ * one hook - contracts/test-hooks.md says at most one is ever on screen). */
+async function displayedNow(
+  client: WebDriverClient,
+  selector: string,
+): Promise<string[]> {
+  const ids = await client.findElements('css selector', selector)
+  const displayed: string[] = []
+  for (const id of ids) {
+    try {
+      if (await client.isDisplayed(id)) displayed.push(id)
+    } catch {
+      // A stale reference (the page moved on between finding and asking) is not displayed either.
     }
-    return null
-  })()`
+  }
+  return displayed
 }
 
-function clickScript(selector: string): string {
-  return `var el = ${displayedElementExpr(selector)}
-    if (!el) return false
-    el.click()
-    return true`
-}
-
-function typeScript(selector: string, text: string): string {
-  return `var el = ${displayedElementExpr(selector)}
-    if (!el) return false
-    el.value = ${JSON.stringify(text)}
-    el.dispatchEvent(new Event('input', { bubbles: true }))
-    return true`
-}
-
-function pressScript(selector: string, times: number): string {
-  return `var el = ${displayedElementExpr(selector)}
-    if (!el) return false
-    setTimeout(function () {
-      el.click()
-      ${times >= 2 ? 'el.click()' : ''}
-    }, 0)
-    return true`
-}
-
-async function pollAction(
+/** Polls find+is-displayed until one element for hook is on screen, or fails naming the hook. */
+async function findDisplayed(
   client: WebDriverClient,
   hook: string,
-  selector: string,
-  script: string,
   deadlineMs: number,
-): Promise<void> {
+): Promise<string> {
+  const selector = toSelector(hook)
   const end = Date.now() + deadlineMs
   for (;;) {
-    if (await client.execute<boolean>(script)) return
+    const [id] = await displayedNow(client, selector)
+    if (id !== undefined) return id
     if (Date.now() >= end) {
       throw new Error(
         `hook "${hook}" (selector ${selector}) was not displayed within ${deadlineMs} ms`,
@@ -87,8 +75,8 @@ export async function click(
   hook: string,
   deadlineMs = 5000,
 ): Promise<void> {
-  const selector = toSelector(hook)
-  await pollAction(client, hook, selector, clickScript(selector), deadlineMs)
+  const element = await findDisplayed(client, hook, deadlineMs)
+  await client.click(element)
 }
 
 /** Types into the displayed control found by hook. Polls until the deadline; fails naming the hook. */
@@ -98,26 +86,21 @@ export async function type(
   text: string,
   deadlineMs = 5000,
 ): Promise<void> {
-  const selector = toSelector(hook)
-  await pollAction(
-    client,
-    hook,
-    selector,
-    typeScript(selector, text),
-    deadlineMs,
-  )
+  const element = await findDisplayed(client, hook, deadlineMs)
+  await client.sendKeys(element, text)
 }
 
 export interface PressOptions {
-  /** Dispatch this many clicks in the same script tick (the lock-twice check). Default 1. */
+  /** Click this many times in a row (the lock-twice check). Default 1. A second click after the first
+   * already ended the application throws, same as any other call made once the session is gone. */
   times?: number
   step: StepRecorder
 }
 
 /**
- * Clicks the displayed control found by hook, scheduled with `setTimeout(…, 0)` so the call returns
- * before the click's effect (a navigation, a close) can replace the page mid-response. The control must
- * already be displayed; unlike `click`, this does not poll for it.
+ * Clicks the displayed control found by hook, `options.times` times in a row. The control must already
+ * be displayed; unlike `click`, this does not poll for it, so a scenario relying on it being on screen
+ * right now gets a clear failure instead of a silent wait.
  */
 export async function press(
   client: WebDriverClient,
@@ -125,11 +108,12 @@ export async function press(
   options: PressOptions,
 ): Promise<void> {
   const selector = toSelector(hook)
-  const times = options.times ?? 1
-  const found = await client.execute<boolean>(pressScript(selector, times))
-  if (!found) {
+  const [element] = await displayedNow(client, selector)
+  if (element === undefined) {
     throw new Error(`hook "${hook}" (selector ${selector}) is not displayed`)
   }
+  const times = options.times ?? 1
+  for (let i = 0; i < times; i++) await client.click(element)
   options.step('press', hook)
 }
 

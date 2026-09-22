@@ -61,18 +61,43 @@ describe('toSelector', () => {
 })
 
 describe('click', () => {
-  it('polls until the script reports a displayed element, then stops', async () => {
-    let calls = 0
-    driver.onExecute(() => {
-      calls += 1
-      return { value: calls >= 3 }
+  it('polls until is-displayed reports true for a found element, then clicks it', async () => {
+    driver.onFind(() => ['el-1'])
+    let checks = 0
+    driver.onDisplayed(() => {
+      checks += 1
+      return checks >= 3
     })
     await click(client, 'open-chat', 200)
-    assert.equal(calls, 3)
+    assert.equal(checks, 3)
+    assert.ok(
+      driver.requests.some(
+        (r) => r.method === 'POST' && r.path.endsWith('/element/el-1/click'),
+      ),
+    )
+  })
+
+  it('clicks the displayed one when the hook finds more than one element', async () => {
+    driver.onFind(() => ['el-1', 'el-2'])
+    driver.onDisplayed((id) => id === 'el-2')
+    const before = driver.requests.length
+    await click(client, 'lock-instance')
+    const made = driver.requests.slice(before)
+    assert.ok(
+      made.some(
+        (r) => r.method === 'POST' && r.path.endsWith('/element/el-2/click'),
+      ),
+    )
+    assert.ok(
+      !made.some(
+        (r) => r.method === 'POST' && r.path.endsWith('/element/el-1/click'),
+      ),
+    )
   })
 
   it('fails naming the hook and the selector when nothing is displayed by the deadline', async () => {
-    driver.onExecute(() => ({ value: false }))
+    driver.onFind(() => ['el-1'])
+    driver.onDisplayed(() => false)
     await assert.rejects(
       click(client, 'open-chat', 80),
       /hook "open-chat" \(selector \[data-testid="open-chat"\]\) was not displayed within 80 ms/,
@@ -81,55 +106,59 @@ describe('click', () => {
 })
 
 describe('type', () => {
-  it('sends the selector and text embedded in the script', async () => {
-    let seenScript = ''
-    driver.onExecute((kind, script) => {
-      seenScript = script
-      return { value: true }
+  it('sends the text to the displayed element found by hook', async () => {
+    driver.onFind((_using, value) => {
+      assert.equal(value, '#unlock-passphrase')
+      return ['el-1']
     })
+    driver.onDisplayed(() => true)
     await type(client, '#unlock-passphrase', 'sekret')
-    assert.match(seenScript, /#unlock-passphrase/)
-    assert.match(seenScript, /sekret/)
+    const typed = driver.requests
+      .filter((r) => r.path.endsWith('/element/el-1/value'))
+      .pop()
+    assert.deepEqual(typed?.body, { text: 'sekret' })
   })
 })
 
 describe('press', () => {
-  it('schedules the click and returns without waiting for it, and records the step', async () => {
-    let seenScript = ''
-    driver.onExecute((kind, script) => {
-      seenScript = script
-      return { value: true }
-    })
+  it('clicks once and records the step, without polling', async () => {
+    driver.onFind(() => ['el-1'])
+    driver.onDisplayed(() => true)
     const steps: Array<[string, string | undefined]> = []
+    const before = driver.requests.length
     await press(client, 'lock-instance', {
       step: (name, detail) => steps.push([name, detail]),
     })
-    assert.match(seenScript, /setTimeout/)
+    const clicks = driver.requests
+      .slice(before)
+      .filter((r) => r.path.endsWith('/click'))
+    assert.equal(clicks.length, 1)
     assert.deepEqual(steps, [['press', 'lock-instance']])
   })
 
-  it('with times: 2 dispatches both clicks in the same script tick', async () => {
-    let seenScript = ''
-    driver.onExecute((kind, script) => {
-      seenScript = script
-      return { value: true }
-    })
+  it('with times: 2 clicks the same element twice', async () => {
+    driver.onFind(() => ['el-1'])
+    driver.onDisplayed(() => true)
+    const before = driver.requests.length
     await press(client, 'lock-instance', { times: 2, step: () => {} })
-    const timeoutBody = seenScript.split('setTimeout(function () {')[1]
-    assert.equal(timeoutBody?.match(/el\.click\(\)/g)?.length, 2)
+    const clicks = driver.requests
+      .slice(before)
+      .filter((r) => r.path.endsWith('/click'))
+    assert.equal(clicks.length, 2)
   })
 
   it('fails at once, without polling, when the control is not displayed', async () => {
-    let calls = 0
-    driver.onExecute(() => {
-      calls += 1
-      return { value: false }
+    driver.onFind(() => ['el-1'])
+    let checks = 0
+    driver.onDisplayed(() => {
+      checks += 1
+      return false
     })
     await assert.rejects(
       press(client, 'lock-instance', { step: () => {} }),
       /hook "lock-instance" \(selector \[data-testid="lock-instance"\]\) is not displayed/,
     )
-    assert.equal(calls, 1)
+    assert.equal(checks, 1)
   })
 })
 
