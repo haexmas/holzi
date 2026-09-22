@@ -556,8 +556,9 @@ go to the "Validation record". Branch `016-e2e-stage4-validation`; a pull reques
       fresh session, give it only `scripts/e2e/README.md` and ask for "create and unlock a vault, call one
       backend command, check its result". It must take 40 lines or fewer and run. Record what tripped it
       and fix the README.
-- [ ] T080 Commit the record as `docs(specs): record the validation of the e2e suite`; open the Stage 4
-      pull request after asking the operator.
+- [x] T080 Commit the record as `docs(specs): record the validation of the e2e suite`; open the Stage 4
+      pull request after asking the operator. Committed `6a7271f`, pushed `016-e2e-stage4-validation`,
+      PR #121 opened (https://github.com/haexmas/holzi/pull/121).
 
 ---
 
