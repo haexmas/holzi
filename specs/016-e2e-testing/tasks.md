@@ -492,27 +492,27 @@ sees its connection close within 1 second of the press. Weaken the behavior on p
 
 ### The relaunch scenario (needs a release build; two checks first)
 
-- [ ] T067 [US2] Check A, recorded: build a release with `pnpm tauri build --no-bundle` and run
+- [x] T067 [US2] Check A, recorded: build a release with `pnpm tauri build --no-bundle` and run
       `pnpm test:e2e --app <its path> --grep smoke`. If `tauri-driver` cannot drive a release-profile
       binary, stop here: record the failure and report it to the operator; T068 to T073 wait for a
       decision, and T062 to T066 are unaffected.
-- [ ] T068 [US2] Check B, recorded, with a throwaway script that is not committed: with the release
+- [x] T068 [US2] Check B, recorded, with a throwaway script that is not committed: with the release
       binary, press the lock control and observe from outside (a) the original pid is gone, (b) a new
       marked process of the same binary appears, so the marker is inherited by a relaunch (research R8),
       (c) whether the virtual screen started with `-fbdir <dir>` keeps a current XWD image that Node can
       read, and what a blank screen and a painted window look like in it. Record the values that the
       painted check of T070 will rely on. If (c) fails, keep the scenario to steps 1, 2 and 4 of research
       R11 and report the difference from FR-018 to the operator; do not drop it silently.
-- [ ] T069 [P] [US2] `scripts/e2e/lib/framebuffer.test.ts` with a synthetic XWD buffer built in the test:
+- [x] T069 [P] [US2] `scripts/e2e/lib/framebuffer.test.ts` with a synthetic XWD buffer built in the test:
       the header is parsed (width, height, bytes per line, bits per pixel, header size, colormap
       entries), a blank image is reported as not painted and one with a window-sized non-blank region as
       painted, and a truncated file is an error, not a pass.
-- [ ] T070 [P] [US2] `scripts/e2e/lib/framebuffer.ts`: `readFramebuffer` and `isPainted` per T069 and the
+- [x] T070 [P] [US2] `scripts/e2e/lib/framebuffer.ts`: `readFramebuffer` and `isPainted` per T069 and the
       values recorded in T068.
-- [ ] T071 [US2] In `scripts/e2e/lib/instance.ts` add the option `framebufferDir` that adds
+- [x] T071 [US2] In `scripts/e2e/lib/instance.ts` add the option `framebufferDir` that adds
       `-fbdir <dir>` to the virtual screen's arguments in `driverCommand`, and a case for it in
       `scripts/e2e/lib/instance.test.ts`.
-- [ ] T072 [US2] `scripts/e2e/scenarios/relaunch-after-lock.test.ts` declaring that it needs the
+- [x] T072 [US2] `scripts/e2e/scenarios/relaunch-after-lock.test.ts` declaring that it needs the
       `relaunch` close behavior: create and unlock, press the lock control; (1) the original pid is gone within 4
       seconds; (2) a new marked process of the same binary with another pid exists within 10 seconds
       (records `relaunch-seen`); (3) the screen shows a painted window (T070), if T068 allowed it;
@@ -520,7 +520,7 @@ sees its connection close within 1 second of the press. Weaken the behavior on p
       `instance-entry` for the created name is displayed and `location.pathname` is `/`, which is what
       the relaunched window shows. If the application does not relaunch, the failure message names that
       the release binary did not relaunch.
-- [ ] T073 [US2] Run the relaunch scenario against the release build, record the result and time, and
+- [x] T073 [US2] Run the relaunch scenario against the release build, record the result and time, and
       against the debug build, where it must be reported as skipped with its reason. Commit
       `feat(e2e): check the relaunch after a lock` and open the Stage 3 pull request (T059 to T073) after
       asking the operator.
@@ -929,4 +929,93 @@ Changed as a result, before the pull request was reviewed further:
   `passed` for all six, `press to process end` between 0.0 s and 0.1 s. No process carrying the run's
   marker, nor any stray `tauri-driver`/`WebKitWebDriver`/`Xvfb`, remained after either run.
 
-_Filled by later tasks: T067, T068, T073 to T083 and T088._
+### The relaunch scenario, checks A and B (T067/T068), 2026-09-22
+
+- **T067** Branch `016-e2e-stage3-relaunch` started from updated `origin/main` (PR #118 merged). Release
+  build: `nix develop --command scripts/with-nix-host-bridge.sh pnpm tauri build --no-bundle` (the
+  `tauri:build` npm script forwards `--no-bundle` past the Tauri CLI to `cargo build` itself, which
+  rejects it as unrecognized — bypassed by calling the raw `tauri` alias directly). Cold build: 6 m 20 s,
+  produced `src-tauri/target/release/holzi`. `pnpm test:e2e --app <that path> --grep smoke`: `passed
+smoke-start`, 6.0 s, exit 0, correctly reported as "closes by relaunch, from path". No leftover marked
+  process, `tauri-driver`, `WebKitWebDriver` or `Xvfb` afterward. **Result: `tauri-driver` can drive a
+  release-profile binary.** T068 can proceed.
+- **T068** Throwaway script (not committed; several iterations, none kept) against the release binary,
+  `-fbdir <dir>` added to the virtual screen's `-s` server-args string (a gotcha in itself: `-fbdir` is an
+  **Xvfb** server option, not an `xvfb-run` option — passing it as a separate `xvfb-run`-level argument
+  makes `xvfb-run` misparse it as the command to run, and the driver never starts. It belongs inside the
+  same `-s "-screen 0 1280x800x24 -fbdir <dir>"` string `driverCommand` already builds).
+  - One early run hit a real, if inconclusive, anomaly: `press('lock-instance-sidebar')` threw
+    `SessionGoneError: ... 500: Session terminated without a reply` on the _first_ click, and the driver
+    log showed two distinct `holzi` process starts 4.2 s apart, before any lock action. Rerunning the
+    same flow three more times (with and without `-fbdir`, with dense process-listing every 300 ms) never
+    reproduced it — every other run showed exactly one process throughout create, unlock and open-chat.
+    Best hypothesis, not confirmed: the same pre-existing `tauri-driver` native-connection race
+    `newSessionWithRetry` already retries (PR #118) can leave the _first_ (failed) attempt's spawned app
+    process running unreaped while the retry's app process becomes the one actually driven — an
+    already-known race, not something `-fbdir` causes, since it also happens with `-fbdir` off elsewhere
+    in the suite. Recorded here rather than dropped silently; not reproducible enough to act on beyond
+    this note. Worth a second look if a real scenario run ever shows two processes at once.
+  - The real check, completed cleanly on the next run: pressed `lock-instance-sidebar` after
+    create+unlock+open-chat. `press()` returned normally in about 10 ms (release build behaves like the
+    debug build here). (a) the original pid was gone within 4 s (confirmed in about 70 ms). (b) a new
+    marked process of the same binary appeared within 10 s (confirmed in about 80 ms) — the marker is
+    inherited across the relaunch (research R8 holds). (c) the `-fbdir` XWD file stayed readable
+    throughout: non-blank while chat was open (~1.92 MB of 4.10 MB non-zero), dropped to blank
+    immediately after the relaunch was seen (295 bytes non-zero — the "screen cleared" instant), then
+    non-blank again about 2 s later (~1.90 MB non-zero) once the relaunched window painted its own
+    (unlock) screen. **Result: all three of (a), (b), (c) hold. T069 to T073 can proceed as planned; no
+    FR-018 gap to report.**
+  - Gotcha hit while investigating, unrelated to the actual finding: the first, crashing run left its
+    whole process group (`xvfb-run`/`Xvfb`/`tauri-driver`/`WebKitWebDriver`/the relaunched `holzi`)
+    running, because the throwaway script's own top-level `catch` only logged the error and never reached
+    its cleanup — a reminder that a spike script needs the same "kill the process group even on an
+    unexpected throw" discipline as the real suite's `stop()`. Killed by pgid by hand; also found and
+    removed one stray empty `bdir` file the misparsed first `xvfb-run` invocation left in the worktree
+    root (untracked, harmless, from before the `-fbdir` placement was fixed).
+
+### The relaunch scenario, built and verified (T069 to T073), 2026-09-22
+
+- **T069/T070** `scripts/e2e/lib/framebuffer.ts`/`.test.ts`: the XWD file header's 25 fields are fixed-size
+  `CARD32`s and always big-endian, independent of the host's own byte order and of the file's own
+  `byte_order` field (which only describes the pixel data) — confirmed against a real `Xvfb` 21.1.24
+  capture in T068 (`header_size` 160, `colormap_entries` 256, and `header_size + colormap_entries*12 +
+bytes_per_line*height` matching the observed file size exactly). `readFramebuffer` parses the header and
+  slices out just the pixel data (past the header and the colormap); `isPainted` requires at least 1% of
+  the pixel bytes to be non-zero, separating the 295-byte cleared-screen capture from the roughly 1.90 MB
+  painted capture recorded in T068. Dedicated tests cover the cleared-screen margin and confirm
+  header/colormap bytes (e.g. the window name) are never mistaken for painted pixels. 9 tests, synthetic
+  buffers built in the test file itself, no
+  real `Xvfb` needed to run them.
+- **T071** `driverCommand` takes an optional `framebufferDir`; when given, `-fbdir <dir>` is appended
+  inside the same `-s "-screen 0 1280x800x24 ..."` string (not as a separate `xvfb-run` argument — the
+  T068 gotcha). Threaded through `StartInstanceOptions` → `launchDriver`, and through
+  `ScenarioContext.startInstance`'s options → `StartInstanceRequest` → the real `startInstance` call in
+  `scenario.ts`, so a scenario can ask for one without touching `instance.ts` directly.
+  `contracts/helpers.md`'s `ctx.startInstance` row updated to name it.
+- **T072** `relaunch-after-lock.test.ts`: `needs: { closeBehavior: 'relaunch' }`; create, unlock, open
+  chat; press `lock-instance-sidebar` once; (1) `waitForEnd(PROCESS_END_LIMIT_MS)`; (2) `ctx.waitFor` a
+  new marked process other than the original pid, within `RELAUNCH_LIMIT_MS` (records `relaunch-seen`);
+  (3) `ctx.waitFor` the `-fbdir` capture to report `isPainted`, within the same limit (records
+  `relaunch-painted`); (4) `instance.stop()` (kills the relaunched process too — T068 confirmed it shares
+  the original driver's process group), then a fresh `ctx.startInstance({ reusesRoot: instance.root })`,
+  checking the created instance is listed and `location.pathname` is `/`.
+  - One real bug found running it for real (not catchable by a lib unit test, which mocks the whole
+    driver): step (4)'s first version checked `document.querySelector(...)` once, right after
+    `startInstance` resolved. `startInstance` only waits for the _process_ to appear, not for its page to
+    have rendered the instance list yet — an exact repeat of the lesson `click`/`type` already learned
+    (find-and-poll, not one bare check). Failed once against the release build
+    (`false !== true`, `failed at: instance-ready`) with a clean timeline showing (1)-(3) all correct
+    (process end 51 ms, relaunch seen immediately, window painted ~556 ms later) — only the last, bare
+    check was wrong. Fixed with `ctx.waitFor` around the same `exec`, matching how every other displayed-ness
+    check in the suite already works.
+- **T073** Against the release build (`pnpm test:e2e --app <release path> --grep relaunch-after-lock`):
+  `passed`, 11.6 s, `press to process end` 0.1 s. Against the debug build (`pnpm test:e2e --grep
+relaunch-after-lock`, no `--app`): `skipped`, "the build exits on close; this scenario needs one that
+  relaunches" — correct, not a pass or a fail. Full lib suite: 154 tests; typecheck/lint/format all pass.
+  Full scenario suite (all seven test files — `closing-page` runs two color schemes as one file) against
+  the release build, no `--grep`: all seven `passed`, 57.4 s total, no leftover marked process or
+  `tauri-driver`/`WebKitWebDriver`/`Xvfb`. Stage 3 is now complete end to end (T059 to T073). Pushed as
+  `016-e2e-stage3-relaunch`, PR #119 opened (https://github.com/haexmas/holzi/pull/119) — the second half
+  of Stage 3 (T067 to T073), following #118's first half (T059 to T066) per the split agreed there.
+
+_Filled by later tasks: T074 to T083 and T088._

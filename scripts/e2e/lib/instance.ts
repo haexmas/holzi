@@ -108,17 +108,27 @@ export function removeRoot(root: string): void {
  * application inherit the screen from `xvfb-run` and it ends with them.
  * ponytail: one X server per instance costs well under a second and keeps scenarios apart; the upgrade
  * path is one shared screen if start-up time ever dominates a large suite.
+ *
+ * `framebufferDir`, if given, keeps the screen's current XWD image at `<dir>/Xvfb_screen0` (research
+ * R11, T068). `-fbdir` is an **Xvfb server** option, not an `xvfb-run` one: it must be appended inside
+ * the same `-s` server-args string, not as a separate argument (`xvfb-run` would otherwise misparse it
+ * as the command to run and never start the driver at all - found the hard way in T068's spike).
  */
 export function driverCommand(
   tools: Tools,
   ports: { driver: number; native: number },
+  options: { framebufferDir?: string } = {},
 ) {
+  const screen =
+    options.framebufferDir === undefined
+      ? '-screen 0 1280x800x24'
+      : `-screen 0 1280x800x24 -fbdir ${options.framebufferDir}`
   return {
     command: tools.xvfbRun,
     args: [
       '-a',
       '-s',
-      '-screen 0 1280x800x24',
+      screen,
       tools.tauriDriver,
       '--port',
       String(ports.driver),
@@ -169,6 +179,8 @@ export interface StartInstanceOptions {
   parentEnv?: NodeJS.ProcessEnv
   /** Records a timeline entry on the scenario that started this instance. Default: does nothing. */
   step?: StepRecorder
+  /** Keeps the screen's current XWD image at `<framebufferDir>/Xvfb_screen0` (research R11, T068). */
+  framebufferDir?: string
 }
 
 export interface Instance extends Page {
@@ -194,7 +206,9 @@ async function launchDriver(
 ) {
   return withPortRetry(async () => {
     const ports = { driver: await freePort(), native: await freePort() }
-    const { command, args } = driverCommand(options.tools, ports)
+    const { command, args } = driverCommand(options.tools, ports, {
+      framebufferDir: options.framebufferDir,
+    })
     const logOffset = existsSync(options.logFile)
       ? statSync(options.logFile).size
       : 0
