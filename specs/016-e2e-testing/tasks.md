@@ -415,27 +415,27 @@ failed. The first is tested here, the other two after the close scenarios exist 
 
 ### Tests for User Story 4 (write first)
 
-- [ ] T054 [P] [US4] `scripts/e2e/lib/artifacts.test.ts`: on failure the scenario directory under the run
+- [x] T054 [P] [US4] `scripts/e2e/lib/artifacts.test.ts`: on failure the scenario directory under the run
       directory holds `timeline.json` (all steps with `atMs` and an ISO time, the failure message, the
       deadline reached if any), `screenshot.png` taken before teardown (absent, with a note in the
       timeline, if the application already ended), `driver.log` (driver, webview driver and application
       output in arrival order, each line timestamped) and `provider.json` (connections and requests);
       on a pass none of these exist and only `report.json` (and `build.log` if built) remain in the run
       directory; `--keep` keeps them for a pass too; capturing never throws when the session is gone.
-- [ ] T055 [P] [US4] Extend `scripts/e2e/lib/report.test.ts`: `failedStep` is the last step reached before
+- [x] T055 [P] [US4] Extend `scripts/e2e/lib/report.test.ts`: `failedStep` is the last step reached before
       the failure or the failing wait's description; `material` is the scenario directory; the printed
       line of a passing scenario with a `press` and a `process-ended` step includes "press to process end
       <seconds>"; a failure line names the failed step and the material directory.
 
 ### Implementation for User Story 4
 
-- [ ] T056 [US4] `scripts/e2e/lib/artifacts.ts`: `captureFailure` writing the four files above.
-- [ ] T057 [US4] Use it: in `scripts/e2e/lib/scenario.ts` call `captureFailure` from the `onFailure`
+- [x] T056 [US4] `scripts/e2e/lib/artifacts.ts`: `captureFailure` writing the four files above.
+- [x] T057 [US4] Use it: in `scripts/e2e/lib/scenario.ts` call `captureFailure` from the `onFailure`
       extension point of T021 before teardown, for a thrown error and for a reached deadline; in
       `scripts/e2e/lib/report.ts` fill `failedStep`, `material` and the press-to-end text; pass `--keep`
       through `E2E_KEEP` from `scripts/e2e/cli.ts`; remove the directory of a passing scenario unless
       kept.
-- [ ] T058 [US4] Seeded failure 1 (SC-004), recorded: point `--app` at an executable script that only
+- [x] T058 [US4] Seeded failure 1 (SC-004), recorded: point `--app` at an executable script that only
       sleeps and run `pnpm test:e2e --close-behavior exit --grep smoke` with it; the material names the
       step that failed (the instance never became ready), and nothing is left running. Commit
       `feat(e2e): keep failure material and report step times`, then the Stage 2 pull request (T038 to
@@ -818,5 +818,20 @@ smoke-start`.
 - **T053** `pnpm check:e2e-lib` 123 tests pass; `pnpm typecheck:scripts`, `pnpm typecheck`, `pnpm lint`,
   `pnpm format:check` all pass. `pnpm test:e2e` (no `--grep`, so both scenarios, built from scratch):
   `passed create-and-unlock 6.6 s`, `passed smoke-start 4.0 s`, exit 0, on the first real run.
+- **T054 to T057** `driver.log` needed no new code: it already exists for the whole life of every
+  instance (`instance.ts`, since Stage 1), so `artifacts.ts` only adds `timeline.json`, `screenshot.png`
+  and `provider.json` on a failure. `failedStep` is the last recorded step, or, for a `ctx.waitFor`
+  timeout specifically, that wait's own description (`WaitTimeoutError` now carries it, rather than
+  parsing it back out of the message); both `failedStep` and `material` are computed by `runScenario`
+  itself, in `ScenarioResult`, since only it has the error as a typed value rather than a string. The
+  "on a pass none of these exist" half of the contract turned out to need its own line: `driver.log` was
+  already being left behind after every passing scenario before this change, so `runScenario` now removes
+  the scenario's directory on a pass unless `E2E_KEEP` says otherwise. `pnpm check:e2e-lib`: 134 tests.
+- **T058** `--app` pointed at a script that only `exec sleep 3600` (never a real WebDriver target),
+  `--close-behavior exit --grep smoke --scenario-timeout 15`: `failed smoke-start`, 15.0 s, exit 1. The
+  kept material's `timeline.json` has `"steps": []` and `"error": "scenario smoke-start reached its
+deadline of 15000 ms"` — an empty timeline already says the instance never reached `instance-ready`,
+  which is what T058 asks the material to show. No process with the run's marker remained afterward, and
+  the fake app itself was gone.
 
-_Filled by later tasks: T058, T066, T067, T068, T073 to T083 and T088._
+_Filled by later tasks: T066, T067, T068, T073 to T083 and T088._
