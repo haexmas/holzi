@@ -545,11 +545,13 @@ go to the "Validation record". Branch `016-e2e-stage4-validation`; a pull reques
       listings of the maintainer's data, config, cache and runtime directories and home for changes
       made by it (none), and confirm no `xdg-desktop-portal` process was started by the run. If only
       top-level listings are captured, limit the conclusion to unchanged top-level entries.
-- [ ] T077 SC-003, in a scratch change reverted after each trial: (a) do not cancel the stream when the
-      vault closes, expect `lock-while-streaming` and `window-close-while-streaming` to fail; (b) do not
-      replace the page by the closing page, expect `closing-page` to fail; (c) make the process not end,
-      expect `lock-while-streaming` and `lock-twice` to fail; (d) make a release build not relaunch,
-      expect `relaunch-after-lock` to fail. Restore each and expect a pass. Record every trial.
+- [x] T077 SC-003, in a scratch change reverted after each trial: (a) do not cancel the stream when the
+      vault closes, expect `lock-while-streaming` to fail (see the T077 follow-up record: a real,
+      investigated, accepted limitation means `window-close-while-streaming` cannot currently be made to
+      fail the same way — rescoped, not achieved); (b) do not replace the page by the closing page,
+      expect `closing-page` to fail; (c) make the process not end, expect `lock-while-streaming` and
+      `lock-twice` to fail; (d) make a release build not relaunch, expect `relaunch-after-lock` to fail.
+      Restore each and expect a pass. Record every trial.
 - [x] T078 SC-004: seeded failures 2 (the process does not end after the lock control, from T077 (c)) and
       3 (the provider connection stays open, from T077 (a)), with failure 1 from T058. For each, the
       material names the failed step, so no second run is needed. Record.
@@ -1200,10 +1202,7 @@ connection closed before message completed)` (225763 lines in that one driver.lo
     control, but the suite currently catches it through the same generic per-scenario deadline that
     would also fire for an unrelated hang, rather than through `waitForEnd`'s own faster, specific
     check. That is a real, minor gap in diagnostic precision for this one failure mode (a maintainer
-    reading the report sees "press timed out after 60 s" rather than "the process did not end"), and
-    the window-close path remains unvalidated under this seed because it did not reach `begin_close`.
-    T077 therefore remains incomplete until trial (a) exercises that path or the task is explicitly
-    re-scoped.
+    reading the report sees "press timed out after 60 s" rather than "the process did not end").
 
 - **Trial (d), "a release build does not relaunch"**: made both `close_effects.rs`'s `request_end`
   and `force_end` treat `ClosePolicy::Relaunch` the same as `Exit` (scratch change, reverted), built a
@@ -1213,10 +1212,68 @@ connection closed before message completed)` (225763 lines in that one driver.lo
 after the relaunch` — unlike trial (c), the failure landed exactly on the check the promise is about,
   not a generic deadline. No leftover processes afterward (checked the same way as every other trial).
   Reverted, rebuilt release, reran: `relaunch-after-lock` passes again (11.4 s, `press to process end`
-  back to ~0.1 s). Trials (b)-(d) and the lock half of trial (a) are recorded above, but **T077 remains
-  incomplete**: `window-close-while-streaming` still passed when cancellation was removed, and its
-  close path did not reach `begin_close`. The suite therefore has not yet demonstrated that it catches
-  the cancellation regression through both close paths.
+  back to ~0.1 s).
+
+### Stage 4, T077 follow-up: window-close-while-streaming's real limit, investigated and accepted, 2026-09-23
+
+A reviewer (CodeRabbit, on PR #121) correctly caught that trial (a)'s own conclusion had overstated
+things: `window-close-while-streaming` staying green while cancellation was removed is not "an open
+question to note", it means the task's own stated expectation ("(a) ... expect `lock-while-streaming`
+**and** `window-close-while-streaming` to fail") was not actually met, and T077 should not have been
+marked done on that basis. Reopened T077, investigated properly rather than either forcing a fix or
+re-closing it on the same evidence.
+
+- **Root cause, confirmed with probes**: `instance.closeWindow()` used WebDriver's own
+  `DELETE /session/{id}/window` command. Added temporary `eprintln!` probes (reverted after) at
+  `WindowEvent::CloseRequested`, `ExitRequested`, `RunEvent::Exit` (`lib.rs`) and at `begin_close`/
+  `finish_close` entry (`close.rs`): **none of them ever fire** when this WebDriver command runs against
+  the app. `close_effects.rs`'s `request_end`/`force_end` and `lib.rs`'s event wiring are all correct
+  and reach `begin_close` for every path Tauri itself dispatches — WebDriver's close-window command
+  simply never reaches Tauri's dispatch at all, likely tearing the GTK window down directly. So
+  `window-close-while-streaming`'s pass has always rested entirely on how fast that external, unmanaged
+  teardown happens to be, the same class of blind spot trial (a)'s own first failed seeding attempt
+  already illustrated for a different mechanism.
+- **First fix attempt: `xdotool windowclose` instead of WebDriver's command.** Implemented in full: a new
+  `scripts/e2e/lib/x11.ts` (`readDisplay` via a new generic `processes.ts` helper `readProcEnvVar`;
+  `closeWindowNatively` with an injectable runner and a poll loop using `xdotool search --onlyvisible
+--pid <pid>` to pick the one real, mapped window over a tiny unmapped 10x10 GTK helper window
+  confirmed to also exist at the same pid), wired through `page.ts`/`instance.ts`, `xdotool` added to
+  `REQUIRED_TOOLS` (already present in the Nix devshell's package list — no atoms change needed), README
+  and `contracts/helpers.md` updated, 9 new/updated tests, typecheck/lint/format clean, 164 lib tests
+  passing. Made `window-close-while-streaming` pass normally.
+  - **Reapplied trial (a)'s exact seed to check it for real**: `window-close-while-streaming`
+    **still incorrectly passed** while `lock-while-streaming` correctly failed — the new mechanism has
+    the identical defect.
+  - **Root-caused definitively** by reading xdotool's own upstream source
+    (`jordansissel/xdotool`'s `xdo.c`): `xdo_close_window` (bound to the `windowclose` CLI command) calls
+    `XDestroyWindow` directly — no `ClientMessage` at all, the same class of bug as the original
+    WebDriver command. `xdo_quit_window` (bound to `windowquit`, described in its own man page as
+    closing "gracefully") sends `_NET_CLOSE_WINDOW` to the **root** window with
+    `SubstructureRedirectMask` — by design, this needs an actual window manager running to translate it
+    into the client's own `WM_DELETE_WINDOW` handling, and Xvfb runs with no window manager here.
+    Confirmed with `xprop -id <id> WM_PROTOCOLS` that the app's own window correctly advertises
+    `WM_DELETE_WINDOW` support — the application side is not at fault; `xdotool` simply ships no command
+    that sends a bare, window-manager-independent `WM_DELETE_WINDOW` straight to a specific window.
+  - Reverted every diagnostic probe and the reapplied seed (confirmed clean via `git diff main`), and
+    reverted the entire `xdotool` suite change itself back to matching `main` exactly (confirmed via
+    `git diff main -- <every touched file>` producing no output) — keeping a differently-broken "fix"
+    that still doesn't exercise `begin_close`, at the cost of a new required tool and ~150 lines of new
+    code, would only relocate the same misleading pass to a new mechanism.
+- **Decision (operator's, after being given three concrete options — a minimal window manager alongside
+  Xvfb, e.g. `openbox`, so `xdotool windowquit`/`wmctrl -c` would have something to forward the request
+  to; a small compiled native helper sending the raw ICCCM `ClientMessage` directly, bypassing the need
+  for a window manager; or accepting and documenting the limitation)**: accept and document, matching the
+  precedent already set for trial (b)'s closing-page gap rather than adding a new system dependency and
+  background process (the window-manager option) or a new compiled artifact (the native-helper option)
+  for one diagnostic scenario.
+- **T077's actual, corrected scope**: `lock-while-streaming` is what SC-003's cancellation-on-close
+  promise is verified through — trial (a)'s seed fails it specifically and correctly.
+  `window-close-while-streaming` still verifies its own real promise (closing the window ends the
+  process and an in-flight reply does not linger past the promised limit), it just cannot currently
+  distinguish that from a scenario where cancellation is entirely broken, because nothing in this
+  suite's toolset can yet deliver a window-manager-mediated close under Xvfb. **T077 is complete on this
+  corrected understanding**: every trial that CAN be seeded to fail does, precisely; the one that
+  cannot is now a documented, understood, accepted limitation instead of an unexamined false pass.
 
 ### Stage 4, a look beyond T077: does state actually stay isolated between vault sessions, 2026-09-22
 

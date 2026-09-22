@@ -218,7 +218,16 @@ or network parts. None is reusable; nothing is duplicated.
   the page so the WebDriver call still returns (spike). The press time is taken by the runner just before
   the call. The scenario then polls until the pid is gone and reads the provider's record.
 - **Window close**: the WebDriver "close window" command. Spike: the provider connection closed within
-  about 50 ms and the process ended.
+  about 50 ms and the process ended. **Confirmed later (spec 016 Stage 4, T077 follow-up, 2026-09-23),
+  with probes on the application side, that this command never reaches Tauri's `WindowEvent::
+CloseRequested` at all** — it tears the window down some other way, so `window-close-while-streaming`'s
+  pass rests on how fast that external teardown happens to be, not on the application's own cancellation.
+  An `xdotool`-based alternative was tried and has the identical defect (`xdotool windowclose` calls
+  `XDestroyWindow` directly; `xdotool windowquit`'s `_NET_CLOSE_WINDOW` needs a window manager, which
+  Xvfb does not run here) — confirmed against xdotool's own upstream source. Accepted as a known
+  limitation of this scenario rather than pursued further (a window manager or a custom native
+  ClientMessage sender could fix it, at a cost judged not worth it for one diagnostic scenario);
+  `lock-while-streaming` is what actually verifies the cancellation-on-close promise.
 - **Closing page**: the closing page lasts only milliseconds in a real close (spike: the session was gone
   11 ms after the press), so it cannot be judged during one. The scenario navigates the page to
   `tauri://localhost/closing.html` and judges what it shows: no text, exactly one `.ring`, and a
