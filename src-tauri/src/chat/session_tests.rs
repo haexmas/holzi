@@ -132,7 +132,7 @@ fn fill_session(chat: &ChatState) -> (std::sync::Weak<IdleAdapter>, AdapterStrea
     let stream = AdapterStream::new(rx, task.abort_handle());
     *chat.current_generation.lock().unwrap() = Some(stream.abort_handle());
 
-    *chat.tool_cancellation.lock().unwrap() = Some(CancellationToken::new());
+    *chat.turn_cancellation.lock().unwrap() = Some(CancellationToken::new());
     let (sender, _receiver) = oneshot::channel::<ApprovalDecision>();
     chat.pending_tool_approvals
         .lock()
@@ -173,7 +173,7 @@ async fn reset_for_close_leaves_nothing_of_the_vault_session_behind() {
         "the adapter, and whatever it holds, must be dropped"
     );
     assert!(chat.current_generation.lock().unwrap().is_none());
-    assert!(chat.tool_cancellation.lock().unwrap().is_none());
+    assert!(chat.turn_cancellation.lock().unwrap().is_none());
     assert!(chat.pending_tool_approvals.lock().unwrap().is_empty());
     assert!(chat.cancelled_tool_approvals.lock().unwrap().is_empty());
     assert_eq!(

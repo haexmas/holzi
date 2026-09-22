@@ -268,7 +268,7 @@ async fn phase_one_runs_its_effects_once_and_in_order() {
     let session = Session::active();
     // A turn is running: its cancellation slot holds a live token.
     let turn = CancellationToken::new();
-    *session.chat.tool_cancellation.lock().unwrap() = Some(turn.clone());
+    *session.chat.turn_cancellation.lock().unwrap() = Some(turn.clone());
     *session.recorder.turn_token.lock().unwrap() = Some(turn);
     // A preload is running: it has its own token.
     let preload = CancellationToken::new();
