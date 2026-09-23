@@ -158,3 +158,59 @@ async fn admission_rejects_new_tasks_after_close() {
         Err(HolziError::VaultClosed)
     ));
 }
+
+/// "`AppState::install` publishes the handle and calls `begin_session` atomically, so two
+/// concurrent installs leave exactly one winner and the loser's handle is dropped" (spec 013 T054).
+#[test]
+fn app_state_install_publishes_and_begins_a_session_atomically_when_two_threads_race() {
+    use crate::instances::vault_config::vault_config;
+    use crate::state::{ActiveInstanceHandle, AppState};
+    use haex_crdt::Database;
+
+    for round in 0..20 {
+        let gate = VaultGate::new();
+        let state = AppState::new(gate.clone());
+        let barrier = Barrier::new(2);
+        let wins = AtomicUsize::new(0);
+        let mut dirs = Vec::new();
+        let handles: Vec<ActiveInstanceHandle> = (0..2)
+            .map(|i| {
+                let tmp = tempfile::tempdir().expect("tmp dir");
+                let db_path = tmp.path().join("vault.db");
+                let installation_id = tmp.path().join("installation-id");
+                let db = Database::open(vault_config(
+                    "app-state-install-race",
+                    &db_path,
+                    &installation_id,
+                    true,
+                ))
+                .expect("open db");
+                dirs.push(tmp);
+                ActiveInstanceHandle {
+                    name: format!("vault-{round}-{i}"),
+                    database: Arc::new(db),
+                }
+            })
+            .collect();
+
+        std::thread::scope(|scope| {
+            for handle in handles {
+                let (state, barrier, wins) = (&state, &barrier, &wins);
+                scope.spawn(move || {
+                    barrier.wait();
+                    if state.install(handle, || Ok(())).is_ok() {
+                        wins.fetch_add(1, Ordering::SeqCst);
+                    }
+                });
+            }
+        });
+
+        assert_eq!(
+            wins.load(Ordering::SeqCst),
+            1,
+            "exactly one install wins the race"
+        );
+        assert_eq!(gate.phase(), VaultPhase::Active);
+        assert!(state.active_name().unwrap().is_some());
+    }
+}

@@ -402,43 +402,44 @@ creating while one exists is refused.
 
 ### Tests for User Story 2 (write first)
 
-- [ ] T053 [P] [US2] Create `src-tauri/tests/vault_single_session.rs` over the mock runtime: with the gate
+- [x] T053 [P] [US2] Create `src-tauri/tests/vault_single_session.rs` over the mock runtime: with the gate
       `Active`, `open_instance` and `create_instance` return `VaultAlreadyActive`; with the gate
       `Closing` they return `VaultClosed`; in both cases no file or directory is created (call with
       a temporary data location and assert it stays empty, so the gate check must run before any path
       is resolved). Add a case for FR-010: a failed open (wrong passphrase) leaves the gate `Idle`, and
       an open that follows succeeds.
-- [ ] T054 [P] [US2] In `src-tauri/src/vault_gate/gate_tests.rs` add: `AppState::install` publishes the handle
+- [x] T054 [P] [US2] In `src-tauri/src/vault_gate/gate_tests.rs` add: `AppState::install` publishes the handle
       and calls `begin_session` atomically, so two concurrent installs leave exactly one winner and
       the loser's handle is dropped.
 
 ### Implementation for User Story 2
 
-- [ ] T055 [US2] `src-tauri/src/instances/open.rs`: check `gate.ensure_can_open()` first, before path
+- [x] T055 [US2] `src-tauri/src/instances/open.rs`: check `gate.ensure_can_open()` first, before path
       resolution. Delete the "already active with the same name" credential branch with its second
       SQLite connection, and the atomic-switch block that drops the previous handle. Publish with
       `AppState::install` (which calls `begin_session` under the same lock). The passphrase is now a
       plain move into the blocking open task (drop the `Arc` from T011). The file must be shorter
       than before.
-- [ ] T056 [US2] `src-tauri/src/instances/create.rs`: the same early gate check and `AppState::install`.
-- [ ] T057 [US2] `AppState::install` in `src-tauri/src/state.rs`: hold the state lock, call
+- [x] T056 [US2] `src-tauri/src/instances/create.rs`: the same early gate check and `AppState::install`.
+- [x] T057 [US2] `AppState::install` in `src-tauri/src/state.rs`: hold the state lock, call
       `gate.begin_session()`, and publish only on success; return `VaultAlreadyActive` or
       `VaultClosed` otherwise.
-- [ ] T058 [US2] Confirm no frontend path opens a vault while one exists: search `src` for
+- [x] T058 [US2] Confirm no frontend path opens a vault while one exists: search `src` for
       `openAsync` and read `src/pages/index.vue` and `src/components/onboarding/UnlockSheet.vue`.
       Record the finding in the Baseline section; change nothing unless a path exists.
-- [ ] T059 [P] [US2] Write `docs/adr/0003-one-vault-session-per-app-process.md` in the format of the
+- [x] T059 [P] [US2] Write `docs/adr/0003-one-vault-session-per-app-process.md` in the format of the
       existing ADRs (Status accepted, Date, Decision, Rationale): one app process serves at most one
       vault session, closing ends the process, supersedes spec 001 FR-022. Include a short "adding
       work later" note: session-scoped work uses `gate.spawn` and `gate.run`; a new command is gated
       by default and is only allow-listed if it never touches the vault.
-- [ ] T060 [P] [US2] Add a supersession note to `specs/001-frontend-onboarding/contracts/tauri-commands.md`
+- [x] T060 [P] [US2] Add a supersession note to `specs/001-frontend-onboarding/contracts/tauri-commands.md`
       (the `open_instance` and `close_instance` sections) and to FR-022 in
       `specs/001-frontend-onboarding/spec.md`, pointing to spec 013 FR-010 and ADR 0003. Keep the
       files Prettier-clean.
-- [ ] T061 [US2] Run quickstart scenario 4 and record it in the Validation record.
-- [ ] T062 [US2] **Checkpoint Stage 4**: full CI parity. Commit
-      `refactor(instances): one vault session per app process`.
+- [x] T061 [US2] Run quickstart scenario 4 and record it in the Validation record.
+- [x] T062 [US2] **Checkpoint Stage 4**: full CI parity. Commit
+      `refactor(instances): one vault session per app process`. Committed `60e8d72`, pushed
+      `013-single-vault-session`, PR #123 opened (https://github.com/haexmas/holzi/pull/123).
 
 ---
 
@@ -726,8 +727,50 @@ _Filled in during T003, T004, T013, T036, T058 and T088._
   `chat/model_loading.rs` 736, `providers/mod.rs` 573, `src/pages/chat/[instance].vue` 1316. Sabotage
   checks that went red as expected: no child kill at the abort rung (3 ladder tests), the drain before
   `reset_for_close` (the loaded-model test), navigation put back into both lock flows (4 replay cases).
-- Frontend open-path finding: (pending)
+- Frontend open-path finding (T058, 2026-09-23): no path exists; nothing changed. `openAsync` (in
+  `src/composables/useInstance.ts`) is called from exactly one place, `src/components/onboarding/
+UnlockSheet.vue`, which is mounted only by `src/pages/index.vue` — the pre-unlock picker. Both of
+  `index.vue`'s own handlers that follow a successful `create`/`open` (`onCreated`, `onUnlocked`)
+  navigate away at once, to `/workspace/<name>`. No route anywhere in `src/pages/` navigates back to
+  `/` other than by first locking (which ends the process); no other component references
+  `UnlockSheet`, `openAsync` or `createAsync`. So a second `open_instance`/`create_instance` call
+  while one is active is unreachable through the real UI today — the gap T053 to T057 close is
+  latent, not exploitable by a user, but a backend command that only the frontend's own restraint
+  keeps single-session is exactly the shape of bug FR-010 exists to rule out by construction.
 
 ## Validation record
 
 _Filled in by T050, T061, T076, T081, T085 and T090._
+
+### T061 — quickstart scenario 4 ("A new vault sees nothing of the old one"), 2026-09-23
+
+Verified step 4 for real, against the built debug and release binaries, with a throwaway script
+reusing the e2e suite's own tooling (`preflight`, `startInstance`, `createAndUnlock` — none of it
+committed, spec 016 is a separate concern): created `vault-a`, created a distinctively-titled chat
+thread in it (`MARKER-scenario4-only-in-vault-a`), then, with `vault-a` still active, called
+`open_instance` and `create_instance` for `vault-b` directly. Both refused with
+`{ kind: "VaultAlreadyActive" }`, exactly as FR-010 requires. Closed `vault-a` for real
+(`close_instance`, process ended in 50 ms), started a fresh process over the same data root, created
+`vault-b`, and read its thread list: empty — no trace of `vault-a`'s marker thread.
+
+Steps 1 to 3 of the scenario (a chat title, an unsent draft, a chosen model and effort option, and a
+visible error, all as markers) were not separately re-walked through by hand: they test that closing
+wipes all in-memory state, which Phase 5 does not touch and which spec 013's own Stage 4 close
+protocol already established (T048 to T050) — the marker-thread check above is the one directly
+relevant to what Phase 5 actually changes, and it holds.
+
+**A real, significant finding and fix made while doing this**: `createAndUnlock`
+(`scripts/e2e/lib/flows.ts`, shared by five real spec-016 scenario files) previously called
+`create_instance` and then re-invoked `open_instance` for the _same_ name through the unlock form's
+UI, to reach the workspace address. That only ever worked because of the old `open_instance`'s
+"already active with the same name" special case — which T055 explicitly removes. Once removed,
+`createAndUnlock` started failing every one of those five scenarios with `VaultAlreadyActive`. Fixed
+by having it navigate straight to `/workspace/<name>` after `create_instance` succeeds, matching what
+the real create form's own `onCreated` handler does (`src/pages/index.vue`) — the real app never
+called `open_instance` a second time either; the test helper's old shortcut just happened to. Updated
+`flows.test.ts` to match (dropped the click/type assertions, added a `/url` navigation assertion and
+a percent-encoding case for names with special characters). Verified: `pnpm typecheck:scripts`,
+`pnpm check:e2e-lib` (155 tests), `eslint`, `prettier --check` all clean, and the full real
+`pnpm test:e2e` suite passes end to end on both the debug build (6 passed, `relaunch-after-lock`
+correctly skipped) and the release build (all 7 passed, including `relaunch-after-lock`) — so Phase 5
+does not regress spec 016's own suite once this fix lands alongside it.

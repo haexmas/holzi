@@ -60,15 +60,21 @@ async fn registration_keeps_the_vault_captured_before_a_transfer() {
         )
         .expect("install the original vault");
     let captured = state.database().expect("active");
-    state
-        .switch_to(
+
+    // A later vault is now only ever a genuinely new app instance (spec 013 FR-010): there is no
+    // in-process switch any more, so a second, unrelated `AppState` models it. `captured`,
+    // obtained before this one even exists, must still reach `original`'s own database, never
+    // this other state's.
+    let other_instance_state = AppState::default();
+    other_instance_state
+        .install(
             ActiveInstanceHandle {
                 name: "replacement".into(),
                 database: Arc::clone(&replacement),
             },
-            || {},
+            || Ok(()),
         )
-        .expect("switch to the replacement vault");
+        .expect("install the replacement vault in its own, unrelated state");
 
     register_downloaded(RegisterDownloadedArgs {
         db: captured,
@@ -87,7 +93,7 @@ async fn registration_keeps_the_vault_captured_before_a_transfer() {
         hf_revision_ref: None,
     })
     .await
-    .expect("register after switch");
+    .expect("register while another instance is active");
 
     tokio::task::spawn_blocking(move || {
         assert!(original
@@ -99,6 +105,7 @@ async fn registration_keeps_the_vault_captured_before_a_transfer() {
             .expect("replacement model")
             .is_none());
         drop(state);
+        drop(other_instance_state);
         drop(original);
         drop(replacement);
         drop(dirs);
