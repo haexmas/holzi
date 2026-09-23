@@ -24,6 +24,13 @@ export interface ScriptSetupGlobals {
   navigateTo?: (to: string) => unknown
   /** The route params the page reads, `{ instance: 'vault' }` by default. */
   params?: Record<string, string>
+  /** `defineProps<Props>()`'s return value — an empty object by default, since most cases so far
+   * replayed a page that reads route params instead. */
+  props?: Record<string, unknown>
+  /** Bare `window`/`document` stand-ins for a page that registers real DOM listeners. Left
+   * unprovided, using either throws the same loud "not provided" error as the Nuxt auto-imports. */
+  window?: unknown
+  document?: unknown
 }
 
 function notProvided(name: string) {
@@ -36,13 +43,15 @@ function notProvided(name: string) {
 
 /**
  * Replays the `<script setup lang="ts">` block of `vueFile` (a path relative to the repository
- * root) and returns the top-level bindings named in `bindings`.
+ * root) and returns the top-level bindings named in `bindings`, plus `mount`/`unmount` (drains
+ * every `onMounted`/`onBeforeUnmount` hook the block registered, in registration order — no real
+ * Vue component instance exists to run them automatically).
  */
 export function loadScriptSetup<T>(
   vueFile: string,
   bindings: string[],
   globals: ScriptSetupGlobals = {},
-): T {
+): T & { mount: () => Promise<unknown[]>; unmount: () => Promise<unknown[]> } {
   const source = readFileSync(resolvePath(repoRoot, vueFile), 'utf8')
   const block = source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)
   if (!block) {
@@ -64,12 +73,15 @@ export function loadScriptSetup<T>(
     computed: unknown
     watch: unknown
   }
+  const mountHooks: Array<() => unknown> = []
+  const unmountHooks: Array<() => unknown> = []
   const scope: Record<string, unknown> = {
     ref: vue.ref,
     computed: vue.computed,
     watch: vue.watch,
-    onBeforeUnmount: () => {},
-    defineProps: () => ({}),
+    onMounted: (hook: () => unknown) => mountHooks.push(hook),
+    onBeforeUnmount: (hook: () => unknown) => unmountHooks.push(hook),
+    defineProps: () => globals.props ?? {},
     defineEmits: () => () => {},
     useI18n: () => ({ t: (key: string) => key }),
     useRoute: () => ({ params: globals.params ?? { instance: 'vault' } }),
@@ -77,9 +89,12 @@ export function loadScriptSetup<T>(
     useInstancesStore:
       globals.useInstancesStore ?? notProvided('useInstancesStore'),
     navigateTo: globals.navigateTo ?? notProvided('navigateTo'),
+    window: 'window' in globals ? globals.window : notProvided('window'),
+    document:
+      'document' in globals ? globals.document : notProvided('document'),
   }
   const names = Object.keys(scope)
-  return new Function(
+  const result = new Function(
     'exports',
     'require',
     ...names,
@@ -93,4 +108,9 @@ export function loadScriptSetup<T>(
     },
     ...names.map((name) => scope[name]),
   ) as T
+  return {
+    ...result,
+    mount: () => Promise.all(mountHooks.map((hook) => hook())),
+    unmount: () => Promise.all(unmountHooks.map((hook) => hook())),
+  }
 }

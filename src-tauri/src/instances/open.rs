@@ -25,6 +25,7 @@ use crate::voice::VoiceState;
 
 use super::events::emit_instance_list_changed;
 use super::info::InstanceInfo;
+use super::lock_retry::{retry_while_locked, OPEN_RETRY_POLL_INTERVAL, OPEN_RETRY_WINDOW};
 use super::passphrase::Passphrase;
 use super::paths::{
     get_app_local_data, get_instance_path, get_pending_marker_path, validate_instance_name,
@@ -79,18 +80,40 @@ pub async fn open_instance_core<R: Runtime>(
         });
     }
 
-    // A plain move into the blocking open task: the candidate is validated without holding
-    // `active_instance`, so a failed unlock leaves the gate untouched (see the doc comment above).
-    let open_path = db_path.clone();
-    let open_installation_id_file = installation_id_file.clone();
-    let candidate_result = tauri::async_runtime::spawn_blocking(move || {
-        open_existing_database(passphrase.as_str(), &open_path, &open_installation_id_file)
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("database open task failed: {e}"),
-    })?;
-    let candidate = candidate_result?;
+    // Shared, not duplicated: `Passphrase` deliberately has no `Clone` (see its own doc comment),
+    // so a retry attempt clones the `Arc` pointer, never the secret bytes — one buffer exists in
+    // memory for however many attempts this open takes. `db_path` itself is cloned once here so
+    // the retry closure can own its copy while the outer `db_path` still returns below.
+    let retry_path = db_path.clone();
+    let passphrase = Arc::new(passphrase);
+    let token = state.gate().token();
+    let candidate = retry_while_locked(
+        &token,
+        OPEN_RETRY_WINDOW,
+        OPEN_RETRY_POLL_INTERVAL,
+        move || {
+            // The candidate is validated without holding `active_instance`, so a failed unlock
+            // leaves the gate untouched (see the doc comment above); this also holds across
+            // retries — nothing is published until one attempt actually succeeds.
+            let open_path = retry_path.clone();
+            let open_installation_id_file = installation_id_file.clone();
+            let passphrase = passphrase.clone();
+            async move {
+                tauri::async_runtime::spawn_blocking(move || {
+                    open_existing_database(
+                        passphrase.as_str(),
+                        &open_path,
+                        &open_installation_id_file,
+                    )
+                })
+                .await
+                .map_err(|e| HolziError::CrdtInit {
+                    reason: format!("database open task failed: {e}"),
+                })?
+            }
+        },
+    )
+    .await?;
 
     state.install(
         ActiveInstanceHandle {
@@ -147,8 +170,19 @@ fn open_existing_database(
     match Database::open(config) {
         Ok(db) => Ok(Arc::new(db)),
         Err(e) if is_wrong_passphrase(&e) => Err(HolziError::WrongPassphrase),
+        Err(e) if is_locked_elsewhere(&e) => Err(HolziError::VaultAlreadyOpenElsewhere),
         Err(e) => Err(HolziError::from(e)),
     }
+}
+
+/// haex-crdt's own `DatabaseError::VaultAlreadyOpenElsewhere { path, reason }` (its `fs2` advisory
+/// lock is already held by another process) exists as a distinct variant, but its error boundary
+/// collapses every `DatabaseError` into an opaque `Error::Message(String)` before it reaches this
+/// crate (`From<DatabaseError> for Error` keeps only the rendered `Display` text) — so, like
+/// [`is_wrong_passphrase`] above, the message is classified by its stable text rather than a typed
+/// variant that never survives the crossing.
+fn is_locked_elsewhere(err: &haex_crdt::Error) -> bool {
+    matches!(err, haex_crdt::Error::Message(msg) if msg.contains("already open in another instance"))
 }
 
 /// SQLCipher rejects a bad key by reporting `SQLITE_NOTADB` (`code = 26`)

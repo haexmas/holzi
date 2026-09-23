@@ -6,7 +6,16 @@ const createSheetOpen = ref(false)
 const unlockSheetOpen = ref(false)
 const selectedName = ref<string | null>(null)
 
+/** Re-syncs so a vault created or closed by another app process appears without a restart (spec
+ * 013 US4, FR-021: this process's own `instance-list-changed` listener above only ever hears
+ * about its own local changes). */
+function onFocusOrVisible() {
+  if (document.visibilityState === 'visible') void store.syncAsync()
+}
+
 onMounted(async () => {
+  window.addEventListener('focus', onFocusOrVisible)
+  document.addEventListener('visibilitychange', onFocusOrVisible)
   let listenerError: unknown
   try {
     await store.startListening()
@@ -24,12 +33,15 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   store.stopListening()
+  window.removeEventListener('focus', onFocusOrVisible)
+  document.removeEventListener('visibilitychange', onFocusOrVisible)
 })
 
 /** Opens the unlock sheet for the selected instance. */
 function onSelect(name: string) {
   selectedName.value = name
   unlockSheetOpen.value = true
+  void store.syncAsync()
 }
 
 /** Activates a newly created instance and opens its workspace-landing. */

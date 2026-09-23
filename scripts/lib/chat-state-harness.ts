@@ -70,7 +70,10 @@ function transpileFile(absPath: string): string {
 
 const pageCode = ts.transpileModule(setupBlock[1], CJS_OPTIONS).outputText
 
-function composablePath(name: string): string {
+/** A real composable's absolute path, for `runComposable` below or a case that needs the raw path
+ * (e.g. `check-vault-lifecycle.ts` running `useErrorString` on its own, with no chat page around
+ * it). */
+export function composablePath(name: string): string {
   return resolvePath(repoRoot, 'src/composables', `${name}.ts`)
 }
 
@@ -83,7 +86,7 @@ function composablePath(name: string): string {
  * Returns whatever `Function`'s own call signature returns (loosely typed
  * by design, like the rest of this sandbox — see `noImplicitAny` above).
  */
-function runComposable(
+export function runComposable(
   absPath: string,
   req: (specifier: string) => unknown,
   autoImports: Record<string, unknown> = {},

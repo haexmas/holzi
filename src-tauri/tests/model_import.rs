@@ -93,3 +93,23 @@ fn startup_cleanup_removes_model_staging_files_only() {
     assert!(slug.join("model.gguf").exists());
     assert!(models.join("unrelated.tmp").exists());
 }
+
+/// T065/T071: `.locks/` (the cross-process publication lock directory, spec 013 US4) is never
+/// scanned for staging leftovers — a lock file that happened to end in `.tmp` must survive.
+#[test]
+fn startup_cleanup_never_touches_the_locks_directory() {
+    let tmp = tempfile::tempdir().expect("temp dir");
+    let models = tmp.path().join("models");
+    let locks = models.join(".locks");
+    std::fs::create_dir_all(&locks).expect("locks directory");
+    let lock_file = locks.join("model-slug.lock");
+    std::fs::write(&lock_file, b"lock").expect("lock file");
+    // Deliberately staging-shaped, to prove the directory itself is skipped rather than its files
+    // happening not to match the staging suffixes.
+    let tmp_shaped = locks.join("model-slug.lock.tmp");
+    std::fs::write(&tmp_shaped, b"still a lock").expect("tmp-shaped lock file");
+
+    assert_eq!(cleanup_staging_in_dir(&models).expect("cleanup"), 0);
+    assert!(lock_file.exists());
+    assert!(tmp_shaped.exists());
+}

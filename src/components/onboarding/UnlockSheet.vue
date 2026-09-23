@@ -44,11 +44,20 @@ async function onSubmit() {
     })
     emit('unlocked', info.name)
     emit('update:open', false)
-  } catch {
-    // Contract FR-021: NotFound and WrongPassphrase MUST both surface
-    // as the same generic message on the frontend. Typed discriminator
-    // stays in logs only.
-    error.value = t('errors.openFailed')
+  } catch (e) {
+    // Contract FR-021: NotFound and WrongPassphrase MUST both surface as the same generic
+    // message on the frontend. Typed discriminator stays in logs only. `VaultAlreadyOpenElsewhere`
+    // gets its own message (spec 013 US4, contracts/frontend-surface.md): a different, actionable
+    // situation — another process, not a typo — so lumping it into the generic text would send
+    // the operator retyping a passphrase that was never wrong.
+    const kind =
+      e && typeof e === 'object' && 'kind' in e
+        ? (e as { kind: unknown }).kind
+        : undefined
+    error.value =
+      kind === 'VaultAlreadyOpenElsewhere'
+        ? t('errors.vaultAlreadyOpenElsewhere')
+        : t('errors.openFailed')
   } finally {
     submitting.value = false
   }

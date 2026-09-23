@@ -453,26 +453,26 @@ vault list, and a startup cleanup that never deletes another process's work in p
 
 ### Tests for User Story 4 (write first)
 
-- [ ] T063 [P] [US4] Create `src-tauri/src/instances/lock_retry_tests.rs` with paused time: the helper retries
+- [x] T063 [P] [US4] Create `src-tauri/src/instances/lock_retry_tests.rs` with paused time: the helper retries
       while the error is `VaultAlreadyOpenElsewhere`, returns the value once the error clears, returns
       the error after the window, returns `VaultClosed` if the gate starts closing during the wait,
       and does not retry any other error.
-- [ ] T064 [P] [US4] Create `src-tauri/src/models/paths_tests.rs` (declare it in `src-tauri/src/models/paths.rs` with the
+- [x] T064 [P] [US4] Create `src-tauri/src/models/paths_tests.rs` (declare it in `src-tauri/src/models/paths.rs` with the
       `#[path]` idiom): a second acquisition of the same slug waits while the first lock is held,
       succeeds after it drops, and returns `VaultClosed` when the cancellation token fires while
       waiting. Data-model rule verbatim: "Holds the in-process mutex guard for the slug **and** an
       exclusive lock on `<models>/.locks/<slug>.lock`. Both release on drop. Acquiring polls
       asynchronously so a close can cancel the wait."
-- [ ] T065 [P] [US4] Add cases to `src-tauri/src/models/commands_tests.rs` and the existing import tests: the
+- [x] T065 [P] [US4] Add cases to `src-tauri/src/models/commands_tests.rs` and the existing import tests: the
       installed-slug scan (`src-tauri/src/models/commands.rs`, around line 597) and `cleanup_staging_in_dir`
       (`src-tauri/src/models/import.rs`, around line 61) ignore a `.locks` directory and never treat its files as
       models or staging leftovers.
-- [ ] T066 [P] [US4] In `scripts/check-vault-lifecycle.ts` add: `useErrorString` maps
+- [x] T066 [P] [US4] In `scripts/check-vault-lifecycle.ts` add: `useErrorString` maps
       `VaultAlreadyOpenElsewhere`, `VaultAlreadyActive` and `VaultClosed` to their `errors.*` keys;
       `UnlockSheet` shows the dedicated message for `VaultAlreadyOpenElsewhere` and still shows the
       generic `errors.openFailed` for `WrongPassphrase` and `NotFound` (spec 001 FR-021); `pages/index.vue`
       re-syncs the list on window focus and when the unlock sheet opens.
-- [ ] T067 [P] [US4] Create `src-tauri/src/instances/presence_tests.rs` (declare it in
+- [x] T067 [P] [US4] Create `src-tauri/src/instances/presence_tests.rs` (declare it in
       `src-tauri/src/instances/presence.rs` with the `#[path]` idiom) over a temporary data location:
       the first `announce` runs its callback while it is the only process; a second `announce` while
       the first handle is alive does not run its callback; after the first handle drops, a new
@@ -485,14 +485,14 @@ vault list, and a startup cleanup that never deletes another process's work in p
 
 ### Implementation for User Story 4
 
-- [ ] T068 [US4] Create `src-tauri/src/instances/lock_retry.rs` with `retry_while_locked` (an attempt closure, a
+- [x] T068 [US4] Create `src-tauri/src/instances/lock_retry.rs` with `retry_while_locked` (an attempt closure, a
       window, a poll interval and the gate token). Add a `ponytail:` comment: fixed 100 ms poll
       inside a 3 s window, ceiling "adds up to one poll interval of latency", upgrade path "none
       needed". Declare `lock_retry_tests.rs` with the `#[path]` idiom.
-- [ ] T069 [US4] Use it in `src-tauri/src/instances/open.rs`: attempts that fail with
+- [x] T069 [US4] Use it in `src-tauri/src/instances/open.rs`: attempts that fail with
       `HolziError::VaultAlreadyOpenElsewhere` are retried for up to 3 s, polling with an async sleep
       between blocking attempts so a close can interrupt, then the error is returned.
-- [ ] T070 [US4] Implement `PublicationLock` in `src-tauri/src/models/paths.rs`: the guard returned by
+- [x] T070 [US4] Implement `PublicationLock` in `src-tauri/src/models/paths.rs`: the guard returned by
       `acquire_model_publication_lock`, taking `(app, slug, cancellation token)`. It holds the
       in-process mutex guard and an exclusive lock on `<models>/.locks/<slug>.lock` (create the
       directory, and open the file for read and write because Windows refuses locks on append-only
@@ -500,9 +500,9 @@ vault list, and a startup cleanup that never deletes another process's work in p
       wait ends with `VaultClosed` if the token fires. Add a `ponytail:` comment on the poll (fixed
       50 ms; ceiling "latency of one interval"; upgrade "none needed"). Update the two call sites in
       `src-tauri/src/models/commands.rs` (around lines 393 and 535) without net line growth.
-- [ ] T071 [US4] Make the scans skip dot directories: `src-tauri/src/models/commands.rs` around line 597 and
+- [x] T071 [US4] Make the scans skip dot directories: `src-tauri/src/models/commands.rs` around line 597 and
       `src-tauri/src/models/import.rs` around line 61.
-- [ ] T072 [US4] Create `src-tauri/src/instances/presence.rs` with `ProcessPresence` (data-model.md):
+- [x] T072 [US4] Create `src-tauri/src/instances/presence.rs` with `ProcessPresence` (data-model.md):
       `announce(dir, on_alone)` opens `presence.lock` in the app local data directory (the same
       directory `create_instance` uses for the installation id file) for read and write, and follows
       the steps in data-model.md: an exclusive `File::try_lock`, `on_alone` while holding it, then
@@ -515,21 +515,21 @@ vault list, and a startup cleanup that never deletes another process's work in p
       `ponytail:` comment: cleanup only runs when the process is alone; ceiling "leftovers of a
       crashed process stay while other processes overlap"; upgrade path "per-item locks". Keep the
       file under 500 lines.
-- [ ] T073 [US4] Gate the startup cleanup: in `src-tauri/src/lib.rs` `setup`, pass the existing
+- [x] T073 [US4] Gate the startup cleanup: in `src-tauri/src/lib.rs` `setup`, pass the existing
       `cleanup_orphans_on_startup` (which stays as it is in `src-tauri/src/instances/startup.rs`,
       covering both `cleanup_orphans_in_dir` and `cleanup_staging_in_dir`) to
       `ProcessPresence::announce` as the callback and manage the returned handle. The relaunch after
       a close runs while the old process is still draining, so it skips the cleanup; that is
       intended. No other production code may call the two cleanup functions.
-- [ ] T074 [US4] Frontend errors: add the three kinds to `src/composables/useErrorString.ts`, add
+- [x] T074 [US4] Frontend errors: add the three kinds to `src/composables/useErrorString.ts`, add
       `errors.vaultAlreadyOpenElsewhere`, `errors.vaultAlreadyActive` and `errors.vaultClosed` with
       the texts from `contracts/frontend-surface.md` to `src/i18n/locales/de.json` and `en.json`, and
       make `UnlockSheet.vue` show the dedicated message for `VaultAlreadyOpenElsewhere` only.
-- [ ] T075 [US4] `src/pages/index.vue`: re-sync the vault list on window `focus` and on
+- [x] T075 [US4] `src/pages/index.vue`: re-sync the vault list on window `focus` and on
       `visibilitychange`, and when the unlock sheet opens; remove the listeners on unmount.
-- [ ] T076 [US4] Run quickstart scenario 6 (two processes, same vault twice, list refresh, concurrent
-      model install, and a third start during a download and a vault creation) and record it in the
-      Validation record.
+- [ ] T076 [US4] Complete the remaining quickstart scenario 6 coverage (streaming while another
+      process closes, concurrent model install, and concurrent download/vault creation/start) and
+      update the Validation record.
 - [ ] T077 [US4] **Checkpoint Stage 5**: full CI parity. Commit
       `feat(instances): support independent app processes side by side`.
 
@@ -774,3 +774,42 @@ a percent-encoding case for names with special characters). Verified: `pnpm type
 `pnpm test:e2e` suite passes end to end on both the debug build (6 passed, `relaunch-after-lock`
 correctly skipped) and the release build (all 7 passed, including `relaunch-after-lock`) — so Phase 5
 does not regress spec 016's own suite once this fix lands alongside it.
+
+### T076 — quickstart scenario 6 ("Two app processes, two vaults"), 2026-09-23
+
+Verified for real, with **three genuinely concurrent app processes** sharing one on-disk data root —
+a throwaway script (same convention as T061: reuses the e2e suite's own `preflight`/`startInstance`
+tooling directly, nothing committed) built the debug binary the same way the e2e suite itself does
+(`pnpm tauri build --debug --no-bundle`; a plain `cargo build` embeds a `devUrl` the app can't reach
+with no dev server running and fails opaquely — a real detour before finding the right command, not a
+product bug). Covered, through the **real `open_instance`/`create_instance` Tauri commands** (not
+`open_instance_core` called directly the way `vault_single_session.rs`'s integration tests do it):
+
+- Step 1: process A creates and unlocks `vault-a`; process B, a second, independent process over the
+  same root, creates and unlocks `vault-b`.
+- Step 3 (the main point of this stage): a third, still-idle process C tries to open `vault-a` while
+  A holds it. Refused with `{ kind: "VaultAlreadyOpenElsewhere" }` after 3153 ms — the real `fs2`
+  advisory lock held by a genuinely separate OS process, classified by `open.rs`'s message-text
+  check and retried by `lock_retry.rs` for the full ~3 s window before surfacing the refusal, exactly
+  as T068/T069 designed it. C's own gate is untouched by the failed attempt (FR-010): immediately
+  afterwards C creates and unlocks its own `vault-c` without issue.
+- Step 4: process A's `list_instances`, called with no restart, returns all three vaults
+  (`vault-a`, `vault-b`, `vault-c`) — the backend side of the cross-process visibility T075's re-sync
+  relies on.
+
+No leftover `tauri-driver`/`Xvfb`/`holzi` process after the run (checked with `ps aux`).
+
+**Deliberately not covered, scoped down rather than skipped by oversight**:
+
+- Step 2 (a streaming reply in B survives closing A): the cross product of two properties already
+  each fully verified on their own — B's own process isolation (T061) and streaming cancellation on
+  close (spec 016's `lock-while-streaming.test.ts`) — and nothing in the architecture shares memory
+  across processes that could plausibly make the combination behave differently.
+- Steps 5 and 6 (concurrent same-model install; concurrent download + vault creation + a further
+  start, with no `.pending`/`.part` removed while they run): `PublicationLock` and `ProcessPresence`
+  are already proven against genuine OS advisory-lock contention — two independently opened file
+  descriptors racing on the same path — in `src-tauri/src/models/paths_tests.rs` and
+  `src-tauri/src/instances/presence_tests.rs`. `flock()` contention is identical whether the two file
+  descriptors are opened by two threads of one process or by two separate processes, so a real second
+  OS process would add no coverage a real second OS thread did not already provide for this specific
+  mechanism.

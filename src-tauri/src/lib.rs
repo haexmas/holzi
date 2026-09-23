@@ -47,6 +47,7 @@ use device::commands::{current_device_info, update_device_alias};
 use hardware::get_hardware_info;
 use instances::{
     cleanup_orphans_on_startup, close_instance, create_instance, list_instances, open_instance,
+    paths::get_app_local_data, ProcessPresence,
 };
 use models::commands::{
     check_huggingface_model_updates, delete_installed_model, download_model_from_catalog,
@@ -62,6 +63,7 @@ use storage::preferences_commands::{clear_pref, get_pref, set_pref};
 use stt::commands::{
     download_stt_model, list_installed_stt_models, list_stt_catalog, stt_recommend_tiers,
 };
+use tauri::Manager;
 use voice::{
     cancel_voice_recording, invalidate_stt_model_cache, start_voice_recording, stop_voice_recording,
 };
@@ -138,13 +140,21 @@ pub fn run() {
                         .build(),
                 )?;
             }
-            // Orphan cleanup before any command handler can run. A
-            // failure here is logged but does not abort startup — the
-            // orphan just stays around, and `list_instances` filters it
-            // out because of its sibling `.pending` marker.
-            if let Err(e) = cleanup_orphans_on_startup(app.handle()) {
-                log::warn!("startup orphan cleanup failed: {e}");
-            }
+            // Orphan cleanup before any command handler can run, gated by presence (spec 013
+            // US4, FR-026, SC-010): only the process alone on this app-local-data directory runs
+            // it. A relaunch that starts while the old process is still draining is not alone,
+            // so it correctly skips the cleanup here — the old process's own close is what is
+            // still tidying up, not a crash to clean up after. A failure inside the cleanup
+            // itself is logged but does not abort startup — an orphan just stays around, and
+            // `list_instances` filters it out because of its sibling `.pending` marker.
+            let app_local_data = get_app_local_data(app.handle())?;
+            let app_for_cleanup = app.handle().clone();
+            let presence = ProcessPresence::announce(&app_local_data, move || {
+                if let Err(e) = cleanup_orphans_on_startup(&app_for_cleanup) {
+                    log::warn!("startup orphan cleanup failed: {e}");
+                }
+            })?;
+            app.manage(presence);
             Ok(())
         })
         .invoke_handler(gate.wrap(tauri::generate_handler![
