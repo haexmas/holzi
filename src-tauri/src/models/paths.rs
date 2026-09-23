@@ -75,20 +75,36 @@ pub async fn acquire_model_publication_lock<R: Runtime>(
         guard = in_process_lock.lock_owned() => guard,
     };
 
-    let locks_dir = models_root(app)?.join(MODEL_LOCKS_DIRECTORY);
-    std::fs::create_dir_all(&locks_dir).map_err(HolziError::from)?;
-    let lock_path = locks_dir.join(format!("{slug}.lock"));
-    // Read and write, not append-only: Windows refuses a lock on an append-only handle
-    // (data-model.md).
-    let file_lock = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(&lock_path)
-        .map_err(HolziError::from)?;
+    if token.is_cancelled() {
+        return Err(HolziError::VaultClosed);
+    }
+    let app_for_lock = app.clone();
+    let slug_for_lock = slug.to_owned();
+    // Keep directory and lock-file setup off the async runtime: slow storage must not delay
+    // cancellation or unrelated commands.
+    let file_lock = tauri::async_runtime::spawn_blocking(move || -> Result<File> {
+        let locks_dir = models_root(&app_for_lock)?.join(MODEL_LOCKS_DIRECTORY);
+        std::fs::create_dir_all(&locks_dir).map_err(HolziError::from)?;
+        let lock_path = locks_dir.join(format!("{slug_for_lock}.lock"));
+        // Read and write, not append-only: Windows refuses a lock on an append-only handle
+        // (data-model.md).
+        OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&lock_path)
+            .map_err(HolziError::from)
+    })
+    .await
+    .map_err(|e| HolziError::CrdtInit {
+        reason: format!("model publication lock setup join: {e}"),
+    })??;
 
     loop {
+        if token.is_cancelled() {
+            return Err(HolziError::VaultClosed);
+        }
         match file_lock.try_lock() {
             Ok(()) => break,
             Err(TryLockError::WouldBlock) => {

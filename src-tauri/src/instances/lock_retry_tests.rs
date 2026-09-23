@@ -74,6 +74,24 @@ async fn returns_vault_closed_if_the_gate_starts_closing_during_the_wait() {
 }
 
 #[tokio::test]
+async fn does_not_attempt_after_cancellation() {
+    tokio::time::pause();
+    let token = CancellationToken::new();
+    token.cancel();
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let counted = attempts.clone();
+
+    let result = retry_while_locked(&token, WINDOW, POLL, move || {
+        counted.fetch_add(1, Ordering::SeqCst);
+        async { Ok::<_, HolziError>(()) }
+    })
+    .await;
+
+    assert!(matches!(result, Err(HolziError::VaultClosed)));
+    assert_eq!(attempts.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
 async fn does_not_retry_any_other_error() {
     tokio::time::pause();
     let attempts = Arc::new(AtomicUsize::new(0));

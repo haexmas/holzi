@@ -527,9 +527,9 @@ vault list, and a startup cleanup that never deletes another process's work in p
       make `UnlockSheet.vue` show the dedicated message for `VaultAlreadyOpenElsewhere` only.
 - [x] T075 [US4] `src/pages/index.vue`: re-sync the vault list on window `focus` and on
       `visibilitychange`, and when the unlock sheet opens; remove the listeners on unmount.
-- [x] T076 [US4] Run quickstart scenario 6 (two processes, same vault twice, list refresh, concurrent
-      model install, and a third start during a download and a vault creation) and record it in the
-      Validation record.
+- [ ] T076 [US4] Complete the remaining quickstart scenario 6 coverage (streaming while another
+      process closes, concurrent model install, and concurrent download/vault creation/start) and
+      update the Validation record.
 - [ ] T077 [US4] **Checkpoint Stage 5**: full CI parity. Commit
       `feat(instances): support independent app processes side by side`.
 

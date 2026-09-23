@@ -14,6 +14,8 @@ function onFocusOrVisible() {
 }
 
 onMounted(async () => {
+  window.addEventListener('focus', onFocusOrVisible)
+  document.addEventListener('visibilitychange', onFocusOrVisible)
   let listenerError: unknown
   try {
     await store.startListening()
@@ -27,8 +29,6 @@ onMounted(async () => {
         ? listenerError.message
         : String(listenerError)
   }
-  window.addEventListener('focus', onFocusOrVisible)
-  document.addEventListener('visibilitychange', onFocusOrVisible)
 })
 
 onBeforeUnmount(() => {

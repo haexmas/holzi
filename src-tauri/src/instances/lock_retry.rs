@@ -39,6 +39,9 @@ where
 {
     let deadline = Instant::now() + window;
     loop {
+        if token.is_cancelled() {
+            return Err(HolziError::VaultClosed);
+        }
         match attempt().await {
             Err(HolziError::VaultAlreadyOpenElsewhere) if Instant::now() < deadline => {
                 tokio::select! {
