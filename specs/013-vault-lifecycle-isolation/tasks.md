@@ -810,9 +810,9 @@ decision.
 
 Verified for real, same convention (throwaway script, not committed, e2e suite tooling reused
 directly), against a rebuilt debug binary (main had moved since the first T076 run — `ba0d4e6` landed
-on it). Steps 5 and 2 below are covered; step 6 is only a partial check. Four
-processes total; ordering matters because closing A is destructive, so it runs last, after everything
-that still needs both A and B alive:
+on it). Steps 5 and 2 below are covered; step 6 remains partial. Four processes total; ordering
+matters because closing A is destructive, so it runs last, after everything that still needs both A
+and B alive:
 
 - **Step 5, concurrent same-model install**: A and B, both active with their own vault, call
   `import_model_from_file` for the same slug at the same time (`Promise.all`, no stagger). Both
@@ -832,13 +832,24 @@ that still needs both A and B alive:
 
   This does **not** complete quickstart step 6: no real model download or vault creation was in
   flight when C started, and the planted files do not prove that either operation survives startup
-  cleanup. T076 stays open until a run starts an actual download and an actual vault creation,
-  starts C while both are in progress, and asserts that both finish normally with no `.pending` or
-  `.part` file removed during the work.
+  cleanup. A follow-up must start an actual download and an actual vault creation, wait until their
+  own in-progress markers exist (`.part` and `.db.pending` respectively), start C, and then assert
+  that both operations finish normally and that neither marker was removed during the work. Those
+  markers are created before the respective operation completes, so the overlap can be observed
+  without relying on an unassertable wall-clock race.
 
-Because this required T076 coverage is still open, the Stage 5 checkpoint T077 remains open as well.
-The PR's CI checks are green, but that does not substitute for the missing scenario-6 acceptance
-run.
+  The current implementation still makes the download fixture awkward to control:
+
+  - A real HF download (`download_model_from_hf`/`download_model_from_catalog`) is not reachable for
+    this: both always build `HfClient::production()` (`huggingface.rs`), and `resolve_download_url`'s
+    `ALLOWED_DOWNLOAD_HOST` check rejects anything but `huggingface.co` — there is no IPC-level way to
+    point a real invoke at a local stand-in server the way the LLM provider adapter can, and using the
+    real network for a throwaway timing test both risks flakiness on a slow connection and load-tests
+    a third party for no product reason.
+  - Genesis (`create_instance`'s `.pending` marker to marker-removed window) can be synchronized
+    deterministically by waiting for that marker before starting C. The third process's own
+    `ProcessPresence::announce` runs during `.setup()`, early in its bootstrap; the harness must
+    launch C without waiting for the later WebDriver-ready signal from `startInstance()`.
 
 - **Step 2, a streaming reply in B survives closing A**: B opens chat, connects the stand-in provider
   and starts a reply (`stream-then-finish`, so it completes on its own rather than needing a second
@@ -851,3 +862,7 @@ manual kill of a `tauri-driver`/Xvfb pair that outlived the script's own `stop()
 process started. That is a harness-cleanup problem rather than a product finding, but it means the
 throwaway run itself was not cleanly automated; the real, committed e2e suite's own `stop()` is
 exercised separately and already relied upon throughout this whole feature.
+
+Because this required scenario-6 coverage is still open, T076 and the Stage 5 checkpoint T077 stay
+open as well. The PR's CI checks are green, but that does not substitute for the missing acceptance
+run.
