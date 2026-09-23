@@ -556,7 +556,7 @@ for test-only helpers, and keeping the already-merged file's diff empty.
 
 ### Tests (write first)
 
-- [ ] T078 [P] [US3] In `scripts/check-vault-passphrase-lifetime.ts` (see deviation note above),
+- [x] T078 [P] [US3] In `scripts/check-vault-passphrase-lifetime.ts` (see deviation note above),
       using the script-setup sandbox from T047 (extended: `defineProps()` now returns a reactive
       object, exposed back as `.props`, so a case can mutate it and see a `watch` react the way a
       real parent's prop update would; `defineEmits()` now takes an optional spy): for `UnlockSheet`
@@ -568,7 +568,7 @@ for test-only helpers, and keeping the already-merged file's diff empty.
       `useInstancesStore()` against a genuine, fresh Pinia never has the passphrase marker in its
       serialized `pinia.state.value` after either flow. A close needs no case here: the backend
       discards the page.
-- [ ] T079 [P] [US5] In the same file: with a backend double that answers the first
+- [x] T079 [P] [US5] In the same file: with a backend double that answers the first
       `active_model_info` slowly (a manually-released gate, not a timer), `initialize()` issues
       overlapping reads (the fire-and-forgotten one from `applyLoadStatus`'s 'ready' branch plus the
       one it awaits directly), resolves without waiting on the still-open first read, re-reads the
@@ -578,12 +578,12 @@ for test-only helpers, and keeping the already-merged file's diff empty.
 
 ### Implementation
 
-- [ ] T080 [US3] Add the explicit clears in `src/components/onboarding/UnlockSheet.vue` and
+- [x] T080 [US3] Add the explicit clears in `src/components/onboarding/UnlockSheet.vue` and
       `CreateSheet.vue`: on success before emitting. The existing `reset()` on dismissal stays, and a
       close needs no clear because the page is discarded. Keep `v-model` on `UiInputPassword` (an
       external component) unchanged.
-- [ ] T081 [US3] Run quickstart scenarios 5 and 7 and record them in the Validation record.
-- [ ] T082 [US3] **Checkpoint Stage 6**: full CI parity. Commit
+- [x] T081 [US3] Run quickstart scenarios 5 and 7 and record them in the Validation record.
+- [x] T082 [US3] **Checkpoint Stage 6**: full CI parity. Commit
       `test(ui): cover passphrase lifetime and overlapping model reads`.
 
 ---
@@ -944,3 +944,30 @@ is the practical ceiling.
 T076 now covers all of quickstart scenario 6 (steps 1–6) fully live, with steps 5 and 6 verified
 against genuine, observed in-flight operations rather than planted files or accepted reasoning. T077
 (Stage 5 checkpoint) follows.
+
+### T081 — quickstart scenarios 5 and 7, 2026-09-24
+
+**Scenario 5 (passphrase hygiene)**: verified live with a throwaway script against the rebuilt debug
+binary. A distinctive marker passphrase was used to `create_instance`, the process closed, a second
+process then failed once with a wrong passphrase before opening with the marker passphrase
+successfully, then closed. Every file under the isolated instance root (both processes' driver/app
+output logs, the app's own log directory, everything — not just the expected log location) was
+scanned for the literal marker string afterward: zero hits, matching the replay test's own coverage
+(T078) and the Rust-level `{:?}`/`{:#?}`/drop-erasure tests from Stage 1.
+
+**Scenario 7 (reads never fail while other work runs)**: verified live. Connected the stand-in
+provider, started a long (~9s) streaming reply, navigated to Settings and back to the chat page
+(a full remount — re-running `initialize()`'s overlapping reads for real, not just in the T079
+replay), and checked no error banner and a resolved (not stuck) effort control; repeated once the
+reply had finished, and again after switching to a second model. All three passed. One real finding
+from writing this check: `busy` (the flag that disables the composer settings control mid-turn) is
+page-local state — it resets to `false` on every remount, same as `input`/`turnSetupPending`, since a
+remount always starts a fresh page reading current backend state rather than resuming a page instance
+that no longer exists. This is correct, existing behavior (nothing in the spec promises a turn's UI
+lockout survives a remount) — flagged here only because the first draft of this check wrongly assumed
+otherwise and had to be corrected.
+
+Also confirmed live: switching to a genuinely new second model (a real `load_model` round trip, not a
+mock) and remounting afterward resolves the effort control for that new model correctly — the exact
+class of regression fix `fedcfa8` addressed, now checked both by the deterministic T079 replay and by
+this live run.

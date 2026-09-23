@@ -25,8 +25,13 @@ export interface ScriptSetupGlobals {
   /** The route params the page reads, `{ instance: 'vault' }` by default. */
   params?: Record<string, string>
   /** `defineProps<Props>()`'s return value — an empty object by default, since most cases so far
-   * replayed a page that reads route params instead. */
+   * replayed a page that reads route params instead. Made reactive by `loadScriptSetup` (and
+   * returned back as `.props`) so a case can mutate a field after load and see a `watch` on it
+   * react, the same way a real parent updating a prop would. */
   props?: Record<string, unknown>
+  /** `defineEmits<{...}>()`'s return value — a no-op by default (events are silently swallowed).
+   * A case that needs to observe emit order/arguments provides its own spy here. */
+  emit?: (event: string, ...args: unknown[]) => void
   /** Bare `window`/`document` stand-ins for a page that registers real DOM listeners. Left
    * unprovided, using either throws the same loud "not provided" error as the Nuxt auto-imports. */
   window?: unknown
@@ -51,7 +56,12 @@ export function loadScriptSetup<T>(
   vueFile: string,
   bindings: string[],
   globals: ScriptSetupGlobals = {},
-): T & { mount: () => Promise<unknown[]>; unmount: () => Promise<unknown[]> } {
+): T & {
+  mount: () => Promise<unknown[]>
+  unmount: () => Promise<unknown[]>
+  /** The reactive `props` object `defineProps()` returned — see `ScriptSetupGlobals.props`. */
+  props: Record<string, unknown>
+} {
   const source = readFileSync(resolvePath(repoRoot, vueFile), 'utf8')
   const block = source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)
   if (!block) {
@@ -72,17 +82,22 @@ export function loadScriptSetup<T>(
     ref: unknown
     computed: unknown
     watch: unknown
+    reactive: <V extends object>(v: V) => V
   }
   const mountHooks: Array<() => unknown> = []
   const unmountHooks: Array<() => unknown> = []
+  // Reactive, not a plain object: a case that mutates a field after load (e.g. simulating a
+  // parent dismissing the sheet by setting `open` back to false) needs the page's own `watch` on
+  // that prop to actually fire, the way it would against a real parent's prop update.
+  const reactiveProps = vue.reactive({ ...(globals.props ?? {}) })
   const scope: Record<string, unknown> = {
     ref: vue.ref,
     computed: vue.computed,
     watch: vue.watch,
     onMounted: (hook: () => unknown) => mountHooks.push(hook),
     onBeforeUnmount: (hook: () => unknown) => unmountHooks.push(hook),
-    defineProps: () => globals.props ?? {},
-    defineEmits: () => () => {},
+    defineProps: () => reactiveProps,
+    defineEmits: () => globals.emit ?? (() => {}),
     useI18n: () => ({ t: (key: string) => key }),
     useRoute: () => ({ params: globals.params ?? { instance: 'vault' } }),
     useInstance: globals.useInstance ?? notProvided('useInstance'),
@@ -110,6 +125,7 @@ export function loadScriptSetup<T>(
   ) as T
   return {
     ...result,
+    props: reactiveProps,
     mount: () => Promise.all(mountHooks.map((hook) => hook())),
     unmount: () => Promise.all(unmountHooks.map((hook) => hook())),
   }
