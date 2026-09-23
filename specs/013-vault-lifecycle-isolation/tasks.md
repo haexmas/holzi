@@ -839,6 +839,7 @@ that still needs both A and B alive:
 Because this required T076 coverage is still open, the Stage 5 checkpoint T077 remains open as well.
 The PR's CI checks are green, but that does not substitute for the missing scenario-6 acceptance
 run.
+
 - **Step 2, a streaming reply in B survives closing A**: B opens chat, connects the stand-in provider
   and starts a reply (`stream-then-finish`, so it completes on its own rather than needing a second
   action to stop it); once its connection is open, A is closed for real (`close_instance`, process
