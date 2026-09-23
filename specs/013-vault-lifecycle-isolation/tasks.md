@@ -527,10 +527,10 @@ vault list, and a startup cleanup that never deletes another process's work in p
       make `UnlockSheet.vue` show the dedicated message for `VaultAlreadyOpenElsewhere` only.
 - [x] T075 [US4] `src/pages/index.vue`: re-sync the vault list on window `focus` and on
       `visibilitychange`, and when the unlock sheet opens; remove the listeners on unmount.
-- [x] T076 [US4] Complete the remaining quickstart scenario 6 coverage (streaming while another
+- [ ] T076 [US4] Complete the remaining quickstart scenario 6 coverage (streaming while another
       process closes, concurrent model install, and concurrent download/vault creation/start) and
       update the Validation record.
-- [x] T077 [US4] **Checkpoint Stage 5**: full CI parity. Commit
+- [ ] T077 [US4] **Checkpoint Stage 5**: full CI parity. Commit
       `feat(instances): support independent app processes side by side`.
 
 ---
@@ -806,12 +806,13 @@ require the remaining scenarios instead of accepting the scoped-down record. Res
 see the follow-up below, which verifies all three for real and supersedes the original scoping
 decision.
 
-### T076 follow-up — the remaining quickstart scenario 6 coverage, 2026-09-23
+### T076 follow-up — partial verification of the remaining scenario 6 coverage, 2026-09-23
 
 Verified for real, same convention (throwaway script, not committed, e2e suite tooling reused
 directly), against a rebuilt debug binary (main had moved since the first T076 run — `ba0d4e6` landed
-on it). Four processes total; ordering matters because closing A is destructive, so it runs last,
-after everything that still needs both A and B alive:
+on it). Steps 5 and 2 below are covered; step 6 is only a partial check. Four
+processes total; ordering matters because closing A is destructive, so it runs last, after everything
+that still needs both A and B alive:
 
 - **Step 5, concurrent same-model install**: A and B, both active with their own vault, call
   `import_model_from_file` for the same slug at the same time (`Promise.all`, no stagger). Both
@@ -819,24 +820,33 @@ after everything that still needs both A and B alive:
   shows exactly one row for the slug with the correct size; no leftover `.tmp`/`.staging` file in the
   slug directory afterward. `PublicationLock`'s cross-process `fs2` serialization holds under genuine
   concurrent OS processes, not just the two-thread contention `paths_tests.rs` already proved.
-- **Step 6, presence gating while other processes are alive**: with A and B both still alive, planted
-  a stray orphan pair (`stray-orphan.db` + its `.pending` marker) and a stray model-staging file
-  (`stray-slug/stray.gguf.tmp`) — standing in for another process's in-progress work, the same shape
-  `startup_tests.rs`'s unit test uses. Started process C over the same root while A and B were still
-  running: both stray files survived C's own startup (`ProcessPresence::announce` sees it is not
-  alone and skips the cleanup entirely, exactly as T072/T073 designed it) — proven through the real
-  `lib.rs` `setup` wiring, not the manually-composed pure-function version `startup_tests.rs` covers.
-  After A, B and C had all stopped, a fourth process D started genuinely alone: both stray files were
-  gone by the time its first command returned, confirming the cleanup does still run once nothing
-  overlaps it.
+- **Step 6, presence gating while other processes are alive (partial)**: with A and B both still
+  alive, planted a stray orphan pair (`stray-orphan.db` + its `.pending` marker) and a stray
+  model-staging file (`stray-slug/stray.gguf.tmp`) — the same file shapes used by
+  `startup_tests.rs`. Started process C over the same root while A and B were still running: both
+  stray files survived C's own startup (`ProcessPresence::announce` sees it is not alone and skips
+  the cleanup entirely, exactly as T072/T073 designed it) — proven through the real `lib.rs` `setup`
+  wiring, not the manually-composed pure-function version `startup_tests.rs` covers. After A, B and C
+  had all stopped, a fourth process D started genuinely alone: both stray files were gone by the time
+  its first command returned, confirming the cleanup does still run once nothing overlaps it.
+
+  This does **not** complete quickstart step 6: no real model download or vault creation was in
+  flight when C started, and the planted files do not prove that either operation survives startup
+  cleanup. T076 stays open until a run starts an actual download and an actual vault creation,
+  starts C while both are in progress, and asserts that both finish normally with no `.pending` or
+  `.part` file removed during the work.
+
+Because this required T076 coverage is still open, the Stage 5 checkpoint T077 remains open as well.
+The PR's CI checks are green, but that does not substitute for the missing scenario-6 acceptance
+run.
 - **Step 2, a streaming reply in B survives closing A**: B opens chat, connects the stand-in provider
   and starts a reply (`stream-then-finish`, so it completes on its own rather than needing a second
   action to stop it); once its connection is open, A is closed for real (`close_instance`, process
   ends). B's reply finishes normally afterward (the provider's connection closes on its own, not from
   A's close) and no error banner appears in B.
 
-No leftover `tauri-driver`/`Xvfb`/`holzi`/`WebKitWebDriver` process after the run (checked with
-`ps aux`; one run needed a manual kill of a driver/Xvfb pair that outlived the script's own `stop()`
-call for the last process started — the script's own process bookkeeping, not a product concern, and
-not investigated further since the real, committed e2e suite's own `stop()` is exercised far more and
-already relied upon throughout this whole feature).
+The product processes were gone after the run (checked with `ps aux`). One throwaway run needed a
+manual kill of a `tauri-driver`/Xvfb pair that outlived the script's own `stop()` call for the last
+process started. That is a harness-cleanup problem rather than a product finding, but it means the
+throwaway run itself was not cleanly automated; the real, committed e2e suite's own `stop()` is
+exercised separately and already relied upon throughout this whole feature.
