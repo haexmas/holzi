@@ -172,8 +172,7 @@ impl Session {
                 },
                 || Ok(()),
             )
-            .expect("publish the vault");
-        session.gate.begin_session().expect("Idle to Active");
+            .expect("publish the vault, and move the gate Idle to Active with it");
         session
     }
 

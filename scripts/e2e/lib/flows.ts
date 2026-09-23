@@ -17,6 +17,7 @@ export interface FlowInstance {
   click(hook: string, deadlineMs?: number): Promise<void>
   type(hook: string, text: string, deadlineMs?: number): Promise<void>
   exec<T = unknown>(script: string, args?: unknown[]): Promise<T>
+  navigate(url: string): Promise<void>
   step: StepRecorder
 }
 
@@ -66,9 +67,12 @@ interface CreateInstanceResult {
 }
 
 /**
- * Creates a vault and unlocks it: `create_instance` by backend call, click the instance entry by hook,
- * type the generated passphrase, click the unlock button, wait for the workspace address. Records
- * `unlocked`.
+ * Creates a vault and reaches its workspace: `create_instance` by backend call, then navigate
+ * straight to `/workspace/<name>`, the same way the real create form's own `onCreated` handler does
+ * (`src/pages/index.vue`) — never a second `open_instance` for the name just created. Spec 013 Phase
+ * 5 (one active vault per process, FR-010) made that second call fail with `VaultAlreadyActive`,
+ * since `create_instance` already published this vault as active; the real app never made that call
+ * in the first place. Records `unlocked`.
  */
 export async function createAndUnlock(
   instance: FlowInstance,
@@ -81,10 +85,9 @@ export async function createAndUnlock(
       args: { name: options.name, passphrase },
     }),
   )
-  const entryHook = `[data-testid="instance-entry"][data-instance-name="${options.name.replace(/"/g, '\\"')}"]`
-  await instance.click(entryHook)
-  await instance.type('#unlock-passphrase', passphrase)
-  await instance.click('[form="unlock-form"]')
+  await instance.navigate(
+    `tauri://localhost/workspace/${encodeURIComponent(options.name)}`,
+  )
   await waitForPath(instance, '/workspace/')
   instance.step('unlocked')
 }

@@ -6,7 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
-use tauri::{path::BaseDirectory, AppHandle, Manager};
+use tauri::{path::BaseDirectory, AppHandle, Manager, Runtime};
 
 use crate::error::{HolziError, Result};
 
@@ -42,7 +42,10 @@ pub fn validate_instance_name(name: &str) -> Result<()> {
 
 /// Resolves `<AppLocalData>/instances/`. Creates the directory if
 /// missing.
-pub fn get_instances_directory(app: &AppHandle) -> Result<PathBuf> {
+///
+/// Generic over `R: Runtime` (not the concrete `AppHandle`) so a test can call it with
+/// `tauri::test::MockRuntime`'s handle instead of a real, windowed one (spec 013 T053).
+pub fn get_instances_directory<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf> {
     let dir = app
         .path()
         .resolve(INSTANCES_DIRECTORY, BaseDirectory::AppLocalData)
@@ -54,7 +57,7 @@ pub fn get_instances_directory(app: &AppHandle) -> Result<PathBuf> {
 }
 
 /// Resolves `<AppLocalData>/instances/<name>.db`. Validates `name` first.
-pub fn get_instance_path(app: &AppHandle, name: &str) -> Result<PathBuf> {
+pub fn get_instance_path<R: Runtime>(app: &AppHandle<R>, name: &str) -> Result<PathBuf> {
     validate_instance_name(name)?;
     let dir = get_instances_directory(app)?;
     Ok(dir.join(format!("{name}.{INSTANCE_EXTENSION}")))
@@ -68,7 +71,7 @@ pub fn get_pending_marker_path(instance_path: &Path) -> PathBuf {
 }
 
 /// Resolves `<AppLocalData>/` — where the installation-id file lives.
-pub fn get_app_local_data(app: &AppHandle) -> Result<PathBuf> {
+pub fn get_app_local_data<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf> {
     app.path()
         .app_local_data_dir()
         .map_err(|e| HolziError::PathResolution {

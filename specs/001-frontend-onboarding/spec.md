@@ -149,7 +149,7 @@ This user story belongs to the superseded paper-seed/federation-root design and 
 - **FR-019**: Clicking an instance in the list MUST open the Unlock sheet with only a passphrase field.
 - **FR-020**: On correct passphrase, the backend MUST unlock SQLCipher, start the Nostr relay endpoint, start the iroh peer, and mark the instance as active in `AppState`. The frontend MUST navigate to `/federation/<instance-id>`.
 - **FR-021**: On incorrect passphrase, the sheet MUST show an inline error without disclosing whether the file exists or the passphrase policy was violated (avoid oracle).
-- **FR-022**: If an instance is already active, `open_instance` MUST close the active one and open the requested instance as one atomic, state-locked backend switch. The frontend MUST NOT orchestrate a separate close/open sequence.
+- **FR-022**: _(superseded by spec 013 FR-010 and [ADR 0003](../../docs/adr/0003-one-vault-session-per-app-process.md): if an instance is already active, `open_instance` now refuses with `VaultAlreadyActive` instead of switching to the requested one — the atomic switch described here is removed. The frontend still MUST NOT orchestrate a separate close/open sequence, but there is no in-process sequence to orchestrate any more: a different vault is only reachable after the active one is fully closed, in a new process.)_
 - **FR-023**: The list MUST support a per-item context menu with "In Papierkorb verschieben". Removing an item while retaining its file is not supported in v1 because the list is a directory scan and no exclusion metadata is persisted. Silent hard-delete MUST NOT be an option.
 
 **Cross-cutting**

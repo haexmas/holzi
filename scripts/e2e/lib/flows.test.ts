@@ -44,9 +44,7 @@ beforeEach(() => {
 })
 
 describe('createAndUnlock', () => {
-  it('creates the instance, unlocks it and waits for the workspace address, recording unlocked', async () => {
-    driver.onFind(() => ['el-1'])
-    driver.onDisplayed(() => true)
+  it('creates the instance by backend call, then navigates straight to its workspace, recording unlocked', async () => {
     driver.onExecute((kind, script) => {
       if (kind === 'async') {
         assert.match(script, /create_instance/)
@@ -57,30 +55,35 @@ describe('createAndUnlock', () => {
     })
     await createAndUnlock(instance, { name: 'test' })
     assert.deepEqual(steps, [['unlocked', undefined]])
-    const clicks = driver.requests.filter((r) => r.path.endsWith('/click'))
-    assert.equal(clicks.length, 2) // the instance entry, then the unlock submit
-    const typed = driver.requests.find((r) => r.path.endsWith('/value'))
-    assert.equal(typeof (typed?.body as { text?: string })?.text, 'string')
-    assert.ok((typed?.body as { text: string }).text.length > 0)
+    // Never a second `open_instance` for the name just created (spec 013 FR-010 would refuse it —
+    // `create_instance` already published the vault as active).
+    const scripts = driver.requests
+      .map((r) => (r.body && typeof r.body === 'object' ? r.body : {}))
+      .map((body) => ('script' in body ? body.script : ''))
+      .filter((script) => typeof script === 'string')
+    assert.ok(scripts.every((script) => !script.includes('open_instance')))
+    const nav = driver.requests.filter((r) => r.path.endsWith('/url')).pop()
+    assert.deepEqual(nav?.body, {
+      url: 'tauri://localhost/workspace/test',
+    })
+    // No click/type at all: the real create form's own `onCreated` handler navigates directly too.
+    assert.equal(
+      driver.requests.some((r) => r.path.endsWith('/click')),
+      false,
+    )
   })
 
-  it('escapes a quote in the name for the data-instance-name selector', async () => {
-    let seenValue = ''
-    driver.onFind((_using, value) => {
-      if (value.includes('data-instance-name')) seenValue = value
-      return ['el-1']
-    })
-    driver.onDisplayed(() => true)
+  it('percent-encodes a name with special characters in the workspace URL', async () => {
     driver.onExecute((kind) =>
       kind === 'async'
         ? { value: { ok: true, data: {} } }
-        : { value: '/workspace/x' },
+        : { value: '/workspace/a%22b' },
     )
     await createAndUnlock(instance, { name: 'a"b' })
-    assert.equal(
-      seenValue,
-      '[data-testid="instance-entry"][data-instance-name="a\\"b"]',
-    )
+    const nav = driver.requests.filter((r) => r.path.endsWith('/url')).pop()
+    assert.deepEqual(nav?.body, {
+      url: 'tauri://localhost/workspace/a%22b',
+    })
   })
 
   it('fails naming the command when create_instance is rejected', async () => {

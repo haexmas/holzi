@@ -17,10 +17,10 @@ mod list;
 mod open;
 
 pub use close::{close_instance, start_close, take_over_exit};
-pub use create::create_instance;
+pub use create::{create_instance, create_instance_core, CreateInstanceArgs, CreateInstanceResult};
 pub use info::InstanceInfo;
 pub use list::list_instances;
-pub use open::open_instance;
+pub use open::{open_instance, open_instance_core, OpenInstanceArgs};
 pub use startup::cleanup_orphans_on_startup;
 
 #[cfg(test)]

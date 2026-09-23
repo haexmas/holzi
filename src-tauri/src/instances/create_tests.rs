@@ -16,7 +16,7 @@ fn genesis_is_not_published_if_pending_marker_cannot_be_removed() {
     std::fs::create_dir(&marker).unwrap(); // remove_file deterministically fails
     let state = AppState::default();
     assert!(publish_active(&state, "vault", &db, &marker).is_err());
-    assert!(!state.has_active().unwrap());
+    assert!(state.active_name().unwrap().is_none());
 }
 
 #[test]
