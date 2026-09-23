@@ -437,8 +437,9 @@ creating while one exists is refused.
       `specs/001-frontend-onboarding/spec.md`, pointing to spec 013 FR-010 and ADR 0003. Keep the
       files Prettier-clean.
 - [x] T061 [US2] Run quickstart scenario 4 and record it in the Validation record.
-- [ ] T062 [US2] **Checkpoint Stage 4**: full CI parity. Commit
-      `refactor(instances): one vault session per app process`.
+- [x] T062 [US2] **Checkpoint Stage 4**: full CI parity. Commit
+      `refactor(instances): one vault session per app process`. Committed `60e8d72`, pushed
+      `013-single-vault-session`, PR #123 opened (https://github.com/haexmas/holzi/pull/123).
 
 ---
 
