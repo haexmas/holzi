@@ -2,7 +2,9 @@
 //! the mock runtime (a real `AppHandle<MockRuntime>`, so path resolution is the genuine article,
 //! per `open_instance_core`/`create_instance_core` being generic over `R: Runtime`): `open_instance`
 //! and `create_instance` refuse before touching any file once a vault is active or a close is
-//! under way, and a failed unlock never leaves the gate stuck.
+//! under way, a failed unlock never leaves the gate stuck, and (US4, FR-018 to FR-020) opening a
+//! vault another independent `AppState` still holds retries and succeeds once that holder releases
+//! its real `fs2` lock.
 //!
 //! Linux only: storage is redirected through `XDG_DATA_HOME`, which Tauri's `AppLocalData`
 //! honours only on Linux.
@@ -212,6 +214,52 @@ async fn a_failed_open_leaves_the_gate_idle_and_a_later_open_succeeds() {
     )
     .await
     .expect("the correct passphrase now succeeds");
+    assert_eq!(opener_gate.phase(), VaultPhase::Active);
+
+    std::env::remove_var("XDG_DATA_HOME");
+}
+
+/// T069, integration-level: haex-crdt's real `DatabaseError::VaultAlreadyOpenElsewhere` (its `fs2`
+/// lock, genuinely held by a second, independent `AppState`/gate pair on the same on-disk vault —
+/// not a mocked attempt closure, unlike `lock_retry_tests.rs`) round-trips through `open.rs`'s
+/// message-text classifier and into a real retry: if the classification ever drifted (e.g. the
+/// upstream message text changed), the very first attempt would fall through to `CrdtInit` and
+/// fail before the release below ever fires, well short of this test's short wait.
+#[tokio::test]
+async fn open_retries_a_real_held_lock_and_succeeds_once_the_holder_releases_it() {
+    let _turn = TURN.lock().await;
+    let data_home = tempfile::tempdir().expect("data home");
+    std::env::set_var("XDG_DATA_HOME", data_home.path());
+
+    let creator_gate = VaultGate::new();
+    let creator_state = AppState::new(creator_gate.clone());
+    let creator_chat = ChatState::with_children(creator_gate.children());
+    let creator_app = mock_app();
+    create(&creator_app, &creator_state, &creator_chat, "vault-a")
+        .await
+        .expect("create vault-a");
+    // The creator's own database handle stays alive here — its fs2 lock is still held, exactly as
+    // a second real process would find it.
+
+    let opener_gate = VaultGate::new();
+    let opener_state = AppState::new(opener_gate.clone());
+    let opener_chat = ChatState::with_children(opener_gate.children());
+    let opener_app = mock_app();
+
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(350)).await;
+        drop(creator_state.take().expect("take the creator's handle"));
+    });
+
+    open(
+        &opener_app,
+        &opener_state,
+        &opener_chat,
+        "vault-a",
+        PASSPHRASE,
+    )
+    .await
+    .expect("retries past the real lock and opens once it clears");
     assert_eq!(opener_gate.phase(), VaultPhase::Active);
 
     std::env::remove_var("XDG_DATA_HOME");

@@ -63,6 +63,15 @@ pub fn cleanup_staging_in_dir(models_root: &Path) -> Result<usize> {
         if !slug_entry.file_type().map_err(HolziError::from)?.is_dir() {
             continue;
         }
+        // Skips `.locks/` (spec 013 T071): the publication lock files living there are never
+        // staging leftovers.
+        if slug_entry
+            .file_name()
+            .to_str()
+            .is_some_and(|name| name.starts_with('.'))
+        {
+            continue;
+        }
         // Collected first so the `.backup` decision below can see whether a
         // finalized `.gguf` is present in this slug directory.
         let mut files: Vec<(String, std::path::PathBuf)> = Vec::new();

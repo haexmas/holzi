@@ -13,7 +13,7 @@
 //! during this implementation would create a second registration boundary
 //! and make failure-atomic behavior harder to review.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
@@ -390,7 +390,8 @@ async fn download_from_hf_inner(
 ) -> Result<InstalledModelPayload> {
     let _operation = chat.acquire_operation()?;
     let db = active_database(&state)?;
-    let _publication_lock = paths::acquire_model_publication_lock(&args.id).await?;
+    let _publication_lock =
+        paths::acquire_model_publication_lock(&app, &args.id, &state.gate().token()).await?;
 
     if let Some(existing) = paths::canonical_model_file(&app, &args.id)? {
         if existing.filename != args.hf_filename {
@@ -532,7 +533,8 @@ pub async fn import_model_from_file(
         .ok_or_else(|| HolziError::InvalidInput {
             reason: "source path has no filename".into(),
         })?;
-    let _publication_lock = paths::acquire_model_publication_lock(&args.id).await?;
+    let _publication_lock =
+        paths::acquire_model_publication_lock(&app, &args.id, &state.gate().token()).await?;
     if let Some(existing) = paths::canonical_model_file(&app, &args.id)? {
         if existing.filename != filename {
             return Err(HolziError::InvalidInput {
@@ -593,26 +595,7 @@ pub async fn list_installed_models(
     // Enumerate the models root. A missing root means "nothing
     // installed", not an error — fresh installs never open this dir.
     let models_root = paths::models_root(&app)?;
-    let mut slug_dirs: Vec<String> = Vec::new();
-    match std::fs::read_dir(&models_root) {
-        Ok(entries) => {
-            for entry in entries {
-                let entry = entry.map_err(HolziError::from)?;
-                if !entry.file_type().map_err(HolziError::from)?.is_dir() {
-                    continue;
-                }
-                if let Some(name) = entry.file_name().to_str() {
-                    slug_dirs.push(name.to_string());
-                }
-            }
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => return Err(HolziError::from(e)),
-    }
-
-    // Deterministic ordering — the frontend can rely on stable listings
-    // between calls without sorting itself.
-    slug_dirs.sort();
+    let slug_dirs = scan_installed_slug_dirs(&models_root)?;
 
     // Resolve canonical files on the async runtime's blocking pool so
     // syscalls do not hold the executor. Per-slug tolerance: a slug
@@ -688,6 +671,35 @@ pub async fn list_installed_models(
     })?
     .map_err(HolziError::from)?;
     Ok(payload)
+}
+
+/// The subdirectories of `models_root` that name an installed model slug, sorted for a stable
+/// listing. A missing root is "nothing installed", not an error. Skips `.locks/` (spec 013 T071):
+/// a dot-directory is never a model slug — `validate_slug` already rejects a leading dot for
+/// anything created through us.
+fn scan_installed_slug_dirs(models_root: &Path) -> Result<Vec<String>> {
+    let mut slug_dirs: Vec<String> = Vec::new();
+    match std::fs::read_dir(models_root) {
+        Ok(entries) => {
+            for entry in entries {
+                let entry = entry.map_err(HolziError::from)?;
+                if !entry.file_type().map_err(HolziError::from)?.is_dir() {
+                    continue;
+                }
+                if let Some(name) = entry.file_name().to_str() {
+                    if !name.starts_with('.') {
+                        slug_dirs.push(name.to_string());
+                    }
+                }
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(HolziError::from(e)),
+    }
+    // Deterministic ordering — the frontend can rely on stable listings
+    // between calls without sorting itself.
+    slug_dirs.sort();
+    Ok(slug_dirs)
 }
 
 /// Removes the on-disk GGUF file for a model slug. The `models` row
