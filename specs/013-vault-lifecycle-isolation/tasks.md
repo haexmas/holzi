@@ -527,10 +527,10 @@ vault list, and a startup cleanup that never deletes another process's work in p
       make `UnlockSheet.vue` show the dedicated message for `VaultAlreadyOpenElsewhere` only.
 - [x] T075 [US4] `src/pages/index.vue`: re-sync the vault list on window `focus` and on
       `visibilitychange`, and when the unlock sheet opens; remove the listeners on unmount.
-- [ ] T076 [US4] Complete the remaining quickstart scenario 6 coverage (streaming while another
+- [x] T076 [US4] Complete the remaining quickstart scenario 6 coverage (streaming while another
       process closes, concurrent model install, and concurrent download/vault creation/start) and
       update the Validation record.
-- [ ] T077 [US4] **Checkpoint Stage 5**: full CI parity. Commit
+- [x] T077 [US4] **Checkpoint Stage 5**: full CI parity. Commit
       `feat(instances): support independent app processes side by side`.
 
 ---
@@ -799,17 +799,44 @@ product bug). Covered, through the **real `open_instance`/`create_instance` Taur
 
 No leftover `tauri-driver`/`Xvfb`/`holzi` process after the run (checked with `ps aux`).
 
-**Deliberately not covered, scoped down rather than skipped by oversight**:
+Originally scoped down here: steps 2, 5 and 6 were reasoned to already be covered by existing
+unit/integration tests and left unverified live, with reasoning recorded. A CodeRabbit review of PR
+#124 disagreed with narrowing T076 that way and, applied before merge (`ba0d4e6`), rewrote the task to
+require the remaining scenarios instead of accepting the scoped-down record. Resolved as directed —
+see the follow-up below, which verifies all three for real and supersedes the original scoping
+decision.
 
-- Step 2 (a streaming reply in B survives closing A): the cross product of two properties already
-  each fully verified on their own — B's own process isolation (T061) and streaming cancellation on
-  close (spec 016's `lock-while-streaming.test.ts`) — and nothing in the architecture shares memory
-  across processes that could plausibly make the combination behave differently.
-- Steps 5 and 6 (concurrent same-model install; concurrent download + vault creation + a further
-  start, with no `.pending`/`.part` removed while they run): `PublicationLock` and `ProcessPresence`
-  are already proven against genuine OS advisory-lock contention — two independently opened file
-  descriptors racing on the same path — in `src-tauri/src/models/paths_tests.rs` and
-  `src-tauri/src/instances/presence_tests.rs`. `flock()` contention is identical whether the two file
-  descriptors are opened by two threads of one process or by two separate processes, so a real second
-  OS process would add no coverage a real second OS thread did not already provide for this specific
-  mechanism.
+### T076 follow-up — the remaining quickstart scenario 6 coverage, 2026-09-23
+
+Verified for real, same convention (throwaway script, not committed, e2e suite tooling reused
+directly), against a rebuilt debug binary (main had moved since the first T076 run — `ba0d4e6` landed
+on it). Four processes total; ordering matters because closing A is destructive, so it runs last,
+after everything that still needs both A and B alive:
+
+- **Step 5, concurrent same-model install**: A and B, both active with their own vault, call
+  `import_model_from_file` for the same slug at the same time (`Promise.all`, no stagger). Both
+  succeed; both report the identical `fileSha256` (no corruption from the race); `list_installed_models`
+  shows exactly one row for the slug with the correct size; no leftover `.tmp`/`.staging` file in the
+  slug directory afterward. `PublicationLock`'s cross-process `fs2` serialization holds under genuine
+  concurrent OS processes, not just the two-thread contention `paths_tests.rs` already proved.
+- **Step 6, presence gating while other processes are alive**: with A and B both still alive, planted
+  a stray orphan pair (`stray-orphan.db` + its `.pending` marker) and a stray model-staging file
+  (`stray-slug/stray.gguf.tmp`) — standing in for another process's in-progress work, the same shape
+  `startup_tests.rs`'s unit test uses. Started process C over the same root while A and B were still
+  running: both stray files survived C's own startup (`ProcessPresence::announce` sees it is not
+  alone and skips the cleanup entirely, exactly as T072/T073 designed it) — proven through the real
+  `lib.rs` `setup` wiring, not the manually-composed pure-function version `startup_tests.rs` covers.
+  After A, B and C had all stopped, a fourth process D started genuinely alone: both stray files were
+  gone by the time its first command returned, confirming the cleanup does still run once nothing
+  overlaps it.
+- **Step 2, a streaming reply in B survives closing A**: B opens chat, connects the stand-in provider
+  and starts a reply (`stream-then-finish`, so it completes on its own rather than needing a second
+  action to stop it); once its connection is open, A is closed for real (`close_instance`, process
+  ends). B's reply finishes normally afterward (the provider's connection closes on its own, not from
+  A's close) and no error banner appears in B.
+
+No leftover `tauri-driver`/`Xvfb`/`holzi`/`WebKitWebDriver` process after the run (checked with
+`ps aux`; one run needed a manual kill of a driver/Xvfb pair that outlived the script's own `stop()`
+call for the last process started — the script's own process bookkeeping, not a product concern, and
+not investigated further since the real, committed e2e suite's own `stop()` is exercised far more and
+already relied upon throughout this whole feature).
