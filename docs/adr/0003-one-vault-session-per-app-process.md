@@ -46,3 +46,9 @@ already-existing decision to the two commands that need it before they touch a p
   frontend's own restraint keeps single-session is exactly the shape of bug this decision rules out
   by construction, for whatever calls the command next (a future feature, a test, a scripting
   surface).
+
+## Adding work later
+
+- Session-scoped background work uses `gate.spawn` (or `gate.spawn_blocking`) and `gate.run`, so
+  close tracks, cancels, and drains it.
+- A new Tauri command is gated by default. Allow-list a command only if it never touches the vault.

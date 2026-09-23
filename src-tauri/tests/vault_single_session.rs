@@ -3,6 +3,10 @@
 //! per `open_instance_core`/`create_instance_core` being generic over `R: Runtime`): `open_instance`
 //! and `create_instance` refuse before touching any file once a vault is active or a close is
 //! under way, and a failed unlock never leaves the gate stuck.
+//!
+//! Linux only: storage is redirected through `XDG_DATA_HOME`, which Tauri's `AppLocalData`
+//! honours only on Linux.
+#![cfg(target_os = "linux")]
 
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
