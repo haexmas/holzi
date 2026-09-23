@@ -527,10 +527,10 @@ vault list, and a startup cleanup that never deletes another process's work in p
       make `UnlockSheet.vue` show the dedicated message for `VaultAlreadyOpenElsewhere` only.
 - [x] T075 [US4] `src/pages/index.vue`: re-sync the vault list on window `focus` and on
       `visibilitychange`, and when the unlock sheet opens; remove the listeners on unmount.
-- [ ] T076 [US4] Complete the remaining quickstart scenario 6 coverage (streaming while another
+- [x] T076 [US4] Complete the remaining quickstart scenario 6 coverage (streaming while another
       process closes, concurrent model install, and concurrent download/vault creation/start) and
       update the Validation record.
-- [ ] T077 [US4] **Checkpoint Stage 5**: full CI parity. Commit
+- [x] T077 [US4] **Checkpoint Stage 5**: full CI parity. Commit
       `feat(instances): support independent app processes side by side`.
 
 ---
@@ -540,19 +540,41 @@ vault list, and a startup cleanup that never deletes another process's work in p
 **Goal**: FR-016 and FR-025. The forms keep the passphrase only as long as the spec allows, and the
 chat view never errors on overlapping reads.
 
-**Independent test**: `pnpm check:vault-lifecycle` and quickstart scenarios 5 and 7.
+**Independent test**: `pnpm check:vault-lifecycle`, `pnpm check:vault-passphrase-lifetime` and
+quickstart scenarios 5 and 7.
+
+**Deviation from this phase's own text (written back here per the project's convention)**: T078 and
+T079 name `scripts/check-vault-lifecycle.ts` as the target file. Adding this content there would
+have pushed it from 280 to 537 lines, past the spaex constitution's 500-LoC boundary — unlike
+`check-chat-state.ts`, this file has no pre-existing documented exception, and the constitution's
+own text says it supersedes a spec's local preference. The tests below instead live in a new file,
+`scripts/check-vault-passphrase-lifetime.ts` (wired into `package.json` and `.github/workflows/
+ci.yml` the same way), with duplicated (not shared/imported) `loadUnlockSheet`/`loadCreateSheet`
+helpers — the existing T074 tests in `check-vault-lifecycle.ts` keep their own copies untouched,
+matching the constitution's own "duplicated arrange/setup blocks... are often intentional" guidance
+for test-only helpers, and keeping the already-merged file's diff empty.
 
 ### Tests (write first)
 
-- [ ] T078 [P] [US3] In `scripts/check-vault-lifecycle.ts`, using the script-setup sandbox from T047:
-      for `UnlockSheet` and `CreateSheet`, the field is cleared after a successful unlock or create
-      (before the `unlocked` or `created` event is emitted), cleared when the sheet is dismissed,
-      and kept after a failed attempt; and the serialized state of every Pinia store never contains
-      the passphrase marker. A close needs no case here: the backend discards the page.
+- [ ] T078 [P] [US3] In `scripts/check-vault-passphrase-lifetime.ts` (see deviation note above),
+      using the script-setup sandbox from T047 (extended: `defineProps()` now returns a reactive
+      object, exposed back as `.props`, so a case can mutate it and see a `watch` react the way a
+      real parent's prop update would; `defineEmits()` now takes an optional spy): for `UnlockSheet`
+      and `CreateSheet`, the field is cleared after a successful unlock or create (before the
+      `unlocked` or `created` event is emitted — verified via the emit spy reading the ref's value
+      synchronously inside the emit call, not just after `onSubmit()` returns, which cannot
+      distinguish "cleared before" from "cleared after but before return"), cleared when the sheet
+      is dismissed (`props.open = false`), and kept after a failed attempt; and a real
+      `useInstancesStore()` against a genuine, fresh Pinia never has the passphrase marker in its
+      serialized `pinia.state.value` after either flow. A close needs no case here: the backend
+      discards the page.
 - [ ] T079 [P] [US5] In the same file: with a backend double that answers the first
-      `active_model_info` slowly, `initialize()` issues overlapping reads, resolves, re-reads the
-      providers and leaves the effort control selectable. Add a comment naming the incident (a read
-      that took the exclusive operation slot aborted `initialize()`).
+      `active_model_info` slowly (a manually-released gate, not a timer), `initialize()` issues
+      overlapping reads (the fire-and-forgotten one from `applyLoadStatus`'s 'ready' branch plus the
+      one it awaits directly), resolves without waiting on the still-open first read, re-reads the
+      providers (asserted via the invoke log reaching `list_providers`) and leaves the effort control
+      `'selectable'`. Comment names the incident (fix `fedcfa8`: a read that took the exclusive
+      operation slot aborted `initialize()` before `refreshProviders()` ran).
 
 ### Implementation
 
@@ -866,3 +888,59 @@ exercised separately and already relied upon throughout this whole feature.
 Because this required scenario-6 coverage is still open, T076 and the Stage 5 checkpoint T077 stay
 open as well. The PR's CI checks are green, but that does not substitute for the missing acceptance
 run.
+
+### T076 — step 6 resolved for real, catching an actual in-flight genesis write and model copy, 2026-09-24
+
+A pre-merge commit (`3a0acd4`, applied before PR #126 merged) reopened T076/T077 a further time,
+overriding the "accept the mechanism-level proof" resolution recorded just above and rejecting the
+prior "unassertable race" conclusion — correctly: that conclusion was wrong, not just unproven. It
+proposed a concrete fix instead of only asking for more effort: wait for the real `.pending` marker
+before starting the third process, and start that process **without** `tauri-driver`'s WebDriver
+handshake (session negotiation alone costs several real seconds — the actual reason the window had
+looked unassertably short, not genesis's own duration).
+
+Implemented exactly that, plus the equivalent fix for the model-copy half, and both now catch a
+genuinely in-flight write, not a planted stray file:
+
+- **Genesis (`create_instance`)**: fired the invoke without awaiting it, polled for
+  `<instances>/<name>.db.pending` to appear, and the instant it did, started a third process as a
+  **bare spawn** of the application binary — no `tauri-driver`, no WebDriver session — under a
+  dedicated `Xvfb` display started ahead of time so its own startup cost never ate into the window
+  (the real `Xvfb` binary is not on the dev shell's own `PATH`, only `xvfb-run`'s internal one that
+  wraps it; located directly under `/nix/store` instead). The marker was confirmed still present at
+  the exact moment the third process was spawned (a real, observed overlap, not an assumed one), and
+  `create_instance` on the first process still completed normally afterward: marker gone, `.db` file
+  present, the vault listed as a normal (non-pending) instance.
+  - **A genuine bug in the first attempt, worth recording**: the poll loop had no `await` inside it
+    (`while (Date.now() < deadline) { if (existsSync(marker)) {...break} }`), making it a tight
+    synchronous loop that never yielded to Node's event loop — which starved the very I/O carrying
+    the `create_instance` WebDriver request to the application, so the request was never even sent
+    until the loop's own deadline expired. The marker was never observed for this reason alone, not
+    because the window was too short. Fixed with `await new Promise(r => setImmediate(r))` inside
+    the loop. Once fixed, the marker was caught reliably (5 consecutive runs, no misses).
+- **Model copy (`import_model_from_file`)**: the earlier "tmpfs makes any copy near-instant" finding
+  was accurate but the fix was to stop copying onto tmpfs, not to give up. Used a fresh instance root
+  on real disk (`/var/tmp`, `btrfs`, confirmed via `df -T`) instead of the usual `/tmp` (tmpfs), and
+  an 800 MiB source file, so `copy_into_managed`'s `.tmp` staging file existed for a genuinely
+  observable duration. Same bare-spawn-under-a-pre-started-`Xvfb` technique for the third process.
+  The staging file was confirmed present at the moment the third process was spawned; the import
+  still completed successfully afterward with no leftover staging file and the full, uncorrupted
+  size.
+
+Both halves passed cleanly and repeatably (3 runs of the genesis case alone, 2 further runs of the
+combined script) with a throwaway script, not committed
+(`scripts/e2e/lib/{preflight,instance,processes}.ts` reused directly). No leftover processes or
+directories after any run (`ps aux` and the throwaway roots checked).
+
+**Correcting the record**: the earlier acceptance of the mechanism-level proof was not wrong given
+what was known at the time, but the investigation behind it stopped one step short — it treated
+"no signal is available from outside `startInstance()`" as the end of the analysis, without asking
+whether a _cheaper_ way to start the third process existed that would remove the multi-second
+WebDriver handshake from the critical path entirely. The reviewer's proposal asked exactly that
+question. Worth carrying forward: when a live race looks unassertable, check whether the harness's
+own overhead (not the product's) is the actual bottleneck before concluding the mechanism-level proof
+is the practical ceiling.
+
+T076 now covers all of quickstart scenario 6 (steps 1–6) fully live, with steps 5 and 6 verified
+against genuine, observed in-flight operations rather than planted files or accepted reasoning. T077
+(Stage 5 checkpoint) follows.
