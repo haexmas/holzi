@@ -527,10 +527,10 @@ vault list, and a startup cleanup that never deletes another process's work in p
       make `UnlockSheet.vue` show the dedicated message for `VaultAlreadyOpenElsewhere` only.
 - [x] T075 [US4] `src/pages/index.vue`: re-sync the vault list on window `focus` and on
       `visibilitychange`, and when the unlock sheet opens; remove the listeners on unmount.
-- [x] T076 [US4] Complete the remaining quickstart scenario 6 coverage (streaming while another
+- [ ] T076 [US4] Complete the remaining quickstart scenario 6 coverage (streaming while another
       process closes, concurrent model install, and concurrent download/vault creation/start) and
       update the Validation record.
-- [x] T077 [US4] **Checkpoint Stage 5**: full CI parity. Commit
+- [ ] T077 [US4] **Checkpoint Stage 5**: full CI parity. Commit
       `feat(instances): support independent app processes side by side`.
 
 ---
@@ -806,12 +806,13 @@ require the remaining scenarios instead of accepting the scoped-down record. Res
 see the follow-up below, which verifies all three for real and supersedes the original scoping
 decision.
 
-### T076 follow-up — the remaining scenario 6 coverage, 2026-09-23
+### T076 follow-up — partial verification of the remaining scenario 6 coverage, 2026-09-23
 
 Verified for real, same convention (throwaway script, not committed, e2e suite tooling reused
 directly), against a rebuilt debug binary (main had moved since the first T076 run — `ba0d4e6` landed
-on it). Four processes total; ordering matters because closing A is destructive, so it runs last,
-after everything that still needs both A and B alive:
+on it). Steps 5 and 2 below are covered; step 6 remains partial. Four processes total; ordering
+matters because closing A is destructive, so it runs last, after everything that still needs both A
+and B alive:
 
 - **Step 5, concurrent same-model install**: A and B, both active with their own vault, call
   `import_model_from_file` for the same slug at the same time (`Promise.all`, no stagger). Both
@@ -829,9 +830,15 @@ after everything that still needs both A and B alive:
   had all stopped, a fourth process D started genuinely alone: both stray files were gone by the time
   its first command returned, confirming the cleanup does still run once nothing overlaps it.
 
-  A later note here judged this partial — no real download or genesis write was actually in flight
-  when C started — and asked for a run that catches an _actual_ in-progress download and an _actual_
-  in-progress genesis write in the act. Investigated concretely rather than attempted blind:
+  This does **not** complete quickstart step 6: no real model download or vault creation was in
+  flight when C started, and the planted files do not prove that either operation survives startup
+  cleanup. A follow-up must start an actual download and an actual vault creation, wait until their
+  own in-progress markers exist (`.part` and `.db.pending` respectively), start C, and then assert
+  that both operations finish normally and that neither marker was removed during the work. Those
+  markers are created before the respective operation completes, so the overlap can be observed
+  without relying on an unassertable wall-clock race.
+
+  The current implementation still makes the download fixture awkward to control:
 
   - A real HF download (`download_model_from_hf`/`download_model_from_catalog`) is not reachable for
     this: both always build `HfClient::production()` (`huggingface.rs`), and `resolve_download_url`'s
@@ -839,32 +846,10 @@ after everything that still needs both A and B alive:
     point a real invoke at a local stand-in server the way the LLM provider adapter can, and using the
     real network for a throwaway timing test both risks flakiness on a slow connection and load-tests
     a third party for no product reason.
-  - `import_model_from_file`'s copy (`copy_into_managed`) is one `tokio::fs::copy` call with no
-    externally observable midpoint, over a source file the caller controls — the throwaway root lives
-    under `/tmp`, confirmed `tmpfs` (`df -T /tmp`), so even a large file copies close to instantly;
-    moving the root to real disk narrows the window but does not bound it, since disk throughput is
-    not something this test controls or should depend on.
-  - Genesis (`create_instance`'s `.pending` marker to marker-removed window) is a `Database::open`
-    call — SQLCipher init plus a handful of migration statements — likely tens of milliseconds. A
-    third process's own `ProcessPresence::announce` runs during `.setup()`, early in that process's
-    own bootstrap, but with no signal available from outside a script to know exactly when `.setup()`
-    has run relative to when `startInstance()` (which additionally waits out Xvfb, the driver and a
-    WebDriver session, several real seconds) will return. Firing `create_instance` unawaited and
-    starting the third process in the same tick is a real race with no way to assert the two windows
-    actually overlapped, only that they might have.
-
-  Closing either gap without a race would need a test-only hook in product code (an env-gated
-  artificial delay in the copy or in genesis) — weighed against the mechanism this is meant to prove
-  and decided, with the operator, not worth adding: `ProcessPresence::announce`'s decision to run or
-  skip the startup cleanup is made once, from a single `try_lock`/`lock_shared` call, and depends only
-  on whether another presence handle is currently held — never on what the files it would otherwise
-  clean up contain or how they got there. The planted-file run above already exercises that exact
-  decision, through the real `lib.rs` wiring, with two other processes genuinely alive; a file that
-  happens to be mid-write when the snapshot is taken is not a different case for that decision, only a
-  harder one to stage from outside the process. Accepted as the practical ceiling of confidence
-  without adding test-only production code: T076 covers steps 1 through 5 fully live, step 6 as the
-  presence-gating mechanism proved live (not the exact in-flight timing quickstart's wording pictures),
-  and step 2, below, fully live.
+  - Genesis (`create_instance`'s `.pending` marker to marker-removed window) can be synchronized
+    deterministically by waiting for that marker before starting C. The third process's own
+    `ProcessPresence::announce` runs during `.setup()`, early in its bootstrap; the harness must
+    launch C without waiting for the later WebDriver-ready signal from `startInstance()`.
 
 - **Step 2, a streaming reply in B survives closing A**: B opens chat, connects the stand-in provider
   and starts a reply (`stream-then-finish`, so it completes on its own rather than needing a second
@@ -877,3 +862,7 @@ manual kill of a `tauri-driver`/Xvfb pair that outlived the script's own `stop()
 process started. That is a harness-cleanup problem rather than a product finding, but it means the
 throwaway run itself was not cleanly automated; the real, committed e2e suite's own `stop()` is
 exercised separately and already relied upon throughout this whole feature.
+
+Because this required scenario-6 coverage is still open, T076 and the Stage 5 checkpoint T077 stay
+open as well. The PR's CI checks are green, but that does not substitute for the missing acceptance
+run.
