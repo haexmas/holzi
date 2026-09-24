@@ -598,18 +598,15 @@ deliberately failing scenario fails the job and uploads the run directory.
       relaunch scenario skipped; a scratch commit that breaks one scenario makes the job fail and the
       artifact downloadable. Revert the scratch commit. Commit `ci: run the e2e suite on ubuntu` and
       open the Stage 5 pull request after asking the operator.
-      Done 2026-09-24, PR #135 (https://github.com/haexmas/holzi/pull/135):
-      - Clean run (after the corepack fix, commit `b01fce2`):
-        https://github.com/haexmas/holzi/actions/runs/36005937603 — all 5 jobs pass, `End-to-end
-        suite` green, `relaunch-after-lock` reported skipped (debug build exits on close), 5 passed.
-      - Scratch-break run (commit `e201b80`, `smoke-start.test.ts` seeded to always throw):
-        https://github.com/haexmas/holzi/actions/runs/36006711933 — `End-to-end suite` job failed
-        exactly as intended: `Result: FAILED (1 failed, 1 skipped, 5 passed)`, only `smoke-start`
-        failed with the seeded message, `relaunch-after-lock` still correctly reported skipped, and
-        `e2e-failure-material.zip` (18084 bytes — real material, unlike the earlier build-failure
-        run's empty-ish 761 bytes) was uploaded and downloadable.
-      - Scratch commit reverted as `853f7bc`; `smoke-start.test.ts` back to its original content
-        (confirmed no diff against the pre-scratch version).
+      Done 2026-09-24, PR #135 (https://github.com/haexmas/holzi/pull/135): - Clean run (after the corepack fix, commit `b01fce2`):
+      https://github.com/haexmas/holzi/actions/runs/36005937603 — all 5 jobs pass, `End-to-end
+suite` green, `relaunch-after-lock` reported skipped (debug build exits on close), 5 passed. - Scratch-break run (commit `e201b80`, `smoke-start.test.ts` seeded to always throw):
+      https://github.com/haexmas/holzi/actions/runs/36006711933 — `End-to-end suite` job failed
+      exactly as intended: `Result: FAILED (1 failed, 1 skipped, 5 passed)`, only `smoke-start`
+      failed with the seeded message, `relaunch-after-lock` still correctly reported skipped, and
+      `e2e-failure-material.zip` (18084 bytes — real material, unlike the earlier build-failure
+      run's empty-ish 761 bytes) was uploaded and downloadable. - Scratch commit reverted as `853f7bc`; `smoke-start.test.ts` back to its original content
+      (confirmed no diff against the pre-scratch version).
 
 ---
 
@@ -639,7 +636,7 @@ deliberately failing scenario fails the job and uploads the run directory.
       ("has not been tried", "keep steps 1, 2 and 4"), though tasks.md's own validation record shows
       both resolved 2026-09-22 (a release binary is drivable; the relaunch is observable via `-fbdir`,
       all four steps ship). Updated both to state the resolution plainly. `pnpm exec prettier --write
-      specs/016-e2e-testing` run twice, second run made no further changes.
+specs/016-e2e-testing` run twice, second run made no further changes.
 - [x] T087 [P] In `specs/013-vault-lifecycle-isolation/tasks.md` add a note to T050 that its automatable
       part (quickstart scenarios 1 and 2, the closing page and the relaunch) is covered by spec 016 with
       the scenario names, and that T048 (relaunch under `tauri dev`) and T049 (local inference stop
@@ -770,7 +767,7 @@ Recorded at T002 on 2026-09-22, branch `016-e2e-stage0-tools` from `origin/main`
 **T085, 2026-09-24** (branch `016-e2e-stage5-ci`, `origin/main` at `d626eae`):
 
 | File                                          | Lines then | Lines now | Delta |
-| ---------------------------------------------- | ---------- | --------- | ----- |
+| --------------------------------------------- | ---------- | --------- | ----- |
 | `src/pages/chat/[instance].vue`               | 1316       | 1318      | +2    |
 | `src/components/onboarding/InstancesList.vue` | 44         | 46        | +2    |
 | `src/components/workspace/ChatFab.vue`        | 20         | 21        | +1    |
@@ -1474,36 +1471,36 @@ _Filled by later tasks: T080, T081 to T083 and T088._
 
 ### T088 — Traceability, 2026-09-24
 
-| Requirement | Covered by | Note |
-| --- | --- | --- |
-| FR-001 | `pnpm test:e2e` (`cli.ts`), documented in `README.md` | |
-| FR-002 | `build.ts`'s `pnpm tauri build --debug --no-bundle` (no dev server); `--app` for a given binary | |
-| FR-003 | `instance.ts` starts each instance under its own `xvfb-run`; T031's checksum/window-count proof | |
-| FR-004 | `build.ts`/`resolveApplication`: builds debug by default, `--app`/`E2E_APP` to test a given one | |
-| FR-005 | `scenario.ts`'s per-scenario deadline; `cli.ts`'s overall run limit | |
-| FR-006 | `instance.ts` + research R5: data/config/cache **and** runtime dir, `HOME`, session bus all isolated; T076's real filesystem-diff run. Spec wording lists fewer than what's implemented (spec alignment item 1, for T089) | |
-| FR-007 | `provider.ts`, the stand-in provider; no scenario reaches the internet | |
-| FR-008 | `processes.ts` (marker, sweep, `stopGroup`); T031/T075 real concurrent-instance and kill proofs | |
-| FR-009 | `ports.ts`: a free port per use, one retry on collision | |
-| FR-010 | `instance.ts`/`scenario.ts`: a fresh instance per scenario, any order | |
-| FR-011 | `preflight.ts`; T036's manual missing-tool/mismatch trials | |
-| FR-012 | Stage 0 (T003-T006): atoms pin delivers the tools via the dev shell | |
-| FR-013 | `page.ts` (invoke, click, type, press, navigate) + `flows.ts` (createAndUnlock, openChat, connectProvider, startReply) | |
-| FR-014 | `contracts/test-hooks.md`'s three `data-testid` hooks (language- and markup-independent) | |
-| FR-015 | `provider.ts` | |
-| FR-016 | `scenarios/{lock-while-streaming,window-close-while-streaming,closing-page,lock-twice,relaunch-after-lock}.test.ts` | |
-| FR-017 | `build.ts`'s `classifyCloseBehavior` + `scenario.ts`'s `needs: relaunch` skip rule | |
-| FR-018 | `framebuffer.ts`; T067/T068 (resolved, see T086) — the relaunch is observed directly, no indirection needed | |
-| FR-019 | `artifacts.ts`'s `captureFailure` (screenshot, timeline, provider record, driver log) | |
-| FR-020 | `report.ts` (per-scenario duration and step times) | |
-| FR-021 | This PR (T081-T083): the `e2e` job in `ci.yml`, `ubuntu-24.04`, tools from apt/`cargo install` | |
-| SC-001 | T074: a clean debug run passes with `relaunch-after-lock` correctly skipped; a release run passes all seven | |
-| SC-002 | T075: 20-run soak, 10 killed at random, no leftover process or directory afterward | |
-| SC-003 | T077 (a)-(d): each spec 013 promise, disabled in turn, fails the matching scenario — with one accepted, reported limitation: `window-close-while-streaming` cannot exercise the real cancellation path, since a driver-issued window close never reaches `WindowEvent::CloseRequested` (PR #122); `lock-while-streaming` is what actually proves the cancellation-on-close promise | |
-| SC-004 | T058 + T078: three seeded failures, each `timeline.json`/kept material names the precise failed step | |
-| SC-005 | T052 (first pass) + T079 (fresh-eyes subagent, no prior context): the README alone got a working 21-line scenario running on the first try | |
-| SC-006 | T036: missing `xvfb-run` and a version mismatch both stop the run within the bound, before any tool starts, naming the remedy | |
-| SC-007 | T074's recorded durations: every close scenario 5.8-11.6 s, all under the 30 s bound | |
+| Requirement | Covered by                                                                                                                                                                                                                                                                                                                                                                         | Note |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| FR-001      | `pnpm test:e2e` (`cli.ts`), documented in `README.md`                                                                                                                                                                                                                                                                                                                              |      |
+| FR-002      | `build.ts`'s `pnpm tauri build --debug --no-bundle` (no dev server); `--app` for a given binary                                                                                                                                                                                                                                                                                    |      |
+| FR-003      | `instance.ts` starts each instance under its own `xvfb-run`; T031's checksum/window-count proof                                                                                                                                                                                                                                                                                    |      |
+| FR-004      | `build.ts`/`resolveApplication`: builds debug by default, `--app`/`E2E_APP` to test a given one                                                                                                                                                                                                                                                                                    |      |
+| FR-005      | `scenario.ts`'s per-scenario deadline; `cli.ts`'s overall run limit                                                                                                                                                                                                                                                                                                                |      |
+| FR-006      | `instance.ts` + research R5: data/config/cache **and** runtime dir, `HOME`, session bus all isolated; T076's real filesystem-diff run. Spec wording lists fewer than what's implemented (spec alignment item 1, for T089)                                                                                                                                                          |      |
+| FR-007      | `provider.ts`, the stand-in provider; no scenario reaches the internet                                                                                                                                                                                                                                                                                                             |      |
+| FR-008      | `processes.ts` (marker, sweep, `stopGroup`); T031/T075 real concurrent-instance and kill proofs                                                                                                                                                                                                                                                                                    |      |
+| FR-009      | `ports.ts`: a free port per use, one retry on collision                                                                                                                                                                                                                                                                                                                            |      |
+| FR-010      | `instance.ts`/`scenario.ts`: a fresh instance per scenario, any order                                                                                                                                                                                                                                                                                                              |      |
+| FR-011      | `preflight.ts`; T036's manual missing-tool/mismatch trials                                                                                                                                                                                                                                                                                                                         |      |
+| FR-012      | Stage 0 (T003-T006): atoms pin delivers the tools via the dev shell                                                                                                                                                                                                                                                                                                                |      |
+| FR-013      | `page.ts` (invoke, click, type, press, navigate) + `flows.ts` (createAndUnlock, openChat, connectProvider, startReply)                                                                                                                                                                                                                                                             |      |
+| FR-014      | `contracts/test-hooks.md`'s three `data-testid` hooks (language- and markup-independent)                                                                                                                                                                                                                                                                                           |      |
+| FR-015      | `provider.ts`                                                                                                                                                                                                                                                                                                                                                                      |      |
+| FR-016      | `scenarios/{lock-while-streaming,window-close-while-streaming,closing-page,lock-twice,relaunch-after-lock}.test.ts`                                                                                                                                                                                                                                                                |      |
+| FR-017      | `build.ts`'s `classifyCloseBehavior` + `scenario.ts`'s `needs: relaunch` skip rule                                                                                                                                                                                                                                                                                                 |      |
+| FR-018      | `framebuffer.ts`; T067/T068 (resolved, see T086) — the relaunch is observed directly, no indirection needed                                                                                                                                                                                                                                                                        |      |
+| FR-019      | `artifacts.ts`'s `captureFailure` (screenshot, timeline, provider record, driver log)                                                                                                                                                                                                                                                                                              |      |
+| FR-020      | `report.ts` (per-scenario duration and step times)                                                                                                                                                                                                                                                                                                                                 |      |
+| FR-021      | This PR (T081-T083): the `e2e` job in `ci.yml`, `ubuntu-24.04`, tools from apt/`cargo install`                                                                                                                                                                                                                                                                                     |      |
+| SC-001      | T074: a clean debug run passes with `relaunch-after-lock` correctly skipped; a release run passes all seven                                                                                                                                                                                                                                                                        |      |
+| SC-002      | T075: 20-run soak, 10 killed at random, no leftover process or directory afterward                                                                                                                                                                                                                                                                                                 |      |
+| SC-003      | T077 (a)-(d): each spec 013 promise, disabled in turn, fails the matching scenario — with one accepted, reported limitation: `window-close-while-streaming` cannot exercise the real cancellation path, since a driver-issued window close never reaches `WindowEvent::CloseRequested` (PR #122); `lock-while-streaming` is what actually proves the cancellation-on-close promise |      |
+| SC-004      | T058 + T078: three seeded failures, each `timeline.json`/kept material names the precise failed step                                                                                                                                                                                                                                                                               |      |
+| SC-005      | T052 (first pass) + T079 (fresh-eyes subagent, no prior context): the README alone got a working 21-line scenario running on the first try                                                                                                                                                                                                                                         |      |
+| SC-006      | T036: missing `xvfb-run` and a version mismatch both stop the run within the bound, before any tool starts, naming the remedy                                                                                                                                                                                                                                                      |      |
+| SC-007      | T074's recorded durations: every close scenario 5.8-11.6 s, all under the 30 s bound                                                                                                                                                                                                                                                                                               |      |
 
 No FR or SC is uncovered. The two caveats above (FR-006's narrower wording, SC-003's window-close limit)
 are pre-existing, already-reported findings surfaced again here for completeness, not new gaps found by
