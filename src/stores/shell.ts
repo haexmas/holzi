@@ -12,6 +12,7 @@ import {
   openApp as openAppReducer,
   switchWorkspace as switchWorkspaceReducer,
   toggleMaximizeWindow as toggleMaximizeWindowReducer,
+  updateArea as updateAreaReducer,
   updateWindowGeometry as updateWindowGeometryReducer,
 } from '~/lib/shell/layoutState'
 import {
@@ -26,6 +27,7 @@ import type {
   ShellState,
   ShellTab,
   ShellWindow,
+  Size,
   TabRuntime,
   Workspace,
 } from '~/lib/shell/types'
@@ -296,6 +298,14 @@ export const useShellStore = defineStore('shell', () => {
     persistWindowDebounced(windowId)
   }
 
+  /** Keeps `state.area`/`state.compact` in sync with the Shell's actual size (T049,
+   * `ShellDesktop.vue`'s `useWindowSize` watcher) and re-clamps every window's stored geometry
+   * into it — debounced like `updateWindowGeometry`, since a live resize can fire rapidly too. */
+  function updateArea(area: Size) {
+    const changedWindowIds = updateAreaReducer(state, area, SHELL_APPS)
+    for (const windowId of changedWindowIds) persistWindowDebounced(windowId)
+  }
+
   /** Removes the window without asking anything — guard confirmation (FR-014) runs at the caller
    * (`useShellTab.ts`'s `requestCloseWindow`, T031; `ShellCloseConfirm.vue`, T038) before this is
    * invoked. */
@@ -418,6 +428,7 @@ export const useShellStore = defineStore('shell', () => {
     minimizeWindow,
     toggleMaximizeWindow,
     updateWindowGeometry,
+    updateArea,
     closeWindow,
     closeTab,
     createWorkspace,

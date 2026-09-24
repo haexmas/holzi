@@ -282,3 +282,56 @@ export function hydrate(
     compact: area.width <= COMPACT_MAX_WIDTH,
   }
 }
+
+/** Keeps the Shell's live area in sync with the actual window size (T049), recomputing `compact`
+ * and re-clamping every window's stored (normal) geometry into the new area — the same clamp
+ * `hydrate` applies at load time (FR-026), now also on a live resize, so shrinking never leaves a
+ * window positioned or sized outside the visible area. Compact/maximized display itself needs no
+ * clamp here: `windowDisplayRect` (geometry.ts) already resolves that per-render without touching
+ * the stored geometry this function corrects (research R7, FR-028's "remembered geometry"
+ * survives the compact/normal switch).
+ *
+ * Uses the widest minSize across a window's own tabs, matching `ShellWindow.vue`'s own
+ * interactive-resize clamp — not just its first tab's, the way `hydrate` above approximates it.
+ *
+ * Returns the ids of windows whose geometry actually changed, so the caller (the store) knows
+ * which ones still need persisting. */
+export function updateArea(
+  state: ShellState,
+  area: Size,
+  apps: readonly ShellAppDefinition[],
+): string[] {
+  state.area = area
+  state.compact = area.width <= COMPACT_MAX_WIDTH
+
+  const changedWindowIds: string[] = []
+  for (const window of state.windows) {
+    let minWidth = 0
+    let minHeight = 0
+    for (const tab of window.tabs) {
+      const app = getAppDefinition(tab.appId, apps)
+      if (app) {
+        minWidth = Math.max(minWidth, app.minSize.width)
+        minHeight = Math.max(minHeight, app.minSize.height)
+      }
+    }
+    const clamped = clampGeometry(
+      window,
+      { width: minWidth, height: minHeight },
+      area,
+    )
+    if (
+      clamped.x !== window.x ||
+      clamped.y !== window.y ||
+      clamped.width !== window.width ||
+      clamped.height !== window.height
+    ) {
+      window.x = clamped.x
+      window.y = clamped.y
+      window.width = clamped.width
+      window.height = clamped.height
+      changedWindowIds.push(window.id)
+    }
+  }
+  return changedWindowIds
+}

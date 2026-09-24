@@ -2,14 +2,24 @@
 /**
  * The Shell's desktop area: every window of the active workspace, plus the
  * Launcher, window-overview and workspace-overview triggers (spec
- * 015-workspace-shell, T023, T030, T040, FR-002, FR-011, FR-022). Compact-
- * mode layout is a later user story (Phase 8) and extends this component
- * then.
+ * 015-workspace-shell, T023, T030, T040, T049, FR-002, FR-011, FR-022).
+ *
+ * `useWindowSize` keeps `shell.area`/`shell.compact` live (T049) — the
+ * store's initial value already matches it at setup time (`window.
+ * innerWidth`/`innerHeight`), so only actual *changes* need forwarding;
+ * `updateArea` itself re-clamps window geometry into the new area
+ * (`layoutState.ts`), `ShellWindow.vue`'s `windowDisplayRect` already
+ * handles the compact/normal display switch without this component's help.
  */
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
 const shell = useShellStore()
 const { t } = useI18n()
+const { width, height } = useWindowSize()
+
+watch([width, height], ([newWidth, newHeight]) => {
+  shell.updateArea({ width: newWidth, height: newHeight })
+})
 
 const launcherOpen = ref(false)
 const windowOverviewOpen = ref(false)
