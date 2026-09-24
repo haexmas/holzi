@@ -30,8 +30,9 @@ export function findOpenTab(
 }
 
 /** The front-most window in `workspaceId` (optionally excluding minimized ones) — shared by
- * `closeWindow`/`minimizeWindow`'s "who becomes active next" step. */
-function frontmostWindow(
+ * `closeWindow`/`minimizeWindow`'s "who becomes active next" step, and (T039) `deleteWorkspace`'s
+ * and `moveWindowToWorkspace`'s. */
+export function frontmostWindow(
   state: ShellState,
   workspaceId: string,
   visibleOnly = false,
@@ -155,6 +156,60 @@ export function closeWindow(state: ShellState, windowId: string): void {
   state.windows = state.windows.filter((w) => w.id !== windowId)
   if (!wasActive) return
   state.activeWindowId = frontmostWindow(state, closed.workspaceId)?.id ?? null
+}
+
+/** Appends a new, empty workspace at the end (FR-019). Its id is provided by the caller —
+ * workspace ids are backend-assigned (research R5); until Phase 7 wires `shell_create_workspace`,
+ * the store generates a temporary local one. Does not switch to it (contracts/tauri-commands.md:
+ * the caller follows up with `switchWorkspace`). */
+export function createWorkspace(state: ShellState, id: string): Workspace {
+  const workspace: Workspace = { id, position: state.workspaces.length }
+  state.workspaces.push(workspace)
+  return workspace
+}
+
+/** Activates `workspaceId`, if it exists. */
+export function switchWorkspace(state: ShellState, workspaceId: string): void {
+  if (!state.workspaces.some((w) => w.id === workspaceId)) return
+  state.activeWorkspaceId = workspaceId
+}
+
+/** Deletes a workspace and its windows/tabs (FR-021 — confirmation runs at the store/UI layer
+ * first); a no-op for the last remaining workspace (I3). Positions are re-densified afterward
+ * (I2). If the deleted workspace was active, its previous neighbor becomes active, or the next one
+ * if it was first (data-model.md's Workspace transitions). */
+export function deleteWorkspace(state: ShellState, workspaceId: string): void {
+  if (state.workspaces.length <= 1) return
+  const index = state.workspaces.findIndex((w) => w.id === workspaceId)
+  if (index === -1) return
+  state.windows = state.windows.filter((w) => w.workspaceId !== workspaceId)
+  state.workspaces.splice(index, 1)
+  state.workspaces.forEach((w, i) => {
+    w.position = i
+  })
+  if (state.activeWorkspaceId !== workspaceId) return
+  const neighborIndex = Math.max(0, index - 1)
+  const neighbor = state.workspaces.find((_, i) => i === neighborIndex)
+  state.activeWorkspaceId = neighbor?.id ?? ''
+}
+
+/** Moves a window (with all its tabs) to another workspace without touching its content (FR-020).
+ * If it was the active window and it just left the active workspace, the next front-most window
+ * remaining there becomes active instead (same rule as `closeWindow`/`minimizeWindow`). */
+export function moveWindowToWorkspace(
+  state: ShellState,
+  windowId: string,
+  workspaceId: string,
+): void {
+  const window = state.windows.find((w) => w.id === windowId)
+  if (!window) return
+  if (!state.workspaces.some((w) => w.id === workspaceId)) return
+  if (window.workspaceId === workspaceId) return
+  const wasActive = state.activeWindowId === windowId
+  window.workspaceId = workspaceId
+  if (!wasActive) return
+  state.activeWindowId =
+    frontmostWindow(state, state.activeWorkspaceId)?.id ?? null
 }
 
 /**

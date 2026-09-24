@@ -3,10 +3,14 @@ import { defineStore } from 'pinia'
 import { getAppDefinition, SHELL_APPS } from '~/lib/shell/apps'
 import {
   closeWindow as closeWindowReducer,
+  createWorkspace as createWorkspaceReducer,
+  deleteWorkspace as deleteWorkspaceReducer,
   focusWindow as focusWindowReducer,
   hydrate,
   minimizeWindow as minimizeWindowReducer,
+  moveWindowToWorkspace as moveWindowToWorkspaceReducer,
   openApp as openAppReducer,
+  switchWorkspace as switchWorkspaceReducer,
   toggleMaximizeWindow as toggleMaximizeWindowReducer,
   updateWindowGeometry as updateWindowGeometryReducer,
 } from '~/lib/shell/layoutState'
@@ -30,13 +34,12 @@ import type {
  * `lib/shell/layoutState.ts` around one `reactive` `ShellState`, so they can
  * keep mutating their `state` parameter in place while Vue tracks it.
  *
- * User Story 1-3's actions are implemented here: `openApp`, `addTab`,
+ * User Story 1-4's actions are implemented here: `openApp`, `addTab`,
  * `switchTab`, `focusWindow`, `closeWindow`, `closeTab`, `minimizeWindow`,
- * `toggleMaximizeWindow`, `updateWindowGeometry`, and a `flushAsync`
- * placeholder (FR-027) `ChatApp.vue`'s `lock()` already depends on.
- * Workspace actions (`createWorkspace`, `deleteWorkspace`,
- * `switchWorkspace`, `moveWindowToWorkspace`) land in this same store once
- * Phase 6 builds them.
+ * `toggleMaximizeWindow`, `updateWindowGeometry`, `createWorkspace`,
+ * `deleteWorkspace`, `switchWorkspace`, `moveWindowToWorkspace`, and a
+ * `flushAsync` placeholder (FR-027) `ChatApp.vue`'s `lock()` already
+ * depends on.
  *
  * Persistence does not exist yet (Phase 7): `state` starts from an empty
  * layout, and `flushAsync` is a no-op until T047 wires the real write queue.
@@ -216,6 +219,36 @@ export const useShellStore = defineStore('shell', () => {
     syncTabRuntime()
   }
 
+  function createWorkspace() {
+    return createWorkspaceReducer(state, crypto.randomUUID())
+  }
+
+  function switchWorkspace(workspaceId: string) {
+    switchWorkspaceReducer(state, workspaceId)
+  }
+
+  /** Deletes the workspace and its windows/tabs — guard confirmation for any running replies
+   * (FR-021, same shape as `closeWindow`'s) and the "close N windows" confirmation both run at the
+   * caller (`ShellWorkspaceOverview.vue`, T040) before this is invoked. A no-op for the last
+   * remaining workspace (I3). */
+  function deleteWorkspace(workspaceId: string) {
+    deleteWorkspaceReducer(state, workspaceId)
+    syncTabRuntime()
+  }
+
+  function moveWindowToWorkspace(windowId: string, workspaceId: string) {
+    moveWindowToWorkspaceReducer(state, windowId, workspaceId)
+  }
+
+  /** Whether *any* window in the workspace has attention (data-model.md's derived rule, mirroring
+   * `windowDisplayInfo`'s own window-level derivation one layer up). */
+  function workspaceHasAttention(workspaceId: string): boolean {
+    return state.windows.some(
+      (w) =>
+        w.workspaceId === workspaceId && windowDisplayInfo(w)?.hasAttention,
+    )
+  }
+
   /** Every non-null close-guard result across the window's tabs (FR-014, for closing the whole
    * window) — a tab without a registered guard, or whose guard currently allows closing,
    * contributes nothing. */
@@ -259,6 +292,11 @@ export const useShellStore = defineStore('shell', () => {
     updateWindowGeometry,
     closeWindow,
     closeTab,
+    createWorkspace,
+    switchWorkspace,
+    deleteWorkspace,
+    moveWindowToWorkspace,
+    workspaceHasAttention,
     guardResultsFor,
     guardResultForTab,
     flushAsync,
