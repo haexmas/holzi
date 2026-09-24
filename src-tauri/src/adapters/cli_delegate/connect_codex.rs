@@ -16,6 +16,7 @@ use crate::adapters::AdapterError;
 
 use super::codex::read_limited;
 use super::process::{configure_process_group, map_spawn_error, ChildLifecycle};
+use crate::vault_gate::ChildRegistry;
 
 /// Matches the CLI's own stated code lifetime ("expires in 15 minutes",
 /// research.md §5) plus headroom for the user to actually complete the
@@ -80,6 +81,7 @@ fn is_device_code(line: &str) -> bool {
 /// shape — unchanged from the chat-invocation path's expectation, `codex.rs`).
 pub async fn run_device_auth(
     binary: &str,
+    children: &ChildRegistry,
     mut on_prompt: impl FnMut(&DeviceAuthPrompt) + Send,
 ) -> Result<Vec<u8>, AdapterError> {
     let tmp = TempDir::new().map_err(|error| AdapterError::Http {
@@ -95,8 +97,8 @@ pub async fn run_device_auth(
         .stderr(Stdio::piped());
     configure_process_group(&mut cmd);
 
-    let mut child =
-        ChildLifecycle::spawn(&mut cmd).map_err(|error| map_spawn_error(binary, error))?;
+    let mut child = ChildLifecycle::spawn(&mut cmd, children)
+        .map_err(|error| map_spawn_error(binary, error))?;
 
     let stdout = child
         .child_mut()

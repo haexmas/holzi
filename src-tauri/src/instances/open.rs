@@ -1,18 +1,18 @@
-//! `open_instance` — unlock existing DB + atomic active-instance switch.
+//! `open_instance` — unlock an existing vault as the process's one active instance.
 //!
-//! Contract: `tauri-commands.md` §`open_instance`. The state mutex is
-//! held across validate → stop-old → publish-new so no concurrent
-//! observer sees a half-open state. WrongPassphrase and NotFound both
-//! surface as generic "open failed" on the frontend (FR-021); the typed
+//! Contract: `tauri-commands.md` §`open_instance`. One app process serves at most one vault
+//! session (spec 013 FR-010, ADR 0003): opening or creating while one is already active or a
+//! close is under way is refused, checked before any path is resolved. WrongPassphrase and
+//! NotFound both surface as generic "open failed" on the frontend (FR-021); the typed
 //! discriminator is for logs and telemetry only.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use filetime::{set_file_mtime, FileTime};
 use haex_crdt::{rusqlite, Database};
 use serde::Deserialize;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Runtime, State};
 use ts_rs::TS;
 
 use crate::chat::default_model::start_default_model_preload;
@@ -25,6 +25,8 @@ use crate::voice::VoiceState;
 
 use super::events::emit_instance_list_changed;
 use super::info::InstanceInfo;
+use super::lock_retry::{retry_while_locked, OPEN_RETRY_POLL_INTERVAL, OPEN_RETRY_WINDOW};
+use super::passphrase::Passphrase;
 use super::paths::{
     get_app_local_data, get_instance_path, get_pending_marker_path, validate_instance_name,
 };
@@ -35,7 +37,95 @@ use super::vault_config::vault_config;
 #[serde(rename_all = "camelCase")]
 pub struct OpenInstanceArgs {
     pub name: String,
-    pub passphrase: String,
+    #[ts(type = "string")]
+    pub passphrase: Passphrase,
+}
+
+/// Everything `open_instance` does up to and including publishing the opened vault as the active
+/// instance — generic over `R: Runtime`, not the concrete `AppHandle`, so a test can call it with
+/// `tauri::test::MockRuntime`'s handle instead of a real, windowed one (spec 013 T053). Returns
+/// the vault's own database path, so the command wrapper's tail (mtime, events, preload — all of
+/// which need the real running app) does not have to resolve it a second time.
+///
+/// A refusal from [`crate::vault_gate::VaultGate::ensure_can_open`] is the first thing checked,
+/// before any path is even computed (spec 013 FR-010). A failed unlock (wrong passphrase) fails
+/// before [`AppState::install`] ever runs, so it never touches the gate: [`VaultGate::begin_session`]
+/// only moves `Idle` to `Active` once the database has genuinely opened.
+pub async fn open_instance_core<R: Runtime>(
+    app: &AppHandle<R>,
+    state: &AppState,
+    chat: &ChatState,
+    name: &str,
+    passphrase: Passphrase,
+) -> Result<PathBuf> {
+    state.gate().ensure_can_open()?;
+    let _operation = chat.acquire_operation()?;
+    validate_instance_name(name)?;
+
+    let db_path = get_instance_path(app, name)?;
+    let pending_marker = get_pending_marker_path(&db_path);
+    let app_local_data = get_app_local_data(app)?;
+    let installation_id_file = installation_id_path(&app_local_data);
+
+    if !db_path.exists() {
+        return Err(HolziError::NotFound {
+            name: name.to_string(),
+        });
+    }
+    // A pending marker means Genesis for this name never completed —
+    // treat the file as non-instance until startup cleanup runs.
+    if pending_marker.exists() {
+        return Err(HolziError::NotFound {
+            name: name.to_string(),
+        });
+    }
+
+    // Shared, not duplicated: `Passphrase` deliberately has no `Clone` (see its own doc comment),
+    // so a retry attempt clones the `Arc` pointer, never the secret bytes — one buffer exists in
+    // memory for however many attempts this open takes. `db_path` itself is cloned once here so
+    // the retry closure can own its copy while the outer `db_path` still returns below.
+    let retry_path = db_path.clone();
+    let passphrase = Arc::new(passphrase);
+    let token = state.gate().token();
+    let candidate = retry_while_locked(
+        &token,
+        OPEN_RETRY_WINDOW,
+        OPEN_RETRY_POLL_INTERVAL,
+        move || {
+            // The candidate is validated without holding `active_instance`, so a failed unlock
+            // leaves the gate untouched (see the doc comment above); this also holds across
+            // retries — nothing is published until one attempt actually succeeds.
+            let open_path = retry_path.clone();
+            let open_installation_id_file = installation_id_file.clone();
+            let passphrase = passphrase.clone();
+            async move {
+                tauri::async_runtime::spawn_blocking(move || {
+                    open_existing_database(
+                        passphrase.as_str(),
+                        &open_path,
+                        &open_installation_id_file,
+                    )
+                })
+                .await
+                .map_err(|e| HolziError::CrdtInit {
+                    reason: format!("database open task failed: {e}"),
+                })?
+            }
+        },
+    )
+    .await?;
+
+    state.install(
+        ActiveInstanceHandle {
+            name: name.to_string(),
+            database: candidate,
+        },
+        || {
+            *chat.session.lock().unwrap_or_else(|e| e.into_inner()) = None;
+            Ok(())
+        },
+    )?;
+    Ok(db_path)
 }
 
 /// Opens an encrypted instance and makes it the active application instance.
@@ -47,158 +137,9 @@ pub async fn open_instance(
     voice: State<'_, VoiceState>,
     args: OpenInstanceArgs,
 ) -> Result<InstanceInfo> {
-    let _operation = chat.acquire_operation()?;
-    validate_instance_name(&args.name)?;
+    let OpenInstanceArgs { name, passphrase } = args;
+    let db_path = open_instance_core(&app, &state, &chat, &name, passphrase).await?;
 
-    let db_path = get_instance_path(&app, &args.name)?;
-    let pending_marker = get_pending_marker_path(&db_path);
-    let app_local_data = get_app_local_data(&app)?;
-    let installation_id_file = installation_id_path(&app_local_data);
-
-    if !db_path.exists() {
-        return Err(HolziError::NotFound {
-            name: args.name.clone(),
-        });
-    }
-    // A pending marker means Genesis for this name never completed —
-    // treat the file as non-instance until startup cleanup runs.
-    if pending_marker.exists() {
-        return Err(HolziError::NotFound {
-            name: args.name.clone(),
-        });
-    }
-
-    // Database::open acquires the active database's advisory lock, so an
-    // already-active request for the same name needs a credential check that
-    // does not mount a second Database handle.
-    let active_database = {
-        let guard = state
-            .active_instance
-            .lock()
-            .map_err(|e| HolziError::CrdtInit {
-                reason: format!("active_instance mutex poisoned: {e}"),
-            })?;
-        guard
-            .as_ref()
-            .filter(|active| active.name == args.name)
-            .map(|active| Arc::clone(&active.database))
-    };
-
-    if let Some(_active_database) = active_database {
-        let passphrase = args.passphrase.clone();
-        let validation_path = db_path.clone();
-        let validation = tauri::async_runtime::spawn_blocking(move || {
-            let connection = rusqlite::Connection::open_with_flags(
-                &validation_path,
-                rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
-            );
-            let result = match connection {
-                Ok(connection) => {
-                    connection
-                        .pragma_update(None, "key", passphrase)
-                        .and_then(|()| {
-                            connection.query_row("SELECT count(*) FROM sqlite_master", [], |row| {
-                                row.get::<_, i64>(0)
-                            })
-                        })
-                }
-                Err(e) => Err(e),
-            };
-
-            match result {
-                Ok(_) => Ok(()),
-                Err(e)
-                    if matches!(
-                        &e,
-                        rusqlite::Error::SqliteFailure(code, _)
-                            if code.code == rusqlite::ErrorCode::NotADatabase
-                    ) || e.to_string().to_lowercase().contains("not a database") =>
-                {
-                    Err(HolziError::WrongPassphrase)
-                }
-                Err(e) => Err(HolziError::CrdtSqlite {
-                    reason: e.to_string(),
-                }),
-            }
-        })
-        .await
-        .map_err(|e| HolziError::CrdtInit {
-            reason: format!("passphrase validation task failed: {e}"),
-        })?;
-        validation?;
-
-        // The active slot may have changed while the read-only validation ran.
-        // Only return the existing instance if it is still the requested one.
-        let guard = state
-            .active_instance
-            .lock()
-            .map_err(|e| HolziError::CrdtInit {
-                reason: format!("active_instance mutex poisoned: {e}"),
-            })?;
-        if guard
-            .as_ref()
-            .is_some_and(|active| active.name == args.name)
-        {
-            drop(guard);
-            let _ = set_file_mtime(&db_path, FileTime::now());
-            let info = InstanceInfo {
-                name: args.name.clone(),
-                alias: None,
-                last_access: std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_millis() as u64)
-                    .unwrap_or(0),
-            };
-            emit_instance_list_changed(&app, "opened", Some(args.name.clone()));
-            return Ok(info);
-        }
-    }
-
-    // Open the candidate without holding active_instance. Failure to open the
-    // candidate leaves the previous runtime intact (contract postcondition).
-    let passphrase = args.passphrase.clone();
-    let open_path = db_path.clone();
-    let open_installation_id_file = installation_id_file.clone();
-    let candidate_result = tauri::async_runtime::spawn_blocking(move || {
-        open_existing_database(&passphrase, &open_path, &open_installation_id_file)
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("database open task failed: {e}"),
-    })?;
-    let candidate = candidate_result?;
-
-    // The candidate is valid, so the old Vault can be retired. Stop its
-    // preload before changing the active database and await only task
-    // termination, never the full model load.
-    chat.cancel_preload_and_wait().await;
-
-    // Hold the state lock only for the atomic old-runtime drop/new-runtime
-    // publish. The blocking SQLCipher open above cannot stall observers.
-    {
-        let mut guard = state
-            .active_instance
-            .lock()
-            .map_err(|e| HolziError::CrdtInit {
-                reason: format!("active_instance mutex poisoned: {e}"),
-            })?;
-
-        // Candidate is up — drop the previous handle (releases fs2 lock)
-        // and publish the new one atomically.
-        let previous = guard.take();
-        if let Some(prev) = previous {
-            // The previous handle's Arc drops when `prev` goes out of scope.
-            // A rare failure to release the fs2 lock here (subsystem still
-            // holding a clone) would let both Arcs live on — acceptable for
-            // MVP, tightens later once background tasks (relay, iroh) enter.
-            drop(prev);
-        }
-        *chat.session.lock().unwrap_or_else(|e| e.into_inner()) = None;
-        *guard = Some(ActiveInstanceHandle {
-            name: args.name.clone(),
-            database: candidate,
-        });
-    }
     chat.bump_vault_generation();
     voice.invalidate_whisper_cache().await;
     emit_model_load_status(&app, &chat);
@@ -207,14 +148,14 @@ pub async fn open_instance(
     let _ = set_file_mtime(&db_path, FileTime::now());
 
     let info = InstanceInfo {
-        name: args.name.clone(),
+        name: name.clone(),
         alias: None,
         last_access: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0),
     };
-    emit_instance_list_changed(&app, "opened", Some(args.name.clone()));
+    emit_instance_list_changed(&app, "opened", Some(name));
     start_default_model_preload(app.clone(), chat.inner().clone());
     Ok(info)
 }
@@ -229,8 +170,19 @@ fn open_existing_database(
     match Database::open(config) {
         Ok(db) => Ok(Arc::new(db)),
         Err(e) if is_wrong_passphrase(&e) => Err(HolziError::WrongPassphrase),
+        Err(e) if is_locked_elsewhere(&e) => Err(HolziError::VaultAlreadyOpenElsewhere),
         Err(e) => Err(HolziError::from(e)),
     }
+}
+
+/// haex-crdt's own `DatabaseError::VaultAlreadyOpenElsewhere { path, reason }` (its `fs2` advisory
+/// lock is already held by another process) exists as a distinct variant, but its error boundary
+/// collapses every `DatabaseError` into an opaque `Error::Message(String)` before it reaches this
+/// crate (`From<DatabaseError> for Error` keeps only the rendered `Display` text) — so, like
+/// [`is_wrong_passphrase`] above, the message is classified by its stable text rather than a typed
+/// variant that never survives the crossing.
+fn is_locked_elsewhere(err: &haex_crdt::Error) -> bool {
+    matches!(err, haex_crdt::Error::Message(msg) if msg.contains("already open in another instance"))
 }
 
 /// SQLCipher rejects a bad key by reporting `SQLITE_NOTADB` (`code = 26`)

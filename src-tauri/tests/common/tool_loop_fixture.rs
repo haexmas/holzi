@@ -250,7 +250,7 @@ pub async fn session_with(adapter: StubAdapter) -> ActiveSession {
 /// returns every emitted `(event, payload)` in arrival order via a channel
 /// instead of a `Vec` (unlike [`run_scripted_turn`], nothing here can wait
 /// for the whole turn to finish before observing events). Stashes a fresh
-/// `CancellationToken` into `chat_state.tool_cancellation` first, mirroring
+/// `CancellationToken` into `chat_state.turn_cancellation` first, mirroring
 /// what `send_message` does in production, so a test can call
 /// `abort_turn(&chat_state)` exactly like a real `abort_current_generation`
 /// invocation (T032).
@@ -269,7 +269,7 @@ pub fn spawn_turn(
     tokio::sync::mpsc::UnboundedReceiver<(String, Value)>,
 ) {
     let cancel_token = CancellationToken::new();
-    *chat_state.tool_cancellation.lock().unwrap() = Some(cancel_token.clone());
+    *chat_state.turn_cancellation.lock().unwrap() = Some(cancel_token.clone());
 
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     let handle = tokio::spawn(async move {

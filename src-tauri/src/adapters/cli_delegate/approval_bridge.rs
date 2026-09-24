@@ -1,6 +1,5 @@
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -11,6 +10,7 @@ use uuid::Uuid;
 use crate::chat::tools::permission::{self, PermissionMode};
 use crate::chat::tools::ApprovalDecision;
 use crate::storage::chat_messages::{self as msg_store, ChatMessage, MessageRole};
+use crate::vault_gate::VaultDb;
 
 use super::autonomy::{self, ApprovalRequestPayload, AutonomyMode};
 use super::{DelegateChatContext, EventEmitter, PendingToolApprovals};
@@ -48,7 +48,7 @@ struct ApprovalRequest {
 pub async fn request_approval(
     pending: &PendingToolApprovals,
     emit: &EventEmitter,
-    database: Option<&Arc<haex_crdt::Database>>,
+    database: Option<&VaultDb>,
     thread_id: Option<Uuid>,
     autonomy_mode: AutonomyMode,
     workspace_root: &Path,
@@ -116,7 +116,7 @@ pub async fn request_approval(
 /// FR-006; `Standard`'s own tool activity, when it has any, is recorded by
 /// the built-in tool loop instead).
 async fn gated_permissive_decision(
-    database: Option<&Arc<haex_crdt::Database>>,
+    database: Option<&VaultDb>,
     workspace_root: &Path,
     thread_id: Option<Uuid>,
     tool_name: &str,
@@ -127,7 +127,7 @@ async fn gated_permissive_decision(
     };
     let device_id = database.device_id();
     let rules = tauri::async_runtime::spawn_blocking({
-        let database = Arc::clone(database);
+        let database = database.clone();
         move || {
             database.with_connection(|conn| {
                 Ok::<_, haex_crdt::Error>(autonomy::get_deny_rules(conn, device_id))
@@ -168,7 +168,7 @@ async fn gated_permissive_decision(
 /// caller denies the call outright when it did not (spec FR-005/US2: an
 /// unaudited `Allow` is not an acceptable outcome).
 async fn persist_gated_permissive_record(
-    database: &Arc<haex_crdt::Database>,
+    database: &VaultDb,
     thread_id: Option<Uuid>,
     tool_name: &str,
     payload: &ApprovalRequestPayload,
@@ -241,7 +241,7 @@ async fn persist_gated_permissive_record(
         autonomy_mode: Some(AutonomyMode::GatedPermissive.as_str().to_string()),
     };
 
-    let database = Arc::clone(database);
+    let database = database.clone();
     tauri::async_runtime::spawn_blocking(move || {
         database.with_connection(|conn| {
             let tx = conn.unchecked_transaction()?;
@@ -262,8 +262,8 @@ fn now_ms() -> i64 {
         .unwrap_or(0)
 }
 
-async fn read_permission_mode(database: &Arc<haex_crdt::Database>) -> PermissionMode {
-    let database = Arc::clone(database);
+async fn read_permission_mode(database: &VaultDb) -> PermissionMode {
+    let database = database.clone();
     let device_id = database.device_id();
     let raw = tauri::async_runtime::spawn_blocking(move || {
         database.with_connection(|conn| {

@@ -18,6 +18,7 @@ use tokio::sync::{mpsc, Notify};
 use uuid::Uuid;
 
 use crate::adapters::AdapterError;
+use crate::vault_gate::{ChildGuard, ChildRegistry};
 
 const URL_TIMEOUT: Duration = Duration::from_secs(30);
 /// Generous: covers the time the user spends in the browser plus copying the
@@ -194,6 +195,8 @@ pub struct ClaudeConnectSession {
     /// than acting on a session that isn't the one it was watching.
     id: Uuid,
     child: Box<dyn Child + Send + Sync>,
+    /// Keeps the PTY process registered until this pending connect session is dropped.
+    _registration: Option<ChildGuard>,
     writer: Box<dyn Write + Send>,
     events: mpsc::UnboundedReceiver<ReaderEvent>,
     /// Notified once, right when a terminal `ReaderEvent` lands in
@@ -267,6 +270,7 @@ impl ClaudeConnectSession {
         Self {
             id: Uuid::new_v4(),
             child: Box::new(child),
+            _registration: None,
             writer: Box::new(std::io::sink()),
             events,
             token_ready,
@@ -285,6 +289,7 @@ fn is_missing_binary(error: &anyhow::Error) -> bool {
 /// (spec.md FR-003) and waits for the OAuth URL to appear.
 pub async fn start_claude_connect(
     binary: &str,
+    children: ChildRegistry,
 ) -> Result<(ClaudeConnectSession, String), AdapterError> {
     let binary_owned = binary.to_string();
     let mut session = tokio::task::spawn_blocking(move || {
@@ -315,6 +320,7 @@ pub async fn start_claude_connect(
                 }
             }
         })?;
+        let registration = child.process_id().map(|pid| children.register(pid));
         drop(pair.slave);
 
         let reader = pair
@@ -334,6 +340,7 @@ pub async fn start_claude_connect(
         Ok::<_, AdapterError>(ClaudeConnectSession {
             id: Uuid::new_v4(),
             child,
+            _registration: registration,
             writer,
             events: spawn_reader_thread(reader, token_ready.clone()),
             token_ready,

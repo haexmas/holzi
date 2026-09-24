@@ -3349,6 +3349,7 @@ dependencies = [
  "unicode-segmentation",
  "uuid 1.26.1",
  "wiremock",
+ "zeroize",
 ]
 
 [[package]]
@@ -8566,6 +8567,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-sink",
+ "futures-util",
  "libc",
  "pin-project-lite",
  "tokio",
@@ -10395,6 +10397,9 @@ name = "zeroize"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e13c156562582aa81c60cb29407084cdb54c4164760106ab78e6c5b0858cf64e"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "zerotrie"

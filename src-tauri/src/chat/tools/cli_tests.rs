@@ -2,10 +2,11 @@ use tokio_util::sync::CancellationToken;
 
 use super::cli::CliTool;
 use super::Tool;
+use crate::vault_gate::ChildRegistry;
 
 #[tokio::test]
 async fn a_trivial_command_returns_its_stdout() {
-    let tool = CliTool;
+    let tool = CliTool::default();
     let result = tool
         .execute(
             serde_json::json!({ "command": "echo hello" }),
@@ -18,7 +19,7 @@ async fn a_trivial_command_returns_its_stdout() {
 
 #[tokio::test]
 async fn a_failing_command_returns_is_error_without_panicking() {
-    let tool = CliTool;
+    let tool = CliTool::default();
     let result = tool
         .execute(
             serde_json::json!({ "command": "exit 7" }),
@@ -30,7 +31,7 @@ async fn a_failing_command_returns_is_error_without_panicking() {
 
 #[tokio::test]
 async fn missing_command_input_is_a_tool_error_not_a_panic() {
-    let tool = CliTool;
+    let tool = CliTool::default();
     let result = tool
         .execute(serde_json::json!({}), CancellationToken::new())
         .await;
@@ -39,7 +40,7 @@ async fn missing_command_input_is_a_tool_error_not_a_panic() {
 
 #[tokio::test]
 async fn a_nonexistent_binary_is_a_tool_error_not_a_panic() {
-    let tool = CliTool;
+    let tool = CliTool::default();
     let result = tool
         .execute(
             serde_json::json!({ "command": "definitely-not-a-real-binary-xyz" }),
@@ -51,7 +52,7 @@ async fn a_nonexistent_binary_is_a_tool_error_not_a_panic() {
 
 #[tokio::test]
 async fn excessive_output_is_rejected_without_buffering_unbounded_data() {
-    let tool = CliTool;
+    let tool = CliTool::default();
     let result = tool
         .execute(
             serde_json::json!({
@@ -66,7 +67,7 @@ async fn excessive_output_is_rejected_without_buffering_unbounded_data() {
 
 #[tokio::test]
 async fn cancellation_kills_the_process_and_reaps_it_without_a_zombie() {
-    let tool = CliTool;
+    let tool = CliTool::default();
     let cancel = CancellationToken::new();
     let cancel_for_task = cancel.clone();
     tokio::spawn(async move {
@@ -91,7 +92,7 @@ async fn cancellation_kills_the_process_and_reaps_it_without_a_zombie() {
 #[cfg(unix)]
 #[tokio::test]
 async fn cancellation_kills_a_descendant_process_too() {
-    let tool = CliTool;
+    let tool = CliTool::default();
     let cancel = CancellationToken::new();
     let cancel_for_execute = cancel.clone();
     let pid_file = tempfile::NamedTempFile::new().expect("pid file");
@@ -140,4 +141,63 @@ async fn cancellation_kills_a_descendant_process_too() {
         descendant_gone.is_ok(),
         "cancellation must terminate the shell's descendant process"
     );
+}
+
+#[cfg(unix)]
+async fn wait_until_registered(registry: &ChildRegistry, count: usize) {
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        while registry.live() != count {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap_or_else(|_| panic!("expected {count} registered, found {}", registry.live()));
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn the_shell_is_registered_while_it_runs_and_unregistered_once_reaped() {
+    let registry = ChildRegistry::default();
+    let tool = CliTool::new(registry.clone());
+    let cancel = CancellationToken::new();
+    let cancel_for_execute = cancel.clone();
+    let execution = tokio::spawn(async move {
+        tool.execute(
+            serde_json::json!({ "command": "sleep 30" }),
+            cancel_for_execute,
+        )
+        .await
+    });
+
+    wait_until_registered(&registry, 1).await;
+    cancel.cancel();
+    let result = execution.await.expect("the tool task ends");
+
+    assert_eq!(result.content, "tool_call_cancelled");
+    assert_eq!(registry.live(), 0, "the entry goes with the reaped shell");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn ending_the_registry_ends_a_running_command_without_the_tools_own_cancellation() {
+    let registry = ChildRegistry::default();
+    let tool = CliTool::new(registry.clone());
+    let execution = tokio::spawn(async move {
+        tool.execute(
+            serde_json::json!({ "command": "sleep 30" }),
+            CancellationToken::new(),
+        )
+        .await
+    });
+    wait_until_registered(&registry, 1).await;
+
+    // What the forced end does: the process ends without any Drop running, so the registry has to
+    // reach the shell by itself.
+    registry.kill_all();
+
+    let result = tokio::time::timeout(std::time::Duration::from_secs(3), execution)
+        .await
+        .expect("the command ended once its group was killed")
+        .expect("the tool task ends");
+    assert!(result.is_error, "a killed command is not a success");
 }

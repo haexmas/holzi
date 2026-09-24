@@ -74,3 +74,15 @@ mod stt_catalog_entry_resolution {
         );
     }
 }
+
+/// The close releases the microphone and the cached model. With nothing recording and nothing
+/// cached it changes nothing, and repeating it is harmless (a real capture needs an audio device).
+#[tokio::test]
+async fn reset_for_close_is_a_safe_noop_on_a_fresh_state_and_idempotent() {
+    let state = VoiceState::new();
+
+    state.reset_for_close().await;
+    state.reset_for_close().await;
+
+    assert!(!state.has_cached_whisper_adapter().await);
+}

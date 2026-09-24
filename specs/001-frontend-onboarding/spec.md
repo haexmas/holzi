@@ -85,7 +85,7 @@ On every subsequent launch, the landing shows the operator's instances (from `<A
 1. **Given** one or more instances present, **When** the operator launches the app, **Then** the list is populated ordered by last-access desc.
 2. **Given** the Unlock sheet with the correct passphrase, **When** the operator submits, **Then** the instance opens and navigation succeeds within 2 seconds on desktop hardware.
 3. **Given** the Unlock sheet with a wrong passphrase, **When** the operator submits, **Then** an inline error appears and no state changes.
-4. **Given** an active instance already open, **When** the operator opens a different instance from the list, **Then** the current instance is closed first (Nostr relay stopped, iroh peer stopped, SQLite closed) before the new one opens.
+4. _(Superseded by spec 013 FR-010 and [ADR 0003](../../docs/adr/0003-one-vault-session-per-app-process.md): with an instance already active, `open_instance` refuses with `VaultAlreadyActive`; a different instance opens only in a new process after the close.)_
 
 ---
 
@@ -108,7 +108,7 @@ This user story belongs to the superseded paper-seed/federation-root design and 
 - **Instance name collision with reserved filename** (`.trash`, files starting with `.`, path traversal): rejected client-side with clear error before any command is sent.
 - **Instance directory changed outside holzi** (e.g., another process creates a file in `instances/`): direct external mutations are unsupported in v1 and do not emit `instance-list-changed`; the new file is discovered on the next app launch or explicit list refresh. Operators import external files through **Öffnen**, whose backend command emits the event.
 - **App closed during Anlegen**: on next launch, an orphan Genesis file may exist. Startup cleanup deletes any Genesis file whose creation flag `.pending` still exists. Imports use a staged file (`.db.importing`) that is renamed atomically; startup deletes any stray staged file.
-- **Two instances open concurrently**: `open_instance` serializes the switch under the backend state lock. It validates credentials and starts the requested runtime as a private candidate while the current runtime remains active; only after every candidate startup step succeeds does it close the old runtime and publish the new one. A validation or candidate-startup failure leaves the old runtime and `AppState.active_instance` unchanged. The frontend does not call `close_instance` first; a concurrent request waits for the lock and then observes either the old or the new fully-active instance, never a half-switched or no-active state.
+- **Two instances open concurrently**: _(superseded by spec 013 FR-010 and [ADR 0003](../../docs/adr/0003-one-vault-session-per-app-process.md): a second `open_instance`/`create_instance` is refused with `VaultAlreadyActive`, or `VaultClosed` while a close is under way; no in-process switch exists.)_
 - **Mobile foreground/background** for Anlegen: if the app is backgrounded during Genesis, the same pending-flag mechanism applies. No changes to relay-lifetime rules for mobile beyond `v1-scope-design.md §7`.
 
 ## Requirements _(mandatory)_
@@ -149,7 +149,7 @@ This user story belongs to the superseded paper-seed/federation-root design and 
 - **FR-019**: Clicking an instance in the list MUST open the Unlock sheet with only a passphrase field.
 - **FR-020**: On correct passphrase, the backend MUST unlock SQLCipher, start the Nostr relay endpoint, start the iroh peer, and mark the instance as active in `AppState`. The frontend MUST navigate to `/federation/<instance-id>`.
 - **FR-021**: On incorrect passphrase, the sheet MUST show an inline error without disclosing whether the file exists or the passphrase policy was violated (avoid oracle).
-- **FR-022**: If an instance is already active, `open_instance` MUST close the active one and open the requested instance as one atomic, state-locked backend switch. The frontend MUST NOT orchestrate a separate close/open sequence.
+- **FR-022**: _(superseded by spec 013 FR-010 and [ADR 0003](../../docs/adr/0003-one-vault-session-per-app-process.md): if an instance is already active, `open_instance` now refuses with `VaultAlreadyActive` instead of switching to the requested one — the atomic switch described here is removed. The frontend still MUST NOT orchestrate a separate close/open sequence, but there is no in-process sequence to orchestrate any more: a different vault is only reachable after the active one is fully closed, in a new process.)_
 - **FR-023**: The list MUST support a per-item context menu with "In Papierkorb verschieben". Removing an item while retaining its file is not supported in v1 because the list is a directory scan and no exclusion metadata is persisted. Silent hard-delete MUST NOT be an option.
 
 **Cross-cutting**

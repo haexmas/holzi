@@ -32,6 +32,7 @@ use holzi_lib::adapters::cli_delegate::{
 use holzi_lib::adapters::{ChatMessage, ChatRequest, ChatRole, ProviderAdapter, StreamChunk};
 use holzi_lib::identity::{holzi_migration_source, installation_id_path, HolziBootstrap};
 use holzi_lib::storage::chat_messages::{list_messages, MessageRole};
+use holzi_lib::vault_gate::VaultGate;
 
 const PASSPHRASE: &str = "cli-delegate-autonomy-gated-permissive";
 
@@ -104,9 +105,10 @@ EOF
         b"fake-oauth-token".to_vec(),
         stub.to_string_lossy().into_owned(),
         Some(DelegateChatContext {
+            children: Default::default(),
             pending_tool_approvals: pending,
             emit,
-            database: Some(db),
+            database: Some(VaultGate::new().vault_db(db).expect("open gate")),
         }),
     );
 
@@ -180,9 +182,14 @@ sys.stdin.readline()
         b"fake-auth".to_vec(),
         stub.to_str().unwrap().to_string(),
         Some(DelegateChatContext {
+            children: Default::default(),
             pending_tool_approvals: pending,
             emit,
-            database: Some(Arc::clone(&db)),
+            database: Some(
+                VaultGate::new()
+                    .vault_db(Arc::clone(&db))
+                    .expect("open gate"),
+            ),
         }),
     );
 

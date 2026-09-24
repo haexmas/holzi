@@ -55,6 +55,7 @@ EOF
         b"fake-oauth-token".to_vec(),
         stub.to_string_lossy().into_owned(),
         Some(holzi_lib::adapters::cli_delegate::DelegateChatContext {
+            children: Default::default(),
             pending_tool_approvals: std::sync::Arc::new(std::sync::Mutex::new(
                 std::collections::HashMap::new(),
             )),
@@ -128,6 +129,7 @@ sys.stdin.readline()
         b"fake-auth".to_vec(),
         stub.to_str().unwrap().to_string(),
         Some(holzi_lib::adapters::cli_delegate::DelegateChatContext {
+            children: Default::default(),
             pending_tool_approvals: std::sync::Arc::new(std::sync::Mutex::new(
                 std::collections::HashMap::new(),
             )),

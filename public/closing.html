@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <style>
+      :root {
+        --page: oklch(0.955 0 0);
+        --track: oklch(0 0 0 / 0.12);
+        --arc: oklch(0.65 0.17 180);
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --page: oklch(0.205 0 0);
+          --track: oklch(1 0 0 / 0.16);
+          --arc: oklch(0.7 0.15 180);
+        }
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: var(--page);
+      }
+
+      body {
+        display: grid;
+        place-items: center;
+      }
+
+      .ring {
+        width: 2.5rem;
+        height: 2.5rem;
+        box-sizing: border-box;
+        border: 0.25rem solid var(--track);
+        border-top-color: var(--arc);
+        border-radius: 50%;
+        animation: turn 0.9s linear infinite;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .ring {
+          animation-duration: 3s;
+        }
+      }
+
+      @keyframes turn {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="ring"></div>
+  </body>
+</html>

@@ -100,6 +100,7 @@ EOF
         b"fake-oauth-token".to_vec(),
         stub.to_string_lossy().into_owned(),
         Some(DelegateChatContext {
+            children: Default::default(),
             pending_tool_approvals: pending,
             emit,
             database: None,
@@ -197,6 +198,7 @@ sys.stdin.readline()
         b"fake-auth".to_vec(),
         stub.to_str().unwrap().to_string(),
         Some(DelegateChatContext {
+            children: Default::default(),
             pending_tool_approvals: pending,
             emit,
             database: None,

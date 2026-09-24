@@ -6,9 +6,6 @@
 //! decision ("alias == null → route to /onboarding"). Alias-rename is
 //! the settings-screen entry point and the wizard's final commit step.
 
-use std::sync::Arc;
-
-use haex_crdt::Database;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
@@ -19,6 +16,7 @@ use crate::identity::{installation_id_path, read_or_mint_installation_uuid, VAUL
 use crate::state::AppState;
 use crate::state_utils::active_database;
 use crate::storage::known_devices;
+use crate::vault_gate::VaultDb;
 
 /// Frontend view of the active device's identity + OS hostname.
 ///
@@ -106,7 +104,7 @@ pub async fn current_device_info(
 /// backend-internal callers (spec 010's `voice::resolve_local_adapter`)
 /// that need "this device"'s identity without a frontend-supplied UUID and
 /// don't need the alias/hostname `current_device_info` also returns.
-pub async fn resolve_vault_device_uuid(app: &AppHandle, db: &Arc<Database>) -> Result<Uuid> {
+pub async fn resolve_vault_device_uuid(app: &AppHandle, db: &VaultDb) -> Result<Uuid> {
     let installation_id_file =
         installation_id_path(&app.path().app_local_data_dir().map_err(|e| {
             HolziError::PathResolution {
@@ -116,7 +114,7 @@ pub async fn resolve_vault_device_uuid(app: &AppHandle, db: &Arc<Database>) -> R
     let installation_uuid =
         read_or_mint_installation_uuid(&installation_id_file).map_err(HolziError::from)?;
 
-    let db = Arc::clone(db);
+    let db = db.clone();
     let raw = tauri::async_runtime::spawn_blocking(move || {
         db.with_connection(|conn| {
             use haex_crdt::rusqlite::{params, OptionalExtension};
