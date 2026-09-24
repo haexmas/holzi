@@ -10,6 +10,11 @@ export type Size = {
   height: number
 }
 
+/** Below this Shell area width, the compact (full-area window) presentation applies (research
+ * R7, spec.md Assumptions: a common tablet breakpoint). Shared by `layoutState.ts` (hydrate) and
+ * `geometry.ts` (T027, live resize). */
+export const COMPACT_MAX_WIDTH = 767
+
 /** An ordered container for windows on one device (data-model.md `workspaces`). No stored name:
  * the UI derives "Arbeitsbereich N" from `position` (spec FR-019). */
 export type Workspace = {
@@ -75,4 +80,13 @@ export type TabRuntime = {
   titleOverride: string | null
   guard: CloseGuard | null
   mounted: boolean
+}
+
+/** The persisted part of one device's layout — shaped like the eventual `ShellLayoutDto`
+ * (contracts/tauri-commands.md, wired in T048) so `hydrate` does not need to change shape once
+ * that DTO exists; until Phase 7, callers pass an empty layout (no workspaces, no windows). */
+export type PersistedLayout = {
+  workspaces: Workspace[]
+  windows: ShellWindow[]
+  activeWorkspaceId: string
 }

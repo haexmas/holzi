@@ -48,9 +48,13 @@ export const SHELL_APPS: readonly ShellAppDefinition[] = [
 ]
 
 /** `undefined` for an unknown `appId` — every caller (Launcher, `+` menu, hydrate) must handle
- * that case rather than assume the registry is exhaustive (research R9). */
+ * that case rather than assume the registry is exhaustive (research R9). `apps` defaults to the
+ * shipped registry; the reducers (layoutState.ts, tabs.ts) take it as a parameter instead of
+ * importing `SHELL_APPS` directly so a test can substitute a `multiInstance: true` app (T052)
+ * without touching the shipped registry. */
 export function getAppDefinition(
   appId: string,
+  apps: readonly ShellAppDefinition[] = SHELL_APPS,
 ): ShellAppDefinition | undefined {
-  return SHELL_APPS.find((app) => app.id === appId)
+  return apps.find((app) => app.id === appId)
 }
