@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-21
 
-**Status**: Draft
+**Status**: Implemented (all tasks T001-T092 done, 2026-09-24)
 
 **Input**: User description: "Closing a vault must reliably and immediately terminate everything
 that belonged to it, and a newly opened vault must never see data from a previously open one. One

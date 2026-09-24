@@ -31,8 +31,11 @@ The wrapper never changes a response of a request that is already executing. See
 
 ```rust
 #[tauri::command]
-pub async fn close_instance(app: AppHandle, gate: State<'_, VaultGate>, ...) -> Result<(), HolziError>;
+pub async fn close_instance(app: AppHandle) -> Result<()>;
 ```
+
+(The gate is reached through `app.state::<VaultGate>()` inside `start_close`, not injected as its own
+parameter; `Result<T>` is the crate's own alias for `Result<T, HolziError>`.)
 
 | Aspect         | Before                                                             | After                                                                 |
 | -------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------- |

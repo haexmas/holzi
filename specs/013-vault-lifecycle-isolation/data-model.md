@@ -52,12 +52,29 @@ A failed open leaves the gate in `Idle`, so the user can retry a wrong passphras
 ## ClosePolicy
 
 `Relaunch` (default in release builds) or `Exit`. Chosen by one function; debug builds return `Exit`
-until the relaunch under the dev runner is verified (research R2). Window close and quit use `Exit`
-regardless, because the user asked to leave. The forced end uses the same policy: `Exit` calls
+— confirmed to stay that way (research R2, T048): forcing a relaunch under `pnpm tauri:dev` ends the
+whole dev session rather than the dev runner re-attaching, checked live twice. Window close and quit
+use `Exit` regardless, because the user asked to leave. The forced end uses the same policy: `Exit` calls
 `std::process::exit(0)` and `Relaunch` calls `tauri::process::restart`, about 0.5 s after the normal
 request, and only if the process is still alive. A second forced end is armed with phase 1, at the
 drain limit plus 0.5 s, for a background phase that never gets to run; the two share one claim on
 the gate, so the forced end runs once.
+
+## CloseEffects (trait, behind it in production; a recording fake in tests)
+
+The effects of a close that reach outside the process's own state. Every method returns at once and
+none can fail — a failure is logged inside the implementation, because a close that can be refused is
+exactly what this feature removes (T039).
+
+| Method                                  | Does                                                                                                                                                                                                                                                                                                                    |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `show_closing_page()`                   | Replaces the page with the closing spinner (R4), so nothing of the vault stays on screen.                                                                                                                                                                                                                               |
+| `announce_closed(name: Option<String>)` | Tells listeners the vault `name` was closed (`instance-list-changed`).                                                                                                                                                                                                                                                  |
+| `request_end(policy: ClosePolicy)`      | Asks the event loop to end the process the normal way: `app.request_restart()` for `Relaunch`, `app.exit(0)` for `Exit`.                                                                                                                                                                                                |
+| `force_end(policy: ClosePolicy)`        | Ends the process now, whatever is still running: `ChildRegistry::kill_all()` first (a forced end skips the `Drop`-based child kills), then `tauri::process::restart` or `std::process::exit(0)`. The caller (`close.rs`) schedules it via `on_plain_thread`, not the async runtime, so a stuck runtime cannot block it. |
+
+Production wiring is `AppCloseEffects` in `src-tauri/src/instances/close_effects.rs`. Tests record
+calls instead of touching a real window or ending the test process (T039).
 
 ## CloseOutcome / DrainOutcome
 
