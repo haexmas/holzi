@@ -1,30 +1,15 @@
 <script setup lang="ts">
 import type { DeviceInfo } from '~/composables/useDevice'
 
-// Settings-Screen for spec 002 US3+US4. Guarded by the `onboarded`
-// middleware — an unset alias sends the operator back to the wizard,
-// so we can assume `alias` is set here.
-definePageMeta({
-  middleware: ['onboarded'],
-})
-
-const route = useRoute()
+// Settings app for spec 002 US3+US4, moved into the Shell (spec
+// 015-workspace-shell, T022). Onboarding enforcement (an unset alias sends
+// the operator back to the wizard, so `alias` can be assumed set here) now
+// lives on the Shell host page (T025) — this component owns no route of
+// its own anymore, so there is no "back to workspace" link either: closing
+// or switching away from this tab is the Shell's own affordance.
 const { t } = useI18n()
 const { errString } = useErrorString()
 const { currentDeviceInfoAsync } = useDevice()
-
-const instanceName = computed(() => {
-  const raw = route.params.instance
-  return typeof raw === 'string'
-    ? raw
-    : Array.isArray(raw)
-      ? (raw[0] ?? '')
-      : ''
-})
-
-const backTarget = computed(
-  () => `/workspace/${encodeURIComponent(instanceName.value)}`,
-)
 
 const deviceInfo = ref<DeviceInfo | null>(null)
 const loadError = ref<string | null>(null)
@@ -42,7 +27,7 @@ onMounted(reloadDeviceInfoAsync)
 </script>
 
 <template>
-  <main class="min-h-screen flex flex-col p-6 gap-6">
+  <main class="h-full min-h-0 overflow-y-auto flex flex-col p-6 gap-6">
     <header class="flex items-center justify-between gap-3 flex-wrap">
       <h1 class="text-2xl font-semibold">
         <template v-if="deviceInfo?.alias">
@@ -50,12 +35,6 @@ onMounted(reloadDeviceInfoAsync)
         </template>
         <template v-else> &nbsp; </template>
       </h1>
-      <NuxtLink
-        :to="backTarget"
-        class="text-sm underline text-blue-600 hover:text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-      >
-        {{ t('workspace.heading', { instance: instanceName }) }}
-      </NuxtLink>
     </header>
 
     <p v-if="loadError" class="text-sm text-red-500" role="alert">
