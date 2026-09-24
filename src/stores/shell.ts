@@ -1,0 +1,120 @@
+import { computed, reactive, toRefs } from 'vue'
+import { defineStore } from 'pinia'
+import { SHELL_APPS } from '~/lib/shell/apps'
+import {
+  closeWindow as closeWindowReducer,
+  focusWindow as focusWindowReducer,
+  hydrate,
+  openApp as openAppReducer,
+} from '~/lib/shell/layoutState'
+import type { ShellState, TabRuntime } from '~/lib/shell/types'
+
+/**
+ * Shell state and its public actions (spec 015-workspace-shell, T018,
+ * contracts/shell-app-contract.md §4). Wraps the pure reducers from
+ * `lib/shell/layoutState.ts` around one `reactive` `ShellState`, so they can
+ * keep mutating their `state` parameter in place while Vue tracks it.
+ *
+ * Only what User Story 1 needs is implemented here: `openApp`,
+ * `focusWindow`, `closeWindow`, and a `flushAsync` placeholder (FR-027)
+ * `ChatApp.vue`'s `lock()` already depends on. Tab actions (`addTab`,
+ * `switchTab`, `closeTab`), window management (`minimizeWindow`,
+ * `toggleMaximizeWindow`) and workspace actions (`createWorkspace`,
+ * `deleteWorkspace`, `switchWorkspace`, `moveWindowToWorkspace`) land in
+ * this same store as their own user stories (Phase 4-6) build them.
+ *
+ * Persistence does not exist yet (Phase 7): `state` starts from an empty
+ * layout, and `flushAsync` is a no-op until T047 wires the real write queue.
+ */
+export const useShellStore = defineStore('shell', () => {
+  const initialArea =
+    typeof window === 'undefined'
+      ? { width: 1280, height: 800 }
+      : { width: window.innerWidth, height: window.innerHeight }
+  const state = reactive<ShellState>(
+    hydrate(
+      { workspaces: [], windows: [], activeWorkspaceId: '' },
+      SHELL_APPS,
+      initialArea,
+    ),
+  )
+
+  /** Never persisted (data-model.md); per-tab bookkeeping keyed by tab id, kept in sync with
+   * `state.windows[*].tabs` after every action that can add or remove a tab. A `Map` rather than
+   * a plain object, so pruning a stale entry needs no dynamic-key `delete`. */
+  const tabRuntime = reactive(new Map<string, TabRuntime>())
+
+  function syncTabRuntime() {
+    const liveIds = new Set(
+      state.windows.flatMap((w) => w.tabs.map((t) => t.id)),
+    )
+    for (const id of tabRuntime.keys()) {
+      if (!liveIds.has(id)) tabRuntime.delete(id)
+    }
+    for (const id of liveIds) {
+      if (!tabRuntime.has(id)) {
+        tabRuntime.set(id, {
+          attention: false,
+          titleOverride: null,
+          guard: null,
+          mounted: false,
+        })
+      }
+    }
+  }
+  syncTabRuntime()
+
+  const windowsInActiveWorkspace = computed(() =>
+    state.windows.filter((w) => w.workspaceId === state.activeWorkspaceId),
+  )
+
+  function runtimeFor(tabId: string): TabRuntime {
+    return (
+      tabRuntime.get(tabId) ?? {
+        attention: false,
+        titleOverride: null,
+        guard: null,
+        mounted: false,
+      }
+    )
+  }
+
+  /** Marks a tab's content mounted for this session (research R8: it then stays mounted, `v-show`
+   * hides it instead of unmounting). Called by the Shell window the first time a tab becomes
+   * visible (T031). */
+  function markTabMounted(tabId: string) {
+    const runtime = tabRuntime.get(tabId)
+    if (runtime) runtime.mounted = true
+  }
+
+  function openApp(appId: string) {
+    openAppReducer(state, appId, SHELL_APPS)
+    syncTabRuntime()
+  }
+
+  function focusWindow(windowId: string) {
+    focusWindowReducer(state, windowId)
+  }
+
+  /** Removes the window without asking anything — guard confirmation (FR-014) runs at the caller
+   * (`ShellCloseConfirm.vue`, T038) before this is invoked. */
+  function closeWindow(windowId: string) {
+    closeWindowReducer(state, windowId)
+    syncTabRuntime()
+  }
+
+  /** Placeholder until Phase 7 (T047) wires the real serialized write queue; `ChatApp.vue`'s
+   * `lock()` already depends on awaiting it before `useInstance().closeAsync()` (FR-027). */
+  async function flushAsync(): Promise<void> {}
+
+  return {
+    ...toRefs(state),
+    windowsInActiveWorkspace,
+    runtimeFor,
+    markTabMounted,
+    openApp,
+    focusWindow,
+    closeWindow,
+    flushAsync,
+  }
+})
