@@ -25,6 +25,9 @@ Ergebnisse.
 Zahl grüner Tests melden — ein Rückgang oder Anstieg zeigt geändertes
 Verhalten statt reiner Verschiebung an.
 
+Bestätigt nach T006 (`useComposer.ts`, Commit `1a8a14a`) und nach T008
+(`useComposerAttachments.ts`): weiterhin 45/45 grün.
+
 ## 1. Automatische Prüfungen (CI-Parität)
 
 ```bash

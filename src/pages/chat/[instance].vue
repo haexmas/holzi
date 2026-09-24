@@ -20,7 +20,7 @@
  * `useComposer` composable next to `useChatTranscript`/`useThreadSidebar`,
  * taking the same instance (`chat`, `chatTranscript`) as a dependency.
  */
-import { computed, onMounted, onBeforeUnmount, ref, nextTick, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, nextTick } from 'vue'
 import type { UnlistenFn } from '@tauri-apps/api/event'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
@@ -30,7 +30,6 @@ import type {
   SendMessageArgs,
 } from '~/composables/useChat'
 import type { PendingApproval } from '~/components/chat/PermissionPrompt.vue'
-import type { ComposerAttachment } from '~/components/chat/ComposerAttachments.vue'
 import { isAutonomyMode } from '~/composables/usePreferences'
 
 definePageMeta({
@@ -144,10 +143,6 @@ const effortLabel = computed(() => {
 // so a stale count never survives into the next turn.
 const activeAgentCount = ref(0)
 const lastAgentBatchSize = ref<number | null>(null)
-// Files staged for the message currently being composed (spec
-// 011-composer-toolbar-parity Story 3) — scoped to this one send (FR-017),
-// cleared alongside `input` once it goes out.
-const attachments = ref<ComposerAttachment[]>([])
 // True while `send()` has set `activeThreadId` but has not yet appended
 // this turn's user/assistant placeholder rows — a `chat-tool-call`/
 // `chat-tool-result` for that (already-active) thread can otherwise land
@@ -156,6 +151,9 @@ const attachments = ref<ComposerAttachment[]>([])
 const turnSetupPending = ref(false)
 const lastError = ref<string | null>(null)
 const pendingSend = ref<SendMessageArgs | null>(null)
+
+const { attachments, addAttachments, removeAttachment } =
+  useComposerAttachments(chat, displayModelId, errString, lastError)
 
 const { textareaRef, reset: resetTextarea } = useAutoResizeTextarea(input)
 
@@ -449,46 +447,6 @@ async function reloadAutonomyMode(uuid: string) {
     autonomyPreferenceLoading.value = false
   }
 }
-
-/** Adds newly picked files to the composer's attachment list, classifying
- * each against the displayed model/backend (spec 011-composer-toolbar-parity
- * Story 3). Duplicate paths are allowed — each gets its own entry (spec.md
- * Edge Cases). */
-async function addAttachments(paths: string[]) {
-  for (const path of paths) {
-    try {
-      const info = await chat.inspectAttachmentAsync(path, displayModelId.value)
-      attachments.value.push({ id: crypto.randomUUID(), path, info })
-    } catch (e: unknown) {
-      lastError.value = errString(e)
-    }
-  }
-}
-
-function removeAttachment(id: string) {
-  attachments.value = attachments.value.filter((a) => a.id !== id)
-}
-
-/** Re-evaluates staged attachments against the newly displayed model/backend
- * after a model switch (spec.md Edge Cases). */
-async function refreshAttachmentUsability() {
-  const modelId = displayModelId.value
-  await Promise.all(
-    attachments.value.map(async (attachment) => {
-      try {
-        attachment.info = await chat.inspectAttachmentAsync(
-          attachment.path,
-          modelId,
-        )
-      } catch {
-        // The file may have disappeared since it was attached — leave its
-        // last-known info in place; send-time re-validation handles exclusion.
-      }
-    }),
-  )
-}
-
-watch(displayModelId, refreshAttachmentUsability)
 
 /** Updates the live sub-agent indicator (spec 011-composer-toolbar-parity). */
 function handleAgentActivity(e: AgentActivityEvent) {
