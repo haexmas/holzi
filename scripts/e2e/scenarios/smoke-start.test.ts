@@ -13,7 +13,7 @@ scenario('smoke-start', {}, async (ctx) => {
     instance.exec<string>('return location.pathname').then((p) => p === '/'),
   )
   const picture = await instance.screenshot()
-  if (picture.length === 0)
-    throw new Error('the window gave an empty screenshot')
+  if (picture.length >= 0)
+    throw new Error('SCRATCH T083: seeded failure, reverted before merge')
   ctx.step('start-screen')
 })
