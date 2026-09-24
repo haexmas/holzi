@@ -1,6 +1,19 @@
 import { invoke as tauriInvoke } from '@tauri-apps/api/core'
 
 /**
+ * Narrowed, non-generic shape of Tauri's `invoke` — deliberately simpler
+ * than its real (generic) type so a plain `async (cmd, args) => ...` fake
+ * satisfies it directly in tests (a concrete-return function is not
+ * assignable to a generic one, but the real `invoke` — being more general —
+ * is always assignable to this narrower shape). Callers cast its result at
+ * each call site instead of relying on a passed-through type parameter.
+ */
+type ShellInvokeFn = (
+  cmd: string,
+  args?: Record<string, unknown>,
+) => Promise<unknown>
+
+/**
  * Wire types for the Shell layout commands (spec 015-workspace-shell,
  * contracts/tauri-commands.md). Hand-declared rather than imported from
  * `src/types/bindings/` — same convention as `usePreferences.ts`'s
@@ -70,7 +83,7 @@ const SAVE_DEBOUNCE_MS = 400
  * state.ts` (T053) substitutes a fake to test the queue/debounce/dirty-
  * retry logic standalone, without a Tauri runtime or module mocking.
  */
-export function useShellLayout(invokeFn: typeof tauriInvoke = tauriInvoke) {
+export function useShellLayout(invokeFn: ShellInvokeFn = tauriInvoke) {
   /** Never rejects — every operation attaches here so the queue keeps
    * flowing even after a failure; the operation's OWN returned promise
    * (from `runExclusive`) still carries that failure to its caller. */
@@ -163,20 +176,25 @@ export function useShellLayout(invokeFn: typeof tauriInvoke = tauriInvoke) {
   /** Loads the device's whole layout. Result-bearing and queued like every
    * other call, but never debounced or retried — the caller awaits it. */
   function loadLayout(): Promise<ShellLayoutDto> {
-    return runExclusive(() => invokeFn<ShellLayoutDto>('shell_load_layout'))
+    return runExclusive(
+      async () => (await invokeFn('shell_load_layout')) as ShellLayoutDto,
+    )
   }
 
   function createWorkspace(): Promise<WorkspaceDto> {
-    return runExclusive(() => invokeFn<WorkspaceDto>('shell_create_workspace'))
+    return runExclusive(
+      async () => (await invokeFn('shell_create_workspace')) as WorkspaceDto,
+    )
   }
 
   function deleteWorkspace(
     workspaceId: string,
   ): Promise<DeleteWorkspaceResult> {
-    return runExclusive(() =>
-      invokeFn<DeleteWorkspaceResult>('shell_delete_workspace', {
-        args: { workspaceId },
-      }),
+    return runExclusive(
+      async () =>
+        (await invokeFn('shell_delete_workspace', {
+          args: { workspaceId },
+        })) as DeleteWorkspaceResult,
     )
   }
 
