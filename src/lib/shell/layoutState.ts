@@ -16,8 +16,9 @@ import {
 } from './types.ts'
 
 /** Every open tab of `appId` across every workspace (FR-016 singleton search is device-wide, not
- * just the active workspace). */
-function findOpenTab(
+ * just the active workspace). Exported for `tabs.ts`'s `addTab` (T033), the same singleton search
+ * `openApp` uses here. */
+export function findOpenTab(
   state: ShellState,
   appId: string,
 ): { window: ShellWindow; tab: ShellTab } | null {
@@ -96,6 +97,22 @@ export function updateWindowGeometry(
   window.height = geometry.height
 }
 
+/** For a singleton app already open somewhere, activates its existing tab (device-wide search,
+ * FR-016) and reports `true` — `openApp`'s and `tabs.ts`'s `addTab`'s shared first step. `false`
+ * means the caller should proceed to create a new tab/window. */
+export function activateExistingSingleton(
+  state: ShellState,
+  app: ShellAppDefinition,
+  appId: string,
+): boolean {
+  if (app.multiInstance) return false
+  const existing = findOpenTab(state, appId)
+  if (!existing) return false
+  existing.window.activeTabId = existing.tab.id
+  focusWindow(state, existing.window.id)
+  return true
+}
+
 /** Opens `appId` as a new window, or activates its existing tab if it is a singleton app already
  * open somewhere (FR-016). No-op for an `appId` the registry does not resolve — callers (Launcher,
  * legacy-route redirect) are expected to only ever pass a known id. */
@@ -106,14 +123,7 @@ export function openApp(
 ): void {
   const app = getAppDefinition(appId, apps)
   if (!app) return
-  if (!app.multiInstance) {
-    const existing = findOpenTab(state, appId)
-    if (existing) {
-      existing.window.activeTabId = existing.tab.id
-      focusWindow(state, existing.window.id)
-      return
-    }
-  }
+  if (activateExistingSingleton(state, app, appId)) return
   const tabId = crypto.randomUUID()
   const openInWorkspace = state.windows.filter(
     (w) => w.workspaceId === state.activeWorkspaceId,
