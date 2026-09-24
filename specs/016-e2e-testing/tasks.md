@@ -657,9 +657,19 @@ deliberately failing scenario fails the job and uploads the run directory.
       T086); SC-003's window-close half is real but narrower than its own table entry states (PR #122,
       T077's corrected scope), and FR-006's spec wording undercounts what R5 actually isolates (spec
       alignment item 1, for T089).
-- [ ] T089 Run `/speckit-analyze` (the constitution requires it to check plans against the constitution)
+- [x] T089 Run `/speckit-analyze` (the constitution requires it to check plans against the constitution)
       and fix findings. Fold in the four spec alignment items of the plan (FR-006, FR-018, the closing
       page scenario, "no error appears") as a small reviewed spec change or record why not.
+      Done 2026-09-24: analysis found 0 CRITICAL/HIGH findings — 21/21 FR and 7/7 SC each have ≥1 task
+      (T088's table), no constitution violation, no ambiguity or duplication. One LOW staleness finding
+      (Assumptions still described the atoms change as unmerged and the spike branch as present; both
+      long since resolved) fixed alongside the alignment items. The four alignment items: **FR-006**
+      and **"no error appears"** folded in as small spec.md changes (the isolation list now names the
+      runtime/home/session-bus scope R5 actually covers; a new Assumptions entry states the
+      last-sample-plus-stronger-evidence check); **FR-018** needed no change — T067/T068 resolved the
+      open risk the item was tracking, so the spec's existing wording already matches what got built;
+      **the closing-page scenario** needed no change — it is a claim about what the page shows, which
+      the direct-navigation strategy checks exactly, not a claim about live-observing a real close.
 - [x] T090 With the operator's agreement, remove the throwaway spike: the worktree
       `.worktrees/016-e2e-spike` and the local branch `spike/e2e-rig`, which the suite replaces, and the
       old local branch `spike/vault-gateway` (task T051 of spec 013).

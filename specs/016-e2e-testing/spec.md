@@ -231,9 +231,10 @@ failing scenario uploads its kept material.
 
 **Isolation and cleanup**
 
-- **FR-006**: Every scenario MUST start the application with data, configuration and cache locations
-  of its own, empty at the start and removed at the end, including the models directory. The
-  maintainer's own Holzi data MUST NOT be read or written.
+- **FR-006**: Every scenario MUST start the application with data, configuration, cache, runtime and
+  home locations of its own, empty at the start and removed at the end, including the models directory,
+  and with its own session bus rather than the maintainer's desktop session. The maintainer's own Holzi
+  data MUST NOT be read or written.
 - **FR-007**: A scenario MUST NOT depend on the internet. It uses local stand-ins for every external
   service and needs no credentials, and it downloads nothing.
 - **FR-008**: However a run ends (all passed, a failure, a time limit or an interrupt), no process the
@@ -344,16 +345,17 @@ failing scenario uploads its kept material.
   The ordinary run uses the debug build, which keeps it fast enough to run before every push. The
   release build is tested when a release is built, by giving the suite its path (see FR-004). There is
   no release workflow in the repository yet, so wiring the suite into one is left to whoever adds it.
-- A spike on the maintainer's machine (throwaway branch `spike/e2e-rig`) showed the approach works: the
-  Tauri WebDriver bridge and the WebKit driver started the real debug binary on a virtual screen (session
-  start about 3 seconds), backend commands could be called from the page, real clicks and typing worked,
-  screenshots came back, and locking while a stand-in provider streamed closed its connection 1 ms
-  later with the process gone (window close: about 50 ms). Details go into the plan's research.
+- A spike on the maintainer's machine (throwaway branch `spike/e2e-rig`, since removed — the suite
+  replaces it) showed the approach works: the Tauri WebDriver bridge and the WebKit driver started the
+  real debug binary on a virtual screen (session start about 3 seconds), backend commands could be
+  called from the page, real clicks and typing worked, screenshots came back, and locking while a
+  stand-in provider streamed closed its connection 1 ms later with the process gone (window close:
+  about 50 ms). Details go into the plan's research.
 - The driver must match the web view version, and only the driver binary may enter the development
   shell, never the web view library itself, because that would displace the host's library the
-  application links. The tools and the check depend on an unmerged change to the shared atoms
-  (`haexmas/atoms`, branch `feat/holzi-e2e-tooling`: `nix-devshell-base` 0.7.0 and `holzi` 0.6.0), which
-  this feature needs pushed and merged, and holzi's pin of it updated, before its tasks can finish.
+  application links. The tools and the check needed a change to the shared atoms (`haexmas/atoms`:
+  `nix-devshell-base` 0.7.0 and `holzi` 0.6.0), merged as `haexmas/atoms#32` and pinned in holzi's
+  `.spaex/manifest.json`.
 - The stand-in provider needs no change to the application: an API-key provider of the Anthropic kind
   accepts any base address, so a local server that lists one model and streams replies can play it.
 - The application has no stable hooks for its controls today, and its texts are German. Adding
@@ -361,3 +363,7 @@ failing scenario uploads its kept material.
 - Scenarios run one after another on one virtual screen. Running them in parallel is a later
   optimization.
 - Continuous integration (User Story 6) is separable and may ship after the local suite.
+- A real close lasts milliseconds, too fast to sample live: "no error appears" (User Story 2, scenarios
+  1 and 2) is checked from the last page sample taken before the session ends, together with the
+  stronger evidence that the process actually ended and the stand-in provider's connection actually
+  closed — not by watching continuously while the window closes.
