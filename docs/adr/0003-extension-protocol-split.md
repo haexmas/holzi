@@ -9,10 +9,10 @@ Holzi hosts haextensions (signed web bundles that run in a sandboxed iframe).
 Traffic between an extension and holzi runs in two directions. Each direction
 has its own protocol, its own code path, and the same permission model.
 
-| Direction | Caller → callee                        | Protocol                                                          | Authorization                                                                 |
-| --------- | -------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| A         | holzi (agent) → extension              | **MCP**: holzi is the client, the extension is the server         | Tool declared in the manifest and confirmed at install; per-call approval gate |
-| B         | extension → host operation (file, DB…) | **Typed request/response over the extension's `MessagePort`**     | Manifest grants; anything else prompts the user                               |
+| Direction | Caller → callee                        | Protocol                                                      | Authorization                                                                  |
+| --------- | -------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| A         | holzi (agent) → extension              | **MCP**: holzi is the client, the extension is the server     | Tool declared in the manifest and confirmed at install; per-call approval gate |
+| B         | extension → host operation (file, DB…) | **Typed request/response over the extension's `MessagePort`** | Manifest grants; anything else prompts the user                                |
 
 **Direction A.** An extension declares the tools it offers in its manifest and
 serves them over MCP at runtime. Holzi connects as an MCP client and registers
