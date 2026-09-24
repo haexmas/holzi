@@ -42,6 +42,10 @@ async function onSubmit() {
       name: props.name,
       passphrase: passphrase.value,
     })
+    // FR-016: keep the value only until the unlock succeeds. Clear it here, before emitting —
+    // `onUnlocked` navigates away instead of ever setting `open` back to `false`, so the dismiss
+    // watch's `reset()` below would otherwise never run for the success path.
+    passphrase.value = ''
     emit('unlocked', info.name)
     emit('update:open', false)
   } catch (e) {
