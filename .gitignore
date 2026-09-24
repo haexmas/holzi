@@ -45,6 +45,10 @@ src-tauri/gen/
 .env.*
 !.env.example
 
+# direnv's per-checkout cache (flake profile symlinks). Every worktree gets
+# its own on `direnv allow`; never meant to be committed.
+.direnv/
+
 # graphify skill output
 graphify-out/
 
