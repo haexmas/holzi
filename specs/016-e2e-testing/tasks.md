@@ -606,7 +606,17 @@ suite` green, `relaunch-after-lock` reported skipped (debug build exits on close
       failed with the seeded message, `relaunch-after-lock` still correctly reported skipped, and
       `e2e-failure-material.zip` (18084 bytes — real material, unlike the earlier build-failure
       run's empty-ish 761 bytes) was uploaded and downloadable. - Scratch commit reverted as `853f7bc`; `smoke-start.test.ts` back to its original content
-      (confirmed no diff against the pre-scratch version).
+      (confirmed no diff against the pre-scratch version). - One real CI-only flake observed on the run after the prettier-stabilizing commit
+      (https://github.com/haexmas/holzi/actions/runs/36008292857): `closing-page` failed with
+      `POST /session got no answer: fetch failed` — the tauri-driver-HTTP-port-before-native-driver
+      race `newSessionWithRetry` already retries once (300 ms, PR #118); this time even that single
+      retry lost the race, most likely because the GitHub-hosted runner is slower/more contended than
+      the maintainer's machine. The other five scenarios passed and `relaunch-after-lock` still
+      correctly reported skipped in the same run — this is the exact failure mode T074 already
+      documented as a rare, unreproducible flake, not a new defect from this job. `gh run rerun
+--failed` on the same commit passed cleanly on the next attempt
+      (no code change). Left as an observed CI-environment flake, consistent with the project's own
+      practice of not hardening a retry based on one occurrence; worth revisiting only if it recurs.
 
 ---
 
