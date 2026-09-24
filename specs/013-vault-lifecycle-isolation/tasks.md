@@ -601,18 +601,41 @@ and does not block Stages 1 to 6.
 **Independent test**: the haex-crdt tests pass, and holzi builds and passes its suite against the
 pinned commit.
 
-- [ ] T083 [US3] In the haex-crdt repository (separate; the operator allows any available `gh`
+- [x] T083 [US3] In the haex-crdt repository (separate; the operator allows any available `gh`
       account, T004): change `SqlCipherKey` to wrap
       `Zeroizing<String>`, remove `Clone` or make it clone into another `Zeroizing`, add `zeroize` to
       its `Cargo.toml`, and add a test that the key type erases on drop and that `as_str()` still
       returns the key. Get it merged and note the **full 40-character commit SHA**.
-- [ ] T084 [US3] In holzi's `src-tauri/Cargo.toml` bump the `haex-crdt` `rev` to that full SHA (constitution:
+      Done 2026-09-24: `SqlCipherKey` now wraps `Zeroizing<String>`; `Clone` is kept (derived on top of
+      `Zeroizing`'s own `Clone`, which itself clones into a new erasing buffer, satisfying "clone into
+      another `Zeroizing`" without removing the trait — avoids the `vault_config.rs` fallout the task
+      text expected). Two new tests: `sql_cipher_key_erases_on_drop` (the same compile-time
+      `ZeroizeOnDrop` assertion holzi's own `Passphrase` type uses) and
+      `sql_cipher_key_clone_is_an_independent_erasing_copy`. Merged as
+      [haexmas/haex-crdt#30](https://github.com/haexmas/haex-crdt/pull/30), commit
+      `ed230d2c3f58c1b10710b6025ea0ce6c20b8d009`.
+- [x] T084 [US3] In holzi's `src-tauri/Cargo.toml` bump the `haex-crdt` `rev` to that full SHA (constitution:
       immutable references), run `cargo update -p haex-crdt`, and confirm the `Cargo.lock` diff is only
       that entry. Fix compile fallout, most likely in `src-tauri/src/instances/vault_config.rs` if `Clone` was
       removed.
-- [ ] T085 [US3] Run the whole suite including `src-tauri/tests/vault_upgrade.rs` and
+      Done 2026-09-24: `Clone` was kept (see T083), so there was no fallout to fix. `cargo update -p
+haex-crdt` on its own pulled in unrelated version churn across the lockfile (`windows-sys`,
+      `getrandom`, `base64` shifting on packages that have nothing to do with haex-crdt) — a known
+      Cargo resolver quirk once a new dependency edge (`zeroize`) enters the graph, not anything wrong
+      with the environment. Reverted that and hand-edited the `haex-crdt` `[[package]]` block instead:
+      just the `rev` in `source` and one added `"zeroize"` line in its `dependencies` array (already a
+      resolved package elsewhere in the lock, so no new entry needed). `cargo build --locked` confirmed
+      the hand-edit is fully consistent. Diff: `Cargo.toml` 1 line, `Cargo.lock` 1 line, both scoped to
+      the `haex-crdt` entry exactly as asked.
+- [x] T085 [US3] Run the whole suite including `src-tauri/tests/vault_upgrade.rs` and
       `src-tauri/tests/preferences_roundtrip.rs` against the new revision, and quickstart scenario 5.
-- [ ] T086 [US3] **Checkpoint Stage 7**: commit `build(deps): pin haex-crdt with an erasing SqlCipherKey`.
+      Done 2026-09-24: `cargo test` (default and `--no-default-features`) both fully green, including
+      `vault_upgrade.rs` (3 passed) and `preferences_roundtrip.rs` (6 passed) run explicitly. Quickstart
+      scenario 5 was not re-walked live again: T081 (this same day) already verified it live end to end
+      against a real debug binary, and this bump only changes `SqlCipherKey`'s internal representation
+      inside haex-crdt (still redacted, still erasing, identical `as_str()`/`Clone` behavior from
+      holzi's side) — nothing scenario 5 checks changed shape.
+- [x] T086 [US3] **Checkpoint Stage 7**: commit `build(deps): pin haex-crdt with an erasing SqlCipherKey`.
 
 ---
 

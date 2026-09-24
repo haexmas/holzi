@@ -3186,7 +3186,7 @@ dependencies = [
 [[package]]
 name = "haex-crdt"
 version = "0.4.0"
-source = "git+https://github.com/haexmas/haex-crdt?rev=b8c9c6cd9cea0fc5bcfe3700f968781d5e4d81da#b8c9c6cd9cea0fc5bcfe3700f968781d5e4d81da"
+source = "git+https://github.com/haexmas/haex-crdt?rev=ed230d2c3f58c1b10710b6025ea0ce6c20b8d009#ed230d2c3f58c1b10710b6025ea0ce6c20b8d009"
 dependencies = [
  "base64 0.22.1",
  "fs2",
@@ -3198,6 +3198,7 @@ dependencies = [
  "thiserror 2.0.20",
  "uhlc",
  "uuid 1.26.1",
+ "zeroize",
 ]
 
 [[package]]

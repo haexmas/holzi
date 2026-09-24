@@ -79,8 +79,9 @@ zeroize = { version = "1", features = ["serde"] }
 # 1c069ef; bumped to main's current HEAD (no tagged releases past v0.1.0
 # exist yet). `raw-connection` gives holzi's storage wrapper direct
 # rusqlite access for the `haex_hlc_no_sync = current_hlc()` write
-# convention (Etappe 0 finding).
-haex-crdt = { git = "https://github.com/haexmas/haex-crdt", rev = "b8c9c6cd9cea0fc5bcfe3700f968781d5e4d81da", features = ["raw-connection"] }
+# convention (Etappe 0 finding). Bumped again (spec 013, T084) to pick up
+# an erasing `SqlCipherKey` (haexmas/haex-crdt#30).
+haex-crdt = { git = "https://github.com/haexmas/haex-crdt", rev = "ed230d2c3f58c1b10710b6025ea0ce6c20b8d009", features = ["raw-connection"] }
 
 # Local inference runtime chosen in plans/001-desktop-mvp.md §"Lokale Inferenz".
 # Pinned to 0.8.1 per Etappe 0 finding #1 (0.6 line does not exist on
