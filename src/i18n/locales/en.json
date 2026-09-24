@@ -62,17 +62,24 @@
     }
   },
   "workspace": {
-    "heading": "Workspace: {instance}",
-    "chatFab": {
-      "openTitle": "Open chat"
-    },
-    "settings": {
-      "iconTitle": "Settings"
-    },
     "modelPreload": {
       "loading": "Preparing {modelName}…",
       "ready": "{modelName} is ready",
       "error": "The model could not be prepared"
+    }
+  },
+  "shell": {
+    "apps": {
+      "chat": "Chat",
+      "settings": "Settings",
+      "federation": "Federation"
+    },
+    "launcher": {
+      "open": "Open Launcher",
+      "title": "Launcher"
+    },
+    "window": {
+      "close": "Close window"
     }
   },
   "chat": {
