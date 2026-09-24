@@ -205,9 +205,6 @@ const threadSidebar = useThreadSidebar(
 refreshThreadsForTranscript = threadSidebar.refreshThreads
 
 const {
-  pendingStreamEvents,
-  pendingToolEvents,
-  pendingTurnCompletions,
   turnTerminalWaiters,
   handleToken,
   handleRetry,
@@ -297,203 +294,6 @@ async function scrollToBottom() {
   if (el) el.scrollTop = el.scrollHeight
 }
 
-/** Sends the current input and seeds local message placeholders for streaming. */
-async function send(retryPending = false) {
-  const retry = retryPending ? pendingSend.value : null
-  const content = retry?.content ?? input.value.trim()
-  if (!content || sendDisabled.value) return
-  if (!retry) input.value = ''
-  busy.value = true
-  lastError.value = null
-  activeAgentCount.value = 0
-  lastAgentBatchSize.value = null
-  const request = retry ?? {
-    threadId: activeThreadId.value,
-    content,
-    idempotencyKey: crypto.randomUUID(),
-    autonomyMode: isDelegateModel.value ? autonomyMode.value : null,
-    reasoningOption: effortLevel.value,
-    attachments: attachments.value.map((a) => ({ path: a.path })),
-  }
-  pendingSend.value = null
-  if (!retry) attachments.value = []
-  turnSetupPending.value = true
-  try {
-    const result = await chat.sendMessageAsync(request)
-    activeThreadId.value = result.threadId
-    const queuedApprovals = pendingApprovalsByThread.get(result.threadId)
-    if (queuedApprovals) {
-      // Merge, don't overwrite: see the matching comment in `selectThread`.
-      pendingApprovals.value = [...queuedApprovals, ...pendingApprovals.value]
-      pendingApprovalsByThread.delete(result.threadId)
-    }
-    if (retry) {
-      // A replay returns the original IDs without emitting another turn.
-      // Recover a completed answer when the initial invoke response was lost.
-      const persisted = await chat.listMessagesAsync(result.threadId)
-      messagesByThread.value[result.threadId] = persisted
-      const completed = persisted.find(
-        (message) => message.id === result.assistantMessageId,
-      )
-      if (completed?.finishReason) {
-        streamingMessageId.value = result.assistantMessageId
-        streamingThreadId.value = result.threadId
-        turnSetupPending.value = false
-        pendingStreamEvents.delete(result.assistantMessageId)
-        pendingTurnCompletions.delete(result.threadId)
-        await handleTurnComplete({
-          threadId: result.threadId,
-          assistantMessageId: result.assistantMessageId,
-          finishReason: completed.finishReason,
-        })
-        return
-      }
-    }
-    // Seed the assistant message placeholder so the UI can show
-    // tokens as they stream in.
-    const list = messagesByThread.value[result.threadId] ?? []
-    if (!list.some((message) => message.id === result.userMessageId))
-      list.push({
-        id: result.userMessageId,
-        threadId: result.threadId,
-        parentId: null,
-        role: 'user',
-        content,
-        modelId: null,
-        promptTokens: null,
-        completionTokens: null,
-        finishReason: 'complete',
-        createdAt: Date.now(),
-        toolName: null,
-        toolCallId: null,
-        toolInput: null,
-        toolIsError: null,
-        toolSource: null,
-        autonomyMode: null,
-      })
-    if (!list.some((message) => message.id === result.assistantMessageId))
-      list.push({
-        id: result.assistantMessageId,
-        threadId: result.threadId,
-        parentId: result.userMessageId,
-        role: 'assistant',
-        content: '',
-        modelId: activeModel.value?.modelId ?? null,
-        promptTokens: null,
-        completionTokens: null,
-        finishReason: null,
-        createdAt: Date.now(),
-        toolName: null,
-        toolCallId: null,
-        toolInput: null,
-        toolIsError: null,
-        toolSource: null,
-        autonomyMode: request.autonomyMode ?? null,
-      })
-    messagesByThread.value[result.threadId] = list
-    turnSetupPending.value = false
-    streamingMessageId.value = result.assistantMessageId
-    streamingThreadId.value = result.threadId
-    streamingBuffer.value = ''
-    retryingMessageId.value = null
-    reasoningByMessage.value = {
-      ...reasoningByMessage.value,
-      [result.assistantMessageId]: '',
-    }
-    const queuedToolEvents = pendingToolEvents.get(result.threadId)
-    if (queuedToolEvents) {
-      pendingToolEvents.delete(result.threadId)
-      for (const event of queuedToolEvents) {
-        if ('toolName' in event) handleToolCall(event, true)
-        else handleToolResult(event, true)
-      }
-    }
-    const pending = pendingStreamEvents.get(result.assistantMessageId)
-    pendingStreamEvents.delete(result.assistantMessageId)
-    if (pending?.retryReset) {
-      streamingBuffer.value = ''
-      reasoningByMessage.value = {
-        ...reasoningByMessage.value,
-        [result.assistantMessageId]: '',
-      }
-    }
-    if (pending?.tokens || pending?.reasoning) {
-      handleToken({
-        messageId: result.assistantMessageId,
-        delta: pending?.tokens ?? '',
-        reasoning: pending?.reasoning ? pending.reasoning : null,
-      })
-    }
-    if (pending?.error) {
-      handleError(pending.error)
-    } else if (pending?.complete) {
-      handleComplete(pending.complete)
-    }
-    const completedTurn = pendingTurnCompletions.get(result.threadId)
-    pendingTurnCompletions.delete(result.threadId)
-    if (completedTurn) {
-      await handleTurnComplete(completedTurn)
-    } else {
-      // A failed list refresh must not turn an accepted send into a retry.
-      await refreshThreads().catch((e: unknown) => {
-        lastError.value = errString(e)
-      })
-    }
-    await scrollToBottom()
-  } catch (e: unknown) {
-    // The initial invoke may have been accepted even when its response was
-    // lost. Keep the exact same key available for a safe retry; stream
-    // errors are handled separately and deliberately do not retry.
-    pendingSend.value = request
-    lastError.value = errString(e)
-    busy.value = false
-    turnSetupPending.value = false
-  }
-}
-
-/**
- * Writes a dictated transcript into the composer (FR-004) and, when
- * auto-send is on, sends it immediately through the same path as manually
- * typed input (FR-005) — same gating as pressing Enter, so it silently
- * stays in the field if e.g. no model is loaded yet.
- */
-function onVoiceTranscript(text: string, autoSend: boolean) {
-  input.value = text
-  if (autoSend) send()
-}
-
-/** Requests cancellation of the active generation. */
-async function abort() {
-  try {
-    await chat.abortAsync()
-  } catch (e: unknown) {
-    lastError.value = errString(e)
-  }
-}
-
-/** Clears the active conversation so the next send creates a new thread. */
-async function newChat() {
-  if (busy.value || modelLoadPending.value) return
-  if (activeThreadId.value && pendingApprovals.value.length > 0) {
-    const queued = pendingApprovalsByThread.get(activeThreadId.value) ?? []
-    pendingApprovalsByThread.set(activeThreadId.value, [
-      ...queued,
-      ...pendingApprovals.value,
-    ])
-    pendingApprovals.value = []
-  }
-  activeThreadId.value = null
-  input.value = ''
-  attachments.value = []
-  streamingMessageId.value = null
-  streamingThreadId.value = null
-  streamingBuffer.value = ''
-  reasoningByMessage.value = {}
-  expandedReasoning.value = new Set()
-  pendingStreamEvents.clear()
-  void resetTextarea()
-}
-
 /**
  * Asks the backend to close the vault. It replaces this page with a spinner and ends the process
  * (spec 013), so nothing is navigated or cleared here and a failed call has nothing to show.
@@ -558,6 +358,39 @@ const isDelegateModel = computed(() => {
     (p) => p.id === providerId && p.kind === 'cli_delegate',
   )
 })
+
+const { send, abort, newChat, onVoiceTranscript } = useComposer(
+  chat,
+  chatTranscript,
+  refreshThreads,
+  scrollToBottom,
+  errString,
+  resetTextarea,
+  input,
+  busy,
+  pendingSend,
+  turnSetupPending,
+  lastError,
+  activeModel,
+  modelLoadPending,
+  isDelegateModel,
+  autonomyMode,
+  effortLevel,
+  sendDisabled,
+  activeThreadId,
+  messagesByThread,
+  streamingMessageId,
+  streamingThreadId,
+  streamingBuffer,
+  reasoningByMessage,
+  retryingMessageId,
+  expandedReasoning,
+  attachments,
+  activeAgentCount,
+  lastAgentBatchSize,
+  pendingApprovals,
+  pendingApprovalsByThread,
+)
 
 /** Translates gated-permissive audit markers for transcript display. */
 function toolResultContentLabel(m: Message): string {
