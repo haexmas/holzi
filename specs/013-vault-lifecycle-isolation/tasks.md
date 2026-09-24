@@ -370,23 +370,28 @@ download; press close repeatedly; close by window; the process ends within about
       chat page `lock()` (add `lock` to the returned bindings) and the federation `onLock()` call
       `close_instance` once, swallow a rejected close, never navigate and never clear the active
       instance.
-- [ ] T048 [US1] Manual check, research R2: run `pnpm tauri:dev`, unlock a scratch vault, close it with
+- [x] T048 [US1] Manual check, research R2: run `pnpm tauri:dev`, unlock a scratch vault, close it with
       relaunch forced, and observe whether the dev runner keeps going, restarts the app or stops.
       Record the outcome in `research.md` R2 and set `close_policy()` accordingly (debug builds stay
       `Exit` unless the relaunch works).
-- [ ] T049 [US1] Manual check, research R5: with a small local model, start a long generation, close,
+- [x] T049 [US1] Manual check, research R5: with a small local model, start a long generation, close,
       and record how long until the process ends and whether the engine stopped on its own. Record it
       in `research.md` R5. If it exceeds 3 s the limit still ends the process; note the residual.
-- [ ] T050 [US1] Run quickstart scenarios 1, 2, 3 and 8 and record pass/fail with dates in a new
+- [x] T050 [US1] Run quickstart scenarios 1, 2, 3 and 8 and record pass/fail with dates in a new
       "Validation record" section at the end of `quickstart.md`.
-- [ ] T051 [US1] Retire the spike: map each spike test on `spike/vault-gateway` to its replacement
+- [x] T051 [US1] Retire the spike: map each spike test on `spike/vault-gateway` to its replacement
       (extractor accept and reject to `src-tauri/tests/vault_gateway.rs`, in-flight end to
       `src-tauri/tests/vault_lifecycle_close.rs`, drain ladder to
       `src-tauri/src/vault_gate/drain_tests.rs`; the epoch test is not needed) and confirm every
       behavior it proved is covered. The file is not on this branch. Once PR D is merged, delete the
       local branch with `git branch -D spike/vault-gateway`. Keep the `tauri` `test` dev-dependency.
-- [ ] T052 [US1] **Checkpoint Stage 3 (MVP)**: full CI parity (see T087), revert the binding
+- [x] T052 [US1] **Checkpoint Stage 3 (MVP)**: full CI parity (see T087), revert the binding
       whitespace churn (format notes at the top) after committing the intended T041 bindings.
+      Verified 2026-09-24 (the substantive commits landed with PR D on 2026-09-21): `cargo fmt
+--check`, `cargo clippy` (both feature sets), `cargo test` (both feature sets), `check:chat-state`,
+      `check:vault-lifecycle`, `check:templates`, `typecheck`, `typecheck:scripts`, `lint`,
+      `format:check` all clean; `cargo test`'s own binding whitespace churn (`InstanceInfo.ts`) reverted,
+      no genuine binding change pending.
       Commits: `feat(vault): close is immediate, infallible and ends the process`,
       `feat(ui): replace the page with a closing spinner`.
 
@@ -739,7 +744,7 @@ _Filled in during T003, T004, T013, T036, T058 and T088._
   `src-tauri/tests/vault_lifecycle_close.rs`. `drain_ladder_cooperative_then_abort_then_reports_stuck_blocking_work`
   is replaced by the ladder cases in `src-tauri/src/vault_gate/drain_tests.rs`, including the tracked
   blocking closure. `epochs_are_unique_ordered_and_never_reused_even_for_the_same_vault` needs no
-  replacement. Still to do after PR D is merged: `git branch -D spike/vault-gateway`.
+  replacement. PR D merged; the local branch was deleted (T051, 2026-09-24).
 - Stage 3 checkpoint numbers (2026-09-21, before the manual checks T048 to T050): `cargo test` 520
   passed, 0 failed, 8 ignored across 30 binaries (483 passed with `--no-default-features`);
   `cargo clippy --all-targets -- -D warnings` clean with default features and with
@@ -971,3 +976,86 @@ Also confirmed live: switching to a genuinely new second model (a real `load_mod
 mock) and remounting afterward resolves the effort control for that new model correctly — the exact
 class of regression fix `fedcfa8` addressed, now checked both by the deterministic T079 replay and by
 this live run.
+
+### T048 — `pnpm tauri:dev` relaunch check (research R2), 2026-09-24
+
+Verified live, twice, against a real `pnpm tauri:dev` session (`xvfb-run` + a real GTK window,
+screen read back from `Xvfb -fbdir` and driven with `xdotool`, no e2e-suite code involved since it
+deliberately never launches through `tauri:dev`). `close_policy()` was temporarily made to return
+`Relaunch` in a debug build through a scratch env-var check, removed again immediately after: both
+runs unlocked a scratch vault, reached the chat page, and pressed the sidebar lock control.
+
+Outcome, identical both times: the relaunched `target/debug/holzi` starts within milliseconds (a new
+pid, a fresh GTK/MESA init line in the log) — the app's own `tauri::process::restart()` works — but
+`cargo run`'s exit then makes the `tauri dev` watcher itself exit right after
+(`XVFB-RUN-WRAPPER-EXIT-CODE: 0`, confirmed by wrapping the invocation so its real exit code is
+logged), with no further Vite/Nitro rebuild output. The dev runner does not re-attach, rebuild or
+keep the session alive; it stops. The on-disk instance survived intact across both runs (the second
+run's fresh onboarding screen listed it under "Zuletzt verwendet" with the correct timestamp), so
+this is a dev-tooling limitation, not a data-safety gap.
+
+Per the task's own fallback, `close_policy()` is left unchanged: debug builds stay `Exit`. The
+research.md R2 comment now records this as resolved rather than open.
+
+### T049 — real local-model generation stop time (research R5) / quickstart scenario 3, 2026-09-24
+
+Verified live against the real debug binary (`pnpm test:e2e`'s own build, a throwaway scenario file,
+not committed): downloaded the real catalog model `qwen3-0.6b-instruct-q4_k_m` (~462 MB, CPU
+inference) via `download_model_from_catalog`, `load_model`, then `send_message` asking for a 2000+
+word story. A raw backend `send_message` call from a script — the same pattern `flows.ts`'s
+`startReply` already uses for the provider case — never runs through the frontend's own
+`sendMessage()` wrapper, so the page's reactive message list cannot be assumed to show it; generation
+was instead confirmed genuinely under way from the process's own CPU time (`/proc/<pid>/stat`
+utime+stime climbing), which is a stronger signal than a DOM check would have been anyway. First
+attempt used a DOM-text-length check instead and timed out at 120 s despite the model having loaded
+correctly (screenshot showed the model selected, no error) — recorded here as the reason the check
+was redone with the CPU-based signal, not silently dropped.
+
+Once generation was confirmed running, waited 3 s more, pressed lock. **The process ended in 50 ms**
+— the drain ladder's cooperative path, nowhere near the 3 s/3.5 s hard limit. Download took 98.7 s
+this run (462 MB); model load 17.6 s; CPU activity was detectable within 70 ms of load completing.
+research.md R5's "Open" note is now resolved: dropping `llm/local/stream.rs`'s reader task stops the
+local inference engine promptly in practice.
+
+### T050 — quickstart scenarios 1, 2, 3 and 8, 2026-09-24
+
+Full pass/fail table in `quickstart.md`'s own new Validation record (that is what the task asks for);
+this entry is the detail behind it. All four scenarios pass; two carry an honest caveat rather than a
+flat "pass."
+
+**Scenario 1** (throwaway scenario file, not committed): a real stand-in-provider stream plus a real
+catalog-model download (`qwen3-0.6b-instruct-q4_k_m`, fired without awaiting completion) both in
+flight, then lock pressed. Process ended 62 ms after the press, the provider connection closed 26 ms
+after it, no alert during the close. Reopened the same data for real (`open_instance` with the actual
+passphrase, not just a UI screenshot) and confirmed `list_installed_models` is empty — the dropped
+download left nothing installed — with no error banner on the reopened chat page. The one piece of
+scenario 1 not re-walked live is the shell-tool child process check (a long `sleep 300` via the chat
+tool, then `pgrep`): `ChildRegistry::kill_all` already has real-process integration coverage
+(`vault_gate/drain_tests.rs`), and the stand-in provider used by this suite has no tool-call support to
+seed one live without building that into the mock server — judged not worth adding for a single
+corroborating data point on an already well-tested path.
+
+**Scenario 2**: repeated lock presses plus a window-close request arriving 300 ms into the drain.
+Passed, but with nothing else running the process had already ended after 1 ms — before the
+window-close arrived — so this mostly re-confirms `lock-twice`'s own finding (one clean ending, no
+error, never more than one marked process) rather than genuinely exercising a request arriving
+mid-drain. Scenario 1 above is the case that actually drains real work (a stream) and still ends in
+tens of milliseconds; the codebase's drain is fast enough in every case tried that "catching it
+mid-flight" is not something this suite can reliably force without artificially slowing the app down,
+which would test the harness more than the product.
+
+**Scenario 3**: the `Stuck`-outcome half is an existing integration test, not re-run live (nothing
+new to verify by hand). The local-inference measurement is T049's own live result (50 ms) — see that
+entry above and research.md R5.
+
+**Scenario 8**: verified by direct code reading, not a live relaunch-build simulation:
+`instances::take_over_exit` (`close.rs:190`) is called from both `tauri::WindowEvent::CloseRequested`
+and `tauri::RunEvent::ExitRequested` in `lib.rs`'s `run` closure, and unconditionally passes
+`ClosePolicy::Exit` — there is no branch on `close_policy()` or build type in that path at all, so a
+release build cannot relaunch from a window close or system-menu quit by construction. A live check
+through this suite's own driver cannot exercise it either way: spec 016's T077 follow-up (PR #122)
+already found that a driver-issued window close destroys the GTK window directly and never reaches
+`WindowEvent::CloseRequested`. The bounded-ending half of scenario 8 (same limits as scenario 1) is
+covered live by spec 016's existing `window-close-while-streaming` scenario, part of the baseline
+`pnpm test:e2e` run (currently passing, checked as part of this same session before writing any of
+the above).

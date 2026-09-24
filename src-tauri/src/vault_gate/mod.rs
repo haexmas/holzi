@@ -53,8 +53,9 @@ pub enum ClosePolicy {
     Exit,
 }
 
-/// The policy for this build. Debug builds exit until the relaunch under the dev runner is
-/// verified (research R2, task T048); release builds relaunch.
+/// The policy for this build. Debug builds exit: under `pnpm tauri:dev`, a relaunch ends the whole
+/// dev session instead of the dev runner re-attaching (research R2, task T048, confirmed
+/// 2026-09-24). Release builds relaunch.
 pub fn close_policy() -> ClosePolicy {
     if cfg!(debug_assertions) {
         ClosePolicy::Exit
