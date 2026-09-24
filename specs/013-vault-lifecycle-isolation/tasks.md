@@ -382,6 +382,14 @@ download; press close repeatedly; close by window; the process ends within about
       in `research.md` R5. If it exceeds 3 s the limit still ends the process; note the residual.
 - [x] T050 [US1] Run quickstart scenarios 1, 2, 3 and 8 and record pass/fail with dates in a new
       "Validation record" section at the end of `quickstart.md`.
+      Cross-reference (spec 016 T087, 2026-09-24): this task's automatable part now runs live in CI
+      through spec 016's own suite, not just by hand — scenario 1 (lock while streaming, the closing
+      page's spinner) via `lock-while-streaming.test.ts` and `closing-page.test.ts`; scenario 2 (the
+      lock control pressed repeatedly) via `lock-twice.test.ts`; scenario 8's bounded-ending half and
+      the relaunch via `window-close-while-streaming.test.ts` and `relaunch-after-lock.test.ts`.
+      Scenario 3 (the `Stuck` drain outcome) stays a Rust integration test, as this task already says,
+      not a live e2e scenario. T048 (relaunch behavior under `pnpm tauri:dev`) and T049 (real local
+      inference stop time) are outside what a scripted driver can observe and stay manual checks.
 - [x] T051 [US1] Retire the spike: map each spike test on `spike/vault-gateway` to its replacement
       (extractor accept and reject to `src-tauri/tests/vault_gateway.rs`, in-flight end to
       `src-tauri/tests/vault_lifecycle_close.rs`, drain ladder to
