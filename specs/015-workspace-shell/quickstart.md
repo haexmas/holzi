@@ -17,6 +17,14 @@ Ergebnisse.
   `scripts/with-nix-host-bridge.sh`).
 - Node 22.19 (`.nvmrc`); die Prüfskripte laufen per Type-Stripping ohne Build.
 
+## 0. Baseline vor dem Chat-Split (T005)
+
+`pnpm check:chat-state` vor jeder Änderung an `pages/chat/[instance].vue`
+(2026-09-24, Commit `3301fdd`): **45 Replay-Tests, alle grün** (`# tests 45`,
+`# pass 45`, `# fail 0`). Jeder Extraktionsschritt in Phase 2 muss dieselbe
+Zahl grüner Tests melden — ein Rückgang oder Anstieg zeigt geändertes
+Verhalten statt reiner Verschiebung an.
+
 ## 1. Automatische Prüfungen (CI-Parität)
 
 ```bash
