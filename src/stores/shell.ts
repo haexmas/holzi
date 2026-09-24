@@ -7,7 +7,7 @@ import {
   hydrate,
   openApp as openAppReducer,
 } from '~/lib/shell/layoutState'
-import type { ShellState, TabRuntime } from '~/lib/shell/types'
+import type { CloseGuard, ShellState, TabRuntime } from '~/lib/shell/types'
 
 /**
  * Shell state and its public actions (spec 015-workspace-shell, T018,
@@ -87,6 +87,24 @@ export const useShellStore = defineStore('shell', () => {
     if (runtime) runtime.mounted = true
   }
 
+  /** The three `useShellTab()` setters (contracts/shell-app-contract.md) — a no-op for a tab id
+   * `syncTabRuntime` has already pruned (the tab closed while an app's own async work was still
+   * settling). */
+  function setTabAttention(tabId: string, attention: boolean) {
+    const runtime = tabRuntime.get(tabId)
+    if (runtime) runtime.attention = attention
+  }
+
+  function setTabTitle(tabId: string, title: string | null) {
+    const runtime = tabRuntime.get(tabId)
+    if (runtime) runtime.titleOverride = title
+  }
+
+  function setTabCloseGuard(tabId: string, guard: CloseGuard | null) {
+    const runtime = tabRuntime.get(tabId)
+    if (runtime) runtime.guard = guard
+  }
+
   function openApp(appId: string) {
     openAppReducer(state, appId, SHELL_APPS)
     syncTabRuntime()
@@ -112,6 +130,9 @@ export const useShellStore = defineStore('shell', () => {
     windowsInActiveWorkspace,
     runtimeFor,
     markTabMounted,
+    setTabAttention,
+    setTabTitle,
+    setTabCloseGuard,
     openApp,
     focusWindow,
     closeWindow,
