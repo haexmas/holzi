@@ -182,3 +182,88 @@ jobs:
 
       - name: Run Clippy
         run: cargo clippy --manifest-path src-tauri/Cargo.toml ${{ matrix.flags }} --all-targets -- -D warnings
+
+  e2e:
+    # Builds the debug application (default features, the same profile
+    # `pnpm test:e2e` builds locally) and drives it through tauri-driver
+    # under a virtual screen (spec 016). `scripts/with-nix-host-bridge.sh`
+    # (invoked by `pnpm test:e2e`) is a no-op outside a Nix devShell, so it
+    # runs the command unchanged here.
+    name: End-to-end suite
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    timeout-minutes: 45
+    env:
+      # Shares the Rust job's default-features cache entry below; the debug
+      # build this job produces is that same feature set.
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.19.0
+
+      - name: Install frontend dependencies
+        run: corepack pnpm install --frozen-lockfile --ignore-scripts
+
+      # Same list the Rust job installs, plus the WebKit WebDriver and the
+      # virtual screen the suite needs (preflight.ts's REQUIRED_TOOLS).
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libasound2-dev \
+            webkit2gtk-driver \
+            xvfb
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: src-tauri
+          shared-key: default
+
+      # tauri-driver is a global `cargo install`, outside the workspace the
+      # cache step above covers; cached separately by its pinned version so
+      # an ordinary run does not recompile it.
+      - name: Cache tauri-driver
+        id: cache-tauri-driver
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/bin/tauri-driver
+          key: tauri-driver-2.0.6-${{ runner.os }}
+
+      - name: Install tauri-driver
+        if: steps.cache-tauri-driver.outputs.cache-hit != 'true'
+        run: cargo install tauri-driver --locked --version 2.0.6
+
+      - name: Run the end-to-end suite
+        run: corepack pnpm test:e2e
+
+      # The relaunch scenario only runs against a release build (`--app`),
+      # so this ordinary run always reports it skipped — expected, not a
+      # failure (spec 016 SC-001).
+      - name: Upload failure material
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-failure-material
+          path: src-tauri/target/e2e
+          if-no-files-found: ignore
