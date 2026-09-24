@@ -37,6 +37,7 @@ const emit = defineEmits<{
   closeDeleteDialog: [open: boolean]
   confirmDelete: []
   lock: []
+  openSettings: []
 }>()
 
 const { t } = useI18n()
@@ -195,13 +196,14 @@ watch(
     </div>
 
     <div class="flex-1" />
-    <NuxtLink
-      :to="`/settings/${encodeURIComponent(instanceName)}`"
+    <button
+      type="button"
       class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+      @click="emit('openSettings')"
     >
       <Icon name="lucide:settings-2" class="h-4 w-4" />
       {{ t('chat.settings') }}
-    </NuxtLink>
+    </button>
     <UiButton
       class="justify-start gap-2"
       size="sm"

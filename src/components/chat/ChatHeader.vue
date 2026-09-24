@@ -7,7 +7,6 @@
  * Presentational only.
  */
 defineProps<{
-  instanceName: string
   title: string
   modelLoaded: boolean
   modelName: string
@@ -17,6 +16,7 @@ defineProps<{
 const emit = defineEmits<{
   lock: []
   newChat: []
+  openSettings: []
 }>()
 
 const { t } = useI18n()
@@ -39,13 +39,14 @@ const { t } = useI18n()
       </p>
     </div>
     <div class="flex shrink-0 items-center gap-1 md:hidden">
-      <NuxtLink
-        :to="`/settings/${encodeURIComponent(instanceName)}`"
+      <button
+        type="button"
         class="rounded-lg p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
         :aria-label="t('chat.settings')"
+        @click="emit('openSettings')"
       >
         <Icon name="lucide:settings-2" class="h-4 w-4" />
-      </NuxtLink>
+      </button>
       <UiButton
         size="sm"
         variant="ghost"

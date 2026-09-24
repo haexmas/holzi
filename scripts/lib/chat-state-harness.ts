@@ -32,7 +32,7 @@ const repoRoot = resolvePath(__dirname, '../..')
 const nodeRequire = createRequire(import.meta.url)
 
 const pageSource = readFileSync(
-  resolvePath(repoRoot, 'src/pages/chat/[instance].vue'),
+  resolvePath(repoRoot, 'src/components/apps/ChatApp.vue'),
   'utf8',
 )
 const setupBlock = pageSource.match(
@@ -318,6 +318,7 @@ export function createChatState(
     'useChatPermissionMode',
     'registerChatSubscriptions',
     'useInstancesStore',
+    'useShellStore',
     'useModelsStore',
     'storeToRefs',
     'navigateTo',
@@ -341,6 +342,7 @@ export function createChatState(
     req('~/composables/useChatPermissionMode').useChatPermissionMode,
     req('~/composables/useChatSubscriptions').registerChatSubscriptions,
     () => pageGlobals.instancesStore ?? {},
+    () => ({ flushAsync: async () => {}, openApp: () => {} }),
     () => modelStore,
     pinia.storeToRefs,
     pageGlobals.navigateTo ?? (() => {}),

@@ -7,6 +7,12 @@
  * page-level state shared across more than one of the above, model-store
  * wiring, permission-mode/autonomy-mode persistence and the `onMounted`
  * event-listener setup.
+ *
+ * Moved from `pages/chat/[instance].vue` into a Shell app (T021): the
+ * instance name comes from `useInstancesStore()` rather than the route (this
+ * component no longer owns one), and `lock()` flushes the Shell layout
+ * first (FR-027). Onboarding enforcement (spec 002) now lives on the Shell
+ * host page (`pages/workspace/[instance].vue`, T025), not here.
  */
 import {
   computed,
@@ -20,11 +26,8 @@ import type { UnlistenFn } from '@tauri-apps/api/event'
 import type { Message, SendMessageArgs } from '~/composables/useChat'
 import type { PendingApproval } from '~/components/chat/PermissionPrompt.vue'
 
-definePageMeta({
-  middleware: ['onboarded'],
-})
-
-const route = useRoute()
+const instancesStore = useInstancesStore()
+const shell = useShellStore()
 const { t } = useI18n()
 const chat = useChat()
 const { closeAsync } = useInstance()
@@ -60,7 +63,7 @@ const pendingApprovals = ref<PendingApproval[]>([])
 const unlisteners: UnlistenFn[] = []
 let unmounted = false
 
-const instanceName = computed(() => String(route.params.instance ?? ''))
+const instanceName = computed(() => instancesStore.activeInstance ?? '')
 
 const messagesByThread = ref<Record<string, Message[]>>({})
 const activeThreadId = ref<string | null>(null)
@@ -246,10 +249,12 @@ async function scrollToBottom() {
 }
 
 /**
- * Asks the backend to close the vault. It replaces this page with a spinner and ends the process
- * (spec 013), so nothing is navigated or cleared here and a failed call has nothing to show.
+ * Flushes the Shell layout (FR-027), then asks the backend to close the vault. It replaces this
+ * page with a spinner and ends the process (spec 013), so nothing is navigated or cleared here and
+ * a failed call has nothing to show.
  */
 async function lock() {
+  await shell.flushAsync()
   await closeAsync().catch(() => {})
 }
 
@@ -379,7 +384,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="flex h-screen min-h-0 bg-muted/20">
+  <main class="flex h-full min-h-0 bg-muted/20">
     <ChatThreadSidebar
       :instance-name="instanceName"
       :busy="busy"
@@ -404,17 +409,18 @@ onBeforeUnmount(() => {
       @close-delete-dialog="closeDeleteDialog"
       @confirm-delete="confirmDelete"
       @lock="lock"
+      @open-settings="shell.openApp('system.settings')"
     />
 
     <section class="min-w-0 flex-1 flex flex-col">
       <ChatHeader
-        :instance-name="instanceName"
         :title="chatTitle"
         :model-loaded="!!activeModel"
         :model-name="activeModel?.name || t('chat.model.notLoaded')"
         :busy="busy"
         @lock="lock"
         @new-chat="newChat"
+        @open-settings="shell.openApp('system.settings')"
       />
 
       <ChatStatusBanners
