@@ -18,13 +18,14 @@
   neuen Unterhaltung, Modell-Preload beim Vault-Open, Composer). Wo Spec 004 von
   „Chat-Route“ oder „Chat-Overlay aus dem Workspace“ spricht, ist ab dieser
   Spec der **Chat-Tab** (in einem Fenster) gemeint.
-- Die Spec 016 (parallele Chat-Sessions im Backend) folgt. Diese Spec bereitet
-  nur das Fenster- und Tab-Modell darauf vor; sie erlaubt weiterhin genau
-  **einen** Chat (ein Tab in einem Fenster).
+- Eine künftige, noch nicht nummerierte Spec (parallele Chat-Sessions im
+  Backend) folgt — Spec 016 ist bereits an `016-e2e-testing` vergeben. Diese
+  Spec bereitet nur das Fenster- und Tab-Modell darauf vor; sie erlaubt
+  weiterhin genau **einen** Chat (ein Tab in einem Fenster).
 - Die Specs 017/018 (Haextension-Host und MCP-Anbindung) folgen. Extensions als
   Fensterinhalt sind nicht Teil dieser Spec.
 - Setzt voraus, dass zu jedem Zeitpunkt genau eine Vault-Session aktiv ist
-  (Spec 013, in Arbeit). Die Shell lebt innerhalb dieser Session.
+  (Spec 013, umgesetzt). Die Shell lebt innerhalb dieser Session.
 
 ## User Scenarios & Testing
 
@@ -459,11 +460,12 @@ den ausgelieferten Apps öffnet ein zweiter Aufruf keine zweite Instanz.
   Arbeitsbereich), MUSS die Shell einen Aufmerksamkeitshinweis am Tab (Leiste
   und Tab-Liste), am Fenster (Fensterübersicht, Launcher) und am Arbeitsbereich
   zeigen.
-- **FR-039**: Fenster MÜSSEN maximiert und wiederhergestellt werden können
-  (Schaltfläche oder Doppelklick auf die Titelleiste); ein maximiertes Fenster
-  füllt den Arbeitsbereich, Wiederherstellen kehrt zur Geometrie vor dem
-  Maximieren zurück, und der Maximierungszustand wird wie die Geometrie
-  persistiert.
+- **FR-039** _(nachträglich ergänzt, daher hier bei den verwandten
+  Fenster-Anforderungen statt nach FR-038 platziert)_: Fenster MÜSSEN
+  maximiert und wiederhergestellt werden können (Schaltfläche oder
+  Doppelklick auf die Titelleiste); ein maximiertes Fenster füllt den
+  Arbeitsbereich, Wiederherstellen kehrt zur Geometrie vor dem Maximieren
+  zurück, und der Maximierungszustand wird wie die Geometrie persistiert.
 
 **Apps und Instanzen**
 
@@ -672,7 +674,8 @@ den ausgelieferten Apps öffnet ein zweiter Aufruf keine zweite Instanz.
 - Haextension-Host und Extensions als Fensterinhalt (Spec 017).
 - MCP-Anbindung von Extensions, in beide Richtungen (Spec 017/018).
 - Parallele Chat-Sessions im Backend und mehrere gleichzeitige Chat-Tabs oder
-  -Fenster (Spec 016).
+  -Fenster (künftige, noch nicht nummerierte Spec — Spec 016 ist bereits an
+  `016-e2e-testing` vergeben).
 - Desktop-Symbole und -Raster auf dem Arbeitsbereich, Drag-and-Drop von Symbolen.
 - Natives Betriebssystemfenster je App.
 - Tabs per Drag umsortieren, zwischen Fenstern verschieben oder zu einem
