@@ -119,6 +119,17 @@ as the preferences-key suffix and Rust/TypeScript identifier.
 Same value. "Gerätename" as German UI label. `alias` as the
 `known_devices` column and Rust/TypeScript identifier.
 
+**Shell / App / Fenster (Window) / Tab / Launcher** (spec 015):
+The desktop-shell concept, adopted from haex-vault. A **Workspace**
+(Arbeitsbereich) contains **Windows** (Fenster); each Window contains
+one or more **Tabs**, each Tab an instance of an **App** (Chat,
+Einstellungen, Föderation in this spec). The **Launcher** lists
+available Apps and opens them as Windows. "Fenster" and "Tab" as
+German UI labels; "window"/"tab"/"app" as code identifiers
+(`ShellWindow`, `ShellTab`, `ShellAppDefinition`). Not to be confused
+with the OS-level application window (singular, Tauri-managed) — the
+Shell is an in-app desktop rendered inside it.
+
 ### Internationalisierung (i18n)
 
 All user-visible text uses `@nuxtjs/i18n`. Backend commands and
