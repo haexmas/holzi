@@ -12,6 +12,7 @@ import {
 } from '~/lib/shell/layoutState'
 import type {
   CloseGuard,
+  CloseGuardResult,
   ShellState,
   ShellWindow,
   TabRuntime,
@@ -169,10 +170,24 @@ export const useShellStore = defineStore('shell', () => {
   }
 
   /** Removes the window without asking anything — guard confirmation (FR-014) runs at the caller
-   * (`ShellCloseConfirm.vue`, T038) before this is invoked. */
+   * (`useShellTab.ts`'s `requestCloseWindow`, T031; `ShellCloseConfirm.vue`, T038) before this is
+   * invoked. */
   function closeWindow(windowId: string) {
     closeWindowReducer(state, windowId)
     syncTabRuntime()
+  }
+
+  /** Every non-null close-guard result across the window's tabs (FR-014) — a tab without a
+   * registered guard, or whose guard currently allows closing, contributes nothing. */
+  function guardResultsFor(windowId: string): CloseGuardResult[] {
+    const window = state.windows.find((w) => w.id === windowId)
+    if (!window) return []
+    const results: CloseGuardResult[] = []
+    for (const tab of window.tabs) {
+      const result = tabRuntime.get(tab.id)?.guard?.()
+      if (result) results.push(result)
+    }
+    return results
   }
 
   /** Placeholder until Phase 7 (T047) wires the real serialized write queue; `ChatApp.vue`'s
@@ -194,6 +209,7 @@ export const useShellStore = defineStore('shell', () => {
     toggleMaximizeWindow,
     updateWindowGeometry,
     closeWindow,
+    guardResultsFor,
     flushAsync,
   }
 })

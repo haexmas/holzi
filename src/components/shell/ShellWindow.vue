@@ -2,18 +2,23 @@
 /**
  * One Shell window: frame, title bar (icon, title, minimize/maximize/close),
  * drag-to-move, eight-way resize, and its app content (spec
- * 015-workspace-shell, T023 + T029). The Firefox-style tab bar/Chevron
+ * 015-workspace-shell, T023 + T029 + T031). The Firefox-style tab bar/Chevron
  * (FR-007's tab area, FR-031-038) is User Story 3 and extends this same
  * file (T034-T037).
+ *
+ * Hidden via `v-show`, never unmounted, when minimized — its content is the
+ * same (research R8): lazy-mounted the first time it becomes visible
+ * (`shell.markTabMounted`), then left mounted regardless of later
+ * minimize/focus/tab/workspace changes.
  *
  * Provides the `useShellTab()` contract for the window's one tab (Phase 3
  * has no multi-tab windows yet — that is tabs.ts, T033).
  */
-import { computed } from 'vue'
+import { computed, watchEffect } from 'vue'
 import { getAppDefinition } from '~/lib/shell/apps'
 import { getAppComponent } from '~/components/shell/appComponents'
 import { windowDisplayRect } from '~/lib/shell/geometry'
-import { provideShellTab } from '~/composables/useShellTab'
+import { provideShellTab, requestCloseWindow } from '~/composables/useShellTab'
 import {
   useWindowPointerGesture,
   type ResizeDirection,
@@ -79,6 +84,17 @@ function onTitleBarDoubleClick() {
   if (!shell.compact) shell.toggleMaximizeWindow(props.window.id)
 }
 
+function requestClose() {
+  void requestCloseWindow(shell, t, props.window.id)
+}
+
+// Lazy-mount (research R8): marks the tab mounted the moment it exists, which for this phase's
+// single-tab-per-window is immediately on open; re-runs if the active tab ever changes (tabs.ts,
+// T033), covering the same rule for a tab that was restored from persistence but never activated.
+watchEffect(() => {
+  if (tab.value) shell.markTabMounted(tab.value.id)
+})
+
 const RESIZE_HANDLES: { direction: ResizeDirection; class: string }[] = [
   { direction: 'n', class: 'inset-x-2 top-0 h-1 cursor-ns-resize' },
   { direction: 's', class: 'inset-x-2 bottom-0 h-1 cursor-ns-resize' },
@@ -121,6 +137,7 @@ provideShellTab({
 
 <template>
   <div
+    v-show="!window.minimized"
     class="absolute flex flex-col overflow-hidden rounded-lg border bg-background shadow-lg"
     :class="active ? 'border-foreground/40' : 'border-border'"
     :style="{
@@ -149,15 +166,31 @@ provideShellTab({
       <span class="min-w-0 flex-1 truncate text-sm font-medium">{{
         title
       }}</span>
+      <span
+        v-if="info?.hasAttention"
+        class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
+        :aria-label="t('shell.attention')"
+      />
       <ShellWindowControls
         :maximized="window.maximized"
         @minimize="shell.minimizeWindow(window.id)"
         @toggle-maximize="shell.toggleMaximizeWindow(window.id)"
-        @close="shell.closeWindow(window.id)"
+        @close="requestClose"
       />
     </div>
     <div class="min-h-0 flex-1 overflow-hidden">
-      <component :is="component" v-if="component" />
+      <div
+        v-if="tab"
+        :key="tab.id"
+        role="tabpanel"
+        class="h-full min-h-0"
+        :aria-label="title"
+      >
+        <component
+          :is="component"
+          v-if="component && shell.runtimeFor(tab.id).mounted"
+        />
+      </div>
     </div>
     <div
       v-for="handle in RESIZE_HANDLES"

@@ -1,4 +1,5 @@
 import { inject, provide, type InjectionKey } from 'vue'
+import type { useShellStore } from '~/stores/shell'
 import type { CloseGuard } from '~/lib/shell/types'
 
 /**
@@ -47,4 +48,27 @@ export function provideShellTab(api: ShellTabApi): void {
 /** Called by an app. Outside a Shell instance, returns `INERT_SHELL_TAB` rather than throwing. */
 export function useShellTab(): ShellTabApi {
   return inject(SHELL_TAB_KEY, INERT_SHELL_TAB)
+}
+
+/**
+ * Shared "ask, then close" step behind every user-initiated window close (title bar, window
+ * overview) — never `closeSelf()`, which the contract defines as skipping guards on purpose
+ * (spec 015-workspace-shell, T031, FR-014). Placeholder confirmation until `ShellCloseConfirm.vue`
+ * (T038) aggregates multiple guard reasons into one real dialog; a single `window.confirm` already
+ * gives the required behavior (ask once, run every `confirmAsync`, then close) for today's
+ * one-tab-per-window case.
+ */
+export async function requestCloseWindow(
+  shell: ReturnType<typeof useShellStore>,
+  t: (key: string) => string,
+  windowId: string,
+): Promise<void> {
+  const results = shell.guardResultsFor(windowId)
+  if (results.length > 0) {
+    const reasons = results.map((result) => t(result.reasonKey)).join('\n')
+    // Placeholder until ShellCloseConfirm.vue (T038) aggregates these into a real dialog.
+    if (!confirm(reasons)) return
+    await Promise.all(results.map((result) => result.confirmAsync()))
+  }
+  shell.closeWindow(windowId)
 }
