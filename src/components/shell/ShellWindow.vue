@@ -146,6 +146,7 @@ const RESIZE_HANDLES: { direction: ResizeDirection; class: string }[] = [
         :window-id="window.id"
         :tabs="window.tabs"
         :active-tab-id="window.activeTabId"
+        :compact="shell.compact"
         @select-tab="selectTab"
         @close-tab="requestCloseTab"
       />
@@ -157,6 +158,7 @@ const RESIZE_HANDLES: { direction: ResizeDirection; class: string }[] = [
       />
       <ShellWindowControls
         :maximized="window.maximized"
+        :compact="shell.compact"
         @minimize="shell.minimizeWindow(window.id)"
         @toggle-maximize="shell.toggleMaximizeWindow(window.id)"
         @close="requestClose"

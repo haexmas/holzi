@@ -1,11 +1,13 @@
 <script setup lang="ts">
 /**
- * The Firefox-style tab strip (spec 015-workspace-shell, T034/T035, plan
- * research R18, FR-031/032/033/035/038): one tab shows icon+title with no
- * tab frame (FR-031); two or more show a full ARIA tab-list with a close
- * button per tab. The "+" sits immediately after the last tab (FR-032),
- * wrapped in `ShellNewTabMenu.vue`'s dropdown. Scroll arrows appear only on
- * overflow; activating a tab scrolls it into view (FR-035).
+ * The Firefox-style tab strip (spec 015-workspace-shell, T034/T035/T037,
+ * plan research R18, FR-031/032/033/035/036/038): one tab shows icon+title
+ * with no tab frame (FR-031); two or more show a full ARIA tab-list with a
+ * close button per tab — unless compact (FR-036), which always collapses
+ * to the active tab's title regardless of count, dropping the tablist and
+ * its scroll arrows entirely. The "+" sits immediately after the last tab
+ * (FR-032) either way, wrapped in `ShellNewTabMenu.vue`'s dropdown.
+ * Activating a tab scrolls it into view (FR-035).
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ShellTab } from '~/lib/shell/types'
@@ -14,6 +16,7 @@ const props = defineProps<{
   windowId: string
   tabs: ShellTab[]
   activeTabId: string
+  compact: boolean
 }>()
 
 const emit = defineEmits<{
@@ -36,8 +39,15 @@ function titleFrom(info: TabInfo): string {
   return info.titleOverride ?? (info.titleKey ? t(info.titleKey) : '')
 }
 
-const singleTab = computed(() => {
-  const tab = props.tabs.length === 1 ? props.tabs[0] : undefined
+// Collapses to a plain title (no tab frame) when there is exactly one tab (FR-031) or, regardless
+// of count, whenever the Shell is compact (FR-036) — using the *active* tab in that case, since a
+// compact window has no visible tablist to pick a tab from otherwise.
+const collapsedTab = computed(() => {
+  const tab = props.compact
+    ? (props.tabs.find((t) => t.id === props.activeTabId) ?? props.tabs[0])
+    : props.tabs.length === 1
+      ? props.tabs[0]
+      : undefined
   return tab ? { tab, info: shell.tabDisplayInfo(tab) } : undefined
 })
 
@@ -118,7 +128,7 @@ watch(
 <template>
   <div class="flex min-w-0 flex-1 items-center">
     <button
-      v-if="overflowing"
+      v-if="!collapsedTab && overflowing"
       type="button"
       class="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
       :aria-label="t('shell.tabs.scrollLeft')"
@@ -133,18 +143,18 @@ watch(
     </button>
 
     <div
-      v-if="singleTab"
+      v-if="collapsedTab"
       class="flex min-w-0 items-center gap-1.5 px-1.5 py-1 text-sm font-medium"
     >
       <Icon
-        v-if="singleTab.info.icon"
-        :name="singleTab.info.icon"
+        v-if="collapsedTab.info.icon"
+        :name="collapsedTab.info.icon"
         class="h-3.5 w-3.5 shrink-0"
         :aria-hidden="true"
       />
-      <span class="min-w-0 truncate">{{ titleFrom(singleTab.info) }}</span>
+      <span class="min-w-0 truncate">{{ titleFrom(collapsedTab.info) }}</span>
       <span
-        v-if="singleTab.info.hasAttention"
+        v-if="collapsedTab.info.hasAttention"
         class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
         :aria-label="t('shell.attention')"
       />
@@ -198,7 +208,7 @@ watch(
     </div>
 
     <button
-      v-if="overflowing"
+      v-if="!collapsedTab && overflowing"
       type="button"
       class="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
       :aria-label="t('shell.tabs.scrollRight')"
