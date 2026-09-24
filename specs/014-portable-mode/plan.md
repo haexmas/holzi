@@ -63,16 +63,16 @@ runs; existing normal-installation tests remain the regression gate.
 
 ## Constitution Check
 
-| Principle | Status | Evidence / gate |
-|---|---|---|
-| No secrets in Git | PASS | No keys, passphrases, or fixtures containing secrets are committed. |
-| No local absolute paths in versioned artifacts | PASS | Plans and contracts use repository-relative paths only. |
-| Cross-repo refs use immutable SHAs | PASS | No new cross-repo reference is needed for the design slice. |
-| Worktree and topic branch | PASS | Work occurs in `.worktrees/014-portable-mode` on `014-portable-mode`. |
-| Separate test files | PASS | Rust tests stay in `*_tests.rs`; filesystem checks stay under `scripts/` or `tests/`. |
-| Non-trivial logic has a runnable check | PASS | Every path/protection boundary gets a deterministic check before implementation is complete. |
-| Security boundary is explicit | PASS | Single-file mode is blocked until the no-readable-host-data gate passes. |
-| Phase discipline | NEEDS OPERATOR CONFIRMATION | The roadmap must record when portable mode is allowed to implement after feature 013. Planning may proceed now. |
+| Principle                                      | Status                      | Evidence / gate                                                                                                 |
+| ---------------------------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| No secrets in Git                              | PASS                        | No keys, passphrases, or fixtures containing secrets are committed.                                             |
+| No local absolute paths in versioned artifacts | PASS                        | Plans and contracts use repository-relative paths only.                                                         |
+| Cross-repo refs use immutable SHAs             | PASS                        | No new cross-repo reference is needed for the design slice.                                                     |
+| Worktree and topic branch                      | PASS                        | Work occurs in `.worktrees/014-portable-mode` on `014-portable-mode`.                                           |
+| Separate test files                            | PASS                        | Rust tests stay in `*_tests.rs`; filesystem checks stay under `scripts/` or `tests/`.                           |
+| Non-trivial logic has a runnable check         | PASS                        | Every path/protection boundary gets a deterministic check before implementation is complete.                    |
+| Security boundary is explicit                  | PASS                        | Single-file mode is blocked until the no-readable-host-data gate passes.                                        |
+| Phase discipline                               | NEEDS OPERATOR CONFIRMATION | The roadmap must record when portable mode is allowed to implement after feature 013. Planning may proceed now. |
 
 ## Design Gates
 
@@ -201,8 +201,8 @@ docs/
 
 ## Complexity Tracking
 
-| Risk / deviation | Why it is necessary | Upgrade or exit path |
-|---|---|---|
-| A protected container may require a new storage adapter | Existing model APIs are path-based and cannot promise host-disk secrecy by configuration alone. | Prefer an existing audited library; otherwise block the single-file mode rather than weakening FR-018. |
-| Portable mode must own more than vault files | Webview state, cache, logs, and helper processes can leak traces even when the vault is portable. | Keep the path audit as a maintained boundary test and add owners when new storage surfaces appear. |
-| Removable-storage weak mode may be needed | The spec explicitly allows it only when the feasibility gate fails. | Label every unprotected category and keep the single-file form unavailable. |
+| Risk / deviation                                        | Why it is necessary                                                                               | Upgrade or exit path                                                                                   |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| A protected container may require a new storage adapter | Existing model APIs are path-based and cannot promise host-disk secrecy by configuration alone.   | Prefer an existing audited library; otherwise block the single-file mode rather than weakening FR-018. |
+| Portable mode must own more than vault files            | Webview state, cache, logs, and helper processes can leak traces even when the vault is portable. | Keep the path audit as a maintained boundary test and add owners when new storage surfaces appear.     |
+| Removable-storage weak mode may be needed               | The spec explicitly allows it only when the feasibility gate fails.                               | Label every unprotected category and keep the single-file form unavailable.                            |

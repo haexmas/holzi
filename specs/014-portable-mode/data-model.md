@@ -6,21 +6,21 @@
 
 ### `PortableMode`
 
-| Field | Rule |
-|---|---|
-| `kind` | `removable` or `single_file`; selected before instance discovery |
-| `root` | validated absolute path owned by the mode; never serialized with secrets |
+| Field        | Rule                                                                                                                      |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `kind`       | `removable` or `single_file`; selected before instance discovery                                                          |
+| `root`       | validated absolute path owned by the mode; never serialized with secrets                                                  |
 | `descriptor` | non-secret launch configuration held in process state and passed through feature-013 relaunch; not a third persisted file |
-| `protection` | `protected`, `weaker_removable`, or `unavailable`; single-file cannot use the weaker state |
+| `protection` | `protected`, `weaker_removable`, or `unavailable`; single-file cannot use the weaker state                                |
 
 ### `PortableSession`
 
-| Field | Rule |
-|---|---|
-| `mode` | immutable for the process lifetime |
-| `session_key` | process-memory only; derived after unlock; never logged or persisted |
+| Field          | Rule                                                                     |
+| -------------- | ------------------------------------------------------------------------ |
+| `mode`         | immutable for the process lifetime                                       |
+| `session_key`  | process-memory only; derived after unlock; never logged or persisted     |
 | `mounted_root` | validated writable/readable root; loss ends the session without fallback |
-| `opened_at` | diagnostics only; must not include passphrases or key material |
+| `opened_at`    | diagnostics only; must not include passphrases or key material           |
 
 ## Persistent container entities
 
