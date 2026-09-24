@@ -4,15 +4,21 @@
  * workspace stub: onboarding enforcement (FR-001) stays here since this is
  * now the only real page apps are reached through (chat/settings/
  * federation moved into Shell apps, T021-T022). The Shell status bar
- * (model preload status, FR-005) and the `?open=` query param are added in
- * T025.
+ * (model preload status, FR-005) is added in T025.
+ *
+ * Consumes `?open=<appId>` once (contracts/shell-app-contract.md §3, T024's
+ * legacy-route redirects land here with it set) and removes it via
+ * `router.replace` so it does not re-fire and open a second tab on a
+ * later navigation that happens to keep it in the URL.
  */
 definePageMeta({
   middleware: ['onboarded'],
 })
 
 const route = useRoute()
+const router = useRouter()
 const instancesStore = useInstancesStore()
+const shell = useShellStore()
 
 const instanceName = computed(() => {
   const raw = route.params.instance
@@ -29,6 +35,13 @@ const instanceName = computed(() => {
 // and friends have no route of their own).
 onMounted(() => {
   instancesStore.setActiveInstance(instanceName.value)
+
+  const open = route.query.open
+  if (typeof open === 'string' && open.length > 0) {
+    shell.openApp(open)
+    const { open: _discarded, ...rest } = route.query
+    void router.replace({ query: rest })
+  }
 })
 </script>
 
