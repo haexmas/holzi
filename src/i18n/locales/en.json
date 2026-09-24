@@ -465,6 +465,9 @@
     "invalidIdempotencyKey": "The send request is invalid.",
     "idempotencyKeyConflict": "This send request was already used with different data.",
     "autonomyUnavailable": "This autonomy mode is not available for the connected backend. Update it, or use Standard instead.",
+    "vaultAlreadyOpenElsewhere": "This vault is open in another Holzi instance.",
+    "vaultAlreadyActive": "A vault is already open in this window.",
+    "vaultClosed": "The vault was closed.",
     "hf": {
       "invalidInput": "Invalid input.",
       "network": "Network error — please check your connection.",

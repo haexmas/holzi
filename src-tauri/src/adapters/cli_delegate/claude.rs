@@ -413,7 +413,8 @@ pub(super) async fn spawn_claude_invocation(
     configure_process_group(&mut cmd);
     cmd.env("CLAUDE_CODE_OAUTH_TOKEN", &token);
 
-    let mut child = ChildLifecycle::spawn(&mut cmd).map_err(|e| map_spawn_error(&binary, e))?;
+    let mut child = ChildLifecycle::spawn(&mut cmd, &context.children)
+        .map_err(|e| map_spawn_error(&binary, e))?;
 
     let mut stdin = child
         .child_mut()

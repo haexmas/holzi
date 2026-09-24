@@ -281,6 +281,8 @@ pub struct CreateInstanceResult {
 
 ### `open_instance`
 
+> **Superseded** by [013-vault-lifecycle-isolation tauri-commands.md](../../013-vault-lifecycle-isolation/contracts/tauri-commands.md#open_instance-changed) and [ADR 0003](../../../docs/adr/0003-one-vault-session-per-app-process.md): the atomic switch described below (§"Atomic switch and rollback") is removed. A second open while one is already active is refused (`VaultAlreadyActive`), not switched to; see spec 013 FR-010.
+
 Opens an existing `.db` (whether created locally, imported from another install, or restored from backup): unlocks SQLCipher, wires the CRDT layer, and marks the instance active in `AppState`. There is no rekey, no restore-pairing handoff, no adoption gate — the vault identity in the DB is authoritative, and the vault-device UUID for this replica comes from the `known_devices` lookup keyed by the local installation UUID (inserted with a fresh UUID on first open of this vault by this installation).
 
 ```rust
@@ -321,6 +323,8 @@ pub struct OpenInstanceArgs {
 ---
 
 ### `close_instance`
+
+> **Superseded** by [013-vault-lifecycle-isolation tauri-commands.md](../../013-vault-lifecycle-isolation/contracts/tauri-commands.md#close_instance-changed) and [ADR 0003](../../../docs/adr/0003-one-vault-session-per-app-process.md): closing now ends the process (spec 013 US1), which is the only way a different vault can be opened afterward — never a same-process switch.
 
 Closes the currently-active instance: shuts down Nostr relay, disconnects iroh peer, drops the last `Arc<Database>` clone (haex-crdt closes the SQLCipher handle and releases its `fs2` lock as a consequence of the last-Arc drop, not through a separate crate call), clears `AppState.active_instance`. Idempotent — succeeds if nothing is active.
 

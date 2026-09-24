@@ -8,26 +8,55 @@
 //! directory.
 
 use std::collections::HashMap;
+use std::fs::{File, OpenOptions, TryLockError};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Duration;
 
-use tauri::{path::BaseDirectory, AppHandle, Manager};
+use tauri::{path::BaseDirectory, AppHandle, Manager, Runtime};
+use tokio_util::sync::CancellationToken;
 
 use crate::error::{HolziError, Result};
 
 pub const MODELS_DIRECTORY: &str = "models";
 
+/// Cross-process publication locks live here, one file per slug — a sibling of the slug
+/// directories themselves, not inside one, so the installed-slug scan and the staging cleanup
+/// (`src-tauri/src/models/commands.rs`, `src-tauri/src/models/import.rs`) must skip it (spec 013
+/// T071).
+const MODEL_LOCKS_DIRECTORY: &str = ".locks";
+
+/// Poll cadence while [`acquire_model_publication_lock`] waits for another process's exclusive
+/// file lock (spec 013 FR-019/FR-020, T070). ponytail: fixed 50 ms poll; ceiling "the wait costs up
+/// to one poll interval of latency past the moment the other holder actually released it"; upgrade
+/// path "none needed" — the same local disk-contention shape `lock_retry.rs` accepts for the vault
+/// open retry.
+const MODEL_LOCK_POLL_INTERVAL: Duration = Duration::from_millis(50);
+
 static MODEL_PUBLICATION_LOCKS: OnceLock<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>> =
     OnceLock::new();
 
-/// Serializes finalized-file publication for one model slug within this
-/// process. The guard must be held from the finalized-file conflict check
-/// through the download/import and catalog registration.
-pub async fn acquire_model_publication_lock(
+/// Held for one model slug's publication, in-process and across processes. Releases both locks on
+/// drop: the in-process mutex guard, then the OS advisory lock on the file handle.
+pub struct PublicationLock {
+    _mutex_guard: tokio::sync::OwnedMutexGuard<()>,
+    _file_lock: File,
+}
+
+/// Serializes finalized-file publication for one model slug: the guard must be held from the
+/// finalized-file conflict check through the download/import and catalog registration. Holds the
+/// in-process mutex guard for the slug **and** an exclusive lock on
+/// `<models>/.locks/<slug>.lock`, so two independent app processes racing to publish the same slug
+/// (spec 013 US4) also serialize. Waiting for the file lock polls asynchronously; `token` firing
+/// (a close under way) cancels the wait with `VaultClosed` instead of leaving the caller blocked
+/// past the process's own shutdown.
+pub async fn acquire_model_publication_lock<R: Runtime>(
+    app: &AppHandle<R>,
     slug: &str,
-) -> Result<tokio::sync::OwnedMutexGuard<()>> {
+    token: &CancellationToken,
+) -> Result<PublicationLock> {
     validate_slug(slug)?;
-    let lock = {
+    let in_process_lock = {
         let locks = MODEL_PUBLICATION_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
         let mut locks = locks.lock().map_err(|e| HolziError::CrdtInit {
             reason: format!("model publication lock map poisoned: {e}"),
@@ -37,11 +66,66 @@ pub async fn acquire_model_publication_lock(
             .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
             .clone()
     };
-    Ok(lock.lock_owned().await)
+    // Races the in-process wait too, not only the file-lock poll below: a slug already held
+    // in-process (another task in this same process, publishing the same slug) must not leave a
+    // close waiting on this acquisition either.
+    let mutex_guard = tokio::select! {
+        biased;
+        _ = token.cancelled() => return Err(HolziError::VaultClosed),
+        guard = in_process_lock.lock_owned() => guard,
+    };
+
+    if token.is_cancelled() {
+        return Err(HolziError::VaultClosed);
+    }
+    let app_for_lock = app.clone();
+    let slug_for_lock = slug.to_owned();
+    // Keep directory and lock-file setup off the async runtime: slow storage must not delay
+    // cancellation or unrelated commands.
+    let file_lock = tauri::async_runtime::spawn_blocking(move || -> Result<File> {
+        let locks_dir = models_root(&app_for_lock)?.join(MODEL_LOCKS_DIRECTORY);
+        std::fs::create_dir_all(&locks_dir).map_err(HolziError::from)?;
+        let lock_path = locks_dir.join(format!("{slug_for_lock}.lock"));
+        // Read and write, not append-only: Windows refuses a lock on an append-only handle
+        // (data-model.md).
+        OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&lock_path)
+            .map_err(HolziError::from)
+    })
+    .await
+    .map_err(|e| HolziError::CrdtInit {
+        reason: format!("model publication lock setup join: {e}"),
+    })??;
+
+    loop {
+        if token.is_cancelled() {
+            return Err(HolziError::VaultClosed);
+        }
+        match file_lock.try_lock() {
+            Ok(()) => break,
+            Err(TryLockError::WouldBlock) => {
+                tokio::select! {
+                    biased;
+                    _ = token.cancelled() => return Err(HolziError::VaultClosed),
+                    _ = tokio::time::sleep(MODEL_LOCK_POLL_INTERVAL) => {}
+                }
+            }
+            Err(TryLockError::Error(e)) => return Err(HolziError::from(e)),
+        }
+    }
+
+    Ok(PublicationLock {
+        _mutex_guard: mutex_guard,
+        _file_lock: file_lock,
+    })
 }
 
 /// Resolves `<AppLocalData>/models/`. Creates the directory if missing.
-pub fn models_root(app: &AppHandle) -> Result<PathBuf> {
+pub fn models_root<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf> {
     let dir = app
         .path()
         .resolve(MODELS_DIRECTORY, BaseDirectory::AppLocalData)
@@ -228,3 +312,7 @@ pub fn canonical_model_file(app: &AppHandle, slug: &str) -> Result<Option<Canoni
         filename,
     }))
 }
+
+#[cfg(test)]
+#[path = "paths_tests.rs"]
+mod paths_tests;

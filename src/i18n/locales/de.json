@@ -465,6 +465,9 @@
     "invalidIdempotencyKey": "Der Sendevorgang ist ungültig.",
     "idempotencyKeyConflict": "Dieser Sendevorgang wurde bereits mit anderen Daten verwendet.",
     "autonomyUnavailable": "Dieser Autonomie-Modus ist für das verbundene Backend nicht verfügbar. Aktualisiere es oder nutze stattdessen Standard.",
+    "vaultAlreadyOpenElsewhere": "Diese Vault ist in einer anderen Holzi-Instanz geöffnet.",
+    "vaultAlreadyActive": "In diesem Fenster ist bereits eine Vault geöffnet.",
+    "vaultClosed": "Die Vault wurde geschlossen.",
     "hf": {
       "invalidInput": "Ungültige Eingabe.",
       "network": "Netzwerkfehler — bitte Verbindung prüfen.",

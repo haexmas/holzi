@@ -14,6 +14,7 @@ use std::os::unix::fs::PermissionsExt;
 
 use holzi_lib::adapters::cli_delegate::connect_claude::{start_claude_connect, submit_claude_code};
 use holzi_lib::adapters::cli_delegate::connect_codex::run_device_auth;
+use holzi_lib::vault_gate::ChildRegistry;
 
 fn write_stub(dir: &std::path::Path, name: &str, script: &str) -> std::path::PathBuf {
     let path = dir.join(name);
@@ -47,11 +48,15 @@ exit 1
 
     let (tx, rx) = tokio::sync::oneshot::channel();
     let mut tx = Some(tx);
-    let auth_bytes = run_device_auth(stub.to_str().unwrap(), move |prompt| {
-        if let Some(tx) = tx.take() {
-            let _ = tx.send((prompt.url.clone(), prompt.code.clone()));
-        }
-    })
+    let auth_bytes = run_device_auth(
+        stub.to_str().unwrap(),
+        &ChildRegistry::default(),
+        move |prompt| {
+            if let Some(tx) = tx.take() {
+                let _ = tx.send((prompt.url.clone(), prompt.code.clone()));
+            }
+        },
+    )
     .await
     .expect("device-auth should succeed");
 
@@ -70,7 +75,7 @@ async fn codex_device_auth_non_zero_exit_is_invalid_credentials() {
         "#!/bin/sh\necho \"denied\" 1>&2\nexit 1\n",
     );
 
-    let error = run_device_auth(stub.to_str().unwrap(), |_| {})
+    let error = run_device_auth(stub.to_str().unwrap(), &ChildRegistry::default(), |_| {})
         .await
         .expect_err("a non-zero exit should fail the connect flow");
     assert!(matches!(
@@ -97,7 +102,7 @@ exit 1
 "#,
     );
 
-    let (mut session, url) = start_claude_connect(stub.to_str().unwrap())
+    let (mut session, url) = start_claude_connect(stub.to_str().unwrap(), ChildRegistry::default())
         .await
         .expect("claude setup-token should start and report a url");
     assert_eq!(url, "https://claude.com/fake/oauth?state=abc");

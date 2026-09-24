@@ -13,8 +13,7 @@
 //! during this implementation would create a second registration boundary
 //! and make failure-atomic behavior harder to review.
 
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
@@ -29,6 +28,7 @@ use crate::providers::local::ensure_local_provider;
 use crate::state::AppState;
 use crate::state_utils::active_database;
 use crate::storage::models::{self as models_store, IntegrityStatus, ModelRow, SourceKind};
+use crate::vault_gate::VaultDb;
 
 use super::{download, hash, huggingface, import, paths};
 
@@ -390,7 +390,8 @@ async fn download_from_hf_inner(
 ) -> Result<InstalledModelPayload> {
     let _operation = chat.acquire_operation()?;
     let db = active_database(&state)?;
-    let _publication_lock = paths::acquire_model_publication_lock(&args.id).await?;
+    let _publication_lock =
+        paths::acquire_model_publication_lock(&app, &args.id, &state.gate().token()).await?;
 
     if let Some(existing) = paths::canonical_model_file(&app, &args.id)? {
         if existing.filename != args.hf_filename {
@@ -405,7 +406,7 @@ async fn download_from_hf_inner(
         // source (repo + filename + revision) is already installed under
         // this id — skip the network round-trip entirely.
         let id_for_lookup = args.id.clone();
-        let db_for_lookup = Arc::clone(&db);
+        let db_for_lookup = db.clone();
         let existing_row = tauri::async_runtime::spawn_blocking(move || {
             db_for_lookup.with_connection(|conn| {
                 models_store::get_model(conn, &id_for_lookup).map_err(haex_crdt::Error::from)
@@ -476,7 +477,7 @@ async fn download_from_hf_inner(
     let app_for_progress = app.clone();
     let model_id_for_progress = args.id.clone();
 
-    let downloaded = download::download_to_file(&url, staging, move |p| {
+    let transfer = download::download_to_file(&url, staging, move |p| {
         let _ = app_for_progress.emit(
             EVENT_PROGRESS,
             ProgressEvent {
@@ -485,8 +486,8 @@ async fn download_from_hf_inner(
                 bytes_total: p.bytes_total,
             },
         );
-    })
-    .await?;
+    });
+    let downloaded = state.gate().run(transfer).await??;
 
     let payload = register_downloaded(RegisterDownloadedArgs {
         db,
@@ -532,7 +533,8 @@ pub async fn import_model_from_file(
         .ok_or_else(|| HolziError::InvalidInput {
             reason: "source path has no filename".into(),
         })?;
-    let _publication_lock = paths::acquire_model_publication_lock(&args.id).await?;
+    let _publication_lock =
+        paths::acquire_model_publication_lock(&app, &args.id, &state.gate().token()).await?;
     if let Some(existing) = paths::canonical_model_file(&app, &args.id)? {
         if existing.filename != filename {
             return Err(HolziError::InvalidInput {
@@ -546,8 +548,8 @@ pub async fn import_model_from_file(
     let destination = paths::model_file_path(&app, &args.id, &filename)?;
     let staging = staging_path(&destination);
     let relative = paths::relative_path(&args.id, &filename)?;
-
-    let bytes = import::copy_into_managed(&source, staging.clone()).await?;
+    let copy = import::copy_into_managed(&source, staging.clone());
+    let bytes = state.gate().run(copy).await??;
     register_downloaded(RegisterDownloadedArgs {
         db,
         id: args.id,
@@ -593,26 +595,7 @@ pub async fn list_installed_models(
     // Enumerate the models root. A missing root means "nothing
     // installed", not an error — fresh installs never open this dir.
     let models_root = paths::models_root(&app)?;
-    let mut slug_dirs: Vec<String> = Vec::new();
-    match std::fs::read_dir(&models_root) {
-        Ok(entries) => {
-            for entry in entries {
-                let entry = entry.map_err(HolziError::from)?;
-                if !entry.file_type().map_err(HolziError::from)?.is_dir() {
-                    continue;
-                }
-                if let Some(name) = entry.file_name().to_str() {
-                    slug_dirs.push(name.to_string());
-                }
-            }
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => return Err(HolziError::from(e)),
-    }
-
-    // Deterministic ordering — the frontend can rely on stable listings
-    // between calls without sorting itself.
-    slug_dirs.sort();
+    let slug_dirs = scan_installed_slug_dirs(&models_root)?;
 
     // Resolve canonical files on the async runtime's blocking pool so
     // syscalls do not hold the executor. Per-slug tolerance: a slug
@@ -690,6 +673,35 @@ pub async fn list_installed_models(
     Ok(payload)
 }
 
+/// The subdirectories of `models_root` that name an installed model slug, sorted for a stable
+/// listing. A missing root is "nothing installed", not an error. Skips `.locks/` (spec 013 T071):
+/// a dot-directory is never a model slug — `validate_slug` already rejects a leading dot for
+/// anything created through us.
+fn scan_installed_slug_dirs(models_root: &Path) -> Result<Vec<String>> {
+    let mut slug_dirs: Vec<String> = Vec::new();
+    match std::fs::read_dir(models_root) {
+        Ok(entries) => {
+            for entry in entries {
+                let entry = entry.map_err(HolziError::from)?;
+                if !entry.file_type().map_err(HolziError::from)?.is_dir() {
+                    continue;
+                }
+                if let Some(name) = entry.file_name().to_str() {
+                    if !name.starts_with('.') {
+                        slug_dirs.push(name.to_string());
+                    }
+                }
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(HolziError::from(e)),
+    }
+    // Deterministic ordering — the frontend can rely on stable listings
+    // between calls without sorting itself.
+    slug_dirs.sort();
+    Ok(slug_dirs)
+}
+
 /// Removes the on-disk GGUF file for a model slug. The `models` row
 /// stays in place because it is synced catalog/source metadata; deleting
 /// the file only removes it from this device's installed list (spec 002
@@ -714,7 +726,7 @@ pub async fn delete_installed_model(
 }
 
 struct RegisterDownloadedArgs {
-    db: Arc<haex_crdt::Database>,
+    db: VaultDb,
     id: String,
     name: String,
     relative: String,

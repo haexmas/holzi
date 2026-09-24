@@ -107,7 +107,7 @@ async fn initial_request_can_be_cancelled_before_response_headers() {
     };
     let chat = Arc::new(ChatState::new());
     let cancel = CancellationToken::new();
-    *chat.tool_cancellation.lock().unwrap() = Some(cancel.clone());
+    *chat.turn_cancellation.lock().unwrap() = Some(cancel.clone());
     let task_chat = chat.clone();
     let task = tokio::spawn(async move {
         let request = ChatRequest {

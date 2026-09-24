@@ -8,8 +8,9 @@ use crate::identity::{
 use crate::model_capabilities::{ModelCapabilities, ReasoningControl};
 use crate::state::{ActiveInstanceHandle, AppState};
 use crate::storage::models::{self, SourceKind};
+use crate::vault_gate::VaultGate;
 
-use super::{register_downloaded, RegisterDownloadedArgs};
+use super::{register_downloaded, scan_installed_slug_dirs, RegisterDownloadedArgs};
 
 #[tokio::test]
 async fn registration_keeps_the_vault_captured_before_a_transfer() {
@@ -48,24 +49,32 @@ async fn registration_keeps_the_vault_captured_before_a_transfer() {
         .await
         .expect("open join");
 
-    let state = AppState::new();
-    *state.active_instance.lock().expect("state") = Some(ActiveInstanceHandle {
-        name: "original".into(),
-        database: Arc::clone(&original),
-    });
-    let captured = Arc::clone(
-        &state
-            .active_instance
-            .lock()
-            .expect("state")
-            .as_ref()
-            .expect("active")
-            .database,
-    );
-    *state.active_instance.lock().expect("state") = Some(ActiveInstanceHandle {
-        name: "replacement".into(),
-        database: Arc::clone(&replacement),
-    });
+    let state = AppState::default();
+    state
+        .install(
+            ActiveInstanceHandle {
+                name: "original".into(),
+                database: Arc::clone(&original),
+            },
+            || Ok(()),
+        )
+        .expect("install the original vault");
+    let captured = state.database().expect("active");
+
+    // A later vault is now only ever a genuinely new app instance (spec 013 FR-010): there is no
+    // in-process switch any more, so a second, unrelated `AppState` models it. `captured`,
+    // obtained before this one even exists, must still reach `original`'s own database, never
+    // this other state's.
+    let other_instance_state = AppState::default();
+    other_instance_state
+        .install(
+            ActiveInstanceHandle {
+                name: "replacement".into(),
+                database: Arc::clone(&replacement),
+            },
+            || Ok(()),
+        )
+        .expect("install the replacement vault in its own, unrelated state");
 
     register_downloaded(RegisterDownloadedArgs {
         db: captured,
@@ -84,7 +93,7 @@ async fn registration_keeps_the_vault_captured_before_a_transfer() {
         hf_revision_ref: None,
     })
     .await
-    .expect("register after switch");
+    .expect("register while another instance is active");
 
     tokio::task::spawn_blocking(move || {
         assert!(original
@@ -96,6 +105,7 @@ async fn registration_keeps_the_vault_captured_before_a_transfer() {
             .expect("replacement model")
             .is_none());
         drop(state);
+        drop(other_instance_state);
         drop(original);
         drop(replacement);
         drop(dirs);
@@ -139,7 +149,9 @@ async fn registration_records_capabilities_derived_from_the_local_model_id() {
             .await
             .expect("stage bytes");
         register_downloaded(RegisterDownloadedArgs {
-            db: Arc::clone(&db),
+            db: VaultGate::new()
+                .vault_db(Arc::clone(&db))
+                .expect("open gate"),
             id: id.into(),
             name: id.into(),
             relative: format!("{id}/model.gguf"),
@@ -177,4 +189,31 @@ async fn registration_records_capabilities_derived_from_the_local_model_id() {
     })
     .await
     .expect("assert join");
+}
+
+/// T065/T071: the installed-slug scan skips `.locks/` (the cross-process publication lock
+/// directory) and any other dot-directory, never treating it as a model slug.
+#[test]
+fn scan_installed_slug_dirs_skips_locks_and_other_dot_directories() {
+    let root = tempfile::tempdir().expect("models root");
+    for slug in ["model-a", "model-b", ".locks", ".hidden"] {
+        std::fs::create_dir_all(root.path().join(slug)).expect("slug dir");
+    }
+    // A file, not a directory, at the root: also never a slug.
+    std::fs::write(root.path().join("stray-file"), b"").expect("stray file");
+
+    let slugs = scan_installed_slug_dirs(root.path()).expect("scan");
+
+    assert_eq!(slugs, vec!["model-a".to_string(), "model-b".to_string()]);
+}
+
+#[test]
+fn scan_installed_slug_dirs_on_a_missing_root_is_empty_not_an_error() {
+    let root = tempfile::tempdir().expect("temp dir");
+    let missing = root.path().join("never-created");
+
+    assert_eq!(
+        scan_installed_slug_dirs(&missing).expect("missing root is not an error"),
+        Vec::<String>::new(),
+    );
 }

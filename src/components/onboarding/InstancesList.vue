@@ -29,6 +29,8 @@ function formatRelative(ms: number): string {
         <button
           class="w-full text-left rounded-md border px-3 py-2 hover:bg-accent hover:text-accent-foreground transition-colors"
           style="border-color: var(--color-border)"
+          data-testid="instance-entry"
+          :data-instance-name="i.name"
           @click="emit('select', i.name)"
         >
           <div class="font-medium">

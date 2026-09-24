@@ -43,6 +43,13 @@ export function useErrorString() {
         return t('errors.invalidIdempotencyKey')
       if (kind === 'IdempotencyKeyConflict')
         return t('errors.idempotencyKeyConflict')
+      // Spec 013 US4 (contracts/frontend-surface.md): fieldless variants with no `reason`, so
+      // without an explicit mapping they would otherwise fall through to `JSON.stringify(e)`
+      // below.
+      if (kind === 'VaultAlreadyOpenElsewhere')
+        return t('errors.vaultAlreadyOpenElsewhere')
+      if (kind === 'VaultAlreadyActive') return t('errors.vaultAlreadyActive')
+      if (kind === 'VaultClosed') return t('errors.vaultClosed')
       if (kind === 'InvalidInput' && typeof reason === 'string') {
         if (reason.startsWith(AUTONOMY_UNAVAILABLE_PREFIX))
           return t('errors.autonomyUnavailable')

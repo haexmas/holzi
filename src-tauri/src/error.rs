@@ -28,6 +28,12 @@ pub enum HolziError {
     #[error("An instance is already active in this process")]
     InstanceAlreadyActive,
 
+    #[error("The vault is closed")]
+    VaultClosed,
+
+    #[error("A vault is already open in this app process")]
+    VaultAlreadyActive,
+
     #[error("Vault file is locked by another process on this host")]
     VaultAlreadyOpenElsewhere,
 
@@ -36,9 +42,6 @@ pub enum HolziError {
 
     #[error("File is not a valid holzi instance: {reason}")]
     NotAValidInstance { reason: String },
-
-    #[error("Failed to close active instance: {reason}")]
-    CloseFailed { reason: String },
 
     #[error("SQLCipher error from haex-crdt: {reason}")]
     CrdtSqlite { reason: String },

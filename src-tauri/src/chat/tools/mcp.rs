@@ -19,6 +19,7 @@ use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
 use super::{RiskClass, Tool, ToolResult};
+use crate::vault_gate::{ChildGuard, ChildRegistry};
 
 /// One MCP server to connect to over stdio: `command` is spawned with
 /// `args`. Not persisted anywhere by this feature — see module docs.
@@ -40,6 +41,8 @@ struct McpTool {
     description: String,
     input_schema: Value,
     connection: Arc<RunningService<RoleClient, ()>>,
+    /// Keeps the server's process registered for as long as any of its tools exists.
+    _registration: Option<Arc<ChildGuard>>,
 }
 
 #[async_trait]
@@ -117,17 +120,27 @@ fn content_to_string(content: &[ContentBlock]) -> String {
         .join("\n")
 }
 
-/// Connects to one server over stdio and completes the MCP handshake.
-async fn connect(server: &McpServerConfig) -> Result<RunningService<RoleClient, ()>, String> {
+/// Connects to one server over stdio and completes the MCP handshake. The server runs as its own
+/// process group and is registered in `children`, so ending the vault ends it and what it started
+/// (spec 013 T044).
+async fn connect(
+    server: &McpServerConfig,
+    children: &ChildRegistry,
+) -> Result<(RunningService<RoleClient, ()>, Option<ChildGuard>), String> {
     let args = server.args.clone();
     let command = tokio::process::Command::new(&server.command).configure(|cmd| {
         cmd.args(&args);
+        #[cfg(unix)]
+        cmd.process_group(0);
     });
     let transport =
         TokioChildProcess::new(command).map_err(|e| format!("spawn {}: {e}", server.command))?;
-    ().serve(transport)
+    let registration = transport.id().map(|pid| children.register(pid));
+    let service = ()
+        .serve(transport)
         .await
-        .map_err(|e| format!("mcp handshake with {}: {e}", server.id))
+        .map_err(|e| format!("mcp handshake with {}: {e}", server.id))?;
+    Ok((service, registration))
 }
 
 /// Lists `connection`'s tools and wraps each as a [`Tool`], disambiguating
@@ -140,6 +153,7 @@ pub(crate) async fn tools_from_connection(
     server_id: &str,
     connection: Arc<RunningService<RoleClient, ()>>,
     seen: &mut std::collections::HashSet<String>,
+    registration: Option<Arc<ChildGuard>>,
 ) -> Result<Vec<Arc<dyn Tool>>, String> {
     let discovered: Vec<McpToolInfo> = connection
         .list_all_tools()
@@ -160,6 +174,7 @@ pub(crate) async fn tools_from_connection(
             description: info.description.clone().unwrap_or_default().into_owned(),
             input_schema: info.schema_as_json_value(),
             connection: connection.clone(),
+            _registration: registration.clone(),
         }));
     }
     Ok(tools)
@@ -174,19 +189,20 @@ pub(crate) async fn tools_from_connection(
 pub async fn discover_mcp_tools(
     servers: &[McpServerConfig],
     existing_names: &std::collections::HashSet<String>,
+    children: &ChildRegistry,
 ) -> Vec<Arc<dyn Tool>> {
     let mut tools: Vec<Arc<dyn Tool>> = Vec::new();
     let mut seen: std::collections::HashSet<String> = existing_names.clone();
 
     for server in servers {
-        let connection = match connect(server).await {
-            Ok(c) => Arc::new(c),
+        let (connection, registration) = match connect(server, children).await {
+            Ok((connection, registration)) => (Arc::new(connection), registration.map(Arc::new)),
             Err(reason) => {
                 log::warn!("mcp server '{}' unavailable: {reason}", server.id);
                 continue;
             }
         };
-        match tools_from_connection(&server.id, connection, &mut seen).await {
+        match tools_from_connection(&server.id, connection, &mut seen, registration).await {
             Ok(discovered) => tools.extend(discovered),
             Err(reason) => log::warn!("{reason}"),
         }

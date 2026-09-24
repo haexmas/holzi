@@ -20,7 +20,6 @@ pub mod local;
 mod providers_tests;
 
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use tauri::State;
 use uuid::Uuid;
 
@@ -33,6 +32,7 @@ use crate::state::AppState;
 use crate::state_utils::active_database;
 use crate::storage::models::{self as models_store, IntegrityStatus, ModelRow, SourceKind};
 use crate::storage::providers::{self as storage, Provider, ProviderCapability, ProviderKind};
+use crate::vault_gate::VaultDb;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -272,7 +272,7 @@ pub async fn refresh_provider_models(
         reason: format!("provider {provider_id} not found"),
     })?;
 
-    let model_count = do_refresh(&db, &provider).await?;
+    let model_count = state.gate().run(do_refresh(&db, &provider)).await??;
 
     Ok(RefreshProviderModelsResult {
         provider_id,
@@ -328,7 +328,7 @@ pub async fn list_provider_models(
 
 /// Shared refresh core used by both [`add_provider`] and
 /// [`refresh_provider_models`]. Returns the number of models cached.
-async fn do_refresh(db: &Arc<haex_crdt::Database>, provider: &Provider) -> Result<usize> {
+async fn do_refresh(db: &VaultDb, provider: &Provider) -> Result<usize> {
     let provider = repair_legacy_adapter(db, provider).await?;
     let adapter = build_adapter(&provider, None)?;
     let fetched = adapter.list_models().await.map_err(map_adapter_error)?;
@@ -361,10 +361,7 @@ async fn do_refresh(db: &Arc<haex_crdt::Database>, provider: &Provider) -> Resul
 /// Repairs a legacy API-key row only when its stored base URL identifies the
 /// Anthropic endpoint unambiguously. Other legacy rows stay unresolved and
 /// are rejected by `build_adapter` instead of being guessed as Anthropic.
-pub(crate) async fn repair_legacy_adapter(
-    db: &Arc<haex_crdt::Database>,
-    provider: &Provider,
-) -> Result<Provider> {
+pub(crate) async fn repair_legacy_adapter(db: &VaultDb, provider: &Provider) -> Result<Provider> {
     if provider.adapter.is_some() {
         return Ok(provider.clone());
     }
