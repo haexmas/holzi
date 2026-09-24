@@ -10,10 +10,16 @@ import {
   toggleMaximizeWindow as toggleMaximizeWindowReducer,
   updateWindowGeometry as updateWindowGeometryReducer,
 } from '~/lib/shell/layoutState'
+import {
+  addTab as addTabReducer,
+  closeTab as closeTabReducer,
+  switchTab as switchTabReducer,
+} from '~/lib/shell/tabs'
 import type {
   CloseGuard,
   CloseGuardResult,
   ShellState,
+  ShellTab,
   ShellWindow,
   TabRuntime,
 } from '~/lib/shell/types'
@@ -24,13 +30,13 @@ import type {
  * `lib/shell/layoutState.ts` around one `reactive` `ShellState`, so they can
  * keep mutating their `state` parameter in place while Vue tracks it.
  *
- * User Story 1 and 2's actions are implemented here: `openApp`,
- * `focusWindow`, `closeWindow`, `minimizeWindow`, `toggleMaximizeWindow`,
- * `updateWindowGeometry`, and a `flushAsync` placeholder (FR-027)
- * `ChatApp.vue`'s `lock()` already depends on. Tab actions (`addTab`,
- * `switchTab`, `closeTab`) and workspace actions (`createWorkspace`,
- * `deleteWorkspace`, `switchWorkspace`, `moveWindowToWorkspace`) land in
- * this same store as their own user stories (Phase 5-6) build them.
+ * User Story 1-3's actions are implemented here: `openApp`, `addTab`,
+ * `switchTab`, `focusWindow`, `closeWindow`, `closeTab`, `minimizeWindow`,
+ * `toggleMaximizeWindow`, `updateWindowGeometry`, and a `flushAsync`
+ * placeholder (FR-027) `ChatApp.vue`'s `lock()` already depends on.
+ * Workspace actions (`createWorkspace`, `deleteWorkspace`,
+ * `switchWorkspace`, `moveWindowToWorkspace`) land in this same store once
+ * Phase 6 builds them.
  *
  * Persistence does not exist yet (Phase 7): `state` starts from an empty
  * layout, and `flushAsync` is a no-op until T047 wires the real write queue.
@@ -122,9 +128,29 @@ export const useShellStore = defineStore('shell', () => {
     )
   }
 
-  /** Raw display data for a window — icon/titleKey from its active tab's app, any title override,
-   * and whether *any* of its tabs wants attention (data-model.md's derived "window has attention"
-   * rule). Callers translate `titleKey` themselves; this store does not depend on `useI18n()`.
+  /** Raw display data for one tab — icon/titleKey from its app, any title override, and its own
+   * attention flag. Callers translate `titleKey` themselves; this store does not depend on
+   * `useI18n()`. Shared by `ShellTabBar.vue`/`ShellTabListMenu.vue` (T034/T036) and
+   * `windowDisplayInfo` below. */
+  function tabDisplayInfo(tab: ShellTab): {
+    titleKey: string | undefined
+    icon: string | undefined
+    titleOverride: string | null
+    hasAttention: boolean
+  } {
+    const app = getAppDefinition(tab.appId, SHELL_APPS)
+    const runtime = runtimeFor(tab.id)
+    return {
+      titleKey: app?.titleKey,
+      icon: app?.icon,
+      titleOverride: runtime.titleOverride,
+      hasAttention: runtime.attention,
+    }
+  }
+
+  /** Raw display data for a window — its active tab's `tabDisplayInfo`, its tab count, and
+   * whether *any* of its tabs wants attention (data-model.md's derived "window has attention"
+   * rule — a window can have attention from a background tab even while its active tab does not).
    * Shared by `ShellWindow.vue` and `ShellWindowOverview.vue` (T030). */
   function windowDisplayInfo(window: ShellWindow): {
     titleKey: string | undefined
@@ -135,11 +161,8 @@ export const useShellStore = defineStore('shell', () => {
   } | null {
     const tab = activeTabOf(window)
     if (!tab) return null
-    const app = getAppDefinition(tab.appId, SHELL_APPS)
     return {
-      titleKey: app?.titleKey,
-      icon: app?.icon,
-      titleOverride: runtimeFor(tab.id).titleOverride,
+      ...tabDisplayInfo(tab),
       tabCount: window.tabs.length,
       hasAttention: window.tabs.some((t) => runtimeFor(t.id).attention),
     }
@@ -147,6 +170,22 @@ export const useShellStore = defineStore('shell', () => {
 
   function openApp(appId: string) {
     openAppReducer(state, appId, SHELL_APPS)
+    syncTabRuntime()
+  }
+
+  function addTab(windowId: string, appId: string) {
+    addTabReducer(state, windowId, appId, SHELL_APPS)
+    syncTabRuntime()
+  }
+
+  function switchTab(windowId: string, tabId: string) {
+    switchTabReducer(state, windowId, tabId)
+  }
+
+  /** Removes the tab without asking anything — guard confirmation (FR-014) runs at the caller,
+   * same as `closeWindow`. */
+  function closeTab(windowId: string, tabId: string) {
+    closeTabReducer(state, windowId, tabId)
     syncTabRuntime()
   }
 
@@ -177,8 +216,9 @@ export const useShellStore = defineStore('shell', () => {
     syncTabRuntime()
   }
 
-  /** Every non-null close-guard result across the window's tabs (FR-014) — a tab without a
-   * registered guard, or whose guard currently allows closing, contributes nothing. */
+  /** Every non-null close-guard result across the window's tabs (FR-014, for closing the whole
+   * window) — a tab without a registered guard, or whose guard currently allows closing,
+   * contributes nothing. */
   function guardResultsFor(windowId: string): CloseGuardResult[] {
     const window = state.windows.find((w) => w.id === windowId)
     if (!window) return []
@@ -190,6 +230,12 @@ export const useShellStore = defineStore('shell', () => {
     return results
   }
 
+  /** One tab's own close-guard result (FR-014, for closing just that tab) — `null` if it has none
+   * registered or its guard currently allows closing. */
+  function guardResultForTab(tabId: string): CloseGuardResult | null {
+    return tabRuntime.get(tabId)?.guard?.() ?? null
+  }
+
   /** Placeholder until Phase 7 (T047) wires the real serialized write queue; `ChatApp.vue`'s
    * `lock()` already depends on awaiting it before `useInstance().closeAsync()` (FR-027). */
   async function flushAsync(): Promise<void> {}
@@ -198,18 +244,23 @@ export const useShellStore = defineStore('shell', () => {
     ...toRefs(state),
     windowsInActiveWorkspace,
     runtimeFor,
+    tabDisplayInfo,
     windowDisplayInfo,
     markTabMounted,
     setTabAttention,
     setTabTitle,
     setTabCloseGuard,
     openApp,
+    addTab,
+    switchTab,
     focusWindow,
     minimizeWindow,
     toggleMaximizeWindow,
     updateWindowGeometry,
     closeWindow,
+    closeTab,
     guardResultsFor,
+    guardResultForTab,
     flushAsync,
   }
 })

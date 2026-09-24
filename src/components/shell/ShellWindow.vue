@@ -1,24 +1,19 @@
 <script setup lang="ts">
 /**
- * One Shell window: frame, title bar (icon, title, minimize/maximize/close),
- * drag-to-move, eight-way resize, and its app content (spec
- * 015-workspace-shell, T023 + T029 + T031). The Firefox-style tab bar/Chevron
- * (FR-007's tab area, FR-031-038) is User Story 3 and extends this same
- * file (T034-T037).
+ * One Shell window: frame, title bar (`ShellTabBar` + minimize/maximize/
+ * close), drag-to-move, eight-way resize, and its tabs' content (spec
+ * 015-workspace-shell, T023 + T029 + T031 + T034). The Chevron tab-list
+ * menu (FR-034) and compact-mode title/Chevron swap (FR-036) are T036/T037
+ * and extend this same file.
  *
- * Hidden via `v-show`, never unmounted, when minimized — its content is the
- * same (research R8): lazy-mounted the first time it becomes visible
- * (`shell.markTabMounted`), then left mounted regardless of later
- * minimize/focus/tab/workspace changes.
- *
- * Provides the `useShellTab()` contract for the window's one tab (Phase 3
- * has no multi-tab windows yet — that is tabs.ts, T033).
+ * Each tab renders through its own `ShellTabPanel` (T034) rather than this
+ * component providing `useShellTab()` itself, so Vue's provide/inject stays
+ * correctly scoped per tab even with several mounted at once (research R8).
  */
-import { computed, watchEffect } from 'vue'
+import { computed } from 'vue'
 import { getAppDefinition } from '~/lib/shell/apps'
-import { getAppComponent } from '~/components/shell/appComponents'
 import { windowDisplayRect } from '~/lib/shell/geometry'
-import { provideShellTab, requestCloseWindow } from '~/composables/useShellTab'
+import { requestCloseWindow } from '~/composables/useShellTab'
 import {
   useWindowPointerGesture,
   type ResizeDirection,
@@ -33,13 +28,6 @@ const props = defineProps<{
 const shell = useShellStore()
 const { t } = useI18n()
 
-const tab = computed(() => props.window.tabs[0])
-const app = computed(() =>
-  tab.value ? getAppDefinition(tab.value.appId) : undefined,
-)
-const component = computed(() =>
-  tab.value ? getAppComponent(tab.value.appId) : undefined,
-)
 const info = computed(() => shell.windowDisplayInfo(props.window))
 const title = computed(() => {
   const displayInfo = info.value
@@ -48,6 +36,21 @@ const title = computed(() => {
     displayInfo.titleOverride ??
     (displayInfo.titleKey ? t(displayInfo.titleKey) : '')
   )
+})
+
+// The largest minimum size across all of the window's tabs' apps, so it never shrinks below what
+// any of them needs — not just the currently active one.
+const minSize = computed(() => {
+  let width = 0
+  let height = 0
+  for (const tab of props.window.tabs) {
+    const app = getAppDefinition(tab.appId)
+    if (app) {
+      width = Math.max(width, app.minSize.width)
+      height = Math.max(height, app.minSize.height)
+    }
+  }
+  return { width, height }
 })
 
 const displayRect = computed(() =>
@@ -64,7 +67,7 @@ const { startMove, startResize } = useWindowPointerGesture(
     width: props.window.width,
     height: props.window.height,
   }),
-  () => app.value?.minSize ?? { width: 0, height: 0 },
+  () => minSize.value,
   () => shell.area,
   (geometry) => shell.updateWindowGeometry(props.window.id, geometry),
 )
@@ -88,12 +91,22 @@ function requestClose() {
   void requestCloseWindow(shell, t, props.window.id)
 }
 
-// Lazy-mount (research R8): marks the tab mounted the moment it exists, which for this phase's
-// single-tab-per-window is immediately on open; re-runs if the active tab ever changes (tabs.ts,
-// T033), covering the same rule for a tab that was restored from persistence but never activated.
-watchEffect(() => {
-  if (tab.value) shell.markTabMounted(tab.value.id)
-})
+function selectTab(tabId: string) {
+  shell.switchTab(props.window.id, tabId)
+}
+
+function requestCloseTab(tabId: string) {
+  const result = shell.guardResultForTab(tabId)
+  if (result) {
+    // Placeholder until ShellCloseConfirm.vue (T038) aggregates these into a real dialog.
+    if (!confirm(t(result.reasonKey))) return
+    void result
+      .confirmAsync()
+      .then(() => shell.closeTab(props.window.id, tabId))
+    return
+  }
+  shell.closeTab(props.window.id, tabId)
+}
 
 const RESIZE_HANDLES: { direction: ResizeDirection; class: string }[] = [
   { direction: 'n', class: 'inset-x-2 top-0 h-1 cursor-ns-resize' },
@@ -105,34 +118,6 @@ const RESIZE_HANDLES: { direction: ResizeDirection; class: string }[] = [
   { direction: 'se', class: 'right-0 bottom-0 h-2 w-2 cursor-nwse-resize' },
   { direction: 'sw', class: 'left-0 bottom-0 h-2 w-2 cursor-nesw-resize' },
 ]
-
-provideShellTab({
-  get tabId() {
-    return tab.value?.id ?? ''
-  },
-  get windowId() {
-    return props.window.id
-  },
-  requestAttention: () => {
-    if (tab.value) shell.setTabAttention(tab.value.id, true)
-  },
-  clearAttention: () => {
-    if (tab.value) shell.setTabAttention(tab.value.id, false)
-  },
-  setTitle: (value) => {
-    if (tab.value) shell.setTabTitle(tab.value.id, value)
-  },
-  registerCloseGuard: (guard) => {
-    const registeredFor = tab.value?.id
-    if (registeredFor) shell.setTabCloseGuard(registeredFor, guard)
-    return () => {
-      if (registeredFor) shell.setTabCloseGuard(registeredFor, null)
-    }
-  },
-  // One tab per window in this phase — closing the tab closes the window
-  // (tabs.ts, T033, replaces this with the neighbor-activation rule).
-  closeSelf: () => shell.closeWindow(props.window.id),
-})
 </script>
 
 <template>
@@ -152,25 +137,18 @@ provideShellTab({
     @pointerdown="shell.focusWindow(window.id)"
   >
     <div
-      class="flex shrink-0 items-center gap-2 border-b border-border bg-muted/40 px-3 py-2"
+      class="flex shrink-0 items-center gap-1 border-b border-border bg-muted/40 px-1.5 py-1"
       :style="interactive ? { touchAction: 'none' } : undefined"
       @pointerdown="onTitleBarPointerDown"
       @dblclick="onTitleBarDoubleClick"
     >
-      <Icon
-        v-if="app"
-        :name="app.icon"
-        class="h-3.5 w-3.5 shrink-0"
-        :aria-hidden="true"
+      <ShellTabBar
+        :tabs="window.tabs"
+        :active-tab-id="window.activeTabId"
+        @select-tab="selectTab"
+        @close-tab="requestCloseTab"
       />
-      <span class="min-w-0 flex-1 truncate text-sm font-medium">{{
-        title
-      }}</span>
-      <span
-        v-if="info?.hasAttention"
-        class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
-        :aria-label="t('shell.attention')"
-      />
+      <div class="min-w-4 flex-1" />
       <ShellWindowControls
         :maximized="window.maximized"
         @minimize="shell.minimizeWindow(window.id)"
@@ -179,18 +157,13 @@ provideShellTab({
       />
     </div>
     <div class="min-h-0 flex-1 overflow-hidden">
-      <div
-        v-if="tab"
+      <ShellTabPanel
+        v-for="tab in window.tabs"
         :key="tab.id"
-        role="tabpanel"
-        class="h-full min-h-0"
-        :aria-label="title"
-      >
-        <component
-          :is="component"
-          v-if="component && shell.runtimeFor(tab.id).mounted"
-        />
-      </div>
+        :tab="tab"
+        :window-id="window.id"
+        :active="tab.id === window.activeTabId"
+      />
     </div>
     <div
       v-for="handle in RESIZE_HANDLES"

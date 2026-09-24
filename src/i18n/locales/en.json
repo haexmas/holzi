@@ -92,6 +92,13 @@
     "attention": "Waiting for you",
     "close": {
       "activeReply": "A reply is still running or waiting for your decision."
+    },
+    "tabs": {
+      "tablist": "Tabs",
+      "close": "Close tab",
+      "newTab": "New tab",
+      "scrollLeft": "Scroll tabs left",
+      "scrollRight": "Scroll tabs right"
     }
   },
   "chat": {

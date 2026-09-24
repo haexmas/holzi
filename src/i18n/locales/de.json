@@ -92,6 +92,13 @@
     "attention": "Wartet auf dich",
     "close": {
       "activeReply": "Eine Antwort läuft noch oder wartet auf deine Entscheidung."
+    },
+    "tabs": {
+      "tablist": "Tabs",
+      "close": "Tab schließen",
+      "newTab": "Neuer Tab",
+      "scrollLeft": "Tabs nach links scrollen",
+      "scrollRight": "Tabs nach rechts scrollen"
     }
   },
   "chat": {
