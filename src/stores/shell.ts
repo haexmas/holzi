@@ -269,6 +269,17 @@ export const useShellStore = defineStore('shell', () => {
     return tabRuntime.get(tabId)?.guard?.() ?? null
   }
 
+  /** Every non-null close-guard result across every window in the workspace (FR-021, for deleting
+   * it) — `guardResultsFor` extended to the whole workspace. */
+  function guardResultsForWorkspace(workspaceId: string): CloseGuardResult[] {
+    const results: CloseGuardResult[] = []
+    for (const window of state.windows) {
+      if (window.workspaceId === workspaceId)
+        results.push(...guardResultsFor(window.id))
+    }
+    return results
+  }
+
   /** Placeholder until Phase 7 (T047) wires the real serialized write queue; `ChatApp.vue`'s
    * `lock()` already depends on awaiting it before `useInstance().closeAsync()` (FR-027). */
   async function flushAsync(): Promise<void> {}
@@ -299,6 +310,7 @@ export const useShellStore = defineStore('shell', () => {
     workspaceHasAttention,
     guardResultsFor,
     guardResultForTab,
+    guardResultsForWorkspace,
     flushAsync,
   }
 })

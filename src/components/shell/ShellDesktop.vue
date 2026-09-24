@@ -1,9 +1,10 @@
 <script setup lang="ts">
 /**
  * The Shell's desktop area: every window of the active workspace, plus the
- * Launcher and window-overview triggers (spec 015-workspace-shell, T023,
- * T030, FR-002, FR-011). Workspace switching and compact-mode layout are
- * later user stories (Phase 6, Phase 8) and extend this component then.
+ * Launcher, window-overview and workspace-overview triggers (spec
+ * 015-workspace-shell, T023, T030, T040, FR-002, FR-011, FR-022). Compact-
+ * mode layout is a later user story (Phase 8) and extends this component
+ * then.
  */
 import { ref } from 'vue'
 
@@ -12,6 +13,7 @@ const { t } = useI18n()
 
 const launcherOpen = ref(false)
 const windowOverviewOpen = ref(false)
+const workspaceOverviewOpen = ref(false)
 </script>
 
 <template>
@@ -24,6 +26,14 @@ const windowOverviewOpen = ref(false)
     />
 
     <div class="absolute bottom-4 right-4 flex flex-col gap-2">
+      <button
+        type="button"
+        class="flex h-12 w-12 items-center justify-center rounded-full bg-background text-foreground shadow-lg ring-1 ring-border hover:bg-accent"
+        :aria-label="t('shell.workspaces.title')"
+        @click="workspaceOverviewOpen = true"
+      >
+        <Icon name="lucide:layout-list" class="h-5 w-5" :aria-hidden="true" />
+      </button>
       <button
         type="button"
         class="flex h-12 w-12 items-center justify-center rounded-full bg-background text-foreground shadow-lg ring-1 ring-border hover:bg-accent"
@@ -48,6 +58,7 @@ const windowOverviewOpen = ref(false)
 
     <ShellLauncher v-model:open="launcherOpen" />
     <ShellWindowOverview v-model:open="windowOverviewOpen" />
+    <ShellWorkspaceOverview v-model:open="workspaceOverviewOpen" />
     <ShellCloseConfirm />
   </div>
 </template>

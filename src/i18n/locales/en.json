@@ -69,6 +69,16 @@
     }
   },
   "shell": {
+    "workspaces": {
+      "title": "Workspaces",
+      "numbered": "Workspace {number}",
+      "windowCount": "{count} window | {count} windows",
+      "delete": "Delete workspace",
+      "deleteWindows": "{count} window will close | {count} windows will close",
+      "create": "Add workspace",
+      "moveWindow": "Move a window to another workspace",
+      "moveTo": "Move to…"
+    },
     "apps": {
       "chat": "Chat",
       "settings": "Settings",

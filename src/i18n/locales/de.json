@@ -69,6 +69,16 @@
     }
   },
   "shell": {
+    "workspaces": {
+      "title": "Arbeitsbereiche",
+      "numbered": "Arbeitsbereich {number}",
+      "windowCount": "{count} Fenster",
+      "delete": "Arbeitsbereich löschen",
+      "deleteWindows": "{count} Fenster wird geschlossen | {count} Fenster werden geschlossen",
+      "create": "Arbeitsbereich hinzufügen",
+      "moveWindow": "Ein Fenster in einen anderen Arbeitsbereich verschieben",
+      "moveTo": "Verschieben nach …"
+    },
     "apps": {
       "chat": "Chat",
       "settings": "Einstellungen",
