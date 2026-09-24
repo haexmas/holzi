@@ -241,7 +241,7 @@ Wiederherstellen verworfen, ebenso ein Fenster, das dadurch keinen Tab mehr hat
 (FR-025). Fenster-ID und Tab-ID sind je eine UUID v4; Persistenz und Verwaltung
 laufen über sie, nie über die `appId` (Voraussetzung für Spec 016).
 
-**Rationale**: Die geforderte Öffnung für den Typ „extension“ (ADR-0003) kostet nur
+**Rationale**: Die geforderte Öffnung für den Typ „extension“ (ADR-0004) kostet nur
 eine offene Textspalte und eine Registry, die um neue Arten erweitert werden kann.
 Der **Tab** ist die Instanz einer App; das **Fenster** ist nur der Rahmen mit
 Geometrie. Ein Chat-Tab, der später vervielfacht wird (Spec 016), braucht damit
