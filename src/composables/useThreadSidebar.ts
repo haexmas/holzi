@@ -1,4 +1,4 @@
-import { nextTick, ref, type Ref } from 'vue'
+import { ref, type Ref } from 'vue'
 import type { Message, Thread, useChat } from '~/composables/useChat'
 import type { useChatTranscript } from '~/composables/useChatTranscript'
 import type { PendingApproval } from '~/components/chat/PermissionPrompt.vue'
@@ -56,7 +56,6 @@ export function useThreadSidebar(
   const editingThreadId = ref<string | null>(null)
   const draftTitle = ref('')
   const editTitleError = ref<string | null>(null)
-  const editingTitleInput = ref<HTMLInputElement | null>(null)
   const renamingThreadId = ref<string | null>(null)
   const deleteCandidate = ref<Thread | null>(null)
   const deleteError = ref<string | null>(null)
@@ -151,10 +150,6 @@ export function useThreadSidebar(
     editingThreadId.value = thread.id
     draftTitle.value = thread.title
     editTitleError.value = null
-    void nextTick(() => {
-      editingTitleInput.value?.focus()
-      editingTitleInput.value?.select()
-    })
   }
 
   function cancelEditing() {
@@ -305,7 +300,6 @@ export function useThreadSidebar(
     editingThreadId,
     draftTitle,
     editTitleError,
-    editingTitleInput,
     renamingThreadId,
     deleteCandidate,
     deleteError,

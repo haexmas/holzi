@@ -2,7 +2,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { EffortState } from '~/composables/useReasoningPreference'
 
-type ModelGroup = {
+export type ModelGroup = {
   providerId: string
   providerName: string
   models: { id: string; name: string }[]

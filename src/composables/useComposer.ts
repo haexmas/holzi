@@ -1,5 +1,6 @@
-import type { Ref } from 'vue'
+import { ref, type Ref } from 'vue'
 import type {
+  AgentActivityEvent,
   LoadedModelInfo,
   Message,
   SendMessageArgs,
@@ -46,11 +47,26 @@ export function useComposer(
   retryingMessageId: Ref<string | null>,
   expandedReasoning: Ref<Set<string>>,
   attachments: Ref<ComposerAttachment[]>,
-  activeAgentCount: Ref<number>,
-  lastAgentBatchSize: Ref<number | null>,
   pendingApprovals: Ref<PendingApproval[]>,
   pendingApprovalsByThread: Map<string, PendingApproval[]>,
 ) {
+  // Live sub-agent activity for the Claude Code delegate (spec
+  // 011-composer-toolbar-parity Story 2) — reset at the start of every send
+  // and when the current turn ends, so a stale count never survives into
+  // the next turn.
+  const activeAgentCount = ref(0)
+  const lastAgentBatchSize = ref<number | null>(null)
+
+  function handleAgentActivity(e: AgentActivityEvent) {
+    activeAgentCount.value = e.activeCount
+    if (e.batchSize !== undefined) lastAgentBatchSize.value = e.batchSize
+  }
+
+  function resetAgentActivity() {
+    activeAgentCount.value = 0
+    lastAgentBatchSize.value = null
+  }
+
   const {
     pendingStreamEvents,
     pendingToolEvents,
@@ -260,5 +276,14 @@ export function useComposer(
     void resetTextarea()
   }
 
-  return { send, abort, newChat, onVoiceTranscript }
+  return {
+    send,
+    abort,
+    newChat,
+    onVoiceTranscript,
+    activeAgentCount,
+    lastAgentBatchSize,
+    handleAgentActivity,
+    resetAgentActivity,
+  }
 }
