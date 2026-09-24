@@ -589,18 +589,19 @@ deliberately failing scenario fails the job and uploads the run directory.
       spawns a literal `pnpm` process, not through corepack — every other job only ever runs
       `corepack pnpm ...`, so this never surfaced there. Fixed with an `Enable Corepack` step
       (`corepack enable`) before install.
-- [x] T082 [US6] The job relies on the package fallback of the version check (T033): confirm on the runner
+- [ ] T082 [US6] The job relies on the package fallback of the version check (T033): confirm on the runner
       that the driver's and the web view's package versions are equal and the preflight passes.
-      Done 2026-09-24: confirmed by the clean run's own success (preflight is the suite's first step;
-      a version mismatch would fail it before any scenario starts, per FR-011/T033's dpkg-query
-      fallback) — no separate check needed.
+      Record evidence that the version file checked by `driverVersionOf` was absent on the runner,
+      or that its `dpkg-query` fallback executed, before marking this task complete.
+      Reopened 2026-09-24: the clean run proves that preflight passed, but its log does not establish
+      which version source was used. Runner evidence for the fallback remains outstanding.
 - [x] T083 [US6] Verify on a pushed branch, recorded with the run links: a clean run passes with the
       relaunch scenario skipped; a scratch commit that breaks one scenario makes the job fail and the
       artifact downloadable. Revert the scratch commit. Commit `ci: run the e2e suite on ubuntu` and
       open the Stage 5 pull request after asking the operator.
       Done 2026-09-24, PR #135 (https://github.com/haexmas/holzi/pull/135): - Clean run (after the corepack fix, commit `b01fce2`):
       https://github.com/haexmas/holzi/actions/runs/36005937603 — all 5 jobs pass, `End-to-end
-suite` green, `relaunch-after-lock` reported skipped (debug build exits on close), 5 passed. - Scratch-break run (commit `e201b80`, `smoke-start.test.ts` seeded to always throw):
+suite` green, `relaunch-after-lock` reported skipped (debug build exits on close), 6 passed. - Scratch-break run (commit `e201b80`, `smoke-start.test.ts` seeded to always throw):
       https://github.com/haexmas/holzi/actions/runs/36006711933 — `End-to-end suite` job failed
       exactly as intended: `Result: FAILED (1 failed, 1 skipped, 5 passed)`, only `smoke-start`
       failed with the seeded message, `relaunch-after-lock` still correctly reported skipped, and

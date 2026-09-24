@@ -294,6 +294,38 @@ describe('runScenario', () => {
       assert.ok(result.steps.some((s) => s.name === 'instance-ready'))
     }))
 
+  it('removes a failed startup root and preserves the original error and diagnostics', () =>
+    withRunDir(async (runDir) => {
+      const root = join(runDir, 'instances', 'failed-start-1')
+      const logFile = join(runDir, 'failed-start', 'driver.log')
+      const startupError = new Error('the application failed to start')
+      let seenFailure: unknown
+      const result = await runScenario(
+        'failed-start',
+        {},
+        async (ctx) => {
+          await ctx.startInstance()
+        },
+        depsFor(runDir, {
+          startInstance: async (request) => {
+            assert.equal(request.root, root)
+            mkdirSync(join(root, 'home'), { recursive: true })
+            mkdirSync(join(root, 'runtime'), { recursive: true })
+            mkdirSync(join(runDir, 'failed-start'), { recursive: true })
+            writeFileSync(request.logFile, 'startup diagnostics')
+            throw startupError
+          },
+          onFailure: async (info) => {
+            seenFailure = info.error
+          },
+        }),
+      )
+      assert.equal(result.status, 'failed')
+      assert.equal(seenFailure, startupError)
+      assert.equal(existsSync(root), false)
+      assert.equal(readFileSync(logFile, 'utf8'), 'startup diagnostics')
+    }))
+
   it('records steps from one monotonic clock', () =>
     withRunDir(async (runDir) => {
       const result = await runScenario(

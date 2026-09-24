@@ -233,7 +233,7 @@ failing scenario uploads its kept material.
 
 - **FR-006**: Every scenario MUST start the application with data, configuration, cache, runtime and
   home locations of its own, empty at the start and removed at the end, including the models directory,
-  and with its own session bus rather than the maintainer's desktop session. The maintainer's own Holzi
+  and MUST NOT use the maintainer's desktop session bus. The maintainer's own Holzi
   data MUST NOT be read or written.
 - **FR-007**: A scenario MUST NOT depend on the internet. It uses local stand-ins for every external
   service and needs no credentials, and it downloads nothing.

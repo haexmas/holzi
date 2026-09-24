@@ -385,8 +385,10 @@ download; press close repeatedly; close by window; the process ends within about
       Cross-reference (spec 016 T087, 2026-09-24): this task's automatable part now runs live in CI
       through spec 016's own suite, not just by hand — scenario 1 (lock while streaming, the closing
       page's spinner) via `lock-while-streaming.test.ts` and `closing-page.test.ts`; scenario 2 (the
-      lock control pressed repeatedly) via `lock-twice.test.ts`; scenario 8's bounded-ending half and
-      the relaunch via `window-close-while-streaming.test.ts` and `relaunch-after-lock.test.ts`.
+      lock control pressed repeatedly) via `lock-twice.test.ts`; scenario 8's bounded-ending half
+      via `window-close-while-streaming.test.ts`. Its relaunch half is covered by
+      `relaunch-after-lock.test.ts` for release builds supplied with `--app`; the CI job uses a
+      debug build and skips that scenario.
       Scenario 3 (the `Stuck` drain outcome) stays a Rust integration test, as this task already says,
       not a live e2e scenario. T048 (relaunch behavior under `pnpm tauri:dev`) and T049 (real local
       inference stop time) are outside what a scripted driver can observe and stay manual checks.
