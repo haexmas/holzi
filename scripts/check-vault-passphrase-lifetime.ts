@@ -29,8 +29,11 @@ const repoRoot = resolvePath(dirname(fileURLToPath(import.meta.url)), '..')
 const PASSPHRASE_MARKER = 'zz-quickstart5-marker-9f3c-zz'
 
 function loadUnlockSheet(
-  openAsync: () => Promise<{ name: string }>,
+  openAsync: (args?: unknown) => Promise<{ name: string }>,
   emit: (event: string, ...args: unknown[]) => void = () => {},
+  useInstance: () => {
+    openAsync: (args?: unknown) => Promise<{ name: string }>
+  } = () => ({ openAsync }),
 ) {
   return loadScriptSetup<{
     onSubmit: () => Promise<void>
@@ -40,7 +43,7 @@ function loadUnlockSheet(
     'src/components/onboarding/UnlockSheet.vue',
     ['onSubmit', 'error', 'passphrase'],
     {
-      useInstance: () => ({ openAsync }),
+      useInstance,
       props: { open: true, name: 'vault' },
       emit,
     },
@@ -48,8 +51,11 @@ function loadUnlockSheet(
 }
 
 function loadCreateSheet(
-  createAsync: () => Promise<{ info: { name: string } }>,
+  createAsync: (args?: unknown) => Promise<{ info: { name: string } }>,
   emit: (event: string, ...args: unknown[]) => void = () => {},
+  useInstance: () => {
+    createAsync: (args?: unknown) => Promise<{ info: { name: string } }>
+  } = () => ({ createAsync }),
 ) {
   return loadScriptSetup<{
     onSubmit: () => Promise<void>
@@ -61,7 +67,7 @@ function loadCreateSheet(
     'src/components/onboarding/CreateSheet.vue',
     ['onSubmit', 'error', 'name', 'passphrase', 'passphraseConfirm'],
     {
-      useInstance: () => ({ createAsync }),
+      useInstance,
       props: { open: true },
       emit,
     },
@@ -96,6 +102,27 @@ test('UnlockSheet clears the passphrase before emitting unlocked, and it reaches
   const testPinia = pinia.createPinia()
   pinia.setActivePinia(testPinia)
   const instancesStore = loadInstancesStore()
+  const realInstance = runComposable(
+    resolvePath(repoRoot, 'src/composables/useInstance.ts'),
+    (specifier) => {
+      if (specifier === '@tauri-apps/api/core') {
+        return {
+          invoke: async (command: string, args: unknown) => {
+            assert.equal(command, 'open_instance')
+            assert.deepEqual(args, {
+              args: { name: 'vault', passphrase: PASSPHRASE_MARKER },
+            })
+            return { name: 'vault' }
+          },
+        }
+      }
+      throw new Error(`useInstance sandbox: unexpected import '${specifier}'`)
+    },
+  ) as {
+    useInstance: () => {
+      openAsync: (args?: unknown) => Promise<{ name: string }>
+    }
+  }
   const emittedPassphrase: Record<string, string> = {}
   const passphraseRef: { current: { value: string } | null } = { current: null }
   const { onSubmit, passphrase } = loadUnlockSheet(
@@ -103,6 +130,7 @@ test('UnlockSheet clears the passphrase before emitting unlocked, and it reaches
     (event) => {
       emittedPassphrase[event] = passphraseRef.current!.value
     },
+    realInstance.useInstance,
   )
   passphraseRef.current = passphrase
   passphrase.value = PASSPHRASE_MARKER
@@ -146,6 +174,30 @@ test('CreateSheet clears the passphrase before emitting created, and it reaches 
   const testPinia = pinia.createPinia()
   pinia.setActivePinia(testPinia)
   const instancesStore = loadInstancesStore()
+  const realInstance = runComposable(
+    resolvePath(repoRoot, 'src/composables/useInstance.ts'),
+    (specifier) => {
+      if (specifier === '@tauri-apps/api/core') {
+        return {
+          invoke: async (command: string, args: unknown) => {
+            assert.equal(command, 'create_instance')
+            assert.deepEqual(args, {
+              args: {
+                name: 'vault',
+                passphrase: PASSPHRASE_MARKER,
+              },
+            })
+            return { info: { name: 'vault' } }
+          },
+        }
+      }
+      throw new Error(`useInstance sandbox: unexpected import '${specifier}'`)
+    },
+  ) as {
+    useInstance: () => {
+      createAsync: (args?: unknown) => Promise<{ info: { name: string } }>
+    }
+  }
   const emittedPassphrase: Record<string, string> = {}
   const passphraseRef: { current: { value: string } | null } = { current: null }
   const { onSubmit, name, passphrase, passphraseConfirm } = loadCreateSheet(
@@ -153,6 +205,7 @@ test('CreateSheet clears the passphrase before emitting created, and it reaches 
     (event) => {
       emittedPassphrase[event] = passphraseRef.current!.value
     },
+    realInstance.useInstance,
   )
   passphraseRef.current = passphrase
   name.value = 'vault'
