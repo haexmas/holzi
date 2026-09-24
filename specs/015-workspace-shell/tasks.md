@@ -73,12 +73,18 @@
 
 **Independent test**: Move, resize, minimize, restore, maximize, and close two windows while a Chat draft and response remain alive.
 
-- [ ] T027 [P] [US2] Implement geometry clamping, cascade placement, minimum sizes, compact correction, and maximize/restore invariants in `src/lib/shell/geometry.ts`
-- [ ] T028 [P] [US2] Implement pointer-capture move and eight-way resize gestures in `src/composables/useWindowPointerGesture.ts`
-- [ ] T029 [US2] Add Shell window frame, title bar, focus, minimize, maximize, restore, and close controls in `src/components/shell/ShellWindow.vue` and `src/components/shell/ShellWindowControls.vue`
-- [ ] T030 [US2] Add window overview with minimized-window restore, close, active-tab title, and attention badges in `src/components/shell/ShellWindowOverview.vue`
-- [ ] T031 [US2] Keep visited app tabs mounted with `v-show`, wire close guards and attention state into `src/components/shell/ShellWindow.vue` and `src/composables/useShellTab.ts`
-- [ ] T032 [US2] Add Chat close guard and permission attention lifecycle in `src/components/apps/ChatApp.vue`
+- [x] T027 [P] [US2] Implement geometry clamping, cascade placement, minimum sizes, compact correction, and maximize/restore invariants in `src/lib/shell/geometry.ts`
+  - Done 2026-09-24: `clampGeometry` (moved from `layoutState.ts`), `clampDragPosition` (64x32-visible-strip rule), `clampResizeSize`, `cascadePosition` (moved), `windowDisplayRect` (resolves maximize/compact display rect without ever touching stored geometry, research R7). Commit `b90756c`.
+- [x] T028 [P] [US2] Implement pointer-capture move and eight-way resize gestures in `src/composables/useWindowPointerGesture.ts`
+  - Done 2026-09-24: pointer capture, requestAnimationFrame-batched updates, delegates all math to `geometry.ts`. Commit `06a88a6`.
+- [x] T029 [US2] Add Shell window frame, title bar, focus, minimize, maximize, restore, and close controls in `src/components/shell/ShellWindow.vue` and `src/components/shell/ShellWindowControls.vue`
+  - Done 2026-09-24: `layoutState.ts` gained `minimizeWindow`/`toggleMaximizeWindow`/`updateWindowGeometry`; `ShellWindow.vue` wires the pointer gesture to the title bar and 8 new resize handles, disabled while compact/maximized. Commit `f6a4e6c`.
+- [x] T030 [US2] Add window overview with minimized-window restore, close, active-tab title, and attention badges in `src/components/shell/ShellWindowOverview.vue`
+  - Done 2026-09-24: store gained `windowDisplayInfo` (icon/title/tabCount/attention, i18n-free — callers translate), shared with `ShellWindow.vue`'s own title. Overview-trigger button added next to the Launcher FAB. Commit `9b9b1ae`.
+- [x] T031 [US2] Keep visited app tabs mounted with `v-show`, wire close guards and attention state into `src/components/shell/ShellWindow.vue` and `src/composables/useShellTab.ts`
+  - Done 2026-09-24: fixed a real bug — `ShellWindow.vue` had no `v-show` gate at all, so minimized windows stayed fully visible. Tab content sits behind a lazy-mounted `role="tabpanel"`. `useShellTab.ts` gained `requestCloseWindow` (gathers guard results via the store's new `guardResultsFor`, a `window.confirm` placeholder until T038, then closes). Commit `e7f045b`.
+- [x] T032 [US2] Add Chat close guard and permission attention lifecycle in `src/components/apps/ChatApp.vue`
+  - Done 2026-09-24: registers a close guard (running reply/pending permission → confirm → abort()); `onToolPermissionRequest` requests attention, cleared on answer (once no approvals remain) or turn-complete. Caught a real regression before committing: `chat-state-harness.ts` had no fake `useShellTab`, so all 45 tests failed with "useShellTab is not defined" — fixed and reverified. Trimmed comments to keep the page at 499 lines. **Phase 4 (User Story 2) complete.** Commit `86efd69`.
 
 ## Phase 5: User Story 3 — Tabs in windows (Priority: P2)
 
