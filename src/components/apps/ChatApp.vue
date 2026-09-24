@@ -2,17 +2,15 @@
 /*
  * Split across `useChatTranscript`/`useThreadSidebar`/`useComposer`/
  * `useComposerAttachments` (composables) and `ThreadSidebar`/`MessageList`/
- * `Composer` (presentational components, spec 015-workspace-shell T010-T013)
- * — see those files' own headers. What's left here is the orchestration:
- * page-level state shared across more than one of the above, model-store
- * wiring, permission-mode/autonomy-mode persistence and the `onMounted`
- * event-listener setup.
+ * `Composer` (components, spec 015-workspace-shell T010-T013) — see their
+ * own headers. What's left is orchestration: shared page-level state,
+ * model-store wiring, permission/autonomy-mode persistence, `onMounted`
+ * listener setup, and the Shell-app contract (`useShellTab`, T032).
  *
- * Moved from `pages/chat/[instance].vue` into a Shell app (T021): the
- * instance name comes from `useInstancesStore()` rather than the route (this
- * component no longer owns one), and `lock()` flushes the Shell layout
- * first (FR-027). Onboarding enforcement (spec 002) now lives on the Shell
- * host page (`pages/workspace/[instance].vue`, T025), not here.
+ * Moved from `pages/chat/[instance].vue` into a Shell app (T021): instance
+ * name from `useInstancesStore()` (no route of its own anymore); `lock()`
+ * flushes the Shell layout first (FR-027). Onboarding enforcement moved to
+ * the Shell host page (T025).
  */
 import {
   computed,
@@ -28,6 +26,7 @@ import type { PendingApproval } from '~/components/chat/PermissionPrompt.vue'
 
 const instancesStore = useInstancesStore()
 const shell = useShellStore()
+const shellTab = useShellTab()
 const { t } = useI18n()
 const chat = useChat()
 const { closeAsync } = useInstance()
@@ -72,10 +71,7 @@ const streamingMessageId = ref<string | null>(null)
 const streamingThreadId = ref<string | null>(null)
 const streamingBuffer = ref<string>('')
 const reasoningByMessage = ref<Record<string, string>>({})
-// Set while an automatic LLM-request retry (spec.md FR-012) is between
-// attempts for the currently-streaming message — cleared the moment new
-// tokens arrive (the next attempt) or the turn ends. Never persisted;
-// `chat-retry` carries no message row of its own.
+// Set between attempts of an automatic LLM-request retry (FR-012); never persisted.
 const retryingMessageId = ref<string | null>(null)
 const expandedReasoning = ref<Set<string>>(new Set())
 
@@ -85,11 +81,7 @@ const input = ref('')
 /** True while the voice control is recording: it then provides the send button. */
 const voiceRecording = ref(false)
 const busy = ref(false)
-// True while `send()` has set `activeThreadId` but has not yet appended
-// this turn's user/assistant placeholder rows — a `chat-tool-call`/
-// `chat-tool-result` for that (already-active) thread can otherwise land
-// before the messages it belongs after (backend events can arrive before
-// `sendMessageAsync`'s own await resolves).
+// True from send() until its placeholder rows land — guards a same-thread event arriving first.
 const turnSetupPending = ref(false)
 const lastError = ref<string | null>(null)
 const pendingSend = ref<SendMessageArgs | null>(null)
@@ -109,9 +101,7 @@ const {
 const { attachments, addAttachments, removeAttachment } =
   useComposerAttachments(chat, displayModelId, errString, lastError)
 
-// `Composer.vue` owns the <textarea> and its auto-resize composable; this
-// wrapper lets useComposer/useThreadSidebar keep a plain `() => Promise<void>`
-// dependency for clearing the input from outside it (new chat, thread delete).
+// Composer.vue owns the <textarea>/auto-resize; wrapped as the plain `() => Promise<void>` useComposer/useThreadSidebar expect.
 const composerRef = useTemplateRef<{ reset: () => Promise<void> } | null>(
   'composer',
 )
@@ -119,9 +109,7 @@ async function resetTextarea() {
   await composerRef.value?.reset()
 }
 
-// chatTranscript/threadSidebar need each other's functions (refreshThreads /
-// hasPendingTurn+co) — resolved by building chatTranscript against a
-// placeholder swapped for the real function once threadSidebar exists.
+// chatTranscript/threadSidebar need each other's functions — resolved via a placeholder swapped for the real refreshThreads once threadSidebar exists.
 let refreshThreadsForTranscript = async () => {}
 const chatTranscript = useChatTranscript(
   chat,
@@ -212,10 +200,7 @@ const sendDisabled = computed(
         autonomyPreferenceError.value !== null)),
 )
 
-// Composer/thread errors (`lastError`) and model-lifecycle errors
-// (`modelStore.lastError`) are separate refs — Pinia setup stores can't
-// take page-local refs as constructor params — merged into the one banner
-// the template shows.
+// lastError and modelStore.lastError are separate refs (Pinia setup stores take no page-local params) — merged into one banner.
 const displayedError = computed(() => lastError.value || modelLastError.value)
 
 function dismissError() {
@@ -236,9 +221,8 @@ const chatTitle = computed(
     t('chat.newChat'),
 )
 
-// Only the message area falls back to the catalog-download state, and only
-// when literally no model is installed/configured anywhere (spec 002
-// §FR-014 covers picking among models that DO exist).
+// Only the message area falls back to the catalog-download state, and only when no model is
+// installed/configured anywhere (spec 002 §FR-014 covers picking among models that DO exist).
 const showModelSelection = computed(() => noModelsInstalled.value)
 
 /** Scrolls the message viewport to its newest item after rendering. */
@@ -327,10 +311,26 @@ async function respondToApproval(
     pendingApprovals.value = pendingApprovals.value.filter(
       (a) => a.requestId !== requestId,
     )
+    if (pendingApprovals.value.length === 0) shellTab.clearAttention()
   } catch (e: unknown) {
     lastError.value = errString(e)
   }
 }
+
+// FR-014: ask before closing with a reply running or a permission pending; confirmAsync reuses abort (spec 003).
+shellTab.registerCloseGuard(() => {
+  const hasActiveReply =
+    streamingMessageId.value !== null ||
+    turnSetupPending.value ||
+    pendingApprovals.value.length > 0
+  if (!hasActiveReply) return null
+  return {
+    reasonKey: 'shell.close.activeReply',
+    confirmAsync: async () => {
+      await abort()
+    },
+  }
+})
 
 onMounted(async () => {
   try {
@@ -345,14 +345,16 @@ onMounted(async () => {
           chat.onRetry(handleRetry),
           chat.onAgentActivity(handleAgentActivity),
           chat.onTurnComplete((e) => {
-            // A turn ending — successfully, cancelled, or errored — is the
-            // authoritative point to clear any lingering agent-activity
-            // state (FR-011), the same signal that already clears
-            // `streamingMessageId`/`busy`.
+            // A turn ending clears agent-activity state (FR-011, same signal that already clears
+            // streamingMessageId/busy) and tab attention (R12) alike.
             resetAgentActivity()
+            shellTab.clearAttention()
             return handleTurnComplete(e)
           }),
-          chat.onToolPermissionRequest(handleToolPermissionRequest),
+          chat.onToolPermissionRequest((e) => {
+            shellTab.requestAttention()
+            return handleToolPermissionRequest(e)
+          }),
         ],
         unlisteners,
         () => unmounted,
@@ -377,8 +379,7 @@ onBeforeUnmount(() => {
   modelStore.stopListening()
   stopDurationRefresh()
   turnTerminalWaiters.clear()
-  // Approval requests cannot be reconstructed by a freshly mounted chat page.
-  if (streamingMessageId.value || turnSetupPending.value) void abort()
+  if (streamingMessageId.value || turnSetupPending.value) void abort() // can't reconstruct approvals on remount
   for (const unlisten of unlisteners.splice(0)) unlisten()
 })
 </script>

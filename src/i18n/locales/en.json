@@ -89,7 +89,10 @@
       "title": "Windows",
       "empty": "No windows are open."
     },
-    "attention": "Waiting for you"
+    "attention": "Waiting for you",
+    "close": {
+      "activeReply": "A reply is still running or waiting for your decision."
+    }
   },
   "chat": {
     "agentActivity": {

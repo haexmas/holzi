@@ -89,7 +89,10 @@
       "title": "Fenster",
       "empty": "Keine Fenster geöffnet."
     },
-    "attention": "Wartet auf dich"
+    "attention": "Wartet auf dich",
+    "close": {
+      "activeReply": "Eine Antwort läuft noch oder wartet auf deine Entscheidung."
+    }
   },
   "chat": {
     "agentActivity": {
