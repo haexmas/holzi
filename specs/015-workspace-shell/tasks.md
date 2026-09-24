@@ -44,18 +44,30 @@
 
 **Independent test**: Open a completed vault, launch Chat and Settings from the Launcher, use both, and reach them through the legacy routes.
 
-- [ ] T015 [P] [US1] Define Shell entities and app identifiers in `src/lib/shell/types.ts` and `src/lib/shell/apps.ts`
-- [ ] T016 [P] [US1] Implement pure app/window/workspace hydration and opening reducers in `src/lib/shell/layoutState.ts`
-- [ ] T017 [P] [US1] Implement app component mapping with async components in `src/components/shell/appComponents.ts`
-- [ ] T018 [US1] Implement the Pinia Shell store and public actions in `src/stores/shell.ts`
-- [ ] T019 [P] [US1] Add the Shell tab contract (`useShellTab`) in `src/composables/useShellTab.ts`
-- [ ] T020 [P] [US1] Move preload listeners and status state into `src/composables/useModelPreloadStatus.ts`
-- [ ] T021 [US1] Move the split chat page to `src/components/apps/ChatApp.vue`, preserving route-independent behavior
-- [ ] T022 [P] [US1] Move settings and federation pages to `src/components/apps/SettingsApp.vue` and `src/components/apps/FederationApp.vue`
-- [ ] T023 [P] [US1] Add Shell host and Launcher components in `src/components/shell/ShellDesktop.vue`, `src/components/shell/ShellLauncher.vue`, and `src/pages/workspace/[instance].vue`
-- [ ] T024 [US1] Add legacy route redirects in `src/pages/chat/[instance].vue`, `src/pages/settings/[instance].vue`, and `src/pages/federation/[instance].vue`
-- [ ] T025 [US1] Add Shell status bar and preserve onboarding/instance close behavior in `src/components/shell/ShellStatusBar.vue` and `src/pages/workspace/[instance].vue`
-- [ ] T026 [US1] Add initial Shell translations and remove obsolete workspace Stub keys only after `rg` confirms no remaining usage in `i18n/locales/de.json` and `i18n/locales/en.json`
+- [x] T015 [P] [US1] Define Shell entities and app identifiers in `src/lib/shell/types.ts` and `src/lib/shell/apps.ts`
+  - Done 2026-09-24: `Workspace`/`ShellTab`/`ShellWindow`/`ShellState`/`CloseGuard(Result)`/`TabRuntime`/`PersistedLayout` types; the three shipped apps in `apps.ts`. Verified loading standalone under Node's type stripping. Commit `c97bf63`.
+- [x] T016 [P] [US1] Implement pure app/window/workspace hydration and opening reducers in `src/lib/shell/layoutState.ts`
+  - Done 2026-09-24: `openApp` (singleton search across all windows, FR-016), `focusWindow`, `closeWindow`, `hydrate` (drops unresolvable tabs/empty windows, repairs dangling `activeTabId`/`workspaceId`, clamps geometry, re-derives `stack`, falls back to a default workspace). `getAppDefinition` (apps.ts) now takes the app list as a parameter (needed for T052 later). Verified by hand against every hydrate repair path. Commit `b158245`.
+- [x] T017 [P] [US1] Implement app component mapping with async components in `src/components/shell/appComponents.ts`
+  - Done 2026-09-24: built once at module load (not per call), so Vue's async-component cache stays keyed by app id. Commit `0b666ea` (done after T021/T022 since it needs `ChatApp.vue`/`SettingsApp.vue`/`FederationApp.vue` to exist — file-level dependency, not a spec change).
+- [x] T018 [US1] Implement the Pinia Shell store and public actions in `src/stores/shell.ts`
+  - Done 2026-09-24: `openApp`/`focusWindow`/`closeWindow`/`flushAsync` (placeholder until T047) plus `tabRuntime` bookkeeping and the three `useShellTab()` setters. Commits `479ab61`, extended in `d4f95d4` (T023) with the setters once `ShellWindow.vue` needed them.
+- [x] T019 [P] [US1] Add the Shell tab contract (`useShellTab`) in `src/composables/useShellTab.ts`
+  - Done 2026-09-24: provide/inject per contracts/shell-app-contract.md, inert default outside a Shell instance. Commit `2c16c94`.
+- [x] T020 [P] [US1] Move preload listeners and status state into `src/composables/useModelPreloadStatus.ts`
+  - Done 2026-09-24: moved unchanged from the old workspace stub; wired into `ShellStatusBar.vue` in T025. Commit `2c16c94`.
+- [x] T021 [US1] Move the split chat page to `src/components/apps/ChatApp.vue`, preserving route-independent behavior
+  - Done 2026-09-24: `git mv`; instance name from `useInstancesStore()`, settings links → `shell.openApp()`, `lock()` flushes first, `h-screen` → `h-full min-h-0`. Harness path and fake `useShellStore` updated to match. All 45 tests/typecheck/lint/vault-lifecycle/38-template-compile stay green. Commit `daab7df`.
+- [x] T022 [P] [US1] Move settings and federation pages to `src/components/apps/SettingsApp.vue` and `src/components/apps/FederationApp.vue`
+  - Done 2026-09-24: same route-coupling treatment; Settings drops its now-meaningless "back to workspace" link. Commit `310ff47`.
+- [x] T023 [P] [US1] Add Shell host and Launcher components in `src/components/shell/ShellDesktop.vue`, `src/components/shell/ShellLauncher.vue`, and `src/pages/workspace/[instance].vue`
+  - Done 2026-09-24: also created `ShellWindow.vue` ahead of T029 — deliberately minimal (icon/title/close, click-to-focus, no drag/resize/minimize/maximize/tabs yet), since US1's own test needs a real window to click and close; T029 extends this same file rather than replacing it. Removed the now-dead `components/workspace/ChatFab.vue`. Verified with typecheck/lint/38-template-compile and a full `pnpm generate` production build; not yet checked in a running Tauri window (needs a real vault session — deferred to the manual quickstart pass). Commit `d4f95d4`.
+- [x] T024 [US1] Add legacy route redirects in `src/pages/chat/[instance].vue`, `src/pages/settings/[instance].vue`, and `src/pages/federation/[instance].vue`
+  - Done 2026-09-24: `definePageMeta({ redirect })` to `/workspace/:instance?open=system.<app>` — resolves before any navigation guard, so `onboarded` still runs against the final URL. Also added the `?open=` consumption on the workspace host page itself (belongs with T023, was the one piece still missing there). Commit `e268dd4`.
+- [x] T025 [US1] Add Shell status bar and preserve onboarding/instance close behavior in `src/components/shell/ShellStatusBar.vue` and `src/pages/workspace/[instance].vue`
+  - Done 2026-09-24: markup moved unchanged from the old stub, wired to `useModelPreloadStatus`. Commit `f6d6421`.
+- [x] T026 [US1] Add initial Shell translations and remove obsolete workspace Stub keys only after `rg` confirms no remaining usage in `i18n/locales/de.json` and `i18n/locales/en.json`
+  - Done 2026-09-24: `shell.apps.*`/`shell.launcher.*`/`shell.window.close` added; `workspace.heading`/`chatFab.*`/`settings.iconTitle` removed (confirmed unused via `rg`), `workspace.modelPreload.*` kept. `jq` key-diff confirms exact de/en parity. **Phase 3 (User Story 1) complete.** Commit `81461aa`.
 
 ## Phase 4: User Story 2 — Window management (Priority: P1)
 
