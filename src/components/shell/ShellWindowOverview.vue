@@ -3,7 +3,9 @@
  * Lists every window of the active workspace — including minimized ones —
  * with icon, active-tab title, tab count and an attention badge; selecting
  * one restores/focuses it, a second control closes it (FR-011, FR-015).
- * Spec 015-workspace-shell, T030.
+ * The close button grows to a full touch target in compact mode (T050) —
+ * at its normal size the icon-only button falls well short of one.
+ * Spec 015-workspace-shell, T030, T050.
  */
 import { computed } from 'vue'
 import type { ShellWindow } from '~/lib/shell/types'
@@ -40,7 +42,7 @@ function select(windowId: string) {
     @update:open="open = $event"
   >
     <template #content>
-      <ul class="flex flex-col gap-1 p-2">
+      <ul class="flex flex-col gap-1 overflow-x-hidden p-2">
         <li
           v-for="row in rows"
           :key="row.win.id"
@@ -75,7 +77,8 @@ function select(windowId: string) {
           </button>
           <button
             type="button"
-            class="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+            class="shrink-0 rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+            :class="shell.compact ? 'p-3.5' : 'p-1.5'"
             :aria-label="t('shell.window.close')"
             @click="shell.closeWindow(row.win.id)"
           >

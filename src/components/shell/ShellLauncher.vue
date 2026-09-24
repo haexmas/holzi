@@ -4,7 +4,10 @@
  * one opens it as a window (FR-002). An attention dot marks an app with a
  * tab waiting on a reply anywhere (any window, any workspace) — the
  * Launcher is one of the surfaces FR-015 requires that to reach even when
- * the affected window is elsewhere. Spec 015-workspace-shell, T023, T041.
+ * the affected window is elsewhere. Compact mode (T050) drops to two
+ * columns so each tile stays a comfortable touch target on a narrow
+ * screen, instead of three cramped ones. Spec 015-workspace-shell, T023,
+ * T041, T050.
  */
 import { SHELL_APPS } from '~/lib/shell/apps'
 
@@ -26,7 +29,10 @@ function launch(appId: string) {
     @update:open="open = $event"
   >
     <template #content>
-      <div class="grid grid-cols-3 gap-3 p-4">
+      <div
+        class="grid gap-3 overflow-x-hidden p-4"
+        :class="shell.compact ? 'grid-cols-2' : 'grid-cols-3'"
+      >
         <button
           v-for="app in SHELL_APPS"
           :key="app.id"

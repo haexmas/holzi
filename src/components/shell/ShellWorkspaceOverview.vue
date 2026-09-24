@@ -6,7 +6,8 @@
  * R14). Deleting a workspace with open windows always confirms (FR-021),
  * even when none of them has a running reply — a plain window-count
  * reason alongside any real guard results, via the same
- * `ShellCloseConfirm.vue` dialog T038 built.
+ * `ShellCloseConfirm.vue` dialog T038 built. The delete button grows to a
+ * full touch target in compact mode (T050).
  */
 import { computed } from 'vue'
 import { requestConfirmation } from '~/composables/useShellCloseConfirm'
@@ -84,7 +85,7 @@ async function remove(workspaceId: string) {
     @update:open="open = $event"
   >
     <template #content>
-      <div class="flex flex-col gap-2 p-4">
+      <div class="flex flex-col gap-2 overflow-x-hidden p-4">
         <div
           v-for="row in rows"
           :key="row.workspace.id"
@@ -100,10 +101,10 @@ async function remove(workspaceId: string) {
             class="flex min-w-0 flex-1 items-center gap-2 text-left"
             @click="select(row.workspace.id)"
           >
-            <span class="font-medium">{{
+            <span class="shrink-0 truncate font-medium">{{
               numberLabel(row.workspace.position)
             }}</span>
-            <span class="text-xs text-muted-foreground">{{
+            <span class="min-w-0 truncate text-xs text-muted-foreground">{{
               t('shell.workspaces.windowCount', row.windowCount)
             }}</span>
             <span
@@ -115,7 +116,8 @@ async function remove(workspaceId: string) {
           <button
             v-if="shell.workspaces.length > 1"
             type="button"
-            class="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+            class="shrink-0 rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+            :class="shell.compact ? 'p-3.5' : 'p-1.5'"
             :aria-label="t('shell.workspaces.delete')"
             @click="remove(row.workspace.id)"
           >
