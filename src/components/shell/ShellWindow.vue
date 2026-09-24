@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
- * One Shell window: frame, minimal title bar (icon, title, close), and its
- * app content (spec 015-workspace-shell, T023). Deliberately minimal for
- * User Story 1 — drag, resize, minimize/maximize and the full Firefox-style
- * tab bar (FR-007, FR-031-038) are User Story 2/3 and extend this same
- * file (T029, T034-T037), not a replacement of it.
+ * One Shell window: frame, title bar (icon, title, minimize/maximize/close),
+ * drag-to-move, eight-way resize, and its app content (spec
+ * 015-workspace-shell, T023 + T029). The Firefox-style tab bar/Chevron
+ * (FR-007's tab area, FR-031-038) is User Story 3 and extends this same
+ * file (T034-T037).
  *
  * Provides the `useShellTab()` contract for the window's one tab (Phase 3
  * has no multi-tab windows yet — that is tabs.ts, T033).
@@ -12,7 +12,12 @@
 import { computed } from 'vue'
 import { getAppDefinition } from '~/lib/shell/apps'
 import { getAppComponent } from '~/components/shell/appComponents'
+import { windowDisplayRect } from '~/lib/shell/geometry'
 import { provideShellTab } from '~/composables/useShellTab'
+import {
+  useWindowPointerGesture,
+  type ResizeDirection,
+} from '~/composables/useWindowPointerGesture'
 import type { ShellWindow } from '~/lib/shell/types'
 
 const props = defineProps<{
@@ -35,6 +40,51 @@ const title = computed(() => {
   if (runtime?.titleOverride) return runtime.titleOverride
   return app.value ? t(app.value.titleKey) : ''
 })
+
+const displayRect = computed(() =>
+  windowDisplayRect(props.window, shell.compact, shell.area),
+)
+// Neither compact nor a maximized window offers moving/resizing (FR-028 for compact; a maximized
+// window has nowhere to move or grow to until it is restored).
+const interactive = computed(() => !shell.compact && !props.window.maximized)
+
+const { startMove, startResize } = useWindowPointerGesture(
+  () => ({
+    x: props.window.x,
+    y: props.window.y,
+    width: props.window.width,
+    height: props.window.height,
+  }),
+  () => app.value?.minSize ?? { width: 0, height: 0 },
+  () => shell.area,
+  (geometry) => shell.updateWindowGeometry(props.window.id, geometry),
+)
+
+function onTitleBarPointerDown(event: PointerEvent) {
+  if (interactive.value) startMove(event)
+}
+
+function onResizeHandlePointerDown(
+  event: PointerEvent,
+  direction: ResizeDirection,
+) {
+  if (interactive.value) startResize(event, direction)
+}
+
+function onTitleBarDoubleClick() {
+  if (!shell.compact) shell.toggleMaximizeWindow(props.window.id)
+}
+
+const RESIZE_HANDLES: { direction: ResizeDirection; class: string }[] = [
+  { direction: 'n', class: 'inset-x-2 top-0 h-1 cursor-ns-resize' },
+  { direction: 's', class: 'inset-x-2 bottom-0 h-1 cursor-ns-resize' },
+  { direction: 'e', class: 'inset-y-2 right-0 w-1 cursor-ew-resize' },
+  { direction: 'w', class: 'inset-y-2 left-0 w-1 cursor-ew-resize' },
+  { direction: 'ne', class: 'right-0 top-0 h-2 w-2 cursor-nesw-resize' },
+  { direction: 'nw', class: 'left-0 top-0 h-2 w-2 cursor-nwse-resize' },
+  { direction: 'se', class: 'right-0 bottom-0 h-2 w-2 cursor-nwse-resize' },
+  { direction: 'sw', class: 'left-0 bottom-0 h-2 w-2 cursor-nesw-resize' },
+]
 
 provideShellTab({
   get tabId() {
@@ -70,10 +120,10 @@ provideShellTab({
     class="absolute flex flex-col overflow-hidden rounded-lg border bg-background shadow-lg"
     :class="active ? 'border-foreground/40' : 'border-border'"
     :style="{
-      left: `${window.x}px`,
-      top: `${window.y}px`,
-      width: `${window.width}px`,
-      height: `${window.height}px`,
+      left: `${displayRect.x}px`,
+      top: `${displayRect.y}px`,
+      width: `${displayRect.width}px`,
+      height: `${displayRect.height}px`,
       zIndex: window.stack,
     }"
     role="group"
@@ -82,6 +132,9 @@ provideShellTab({
   >
     <div
       class="flex shrink-0 items-center gap-2 border-b border-border bg-muted/40 px-3 py-2"
+      :style="interactive ? { touchAction: 'none' } : undefined"
+      @pointerdown="onTitleBarPointerDown"
+      @dblclick="onTitleBarDoubleClick"
     >
       <Icon
         v-if="app"
@@ -92,17 +145,24 @@ provideShellTab({
       <span class="min-w-0 flex-1 truncate text-sm font-medium">{{
         title
       }}</span>
-      <button
-        type="button"
-        class="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-        :aria-label="t('shell.window.close')"
-        @click.stop="shell.closeWindow(window.id)"
-      >
-        <Icon name="lucide:x" class="h-3.5 w-3.5" :aria-hidden="true" />
-      </button>
+      <ShellWindowControls
+        :maximized="window.maximized"
+        @minimize="shell.minimizeWindow(window.id)"
+        @toggle-maximize="shell.toggleMaximizeWindow(window.id)"
+        @close="shell.closeWindow(window.id)"
+      />
     </div>
     <div class="min-h-0 flex-1 overflow-hidden">
       <component :is="component" v-if="component" />
     </div>
+    <div
+      v-for="handle in RESIZE_HANDLES"
+      v-show="interactive"
+      :key="handle.direction"
+      class="absolute"
+      :class="handle.class"
+      :style="{ touchAction: 'none' }"
+      @pointerdown="onResizeHandlePointerDown($event, handle.direction)"
+    />
   </div>
 </template>

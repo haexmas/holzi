@@ -5,7 +5,10 @@ import {
   closeWindow as closeWindowReducer,
   focusWindow as focusWindowReducer,
   hydrate,
+  minimizeWindow as minimizeWindowReducer,
   openApp as openAppReducer,
+  toggleMaximizeWindow as toggleMaximizeWindowReducer,
+  updateWindowGeometry as updateWindowGeometryReducer,
 } from '~/lib/shell/layoutState'
 import type { CloseGuard, ShellState, TabRuntime } from '~/lib/shell/types'
 
@@ -15,13 +18,13 @@ import type { CloseGuard, ShellState, TabRuntime } from '~/lib/shell/types'
  * `lib/shell/layoutState.ts` around one `reactive` `ShellState`, so they can
  * keep mutating their `state` parameter in place while Vue tracks it.
  *
- * Only what User Story 1 needs is implemented here: `openApp`,
- * `focusWindow`, `closeWindow`, and a `flushAsync` placeholder (FR-027)
+ * User Story 1 and 2's actions are implemented here: `openApp`,
+ * `focusWindow`, `closeWindow`, `minimizeWindow`, `toggleMaximizeWindow`,
+ * `updateWindowGeometry`, and a `flushAsync` placeholder (FR-027)
  * `ChatApp.vue`'s `lock()` already depends on. Tab actions (`addTab`,
- * `switchTab`, `closeTab`), window management (`minimizeWindow`,
- * `toggleMaximizeWindow`) and workspace actions (`createWorkspace`,
+ * `switchTab`, `closeTab`) and workspace actions (`createWorkspace`,
  * `deleteWorkspace`, `switchWorkspace`, `moveWindowToWorkspace`) land in
- * this same store as their own user stories (Phase 4-6) build them.
+ * this same store as their own user stories (Phase 5-6) build them.
  *
  * Persistence does not exist yet (Phase 7): `state` starts from an empty
  * layout, and `flushAsync` is a no-op until T047 wires the real write queue.
@@ -114,6 +117,21 @@ export const useShellStore = defineStore('shell', () => {
     focusWindowReducer(state, windowId)
   }
 
+  function minimizeWindow(windowId: string) {
+    minimizeWindowReducer(state, windowId)
+  }
+
+  function toggleMaximizeWindow(windowId: string) {
+    toggleMaximizeWindowReducer(state, windowId)
+  }
+
+  function updateWindowGeometry(
+    windowId: string,
+    geometry: { x: number; y: number; width: number; height: number },
+  ) {
+    updateWindowGeometryReducer(state, windowId, geometry)
+  }
+
   /** Removes the window without asking anything — guard confirmation (FR-014) runs at the caller
    * (`ShellCloseConfirm.vue`, T038) before this is invoked. */
   function closeWindow(windowId: string) {
@@ -135,6 +153,9 @@ export const useShellStore = defineStore('shell', () => {
     setTabCloseGuard,
     openApp,
     focusWindow,
+    minimizeWindow,
+    toggleMaximizeWindow,
+    updateWindowGeometry,
     closeWindow,
     flushAsync,
   }

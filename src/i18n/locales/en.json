@@ -79,7 +79,10 @@
       "title": "Launcher"
     },
     "window": {
-      "close": "Close window"
+      "close": "Close window",
+      "minimize": "Minimize window",
+      "maximize": "Maximize window",
+      "restore": "Restore window"
     }
   },
   "chat": {

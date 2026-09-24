@@ -28,6 +28,23 @@ function findOpenTab(
   return null
 }
 
+/** The front-most window in `workspaceId` (optionally excluding minimized ones) — shared by
+ * `closeWindow`/`minimizeWindow`'s "who becomes active next" step. */
+function frontmostWindow(
+  state: ShellState,
+  workspaceId: string,
+  visibleOnly = false,
+): ShellWindow | null {
+  return state.windows
+    .filter(
+      (w) => w.workspaceId === workspaceId && (!visibleOnly || !w.minimized),
+    )
+    .reduce<ShellWindow | null>(
+      (front, w) => (front === null || w.stack > front.stack ? w : front),
+      null,
+    )
+}
+
 /** Restores (if minimized), brings to front, and activates `tab` within its window and workspace
  * — the shared "make this tab visible" step behind `openApp`'s singleton path and, later, tab
  * selection (tabs.ts, T033). */
@@ -38,6 +55,45 @@ export function focusWindow(state: ShellState, windowId: string): void {
   window.stack = ++state.nextStack
   state.activeWindowId = window.id
   state.activeWorkspaceId = window.workspaceId
+}
+
+/** Minimizes the window; if it was active, the next-front-most *visible* window in the same
+ * workspace becomes active (data-model.md's Fenster transitions). */
+export function minimizeWindow(state: ShellState, windowId: string): void {
+  const window = state.windows.find((w) => w.id === windowId)
+  if (!window) return
+  window.minimized = true
+  if (state.activeWindowId !== windowId) return
+  state.activeWindowId =
+    frontmostWindow(state, window.workspaceId, true)?.id ?? null
+}
+
+/** Toggles maximized state (FR-039) and focuses the window — the stored normal geometry is never
+ * touched either way (research R7); `geometry.ts`'s `windowDisplayRect` resolves what actually
+ * renders. */
+export function toggleMaximizeWindow(
+  state: ShellState,
+  windowId: string,
+): void {
+  const window = state.windows.find((w) => w.id === windowId)
+  if (!window) return
+  window.maximized = !window.maximized
+  focusWindow(state, windowId)
+}
+
+/** Applies a drag/resize result (already clamped by the caller, `useWindowPointerGesture`) to the
+ * window's stored normal geometry. */
+export function updateWindowGeometry(
+  state: ShellState,
+  windowId: string,
+  geometry: { x: number; y: number; width: number; height: number },
+): void {
+  const window = state.windows.find((w) => w.id === windowId)
+  if (!window) return
+  window.x = geometry.x
+  window.y = geometry.y
+  window.width = geometry.width
+  window.height = geometry.height
 }
 
 /** Opens `appId` as a new window, or activates its existing tab if it is a singleton app already
@@ -88,13 +144,7 @@ export function closeWindow(state: ShellState, windowId: string): void {
   const wasActive = state.activeWindowId === windowId
   state.windows = state.windows.filter((w) => w.id !== windowId)
   if (!wasActive) return
-  const nextInWorkspace = state.windows
-    .filter((w) => w.workspaceId === closed.workspaceId)
-    .reduce<ShellWindow | null>(
-      (front, w) => (front === null || w.stack > front.stack ? w : front),
-      null,
-    )
-  state.activeWindowId = nextInWorkspace?.id ?? null
+  state.activeWindowId = frontmostWindow(state, closed.workspaceId)?.id ?? null
 }
 
 /**
