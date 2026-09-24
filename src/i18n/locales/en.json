@@ -99,7 +99,8 @@
       "newTab": "New tab",
       "scrollLeft": "Scroll tabs left",
       "scrollRight": "Scroll tabs right",
-      "alreadyOpen": "Already open"
+      "alreadyOpen": "Already open",
+      "listMenu": "All tabs"
     }
   },
   "chat": {

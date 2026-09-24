@@ -150,6 +150,11 @@ const RESIZE_HANDLES: { direction: ResizeDirection; class: string }[] = [
         @close-tab="requestCloseTab"
       />
       <div class="min-w-4 flex-1" />
+      <ShellTabListMenu
+        :tabs="window.tabs"
+        :active-tab-id="window.activeTabId"
+        @select-tab="selectTab"
+      />
       <ShellWindowControls
         :maximized="window.maximized"
         @minimize="shell.minimizeWindow(window.id)"

@@ -99,7 +99,8 @@
       "newTab": "Neuer Tab",
       "scrollLeft": "Tabs nach links scrollen",
       "scrollRight": "Tabs nach rechts scrollen",
-      "alreadyOpen": "Bereits geöffnet"
+      "alreadyOpen": "Bereits geöffnet",
+      "listMenu": "Alle Tabs"
     }
   },
   "chat": {
