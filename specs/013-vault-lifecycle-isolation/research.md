@@ -72,9 +72,17 @@ descendant that left its process group survives. **Upgrade path**: a Windows Job
 kill-on-close and `PR_SET_PDEATHSIG` on Linux, which would also cover a killed app; not adopted
 because it needs platform-specific code and a new Windows dependency.
 
-**Open**: how `tauri dev` reacts to the relaunch (whether the dev runner re-attaches, restarts or
-stops). Until verified, debug builds default to `Exit`; release builds default to relaunch. The
-policy is one `const`-like function so the outcome of the manual check changes one line.
+**Resolved** (T048, 2026-09-24): under `pnpm tauri:dev`, the dev runner **stops**. Forcing
+`ClosePolicy::Relaunch` in a debug build (a scratch env-var check in `close_policy()`, removed
+again after the test) and triggering it through the real UI (`xvfb-run` + `tauri-driver`, screen
+captured via `Xvfb -fbdir` and read back as a converted PNG, input via `xdotool`) showed the same
+outcome twice: the relaunched `target/debug/holzi` process appears within milliseconds (a new pid,
+a fresh GTK/MESA init line), but `cargo run`'s exit then makes the `tauri dev` watcher itself exit
+(`XVFB-RUN-WRAPPER-EXIT-CODE: 0`, i.e. a clean, non-error exit) with no further Vite/Nitro output —
+it does not re-attach to the new process or rebuild. The instance's on-disk data survived intact
+across both runs (the relaunched app listed it as "Zuletzt verwendet"), so this is a dev-tooling
+limitation, not a data-safety issue. Debug builds stay `Exit`, matching the pre-existing default; no
+code change needed beyond confirming it.
 
 **Alternatives considered**: `restart()` (blocks a thread); spawning our own child process (loses
 Tauri's AppImage and macOS bundle handling); never relaunching (spec default is relaunch).
@@ -183,9 +191,15 @@ does, because its terminal closes. `gate.run` drops the future of a long command
 a `spawn_blocking` closure such as the model file copy keeps running until the process ends, and
 the staging file it leaves is removed by the next start-up cleanup.
 
-**Open**: whether dropping the local inference stream stops the engine promptly
-(`llm/local/stream.rs` spawns the reader task; the engine thread is inside mistralrs). If it does
-not, the 3 s limit covers it; the quickstart measures it.
+**Resolved** (T049, 2026-09-24): yes, promptly. Verified live: downloaded the real catalog model
+`qwen3-0.6b-instruct-q4_k_m` (~462 MB, CPU inference), loaded it, sent a prompt asking for a long
+(2000+ word) story, confirmed generation was genuinely under way from the process's own CPU time
+(`/proc/<pid>/stat`, not the DOM — a raw backend `send_message` call, like `startReply` already does
+for the provider case, never runs through the frontend's own reactive plumbing, so nothing here
+could assume the page would show it), let it run a few more seconds, then pressed lock. The process
+ended in 50 ms — the cooperative path, nowhere near the 3 s/3.5 s limit. Dropping
+`llm/local/stream.rs`'s reader task stops the engine immediately in practice; the hard limit exists
+for a genuinely stuck case, not the ordinary one.
 
 **Alternatives considered**: a full per-vault `VaultSession` object dropped on close (unneeded once
 the process ends); epoch headers on every request (unneeded, one vault per process).
