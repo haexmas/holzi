@@ -83,7 +83,13 @@
       "minimize": "Minimize window",
       "maximize": "Maximize window",
       "restore": "Restore window"
-    }
+    },
+    "windowOverview": {
+      "open": "Window overview",
+      "title": "Windows",
+      "empty": "No windows are open."
+    },
+    "attention": "Waiting for you"
   },
   "chat": {
     "agentActivity": {

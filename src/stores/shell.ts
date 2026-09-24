@@ -1,6 +1,6 @@
 import { computed, reactive, toRefs } from 'vue'
 import { defineStore } from 'pinia'
-import { SHELL_APPS } from '~/lib/shell/apps'
+import { getAppDefinition, SHELL_APPS } from '~/lib/shell/apps'
 import {
   closeWindow as closeWindowReducer,
   focusWindow as focusWindowReducer,
@@ -10,7 +10,12 @@ import {
   toggleMaximizeWindow as toggleMaximizeWindowReducer,
   updateWindowGeometry as updateWindowGeometryReducer,
 } from '~/lib/shell/layoutState'
-import type { CloseGuard, ShellState, TabRuntime } from '~/lib/shell/types'
+import type {
+  CloseGuard,
+  ShellState,
+  ShellWindow,
+  TabRuntime,
+} from '~/lib/shell/types'
 
 /**
  * Shell state and its public actions (spec 015-workspace-shell, T018,
@@ -108,6 +113,37 @@ export const useShellStore = defineStore('shell', () => {
     if (runtime) runtime.guard = guard
   }
 
+  /** The active tab of a window, falling back to its first tab if `activeTabId` is somehow stale
+   * (should not happen post-hydrate, but callers should not assume it never will). */
+  function activeTabOf(window: ShellWindow) {
+    return (
+      window.tabs.find((t) => t.id === window.activeTabId) ?? window.tabs[0]
+    )
+  }
+
+  /** Raw display data for a window — icon/titleKey from its active tab's app, any title override,
+   * and whether *any* of its tabs wants attention (data-model.md's derived "window has attention"
+   * rule). Callers translate `titleKey` themselves; this store does not depend on `useI18n()`.
+   * Shared by `ShellWindow.vue` and `ShellWindowOverview.vue` (T030). */
+  function windowDisplayInfo(window: ShellWindow): {
+    titleKey: string | undefined
+    icon: string | undefined
+    titleOverride: string | null
+    tabCount: number
+    hasAttention: boolean
+  } | null {
+    const tab = activeTabOf(window)
+    if (!tab) return null
+    const app = getAppDefinition(tab.appId, SHELL_APPS)
+    return {
+      titleKey: app?.titleKey,
+      icon: app?.icon,
+      titleOverride: runtimeFor(tab.id).titleOverride,
+      tabCount: window.tabs.length,
+      hasAttention: window.tabs.some((t) => runtimeFor(t.id).attention),
+    }
+  }
+
   function openApp(appId: string) {
     openAppReducer(state, appId, SHELL_APPS)
     syncTabRuntime()
@@ -147,6 +183,7 @@ export const useShellStore = defineStore('shell', () => {
     ...toRefs(state),
     windowsInActiveWorkspace,
     runtimeFor,
+    windowDisplayInfo,
     markTabMounted,
     setTabAttention,
     setTabTitle,

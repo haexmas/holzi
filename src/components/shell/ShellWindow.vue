@@ -35,10 +35,14 @@ const app = computed(() =>
 const component = computed(() =>
   tab.value ? getAppComponent(tab.value.appId) : undefined,
 )
+const info = computed(() => shell.windowDisplayInfo(props.window))
 const title = computed(() => {
-  const runtime = tab.value ? shell.runtimeFor(tab.value.id) : null
-  if (runtime?.titleOverride) return runtime.titleOverride
-  return app.value ? t(app.value.titleKey) : ''
+  const displayInfo = info.value
+  if (!displayInfo) return ''
+  return (
+    displayInfo.titleOverride ??
+    (displayInfo.titleKey ? t(displayInfo.titleKey) : '')
+  )
 })
 
 const displayRect = computed(() =>

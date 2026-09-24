@@ -83,7 +83,13 @@
       "minimize": "Fenster minimieren",
       "maximize": "Fenster maximieren",
       "restore": "Fenster wiederherstellen"
-    }
+    },
+    "windowOverview": {
+      "open": "Fensterübersicht",
+      "title": "Fenster",
+      "empty": "Keine Fenster geöffnet."
+    },
+    "attention": "Wartet auf dich"
   },
   "chat": {
     "agentActivity": {
