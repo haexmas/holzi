@@ -11,11 +11,11 @@ Fremdschlüssel auf `known_devices(vault_device_uuid) ON DELETE CASCADE`.
 
 ### `workspaces`
 
-| Spalte              | Typ                | Regel                                                        |
-| ------------------- | ------------------ | ------------------------------------------------------------ |
-| `vault_device_uuid` | TEXT NOT NULL      | FK → `known_devices` ON DELETE CASCADE; nie die Nil-UUID     |
-| `workspace_id`      | TEXT NOT NULL      | UUID v4, vom Backend vergeben                                |
-| `position`          | INTEGER NOT NULL   | dicht 0…n−1 je Gerät                                         |
+| Spalte              | Typ              | Regel                                                    |
+| ------------------- | ---------------- | -------------------------------------------------------- |
+| `vault_device_uuid` | TEXT NOT NULL    | FK → `known_devices` ON DELETE CASCADE; nie die Nil-UUID |
+| `workspace_id`      | TEXT NOT NULL    | UUID v4, vom Backend vergeben                            |
+| `position`          | INTEGER NOT NULL | dicht 0…n−1 je Gerät                                     |
 
 PK `(vault_device_uuid, workspace_id)`; `UNIQUE (workspace_id)` (Ziel der Fremdschlüssel, R2); Index `(vault_device_uuid, position)`.
 
@@ -26,29 +26,29 @@ Nummern bleiben dadurch lückenlos, ohne dass etwas umbenannt werden muss.
 
 ### `shell_windows`
 
-| Spalte              | Typ                     | Regel                                                             |
-| ------------------- | ----------------------- | ----------------------------------------------------------------- |
-| `vault_device_uuid` | TEXT NOT NULL           | FK wie oben                                                       |
-| `window_id`         | TEXT NOT NULL           | UUID v4, vom Frontend vergeben                                    |
-| `workspace_id`      | TEXT NOT NULL           | FK → `workspaces(workspace_id)` ON DELETE CASCADE (Ziel; Fallback ohne FK: Speicherschicht, R2) |
-| `x`, `y`            | INTEGER NOT NULL        | Normalgeometrie, ±100 000                                         |
-| `width`, `height`   | INTEGER NOT NULL        | Normalgeometrie, 1–100 000                                        |
-| `is_minimized`      | INTEGER NOT NULL DEFAULT 0 | 0/1                                                            |
-| `is_maximized`      | INTEGER NOT NULL DEFAULT 0 | 0/1; die Normalgeometrie bleibt beim Maximieren unverändert (R7) |
-| `stack_order`       | INTEGER NOT NULL        | Rang der Stapelreihenfolge je Gerät (höher = weiter vorn), beim Speichern dicht |
-| `active_tab_id`     | TEXT NOT NULL           | einer der Tabs des Fensters                                       |
+| Spalte              | Typ                        | Regel                                                                                           |
+| ------------------- | -------------------------- | ----------------------------------------------------------------------------------------------- |
+| `vault_device_uuid` | TEXT NOT NULL              | FK wie oben                                                                                     |
+| `window_id`         | TEXT NOT NULL              | UUID v4, vom Frontend vergeben                                                                  |
+| `workspace_id`      | TEXT NOT NULL              | FK → `workspaces(workspace_id)` ON DELETE CASCADE (Ziel; Fallback ohne FK: Speicherschicht, R2) |
+| `x`, `y`            | INTEGER NOT NULL           | Normalgeometrie, ±100 000                                                                       |
+| `width`, `height`   | INTEGER NOT NULL           | Normalgeometrie, 1–100 000                                                                      |
+| `is_minimized`      | INTEGER NOT NULL DEFAULT 0 | 0/1                                                                                             |
+| `is_maximized`      | INTEGER NOT NULL DEFAULT 0 | 0/1; die Normalgeometrie bleibt beim Maximieren unverändert (R7)                                |
+| `stack_order`       | INTEGER NOT NULL           | Rang der Stapelreihenfolge je Gerät (höher = weiter vorn), beim Speichern dicht                 |
+| `active_tab_id`     | TEXT NOT NULL              | einer der Tabs des Fensters                                                                     |
 
 PK `(vault_device_uuid, window_id)`; `UNIQUE (window_id)` (Ziel des Fremdschlüssels, R2); Index `(vault_device_uuid, workspace_id)`.
 
 ### `shell_window_tabs`
 
-| Spalte              | Typ              | Regel                                                             |
-| ------------------- | ---------------- | ----------------------------------------------------------------- |
-| `vault_device_uuid` | TEXT NOT NULL    | FK wie oben                                                       |
-| `tab_id`            | TEXT NOT NULL    | UUID v4, vom Frontend vergeben                                    |
+| Spalte              | Typ              | Regel                                                                                           |
+| ------------------- | ---------------- | ----------------------------------------------------------------------------------------------- |
+| `vault_device_uuid` | TEXT NOT NULL    | FK wie oben                                                                                     |
+| `tab_id`            | TEXT NOT NULL    | UUID v4, vom Frontend vergeben                                                                  |
 | `window_id`         | TEXT NOT NULL    | FK → `shell_windows(window_id)` ON DELETE CASCADE (Ziel; Fallback ohne FK: Speicherschicht, R2) |
-| `app_id`            | TEXT NOT NULL    | opak, 1–128 Zeichen, keine Steuerzeichen (z. B. `system.chat`)    |
-| `position`          | INTEGER NOT NULL | dicht 0…n−1 je Fenster                                            |
+| `app_id`            | TEXT NOT NULL    | opak, 1–128 Zeichen, keine Steuerzeichen (z. B. `system.chat`)                                  |
+| `position`          | INTEGER NOT NULL | dicht 0…n−1 je Fenster                                                                          |
 
 PK `(vault_device_uuid, tab_id)`; Index `(vault_device_uuid, window_id, position)`.
 
@@ -61,17 +61,17 @@ einen nicht (mehr) vorhandenen Arbeitsbereich, gilt der erste nach `position`;
 
 ### Invarianten (Speicherschicht in Transaktionen, wo nicht das Schema selbst sie garantiert)
 
-| #   | Invariante                                                                                     | Spec        |
-| --- | ---------------------------------------------------------------------------------------------- | ----------- |
-| I1  | Nach `shell_load_layout` existiert ≥ 1 Arbeitsbereich für das aktuelle Gerät                   | FR-018      |
-| I2  | `position` der Arbeitsbereiche ist dicht 0…n−1 (nach Anlegen und Löschen)             | FR-019      |
-| I3  | Der letzte Arbeitsbereich ist nicht löschbar (`InvalidInput`)                                  | FR-019      |
-| I4  | Ein Fenster verweist auf einen vorhandenen Arbeitsbereich desselben Geräts, sonst `InvalidInput` | FR-006      |
-| I5  | Ein Fenster hat 1–100 Tabs; `tab_id` je Gerät eindeutig; `active_tab_id` ∈ Tabs; `position` dicht | FR-006, FR-037 |
-| I6  | Speichern eines Fensters ersetzt seine Tab-Menge vollständig in derselben Transaktion           | FR-023      |
-| I7  | Löschen eines Arbeitsbereichs entfernt seine Fenster und deren Tabs; Schließen eines Fensters seine Tabs (Datenbank-Cascade; Fallback R2: eine Transaktion) | FR-021 |
-| I8  | Alle Zugriffe filtern nach dem im Backend aufgelösten Gerät; das Frontend übergibt keine Geräte-UUID | FR-024 |
-| I9  | Höchstens 500 Fenster je Gerät (Schutz vor Fehlverhalten, keine UI-Regel)                       | –           |
+| #   | Invariante                                                                                                                                                  | Spec           |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| I1  | Nach `shell_load_layout` existiert ≥ 1 Arbeitsbereich für das aktuelle Gerät                                                                                | FR-018         |
+| I2  | `position` der Arbeitsbereiche ist dicht 0…n−1 (nach Anlegen und Löschen)                                                                                   | FR-019         |
+| I3  | Der letzte Arbeitsbereich ist nicht löschbar (`InvalidInput`)                                                                                               | FR-019         |
+| I4  | Ein Fenster verweist auf einen vorhandenen Arbeitsbereich desselben Geräts, sonst `InvalidInput`                                                            | FR-006         |
+| I5  | Ein Fenster hat 1–100 Tabs; `tab_id` je Gerät eindeutig; `active_tab_id` ∈ Tabs; `position` dicht                                                           | FR-006, FR-037 |
+| I6  | Speichern eines Fensters ersetzt seine Tab-Menge vollständig in derselben Transaktion                                                                       | FR-023         |
+| I7  | Löschen eines Arbeitsbereichs entfernt seine Fenster und deren Tabs; Schließen eines Fensters seine Tabs (Datenbank-Cascade; Fallback R2: eine Transaktion) | FR-021         |
+| I8  | Alle Zugriffe filtern nach dem im Backend aufgelösten Gerät; das Frontend übergibt keine Geräte-UUID                                                        | FR-024         |
+| I9  | Höchstens 500 Fenster je Gerät (Schutz vor Fehlverhalten, keine UI-Regel)                                                                                   | –              |
 
 Kopie/Adoption (FR-024, SC-006): Ein kopierter Vault auf einem neuen Gerät bekommt
 eine neue `vault_device_uuid` (`HolziBootstrap`); alle Abfragen filtern danach, die
@@ -147,9 +147,9 @@ nächster) wird aktiv.
 
 ### Validierung (Spec → Regel)
 
-| Regel                                                        | Ort                    |
-| ------------------------------------------------------------ | ---------------------- |
-| Fenster-Mindestgröße je App, Klemmen in den Bereich (FR-009)  | `geometry.ts` (Frontend) |
-| Nur Titelleisten-Ausschnitt 64 × 32 px muss sichtbar bleiben beim Ziehen | `geometry.ts` |
-| Singleton über alle Fenster (FR-016, FR-033)                  | `tabs.ts`              |
-| IDs, Grenzen, Tab-Anzahl, `activeTabId` ∈ Tabs                | Rust-Speicherschicht   |
+| Regel                                                                    | Ort                      |
+| ------------------------------------------------------------------------ | ------------------------ |
+| Fenster-Mindestgröße je App, Klemmen in den Bereich (FR-009)             | `geometry.ts` (Frontend) |
+| Nur Titelleisten-Ausschnitt 64 × 32 px muss sichtbar bleiben beim Ziehen | `geometry.ts`            |
+| Singleton über alle Fenster (FR-016, FR-033)                             | `tabs.ts`                |
+| IDs, Grenzen, Tab-Anzahl, `activeTabId` ∈ Tabs                           | Rust-Speicherschicht     |

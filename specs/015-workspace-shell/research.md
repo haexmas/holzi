@@ -12,13 +12,13 @@ gepinnten haex-vault-Commit `8dce379d94e18fcd42c3b73686a06f984ca3f574`.
 Abfragen gegen `graphify-out/graph.json` des primären Checkouts (Fork-Point-
 Snapshot, wie vorgeschrieben unverändert genutzt):
 
-| Kandidat                                                         | Ergebnis                                                              | Konsequenz                                                                                      |
-| ---------------------------------------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `storage::preferences` (`PrefScope`, `insert_or_update`, `get`)  | Per-device Key/Value nach ADR-0001, CRDT-getrackt                    | **Erweitert**: der aktive Arbeitsbereich wird als Preference gespeichert (R1), kein neuer Store |
-| `usePreferences`, `useDevice`, `active_database`                 | Bestehende Wrapper/Helfer                                             | **Wiederverwendet** unverändert                                                                 |
-| `known_devices::get_vault_device_uuid`                           | Löst `installation_uuid → vault_device_uuid` auf                      | **Wiederverwendet** (R4)                                                                        |
-| Fenstermanager, Drag-/Resize-Composable, Viewport-/Breakpoint-Helfer | Keine Treffer (nur `useAutoResizeTextarea`, das nichts mit Fenstern zu tun hat) | Neu zu schreiben, aber auf `@vueuse/core` (bereits Abhängigkeit) gestützt (R7)              |
-| Workspace-Stub `pages/workspace/[instance].vue`                  | Enthält die Modell-Preload-Statuslogik                                | **Wird verschoben**, nicht dupliziert (R11)                                                     |
+| Kandidat                                                             | Ergebnis                                                                        | Konsequenz                                                                                      |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `storage::preferences` (`PrefScope`, `insert_or_update`, `get`)      | Per-device Key/Value nach ADR-0001, CRDT-getrackt                               | **Erweitert**: der aktive Arbeitsbereich wird als Preference gespeichert (R1), kein neuer Store |
+| `usePreferences`, `useDevice`, `active_database`                     | Bestehende Wrapper/Helfer                                                       | **Wiederverwendet** unverändert                                                                 |
+| `known_devices::get_vault_device_uuid`                               | Löst `installation_uuid → vault_device_uuid` auf                                | **Wiederverwendet** (R4)                                                                        |
+| Fenstermanager, Drag-/Resize-Composable, Viewport-/Breakpoint-Helfer | Keine Treffer (nur `useAutoResizeTextarea`, das nichts mit Fenstern zu tun hat) | Neu zu schreiben, aber auf `@vueuse/core` (bereits Abhängigkeit) gestützt (R7)                  |
+| Workspace-Stub `pages/workspace/[instance].vue`                      | Enthält die Modell-Preload-Statuslogik                                          | **Wird verschoben**, nicht dupliziert (R11)                                                     |
 
 Die Abfragen `query "workspace window layout"` und `query "viewport breakpoint compact"`
 liefern erwartungsgemäß nur Token-Treffer (siehe bekannte Schwäche von

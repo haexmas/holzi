@@ -15,21 +15,24 @@ Rückgaben enthalten nie lokalisierte Texte.
 
 ```ts
 // src/types/bindings/ (generiert)
-type WorkspaceDto = { workspaceId: string; position: number }   // kein Name: Anzeige „Arbeitsbereich N“ aus position
-type TabDto       = { tabId: string; appId: string }
+type WorkspaceDto = { workspaceId: string; position: number } // kein Name: Anzeige „Arbeitsbereich N“ aus position
+type TabDto = { tabId: string; appId: string }
 type WindowDto = {
   windowId: string
   workspaceId: string
-  x: number; y: number; width: number; height: number   // Normalgeometrie
+  x: number
+  y: number
+  width: number
+  height: number // Normalgeometrie
   isMinimized: boolean
   isMaximized: boolean
   stackOrder: number
   activeTabId: string
-  tabs: TabDto[]                                          // Reihenfolge = Leistenreihenfolge
+  tabs: TabDto[] // Reihenfolge = Leistenreihenfolge
 }
 type ShellLayoutDto = {
-  workspaces: WorkspaceDto[]                              // nach position
-  windows: WindowDto[]                                    // nach stackOrder aufsteigend
+  workspaces: WorkspaceDto[] // nach position
+  windows: WindowDto[] // nach stackOrder aufsteigend
   activeWorkspaceId: string
 }
 ```
@@ -111,15 +114,15 @@ je Gerät.
 
 ## Fehlerabbildung
 
-| Situation                                         | Fehler                                          |
-| ------------------------------------------------- | ----------------------------------------------- |
-| Kein Vault geöffnet                               | `NoActiveInstance`                              |
-| Unbekannte `workspaceId`                          | `InvalidInput`                                  |
-| Letzten Arbeitsbereich löschen                    | `InvalidInput`                                  |
-| Fenster ohne Tab, `activeTabId` ∉ Tabs, > 100 Tabs | `InvalidInput`                                 |
-| Doppelte `tabId` im Aufruf oder in einem anderen Fenster | `InvalidInput`                           |
-| Geometrie/`appId` außerhalb der Grenzen           | `InvalidInput`                                  |
-| Datenbankfehler                                   | bestehende Abbildung über `HolziError::from`    |
+| Situation                                                | Fehler                                       |
+| -------------------------------------------------------- | -------------------------------------------- |
+| Kein Vault geöffnet                                      | `NoActiveInstance`                           |
+| Unbekannte `workspaceId`                                 | `InvalidInput`                               |
+| Letzten Arbeitsbereich löschen                           | `InvalidInput`                               |
+| Fenster ohne Tab, `activeTabId` ∉ Tabs, > 100 Tabs       | `InvalidInput`                               |
+| Doppelte `tabId` im Aufruf oder in einem anderen Fenster | `InvalidInput`                               |
+| Geometrie/`appId` außerhalb der Grenzen                  | `InvalidInput`                               |
+| Datenbankfehler                                          | bestehende Abbildung über `HolziError::from` |
 
 ## Nicht Teil dieses Vertrags
 

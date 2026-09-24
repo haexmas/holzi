@@ -12,12 +12,12 @@ absichtlich klein und hängt von keiner konkreten App ab, sodass spätere Apps
 
 ```ts
 export type ShellAppDefinition = {
-  id: string                    // 'system.chat' | 'system.settings' | 'system.federation'
-  titleKey: string              // i18n-Schlüssel, z. B. 'shell.apps.chat'
-  icon: string                  // Iconify-Name, z. B. 'lucide:message-square'
-  defaultSize: { width: number; height: number }   // neues Fenster mit dieser App als erstem Tab
-  minSize: { width: number; height: number }       // Mindestgröße des Fensters
-  multiInstance: boolean        // false = Einzelinstanz (FR-016)
+  id: string // 'system.chat' | 'system.settings' | 'system.federation'
+  titleKey: string // i18n-Schlüssel, z. B. 'shell.apps.chat'
+  icon: string // Iconify-Name, z. B. 'lucide:message-square'
+  defaultSize: { width: number; height: number } // neues Fenster mit dieser App als erstem Tab
+  minSize: { width: number; height: number } // Mindestgröße des Fensters
+  multiInstance: boolean // false = Einzelinstanz (FR-016)
 }
 ```
 
@@ -42,7 +42,7 @@ export type CloseGuardResult = {
       (z. B. Antwort abbrechen). Resolves, sobald der Tab gefahrlos schließen kann. */
   confirmAsync: () => Promise<void>
 }
-export type CloseGuard = () => CloseGuardResult | null    // null = kein Nachfragen nötig
+export type CloseGuard = () => CloseGuardResult | null // null = kein Nachfragen nötig
 
 export type ShellTabApi = {
   readonly tabId: string
@@ -83,14 +83,14 @@ Erwartetes Verhalten der Apps:
 
 ## 3. Route-Vertrag
 
-| Route                                    | Verhalten                                                                                       |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `/workspace/:instance`                   | Shell-Host-Seite (Middleware `onboarded` unverändert, FR-001)                                    |
-| `/workspace/:instance?open=<appId>`      | Wie oben; die Shell öffnet die App (`openApp`), entfernt `open` per `router.replace`, lässt keinen zweiten Tab entstehen, wenn der Parameter erneut ankommt |
-| `/chat/:instance`                        | Redirect auf `/workspace/:instance?open=system.chat` (FR-004)                                    |
-| `/settings/:instance`                    | Redirect auf `/workspace/:instance?open=system.settings`                                         |
-| `/federation/:instance`                  | Redirect auf `/workspace/:instance?open=system.federation`                                       |
-| `/`, `/onboarding/:instance`             | unverändert                                                                                     |
+| Route                               | Verhalten                                                                                                                                                   |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/workspace/:instance`              | Shell-Host-Seite (Middleware `onboarded` unverändert, FR-001)                                                                                               |
+| `/workspace/:instance?open=<appId>` | Wie oben; die Shell öffnet die App (`openApp`), entfernt `open` per `router.replace`, lässt keinen zweiten Tab entstehen, wenn der Parameter erneut ankommt |
+| `/chat/:instance`                   | Redirect auf `/workspace/:instance?open=system.chat` (FR-004)                                                                                               |
+| `/settings/:instance`               | Redirect auf `/workspace/:instance?open=system.settings`                                                                                                    |
+| `/federation/:instance`             | Redirect auf `/workspace/:instance?open=system.federation`                                                                                                  |
+| `/`, `/onboarding/:instance`        | unverändert                                                                                                                                                 |
 
 Ein unbekannter `open`-Wert wird ignoriert (Shell erscheint ohne zusätzliches
 Fenster).
