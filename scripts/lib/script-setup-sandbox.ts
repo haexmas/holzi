@@ -5,9 +5,10 @@
 //
 // The block is transpiled with the `typescript` package already used by the other harness and run
 // in its own `new Function` scope. Nuxt's auto-imports and compiler macros have no module behind
-// them here, so they are injected as bare names. The three that reach outside the page
-// (`useInstance`, `useInstancesStore`, `navigateTo`) throw unless the case provides them, so a page
-// that starts using one of them without the case knowing fails loudly instead of doing nothing.
+// them here, so they are injected as bare names. The ones that reach outside the page
+// (`useInstance`, `useInstancesStore`, `useShellStore`, `navigateTo`) throw unless the case
+// provides them, so a page that starts using one of them without the case knowing fails loudly
+// instead of doing nothing.
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, resolve as resolvePath } from 'node:path'
@@ -21,6 +22,9 @@ const repoRoot = resolvePath(dirname(fileURLToPath(import.meta.url)), '../..')
 export interface ScriptSetupGlobals {
   useInstance?: () => unknown
   useInstancesStore?: () => unknown
+  /** `FederationApp.vue` (spec 015-workspace-shell) calls `shell.flushAsync()` before locking,
+   * the same as `ChatApp.vue`'s `lock()` — a case exercising it provides at least that. */
+  useShellStore?: () => unknown
   navigateTo?: (to: string) => unknown
   /** The route params the page reads, `{ instance: 'vault' }` by default. */
   params?: Record<string, string>
@@ -103,6 +107,7 @@ export function loadScriptSetup<T>(
     useInstance: globals.useInstance ?? notProvided('useInstance'),
     useInstancesStore:
       globals.useInstancesStore ?? notProvided('useInstancesStore'),
+    useShellStore: globals.useShellStore ?? notProvided('useShellStore'),
     navigateTo: globals.navigateTo ?? notProvided('navigateTo'),
     window: 'window' in globals ? globals.window : notProvided('window'),
     document:
