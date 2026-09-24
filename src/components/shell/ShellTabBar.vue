@@ -1,17 +1,17 @@
 <script setup lang="ts">
 /**
- * The Firefox-style tab strip (spec 015-workspace-shell, T034, plan
- * research R18, FR-031/032/035/038): one tab shows icon+title with no tab
- * frame (FR-031); two or more show a full ARIA tab-list with a close
- * button per tab. The "+" sits immediately after the last tab (FR-032) —
- * its dropdown (`ShellNewTabMenu.vue`) is wired in T035, this only emits
- * `openNewTabMenu` for now. Scroll arrows appear only on overflow;
- * activating a tab scrolls it into view (FR-035).
+ * The Firefox-style tab strip (spec 015-workspace-shell, T034/T035, plan
+ * research R18, FR-031/032/033/035/038): one tab shows icon+title with no
+ * tab frame (FR-031); two or more show a full ARIA tab-list with a close
+ * button per tab. The "+" sits immediately after the last tab (FR-032),
+ * wrapped in `ShellNewTabMenu.vue`'s dropdown. Scroll arrows appear only on
+ * overflow; activating a tab scrolls it into view (FR-035).
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ShellTab } from '~/lib/shell/types'
 
 const props = defineProps<{
+  windowId: string
   tabs: ShellTab[]
   activeTabId: string
 }>()
@@ -19,7 +19,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   selectTab: [tabId: string]
   closeTab: [tabId: string]
-  openNewTabMenu: [event: MouseEvent]
 }>()
 
 const shell = useShellStore()
@@ -213,14 +212,15 @@ watch(
       />
     </button>
 
-    <button
-      type="button"
-      class="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-      :aria-label="t('shell.tabs.newTab')"
-      @pointerdown.stop
-      @click.stop="emit('openNewTabMenu', $event)"
-    >
-      <Icon name="lucide:plus" class="h-3.5 w-3.5" :aria-hidden="true" />
-    </button>
+    <ShellNewTabMenu :window-id="windowId">
+      <button
+        type="button"
+        class="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+        :aria-label="t('shell.tabs.newTab')"
+        @pointerdown.stop
+      >
+        <Icon name="lucide:plus" class="h-3.5 w-3.5" :aria-hidden="true" />
+      </button>
+    </ShellNewTabMenu>
   </div>
 </template>

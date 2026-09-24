@@ -143,6 +143,7 @@ const RESIZE_HANDLES: { direction: ResizeDirection; class: string }[] = [
       @dblclick="onTitleBarDoubleClick"
     >
       <ShellTabBar
+        :window-id="window.id"
         :tabs="window.tabs"
         :active-tab-id="window.activeTabId"
         @select-tab="selectTab"

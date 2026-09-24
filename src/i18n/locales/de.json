@@ -98,7 +98,8 @@
       "close": "Tab schließen",
       "newTab": "Neuer Tab",
       "scrollLeft": "Tabs nach links scrollen",
-      "scrollRight": "Tabs nach rechts scrollen"
+      "scrollRight": "Tabs nach rechts scrollen",
+      "alreadyOpen": "Bereits geöffnet"
     }
   },
   "chat": {

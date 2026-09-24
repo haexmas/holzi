@@ -98,7 +98,8 @@
       "close": "Close tab",
       "newTab": "New tab",
       "scrollLeft": "Scroll tabs left",
-      "scrollRight": "Scroll tabs right"
+      "scrollRight": "Scroll tabs right",
+      "alreadyOpen": "Already open"
     }
   },
   "chat": {
