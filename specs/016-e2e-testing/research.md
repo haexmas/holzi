@@ -258,10 +258,16 @@ the driver session (which ends with the process):
 it (spike). The driver cannot attach to a running application, so what the new window shows cannot be read
 directly.
 
-**Open**: Steps 3 and 4 are indirect for the clause "its window showing the unlock screen" and step 3 has
-not been tried. The first task of the relaunch scenario is a short spike of step 3. If the framebuffer
-route fails, the scenario keeps steps 1, 2 and 4 and the difference from FR-018 is reported to the
-operator, not hidden.
+**Resolved (Stage 3, T067/T068, 2026-09-22, see tasks.md's validation record for the full runs)**: both
+checks passed. **T067**: `tauri-driver` can drive a release-profile binary — a real `pnpm test:e2e --app
+<release path>` smoke run passed with no leftover process. **T068**: the relaunch is observable from
+outside as designed — after a lock press, the original pid ended in about 70 ms, a new marked process of
+the same binary appeared in about 80 ms, and the `-fbdir` framebuffer went non-zero (chat open) → almost
+blank (the instant after relaunch) → non-zero again about 2 s later (once the new window painted),
+confirming steps 1 to 3. Step 4 (a fresh session over the same data shows the instance list, not the
+vault) was already covered by ordinary CRDT/adoption behavior and needed no new mechanism. All four steps
+of the relaunch scenario (`relaunch-after-lock.test.ts`) ship as designed; the clause "its window showing
+the unlock screen" is met, not just approximated. No difference from FR-018 remained to report.
 
 ## R12 Reaching controls: hooks
 

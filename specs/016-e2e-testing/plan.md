@@ -141,8 +141,8 @@ Stage 3's relaunch scenario can land in a later pull request than the other four
 
 | Risk                                                                            | Effect                                      | Mitigation                                                                                                                                                                                         |
 | ------------------------------------------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A release-profile binary cannot be driven (webview automation)                  | The relaunch scenario cannot run at all     | First check of the relaunch scenario. If it fails, report it to the operator; the other four scenarios are unaffected.                                                                             |
-| The relaunched window cannot be observed from outside (framebuffer route fails) | FR-018's last clause is met only indirectly | Research R11: keep steps 1, 2 and 4 and report the difference to the operator.                                                                                                                     |
+| A release-profile binary cannot be driven (webview automation)                  | The relaunch scenario cannot run at all     | First check of the relaunch scenario (T067). **Resolved 2026-09-22: it can** — research R11.                                                                                                       |
+| The relaunched window cannot be observed from outside (framebuffer route fails) | FR-018's last clause is met only indirectly | Research R11 (T068). **Resolved 2026-09-22: it can** — `-fbdir` observes the relaunch directly; all four steps ship, no indirection needed.                                                        |
 | Timing assertions flake on a loaded machine                                     | The suite is switched off                   | Polls with deadlines; conformance checks keep the 4 s, 1 s and 10 s promises fixed, while diagnostic runs may scale generic timeouts and report themselves non-conformant with the scale (FR-020). |
 | Debug build time in CI                                                          | A slow job                                  | Separate, optional job; caches shared with the Rust job; Stage 5 is separable.                                                                                                                     |
 | Driver and webview drift after a system update                                  | Failures that look like application bugs    | The preflight compares versions on every run and prints both (FR-011, SC-006).                                                                                                                     |
@@ -158,9 +158,20 @@ Stage 3's relaunch scenario can land in a later pull request than the other four
 
 ## Spec alignment items
 
-The spec is merged; these are differences found while planning, to be folded in with `/speckit-analyze` or a small spec change, not silently applied:
+The spec is merged; these were differences found while planning. Folded in via `/speckit-analyze`
+(T089, 2026-09-24):
 
-1. **FR-006** lists data, configuration and cache. The runtime directory, the home directory and the session bus must be isolated too (research R5, experiments E1 to E4).
-2. **FR-018** asks that the relaunched window be shown to display the unlock screen. The plan observes the new process and its painted window from outside and checks the unlock screen on a fresh start over the same data (research R11). If the window check cannot be made to work, that clause is met indirectly.
-3. **User Story 2, scenario 3** says the closing page shows no text and one spinner on a dark and a light scheme. It cannot be judged during a real close, which lasts milliseconds; the scenario loads the page directly (research R10).
-4. **User Story 2, scenario 1** says "no error appears". After the press the page is replaced, so the check is the last page sample before the session ends plus the stronger facts (process ended, provider connection closed).
+1. **Resolved by a spec change.** FR-006 listed only data, configuration and cache; the runtime
+   directory, the home directory and the session bus are isolated too (research R5, experiments E1 to
+   E4). FR-006 now names all of them.
+2. **Resolved, no spec change needed.** FR-018 asked that the relaunched window be shown to display the
+   unlock screen. T067/T068 (research R11) resolved this fully: a release binary can be driven and the
+   relaunch is observed directly via the virtual screen's framebuffer, all four steps ship — the spec's
+   wording already matched what got built once the open risk closed.
+3. **No spec change needed.** User Story 2, scenario 3 says the closing page shows no text and one
+   spinner on a dark and a light scheme — a claim about what the page shows, not about when it is
+   observed. It cannot be judged during a real close, which lasts milliseconds; the scenario loads the
+   page directly and checks exactly that claim (research R10).
+4. **Resolved by a spec change.** User Story 2, scenarios 1 and 2 say "no error appears". Added as an
+   Assumptions entry: checked from the last page sample before the session ends plus the stronger facts
+   (process ended, provider connection closed), not by continuous observation.

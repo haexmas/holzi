@@ -289,6 +289,9 @@ export async function runScenario(
         })
         step('instance-ready')
         return instance
+      } catch (error) {
+        removeRoot(root)
+        throw error
       } finally {
         pendingStep = undefined
       }

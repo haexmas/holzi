@@ -573,7 +573,7 @@ its material (FR-021). Separable: nothing above waits for it.
 **Independent Test**: A CI run on a clean runner passes the same scenarios as the ordinary local run; a
 deliberately failing scenario fails the job and uploads the run directory.
 
-- [ ] T081 [US6] Branch `016-e2e-stage5-ci` from the updated `origin/main`. In `.github/workflows/ci.yml`
+- [x] T081 [US6] Branch `016-e2e-stage5-ci` from the updated `origin/main`. In `.github/workflows/ci.yml`
       add a job `e2e` on `ubuntu-24.04` with `permissions: contents: read` and a `timeout-minutes`: check
       out (same pinned action and `persist-credentials: false` as the other jobs), Node 22.19.0 through
       the same pinned action, `corepack pnpm install --frozen-lockfile --ignore-scripts`, the apt
@@ -583,39 +583,107 @@ deliberately failing scenario fails the job and uploads the run directory.
       failure upload `src-tauri/target/e2e` as an artifact. Every third-party action is pinned by full
       commit hash like the existing ones: look up the current release commit of each new action and
       record the tag in a comment. Outside the Nix shell the bridge script runs the command unchanged.
+      Done 2026-09-24: added as designed. `actions/upload-artifact@043fb46d…` (v7.0.1) and
+      `actions/cache@55cc8345…` (v6.1.0) resolved from each action's current release commit.
+      Real bug found on the first real run: `pnpm tauri build`'s `beforeBuildCommand` (`pnpm generate`)
+      spawns a literal `pnpm` process, not through corepack — every other job only ever runs
+      `corepack pnpm ...`, so this never surfaced there. Fixed with an `Enable Corepack` step
+      (`corepack enable`) before install.
 - [ ] T082 [US6] The job relies on the package fallback of the version check (T033): confirm on the runner
       that the driver's and the web view's package versions are equal and the preflight passes.
-- [ ] T083 [US6] Verify on a pushed branch, recorded with the run links: a clean run passes with the
+      Record evidence that the version file checked by `driverVersionOf` was absent on the runner,
+      or that its `dpkg-query` fallback executed, before marking this task complete.
+      Reopened 2026-09-24: the clean run proves that preflight passed, but its log does not establish
+      which version source was used. Runner evidence for the fallback remains outstanding.
+- [x] T083 [US6] Verify on a pushed branch, recorded with the run links: a clean run passes with the
       relaunch scenario skipped; a scratch commit that breaks one scenario makes the job fail and the
       artifact downloadable. Revert the scratch commit. Commit `ci: run the e2e suite on ubuntu` and
       open the Stage 5 pull request after asking the operator.
+      Done 2026-09-24, PR #135 (https://github.com/haexmas/holzi/pull/135): - Clean run (after the corepack fix, commit `b01fce2`):
+      https://github.com/haexmas/holzi/actions/runs/36005937603 — all 5 jobs pass, `End-to-end
+suite` green, `relaunch-after-lock` reported skipped (debug build exits on close), 6 passed. - Scratch-break run (commit `e201b80`, `smoke-start.test.ts` seeded to always throw):
+      https://github.com/haexmas/holzi/actions/runs/36006711933 — `End-to-end suite` job failed
+      exactly as intended: `Result: FAILED (1 failed, 1 skipped, 5 passed)`, only `smoke-start`
+      failed with the seeded message, `relaunch-after-lock` still correctly reported skipped, and
+      `e2e-failure-material.zip` (18084 bytes — real material, unlike the earlier build-failure
+      run's empty-ish 761 bytes) was uploaded and downloadable. - Scratch commit reverted as `853f7bc`; `smoke-start.test.ts` back to its original content
+      (confirmed no diff against the pre-scratch version). - One real CI-only flake observed on the run after the prettier-stabilizing commit
+      (https://github.com/haexmas/holzi/actions/runs/36008292857): `closing-page` failed with
+      `POST /session got no answer: fetch failed` — the tauri-driver-HTTP-port-before-native-driver
+      race `newSessionWithRetry` already retries once (300 ms, PR #118); this time even that single
+      retry lost the race, most likely because the GitHub-hosted runner is slower/more contended than
+      the maintainer's machine. The other five scenarios passed and `relaunch-after-lock` still
+      correctly reported skipped in the same run — this is the exact failure mode T074 already
+      documented as a rare, unreproducible flake, not a new defect from this job. `gh run rerun
+--failed` on the same commit passed cleanly on the next attempt
+      (no code change). Left as an observed CI-environment flake, consistent with the project's own
+      practice of not hardening a retry based on one occurrence; worth revisiting only if it recurs.
 
 ---
 
 ## Phase 10: Polish and cross-cutting
 
-- [ ] T084 Full CI parity from a clean state: `pnpm typecheck`, `pnpm typecheck:scripts`, `pnpm lint`,
+- [x] T084 Full CI parity from a clean state: `pnpm typecheck`, `pnpm typecheck:scripts`, `pnpm lint`,
       `pnpm format:check`, `pnpm check:chat-state`, `pnpm check:vault-lifecycle`, `pnpm check:templates`,
       `pnpm check:e2e-lib`, `python3 scripts/ci/check-docs.py`, `git diff --check`.
-- [ ] T085 Compare `wc -l` with the T002 baseline: the chat page grew by exactly 2 lines, every new file
+      Done 2026-09-24: all pass from a clean `pnpm install --frozen-lockfile` in a fresh worktree.
+      Also ran `pnpm check:vault-passphrase-lifetime` (7 tests) and `pnpm check:e2e-lib` (155 tests),
+      both green — not in this task's own list but part of the documentation job's real command set.
+- [x] T085 Compare `wc -l` with the T002 baseline: the chat page grew by exactly 2 lines, every new file
       is under 500 lines. Record the numbers in the Baseline section.
-- [ ] T086 [P] Bring `plan.md`, `research.md`, `data-model.md` and `contracts/` in line with what was
+      Done 2026-09-24: chat page 1316 → 1318 (exactly +2, the `lock-instance-sidebar`/
+      `-header` hooks). The other two T002 files also grew — expected, not drift: both carry a
+      Stage 2 `data-testid` hook (`InstancesList.vue` 44 → 46: `data-testid="instance-entry"` +
+      `:data-instance-name`; `ChatFab.vue` 20 → 21: `data-testid="open-chat"`). Every file under
+      `scripts/e2e/` is under 500 lines; the largest is `scripts/e2e/lib/scenario.ts` at 465.
+- [x] T086 [P] Bring `plan.md`, `research.md`, `data-model.md` and `contracts/` in line with what was
       built: the files the plan did not list (`page.ts`, `flows.ts`, `artifacts.ts`, `framebuffer.ts`,
       `fake-driver.testlib.ts`, and `session.ts` if it was split), the outcomes of T067 and T068, and any
       renamed helper. Run `pnpm exec prettier --write specs/016-e2e-testing` twice and confirm it is
       stable.
-- [ ] T087 [P] In `specs/013-vault-lifecycle-isolation/tasks.md` add a note to T050 that its automatable
+      Done 2026-09-24: `plan.md`'s file tree already named every file under `scripts/e2e/` (an earlier
+      stage had kept it current) — nothing missing, no `session.ts` split, no renamed helper found.
+      What was stale: `research.md` R11 and `plan.md`'s Risks table still described T067/T068 as open
+      ("has not been tried", "keep steps 1, 2 and 4"), though tasks.md's own validation record shows
+      both resolved 2026-09-22 (a release binary is drivable; the relaunch is observable via `-fbdir`,
+      all four steps ship). Updated both to state the resolution plainly. `pnpm exec prettier --write
+specs/016-e2e-testing` run twice, second run made no further changes.
+- [x] T087 [P] In `specs/013-vault-lifecycle-isolation/tasks.md` add a note to T050 that its automatable
       part (quickstart scenarios 1 and 2, the closing page and the relaunch) is covered by spec 016 with
       the scenario names, and that T048 (relaunch under `tauri dev`) and T049 (local inference stop
       time) stay manual.
-- [ ] T088 Traceability: for FR-001 to FR-021 and SC-001 to SC-007 write down in the Validation record the
+      Done 2026-09-24: added directly under spec 013's T050, naming `lock-while-streaming.test.ts` +
+      `closing-page.test.ts` for scenario 1, `lock-twice.test.ts` for scenario 2, and
+      `window-close-while-streaming.test.ts` + `relaunch-after-lock.test.ts` for scenario 8's
+      bounded-ending half and the relaunch; noted scenario 3 stays a Rust integration test (already
+      true in spec 013's own text) and T048/T049 stay manual.
+- [x] T088 Traceability: for FR-001 to FR-021 and SC-001 to SC-007 write down in the Validation record the
       test or the recorded result that covers each. A gap is closed or reported.
-- [ ] T089 Run `/speckit-analyze` (the constitution requires it to check plans against the constitution)
+      Done 2026-09-24: table added to the Validation record below. No gap: every FR and SC has a
+      covering file or recorded result. Two items carry an accepted caveat, already reported earlier
+      rather than found here — FR-018 turned out to need no caveat at all (T067/T068 resolved it, see
+      T086); SC-003's window-close half is real but narrower than its own table entry states (PR #122,
+      T077's corrected scope), and FR-006's spec wording undercounts what R5 actually isolates (spec
+      alignment item 1, for T089).
+- [x] T089 Run `/speckit-analyze` (the constitution requires it to check plans against the constitution)
       and fix findings. Fold in the four spec alignment items of the plan (FR-006, FR-018, the closing
       page scenario, "no error appears") as a small reviewed spec change or record why not.
-- [ ] T090 With the operator's agreement, remove the throwaway spike: the worktree
+      Done 2026-09-24: analysis found 0 CRITICAL/HIGH findings — 21/21 FR and 7/7 SC each have ≥1 task
+      (T088's table), no constitution violation, no ambiguity or duplication. One LOW staleness finding
+      (Assumptions still described the atoms change as unmerged and the spike branch as present; both
+      long since resolved) fixed alongside the alignment items. The four alignment items: **FR-006**
+      and **"no error appears"** folded in as small spec.md changes (the isolation list now names the
+      runtime/home/session-bus scope R5 actually covers; a new Assumptions entry states the
+      last-sample-plus-stronger-evidence check); **FR-018** needed no change — T067/T068 resolved the
+      open risk the item was tracking, so the spec's existing wording already matches what got built;
+      **the closing-page scenario** needed no change — it is a claim about what the page shows, which
+      the direct-navigation strategy checks exactly, not a claim about live-observing a real close.
+- [x] T090 With the operator's agreement, remove the throwaway spike: the worktree
       `.worktrees/016-e2e-spike` and the local branch `spike/e2e-rig`, which the suite replaces, and the
       old local branch `spike/vault-gateway` (task T051 of spec 013).
+      Done 2026-09-24: `git worktree remove .worktrees/016-e2e-spike --force` and
+      `git branch -D spike/e2e-rig`. `spike/vault-gateway` no longer existed locally — already removed
+      when spec 013's own T051 ran.
 - [ ] T091 Open any remaining pull requests in the structure below after asking the operator. Merge by
       rebase or merge commit, never squash; merge-commit subjects use a Conventional Commits header.
 
@@ -707,7 +775,16 @@ Recorded at T002 on 2026-09-22, branch `016-e2e-stage0-tools` from `origin/main`
 | `src/components/onboarding/InstancesList.vue` | 44    |
 | `src/components/workspace/ChatFab.vue`        | 20    |
 
-_T085 adds the closing numbers here._
+**T085, 2026-09-24** (branch `016-e2e-stage5-ci`, `origin/main` at `d626eae`):
+
+| File                                          | Lines then | Lines now | Delta |
+| --------------------------------------------- | ---------- | --------- | ----- |
+| `src/pages/chat/[instance].vue`               | 1316       | 1318      | +2    |
+| `src/components/onboarding/InstancesList.vue` | 44         | 46        | +2    |
+| `src/components/workspace/ChatFab.vue`        | 20         | 21        | +1    |
+
+The chat page's own delta matches the expectation exactly. The other two files' growth is the
+remaining Stage 2 `data-testid` hooks (`instance-entry`, `open-chat`), not unplanned drift.
 
 ## Validation record
 
@@ -1402,3 +1479,40 @@ there. Verified `pnpm exec prettier --check`/`--write` clean and `pnpm check:e2e
 passing after the edit and after deleting the exercise scenario file.
 
 _Filled by later tasks: T080, T081 to T083 and T088._
+
+### T088 — Traceability, 2026-09-24
+
+| Requirement | Covered by                                                                                                                                                                                                                                                                                                                                                                         | Note |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| FR-001      | `pnpm test:e2e` (`cli.ts`), documented in `README.md`                                                                                                                                                                                                                                                                                                                              |      |
+| FR-002      | `build.ts`'s `pnpm tauri build --debug --no-bundle` (no dev server); `--app` for a given binary                                                                                                                                                                                                                                                                                    |      |
+| FR-003      | `instance.ts` starts each instance under its own `xvfb-run`; T031's checksum/window-count proof                                                                                                                                                                                                                                                                                    |      |
+| FR-004      | `build.ts`/`resolveApplication`: builds debug by default, `--app`/`E2E_APP` to test a given one                                                                                                                                                                                                                                                                                    |      |
+| FR-005      | `scenario.ts`'s per-scenario deadline; `cli.ts`'s overall run limit                                                                                                                                                                                                                                                                                                                |      |
+| FR-006      | `instance.ts` + research R5: data/config/cache **and** runtime dir, `HOME`, session bus all isolated; T076's real filesystem-diff run. Spec wording lists fewer than what's implemented (spec alignment item 1, for T089)                                                                                                                                                          |      |
+| FR-007      | `provider.ts`, the stand-in provider; no scenario reaches the internet                                                                                                                                                                                                                                                                                                             |      |
+| FR-008      | `processes.ts` (marker, sweep, `stopGroup`); T031/T075 real concurrent-instance and kill proofs                                                                                                                                                                                                                                                                                    |      |
+| FR-009      | `ports.ts`: a free port per use, one retry on collision                                                                                                                                                                                                                                                                                                                            |      |
+| FR-010      | `instance.ts`/`scenario.ts`: a fresh instance per scenario, any order                                                                                                                                                                                                                                                                                                              |      |
+| FR-011      | `preflight.ts`; T036's manual missing-tool/mismatch trials                                                                                                                                                                                                                                                                                                                         |      |
+| FR-012      | Stage 0 (T003-T006): atoms pin delivers the tools via the dev shell                                                                                                                                                                                                                                                                                                                |      |
+| FR-013      | `page.ts` (invoke, click, type, press, navigate) + `flows.ts` (createAndUnlock, openChat, connectProvider, startReply)                                                                                                                                                                                                                                                             |      |
+| FR-014      | `contracts/test-hooks.md`'s three `data-testid` hooks (language- and markup-independent)                                                                                                                                                                                                                                                                                           |      |
+| FR-015      | `provider.ts`                                                                                                                                                                                                                                                                                                                                                                      |      |
+| FR-016      | `scenarios/{lock-while-streaming,window-close-while-streaming,closing-page,lock-twice,relaunch-after-lock}.test.ts`                                                                                                                                                                                                                                                                |      |
+| FR-017      | `build.ts`'s `classifyCloseBehavior` + `scenario.ts`'s `needs: relaunch` skip rule                                                                                                                                                                                                                                                                                                 |      |
+| FR-018      | `framebuffer.ts`; T067/T068 (resolved, see T086) — the relaunch is observed directly, no indirection needed                                                                                                                                                                                                                                                                        |      |
+| FR-019      | `artifacts.ts`'s `captureFailure` (screenshot, timeline, provider record, driver log)                                                                                                                                                                                                                                                                                              |      |
+| FR-020      | `report.ts` (per-scenario duration and step times)                                                                                                                                                                                                                                                                                                                                 |      |
+| FR-021      | This PR (T081-T083): the `e2e` job in `ci.yml`, `ubuntu-24.04`, tools from apt/`cargo install`                                                                                                                                                                                                                                                                                     |      |
+| SC-001      | T074: a clean debug run passes with `relaunch-after-lock` correctly skipped; a release run passes all seven                                                                                                                                                                                                                                                                        |      |
+| SC-002      | T075: 20-run soak, 10 killed at random, no leftover process or directory afterward                                                                                                                                                                                                                                                                                                 |      |
+| SC-003      | T077 (a)-(d): each spec 013 promise, disabled in turn, fails the matching scenario — with one accepted, reported limitation: `window-close-while-streaming` cannot exercise the real cancellation path, since a driver-issued window close never reaches `WindowEvent::CloseRequested` (PR #122); `lock-while-streaming` is what actually proves the cancellation-on-close promise |      |
+| SC-004      | T058 + T078: three seeded failures, each `timeline.json`/kept material names the precise failed step                                                                                                                                                                                                                                                                               |      |
+| SC-005      | T052 (first pass) + T079 (fresh-eyes subagent, no prior context): the README alone got a working 21-line scenario running on the first try                                                                                                                                                                                                                                         |      |
+| SC-006      | T036: missing `xvfb-run` and a version mismatch both stop the run within the bound, before any tool starts, naming the remedy                                                                                                                                                                                                                                                      |      |
+| SC-007      | T074's recorded durations: every close scenario 5.8-11.6 s, all under the 30 s bound                                                                                                                                                                                                                                                                                               |      |
+
+No FR or SC is uncovered. The two caveats above (FR-006's narrower wording, SC-003's window-close limit)
+are pre-existing, already-reported findings surfaced again here for completeness, not new gaps found by
+this task; folding FR-006's wording into the spec text is T089's job.
