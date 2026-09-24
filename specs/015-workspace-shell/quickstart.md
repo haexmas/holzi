@@ -25,8 +25,11 @@ Ergebnisse.
 Zahl grüner Tests melden — ein Rückgang oder Anstieg zeigt geändertes
 Verhalten statt reiner Verschiebung an.
 
-Bestätigt nach T006 (`useComposer.ts`, Commit `1a8a14a`) und nach T008
-(`useComposerAttachments.ts`): weiterhin 45/45 grün.
+Bestätigt nach T006 (`useComposer.ts`, Commit `1a8a14a`), nach T008
+(`useComposerAttachments.ts`, Commit `695881e`) und nach T010-T013
+(Komponenten-Split, Commit `9ac6d20`, Seite 1109 → 492 Zeilen): weiterhin
+45/45 grün. T014 zusätzlich `pnpm typecheck`, `pnpm lint`,
+`pnpm check:templates` (33 Templates kompilieren) — alle grün.
 
 ## 1. Automatische Prüfungen (CI-Parität)
 

@@ -6,25 +6,39 @@
 
 ## Phase 1: Setup and roadmap gate
 
-- [ ] T001 Add the approved Shell phase and its dependency on feature 013 to `plans/README.md`
-- [ ] T002 [P] Add Shell/App/Window/Tab/Launcher terminology to `CONTEXT.md`
-- [ ] T003 [P] Confirm migration numbering and trigger version against the current `main` and feature-013/014 branches in `specs/015-workspace-shell/research.md`
-- [ ] T004 [P] Add the `check:shell-state` script entry and CI placeholder in `package.json` and `.github/workflows/ci.yml`
+- [x] T001 Add the approved Shell phase and its dependency on feature 013 to `plans/README.md`
+  - Done 2026-09-24: roadmap row added, dependency on Spec 013 named. Commit `3301fdd`.
+- [x] T002 [P] Add Shell/App/Window/Tab/Launcher terminology to `CONTEXT.md`
+  - Done 2026-09-24: added to "Sprachkonventionen im UI" alongside the existing Workspace/Arbeitsbereich entry. Commit `3301fdd`.
+- [x] T003 [P] Confirm migration numbering and trigger version against the current `main` and feature-013/014 branches in `specs/015-workspace-shell/research.md`
+  - Done 2026-09-24: main is at `0018`/version 10 (013 already merged into it); no `014-portable-mode` branch exists yet. `0019`/11 confirmed free. Commit `3301fdd`.
+- [x] T004 [P] Add the `check:shell-state` script entry and CI placeholder in `package.json` and `.github/workflows/ci.yml`
+  - Done 2026-09-24: placeholder harness (`scripts/check-shell-state.ts`) wired into both; real checks land in T053. Commit `3301fdd`.
 
 ## Phase 2: Foundational chat split
 
 **Purpose**: Move behavior without changing the chat contract before embedding it in a Shell window.
 
-- [ ] T005 Capture the current replay-test count and baseline output of `pnpm check:chat-state` in `specs/015-workspace-shell/quickstart.md`
-- [ ] T006 Extract composer send/cancel/new-conversation logic into `src/composables/useComposer.ts` without changing behavior
-- [ ] T007 Run `pnpm check:chat-state` and preserve the baseline replay-test count after T006
-- [ ] T008 Extract attachment handling into `src/composables/useComposerAttachments.ts` without changing behavior
-- [ ] T009 Run `pnpm check:chat-state` and preserve the baseline replay-test count after T008
-- [ ] T010 [P] Extract the thread sidebar into `src/components/chat/ThreadSidebar.vue` with props and emits only
-- [ ] T011 [P] Extract transcript, reasoning, tool rows, and audit-marker translation into `src/components/chat/MessageList.vue`
-- [ ] T012 [P] Extract the composer view into `src/components/chat/Composer.vue` using existing composer controls
-- [ ] T013 Integrate the extracted chat components into `src/pages/chat/[instance].vue` and keep the orchestrator under 500 lines
-- [ ] T014 Run `pnpm check:chat-state`, `pnpm typecheck`, and `pnpm lint` after the split
+- [x] T005 Capture the current replay-test count and baseline output of `pnpm check:chat-state` in `specs/015-workspace-shell/quickstart.md`
+  - Done 2026-09-24: 45/45 green, recorded in quickstart.md §0. Commit `5c65449`.
+- [x] T006 Extract composer send/cancel/new-conversation logic into `src/composables/useComposer.ts` without changing behavior
+  - Done 2026-09-24: `send`/`abort`/`newChat`/`onVoiceTranscript` moved; shared refs (`input`/`busy`/`pendingSend`/`turnSetupPending`) stay page-created, passed in as dependencies (same convention as `useChatTranscript`/`useThreadSidebar`). Commit `1a8a14a`.
+- [x] T007 Run `pnpm check:chat-state` and preserve the baseline replay-test count after T006
+  - Done 2026-09-24: 45/45 green. Commit `695881e`.
+- [x] T008 Extract attachment handling into `src/composables/useComposerAttachments.ts` without changing behavior
+  - Done 2026-09-24: owns `attachments` plus add/remove/refresh-on-model-switch. Commit `695881e`.
+- [x] T009 Run `pnpm check:chat-state` and preserve the baseline replay-test count after T008
+  - Done 2026-09-24: 45/45 green. Commit `695881e`.
+- [x] T010 [P] Extract the thread sidebar into `src/components/chat/ThreadSidebar.vue` with props and emits only
+  - Done 2026-09-24: includes the delete-confirmation `UiDrawerModal` (same thread-management concern). The edited-row input's focus/select moved from `useThreadSidebar.ts` into a local watcher here, since the DOM node is now local to this component. Commit `9ac6d20`.
+- [x] T011 [P] Extract transcript, reasoning, tool rows, and audit-marker translation into `src/components/chat/MessageList.vue`
+  - Done 2026-09-24: `renderMarkdown`/`delegateAnsweredByLabel`/`DENY_AUDIT_MARKERS`/`toolResultContentLabel`/`reasoningFor` moved in as local pure functions; emits `toggleReasoning` since that state is also cleared from outside (new chat, thread delete). Commit `9ac6d20`.
+- [x] T012 [P] Extract the composer view into `src/components/chat/Composer.vue` using existing composer controls
+  - Done 2026-09-24: also reads `useModelsStore()` directly for model/effort display instead of prop-drilling it, and owns `useAutoResizeTextarea` (needs its own `<textarea>` DOM node — exposes `reset()` via `defineExpose` for the page's `useComposer`/`useThreadSidebar` dependency). Commit `9ac6d20`.
+- [x] T013 Integrate the extracted chat components into `src/pages/chat/[instance].vue` and keep the orchestrator under 500 lines
+  - Done 2026-09-24: page went 1109 → 492 lines. Two further extractions beyond T010-T012 were needed to get under 500: `useChatPermissionMode.ts` (permission-mode/autonomy-mode persistence) and `useChatSubscriptions.ts` (`chat.on*` listener registration). `useComposer.ts` also absorbed the sub-agent-activity indicator state. Two new small presentational components, `ChatHeader.vue` and `StatusBanners.vue`, cover the header and the three status banners. Commit `9ac6d20`.
+- [x] T014 Run `pnpm check:chat-state`, `pnpm typecheck`, and `pnpm lint` after the split
+  - Done 2026-09-24: 45/45 green, typecheck clean, lint clean, `pnpm check:templates` also run (33/33 Vue templates compile, including all 5 new components). Documented in quickstart.md §0.
 
 ## Phase 3: User Story 1 — Apps as windows (Priority: P1)
 
