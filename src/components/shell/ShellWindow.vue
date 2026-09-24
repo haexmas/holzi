@@ -13,7 +13,10 @@
 import { computed } from 'vue'
 import { getAppDefinition } from '~/lib/shell/apps'
 import { windowDisplayRect } from '~/lib/shell/geometry'
-import { requestCloseWindow } from '~/composables/useShellTab'
+import {
+  requestCloseTab as requestCloseTabAction,
+  requestCloseWindow,
+} from '~/composables/useShellTab'
 import {
   useWindowPointerGesture,
   type ResizeDirection,
@@ -88,7 +91,7 @@ function onTitleBarDoubleClick() {
 }
 
 function requestClose() {
-  void requestCloseWindow(shell, t, props.window.id)
+  void requestCloseWindow(shell, props.window.id)
 }
 
 function selectTab(tabId: string) {
@@ -96,16 +99,7 @@ function selectTab(tabId: string) {
 }
 
 function requestCloseTab(tabId: string) {
-  const result = shell.guardResultForTab(tabId)
-  if (result) {
-    // Placeholder until ShellCloseConfirm.vue (T038) aggregates these into a real dialog.
-    if (!confirm(t(result.reasonKey))) return
-    void result
-      .confirmAsync()
-      .then(() => shell.closeTab(props.window.id, tabId))
-    return
-  }
-  shell.closeTab(props.window.id, tabId)
+  void requestCloseTabAction(shell, props.window.id, tabId)
 }
 
 const RESIZE_HANDLES: { direction: ResizeDirection; class: string }[] = [

@@ -48,5 +48,6 @@ const windowOverviewOpen = ref(false)
 
     <ShellLauncher v-model:open="launcherOpen" />
     <ShellWindowOverview v-model:open="windowOverviewOpen" />
+    <ShellCloseConfirm />
   </div>
 </template>

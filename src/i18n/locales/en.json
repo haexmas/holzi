@@ -91,7 +91,10 @@
     },
     "attention": "Waiting for you",
     "close": {
-      "activeReply": "A reply is still running or waiting for your decision."
+      "activeReply": "A reply is still running or waiting for your decision.",
+      "confirmTitle": "Close anyway?",
+      "cancel": "Cancel",
+      "confirm": "Close"
     },
     "tabs": {
       "tablist": "Tabs",

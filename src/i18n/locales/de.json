@@ -91,7 +91,10 @@
     },
     "attention": "Wartet auf dich",
     "close": {
-      "activeReply": "Eine Antwort läuft noch oder wartet auf deine Entscheidung."
+      "activeReply": "Eine Antwort läuft noch oder wartet auf deine Entscheidung.",
+      "confirmTitle": "Trotzdem schließen?",
+      "cancel": "Abbrechen",
+      "confirm": "Schließen"
     },
     "tabs": {
       "tablist": "Tabs",
