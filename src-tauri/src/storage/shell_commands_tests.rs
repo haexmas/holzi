@@ -222,6 +222,76 @@ async fn save_windows_then_load_layout_roundtrips_a_window() {
     assert_eq!(reloaded.windows[0].tabs[0].tab_id, tab_id);
 }
 
+/// Spec 015-workspace-shell, T051 (User Story 7 — multi-instance apps): `app_id` is an opaque,
+/// non-unique column (data-model.md) -- nothing in the storage layer treats it as a singleton key.
+/// Two tabs in two different windows sharing the same `app_id` must save and reload as two
+/// distinct entries, exactly like two tabs of different apps would.
+#[tokio::test]
+async fn save_windows_persists_two_tabs_of_the_same_multi_instance_app_id() {
+    let (_dir, state, device) = open_test_state("shell-commands-multi-instance");
+    let db = state.database().expect("active");
+    let layout = load_layout(db.clone(), device).await.expect("load");
+    let workspace_id = layout.workspaces[0].workspace_id;
+
+    let tab_a = Uuid::new_v4();
+    let window_a = Uuid::new_v4();
+    let tab_b = Uuid::new_v4();
+    let window_b = Uuid::new_v4();
+    let app_id = "extension.multi-instance-example".to_string();
+    let windows = vec![
+        WindowDto {
+            window_id: window_a,
+            workspace_id,
+            x: 10,
+            y: 20,
+            width: 800,
+            height: 600,
+            is_minimized: false,
+            is_maximized: false,
+            stack_order: 1,
+            active_tab_id: tab_a,
+            tabs: vec![TabDto {
+                tab_id: tab_a,
+                app_id: app_id.clone(),
+            }],
+        },
+        WindowDto {
+            window_id: window_b,
+            workspace_id,
+            x: 40,
+            y: 50,
+            width: 800,
+            height: 600,
+            is_minimized: false,
+            is_maximized: false,
+            stack_order: 2,
+            active_tab_id: tab_b,
+            tabs: vec![TabDto {
+                tab_id: tab_b,
+                app_id: app_id.clone(),
+            }],
+        },
+    ];
+
+    save_windows(
+        db.clone(),
+        device,
+        windows.into_iter().map(Into::into).collect(),
+    )
+    .await
+    .expect("save two windows sharing the same app_id");
+
+    let reloaded = load_layout(db, device).await.expect("reload");
+    assert_eq!(reloaded.windows.len(), 2);
+    let reloaded_window_ids: Vec<Uuid> = reloaded.windows.iter().map(|w| w.window_id).collect();
+    assert!(reloaded_window_ids.contains(&window_a));
+    assert!(reloaded_window_ids.contains(&window_b));
+    for window in &reloaded.windows {
+        assert_eq!(window.tabs.len(), 1);
+        assert_eq!(window.tabs[0].app_id, app_id);
+    }
+}
+
 #[tokio::test]
 async fn save_windows_rejects_an_unknown_workspace() {
     let (_dir, state, device) = open_test_state("shell-commands-save-windows-bad-workspace");
