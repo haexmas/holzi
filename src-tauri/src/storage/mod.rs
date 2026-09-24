@@ -27,3 +27,6 @@ pub mod preferences_commands_tests;
 #[cfg(test)]
 pub mod preferences_tests;
 pub mod providers;
+pub mod shell_workspaces;
+#[cfg(test)]
+mod shell_workspaces_tests;
