@@ -90,12 +90,19 @@
 
 **Independent test**: Add Settings to a Chat window, switch through the Chevron, close the Settings tab, and preserve the Chat draft.
 
-- [ ] T033 [P] [US3] Implement tab insertion, singleton resolution, activation, neighbor close, and last-tab window close in `src/lib/shell/tabs.ts`
-- [ ] T034 [P] [US3] Add the ARIA tab-list and Firefox-style tab bar in `src/components/shell/ShellTabBar.vue`
-- [ ] T035 [P] [US3] Add the `+` app menu and singleton-open state in `src/components/shell/ShellNewTabMenu.vue`
-- [ ] T036 [P] [US3] Add the Chevron tab-list menu with active and attention states in `src/components/shell/ShellTabListMenu.vue`
-- [ ] T037 [US3] Add compact-mode title/Chevron behavior and keyboard navigation in `src/components/shell/ShellWindow.vue` and `src/components/shell/ShellTabBar.vue`
-- [ ] T038 [US3] Add tab close confirmation aggregation for all guards in `src/components/shell/ShellCloseConfirm.vue`
+- [x] T033 [P] [US3] Implement tab insertion, singleton resolution, activation, neighbor close, and last-tab window close in `src/lib/shell/tabs.ts`
+  - Done 2026-09-24: `addTab` (shares `openApp`'s singleton search via the new `activateExistingSingleton`), `switchTab`, `closeTab` (last tab closes the window; otherwise closing the active tab activates its right neighbor, or the left one if it was last). Verified by hand against every case. Commit `460a333`.
+- [x] T034 [P] [US3] Add the ARIA tab-list and Firefox-style tab bar in `src/components/shell/ShellTabBar.vue`
+  - Done 2026-09-24: single tab = title only (FR-031), 2+ = full `role=tablist`/`tab` bar with roving tabindex and arrow/Home/End/Enter/Space (FR-038), ResizeObserver-driven scroll arrows on overflow (FR-035). Required a structural change: `ShellTabPanel.vue` now provides `useShellTab()` per tab-content instance (not `ShellWindow.vue` once for "the" tab), since several tabs stay mounted side by side (R8) and a single shared injection would leak the active tab's context into background tabs. Store gained `addTab`/`switchTab`/`closeTab`/`tabDisplayInfo`. Commit `6193433`.
+- [x] T035 [P] [US3] Add the `+` app menu and singleton-open state in `src/components/shell/ShellNewTabMenu.vue`
+  - Done 2026-09-24: first use of `ShadcnDropdownMenu` (haex-ui layer) in this repo; every app listed (never empty, FR-033), a singleton already open elsewhere is labelled, not hidden. Noted a narrow, deliberately-unaddressed limitation in code: the dropdown's fixed z-50 could in principle be outscaled by `window.stack` (unbounded growth) after ~50 focus changes in one session. Commits `fca7be7`, `c4ce94e`.
+  - Note: fully verifying reka-ui's `as-child` trigger cooperates with the title bar's own `@pointerdown.stop` drag-prevention needs a real pointer in a running window (deferred to the manual quickstart pass); typecheck/lint/build all pass and the interaction is structurally sound (stopPropagation does not cancel same-element listeners).
+- [x] T036 [P] [US3] Add the Chevron tab-list menu with active and attention states in `src/components/shell/ShellTabListMenu.vue`
+  - Done 2026-09-24: every tab in bar order, icon + title + checkmark on the active one + attention badge; always present regardless of tab count (spec.md US3 Scenario 1 shows it even with one tab). Commit `3220f9e`.
+- [x] T037 [US3] Add compact-mode title/Chevron behavior and keyboard navigation in `src/components/shell/ShellWindow.vue` and `src/components/shell/ShellTabBar.vue`
+  - Done 2026-09-24: compact always collapses to the active tab's title regardless of count (FR-036, not just the single-tab case); `ShellWindowControls.vue` hides minimize/maximize while compact (Chevron and "+" stay). Fixed a latent bug: the scroll arrows were gated only on a possibly-stale `overflowing` flag, unguarded against the collapsed view. Commit `fbe3fa1`.
+- [x] T038 [US3] Add tab close confirmation aggregation for all guards in `src/components/shell/ShellCloseConfirm.vue`
+  - Done 2026-09-24: replaces the `window.confirm` placeholders (T031/T037) with a real `ShadcnAlertDialog`; `useShellCloseConfirm.ts` holds one module-level pending confirmation (closing is always a singular action). `requestCloseWindow`/new `requestCloseTab` (`useShellTab.ts`) share the gather-confirm-run-close shape. **Phase 5 (User Story 3 — Tabs in windows) complete: T033-T038.** Commit `3b95b31`.
 
 ## Phase 6: User Story 4 — Multiple workspaces (Priority: P2)
 
