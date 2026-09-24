@@ -249,6 +249,14 @@ export const useShellStore = defineStore('shell', () => {
     )
   }
 
+  /** Whether any open tab of this app (any window, any workspace) wants attention (FR-015: the
+   * Launcher is one of the surfaces a background window's attention must reach). */
+  function appHasAttention(appId: string): boolean {
+    return state.windows.some((w) =>
+      w.tabs.some((tab) => tab.appId === appId && runtimeFor(tab.id).attention),
+    )
+  }
+
   /** Every non-null close-guard result across the window's tabs (FR-014, for closing the whole
    * window) — a tab without a registered guard, or whose guard currently allows closing,
    * contributes nothing. */
@@ -308,6 +316,7 @@ export const useShellStore = defineStore('shell', () => {
     deleteWorkspace,
     moveWindowToWorkspace,
     workspaceHasAttention,
+    appHasAttention,
     guardResultsFor,
     guardResultForTab,
     guardResultsForWorkspace,
