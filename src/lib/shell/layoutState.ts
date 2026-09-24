@@ -4,6 +4,7 @@
 // `node scripts/check-shell-state.ts`.
 import type { ShellAppDefinition } from './apps.ts'
 import { getAppDefinition } from './apps.ts'
+import { cascadePosition, clampGeometry } from './geometry.ts'
 import {
   COMPACT_MAX_WIDTH,
   type PersistedLayout,
@@ -13,53 +14,6 @@ import {
   type Size,
   type Workspace,
 } from './types.ts'
-
-/** New windows cascade by this offset per step (research R12/haex-vault reference), wrapping once
- * they would run off the visible area. */
-const CASCADE_STEP = 24
-const CASCADE_WRAP_MARGIN = 160
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), Math.max(min, max))
-}
-
-/** Full-clamp for restored geometry (FR-026): the window must end up entirely inside `area`. This
- * is deliberately simpler than the drag-time "keep a 64x32 title-bar strip visible" rule
- * (geometry.ts, T027) — hydration has no previous on-screen position to preserve partially. */
-function clampToArea(
-  window: Pick<ShellWindow, 'x' | 'y' | 'width' | 'height'>,
-  minSize: Size,
-  area: Size,
-): Pick<ShellWindow, 'x' | 'y' | 'width' | 'height'> {
-  const width = clamp(
-    window.width,
-    minSize.width,
-    Math.max(area.width, minSize.width),
-  )
-  const height = clamp(
-    window.height,
-    minSize.height,
-    Math.max(area.height, minSize.height),
-  )
-  const x = clamp(window.x, 0, Math.max(area.width - width, 0))
-  const y = clamp(window.y, 0, Math.max(area.height - height, 0))
-  return { x, y, width, height }
-}
-
-/** Where the store keeps the new window if `openApp` does not activate an existing singleton. */
-function cascadePosition(
-  state: ShellState,
-  defaultSize: Size,
-): { x: number; y: number } {
-  const openInWorkspace = state.windows.filter(
-    (w) => w.workspaceId === state.activeWorkspaceId,
-  ).length
-  const offset = (openInWorkspace * CASCADE_STEP) % CASCADE_WRAP_MARGIN
-  return {
-    x: clamp(offset, 0, Math.max(state.area.width - defaultSize.width, 0)),
-    y: clamp(offset, 0, Math.max(state.area.height - defaultSize.height, 0)),
-  }
-}
 
 /** Every open tab of `appId` across every workspace (FR-016 singleton search is device-wide, not
  * just the active workspace). */
@@ -105,7 +59,10 @@ export function openApp(
     }
   }
   const tabId = crypto.randomUUID()
-  const { x, y } = cascadePosition(state, app.defaultSize)
+  const openInWorkspace = state.windows.filter(
+    (w) => w.workspaceId === state.activeWorkspaceId,
+  ).length
+  const { x, y } = cascadePosition(openInWorkspace, app.defaultSize, state.area)
   const window: ShellWindow = {
     id: crypto.randomUUID(),
     workspaceId: state.activeWorkspaceId,
@@ -179,7 +136,7 @@ export function hydrate(
       ? source.workspaceId
       : defaultWorkspace.id
     const firstApp = getAppDefinition(firstTab.appId, apps)
-    const geometry = clampToArea(
+    const geometry = clampGeometry(
       source,
       firstApp?.minSize ?? { width: 0, height: 0 },
       area,
