@@ -154,7 +154,8 @@
 
 ## Phase 10: Verification and handoff
 
-- [ ] T053 [P] Add pure reducer, geometry, tabs, hydration, queue, and unknown-app checks to `scripts/check-shell-state.ts`
+- [x] T053 [P] Add pure reducer, geometry, tabs, hydration, queue, and unknown-app checks to `scripts/check-shell-state.ts`
+  - Done 2026-09-24: grew the file from 3 to 43 tests, organized into six sections (pure reducers, geometry, tabs, hydration, persistence queue, multi-instance — the last kept as-is from T052). Made `useShellLayout(invokeFn = tauriInvoke)`'s Tauri `invoke` an injectable parameter (a small, non-breaking addition — `stores/shell.ts`'s call site is unchanged) specifically so the queue/debounce/dirty-retry/serialization tests could run here directly against the real module, instead of needing Node's `--experimental-test-module-mocks` flag (checked: exists but requires the flag on this Node version) or a source-patched throwaway copy. Reused two singleton test apps (`test.alpha`/`test.beta`, distinct minSizes) across the reducer/geometry/tabs/hydration sections rather than the shipped `SHELL_APPS`, so these tests stay independent of the real app registry. All 43 pass. `pnpm typecheck`, `pnpm lint`, `pnpm check:chat-state` (45/45), `pnpm check:templates` (52/52), full `pnpm generate` build all clean.
 - [ ] T054 [P] Update `scripts/check-chat-state.ts` to load `src/components/apps/ChatApp.vue` and preserve the existing replay count
 - [ ] T055 [P] Add Shell script and CI commands to `package.json` and `.github/workflows/ci.yml`
 - [ ] T056 Run the full validation commands documented in `specs/015-workspace-shell/quickstart.md`, including targeted Rust tests, generated binding drift, Shell/chat checks, templates, typechecks, lint, and formatting

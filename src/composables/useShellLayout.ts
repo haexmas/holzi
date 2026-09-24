@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core'
+import { invoke as tauriInvoke } from '@tauri-apps/api/core'
 
 /**
  * Wire types for the Shell layout commands (spec 015-workspace-shell,
@@ -65,8 +65,12 @@ const SAVE_DEBOUNCE_MS = 400
  * dirty sets are per-call closure state, not a module-level singleton
  * (unlike `useShellCloseConfirm`'s `pending` ref) — there is exactly one
  * shell layout per device, so `stores/shell.ts` calls this once at setup.
+ *
+ * `invokeFn` defaults to the real Tauri `invoke` — `scripts/check-shell-
+ * state.ts` (T053) substitutes a fake to test the queue/debounce/dirty-
+ * retry logic standalone, without a Tauri runtime or module mocking.
  */
-export function useShellLayout() {
+export function useShellLayout(invokeFn: typeof tauriInvoke = tauriInvoke) {
   /** Never rejects — every operation attaches here so the queue keeps
    * flowing even after a failure; the operation's OWN returned promise
    * (from `runExclusive`) still carries that failure to its caller. */
@@ -99,7 +103,7 @@ export function useShellLayout() {
     if (pendingSaves.size > 0) {
       const windows = Array.from(pendingSaves.values())
       try {
-        await invoke('shell_save_windows', { args: { windows } })
+        await invokeFn('shell_save_windows', { args: { windows } })
         for (const w of windows) pendingSaves.delete(w.windowId)
       } catch (error) {
         console.error(
@@ -111,7 +115,7 @@ export function useShellLayout() {
     if (pendingCloses.size > 0) {
       const windowIds = Array.from(pendingCloses)
       try {
-        await invoke('shell_close_windows', { args: { windowIds } })
+        await invokeFn('shell_close_windows', { args: { windowIds } })
         for (const id of windowIds) pendingCloses.delete(id)
       } catch (error) {
         console.error(
@@ -159,18 +163,18 @@ export function useShellLayout() {
   /** Loads the device's whole layout. Result-bearing and queued like every
    * other call, but never debounced or retried — the caller awaits it. */
   function loadLayout(): Promise<ShellLayoutDto> {
-    return runExclusive(() => invoke<ShellLayoutDto>('shell_load_layout'))
+    return runExclusive(() => invokeFn<ShellLayoutDto>('shell_load_layout'))
   }
 
   function createWorkspace(): Promise<WorkspaceDto> {
-    return runExclusive(() => invoke<WorkspaceDto>('shell_create_workspace'))
+    return runExclusive(() => invokeFn<WorkspaceDto>('shell_create_workspace'))
   }
 
   function deleteWorkspace(
     workspaceId: string,
   ): Promise<DeleteWorkspaceResult> {
     return runExclusive(() =>
-      invoke<DeleteWorkspaceResult>('shell_delete_workspace', {
+      invokeFn<DeleteWorkspaceResult>('shell_delete_workspace', {
         args: { workspaceId },
       }),
     )
@@ -178,7 +182,7 @@ export function useShellLayout() {
 
   function setActiveWorkspace(workspaceId: string): Promise<void> {
     return runExclusive(() =>
-      invoke('shell_set_active_workspace', { args: { workspaceId } }).then(
+      invokeFn('shell_set_active_workspace', { args: { workspaceId } }).then(
         () => undefined,
       ),
     )
