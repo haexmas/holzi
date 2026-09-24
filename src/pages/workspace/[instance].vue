@@ -7,6 +7,11 @@
  * keeps the model preload/readiness status (FR-005) visible independent of
  * any open window.
  *
+ * Awaits `shell.hydrateFromBackendAsync()` (T048) before anything else: the
+ * store's `state` otherwise starts from `hydrate`'s own throwaway default
+ * workspace, and opening a window into that would be immediately discarded
+ * once the real persisted layout replaces `state` right after.
+ *
  * Consumes `?open=<appId>` once (contracts/shell-app-contract.md §3, T024's
  * legacy-route redirects land here with it set) and removes it via
  * `router.replace` so it does not re-fire and open a second tab on a
@@ -34,8 +39,9 @@ const instanceName = computed(() => {
 // here; set again so a direct/refreshed load of this route still resolves
 // the same instance for components that only read the store (ChatApp.vue
 // and friends have no route of their own).
-onMounted(() => {
+onMounted(async () => {
   instancesStore.setActiveInstance(instanceName.value)
+  await shell.hydrateFromBackendAsync()
 
   const open = route.query.open
   if (typeof open === 'string' && open.length > 0) {

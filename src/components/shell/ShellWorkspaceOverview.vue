@@ -48,8 +48,8 @@ function select(workspaceId: string) {
   shell.switchWorkspace(workspaceId)
 }
 
-function create() {
-  const workspace = shell.createWorkspace()
+async function create() {
+  const workspace = await shell.createWorkspace()
   shell.switchWorkspace(workspace.id)
 }
 

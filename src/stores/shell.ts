@@ -22,11 +22,14 @@ import {
 import type {
   CloseGuard,
   CloseGuardResult,
+  PersistedLayout,
   ShellState,
   ShellTab,
   ShellWindow,
   TabRuntime,
+  Workspace,
 } from '~/lib/shell/types'
+import { useShellLayout, type WindowDto } from '~/composables/useShellLayout'
 
 /**
  * Shell state and its public actions (spec 015-workspace-shell, T018,
@@ -37,12 +40,20 @@ import type {
  * User Story 1-4's actions are implemented here: `openApp`, `addTab`,
  * `switchTab`, `focusWindow`, `closeWindow`, `closeTab`, `minimizeWindow`,
  * `toggleMaximizeWindow`, `updateWindowGeometry`, `createWorkspace`,
- * `deleteWorkspace`, `switchWorkspace`, `moveWindowToWorkspace`, and a
- * `flushAsync` placeholder (FR-027) `ChatApp.vue`'s `lock()` already
- * depends on.
+ * `deleteWorkspace`, `switchWorkspace`, `moveWindowToWorkspace`.
  *
- * Persistence does not exist yet (Phase 7): `state` starts from an empty
- * layout, and `flushAsync` is a no-op until T047 wires the real write queue.
+ * Persistence (T048): `state` starts from an empty local layout — same as
+ * before any backend round trip existed — so the store is usable
+ * synchronously at setup. `hydrateFromBackendAsync` (called once by
+ * `pages/workspace/[instance].vue`, before anything else touches the
+ * store) replaces it in place with the real persisted layout via
+ * `Object.assign`, which keeps `state`'s identity so every `toRefs`/
+ * `computed` consumer already holding a reference keeps tracking it.
+ * Every mutating action below also tells `useShellLayout()` what to
+ * persist: immediately for structural changes (open, add/switch/close tab,
+ * close window, move to another workspace, minimize/maximize) and
+ * debounced for geometry and stack (focus) changes — research.md R13.
+ * Workspace actions use their own commands, not `shell_save_windows`.
  */
 export const useShellStore = defineStore('shell', () => {
   const initialArea =
@@ -56,6 +67,67 @@ export const useShellStore = defineStore('shell', () => {
       initialArea,
     ),
   )
+
+  const shellLayout = useShellLayout()
+
+  function windowToDto(window: ShellWindow): WindowDto {
+    return {
+      windowId: window.id,
+      workspaceId: window.workspaceId,
+      x: window.x,
+      y: window.y,
+      width: window.width,
+      height: window.height,
+      isMinimized: window.minimized,
+      isMaximized: window.maximized,
+      stackOrder: window.stack,
+      activeTabId: window.activeTabId,
+      tabs: window.tabs.map((tab) => ({ tabId: tab.id, appId: tab.appId })),
+    }
+  }
+
+  function persistWindowNow(windowId: string) {
+    const window = state.windows.find((w) => w.id === windowId)
+    if (window) shellLayout.saveWindowNow(windowToDto(window))
+  }
+
+  function persistWindowDebounced(windowId: string) {
+    const window = state.windows.find((w) => w.id === windowId)
+    if (window) shellLayout.saveWindowDebounced(windowToDto(window))
+  }
+
+  /** Loads the device's real layout and replaces `state` in place (research
+   * data-model.md "Wiederherstellen"; unknown-app filtering and geometry
+   * clamping already live in `hydrate` itself, so this only has to feed it
+   * real data). Called once, before anything else touches the store —
+   * `pages/workspace/[instance].vue`'s `onMounted`, ahead of its own
+   * `?open=` handling, so a window never opens into the throwaway
+   * pre-hydration workspace `hydrate({ workspaces: [], ... })` mints. */
+  async function hydrateFromBackendAsync(): Promise<void> {
+    const dto = await shellLayout.loadLayout()
+    const layout: PersistedLayout = {
+      workspaces: dto.workspaces.map((w) => ({
+        id: w.workspaceId,
+        position: w.position,
+      })),
+      windows: dto.windows.map((w) => ({
+        id: w.windowId,
+        workspaceId: w.workspaceId,
+        x: w.x,
+        y: w.y,
+        width: w.width,
+        height: w.height,
+        minimized: w.isMinimized,
+        maximized: w.isMaximized,
+        stack: w.stackOrder,
+        tabs: w.tabs.map((tab) => ({ id: tab.tabId, appId: tab.appId })),
+        activeTabId: w.activeTabId,
+      })),
+      activeWorkspaceId: dto.activeWorkspaceId,
+    }
+    Object.assign(state, hydrate(layout, SHELL_APPS, state.area))
+    syncTabRuntime()
+  }
 
   /** Never persisted (data-model.md); per-tab bookkeeping keyed by tab id, kept in sync with
    * `state.windows[*].tabs` after every action that can add or remove a tab. A `Map` rather than
@@ -171,37 +243,49 @@ export const useShellStore = defineStore('shell', () => {
     }
   }
 
+  /** Opens the app, or activates its existing singleton tab (`state.activeWindowId` either way) —
+   * persisted immediately either way: even reactivating a singleton is a deliberate click, not a
+   * continuous gesture (research.md R13's structural bucket is everything but geometry/stack). */
   function openApp(appId: string) {
     openAppReducer(state, appId, SHELL_APPS)
     syncTabRuntime()
+    if (state.activeWindowId) persistWindowNow(state.activeWindowId)
   }
 
   function addTab(windowId: string, appId: string) {
     addTabReducer(state, windowId, appId, SHELL_APPS)
     syncTabRuntime()
+    if (state.activeWindowId) persistWindowNow(state.activeWindowId)
   }
 
   function switchTab(windowId: string, tabId: string) {
     switchTabReducer(state, windowId, tabId)
+    persistWindowNow(windowId)
   }
 
   /** Removes the tab without asking anything — guard confirmation (FR-014) runs at the caller,
-   * same as `closeWindow`. */
+   * same as `closeWindow`. Persists via `shell_close_windows` if the window closed with it (it was
+   * the last tab), otherwise via a save carrying the window's remaining tabs. */
   function closeTab(windowId: string, tabId: string) {
     closeTabReducer(state, windowId, tabId)
     syncTabRuntime()
+    if (state.windows.some((w) => w.id === windowId)) persistWindowNow(windowId)
+    else shellLayout.closeWindowNow(windowId)
   }
 
   function focusWindow(windowId: string) {
     focusWindowReducer(state, windowId)
+    persistWindowDebounced(windowId)
   }
 
   function minimizeWindow(windowId: string) {
     minimizeWindowReducer(state, windowId)
+    persistWindowNow(windowId)
   }
 
   function toggleMaximizeWindow(windowId: string) {
     toggleMaximizeWindowReducer(state, windowId)
+    persistWindowNow(windowId)
   }
 
   function updateWindowGeometry(
@@ -209,6 +293,7 @@ export const useShellStore = defineStore('shell', () => {
     geometry: { x: number; y: number; width: number; height: number },
   ) {
     updateWindowGeometryReducer(state, windowId, geometry)
+    persistWindowDebounced(windowId)
   }
 
   /** Removes the window without asking anything — guard confirmation (FR-014) runs at the caller
@@ -217,27 +302,48 @@ export const useShellStore = defineStore('shell', () => {
   function closeWindow(windowId: string) {
     closeWindowReducer(state, windowId)
     syncTabRuntime()
+    shellLayout.closeWindowNow(windowId)
   }
 
-  function createWorkspace() {
-    return createWorkspaceReducer(state, crypto.randomUUID())
+  /** Creates the workspace on the backend first — `workspace_id` is backend-assigned
+   * (data-model.md) — then applies the identical id locally, so the two never diverge. */
+  async function createWorkspace(): Promise<Workspace> {
+    const dto = await shellLayout.createWorkspace()
+    return createWorkspaceReducer(state, dto.workspaceId)
   }
 
   function switchWorkspace(workspaceId: string) {
     switchWorkspaceReducer(state, workspaceId)
+    void shellLayout.setActiveWorkspace(workspaceId).catch((error: unknown) => {
+      console.error('[shell] shell_set_active_workspace failed', error)
+    })
   }
 
-  /** Deletes the workspace and its windows/tabs — guard confirmation for any running replies
-   * (FR-021, same shape as `closeWindow`'s) and the "close N windows" confirmation both run at the
-   * caller (`ShellWorkspaceOverview.vue`, T040) before this is invoked. A no-op for the last
-   * remaining workspace (I3). */
+  /** Deletes the workspace and its windows/tabs locally for instant feedback — guard confirmation
+   * for any running replies (FR-021, same shape as `closeWindow`'s) and the "close N windows"
+   * confirmation both run at the caller (`ShellWorkspaceOverview.vue`, T040) before this is
+   * invoked. A no-op for the last remaining workspace (I3). The backend call runs the identical
+   * dense-renumber/neighbor-activation algorithm (`shell_commands.rs`'s `neighbor_after_delete`),
+   * so it only needs to persist the outcome, not correct it. Explicitly closes each of its windows
+   * first (redundant with the backend's own FK cascade, but idempotent) so none of them can be
+   * left dirty in `useShellLayout`'s retry set forever — a workspace this deletes no longer exists
+   * for `shell_save_windows` to validate a stale pending save against. */
   function deleteWorkspace(workspaceId: string) {
+    const removedWindowIds = state.windows
+      .filter((w) => w.workspaceId === workspaceId)
+      .map((w) => w.id)
     deleteWorkspaceReducer(state, workspaceId)
     syncTabRuntime()
+    for (const windowId of removedWindowIds)
+      shellLayout.closeWindowNow(windowId)
+    void shellLayout.deleteWorkspace(workspaceId).catch((error: unknown) => {
+      console.error('[shell] shell_delete_workspace failed', error)
+    })
   }
 
   function moveWindowToWorkspace(windowId: string, workspaceId: string) {
     moveWindowToWorkspaceReducer(state, windowId, workspaceId)
+    persistWindowNow(windowId)
   }
 
   /** Whether *any* window in the workspace has attention (data-model.md's derived rule, mirroring
@@ -288,13 +394,16 @@ export const useShellStore = defineStore('shell', () => {
     return results
   }
 
-  /** Placeholder until Phase 7 (T047) wires the real serialized write queue; `ChatApp.vue`'s
-   * `lock()` already depends on awaiting it before `useInstance().closeAsync()` (FR-027). */
-  async function flushAsync(): Promise<void> {}
+  /** Awaits the persistence queue before the vault locks or closes (FR-027) — `ChatApp.vue`'s and
+   * `FederationApp.vue`'s `lock()` already call this before `useInstance().closeAsync()`. */
+  function flushAsync(): Promise<void> {
+    return shellLayout.flushAsync()
+  }
 
   return {
     ...toRefs(state),
     windowsInActiveWorkspace,
+    hydrateFromBackendAsync,
     runtimeFor,
     tabDisplayInfo,
     windowDisplayInfo,
