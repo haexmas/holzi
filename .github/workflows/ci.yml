@@ -209,6 +209,13 @@ jobs:
         with:
           node-version: 22.19.0
 
+      # Every other job only ever runs `corepack pnpm ...`, which needs no
+      # shim. This job also runs `pnpm tauri build` (inside `test:e2e`),
+      # whose `beforeBuildCommand` spawns a literal `pnpm generate` itself —
+      # without a real `pnpm` on PATH that fails with `spawn pnpm ENOENT`.
+      - name: Enable Corepack
+        run: corepack enable
+
       - name: Install frontend dependencies
         run: corepack pnpm install --frozen-lockfile --ignore-scripts
 
