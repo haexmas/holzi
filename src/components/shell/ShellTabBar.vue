@@ -7,7 +7,8 @@
  * to the active tab's title regardless of count, dropping the tablist and
  * its scroll arrows entirely. The "+" sits immediately after the last tab
  * (FR-032) either way, wrapped in `ShellNewTabMenu.vue`'s dropdown.
- * Activating a tab scrolls it into view (FR-035).
+ * Activating a tab scrolls it into view (FR-035). Like Firefox, tabs take up
+ * to 14rem each and shrink evenly to 6rem before the strip scrolls.
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ShellTab } from '~/lib/shell/types'
@@ -173,7 +174,7 @@ watch(
       v-else
       ref="barRef"
       role="tablist"
-      class="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto"
+      class="flex min-w-0 items-center gap-0.5 overflow-x-auto"
       :aria-label="t('shell.tabs.tablist')"
     >
       <div
@@ -183,7 +184,7 @@ watch(
         role="tab"
         :aria-selected="row.tab.id === activeTabId"
         :tabindex="row.tab.id === activeTabId ? 0 : -1"
-        class="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-t-md px-2 py-1 text-sm"
+        class="flex min-w-24 basis-56 cursor-pointer items-center gap-1.5 rounded-t-md px-2 py-1 text-sm"
         :class="
           row.tab.id === activeTabId
             ? 'bg-background font-medium'
@@ -199,7 +200,7 @@ watch(
           class="h-3.5 w-3.5 shrink-0"
           :aria-hidden="true"
         />
-        <span class="max-w-40 truncate">{{ titleFrom(row.info) }}</span>
+        <span class="min-w-0 flex-1 truncate">{{ titleFrom(row.info) }}</span>
         <span
           v-if="row.info.hasAttention"
           class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"

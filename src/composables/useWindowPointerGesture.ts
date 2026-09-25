@@ -15,7 +15,8 @@ type Geometry = { x: number; y: number; width: number; height: number }
  * Callers attach `startMove`/`startResize` to `pointerdown` on the title
  * bar (drag) and each resize handle (`touch-action: none` on both is the
  * caller's responsibility, so the browser never starts a scroll gesture
- * mid-drag).
+ * mid-drag). Text selection is off for the whole page while a gesture
+ * runs, so dragging across window content never selects it.
  */
 export function useWindowPointerGesture(
   getGeometry: () => Geometry,
@@ -34,6 +35,9 @@ export function useWindowPointerGesture(
     const startY = startEvent.clientY
     let pending: Geometry | null = null
     let frameScheduled = false
+    const root = document.documentElement.style
+    const previousUserSelect = root.userSelect
+    const previousWebkitUserSelect = root.webkitUserSelect
 
     function flush() {
       frameScheduled = false
@@ -55,8 +59,14 @@ export function useWindowPointerGesture(
       if (target.hasPointerCapture(pointerId)) {
         target.releasePointerCapture(pointerId)
       }
+      root.userSelect = previousUserSelect
+      root.webkitUserSelect = previousWebkitUserSelect
     }
 
+    // WebKitGTK still honors only the prefixed property.
+    root.userSelect = 'none'
+    root.webkitUserSelect = 'none'
+    window.getSelection()?.removeAllRanges()
     target.setPointerCapture(pointerId)
     target.addEventListener('pointermove', onMove)
     target.addEventListener('pointerup', stop)

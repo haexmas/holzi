@@ -46,7 +46,7 @@ const openLauncher = useAction('shell.launcher.open')
         :aria-label="t('shell.workspaces.title')"
         @click="openWorkspaces()"
       >
-        <Icon name="lucide:layout-list" class="h-5 w-5" :aria-hidden="true" />
+        <Icon name="lucide:monitor" class="h-5 w-5" :aria-hidden="true" />
       </button>
       <button
         type="button"
@@ -54,11 +54,7 @@ const openLauncher = useAction('shell.launcher.open')
         :aria-label="t('shell.windowOverview.open')"
         @click="openWindows()"
       >
-        <Icon
-          name="lucide:layout-panel-top"
-          class="h-5 w-5"
-          :aria-hidden="true"
-        />
+        <Icon name="lucide:copy" class="h-5 w-5" :aria-hidden="true" />
       </button>
       <button
         type="button"

@@ -1,11 +1,9 @@
 import { onBackButtonPress } from '@tauri-apps/api/app'
 import { registerChatActionHandlers } from '~/stores/chatActionHandlers'
 import { registerSettingsActionHandlers } from '~/stores/settingsActionHandlers'
+import type { Translate } from '~/composables/useModelInventory'
 import { registerShellActionHandlers } from '~/stores/shellActionHandlers'
-import {
-  registerShellLayoutHandlers,
-  type Translate,
-} from '~/stores/shellLayoutHandlers'
+import { registerShellLayoutHandlers } from '~/stores/shellLayoutHandlers'
 
 /**
  * Registers the global action handlers once at startup (spec

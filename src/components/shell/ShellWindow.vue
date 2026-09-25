@@ -185,7 +185,7 @@ const RESIZE_HANDLES: { direction: ResizeDirection; class: string }[] = [
         @select-tab="selectTab"
         @close-tab="requestCloseTab"
       />
-      <div class="min-w-4 flex-1" />
+      <div class="w-4 shrink-0" />
       <ShellTabListMenu
         :tabs="window.tabs"
         :active-tab-id="window.activeTabId"

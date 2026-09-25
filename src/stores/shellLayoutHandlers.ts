@@ -9,13 +9,10 @@ import { getAppDefinition, SHELL_APPS } from '~/lib/shell/apps'
 import { clampGeometry } from '~/lib/shell/geometry'
 import { formatLocation, currentLocation } from '~/lib/shell/navigation'
 import type { ShellTab, ShellWindow } from '~/lib/shell/types'
+import type { Translate } from '~/composables/useModelInventory'
 import type { useShellStore } from '~/stores/shell'
 
 type ShellStore = ReturnType<typeof useShellStore>
-export type Translate = (
-  key: string,
-  params?: Record<string, unknown>,
-) => string
 
 /** A declined user confirmation fails the action (contracts/shell-actions.md §1). */
 function confirmed(ok: boolean): { done: true } {
