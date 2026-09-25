@@ -4,14 +4,9 @@
  * singleton app that already has a tab somewhere activates it instead of
  * opening a second one — `shell.addTab` already implements that search
  * (tabs.ts, T033); this only labels those entries as already open (T035,
- * plan research R18).
- *
- * Known limitation: the dropdown's stacking context (z-50, from the haex-ui
- * layer) is a fixed value, while `ShellWindow.vue` gives each window a
- * `z-index` from its `stack` rank, which only ever grows (`nextStack` is
- * never renumbered dense the way workspace `position` is). After roughly 50
- * focus changes in one session, a focused window could in principle render
- * above this menu. Not worth a stack-renumbering change for this task.
+ * plan research R18). The teleported dropdown (z-50) always paints above
+ * the windows: `ShellDesktop.vue` keeps their growing `stack` z-indices
+ * inside an isolated stacking context.
  */
 import { SHELL_APPS } from '~/lib/shell/apps'
 
