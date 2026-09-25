@@ -68,7 +68,7 @@ sha2 = "0.11"
 # API content blocks (spec 011-composer-toolbar-parity). Already present as
 # a transitive dependency; pinned directly here for the same reason as
 # sha2 above.
-base64 = "0.22"
+base64 = "0.23"
 unicode-segmentation = "1.13"
 # Erases the vault passphrase from memory when it is dropped (spec 013, FR-014).
 # Already in the lock as a transitive dependency; the `serde` feature lets the
