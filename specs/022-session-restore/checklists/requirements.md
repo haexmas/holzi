@@ -36,8 +36,12 @@
   the vault value, like the default model from spec 002), and layouts saved
   unasked by earlier versions are removed on update. No clarification markers
   were needed.
-- The spec says what gets removed and when, not how. FR-010 ("no deleted
-  entries that can be restored or passed on") is the requirement the plan must
-  meet for the CRDT-tracked layout tables.
-- SC-004 (find and enable in under 30 seconds) is checked in the manual
+- Deleting synced rows is never traceless: haex-crdt records each deletion in
+  its delete log (table name and primary key) and syncs it to other devices.
+  FR-010 therefore keeps saved sessions off the sync entirely, and FR-011
+  allows content-free delete markers only for the already-synced legacy data.
+  How (for example device-local tables) is plan material.
+- The spec avoids the word "Layout" and defines "Sitzung" instead (operator
+  feedback: the term was unclear).
+- SC-005 (find and enable in under 30 seconds) is checked in the manual
   quickstart run.
