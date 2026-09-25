@@ -161,6 +161,26 @@ describe('press', () => {
     assert.equal(clicks.length, 2)
   })
 
+  it('uses the element activated by the first click for later activations', async () => {
+    let finds = 0
+    driver.onFind(() => {
+      finds += 1
+      return [finds === 1 ? 'el-old' : 'el-new']
+    })
+    driver.onDisplayed(() => true)
+    driver.onClick(() => 'ok')
+    const before = driver.requests.length
+    await press(client, 'lock-instance', { times: 2, step: () => {} })
+    const clicks = driver.requests
+      .slice(before)
+      .filter((r) => r.path.endsWith('/click'))
+      .map((r) => r.path)
+    assert.deepEqual(clicks, [
+      '/session/fake-session/element/el-new/click',
+      '/session/fake-session/element/el-new/click',
+    ])
+  })
+
   it('stops quietly when a later click finds the session already gone', async () => {
     driver.onFind(() => ['el-1'])
     driver.onDisplayed(() => true)

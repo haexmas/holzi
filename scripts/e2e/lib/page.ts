@@ -85,12 +85,12 @@ async function findDisplayed(
   }
 }
 
-/** Clicks the displayed control found by hook. Polls until the deadline; fails naming the hook. */
-export async function click(
+/** Clicks the displayed control and returns the element ID that was activated. */
+async function clickDisplayed(
   client: WebDriverClient,
   hook: string,
   deadlineMs = 5000,
-): Promise<void> {
+): Promise<string> {
   const end = Date.now() + deadlineMs
   for (;;) {
     const element = await findDisplayed(
@@ -100,7 +100,7 @@ export async function click(
     )
     try {
       await client.click(element)
-      return
+      return element
     } catch (error) {
       if (
         !(error instanceof WebDriverError) ||
@@ -112,6 +112,15 @@ export async function click(
       await sleep(50)
     }
   }
+}
+
+/** Clicks the displayed control found by hook. Polls until the deadline; fails naming the hook. */
+export async function click(
+  client: WebDriverClient,
+  hook: string,
+  deadlineMs = 5000,
+): Promise<void> {
+  await clickDisplayed(client, hook, deadlineMs)
 }
 
 /** Waits until a stable hook is displayed without activating it. */
@@ -157,14 +166,14 @@ export async function press(
   options: PressOptions,
 ): Promise<void> {
   const selector = toSelector(hook)
-  const [element] = await displayedNow(client, selector)
+  let [element] = await displayedNow(client, selector)
   if (element === undefined) {
     throw new Error(`hook "${hook}" (selector ${selector}) is not displayed`)
   }
   const times = options.times ?? 1
   for (let i = 0; i < times; i++) {
     try {
-      if (i === 0) await click(client, hook)
+      if (i === 0) element = await clickDisplayed(client, hook)
       else await client.click(element)
     } catch (error) {
       if (i > 0 && isGoneMidPress(error)) break
