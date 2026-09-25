@@ -316,6 +316,18 @@ Browser-Historie wird nie gelesen (R7). Dazu:
 manuell nach quickstart M21 geprüft (DevTools: iframe in einen Tab einfügen,
 `pushState` und `history.back()` darin auslösen).
 
+**Umsetzungsstand (T038, 2026-09-25)**: Tauri 2.11.5 (laut `Cargo.lock`) reicht
+WebView2s `browser_accelerator_keys` nicht durch — nur `wry` 0.55 kennt die
+Einstellung, und holzis Fenster entstehen aus `tauri.conf.json`. Eine gezielte
+Abschaltung der Maus-Navigation von WebKitGTK/WKWebView bietet Tauri ebenfalls
+nicht. Es gibt daher keinen Rust-Anteil. Wirkung trotzdem spezifikationsgemäß:
+Die History des obersten Dokuments bleibt flach, und die Abwehr in
+`pages/workspace/[instance].vue` bricht jede Router-Navigation weg von der
+Seite ab, ohne sie zu deuten. Eine vom Webview selbst ausgelöste
+Rück-Navigation trifft deshalb höchstens ein eingebettetes Dokument (FR-035).
+Einschränkung für den PR: Unter Windows kann Alt+← bei Fokus in einem iframe
+dessen eigene History bewegen.
+
 ## R18 — Aufrufer, Bereiche, Leitplanken
 
 **Decision**:

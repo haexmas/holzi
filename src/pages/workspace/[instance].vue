@@ -29,6 +29,13 @@ const shell = useShellStore()
 // Spec 020: global shortcuts for Shell actions (back/forward).
 useShellKeyboard()
 
+// Spec 020 (research R7, FR-020, FR-035): the webview history is never navigation state. Pages
+// reach this one with `replace`, so the top document's history stays flat, and every router
+// navigation away from it — a webview back, or an embedded document's `history.back()` — is
+// cancelled and deliberately not read as a tab's back (locking or closing ends the process,
+// spec 013, so there is no legitimate route away).
+onBeforeRouteLeave(() => false)
+
 const instanceName = computed(() => {
   const raw = route.params.instance
   return typeof raw === 'string'

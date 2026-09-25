@@ -82,7 +82,9 @@ async function finishOnboardingAsync() {
     loadError.value = errString(e)
     return
   }
-  await navigateTo(`/workspace/${encodeURIComponent(instanceName.value)}`)
+  await navigateTo(`/workspace/${encodeURIComponent(instanceName.value)}`, {
+    replace: true,
+  })
 }
 
 async function completeWithModel(rec: TierRecommendation) {

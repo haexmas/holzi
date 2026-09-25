@@ -153,9 +153,12 @@ description: 'Task list for spec 020-tab-navigation'
 
 **Independent Test**: quickstart M13, M21, M22; SC-009
 
-- [ ] T037 [US8] Keep the top document's webview history flat: enter the workspace page with `router.replace` from `src/pages/index.vue` and the onboarding completion path in `src/pages/onboarding/[instance].vue`; add `onBeforeRouteLeave` to `src/pages/workspace/[instance].vue` that cancels every router navigation away and ignores it (never interpreted as back, research R7)
-- [ ] T038 [US8] Disable webview-level history navigation from input devices where the platform allows it, in the Tauri window setup (`src-tauri/src/lib.rs` or the window builder): WebView2 browser accelerator keys off; mouse back/forward navigation off per the T032 findings; document platforms without such a setting as limitations in research.md R17
+- [x] T037 [US8] Keep the top document's webview history flat: enter the workspace page with `router.replace` from `src/pages/index.vue` and the onboarding completion path in `src/pages/onboarding/[instance].vue`; add `onBeforeRouteLeave` to `src/pages/workspace/[instance].vue` that cancels every router navigation away and ignores it (never interpreted as back, research R7)
+  - Done 2026-09-25: index.vue and the onboarding completion navigate to the workspace with replace: true; pages/workspace/[instance].vue cancels every route leave (onBeforeRouteLeave(() => false)) without interpreting it. The ?open= cleanup is a same-route replace and unaffected. check:vault-lifecycle 12/12.
+- [x] T038 [US8] Disable webview-level history navigation from input devices where the platform allows it, in the Tauri window setup (`src-tauri/src/lib.rs` or the window builder): WebView2 browser accelerator keys off; mouse back/forward navigation off per the T032 findings; document platforms without such a setting as limitations in research.md R17
+  - Done 2026-09-25: no Rust change possible: Tauri 2.11.5 does not expose WebView2 browser_accelerator_keys (only wry does) nor a mouse-navigation switch; documented in research.md R17 with the resulting Windows limitation (Alt+← inside a focused iframe may move that iframe's own history). FR-035 still holds via the flat history + non-interpreting leave guard.
 - [ ] T039 [US8] Run quickstart M13, M21 and M22 manually and record the results (including per-platform limitations) in a note on this task
+  - Status 2026-09-25: open — needs a running app. M13/M21 can be automated in the tauri-driver e2e rig (spec 016) by executing `history.back()` and an iframe `pushState` loop in the webview; planned with T060. M22 needs a physical mouse (see T032).
 
 **Checkpoint**: 20 history writes and backs inside an iframe change no tab history (SC-009)
 
