@@ -6,10 +6,13 @@
 **Input**: Jeder Tab der Workspace-Shell (Spec 015) bekommt einen Ort innerhalb
 seiner App und eine eigene Vor/Zurück-Historie wie ein Browser-Tab. Jeder Klick,
 der zu einer neuen Seite oder Ansicht führt, ist über Vor und Zurück erreichbar.
-Apps lassen sich direkt an einem Ort öffnen. Shell-Aktionen werden als Befehle
-mit festen Standard-Tastenkürzeln geführt; das Umbelegen zur Laufzeit folgt in
-einer eigenen Spec. Das haex-vault-Modell (`useDrillDownNavigation`,
-Navigation-Store) wird dabei bewusst nicht 1:1 übernommen.
+Apps lassen sich direkt an einem Ort öffnen. Jede Aktion der Shell und der
+ausgelieferten Apps wird als beschriebene, aufrufbare Aktion geführt — für
+Oberfläche, Tastenkürzel und später für Agenten (eingebaut und extern über MCP);
+Leitplanken-Einstellungen bleiben Agenten verschlossen. Inhalte in Tabs,
+insbesondere haextensions, können die Navigation von holzi nicht verändern. Das
+haex-vault-Modell (`useDrillDownNavigation`, Navigation-Store) wird bewusst
+nicht 1:1 übernommen.
 
 ## Beziehung zu bestehenden Specs
 
@@ -29,8 +32,20 @@ Navigation-Store) wird dabei bewusst nicht 1:1 übernommen.
   Unteransichten) baut auf dieser Spec auf; ihre Kategorien und Unteransichten
   sind Orte im Sinne dieser Spec.
 - Die geplante Folge-Spec **Befehle und Tastenkürzel** baut auf der
-  Befehls-Registry dieser Spec auf und macht die Belegung durch den Nutzer
+  Aktions-Registry dieser Spec auf und macht die Belegung durch den Nutzer
   änderbar.
+- Die geplante Spec **021 (holzi als MCP-Server, Agenten-Berechtigungen)**
+  macht die Aktionen dieser Spec für angemeldete externe Agenten und den
+  eingebauten Agenten aufrufbar, mit Anmeldung, Freigabe und Berechtigungen je
+  Agent (welche Bereiche, welche haextensions, Passwörter, Shell, Dateien …).
+  Diese Spec liefert dafür den vollständigen, beschriebenen Aktionskatalog, die
+  Berechtigungsbereiche und die Sperre der Leitplanken (FR-028–FR-033), aber
+  noch keinen Zugang für Agenten.
+- Die Specs **017/018** (haextension-Host, Extension-Tools, ADR-0004) binden
+  Extension-Tabs an das Ort- und Historienmodell dieser Spec an (Navigation der
+  Extension über das SDK statt über die Webview-Historie). Diese Spec stellt
+  sicher, dass Inhalte in Tabs die Navigation von holzi nicht verändern können
+  (FR-034, FR-035).
 - Die geplanten Folge-Specs **Tabs per Drag & Drop** und **Native Fenster**
   setzen voraus, dass die Historie mit dem Tab mitwandert (FR-010).
 
@@ -251,6 +266,89 @@ aus dem Verlauf öffnen, Zurück: die zuvor aktive Unterhaltung ist wieder offen
    Regeln wie beim Wechsel über den Verlauf (Spec 003/006); die Navigation
    selbst bricht keine Antwort stillschweigend ab.
 
+### User Story 7 - Jede Aktion ist beschrieben und aufrufbar (Priority: P2)
+
+Ein Agent — später der eingebaute oder ein angemeldeter externer — soll holzi
+vollständig bedienen können: eine App öffnen, dorthin navigieren, eine
+Einstellung ändern, eine Unterhaltung beginnen. Dafür ist jede Aktion, die ein
+Nutzer per Klick oder Taste auslösen kann, auch als beschriebene Aktion mit
+Eingaben und Ergebnis aufrufbar, und der aktuelle Zustand der Shell ist lesbar.
+Leitplanken-Einstellungen kann nur der Nutzer selbst ändern.
+
+**Why this priority**: Voraussetzung für Spec 021 und dafür, dass Oberfläche,
+Tastatur und Agenten dieselbe Logik benutzen. Für den Nutzer in dieser Spec noch
+nicht direkt sichtbar, deshalb P2; später nachgerüstet wäre es aber teuer, weil
+jede Schaltfläche erneut angefasst werden müsste.
+
+**Independent Test**: Den Aktionskatalog abrufen: jede Schaltfläche, jedes Menü
+und jedes Tastenkürzel der Shell und der ausgelieferten Apps, das Zustand ändert
+oder navigiert, hat einen Eintrag mit Beschreibung und Eingaben. Eine Aktion
+„App an Ort öffnen“ mit Aufrufer „Agent“ wirkt genauso wie der Klick. Eine
+Leitplanken-Aktion mit Aufrufer „Agent“ wird abgelehnt, mit Aufrufer „Nutzer“
+ausgeführt.
+
+**Acceptance Scenarios**:
+
+1. **Given** der Aktionskatalog, **When** er abgerufen wird, **Then** enthält
+   jeder Eintrag Kennung, Namen, Beschreibung, erwartete Eingaben, Form des
+   Ergebnisses, Berechtigungsbereich, Wirkungsart (lesend, ändernd,
+   zerstörend) und ob Agenten ihn aufrufen dürfen.
+2. **Given** eine Aktion, die sich auf einen Tab oder ein Fenster bezieht,
+   **When** sie ohne Oberflächen-Fokus aufgerufen wird, **Then** lässt sich das
+   Ziel ausdrücklich angeben (Tab, Fenster, Arbeitsbereich); fehlt es bei einem
+   Aufruf durch einen Agenten, wird der Aufruf mit verständlichem Fehler
+   abgelehnt statt still auf den fokussierten Tab zu wirken.
+3. **Given** eine Aktion wird mit Aufrufer „Agent“ aufgerufen, **When** sie
+   ausgeführt wird, **Then** ist das Ergebnis dasselbe wie beim Klick des
+   Nutzers (z. B. das Einstellungs-Fenster öffnet sich sichtbar), und das
+   Ergebnis wird strukturiert zurückgegeben.
+4. **Given** eine lesende Aktion für den Shell-Zustand, **When** sie
+   aufgerufen wird, **Then** liefert sie Arbeitsbereiche, Fenster, Tabs mit App,
+   aktuellem Ort, Titel und Aufmerksamkeitshinweis sowie die verfügbaren Apps
+   mit ihren Orten.
+5. **Given** eine Aktion im Leitplanken-Bereich (Autonomie-Modus,
+   Deny-Regeln, Zugangsdaten von Anbietern, Berechtigungen von Agenten),
+   **When** ein Agent sie aufruft, **Then** wird der Aufruf immer abgelehnt,
+   unabhängig von künftigen Freigaben; **When** der Nutzer sie über die
+   Oberfläche auslöst, **Then** wird sie ausgeführt.
+6. **Given** ein Aufruf mit ungültigen Eingaben, **When** er ausgeführt werden
+   soll, **Then** passiert nichts und der Aufrufer erhält einen verständlichen
+   Fehler mit dem betroffenen Feld.
+
+---
+
+### User Story 8 - Inhalte in Tabs verändern die Navigation nicht (Priority: P1)
+
+Ein Nutzer hat eine haextension oder eine andere eingebettete Seite in einem Tab
+offen. Was diese Seite mit ihrer eigenen Browser-Historie macht, hat keinen
+Einfluss auf holzi: keine Tab-Historie ändert sich, kein anderer Tab wird aktiv,
+und Zurück in holzi führt immer dorthin, wo der Nutzer es erwartet.
+
+**Why this priority**: Vorgabe des Betreibers. In einem Webview teilen sich alle
+eingebetteten Dokumente eine gemeinsame Browser-Historie; ohne Schutz könnte eine
+Extension holzis Zurück-Verhalten kapern oder stören.
+
+**Independent Test**: In einen Tab ein eingebettetes Dokument laden, das
+mehrfach Einträge in seine Browser-Historie schreibt und Zurück auslöst.
+Tab-Historien, aktiver Tab und sichtbare Ansichten außerhalb des Dokuments
+bleiben unverändert; Zurück per Knopf, Kürzel und Maustaste wirkt weiter
+ausschließlich nach den Regeln dieser Spec.
+
+**Acceptance Scenarios**:
+
+1. **Given** ein eingebettetes Dokument schreibt Einträge in seine
+   Browser-Historie, **When** das geschieht, **Then** ändern sich weder die
+   Historie noch der Ort irgendeines Tabs, noch der aktive Tab oder das
+   fokussierte Fenster.
+2. **Given** ein eingebettetes Dokument löst selbst Zurück aus, **When** das
+   geschieht, **Then** betrifft es höchstens dieses Dokument; holzi navigiert
+   keinen Tab und verlässt die Vault nicht.
+3. **Given** der Zeiger steht über einem eingebetteten Dokument, **When** der
+   Nutzer die Maustaste Zurück drückt oder das Kürzel verwendet, **Then** wirkt
+   die Eingabe nach FR-017/FR-018 auf den Tab, soweit die Plattform die Eingabe
+   an holzi weiterreicht; andernfalls betrifft sie höchstens das eingebettete
+   Dokument, nie holzis Navigation.
+
 ### Edge Cases
 
 - **Schnelles Mehrfach-Zurück**: Mehrere Zurück-Eingaben kurz hintereinander
@@ -369,8 +467,8 @@ aus dem Verlauf öffnen, Zurück: die zuvor aktive Unterhaltung ist wieder offen
   der Kompaktdarstellung ist sie bei leerer Historie wirkungslos. Sie DARF die
   App nie verlassen.
 - **FR-020**: Die Navigations-Historie des Webviews selbst DARF NICHT als
-  Historie eines Tabs dienen; sie MUSS nur so weit beeinflusst werden, dass
-  eine Zurück-Eingabe des Systems die Vault nicht verlässt.
+  Historie eines Tabs dienen (siehe FR-035); eine Zurück-Eingabe des Systems
+  DARF die Vault nie verlassen.
 - **FR-021**: Liefert ein Ort einen Titel, MÜSSEN Tab, Tab-Liste und
   Fensterübersicht diesen zeigen; sonst den App-Namen. Einträge der
   Verlaufsliste tragen den Titel ihres Orts zum Zeitpunkt des Besuchs.
@@ -380,19 +478,26 @@ aus dem Verlauf öffnen, Zurück: die zuvor aktive Unterhaltung ist wieder offen
 - **FR-023**: Alle neuen sichtbaren Texte MÜSSEN in Deutsch und Englisch im
   Gleichschritt vorliegen.
 
-**Befehle**
+**Aktionen**
 
-- **FR-024**: Jede Shell-Aktion (mindestens: Zurück, Vor, Tab schließen, neuer
-  Tab über „+“, Fenster minimieren, maximieren/wiederherstellen und schließen,
-  Fensterübersicht, Arbeitsbereich anlegen und wechseln, Launcher öffnen) MUSS
-  als Befehl mit fester Kennung und lokalisiertem Namen geführt werden.
-  Schaltflächen, Menüs und Tastenkürzel MÜSSEN diese Befehle auslösen statt
-  eigene Logik zu enthalten.
-- **FR-025**: Ein Befehl MUSS festlegen, worauf er wirkt (etwa aktiver Tab des
-  fokussierten Fensters), und DARF eine Standard-Tastenbelegung je Plattform
-  haben. In dieser Spec haben nur Zurück und Vor eine Standardbelegung
-  (FR-017); die Belegung ist fest, das Ändern durch den Nutzer folgt in einer
-  eigenen Spec.
+- **FR-024**: Jede Nutzeraktion der Shell und der ausgelieferten Apps, die
+  Zustand ändert oder navigiert, MUSS als Aktion mit fester Kennung geführt
+  werden. Mindestens: Zurück, Vor, Sprung in der Verlaufsliste, zu einem Ort
+  navigieren, App (an einem Ort) öffnen, Tab schließen, neuer Tab über „+“,
+  Tab aktivieren, Fenster fokussieren, minimieren, maximieren/wiederherstellen,
+  schließen und in einen Arbeitsbereich verschieben, Fensterübersicht,
+  Arbeitsbereich anlegen, wechseln und löschen, Launcher öffnen; im Chat neue
+  Unterhaltung, Verlaufseintrag öffnen, umbenennen und löschen, Nachricht
+  senden, Antwort abbrechen, Freigabe erteilen oder ablehnen; in den
+  Einstellungen jede dort änderbare Einstellung. Schaltflächen, Menüs und
+  Tastenkürzel MÜSSEN diese Aktionen auslösen statt eigene Logik zu enthalten.
+- **FR-025**: Jede Aktion MUSS beschreiben: Kennung, lokalisierten Namen,
+  Beschreibung ihres Zwecks für maschinelle Aufrufer, erwartete Eingaben
+  (Name, Art, Pflicht), Form des Ergebnisses, ihr Ziel und ob dieses
+  ausdrücklich angegeben werden kann (Tab, Fenster, Arbeitsbereich), sowie
+  optional eine Standard-Tastenbelegung je Plattform. In dieser Spec haben nur
+  Zurück und Vor eine Standardbelegung (FR-017); das Ändern durch den Nutzer
+  folgt in einer eigenen Spec.
 - **FR-026**: Die bestehende Tastatursteuerung der Tab-Leiste (Spec 015,
   FR-038: Pfeiltasten zwischen Tabs) bleibt unverändert und ist keine globale
   Tastenbelegung im Sinne von FR-025.
@@ -406,6 +511,52 @@ aus dem Verlauf öffnen, Zurück: die zuvor aktive Unterhaltung ist wieder offen
   für laufende Antworten und ausstehende Freigaben dieselben Regeln wie beim
   Wechsel über den Verlauf (Spec 003/006).
 
+**Aktionen für Agenten** (Vorbereitung für Spec 021; Agenten erhalten in dieser
+Spec noch keinen Zugang)
+
+- **FR-028**: Die Shell MUSS lesende Aktionen bereitstellen für: den
+  Aktionskatalog mit allen Beschreibungen (FR-025), den Shell-Zustand
+  (Arbeitsbereiche, Fenster, Tabs mit App, aktuellem Ort, Titel,
+  Aufmerksamkeitshinweis), die Historie eines Tabs und die verfügbaren Apps
+  mit ihren Orten. Apps MÜSSEN lesende Aktionen für ihre Inhalte anbieten, wo
+  sie ändernde anbieten (etwa Liste der Unterhaltungen, aktuelle Werte der
+  Einstellungen).
+- **FR-029**: Jeder Aktionsaufruf MUSS seinen Aufrufer tragen: Nutzer
+  (Oberfläche, Tastatur), eingebauter Agent oder externer Agent (mit Kennung).
+  Die Wirkung einer Aktion MUSS unabhängig vom Aufrufer dieselbe sein; das
+  Ergebnis oder ein Fehler MUSS strukturiert zurückgegeben werden.
+- **FR-030**: Ruft ein Agent eine Aktion auf, deren Ziel sich auf einen Tab,
+  ein Fenster oder einen Arbeitsbereich bezieht, MUSS das Ziel ausdrücklich
+  angegeben sein; die Auflösung über den Oberflächen-Fokus gilt nur für den
+  Aufrufer Nutzer.
+- **FR-031**: Jede Aktion MUSS genau einem Berechtigungsbereich angehören (etwa
+  Shell-Anordnung, Navigation, Chat lesen, Chat schreiben, Einstellungen
+  Modelle, Leitplanken) und ihre Wirkungsart angeben (lesend, ändernd,
+  zerstörend). Die Liste der Bereiche MUSS lokalisierte Namen tragen, damit
+  Spec 021 Berechtigungen je Agent darauf aufbauen kann.
+- **FR-032**: Aktionen im Bereich Leitplanken — mindestens Autonomie-Modus,
+  Deny-Regeln des Delegates, Verbinden und Zugangsdaten von Anbietern und
+  (künftig) Berechtigungen von Agenten — MÜSSEN als nicht durch Agenten
+  aufrufbar gekennzeichnet sein. Ein Aufruf durch einen Agenten MUSS immer
+  abgelehnt werden, unabhängig von Freigaben; nur der Nutzer kann sie auslösen.
+- **FR-033**: Ungültige Eingaben oder ein nicht auflösbares Ziel MÜSSEN zu einem
+  verständlichen Fehler ohne Wirkung führen.
+
+**Schutz der Navigation**
+
+- **FR-034**: Inhalte in Tabs — insbesondere eingebettete Dokumente wie
+  haextensions — DÜRFEN weder Ort noch Historie eines Tabs, den aktiven Tab,
+  das fokussierte Fenster noch sonst die Navigation von holzi verändern.
+  Änderungen, die ein eingebettetes Dokument an der Browser-Historie vornimmt,
+  MÜSSEN auf dieses Dokument beschränkt bleiben. Der Ort eines Tabs ändert sich
+  nur über die Tab-Schnittstelle der App oder über eine Aktion.
+- **FR-035**: Die Browser-Historie des Webviews DARF NIE Quelle eines
+  Navigationszustands von holzi sein. Zurück-Eingaben (Maustasten,
+  Tastenkürzel, System-Zurück) MÜSSEN von holzi selbst verarbeitet werden,
+  bevor der Webview sie als eigene History-Navigation ausführt, soweit die
+  Plattform das erlaubt; wo eine Plattform eine Eingabe nur einem eingebetteten
+  Dokument zustellt, DARF sie höchstens dieses Dokument betreffen.
+
 ### Key Entities
 
 - **Ort (Location)**: Wo ein Tab innerhalb seiner App steht. Attribute:
@@ -416,8 +567,15 @@ aus dem Verlauf öffnen, Zurück: die zuvor aktive Unterhaltung ist wieder offen
   Titel, ob sie Start-Ort ist.
 - **Tab-Historie**: Geordnete Liste von Orten mit aktueller Position; gehört zu
   genau einem Tab, höchstens 50 Einträge, nur im Speicher.
-- **Befehl (Command)**: Eine benannte Shell-Aktion mit Kennung, lokalisiertem
-  Namen, Wirkungsziel und optionaler Standard-Tastenbelegung je Plattform.
+- **Aktion (Action)**: Eine benannte, aufrufbare Funktion der Shell oder einer
+  App. Attribute: Kennung, lokalisierter Name, Beschreibung, Eingaben, Ergebnis,
+  Ziel, Berechtigungsbereich, Wirkungsart, durch Agenten aufrufbar ja/nein,
+  optionale Standard-Tastenbelegung je Plattform.
+- **Berechtigungsbereich (Scope)**: Eine benannte Gruppe von Aktionen, auf der
+  Spec 021 Berechtigungen je Agent aufbaut; der Bereich Leitplanken ist für
+  Agenten grundsätzlich gesperrt.
+- **Aufrufer (Caller)**: Wer eine Aktion auslöst — Nutzer, eingebauter Agent
+  oder externer Agent mit Kennung.
 
 ## Success Criteria _(mandatory)_
 
@@ -439,6 +597,15 @@ aus dem Verlauf öffnen, Zurück: die zuvor aktive Unterhaltung ist wieder offen
   einen Tab oder verlässt die Vault.
 - **SC-006**: Die bisherigen Funktionen der Shell aus Spec 015 bleiben ohne
   Rückschritt erfüllt (alle Quickstart-Szenarien aus Spec 015 bestehen weiter).
+- **SC-007**: 100 % der Schaltflächen, Menüeinträge und Tastenkürzel der Shell
+  und der ausgelieferten Apps, die Zustand ändern oder navigieren, lösen eine
+  Aktion aus dem Katalog aus (Prüfung aller Bedienelemente).
+- **SC-008**: 100 % der Aufrufe von Leitplanken-Aktionen mit Aufrufer
+  „Agent“ werden abgelehnt; 100 % der gleichen Aufrufe mit Aufrufer „Nutzer“
+  werden ausgeführt.
+- **SC-009**: In einem Testlauf, in dem ein eingebettetes Dokument mindestens
+  20-mal Einträge in seine Browser-Historie schreibt und Zurück auslöst,
+  ändert sich keine Tab-Historie und kein aktiver Tab.
 
 ## Assumptions
 
@@ -455,6 +622,13 @@ aus dem Verlauf öffnen, Zurück: die zuvor aktive Unterhaltung ist wieder offen
   dort in Textfeldern zum nächsten Wort springt und dort Vorrang hat.
 - **Grenzen der Historie** (50 Einträge, 15 in der Liste) sind übliche
   Browser-Werte und in der Planung änderbar.
+- **Leitplanken gelten für alle Agenten.** Der Betreiber hat sie für externe
+  Agenten gesperrt; diese Spec sperrt sie auch für den eingebauten Agenten, weil
+  ein Agent seine eigenen Grenzen nicht lockern soll. Eine abweichende Regel
+  für den eingebauten Agenten wäre in Spec 021 zu entscheiden.
+- **Agenten simulieren keine Klicks.** Sie rufen fachliche Aktionen auf; ob eine
+  Aktion dabei sichtbar ein Fenster öffnet, ist Teil der Aktion, nicht des
+  Aufrufers.
 - **Mittelklick oder Strg+Klick zum Öffnen in neuem Tab** ist nicht Teil dieser
   Spec, weil alle ausgelieferten Apps Einzelinstanz-Apps sind.
 - **Vorgaben aus dem Projekt** (Randbedingungen an die Planung):
@@ -478,3 +652,7 @@ aus dem Verlauf öffnen, Zurück: die zuvor aktive Unterhaltung ist wieder offen
 - Persistenz von Ort oder Historie über Neustarts.
 - Tabs per Drag & Drop und native Fenster (nur vorbereitet durch FR-010).
 - Öffnen eines Orts in einem neuen Tab per Mittelklick.
+- Zugang für Agenten: MCP-Server, Anmeldung und Freigabe externer Agenten,
+  Berechtigungen je Agent, Registrierung der Aktionen als Tools des eingebauten
+  Agenten, Protokoll der Agenten-Aufrufe (Spec 021 mit ADR-0005).
+- Anbindung von Extension-Tabs an das Ortmodell über das SDK (Spec 017/018).

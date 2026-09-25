@@ -36,5 +36,8 @@
   Implementierungsvorgabe.
 - Die Projektvorgaben (i18n-Stack, haex-vault-Referenz mit gepinntem SHA) stehen
   wie in Spec 015 als Randbedingungen unter „Annahmen“, nicht in den Anforderungen.
-- Die Befehls-Registry (FR-024–FR-026) ist bewusst minimal; das Umbelegen folgt
-  in einer eigenen Spec.
+- Die Aktions-Registry (FR-024–FR-033) ist agentenfähig beschrieben, gibt
+  Agenten aber noch keinen Zugang (Spec 021); das Umbelegen von Kürzeln folgt in
+  einer eigenen Spec.
+- 2026-09-25 erneut geprüft nach Erweiterung um US7/US8, FR-028–FR-035,
+  SC-007–SC-009: alle Punkte weiterhin erfüllt.
