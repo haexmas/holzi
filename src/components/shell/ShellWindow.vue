@@ -14,10 +14,6 @@ import { computed } from 'vue'
 import { getAppDefinition } from '~/lib/shell/apps'
 import { windowDisplayRect } from '~/lib/shell/geometry'
 import {
-  requestCloseTab as requestCloseTabAction,
-  requestCloseWindow,
-} from '~/composables/useShellTab'
-import {
   useWindowPointerGesture,
   type ResizeDirection,
 } from '~/composables/useWindowPointerGesture'
@@ -46,6 +42,7 @@ function isSideButton(event: MouseEvent | PointerEvent): boolean {
   return event.button === 3 || event.button === 4
 }
 
+// action-exempt: implicit focus on pointer down is part of the pointer gesture, not a control.
 function onRootPointerDown(event: PointerEvent) {
   if (!isSideButton(event)) shell.focusWindow(props.window.id)
 }
@@ -119,23 +116,22 @@ function onResizeHandlePointerDown(
 
 /** Toggles maximization from the title bar outside compact mode. */
 function onTitleBarDoubleClick() {
-  if (!shell.compact) shell.toggleMaximizeWindow(props.window.id)
+  if (!shell.compact) void toggleMaximize()
 }
 
-/** Runs every tab's close guard before closing the whole window. */
-function requestClose() {
-  void requestCloseWindow(shell, props.window.id)
-}
-
-/** Activates a tab in this window through the shell store. */
-function selectTab(tabId: string) {
-  shell.switchTab(props.window.id, tabId)
-}
-
-/** Runs the selected tab's close guard before removing it. */
-function requestCloseTab(tabId: string) {
-  void requestCloseTabAction(shell, props.window.id, tabId)
-}
+// Spec 020 FR-024: the title-bar controls trigger catalog actions for this window/tab; closing
+// still runs every close guard (the actions use the same confirmation helpers).
+const windowTarget = () => ({ windowId: props.window.id })
+const runMinimize = useAction('shell.window.minimize')
+const runToggleMaximize = useAction('shell.window.toggleMaximize')
+const runCloseWindow = useAction('shell.window.close')
+const runActivateTab = useAction('shell.tab.activate')
+const runCloseTab = useAction('shell.tab.close')
+const minimize = () => runMinimize(windowTarget())
+const toggleMaximize = () => runToggleMaximize(windowTarget())
+const requestClose = () => void runCloseWindow(windowTarget())
+const selectTab = (tabId: string) => void runActivateTab({ tabId })
+const requestCloseTab = (tabId: string) => void runCloseTab({ tabId })
 
 const RESIZE_HANDLES: { direction: ResizeDirection; class: string }[] = [
   { direction: 'n', class: 'inset-x-2 top-0 h-1 cursor-ns-resize' },
@@ -197,8 +193,8 @@ const RESIZE_HANDLES: { direction: ResizeDirection; class: string }[] = [
       <ShellWindowControls
         :maximized="window.maximized"
         :compact="shell.compact"
-        @minimize="shell.minimizeWindow(window.id)"
-        @toggle-maximize="shell.toggleMaximizeWindow(window.id)"
+        @minimize="minimize"
+        @toggle-maximize="toggleMaximize"
         @close="requestClose"
       />
     </div>

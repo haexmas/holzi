@@ -1,5 +1,9 @@
 import { onBackButtonPress } from '@tauri-apps/api/app'
 import { registerShellActionHandlers } from '~/stores/shellActionHandlers'
+import {
+  registerShellLayoutHandlers,
+  type Translate,
+} from '~/stores/shellLayoutHandlers'
 
 /**
  * Registers the global action handlers once at startup (spec
@@ -10,9 +14,11 @@ import { registerShellActionHandlers } from '~/stores/shellActionHandlers'
  * (research R7) instead of the webview's own history, which holzi never uses
  * as navigation state (FR-035).
  */
-export default defineNuxtPlugin(() => {
+export default defineNuxtPlugin((nuxtApp) => {
   const shell = useShellStore()
+  const t = ((key, params) => nuxtApp.$i18n.t(key, params ?? {})) as Translate
   registerShellActionHandlers(shell)
+  registerShellLayoutHandlers(shell, t)
 
   // ponytail: holzi has no Android target yet, so this hook is untested end to end; the decision
   // logic behind `shell.system.back` is covered by `pnpm check:shell-navigation`.

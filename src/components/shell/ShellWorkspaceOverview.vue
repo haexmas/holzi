@@ -10,7 +10,6 @@
  * full touch target in compact mode (T050).
  */
 import { computed } from 'vue'
-import { requestConfirmation } from '~/composables/useShellCloseConfirm'
 import type { ShellWindow } from '~/lib/shell/types'
 
 const open = defineModel<boolean>('open', { default: false })
@@ -50,39 +49,26 @@ function windowTitle(window: ShellWindow): string {
   )
 }
 
+// Spec 020 FR-024: switching, creating, deleting and moving run catalog actions; deleting keeps
+// the FR-021 confirmation (`requestDeleteWorkspace`, useShellTab.ts).
+const switchWorkspace = useAction('shell.workspace.switch')
+const createWorkspace = useAction('shell.workspace.create')
+const deleteWorkspace = useAction('shell.workspace.delete')
+const moveWindow = useAction('shell.window.moveToWorkspace')
+
 /** Activates the selected workspace while leaving the overview open. */
 function select(workspaceId: string) {
-  shell.switchWorkspace(workspaceId)
+  void switchWorkspace({ workspaceId })
 }
 
-/** Waits for the backend-assigned id before activating a new workspace. */
-async function create() {
-  const workspace = await shell.createWorkspace()
-  shell.switchWorkspace(workspace.id)
+/** Creates a workspace (backend-assigned id) and switches to it. */
+function create() {
+  void createWorkspace()
 }
 
 /** Confirms open windows and running work before removing a workspace. */
-async function remove(workspaceId: string) {
-  const windowCount = shell.windows.filter(
-    (w) => w.workspaceId === workspaceId,
-  ).length
-  const guardResults = shell.guardResultsForWorkspace(workspaceId)
-  const reasons = [
-    ...(windowCount > 0
-      ? [
-          {
-            reasonKey: 'shell.workspaces.deleteWindows',
-            params: { count: windowCount },
-          },
-        ]
-      : []),
-    ...guardResults,
-  ]
-  if (reasons.length > 0) {
-    if (!(await requestConfirmation(reasons))) return
-    await Promise.all(guardResults.map((result) => result.confirmAsync()))
-  }
-  shell.deleteWorkspace(workspaceId)
+function remove(workspaceId: string) {
+  void deleteWorkspace({ workspaceId })
 }
 </script>
 
@@ -165,7 +151,9 @@ async function remove(workspaceId: string) {
                 <ShadcnDropdownMenuItem
                   v-for="target in otherWorkspaces"
                   :key="target.id"
-                  @select="shell.moveWindowToWorkspace(win.id, target.id)"
+                  @select="
+                    moveWindow({ windowId: win.id, toWorkspaceId: target.id })
+                  "
                 >
                   {{ numberLabel(target.position) }}
                 </ShadcnDropdownMenuItem>

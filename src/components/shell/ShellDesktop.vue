@@ -22,6 +22,10 @@ const { width, height } = useWindowSize()
 watch([width, height], ([newWidth, newHeight]) => {
   shell.updateArea({ width: newWidth, height: newHeight })
 })
+
+const openWorkspaces = useAction('shell.workspaces.overview')
+const openWindows = useAction('shell.windows.overview')
+const openLauncher = useAction('shell.launcher.open')
 </script>
 
 <template>
@@ -40,7 +44,7 @@ watch([width, height], ([newWidth, newHeight]) => {
         type="button"
         class="flex h-12 w-12 items-center justify-center rounded-full bg-background text-foreground shadow-lg ring-1 ring-border hover:bg-accent"
         :aria-label="t('shell.workspaces.title')"
-        @click="shell.overlays.workspaces = true"
+        @click="openWorkspaces()"
       >
         <Icon name="lucide:layout-list" class="h-5 w-5" :aria-hidden="true" />
       </button>
@@ -48,7 +52,7 @@ watch([width, height], ([newWidth, newHeight]) => {
         type="button"
         class="flex h-12 w-12 items-center justify-center rounded-full bg-background text-foreground shadow-lg ring-1 ring-border hover:bg-accent"
         :aria-label="t('shell.windowOverview.open')"
-        @click="shell.overlays.windows = true"
+        @click="openWindows()"
       >
         <Icon
           name="lucide:layout-panel-top"
@@ -61,7 +65,7 @@ watch([width, height], ([newWidth, newHeight]) => {
         class="flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-lg hover:opacity-90"
         data-testid="open-launcher"
         :aria-label="t('shell.launcher.open')"
-        @click="shell.overlays.launcher = true"
+        @click="openLauncher()"
       >
         <Icon name="lucide:layout-grid" class="h-5 w-5" :aria-hidden="true" />
       </button>

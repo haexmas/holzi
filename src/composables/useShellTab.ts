@@ -75,13 +75,14 @@ export function useShellTab(): ShellTabApi {
 export async function requestCloseWindow(
   shell: ReturnType<typeof useShellStore>,
   windowId: string,
-): Promise<void> {
+): Promise<boolean> {
   const results = shell.guardResultsFor(windowId)
   if (results.length > 0) {
-    if (!(await requestConfirmation(results))) return
+    if (!(await requestConfirmation(results))) return false
     await Promise.all(results.map((result) => result.confirmAsync()))
   }
   shell.closeWindow(windowId)
+  return true
 }
 
 /** The same "ask, then close" step for a single tab (T038) — used by `ShellTabBar.vue`'s and
@@ -90,11 +91,43 @@ export async function requestCloseTab(
   shell: ReturnType<typeof useShellStore>,
   windowId: string,
   tabId: string,
-): Promise<void> {
+): Promise<boolean> {
   const result = shell.guardResultForTab(tabId)
   if (result) {
-    if (!(await requestConfirmation([result]))) return
+    if (!(await requestConfirmation([result]))) return false
     await result.confirmAsync()
   }
   shell.closeTab(windowId, tabId)
+  return true
+}
+
+/** The same "ask, then delete" step for a workspace (015 FR-021, moved here from
+ * `ShellWorkspaceOverview.vue` for spec 020's `shell.workspace.delete` action): deleting one with
+ * open windows always confirms, naming the window count next to any guard reasons. Resolves
+ * `false` when the user declines. */
+export async function requestDeleteWorkspace(
+  shell: ReturnType<typeof useShellStore>,
+  workspaceId: string,
+): Promise<boolean> {
+  const windowCount = shell.windows.filter(
+    (w) => w.workspaceId === workspaceId,
+  ).length
+  const guardResults = shell.guardResultsForWorkspace(workspaceId)
+  const reasons = [
+    ...(windowCount > 0
+      ? [
+          {
+            reasonKey: 'shell.workspaces.deleteWindows',
+            params: { count: windowCount },
+          },
+        ]
+      : []),
+    ...guardResults,
+  ]
+  if (reasons.length > 0) {
+    if (!(await requestConfirmation(reasons))) return false
+    await Promise.all(guardResults.map((result) => result.confirmAsync()))
+  }
+  shell.deleteWorkspace(workspaceId)
+  return true
 }

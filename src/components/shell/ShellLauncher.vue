@@ -16,8 +16,10 @@ const open = defineModel<boolean>('open', { default: false })
 const shell = useShellStore()
 const { t } = useI18n()
 
+const openApp = useAction('shell.app.open')
+
 function launch(appId: string) {
-  shell.openApp(appId)
+  void openApp({ appId })
   open.value = false
 }
 </script>

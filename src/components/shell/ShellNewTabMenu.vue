@@ -2,7 +2,8 @@
 /**
  * The "+" dropdown: every registered app, never empty (FR-033). Selecting a
  * singleton app that already has a tab somewhere activates it instead of
- * opening a second one — `shell.addTab` already implements that search
+ * opening a second one — `shell.addTab` (via the `shell.tab.new` action,
+ * spec 020) already implements that search
  * (tabs.ts, T033); this only labels those entries as already open (T035,
  * plan research R18). The teleported dropdown (z-50) always paints above
  * the windows: `ShellDesktop.vue` keeps their growing `stack` z-indices
@@ -22,8 +23,10 @@ function isOpenElsewhere(appId: string, multiInstance: boolean): boolean {
   return shell.windows.some((w) => w.tabs.some((tab) => tab.appId === appId))
 }
 
+const newTab = useAction('shell.tab.new')
+
 function select(appId: string) {
-  shell.addTab(props.windowId, appId)
+  void newTab({ windowId: props.windowId, appId })
 }
 </script>
 
