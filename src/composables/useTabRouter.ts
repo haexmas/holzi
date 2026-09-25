@@ -30,6 +30,9 @@ export type TabRouter = {
   ): void
   back(): void
   forward(): void
+  /** Drops the current entry because its target no longer exists and moves on in the last travel
+   * direction (FR-027); `false` if it was the only entry. */
+  skipCurrent(): boolean
 }
 
 /** Nesting depth of `ShellRouterView` (like vue-router's `RouterView`): the root one in
@@ -48,6 +51,7 @@ const INERT_ROUTER: TabRouter = {
   setQuery() {},
   back() {},
   forward() {},
+  skipCurrent: () => false,
 }
 
 /**
@@ -111,5 +115,6 @@ export function useTabRouter(): TabRouter {
     forward: () => {
       shell.goTab(tabId, 1)
     },
+    skipCurrent: () => shell.skipCurrent(tabId),
   }) as TabRouter
 }

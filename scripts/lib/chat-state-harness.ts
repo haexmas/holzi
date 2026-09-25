@@ -264,6 +264,14 @@ export function createRecordingTabRouter() {
       if (index < entries.length - 1) index += 1
       sync()
     },
+    skipCurrent() {
+      state.log.push('skip')
+      if (entries.length <= 1) return false
+      entries.splice(index, 1)
+      index = Math.max(0, index - 1)
+      sync()
+      return true
+    },
   })
 }
 

@@ -11,6 +11,7 @@ import {
   goTab,
   navigateTab,
   resolveSystemBack,
+  skipTabEntry,
   syncHistories,
   type TabHistories,
 } from '~/lib/shell/tabNavigation'
@@ -39,6 +40,8 @@ export function createShellNavigation(deps: {
   const { state } = deps
   const histories: TabHistories = reactive(new Map<string, TabHistory>())
   const handlers = createHandlerRegistry()
+  /** Last travel direction per tab, for skipping a stale entry the same way (FR-027). */
+  const lastDirection = new Map<string, -1 | 1>()
 
   /** The Shell's own overlays, here rather than local to `ShellDesktop.vue` so system back can
    * close them and open the window overview (FR-019). Dropdown menus close themselves. */
@@ -83,14 +86,26 @@ export function createShellNavigation(deps: {
       replace: options.replace,
       leavingTitle: deps.titleOverrideOf(tabId),
     })
-    if (changed && !options.replace) deps.clearTitleOverride(tabId)
+    if (changed && !options.replace) {
+      lastDirection.set(tabId, 1)
+      deps.clearTitleOverride(tabId)
+    }
     return changed
   }
 
   function go(tabId: string, delta: number): boolean {
     const changed = goTab(histories, tabId, delta, deps.titleOverrideOf(tabId))
-    if (changed) deps.clearTitleOverride(tabId)
+    if (changed) {
+      lastDirection.set(tabId, delta < 0 ? -1 : 1)
+      deps.clearTitleOverride(tabId)
+    }
     return changed
+  }
+
+  /** Drops the tab's current entry (its target is gone) and moves on in the last travel
+   * direction; `false` if it was the only entry. */
+  function skipCurrent(tabId: string): boolean {
+    return skipTabEntry(histories, tabId, lastDirection.get(tabId) ?? -1)
   }
 
   function tabIdsOf(appId: string): string[] {
@@ -152,6 +167,7 @@ export function createShellNavigation(deps: {
     historyOf,
     navigate,
     go,
+    skipCurrent,
     runAction,
     registerGlobalActionHandler,
     registerTabActionHandler,

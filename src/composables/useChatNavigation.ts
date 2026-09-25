@@ -75,6 +75,11 @@ export function useChatNavigation(deps: {
     async (path) => {
       const threadId = threadIdOf(path)
       if (threadId === activeThreadId.value) return
+      // FR-027: an entry of a deleted conversation is skipped in travel direction.
+      if (threadId !== null && !threads.value.some((t) => t.id === threadId)) {
+        if (!router.skipCurrent()) router.replace('/')
+        return
+      }
       if (threadId !== null) await deps.selectThread(threadId)
       else await deps.newChat()
       alignLocation()

@@ -8,7 +8,7 @@
     "build": "nuxt build",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "check:chat-state": "node scripts/check-chat-state.ts",
+    "check:chat-state": "node --test scripts/check-chat-state.ts scripts/check-chat-navigation.ts",
     "check:shell-navigation": "node --test scripts/check-shell-navigation.ts scripts/check-shell-actions.ts scripts/check-shell-nav-store.ts scripts/check-shell-keys.ts",
     "check:shell-state": "node --test scripts/check-shell-state.ts scripts/check-shell-geometry.ts scripts/check-shell-persistence.ts",
     "check:vault-lifecycle": "node scripts/check-vault-lifecycle.ts",

@@ -227,9 +227,12 @@ description: 'Task list for spec 020-tab-navigation'
 
 **Independent Test**: quickstart M2–M4, M16
 
-- [ ] T055 [US6] In `src/composables/useChatNavigation.ts`: "new conversation" pushes `/`; the first message creating a thread (`useComposer.ts` sets `activeThreadId`) replaces `/` with `/thread/<id>`; deleting the active thread (spec 006 FR-015) replaces with `/`
-- [ ] T056 [US6] Skip entries to deleted conversations: on reaching `/thread/<id>` for a missing thread, `removeEntry` and continue in the same direction, else `replace('/')` (FR-027); navigation reuses `selectThread`, so running replies and pending approvals follow specs 003/006 unchanged
-- [ ] T057 [US6] Add chat-navigation cases to the replay harness via `scripts/lib/chat-state-harness.ts` / `scripts/check-chat-state.ts` where feasible (open → back → forward, create-replace, delete-skip); existing replay count unchanged plus the new cases
+- [x] T055 [US6] In `src/composables/useChatNavigation.ts`: "new conversation" pushes `/`; the first message creating a thread (`useComposer.ts` sets `activeThreadId`) replaces `/` with `/thread/<id>`; deleting the active thread (spec 006 FR-015) replaces with `/`
+  - Done 2026-09-25: implemented with T025 in useChatNavigation (new conversation pushes '/'; the first message's thread creation and the active thread's deletion replace via the chat → location sync); covered by the T057 replay.
+- [x] T056 [US6] Skip entries to deleted conversations: on reaching `/thread/<id>` for a missing thread, `removeEntry` and continue in the same direction, else `replace('/')` (FR-027); navigation reuses `selectThread`, so running replies and pending approvals follow specs 003/006 unchanged
+  - Done 2026-09-25: skipTabEntry (tabNavigation.ts, 2 tests) + per-tab last travel direction in stores/shellNavigation.ts, exposed as useTabRouter().skipCurrent(); useChatNavigation skips entries of conversations no longer in the list, else replaces with '/'. Navigation still goes through selectThread, so specs 003/006 rules apply unchanged.
+- [x] T057 [US6] Add chat-navigation cases to the replay harness via `scripts/lib/chat-state-harness.ts` / `scripts/check-chat-state.ts` where feasible (open → back → forward, create-replace, delete-skip); existing replay count unchanged plus the new cases
+  - Done 2026-09-25: new scripts/check-chat-navigation.ts (4 replays: open/back/forward, create-replace, delete-skip, unknown id → '/') on the shared harness with its recording router; check:chat-state now runs both files: 49/49 (45 + 4). Finding: check-chat-state.ts itself is 1199 lines (> 500) since before this spec.
 
 ---
 

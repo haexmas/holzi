@@ -10,6 +10,7 @@ import {
   createHistory,
   go,
   push,
+  removeEntry,
   replace,
   type TabHistory,
   type TabLocation,
@@ -148,4 +149,20 @@ export function resolveSystemBack(
   if (top && history && canGoBack(history))
     return { kind: 'back', tabId: top.activeTabId }
   return state.compact ? { kind: 'openWindowOverview' } : { kind: 'none' }
+}
+
+/** Drops the current entry of a tab because its target no longer exists (FR-027, research R10)
+ * and moves to the neighbor in travel direction (`-1` back, `1` forward). `false` when the entry
+ * is the only one, so the caller falls back to the start location. */
+export function skipTabEntry(
+  histories: TabHistories,
+  tabId: string,
+  direction: -1 | 1,
+): boolean {
+  const history = histories.get(tabId)
+  if (!history) return false
+  const next = removeEntry(history, history.index, direction)
+  if (next === history) return false
+  histories.set(tabId, next)
+  return true
 }

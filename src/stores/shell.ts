@@ -477,6 +477,7 @@ export const useShellStore = defineStore('shell', () => {
     historyOf: navigation.historyOf,
     navigate: navigation.navigate,
     goTab: navigation.go,
+    skipCurrent: navigation.skipCurrent,
     runAction: navigation.runAction,
     registerGlobalActionHandler: navigation.registerGlobalActionHandler,
     registerTabActionHandler: navigation.registerTabActionHandler,

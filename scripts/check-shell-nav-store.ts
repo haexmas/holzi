@@ -28,6 +28,7 @@ import {
   navigateTab,
   openAppAt,
   resolveSystemBack,
+  skipTabEntry,
   syncHistories,
 } from '../src/lib/shell/tabNavigation.ts'
 import { closeTab, switchTab } from '../src/lib/shell/tabs.ts'
@@ -212,6 +213,28 @@ test("switching the active tab exposes that tab's own history (US2 AS2)", () => 
   )
   switchTab(state, windowId, b)
   assert.equal(pathOf(histories, state.windows[0]?.activeTabId ?? null), '/')
+})
+
+test('skipTabEntry drops the current entry and moves on in travel direction (FR-027)', () => {
+  const { state, histories } = fresh()
+  const a = openAppAt(state, histories, ALPHA.id, null, APPS).tabId ?? ''
+  navigateTab(histories, a, '/thread/1')
+  navigateTab(histories, a, '/thread/2')
+  navigateTab(histories, a, '/thread/3')
+  goTab(histories, a, -1)
+  assert.equal(skipTabEntry(histories, a, -1), true)
+  assert.equal(pathOf(histories, a), '/thread/1')
+  assert.equal(histories.get(a)?.entries.length, 3)
+  goTab(histories, a, 1)
+  assert.equal(skipTabEntry(histories, a, 1), true)
+  assert.equal(pathOf(histories, a), '/thread/1')
+})
+
+test('skipTabEntry keeps a single-entry history and reports false', () => {
+  const { state, histories } = fresh()
+  const a = openAppAt(state, histories, ALPHA.id, '/thread/9', APPS).tabId ?? ''
+  assert.equal(skipTabEntry(histories, a, -1), false)
+  assert.equal(pathOf(histories, a), '/thread/9')
 })
 
 // ---------------------------------------------------------------------------
