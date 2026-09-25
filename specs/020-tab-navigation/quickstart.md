@@ -18,19 +18,19 @@ nur Vorbereitung, Befehle und erwartete Ergebnisse.
 ## 1. Automatische Prüfungen
 
 ```sh
-pnpm check:shell-navigation   # neu: Historie, Matcher, Chords, Aktionen, Store-Integration
-pnpm check:shell-state        # 015-Regression, unverändert grün
+pnpm check:wm-navigation   # neu: Historie, Matcher, Chords, Aktionen, Store-Integration
+pnpm check:wm-state        # 015-Regression, unverändert grün
 pnpm check:chat-state         # Chat-Regression, unveränderte Testzahl
 pnpm check:templates
 pnpm typecheck && pnpm typecheck:scripts
 pnpm lint && pnpm format:check
 ```
 
-Erwartet: alle grün. `check:shell-navigation` deckt mindestens die Invarianten
+Erwartet: alle grün. `check:wm-navigation` deckt mindestens die Invarianten
 1–7 aus [data-model.md](./data-model.md) ab, dazu den Ablauf von `runAction`
 mit allen Fehlercodes, die Ablehnung jeder `guardrails`-Aktion für
 `builtinAgent` und `externalAgent` bei Ausführung für `user` (SC-008), die
-Pflicht zum ausdrücklichen Ziel für Agenten, `shell.system.back` in allen drei
+Pflicht zum ausdrücklichen Ziel für Agenten, `wm.system.back` in allen drei
 Fällen sowie Push/Replace/No-op, die
 50-Einträge-Grenze, `removeEntry` in beide Richtungen, verschachteltes Matching
 mit Parametern und die Chord-Auflösung je Plattform (inkl. `yieldToTextInput`
@@ -62,7 +62,7 @@ unter macOS).
 | M20 | Alle Quickstart-Szenarien aus Spec 015                                                                                                                                                                                                                  | weiterhin erfüllt                                                                                                                                        | SC-006              |
 | M21 | In den DevTools in den Inhalt eines Tabs ein `<iframe>` mit einer lokalen Seite einfügen; darin 20× `history.pushState({}, '', '#' + i)` und danach `history.back()` bzw. `history.go(-30)` ausführen; anschließend Zurück per Knopf, Kürzel, Maustaste | keine Tab-Historie, kein aktiver Tab, kein Fenster ändert sich; holzis Zurück wirkt wie vorher                                                           | US8, FR-034, SC-009 |
 | M22 | Maustaste Zurück mit dem Zeiger über dem iframe aus M21                                                                                                                                                                                                 | wirkt auf den Tab (falls die Plattform sie liefert) oder höchstens auf das iframe; holzi navigiert keinen anderen Tab                                    | US8 AS3             |
-| M23 | Bestandsaufnahme: jede Schaltfläche, jedes Menü, jedes Kürzel der Shell, des Chats und der Einstellungen durchgehen                                                                                                                                     | jede zustandsändernde Bedienung löst eine Aktion aus dem Katalog aus (`shell.actions.list`) oder trägt `action-exempt:`                                  | SC-007              |
+| M23 | Bestandsaufnahme: jede Schaltfläche, jedes Menü, jedes Kürzel der Shell, des Chats und der Einstellungen durchgehen                                                                                                                                     | jede zustandsändernde Bedienung löst eine Aktion aus dem Katalog aus (`wm.actions.list`) oder trägt `action-exempt:`                                     | SC-007              |
 | M24 | In den DevTools `performance.now()` vor dem Klick auf Zurück und nach dem Erscheinen der vorigen, bereits geladenen Unterhaltung messen                                                                                                                 | höchstens 100 ms                                                                                                                                         | SC-003              |
 
 ## 3. Plattform-Spike (vor der Maus-Umsetzung)
@@ -75,10 +75,10 @@ Fällen bestehen (research R6).
 ## 4. Nicht prüfbar in diesem Schnitt
 
 - Die echte Android-Zurück-Geste: holzi hat noch kein Android-Target (research
-  R7). Die Logik von `shell.system.back` prüft `check:shell-navigation`.
+  R7). Die Logik von `wm.system.back` prüft `check:wm-navigation`.
 - Aufrufe durch echte Agenten: Zugang erst mit Spec 021; der Runner wird mit
-  Agenten-Aufrufern in `check:shell-navigation` geprüft.
+  Agenten-Aufrufern in `check:wm-navigation` geprüft.
 - Verschachtelte Ansichten mit Seitenleiste und der Sprung eines offenen Tabs an
   einen _anderen_ Ort (US4 AS2): brauchen eine App mit mehreren Ansichten außer
   dem Chat und kommen mit der Folge-Spec Einstellungs-App. Matcher und
-  Singleton-Push sind in `check:shell-navigation` abgedeckt.
+  Singleton-Push sind in `check:wm-navigation` abgedeckt.

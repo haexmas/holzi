@@ -36,7 +36,7 @@ Abgeleitet: `current = entries[index]`, `canGoBack = index > 0`,
 `entries[index-1 … max(0, index-15)]`, vor = `entries[index+1 … index+15]`.
 
 Ablage: eigene reaktive `Map<tabId, TabHistory>` neben `TabRuntime` im Shell-Store
-(`stores/shellNavigation.ts`, research R2), nie persistiert.
+(`stores/wmNavigation.ts`, research R2), nie persistiert.
 
 ### Zustandsübergänge
 
@@ -57,9 +57,9 @@ Ablage: eigene reaktive `Map<tabId, TabHistory>` neben `TabRuntime` im Shell-Sto
 | Feld        | Typ              | Regeln                                                                                                  |
 | ----------- | ---------------- | ------------------------------------------------------------------------------------------------------- |
 | `path`      | `string`         | Muster relativ zum Eltern-Eintrag; Segmente literal oder `:name`; `''` = Index-Kind des Eltern-Eintrags |
-| `component` | Vue-Komponente   | nur in `components/shell/appRoutes.ts`, nicht in reinen Modulen                                         |
+| `component` | Vue-Komponente   | nur in `components/wm/appRoutes.ts`, nicht in reinen Modulen                                            |
 | `titleKey`  | `string?`        | i18n-Schlüssel; darf `{param}`-Platzhalter nutzen                                                       |
-| `children`  | `RouteRecord[]?` | verschachtelte Ansichten, gerendert vom `ShellRouterView` der nächsten Tiefe                            |
+| `children`  | `RouteRecord[]?` | verschachtelte Ansichten, gerendert vom `WmRouterView` der nächsten Tiefe                               |
 
 Match-Ergebnis (`RouteMatch`): `chain: RouteRecord[]` (außen → innen), `params:
 Record<string, string>`; kein Match → `null` (FR-014). Eine App ohne
@@ -70,7 +70,7 @@ Routentabelle hat implizit `[{ path: '/', component: <App-Wurzel> }]`.
 Statt eines Felds `TabRuntime.history` führt der Store eine eigene reaktive Map
 `Map<tabId, TabHistory>` plus je Tab die letzte Laufrichtung (für das
 Überspringen verwaister Einträge, FR-027). Die reinen Layout-Reducer aus 015
-bleiben unverändert; `lib/shell/tabNavigation.ts` legt nach `openApp`/`addTab`
+bleiben unverändert; `lib/wm/tabNavigation.ts` legt nach `openApp`/`addTab`
 die Historie eines neuen Tabs an bzw. pusht den Ort auf eine aktivierte
 Einzelinstanz.
 
@@ -79,14 +79,14 @@ bleibt beim Tab-Wechsel, Minimieren, Maximieren, Arbeitsbereichswechsel und
 Verschieben erhalten (Tab-Id unverändert, FR-010), verschwindet beim Schließen
 des Tabs (Abgleich in `syncTabRuntime`, FR-011).
 
-## ShellActionDefinition (Aktion)
+## ActionDefinition (Aktion)
 
 Reine Daten unter `src/lib/actions/` (research R8); Handler werden getrennt
 registriert (R19).
 
 | Feld               | Typ                                          | Regeln                                                                                                                                                 |
 | ------------------ | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `id`               | `string`                                     | Namensraum `shell.*`, `chat.*`, `settings.*`; stabil, sobald ausgeliefert                                                                              |
+| `id`               | `string`                                     | Namensraum `wm.*`, `chat.*`, `settings.*`; stabil, sobald ausgeliefert                                                                                 |
 | `titleKey`         | `string`                                     | i18n-Schlüssel `actions.<id>`                                                                                                                          |
 | `description`      | `string`                                     | englisch, für maschinelle Aufrufer (Tool-Beschreibung)                                                                                                 |
 | `input`            | JSON Schema (Teilmenge)                      | Wurzel `type: object`; erlaubt `properties`, `required`, `string`, `number`, `integer`, `boolean`, `array`, `enum`, `description`                      |
@@ -97,14 +97,14 @@ registriert (R19).
 | `agentCallable`    | `boolean`                                    | `false` für jeden Eintrag mit `scope = 'guardrails'` (Invariante)                                                                                      |
 | `binding`          | `'global' \| 'tab'`                          | global beim Start registriert oder von der App-Instanz (R19)                                                                                           |
 | `appId`            | `string?`                                    | Pflicht bei `binding = 'tab'`: welche App der Runner öffnet                                                                                            |
-| `defaultKeys`      | `{ default?: KeyChord[]; mac?: KeyChord[] }` | nur `shell.tab.back`/`forward` belegt (FR-025)                                                                                                         |
+| `defaultKeys`      | `{ default?: KeyChord[]; mac?: KeyChord[] }` | nur `wm.tab.back`/`forward` belegt (FR-025)                                                                                                            |
 | `yieldToTextInput` | `{ mac?: KeyChord[]; default?: KeyChord[] }` | Kombinationen, die in editierbaren Elementen nicht abgefangen werden (unter macOS nur Alt+Pfeil, nicht Cmd+[/])                                        |
 
 `KeyChord`: `Ctrl+Alt+Shift+Meta+<KeyboardEvent.code>` in dieser Reihenfolge.
 
 ## ActionScope (Berechtigungsbereich)
 
-`shell.layout` · `shell.navigation` · `shell.read` · `chat.read` · `chat.write` ·
+`wm.layout` · `wm.navigation` · `wm.read` · `chat.read` · `chat.write` ·
 `settings.read` · `settings.device` · `settings.models` · `guardrails`
 
 Jeder Bereich hat `titleKey` (`actions.scopes.<name>`) und eine Beschreibung;
@@ -140,7 +140,7 @@ Backend-Fehlers).
    sonst `app_unavailable`.
 6. Handler ausführen → Erfolg oder `failed`.
 
-## Invarianten (Prüfung in `check:shell-navigation`)
+## Invarianten (Prüfung in `check:wm-navigation`)
 
 1. Jeder offene Tab hat genau eine `TabHistory` mit gültigem `index`.
 2. Keine Operation auf Tab A ändert `TabHistory` von Tab B.

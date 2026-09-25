@@ -1,7 +1,7 @@
 import { usePreferences } from '~/composables/usePreferences'
-import type { useShellStore } from '~/stores/shell'
+import type { useWindowManagerStore } from '~/stores/windowManager'
 
-type ShellStore = ReturnType<typeof useShellStore>
+type WmStore = ReturnType<typeof useWindowManagerStore>
 
 /** The vault-scoped preference `VoiceInputControl.vue` reads on mount (spec 008). */
 export const VOICE_AUTO_SEND_PREF_KEY = 'voice.auto_send'
@@ -12,13 +12,13 @@ export const VOICE_AUTO_SEND_PREF_KEY = 'voice.auto_send'
  * `lib/actions/chatActions.ts`). They act on the global models store and
  * preferences, so they work without the chat being open.
  */
-export function registerChatActionHandlers(shell: ShellStore): void {
+export function registerChatActionHandlers(wm: WmStore): void {
   // The models store calls `useI18n()` in its setup, which only works inside a component setup:
   // resolve it per call (the workspace page has created it by then), never at registration.
   const models = () => useModelsStore()
   const { setPrefAsync } = usePreferences()
   const done = { done: true }
-  const on = shell.registerGlobalActionHandler
+  const on = wm.registerGlobalActionHandler
 
   on('chat.model.select', async ({ input }) => {
     await models().loadModel(String(input.modelId))

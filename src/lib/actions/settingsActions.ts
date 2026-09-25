@@ -1,9 +1,9 @@
-// Settings action catalog (spec 020-tab-navigation, T051, contracts/shell-actions.md §1). All
+// Settings action catalog (spec 020-tab-navigation, T051, contracts/wm-actions.md §1). All
 // global: they work without the settings window (research R19); handlers in
 // `stores/settingsActionHandlers.ts`. Provider connections, the autonomy mode and the delegate
 // deny rules are guardrails — never callable by agents (FR-032). `settings.get` never returns
 // provider credentials.
-import type { JsonSchema, ShellActionDefinition } from './types.ts'
+import type { JsonSchema, ActionDefinition } from './types.ts'
 
 const DONE: JsonSchema = {
   type: 'object',
@@ -22,13 +22,10 @@ const MODEL_ID: JsonSchema = {
   description: 'Installed model id (see settings.models.list).',
 }
 
-type Spec = Pick<
-  ShellActionDefinition,
-  'id' | 'description' | 'scope' | 'effect'
-> &
-  Partial<Pick<ShellActionDefinition, 'input' | 'result'>>
+type Spec = Pick<ActionDefinition, 'id' | 'description' | 'scope' | 'effect'> &
+  Partial<Pick<ActionDefinition, 'input' | 'result'>>
 
-function setting(spec: Spec): ShellActionDefinition {
+function setting(spec: Spec): ActionDefinition {
   return {
     titleKey: `actions.${spec.id}`,
     input: NO_INPUT,
@@ -40,7 +37,7 @@ function setting(spec: Spec): ShellActionDefinition {
   }
 }
 
-export const SETTINGS_ACTIONS: readonly ShellActionDefinition[] = [
+export const SETTINGS_ACTIONS: readonly ActionDefinition[] = [
   setting({
     id: 'settings.get',
     description:

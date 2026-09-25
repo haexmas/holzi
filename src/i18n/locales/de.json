@@ -61,7 +61,7 @@
       "skip": "Später entscheiden"
     }
   },
-  "shell": {
+  "wm": {
     "workspaces": {
       "title": "Arbeitsbereiche",
       "numbered": "Arbeitsbereich {number}",
@@ -528,7 +528,7 @@
     }
   },
   "actions": {
-    "shell": {
+    "wm": {
       "tab": {
         "back": "Zurück",
         "forward": "Vor",
@@ -568,7 +568,7 @@
         "open": "Launcher öffnen"
       },
       "state": {
-        "get": "Shell-Zustand lesen"
+        "get": "Zustand von Arbeitsbereichen, Fenstern und Tabs lesen"
       },
       "apps": {
         "list": "Apps auflisten"
@@ -645,10 +645,10 @@
       }
     },
     "scopes": {
-      "shell": {
+      "wm": {
         "layout": "Fenster und Arbeitsbereiche anordnen",
         "navigation": "Apps öffnen und navigieren",
-        "read": "Shell-Zustand lesen"
+        "read": "Arbeitsbereiche, Fenster und Tabs lesen"
       },
       "chat": {
         "read": "Chat lesen",

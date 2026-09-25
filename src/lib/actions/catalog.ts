@@ -1,20 +1,17 @@
 // The complete action catalog (spec 020-tab-navigation): every shipped action definition, in one
-// list, for the runner, `shell.actions.list` and the catalog invariants in check-shell-actions.ts.
-// The per-area catalogs (shell, chat, settings) are added here as their stories land.
-import { SHELL_NAVIGATION_ACTIONS, SHELL_OPEN_ACTIONS } from './shellActions.ts'
-import {
-  SHELL_LAYOUT_ACTIONS,
-  SHELL_READ_ACTIONS,
-} from './shellLayoutActions.ts'
+// list, for the runner, `wm.actions.list` and the catalog invariants in check-wm-actions.ts.
+// The per-area catalogs (wm, chat, settings) are added here as their stories land.
+import { WM_NAVIGATION_ACTIONS, WM_OPEN_ACTIONS } from './wmActions.ts'
+import { WM_LAYOUT_ACTIONS, WM_READ_ACTIONS } from './wmLayoutActions.ts'
 import { CHAT_ACTIONS, CHAT_MODEL_ACTIONS } from './chatActions.ts'
 import { SETTINGS_ACTIONS } from './settingsActions.ts'
-import type { ShellActionDefinition } from './types.ts'
+import type { ActionDefinition } from './types.ts'
 
-export const ALL_ACTIONS: readonly ShellActionDefinition[] = [
-  ...SHELL_NAVIGATION_ACTIONS,
-  ...SHELL_OPEN_ACTIONS,
-  ...SHELL_LAYOUT_ACTIONS,
-  ...SHELL_READ_ACTIONS,
+export const ALL_ACTIONS: readonly ActionDefinition[] = [
+  ...WM_NAVIGATION_ACTIONS,
+  ...WM_OPEN_ACTIONS,
+  ...WM_LAYOUT_ACTIONS,
+  ...WM_READ_ACTIONS,
   ...CHAT_ACTIONS,
   ...CHAT_MODEL_ACTIONS,
   ...SETTINGS_ACTIONS,

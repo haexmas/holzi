@@ -1,11 +1,11 @@
 // Permission scopes (spec 020-tab-navigation, T011, FR-031). Every action belongs to exactly one;
 // spec 021 grants external agents access per scope. `guardrails` is locked for every agent,
-// regardless of any grant (FR-032). Later specs (extensions, passwords, files, shell) add scopes.
+// regardless of any grant (FR-032). Later specs (extensions, passwords, files, command-line shell) add scopes.
 
 export const ACTION_SCOPE_IDS = [
-  'shell.layout',
-  'shell.navigation',
-  'shell.read',
+  'wm.layout',
+  'wm.navigation',
+  'wm.read',
   'chat.read',
   'chat.write',
   'settings.read',
@@ -24,10 +24,10 @@ export type ActionScope = {
 }
 
 const DESCRIPTIONS: Record<ActionScopeId, string> = {
-  'shell.layout': 'Open, arrange and close windows, tabs and workspaces.',
-  'shell.navigation': 'Open apps at a location and move through tab history.',
-  'shell.read':
-    'Read the shell layout, tab histories, apps and the action catalog.',
+  'wm.layout': 'Open, arrange and close windows, tabs and workspaces.',
+  'wm.navigation': 'Open apps at a location and move through tab history.',
+  'wm.read':
+    'Read the open workspaces, windows and tabs, tab histories, apps and the action catalog.',
   'chat.read': 'Read conversations and messages.',
   'chat.write':
     'Start, rename and delete conversations, send messages, cancel replies.',

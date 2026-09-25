@@ -61,7 +61,7 @@
       "skip": "Decide later"
     }
   },
-  "shell": {
+  "wm": {
     "workspaces": {
       "title": "Workspaces",
       "numbered": "Workspace {number}",
@@ -528,7 +528,7 @@
     }
   },
   "actions": {
-    "shell": {
+    "wm": {
       "tab": {
         "back": "Back",
         "forward": "Forward",
@@ -568,7 +568,7 @@
         "open": "Open launcher"
       },
       "state": {
-        "get": "Read shell state"
+        "get": "Read workspaces, windows and tabs"
       },
       "apps": {
         "list": "List apps"
@@ -645,10 +645,10 @@
       }
     },
     "scopes": {
-      "shell": {
+      "wm": {
         "layout": "Arrange windows and workspaces",
         "navigation": "Open apps and navigate",
-        "read": "Read the shell state"
+        "read": "Read workspaces, windows and tabs"
       },
       "chat": {
         "read": "Read chat",

@@ -42,7 +42,7 @@ export function useChatNavigation(deps: {
   threads: Ref<Thread[]>
   /** Header/tab title of a conversation that has no title yet. */
   newChatLabel: () => string
-  /** `useShellTab().setTitle`: the conversation title becomes the tab title (spec 020 US5). */
+  /** `useWmTab().setTitle`: the conversation title becomes the tab title (spec 020 US5). */
   setTitle: (title: string | null) => void
   selectThread: (id: string) => Promise<void> | void
   newChat: () => Promise<void> | void
@@ -89,7 +89,7 @@ export function useChatNavigation(deps: {
   watch(activeThreadId, alignLocation)
 
   // The tab shows the open conversation's title; a new conversation keeps the app/route title.
-  // The Shell resets this override on every navigation, so it is set again for the new view.
+  // The window manager resets this override on every navigation, so it is set again for the new view.
   watch(
     [activeThreadId, chatTitle, () => router.route.path],
     () => deps.setTitle(activeThreadId.value ? chatTitle.value : null),

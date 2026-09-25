@@ -1,18 +1,18 @@
 <script setup lang="ts">
-// Placeholder app, moved into the Shell unchanged (spec 015-workspace-shell,
+// Placeholder app, moved into the window manager unchanged (spec 015-workspace-shell,
 // T022, FR-003: "existing placeholder content").
 const instancesStore = useInstancesStore()
-const shell = useShellStore()
+const wm = useWindowManagerStore()
 const { t } = useI18n()
 const { closeAsync } = useInstance()
 
 const name = computed(() => instancesStore.activeInstance ?? '')
 
-// Flushes the Shell layout (FR-027) first, same as ChatApp.vue's lock(). The backend then
+// Flushes the window manager layout (FR-027) first, same as ChatApp.vue's lock(). The backend then
 // replaces this page with a spinner and ends the process (spec 013), so nothing else is navigated
 // or cleared here and a failed call has nothing to show.
 async function onLock() {
-  await shell.flushAsync()
+  await wm.flushAsync()
   await closeAsync().catch(() => {})
 }
 </script>

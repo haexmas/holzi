@@ -5,12 +5,12 @@
  * `Composer` (components, spec 015-workspace-shell T010-T013) — see their
  * own headers. What's left is orchestration: shared page-level state,
  * model-store wiring, permission/autonomy-mode persistence, `onMounted`
- * listener setup, and the Shell-app contract (`useShellTab`, T032).
+ * listener setup, and the window manager-app contract (`useWmTab`, T032).
  *
- * Moved from `pages/chat/[instance].vue` into a Shell app (T021): instance
+ * Moved from `pages/chat/[instance].vue` into a window manager app (T021): instance
  * name from `useInstancesStore()` (no route of its own anymore); `lock()`
- * flushes the Shell layout first (FR-027). Onboarding enforcement moved to
- * the Shell host page (T025).
+ * flushes the window manager layout first (FR-027). Onboarding enforcement moved to
+ * the window manager host page (T025).
  */
 import {
   computed,
@@ -25,9 +25,9 @@ import type { Message, SendMessageArgs } from '~/composables/useChat'
 import type { PendingApproval } from '~/components/chat/PermissionPrompt.vue'
 
 const instancesStore = useInstancesStore()
-const shell = useShellStore()
-const shellTab = useShellTab()
-const openApp = useAction('shell.app.open')
+const wm = useWindowManagerStore()
+const wmTab = useWmTab()
+const openApp = useAction('wm.app.open')
 const { t } = useI18n()
 const chat = useChat()
 const { closeAsync } = useInstance()
@@ -223,12 +223,12 @@ async function scrollToBottom() {
 }
 
 /**
- * Flushes the Shell layout (FR-027), then asks the backend to close the vault. It replaces this
+ * Flushes the window manager layout (FR-027), then asks the backend to close the vault. It replaces this
  * page with a spinner and ends the process (spec 013), so nothing is navigated or cleared here and
  * a failed call has nothing to show.
  */
 async function lock() {
-  await shell.flushAsync()
+  await wm.flushAsync()
   await closeAsync().catch(() => {})
 }
 
@@ -286,11 +286,11 @@ const {
   pendingApprovalsByThread,
 )
 
-// Spec 020: tab history, tab-bound chat actions, approval response and close guard (useChatShell).
-const { chatTitle, ui } = useChatShell({
-  shellTab,
+// Spec 020: tab history, tab-bound chat actions, approval response and close guard (useChatTab).
+const { chatTitle, ui } = useChatTab({
+  wmTab,
   router: useTabRouter(),
-  runAction: shell.runAction,
+  runAction: wm.runAction,
   chat,
   errString,
   newChatLabel: () => t('chat.newChat'),
@@ -333,11 +333,11 @@ onMounted(async () => {
             // A turn ending clears agent-activity state (FR-011, same signal that already clears
             // streamingMessageId/busy) and tab attention (R12) alike.
             resetAgentActivity()
-            shellTab.clearAttention()
+            wmTab.clearAttention()
             return handleTurnComplete(e)
           }),
           chat.onToolPermissionRequest((e) => {
-            shellTab.requestAttention()
+            wmTab.requestAttention()
             return handleToolPermissionRequest(e)
           }),
         ],

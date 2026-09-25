@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import type { DeviceInfo } from '~/composables/useDevice'
 
-// Settings app for spec 002 US3+US4, moved into the Shell (spec
+// Settings app for spec 002 US3+US4, moved into the window manager (spec
 // 015-workspace-shell, T022). Onboarding enforcement (an unset alias sends
 // the operator back to the wizard, so `alias` can be assumed set here) now
-// lives on the Shell host page (T025) — this component owns no route of
+// lives on the window manager host page (T025) — this component owns no route of
 // its own anymore, so there is no "back to workspace" link either: closing
-// or switching away from this tab is the Shell's own affordance.
+// or switching away from this tab is the window manager's own affordance.
 const { t } = useI18n()
 const { errString } = useErrorString()
 const { currentDeviceInfoAsync } = useDevice()

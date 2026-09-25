@@ -1,6 +1,6 @@
 import { computed, reactive, type InjectionKey } from 'vue'
-import { getAppRoutes } from '~/components/shell/appRoutes'
-import { useShellTab } from '~/composables/useShellTab'
+import { getAppRoutes } from '~/components/wm/appRoutes'
+import { useWmTab } from '~/composables/useWmTab'
 import {
   canGoBack,
   canGoForward,
@@ -8,8 +8,8 @@ import {
   parseLocation,
   withQuery,
   type TabLocation,
-} from '~/lib/shell/navigation'
-import { matchRoute } from '~/lib/shell/routeMatch'
+} from '~/lib/wm/navigation'
+import { matchRoute } from '~/lib/wm/routeMatch'
 
 export type TabRoute = {
   path: string
@@ -35,13 +35,13 @@ export type TabRouter = {
   skipCurrent(): boolean
 }
 
-/** Nesting depth of `ShellRouterView` (like vue-router's `RouterView`): the root one in
- * `ShellTabPanel.vue` renders chain[0], a nested one chain[1], and so on (research R4). */
-export const ROUTER_DEPTH_KEY: InjectionKey<number> = Symbol('shellRouterDepth')
+/** Nesting depth of `WmRouterView` (like vue-router's `RouterView`): the root one in
+ * `wm/TabPanel.vue` renders chain[0], a nested one chain[1], and so on (research R4). */
+export const ROUTER_DEPTH_KEY: InjectionKey<number> = Symbol('wmRouterDepth')
 
 const START_ROUTE: TabRoute = { path: '/', query: {}, params: {}, matched: [] }
 
-/** Outside a Shell tab (e.g. the Node test harnesses) apps still mount: a router pinned to `/`. */
+/** Outside a window manager tab (e.g. the Node test harnesses) apps still mount: a router pinned to `/`. */
 const INERT_ROUTER: TabRouter = {
   route: START_ROUTE,
   canGoBack: false,
@@ -57,16 +57,16 @@ const INERT_ROUTER: TabRouter = {
 /**
  * The app-facing router of one tab (spec 020-tab-navigation, T018,
  * contracts/tab-navigation-contract.md §2). Reads and changes only the own
- * tab's history in the Shell store (FR-008). `push` is for a new view,
+ * tab's history in the window manager store (FR-008). `push` is for a new view,
  * `replace`/`setQuery` for the same view shown differently (FR-004, FR-005).
  */
 export function useTabRouter(): TabRouter {
-  const tab = useShellTab()
+  const tab = useWmTab()
   if (!tab.tabId) return INERT_ROUTER
-  const shell = useShellStore()
+  const wm = useWindowManagerStore()
   const tabId = tab.tabId
 
-  const history = computed(() => shell.historyOf(tabId))
+  const history = computed(() => wm.historyOf(tabId))
   const route = computed<TabRoute>(() => {
     const current = history.value
     if (!current) return START_ROUTE
@@ -87,7 +87,7 @@ export function useTabRouter(): TabRouter {
     patch: Record<string, string | null>,
     options: { push?: boolean } = {},
   ) {
-    shell.navigate(
+    wm.navigate(
       tabId,
       withQuery({ path: route.value.path, query: route.value.query }, patch),
       { replace: !options.push },
@@ -103,18 +103,18 @@ export function useTabRouter(): TabRouter {
       history.value ? canGoForward(history.value) : false,
     ),
     push: (to: string | TabLocation) => {
-      shell.navigate(tabId, parseLocation(to))
+      wm.navigate(tabId, parseLocation(to))
     },
     replace: (to: string | TabLocation) => {
-      shell.navigate(tabId, parseLocation(to), { replace: true })
+      wm.navigate(tabId, parseLocation(to), { replace: true })
     },
     setQuery,
     back: () => {
-      shell.goTab(tabId, -1)
+      wm.goTab(tabId, -1)
     },
     forward: () => {
-      shell.goTab(tabId, 1)
+      wm.goTab(tabId, 1)
     },
-    skipCurrent: () => shell.skipCurrent(tabId),
+    skipCurrent: () => wm.skipCurrent(tabId),
   }) as TabRouter
 }

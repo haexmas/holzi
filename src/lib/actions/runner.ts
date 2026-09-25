@@ -7,7 +7,7 @@ import type {
   ActionOutcome,
   ActionTarget,
   ActionTargetIds,
-  ShellActionDefinition,
+  ActionDefinition,
 } from './types.ts'
 
 export type ActionHandlerContext = {
@@ -19,7 +19,7 @@ export type ActionHandlerContext = {
 export type ActionHandler = (context: ActionHandlerContext) => unknown
 
 export type ActionRunnerDeps = {
-  catalog: readonly ShellActionDefinition[]
+  catalog: readonly ActionDefinition[]
   globalHandler: (actionId: string) => ActionHandler | undefined
   /** The id the UI focus implies for this target kind, or `null` if there is none. */
   resolveFocus: (target: Exclude<ActionTarget, 'none'>) => string | null

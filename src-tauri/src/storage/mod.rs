@@ -27,10 +27,10 @@ pub mod preferences_commands_tests;
 #[cfg(test)]
 pub mod preferences_tests;
 pub mod providers;
-pub mod shell_commands;
-pub mod shell_windows;
+pub mod wm_commands;
+pub mod wm_windows;
 #[cfg(test)]
-mod shell_windows_tests;
-pub mod shell_workspaces;
+mod wm_windows_tests;
+pub mod wm_workspaces;
 #[cfg(test)]
-mod shell_workspaces_tests;
+mod wm_workspaces_tests;

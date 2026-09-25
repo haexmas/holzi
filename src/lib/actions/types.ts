@@ -1,5 +1,5 @@
 // Action types (spec 020-tab-navigation, T011, data-model.md). Every state-changing control of the
-// Shell and its apps is an action: the UI, keyboard shortcuts and — from spec 021 on — agents call
+// window manager and its apps is an action: the UI, keyboard shortcuts and — from spec 021 on — agents call
 // the same definitions. "Action", never "command": in holzi "command" means Tauri commands
 // (research R8). Pure types, relative sibling imports only.
 import type { ActionScopeId } from './scopes.ts'
@@ -25,7 +25,7 @@ export type ActionEffect = 'read' | 'write' | 'destructive'
 /** `KeyboardEvent.code`-based chord in fixed modifier order: `Ctrl+Alt+Shift+Meta+<code>`. */
 export type KeyChord = string
 
-export type ShellActionDefinition = {
+export type ActionDefinition = {
   id: string
   titleKey: string
   /** English, for machine callers (it becomes the tool description in spec 021). */

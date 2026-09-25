@@ -14,6 +14,12 @@ insbesondere haextensions, können die Navigation von holzi nicht verändern. Da
 haex-vault-Modell (`useDrillDownNavigation`, Navigation-Store) wird bewusst
 nicht 1:1 übernommen.
 
+> **Begriff (2026-09-25):** Die „Shell“ aus Spec 015 heißt im Code seit dem
+> 2026-09-25 **Window Manager** (`wm`), weil „Shell“ auch die Kommandozeile
+> meint, auf die Agenten mit Spec 021 Zugriff bekommen können. Code-Bezeichner,
+> Aktions-IDs (`wm.*`) und Dateipfade in diesen Dokumenten sind umbenannt; der
+> Fließtext spricht weiter von der Shell. Siehe `CONTEXT.md`.
+
 ## Beziehung zu bestehenden Specs
 
 - [`015-workspace-shell`](../015-workspace-shell/spec.md) bleibt maßgeblich für
@@ -656,6 +662,6 @@ Spec noch keinen Zugang)
   Berechtigungen je Agent, Registrierung der Aktionen als Tools des eingebauten
   Agenten, Protokoll der Agenten-Aufrufe (Spec 021 mit ADR-0005).
 - Anbindung von Extension-Tabs an das Ortmodell über das SDK (Spec 017/018).
-- Sperren der Vault als Aktion (`shell.vault.lock`): Der Sperren-Knopf bleibt
+- Sperren der Vault als Aktion (`wm.vault.lock`): Der Sperren-Knopf bleibt
   direkt (er beendet den Prozess, Spec 013, und darf ohnehin nie von Agenten
   ausgelöst werden); die Aktion folgt mit der Spec „Befehle und Tastenkürzel“.

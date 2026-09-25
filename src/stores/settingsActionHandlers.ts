@@ -5,9 +5,9 @@ import { useModels } from '~/composables/useModels'
 import { usePreferences, type PrefScope } from '~/composables/usePreferences'
 import { useProviders, type DelegateVendor } from '~/composables/useProviders'
 import { useSttModels } from '~/composables/useSttModels'
-import type { useShellStore } from '~/stores/shell'
+import type { useWindowManagerStore } from '~/stores/windowManager'
 
-type ShellStore = ReturnType<typeof useShellStore>
+type WmStore = ReturnType<typeof useWindowManagerStore>
 
 /** Preference keys the settings components read (specs 002, 008, 009). */
 const DEFAULT_MODEL_KEY = 'chat.default_model_id'
@@ -21,7 +21,7 @@ const DENY_RULES_KEY = 'cli_delegate.deny_rules'
  * components used to run themselves, so a setting changes the same way from
  * the UI, a shortcut or an agent, with or without the settings window open.
  */
-export function registerSettingsActionHandlers(shell: ShellStore): void {
+export function registerSettingsActionHandlers(wm: WmStore): void {
   const { currentDeviceInfoAsync, updateDeviceAliasAsync } = useDevice()
   const { getPrefAsync, setPrefAsync, clearPrefAsync } = usePreferences()
   const models = useModels()
@@ -29,7 +29,7 @@ export function registerSettingsActionHandlers(shell: ShellStore): void {
   const providers = useProviders()
   const sttModels = useSttModels()
   const done = { done: true }
-  const on = shell.registerGlobalActionHandler
+  const on = wm.registerGlobalActionHandler
 
   async function deviceScope(): Promise<PrefScope> {
     const device = await currentDeviceInfoAsync()

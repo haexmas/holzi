@@ -37,11 +37,11 @@ jobs:
       - name: Check chat state
         run: corepack pnpm check:chat-state
 
-      - name: Check shell state
-        run: corepack pnpm check:shell-state
+      - name: Check window manager state
+        run: corepack pnpm check:wm-state
 
-      - name: Check shell navigation
-        run: corepack pnpm check:shell-navigation
+      - name: Check window manager navigation
+        run: corepack pnpm check:wm-navigation
 
       - name: Check vault lifecycle
         run: corepack pnpm check:vault-lifecycle

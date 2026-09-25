@@ -1,5 +1,5 @@
-// Chat action catalog (spec 020-tab-navigation, T049, contracts/shell-actions.md §1). Tab-bound
-// actions run in the mounted chat (`composables/useChatShell.ts` registers them; the runner opens
+// Chat action catalog (spec 020-tab-navigation, T049, contracts/wm-actions.md §1). Tab-bound
+// actions run in the mounted chat (`composables/useChatTab.ts` registers them; the runner opens
 // the chat first if needed). Model, reasoning and voice preferences live in global stores and are
 // global actions (`stores/chatActionHandlers.ts`). Approvals, the permission mode and model
 // integrity overrides are guardrails: never callable by agents (FR-032).
@@ -7,7 +7,7 @@
 // Exempt from the catalog (`action-exempt:` at the control): draft editing (typing, attachments,
 // voice recording as an input method) and view state (dialogs, accordions, editing mode, error
 // dismissal, HuggingFace browsing and previews).
-import type { JsonSchema, ShellActionDefinition } from './types.ts'
+import type { JsonSchema, ActionDefinition } from './types.ts'
 
 const THREAD_ID: JsonSchema = {
   type: 'string',
@@ -20,13 +20,10 @@ const DONE: JsonSchema = {
 const ANY_OBJECT: JsonSchema = { type: 'object' }
 const NO_INPUT: JsonSchema = { type: 'object', properties: {} }
 
-type Spec = Pick<
-  ShellActionDefinition,
-  'id' | 'description' | 'scope' | 'effect'
-> &
-  Partial<Pick<ShellActionDefinition, 'input' | 'result' | 'agentCallable'>>
+type Spec = Pick<ActionDefinition, 'id' | 'description' | 'scope' | 'effect'> &
+  Partial<Pick<ActionDefinition, 'input' | 'result' | 'agentCallable'>>
 
-function inChat(spec: Spec): ShellActionDefinition {
+function inChat(spec: Spec): ActionDefinition {
   return {
     titleKey: `actions.${spec.id}`,
     input: NO_INPUT,
@@ -39,7 +36,7 @@ function inChat(spec: Spec): ShellActionDefinition {
   }
 }
 
-function global(spec: Spec): ShellActionDefinition {
+function global(spec: Spec): ActionDefinition {
   return {
     titleKey: `actions.${spec.id}`,
     input: NO_INPUT,
@@ -51,7 +48,7 @@ function global(spec: Spec): ShellActionDefinition {
   }
 }
 
-export const CHAT_ACTIONS: readonly ShellActionDefinition[] = [
+export const CHAT_ACTIONS: readonly ActionDefinition[] = [
   inChat({
     id: 'chat.conversation.new',
     description: 'Start a new conversation in the chat.',
@@ -165,7 +162,7 @@ export const CHAT_ACTIONS: readonly ShellActionDefinition[] = [
   }),
 ]
 
-export const CHAT_MODEL_ACTIONS: readonly ShellActionDefinition[] = [
+export const CHAT_MODEL_ACTIONS: readonly ActionDefinition[] = [
   global({
     id: 'chat.model.select',
     description: 'Choose and load the model the chat answers with.',

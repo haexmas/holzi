@@ -9,8 +9,8 @@ Stand; die Umsetzung von 020 beginnt erst, wenn 015 gemerged ist (R15).
 ## R1 — Eigener Router je Tab statt vue-router
 
 **Decision**: Ein kleiner eigener Tab-Router: reine Reducer für die Historie und ein
-reiner Pfad-Matcher unter `src/lib/shell/`, dazu zwei Vue-Bausteine
-(`ShellRouterView`, `ShellLink`) und das Composable `useTabRouter()`.
+reiner Pfad-Matcher unter `src/lib/wm/`, dazu zwei Vue-Bausteine
+(`WmRouterView`, `WmLink`) und das Composable `useTabRouter()`.
 
 **Rationale**:
 
@@ -24,7 +24,7 @@ reiner Pfad-Matcher unter `src/lib/shell/`, dazu zwei Vue-Bausteine
   Router-Objekt mit Closures.
 - Der Bedarf ist klein: Pfadmuster mit `:param`, verschachtelte Einträge,
   Push/Replace/Back/Forward/Go. Geschätzt 200–300 Zeilen einschließlich Tests,
-  prüfbar ohne Nuxt im Node-Harness (Vorbild `check-shell-state.ts`).
+  prüfbar ohne Nuxt im Node-Harness (Vorbild `check-wm-state.ts`).
 
 **Alternatives considered**:
 
@@ -37,7 +37,7 @@ reiner Pfad-Matcher unter `src/lib/shell/`, dazu zwei Vue-Bausteine
 
 ## R2 — Historie lebt im Shell-Store, nicht in der Komponente
 
-**Decision**: Die Historie jedes Tabs liegt im Pinia-Store `stores/shell.ts` in
+**Decision**: Die Historie jedes Tabs liegt im Pinia-Store `stores/windowManager.ts` in
 der bereits vorhandenen, nie persistierten Laufzeitstruktur `TabRuntime`
 (Feld `history`), geschlüsselt nach Tab-Id.
 
@@ -46,9 +46,9 @@ zwischen Fenstern und Arbeitsbereichen gleich, und `TabRuntime` ist in Spec 015
 genau für flüchtige Tab-Daten angelegt. Schließen eines Tabs räumt die
 Laufzeitdaten über das vorhandene `syncTabRuntime()` ab (FR-011).
 
-**Alternatives considered**: Historie in der `ShellTabPanel`-Instanz (geht beim
+**Alternatives considered**: Historie in der `WmTabPanel`-Instanz (geht beim
 künftigen Tab-Drag zwischen Fenstern verloren); Historie im persistierten
-`ShellTab` (widerspricht der Betreiberentscheidung, FR-011).
+`WmTab` (widerspricht der Betreiberentscheidung, FR-011).
 
 ## R3 — Ort als Pfad plus Query
 
@@ -71,10 +71,10 @@ nicht serialisierbaren Inhalten).
 **Decision**: Jede App meldet eine Routentabelle an:
 `{ path, component, titleKey?, children? }`. Die reine Matcher-Funktion liefert
 für einen Pfad die Kette der passenden Einträge von außen nach innen plus die
-Parameter. `ShellRouterView` rendert je Verschachtelungstiefe den Eintrag dieser
+Parameter. `WmRouterView` rendert je Verschachtelungstiefe den Eintrag dieser
 Tiefe (Tiefe über provide/inject, wie `RouterView`). Eine App ohne eigene
 Routentabelle hat implizit genau die Route `/` auf ihre Wurzelkomponente — damit
-bleibt `components/shell/appComponents.ts` rückwärtskompatibel und wird zur
+bleibt `components/wm/appComponents.ts` rückwärtskompatibel und wird zur
 Routentabelle erweitert (`appRoutes.ts`).
 
 **Rationale**: Die Seitenleiste der künftigen Einstellungs-App ist dann eine
@@ -109,11 +109,11 @@ Funktionen `(history, …) → history` und damit ohne Vue testbar.
 
 | Eingabe                               | Ziel                                         | Umsetzung                                                                                          |
 | ------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Schaltflächen Zurück/Vor              | aktiver Tab dieses Fensters                  | `ShellNavButtons.vue` links vor `ShellTabBar` in `ShellWindow.vue`                                 |
+| Schaltflächen Zurück/Vor              | aktiver Tab dieses Fensters                  | `wm/NavButtons.vue` links vor `WmTabBar` in `wm/Window.vue`                                        |
 | Langer Druck (≥ 500 ms) / Rechtsklick | Verlaufsliste                                | Dropdown aus dem haex-ui-Layer (`ShadcnDropdownMenu`), per Tastatur bedienbar                      |
 | Alt+←/→ (alle), Cmd+[/] (macOS)       | aktiver Tab des fokussierten Fensters        | ein globaler `keydown`-Listener auf der Shell-Host-Seite, Auflösung über die Aktions-Registry (R8) |
 | Maustasten Zurück/Vor                 | aktiver Tab des Fensters unter dem Zeiger    | `mouseup`/`auxclick` mit `button` 3/4 am Fenster-Wurzelelement, Default unterdrückt; Spike unten   |
-| System-Zurück (Android-Geste)         | aktiver Tab des obersten sichtbaren Fensters | nativer Zurück-Hook → Aktion `shell.system.back` (R7)                                              |
+| System-Zurück (Android-Geste)         | aktiver Tab des obersten sichtbaren Fensters | nativer Zurück-Hook → Aktion `wm.system.back` (R7)                                                 |
 
 Für Alt+Pfeil gilt: Liegt der Fokus in einem editierbaren Element und läuft holzi
 unter macOS, wird die Taste nicht abgefangen (Wortsprung hat Vorrang, FR-017).
@@ -146,7 +146,7 @@ FR-018 ist dann für diese Plattform als Einschränkung im PR zu vermerken.
   legitimen Router-Weg weg von der Seite.)
 - **System-Zurück** kommt nicht über die Webview-Historie, sondern über den
   nativen Zurück-Hook der Plattform (Android: Zurück-Taste/-Geste über Tauri)
-  und ruft die Aktion `shell.system.back` auf. Ziel: aktiver Tab des obersten
+  und ruft die Aktion `wm.system.back` auf. Ziel: aktiver Tab des obersten
   sichtbaren Fensters; ohne Zurück-Eintrag in der Kompaktdarstellung die
   Fensterübersicht; offenes Shell-Overlay schließen (FR-019).
 
@@ -165,12 +165,12 @@ mit vue-router.
 **Spike (tasks)**: Die genaue Tauri-2-Schnittstelle für die Android-Zurück-Taste
 (Plugin-Event bzw. `onBackButtonPress`) ist zu verifizieren. holzi hat heute kein
 Android-Target; der Hook wird hinter einer Plattformprüfung angelegt und mit
-`ponytail:` markiert, die Logik von `shell.system.back` ist unabhängig davon in
-`check:shell-navigation` geprüft.
+`ponytail:` markiert, die Logik von `wm.system.back` ist unabhängig davon in
+`check:wm-navigation` geprüft.
 
 ## R8 — Aktions-Registry, agentenfähig (Name „Aktion“, nicht „Command“)
 
-**Decision**: Eine Registry `ShellActionDefinition` (reine Daten unter
+**Decision**: Eine Registry `ActionDefinition` (reine Daten unter
 `src/lib/actions/`) mit: `id`, `titleKey`, `description` (englisch, für
 maschinelle Aufrufer; Tool-Beschreibungen sind im Projekt englisch),
 `input` und `result` als JSON Schema, `target` (`none` | `tab` | `window` |
@@ -201,7 +201,7 @@ Tastenkürzel direkt in Komponenten (widerspricht FR-024).
 ## R9 — Titel
 
 **Decision**: Angezeigter Tab-Titel = dynamischer Titel der App
-(`useShellTab().setTitle`, Spec 015) → sonst `titleKey` der tiefsten gematchten
+(`useWmTab().setTitle`, Spec 015) → sonst `titleKey` der tiefsten gematchten
 Route mit `titleKey` → sonst App-Name. Beim Verlassen eines Eintrags speichert
 der Store den zu diesem Zeitpunkt angezeigten Titel im Eintrag (`title`), sodass
 die Verlaufsliste Titel „zum Zeitpunkt des Besuchs“ zeigt (FR-021). Ein
@@ -230,12 +230,12 @@ steht:
 
 ## R11 — Öffnen an einem Ort
 
-**Decision**: `shell.openApp(appId, location?)` und `addTab(windowId, appId,
-location?)`; `useShellTab()` bekommt `openApp(appId, location?)` für Sprünge
+**Decision**: `wm.openApp(appId, location?)` und `addTab(windowId, appId,
+location?)`; `useWmTab()` bekommt `openApp(appId, location?)` für Sprünge
 zwischen Apps. Neue Instanz: Historie `[location ?? '/']`. Vorhandene
 Einzelinstanz: aktivieren wie bisher (`activateExistingSingleton`), dann `push`
 (No-op bei gleichem Ort). Die Legacy-Weiterleitung `?open=<appId>` bleibt und
-nimmt optional `&at=<pfad>` an. Unbekannter Pfad → `ShellRouterView` ersetzt
+nimmt optional `&at=<pfad>` an. Unbekannter Pfad → `WmRouterView` ersetzt
 per `replace('/')` und zeigt einen Hinweis (Toast aus dem haex-ui-Layer)
 (FR-014).
 
@@ -248,13 +248,13 @@ eine Historie `[{ path: '/' }]` an. Sperren/Schließen beendet den Prozess
 
 ## R13 — Prüfungen
 
-**Decision**: Neues Skript `scripts/check-shell-navigation.ts` (Node mit
-Type-Stripping, Vorbild `check-shell-state.ts`) für Historien-Reducer, Matcher,
+**Decision**: Neues Skript `scripts/check-wm-navigation.ts` (Node mit
+Type-Stripping, Vorbild `check-wm-state.ts`) für Historien-Reducer, Matcher,
 Chord-Normierung und Aktionsauflösung sowie Store-Integration (openApp mit Ort,
 Singleton-Push, Verschieben erhält Historie, hydrate ohne Historie). Neues
-`pnpm check:shell-navigation` und ein CI-Schritt.
+`pnpm check:wm-navigation` und ein CI-Schritt.
 
-**Rationale**: `scripts/check-shell-state.ts` hat bereits 829 Zeilen und liegt
+**Rationale**: `scripts/check-wm-state.ts` hat bereits 829 Zeilen und liegt
 über der 500-Zeilen-Grenze (in Spec 015 als Complexity Tracking mit
 „aufteilen, sobald erreicht“ vermerkt). Neue Prüfungen kommen deshalb in eine
 eigene Datei; die Aufteilung des bestehenden Skripts ist ein Befund für 015,
@@ -312,7 +312,7 @@ Browser-Historie wird nie gelesen (R7). Dazu:
   Tab-Historie; die Brücke ist kooperativ, die Garantie von FR-034 gilt auch
   ohne sie.
 
-**Prüfung**: `check:shell-navigation` kann kein iframe laden; der Schutz wird
+**Prüfung**: `check:wm-navigation` kann kein iframe laden; der Schutz wird
 manuell nach quickstart M21 geprüft (DevTools: iframe in einen Tab einfügen,
 `pushState` und `history.back()` darin auslösen).
 
@@ -334,7 +334,7 @@ dessen eigene History bewegen.
 
 - `ActionCaller = { kind: 'user' } | { kind: 'builtinAgent' } | { kind:
 'externalAgent'; agentId: string }`.
-- Bereiche (erste Liste): `shell.layout`, `shell.navigation`, `shell.read`,
+- Bereiche (erste Liste): `wm.layout`, `wm.navigation`, `wm.read`,
   `chat.read`, `chat.write`, `settings.read`, `settings.device`,
   `settings.models`, `guardrails`.
 - `guardrails` umfasst Autonomie-Modus, Deny-Regeln, Anbieter verbinden und
@@ -356,7 +356,7 @@ dessen eigene History bewegen.
   `usePreferences`/`useDevice`/Provider-Composables). Sie funktionieren, ohne
   dass eine App offen ist — ein Agent kann eine Einstellung ändern, ohne das
   Fenster zu öffnen.
-- **Tab-gebunden**, von der gemounteten App-Instanz über `useShellTab()`
+- **Tab-gebunden**, von der gemounteten App-Instanz über `useWmTab()`
   registriert (Chat: Nachricht senden, Antwort abbrechen, Freigabe, Verlauf
   öffnen). Ist die App nicht offen, öffnet der Runner sie (Einzelinstanz:
   aktiviert), wartet auf die Registrierung (Zeitlimit 5 s → `app_unavailable`)
@@ -368,7 +368,7 @@ Stelle, und Oberfläche und Agenten teilen sie.
 
 ## R20 — Vollständigkeit des Katalogs prüfen
 
-**Decision**: `check:shell-navigation` prüft den Katalog strukturell (eindeutige
+**Decision**: `check:wm-navigation` prüft den Katalog strukturell (eindeutige
 Ids, gültige Schemas, jeder Bereich existiert, jede `guardrails`-Aktion ist
 `agentCallable: false`, der Runner lehnt Agenten dort ab). `check:templates`
 sperrt direkte Aufrufe schreibender Schnittstellen in `.vue`-Dateien unter

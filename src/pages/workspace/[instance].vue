@@ -1,13 +1,13 @@
 <script setup lang="ts">
 /**
- * Shell host page (spec 015-workspace-shell, T023). Replaces the spec-002
+ * window manager host page (spec 015-workspace-shell, T023). Replaces the spec-002
  * workspace stub: onboarding enforcement (FR-001) stays here since this is
  * now the only real page apps are reached through (chat/settings/
- * federation moved into Shell apps, T021-T022). The model status shows in
+ * federation moved into window manager apps, T021-T022). The model status shows in
  * the chat only; the workspace-wide status bar (015 FR-005) was dropped by
  * operator decision.
  *
- * Awaits `shell.hydrateFromBackendAsync()` (T048) before anything else: the
+ * Awaits `wm.hydrateFromBackendAsync()` (T048) before anything else: the
  * store's `state` otherwise starts from `hydrate`'s own throwaway default
  * workspace, and opening a window into that would be immediately discarded
  * once the real persisted layout replaces `state` right after.
@@ -24,13 +24,13 @@ definePageMeta({
 const route = useRoute()
 const router = useRouter()
 const instancesStore = useInstancesStore()
-const shell = useShellStore()
+const wm = useWindowManagerStore()
 // Spec 020: create the models store here, inside a component setup (its setup calls `useI18n()`),
 // so the global chat actions (`stores/chatActionHandlers.ts`) find it when an action runs.
 useModelsStore()
 
-// Spec 020: global shortcuts for Shell actions (back/forward).
-useShellKeyboard()
+// Spec 020: global shortcuts for window manager actions (back/forward).
+useWmKeyboard()
 
 // Spec 020 (research R7, FR-020, FR-035): the webview history is never navigation state. Pages
 // reach this one with `replace`, so the top document's history stays flat, and every router
@@ -54,13 +54,13 @@ const instanceName = computed(() => {
 // and friends have no route of their own).
 onMounted(async () => {
   instancesStore.setActiveInstance(instanceName.value)
-  await shell.hydrateFromBackendAsync()
+  await wm.hydrateFromBackendAsync()
 
   const open = route.query.open
   if (typeof open === 'string' && open.length > 0) {
     // Spec 020 FR-012/FR-013: `&at=<path>` opens the app at a location.
     const at = route.query.at
-    void shell.runAction('shell.app.open', {
+    void wm.runAction('wm.app.open', {
       appId: open,
       ...(typeof at === 'string' && at.length > 0 ? { at } : {}),
     })
@@ -72,6 +72,6 @@ onMounted(async () => {
 
 <template>
   <div class="flex h-screen min-h-0 flex-col">
-    <ShellDesktop class="min-h-0 flex-1" />
+    <WmDesktop class="min-h-0 flex-1" />
   </div>
 </template>

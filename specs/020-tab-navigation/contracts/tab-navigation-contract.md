@@ -1,13 +1,13 @@
 # Vertrag: Navigation im Tab (App-Seite)
 
 Ergänzt [`015-workspace-shell/contracts/shell-app-contract.md`](../../015-workspace-shell/contracts/shell-app-contract.md).
-Apps sehen weiterhin nur `useShellTab()` und die hier beschriebenen Bausteine;
-sie importieren nichts aus `stores/shell.ts` oder `components/shell/` außer
-`ShellRouterView` und `ShellLink`.
+Apps sehen weiterhin nur `useWmTab()` und die hier beschriebenen Bausteine;
+sie importieren nichts aus `stores/windowManager.ts` oder `components/wm/` außer
+`WmRouterView` und `WmLink`.
 
 ## 1. Routen anmelden
 
-In `src/components/shell/appRoutes.ts` (ersetzt `appComponents.ts`):
+In `src/components/wm/appRoutes.ts` (ersetzt `appComponents.ts`):
 
 ```ts
 // Form, kein Implementierungscode
@@ -15,7 +15,7 @@ In `src/components/shell/appRoutes.ts` (ersetzt `appComponents.ts`):
   routes: [
     { path: '/', component: ChatApp, children: [
       { path: '', component: ChatNewConversation },          // Start-Ort
-      { path: 'thread/:id', component: ChatThreadView, titleKey: 'shell.chat.thread' },
+      { path: 'thread/:id', component: ChatThreadView, titleKey: 'wm.chat.thread' },
     ]},
   ],
 },
@@ -58,26 +58,26 @@ type TabRouter = {
   Pfade sind nicht erlaubt.
 - Alle Aufrufe wirken ausschließlich auf den eigenen Tab (FR-008).
 - Außerhalb einer Shell liefert `useTabRouter()` einen inerten Router mit Ort
-  `/` (wie `useShellTab()`), damit Apps in Test-Harnesses montierbar bleiben.
+  `/` (wie `useWmTab()`), damit Apps in Test-Harnesses montierbar bleiben.
 
 **Regel für Apps (FR-005)**: `push` für alles, was der Nutzer als „andere Seite“
 wahrnimmt (andere Ansicht, anderes Element); `replace`/`setQuery` für Filter,
 Suche, Sortierung, Aufklappzustand, Tabs innerhalb einer Ansicht.
 
-## 3. `ShellRouterView` und `ShellLink`
+## 3. `WmRouterView` und `WmLink`
 
-- `<ShellRouterView />` rendert den gematchten Eintrag der eigenen Tiefe. Die
-  Wurzel rendert die Shell selbst in `ShellTabPanel`; Apps setzen
-  `<ShellRouterView />` dort ein, wo Kinder erscheinen (z. B. rechts neben der
+- `<WmRouterView />` rendert den gematchten Eintrag der eigenen Tiefe. Die
+  Wurzel rendert die Shell selbst in `WmTabPanel`; Apps setzen
+  `<WmRouterView />` dort ein, wo Kinder erscheinen (z. B. rechts neben der
   Seitenleiste).
-- `<ShellLink to="/models" [replace] [active-class]>` rendert ein `<a>` mit
+- `<WmLink to="/models" [replace] [active-class]>` rendert ein `<a>` mit
   `href="#"` (kein Webview-Navigationsziel), löst `push`/`replace` aus und setzt
   `aria-current="page"`, wenn der aktuelle Pfad gleich oder (mit `prefix`) ein
   Unterpfad ist — Grundlage für die Seitenleisten-Markierung (US1 AS7).
-- Unbekannter Pfad: `ShellRouterView` der Wurzel ersetzt per `replace('/')` und
-  zeigt den Hinweis `shell.nav.unknownLocation` (FR-014).
+- Unbekannter Pfad: `WmRouterView` der Wurzel ersetzt per `replace('/')` und
+  zeigt den Hinweis `wm.nav.unknownLocation` (FR-014).
 
-## 4. Erweiterung von `useShellTab()`
+## 4. Erweiterung von `useWmTab()`
 
 ```ts
 openApp(appId: string, at?: string | TabLocation): void   // FR-012
@@ -90,7 +90,7 @@ openApp(appId: string, at?: string | TabLocation): void   // FR-012
   des Tabs (research R9).
 - `registerActionHandler(actionId, handler)`: meldet einen tab-gebundenen
   Handler für eine Aktion der eigenen App an (research R19,
-  [shell-actions.md](./shell-actions.md) §2); gibt eine Abmeldefunktion zurück.
+  [wm-actions.md](./wm-actions.md) §2); gibt eine Abmeldefunktion zurück.
 
 ## 5. Legacy-Adressen
 

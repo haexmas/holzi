@@ -1,12 +1,12 @@
-import { clampDragPosition, clampResizeSize } from '~/lib/shell/geometry'
-import type { Size } from '~/lib/shell/types'
+import { clampDragPosition, clampResizeSize } from '~/lib/wm/geometry'
+import type { Size } from '~/lib/wm/types'
 
 export type ResizeDirection = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
 
 type Geometry = { x: number; y: number; width: number; height: number }
 
 /**
- * Pointer-driven move and eight-way resize for a Shell window (spec
+ * Pointer-driven move and eight-way resize for a window manager window (spec
  * 015-workspace-shell, T028, plan research R7). DOM/event wiring only —
  * the actual geometry math (clamping, minimum size) is `geometry.ts`'s
  * pure functions. Multiple pointermove events per frame collapse into one

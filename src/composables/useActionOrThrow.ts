@@ -6,9 +6,9 @@
  * HuggingFace error keys — keeps working unchanged.
  */
 export function useActionOrThrow(id: string) {
-  const shell = useShellStore()
+  const wm = useWindowManagerStore()
   return async (input: Record<string, unknown> = {}): Promise<unknown> => {
-    const outcome = await shell.runAction(id, input, { kind: 'user' })
+    const outcome = await wm.runAction(id, input, { kind: 'user' })
     if (outcome.ok) return outcome.result
     throw outcome.error !== undefined
       ? outcome.error

@@ -60,7 +60,7 @@ for (const filename of files) {
 // component calling one of these write APIs directly bypasses the catalog. Allowed only with an
 // `action-exempt: <reason>` comment on the same line or up to three lines above.
 const DIRECT_WRITES = [
-  /\bshell\.(openApp|addTab|switchTab|closeTab|closeWindow|focusWindow|minimizeWindow|toggleMaximizeWindow|updateWindowGeometry|createWorkspace|switchWorkspace|deleteWorkspace|moveWindowToWorkspace|navigate|goTab)\(/,
+  /\bwm\.(openApp|addTab|switchTab|closeTab|closeWindow|focusWindow|minimizeWindow|toggleMaximizeWindow|updateWindowGeometry|createWorkspace|switchWorkspace|deleteWorkspace|moveWindowToWorkspace|navigate|goTab)\(/,
   /\b(setPrefAsync|clearPrefAsync|updateDeviceAliasAsync)\(/,
   /\b(downloadFromHfAsync|downloadFromCatalogAsync|deleteAsync|installUpdateAsync|connectCliDelegateAsync|submitCliDelegateCodeAsync|refreshModelsAsync)\(/,
   /\b(loadModel|updateEffortLevel|downloadCatalogEntry|retryModelLoad|onIntegrityLoadUntrusted|onIntegrityRepairSource|onIntegrityChooseOther)\(/,
