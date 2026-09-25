@@ -42,8 +42,12 @@ export type ShellActionDefinition = {
   binding: 'global' | 'tab'
   appId?: string
   defaultKeys?: { default?: readonly KeyChord[]; mac?: readonly KeyChord[] }
-  /** Do not intercept the chord while an editable element has focus on these platforms. */
-  yieldToTextInput?: { default?: boolean; mac?: boolean }
+  /** Chords that are not intercepted while an editable element has focus, per platform (on macOS
+   * Alt+Arrow jumps words in text, FR-017). */
+  yieldToTextInput?: {
+    default?: readonly KeyChord[]
+    mac?: readonly KeyChord[]
+  }
 }
 
 export type ActionCaller =

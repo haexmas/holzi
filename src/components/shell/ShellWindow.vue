@@ -30,6 +30,33 @@ const props = defineProps<{
 
 const shell = useShellStore()
 const { t } = useI18n()
+const runBack = useAction('shell.tab.back')
+const runForward = useAction('shell.tab.forward')
+
+const activeAppId = computed(
+  () =>
+    props.window.tabs.find((tab) => tab.id === props.window.activeTabId)
+      ?.appId ?? '',
+)
+
+/** Mouse side buttons (DOM `button` 3 = back, 4 = forward) act on this window's active tab without
+ * focusing it (spec 020 FR-018); their default webview navigation is suppressed. Whether a
+ * platform delivers them to the DOM at all is research R6's spike. */
+function isSideButton(event: MouseEvent | PointerEvent): boolean {
+  return event.button === 3 || event.button === 4
+}
+
+function onRootPointerDown(event: PointerEvent) {
+  if (!isSideButton(event)) shell.focusWindow(props.window.id)
+}
+
+function onSideButton(event: MouseEvent) {
+  if (!isSideButton(event)) return
+  event.preventDefault()
+  if (event.type !== 'mouseup') return
+  const run = event.button === 3 ? runBack : runForward
+  void run({ tabId: props.window.activeTabId })
+}
 
 const info = computed(() => shell.windowDisplayInfo(props.window))
 const title = computed(() => {
@@ -134,7 +161,11 @@ const RESIZE_HANDLES: { direction: ResizeDirection; class: string }[] = [
     }"
     role="group"
     :aria-label="title"
-    @pointerdown="shell.focusWindow(window.id)"
+    :data-shell-window-id="window.id"
+    @pointerdown="onRootPointerDown"
+    @mousedown="onSideButton"
+    @auxclick="onSideButton"
+    @mouseup="onSideButton"
   >
     <div
       class="flex shrink-0 items-center gap-1 border-b border-border bg-muted/40 px-1.5 py-1"
@@ -142,7 +173,11 @@ const RESIZE_HANDLES: { direction: ResizeDirection; class: string }[] = [
       @pointerdown="onTitleBarPointerDown"
       @dblclick="onTitleBarDoubleClick"
     >
-      <ShellNavButtons :tab-id="window.activeTabId" :compact="shell.compact" />
+      <ShellNavButtons
+        :tab-id="window.activeTabId"
+        :app-id="activeAppId"
+        :compact="shell.compact"
+      />
       <ShellTabBar
         :window-id="window.id"
         :tabs="window.tabs"

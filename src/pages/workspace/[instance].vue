@@ -26,6 +26,9 @@ const router = useRouter()
 const instancesStore = useInstancesStore()
 const shell = useShellStore()
 
+// Spec 020: global shortcuts for Shell actions (back/forward).
+useShellKeyboard()
+
 const instanceName = computed(() => {
   const raw = route.params.instance
   return typeof raw === 'string'

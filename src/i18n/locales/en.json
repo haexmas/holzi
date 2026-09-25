@@ -117,7 +117,9 @@
     },
     "nav": {
       "back": "Back",
-      "forward": "Forward"
+      "forward": "Forward",
+      "backList": "Earlier views",
+      "forwardList": "Later views"
     },
     "chat": {
       "thread": "Conversation"

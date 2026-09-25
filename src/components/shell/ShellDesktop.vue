@@ -10,8 +10,10 @@
  * `updateArea` itself re-clamps window geometry into the new area
  * (`layoutState.ts`), `ShellWindow.vue`'s `windowDisplayRect` already
  * handles the compact/normal display switch without this component's help.
+ * The overlay open states live in the store (`shell.overlays`, spec 020) so
+ * system back can close them and open the window overview.
  */
-import { ref, watch } from 'vue'
+import { watch } from 'vue'
 
 const shell = useShellStore()
 const { t } = useI18n()
@@ -20,10 +22,6 @@ const { width, height } = useWindowSize()
 watch([width, height], ([newWidth, newHeight]) => {
   shell.updateArea({ width: newWidth, height: newHeight })
 })
-
-const launcherOpen = ref(false)
-const windowOverviewOpen = ref(false)
-const workspaceOverviewOpen = ref(false)
 </script>
 
 <template>
@@ -42,7 +40,7 @@ const workspaceOverviewOpen = ref(false)
         type="button"
         class="flex h-12 w-12 items-center justify-center rounded-full bg-background text-foreground shadow-lg ring-1 ring-border hover:bg-accent"
         :aria-label="t('shell.workspaces.title')"
-        @click="workspaceOverviewOpen = true"
+        @click="shell.overlays.workspaces = true"
       >
         <Icon name="lucide:layout-list" class="h-5 w-5" :aria-hidden="true" />
       </button>
@@ -50,7 +48,7 @@ const workspaceOverviewOpen = ref(false)
         type="button"
         class="flex h-12 w-12 items-center justify-center rounded-full bg-background text-foreground shadow-lg ring-1 ring-border hover:bg-accent"
         :aria-label="t('shell.windowOverview.open')"
-        @click="windowOverviewOpen = true"
+        @click="shell.overlays.windows = true"
       >
         <Icon
           name="lucide:layout-panel-top"
@@ -63,15 +61,15 @@ const workspaceOverviewOpen = ref(false)
         class="flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-lg hover:opacity-90"
         data-testid="open-launcher"
         :aria-label="t('shell.launcher.open')"
-        @click="launcherOpen = true"
+        @click="shell.overlays.launcher = true"
       >
         <Icon name="lucide:layout-grid" class="h-5 w-5" :aria-hidden="true" />
       </button>
     </div>
 
-    <ShellLauncher v-model:open="launcherOpen" />
-    <ShellWindowOverview v-model:open="windowOverviewOpen" />
-    <ShellWorkspaceOverview v-model:open="workspaceOverviewOpen" />
+    <ShellLauncher v-model:open="shell.overlays.launcher" />
+    <ShellWindowOverview v-model:open="shell.overlays.windows" />
+    <ShellWorkspaceOverview v-model:open="shell.overlays.workspaces" />
     <ShellCloseConfirm />
   </div>
 </template>

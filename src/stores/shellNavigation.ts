@@ -10,6 +10,7 @@ import type { TabHistory, TabLocation } from '~/lib/shell/navigation'
 import {
   goTab,
   navigateTab,
+  resolveSystemBack,
   syncHistories,
   type TabHistories,
 } from '~/lib/shell/tabNavigation'
@@ -38,6 +39,28 @@ export function createShellNavigation(deps: {
   const { state } = deps
   const histories: TabHistories = reactive(new Map<string, TabHistory>())
   const handlers = createHandlerRegistry()
+
+  /** The Shell's own overlays, here rather than local to `ShellDesktop.vue` so system back can
+   * close them and open the window overview (FR-019). Dropdown menus close themselves. */
+  const overlays = reactive({
+    launcher: false,
+    windows: false,
+    workspaces: false,
+  })
+
+  /** `shell.system.back` (contracts/shell-actions.md §5). */
+  function systemBack(): string {
+    const overlayOpen =
+      overlays.launcher || overlays.windows || overlays.workspaces
+    const decision = resolveSystemBack(state, histories, overlayOpen)
+    if (decision.kind === 'closeOverlay') {
+      overlays.launcher = false
+      overlays.windows = false
+      overlays.workspaces = false
+    } else if (decision.kind === 'back') go(decision.tabId, -1)
+    else if (decision.kind === 'openWindowOverview') overlays.windows = true
+    return decision.kind
+  }
 
   function syncNavigation() {
     const before = new Set(histories.keys())
@@ -119,6 +142,8 @@ export function createShellNavigation(deps: {
 
   return {
     histories,
+    overlays,
+    systemBack,
     syncNavigation,
     historyOf,
     navigate,

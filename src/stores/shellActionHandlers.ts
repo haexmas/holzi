@@ -27,4 +27,7 @@ export function registerShellActionHandlers(shell: ShellStore): void {
       }),
     }),
   )
+  shell.registerGlobalActionHandler('shell.system.back', () => ({
+    outcome: shell.systemBack(),
+  }))
 }

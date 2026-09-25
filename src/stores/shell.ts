@@ -464,6 +464,8 @@ export const useShellStore = defineStore('shell', () => {
     guardResultForTab,
     guardResultsForWorkspace,
     flushAsync,
+    overlays: navigation.overlays,
+    systemBack: navigation.systemBack,
     historyOf: navigation.historyOf,
     navigate: navigation.navigate,
     goTab: navigation.go,

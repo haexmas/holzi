@@ -1,5 +1,6 @@
 import { defineAsyncComponent, type Component } from 'vue'
-import type { RoutePattern } from '~/lib/shell/routeMatch'
+import { getAppDefinition } from '~/lib/shell/apps'
+import { matchRoute, type RoutePattern } from '~/lib/shell/routeMatch'
 
 /**
  * Per-app route tables for tab navigation (spec 020-tab-navigation, T020,
@@ -50,4 +51,17 @@ export function getAppRoutes(
   appId: string,
 ): readonly AppRouteRecord[] | undefined {
   return APP_ROUTES[appId]
+}
+
+/** The i18n key titling a location (spec 020 research R9): the deepest matched route with a
+ * `titleKey`, else the app's own title. */
+export function titleKeyForLocation(
+  appId: string,
+  path: string,
+): string | undefined {
+  const match = matchRoute(getAppRoutes(appId) ?? [], path)
+  const routed = [...(match?.chain ?? [])]
+    .reverse()
+    .find((record) => record.titleKey)?.titleKey
+  return routed ?? getAppDefinition(appId)?.titleKey
 }

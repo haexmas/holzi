@@ -4,8 +4,9 @@
 // location) from a re-activated singleton (push the location onto its history). Histories live
 // next to the store's non-persisted tab runtime, never in the persisted layout (FR-011).
 import type { ShellAppDefinition } from './apps.ts'
-import { findOpenTab, openApp } from './layoutState.ts'
+import { findOpenTab, frontmostWindow, openApp } from './layoutState.ts'
 import {
+  canGoBack,
   createHistory,
   go,
   push,
@@ -124,4 +125,27 @@ export function goTab(
   if (next === history) return false
   histories.set(tabId, next)
   return true
+}
+
+export type SystemBackDecision =
+  | { kind: 'closeOverlay' }
+  | { kind: 'back'; tabId: string }
+  | { kind: 'openWindowOverview' }
+  | { kind: 'none' }
+
+/** What the platform back hook does (`shell.system.back`, FR-019, contracts/shell-actions.md §5):
+ * close an open shell overlay; else go back in the active tab of the top visible window of the
+ * active workspace; else, in compact mode, open the window overview. It never closes a window or
+ * leaves the app. */
+export function resolveSystemBack(
+  state: ShellState,
+  histories: TabHistories,
+  overlayOpen: boolean,
+): SystemBackDecision {
+  if (overlayOpen) return { kind: 'closeOverlay' }
+  const top = frontmostWindow(state, state.activeWorkspaceId, true)
+  const history = top ? histories.get(top.activeTabId) : undefined
+  if (top && history && canGoBack(history))
+    return { kind: 'back', tabId: top.activeTabId }
+  return state.compact ? { kind: 'openWindowOverview' } : { kind: 'none' }
 }

@@ -36,7 +36,7 @@ export const SHELL_NAVIGATION_ACTIONS: readonly ShellActionDefinition[] = [
       default: ['Alt+ArrowLeft'],
       mac: ['Alt+ArrowLeft', 'Meta+BracketLeft'],
     },
-    yieldToTextInput: { mac: true },
+    yieldToTextInput: { mac: ['Alt+ArrowLeft'] },
   },
   {
     id: 'shell.tab.forward',
@@ -53,7 +53,7 @@ export const SHELL_NAVIGATION_ACTIONS: readonly ShellActionDefinition[] = [
       default: ['Alt+ArrowRight'],
       mac: ['Alt+ArrowRight', 'Meta+BracketRight'],
     },
-    yieldToTextInput: { mac: true },
+    yieldToTextInput: { mac: ['Alt+ArrowRight'] },
   },
   {
     id: 'shell.tab.go',
@@ -98,6 +98,27 @@ export const SHELL_NAVIGATION_ACTIONS: readonly ShellActionDefinition[] = [
     scope: 'shell.navigation',
     effect: 'write',
     agentCallable: true,
+    binding: 'global',
+  },
+  {
+    id: 'shell.system.back',
+    titleKey: 'actions.shell.system.back',
+    description:
+      'Platform back (Android back gesture): close a shell overlay, else go back in the top visible tab, else open the window overview in compact mode.',
+    input: { type: 'object', properties: {} },
+    result: {
+      type: 'object',
+      properties: {
+        outcome: {
+          type: 'string',
+          enum: ['closeOverlay', 'back', 'openWindowOverview', 'none'],
+        },
+      },
+    },
+    target: 'none',
+    scope: 'shell.navigation',
+    effect: 'write',
+    agentCallable: false,
     binding: 'global',
   },
 ]

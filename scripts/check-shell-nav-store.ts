@@ -27,6 +27,7 @@ import {
   goTab,
   navigateTab,
   openAppAt,
+  resolveSystemBack,
   syncHistories,
 } from '../src/lib/shell/tabNavigation.ts'
 import { closeTab, switchTab } from '../src/lib/shell/tabs.ts'
@@ -211,6 +212,51 @@ test("switching the active tab exposes that tab's own history (US2 AS2)", () => 
   )
   switchTab(state, windowId, b)
   assert.equal(pathOf(histories, state.windows[0]?.activeTabId ?? null), '/')
+})
+
+// ---------------------------------------------------------------------------
+// System back (shell.system.back, FR-019)
+// ---------------------------------------------------------------------------
+
+test('system back closes an open shell overlay first', () => {
+  const { state, histories } = fresh()
+  const a = openAppAt(state, histories, ALPHA.id, null, APPS).tabId ?? ''
+  navigateTab(histories, a, '/x')
+  assert.deepEqual(resolveSystemBack(state, histories, true), {
+    kind: 'closeOverlay',
+  })
+})
+
+test('system back goes back in the active tab of the top visible window', () => {
+  const { state, histories } = fresh()
+  const a = openAppAt(state, histories, ALPHA.id, null, APPS).tabId ?? ''
+  const b = openAppAt(state, histories, BETA.id, null, APPS).tabId ?? ''
+  navigateTab(histories, a, '/x')
+  navigateTab(histories, b, '/y')
+  assert.deepEqual(resolveSystemBack(state, histories, false), {
+    kind: 'back',
+    tabId: b,
+  })
+  minimizeWindow(state, state.windows[1]?.id ?? '')
+  assert.deepEqual(resolveSystemBack(state, histories, false), {
+    kind: 'back',
+    tabId: a,
+  })
+})
+
+test('system back without entries opens the window overview in compact mode only', () => {
+  const { state, histories } = fresh()
+  openAppAt(state, histories, ALPHA.id, null, APPS)
+  assert.deepEqual(resolveSystemBack(state, histories, false), { kind: 'none' })
+  state.compact = true
+  assert.deepEqual(resolveSystemBack(state, histories, false), {
+    kind: 'openWindowOverview',
+  })
+  const empty = fresh()
+  empty.state.compact = true
+  assert.deepEqual(resolveSystemBack(empty.state, empty.histories, false), {
+    kind: 'openWindowOverview',
+  })
 })
 
 // ---------------------------------------------------------------------------
