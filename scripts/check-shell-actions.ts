@@ -240,6 +240,18 @@ test('tab-bound actions wait for their app; no handler in time → app_unavailab
   assert.equal(!outcome.ok && outcome.code, 'app_unavailable')
 })
 
+test('a structured backend error keeps its reason and travels raw in error', async () => {
+  const raw = { kind: 'InvalidInput', reason: 'bad title' }
+  const { deps } = harness({
+    globalHandler: () => () => {
+      throw raw
+    },
+  })
+  const outcome = await createActionRunner(deps).runAction(GO.id, { steps: 1 })
+  assert.equal(!outcome.ok && outcome.message, 'bad title')
+  assert.equal(!outcome.ok && outcome.error, raw)
+})
+
 test('a throwing handler becomes failed with its message', async () => {
   const outcome = await createActionRunner(harness().deps).runAction(BROKEN.id)
   assert.equal(!outcome.ok && outcome.code, 'failed')

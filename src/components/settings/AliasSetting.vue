@@ -1,7 +1,7 @@
 <script setup lang="ts">
 const { t } = useI18n()
 const { errString } = useErrorString()
-const { updateDeviceAliasAsync } = useDevice()
+const setAlias = useActionOrThrow('settings.device.setAlias')
 
 const props = defineProps<{
   currentAlias: string
@@ -48,7 +48,7 @@ async function onSubmit() {
   savedFlash.value = false
   saveError.value = null
   try {
-    await updateDeviceAliasAsync(trimmed)
+    await setAlias({ alias: trimmed })
     localValue.value = trimmed
     savedFlash.value = true
     emit('saved', trimmed)

@@ -5,13 +5,11 @@ import type { DelegateVendor, Provider } from '~/composables/useProviders'
 
 const { t } = useI18n()
 const { errString } = useErrorString()
-const {
-  listAsync,
-  connectCliDelegateAsync,
-  submitCliDelegateCodeAsync,
-  refreshModelsAsync,
-  onDelegateConnectProgress,
-} = useProviders()
+const { listAsync, onDelegateConnectProgress } = useProviders()
+// Spec 020 FR-024: provider writes run catalog actions (connect/submit are guardrails).
+const refreshModels = useActionOrThrow('settings.delegate.refreshModels')
+const connect = useActionOrThrow('settings.delegate.connectProvider')
+const submitCode = useActionOrThrow('settings.delegate.submitCode')
 
 const VENDORS: DelegateVendor[] = ['claude', 'codex']
 
@@ -110,7 +108,7 @@ async function onRefreshModels(vendor: DelegateVendor) {
   refreshError[vendor] = null
   refreshing[vendor] = true
   try {
-    await refreshModelsAsync(provider.id)
+    await refreshModels({ providerId: provider.id })
     refreshed[vendor] = true
   } catch (e) {
     refreshError[vendor] = errString(e)
@@ -123,10 +121,9 @@ async function onConnect(vendor: DelegateVendor) {
   resetVendorState(vendor)
   connecting[vendor] = true
   try {
-    const result = await connectCliDelegateAsync({
-      vendor,
-      name: vendorLabel(vendor),
-    })
+    const result = (await connect({ vendor, name: vendorLabel(vendor) })) as {
+      status: string
+    }
     if (result.status === 'awaiting_code') {
       awaitingCode[vendor] = true
     } else {
@@ -144,10 +141,7 @@ async function onSubmitCode(vendor: DelegateVendor) {
   if (!codeInput[vendor].trim()) return
   opError[vendor] = null
   try {
-    await submitCliDelegateCodeAsync({
-      code: codeInput[vendor],
-      name: vendorLabel(vendor),
-    })
+    await submitCode({ code: codeInput[vendor], name: vendorLabel(vendor) })
     await reloadAsync()
     awaitingCode[vendor] = false
     successFlash[vendor] = true

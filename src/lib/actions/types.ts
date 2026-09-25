@@ -66,7 +66,15 @@ export type ActionErrorCode =
 
 export type ActionOutcome =
   | { ok: true; result: unknown }
-  | { ok: false; code: ActionErrorCode; message: string; field?: string }
+  | {
+      ok: false
+      code: ActionErrorCode
+      message: string
+      field?: string
+      /** The raw error a handler threw (`failed` only), for in-process callers that parse
+       * structured backend errors; never meant for display or for agents. */
+      error?: unknown
+    }
 
 export type ActionTargetIds = {
   tabId?: string

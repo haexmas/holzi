@@ -50,6 +50,25 @@ function failure(
     : { ok: false, code, message, field }
 }
 
+/** A readable message for any thrown value: `Error.message`, a backend error's `reason` or
+ * `message`, else its JSON. */
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (typeof error === 'string') return error
+  if (typeof error === 'object' && error !== null) {
+    const record = error as Record<string, unknown>
+    for (const key of ['reason', 'message']) {
+      if (typeof record[key] === 'string') return record[key] as string
+    }
+    try {
+      return JSON.stringify(error)
+    } catch {
+      return String(error)
+    }
+  }
+  return String(error)
+}
+
 export function createActionRunner(deps: ActionRunnerDeps) {
   async function runAction(
     id: string,
@@ -120,10 +139,12 @@ export function createActionRunner(deps: ActionRunnerDeps) {
       const result = await handler({ input, caller, target })
       return { ok: true, result: result ?? null }
     } catch (error) {
-      return failure(
-        'failed',
-        error instanceof Error ? error.message : String(error),
-      )
+      return {
+        ok: false,
+        code: 'failed',
+        message: errorMessage(error),
+        error,
+      }
     }
   }
 

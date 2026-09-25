@@ -1,5 +1,6 @@
 import { onBackButtonPress } from '@tauri-apps/api/app'
 import { registerChatActionHandlers } from '~/stores/chatActionHandlers'
+import { registerSettingsActionHandlers } from '~/stores/settingsActionHandlers'
 import { registerShellActionHandlers } from '~/stores/shellActionHandlers'
 import {
   registerShellLayoutHandlers,
@@ -21,6 +22,7 @@ export default defineNuxtPlugin((nuxtApp) => {
   registerShellActionHandlers(shell)
   registerShellLayoutHandlers(shell, t)
   registerChatActionHandlers(shell)
+  registerSettingsActionHandlers(shell)
 
   // ponytail: holzi has no Android target yet, so this hook is untested end to end; the decision
   // logic behind `shell.system.back` is covered by `pnpm check:shell-navigation`.

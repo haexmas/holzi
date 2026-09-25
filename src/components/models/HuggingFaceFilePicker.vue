@@ -9,8 +9,8 @@ import type { InstalledModel } from '~/composables/useModels'
 
 const { t } = useI18n()
 const { detailsAsync, previewInstallAsync } = useHuggingFace()
-const { downloadFromHfAsync, onDownloadProgress, onDownloadComplete } =
-  useModels()
+const { onDownloadProgress, onDownloadComplete } = useModels()
+const downloadFromHf = useActionOrThrow('settings.models.downloadFromHf')
 
 const props = defineProps<{
   repoId: string
@@ -120,7 +120,7 @@ async function installAsync() {
   downloadedBytes.value = 0
   downloadTotalBytes.value = preview.value.sizeBytes
   try {
-    const model = await downloadFromHfAsync({
+    const model = (await downloadFromHf({
       repoId: selectedFile.value.repoId,
       filename: selectedFile.value.filename,
       // Preserve the preview's update semantics: tracked refs remain
@@ -128,9 +128,9 @@ async function installAsync() {
       revision: preview.value.revisionRef ?? preview.value.revision,
       name: preview.value.name,
       tokenizerRepo: effectiveTokenizerRepo.value ?? undefined,
-      contextWindow: preview.value.contextWindow,
+      contextWindow: preview.value.contextWindow ?? undefined,
       forceTooBig: tooBigConfirmed.value,
-    })
+    })) as InstalledModel
     emit('installed', model)
   } catch (e) {
     installErrorKey.value = hfErrorKey(e)

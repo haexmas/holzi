@@ -32,13 +32,13 @@ import type {
 import type { CatalogEntryWithFit } from '~/composables/useCatalog'
 
 const { t } = useI18n()
-const {
-  deleteAsync,
-  downloadFromCatalogAsync,
-  onDownloadProgress,
-  onDownloadComplete,
-} = useModels()
-const { checkUpdatesAsync, installUpdateAsync } = useHuggingFace()
+const { onDownloadProgress, onDownloadComplete } = useModels()
+const checkUpdates = useActionOrThrow('settings.models.checkUpdates')
+const installUpdate = useActionOrThrow('settings.models.installUpdate')
+const downloadCatalog = useActionOrThrow('settings.models.downloadCatalog')
+const deleteModel = useActionOrThrow('settings.models.delete')
+const selectModel = useAction('chat.model.select')
+const decideIntegrity = useAction('chat.modelIntegrity.decide')
 
 // Installed/catalog lists, the active model and the integrity-dialog flow
 // all come straight from the same store the chat page uses — this used
@@ -56,12 +56,8 @@ const {
   integrityActionError,
 } = storeToRefs(modelStore)
 const {
-  loadModel: loadModelAsync,
   refreshInstalledAndCatalog,
   refreshActiveModel,
-  onIntegrityLoadUntrusted: onLoadUntrustedAsync,
-  onIntegrityRepairSource,
-  onIntegrityChooseOther,
   onIntegrityDialogOpenChange,
 } = modelStore
 
@@ -84,7 +80,7 @@ const busyModelId = ref<string | null>(null)
 const deleteErrorKey = ref<string | null>(null)
 // The store's own `lastError` is already a resolved, display-ready
 // string (unlike `listErrorKey`/`deleteErrorKey` below, which are i18n
-// keys rendered through `t()`) — `loadModelAsync` is the store's action,
+// keys rendered through `t()`) — `chat.model.select` runs the store's `loadModel`,
 // so its failure reads the same way the chat page shows it.
 const loadErrorMessage = ref<string | null>(null)
 const downloadStates = ref<Record<string, DownloadProgressEvent>>({})
@@ -124,7 +120,9 @@ async function checkUpdatesNowAsync() {
   updateErrorKey.value = null
   updateErrorDetail.value = null
   try {
-    const statuses = await checkUpdatesAsync()
+    const { statuses } = (await checkUpdates()) as {
+      statuses: HuggingFaceUpdateStatus[]
+    }
     updateStatuses.value = Object.fromEntries(
       statuses.map((s) => [s.modelId, s]),
     )
@@ -141,7 +139,7 @@ async function installUpdateForAsync(modelId: string) {
   updateErrorKey.value = null
   updateErrorDetail.value = null
   try {
-    await installUpdateAsync(modelId)
+    await installUpdate({ modelId })
     await reloadAsync()
     await checkUpdatesNowAsync()
   } catch (e) {
@@ -158,7 +156,7 @@ async function downloadCatalogEntryAsync(entry: CatalogEntryWithFit) {
   listErrorKey.value = null
   listErrorDetail.value = null
   try {
-    await downloadFromCatalogAsync(entry.id)
+    await downloadCatalog({ entryId: entry.id })
     await reloadAsync()
   } catch (e) {
     listErrorKey.value = hfErrorKey(e)
@@ -210,7 +208,7 @@ async function deleteModelAsync(id: string) {
   busyModelId.value = id
   deleteErrorKey.value = null
   try {
-    await deleteAsync(id)
+    await deleteModel({ modelId: id })
     await reloadAsync()
   } catch (e) {
     deleteErrorKey.value = hfErrorKey(e)
@@ -231,7 +229,7 @@ async function loadModelHereAsync(id: string) {
   busyModelId.value = id
   loadErrorMessage.value = null
   try {
-    await loadModelAsync(id)
+    await selectModel({ modelId: id })
     if (!integrityDialog.value && modelStore.lastError) {
       loadErrorMessage.value = modelStore.lastError
     }
@@ -252,13 +250,13 @@ async function loadModelHereAsync(id: string) {
  */
 async function onRepairSourceAsync() {
   const modelId = integrityDialog.value?.modelId
-  await onIntegrityRepairSource()
+  await decideIntegrity({ decision: 'repairSource' })
   if (modelId) clearDownloadState(modelId)
 }
 
 /** Closing the dialog after "pick another model" also returns to the installed tab. */
 function onChooseOther() {
-  onIntegrityChooseOther()
+  void decideIntegrity({ decision: 'chooseOther' })
   activeTab.value = 'installed'
 }
 
@@ -574,7 +572,7 @@ onBeforeUnmount(() => {
       :busy="integrityBusy"
       :action-error="integrityActionError"
       @update:open="onIntegrityDialogOpenChange"
-      @load-untrusted="onLoadUntrustedAsync"
+      @load-untrusted="decideIntegrity({ decision: 'loadUntrusted' })"
       @repair-source="onRepairSourceAsync"
       @choose-other="onChooseOther"
     />

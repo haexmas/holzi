@@ -7,7 +7,8 @@ import {
 
 const { t } = useI18n()
 const { errString } = useErrorString()
-const { getPrefAsync, setPrefAsync } = usePreferences()
+const { getPrefAsync } = usePreferences()
+const setMode = useActionOrThrow('settings.autonomy.setMode')
 
 const props = defineProps<{
   deviceUuid: string
@@ -55,11 +56,7 @@ async function onSave() {
   savedFlash.value = false
   opError.value = null
   try {
-    await setPrefAsync(
-      { kind: 'device', uuid: props.deviceUuid },
-      PREF_KEY,
-      selected.value,
-    )
+    await setMode({ mode: selected.value })
     savedFlash.value = true
   } catch (e) {
     opError.value = errString(e)
