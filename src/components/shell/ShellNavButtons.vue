@@ -100,6 +100,7 @@ function onSelect(steps: number) {
         :class="buttonClass"
         :disabled="!enabled[direction]"
         :aria-label="label[direction]"
+        :data-testid="`nav-${direction}`"
         :title="`${label[direction]} (${shortcut[direction]})`"
         aria-haspopup="menu"
         @pointerdown="onPointerDown($event, direction)"
