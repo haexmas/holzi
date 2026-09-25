@@ -37,7 +37,10 @@ provideShellTab({
     shell.setTabCloseGuard(props.tab.id, guard)
     return () => shell.setTabCloseGuard(props.tab.id, null)
   },
+  // action-exempt: the Shell↔App contract's programmatic API (closeSelf, openApp) — apps call it
+  // from their own logic, not as a user control.
   closeSelf: () => shell.closeTab(props.windowId, props.tab.id),
+  // action-exempt: part of the same programmatic app API as closeSelf above.
   openApp: (appId, at) => {
     shell.openApp(appId, at ?? null)
   },

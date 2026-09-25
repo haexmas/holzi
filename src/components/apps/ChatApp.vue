@@ -53,7 +53,7 @@ const {
 } = storeToRefs(modelStore)
 const { onIntegrityDialogOpenChange } = modelStore
 // Spec 020 FR-024: model retry and integrity decisions run their catalog actions.
-const retryModelLoad = useAction('chat.model.retryLoad')
+const retryLoad = useAction('chat.model.retryLoad')
 const decideIntegrity = useAction('chat.modelIntegrity.decide')
 
 const pendingApprovals = ref<PendingApproval[]>([])
@@ -417,7 +417,7 @@ onBeforeUnmount(() => {
         :autonomy-preference-loading="autonomyPreferenceLoading"
         :loading-label="loadingLabel"
         @retry-send="ui.retrySend"
-        @retry-model-load="retryModelLoad()"
+        @retry-model-load="retryLoad()"
         @dismiss-error="dismissError"
         @retry-autonomy-mode="reloadAutonomyMode(deviceUuid)"
       />

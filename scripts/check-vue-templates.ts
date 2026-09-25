@@ -55,6 +55,31 @@ for (const filename of files) {
   }
 }
 
+// Spec 020-tab-navigation (research R20, SC-007): every state-changing control runs a catalog
+// action (`useAction`/`useActionOrThrow`), so the UI, shortcuts and agents share one code path. A
+// component calling one of these write APIs directly bypasses the catalog. Allowed only with an
+// `action-exempt: <reason>` comment on the same line or up to three lines above.
+const DIRECT_WRITES = [
+  /\bshell\.(openApp|addTab|switchTab|closeTab|closeWindow|focusWindow|minimizeWindow|toggleMaximizeWindow|updateWindowGeometry|createWorkspace|switchWorkspace|deleteWorkspace|moveWindowToWorkspace|navigate|goTab)\(/,
+  /\b(setPrefAsync|clearPrefAsync|updateDeviceAliasAsync)\(/,
+  /\b(downloadFromHfAsync|downloadFromCatalogAsync|deleteAsync|installUpdateAsync|connectCliDelegateAsync|submitCliDelegateCodeAsync|refreshModelsAsync)\(/,
+  /\b(loadModel|updateEffortLevel|downloadCatalogEntry|retryModelLoad|onIntegrityLoadUntrusted|onIntegrityRepairSource|onIntegrityChooseOther)\(/,
+]
+
+for (const filename of files) {
+  if (!filename.startsWith('src/')) continue
+  const lines = readFileSync(filename, 'utf8').split('\n')
+  lines.forEach((line, index) => {
+    if (!DIRECT_WRITES.some((pattern) => pattern.test(line))) return
+    const context = lines.slice(Math.max(0, index - 3), index + 1).join('\n')
+    if (context.includes('action-exempt:')) return
+    failures.push({
+      filename,
+      message: `direct write outside the action catalog (line ${index + 1}): ${line.trim()} — trigger its action via useAction/useActionOrThrow, or mark it action-exempt: <reason>`,
+    })
+  })
+}
+
 function describe(error: unknown) {
   const detail = error as {
     message?: string
@@ -72,11 +97,16 @@ if (failures.length > 0) {
   for (const { filename, message } of failures) {
     console.error(`  ${filename}\n    ${message}`)
   }
-  console.error(
-    '\nA multi-statement inline handler is the usual cause. Move it into a' +
-      '\nnamed function in `<script setup>` — see AliasSetting.vue.',
-  )
+  if (failures.some((f) => !f.message.startsWith('direct write'))) {
+    console.error(
+      '\nA multi-statement inline handler is the usual cause of a template' +
+        '\nerror. Move it into a named function in `<script setup>` — see' +
+        '\nAliasSetting.vue.',
+    )
+  }
   process.exit(1)
 }
 
-console.log(`${files.length} Vue templates compile.`)
+console.log(
+  `${files.length} Vue templates compile; no direct writes outside the action catalog.`,
+)

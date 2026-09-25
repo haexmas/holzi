@@ -98,6 +98,7 @@ const { startMove, startResize } = useWindowPointerGesture(
   }),
   () => minSize.value,
   () => shell.area,
+  // action-exempt: continuous drag/resize gesture; agents use shell.window.setGeometry.
   (geometry) => shell.updateWindowGeometry(props.window.id, geometry),
 )
 

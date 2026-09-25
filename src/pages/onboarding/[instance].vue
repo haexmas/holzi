@@ -72,6 +72,7 @@ async function finalizeAliasAsync() {
   if (!trimmed) {
     throw new Error(t('onboarding.alias.required'))
   }
+  // action-exempt: onboarding runs before the Shell (spec 002), outside the app catalog.
   await updateDeviceAliasAsync(trimmed)
 }
 
@@ -95,9 +96,11 @@ async function completeWithModel(rec: TierRecommendation) {
   downloadingId.value = rec.entry.id
   downloadError.value = null
   try {
+    // action-exempt: onboarding runs before the Shell (spec 002), outside the app catalog.
     const installed = await downloadFromCatalogAsync(rec.entry.id)
     // Set device-scoped default model — the wizard's explicit
     // selection is a device standard (spec 002 §FR-007).
+    // action-exempt: onboarding runs before the Shell (spec 002), outside the app catalog.
     await setPrefAsync(
       { kind: 'device', uuid: info.vaultDeviceUuid },
       'chat.default_model_id',
@@ -122,6 +125,7 @@ async function completeSttWithModel(rec: TierRecommendation<SttCatalogEntry>) {
     const installed = await downloadSttFromCatalogAsync(rec.entry.id)
     // Device-scoped only — no vault-wide variant (data-model.md), the
     // transcription hardware is tied to this device.
+    // action-exempt: onboarding runs before the Shell (spec 002), outside the app catalog.
     await setPrefAsync(
       { kind: 'device', uuid: info.vaultDeviceUuid },
       'voice.stt_model_id',

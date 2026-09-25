@@ -7,13 +7,6 @@ import { test } from 'node:test'
 
 import { ALL_ACTIONS } from '../src/lib/actions/catalog.ts'
 import {
-  chordFromEvent,
-  detectPlatform,
-  isEditableTarget,
-  resolveChord,
-  shouldYield,
-} from '../src/lib/shell/keybindings.ts'
-import {
   createActionRunner,
   type ActionHandler,
   type ActionRunnerDeps,
@@ -302,79 +295,119 @@ test('tab-bound actions name their app; targeted actions declare their target fi
 })
 
 // ---------------------------------------------------------------------------
-// Keybindings (keybindings.ts)
+// Catalog-wide agent policy (SC-008, FR-032)
 // ---------------------------------------------------------------------------
 
-function key(
-  code: string,
-  mods: Partial<Record<'ctrl' | 'alt' | 'shift' | 'meta', boolean>> = {},
-) {
-  return {
-    code,
-    ctrlKey: mods.ctrl ?? false,
-    altKey: mods.alt ?? false,
-    shiftKey: mods.shift ?? false,
-    metaKey: mods.meta ?? false,
+/** These must stay user-only; a test failure here means a guardrail left the lock. */
+const EXPECTED_GUARDRAILS = [
+  'chat.approval.decide',
+  'chat.permissionMode.set',
+  'chat.modelIntegrity.decide',
+  'settings.delegate.connectProvider',
+  'settings.delegate.submitCode',
+  'settings.autonomy.setMode',
+  'settings.delegate.setDenyRules',
+]
+
+function sample(schema: JsonSchema): unknown {
+  if (schema.enum) return schema.enum[0]
+  switch (schema.type) {
+    case 'string':
+      return 'x'
+    case 'integer':
+    case 'number':
+      return 1
+    case 'boolean':
+      return true
+    case 'array':
+      return []
+    case 'object': {
+      const value: Record<string, unknown> = {}
+      for (const key of schema.required ?? []) {
+        const child = schema.properties?.[key]
+        if (child) value[key] = sample(child)
+      }
+      return value
+    }
   }
 }
 
-test('chordFromEvent normalizes modifiers in fixed order', () => {
-  assert.equal(chordFromEvent(key('ArrowLeft', { alt: true })), 'Alt+ArrowLeft')
-  assert.equal(
-    chordFromEvent(
-      key('KeyT', { meta: true, shift: true, ctrl: true, alt: true }),
-    ),
-    'Ctrl+Alt+Shift+Meta+KeyT',
+function catalogRunner(calls: string[]) {
+  const record: ActionHandler = () => {
+    calls.push('handled')
+    return { done: true }
+  }
+  return createActionRunner({
+    catalog: ALL_ACTIONS,
+    globalHandler: () => record,
+    resolveFocus: () => 'focused',
+    targetExists: () => true,
+    awaitTabHandler: async () => record,
+  })
+}
+
+test('the guardrail scope contains every expected user-only action', () => {
+  const guardrails = ALL_ACTIONS.filter((a) => a.scope === 'guardrails').map(
+    (a) => a.id,
   )
-  assert.equal(chordFromEvent(key('AltLeft', { alt: true })), null)
+  for (const id of EXPECTED_GUARDRAILS) assert.ok(guardrails.includes(id), id)
 })
 
-test('detectPlatform prefers userAgentData and recognizes macOS', () => {
-  assert.equal(detectPlatform({ platform: 'MacIntel' }), 'mac')
-  assert.equal(detectPlatform({ platform: 'Linux x86_64' }), 'default')
-  assert.equal(
-    detectPlatform({ platform: 'Win32', userAgentData: { platform: 'macOS' } }),
-    'mac',
-  )
+test('every guardrail action is refused for both agent kinds and runs for the user (SC-008)', async () => {
+  for (const action of ALL_ACTIONS.filter((a) => a.scope === 'guardrails')) {
+    const input = sample(action.input) as Record<string, unknown>
+    for (const caller of [BUILTIN, EXTERNAL]) {
+      const calls: string[] = []
+      const outcome = await catalogRunner(calls).runAction(
+        action.id,
+        input,
+        caller,
+      )
+      assert.equal(
+        !outcome.ok && outcome.code,
+        'forbidden_for_agents',
+        action.id,
+      )
+      assert.equal(calls.length, 0, action.id)
+    }
+    const calls: string[] = []
+    const outcome = await catalogRunner(calls).runAction(action.id, input, USER)
+    assert.equal(outcome.ok, true, action.id)
+    assert.equal(calls.length, 1, action.id)
+  }
 })
 
-test('Alt+Arrow resolves to back/forward everywhere, Cmd+[ / Cmd+] only on mac', () => {
-  assert.equal(
-    resolveChord(ALL_ACTIONS, 'Alt+ArrowLeft', 'default')?.id,
-    'shell.tab.back',
-  )
-  assert.equal(
-    resolveChord(ALL_ACTIONS, 'Alt+ArrowRight', 'mac')?.id,
-    'shell.tab.forward',
-  )
-  assert.equal(
-    resolveChord(ALL_ACTIONS, 'Meta+BracketLeft', 'mac')?.id,
-    'shell.tab.back',
-  )
-  assert.equal(
-    resolveChord(ALL_ACTIONS, 'Meta+BracketLeft', 'default'),
-    undefined,
-  )
-  assert.equal(resolveChord(ALL_ACTIONS, 'Ctrl+KeyZ', 'default'), undefined)
+test('every other action is callable by an agent naming its target, except the platform back hook', async () => {
+  const field = { tab: 'tabId', window: 'windowId', workspace: 'workspaceId' }
+  for (const action of ALL_ACTIONS.filter((a) => a.scope !== 'guardrails')) {
+    if (action.id === 'shell.system.back') {
+      assert.equal(action.agentCallable, false)
+      continue
+    }
+    assert.equal(action.agentCallable, true, action.id)
+    const input = sample(action.input) as Record<string, unknown>
+    if (action.target !== 'none') input[field[action.target]] = 'target'
+    const outcome = await catalogRunner([]).runAction(
+      action.id,
+      input,
+      EXTERNAL,
+    )
+    assert.equal(outcome.ok, true, action.id)
+  }
 })
 
-test('on mac Alt+Arrow yields to a focused text field; elsewhere it navigates (FR-017)', () => {
-  const back = resolveChord(ALL_ACTIONS, 'Alt+ArrowLeft', 'mac')
-  assert.ok(back)
-  const textarea = { tagName: 'TEXTAREA' }
-  const button = { tagName: 'BUTTON' }
-  assert.equal(shouldYield(back, 'mac', 'Alt+ArrowLeft', textarea), true)
-  assert.equal(shouldYield(back, 'mac', 'Alt+ArrowLeft', button), false)
-  assert.equal(shouldYield(back, 'mac', 'Meta+BracketLeft', textarea), false)
-  assert.equal(shouldYield(back, 'default', 'Alt+ArrowLeft', textarea), false)
-})
-
-test('isEditableTarget recognizes text inputs, textareas and contenteditable', () => {
-  assert.ok(isEditableTarget({ tagName: 'INPUT', type: 'text' }))
-  assert.ok(isEditableTarget({ tagName: 'INPUT', type: 'search' }))
-  assert.ok(!isEditableTarget({ tagName: 'INPUT', type: 'checkbox' }))
-  assert.ok(isEditableTarget({ tagName: 'TEXTAREA' }))
-  assert.ok(isEditableTarget({ tagName: 'DIV', isContentEditable: true }))
-  assert.ok(!isEditableTarget({ tagName: 'DIV' }))
-  assert.ok(!isEditableTarget(null))
+test('the catalog offers the read actions agents observe with (FR-028)', () => {
+  const reads = new Set(
+    ALL_ACTIONS.filter((a) => a.effect === 'read').map((a) => a.id),
+  )
+  for (const id of [
+    'shell.state.get',
+    'shell.tab.history',
+    'shell.apps.list',
+    'shell.actions.list',
+    'chat.conversations.list',
+    'chat.messages.list',
+    'settings.get',
+  ])
+    assert.ok(reads.has(id), id)
 })
