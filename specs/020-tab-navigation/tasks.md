@@ -157,8 +157,8 @@ description: 'Task list for spec 020-tab-navigation'
   - Done 2026-09-25: index.vue and the onboarding completion navigate to the workspace with replace: true; pages/workspace/[instance].vue cancels every route leave (onBeforeRouteLeave(() => false)) without interpreting it. The ?open= cleanup is a same-route replace and unaffected. check:vault-lifecycle 12/12.
 - [x] T038 [US8] Disable webview-level history navigation from input devices where the platform allows it, in the Tauri window setup (`src-tauri/src/lib.rs` or the window builder): WebView2 browser accelerator keys off; mouse back/forward navigation off per the T032 findings; document platforms without such a setting as limitations in research.md R17
   - Done 2026-09-25: no Rust change possible: Tauri 2.11.5 does not expose WebView2 browser_accelerator_keys (only wry does) nor a mouse-navigation switch; documented in research.md R17 with the resulting Windows limitation (Alt+← inside a focused iframe may move that iframe's own history). FR-035 still holds via the flat history + non-interpreting leave guard.
-- [ ] T039 [US8] Run quickstart M13, M21 and M22 manually and record the results (including per-platform limitations) in a note on this task
-  - Status 2026-09-25: open — needs a running app. M13/M21 can be automated in the tauri-driver e2e rig (spec 016) by executing `history.back()` and an iframe `pushState` loop in the webview; planned with T060. M22 needs a physical mouse (see T032).
+- [x] T039 [US8] Run quickstart M13, M21 and M22 manually and record the results (including per-platform limitations) in a note on this task
+  - Done 2026-09-25: M13 and M21 automated as e2e scenario scripts/e2e/scenarios/tab-content-isolation.test.ts and passing on Linux/WebKitGTK (webview history.back/go(-5) and an embedded document's 20 pushState + go(-30) + back leave the workspace page, the open chat and the disabled back button untouched; SC-009). M22 (physical mouse over the iframe) stays with T032.
 
 **Checkpoint**: 20 history writes and backs inside an iframe change no tab history (SC-009)
 
@@ -243,6 +243,7 @@ description: 'Task list for spec 020-tab-navigation'
 - [x] T059 [P] Add Ort, Tab-Historie, Aktion, Berechtigungsbereich and Aufrufer to `CONTEXT.md` (note: code says "action", never "command")
   - Done 2026-09-25: Ort/Tab-Historie and Aktion/Berechtigungsbereich/Aufrufer entries after the Shell entry, with the 'not command' note.
 - [ ] T060 Run quickstart §1 (all automated checks) and §2 (M1–M23); record results and platform limitations for the PR
+  - Status 2026-09-25: §1 all green — check:shell-navigation 75/75, check:shell-state 44/44, check:chat-state 49/49, check:vault-lifecycle 12/12, check:vault-passphrase-lifetime 7/7, check:e2e-lib 160/160, check:templates 56 (no direct writes), typecheck, typecheck:scripts, lint, format:check. Full e2e suite (debug build, Xvfb): 7 passed, 1 skipped (relaunch needs a release build) — the first run exposed a real bug (models store created in the startup plugin → vue-i18n error 26 on the workspace page), fixed in 9a6a494. Open: the manual §2 scenarios M1–M20/M22/M23 need an operator in the running app (M13/M21 automated, T039).
 - [ ] T061 Run `/speckit-analyze` on spec/plan/tasks; resolve all CRITICAL/HIGH findings before opening the PR
 
 ---
