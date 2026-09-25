@@ -8,6 +8,7 @@
  * Spec 015-workspace-shell, T030, T050.
  */
 import { computed } from 'vue'
+import { requestCloseWindow } from '~/composables/useShellTab'
 import type { ShellWindow } from '~/lib/shell/types'
 
 const open = defineModel<boolean>('open', { default: false })
@@ -80,7 +81,7 @@ function select(windowId: string) {
             class="shrink-0 rounded text-muted-foreground hover:bg-accent hover:text-foreground"
             :class="shell.compact ? 'p-3.5' : 'p-1.5'"
             :aria-label="t('shell.window.close')"
-            @click="shell.closeWindow(row.win.id)"
+            @click="requestCloseWindow(shell, row.win.id)"
           >
             <Icon name="lucide:x" class="h-3.5 w-3.5" :aria-hidden="true" />
           </button>

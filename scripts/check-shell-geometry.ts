@@ -276,3 +276,64 @@ test('hydrate re-derives a dense stack from the persisted order', () => {
     'the front-most (highest original stack) window is active',
   )
 })
+
+test('hydrate keeps singleton apps unique and selects a visible window in the active workspace', () => {
+  const layout: PersistedLayout = {
+    workspaces: [
+      { id: 'ws-active', position: 0 },
+      { id: 'ws-other', position: 1 },
+    ],
+    windows: [
+      {
+        id: 'w-active-visible',
+        workspaceId: 'ws-active',
+        x: 0,
+        y: 0,
+        width: 400,
+        height: 300,
+        minimized: false,
+        maximized: false,
+        stack: 1,
+        tabs: [{ id: 't-alpha-1', appId: ALPHA.id }],
+        activeTabId: 't-alpha-1',
+      },
+      {
+        id: 'w-active-duplicate',
+        workspaceId: 'ws-active',
+        x: 0,
+        y: 0,
+        width: 400,
+        height: 300,
+        minimized: false,
+        maximized: false,
+        stack: 2,
+        tabs: [{ id: 't-alpha-2', appId: ALPHA.id }],
+        activeTabId: 't-alpha-2',
+      },
+      {
+        id: 'w-other-front',
+        workspaceId: 'ws-other',
+        x: 0,
+        y: 0,
+        width: 400,
+        height: 300,
+        minimized: false,
+        maximized: false,
+        stack: 3,
+        tabs: [{ id: 't-beta', appId: BETA.id }],
+        activeTabId: 't-beta',
+      },
+    ],
+    activeWorkspaceId: 'ws-active',
+  }
+
+  const state = hydrate(layout, APPS, AREA)
+
+  assert.deepEqual(
+    state.windows.flatMap((window) =>
+      window.tabs.map((tab) => `${window.id}:${tab.appId}`),
+    ),
+    ['w-active-visible:test.alpha', 'w-other-front:test.beta'],
+  )
+  assert.equal(state.activeWindowId, 'w-active-visible')
+})

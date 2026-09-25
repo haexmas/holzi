@@ -234,14 +234,21 @@ export function hydrate(
       ? [...layout.workspaces].sort((a, b) => a.position - b.position)
       : [defaultWorkspace]
   const workspaceIds = new Set(workspaces.map((w) => w.id))
+  const singletonAppIds = new Set(
+    apps.filter((app) => !app.multiInstance).map((app) => app.id),
+  )
+  const hydratedSingletonAppIds = new Set<string>()
 
   const windows: ShellWindow[] = []
-  let lastWindow: ShellWindow | null = null
   let stack = 0
   for (const source of [...layout.windows].sort((a, b) => a.stack - b.stack)) {
-    const tabs = source.tabs.filter(
-      (tab) => getAppDefinition(tab.appId, apps) !== undefined,
-    )
+    const tabs = source.tabs.filter((tab) => {
+      if (getAppDefinition(tab.appId, apps) === undefined) return false
+      if (!singletonAppIds.has(tab.appId)) return true
+      if (hydratedSingletonAppIds.has(tab.appId)) return false
+      hydratedSingletonAppIds.add(tab.appId)
+      return true
+    })
     const firstTab = tabs.find(() => true)
     if (!firstTab) continue
     const activeTabId = tabs.some((tab) => tab.id === source.activeTabId)
@@ -265,22 +272,24 @@ export function hydrate(
       stack: stack++,
     }
     windows.push(window)
-    lastWindow = window
   }
 
   const activeWorkspaceId = workspaceIds.has(layout.activeWorkspaceId)
     ? layout.activeWorkspaceId
     : defaultWorkspace.id
 
-  return {
+  const result: ShellState = {
     workspaces,
     windows,
     activeWorkspaceId,
-    activeWindowId: lastWindow?.id ?? null,
+    activeWindowId: null,
     nextStack: stack,
     area,
     compact: area.width <= COMPACT_MAX_WIDTH,
   }
+  result.activeWindowId =
+    frontmostWindow(result, activeWorkspaceId, true)?.id ?? null
+  return result
 }
 
 /** Keeps the Shell's live area in sync with the actual window size (T049), recomputing `compact`

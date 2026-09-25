@@ -7,7 +7,7 @@
  * focus/select, which this component owns since it is DOM-local to a row
  * this component renders.
  */
-import { nextTick, ref, watch } from 'vue'
+import { nextTick, shallowRef, watch, type ComponentPublicInstance } from 'vue'
 import type { Thread } from '~/composables/useChat'
 
 const props = defineProps<{
@@ -42,7 +42,12 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const editingTitleInput = ref<HTMLInputElement | null>(null)
+const editingTitleInput = shallowRef<HTMLInputElement | null>(null)
+function setEditingTitleInput(
+  element: Element | ComponentPublicInstance | null,
+) {
+  editingTitleInput.value = element as HTMLInputElement | null
+}
 watch(
   () => props.editingThreadId,
   (id) => {
@@ -104,7 +109,7 @@ watch(
         <template v-if="editingThreadId === thread.id">
           <div class="min-w-0 flex-1 px-2 py-1.5">
             <input
-              ref="editingTitleInput"
+              :ref="setEditingTitleInput"
               :value="draftTitle"
               class="w-full rounded border border-border bg-background px-2 py-1 text-sm outline-none focus:border-foreground/50"
               :aria-label="t('chat.threads.editTitle')"

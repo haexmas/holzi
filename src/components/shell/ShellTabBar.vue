@@ -63,6 +63,7 @@ function select(tabId: string) {
  * ends, Enter/Space activates (FR-038) — this element is a `role="tab"` `<div>`, not a native
  * `<button>`, so activation keys need explicit handling. */
 function onKeydown(event: KeyboardEvent, index: number) {
+  if (event.target !== event.currentTarget) return
   const count = props.tabs.length
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault()

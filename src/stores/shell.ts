@@ -257,7 +257,9 @@ export const useShellStore = defineStore('shell', () => {
   function addTab(windowId: string, appId: string) {
     addTabReducer(state, windowId, appId, SHELL_APPS)
     syncTabRuntime()
-    if (state.activeWindowId) persistWindowNow(state.activeWindowId)
+    persistWindowNow(windowId)
+    if (state.activeWindowId && state.activeWindowId !== windowId)
+      persistWindowNow(state.activeWindowId)
   }
 
   function switchTab(windowId: string, tabId: string) {

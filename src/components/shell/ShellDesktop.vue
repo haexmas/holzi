@@ -28,14 +28,16 @@ const workspaceOverviewOpen = ref(false)
 
 <template>
   <div class="relative h-full min-h-0 w-full overflow-hidden bg-muted/10">
-    <ShellWindow
-      v-for="win in shell.windowsInActiveWorkspace"
-      :key="win.id"
-      :window="win"
-      :active="win.id === shell.activeWindowId"
-    />
+    <div class="absolute inset-0 isolate">
+      <ShellWindow
+        v-for="win in shell.windowsInActiveWorkspace"
+        :key="win.id"
+        :window="win"
+        :active="win.id === shell.activeWindowId"
+      />
+    </div>
 
-    <div class="absolute bottom-4 right-4 flex flex-col gap-2">
+    <div class="absolute bottom-4 right-4 z-10 flex flex-col gap-2">
       <button
         type="button"
         class="flex h-12 w-12 items-center justify-center rounded-full bg-background text-foreground shadow-lg ring-1 ring-border hover:bg-accent"

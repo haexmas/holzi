@@ -53,9 +53,9 @@ function describe(reason: ConfirmationReason): string {
         <ShadcnAlertDialogCancel @click="resolvePending(false)">
           {{ t('shell.close.cancel') }}
         </ShadcnAlertDialogCancel>
-        <ShadcnAlertDialogAction @click="resolvePending(true)">
+        <UiButton @click="resolvePending(true)">
           {{ t('shell.close.confirm') }}
-        </ShadcnAlertDialogAction>
+        </UiButton>
       </ShadcnAlertDialogFooter>
     </ShadcnAlertDialogContent>
   </ShadcnAlertDialog>
