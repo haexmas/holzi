@@ -34,7 +34,7 @@ Navigation-Store) wird dabei bewusst nicht 1:1 übernommen.
 - Die geplanten Folge-Specs **Tabs per Drag & Drop** und **Native Fenster**
   setzen voraus, dass die Historie mit dem Tab mitwandert (FR-010).
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Zurück und Vor innerhalb eines Tabs (Priority: P1)
 
@@ -280,7 +280,7 @@ aus dem Verlauf öffnen, Zurück: die zuvor aktive Unterhaltung ist wieder offen
   Verschieben in einen anderen Arbeitsbereich, später per Drag & Drop oder in
   ein natives Fenster): Ort und Historie ziehen mit.
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 ### Functional Requirements
 
@@ -419,7 +419,7 @@ aus dem Verlauf öffnen, Zurück: die zuvor aktive Unterhaltung ist wieder offen
 - **Befehl (Command)**: Eine benannte Shell-Aktion mit Kennung, lokalisiertem
   Namen, Wirkungsziel und optionaler Standard-Tastenbelegung je Plattform.
 
-## Success Criteria *(mandatory)*
+## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
 
