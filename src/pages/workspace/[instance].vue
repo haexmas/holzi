@@ -12,7 +12,7 @@
  * workspace, and opening a window into that would be immediately discarded
  * once the real persisted layout replaces `state` right after.
  *
- * Consumes `?open=<appId>` once (contracts/shell-app-contract.md §3, T024's
+ * Consumes `?open=<appId>` (and spec 020's optional `&at=<path>`) once (contracts/shell-app-contract.md §3, T024's
  * legacy-route redirects land here with it set) and removes it via
  * `router.replace` so it does not re-fire and open a second tab on a
  * later navigation that happens to keep it in the URL.
@@ -55,8 +55,13 @@ onMounted(async () => {
 
   const open = route.query.open
   if (typeof open === 'string' && open.length > 0) {
-    shell.openApp(open)
-    const { open: _discarded, ...rest } = route.query
+    // Spec 020 FR-012/FR-013: `&at=<path>` opens the app at a location.
+    const at = route.query.at
+    void shell.runAction('shell.app.open', {
+      appId: open,
+      ...(typeof at === 'string' && at.length > 0 ? { at } : {}),
+    })
+    const { open: _open, at: _at, ...rest } = route.query
     void router.replace({ query: rest })
   }
 })

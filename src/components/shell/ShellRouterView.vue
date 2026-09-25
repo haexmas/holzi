@@ -7,10 +7,11 @@
  * appear. The component at a depth only changes when the matched record does,
  * so a root component stays mounted while its children change.
  *
- * At the root, an unknown location falls back to the app's start `/`
- * (FR-014).
+ * At the root, an unknown location falls back to the app's start `/` with an
+ * unobtrusive hint (FR-014).
  */
 import { computed, inject, provide, watch } from 'vue'
+import { toast } from 'vue-sonner'
 import { getAppRoutes } from '~/components/shell/appRoutes'
 import { useShellTab } from '~/composables/useShellTab'
 import { ROUTER_DEPTH_KEY, useTabRouter } from '~/composables/useTabRouter'
@@ -21,6 +22,7 @@ provide(ROUTER_DEPTH_KEY, depth + 1)
 
 const tab = useShellTab()
 const router = useTabRouter()
+const { t } = useI18n()
 
 const match = computed(() =>
   matchRoute(getAppRoutes(tab.appId) ?? [], router.route.path),
@@ -31,7 +33,9 @@ if (depth === 0) {
   watch(
     () => [match.value, router.route.path] as const,
     ([matched, path]) => {
-      if (!matched && path !== '/') router.replace('/')
+      if (matched || path === '/') return
+      router.replace('/')
+      toast(t('shell.nav.unknownLocation'))
     },
     { immediate: true },
   )

@@ -206,6 +206,8 @@ export interface PageGlobals {
   instancesStore?: object
   navigateTo?: (to: string) => unknown
   tabRouter?: RecordingTabRouter
+  /** Every `useAction(id)(input)` call the page makes (spec 020). */
+  actionLog?: { id: string; input: Record<string, unknown> }[]
 }
 
 /** A tab router double for the chat page (spec 020-tab-navigation): a real linear history of paths,
@@ -375,6 +377,7 @@ export function createChatState(
     'useShellTab',
     'useTabRouter',
     'useChatNavigation',
+    'useAction',
     'useModelsStore',
     'storeToRefs',
     'navigateTo',
@@ -410,6 +413,11 @@ export function createChatState(
     }),
     () => pageGlobals.tabRouter ?? createRecordingTabRouter(),
     req('~/composables/useChatNavigation').useChatNavigation,
+    (id: string) =>
+      async (input: Record<string, unknown> = {}) => {
+        pageGlobals.actionLog?.push({ id, input })
+        return { ok: true, result: null }
+      },
     () => modelStore,
     pinia.storeToRefs,
     pageGlobals.navigateTo ?? (() => {}),

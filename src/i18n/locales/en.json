@@ -119,7 +119,8 @@
       "back": "Back",
       "forward": "Forward",
       "backList": "Earlier views",
-      "forwardList": "Later views"
+      "forwardList": "Later views",
+      "unknownLocation": "That view no longer exists. The app opened at its start."
     },
     "chat": {
       "thread": "Conversation"

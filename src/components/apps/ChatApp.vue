@@ -27,6 +27,7 @@ import type { PendingApproval } from '~/components/chat/PermissionPrompt.vue'
 const instancesStore = useInstancesStore()
 const shell = useShellStore()
 const shellTab = useShellTab()
+const openApp = useAction('shell.app.open')
 const { t } = useI18n()
 const chat = useChat()
 const { closeAsync } = useInstance()
@@ -408,7 +409,7 @@ onBeforeUnmount(() => {
       @close-delete-dialog="closeDeleteDialog"
       @confirm-delete="confirmDelete"
       @lock="lock"
-      @open-settings="shell.openApp('system.settings')"
+      @open-settings="openApp({ appId: 'system.settings' })"
     />
 
     <section class="min-w-0 flex-1 flex flex-col">
@@ -419,7 +420,7 @@ onBeforeUnmount(() => {
         :busy="busy"
         @lock="lock"
         @new-chat="startNewConversation"
-        @open-settings="shell.openApp('system.settings')"
+        @open-settings="openApp({ appId: 'system.settings' })"
       />
 
       <ChatStatusBanners

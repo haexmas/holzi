@@ -122,3 +122,70 @@ export const SHELL_NAVIGATION_ACTIONS: readonly ShellActionDefinition[] = [
     binding: 'global',
   },
 ]
+
+const APP_ID: JsonSchema = {
+  type: 'string',
+  description:
+    "App id, e.g. 'system.chat', 'system.settings' (see shell.apps.list).",
+}
+const AT: JsonSchema = {
+  type: 'string',
+  description: "Optional app-relative start location, e.g. '/thread/<id>'.",
+}
+const OPENED: JsonSchema = {
+  type: 'object',
+  properties: {
+    tabId: { type: 'string', description: 'The tab that shows the app.' },
+    created: {
+      type: 'boolean',
+      description:
+        'false when an already open single-instance app was activated instead.',
+    },
+  },
+}
+
+/** Opening apps and tabs at a location (FR-012). */
+export const SHELL_OPEN_ACTIONS: readonly ShellActionDefinition[] = [
+  {
+    id: 'shell.app.open',
+    titleKey: 'actions.shell.app.open',
+    description:
+      'Open an app in a new window, optionally at a location. A single-instance app that is already open is activated and navigated there instead.',
+    input: {
+      type: 'object',
+      properties: { appId: APP_ID, at: AT },
+      required: ['appId'],
+    },
+    result: OPENED,
+    target: 'none',
+    scope: 'shell.navigation',
+    effect: 'write',
+    agentCallable: true,
+    binding: 'global',
+  },
+  {
+    id: 'shell.tab.new',
+    titleKey: 'actions.shell.tab.new',
+    description:
+      'Open an app as a new tab in a window, optionally at a location. A single-instance app that is already open is activated instead.',
+    input: {
+      type: 'object',
+      properties: {
+        windowId: {
+          type: 'string',
+          description:
+            'Window to add the tab to. Required for agents; users default to the focused window.',
+        },
+        appId: APP_ID,
+        at: AT,
+      },
+      required: ['appId'],
+    },
+    result: OPENED,
+    target: 'window',
+    scope: 'shell.layout',
+    effect: 'write',
+    agentCallable: true,
+    binding: 'global',
+  },
+]

@@ -119,7 +119,8 @@
       "back": "Zurück",
       "forward": "Vor",
       "backList": "Frühere Ansichten",
-      "forwardList": "Spätere Ansichten"
+      "forwardList": "Spätere Ansichten",
+      "unknownLocation": "Diese Ansicht gibt es nicht mehr. Die App startet am Anfang."
     },
     "chat": {
       "thread": "Unterhaltung"

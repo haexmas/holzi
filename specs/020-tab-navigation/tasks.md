@@ -170,11 +170,16 @@ description: 'Task list for spec 020-tab-navigation'
 
 **Independent Test**: quickstart M14–M15; singleton-push tests
 
-- [ ] T040 [P] [US4] Add tests to `scripts/check-shell-navigation.ts`: `shell.app.open` with `at` on a closed app starts a single-entry history at `at`; on an open singleton it activates the tab (015 FR-016) and pushes `at`; the same location adds no entry (US4 AS3)
-- [ ] T041 [US4] Add `shell.app.open` (`appId`, `at?`; target `none`, scope `shell.navigation`) and `shell.tab.new` (`appId`, `at?`; target `window`, scope `shell.layout`) to `src/lib/actions/shellActions.ts`, delegating to the store's `openApp`/`addTab`
-- [ ] T042 [US4] Accept `&at=<path>` next to `?open=` in `src/pages/workspace/[instance].vue` (call `shell.app.open`, then strip both via `router.replace`) and keep the legacy redirects in `src/pages/{chat,settings,federation}/[instance].vue` working (FR-013)
-- [ ] T043 [US4] Make the root `ShellRouterView` handle an unknown location: `replace('/')` and show the `shell.nav.unknownLocation` toast (haex-ui toast) (FR-014)
-- [ ] T044 [US4] Route the chat header's settings button (`src/components/chat/ChatHeader.vue` / `ChatApp.vue`) through `shell.app.open` with `appId: 'system.settings'`
+- [x] T040 [P] [US4] Add tests to `scripts/check-shell-navigation.ts`: `shell.app.open` with `at` on a closed app starts a single-entry history at `at`; on an open singleton it activates the tab (015 FR-016) and pushes `at`; the same location adds no entry (US4 AS3)
+  - Done 2026-09-25: covered by the T016 tests in check-shell-nav-store.ts (closed app → single entry at 'at'; open singleton → activated + pushed; same location → no entry).
+- [x] T041 [US4] Add `shell.app.open` (`appId`, `at?`; target `none`, scope `shell.navigation`) and `shell.tab.new` (`appId`, `at?`; target `window`, scope `shell.layout`) to `src/lib/actions/shellActions.ts`, delegating to the store's `openApp`/`addTab`
+  - Done 2026-09-25: SHELL_OPEN_ACTIONS in shellActions.ts; handlers reject unknown app ids with 'unknown app <id>' (openApp itself ignores them silently) and report { tabId, created }.
+- [x] T042 [US4] Accept `&at=<path>` next to `?open=` in `src/pages/workspace/[instance].vue` (call `shell.app.open`, then strip both via `router.replace`) and keep the legacy redirects in `src/pages/{chat,settings,federation}/[instance].vue` working (FR-013)
+  - Done 2026-09-25: ?open= now runs shell.app.open with the optional &at=; both parameters are stripped with router.replace. Legacy redirect pages unchanged.
+- [x] T043 [US4] Make the root `ShellRouterView` handle an unknown location: `replace('/')` and show the `shell.nav.unknownLocation` toast (haex-ui toast) (FR-014)
+  - Done 2026-09-25: ShellRouterView root: replace('/') + vue-sonner toast shell.nav.unknownLocation (the app already mounts ShadcnSonnerToaster).
+- [x] T044 [US4] Route the chat header's settings button (`src/components/chat/ChatHeader.vue` / `ChatApp.vue`) through `shell.app.open` with `appId: 'system.settings'`
+  - Done 2026-09-25: both open-settings bindings in ChatApp.vue call useAction('shell.app.open'); the chat harness injects a recording useAction (pageGlobals.actionLog). ChatApp.vue 498 lines; check:chat-state 45/45, check:vault-lifecycle 12/12.
 
 ---
 
