@@ -196,3 +196,31 @@ export function forwardList(history: TabHistory): HistoryListItem[] {
   }
   return items
 }
+
+/** The location with `patch` merged into its query; `null` removes a key (`setQuery`, FR-005). */
+export function withQuery(
+  location: TabLocation,
+  patch: Record<string, string | null>,
+): TabLocation {
+  const merged: Record<string, string | null> = { ...location.query, ...patch }
+  const query = Object.fromEntries(
+    Object.entries(merged).filter(
+      (entry): entry is [string, string] => entry[1] !== null,
+    ),
+  )
+  return { path: location.path, query }
+}
+
+/** Whether a link to `target` marks the current path as active; with `prefix`, any location below
+ * `target` counts too — how a sidebar highlights the category of the current view (US1 AS7). */
+export function isLocationActive(
+  currentPath: string,
+  target: string,
+  prefix = false,
+): boolean {
+  const targetPath = parseLocation(target).path
+  const current = normalizePath(currentPath)
+  if (current === targetPath) return true
+  if (!prefix) return false
+  return targetPath === '/' || current.startsWith(`${targetPath}/`)
+}

@@ -11,7 +11,7 @@ import { computed } from 'vue'
 import { useAction } from '~/composables/useAction'
 import { useShellTab } from '~/composables/useShellTab'
 import { useTabRouter } from '~/composables/useTabRouter'
-import { parseLocation } from '~/lib/shell/navigation'
+import { isLocationActive } from '~/lib/shell/navigation'
 
 const props = withDefaults(
   defineProps<{ to: string; replace?: boolean; prefix?: boolean }>(),
@@ -22,12 +22,9 @@ const tab = useShellTab()
 const router = useTabRouter()
 const navigate = useAction('shell.tab.navigate')
 
-const active = computed(() => {
-  const target = parseLocation(props.to).path
-  const current = router.route.path
-  if (current === target) return true
-  return props.prefix && current.startsWith(target === '/' ? '/' : `${target}/`)
-})
+const active = computed(() =>
+  isLocationActive(router.route.path, props.to, props.prefix),
+)
 
 function onClick() {
   void navigate({ tabId: tab.tabId, to: props.to, replace: props.replace })

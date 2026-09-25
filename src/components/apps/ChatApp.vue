@@ -213,14 +213,6 @@ const activeMessages = computed<Message[]>(() => {
   return messagesByThread.value[activeThreadId.value] ?? []
 })
 
-const chatTitle = computed(
-  () =>
-    (activeThreadId.value &&
-      threads.value.find((thread) => thread.id === activeThreadId.value)
-        ?.title) ||
-    t('chat.newChat'),
-)
-
 // Only the message area falls back to the catalog-download state, and only when no model is
 // installed/configured anywhere (spec 002 §FR-014 covers picking among models that DO exist).
 const showModelSelection = computed(() => noModelsInstalled.value)
@@ -242,13 +234,6 @@ async function lock() {
   await closeAsync().catch(() => {})
 }
 
-function setReasoningExpanded(messageId: string, expanded: boolean) {
-  const next = new Set(expandedReasoning.value)
-  if (expanded) next.add(messageId)
-  else next.delete(messageId)
-  expandedReasoning.value = next
-}
-
 /** Whether the active model resolves to a `cli_delegate` provider — the
  * same provider lookup `MessageList.vue`'s `delegateAnsweredByLabel` does
  * (spec 009-autonomous-delegate-mode: the autonomy control only makes
@@ -266,6 +251,7 @@ const {
   send,
   abort,
   newChat,
+  setReasoningExpanded,
   onVoiceTranscript,
   activeAgentCount,
   lastAgentBatchSize,
@@ -300,6 +286,18 @@ const {
   attachments,
   pendingApprovals,
   pendingApprovalsByThread,
+)
+
+// Spec 020: conversations as tab history entries (`/`, `/thread/<id>`).
+const { chatTitle, openConversation, startNewConversation } = useChatNavigation(
+  {
+    router: useTabRouter(),
+    activeThreadId,
+    threads,
+    newChatLabel: () => t('chat.newChat'),
+    selectThread,
+    newChat,
+  },
 )
 
 async function respondToApproval(
@@ -401,8 +399,8 @@ onBeforeUnmount(() => {
       :history-duration-label="historyDurationLabel"
       :opening-time-label="openingTimeLabel"
       @update:draft-title="draftTitle = $event"
-      @new-chat="newChat"
-      @select-thread="selectThread"
+      @new-chat="startNewConversation"
+      @select-thread="openConversation"
       @start-editing="startEditing"
       @save-title="saveThreadTitle"
       @cancel-editing="cancelEditing"
@@ -420,7 +418,7 @@ onBeforeUnmount(() => {
         :model-name="activeModel?.name || t('chat.model.notLoaded')"
         :busy="busy"
         @lock="lock"
-        @new-chat="newChat"
+        @new-chat="startNewConversation"
         @open-settings="shell.openApp('system.settings')"
       />
 

@@ -114,6 +114,13 @@
       "scrollRight": "Tabs nach rechts scrollen",
       "alreadyOpen": "Bereits geöffnet",
       "listMenu": "Alle Tabs"
+    },
+    "nav": {
+      "back": "Zurück",
+      "forward": "Vor"
+    },
+    "chat": {
+      "thread": "Unterhaltung"
     }
   },
   "chat": {

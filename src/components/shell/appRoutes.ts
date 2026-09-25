@@ -28,7 +28,17 @@ const FederationApp = defineAsyncComponent(
 )
 
 const APP_ROUTES: Record<string, readonly AppRouteRecord[]> = {
-  'system.chat': [{ path: '/', component: ChatApp }],
+  // Chat (research R10): one mounted root; children only carry the location.
+  'system.chat': [
+    {
+      path: '/',
+      component: ChatApp,
+      children: [
+        { path: '' },
+        { path: 'thread/:id', titleKey: 'shell.chat.thread' },
+      ],
+    },
+  ],
   // An app without its own routes has exactly the start location `/`.
   'system.settings': [{ path: '/', component: SettingsApp }],
   'system.federation': [{ path: '/', component: FederationApp }],

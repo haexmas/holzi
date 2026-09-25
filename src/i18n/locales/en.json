@@ -114,6 +114,13 @@
       "scrollRight": "Scroll tabs right",
       "alreadyOpen": "Already open",
       "listMenu": "All tabs"
+    },
+    "nav": {
+      "back": "Back",
+      "forward": "Forward"
+    },
+    "chat": {
+      "thread": "Conversation"
     }
   },
   "chat": {

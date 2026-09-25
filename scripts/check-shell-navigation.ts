@@ -19,6 +19,7 @@ import {
   forwardList,
   go,
   HISTORY_LIST_LIMIT,
+  isLocationActive,
   locationsEqual,
   MAX_HISTORY_ENTRIES,
   parseLocation,
@@ -26,6 +27,7 @@ import {
   removeEntry,
   replace,
   type TabHistory,
+  withQuery,
 } from '../src/lib/shell/navigation.ts'
 import { matchRoute, type RoutePattern } from '../src/lib/shell/routeMatch.ts'
 
@@ -226,4 +228,37 @@ test('an app without routes matches only `/`', () => {
   const implicit: readonly RoutePattern[] = [{ path: '/' }]
   assert.deepEqual(matchRoute(implicit, '/')?.chain.length, 1)
   assert.equal(matchRoute(implicit, '/x'), null)
+})
+
+// ---------------------------------------------------------------------------
+// In-tab helpers used by useTabRouter/ShellLink (US1 AS5, AS7)
+// ---------------------------------------------------------------------------
+
+test('setQuery-style replace keeps the history length and back returns to the previous view', () => {
+  let history = push(createHistory('/'), '/models')
+  const current = currentLocation(history)
+  history = replace(history, withQuery(current, { sort: 'size' }))
+  history = replace(
+    history,
+    withQuery(currentLocation(history), { q: 'llama' }),
+  )
+  assert.equal(history.entries.length, 2)
+  assert.deepEqual(currentLocation(history).query, { sort: 'size', q: 'llama' })
+  assert.equal(currentLocation(go(history, -1)).path, '/')
+})
+
+test('withQuery removes keys set to null', () => {
+  const location = parseLocation('/x?a=1&b=2')
+  assert.deepEqual(withQuery(location, { a: null, c: '3' }).query, {
+    b: '2',
+    c: '3',
+  })
+})
+
+test('a prefix link marks nested locations active, a plain link only its own', () => {
+  assert.ok(isLocationActive('/models/hf/x', '/models', true))
+  assert.ok(!isLocationActive('/models/hf/x', '/models'))
+  assert.ok(isLocationActive('/models/', '/models'))
+  assert.ok(!isLocationActive('/modelsx', '/models', true))
+  assert.ok(isLocationActive('/anything', '/', true))
 })

@@ -6,6 +6,7 @@ import {
   canGoForward,
   currentLocation,
   parseLocation,
+  withQuery,
   type TabLocation,
 } from '~/lib/shell/navigation'
 import { matchRoute } from '~/lib/shell/routeMatch'
@@ -82,18 +83,9 @@ export function useTabRouter(): TabRouter {
     patch: Record<string, string | null>,
     options: { push?: boolean } = {},
   ) {
-    const merged: Record<string, string | null> = {
-      ...route.value.query,
-      ...patch,
-    }
-    const query = Object.fromEntries(
-      Object.entries(merged).filter(
-        (entry): entry is [string, string] => entry[1] !== null,
-      ),
-    )
     shell.navigate(
       tabId,
-      { path: route.value.path, query },
+      withQuery({ path: route.value.path, query: route.value.query }, patch),
       { replace: !options.push },
     )
   }

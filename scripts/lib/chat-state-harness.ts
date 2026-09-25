@@ -22,7 +22,7 @@ import { createRequire } from 'node:module'
 import { dirname, resolve as resolvePath } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
-import { nextTick } from 'vue'
+import { nextTick, reactive } from 'vue'
 
 /** Same shape the page's own `useI18n()` gets — see the bare-globals list below. */
 const useI18nDouble = () => ({ t: (key: string) => key })
@@ -205,6 +205,59 @@ function storePath(name: string): string {
 export interface PageGlobals {
   instancesStore?: object
   navigateTo?: (to: string) => unknown
+  tabRouter?: RecordingTabRouter
+}
+
+/** A tab router double for the chat page (spec 020-tab-navigation): a real linear history of paths,
+ * reactive like the Shell's, with every call recorded in `log` (`push /x`, `replace /y`, `back`). */
+export type RecordingTabRouter = ReturnType<typeof createRecordingTabRouter>
+
+export function createRecordingTabRouter() {
+  const entries = ['/']
+  let index = 0
+  const state = reactive({
+    route: {
+      path: '/',
+      query: {} as Record<string, string>,
+      params: {} as Record<string, string>,
+      matched: [] as { path: string }[],
+    },
+    canGoBack: false,
+    canGoForward: false,
+    log: [] as string[],
+    entries,
+  })
+  function sync() {
+    state.route.path = entries[index] ?? '/'
+    state.canGoBack = index > 0
+    state.canGoForward = index < entries.length - 1
+  }
+  return Object.assign(state, {
+    push(to: string) {
+      state.log.push(`push ${to}`)
+      if (to === entries[index]) return
+      entries.splice(index + 1)
+      entries.push(to)
+      index = entries.length - 1
+      sync()
+    },
+    replace(to: string) {
+      state.log.push(`replace ${to}`)
+      entries[index] = to
+      sync()
+    },
+    setQuery() {},
+    back() {
+      state.log.push('back')
+      if (index > 0) index -= 1
+      sync()
+    },
+    forward() {
+      state.log.push('forward')
+      if (index < entries.length - 1) index += 1
+      sync()
+    },
+  })
 }
 
 /** Boots the real chat page dependencies inside an isolated test sandbox. */
@@ -320,6 +373,8 @@ export function createChatState(
     'useInstancesStore',
     'useShellStore',
     'useShellTab',
+    'useTabRouter',
+    'useChatNavigation',
     'useModelsStore',
     'storeToRefs',
     'navigateTo',
@@ -353,6 +408,8 @@ export function createChatState(
       registerCloseGuard: () => () => {},
       closeSelf: () => {},
     }),
+    () => pageGlobals.tabRouter ?? createRecordingTabRouter(),
+    req('~/composables/useChatNavigation').useChatNavigation,
     () => modelStore,
     pinia.storeToRefs,
     pageGlobals.navigateTo ?? (() => {}),

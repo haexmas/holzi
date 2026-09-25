@@ -142,6 +142,7 @@ const RESIZE_HANDLES: { direction: ResizeDirection; class: string }[] = [
       @pointerdown="onTitleBarPointerDown"
       @dblclick="onTitleBarDoubleClick"
     >
+      <ShellNavButtons :tab-id="window.activeTabId" :compact="shell.compact" />
       <ShellTabBar
         :window-id="window.id"
         :tabs="window.tabs"
