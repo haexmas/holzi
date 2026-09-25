@@ -181,4 +181,40 @@ describe('startReply', () => {
       await provider.close()
     }
   })
+
+  it('retries send_message while a model operation is still finishing', async () => {
+    let attempts = 0
+    driver.onExecute((kind, script) => {
+      if (
+        kind === 'async' &&
+        script.includes('send_message') &&
+        attempts++ === 0
+      ) {
+        return {
+          value: {
+            ok: false,
+            error: {
+              reason: 'a chat or vault operation is still in progress',
+              kind: 'InvalidInput',
+            },
+          },
+        }
+      }
+      return { value: { ok: true, data: null } }
+    })
+    const provider = await startProvider({ kind: 'stream-forever' })
+    const controller = new AbortController()
+    try {
+      fetch(`${provider.baseUrl}/v1/messages`, {
+        method: 'POST',
+        body: '{}',
+        signal: controller.signal,
+      }).catch(() => {})
+      await startReply(instance, provider, 'hello')
+      assert.equal(attempts, 2)
+    } finally {
+      controller.abort()
+      await provider.close()
+    }
+  })
 })

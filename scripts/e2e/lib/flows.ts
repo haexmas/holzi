@@ -34,6 +34,28 @@ function describe(value: unknown): string {
   }
 }
 
+function isOperationBusy(result: InvokeResult): boolean {
+  if ('ended' in result || result.ok) return false
+  if (!('error' in result)) return false
+  return describe(result.error).includes(
+    'a chat or vault operation is still in progress',
+  )
+}
+
+async function invokeAfterBusyOperation(
+  instance: FlowInstance,
+  command: string,
+  args: unknown,
+  deadlineMs = 5000,
+): Promise<InvokeResult> {
+  const end = Date.now() + deadlineMs
+  for (;;) {
+    const result = await instance.invoke(command, args)
+    if (!isOperationBusy(result) || Date.now() >= end) return result
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+}
+
 /** The data of a successful `invoke`, or a clear error naming the command that failed or never answered. */
 function unwrap<T>(action: string, result: InvokeResult): T {
   if ('ended' in result) {
@@ -141,7 +163,7 @@ export async function startReply(
 ): Promise<void> {
   unwrap(
     'send_message',
-    await instance.invoke('send_message', {
+    await invokeAfterBusyOperation(instance, 'send_message', {
       args: { content: text, idempotencyKey: randomUUID() },
     }),
   )
