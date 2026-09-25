@@ -25,7 +25,7 @@ scenario('lock-twice', {}, async (ctx) => {
     'an alert was already showing just before the press',
   )
 
-  await instance.press('lock-instance-sidebar', { times: 2 })
+  await instance.press('lock-instance-header', { times: 2 })
 
   const samples = await instance.sampleUntilEnd<boolean>(ALERT_SCRIPT, 50)
   assert.ok(

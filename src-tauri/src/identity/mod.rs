@@ -11,6 +11,8 @@
 pub mod bootstrap;
 pub mod installation;
 pub mod migrations;
+#[cfg(test)]
+mod migrations_tests;
 
 pub use bootstrap::HolziBootstrap;
 pub use installation::{installation_id_path, read_or_mint_installation_uuid};

@@ -31,9 +31,11 @@ export interface FakeDriver {
   onDisplayed(displayed: (id: string) => boolean): void
   /**
    * Whether a click on the given element succeeds, drops the connection (gone-session style), or
-   * answers with a stale element reference (the element was found, but the DOM moved on since).
+   * answers with an element reference error after the DOM moved on since it was found.
    */
-  onClick(click: (id: string) => 'ok' | 'drop' | 'stale'): void
+  onClick(
+    click: (id: string) => 'ok' | 'drop' | 'stale' | 'not-interactable',
+  ): void
   /** Whether a `POST /session` (new session) succeeds, drops the connection, or is rejected. */
   onNewSession(newSession: () => 'ok' | 'drop' | 'not-created'): void
   close(): Promise<void>
@@ -46,7 +48,9 @@ export async function startFakeDriver(): Promise<FakeDriver> {
     kind === 'async' ? { value: { ok: true, data: null } } : { value: null }
   let finder: (using: string, value: string) => string[] = () => ['el-1']
   let displayed: (id: string) => boolean = () => true
-  let click: (id: string) => 'ok' | 'drop' | 'stale' = () => 'ok'
+  let click: (
+    id: string,
+  ) => 'ok' | 'drop' | 'stale' | 'not-interactable' = () => 'ok'
   let newSession: () => 'ok' | 'drop' | 'not-created' = () => 'ok'
 
   const server = http.createServer((req, res) => {
@@ -116,6 +120,9 @@ export async function startFakeDriver(): Promise<FakeDriver> {
         }
         if (outcome === 'stale') {
           return reply({ error: 'stale element reference', message: '' }, 404)
+        }
+        if (outcome === 'not-interactable') {
+          return reply({ error: 'element not interactable', message: '' }, 400)
         }
         return reply(null)
       }

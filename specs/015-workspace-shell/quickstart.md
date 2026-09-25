@@ -17,6 +17,20 @@ Ergebnisse.
   `scripts/with-nix-host-bridge.sh`).
 - Node 22.19 (`.nvmrc`); die Prüfskripte laufen per Type-Stripping ohne Build.
 
+## 0. Baseline vor dem Chat-Split (T005)
+
+`pnpm check:chat-state` vor jeder Änderung an `pages/chat/[instance].vue`
+(2026-09-24, Commit `3301fdd`): **45 Replay-Tests, alle grün** (`# tests 45`,
+`# pass 45`, `# fail 0`). Jeder Extraktionsschritt in Phase 2 muss dieselbe
+Zahl grüner Tests melden — ein Rückgang oder Anstieg zeigt geändertes
+Verhalten statt reiner Verschiebung an.
+
+Bestätigt nach T006 (`useComposer.ts`, Commit `1a8a14a`), nach T008
+(`useComposerAttachments.ts`, Commit `695881e`) und nach T010-T013
+(Komponenten-Split, Commit `9ac6d20`, Seite 1109 → 492 Zeilen): weiterhin
+45/45 grün. T014 zusätzlich `pnpm typecheck`, `pnpm lint`,
+`pnpm check:templates` (33 Templates kompilieren) — alle grün.
+
 ## 1. Automatische Prüfungen (CI-Parität)
 
 ```bash

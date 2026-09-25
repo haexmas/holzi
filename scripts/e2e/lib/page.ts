@@ -26,7 +26,8 @@ function isGoneMidPress(error: unknown): boolean {
     error instanceof SessionGoneError ||
     (error instanceof WebDriverError &&
       (error.code === 'stale element reference' ||
-        error.code === 'no such element'))
+        error.code === 'no such element' ||
+        error.code === 'element not interactable'))
   )
 }
 
@@ -84,14 +85,51 @@ async function findDisplayed(
   }
 }
 
+/** Clicks the displayed control and returns the element ID that was activated. */
+async function clickDisplayed(
+  client: WebDriverClient,
+  hook: string,
+  deadlineMs = 5000,
+): Promise<string> {
+  const end = Date.now() + deadlineMs
+  for (;;) {
+    const element = await findDisplayed(
+      client,
+      hook,
+      Math.max(0, end - Date.now()),
+    )
+    try {
+      await client.click(element)
+      return element
+    } catch (error) {
+      if (
+        !(error instanceof WebDriverError) ||
+        error.code !== 'element not interactable' ||
+        Date.now() >= end
+      ) {
+        throw error
+      }
+      await sleep(50)
+    }
+  }
+}
+
 /** Clicks the displayed control found by hook. Polls until the deadline; fails naming the hook. */
 export async function click(
   client: WebDriverClient,
   hook: string,
   deadlineMs = 5000,
 ): Promise<void> {
-  const element = await findDisplayed(client, hook, deadlineMs)
-  await client.click(element)
+  await clickDisplayed(client, hook, deadlineMs)
+}
+
+/** Waits until a stable hook is displayed without activating it. */
+export async function waitForDisplayed(
+  client: WebDriverClient,
+  hook: string,
+  deadlineMs = 5000,
+): Promise<void> {
+  await findDisplayed(client, hook, deadlineMs)
 }
 
 /** Types into the displayed control found by hook. Polls until the deadline; fails naming the hook. */
@@ -128,14 +166,15 @@ export async function press(
   options: PressOptions,
 ): Promise<void> {
   const selector = toSelector(hook)
-  const [element] = await displayedNow(client, selector)
+  let [element] = await displayedNow(client, selector)
   if (element === undefined) {
     throw new Error(`hook "${hook}" (selector ${selector}) is not displayed`)
   }
   const times = options.times ?? 1
   for (let i = 0; i < times; i++) {
     try {
-      await client.click(element)
+      if (i === 0) element = await clickDisplayed(client, hook)
+      else await client.click(element)
     } catch (error) {
       if (i > 0 && isGoneMidPress(error)) break
       throw error
@@ -203,6 +242,7 @@ export interface Page {
     options?: InvokeOptions,
   ): Promise<InvokeResult>
   click(hook: string, deadlineMs?: number): Promise<void>
+  waitForDisplayed(hook: string, deadlineMs?: number): Promise<void>
   type(hook: string, text: string, deadlineMs?: number): Promise<void>
   press(hook: string, options?: { times?: number }): Promise<void>
   closeWindow(): Promise<void>
@@ -230,6 +270,8 @@ export function createPage(options: PageOptions): Page {
     invoke: (command, args, invokeOptions) =>
       client.invoke(command, args, invokeOptions),
     click: (hook, deadlineMs) => click(client, hook, deadlineMs),
+    waitForDisplayed: (hook, deadlineMs) =>
+      waitForDisplayed(client, hook, deadlineMs),
     type: (hook, text, deadlineMs) => type(client, hook, text, deadlineMs),
     press: (hook, pressOptions) =>
       press(client, hook, { ...pressOptions, step }),

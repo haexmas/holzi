@@ -15,6 +15,7 @@ export interface FlowInstance {
     options?: InvokeOptions,
   ): Promise<InvokeResult>
   click(hook: string, deadlineMs?: number): Promise<void>
+  waitForDisplayed(hook: string, deadlineMs?: number): Promise<void>
   type(hook: string, text: string, deadlineMs?: number): Promise<void>
   exec<T = unknown>(script: string, args?: unknown[]): Promise<T>
   navigate(url: string): Promise<void>
@@ -30,6 +31,28 @@ function describe(value: unknown): string {
     return JSON.stringify(value) ?? String(value)
   } catch {
     return String(value)
+  }
+}
+
+function isOperationBusy(result: InvokeResult): boolean {
+  if ('ended' in result || result.ok) return false
+  if (!('error' in result)) return false
+  return describe(result.error).includes(
+    'a chat or vault operation is still in progress',
+  )
+}
+
+async function invokeAfterBusyOperation(
+  instance: FlowInstance,
+  command: string,
+  args: unknown,
+  deadlineMs = 5000,
+): Promise<InvokeResult> {
+  const end = Date.now() + deadlineMs
+  for (;;) {
+    const result = await instance.invoke(command, args)
+    if (!isOperationBusy(result) || Date.now() >= end) return result
+    await new Promise((resolve) => setTimeout(resolve, 50))
   }
 }
 
@@ -92,10 +115,12 @@ export async function createAndUnlock(
   instance.step('unlocked')
 }
 
-/** Clicks the open-chat hook and waits for the chat address. */
+/** Opens the Workspace launcher, selects Chat, and waits for the workspace route. */
 export async function openChat(instance: FlowInstance): Promise<void> {
+  await instance.click('open-launcher')
   await instance.click('open-chat')
-  await waitForPath(instance, '/chat/')
+  await waitForPath(instance, '/workspace/')
+  await instance.waitForDisplayed('lock-instance-header')
 }
 
 interface AddProviderResult {
@@ -138,7 +163,7 @@ export async function startReply(
 ): Promise<void> {
   unwrap(
     'send_message',
-    await instance.invoke('send_message', {
+    await invokeAfterBusyOperation(instance, 'send_message', {
       args: { content: text, idempotencyKey: randomUUID() },
     }),
   )

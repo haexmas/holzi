@@ -60,6 +60,10 @@ use providers::{
     add_provider, delete_provider, list_provider_models, list_providers, refresh_provider_models,
 };
 use storage::preferences_commands::{clear_pref, get_pref, set_pref};
+use storage::shell_commands::{
+    shell_close_windows, shell_create_workspace, shell_delete_workspace, shell_load_layout,
+    shell_save_windows, shell_set_active_workspace,
+};
 use stt::commands::{
     download_stt_model, list_installed_stt_models, list_stt_catalog, stt_recommend_tiers,
 };
@@ -202,6 +206,12 @@ pub fn run() {
             get_pref,
             set_pref,
             clear_pref,
+            shell_load_layout,
+            shell_create_workspace,
+            shell_delete_workspace,
+            shell_set_active_workspace,
+            shell_save_windows,
+            shell_close_windows,
             start_voice_recording,
             stop_voice_recording,
             cancel_voice_recording,

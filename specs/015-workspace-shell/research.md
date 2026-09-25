@@ -106,6 +106,14 @@ zuerst nach `main` merged, behält 0019/11; der zweite nummeriert neu. Das ist
 ein reiner Merge-Handgriff, kein Designproblem; der Plan hält es hier fest, damit
 der PR-Review es nicht überrascht.
 
+**Bestätigt (2026-09-24, T003)**: Spec 013 ist bereits vollständig auf `main`
+gemerged (zuletzt PR #133) und dort in 0018/Version 10 aufgegangen — keine
+offene Konkurrenz mehr um `0019`/11. Für Spec 014 existiert noch kein Branch
+(Implementierung startet erst nach 015); `0019_shell_layout` und
+`HOLZI_TRIGGER_VERSION = 11` sind damit zum Zeitpunkt der Implementierung von
+015 frei. Sollte 014 vor 015 mergen, nummeriert 015 beim Rebase neu (reiner
+Merge-Handgriff, siehe oben).
+
 ## R4. Aktuelles Gerät wird im Backend aufgelöst
 
 **Decision**: Die Shell-Commands nehmen **keine** Geräte-UUID vom Frontend. Sie

@@ -1,109 +1,12 @@
 <script setup lang="ts">
-import type { DeviceInfo } from '~/composables/useDevice'
-
-// Settings-Screen for spec 002 US3+US4. Guarded by the `onboarded`
-// middleware — an unset alias sends the operator back to the wizard,
-// so we can assume `alias` is set here.
+// Legacy route (spec 002), kept as a redirect into the Shell (spec
+// 015-workspace-shell, T024, FR-004, contracts/shell-app-contract.md §3).
+// The redirect resolves before any navigation guard, so /workspace's own
+// `onboarded` middleware still runs against the final URL.
 definePageMeta({
-  middleware: ['onboarded'],
+  redirect: (to) =>
+    `/workspace/${encodeURIComponent(String(to.params.instance ?? ''))}?open=system.settings`,
 })
-
-const route = useRoute()
-const { t } = useI18n()
-const { errString } = useErrorString()
-const { currentDeviceInfoAsync } = useDevice()
-
-const instanceName = computed(() => {
-  const raw = route.params.instance
-  return typeof raw === 'string'
-    ? raw
-    : Array.isArray(raw)
-      ? (raw[0] ?? '')
-      : ''
-})
-
-const backTarget = computed(
-  () => `/workspace/${encodeURIComponent(instanceName.value)}`,
-)
-
-const deviceInfo = ref<DeviceInfo | null>(null)
-const loadError = ref<string | null>(null)
-
-async function reloadDeviceInfoAsync() {
-  loadError.value = null
-  try {
-    deviceInfo.value = await currentDeviceInfoAsync()
-  } catch (e) {
-    loadError.value = errString(e)
-  }
-}
-
-onMounted(reloadDeviceInfoAsync)
 </script>
 
-<template>
-  <main class="min-h-screen flex flex-col p-6 gap-6">
-    <header class="flex items-center justify-between gap-3 flex-wrap">
-      <h1 class="text-2xl font-semibold">
-        <template v-if="deviceInfo?.alias">
-          {{ t('settings.header.forDevice', { alias: deviceInfo.alias }) }}
-        </template>
-        <template v-else> &nbsp; </template>
-      </h1>
-      <NuxtLink
-        :to="backTarget"
-        class="text-sm underline text-blue-600 hover:text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-      >
-        {{ t('workspace.heading', { instance: instanceName }) }}
-      </NuxtLink>
-    </header>
-
-    <p v-if="loadError" class="text-sm text-red-500" role="alert">
-      {{ t('errors.deviceInfoFailed') }}: {{ loadError }}
-    </p>
-
-    <div class="flex flex-col gap-8 max-w-2xl">
-      <SettingsAliasSetting
-        v-if="deviceInfo?.alias"
-        :current-alias="deviceInfo.alias"
-        @saved="reloadDeviceInfoAsync"
-      />
-
-      <hr class="border-neutral-200" />
-
-      <SettingsDefaultModelSetting
-        v-if="deviceInfo"
-        :device-uuid="deviceInfo.vaultDeviceUuid"
-      />
-
-      <hr class="border-neutral-200" />
-
-      <SettingsSttModelSetting
-        v-if="deviceInfo"
-        :device-uuid="deviceInfo.vaultDeviceUuid"
-      />
-
-      <hr class="border-neutral-200" />
-
-      <ModelsHuggingFaceModelManagement />
-
-      <hr class="border-neutral-200" />
-
-      <SettingsConnectDelegateProvider />
-
-      <hr class="border-neutral-200" />
-
-      <SettingsAutonomyModeSetting
-        v-if="deviceInfo"
-        :device-uuid="deviceInfo.vaultDeviceUuid"
-      />
-
-      <hr class="border-neutral-200" />
-
-      <SettingsDelegateDenyRulesSetting
-        v-if="deviceInfo"
-        :device-uuid="deviceInfo.vaultDeviceUuid"
-      />
-    </div>
-  </main>
-</template>
+<template><div /></template>

@@ -59,7 +59,8 @@ use haex_crdt::{MigrationName, StaticMigrationSource};
 /// - 9: `0017_chat_messages_add_autonomy_mode` added a column to
 ///   `chat_messages`.
 /// - 10: `0018_models_add_capabilities` added a column to `models`.
-pub const HOLZI_TRIGGER_VERSION: i32 = 10;
+/// - 11: `0019_shell_layout` introduced three new CRDT-tracked tables.
+pub const HOLZI_TRIGGER_VERSION: i32 = 11;
 
 /// Returns the frozen holzi migration set at the pinned haex-crdt revision.
 pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
@@ -358,6 +359,65 @@ pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
     m.insert(
         MigrationName::from("0018_models_add_capabilities"),
         "ALTER TABLE models ADD COLUMN capabilities_json TEXT;".to_string(),
+    );
+
+    // Workspace-Shell (spec 015): `workspaces` (no name column — the UI
+    // shows "Workspace N" from `position`, FR-019), `shell_windows` and
+    // `shell_window_tabs`. Single-column foreign keys target `workspaces
+    // (workspace_id)` / `shell_windows(window_id)` via their own `UNIQUE`
+    // constraint (research.md R2, confirmed by the CRDT-transformer table-
+    // constraint pass-through check in `migrations_tests.rs`), so deleting a
+    // workspace or window cascades to its windows/tabs at the database
+    // level (I7). All three tables also carry the ADR-0001 FK to
+    // `known_devices(vault_device_uuid) ON DELETE CASCADE`. Bumps
+    // HOLZI_TRIGGER_VERSION to 11.
+    m.insert(
+        MigrationName::from("0019_shell_layout"),
+        "CREATE TABLE workspaces (\
+            vault_device_uuid TEXT NOT NULL \
+              REFERENCES known_devices(vault_device_uuid) ON DELETE CASCADE, \
+            workspace_id TEXT NOT NULL UNIQUE, \
+            position INTEGER NOT NULL, \
+            PRIMARY KEY (vault_device_uuid, workspace_id)\
+         );\n\
+         --> statement-breakpoint\n\
+         CREATE INDEX idx_workspaces_device_position \
+         ON workspaces (vault_device_uuid, position);\n\
+         --> statement-breakpoint\n\
+         CREATE TABLE shell_windows (\
+            vault_device_uuid TEXT NOT NULL \
+              REFERENCES known_devices(vault_device_uuid) ON DELETE CASCADE, \
+            window_id TEXT NOT NULL UNIQUE, \
+            workspace_id TEXT NOT NULL \
+              REFERENCES workspaces(workspace_id) ON DELETE CASCADE, \
+            x INTEGER NOT NULL, \
+            y INTEGER NOT NULL, \
+            width INTEGER NOT NULL, \
+            height INTEGER NOT NULL, \
+            is_minimized INTEGER NOT NULL DEFAULT 0, \
+            is_maximized INTEGER NOT NULL DEFAULT 0, \
+            stack_order INTEGER NOT NULL, \
+            active_tab_id TEXT NOT NULL, \
+            PRIMARY KEY (vault_device_uuid, window_id)\
+         );\n\
+         --> statement-breakpoint\n\
+         CREATE INDEX idx_shell_windows_device_workspace \
+         ON shell_windows (vault_device_uuid, workspace_id);\n\
+         --> statement-breakpoint\n\
+         CREATE TABLE shell_window_tabs (\
+            vault_device_uuid TEXT NOT NULL \
+              REFERENCES known_devices(vault_device_uuid) ON DELETE CASCADE, \
+            tab_id TEXT NOT NULL, \
+            window_id TEXT NOT NULL \
+              REFERENCES shell_windows(window_id) ON DELETE CASCADE, \
+            app_id TEXT NOT NULL, \
+            position INTEGER NOT NULL, \
+            PRIMARY KEY (vault_device_uuid, tab_id)\
+         );\n\
+         --> statement-breakpoint\n\
+         CREATE INDEX idx_shell_window_tabs_device_window_position \
+         ON shell_window_tabs (vault_device_uuid, window_id, position);"
+            .to_string(),
     );
 
     Arc::new(StaticMigrationSource(m))

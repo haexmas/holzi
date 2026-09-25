@@ -69,11 +69,12 @@ test('the chat page lock() swallows a rejected close and shows no error', async 
   assert.deepEqual(page.effects, [])
 })
 
-test('the federation page onLock() asks for the close once and does nothing else', async () => {
+test('the federation app onLock() flushes the Shell layout, asks for the close once, and does nothing else', async () => {
   const page = watchedPage()
   let closes = 0
+  let flushes = 0
   const { onLock } = loadScriptSetup<{ onLock: () => Promise<void> }>(
-    'src/pages/federation/[instance].vue',
+    'src/components/apps/FederationApp.vue',
     ['onLock'],
     {
       useInstance: () => ({
@@ -82,20 +83,26 @@ test('the federation page onLock() asks for the close once and does nothing else
         },
       }),
       useInstancesStore: () => page.instancesStore,
+      useShellStore: () => ({
+        flushAsync: async () => {
+          flushes += 1
+        },
+      }),
       navigateTo: page.navigateTo,
     },
   )
 
   await onLock()
 
+  assert.equal(flushes, 1)
   assert.equal(closes, 1)
   assert.deepEqual(page.effects, [])
 })
 
-test('the federation page onLock() swallows a rejected close', async () => {
+test('the federation app onLock() swallows a rejected close', async () => {
   const page = watchedPage()
   const { onLock } = loadScriptSetup<{ onLock: () => Promise<void> }>(
-    'src/pages/federation/[instance].vue',
+    'src/components/apps/FederationApp.vue',
     ['onLock'],
     {
       useInstance: () => ({
@@ -104,6 +111,7 @@ test('the federation page onLock() swallows a rejected close', async () => {
         },
       }),
       useInstancesStore: () => page.instancesStore,
+      useShellStore: () => ({ flushAsync: async () => {} }),
       navigateTo: page.navigateTo,
     },
   )

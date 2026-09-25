@@ -62,17 +62,58 @@
     }
   },
   "workspace": {
-    "heading": "Workspace: {instance}",
-    "chatFab": {
-      "openTitle": "Open chat"
-    },
-    "settings": {
-      "iconTitle": "Settings"
-    },
     "modelPreload": {
       "loading": "Preparing {modelName}…",
       "ready": "{modelName} is ready",
       "error": "The model could not be prepared"
+    }
+  },
+  "shell": {
+    "workspaces": {
+      "title": "Workspaces",
+      "numbered": "Workspace {number}",
+      "windowCount": "{count} window | {count} windows",
+      "delete": "Delete workspace",
+      "deleteWindows": "{count} window will close | {count} windows will close",
+      "create": "Add workspace",
+      "moveWindow": "Move a window to another workspace",
+      "moveTo": "Move to…"
+    },
+    "apps": {
+      "chat": "Chat",
+      "settings": "Settings",
+      "federation": "Federation"
+    },
+    "launcher": {
+      "open": "Open Launcher",
+      "title": "Launcher"
+    },
+    "window": {
+      "close": "Close window",
+      "minimize": "Minimize window",
+      "maximize": "Maximize window",
+      "restore": "Restore window"
+    },
+    "windowOverview": {
+      "open": "Window overview",
+      "title": "Windows",
+      "empty": "No windows are open."
+    },
+    "attention": "Waiting for you",
+    "close": {
+      "activeReply": "A reply is still running or waiting for your decision.",
+      "confirmTitle": "Close anyway?",
+      "cancel": "Cancel",
+      "confirm": "Close"
+    },
+    "tabs": {
+      "tablist": "Tabs",
+      "close": "Close tab",
+      "newTab": "New tab",
+      "scrollLeft": "Scroll tabs left",
+      "scrollRight": "Scroll tabs right",
+      "alreadyOpen": "Already open",
+      "listMenu": "All tabs"
     }
   },
   "chat": {

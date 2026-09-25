@@ -95,6 +95,18 @@ describe('click', () => {
     )
   })
 
+  it('retries a transient element-not-interactable response', async () => {
+    driver.onFind(() => ['el-1'])
+    driver.onDisplayed(() => true)
+    let attempts = 0
+    driver.onClick(() => {
+      attempts += 1
+      return attempts === 1 ? 'not-interactable' : 'ok'
+    })
+    await click(client, 'open-chat')
+    assert.equal(attempts, 2)
+  })
+
   it('fails naming the hook and the selector when nothing is displayed by the deadline', async () => {
     driver.onFind(() => ['el-1'])
     driver.onDisplayed(() => false)
@@ -149,6 +161,26 @@ describe('press', () => {
     assert.equal(clicks.length, 2)
   })
 
+  it('uses the element activated by the first click for later activations', async () => {
+    let finds = 0
+    driver.onFind(() => {
+      finds += 1
+      return [finds === 1 ? 'el-old' : 'el-new']
+    })
+    driver.onDisplayed(() => true)
+    driver.onClick(() => 'ok')
+    const before = driver.requests.length
+    await press(client, 'lock-instance', { times: 2, step: () => {} })
+    const clicks = driver.requests
+      .slice(before)
+      .filter((r) => r.path.endsWith('/click'))
+      .map((r) => r.path)
+    assert.deepEqual(clicks, [
+      '/session/fake-session/element/el-new/click',
+      '/session/fake-session/element/el-new/click',
+    ])
+  })
+
   it('stops quietly when a later click finds the session already gone', async () => {
     driver.onFind(() => ['el-1'])
     driver.onDisplayed(() => true)
@@ -181,6 +213,18 @@ describe('press', () => {
     })
     assert.equal(calls, 2)
     assert.deepEqual(steps, [['press', 'lock-instance']])
+  })
+
+  it('also stops quietly when the ending process makes the element non-interactable', async () => {
+    driver.onFind(() => ['el-1'])
+    driver.onDisplayed(() => true)
+    let calls = 0
+    driver.onClick(() => {
+      calls += 1
+      return calls === 1 ? 'ok' : 'not-interactable'
+    })
+    await press(client, 'lock-instance', { times: 2, step: () => {} })
+    assert.equal(calls, 2)
   })
 
   it('still throws if the very first click fails', async () => {

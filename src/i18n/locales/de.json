@@ -62,17 +62,58 @@
     }
   },
   "workspace": {
-    "heading": "Arbeitsbereich: {instance}",
-    "chatFab": {
-      "openTitle": "Chat öffnen"
-    },
-    "settings": {
-      "iconTitle": "Einstellungen"
-    },
     "modelPreload": {
       "loading": "Bereite {modelName} vor…",
       "ready": "{modelName} ist bereit",
       "error": "Das Modell konnte nicht vorbereitet werden"
+    }
+  },
+  "shell": {
+    "workspaces": {
+      "title": "Arbeitsbereiche",
+      "numbered": "Arbeitsbereich {number}",
+      "windowCount": "{count} Fenster",
+      "delete": "Arbeitsbereich löschen",
+      "deleteWindows": "{count} Fenster wird geschlossen | {count} Fenster werden geschlossen",
+      "create": "Arbeitsbereich hinzufügen",
+      "moveWindow": "Ein Fenster in einen anderen Arbeitsbereich verschieben",
+      "moveTo": "Verschieben nach …"
+    },
+    "apps": {
+      "chat": "Chat",
+      "settings": "Einstellungen",
+      "federation": "Föderation"
+    },
+    "launcher": {
+      "open": "Launcher öffnen",
+      "title": "Launcher"
+    },
+    "window": {
+      "close": "Fenster schließen",
+      "minimize": "Fenster minimieren",
+      "maximize": "Fenster maximieren",
+      "restore": "Fenster wiederherstellen"
+    },
+    "windowOverview": {
+      "open": "Fensterübersicht",
+      "title": "Fenster",
+      "empty": "Keine Fenster geöffnet."
+    },
+    "attention": "Wartet auf dich",
+    "close": {
+      "activeReply": "Eine Antwort läuft noch oder wartet auf deine Entscheidung.",
+      "confirmTitle": "Trotzdem schließen?",
+      "cancel": "Abbrechen",
+      "confirm": "Schließen"
+    },
+    "tabs": {
+      "tablist": "Tabs",
+      "close": "Tab schließen",
+      "newTab": "Neuer Tab",
+      "scrollLeft": "Tabs nach links scrollen",
+      "scrollRight": "Tabs nach rechts scrollen",
+      "alreadyOpen": "Bereits geöffnet",
+      "listMenu": "Alle Tabs"
     }
   },
   "chat": {

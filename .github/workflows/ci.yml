@@ -37,6 +37,9 @@ jobs:
       - name: Check chat state
         run: corepack pnpm check:chat-state
 
+      - name: Check shell state
+        run: corepack pnpm check:shell-state
+
       - name: Check vault lifecycle
         run: corepack pnpm check:vault-lifecycle
 

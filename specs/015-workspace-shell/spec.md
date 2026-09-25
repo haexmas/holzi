@@ -2,7 +2,7 @@
 
 **Feature Branch**: `015-workspace-shell`
 **Created**: 2026-09-21
-**Status**: Draft
+**Status**: Implemented (T057 offen)
 **Input**: holzi übernimmt aus haex-vault das Shell-Konzept aus Workspaces (Arbeitsbereichen), Apps und Fenstern. Die heutige Workspace-Seite ist nur ein Stub mit Vault-Name und Chat-Einstieg; Chat, Einstellungen und Föderation sind eigene Vollseiten. Nach dieser Spec öffnet der Nutzer Apps als Fenster in einem Arbeitsbereich, bündelt mehrere Apps oder Ansichten als Tabs in einem Fenster (Bedienung wie in Firefox), kann mehrere Arbeitsbereiche pro Gerät verwalten, und sein Layout überlebt einen Neustart.
 
 ## Beziehung zu bestehenden Specs
@@ -18,13 +18,14 @@
   neuen Unterhaltung, Modell-Preload beim Vault-Open, Composer). Wo Spec 004 von
   „Chat-Route“ oder „Chat-Overlay aus dem Workspace“ spricht, ist ab dieser
   Spec der **Chat-Tab** (in einem Fenster) gemeint.
-- Die Spec 016 (parallele Chat-Sessions im Backend) folgt. Diese Spec bereitet
-  nur das Fenster- und Tab-Modell darauf vor; sie erlaubt weiterhin genau
-  **einen** Chat (ein Tab in einem Fenster).
+- Eine künftige, noch nicht nummerierte Spec (parallele Chat-Sessions im
+  Backend) folgt — Spec 016 ist bereits an `016-e2e-testing` vergeben. Diese
+  Spec bereitet nur das Fenster- und Tab-Modell darauf vor; sie erlaubt
+  weiterhin genau **einen** Chat (ein Tab in einem Fenster).
 - Die Specs 017/018 (Haextension-Host und MCP-Anbindung) folgen. Extensions als
   Fensterinhalt sind nicht Teil dieser Spec.
 - Setzt voraus, dass zu jedem Zeitpunkt genau eine Vault-Session aktiv ist
-  (Spec 013, in Arbeit). Die Shell lebt innerhalb dieser Session.
+  (Spec 013, umgesetzt). Die Shell lebt innerhalb dieser Session.
 
 ## User Scenarios & Testing
 
@@ -333,7 +334,7 @@ Bereich, der Wechsel gelingt über die Fensterübersicht.
 
 Ein Entwickler von holzi definiert eine App so, dass sie mehrfach geöffnet
 werden darf — als eigene Tabs oder eigene Fenster — die Voraussetzung dafür,
-dass Spec 016 mehrere Chats parallel ermöglichen kann, ohne die Shell
+dass eine künftige Spec (parallele Chat-Sessions) mehrere Chats parallel ermöglichen kann, ohne die Shell
 umzubauen. In dieser Spec sind alle ausgelieferten Apps auf eine Instanz
 begrenzt.
 
@@ -459,11 +460,12 @@ den ausgelieferten Apps öffnet ein zweiter Aufruf keine zweite Instanz.
   Arbeitsbereich), MUSS die Shell einen Aufmerksamkeitshinweis am Tab (Leiste
   und Tab-Liste), am Fenster (Fensterübersicht, Launcher) und am Arbeitsbereich
   zeigen.
-- **FR-039**: Fenster MÜSSEN maximiert und wiederhergestellt werden können
-  (Schaltfläche oder Doppelklick auf die Titelleiste); ein maximiertes Fenster
-  füllt den Arbeitsbereich, Wiederherstellen kehrt zur Geometrie vor dem
-  Maximieren zurück, und der Maximierungszustand wird wie die Geometrie
-  persistiert.
+- **FR-039** _(nachträglich ergänzt, daher hier bei den verwandten
+  Fenster-Anforderungen statt nach FR-038 platziert)_: Fenster MÜSSEN
+  maximiert und wiederhergestellt werden können (Schaltfläche oder
+  Doppelklick auf die Titelleiste); ein maximiertes Fenster füllt den
+  Arbeitsbereich, Wiederherstellen kehrt zur Geometrie vor dem Maximieren
+  zurück, und der Maximierungszustand wird wie die Geometrie persistiert.
 
 **Apps und Instanzen**
 
@@ -648,10 +650,12 @@ den ausgelieferten Apps öffnet ein zweiter Aufruf keine zweite Instanz.
   verschiebt sie nicht in einen anderen Arbeitsbereich.
 - **Chat bleibt in dieser Spec auf einen Tab begrenzt**, weil das Backend
   heute app-weit nur einen laufenden Turn zulässt; das Aufheben dieser
-  Grenze ist Spec 016.
+  Grenze ist eine künftige, noch nicht nummerierte Spec.
 - **Die Föderations-App ist ein Platzhalter.** Sie existiert, damit die
   Zuordnung „bisherige Vollseite → Fenster“ vollständig ist und eine App ohne
-  echten Inhalt getestet wird.
+  echten Inhalt getestet wird. Geplant ist, die Föderation in einer Folge-Spec
+  zur Einstellungs-App als Kategorie der Einstellungen zu machen; die
+  Föderations-App entfällt dann (siehe „Geplante Folge-Specs“).
 - **Vorgaben aus dem Projekt** (Randbedingungen an die Planung, keine
   Anforderungen an Nutzer):
   - Persistenz liegt im Vault-Storage auf der Rust-Seite (Tauri-Commands,
@@ -672,14 +676,42 @@ den ausgelieferten Apps öffnet ein zweiter Aufruf keine zweite Instanz.
 - Haextension-Host und Extensions als Fensterinhalt (Spec 017).
 - MCP-Anbindung von Extensions, in beide Richtungen (Spec 017/018).
 - Parallele Chat-Sessions im Backend und mehrere gleichzeitige Chat-Tabs oder
-  -Fenster (Spec 016).
-- Desktop-Symbole und -Raster auf dem Arbeitsbereich, Drag-and-Drop von Symbolen.
-- Natives Betriebssystemfenster je App.
+  -Fenster (künftige, noch nicht nummerierte Spec — Spec 016 ist bereits an
+  `016-e2e-testing` vergeben).
+- Desktop-Symbole und -Raster auf dem Arbeitsbereich, Drag-and-Drop von
+  Symbolen (Folge-Spec geplant).
+- Natives Betriebssystemfenster je App (Folge-Spec geplant).
 - Tabs per Drag umsortieren, zwischen Fenstern verschieben oder zu einem
-  eigenen Fenster lösen sowie Tab-Tastenkürzel (Strg+T, Strg+W,
-  Strg+Tab).
+  eigenen Fenster lösen (Folge-Spec geplant) sowie Tastenkürzel wie Strg+T,
+  Strg+W, Strg+Tab (Folge-Spec geplant).
+- Navigation innerhalb eines Tabs (Vor/Zurück, Unteransichten einer App;
+  Folge-Spec geplant).
 - Neue Inhalte der Föderations-App.
 - Synchronisation von Arbeitsbereichen zwischen Geräten (bewusst gerätebezogen).
+
+### Geplante Folge-Specs
+
+Mit dem Betreiber abgestimmt (2026-09-25); Nummern werden bei der
+Spezifikation vergeben. Diese Spec setzt sie nicht um, ihr Modell soll ihnen
+aber nicht im Weg stehen.
+
+1. **Navigation im Tab**: Jeder Tab hat einen Ort innerhalb seiner App und
+   eine eigene Vor/Zurück-Historie wie ein Browser-Tab; dazu eine
+   Befehls-Registry mit festen Standard-Tastenkürzeln.
+2. **Einstellungs-App im Stil von haex-vault**: Kategorien-Seitenleiste,
+   Unteransichten als Navigation im Tab, Föderation als Kategorie,
+   Erscheinungsbild.
+3. **Befehle und Tastenkürzel**: einheitliches Konzept, zur Laufzeit vom
+   Nutzer umbelegbar.
+4. **Desktop-Symbole und Raster** auf dem Arbeitsbereich, ohne Überlappungen.
+5. **Tabs per Drag & Drop**: umsortieren, zwischen Fenstern verschieben, zu
+   einem eigenen Fenster lösen.
+6. **Native Fenster** je App (zumindest auf dem Desktop).
+
+Voraussetzungen, die das Modell dieser Spec dafür schon erfüllt oder erfüllen
+soll: Ein Tab behält seine Identität, wenn er das Fenster wechselt (FR-017);
+ein Fenster soll später außer im Arbeitsbereich auch als natives Fenster
+dargestellt werden können.
 
 ## Referenzen
 
