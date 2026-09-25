@@ -82,13 +82,13 @@ kein Fenster. Die Vault enthält keine gespeicherte Sitzung.
 
 1. **Given** die Wiederherstellung ist weder für dieses Gerät noch für die Vault
    eingeschaltet, **When** der Nutzer holzi beendet und die Vault erneut öffnet,
-   **Then** zeigt die Shell genau einen Arbeitsbereich ohne Fenster.
+   **Then** zeigt holzi genau einen Arbeitsbereich ohne Fenster.
 2. **Given** dieselbe Ausgangslage, **When** der Nutzer die Vault sperrt und
    wieder entsperrt, **Then** beginnt die neue Vault-Session ebenfalls leer.
 3. **Given** dieselbe Ausgangslage, **When** die Vault-Session läuft, **Then**
    wird zu keinem Zeitpunkt eine Sitzung in der Vault gespeichert.
 4. **Given** der Nutzer öffnet holzi über eine Adresse, die eine App an einem Ort
-   öffnet (Spec 020), **When** die Shell erscheint, **Then** ist genau diese App
+   öffnet (Spec 020), **When** holzi erscheint, **Then** ist genau diese App
    im einzigen Arbeitsbereich geöffnet, und sonst nichts.
 
 ---
@@ -117,7 +117,7 @@ zuletzt aktiver Arbeitsbereich).
 2. **Given** die Wiederherstellung ist eingeschaltet, **When** der Nutzer die
    Vault erneut öffnet, **Then** erscheint die zuletzt gespeicherte Sitzung
    dieses Geräts gemäß Spec 015 User Story 5.
-3. **Given** ein wiederhergestellter Tab, **When** die Shell erscheint,
+3. **Given** ein wiederhergestellter Tab, **When** holzi erscheint,
    **Then** beginnt er an der Startansicht seiner App ohne Vor-/Zurück-Historie
    (Spec 020); ein Chat-Tab beginnt mit einer neuen Unterhaltung (Spec 004).
 4. **Given** die Einstellungsansicht, **When** der Nutzer sie öffnet, **Then**
@@ -205,7 +205,7 @@ Schritt blieben alte Sitzungen als tote Information in der Vault liegen und
 reisten mit der Vault-Datei weiter.
 
 **Independent Test**: Eine Vault, in der eine frühere Version eine Sitzung
-gespeichert hat, mit der neuen Version öffnen: Die Shell ist leer, und die Vault
+gespeichert hat, mit der neuen Version öffnen: holzi ist leer, und die Vault
 enthält danach keine Inhalte früherer Sitzungen mehr, von keinem Gerät der
 Vault.
 
@@ -213,11 +213,11 @@ Vault.
 
 1. **Given** eine Vault mit einer Sitzung, die eine frühere Version gespeichert
    hat, **When** der Nutzer sie mit dieser Version öffnet, **Then** erscheint
-   die Shell mit genau einem leeren Arbeitsbereich.
+   holzi mit genau einem leeren Arbeitsbereich.
 2. **Given** dieselbe Vault, **When** das Öffnen abgeschlossen ist, **Then**
    enthält die Vault keine Inhalte früherer Sitzungen mehr, auch nicht die
    anderer Geräte, die frühere Versionen dorthin synchronisiert haben.
-3. **Given** die Bereinigung schlägt fehl, **When** die Shell erscheint,
+3. **Given** die Bereinigung schlägt fehl, **When** holzi erscheint,
    **Then** startet sie trotzdem leer, die Vault bleibt nutzbar, und der Fehler
    wird protokolliert, ohne den Nutzer mit einem Fehlerbildschirm aufzuhalten.
 
@@ -229,14 +229,14 @@ Vault.
   Wiederherstellung eingeschaltet ist. Beim nächsten Öffnen erscheint die
   zuletzt gespeicherte Sitzung, höchstens mit den Änderungen der letzten
   Augenblicke vor dem Absturz verloren (wie in Spec 015).
-- Derselbe Absturz bei ausgeschalteter Wiederherstellung: Die Shell ist leer wie
+- Derselbe Absturz bei ausgeschalteter Wiederherstellung: holzi ist leer wie
   nach einem normalen Beenden. Es gibt keinen Wiederherstellungsdialog.
 - Der Nutzer schaltet die Wiederherstellung ein und sofort wieder aus. Danach
   liegt keine Sitzung in der Vault.
 - Ein anderes Gerät hat den Vault-Wert geändert, während dieses Gerät eine
   Vault-Session offen hat. Die Änderung gilt auf diesem Gerät spätestens ab dem
   nächsten Öffnen; bis dahin gilt, was beim Öffnen galt.
-- Die Einstellung lässt sich nicht lesen. Die Shell verhält sich wie bei
+- Die Einstellung lässt sich nicht lesen. holzi verhält sich wie bei
   ausgeschalteter Wiederherstellung und startet leer.
 - Eine gespeicherte Sitzung ist nicht lesbar oder verweist auf eine unbekannte
   App. Es gilt Spec 015 FR-025: Start mit dem verwertbaren Rest oder leer, kein
@@ -278,7 +278,7 @@ Vault.
   offenen Arbeitsbereiche, Fenster und Tabs bleiben unverändert.
 - **FR-008**: Öffnet ein Gerät die Vault und die Einstellung gilt dort nicht,
   MUSS eine noch vorhandene gespeicherte Sitzung dieses Geräts entfernt werden,
-  bevor die Shell erscheint (zum Beispiel, weil ein anderes Gerät den Vault-Wert
+  bevor holzi erscheint (zum Beispiel, weil ein anderes Gerät den Vault-Wert
   ausgeschaltet hat).
 - **FR-009**: Beim ersten Öffnen einer Vault mit dieser Version MÜSSEN alle
   Sitzungen, die frühere Versionen gespeichert haben, entfernt werden, die
@@ -293,13 +293,13 @@ Vault.
   Reihenfolge der Arbeitsbereiche). Ein Löschvermerk, den die Synchronisierung
   zum Weitergeben der Löschung braucht, ist zulässig, solange er nur die
   Kennung des gelöschten Eintrags trägt und keine dieser Inhalte.
-- **FR-012**: Schlägt ein Entfernen fehl, MUSS die Shell trotzdem normal
+- **FR-012**: Schlägt ein Entfernen fehl, MUSS holzi trotzdem normal
   starten beziehungsweise weiterlaufen. Die Vault MUSS nutzbar bleiben, der
   Fehler MUSS protokolliert werden, und das Entfernen MUSS beim nächsten Öffnen
   erneut versucht werden. Eine nicht entfernte Sitzung DARF bei ausgeschalteter
   Einstellung NICHT wiederhergestellt werden.
 
-**Verhalten der Shell**
+**Verhalten der Fensterverwaltung**
 
 - **FR-013**: Ohne geltende Einstellung MUSS jede Vault-Session (Öffnen,
   Entsperren, Neustart nach Absturz) mit genau einem Arbeitsbereich ohne Fenster
@@ -308,7 +308,7 @@ Vault.
   Vollseiten-Adressen, Spec 020 FR-012), MUSS diese App erscheinen: ohne
   geltende Einstellung im einzigen Arbeitsbereich, mit geltender Einstellung
   zusätzlich zur wiederhergestellten Sitzung wie bisher.
-- **FR-015**: Die Shell MUSS während der Vault-Session alle Fähigkeiten aus
+- **FR-015**: holzi MUSS während der Vault-Session alle Fähigkeiten aus
   Spec 015 und 020 behalten, unabhängig von der Einstellung.
 - **FR-016**: Die Dokumentation von Spec 015 MUSS bei User Story 5, FR-023 bis
   FR-025 und dem Neustart-Teil von User Story 7 vermerken, dass sie nur bei
@@ -329,10 +329,10 @@ Vault.
 
 ### Measurable Outcomes
 
-- **SC-001**: Ohne geltende Einstellung zeigt die Shell in 100 % der Starts,
+- **SC-001**: Ohne geltende Einstellung zeigt holzi in 100 % der Starts,
   ob nach normalem Beenden, Sperren oder Absturz, genau einen Arbeitsbereich
   ohne Fenster (ohne Deep-Link).
-- **SC-002**: Mit geltender Einstellung stellt die Shell die Sitzung in 100 %
+- **SC-002**: Mit geltender Einstellung stellt holzi die Sitzung in 100 %
   der normalen Neustarts so wieder her, wie Spec 015 User Story 5 es
   beschreibt.
 - **SC-003**: Nach dem Ausschalten und nach dem ersten Öffnen mit dieser Version
@@ -365,7 +365,7 @@ Vault.
   sind nicht Teil dieser Spec. Ob sie gespeichert werden, entscheidet die
   Folge-Spec.
 - Der PR zu dieser Spec setzt auf dem PR zu Spec 020 auf (gestapelt), weil beide
-  den Shell-Store ändern.
+  den Store der Fensterverwaltung ändern.
 
 ## Nicht im Umfang
 
