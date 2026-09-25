@@ -1,0 +1,130 @@
+import { reactive } from 'vue'
+import { ALL_ACTIONS } from '~/lib/actions/catalog'
+import {
+  createHandlerRegistry,
+  type ActionHandler,
+} from '~/lib/actions/handlers'
+import { createActionRunner } from '~/lib/actions/runner'
+import type { ActionCaller, ActionOutcome } from '~/lib/actions/types'
+import type { TabHistory, TabLocation } from '~/lib/shell/navigation'
+import {
+  goTab,
+  navigateTab,
+  syncHistories,
+  type TabHistories,
+} from '~/lib/shell/tabNavigation'
+import type { ShellState } from '~/lib/shell/types'
+
+/**
+ * Per-tab navigation and the action runner, wired into the Shell store
+ * (spec 020-tab-navigation, T015). Kept out of `stores/shell.ts` so that file
+ * stays below the 500-line limit; the logic itself lives in the pure modules
+ * under `lib/shell/tabNavigation.ts` and `lib/actions/` (tested by
+ * `pnpm check:shell-navigation`).
+ *
+ * Histories are a reactive `Map` next to the store's tab runtime — never
+ * persisted (FR-011), dropped with their tab, and untouched by window or
+ * workspace operations (FR-010).
+ */
+export function createShellNavigation(deps: {
+  state: ShellState
+  /** The title override a tab shows right now (stored on the entry it leaves, research R9). */
+  titleOverrideOf: (tabId: string) => string | null
+  /** Navigation resets a dynamic title; the app sets it again for the new view (research R9). */
+  clearTitleOverride: (tabId: string) => void
+  /** The store's `openApp` (persists); returns the app's tab id. */
+  openApp: (appId: string) => string | null
+}) {
+  const { state } = deps
+  const histories: TabHistories = reactive(new Map<string, TabHistory>())
+  const handlers = createHandlerRegistry()
+
+  function syncNavigation() {
+    const before = new Set(histories.keys())
+    syncHistories(histories, state)
+    for (const id of before) {
+      if (!histories.has(id)) handlers.dropTab(id)
+    }
+  }
+
+  function historyOf(tabId: string): TabHistory | undefined {
+    return histories.get(tabId)
+  }
+
+  function navigate(
+    tabId: string,
+    to: string | TabLocation,
+    options: { replace?: boolean } = {},
+  ): boolean {
+    const changed = navigateTab(histories, tabId, to, {
+      replace: options.replace,
+      leavingTitle: deps.titleOverrideOf(tabId),
+    })
+    if (changed && !options.replace) deps.clearTitleOverride(tabId)
+    return changed
+  }
+
+  function go(tabId: string, delta: number): boolean {
+    const changed = goTab(histories, tabId, delta, deps.titleOverrideOf(tabId))
+    if (changed) deps.clearTitleOverride(tabId)
+    return changed
+  }
+
+  function tabIdsOf(appId: string): string[] {
+    return state.windows.flatMap((w) =>
+      w.tabs.filter((t) => t.appId === appId).map((t) => t.id),
+    )
+  }
+
+  const runner = createActionRunner({
+    catalog: ALL_ACTIONS,
+    globalHandler: (id) => handlers.globalHandler(id),
+    resolveFocus: (target) => {
+      if (target === 'workspace') return state.activeWorkspaceId || null
+      const window = state.windows.find((w) => w.id === state.activeWindowId)
+      if (!window) return null
+      return target === 'window' ? window.id : window.activeTabId
+    },
+    targetExists: (target, id) => {
+      if (target === 'workspace')
+        return state.workspaces.some((w) => w.id === id)
+      if (target === 'window') return state.windows.some((w) => w.id === id)
+      return state.windows.some((w) => w.tabs.some((t) => t.id === id))
+    },
+    awaitTabHandler: (appId, actionId, timeoutMs) => {
+      deps.openApp(appId)
+      return handlers.awaitTab(tabIdsOf(appId), actionId, timeoutMs)
+    },
+  })
+
+  function runAction(
+    id: string,
+    input: Record<string, unknown> = {},
+    caller: ActionCaller = { kind: 'user' },
+  ): Promise<ActionOutcome> {
+    return runner.runAction(id, input, caller)
+  }
+
+  function registerGlobalActionHandler(id: string, handler: ActionHandler) {
+    handlers.registerGlobal(id, handler)
+  }
+
+  function registerTabActionHandler(
+    tabId: string,
+    id: string,
+    handler: ActionHandler,
+  ): () => void {
+    return handlers.registerTab(tabId, id, handler)
+  }
+
+  return {
+    histories,
+    syncNavigation,
+    historyOf,
+    navigate,
+    go,
+    runAction,
+    registerGlobalActionHandler,
+    registerTabActionHandler,
+  }
+}

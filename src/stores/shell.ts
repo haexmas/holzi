@@ -9,20 +9,19 @@ import {
   hydrate,
   minimizeWindow as minimizeWindowReducer,
   moveWindowToWorkspace as moveWindowToWorkspaceReducer,
-  openApp as openAppReducer,
   switchWorkspace as switchWorkspaceReducer,
   toggleMaximizeWindow as toggleMaximizeWindowReducer,
   updateArea as updateAreaReducer,
   updateWindowGeometry as updateWindowGeometryReducer,
 } from '~/lib/shell/layoutState'
 import {
-  addTab as addTabReducer,
   closeTab as closeTabReducer,
   switchTab as switchTabReducer,
 } from '~/lib/shell/tabs'
+import type { TabLocation } from '~/lib/shell/navigation'
+import { addTabAt, openAppAt } from '~/lib/shell/tabNavigation'
 import type {
   CloseGuard,
-  CloseGuardResult,
   PersistedLayout,
   ShellState,
   ShellTab,
@@ -32,6 +31,8 @@ import type {
   Workspace,
 } from '~/lib/shell/types'
 import { useShellLayout, type WindowDto } from '~/composables/useShellLayout'
+import { createShellGuards } from '~/stores/shellGuards'
+import { createShellNavigation } from '~/stores/shellNavigation'
 
 /**
  * Shell state and its public actions (spec 015-workspace-shell, T018,
@@ -131,6 +132,7 @@ export const useShellStore = defineStore('shell', () => {
       activeWorkspaceId: dto.activeWorkspaceId,
     }
     Object.assign(state, hydrate(layout, SHELL_APPS, state.area))
+    navigation.histories.clear()
     syncTabRuntime()
   }
 
@@ -138,6 +140,14 @@ export const useShellStore = defineStore('shell', () => {
    * `state.windows[*].tabs` after every action that can add or remove a tab. A `Map` rather than
    * a plain object, so pruning a stale entry needs no dynamic-key `delete`. */
   const tabRuntime = reactive(new Map<string, TabRuntime>())
+
+  // Per-tab history and the action runner (spec 020-tab-navigation, stores/shellNavigation.ts).
+  const navigation = createShellNavigation({
+    state,
+    titleOverrideOf: (tabId) => tabRuntime.get(tabId)?.titleOverride ?? null,
+    clearTitleOverride: (tabId) => setTabTitle(tabId, null),
+    openApp: (appId) => openApp(appId),
+  })
 
   /** Retains runtime state for live tabs and initializes newly opened tabs. */
   function syncTabRuntime() {
@@ -157,6 +167,7 @@ export const useShellStore = defineStore('shell', () => {
         })
       }
     }
+    navigation.syncNavigation()
   }
   syncTabRuntime()
 
@@ -255,19 +266,41 @@ export const useShellStore = defineStore('shell', () => {
   /** Opens the app, or activates its existing singleton tab (`state.activeWindowId` either way) —
    * persisted immediately either way: even reactivating a singleton is a deliberate click, not a
    * continuous gesture (research.md R13's structural bucket is everything but geometry/stack). */
-  function openApp(appId: string) {
-    openAppReducer(state, appId, SHELL_APPS)
+  function openApp(appId: string, at: string | TabLocation | null = null) {
+    const { tabId } = openAppAt(
+      state,
+      navigation.histories,
+      appId,
+      at,
+      SHELL_APPS,
+      (id) => runtimeFor(id).titleOverride,
+    )
     syncTabRuntime()
     if (state.activeWindowId) persistWindowNow(state.activeWindowId)
+    return tabId
   }
 
-  /** Adds a tab and persists both the target and any newly active window. */
-  function addTab(windowId: string, appId: string) {
-    addTabReducer(state, windowId, appId, SHELL_APPS)
+  /** Adds a tab (at `at`, spec 020 FR-012) and persists both the target and any newly active
+   * window. */
+  function addTab(
+    windowId: string,
+    appId: string,
+    at: string | TabLocation | null = null,
+  ) {
+    const { tabId } = addTabAt(
+      state,
+      navigation.histories,
+      windowId,
+      appId,
+      at,
+      SHELL_APPS,
+      (id) => runtimeFor(id).titleOverride,
+    )
     syncTabRuntime()
     persistWindowNow(windowId)
     if (state.activeWindowId && state.activeWindowId !== windowId)
       persistWindowNow(state.activeWindowId)
+    return tabId
   }
 
   /** Activates a tab and saves its window's new active tab id. */
@@ -390,36 +423,9 @@ export const useShellStore = defineStore('shell', () => {
     )
   }
 
-  /** Every non-null close-guard result across the window's tabs (FR-014, for closing the whole
-   * window) — a tab without a registered guard, or whose guard currently allows closing,
-   * contributes nothing. */
-  function guardResultsFor(windowId: string): CloseGuardResult[] {
-    const window = state.windows.find((w) => w.id === windowId)
-    if (!window) return []
-    const results: CloseGuardResult[] = []
-    for (const tab of window.tabs) {
-      const result = tabRuntime.get(tab.id)?.guard?.()
-      if (result) results.push(result)
-    }
-    return results
-  }
-
-  /** One tab's own close-guard result (FR-014, for closing just that tab) — `null` if it has none
-   * registered or its guard currently allows closing. */
-  function guardResultForTab(tabId: string): CloseGuardResult | null {
-    return tabRuntime.get(tabId)?.guard?.() ?? null
-  }
-
-  /** Every non-null close-guard result across every window in the workspace (FR-021, for deleting
-   * it) — `guardResultsFor` extended to the whole workspace. */
-  function guardResultsForWorkspace(workspaceId: string): CloseGuardResult[] {
-    const results: CloseGuardResult[] = []
-    for (const window of state.windows) {
-      if (window.workspaceId === workspaceId)
-        results.push(...guardResultsFor(window.id))
-    }
-    return results
-  }
+  // Close-guard queries for FR-014/FR-021 (stores/shellGuards.ts).
+  const { guardResultsFor, guardResultForTab, guardResultsForWorkspace } =
+    createShellGuards(state, (tabId) => tabRuntime.get(tabId)?.guard)
 
   /** Awaits the persistence queue before the vault locks or closes (FR-027) — `ChatApp.vue`'s and
    * `FederationApp.vue`'s `lock()` already call this before `useInstance().closeAsync()`. */
@@ -458,5 +464,11 @@ export const useShellStore = defineStore('shell', () => {
     guardResultForTab,
     guardResultsForWorkspace,
     flushAsync,
+    historyOf: navigation.historyOf,
+    navigate: navigation.navigate,
+    goTab: navigation.go,
+    runAction: navigation.runAction,
+    registerGlobalActionHandler: navigation.registerGlobalActionHandler,
+    registerTabActionHandler: navigation.registerTabActionHandler,
   }
 })
