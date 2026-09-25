@@ -82,9 +82,9 @@ export type TabRuntime = {
   mounted: boolean
 }
 
-/** The persisted part of one device's layout — shaped like the eventual `WmLayoutDto`
- * (contracts/tauri-commands.md, wired in T048) so `hydrate` does not need to change shape once
- * that DTO exists; until Phase 7, callers pass an empty layout (no workspaces, no windows). */
+/** What `hydrate` builds a state from: workspaces, windows and their plain tabs. A saved session
+ * (`WmSession` in `session.ts`, spec 022) adds a version and each tab's history on top;
+ * `splitSession` turns it into this. The empty start passes no workspaces and no windows. */
 export type PersistedLayout = {
   workspaces: Workspace[]
   windows: WmWindow[]

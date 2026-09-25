@@ -420,5 +420,40 @@ pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
             .to_string(),
     );
 
+    // Opt-in session restore (spec 022-session-restore, research R5/R6).
+    // Drops the three spec 015 tables, children first: `DROP TABLE`'s
+    // implicit delete fires no triggers, so no delete markers reach other
+    // devices, and dropping a child before its parent keeps the parent's
+    // drop from cascading into a CRDT table (a `DELETE` on a CRDT table
+    // fails here — migrations run before the HLC is initialized). Saved
+    // sessions move to the device-local `wm_sessions_no_sync` (one JSON
+    // row per device; `_no_sync` keeps it out of sync entirely). The
+    // maintenance row asks the first open to `VACUUM` the dropped
+    // content out of the file's free pages. No `HOLZI_TRIGGER_VERSION`
+    // bump: dropping a CRDT table and adding `_no_sync` tables install no
+    // triggers.
+    m.insert(
+        MigrationName::from("0020_wm_session_no_sync"),
+        "DROP TABLE shell_window_tabs;\n\
+         --> statement-breakpoint\n\
+         DROP TABLE shell_windows;\n\
+         --> statement-breakpoint\n\
+         DROP TABLE workspaces;\n\
+         --> statement-breakpoint\n\
+         CREATE TABLE wm_sessions_no_sync (\
+            vault_device_uuid TEXT PRIMARY KEY NOT NULL, \
+            session_json TEXT NOT NULL, \
+            updated_at TEXT NOT NULL\
+         );\n\
+         --> statement-breakpoint\n\
+         CREATE TABLE holzi_maintenance_no_sync (\
+            task TEXT PRIMARY KEY NOT NULL\
+         );\n\
+         --> statement-breakpoint\n\
+         INSERT INTO holzi_maintenance_no_sync (task) \
+         VALUES ('vacuum_after_legacy_wm_drop');"
+            .to_string(),
+    );
+
     Arc::new(StaticMigrationSource(m))
 }

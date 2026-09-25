@@ -10,7 +10,7 @@
     "preview": "nuxt preview",
     "check:chat-state": "node --test scripts/check-chat-state.ts scripts/check-chat-navigation.ts",
     "check:wm-navigation": "node --test scripts/check-wm-navigation.ts scripts/check-wm-actions.ts scripts/check-wm-nav-store.ts scripts/check-wm-keys.ts",
-    "check:wm-state": "node --test scripts/check-wm-state.ts scripts/check-wm-geometry.ts scripts/check-wm-persistence.ts",
+    "check:wm-state": "node --test scripts/check-wm-state.ts scripts/check-wm-geometry.ts scripts/check-wm-persistence.ts scripts/check-wm-session.ts",
     "check:vault-lifecycle": "node scripts/check-vault-lifecycle.ts",
     "check:vault-passphrase-lifetime": "node scripts/check-vault-passphrase-lifetime.ts",
     "check:templates": "node scripts/check-vue-templates.ts",

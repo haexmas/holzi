@@ -39,21 +39,32 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
     return value === 'vault' ? { kind: 'vault' } : deviceScope()
   }
 
+  const restoreScope = (value: unknown) =>
+    value === 'vault' ? ('vault' as const) : ('device' as const)
+
   on('settings.get', async () => {
     const device = await currentDeviceInfoAsync()
     const scope: PrefScope = { kind: 'device', uuid: device.vaultDeviceUuid }
-    const [deviceDefault, vaultDefault, stt, autonomy, denyRules] =
-      await Promise.all([
-        getPrefAsync(scope, DEFAULT_MODEL_KEY),
-        getPrefAsync({ kind: 'vault' }, DEFAULT_MODEL_KEY),
-        getPrefAsync(scope, STT_MODEL_KEY),
-        getPrefAsync(scope, AUTONOMY_KEY),
-        getPrefAsync(scope, DENY_RULES_KEY),
-      ])
+    const [
+      deviceDefault,
+      vaultDefault,
+      stt,
+      autonomy,
+      denyRules,
+      sessionRestore,
+    ] = await Promise.all([
+      getPrefAsync(scope, DEFAULT_MODEL_KEY),
+      getPrefAsync({ kind: 'vault' }, DEFAULT_MODEL_KEY),
+      getPrefAsync(scope, STT_MODEL_KEY),
+      getPrefAsync(scope, AUTONOMY_KEY),
+      getPrefAsync(scope, DENY_RULES_KEY),
+      wm.getSessionRestore(),
+    ])
     return {
       deviceAlias: device.alias,
       defaultModel: { device: deviceDefault, vault: vaultDefault },
       sttModel: stt,
+      sessionRestore,
       autonomyMode: autonomy,
       delegateDenyRules: denyRules ? (JSON.parse(denyRules) as unknown) : [],
     }
@@ -68,6 +79,13 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
   on('settings.models.checkUpdates', async () => ({
     statuses: await huggingFace.checkUpdatesAsync(),
   }))
+
+  on('settings.sessionRestore.set', ({ input }) =>
+    wm.setSessionRestore(restoreScope(input.scope), input.enabled === true),
+  )
+  on('settings.sessionRestore.clear', ({ input }) =>
+    wm.setSessionRestore(restoreScope(input.scope), null),
+  )
 
   on('settings.device.setAlias', async ({ input }) => {
     const alias = String(input.alias).trim()

@@ -17,6 +17,16 @@ const SCOPE: JsonSchema = {
   description: "'device' applies to this device only, 'vault' to all devices.",
 }
 const VENDOR: JsonSchema = { type: 'string', enum: ['claude', 'codex'] }
+const RESTORE_STATE: JsonSchema = {
+  type: 'object',
+  description:
+    "Session restore setting: 'device' and 'vault' are true, false or null (unset); 'effective' is what applies on this device.",
+  properties: {
+    device: { type: 'boolean' },
+    vault: { type: 'boolean' },
+    effective: { type: 'boolean' },
+  },
+}
 const MODEL_ID: JsonSchema = {
   type: 'string',
   description: 'Installed model id (see settings.models.list).',
@@ -41,7 +51,7 @@ export const SETTINGS_ACTIONS: readonly ActionDefinition[] = [
   setting({
     id: 'settings.get',
     description:
-      'Read the current settings: device name, default and speech models, autonomy mode and delegate deny rules. Never includes credentials.',
+      'Read the current settings: device name, default and speech models, session restore, autonomy mode and delegate deny rules. Never includes credentials.',
     result: ANY_OBJECT,
     scope: 'settings.read',
     effect: 'read',
@@ -68,6 +78,32 @@ export const SETTINGS_ACTIONS: readonly ActionDefinition[] = [
       properties: { alias: { type: 'string' } },
       required: ['alias'],
     },
+    scope: 'settings.device',
+    effect: 'write',
+  }),
+  setting({
+    id: 'settings.sessionRestore.set',
+    description:
+      'Turn saving and restoring the open workspaces, windows and tabs (with their back/forward history) on or off, for this device or for the whole vault. Turning it off deletes the saved session.',
+    input: {
+      type: 'object',
+      properties: { scope: SCOPE, enabled: { type: 'boolean' } },
+      required: ['scope', 'enabled'],
+    },
+    result: RESTORE_STATE,
+    scope: 'settings.device',
+    effect: 'write',
+  }),
+  setting({
+    id: 'settings.sessionRestore.clear',
+    description:
+      'Reset the session restore value for this device or the vault, so the other value applies (or off if neither is set).',
+    input: {
+      type: 'object',
+      properties: { scope: SCOPE },
+      required: ['scope'],
+    },
+    result: RESTORE_STATE,
     scope: 'settings.device',
     effect: 'write',
   }),

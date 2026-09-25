@@ -7,7 +7,9 @@
 
 use uuid::Uuid;
 
-use super::preferences::{validate_key, validate_scope, PrefError, PrefScope};
+use super::preferences::{
+    parse_bool, validate_key, validate_scope, PrefError, PrefScope, ScopedBool,
+};
 use crate::identity::VAULT_SCOPE_UUID;
 
 #[test]
@@ -39,4 +41,51 @@ fn device_scope_refuses_the_nil_uuid() {
         validate_scope(PrefScope::Device(VAULT_SCOPE_UUID)),
         Err(PrefError::NilDeviceUuid)
     ));
+}
+
+// Boolean preferences with device-over-vault resolution (spec 022-session-restore,
+// research R3). The DB read in `get_scoped_bool` is covered through the
+// `wm_session_commands` tests, which need an open vault.
+
+#[test]
+fn only_true_and_false_parse_as_booleans() {
+    assert_eq!(parse_bool(Some("true")), Some(true));
+    assert_eq!(parse_bool(Some("false")), Some(false));
+    assert_eq!(parse_bool(Some("TRUE")), None);
+    assert_eq!(parse_bool(Some("1")), None);
+    assert_eq!(parse_bool(Some("")), None);
+    assert_eq!(parse_bool(None), None);
+}
+
+#[test]
+fn the_device_value_wins_over_the_vault_value() {
+    let scoped = ScopedBool {
+        device: Some(true),
+        vault: Some(false),
+    };
+    assert!(scoped.effective());
+    let scoped = ScopedBool {
+        device: Some(false),
+        vault: Some(true),
+    };
+    assert!(!scoped.effective());
+}
+
+#[test]
+fn an_unset_device_value_falls_back_to_the_vault_value_then_to_false() {
+    assert!(ScopedBool {
+        device: None,
+        vault: Some(true),
+    }
+    .effective());
+    assert!(!ScopedBool {
+        device: None,
+        vault: Some(false),
+    }
+    .effective());
+    assert!(!ScopedBool {
+        device: None,
+        vault: None,
+    }
+    .effective());
 }

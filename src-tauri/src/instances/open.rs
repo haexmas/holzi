@@ -168,7 +168,12 @@ fn open_existing_database(
 ) -> Result<Arc<Database>> {
     let config = vault_config(passphrase, db_path, installation_id_file, false);
     match Database::open(config) {
-        Ok(db) => Ok(Arc::new(db)),
+        Ok(db) => {
+            // Spec 022: secure_delete, legacy cleanup and the one-time VACUUM, before the
+            // frontend sees the vault. Logs and carries on on failure.
+            crate::storage::maintenance::run_after_open(&db);
+            Ok(Arc::new(db))
+        }
         Err(e) if is_wrong_passphrase(&e) => Err(HolziError::WrongPassphrase),
         Err(e) if is_locked_elsewhere(&e) => Err(HolziError::VaultAlreadyOpenElsewhere),
         Err(e) => Err(HolziError::from(e)),

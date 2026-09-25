@@ -19,6 +19,9 @@ pub mod chat_messages;
 mod chat_messages_tests;
 pub mod chat_threads;
 pub mod known_devices;
+pub mod maintenance;
+#[cfg(test)]
+mod maintenance_tests;
 pub mod models;
 pub mod preferences;
 pub mod preferences_commands;
@@ -27,10 +30,7 @@ pub mod preferences_commands_tests;
 #[cfg(test)]
 pub mod preferences_tests;
 pub mod providers;
-pub mod wm_commands;
-pub mod wm_windows;
+pub mod wm_session;
+pub mod wm_session_commands;
 #[cfg(test)]
-mod wm_windows_tests;
-pub mod wm_workspaces;
-#[cfg(test)]
-mod wm_workspaces_tests;
+mod wm_session_tests;
