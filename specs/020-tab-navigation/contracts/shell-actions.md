@@ -1,91 +1,138 @@
-# Vertrag: Shell-Aktionen und Eingaben
+# Vertrag: Aktionen und Eingaben
 
-Die „Befehle“ der Spec (FR-024–026) heißen im Code **Aktionen**, weil „Command“ in
-holzi Tauri-Commands bezeichnet (research R8).
+Die Aktionen der Spec (FR-024–FR-033) heißen im Code **Aktionen**, weil „Command“
+in holzi Tauri-Commands bezeichnet (research R8). Datenformen:
+[data-model.md](../data-model.md#shellactiondefinition-aktion).
 
-## 1. Aktionsliste
+## 1. Katalog
 
-| Id                            | Titel-Schlüssel                      | Ziel                                 | Standardbelegung                                   |
-| ----------------------------- | ------------------------------------ | ------------------------------------ | -------------------------------------------------- |
-| `shell.tab.back`              | `shell.actions.tabBack`              | `focusedTab`                         | Alt+ArrowLeft; macOS zusätzlich Meta+BracketLeft   |
-| `shell.tab.forward`           | `shell.actions.tabForward`           | `focusedTab`                         | Alt+ArrowRight; macOS zusätzlich Meta+BracketRight |
-| `shell.tab.new`               | `shell.actions.tabNew`               | `focusedWindow` („+“-Liste öffnen)   | –                                                  |
-| `shell.tab.close`             | `shell.actions.tabClose`             | `focusedTab` (mit Guard, 015 FR-014) | –                                                  |
-| `shell.tab.list`              | `shell.actions.tabList`              | `focusedWindow` (Chevron)            | –                                                  |
-| `shell.window.minimize`       | `shell.actions.windowMinimize`       | `focusedWindow`                      | –                                                  |
-| `shell.window.toggleMaximize` | `shell.actions.windowToggleMaximize` | `focusedWindow`                      | –                                                  |
-| `shell.window.close`          | `shell.actions.windowClose`          | `focusedWindow` (mit Guard)          | –                                                  |
-| `shell.windows.overview`      | `shell.actions.windowsOverview`      | `shell`                              | –                                                  |
-| `shell.workspace.create`      | `shell.actions.workspaceCreate`      | `shell`                              | –                                                  |
-| `shell.workspace.switch`      | `shell.actions.workspaceSwitch`      | `shell` (Argument `workspaceId`)     | –                                                  |
-| `shell.launcher.open`         | `shell.actions.launcherOpen`         | `shell`                              | –                                                  |
+Die folgende Liste ist der Mindestumfang. Die endgültige Liste der
+Einstellungs- und Chat-Aktionen entsteht in tasks aus einer Bestandsaufnahme
+aller Bedienelemente (SC-007); jede dort gefundene zustandsändernde Bedienung
+bekommt eine Aktion oder eine begründete `action-exempt:`-Ausnahme (R20).
 
-Neue Aktionen dürfen hinzukommen; Ids sind stabil, sobald ausgeliefert (die
-Folge-Spec speichert Nutzerbelegungen unter diesen Ids).
+### Shell (`binding: global`)
+
+| Id                                             | Ziel      | Bereich            | Wirkung     | Agent                     | Kürzel                                  |
+| ---------------------------------------------- | --------- | ------------------ | ----------- | ------------------------- | --------------------------------------- |
+| `shell.tab.back`                               | tab       | `shell.navigation` | write       | ja                        | Alt+ArrowLeft; mac + Meta+BracketLeft   |
+| `shell.tab.forward`                            | tab       | `shell.navigation` | write       | ja                        | Alt+ArrowRight; mac + Meta+BracketRight |
+| `shell.tab.go` (`steps`)                       | tab       | `shell.navigation` | write       | ja                        | –                                       |
+| `shell.tab.navigate` (`to`, `replace?`)        | tab       | `shell.navigation` | write       | ja                        | –                                       |
+| `shell.app.open` (`appId`, `at?`)              | none      | `shell.navigation` | write       | ja                        | –                                       |
+| `shell.tab.new` (`appId`, `at?`)               | window    | `shell.layout`     | write       | ja                        | –                                       |
+| `shell.tab.activate`                           | tab       | `shell.layout`     | write       | ja                        | –                                       |
+| `shell.tab.close`                              | tab       | `shell.layout`     | destructive | ja                        | –                                       |
+| `shell.window.focus`                           | window    | `shell.layout`     | write       | ja                        | –                                       |
+| `shell.window.minimize`                        | window    | `shell.layout`     | write       | ja                        | –                                       |
+| `shell.window.toggleMaximize`                  | window    | `shell.layout`     | write       | ja                        | –                                       |
+| `shell.window.close`                           | window    | `shell.layout`     | destructive | ja                        | –                                       |
+| `shell.window.moveToWorkspace` (`workspaceId`) | window    | `shell.layout`     | write       | ja                        | –                                       |
+| `shell.workspace.create`                       | none      | `shell.layout`     | write       | ja                        | –                                       |
+| `shell.workspace.switch`                       | workspace | `shell.layout`     | write       | ja                        | –                                       |
+| `shell.workspace.delete`                       | workspace | `shell.layout`     | destructive | ja                        | –                                       |
+| `shell.windows.overview`                       | none      | `shell.layout`     | write       | ja                        | –                                       |
+| `shell.launcher.open`                          | none      | `shell.layout`     | write       | ja                        | –                                       |
+| `shell.system.back`                            | none      | `shell.navigation` | write       | nein (nur Plattform-Hook) | –                                       |
+| `shell.state.get`                              | none      | `shell.read`       | read        | ja                        | –                                       |
+| `shell.tab.history`                            | tab       | `shell.read`       | read        | ja                        | –                                       |
+| `shell.apps.list`                              | none      | `shell.read`       | read        | ja                        | –                                       |
+| `shell.actions.list`                           | none      | `shell.read`       | read        | ja                        | –                                       |
+
+Fenster- und Tab-Schließen durch einen Agenten laufen durch dieselben Guards wie
+beim Nutzer (015 FR-014): Die Bestätigung erscheint beim Nutzer; lehnt er ab,
+liefert die Aktion `failed` mit `message: "declined by user"`.
+
+### Chat (`binding: tab`, `appId: system.chat`)
+
+| Id                                                 | Bereich      | Wirkung     | Agent    |
+| -------------------------------------------------- | ------------ | ----------- | -------- |
+| `chat.conversation.new`                            | `chat.write` | write       | ja       |
+| `chat.conversation.open` (`threadId`)              | `chat.read`  | write       | ja       |
+| `chat.conversation.rename` (`threadId`, `title`)   | `chat.write` | write       | ja       |
+| `chat.conversation.delete` (`threadId`)            | `chat.write` | destructive | ja       |
+| `chat.conversations.list`                          | `chat.read`  | read        | ja       |
+| `chat.messages.list` (`threadId`)                  | `chat.read`  | read        | ja       |
+| `chat.message.send` (`text`)                       | `chat.write` | write       | ja       |
+| `chat.reply.cancel`                                | `chat.write` | write       | ja       |
+| `chat.model.select` (`modelId`)                    | `chat.write` | write       | ja       |
+| `chat.approval.decide` (`requestId`, `decision`)   | `guardrails` | write       | **nein** |
+| `chat.permissionMode.set` (`manual`/`auto`/`plan`) | `guardrails` | write       | **nein** |
+
+### Einstellungen (`binding: global`)
+
+| Id                                                         | Bereich           | Wirkung             | Agent    |
+| ---------------------------------------------------------- | ----------------- | ------------------- | -------- |
+| `settings.get`                                             | `settings.read`   | read                | ja       |
+| `settings.device.setAlias` (`alias`)                       | `settings.device` | write               | ja       |
+| `settings.models.setDefault` (`modelId`)                   | `settings.models` | write               | ja       |
+| `settings.models.setStt` (`modelId`)                       | `settings.models` | write               | ja       |
+| `settings.models.download` / `.cancelDownload` / `.delete` | `settings.models` | write / destructive | ja       |
+| `settings.delegate.connectProvider`                        | `guardrails`      | write               | **nein** |
+| `settings.autonomy.setMode`                                | `guardrails`      | write               | **nein** |
+| `settings.delegate.setDenyRules`                           | `guardrails`      | write               | **nein** |
+
+`settings.get` gibt Werte der Leitplanken lesbar zurück, aber **nie**
+Zugangsdaten oder Geheimnisse von Anbietern.
 
 ## 2. Aufruf
 
 ```ts
-shell.runAction(id: string, context?: { windowId?: string; tabId?: string; workspaceId?: string; steps?: number })
+shell.runAction(id: string, input?: Record<string, unknown>, caller?: ActionCaller): Promise<ActionOutcome>
+// caller Standard: { kind: 'user' }
 ```
 
-- Ohne `context` löst der Store das Ziel nach `target` auf
-  (`focusedTab` = aktiver Tab von `state.activeWindowId`).
-- Schaltflächen, Menüs und Tastenkürzel aus Spec 015 und 020 rufen
-  ausschließlich `runAction` (FR-024). Die Maus-Seitentasten übergeben
-  `windowId` des Fensters unter dem Zeiger; die Verlaufsliste übergibt
-  `steps` (±n).
-- Unbekannte Id oder nicht auflösbares Ziel: No-op, Warnung nur im Dev-Build.
+- Ablauf und Fehlercodes: [data-model.md](../data-model.md#actionoutcome-ergebnis).
+- Schaltflächen, Menüs und Tastenkürzel rufen ausschließlich `runAction`
+  (FR-024); in Vue-Komponenten über `useAction(id)` (liefert eine
+  Aufruf-Funktion mit `caller: user`).
+- Tab-gebundene Handler registriert die App mit
+  `useShellTab().registerActionHandler(id, handler)`; ein Handler je Aktion und
+  Tab-Instanz, Abmeldung beim Unmount.
 
 ## 3. Tastatur
 
-- Ein einziger `keydown`-Listener (Capture-Phase) auf der Shell-Host-Seite.
-- Normierung: `Ctrl+Alt+Shift+Meta+<KeyboardEvent.code>`; Plattform
-  `mac` = `navigator.userAgentData?.platform ?? navigator.platform` beginnt mit
-  „Mac“.
-- Treffer → `preventDefault()` + `runAction`. Ausnahme: `yieldToTextInput` der
-  Aktion für die Plattform ist gesetzt und `event.target` ist editierbar
-  (`input`, `textarea`, `[contenteditable]`) → nicht abfangen (FR-017; betrifft
-  Alt+Pfeil unter macOS).
-- Die Pfeiltasten-Navigation der Tab-Leiste (015 FR-038) und alle
-  komponentenlokalen Tasten (Escape in Popovern, Enter im Composer) bleiben
-  lokal und sind keine globalen Belegungen (FR-026).
+- Ein einziger `keydown`-Listener (Capture-Phase) im obersten Dokument auf der
+  Shell-Host-Seite.
+- Normierung `Ctrl+Alt+Shift+Meta+<KeyboardEvent.code>`; Plattform `mac`, wenn
+  `navigator.userAgentData?.platform ?? navigator.platform` mit „Mac“ beginnt.
+- Treffer → `preventDefault()` + `runAction(id, {}, user)`. Ausnahme:
+  `yieldToTextInput` für die Plattform gesetzt und `event.target` editierbar
+  (`input`, `textarea`, `[contenteditable]`) → nicht abfangen (FR-017).
+- Komponentenlokale Tasten (Pfeiltasten der Tab-Leiste, Escape in Popovern,
+  Enter im Composer) bleiben lokal (FR-026).
+- Browser-eigene Kürzel des Webviews werden abgeschaltet, wo die Plattform es
+  anbietet (research R17).
 
 ## 4. Maus
 
 - Am Fenster-Wurzelelement (`ShellWindow.vue`, `data-shell-window-id`):
   `mouseup` mit `button === 3` → `shell.tab.back`, `button === 4` →
-  `shell.tab.forward`, jeweils mit `context.windowId` dieses Fensters; kein
-  `focusWindow` (FR-018). `mousedown`/`auxclick` dieser Tasten: `preventDefault`.
-- Außerhalb von Fenstern: nichts.
-- Kommen die Tasten nicht als DOM-Ereignis an, greift der System-Zurück-Pfad
-  (Abschnitt 5) mit dem Fenster unter der zuletzt bekannten Zeigerposition
-  (research R6).
+  `shell.tab.forward`, mit dem aktiven Tab dieses Fensters als `tabId`; kein
+  `focusWindow` (FR-018). `mousedown`/`auxclick` dieser Tasten:
+  `preventDefault`.
+- Außerhalb von Fenstern: nichts. Über eingebetteten Dokumenten: siehe research
+  R17.
 
-## 5. System-Zurück (Webview/Android)
+## 5. System-Zurück
 
+- Nur der native Zurück-Hook der Plattform ruft `shell.system.back` auf
+  (research R7). Die Browser-Historie des Webviews löst nie eine Aktion aus.
 - `pages/workspace/[instance].vue` bricht jede Router-Navigation weg von der
-  Seite ab (`onBeforeRouteLeave`) und ruft stattdessen `shell.systemBack()`.
-- `systemBack()`:
-  1. Ist ein Shell-Overlay offen (Launcher, Fensterübersicht,
-     Arbeitsbereichs-Übersicht, „+“-Liste, Chevron, Verlaufsliste): schließen.
-  2. Sonst Ziel = Fenster unter der letzten Zeigerposition, falls die Eingabe
-     eine Maustaste war, sonst oberstes sichtbares Fenster; dessen aktiver Tab
-     `back()`.
-  3. Hat das Ziel keinen Zurück-Eintrag: in der Kompaktdarstellung
-     Fensterübersicht öffnen; sonst nichts.
-- Nach jedem abgefangenen Zurück stellt die Host-Seite den Sperr-Eintrag der
-  Router-Historie wieder her (research R7). Die App wird nie verlassen.
+  Seite ab und ignoriert sie (`onBeforeRouteLeave`), ohne sie zu deuten.
+- `shell.system.back`:
+  1. Offenes Shell-Overlay (Launcher, Fensterübersicht,
+     Arbeitsbereichs-Übersicht, „+“-Liste, Chevron, Verlaufsliste) → schließen.
+  2. Sonst aktiver Tab des obersten sichtbaren Fensters → `back()`.
+  3. Kein Zurück-Eintrag: Kompaktdarstellung → Fensterübersicht öffnen; sonst
+     nichts. Die App wird nie verlassen.
 
 ## 6. Schaltflächen und Verlaufsliste
 
-- `ShellNavButtons.vue` links vor `ShellTabBar` in der Titelleiste; zwei
-  Icon-Schaltflächen mit `aria-label` (`shell.nav.back`, `shell.nav.forward`),
-  `disabled`, wenn keine Einträge in der Richtung existieren; Tooltip mit
-  Tastenkürzel.
-- Langer Druck (≥ 500 ms, Zeiger bleibt auf der Schaltfläche) oder
-  `contextmenu` öffnet die Verlaufsliste (Dropdown, höchstens 15 Einträge,
-  nächster zuerst, Titel je Eintrag). Auswahl → `runAction('shell.tab.back' |
-'shell.tab.forward', { windowId, steps })`.
-- `pointerdown` auf den Schaltflächen startet keinen Fenster-Drag (wie die
-  übrigen Titelleisten-Schaltflächen in 015).
+- `ShellNavButtons.vue` links vor `ShellTabBar`; zwei Icon-Schaltflächen mit
+  `aria-label` (`shell.nav.back`, `shell.nav.forward`), `disabled`, wenn keine
+  Einträge in der Richtung existieren; Tooltip mit Tastenkürzel.
+- Langer Druck (≥ 500 ms) oder `contextmenu` öffnet die Verlaufsliste
+  (höchstens 15 Einträge, nächster zuerst, Titel je Eintrag). Auswahl →
+  `runAction('shell.tab.go', { tabId, steps })`.
+- `pointerdown` auf den Schaltflächen startet keinen Fenster-Drag.

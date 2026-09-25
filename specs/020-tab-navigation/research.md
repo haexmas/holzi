@@ -107,13 +107,13 @@ Funktionen `(history, …) → history` und damit ohne Vue testbar.
 
 **Decision**:
 
-| Eingabe                                       | Ziel                                         | Umsetzung                                                                                          |
-| --------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Schaltflächen Zurück/Vor                      | aktiver Tab dieses Fensters                  | `ShellNavButtons.vue` links vor `ShellTabBar` in `ShellWindow.vue`                                 |
-| Langer Druck (≥ 500 ms) / Rechtsklick         | Verlaufsliste                                | Dropdown aus dem haex-ui-Layer (`ShadcnDropdownMenu`), per Tastatur bedienbar                      |
-| Alt+←/→ (alle), Cmd+[/] (macOS)               | aktiver Tab des fokussierten Fensters        | ein globaler `keydown`-Listener auf der Shell-Host-Seite, Auflösung über die Aktions-Registry (R8) |
-| Maustasten Zurück/Vor                         | aktiver Tab des Fensters unter dem Zeiger    | `mouseup`/`auxclick` mit `button` 3/4 am Fenster-Wurzelelement, Default unterdrückt; Fallback R7   |
-| System-Zurück (Android-Geste, Webview-Zurück) | aktiver Tab des obersten sichtbaren Fensters | R7                                                                                                 |
+| Eingabe                               | Ziel                                         | Umsetzung                                                                                          |
+| ------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Schaltflächen Zurück/Vor              | aktiver Tab dieses Fensters                  | `ShellNavButtons.vue` links vor `ShellTabBar` in `ShellWindow.vue`                                 |
+| Langer Druck (≥ 500 ms) / Rechtsklick | Verlaufsliste                                | Dropdown aus dem haex-ui-Layer (`ShadcnDropdownMenu`), per Tastatur bedienbar                      |
+| Alt+←/→ (alle), Cmd+[/] (macOS)       | aktiver Tab des fokussierten Fensters        | ein globaler `keydown`-Listener auf der Shell-Host-Seite, Auflösung über die Aktions-Registry (R8) |
+| Maustasten Zurück/Vor                 | aktiver Tab des Fensters unter dem Zeiger    | `mouseup`/`auxclick` mit `button` 3/4 am Fenster-Wurzelelement, Default unterdrückt; Spike unten   |
+| System-Zurück (Android-Geste)         | aktiver Tab des obersten sichtbaren Fensters | nativer Zurück-Hook → Aktion `shell.system.back` (R7)                                              |
 
 Für Alt+Pfeil gilt: Liegt der Fokus in einem editierbaren Element und läuft holzi
 unter macOS, wird die Taste nicht abgefangen (Wortsprung hat Vorrang, FR-017).
@@ -126,60 +126,77 @@ in haex-vault).
 
 **Offener Punkt (Spike in tasks)**: Ob die Maus-Seitentasten unter WebKitGTK
 (Linux), WKWebView (macOS) und WebView2 (Windows) als DOM-Ereignis ankommen oder
-vom Webview selbst als History-Navigation verarbeitet werden. Kommen sie nicht
-an, greift R7 und löst das Ziel über die zuletzt bekannte Zeigerposition
-(`pointermove` → `document.elementFromPoint` → nächstes Fenster-Wurzelelement)
-auf. Das Verhalten ist damit in beiden Fällen spezifikationsgemäß.
+vom Webview selbst als History-Navigation verarbeitet werden. Kommen sie im DOM
+an, gilt die Tabelle. Verarbeitet der Webview sie selbst, wird das abgeschaltet,
+wo die Plattform es erlaubt (Webview-Einstellung beim Fensteraufbau in
+Rust); wo nicht, bewirken sie wegen der flachen Historie (R7) nichts in holzi —
+FR-018 ist dann für diese Plattform als Einschränkung im PR zu vermerken.
 
-## R7 — Webview-Historie: Sperre und System-Zurück
+## R7 — Webview-Historie: keine Sperr-Einträge, System-Zurück nativ
 
-**Decision**: Die Shell-Host-Seite `pages/workspace/[instance].vue` registriert
-`onBeforeRouteLeave`. Jede vom Router ausgelöste Navigation weg von der
-Workspace-Seite (praktisch nur durch System-Zurück, denn Sperren und Schließen
-beenden den Prozess, Spec 013) wird abgebrochen und als **System-Zurück**
-behandelt: Ziel ist der aktive Tab des obersten sichtbaren Fensters bzw. — für
-Maustasten, die nicht als DOM-Ereignis ankommen — das Fenster unter der zuletzt
-bekannten Zeigerposition. Hat das Ziel keinen Zurück-Eintrag, öffnet sich in der
-Kompaktdarstellung die Fensterübersicht; ist ein Shell-Overlay offen, schließt es
-sich (FR-019). Damit System-Zurück überhaupt ein Ereignis auslöst statt die App
-zu beenden, hält die Host-Seite einen Sperr-Eintrag in der Router-Historie
-(ein `router.push` auf dieselbe Seite mit einem Marker in `history.state`,
-nach jedem abgefangenen Zurück erneut).
+**Decision**:
 
-**Rationale**: Die Webview-Historie dient nie als Tab-Historie (FR-020); der
-Router bleibt Herr seiner eigenen `history.state`-Struktur (direktes
-`pushState` an vue-router vorbei bricht dessen Zustandsschlüssel).
+- holzi hält die Browser-Historie des obersten Dokuments bewusst **flach**: Der
+  Einstieg in die Workspace-Seite erfolgt per `router.replace`, es gibt keine
+  Sperr- oder Hilfseinträge.
+- `pages/workspace/[instance].vue` registriert `onBeforeRouteLeave` nur als
+  **Abwehr**: Jede vom Router ausgelöste Navigation weg von der Workspace-Seite
+  wird abgebrochen und **ignoriert** — sie wird nie als Zurück eines Tabs
+  gedeutet. (Sperren und Schließen beenden den Prozess, Spec 013; es gibt keinen
+  legitimen Router-Weg weg von der Seite.)
+- **System-Zurück** kommt nicht über die Webview-Historie, sondern über den
+  nativen Zurück-Hook der Plattform (Android: Zurück-Taste/-Geste über Tauri)
+  und ruft die Aktion `shell.system.back` auf. Ziel: aktiver Tab des obersten
+  sichtbaren Fensters; ohne Zurück-Eintrag in der Kompaktdarstellung die
+  Fensterübersicht; offenes Shell-Overlay schließen (FR-019).
 
-**Alternatives considered**: roher `popstate`-Listener mit eigenem `pushState`
-(haex-vault) — kollidiert mit vue-router, der denselben `popstate` verarbeitet.
+**Rationale**: Ein eingebettetes Dokument (iframe) teilt sich mit holzi die
+gemeinsame Browser-Historie des Webviews. Mit Sperr-Einträgen könnte ein
+`history.back()` aus einem iframe holzis Eintrag treffen und würde dann als
+Zurück eines Tabs gedeutet — ein Verstoß gegen FR-034. Mit flacher Historie und
+„abbrechen, nicht deuten“ hat Webview-Historie keinerlei Wirkung auf holzi
+(FR-035).
 
-**Einschränkung**: holzi hat heute kein Android-Target. Die Android-Geste wird
-über denselben Pfad bedient (Tauri leitet sie an die Webview-Historie weiter),
-kann aber erst mit einem Android-Build end-to-end geprüft werden. Auf dem Desktop
-wird der Pfad mit `history.back()` in den DevTools geprüft (quickstart.md).
+**Alternatives considered**: Sperr-Eintrag im Router mit Deutung als
+System-Zurück (erste Planfassung) — von iframes auslösbar; roher
+`popstate`-Listener mit eigenem `pushState` (haex-vault) — kollidiert zusätzlich
+mit vue-router.
 
-## R8 — Aktions-Registry (Name „Aktion“, nicht „Command“)
+**Spike (tasks)**: Die genaue Tauri-2-Schnittstelle für die Android-Zurück-Taste
+(Plugin-Event bzw. `onBackButtonPress`) ist zu verifizieren. holzi hat heute kein
+Android-Target; der Hook wird hinter einer Plattformprüfung angelegt und mit
+`ponytail:` markiert, die Logik von `shell.system.back` ist unabhängig davon in
+`check:shell-navigation` geprüft.
 
-**Decision**: `src/lib/shell/actions.ts` definiert Shell-Aktionen
-(`ShellActionDefinition`: `id`, `titleKey`, `target`, `defaultKeys`),
-`src/lib/shell/keybindings.ts` normiert `KeyboardEvent` zu Chords
-(`Alt+ArrowLeft`, `Meta+BracketLeft`) und löst Chords je Plattform zu Aktionen
-auf. Der Store bekommt `runAction(id, context)`. Schaltflächen und Menüs der
-Spec-015-Komponenten rufen künftig `runAction` statt Store-Methoden direkt
-(FR-024). Nur `shell.tab.back` und `shell.tab.forward` haben eine
-Standardbelegung (FR-025). Die Pfeiltasten der Tab-Leiste bleiben lokales
-ARIA-Verhalten (FR-026).
+## R8 — Aktions-Registry, agentenfähig (Name „Aktion“, nicht „Command“)
 
-**Rationale**: In holzi bezeichnet „Command“ durchgehend Tauri-Commands
-(`#[tauri::command]`, `contracts/tauri-commands.md`, die sechs
-Shell-Layout-Commands aus 015). Graphify-Abfrage (Graph vom 2026-09-21) zu
-`router`, `navigation`, `keybinding`, `shortcut`, `hotkey`, `keydown`: keine
-Treffer im Frontend; `command` trifft nur Tauri-Commands. Spec 015 spricht
-bereits von „Shell-Aktionen“ — der Begriff wird übernommen. Die Befehle der Spec
-heißen im Code daher Aktionen.
+**Decision**: Eine Registry `ShellActionDefinition` (reine Daten unter
+`src/lib/actions/`) mit: `id`, `titleKey`, `description` (englisch, für
+maschinelle Aufrufer; Tool-Beschreibungen sind im Projekt englisch),
+`input` und `result` als JSON Schema, `target` (`none` | `tab` | `window` |
+`workspace`, dazu ob ausdrücklich angebbar), `scope`, `effect`
+(`read` | `write` | `destructive`), `agentCallable`, `defaultKeys`,
+`yieldToTextInput`. Ein Runner `runAction(id, input, caller)` validiert die
+Eingabe, prüft Aufrufer und Leitplanken, löst das Ziel auf und ruft den Handler.
 
-**Alternatives considered**: `commands.ts` (Namenskollision), Tastenkürzel direkt
-in Komponenten (widerspricht FR-024 und macht die Folge-Spec teuer).
+**Rationale**:
+
+- In holzi bezeichnet „Command“ Tauri-Commands. Graphify-Abfrage (Graph vom
+  2026-09-21) zu `router`, `navigation`, `keybinding`, `shortcut`, `hotkey`,
+  `keydown`: keine Frontend-Treffer; `command` trifft nur Tauri-Commands. Spec 015
+  spricht bereits von „Shell-Aktionen“.
+- JSON Schema, weil der vorhandene `ToolRegistry` des eingebauten Agenten
+  (`src-tauri/src/chat/tools/`, `input_schema()` als `serde_json::Value`) und
+  MCP (`tools/list`) genau dieses Format erwarten. Spec 021 kann die Aktionen dann
+  ohne Umbau als Tools anbieten.
+- `effect` lässt sich später direkt auf `RiskClass` abbilden (`read` → `Safe`,
+  sonst `Risky`), `scope` ist die Einheit für Berechtigungen je Agent.
+
+**Alternatives considered**: `commands.ts` (Namenskollision); eine
+Schema-Bibliothek wie zod (neue Abhängigkeit; wir brauchen nur eine kleine
+Teilmenge — `object`, `properties`, `required`, `string`, `number`, `integer`,
+`boolean`, `array`, `enum` —, die ein eigener Validator von ~100 Zeilen prüft);
+Tastenkürzel direkt in Komponenten (widerspricht FR-024).
 
 ## R9 — Titel
 
@@ -263,5 +280,90 @@ sind.
 
 ## R16 — ADR
 
-**Decision**: Kein ADR nötig. Die Entscheidungen berühren kein Prinzip der
-Constitution; sie sind in dieser Datei begründet.
+**Decision**: Kein ADR für diese Spec. Die Entscheidungen berühren kein Prinzip
+der Constitution; sie sind in dieser Datei begründet. Die Zugriffsrichtung
+„externer Agent → holzi“ (MCP-Server, Anmeldung, Berechtigungen je Agent)
+ergänzt ADR-0004 um eine dritte Richtung und bekommt mit Spec 021 ein eigenes
+ADR-0005.
+
+## R17 — Isolation eingebetteter Dokumente (haextensions)
+
+**Decision**: holzis Navigationszustand lebt ausschließlich im Shell-Store; die
+Browser-Historie wird nie gelesen (R7). Dazu:
+
+- **Tastatur**: Der globale `keydown`-Listener sitzt im obersten Dokument; über
+  einem fokussierten iframe erreicht ihn die Taste nicht. Browser-eigene
+  Kürzel des Webviews werden abgeschaltet, wo die Plattform das anbietet
+  (WebView2: Browser-Accelerator-Keys aus), damit Alt+Pfeil im iframe keine
+  Webview-Navigation auslöst. Weiterleitung aus dem iframe an holzi übernimmt
+  die SDK-Brücke (Spec 017).
+- **Maus**: Seitentasten über einem iframe gehen an das iframe-Dokument. Ob der
+  Webview daraus eigene History-Navigation macht, klärt der Spike aus
+  quickstart §3; wenn ja, wird sie abgeschaltet, wo möglich. Andernfalls trifft
+  sie höchstens das iframe (FR-035) — holzi bleibt unberührt, weil es keine
+  Webview-Einträge deutet.
+- **Programmatisch**: `pushState`/`history.back()` eines iframes wirken nur auf
+  dessen Dokument; holzi reagiert nicht darauf.
+- **Künftige Extension-Tabs** (017): Der History-Polyfill des SDK
+  (`haex-space/vault-sdk` @ `502593e84b8d289b0986a2777754d6bd8f52da5e`,
+  `src/polyfills/history.ts`) wird zur Navigations-Brücke: Er meldet Orte über
+  den MessagePort an die Shell, statt die gemeinsame Historie zu füllen, und
+  folgt Anweisungen der Shell per `popstate`. So nutzen Extension-Tabs dieselbe
+  Tab-Historie; die Brücke ist kooperativ, die Garantie von FR-034 gilt auch
+  ohne sie.
+
+**Prüfung**: `check:shell-navigation` kann kein iframe laden; der Schutz wird
+manuell nach quickstart M21 geprüft (DevTools: iframe in einen Tab einfügen,
+`pushState` und `history.back()` darin auslösen).
+
+## R18 — Aufrufer, Bereiche, Leitplanken
+
+**Decision**:
+
+- `ActionCaller = { kind: 'user' } | { kind: 'builtinAgent' } | { kind:
+'externalAgent'; agentId: string }`.
+- Bereiche (erste Liste): `shell.layout`, `shell.navigation`, `shell.read`,
+  `chat.read`, `chat.write`, `settings.read`, `settings.device`,
+  `settings.models`, `guardrails`.
+- `guardrails` umfasst Autonomie-Modus, Deny-Regeln, Anbieter verbinden und
+  Zugangsdaten sowie (künftig) Agenten-Berechtigungen; jede Aktion dort hat
+  `agentCallable: false`. Der Runner lehnt jeden Aufruf mit `caller.kind ≠
+'user'` ab (`forbidden_for_agents`), bevor die Eingabe den Handler erreicht.
+- Für Agenten-Aufrufer ist ein ausdrückliches Ziel Pflicht (FR-030); fehlt es:
+  `target_required`.
+- In dieser Spec rufen nur Oberfläche und Tastatur (`user`) auf; die
+  Agenten-Aufrufer existieren im Typ und in den Tests, einen Zugang gibt es erst
+  mit Spec 021.
+
+## R19 — Globale und tab-gebundene Handler
+
+**Decision**: Zwei Arten von Handlern:
+
+- **Global**, beim App-Start registriert (Nuxt-Plugin): Shell-Aktionen und
+  Aktionen, die nur das Backend brauchen (Einstellungen über
+  `usePreferences`/`useDevice`/Provider-Composables). Sie funktionieren, ohne
+  dass eine App offen ist — ein Agent kann eine Einstellung ändern, ohne das
+  Fenster zu öffnen.
+- **Tab-gebunden**, von der gemounteten App-Instanz über `useShellTab()`
+  registriert (Chat: Nachricht senden, Antwort abbrechen, Freigabe, Verlauf
+  öffnen). Ist die App nicht offen, öffnet der Runner sie (Einzelinstanz:
+  aktiviert), wartet auf die Registrierung (Zeitlimit 5 s → `app_unavailable`)
+  und ruft dann auf.
+
+**Rationale**: Chat-Zustand (laufender Turn, Freigaben) lebt in der
+Chat-Instanz; Einstellungen leben im Backend. So bleibt jede Logik an einer
+Stelle, und Oberfläche und Agenten teilen sie.
+
+## R20 — Vollständigkeit des Katalogs prüfen
+
+**Decision**: `check:shell-navigation` prüft den Katalog strukturell (eindeutige
+Ids, gültige Schemas, jeder Bereich existiert, jede `guardrails`-Aktion ist
+`agentCallable: false`, Runner lehnt Agenten dort ab). Die Abdeckung aller
+Bedienelemente (SC-007) prüft ein Lint-Schritt in `check:templates`: In
+`components/shell/**` und `components/apps/**` darf ein `@click`, das Zustand
+ändert, nur `runAction`/`useAction` aufrufen; Ausnahmen (reine
+Ansichts-Umschalter wie Aufklappen) tragen einen Kommentar `action-exempt:`.
+Ergänzend eine manuelle Prüfliste in quickstart.
+
+**Rationale**: Eine vollautomatische Semantikprüfung „ändert Zustand“ ist nicht
+machbar; eine einfache Regel plus explizite Ausnahmen hält SC-007 überprüfbar.

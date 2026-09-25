@@ -87,6 +87,9 @@ openApp(appId: string, at?: string | TabLocation): void   // FR-012
   fokussieren, Arbeitsbereich aktivieren (015 FR-016), dann `push(at)`.
 - `setTitle(title)` bleibt; ein gesetzter Titel gilt bis zur nächsten Navigation
   des Tabs (research R9).
+- `registerActionHandler(actionId, handler)`: meldet einen tab-gebundenen
+  Handler für eine Aktion der eigenen App an (research R19,
+  [shell-actions.md](./shell-actions.md) §2); gibt eine Abmeldefunktion zurück.
 
 ## 5. Legacy-Adressen
 
@@ -102,3 +105,6 @@ Host-Seite ruft `openApp(appId, at)` einmal auf und entfernt beide Parameter per
 - Zurück/Vor schließen nie etwas (FR-007).
 - Beim Navigieren wird die verlassene Ansicht unmontiert; Apps, die Eingaben
   retten wollen, tun das selbst (spec Annahmen).
+- Inhalte eines Tabs (auch eingebettete Dokumente) können Ort und Historie
+  nicht verändern; nur `useTabRouter()` der eigenen App und Aktionen tun das
+  (FR-034, research R17).

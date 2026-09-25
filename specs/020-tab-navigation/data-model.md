@@ -76,21 +76,65 @@ bleibt beim Tab-Wechsel, Minimieren, Maximieren, Arbeitsbereichswechsel und
 Verschieben erhalten (Tab-Id unverändert, FR-010), verschwindet beim Schließen
 des Tabs (`syncTabRuntime`, FR-011).
 
-## ShellActionDefinition (Aktion / „Befehl“ der Spec)
+## ShellActionDefinition (Aktion)
 
-| Feld               | Typ                                                                | Regeln                                                                                  |
-| ------------------ | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| `id`               | `string`                                                           | Namensraum `shell.*`, stabil (Grundlage der Folge-Spec Tastenkürzel)                    |
-| `titleKey`         | `string`                                                           | i18n-Schlüssel `shell.actions.<…>`                                                      |
-| `target`           | `'focusedTab' \| 'focusedWindow' \| 'pointerWindowTab' \| 'shell'` | worauf die Aktion ohne expliziten Kontext wirkt                                         |
-| `defaultKeys`      | `{ default?: KeyChord[]; mac?: KeyChord[] }`                       | nur `shell.tab.back`/`forward` belegt (FR-025)                                          |
-| `yieldToTextInput` | `{ mac?: boolean; default?: boolean }`                             | ob die Belegung in editierbaren Elementen nicht abgefangen wird (Alt+Pfeil unter macOS) |
+Reine Daten unter `src/lib/actions/` (research R8); Handler werden getrennt
+registriert (R19).
 
-`KeyChord`: String in fester Reihenfolge `Ctrl+Alt+Shift+Meta+<code>`, `code`
-nach `KeyboardEvent.code` (layoutunabhängig, z. B. `ArrowLeft`, `BracketLeft`).
+| Feld               | Typ                                          | Regeln                                                                                                                                                 |
+| ------------------ | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`               | `string`                                     | Namensraum `shell.*`, `chat.*`, `settings.*`; stabil, sobald ausgeliefert                                                                              |
+| `titleKey`         | `string`                                     | i18n-Schlüssel `actions.<id>`                                                                                                                          |
+| `description`      | `string`                                     | englisch, für maschinelle Aufrufer (Tool-Beschreibung)                                                                                                 |
+| `input`            | JSON Schema (Teilmenge)                      | Wurzel `type: object`; erlaubt `properties`, `required`, `string`, `number`, `integer`, `boolean`, `array`, `enum`, `description`                      |
+| `result`           | JSON Schema (Teilmenge)                      | Form des Ergebnisses                                                                                                                                   |
+| `target`           | `'none' \| 'tab' \| 'window' \| 'workspace'` | worauf die Aktion wirkt; bei ≠ `none` enthält `input` das Feld `tabId` / `windowId` / `workspaceId` (optional für `user`, Pflicht für Agenten, FR-030) |
+| `scope`            | `ActionScope`                                | genau ein Bereich (FR-031)                                                                                                                             |
+| `effect`           | `'read' \| 'write' \| 'destructive'`         | Abbildung später: `read` → `Safe`, sonst `Risky`                                                                                                       |
+| `agentCallable`    | `boolean`                                    | `false` für jeden Eintrag mit `scope = 'guardrails'` (Invariante)                                                                                      |
+| `binding`          | `'global' \| 'tab'`                          | global beim Start registriert oder von der App-Instanz (R19)                                                                                           |
+| `appId`            | `string?`                                    | Pflicht bei `binding = 'tab'`: welche App der Runner öffnet                                                                                            |
+| `defaultKeys`      | `{ default?: KeyChord[]; mac?: KeyChord[] }` | nur `shell.tab.back`/`forward` belegt (FR-025)                                                                                                         |
+| `yieldToTextInput` | `{ mac?: boolean; default?: boolean }`       | Belegung in editierbaren Elementen nicht abfangen                                                                                                      |
 
-Aktionsliste und Kontext siehe
-[contracts/shell-actions.md](./contracts/shell-actions.md).
+`KeyChord`: `Ctrl+Alt+Shift+Meta+<KeyboardEvent.code>` in dieser Reihenfolge.
+
+## ActionScope (Berechtigungsbereich)
+
+`shell.layout` · `shell.navigation` · `shell.read` · `chat.read` · `chat.write` ·
+`settings.read` · `settings.device` · `settings.models` · `guardrails`
+
+Jeder Bereich hat `titleKey` (`actions.scopes.<name>`) und eine Beschreibung;
+`guardrails` ist für Agenten gesperrt (FR-032). Neue Bereiche (etwa für
+haextensions, Passwörter, Dateien, Shell) kommen mit den Specs 017–021 hinzu.
+
+## ActionCaller (Aufrufer)
+
+`{ kind: 'user' }` · `{ kind: 'builtinAgent' }` · `{ kind: 'externalAgent';
+agentId: string }` (FR-029). In dieser Spec ruft nur `user` auf; die anderen
+Formen existieren für Runner und Tests.
+
+## ActionOutcome (Ergebnis)
+
+| Form   | Felder                                                       |
+| ------ | ------------------------------------------------------------ |
+| Erfolg | `{ ok: true, result: unknown }` (entspricht `result`-Schema) |
+| Fehler | `{ ok: false, code, message, field? }`                       |
+
+Fehlercodes: `unknown_action`, `invalid_input` (mit `field`), `target_required`,
+`target_not_found`, `forbidden_for_agents`, `app_unavailable`, `failed`
+(Handler-Fehler, `message` aus `errString`).
+
+### Ablauf `runAction(id, input, caller)`
+
+1. Aktion nachschlagen → sonst `unknown_action`.
+2. `caller.kind ≠ 'user'` und `agentCallable = false` → `forbidden_for_agents`.
+3. Eingabe gegen `input` prüfen → sonst `invalid_input`.
+4. Ziel: ausdrücklich angegeben → prüfen (`target_not_found`); fehlt es →
+   `user`: aus dem Fokus (FR-025), Agent: `target_required`.
+5. `binding = 'tab'`: App öffnen/aktivieren, auf Handler warten (≤ 5 s) →
+   sonst `app_unavailable`.
+6. Handler ausführen → Erfolg oder `failed`.
 
 ## Invarianten (Prüfung in `check:shell-navigation`)
 
@@ -100,3 +144,7 @@ Aktionsliste und Kontext siehe
    ändern keine Historie.
 4. Nach `hydrate` hat jeder Tab genau einen Eintrag `/`.
 5. Länge ≤ 50 nach jeder Operation.
+6. Aktions-Ids eindeutig; jedes Schema in der erlaubten Teilmenge; jeder
+   `scope` existiert; `scope = 'guardrails'` ⇒ `agentCallable = false`.
+7. Kein Aufruf mit Agenten-Aufrufer erreicht den Handler einer Aktion mit
+   `agentCallable = false`.
