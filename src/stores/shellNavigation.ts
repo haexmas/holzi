@@ -115,6 +115,10 @@ export function createShellNavigation(deps: {
       return state.windows.some((w) => w.tabs.some((t) => t.id === id))
     },
     awaitTabHandler: (appId, actionId, timeoutMs) => {
+      // A mounted instance answers directly; otherwise open/activate the app (which also mounts a
+      // lazily mounted tab) and wait for it to register.
+      const ready = handlers.findTab(tabIdsOf(appId), actionId)
+      if (ready) return Promise.resolve(ready)
       deps.openApp(appId)
       return handlers.awaitTab(tabIdsOf(appId), actionId, timeoutMs)
     },

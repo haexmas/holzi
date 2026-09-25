@@ -206,8 +206,13 @@ export interface PageGlobals {
   instancesStore?: object
   navigateTo?: (to: string) => unknown
   tabRouter?: RecordingTabRouter
-  /** Every `useAction(id)(input)` call the page makes (spec 020). */
+  /** Every `useAction(id)(input)` / `shell.runAction` call the page makes (spec 020). */
   actionLog?: { id: string; input: Record<string, unknown> }[]
+  /** The tab-bound action handlers the page registers (spec 020). */
+  actionHandlers?: Map<
+    string,
+    (context: { input: Record<string, unknown> }) => unknown
+  >
 }
 
 /** A tab router double for the chat page (spec 020-tab-navigation): a real linear history of paths,
@@ -378,6 +383,7 @@ export function createChatState(
     'useTabRouter',
     'useChatNavigation',
     'useAction',
+    'useChatShell',
     'useModelsStore',
     'storeToRefs',
     'navigateTo',
@@ -401,7 +407,14 @@ export function createChatState(
     req('~/composables/useChatPermissionMode').useChatPermissionMode,
     req('~/composables/useChatSubscriptions').registerChatSubscriptions,
     () => pageGlobals.instancesStore ?? {},
-    () => ({ flushAsync: async () => {}, openApp: () => {} }),
+    () => ({
+      flushAsync: async () => {},
+      openApp: () => {},
+      runAction: async (id: string, input: Record<string, unknown> = {}) => {
+        pageGlobals.actionLog?.push({ id, input })
+        return { ok: true, result: null }
+      },
+    }),
     () => ({
       tabId: '',
       windowId: '',
@@ -410,6 +423,15 @@ export function createChatState(
       setTitle: () => {},
       registerCloseGuard: () => () => {},
       closeSelf: () => {},
+      appId: 'system.chat',
+      openApp: () => {},
+      registerActionHandler: (
+        id: string,
+        handler: (context: { input: Record<string, unknown> }) => unknown,
+      ) => {
+        pageGlobals.actionHandlers?.set(id, handler)
+        return () => pageGlobals.actionHandlers?.delete(id)
+      },
     }),
     () => pageGlobals.tabRouter ?? createRecordingTabRouter(),
     req('~/composables/useChatNavigation').useChatNavigation,
@@ -418,6 +440,7 @@ export function createChatState(
         pageGlobals.actionLog?.push({ id, input })
         return { ok: true, result: null }
       },
+    req('~/composables/useChatShell').useChatShell,
     () => modelStore,
     pinia.storeToRefs,
     pageGlobals.navigateTo ?? (() => {}),

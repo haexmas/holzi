@@ -6,6 +6,7 @@ import {
   SHELL_LAYOUT_ACTIONS,
   SHELL_READ_ACTIONS,
 } from './shellLayoutActions.ts'
+import { CHAT_ACTIONS, CHAT_MODEL_ACTIONS } from './chatActions.ts'
 import type { ShellActionDefinition } from './types.ts'
 
 export const ALL_ACTIONS: readonly ShellActionDefinition[] = [
@@ -13,4 +14,6 @@ export const ALL_ACTIONS: readonly ShellActionDefinition[] = [
   ...SHELL_OPEN_ACTIONS,
   ...SHELL_LAYOUT_ACTIONS,
   ...SHELL_READ_ACTIONS,
+  ...CHAT_ACTIONS,
+  ...CHAT_MODEL_ACTIONS,
 ]

@@ -86,7 +86,14 @@ export function createHandlerRegistry() {
     })
   }
 
-  return { registerGlobal, globalHandler, registerTab, dropTab, awaitTab }
+  return {
+    registerGlobal,
+    globalHandler,
+    registerTab,
+    dropTab,
+    findTab,
+    awaitTab,
+  }
 }
 
 export type HandlerRegistry = ReturnType<typeof createHandlerRegistry>

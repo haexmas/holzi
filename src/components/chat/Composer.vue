@@ -52,7 +52,9 @@ const {
   effortOptions,
   effortState,
 } = storeToRefs(modelStore)
-const { loadModel, updateEffortLevel } = modelStore
+// Spec 020 FR-024: model and reasoning choices run their catalog actions.
+const selectModel = useAction('chat.model.select')
+const setReasoning = useAction('chat.reasoning.set')
 
 const modelDisabled = computed(
   () => modelGroups.value.length === 0 || modelLoadPending.value,
@@ -133,8 +135,10 @@ defineExpose({ reset })
               :effort-state="effortState"
               :disabled="busy"
               :model-disabled="modelDisabled"
-              @update:model-id="loadModel"
-              @update:effort-level="updateEffortLevel"
+              @update:model-id="selectModel({ modelId: $event })"
+              @update:effort-level="
+                setReasoning($event === null ? {} : { level: $event })
+              "
             />
 
             <ChatPermissionPrompt
