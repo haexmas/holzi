@@ -1,5 +1,5 @@
 // App registry for the Workspace-Shell (spec 015-workspace-shell, T015). Pure data — the
-// id-to-component mapping lives separately in src/components/shell/appComponents.ts (T017), so
+// id-to-route/component mapping lives separately in src/components/shell/appRoutes.ts, so
 // this module stays free of Vue/Nuxt and loadable by scripts/check-shell-state.ts.
 import type { Size } from './types.ts'
 

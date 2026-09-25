@@ -6,10 +6,12 @@
  * this tab, even while other tabs in the same window stay mounted
  * alongside it (research R8). Hidden via `v-show`, not `v-if`, when
  * inactive; lazy-mounted the first time it becomes active
- * (`shell.markTabMounted`), then left mounted.
+ * (`shell.markTabMounted`), then left mounted. Spec 020: the content is
+ * the tab's root `ShellRouterView`, which renders the app for the tab's
+ * current location.
  */
 import { computed, watchEffect } from 'vue'
-import { getAppComponent } from '~/components/shell/appComponents'
+import { getAppRoutes } from '~/components/shell/appRoutes'
 import { provideShellTab } from '~/composables/useShellTab'
 import type { ShellTab } from '~/lib/shell/types'
 
@@ -21,12 +23,13 @@ const props = defineProps<{
 
 const shell = useShellStore()
 
-const component = computed(() => getAppComponent(props.tab.appId))
+const hasRoutes = computed(() => getAppRoutes(props.tab.appId) !== undefined)
 const mounted = computed(() => shell.runtimeFor(props.tab.id).mounted)
 
 provideShellTab({
   tabId: props.tab.id,
   windowId: props.windowId,
+  appId: props.tab.appId,
   requestAttention: () => shell.setTabAttention(props.tab.id, true),
   clearAttention: () => shell.setTabAttention(props.tab.id, false),
   setTitle: (value) => shell.setTabTitle(props.tab.id, value),
@@ -35,6 +38,11 @@ provideShellTab({
     return () => shell.setTabCloseGuard(props.tab.id, null)
   },
   closeSelf: () => shell.closeTab(props.windowId, props.tab.id),
+  openApp: (appId, at) => {
+    shell.openApp(appId, at ?? null)
+  },
+  registerActionHandler: (actionId, handler) =>
+    shell.registerTabActionHandler(props.tab.id, actionId, handler),
 })
 
 watchEffect(() => {
@@ -49,6 +57,6 @@ watchEffect(() => {
     class="h-full min-h-0"
     :aria-hidden="!active"
   >
-    <component :is="component" v-if="component && mounted" />
+    <ShellRouterView v-if="hasRoutes && mounted" />
   </div>
 </template>

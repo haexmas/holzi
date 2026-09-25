@@ -1,6 +1,8 @@
 import { inject, provide, type InjectionKey } from 'vue'
 import type { useShellStore } from '~/stores/shell'
 import { requestConfirmation } from '~/composables/useShellCloseConfirm'
+import type { ActionHandler } from '~/lib/actions/handlers'
+import type { TabLocation } from '~/lib/shell/navigation'
 import type { CloseGuard } from '~/lib/shell/types'
 
 /**
@@ -11,6 +13,8 @@ import type { CloseGuard } from '~/lib/shell/types'
 export type ShellTabApi = {
   readonly tabId: string
   readonly windowId: string
+  /** The app this tab runs (spec 020: selects its route table). */
+  readonly appId: string
   /** Marks the tab as "waiting on the user" (badge on the tab, Chevron entry, window overview,
    * Launcher, workspace switcher). */
   requestAttention(): void
@@ -22,6 +26,12 @@ export type ShellTabApi = {
   registerCloseGuard(guard: CloseGuard): () => void
   /** Closes this tab (the window too, if it is the last tab) without asking any guard. */
   closeSelf(): void
+  /** Opens another app, optionally at a location (spec 020 FR-012): a singleton already open is
+   * activated and navigated there. */
+  openApp(appId: string, at?: string | TabLocation): void
+  /** Registers this tab's handler for one of its app's tab-bound actions (spec 020 research R19);
+   * returns the unregister function. */
+  registerActionHandler(actionId: string, handler: ActionHandler): () => void
 }
 
 const SHELL_TAB_KEY: InjectionKey<ShellTabApi> = Symbol('shellTab')
@@ -31,6 +41,7 @@ const SHELL_TAB_KEY: InjectionKey<ShellTabApi> = Symbol('shellTab')
 const INERT_SHELL_TAB: ShellTabApi = {
   tabId: '',
   windowId: '',
+  appId: '',
   requestAttention() {},
   clearAttention() {},
   setTitle() {},
@@ -38,6 +49,10 @@ const INERT_SHELL_TAB: ShellTabApi = {
     return () => {}
   },
   closeSelf() {},
+  openApp() {},
+  registerActionHandler() {
+    return () => {}
+  },
 }
 
 /** Called by the Shell (one instance per rendered tab) to make the contract available to
