@@ -533,5 +533,140 @@
       "modelNotFound": "Modell wurde nicht gefunden.",
       "generic": "Unbekannter Fehler."
     }
+  },
+  "actions": {
+    "shell": {
+      "tab": {
+        "back": "Zurück",
+        "forward": "Vor",
+        "go": "Im Verlauf springen",
+        "navigate": "Im Tab navigieren",
+        "new": "Neuer Tab",
+        "activate": "Tab aktivieren",
+        "close": "Tab schließen",
+        "history": "Tab-Verlauf lesen"
+      },
+      "system": {
+        "back": "System-Zurück"
+      },
+      "app": {
+        "open": "App öffnen"
+      },
+      "window": {
+        "focus": "Fenster fokussieren",
+        "minimize": "Fenster minimieren",
+        "toggleMaximize": "Fenster maximieren oder wiederherstellen",
+        "setGeometry": "Fenster verschieben und skalieren",
+        "close": "Fenster schließen",
+        "moveToWorkspace": "Fenster in Arbeitsbereich verschieben"
+      },
+      "workspace": {
+        "create": "Arbeitsbereich anlegen",
+        "switch": "Arbeitsbereich wechseln",
+        "delete": "Arbeitsbereich löschen"
+      },
+      "windows": {
+        "overview": "Fensterübersicht öffnen"
+      },
+      "workspaces": {
+        "overview": "Arbeitsbereichsübersicht öffnen"
+      },
+      "launcher": {
+        "open": "Launcher öffnen"
+      },
+      "state": {
+        "get": "Shell-Zustand lesen"
+      },
+      "apps": {
+        "list": "Apps auflisten"
+      },
+      "actions": {
+        "list": "Aktionen auflisten"
+      }
+    },
+    "chat": {
+      "conversation": {
+        "new": "Neue Unterhaltung",
+        "open": "Unterhaltung öffnen",
+        "rename": "Unterhaltung umbenennen",
+        "delete": "Unterhaltung löschen"
+      },
+      "conversations": {
+        "list": "Unterhaltungen auflisten"
+      },
+      "messages": {
+        "list": "Nachrichten lesen"
+      },
+      "message": {
+        "send": "Nachricht senden",
+        "retry": "Senden wiederholen"
+      },
+      "reply": {
+        "cancel": "Antwort abbrechen"
+      },
+      "approval": {
+        "decide": "Freigabe entscheiden"
+      },
+      "permissionMode": {
+        "set": "Berechtigungsmodus setzen"
+      },
+      "model": {
+        "select": "Modell wählen",
+        "retryLoad": "Modell erneut laden",
+        "downloadRecommended": "Empfohlenes Modell herunterladen"
+      },
+      "reasoning": {
+        "set": "Denkaufwand setzen"
+      },
+      "modelIntegrity": {
+        "decide": "Integritätsprüfung entscheiden"
+      },
+      "voice": {
+        "setAutoSend": "Automatisches Senden nach Diktat"
+      }
+    },
+    "settings": {
+      "get": "Einstellungen lesen",
+      "models": {
+        "list": "Installierte Modelle auflisten",
+        "checkUpdates": "Modell-Updates prüfen",
+        "setDefault": "Standard-Modell setzen",
+        "clearDefault": "Standard-Modell entfernen",
+        "setStt": "Spracherkennungsmodell wechseln",
+        "downloadCatalog": "Modell aus dem Katalog herunterladen",
+        "downloadFromHf": "Modell von HuggingFace herunterladen",
+        "installUpdate": "Modell-Update installieren",
+        "delete": "Modell löschen"
+      },
+      "device": {
+        "setAlias": "Gerätename ändern"
+      },
+      "delegate": {
+        "refreshModels": "Anbieter-Modelle aktualisieren",
+        "connectProvider": "Anbieter verbinden",
+        "submitCode": "Anmeldecode senden",
+        "setDenyRules": "Deny-Regeln setzen"
+      },
+      "autonomy": {
+        "setMode": "Autonomie-Modus setzen"
+      }
+    },
+    "scopes": {
+      "shell": {
+        "layout": "Fenster und Arbeitsbereiche anordnen",
+        "navigation": "Apps öffnen und navigieren",
+        "read": "Shell-Zustand lesen"
+      },
+      "chat": {
+        "read": "Chat lesen",
+        "write": "Chat schreiben"
+      },
+      "settings": {
+        "read": "Einstellungen lesen",
+        "device": "Geräte-Einstellungen ändern",
+        "models": "Modelle verwalten"
+      },
+      "guardrails": "Leitplanken (nur Nutzer)"
+    }
   }
 }

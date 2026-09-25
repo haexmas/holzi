@@ -238,8 +238,10 @@ description: 'Task list for spec 020-tab-navigation'
 
 ## Phase 11: Polish & Cross-Cutting Concerns
 
-- [ ] T058 [P] Add all new keys (`shell.nav.*`, `shell.chat.thread`, `actions.*`, `actions.scopes.*`) to `src/i18n/locales/de.json` and `en.json` in lockstep; `jq` key comparison shows no difference (FR-023)
-- [ ] T059 [P] Add Ort, Tab-Historie, Aktion, Berechtigungsbereich and Aufrufer to `CONTEXT.md` (note: code says "action", never "command")
+- [x] T058 [P] Add all new keys (`shell.nav.*`, `shell.chat.thread`, `actions.*`, `actions.scopes.*`) to `src/i18n/locales/de.json` and `en.json` in lockstep; `jq` key comparison shows no difference (FR-023)
+  - Done 2026-09-25: titles for all 58 actions and 9 scopes in de.json/en.json; key sets identical (verified), every catalog titleKey resolves.
+- [x] T059 [P] Add Ort, Tab-Historie, Aktion, Berechtigungsbereich and Aufrufer to `CONTEXT.md` (note: code says "action", never "command")
+  - Done 2026-09-25: Ort/Tab-Historie and Aktion/Berechtigungsbereich/Aufrufer entries after the Shell entry, with the 'not command' note.
 - [ ] T060 Run quickstart §1 (all automated checks) and §2 (M1–M23); record results and platform limitations for the PR
 - [ ] T061 Run `/speckit-analyze` on spec/plan/tasks; resolve all CRITICAL/HIGH findings before opening the PR
 

@@ -130,6 +130,22 @@ German UI labels; "window"/"tab"/"app" as code identifiers
 with the OS-level application window (singular, Tauri-managed) — the
 Shell is an in-app desktop rendered inside it.
 
+**Ort (Location) / Tab-Historie** (spec 020):
+Where a Tab stands inside its App: an app-relative path plus query
+(`/thread/<id>`, `/models?sort=size`), pure data (`TabLocation`). Each
+Tab keeps its own linear back/forward **Tab-Historie** (`TabHistory`),
+in memory only. "Ort" and "Verlauf" as German UI wording; never the
+webview's browser history, which holzi does not use as navigation state.
+
+**Aktion (Action) / Berechtigungsbereich (Scope) / Aufrufer (Caller)**
+(spec 020):
+Every state-changing control of the Shell and its Apps triggers a
+catalog **Aktion** (`ShellActionDefinition`, `runAction`) with a JSON
+schema, a target, a **Berechtigungsbereich** and an effect; the
+**Aufrufer** is the user, the built-in agent or an external agent.
+Actions in the `guardrails` scope are user-only.
+_Avoid_: "command" for these — in holzi "command" means Tauri commands.
+
 ### Internationalisierung (i18n)
 
 All user-visible text uses `@nuxtjs/i18n`. Backend commands and
