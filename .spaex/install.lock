@@ -4,7 +4,7 @@
     ".envrc": "sha256:1d26c74fd25a4c3dbb09e029fc609588da499fd4af2a41c88f6316c7f8c54cf1",
     "flake.nix": "sha256:de359292d49aec2aeb921d8fc9051a5d51e3a392c8e9065c31f5540141b9f8d3"
   },
-  "generation_id": "g_20260921T220826Z_e3b0",
+  "generation_id": "g_20260925T100826Z_e3b0",
   "molecules": [
     {
       "id": "com.github.haexmas.atoms.ast-grep",
@@ -47,7 +47,7 @@
       "source": "https://github.com/haexmas/atoms"
     },
     {
-      "hook_status": "skipped",
+      "hook_status": "ok",
       "id": "com.github.haexmas.atoms.graphify-first-authoring",
       "paths": [
         ".spaex/constitution.md"
@@ -65,7 +65,7 @@
       "source": "https://github.com/haexmas/atoms"
     },
     {
-      "hook_status": "skipped",
+      "hook_status": "ok",
       "id": "com.github.haexmas.atoms.nix-devshell-base",
       "paths": [
         ".envrc",
