@@ -1,4 +1,4 @@
-# Specification Quality Checklist: Shell ohne Persistenz
+# Specification Quality Checklist: Sitzung wiederherstellen (wählbar)
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-09-25
@@ -31,11 +31,13 @@
 
 ## Notes
 
-- The operator already decided the scope on 2026-09-25 (no persistence at all,
-  not even workspaces), so no clarification markers were needed.
-- The spec names what gets removed (workspaces, windows, tabs) but not how:
-  the tables, the CRDT tombstones and the commands are plan material. FR-006
-  ("no deleted entries that can be restored or passed on") is the requirement
-  the plan must meet for the CRDT-tracked tables.
-- SC-005 refers to the app's list of interfaces, which stays technology-neutral
-  while being checkable.
+- Scope set by the operator on 2026-09-25: saving is off by default, the user
+  can turn it on for this device or the whole vault (device value overrides
+  the vault value, like the default model from spec 002), and layouts saved
+  unasked by earlier versions are removed on update. No clarification markers
+  were needed.
+- The spec says what gets removed and when, not how. FR-010 ("no deleted
+  entries that can be restored or passed on") is the requirement the plan must
+  meet for the CRDT-tracked layout tables.
+- SC-004 (find and enable in under 30 seconds) is checked in the manual
+  quickstart run.
