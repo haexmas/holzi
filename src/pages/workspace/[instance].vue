@@ -25,6 +25,9 @@ const route = useRoute()
 const router = useRouter()
 const instancesStore = useInstancesStore()
 const shell = useShellStore()
+// Spec 020: create the models store here, inside a component setup (its setup calls `useI18n()`),
+// so the global chat actions (`stores/chatActionHandlers.ts`) find it when an action runs.
+useModelsStore()
 
 // Spec 020: global shortcuts for Shell actions (back/forward).
 useShellKeyboard()

@@ -13,37 +13,39 @@ export const VOICE_AUTO_SEND_PREF_KEY = 'voice.auto_send'
  * preferences, so they work without the chat being open.
  */
 export function registerChatActionHandlers(shell: ShellStore): void {
-  const models = useModelsStore()
+  // The models store calls `useI18n()` in its setup, which only works inside a component setup:
+  // resolve it per call (the workspace page has created it by then), never at registration.
+  const models = () => useModelsStore()
   const { setPrefAsync } = usePreferences()
   const done = { done: true }
   const on = shell.registerGlobalActionHandler
 
   on('chat.model.select', async ({ input }) => {
-    await models.loadModel(String(input.modelId))
+    await models().loadModel(String(input.modelId))
     return done
   })
   on('chat.reasoning.set', async ({ input }) => {
-    await models.updateEffortLevel(
+    await models().updateEffortLevel(
       typeof input.level === 'string' ? input.level : null,
     )
     return done
   })
   on('chat.model.retryLoad', async () => {
-    await models.retryModelLoad()
+    await models().retryModelLoad()
     return done
   })
   on('chat.model.downloadRecommended', async ({ input }) => {
-    const entry = models.catalogEntries.find((e) => e.id === input.entryId)
+    const entry = models().catalogEntries.find((e) => e.id === input.entryId)
     if (!entry) throw new Error(`no catalog entry ${String(input.entryId)}`)
-    await models.downloadCatalogEntry(entry)
+    await models().downloadCatalogEntry(entry)
     return done
   })
   on('chat.modelIntegrity.decide', async ({ input }) => {
     if (input.decision === 'loadUntrusted')
-      await models.onIntegrityLoadUntrusted()
+      await models().onIntegrityLoadUntrusted()
     else if (input.decision === 'repairSource')
-      await models.onIntegrityRepairSource()
-    else await models.onIntegrityChooseOther()
+      await models().onIntegrityRepairSource()
+    else await models().onIntegrityChooseOther()
     return done
   })
   on('chat.voice.setAutoSend', async ({ input }) => {
