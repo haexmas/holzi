@@ -40,6 +40,9 @@ jobs:
       - name: Check shell state
         run: corepack pnpm check:shell-state
 
+      - name: Check shell navigation
+        run: corepack pnpm check:shell-navigation
+
       - name: Check vault lifecycle
         run: corepack pnpm check:vault-lifecycle
 

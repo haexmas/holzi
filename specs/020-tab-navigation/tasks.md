@@ -23,10 +23,14 @@ description: 'Task list for spec 020-tab-navigation'
 
 **Purpose**: Gate, environment, script wiring
 
-- [ ] T001 Confirm the phase gate (research R15): spec 015 (PR #141) is merged into `main`; rebase `020-tab-navigation` onto `main` and resolve conflicts in `specs/` only
-- [ ] T002 Run a real `pnpm install` in `.worktrees/020-tab-navigation` (never symlink `node_modules`), then confirm `pnpm check:shell-state` and `pnpm check:chat-state` are green as the baseline; record both test counts in the T002 note
-- [ ] T003 [P] Add the 020 roadmap row to `plans/README.md` (after the 015 row): priority P1, effort M, status "Spezifiziert 2026-09-25, Umsetzung nach Merge von 015", gate "setzt Spec 015 voraus"
-- [ ] T004 [P] Create `scripts/check-shell-navigation.ts` as an empty `node:test` harness with a header comment in the style of `scripts/check-shell-state.ts`; add `"check:shell-navigation": "node scripts/check-shell-navigation.ts"` to `package.json` and a matching step next to `check:shell-state` in `.github/workflows/ci.yml`
+- [x] T001 Confirm the phase gate (research R15): spec 015 (PR #141) is merged into `main`; rebase `020-tab-navigation` onto `main` and resolve conflicts in `specs/` only
+  - Done 2026-09-25: 015 merged as ccf932a (PR #141); rebased 020-tab-navigation onto main, the only conflict was .specify/feature.json (kept specs/020-tab-navigation); force-pushed with lease (no PR yet).
+- [x] T002 Run a real `pnpm install` in `.worktrees/020-tab-navigation` (never symlink `node_modules`), then confirm `pnpm check:shell-state` and `pnpm check:chat-state` are green as the baseline; record both test counts in the T002 note
+  - Done 2026-09-25: real pnpm install in the worktree; baseline check:shell-state 44/44 (one test added by the 015 review fixes), check:chat-state 45/45.
+- [x] T003 [P] Add the 020 roadmap row to `plans/README.md` (after the 015 row): priority P1, effort M, status "Spezifiziert 2026-09-25, Umsetzung nach Merge von 015", gate "setzt Spec 015 voraus"
+  - Done 2026-09-25: row added after 015 in plans/README.md.
+- [x] T004 [P] Create `scripts/check-shell-navigation.ts` as an empty `node:test` harness with a header comment in the style of `scripts/check-shell-state.ts`; add `"check:shell-navigation": "node scripts/check-shell-navigation.ts"` to `package.json` and a matching step next to `check:shell-state` in `.github/workflows/ci.yml`
+  - Done 2026-09-25: harness + package script + CI step. Deviation: check:shell-navigation runs several files via node --test (check-shell-navigation.ts, check-shell-actions.ts, check-shell-nav-store.ts as they appear) so each stays below 500 lines; later tasks name the file they extend.
 
 ---
 

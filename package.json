@@ -9,6 +9,7 @@
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "check:chat-state": "node scripts/check-chat-state.ts",
+    "check:shell-navigation": "node --test scripts/check-shell-navigation.ts",
     "check:shell-state": "node --test scripts/check-shell-state.ts scripts/check-shell-geometry.ts scripts/check-shell-persistence.ts",
     "check:vault-lifecycle": "node scripts/check-vault-lifecycle.ts",
     "check:vault-passphrase-lifetime": "node scripts/check-vault-passphrase-lifetime.ts",

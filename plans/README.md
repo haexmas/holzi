@@ -8,6 +8,7 @@ Ablage und Vorrang: Nummerierte `specs/`-Artefakte einschließlich ihrer Verträ
 | ---------------------------------------------------------------------- | --------- | ------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | [001: MVP mit lokalem Chat und Anbietermodellen](./001-desktop-mvp.md) | P1        | L       | Draft (überarbeitet 2026-09-08)                                        | Übernahme einer neuen Geräte-UUID in haex-crdt bleibt offen (blockiert nur den späteren Kopierweg, nicht den MVP) |
 | 015: Workspace-Shell (`specs/015-workspace-shell/`)                    | P1        | L       | Vom Betreiber am 2026-09-21 angefordert; Implementierung ab 2026-09-24 | Setzt Spec 013 (eine Vault-Session je Prozess) voraus; die Shell lebt innerhalb dieser Session                    |
+| 020: Navigation im Tab (`specs/020-tab-navigation/`)                   | P1        | M       | Spezifiziert 2026-09-25, Umsetzung nach Merge von 015 (ab 2026-09-25)  | Setzt Spec 015 (Workspace-Shell) voraus                                                                           |
 
 Legende: Priorität `P1` (höchste) – `P3` (nachrangig); Aufwand `S` (klein), `M` (mittel), `L` (groß).
 
