@@ -4,7 +4,7 @@
 
 Grundlage ist der Implementierungsstand von Spec 015 auf dem Branch
 `015-workspace-shell` (noch nicht auf `main`). Pfade unten beziehen sich auf diesen
-Stand; die Umsetzung von 019 beginnt erst, wenn 015 gemerged ist (R15).
+Stand; die Umsetzung von 020 beginnt erst, wenn 015 gemerged ist (R15).
 
 ## R1 — Eigener Router je Tab statt vue-router
 
@@ -253,7 +253,7 @@ Kompaktdarstellung sichtbar (FR-015) und erhalten dort die Touch-Größe aus
 
 ## R15 — Abhängigkeit von 015 und Phasen-Disziplin
 
-**Decision**: Spec und Plan liegen auf `019-tab-navigation` (Basis `main`). Die
+**Decision**: Spec und Plan liegen auf `020-tab-navigation` (Basis `main`). Die
 Umsetzung beginnt erst nach dem Merge von 015; dann wird der Branch auf `main`
 rebased. `plans/README.md` bekommt einen Roadmap-Eintrag (Aufgabe in tasks).
 

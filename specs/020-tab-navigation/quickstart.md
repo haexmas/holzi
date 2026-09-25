@@ -1,6 +1,6 @@
 # Quickstart: Navigation im Tab validieren
 
-**Feature**: 019-tab-navigation | **Date**: 2026-09-25
+**Feature**: 020-tab-navigation | **Date**: 2026-09-25
 
 Leitfaden zum Prüfen der fertigen Funktion. Datenformen und Schnittstellen stehen
 in [data-model.md](./data-model.md) und [contracts/](./contracts/); hier stehen
@@ -8,9 +8,9 @@ nur Vorbereitung, Befehle und erwartete Ergebnisse.
 
 ## Voraussetzungen
 
-- Spec 015 ist auf `main` gemerged, `019-tab-navigation` ist darauf rebased
+- Spec 015 ist auf `main` gemerged, `020-tab-navigation` ist darauf rebased
   (research R15).
-- Arbeit im Worktree `.worktrees/019-tab-navigation`, Abhängigkeiten dort regulär
+- Arbeit im Worktree `.worktrees/020-tab-navigation`, Abhängigkeiten dort regulär
   installiert (`pnpm install`, kein verlinktes `node_modules`).
 - Werkzeuge aus dem Nix-Devshell; `pnpm tauri:dev` läuft darin.
 - Eine Vault mit abgeschlossenem Onboarding und mindestens drei Chat-Verläufen.

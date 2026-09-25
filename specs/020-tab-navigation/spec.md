@@ -1,6 +1,6 @@
 # Feature Specification: Navigation im Tab (Vor/Zurück je Tab)
 
-**Feature Branch**: `019-tab-navigation`
+**Feature Branch**: `020-tab-navigation`
 **Created**: 2026-09-25
 **Status**: Draft
 **Input**: Jeder Tab der Workspace-Shell (Spec 015) bekommt einen Ort innerhalb

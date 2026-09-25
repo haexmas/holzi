@@ -1,8 +1,8 @@
 # Implementation Plan: Navigation im Tab (Vor/Zurück je Tab)
 
-**Branch**: `019-tab-navigation` | **Date**: 2026-09-25 | **Spec**: [spec.md](./spec.md)
+**Branch**: `020-tab-navigation` | **Date**: 2026-09-25 | **Spec**: [spec.md](./spec.md)
 
-**Input**: Feature specification from `/specs/019-tab-navigation/spec.md`
+**Input**: Feature specification from `/specs/020-tab-navigation/spec.md`
 
 ## Summary
 
@@ -81,7 +81,7 @@ spaex-Constitution `.spaex/constitution.md`.
 | Workflow: speckit-Stufen, PR auf `main`, Conventional Commits, kein Squash | ✅     | specify → plan → tasks → implement; Topic-Branch im Worktree                                                                                                                                |
 | ADR bei prinzipienrelevanter Entscheidung                                  | ✅     | Keine nötig (R16)                                                                                                                                                                           |
 | Test-Code in separaten Dateien                                             | ✅     | `scripts/check-shell-navigation.ts`                                                                                                                                                         |
-| Worktree je Änderung                                                       | ✅     | `.worktrees/019-tab-navigation`                                                                                                                                                             |
+| Worktree je Änderung                                                       | ✅     | `.worktrees/020-tab-navigation`                                                                                                                                                             |
 | 500-LoC-Grenze                                                             | ✅     | Neue Dateien klein; `ChatApp.vue` bekommt nur einen Composable-Aufruf; neue Prüfungen nicht in `check-shell-state.ts`                                                                       |
 | Graphify vor neuen benannten Artefakten                                    | ✅     | Abfrage in R8: keine Router/Keybinding-Artefakte; „Command“ belegt → Name „Aktion“                                                                                                          |
 | `ponytail:`-Kommentar bei bewusster Vereinfachung                          | ✅     | Geplant an R7 (Android erst mit Target geprüft) und R6-Fallback (Zeigerposition)                                                                                                            |
@@ -99,7 +99,7 @@ Persistenz und keinen Tauri-Command hinzu.
 ### Documentation (this feature)
 
 ```text
-specs/019-tab-navigation/
+specs/020-tab-navigation/
 ├── plan.md                              # Dieses Dokument
 ├── research.md                          # Phase 0 (R1–R16)
 ├── data-model.md                        # Phase 1: Ort, Historie, Routen, Aktionen, Übergänge
@@ -149,7 +149,7 @@ scripts/check-shell-navigation.ts        # NEU
 package.json                             # + check:shell-navigation
 .github/workflows/ci.yml                 # + Schritt check:shell-navigation
 CONTEXT.md                               # + Ort, Tab-Historie, Shell-Aktion
-plans/README.md                          # + Roadmap-Eintrag 019
+plans/README.md                          # + Roadmap-Eintrag 020
 ```
 
 **Structure Decision**: Wie in 015: reine, ohne Nuxt testbare Module unter

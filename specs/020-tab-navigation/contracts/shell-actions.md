@@ -31,7 +31,7 @@ shell.runAction(id: string, context?: { windowId?: string; tabId?: string; works
 
 - Ohne `context` löst der Store das Ziel nach `target` auf
   (`focusedTab` = aktiver Tab von `state.activeWindowId`).
-- Schaltflächen, Menüs und Tastenkürzel aus Spec 015 und 019 rufen
+- Schaltflächen, Menüs und Tastenkürzel aus Spec 015 und 020 rufen
   ausschließlich `runAction` (FR-024). Die Maus-Seitentasten übergeben
   `windowId` des Fensters unter dem Zeiger; die Verlaufsliste übergibt
   `steps` (±n).
