@@ -61,13 +61,6 @@
       "skip": "Später entscheiden"
     }
   },
-  "workspace": {
-    "modelPreload": {
-      "loading": "Bereite {modelName} vor…",
-      "ready": "{modelName} ist bereit",
-      "error": "Das Modell konnte nicht vorbereitet werden"
-    }
-  },
   "shell": {
     "workspaces": {
       "title": "Arbeitsbereiche",

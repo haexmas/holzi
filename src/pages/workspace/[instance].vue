@@ -3,9 +3,9 @@
  * Shell host page (spec 015-workspace-shell, T023). Replaces the spec-002
  * workspace stub: onboarding enforcement (FR-001) stays here since this is
  * now the only real page apps are reached through (chat/settings/
- * federation moved into Shell apps, T021-T022). `ShellStatusBar` (T025)
- * keeps the model preload/readiness status (FR-005) visible independent of
- * any open window.
+ * federation moved into Shell apps, T021-T022). The model status shows in
+ * the chat only; the workspace-wide status bar (015 FR-005) was dropped by
+ * operator decision.
  *
  * Awaits `shell.hydrateFromBackendAsync()` (T048) before anything else: the
  * store's `state` otherwise starts from `hydrate`'s own throwaway default
@@ -72,7 +72,6 @@ onMounted(async () => {
 
 <template>
   <div class="flex h-screen min-h-0 flex-col">
-    <ShellStatusBar />
     <ShellDesktop class="min-h-0 flex-1" />
   </div>
 </template>

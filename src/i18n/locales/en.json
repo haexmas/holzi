@@ -61,13 +61,6 @@
       "skip": "Decide later"
     }
   },
-  "workspace": {
-    "modelPreload": {
-      "loading": "Preparing {modelName}…",
-      "ready": "{modelName} is ready",
-      "error": "The model could not be prepared"
-    }
-  },
   "shell": {
     "workspaces": {
       "title": "Workspaces",

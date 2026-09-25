@@ -421,8 +421,10 @@ den ausgelieferten Apps öffnet ein zweiter Aufruf keine zweite Instanz.
 - **FR-004**: Die bisherigen Vollseiten-Adressen für Chat, Einstellungen und
   Föderation MÜSSEN auf den Arbeitsbereich mit geöffnetem passendem Fenster
   weiterleiten.
-- **FR-005**: Die Shell MUSS den Modell-Lade-/Bereitschaftszustand (Spec 004)
-  unabhängig von geöffneten Fenstern sichtbar halten.
+- **FR-005**: ~~Die Shell MUSS den Modell-Lade-/Bereitschaftszustand (Spec 004)
+  unabhängig von geöffneten Fenstern sichtbar halten.~~ Zurückgezogen durch
+  Betreiberentscheidung vom 2026-09-25 (beim Test von Spec 020): Den
+  Modellstatus zeigt nur der Chat, der Arbeitsbereich zeigt keine Statusleiste.
 
 **Fenster**
 
