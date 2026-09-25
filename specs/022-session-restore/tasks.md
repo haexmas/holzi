@@ -155,7 +155,8 @@ description: 'Task list for spec 022-session-restore'
   - Done 2026-09-26.
 - [x] T036 [P] Add the term "Sitzung (wm session)" to `CONTEXT.md` next to the window manager entry: what it contains, that it is saved only with the setting, and that it differs from the vault session (spec 013) and the chat's active session
   - Done 2026-09-26.
-- [ ] T037 Run the full quickstart §1 (all automated checks incl. `cargo fmt --check`, `lint:rust`, `cargo test`) and the e2e suite (`pnpm test:e2e`); record counts
+- [x] T037 Run the full quickstart §1 (all automated checks incl. `cargo fmt --check`, `lint:rust`, `cargo test`) and the e2e suite (`pnpm test:e2e`); record counts
+  - Done 2026-09-26: cargo fmt --check, lint:rust (both feature sets) and cargo test green (465 lib tests plus integration suites); frontend checks as in T016; e2e debug build 7 passed, 1 skipped (relaunch-after-lock needs a relaunching build), 0 failed.
 - [ ] T038 Run `/speckit-analyze` for 022 and resolve findings in the docs
 - [x] T039 Open the PR with base `020-tab-navigation` (retarget to `main` after #142 merges), as a draft until the manual scenarios are recorded
   - Done 2026-09-26: draft PR #143 opened before implementation, as the operator asked (clarify → PR → implement).
