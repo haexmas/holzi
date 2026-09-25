@@ -111,8 +111,10 @@ description: 'Task list for spec 020-tab-navigation'
 
 **Independent Test**: quickstart M9–M12
 
-- [ ] T027 [P] [US2] Add isolation tests to `scripts/check-shell-navigation.ts` (data-model.md invariants 1–3): navigation in tab A leaves tab B unchanged; `switchTab`, `minimizeWindow`, `toggleMaximizeWindow`, `moveWindowToWorkspace`, `switchWorkspace` never change any history; back without entries changes nothing and closes nothing (SC-005)
-- [ ] T028 [US2] Make `ShellNavButtons` in `src/components/shell/ShellWindow.vue` react to the active-tab switch (US2 AS2) and fix any store gap the T027 tests expose in `src/stores/shell.ts`
+- [x] T027 [P] [US2] Add isolation tests to `scripts/check-shell-navigation.ts` (data-model.md invariants 1–3): navigation in tab A leaves tab B unchanged; `switchTab`, `minimizeWindow`, `toggleMaximizeWindow`, `moveWindowToWorkspace`, `switchWorkspace` never change any history; back without entries changes nothing and closes nothing (SC-005)
+  - Done 2026-09-25: isolation and lifecycle cases were already in check-shell-nav-store.ts from T016 (FR-008, FR-010, FR-011); added SC-005 (back/forward without entries change and close nothing) and the active-tab switch exposing each tab's own history. 58/58.
+- [x] T028 [US2] Make `ShellNavButtons` in `src/components/shell/ShellWindow.vue` react to the active-tab switch (US2 AS2) and fix any store gap the T027 tests expose in `src/stores/shell.ts`
+  - Done 2026-09-25: no code change needed: ShellNavButtons derives its state from its tabId prop, bound to window.activeTabId, so it follows every tab switch; the T027 tests exposed no store gap.
 
 **Checkpoint**: Two windows with independent histories (M9–M12)
 

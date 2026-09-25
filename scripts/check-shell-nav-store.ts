@@ -184,6 +184,35 @@ test('navigateTab and goTab report whether anything changed', () => {
   assert.equal(navigateTab(histories, 'missing', '/x'), false)
 })
 
+test('back and forward without entries change nothing and close nothing (SC-005)', () => {
+  const { state, histories } = fresh()
+  const a = openAppAt(state, histories, ALPHA.id, null, APPS).tabId ?? ''
+  const windowsBefore = structuredClone(state.windows)
+  const historyBefore = histories.get(a)
+  assert.equal(goTab(histories, a, -1), false)
+  assert.equal(goTab(histories, a, 1), false)
+  assert.equal(goTab(histories, a, -5), false)
+  assert.deepEqual(state.windows, windowsBefore)
+  assert.equal(histories.get(a), historyBefore)
+})
+
+test("switching the active tab exposes that tab's own history (US2 AS2)", () => {
+  const { state, histories } = fresh()
+  const a = openAppAt(state, histories, ALPHA.id, null, APPS).tabId ?? ''
+  const windowId = state.windows[0]?.id ?? ''
+  const b =
+    addTabAt(state, histories, windowId, BETA.id, null, APPS).tabId ?? ''
+  navigateTab(histories, a, '/deep')
+  switchTab(state, windowId, a)
+  assert.equal(state.windows[0]?.activeTabId, a)
+  assert.equal(
+    pathOf(histories, state.windows[0]?.activeTabId ?? null),
+    '/deep',
+  )
+  switchTab(state, windowId, b)
+  assert.equal(pathOf(histories, state.windows[0]?.activeTabId ?? null), '/')
+})
+
 // ---------------------------------------------------------------------------
 // Handler registries (actions/handlers.ts)
 // ---------------------------------------------------------------------------
