@@ -6,6 +6,15 @@ in holzi Tauri-Commands bezeichnet (research R8). Datenformen:
 
 ## 1. Katalog
 
+**Umsetzungsstand:** Der ausgelieferte Katalog steht in `src/lib/actions/` (58
+Aktionen; `shell.actions.list` liefert ihn zur Laufzeit). Gegenüber der Liste unten
+kamen `shell.window.setGeometry`, `shell.workspaces.overview`,
+`chat.model.retryLoad`, `chat.model.downloadRecommended`,
+`chat.modelIntegrity.decide` (Leitplanke), `chat.voice.setAutoSend` sowie weitere
+Einstellungsaktionen hinzu. Der Sperren-Knopf bleibt bewusst direkt
+(`action-exempt:`, Spec 013 prüft ihn); eine Aktion `shell.vault.lock` folgt mit
+der Spec für Tastenkürzel.
+
 Die folgende Liste ist der Mindestumfang. Die endgültige Liste der
 Einstellungs- und Chat-Aktionen entsteht in tasks aus einer Bestandsaufnahme
 aller Bedienelemente (SC-007); jede dort gefundene zustandsändernde Bedienung

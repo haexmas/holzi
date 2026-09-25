@@ -50,6 +50,7 @@ type TabRouter = {
   ): void // Standard: replace
   back(): void
   forward(): void
+  skipCurrent(): boolean // Eintrag mit verschwundenem Ziel überspringen (FR-027)
 }
 ```
 

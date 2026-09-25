@@ -35,7 +35,8 @@ Abgeleitet: `current = entries[index]`, `canGoBack = index > 0`,
 `canGoForward = index < entries.length - 1`, Verlaufsliste zurück =
 `entries[index-1 … max(0, index-15)]`, vor = `entries[index+1 … index+15]`.
 
-Ablage: `TabRuntime.history` im Shell-Store (research R2), nie persistiert.
+Ablage: eigene reaktive `Map<tabId, TabHistory>` neben `TabRuntime` im Shell-Store
+(`stores/shellNavigation.ts`, research R2), nie persistiert.
 
 ### Zustandsübergänge
 
@@ -64,17 +65,19 @@ Match-Ergebnis (`RouteMatch`): `chain: RouteRecord[]` (außen → innen), `param
 Record<string, string>`; kein Match → `null` (FR-014). Eine App ohne
 Routentabelle hat implizit `[{ path: '/', component: <App-Wurzel> }]`.
 
-## TabRuntime (Erweiterung aus Spec 015)
+## Tab-Historien im Store (Umsetzung)
 
-| Feld                                             | neu?      | Zweck                 |
-| ------------------------------------------------ | --------- | --------------------- |
-| `attention`, `titleOverride`, `guard`, `mounted` | bestehend | unverändert           |
-| `history`                                        | **neu**   | `TabHistory` des Tabs |
+Statt eines Felds `TabRuntime.history` führt der Store eine eigene reaktive Map
+`Map<tabId, TabHistory>` plus je Tab die letzte Laufrichtung (für das
+Überspringen verwaister Einträge, FR-027). Die reinen Layout-Reducer aus 015
+bleiben unverändert; `lib/shell/tabNavigation.ts` legt nach `openApp`/`addTab`
+die Historie eines neuen Tabs an bzw. pusht den Ort auf eine aktivierte
+Einzelinstanz.
 
 Lebensdauer: entsteht mit dem Tab (`openApp`, `addTab`, `hydrate` → Start-Ort),
 bleibt beim Tab-Wechsel, Minimieren, Maximieren, Arbeitsbereichswechsel und
 Verschieben erhalten (Tab-Id unverändert, FR-010), verschwindet beim Schließen
-des Tabs (`syncTabRuntime`, FR-011).
+des Tabs (Abgleich in `syncTabRuntime`, FR-011).
 
 ## ShellActionDefinition (Aktion)
 
@@ -95,7 +98,7 @@ registriert (R19).
 | `binding`          | `'global' \| 'tab'`                          | global beim Start registriert oder von der App-Instanz (R19)                                                                                           |
 | `appId`            | `string?`                                    | Pflicht bei `binding = 'tab'`: welche App der Runner öffnet                                                                                            |
 | `defaultKeys`      | `{ default?: KeyChord[]; mac?: KeyChord[] }` | nur `shell.tab.back`/`forward` belegt (FR-025)                                                                                                         |
-| `yieldToTextInput` | `{ mac?: boolean; default?: boolean }`       | Belegung in editierbaren Elementen nicht abfangen                                                                                                      |
+| `yieldToTextInput` | `{ mac?: KeyChord[]; default?: KeyChord[] }` | Kombinationen, die in editierbaren Elementen nicht abgefangen werden (unter macOS nur Alt+Pfeil, nicht Cmd+[/])                                        |
 
 `KeyChord`: `Ctrl+Alt+Shift+Meta+<KeyboardEvent.code>` in dieser Reihenfolge.
 
@@ -116,14 +119,15 @@ Formen existieren für Runner und Tests.
 
 ## ActionOutcome (Ergebnis)
 
-| Form   | Felder                                                       |
-| ------ | ------------------------------------------------------------ |
-| Erfolg | `{ ok: true, result: unknown }` (entspricht `result`-Schema) |
-| Fehler | `{ ok: false, code, message, field? }`                       |
+| Form   | Felder                                                                                                                                                 |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Erfolg | `{ ok: true, result: unknown }` (entspricht `result`-Schema)                                                                                           |
+| Fehler | `{ ok: false, code, message, field?, error? }` — `error` ist bei `failed` der Rohfehler des Handlers, nur für In-Process-Aufrufer (`useActionOrThrow`) |
 
 Fehlercodes: `unknown_action`, `invalid_input` (mit `field`), `target_required`,
 `target_not_found`, `forbidden_for_agents`, `app_unavailable`, `failed`
-(Handler-Fehler, `message` aus `errString`).
+(Handler-Fehler; `message` aus `Error.message` bzw. dem `reason`/`message` eines
+Backend-Fehlers).
 
 ### Ablauf `runAction(id, input, caller)`
 
