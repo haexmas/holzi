@@ -95,6 +95,18 @@ describe('click', () => {
     )
   })
 
+  it('retries a transient element-not-interactable response', async () => {
+    driver.onFind(() => ['el-1'])
+    driver.onDisplayed(() => true)
+    let attempts = 0
+    driver.onClick(() => {
+      attempts += 1
+      return attempts === 1 ? 'not-interactable' : 'ok'
+    })
+    await click(client, 'open-chat')
+    assert.equal(attempts, 2)
+  })
+
   it('fails naming the hook and the selector when nothing is displayed by the deadline', async () => {
     driver.onFind(() => ['el-1'])
     driver.onDisplayed(() => false)
@@ -181,6 +193,18 @@ describe('press', () => {
     })
     assert.equal(calls, 2)
     assert.deepEqual(steps, [['press', 'lock-instance']])
+  })
+
+  it('also stops quietly when the ending process makes the element non-interactable', async () => {
+    driver.onFind(() => ['el-1'])
+    driver.onDisplayed(() => true)
+    let calls = 0
+    driver.onClick(() => {
+      calls += 1
+      return calls === 1 ? 'ok' : 'not-interactable'
+    })
+    await press(client, 'lock-instance', { times: 2, step: () => {} })
+    assert.equal(calls, 2)
   })
 
   it('still throws if the very first click fails', async () => {

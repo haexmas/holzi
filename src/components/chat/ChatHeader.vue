@@ -26,27 +26,19 @@ const { t } = useI18n()
   <header
     class="flex items-center justify-between gap-3 border-b border-border bg-background/90 px-4 py-3 backdrop-blur md:px-6"
   >
-    <div class="min-w-0">
-      <div class="flex items-center gap-2">
-        <div
-          class="h-2 w-2 rounded-full"
-          :class="modelLoaded ? 'bg-emerald-500' : 'bg-muted-foreground/40'"
-        />
-        <h1 class="truncate text-sm font-semibold">{{ title }}</h1>
+    <div class="flex min-w-0 items-center gap-2">
+      <div class="min-w-0">
+        <div class="flex items-center gap-2">
+          <div
+            class="h-2 w-2 rounded-full"
+            :class="modelLoaded ? 'bg-emerald-500' : 'bg-muted-foreground/40'"
+          />
+          <h1 class="truncate text-sm font-semibold">{{ title }}</h1>
+        </div>
+        <p class="mt-0.5 truncate text-xs text-muted-foreground">
+          {{ modelName }}
+        </p>
       </div>
-      <p class="mt-0.5 truncate text-xs text-muted-foreground">
-        {{ modelName }}
-      </p>
-    </div>
-    <div class="flex shrink-0 items-center gap-1 md:hidden">
-      <button
-        type="button"
-        class="rounded-lg p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
-        :aria-label="t('chat.settings')"
-        @click="emit('openSettings')"
-      >
-        <Icon name="lucide:settings-2" class="h-4 w-4" />
-      </button>
       <UiButton
         size="sm"
         variant="ghost"
@@ -56,8 +48,18 @@ const { t } = useI18n()
       >
         <Icon name="lucide:lock-keyhole" class="h-4 w-4" />
       </UiButton>
+    </div>
+    <div class="flex shrink-0 items-center gap-1">
+      <button
+        type="button"
+        class="rounded-lg p-2 text-muted-foreground hover:bg-accent hover:text-foreground md:hidden"
+        :aria-label="t('chat.settings')"
+        @click="emit('openSettings')"
+      >
+        <Icon name="lucide:settings-2" class="h-4 w-4" />
+      </button>
       <UiButton
-        class="gap-2"
+        class="gap-2 md:hidden"
         size="sm"
         variant="outline"
         :disabled="busy"

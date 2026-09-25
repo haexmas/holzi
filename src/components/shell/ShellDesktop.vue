@@ -61,6 +61,7 @@ const workspaceOverviewOpen = ref(false)
       <button
         type="button"
         class="flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-lg hover:opacity-90"
+        data-testid="open-launcher"
         :aria-label="t('shell.launcher.open')"
         @click="launcherOpen = true"
       >

@@ -15,6 +15,7 @@ export interface FlowInstance {
     options?: InvokeOptions,
   ): Promise<InvokeResult>
   click(hook: string, deadlineMs?: number): Promise<void>
+  waitForDisplayed(hook: string, deadlineMs?: number): Promise<void>
   type(hook: string, text: string, deadlineMs?: number): Promise<void>
   exec<T = unknown>(script: string, args?: unknown[]): Promise<T>
   navigate(url: string): Promise<void>
@@ -92,10 +93,12 @@ export async function createAndUnlock(
   instance.step('unlocked')
 }
 
-/** Clicks the open-chat hook and waits for the chat address. */
+/** Opens the Workspace launcher, selects Chat, and waits for the workspace route. */
 export async function openChat(instance: FlowInstance): Promise<void> {
+  await instance.click('open-launcher')
   await instance.click('open-chat')
-  await waitForPath(instance, '/chat/')
+  await waitForPath(instance, '/workspace/')
+  await instance.waitForDisplayed('lock-instance-header')
 }
 
 interface AddProviderResult {

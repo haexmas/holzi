@@ -40,7 +40,7 @@ scenario('lock-while-streaming', {}, async (ctx) => {
   )
 
   const pressedAt = Date.now()
-  await instance.press('lock-instance-sidebar')
+  await instance.press('lock-instance-header')
 
   const samples = await instance.sampleUntilEnd<boolean>(ALERT_SCRIPT, 50)
   assert.ok(

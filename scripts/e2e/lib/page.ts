@@ -26,7 +26,8 @@ function isGoneMidPress(error: unknown): boolean {
     error instanceof SessionGoneError ||
     (error instanceof WebDriverError &&
       (error.code === 'stale element reference' ||
-        error.code === 'no such element'))
+        error.code === 'no such element' ||
+        error.code === 'element not interactable'))
   )
 }
 
@@ -90,8 +91,36 @@ export async function click(
   hook: string,
   deadlineMs = 5000,
 ): Promise<void> {
-  const element = await findDisplayed(client, hook, deadlineMs)
-  await client.click(element)
+  const end = Date.now() + deadlineMs
+  for (;;) {
+    const element = await findDisplayed(
+      client,
+      hook,
+      Math.max(0, end - Date.now()),
+    )
+    try {
+      await client.click(element)
+      return
+    } catch (error) {
+      if (
+        !(error instanceof WebDriverError) ||
+        error.code !== 'element not interactable' ||
+        Date.now() >= end
+      ) {
+        throw error
+      }
+      await sleep(50)
+    }
+  }
+}
+
+/** Waits until a stable hook is displayed without activating it. */
+export async function waitForDisplayed(
+  client: WebDriverClient,
+  hook: string,
+  deadlineMs = 5000,
+): Promise<void> {
+  await findDisplayed(client, hook, deadlineMs)
 }
 
 /** Types into the displayed control found by hook. Polls until the deadline; fails naming the hook. */
@@ -135,7 +164,8 @@ export async function press(
   const times = options.times ?? 1
   for (let i = 0; i < times; i++) {
     try {
-      await client.click(element)
+      if (i === 0) await click(client, hook)
+      else await client.click(element)
     } catch (error) {
       if (i > 0 && isGoneMidPress(error)) break
       throw error
@@ -203,6 +233,7 @@ export interface Page {
     options?: InvokeOptions,
   ): Promise<InvokeResult>
   click(hook: string, deadlineMs?: number): Promise<void>
+  waitForDisplayed(hook: string, deadlineMs?: number): Promise<void>
   type(hook: string, text: string, deadlineMs?: number): Promise<void>
   press(hook: string, options?: { times?: number }): Promise<void>
   closeWindow(): Promise<void>
@@ -230,6 +261,8 @@ export function createPage(options: PageOptions): Page {
     invoke: (command, args, invokeOptions) =>
       client.invoke(command, args, invokeOptions),
     click: (hook, deadlineMs) => click(client, hook, deadlineMs),
+    waitForDisplayed: (hook, deadlineMs) =>
+      waitForDisplayed(client, hook, deadlineMs),
     type: (hook, text, deadlineMs) => type(client, hook, text, deadlineMs),
     press: (hook, pressOptions) =>
       press(client, hook, { ...pressOptions, step }),

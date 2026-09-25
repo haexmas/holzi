@@ -29,7 +29,7 @@ scenario(
     await openChat(instance)
 
     const originalPid = instance.pid
-    await instance.press('lock-instance-sidebar')
+    await instance.press('lock-instance-header')
 
     // (1) the original process ends.
     await instance.waitForEnd(PROCESS_END_LIMIT_MS)

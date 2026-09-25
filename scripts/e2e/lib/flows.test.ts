@@ -96,15 +96,16 @@ describe('createAndUnlock', () => {
 })
 
 describe('openChat', () => {
-  it('clicks open-chat and waits for the chat address', async () => {
+  it('opens the launcher, clicks Chat, and waits for the workspace address', async () => {
     driver.onFind(() => ['el-1'])
     driver.onDisplayed(() => true)
-    driver.onExecute(() => ({ value: '/chat/test' }))
+    driver.onExecute(() => ({ value: '/workspace/test' }))
     await openChat(instance)
-    assert.ok(
-      driver.requests.some(
+    assert.equal(
+      driver.requests.filter(
         (r) => r.method === 'POST' && r.path.endsWith('/element/el-1/click'),
-      ),
+      ).length,
+      2,
     )
   })
 })
