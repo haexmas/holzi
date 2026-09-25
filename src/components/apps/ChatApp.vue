@@ -296,6 +296,7 @@ const { chatTitle, openConversation, startNewConversation } = useChatNavigation(
     activeThreadId,
     threads,
     newChatLabel: () => t('chat.newChat'),
+    setTitle: shellTab.setTitle,
     selectThread,
     newChat,
   },

@@ -44,7 +44,10 @@ function numberLabel(position: number): string {
 function windowTitle(window: ShellWindow): string {
   const info = shell.windowDisplayInfo(window)
   if (!info) return ''
-  return info.titleOverride ?? (info.titleKey ? t(info.titleKey) : '')
+  return (
+    info.titleOverride ??
+    (info.titleKey ? t(info.titleKey, info.titleParams) : '')
+  )
 }
 
 /** Activates the selected workspace while leaving the overview open. */

@@ -18,7 +18,8 @@ import {
   closeTab as closeTabReducer,
   switchTab as switchTabReducer,
 } from '~/lib/shell/tabs'
-import type { TabLocation } from '~/lib/shell/navigation'
+import { currentLocation, type TabLocation } from '~/lib/shell/navigation'
+import { titleForLocation } from '~/components/shell/appRoutes'
 import { addTabAt, openAppAt } from '~/lib/shell/tabNavigation'
 import type {
   CloseGuard,
@@ -223,20 +224,26 @@ export const useShellStore = defineStore('shell', () => {
     )
   }
 
-  /** Raw display data for one tab — icon/titleKey from its app, any title override, and its own
-   * attention flag. Callers translate `titleKey` themselves; this store does not depend on
-   * `useI18n()`. Shared by `ShellTabBar.vue`/`ShellTabListMenu.vue` (T034/T036) and
-   * `windowDisplayInfo` below. */
+  /** Raw display data for one tab — its title key (spec 020 research R9: the current location's
+   * routed title with its params, else the app's), icon, any title override, and its attention
+   * flag. Callers translate `titleKey` with `titleParams`; this store does not use `useI18n()`.
+   * Shared by the tab bar, tab list, window title and overviews. */
   function tabDisplayInfo(tab: ShellTab): {
     titleKey: string | undefined
+    titleParams: Record<string, string>
     icon: string | undefined
     titleOverride: string | null
     hasAttention: boolean
   } {
     const app = getAppDefinition(tab.appId, SHELL_APPS)
     const runtime = runtimeFor(tab.id)
+    const history = navigation.historyOf(tab.id)
+    const title = history
+      ? titleForLocation(tab.appId, currentLocation(history).path)
+      : { key: app?.titleKey, params: {} }
     return {
-      titleKey: app?.titleKey,
+      titleKey: title.key,
+      titleParams: title.params,
       icon: app?.icon,
       titleOverride: runtime.titleOverride,
       hasAttention: runtime.attention,
@@ -249,6 +256,7 @@ export const useShellStore = defineStore('shell', () => {
    * Shared by `ShellWindow.vue` and `ShellWindowOverview.vue` (T030). */
   function windowDisplayInfo(window: ShellWindow): {
     titleKey: string | undefined
+    titleParams: Record<string, string>
     icon: string | undefined
     titleOverride: string | null
     tabCount: number

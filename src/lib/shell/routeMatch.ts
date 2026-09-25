@@ -67,3 +67,19 @@ export function matchRoute<R extends RoutePattern>(
 ): RouteMatch<R> | null {
   return matchLevel(routes, patternSegments(normalizePath(path)))
 }
+
+/** The title of a location (research R9): the deepest matched route with a `titleKey` plus the
+ * route params for its interpolation, else the app's own title key. */
+export function locationTitle(
+  routes: readonly RoutePattern[],
+  path: string,
+  appTitleKey: string | undefined,
+): { key: string | undefined; params: Record<string, string> } {
+  const match = matchRoute(routes, path)
+  const routed = [...(match?.chain ?? [])]
+    .reverse()
+    .find((route) => route.titleKey)?.titleKey
+  return routed
+    ? { key: routed, params: match?.params ?? {} }
+    : { key: appTitleKey, params: {} }
+}

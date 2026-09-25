@@ -63,7 +63,9 @@ function select(windowId: string) {
             />
             <span class="min-w-0 flex-1 truncate">{{
               row.info.titleOverride ??
-              (row.info.titleKey ? t(row.info.titleKey) : '')
+              (row.info.titleKey
+                ? t(row.info.titleKey, row.info.titleParams)
+                : '')
             }}</span>
             <span
               v-if="row.info.tabCount > 1"

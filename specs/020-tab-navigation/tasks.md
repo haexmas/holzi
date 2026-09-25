@@ -189,8 +189,10 @@ description: 'Task list for spec 020-tab-navigation'
 
 **Independent Test**: quickstart M5 titles; title tests
 
-- [ ] T045 [P] [US5] Add title tests to `scripts/check-shell-navigation.ts`: display title = `setTitle` override → deepest matched `titleKey` (with `{param}` interpolation) → app name; the override resets on navigation; a left entry keeps the title shown when it was left (research R9)
-- [ ] T046 [US5] Implement the title chain in `src/stores/shell.ts` `tabDisplayInfo` and store the leaving title on `push`/`go`; show it in `ShellTabBar.vue`, `ShellTabListMenu.vue`, `ShellWindowOverview.vue` and `ShellHistoryMenu.vue`; let the chat set the conversation title via `setTitle` in `useChatNavigation.ts`
+- [x] T045 [P] [US5] Add title tests to `scripts/check-shell-navigation.ts`: display title = `setTitle` override → deepest matched `titleKey` (with `{param}` interpolation) → app name; the override resets on navigation; a left entry keeps the title shown when it was left (research R9)
+  - Done 2026-09-25: locationTitle (routeMatch.ts) tested in check-shell-navigation.ts; leaving-title storage is covered by the history-reducer tests (push/go store the leaving title), the override reset lives in stores/shellNavigation.ts navigate/go.
+- [x] T046 [US5] Implement the title chain in `src/stores/shell.ts` `tabDisplayInfo` and store the leaving title on `push`/`go`; show it in `ShellTabBar.vue`, `ShellTabListMenu.vue`, `ShellWindowOverview.vue` and `ShellHistoryMenu.vue`; let the chat set the conversation title via `setTitle` in `useChatNavigation.ts`
+  - Done 2026-09-25: tabDisplayInfo returns the routed titleKey plus titleParams (titleForLocation in appRoutes.ts); tab bar, tab list, window title, window overview, workspace overview and history menu translate with the params. useChatNavigation sets the conversation title as the tab title (new conversation keeps the route/app title). ChatApp.vue 499 lines, stores/shell.ts 484.
 
 ---
 

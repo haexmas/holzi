@@ -21,7 +21,10 @@ const shell = useShellStore()
 const { t } = useI18n()
 
 function titleFrom(info: ReturnType<typeof shell.tabDisplayInfo>): string {
-  return info.titleOverride ?? (info.titleKey ? t(info.titleKey) : '')
+  return (
+    info.titleOverride ??
+    (info.titleKey ? t(info.titleKey, info.titleParams) : '')
+  )
 }
 
 const rows = computed(() =>

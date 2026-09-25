@@ -64,7 +64,9 @@ const title = computed(() => {
   if (!displayInfo) return ''
   return (
     displayInfo.titleOverride ??
-    (displayInfo.titleKey ? t(displayInfo.titleKey) : '')
+    (displayInfo.titleKey
+      ? t(displayInfo.titleKey, displayInfo.titleParams)
+      : '')
   )
 })
 

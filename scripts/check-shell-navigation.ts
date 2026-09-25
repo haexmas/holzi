@@ -29,7 +29,11 @@ import {
   type TabHistory,
   withQuery,
 } from '../src/lib/shell/navigation.ts'
-import { matchRoute, type RoutePattern } from '../src/lib/shell/routeMatch.ts'
+import {
+  locationTitle,
+  matchRoute,
+  type RoutePattern,
+} from '../src/lib/shell/routeMatch.ts'
 
 /** A history visited `/a` → `/b` → `/c`, positioned at `/c`. */
 function abc(): TabHistory {
@@ -261,4 +265,40 @@ test('a prefix link marks nested locations active, a plain link only its own', (
   assert.ok(isLocationActive('/models/', '/models'))
   assert.ok(!isLocationActive('/modelsx', '/models', true))
   assert.ok(isLocationActive('/anything', '/', true))
+})
+
+// ---------------------------------------------------------------------------
+// Location titles (US5, research R9)
+// ---------------------------------------------------------------------------
+
+test('locationTitle takes the deepest matched titleKey with its params', () => {
+  assert.deepEqual(
+    locationTitle(SETTINGS_ROUTES, '/models/hf/org%2Fx', 'app'),
+    {
+      key: 'models.detail',
+      params: { repo: 'org/x' },
+    },
+  )
+  assert.deepEqual(locationTitle(SETTINGS_ROUTES, '/models', 'app'), {
+    key: 'models.list',
+    params: {},
+  })
+})
+
+test('locationTitle falls back to the app title without a routed title or match', () => {
+  const routes: readonly RoutePattern[] = [
+    {
+      path: '/',
+      children: [{ path: '' }, { path: 'thread/:id', titleKey: 'thread' }],
+    },
+  ]
+  assert.deepEqual(locationTitle(routes, '/', 'app.chat'), {
+    key: 'app.chat',
+    params: {},
+  })
+  assert.deepEqual(locationTitle(routes, '/nope', 'app.chat'), {
+    key: 'app.chat',
+    params: {},
+  })
+  assert.equal(locationTitle(routes, '/thread/7', 'app.chat').key, 'thread')
 })

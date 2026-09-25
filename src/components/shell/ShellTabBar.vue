@@ -38,7 +38,10 @@ type TabInfo = ReturnType<typeof shell.tabDisplayInfo>
 
 /** Prefers a tab's runtime title over its translated app title. */
 function titleFrom(info: TabInfo): string {
-  return info.titleOverride ?? (info.titleKey ? t(info.titleKey) : '')
+  return (
+    info.titleOverride ??
+    (info.titleKey ? t(info.titleKey, info.titleParams) : '')
+  )
 }
 
 // Collapses to a plain title (no tab frame) when there is exactly one tab (FR-031) or, regardless

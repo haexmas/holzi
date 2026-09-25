@@ -8,7 +8,7 @@
  * emits the signed step count for `shell.tab.go`.
  */
 import { computed } from 'vue'
-import { titleKeyForLocation } from '~/components/shell/appRoutes'
+import { titleForLocation } from '~/components/shell/appRoutes'
 import { backList, forwardList } from '~/lib/shell/navigation'
 
 const props = defineProps<{
@@ -32,10 +32,14 @@ const items = computed(() => {
   const list =
     props.direction === 'back' ? backList(history) : forwardList(history)
   return list.map((item) => {
-    const key = titleKeyForLocation(props.appId, item.entry.location.path)
+    const { key, params } = titleForLocation(
+      props.appId,
+      item.entry.location.path,
+    )
     return {
       steps: item.steps,
-      title: item.entry.title ?? (key ? t(key) : item.entry.location.path),
+      title:
+        item.entry.title ?? (key ? t(key, params) : item.entry.location.path),
     }
   })
 })
