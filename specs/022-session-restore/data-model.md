@@ -53,8 +53,10 @@ Zeile des eigenen Geräts.
 
 ## `WmSession` (Frontend-Typ, Inhalt von `session_json`)
 
-Ersetzt `PersistedLayout` in `src/lib/wm/types.ts`; `hydrate` nimmt ihn
-unverändert entgegen.
+Definiert in `src/lib/wm/session.ts`. `PersistedLayout` in `src/lib/wm/types.ts`
+bleibt die Eingabe von `hydrate`; `splitSession` macht aus einer `WmSession` ein
+`PersistedLayout` (Tabs nur mit `id` und `appId`) und die Historien je
+Tab-Kennung.
 
 ```ts
 type WmSession = {

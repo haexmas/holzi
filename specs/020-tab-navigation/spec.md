@@ -429,6 +429,7 @@ ausschließlich nach den Regeln dieser Spec.
   Sperren bzw. Schließen der Vault hinaus erhalten werden; ein
   wiederhergestellter Tab (Spec 015, FR-023) beginnt an seinem Start-Ort ohne
   Historie. Schließen eines Tabs verwirft seine Historie.
+  _Seit Spec 022 bleiben Ort und Historie bei eingeschalteter Einstellung „Sitzung wiederherstellen“ erhalten, siehe [`022-session-restore`](../022-session-restore/spec.md)._
 
 **Öffnen an einem Ort**
 

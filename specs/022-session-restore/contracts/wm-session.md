@@ -36,8 +36,9 @@ Liest Gerätewert und Vault-Wert von `wm.session_restore` und den geltenden Wert
 
 ### `wm_session_save(args: { session: unknown }) -> { saved: boolean }`
 
-- Prüft: gültiges JSON-Objekt, serialisiert höchstens 4 MiB; sonst
-  `HolziError::InvalidInput`.
+- Prüft: gültiges JSON-Objekt (sonst `HolziError::InvalidInput`), serialisiert
+  höchstens 4 MiB (sonst `HolziError::SessionTooLarge { bytes }`; das Frontend
+  versucht es dann einmal ohne Historien, data-model.md „Größe“).
 - Gilt die Einstellung nicht, schreibt es nichts und gibt `saved: false` zurück
   (ein verspätetes Speichern nach dem Ausschalten legt nichts an).
 - Sonst überschreibt es die eigene Zeile (`INSERT … ON CONFLICT DO UPDATE`,
@@ -68,23 +69,30 @@ In `src/lib/actions/settingsActions.ts`, Handler in
 | `settings.sessionRestore.set`   | `{ scope: 'device' \| 'vault', enabled: boolean }` | `SessionRestoreState` | `settings.device` | write   | ja    |
 | `settings.sessionRestore.clear` | `{ scope: 'device' \| 'vault' }`                   | `SessionRestoreState` | `settings.device` | write   | ja    |
 
-Beide rufen `wm_session_restore_set` und reichen den neuen Zustand an den
-Store weiter (`useWindowManagerStore().applySessionRestore(state)`).
-`settings.get` ergänzt `sessionRestore: SessionRestoreState`.
+Beide rufen `useWindowManagerStore().setSessionRestore(scope, enabled)`. Das
+schickt `wm_session_restore_set` über dieselbe Warteschlange wie das Speichern
+(kein früheres Speichern kann danach ankommen) und übernimmt den neuen Zustand.
+`settings.get` ergänzt `sessionRestore: SessionRestoreState` über
+`getSessionRestore()`.
 
 ## 4. Store (`src/stores/windowManager.ts`)
 
-| Mitglied                     | Verhalten                                                                                                                 |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `sessionRestore` (ref)       | geltender Wert; `false` bis `restoreSessionAsync` ihn gesetzt hat                                                         |
-| `restoreSessionAsync()`      | ersetzt `hydrateFromBackendAsync`: `wm_session_load`, dann `hydrate` und Historien der Tabs übernehmen, oder leerer Start |
-| `applySessionRestore(state)` | übernimmt `state.effective`; wechselt er auf wahr, sofort speichern                                                       |
-| `flushAsync()`               | wie bisher, wartet die Speicher-Warteschlange ab (vor dem Sperren)                                                        |
+Die Logik liegt in `src/lib/wm/sessionSync.ts` (rein, unter Node testbar); der
+Store gibt ihr seinen Zustand, die Historien-Map und `useWmSession()`.
+
+| Mitglied                            | Verhalten                                                                                                                 |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| geltender Wert (intern)             | `false`, bis `restoreSessionAsync` ihn gesetzt hat                                                                        |
+| `restoreSessionAsync()`             | ersetzt `hydrateFromBackendAsync`: `wm_session_load`, dann `hydrate` und Historien der Tabs übernehmen, oder leerer Start |
+| `setSessionRestore(scope, enabled)` | setzt oder löscht (`null`) einen Wert und übernimmt den Zustand; wird er wahr, sofort speichern                           |
+| `getSessionRestore()`               | liest Gerätewert, Vault-Wert und geltenden Wert                                                                           |
+| `flushAsync()`                      | wie bisher, wartet die Speicher-Warteschlange ab (vor dem Sperren)                                                        |
 
 `createWorkspace` erzeugt die Kennung selbst (`crypto.randomUUID()`) und ist
 synchron. `switchWorkspace`, `deleteWorkspace` und alle Fenster- und
-Tab-Änderungen lösen `saveSessionNow`/`saveSessionSoon` aus, die ohne geltende
-Einstellung nichts tun.
+Tab-Änderungen lösen sofortiges bzw. entprelltes Speichern aus, Navigation im
+Tab (`navigate`, `goTab`, `skipCurrent`) entprelltes; ohne geltende Einstellung
+tut beides nichts.
 
 ## 5. Einstellungsansicht
 
@@ -93,11 +101,12 @@ Einstellung nichts tun.
 
 - Überschrift „Sitzung wiederherstellen“, eine Zeile Erklärung (was gespeichert
   wird, dass es nur dieses Gerät betrifft).
-- Anzeige: „Dieses Gerät: an / aus / nicht gesetzt“, „Alle Geräte: …“, „Gilt
-  hier: an / aus“.
-- Auswahl „Nur dieses Gerät / Alle Geräte“ (wie `DefaultModelSetting.vue`),
-  Schalter „Ein“ für den gewählten Scope, Knopf „Zurücksetzen“ für den gewählten
-  Scope, deaktiviert, wenn dort nichts gesetzt ist.
+- Anzeige: „Dieses Gerät: an / aus / nicht gesetzt“, „Vault-weit: …“, „Gilt
+  auf diesem Gerät: an / aus“.
+- Auswahl „Nur dieses Gerät / Vault-weit“ (wie `DefaultModelSetting.vue`) und
+  für den gewählten Scope die Knöpfe „Einschalten“, „Ausschalten“ und
+  „Zurücksetzen“, jeweils deaktiviert, wenn der Wert schon so ist bzw. nichts
+  gesetzt ist. Ein einzelner Schalter könnte „nicht gesetzt“ nicht zeigen.
 - Alle Änderungen laufen über `useActionOrThrow` (Spec 020 FR-024,
   `check:templates`).
 - i18n-Schlüssel unter `settings.sessionRestore.*` (de, en).
