@@ -42,9 +42,9 @@ Technischer Ansatz (Begründungen in [research.md](./research.md)):
 ## Technical Context
 
 **Language/Version**: TypeScript 6 (strict), Vue 3.5, Nuxt 4.5.2 (SPA,
-`ssr: false`), Node 22.19; Rust nur für Webview-Einstellungen beim Fensteraufbau (Browser-Kürzel
-und Maus-Navigation aus, R17) und den Android-Zurück-Hook hinter
-Plattformprüfung (R7)
+`ssr: false`), Node 22.19; Rust unverändert: Tauri 2.11 reicht die
+Webview-Einstellungen nicht durch (R17); der Android-Zurück-Hook nutzt
+`onBackButtonPress` aus `@tauri-apps/api` im Plugin (R7)
 
 **Primary Dependencies**: nur Vorhandenes — Pinia 4, `@vueuse/core` 15,
 haex-ui-Layer (shadcn-vue/reka-ui: `ShadcnDropdownMenu`, `ShadcnTooltip`,
@@ -82,34 +82,35 @@ _GATE: Muss vor Phase 0 bestehen. Nach Phase 1 erneut geprüft — Ergebnis unte
 Geprüft gegen `.specify/memory/constitution.md` (v1.4.0) und die
 spaex-Constitution `.spaex/constitution.md`.
 
-| Prinzip / Vorgabe                                                          | Status | Begründung                                                                                                                                                                                  |
-| -------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| I Keine Geheimnisse in Git                                                 | ✅     | Keine Geheimnisse berührt; `settings.get` gibt nie Zugangsdaten von Anbietern zurück                                                                                                        |
-| II Keine lokalen absoluten Pfade in versionierter Konfiguration            | ✅     | Nur repo-relative Pfade                                                                                                                                                                     |
-| III Projektidentität geräteunabhängig                                      | ✅     | Berührt nicht                                                                                                                                                                               |
-| IV Cross-Repo-Referenzen an unveränderliche SHAs gepinnt                   | ✅     | haex-vault `8dce379d94e18fcd42c3b73686a06f984ca3f574` in Spec und Research                                                                                                                  |
-| V Externe Quellen nur per Opt-in                                           | ✅     | Keine neue Quelle                                                                                                                                                                           |
-| VI Selbstverändernde Anweisungen review-pflichtig                          | ✅     | Keine Änderung an Constitution/Skills; `CONTEXT.md` läuft durch den PR                                                                                                                      |
-| VII Relay-Ausfall blockiert lokale Arbeit nicht                            | ✅     | Rein lokal                                                                                                                                                                                  |
-| VIII Keine Verheimlichung in Agent-Ausgaben                                | ✅     | –                                                                                                                                                                                           |
-| Workflow: speckit-Stufen, PR auf `main`, Conventional Commits, kein Squash | ✅     | specify → plan → tasks → implement; Topic-Branch im Worktree                                                                                                                                |
-| ADR bei prinzipienrelevanter Entscheidung                                  | ✅     | Keine für 020; die Richtung „externer Agent → holzi“ bekommt ADR-0005 mit Spec 021 (R16)                                                                                                    |
-| Test-Code in separaten Dateien                                             | ✅     | `scripts/check-shell-navigation.ts`                                                                                                                                                         |
-| Worktree je Änderung                                                       | ✅     | `.worktrees/020-tab-navigation`                                                                                                                                                             |
-| 500-LoC-Grenze                                                             | ✅     | Neue Dateien klein; `ChatApp.vue` bekommt nur einen Composable-Aufruf; neue Prüfungen nicht in `check-shell-state.ts`                                                                       |
-| Graphify vor neuen benannten Artefakten                                    | ✅     | Abfrage in R8: keine Router/Keybinding-Artefakte; „Command“ belegt → Name „Aktion“                                                                                                          |
-| `ponytail:`-Kommentar bei bewusster Vereinfachung                          | ✅     | Geplant an R7 (Android erst mit Target geprüft) und R6-Fallback (Zeigerposition)                                                                                                            |
-| Nicht-triviale Logik hinterlässt einen ausführbaren Check                  | ✅     | `check:shell-navigation`                                                                                                                                                                    |
-| Keine Selbstreferenzen von Agenten in Artefakten/Commits                   | ✅     | Wird bei Commits eingehalten                                                                                                                                                                |
-| **Phasen-Disziplin**                                                       | ⚠️     | Setzt 015 im Einsatz voraus. Planen ist erlaubt; **`/speckit-implement` erst nach Merge von 015**, dann Rebase auf `main`; `plans/README.md` bekommt einen Eintrag (Aufgabe in tasks) — R15 |
+| Prinzip / Vorgabe                                                          | Status | Begründung                                                                                                                                                                                                                   |
+| -------------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| I Keine Geheimnisse in Git                                                 | ✅     | Keine Geheimnisse berührt; `settings.get` gibt nie Zugangsdaten von Anbietern zurück                                                                                                                                         |
+| II Keine lokalen absoluten Pfade in versionierter Konfiguration            | ✅     | Nur repo-relative Pfade                                                                                                                                                                                                      |
+| III Projektidentität geräteunabhängig                                      | ✅     | Berührt nicht                                                                                                                                                                                                                |
+| IV Cross-Repo-Referenzen an unveränderliche SHAs gepinnt                   | ✅     | haex-vault `8dce379d94e18fcd42c3b73686a06f984ca3f574` in Spec und Research                                                                                                                                                   |
+| V Externe Quellen nur per Opt-in                                           | ✅     | Keine neue Quelle                                                                                                                                                                                                            |
+| VI Selbstverändernde Anweisungen review-pflichtig                          | ✅     | Keine Änderung an Constitution/Skills; `CONTEXT.md` läuft durch den PR                                                                                                                                                       |
+| VII Relay-Ausfall blockiert lokale Arbeit nicht                            | ✅     | Rein lokal                                                                                                                                                                                                                   |
+| VIII Keine Verheimlichung in Agent-Ausgaben                                | ✅     | –                                                                                                                                                                                                                            |
+| Workflow: speckit-Stufen, PR auf `main`, Conventional Commits, kein Squash | ✅     | specify → plan → tasks → implement; Topic-Branch im Worktree                                                                                                                                                                 |
+| ADR bei prinzipienrelevanter Entscheidung                                  | ✅     | Keine für 020; die Richtung „externer Agent → holzi“ bekommt ADR-0005 mit Spec 021 (R16)                                                                                                                                     |
+| Test-Code in separaten Dateien                                             | ✅     | `scripts/check-shell-navigation.ts`                                                                                                                                                                                          |
+| Worktree je Änderung                                                       | ✅     | `.worktrees/020-tab-navigation`                                                                                                                                                                                              |
+| 500-LoC-Grenze                                                             | ⚠️     | Neue Dateien bleiben unter 500 Zeilen (`ChatApp.vue` 484, `stores/shell.ts` 485). `HuggingFaceModelManagement.vue` lag schon vorher bei 582 Zeilen; 020 tauscht dort nur Aufrufe aus (jetzt 580) — siehe Complexity Tracking |
+| Graphify vor neuen benannten Artefakten                                    | ✅     | Abfrage in R8: keine Router/Keybinding-Artefakte; „Command“ belegt → Name „Aktion“                                                                                                                                           |
+| `ponytail:`-Kommentar bei bewusster Vereinfachung                          | ✅     | Geplant an R7 (Android erst mit Target geprüft) und R6-Fallback (Zeigerposition)                                                                                                                                             |
+| Nicht-triviale Logik hinterlässt einen ausführbaren Check                  | ✅     | `check:shell-navigation`                                                                                                                                                                                                     |
+| Keine Selbstreferenzen von Agenten in Artefakten/Commits                   | ✅     | Wird bei Commits eingehalten                                                                                                                                                                                                 |
+| **Phasen-Disziplin**                                                       | ⚠️     | Setzt 015 im Einsatz voraus. Planen ist erlaubt; **`/speckit-implement` erst nach Merge von 015**, dann Rebase auf `main`; `plans/README.md` bekommt einen Eintrag (Aufgabe in tasks) — R15                                  |
 
 **Ergebnis vor Phase 0**: kein unbegründeter Verstoß; ein ⚠️ dokumentiert.
 
 **Ergebnis nach Phase 1**: unverändert. Das Design fügt keine Abhängigkeit, keine
 Persistenz und keinen Tauri-Command hinzu. Die Erweiterung vom selben Tag
 (agentenfähige Aktionen, Isolation eingebetteter Dokumente) ändert
-Datenmodell, Verträge und Umfang, aber keinen Punkt der Tabelle; der
-Rust-Anteil beschränkt sich auf Webview-Einstellungen und einen Plattform-Hook.
+Datenmodell, Verträge und Umfang, aber keinen Punkt der Tabelle; ohne
+Rust-Anteil. Nach der Umsetzung kam das ⚠️ zur 500-LoC-Grenze hinzu
+(Complexity Tracking).
 
 ## Project Structure
 
@@ -130,56 +131,63 @@ specs/020-tab-navigation/
 
 ### Source Code (repository root)
 
-Stand nach Merge von 015 (Pfade aus dem Branch `015-workspace-shell`).
+Stand nach der Umsetzung (auf `main` nach dem Merge von 015).
 
 ```text
 src/
 ├── lib/shell/                           # reine Module (relativ, mit .ts)
-│   ├── navigation.ts                    # NEU: TabLocation, TabHistory, push/replace/go/removeEntry, Gleichheit, Parsen
-│   ├── routeMatch.ts                    # NEU: Pfadmuster, verschachteltes Matching, Parameter
-│   ├── keybindings.ts                   # NEU: KeyboardEvent → Chord, Plattform, Auflösung
-│   ├── types.ts                         # + TabRuntime.history
-│   ├── layoutState.ts                   # openApp(…, at?), hydrate legt Start-Historie an
-│   └── tabs.ts                          # addTab(…, at?)
+│   ├── navigation.ts                    # NEU: TabLocation, TabHistory, push/replace/go/removeEntry, withQuery, isLocationActive
+│   ├── routeMatch.ts                    # NEU: Pfadmuster, verschachteltes Matching, locationTitle
+│   ├── keybindings.ts                   # NEU: KeyboardEvent → Chord, Plattform, Auflösung, Textfeld-Vorrang
+│   ├── tabNavigation.ts                 # NEU: Historien mit dem Layout abgleichen, openAppAt/addTabAt, skipTabEntry, resolveSystemBack
+│   └── apps.ts                          # nur Kommentar (appRoutes.ts)
 ├── lib/actions/                         # reine Module (relativ, mit .ts)
-│   ├── types.ts                         # NEU: ShellActionDefinition, ActionScope, ActionCaller, ActionOutcome
-│   ├── schema.ts                        # NEU: Validator der JSON-Schema-Teilmenge
-│   ├── runner.ts                        # NEU: runAction-Ablauf (Nachschlagen, Leitplanken, Eingabe, Ziel, Handler)
-│   ├── scopes.ts                        # NEU: Bereichsliste
-│   ├── shellActions.ts                  # NEU: Katalog Shell
-│   ├── chatActions.ts                   # NEU: Katalog Chat
-│   └── settingsActions.ts               # NEU: Katalog Einstellungen
-├── plugins/actions.client.ts            # NEU: globale Handler registrieren (Shell, Einstellungen)
-├── stores/shell.ts                      # + Navigation je Tab, runAction-Anbindung, tab-gebundene Handler, systemBack
+│   ├── types.ts, scopes.ts, schema.ts   # NEU: Aktion, Bereiche, Aufrufer, Ergebnis; Validator der JSON-Schema-Teilmenge
+│   ├── runner.ts, handlers.ts           # NEU: runAction-Ablauf; Registries für globale und tab-gebundene Handler
+│   ├── catalog.ts                       # NEU: ALL_ACTIONS
+│   ├── shellActions.ts                  # NEU: Navigation, App/Tab an Ort öffnen, System-Zurück
+│   ├── shellLayoutActions.ts            # NEU: Anordnung und lesende Aktionen
+│   ├── chatActions.ts                   # NEU: Chat (tab-gebunden) und Modell/Effort/Diktat (global)
+│   └── settingsActions.ts               # NEU: Einstellungen
+├── plugins/actions.client.ts            # NEU: globale Handler registrieren; Android-Hook (onBackButtonPress, ponytail)
+├── stores/
+│   ├── shell.ts                         # + openApp/addTab mit Ort, Durchreichen von Navigation und Aktionen
+│   ├── shellNavigation.ts               # NEU: Historien, Laufrichtung, Overlays, systemBack, Runner-Verdrahtung
+│   ├── shellGuards.ts                   # 015-Close-Guard-Abfragen, unverändert ausgelagert (500-Zeilen-Grenze)
+│   ├── shellActionHandlers.ts           # NEU: Handler Navigation und Öffnen
+│   ├── shellLayoutHandlers.ts           # NEU: Handler Anordnung und Lesen
+│   ├── chatActionHandlers.ts            # NEU: Handler Modell, Effort, Download, Integrität, Diktat
+│   └── settingsActionHandlers.ts        # NEU: Handler Einstellungen (Schreiblogik aus den Komponenten)
 ├── composables/
-│   ├── useTabRouter.ts                  # NEU: App-Schnittstelle (inert außerhalb der Shell)
-│   ├── useAction.ts                     # NEU: runAction mit caller user für Komponenten
-│   ├── useShellTab.ts                   # + openApp(appId, at?), registerActionHandler
+│   ├── useTabRouter.ts                  # NEU: App-Schnittstelle (inert außerhalb der Shell), skipCurrent
+│   ├── useAction.ts, useActionOrThrow.ts# NEU: Aktionen aus Komponenten; OrThrow wirft den Rohfehler weiter
 │   ├── useShellKeyboard.ts              # NEU: globaler keydown → runAction
-│   ├── useChatNavigation.ts             # NEU: Chat-Routen ↔ selectThread/newChat/Thread-Anlage/Löschen
-│   └── useChatActions.ts                # NEU: tab-gebundene Chat-Handler
+│   ├── useChatNavigation.ts             # NEU: Chat-Orte ↔ selectThread/newChat, Titel, Überspringen
+│   ├── useChatShell.ts                  # NEU: Chat↔Shell (Navigation, tab-gebundene Handler, Freigabe, Close-Guard)
+│   ├── useShellTab.ts                   # + appId, openApp(appId, at?), registerActionHandler, requestDeleteWorkspace
+│   └── useComposer.ts                   # + setReasoningExpanded (aus ChatApp.vue verschoben)
 ├── components/shell/
-│   ├── ShellNavButtons.vue              # NEU: Zurück/Vor + langer Druck/Rechtsklick
-│   ├── ShellHistoryMenu.vue             # NEU: Verlaufsliste (Dropdown)
-│   ├── ShellRouterView.vue              # NEU: rendert den Eintrag der eigenen Tiefe
-│   ├── ShellLink.vue                    # NEU: Link mit push/replace, aria-current
-│   ├── appRoutes.ts                     # ersetzt appComponents.ts (Routentabellen je App)
-│   ├── ShellWindow.vue                  # + ShellNavButtons, Maustasten, data-shell-window-id
-│   ├── ShellTabPanel.vue                # rendert ShellRouterView statt direkter App-Komponente
-│   └── übrige Shell-Komponenten         # Bedienung über useAction
-├── components/apps/ChatApp.vue          # + useChatNavigation, useChatActions (je ein Aufruf)
-├── components/chat/**, components/settings/**, components/models/**  # Bedienung über useAction
-├── pages/workspace/[instance].vue       # + onBeforeRouteLeave (Abwehr), ?at=, useShellKeyboard
-└── i18n/locales/{de,en}.json            # + shell.nav.*, actions.*, actions.scopes.*, shell.chat.thread
+│   ├── ShellNavButtons.vue, ShellHistoryMenu.vue, ShellRouterView.vue, ShellLink.vue  # NEU
+│   ├── appRoutes.ts                     # ersetzt appComponents.ts (Routentabellen, titleForLocation)
+│   └── übrige Shell-Komponenten         # Bedienung über useAction; Overlays im Store
+├── components/apps/ChatApp.vue          # useChatShell statt eigener Shell-Verdrahtung (484 Zeilen)
+├── components/chat/**, settings/**, models/**  # Bedienung über useAction/useActionOrThrow
+├── pages/index.vue, onboarding/[instance].vue   # Einstieg in den Arbeitsbereich per replace
+├── pages/workspace/[instance].vue       # + onBeforeRouteLeave (Abwehr), ?at=, useShellKeyboard, Models-Store im Setup
+└── i18n/locales/{de,en}.json            # + shell.nav.*, shell.chat.thread, actions.*, actions.scopes.*
 
-src-tauri/src/
-├── lib.rs (bzw. Fensteraufbau)          # Webview: Browser-Kürzel/Maus-Navigation aus, wo verfügbar (R17)
-└── (Android-Zurück-Hook)                # hinter Plattformprüfung, ponytail-markiert (R7)
-
-scripts/check-shell-navigation.ts        # NEU (Historie, Matcher, Chords, Katalog, Runner, Store)
-scripts/check-vue-templates.ts           # + Regel: zustandsändernde @click nur über useAction (R20)
-package.json                             # + check:shell-navigation
+scripts/
+├── check-shell-navigation.ts            # NEU: Historie, Matcher, Hilfen, Titel
+├── check-shell-actions.ts               # NEU: Validator, Runner, Katalog- und Agenten-Regeln
+├── check-shell-nav-store.ts             # NEU: Historien im Layout, Registries, System-Zurück, Überspringen
+├── check-shell-keys.ts                  # NEU: Tastenkürzel
+├── check-chat-navigation.ts             # NEU: Chat-Navigations-Replays (Teil von check:chat-state)
+├── lib/chat-state-harness.ts            # + aufzeichnender Tab-Router, Aktions-Doubles
+├── check-vue-templates.ts               # + Sperrliste direkter Schreibaufrufe (R20)
+└── e2e/scenarios/tab-content-isolation.test.ts  # NEU: M13/M21, SC-009
+package.json                             # + check:shell-navigation, check:chat-state über zwei Dateien
 .github/workflows/ci.yml                 # + Schritt check:shell-navigation
+specs/016-e2e-testing/contracts/test-hooks.md  # + nav-back/nav-forward
 CONTEXT.md                               # + Ort, Tab-Historie, Aktion, Berechtigungsbereich, Aufrufer
 plans/README.md                          # + Roadmap-Eintrag 020
 ```
@@ -229,4 +237,6 @@ plans/README.md                          # + Roadmap-Eintrag 020
 
 ## Complexity Tracking
 
-Keine Abweichungen von der Constitution.
+| Abweichung                                                                                        | Warum sie bleibt                                                                                                                                                                                                   | Plan für die Aufteilung                                                                                                                                                       |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/components/models/HuggingFaceModelManagement.vue` hat 580 Zeilen (vorher 582, Stand vor 020) | 020 tauscht dort nur Aufrufe gegen Aktionen aus und verkleinert die Datei; eine Aufteilung gehört thematisch zur Folge-Spec „Einstellungs-App“, die diese Ansicht ohnehin in Kategorien und Unteransichten zerlegt | Mit der Einstellungs-Spec: Katalog-, Such- und Installiert-Bereich als eigene Unteransichten (je unter 250 Zeilen), die Integritäts-Verdrahtung in ein gemeinsames Composable |

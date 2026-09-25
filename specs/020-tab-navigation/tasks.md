@@ -243,8 +243,9 @@ description: 'Task list for spec 020-tab-navigation'
 - [x] T059 [P] Add Ort, Tab-Historie, Aktion, Berechtigungsbereich and Aufrufer to `CONTEXT.md` (note: code says "action", never "command")
   - Done 2026-09-25: Ort/Tab-Historie and Aktion/Berechtigungsbereich/Aufrufer entries after the Shell entry, with the 'not command' note.
 - [ ] T060 Run quickstart §1 (all automated checks) and §2 (M1–M23); record results and platform limitations for the PR
-  - Status 2026-09-25: §1 all green — check:shell-navigation 75/75, check:shell-state 44/44, check:chat-state 49/49, check:vault-lifecycle 12/12, check:vault-passphrase-lifetime 7/7, check:e2e-lib 160/160, check:templates 56 (no direct writes), typecheck, typecheck:scripts, lint, format:check. Full e2e suite (debug build, Xvfb): 7 passed, 1 skipped (relaunch needs a release build) — the first run exposed a real bug (models store created in the startup plugin → vue-i18n error 26 on the workspace page), fixed in 9a6a494. Open: the manual §2 scenarios M1–M20/M22/M23 need an operator in the running app (M13/M21 automated, T039).
-- [ ] T061 Run `/speckit-analyze` on spec/plan/tasks; resolve all CRITICAL/HIGH findings before opening the PR
+  - Status 2026-09-25: §1 all green — check:shell-navigation 75/75, check:shell-state 44/44, check:chat-state 49/49, check:vault-lifecycle 12/12, check:vault-passphrase-lifetime 7/7, check:e2e-lib 160/160, check:templates 56 (no direct writes), typecheck, typecheck:scripts, lint, format:check. Full e2e suite (debug build, Xvfb): 7 passed, 1 skipped (relaunch needs a release build) — the first run exposed a real bug (models store created in the startup plugin → vue-i18n error 26 on the workspace page), fixed in 9a6a494. Open: the manual §2 scenarios M1–M20 and M22–M24 need an operator in the running app (M13/M21 automated, T039; M24 measures SC-003).
+- [x] T061 Run `/speckit-analyze` on spec/plan/tasks; resolve all CRITICAL/HIGH findings before opening the PR
+  - Done 2026-09-25: /speckit-analyze: 1 CRITICAL (HuggingFaceModelManagement.vue > 500 lines touched without Complexity Tracking) and the documentation findings I1/I2/U1/U2/G1 fixed in the plan, spec, research and quickstart; C2 (change size) accepted by the operator as one large PR, noted in the PR description. Open by nature: T032 (physical mouse) and T060's manual scenarios.
 
 ---
 

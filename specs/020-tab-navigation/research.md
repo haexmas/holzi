@@ -370,12 +370,13 @@ Stelle, und Oberfläche und Agenten teilen sie.
 
 **Decision**: `check:shell-navigation` prüft den Katalog strukturell (eindeutige
 Ids, gültige Schemas, jeder Bereich existiert, jede `guardrails`-Aktion ist
-`agentCallable: false`, Runner lehnt Agenten dort ab). Die Abdeckung aller
-Bedienelemente (SC-007) prüft ein Lint-Schritt in `check:templates`: In
-`components/shell/**` und `components/apps/**` darf ein `@click`, das Zustand
-ändert, nur `runAction`/`useAction` aufrufen; Ausnahmen (reine
-Ansichts-Umschalter wie Aufklappen) tragen einen Kommentar `action-exempt:`.
-Ergänzend eine manuelle Prüfliste in quickstart.
+`agentCallable: false`, der Runner lehnt Agenten dort ab). `check:templates`
+sperrt direkte Aufrufe schreibender Schnittstellen in `.vue`-Dateien unter
+`src/`: Shell-Store-Mutationen, Schreibzugriffe auf Präferenzen, Gerät, Modelle,
+HF und Provider sowie die schreibenden Aktionen des Models-Stores. Ausnahmen
+tragen `action-exempt: <Grund>` in der Zeile oder bis zu drei Zeilen davor.
+Ergänzend eine manuelle Prüfliste in quickstart (M23).
 
-**Rationale**: Eine vollautomatische Semantikprüfung „ändert Zustand“ ist nicht
-machbar; eine einfache Regel plus explizite Ausnahmen hält SC-007 überprüfbar.
+**Rationale**: Eine Regel „@click nur über useAction“ erkennt nicht, ob ein
+Handler Zustand ändert. Die Sperrliste trifft genau die Aufrufe, die am Katalog
+vorbeigehen würden, und lässt reine Ansichts-Umschalter unberührt.

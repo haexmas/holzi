@@ -656,3 +656,6 @@ Spec noch keinen Zugang)
   Berechtigungen je Agent, Registrierung der Aktionen als Tools des eingebauten
   Agenten, Protokoll der Agenten-Aufrufe (Spec 021 mit ADR-0005).
 - Anbindung von Extension-Tabs an das Ortmodell über das SDK (Spec 017/018).
+- Sperren der Vault als Aktion (`shell.vault.lock`): Der Sperren-Knopf bleibt
+  direkt (er beendet den Prozess, Spec 013, und darf ohnehin nie von Agenten
+  ausgelöst werden); die Aktion folgt mit der Spec „Befehle und Tastenkürzel“.
