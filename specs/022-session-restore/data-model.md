@@ -34,7 +34,7 @@ von der Synchronisierung aus (research R1).
 | Spalte              | Typ                | Regel                                                               |
 | ------------------- | ------------------ | ------------------------------------------------------------------- |
 | `vault_device_uuid` | `TEXT PRIMARY KEY` | Gerät, dem die Sitzung gehört; von Rust ermittelt, nie vom Frontend |
-| `session_json`      | `TEXT NOT NULL`    | `WmSession` als JSON, höchstens 1 MiB                               |
+| `session_json`      | `TEXT NOT NULL`    | `WmSession` als JSON, höchstens 4 MiB                               |
 | `updated_at`        | `TEXT NOT NULL`    | RFC 3339, nur zur Diagnose                                          |
 
 Kein Fremdschlüssel (research R1). Gelesen und geschrieben wird immer nur die
@@ -70,20 +70,44 @@ type WmSession = {
     minimized: boolean
     maximized: boolean
     stack: number
-    tabs: { id: string; appId: string }[]
+    tabs: {
+      id: string
+      appId: string
+      // Spec 020 TabHistory: 1–50 Einträge, index zeigt auf den aktuellen Ort
+      history: {
+        entries: {
+          location: { path: string; query: Record<string, string> }
+          title: string | null
+        }[]
+        index: number
+      }
+    }[]
     activeTabId: string
   }[]
   activeWorkspaceId: string
 }
 ```
 
-Nicht enthalten, wie in Spec 015 und 020: Tab-Inhalte, Tab-Orte und
-Vor-/Zurück-Historie, Titel, Aufmerksamkeitsmarken, Schließwächter.
+Enthalten ist für jeden Tab seine Vor-/Zurück-Historie aus Spec 020
+(`TabHistory` in `src/lib/wm/navigation.ts`), also Ort, alle Einträge mit
+Titeln und die Position darin (Klärung vom 2026-09-26). Nicht enthalten:
+Scrollpositionen, nicht abgeschickte Eingaben, laufzeitgesetzte Tab-Titel,
+Aufmerksamkeitsmarken, Schließwächter.
+
+**Größe**: Eine typische Sitzung hat wenige Kilobyte. Liegt eine Momentaufnahme
+über 4 MiB (extrem viele Tabs mit voller Historie), lehnt Rust sie ab; das
+Frontend speichert sie dann einmal ohne Historien (jeder Tab nur mit seinem
+aktuellen Ort) und protokolliert das, statt endlos zu wiederholen.
 
 **Beim Laden** (FR-012, Spec 015 FR-025): Ist das JSON ungültig, hat es eine
 andere `version` oder fehlen Pflichtfelder, startet holzi leer und
 protokolliert den Fehler. Unbekannte Apps, doppelte Einzelinstanzen und
-Fenster außerhalb des sichtbaren Bereichs behandelt `hydrate` wie bisher.
+Fenster außerhalb des sichtbaren Bereichs behandelt `hydrate` wie bisher. Eine
+einzelne ungültige Historie (leer, mehr als 50 Einträge, `index` außerhalb,
+Ort ohne führendes `/`) ersetzt holzi durch eine frische Historie am Start-Ort
+der App, ohne die übrige Sitzung zu verwerfen. Orte, die es nicht mehr gibt,
+behandelt Spec 020 beim Anzeigen (Hinweis, Startansicht, Überspringen
+gelöschter Unterhaltungen).
 
 ## Wartungsaufgaben
 

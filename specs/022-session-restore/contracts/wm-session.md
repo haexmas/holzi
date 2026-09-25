@@ -36,7 +36,7 @@ Liest Gerätewert und Vault-Wert von `wm.session_restore` und den geltenden Wert
 
 ### `wm_session_save(args: { session: unknown }) -> { saved: boolean }`
 
-- Prüft: gültiges JSON-Objekt, serialisiert höchstens 1 MiB; sonst
+- Prüft: gültiges JSON-Objekt, serialisiert höchstens 4 MiB; sonst
   `HolziError::InvalidInput`.
 - Gilt die Einstellung nicht, schreibt es nichts und gibt `saved: false` zurück
   (ein verspätetes Speichern nach dem Ausschalten legt nichts an).
@@ -74,12 +74,12 @@ Store weiter (`useWindowManagerStore().applySessionRestore(state)`).
 
 ## 4. Store (`src/stores/windowManager.ts`)
 
-| Mitglied                     | Verhalten                                                                              |
-| ---------------------------- | -------------------------------------------------------------------------------------- |
-| `sessionRestore` (ref)       | geltender Wert; `false` bis `restoreSessionAsync` ihn gesetzt hat                      |
-| `restoreSessionAsync()`      | ersetzt `hydrateFromBackendAsync`: `wm_session_load`, dann `hydrate` oder leerer Start |
-| `applySessionRestore(state)` | übernimmt `state.effective`; wechselt er auf wahr, sofort speichern                    |
-| `flushAsync()`               | wie bisher, wartet die Speicher-Warteschlange ab (vor dem Sperren)                     |
+| Mitglied                     | Verhalten                                                                                                                 |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `sessionRestore` (ref)       | geltender Wert; `false` bis `restoreSessionAsync` ihn gesetzt hat                                                         |
+| `restoreSessionAsync()`      | ersetzt `hydrateFromBackendAsync`: `wm_session_load`, dann `hydrate` und Historien der Tabs übernehmen, oder leerer Start |
+| `applySessionRestore(state)` | übernimmt `state.effective`; wechselt er auf wahr, sofort speichern                                                       |
+| `flushAsync()`               | wie bisher, wartet die Speicher-Warteschlange ab (vor dem Sperren)                                                        |
 
 `createWorkspace` erzeugt die Kennung selbst (`crypto.randomUUID()`) und ist
 synchron. `switchWorkspace`, `deleteWorkspace` und alle Fenster- und

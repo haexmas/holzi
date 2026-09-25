@@ -15,8 +15,11 @@ gespeichert haben, werden beim Update entfernt.
 - **Sitzung**: welche Arbeitsbereiche es gibt und in welcher Reihenfolge,
   welcher davon aktiv ist, welche Fenster in welchem Arbeitsbereich offen sind
   (mit Position, Größe, minimiert oder maximiert) und welche Tabs jedes Fenster
-  hat (welche App, Reihenfolge, aktiver Tab). Das ist genau das, was Spec 015
-  bisher bei jedem Neustart wiederhergestellt hat (FR-023 dort).
+  hat (welche App, Reihenfolge, aktiver Tab), dazu für jeden Tab sein Ort und
+  seine ganze Vor-/Zurück-Historie (Spec 020) samt Position darin und den Titeln
+  der Einträge. Nicht dazu gehören Scrollpositionen und nicht abgeschickte
+  Eingaben. Spec 015 hat bisher alles außer Ort und Historie bei jedem Neustart
+  wiederhergestellt (FR-023 dort).
 - **Gespeicherte Sitzung**: eine Sitzung, die in der Vault liegt, damit der
   nächste Start sie wiederherstellen kann. Sie gehört immer zu genau einem
   Gerät.
@@ -42,11 +45,18 @@ gespeichert haben, werden beim Update entfernt.
   neue Einstellung folgt demselben Muster wie das Standardmodell. Es gibt einen
   Wert für die ganze Vault und optional einen Wert nur für dieses Gerät, der den
   Vault-Wert überschreibt.
-- [`020-tab-navigation`](../020-tab-navigation/spec.md): Die Vor-/Zurück-
-  Historie eines Tabs wird auch mit eingeschalteter Wiederherstellung nicht
-  gespeichert (Betreiberentscheidung dort). Die Einstellung ist eine Aktion im
-  Katalog von Spec 020 (FR-024 dort), wie jede andere Änderung einer
-  Einstellung.
+- [`020-tab-navigation`](../020-tab-navigation/spec.md): Mit eingeschalteter
+  Wiederherstellung werden Ort und Vor-/Zurück-Historie jedes Tabs mitgespeichert
+  und wiederhergestellt, wie in einem Browser. Das ersetzt für diesen Fall die
+  Entscheidung aus Spec 020, die Historie nie zu speichern (FR-011 dort); ohne
+  Einstellung bleibt es dabei. Einträge, deren Ziel es nicht mehr gibt (etwa eine
+  gelöschte Unterhaltung), behandelt Spec 020 wie bisher. Die Einstellung ist
+  eine Aktion im Katalog von Spec 020 (FR-024 dort), wie jede andere Änderung
+  einer Einstellung.
+- [`004-chat-window-handling`](../004-chat-window-handling/spec.md): Ein
+  wiederhergestellter Chat-Tab zeigt die Unterhaltung, an der er stand. Das ist
+  kein neuer Chat-Einstieg im Sinne von Spec 004, der weiterhin mit einer neuen
+  Unterhaltung beginnt.
 - ADR-0001 (gerätebezogene Daten): Eine gespeicherte Sitzung bleibt
   gerätebezogen, auch wenn die Einstellung für die ganze Vault gilt. Jedes Gerät
   speichert und sieht nur seine eigene.
@@ -61,6 +71,13 @@ gespeichert haben, werden beim Update entfernt.
   der heutigen Einstellungsansicht.
 - Tab-Inhalte sind nicht betroffen: Chat-Verlauf, Einstellungen, Modelle und
   alle anderen Daten der Apps bleiben wie bisher in der Vault.
+
+## Clarifications
+
+### Session 2026-09-26
+
+- Q: Dürfen Agenten die Einstellung „Sitzung wiederherstellen“ ändern, oder bleibt sie wie die Leitplanken dem Nutzer vorbehalten? → A: Agenten dürfen sie ein- und ausschalten, wenn ihnen der Bereich für Geräteeinstellungen freigegeben ist (Spec 021); sie ist keine Leitplanke.
+- Q: Soll ein wiederhergestellter Tab dort weitermachen, wo er zuletzt stand, oder an der Startansicht seiner App beginnen? → A: Wie im Browser: Ort und ganze Vor-/Zurück-Historie jedes Tabs samt Position und Titeln der Einträge; keine Scrollposition, keine nicht abgeschickten Eingaben.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -107,7 +124,8 @@ behalten wollen, eine Fähigkeit, die sie heute haben.
 Arbeitsbereiche mit Fenstern und Tabs einrichten, holzi beenden und die Vault
 erneut öffnen: Das Verhalten entspricht Spec 015 User Story 5 (Arbeitsbereiche,
 Fenster mit Position, Größe und Zustand, Tabs mit Reihenfolge und aktivem Tab,
-zuletzt aktiver Arbeitsbereich).
+zuletzt aktiver Arbeitsbereich), und jeder Tab steht am selben Ort mit derselben
+Vor-/Zurück-Historie.
 
 **Acceptance Scenarios**:
 
@@ -118,8 +136,10 @@ zuletzt aktiver Arbeitsbereich).
    Vault erneut öffnet, **Then** erscheint die zuletzt gespeicherte Sitzung
    dieses Geräts gemäß Spec 015 User Story 5.
 3. **Given** ein wiederhergestellter Tab, **When** holzi erscheint,
-   **Then** beginnt er an der Startansicht seiner App ohne Vor-/Zurück-Historie
-   (Spec 020); ein Chat-Tab beginnt mit einer neuen Unterhaltung (Spec 004).
+   **Then** steht er am selben Ort wie beim letzten Speichern und hat dieselbe
+   Vor-/Zurück-Historie mit derselben Position darin: Ein Chat-Tab zeigt dieselbe
+   Unterhaltung, Zurück führt zu denselben Ansichten wie vorher. Scrollposition
+   und nicht abgeschickte Eingaben kommen nicht mit.
 4. **Given** die Einstellungsansicht, **When** der Nutzer sie öffnet, **Then**
    sieht er, welcher Wert für dieses Gerät und welcher für die ganze Vault
    gesetzt ist, und welcher davon auf diesem Gerät gerade gilt.
@@ -236,6 +256,10 @@ Vault.
 - Ein anderes Gerät hat den Vault-Wert geändert, während dieses Gerät eine
   Vault-Session offen hat. Die Änderung gilt auf diesem Gerät spätestens ab dem
   nächsten Öffnen; bis dahin gilt, was beim Öffnen galt.
+- Ein wiederhergestellter Tab steht an einem Ort, den es nicht mehr gibt (eine
+  gelöschte Unterhaltung, eine Ansicht, die diese Version nicht kennt). Es gilt
+  Spec 020: Der Tab zeigt die Startansicht seiner App mit Hinweis, und Einträge
+  gelöschter Unterhaltungen werden beim Vor- und Zurückgehen übersprungen.
 - Die Einstellung lässt sich nicht lesen. holzi verhält sich wie bei
   ausgeschalteter Wiederherstellung und startet leer.
 - Eine gespeicherte Sitzung ist nicht lesbar oder verweist auf eine unbekannte
@@ -251,8 +275,9 @@ Vault.
 **Einstellung**
 
 - **FR-001**: holzi MUSS eine Einstellung „Sitzung wiederherstellen“ anbieten.
-  Gilt sie auf einem Gerät, wird dort die Sitzung gemäß Spec 015 FR-023 bis
-  FR-025 gespeichert und beim nächsten Öffnen wiederhergestellt. Gilt sie
+  Gilt sie auf einem Gerät, wird dort die Sitzung (siehe Begriffe) gespeichert
+  und beim nächsten Öffnen wiederhergestellt, gemäß Spec 015 FR-023 bis FR-025
+  und zusätzlich mit Ort und Vor-/Zurück-Historie jedes Tabs. Gilt sie
   nicht, DARF die Sitzung NICHT über das Ende der Vault-Session hinaus
   gespeichert werden.
 - **FR-002**: Die Einstellung MUSS einen Wert für die ganze Vault und einen Wert
@@ -269,7 +294,9 @@ Vault.
   sofort gespeichert; hört sie auf zu gelten, gilt FR-007.
 - **FR-006**: Das Setzen, Ändern und Zurücksetzen der Einstellung MUSS eine
   Aktion im Katalog von Spec 020 sein, mit derselben Wirkung aus Oberfläche,
-  Tastenkürzel und für Agenten mit passender Berechtigung.
+  Tastenkürzel und für Agenten. Die Einstellung ist keine Leitplanke: Agenten
+  dürfen sie ändern, sobald ihnen der Bereich für Geräteeinstellungen
+  freigegeben ist (Spec 021).
 
 **Entfernen gespeicherter Sitzungen**
 
@@ -312,7 +339,9 @@ Vault.
   Spec 015 und 020 behalten, unabhängig von der Einstellung.
 - **FR-016**: Die Dokumentation von Spec 015 MUSS bei User Story 5, FR-023 bis
   FR-025 und dem Neustart-Teil von User Story 7 vermerken, dass sie nur bei
-  eingeschalteter Wiederherstellung gelten, und auf diese Spec verweisen.
+  eingeschalteter Wiederherstellung gelten; die von Spec 020 MUSS bei FR-011
+  vermerken, dass Ort und Historie bei eingeschalteter Wiederherstellung
+  erhalten bleiben. Beide verweisen auf diese Spec.
 
 ### Key Entities
 
@@ -334,7 +363,8 @@ Vault.
   ohne Fenster (ohne Deep-Link).
 - **SC-002**: Mit geltender Einstellung stellt holzi die Sitzung in 100 %
   der normalen Neustarts so wieder her, wie Spec 015 User Story 5 es
-  beschreibt.
+  beschreibt, und jeder Tab hat danach denselben Ort und dieselbe
+  Vor-/Zurück-Historie wie beim letzten Speichern.
 - **SC-003**: Nach dem Ausschalten und nach dem ersten Öffnen mit dieser Version
   findet eine Untersuchung der Vault-Datei keine Inhalte einer entfernten
   Sitzung mehr (höchstens Löschvermerke nach FR-011).
@@ -352,12 +382,10 @@ Vault.
 
 - Ein Downgrade auf eine ältere holzi-Version nach dem Update ist nicht
   unterstützt, wie bei anderen Schemaänderungen auch.
-- Die Einstellung ist keine Leitplanke im Sinne von Spec 020 (FR-032 dort). Sie
-  bekommt den Berechtigungsbereich für Geräteeinstellungen, den Spec 021 für
-  externe Agenten freigeben kann.
-- Mit eingeschalteter Wiederherstellung gilt, was Spec 015 festlegt: kein
-  Wiederherstellen von Tab-Inhalten, keine Vor-/Zurück-Historie (Spec 020),
-  keine zuletzt geöffnete Ansicht innerhalb einer App.
+- Mit eingeschalteter Wiederherstellung kommen Ort und Historie jedes Tabs
+  zurück, aber keine Tab-Inhalte darüber hinaus: keine Scrollpositionen, keine
+  Entwürfe. Das kann eine spätere Spec ergänzen, wenn Apps ihren Zustand melden
+  können.
 - Die Synchronisierung bietet eine Möglichkeit, Daten gerätelokal zu halten, so
   dass sie nicht weitergegeben werden. Wie FR-010 umgesetzt wird, klärt der
   Plan.

@@ -44,8 +44,8 @@ haex-crdt an der von holzi gepinnten Revision
 ## R2 Ganze Sitzung als Momentaufnahme statt einzelner Fenster
 
 **Entscheidung**: Das Frontend schreibt die ganze Sitzung als ein JSON-Dokument
-(`WmSessionSnapshot`, siehe data-model.md), entprellt um 400 ms und sofort bei
-strukturellen Änderungen, wie bisher. Rust prüft nur Größe (≤ 1 MiB) und
+(`WmSession`, siehe data-model.md), entprellt um 400 ms und sofort bei
+strukturellen Änderungen, wie bisher. Rust prüft nur Größe (≤ 4 MiB) und
 gültiges JSON; die inhaltliche Prüfung beim Laden übernimmt `hydrate` in
 `src/lib/wm/layoutState.ts`, das schon heute unbekannte Apps und doppelte
 Einzelinstanzen verwirft und Geometrie einpasst (Spec 015 FR-025, FR-026).
@@ -53,9 +53,12 @@ Einzelinstanzen verwirft und Geometrie einpasst (Spec 015 FR-025, FR-026).
 **Begründung**: Ein Schreibvorgang ist eine Zeile; Löschen ist eine Zeile.
 Die Arbeitsbereichs-Kennungen erzeugt künftig das Frontend
 (`crypto.randomUUID()`), der Umweg über `wm_create_workspace` entfällt. Die
-Größe bleibt klein: auch bei der bisherigen Obergrenze von 500 Fenstern mit je
-100 Tabs liegt ein Dokument im niedrigen Megabyte-Bereich; typische Sitzungen
-haben wenige Kilobyte.
+Sitzung enthält seit der Klärung vom 2026-09-26 auch die Vor-/Zurück-Historie
+jedes Tabs (bis 50 Einträge). Typische Sitzungen haben trotzdem wenige
+Kilobyte; für Extremfälle gilt die Obergrenze von 4 MiB mit dem Rückfall
+„ohne Historien speichern“ (data-model.md). Weil Historien in der Sitzung
+liegen, sind sie nur im Frontend vorhanden: Das bestätigt die Momentaufnahme
+statt eines relationalen Modells.
 
 **Verworfen**: Die inkrementellen Befehle aus 015 (`wm_save_windows`,
 `wm_close_windows`, `wm_create_workspace`, `wm_delete_workspace`,
@@ -170,12 +173,17 @@ greifen kann; deshalb das einmalige `VACUUM`. Bei typischen Vault-Größen
 - `src/composables/useWmLayout.ts` wird zu `useWmSession.ts`: dieselbe
   serialisierte Warteschlange mit Entprellung (400 ms) und `flushAsync`, aber
   mit einem einzigen Befehl `wm_session_save` und der ganzen Momentaufnahme.
+- Die Momentaufnahme liest die Historie jedes Tabs aus derselben Map. Auch
+  Vor, Zurück und jede Navigation im Tab lösen `saveSessionSoon` aus, damit die
+  gespeicherte Historie aktuell bleibt.
 - Der Store (`src/stores/windowManager.ts`) hält `sessionRestore`
   (geltender Wert). Die bisherigen Speicheraufrufe (`persistWindowNow`,
   `persistWindowDebounced`) werden zu `saveSessionNow`/`saveSessionSoon`, die
   nichts tun, solange `sessionRestore` falsch ist.
 - `hydrateFromBackendAsync` wird zu `restoreSessionAsync`: `wm_session_load`,
-  bei Sitzung `hydrate`, sonst ein leerer Arbeitsbereich. Fehler werden
+  bei Sitzung `hydrate` und die Historien der Tabs in die Historien-Map des
+  Navigations-Stores (`src/stores/wmNavigation.ts`) übernehmen, statt sie wie
+  bisher zu leeren; sonst ein leerer Arbeitsbereich. Fehler werden
   protokolliert, holzi startet leer (FR-012); die Workspace-Seite fängt den Fehler
   ab, damit `?open=` trotzdem wirkt (FR-014).
 - Nach `wm_session_restore_set` übernimmt der Store den neuen geltenden Wert;

@@ -58,7 +58,7 @@ je Speicherung
 **Constraints**: Dateien ≤ 500 Zeilen (`stores/windowManager.ts` steht bei 485;
 der Umbau entfernt mehr, als er hinzufügt); Migrationen sind unveränderlich
 (`MigrationContentDrift`), also nur neue Migration 0020; kein `DELETE` auf
-CRDT-Tabellen in Migrationen (R5); Sitzung ≤ 1 MiB
+CRDT-Tabellen in Migrationen (R5); Sitzung ≤ 4 MiB (mit Historien je Tab)
 
 **Scale/Scope**: eine Zeile je Gerät, typischerweise wenige KB
 
