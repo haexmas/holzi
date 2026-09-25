@@ -28,6 +28,7 @@ const shell = useShellStore()
 const { t } = useI18n()
 
 const tabRefs = new Map<string, HTMLElement>()
+/** Tracks mounted tab elements for keyboard focus and scroll positioning. */
 function setTabRef(tabId: string, el: Element | null) {
   if (el instanceof HTMLElement) tabRefs.set(tabId, el)
   else tabRefs.delete(tabId)
@@ -35,6 +36,7 @@ function setTabRef(tabId: string, el: Element | null) {
 
 type TabInfo = ReturnType<typeof shell.tabDisplayInfo>
 
+/** Prefers a tab's runtime title over its translated app title. */
 function titleFrom(info: TabInfo): string {
   return info.titleOverride ?? (info.titleKey ? t(info.titleKey) : '')
 }
@@ -55,6 +57,7 @@ const tabRows = computed(() =>
   props.tabs.map((tab) => ({ tab, info: shell.tabDisplayInfo(tab) })),
 )
 
+/** Sends the selected tab id to the window that owns the tab state. */
 function select(tabId: string) {
   emit('selectTab', tabId)
 }
@@ -101,11 +104,13 @@ const barRef = ref<HTMLElement | null>(null)
 const overflowing = ref(false)
 let observer: ResizeObserver | null = null
 
+/** Shows scroll controls only when the tab strip exceeds its visible width. */
 function updateOverflow() {
   const el = barRef.value
   overflowing.value = !!el && el.scrollWidth > el.clientWidth + 1
 }
 
+/** Scrolls the tab strip without changing the active tab. */
 function scrollBy(amount: number) {
   barRef.value?.scrollBy({ left: amount, behavior: 'smooth' })
 }

@@ -30,6 +30,7 @@ const rows = computed<Row[]>(() => {
   return result
 })
 
+/** Restores and focuses the chosen window, then closes the overview. */
 function select(windowId: string) {
   shell.focusWindow(windowId)
   open.value = false

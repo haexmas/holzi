@@ -35,25 +35,30 @@ const otherWorkspaces = computed(() =>
   shell.workspaces.filter((w) => w.id !== shell.activeWorkspaceId),
 )
 
+/** Formats the zero-based storage position as a one-based workspace label. */
 function numberLabel(position: number): string {
   return t('shell.workspaces.numbered', { number: position + 1 })
 }
 
+/** Resolves a window's title override before its translated app title. */
 function windowTitle(window: ShellWindow): string {
   const info = shell.windowDisplayInfo(window)
   if (!info) return ''
   return info.titleOverride ?? (info.titleKey ? t(info.titleKey) : '')
 }
 
+/** Activates the selected workspace while leaving the overview open. */
 function select(workspaceId: string) {
   shell.switchWorkspace(workspaceId)
 }
 
+/** Waits for the backend-assigned id before activating a new workspace. */
 async function create() {
   const workspace = await shell.createWorkspace()
   shell.switchWorkspace(workspace.id)
 }
 
+/** Confirms open windows and running work before removing a workspace. */
 async function remove(workspaceId: string) {
   const windowCount = shell.windows.filter(
     (w) => w.workspaceId === workspaceId,

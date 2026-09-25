@@ -93,6 +93,7 @@ export function useShellLayout(invokeFn: ShellInvokeFn = tauriInvoke) {
   const pendingCloses = new Set<string>()
   let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
+  /** Runs a backend operation after earlier calls, preserving its own result or error. */
   function runExclusive<T>(op: () => Promise<T>): Promise<T> {
     const started = queueTail.then(op, op)
     queueTail = started.then(
@@ -102,6 +103,7 @@ export function useShellLayout(invokeFn: ShellInvokeFn = tauriInvoke) {
     return started
   }
 
+  /** Cancels a scheduled save before an immediate flush or orderly shutdown. */
   function clearDebounce(): void {
     if (debounceTimer !== null) {
       clearTimeout(debounceTimer)
@@ -139,6 +141,7 @@ export function useShellLayout(invokeFn: ShellInvokeFn = tauriInvoke) {
     }
   }
 
+  /** Restarts the timer so a burst of changes is sent in one queued flush. */
   function scheduleDebouncedFlush(): void {
     clearDebounce()
     debounceTimer = setTimeout(() => {
@@ -181,12 +184,14 @@ export function useShellLayout(invokeFn: ShellInvokeFn = tauriInvoke) {
     )
   }
 
+  /** Creates a workspace on the backend and returns its assigned id. */
   function createWorkspace(): Promise<WorkspaceDto> {
     return runExclusive(
       async () => (await invokeFn('shell_create_workspace')) as WorkspaceDto,
     )
   }
 
+  /** Deletes a workspace after earlier queued window changes settle. */
   function deleteWorkspace(
     workspaceId: string,
   ): Promise<DeleteWorkspaceResult> {
@@ -198,6 +203,7 @@ export function useShellLayout(invokeFn: ShellInvokeFn = tauriInvoke) {
     )
   }
 
+  /** Persists the active workspace as a serialized device preference. */
   function setActiveWorkspace(workspaceId: string): Promise<void> {
     return runExclusive(() =>
       invokeFn('shell_set_active_workspace', { args: { workspaceId } }).then(

@@ -72,6 +72,7 @@ export const useShellStore = defineStore('shell', () => {
 
   const shellLayout = useShellLayout()
 
+  /** Converts the in-memory window and ordered tabs to the backend wire shape. */
   function windowToDto(window: ShellWindow): WindowDto {
     return {
       windowId: window.id,
@@ -88,11 +89,13 @@ export const useShellStore = defineStore('shell', () => {
     }
   }
 
+  /** Queues an immediate save when the window still exists. */
   function persistWindowNow(windowId: string) {
     const window = state.windows.find((w) => w.id === windowId)
     if (window) shellLayout.saveWindowNow(windowToDto(window))
   }
 
+  /** Coalesces frequent changes to a window's geometry or stack position. */
   function persistWindowDebounced(windowId: string) {
     const window = state.windows.find((w) => w.id === windowId)
     if (window) shellLayout.saveWindowDebounced(windowToDto(window))
@@ -136,6 +139,7 @@ export const useShellStore = defineStore('shell', () => {
    * a plain object, so pruning a stale entry needs no dynamic-key `delete`. */
   const tabRuntime = reactive(new Map<string, TabRuntime>())
 
+  /** Retains runtime state for live tabs and initializes newly opened tabs. */
   function syncTabRuntime() {
     const liveIds = new Set(
       state.windows.flatMap((w) => w.tabs.map((t) => t.id)),
@@ -160,6 +164,7 @@ export const useShellStore = defineStore('shell', () => {
     state.windows.filter((w) => w.workspaceId === state.activeWorkspaceId),
   )
 
+  /** Returns inert defaults if the tab has already closed. */
   function runtimeFor(tabId: string): TabRuntime {
     return (
       tabRuntime.get(tabId) ?? {
@@ -187,11 +192,13 @@ export const useShellStore = defineStore('shell', () => {
     if (runtime) runtime.attention = attention
   }
 
+  /** Overrides a live tab's displayed title without changing its app definition. */
   function setTabTitle(tabId: string, title: string | null) {
     const runtime = tabRuntime.get(tabId)
     if (runtime) runtime.titleOverride = title
   }
 
+  /** Registers or clears the close guard for a live tab. */
   function setTabCloseGuard(tabId: string, guard: CloseGuard | null) {
     const runtime = tabRuntime.get(tabId)
     if (runtime) runtime.guard = guard
@@ -254,6 +261,7 @@ export const useShellStore = defineStore('shell', () => {
     if (state.activeWindowId) persistWindowNow(state.activeWindowId)
   }
 
+  /** Adds a tab and persists both the target and any newly active window. */
   function addTab(windowId: string, appId: string) {
     addTabReducer(state, windowId, appId, SHELL_APPS)
     syncTabRuntime()
@@ -262,6 +270,7 @@ export const useShellStore = defineStore('shell', () => {
       persistWindowNow(state.activeWindowId)
   }
 
+  /** Activates a tab and saves its window's new active tab id. */
   function switchTab(windowId: string, tabId: string) {
     switchTabReducer(state, windowId, tabId)
     persistWindowNow(windowId)
@@ -277,21 +286,25 @@ export const useShellStore = defineStore('shell', () => {
     else shellLayout.closeWindowNow(windowId)
   }
 
+  /** Restores and raises a window, debouncing its new stack position. */
   function focusWindow(windowId: string) {
     focusWindowReducer(state, windowId)
     persistWindowDebounced(windowId)
   }
 
+  /** Minimizes a window and saves the structural change immediately. */
   function minimizeWindow(windowId: string) {
     minimizeWindowReducer(state, windowId)
     persistWindowNow(windowId)
   }
 
+  /** Saves the window's maximized or restored state immediately. */
   function toggleMaximizeWindow(windowId: string) {
     toggleMaximizeWindowReducer(state, windowId)
     persistWindowNow(windowId)
   }
 
+  /** Applies a drag or resize result and debounces the resulting save. */
   function updateWindowGeometry(
     windowId: string,
     geometry: { x: number; y: number; width: number; height: number },
@@ -324,6 +337,7 @@ export const useShellStore = defineStore('shell', () => {
     return createWorkspaceReducer(state, dto.workspaceId)
   }
 
+  /** Activates a workspace locally and queues its device preference write. */
   function switchWorkspace(workspaceId: string) {
     switchWorkspaceReducer(state, workspaceId)
     void shellLayout.setActiveWorkspace(workspaceId).catch((error: unknown) => {
@@ -353,6 +367,7 @@ export const useShellStore = defineStore('shell', () => {
     })
   }
 
+  /** Moves a window with its tabs and immediately saves its new workspace id. */
   function moveWindowToWorkspace(windowId: string, workspaceId: string) {
     moveWindowToWorkspaceReducer(state, windowId, workspaceId)
     persistWindowNow(windowId)

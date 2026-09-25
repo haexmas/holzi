@@ -75,10 +75,12 @@ const { startMove, startResize } = useWindowPointerGesture(
   (geometry) => shell.updateWindowGeometry(props.window.id, geometry),
 )
 
+/** Starts a move gesture only while the window can be dragged. */
 function onTitleBarPointerDown(event: PointerEvent) {
   if (interactive.value) startMove(event)
 }
 
+/** Starts resizing in the handle's direction when geometry is editable. */
 function onResizeHandlePointerDown(
   event: PointerEvent,
   direction: ResizeDirection,
@@ -86,18 +88,22 @@ function onResizeHandlePointerDown(
   if (interactive.value) startResize(event, direction)
 }
 
+/** Toggles maximization from the title bar outside compact mode. */
 function onTitleBarDoubleClick() {
   if (!shell.compact) shell.toggleMaximizeWindow(props.window.id)
 }
 
+/** Runs every tab's close guard before closing the whole window. */
 function requestClose() {
   void requestCloseWindow(shell, props.window.id)
 }
 
+/** Activates a tab in this window through the shell store. */
 function selectTab(tabId: string) {
   shell.switchTab(props.window.id, tabId)
 }
 
+/** Runs the selected tab's close guard before removing it. */
 function requestCloseTab(tabId: string) {
   void requestCloseTabAction(shell, props.window.id, tabId)
 }
