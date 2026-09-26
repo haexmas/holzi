@@ -398,8 +398,8 @@ Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
   weil verschiedene Geräte unterschiedliche Vorlieben nahelegen (heller
   Arbeitsplatz, dunkles Tablet).
 - Eine Akzentfarbe, die Schriftgröße und eine Sprachwahl sind nicht Teil dieser
-  Spec; haex-vault hat die ersten beiden auch nicht, die Sprache folgt weiter dem
-  System.
+  Spec; haex-vault hat die ersten beiden auch nicht. holzi zeigt die Oberfläche
+  heute immer auf Deutsch; die englischen Texte (FR-020) liegen trotzdem vor.
 - Die zu große Komponente der HuggingFace-Modellverwaltung (Complexity Tracking
   aus Spec 020) wird bei der Aufteilung in Bereiche zerlegt; das ist eine Folge
   dieser Spec, keine eigene Anforderung.
