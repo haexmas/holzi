@@ -16,10 +16,10 @@ import { findByMarker, pidAlive } from './processes.ts'
 import type { MarkedProcess } from './processes.ts'
 
 /**
- * Whether `error` is a legitimate way for a click past the first to land once the application is already
- * on its way out: the session itself may already be gone, or - observed for real, under load, where the
- * DOM was torn down before the session was - the element the earlier click found is now a stale
- * reference (or gone outright). Anything else is a real failure and still propagates.
+ * Whether `error` is a legitimate way for a click to land once the application is already on its way
+ * out: the session itself may already be gone, or - observed for real, under load, where the DOM was
+ * torn down before the session was - the element the earlier click found is now a stale reference (or
+ * gone outright). Anything else is a real failure and still propagates.
  */
 function isGoneMidPress(error: unknown): boolean {
   return (
@@ -154,11 +154,10 @@ export interface PressOptions {
  * be displayed; unlike `click`, this does not poll for it, so a scenario relying on it being on screen
  * right now gets a clear failure instead of a silent wait.
  *
- * A click past the first can find the application already ending, because the first one already ended
- * it (the lock-twice check's very point): the session itself may be gone, or - seen for real, under
- * load - only the element it found is now stale, the DOM having been torn down first. Either quietly
- * stops the remaining clicks, rather than failing the call. A click that fails for any other reason
- * still throws.
+ * A click can find the application already ending: the session may disappear after the browser
+ * dispatches the lock event but before WebDriver answers, or - seen for real, under load - only the
+ * element it found may be stale because the DOM was torn down first. Either quietly stops the
+ * remaining clicks, rather than failing the call. A click that fails for any other reason still throws.
  */
 export async function press(
   client: WebDriverClient,
@@ -176,7 +175,7 @@ export async function press(
       if (i === 0) element = await clickDisplayed(client, hook)
       else await client.click(element)
     } catch (error) {
-      if (i > 0 && isGoneMidPress(error)) break
+      if (isGoneMidPress(error)) break
       throw error
     }
   }
