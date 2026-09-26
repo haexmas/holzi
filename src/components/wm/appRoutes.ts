@@ -31,6 +31,9 @@ const SETTINGS_VIEWS: Record<string, Component> = {
   general: defineAsyncComponent(
     () => import('~/components/settings/GeneralView.vue'),
   ),
+  appearance: defineAsyncComponent(
+    () => import('~/components/settings/ColorSchemeSetting.vue'),
+  ),
   models: defineAsyncComponent(
     () => import('~/components/settings/OverviewView.vue'),
   ),

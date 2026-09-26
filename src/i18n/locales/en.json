@@ -429,6 +429,15 @@
     "sidebar": {
       "show": "Show sidebar",
       "hide": "Hide sidebar"
+    },
+    "colorScheme": {
+      "label": "Color scheme",
+      "followVault": "Like all devices",
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System",
+      "saved": "Saved.",
+      "failed": "The color scheme could not be saved"
     }
   },
   "models": {
@@ -713,6 +722,10 @@
       "sessionRestore": {
         "set": "Turn session restore on or off",
         "clear": "Reset the session restore setting"
+      },
+      "appearance": {
+        "setColorScheme": "Set the color scheme",
+        "clearColorScheme": "Reset the color scheme"
       }
     },
     "scopes": {

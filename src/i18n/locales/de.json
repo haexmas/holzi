@@ -429,6 +429,15 @@
     "sidebar": {
       "show": "Seitenleiste einblenden",
       "hide": "Seitenleiste ausblenden"
+    },
+    "colorScheme": {
+      "label": "Farbschema",
+      "followVault": "Wie alle Geräte",
+      "light": "Hell",
+      "dark": "Dunkel",
+      "system": "System",
+      "saved": "Gespeichert.",
+      "failed": "Das Farbschema konnte nicht gespeichert werden"
     }
   },
   "models": {
@@ -713,6 +722,10 @@
       "sessionRestore": {
         "set": "Sitzung wiederherstellen ein- oder ausschalten",
         "clear": "Einstellung „Sitzung wiederherstellen“ zurücksetzen"
+      },
+      "appearance": {
+        "setColorScheme": "Farbschema festlegen",
+        "clearColorScheme": "Farbschema zurücksetzen"
       }
     },
     "scopes": {

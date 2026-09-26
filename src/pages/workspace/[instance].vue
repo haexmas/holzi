@@ -60,6 +60,12 @@ onMounted(async () => {
   } catch (error) {
     console.error('[wm] restoring the session failed; starting empty', error)
   }
+  // Spec 023 (FR-014): the vault's color scheme; a read error leaves the system's.
+  void useColorScheme()
+    .loadAsync()
+    .catch((error: unknown) => {
+      console.error('[settings] reading the color scheme failed', error)
+    })
   void useModelDownloadsStore()
     .watchDownloads()
     .catch((error: unknown) => {

@@ -28,6 +28,21 @@ const RESTORE_STATE: JsonSchema = {
   },
   required: ['effective'],
 }
+const COLOR_SCHEME: JsonSchema = {
+  type: 'string',
+  enum: ['light', 'dark', 'system'],
+}
+const COLOR_SCHEME_STATE: JsonSchema = {
+  type: 'object',
+  description:
+    "Color scheme setting: 'device' and 'vault' are left out when unset; 'effective' is what applies on this device ('system' follows the operating system).",
+  properties: {
+    device: COLOR_SCHEME,
+    vault: COLOR_SCHEME,
+    effective: COLOR_SCHEME,
+  },
+  required: ['effective'],
+}
 const MODEL_ID: JsonSchema = {
   type: 'string',
   description: 'Installed model id (see settings.models.list).',
@@ -52,7 +67,7 @@ export const SETTINGS_ACTIONS: readonly ActionDefinition[] = [
   setting({
     id: 'settings.get',
     description:
-      'Read the current settings: device name, default and speech models, session restore, autonomy mode and delegate deny rules. Never includes credentials.',
+      'Read the current settings: device name, color scheme, default and speech models, session restore, autonomy mode and delegate deny rules. Never includes credentials.',
     result: ANY_OBJECT,
     scope: 'settings.read',
     effect: 'read',
@@ -105,6 +120,32 @@ export const SETTINGS_ACTIONS: readonly ActionDefinition[] = [
       required: ['scope'],
     },
     result: RESTORE_STATE,
+    scope: 'settings.device',
+    effect: 'write',
+  }),
+  setting({
+    id: 'settings.appearance.setColorScheme',
+    description:
+      'Set the color scheme (light, dark or following the system) for this device or the whole vault. It applies at once.',
+    input: {
+      type: 'object',
+      properties: { scope: SCOPE, scheme: COLOR_SCHEME },
+      required: ['scope', 'scheme'],
+    },
+    result: COLOR_SCHEME_STATE,
+    scope: 'settings.device',
+    effect: 'write',
+  }),
+  setting({
+    id: 'settings.appearance.clearColorScheme',
+    description:
+      'Reset the color scheme for this device or the vault, so the other value applies (or the system scheme if neither is set).',
+    input: {
+      type: 'object',
+      properties: { scope: SCOPE },
+      required: ['scope'],
+    },
+    result: COLOR_SCHEME_STATE,
     scope: 'settings.device',
     effect: 'write',
   }),

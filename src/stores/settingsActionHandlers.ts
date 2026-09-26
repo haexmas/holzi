@@ -1,10 +1,15 @@
 import { invoke } from '@tauri-apps/api/core'
+import { useColorScheme } from '~/composables/useColorScheme'
 import { useDevice } from '~/composables/useDevice'
 import { useHuggingFace } from '~/composables/useHuggingFace'
 import { useModels } from '~/composables/useModels'
 import { usePreferences, type PrefScope } from '~/composables/usePreferences'
 import { useProviders, type DelegateVendor } from '~/composables/useProviders'
 import { useSttModels } from '~/composables/useSttModels'
+import {
+  parseColorScheme,
+  toColorSchemeResult,
+} from '~/lib/settings/colorScheme'
 import { toRestoreResult } from '~/lib/wm/sessionSync'
 import type { useWindowManagerStore } from '~/stores/windowManager'
 
@@ -29,6 +34,7 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
   const huggingFace = useHuggingFace()
   const providers = useProviders()
   const sttModels = useSttModels()
+  const colorScheme = useColorScheme()
   const done = { done: true }
   const on = wm.registerGlobalActionHandler
 
@@ -63,6 +69,7 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
     ])
     return {
       deviceAlias: device.alias,
+      colorScheme: toColorSchemeResult(colorScheme.state.value),
       defaultModel: { device: deviceDefault, vault: vaultDefault },
       sttModel: stt,
       sessionRestore,
@@ -92,6 +99,19 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
   on('settings.sessionRestore.clear', async ({ input }) =>
     toRestoreResult(
       await wm.setSessionRestore(restoreScope(input.scope), null),
+    ),
+  )
+
+  on('settings.appearance.setColorScheme', async ({ input }) => {
+    const scheme = parseColorScheme(input.scheme)
+    if (!scheme) throw new Error(`unknown color scheme ${String(input.scheme)}`)
+    return toColorSchemeResult(
+      await colorScheme.setAsync(restoreScope(input.scope), scheme),
+    )
+  })
+  on('settings.appearance.clearColorScheme', async ({ input }) =>
+    toColorSchemeResult(
+      await colorScheme.setAsync(restoreScope(input.scope), null),
     ),
   )
 
