@@ -75,7 +75,7 @@ function downloadProgressPercent(
       >
         <div
           v-if="downloadingId === e.id"
-          class="pointer-events-none absolute inset-y-0 left-0 bg-blue-100/70 transition-[width] duration-150"
+          class="pointer-events-none absolute inset-y-0 left-0 bg-primary/10 transition-[width] duration-150"
           :class="
             downloadProgressPercent(
               e.id,

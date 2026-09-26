@@ -72,7 +72,7 @@ const { t } = useI18n()
 
   <div
     v-if="loadingLabel"
-    class="border-b border-blue-500/20 bg-blue-500/10 p-3 text-sm text-blue-800"
+    class="border-b border-primary/20 bg-primary/10 p-3 text-sm text-primary"
     role="status"
   >
     {{ loadingLabel }}

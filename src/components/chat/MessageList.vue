@@ -173,7 +173,7 @@ function renderMarkdown(content: string): string {
             </span>
             <span
               v-if="m.finishReason === 'tool_limit_reached'"
-              class="ml-2 text-amber-600"
+              class="ml-2 text-warning"
             >
               {{ t('chat.tool.limitReached') }}
             </span>

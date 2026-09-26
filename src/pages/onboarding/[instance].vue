@@ -149,16 +149,19 @@ async function completeSttWithModel(rec: TierRecommendation<SttCatalogEntry>) {
         <h1 class="text-2xl font-semibold">
           {{ t('onboarding.wizard.title') }}
         </h1>
-        <p class="text-sm text-neutral-500">
+        <p class="text-sm text-muted-foreground">
           {{ t('onboarding.wizard.subtitle') }}
         </p>
       </div>
 
-      <p v-if="loadError" class="text-sm text-red-500" role="alert">
+      <p v-if="loadError" class="text-sm text-destructive" role="alert">
         {{ t('errors.deviceInfoFailed') }}: {{ loadError }}
       </p>
 
-      <div v-if="!deviceInfo && !loadError" class="text-sm text-neutral-500">
+      <div
+        v-if="!deviceInfo && !loadError"
+        class="text-sm text-muted-foreground"
+      >
         {{ t('onboarding.wizard.loadingDeviceInfo') }}
       </div>
 

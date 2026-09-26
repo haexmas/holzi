@@ -36,7 +36,7 @@ function onSubmit() {
     <h2 class="text-xl font-semibold">
       {{ t('onboarding.alias.label') }}
     </h2>
-    <p class="text-sm text-neutral-500">
+    <p class="text-sm text-muted-foreground">
       {{ t('onboarding.alias.description') }}
     </p>
     <label class="flex flex-col gap-1">
@@ -44,13 +44,13 @@ function onSubmit() {
       <input
         v-model="localValue"
         type="text"
-        class="border border-neutral-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        class="border border-input rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-ring"
         :aria-invalid="showRequired && !localValue.trim() ? true : undefined"
         @input="showRequired = false"
       />
       <span
         v-if="showRequired && !localValue.trim()"
-        class="text-xs text-red-500"
+        class="text-xs text-destructive"
       >
         {{ t('onboarding.alias.required') }}
       </span>

@@ -38,11 +38,11 @@ function formatSize(bytes: number): string {
     <h2 class="text-xl font-semibold">
       {{ t('onboarding.sttModel.title') }}
     </h2>
-    <p class="text-sm text-neutral-500">
+    <p class="text-sm text-muted-foreground">
       {{ t('onboarding.sttModel.description') }}
     </p>
 
-    <div v-if="tiers.length === 0" class="text-sm text-neutral-500">
+    <div v-if="tiers.length === 0" class="text-sm text-muted-foreground">
       {{ t('onboarding.sttModel.empty') }}
     </div>
 
@@ -51,7 +51,7 @@ function formatSize(bytes: number): string {
         v-for="rec in tiers"
         :key="`${rec.tier}-${rec.entry.id}`"
         type="button"
-        class="flex flex-col gap-2 rounded-md border border-neutral-300 p-3 text-left hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-progress"
+        class="flex flex-col gap-2 rounded-md border border-input p-3 text-left hover:border-primary focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 disabled:cursor-progress"
         :disabled="downloadingId !== null"
         @click="emit('choose', rec)"
       >
@@ -59,7 +59,7 @@ function formatSize(bytes: number): string {
           {{ t(tierLabelKey(rec.tier)) }}
         </span>
         <span class="text-base font-medium">{{ rec.entry.name }}</span>
-        <span class="text-xs text-neutral-500">
+        <span class="text-xs text-muted-foreground">
           {{ formatSize(rec.entry.approxSizeBytes) }}
         </span>
         <span class="text-xs">
@@ -68,10 +68,10 @@ function formatSize(bytes: number): string {
       </button>
     </div>
 
-    <p v-if="downloadingId" class="text-sm text-neutral-500" role="status">
+    <p v-if="downloadingId" class="text-sm text-muted-foreground" role="status">
       {{ t('onboarding.sttModel.downloading') }} ({{ downloadingId }})
     </p>
-    <p v-if="downloadError" class="text-sm text-red-500" role="alert">
+    <p v-if="downloadError" class="text-sm text-destructive" role="alert">
       {{ t('onboarding.sttModel.downloadFailed') }}: {{ downloadError }}
     </p>
 

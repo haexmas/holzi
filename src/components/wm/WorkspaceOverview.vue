@@ -103,7 +103,7 @@ function remove(workspaceId: string) {
             }}</span>
             <span
               v-if="row.hasAttention"
-              class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
+              class="h-1.5 w-1.5 shrink-0 rounded-full bg-warning"
               :aria-label="t('wm.attention')"
             />
           </button>
