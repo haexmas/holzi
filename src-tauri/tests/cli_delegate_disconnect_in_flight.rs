@@ -45,6 +45,9 @@ fn open_vault(dir: &Path) -> Database {
     .expect("vault open")
 }
 
+/// Creates an executable `fake-claude` shell stub in `dir` and returns its path.
+///
+/// The stub consumes stdin before emitting the fixed `STUB_TRANSCRIPT` response.
 fn write_stub(dir: &Path) -> PathBuf {
     let path = dir.join("fake-claude");
     let script = format!("#!/bin/sh\ncat >/dev/null\ncat <<'EOF'\n{STUB_TRANSCRIPT}EOF\n");
