@@ -138,10 +138,12 @@ useColorScheme() → {
 - Frontend: `useDevice().listVaultDevicesAsync()`; der Handler von
   `settings.devices.list` lässt `alias: null` weg.
 
-## 6. Modell-Store (`stores/models.ts`)
+## 6. Download-Store (`stores/modelDownloads.ts`)
 
-- `downloads: Record<string, DownloadProgressEvent>`; Fortschritt setzt,
-  Abschluss entfernt den Eintrag.
+- `downloads: Record<string, DownloadProgressEvent>`; Fortschritt setzt den
+  Eintrag, Abschluss setzt ihn auf 100 %; die Ansicht, die den Download
+  gestartet hat, entfernt ihn mit `clearDownload(id)`, wenn sie das Ergebnis
+  verarbeitet hat (fertig, fehlgeschlagen, repariert). `downloadPercent(id)`.
 - `watchDownloads()`: abonniert `onDownloadProgress`/`onDownloadComplete`
   einmal je Prozess; weitere Aufrufe kehren sofort zurück. Aufruf in
   `pages/workspace/[instance].vue` nach dem Öffnen.

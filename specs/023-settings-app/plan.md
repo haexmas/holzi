@@ -150,7 +150,7 @@ src/
 ├── composables/useColorScheme.ts  # NEU: Zustand, Klasse `dark`, Medienabfrage
 ├── plugins/colorScheme.client.ts  # NEU: „System“ beim Start
 ├── stores/
-│   ├── models.ts                  # downloads, watchDownloads
+│   ├── modelDownloads.ts          # NEU: downloads, watchDownloads, clearDownload
 │   ├── windowManager.ts           # tabDisplayInfo über tabTitleFor
 │   ├── settingsActionHandlers.ts  # Farbschema-Handler, settings.devices.list, settings.get + colorScheme
 │   └── wmActionHandlers.ts        # Alias vor knownApp
@@ -175,7 +175,7 @@ src/
 │       ├── HuggingFaceSearch.vue  # q über den Tab-Router, Ergebnis → Repo-Ort
 │       └── HuggingFaceFilePicker.vue # owner/name aus der Route, Fortschritt aus dem Store
 ├── pages/
-│   ├── workspace/[instance].vue   # nach dem Öffnen: useColorScheme().loadAsync, models.watchDownloads
+│   ├── workspace/[instance].vue   # nach dem Öffnen: useColorScheme().loadAsync, useModelDownloadsStore().watchDownloads
 │   └── federation/[instance].vue  # Umleitung auf ?open=system.settings&at=/federation
 ├── **/*.vue (28 Dateien)          # feste Farben → Theme-Farben (R9, eigener Commit)
 └── i18n/locales/{de,en}.json      # Kategorien, Orte, Farbschema, Geräte, Aktionen; Speichern-Texte raus
@@ -212,7 +212,7 @@ unter `src/components/settings/` (Auto-Import `Settings*`).
 | FR-019 (Verhalten unverändert)                           | bestehende Aktionen; Regressionschecks                                                                                   |
 | FR-020 (de, en)                                          | i18n; `check:settings` prüft Schlüssel in beiden Sprachen                                                                |
 | FR-021 (ohne Speichern-Knopf)                            | Umstellung der Einstellungskomponenten (R5)                                                                              |
-| Edge Case Download läuft weiter                          | `models.downloads`, `watchDownloads` (R6)                                                                                |
+| Edge Case Download läuft weiter                          | `stores/modelDownloads.ts`, `watchDownloads` (R6)                                                                        |
 | Complexity Tracking aus Spec 020                         | Aufteilung der Modellverwaltung (R10)                                                                                    |
 
 ## Complexity Tracking

@@ -60,14 +60,15 @@ Abgeleitet:
 mit `Scheme = 'light' | 'dark' | 'system'`. Dunkel ist die Ansicht, wenn
 `effective` `dark` ist oder `system` und das Betriebssystem dunkel meldet.
 
-## Download-Fortschritt (Modell-Store)
+## Download-Fortschritt (Download-Store)
 
-In `stores/models.ts` (R6):
+In `stores/modelDownloads.ts` (R6), dazu `clearDownload(id)` und
+`downloadPercent(id)`:
 
-| Feld               | Typ                                     | Regel                                                                                |
-| ------------------ | --------------------------------------- | ------------------------------------------------------------------------------------ |
-| `downloads`        | `Record<string, DownloadProgressEvent>` | Schlüssel Modellkennung; gesetzt bei Fortschritt, entfernt bei Abschluss oder Fehler |
-| `watchDownloads()` | `() => Promise<void>`                   | abonniert einmal je Vault-Session; weitere Aufrufe tun nichts                        |
+| Feld               | Typ                                     | Regel                                                                                                      |
+| ------------------ | --------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `downloads`        | `Record<string, DownloadProgressEvent>` | Schlüssel Modellkennung; gesetzt bei Fortschritt, 100 % bei Abschluss, entfernt von der startenden Ansicht |
+| `watchDownloads()` | `() => Promise<void>`                   | abonniert einmal je Vault-Session; weitere Aufrufe tun nichts                                              |
 
 Die vorhandenen Felder `downloadingId`, `downloadProgressBytes`,
 `downloadTotalBytes` (Download aus dem Katalog im Chat) bleiben.

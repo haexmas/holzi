@@ -23,9 +23,12 @@ description: 'Task list for spec 023-settings-app'
 
 ## Phase 1: Setup
 
-- [ ] T001 Prepare `.worktrees/023-settings-app`: rerun the real `pnpm install` (main moved to the haex-ui pin `db48f9a`); reflink the Rust build cache from the primary checkout if its `src-tauri/Cargo.lock` matches (`cp -a --reflink=always ../../src-tauri/target src-tauri/target`); record baseline counts of `pnpm check:wm-state`, `check:wm-navigation`, `check:chat-state`, `check:vault-lifecycle`, `check:templates` and `cargo test` in this task's note
-- [ ] T002 [P] Add the 023 row to `plans/README.md` after the 022 row: priority P1, effort M, status "Spezifiziert 2026-09-26, Plan 2026-09-26", gate "setzt Spec 015, 020, 022 voraus"
-- [ ] T003 [P] Add `"check:settings": "node --test scripts/check-settings.ts"` to `package.json` and a step "Check settings app" running `corepack pnpm check:settings` after "Check window manager navigation" in `.github/workflows/ci.yml`; create `scripts/check-settings.ts` with the file header only
+- [x] T001 Prepare `.worktrees/023-settings-app`: rerun the real `pnpm install` (main moved to the haex-ui pin `db48f9a`); reflink the Rust build cache from the primary checkout if its `src-tauri/Cargo.lock` matches (`cp -a --reflink=always ../../src-tauri/target src-tauri/target`); record baseline counts of `pnpm check:wm-state`, `check:wm-navigation`, `check:chat-state`, `check:vault-lifecycle`, `check:templates` and `cargo test` in this task's note
+  - Done 2026-09-26: pnpm install done; Rust target already present in the worktree (Cargo.lock matches main). Baseline: check:wm-state 64, check:wm-navigation 77, check:chat-state 50, check:vault-lifecycle 12, check:templates 56 templates, cargo test 573 — all green.
+- [x] T002 [P] Add the 023 row to `plans/README.md` after the 022 row: priority P1, effort M, status "Spezifiziert 2026-09-26, Plan 2026-09-26", gate "setzt Spec 015, 020, 022 voraus"
+  - Done 2026-09-26.
+- [x] T003 [P] Add `"check:settings": "node --test scripts/check-settings.ts"` to `package.json` and a step "Check settings app" running `corepack pnpm check:settings` after "Check window manager navigation" in `.github/workflows/ci.yml`; create `scripts/check-settings.ts` with the file header only
+  - Done 2026-09-26.
 
 ---
 
@@ -37,17 +40,25 @@ description: 'Task list for spec 023-settings-app'
 
 ### Tests first
 
-- [ ] T004 Write registry tests in `scripts/check-settings.ts` (fail until T007): exactly five categories in the order `general`, `appearance`, `models`, `agents`, `federation` with paths `/`, `/appearance`, `/models`, `/agents`, `/federation`; every location id and path unique; every location has a category, `titleKey`, `descriptionKey`; every `parent` exists and belongs to the same category; `overviewRows('models')` = `models.default`, `models.installed`, `models.download`, `models.speech` and `overviewRows('agents')` = `agents.providers`, `agents.autonomy`, `agents.denyRules`; `general`, `appearance`, `federation` have no overview rows; `matchRoute(settingsRoutePatterns(), path)` resolves every location from contracts §1, including `/models/download/repo/Qwen/Qwen2.5-GGUF` with `params = { owner: 'Qwen', name: 'Qwen2.5-GGUF' }`; `locationFor('/nope')` is `undefined`; every registry i18n key exists in both `src/i18n/locales/de.json` and `en.json` (FR-020)
-- [ ] T005 Write `headerBack` tests in `scripts/check-settings.ts` (fail until T008), using `createHistory`/`push` from `src/lib/wm/navigation.ts`: previous entry is the parent path → `{ kind: 'back' }`, also when the previous entry carries a query (`/models/download/search?q=qwen` as parent of a repo); previous entry is some other location → `{ kind: 'push', path: parent }`; a history with only the current entry (deep link) → `{ kind: 'push', path: parent }`
-- [ ] T006 Write `tabTitleFor` tests in `scripts/check-settings.ts` (fail until T011): an app with `tabTitle: 'app'` gets its own `titleKey` and no params even when the location has a routed title; an app without `tabTitle` (`system.chat`) gets the routed title with its params; `getAppDefinition('system.settings')?.tabTitle === 'app'`
+- [x] T004 Write registry tests in `scripts/check-settings.ts` (fail until T007): exactly five categories in the order `general`, `appearance`, `models`, `agents`, `federation` with paths `/`, `/appearance`, `/models`, `/agents`, `/federation`; every location id and path unique; every location has a category, `titleKey`, `descriptionKey`; every `parent` exists and belongs to the same category; `overviewRows('models')` = `models.default`, `models.installed`, `models.download`, `models.speech` and `overviewRows('agents')` = `agents.providers`, `agents.autonomy`, `agents.denyRules`; `general`, `appearance`, `federation` have no overview rows; `matchRoute(settingsRoutePatterns(), path)` resolves every location from contracts §1, including `/models/download/repo/Qwen/Qwen2.5-GGUF` with `params = { owner: 'Qwen', name: 'Qwen2.5-GGUF' }`; `locationFor('/nope')` is `undefined`; every registry i18n key exists in both `src/i18n/locales/de.json` and `en.json` (FR-020)
+  - Done 2026-09-26: failed first (module missing), green after T007/T009.
+- [x] T005 Write `headerBack` tests in `scripts/check-settings.ts` (fail until T008), using `createHistory`/`push` from `src/lib/wm/navigation.ts`: previous entry is the parent path → `{ kind: 'back' }`, also when the previous entry carries a query (`/models/download/search?q=qwen` as parent of a repo); previous entry is some other location → `{ kind: 'push', path: parent }`; a history with only the current entry (deep link) → `{ kind: 'push', path: parent }`
+  - Done 2026-09-26.
+- [x] T006 Write `tabTitleFor` tests in `scripts/check-settings.ts` (fail until T011): an app with `tabTitle: 'app'` gets its own `titleKey` and no params even when the location has a routed title; an app without `tabTitle` (`system.chat`) gets the routed title with its params; `getAppDefinition('system.settings')?.tabTitle === 'app'`
+  - Done 2026-09-26.
 
 ### Implementation
 
-- [ ] T007 Implement `src/lib/settings/registry.ts` per data-model.md and contracts §1: `SETTINGS_CATEGORIES`, `SETTINGS_LOCATIONS`, `settingsRoutePatterns()`, `locationFor(path)`, `categoryOf(path)`, `overviewRows(categoryId)`; pure, relative imports only (`../wm/routeMatch.ts`); make T004 pass except the i18n part
-- [ ] T008 Implement `headerBack(history, parentPath)` in `src/lib/settings/registry.ts` (research R3); make T005 pass
-- [ ] T009 [P] Add `settings.categories.<id>.{title,description}` for the five categories, `settings.locations.<id>.{title,description}` for every location with a parent, and `settings.back` ("Zurück zu {title}" / "Back to {title}") to `src/i18n/locales/de.json` and `en.json`; the repo location title interpolates `{owner}/{name}`; make the i18n part of T004 pass
-- [ ] T010 Replace the `system.settings` entry in `src/components/wm/appRoutes.ts` with a root `/` record (component `SettingsApp`) whose children come from `settingsRoutePatterns()`, each with its async component from contracts §1 keyed by location id and its `titleKey` for tab titles and the history list (spec 020 R9)
-- [ ] T011 Add `tabTitle?: 'location' | 'app'` to `AppDefinition` and `tabTitleFor(app, routed)` to `src/lib/wm/apps.ts`, set `tabTitle: 'app'` on `system.settings`, and use `tabTitleFor` in `tabDisplayInfo` in `src/stores/windowManager.ts`; `wm/HistoryMenu.vue` keeps `titleForLocation` (research R2); make T006 pass
+- [x] T007 Implement `src/lib/settings/registry.ts` per data-model.md and contracts §1: `SETTINGS_CATEGORIES`, `SETTINGS_LOCATIONS`, `settingsRoutePatterns()`, `locationFor(path)`, `categoryOf(path)`, `overviewRows(categoryId)`; pure, relative imports only (`../wm/routeMatch.ts`); make T004 pass except the i18n part
+  - Done 2026-09-26: plus `locationPath` and `parentPathOf`; `SettingsRoutePattern` carries `locationId` for appRoutes.
+- [x] T008 Implement `headerBack(history, parentPath)` in `src/lib/settings/registry.ts` (research R3); make T005 pass
+  - Done 2026-09-26.
+- [x] T009 [P] Add `settings.categories.<id>.{title,description}` for the five categories, `settings.locations.<id>.{title,description}` for every location with a parent, and `settings.back` ("Zurück zu {title}" / "Back to {title}") to `src/i18n/locales/de.json` and `en.json`; the repo location title interpolates `{owner}/{name}`; make the i18n part of T004 pass
+  - Done 2026-09-26: texts reuse the established terms ("Abo verbinden", "Autonomie für Delegaten", "Verbotsregeln für Delegaten", "Sprach-zu-Text-Modell").
+- [x] T010 Replace the `system.settings` entry in `src/components/wm/appRoutes.ts` with a root `/` record (component `SettingsApp`) whose children come from `settingsRoutePatterns()`, each with its async component from contracts §1 keyed by location id and its `titleKey` for tab titles and the history list (spec 020 R9)
+  - Done 2026-09-26, together with US1: the async components need the view files to exist, so the wiring moved after T012–T025. `appearance` and `federation` have no view until T039/T048.
+- [x] T011 Add `tabTitle?: 'location' | 'app'` to `AppDefinition` and `tabTitleFor(app, routed)` to `src/lib/wm/apps.ts`, set `tabTitle: 'app'` on `system.settings`, and use `tabTitleFor` in `tabDisplayInfo` in `src/stores/windowManager.ts`; `wm/HistoryMenu.vue` keeps `titleForLocation` (research R2); make T006 pass
+  - Done 2026-09-26.
 
 **Checkpoint**: `pnpm check:settings` green; the settings app still renders its old page at `/`.
 
@@ -59,21 +70,36 @@ description: 'Task list for spec 023-settings-app'
 
 **Independent Test**: quickstart S1–S3, S17.
 
-- [ ] T012 [US1] Rebuild `src/components/apps/SettingsApp.vue` as the frame (contracts §2): sidebar left, header with title and one-line description from `locationFor` (params interpolated through `t`), content `<WmRouterView />` at depth 1 as the only scrolling area; load `currentDeviceInfoAsync()` once and `provide` it with a reload function under `SETTINGS_DEVICE_KEY` (exported from a small `src/components/settings/deviceContext.ts`)
-- [ ] T013 [P] [US1] Create `src/components/settings/Sidebar.vue`: one button per `SETTINGS_CATEGORIES` entry with icon and name, `aria-current="page"` on `categoryOf(route.path)`, click → `router.push(category.path)` even when that category is already active (FR-010)
-- [ ] T014 [P] [US1] Create `src/components/settings/OverviewView.vue`: rows from `overviewRows(categoryOf(route.path))` with icon (`text-primary`), title, one-line description and chevron; click → `router.push(row.path)` (FR-003)
-- [ ] T015 [P] [US1] Create `src/components/settings/GeneralView.vue` with `SettingsAliasSetting` (device from `SETTINGS_DEVICE_KEY`, reload on save) and `SettingsSessionRestoreSetting`
-- [ ] T016 [P] [US1] Convert `src/components/settings/AliasSetting.vue` (research R5): save on blur and on Enter through `settings.device.setAlias`; an empty name is not saved and the field explains why; drop the save button and its i18n text
-- [ ] T017 [P] [US1] Convert `src/components/settings/DefaultModelSetting.vue`: two selects "Dieses Gerät" (Wie alle Geräte / models) and "Alle Geräte" (Keins / models), saved on selection via `settings.models.setDefault`; "Wie alle Geräte" and "Keins" call `settings.models.clearDefault` (contracts §3); device uuid from `SETTINGS_DEVICE_KEY`; drop the scope radios and both buttons
-- [ ] T018 [P] [US1] Convert `src/components/settings/SttModelSetting.vue`: the select lists only installed models and saves on selection via `settings.models.setStt`; models that are not installed are listed below with a button "Herunterladen und verwenden" (same action, with visible progress); drop the switch button (clarification 2026-09-26)
-- [ ] T019 [P] [US1] Convert `src/components/settings/AutonomyModeSetting.vue`: the options save on selection via `settings.autonomy.setMode`; drop the save button
-- [ ] T020 [P] [US1] Convert `src/components/settings/DelegateDenyRulesSetting.vue`: save on blur via `settings.delegate.setDenyRules`; invalid rules are not saved and the field explains why; drop the save button
-- [ ] T021 [US1] Add `downloads: Record<string, DownloadProgressEvent>` and an idempotent `watchDownloads()` to `src/stores/models.ts` (research R6), with a `ponytail:` comment that the subscription lives until the process ends (one vault per process, spec 013); call it in `src/pages/workspace/[instance].vue` after the session restore
-- [ ] T022 [US1] Create `src/components/settings/InstalledModels.vue` from the installed-models tab of `src/components/models/HuggingFaceModelManagement.vue`: list, load, delete, check and install updates, integrity dialog; reads `useModelsStore()`
-- [ ] T023 [P] [US1] Create `src/components/settings/DownloadModels.vue` from the catalog tab: recommended models with progress from `models.downloads`, and a row "Auf HuggingFace suchen" → `router.push('/models/download/search')`
-- [ ] T024 [P] [US1] Rework `src/components/models/HuggingFaceSearch.vue` as the location `/models/download/search`: search term in `route.query.q` via `router.setQuery({ q })` (replace), a result → `router.push('/models/download/repo/<owner>/<name>')` instead of emitting `select`
-- [ ] T025 [P] [US1] Rework `src/components/models/HuggingFaceFilePicker.vue` as the location `/models/download/repo/:owner/:name`: repo from `route.params`, progress from `models.downloads`; remove its own download listeners
-- [ ] T026 [US1] Delete `src/components/models/HuggingFaceModelManagement.vue` (its size exception goes with it) and the unused i18n keys (`settings.header.forDevice`, the save texts of T016–T020, the old tab labels); `pnpm typecheck`, `lint`, `check:templates` green
+- [x] T012 [US1] Rebuild `src/components/apps/SettingsApp.vue` as the frame (contracts §2): sidebar left, header with title and one-line description from `locationFor` (params interpolated through `t`), content `<WmRouterView />` at depth 1 as the only scrolling area; load `currentDeviceInfoAsync()` once and `provide` it with a reload function under `SETTINGS_DEVICE_KEY` (exported from a small `src/components/settings/deviceContext.ts`)
+  - Done 2026-09-26: includes the header back arrow (T028) and the `@container` frame (T053).
+- [x] T013 [P] [US1] Create `src/components/settings/Sidebar.vue`: one button per `SETTINGS_CATEGORIES` entry with icon and name, `aria-current="page"` on `categoryOf(route.path)`, click → `router.push(category.path)` even when that category is already active (FR-010)
+  - Done 2026-09-26: the tooltip content is portalled out of the container, so it is enabled by the measured sidebar width (`useElementSize`), not a container query. Reka tooltips open on hover and focus, not on a touch long press (see T055).
+- [x] T014 [P] [US1] Create `src/components/settings/OverviewView.vue`: rows from `overviewRows(categoryOf(route.path))` with icon (`text-primary`), title, one-line description and chevron; click → `router.push(row.path)` (FR-003)
+  - Done 2026-09-26: plus `settings/OverviewRow.vue`, shared with the search row in DownloadModels.
+- [x] T015 [P] [US1] Create `src/components/settings/GeneralView.vue` with `SettingsAliasSetting` (device from `SETTINGS_DEVICE_KEY`, reload on save) and `SettingsSessionRestoreSetting`
+  - Done 2026-09-26.
+- [x] T016 [P] [US1] Convert `src/components/settings/AliasSetting.vue` (research R5): save on blur and on Enter through `settings.device.setAlias`; an empty name is not saved and the field explains why; drop the save button and its i18n text
+  - Done 2026-09-26.
+- [x] T017 [P] [US1] Convert `src/components/settings/DefaultModelSetting.vue`: two selects "Dieses Gerät" (Wie alle Geräte / models) and "Alle Geräte" (Keins / models), saved on selection via `settings.models.setDefault`; "Wie alle Geräte" and "Keins" call `settings.models.clearDefault` (contracts §3); device uuid from `SETTINGS_DEVICE_KEY`; drop the scope radios and both buttons
+  - Done 2026-09-26: an unknown stored model id stays visible as "(nicht mehr vorhanden)".
+- [x] T018 [P] [US1] Convert `src/components/settings/SttModelSetting.vue`: the select lists only installed models and saves on selection via `settings.models.setStt`; models that are not installed are listed below with a button "Herunterladen und verwenden" (same action, with visible progress); drop the switch button (clarification 2026-09-26)
+  - Done 2026-09-26: the select shows the default as "nicht installiert" when it is not installed yet.
+- [x] T019 [P] [US1] Convert `src/components/settings/AutonomyModeSetting.vue`: the options save on selection via `settings.autonomy.setMode`; drop the save button
+  - Done 2026-09-26.
+- [x] T020 [P] [US1] Convert `src/components/settings/DelegateDenyRulesSetting.vue`: save on blur via `settings.delegate.setDenyRules`; invalid rules are not saved and the field explains why; drop the save button
+  - Done 2026-09-26: correction — the deny rules are checkboxes, not a text field; each checkbox saves on change and a failure restores the stored selection. There is no invalid input.
+- [x] T021 [US1] Add `downloads: Record<string, DownloadProgressEvent>` and an idempotent `watchDownloads()` to `src/stores/models.ts` (research R6), with a `ponytail:` comment that the subscription lives until the process ends (one vault per process, spec 013); call it in `src/pages/workspace/[instance].vue` after the session restore
+  - Done 2026-09-26: deviation — a separate store `src/stores/modelDownloads.ts` (`useModelDownloadsStore`) instead of `stores/models.ts`, which would have exceeded 500 lines; shared `lib/models/format.ts` (`humanBytes`, `progressPercent`) and `models/DownloadBar.vue`/`DownloadStatus.vue`.
+- [x] T022 [US1] Create `src/components/settings/InstalledModels.vue` from the installed-models tab of `src/components/models/HuggingFaceModelManagement.vue`: list, load, delete, check and install updates, integrity dialog; reads `useModelsStore()`
+  - Done 2026-09-26.
+- [x] T023 [P] [US1] Create `src/components/settings/DownloadModels.vue` from the catalog tab: recommended models with progress from `models.downloads`, and a row "Auf HuggingFace suchen" → `router.push('/models/download/search')`
+  - Done 2026-09-26: plus a "Laufende Downloads" section for downloads that are no catalog row (HuggingFace files), so they stay visible after leaving the repository view.
+- [x] T024 [P] [US1] Rework `src/components/models/HuggingFaceSearch.vue` as the location `/models/download/search`: search term in `route.query.q` via `router.setQuery({ q })` (replace), a result → `router.push('/models/download/repo/<owner>/<name>')` instead of emitting `select`
+  - Done 2026-09-26: filters also live in the query (`quant`, `size`, `fit`); a result passes the matching files as `?files=`, keeping the filter behavior from 8b4d9d5; the last result list is cached in `useHuggingFace` (ponytail comment) so back does not refetch.
+- [x] T025 [P] [US1] Rework `src/components/models/HuggingFaceFilePicker.vue` as the location `/models/download/repo/:owner/:name`: repo from `route.params`, progress from `models.downloads`; remove its own download listeners
+  - Done 2026-09-26: after installing it opens `/models/installed`, like the old tab switch.
+- [x] T026 [US1] Delete `src/components/models/HuggingFaceModelManagement.vue` (its size exception goes with it) and the unused i18n keys (`settings.header.forDevice`, the save texts of T016–T020, the old tab labels); `pnpm typecheck`, `lint`, `check:templates` green
+  - Done 2026-09-26: typecheck, lint, check:templates green.
 - [ ] T027 [US1] Operator: run quickstart S1–S3 and S17
 
 **Checkpoint**: every existing setting is reachable by category and saves without a button.
@@ -86,7 +112,8 @@ description: 'Task list for spec 023-settings-app'
 
 **Independent Test**: quickstart S4–S7, S9.
 
-- [ ] T028 [US2] Add the back arrow to the header in `src/components/apps/SettingsApp.vue` for locations with a `parent`: label `settings.back` with the parent's title; click runs `headerBack(wm.historyOf(tabId), parentPath)` → `router.back()` or `router.push(path)` (FR-009)
+- [x] T028 [US2] Add the back arrow to the header in `src/components/apps/SettingsApp.vue` for locations with a `parent`: label `settings.back` with the parent's title; click runs `headerBack(wm.historyOf(tabId), parentPath)` → `router.back()` or `router.push(path)` (FR-009)
+  - Done 2026-09-26 with T012.
 - [ ] T029 [P] [US2] Show a hint with the way back to the overview instead of an error when a sub-view's data is gone: unknown repo in `HuggingFaceFilePicker.vue`, no provider connected in `ConnectDelegateProvider.vue`, deleted model in `InstalledModels.vue` (edge case)
 - [ ] T030 [US2] Operator: run quickstart S4–S7 and S9
 
@@ -157,7 +184,8 @@ description: 'Task list for spec 023-settings-app'
 
 **Independent Test**: quickstart S15.
 
-- [ ] T053 [US6] Make the settings frame a container (`@container` on the root of `SettingsApp.vue`); in `Sidebar.vue` show icon and name from `@2xl` (42rem) up and only icons with the name as `UiButton` tooltip below, widths 16rem and 3.5rem (research R4); check that no view scrolls horizontally at 360 px
+- [x] T053 [US6] Make the settings frame a container (`@container` on the root of `SettingsApp.vue`); in `Sidebar.vue` show icon and name from `@2xl` (42rem) up and only icons with the name as `UiButton` tooltip below, widths 16rem and 3.5rem (research R4); check that no view scrolls horizontally at 360 px
+  - Done 2026-09-26 with T012/T013; the 360 px check is part of T054.
 - [ ] T054 [US6] Operator: run quickstart S15
 
 ---

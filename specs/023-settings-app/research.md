@@ -20,7 +20,7 @@ Der Snapshot ist älter als die Window-Manager-Arbeit (015, 020, 022) und kennt
 wurden deshalb zusätzlich direkt im Code geprüft. Ergebnis:
 
 - **Erweitert statt neu gebaut**: `lib/wm/apps.ts` (Alias der entfallenen App,
-  R7), `stores/models.ts` (Download-Fortschritt, R6), `components/wm/appRoutes.ts`
+  R7), Download-Fortschritt neben `stores/models.ts` (R6), `components/wm/appRoutes.ts`
   (Routen der Einstellungen, R1), `usePreferences` (Farbschema, R8),
   `scripts/check-vue-templates.ts` (Farbprüfung, R9).
 - **Kein Kandidat**: Kategorien-Register, Seitenleiste, Kopf mit Zurück,
@@ -149,7 +149,7 @@ ihre Aktionen bleiben:
 | Standardmodell  | zwei Auswahlen: „Dieses Gerät“ (Wie alle Geräte / Modelle), „Alle Geräte“ (Keins / Modelle)                                               | `settings.models.setDefault` / `.clearDefault` |
 | Spracherkennung | Auswahl nur mit installierten Modellen, speichert beim Wählen; nicht installierte stehen darunter mit Knopf „Herunterladen und verwenden“ | `settings.models.setStt`                       |
 | Autonomiemodus  | Optionen speichern beim Wählen                                                                                                            | `settings.autonomy.setMode`                    |
-| Deny-Regeln     | Textfeld speichert beim Verlassen; ungültige Regeln → Hinweis am Feld, kein Speichern                                                     | `settings.delegate.setDenyRules`               |
+| Verbotsregeln   | Kontrollkästchen speichern beim Anklicken; ein Fehler stellt die gespeicherte Auswahl wieder her                                          | `settings.delegate.setDenyRules`               |
 
 Knöpfe bleiben für Handlungen: Anbieter verbinden, Modell laden, herunterladen,
 Updates prüfen und installieren, löschen.
@@ -166,9 +166,12 @@ gespeicherten Wert zurück.
 
 ## R6 Download-Fortschritt überlebt die Navigation
 
-**Entscheidung**: `stores/models.ts` bekommt `downloads` (Fortschritt je
-Modellkennung) und `watchDownloads()`, das Fortschritt und Abschluss einmal je
-Vault-Session abonniert (idempotent, ohne `stopListening` des Chats).
+**Entscheidung**: Ein eigener Store `stores/modelDownloads.ts`
+(`useModelDownloadsStore`) hält `downloads` (Fortschritt je Modellkennung) und
+`watchDownloads()`, das Fortschritt und Abschluss einmal je Vault-Session
+abonniert (idempotent, ohne `stopListening` des Chats). (Umsetzung 2026-09-26:
+ursprünglich in `stores/models.ts` geplant; die Datei wäre über 500 Zeilen
+gewachsen.)
 `pages/workspace/[instance].vue` ruft es beim Öffnen auf. Die Download-Ansichten
 lesen nur noch den Store; ihre eigenen Abonnements
 (`HuggingFaceModelManagement.vue`, `HuggingFaceFilePicker.vue`) entfallen.

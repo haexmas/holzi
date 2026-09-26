@@ -260,7 +260,7 @@ Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
 - Eine Kategorie wird geöffnet, während eine Einstellung darin gerade lädt oder
   ein Download läuft: Der Download läuft weiter, die Anzeige zeigt seinen Stand,
   sobald die Unteransicht wieder offen ist.
-- Ein Nutzer ist mitten in einer Eingabe (Gerätename, Deny-Regeln) und wechselt
+- Ein Nutzer ist mitten in einer Eingabe (Gerätename) und wechselt
   die Kategorie: Er verlässt damit das Feld, die Eingabe wird gespeichert
   (FR-021). Nur eine ungültige Eingabe geht verloren, wie beim Navigieren in
   Spec 020 („Inhalte bleiben nicht zwingend erhalten“).
