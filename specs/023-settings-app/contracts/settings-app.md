@@ -132,7 +132,8 @@ Alle anderen Einstellungen behalten ihre Aktionen (FR-019); nur die Bedienung
 ```text
 useColorScheme() → {
   state: Readonly<Ref<ColorSchemeState>>     // device, vault, effective
-  loadAsync(deviceUuid): Promise<void>        // liest beide Präferenzen, wendet an
+  startSystem(): void                         // vor dem Entsperren: System-Schema anwenden
+  loadAsync(): Promise<void>                  // liest beide Präferenzen, wendet an
   setAsync(scope, scheme | null): Promise<ColorSchemeState>  // schreibt oder löscht, wendet an
 }
 ```
@@ -141,11 +142,21 @@ useColorScheme() → {
 - Wendet an: `document.documentElement.classList.toggle('dark', isDark(...))`;
   hört auf `matchMedia('(prefers-color-scheme: dark)')` und wendet bei `system`
   neu an (US4 AS2).
-- `plugins/colorScheme.client.ts` wendet beim Start `system` an.
+- `loadAsync` und `setAsync` holen die Geräte-Kennung selbst über
+  `useDevice().currentDeviceInfoAsync()`, damit auch ein Aktions-Handler ohne
+  offene Einstellungen schreiben kann.
+- `plugins/colorScheme.client.ts` wendet beim Start `system` an
+  (`startSystem`).
   `pages/workspace/[instance].vue` ruft nach dem Öffnen `loadAsync` auf; ein
   Fehler beim Lesen lässt `system` stehen (Edge Case).
-- Die Aktions-Handler rufen `setAsync`; die Einstellungsansicht ruft nur
-  Aktionen (Spec 020 FR-024).
+- Die Aktions-Handler rufen `setAsync`; die Einstellungsansicht
+  (`settings/ColorSchemeSetting.vue`, Kategorie „Darstellung“) liest `state`
+  und ruft nur Aktionen (Spec 020 FR-024). Sie zeigt eine Gruppe „Farbschema“
+  mit den Zeilen „Dieses Gerät“ (Wie alle Geräte / Hell / Dunkel / System) und
+  „Alle Geräte dieser Vault“ (System / Hell / Dunkel). Ein von einem Agenten
+  gespeichertes `system` für die Vault zeigt sie als „System“.
+- Die Suche findet die Einstellung über ihre Bezeichnung „Farbschema“
+  (`settingKeys` der Kategorie `appearance`).
 
 ## 5. Entfallene App (`lib/wm/apps.ts`, `stores/wmActionHandlers.ts`)
 
