@@ -207,6 +207,22 @@ description: 'Task list for spec 023-settings-app'
 
 ---
 
+## Phase 8a: Einstellungen pro Vault (FR-024, research R14)
+
+**Goal**: Settings apply to the vault on every device; only the device name and the default and speech models stay per device. Controls from haex-ui, readable in both schemes.
+
+**Independent Test**: quickstart S20, S21.
+
+- [ ] T060 Rust: `fold_scoped_preferences` in `src-tauri/src/storage/maintenance.rs` (called from `run_after_open`) with tests in `maintenance_tests.rs`: device value → vault for `appearance.color_scheme`, `wm.session_restore`, `chat.autonomy_mode`, `cli_delegate.deny_rules`, `chat.reasoning_option.*` when the vault has none, then the device value is deleted; the vault value of `chat.default_model_id` → this device when it has none, then deleted; idempotent
+- [ ] T061 Rust: session restore vault-only in `src-tauri/src/storage/wm_session_commands.rs` (`{ enabled }`), tests in `wm_session_commands_tests.rs`; `autonomy::get_deny_rules` reads the vault value; `cargo fmt --check`, `lint:rust`, `cargo test` green
+- [ ] T062 Frontend: `useWmSession`, `lib/wm/sessionSync.ts`, the window manager store and their checks follow `{ enabled }`; `SessionRestoreSetting.vue` becomes one switch row
+- [ ] T063 Frontend: actions without `scope` (contracts §3), handlers, `settings.get`; `useColorScheme` vault-only with `color-scheme` on `<html>`; autonomy (`AutonomyModeSetting.vue`, `useChatPermissionMode.ts`), deny rules and reasoning preference (`useReasoningPreference.ts`) read and write the vault value; default model device-only (`DefaultModelSetting.vue` one select)
+- [ ] T064 Frontend: controls from haex-ui in every settings view (`ShadcnSelect`, `ShadcnInput`, `ShadcnSwitch`, `ShadcnCheckbox`); native radio buttons keep the scheme through `color-scheme`
+- [ ] T065 Notes in specs 002, 009, 011/012 and 022 next to the scope requirements: settings apply to the vault since spec 023 (FR-024)
+- [ ] T066 Operator: run quickstart S20 and S21
+
+---
+
 ## Phase 9: Polish & Cross-Cutting
 
 - [ ] T055 [P] Add the terms "Einstellungskategorie", "Farbschema" and "Geräte der Vault" to `CONTEXT.md`

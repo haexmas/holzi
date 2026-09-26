@@ -103,26 +103,32 @@ Route-Komponenten bekommen keine Props. Was eine Einstellung vom Gerät braucht
 ## 3. Aktionen
 
 In `src/lib/actions/settingsActions.ts`, Handler in
-`src/stores/settingsActionHandlers.ts`.
+`src/stores/settingsActionHandlers.ts`. Einstellungen gelten für die Vault,
+Standard- und Spracherkennungsmodell für dieses Gerät (FR-024); keine Aktion hat
+einen Parameter `scope`.
 
-| Kennung                                | Eingabe                                                                 | Ergebnis                     | Bereich           | Wirkung | Agent |
-| -------------------------------------- | ----------------------------------------------------------------------- | ---------------------------- | ----------------- | ------- | ----- |
-| `settings.appearance.setColorScheme`   | `{ scope: 'device' \| 'vault', scheme: 'light' \| 'dark' \| 'system' }` | `ColorSchemeResult`          | `settings.device` | write   | ja    |
-| `settings.appearance.clearColorScheme` | `{ scope: 'device' \| 'vault' }`                                        | `ColorSchemeResult`          | `settings.device` | write   | ja    |
-| `settings.devices.list`                | `{}`                                                                    | `{ devices: VaultDevice[] }` | `settings.read`   | read    | ja    |
+| Kennung                              | Eingabe                                     | Ergebnis                     | Bereich           | Wirkung | Agent |
+| ------------------------------------ | ------------------------------------------- | ---------------------------- | ----------------- | ------- | ----- |
+| `settings.appearance.setColorScheme` | `{ scheme: 'light' \| 'dark' \| 'system' }` | `{ scheme }`                 | `settings.device` | write   | ja    |
+| `settings.sessionRestore.set`        | `{ enabled: boolean }`                      | `{ enabled }`                | `settings.device` | write   | ja    |
+| `settings.models.setDefault`         | `{ modelId }`                               | `{ done }`                   | `settings.models` | write   | ja    |
+| `settings.models.clearDefault`       | `{}`                                        | `{ done }`                   | `settings.models` | write   | ja    |
+| `settings.devices.list`              | `{}`                                        | `{ devices: VaultDevice[] }` | `settings.read`   | read    | ja    |
+
+Entfallen: `settings.appearance.clearColorScheme`,
+`settings.sessionRestore.clear` und der `scope` der Standard-Modell-Aktionen.
+Autonomie (`settings.autonomy.setMode`) und Verbotsregeln
+(`settings.delegate.setDenyRules`) behalten ihre Eingabe und schreiben den
+Vault-Wert.
 
 `VaultDevice = { vaultDeviceUuid, alias?, isCurrent }`; ein Gerät
 ohne Namen hat kein `alias` (Schema-Subset ohne `null`).
 
-`ColorSchemeResult = { effective: Scheme, device?: Scheme, vault?: Scheme }`:
-nicht gesetzte Werte fehlen, weil das Schema-Subset kein `null` kennt (wie
-`settings.sessionRestore.*`, Spec 022). `settings.get` ergänzt `colorScheme` in
-dieser Form.
+`settings.get` meldet `colorScheme` (Wert), `sessionRestore` (boolean),
+`defaultModel` (Kennung, fehlt ohne Wert), `sttModel`, `autonomyMode` und
+`delegateDenyRules`.
 
-Die Einstellungsansicht ruft `clearColorScheme` für „Dieses Gerät: Wie alle
-Geräte“ und für „Alle Geräte: System“; `setColorScheme` mit `scope: 'vault'`
-bekommt von ihr nie `system`. Beim Standardmodell ruft „Keins“ bzw. „Wie alle
-Geräte“ `settings.models.clearDefault`.
+Beim Standardmodell ruft „Keins“ `settings.models.clearDefault`.
 
 Alle anderen Einstellungen behalten ihre Aktionen (FR-019); nur die Bedienung
 ändert sich (research R5).
@@ -131,30 +137,26 @@ Alle anderen Einstellungen behalten ihre Aktionen (FR-019); nur die Bedienung
 
 ```text
 useColorScheme() → {
-  state: Readonly<Ref<ColorSchemeState>>     // device, vault, effective
+  scheme: Readonly<Ref<ColorScheme>>          // Vault-Wert, ohne Wert 'system'
   startSystem(): void                         // vor dem Entsperren: System-Schema anwenden
-  loadAsync(): Promise<void>                  // liest beide Präferenzen, wendet an
-  setAsync(scope, scheme | null): Promise<ColorSchemeState>  // schreibt oder löscht, wendet an
+  loadAsync(): Promise<void>                  // liest den Vault-Wert, wendet an
+  setAsync(scheme): Promise<ColorScheme>      // schreibt, wendet an
 }
 ```
 
 - Modulweiter Zustand: ein Zustand je Prozess (eine Vault je Prozess, Spec 013).
-- Wendet an: `document.documentElement.classList.toggle('dark', isDark(...))`;
-  hört auf `matchMedia('(prefers-color-scheme: dark)')` und wendet bei `system`
-  neu an (US4 AS2).
-- `loadAsync` und `setAsync` holen die Geräte-Kennung selbst über
-  `useDevice().currentDeviceInfoAsync()`, damit auch ein Aktions-Handler ohne
-  offene Einstellungen schreiben kann.
+- Wendet an: `document.documentElement.classList.toggle('dark', isDark(...))`
+  und `style.colorScheme` (`dark`/`light`), damit native Elemente wie
+  Optionsfelder und Rollbalken mitziehen; hört auf
+  `matchMedia('(prefers-color-scheme: dark)')` und wendet bei `system` neu an
+  (US4 AS2).
 - `plugins/colorScheme.client.ts` wendet beim Start `system` an
-  (`startSystem`).
-  `pages/workspace/[instance].vue` ruft nach dem Öffnen `loadAsync` auf; ein
-  Fehler beim Lesen lässt `system` stehen (Edge Case).
+  (`startSystem`). `pages/workspace/[instance].vue` ruft nach dem Öffnen
+  `loadAsync` auf; ein Fehler beim Lesen lässt `system` stehen (Edge Case).
 - Die Aktions-Handler rufen `setAsync`; die Einstellungsansicht
-  (`settings/ColorSchemeSetting.vue`, Kategorie „Darstellung“) liest `state`
-  und ruft nur Aktionen (Spec 020 FR-024). Sie zeigt eine Gruppe „Farbschema“
-  mit den Zeilen „Dieses Gerät“ (Wie alle Geräte / Hell / Dunkel / System) und
-  „Alle Geräte dieser Vault“ (System / Hell / Dunkel). Ein von einem Agenten
-  gespeichertes `system` für die Vault zeigt sie als „System“.
+  (`settings/ColorSchemeSetting.vue`, Kategorie „Darstellung“) liest `scheme`
+  und ruft nur Aktionen (Spec 020 FR-024): eine Zeile „Farbschema“ mit Hell /
+  Dunkel / System.
 - Die Suche findet die Einstellung über ihre Bezeichnung „Farbschema“
   (`settingKeys` der Kategorie `appearance`).
 

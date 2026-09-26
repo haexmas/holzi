@@ -102,6 +102,15 @@ entfällt; die Kategorie „Föderation“ zeigt die Geräte der Vault.) Referen
   das Bedienelement); Übersichten zeigen je Bereich eine eigene abgerundete
   Karte. Das ersetzt „ohne Karten-Rahmen“ aus der Rückmeldung nach US1; ohne
   Überschriften und Beschreibungsabsätze bleibt es (FR-002).
+- Q: (Betreiber-Rückmeldung) Gelten Einstellungen pro Gerät oder pro Vault? →
+  A: Pro Vault, auf jedem Gerät gleich; die Wahl „Dieses Gerät / Alle Geräte“
+  entfällt überall. Ausnahmen sind nur Gerätename, Standard-Modell und
+  Spracherkennungsmodell, weil Name, Modell-Dateien und Hardware am Gerät
+  hängen; sie gelten nur für dieses Gerät (FR-024).
+- Q: (Betreiber-Rückmeldung) Im dunklen Schema sind die Werte der
+  Auswahllisten unlesbar. → A: Bedienelemente kommen aus dem haex-ui-Layer
+  (Auswahlliste, Eingabefeld, Schalter, Häkchen); native Elemente bekommen mit
+  `color-scheme` das passende Schema (FR-013).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -396,11 +405,11 @@ einer bestimmten Breite verschwindet die Seitenleiste, das Symbol in der Werkzeu
 
 - **FR-013**: holzi MUSS ein Farbschema mit den Werten „Hell“, „Dunkel“ und
   „System“ anbieten; Standard ist „System“. Die Wahl MUSS sofort in der ganzen
-  App gelten und bei „System“ dem Betriebssystem folgen.
-- **FR-014**: Das Farbschema MUSS sich wie das Standardmodell für dieses Gerät
-  oder für die ganze Vault setzen und zurücksetzen lassen; der Gerätewert geht
-  vor. Setzen und Zurücksetzen MÜSSEN Aktionen im Katalog von Spec 020 sein.
-  Vor dem Entsperren einer Vault folgt holzi dem Betriebssystem.
+  App gelten und bei „System“ dem Betriebssystem folgen. Alle Bedienelemente
+  MÜSSEN in beiden Schemata lesbar sein.
+- **FR-014**: Das Farbschema gilt für die Vault (FR-024). Das Setzen MUSS eine
+  Aktion im Katalog von Spec 020 sein. Vor dem Entsperren einer Vault folgt
+  holzi dem Betriebssystem.
 - **FR-015**: „Darstellung“ MUSS in dieser Spec nur das Farbschema enthalten.
   Ein Hintergrund des Arbeitsbereichs (Bild oder Farbverlauf) gehört zur Spec
   Desktop-Symbole und Raster.
@@ -432,12 +441,22 @@ einer bestimmten Breite verschwindet die Seitenleiste, das Symbol in der Werkzeu
   Zurücksetzen haben. Auswahlen (Optionen, Auswahllisten, Schalter) MÜSSEN beim
   Wählen gespeichert werden; Textfelder beim Verlassen des Feldes und, wenn
   einzeilig, mit Enter. Eine ungültige Eingabe (etwa ein leerer Gerätename)
-  wird nicht gespeichert, sondern am Feld erklärt. Einstellungen mit Wert für
-  dieses Gerät und für die Vault bieten „nicht festgelegt“ als wählbare Option
+  wird nicht gespeichert, sondern am Feld erklärt. Eine Einstellung, die leer
+  bleiben darf (etwa das Standard-Modell), bietet „Keins“ als wählbare Option
   statt eines Knopfs zum Zurücksetzen. Knöpfe bleiben nur für Handlungen, die
   etwas starten, und nicht für Werte (Anbieter verbinden, Modell herunterladen,
   Update prüfen, Modell löschen). Das Vorbild ist „Sitzung wiederherstellen“
   (Spec 022 FR-004).
+- **FR-024**: Einstellungen MÜSSEN für die Vault gelten, auf jedem Gerät
+  gleich: Farbschema, Sitzung wiederherstellen (ein oder aus), Autonomie für
+  Delegaten, Verbotsregeln und die Aufwandsstufe je Modell. Eine Wahl zwischen
+  „Dieses Gerät“ und „Alle Geräte“ DARF es nicht geben. Nur für dieses Gerät
+  gelten Gerätename, Standard-Modell und Spracherkennungsmodell. Werte, die
+  frühere Versionen für ein Gerät bzw. für die Vault gespeichert haben, werden
+  beim Öffnen der Vault einmal übernommen: ein Gerätewert wird zum Vault-Wert,
+  wenn die Vault noch keinen hat; beim Standard-Modell wird ein Vault-Wert zum
+  Wert dieses Geräts, wenn es noch keinen hat. Danach sind die alten Werte
+  gelöscht.
 - **FR-023**: Die Werkzeugleiste MUSS eine Suche haben: Ein Such-Symbol klappt
   dort ein Suchfeld auf. Es findet Orte über Titel, Beschreibung und
   hinterlegte Suchbegriffe und einzelne Einstellungen über ihre Bezeichnung,
@@ -458,8 +477,8 @@ einer bestimmten Breite verschwindet die Seitenleiste, das Symbol in der Werkzeu
 - **Bereich / Unteransicht**: ein Teil einer Kategorie mit eigenem Titel, eigener
   Beschreibung und eigenem Ort; kann weitere Unteransichten haben (etwa
   HuggingFace-Suche → Ergebnis → Dateiauswahl).
-- **Farbschema**: Einstellung mit den Werten Hell, Dunkel, System; Gerätewert
-  vor Vault-Wert, Standard System.
+- **Farbschema**: Einstellung mit den Werten Hell, Dunkel, System; gilt für die
+  Vault (FR-024), Standard System.
 - **Gerät der Vault**: eine Installation von holzi, die die Vault geöffnet hat;
   Name, ob es dieses Gerät ist.
 

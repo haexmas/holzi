@@ -51,14 +51,30 @@ Abgeleitet:
 | ------------------ | -------------------------------------------------------------------------------- |
 | Schlüssel          | `appearance.color_scheme`                                                        |
 | Werte              | `light`, `dark`, `system`; jeder andere gespeicherte Wert gilt als nicht gesetzt |
-| Scopes             | `device` (vault_device_uuid) und `vault`, Gerät vor Vault                        |
-| Standard           | `system`, wenn keiner der beiden gesetzt ist                                     |
+| Scope              | `vault` (FR-024)                                                                 |
+| Standard           | `system`, wenn nicht gesetzt                                                     |
 | Sync               | wie alle Präferenzen (Tabelle `preferences`)                                     |
 | Vor dem Entsperren | `system` (keine Vault offen)                                                     |
 
-`ColorSchemeState = { device: Scheme | null, vault: Scheme | null, effective: Scheme }`
-mit `Scheme = 'light' | 'dark' | 'system'`. Dunkel ist die Ansicht, wenn
-`effective` `dark` ist oder `system` und das Betriebssystem dunkel meldet.
+Dunkel ist die Ansicht, wenn der Wert `dark` ist oder `system` und das
+Betriebssystem dunkel meldet.
+
+## Scopes der Einstellungen (FR-024, research R14)
+
+| Schlüssel                    | Scope                   | Übernahme beim Öffnen                         |
+| ---------------------------- | ----------------------- | --------------------------------------------- |
+| `appearance.color_scheme`    | `vault`                 | Gerätewert → Vault, wenn die Vault keinen hat |
+| `wm.session_restore`         | `vault`                 | Gerätewert → Vault, wenn die Vault keinen hat |
+| `chat.autonomy_mode`         | `vault`                 | Gerätewert → Vault, wenn die Vault keinen hat |
+| `cli_delegate.deny_rules`    | `vault`                 | Gerätewert → Vault, wenn die Vault keinen hat |
+| `chat.reasoning_option.<id>` | `vault`                 | Gerätewert → Vault, wenn die Vault keinen hat |
+| `chat.default_model_id`      | `device`                | Vault-Wert → dieses Gerät, wenn es keinen hat |
+| `voice.stt_model_id`         | `device`                | —                                             |
+| Gerätename                   | Gerät (`known_devices`) | —                                             |
+
+Nach der Übernahme ist der alte Wert dieses Geräts (bzw. beim Standard-Modell
+der alte Vault-Wert) gelöscht; Werte anderer Geräte übernimmt jedes Gerät beim
+eigenen Öffnen.
 
 ## Download-Fortschritt (Download-Store)
 

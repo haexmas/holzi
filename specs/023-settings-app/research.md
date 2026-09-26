@@ -343,6 +343,47 @@ abgelehnt).
   `typecheck`, `lint`, `format:check`, e2e-Suite.
 - **Manuell**: [quickstart.md](./quickstart.md).
 
+## R14 Einstellungen pro Vault (FR-024)
+
+**Entscheidung** (Betreiber-Rückmeldung 2026-09-26): Einstellungen gelten für
+die Vault; die Ausnahmen Gerätename, Standard-Modell und Spracherkennungsmodell
+gelten für dieses Gerät. Umsetzung:
+
+- Ein neuer Schritt in `storage/maintenance.rs` (`fold_scoped_preferences`)
+  läuft beim Öffnen: Für jeden Vault-Schlüssel wird der Wert dieses Geräts zum
+  Vault-Wert, wenn die Vault keinen hat, dann wird der Gerätewert gelöscht;
+  beim Standard-Modell umgekehrt (Vault-Wert zu diesem Gerät). Idempotent,
+  Fehler werden geloggt und halten das Öffnen nicht auf (wie die übrigen
+  Schritte).
+- Sitzung wiederherstellen: `wm_session_restore_get/set` lesen und schreiben
+  nur den Vault-Wert (`{ enabled }` statt Scope und Zustand je Scope);
+  ausgeschaltet löscht es die gespeicherte Sitzung dieses Geräts wie bisher,
+  andere Geräte löschen ihre beim nächsten Laden (Spec 022 FR-008).
+- Verbotsregeln: `autonomy::get_deny_rules` liest den Vault-Wert.
+- Autonomie und Aufwandsstufe: das Frontend liest und schreibt den Vault-Wert.
+- Farbschema: nur der Vault-Wert; `clearColorScheme` entfällt.
+- Standard-Modell: die Aktionen schreiben nur für dieses Gerät;
+  `resolve_default_model` behält den Vault-Wert als letzten Rückfall, der nach
+  der Übernahme leer ist.
+- Aktionen verlieren ihren Parameter `scope`: `settings.sessionRestore.set`
+  (`{ enabled }`), `settings.appearance.setColorScheme` (`{ scheme }`),
+  `settings.models.setDefault` (`{ modelId }`), `settings.models.clearDefault`
+  (`{}`); `settings.sessionRestore.clear` und
+  `settings.appearance.clearColorScheme` entfallen.
+- Bedienelemente aus haex-ui (`ShadcnSelect`, `ShadcnInput`, `ShadcnSwitch`,
+  `ShadcnCheckbox`); haex-ui hat keine Optionsfeld-Gruppe, native Optionsfelder
+  bekommen über `color-scheme` am `<html>` das passende Schema.
+
+**Begründung**: Eine Vault ist der Arbeitsraum des Nutzers; auf jedem Gerät
+dasselbe Verhalten ist einfacher als eine Wahl je Einstellung. Name und Modelle
+hängen an Gerät und Hardware. Die Übernahme erhält bisherige Werte, besonders
+die Verbotsregeln, die sonst auf den Standard zurückfielen.
+
+**Alternativen**: Modelle ebenfalls für die Vault mit Hinweis zum Herunterladen
+(Betreiber wählte die Ausnahme); alte Werte verwerfen (Verbotsregeln gingen
+verloren); Übernahme im Frontend (liefe erst nach dem ersten Lesen des
+Backends).
+
 ## R13 Suche in den Einstellungen (FR-023)
 
 **Entscheidung**: Ein Suchfeld, das ein Such-Symbol in der Werkzeugleiste aufklappt; die Treffer stehen in der Seitenleiste. Gesucht wird in einem
