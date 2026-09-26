@@ -114,7 +114,8 @@ description: 'Task list for spec 023-settings-app'
 
 - [x] T028 [US2] Add the back arrow to the header in `src/components/apps/SettingsApp.vue` for locations with a `parent`: label `settings.back` with the parent's title; click runs `headerBack(wm.historyOf(tabId), parentPath)` → `router.back()` or `router.push(path)` (FR-009)
   - Done 2026-09-26 with T012.
-- [ ] T029 [P] [US2] Show a hint with the way back to the overview instead of an error when a sub-view's data is gone: unknown repo in `HuggingFaceFilePicker.vue`, no provider connected in `ConnectDelegateProvider.vue`, deleted model in `InstalledModels.vue` (edge case)
+- [x] T029 [P] [US2] Show a hint with the way back to the overview instead of an error when a sub-view's data is gone: unknown repo in `HuggingFaceFilePicker.vue`, no provider connected in `ConnectDelegateProvider.vue`, deleted model in `InstalledModels.vue` (edge case)
+  - Done 2026-09-26: the hint is a row of the boxed list that leads to the place with the data — a missing repo or one without GGUF files to the HuggingFace search, no installed model to "Modelle herunterladen", no model at all in "Standard-Modell" to downloads and "Abo verbinden". "Abo verbinden" needs no hint: a disconnected provider is its normal state with the connect button.
 - [ ] T030 [US2] Operator: run quickstart S4–S7 and S9
 
 ---
@@ -125,7 +126,8 @@ description: 'Task list for spec 023-settings-app'
 
 **Independent Test**: quickstart S8, S10.
 
-- [ ] T031 [US3] Audit the callers of `openApp({ appId: 'system.settings' })` and `wm.app.open` for the settings (`src/components/apps/ChatApp.vue`, chat banners and dialogs): contextual hints (for example "no model installed") pass `at` with the matching location (`/models/download`, `/models/default`, `/agents/providers`); generic settings buttons stay at `/`
+- [x] T031 [US3] Audit the callers of `openApp({ appId: 'system.settings' })` and `wm.app.open` for the settings (`src/components/apps/ChatApp.vue`, chat banners and dialogs): contextual hints (for example "no model installed") pass `at` with the matching location (`/models/download`, `/models/default`, `/agents/providers`); generic settings buttons stay at `/`
+  - Done 2026-09-26: only two callers exist, the generic settings buttons in the chat header and thread sidebar; they stay at `/`. The chat's hints that mention the settings (`chat.empty.noModelsDescription`, `chat.model.delegateNotConnected`, `chat.effort.unknown`) are plain text or disabled select entries, so there is no contextual caller to point elsewhere yet.
 - [ ] T032 [US3] Operator: run quickstart S8 and S10
 
 ---
