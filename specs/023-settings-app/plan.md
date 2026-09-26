@@ -45,7 +45,7 @@ Technischer Ansatz (Begründungen in [research.md](./research.md)):
 Rust (Tauri 2.11) nur für den Lesebefehl der Geräteliste
 
 **Primary Dependencies**: nur Vorhandenes — haex-ui-Layer (Pin
-`db48f9a948522c18a00331aac232718825cc9317`, seit T068 `e380e18395c0f1d6536dffa9d5dff39bd4150b34`, `.dark`-Theme, `UiButton` mit
+`db48f9a948522c18a00331aac232718825cc9317`, seit T069 `b8549be89880bc26046c994cc7e2d7c082db2a63`, `.dark`-Theme, `UiButton` mit
 Tooltip), Tailwind v4 (Container-Abfragen), Pinia, vue-i18n, reka-ui
 
 **Storage**: Präferenz `appearance.color_scheme` in der vorhandenen Tabelle
