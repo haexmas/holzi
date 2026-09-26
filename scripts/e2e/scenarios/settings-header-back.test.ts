@@ -10,10 +10,11 @@ import {
 
 const REPO = '/models/download/repo/Qwen/Qwen2.5-0.5B-Instruct-GGUF'
 
-// Spec 023-settings-app, quickstart S4–S6 and S22 (FR-008–FR-010): the arrow in the title row goes to
+// Spec 023-settings-app, quickstart S4–S7 and S22 (FR-008–FR-010): the arrow in the title row goes to
 // the previous place when that is in the same category, otherwise to the parent; the tab's own back and
-// forward walk the same places; choosing a category in the sidebar starts at its overview. The repo is
-// reached the way a search result does it (a push onto the tab), so no network is needed.
+// forward walk the same places; choosing a category in the sidebar starts at its overview; reopened
+// settings start at the first category. The repo is reached the way a search result does it (a push
+// onto the tab), so no network is needed.
 scenario('settings-header-back', {}, async (ctx) => {
   const instance = await ctx.startInstance()
   await createAndUnlock(instance, { name: 'e2e-settings-back' })
@@ -79,4 +80,14 @@ scenario('settings-header-back', {}, async (ctx) => {
   await instance.click('settings-category-models')
   await waitForLocation(instance, 'models')
   ctx.step('S6 category starts at its overview')
+
+  // S7: closed and opened again (session restore off), the settings start at "Allgemein".
+  const closed = await runAction(instance, 'wm.tab.close', { tabId: tab.tabId })
+  if (!closed.ok) throw new Error(`wm.tab.close: ${JSON.stringify(closed)}`)
+  await ctx.waitFor(
+    'the settings to close',
+    async () => settingsTabs(await wmSnapshot(instance)).length === 0,
+  )
+  await openSettings(instance)
+  ctx.step('S7 reopened at the first category')
 })
