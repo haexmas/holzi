@@ -269,7 +269,8 @@ description: 'Task list for spec 023-settings-app'
 
 ## Phase 9: Polish & Cross-Cutting
 
-- [ ] T055 [P] Add the terms "Einstellungskategorie", "Farbschema" and "Geräte der Vault" to `CONTEXT.md`
+- [x] T055 [P] Add the terms "Einstellungskategorie", "Farbschema" and "Geräte der Vault" to `CONTEXT.md`
+  - Done 2026-09-27; also corrected two stale statements there (Föderation as an App, session restore "device value over vault value").
 - [ ] T056 Run the automated part of `quickstart.md` in full: `check:settings`, `check:templates`, `check:wm-state`, `check:wm-navigation`, `check:chat-state`, `check:vault-lifecycle`, `typecheck`, `typecheck:scripts`, `lint`, `format:check`, `cargo fmt --check`, `lint:rust` (both feature sets), `cargo test`, `test:e2e`; record the counts here
 - [x] T057 Operator: run quickstart S16 and S18
   - Done 2026-09-27: the operator confirmed that a download keeps running across category changes (S16) and that switching categories is smooth (S18).

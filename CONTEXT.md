@@ -123,7 +123,8 @@ Same value. "Gerätename" as German UI label. `alias` as the
 The in-app desktop concept, adopted from haex-vault. A **Workspace**
 (Arbeitsbereich) contains **Windows** (Fenster); each Window contains
 one or more **Tabs**, each Tab an instance of an **App** (Chat,
-Einstellungen, Föderation in this spec). The **Launcher** lists
+Einstellungen; Föderation was an App in spec 015 and is a settings category
+since spec 023). The **Launcher** lists
 available Apps and opens them as Windows. "Fenster" and "Tab" as
 German UI labels; `wm` as the code prefix (`useWindowManagerStore`,
 `src/lib/wm/`, `src/components/wm/`, action ids `wm.*`, Tauri commands
@@ -139,8 +140,8 @@ concept in new code or specs.
 Which workspaces, windows and tabs are open, with window geometry and state and
 each tab's location and back/forward history. Saved (`wm_sessions_no_sync`, one
 JSON row per device, never synced) only while the setting "Sitzung
-wiederherstellen" (`wm.session_restore`, device value over vault value, off by
-default) applies; turning it off deletes the saved session. Not the **vault
+wiederherstellen" (`wm.session_restore`, one value for the vault since spec 023,
+off by default) applies; turning it off deletes the saved session. Not the **vault
 session** (spec 013: unlock to lock, one process) and not the chat's **Active
 Session** (the loaded model). Avoid "Layout" for this in user-facing text.
 
@@ -159,6 +160,28 @@ schema, a target, a **Berechtigungsbereich** and an effect; the
 **Aufrufer** is the user, the built-in agent or an external agent.
 Actions in the `guardrails` scope are user-only.
 _Avoid_: "command" for these — in holzi "command" means Tauri commands.
+
+**Einstellungskategorie (settings category) / Unteransicht** (spec 023):
+A group in the settings' sidebar — Allgemein, Darstellung, Modelle, Agenten,
+Föderation (`SETTINGS_CATEGORIES` in `src/lib/settings/registry.ts`). A
+category with several areas starts with an overview that leads into
+**Unteransichten**; every category and sub-view is an **Ort** of the settings
+tab. Settings apply to the vault on every device; only the Gerätename, the
+Standard-Modell and the Spracherkennungsmodell stay per device (FR-024). A
+choice saves on selection, without a save button.
+
+**Farbschema (color scheme)** (spec 023):
+Hell, Dunkel or System (`appearance.color_scheme`, vault value, default
+System); System follows the operating system. Applied as the `dark` class and
+`color-scheme` on `<html>`. Pages before unlocking follow the operating system.
+_Avoid_: "Theme" in user-facing text.
+
+**Geräte der Vault (vault devices)** (spec 023):
+The rows of `known_devices` except the Vault Scope Sentinel, shown in the
+category "Föderation" (`list_vault_devices`, action `settings.devices.list`):
+this device first and marked "Dieses Gerät", the others by Gerätename, unnamed
+ones as "Unbenanntes Gerät". Other devices appear once the sync exists or in a
+copied vault; "zuletzt online" waits for the sync spec.
 
 ### Internationalisierung (i18n)
 
