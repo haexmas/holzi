@@ -26,6 +26,14 @@ const emit = defineEmits<{
 const wm = useWindowManagerStore()
 const { t } = useI18n()
 
+/** The menu's accessible name. reka-ui names the menu by its trigger
+ * (`aria-labelledby`), and an `aria-label` on `ShadcnDropdownMenuContent`
+ * would land on its portal root and be dropped; so the invisible trigger
+ * carries the name as screen-reader text. */
+const label = computed(() =>
+  props.direction === 'back' ? t('wm.nav.backList') : t('wm.nav.forwardList'),
+)
+
 const items = computed(() => {
   const history = wm.historyOf(props.tabId)
   if (!history) return []
@@ -48,14 +56,11 @@ const items = computed(() => {
 <template>
   <ShadcnDropdownMenu v-model:open="open">
     <ShadcnDropdownMenuTrigger as-child>
-      <span class="pointer-events-none absolute inset-0" aria-hidden="true" />
+      <span class="pointer-events-none absolute inset-0" aria-hidden="true">
+        <span class="sr-only">{{ label }}</span>
+      </span>
     </ShadcnDropdownMenuTrigger>
-    <ShadcnDropdownMenuContent
-      align="start"
-      :aria-label="
-        direction === 'back' ? t('wm.nav.backList') : t('wm.nav.forwardList')
-      "
-    >
+    <ShadcnDropdownMenuContent align="start">
       <ShadcnDropdownMenuItem
         v-for="item in items"
         :key="item.steps"
