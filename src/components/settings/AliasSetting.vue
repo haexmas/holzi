@@ -67,12 +67,6 @@ async function commitAsync() {
 
 <template>
   <section class="flex flex-col gap-3">
-    <h2 class="text-xl font-semibold">
-      {{ t('settings.alias.title') }}
-    </h2>
-    <p class="text-sm text-muted-foreground">
-      {{ t('settings.alias.description') }}
-    </p>
     <label class="flex flex-col gap-1">
       <span class="text-sm font-medium">{{ t('settings.alias.label') }}</span>
       <input

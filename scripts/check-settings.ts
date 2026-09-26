@@ -80,7 +80,6 @@ test('locations have unique ids and patterns, a category, and titles', () => {
   for (const location of SETTINGS_LOCATIONS) {
     assert.ok(categoryIds.has(location.category), location.id)
     assert.ok(location.titleKey.length > 0, location.id)
-    assert.ok(location.descriptionKey.length > 0, location.id)
     if (location.parent) {
       const parent = SETTINGS_LOCATIONS.find(
         (candidate) => candidate.id === location.parent,
@@ -88,8 +87,10 @@ test('locations have unique ids and patterns, a category, and titles', () => {
       assert.ok(parent, `${location.id} → ${location.parent}`)
       assert.equal(parent.category, location.category, location.id)
     }
-    if (location.overviewRow)
+    if (location.overviewRow) {
       assert.ok(location.icon?.startsWith('lucide:'), location.id)
+      assert.ok(location.descriptionKey, location.id)
+    }
   }
 })
 
@@ -141,14 +142,12 @@ test('categoryOf maps every location to its category', () => {
 
 test('every registry text exists in German and English (FR-020)', () => {
   const keys = [
-    ...SETTINGS_CATEGORIES.flatMap((category) => [
-      category.titleKey,
-      category.descriptionKey,
-    ]),
-    ...SETTINGS_LOCATIONS.flatMap((location) => [
-      location.titleKey,
-      location.descriptionKey,
-    ]),
+    ...SETTINGS_CATEGORIES.map((category) => category.titleKey),
+    ...SETTINGS_LOCATIONS.flatMap((location) =>
+      location.descriptionKey
+        ? [location.titleKey, location.descriptionKey]
+        : [location.titleKey],
+    ),
     'settings.back',
   ]
   for (const locale of ['de', 'en'] as const) {

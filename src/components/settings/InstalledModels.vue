@@ -181,7 +181,7 @@ onMounted(async () => {
     <div
       v-for="model in installed"
       :key="model.id"
-      class="relative flex flex-col gap-1 overflow-hidden rounded-md border border-border p-3"
+      class="relative flex flex-col gap-1 overflow-hidden border-b border-border px-3 py-3 last:border-b-0"
     >
       <ModelsDownloadBar :model-id="model.id" />
       <div class="relative z-10 flex flex-col gap-1">

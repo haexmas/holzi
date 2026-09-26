@@ -16,7 +16,7 @@ const router = useTabRouter()
 <template>
   <button
     type="button"
-    class="flex w-full items-center gap-4 px-4 py-3 text-left hover:bg-accent hover:text-accent-foreground"
+    class="flex w-full items-center gap-4 rounded-md px-3 py-3 text-left hover:bg-accent hover:text-accent-foreground"
     @click="router.push(to)"
   >
     <Icon :name="icon" class="size-5 shrink-0 text-primary" />

@@ -14,7 +14,6 @@ export type SettingsCategory = {
   path: string
   icon: string
   titleKey: string
-  descriptionKey: string
 }
 
 export type SettingsLocation = {
@@ -28,7 +27,9 @@ export type SettingsLocation = {
   icon?: string
   /** Title in the header and the history list; may use the route params. */
   titleKey: string
-  descriptionKey: string
+  /** One line under the title where the location appears as a row (overview, search entry). The
+   * header shows no description (operator decision 2026-09-26). */
+  descriptionKey?: string
   overviewRow: boolean
 }
 
@@ -42,7 +43,6 @@ function category(
     path,
     icon,
     titleKey: `settings.categories.${id}.title`,
-    descriptionKey: `settings.categories.${id}.description`,
   }
 }
 
@@ -61,7 +61,6 @@ function categoryLocation(id: SettingsCategoryId): SettingsLocation {
     pattern: SETTINGS_CATEGORIES.find((c) => c.id === id)!.path.slice(1),
     category: id,
     titleKey: `settings.categories.${id}.title`,
-    descriptionKey: `settings.categories.${id}.description`,
     overviewRow: false,
   }
 }
@@ -70,8 +69,9 @@ function subView(
   id: string,
   pattern: string,
   parent: string,
-  options: { icon?: string; overviewRow?: boolean } = {},
+  options: { icon?: string; overviewRow?: boolean; row?: boolean } = {},
 ): SettingsLocation {
+  const shownAsRow = (options.overviewRow ?? false) || (options.row ?? false)
   return {
     id,
     pattern,
@@ -79,7 +79,9 @@ function subView(
     parent,
     icon: options.icon,
     titleKey: `settings.locations.${id}.title`,
-    descriptionKey: `settings.locations.${id}.description`,
+    descriptionKey: shownAsRow
+      ? `settings.locations.${id}.description`
+      : undefined,
     overviewRow: options.overviewRow ?? false,
   }
 }
@@ -105,6 +107,7 @@ export const SETTINGS_LOCATIONS: readonly SettingsLocation[] = [
     'models.download.search',
     'models/download/search',
     'models.download',
+    { icon: 'lucide:search', row: true },
   ),
   subView(
     'models.download.repo',

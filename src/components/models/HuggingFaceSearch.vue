@@ -221,11 +221,10 @@ onMounted(() => {
 
     <div
       v-if="results.length > 0"
-      class="flex flex-wrap items-end gap-3 rounded-md border border-border p-3"
+      class="flex flex-wrap items-end gap-3"
+      :aria-label="t('models.search.filters.title')"
+      role="group"
     >
-      <span class="w-full text-sm font-medium">
-        {{ t('models.search.filters.title') }}
-      </span>
       <label class="flex flex-col gap-1 text-xs">
         <span>{{ t('models.search.filters.quantization') }}</span>
         <select
@@ -290,7 +289,10 @@ onMounted(() => {
       {{ t('models.search.filters.empty') }}
     </p>
 
-    <div v-if="filteredResults.length > 0" class="flex flex-col gap-2">
+    <div
+      v-if="filteredResults.length > 0"
+      class="flex flex-col divide-y divide-border"
+    >
       <ModelsHuggingFaceResult
         v-for="result in filteredResults"
         :key="result.repoId"

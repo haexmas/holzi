@@ -16,15 +16,13 @@ const rows = computed(() => {
 </script>
 
 <template>
-  <ul
-    class="flex flex-col divide-y divide-border overflow-hidden rounded-lg border border-border"
-  >
+  <ul class="flex flex-col divide-y divide-border">
     <li v-for="row in rows" :key="row.id">
       <SettingsOverviewRow
         :to="locationPath(row)"
         :icon="row.icon ?? ''"
         :title="t(row.titleKey)"
-        :description="t(row.descriptionKey)"
+        :description="row.descriptionKey ? t(row.descriptionKey) : ''"
         :data-testid="`settings-row-${row.id}`"
       />
     </li>

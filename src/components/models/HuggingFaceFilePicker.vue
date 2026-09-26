@@ -139,10 +139,6 @@ onMounted(loadDetailsAsync)
 
 <template>
   <section class="flex flex-col gap-3">
-    <h2 class="text-base font-medium">
-      {{ t('models.filePicker.title') }}
-    </h2>
-
     <p
       v-if="loadingDetails"
       class="text-sm text-muted-foreground"
@@ -166,16 +162,19 @@ onMounted(loadDetailsAsync)
       {{ t('models.search.filters.empty') }}
     </p>
 
-    <div v-if="details && visibleFiles.length > 0" class="flex flex-col gap-2">
+    <div
+      v-if="details && visibleFiles.length > 0"
+      class="flex flex-col divide-y divide-border"
+    >
       <button
         v-for="file in visibleFiles"
         :key="file.filename"
         type="button"
-        class="flex flex-col gap-1 rounded-md border p-3 text-left focus:outline-none focus:ring-2 focus:ring-ring"
+        class="flex flex-col gap-1 rounded-md px-3 py-3 text-left focus:outline-none focus:ring-2 focus:ring-ring"
         :class="
           selectedFile?.filename === file.filename
-            ? 'border-primary'
-            : 'border-border hover:border-primary'
+            ? 'bg-primary/10'
+            : 'hover:bg-accent hover:text-accent-foreground'
         "
         @click="selectFileAsync(file)"
       >
@@ -203,7 +202,7 @@ onMounted(loadDetailsAsync)
 
     <div
       v-if="selectedFile"
-      class="relative flex flex-col gap-3 overflow-hidden rounded-md border border-border p-3"
+      class="relative flex flex-col gap-3 overflow-hidden border-t border-border px-3 pt-3"
     >
       <ModelsDownloadBar v-if="preview" :model-id="downloadModelId" />
       <div class="relative z-10 flex flex-col gap-3">

@@ -69,12 +69,9 @@ onMounted(reloadAsync)
 
 <template>
   <section class="flex flex-col gap-3">
-    <h2 id="session-restore-title" class="text-xl font-semibold">
+    <span id="session-restore-title" class="text-sm font-medium">
       {{ t('settings.sessionRestore.title') }}
-    </h2>
-    <p class="text-sm text-muted-foreground">
-      {{ t('settings.sessionRestore.description') }}
-    </p>
+    </span>
 
     <p v-if="loadError" class="text-sm text-destructive" role="alert">
       {{ t('errors.prefLoadFailed') }}: {{ loadError }}

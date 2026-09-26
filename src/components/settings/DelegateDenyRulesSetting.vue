@@ -81,10 +81,6 @@ onMounted(reloadAsync)
 
 <template>
   <section class="flex flex-col gap-3">
-    <p class="text-sm text-muted-foreground">
-      {{ t('settings.denyRules.description') }}
-    </p>
-
     <div v-if="loading" class="text-sm text-muted-foreground">
       {{ t('onboarding.wizard.loadingDeviceInfo') }}
     </div>

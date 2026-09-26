@@ -271,15 +271,12 @@
   },
   "settings": {
     "alias": {
-      "title": "Device name",
-      "description": "What should this device be called in the vault? The name shows up in settings and can be changed any time.",
       "label": "Device name",
       "saved": "Saved.",
       "required": "Please enter a name."
     },
     "sessionRestore": {
       "title": "Restore session",
-      "description": "Saves which workspaces, windows and tabs are open, with each tab's back/forward history, and restores them the next time the vault opens. The saved session stays on this device and is not synced to other devices. \"Off\" deletes it at once.",
       "choice": {
         "off": "Off",
         "device": "Only on this device",
@@ -289,8 +286,6 @@
       "failed": "The setting could not be changed"
     },
     "default": {
-      "title": "Default model",
-      "description": "Pick the model that loads automatically when this vault opens — as a device default for this device only or as a vault-wide default for every device on this vault.",
       "modelGroup": {
         "local": "Local models"
       },
@@ -303,8 +298,6 @@
       "unknownModel": "{id} (no longer available)"
     },
     "sttModel": {
-      "title": "Speech-to-text model",
-      "description": "Pick which local model is used for dictation on this device.",
       "modelLabel": "Model",
       "saved": "Switched.",
       "downloading": "Downloading…",
@@ -315,8 +308,6 @@
       "downloadAndUse": "Download and use"
     },
     "cliDelegate": {
-      "title": "Connect a subscription",
-      "description": "Use your existing Claude Code or Codex subscription as a chat backend — no API key needed. Connecting works once per vault and follows the vault everywhere it's opened.",
       "connect": "Connect",
       "reconnect": "Reconnect",
       "connected": "Connected",
@@ -334,8 +325,6 @@
       "refreshFailed": "Could not refresh models"
     },
     "autonomyMode": {
-      "title": "Delegate autonomy",
-      "description": "Sets how much freedom a connected delegate (Claude Code or Codex) gets by default when executing tools. Only applies once a delegate is connected, and for this device.",
       "standardDescription": "Tool calls go through the same approval rule as every other model (Manual/Auto/Plan, adjustable in chat).",
       "ungatedDescription": "The delegate runs fully on its own, using its own native full-autonomy mechanism — Holzi does not intervene or ask.",
       "gated_permissiveDescription": "The delegate can act freely, but the deny rules set below stay off-limits — no prompts, every action is logged.",
@@ -344,8 +333,6 @@
       "loadFailed": "Failed to load the autonomy default."
     },
     "denyRules": {
-      "title": "Delegate deny rules",
-      "description": "Actions that stay off-limits for a connected delegate even under an otherwise autonomous mode — applies to this device.",
       "workspace_escape": "Workspace escape",
       "workspace_escapeDescription": "Block file access outside the invocation's own workspace.",
       "network_access": "Network access",
@@ -359,24 +346,19 @@
     "back": "Back to {title}",
     "categories": {
       "general": {
-        "title": "General",
-        "description": "This device's name and what is restored when the vault opens."
+        "title": "General"
       },
       "appearance": {
-        "title": "Appearance",
-        "description": "holzi's color scheme."
+        "title": "Appearance"
       },
       "models": {
-        "title": "Models",
-        "description": "Choose, download and manage local models for chat and voice input."
+        "title": "Models"
       },
       "agents": {
-        "title": "Agents",
-        "description": "Connect Claude Code and Codex and decide what they may do without asking."
+        "title": "Agents"
       },
       "federation": {
-        "title": "Federation",
-        "description": "The devices that use this vault."
+        "title": "Federation"
       }
     },
     "locations": {
@@ -397,8 +379,7 @@
             "description": "Find GGUF models on HuggingFace."
           },
           "repo": {
-            "title": "{owner}/{name}",
-            "description": "Choose a file of this model to download."
+            "title": "{owner}/{name}"
           }
         },
         "speech": {
@@ -465,7 +446,6 @@
       "noGgufFiles": "No installable GGUF files in this repository."
     },
     "filePicker": {
-      "title": "Select a file",
       "size": "Size",
       "sizeUnknown": "unknown",
       "quantization": "Quantization",

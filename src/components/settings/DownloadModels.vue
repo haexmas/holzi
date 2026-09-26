@@ -61,8 +61,8 @@ onMounted(reloadAsync)
 </script>
 
 <template>
-  <section class="flex flex-col gap-4">
-    <div class="overflow-hidden rounded-lg border border-border">
+  <section class="flex flex-col gap-2">
+    <div class="border-b border-border pb-2">
       <SettingsOverviewRow
         to="/models/download/search"
         icon="lucide:search"
@@ -75,13 +75,13 @@ onMounted(reloadAsync)
     </div>
 
     <template v-if="otherDownloads.length > 0">
-      <h2 class="text-base font-medium">
+      <span class="text-xs font-medium text-muted-foreground uppercase">
         {{ t('settings.downloadModels.running') }}
-      </h2>
+      </span>
       <div
         v-for="id in otherDownloads"
         :key="id"
-        class="relative flex flex-col overflow-hidden rounded-md border border-border p-3"
+        class="relative flex flex-col overflow-hidden border-b border-border px-3 py-3"
       >
         <ModelsDownloadBar :model-id="id" />
         <span class="relative z-10 font-mono text-sm">{{ id }}</span>
@@ -89,9 +89,12 @@ onMounted(reloadAsync)
       </div>
     </template>
 
-    <h2 class="text-base font-medium">
+    <span
+      v-if="otherDownloads.length > 0"
+      class="text-xs font-medium text-muted-foreground uppercase"
+    >
       {{ t('settings.downloadModels.recommended') }}
-    </h2>
+    </span>
 
     <p v-if="errorKey" class="text-sm text-destructive" role="alert">
       {{ t(errorKey) }}
@@ -104,7 +107,7 @@ onMounted(reloadAsync)
     <div
       v-for="entry in catalogEntries"
       :key="entry.id"
-      class="relative flex items-center justify-between gap-2 overflow-hidden rounded-md border border-border p-3"
+      class="relative flex items-center justify-between gap-2 overflow-hidden border-b border-border px-3 py-3 last:border-b-0"
     >
       <ModelsDownloadBar :model-id="entry.id" />
       <div class="relative z-10 flex flex-col">
