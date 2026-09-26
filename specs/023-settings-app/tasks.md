@@ -230,6 +230,7 @@ description: 'Task list for spec 023-settings-app'
 - [x] T068 haex-ui: readable unchecked switch in dark mode (upstream in haex-space/haextension), then bump the pin in `nuxt.config.ts`
   - 2026-09-26: haex-space/haextension#61 open (unchecked thumb `bg-foreground`, track `bg-input/80` in dark mode, as in shadcn-vue); the pin bump follows the merge.
   - Done 2026-09-26: merged as `e380e18`, pin in `nuxt.config.ts` bumped.
+- [ ] T069 haex-ui: visible unchecked switch track (the knob was readable after T068, the track still vanished on the muted card): haex-space/haextension#62 with `bg-muted-foreground/35`, then bump the pin
 - [ ] T066 Operator: run quickstart S20, S21 and S22
 
 ---
