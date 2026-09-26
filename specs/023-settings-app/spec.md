@@ -449,7 +449,8 @@ einer bestimmten Breite verschwindet die Seitenleiste, das Symbol in der Werkzeu
   (Spec 022 FR-004).
 - **FR-024**: Einstellungen MÜSSEN für die Vault gelten, auf jedem Gerät
   gleich: Farbschema, Sitzung wiederherstellen (ein oder aus), Autonomie für
-  Delegaten, Verbotsregeln und die Aufwandsstufe je Modell. Eine Wahl zwischen
+  Delegaten, Verbotsregeln, Berechtigungsmodus des Chats und die Aufwandsstufe
+  je Modell. Eine Wahl zwischen
   „Dieses Gerät“ und „Alle Geräte“ DARF es nicht geben. Nur für dieses Gerät
   gelten Gerätename, Standard-Modell und Spracherkennungsmodell. Werte, die
   frühere Versionen für ein Gerät bzw. für die Vault gespeichert haben, werden

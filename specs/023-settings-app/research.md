@@ -359,7 +359,9 @@ gelten für dieses Gerät. Umsetzung:
   nur den Vault-Wert (`{ enabled }` statt Scope und Zustand je Scope);
   ausgeschaltet löscht es die gespeicherte Sitzung dieses Geräts wie bisher,
   andere Geräte löschen ihre beim nächsten Laden (Spec 022 FR-008).
-- Verbotsregeln: `autonomy::get_deny_rules` liest den Vault-Wert.
+- Verbotsregeln: `autonomy::get_deny_rules` liest den Vault-Wert (ohne Geräte-Parameter).
+- Berechtigungsmodus des Chats (`chat.permission_mode`, Manuell/Auto/Plan): Backend (`approval_bridge.rs`, `tool_round.rs`) und Frontend lesen und schreiben den Vault-Wert.
+- Zuletzt genutztes Modell (`chat.last_active_model_id`) bleibt pro Gerät wie das Standard-Modell.
 - Autonomie und Aufwandsstufe: das Frontend liest und schreibt den Vault-Wert.
 - Farbschema: nur der Vault-Wert; `clearColorScheme` entfällt.
 - Standard-Modell: die Aktionen schreiben nur für dieses Gerät;

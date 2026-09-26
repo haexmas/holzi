@@ -213,12 +213,18 @@ description: 'Task list for spec 023-settings-app'
 
 **Independent Test**: quickstart S20, S21.
 
-- [ ] T060 Rust: `fold_scoped_preferences` in `src-tauri/src/storage/maintenance.rs` (called from `run_after_open`) with tests in `maintenance_tests.rs`: device value → vault for `appearance.color_scheme`, `wm.session_restore`, `chat.autonomy_mode`, `cli_delegate.deny_rules`, `chat.reasoning_option.*` when the vault has none, then the device value is deleted; the vault value of `chat.default_model_id` → this device when it has none, then deleted; idempotent
-- [ ] T061 Rust: session restore vault-only in `src-tauri/src/storage/wm_session_commands.rs` (`{ enabled }`), tests in `wm_session_commands_tests.rs`; `autonomy::get_deny_rules` reads the vault value; `cargo fmt --check`, `lint:rust`, `cargo test` green
-- [ ] T062 Frontend: `useWmSession`, `lib/wm/sessionSync.ts`, the window manager store and their checks follow `{ enabled }`; `SessionRestoreSetting.vue` becomes one switch row
-- [ ] T063 Frontend: actions without `scope` (contracts §3), handlers, `settings.get`; `useColorScheme` vault-only with `color-scheme` on `<html>`; autonomy (`AutonomyModeSetting.vue`, `useChatPermissionMode.ts`), deny rules and reasoning preference (`useReasoningPreference.ts`) read and write the vault value; default model device-only (`DefaultModelSetting.vue` one select)
-- [ ] T064 Frontend: controls from haex-ui in every settings view (`ShadcnSelect`, `ShadcnInput`, `ShadcnSwitch`, `ShadcnCheckbox`); native radio buttons keep the scheme through `color-scheme`
-- [ ] T065 Notes in specs 002, 009, 011/012 and 022 next to the scope requirements: settings apply to the vault since spec 023 (FR-024)
+- [x] T060 Rust: `fold_scoped_preferences` in `src-tauri/src/storage/maintenance.rs` (called from `run_after_open`) with tests in `maintenance_tests.rs`: device value → vault for `appearance.color_scheme`, `wm.session_restore`, `chat.autonomy_mode`, `cli_delegate.deny_rules`, `chat.reasoning_option.*` when the vault has none, then the device value is deleted; the vault value of `chat.default_model_id` → this device when it has none, then deleted; idempotent
+  - Done 2026-09-26; `chat.permission_mode` joined the vault keys (found in `approval_bridge.rs`/`tool_round.rs`). Four new tests.
+- [x] T061 Rust: session restore vault-only in `src-tauri/src/storage/wm_session_commands.rs` (`{ enabled }`), tests in `wm_session_commands_tests.rs`; `autonomy::get_deny_rules` reads the vault value; `cargo fmt --check`, `lint:rust`, `cargo test` green
+  - Done 2026-09-26; `ScopedBool`/`get_scoped_bool` removed, `get_deny_rules` lost its device parameter, `chat.permission_mode` read from the vault. 571 Rust tests, fmt and clippy (both feature sets) green; one unrelated presence test is flaky and passed on rerun.
+- [x] T062 Frontend: `useWmSession`, `lib/wm/sessionSync.ts`, the window manager store and their checks follow `{ enabled }`; `SessionRestoreSetting.vue` becomes one switch row
+  - Done 2026-09-26; `SessionRestoreSetting.vue` is one `ShadcnSwitch` row with a one-line description.
+- [x] T063 Frontend: actions without `scope` (contracts §3), handlers, `settings.get`; `useColorScheme` vault-only with `color-scheme` on `<html>`; autonomy (`AutonomyModeSetting.vue`, `useChatPermissionMode.ts`), deny rules and reasoning preference (`useReasoningPreference.ts`) read and write the vault value; default model device-only (`DefaultModelSetting.vue` one select)
+  - Done 2026-09-26; `settings.sessionRestore.clear` and `settings.appearance.clearColorScheme` removed; `useChatPermissionMode` reads permission and autonomy mode from the vault.
+- [x] T064 Frontend: controls from haex-ui in every settings view (`ShadcnSelect`, `ShadcnInput`, `ShadcnSwitch`, `ShadcnCheckbox`); native radio buttons keep the scheme through `color-scheme`
+  - Done 2026-09-26 with `src/components/settings/Select.vue` (`SettingsSelect`; reka items cannot carry an empty value, so "Keins" travels as a sentinel); also the HuggingFace filters, the code input of "Abo verbinden" and the too-big confirmation in the file picker.
+- [x] T065 Notes in specs 002, 009, 011/012 and 022 next to the scope requirements: settings apply to the vault since spec 023 (FR-024)
+  - Done 2026-09-26: notes in specs 002 (FR-012), 009 (FR-014), 012 (effort preferences) and 022 (FR-002); 011 has no scope statement of its own.
 - [ ] T066 Operator: run quickstart S20 and S21
 
 ---

@@ -66,6 +66,7 @@ Betriebssystem dunkel meldet.
 | `appearance.color_scheme`    | `vault`                 | Gerätewert → Vault, wenn die Vault keinen hat |
 | `wm.session_restore`         | `vault`                 | Gerätewert → Vault, wenn die Vault keinen hat |
 | `chat.autonomy_mode`         | `vault`                 | Gerätewert → Vault, wenn die Vault keinen hat |
+| `chat.permission_mode`       | `vault`                 | Gerätewert → Vault, wenn die Vault keinen hat |
 | `cli_delegate.deny_rules`    | `vault`                 | Gerätewert → Vault, wenn die Vault keinen hat |
 | `chat.reasoning_option.<id>` | `vault`                 | Gerätewert → Vault, wenn die Vault keinen hat |
 | `chat.default_model_id`      | `device`                | Vault-Wert → dieses Gerät, wenn es keinen hat |
