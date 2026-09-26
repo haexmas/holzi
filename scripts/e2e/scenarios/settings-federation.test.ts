@@ -3,6 +3,7 @@ import { scenario } from '../lib/scenario.ts'
 import { createAndUnlock } from '../lib/flows.ts'
 import {
   KEY,
+  clearAlias,
   openSettings,
   runAction,
   waitForLocation,
@@ -28,11 +29,7 @@ scenario('settings-federation', {}, async (ctx) => {
   await openSettings(instance)
 
   const renamed = 'E2E Föderation'
-  await instance.waitForDisplayed('settings-alias')
-  const length = await instance.exec<number>(
-    'return document.querySelector(\'[data-testid="settings-alias"]\').value.length',
-  )
-  await instance.type('settings-alias', KEY.backspace.repeat(length))
+  await clearAlias(instance)
   await instance.type('settings-alias', renamed)
   await instance.type('settings-alias', KEY.enter)
   await ctx.waitFor('the name to be saved', () =>

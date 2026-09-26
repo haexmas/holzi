@@ -2,7 +2,12 @@ import assert from 'node:assert/strict'
 import { scenario } from '../lib/scenario.ts'
 import { createAndUnlock } from '../lib/flows.ts'
 import type { InvokeResult } from '../lib/webdriver.ts'
-import { KEY, openSettings, waitForLocation } from '../lib/settings.ts'
+import {
+  KEY,
+  clearAlias,
+  openSettings,
+  waitForLocation,
+} from '../lib/settings.ts'
 
 function data<T>(result: InvokeResult): T {
   if (!('ok' in result) || !result.ok) {
@@ -34,16 +39,8 @@ scenario('settings-save-on-selection', {}, async (ctx) => {
   )
   assert.equal(buttons, 0, 'the settings show a save button')
 
-  // Emptied with Backspace, the way a person does it, so the field's own input handling runs.
-  const clearAlias = async () => {
-    const length = await instance.exec<number>(
-      'return document.querySelector(\'[data-testid="settings-alias"]\').value.length',
-    )
-    await instance.type('settings-alias', KEY.backspace.repeat(length))
-  }
   const renamed = 'E2E Zweitgerät'
-  await instance.waitForDisplayed('settings-alias')
-  await clearAlias()
+  await clearAlias(instance)
   await instance.type('settings-alias', renamed)
   await instance.type('settings-alias', KEY.enter)
   await ctx.waitFor(
@@ -55,7 +52,7 @@ scenario('settings-save-on-selection', {}, async (ctx) => {
       'return document.querySelector(\'ul:has([data-testid="settings-alias"]) [role="status"]\') !== null',
     ),
   )
-  await clearAlias()
+  await clearAlias(instance)
   await instance.type('settings-alias', KEY.enter)
   await instance.waitForDisplayed(
     '[data-testid="settings-alias"][aria-invalid="true"]',

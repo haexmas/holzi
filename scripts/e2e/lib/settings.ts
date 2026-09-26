@@ -142,6 +142,35 @@ export const KEY = {
 } as const
 
 /**
+ * Empties the device name field with Backspace, the way a person does it, once it shows the stored
+ * name: the field fills in after the view mounts, and clearing it earlier would leave the name in.
+ */
+export async function clearAlias(instance: FlowInstance): Promise<void> {
+  await instance.waitForDisplayed('settings-alias')
+  const end = Date.now() + 5000
+  for (;;) {
+    const info = await instance.invoke('current_device_info')
+    const stored =
+      'ok' in info && info.ok
+        ? ((info.data as { alias: string | null }).alias ?? '')
+        : null
+    const shown = await instance.exec<string>(
+      'return document.querySelector(\'[data-testid="settings-alias"]\').value',
+    )
+    if (stored !== null && shown === stored) {
+      await instance.type('settings-alias', KEY.backspace.repeat(shown.length))
+      return
+    }
+    if (Date.now() >= end) {
+      throw new Error(
+        `the name field shows ${JSON.stringify(shown)}, the stored name is ${JSON.stringify(stored)}`,
+      )
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+}
+
+/**
  * WCAG contrast ratio of an element's text against what is behind it, both composited on a canvas so
  * any CSS colour syntax (oklch included) and translucent layers count as painted (FR-013, S20).
  */
