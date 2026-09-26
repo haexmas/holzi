@@ -347,15 +347,15 @@ abgelehnt).
 - **Angepasst `scripts/check-vault-lifecycle.ts`**: Föderations-Tests entfallen.
 - **Regression**: `check:wm-state`, `check:wm-navigation`, `check:chat-state`,
   `typecheck`, `lint`, `format:check`, e2e-Suite.
-- **End-to-End (Nachtrag 2026-09-27, SC-007)**: sieben Szenarien
+- **End-to-End (Nachtrag 2026-09-27, SC-007)**: acht Szenarien
   `scripts/e2e/scenarios/settings-*.test.ts` gegen die gebaute App unter Xvfb
   (Spec 016), Zuordnung in [quickstart.md](./quickstart.md). Helfer in
   `scripts/e2e/lib/settings.ts`: Ort über `data-location` am Titel, Aktionen
   über den Aktionskatalog der Seite (`$pinia` am Vue-App-Objekt von
   `#__nuxt`), Kontrast nach WCAG über eine Leinwand gemischt, damit `oklch`
   und durchscheinende Ebenen so zählen, wie sie gemalt werden. Suchbegriffe
-  sind deutsch, die Standardsprache. Nicht automatisiert: S13a (braucht
-  T042–T048 und ein zweites Gerät), S14, S16 (Download aus dem Netz), S18
+  sind deutsch, die Standardsprache. Nicht automatisiert: der Teil von S13a mit
+  einer zweiten Installation, S14, S16 (Download aus dem Netz), S18
   (Zeitmessung), die Übernahme alter Gerätewerte in S21 (Rust-Tests in
   `maintenance_tests.rs`).
 - **Symbole ohne Netz (Nachtrag 2026-09-27)**: Die E2E-Läufe zeigten die

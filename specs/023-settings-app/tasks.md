@@ -178,22 +178,24 @@ description: 'Task list for spec 023-settings-app'
 
 ### Tests first
 
-- [ ] T042 [P] [US5] Create `src-tauri/src/storage/known_devices_tests.rs` (declared in `src-tauri/src/storage/mod.rs` like `maintenance_tests`; real vault like `maintenance_tests.rs`): `list_devices` returns this installation's row, skips the `VAULT_SCOPE_UUID` row, returns a second inserted device with `alias = NULL` as `None`
-- [ ] T043 [P] [US5] Create `src-tauri/src/device/commands_tests.rs` (declared via `#[cfg(test)] #[path]` in `src-tauri/src/device/mod.rs`): the pure ordering helper puts the current device first, then the others by name case-insensitively, unnamed devices last, and marks exactly one `is_current`
+- [x] T042 [P] [US5] Create `src-tauri/src/storage/known_devices_tests.rs` (declared in `src-tauri/src/storage/mod.rs` like `maintenance_tests`; real vault like `maintenance_tests.rs`): `list_devices` returns this installation's row, skips the `VAULT_SCOPE_UUID` row, returns a second inserted device with `alias = NULL` as `None`
+- [x] T043 [P] [US5] Create `src-tauri/src/device/commands_tests.rs` (declared via `#[cfg(test)] #[path]` in `src-tauri/src/device/mod.rs`): the pure ordering helper puts the current device first, then the others by name case-insensitively, unnamed devices last, and marks exactly one `is_current`
 - [x] T044 [P] [US5] Add `resolveAppAlias` tests to `scripts/check-settings.ts`: `system.federation` → `{ appId: 'system.settings', at: '/federation' }`; `system.chat` → `{ appId: 'system.chat', at: null }`; `system.federation` is not in `WM_APPS`
 
 ### Implementation
 
-- [ ] T045 [US5] Implement `list_devices(conn)` in `src-tauri/src/storage/known_devices.rs` (research R12); make T042 pass
-- [ ] T046 [US5] Implement the command `list_vault_devices` and `VaultDevicePayload { vault_device_uuid, alias, is_current }` (serde camelCase) with the ordering helper in `src-tauri/src/device/commands.rs`, register it in `src-tauri/src/lib.rs`; make T043 pass; `cargo fmt --check`, `lint:rust`, `cargo test` green
-- [ ] T047 [US5] Add `VaultDevice` and `listVaultDevicesAsync()` to `src/composables/useDevice.ts`; add the read action `settings.devices.list` (scope `settings.read`, effect `read`) to `settingsActions.ts` with a handler that omits a `null` alias; i18n `actions.settings.devices.list`
-- [ ] T048 [US5] Create `src/components/settings/FederationView.vue`: one row per device with name or "Unbenanntes Gerät" and the mark "Dieses Gerät", loaded when the category opens; i18n `settings.federation.*`
+- [x] T045 [US5] Implement `list_devices(conn)` in `src-tauri/src/storage/known_devices.rs` (research R12); make T042 pass
+- [x] T046 [US5] Implement the command `list_vault_devices` and `VaultDevicePayload { vault_device_uuid, alias, is_current }` (serde camelCase) with the ordering helper in `src-tauri/src/device/commands.rs`, register it in `src-tauri/src/lib.rs`; make T043 pass; `cargo fmt --check`, `lint:rust`, `cargo test` green
+- [x] T047 [US5] Add `VaultDevice` and `listVaultDevicesAsync()` to `src/composables/useDevice.ts`; add the read action `settings.devices.list` (scope `settings.read`, effect `read`) to `settingsActions.ts` with a handler that omits a `null` alias; i18n `actions.settings.devices.list`
+- [x] T048 [US5] Create `src/components/settings/FederationView.vue`: one row per device with name or "Unbenanntes Gerät" and the mark "Dieses Gerät", loaded when the category opens; i18n `settings.federation.*`
+  - Done 2026-09-27 with T042–T047: `KnownDevice` and `list_devices` in `known_devices.rs`, `VaultDevicePayload`, `order_vault_devices` and `list_vault_devices` in `device/commands.rs` (tests in `commands_tests.rs` via `#[path]` next to the command, like other modules); five new Rust tests. The action `settings.devices.list` returns `{ devices }`. E2E scenario `settings-federation` (T074).
 - [x] T049 [US5] Add `LEGACY_APP_ALIASES` and `resolveAppAlias` to `src/lib/wm/apps.ts` and remove `system.federation` from `WM_APPS`; resolve the alias before `knownApp` in `wm.app.open` and `wm.tab.new` in `src/stores/wmActionHandlers.ts` (an input `at` wins over the alias `at`); make T044 pass
 - [x] T050 [US5] Remove the federation entry from `src/components/wm/appRoutes.ts`, delete `src/components/apps/FederationApp.vue`, its two tests in `scripts/check-vault-lifecycle.ts` and the i18n key `wm.apps.federation`; point `src/pages/federation/[instance].vue` at `?open=system.settings&at=/federation`
 - [x] T051 [P] [US5] Add a note to `specs/015-workspace-shell/spec.md` next to FR-003/FR-004: the federation app is replaced by the settings category "Föderation" (spec 023)
   - Done 2026-09-26 ahead of T042–T048 on operator request (the launcher still listed the federation app); the category stays empty until T048.
 - [ ] T052 [US5] Operator: run quickstart S13, S13a and S14
   - 2026-09-27: S13 confirmed (no federation app in the launcher); S13a waits for T042–T048, S14 is optional.
+  - 2026-09-27: S13a without a second installation runs as `settings-federation`; the part with a copied vault on a second installation and S14 stay open for the operator.
 
 ---
 
@@ -256,6 +258,10 @@ description: 'Task list for spec 023-settings-app'
   - Done 2026-09-27: all seven pass, the full suite 14 passed, 1 skipped (`relaunch-after-lock`, needs a relaunching build). The dark off switch's track measures 1.88:1 against its card; the scenario guards ≥ 1.5 (below the WCAG 3:1 for components — accepted by the operator after haex-space/haextension#62).
 - [x] T071 Deep link while the workspace is mounted (FR-011): `pages/workspace/[instance].vue` watches `route.query.open` once the session is restored
   - Done 2026-09-27; covered by `settings-deep-links`.
+- [ ] T073 haex-ui: the unchecked switch track reaches 3:1 against its card (WCAG 1.4.11; it measured 1.88:1 dark, about 1.5:1 light): haex-space/haextension#63 with `muted-foreground/85` light and `/65` dark, then bump the pin and raise `settings-color-scheme` to ≥ 3 in both schemes
+  - 2026-09-27: PR open; a build against a local copy of the layer measured 3.33:1 dark and 3.30:1 light, the scenario passed with the raised threshold.
+- [x] T074 E2E scenario `scripts/e2e/scenarios/settings-federation.test.ts` for S13a without a second installation (FR-022): this device listed once, first, marked, with the name set in "Allgemein"; `settings.devices.list` returns the same; hooks `settings-device` (`data-current`) and `settings-device-current`
+  - Done 2026-09-27.
 - [x] T072 Icons named only in TypeScript are bundled (`icon.clientBundle.scan.globInclude` with `.ts` in `nuxt.config.ts`): the e2e run showed the sidebar without category icons, the app fetched them from the iconify API
   - Done 2026-09-27; `settings-categories` checks that every category has its icon without network.
 
@@ -265,8 +271,10 @@ description: 'Task list for spec 023-settings-app'
 
 - [ ] T055 [P] Add the terms "Einstellungskategorie", "Farbschema" and "Geräte der Vault" to `CONTEXT.md`
 - [ ] T056 Run the automated part of `quickstart.md` in full: `check:settings`, `check:templates`, `check:wm-state`, `check:wm-navigation`, `check:chat-state`, `check:vault-lifecycle`, `typecheck`, `typecheck:scripts`, `lint`, `format:check`, `cargo fmt --check`, `lint:rust` (both feature sets), `cargo test`, `test:e2e`; record the counts here
-- [ ] T057 Operator: run quickstart S16 and S18
-- [ ] T058 Operator: rerun the manual scenarios of the specs whose settings moved (SC-002): 002 default model and device name, 005 HuggingFace search and download, 009 autonomy mode, 010 speech model, 022 session restore S3–S7
+- [x] T057 Operator: run quickstart S16 and S18
+  - Done 2026-09-27: the operator confirmed that a download keeps running across category changes (S16) and that switching categories is smooth (S18).
+- [x] T058 Operator: rerun the manual scenarios of the specs whose settings moved (SC-002): 002 default model and device name, 005 HuggingFace search and download, 009 autonomy mode, 010 speech model, 022 session restore S3–S7
+  - Done 2026-09-27: the operator reported the tests done and working.
 - [ ] T059 After merge: refresh the graphify graph on `main` and rerun the queries from research.md (flagged there because the worktree snapshot predates the window manager work)
 
 ---

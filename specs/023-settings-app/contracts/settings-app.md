@@ -178,7 +178,9 @@ useColorScheme() → {
   `isCurrent`; dieses Gerät zuerst, dann nach Namen, Geräte ohne Namen zuletzt.
 - Liest über `known_devices::list_devices`; die Vault-Bereichszeile fehlt.
 - Frontend: `useDevice().listVaultDevicesAsync()`; der Handler von
-  `settings.devices.list` lässt `alias: null` weg.
+  `settings.devices.list` liefert `{ devices }` und lässt `alias: null` weg.
+- Rust: `known_devices::list_devices(conn) → Vec<KnownDevice>`, Reihenfolge in
+  `order_vault_devices(devices, installation)` (rein, getestet).
 
 ## 6. Download-Store (`stores/modelDownloads.ts`)
 
@@ -229,18 +231,19 @@ useColorScheme() → {
 Für die End-to-End-Szenarien `settings-*` (SC-007). Ein Hook ist ein
 `data-testid` oder ein Datenattribut mit Daten, nie mit angezeigtem Text.
 
-| Hook                                                                | Element                                             |
-| ------------------------------------------------------------------- | --------------------------------------------------- |
-| `settings-title` mit `data-location="<Ort-ID>"`                     | Titel des Rahmens; zeigt, wo die Einstellungen sind |
-| `settings-category-<id>`, `settings-category-icon`                  | Seitenleisten-Eintrag, Kategorie-Symbol im Titel    |
-| `settings-row-<Ort-ID>`, `settings-back`                            | Übersichtszeile, Pfeil im Titel                     |
-| `settings-sidebar-toggle`, `#settings-sidebar`                      | Seitenleisten-Knopf, Seitenleiste                   |
-| `settings-search-open`, `settings-search`, `settings-search-clear`  | Suche in der Werkzeugleiste                         |
-| `settings-search-hit` mit `data-location`                           | Suchtreffer                                         |
-| `[role="option"][data-value="<Wert>"]`                              | Eintrag einer `SettingsSelect`-Liste                |
-| `settings-color-scheme`, `settings-alias`, `session-restore-switch` | Farbschema, Gerätename, Sitzung                     |
-| `settings-autonomy-<Modus>`, `settings-deny-<Kategorie>`            | Autonomiemodus, Verbotsregeln                       |
-| `[data-app-id="<appId>"]`                                           | Kachel im Launcher                                  |
+| Hook                                                                | Element                                                |
+| ------------------------------------------------------------------- | ------------------------------------------------------ |
+| `settings-title` mit `data-location="<Ort-ID>"`                     | Titel des Rahmens; zeigt, wo die Einstellungen sind    |
+| `settings-category-<id>`, `settings-category-icon`                  | Seitenleisten-Eintrag, Kategorie-Symbol im Titel       |
+| `settings-row-<Ort-ID>`, `settings-back`                            | Übersichtszeile, Pfeil im Titel                        |
+| `settings-sidebar-toggle`, `#settings-sidebar`                      | Seitenleisten-Knopf, Seitenleiste                      |
+| `settings-search-open`, `settings-search`, `settings-search-clear`  | Suche in der Werkzeugleiste                            |
+| `settings-search-hit` mit `data-location`                           | Suchtreffer                                            |
+| `[role="option"][data-value="<Wert>"]`                              | Eintrag einer `SettingsSelect`-Liste                   |
+| `settings-color-scheme`, `settings-alias`, `session-restore-switch` | Farbschema, Gerätename, Sitzung                        |
+| `settings-autonomy-<Modus>`, `settings-deny-<Kategorie>`            | Autonomiemodus, Verbotsregeln                          |
+| `settings-device` mit `data-current`, `settings-device-current`     | Gerätezeile in „Föderation“, Markierung „Dieses Gerät“ |
+| `[data-app-id="<appId>"]`                                           | Kachel im Launcher                                     |
 
 Fensteraktionen (Größe, Zurück im Tab) laufen in den Szenarien über den
 Aktionskatalog der Seite (`scripts/e2e/lib/settings.ts`), wie später ein Agent.
