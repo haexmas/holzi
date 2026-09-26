@@ -8,7 +8,7 @@ eine Seitenleiste mit Kategorien, rechts der Inhalt der gewählten Kategorie mit
 Titel und Beschreibung, Übersichten mit Unteransichten. Föderation wird eine
 Kategorie der Einstellungen statt einer eigenen App, Darstellung kommt als
 Kategorie hinzu. (Präzisiert in den Clarifications: Die Föderations-App
-entfällt, ihre Kategorie folgt mit der Föderation selbst.) Referenz: haex-vault @ `8dce379d94e18fcd42c3b73686a06f984ca3f574`,
+entfällt; die Kategorie „Föderation“ zeigt die Geräte der Vault.) Referenz: haex-vault @ `8dce379d94e18fcd42c3b73686a06f984ca3f574`,
 `src/components/haex/system/settings/` und
 `src/components/haex/system/settings-layout/`.
 
@@ -38,23 +38,26 @@ entfällt, ihre Kategorie folgt mit der Föderation selbst.) Referenz: haex-vaul
   nur neu an.
 - Die geplante Spec **Befehle und Tastenkürzel** bekommt später eine eigene
   Kategorie. Die geplante Spec **Desktop-Symbole und Raster** ergänzt
-  „Darstellung“ um den Hintergrund des Arbeitsbereichs. Eine künftige Spec zur
-  **Föderation** legt die Kategorie „Föderation“ an.
+  „Darstellung“ um den Hintergrund des Arbeitsbereichs. Künftige Specs zur
+  **Föderation** erweitern die Kategorie „Föderation“.
 
 ## Clarifications
 
 ### Session 2026-09-26
 
 - Q: Was zeigt die Kategorie „Föderation“, solange holzi keine
-  Föderationsfunktionen hat? → A: Es gibt sie noch nicht. Die App „Föderation“
-  entfällt trotzdem; alte Wege dorthin führen in die Kategorie „Allgemein“. Die
-  Kategorie entsteht mit der ersten Spec, die Föderationsfunktionen bringt.
+  Föderationsfunktionen hat? → A: (ersetzt durch die Antwort beim Plan-Review
+  unten) Es gibt sie noch nicht; alte Wege führen nach „Allgemein“.
 - Q: Gehört ein Hintergrund des Arbeitsbereichs (Bild oder Farbverlauf wie in
   haex-vault) zu dieser Spec? → A: Nein. „Darstellung“ enthält hier nur das
   Farbschema; der Hintergrund kommt mit der Spec Desktop-Symbole und Raster.
 - Q: (Betreiber-Rückmeldung beim Testen von Spec 022) Brauchen Einstellungen
   einen Knopf zum Speichern? → A: Nein. Was ausgewählt ist, ist gespeichert;
   keine Einstellung hat einen Knopf zum Übernehmen (FR-021).
+- Q: (Plan-Review) Soll die Föderation doch schon jetzt eine Kategorie der
+  Einstellungen sein statt nur zu entfallen? → A: Ja. Die Kategorie
+  „Föderation“ zeigt die Geräte der Vault: dieses Gerät und alle anderen
+  bekannten Geräte mit Namen. Alte Wege zur Föderations-App führen dorthin.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -182,30 +185,36 @@ jeweils sofort, ohne Neustart.
 
 ---
 
-### User Story 5 - Keine eigene Föderations-App mehr (Priority: P2)
+### User Story 5 - Föderation in den Einstellungen (Priority: P2)
 
-Die Föderation ist keine eigene App mehr. Sie gehört künftig in die
-Einstellungen, bekommt dort aber erst eine Kategorie, wenn es
-Föderationsfunktionen gibt. Bis dahin führen alte Wege dorthin
-(Launcher-Eintrag, frühere Adresse) in die Kategorie „Allgemein“.
+Die Föderation ist keine eigene App mehr, sondern eine Kategorie der
+Einstellungen. Dort sieht der Nutzer, welche Geräte seine Vault nutzen: dieses
+Gerät und alle anderen, die die Vault schon einmal geöffnet haben, mit ihren
+Namen. Alte Wege zur Föderation (Launcher-Eintrag, frühere Adresse) führen in
+diese Kategorie.
 
-**Why this priority**: Betreiberentscheidung vom 2026-09-25. Föderation ist eine
-Konfiguration der Vault, keine Arbeitsumgebung wie der Chat. Die heutige App ist
-nur ein Platzhalter mit Sperr-Knopf, und eine Kategorie ohne Inhalt widerspricht
-FR-006.
+**Why this priority**: Betreiberentscheidungen vom 2026-09-25 und 2026-09-26.
+Föderation ist eine Konfiguration der Vault, keine Arbeitsumgebung wie der
+Chat. Die Geräteliste ist echter Inhalt (FR-006) und die Grundlage für spätere
+Föderationsfunktionen.
 
 **Independent Test**: Launcher öffnen: kein Eintrag „Föderation“ mehr. Die
 frühere Föderations-Adresse öffnen: Die Einstellungen öffnen sich in der
-Kategorie „Allgemein“.
+Kategorie „Föderation“ und listen die Geräte der Vault.
 
 **Acceptance Scenarios**:
 
 1. **Given** der Launcher, **When** der Nutzer ihn öffnet, **Then** gibt es keine
    App „Föderation“ mehr.
 2. **Given** die frühere Adresse der Föderation, **When** holzi sie öffnet,
-   **Then** erscheinen die Einstellungen in der Kategorie „Allgemein“.
-3. **Given** die Seitenleiste der Einstellungen, **When** der Nutzer sie
-   ansieht, **Then** gibt es keine Kategorie „Föderation“.
+   **Then** erscheinen die Einstellungen in der Kategorie „Föderation“.
+3. **Given** die Kategorie „Föderation“, **When** der Nutzer sie öffnet,
+   **Then** sieht er jedes Gerät der Vault einmal mit seinem Namen und dem
+   Tag, an dem es die Vault zum ersten Mal geöffnet hat; dieses Gerät steht
+   zuerst und ist als „Dieses Gerät“ markiert.
+4. **Given** ein anderes Gerät hat die Vault geöffnet und die Änderungen sind
+   synchronisiert, **When** der Nutzer die Kategorie erneut öffnet, **Then**
+   erscheint es in der Liste.
 
 ---
 
@@ -255,6 +264,8 @@ Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
   Betriebssystems.
 - Eine Kategorie hat nur einen Bereich: Sie zeigt den Inhalt direkt, ohne
   Übersicht mit einer einzigen Zeile.
+- Ein Gerät hat noch keinen Namen (Einrichtung dort nicht abgeschlossen): Die
+  Geräteliste zeigt „Unbenanntes Gerät“.
 
 ## Requirements _(mandatory)_
 
@@ -288,11 +299,12 @@ Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
   | Darstellung | Farbschema (US4)                                                                                                                                                                 |
   | Modelle     | Übersicht mit: Standardmodell; installierte Modelle mit Updates und Löschen; Modelle herunterladen (Empfehlungen und HuggingFace-Suche mit Dateiauswahl); Spracherkennungsmodell |
   | Agenten     | Übersicht mit: Anbieter verbinden; Autonomiemodus; Deny-Regeln                                                                                                                   |
+  | Föderation  | Geräte der Vault (US5)                                                                                                                                                           |
 
 - **FR-006**: Es DÜRFEN nur Kategorien erscheinen, die Inhalt haben. Kategorien
   aus haex-vault ohne Gegenstück in holzi (Erweiterungen, Kontakte, Identitäten,
   Speicher, Sicherheit, Protokolle, Entwickler und ähnliche) entfallen, bis eine
-  eigene Spec sie füllt. Das gilt auch für „Föderation“ (US5).
+  eigene Spec sie füllt.
 - **FR-007**: Jede Einstellung, die es vor dieser Spec gab, MUSS mit
   unverändertem Verhalten in genau einer Kategorie erreichbar sein.
 
@@ -336,10 +348,14 @@ Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
   Eintrag im Menü für neue Tabs, kein Öffnen als Fenster.
 - **FR-017**: Die frühere Adresse der Föderation und jeder Aufruf, der die App
   „Föderation“ öffnen will, MÜSSEN die Einstellungen in der Kategorie
-  „Allgemein“ öffnen, bis eine Spec zur Föderation eine eigene Kategorie
-  anlegt.
+  „Föderation“ öffnen.
 - **FR-018**: Der Sperr-Knopf der bisherigen Föderations-App entfällt ersatzlos;
   gesperrt wird weiter über den Chat und die künftige Tastenkürzel-Spec.
+- **FR-022**: Die Kategorie „Föderation“ MUSS die Geräte der Vault zeigen: je
+  Gerät einmal, mit Namen (oder „Unbenanntes Gerät“) und dem Tag des ersten
+  Öffnens der Vault; dieses Gerät zuerst und markiert, die übrigen nach dem
+  ersten Öffnen. Die Liste ist nur eine Anzeige. Sie MUSS auch für Agenten mit
+  Leserecht auf die Einstellungen abrufbar sein.
 
 **Allgemein**
 
@@ -369,6 +385,8 @@ Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
   HuggingFace-Suche → Ergebnis → Dateiauswahl).
 - **Farbschema**: Einstellung mit den Werten Hell, Dunkel, System; Gerätewert
   vor Vault-Wert, Standard System.
+- **Gerät der Vault**: eine Installation von holzi, die die Vault geöffnet hat;
+  Name, Tag des ersten Öffnens, ob es dieses Gerät ist.
 
 ## Success Criteria _(mandatory)_
 
@@ -389,8 +407,8 @@ Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
 
 ## Assumptions
 
-- Die Kategorie-Namen „Allgemein“, „Darstellung“, „Modelle“, „Agenten“ sind
-  Arbeitstitel; die Beschreibungen formuliert der Plan.
+- Die Kategorie-Namen „Allgemein“, „Darstellung“, „Modelle“, „Agenten“,
+  „Föderation“ sind Arbeitstitel; die Beschreibungen formuliert der Plan.
 - Der Wechsel der Kategorie ist eine Navigation im Tab wie jeder andere Klick zu
   einer neuen Ansicht (Spec 020); das entspricht auch haex-vault, wo Zurück einen
   Kategoriewechsel rückgängig macht.
@@ -398,8 +416,8 @@ Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
   weil verschiedene Geräte unterschiedliche Vorlieben nahelegen (heller
   Arbeitsplatz, dunkles Tablet).
 - Eine Akzentfarbe, die Schriftgröße und eine Sprachwahl sind nicht Teil dieser
-  Spec; haex-vault hat die ersten beiden auch nicht, die Sprache folgt weiter dem
-  System.
+  Spec; haex-vault hat die ersten beiden auch nicht. holzi zeigt die Oberfläche
+  heute immer auf Deutsch; die englischen Texte (FR-020) liegen trotzdem vor.
 - Die zu große Komponente der HuggingFace-Modellverwaltung (Complexity Tracking
   aus Spec 020) wird bei der Aufteilung in Bereiche zerlegt; das ist eine Folge
   dieser Spec, keine eigene Anforderung.
@@ -409,7 +427,9 @@ Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
 ## Nicht im Umfang
 
 - Eine Suche über alle Einstellungen und ein globales Zurücksetzen.
-- Kategorien ohne heutigen Inhalt (siehe FR-006), darunter „Föderation“.
+- Kategorien ohne heutigen Inhalt (siehe FR-006).
+- Geräte umbenennen (außer diesem), entfernen, sperren oder ihren
+  Synchronisationsstand zeigen; die Geräteliste ist nur eine Anzeige (FR-022).
 - Ein Hintergrund des Arbeitsbereichs (FR-015).
 - Neue Einstellungen außer dem Farbschema.
 - Tastenkürzel für einzelne Kategorien (kommt mit der Tastenkürzel-Spec).
