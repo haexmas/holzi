@@ -149,6 +149,43 @@ pub fn delete(conn: &Connection, scope: PrefScope, key: &str) -> Result<usize> {
     )
 }
 
+/// Parses a stored boolean preference. Only `'true'` and `'false'` count;
+/// anything else reads as unset, like an absent row (the `voice.auto_send`
+/// convention).
+pub fn parse_bool(value: Option<&str>) -> Option<bool> {
+    match value {
+        Some("true") => Some(true),
+        Some("false") => Some(false),
+        _ => None,
+    }
+}
+
+/// A boolean preference read in both scopes (spec 022-session-restore,
+/// research R3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ScopedBool {
+    pub device: Option<bool>,
+    pub vault: Option<bool>,
+}
+
+impl ScopedBool {
+    /// The value that applies on the device: the device value if set,
+    /// otherwise the vault value, otherwise `false`.
+    pub fn effective(self) -> bool {
+        self.device.or(self.vault).unwrap_or(false)
+    }
+}
+
+/// Reads a boolean preference for `device` and for the vault scope.
+pub fn get_scoped_bool(conn: &Connection, device: Uuid, key: &str) -> Result<ScopedBool> {
+    let device_value = get(conn, PrefScope::Device(device), key)?;
+    let vault_value = get(conn, PrefScope::Vault, key)?;
+    Ok(ScopedBool {
+        device: parse_bool(device_value.as_deref()),
+        vault: parse_bool(vault_value.as_deref()),
+    })
+}
+
 /// Lists every preference row for the given scope, ordered by key.
 pub fn list_by_scope(conn: &Connection, scope: PrefScope) -> Result<Vec<PrefRow>> {
     let mut stmt = conn.prepare(

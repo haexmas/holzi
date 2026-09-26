@@ -98,8 +98,8 @@ export function registerWmLayoutHandlers(wm: WmStore, t: Translate): void {
     wm.moveWindowToWorkspace(target.windowId ?? '', to)
     return { done: true }
   })
-  on('wm.workspace.create', async () => {
-    const workspace = await wm.createWorkspace()
+  on('wm.workspace.create', () => {
+    const workspace = wm.createWorkspace()
     wm.switchWorkspace(workspace.id)
     return { workspaceId: workspace.id }
   })

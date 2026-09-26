@@ -110,6 +110,14 @@ pub enum HolziError {
     #[error("Invalid input: {reason}")]
     InvalidInput { reason: String },
 
+    /// A window manager session above `wm_session::MAX_SESSION_BYTES` (spec
+    /// 022-session-restore); the frontend retries once without tab histories.
+    #[error("The saved session is too large ({bytes} bytes)")]
+    SessionTooLarge {
+        #[ts(type = "number")]
+        bytes: usize,
+    },
+
     // --- HuggingFace discovery / install (spec 005) ---------------------
     #[error("Network error contacting Hugging Face: {reason}")]
     Network { reason: String },

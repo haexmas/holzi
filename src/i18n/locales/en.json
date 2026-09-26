@@ -281,6 +281,17 @@
       "saved": "Saved.",
       "required": "Please enter a name."
     },
+    "sessionRestore": {
+      "title": "Restore session",
+      "description": "Saves which workspaces, windows and tabs are open, with each tab's back/forward history, and restores them the next time the vault opens. The saved session stays on this device and is not synced to other devices. \"Off\" deletes it at once.",
+      "choice": {
+        "off": "Off",
+        "device": "Only on this device",
+        "vault": "On all devices of this vault"
+      },
+      "saved": "Saved.",
+      "failed": "The setting could not be changed"
+    },
     "default": {
       "title": "Default model",
       "description": "Pick the model that loads automatically when this vault opens — as a device default for this device only or as a vault-wide default for every device on this vault.",
@@ -648,6 +659,10 @@
       },
       "autonomy": {
         "setMode": "Set autonomy mode"
+      },
+      "sessionRestore": {
+        "set": "Turn session restore on or off",
+        "clear": "Reset the session restore setting"
       }
     },
     "scopes": {

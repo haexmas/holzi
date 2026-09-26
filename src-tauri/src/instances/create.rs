@@ -183,7 +183,11 @@ fn open_new_database(
     installation_id_file: &Path,
 ) -> Result<Arc<Database>> {
     let config = vault_config(passphrase, db_path, installation_id_file, true);
-    Ok(Arc::new(Database::open(config)?))
+    let db = Database::open(config)?;
+    // Spec 022: secure_delete from the start; the VACUUM queued by migration 0020 is cheap on an
+    // empty vault.
+    crate::storage::maintenance::run_after_open(&db);
+    Ok(Arc::new(db))
 }
 
 /// Returns the current UNIX timestamp in milliseconds.

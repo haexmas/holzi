@@ -135,6 +135,15 @@ inside it. Specs 015 and 020 call it **Shell**; it was renamed on
 be granted or denied access to (spec 021). Do not use "shell" for this
 concept in new code or specs.
 
+**Sitzung (wm session)** (spec 022):
+Which workspaces, windows and tabs are open, with window geometry and state and
+each tab's location and back/forward history. Saved (`wm_sessions_no_sync`, one
+JSON row per device, never synced) only while the setting "Sitzung
+wiederherstellen" (`wm.session_restore`, device value over vault value, off by
+default) applies; turning it off deletes the saved session. Not the **vault
+session** (spec 013: unlock to lock, one process) and not the chat's **Active
+Session** (the loaded model). Avoid "Layout" for this in user-facing text.
+
 **Ort (Location) / Tab-Historie** (spec 020):
 Where a Tab stands inside its App: an app-relative path plus query
 (`/thread/<id>`, `/models?sort=size`), pure data (`TabLocation`). Each

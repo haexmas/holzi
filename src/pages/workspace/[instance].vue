@@ -7,10 +7,11 @@
  * the chat only; the workspace-wide status bar (015 FR-005) was dropped by
  * operator decision.
  *
- * Awaits `wm.hydrateFromBackendAsync()` (T048) before anything else: the
- * store's `state` otherwise starts from `hydrate`'s own throwaway default
- * workspace, and opening a window into that would be immediately discarded
- * once the real persisted layout replaces `state` right after.
+ * Awaits `wm.restoreSessionAsync()` (spec 022) before anything else: with
+ * the setting "Sitzung wiederherstellen" on, the saved session replaces the
+ * store's initial empty workspace, and a window opened before that would be
+ * discarded. A failure is logged and the page carries on with the empty
+ * start, so a deep link below still opens its app (spec 022 FR-012, FR-014).
  *
  * Consumes `?open=<appId>` (and spec 020's optional `&at=<path>`) once (contracts/shell-app-contract.md §3, T024's
  * legacy-route redirects land here with it set) and removes it via
@@ -54,7 +55,11 @@ const instanceName = computed(() => {
 // and friends have no route of their own).
 onMounted(async () => {
   instancesStore.setActiveInstance(instanceName.value)
-  await wm.hydrateFromBackendAsync()
+  try {
+    await wm.restoreSessionAsync()
+  } catch (error) {
+    console.error('[wm] restoring the session failed; starting empty', error)
+  }
 
   const open = route.query.open
   if (typeof open === 'string' && open.length > 0) {

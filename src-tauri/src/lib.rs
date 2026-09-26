@@ -60,9 +60,8 @@ use providers::{
     add_provider, delete_provider, list_provider_models, list_providers, refresh_provider_models,
 };
 use storage::preferences_commands::{clear_pref, get_pref, set_pref};
-use storage::wm_commands::{
-    wm_close_windows, wm_create_workspace, wm_delete_workspace, wm_load_layout, wm_save_windows,
-    wm_set_active_workspace,
+use storage::wm_session_commands::{
+    wm_session_load, wm_session_restore_get, wm_session_restore_set, wm_session_save,
 };
 use stt::commands::{
     download_stt_model, list_installed_stt_models, list_stt_catalog, stt_recommend_tiers,
@@ -206,12 +205,10 @@ pub fn run() {
             get_pref,
             set_pref,
             clear_pref,
-            wm_load_layout,
-            wm_create_workspace,
-            wm_delete_workspace,
-            wm_set_active_workspace,
-            wm_save_windows,
-            wm_close_windows,
+            wm_session_restore_get,
+            wm_session_restore_set,
+            wm_session_load,
+            wm_session_save,
             start_voice_recording,
             stop_voice_recording,
             cancel_voice_recording,

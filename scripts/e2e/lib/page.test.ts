@@ -198,6 +198,17 @@ describe('press', () => {
     assert.deepEqual(steps, [['press', 'lock-instance']])
   })
 
+  it('stops quietly when the first click races the process ending', async () => {
+    driver.onFind(() => ['el-1'])
+    driver.onDisplayed(() => true)
+    driver.onClick(() => 'drop')
+    const steps: Array<[string, string | undefined]> = []
+    await press(client, 'lock-instance', {
+      step: (name, detail) => steps.push([name, detail]),
+    })
+    assert.deepEqual(steps, [['press', 'lock-instance']])
+  })
+
   it('also stops quietly on a stale element reference (seen under load: the DOM moved on before the session was gone)', async () => {
     driver.onFind(() => ['el-1'])
     driver.onDisplayed(() => true)
@@ -227,12 +238,13 @@ describe('press', () => {
     assert.equal(calls, 2)
   })
 
-  it('still throws if the very first click fails', async () => {
+  it('still throws if the very first click fails for another reason', async () => {
     driver.onFind(() => ['el-1'])
     driver.onDisplayed(() => true)
-    driver.onClick(() => 'drop')
+    driver.onClick(() => 'invalid')
     await assert.rejects(
       press(client, 'lock-instance', { times: 2, step: () => {} }),
+      /invalid argument/,
     )
   })
 

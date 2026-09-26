@@ -281,6 +281,17 @@
       "saved": "Gespeichert.",
       "required": "Bitte einen Namen eingeben."
     },
+    "sessionRestore": {
+      "title": "Sitzung wiederherstellen",
+      "description": "Speichert, welche Arbeitsbereiche, Fenster und Tabs offen sind, samt Vor-/Zurück-Verlauf jedes Tabs, und stellt sie beim nächsten Öffnen der Vault wieder her. Die gespeicherte Sitzung bleibt auf diesem Gerät und wird nicht mit anderen Geräten abgeglichen. „Aus“ löscht sie sofort.",
+      "choice": {
+        "off": "Aus",
+        "device": "Nur auf diesem Gerät",
+        "vault": "Auf allen Geräten dieser Vault"
+      },
+      "saved": "Gespeichert.",
+      "failed": "Die Einstellung konnte nicht geändert werden"
+    },
     "default": {
       "title": "Standard-Modell",
       "description": "Wähle das Modell, das nach dem Öffnen dieses Vaults automatisch geladen wird — als Gerätestandard nur für dieses Gerät oder als Vault-weiter Standard für alle Geräte dieses Vaults.",
@@ -648,6 +659,10 @@
       },
       "autonomy": {
         "setMode": "Autonomie-Modus setzen"
+      },
+      "sessionRestore": {
+        "set": "Sitzung wiederherstellen ein- oder ausschalten",
+        "clear": "Einstellung „Sitzung wiederherstellen“ zurücksetzen"
       }
     },
     "scopes": {

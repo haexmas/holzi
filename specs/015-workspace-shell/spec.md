@@ -250,6 +250,8 @@ verschieben, zwischen beiden wechseln, den zweiten löschen.
 
 ### User Story 5 - Layout bleibt über Neustarts erhalten (Priority: P2)
 
+> **Seit Spec 022** gilt dies nur bei eingeschalteter Einstellung „Sitzung wiederherstellen“ (standardmäßig aus), siehe [`022-session-restore`](../022-session-restore/spec.md). Mit der Einstellung kommen zusätzlich Ort und Vor-/Zurück-Historie jedes Tabs zurück.
+
 Ein Nutzer schließt holzi und öffnet die Vault später wieder. Seine
 Arbeitsbereiche und deren Reihenfolge, die Anordnung seiner Fenster und
 deren Tabs sind wieder da. Auf einem anderen Gerät, auf dem er dieselbe Vault öffnet, hat
@@ -345,7 +347,8 @@ später nicht mehr billig zu ändern sind.
 
 **Independent Test**: Mit einer ausschließlich zu Testzwecken definierten
 App, die mehrere Instanzen erlaubt, zweimal öffnen (einmal als Tab, einmal als
-Fenster): es entstehen unabhängige Instanzen, alle überleben einen Neustart. Bei
+Fenster): es entstehen unabhängige Instanzen, alle überleben einen Neustart (seit
+Spec 022 nur bei eingeschalteter Einstellung „Sitzung wiederherstellen“). Bei
 den ausgelieferten Apps öffnet ein zweiter Aufruf keine zweite Instanz.
 
 **Acceptance Scenarios**:
@@ -359,7 +362,8 @@ den ausgelieferten Apps öffnet ein zweiter Aufruf keine zweite Instanz.
    zweimal öffnet, **Then** entstehen zwei unabhängige Tabs (über „+“ im selben
    Fenster) bzw. Fenster (über den Launcher) mit getrenntem Inhalt.
 3. **Given** zwei Tabs derselben App, **When** die Vault neu geöffnet wird,
-   **Then** erscheinen beide wieder (Persistenz je Tab, nicht je App).
+   **Then** erscheinen beide wieder (Persistenz je Tab, nicht je App; seit Spec
+   022 nur bei eingeschalteter Einstellung „Sitzung wiederherstellen“).
 4. **Given** die ausgelieferten Apps Chat, Einstellungen und Föderation,
    **When** der Nutzer sie mehrfach öffnet, **Then** bleibt es je App bei einem
    Tab.
@@ -503,6 +507,8 @@ den ausgelieferten Apps öffnet ein zweiter Aufruf keine zweite Instanz.
   erlaubt.
 
 **Persistenz**
+
+> **Seit Spec 022** gelten FR-023 bis FR-025 nur bei eingeschalteter Einstellung „Sitzung wiederherstellen“ (standardmäßig aus), siehe [`022-session-restore`](../022-session-restore/spec.md).
 
 - **FR-023**: Arbeitsbereiche (Reihenfolge), Fenster (Arbeitsbereich,
   Position, Größe, Minimierungs- und Maximierungszustand), Tabs (App,

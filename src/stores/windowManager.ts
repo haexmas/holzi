@@ -23,7 +23,6 @@ import { titleForLocation } from '~/components/wm/appRoutes'
 import { addTabAt, openAppAt } from '~/lib/wm/tabNavigation'
 import type {
   CloseGuard,
-  PersistedLayout,
   WmState,
   WmTab,
   WmWindow,
@@ -31,7 +30,12 @@ import type {
   TabRuntime,
   Workspace,
 } from '~/lib/wm/types'
-import { useWmLayout, type WindowDto } from '~/composables/useWmLayout'
+import {
+  createSessionSync,
+  type RestoreScope,
+  type RestoreState,
+} from '~/lib/wm/sessionSync'
+import { useWmSession } from '~/composables/useWmSession'
 import { createWmGuards } from '~/stores/wmGuards'
 import { createWmNavigation } from '~/stores/wmNavigation'
 
@@ -46,18 +50,13 @@ import { createWmNavigation } from '~/stores/wmNavigation'
  * `toggleMaximizeWindow`, `updateWindowGeometry`, `createWorkspace`,
  * `deleteWorkspace`, `switchWorkspace`, `moveWindowToWorkspace`.
  *
- * Persistence (T048): `state` starts from an empty local layout — same as
- * before any backend round trip existed — so the store is usable
- * synchronously at setup. `hydrateFromBackendAsync` (called once by
- * `pages/workspace/[instance].vue`, before anything else touches the
- * store) replaces it in place with the real persisted layout via
- * `Object.assign`, which keeps `state`'s identity so every `toRefs`/
- * `computed` consumer already holding a reference keeps tracking it.
- * Every mutating action below also tells `useWmLayout()` what to
- * persist: immediately for structural changes (open, add/switch/close tab,
- * close window, move to another workspace, minimize/maximize) and
- * debounced for geometry and stack (focus) changes — research.md R13.
- * Workspace actions use their own commands, not `wm_save_windows`.
+ * Saving (spec 022-session-restore, `lib/wm/sessionSync.ts`): `state` starts as one empty
+ * workspace, so the store is usable synchronously at setup. `restoreSessionAsync` (called once by
+ * `pages/workspace/[instance].vue`, before anything else touches the store) replaces it in place
+ * with the saved session if the setting "Sitzung wiederherstellen" applies on this device, keeping
+ * `state`'s identity for every `toRefs`/`computed` consumer. Every mutating action then asks the
+ * session sync to save: immediately for structural changes, debounced for geometry, focus and
+ * navigation. While the setting does not apply (the default), nothing is saved.
  */
 export const useWindowManagerStore = defineStore('windowManager', () => {
   const initialArea =
@@ -72,72 +71,7 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
     ),
   )
 
-  const wmLayout = useWmLayout()
-
-  /** Converts the in-memory window and ordered tabs to the backend wire shape. */
-  function windowToDto(window: WmWindow): WindowDto {
-    return {
-      windowId: window.id,
-      workspaceId: window.workspaceId,
-      x: window.x,
-      y: window.y,
-      width: window.width,
-      height: window.height,
-      isMinimized: window.minimized,
-      isMaximized: window.maximized,
-      stackOrder: window.stack,
-      activeTabId: window.activeTabId,
-      tabs: window.tabs.map((tab) => ({ tabId: tab.id, appId: tab.appId })),
-    }
-  }
-
-  /** Queues an immediate save when the window still exists. */
-  function persistWindowNow(windowId: string) {
-    const window = state.windows.find((w) => w.id === windowId)
-    if (window) wmLayout.saveWindowNow(windowToDto(window))
-  }
-
-  /** Coalesces frequent changes to a window's geometry or stack position. */
-  function persistWindowDebounced(windowId: string) {
-    const window = state.windows.find((w) => w.id === windowId)
-    if (window) wmLayout.saveWindowDebounced(windowToDto(window))
-  }
-
-  /** Loads the device's real layout and replaces `state` in place (research
-   * data-model.md "Wiederherstellen"; unknown-app filtering and geometry
-   * clamping already live in `hydrate` itself, so this only has to feed it
-   * real data). Called once, before anything else touches the store —
-   * `pages/workspace/[instance].vue`'s `onMounted`, ahead of its own
-   * `?open=` handling, so a window never opens into the throwaway
-   * pre-hydration workspace `hydrate({ workspaces: [], ... })` mints. */
-  async function hydrateFromBackendAsync(): Promise<void> {
-    const dto = await wmLayout.loadLayout()
-    const layout: PersistedLayout = {
-      workspaces: dto.workspaces.map((w) => ({
-        id: w.workspaceId,
-        position: w.position,
-      })),
-      windows: dto.windows.map((w) => ({
-        id: w.windowId,
-        workspaceId: w.workspaceId,
-        x: w.x,
-        y: w.y,
-        width: w.width,
-        height: w.height,
-        minimized: w.isMinimized,
-        maximized: w.isMaximized,
-        stack: w.stackOrder,
-        tabs: w.tabs.map((tab) => ({ id: tab.tabId, appId: tab.appId })),
-        activeTabId: w.activeTabId,
-      })),
-      activeWorkspaceId: dto.activeWorkspaceId,
-    }
-    Object.assign(state, hydrate(layout, WM_APPS, state.area))
-    navigation.histories.clear()
-    syncTabRuntime()
-  }
-
-  /** Never persisted (data-model.md); per-tab bookkeeping keyed by tab id, kept in sync with
+  /** Never saved (data-model.md); per-tab bookkeeping keyed by tab id, kept in sync with
    * `state.windows[*].tabs` after every action that can add or remove a tab. A `Map` rather than
    * a plain object, so pruning a stale entry needs no dynamic-key `delete`. */
   const tabRuntime = reactive(new Map<string, TabRuntime>())
@@ -148,6 +82,14 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
     titleOverrideOf: (tabId) => tabRuntime.get(tabId)?.titleOverride ?? null,
     clearTitleOverride: (tabId) => setTabTitle(tabId, null),
     openApp: (appId) => openApp(appId),
+  })
+
+  const session = createSessionSync({
+    state,
+    histories: navigation.histories,
+    apps: WM_APPS,
+    port: useWmSession(),
+    onRestored: syncTabRuntime,
   })
 
   /** Retains runtime state for live tabs and initializes newly opened tabs. */
@@ -271,9 +213,9 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
     }
   }
 
-  /** Opens the app, or activates its existing singleton tab (`state.activeWindowId` either way) —
-   * persisted immediately either way: even reactivating a singleton is a deliberate click, not a
-   * continuous gesture (research.md R13's structural bucket is everything but geometry/stack). */
+  /** Opens the app, or activates its existing singleton tab (`state.activeWindowId` either way),
+   * and saves at once either way: reactivating a singleton is a deliberate click, not a continuous
+   * gesture. */
   function openApp(appId: string, at: string | TabLocation | null = null) {
     const { tabId } = openAppAt(
       state,
@@ -284,12 +226,11 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
       (id) => runtimeFor(id).titleOverride,
     )
     syncTabRuntime()
-    if (state.activeWindowId) persistWindowNow(state.activeWindowId)
+    session.saveNow()
     return tabId
   }
 
-  /** Adds a tab (at `at`, spec 020 FR-012) and persists both the target and any newly active
-   * window. */
+  /** Adds a tab (at `at`, spec 020 FR-012) and saves at once. */
   function addTab(
     windowId: string,
     appId: string,
@@ -305,44 +246,40 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
       (id) => runtimeFor(id).titleOverride,
     )
     syncTabRuntime()
-    persistWindowNow(windowId)
-    if (state.activeWindowId && state.activeWindowId !== windowId)
-      persistWindowNow(state.activeWindowId)
+    session.saveNow()
     return tabId
   }
 
   /** Activates a tab and saves its window's new active tab id. */
   function switchTab(windowId: string, tabId: string) {
     switchTabReducer(state, windowId, tabId)
-    persistWindowNow(windowId)
+    session.saveNow()
   }
 
   /** Removes the tab without asking anything — guard confirmation (FR-014) runs at the caller,
-   * same as `closeWindow`. Persists via `wm_close_windows` if the window closed with it (it was
-   * the last tab), otherwise via a save carrying the window's remaining tabs. */
+   * same as `closeWindow`. Closing the last tab closes the window too. */
   function closeTab(windowId: string, tabId: string) {
     closeTabReducer(state, windowId, tabId)
     syncTabRuntime()
-    if (state.windows.some((w) => w.id === windowId)) persistWindowNow(windowId)
-    else wmLayout.closeWindowNow(windowId)
+    session.saveNow()
   }
 
   /** Restores and raises a window, debouncing its new stack position. */
   function focusWindow(windowId: string) {
     focusWindowReducer(state, windowId)
-    persistWindowDebounced(windowId)
+    session.saveSoon()
   }
 
   /** Minimizes a window and saves the structural change immediately. */
   function minimizeWindow(windowId: string) {
     minimizeWindowReducer(state, windowId)
-    persistWindowNow(windowId)
+    session.saveNow()
   }
 
   /** Saves the window's maximized or restored state immediately. */
   function toggleMaximizeWindow(windowId: string) {
     toggleMaximizeWindowReducer(state, windowId)
-    persistWindowNow(windowId)
+    session.saveNow()
   }
 
   /** Applies a drag or resize result and debounces the resulting save. */
@@ -351,15 +288,14 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
     geometry: { x: number; y: number; width: number; height: number },
   ) {
     updateWindowGeometryReducer(state, windowId, geometry)
-    persistWindowDebounced(windowId)
+    session.saveSoon()
   }
 
   /** Keeps `state.area`/`state.compact` in sync with the window manager's actual size (T049,
    * `wm/Desktop.vue`'s `useWindowSize` watcher) and re-clamps every window's stored geometry
    * into it — debounced like `updateWindowGeometry`, since a live resize can fire rapidly too. */
   function updateArea(area: Size) {
-    const changedWindowIds = updateAreaReducer(state, area, WM_APPS)
-    for (const windowId of changedWindowIds) persistWindowDebounced(windowId)
+    if (updateAreaReducer(state, area, WM_APPS).length > 0) session.saveSoon()
   }
 
   /** Removes the window without asking anything — guard confirmation (FR-014) runs at the caller
@@ -368,49 +304,35 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
   function closeWindow(windowId: string) {
     closeWindowReducer(state, windowId)
     syncTabRuntime()
-    wmLayout.closeWindowNow(windowId)
+    session.saveNow()
   }
 
-  /** Creates the workspace on the backend first — `workspace_id` is backend-assigned
-   * (data-model.md) — then applies the identical id locally, so the two never diverge. */
-  async function createWorkspace(): Promise<Workspace> {
-    const dto = await wmLayout.createWorkspace()
-    return createWorkspaceReducer(state, dto.workspaceId)
+  /** Creates a workspace with a fresh id and saves the session. */
+  function createWorkspace(): Workspace {
+    const workspace = createWorkspaceReducer(state, crypto.randomUUID())
+    session.saveNow()
+    return workspace
   }
 
-  /** Activates a workspace locally and queues its device preference write. */
+  /** Activates a workspace and saves the session. */
   function switchWorkspace(workspaceId: string) {
     switchWorkspaceReducer(state, workspaceId)
-    void wmLayout.setActiveWorkspace(workspaceId).catch((error: unknown) => {
-      console.error('[wm] wm_set_active_workspace failed', error)
-    })
+    session.saveNow()
   }
 
-  /** Deletes the workspace and its windows/tabs locally for instant feedback — guard confirmation
-   * for any running replies (FR-021, same shape as `closeWindow`'s) and the "close N windows"
-   * confirmation both run at the caller (`wm/WorkspaceOverview.vue`, T040) before this is
-   * invoked. A no-op for the last remaining workspace (I3). The backend call runs the identical
-   * dense-renumber/neighbor-activation algorithm (`wm_commands.rs`'s `neighbor_after_delete`),
-   * so it only needs to persist the outcome, not correct it. Explicitly closes each of its windows
-   * first (redundant with the backend's own FK cascade, but idempotent) so none of them can be
-   * left dirty in `useWmLayout`'s retry set forever — a workspace this deletes no longer exists
-   * for `wm_save_windows` to validate a stale pending save against. */
+  /** Deletes the workspace with its windows and tabs — guard confirmation for running replies
+   * (FR-021) and the "close N windows" confirmation both run at the caller
+   * (`wm/WorkspaceOverview.vue`, T040). A no-op for the last remaining workspace (I3). */
   function deleteWorkspace(workspaceId: string) {
-    const removedWindowIds = state.windows
-      .filter((w) => w.workspaceId === workspaceId)
-      .map((w) => w.id)
     deleteWorkspaceReducer(state, workspaceId)
     syncTabRuntime()
-    for (const windowId of removedWindowIds) wmLayout.closeWindowNow(windowId)
-    void wmLayout.deleteWorkspace(workspaceId).catch((error: unknown) => {
-      console.error('[wm] wm_delete_workspace failed', error)
-    })
+    session.saveNow()
   }
 
   /** Moves a window with its tabs and immediately saves its new workspace id. */
   function moveWindowToWorkspace(windowId: string, workspaceId: string) {
     moveWindowToWorkspaceReducer(state, windowId, workspaceId)
-    persistWindowNow(windowId)
+    session.saveNow()
   }
 
   /** Whether *any* window in the workspace has attention (data-model.md's derived rule, mirroring
@@ -434,16 +356,44 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
   const { guardResultsFor, guardResultForTab, guardResultsForWorkspace } =
     createWmGuards(state, (tabId) => tabRuntime.get(tabId)?.guard)
 
-  /** Awaits the persistence queue before the vault locks or closes (FR-027) — `ChatApp.vue`'s and
+  /** Awaits the save queue before the vault locks or closes (FR-027) — `ChatApp.vue`'s and
    * `FederationApp.vue`'s `lock()` already call this before `useInstance().closeAsync()`. */
   function flushAsync(): Promise<void> {
-    return wmLayout.flushAsync()
+    return session.flushAsync()
+  }
+
+  /** Sets or resets the "Sitzung wiederherstellen" setting for one scope and takes over the
+   * result (spec 022 FR-005, FR-007); the settings actions call this. */
+  function setSessionRestore(
+    scope: RestoreScope,
+    enabled: boolean | null,
+  ): Promise<RestoreState> {
+    return session.setRestoreAsync(scope, enabled)
+  }
+
+  // Navigation changes a tab's saved history (spec 022 clarification 2026-09-26).
+  const navigate: typeof navigation.navigate = (...args) => {
+    const changed = navigation.navigate(...args)
+    session.saveSoon()
+    return changed
+  }
+  const goTab: typeof navigation.go = (...args) => {
+    const changed = navigation.go(...args)
+    session.saveSoon()
+    return changed
+  }
+  const skipCurrent: typeof navigation.skipCurrent = (...args) => {
+    const changed = navigation.skipCurrent(...args)
+    session.saveSoon()
+    return changed
   }
 
   return {
     ...toRefs(state),
     windowsInActiveWorkspace,
-    hydrateFromBackendAsync,
+    restoreSessionAsync: session.restoreAsync,
+    setSessionRestore,
+    getSessionRestore: session.getRestoreAsync,
     runtimeFor,
     tabDisplayInfo,
     windowDisplayInfo,
@@ -474,9 +424,9 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
     overlays: navigation.overlays,
     systemBack: navigation.systemBack,
     historyOf: navigation.historyOf,
-    navigate: navigation.navigate,
-    goTab: navigation.go,
-    skipCurrent: navigation.skipCurrent,
+    navigate,
+    goTab,
+    skipCurrent,
     runAction: navigation.runAction,
     registerGlobalActionHandler: navigation.registerGlobalActionHandler,
     registerTabActionHandler: navigation.registerTabActionHandler,

@@ -50,6 +50,10 @@ onMounted(reloadDeviceInfoAsync)
 
       <hr class="border-neutral-200" />
 
+      <SettingsSessionRestoreSetting />
+
+      <hr class="border-neutral-200" />
+
       <SettingsDefaultModelSetting
         v-if="deviceInfo"
         :device-uuid="deviceInfo.vaultDeviceUuid"

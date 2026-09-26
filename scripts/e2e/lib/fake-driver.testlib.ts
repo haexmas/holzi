@@ -34,7 +34,9 @@ export interface FakeDriver {
    * answers with an element reference error after the DOM moved on since it was found.
    */
   onClick(
-    click: (id: string) => 'ok' | 'drop' | 'stale' | 'not-interactable',
+    click: (
+      id: string,
+    ) => 'ok' | 'drop' | 'stale' | 'not-interactable' | 'invalid',
   ): void
   /** Whether a `POST /session` (new session) succeeds, drops the connection, or is rejected. */
   onNewSession(newSession: () => 'ok' | 'drop' | 'not-created'): void
@@ -50,7 +52,7 @@ export async function startFakeDriver(): Promise<FakeDriver> {
   let displayed: (id: string) => boolean = () => true
   let click: (
     id: string,
-  ) => 'ok' | 'drop' | 'stale' | 'not-interactable' = () => 'ok'
+  ) => 'ok' | 'drop' | 'stale' | 'not-interactable' | 'invalid' = () => 'ok'
   let newSession: () => 'ok' | 'drop' | 'not-created' = () => 'ok'
 
   const server = http.createServer((req, res) => {
@@ -123,6 +125,9 @@ export async function startFakeDriver(): Promise<FakeDriver> {
         }
         if (outcome === 'not-interactable') {
           return reply({ error: 'element not interactable', message: '' }, 400)
+        }
+        if (outcome === 'invalid') {
+          return reply({ error: 'invalid argument', message: '' }, 400)
         }
         return reply(null)
       }
