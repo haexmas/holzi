@@ -193,29 +193,40 @@ test('every registry text exists in German and English (FR-020)', () => {
   }
 })
 
-test('header back acts as tab back when the parent is the previous entry', () => {
+test('header back returns to the previous station in the same category', () => {
   const fromSearch = push(
     push(createHistory('/models/download'), '/models/download/search?q=qwen'),
     '/models/download/repo/Qwen/Qwen2.5-GGUF',
   )
-  assert.deepEqual(headerBack(fromSearch, '/models/download/search'), {
+  assert.deepEqual(headerBack(fromSearch), {
     kind: 'back',
+    path: '/models/download/search',
   })
   const fromOverview = push(createHistory('/models'), '/models/installed')
-  assert.deepEqual(headerBack(fromOverview, '/models'), { kind: 'back' })
+  assert.deepEqual(headerBack(fromOverview), { kind: 'back', path: '/models' })
+  // Modelle → Installierte Modelle → Modelle herunterladen: back to Installierte Modelle.
+  const lateral = push(
+    push(createHistory('/models'), '/models/installed'),
+    '/models/download',
+  )
+  assert.deepEqual(headerBack(lateral), {
+    kind: 'back',
+    path: '/models/installed',
+  })
 })
 
-test('header back navigates to the parent otherwise, also after a deep link', () => {
+test('header back goes to the parent after a jump from another category or a deep link', () => {
   const fromElsewhere = push(createHistory('/agents'), '/models/installed')
-  assert.deepEqual(headerBack(fromElsewhere, '/models'), {
+  assert.deepEqual(headerBack(fromElsewhere), {
     kind: 'push',
     path: '/models',
   })
   const deepLink = createHistory('/models/download/repo/Qwen/Qwen2.5-GGUF')
-  assert.deepEqual(headerBack(deepLink, '/models/download/search'), {
+  assert.deepEqual(headerBack(deepLink), {
     kind: 'push',
     path: '/models/download/search',
   })
+  assert.equal(headerBack(createHistory('/models')), undefined)
 })
 
 test('the settings tab keeps the app title; other apps show the location title', () => {

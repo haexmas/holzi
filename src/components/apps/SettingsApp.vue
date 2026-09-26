@@ -20,7 +20,6 @@ import {
   locationFor,
   parentPathOf,
   SETTINGS_CATEGORIES,
-  SETTINGS_LOCATIONS,
 } from '~/lib/settings/registry'
 import { searchSettings } from '~/lib/settings/search'
 
@@ -143,17 +142,22 @@ const categoryIcon = computed(() => {
   const id = categoryOf(router.route.path)
   return SETTINGS_CATEGORIES.find((category) => category.id === id)?.icon
 })
+/** Recomputed on every navigation: the route path is read first, so the history is current. */
+const back = computed(() => {
+  if (!router.route.path || !tab.tabId) return undefined
+  const history = wm.historyOf(tab.tabId)
+  return history ? headerBack(history) : undefined
+})
 const backLabel = computed(() => {
-  const parent = SETTINGS_LOCATIONS.find(
-    (location) => location.id === current.value?.location.parent,
-  )
-  return parent ? t('settings.back', { title: t(parent.titleKey) }) : ''
+  const target = back.value ? locationFor(back.value.path) : undefined
+  return target
+    ? t('settings.back', { title: t(target.location.titleKey, target.params) })
+    : ''
 })
 
 function goBack() {
-  const history = tab.tabId ? wm.historyOf(tab.tabId) : undefined
-  if (!parentPath.value || !history) return
-  const step = headerBack(history, parentPath.value)
+  const step = back.value
+  if (!step) return
   if (step.kind === 'back') router.back()
   else router.push(step.path)
 }

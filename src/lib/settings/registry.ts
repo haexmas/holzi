@@ -207,18 +207,25 @@ export function parentPathOf(location: SettingsLocation): string | undefined {
   return parent ? locationPath(parent) : undefined
 }
 
-export type HeaderBack = { kind: 'back' } | { kind: 'push'; path: string }
+export type HeaderBack =
+  { kind: 'back'; path: string } | { kind: 'push'; path: string }
 
-/** FR-009: the header arrow acts as tab back when the parent is the previous entry (keeping its
- * query, e.g. the search term), and navigates to the parent otherwise, e.g. after a deep link. */
-export function headerBack(
-  history: TabHistory,
-  parentPath: string,
-): HeaderBack {
+/** FR-009: where the header arrow of the current location leads. Back to the previous station
+ * when it lies in the same category (so Modelle → Installierte Modelle → Modelle herunterladen
+ * returns to Installierte Modelle, and the search keeps its query), as a tab back without a
+ * second entry; otherwise — after a deep link, a sidebar or search jump from another category —
+ * to the registry parent. `undefined` for a category start page, which has no arrow. */
+export function headerBack(history: TabHistory): HeaderBack | undefined {
+  const current = history.entries[history.index]
+  const here = current ? locationFor(current.location.path) : undefined
+  const parentPath = here ? parentPathOf(here.location) : undefined
+  if (!here || !parentPath) return undefined
   const previous = history.entries[history.index - 1]
-  const target = normalizePath(parentPath)
-  if (previous && normalizePath(previous.location.path) === target) {
-    return { kind: 'back' }
+  if (
+    previous &&
+    categoryOf(previous.location.path) === here.location.category
+  ) {
+    return { kind: 'back', path: normalizePath(previous.location.path) }
   }
-  return { kind: 'push', path: target }
+  return { kind: 'push', path: normalizePath(parentPath) }
 }
