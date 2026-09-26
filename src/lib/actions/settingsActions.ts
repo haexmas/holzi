@@ -20,12 +20,13 @@ const VENDOR: JsonSchema = { type: 'string', enum: ['claude', 'codex'] }
 const RESTORE_STATE: JsonSchema = {
   type: 'object',
   description:
-    "Session restore setting: 'device' and 'vault' are true, false or null (unset); 'effective' is what applies on this device.",
+    "Session restore setting: 'device' and 'vault' are true or false, and left out when unset; 'effective' is what applies on this device.",
   properties: {
     device: { type: 'boolean' },
     vault: { type: 'boolean' },
     effective: { type: 'boolean' },
   },
+  required: ['effective'],
 }
 const MODEL_ID: JsonSchema = {
   type: 'string',

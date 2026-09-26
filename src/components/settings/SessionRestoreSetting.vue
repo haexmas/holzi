@@ -6,7 +6,11 @@
  * reset for the chosen scope. A single switch could not show "not set".
  * Writes go through the catalog actions (spec 020 FR-024).
  */
-import type { RestoreState } from '~/lib/wm/sessionSync'
+import {
+  fromRestoreResult,
+  type RestoreState,
+  type RestoreStateResult,
+} from '~/lib/wm/sessionSync'
 
 type ScopeKind = 'device' | 'vault'
 
@@ -50,7 +54,7 @@ async function runAsync(change: () => Promise<unknown>) {
   savedFlash.value = false
   opError.value = null
   try {
-    restore.value = (await change()) as RestoreState
+    restore.value = fromRestoreResult((await change()) as RestoreStateResult)
     savedFlash.value = true
   } catch (error: unknown) {
     opError.value = errString(error)

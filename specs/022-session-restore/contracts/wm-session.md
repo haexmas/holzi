@@ -72,8 +72,13 @@ In `src/lib/actions/settingsActions.ts`, Handler in
 Beide rufen `useWindowManagerStore().setSessionRestore(scope, enabled)`. Das
 schickt `wm_session_restore_set` über dieselbe Warteschlange wie das Speichern
 (kein früheres Speichern kann danach ankommen) und übernimmt den neuen Zustand.
-`settings.get` ergänzt `sessionRestore: SessionRestoreState` über
-`getSessionRestore()`.
+`settings.get` ergänzt `sessionRestore` über `getSessionRestore()`.
+
+Das Ergebnis der Aktionen ist `SessionRestoreState` ohne die nicht gesetzten
+Werte (`toRestoreResult`): `{ effective, device?, vault? }`. Die Schemas des
+Katalogs kennen kein `null` (Spec 020, R8), und sie werden in Spec 021 zur
+Tool-Beschreibung für Agenten. Die Einstellungsansicht setzt die fehlenden
+Werte mit `fromRestoreResult` wieder auf `null`.
 
 ## 4. Store (`src/stores/windowManager.ts`)
 

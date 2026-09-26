@@ -23,6 +23,30 @@ export type RestoreState = {
 
 export type RestoreScope = 'device' | 'vault'
 
+/** The result of the `settings.sessionRestore.*` actions: a value that is not
+ * set is left out, because the action schema subset has no `null` (spec 020
+ * research R8) and the schema becomes an agent tool description in spec 021. */
+export type RestoreStateResult = {
+  device?: boolean
+  vault?: boolean
+  effective: boolean
+}
+
+export function toRestoreResult(state: RestoreState): RestoreStateResult {
+  const result: RestoreStateResult = { effective: state.effective }
+  if (state.device !== null) result.device = state.device
+  if (state.vault !== null) result.vault = state.vault
+  return result
+}
+
+export function fromRestoreResult(result: RestoreStateResult): RestoreState {
+  return {
+    device: result.device ?? null,
+    vault: result.vault ?? null,
+    effective: result.effective,
+  }
+}
+
 /** The part of `useWmSession()` this module drives. */
 export type SessionPort = {
   saveNow(session: WmSession): void

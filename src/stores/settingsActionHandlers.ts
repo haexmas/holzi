@@ -5,6 +5,7 @@ import { useModels } from '~/composables/useModels'
 import { usePreferences, type PrefScope } from '~/composables/usePreferences'
 import { useProviders, type DelegateVendor } from '~/composables/useProviders'
 import { useSttModels } from '~/composables/useSttModels'
+import { toRestoreResult } from '~/lib/wm/sessionSync'
 import type { useWindowManagerStore } from '~/stores/windowManager'
 
 type WmStore = ReturnType<typeof useWindowManagerStore>
@@ -58,7 +59,7 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
       getPrefAsync(scope, STT_MODEL_KEY),
       getPrefAsync(scope, AUTONOMY_KEY),
       getPrefAsync(scope, DENY_RULES_KEY),
-      wm.getSessionRestore(),
+      wm.getSessionRestore().then(toRestoreResult),
     ])
     return {
       deviceAlias: device.alias,
@@ -80,11 +81,18 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
     statuses: await huggingFace.checkUpdatesAsync(),
   }))
 
-  on('settings.sessionRestore.set', ({ input }) =>
-    wm.setSessionRestore(restoreScope(input.scope), input.enabled === true),
+  on('settings.sessionRestore.set', async ({ input }) =>
+    toRestoreResult(
+      await wm.setSessionRestore(
+        restoreScope(input.scope),
+        input.enabled === true,
+      ),
+    ),
   )
-  on('settings.sessionRestore.clear', ({ input }) =>
-    wm.setSessionRestore(restoreScope(input.scope), null),
+  on('settings.sessionRestore.clear', async ({ input }) =>
+    toRestoreResult(
+      await wm.setSessionRestore(restoreScope(input.scope), null),
+    ),
   )
 
   on('settings.device.setAlias', async ({ input }) => {

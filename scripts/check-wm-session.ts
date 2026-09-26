@@ -4,6 +4,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
+import { ALL_ACTIONS } from '../src/lib/actions/catalog.ts'
+import { validate } from '../src/lib/actions/schema.ts'
 import { openApp } from '../src/lib/wm/layoutState.ts'
 import {
   createHistory,
@@ -20,6 +22,8 @@ import {
 } from '../src/lib/wm/session.ts'
 import {
   createSessionSync,
+  fromRestoreResult,
+  toRestoreResult,
   type RestoreState,
   type SessionPort,
 } from '../src/lib/wm/sessionSync.ts'
@@ -309,4 +313,27 @@ test('setRestoreAsync goes through the port and takes over the new setting', asy
   assert.equal(off.effective, false)
   sync.saveNow()
   assert.equal(log.saveNow.length, 1, 'no save after turning off')
+})
+
+test('session restore action results fit their schema, with unset values left out', () => {
+  const values = [true, false, null]
+  for (const id of [
+    'settings.sessionRestore.set',
+    'settings.sessionRestore.clear',
+  ]) {
+    const action = ALL_ACTIONS.find((candidate) => candidate.id === id)
+    assert.ok(action, id)
+    for (const device of values) {
+      for (const vault of values) {
+        const state: RestoreState = {
+          device,
+          vault,
+          effective: device ?? vault ?? false,
+        }
+        const result = toRestoreResult(state)
+        assert.deepEqual(validate(action.result, result), { ok: true })
+        assert.deepEqual(fromRestoreResult(result), state)
+      }
+    }
+  }
 })
