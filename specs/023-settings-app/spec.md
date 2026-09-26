@@ -52,6 +52,9 @@ entfällt, ihre Kategorie folgt mit der Föderation selbst.) Referenz: haex-vaul
 - Q: Gehört ein Hintergrund des Arbeitsbereichs (Bild oder Farbverlauf wie in
   haex-vault) zu dieser Spec? → A: Nein. „Darstellung“ enthält hier nur das
   Farbschema; der Hintergrund kommt mit der Spec Desktop-Symbole und Raster.
+- Q: (Betreiber-Rückmeldung beim Testen von Spec 022) Brauchen Einstellungen
+  einen Knopf zum Speichern? → A: Nein. Was ausgewählt ist, ist gespeichert;
+  keine Einstellung hat einen Knopf zum Übernehmen (FR-021).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -238,8 +241,9 @@ Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
   ein Download läuft: Der Download läuft weiter, die Anzeige zeigt seinen Stand,
   sobald die Unteransicht wieder offen ist.
 - Ein Nutzer ist mitten in einer Eingabe (Gerätename, Deny-Regeln) und wechselt
-  die Kategorie: Nicht gespeicherte Eingaben gehen verloren, wie beim Navigieren
-  in Spec 020 („Inhalte bleiben nicht zwingend erhalten“).
+  die Kategorie: Er verlässt damit das Feld, die Eingabe wird gespeichert
+  (FR-021). Nur eine ungültige Eingabe geht verloren, wie beim Navigieren in
+  Spec 020 („Inhalte bleiben nicht zwingend erhalten“).
 - Eine gespeicherte Sitzung (Spec 022) enthält einen Tab der entfallenen App
   „Föderation“: Er wird beim Wiederherstellen verworfen wie jede unbekannte App
   (Spec 015 FR-025).
@@ -339,10 +343,21 @@ Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
 
 **Allgemein**
 
-- **FR-019**: Die Aufteilung DARF keine Einstellung in ihrem Verhalten ändern;
-  alle Änderungen bleiben die bestehenden Aktionen aus Spec 020 und 022.
+- **FR-019**: Die Aufteilung DARF keine Einstellung in ihrem Verhalten ändern
+  (außer der Bedienung nach FR-021); alle Änderungen bleiben die bestehenden
+  Aktionen aus Spec 020 und 022.
 - **FR-020**: Die Kategorien, ihre Titel und Beschreibungen MÜSSEN auf Deutsch
   und Englisch vorliegen.
+- **FR-021**: Keine Einstellung DARF einen Knopf zum Speichern, Übernehmen oder
+  Zurücksetzen haben. Auswahlen (Optionen, Auswahllisten, Schalter) MÜSSEN beim
+  Wählen gespeichert werden; Textfelder beim Verlassen des Feldes und, wenn
+  einzeilig, mit Enter. Eine ungültige Eingabe (etwa ein leerer Gerätename)
+  wird nicht gespeichert, sondern am Feld erklärt. Einstellungen mit Wert für
+  dieses Gerät und für die Vault bieten „nicht festgelegt“ als wählbare Option
+  statt eines Knopfs zum Zurücksetzen. Knöpfe bleiben nur für Handlungen, die
+  etwas starten, und nicht für Werte (Anbieter verbinden, Modell herunterladen,
+  Update prüfen, Modell löschen). Das Vorbild ist „Sitzung wiederherstellen“
+  (Spec 022 FR-004).
 
 ### Key Entities
 
