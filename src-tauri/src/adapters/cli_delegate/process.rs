@@ -3,15 +3,26 @@ use tokio::process::{Child, Command};
 use crate::adapters::AdapterError;
 use crate::vault_gate::{ChildGuard, ChildRegistry};
 
+use super::DelegateVendor;
+
 /// Maps a `Command::spawn` failure to a distinct "backend not installed"
 /// error (spec 007-cli-delegate FR-008/SC-006) when the binary itself
 /// isn't found, separate from any other spawn failure (permissions,
 /// resource limits, ...) or from `AdapterError::InvalidCredentials`
-/// (tasks.md T019/T026 cover different failure causes on purpose).
-pub(super) fn map_spawn_error(binary: &str, error: std::io::Error) -> AdapterError {
+/// (tasks.md T019/T026 cover different failure causes on purpose). Carries
+/// `vendor`'s install hint so the operator sees a next step rather than a
+/// bare PATH failure.
+pub(super) fn map_spawn_error(
+    binary: &str,
+    vendor: DelegateVendor,
+    error: std::io::Error,
+) -> AdapterError {
     if error.kind() == std::io::ErrorKind::NotFound {
         AdapterError::Unavailable {
-            reason: format!("\"{binary}\" is not installed or not on PATH"),
+            reason: format!(
+                "\"{binary}\" is not installed or not on PATH — {}",
+                vendor.install_hint()
+            ),
         }
     } else {
         AdapterError::Http {

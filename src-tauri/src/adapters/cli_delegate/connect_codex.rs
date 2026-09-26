@@ -16,6 +16,7 @@ use crate::adapters::AdapterError;
 
 use super::codex::read_limited;
 use super::process::{configure_process_group, map_spawn_error, ChildLifecycle};
+use super::DelegateVendor;
 use crate::vault_gate::ChildRegistry;
 
 /// Matches the CLI's own stated code lifetime ("expires in 15 minutes",
@@ -98,7 +99,7 @@ pub async fn run_device_auth(
     configure_process_group(&mut cmd);
 
     let mut child = ChildLifecycle::spawn(&mut cmd, children)
-        .map_err(|error| map_spawn_error(binary, error))?;
+        .map_err(|error| map_spawn_error(binary, DelegateVendor::Codex, error))?;
 
     let stdout = child
         .child_mut()

@@ -336,7 +336,7 @@ pub(super) async fn spawn_codex_app_server(
     let mut command = build_command(&binary, &tmp);
     configure_process_group(&mut command);
     let mut child = ChildLifecycle::spawn(&mut command, &context.children)
-        .map_err(|error| map_spawn_error(&binary, error))?;
+        .map_err(|error| map_spawn_error(&binary, DelegateVendor::Codex, error))?;
     let mut stdin = child
         .child_mut()
         .stdin

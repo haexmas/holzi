@@ -156,6 +156,20 @@ impl DelegateVendor {
             _ => None,
         }
     }
+
+    /// One-line install suggestion surfaced alongside a "binary not found"
+    /// error (`process::map_spawn_error`, `connect_claude::is_missing_binary`),
+    /// so the operator sees a next step instead of just a bare PATH failure.
+    pub(super) fn install_hint(self) -> &'static str {
+        match self {
+            DelegateVendor::Claude => {
+                "install the Claude Code CLI, e.g. `npm install -g @anthropic-ai/claude-code`, then try again"
+            }
+            DelegateVendor::Codex => {
+                "install the Codex CLI, e.g. `npm install -g @openai/codex`, then try again"
+            }
+        }
+    }
 }
 
 /// `ProviderAdapter` implementation for a `cli_delegate` provider row.
