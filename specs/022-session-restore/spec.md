@@ -77,6 +77,7 @@ gespeichert haben, werden beim Update entfernt.
 ### Session 2026-09-26
 
 - Q: Dürfen Agenten die Einstellung „Sitzung wiederherstellen“ ändern, oder bleibt sie wie die Leitplanken dem Nutzer vorbehalten? → A: Agenten dürfen sie ein- und ausschalten, wenn ihnen der Bereich für Geräteeinstellungen freigegeben ist (Spec 021); sie ist keine Leitplanke.
+- Q: (Betreiber-Rückmeldung beim Testen) Braucht die Einstellungsansicht Knöpfe zum Übernehmen? → A: Nein. Die Ansicht ist eine einzige Auswahl „Aus / Nur auf diesem Gerät / Auf allen Geräten dieser Vault“, und die gewählte Option gilt sofort.
 - Q: Soll ein wiederhergestellter Tab dort weitermachen, wo er zuletzt stand, oder an der Startansicht seiner App beginnen? → A: Wie im Browser: Ort und ganze Vor-/Zurück-Historie jedes Tabs samt Position und Titeln der Einträge; keine Scrollposition, keine nicht abgeschickten Eingaben.
 
 ## User Scenarios & Testing _(mandatory)_
@@ -141,8 +142,10 @@ Vor-/Zurück-Historie.
    Unterhaltung, Zurück führt zu denselben Ansichten wie vorher. Scrollposition
    und nicht abgeschickte Eingaben kommen nicht mit.
 4. **Given** die Einstellungsansicht, **When** der Nutzer sie öffnet, **Then**
-   sieht er, welcher Wert für dieses Gerät und welcher für die ganze Vault
-   gesetzt ist, und welcher davon auf diesem Gerät gerade gilt.
+   ist genau eine der Optionen „Aus“, „Nur auf diesem Gerät“ und „Auf allen
+   Geräten dieser Vault“ gewählt, passend zu dem, was auf diesem Gerät gilt.
+5. **Given** die Einstellungsansicht, **When** der Nutzer eine andere Option
+   wählt, **Then** ist sie sofort gespeichert, ohne weiteren Knopf.
 
 ---
 
@@ -178,8 +181,10 @@ ausschalten: Dort beginnt jeder Start leer, das erste Gerät speichert weiter.
    öffnet, **Then** wird die Sitzung dieses Geräts wiederhergestellt.
 4. **Given** zwei Geräte mit eingeschalteter Wiederherstellung, **When** jedes
    seine Vault öffnet, **Then** sieht jedes nur seine eigene Sitzung.
-5. **Given** ein Wert für dieses Gerät ist gesetzt, **When** der Nutzer ihn
-   zurücksetzt, **Then** gilt auf diesem Gerät wieder der Wert der Vault.
+5. **Given** die Wiederherstellung ist für die Vault eingeschaltet und für
+   dieses Gerät ausgeschaltet, **When** der Nutzer „Auf allen Geräten dieser
+   Vault“ wählt, **Then** wird der Wert für dieses Gerät entfernt und der Wert
+   der Vault gilt wieder.
 
 ---
 
@@ -286,10 +291,15 @@ Vault.
   gesetzt, sonst der Vault-Wert, sonst „aus“.
 - **FR-003**: Der Standard MUSS „aus“ sein: Eine neue Vault und eine
   aktualisierte Vault haben weder einen Vault- noch einen Gerätewert gesetzt.
-- **FR-004**: Die Einstellungsansicht MUSS den Gerätewert, den Vault-Wert und
-  den auf diesem Gerät geltenden Wert zeigen. Der Nutzer MUSS jeden der beiden
-  Werte einschalten, ausschalten und zurücksetzen können. Die Bedienung folgt
-  dem Muster der Einstellung zum Standardmodell (Spec 002).
+- **FR-004**: Die Einstellungsansicht MUSS eine einzige Auswahl mit den
+  Optionen „Aus“, „Nur auf diesem Gerät“ und „Auf allen Geräten dieser Vault“
+  zeigen; die gewählte Option MUSS sofort gespeichert werden, ohne Knopf zum
+  Übernehmen. Die Optionen setzen die beiden Werte so: „Auf allen Geräten“
+  schaltet den Vault-Wert ein und entfernt den Gerätewert; „Nur auf diesem
+  Gerät“ schaltet den Gerätewert ein und entfernt einen eingeschalteten
+  Vault-Wert; „Aus“ schaltet bei eingeschaltetem Vault-Wert nur dieses Gerät
+  aus (die anderen Geräte behalten ihre Wiederherstellung, die Ansicht sagt
+  das), sonst entfernt es den Gerätewert.
 - **FR-005**: Eine Änderung der Einstellung MUSS auf diesem Gerät sofort
   wirken, ohne Neustart: Beginnt sie zu gelten, wird die aktuelle Sitzung ab
   sofort gespeichert; hört sie auf zu gelten, gilt FR-007.

@@ -47,6 +47,43 @@ export function fromRestoreResult(result: RestoreStateResult): RestoreState {
   }
 }
 
+/** The one choice the settings view offers (spec 022 FR-004). */
+export type RestoreChoice = 'off' | 'device' | 'vault'
+
+export type RestoreStep = { scope: RestoreScope; enabled: boolean | null }
+
+/** Which choice the settings view shows for a restore state. */
+export function restoreChoice(state: RestoreState): RestoreChoice {
+  if (!state.effective) return 'off'
+  return state.device === true && state.vault !== true ? 'device' : 'vault'
+}
+
+/**
+ * The writes that turn `state` into `choice`, in an order that never makes
+ * restore apply in between when the choice keeps it on. "Off" while the vault
+ * value is on only turns this device off (`device: false`): other devices keep
+ * their session. "Only this device" clears a vault value that is on, because
+ * otherwise the view would still show "all devices".
+ */
+export function restoreChoiceSteps(
+  state: RestoreState,
+  choice: RestoreChoice,
+): RestoreStep[] {
+  const steps: RestoreStep[] = []
+  if (choice === 'vault') {
+    if (state.vault !== true) steps.push({ scope: 'vault', enabled: true })
+    if (state.device !== null) steps.push({ scope: 'device', enabled: null })
+  } else if (choice === 'device') {
+    if (state.device !== true) steps.push({ scope: 'device', enabled: true })
+    if (state.vault === true) steps.push({ scope: 'vault', enabled: null })
+  } else if (state.vault === true) {
+    if (state.device !== false) steps.push({ scope: 'device', enabled: false })
+  } else if (state.device === true) {
+    steps.push({ scope: 'device', enabled: null })
+  }
+  return steps
+}
+
 /** The part of `useWmSession()` this module drives. */
 export type SessionPort = {
   saveNow(session: WmSession): void

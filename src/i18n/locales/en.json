@@ -277,23 +277,13 @@
     },
     "sessionRestore": {
       "title": "Restore session",
-      "description": "Saves which workspaces, windows and tabs are open, with each tab's back/forward history, and restores them the next time the vault opens. The saved session stays on this device and is not synced to other devices. Turning it off deletes it at once.",
-      "current": {
-        "device": "This device",
-        "vault": "Vault-wide",
-        "effective": "Applies on this device",
-        "on": "on",
-        "off": "off",
-        "unset": "not set"
+      "description": "Saves which workspaces, windows and tabs are open, with each tab's back/forward history, and restores them the next time the vault opens. The saved session stays on this device and is not synced to other devices. \"Off\" deletes it at once.",
+      "choice": {
+        "off": "Off",
+        "device": "Only on this device",
+        "vault": "On all devices of this vault"
       },
-      "scope": {
-        "label": "Scope",
-        "device": "This device only",
-        "vault": "Vault-wide"
-      },
-      "enable": "Turn on",
-      "disable": "Turn off",
-      "reset": "Reset",
+      "otherDevicesOn": "Restoring stays on for the other devices of this vault.",
       "saved": "Saved.",
       "failed": "The setting could not be changed"
     },

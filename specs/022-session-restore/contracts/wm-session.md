@@ -106,12 +106,14 @@ tut beides nichts.
 
 - Überschrift „Sitzung wiederherstellen“, eine Zeile Erklärung (was gespeichert
   wird, dass es nur dieses Gerät betrifft).
-- Anzeige: „Dieses Gerät: an / aus / nicht gesetzt“, „Vault-weit: …“, „Gilt
-  auf diesem Gerät: an / aus“.
-- Auswahl „Nur dieses Gerät / Vault-weit“ (wie `DefaultModelSetting.vue`) und
-  für den gewählten Scope die Knöpfe „Einschalten“, „Ausschalten“ und
-  „Zurücksetzen“, jeweils deaktiviert, wenn der Wert schon so ist bzw. nichts
-  gesetzt ist. Ein einzelner Schalter könnte „nicht gesetzt“ nicht zeigen.
+- Eine Auswahl „Aus / Nur auf diesem Gerät / Auf allen Geräten dieser Vault“
+  (FR-004), gespeichert beim Wählen, ohne Knopf zum Übernehmen.
+  `restoreChoice(state)` bestimmt die gewählte Option,
+  `restoreChoiceSteps(state, choice)` in `src/lib/wm/sessionSync.ts` die
+  Aktionsaufrufe in einer Reihenfolge, in der eine eingeschaltete
+  Wiederherstellung zwischendurch nie aus ist.
+- Ein Hinweis, wenn „Aus“ gewählt ist, der Vault-Wert aber an ist: Die anderen
+  Geräte stellen weiter wieder her.
 - Alle Änderungen laufen über `useActionOrThrow` (Spec 020 FR-024,
   `check:templates`).
 - i18n-Schlüssel unter `settings.sessionRestore.*` (de, en).

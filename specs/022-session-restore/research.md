@@ -215,9 +215,11 @@ drei Werte mit.
 
 **Begründung**: Folgt dem vorhandenen Muster (Spec 002, Spec 020 FR-024).
 
-**Umsetzung (2026-09-26)**: Statt eines Schalters hat die Ansicht die Knöpfe
-„Einschalten“, „Ausschalten“ und „Zurücksetzen“, weil ein Schalter „nicht
-gesetzt“ nicht zeigen kann.
+**Umsetzung (2026-09-26)**: Statt Anzeige, Schalter und „Zurücksetzen“ hat die
+Ansicht eine einzige Auswahl „Aus / Nur auf diesem Gerät / Auf allen Geräten
+dieser Vault“, die beim Wählen speichert (Betreiber-Rückmeldung: keine Knöpfe
+zum Übernehmen). Die Zuordnung auf Geräte- und Vault-Wert steht in FR-004; die
+Aktionen bleiben `set`/`clear` je Scope.
 
 ## R9 Tests
 

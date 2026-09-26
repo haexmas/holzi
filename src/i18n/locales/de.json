@@ -277,23 +277,13 @@
     },
     "sessionRestore": {
       "title": "Sitzung wiederherstellen",
-      "description": "Speichert, welche Arbeitsbereiche, Fenster und Tabs offen sind, samt Vor-/Zurück-Verlauf jedes Tabs, und stellt sie beim nächsten Öffnen der Vault wieder her. Die gespeicherte Sitzung bleibt auf diesem Gerät und wird nicht mit anderen Geräten abgeglichen. Ausschalten löscht sie sofort.",
-      "current": {
-        "device": "Dieses Gerät",
-        "vault": "Vault-weit",
-        "effective": "Gilt auf diesem Gerät",
-        "on": "an",
-        "off": "aus",
-        "unset": "nicht gesetzt"
+      "description": "Speichert, welche Arbeitsbereiche, Fenster und Tabs offen sind, samt Vor-/Zurück-Verlauf jedes Tabs, und stellt sie beim nächsten Öffnen der Vault wieder her. Die gespeicherte Sitzung bleibt auf diesem Gerät und wird nicht mit anderen Geräten abgeglichen. „Aus“ löscht sie sofort.",
+      "choice": {
+        "off": "Aus",
+        "device": "Nur auf diesem Gerät",
+        "vault": "Auf allen Geräten dieser Vault"
       },
-      "scope": {
-        "label": "Wirkungsbereich",
-        "device": "Nur dieses Gerät",
-        "vault": "Vault-weit"
-      },
-      "enable": "Einschalten",
-      "disable": "Ausschalten",
-      "reset": "Zurücksetzen",
+      "otherDevicesOn": "Auf den anderen Geräten dieser Vault bleibt die Wiederherstellung eingeschaltet.",
       "saved": "Gespeichert.",
       "failed": "Die Einstellung konnte nicht geändert werden"
     },

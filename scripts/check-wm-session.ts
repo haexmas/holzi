@@ -23,7 +23,10 @@ import {
 import {
   createSessionSync,
   fromRestoreResult,
+  restoreChoice,
+  restoreChoiceSteps,
   toRestoreResult,
+  type RestoreChoice,
   type RestoreState,
   type SessionPort,
 } from '../src/lib/wm/sessionSync.ts'
@@ -336,4 +339,43 @@ test('session restore action results fit their schema, with unset values left ou
       }
     }
   }
+})
+
+test('each restore choice ends in a state that shows that choice, and staying on never turns off in between', () => {
+  const values = [true, false, null]
+  const choices: RestoreChoice[] = ['off', 'device', 'vault']
+  const withEffective = (device: boolean | null, vault: boolean | null) => ({
+    device,
+    vault,
+    effective: device ?? vault ?? false,
+  })
+  for (const device of values) {
+    for (const vault of values) {
+      const start = withEffective(device, vault)
+      for (const choice of choices) {
+        let state = start
+        for (const step of restoreChoiceSteps(start, choice)) {
+          state = withEffective(
+            step.scope === 'device' ? step.enabled : state.device,
+            step.scope === 'vault' ? step.enabled : state.vault,
+          )
+          if (choice !== 'off' && start.effective)
+            assert.ok(
+              state.effective,
+              `${choice} from ${JSON.stringify(start)}`,
+            )
+        }
+        assert.equal(restoreChoice(state), choice)
+        if (restoreChoice(start) === choice && choice !== 'vault')
+          assert.deepEqual(restoreChoiceSteps(start, choice), [])
+      }
+    }
+  }
+})
+
+test('turning restore off while the vault value is on keeps it on for other devices', () => {
+  const state: RestoreState = { device: null, vault: true, effective: true }
+  assert.deepEqual(restoreChoiceSteps(state, 'off'), [
+    { scope: 'device', enabled: false },
+  ])
 })
