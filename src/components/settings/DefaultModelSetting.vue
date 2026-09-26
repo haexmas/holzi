@@ -150,12 +150,24 @@ onMounted(reloadAsync)
       <p v-if="modelListError" class="text-sm text-destructive" role="alert">
         {{ t('errors.modelListFailed') }}
       </p>
-      <p
+      <SettingsGroup
         v-if="!hasAnyModel && !modelListError"
-        class="text-sm text-muted-foreground"
+        :label="t('settings.default.empty')"
+        data-testid="settings-default-empty"
       >
-        {{ t('settings.default.empty') }}
-      </p>
+        <SettingsRow
+          to="/models/download"
+          icon="lucide:download"
+          :title="t('settings.locations.models.download.title')"
+          :description="t('settings.locations.models.download.description')"
+        />
+        <SettingsRow
+          to="/agents/providers"
+          icon="lucide:plug"
+          :title="t('settings.locations.agents.providers.title')"
+          :description="t('settings.locations.agents.providers.description')"
+        />
+      </SettingsGroup>
 
       <SettingsGroup>
         <SettingsRow

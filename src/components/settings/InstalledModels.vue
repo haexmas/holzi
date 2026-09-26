@@ -174,9 +174,15 @@ onMounted(async () => {
     <div v-if="loading" class="text-sm text-muted-foreground">
       {{ t('models.search.loading') }}
     </div>
-    <p v-else-if="installed.length === 0" class="text-sm text-muted-foreground">
-      {{ t('models.installed.empty') }}
-    </p>
+    <SettingsGroup v-else-if="installed.length === 0">
+      <SettingsRow
+        to="/models/download"
+        icon="lucide:download"
+        :title="t('settings.locations.models.download.title')"
+        :description="t('models.installed.empty')"
+        data-testid="settings-installed-empty"
+      />
+    </SettingsGroup>
 
     <SettingsGroup v-if="installed.length > 0">
       <SettingsRow v-for="model in installed" :key="model.id">

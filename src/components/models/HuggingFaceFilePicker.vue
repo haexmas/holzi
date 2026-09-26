@@ -156,15 +156,29 @@ onMounted(loadDetailsAsync)
     >
       {{ t('models.search.loading') }}
     </p>
-    <p v-if="detailsErrorKey" class="text-sm text-destructive" role="alert">
-      {{ t(detailsErrorKey) }}
-    </p>
-    <p
-      v-if="details && details.files.length === 0"
-      class="text-sm text-muted-foreground"
+    <SettingsGroup
+      v-if="detailsErrorKey || (details && details.files.length === 0)"
+      data-testid="settings-repo-missing"
     >
-      {{ t('models.result.noGgufFiles') }}
-    </p>
+      <SettingsRow
+        to="/models/download/search"
+        icon="lucide:search"
+        :title="t('settings.locations.models.download.search.title')"
+      >
+        <template #description>
+          <span
+            :class="detailsErrorKey ? 'text-destructive' : ''"
+            :role="detailsErrorKey ? 'alert' : undefined"
+          >
+            {{
+              detailsErrorKey
+                ? t(detailsErrorKey)
+                : t('models.result.noGgufFiles')
+            }}
+          </span>
+        </template>
+      </SettingsRow>
+    </SettingsGroup>
     <p
       v-else-if="details && visibleFiles.length === 0"
       class="text-sm text-muted-foreground"
