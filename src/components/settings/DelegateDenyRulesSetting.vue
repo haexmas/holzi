@@ -80,7 +80,7 @@ onMounted(reloadAsync)
 </script>
 
 <template>
-  <section class="flex flex-col gap-3">
+  <section class="flex flex-col gap-2">
     <div v-if="loading" class="text-sm text-muted-foreground">
       {{ t('onboarding.wizard.loadingDeviceInfo') }}
     </div>
@@ -90,35 +90,27 @@ onMounted(reloadAsync)
     </p>
 
     <template v-if="!loading">
-      <fieldset class="flex flex-col gap-2">
-        <label
-          v-for="category in CATEGORIES"
-          :key="category"
-          class="flex items-center gap-2 text-sm"
-        >
-          <input
+      <fieldset :aria-label="t('settings.locations.agents.denyRules.title')">
+        <SettingsGroup>
+          <SettingsOptionRow
+            v-for="category in CATEGORIES"
+            :key="category"
             type="checkbox"
             :checked="selected.has(category)"
             :disabled="busy"
-            @change="
-              toggleAsync(category, ($event.target as HTMLInputElement).checked)
-            "
+            :title="t(`settings.denyRules.${category}`)"
+            :description="t(`settings.denyRules.${category}Description`)"
+            @change="(checked) => toggleAsync(category, checked)"
           />
-          {{ t(`settings.denyRules.${category}`) }}
-          <span class="text-muted-foreground">
-            — {{ t(`settings.denyRules.${category}Description`) }}
-          </span>
-        </label>
+        </SettingsGroup>
       </fieldset>
 
-      <div class="flex items-center gap-3 flex-wrap">
-        <span v-if="savedFlash" class="text-xs text-success" role="status">
-          {{ t('settings.denyRules.saved') }}
-        </span>
-        <span v-if="opError" class="text-xs text-destructive" role="alert">
-          {{ t('settings.denyRules.saveFailed') }}: {{ opError }}
-        </span>
-      </div>
+      <p v-if="savedFlash" class="px-1 text-xs text-success" role="status">
+        {{ t('settings.denyRules.saved') }}
+      </p>
+      <p v-if="opError" class="px-1 text-xs text-destructive" role="alert">
+        {{ t('settings.denyRules.saveFailed') }}: {{ opError }}
+      </p>
     </template>
   </section>
 </template>

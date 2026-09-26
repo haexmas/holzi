@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * Overview of a category with several areas (spec 023-settings-app, FR-003): one row per area
- * with icon, title, one-line description and chevron; a row opens its sub-view as a new tab
- * location.
+ * Overview of a category with several areas (spec 023-settings-app, FR-003): one card per area
+ * with icon, title, one-line description and chevron, like the COSMIC settings; a card opens its
+ * sub-view as a new tab location.
  */
 import { categoryOf, locationPath, overviewRows } from '~/lib/settings/registry'
 
@@ -16,15 +16,15 @@ const rows = computed(() => {
 </script>
 
 <template>
-  <ul class="flex flex-col divide-y divide-border">
-    <li v-for="row in rows" :key="row.id">
-      <SettingsOverviewRow
+  <div class="flex flex-col gap-3">
+    <SettingsGroup v-for="row in rows" :key="row.id">
+      <SettingsRow
         :to="locationPath(row)"
-        :icon="row.icon ?? ''"
+        :icon="row.icon"
         :title="t(row.titleKey)"
-        :description="row.descriptionKey ? t(row.descriptionKey) : ''"
+        :description="row.descriptionKey ? t(row.descriptionKey) : undefined"
         :data-testid="`settings-row-${row.id}`"
       />
-    </li>
-  </ul>
+    </SettingsGroup>
+  </div>
 </template>

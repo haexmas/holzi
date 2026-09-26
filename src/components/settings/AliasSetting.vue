@@ -66,13 +66,16 @@ async function commitAsync() {
 </script>
 
 <template>
-  <section class="flex flex-col gap-3">
-    <label class="flex flex-col gap-1">
-      <span class="text-sm font-medium">{{ t('settings.alias.label') }}</span>
+  <SettingsGroup>
+    <SettingsRow
+      :title="t('settings.alias.label')"
+      label-for="settings-alias-input"
+    >
       <input
+        id="settings-alias-input"
         v-model="localValue"
         type="text"
-        class="rounded-md border border-input bg-background p-2 focus:outline-none focus:ring-2 focus:ring-ring"
+        class="h-9 w-56 max-w-full rounded-md border border-input bg-background px-2 text-sm focus:ring-2 focus:ring-ring focus:outline-none"
         :disabled="busy"
         :aria-invalid="showRequired && !localValue.trim() ? true : undefined"
         data-testid="settings-alias"
@@ -80,19 +83,24 @@ async function commitAsync() {
         @blur="commitAsync"
         @keydown.enter.prevent="commitAsync"
       />
-      <span
-        v-if="showRequired && !localValue.trim()"
-        class="text-xs text-destructive"
-        role="alert"
+      <template
+        v-if="(showRequired && !localValue.trim()) || savedFlash || saveError"
+        #below
       >
-        {{ t('settings.alias.required') }}
-      </span>
-    </label>
-    <span v-if="savedFlash" class="text-xs text-success" role="status">
-      {{ t('settings.alias.saved') }}
-    </span>
-    <span v-if="saveError" class="text-xs text-destructive" role="alert">
-      {{ t('errors.aliasSaveFailed') }}: {{ saveError }}
-    </span>
-  </section>
+        <span
+          v-if="showRequired && !localValue.trim()"
+          class="text-xs text-destructive"
+          role="alert"
+        >
+          {{ t('settings.alias.required') }}
+        </span>
+        <span v-if="savedFlash" class="text-xs text-success" role="status">
+          {{ t('settings.alias.saved') }}
+        </span>
+        <span v-if="saveError" class="text-xs text-destructive" role="alert">
+          {{ t('errors.aliasSaveFailed') }}: {{ saveError }}
+        </span>
+      </template>
+    </SettingsRow>
+  </SettingsGroup>
 </template>

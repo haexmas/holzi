@@ -68,45 +68,36 @@ onMounted(reloadAsync)
 </script>
 
 <template>
-  <section class="flex flex-col gap-3">
-    <span id="session-restore-title" class="text-sm font-medium">
-      {{ t('settings.sessionRestore.title') }}
-    </span>
-
+  <section class="flex flex-col gap-2">
     <p v-if="loadError" class="text-sm text-destructive" role="alert">
       {{ t('errors.prefLoadFailed') }}: {{ loadError }}
     </p>
 
-    <template v-if="restore">
-      <fieldset
-        class="flex flex-col gap-1"
-        aria-labelledby="session-restore-title"
-        data-testid="session-restore-choice"
-      >
-        <label
+    <fieldset v-if="restore" data-testid="session-restore-choice">
+      <legend class="mb-2 px-1 text-sm font-semibold">
+        {{ t('settings.sessionRestore.title') }}
+      </legend>
+      <SettingsGroup>
+        <SettingsOptionRow
           v-for="option in CHOICES"
           :key="option"
-          class="flex items-center gap-2 text-sm"
-        >
-          <input
-            type="radio"
-            name="session-restore"
-            :value="option"
-            :checked="choice === option"
-            :disabled="busy"
-            :data-testid="`session-restore-${option}`"
-            @change="chooseAsync(option)"
-          />
-          {{ t(`settings.sessionRestore.choice.${option}`) }}
-        </label>
-      </fieldset>
+          type="radio"
+          name="session-restore"
+          :value="option"
+          :checked="choice === option"
+          :disabled="busy"
+          :title="t(`settings.sessionRestore.choice.${option}`)"
+          :data-testid="`session-restore-${option}`"
+          @change="chooseAsync(option)"
+        />
+      </SettingsGroup>
+    </fieldset>
 
-      <p v-if="savedFlash" class="text-xs text-success" role="status">
-        {{ t('settings.sessionRestore.saved') }}
-      </p>
-      <p v-if="opError" class="text-xs text-destructive" role="alert">
-        {{ t('settings.sessionRestore.failed') }}: {{ opError }}
-      </p>
-    </template>
+    <p v-if="savedFlash" class="px-1 text-xs text-success" role="status">
+      {{ t('settings.sessionRestore.saved') }}
+    </p>
+    <p v-if="opError" class="px-1 text-xs text-destructive" role="alert">
+      {{ t('settings.sessionRestore.failed') }}: {{ opError }}
+    </p>
   </section>
 </template>

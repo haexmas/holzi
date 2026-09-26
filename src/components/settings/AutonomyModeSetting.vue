@@ -67,11 +67,17 @@ async function chooseAsync(mode: AutonomyMode) {
   }
 }
 
+/** Shows the choice at once; `chooseAsync` puts the stored one back if saving fails. */
+function onChoose(mode: AutonomyMode) {
+  selected.value = mode
+  void chooseAsync(mode)
+}
+
 onMounted(reloadAsync)
 </script>
 
 <template>
-  <section class="flex flex-col gap-3">
+  <section class="flex flex-col gap-2">
     <div v-if="loading" class="text-sm text-muted-foreground">
       {{ t('onboarding.wizard.loadingDeviceInfo') }}
     </div>
@@ -80,37 +86,31 @@ onMounted(reloadAsync)
       {{ t('settings.autonomyMode.loadFailed') }}: {{ loadError }}
     </p>
 
-    <fieldset v-if="!loading" class="flex flex-col gap-2">
-      <label
-        v-for="mode in MODES"
-        :key="mode"
-        class="flex items-start gap-2 text-sm"
-      >
-        <input
-          v-model="selected"
+    <fieldset
+      v-if="!loading"
+      :aria-label="t('settings.locations.agents.autonomy.title')"
+    >
+      <SettingsGroup>
+        <SettingsOptionRow
+          v-for="mode in MODES"
+          :key="mode"
           type="radio"
+          name="autonomy-mode"
           :value="mode"
+          :checked="selected === mode"
           :disabled="busy"
-          class="mt-1"
-          @change="chooseAsync(mode)"
+          :title="t(`chat.autonomy.${mode}`)"
+          :description="t(`settings.autonomyMode.${mode}Description`)"
+          @change="onChoose(mode)"
         />
-        <span>
-          <span class="font-medium">{{ t(`chat.autonomy.${mode}`) }}</span>
-          <br />
-          <span class="text-muted-foreground">{{
-            t(`settings.autonomyMode.${mode}Description`)
-          }}</span>
-        </span>
-      </label>
+      </SettingsGroup>
     </fieldset>
 
-    <div v-if="!loading" class="flex items-center gap-3 flex-wrap">
-      <span v-if="savedFlash" class="text-xs text-success" role="status">
-        {{ t('settings.autonomyMode.saved') }}
-      </span>
-      <span v-if="opError" class="text-xs text-destructive" role="alert">
-        {{ t('settings.autonomyMode.saveFailed') }}: {{ opError }}
-      </span>
-    </div>
+    <p v-if="savedFlash" class="px-1 text-xs text-success" role="status">
+      {{ t('settings.autonomyMode.saved') }}
+    </p>
+    <p v-if="opError" class="px-1 text-xs text-destructive" role="alert">
+      {{ t('settings.autonomyMode.saveFailed') }}: {{ opError }}
+    </p>
   </section>
 </template>

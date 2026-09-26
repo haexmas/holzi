@@ -8,12 +8,11 @@ const device = useSettingsDevice()
 </script>
 
 <template>
-  <div class="flex flex-col gap-8">
+  <div class="flex flex-col gap-6">
     <SettingsAliasSetting
       :current-alias="device.info.value.alias ?? ''"
       @saved="device.reloadAsync"
     />
-    <hr class="border-border" />
     <SettingsSessionRestoreSetting />
   </div>
 </template>

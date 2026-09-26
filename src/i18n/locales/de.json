@@ -422,7 +422,9 @@
       "label": "Einstellungen durchsuchen",
       "placeholder": "Suchen",
       "noResults": "Keine Einstellung gefunden.",
-      "open": "Einstellungen durchsuchen"
+      "open": "Einstellungen durchsuchen",
+      "clear": "Suche leeren",
+      "close": "Suche schließen"
     },
     "sidebar": {
       "show": "Seitenleiste einblenden",

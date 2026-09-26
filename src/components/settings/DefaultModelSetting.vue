@@ -137,7 +137,7 @@ onMounted(reloadAsync)
 </script>
 
 <template>
-  <section class="flex flex-col gap-4">
+  <section class="flex flex-col gap-3">
     <div v-if="loading" class="text-sm text-muted-foreground">
       {{ t('onboarding.wizard.loadingDeviceInfo') }}
     </div>
@@ -157,44 +157,48 @@ onMounted(reloadAsync)
         {{ t('settings.default.empty') }}
       </p>
 
-      <label
-        v-for="scope in ['device', 'vault'] as const"
-        :key="scope"
-        class="flex flex-col gap-1"
-      >
-        <span class="text-sm font-medium">
-          {{ t(`settings.default.${scope}Label`) }}
-        </span>
-        <select
-          class="rounded-md border border-input bg-background p-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          :value="stored[scope] ?? ''"
-          :disabled="busy"
-          :data-testid="`settings-default-${scope}`"
-          @change="chooseAsync(scope, $event)"
+      <SettingsGroup>
+        <SettingsRow
+          v-for="scope in ['device', 'vault'] as const"
+          :key="scope"
+          :title="t(`settings.default.${scope}Label`)"
+          :label-for="`settings-default-${scope}-select`"
         >
-          <option value="">
-            {{
-              t(
-                scope === 'device'
-                  ? 'settings.default.followVault'
-                  : 'settings.default.none',
-              )
-            }}
-          </option>
-          <option v-if="!isOffered(stored[scope])" :value="stored[scope] ?? ''">
-            {{ t('settings.default.unknownModel', { id: stored[scope] }) }}
-          </option>
-          <optgroup
-            v-for="group in modelGroups"
-            :key="group.providerId"
-            :label="group.providerName"
+          <select
+            :id="`settings-default-${scope}-select`"
+            class="h-9 w-64 max-w-full rounded-md border border-input bg-background px-2 text-sm focus:ring-2 focus:ring-ring focus:outline-none"
+            :value="stored[scope] ?? ''"
+            :disabled="busy"
+            :data-testid="`settings-default-${scope}`"
+            @change="chooseAsync(scope, $event)"
           >
-            <option v-for="m in group.models" :key="m.id" :value="m.id">
-              {{ m.name }}
+            <option value="">
+              {{
+                t(
+                  scope === 'device'
+                    ? 'settings.default.followVault'
+                    : 'settings.default.none',
+                )
+              }}
             </option>
-          </optgroup>
-        </select>
-      </label>
+            <option
+              v-if="!isOffered(stored[scope])"
+              :value="stored[scope] ?? ''"
+            >
+              {{ t('settings.default.unknownModel', { id: stored[scope] }) }}
+            </option>
+            <optgroup
+              v-for="group in modelGroups"
+              :key="group.providerId"
+              :label="group.providerName"
+            >
+              <option v-for="m in group.models" :key="m.id" :value="m.id">
+                {{ m.name }}
+              </option>
+            </optgroup>
+          </select>
+        </SettingsRow>
+      </SettingsGroup>
 
       <span v-if="savedFlash" class="text-xs text-success" role="status">
         {{ t('settings.default.saved') }}

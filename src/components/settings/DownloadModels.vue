@@ -61,9 +61,9 @@ onMounted(reloadAsync)
 </script>
 
 <template>
-  <section class="flex flex-col gap-2">
-    <div class="border-b border-border pb-2">
-      <SettingsOverviewRow
+  <section class="flex flex-col gap-6">
+    <SettingsGroup>
+      <SettingsRow
         to="/models/download/search"
         icon="lucide:search"
         :title="t('settings.locations.models.download.search.title')"
@@ -72,29 +72,24 @@ onMounted(reloadAsync)
         "
         data-testid="settings-row-models.download.search"
       />
-    </div>
+    </SettingsGroup>
 
-    <template v-if="otherDownloads.length > 0">
-      <span class="text-xs font-medium text-muted-foreground uppercase">
-        {{ t('settings.downloadModels.running') }}
-      </span>
-      <div
-        v-for="id in otherDownloads"
-        :key="id"
-        class="relative flex flex-col overflow-hidden border-b border-border px-3 py-3"
-      >
-        <ModelsDownloadBar :model-id="id" />
-        <span class="relative z-10 font-mono text-sm">{{ id }}</span>
-        <ModelsDownloadStatus class="relative z-10" :model-id="id" />
-      </div>
-    </template>
-
-    <span
+    <SettingsGroup
       v-if="otherDownloads.length > 0"
-      class="text-xs font-medium text-muted-foreground uppercase"
+      :label="t('settings.downloadModels.running')"
     >
-      {{ t('settings.downloadModels.recommended') }}
-    </span>
+      <SettingsRow v-for="id in otherDownloads" :key="id">
+        <template #backdrop>
+          <ModelsDownloadBar :model-id="id" />
+        </template>
+        <template #title>
+          <span class="font-mono text-sm">{{ id }}</span>
+        </template>
+        <template #description>
+          <ModelsDownloadStatus :model-id="id" />
+        </template>
+      </SettingsRow>
+    </SettingsGroup>
 
     <p v-if="errorKey" class="text-sm text-destructive" role="alert">
       {{ t(errorKey) }}
@@ -104,21 +99,30 @@ onMounted(reloadAsync)
       {{ t('models.search.loading') }}
     </div>
 
-    <div
-      v-for="entry in catalogEntries"
-      :key="entry.id"
-      class="relative flex items-center justify-between gap-2 overflow-hidden border-b border-border px-3 py-3 last:border-b-0"
+    <SettingsGroup
+      v-if="catalogEntries.length > 0"
+      :label="
+        otherDownloads.length > 0
+          ? t('settings.downloadModels.recommended')
+          : undefined
+      "
     >
-      <ModelsDownloadBar :model-id="entry.id" />
-      <div class="relative z-10 flex flex-col">
-        <span class="font-medium">{{ entry.name }}</span>
-        <span class="text-xs text-muted-foreground"
-          >{{ entry.parameters }} · {{ entry.quantization }} ·
-          {{ t(`models.filePicker.fit.${entry.fit}`) }}</span
-        >
-        <ModelsDownloadStatus :model-id="entry.id" />
-      </div>
-      <div class="relative z-10">
+      <SettingsRow v-for="entry in catalogEntries" :key="entry.id">
+        <template #backdrop>
+          <ModelsDownloadBar :model-id="entry.id" />
+        </template>
+        <template #title>
+          <span class="font-medium">{{ entry.name }}</span>
+        </template>
+        <template #description>
+          <span class="flex flex-col text-xs">
+            <span
+              >{{ entry.parameters }} · {{ entry.quantization }} ·
+              {{ t(`models.filePicker.fit.${entry.fit}`) }}</span
+            >
+            <ModelsDownloadStatus :model-id="entry.id" />
+          </span>
+        </template>
         <UiButton
           type="button"
           size="sm"
@@ -132,7 +136,7 @@ onMounted(reloadAsync)
               : t('models.filePicker.install')
           }}
         </UiButton>
-      </div>
-    </div>
+      </SettingsRow>
+    </SettingsGroup>
   </section>
 </template>

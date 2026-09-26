@@ -229,7 +229,7 @@ onMounted(() => {
         <span>{{ t('models.search.filters.quantization') }}</span>
         <select
           v-model="quantizationFilter"
-          class="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm"
+          class="h-9 rounded-md border border-input bg-background px-2 text-sm"
         >
           <option value="all">{{ t('models.search.filters.all') }}</option>
           <option
@@ -249,7 +249,7 @@ onMounted(() => {
         <span>{{ t('models.search.filters.maxSize') }}</span>
         <select
           v-model="sizeLimitFilter"
-          class="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm"
+          class="h-9 rounded-md border border-input bg-background px-2 text-sm"
         >
           <option value="all">{{ t('models.search.filters.all') }}</option>
           <option
@@ -265,7 +265,7 @@ onMounted(() => {
         <span>{{ t('models.search.filters.fit') }}</span>
         <select
           v-model="fitFilter"
-          class="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm"
+          class="h-9 rounded-md border border-input bg-background px-2 text-sm"
         >
           <option value="all">{{ t('models.search.filters.all') }}</option>
           <option v-for="fit in fitOptions" :key="fit" :value="fit">
@@ -289,16 +289,13 @@ onMounted(() => {
       {{ t('models.search.filters.empty') }}
     </p>
 
-    <div
-      v-if="filteredResults.length > 0"
-      class="flex flex-col divide-y divide-border"
-    >
+    <SettingsGroup v-if="filteredResults.length > 0">
       <ModelsHuggingFaceResult
         v-for="result in filteredResults"
         :key="result.repoId"
         :result="result"
         @select="openResult"
       />
-    </div>
+    </SettingsGroup>
   </section>
 </template>

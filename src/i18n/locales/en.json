@@ -422,7 +422,9 @@
       "label": "Search settings",
       "placeholder": "Search",
       "noResults": "No setting found.",
-      "open": "Search settings"
+      "open": "Search settings",
+      "clear": "Clear search",
+      "close": "Close search"
     },
     "sidebar": {
       "show": "Show sidebar",

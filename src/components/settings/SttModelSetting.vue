@@ -80,7 +80,7 @@ onMounted(reloadAsync)
 </script>
 
 <template>
-  <section class="flex flex-col gap-4">
+  <section class="flex flex-col gap-6">
     <div v-if="loading" class="text-sm text-muted-foreground">
       {{ t('onboarding.wizard.loadingDeviceInfo') }}
     </div>
@@ -90,39 +90,49 @@ onMounted(reloadAsync)
     </p>
 
     <template v-if="!loading && !loadError">
-      <label v-if="installed.length > 0" class="flex flex-col gap-1">
-        <span class="text-sm font-medium">{{
-          t('settings.sttModel.modelLabel')
-        }}</span>
-        <select
-          class="rounded-md border border-input bg-background p-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          :value="activeId"
-          :disabled="busyId !== null"
-          data-testid="settings-stt-model"
-          @change="activateAsync(($event.target as HTMLSelectElement).value)"
+      <SettingsGroup v-if="installed.length > 0">
+        <SettingsRow
+          :title="t('settings.sttModel.modelLabel')"
+          label-for="settings-stt-model-select"
         >
-          <option v-if="!installedIds.has(activeId)" :value="activeId" disabled>
-            {{ t('settings.sttModel.notInstalled') }}
-          </option>
-          <option v-for="entry in installed" :key="entry.id" :value="entry.id">
-            {{ entry.name }}
-          </option>
-        </select>
-      </label>
+          <select
+            id="settings-stt-model-select"
+            class="h-9 w-56 max-w-full rounded-md border border-input bg-background px-2 text-sm focus:ring-2 focus:ring-ring focus:outline-none"
+            :value="activeId"
+            :disabled="busyId !== null"
+            data-testid="settings-stt-model"
+            @change="activateAsync(($event.target as HTMLSelectElement).value)"
+          >
+            <option
+              v-if="!installedIds.has(activeId)"
+              :value="activeId"
+              disabled
+            >
+              {{ t('settings.sttModel.notInstalled') }}
+            </option>
+            <option
+              v-for="entry in installed"
+              :key="entry.id"
+              :value="entry.id"
+            >
+              {{ entry.name }}
+            </option>
+          </select>
+        </SettingsRow>
+      </SettingsGroup>
       <p v-else class="text-sm text-muted-foreground">
         {{ t('settings.sttModel.noneInstalled') }}
       </p>
 
-      <div v-if="available.length > 0" class="flex flex-col gap-2">
-        <span class="text-sm font-medium">{{
-          t('settings.sttModel.availableLabel')
-        }}</span>
-        <div
+      <SettingsGroup
+        v-if="available.length > 0"
+        :label="t('settings.sttModel.availableLabel')"
+      >
+        <SettingsRow
           v-for="entry in available"
           :key="entry.id"
-          class="flex items-center justify-between gap-3 text-sm"
+          :title="entry.name"
         >
-          <span>{{ entry.name }}</span>
           <UiButton
             type="button"
             variant="outline"
@@ -137,15 +147,15 @@ onMounted(reloadAsync)
                 : t('settings.sttModel.downloadAndUse')
             }}
           </UiButton>
-        </div>
-      </div>
+        </SettingsRow>
+      </SettingsGroup>
 
-      <span v-if="savedFlash" class="text-xs text-success" role="status">
+      <p v-if="savedFlash" class="px-1 text-xs text-success" role="status">
         {{ t('settings.sttModel.saved') }}
-      </span>
-      <span v-if="opError" class="text-xs text-destructive" role="alert">
+      </p>
+      <p v-if="opError" class="px-1 text-xs text-destructive" role="alert">
         {{ t('settings.sttModel.downloadFailed') }}: {{ opError }}
-      </span>
+      </p>
     </template>
   </section>
 </template>

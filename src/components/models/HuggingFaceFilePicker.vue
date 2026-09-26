@@ -134,6 +134,16 @@ function sizeLabel(bytes: number | null): string {
   return bytes === null ? t('models.filePicker.sizeUnknown') : humanBytes(bytes)
 }
 
+/** One line under the file name: size, quantization, fit and a catalog match. */
+function fileSummary(file: HuggingFaceFileCandidate): string {
+  return [
+    sizeLabel(file.sizeBytes),
+    file.quantization ?? t('models.filePicker.quantizationUnknown'),
+    t(`models.filePicker.fit.${file.fit}`),
+    ...(file.catalogMatch ? [t('models.result.catalogMatch')] : []),
+  ].join(' · ')
+}
+
 onMounted(loadDetailsAsync)
 </script>
 
@@ -162,47 +172,23 @@ onMounted(loadDetailsAsync)
       {{ t('models.search.filters.empty') }}
     </p>
 
-    <div
-      v-if="details && visibleFiles.length > 0"
-      class="flex flex-col divide-y divide-border"
-    >
-      <button
+    <SettingsGroup v-if="details && visibleFiles.length > 0">
+      <SettingsOptionRow
         v-for="file in visibleFiles"
         :key="file.filename"
-        type="button"
-        class="flex flex-col gap-1 rounded-md px-3 py-3 text-left focus:outline-none focus:ring-2 focus:ring-ring"
-        :class="
-          selectedFile?.filename === file.filename
-            ? 'bg-primary/10'
-            : 'hover:bg-accent hover:text-accent-foreground'
-        "
-        @click="selectFileAsync(file)"
-      >
-        <span class="font-mono text-sm">{{ file.filename }}</span>
-        <div
-          class="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground"
-        >
-          <span
-            >{{ t('models.filePicker.size') }}:
-            {{ sizeLabel(file.sizeBytes) }}</span
-          >
-          <span
-            >{{ t('models.filePicker.quantization') }}:
-            {{
-              file.quantization ?? t('models.filePicker.quantizationUnknown')
-            }}</span
-          >
-          <span>{{ t(`models.filePicker.fit.${file.fit}`) }}</span>
-          <span v-if="file.catalogMatch">{{
-            t('models.result.catalogMatch')
-          }}</span>
-        </div>
-      </button>
-    </div>
+        type="radio"
+        name="hf-file"
+        :value="file.filename"
+        :checked="selectedFile?.filename === file.filename"
+        :title="file.filename"
+        :description="fileSummary(file)"
+        @change="selectFileAsync(file)"
+      />
+    </SettingsGroup>
 
     <div
       v-if="selectedFile"
-      class="relative flex flex-col gap-3 overflow-hidden border-t border-border px-3 pt-3"
+      class="relative flex flex-col gap-3 overflow-hidden rounded-xl bg-muted p-4"
     >
       <ModelsDownloadBar v-if="preview" :model-id="downloadModelId" />
       <div class="relative z-10 flex flex-col gap-3">

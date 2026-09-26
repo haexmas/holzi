@@ -178,93 +178,94 @@ onMounted(async () => {
       {{ t('models.installed.empty') }}
     </p>
 
-    <div
-      v-for="model in installed"
-      :key="model.id"
-      class="relative flex flex-col gap-1 overflow-hidden border-b border-border px-3 py-3 last:border-b-0"
-    >
-      <ModelsDownloadBar :model-id="model.id" />
-      <div class="relative z-10 flex flex-col gap-1">
-        <div class="flex items-center justify-between gap-2">
-          <span class="font-medium">{{ model.name }}</span>
-          <span
-            v-if="activeModelId === model.id"
-            class="rounded bg-success/10 px-1.5 py-0.5 text-xs text-success"
-          >
-            {{ t('models.installed.active') }}
+    <SettingsGroup v-if="installed.length > 0">
+      <SettingsRow v-for="model in installed" :key="model.id">
+        <template #backdrop>
+          <ModelsDownloadBar :model-id="model.id" />
+        </template>
+        <template #title>
+          <span class="flex flex-wrap items-center gap-2">
+            <span class="font-medium">{{ model.name }}</span>
+            <span
+              v-if="activeModelId === model.id"
+              class="rounded-full bg-success/10 px-2 py-0.5 text-xs text-success"
+            >
+              {{ t('models.installed.active') }}
+            </span>
           </span>
-        </div>
-        <div
-          class="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground"
-        >
-          <span>{{ t(`models.installed.source.${model.sourceKind}`) }}</span>
-          <span>{{
-            t(`models.installed.integrity.${model.integrityStatus}`)
-          }}</span>
-        </div>
-        <ModelsDownloadStatus :model-id="model.id" />
-        <div
-          v-if="model.hfRevisionRef && updateStatuses[model.id]"
-          class="text-xs"
-        >
-          <span
-            v-if="updateStatuses[model.id]?.errorCode"
-            class="text-destructive"
-          >
-            {{ t('models.update.error') }}
+        </template>
+        <template #description>
+          <span class="flex flex-col gap-0.5 text-xs">
+            <span class="flex flex-wrap gap-x-3 gap-y-0.5">
+              <span>{{
+                t(`models.installed.source.${model.sourceKind}`)
+              }}</span>
+              <span>{{
+                t(`models.installed.integrity.${model.integrityStatus}`)
+              }}</span>
+            </span>
+            <ModelsDownloadStatus :model-id="model.id" />
+            <span v-if="model.hfRevisionRef && updateStatuses[model.id]">
+              <span
+                v-if="updateStatuses[model.id]?.errorCode"
+                class="text-destructive"
+              >
+                {{ t('models.update.error') }}
+              </span>
+              <span
+                v-else-if="updateStatuses[model.id]?.updateAvailable"
+                class="text-warning"
+              >
+                {{ t('models.update.available') }} ({{
+                  t('models.update.oldRevision')
+                }}:
+                {{ updateStatuses[model.id]?.installedRevision.slice(0, 8) }} →
+                {{ t('models.update.newRevision') }}:
+                {{ updateStatuses[model.id]?.latestRevision?.slice(0, 8) }})
+              </span>
+              <span v-else>{{ t('models.update.upToDate') }}</span>
+            </span>
+            <span
+              v-else-if="
+                model.sourceKind === 'huggingface' && !model.hfRevisionRef
+              "
+            >
+              {{ t('models.update.notTrackable') }}
+            </span>
           </span>
-          <span
-            v-else-if="updateStatuses[model.id]?.updateAvailable"
-            class="text-warning"
-          >
-            {{ t('models.update.available') }} ({{
-              t('models.update.oldRevision')
-            }}: {{ updateStatuses[model.id]?.installedRevision.slice(0, 8) }} →
-            {{ t('models.update.newRevision') }}:
-            {{ updateStatuses[model.id]?.latestRevision?.slice(0, 8) }})
-          </span>
-          <span v-else class="text-muted-foreground">{{
-            t('models.update.upToDate')
-          }}</span>
-        </div>
-        <div
-          v-else-if="model.sourceKind === 'huggingface' && !model.hfRevisionRef"
-          class="text-xs text-muted-foreground"
+        </template>
+        <UiButton
+          type="button"
+          size="sm"
+          :disabled="activeModelId === model.id"
+          :loading="busyModelId === model.id"
+          @click="loadModelHereAsync(model.id)"
         >
-          {{ t('models.update.notTrackable') }}
-        </div>
-        <div class="flex flex-wrap items-center gap-2 pt-1">
-          <UiButton
-            type="button"
-            size="sm"
-            :disabled="activeModelId === model.id"
-            :loading="busyModelId === model.id"
-            @click="loadModelHereAsync(model.id)"
-          >
-            {{ t('models.installed.load') }}
-          </UiButton>
-          <UiButton
-            v-if="updateStatuses[model.id]?.updateAvailable"
-            type="button"
-            size="sm"
-            variant="outline"
-            :loading="installingUpdateId === model.id"
-            @click="installUpdateForAsync(model.id)"
-          >
-            {{ t('models.update.install') }}
-          </UiButton>
-          <UiButton
-            type="button"
-            size="sm"
-            variant="ghost"
-            :loading="busyModelId === model.id"
-            @click="deleteModelAsync(model.id)"
-          >
-            {{ t('models.installed.delete') }}
-          </UiButton>
-        </div>
-      </div>
-    </div>
+          {{ t('models.installed.load') }}
+        </UiButton>
+        <UiButton
+          v-if="updateStatuses[model.id]?.updateAvailable"
+          type="button"
+          size="sm"
+          variant="outline"
+          :loading="installingUpdateId === model.id"
+          @click="installUpdateForAsync(model.id)"
+        >
+          {{ t('models.update.install') }}
+        </UiButton>
+        <UiButton
+          type="button"
+          size="sm"
+          variant="ghost"
+          :aria-label="`${t('models.installed.delete')}: ${model.name}`"
+          :tooltip="t('models.installed.delete')"
+          :loading="busyModelId === model.id"
+          @click="deleteModelAsync(model.id)"
+        >
+          <Icon name="lucide:trash-2" class="size-4" />
+        </UiButton>
+      </SettingsRow>
+    </SettingsGroup>
 
     <ModelsModelIntegrityDialog
       v-if="integrityDialog"
