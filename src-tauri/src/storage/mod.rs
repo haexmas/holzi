@@ -19,6 +19,8 @@ pub mod chat_messages;
 mod chat_messages_tests;
 pub mod chat_threads;
 pub mod known_devices;
+#[cfg(test)]
+mod known_devices_tests;
 pub mod maintenance;
 #[cfg(test)]
 mod maintenance_tests;

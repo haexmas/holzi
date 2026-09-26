@@ -24,7 +24,11 @@ const DENY_RULES_KEY = 'cli_delegate.deny_rules'
  * the UI, a shortcut or an agent, with or without the settings window open.
  */
 export function registerSettingsActionHandlers(wm: WmStore): void {
-  const { currentDeviceInfoAsync, updateDeviceAliasAsync } = useDevice()
+  const {
+    currentDeviceInfoAsync,
+    updateDeviceAliasAsync,
+    listVaultDevicesAsync,
+  } = useDevice()
   const { getPrefAsync, setPrefAsync, clearPrefAsync } = usePreferences()
   const models = useModels()
   const huggingFace = useHuggingFace()
@@ -63,6 +67,13 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
       delegateDenyRules: denyRules ? (JSON.parse(denyRules) as unknown) : [],
     }
   })
+  on('settings.devices.list', async () => ({
+    devices: (await listVaultDevicesAsync()).map((device) => ({
+      vaultDeviceUuid: device.vaultDeviceUuid,
+      ...(device.alias === null ? {} : { alias: device.alias }),
+      isCurrent: device.isCurrent,
+    })),
+  }))
   on('settings.models.list', async () => ({
     models: (await models.listInstalledAsync()).map((model) => ({
       modelId: model.id,

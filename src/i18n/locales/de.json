@@ -432,7 +432,13 @@
       "saved": "Gespeichert.",
       "failed": "Das Farbschema konnte nicht gespeichert werden"
     },
-    "deviceOnly": "Gilt nur für dieses Gerät"
+    "deviceOnly": "Gilt nur für dieses Gerät",
+    "federation": {
+      "thisDevice": "Dieses Gerät",
+      "unnamed": "Unbenanntes Gerät",
+      "loadFailed": "Die Geräte der Vault ließen sich nicht laden",
+      "devicesLabel": "Geräte der Vault"
+    }
   },
   "models": {
     "search": {
@@ -720,6 +726,9 @@
       "appearance": {
         "setColorScheme": "Farbschema festlegen",
         "clearColorScheme": "Farbschema zurücksetzen"
+      },
+      "devices": {
+        "list": "Geräte der Vault auflisten"
       }
     },
     "scopes": {

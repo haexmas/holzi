@@ -60,6 +60,14 @@ export const SETTINGS_ACTIONS: readonly ActionDefinition[] = [
     effect: 'read',
   }),
   setting({
+    id: 'settings.devices.list',
+    description:
+      "List the vault's devices: this device first and marked, then the others by name. A device without a name has no alias.",
+    result: ANY_OBJECT,
+    scope: 'settings.read',
+    effect: 'read',
+  }),
+  setting({
     id: 'settings.models.list',
     description: 'List the installed models.',
     result: ANY_OBJECT,

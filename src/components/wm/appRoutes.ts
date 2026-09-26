@@ -67,6 +67,9 @@ const SETTINGS_VIEWS: Record<string, Component> = {
   'agents.denyRules': defineAsyncComponent(
     () => import('~/components/settings/DelegateDenyRulesSetting.vue'),
   ),
+  federation: defineAsyncComponent(
+    () => import('~/components/settings/FederationView.vue'),
+  ),
 }
 
 /** The settings routes from the registry: `SettingsApp` as the frame, one flat child per location. */

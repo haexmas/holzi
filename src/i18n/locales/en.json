@@ -432,7 +432,13 @@
       "saved": "Saved.",
       "failed": "The color scheme could not be saved"
     },
-    "deviceOnly": "Applies to this device only"
+    "deviceOnly": "Applies to this device only",
+    "federation": {
+      "thisDevice": "This device",
+      "unnamed": "Unnamed device",
+      "loadFailed": "Could not load the vault's devices",
+      "devicesLabel": "Devices of the vault"
+    }
   },
   "models": {
     "search": {
@@ -720,6 +726,9 @@
       "appearance": {
         "setColorScheme": "Set the color scheme",
         "clearColorScheme": "Reset the color scheme"
+      },
+      "devices": {
+        "list": "List the vault's devices"
       }
     },
     "scopes": {
