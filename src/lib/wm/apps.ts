@@ -18,6 +18,10 @@ export type AppDefinition = {
   /** `false` = singleton: re-opening activates the existing tab instead of creating a second one
    * (FR-016). All three shipped apps are singletons in this spec (FR-017). */
   multiInstance: boolean
+  /** What the tab shows as its title: the current location's title (default, e.g. the chat's
+   * conversation) or always the app's own title (the settings, spec 023 research R2). The history
+   * list shows location titles either way. */
+  tabTitle?: 'location' | 'app'
 }
 
 export const WM_APPS: readonly AppDefinition[] = [
@@ -36,6 +40,7 @@ export const WM_APPS: readonly AppDefinition[] = [
     defaultSize: { width: 760, height: 560 },
     minSize: { width: 420, height: 360 },
     multiInstance: false,
+    tabTitle: 'app',
   },
   {
     id: 'system.federation',
@@ -57,4 +62,17 @@ export function getAppDefinition(
   apps: readonly AppDefinition[] = WM_APPS,
 ): AppDefinition | undefined {
   return apps.find((app) => app.id === appId)
+}
+
+export type TitleRef = {
+  key: string | undefined
+  params: Record<string, string>
+}
+
+/** The tab title for a tab of `app` whose location is titled `routed` (spec 023 research R2). */
+export function tabTitleFor(
+  app: AppDefinition | undefined,
+  routed: TitleRef,
+): TitleRef {
+  return app?.tabTitle === 'app' ? { key: app.titleKey, params: {} } : routed
 }

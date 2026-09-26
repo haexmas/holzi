@@ -60,6 +60,11 @@ onMounted(async () => {
   } catch (error) {
     console.error('[wm] restoring the session failed; starting empty', error)
   }
+  void useModelDownloadsStore()
+    .watchDownloads()
+    .catch((error: unknown) => {
+      console.error('[models] watching download progress failed', error)
+    })
 
   const open = route.query.open
   if (typeof open === 'string' && open.length > 0) {

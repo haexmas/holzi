@@ -10,6 +10,7 @@ Ablage und Vorrang: Nummerierte `specs/`-Artefakte einschließlich ihrer Verträ
 | 015: Workspace-Shell (`specs/015-workspace-shell/`)                    | P1        | L       | Vom Betreiber am 2026-09-21 angefordert; Implementierung ab 2026-09-24 | Setzt Spec 013 (eine Vault-Session je Prozess) voraus; die Shell lebt innerhalb dieser Session                    |
 | 020: Navigation im Tab (`specs/020-tab-navigation/`)                   | P1        | M       | Spezifiziert 2026-09-25, Umsetzung nach Merge von 015 (ab 2026-09-25)  | Setzt Spec 015 (Workspace-Shell) voraus                                                                           |
 | 022: Sitzung wiederherstellen (`specs/022-session-restore/`)           | P1        | S       | Spezifiziert 2026-09-25, Umsetzung ab 2026-09-26                       | Setzt Spec 015 voraus; PR #143 stapelt auf 020 (#142)                                                             |
+| 023: Einstellungs-App mit Kategorien (`specs/023-settings-app/`)       | P1        | M       | Spezifiziert 2026-09-26, Plan 2026-09-26, Umsetzung ab 2026-09-26      | Setzt Spec 015, 020, 022 voraus                                                                                   |
 
 Legende: Priorität `P1` (höchste) – `P3` (nachrangig); Aufwand `S` (klein), `M` (mittel), `L` (groß).
 

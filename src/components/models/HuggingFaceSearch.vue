@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * HuggingFace search, the location `/models/download/search` (spec 005, spec 023 research R1).
+ * The submitted term and the filters live in the tab location's query (`q`, `quant`, `size`,
+ * `fit`, replaced in place), so back from a repository returns to the same results. A result opens
+ * its repository as a new location, passing the files that matched the filters.
+ */
 import type {
   HardwareFit,
   HuggingFaceFileCandidate,
@@ -6,20 +12,20 @@ import type {
 } from '~/composables/useHuggingFace'
 
 const { t } = useI18n()
+const router = useTabRouter()
 const { searchAsync, detailsAsync } = useHuggingFace()
 
-const emit = defineEmits<{
-  select: [result: HuggingFaceModelResult]
-}>()
-
-const query = ref('')
+const initial = router.route.query
+const query = ref(initial.q ?? '')
 const results = ref<HuggingFaceModelResult[]>([])
 const loading = ref(false)
 const errorKey = ref<string | null>(null)
 const hasSearched = ref(false)
-const quantizationFilter = ref('all')
-const sizeLimitFilter = ref('all')
-const fitFilter = ref<'all' | HardwareFit>('all')
+const quantizationFilter = ref(initial.quant ?? 'all')
+const sizeLimitFilter = ref(initial.size ?? 'all')
+const fitFilter = ref<'all' | HardwareFit>(
+  (initial.fit as HardwareFit | undefined) ?? 'all',
+)
 
 const fitOptions: HardwareFit[] = ['fits', 'tight', 'too_big', 'unknown']
 const sizeLimitOptions = [2, 4, 8, 16]
@@ -32,6 +38,13 @@ const queryTooShort = computed(
 /** Loads repositories and enriches them with file-level size/fit metadata. */
 async function loadResultsAsync(searchQuery?: string) {
   if (loading.value) return
+  const key = searchQuery ?? ''
+  const cached = cachedSearchResults(key)
+  if (cached) {
+    results.value = cached
+    hasSearched.value = true
+    return
+  }
   loading.value = true
   errorKey.value = null
   try {
@@ -54,6 +67,7 @@ async function loadResultsAsync(searchQuery?: string) {
         }
       }),
     )
+    rememberSearchResults(key, results.value)
     hasSearched.value = true
   } catch (e) {
     errorKey.value = hfErrorKey(e)
@@ -71,11 +85,13 @@ async function loadResultsAsync(searchQuery?: string) {
 async function onSubmit() {
   if (queryTooShort.value || trimmedQuery.value.length === 0 || loading.value)
     return
+  router.setQuery({ q: trimmedQuery.value })
   await loadResultsAsync(trimmedQuery.value)
 }
 
 async function retryAsync() {
   if (loading.value) return
+  forgetSearchResults()
   if (trimmedQuery.value.length > 0) {
     await loadResultsAsync(trimmedQuery.value)
   } else {
@@ -125,16 +141,42 @@ const filteredResults = computed(() =>
     .filter((result) => result.files.length > 0),
 )
 
+watch(
+  [quantizationFilter, sizeLimitFilter, fitFilter],
+  ([quant, size, fit]) => {
+    router.setQuery({
+      quant: quant === 'all' ? null : quant,
+      size: size === 'all' ? null : size,
+      fit: fit === 'all' ? null : fit,
+    })
+  },
+)
+
+const filtersActive = computed(
+  () =>
+    quantizationFilter.value !== 'all' ||
+    sizeLimitFilter.value !== 'all' ||
+    fitFilter.value !== 'all',
+)
+
+/** Opens the repository as a new location; the files that matched the filters go along. */
+function openResult(result: HuggingFaceModelResult) {
+  const [owner = '', ...rest] = result.repoId.split('/')
+  router.push({
+    path: `/models/download/repo/${encodeURIComponent(owner)}/${encodeURIComponent(rest.join('/'))}`,
+    query: filtersActive.value
+      ? { files: result.files.map((file) => file.filename).join(',') }
+      : {},
+  })
+}
+
 onMounted(() => {
-  void loadResultsAsync()
+  void loadResultsAsync(router.route.query.q || undefined)
 })
 </script>
 
 <template>
   <section class="flex flex-col gap-3">
-    <h2 class="text-lg font-semibold">
-      {{ t('models.search.title') }}
-    </h2>
     <form class="flex gap-2" @submit.prevent="onSubmit">
       <ShadcnInput
         v-model="query"
@@ -151,13 +193,13 @@ onMounted(() => {
       </UiButton>
     </form>
 
-    <p v-if="queryTooShort" class="text-xs text-neutral-500">
+    <p v-if="queryTooShort" class="text-xs text-muted-foreground">
       {{ t('models.search.tooShort') }}
     </p>
 
     <p
       v-if="errorKey"
-      class="flex items-center gap-2 text-sm text-red-500"
+      class="flex items-center gap-2 text-sm text-destructive"
       role="alert"
     >
       {{ t(errorKey) }}
@@ -166,20 +208,20 @@ onMounted(() => {
       </button>
     </p>
 
-    <p v-if="loading" class="text-sm text-neutral-500" role="status">
+    <p v-if="loading" class="text-sm text-muted-foreground" role="status">
       {{ t('models.search.loading') }}
     </p>
 
     <p
       v-if="hasSearched && trimmedQuery.length === 0 && !errorKey"
-      class="text-sm text-neutral-500"
+      class="text-sm text-muted-foreground"
     >
       {{ t('models.search.top') }}
     </p>
 
     <div
       v-if="results.length > 0"
-      class="flex flex-wrap items-end gap-3 rounded-md border border-neutral-200 p-3"
+      class="flex flex-wrap items-end gap-3 rounded-md border border-border p-3"
     >
       <span class="w-full text-sm font-medium">
         {{ t('models.search.filters.title') }}
@@ -188,7 +230,7 @@ onMounted(() => {
         <span>{{ t('models.search.filters.quantization') }}</span>
         <select
           v-model="quantizationFilter"
-          class="rounded-md border border-neutral-300 bg-transparent px-2 py-1.5 text-sm"
+          class="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm"
         >
           <option value="all">{{ t('models.search.filters.all') }}</option>
           <option
@@ -208,7 +250,7 @@ onMounted(() => {
         <span>{{ t('models.search.filters.maxSize') }}</span>
         <select
           v-model="sizeLimitFilter"
-          class="rounded-md border border-neutral-300 bg-transparent px-2 py-1.5 text-sm"
+          class="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm"
         >
           <option value="all">{{ t('models.search.filters.all') }}</option>
           <option
@@ -224,7 +266,7 @@ onMounted(() => {
         <span>{{ t('models.search.filters.fit') }}</span>
         <select
           v-model="fitFilter"
-          class="rounded-md border border-neutral-300 bg-transparent px-2 py-1.5 text-sm"
+          class="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm"
         >
           <option value="all">{{ t('models.search.filters.all') }}</option>
           <option v-for="fit in fitOptions" :key="fit" :value="fit">
@@ -236,14 +278,14 @@ onMounted(() => {
 
     <p
       v-else-if="hasSearched && results.length === 0 && !errorKey"
-      class="text-sm text-neutral-500"
+      class="text-sm text-muted-foreground"
     >
       {{ t('models.search.empty') }}
     </p>
 
     <p
       v-if="hasSearched && results.length > 0 && filteredResults.length === 0"
-      class="text-sm text-neutral-500"
+      class="text-sm text-muted-foreground"
     >
       {{ t('models.search.filters.empty') }}
     </p>
@@ -253,7 +295,7 @@ onMounted(() => {
         v-for="result in filteredResults"
         :key="result.repoId"
         :result="result"
-        @select="emit('select', $event)"
+        @select="openResult"
       />
     </div>
   </section>

@@ -186,18 +186,15 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="flex flex-col gap-3">
-    <h2 class="text-xl font-semibold">
-      {{ t('settings.cliDelegate.title') }}
-    </h2>
-    <p class="text-sm text-neutral-500">
+    <p class="text-sm text-muted-foreground">
       {{ t('settings.cliDelegate.description') }}
     </p>
 
-    <div v-if="loading" class="text-sm text-neutral-500">
+    <div v-if="loading" class="text-sm text-muted-foreground">
       {{ t('onboarding.wizard.loadingDeviceInfo') }}
     </div>
 
-    <p v-if="loadError" class="text-sm text-red-500" role="alert">
+    <p v-if="loadError" class="text-sm text-destructive" role="alert">
       {{ t('errors.prefLoadFailed') }}: {{ loadError }}
     </p>
 
@@ -205,20 +202,20 @@ onBeforeUnmount(() => {
       <div
         v-for="vendor in VENDORS"
         :key="vendor"
-        class="flex flex-col gap-2 border border-neutral-200 rounded-md p-3"
+        class="flex flex-col gap-2 border border-border rounded-md p-3"
       >
         <div class="flex items-center justify-between gap-3 flex-wrap">
           <span class="text-sm font-medium">{{ vendorLabel(vendor) }}</span>
           <span
             v-if="connectedProvider(vendor) && !awaitingCode[vendor]"
-            class="text-xs text-green-600"
+            class="text-xs text-success"
           >
             {{ t('settings.cliDelegate.connected') }}
           </span>
         </div>
 
         <template v-if="awaitingCode[vendor]">
-          <p class="text-sm text-neutral-500">
+          <p class="text-sm text-muted-foreground">
             {{ t('settings.cliDelegate.awaitingAuto') }}
           </p>
           <p class="text-sm">
@@ -227,7 +224,7 @@ onBeforeUnmount(() => {
           <a
             v-if="progressUrl[vendor]"
             :href="progressUrl[vendor]!"
-            class="text-sm underline text-blue-600 hover:text-blue-800 break-all"
+            class="text-sm underline text-primary hover:text-primary/80 break-all"
             @click.prevent="openUrl(progressUrl[vendor]!)"
           >
             {{ progressUrl[vendor] }}
@@ -240,7 +237,7 @@ onBeforeUnmount(() => {
               v-model="codeInput[vendor]"
               type="text"
               autocomplete="off"
-              class="border border-neutral-300 rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              class="border border-border rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               @keyup.enter="onSubmitCode(vendor)"
             />
           </label>
@@ -256,13 +253,13 @@ onBeforeUnmount(() => {
         </template>
 
         <template v-else-if="connecting[vendor]">
-          <p class="text-sm text-neutral-500">
+          <p class="text-sm text-muted-foreground">
             {{ t('settings.cliDelegate.connecting') }}
           </p>
           <template v-if="progressUrl[vendor]">
             <a
               :href="progressUrl[vendor]!"
-              class="text-sm underline text-blue-600 hover:text-blue-800 break-all"
+              class="text-sm underline text-primary hover:text-primary/80 break-all"
               @click.prevent="openUrl(progressUrl[vendor]!)"
             >
               {{ progressUrl[vendor] }}
@@ -305,27 +302,31 @@ onBeforeUnmount(() => {
 
         <span
           v-if="successFlash[vendor]"
-          class="text-xs text-green-600"
+          class="text-xs text-success"
           role="status"
         >
           {{ t('settings.cliDelegate.success') }}
         </span>
         <span
           v-if="refreshed[vendor]"
-          class="text-xs text-green-600"
+          class="text-xs text-success"
           role="status"
         >
           {{ t('settings.cliDelegate.refreshed') }}
         </span>
         <span
           v-if="refreshError[vendor]"
-          class="text-xs text-red-500"
+          class="text-xs text-destructive"
           role="alert"
         >
           {{ t('settings.cliDelegate.refreshFailed') }}:
           {{ refreshError[vendor] }}
         </span>
-        <span v-if="opError[vendor]" class="text-xs text-red-500" role="alert">
+        <span
+          v-if="opError[vendor]"
+          class="text-xs text-destructive"
+          role="alert"
+        >
           {{ t('settings.cliDelegate.error') }}: {{ opError[vendor] }}
         </span>
       </div>

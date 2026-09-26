@@ -270,14 +270,10 @@
     }
   },
   "settings": {
-    "header": {
-      "forDevice": "Einstellungen für: {alias}"
-    },
     "alias": {
       "title": "Gerätename",
       "description": "Wie soll dieses Gerät im Vault heißen? Der Name erscheint in den Einstellungen und ist jederzeit änderbar.",
       "label": "Gerätename",
-      "save": "Speichern",
       "saved": "Gespeichert.",
       "required": "Bitte einen Namen eingeben."
     },
@@ -295,36 +291,28 @@
     "default": {
       "title": "Standard-Modell",
       "description": "Wähle das Modell, das nach dem Öffnen dieses Vaults automatisch geladen wird — als Gerätestandard nur für dieses Gerät oder als Vault-weiter Standard für alle Geräte dieses Vaults.",
-      "current": {
-        "device": "Aktueller Gerätestandard",
-        "vault": "Aktueller Vault-weiter Standard",
-        "none": "nicht gesetzt"
-      },
-      "modelLabel": "Modell",
-      "modelPlaceholder": "Modell wählen …",
       "modelGroup": {
         "local": "Lokale Modelle"
       },
-      "scope": {
-        "label": "Wirkungsbereich",
-        "device": "Nur dieses Gerät",
-        "vault": "Vault-weit"
-      },
-      "save": "Als Standard setzen",
       "saved": "Standard gesetzt.",
-      "clear": "Diesen Standard löschen",
-      "cleared": "Standard gelöscht.",
-      "empty": "Es sind noch keine Modelle installiert oder Anbieter konfiguriert."
+      "empty": "Es sind noch keine Modelle installiert oder Anbieter konfiguriert.",
+      "deviceLabel": "Dieses Gerät",
+      "vaultLabel": "Alle Geräte dieser Vault",
+      "followVault": "Wie alle Geräte",
+      "none": "Keins",
+      "unknownModel": "{id} (nicht mehr vorhanden)"
     },
     "sttModel": {
       "title": "Sprach-zu-Text-Modell",
       "description": "Wähle, welches lokale Modell für die Diktierfunktion auf diesem Gerät verwendet wird.",
-      "current": "Aktives Modell",
       "modelLabel": "Modell",
-      "save": "Wechseln",
       "saved": "Gewechselt.",
       "downloading": "Lade herunter…",
-      "downloadFailed": "Download fehlgeschlagen"
+      "downloadFailed": "Download fehlgeschlagen",
+      "notInstalled": "Standard (nicht installiert)",
+      "noneInstalled": "Es ist noch kein Sprach-zu-Text-Modell installiert.",
+      "availableLabel": "Weitere Modelle",
+      "downloadAndUse": "Herunterladen und verwenden"
     },
     "cliDelegate": {
       "title": "Abo verbinden",
@@ -351,7 +339,6 @@
       "standardDescription": "Tool-Aufrufe durchlaufen dieselbe Freigabe-Regel wie bei allen anderen Modellen (Manuell/Automatisch/Plan, im Chat einstellbar).",
       "ungatedDescription": "Der Delegat läuft komplett eigenständig, mit seinem eigenen vollständigen Autonomie-Mechanismus — Holzi greift nicht ein und fragt nicht nach.",
       "gated_permissiveDescription": "Der Delegat darf frei agieren, aber die unten festgelegten Verbotsregeln bleiben tabu — ohne Rückfrage, jede Aktion wird protokolliert.",
-      "save": "Speichern",
       "saved": "Gespeichert.",
       "saveFailed": "Autonomie-Voreinstellung konnte nicht gespeichert werden.",
       "loadFailed": "Autonomie-Voreinstellung konnte nicht geladen werden."
@@ -365,22 +352,81 @@
       "network_accessDescription": "Aktionen blockieren, die auf das Netzwerk zugreifen.",
       "credential_paths": "Zugangsdaten-Pfade",
       "credential_pathsDescription": "Zugriff auf übliche Zugangsdaten-/Geheimnis-Dateipfade blockieren (.ssh, .aws, .env, …).",
-      "save": "Speichern",
       "saved": "Gespeichert.",
       "saveFailed": "Verbotsregeln konnten nicht gespeichert werden.",
       "loadFailed": "Verbotsregeln konnten nicht geladen werden."
+    },
+    "back": "Zurück zu {title}",
+    "categories": {
+      "general": {
+        "title": "Allgemein",
+        "description": "Name dieses Geräts und was beim Öffnen der Vault wiederhergestellt wird."
+      },
+      "appearance": {
+        "title": "Darstellung",
+        "description": "Farbschema von holzi."
+      },
+      "models": {
+        "title": "Modelle",
+        "description": "Lokale Modelle für Chat und Spracheingabe wählen, herunterladen und verwalten."
+      },
+      "agents": {
+        "title": "Agenten",
+        "description": "Claude Code und Codex anbinden und festlegen, was sie ohne Rückfrage dürfen."
+      },
+      "federation": {
+        "title": "Föderation",
+        "description": "Die Geräte, die diese Vault nutzen."
+      }
+    },
+    "locations": {
+      "models": {
+        "default": {
+          "title": "Standard-Modell",
+          "description": "Welches Modell nach dem Öffnen der Vault geladen wird."
+        },
+        "installed": {
+          "title": "Installierte Modelle",
+          "description": "Modelle laden, aktualisieren und löschen."
+        },
+        "download": {
+          "title": "Modelle herunterladen",
+          "description": "Empfohlene Modelle oder eine Suche auf HuggingFace.",
+          "search": {
+            "title": "Auf HuggingFace suchen",
+            "description": "GGUF-Modelle auf HuggingFace finden."
+          },
+          "repo": {
+            "title": "{owner}/{name}",
+            "description": "Eine Datei dieses Modells zum Herunterladen wählen."
+          }
+        },
+        "speech": {
+          "title": "Sprach-zu-Text-Modell",
+          "description": "Das Modell für die Spracheingabe auf diesem Gerät."
+        }
+      },
+      "agents": {
+        "providers": {
+          "title": "Abo verbinden",
+          "description": "Dein Claude-Code- oder Codex-Abo als Chat-Backend nutzen."
+        },
+        "autonomy": {
+          "title": "Autonomie für Delegaten",
+          "description": "Wie viel ein Delegat ohne Rückfrage tun darf."
+        },
+        "denyRules": {
+          "title": "Verbotsregeln für Delegaten",
+          "description": "Aktionen, die auch im autonomen Modus tabu bleiben."
+        }
+      }
+    },
+    "downloadModels": {
+      "recommended": "Empfohlene Modelle",
+      "running": "Laufende Downloads"
     }
   },
   "models": {
-    "management": {
-      "title": "Modelle verwalten",
-      "description": "Katalog, freie Suche und installierte Modelle an einem Ort — unabhängig vom Onboarding-Status.",
-      "tabs": {
-        "catalog": "Katalog",
-        "search": "Hugging Face durchsuchen",
-        "installed": "Installierte Modelle"
-      }
-    },
     "search": {
       "title": "Modell von Hugging Face suchen",
       "placeholder": "z. B. llama gguf",

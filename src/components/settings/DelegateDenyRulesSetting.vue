@@ -1,12 +1,15 @@
 <script setup lang="ts">
+/**
+ * Delegate deny rules on this device (spec 009). Each checkbox saves on change (spec 023
+ * FR-021); a failure restores the stored selection.
+ */
+import { useSettingsDevice } from '~/components/settings/deviceContext'
+
 const { t } = useI18n()
 const { errString } = useErrorString()
 const { getPrefAsync } = usePreferences()
 const setDenyRules = useActionOrThrow('settings.delegate.setDenyRules')
-
-const props = defineProps<{
-  deviceUuid: string
-}>()
+const device = useSettingsDevice()
 
 // No Rust-side setter exists for this preference (research.md §5) — the
 // frontend writes the JSON array of category identifiers directly through
@@ -34,7 +37,7 @@ async function reloadAsync() {
   loadError.value = null
   try {
     const raw = await getPrefAsync(
-      { kind: 'device', uuid: props.deviceUuid },
+      { kind: 'device', uuid: device.info.value.vaultDeviceUuid },
       PREF_KEY,
     )
     const parsed: unknown = raw ? JSON.parse(raw) : []
@@ -52,25 +55,22 @@ async function reloadAsync() {
   }
 }
 
-/** Applies one checkbox change to the local selection. */
-function toggle(category: string, checked: boolean) {
-  const next = new Set(selected.value)
+/** Applies one checkbox change and saves the selection for this device. */
+async function toggleAsync(category: string, checked: boolean) {
+  const previous = selected.value
+  const next = new Set(previous)
   if (checked) next.add(category)
   else next.delete(category)
   selected.value = next
-  savedFlash.value = false
-}
-
-/** Persists the current deny-rule selection for this device. */
-async function onSave() {
   busy.value = true
   savedFlash.value = false
   opError.value = null
   try {
-    await setDenyRules({ rules: [...selected.value] })
+    await setDenyRules({ rules: [...next] })
     savedFlash.value = true
   } catch (e) {
     opError.value = errString(e)
+    selected.value = previous
   } finally {
     busy.value = false
   }
@@ -81,18 +81,15 @@ onMounted(reloadAsync)
 
 <template>
   <section class="flex flex-col gap-3">
-    <h2 class="text-xl font-semibold">
-      {{ t('settings.denyRules.title') }}
-    </h2>
-    <p class="text-sm text-neutral-500">
+    <p class="text-sm text-muted-foreground">
       {{ t('settings.denyRules.description') }}
     </p>
 
-    <div v-if="loading" class="text-sm text-neutral-500">
+    <div v-if="loading" class="text-sm text-muted-foreground">
       {{ t('onboarding.wizard.loadingDeviceInfo') }}
     </div>
 
-    <p v-if="loadError" class="text-sm text-red-500" role="alert">
+    <p v-if="loadError" class="text-sm text-destructive" role="alert">
       {{ t('settings.denyRules.loadFailed') }}: {{ loadError }}
     </p>
 
@@ -108,24 +105,21 @@ onMounted(reloadAsync)
             :checked="selected.has(category)"
             :disabled="busy"
             @change="
-              toggle(category, ($event.target as HTMLInputElement).checked)
+              toggleAsync(category, ($event.target as HTMLInputElement).checked)
             "
           />
           {{ t(`settings.denyRules.${category}`) }}
-          <span class="text-neutral-500">
+          <span class="text-muted-foreground">
             — {{ t(`settings.denyRules.${category}Description`) }}
           </span>
         </label>
       </fieldset>
 
       <div class="flex items-center gap-3 flex-wrap">
-        <UiButton type="button" :disabled="busy" @click="onSave">
-          {{ t('settings.denyRules.save') }}
-        </UiButton>
-        <span v-if="savedFlash" class="text-xs text-green-600" role="status">
+        <span v-if="savedFlash" class="text-xs text-success" role="status">
           {{ t('settings.denyRules.saved') }}
         </span>
-        <span v-if="opError" class="text-xs text-red-500" role="alert">
+        <span v-if="opError" class="text-xs text-destructive" role="alert">
           {{ t('settings.denyRules.saveFailed') }}: {{ opError }}
         </span>
       </div>

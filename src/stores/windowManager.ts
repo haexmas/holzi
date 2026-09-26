@@ -1,6 +1,6 @@
 import { computed, reactive, toRefs } from 'vue'
 import { defineStore } from 'pinia'
-import { getAppDefinition, WM_APPS } from '~/lib/wm/apps'
+import { getAppDefinition, tabTitleFor, WM_APPS } from '~/lib/wm/apps'
 import {
   closeWindow as closeWindowReducer,
   createWorkspace as createWorkspaceReducer,
@@ -181,7 +181,10 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
     const runtime = runtimeFor(tab.id)
     const history = navigation.historyOf(tab.id)
     const title = history
-      ? titleForLocation(tab.appId, currentLocation(history).path)
+      ? tabTitleFor(
+          app,
+          titleForLocation(tab.appId, currentLocation(history).path),
+        )
       : { key: app?.titleKey, params: {} }
     return {
       titleKey: title.key,

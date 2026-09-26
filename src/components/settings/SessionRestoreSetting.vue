@@ -72,11 +72,11 @@ onMounted(reloadAsync)
     <h2 id="session-restore-title" class="text-xl font-semibold">
       {{ t('settings.sessionRestore.title') }}
     </h2>
-    <p class="text-sm text-neutral-500">
+    <p class="text-sm text-muted-foreground">
       {{ t('settings.sessionRestore.description') }}
     </p>
 
-    <p v-if="loadError" class="text-sm text-red-500" role="alert">
+    <p v-if="loadError" class="text-sm text-destructive" role="alert">
       {{ t('errors.prefLoadFailed') }}: {{ loadError }}
     </p>
 
@@ -104,10 +104,10 @@ onMounted(reloadAsync)
         </label>
       </fieldset>
 
-      <p v-if="savedFlash" class="text-xs text-green-600" role="status">
+      <p v-if="savedFlash" class="text-xs text-success" role="status">
         {{ t('settings.sessionRestore.saved') }}
       </p>
-      <p v-if="opError" class="text-xs text-red-500" role="alert">
+      <p v-if="opError" class="text-xs text-destructive" role="alert">
         {{ t('settings.sessionRestore.failed') }}: {{ opError }}
       </p>
     </template>

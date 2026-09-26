@@ -1,5 +1,11 @@
 <script setup lang="ts">
+/**
+ * Speech-to-text model (spec 010). The select lists only installed models and saves on selection
+ * (spec 023 FR-021); a model that is not installed is fetched and activated with its own button,
+ * because a download is an action, not a value (clarification 2026-09-26).
+ */
 import type { SttCatalogEntry } from '~/composables/useSttCatalog'
+import { useSettingsDevice } from '~/components/settings/deviceContext'
 
 const { t } = useI18n()
 const { errString } = useErrorString()
@@ -7,10 +13,7 @@ const { getPrefAsync } = usePreferences()
 const setStt = useActionOrThrow('settings.models.setStt')
 const { listAsync: listSttCatalogAsync } = useSttCatalog()
 const { listInstalledAsync } = useSttModels()
-
-const props = defineProps<{
-  deviceUuid: string
-}>()
+const device = useSettingsDevice()
 
 const PREF_KEY = 'voice.stt_model_id'
 const DEFAULT_ID = 'whisper-tiny'
@@ -18,33 +21,36 @@ const DEFAULT_ID = 'whisper-tiny'
 const catalog = ref<SttCatalogEntry[]>([])
 const installedIds = ref<Set<string>>(new Set())
 const activeId = ref(DEFAULT_ID)
-const selectedId = ref(DEFAULT_ID)
 
 const loading = ref(true)
-const busy = ref(false)
+const busyId = ref<string | null>(null)
 const savedFlash = ref(false)
 const opError = ref<string | null>(null)
 const loadError = ref<string | null>(null)
 
-function modelDisplayName(id: string): string {
-  return catalog.value.find((e) => e.id === id)?.name ?? id
-}
+const installed = computed(() =>
+  catalog.value.filter((entry) => installedIds.value.has(entry.id)),
+)
+const available = computed(() =>
+  catalog.value.filter((entry) => !installedIds.value.has(entry.id)),
+)
 
 async function reloadAsync() {
   loading.value = true
   loadError.value = null
   try {
-    const [entries, installed, pref] = await Promise.all([
+    const [entries, installedModels, pref] = await Promise.all([
       listSttCatalogAsync(),
       listInstalledAsync(),
-      getPrefAsync({ kind: 'device', uuid: props.deviceUuid }, PREF_KEY),
+      getPrefAsync(
+        { kind: 'device', uuid: device.info.value.vaultDeviceUuid },
+        PREF_KEY,
+      ),
     ])
     catalog.value = entries
-    installedIds.value = new Set(installed.map((m) => m.id))
-    const normalizedActiveId =
+    installedIds.value = new Set(installedModels.map((m) => m.id))
+    activeId.value =
       pref && entries.some((entry) => entry.id === pref) ? pref : DEFAULT_ID
-    activeId.value = normalizedActiveId
-    selectedId.value = activeId.value
   } catch (e) {
     loadError.value = errString(e)
   } finally {
@@ -52,22 +58,21 @@ async function reloadAsync() {
   }
 }
 
-async function onSwitch() {
-  if (!selectedId.value || selectedId.value === activeId.value) return
-  busy.value = true
+/** Activates a model; `setStt` downloads it first when it is not installed. */
+async function activateAsync(catalogId: string) {
+  if (catalogId === activeId.value || busyId.value) return
+  busyId.value = catalogId
   savedFlash.value = false
   opError.value = null
   try {
-    const { modelId } = (await setStt({ catalogId: selectedId.value })) as {
-      modelId: string
-    }
+    const { modelId } = (await setStt({ catalogId })) as { modelId: string }
     activeId.value = modelId
     installedIds.value = new Set([...installedIds.value, modelId])
     savedFlash.value = true
   } catch (e) {
     opError.value = errString(e)
   } finally {
-    busy.value = false
+    busyId.value = null
   }
 }
 
@@ -75,62 +80,76 @@ onMounted(reloadAsync)
 </script>
 
 <template>
-  <section class="flex flex-col gap-3">
-    <h2 class="text-xl font-semibold">
-      {{ t('settings.sttModel.title') }}
-    </h2>
-    <p class="text-sm text-neutral-500">
+  <section class="flex flex-col gap-4">
+    <p class="text-sm text-muted-foreground">
       {{ t('settings.sttModel.description') }}
     </p>
 
-    <div v-if="loading" class="text-sm text-neutral-500">
+    <div v-if="loading" class="text-sm text-muted-foreground">
       {{ t('onboarding.wizard.loadingDeviceInfo') }}
     </div>
 
-    <p v-if="loadError" class="text-sm text-red-500" role="alert">
+    <p v-if="loadError" class="text-sm text-destructive" role="alert">
       {{ t('errors.prefLoadFailed') }}: {{ loadError }}
     </p>
 
-    <template v-if="!loading">
-      <div class="text-sm">
-        {{ t('settings.sttModel.current') }}:
-        <strong>{{ modelDisplayName(activeId) }}</strong>
-      </div>
-
-      <label class="flex flex-col gap-1">
+    <template v-if="!loading && !loadError">
+      <label v-if="installed.length > 0" class="flex flex-col gap-1">
         <span class="text-sm font-medium">{{
           t('settings.sttModel.modelLabel')
         }}</span>
         <select
-          v-model="selectedId"
-          class="border border-neutral-300 rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          :disabled="busy"
+          class="rounded-md border border-input bg-background p-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          :value="activeId"
+          :disabled="busyId !== null"
+          data-testid="settings-stt-model"
+          @change="activateAsync(($event.target as HTMLSelectElement).value)"
         >
-          <option v-for="entry in catalog" :key="entry.id" :value="entry.id">
-            {{ entry.name }}{{ installedIds.has(entry.id) ? '' : ' …' }}
+          <option v-if="!installedIds.has(activeId)" :value="activeId" disabled>
+            {{ t('settings.sttModel.notInstalled') }}
+          </option>
+          <option v-for="entry in installed" :key="entry.id" :value="entry.id">
+            {{ entry.name }}
           </option>
         </select>
       </label>
+      <p v-else class="text-sm text-muted-foreground">
+        {{ t('settings.sttModel.noneInstalled') }}
+      </p>
 
-      <div class="flex items-center gap-3 flex-wrap">
-        <UiButton
-          type="button"
-          :disabled="busy || !selectedId || selectedId === activeId"
-          @click="onSwitch"
+      <div v-if="available.length > 0" class="flex flex-col gap-2">
+        <span class="text-sm font-medium">{{
+          t('settings.sttModel.availableLabel')
+        }}</span>
+        <div
+          v-for="entry in available"
+          :key="entry.id"
+          class="flex items-center justify-between gap-3 text-sm"
         >
-          {{
-            busy
-              ? t('settings.sttModel.downloading')
-              : t('settings.sttModel.save')
-          }}
-        </UiButton>
-        <span v-if="savedFlash" class="text-xs text-green-600" role="status">
-          {{ t('settings.sttModel.saved') }}
-        </span>
-        <span v-if="opError" class="text-xs text-red-500" role="alert">
-          {{ t('settings.sttModel.downloadFailed') }}: {{ opError }}
-        </span>
+          <span>{{ entry.name }}</span>
+          <UiButton
+            type="button"
+            variant="outline"
+            size="sm"
+            :loading="busyId === entry.id"
+            :disabled="busyId !== null"
+            @click="activateAsync(entry.id)"
+          >
+            {{
+              busyId === entry.id
+                ? t('settings.sttModel.downloading')
+                : t('settings.sttModel.downloadAndUse')
+            }}
+          </UiButton>
+        </div>
       </div>
+
+      <span v-if="savedFlash" class="text-xs text-success" role="status">
+        {{ t('settings.sttModel.saved') }}
+      </span>
+      <span v-if="opError" class="text-xs text-destructive" role="alert">
+        {{ t('settings.sttModel.downloadFailed') }}: {{ opError }}
+      </span>
     </template>
   </section>
 </template>
