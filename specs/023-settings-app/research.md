@@ -244,7 +244,7 @@ wäre vor dem Entsperren eine Spur der Vault).
 
 ## R9 Feste Farben auf Theme-Farben umstellen
 
-**Entscheidung**: Rund 170 feste Tailwind-Farben in 28 Vue-Dateien werden auf
+**Entscheidung**: Die festen Tailwind-Farben der Vue-Dateien (beim Planen rund 170 in 28 Dateien, nach dem Umbau der Einstellungen im COSMIC-Stil noch rund 40 in 16) werden auf
 die Theme-Farben des Layers umgestellt, in einem eigenen, mechanischen Commit:
 
 | heute                                                          | neu                                                            |
@@ -257,6 +257,7 @@ die Theme-Farben des Layers umgestellt, in einem eigenen, mechanischen Commit:
 | `ring-blue-500`, `border-blue-500`, `text-blue-*`, `bg-blue-*` | `ring-ring`, `border-primary`, `text-primary`, `bg-primary/10` |
 | `bg-emerald-500`                                               | `bg-success`                                                   |
 | `bg-white/10`, `bg-black/10`                                   | `bg-foreground/10`                                             |
+| `border-blue-500/20`, `bg-blue-100/70`                         | `border-primary/20`, `bg-primary/10`                           |
 
 `scripts/check-vue-templates.ts` bekommt eine Sperrliste für Palettenfarben
 (`(text|bg|border|ring|…)-(neutral|gray|red|green|amber|blue|emerald|white|black|…)`),

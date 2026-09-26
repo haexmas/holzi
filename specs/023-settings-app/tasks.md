@@ -142,7 +142,8 @@ description: 'Task list for spec 023-settings-app'
 
 - [x] T033 [P] [US4] Write color-scheme tests in `scripts/check-settings.ts` (fail until T035): `parseColorScheme` accepts `light`/`dark`/`system` and maps anything else to `null`; `effectiveColorScheme` device over vault, both unset → `system`; `isDark('system', true)` true, `isDark('system', false)` false, `isDark('light', true)` false
   - Done 2026-09-26, plus a test that `toColorSchemeResult` leaves unset values out.
-- [ ] T034 [P] [US4] Add a palette-color denylist to `scripts/check-vue-templates.ts` (research R9): `(text|bg|border|ring|divide|fill|stroke|outline|from|to|via)-(white|black|neutral|gray|slate|zinc|stone|red|green|amber|yellow|blue|emerald|orange|sky|indigo|rose)` with optional shade and opacity in any `.vue` under `src/`; it fails now with about 170 hits; commit it together with T040 so no commit is red in CI
+- [x] T034 [P] [US4] Add a palette-color denylist to `scripts/check-vue-templates.ts` (research R9): `(text|bg|border|ring|divide|fill|stroke|outline|from|to|via)-(white|black|neutral|gray|slate|zinc|stone|red|green|amber|yellow|blue|emerald|orange|sky|indigo|rose)` with optional shade and opacity in any `.vue` under `src/`; it fails now with about 170 hits; commit it together with T040 so no commit is red in CI
+  - Done 2026-09-26 in the same commit as T040; a planted `text-neutral-500` fails the check.
 
 ### Implementation
 
@@ -156,7 +157,8 @@ description: 'Task list for spec 023-settings-app'
   - Done 2026-09-26; `settings.get` returns `colorScheme` from the loaded state.
 - [x] T039 [US4] Create `src/components/settings/ColorSchemeSetting.vue`: selects "Dieses Gerät" (Wie alle Geräte / Hell / Dunkel / System) and "Alle Geräte" (System / Hell / Dunkel), saved on selection through the two actions; "Dieses Gerät: Wie alle Geräte" and "Alle Geräte: System" call `clearColorScheme`, the view never sends `system` for the vault (contracts §3); i18n `settings.colorScheme.*`
   - Done 2026-09-26 in the boxed-list style (group "Farbschema", rows "Dieses Gerät" and "Alle Geräte dieser Vault" reusing `settings.default.*Label`); wired as the view of `appearance` in `appRoutes.ts`; the search finds it as "Farbschema".
-- [ ] T040 [US4] In its own commit (`refactor(ui): use theme colors instead of palette colors`), replace the palette colors in the ~28 Vue files per the mapping in research R9; make T034 pass; `check:templates`, `typecheck`, `lint`, `format:check` green
+- [x] T040 [US4] In its own commit (`refactor(ui): use theme colors instead of palette colors`), replace the palette colors in the ~28 Vue files per the mapping in research R9; make T034 pass; `check:templates`, `typecheck`, `lint`, `format:check` green
+  - Done 2026-09-26 (`refactor(ui): use theme colors instead of palette colors`): only about 40 palette colors in 16 files were left, the settings views had lost theirs in the COSMIC restyle. Extra mappings beyond research R9: `border-blue-500/20` → `border-primary/20`, `hover:border-blue-500` → `hover:border-primary`, `bg-blue-100/70` → `bg-primary/10`, `hover:bg-black/10 dark:hover:bg-white/10` → `hover:bg-foreground/10`.
 - [ ] T041 [US4] Operator: run quickstart S11 and S12, looking at chat, settings, onboarding and dialogs in dark mode
 
 ---
