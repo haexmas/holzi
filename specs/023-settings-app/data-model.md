@@ -42,8 +42,9 @@ Abgeleitet:
 - `locationFor(path)`: der Ort eines Pfads über `matchRoute`, `undefined` für
   Unbekanntes.
 - `overviewRows(categoryId)`: Orte mit `overviewRow` in Registerreihenfolge.
-- `headerBack(history, parentPath)`: `{ kind: 'back' }` oder
-  `{ kind: 'push', path }` (R3).
+- `headerBack(history)`: `{ kind: 'back', path }` (vorige Station in derselben
+  Kategorie), `{ kind: 'push', path }` (übergeordneter Ort) oder `undefined`
+  für eine Kategorie (R3).
 
 ## Farbschema (Präferenz)
 

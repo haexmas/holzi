@@ -225,7 +225,10 @@ description: 'Task list for spec 023-settings-app'
   - Done 2026-09-26 with `src/components/settings/Select.vue` (`SettingsSelect`; reka items cannot carry an empty value, so "Keins" travels as a sentinel); also the HuggingFace filters, the code input of "Abo verbinden" and the too-big confirmation in the file picker.
 - [x] T065 Notes in specs 002, 009, 011/012 and 022 next to the scope requirements: settings apply to the vault since spec 023 (FR-024)
   - Done 2026-09-26: notes in specs 002 (FR-012), 009 (FR-014), 012 (effort preferences) and 022 (FR-002); 011 has no scope statement of its own.
-- [ ] T066 Operator: run quickstart S20 and S21
+- [x] T067 Header back returns to the previous station in the same category, otherwise to the parent (FR-009, research R3 revised): `headerBack(history)` in `src/lib/settings/registry.ts`, label names the target, tests in `scripts/check-settings.ts`
+  - Done 2026-09-26 on operator feedback (Modelle → Installierte Modelle → Modelle herunterladen came back to Modelle).
+- [ ] T068 haex-ui: readable unchecked switch in dark mode (upstream in haex-space/haextension), then bump the pin in `nuxt.config.ts`
+- [ ] T066 Operator: run quickstart S20, S21 and S22
 
 ---
 

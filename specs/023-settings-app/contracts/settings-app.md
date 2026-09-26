@@ -86,9 +86,9 @@ Route-Komponenten bekommen keine Props. Was eine Einstellung vom Gerät braucht
   (`locationFor`, Parameter eingesetzt), keine Beschreibungszeile. Titel und
   Inhalt teilen eine zentrierte Spalte
   (`max-w-3xl`). Hat der Ort ein `parent`, steht links ein Zurück-Pfeil mit
-  Beschriftung „Zurück zu <Titel des übergeordneten Orts>“; er führt
-  `headerBack` aus: `back` → `router.back()`, `push` → `router.push(path)`
-  (FR-009). Ohne `parent` (Startseite einer Kategorie) steht an derselben
+  Beschriftung „Zurück zu <Titel des Ziels>“; er führt `headerBack(history)`
+  aus: `back` → `router.back()` (vorige Station in derselben Kategorie),
+  `push` → `router.push(path)` (übergeordneter Ort) (FR-009). Ohne `parent` (Startseite einer Kategorie) steht an derselben
   Stelle und in derselben Größe das Symbol der Kategorie (`categoryOf`,
   dekorativ, `aria-hidden`), damit der Titel nicht springt.
 - **Inhalt**: `<WmRouterView />` auf Tiefe 1; nur dieser Bereich scrollt,

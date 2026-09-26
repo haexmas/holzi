@@ -111,6 +111,10 @@ entfällt; die Kategorie „Föderation“ zeigt die Geräte der Vault.) Referen
   Auswahllisten unlesbar. → A: Bedienelemente kommen aus dem haex-ui-Layer
   (Auswahlliste, Eingabefeld, Schalter, Häkchen); native Elemente bekommen mit
   `color-scheme` das passende Schema (FR-013).
+- Q: (Betreiber-Rückmeldung) Wohin führt der Zurück-Pfeil nach Modelle →
+  Installierte Modelle → Modelle herunterladen? → A: Zu „Installierte Modelle“,
+  also dorthin, woher der Nutzer kam, solange das in derselben Kategorie liegt;
+  sonst zur übergeordneten Ansicht (FR-009).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -386,10 +390,11 @@ einer bestimmten Breite verschwindet die Seitenleiste, das Symbol in der Werkzeu
   MÜSSEN neue Einträge in der Historie des Tabs erzeugen; Vor, Zurück und die
   Verlaufsliste gelten ohne Sonderregeln. Der Tab heißt dabei immer
   „Einstellungen“; die Verlaufsliste zeigt die Titel der Orte.
-- **FR-009**: Der Zurück-Pfeil im Kopf einer Unteransicht MUSS zur
-  übergeordneten Ansicht führen. War diese die vorige Station der Historie,
-  MUSS er wie Zurück im Tab wirken (kein doppelter Eintrag); sonst MUSS er zu
-  ihr navigieren.
+- **FR-009**: Der Zurück-Pfeil im Kopf einer Unteransicht MUSS zur vorigen
+  Station der Historie führen, wenn sie in derselben Kategorie liegt, und dann
+  wie Zurück im Tab wirken (kein doppelter Eintrag). Sonst (nach einem
+  Deep-Link oder einem Sprung aus einer anderen Kategorie) MUSS er zur
+  übergeordneten Ansicht navigieren. Seine Beschriftung nennt das Ziel.
 - **FR-010**: Ein neu geöffneter Einstellungs-Tab MUSS mit der ersten Kategorie
   beginnen. Die zuletzt geöffnete Kategorie oder Unteransicht DARF NICHT von den
   Einstellungen gemerkt werden. Wählt der Nutzer eine Kategorie in der

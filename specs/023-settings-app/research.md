@@ -105,21 +105,27 @@ testbar, dreifache Pflege).
 
 ## R3 Zurück im Kopf
 
-**Entscheidung**: Reine Funktion `headerBack(history, parentPath)`:
+**Entscheidung** (überarbeitet 2026-09-26 nach Betreiber-Rückmeldung): Reine
+Funktion `headerBack(history)` für den aktuellen Eintrag:
 
-- Ist der vorige Historieneintrag des Tabs ein Ort mit dem Pfad `parentPath`
-  (Query egal), wirkt der Pfeil wie Zurück im Tab (`goTab(tab, -1)`); die Query
-  des Eintrags bleibt, etwa der Suchbegriff.
-- Sonst `push(parentPath)`.
+- Liegt der vorige Historieneintrag des Tabs in derselben Kategorie, wirkt der
+  Pfeil wie Zurück im Tab (`goTab(tab, -1)`); die Query des Eintrags bleibt,
+  etwa der Suchbegriff. So führt Modelle → Installierte Modelle → Modelle
+  herunterladen zurück zu „Installierte Modelle“.
+- Sonst `push` auf den übergeordneten Ort: nach einem Deep-Link oder einem
+  Sprung aus einer anderen Kategorie (Seitenleiste, Suche).
+- Kategorien selbst haben keinen Pfeil (`undefined`).
 
 Übergeordnet: Unteransicht → Übersicht der Kategorie; Suche → Download; Repo →
-Suche. Kategorien selbst haben keinen Pfeil. Ein Klick in der Seitenleiste ist
-immer ein `push` auf den Ort der Kategorie, auch aus einer Unteransicht derselben
-Kategorie (FR-010).
+Suche. Ein Klick in der Seitenleiste ist immer ein `push` auf den Ort der
+Kategorie, auch aus einer Unteransicht derselben Kategorie (FR-010). Die
+Beschriftung des Pfeils nennt das Ziel.
 
-**Begründung**: FR-009 verlangt „kein doppelter Eintrag“, wenn die übergeordnete
-Ansicht die vorige Station ist, und einen Weg zur Übersicht nach einem
-Deep-Link.
+**Begründung**: FR-009 verlangt „kein doppelter Eintrag“ und einen Weg zur
+Übersicht nach einem Deep-Link. Die erste Fassung ging nur dann zurück, wenn
+die vorige Station genau der übergeordnete Ort war; nach einem Sprung zwischen
+Geschwistern (über eine Zeile, die an eine andere Stelle führt) landete der
+Nutzer dann beim übergeordneten Ort statt dort, woher er kam.
 
 ## R4 Seitenleiste in schmalen Fenstern
 
