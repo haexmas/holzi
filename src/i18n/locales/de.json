@@ -80,8 +80,7 @@
     },
     "apps": {
       "chat": "Chat",
-      "settings": "Einstellungen",
-      "federation": "Föderation"
+      "settings": "Einstellungen"
     },
     "launcher": {
       "open": "Launcher öffnen",

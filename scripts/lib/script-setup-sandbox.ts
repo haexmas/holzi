@@ -1,7 +1,7 @@
 // A small sandbox for pages whose `<script setup>` block can be replayed on its own, for the
 // frontend checks of spec 013 (`node scripts/check-vault-lifecycle.ts`). The chat page has its own,
-// much larger harness (`chat-state-harness.ts`); this one is for short pages such as the federation
-// page, where booting every composable would only hide what the case is about.
+// much larger harness (`chat-state-harness.ts`); this one is for short pages and components, where
+// booting every composable would only hide what the case is about.
 //
 // The block is transpiled with the `typescript` package already used by the other harness and run
 // in its own `new Function` scope. Nuxt's auto-imports and compiler macros have no module behind
@@ -22,8 +22,6 @@ const repoRoot = resolvePath(dirname(fileURLToPath(import.meta.url)), '../..')
 export interface ScriptSetupGlobals {
   useInstance?: () => unknown
   useInstancesStore?: () => unknown
-  /** `FederationApp.vue` (spec 015-workspace-shell) calls `wm.flushAsync()` before locking,
-   * the same as `ChatApp.vue`'s `lock()` — a case exercising it provides at least that. */
   useWindowManagerStore?: () => unknown
   navigateTo?: (to: string) => unknown
   /** The route params the page reads, `{ instance: 'vault' }` by default. */

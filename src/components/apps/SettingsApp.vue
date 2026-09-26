@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * The settings frame (spec 023-settings-app, contracts §2): category sidebar, a header with the
- * location's title and — for sub-views — a back arrow, and the location's view below as the only
+ * location's title behind a back arrow (sub-views) or the category's icon in the same slot
+ * (category start pages, so the title does not shift), and the location's view below as the only
  * scrolling area. Header and view share one centered column, so the list does not stretch across
  * a wide window. Every view is a tab location (spec 020); the registry in
  * `lib/settings/registry.ts` supplies titles and hierarchy. The frame is a size container, so the
@@ -10,9 +11,11 @@
 import type { DeviceInfo } from '~/composables/useDevice'
 import { SETTINGS_DEVICE_KEY } from '~/components/settings/deviceContext'
 import {
+  categoryOf,
   headerBack,
   locationFor,
   parentPathOf,
+  SETTINGS_CATEGORIES,
   SETTINGS_LOCATIONS,
 } from '~/lib/settings/registry'
 
@@ -47,6 +50,10 @@ const title = computed(() =>
 const parentPath = computed(() =>
   current.value ? parentPathOf(current.value.location) : undefined,
 )
+const categoryIcon = computed(() => {
+  const id = categoryOf(router.route.path)
+  return SETTINGS_CATEGORIES.find((category) => category.id === id)?.icon
+})
 const backLabel = computed(() => {
   const parent = SETTINGS_LOCATIONS.find(
     (location) => location.id === current.value?.location.parent,
@@ -83,6 +90,14 @@ onMounted(reloadDeviceInfoAsync)
           >
             <Icon name="lucide:arrow-left" class="size-4" />
           </UiButton>
+          <span
+            v-else-if="categoryIcon"
+            class="-ml-2 flex size-9 shrink-0 items-center justify-center text-muted-foreground"
+            aria-hidden="true"
+            data-testid="settings-category-icon"
+          >
+            <Icon :name="categoryIcon" class="size-4" />
+          </span>
           <h1 class="min-w-0 truncate text-xl font-semibold">{{ title }}</h1>
         </div>
       </header>

@@ -359,8 +359,8 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
   const { guardResultsFor, guardResultForTab, guardResultsForWorkspace } =
     createWmGuards(state, (tabId) => tabRuntime.get(tabId)?.guard)
 
-  /** Awaits the save queue before the vault locks or closes (FR-027) — `ChatApp.vue`'s and
-   * `FederationApp.vue`'s `lock()` already call this before `useInstance().closeAsync()`. */
+  /** Awaits the save queue before the vault locks or closes (FR-027) — `ChatApp.vue`'s `lock()`
+   * already calls this before `useInstance().closeAsync()`. */
   function flushAsync(): Promise<void> {
     return session.flushAsync()
   }

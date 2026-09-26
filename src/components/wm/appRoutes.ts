@@ -25,9 +25,6 @@ const ChatApp = defineAsyncComponent(
 const SettingsApp = defineAsyncComponent(
   () => import('~/components/apps/SettingsApp.vue'),
 )
-const FederationApp = defineAsyncComponent(
-  () => import('~/components/apps/FederationApp.vue'),
-)
 
 /** The view of each settings location (spec 023-settings-app, contracts §1). */
 const SETTINGS_VIEWS: Record<string, Component> = {
@@ -95,8 +92,6 @@ const APP_ROUTES: Record<string, readonly AppRouteRecord[]> = {
     },
   ],
   'system.settings': settingsRoutes(),
-  // An app without its own routes has exactly the start location `/`.
-  'system.federation': [{ path: '/', component: FederationApp }],
 }
 
 /** `undefined` for an `appId` no routes are registered for — `wm/TabPanel.vue` then renders

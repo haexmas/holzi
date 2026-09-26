@@ -14,7 +14,12 @@ import {
   SETTINGS_LOCATIONS,
   settingsRoutePatterns,
 } from '../src/lib/settings/registry.ts'
-import { getAppDefinition, tabTitleFor } from '../src/lib/wm/apps.ts'
+import {
+  getAppDefinition,
+  resolveAppAlias,
+  tabTitleFor,
+  WM_APPS,
+} from '../src/lib/wm/apps.ts'
 import { createHistory, push } from '../src/lib/wm/navigation.ts'
 import { matchRoute } from '../src/lib/wm/routeMatch.ts'
 
@@ -196,4 +201,16 @@ test('the settings tab keeps the app title; other apps show the location title',
   const thread = { key: 'wm.chat.thread', params: { id: 't1' } }
   assert.deepEqual(tabTitleFor(getAppDefinition('system.chat'), thread), thread)
   assert.deepEqual(tabTitleFor(undefined, thread), thread)
+})
+
+test('the removed federation app opens the settings at the federation category (R11)', () => {
+  assert.deepEqual(resolveAppAlias('system.federation'), {
+    appId: 'system.settings',
+    at: '/federation',
+  })
+  assert.deepEqual(resolveAppAlias('system.chat'), {
+    appId: 'system.chat',
+    at: null,
+  })
+  assert.ok(!WM_APPS.some((app) => app.id === 'system.federation'))
 })
