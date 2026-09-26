@@ -96,7 +96,7 @@ spaex-Constitution `.spaex/constitution.md`.
 | VIII Keine Verheimlichung in Agent-Ausgaben                                | ✅     | –                                                                                                                                                |
 | Workflow: speckit-Stufen, PR auf `main`, Conventional Commits, kein Squash | ✅     | Spec über #144/#147; Plan im Topic-Branch `023-settings-app-plan`                                                                                |
 | ADR bei prinzipienrelevanter Entscheidung                                  | ✅     | Keine; ADR-0001 (gerätebezogene Daten) gilt für das Farbschema pro Gerät                                                                         |
-| Test-Code in separaten Dateien                                             | ✅     | `known_devices_tests.rs`, `scripts/check-settings.ts`, Erweiterung von `check-vue-templates.ts`                                                  |
+| Test-Code in separaten Dateien                                             | ✅     | `known_devices_tests.rs`, `device/commands_tests.rs`, `scripts/check-settings.ts`, Erweiterung von `check-vue-templates.ts`                      |
 | Worktree je Änderung                                                       | ✅     | `.worktrees/023-settings-app`                                                                                                                    |
 | 500-LoC-Grenze                                                             | ✅     | Löst die Ausnahme von `HuggingFaceModelManagement.vue` auf; neue Dateien klein                                                                   |
 | Graphify vor neuen benannten Artefakten                                    | ⚠️     | Abfragen in research.md; der Graph (21.09.) ist älter als 015/020/022, Kandidaten zusätzlich im Code geprüft; zur manuellen Nachprüfung vermerkt |
@@ -136,7 +136,8 @@ src-tauri/src/
 │   ├── known_devices.rs           # list_devices (ohne Vault-Bereichszeile)
 │   ├── known_devices_tests.rs     # NEU
 │   └── mod.rs                     # Testmodul anmelden
-├── device/commands.rs             # list_vault_devices, VaultDevicePayload
+├── device/commands.rs             # list_vault_devices, VaultDevicePayload, Sortierung
+├── device/commands_tests.rs       # NEU: Sortierung der Geräte
 └── lib.rs                         # Befehl registrieren
 
 src/
@@ -144,12 +145,13 @@ src/
 ├── lib/settings/
 │   ├── registry.ts                # NEU: Kategorien, Orte, settingsRoutePatterns, locationFor, overviewRows, headerBack
 │   └── colorScheme.ts             # NEU: parseColorScheme, effectiveColorScheme, isDark
-├── lib/wm/apps.ts                 # system.federation raus; LEGACY_APP_ALIASES, resolveAppAlias
+├── lib/wm/apps.ts                 # system.federation raus; LEGACY_APP_ALIASES, resolveAppAlias; tabTitle, tabTitleFor
 ├── lib/actions/settingsActions.ts # settings.appearance.setColorScheme / clearColorScheme, settings.devices.list
 ├── composables/useColorScheme.ts  # NEU: Zustand, Klasse `dark`, Medienabfrage
 ├── plugins/colorScheme.client.ts  # NEU: „System“ beim Start
 ├── stores/
 │   ├── models.ts                  # downloads, watchDownloads
+│   ├── windowManager.ts           # tabDisplayInfo über tabTitleFor
 │   ├── settingsActionHandlers.ts  # Farbschema-Handler, settings.devices.list, settings.get + colorScheme
 │   └── wmActionHandlers.ts        # Alias vor knownApp
 ├── components/
@@ -158,6 +160,7 @@ src/
 │   ├── wm/appRoutes.ts            # Routen der Einstellungen aus dem Register; App-Föderation raus
 │   ├── settings/
 │   │   ├── Sidebar.vue            # NEU
+│   │   ├── deviceContext.ts       # NEU: SETTINGS_DEVICE_KEY (provide/inject des Geräts)
 │   │   ├── FederationView.vue     # NEU: Geräte der Vault
 │   │   ├── OverviewView.vue       # NEU: Übersichtszeilen einer Kategorie
 │   │   ├── GeneralView.vue        # NEU: Gerätename + Sitzung wiederherstellen
@@ -194,23 +197,23 @@ unter `src/components/settings/` (Auto-Import `Settings*`).
 
 ## Anforderungen → Umsetzung
 
-| Anforderungen                                            | Umsetzung                                                                                                |
-| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| FR-001, FR-002 (Aufbau, Kopf)                            | `SettingsApp.vue`, `Sidebar.vue`, `locationFor`                                                          |
-| FR-003 (Übersicht, Einzelbereich direkt)                 | `OverviewView.vue`, `overviewRows`; Allgemein/Darstellung/Föderation ohne Übersicht                      |
-| FR-004 (schmale Fenster)                                 | `@container`, Schwelle `@2xl` (R4)                                                                       |
-| FR-005–007 (Kategorien, Zuordnung)                       | `registry.ts`, Routen in `appRoutes.ts`; S3                                                              |
-| FR-008, FR-010–012 (Orte, Start, Deep-Link, Unbekanntes) | Routentabelle (R1), `wm.app.open` mit `at`, `RouterView`-Rückfall                                        |
-| FR-009 (Zurück im Kopf)                                  | `headerBack` (R3)                                                                                        |
-| FR-013, FR-014 (Farbschema)                              | `colorScheme.ts`, `useColorScheme`, Plugin, zwei Aktionen (R8)                                           |
-| FR-015 (kein Hintergrund)                                | nichts zu tun                                                                                            |
-| FR-016–018 (Föderation-App)                              | `apps.ts` Alias auf `/federation`, `FederationApp.vue` und Tests raus, Umleitung (R7)                    |
-| FR-022 (Geräte der Vault)                                | `known_devices::list_devices`, `list_vault_devices`, `settings.devices.list`, `FederationView.vue` (R12) |
-| FR-019 (Verhalten unverändert)                           | bestehende Aktionen; Regressionschecks                                                                   |
-| FR-020 (de, en)                                          | i18n; `check:settings` prüft Schlüssel in beiden Sprachen                                                |
-| FR-021 (ohne Speichern-Knopf)                            | Umstellung der Einstellungskomponenten (R5)                                                              |
-| Edge Case Download läuft weiter                          | `models.downloads`, `watchDownloads` (R6)                                                                |
-| Complexity Tracking aus Spec 020                         | Aufteilung der Modellverwaltung (R10)                                                                    |
+| Anforderungen                                            | Umsetzung                                                                                                                |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| FR-001, FR-002 (Aufbau, Kopf)                            | `SettingsApp.vue`, `Sidebar.vue`, `locationFor`                                                                          |
+| FR-003 (Übersicht, Einzelbereich direkt)                 | `OverviewView.vue`, `overviewRows`; Allgemein/Darstellung/Föderation ohne Übersicht                                      |
+| FR-004 (schmale Fenster)                                 | `@container`, Schwelle `@2xl` (R4)                                                                                       |
+| FR-005–007 (Kategorien, Zuordnung)                       | `registry.ts`, Routen in `appRoutes.ts`; S3                                                                              |
+| FR-008, FR-010–012 (Orte, Start, Deep-Link, Unbekanntes) | Routentabelle (R1), `wm.app.open` mit `at`, `RouterView`-Rückfall; Tab-Titel „Einstellungen“ über `tabTitle: 'app'` (R2) |
+| FR-009 (Zurück im Kopf)                                  | `headerBack` (R3)                                                                                                        |
+| FR-013, FR-014 (Farbschema)                              | `colorScheme.ts`, `useColorScheme`, Plugin, zwei Aktionen (R8)                                                           |
+| FR-015 (kein Hintergrund)                                | nichts zu tun                                                                                                            |
+| FR-016–018 (Föderation-App)                              | `apps.ts` Alias auf `/federation`, `FederationApp.vue` und Tests raus, Umleitung (R7)                                    |
+| FR-022 (Geräte der Vault)                                | `known_devices::list_devices`, `list_vault_devices`, `settings.devices.list`, `FederationView.vue` (R12)                 |
+| FR-019 (Verhalten unverändert)                           | bestehende Aktionen; Regressionschecks                                                                                   |
+| FR-020 (de, en)                                          | i18n; `check:settings` prüft Schlüssel in beiden Sprachen                                                                |
+| FR-021 (ohne Speichern-Knopf)                            | Umstellung der Einstellungskomponenten (R5)                                                                              |
+| Edge Case Download läuft weiter                          | `models.downloads`, `watchDownloads` (R6)                                                                                |
+| Complexity Tracking aus Spec 020                         | Aufteilung der Modellverwaltung (R10)                                                                                    |
 
 ## Complexity Tracking
 

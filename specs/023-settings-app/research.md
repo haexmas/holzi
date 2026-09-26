@@ -92,6 +92,14 @@ Titel und Beschreibung, übergeordneter Ort. Daraus entstehen:
 **Begründung**: Eine Quelle für Reihenfolge, Titel und Hierarchie; FR-005,
 FR-002, FR-003 und die Tab-Titel können nicht auseinanderlaufen.
 
+**Tab-Titel** (Betreiberentscheidung bei der Analyse): Der Tab der Einstellungen
+heißt immer „Einstellungen“; die Orte tragen ihren `titleKey` nur für die
+Verlaufsliste. Dafür bekommt `AppDefinition` in `lib/wm/apps.ts` ein Feld
+`tabTitle: 'location' | 'app'` (Standard `location`, wie der Chat mit dem Namen
+der Unterhaltung), und eine reine Funktion `tabTitleFor(app, routed)` wählt
+zwischen App-Titel und Orts-Titel; `tabDisplayInfo` im Store ruft sie auf.
+`system.settings` setzt `tabTitle: 'app'`.
+
 **Alternativen**: Kategorien in der Vue-Komponente fest verdrahten (nicht
 testbar, dreifache Pflege).
 
@@ -133,21 +141,24 @@ Medienabfragen (falsche Bezugsgröße).
 **Entscheidung**: Die vorhandenen Einstellungskomponenten werden umgestellt,
 ihre Aktionen bleiben:
 
-| Einstellung     | Bedienung neu                                                                                                     | Aktion                                         |
-| --------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| Gerätename      | Textfeld, speichert beim Verlassen und mit Enter; leer → Hinweis, kein Speichern                                  | `settings.device.setAlias`                     |
-| Sitzung         | unverändert (Spec 022, Vorbild)                                                                                   | `settings.sessionRestore.*`                    |
-| Farbschema      | zwei Auswahlen: „Dieses Gerät“ (Wie alle Geräte / Hell / Dunkel / System), „Alle Geräte“ (System / Hell / Dunkel) | neu, R8                                        |
-| Standardmodell  | zwei Auswahlen: „Dieses Gerät“ (Wie alle Geräte / Modelle), „Alle Geräte“ (Keins / Modelle)                       | `settings.models.setDefault` / `.clearDefault` |
-| Spracherkennung | Auswahl speichert beim Wählen; ein nicht installiertes Modell wird dabei geladen, mit Fortschritt                 | `settings.models.setStt`                       |
-| Autonomiemodus  | Optionen speichern beim Wählen                                                                                    | `settings.autonomy.setMode`                    |
-| Deny-Regeln     | Textfeld speichert beim Verlassen; ungültige Regeln → Hinweis am Feld, kein Speichern                             | `settings.delegate.setDenyRules`               |
+| Einstellung     | Bedienung neu                                                                                                                             | Aktion                                         |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Gerätename      | Textfeld, speichert beim Verlassen und mit Enter; leer → Hinweis, kein Speichern                                                          | `settings.device.setAlias`                     |
+| Sitzung         | unverändert (Spec 022, Vorbild)                                                                                                           | `settings.sessionRestore.*`                    |
+| Farbschema      | zwei Auswahlen: „Dieses Gerät“ (Wie alle Geräte / Hell / Dunkel / System), „Alle Geräte“ (System / Hell / Dunkel)                         | neu, R8                                        |
+| Standardmodell  | zwei Auswahlen: „Dieses Gerät“ (Wie alle Geräte / Modelle), „Alle Geräte“ (Keins / Modelle)                                               | `settings.models.setDefault` / `.clearDefault` |
+| Spracherkennung | Auswahl nur mit installierten Modellen, speichert beim Wählen; nicht installierte stehen darunter mit Knopf „Herunterladen und verwenden“ | `settings.models.setStt`                       |
+| Autonomiemodus  | Optionen speichern beim Wählen                                                                                                            | `settings.autonomy.setMode`                    |
+| Deny-Regeln     | Textfeld speichert beim Verlassen; ungültige Regeln → Hinweis am Feld, kein Speichern                                                     | `settings.delegate.setDenyRules`               |
 
 Knöpfe bleiben für Handlungen: Anbieter verbinden, Modell laden, herunterladen,
 Updates prüfen und installieren, löschen.
 
 „Wie alle Geräte“ bzw. „Keins“ ist die Option „nicht festgelegt“ aus FR-021 und
-ruft die `clear`-Aktion. Eine Rückmeldung „Gespeichert.“ bleibt als kurzer
+ruft die `clear`-Aktion. Beim Farbschema ruft auch „Alle Geräte: System“ die
+`clear`-Aktion auf, weil ohne Vault-Wert „System“ gilt; es wird nie `system`
+als Vault-Wert gespeichert. Für das Gerät bleibt „System“ ein eigener Wert (er
+überstimmt einen Vault-Wert „Dunkel“). Eine Rückmeldung „Gespeichert.“ bleibt als kurzer
 Status, ein Fehler erscheint an der Einstellung und setzt die Anzeige auf den
 gespeicherten Wert zurück.
 
@@ -309,7 +320,8 @@ abgelehnt).
   Titel und Beschreibung, Reihenfolge nach FR-005, `categoryOf` für jeden Ort),
   `settingsRoutePatterns` gegen `matchRoute`, `headerBack` (vorige Station ist
   übergeordnet → zurück, mit Query; sonst `push`; Deep-Link-Fall),
-  `effectiveColorScheme`/`isDark`, `resolveAppAlias`, und dass jeder
+  `effectiveColorScheme`/`isDark`, `resolveAppAlias`, `tabTitleFor`, und dass
+  jeder
   i18n-Schlüssel des Registers in `de.json` und `en.json` existiert (FR-020;
   holzi schaltet die Sprache zur Laufzeit nicht um, eine manuelle Prüfung auf
   Englisch ist deshalb nicht möglich).

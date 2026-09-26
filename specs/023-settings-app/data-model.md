@@ -87,6 +87,12 @@ Nicht enthalten: die interne Vault-Bereichszeile (`VAULT_SCOPE_UUID`) und die
 `installation_uuid` anderer Geräte. Reihenfolge: dieses Gerät, dann nach Namen,
 Geräte ohne Namen zuletzt. „Zuletzt online“ kommt mit der Sync-Spec.
 
+## App-Definition: Tab-Titel
+
+`AppDefinition` in `lib/wm/apps.ts` bekommt `tabTitle?: 'location' | 'app'`
+(fehlt = `location`). `system.settings` setzt `'app'`: Der Tab zeigt
+`wm.apps.settings`, die Verlaufsliste weiter die Titel der Orte.
+
 ## Alias entfallener Apps
 
 In `lib/wm/apps.ts` (R7):

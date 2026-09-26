@@ -29,6 +29,10 @@ Query: nur `models.download.search` nutzt `q` (Suchbegriff). Deep-Link:
 `/workspace/<vault>?open=system.settings&at=/models/download/search?q=qwen`
 (URL-kodiert).
 
+Tab-Titel: immer „Einstellungen“ (`tabTitle: 'app'` an der App-Definition,
+`tabTitleFor` in `lib/wm/apps.ts`); die `titleKey` der Orte erscheinen in der
+Verlaufsliste an Vor/Zurück und im Kopf.
+
 Route-Komponenten bekommen keine Props. Was eine Einstellung vom Gerät braucht
 (`vaultDeviceUuid`, Alias), stellt `SettingsApp.vue` per `provide` bereit
 (`SETTINGS_DEVICE_KEY`, geladen einmal beim Montieren).
@@ -86,6 +90,11 @@ nicht gesetzte Werte fehlen, weil das Schema-Subset kein `null` kennt (wie
 `settings.sessionRestore.*`, Spec 022). `settings.get` ergänzt `colorScheme` in
 dieser Form.
 
+Die Einstellungsansicht ruft `clearColorScheme` für „Dieses Gerät: Wie alle
+Geräte“ und für „Alle Geräte: System“; `setColorScheme` mit `scope: 'vault'`
+bekommt von ihr nie `system`. Beim Standardmodell ruft „Keins“ bzw. „Wie alle
+Geräte“ `settings.models.clearDefault`.
+
 Alle anderen Einstellungen behalten ihre Aktionen (FR-019); nur die Bedienung
 ändert sich (research R5).
 
@@ -141,7 +150,8 @@ useColorScheme() → {
 
 - `settings.categories.<id>.{title,description}` für die fünf Kategorien.
 - `settings.federation.*` (Dieses Gerät, Unbenanntes Gerät).
-- `settings.locations.<id>.{title,description}` für jeden Ort mit Unteransicht.
+- `settings.locations.<id>.{title,description}` für jeden Ort mit übergeordnetem
+  Ort (jede Unteransicht).
 - `settings.back` („Zurück zu {title}“).
 - `settings.colorScheme.*` (Titel, Optionen, „Wie alle Geräte“).
 - `actions.settings.appearance.{setColorScheme,clearColorScheme}`,

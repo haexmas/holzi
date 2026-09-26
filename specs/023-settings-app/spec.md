@@ -64,6 +64,12 @@ entfällt; die Kategorie „Föderation“ zeigt die Geräte der Vault.) Referen
   zuletzt online war, und die Liste soll sich über den CRDT-Sync live
   aktualisieren. Beides braucht den iroh-Sync, den holzi noch nicht hat; es
   kommt mit der Sync-Spec. Bis dahin zeigt die Liste Namen ohne Datum.
+- Q: (Analyse) Wie heißt der Tab beim Navigieren in den Einstellungen? → A:
+  Immer „Einstellungen“; die Verlaufsliste an Vor/Zurück zeigt die Orte.
+- Q: (Analyse) Startet die Auswahl eines nicht installierten
+  Spracherkennungsmodells den Download? → A: Nein. Die Auswahl enthält nur
+  installierte Modelle; nicht installierte haben einen Knopf „Herunterladen“
+  (FR-021).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -126,6 +132,7 @@ jeweils eine Ebene zurück. Vor im Tab führt wieder hinein.
    wieder zu sehen, und Vor im Tab führt zurück in die Unteransicht.
 4. **Given** eine Unteransicht, die über einen Deep-Link direkt geöffnet wurde,
    **When** der Nutzer den Zurück-Pfeil im Kopf wählt, **Then** führt er zur
+   übergeordneten Ansicht und mit weiteren Klicks Schritt für Schritt bis zur
    Übersicht der Kategorie, nicht aus den Einstellungen heraus.
 5. **Given** der Nutzer wechselt aus einer Unteransicht in eine andere Kategorie
    und wieder zurück, **When** er die frühere Kategorie wählt, **Then** beginnt
@@ -317,7 +324,8 @@ Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
 - **FR-008**: Jede Kategorie und jede Unteransicht MUSS ein eigener Ort im Sinne
   von Spec 020 sein. Der Wechsel der Kategorie und das Öffnen einer Unteransicht
   MÜSSEN neue Einträge in der Historie des Tabs erzeugen; Vor, Zurück und die
-  Verlaufsliste gelten ohne Sonderregeln.
+  Verlaufsliste gelten ohne Sonderregeln. Der Tab heißt dabei immer
+  „Einstellungen“; die Verlaufsliste zeigt die Titel der Orte.
 - **FR-009**: Der Zurück-Pfeil im Kopf einer Unteransicht MUSS zur
   übergeordneten Ansicht führen. War diese die vorige Station der Historie,
   MUSS er wie Zurück im Tab wirken (kein doppelter Eintrag); sonst MUSS er zu
