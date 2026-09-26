@@ -8,12 +8,12 @@
 
 Die Einstellungen bekommen den Aufbau aus haex-vault: links eine Seitenleiste
 mit den Kategorien Allgemein, Darstellung, Modelle, Agenten und Föderation,
-rechts ein Kopf
-mit Titel und Beschreibung und der Inhalt. Modelle und Agenten zeigen eine
-Übersicht mit Unteransichten. Jede Ansicht ist ein Ort im Tab (Spec 020). Neu
-ist ein Farbschema (Hell, Dunkel, System). Die Föderations-App geht in der
-Kategorie „Föderation“ auf, die die Geräte der Vault zeigt, und keine
-Einstellung hat mehr einen Knopf zum Speichern.
+rechts ein Kopf mit Titel und Beschreibung und der Inhalt. Modelle und Agenten
+zeigen eine Übersicht mit Unteransichten. Jede Ansicht ist ein Ort im Tab (Spec
+020). Neu ist ein Farbschema (Hell, Dunkel, System). Die eigene
+Föderations-App entfällt; alte Aufrufe führen in die Kategorie „Föderation“, die
+die Geräte der Vault zeigt. Keine Einstellung hat mehr einen Knopf zum
+Speichern.
 
 Technischer Ansatz (Begründungen in [research.md](./research.md)):
 
@@ -29,7 +29,8 @@ Technischer Ansatz (Begründungen in [research.md](./research.md)):
 - **Sofort speichern** (R5): Auswahlen beim Wählen, Textfelder beim Verlassen;
   „nicht festgelegt“ als Option statt Zurücksetzen-Knopf.
 - **Farbschema** (R8): Präferenz `appearance.color_scheme` (Gerät vor Vault),
-  Klasse `dark` an `<html>`, zwei neue Aktionen; kein Backend-Code.
+  Klasse `dark` an `<html>`, zwei neue Aktionen; kein neues Backend für die
+  Präferenz.
 - **Theme-Farben** (R9): rund 170 feste Farben auf Theme-Farben umstellen, damit
   das dunkle Schema überall lesbar ist; ein Check verhindert neue.
 - **Föderation** (R7, R12): App raus, Alias `system.federation` → Einstellungen
@@ -48,9 +49,11 @@ Rust (Tauri 2.11) nur für den Lesebefehl der Geräteliste
 Tooltip), Tailwind v4 (Container-Abfragen), Pinia, vue-i18n, reka-ui
 
 **Storage**: Präferenz `appearance.color_scheme` in der vorhandenen Tabelle
-`preferences` über `get_pref`/`set_pref`/`clear_pref`; keine Migration
+`preferences` über `get_pref`/`set_pref`/`clear_pref`; die Geräteliste aus
+`known_devices`; keine Migration
 
-**Testing**: neu `known_devices_tests.rs` (`cargo test`); neu
+**Testing**: neu `known_devices_tests.rs` (`cargo test --manifest-path
+src-tauri/Cargo.toml known_devices`); neu
 `check:settings` (Register, Orte, `headerBack`, Farbschema, Alias,
 de/en-Schlüssel); `check:templates` mit Sperrliste für Palettenfarben;
 Regression `check:wm-state`, `check:wm-navigation`, `check:chat-state`,
@@ -116,8 +119,8 @@ Migration; ein Lesebefehl über eine vorhandene Tabelle, drei neue Aktionen
 ```text
 specs/023-settings-app/
 ├── plan.md                    # Dieses Dokument
-├── research.md                # Phase 0 (R1–R11)
-├── data-model.md              # Phase 1: Kategorie, Ort, Farbschema, Download-Fortschritt, Alias
+├── research.md                # Phase 0 (R1–R12)
+├── data-model.md              # Phase 1: Kategorie, Ort, Farbschema, Download-Fortschritt, Gerät, Alias
 ├── quickstart.md              # Phase 1: automatische und manuelle Validierung (S1–S18)
 ├── contracts/
 │   └── settings-app.md        # Orte, Gerüst, Aktionen, Farbschema, Alias, Store, i18n
@@ -152,7 +155,7 @@ src/
 ├── components/
 │   ├── apps/SettingsApp.vue       # NEU aufgebaut: Gerüst (Seitenleiste, Kopf, WmRouterView), provide Gerät
 │   ├── apps/FederationApp.vue     # ENTFÄLLT
-│   ├── wm/appRoutes.ts            # Routen der Einstellungen aus dem Register; Föderation raus
+│   ├── wm/appRoutes.ts            # Routen der Einstellungen aus dem Register; App-Föderation raus
 │   ├── settings/
 │   │   ├── Sidebar.vue            # NEU
 │   │   ├── FederationView.vue     # NEU: Geräte der Vault
@@ -170,9 +173,9 @@ src/
 │       └── HuggingFaceFilePicker.vue # owner/name aus der Route, Fortschritt aus dem Store
 ├── pages/
 │   ├── workspace/[instance].vue   # nach dem Öffnen: useColorScheme().loadAsync, models.watchDownloads
-│   └── federation/[instance].vue  # Umleitung auf ?open=system.settings
+│   └── federation/[instance].vue  # Umleitung auf ?open=system.settings&at=/federation
 ├── **/*.vue (28 Dateien)          # feste Farben → Theme-Farben (R9, eigener Commit)
-└── i18n/locales/{de,en}.json      # Kategorien, Orte, Farbschema, Aktionen; Föderation und Speichern-Texte raus
+└── i18n/locales/{de,en}.json      # Kategorien, Orte, Farbschema, Geräte, Aktionen; Speichern-Texte raus
 
 scripts/
 ├── check-settings.ts              # NEU (package.json `check:settings`, CI)
@@ -194,7 +197,7 @@ unter `src/components/settings/` (Auto-Import `Settings*`).
 | Anforderungen                                            | Umsetzung                                                                                                |
 | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | FR-001, FR-002 (Aufbau, Kopf)                            | `SettingsApp.vue`, `Sidebar.vue`, `locationFor`                                                          |
-| FR-003 (Übersicht, Einzelbereich direkt)                 | `OverviewView.vue`, `overviewRows`; Allgemein/Darstellung ohne Übersicht                                 |
+| FR-003 (Übersicht, Einzelbereich direkt)                 | `OverviewView.vue`, `overviewRows`; Allgemein/Darstellung/Föderation ohne Übersicht                      |
 | FR-004 (schmale Fenster)                                 | `@container`, Schwelle `@2xl` (R4)                                                                       |
 | FR-005–007 (Kategorien, Zuordnung)                       | `registry.ts`, Routen in `appRoutes.ts`; S3                                                              |
 | FR-008, FR-010–012 (Orte, Start, Deep-Link, Unbekanntes) | Routentabelle (R1), `wm.app.open` mit `at`, `RouterView`-Rückfall                                        |

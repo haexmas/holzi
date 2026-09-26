@@ -78,7 +78,7 @@ In `src/lib/actions/settingsActions.ts`, Handler in
 | `settings.appearance.clearColorScheme` | `{ scope: 'device' \| 'vault' }`                                        | `ColorSchemeResult`          | `settings.device` | write   | ja    |
 | `settings.devices.list`                | `{}`                                                                    | `{ devices: VaultDevice[] }` | `settings.read`   | read    | ja    |
 
-`VaultDevice = { vaultDeviceUuid, alias?, firstSeenMs, isCurrent }`; ein Gerät
+`VaultDevice = { vaultDeviceUuid, alias?, isCurrent }`; ein Gerät
 ohne Namen hat kein `alias` (Schema-Subset ohne `null`).
 
 `ColorSchemeResult = { effective: Scheme, device?: Scheme, vault?: Scheme }`:
@@ -124,7 +124,7 @@ useColorScheme() → {
 - Keine Argumente; braucht eine offene Vault (sonst `NoActiveInstance`, wie
   `current_device_info`).
 - Liefert `Vec<VaultDevicePayload>` (camelCase): `vaultDeviceUuid`, `alias`,
-  `firstSeenMs`, `isCurrent`; dieses Gerät zuerst, dann nach `firstSeenMs`.
+  `isCurrent`; dieses Gerät zuerst, dann nach Namen, Geräte ohne Namen zuletzt.
 - Liest über `known_devices::list_devices`; die Vault-Bereichszeile fehlt.
 - Frontend: `useDevice().listVaultDevicesAsync()`; der Handler von
   `settings.devices.list` lässt `alias: null` weg.
@@ -140,7 +140,7 @@ useColorScheme() → {
 ## 7. i18n (de, en)
 
 - `settings.categories.<id>.{title,description}` für die fünf Kategorien.
-- `settings.federation.*` (Dieses Gerät, Unbenanntes Gerät, „Seit {date}“).
+- `settings.federation.*` (Dieses Gerät, Unbenanntes Gerät).
 - `settings.locations.<id>.{title,description}` für jeden Ort mit Unteransicht.
 - `settings.back` („Zurück zu {title}“).
 - `settings.colorScheme.*` (Titel, Optionen, „Wie alle Geräte“).

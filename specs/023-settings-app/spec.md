@@ -46,8 +46,9 @@ entfällt; die Kategorie „Föderation“ zeigt die Geräte der Vault.) Referen
 ### Session 2026-09-26
 
 - Q: Was zeigt die Kategorie „Föderation“, solange holzi keine
-  Föderationsfunktionen hat? → A: (ersetzt durch die Antwort beim Plan-Review
-  unten) Es gibt sie noch nicht; alte Wege führen nach „Allgemein“.
+  Föderationsfunktionen hat? → A: Die ursprüngliche Antwort, die Kategorie
+  aufzuschieben und alte Wege nach „Allgemein“ zu führen, wurde beim
+  Plan-Review durch die folgende Entscheidung ersetzt.
 - Q: Gehört ein Hintergrund des Arbeitsbereichs (Bild oder Farbverlauf wie in
   haex-vault) zu dieser Spec? → A: Nein. „Darstellung“ enthält hier nur das
   Farbschema; der Hintergrund kommt mit der Spec Desktop-Symbole und Raster.
@@ -58,6 +59,11 @@ entfällt; die Kategorie „Föderation“ zeigt die Geräte der Vault.) Referen
   Einstellungen sein statt nur zu entfallen? → A: Ja. Die Kategorie
   „Föderation“ zeigt die Geräte der Vault: dieses Gerät und alle anderen
   bekannten Geräte mit Namen. Alte Wege zur Föderations-App führen dorthin.
+- Q: (Plan-Review) Welches Datum zeigt die Geräteliste, und aktualisiert sie
+  sich live? → A: Nicht das Datum des Hinzufügens, sondern wann ein Gerät
+  zuletzt online war, und die Liste soll sich über den CRDT-Sync live
+  aktualisieren. Beides braucht den iroh-Sync, den holzi noch nicht hat; es
+  kommt mit der Sync-Spec. Bis dahin zeigt die Liste Namen ohne Datum.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -209,12 +215,10 @@ Kategorie „Föderation“ und listen die Geräte der Vault.
 2. **Given** die frühere Adresse der Föderation, **When** holzi sie öffnet,
    **Then** erscheinen die Einstellungen in der Kategorie „Föderation“.
 3. **Given** die Kategorie „Föderation“, **When** der Nutzer sie öffnet,
-   **Then** sieht er jedes Gerät der Vault einmal mit seinem Namen und dem
-   Tag, an dem es die Vault zum ersten Mal geöffnet hat; dieses Gerät steht
-   zuerst und ist als „Dieses Gerät“ markiert.
-4. **Given** ein anderes Gerät hat die Vault geöffnet und die Änderungen sind
-   synchronisiert, **When** der Nutzer die Kategorie erneut öffnet, **Then**
-   erscheint es in der Liste.
+   **Then** sieht er jedes bekannte Gerät der Vault einmal mit seinem Namen;
+   dieses Gerät steht zuerst und ist als „Dieses Gerät“ markiert.
+4. **Given** der Nutzer ändert in „Allgemein“ den Namen dieses Geräts, **When**
+   er danach „Föderation“ öffnet, **Then** steht dort der neue Name.
 
 ---
 
@@ -351,11 +355,12 @@ Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
   „Föderation“ öffnen.
 - **FR-018**: Der Sperr-Knopf der bisherigen Föderations-App entfällt ersatzlos;
   gesperrt wird weiter über den Chat und die künftige Tastenkürzel-Spec.
-- **FR-022**: Die Kategorie „Föderation“ MUSS die Geräte der Vault zeigen: je
-  Gerät einmal, mit Namen (oder „Unbenanntes Gerät“) und dem Tag des ersten
-  Öffnens der Vault; dieses Gerät zuerst und markiert, die übrigen nach dem
-  ersten Öffnen. Die Liste ist nur eine Anzeige. Sie MUSS auch für Agenten mit
-  Leserecht auf die Einstellungen abrufbar sein.
+- **FR-022**: Die Kategorie „Föderation“ MUSS die bekannten Geräte der Vault
+  zeigen: je Gerät einmal, mit Namen (oder „Unbenanntes Gerät“); dieses Gerät
+  zuerst und markiert, die übrigen nach Namen. Die Liste ist nur eine Anzeige.
+  Sie MUSS auch für Agenten mit Leserecht auf die Einstellungen abrufbar sein.
+  „Zuletzt online“ je Gerät und die Live-Aktualisierung über den Sync kommen
+  mit der Spec, die den iroh-Sync baut.
 
 **Allgemein**
 
@@ -386,7 +391,7 @@ Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
 - **Farbschema**: Einstellung mit den Werten Hell, Dunkel, System; Gerätewert
   vor Vault-Wert, Standard System.
 - **Gerät der Vault**: eine Installation von holzi, die die Vault geöffnet hat;
-  Name, Tag des ersten Öffnens, ob es dieses Gerät ist.
+  Name, ob es dieses Gerät ist.
 
 ## Success Criteria _(mandatory)_
 
@@ -430,6 +435,8 @@ Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
 - Kategorien ohne heutigen Inhalt (siehe FR-006).
 - Geräte umbenennen (außer diesem), entfernen, sperren oder ihren
   Synchronisationsstand zeigen; die Geräteliste ist nur eine Anzeige (FR-022).
+- „Zuletzt online“ je Gerät und die Live-Aktualisierung der Geräteliste; beides
+  kommt mit der Sync-Spec (iroh), weil holzi heute keinen Sync-Transport hat.
 - Ein Hintergrund des Arbeitsbereichs (FR-015).
 - Neue Einstellungen außer dem Farbschema.
 - Tastenkürzel für einzelne Kategorien (kommt mit der Tastenkürzel-Spec).

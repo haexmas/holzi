@@ -11,7 +11,7 @@ Reines Datum in `src/lib/settings/registry.ts` (R2).
 
 | Feld             | Typ                                                                 | Regel                                                                      |
 | ---------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `id`             | `'general' \| 'appearance' \| 'models' \| 'agents' \| 'federation'` | eindeutig; Reihenfolge des Arrays = FR-005                                 |
+| `id`             | `'general' \| 'appearance' \| 'models' \| 'agents' \| 'federation'` | genau eine der fünf Kategorien; Reihenfolge des Arrays = FR-005            |
 | `path`           | `string`                                                            | Ort der Kategorie: `/`, `/appearance`, `/models`, `/agents`, `/federation` |
 | `icon`           | `string`                                                            | Iconify-Name (`lucide:*`)                                                  |
 | `titleKey`       | `string`                                                            | `settings.categories.<id>.title`                                           |
@@ -22,16 +22,16 @@ Eine Kategorie mit Unteransichten zeigt an ihrem Ort die Übersicht; eine ohne
 
 ## Ort (`SettingsLocation`)
 
-| Feld             | Typ                                                                 | Regel                                                                                |
-| ---------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `id`             | `'general' \| 'appearance' \| 'models' \| 'agents' \| 'federation'` | eindeutig; Reihenfolge des Arrays = FR-005                                           |
-| `pattern`        | `string`                                                            | Routenmuster relativ zu `/`, z. B. `models/download/repo/:owner/:name`; `''` für `/` |
-| `category`       | Kategorie-`id`                                                      | bestimmt die Hervorhebung in der Seitenleiste                                        |
-| `parent`         | Ort-`id` \| —                                                       | nur Unteransichten; Ziel des Zurück-Pfeils (R3)                                      |
-| `icon`           | `string` \| —                                                       | nur Orte, die als Zeile einer Übersicht erscheinen                                   |
-| `titleKey`       | `string`                                                            | Kopf und Tab-Titel; darf Routenparameter nutzen (`{owner}/{name}`)                   |
-| `descriptionKey` | `string`                                                            | eine Zeile unter dem Titel und in der Übersichtszeile                                |
-| `overviewRow`    | `boolean`                                                           | erscheint als Zeile in der Übersicht seiner Kategorie                                |
+| Feld             | Typ            | Regel                                                                                |
+| ---------------- | -------------- | ------------------------------------------------------------------------------------ |
+| `id`             | `string`       | eindeutig, z. B. `models.download.repo`                                              |
+| `pattern`        | `string`       | Routenmuster relativ zu `/`, z. B. `models/download/repo/:owner/:name`; `''` für `/` |
+| `category`       | Kategorie-`id` | bestimmt die Hervorhebung in der Seitenleiste                                        |
+| `parent`         | Ort-`id` \| —  | nur Unteransichten; Ziel des Zurück-Pfeils (R3)                                      |
+| `icon`           | `string` \| —  | nur Orte, die als Zeile einer Übersicht erscheinen                                   |
+| `titleKey`       | `string`       | Kopf und Tab-Titel; darf Routenparameter nutzen (`{owner}/{name}`)                   |
+| `descriptionKey` | `string`       | eine Zeile unter dem Titel und in der Übersichtszeile                                |
+| `overviewRow`    | `boolean`      | erscheint als Zeile in der Übersicht seiner Kategorie                                |
 
 Die vollständige Liste steht in R1 und im [Vertrag](./contracts/settings-app.md#1-orte).
 
@@ -81,12 +81,11 @@ Lesetyp des Befehls `list_vault_devices` (R12), aus der vorhandenen Tabelle
 | ----------------- | ---------------- | ----------------------------------------------------------------- |
 | `vaultDeviceUuid` | `string` (UUID)  | eindeutig je Gerät und Vault                                      |
 | `alias`           | `string \| null` | `null`, solange das Gerät die Einrichtung nicht abgeschlossen hat |
-| `firstSeenMs`     | `number`         | Unix-Millisekunden des ersten Öffnens                             |
 | `isCurrent`       | `boolean`        | genau ein Eintrag ist `true`                                      |
 
 Nicht enthalten: die interne Vault-Bereichszeile (`VAULT_SCOPE_UUID`) und die
-`installation_uuid` anderer Geräte. Reihenfolge: dieses Gerät, dann nach
-`firstSeenMs`.
+`installation_uuid` anderer Geräte. Reihenfolge: dieses Gerät, dann nach Namen,
+Geräte ohne Namen zuletzt. „Zuletzt online“ kommt mit der Sync-Spec.
 
 ## Alias entfallener Apps
 

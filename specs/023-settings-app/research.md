@@ -273,35 +273,37 @@ Schnitte vor.
 
 - `storage/known_devices.rs` bekommt `list_devices(conn)`: alle Zeilen außer
   der internen Vault-Bereichszeile (`installation_uuid = VAULT_SCOPE_UUID`, von
-  `identity::bootstrap` mit `first_seen = 0` angelegt), sortiert nach
-  `first_seen`.
+  `identity::bootstrap` angelegt).
 - Neuer Befehl `list_vault_devices` in `device/commands.rs`, registriert in
-  `lib.rs`: `Vec<VaultDevicePayload>` mit `vaultDeviceUuid`, `alias`
-  (`null` ohne Namen), `firstSeenMs` (Unix-Millisekunden, wie gespeichert) und
-  `isCurrent`; dieses Gerät zuerst. Wire-Form camelCase wie
-  `DeviceInfoPayload`, TypeScript-Typ von Hand in `useDevice.ts` (Muster des
-  Moduls).
+  `lib.rs`: `Vec<VaultDevicePayload>` mit `vaultDeviceUuid`, `alias` (`null`
+  ohne Namen) und `isCurrent`; dieses Gerät zuerst, die übrigen nach Namen
+  (ohne Namen zuletzt). Wire-Form camelCase wie `DeviceInfoPayload`,
+  TypeScript-Typ von Hand in `useDevice.ts` (Muster des Moduls).
 - Lese-Aktion `settings.devices.list` (Bereich `settings.read`, Wirkung
   `read`), damit Agenten die Liste abrufen können (FR-022).
 - Ansicht `settings/FederationView.vue`: eine Zeile je Gerät mit Name oder
-  „Unbenanntes Gerät“, Datum des ersten Öffnens (lokal formatiert) und der
-  Markierung „Dieses Gerät“. Kein Umbenennen hier: der eigene Name steht in
-  „Allgemein“.
-- Die Liste wird beim Öffnen der Kategorie geladen; neue Geräte anderer
-  Rechner erscheinen, sobald ihre `known_devices`-Zeile synchronisiert ist und
-  die Kategorie erneut geöffnet wird (US5 AS4). Kein Live-Abonnement.
+  „Unbenanntes Gerät“ und der Markierung „Dieses Gerät“. Kein Umbenennen hier:
+  der eigene Name steht in „Allgemein“. Geladen beim Öffnen der Kategorie.
+- **Nicht in 023** (Betreiberentscheidung beim Plan-Review): „zuletzt online“
+  und die Live-Aktualisierung. holzi hat noch keinen Sync-Transport
+  (`plans/README.md`: der Zwei-Geräte-Sync ist eine eigene Etappe nach dem MVP),
+  also weder Verbindungen, deren Zeitpunkt sich messen ließe, noch ein
+  Ereignis, wenn Änderungen anderer Geräte ankommen. Ein Lebenszeichen über
+  synchronisierte Präferenzen wurde verworfen; beides kommt mit der Sync-Spec.
+  Bis dahin sieht man andere Geräte nur in einer kopierten Vault, mit dem Stand
+  der Kopie.
 
-**Begründung**: Betreiberentscheidung beim Plan-Review (Clarification). Die
-Daten liegen schon in der Vault; ein Lesebefehl genügt.
+**Begründung**: Die Daten liegen schon in der Vault; ein Lesebefehl genügt.
 
 **Alternativen**: Liste aus `settings.get` (vermischt Einstellungen mit einer
-Geräteliste); Live-Aktualisierung über Sync-Ereignisse (ohne Bedarf in der
-Spec).
+Geräteliste); Datum des ersten Öffnens aus `first_seen` (vom Betreiber
+abgelehnt).
 
 ## R11 Tests
 
 - **Neu `src-tauri/src/storage/known_devices_tests.rs`**: `list_devices` ohne
-  Vault-Bereichszeile, Sortierung nach `first_seen`, Gerät ohne Namen.
+  Vault-Bereichszeile, Gerät ohne Namen; Sortierung im Befehl (dieses Gerät
+  zuerst, dann nach Namen) als reine Funktion getestet.
 - **Neu `scripts/check-settings.ts`** (`pnpm check:settings`, in CI): Register
   (eindeutige Kennungen und Pfade, jede Kategorie hat einen Ort, jeder Ort hat
   Titel und Beschreibung, Reihenfolge nach FR-005, `categoryOf` für jeden Ort),
