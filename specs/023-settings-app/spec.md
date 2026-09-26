@@ -403,8 +403,8 @@ Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
 - Die zu große Komponente der HuggingFace-Modellverwaltung (Complexity Tracking
   aus Spec 020) wird bei der Aufteilung in Bereiche zerlegt; das ist eine Folge
   dieser Spec, keine eigene Anforderung.
-- Der PR zu dieser Spec stapelt auf dem PR zu Spec 022, weil 022 die
-  Einstellungsansicht um einen Abschnitt erweitert.
+- Spec 022 ist in `main`; diese Spec baut auf ihrer Einstellung „Sitzung
+  wiederherstellen“ auf (Auswahl, die beim Wählen speichert).
 
 ## Nicht im Umfang
 
