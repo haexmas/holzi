@@ -123,18 +123,25 @@ Deep-Link.
 
 ## R4 Seitenleiste in schmalen Fenstern
 
-**Entscheidung**: CSS-Container-Abfragen von Tailwind v4 (`@container` am
-Einstellungs-Gerüst). Unterhalb von `@2xl` (42rem, 672 px) zeigt die
-Seitenleiste nur Symbole (Breite 3.5rem) mit Tooltip (`UiButton` hat
-`tooltip`), darüber Symbol und Name (Breite 16rem).
+**Entscheidung** (überarbeitet 2026-09-26 nach Betreiber-Rückmeldung, Vorbild
+GNOME-Einstellungen): CSS-Container-Abfragen von Tailwind v4 (`@container` am
+Einstellungs-Gerüst). Ab `@2xl` (42rem, 672 px) steht die Seitenleiste (16rem)
+neben dem Inhalt und lässt sich ausblenden; darunter ist sie ausgeblendet und
+öffnet sich über ein Symbol im Kopf über den ganzen Rahmen. Die Lage kommt aus
+CSS; der Rahmen liest beim Umschalten die berechnete `position` der Leiste, um
+zu wissen, welcher der zwei Zustände (`wideHidden`, `menuOpen`) gemeint ist.
 
 **Begründung**: FR-004 verlangt die Fensterbreite, nicht die Bildschirmbreite.
-haex-vault schaltet bei `@3xl` (48rem) um, das Einstellungsfenster in holzi
-startet aber mit 760 px (`lib/wm/apps.ts`) und würde sonst immer nur Symbole
-zeigen. Bei 360 px (SC-004) bleiben neben der Leiste rund 300 px für den Inhalt.
+Die frühere Symbolleiste mit Tooltips kostete in schmalen Fenstern dauerhaft
+Breite, und Tooltips öffnen auf Touch nicht beim langen Drücken. Das
+Vollbild-Menü gibt dem Inhalt den ganzen Platz. Die Schwelle bleibt 672 px,
+weil das Fenster mit 760 px startet (`lib/wm/apps.ts`).
 
-**Alternativen**: `ResizeObserver` in JavaScript (mehr Code, gleiche Wirkung);
-Medienabfragen (falsche Bezugsgröße).
+**Alternativen**: Symbolleiste mit Tooltips (erste Umsetzung, verworfen);
+Navigation als Seitenstapel wie im schmalen GNOME (die Seitenleiste als erste
+Seite) – passt nicht zu den Orten aus Spec 020, weil die Leiste kein Ort ist;
+Messen der Breite in JavaScript für die Darstellung (Aufblitzen beim ersten
+Zeichnen).
 
 ## R5 Einstellungen ohne Speichern-Knopf (FR-021)
 
@@ -334,3 +341,22 @@ abgelehnt).
 - **Regression**: `check:wm-state`, `check:wm-navigation`, `check:chat-state`,
   `typecheck`, `lint`, `format:check`, e2e-Suite.
 - **Manuell**: [quickstart.md](./quickstart.md).
+
+## R13 Suche in den Einstellungen (FR-023)
+
+**Entscheidung**: Ein Suchfeld oben in der Seitenleiste. Gesucht wird in einem
+reinen Modul `lib/settings/search.ts` über die Registry: Titel, Beschreibung und
+Suchbegriffe jedes Orts ohne Parameter (`settings.categories.<id>.keywords`,
+`settings.locations.<id>.keywords`) und die Bezeichnungen einzelner
+Einstellungen (`settingKeys`, heute Gerätename und Sitzung wiederherstellen in
+„Allgemein“). Treffer führen an den Ort per `router.push`; die Suche selbst ist
+kein Ort.
+
+**Begründung**: Die Registry kennt schon alle Orte und Titel; Suchbegriffe
+fangen Wörter ab, die in keinem Titel stehen („Whisper“, „dunkel“). Als reines
+Modul läuft die Suche in `check:settings` mit dem deutschen Katalog. Ein
+Suchbegriff als Ort (`?q=`) brächte Verlaufseinträge je Tastendruck.
+
+**Alternativen**: Die Ansichten zur Laufzeit durchsuchen (braucht gemountete
+Ansichten); eine Such-Bibliothek mit unscharfer Suche (für rund 20 Einträge
+unnötig).

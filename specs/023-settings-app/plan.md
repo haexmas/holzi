@@ -201,7 +201,7 @@ unter `src/components/settings/` (Auto-Import `Settings*`).
 | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | FR-001, FR-002 (Aufbau, Kopf)                            | `SettingsApp.vue`, `Sidebar.vue`, `locationFor`                                                                          |
 | FR-003 (Übersicht, Einzelbereich direkt)                 | `OverviewView.vue`, `overviewRows`; Allgemein/Darstellung/Föderation ohne Übersicht                                      |
-| FR-004 (schmale Fenster)                                 | `@container`, Schwelle `@2xl` (R4)                                                                                       |
+| FR-004 (schmale Fenster)                                 | `@container`, Schwelle `@2xl`; ausblendbar, schmal als Vollbild-Menü (R4)                                                |
 | FR-005–007 (Kategorien, Zuordnung)                       | `registry.ts`, Routen in `appRoutes.ts`; S3                                                                              |
 | FR-008, FR-010–012 (Orte, Start, Deep-Link, Unbekanntes) | Routentabelle (R1), `wm.app.open` mit `at`, `RouterView`-Rückfall; Tab-Titel „Einstellungen“ über `tabTitle: 'app'` (R2) |
 | FR-009 (Zurück im Kopf)                                  | `headerBack` (R3)                                                                                                        |
@@ -212,6 +212,7 @@ unter `src/components/settings/` (Auto-Import `Settings*`).
 | FR-019 (Verhalten unverändert)                           | bestehende Aktionen; Regressionschecks                                                                                   |
 | FR-020 (de, en)                                          | i18n; `check:settings` prüft Schlüssel in beiden Sprachen                                                                |
 | FR-021 (ohne Speichern-Knopf)                            | Umstellung der Einstellungskomponenten (R5)                                                                              |
+| FR-023 (Suche)                                           | `lib/settings/search.ts`, `keywordsKey`/`settingKeys` in der Registry, Suchfeld in `Sidebar.vue` (R13)                   |
 | Edge Case Download läuft weiter                          | `stores/modelDownloads.ts`, `watchDownloads` (R6)                                                                        |
 | Complexity Tracking aus Spec 020                         | Aufteilung der Modellverwaltung (R10)                                                                                    |
 

@@ -50,10 +50,20 @@ Route-Komponenten bekommen keine Props. Was eine Einstellung vom Gerät braucht
 └──────────────┴───────────────────────────────────────────┘
 ```
 
-- Wurzel mit `@container`; unter `@2xl` (672 px) ist die Seitenleiste 3.5rem
-  breit und zeigt nur Symbole mit Tooltip, darüber 16rem mit Symbol und Name
-  (FR-004). Breite und Deckkraft der Namen gehen mit 200 ms über
-  (`motion-reduce` schaltet den Übergang ab).
+- Wurzel mit `@container`. Ab `@2xl` (672 px) steht die Seitenleiste (16rem,
+  Farbe `sidebar`) neben dem Inhalt; `wideHidden` blendet sie auf Breite 0
+  aus. Darunter liegt sie absolut über dem ganzen Rahmen, außerhalb des Bildes
+  und `invisible`; `menuOpen` schiebt sie herein, der Inhalt ist dann `inert`
+  (FR-004). Beide Zustände sind lokal im Rahmen und werden nicht gemerkt;
+  welcher gilt, liest der Rahmen an der berechneten `position` der Leiste ab
+  (keine zweite Kopie der Schwelle). Wird das Fenster breit, schließt
+  `menuOpen`. Breite und Verschiebung gehen mit 200 ms über (`motion-reduce`
+  schaltet den Übergang ab).
+- Kopf, wenn die Seitenleiste nicht zu sehen ist: links ein Symbol zum
+  Einblenden (`aria-expanded="false"`, `aria-controls="settings-sidebar"`) und
+  ein Such-Symbol, das die Leiste öffnet und das Suchfeld fokussiert. Beim
+  Öffnen geht der Fokus auf die aktive Kategorie, beim Schließen zurück auf das
+  Symbol im Kopf.
 - Die Ansichten zeigen nur Listen und Einstellungen: keine eigenen
   Überschriften, Beschreibungsabsätze oder Karten-Rahmen; Listen sind Zeilen
   mit Trennlinien.
@@ -167,3 +177,19 @@ useColorScheme() → {
   `actions.settings.devices.list`.
 - Entfällt: `wm.apps.federation`, `settings.header.forDevice`, die
   Speichern-Texte der umgestellten Einstellungen.
+
+## Suche (`lib/settings/search.ts`, FR-023)
+
+- `searchSettings(query, translate) → SettingsSearchHit[]` mit
+  `{ location, path, label, trail }`; leere Eingabe → `[]`.
+- Einträge: je Ort mit `keywordsKey` (alle Orte ohne Parameter) einer mit
+  Titel, Beschreibung und Suchbegriffen, dazu einer je `settingKeys`-Bezeichnung
+  (Pfad um den Ortstitel verlängert).
+- Vergleich nach NFD ohne diakritische Zeichen und in Kleinbuchstaben; jedes
+  Wort muss vorkommen. Rang: Bezeichnung beginnt mit der Eingabe, ein Wort der
+  Bezeichnung beginnt damit, Bezeichnung enthält sie, nur Beschreibung oder
+  Suchbegriffe; bei Gleichstand Reihenfolge der Registry.
+- Seitenleiste: oben Symbol zum Ausblenden und Suchfeld (`type="search"`);
+  Treffer ersetzen die Kategorien, Enter wählt den ersten, Escape leert das
+  Feld und schließt bei leerem Feld das Vollbild-Menü; nach der Wahl ist das
+  Feld leer.

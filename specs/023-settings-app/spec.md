@@ -84,6 +84,16 @@ entfällt; die Kategorie „Föderation“ zeigt die Geräte der Vault.) Referen
   verschwindet die App? → A: Sofort, vor der Geräteliste: Die App entfällt aus
   Launcher und Tab-Menü, alte Aufrufe öffnen die Kategorie „Föderation“ (FR-016,
   FR-017); deren Inhalt folgt mit US5.
+- Q: (Betreiber-Rückmeldung, Vorbild GNOME-Einstellungen) Was zeigt ein
+  schmales Fenster statt der Symbolleiste? → A: Die Seitenleiste ist dort ganz
+  ausgeblendet; ein Symbol im Kopf öffnet sie über das ganze Fenster, die Wahl
+  einer Kategorie schließt sie wieder. In breiten Fenstern steht sie neben dem
+  Inhalt und lässt sich über dasselbe Symbol ausblenden. Keiner der beiden
+  Zustände wird gemerkt (FR-004).
+- Q: (Betreiber-Rückmeldung) Gibt es doch eine Suche? → A: Ja, ein Suchfeld
+  oben in der Seitenleiste führt direkt zu passenden Orten und einzelnen
+  Einstellungen; das hebt „keine Suche über alle Einstellungen“ aus „Nicht im
+  Umfang“ auf (FR-023). Ein globales Zurücksetzen bleibt ausgeschlossen.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -246,25 +256,31 @@ Kategorie „Föderation“ und listen die Geräte der Vault.
 ### User Story 6 - Schmale Fenster (Priority: P2)
 
 Ein Nutzer verkleinert das Einstellungsfenster oder nutzt holzi im Kompaktmodus
-(Spec 015). Die Seitenleiste schrumpft auf eine Leiste mit Symbolen; beim
-Überfahren oder langen Drücken zeigt ein Hinweis den Namen der Kategorie. Der
-Inhalt bekommt den Platz.
+(Spec 015). Die Seitenleiste verschwindet, der Inhalt bekommt den ganzen Platz.
+Ein Symbol im Kopf öffnet die Seitenleiste über das ganze Fenster; die Wahl
+einer Kategorie schließt sie wieder (wie in den GNOME-Einstellungen).
 
 **Why this priority**: Fenster lassen sich frei verkleinern, und im Kompaktmodus
 ist wenig Platz. Eine volle Seitenleiste würde den Inhalt dort erdrücken.
 
 **Independent Test**: Das Einstellungsfenster schrittweise schmaler ziehen: Ab
-einer bestimmten Breite zeigt die Seitenleiste nur noch Symbole mit Hinweis, der
-Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
+einer bestimmten Breite verschwindet die Seitenleiste, das Symbol im Kopf öffnet
+sie als Vollbild-Menü, der Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
 
 **Acceptance Scenarios**:
 
 1. **Given** ein breites Einstellungsfenster, **When** es angezeigt wird,
    **Then** zeigt die Seitenleiste Symbol und Namen jeder Kategorie.
 2. **Given** das Fenster wird schmaler als eine feste Grenze, **When** es
-   angezeigt wird, **Then** zeigt die Seitenleiste nur Symbole, und jeder Name
-   erscheint als Hinweis.
-3. **Given** die Breite des Fensters (nicht des Bildschirms), **When** sie sich
+   angezeigt wird, **Then** ist die Seitenleiste ausgeblendet und der Kopf zeigt
+   ein Symbol zum Einblenden und eines für die Suche.
+3. **Given** ein schmales Fenster, **When** der Nutzer das Symbol wählt,
+   **Then** füllt die Seitenleiste das Fenster; die Wahl einer Kategorie oder
+   Escape schließt sie wieder.
+4. **Given** ein breites Fenster, **When** der Nutzer die Seitenleiste über ihr
+   Symbol ausblendet, **Then** bekommt der Inhalt die ganze Breite und der Kopf
+   zeigt das Symbol zum Einblenden.
+5. **Given** die Breite des Fensters (nicht des Bildschirms), **When** sie sich
    ändert, **Then** entscheidet sie allein über die Darstellung der Seitenleiste.
 
 ---
@@ -314,9 +330,11 @@ Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
   eine Zeile je Bereich mit Symbol, Titel, einer Zeile Beschreibung und einem
   Pfeil. Eine Kategorie mit nur einem Bereich MUSS diesen direkt zeigen.
 - **FR-004**: Die Seitenleiste MUSS unterhalb einer festen Breite des Fensters
-  nur Symbole zeigen, mit dem Namen als Hinweis beim Überfahren oder langen
-  Drücken. Maßgeblich ist die Breite des Einstellungsfensters, nicht die des
-  Bildschirms.
+  ausgeblendet sein; ein Symbol im Kopf öffnet sie über das ganze Fenster, die
+  Wahl einer Kategorie oder eines Suchtreffers und Escape schließen sie. Darüber
+  steht sie neben dem Inhalt und lässt sich ausblenden. Maßgeblich ist die
+  Breite des Einstellungsfensters, nicht die des Bildschirms; ob sie ein- oder
+  ausgeblendet ist, wird nicht gemerkt.
 
 **Kategorien**
 
@@ -406,6 +424,16 @@ Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
   etwas starten, und nicht für Werte (Anbieter verbinden, Modell herunterladen,
   Update prüfen, Modell löschen). Das Vorbild ist „Sitzung wiederherstellen“
   (Spec 022 FR-004).
+- **FR-023**: Oben in der Seitenleiste MUSS ein Suchfeld stehen. Es findet Orte
+  über Titel, Beschreibung und hinterlegte Suchbegriffe und einzelne
+  Einstellungen über ihre Bezeichnung, ohne Rücksicht auf Groß- und
+  Kleinschreibung und Akzente; jedes Wort der Eingabe muss vorkommen. Treffer
+  ersetzen die Kategorien, zeigen Bezeichnung und Pfad (etwa „Modelle ›
+  Modelle herunterladen“) und führen per Klick oder Enter (erster Treffer) an
+  den Ort; danach ist das Feld leer. Escape leert das Feld. Orte mit
+  Parametern (ein HuggingFace-Repo) sind keine Treffer. Suchbegriffe liegen auf
+  Deutsch und Englisch vor (FR-020). Im Kopf öffnet ein Such-Symbol die
+  Seitenleiste mit dem Suchfeld, wenn sie ausgeblendet ist.
 
 ### Key Entities
 
@@ -458,7 +486,8 @@ Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
 
 ## Nicht im Umfang
 
-- Eine Suche über alle Einstellungen und ein globales Zurücksetzen.
+- Ein globales Zurücksetzen; die Suche (FR-023) durchsucht keine Inhalte von
+  Listen (etwa installierte Modelle oder HuggingFace-Ergebnisse).
 - Kategorien ohne heutigen Inhalt (siehe FR-006).
 - Geräte umbenennen (außer diesem), entfernen, sperren oder ihren
   Synchronisationsstand zeigen; die Geräteliste ist nur eine Anzeige (FR-022).

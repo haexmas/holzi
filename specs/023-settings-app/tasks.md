@@ -187,7 +187,11 @@ description: 'Task list for spec 023-settings-app'
 
 - [x] T053 [US6] Make the settings frame a container (`@container` on the root of `SettingsApp.vue`); in `Sidebar.vue` show icon and name from `@2xl` (42rem) up and only icons with the name as `UiButton` tooltip below, widths 16rem and 3.5rem (research R4); check that no view scrolls horizontally at 360 px
   - Done 2026-09-26 with T012/T013; the 360 px check is part of T054.
-- [ ] T054 [US6] Operator: run quickstart S15
+- [x] T053a [US6] Replace the icon rail with the GNOME-style sidebar (research R4, revised): hidden below `@2xl` and opened over the whole frame from a header icon, hideable beside the content from `@2xl` up, states `wideHidden`/`menuOpen` in `SettingsApp.vue`, not kept
+  - Done 2026-09-26 on operator feedback.
+- [x] T053b [US6] Settings search (FR-023, research R13): `keywordsKey`/`settingKeys` in `src/lib/settings/registry.ts`, `src/lib/settings/search.ts`, search field and hits in `Sidebar.vue`, keywords de/en, tests in `scripts/check-settings.ts`
+  - Done 2026-09-26 on operator feedback.
+- [ ] T054 [US6] Operator: run quickstart S15 and S19
 
 ---
 
