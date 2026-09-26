@@ -31,10 +31,10 @@
 
 ## Notes
 
-- Both clarification markers are resolved (session 2026-09-26): the federation
-  app is removed and its old routes lead to "Allgemein"; the "Föderation"
-  category comes with a federation spec (US5, FR-006, FR-017). "Darstellung"
-  holds only the color scheme; the background belongs to the desktop icons and
-  grid spec (FR-015).
+- Both clarification markers are resolved (session 2026-09-26). The federation
+  app is removed; at plan review the operator chose a "Föderation" settings
+  category that lists the vault's devices (US5, FR-017, FR-022), superseding the
+  earlier "no category yet" answer. "Darstellung" holds only the color scheme;
+  the background belongs to the desktop icons and grid spec (FR-015).
 - The spec names the haex-vault reference by commit SHA only; the file paths in
   the input line are references, not requirements.

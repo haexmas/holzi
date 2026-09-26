@@ -23,6 +23,7 @@ in `src/components/wm/appRoutes.ts`.
 | `agents.providers`       | `/agents/providers`                  | agents     | `agents`                 | ja              | `settings/ConnectDelegateProvider.vue`  |
 | `agents.autonomy`        | `/agents/autonomy`                   | agents     | `agents`                 | ja              | `settings/AutonomyModeSetting.vue`      |
 | `agents.denyRules`       | `/agents/deny-rules`                 | agents     | `agents`                 | ja              | `settings/DelegateDenyRulesSetting.vue` |
+| `federation`             | `/federation`                        | federation | —                        | —               | `settings/FederationView.vue`           |
 
 Query: nur `models.download.search` nutzt `q` (Suchbegriff). Deep-Link:
 `/workspace/<vault>?open=system.settings&at=/models/download/search?q=qwen`
@@ -41,6 +42,7 @@ Route-Komponenten bekommen keine Props. Was eine Einstellung vom Gerät braucht
 │  ◐ Darstell. ├───────────────────────────────────────────┤
 │  ▣ Modelle   │ Inhalt (WmRouterView, scrollt allein)     │
 │  ✦ Agenten   │                                           │
+│  ⇄ Föderation│                                           │
 └──────────────┴───────────────────────────────────────────┘
 ```
 
@@ -70,10 +72,14 @@ Route-Komponenten bekommen keine Props. Was eine Einstellung vom Gerät braucht
 In `src/lib/actions/settingsActions.ts`, Handler in
 `src/stores/settingsActionHandlers.ts`.
 
-| Kennung                                | Eingabe                                                                 | Ergebnis            | Bereich           | Wirkung | Agent |
-| -------------------------------------- | ----------------------------------------------------------------------- | ------------------- | ----------------- | ------- | ----- |
-| `settings.appearance.setColorScheme`   | `{ scope: 'device' \| 'vault', scheme: 'light' \| 'dark' \| 'system' }` | `ColorSchemeResult` | `settings.device` | write   | ja    |
-| `settings.appearance.clearColorScheme` | `{ scope: 'device' \| 'vault' }`                                        | `ColorSchemeResult` | `settings.device` | write   | ja    |
+| Kennung                                | Eingabe                                                                 | Ergebnis                     | Bereich           | Wirkung | Agent |
+| -------------------------------------- | ----------------------------------------------------------------------- | ---------------------------- | ----------------- | ------- | ----- |
+| `settings.appearance.setColorScheme`   | `{ scope: 'device' \| 'vault', scheme: 'light' \| 'dark' \| 'system' }` | `ColorSchemeResult`          | `settings.device` | write   | ja    |
+| `settings.appearance.clearColorScheme` | `{ scope: 'device' \| 'vault' }`                                        | `ColorSchemeResult`          | `settings.device` | write   | ja    |
+| `settings.devices.list`                | `{}`                                                                    | `{ devices: VaultDevice[] }` | `settings.read`   | read    | ja    |
+
+`VaultDevice = { vaultDeviceUuid, alias?, firstSeenMs, isCurrent }`; ein Gerät
+ohne Namen hat kein `alias` (Schema-Subset ohne `null`).
 
 `ColorSchemeResult = { effective: Scheme, device?: Scheme, vault?: Scheme }`:
 nicht gesetzte Werte fehlen, weil das Schema-Subset kein `null` kennt (wie
@@ -106,11 +112,22 @@ useColorScheme() → {
 ## 5. Entfallene App (`lib/wm/apps.ts`, `stores/wmActionHandlers.ts`)
 
 - `resolveAppAlias('system.federation')` →
-  `{ appId: 'system.settings', at: '/' }`; jede andere Kennung →
+  `{ appId: 'system.settings', at: '/federation' }`; jede andere Kennung →
   `{ appId, at: null }`.
 - `wm.app.open` und `wm.tab.new`: zuerst Alias auflösen, dann `knownApp`; ein
   `at` aus der Eingabe geht vor dem `at` des Alias.
-- `pages/federation/[instance].vue` leitet auf `?open=system.settings` um.
+- `pages/federation/[instance].vue` leitet auf
+  `?open=system.settings&at=/federation` um.
+
+## 5a. Befehl `list_vault_devices` (`src-tauri/src/device/commands.rs`)
+
+- Keine Argumente; braucht eine offene Vault (sonst `NoActiveInstance`, wie
+  `current_device_info`).
+- Liefert `Vec<VaultDevicePayload>` (camelCase): `vaultDeviceUuid`, `alias`,
+  `firstSeenMs`, `isCurrent`; dieses Gerät zuerst, dann nach `firstSeenMs`.
+- Liest über `known_devices::list_devices`; die Vault-Bereichszeile fehlt.
+- Frontend: `useDevice().listVaultDevicesAsync()`; der Handler von
+  `settings.devices.list` lässt `alias: null` weg.
 
 ## 6. Modell-Store (`stores/models.ts`)
 
@@ -122,10 +139,12 @@ useColorScheme() → {
 
 ## 7. i18n (de, en)
 
-- `settings.categories.<id>.{title,description}` für die vier Kategorien.
+- `settings.categories.<id>.{title,description}` für die fünf Kategorien.
+- `settings.federation.*` (Dieses Gerät, Unbenanntes Gerät, „Seit {date}“).
 - `settings.locations.<id>.{title,description}` für jeden Ort mit Unteransicht.
 - `settings.back` („Zurück zu {title}“).
 - `settings.colorScheme.*` (Titel, Optionen, „Wie alle Geräte“).
-- `actions.settings.appearance.{setColorScheme,clearColorScheme}`.
+- `actions.settings.appearance.{setColorScheme,clearColorScheme}`,
+  `actions.settings.devices.list`.
 - Entfällt: `wm.apps.federation`, `settings.header.forDevice`, die
   Speichern-Texte der umgestellten Einstellungen.

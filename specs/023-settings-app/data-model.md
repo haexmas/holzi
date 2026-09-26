@@ -2,36 +2,36 @@
 
 **Spec**: [spec.md](./spec.md) | **Research**: [research.md](./research.md)
 
-Diese Spec legt keine Tabellen und keine Rust-Typen an. Neu sind ein
-Frontend-Register, eine Präferenz und Zustand im Modell-Store.
+Diese Spec legt keine Tabellen an. Neu sind ein Frontend-Register, eine
+Präferenz, Zustand im Modell-Store und ein Lesetyp für die Geräte der Vault.
 
 ## Kategorie (`SettingsCategory`)
 
 Reines Datum in `src/lib/settings/registry.ts` (R2).
 
-| Feld             | Typ                                                 | Regel                                                       |
-| ---------------- | --------------------------------------------------- | ----------------------------------------------------------- |
-| `id`             | `'general' \| 'appearance' \| 'models' \| 'agents'` | eindeutig; Reihenfolge des Arrays = FR-005                  |
-| `path`           | `string`                                            | Ort der Kategorie: `/`, `/appearance`, `/models`, `/agents` |
-| `icon`           | `string`                                            | Iconify-Name (`lucide:*`)                                   |
-| `titleKey`       | `string`                                            | `settings.categories.<id>.title`                            |
-| `descriptionKey` | `string`                                            | `settings.categories.<id>.description`                      |
+| Feld             | Typ                                                                 | Regel                                                                      |
+| ---------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `id`             | `'general' \| 'appearance' \| 'models' \| 'agents' \| 'federation'` | eindeutig; Reihenfolge des Arrays = FR-005                                 |
+| `path`           | `string`                                                            | Ort der Kategorie: `/`, `/appearance`, `/models`, `/agents`, `/federation` |
+| `icon`           | `string`                                                            | Iconify-Name (`lucide:*`)                                                  |
+| `titleKey`       | `string`                                                            | `settings.categories.<id>.title`                                           |
+| `descriptionKey` | `string`                                                            | `settings.categories.<id>.description`                                     |
 
 Eine Kategorie mit Unteransichten zeigt an ihrem Ort die Übersicht; eine ohne
-(Allgemein, Darstellung) zeigt ihren Inhalt direkt (FR-003).
+(Allgemein, Darstellung, Föderation) zeigt ihren Inhalt direkt (FR-003).
 
 ## Ort (`SettingsLocation`)
 
-| Feld             | Typ            | Regel                                                                                |
-| ---------------- | -------------- | ------------------------------------------------------------------------------------ |
-| `id`             | `string`       | eindeutig, z. B. `models.download.search`                                            |
-| `pattern`        | `string`       | Routenmuster relativ zu `/`, z. B. `models/download/repo/:owner/:name`; `''` für `/` |
-| `category`       | Kategorie-`id` | bestimmt die Hervorhebung in der Seitenleiste                                        |
-| `parent`         | Ort-`id` \| —  | nur Unteransichten; Ziel des Zurück-Pfeils (R3)                                      |
-| `icon`           | `string` \| —  | nur Orte, die als Zeile einer Übersicht erscheinen                                   |
-| `titleKey`       | `string`       | Kopf und Tab-Titel; darf Routenparameter nutzen (`{owner}/{name}`)                   |
-| `descriptionKey` | `string`       | eine Zeile unter dem Titel und in der Übersichtszeile                                |
-| `overviewRow`    | `boolean`      | erscheint als Zeile in der Übersicht seiner Kategorie                                |
+| Feld             | Typ                                                                 | Regel                                                                                |
+| ---------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `id`             | `'general' \| 'appearance' \| 'models' \| 'agents' \| 'federation'` | eindeutig; Reihenfolge des Arrays = FR-005                                           |
+| `pattern`        | `string`                                                            | Routenmuster relativ zu `/`, z. B. `models/download/repo/:owner/:name`; `''` für `/` |
+| `category`       | Kategorie-`id`                                                      | bestimmt die Hervorhebung in der Seitenleiste                                        |
+| `parent`         | Ort-`id` \| —                                                       | nur Unteransichten; Ziel des Zurück-Pfeils (R3)                                      |
+| `icon`           | `string` \| —                                                       | nur Orte, die als Zeile einer Übersicht erscheinen                                   |
+| `titleKey`       | `string`                                                            | Kopf und Tab-Titel; darf Routenparameter nutzen (`{owner}/{name}`)                   |
+| `descriptionKey` | `string`                                                            | eine Zeile unter dem Titel und in der Übersichtszeile                                |
+| `overviewRow`    | `boolean`                                                           | erscheint als Zeile in der Übersicht seiner Kategorie                                |
 
 Die vollständige Liste steht in R1 und im [Vertrag](./contracts/settings-app.md#1-orte).
 
@@ -72,13 +72,29 @@ In `stores/models.ts` (R6):
 Die vorhandenen Felder `downloadingId`, `downloadProgressBytes`,
 `downloadTotalBytes` (Download aus dem Katalog im Chat) bleiben.
 
+## Gerät der Vault (`VaultDevicePayload`)
+
+Lesetyp des Befehls `list_vault_devices` (R12), aus der vorhandenen Tabelle
+`known_devices`.
+
+| Feld              | Typ              | Regel                                                             |
+| ----------------- | ---------------- | ----------------------------------------------------------------- |
+| `vaultDeviceUuid` | `string` (UUID)  | eindeutig je Gerät und Vault                                      |
+| `alias`           | `string \| null` | `null`, solange das Gerät die Einrichtung nicht abgeschlossen hat |
+| `firstSeenMs`     | `number`         | Unix-Millisekunden des ersten Öffnens                             |
+| `isCurrent`       | `boolean`        | genau ein Eintrag ist `true`                                      |
+
+Nicht enthalten: die interne Vault-Bereichszeile (`VAULT_SCOPE_UUID`) und die
+`installation_uuid` anderer Geräte. Reihenfolge: dieses Gerät, dann nach
+`firstSeenMs`.
+
 ## Alias entfallener Apps
 
 In `lib/wm/apps.ts` (R7):
 
 ```text
 LEGACY_APP_ALIASES: Record<string, { appId: string; at: string }>
-  'system.federation' → { appId: 'system.settings', at: '/' }
+  'system.federation' → { appId: 'system.settings', at: '/federation' }
 resolveAppAlias(appId) → { appId, at: string | null }
 ```
 

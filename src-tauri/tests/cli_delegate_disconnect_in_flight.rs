@@ -47,7 +47,7 @@ fn open_vault(dir: &Path) -> Database {
 
 fn write_stub(dir: &Path) -> PathBuf {
     let path = dir.join("fake-claude");
-    let script = format!("#!/bin/sh\ncat <<'EOF'\n{STUB_TRANSCRIPT}EOF\n");
+    let script = format!("#!/bin/sh\ncat >/dev/null\ncat <<'EOF'\n{STUB_TRANSCRIPT}EOF\n");
     fs::write(&path, script).expect("write stub script");
     let mut perms = fs::metadata(&path).unwrap().permissions();
     perms.set_mode(0o755);
