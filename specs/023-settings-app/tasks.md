@@ -100,7 +100,8 @@ description: 'Task list for spec 023-settings-app'
   - Done 2026-09-26: after installing it opens `/models/installed`, like the old tab switch.
 - [x] T026 [US1] Delete `src/components/models/HuggingFaceModelManagement.vue` (its size exception goes with it) and the unused i18n keys (`settings.header.forDevice`, the save texts of T016–T020, the old tab labels); `pnpm typecheck`, `lint`, `check:templates` green
   - Done 2026-09-26: typecheck, lint, check:templates green.
-- [ ] T027 [US1] Operator: run quickstart S1–S3 and S17
+- [x] T027 [US1] Operator: run quickstart S1–S3 and S17
+  - Done 2026-09-27: operator confirmed S1–S3 and S17.
 
 **Checkpoint**: every existing setting is reachable by category and saves without a button.
 
@@ -117,6 +118,7 @@ description: 'Task list for spec 023-settings-app'
 - [x] T029 [P] [US2] Show a hint with the way back to the overview instead of an error when a sub-view's data is gone: unknown repo in `HuggingFaceFilePicker.vue`, no provider connected in `ConnectDelegateProvider.vue`, deleted model in `InstalledModels.vue` (edge case)
   - Done 2026-09-26: the hint is a row of the boxed list that leads to the place with the data — a missing repo or one without GGUF files to the HuggingFace search, no installed model to "Modelle herunterladen", no model at all in "Standard-Modell" to downloads and "Abo verbinden". "Abo verbinden" needs no hint: a disconnected provider is its normal state with the connect button.
 - [ ] T030 [US2] Operator: run quickstart S4–S7 and S9
+  - 2026-09-27: S4–S7 confirmed by the operator; S9 (deep link to a repo) still open — `location.href` with the `<vault>` placeholder failed, retry with `location.search = '?open=…'`.
 
 ---
 
@@ -129,6 +131,7 @@ description: 'Task list for spec 023-settings-app'
 - [x] T031 [US3] Audit the callers of `openApp({ appId: 'system.settings' })` and `wm.app.open` for the settings (`src/components/apps/ChatApp.vue`, chat banners and dialogs): contextual hints (for example "no model installed") pass `at` with the matching location (`/models/download`, `/models/default`, `/agents/providers`); generic settings buttons stay at `/`
   - Done 2026-09-26: only two callers exist, the generic settings buttons in the chat header and thread sidebar; they stay at `/`. The chat's hints that mention the settings (`chat.empty.noModelsDescription`, `chat.model.delegateNotConnected`, `chat.effort.unknown`) are plain text or disabled select entries, so there is no contextual caller to point elsewhere yet.
 - [ ] T032 [US3] Operator: run quickstart S8 and S10
+  - 2026-09-27: open — retry the deep links with `location.search = '?open=system.settings&at=…'`. Changing settings through a chat agent is not part of this spec: the actions are agent-callable, but holzi as an MCP server is spec 021.
 
 ---
 
@@ -159,7 +162,8 @@ description: 'Task list for spec 023-settings-app'
   - Done 2026-09-26 in the boxed-list style (group "Farbschema", rows "Dieses Gerät" and "Alle Geräte dieser Vault" reusing `settings.default.*Label`); wired as the view of `appearance` in `appRoutes.ts`; the search finds it as "Farbschema".
 - [x] T040 [US4] In its own commit (`refactor(ui): use theme colors instead of palette colors`), replace the palette colors in the ~28 Vue files per the mapping in research R9; make T034 pass; `check:templates`, `typecheck`, `lint`, `format:check` green
   - Done 2026-09-26 (`refactor(ui): use theme colors instead of palette colors`): only about 40 palette colors in 16 files were left, the settings views had lost theirs in the COSMIC restyle. Extra mappings beyond research R9: `border-blue-500/20` → `border-primary/20`, `hover:border-blue-500` → `hover:border-primary`, `bg-blue-100/70` → `bg-primary/10`, `hover:bg-black/10 dark:hover:bg-white/10` → `hover:bg-foreground/10`.
-- [ ] T041 [US4] Operator: run quickstart S11 and S12, looking at chat, settings, onboarding and dialogs in dark mode
+- [x] T041 [US4] Operator: run quickstart S11 and S12, looking at chat, settings, onboarding and dialogs in dark mode
+  - Done 2026-09-27: operator confirmed S11 and S12, dark mode readable after T064, T068, T069.
 
 ---
 
@@ -186,6 +190,7 @@ description: 'Task list for spec 023-settings-app'
 - [x] T051 [P] [US5] Add a note to `specs/015-workspace-shell/spec.md` next to FR-003/FR-004: the federation app is replaced by the settings category "Föderation" (spec 023)
   - Done 2026-09-26 ahead of T042–T048 on operator request (the launcher still listed the federation app); the category stays empty until T048.
 - [ ] T052 [US5] Operator: run quickstart S13, S13a and S14
+  - 2026-09-27: S13 confirmed (no federation app in the launcher); S13a waits for T042–T048, S14 is optional.
 
 ---
 
@@ -203,7 +208,8 @@ description: 'Task list for spec 023-settings-app'
   - Done 2026-09-26 on operator feedback.
 - [x] T053b [US6] Settings search (FR-023, research R13): `keywordsKey`/`settingKeys` in `src/lib/settings/registry.ts`, `src/lib/settings/search.ts`, search field and hits in `Sidebar.vue`, keywords de/en, tests in `scripts/check-settings.ts`
   - Done 2026-09-26 on operator feedback.
-- [ ] T054 [US6] Operator: run quickstart S15 and S19
+- [x] T054 [US6] Operator: run quickstart S15 and S19
+  - Done 2026-09-27: operator confirmed S15 and S19.
 
 ---
 
@@ -232,7 +238,8 @@ description: 'Task list for spec 023-settings-app'
   - Done 2026-09-26: merged as `e380e18`, pin in `nuxt.config.ts` bumped.
 - [x] T069 haex-ui: visible unchecked switch track (the knob was readable after T068, the track still vanished on the muted card): haex-space/haextension#62 with `bg-muted-foreground/35`, then bump the pin
   - Done 2026-09-26: merged as `b8549be`, pin bumped.
-- [ ] T066 Operator: run quickstart S20, S21 and S22
+- [x] T066 Operator: run quickstart S20, S21 and S22
+  - Done 2026-09-27: operator confirmed S20, S21 (earlier values kept) and S22.
 
 ---
 
