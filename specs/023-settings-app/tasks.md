@@ -117,8 +117,9 @@ description: 'Task list for spec 023-settings-app'
   - Done 2026-09-26 with T012.
 - [x] T029 [P] [US2] Show a hint with the way back to the overview instead of an error when a sub-view's data is gone: unknown repo in `HuggingFaceFilePicker.vue`, no provider connected in `ConnectDelegateProvider.vue`, deleted model in `InstalledModels.vue` (edge case)
   - Done 2026-09-26: the hint is a row of the boxed list that leads to the place with the data — a missing repo or one without GGUF files to the HuggingFace search, no installed model to "Modelle herunterladen", no model at all in "Standard-Modell" to downloads and "Abo verbinden". "Abo verbinden" needs no hint: a disconnected provider is its normal state with the connect button.
-- [ ] T030 [US2] Operator: run quickstart S4–S7 and S9
+- [x] T030 [US2] Operator: run quickstart S4–S7 and S9
   - 2026-09-27: S4–S7 confirmed by the operator; S9 (deep link to a repo) still open — `location.href` with the `<vault>` placeholder failed, retry with `location.search = '?open=…'`.
+  - Done 2026-09-27: the dev webview's reload fails in Vite, so S9 runs as the e2e scenario `settings-deep-links` against the built app (T070).
 
 ---
 
@@ -130,8 +131,10 @@ description: 'Task list for spec 023-settings-app'
 
 - [x] T031 [US3] Audit the callers of `openApp({ appId: 'system.settings' })` and `wm.app.open` for the settings (`src/components/apps/ChatApp.vue`, chat banners and dialogs): contextual hints (for example "no model installed") pass `at` with the matching location (`/models/download`, `/models/default`, `/agents/providers`); generic settings buttons stay at `/`
   - Done 2026-09-26: only two callers exist, the generic settings buttons in the chat header and thread sidebar; they stay at `/`. The chat's hints that mention the settings (`chat.empty.noModelsDescription`, `chat.model.delegateNotConnected`, `chat.effort.unknown`) are plain text or disabled select entries, so there is no contextual caller to point elsewhere yet.
-- [ ] T032 [US3] Operator: run quickstart S8 and S10
+- [x] T032 [US3] Operator: run quickstart S8 and S10
   - 2026-09-27: open — retry the deep links with `location.search = '?open=system.settings&at=…'`. Changing settings through a chat agent is not part of this spec: the actions are agent-callable, but holzi as an MCP server is spec 021.
+  - 2026-09-27: `location.search` only reloaded the dev app; the log shows Vite failing to load its modules after the reload ("Importing a module script failed"), not the deep link. The workspace page now also consumes `?open=` that arrives while it is mounted (T071).
+  - Done 2026-09-27: S8 (on load and with the settings open) and S10 run as `settings-deep-links` (T070).
 
 ---
 
@@ -240,6 +243,21 @@ description: 'Task list for spec 023-settings-app'
   - Done 2026-09-26: merged as `b8549be`, pin bumped.
 - [x] T066 Operator: run quickstart S20, S21 and S22
   - Done 2026-09-27: operator confirmed S20, S21 (earlier values kept) and S22.
+
+---
+
+## Phase 8b: End-to-End-Szenarien (SC-007)
+
+**Goal**: The quickstart scenarios the operator checked by hand run against the built app (spec 016 rig).
+
+**Independent Test**: `pnpm test:e2e --grep settings-`.
+
+- [x] T070 E2E scenarios `scripts/e2e/scenarios/settings-{categories,header-back,deep-links,color-scheme,narrow-window,search,save-on-selection}.test.ts` with helpers in `scripts/e2e/lib/settings.ts`; hooks `settings-title`/`data-location`, `data-location` on search hits, `data-value` on `SettingsSelect` entries, `settings-autonomy-*`, `settings-deny-*`, `data-app-id` on launcher tiles (contracts "Test-Hooks")
+  - Done 2026-09-27: all seven pass, the full suite 14 passed, 1 skipped (`relaunch-after-lock`, needs a relaunching build). The dark off switch's track measures 1.88:1 against its card; the scenario guards ≥ 1.5 (below the WCAG 3:1 for components — accepted by the operator after haex-space/haextension#62).
+- [x] T071 Deep link while the workspace is mounted (FR-011): `pages/workspace/[instance].vue` watches `route.query.open` once the session is restored
+  - Done 2026-09-27; covered by `settings-deep-links`.
+- [x] T072 Icons named only in TypeScript are bundled (`icon.clientBundle.scan.globInclude` with `.ts` in `nuxt.config.ts`): the e2e run showed the sidebar without category icons, the app fetched them from the iconify API
+  - Done 2026-09-27; `settings-categories` checks that every category has its icon without network.
 
 ---
 

@@ -41,6 +41,7 @@ function launch(appId: string) {
           type="button"
           class="relative flex flex-col items-center gap-2 rounded-lg p-3 text-sm text-foreground hover:bg-accent"
           :data-testid="app.id === 'system.chat' ? 'open-chat' : undefined"
+          :data-app-id="app.id"
           @click="launch(app.id)"
         >
           <span

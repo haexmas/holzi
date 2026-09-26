@@ -116,6 +116,18 @@ entfällt; die Kategorie „Föderation“ zeigt die Geräte der Vault.) Referen
   also dorthin, woher der Nutzer kam, solange das in derselben Kategorie liegt;
   sonst zur übergeordneten Ansicht (FR-009).
 
+### Session 2026-09-27
+
+- Q: (Betreiber-Rückmeldung) Ein Deep-Link über `location.search` lädt die
+  App nur neu und öffnet nichts. → A: Der Neuladen scheiterte im
+  Entwicklungs-Webview an Vite, nicht an der App. Die Arbeitsfläche nimmt
+  `?open=…&at=…` aber künftig auch an, wenn der Parameter bei geöffneter Seite
+  in die Adresse kommt, nicht nur beim Laden (FR-011).
+- Q: (Betreiber-Rückmeldung) Sollen die manuell geprüften Szenarien
+  automatisch laufen? → A: Ja, als echte End-to-End-Tests gegen die gebaute
+  App (Spec 016): jedes Quickstart-Szenario, das ohne Netz, zweites Gerät oder
+  Zeitmessung auskommt (SC-007).
+
 ## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Einstellungen nach Kategorien finden (Priority: P1)
@@ -402,7 +414,8 @@ einer bestimmten Breite verschwindet die Seitenleiste, das Symbol in der Werkzeu
 - **FR-011**: Die Einstellungen MÜSSEN sich an jeder Kategorie und jeder
   Unteransicht öffnen lassen (Spec 020 FR-012), auch über Deep-Links und durch
   Agenten mit passender Berechtigung. Sind sie schon offen, MUSS der vorhandene
-  Tab dorthin navigieren.
+  Tab dorthin navigieren. Ein Deep-Link MUSS auch wirken, wenn er bei schon
+  geöffneter Arbeitsfläche in die Adresse kommt.
 - **FR-012**: Ein unbekannter Ort in den Einstellungen MUSS zur ersten Kategorie
   mit Hinweis führen (Spec 020 FR-014).
 
@@ -504,6 +517,9 @@ einer bestimmten Breite verschwindet die Seitenleiste, das Symbol in der Werkzeu
 - **SC-005**: Ein Wechsel des Farbschemas ist in allen offenen Fenstern in
   weniger als einer Sekunde sichtbar.
 - **SC-006**: Kein Weg in holzi öffnet mehr eine eigene Föderations-App.
+- **SC-007**: Jedes Quickstart-Szenario, das weder Netz noch ein zweites Gerät
+  noch eine Zeitmessung braucht, läuft als End-to-End-Test gegen die gebaute
+  App und besteht.
 
 ## Assumptions
 
@@ -512,9 +528,9 @@ einer bestimmten Breite verschwindet die Seitenleiste, das Symbol in der Werkzeu
 - Der Wechsel der Kategorie ist eine Navigation im Tab wie jeder andere Klick zu
   einer neuen Ansicht (Spec 020); das entspricht auch haex-vault, wo Zurück einen
   Kategoriewechsel rückgängig macht.
-- Das Farbschema folgt dem Muster „Gerät vor Vault“ aus Spec 002 und Spec 022,
-  weil verschiedene Geräte unterschiedliche Vorlieben nahelegen (heller
-  Arbeitsplatz, dunkles Tablet).
+- Das Farbschema gilt wie alle Einstellungen außer Gerätename und Modellen für
+  die Vault (FR-024); die ursprüngliche Annahme „Gerät vor Vault“ hat der
+  Betreiber am 2026-09-26 verworfen.
 - Eine Akzentfarbe, die Schriftgröße und eine Sprachwahl sind nicht Teil dieser
   Spec; haex-vault hat die ersten beiden auch nicht. holzi zeigt die Oberfläche
   heute immer auf Deutsch; die englischen Texte (FR-020) liegen trotzdem vor.

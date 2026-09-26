@@ -20,6 +20,24 @@ pnpm test:e2e
 
 Alle grün.
 
+### End-to-End
+
+`pnpm test:e2e --grep settings-` (Spec 016; baut die Debug-App, oder `--app <Pfad>`).
+Die Szenarien sind auch Teil des vollen `pnpm test:e2e`.
+
+| Szenario                     | Deckt                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------ |
+| `settings-categories`        | S1, S2, S3, Launcher aus S13; Symbole ohne Netz                          |
+| `settings-header-back`       | S4, S5, S6, S22                                                          |
+| `settings-deep-links`        | S8 (beim Laden und bei offenen Einstellungen), S9, S10, Adressen aus S13 |
+| `settings-color-scheme`      | S11, S12 (Startseite statt Sperren), S20 (Kontrast)                      |
+| `settings-narrow-window`     | S15                                                                      |
+| `settings-search`            | S19, breit und schmal                                                    |
+| `settings-save-on-selection` | S17, Speicherort aus S21                                                 |
+
+Manuell bleiben S7, S13a, S14, S16, S18 und die Übernahme alter Gerätewerte aus
+S21 (dafür die Rust-Tests in `maintenance_tests.rs`).
+
 ## Manuell
 
 `pnpm tauri:dev` (oder `tauri:dev:cuda`), eine Vault entsperren.

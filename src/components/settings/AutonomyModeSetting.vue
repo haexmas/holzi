@@ -96,6 +96,7 @@ onMounted(reloadAsync)
           :disabled="busy"
           :title="t(`chat.autonomy.${mode}`)"
           :description="t(`settings.autonomyMode.${mode}Description`)"
+          :data-testid="`settings-autonomy-${mode}`"
           @change="onChoose(mode)"
         />
       </SettingsGroup>

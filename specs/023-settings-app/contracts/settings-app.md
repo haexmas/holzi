@@ -197,9 +197,8 @@ useColorScheme() → {
 - `settings.locations.<id>.{title,description}` für jeden Ort mit übergeordnetem
   Ort (jede Unteransicht).
 - `settings.back` („Zurück zu {title}“).
-- `settings.colorScheme.*` (Titel, Optionen, „Wie alle Geräte“).
-- `actions.settings.appearance.{setColorScheme,clearColorScheme}`,
-  `actions.settings.devices.list`.
+- `settings.colorScheme.*` (Bezeichnung, Optionen, Meldungen).
+- `actions.settings.appearance.setColorScheme`, `actions.settings.devices.list`.
 - Entfällt: `wm.apps.federation`, `settings.header.forDevice`, die
   Speichern-Texte der umgestellten Einstellungen.
 
@@ -218,3 +217,30 @@ useColorScheme() → {
   zeigt der Rahmen die Seitenleiste mit den Treffern statt der Kategorien.
   Enter wählt den ersten Treffer; nach der Wahl ist die Suche geschlossen und
   das schmale Menü zu.
+
+## Deep-Links (`pages/workspace/[instance].vue`, FR-011)
+
+- `?open=<appId>&at=<Pfad>` wirkt beim Laden der Seite und, sobald die Sitzung
+  wiederhergestellt ist, auch wenn der Parameter später in die Adresse kommt
+  (`router.replace` auf dieselbe Seite); danach entfernt die Seite ihn wieder.
+
+## Test-Hooks (Spec 016, `scripts/e2e/`)
+
+Für die End-to-End-Szenarien `settings-*` (SC-007). Ein Hook ist ein
+`data-testid` oder ein Datenattribut mit Daten, nie mit angezeigtem Text.
+
+| Hook                                                                | Element                                             |
+| ------------------------------------------------------------------- | --------------------------------------------------- |
+| `settings-title` mit `data-location="<Ort-ID>"`                     | Titel des Rahmens; zeigt, wo die Einstellungen sind |
+| `settings-category-<id>`, `settings-category-icon`                  | Seitenleisten-Eintrag, Kategorie-Symbol im Titel    |
+| `settings-row-<Ort-ID>`, `settings-back`                            | Übersichtszeile, Pfeil im Titel                     |
+| `settings-sidebar-toggle`, `#settings-sidebar`                      | Seitenleisten-Knopf, Seitenleiste                   |
+| `settings-search-open`, `settings-search`, `settings-search-clear`  | Suche in der Werkzeugleiste                         |
+| `settings-search-hit` mit `data-location`                           | Suchtreffer                                         |
+| `[role="option"][data-value="<Wert>"]`                              | Eintrag einer `SettingsSelect`-Liste                |
+| `settings-color-scheme`, `settings-alias`, `session-restore-switch` | Farbschema, Gerätename, Sitzung                     |
+| `settings-autonomy-<Modus>`, `settings-deny-<Kategorie>`            | Autonomiemodus, Verbotsregeln                       |
+| `[data-app-id="<appId>"]`                                           | Kachel im Launcher                                  |
+
+Fensteraktionen (Größe, Zurück im Tab) laufen in den Szenarien über den
+Aktionskatalog der Seite (`scripts/e2e/lib/settings.ts`), wie später ein Agent.

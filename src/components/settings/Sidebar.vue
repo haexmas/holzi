@@ -64,6 +64,7 @@ defineExpose({
               type="button"
               :class="ITEM"
               data-testid="settings-search-hit"
+              :data-location="hit.location.id"
               @click="emit('select', hit.path)"
             >
               <Icon :name="iconOf(hit)" class="size-5 shrink-0" />

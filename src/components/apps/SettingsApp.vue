@@ -213,7 +213,13 @@ onMounted(() => {
             >
               <Icon :name="categoryIcon" class="size-5" />
             </span>
-            <h1 class="min-w-0 truncate text-2xl font-bold">{{ title }}</h1>
+            <h1
+              class="min-w-0 truncate text-2xl font-bold"
+              data-testid="settings-title"
+              :data-location="current?.location.id"
+            >
+              {{ title }}
+            </h1>
           </div>
         </div>
         <div class="min-h-0 flex-1 overflow-y-auto px-6 pb-6">

@@ -118,6 +118,11 @@ Convenience built on the above, in [`lib/flows.ts`](lib/flows.ts):
 - `connectProvider(instance, provider)` — point the instance at a stand-in provider and load its model.
 - `startReply(instance, provider, text)` — send a message; waits until the provider sees it arrive.
 
+For the settings (spec 023), [`lib/settings.ts`](lib/settings.ts) adds `openSettings`, `waitForLocation`
+(where the settings are, from the title's `data-location`), `choose` (an entry of a settings select),
+`runAction` (a catalog action through the page, e.g. `wm.window.setGeometry`), `resizeSettingsWindow` and
+contrast measurements for the colour scheme checks.
+
 ## The stand-in provider
 
 `ctx.provider(behavior?)` starts a local server that plays an external model provider of the Anthropic

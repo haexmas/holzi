@@ -95,6 +95,7 @@ onMounted(reloadAsync)
             :disabled="busy"
             :title="t(`settings.denyRules.${category}`)"
             :description="t(`settings.denyRules.${category}Description`)"
+            :data-testid="`settings-deny-${category}`"
             @change="(checked) => toggleAsync(category, checked)"
           />
         </SettingsGroup>

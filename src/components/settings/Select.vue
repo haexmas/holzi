@@ -63,6 +63,7 @@ function onUpdate(value: unknown) {
         :key="option.value"
         :value="wire(option.value)"
         :disabled="option.disabled"
+        :data-value="option.value"
       >
         {{ option.label }}
       </ShadcnSelectItem>
@@ -73,6 +74,7 @@ function onUpdate(value: unknown) {
           :key="option.value"
           :value="wire(option.value)"
           :disabled="option.disabled"
+          :data-value="option.value"
         >
           {{ option.label }}
         </ShadcnSelectItem>
