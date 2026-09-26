@@ -11,18 +11,76 @@
 //!    0020 dropped the spec 015 tables, one `VACUUM` rewrites the file so
 //!    their content does not survive in free pages, then the WAL is
 //!    truncated.
+//! 4. Fold preferences into their scope (spec 023-settings-app, FR-024,
+//!    research R14): settings apply to the vault, so this device's value of
+//!    a vault setting becomes the vault value when the vault has none; the
+//!    default model applies to the device, so a vault value becomes this
+//!    device's when it has none. The old value is deleted either way.
+//!    Idempotent; other devices fold their own values when they open.
 //!
 //! Every failure is logged and never stops the vault from opening (FR-012);
 //! a failed task stays queued for the next open.
 
 use haex_crdt::rusqlite::{params, Connection};
 use haex_crdt::Database;
+use uuid::Uuid;
+
+use super::preferences::{self, PrefScope};
 
 /// Maintenance task queued by migration `0020_wm_session_no_sync`.
 pub const VACUUM_TASK: &str = "vacuum_after_legacy_wm_drop";
 
 /// Device preference that stored the active workspace in spec 015.
 pub const LEGACY_ACTIVE_WORKSPACE_KEY: &str = "shell.active_workspace_id";
+
+/// Preferences that apply to the whole vault since spec 023 (FR-024).
+pub const VAULT_PREFERENCE_KEYS: &[&str] = &[
+    "appearance.color_scheme",
+    "wm.session_restore",
+    "chat.autonomy_mode",
+    "chat.permission_mode",
+    "cli_delegate.deny_rules",
+];
+
+/// Key prefixes of vault preferences with one key per model.
+pub const VAULT_PREFERENCE_PREFIXES: &[&str] = &["chat.reasoning_option."];
+
+/// Preferences that apply to one device only: the model files live there.
+pub const DEVICE_PREFERENCE_KEYS: &[&str] = &["chat.default_model_id"];
+
+fn is_vault_preference(key: &str) -> bool {
+    VAULT_PREFERENCE_KEYS.contains(&key)
+        || VAULT_PREFERENCE_PREFIXES
+            .iter()
+            .any(|prefix| key.starts_with(prefix))
+}
+
+/// Step 4 above, in one transaction.
+pub fn fold_scoped_preferences(conn: &Connection, device: Uuid) -> haex_crdt::Result<()> {
+    let tx = conn.unchecked_transaction()?;
+    for row in preferences::list_by_scope(&tx, PrefScope::Device(device))? {
+        if !is_vault_preference(&row.key) {
+            continue;
+        }
+        if let Some(value) = row.value.as_deref() {
+            if preferences::get(&tx, PrefScope::Vault, &row.key)?.is_none() {
+                preferences::insert_or_update(&tx, PrefScope::Vault, &row.key, value)?;
+            }
+        }
+        preferences::delete(&tx, PrefScope::Device(device), &row.key)?;
+    }
+    for key in DEVICE_PREFERENCE_KEYS {
+        let Some(value) = preferences::get(&tx, PrefScope::Vault, key)? else {
+            continue;
+        };
+        if preferences::get(&tx, PrefScope::Device(device), key)?.is_none() {
+            preferences::insert_or_update(&tx, PrefScope::Device(device), key, &value)?;
+        }
+        preferences::delete(&tx, PrefScope::Vault, key)?;
+    }
+    tx.commit()?;
+    Ok(())
+}
 
 /// Runs the steps above; logs failures and always returns.
 pub fn run_after_open(db: &Database) {
@@ -43,6 +101,10 @@ pub fn run_after_open(db: &Database) {
         Ok(Err(e)) | Err(e) => {
             log::warn!("maintenance: a queued task failed, retrying on the next open: {e}")
         }
+    }
+    let device = db.device_id();
+    if let Err(e) = db.with_connection(|conn| fold_scoped_preferences(conn, device)) {
+        log::warn!("maintenance: could not fold preferences into their scope: {e}");
     }
 }
 

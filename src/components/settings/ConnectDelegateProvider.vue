@@ -263,11 +263,11 @@ function hasDetails(vendor: DelegateVendor): boolean {
                 <span class="text-sm font-medium">
                   {{ t('settings.cliDelegate.codeInputLabel') }}
                 </span>
-                <input
+                <ShadcnInput
                   v-model="codeInput[vendor]"
                   type="text"
                   autocomplete="off"
-                  class="border border-border rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  class="bg-background"
                   @keyup.enter="onSubmitCode(vendor)"
                 />
               </label>

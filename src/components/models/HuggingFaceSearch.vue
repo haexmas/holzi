@@ -5,6 +5,7 @@
  * `fit`, replaced in place), so back from a repository returns to the same results. A result opens
  * its repository as a new location, passing the files that matched the filters.
  */
+import type { SettingsSelectOption } from '~/components/settings/Select.vue'
 import type {
   HardwareFit,
   HuggingFaceFileCandidate,
@@ -97,6 +98,38 @@ async function retryAsync() {
   } else {
     await loadResultsAsync()
   }
+}
+
+/** The filter selects' entries; "Alle" is `all`, like the location query (spec 023). */
+const quantizationOptions = computed<SettingsSelectOption[]>(() => [
+  { value: 'all', label: t('models.search.filters.all') },
+  ...availableQuantizations.value.map((quantization) => ({
+    value: quantization,
+    label:
+      quantization === 'unknown'
+        ? t('models.search.filters.unknown')
+        : quantization,
+  })),
+])
+const sizeOptions = computed<SettingsSelectOption[]>(() => [
+  { value: 'all', label: t('models.search.filters.all') },
+  ...sizeLimitOptions.map((limit) => ({
+    value: String(limit),
+    label: t('models.search.filters.maxSizeValue', { size: limit }),
+  })),
+])
+const fitSelectOptions = computed<SettingsSelectOption[]>(() => [
+  { value: 'all', label: t('models.search.filters.all') },
+  ...fitOptions.map((fit) => ({
+    value: fit,
+    label: t(`models.search.filters.fitValues.${fit}`),
+  })),
+])
+
+function setFit(value: string) {
+  fitFilter.value = fitOptions.includes(value as HardwareFit)
+    ? (value as HardwareFit)
+    : 'all'
 }
 
 const availableQuantizations = computed(() => {
@@ -227,51 +260,28 @@ onMounted(() => {
     >
       <label class="flex flex-col gap-1 text-xs">
         <span>{{ t('models.search.filters.quantization') }}</span>
-        <select
+        <SettingsSelect
           v-model="quantizationFilter"
-          class="h-9 rounded-md border border-input bg-background px-2 text-sm"
-        >
-          <option value="all">{{ t('models.search.filters.all') }}</option>
-          <option
-            v-for="quantization in availableQuantizations"
-            :key="quantization"
-            :value="quantization"
-          >
-            {{
-              quantization === 'unknown'
-                ? t('models.search.filters.unknown')
-                : quantization
-            }}
-          </option>
-        </select>
+          class="w-40"
+          :options="quantizationOptions"
+        />
       </label>
       <label class="flex flex-col gap-1 text-xs">
         <span>{{ t('models.search.filters.maxSize') }}</span>
-        <select
+        <SettingsSelect
           v-model="sizeLimitFilter"
-          class="h-9 rounded-md border border-input bg-background px-2 text-sm"
-        >
-          <option value="all">{{ t('models.search.filters.all') }}</option>
-          <option
-            v-for="limit in sizeLimitOptions"
-            :key="limit"
-            :value="String(limit)"
-          >
-            {{ t('models.search.filters.maxSizeValue', { size: limit }) }}
-          </option>
-        </select>
+          class="w-40"
+          :options="sizeOptions"
+        />
       </label>
       <label class="flex flex-col gap-1 text-xs">
         <span>{{ t('models.search.filters.fit') }}</span>
-        <select
-          v-model="fitFilter"
-          class="h-9 rounded-md border border-input bg-background px-2 text-sm"
-        >
-          <option value="all">{{ t('models.search.filters.all') }}</option>
-          <option v-for="fit in fitOptions" :key="fit" :value="fit">
-            {{ t(`models.search.filters.fitValues.${fit}`) }}
-          </option>
-        </select>
+        <SettingsSelect
+          :model-value="fitFilter"
+          class="w-40"
+          :options="fitSelectOptions"
+          @update:model-value="setFit"
+        />
       </label>
     </div>
 

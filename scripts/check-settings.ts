@@ -14,13 +14,7 @@ import {
   SETTINGS_LOCATIONS,
   settingsRoutePatterns,
 } from '../src/lib/settings/registry.ts'
-import {
-  colorSchemeState,
-  effectiveColorScheme,
-  isDark,
-  parseColorScheme,
-  toColorSchemeResult,
-} from '../src/lib/settings/colorScheme.ts'
+import { isDark, parseColorScheme } from '../src/lib/settings/colorScheme.ts'
 import { searchSettings } from '../src/lib/settings/search.ts'
 import {
   getAppDefinition,
@@ -302,26 +296,9 @@ test('color scheme: known values parse, anything else is unset', () => {
   }
 })
 
-test('color scheme: device before vault, system when both are unset', () => {
-  assert.equal(effectiveColorScheme({ device: 'dark', vault: 'light' }), 'dark')
-  assert.equal(effectiveColorScheme({ device: null, vault: 'light' }), 'light')
-  assert.equal(effectiveColorScheme({ device: null, vault: null }), 'system')
-})
-
 test('color scheme: dark follows the system only for system', () => {
   assert.equal(isDark('system', true), true)
   assert.equal(isDark('system', false), false)
   assert.equal(isDark('light', true), false)
   assert.equal(isDark('dark', false), true)
-})
-
-test('color scheme result leaves unset values out', () => {
-  assert.deepEqual(toColorSchemeResult(colorSchemeState(null, null)), {
-    effective: 'system',
-  })
-  assert.deepEqual(toColorSchemeResult(colorSchemeState('dark', 'light')), {
-    effective: 'dark',
-    device: 'dark',
-    vault: 'light',
-  })
 })

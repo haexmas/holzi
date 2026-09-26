@@ -14,84 +14,15 @@ import {
 import type { WmState } from './types.ts'
 
 /** What `wm_session_restore_get`/`_set` return (mirrors `SessionRestoreState` in
- * `src/types/bindings/`). */
-export type RestoreState = {
-  device: boolean | null
-  vault: boolean | null
-  effective: boolean
-}
-
-export type RestoreScope = 'device' | 'vault'
-
-/** The result of the `settings.sessionRestore.*` actions: a value that is not
- * set is left out, because the action schema subset has no `null` (spec 020
- * research R8) and the schema becomes an agent tool description in spec 021. */
-export type RestoreStateResult = {
-  device?: boolean
-  vault?: boolean
-  effective: boolean
-}
-
-export function toRestoreResult(state: RestoreState): RestoreStateResult {
-  const result: RestoreStateResult = { effective: state.effective }
-  if (state.device !== null) result.device = state.device
-  if (state.vault !== null) result.vault = state.vault
-  return result
-}
-
-export function fromRestoreResult(result: RestoreStateResult): RestoreState {
-  return {
-    device: result.device ?? null,
-    vault: result.vault ?? null,
-    effective: result.effective,
-  }
-}
-
-/** The one choice the settings view offers (spec 022 FR-004). */
-export type RestoreChoice = 'off' | 'device' | 'vault'
-
-export type RestoreStep = { scope: RestoreScope; enabled: boolean | null }
-
-/** Which choice the settings view shows for a restore state. */
-export function restoreChoice(state: RestoreState): RestoreChoice {
-  if (!state.effective) return 'off'
-  return state.device === true && state.vault !== true ? 'device' : 'vault'
-}
-
-/**
- * The writes that turn `state` into `choice`, in an order that never makes
- * restore apply in between when the choice keeps it on. "Off" clears both
- * values, so restore is off on every device of the vault that has no own
- * "only this device" value. "Only this device" clears a vault value that is
- * on, because otherwise the view would still show "all devices".
- */
-export function restoreChoiceSteps(
-  state: RestoreState,
-  choice: RestoreChoice,
-): RestoreStep[] {
-  const steps: RestoreStep[] = []
-  if (choice === 'vault') {
-    if (state.vault !== true) steps.push({ scope: 'vault', enabled: true })
-    if (state.device !== null) steps.push({ scope: 'device', enabled: null })
-  } else if (choice === 'device') {
-    if (state.device !== true) steps.push({ scope: 'device', enabled: true })
-    if (state.vault === true) steps.push({ scope: 'vault', enabled: null })
-  } else {
-    if (state.vault !== null) steps.push({ scope: 'vault', enabled: null })
-    if (state.device !== null) steps.push({ scope: 'device', enabled: null })
-  }
-  return steps
-}
+ * `src/types/bindings/`): one value for the whole vault since spec 023 (FR-024). */
+export type RestoreState = { enabled: boolean }
 
 /** The part of `useWmSession()` this module drives. */
 export type SessionPort = {
   saveNow(session: WmSession): void
   saveSoon(session: WmSession): void
   load(): Promise<{ restore: RestoreState; session: unknown }>
-  setRestore(
-    scope: RestoreScope,
-    enabled: boolean | null,
-  ): Promise<RestoreState>
+  setRestore(enabled: boolean): Promise<RestoreState>
   getRestore(): Promise<RestoreState>
   flushAsync(): Promise<void>
 }
@@ -105,7 +36,7 @@ export function createSessionSync(deps: {
   onRestored: () => void
 }) {
   const { state, histories, port } = deps
-  /** Whether the setting applies on this device; `false` until restored (FR-003). */
+  /** Whether the setting is on; `false` until restored (FR-003). */
   let enabled = false
 
   function snapshot(): WmSession {
@@ -149,7 +80,7 @@ export function createSessionSync(deps: {
       replaceState(null)
       return
     }
-    enabled = loaded.restore.effective
+    enabled = loaded.restore.enabled
     const session =
       loaded.session == null ? null : parseWmSession(loaded.session)
     if (loaded.session != null && session === null)
@@ -162,17 +93,14 @@ export function createSessionSync(deps: {
    * saved session (FR-007). */
   function applyRestore(restore: RestoreState): void {
     const wasEnabled = enabled
-    enabled = restore.effective
+    enabled = restore.enabled
     if (enabled && !wasEnabled) saveNow()
   }
 
-  /** Sets (`true`/`false`) or resets (`null`) one scope's value through the same queue as the
-   * saves, so no earlier save can land after it, and takes over the result. */
-  async function setRestoreAsync(
-    scope: RestoreScope,
-    enabled: boolean | null,
-  ): Promise<RestoreState> {
-    const restore = await port.setRestore(scope, enabled)
+  /** Turns the setting on or off through the same queue as the saves, so no earlier save can
+   * land after it, and takes over the result. */
+  async function setRestoreAsync(enabled: boolean): Promise<RestoreState> {
+    const restore = await port.setRestore(enabled)
     applyRestore(restore)
     return restore
   }

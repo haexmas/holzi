@@ -8,13 +8,11 @@ import {
   isAutonomyMode,
   type AutonomyMode,
 } from '~/composables/usePreferences'
-import { useSettingsDevice } from '~/components/settings/deviceContext'
 
 const { t } = useI18n()
 const { errString } = useErrorString()
 const { getPrefAsync } = usePreferences()
 const setMode = useActionOrThrow('settings.autonomy.setMode')
-const device = useSettingsDevice()
 
 // No Rust-side setter exists for this preference, same as
 // `chat.permission_mode` and `cli_delegate.deny_rules` — the frontend
@@ -37,10 +35,7 @@ async function reloadAsync() {
   loading.value = true
   loadError.value = null
   try {
-    const raw = await getPrefAsync(
-      { kind: 'device', uuid: device.info.value.vaultDeviceUuid },
-      PREF_KEY,
-    )
+    const raw = await getPrefAsync({ kind: 'vault' }, PREF_KEY)
     stored.value = isAutonomyMode(raw) ? raw : DEFAULT_MODE
     selected.value = stored.value
   } catch (e) {

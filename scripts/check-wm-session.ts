@@ -22,18 +22,13 @@ import {
 } from '../src/lib/wm/session.ts'
 import {
   createSessionSync,
-  fromRestoreResult,
-  restoreChoice,
-  restoreChoiceSteps,
-  toRestoreResult,
-  type RestoreChoice,
   type RestoreState,
   type SessionPort,
 } from '../src/lib/wm/sessionSync.ts'
 import { ALPHA, APPS, BETA, emptyState } from './lib/wm-fixtures.ts'
 
-const ON: RestoreState = { device: true, vault: null, effective: true }
-const OFF: RestoreState = { device: null, vault: null, effective: false }
+const ON: RestoreState = { enabled: true }
+const OFF: RestoreState = { enabled: false }
 
 function chatHistory(): TabHistory {
   return push(
@@ -163,7 +158,7 @@ test('withoutHistories keeps only the current entry of each tab', () => {
 type PortLog = {
   saveNow: WmSession[]
   saveSoon: WmSession[]
-  setRestore: [string, boolean | null][]
+  setRestore: boolean[]
 }
 
 function fakePort(load: SessionPort['load']): {
@@ -177,11 +172,9 @@ function fakePort(load: SessionPort['load']): {
       saveNow: (s) => log.saveNow.push(s),
       saveSoon: (s) => log.saveSoon.push(s),
       load,
-      setRestore: async (scope, enabled) => {
-        log.setRestore.push([scope, enabled])
-        return enabled === null
-          ? OFF
-          : { device: enabled, vault: null, effective: enabled }
+      setRestore: async (enabled) => {
+        log.setRestore.push(enabled)
+        return { enabled }
       },
       getRestore: async () => OFF,
       flushAsync: async () => {},
@@ -308,74 +301,26 @@ test('setRestoreAsync goes through the port and takes over the new setting', asy
   }))
   await sync.restoreAsync()
   openApp(state, ALPHA.id, APPS)
-  const on = await sync.setRestoreAsync('device', true)
-  assert.equal(on.effective, true)
-  assert.deepEqual(log.setRestore, [['device', true]])
+  const on = await sync.setRestoreAsync(true)
+  assert.equal(on.enabled, true)
+  assert.deepEqual(log.setRestore, [true])
   assert.equal(log.saveNow.length, 1, 'turning on saves at once')
-  const off = await sync.setRestoreAsync('device', null)
-  assert.equal(off.effective, false)
+  const off = await sync.setRestoreAsync(false)
+  assert.equal(off.enabled, false)
   sync.saveNow()
   assert.equal(log.saveNow.length, 1, 'no save after turning off')
 })
 
-test('session restore action results fit their schema, with unset values left out', () => {
-  const values = [true, false, null]
-  for (const id of [
-    'settings.sessionRestore.set',
-    'settings.sessionRestore.clear',
-  ]) {
-    const action = ALL_ACTIONS.find((candidate) => candidate.id === id)
-    assert.ok(action, id)
-    for (const device of values) {
-      for (const vault of values) {
-        const state: RestoreState = {
-          device,
-          vault,
-          effective: device ?? vault ?? false,
-        }
-        const result = toRestoreResult(state)
-        assert.deepEqual(validate(action.result, result), { ok: true })
-        assert.deepEqual(fromRestoreResult(result), state)
-      }
-    }
+test('the session restore action result fits its schema (one vault value, spec 023)', () => {
+  const action = ALL_ACTIONS.find(
+    (candidate) => candidate.id === 'settings.sessionRestore.set',
+  )
+  assert.ok(action)
+  for (const enabled of [true, false]) {
+    assert.deepEqual(validate(action.result, { enabled }), { ok: true })
   }
-})
-
-test('each restore choice ends in a state that shows that choice, and staying on never turns off in between', () => {
-  const values = [true, false, null]
-  const choices: RestoreChoice[] = ['off', 'device', 'vault']
-  const withEffective = (device: boolean | null, vault: boolean | null) => ({
-    device,
-    vault,
-    effective: device ?? vault ?? false,
-  })
-  for (const device of values) {
-    for (const vault of values) {
-      const start = withEffective(device, vault)
-      for (const choice of choices) {
-        let state = start
-        for (const step of restoreChoiceSteps(start, choice)) {
-          state = withEffective(
-            step.scope === 'device' ? step.enabled : state.device,
-            step.scope === 'vault' ? step.enabled : state.vault,
-          )
-          if (choice !== 'off' && start.effective)
-            assert.ok(
-              state.effective,
-              `${choice} from ${JSON.stringify(start)}`,
-            )
-        }
-        assert.equal(restoreChoice(state), choice)
-        assert.deepEqual(restoreChoiceSteps(state, choice), [], 'idempotent')
-      }
-    }
-  }
-})
-
-test('turning restore off clears the vault value too, so it is off on every device', () => {
-  const state: RestoreState = { device: false, vault: true, effective: false }
-  assert.deepEqual(restoreChoiceSteps(state, 'off'), [
-    { scope: 'vault', enabled: null },
-    { scope: 'device', enabled: null },
-  ])
+  assert.equal(
+    ALL_ACTIONS.some((c) => c.id === 'settings.sessionRestore.clear'),
+    false,
+  )
 })

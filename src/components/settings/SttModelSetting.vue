@@ -5,6 +5,7 @@
  * because a download is an action, not a value (clarification 2026-09-26).
  */
 import type { SttCatalogEntry } from '~/composables/useSttCatalog'
+import type { SettingsSelectOption } from '~/components/settings/Select.vue'
 import { useSettingsDevice } from '~/components/settings/deviceContext'
 
 const { t } = useI18n()
@@ -31,6 +32,18 @@ const loadError = ref<string | null>(null)
 const installed = computed(() =>
   catalog.value.filter((entry) => installedIds.value.has(entry.id)),
 )
+const sttOptions = computed<SettingsSelectOption[]>(() => [
+  ...(installedIds.value.has(activeId.value)
+    ? []
+    : [
+        {
+          value: activeId.value,
+          label: t('settings.sttModel.notInstalled'),
+          disabled: true,
+        },
+      ]),
+  ...installed.value.map((entry) => ({ value: entry.id, label: entry.name })),
+])
 const available = computed(() =>
   catalog.value.filter((entry) => !installedIds.value.has(entry.id)),
 )
@@ -93,31 +106,17 @@ onMounted(reloadAsync)
       <SettingsGroup v-if="installed.length > 0">
         <SettingsRow
           :title="t('settings.sttModel.modelLabel')"
+          :description="t('settings.deviceOnly')"
           label-for="settings-stt-model-select"
         >
-          <select
+          <SettingsSelect
             id="settings-stt-model-select"
-            class="h-9 w-56 max-w-full rounded-md border border-input bg-background px-2 text-sm focus:ring-2 focus:ring-ring focus:outline-none"
-            :value="activeId"
+            :model-value="activeId"
+            :options="sttOptions"
             :disabled="busyId !== null"
             data-testid="settings-stt-model"
-            @change="activateAsync(($event.target as HTMLSelectElement).value)"
-          >
-            <option
-              v-if="!installedIds.has(activeId)"
-              :value="activeId"
-              disabled
-            >
-              {{ t('settings.sttModel.notInstalled') }}
-            </option>
-            <option
-              v-for="entry in installed"
-              :key="entry.id"
-              :value="entry.id"
-            >
-              {{ entry.name }}
-            </option>
-          </select>
+            @update:model-value="activateAsync"
+          />
         </SettingsRow>
       </SettingsGroup>
       <p v-else class="text-sm text-muted-foreground">

@@ -1,14 +1,13 @@
 <script setup lang="ts">
 /**
- * Default chat model (spec 002 US4), for this device and for the whole vault; the device value
- * wins. Two selects saved on selection (spec 023 FR-021): "Wie alle Geräte" and "Keins" are the
- * "not set" options and clear the stored value.
+ * Default chat model (spec 002 US4) of this device: models are installed per device, so it is one
+ * of the few settings that do not apply to the whole vault (spec 023 FR-024). One select saved on
+ * selection (FR-021); "Keins" clears the stored value.
  */
 import type { InstalledModel } from '~/composables/useModels'
 import type { Provider, ProviderModel } from '~/composables/useProviders'
+import type { SettingsSelectOption } from '~/components/settings/Select.vue'
 import { useSettingsDevice } from '~/components/settings/deviceContext'
-
-type ScopeKind = 'device' | 'vault'
 
 const { t } = useI18n()
 const { errString } = useErrorString()
@@ -24,10 +23,7 @@ const PREF_KEY = 'chat.default_model_id'
 const installedModels = ref<InstalledModel[]>([])
 const providerList = ref<Provider[]>([])
 const providerModels = ref<Record<string, ProviderModel[]>>({})
-const stored = ref<Record<ScopeKind, string | null>>({
-  device: null,
-  vault: null,
-})
+const stored = ref<string | null>(null)
 
 const loading = ref(true)
 const busy = ref(false)
@@ -69,12 +65,26 @@ const hasAnyModel = computed(() =>
 )
 
 /** A stored id that is no longer offered (a deleted model) stays visible and selected. */
-function isOffered(id: string | null): boolean {
-  return (
+const extraOptions = computed<SettingsSelectOption[]>(() => {
+  const id = stored.value
+  const offered =
     id === null ||
     modelGroups.value.some((g) => g.models.some((m) => m.id === id))
-  )
-}
+  return [
+    { value: '', label: t('settings.default.none') },
+    ...(offered
+      ? []
+      : [{ value: id, label: t('settings.default.unknownModel', { id }) }]),
+  ]
+})
+
+const selectGroups = computed(() =>
+  modelGroups.value.map((group) => ({
+    key: group.providerId,
+    label: group.providerName,
+    options: group.models.map((m) => ({ value: m.id, label: m.name })),
+  })),
+)
 
 async function reloadAsync() {
   loading.value = true
@@ -101,12 +111,10 @@ async function reloadAsync() {
     )
     providerModels.value = nextModels
 
-    const uuid = device.info.value.vaultDeviceUuid
-    const [deviceVal, vaultVal] = await Promise.all([
-      getPrefAsync({ kind: 'device', uuid }, PREF_KEY),
-      getPrefAsync({ kind: 'vault' }, PREF_KEY),
-    ])
-    stored.value = { device: deviceVal, vault: vaultVal }
+    stored.value = await getPrefAsync(
+      { kind: 'device', uuid: device.info.value.vaultDeviceUuid },
+      PREF_KEY,
+    )
   } catch (e) {
     loadError.value = errString(e)
   } finally {
@@ -114,20 +122,18 @@ async function reloadAsync() {
   }
 }
 
-async function chooseAsync(scope: ScopeKind, event: Event) {
-  const select = event.target as HTMLSelectElement
-  const modelId = select.value || null
+async function chooseAsync(value: string) {
+  const modelId = value || null
   busy.value = true
   savedFlash.value = false
   opError.value = null
   try {
-    if (modelId) await setDefault({ modelId, scope })
-    else await clearDefault({ scope })
-    stored.value = { ...stored.value, [scope]: modelId }
+    if (modelId) await setDefault({ modelId })
+    else await clearDefault({})
+    stored.value = modelId
     savedFlash.value = true
   } catch (e) {
     opError.value = errString(e)
-    select.value = stored.value[scope] ?? ''
   } finally {
     busy.value = false
   }
@@ -171,44 +177,19 @@ onMounted(reloadAsync)
 
       <SettingsGroup>
         <SettingsRow
-          v-for="scope in ['device', 'vault'] as const"
-          :key="scope"
-          :title="t(`settings.default.${scope}Label`)"
-          :label-for="`settings-default-${scope}-select`"
+          :title="t('settings.default.label')"
+          :description="t('settings.deviceOnly')"
+          label-for="settings-default-model"
         >
-          <select
-            :id="`settings-default-${scope}-select`"
-            class="h-9 w-64 max-w-full rounded-md border border-input bg-background px-2 text-sm focus:ring-2 focus:ring-ring focus:outline-none"
-            :value="stored[scope] ?? ''"
+          <SettingsSelect
+            id="settings-default-model"
+            :model-value="stored ?? ''"
+            :options="extraOptions"
+            :groups="selectGroups"
             :disabled="busy"
-            :data-testid="`settings-default-${scope}`"
-            @change="chooseAsync(scope, $event)"
-          >
-            <option value="">
-              {{
-                t(
-                  scope === 'device'
-                    ? 'settings.default.followVault'
-                    : 'settings.default.none',
-                )
-              }}
-            </option>
-            <option
-              v-if="!isOffered(stored[scope])"
-              :value="stored[scope] ?? ''"
-            >
-              {{ t('settings.default.unknownModel', { id: stored[scope] }) }}
-            </option>
-            <optgroup
-              v-for="group in modelGroups"
-              :key="group.providerId"
-              :label="group.providerName"
-            >
-              <option v-for="m in group.models" :key="m.id" :value="m.id">
-                {{ m.name }}
-              </option>
-            </optgroup>
-          </select>
+            data-testid="settings-default-model"
+            @update:model-value="chooseAsync"
+          />
         </SettingsRow>
       </SettingsGroup>
 

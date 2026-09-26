@@ -114,27 +114,24 @@ test('never runs two backend calls at once', async () => {
   store.saveNow(session('a'))
   void store.load()
   store.saveNow(session('b'))
-  void store.setRestore('device', true)
+  void store.setRestore(true)
   await store.flushAsync()
   assert.equal(maxInFlight, 1)
 })
 
 test('load and setRestore pass the backend result through', async () => {
   const calls: FakeCall[] = []
-  const loaded = {
-    restore: { device: true, vault: null, effective: true },
-    session: null,
-  }
-  const state = { device: false, vault: null, effective: false }
+  const loaded = { restore: { enabled: true }, session: null }
+  const state = { enabled: false }
   const store = useWmSession(async (cmd, args) => {
     calls.push({ cmd, args })
     return cmd === 'wm_session_load' ? loaded : state
   })
   assert.deepEqual(await store.load(), loaded)
-  assert.deepEqual(await store.setRestore('device', false), state)
+  assert.deepEqual(await store.setRestore(false), state)
   assert.deepEqual(calls[1], {
     cmd: 'wm_session_restore_set',
-    args: { args: { scope: 'device', enabled: false } },
+    args: { args: { enabled: false } },
   })
 })
 

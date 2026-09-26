@@ -276,13 +276,9 @@
     },
     "sessionRestore": {
       "title": "Sitzung wiederherstellen",
-      "choice": {
-        "off": "Aus",
-        "device": "Nur auf diesem Gerät",
-        "vault": "Auf allen Geräten dieser Vault"
-      },
       "saved": "Gespeichert.",
-      "failed": "Die Einstellung konnte nicht geändert werden"
+      "failed": "Die Einstellung konnte nicht geändert werden",
+      "description": "Offene Fenster und Tabs beim Öffnen der Vault zurückholen"
     },
     "default": {
       "modelGroup": {
@@ -290,11 +286,9 @@
       },
       "saved": "Standard gesetzt.",
       "empty": "Es sind noch keine Modelle installiert oder Anbieter konfiguriert.",
-      "deviceLabel": "Dieses Gerät",
-      "vaultLabel": "Alle Geräte dieser Vault",
-      "followVault": "Wie alle Geräte",
       "none": "Keins",
-      "unknownModel": "{id} (nicht mehr vorhanden)"
+      "unknownModel": "{id} (nicht mehr vorhanden)",
+      "label": "Modell"
     },
     "sttModel": {
       "modelLabel": "Modell",
@@ -432,13 +426,13 @@
     },
     "colorScheme": {
       "label": "Farbschema",
-      "followVault": "Wie alle Geräte",
       "light": "Hell",
       "dark": "Dunkel",
       "system": "System",
       "saved": "Gespeichert.",
       "failed": "Das Farbschema konnte nicht gespeichert werden"
-    }
+    },
+    "deviceOnly": "Gilt nur für dieses Gerät"
   },
   "models": {
     "search": {

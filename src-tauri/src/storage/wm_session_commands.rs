@@ -1,5 +1,7 @@
 //! Tauri commands for the opt-in session restore (spec 022-session-restore,
 //! [contracts/wm-session.md](../../../specs/022-session-restore/contracts/wm-session.md)).
+//! Since spec 023 (FR-024) the setting applies to the whole vault: one value,
+//! on or off; the saved session itself stays per device.
 //!
 //! Each `#[tauri::command]` resolves the active database and the current
 //! device, then delegates to a plain `async fn` that the tests call directly.
@@ -17,7 +19,7 @@ use crate::identity::{installation_id_path, read_or_mint_installation_uuid};
 use crate::state::AppState;
 use crate::state_utils::active_database;
 use crate::storage::known_devices;
-use crate::storage::preferences::{self, PrefScope, ScopedBool};
+use crate::storage::preferences::{self, PrefScope};
 use crate::storage::wm_session::{self, WmSessionError};
 use crate::vault_gate::VaultDb;
 
@@ -28,41 +30,19 @@ pub const SESSION_RESTORE_KEY: &str = "wm.session_restore";
 // Wire types
 // ---------------------------------------------------------------------------
 
-/// Device value, vault value and the value that applies on this device.
+/// Whether the session is saved and restored, for every device of the vault.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[ts(export, export_to = "../../src/types/bindings/")]
 #[serde(rename_all = "camelCase")]
 pub struct SessionRestoreState {
-    pub device: Option<bool>,
-    pub vault: Option<bool>,
-    pub effective: bool,
+    pub enabled: bool,
 }
 
-impl From<ScopedBool> for SessionRestoreState {
-    fn from(scoped: ScopedBool) -> Self {
-        Self {
-            device: scoped.device,
-            vault: scoped.vault,
-            effective: scoped.effective(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
-#[ts(export, export_to = "../../src/types/bindings/")]
-#[serde(rename_all = "camelCase")]
-pub enum SessionRestoreScope {
-    Device,
-    Vault,
-}
-
-#[derive(Debug, Clone, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, Deserialize, TS)]
 #[ts(export, export_to = "../../src/types/bindings/")]
 #[serde(rename_all = "camelCase")]
 pub struct SessionRestoreSetArgs {
-    pub scope: SessionRestoreScope,
-    /// `null` resets the value in `scope`.
-    pub enabled: Option<bool>,
+    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, TS)]
@@ -143,56 +123,45 @@ where
         })?
 }
 
-async fn restore_get(db: VaultDb, device: Uuid) -> Result<SessionRestoreState> {
+/// The vault value; unset or unreadable means off (spec 022 FR-001).
+fn restore_enabled(conn: &haex_crdt::rusqlite::Connection) -> haex_crdt::Result<bool> {
+    let value = preferences::get(conn, PrefScope::Vault, SESSION_RESTORE_KEY)?;
+    Ok(preferences::parse_bool(value.as_deref()).unwrap_or(false))
+}
+
+async fn restore_get(db: VaultDb) -> Result<SessionRestoreState> {
     blocking("wm_session_restore_get", move || {
-        let scoped = db
-            .with_connection(|conn| {
-                Ok(preferences::get_scoped_bool(
-                    conn,
-                    device,
-                    SESSION_RESTORE_KEY,
-                )?)
-            })
+        let enabled = db
+            .with_connection(restore_enabled)
             .map_err(HolziError::from)?;
-        Ok(scoped.into())
+        Ok(SessionRestoreState { enabled })
     })
     .await
 }
 
-/// Writes or resets one scope's value and, in the same transaction, deletes
-/// the device's saved session when restore no longer applies (FR-005,
-/// FR-007): no save can slip in between turning it off and deleting.
+/// Writes the vault value and, in the same transaction, deletes this
+/// device's saved session when turned off (FR-005, FR-007): no save can slip
+/// in between. Other devices delete theirs on their next load (FR-008).
 async fn restore_set(
     db: VaultDb,
     device: Uuid,
     args: SessionRestoreSetArgs,
 ) -> Result<SessionRestoreState> {
     blocking("wm_session_restore_set", move || {
-        let scope = match args.scope {
-            SessionRestoreScope::Device => PrefScope::Device(device),
-            SessionRestoreScope::Vault => PrefScope::Vault,
-        };
-        let scoped = db
-            .with_connection(|conn| {
-                let tx = conn.unchecked_transaction()?;
-                match args.enabled {
-                    Some(enabled) => {
-                        let value = if enabled { "true" } else { "false" };
-                        preferences::insert_or_update(&tx, scope, SESSION_RESTORE_KEY, value)?;
-                    }
-                    None => {
-                        preferences::delete(&tx, scope, SESSION_RESTORE_KEY)?;
-                    }
-                }
-                let scoped = preferences::get_scoped_bool(&tx, device, SESSION_RESTORE_KEY)?;
-                if !scoped.effective() {
-                    wm_session::delete(&tx, device)?;
-                }
-                tx.commit()?;
-                Ok(scoped)
-            })
-            .map_err(HolziError::from)?;
-        Ok(scoped.into())
+        db.with_connection(|conn| {
+            let tx = conn.unchecked_transaction()?;
+            let value = if args.enabled { "true" } else { "false" };
+            preferences::insert_or_update(&tx, PrefScope::Vault, SESSION_RESTORE_KEY, value)?;
+            if !args.enabled {
+                wm_session::delete(&tx, device)?;
+            }
+            tx.commit()?;
+            Ok(())
+        })
+        .map_err(HolziError::from)?;
+        Ok(SessionRestoreState {
+            enabled: args.enabled,
+        })
     })
     .await
 }
@@ -203,17 +172,16 @@ async fn session_load(db: VaultDb, device: Uuid) -> Result<WmSessionLoad> {
     blocking("wm_session_load", move || {
         let result = db
             .with_connection(|conn| {
-                let scoped = preferences::get_scoped_bool(conn, device, SESSION_RESTORE_KEY)?;
-                if !scoped.effective() {
+                if !restore_enabled(conn)? {
                     wm_session::delete(conn, device)?;
-                    return Ok(Ok((scoped, None)));
+                    return Ok(Ok((false, None)));
                 }
-                Ok(wm_session::load(conn, device).map(|session| (scoped, session)))
+                Ok(wm_session::load(conn, device).map(|session| (true, session)))
             })
             .map_err(HolziError::from)?;
-        let (scoped, session) = result.map_err(session_error_to_holzi)?;
+        let (enabled, session) = result.map_err(session_error_to_holzi)?;
         Ok(WmSessionLoad {
-            restore: scoped.into(),
+            restore: SessionRestoreState { enabled },
             session,
         })
     })
@@ -226,8 +194,7 @@ async fn session_save(db: VaultDb, device: Uuid, session: Value) -> Result<WmSes
     blocking("wm_session_save", move || {
         let result = db
             .with_connection(|conn| {
-                let scoped = preferences::get_scoped_bool(conn, device, SESSION_RESTORE_KEY)?;
-                if !scoped.effective() {
+                if !restore_enabled(conn)? {
                     return Ok(Ok(false));
                 }
                 Ok(wm_session::save(conn, device, &session).map(|()| true))
@@ -244,13 +211,8 @@ async fn session_save(db: VaultDb, device: Uuid, session: Value) -> Result<WmSes
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-pub async fn wm_session_restore_get(
-    app: AppHandle,
-    state: State<'_, AppState>,
-) -> Result<SessionRestoreState> {
-    let db = active_database(&state)?;
-    let device = current_device_uuid(&app, &db)?;
-    restore_get(db, device).await
+pub async fn wm_session_restore_get(state: State<'_, AppState>) -> Result<SessionRestoreState> {
+    restore_get(active_database(&state)?).await
 }
 
 #[tauri::command]

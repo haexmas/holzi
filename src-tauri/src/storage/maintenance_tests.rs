@@ -10,7 +10,8 @@ use haex_crdt::{Database, DatabaseConfig, NoopSignatureProvider, SqlCipherKey};
 use uuid::Uuid;
 
 use super::maintenance::{
-    run_after_open, run_pending_tasks, LEGACY_ACTIVE_WORKSPACE_KEY, VACUUM_TASK,
+    fold_scoped_preferences, run_after_open, run_pending_tasks, LEGACY_ACTIVE_WORKSPACE_KEY,
+    VACUUM_TASK,
 };
 use super::preferences::{self, PrefScope};
 use crate::identity::{
@@ -133,4 +134,131 @@ fn a_failing_vacuum_keeps_the_task_for_the_next_open() {
 
     run_after_open(&db);
     assert!(!pending_vacuum(&db), "the next open catches up");
+}
+
+fn set(db: &Database, scope: PrefScope, key: &str, value: &str) {
+    db.with_connection(|conn| Ok(preferences::insert_or_update(conn, scope, key, value)?))
+        .expect("set preference");
+}
+
+fn get(db: &Database, scope: PrefScope, key: &str) -> Option<String> {
+    db.with_connection(|conn| Ok(preferences::get(conn, scope, key)?))
+        .expect("get preference")
+}
+
+fn fold(db: &Database, device: Uuid) {
+    db.with_connection(|conn| fold_scoped_preferences(conn, device))
+        .expect("fold preferences");
+}
+
+#[test]
+fn a_device_value_of_a_vault_setting_becomes_the_vault_value() {
+    let (_dir, db, device) = open_test_vault("fold-vault-settings");
+    set(
+        &db,
+        PrefScope::Device(device),
+        "chat.autonomy_mode",
+        "ungated",
+    );
+    set(
+        &db,
+        PrefScope::Device(device),
+        "cli_delegate.deny_rules",
+        "[\"git_push\"]",
+    );
+    set(
+        &db,
+        PrefScope::Device(device),
+        "chat.reasoning_option.qwen",
+        "high",
+    );
+
+    fold(&db, device);
+
+    for (key, value) in [
+        ("chat.autonomy_mode", "ungated"),
+        ("cli_delegate.deny_rules", "[\"git_push\"]"),
+        ("chat.reasoning_option.qwen", "high"),
+    ] {
+        assert_eq!(
+            get(&db, PrefScope::Vault, key).as_deref(),
+            Some(value),
+            "{key}"
+        );
+        assert_eq!(get(&db, PrefScope::Device(device), key), None, "{key}");
+    }
+}
+
+#[test]
+fn an_existing_vault_value_wins_and_the_device_value_is_dropped() {
+    let (_dir, db, device) = open_test_vault("fold-vault-wins");
+    set(&db, PrefScope::Vault, "wm.session_restore", "false");
+    set(&db, PrefScope::Device(device), "wm.session_restore", "true");
+
+    fold(&db, device);
+
+    assert_eq!(
+        get(&db, PrefScope::Vault, "wm.session_restore").as_deref(),
+        Some("false")
+    );
+    assert_eq!(
+        get(&db, PrefScope::Device(device), "wm.session_restore"),
+        None
+    );
+}
+
+#[test]
+fn the_vault_default_model_becomes_this_devices_when_it_has_none() {
+    let (_dir, db, device) = open_test_vault("fold-default-model");
+    set(&db, PrefScope::Vault, "chat.default_model_id", "qwen");
+
+    fold(&db, device);
+
+    assert_eq!(
+        get(&db, PrefScope::Device(device), "chat.default_model_id").as_deref(),
+        Some("qwen")
+    );
+    assert_eq!(get(&db, PrefScope::Vault, "chat.default_model_id"), None);
+
+    set(&db, PrefScope::Vault, "chat.default_model_id", "llama");
+    fold(&db, device);
+    assert_eq!(
+        get(&db, PrefScope::Device(device), "chat.default_model_id").as_deref(),
+        Some("qwen"),
+        "this device keeps its own value"
+    );
+    assert_eq!(get(&db, PrefScope::Vault, "chat.default_model_id"), None);
+}
+
+#[test]
+fn folding_leaves_device_settings_alone_and_runs_on_open() {
+    let (_dir, db, device) = open_test_vault("fold-on-open");
+    set(
+        &db,
+        PrefScope::Device(device),
+        "voice.stt_model_id",
+        "whisper-tiny",
+    );
+    set(
+        &db,
+        PrefScope::Device(device),
+        "appearance.color_scheme",
+        "dark",
+    );
+
+    run_after_open(&db);
+    run_after_open(&db);
+
+    assert_eq!(
+        get(&db, PrefScope::Device(device), "voice.stt_model_id").as_deref(),
+        Some("whisper-tiny")
+    );
+    assert_eq!(
+        get(&db, PrefScope::Vault, "appearance.color_scheme").as_deref(),
+        Some("dark")
+    );
+    assert_eq!(
+        get(&db, PrefScope::Device(device), "appearance.color_scheme"),
+        None
+    );
 }

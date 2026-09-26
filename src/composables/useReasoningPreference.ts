@@ -17,7 +17,8 @@ import type { PrefScope, usePreferences } from '~/composables/usePreferences'
  */
 export type EffortState = 'selectable' | 'hidden' | 'managed' | 'unknown'
 
-/** Device-scoped key holding one model's chosen option id; absent means Auto. */
+/** Vault key holding one model's chosen option id; absent means Auto (vault-wide since spec
+ * 023, FR-024). */
 const PREF_KEY_PREFIX = 'chat.reasoning_option.'
 const prefKey = (modelId: string) => `${PREF_KEY_PREFIX}${modelId}`
 
@@ -30,8 +31,9 @@ export interface ReasoningPreferenceDeps {
    */
   capabilities: Ref<ModelCapabilities | null | undefined>
   /**
-   * This vault device's uuid, `null` until it is known. The preference is
-   * device-scoped, so nothing is read or written before then.
+   * This vault device's uuid, `null` until it is known: nothing is read or
+   * written before the vault is open. The preference itself applies to the
+   * whole vault.
    */
   deviceUuid: Ref<string | null>
   preferences: Pick<
@@ -97,8 +99,7 @@ export function useReasoningPreference(deps: ReasoningPreferenceDeps) {
   })
 
   function scope(): PrefScope | null {
-    const uuid = deviceUuid.value
-    return uuid ? { kind: 'device', uuid } : null
+    return deviceUuid.value ? { kind: 'vault' } : null
   }
 
   function enqueueMutation(

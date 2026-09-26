@@ -71,11 +71,11 @@ async function commitAsync() {
       :title="t('settings.alias.label')"
       label-for="settings-alias-input"
     >
-      <input
+      <ShadcnInput
         id="settings-alias-input"
         v-model="localValue"
         type="text"
-        class="h-9 w-56 max-w-full rounded-md border border-input bg-background px-2 text-sm focus:ring-2 focus:ring-ring focus:outline-none"
+        class="w-56 max-w-full bg-background"
         :disabled="busy"
         :aria-invalid="showRequired && !localValue.trim() ? true : undefined"
         data-testid="settings-alias"

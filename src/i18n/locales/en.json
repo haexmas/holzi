@@ -276,13 +276,9 @@
     },
     "sessionRestore": {
       "title": "Restore session",
-      "choice": {
-        "off": "Off",
-        "device": "Only on this device",
-        "vault": "On all devices of this vault"
-      },
       "saved": "Saved.",
-      "failed": "The setting could not be changed"
+      "failed": "The setting could not be changed",
+      "description": "Bring back open windows and tabs when the vault opens"
     },
     "default": {
       "modelGroup": {
@@ -290,11 +286,9 @@
       },
       "saved": "Default set.",
       "empty": "No installed models or configured providers yet.",
-      "deviceLabel": "This device",
-      "vaultLabel": "All devices of this vault",
-      "followVault": "Same as all devices",
       "none": "None",
-      "unknownModel": "{id} (no longer available)"
+      "unknownModel": "{id} (no longer available)",
+      "label": "Model"
     },
     "sttModel": {
       "modelLabel": "Model",
@@ -432,13 +426,13 @@
     },
     "colorScheme": {
       "label": "Color scheme",
-      "followVault": "Like all devices",
       "light": "Light",
       "dark": "Dark",
       "system": "System",
       "saved": "Saved.",
       "failed": "The color scheme could not be saved"
-    }
+    },
+    "deviceOnly": "Applies to this device only"
   },
   "models": {
     "search": {

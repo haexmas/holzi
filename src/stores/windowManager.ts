@@ -30,11 +30,7 @@ import type {
   TabRuntime,
   Workspace,
 } from '~/lib/wm/types'
-import {
-  createSessionSync,
-  type RestoreScope,
-  type RestoreState,
-} from '~/lib/wm/sessionSync'
+import { createSessionSync, type RestoreState } from '~/lib/wm/sessionSync'
 import { useWmSession } from '~/composables/useWmSession'
 import { createWmGuards } from '~/stores/wmGuards'
 import { createWmNavigation } from '~/stores/wmNavigation'
@@ -365,13 +361,10 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
     return session.flushAsync()
   }
 
-  /** Sets or resets the "Sitzung wiederherstellen" setting for one scope and takes over the
-   * result (spec 022 FR-005, FR-007); the settings actions call this. */
-  function setSessionRestore(
-    scope: RestoreScope,
-    enabled: boolean | null,
-  ): Promise<RestoreState> {
-    return session.setRestoreAsync(scope, enabled)
+  /** Turns the vault's "Sitzung wiederherstellen" on or off and takes over the result (spec
+   * 022 FR-005, FR-007; one vault value since spec 023); the settings action calls this. */
+  function setSessionRestore(enabled: boolean): Promise<RestoreState> {
+    return session.setRestoreAsync(enabled)
   }
 
   // Navigation changes a tab's saved history (spec 022 clarification 2026-09-26).

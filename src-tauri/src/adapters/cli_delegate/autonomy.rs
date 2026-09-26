@@ -1,6 +1,7 @@
 //! Autonomy Mode (spec 009-autonomous-delegate-mode): `AutonomyMode`,
 //! `DenyCategory`, the per-vendor `evaluate_deny_rules` matcher, the
-//! `cli_delegate.deny_rules` device preference, and the reactive
+//! `cli_delegate.deny_rules` vault preference (a device preference before
+//! spec 023, FR-024), and the reactive
 //! unsupported-mode error classifier. See
 //! `specs/009-autonomous-delegate-mode/data-model.md` for the full design.
 
@@ -371,12 +372,11 @@ fn parse_deny_rules(raw: Option<String>) -> Result<Vec<DenyCategory>, DenyRulesE
 }
 
 /// Reads the persisted deny-rule set (see [`parse_deny_rules`] for the
-/// value-shape rules).
+/// value-shape rules). It applies to the whole vault since spec 023 (FR-024).
 pub fn get_deny_rules(
     conn: &haex_crdt::rusqlite::Connection,
-    device_id: uuid::Uuid,
 ) -> Result<Vec<DenyCategory>, DenyRulesError> {
-    let raw = preferences::get(conn, PrefScope::Device(device_id), PREF_DENY_RULES)?;
+    let raw = preferences::get(conn, PrefScope::Vault, PREF_DENY_RULES)?;
     parse_deny_rules(raw)
 }
 

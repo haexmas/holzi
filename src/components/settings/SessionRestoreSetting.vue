@@ -1,37 +1,22 @@
 <script setup lang="ts">
 /**
- * The setting "Sitzung wiederherstellen" (spec 022-session-restore, FR-004,
- * contracts/wm-session.md §5): one choice — off, only this device, all devices
- * of the vault — saved as soon as it is picked, without a save button.
- * `restoreChoiceSteps` maps the choice onto the device and vault values.
- * Writes go through the catalog actions (spec 020 FR-024).
+ * The setting "Sitzung wiederherstellen" (spec 022-session-restore, FR-004, contracts/wm-session.md
+ * §5): one switch for the whole vault since spec 023 (FR-024), saved as soon as it flips, without
+ * a save button. Turning it off deletes the saved session. Writes go through the catalog action
+ * (spec 020 FR-024).
  */
-import {
-  fromRestoreResult,
-  restoreChoice,
-  restoreChoiceSteps,
-  type RestoreChoice,
-  type RestoreState,
-  type RestoreStateResult,
-} from '~/lib/wm/sessionSync'
-
-const CHOICES: readonly RestoreChoice[] = ['off', 'device', 'vault']
+import type { RestoreState } from '~/lib/wm/sessionSync'
 
 const { t } = useI18n()
 const { errString } = useErrorString()
 const wm = useWindowManagerStore()
 const setRestore = useActionOrThrow('settings.sessionRestore.set')
-const clearRestore = useActionOrThrow('settings.sessionRestore.clear')
 
 const restore = ref<RestoreState | null>(null)
 const busy = ref(false)
 const savedFlash = ref(false)
 const loadError = ref<string | null>(null)
 const opError = ref<string | null>(null)
-
-const choice = computed(() =>
-  restore.value ? restoreChoice(restore.value) : null,
-)
 
 async function reloadAsync() {
   try {
@@ -42,19 +27,13 @@ async function reloadAsync() {
   }
 }
 
-async function chooseAsync(next: RestoreChoice) {
+async function toggleAsync(enabled: boolean) {
   if (!restore.value || busy.value) return
   busy.value = true
   savedFlash.value = false
   opError.value = null
   try {
-    for (const step of restoreChoiceSteps(restore.value, next)) {
-      const result =
-        step.enabled === null
-          ? await clearRestore({ scope: step.scope })
-          : await setRestore({ scope: step.scope, enabled: step.enabled })
-      restore.value = fromRestoreResult(result as RestoreStateResult)
-    }
+    restore.value = (await setRestore({ enabled })) as RestoreState
     savedFlash.value = true
   } catch (error: unknown) {
     opError.value = errString(error)
@@ -73,25 +52,21 @@ onMounted(reloadAsync)
       {{ t('errors.prefLoadFailed') }}: {{ loadError }}
     </p>
 
-    <fieldset v-if="restore" data-testid="session-restore-choice">
-      <legend class="mb-2 px-1 text-sm font-semibold">
-        {{ t('settings.sessionRestore.title') }}
-      </legend>
-      <SettingsGroup>
-        <SettingsOptionRow
-          v-for="option in CHOICES"
-          :key="option"
-          type="radio"
-          name="session-restore"
-          :value="option"
-          :checked="choice === option"
+    <SettingsGroup v-if="restore">
+      <SettingsRow
+        :title="t('settings.sessionRestore.title')"
+        :description="t('settings.sessionRestore.description')"
+        label-for="session-restore-switch"
+      >
+        <ShadcnSwitch
+          id="session-restore-switch"
+          :model-value="restore.enabled"
           :disabled="busy"
-          :title="t(`settings.sessionRestore.choice.${option}`)"
-          :data-testid="`session-restore-${option}`"
-          @change="chooseAsync(option)"
+          data-testid="session-restore-switch"
+          @update:model-value="toggleAsync($event === true)"
         />
-      </SettingsGroup>
-    </fieldset>
+      </SettingsRow>
+    </SettingsGroup>
 
     <p v-if="savedFlash" class="px-1 text-xs text-success" role="status">
       {{ t('settings.sessionRestore.saved') }}

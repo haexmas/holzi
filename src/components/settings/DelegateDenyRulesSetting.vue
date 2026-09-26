@@ -3,13 +3,11 @@
  * Delegate deny rules on this device (spec 009). Each checkbox saves on change (spec 023
  * FR-021); a failure restores the stored selection.
  */
-import { useSettingsDevice } from '~/components/settings/deviceContext'
 
 const { t } = useI18n()
 const { errString } = useErrorString()
 const { getPrefAsync } = usePreferences()
 const setDenyRules = useActionOrThrow('settings.delegate.setDenyRules')
-const device = useSettingsDevice()
 
 // No Rust-side setter exists for this preference (research.md §5) — the
 // frontend writes the JSON array of category identifiers directly through
@@ -31,15 +29,12 @@ const savedFlash = ref(false)
 const opError = ref<string | null>(null)
 const loadError = ref<string | null>(null)
 
-/** Reloads and validates the device-scoped deny-rule selection. */
+/** Reloads and validates the vault's deny-rule selection (spec 023 FR-024). */
 async function reloadAsync() {
   loading.value = true
   loadError.value = null
   try {
-    const raw = await getPrefAsync(
-      { kind: 'device', uuid: device.info.value.vaultDeviceUuid },
-      PREF_KEY,
-    )
+    const raw = await getPrefAsync({ kind: 'vault' }, PREF_KEY)
     const parsed: unknown = raw ? JSON.parse(raw) : []
     const validItems = Array.isArray(parsed)
       ? parsed.filter(
@@ -55,7 +50,7 @@ async function reloadAsync() {
   }
 }
 
-/** Applies one checkbox change and saves the selection for this device. */
+/** Applies one checkbox change and saves the selection for the vault. */
 async function toggleAsync(category: string, checked: boolean) {
   const previous = selected.value
   const next = new Set(previous)

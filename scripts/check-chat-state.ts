@@ -886,7 +886,7 @@ async function initializedStore(options: {
   return state
 }
 
-test('a saved option is restored for the model shown first, read under this device and the model key', async () => {
+test('a saved option is restored for the model shown first, read from the vault under the model key', async () => {
   const prefs = createPrefStore({ [EFFORT_KEY('a')]: 'high' })
   const state = await initializedStore({
     prefs,
@@ -899,7 +899,7 @@ test('a saved option is restored for the model shown first, read under this devi
     prefs.calls.find((c) => c.op === 'get' && c.key === EFFORT_KEY('a')),
     {
       op: 'get',
-      scope: { kind: 'device', uuid: 'device' },
+      scope: { kind: 'vault' },
       key: EFFORT_KEY('a'),
     },
   )

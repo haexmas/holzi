@@ -6,11 +6,7 @@ import { useModels } from '~/composables/useModels'
 import { usePreferences, type PrefScope } from '~/composables/usePreferences'
 import { useProviders, type DelegateVendor } from '~/composables/useProviders'
 import { useSttModels } from '~/composables/useSttModels'
-import {
-  parseColorScheme,
-  toColorSchemeResult,
-} from '~/lib/settings/colorScheme'
-import { toRestoreResult } from '~/lib/wm/sessionSync'
+import { parseColorScheme } from '~/lib/settings/colorScheme'
 import type { useWindowManagerStore } from '~/stores/windowManager'
 
 type WmStore = ReturnType<typeof useWindowManagerStore>
@@ -42,37 +38,27 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
     const device = await currentDeviceInfoAsync()
     return { kind: 'device', uuid: device.vaultDeviceUuid }
   }
-  async function scopeOf(value: unknown): Promise<PrefScope> {
-    return value === 'vault' ? { kind: 'vault' } : deviceScope()
-  }
-
-  const restoreScope = (value: unknown) =>
-    value === 'vault' ? ('vault' as const) : ('device' as const)
+  /** Settings apply to the vault; only the default and speech models to this device (spec 023,
+   * FR-024). */
+  const VAULT: PrefScope = { kind: 'vault' }
 
   on('settings.get', async () => {
     const device = await currentDeviceInfoAsync()
     const scope: PrefScope = { kind: 'device', uuid: device.vaultDeviceUuid }
-    const [
-      deviceDefault,
-      vaultDefault,
-      stt,
-      autonomy,
-      denyRules,
-      sessionRestore,
-    ] = await Promise.all([
-      getPrefAsync(scope, DEFAULT_MODEL_KEY),
-      getPrefAsync({ kind: 'vault' }, DEFAULT_MODEL_KEY),
-      getPrefAsync(scope, STT_MODEL_KEY),
-      getPrefAsync(scope, AUTONOMY_KEY),
-      getPrefAsync(scope, DENY_RULES_KEY),
-      wm.getSessionRestore().then(toRestoreResult),
-    ])
+    const [defaultModel, stt, autonomy, denyRules, sessionRestore] =
+      await Promise.all([
+        getPrefAsync(scope, DEFAULT_MODEL_KEY),
+        getPrefAsync(scope, STT_MODEL_KEY),
+        getPrefAsync(VAULT, AUTONOMY_KEY),
+        getPrefAsync(VAULT, DENY_RULES_KEY),
+        wm.getSessionRestore(),
+      ])
     return {
       deviceAlias: device.alias,
-      colorScheme: toColorSchemeResult(colorScheme.state.value),
-      defaultModel: { device: deviceDefault, vault: vaultDefault },
+      colorScheme: colorScheme.scheme.value,
+      ...(defaultModel ? { defaultModel } : {}),
       sttModel: stt,
-      sessionRestore,
+      sessionRestore: sessionRestore.enabled,
       autonomyMode: autonomy,
       delegateDenyRules: denyRules ? (JSON.parse(denyRules) as unknown) : [],
     }
@@ -89,31 +75,13 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
   }))
 
   on('settings.sessionRestore.set', async ({ input }) =>
-    toRestoreResult(
-      await wm.setSessionRestore(
-        restoreScope(input.scope),
-        input.enabled === true,
-      ),
-    ),
+    wm.setSessionRestore(input.enabled === true),
   )
-  on('settings.sessionRestore.clear', async ({ input }) =>
-    toRestoreResult(
-      await wm.setSessionRestore(restoreScope(input.scope), null),
-    ),
-  )
-
   on('settings.appearance.setColorScheme', async ({ input }) => {
     const scheme = parseColorScheme(input.scheme)
     if (!scheme) throw new Error(`unknown color scheme ${String(input.scheme)}`)
-    return toColorSchemeResult(
-      await colorScheme.setAsync(restoreScope(input.scope), scheme),
-    )
+    return { scheme: await colorScheme.setAsync(scheme) }
   })
-  on('settings.appearance.clearColorScheme', async ({ input }) =>
-    toColorSchemeResult(
-      await colorScheme.setAsync(restoreScope(input.scope), null),
-    ),
-  )
 
   on('settings.device.setAlias', async ({ input }) => {
     const alias = String(input.alias).trim()
@@ -123,14 +91,14 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
   })
   on('settings.models.setDefault', async ({ input }) => {
     await setPrefAsync(
-      await scopeOf(input.scope),
+      await deviceScope(),
       DEFAULT_MODEL_KEY,
       String(input.modelId),
     )
     return done
   })
-  on('settings.models.clearDefault', async ({ input }) => {
-    await clearPrefAsync(await scopeOf(input.scope), DEFAULT_MODEL_KEY)
+  on('settings.models.clearDefault', async () => {
+    await clearPrefAsync(await deviceScope(), DEFAULT_MODEL_KEY)
     return done
   })
   on('settings.models.setStt', async ({ input }) => {
@@ -190,15 +158,11 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
     return done
   })
   on('settings.autonomy.setMode', async ({ input }) => {
-    await setPrefAsync(await deviceScope(), AUTONOMY_KEY, String(input.mode))
+    await setPrefAsync(VAULT, AUTONOMY_KEY, String(input.mode))
     return done
   })
   on('settings.delegate.setDenyRules', async ({ input }) => {
-    await setPrefAsync(
-      await deviceScope(),
-      DENY_RULES_KEY,
-      JSON.stringify(input.rules),
-    )
+    await setPrefAsync(VAULT, DENY_RULES_KEY, JSON.stringify(input.rules))
     return done
   })
 }

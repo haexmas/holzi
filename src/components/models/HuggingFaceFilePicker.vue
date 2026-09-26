@@ -275,7 +275,7 @@ onMounted(loadDetailsAsync)
               {{ t('models.filePicker.tooBigWarning') }}
             </p>
             <label class="flex items-center gap-2 text-sm">
-              <input v-model="tooBigConfirmed" type="checkbox" />
+              <ShadcnCheckbox v-model="tooBigConfirmed" />
               {{ t('models.filePicker.tooBigConfirm') }}
             </label>
           </div>

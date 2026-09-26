@@ -420,7 +420,7 @@ onBeforeUnmount(() => {
         @retry-send="ui.retrySend"
         @retry-model-load="retryLoad()"
         @dismiss-error="dismissError"
-        @retry-autonomy-mode="reloadAutonomyMode(deviceUuid)"
+        @retry-autonomy-mode="reloadAutonomyMode()"
       />
 
       <div class="flex-1 flex flex-col overflow-hidden">

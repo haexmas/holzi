@@ -16,8 +16,6 @@ type WmInvokeFn = (
   args?: Record<string, unknown>,
 ) => Promise<unknown>
 
-export type SessionRestoreScope = 'device' | 'vault'
-
 const SAVE_DEBOUNCE_MS = 400
 
 function isTooLarge(error: unknown): boolean {
@@ -130,15 +128,12 @@ export function useWmSession(invokeFn: WmInvokeFn = tauriInvoke) {
     )
   }
 
-  /** Sets (`true`/`false`) or resets (`null`) one scope's value. */
-  function setRestore(
-    scope: SessionRestoreScope,
-    enabled: boolean | null,
-  ): Promise<SessionRestoreState> {
+  /** Turns the vault's setting on or off (spec 023, FR-024). */
+  function setRestore(enabled: boolean): Promise<SessionRestoreState> {
     return runExclusive(
       async () =>
         (await invokeFn('wm_session_restore_set', {
-          args: { scope, enabled },
+          args: { enabled },
         })) as SessionRestoreState,
     )
   }

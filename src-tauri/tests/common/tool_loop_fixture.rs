@@ -41,16 +41,10 @@ use holzi_lib::storage::providers::ProviderKind;
 const PREF_PERMISSION_MODE: &str = "chat.permission_mode";
 
 pub fn set_permission_mode(db: &Database, mode: &str) {
-    let this_device = db.device_id();
     db.with_connection(|conn| {
-        preferences::insert_or_update(
-            conn,
-            PrefScope::Device(this_device),
-            PREF_PERMISSION_MODE,
-            mode,
-        )
-        .map(|_| ())
-        .map_err(haex_crdt::Error::from)
+        preferences::insert_or_update(conn, PrefScope::Vault, PREF_PERMISSION_MODE, mode)
+            .map(|_| ())
+            .map_err(haex_crdt::Error::from)
     })
     .unwrap();
 }
