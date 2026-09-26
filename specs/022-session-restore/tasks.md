@@ -157,7 +157,8 @@ description: 'Task list for spec 022-session-restore'
   - Done 2026-09-26.
 - [x] T037 Run the full quickstart §1 (all automated checks incl. `cargo fmt --check`, `lint:rust`, `cargo test`) and the e2e suite (`pnpm test:e2e`); record counts
   - Done 2026-09-26: cargo fmt --check, lint:rust (both feature sets) and cargo test green (465 lib tests plus integration suites); frontend checks as in T016; e2e debug build 7 passed, 1 skipped (relaunch-after-lock needs a relaunching build), 0 failed.
-- [ ] T038 Run `/speckit-analyze` for 022 and resolve findings in the docs
+- [x] T038 Run `/speckit-analyze` for 022 and resolve findings in the docs
+  - Done 2026-09-26: 4 findings, all resolved: C1 `ponytail:` comment at `snapshotSession` (R2); I1 plan source tree and requirement mapping updated to the implementation; I2 R7/R8 got "Umsetzung" notes; U1 edge case now says the settings view already shows the value that applies from the next open.
 - [x] T039 Open the PR with base `020-tab-navigation` (retarget to `main` after #142 merges), as a draft until the manual scenarios are recorded
   - Done 2026-09-26: draft PR #143 opened before implementation, as the operator asked (clarify → PR → implement).
 

@@ -113,46 +113,55 @@ specs/022-session-restore/
 
 ### Source Code (repository root)
 
+Stand nach der Umsetzung (2026-09-26).
+
 ```text
 src-tauri/src/
+├── error.rs                       # NEU: HolziError::SessionTooLarge { bytes }
 ├── identity/
 │   ├── migrations.rs              # NEU: 0020_wm_session_no_sync (DROP ×3, CREATE ×2, Wartungseintrag)
 │   └── migrations_tests.rs        # NEU: 0020 frisch + aktualisiert; 0019-Kaskadentests entfallen
 ├── instances/
-│   ├── open.rs                    # NEU: nach dem Öffnen secure_delete, Alt-Präferenz löschen, Wartung
-│   └── create.rs                  # NEU: secure_delete für neue Vaults
+│   ├── open.rs                    # NEU: maintenance::run_after_open nach dem Öffnen
+│   └── create.rs                  # NEU: maintenance::run_after_open für neue Vaults
 ├── storage/
-│   ├── maintenance.rs             # NEU: Start-Schritte aus contracts §2
-│   ├── preferences.rs             # ERWEITERT: get_scoped_bool (Gerät vor Vault)
+│   ├── maintenance.rs             # NEU: secure_delete, Alt-Präferenz löschen, einmaliges VACUUM
+│   ├── maintenance_tests.rs       # NEU
+│   ├── preferences.rs             # ERWEITERT: parse_bool, ScopedBool, get_scoped_bool
+│   ├── preferences_tests.rs       # ERWEITERT: Auflösung Gerät vor Vault
 │   ├── wm_session.rs              # NEU: Tabelle wm_sessions_no_sync (load/save/delete je Gerät)
-│   ├── wm_session_commands.rs     # NEU: die vier Befehle, Wire-Typen (ts-rs), current_device_uuid
 │   ├── wm_session_tests.rs        # NEU
-│   ├── wm_commands.rs             # ENTFÄLLT (current_device_uuid wandert nach wm_session_commands.rs)
-│   ├── wm_windows.rs, wm_workspaces.rs + *_tests.rs   # ENTFALLEN
+│   ├── wm_session_commands.rs     # NEU: die vier Befehle, Wire-Typen (ts-rs), current_device_uuid
+│   ├── wm_session_commands_tests.rs # NEU: inkl. Vault-Scope
+│   ├── wm_commands.rs, wm_windows.rs, wm_workspaces.rs + *_tests.rs   # ENTFALLEN
 │   └── mod.rs                     # Module anpassen
 └── lib.rs                         # Befehlsregistrierung: 6 alte raus, 4 neue rein
 
 src/
 ├── composables/
-│   ├── useWmLayout.ts → useWmSession.ts   # Warteschlange mit wm_session_save
-│   └── usePreferences.ts          # unverändert
+│   └── useWmLayout.ts → useWmSession.ts   # Warteschlange mit wm_session_save, Rückfall ohne Historien
 ├── lib/wm/
-│   ├── types.ts                   # PersistedLayout → WmSession (mit version)
-│   └── layoutState.ts             # hydrate nimmt WmSession
+│   ├── session.ts                 # NEU: WmSession, snapshotSession, parseWmSession, splitSession, withoutHistories
+│   ├── sessionSync.ts             # NEU: Speichern/Wiederherstellen, rein und unter Node testbar
+│   └── types.ts                   # PersistedLayout bleibt Eingabe von hydrate (nur Kommentar)
 ├── stores/
-│   ├── windowManager.ts           # sessionRestore, restoreSessionAsync, applySessionRestore, Speichern nur bei geltender Einstellung
+│   ├── windowManager.ts           # delegiert an sessionSync: restoreSessionAsync, setSessionRestore, getSessionRestore
+│   ├── wmLayoutHandlers.ts        # wm.workspace.create synchron
 │   └── settingsActionHandlers.ts  # settings.sessionRestore.set/clear, settings.get
 ├── lib/actions/settingsActions.ts # zwei neue Aktionen
 ├── components/
 │   ├── settings/SessionRestoreSetting.vue # NEU
 │   └── apps/SettingsApp.vue       # Komponente einbinden
 ├── pages/workspace/[instance].vue # restoreSessionAsync mit Fehlerbehandlung vor ?open=
-├── types/bindings/                # WmLayoutDto, WindowDto, TabDto, WorkspaceDto, DeleteWorkspaceResult raus; SessionRestoreState, WmSessionLoad rein
+├── types/bindings/                # 5 alte DTOs raus; SessionRestoreState, SessionRestoreScope, SessionRestoreSetArgs, WmSessionLoad, WmSessionSaveArgs, WmSessionSaved rein
 └── i18n/locales/{de,en}.json      # settings.sessionRestore.*, actions.settings.sessionRestore.*
 
 scripts/check-wm-persistence.ts    # auf useWmSession umgestellt
+scripts/check-wm-session.ts        # NEU: session.ts und sessionSync.ts (in check:wm-state)
 specs/015-workspace-shell/spec.md  # Vermerke nach FR-016
+specs/020-tab-navigation/spec.md   # Vermerk an FR-011
 CONTEXT.md                         # Begriff „Sitzung (wm session)“, Abgrenzung zur Vault-Session
+plans/README.md                    # Zeile 022
 ```
 
 **Structure Decision**: Bestehende Tauri-Struktur. Rust-Speicherlogik unter
@@ -161,19 +170,19 @@ und 020.
 
 ## Anforderungen → Umsetzung
 
-| Anforderungen                         | Umsetzung                                                                            |
-| ------------------------------------- | ------------------------------------------------------------------------------------ |
-| FR-001–003 (Einstellung, Scopes, aus) | `preferences.rs::get_scoped_bool`, `wm_session_restore_get`                          |
-| FR-004 (Ansicht)                      | `SessionRestoreSetting.vue`                                                          |
-| FR-005 (sofort wirksam)               | `wm_session_restore_set` + `applySessionRestore` (speichert beim Einschalten sofort) |
-| FR-006 (Aktion)                       | `settings.sessionRestore.set/clear`                                                  |
-| FR-007 (Ausschalten löscht)           | `wm_session_restore_set` löscht in derselben Transaktion                             |
-| FR-008 (beim Öffnen aufräumen)        | `wm_session_load` löscht, wenn nichts gilt                                           |
-| FR-009, FR-011 (Altdaten)             | Migration 0020 (`DROP TABLE`), `maintenance.rs` (Alt-Präferenz, `VACUUM`)            |
-| FR-010 (nie an andere Geräte)         | `wm_sessions_no_sync`, `secure_delete`                                               |
-| FR-012 (Fehler)                       | Protokollieren und weiterlaufen; Wartungseintrag bleibt für den nächsten Start       |
-| FR-013–015 (Start, Deep-Link)         | `restoreSessionAsync`, Fehlerbehandlung in `pages/workspace/[instance].vue`          |
-| FR-016 (Doku 015)                     | Vermerke in `specs/015-workspace-shell/spec.md`                                      |
+| Anforderungen                         | Umsetzung                                                                                                    |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| FR-001–003 (Einstellung, Scopes, aus) | `preferences.rs::get_scoped_bool`, `wm_session_restore_get`                                                  |
+| FR-004 (Ansicht)                      | `SessionRestoreSetting.vue`                                                                                  |
+| FR-005 (sofort wirksam)               | `wm_session_restore_set` über `setSessionRestore` (gleiche Warteschlange, speichert beim Einschalten sofort) |
+| FR-006 (Aktion)                       | `settings.sessionRestore.set/clear`                                                                          |
+| FR-007 (Ausschalten löscht)           | `wm_session_restore_set` löscht in derselben Transaktion                                                     |
+| FR-008 (beim Öffnen aufräumen)        | `wm_session_load` löscht, wenn nichts gilt                                                                   |
+| FR-009, FR-011 (Altdaten)             | Migration 0020 (`DROP TABLE`), `maintenance.rs` (Alt-Präferenz, `VACUUM`)                                    |
+| FR-010 (nie an andere Geräte)         | `wm_sessions_no_sync`, `secure_delete`                                                                       |
+| FR-012 (Fehler)                       | Protokollieren und weiterlaufen; Wartungseintrag bleibt für den nächsten Start                               |
+| FR-013–015 (Start, Deep-Link)         | `sessionSync.restoreAsync` via `restoreSessionAsync`, Fehlerbehandlung in `pages/workspace/[instance].vue`   |
+| FR-016 (Doku 015, 020)                | Vermerke in `specs/015-workspace-shell/spec.md` und `specs/020-tab-navigation/spec.md`                       |
 
 ## Complexity Tracking
 

@@ -192,6 +192,14 @@ greifen kann; deshalb das einmalige `VACUUM`. Bei typischen Vault-Größen
 **Begründung**: Die Aufrufstellen im Store bleiben, nur ihr Ziel ändert sich.
 Das hält die Änderung am Store klein (er steht bei 485 Zeilen).
 
+**Umsetzung (2026-09-26)**: Die Logik liegt im reinen Modul
+`src/lib/wm/sessionSync.ts`, damit sie unter Node testbar ist. Der Store hält
+keinen eigenen `sessionRestore`-Ref, sondern delegiert (`restoreSessionAsync`,
+`setSessionRestore`, `getSessionRestore`). Einstellungsänderungen laufen über
+dieselbe Warteschlange wie das Speichern, statt wie geplant über
+`applySessionRestore` nachträglich übernommen zu werden. Eine zu große Sitzung
+meldet Rust als `HolziError::SessionTooLarge`.
+
 ## R8 Einstellungsansicht und Aktionen
 
 **Entscheidung**: Neue Komponente
@@ -206,6 +214,10 @@ Agenten aufrufbar (keine Leitplanke, Spec-Annahme). `settings.get` meldet die
 drei Werte mit.
 
 **Begründung**: Folgt dem vorhandenen Muster (Spec 002, Spec 020 FR-024).
+
+**Umsetzung (2026-09-26)**: Statt eines Schalters hat die Ansicht die Knöpfe
+„Einschalten“, „Ausschalten“ und „Zurücksetzen“, weil ein Schalter „nicht
+gesetzt“ nicht zeigen kann.
 
 ## R9 Tests
 

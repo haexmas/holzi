@@ -48,7 +48,11 @@ export type RestoredSession = {
 }
 
 /** Takes the current state and every tab's history as one snapshot. A tab without a history
- * entry (should not happen) is saved at its app's start location. */
+ * entry (should not happen) is saved at its app's start location.
+ *
+ * ponytail: every save writes the whole session, not just the window that changed (research R2).
+ * Sessions are a few KB and saves are debounced, so diffing would only add the relational model
+ * that spec 015 needed for sync. Oversized sessions fall back to `withoutHistories`. */
 export function snapshotSession(
   state: Pick<WmState, 'workspaces' | 'windows' | 'activeWorkspaceId'>,
   historyOf: (tabId: string) => TabHistory | undefined,

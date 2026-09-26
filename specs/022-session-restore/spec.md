@@ -255,7 +255,8 @@ Vault.
   liegt keine Sitzung in der Vault.
 - Ein anderes Gerät hat den Vault-Wert geändert, während dieses Gerät eine
   Vault-Session offen hat. Die Änderung gilt auf diesem Gerät spätestens ab dem
-  nächsten Öffnen; bis dahin gilt, was beim Öffnen galt.
+  nächsten Öffnen; bis dahin gilt, was beim Öffnen galt. Die Einstellungsansicht
+  zeigt schon den neuen Wert, also den, der ab dem nächsten Öffnen gilt.
 - Ein wiederhergestellter Tab steht an einem Ort, den es nicht mehr gibt (eine
   gelöschte Unterhaltung, eine Ansicht, die diese Version nicht kennt). Es gilt
   Spec 020: Der Tab zeigt die Startansicht seiner App mit Hinweis, und Einträge
