@@ -20,6 +20,8 @@ use uuid::Uuid;
 use crate::adapters::AdapterError;
 use crate::vault_gate::{ChildGuard, ChildRegistry};
 
+use super::DelegateVendor;
+
 const URL_TIMEOUT: Duration = Duration::from_secs(30);
 /// Generous: covers the time the user spends in the browser plus copying the
 /// code back.
@@ -312,7 +314,10 @@ pub async fn start_claude_connect(
         let child = pair.slave.spawn_command(cmd).map_err(|error| {
             if is_missing_binary(&error) {
                 AdapterError::Unavailable {
-                    reason: format!("\"{binary_owned}\" is not installed or not on PATH"),
+                    reason: format!(
+                        "\"{binary_owned}\" is not installed or not on PATH — {}",
+                        DelegateVendor::Claude.install_hint()
+                    ),
                 }
             } else {
                 AdapterError::Http {
