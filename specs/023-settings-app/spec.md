@@ -86,7 +86,7 @@ entfällt; die Kategorie „Föderation“ zeigt die Geräte der Vault.) Referen
   FR-017); deren Inhalt folgt mit US5.
 - Q: (Betreiber-Rückmeldung, Vorbild GNOME-Einstellungen) Was zeigt ein
   schmales Fenster statt der Symbolleiste? → A: Die Seitenleiste ist dort ganz
-  ausgeblendet; ein Symbol im Kopf öffnet sie über das ganze Fenster, die Wahl
+  ausgeblendet; ein Symbol in der Werkzeugleiste öffnet sie über den Inhalt, die Wahl
   einer Kategorie schließt sie wieder. In breiten Fenstern steht sie neben dem
   Inhalt und lässt sich über dasselbe Symbol ausblenden. Keiner der beiden
   Zustände wird gemerkt (FR-004).
@@ -94,6 +94,14 @@ entfällt; die Kategorie „Föderation“ zeigt die Geräte der Vault.) Referen
   oben in der Seitenleiste führt direkt zu passenden Orten und einzelnen
   Einstellungen; das hebt „keine Suche über alle Einstellungen“ aus „Nicht im
   Umfang“ auf (FR-023). Ein globales Zurücksetzen bleibt ausgeschlossen.
+- Q: (Betreiber-Rückmeldung, Vorbild COSMIC/GNOME) Wie sind Rahmen und Listen
+  gestaltet? → A: Die erste Zeile ist eine schmale Werkzeugleiste nur mit dem
+  Knopf für die Seitenleiste und der Suche (das Such-Symbol klappt dort zum
+  Suchfeld auf). Darunter stehen der große Titel und der Inhalt. Listen sind
+  abgerundete Gruppen mit fein getrennten Zeilen (Titel, Beschreibung, rechts
+  das Bedienelement); Übersichten zeigen je Bereich eine eigene abgerundete
+  Karte. Das ersetzt „ohne Karten-Rahmen“ aus der Rückmeldung nach US1; ohne
+  Überschriften und Beschreibungsabsätze bleibt es (FR-002).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -257,29 +265,29 @@ Kategorie „Föderation“ und listen die Geräte der Vault.
 
 Ein Nutzer verkleinert das Einstellungsfenster oder nutzt holzi im Kompaktmodus
 (Spec 015). Die Seitenleiste verschwindet, der Inhalt bekommt den ganzen Platz.
-Ein Symbol im Kopf öffnet die Seitenleiste über das ganze Fenster; die Wahl
+Ein Symbol in der Werkzeugleiste öffnet die Seitenleiste über den Inhalt; die Wahl
 einer Kategorie schließt sie wieder (wie in den GNOME-Einstellungen).
 
 **Why this priority**: Fenster lassen sich frei verkleinern, und im Kompaktmodus
 ist wenig Platz. Eine volle Seitenleiste würde den Inhalt dort erdrücken.
 
 **Independent Test**: Das Einstellungsfenster schrittweise schmaler ziehen: Ab
-einer bestimmten Breite verschwindet die Seitenleiste, das Symbol im Kopf öffnet
-sie als Vollbild-Menü, der Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
+einer bestimmten Breite verschwindet die Seitenleiste, das Symbol in der Werkzeugleiste
+öffnet sie als Vollbild-Menü, der Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
 
 **Acceptance Scenarios**:
 
 1. **Given** ein breites Einstellungsfenster, **When** es angezeigt wird,
    **Then** zeigt die Seitenleiste Symbol und Namen jeder Kategorie.
 2. **Given** das Fenster wird schmaler als eine feste Grenze, **When** es
-   angezeigt wird, **Then** ist die Seitenleiste ausgeblendet und der Kopf zeigt
-   ein Symbol zum Einblenden und eines für die Suche.
+   angezeigt wird, **Then** ist die Seitenleiste ausgeblendet; die
+   Werkzeugleiste zeigt weiter ihr Symbol und die Suche.
 3. **Given** ein schmales Fenster, **When** der Nutzer das Symbol wählt,
-   **Then** füllt die Seitenleiste das Fenster; die Wahl einer Kategorie oder
+   **Then** füllt die Seitenleiste den Platz unter der Werkzeugleiste; die Wahl einer Kategorie oder
    Escape schließt sie wieder.
 4. **Given** ein breites Fenster, **When** der Nutzer die Seitenleiste über ihr
-   Symbol ausblendet, **Then** bekommt der Inhalt die ganze Breite und der Kopf
-   zeigt das Symbol zum Einblenden.
+   Symbol ausblendet, **Then** bekommt der Inhalt die ganze Breite, und
+   dasselbe Symbol blendet sie wieder ein.
 5. **Given** die Breite des Fensters (nicht des Bildschirms), **When** sie sich
    ändert, **Then** entscheidet sie allein über die Darstellung der Seitenleiste.
 
@@ -318,19 +326,25 @@ sie als Vollbild-Menü, der Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
   Kategorien und rechts den Inhalt der gewählten Kategorie zeigen. Die
   Seitenleiste ist eine flache Liste ohne Gruppen; die gewählte Kategorie ist
   hervorgehoben.
-- **FR-002**: Jede Kategorie und jede Unteransicht MUSS oben einen Kopf mit
-  ihrem Titel haben. Vor dem Titel steht bei Unteransichten ein Zurück-Pfeil, bei
-  der Startseite einer Kategorie an derselben Stelle ihr Symbol, damit der Titel
-  nicht springt; eine Beschreibungszeile gibt es im Kopf nicht. Nur der Inhalt darunter scrollt. Der
-  Inhalt zeigt nur die Liste bzw. Einstellung, ohne eigene Überschriften,
-  Beschreibungsabsätze oder Karten-Rahmen, und steht auf breiten Fenstern
-  zentriert mit begrenzter Breite. Die Seitenleiste wechselt ihre Breite mit
-  einem Übergang.
+- **FR-002**: Die Einstellungen MÜSSEN oben eine schmale Werkzeugleiste haben,
+  die nur den Knopf für die Seitenleiste und die Suche enthält (FR-004,
+  FR-023). Jede Kategorie und jede Unteransicht MUSS darunter ihren Titel groß
+  zeigen. Vor dem Titel steht bei Unteransichten ein Zurück-Pfeil, bei der
+  Startseite einer Kategorie an derselben Stelle ihr Symbol, damit der Titel
+  nicht springt; eine Beschreibungszeile gibt es nicht. Nur der Inhalt unter
+  dem Titel scrollt. Der Inhalt zeigt Einstellungen und Listen als abgerundete
+  Gruppen mit fein getrennten Zeilen (Titel, eine Zeile Beschreibung, rechts
+  das Bedienelement), Übersichten als eine abgerundete Karte je Bereich, wie in
+  den COSMIC- und GNOME-Einstellungen; eigene Überschriften und
+  Beschreibungsabsätze gibt es nicht, nur einen kurzen Gruppennamen, wo eine
+  Ansicht mehrere Gruppen oder eine Auswahl hat. Der Inhalt steht auf breiten
+  Fenstern zentriert mit begrenzter Breite. Die Seitenleiste wechselt ihre
+  Breite mit einem Übergang.
 - **FR-003**: Eine Kategorie mit mehreren Bereichen MUSS eine Übersicht zeigen:
   eine Zeile je Bereich mit Symbol, Titel, einer Zeile Beschreibung und einem
   Pfeil. Eine Kategorie mit nur einem Bereich MUSS diesen direkt zeigen.
 - **FR-004**: Die Seitenleiste MUSS unterhalb einer festen Breite des Fensters
-  ausgeblendet sein; ein Symbol im Kopf öffnet sie über das ganze Fenster, die
+  ausgeblendet sein; ein Symbol in der Werkzeugleiste öffnet sie über den Inhalt, die
   Wahl einer Kategorie oder eines Suchtreffers und Escape schließen sie. Darüber
   steht sie neben dem Inhalt und lässt sich ausblenden. Maßgeblich ist die
   Breite des Einstellungsfensters, nicht die des Bildschirms; ob sie ein- oder
@@ -424,16 +438,17 @@ sie als Vollbild-Menü, der Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
   etwas starten, und nicht für Werte (Anbieter verbinden, Modell herunterladen,
   Update prüfen, Modell löschen). Das Vorbild ist „Sitzung wiederherstellen“
   (Spec 022 FR-004).
-- **FR-023**: Oben in der Seitenleiste MUSS ein Suchfeld stehen. Es findet Orte
-  über Titel, Beschreibung und hinterlegte Suchbegriffe und einzelne
-  Einstellungen über ihre Bezeichnung, ohne Rücksicht auf Groß- und
-  Kleinschreibung und Akzente; jedes Wort der Eingabe muss vorkommen. Treffer
-  ersetzen die Kategorien, zeigen Bezeichnung und Pfad (etwa „Modelle ›
-  Modelle herunterladen“) und führen per Klick oder Enter (erster Treffer) an
-  den Ort; danach ist das Feld leer. Escape leert das Feld. Orte mit
-  Parametern (ein HuggingFace-Repo) sind keine Treffer. Suchbegriffe liegen auf
-  Deutsch und Englisch vor (FR-020). Im Kopf öffnet ein Such-Symbol die
-  Seitenleiste mit dem Suchfeld, wenn sie ausgeblendet ist.
+- **FR-023**: Die Werkzeugleiste MUSS eine Suche haben: Ein Such-Symbol klappt
+  dort ein Suchfeld auf. Es findet Orte über Titel, Beschreibung und
+  hinterlegte Suchbegriffe und einzelne Einstellungen über ihre Bezeichnung,
+  ohne Rücksicht auf Groß- und Kleinschreibung und Akzente; jedes Wort der
+  Eingabe muss vorkommen. Treffer erscheinen in der Seitenleiste statt der
+  Kategorien (sie wird dafür eingeblendet), zeigen Bezeichnung und Pfad (etwa
+  „Modelle › Modelle herunterladen“) und führen per Klick oder Enter (erster
+  Treffer) an den Ort; danach ist die Suche geschlossen. Escape oder der
+  Knopf im Feld leeren es erst und schließen es dann. Orte mit Parametern (ein
+  HuggingFace-Repo) sind keine Treffer. Suchbegriffe liegen auf Deutsch und
+  Englisch vor (FR-020).
 
 ### Key Entities
 

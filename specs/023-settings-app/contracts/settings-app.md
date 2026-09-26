@@ -40,39 +40,51 @@ Route-Komponenten bekommen keine Props. Was eine Einstellung vom Gerät braucht
 ## 2. Gerüst (`components/apps/SettingsApp.vue`)
 
 ```text
-┌──────────────┬───────────────────────────────────────────┐
-│ Seitenleiste │ Kopf: [←] Titel                           │
-│  ⚙ Allgemein │       eine Zeile Beschreibung             │
-│  ◐ Darstell. ├───────────────────────────────────────────┤
-│  ▣ Modelle   │ Inhalt (WmRouterView, scrollt allein)     │
-│  ✦ Agenten   │                                           │
-│  ⇄ Föderation│                                           │
+┌──────────────────────────────────────────────────────────┐
+│ [▯] [⌕ Suchen…      ×]            Werkzeugleiste         │
+├──────────────┬───────────────────────────────────────────┤
+│ ⚙ Allgemein  │  [←] Titel                                │
+│ ◐ Darstell.  │  ╭───────────────────────────────────────╮│
+│ ▣ Modelle    │  │ Einstellung             [Bedienung]   ││
+│ ✦ Agenten    │  ├───────────────────────────────────────┤│
+│ ⇄ Föderation │  │ Einstellung             [Bedienung]   ││
+│              │  ╰───────────────────────────────────────╯│
 └──────────────┴───────────────────────────────────────────┘
 ```
 
-- Wurzel mit `@container`. Ab `@2xl` (672 px) steht die Seitenleiste (16rem,
-  Farbe `sidebar`) neben dem Inhalt; `wideHidden` blendet sie auf Breite 0
-  aus. Darunter liegt sie absolut über dem ganzen Rahmen, außerhalb des Bildes
-  und `invisible`; `menuOpen` schiebt sie herein, der Inhalt ist dann `inert`
+- Wurzel mit `@container`, zwei Zeilen: die Werkzeugleiste
+  (`settings/Toolbar.vue`) und darunter Seitenleiste und Inhalt.
+- **Werkzeugleiste**: nur der Knopf für die Seitenleiste (`aria-expanded`,
+  `aria-controls="settings-sidebar"`, Beschriftung „Seitenleiste ein-/
+  ausblenden“) und die Suche. Das Such-Symbol klappt dort ein Suchfeld auf
+  (FR-023); dessen Knopf „×“ und Escape leeren es erst und schließen es dann.
+  Der Knopf bleibt in beiden Breiten an derselben Stelle.
+- Ab `@2xl` (672 px) steht die Seitenleiste (16rem, abgerundet, Farbe
+  `muted`) neben dem Inhalt; `wideHidden` blendet sie auf Breite 0 aus.
+  Darunter liegt sie absolut über dem Inhalt, außerhalb des Bildes und
+  `invisible`; `menuOpen` schiebt sie herein, der Inhalt ist dann `inert`
   (FR-004). Beide Zustände sind lokal im Rahmen und werden nicht gemerkt;
   welcher gilt, liest der Rahmen an der berechneten `position` der Leiste ab
   (keine zweite Kopie der Schwelle). Wird das Fenster breit, schließt
   `menuOpen`. Breite und Verschiebung gehen mit 200 ms über (`motion-reduce`
-  schaltet den Übergang ab).
-- Kopf, wenn die Seitenleiste nicht zu sehen ist: links ein Symbol zum
-  Einblenden (`aria-expanded="false"`, `aria-controls="settings-sidebar"`) und
-  ein Such-Symbol, das die Leiste öffnet und das Suchfeld fokussiert. Beim
-  Öffnen geht der Fokus auf die aktive Kategorie, beim Schließen zurück auf das
-  Symbol im Kopf.
-- Die Ansichten zeigen nur Listen und Einstellungen: keine eigenen
-  Überschriften, Beschreibungsabsätze oder Karten-Rahmen; Listen sind Zeilen
-  mit Trennlinien.
+  schaltet den Übergang ab). Beim Einblenden geht der Fokus auf die aktive
+  Kategorie; Escape im schmalen Menü schließt es und gibt den Fokus an den
+  Knopf zurück.
+- **Listen** (`settings/Group.vue`, `settings/Row.vue`,
+  `settings/OptionRow.vue`): abgerundete Gruppen (`muted`) mit fein getrennten
+  Zeilen; eine Zeile hat optional Symbol, Titel, eine Zeile Beschreibung und
+  rechts das Bedienelement, das in schmalen Fenstern unter den Text umbricht.
+  Mit `to` ist die ganze Zeile ein Knopf mit Pfeil. Auswahl-Zeilen sind ganz
+  das Label ihres Optionsfelds oder Häkchens. Ein Gruppenname steht nur, wo
+  eine Ansicht mehrere Gruppen oder eine Auswahl hat. Keine eigenen
+  Überschriften oder Beschreibungsabsätze (FR-002).
 - **Seitenleiste** (`settings/Sidebar.vue`): eine Schaltfläche je Kategorie in
   Registerreihenfolge; hervorgehoben ist die Kategorie des aktuellen Orts
   (`aria-current="page"`). Ein Klick ist `router.push(category.path)`, auch wenn
   die Kategorie schon aktiv ist und eine Unteransicht offen ist (FR-010).
-- **Kopf**: nur der Titel des Orts (`locationFor`, Parameter eingesetzt), keine
-  Beschreibungszeile. Kopf und Inhalt teilen eine zentrierte Spalte
+- **Titel**: unter der Werkzeugleiste, groß; nur der Titel des Orts
+  (`locationFor`, Parameter eingesetzt), keine Beschreibungszeile. Titel und
+  Inhalt teilen eine zentrierte Spalte
   (`max-w-3xl`). Hat der Ort ein `parent`, steht links ein Zurück-Pfeil mit
   Beschriftung „Zurück zu <Titel des übergeordneten Orts>“; er führt
   `headerBack` aus: `back` → `router.back()`, `push` → `router.push(path)`
@@ -80,8 +92,8 @@ Route-Komponenten bekommen keine Props. Was eine Einstellung vom Gerät braucht
   Stelle und in derselben Größe das Symbol der Kategorie (`categoryOf`,
   dekorativ, `aria-hidden`), damit der Titel nicht springt.
 - **Inhalt**: `<WmRouterView />` auf Tiefe 1; nur dieser Bereich scrollt,
-  Kopf und Seitenleiste stehen (US1 AS3).
-- **Übersicht** (`settings/OverviewView.vue`): eine Zeile je
+  Werkzeugleiste, Titel und Seitenleiste stehen (US1 AS3).
+- **Übersicht** (`settings/OverviewView.vue`): eine abgerundete Karte je
   `overviewRows(category)`: Symbol, Titel, eine Zeile Beschreibung, Pfeil;
   Klick `router.push(row.path)` (FR-003).
 - Eine Unteransicht, deren Daten fehlen (gelöschtes Modell, getrennter
@@ -189,7 +201,7 @@ useColorScheme() → {
   Wort muss vorkommen. Rang: Bezeichnung beginnt mit der Eingabe, ein Wort der
   Bezeichnung beginnt damit, Bezeichnung enthält sie, nur Beschreibung oder
   Suchbegriffe; bei Gleichstand Reihenfolge der Registry.
-- Seitenleiste: oben Symbol zum Ausblenden und Suchfeld (`type="search"`);
-  Treffer ersetzen die Kategorien, Enter wählt den ersten, Escape leert das
-  Feld und schließt bei leerem Feld das Vollbild-Menü; nach der Wahl ist das
-  Feld leer.
+- Suchfeld in der Werkzeugleiste (`type="search"`); sobald es Text enthält,
+  zeigt der Rahmen die Seitenleiste mit den Treffern statt der Kategorien.
+  Enter wählt den ersten Treffer; nach der Wahl ist die Suche geschlossen und
+  das schmale Menü zu.

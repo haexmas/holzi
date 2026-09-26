@@ -127,7 +127,7 @@ Deep-Link.
 GNOME-Einstellungen): CSS-Container-Abfragen von Tailwind v4 (`@container` am
 Einstellungs-Gerüst). Ab `@2xl` (42rem, 672 px) steht die Seitenleiste (16rem)
 neben dem Inhalt und lässt sich ausblenden; darunter ist sie ausgeblendet und
-öffnet sich über ein Symbol im Kopf über den ganzen Rahmen. Die Lage kommt aus
+öffnet sich über den Knopf in der Werkzeugleiste über den Inhalt. Die Lage kommt aus
 CSS; der Rahmen liest beim Umschalten die berechnete `position` der Leiste, um
 zu wissen, welcher der zwei Zustände (`wideHidden`, `menuOpen`) gemeint ist.
 
@@ -344,7 +344,7 @@ abgelehnt).
 
 ## R13 Suche in den Einstellungen (FR-023)
 
-**Entscheidung**: Ein Suchfeld oben in der Seitenleiste. Gesucht wird in einem
+**Entscheidung**: Ein Suchfeld, das ein Such-Symbol in der Werkzeugleiste aufklappt; die Treffer stehen in der Seitenleiste. Gesucht wird in einem
 reinen Modul `lib/settings/search.ts` über die Registry: Titel, Beschreibung und
 Suchbegriffe jedes Orts ohne Parameter (`settings.categories.<id>.keywords`,
 `settings.locations.<id>.keywords`) und die Bezeichnungen einzelner

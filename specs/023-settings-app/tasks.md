@@ -189,6 +189,8 @@ description: 'Task list for spec 023-settings-app'
   - Done 2026-09-26 with T012/T013; the 360 px check is part of T054.
 - [x] T053a [US6] Replace the icon rail with the GNOME-style sidebar (research R4, revised): hidden below `@2xl` and opened over the whole frame from a header icon, hideable beside the content from `@2xl` up, states `wideHidden`/`menuOpen` in `SettingsApp.vue`, not kept
   - Done 2026-09-26 on operator feedback.
+- [x] T053c [US6] COSMIC/GNOME layout (FR-002): toolbar row with only the sidebar button and the search in `src/components/settings/Toolbar.vue`, large title below; boxed lists `src/components/settings/Group.vue`, `Row.vue`, `OptionRow.vue` in every settings view, overview rows as cards; `OverviewRow.vue` removed
+  - Done 2026-09-26 on operator feedback.
 - [x] T053b [US6] Settings search (FR-023, research R13): `keywordsKey`/`settingKeys` in `src/lib/settings/registry.ts`, `src/lib/settings/search.ts`, search field and hits in `Sidebar.vue`, keywords de/en, tests in `scripts/check-settings.ts`
   - Done 2026-09-26 on operator feedback.
 - [ ] T054 [US6] Operator: run quickstart S15 and S19
