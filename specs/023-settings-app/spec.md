@@ -70,13 +70,19 @@ entfällt; die Kategorie „Föderation“ zeigt die Geräte der Vault.) Referen
   Spracherkennungsmodells den Download? → A: Nein. Die Auswahl enthält nur
   installierte Modelle; nicht installierte haben einen Knopf „Herunterladen“
   (FR-021).
+- Q: (Betreiber-Rückmeldung nach US1) Wie viel Text zeigen Kopf und Ansichten?
+  → A: Der Kopf zeigt nur Zurück-Pfeil und Titel, keine Beschreibungszeile. Die
+  Ansichten zeigen nur ihre Liste bzw. Einstellung, ohne eigene Überschriften,
+  Beschreibungsabsätze oder Karten-Rahmen; Zeilen einer Übersicht behalten ihre
+  eine Zeile Beschreibung. Auf breiten Fenstern steht die Liste zentriert mit
+  begrenzter Breite. Die Seitenleiste gleitet beim Ändern der Fensterbreite.
 
 ## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Einstellungen nach Kategorien finden (Priority: P1)
 
 Ein Nutzer öffnet die Einstellungen. Links sieht er die Kategorien, rechts den
-Inhalt der ersten Kategorie mit Titel und einer Zeile Beschreibung. Er klickt
+Inhalt der ersten Kategorie unter ihrem Titel. Er klickt
 auf „Modelle“ und sieht dort alles, was Modelle betrifft, statt eine lange Seite
 mit allen Einstellungen durchzuscrollen.
 
@@ -96,8 +102,8 @@ Einstellung ist in genau einer Kategorie zu finden.
    Kategorie wählt, **Then** ist diese in der Seitenleiste hervorgehoben und ihr
    Inhalt ersetzt den vorherigen.
 3. **Given** eine Kategorie, **When** sie angezeigt wird, **Then** steht oben ihr
-   Titel und eine Zeile Beschreibung, darunter ihr Inhalt, der für sich scrollt,
-   während Kopf und Seitenleiste stehen bleiben.
+   Titel, darunter ihr Inhalt, der für sich scrollt, während Kopf und
+   Seitenleiste stehen bleiben.
 4. **Given** die Einstellungen vor dieser Spec, **When** der Nutzer eine
    beliebige frühere Einstellung sucht, **Then** findet er sie in genau einer
    Kategorie (Zuordnung in FR-005).
@@ -288,9 +294,13 @@ Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
   Kategorien und rechts den Inhalt der gewählten Kategorie zeigen. Die
   Seitenleiste ist eine flache Liste ohne Gruppen; die gewählte Kategorie ist
   hervorgehoben.
-- **FR-002**: Jede Kategorie und jede Unteransicht MUSS oben einen Kopf mit Titel
-  und einer Zeile Beschreibung haben; Unteransichten zusätzlich einen
-  Zurück-Pfeil. Nur der Inhalt darunter scrollt.
+- **FR-002**: Jede Kategorie und jede Unteransicht MUSS oben einen Kopf mit
+  ihrem Titel haben, Unteransichten zusätzlich einen Zurück-Pfeil; eine
+  Beschreibungszeile gibt es im Kopf nicht. Nur der Inhalt darunter scrollt. Der
+  Inhalt zeigt nur die Liste bzw. Einstellung, ohne eigene Überschriften,
+  Beschreibungsabsätze oder Karten-Rahmen, und steht auf breiten Fenstern
+  zentriert mit begrenzter Breite. Die Seitenleiste wechselt ihre Breite mit
+  einem Übergang.
 - **FR-003**: Eine Kategorie mit mehreren Bereichen MUSS eine Übersicht zeigen:
   eine Zeile je Bereich mit Symbol, Titel, einer Zeile Beschreibung und einem
   Pfeil. Eine Kategorie mit nur einem Bereich MUSS diesen direkt zeigen.
@@ -375,7 +385,7 @@ Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
 - **FR-019**: Die Aufteilung DARF keine Einstellung in ihrem Verhalten ändern
   (außer der Bedienung nach FR-021); alle Änderungen bleiben die bestehenden
   Aktionen aus Spec 020 und 022.
-- **FR-020**: Die Kategorien, ihre Titel und Beschreibungen MÜSSEN auf Deutsch
+- **FR-020**: Die Kategorien, die Titel der Orte und die Beschreibungen der Zeilen MÜSSEN auf Deutsch
   und Englisch vorliegen.
 - **FR-021**: Keine Einstellung DARF einen Knopf zum Speichern, Übernehmen oder
   Zurücksetzen haben. Auswahlen (Optionen, Auswahllisten, Schalter) MÜSSEN beim

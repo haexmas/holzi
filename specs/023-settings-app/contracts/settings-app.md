@@ -52,13 +52,18 @@ Route-Komponenten bekommen keine Props. Was eine Einstellung vom Gerät braucht
 
 - Wurzel mit `@container`; unter `@2xl` (672 px) ist die Seitenleiste 3.5rem
   breit und zeigt nur Symbole mit Tooltip, darüber 16rem mit Symbol und Name
-  (FR-004).
+  (FR-004). Breite und Deckkraft der Namen gehen mit 200 ms über
+  (`motion-reduce` schaltet den Übergang ab).
+- Die Ansichten zeigen nur Listen und Einstellungen: keine eigenen
+  Überschriften, Beschreibungsabsätze oder Karten-Rahmen; Listen sind Zeilen
+  mit Trennlinien.
 - **Seitenleiste** (`settings/Sidebar.vue`): eine Schaltfläche je Kategorie in
   Registerreihenfolge; hervorgehoben ist die Kategorie des aktuellen Orts
   (`aria-current="page"`). Ein Klick ist `router.push(category.path)`, auch wenn
   die Kategorie schon aktiv ist und eine Unteransicht offen ist (FR-010).
-- **Kopf**: Titel und Beschreibung aus dem Ort (`locationFor`), Parameter
-  eingesetzt. Hat der Ort ein `parent`, steht links ein Zurück-Pfeil mit
+- **Kopf**: nur der Titel des Orts (`locationFor`, Parameter eingesetzt), keine
+  Beschreibungszeile. Kopf und Inhalt teilen eine zentrierte Spalte
+  (`max-w-3xl`). Hat der Ort ein `parent`, steht links ein Zurück-Pfeil mit
   Beschriftung „Zurück zu <Titel des übergeordneten Orts>“; er führt
   `headerBack` aus: `back` → `router.back()`, `push` → `router.push(path)`
   (FR-009).

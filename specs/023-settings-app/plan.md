@@ -8,7 +8,7 @@
 
 Die Einstellungen bekommen den Aufbau aus haex-vault: links eine Seitenleiste
 mit den Kategorien Allgemein, Darstellung, Modelle, Agenten und Föderation,
-rechts ein Kopf mit Titel und Beschreibung und der Inhalt. Modelle und Agenten
+rechts ein Kopf mit dem Titel und darunter der Inhalt als zentrierte Liste. Modelle und Agenten
 zeigen eine Übersicht mit Unteransichten. Jede Ansicht ist ein Ort im Tab (Spec
 020). Neu ist ein Farbschema (Hell, Dunkel, System). Die eigene
 Föderations-App entfällt; alte Aufrufe führen in die Kategorie „Föderation“, die
