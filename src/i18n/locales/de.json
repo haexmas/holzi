@@ -283,7 +283,6 @@
         "device": "Nur auf diesem Gerät",
         "vault": "Auf allen Geräten dieser Vault"
       },
-      "otherDevicesOn": "Auf den anderen Geräten dieser Vault bleibt die Wiederherstellung eingeschaltet.",
       "saved": "Gespeichert.",
       "failed": "Die Einstellung konnte nicht geändert werden"
     },

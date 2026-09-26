@@ -283,7 +283,6 @@
         "device": "Only on this device",
         "vault": "On all devices of this vault"
       },
-      "otherDevicesOn": "Restoring stays on for the other devices of this vault.",
       "saved": "Saved.",
       "failed": "The setting could not be changed"
     },

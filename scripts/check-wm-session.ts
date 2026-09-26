@@ -366,16 +366,16 @@ test('each restore choice ends in a state that shows that choice, and staying on
             )
         }
         assert.equal(restoreChoice(state), choice)
-        if (restoreChoice(start) === choice && choice !== 'vault')
-          assert.deepEqual(restoreChoiceSteps(start, choice), [])
+        assert.deepEqual(restoreChoiceSteps(state, choice), [], 'idempotent')
       }
     }
   }
 })
 
-test('turning restore off while the vault value is on keeps it on for other devices', () => {
-  const state: RestoreState = { device: null, vault: true, effective: true }
+test('turning restore off clears the vault value too, so it is off on every device', () => {
+  const state: RestoreState = { device: false, vault: true, effective: false }
   assert.deepEqual(restoreChoiceSteps(state, 'off'), [
-    { scope: 'device', enabled: false },
+    { scope: 'vault', enabled: null },
+    { scope: 'device', enabled: null },
   ])
 })

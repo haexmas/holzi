@@ -152,20 +152,22 @@ Vor-/Zurück-Historie.
 ### User Story 3 - Für alle Geräte oder nur für dieses (Priority: P2)
 
 Eine Nutzerin verwendet ihre Vault auf ihrem Arbeitsrechner, ihrem Laptop und
-gelegentlich auf fremden Rechnern. Sie schaltet die Wiederherstellung für die
-ganze Vault ein, damit ihre eigenen Geräte ihre Sitzung behalten. Auf dem
-Laptop, den sie oft unterwegs nutzt, schaltet sie sie für dieses Gerät gezielt
-aus.
+gelegentlich auf fremden Rechnern. Sie schaltet die Wiederherstellung auf dem
+Arbeitsrechner nur für dieses Gerät ein; der Laptop und fremde Rechner beginnen
+weiter leer. Später schaltet sie sie für die ganze Vault ein, und jedes Gerät
+behält seine eigene Sitzung. „Aus“ schaltet sie wieder für alle Geräte aus.
 
 **Why this priority**: Wer mehrere eigene Geräte hat, soll die Einstellung nicht
-auf jedem einzeln setzen müssen. Die Ausnahme je Gerät ist aber nötig, sonst
-würde die Einstellung für die Vault auch auf Geräten gelten, auf denen man das
-nicht will.
+auf jedem einzeln setzen müssen. Wer nur einem Gerät traut, soll sie auf dieses
+Gerät beschränken können. Ein Gerät gezielt aus einer eingeschalteten Vault
+herauszunehmen bietet die Ansicht nicht an (Betreiberentscheidung 2026-09-26:
+„Aus“ heißt aus auf allen Geräten); die Aktionen können es weiterhin (AS2).
 
 **Independent Test**: Die Einstellung für die Vault einschalten und die Vault
 auf einem zweiten Gerät öffnen: Dort wird die Sitzung ebenfalls gespeichert,
-aber getrennt. Auf dem zweiten Gerät die Einstellung für dieses Gerät
-ausschalten: Dort beginnt jeder Start leer, das erste Gerät speichert weiter.
+aber getrennt. Auf dem zweiten Gerät „Aus“ wählen: Auf beiden Geräten beginnt
+jeder Start leer. Auf dem ersten Gerät „Nur auf diesem Gerät“ wählen: Nur dieses
+speichert.
 
 **Acceptance Scenarios**:
 
@@ -297,9 +299,10 @@ Vault.
   Übernehmen. Die Optionen setzen die beiden Werte so: „Auf allen Geräten“
   schaltet den Vault-Wert ein und entfernt den Gerätewert; „Nur auf diesem
   Gerät“ schaltet den Gerätewert ein und entfernt einen eingeschalteten
-  Vault-Wert; „Aus“ schaltet bei eingeschaltetem Vault-Wert nur dieses Gerät
-  aus (die anderen Geräte behalten ihre Wiederherstellung, die Ansicht sagt
-  das), sonst entfernt es den Gerätewert.
+  Vault-Wert; „Aus“ entfernt beide Werte und schaltet die Wiederherstellung
+  damit auf allen Geräten aus, die nicht selbst „Nur auf diesem Gerät“ gewählt
+  haben. Einen ausgeschalteten Gerätewert bei eingeschaltetem Vault-Wert
+  (US3 AS2) setzen nur die Aktionen; die Ansicht zeigt ihn als „Aus“.
 - **FR-005**: Eine Änderung der Einstellung MUSS auf diesem Gerät sofort
   wirken, ohne Neustart: Beginnt sie zu gelten, wird die aktuelle Sitzung ab
   sofort gespeichert; hört sie auf zu gelten, gilt FR-007.

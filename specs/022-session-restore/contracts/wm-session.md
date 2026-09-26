@@ -112,8 +112,6 @@ tut beides nichts.
   `restoreChoiceSteps(state, choice)` in `src/lib/wm/sessionSync.ts` die
   Aktionsaufrufe in einer Reihenfolge, in der eine eingeschaltete
   Wiederherstellung zwischendurch nie aus ist.
-- Ein Hinweis, wenn „Aus“ gewählt ist, der Vault-Wert aber an ist: Die anderen
-  Geräte stellen weiter wieder her.
 - Alle Änderungen laufen über `useActionOrThrow` (Spec 020 FR-024,
   `check:templates`).
 - i18n-Schlüssel unter `settings.sessionRestore.*` (de, en).

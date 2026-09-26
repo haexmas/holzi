@@ -60,10 +60,10 @@ export function restoreChoice(state: RestoreState): RestoreChoice {
 
 /**
  * The writes that turn `state` into `choice`, in an order that never makes
- * restore apply in between when the choice keeps it on. "Off" while the vault
- * value is on only turns this device off (`device: false`): other devices keep
- * their session. "Only this device" clears a vault value that is on, because
- * otherwise the view would still show "all devices".
+ * restore apply in between when the choice keeps it on. "Off" clears both
+ * values, so restore is off on every device of the vault that has no own
+ * "only this device" value. "Only this device" clears a vault value that is
+ * on, because otherwise the view would still show "all devices".
  */
 export function restoreChoiceSteps(
   state: RestoreState,
@@ -76,10 +76,9 @@ export function restoreChoiceSteps(
   } else if (choice === 'device') {
     if (state.device !== true) steps.push({ scope: 'device', enabled: true })
     if (state.vault === true) steps.push({ scope: 'vault', enabled: null })
-  } else if (state.vault === true) {
-    if (state.device !== false) steps.push({ scope: 'device', enabled: false })
-  } else if (state.device === true) {
-    steps.push({ scope: 'device', enabled: null })
+  } else {
+    if (state.vault !== null) steps.push({ scope: 'vault', enabled: null })
+    if (state.device !== null) steps.push({ scope: 'device', enabled: null })
   }
   return steps
 }

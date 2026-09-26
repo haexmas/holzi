@@ -218,7 +218,8 @@ drei Werte mit.
 **Umsetzung (2026-09-26)**: Statt Anzeige, Schalter und „Zurücksetzen“ hat die
 Ansicht eine einzige Auswahl „Aus / Nur auf diesem Gerät / Auf allen Geräten
 dieser Vault“, die beim Wählen speichert (Betreiber-Rückmeldung: keine Knöpfe
-zum Übernehmen). Die Zuordnung auf Geräte- und Vault-Wert steht in FR-004; die
+zum Übernehmen; „Aus“ heißt aus auf allen Geräten). Die Zuordnung auf Geräte-
+und Vault-Wert steht in FR-004; die
 Aktionen bleiben `set`/`clear` je Scope.
 
 ## R9 Tests

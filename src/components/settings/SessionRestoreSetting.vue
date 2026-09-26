@@ -32,10 +32,6 @@ const opError = ref<string | null>(null)
 const choice = computed(() =>
   restore.value ? restoreChoice(restore.value) : null,
 )
-/** "Off" here while the vault value is on: other devices keep restoring. */
-const otherDevicesOn = computed(
-  () => choice.value === 'off' && restore.value?.vault === true,
-)
 
 async function reloadAsync() {
   try {
@@ -108,9 +104,6 @@ onMounted(reloadAsync)
         </label>
       </fieldset>
 
-      <p v-if="otherDevicesOn" class="text-xs text-neutral-500">
-        {{ t('settings.sessionRestore.otherDevicesOn') }}
-      </p>
       <p v-if="savedFlash" class="text-xs text-green-600" role="status">
         {{ t('settings.sessionRestore.saved') }}
       </p>
