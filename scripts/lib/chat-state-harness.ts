@@ -192,7 +192,7 @@ const RETURN_STATEMENT = `
       editingThreadId, editTitleError, deleteCandidate, deleteError,
       composerInputDisabled, sendDisabled, pendingApprovals, streamingMessageId,
       streamingThreadId, lastError,
-      updatePermissionMode, permissionMode, permissionModeSaving,
+      updatePermissionMode, permissionMode, permissionModeSaving, syncFromLocation,
       addAttachments, attachments, lock };
 `
 

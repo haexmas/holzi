@@ -1,5 +1,5 @@
 // Validator for the JSON-schema subset actions use (spec 020-tab-navigation, T012, research R8):
-// `object` (strict — unknown keys are invalid), `properties`, `required`, `string`, `number`,
+// `object` (strict when `properties` is declared; otherwise any object), `properties`, `required`, `string`, `number`,
 // `integer`, `boolean`, `array` with `items`, `enum`, `description`. No dependency; anything
 // outside the subset is rejected by `isSchemaInSubset` so the catalog cannot drift into it.
 import type { JsonSchema } from './types.ts'
@@ -86,9 +86,11 @@ function validateAt(
     const record = value as Record<string, unknown>
     const properties = schema.properties ?? {}
     const prefix = field === '' ? '' : `${field}.`
-    for (const key of Object.keys(record)) {
-      if (!(key in properties))
-        return fail(`${prefix}${key}`, 'unknown property')
+    if (schema.properties) {
+      for (const key of Object.keys(record)) {
+        if (!(key in properties))
+          return fail(`${prefix}${key}`, 'unknown property')
+      }
     }
     for (const key of schema.required ?? []) {
       if (record[key] === undefined) return fail(`${prefix}${key}`, 'required')

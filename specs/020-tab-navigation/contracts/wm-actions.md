@@ -22,31 +22,31 @@ bekommt eine Aktion oder eine begründete `action-exempt:`-Ausnahme (R20).
 
 ### Shell (`binding: global`)
 
-| Id                                          | Ziel      | Bereich         | Wirkung     | Agent                     | Kürzel                                  |
-| ------------------------------------------- | --------- | --------------- | ----------- | ------------------------- | --------------------------------------- |
-| `wm.tab.back`                               | tab       | `wm.navigation` | write       | ja                        | Alt+ArrowLeft; mac + Meta+BracketLeft   |
-| `wm.tab.forward`                            | tab       | `wm.navigation` | write       | ja                        | Alt+ArrowRight; mac + Meta+BracketRight |
-| `wm.tab.go` (`steps`)                       | tab       | `wm.navigation` | write       | ja                        | –                                       |
-| `wm.tab.navigate` (`to`, `replace?`)        | tab       | `wm.navigation` | write       | ja                        | –                                       |
-| `wm.app.open` (`appId`, `at?`)              | none      | `wm.navigation` | write       | ja                        | –                                       |
-| `wm.tab.new` (`appId`, `at?`)               | window    | `wm.layout`     | write       | ja                        | –                                       |
-| `wm.tab.activate`                           | tab       | `wm.layout`     | write       | ja                        | –                                       |
-| `wm.tab.close`                              | tab       | `wm.layout`     | destructive | ja                        | –                                       |
-| `wm.window.focus`                           | window    | `wm.layout`     | write       | ja                        | –                                       |
-| `wm.window.minimize`                        | window    | `wm.layout`     | write       | ja                        | –                                       |
-| `wm.window.toggleMaximize`                  | window    | `wm.layout`     | write       | ja                        | –                                       |
-| `wm.window.close`                           | window    | `wm.layout`     | destructive | ja                        | –                                       |
-| `wm.window.moveToWorkspace` (`workspaceId`) | window    | `wm.layout`     | write       | ja                        | –                                       |
-| `wm.workspace.create`                       | none      | `wm.layout`     | write       | ja                        | –                                       |
-| `wm.workspace.switch`                       | workspace | `wm.layout`     | write       | ja                        | –                                       |
-| `wm.workspace.delete`                       | workspace | `wm.layout`     | destructive | ja                        | –                                       |
-| `wm.windows.overview`                       | none      | `wm.layout`     | write       | ja                        | –                                       |
-| `wm.launcher.open`                          | none      | `wm.layout`     | write       | ja                        | –                                       |
-| `wm.system.back`                            | none      | `wm.navigation` | write       | nein (nur Plattform-Hook) | –                                       |
-| `wm.state.get`                              | none      | `wm.read`       | read        | ja                        | –                                       |
-| `wm.tab.history`                            | tab       | `wm.read`       | read        | ja                        | –                                       |
-| `wm.apps.list`                              | none      | `wm.read`       | read        | ja                        | –                                       |
-| `wm.actions.list`                           | none      | `wm.read`       | read        | ja                        | –                                       |
+| Id                                            | Ziel      | Bereich         | Wirkung     | Agent                     | Kürzel                                  |
+| --------------------------------------------- | --------- | --------------- | ----------- | ------------------------- | --------------------------------------- |
+| `wm.tab.back`                                 | tab       | `wm.navigation` | write       | ja                        | Alt+ArrowLeft; mac + Meta+BracketLeft   |
+| `wm.tab.forward`                              | tab       | `wm.navigation` | write       | ja                        | Alt+ArrowRight; mac + Meta+BracketRight |
+| `wm.tab.go` (`steps`)                         | tab       | `wm.navigation` | write       | ja                        | –                                       |
+| `wm.tab.navigate` (`to`, `replace?`)          | tab       | `wm.navigation` | write       | ja                        | –                                       |
+| `wm.app.open` (`appId`, `at?`)                | none      | `wm.navigation` | write       | ja                        | –                                       |
+| `wm.tab.new` (`appId`, `at?`)                 | window    | `wm.layout`     | write       | ja                        | –                                       |
+| `wm.tab.activate`                             | tab       | `wm.layout`     | write       | ja                        | –                                       |
+| `wm.tab.close`                                | tab       | `wm.layout`     | destructive | ja                        | –                                       |
+| `wm.window.focus`                             | window    | `wm.layout`     | write       | ja                        | –                                       |
+| `wm.window.minimize`                          | window    | `wm.layout`     | write       | ja                        | –                                       |
+| `wm.window.toggleMaximize`                    | window    | `wm.layout`     | write       | ja                        | –                                       |
+| `wm.window.close`                             | window    | `wm.layout`     | destructive | ja                        | –                                       |
+| `wm.window.moveToWorkspace` (`toWorkspaceId`) | window    | `wm.layout`     | write       | ja                        | –                                       |
+| `wm.workspace.create`                         | none      | `wm.layout`     | write       | ja                        | –                                       |
+| `wm.workspace.switch`                         | workspace | `wm.layout`     | write       | ja                        | –                                       |
+| `wm.workspace.delete`                         | workspace | `wm.layout`     | destructive | ja                        | –                                       |
+| `wm.windows.overview`                         | none      | `wm.layout`     | write       | ja                        | –                                       |
+| `wm.launcher.open`                            | none      | `wm.layout`     | write       | ja                        | –                                       |
+| `wm.system.back`                              | none      | `wm.navigation` | write       | nein (nur Plattform-Hook) | –                                       |
+| `wm.state.get`                                | none      | `wm.read`       | read        | ja                        | –                                       |
+| `wm.tab.history`                              | tab       | `wm.read`       | read        | ja                        | –                                       |
+| `wm.apps.list`                                | none      | `wm.read`       | read        | ja                        | –                                       |
+| `wm.actions.list`                             | none      | `wm.read`       | read        | ja                        | –                                       |
 
 Fenster- und Tab-Schließen durch einen Agenten laufen durch dieselben Guards wie
 beim Nutzer (015 FR-014): Die Bestätigung erscheint beim Nutzer; lehnt er ab,
@@ -64,9 +64,14 @@ liefert die Aktion `failed` mit `message: "declined by user"`.
 | `chat.messages.list` (`threadId`)                  | `chat.read`  | read        | ja       |
 | `chat.message.send` (`text`)                       | `chat.write` | write       | ja       |
 | `chat.reply.cancel`                                | `chat.write` | write       | ja       |
-| `chat.model.select` (`modelId`)                    | `chat.write` | write       | ja       |
 | `chat.approval.decide` (`requestId`, `decision`)   | `guardrails` | write       | **nein** |
 | `chat.permissionMode.set` (`manual`/`auto`/`plan`) | `guardrails` | write       | **nein** |
+
+### Chat model preferences (`binding: global`)
+
+| Id                              | Bereich           | Wirkung | Agent |
+| ------------------------------- | ----------------- | ------- | ----- |
+| `chat.model.select` (`modelId`) | `settings.models` | write   | ja    |
 
 ### Einstellungen (`binding: global`)
 

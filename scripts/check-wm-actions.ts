@@ -24,6 +24,7 @@ const BUILTIN: ActionCaller = { kind: 'builtinAgent' }
 const EXTERNAL: ActionCaller = { kind: 'externalAgent', agentId: 'agent-1' }
 
 const EMPTY_OBJECT: JsonSchema = { type: 'object', properties: {} }
+const ANY_OBJECT: JsonSchema = { type: 'object' }
 
 function action(
   overrides: Partial<ActionDefinition> & { id: string },
@@ -32,7 +33,7 @@ function action(
     titleKey: `actions.${overrides.id}`,
     description: 'test action',
     input: EMPTY_OBJECT,
-    result: EMPTY_OBJECT,
+    result: ANY_OBJECT,
     target: 'none',
     scope: 'wm.layout',
     effect: 'write',
@@ -141,6 +142,12 @@ test('validate checks enums, arrays and booleans', () => {
   assert.equal(!badEnum.ok && badEnum.field, 'mode')
   const badItem = validate(schema, { ids: ['a', 2] })
   assert.equal(!badItem.ok && badItem.field, 'ids[1]')
+})
+
+test('validate allows arbitrary fields for an open object schema', () => {
+  assert.deepEqual(validate(ANY_OBJECT, { modelId: 'installed', size: 4 }), {
+    ok: true,
+  })
 })
 
 test('isSchemaInSubset rejects keywords outside the subset', () => {
@@ -257,6 +264,25 @@ test('a global action without a registered handler is failed, not a crash', asyn
   assert.equal(!outcome.ok && outcome.code, 'failed')
 })
 
+test('runAction rejects a handler result that does not match its schema', async () => {
+  const invalidResult = action({
+    id: 'test.invalid-result',
+    result: {
+      type: 'object',
+      properties: { done: { type: 'boolean' } },
+      required: ['done'],
+    },
+  })
+  const outcome = await createActionRunner(
+    harness({
+      catalog: [invalidResult],
+      globalHandler: () => () => ({ done: 'yes' }),
+    }).deps,
+  ).runAction(invalidResult.id)
+  assert.equal(!outcome.ok && outcome.code, 'failed')
+  assert.equal(!outcome.ok && outcome.field, 'done')
+})
+
 // ---------------------------------------------------------------------------
 // Shipped catalog invariants (catalog.ts)
 // ---------------------------------------------------------------------------
@@ -333,16 +359,19 @@ function sample(schema: JsonSchema): unknown {
 }
 
 function catalogRunner(calls: string[]) {
-  const record: ActionHandler = () => {
-    calls.push('handled')
-    return { done: true }
-  }
+  const record =
+    (id: string): ActionHandler =>
+    () => {
+      calls.push('handled')
+      const definition = ALL_ACTIONS.find((action) => action.id === id)
+      return definition ? sample(definition.result) : {}
+    }
   return createActionRunner({
     catalog: ALL_ACTIONS,
-    globalHandler: () => record,
+    globalHandler: (id) => record(id),
     resolveFocus: () => 'focused',
     targetExists: () => true,
-    awaitTabHandler: async () => record,
+    awaitTabHandler: async (_appId, id) => record(id),
   })
 }
 

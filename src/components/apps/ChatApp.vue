@@ -287,7 +287,7 @@ const {
 )
 
 // Spec 020: tab history, tab-bound chat actions, approval response and close guard (useChatTab).
-const { chatTitle, ui } = useChatTab({
+const { chatTitle, syncFromLocation, ui } = useChatTab({
   wmTab,
   router: useTabRouter(),
   runAction: wm.runAction,
@@ -354,6 +354,7 @@ onMounted(async () => {
 
     await modelStore.initialize()
     await refreshThreads()
+    await syncFromLocation()
   } catch (e: unknown) {
     if (!unmounted) lastError.value = errString(e)
   }

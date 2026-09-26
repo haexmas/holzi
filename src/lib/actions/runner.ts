@@ -137,7 +137,11 @@ export function createActionRunner(deps: ActionRunnerDeps) {
 
     try {
       const result = await handler({ input, caller, target })
-      return { ok: true, result: result ?? null }
+      const normalized = result ?? null
+      const validation = validate(action.result, normalized)
+      if (!validation.ok)
+        return failure('failed', validation.message, validation.field)
+      return { ok: true, result: normalized }
     } catch (error) {
       return {
         ok: false,

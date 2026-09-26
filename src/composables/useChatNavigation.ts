@@ -70,21 +70,28 @@ export function useChatNavigation(deps: {
     if (router.route.path !== expected) router.replace(expected)
   }
 
-  watch(
-    () => router.route.path,
-    async (path) => {
-      const threadId = threadIdOf(path)
-      if (threadId === activeThreadId.value) return
+  let threadsLoaded = false
+  async function applyLocation(path: string) {
+    const threadId = threadIdOf(path)
+    if (threadId === activeThreadId.value) return
+    if (threadId !== null && !threads.value.some((t) => t.id === threadId)) {
+      // The list is not loaded yet: decide once `syncFromLocation` runs.
+      if (!threadsLoaded) return
       // FR-027: an entry of a deleted conversation is skipped in travel direction.
-      if (threadId !== null && !threads.value.some((t) => t.id === threadId)) {
-        if (!router.skipCurrent()) router.replace('/')
-        return
-      }
-      if (threadId !== null) await deps.selectThread(threadId)
-      else await deps.newChat()
-      alignLocation()
-    },
-  )
+      if (!router.skipCurrent()) router.replace('/')
+      return
+    }
+    if (threadId !== null) await deps.selectThread(threadId)
+    else await deps.newChat()
+    alignLocation()
+  }
+  watch(() => router.route.path, applyLocation)
+
+  /** Call once the thread list has loaded: applies the location the tab started at. */
+  function syncFromLocation() {
+    threadsLoaded = true
+    return applyLocation(router.route.path)
+  }
 
   watch(activeThreadId, alignLocation)
 
@@ -96,5 +103,10 @@ export function useChatNavigation(deps: {
     { immediate: true },
   )
 
-  return { chatTitle, openConversation, startNewConversation }
+  return {
+    chatTitle,
+    openConversation,
+    startNewConversation,
+    syncFromLocation,
+  }
 }

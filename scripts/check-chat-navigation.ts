@@ -27,6 +27,7 @@ function chatWithRouter(overrides: Record<string, unknown> = {}) {
     { tabRouter },
   )
   state.threads.value = THREADS.map((thread) => ({ ...thread }))
+  void state.syncFromLocation()
   return { state, tabRouter }
 }
 
@@ -87,4 +88,13 @@ test('a conversation id that never existed falls back to the start location', as
   await flush()
   assert.equal(tabRouter.route.path, '/')
   assert.equal(state.activeThreadId.value, null)
+})
+
+test('an initial conversation location is applied after threads load', async () => {
+  const tabRouter = createRecordingTabRouter()
+  tabRouter.replace('/thread/a')
+  const state = createChatState({}, {}, {}, undefined, { tabRouter })
+  await state.mount()
+  assert.equal(state.activeThreadId.value, 'a')
+  assert.equal(tabRouter.route.path, '/thread/a')
 })

@@ -5,7 +5,8 @@
 import type { ActionScopeId } from './scopes.ts'
 
 /** The JSON-schema subset actions use (research R8) — the same format the built-in agent's
- * `ToolRegistry` and MCP `tools/list` expect. Objects are strict: unknown properties are invalid. */
+ * `ToolRegistry` and MCP `tools/list` expect. Objects with declared properties are strict;
+ * an object without `properties` accepts any object shape. */
 export type JsonSchema = {
   type: 'object' | 'string' | 'number' | 'integer' | 'boolean' | 'array'
   description?: string

@@ -53,16 +53,20 @@ export function useChatTab(deps: {
 }) {
   const { wmTab, state, runAction } = deps
 
-  const { chatTitle, openConversation, startNewConversation } =
-    useChatNavigation({
-      router: deps.router,
-      activeThreadId: state.activeThreadId,
-      threads: state.threads,
-      newChatLabel: deps.newChatLabel,
-      setTitle: wmTab.setTitle,
-      selectThread: deps.selectThread,
-      newChat: deps.newChat,
-    })
+  const {
+    chatTitle,
+    openConversation,
+    startNewConversation,
+    syncFromLocation,
+  } = useChatNavigation({
+    router: deps.router,
+    activeThreadId: state.activeThreadId,
+    threads: state.threads,
+    newChatLabel: deps.newChatLabel,
+    setTitle: wmTab.setTitle,
+    selectThread: deps.selectThread,
+    newChat: deps.newChat,
+  })
 
   async function respondToApproval(
     requestId: string,
@@ -179,6 +183,7 @@ export function useChatTab(deps: {
 
   return {
     chatTitle,
+    syncFromLocation,
     ui: {
       newConversation: () => run('chat.conversation.new'),
       openConversation: (threadId: string) =>
