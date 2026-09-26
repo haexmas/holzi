@@ -31,6 +31,11 @@ export type SettingsLocation = {
    * header shows no description (operator decision 2026-09-26). */
   descriptionKey?: string
   overviewRow: boolean
+  /** Synonyms the settings search matches besides title and description (FR-023); only locations
+   * without route params are searchable. */
+  keywordsKey?: string
+  /** Labels of the single settings on this location's view, each its own search hit (FR-023). */
+  settingKeys?: readonly string[]
 }
 
 function category(
@@ -55,13 +60,18 @@ export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
   category('federation', '/federation', 'lucide:share-2'),
 ]
 
-function categoryLocation(id: SettingsCategoryId): SettingsLocation {
+function categoryLocation(
+  id: SettingsCategoryId,
+  settingKeys?: readonly string[],
+): SettingsLocation {
   return {
     id,
     pattern: SETTINGS_CATEGORIES.find((c) => c.id === id)!.path.slice(1),
     category: id,
     titleKey: `settings.categories.${id}.title`,
     overviewRow: false,
+    keywordsKey: `settings.categories.${id}.keywords`,
+    settingKeys,
   }
 }
 
@@ -83,12 +93,18 @@ function subView(
       ? `settings.locations.${id}.description`
       : undefined,
     overviewRow: options.overviewRow ?? false,
+    keywordsKey: pattern.includes(':')
+      ? undefined
+      : `settings.locations.${id}.keywords`,
   }
 }
 
 /** Overview rows appear in this order. */
 export const SETTINGS_LOCATIONS: readonly SettingsLocation[] = [
-  categoryLocation('general'),
+  categoryLocation('general', [
+    'settings.alias.label',
+    'settings.sessionRestore.title',
+  ]),
   categoryLocation('appearance'),
   categoryLocation('models'),
   subView('models.default', 'models/default', 'models', {

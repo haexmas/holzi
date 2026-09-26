@@ -14,6 +14,7 @@ import {
   SETTINGS_LOCATIONS,
   settingsRoutePatterns,
 } from '../src/lib/settings/registry.ts'
+import { searchSettings } from '../src/lib/settings/search.ts'
 import {
   getAppDefinition,
   resolveAppAlias,
@@ -51,9 +52,26 @@ function flatKeys(tree: unknown, prefix = ''): Set<string> {
   return keys
 }
 
-function localeKeys(locale: 'de' | 'en'): Set<string> {
+function localeTree(locale: 'de' | 'en'): unknown {
   const url = new URL(`../src/i18n/locales/${locale}.json`, import.meta.url)
-  return flatKeys(JSON.parse(readFileSync(url, 'utf8')))
+  return JSON.parse(readFileSync(url, 'utf8'))
+}
+
+function localeKeys(locale: 'de' | 'en'): Set<string> {
+  return flatKeys(localeTree(locale))
+}
+
+/** A plain `t` over the German locale, without vue-i18n: params stay as `{name}`. */
+function germanT(): (key: string) => string {
+  const tree = localeTree('de')
+  return (key) => {
+    let node: unknown = tree
+    for (const part of key.split('.')) {
+      node = (node as Record<string, unknown> | undefined)?.[part]
+    }
+    if (typeof node !== 'string') throw new Error(`missing de key ${key}`)
+    return node
+  }
 }
 
 test('five categories in the order of FR-005, each at its own location', () => {
@@ -153,7 +171,17 @@ test('every registry text exists in German and English (FR-020)', () => {
         ? [location.titleKey, location.descriptionKey]
         : [location.titleKey],
     ),
+    ...SETTINGS_LOCATIONS.flatMap((location) => [
+      ...(location.keywordsKey ? [location.keywordsKey] : []),
+      ...(location.settingKeys ?? []),
+    ]),
     'settings.back',
+    'settings.search.label',
+    'settings.search.placeholder',
+    'settings.search.noResults',
+    'settings.search.open',
+    'settings.sidebar.show',
+    'settings.sidebar.hide',
   ]
   for (const locale of ['de', 'en'] as const) {
     const available = localeKeys(locale)
@@ -213,4 +241,45 @@ test('the removed federation app opens the settings at the federation category (
     at: null,
   })
   assert.ok(!WM_APPS.some((app) => app.id === 'system.federation'))
+})
+
+test('every location without route params is searchable', () => {
+  for (const location of SETTINGS_LOCATIONS) {
+    assert.equal(
+      location.keywordsKey !== undefined,
+      !location.pattern.includes(':'),
+      location.id,
+    )
+  }
+})
+
+test('the search finds locations by title, synonym and single setting (FR-023)', () => {
+  const t = germanT()
+  const first = (query: string) => searchSettings(query, t)[0]
+  assert.deepEqual(searchSettings('   ', t), [])
+  assert.deepEqual(searchSettings('xyzzy', t), [])
+
+  assert.equal(first('standard')?.path, '/models/default')
+  assert.equal(first('whisper')?.path, '/models/speech')
+  assert.equal(first('dunkel')?.path, '/appearance')
+
+  const alias = first('geratename')
+  assert.equal(alias?.label, 'Gerätename')
+  assert.equal(alias?.path, '/')
+  assert.deepEqual(alias?.trail, ['Allgemein'])
+
+  const search = first('huggingface suchen')
+  assert.equal(search?.path, '/models/download/search')
+  assert.deepEqual(search?.trail, ['Modelle', 'Modelle herunterladen'])
+
+  assert.ok(
+    searchSettings('modell', t).every((hit) => !hit.path.includes('/repo/')),
+  )
+})
+
+test('a title match ranks above a synonym match', () => {
+  const t = germanT()
+  const labels = searchSettings('sitzung', t).map((hit) => hit.label)
+  assert.deepEqual(labels, [t('settings.sessionRestore.title'), 'Allgemein'])
+  assert.equal(searchSettings('modelle', t)[0]?.path, '/models')
 })

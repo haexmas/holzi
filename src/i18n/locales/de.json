@@ -345,65 +345,88 @@
     "back": "Zurück zu {title}",
     "categories": {
       "general": {
-        "title": "Allgemein"
+        "title": "Allgemein",
+        "keywords": "Gerät Gerätename Name Sitzung wiederherstellen Fenster Tabs"
       },
       "appearance": {
-        "title": "Darstellung"
+        "title": "Darstellung",
+        "keywords": "Darstellung Farbschema hell dunkel System Theme Aussehen"
       },
       "models": {
-        "title": "Modelle"
+        "title": "Modelle",
+        "keywords": "Modelle LLM KI"
       },
       "agents": {
-        "title": "Agenten"
+        "title": "Agenten",
+        "keywords": "Agenten Delegaten Claude Codex"
       },
       "federation": {
-        "title": "Föderation"
+        "title": "Föderation",
+        "keywords": "Geräte Vault Synchronisation Sync"
       }
     },
     "locations": {
       "models": {
         "default": {
           "title": "Standard-Modell",
-          "description": "Welches Modell nach dem Öffnen der Vault geladen wird."
+          "description": "Welches Modell nach dem Öffnen der Vault geladen wird.",
+          "keywords": "Standard Chat Start laden"
         },
         "installed": {
           "title": "Installierte Modelle",
-          "description": "Modelle laden, aktualisieren und löschen."
+          "description": "Modelle laden, aktualisieren und löschen.",
+          "keywords": "installiert laden aktualisieren Update löschen entfernen"
         },
         "download": {
           "title": "Modelle herunterladen",
           "description": "Empfohlene Modelle oder eine Suche auf HuggingFace.",
           "search": {
             "title": "Auf HuggingFace suchen",
-            "description": "GGUF-Modelle auf HuggingFace finden."
+            "description": "GGUF-Modelle auf HuggingFace finden.",
+            "keywords": "HuggingFace suchen GGUF Quantisierung"
           },
           "repo": {
             "title": "{owner}/{name}"
-          }
+          },
+          "keywords": "herunterladen Download empfohlen HuggingFace"
         },
         "speech": {
           "title": "Sprach-zu-Text-Modell",
-          "description": "Das Modell für die Spracheingabe auf diesem Gerät."
+          "description": "Das Modell für die Spracheingabe auf diesem Gerät.",
+          "keywords": "Spracherkennung Spracheingabe Whisper Mikrofon Diktat STT"
         }
       },
       "agents": {
         "providers": {
           "title": "Abo verbinden",
-          "description": "Dein Claude-Code- oder Codex-Abo als Chat-Backend nutzen."
+          "description": "Dein Claude-Code- oder Codex-Abo als Chat-Backend nutzen.",
+          "keywords": "Abo Anbieter verbinden Claude Code Codex CLI"
         },
         "autonomy": {
           "title": "Autonomie für Delegaten",
-          "description": "Wie viel ein Delegat ohne Rückfrage tun darf."
+          "description": "Wie viel ein Delegat ohne Rückfrage tun darf.",
+          "keywords": "Autonomie Rückfrage bestätigen autonom"
         },
         "denyRules": {
           "title": "Verbotsregeln für Delegaten",
-          "description": "Aktionen, die auch im autonomen Modus tabu bleiben."
+          "description": "Aktionen, die auch im autonomen Modus tabu bleiben.",
+          "keywords": "verbieten Regeln tabu Befehle"
         }
       }
     },
     "downloadModels": {
       "recommended": "Empfohlene Modelle",
       "running": "Laufende Downloads"
+    },
+    "search": {
+      "label": "Einstellungen durchsuchen",
+      "placeholder": "Suchen",
+      "noResults": "Keine Einstellung gefunden.",
+      "open": "Einstellungen durchsuchen"
+    },
+    "sidebar": {
+      "show": "Seitenleiste einblenden",
+      "hide": "Seitenleiste ausblenden"
     }
   },
   "models": {
