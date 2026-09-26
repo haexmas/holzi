@@ -6,11 +6,12 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   ssr: false,
   srcDir: 'src/',
-  // haex-ui Nuxt layer — provides Shadcn* + Ui* components, i18n
-  // scaffolding, reka-ui config. Pinned by commit SHA so upstream
-  // changes never surprise our build. Layer declares its peers; we
-  // list them explicitly under `dependencies` below.
-  extends: ['github:haex-space/haextension/packages/haex-ui#dfdf944'],
+  // haex-ui Nuxt layer — provides Shadcn* + Ui* components and the theme
+  // tokens. Pinned by commit SHA so upstream changes never surprise our
+  // build. Layer declares its peers; we list them explicitly under
+  // `dependencies` below. It ships no i18n: pass translated labels to
+  // its components (e.g. `UiInputPassword` `labels`).
+  extends: ['github:haex-space/haextension/packages/haex-ui#db48f9a'],
   build: {
     transpile: ['reka-ui'],
   },

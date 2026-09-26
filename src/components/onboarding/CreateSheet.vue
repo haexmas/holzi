@@ -10,6 +10,13 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+// haex-ui ships German defaults only; pass the translated tooltips.
+const passwordLabels = computed(() => ({
+  show: t('onboarding.passwordField.show'),
+  hide: t('onboarding.passwordField.hide'),
+  copy: t('onboarding.passwordField.copy'),
+  copied: t('onboarding.passwordField.copied'),
+}))
 const { createAsync } = useInstance()
 
 const name = ref('')
@@ -87,7 +94,11 @@ async function onSubmit() {
           <ShadcnLabel for="create-passphrase">
             {{ t('onboarding.create.passphrase') }}
           </ShadcnLabel>
-          <UiInputPassword id="create-passphrase" v-model="passphrase" />
+          <UiInputPassword
+            id="create-passphrase"
+            v-model="passphrase"
+            :labels="passwordLabels"
+          />
         </div>
         <div class="space-y-1.5">
           <ShadcnLabel for="create-passphrase-confirm">
@@ -96,6 +107,7 @@ async function onSubmit() {
           <UiInputPassword
             id="create-passphrase-confirm"
             v-model="passphraseConfirm"
+            :labels="passwordLabels"
           />
         </div>
         <p v-if="error" class="text-sm text-destructive" role="alert">

@@ -59,6 +59,12 @@
       "downloadFailed": "Download fehlgeschlagen",
       "empty": "Keine Sprach-zu-Text-Modelle verfügbar.",
       "skip": "Später entscheiden"
+    },
+    "passwordField": {
+      "show": "Passwort anzeigen",
+      "hide": "Passwort verbergen",
+      "copy": "Kopieren",
+      "copied": "Kopiert!"
     }
   },
   "wm": {
