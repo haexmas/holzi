@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { invoke } from '@tauri-apps/api/core'
 import type { SttCatalogEntry } from '~/composables/useSttCatalog'
 
 const { t } = useI18n()
 const { errString } = useErrorString()
-const { getPrefAsync, setPrefAsync } = usePreferences()
+const { getPrefAsync } = usePreferences()
+const setStt = useActionOrThrow('settings.models.setStt')
 const { listAsync: listSttCatalogAsync } = useSttCatalog()
-const { listInstalledAsync, downloadFromCatalogAsync } = useSttModels()
+const { listInstalledAsync } = useSttModels()
 
 const props = defineProps<{
   deviceUuid: string
@@ -58,15 +58,11 @@ async function onSwitch() {
   savedFlash.value = false
   opError.value = null
   try {
-    const installed = await downloadFromCatalogAsync(selectedId.value)
-    await setPrefAsync(
-      { kind: 'device', uuid: props.deviceUuid },
-      PREF_KEY,
-      installed.id,
-    )
-    await invoke('invalidate_stt_model_cache')
-    activeId.value = installed.id
-    installedIds.value = new Set([...installedIds.value, installed.id])
+    const { modelId } = (await setStt({ catalogId: selectedId.value })) as {
+      modelId: string
+    }
+    activeId.value = modelId
+    installedIds.value = new Set([...installedIds.value, modelId])
     savedFlash.value = true
   } catch (e) {
     opError.value = errString(e)

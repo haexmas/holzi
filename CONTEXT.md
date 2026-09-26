@@ -119,16 +119,37 @@ as the preferences-key suffix and Rust/TypeScript identifier.
 Same value. "Gerätename" as German UI label. `alias` as the
 `known_devices` column and Rust/TypeScript identifier.
 
-**Shell / App / Fenster (Window) / Tab / Launcher** (spec 015):
-The desktop-shell concept, adopted from haex-vault. A **Workspace**
+**Window Manager (`wm`) / App / Fenster (Window) / Tab / Launcher** (spec 015):
+The in-app desktop concept, adopted from haex-vault. A **Workspace**
 (Arbeitsbereich) contains **Windows** (Fenster); each Window contains
 one or more **Tabs**, each Tab an instance of an **App** (Chat,
 Einstellungen, Föderation in this spec). The **Launcher** lists
 available Apps and opens them as Windows. "Fenster" and "Tab" as
-German UI labels; "window"/"tab"/"app" as code identifiers
-(`ShellWindow`, `ShellTab`, `ShellAppDefinition`). Not to be confused
-with the OS-level application window (singular, Tauri-managed) — the
-Shell is an in-app desktop rendered inside it.
+German UI labels; `wm` as the code prefix (`useWindowManagerStore`,
+`src/lib/wm/`, `src/components/wm/`, action ids `wm.*`, Tauri commands
+`wm_*`) and "window"/"tab"/"app" as identifiers (`WmWindow`, `WmTab`,
+`AppDefinition`). Not to be confused with the OS-level application window
+(singular, Tauri-managed); the window manager is an in-app desktop rendered
+inside it. Specs 015 and 020 call it **Shell**; it was renamed on
+2026-09-25 because "shell" also means the command line, which agents will
+be granted or denied access to (spec 021). Do not use "shell" for this
+concept in new code or specs.
+
+**Ort (Location) / Tab-Historie** (spec 020):
+Where a Tab stands inside its App: an app-relative path plus query
+(`/thread/<id>`, `/models?sort=size`), pure data (`TabLocation`). Each
+Tab keeps its own linear back/forward **Tab-Historie** (`TabHistory`),
+in memory only. "Ort" and "Verlauf" as German UI wording; never the
+webview's browser history, which holzi does not use as navigation state.
+
+**Aktion (Action) / Berechtigungsbereich (Scope) / Aufrufer (Caller)**
+(spec 020):
+Every state-changing control of the window manager and its Apps triggers a
+catalog **Aktion** (`ActionDefinition`, `runAction`) with a JSON
+schema, a target, a **Berechtigungsbereich** and an effect; the
+**Aufrufer** is the user, the built-in agent or an external agent.
+Actions in the `guardrails` scope are user-only.
+_Avoid_: "command" for these — in holzi "command" means Tauri commands.
 
 ### Internationalisierung (i18n)
 

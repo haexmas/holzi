@@ -61,14 +61,7 @@
       "skip": "Decide later"
     }
   },
-  "workspace": {
-    "modelPreload": {
-      "loading": "Preparing {modelName}…",
-      "ready": "{modelName} is ready",
-      "error": "The model could not be prepared"
-    }
-  },
-  "shell": {
+  "wm": {
     "workspaces": {
       "title": "Workspaces",
       "numbered": "Workspace {number}",
@@ -114,6 +107,16 @@
       "scrollRight": "Scroll tabs right",
       "alreadyOpen": "Already open",
       "listMenu": "All tabs"
+    },
+    "nav": {
+      "back": "Back",
+      "forward": "Forward",
+      "backList": "Earlier views",
+      "forwardList": "Later views",
+      "unknownLocation": "That view no longer exists. The app opened at its start."
+    },
+    "chat": {
+      "thread": "Conversation"
     }
   },
   "chat": {
@@ -522,6 +525,141 @@
       "modelRegistrationFailed": "The installation could not be completed.",
       "modelNotFound": "Model not found.",
       "generic": "Unknown error."
+    }
+  },
+  "actions": {
+    "wm": {
+      "tab": {
+        "back": "Back",
+        "forward": "Forward",
+        "go": "Jump in history",
+        "navigate": "Navigate in tab",
+        "new": "New tab",
+        "activate": "Activate tab",
+        "close": "Close tab",
+        "history": "Read tab history"
+      },
+      "system": {
+        "back": "System back"
+      },
+      "app": {
+        "open": "Open app"
+      },
+      "window": {
+        "focus": "Focus window",
+        "minimize": "Minimize window",
+        "toggleMaximize": "Maximize or restore window",
+        "setGeometry": "Move and resize window",
+        "close": "Close window",
+        "moveToWorkspace": "Move window to workspace"
+      },
+      "workspace": {
+        "create": "Create workspace",
+        "switch": "Switch workspace",
+        "delete": "Delete workspace"
+      },
+      "windows": {
+        "overview": "Open window overview"
+      },
+      "workspaces": {
+        "overview": "Open workspace overview"
+      },
+      "launcher": {
+        "open": "Open launcher"
+      },
+      "state": {
+        "get": "Read workspaces, windows and tabs"
+      },
+      "apps": {
+        "list": "List apps"
+      },
+      "actions": {
+        "list": "List actions"
+      }
+    },
+    "chat": {
+      "conversation": {
+        "new": "New conversation",
+        "open": "Open conversation",
+        "rename": "Rename conversation",
+        "delete": "Delete conversation"
+      },
+      "conversations": {
+        "list": "List conversations"
+      },
+      "messages": {
+        "list": "Read messages"
+      },
+      "message": {
+        "send": "Send message",
+        "retry": "Retry sending"
+      },
+      "reply": {
+        "cancel": "Cancel reply"
+      },
+      "approval": {
+        "decide": "Decide approval"
+      },
+      "permissionMode": {
+        "set": "Set permission mode"
+      },
+      "model": {
+        "select": "Choose model",
+        "retryLoad": "Retry loading model",
+        "downloadRecommended": "Download recommended model"
+      },
+      "reasoning": {
+        "set": "Set reasoning effort"
+      },
+      "modelIntegrity": {
+        "decide": "Resolve integrity check"
+      },
+      "voice": {
+        "setAutoSend": "Auto-send after dictation"
+      }
+    },
+    "settings": {
+      "get": "Read settings",
+      "models": {
+        "list": "List installed models",
+        "checkUpdates": "Check model updates",
+        "setDefault": "Set default model",
+        "clearDefault": "Clear default model",
+        "setStt": "Switch speech model",
+        "downloadCatalog": "Download catalog model",
+        "downloadFromHf": "Download model from HuggingFace",
+        "installUpdate": "Install model update",
+        "delete": "Delete model"
+      },
+      "device": {
+        "setAlias": "Rename device"
+      },
+      "delegate": {
+        "refreshModels": "Refresh provider models",
+        "connectProvider": "Connect provider",
+        "submitCode": "Submit sign-in code",
+        "setDenyRules": "Set deny rules"
+      },
+      "autonomy": {
+        "setMode": "Set autonomy mode"
+      }
+    },
+    "scopes": {
+      "wm": {
+        "layout": "Arrange windows and workspaces",
+        "navigation": "Open apps and navigate",
+        "read": "Read workspaces, windows and tabs"
+      },
+      "chat": {
+        "read": "Read chat",
+        "write": "Write chat"
+      },
+      "settings": {
+        "read": "Read settings",
+        "device": "Change device settings",
+        "models": "Manage models"
+      },
+      "guardrails": "Guardrails (user only)"
     }
   }
 }

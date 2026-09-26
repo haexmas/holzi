@@ -10,7 +10,8 @@
  *
  * Reads `useModelsStore` directly for its state (`catalogEntries`,
  * `downloadingId`, `downloadProgressBytes`/`downloadTotalBytes`,
- * `modelGroups`) and calls its `downloadCatalogEntry` action directly.
+ * `modelGroups`); downloads run the `chat.model.downloadRecommended` action
+ * (spec 020).
  */
 const { t } = useI18n()
 const modelStore = useModelsStore()
@@ -21,7 +22,7 @@ const {
   downloadTotalBytes,
   modelGroups,
 } = storeToRefs(modelStore)
-const { downloadCatalogEntry } = modelStore
+const downloadRecommended = useAction('chat.model.downloadRecommended')
 
 /** Maps a hardware-fit verdict to its localized display label. */
 function fitLabel(f: (typeof catalogEntries.value)[number]['fit']): string {
@@ -130,7 +131,7 @@ function downloadProgressPercent(
           <UiButton
             size="sm"
             :disabled="downloadingId !== null"
-            @click="downloadCatalogEntry(e)"
+            @click="downloadRecommended({ entryId: e.id })"
           >
             <template v-if="downloadingId === e.id">
               {{ humanBytes(downloadProgressBytes) }} /

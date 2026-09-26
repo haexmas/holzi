@@ -276,10 +276,19 @@ export function useComposer(
     void resetTextarea()
   }
 
+  /** Expands or collapses one message's reasoning accordion. */
+  function setReasoningExpanded(messageId: string, expanded: boolean) {
+    const next = new Set(expandedReasoning.value)
+    if (expanded) next.add(messageId)
+    else next.delete(messageId)
+    expandedReasoning.value = next
+  }
+
   return {
     send,
     abort,
     newChat,
+    setReasoningExpanded,
     onVoiceTranscript,
     activeAgentCount,
     lastAgentBatchSize,

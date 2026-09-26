@@ -1,7 +1,8 @@
 <script setup lang="ts">
 const { t } = useI18n()
 const { errString } = useErrorString()
-const { getPrefAsync, setPrefAsync } = usePreferences()
+const { getPrefAsync } = usePreferences()
+const setDenyRules = useActionOrThrow('settings.delegate.setDenyRules')
 
 const props = defineProps<{
   deviceUuid: string
@@ -66,11 +67,7 @@ async function onSave() {
   savedFlash.value = false
   opError.value = null
   try {
-    await setPrefAsync(
-      { kind: 'device', uuid: props.deviceUuid },
-      PREF_KEY,
-      JSON.stringify([...selected.value]),
-    )
+    await setDenyRules({ rules: [...selected.value] })
     savedFlash.value = true
   } catch (e) {
     opError.value = errString(e)

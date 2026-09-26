@@ -40,7 +40,7 @@ const emit = defineEmits<{
 const recording = defineModel<boolean>('recording', { default: false })
 
 const { t } = useI18n()
-const { getPrefAsync, setPrefAsync } = usePreferences()
+const { getPrefAsync } = usePreferences()
 
 const state = ref<RecordingState>('idle')
 const autoSend = ref(true)
@@ -91,18 +91,12 @@ onBeforeUnmount(() => {
   }
 })
 
+// Spec 020 FR-024: persisting the choice runs the `chat.voice.setAutoSend` action. Best-effort:
+// the toggle still reflects the user's choice for this session even if persisting it failed.
+const setAutoSend = useAction('chat.voice.setAutoSend')
 async function toggleAutoSend() {
   autoSend.value = !autoSend.value
-  try {
-    await setPrefAsync(
-      { kind: 'vault' },
-      AUTO_SEND_PREF_KEY,
-      String(autoSend.value),
-    )
-  } catch {
-    // Best-effort: the toggle still reflects the user's choice for this
-    // session even if persisting it failed.
-  }
+  await setAutoSend({ enabled: autoSend.value })
 }
 
 function structuredVoiceError(e: unknown): { kind?: unknown } | null {

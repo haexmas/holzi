@@ -69,7 +69,7 @@ test('the chat page lock() swallows a rejected close and shows no error', async 
   assert.deepEqual(page.effects, [])
 })
 
-test('the federation app onLock() flushes the Shell layout, asks for the close once, and does nothing else', async () => {
+test('the federation app onLock() flushes the window manager layout, asks for the close once, and does nothing else', async () => {
   const page = watchedPage()
   let closes = 0
   let flushes = 0
@@ -83,7 +83,7 @@ test('the federation app onLock() flushes the Shell layout, asks for the close o
         },
       }),
       useInstancesStore: () => page.instancesStore,
-      useShellStore: () => ({
+      useWindowManagerStore: () => ({
         flushAsync: async () => {
           flushes += 1
         },
@@ -111,7 +111,7 @@ test('the federation app onLock() swallows a rejected close', async () => {
         },
       }),
       useInstancesStore: () => page.instancesStore,
-      useShellStore: () => ({ flushAsync: async () => {} }),
+      useWindowManagerStore: () => ({ flushAsync: async () => {} }),
       navigateTo: page.navigateTo,
     },
   )

@@ -47,13 +47,13 @@ function onSelect(name: string) {
 /** Activates a newly created instance and opens its workspace-landing. */
 async function onCreated(name: string) {
   store.setActiveInstance(name)
-  await navigateTo(`/workspace/${encodeURIComponent(name)}`)
+  await navigateTo(`/workspace/${encodeURIComponent(name)}`, { replace: true })
 }
 
 /** Activates an unlocked instance and opens its workspace-landing. */
 async function onUnlocked(name: string) {
   store.setActiveInstance(name)
-  await navigateTo(`/workspace/${encodeURIComponent(name)}`)
+  await navigateTo(`/workspace/${encodeURIComponent(name)}`, { replace: true })
 }
 </script>
 

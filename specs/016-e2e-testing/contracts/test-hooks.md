@@ -30,6 +30,7 @@ They are part of this contract now: renaming one means updating the helpers in t
 | `data-testid="open-chat"`                                        | The Chat tile in the workspace app launcher                       | `src/components/shell/ShellLauncher.vue`                 | 1           |
 | `data-testid="lock-instance-sidebar"`                            | The lock button in the sidebar, shown from the `md` breakpoint up | `src/components/chat/ThreadSidebar.vue`                  | 1           |
 | `data-testid="lock-instance-header"`                             | The always-visible lock button in the chat header                 | `src/components/chat/ChatHeader.vue`                     | 1           |
+| `data-testid="nav-back"`, `data-testid="nav-forward"`            | A window's back/forward buttons (spec 020)                        | `src/components/shell/ShellNavButtons.vue`               | 1           |
 
 `data-instance-name` carries the instance's name, which is data, not interface text, so an entry can be
 found by name without reading what is displayed.

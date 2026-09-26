@@ -5,12 +5,12 @@
  * `Composer` (components, spec 015-workspace-shell T010-T013) — see their
  * own headers. What's left is orchestration: shared page-level state,
  * model-store wiring, permission/autonomy-mode persistence, `onMounted`
- * listener setup, and the Shell-app contract (`useShellTab`, T032).
+ * listener setup, and the window manager-app contract (`useWmTab`, T032).
  *
- * Moved from `pages/chat/[instance].vue` into a Shell app (T021): instance
+ * Moved from `pages/chat/[instance].vue` into a window manager app (T021): instance
  * name from `useInstancesStore()` (no route of its own anymore); `lock()`
- * flushes the Shell layout first (FR-027). Onboarding enforcement moved to
- * the Shell host page (T025).
+ * flushes the window manager layout first (FR-027). Onboarding enforcement moved to
+ * the window manager host page (T025).
  */
 import {
   computed,
@@ -25,8 +25,9 @@ import type { Message, SendMessageArgs } from '~/composables/useChat'
 import type { PendingApproval } from '~/components/chat/PermissionPrompt.vue'
 
 const instancesStore = useInstancesStore()
-const shell = useShellStore()
-const shellTab = useShellTab()
+const wm = useWindowManagerStore()
+const wmTab = useWmTab()
+const openApp = useAction('wm.app.open')
 const { t } = useI18n()
 const chat = useChat()
 const { closeAsync } = useInstance()
@@ -50,13 +51,10 @@ const {
   integrityActionError,
   lastError: modelLastError,
 } = storeToRefs(modelStore)
-const {
-  retryModelLoad,
-  onIntegrityLoadUntrusted,
-  onIntegrityRepairSource,
-  onIntegrityChooseOther,
-  onIntegrityDialogOpenChange,
-} = modelStore
+const { onIntegrityDialogOpenChange } = modelStore
+// Spec 020 FR-024: model retry and integrity decisions run their catalog actions.
+const retryLoad = useAction('chat.model.retryLoad')
+const decideIntegrity = useAction('chat.modelIntegrity.decide')
 
 const pendingApprovals = ref<PendingApproval[]>([])
 const unlisteners: UnlistenFn[] = []
@@ -213,14 +211,6 @@ const activeMessages = computed<Message[]>(() => {
   return messagesByThread.value[activeThreadId.value] ?? []
 })
 
-const chatTitle = computed(
-  () =>
-    (activeThreadId.value &&
-      threads.value.find((thread) => thread.id === activeThreadId.value)
-        ?.title) ||
-    t('chat.newChat'),
-)
-
 // Only the message area falls back to the catalog-download state, and only when no model is
 // installed/configured anywhere (spec 002 §FR-014 covers picking among models that DO exist).
 const showModelSelection = computed(() => noModelsInstalled.value)
@@ -233,20 +223,13 @@ async function scrollToBottom() {
 }
 
 /**
- * Flushes the Shell layout (FR-027), then asks the backend to close the vault. It replaces this
+ * Flushes the window manager layout (FR-027), then asks the backend to close the vault. It replaces this
  * page with a spinner and ends the process (spec 013), so nothing is navigated or cleared here and
  * a failed call has nothing to show.
  */
 async function lock() {
-  await shell.flushAsync()
+  await wm.flushAsync()
   await closeAsync().catch(() => {})
-}
-
-function setReasoningExpanded(messageId: string, expanded: boolean) {
-  const next = new Set(expandedReasoning.value)
-  if (expanded) next.add(messageId)
-  else next.delete(messageId)
-  expandedReasoning.value = next
 }
 
 /** Whether the active model resolves to a `cli_delegate` provider — the
@@ -266,6 +249,7 @@ const {
   send,
   abort,
   newChat,
+  setReasoningExpanded,
   onVoiceTranscript,
   activeAgentCount,
   lastAgentBatchSize,
@@ -302,34 +286,35 @@ const {
   pendingApprovalsByThread,
 )
 
-async function respondToApproval(
-  requestId: string,
-  decision: 'allow' | 'deny',
-) {
-  try {
-    await chat.respondToolPermissionAsync(requestId, decision)
-    pendingApprovals.value = pendingApprovals.value.filter(
-      (a) => a.requestId !== requestId,
-    )
-    if (pendingApprovals.value.length === 0) shellTab.clearAttention()
-  } catch (e: unknown) {
-    lastError.value = errString(e)
-  }
-}
-
-// FR-014: ask before closing with a reply running or a permission pending; confirmAsync reuses abort (spec 003).
-shellTab.registerCloseGuard(() => {
-  const hasActiveReply =
-    streamingMessageId.value !== null ||
-    turnSetupPending.value ||
-    pendingApprovals.value.length > 0
-  if (!hasActiveReply) return null
-  return {
-    reasonKey: 'shell.close.activeReply',
-    confirmAsync: async () => {
-      await abort()
-    },
-  }
+// Spec 020: tab history, tab-bound chat actions, approval response and close guard (useChatTab).
+const { chatTitle, syncFromLocation, ui } = useChatTab({
+  wmTab,
+  router: useTabRouter(),
+  runAction: wm.runAction,
+  chat,
+  errString,
+  newChatLabel: () => t('chat.newChat'),
+  state: {
+    activeThreadId,
+    threads,
+    input,
+    pendingApprovals,
+    lastError,
+    streamingMessageId,
+    turnSetupPending,
+    editingThreadId,
+    draftTitle,
+    editTitleError,
+    deleteCandidate,
+    deleteError,
+  },
+  selectThread,
+  saveThreadTitle,
+  confirmDelete,
+  send,
+  abort,
+  newChat,
+  updatePermissionMode,
 })
 
 onMounted(async () => {
@@ -348,11 +333,11 @@ onMounted(async () => {
             // A turn ending clears agent-activity state (FR-011, same signal that already clears
             // streamingMessageId/busy) and tab attention (R12) alike.
             resetAgentActivity()
-            shellTab.clearAttention()
+            wmTab.clearAttention()
             return handleTurnComplete(e)
           }),
           chat.onToolPermissionRequest((e) => {
-            shellTab.requestAttention()
+            wmTab.requestAttention()
             return handleToolPermissionRequest(e)
           }),
         ],
@@ -369,6 +354,7 @@ onMounted(async () => {
 
     await modelStore.initialize()
     await refreshThreads()
+    await syncFromLocation()
   } catch (e: unknown) {
     if (!unmounted) lastError.value = errString(e)
   }
@@ -401,16 +387,16 @@ onBeforeUnmount(() => {
       :history-duration-label="historyDurationLabel"
       :opening-time-label="openingTimeLabel"
       @update:draft-title="draftTitle = $event"
-      @new-chat="newChat"
-      @select-thread="selectThread"
+      @new-chat="ui.newConversation"
+      @select-thread="ui.openConversation"
       @start-editing="startEditing"
-      @save-title="saveThreadTitle"
+      @save-title="ui.saveTitle"
       @cancel-editing="cancelEditing"
       @request-delete="requestDelete"
       @close-delete-dialog="closeDeleteDialog"
-      @confirm-delete="confirmDelete"
+      @confirm-delete="ui.confirmDelete"
       @lock="lock"
-      @open-settings="shell.openApp('system.settings')"
+      @open-settings="openApp({ appId: 'system.settings' })"
     />
 
     <section class="min-w-0 flex-1 flex flex-col">
@@ -420,8 +406,8 @@ onBeforeUnmount(() => {
         :model-name="activeModel?.name || t('chat.model.notLoaded')"
         :busy="busy"
         @lock="lock"
-        @new-chat="newChat"
-        @open-settings="shell.openApp('system.settings')"
+        @new-chat="ui.newConversation"
+        @open-settings="openApp({ appId: 'system.settings' })"
       />
 
       <ChatStatusBanners
@@ -431,8 +417,8 @@ onBeforeUnmount(() => {
         :autonomy-preference-error="autonomyPreferenceError"
         :autonomy-preference-loading="autonomyPreferenceLoading"
         :loading-label="loadingLabel"
-        @retry-send="send(true)"
-        @retry-model-load="retryModelLoad"
+        @retry-send="ui.retrySend"
+        @retry-model-load="retryLoad()"
         @dismiss-error="dismissError"
         @retry-autonomy-mode="reloadAutonomyMode(deviceUuid)"
       />
@@ -471,12 +457,12 @@ onBeforeUnmount(() => {
           :permission-mode="permissionMode"
           :pending-approvals="pendingApprovals"
           :permission-disabled="!deviceUuid || permissionModeSaving"
-          @send="send()"
-          @abort="abort"
+          @send="ui.send"
+          @abort="ui.abort"
           @add-attachments="addAttachments"
           @remove-attachment="removeAttachment"
-          @update-permission-mode="updatePermissionMode"
-          @respond-approval="respondToApproval"
+          @update-permission-mode="ui.setPermissionMode"
+          @respond-approval="ui.respondApproval"
           @transcript="onVoiceTranscript"
         />
       </div>
@@ -491,9 +477,9 @@ onBeforeUnmount(() => {
       :busy="integrityBusy"
       :action-error="integrityActionError"
       @update:open="onIntegrityDialogOpenChange"
-      @load-untrusted="onIntegrityLoadUntrusted"
-      @repair-source="onIntegrityRepairSource"
-      @choose-other="onIntegrityChooseOther"
+      @load-untrusted="decideIntegrity({ decision: 'loadUntrusted' })"
+      @repair-source="decideIntegrity({ decision: 'repairSource' })"
+      @choose-other="decideIntegrity({ decision: 'chooseOther' })"
     />
   </main>
 </template>

@@ -4,7 +4,9 @@ import type { Provider, ProviderModel } from '~/composables/useProviders'
 
 const { t } = useI18n()
 const { errString } = useErrorString()
-const { getPrefAsync, setPrefAsync, clearPrefAsync } = usePreferences()
+const { getPrefAsync } = usePreferences()
+const setDefault = useActionOrThrow('settings.models.setDefault')
+const clearDefault = useActionOrThrow('settings.models.clearDefault')
 const { listInstalledAsync } = useModels()
 const { listAsync: listProvidersAsync, listModelsAsync } = useProviders()
 
@@ -137,12 +139,11 @@ async function onSave() {
   savedFlash.value = null
   opError.value = null
   opErrorKind.value = null
-  const scope =
-    selectedScope.value === 'device'
-      ? { kind: 'device' as const, uuid: props.deviceUuid }
-      : { kind: 'vault' as const }
   try {
-    await setPrefAsync(scope, PREF_KEY, selectedModelId.value)
+    await setDefault({
+      modelId: selectedModelId.value,
+      scope: selectedScope.value,
+    })
     if (selectedScope.value === 'device') {
       currentDeviceDefault.value = selectedModelId.value
     } else {
@@ -162,12 +163,8 @@ async function onClear() {
   savedFlash.value = null
   opError.value = null
   opErrorKind.value = null
-  const scope =
-    selectedScope.value === 'device'
-      ? { kind: 'device' as const, uuid: props.deviceUuid }
-      : { kind: 'vault' as const }
   try {
-    await clearPrefAsync(scope, PREF_KEY)
+    await clearDefault({ scope: selectedScope.value })
     if (selectedScope.value === 'device') {
       currentDeviceDefault.value = null
     } else {

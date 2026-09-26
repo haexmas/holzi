@@ -22,7 +22,7 @@ import { createRequire } from 'node:module'
 import { dirname, resolve as resolvePath } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
-import { nextTick } from 'vue'
+import { nextTick, reactive } from 'vue'
 
 /** Same shape the page's own `useI18n()` gets — see the bare-globals list below. */
 const useI18nDouble = () => ({ t: (key: string) => key })
@@ -192,7 +192,7 @@ const RETURN_STATEMENT = `
       editingThreadId, editTitleError, deleteCandidate, deleteError,
       composerInputDisabled, sendDisabled, pendingApprovals, streamingMessageId,
       streamingThreadId, lastError,
-      updatePermissionMode, permissionMode, permissionModeSaving,
+      updatePermissionMode, permissionMode, permissionModeSaving, syncFromLocation,
       addAttachments, attachments, lock };
 `
 
@@ -205,6 +205,74 @@ function storePath(name: string): string {
 export interface PageGlobals {
   instancesStore?: object
   navigateTo?: (to: string) => unknown
+  tabRouter?: RecordingTabRouter
+  /** Every `useAction(id)(input)` / `wm.runAction` call the page makes (spec 020). */
+  actionLog?: { id: string; input: Record<string, unknown> }[]
+  /** The tab-bound action handlers the page registers (spec 020). */
+  actionHandlers?: Map<
+    string,
+    (context: { input: Record<string, unknown> }) => unknown
+  >
+}
+
+/** A tab router double for the chat page (spec 020-tab-navigation): a real linear history of paths,
+ * reactive like the window manager's, with every call recorded in `log` (`push /x`, `replace /y`, `back`). */
+export type RecordingTabRouter = ReturnType<typeof createRecordingTabRouter>
+
+export function createRecordingTabRouter() {
+  const entries = ['/']
+  let index = 0
+  const state = reactive({
+    route: {
+      path: '/',
+      query: {} as Record<string, string>,
+      params: {} as Record<string, string>,
+      matched: [] as { path: string }[],
+    },
+    canGoBack: false,
+    canGoForward: false,
+    log: [] as string[],
+    entries,
+  })
+  function sync() {
+    state.route.path = entries[index] ?? '/'
+    state.canGoBack = index > 0
+    state.canGoForward = index < entries.length - 1
+  }
+  return Object.assign(state, {
+    push(to: string) {
+      state.log.push(`push ${to}`)
+      if (to === entries[index]) return
+      entries.splice(index + 1)
+      entries.push(to)
+      index = entries.length - 1
+      sync()
+    },
+    replace(to: string) {
+      state.log.push(`replace ${to}`)
+      entries[index] = to
+      sync()
+    },
+    setQuery() {},
+    back() {
+      state.log.push('back')
+      if (index > 0) index -= 1
+      sync()
+    },
+    forward() {
+      state.log.push('forward')
+      if (index < entries.length - 1) index += 1
+      sync()
+    },
+    skipCurrent() {
+      state.log.push('skip')
+      if (entries.length <= 1) return false
+      entries.splice(index, 1)
+      index = Math.max(0, index - 1)
+      sync()
+      return true
+    },
+  })
 }
 
 /** Boots the real chat page dependencies inside an isolated test sandbox. */
@@ -318,8 +386,12 @@ export function createChatState(
     'useChatPermissionMode',
     'registerChatSubscriptions',
     'useInstancesStore',
-    'useShellStore',
-    'useShellTab',
+    'useWindowManagerStore',
+    'useWmTab',
+    'useTabRouter',
+    'useChatNavigation',
+    'useAction',
+    'useChatTab',
     'useModelsStore',
     'storeToRefs',
     'navigateTo',
@@ -343,7 +415,14 @@ export function createChatState(
     req('~/composables/useChatPermissionMode').useChatPermissionMode,
     req('~/composables/useChatSubscriptions').registerChatSubscriptions,
     () => pageGlobals.instancesStore ?? {},
-    () => ({ flushAsync: async () => {}, openApp: () => {} }),
+    () => ({
+      flushAsync: async () => {},
+      openApp: () => {},
+      runAction: async (id: string, input: Record<string, unknown> = {}) => {
+        pageGlobals.actionLog?.push({ id, input })
+        return { ok: true, result: null }
+      },
+    }),
     () => ({
       tabId: '',
       windowId: '',
@@ -352,7 +431,24 @@ export function createChatState(
       setTitle: () => {},
       registerCloseGuard: () => () => {},
       closeSelf: () => {},
+      appId: 'system.chat',
+      openApp: () => {},
+      registerActionHandler: (
+        id: string,
+        handler: (context: { input: Record<string, unknown> }) => unknown,
+      ) => {
+        pageGlobals.actionHandlers?.set(id, handler)
+        return () => pageGlobals.actionHandlers?.delete(id)
+      },
     }),
+    () => pageGlobals.tabRouter ?? createRecordingTabRouter(),
+    req('~/composables/useChatNavigation').useChatNavigation,
+    (id: string) =>
+      async (input: Record<string, unknown> = {}) => {
+        pageGlobals.actionLog?.push({ id, input })
+        return { ok: true, result: null }
+      },
+    req('~/composables/useChatTab').useChatTab,
     () => modelStore,
     pinia.storeToRefs,
     pageGlobals.navigateTo ?? (() => {}),
