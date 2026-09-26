@@ -59,6 +59,12 @@
       "downloadFailed": "Download failed",
       "empty": "No speech-to-text models available.",
       "skip": "Decide later"
+    },
+    "passwordField": {
+      "show": "Show password",
+      "hide": "Hide password",
+      "copy": "Copy",
+      "copied": "Copied!"
     }
   },
   "wm": {
