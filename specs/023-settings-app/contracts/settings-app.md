@@ -66,7 +66,9 @@ Route-Komponenten bekommen keine Props. Was eine Einstellung vom Gerät braucht
   (`max-w-3xl`). Hat der Ort ein `parent`, steht links ein Zurück-Pfeil mit
   Beschriftung „Zurück zu <Titel des übergeordneten Orts>“; er führt
   `headerBack` aus: `back` → `router.back()`, `push` → `router.push(path)`
-  (FR-009).
+  (FR-009). Ohne `parent` (Startseite einer Kategorie) steht an derselben
+  Stelle und in derselben Größe das Symbol der Kategorie (`categoryOf`,
+  dekorativ, `aria-hidden`), damit der Titel nicht springt.
 - **Inhalt**: `<WmRouterView />` auf Tiefe 1; nur dieser Bereich scrollt,
   Kopf und Seitenleiste stehen (US1 AS3).
 - **Übersicht** (`settings/OverviewView.vue`): eine Zeile je

@@ -163,7 +163,7 @@ description: 'Task list for spec 023-settings-app'
 
 - [ ] T042 [P] [US5] Create `src-tauri/src/storage/known_devices_tests.rs` (declared in `src-tauri/src/storage/mod.rs` like `maintenance_tests`; real vault like `maintenance_tests.rs`): `list_devices` returns this installation's row, skips the `VAULT_SCOPE_UUID` row, returns a second inserted device with `alias = NULL` as `None`
 - [ ] T043 [P] [US5] Create `src-tauri/src/device/commands_tests.rs` (declared via `#[cfg(test)] #[path]` in `src-tauri/src/device/mod.rs`): the pure ordering helper puts the current device first, then the others by name case-insensitively, unnamed devices last, and marks exactly one `is_current`
-- [ ] T044 [P] [US5] Add `resolveAppAlias` tests to `scripts/check-settings.ts`: `system.federation` → `{ appId: 'system.settings', at: '/federation' }`; `system.chat` → `{ appId: 'system.chat', at: null }`; `system.federation` is not in `WM_APPS`
+- [x] T044 [P] [US5] Add `resolveAppAlias` tests to `scripts/check-settings.ts`: `system.federation` → `{ appId: 'system.settings', at: '/federation' }`; `system.chat` → `{ appId: 'system.chat', at: null }`; `system.federation` is not in `WM_APPS`
 
 ### Implementation
 
@@ -171,9 +171,10 @@ description: 'Task list for spec 023-settings-app'
 - [ ] T046 [US5] Implement the command `list_vault_devices` and `VaultDevicePayload { vault_device_uuid, alias, is_current }` (serde camelCase) with the ordering helper in `src-tauri/src/device/commands.rs`, register it in `src-tauri/src/lib.rs`; make T043 pass; `cargo fmt --check`, `lint:rust`, `cargo test` green
 - [ ] T047 [US5] Add `VaultDevice` and `listVaultDevicesAsync()` to `src/composables/useDevice.ts`; add the read action `settings.devices.list` (scope `settings.read`, effect `read`) to `settingsActions.ts` with a handler that omits a `null` alias; i18n `actions.settings.devices.list`
 - [ ] T048 [US5] Create `src/components/settings/FederationView.vue`: one row per device with name or "Unbenanntes Gerät" and the mark "Dieses Gerät", loaded when the category opens; i18n `settings.federation.*`
-- [ ] T049 [US5] Add `LEGACY_APP_ALIASES` and `resolveAppAlias` to `src/lib/wm/apps.ts` and remove `system.federation` from `WM_APPS`; resolve the alias before `knownApp` in `wm.app.open` and `wm.tab.new` in `src/stores/wmActionHandlers.ts` (an input `at` wins over the alias `at`); make T044 pass
-- [ ] T050 [US5] Remove the federation entry from `src/components/wm/appRoutes.ts`, delete `src/components/apps/FederationApp.vue`, its two tests in `scripts/check-vault-lifecycle.ts` and the i18n key `wm.apps.federation`; point `src/pages/federation/[instance].vue` at `?open=system.settings&at=/federation`
-- [ ] T051 [P] [US5] Add a note to `specs/015-workspace-shell/spec.md` next to FR-003/FR-004: the federation app is replaced by the settings category "Föderation" (spec 023)
+- [x] T049 [US5] Add `LEGACY_APP_ALIASES` and `resolveAppAlias` to `src/lib/wm/apps.ts` and remove `system.federation` from `WM_APPS`; resolve the alias before `knownApp` in `wm.app.open` and `wm.tab.new` in `src/stores/wmActionHandlers.ts` (an input `at` wins over the alias `at`); make T044 pass
+- [x] T050 [US5] Remove the federation entry from `src/components/wm/appRoutes.ts`, delete `src/components/apps/FederationApp.vue`, its two tests in `scripts/check-vault-lifecycle.ts` and the i18n key `wm.apps.federation`; point `src/pages/federation/[instance].vue` at `?open=system.settings&at=/federation`
+- [x] T051 [P] [US5] Add a note to `specs/015-workspace-shell/spec.md` next to FR-003/FR-004: the federation app is replaced by the settings category "Föderation" (spec 023)
+  - Done 2026-09-26 ahead of T042–T048 on operator request (the launcher still listed the federation app); the category stays empty until T048.
 - [ ] T052 [US5] Operator: run quickstart S13, S13a and S14
 
 ---

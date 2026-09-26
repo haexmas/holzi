@@ -76,6 +76,14 @@ entfällt; die Kategorie „Föderation“ zeigt die Geräte der Vault.) Referen
   Beschreibungsabsätze oder Karten-Rahmen; Zeilen einer Übersicht behalten ihre
   eine Zeile Beschreibung. Auf breiten Fenstern steht die Liste zentriert mit
   begrenzter Breite. Die Seitenleiste gleitet beim Ändern der Fensterbreite.
+- Q: (Betreiber-Rückmeldung) Der Titel im Kopf springt, je nachdem ob der
+  Zurück-Pfeil da ist. Was steht auf der Startseite einer Kategorie an seiner
+  Stelle? → A: Das Symbol der Kategorie, im selben Platz wie der Pfeil; der
+  Titel steht damit immer an derselben Stelle (FR-002).
+- Q: (Betreiber-Rückmeldung) Der Launcher zeigt noch „Föderation“. Wann
+  verschwindet die App? → A: Sofort, vor der Geräteliste: Die App entfällt aus
+  Launcher und Tab-Menü, alte Aufrufe öffnen die Kategorie „Föderation“ (FR-016,
+  FR-017); deren Inhalt folgt mit US5.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -295,8 +303,9 @@ Inhalt bleibt ohne waagerechtes Scrollen bedienbar.
   Seitenleiste ist eine flache Liste ohne Gruppen; die gewählte Kategorie ist
   hervorgehoben.
 - **FR-002**: Jede Kategorie und jede Unteransicht MUSS oben einen Kopf mit
-  ihrem Titel haben, Unteransichten zusätzlich einen Zurück-Pfeil; eine
-  Beschreibungszeile gibt es im Kopf nicht. Nur der Inhalt darunter scrollt. Der
+  ihrem Titel haben. Vor dem Titel steht bei Unteransichten ein Zurück-Pfeil, bei
+  der Startseite einer Kategorie an derselben Stelle ihr Symbol, damit der Titel
+  nicht springt; eine Beschreibungszeile gibt es im Kopf nicht. Nur der Inhalt darunter scrollt. Der
   Inhalt zeigt nur die Liste bzw. Einstellung, ohne eigene Überschriften,
   Beschreibungsabsätze oder Karten-Rahmen, und steht auf breiten Fenstern
   zentriert mit begrenzter Breite. Die Seitenleiste wechselt ihre Breite mit
