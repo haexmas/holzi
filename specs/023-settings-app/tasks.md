@@ -228,6 +228,7 @@ description: 'Task list for spec 023-settings-app'
 - [x] T067 Header back returns to the previous station in the same category, otherwise to the parent (FR-009, research R3 revised): `headerBack(history)` in `src/lib/settings/registry.ts`, label names the target, tests in `scripts/check-settings.ts`
   - Done 2026-09-26 on operator feedback (Modelle → Installierte Modelle → Modelle herunterladen came back to Modelle).
 - [ ] T068 haex-ui: readable unchecked switch in dark mode (upstream in haex-space/haextension), then bump the pin in `nuxt.config.ts`
+  - 2026-09-26: haex-space/haextension#61 open (unchecked thumb `bg-foreground`, track `bg-input/80` in dark mode, as in shadcn-vue); the pin bump follows the merge.
 - [ ] T066 Operator: run quickstart S20, S21 and S22
 
 ---
