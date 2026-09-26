@@ -26,6 +26,8 @@ wurden deshalb zusätzlich direkt im Code geprüft. Ergebnis:
 - **Kein Kandidat**: Kategorien-Register, Seitenleiste, Kopf mit Zurück,
   Farbschema-Anwendung. Es gibt kein Farbschema-Handling und keine
   Seitenleiste in holzi.
+- **Geräteliste** (R12): `storage/known_devices.rs` und `device/commands.rs`
+  werden erweitert; es gibt dort nur Lesen des eigenen Geräts und Umbenennen.
 - Zur späteren manuellen Prüfung vermerkt: Abfragen gegen einen veralteten
   Graphen.
 
@@ -50,6 +52,7 @@ Kindern, alle auf Tiefe 1:
 | `/agents/providers`                  | Anbieter verbinden                                 | Agenten     |
 | `/agents/autonomy`                   | Autonomiemodus                                     | Agenten     |
 | `/agents/deny-rules`                 | Deny-Regeln                                        | Agenten     |
+| `/federation`                        | Föderation: Geräte der Vault                       | Föderation  |
 
 - Der Start-Ort `/` eines neuen Tabs ist die erste Kategorie „Allgemein“
   (FR-010). Es gibt keinen zweiten Ort `/general` und keine Umleitung.
@@ -175,18 +178,18 @@ Ansichten); Fortschritt im Backend abfragen (neuer Befehl ohne Not).
   `components/apps/FederationApp.vue` und ihre Tests in
   `scripts/check-vault-lifecycle.ts` entfallen (FR-016, FR-018).
 - `lib/wm/apps.ts` bekommt `LEGACY_APP_ALIASES`:
-  `system.federation` → `{ appId: 'system.settings', at: '/' }` und
+  `system.federation` → `{ appId: 'system.settings', at: '/federation' }` und
   `resolveAppAlias(appId)`. `wm.app.open` und `wm.tab.new` lösen den Alias vor
   der Prüfung auf; damit führen der Deep-Link `?open=system.federation`, Agenten
-  und alte Aufrufe nach „Allgemein“ (FR-017).
+  und alte Aufrufe in die Kategorie „Föderation“ (FR-017).
 - `pages/federation/[instance].vue` leitet direkt auf
-  `?open=system.settings` um.
+  `?open=system.settings&at=/federation` um.
 - Ein gespeicherter Föderations-Tab (Spec 022) wird wie jede unbekannte App beim
   Wiederherstellen verworfen (Spec 015 FR-025); das deckt der bestehende Test
   für unbekannte Apps ab.
 
-**Begründung**: Kleinste Änderung, die jeden Weg abdeckt. Das Alias-Register
-erlaubt später, `system.federation` auf eine Kategorie „Föderation“ zu legen.
+**Begründung**: Kleinste Änderung, die jeden Weg abdeckt; die Kennung
+`system.federation` bleibt für Agenten und alte Links gültig.
 
 ## R8 Farbschema
 
@@ -264,8 +267,41 @@ Split bisher verhinderte (`downloadStates`, Abonnements), liegt nach R6 im Store
 **Begründung**: Complexity Tracking aus Spec 020; die Orte der Spec geben die
 Schnitte vor.
 
+## R12 Geräte der Vault (Kategorie „Föderation“)
+
+**Entscheidung**:
+
+- `storage/known_devices.rs` bekommt `list_devices(conn)`: alle Zeilen außer
+  der internen Vault-Bereichszeile (`installation_uuid = VAULT_SCOPE_UUID`, von
+  `identity::bootstrap` mit `first_seen = 0` angelegt), sortiert nach
+  `first_seen`.
+- Neuer Befehl `list_vault_devices` in `device/commands.rs`, registriert in
+  `lib.rs`: `Vec<VaultDevicePayload>` mit `vaultDeviceUuid`, `alias`
+  (`null` ohne Namen), `firstSeenMs` (Unix-Millisekunden, wie gespeichert) und
+  `isCurrent`; dieses Gerät zuerst. Wire-Form camelCase wie
+  `DeviceInfoPayload`, TypeScript-Typ von Hand in `useDevice.ts` (Muster des
+  Moduls).
+- Lese-Aktion `settings.devices.list` (Bereich `settings.read`, Wirkung
+  `read`), damit Agenten die Liste abrufen können (FR-022).
+- Ansicht `settings/FederationView.vue`: eine Zeile je Gerät mit Name oder
+  „Unbenanntes Gerät“, Datum des ersten Öffnens (lokal formatiert) und der
+  Markierung „Dieses Gerät“. Kein Umbenennen hier: der eigene Name steht in
+  „Allgemein“.
+- Die Liste wird beim Öffnen der Kategorie geladen; neue Geräte anderer
+  Rechner erscheinen, sobald ihre `known_devices`-Zeile synchronisiert ist und
+  die Kategorie erneut geöffnet wird (US5 AS4). Kein Live-Abonnement.
+
+**Begründung**: Betreiberentscheidung beim Plan-Review (Clarification). Die
+Daten liegen schon in der Vault; ein Lesebefehl genügt.
+
+**Alternativen**: Liste aus `settings.get` (vermischt Einstellungen mit einer
+Geräteliste); Live-Aktualisierung über Sync-Ereignisse (ohne Bedarf in der
+Spec).
+
 ## R11 Tests
 
+- **Neu `src-tauri/src/storage/known_devices_tests.rs`**: `list_devices` ohne
+  Vault-Bereichszeile, Sortierung nach `first_seen`, Gerät ohne Namen.
 - **Neu `scripts/check-settings.ts`** (`pnpm check:settings`, in CI): Register
   (eindeutige Kennungen und Pfade, jede Kategorie hat einen Ort, jeder Ort hat
   Titel und Beschreibung, Reihenfolge nach FR-005, `categoryOf` für jeden Ort),
