@@ -55,7 +55,11 @@ const instanceName = computed(() => {
 // query arrives later.
 const sessionRestored = ref(false)
 watch([sessionRestored, () => route.query.open], ([restored]) => {
-  if (restored) consumeDeepLink()
+  if (restored) {
+    void consumeDeepLink().catch((error: unknown) => {
+      console.error('[wm] consuming the deep link failed', error)
+    })
+  }
 })
 
 // Normally already set by the caller (pages/index.vue) before navigating
@@ -84,17 +88,25 @@ onMounted(async () => {
   sessionRestored.value = true
 })
 
-function consumeDeepLink() {
+async function consumeDeepLink(): Promise<void> {
   const open = route.query.open
   if (typeof open !== 'string' || open.length === 0) return
-  // Spec 020 FR-012/FR-013: `&at=<path>` opens the app at a location.
   const at = route.query.at
-  void wm.runAction('wm.app.open', {
+  const { open: _open, at: _at, ...rest } = route.query
+  // Remove the transport query before opening the app. Awaiting this replace
+  // keeps the address bar and the window-manager state in sync under slow CI
+  // webviews; otherwise the E2E check can observe the app before the query is
+  // gone and the deep link may be replayed by a later navigation.
+  await router.replace({ query: rest })
+
+  // Spec 020 FR-012/FR-013: `&at=<path>` opens the app at a location.
+  const outcome = await wm.runAction('wm.app.open', {
     appId: open,
     ...(typeof at === 'string' && at.length > 0 ? { at } : {}),
   })
-  const { open: _open, at: _at, ...rest } = route.query
-  void router.replace({ query: rest })
+  if (!outcome.ok) {
+    console.error('[wm] deep link action failed', outcome)
+  }
 }
 </script>
 
