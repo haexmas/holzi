@@ -2,7 +2,7 @@
 
 **Feature Branch**: `023-settings-app`
 **Created**: 2026-09-26
-**Status**: Draft
+**Status**: Implemented (T001–T074 done, 2026-09-27; open only the optional operator checks in T052: S13a with a second installation, S14)
 **Input**: Die Einstellungen von holzi bekommen den Aufbau aus haex-vault: links
 eine Seitenleiste mit Kategorien, rechts der Inhalt der gewählten Kategorie mit
 Titel und Beschreibung, Übersichten mit Unteransichten. Föderation wird eine
