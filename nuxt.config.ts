@@ -11,7 +11,7 @@ export default defineNuxtConfig({
   // build. Layer declares its peers; we list them explicitly under
   // `dependencies` below. It ships no i18n: pass translated labels to
   // its components (e.g. `UiInputPassword` `labels`).
-  extends: ['github:haex-space/haextension/packages/haex-ui#b8549be'],
+  extends: ['github:haex-space/haextension/packages/haex-ui#0407e10'],
   build: {
     transpile: ['reka-ui'],
   },

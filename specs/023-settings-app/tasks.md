@@ -255,11 +255,12 @@ description: 'Task list for spec 023-settings-app'
 **Independent Test**: `pnpm test:e2e --grep settings-`.
 
 - [x] T070 E2E scenarios `scripts/e2e/scenarios/settings-{categories,header-back,deep-links,color-scheme,narrow-window,search,save-on-selection}.test.ts` with helpers in `scripts/e2e/lib/settings.ts`; hooks `settings-title`/`data-location`, `data-location` on search hits, `data-value` on `SettingsSelect` entries, `settings-autonomy-*`, `settings-deny-*`, `data-app-id` on launcher tiles (contracts "Test-Hooks")
-  - Done 2026-09-27: all seven pass, the full suite 14 passed, 1 skipped (`relaunch-after-lock`, needs a relaunching build). The dark off switch's track measures 1.88:1 against its card; the scenario guards ≥ 1.5 (below the WCAG 3:1 for components — accepted by the operator after haex-space/haextension#62).
+  - Done 2026-09-27: all seven pass, the full suite 14 passed, 1 skipped (`relaunch-after-lock`, needs a relaunching build). The dark off switch's track measured 1.88:1 against its card at first; T073 raised it to 3:1.
 - [x] T071 Deep link while the workspace is mounted (FR-011): `pages/workspace/[instance].vue` watches `route.query.open` once the session is restored
   - Done 2026-09-27; covered by `settings-deep-links`.
-- [ ] T073 haex-ui: the unchecked switch track reaches 3:1 against its card (WCAG 1.4.11; it measured 1.88:1 dark, about 1.5:1 light): haex-space/haextension#63 with `muted-foreground/85` light and `/65` dark, then bump the pin and raise `settings-color-scheme` to ≥ 3 in both schemes
+- [x] T073 haex-ui: the unchecked switch track reaches 3:1 against its card (WCAG 1.4.11; it measured 1.88:1 dark, about 1.5:1 light): haex-space/haextension#63 with `muted-foreground/85` light and `/65` dark, then bump the pin and raise `settings-color-scheme` to ≥ 3 in both schemes
   - 2026-09-27: PR open; a build against a local copy of the layer measured 3.33:1 dark and 3.30:1 light, the scenario passed with the raised threshold.
+  - Done 2026-09-27: merged as `0407e10`, pin bumped; `settings-color-scheme` requires ≥ 3 in both schemes and measures 3.33:1 dark, 3.30:1 light against the pinned layer.
 - [x] T074 E2E scenario `scripts/e2e/scenarios/settings-federation.test.ts` for S13a without a second installation (FR-022): this device listed once, first, marked, with the name set in "Allgemein"; `settings.devices.list` returns the same; hooks `settings-device` (`data-current`) and `settings-device-current`
   - Done 2026-09-27.
 - [x] T072 Icons named only in TypeScript are bundled (`icon.clientBundle.scan.globInclude` with `.ts` in `nuxt.config.ts`): the e2e run showed the sidebar without category icons, the app fetched them from the iconify API

@@ -30,6 +30,20 @@ scenario('settings-color-scheme', {}, async (ctx) => {
   await instance.click('settings-category-appearance')
   await waitForLocation(instance, 'appearance')
 
+  // Non-text contrast of the off switch's track against its card, at least 3:1 (WCAG 1.4.11).
+  const trackContrast = async () => {
+    const ratio = await backgroundContrast(
+      instance,
+      '[data-testid="session-restore-switch"]',
+      'ul:has([data-testid="session-restore-switch"])',
+    )
+    assert.ok(
+      ratio >= 3,
+      `off switch track: contrast ${ratio.toFixed(2)} < 3 against its card`,
+    )
+    return ratio
+  }
+
   await choose(instance, 'settings-color-scheme', 'light')
   await ctx.waitFor('light', async () => !(await scheme(instance)).dark)
   assert.equal((await scheme(instance)).colorScheme, 'light')
@@ -70,21 +84,19 @@ scenario('settings-color-scheme', {}, async (ctx) => {
   await waitForLocation(instance, 'general')
   const alias = await textContrast(instance, '[data-testid="settings-alias"]')
   assert.ok(alias >= 4.5, `name field: contrast ${alias.toFixed(2)} < 4.5`)
-  const track = await backgroundContrast(
-    instance,
-    '[data-testid="session-restore-switch"]',
-    'ul:has([data-testid="session-restore-switch"])',
-  )
-  assert.ok(
-    track >= 1.5,
-    `off switch track: contrast ${track.toFixed(2)} against its card`,
-  )
+  const track = await trackContrast()
   ctx.step(`S20 readable in dark mode (switch track ${track.toFixed(2)})`)
 
-  // S12: the start page follows the system, the workspace brings the vault's choice back.
+  // The off switch's track also stands out from its card in the light scheme.
   await instance.click('settings-category-appearance')
   await choose(instance, 'settings-color-scheme', 'light')
   await ctx.waitFor('light again', async () => !(await scheme(instance)).dark)
+  await instance.click('settings-category-general')
+  await waitForLocation(instance, 'general')
+  const lightTrack = await trackContrast()
+  ctx.step(`switch track in light mode ${lightTrack.toFixed(2)}`)
+
+  // S12: the start page follows the system, the workspace brings the vault's choice back.
   await instance.navigate('tauri://localhost/')
   await ctx.waitFor('the start page follows the system', async () => {
     const path = await instance.exec<string>('return location.pathname')
