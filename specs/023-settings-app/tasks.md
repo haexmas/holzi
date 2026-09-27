@@ -193,9 +193,10 @@ description: 'Task list for spec 023-settings-app'
 - [x] T050 [US5] Remove the federation entry from `src/components/wm/appRoutes.ts`, delete `src/components/apps/FederationApp.vue`, its two tests in `scripts/check-vault-lifecycle.ts` and the i18n key `wm.apps.federation`; point `src/pages/federation/[instance].vue` at `?open=system.settings&at=/federation`
 - [x] T051 [P] [US5] Add a note to `specs/015-workspace-shell/spec.md` next to FR-003/FR-004: the federation app is replaced by the settings category "Föderation" (spec 023)
   - Done 2026-09-26 ahead of T042–T048 on operator request (the launcher still listed the federation app); the category stays empty until T048.
-- [ ] T052 [US5] Operator: run quickstart S13, S13a and S14
+- [x] T052 [US5] Operator: run quickstart S13, S13a and S14
   - 2026-09-27: S13 confirmed (no federation app in the launcher); S13a waits for T042–T048, S14 is optional.
   - 2026-09-27: S13a without a second installation runs as `settings-federation`; the part with a copied vault on a second installation and S14 stay open for the operator.
+  - Done 2026-09-27 (operator decision): the copied-vault part of S13a is dropped — holzi has no federation yet, and a copy only shows the `known_devices` rows the Rust tests already cover; a real multi-device check comes with the sync spec. S14 is dropped as a manual check: it needs a build from before this spec, and `check-wm-geometry.ts` covers dropping a tab whose app no longer exists.
 
 ---
 
