@@ -4,6 +4,11 @@
 conclusions are not lost and so the closed-federation work can avoid choices that would block this
 later.
 
+**Superseded in part** by [`2026-09-28-sync-architecture.md`](./2026-09-28-sync-architecture.md):
+rows are no longer scoped into spaces (spaces carry files only; data is shared per user), the
+separate federation identity is replaced by the vault identity, and the object-storage IAM sidecars
+are replaced. That document lists what is kept from here.
+
 **Relationship to existing documents**:
 
 - [`docs/design/founding.md`](../design/founding.md) §6 sketched cross-user sharing as a future
