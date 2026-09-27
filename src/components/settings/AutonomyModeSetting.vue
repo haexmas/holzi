@@ -30,7 +30,7 @@ const savedFlash = ref(false)
 const opError = ref<string | null>(null)
 const loadError = ref<string | null>(null)
 
-/** Reloads the device-scoped autonomy default, falling back to 'ungated'. */
+/** Reloads the vault-scoped autonomy default, falling back to 'ungated'. */
 async function reloadAsync() {
   loading.value = true
   loadError.value = null

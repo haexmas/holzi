@@ -43,6 +43,9 @@ export function useColorScheme() {
   /** Reads the vault's value once it is open; a read error leaves the system's scheme. */
   async function loadAsync(): Promise<void> {
     watchSystem()
+    // Do not display the previous vault's value while the new vault is loading.
+    scheme.value = 'system'
+    apply()
     const stored = await getPrefAsync({ kind: 'vault' }, COLOR_SCHEME_KEY)
     scheme.value = parseColorScheme(stored) ?? 'system'
     apply()

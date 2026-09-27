@@ -1,6 +1,6 @@
 //! Autonomy Mode (spec 009-autonomous-delegate-mode): `AutonomyMode`,
 //! `DenyCategory`, the per-vendor `evaluate_deny_rules` matcher, the
-//! `cli_delegate.deny_rules` vault preference (a device preference before
+//! `cli_delegate.deny_rules` vault preference (it was a device preference before
 //! spec 023, FR-024), and the reactive
 //! unsupported-mode error classifier. See
 //! `specs/009-autonomous-delegate-mode/data-model.md` for the full design.
@@ -20,7 +20,7 @@ use super::DelegateVendor;
 /// `ChatRequest::autonomy_mode`'s own `None` fallback in `chat/commands.rs`
 /// — but as of the 2026-09-19 amendment to spec 009 this is no longer the
 /// product-level default: the frontend now reads a real, persisted
-/// device-scoped preference (`chat.autonomy_mode`, `AutonomyModeSetting.vue`)
+/// vault-scoped preference (`chat.autonomy_mode`, `AutonomyModeSetting.vue`)
 /// defaulting to `Ungated` there, and always sends a concrete value for a
 /// `cli_delegate` model, so `unwrap_or_default()`'s `Standard` fallback below
 /// is only ever reached by a caller that omits `autonomy_mode` outright

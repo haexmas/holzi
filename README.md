@@ -34,6 +34,12 @@ specify init --here --ai claude --offline
 
 ### Local inference build
 
+When using the Linux Nix devShell, run Rust/Tauri commands through
+`scripts/with-nix-host-bridge.sh`. WebKitGTK 4.1 is intentionally provided by
+the host system because its helper binaries must match the host runtime; the
+host development package (for example `libwebkit2gtk-4.1-dev` on Debian/
+Ubuntu) must be installed. Outside the Nix devShell, the wrapper is a no-op.
+
 The default `cargo build` enables the `llm-cpu` feature, which pulls
 `mistralrs = 0.8.1` and its candle/tokio dependency tree. The first
 build downloads and compiles many crates; expect several minutes on a

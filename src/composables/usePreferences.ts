@@ -25,7 +25,7 @@ export interface ResolveDefaultModelResult {
 
 /**
  * Delegate autonomy posture (spec 009-autonomous-delegate-mode), stored as
- * the device-scoped `chat.autonomy_mode` preference. Shared here — rather
+ * the vault-scoped `chat.autonomy_mode` preference. Shared here — rather
  * than each reader re-declaring the literal union and hand-rolling its own
  * `=== 'standard' || === 'ungated' || === 'gated_permissive'` validation —
  * so `AutonomyModeSetting.vue` (the writer) and `[instance].vue` (a reader)

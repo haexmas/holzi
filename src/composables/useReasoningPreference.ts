@@ -47,7 +47,7 @@ export interface ReasoningPreferenceDeps {
 
 /**
  * The selected reasoning option for the displayed model, remembered per model
- * (per provider connection, since model ids are composite) and per device. It
+ * (per provider connection, since model ids are composite) and per vault. It
  * is a user preference kept apart from the provider facts in the capability
  * record: refreshing a provider never overwrites a choice, it only clears one
  * the model no longer offers.

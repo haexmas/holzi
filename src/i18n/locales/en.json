@@ -720,12 +720,10 @@
         "setMode": "Set autonomy mode"
       },
       "sessionRestore": {
-        "set": "Turn session restore on or off",
-        "clear": "Reset the session restore setting"
+        "set": "Turn session restore on or off"
       },
       "appearance": {
-        "setColorScheme": "Set the color scheme",
-        "clearColorScheme": "Reset the color scheme"
+        "setColorScheme": "Set the color scheme"
       },
       "devices": {
         "list": "List the vault's devices"

@@ -720,12 +720,10 @@
         "setMode": "Autonomie-Modus setzen"
       },
       "sessionRestore": {
-        "set": "Sitzung wiederherstellen ein- oder ausschalten",
-        "clear": "Einstellung „Sitzung wiederherstellen“ zurücksetzen"
+        "set": "Sitzung wiederherstellen ein- oder ausschalten"
       },
       "appearance": {
-        "setColorScheme": "Farbschema festlegen",
-        "clearColorScheme": "Farbschema zurücksetzen"
+        "setColorScheme": "Farbschema festlegen"
       },
       "devices": {
         "list": "Geräte der Vault auflisten"

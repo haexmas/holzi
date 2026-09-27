@@ -222,28 +222,28 @@ Ansichten); Fortschritt im Backend abfragen (neuer Befehl ohne Not).
 
 **Entscheidung**:
 
-- Präferenz `appearance.color_scheme` mit `light`, `dark` oder `system`, Gerät
-  vor Vault, ohne Wert `system` (FR-013, FR-014). Kein Backend-Code: Lesen und
-  Schreiben über die vorhandenen `get_pref`/`set_pref`/`clear_pref`.
+- Präferenz `appearance.color_scheme` mit `light`, `dark` oder `system` gilt
+  für die Vault (FR-013, FR-014, FR-024). Kein Backend-Befehl: Lesen und
+  Schreiben erfolgt über die vorhandenen `get_pref`/`set_pref`; die Migration
+  `fold_scoped_preferences` übernimmt alte Gerätewerte beim Öffnen.
 - Reines Modul `src/lib/settings/colorScheme.ts`: `parseColorScheme`,
-  `effectiveColorScheme({ device, vault })`, `isDark(scheme, systemDark)`.
-- Composable `useColorScheme` (modulweiter Zustand): hält beide Werte, hört auf
-  `prefers-color-scheme` und setzt die Klasse `dark` an `<html>` (das Theme des
-  haex-ui-Layers definiert `.dark`, `tailwind.css` hat die Variante).
-- Plugin `plugins/colorScheme.client.ts` wendet beim Start „System“ an (vor dem
-  Entsperren, FR-014); `pages/workspace/[instance].vue` lädt nach dem Öffnen die
-  Werte der Vault.
-- Aktionen `settings.appearance.setColorScheme` (`{ scope, scheme }`) und
-  `settings.appearance.clearColorScheme` (`{ scope }`), Bereich
-  `settings.device`, für Agenten aufrufbar (keine Leitplanke). Die Handler
-  aktualisieren den Zustand von `useColorScheme`, die App wechselt sofort
-  (SC-005). `settings.get` meldet `colorScheme` mit.
+  `isDark(scheme, systemDark)` und die Ergebnis-Projektion für `settings.get`.
+- Composable `useColorScheme` (modulweiter Zustand): hält den Vault-Wert, hört
+  auf `prefers-color-scheme` und setzt die Klasse `dark` an `<html>` (das Theme
+  des haex-ui-Layers definiert `.dark`, `tailwind.css` hat die Variante).
+- Das Plugin `plugins/colorScheme.client.ts` wendet beim Start „System“ an (vor
+  dem Entsperren, FR-014); `pages/workspace/[instance].vue` lädt nach dem
+  Öffnen den Vault-Wert. Ein Lesefehler lässt „System“ aktiv.
+- Die Aktion `settings.appearance.setColorScheme` (`{ scheme }`) ist für
+  Agenten aufrufbar (keine Leitplanke). Der Handler aktualisiert den Zustand,
+  die App wechselt sofort (SC-005). `settings.get` meldet `colorScheme` mit.
 - Alle Fenster des Window Managers liegen in einer Webview, eine Klasse genügt
   (US4 AS1).
 
-**Begründung**: Folgt dem Muster „Gerät vor Vault“ (Spec 002, 022); nutzt das
-vorhandene Theme. `@nuxtjs/color-mode` wäre eine neue Abhängigkeit für eine
-Klasse und eine Medienabfrage.
+**Begründung**: Die Betreiberentscheidung in R14 behandelt Einstellungen als
+Eigenschaften der Vault; nur Geräte-/Hardwarewerte bleiben gerätebezogen.
+Das vorhandene Theme genügt, `@nuxtjs/color-mode` wäre eine neue
+Abhängigkeit für eine Klasse und eine Medienabfrage.
 
 **Alternativen**: Farbschema im `localStorage` (liefe am Vault-Muster vorbei und
 wäre vor dem Entsperren eine Spur der Vault).
@@ -337,7 +337,7 @@ abgelehnt).
   Titel und Beschreibung, Reihenfolge nach FR-005, `categoryOf` für jeden Ort),
   `settingsRoutePatterns` gegen `matchRoute`, `headerBack` (vorige Station ist
   übergeordnet → zurück, mit Query; sonst `push`; Deep-Link-Fall),
-  `effectiveColorScheme`/`isDark`, `resolveAppAlias`, `tabTitleFor`, und dass
+  `isDark`, `resolveAppAlias`, `tabTitleFor`, und dass
   jeder
   i18n-Schlüssel des Registers in `de.json` und `en.json` existiert (FR-020;
   holzi schaltet die Sprache zur Laufzeit nicht um, eine manuelle Prüfung auf

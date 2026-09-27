@@ -28,9 +28,9 @@ Technischer Ansatz (Begründungen in [research.md](./research.md)):
 - **Schmale Fenster** (R4): Container-Abfragen, unter 672 px nur Symbole.
 - **Sofort speichern** (R5): Auswahlen beim Wählen, Textfelder beim Verlassen;
   „nicht festgelegt“ als Option statt Zurücksetzen-Knopf.
-- **Farbschema** (R8): Präferenz `appearance.color_scheme` (Gerät vor Vault),
-  Klasse `dark` an `<html>`, zwei neue Aktionen; kein neues Backend für die
-  Präferenz.
+- **Farbschema** (R8, R14): Präferenz `appearance.color_scheme` für die Vault,
+  Klasse `dark` an `<html>`, eine neue Aktion; alte Gerätewerte werden beim
+  Öffnen übernommen.
 - **Theme-Farben** (R9): rund 170 feste Farben auf Theme-Farben umstellen, damit
   das dunkle Schema überall lesbar ist; ein Check verhindert neue.
 - **Föderation** (R7, R12): App raus, Alias `system.federation` → Einstellungen
@@ -50,7 +50,7 @@ Tooltip), Tailwind v4 (Container-Abfragen), Pinia, vue-i18n, reka-ui
 
 **Storage**: Präferenz `appearance.color_scheme` in der vorhandenen Tabelle
 `preferences` über `get_pref`/`set_pref`/`clear_pref`; die Geräteliste aus
-`known_devices`; keine Migration
+`known_devices`; Migration alter Scope-Werte beim Öffnen
 
 **Testing**: neu `known_devices_tests.rs` (`cargo test --manifest-path
 src-tauri/Cargo.toml known_devices`); neu
@@ -74,7 +74,7 @@ aufgeteilt); Einstellungsänderungen nur über Katalog-Aktionen (Spec 020 FR-024
 `check:templates`); Aktions-Schemas ohne `null` (Spec 022); Route-Komponenten
 ohne Props
 
-**Scale/Scope**: 5 Kategorien, 14 Orte, 3 neue Aktionen, 1 neuer Tauri-Befehl,
+**Scale/Scope**: 5 Kategorien, 14 Orte, 2 neue Aktionen, 1 neuer Tauri-Befehl,
 rund 28 Dateien mit Farbumstellung
 
 ## Constitution Check
@@ -95,7 +95,7 @@ spaex-Constitution `.spaex/constitution.md`.
 | VII Relay-Ausfall blockiert lokale Arbeit nicht                            | ✅     | Rein lokal                                                                                                                                       |
 | VIII Keine Verheimlichung in Agent-Ausgaben                                | ✅     | –                                                                                                                                                |
 | Workflow: speckit-Stufen, PR auf `main`, Conventional Commits, kein Squash | ✅     | Spec über #144/#147; Plan im Topic-Branch `023-settings-app-plan`                                                                                |
-| ADR bei prinzipienrelevanter Entscheidung                                  | ✅     | Keine; ADR-0001 (gerätebezogene Daten) gilt für das Farbschema pro Gerät                                                                         |
+| ADR bei prinzipienrelevanter Entscheidung                                  | ✅     | Keine; die Betreiberentscheidung in R14 legt den Vault als Scope der Einstellungen fest                                                          |
 | Test-Code in separaten Dateien                                             | ✅     | `known_devices_tests.rs`, `device/commands_tests.rs`, `scripts/check-settings.ts`, Erweiterung von `check-vue-templates.ts`                      |
 | Worktree je Änderung                                                       | ✅     | `.worktrees/023-settings-app`                                                                                                                    |
 | 500-LoC-Grenze                                                             | ✅     | Löst die Ausnahme von `HuggingFaceModelManagement.vue` auf; neue Dateien klein                                                                   |
@@ -108,9 +108,9 @@ spaex-Constitution `.spaex/constitution.md`.
 **Ergebnis vor Phase 0**: kein Verstoß; die Graphify-Einschränkung ist eine
 Warnung nach der Regel für fehlgeschlagene oder unbrauchbare Abfragen.
 
-**Ergebnis nach Phase 1**: unverändert. Keine neue Abhängigkeit, keine
-Migration; ein Lesebefehl über eine vorhandene Tabelle, drei neue Aktionen
-(eine davon nur lesend).
+**Ergebnis nach Phase 1**: unverändert. Keine neue Abhängigkeit; die
+Migration übernimmt alte Scope-Werte beim Öffnen. Ein Lesebefehl über eine
+vorhandene Tabelle und zwei neue Aktionen (eine davon nur lesend).
 
 ## Project Structure
 
@@ -144,9 +144,9 @@ src/
 ├── composables/useDevice.ts       # listVaultDevicesAsync, VaultDevice
 ├── lib/settings/
 │   ├── registry.ts                # NEU: Kategorien, Orte, settingsRoutePatterns, locationFor, overviewRows, headerBack
-│   └── colorScheme.ts             # NEU: parseColorScheme, effectiveColorScheme, isDark
+│   └── colorScheme.ts             # NEU: parseColorScheme, isDark, Ergebnis-Projektion
 ├── lib/wm/apps.ts                 # system.federation raus; LEGACY_APP_ALIASES, resolveAppAlias; tabTitle, tabTitleFor
-├── lib/actions/settingsActions.ts # settings.appearance.setColorScheme / clearColorScheme, settings.devices.list
+├── lib/actions/settingsActions.ts # settings.appearance.setColorScheme, settings.devices.list
 ├── composables/useColorScheme.ts  # NEU: Zustand, Klasse `dark`, Medienabfrage
 ├── plugins/colorScheme.client.ts  # NEU: „System“ beim Start
 ├── stores/

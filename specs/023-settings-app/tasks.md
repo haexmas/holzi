@@ -146,22 +146,22 @@ description: 'Task list for spec 023-settings-app'
 
 ### Tests first
 
-- [x] T033 [P] [US4] Write color-scheme tests in `scripts/check-settings.ts` (fail until T035): `parseColorScheme` accepts `light`/`dark`/`system` and maps anything else to `null`; `effectiveColorScheme` device over vault, both unset → `system`; `isDark('system', true)` true, `isDark('system', false)` false, `isDark('light', true)` false
+- [x] T033 [P] [US4] Write color-scheme tests in `scripts/check-settings.ts` (fail until T035): `parseColorScheme` accepts `light`/`dark`/`system` and maps anything else to `null`; `isDark('system', true)` true, `isDark('system', false)` false, `isDark('light', true)` false
   - Done 2026-09-26, plus a test that `toColorSchemeResult` leaves unset values out.
 - [x] T034 [P] [US4] Add a palette-color denylist to `scripts/check-vue-templates.ts` (research R9): `(text|bg|border|ring|divide|fill|stroke|outline|from|to|via)-(white|black|neutral|gray|slate|zinc|stone|red|green|amber|yellow|blue|emerald|orange|sky|indigo|rose)` with optional shade and opacity in any `.vue` under `src/`; it fails now with about 170 hits; commit it together with T040 so no commit is red in CI
   - Done 2026-09-26 in the same commit as T040; a planted `text-neutral-500` fails the check.
 
 ### Implementation
 
-- [x] T035 [US4] Implement `src/lib/settings/colorScheme.ts` (`parseColorScheme`, `effectiveColorScheme`, `isDark`); make T033 pass
+- [x] T035 [US4] Implement `src/lib/settings/colorScheme.ts` (`parseColorScheme`, `isDark` and the `settings.get` projection); make T033 pass
   - Done 2026-09-26, plus `COLOR_SCHEME_KEY`, `colorSchemeState` and `toColorSchemeResult`.
-- [x] T036 [US4] Implement `src/composables/useColorScheme.ts` per contracts §4: module-level state, `loadAsync(deviceUuid)` reading `appearance.color_scheme` for both scopes via `usePreferences`, `setAsync(scope, scheme | null)`, applying the `dark` class on `document.documentElement` and following `matchMedia('(prefers-color-scheme: dark)')` while `system` applies
+- [x] T036 [US4] Implement `src/composables/useColorScheme.ts` per contracts §4: module-level state, vault-only `loadAsync()`/`setAsync(scheme)`, applying the `dark` class on `document.documentElement` and following `matchMedia('(prefers-color-scheme: dark)')` while `system` applies
   - Done 2026-09-26 with a deviation from contracts §4 (updated there): `loadAsync()` takes no argument and reads the device id itself, like `setAsync`, and `startSystem()` applies the system scheme before unlock.
-- [x] T037 [P] [US4] Create `src/plugins/colorScheme.client.ts` that applies `system` at start (before unlock, FR-014); call `useColorScheme().loadAsync(...)` in `src/pages/workspace/[instance].vue` after opening, leaving `system` on a read error
+- [x] T037 [P] [US4] Create `src/plugins/colorScheme.client.ts` that applies `system` at start (before unlock, FR-014); call `useColorScheme().loadAsync()` in `src/pages/workspace/[instance].vue` after opening, leaving `system` on a read error
   - Done 2026-09-26.
-- [x] T038 [US4] Add `settings.appearance.setColorScheme` and `settings.appearance.clearColorScheme` to `src/lib/actions/settingsActions.ts` (scope `settings.device`, agent-callable, result without `null` per contracts §3), handlers in `src/stores/settingsActionHandlers.ts` calling `useColorScheme().setAsync`, and `colorScheme` in `settings.get`; i18n `actions.settings.appearance.*`
+- [x] T038 [US4] Add `settings.appearance.setColorScheme` to `src/lib/actions/settingsActions.ts` (agent-callable, result without `null` per contracts §3), handler in `src/stores/settingsActionHandlers.ts` calling `useColorScheme().setAsync`, and `colorScheme` in `settings.get`; i18n `actions.settings.appearance.*`
   - Done 2026-09-26; `settings.get` returns `colorScheme` from the loaded state.
-- [x] T039 [US4] Create `src/components/settings/ColorSchemeSetting.vue`: selects "Dieses Gerät" (Wie alle Geräte / Hell / Dunkel / System) and "Alle Geräte" (System / Hell / Dunkel), saved on selection through the two actions; "Dieses Gerät: Wie alle Geräte" and "Alle Geräte: System" call `clearColorScheme`, the view never sends `system` for the vault (contracts §3); i18n `settings.colorScheme.*`
+- [x] T039 [US4] Create `src/components/settings/ColorSchemeSetting.vue`: select Hell/Dunkel/System for the current Vault and save on selection through `settings.appearance.setColorScheme`; i18n `settings.colorScheme.*`
   - Done 2026-09-26 in the boxed-list style (group "Farbschema", rows "Dieses Gerät" and "Alle Geräte dieser Vault" reusing `settings.default.*Label`); wired as the view of `appearance` in `appRoutes.ts`; the search finds it as "Farbschema".
 - [x] T040 [US4] In its own commit (`refactor(ui): use theme colors instead of palette colors`), replace the palette colors in the ~28 Vue files per the mapping in research R9; make T034 pass; `check:templates`, `typecheck`, `lint`, `format:check` green
   - Done 2026-09-26 (`refactor(ui): use theme colors instead of palette colors`): only about 40 palette colors in 16 files were left, the settings views had lost theirs in the COSMIC restyle. Extra mappings beyond research R9: `border-blue-500/20` → `border-primary/20`, `hover:border-blue-500` → `hover:border-primary`, `bg-blue-100/70` → `bg-primary/10`, `hover:bg-black/10 dark:hover:bg-white/10` → `hover:bg-foreground/10`.
