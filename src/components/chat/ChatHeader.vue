@@ -31,7 +31,7 @@ const { t } = useI18n()
         <div class="flex items-center gap-2">
           <div
             class="h-2 w-2 rounded-full"
-            :class="modelLoaded ? 'bg-emerald-500' : 'bg-muted-foreground/40'"
+            :class="modelLoaded ? 'bg-success' : 'bg-muted-foreground/40'"
           />
           <h1 class="truncate text-sm font-semibold">{{ title }}</h1>
         </div>

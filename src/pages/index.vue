@@ -75,7 +75,7 @@ async function onUnlocked(name: string) {
 
     <OnboardingInstancesList :instances="store.instances" @select="onSelect" />
 
-    <p v-if="store.lastError" class="text-sm text-red-500" role="status">
+    <p v-if="store.lastError" class="text-sm text-destructive" role="status">
       {{ store.lastError }}
     </p>
 

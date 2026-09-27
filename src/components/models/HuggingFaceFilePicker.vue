@@ -1,26 +1,31 @@
 <script setup lang="ts">
-import type { UnlistenFn } from '@tauri-apps/api/event'
+/**
+ * File choice of one HuggingFace repository, the location `/models/download/repo/:owner/:name`
+ * (spec 005, spec 023 research R1/R10). `?files=a.gguf,b.gguf` limits the list to the files that
+ * matched the search filters; without it (a deep link) every GGUF file is offered. Progress comes
+ * from the download store, so it survives leaving the view.
+ */
 import type {
   HuggingFaceFileCandidate,
   HuggingFaceModelResult,
   InstallPreview,
 } from '~/composables/useHuggingFace'
 import type { InstalledModel } from '~/composables/useModels'
+import { humanBytes } from '~/lib/models/format'
 
 const { t } = useI18n()
+const router = useTabRouter()
 const { detailsAsync, previewInstallAsync } = useHuggingFace()
-const { onDownloadProgress, onDownloadComplete } = useModels()
 const downloadFromHf = useActionOrThrow('settings.models.downloadFromHf')
+const downloads = useModelDownloadsStore()
 
-const props = defineProps<{
-  repoId: string
-  allowedFilenames?: string[]
-}>()
-
-const emit = defineEmits<{
-  installed: [model: InstalledModel]
-  back: []
-}>()
+const repoId = computed(
+  () => `${router.route.params.owner ?? ''}/${router.route.params.name ?? ''}`,
+)
+const allowedFilenames = computed(() => {
+  const files = router.route.query.files
+  return files ? files.split(',').filter((name) => name.length > 0) : null
+})
 
 const details = ref<HuggingFaceModelResult | null>(null)
 const detailsErrorKey = ref<string | null>(null)
@@ -37,24 +42,19 @@ const tooBigConfirmed = ref(false)
 const installing = ref(false)
 const installErrorKey = ref<string | null>(null)
 const installErrorDetail = ref<string | null>(null)
-const downloadedBytes = ref(0)
-const downloadTotalBytes = ref<number | null>(null)
 
 const visibleFiles = computed(() => {
   if (!details.value) return []
-  if (!props.allowedFilenames) return details.value.files
-  const allowed = new Set(props.allowedFilenames)
+  if (!allowedFilenames.value) return details.value.files
+  const allowed = new Set(allowedFilenames.value)
   return details.value.files.filter((file) => allowed.has(file.filename))
 })
-
-let unlistenProgress: UnlistenFn | null = null
-let unlistenComplete: UnlistenFn | null = null
 
 async function loadDetailsAsync() {
   loadingDetails.value = true
   detailsErrorKey.value = null
   try {
-    details.value = await detailsAsync(props.repoId)
+    details.value = await detailsAsync(repoId.value)
   } catch (e) {
     detailsErrorKey.value = hfErrorKey(e)
   } finally {
@@ -100,25 +100,13 @@ const canInstall = computed(
     !installing.value,
 )
 
-const downloadPercent = computed(() => {
-  if (downloadTotalBytes.value === null || downloadTotalBytes.value <= 0)
-    return null
-  return Math.min(
-    100,
-    Math.max(
-      0,
-      Math.round((downloadedBytes.value / downloadTotalBytes.value) * 100),
-    ),
-  )
-})
+const downloadModelId = computed(() => preview.value?.modelId ?? '')
 
 async function installAsync() {
   if (!preview.value || !selectedFile.value || !canInstall.value) return
   installing.value = true
   installErrorKey.value = null
   installErrorDetail.value = null
-  downloadedBytes.value = 0
-  downloadTotalBytes.value = preview.value.sizeBytes
   try {
     const model = (await downloadFromHf({
       repoId: selectedFile.value.repoId,
@@ -131,8 +119,10 @@ async function installAsync() {
       contextWindow: preview.value.contextWindow ?? undefined,
       forceTooBig: tooBigConfirmed.value,
     })) as InstalledModel
-    emit('installed', model)
+    downloads.clearDownload(model.id)
+    router.push('/models/installed')
   } catch (e) {
+    downloads.clearDownload(downloadModelId.value)
     installErrorKey.value = hfErrorKey(e)
     installErrorDetail.value = hfErrorDetail(e)
   } finally {
@@ -140,133 +130,100 @@ async function installAsync() {
   }
 }
 
-function humanBytes(n: number | null): string {
-  if (n === null) return t('models.filePicker.sizeUnknown')
-  const kb = 1024
-  const mb = kb * 1024
-  const gb = mb * 1024
-  if (n >= gb) return `${(n / gb).toFixed(1)} GB`
-  if (n >= mb) return `${(n / mb).toFixed(0)} MB`
-  return `${(n / kb).toFixed(0)} KB`
+function sizeLabel(bytes: number | null): string {
+  return bytes === null ? t('models.filePicker.sizeUnknown') : humanBytes(bytes)
 }
 
-onMounted(async () => {
-  await loadDetailsAsync()
-  unlistenProgress = await onDownloadProgress((e) => {
-    if (e.modelId !== preview.value?.modelId) return
-    downloadedBytes.value = e.bytesDownloaded
-    if (e.bytesTotal !== null) downloadTotalBytes.value = e.bytesTotal
-  })
-  unlistenComplete = await onDownloadComplete((model) => {
-    if (model.id !== preview.value?.modelId) return
-    downloadedBytes.value = downloadTotalBytes.value ?? downloadedBytes.value
-  })
-})
+/** One line under the file name: size, quantization, fit and a catalog match. */
+function fileSummary(file: HuggingFaceFileCandidate): string {
+  return [
+    sizeLabel(file.sizeBytes),
+    file.quantization ?? t('models.filePicker.quantizationUnknown'),
+    t(`models.filePicker.fit.${file.fit}`),
+    ...(file.catalogMatch ? [t('models.result.catalogMatch')] : []),
+  ].join(' · ')
+}
 
-onBeforeUnmount(() => {
-  unlistenProgress?.()
-  unlistenComplete?.()
-})
+onMounted(loadDetailsAsync)
 </script>
 
 <template>
   <section class="flex flex-col gap-3">
-    <div class="flex items-center justify-between">
-      <h2 class="text-lg font-semibold">
-        {{ t('models.filePicker.title') }}
-      </h2>
-      <UiButton variant="ghost" type="button" @click="emit('back')">
-        {{ t('onboarding.wizard.back') }}
-      </UiButton>
-    </div>
-
-    <p v-if="loadingDetails" class="text-sm text-neutral-500" role="status">
+    <p
+      v-if="loadingDetails"
+      class="text-sm text-muted-foreground"
+      role="status"
+    >
       {{ t('models.search.loading') }}
     </p>
-    <p v-if="detailsErrorKey" class="text-sm text-red-500" role="alert">
-      {{ t(detailsErrorKey) }}
-    </p>
-    <p
-      v-if="details && details.files.length === 0"
-      class="text-sm text-neutral-500"
+    <SettingsGroup
+      v-if="detailsErrorKey || (details && details.files.length === 0)"
+      data-testid="settings-repo-missing"
     >
-      {{ t('models.result.noGgufFiles') }}
-    </p>
+      <SettingsRow
+        to="/models/download/search"
+        icon="lucide:search"
+        :title="t('settings.locations.models.download.search.title')"
+      >
+        <template #description>
+          <span
+            :class="detailsErrorKey ? 'text-destructive' : ''"
+            :role="detailsErrorKey ? 'alert' : undefined"
+          >
+            {{
+              detailsErrorKey
+                ? t(detailsErrorKey)
+                : t('models.result.noGgufFiles')
+            }}
+          </span>
+        </template>
+      </SettingsRow>
+    </SettingsGroup>
     <p
       v-else-if="details && visibleFiles.length === 0"
-      class="text-sm text-neutral-500"
+      class="text-sm text-muted-foreground"
     >
       {{ t('models.search.filters.empty') }}
     </p>
 
-    <div v-if="details && visibleFiles.length > 0" class="flex flex-col gap-2">
-      <button
+    <SettingsGroup v-if="details && visibleFiles.length > 0">
+      <SettingsOptionRow
         v-for="file in visibleFiles"
         :key="file.filename"
-        type="button"
-        class="flex flex-col gap-1 rounded-md border p-3 text-left focus:outline-none focus:ring-2 focus:ring-blue-500"
-        :class="
-          selectedFile?.filename === file.filename
-            ? 'border-blue-500'
-            : 'border-neutral-300 hover:border-blue-500'
-        "
-        @click="selectFileAsync(file)"
-      >
-        <span class="font-mono text-sm">{{ file.filename }}</span>
-        <div class="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-neutral-500">
-          <span
-            >{{ t('models.filePicker.size') }}:
-            {{ humanBytes(file.sizeBytes) }}</span
-          >
-          <span
-            >{{ t('models.filePicker.quantization') }}:
-            {{
-              file.quantization ?? t('models.filePicker.quantizationUnknown')
-            }}</span
-          >
-          <span>{{ t(`models.filePicker.fit.${file.fit}`) }}</span>
-          <span v-if="file.catalogMatch">{{
-            t('models.result.catalogMatch')
-          }}</span>
-        </div>
-      </button>
-    </div>
+        type="radio"
+        name="hf-file"
+        :value="file.filename"
+        :checked="selectedFile?.filename === file.filename"
+        :title="file.filename"
+        :description="fileSummary(file)"
+        @change="selectFileAsync(file)"
+      />
+    </SettingsGroup>
 
     <div
       v-if="selectedFile"
-      class="relative flex flex-col gap-3 overflow-hidden rounded-md border border-neutral-300 p-3"
+      class="relative flex flex-col gap-3 overflow-hidden rounded-xl bg-muted p-4"
     >
-      <div
-        v-if="installing"
-        class="pointer-events-none absolute inset-y-0 left-0 bg-blue-100/70 transition-[width] duration-150"
-        :class="downloadPercent === null ? 'animate-pulse' : ''"
-        :style="{ width: `${downloadPercent ?? 35}%` }"
-        role="progressbar"
-        :aria-valuenow="downloadPercent ?? undefined"
-        aria-valuemin="0"
-        aria-valuemax="100"
-        :aria-label="
-          t('models.filePicker.downloadProgress', {
-            done: humanBytes(downloadedBytes),
-            total: humanBytes(downloadTotalBytes),
-          })
-        "
-      />
+      <ModelsDownloadBar v-if="preview" :model-id="downloadModelId" />
       <div class="relative z-10 flex flex-col gap-3">
-        <p v-if="loadingPreview" class="text-sm text-neutral-500" role="status">
+        <p
+          v-if="loadingPreview"
+          class="text-sm text-muted-foreground"
+          role="status"
+        >
           {{ t('models.search.loading') }}
         </p>
-        <p v-if="previewErrorKey" class="text-sm text-red-500" role="alert">
+        <p v-if="previewErrorKey" class="text-sm text-destructive" role="alert">
           {{ t(previewErrorKey) }}
         </p>
 
         <template v-if="preview">
           <dl class="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-            <dt class="text-neutral-500">
+            <dt class="text-muted-foreground">
               {{ t('models.filePicker.size') }}
             </dt>
-            <dd>{{ humanBytes(preview.sizeBytes) }}</dd>
-            <dt class="text-neutral-500">
+            <dd>{{ sizeLabel(preview.sizeBytes) }}</dd>
+            <dt class="text-muted-foreground">
               {{ t('models.filePicker.quantization') }}
             </dt>
             <dd>
@@ -275,7 +232,7 @@ onBeforeUnmount(() => {
                 t('models.filePicker.quantizationUnknown')
               }}
             </dd>
-            <dt class="text-neutral-500">
+            <dt class="text-muted-foreground">
               {{ t('models.filePicker.contextWindow') }}
             </dt>
             <dd>
@@ -284,14 +241,14 @@ onBeforeUnmount(() => {
                 t('models.filePicker.contextWindowUnknown')
               }}
             </dd>
-            <dt class="text-neutral-500">
+            <dt class="text-muted-foreground">
               {{ t('models.filePicker.revision') }}
             </dt>
             <dd class="truncate font-mono">
               {{ preview.revision }}
             </dd>
             <template v-if="preview.revisionRef">
-              <dt class="text-neutral-500">
+              <dt class="text-muted-foreground">
                 {{ t('models.filePicker.revisionRef') }}
               </dt>
               <dd>{{ preview.revisionRef }}</dd>
@@ -299,7 +256,7 @@ onBeforeUnmount(() => {
           </dl>
 
           <div v-if="preview.tokenizerRequired" class="flex flex-col gap-1">
-            <p class="text-xs text-amber-600">
+            <p class="text-xs text-warning">
               {{ t('models.filePicker.tokenizerHint') }}
             </p>
             <label class="flex flex-col gap-1">
@@ -314,29 +271,26 @@ onBeforeUnmount(() => {
           </div>
 
           <div v-if="needsTooBigConfirmation" class="flex flex-col gap-1">
-            <p class="text-sm text-red-500" role="alert">
+            <p class="text-sm text-destructive" role="alert">
               {{ t('models.filePicker.tooBigWarning') }}
             </p>
             <label class="flex items-center gap-2 text-sm">
-              <input v-model="tooBigConfirmed" type="checkbox" />
+              <ShadcnCheckbox v-model="tooBigConfirmed" />
               {{ t('models.filePicker.tooBigConfirm') }}
             </label>
           </div>
 
-          <p v-if="installErrorKey" class="text-sm text-red-500" role="alert">
+          <p
+            v-if="installErrorKey"
+            class="text-sm text-destructive"
+            role="alert"
+          >
             {{ t(installErrorKey) }}
             <span v-if="installErrorDetail" class="block text-xs">{{
               installErrorDetail
             }}</span>
           </p>
-          <p v-if="installing" class="text-sm text-neutral-500" role="status">
-            {{
-              t('models.filePicker.downloadProgress', {
-                done: humanBytes(downloadedBytes),
-                total: humanBytes(downloadTotalBytes),
-              })
-            }}
-          </p>
+          <ModelsDownloadStatus :model-id="downloadModelId" />
 
           <UiButton
             type="button"

@@ -425,6 +425,9 @@ den ausgelieferten Apps öffnet ein zweiter Aufruf keine zweite Instanz.
 - **FR-004**: Die bisherigen Vollseiten-Adressen für Chat, Einstellungen und
   Föderation MÜSSEN auf den Arbeitsbereich mit geöffnetem passendem Fenster
   weiterleiten.
+
+> **Seit Spec 023** gibt es keine eigene Föderations-App mehr: Sie ist die Kategorie „Föderation“ der Einstellungen. Die alte Adresse und Aufrufe von `system.federation` öffnen die Einstellungen in dieser Kategorie, siehe [`023-settings-app`](../023-settings-app/spec.md).
+
 - **FR-005**: ~~Die Shell MUSS den Modell-Lade-/Bereitschaftszustand (Spec 004)
   unabhängig von geöffneten Fenstern sichtbar halten.~~ Zurückgezogen durch
   Betreiberentscheidung vom 2026-09-25 (beim Test von Spec 020): Den

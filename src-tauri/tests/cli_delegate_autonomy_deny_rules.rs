@@ -43,13 +43,8 @@ fn open_vault_with_deny_rules(dir: &Path, categories: &[&str]) -> Database {
     .expect("vault open");
     let json = serde_json::to_string(categories).unwrap();
     db.with_connection(|conn| {
-        preferences::insert_or_update(
-            conn,
-            PrefScope::Device(db.device_id()),
-            PREF_DENY_RULES,
-            &json,
-        )
-        .map_err(haex_crdt::Error::from)
+        preferences::insert_or_update(conn, PrefScope::Vault, PREF_DENY_RULES, &json)
+            .map_err(haex_crdt::Error::from)
     })
     .expect("set deny rules");
     db
@@ -237,13 +232,8 @@ async fn malformed_deny_rules_preference_fails_closed_to_deny() {
     let dir = tempfile::tempdir().expect("tempdir");
     let db = Arc::new(open_vault_with_deny_rules(dir.path(), &[]));
     db.with_connection(|conn| {
-        preferences::insert_or_update(
-            conn,
-            PrefScope::Device(db.device_id()),
-            PREF_DENY_RULES,
-            "not valid json",
-        )
-        .map_err(haex_crdt::Error::from)
+        preferences::insert_or_update(conn, PrefScope::Vault, PREF_DENY_RULES, "not valid json")
+            .map_err(haex_crdt::Error::from)
     })
     .expect("corrupt the deny rules preference");
 

@@ -80,6 +80,26 @@ for (const filename of files) {
   })
 }
 
+// Spec 023-settings-app (research R9): palette colors do not follow the color scheme, so gray
+// text on a dark background or a white surface would be unreadable in dark mode. Components use
+// the theme's colors (`text-muted-foreground`, `bg-primary/10`, `text-destructive`, …).
+const PALETTE_COLOR =
+  /\b(?:text|bg|border|ring|divide|fill|stroke|outline|from|to|via)-(?:white|black|neutral|gray|slate|zinc|stone|red|green|amber|yellow|blue|emerald|orange|sky|indigo|rose)(?:-\d{2,3})?(?:\/\d+)?\b/
+
+for (const filename of files) {
+  if (!filename.startsWith('src/')) continue
+  readFileSync(filename, 'utf8')
+    .split('\n')
+    .forEach((line, index) => {
+      const match = PALETTE_COLOR.exec(line)
+      if (!match) return
+      failures.push({
+        filename,
+        message: `palette color ${match[0]} (line ${index + 1}) — use a theme color instead, it follows the color scheme`,
+      })
+    })
+}
+
 function describe(error: unknown) {
   const detail = error as {
     message?: string
@@ -97,7 +117,13 @@ if (failures.length > 0) {
   for (const { filename, message } of failures) {
     console.error(`  ${filename}\n    ${message}`)
   }
-  if (failures.some((f) => !f.message.startsWith('direct write'))) {
+  if (
+    failures.some(
+      (f) =>
+        !f.message.startsWith('direct write') &&
+        !f.message.startsWith('palette color'),
+    )
+  ) {
     console.error(
       '\nA multi-statement inline handler is the usual cause of a template' +
         '\nerror. Move it into a named function in `<script setup>` — see' +
@@ -108,5 +134,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `${files.length} Vue templates compile; no direct writes outside the action catalog.`,
+  `${files.length} Vue templates compile; no direct writes outside the action catalog; no palette colors.`,
 )

@@ -1,0 +1,81 @@
+//! Tests for `known_devices::list_devices` (spec 023-settings-app, FR-022, research R12). They
+//! open a real vault, so the bootstrap rows (this installation and the vault-scope row) exist as
+//! in the app.
+
+use std::sync::Arc;
+
+use haex_crdt::rusqlite::params;
+use haex_crdt::{Database, DatabaseConfig, NoopSignatureProvider, SqlCipherKey};
+use uuid::Uuid;
+
+use super::known_devices::{self, KnownDevice};
+use crate::identity::{
+    holzi_migration_source, installation_id_path, read_or_mint_installation_uuid, HolziBootstrap,
+    HOLZI_TRIGGER_VERSION, VAULT_SCOPE_UUID,
+};
+
+fn open_test_vault() -> (tempfile::TempDir, Database, Uuid) {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let install_path = installation_id_path(dir.path());
+    let db = Database::open(DatabaseConfig {
+        path: dir.path().join("vault.db"),
+        key: SqlCipherKey::new("known-devices-test"),
+        create_if_missing: true,
+        bootstrap: Arc::new(HolziBootstrap::new(install_path.clone())),
+        signature_provider: Arc::new(NoopSignatureProvider),
+        migration_source: holzi_migration_source(),
+        trigger_version: HOLZI_TRIGGER_VERSION,
+    })
+    .expect("open test vault");
+    let installation_uuid =
+        read_or_mint_installation_uuid(&install_path).expect("installation uuid");
+    (dir, db, installation_uuid)
+}
+
+fn list(db: &Database) -> Vec<KnownDevice> {
+    db.with_connection(|conn| Ok(known_devices::list_devices(conn)?))
+        .expect("list devices")
+}
+
+#[test]
+fn lists_this_installation_without_the_vault_scope_row() {
+    let (_dir, db, installation_uuid) = open_test_vault();
+
+    let devices = list(&db);
+
+    assert_eq!(devices.len(), 1, "{devices:?}");
+    assert_eq!(devices[0].installation_uuid, installation_uuid);
+    assert_ne!(devices[0].vault_device_uuid, VAULT_SCOPE_UUID);
+    assert!(devices
+        .iter()
+        .all(|d| d.installation_uuid != VAULT_SCOPE_UUID));
+}
+
+#[test]
+fn lists_another_device_and_its_missing_name() {
+    let (_dir, db, installation_uuid) = open_test_vault();
+    db.with_connection(|conn| {
+        known_devices::update_alias(conn, installation_uuid, "Laptop")?;
+        conn.execute(
+            "INSERT INTO known_devices (installation_uuid, vault_device_uuid, alias, first_seen) \
+             VALUES (?1, ?2, NULL, 1)",
+            params![Uuid::new_v4().to_string(), Uuid::new_v4().to_string()],
+        )?;
+        Ok(())
+    })
+    .expect("seed devices");
+
+    let devices = list(&db);
+
+    assert_eq!(devices.len(), 2, "{devices:?}");
+    let this = devices
+        .iter()
+        .find(|d| d.installation_uuid == installation_uuid)
+        .expect("this installation");
+    assert_eq!(this.alias.as_deref(), Some("Laptop"));
+    let other = devices
+        .iter()
+        .find(|d| d.installation_uuid != installation_uuid)
+        .expect("the other device");
+    assert_eq!(other.alias, None);
+}

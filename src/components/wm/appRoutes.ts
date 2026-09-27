@@ -1,4 +1,5 @@
 import { defineAsyncComponent, type Component } from 'vue'
+import { settingsRoutePatterns } from '~/lib/settings/registry'
 import { getAppDefinition } from '~/lib/wm/apps'
 import { locationTitle, type RoutePattern } from '~/lib/wm/routeMatch'
 
@@ -24,9 +25,65 @@ const ChatApp = defineAsyncComponent(
 const SettingsApp = defineAsyncComponent(
   () => import('~/components/apps/SettingsApp.vue'),
 )
-const FederationApp = defineAsyncComponent(
-  () => import('~/components/apps/FederationApp.vue'),
-)
+
+/** The view of each settings location (spec 023-settings-app, contracts §1). */
+const SETTINGS_VIEWS: Record<string, Component> = {
+  general: defineAsyncComponent(
+    () => import('~/components/settings/GeneralView.vue'),
+  ),
+  appearance: defineAsyncComponent(
+    () => import('~/components/settings/ColorSchemeSetting.vue'),
+  ),
+  models: defineAsyncComponent(
+    () => import('~/components/settings/OverviewView.vue'),
+  ),
+  'models.default': defineAsyncComponent(
+    () => import('~/components/settings/DefaultModelSetting.vue'),
+  ),
+  'models.installed': defineAsyncComponent(
+    () => import('~/components/settings/InstalledModels.vue'),
+  ),
+  'models.download': defineAsyncComponent(
+    () => import('~/components/settings/DownloadModels.vue'),
+  ),
+  'models.download.search': defineAsyncComponent(
+    () => import('~/components/models/HuggingFaceSearch.vue'),
+  ),
+  'models.download.repo': defineAsyncComponent(
+    () => import('~/components/models/HuggingFaceFilePicker.vue'),
+  ),
+  'models.speech': defineAsyncComponent(
+    () => import('~/components/settings/SttModelSetting.vue'),
+  ),
+  agents: defineAsyncComponent(
+    () => import('~/components/settings/OverviewView.vue'),
+  ),
+  'agents.providers': defineAsyncComponent(
+    () => import('~/components/settings/ConnectDelegateProvider.vue'),
+  ),
+  'agents.autonomy': defineAsyncComponent(
+    () => import('~/components/settings/AutonomyModeSetting.vue'),
+  ),
+  'agents.denyRules': defineAsyncComponent(
+    () => import('~/components/settings/DelegateDenyRulesSetting.vue'),
+  ),
+  federation: defineAsyncComponent(
+    () => import('~/components/settings/FederationView.vue'),
+  ),
+}
+
+/** The settings routes from the registry: `SettingsApp` as the frame, one flat child per location. */
+function settingsRoutes(): AppRouteRecord[] {
+  return settingsRoutePatterns().map((root) => ({
+    path: root.path,
+    component: SettingsApp,
+    children: (root.children ?? []).map((child) => ({
+      path: child.path,
+      titleKey: child.titleKey,
+      component: SETTINGS_VIEWS[child.locationId ?? ''],
+    })),
+  }))
+}
 
 const APP_ROUTES: Record<string, readonly AppRouteRecord[]> = {
   // Chat (research R10): one mounted root; children only carry the location.
@@ -40,9 +97,7 @@ const APP_ROUTES: Record<string, readonly AppRouteRecord[]> = {
       ],
     },
   ],
-  // An app without its own routes has exactly the start location `/`.
-  'system.settings': [{ path: '/', component: SettingsApp }],
-  'system.federation': [{ path: '/', component: FederationApp }],
+  'system.settings': settingsRoutes(),
 }
 
 /** `undefined` for an `appId` no routes are registered for — `wm/TabPanel.vue` then renders

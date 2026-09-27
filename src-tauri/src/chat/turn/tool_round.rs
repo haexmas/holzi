@@ -65,14 +65,13 @@ enum ToolPlan {
     Unknown,
 }
 
-/// Reads `chat.permission_mode` for this device, defaulting to `Manual`
-/// when unset or unparseable (spec.md Assumptions).
+/// Reads `chat.permission_mode` for the vault (spec 023, FR-024), defaulting
+/// to `Manual` when unset or unparseable (spec.md Assumptions).
 async fn read_permission_mode(db: &haex_crdt::Database) -> PermissionMode {
     let db = db.clone();
-    let this_device = db.device_id();
     let raw = tauri::async_runtime::spawn_blocking(move || {
         db.with_connection(|conn| {
-            preferences::get(conn, PrefScope::Device(this_device), PREF_PERMISSION_MODE)
+            preferences::get(conn, PrefScope::Vault, PREF_PERMISSION_MODE)
                 .map_err(haex_crdt::Error::from)
         })
     })

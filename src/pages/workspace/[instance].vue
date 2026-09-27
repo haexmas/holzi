@@ -16,7 +16,9 @@
  * Consumes `?open=<appId>` (and spec 020's optional `&at=<path>`) once (contracts/shell-app-contract.md §3, T024's
  * legacy-route redirects land here with it set) and removes it via
  * `router.replace` so it does not re-fire and open a second tab on a
- * later navigation that happens to keep it in the URL.
+ * later navigation that happens to keep it in the URL. A query that arrives while the page is
+ * already mounted (a `router.replace` to this route) is consumed the same way, once the session
+ * is restored (spec 023, quickstart S8–S10).
  */
 definePageMeta({
   middleware: ['onboarded'],
@@ -49,6 +51,13 @@ const instanceName = computed(() => {
       : ''
 })
 
+// A deep link is consumed once the saved session is in place (spec 022 FR-012), also when the
+// query arrives later.
+const sessionRestored = ref(false)
+watch([sessionRestored, () => route.query.open], ([restored]) => {
+  if (restored) consumeDeepLink()
+})
+
 // Normally already set by the caller (pages/index.vue) before navigating
 // here; set again so a direct/refreshed load of this route still resolves
 // the same instance for components that only read the store (ChatApp.vue
@@ -60,19 +69,33 @@ onMounted(async () => {
   } catch (error) {
     console.error('[wm] restoring the session failed; starting empty', error)
   }
-
-  const open = route.query.open
-  if (typeof open === 'string' && open.length > 0) {
-    // Spec 020 FR-012/FR-013: `&at=<path>` opens the app at a location.
-    const at = route.query.at
-    void wm.runAction('wm.app.open', {
-      appId: open,
-      ...(typeof at === 'string' && at.length > 0 ? { at } : {}),
+  // Spec 023 (FR-014): the vault's color scheme; a read error leaves the system's.
+  void useColorScheme()
+    .loadAsync()
+    .catch((error: unknown) => {
+      console.error('[settings] reading the color scheme failed', error)
     })
-    const { open: _open, at: _at, ...rest } = route.query
-    void router.replace({ query: rest })
-  }
+  void useModelDownloadsStore()
+    .watchDownloads()
+    .catch((error: unknown) => {
+      console.error('[models] watching download progress failed', error)
+    })
+
+  sessionRestored.value = true
 })
+
+function consumeDeepLink() {
+  const open = route.query.open
+  if (typeof open !== 'string' || open.length === 0) return
+  // Spec 020 FR-012/FR-013: `&at=<path>` opens the app at a location.
+  const at = route.query.at
+  void wm.runAction('wm.app.open', {
+    appId: open,
+    ...(typeof at === 'string' && at.length > 0 ? { at } : {}),
+  })
+  const { open: _open, at: _at, ...rest } = route.query
+  void router.replace({ query: rest })
+}
 </script>
 
 <template>

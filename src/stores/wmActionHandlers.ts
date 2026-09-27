@@ -1,4 +1,4 @@
-import { getAppDefinition } from '~/lib/wm/apps'
+import { getAppDefinition, resolveAppAlias } from '~/lib/wm/apps'
 import type { useWindowManagerStore } from '~/stores/windowManager'
 
 type WmStore = ReturnType<typeof useWindowManagerStore>
@@ -29,26 +29,33 @@ export function registerWmActionHandlers(wm: WmStore): void {
     outcome: wm.systemBack(),
   }))
 
-  /** Unknown app ids fail loudly: `openApp` itself silently ignores them. */
-  function knownApp(appId: unknown): string {
-    const id = String(appId)
-    if (!getAppDefinition(id)) throw new Error(`unknown app ${id}`)
-    return id
-  }
-  function at(input: Record<string, unknown>): string | null {
-    return typeof input.at === 'string' ? input.at : null
+  /** The app and start location to open: a removed app resolves to its replacement first
+   * (spec 023 research R11), an `at` from the input wins over the alias's. Unknown app ids fail
+   * loudly: `openApp` itself silently ignores them. */
+  function target(input: Record<string, unknown>): {
+    appId: string
+    at: string | null
+  } {
+    const alias = resolveAppAlias(String(input.appId))
+    if (!getAppDefinition(alias.appId)) {
+      throw new Error(`unknown app ${alias.appId}`)
+    }
+    return {
+      appId: alias.appId,
+      at: typeof input.at === 'string' ? input.at : alias.at,
+    }
   }
 
   wm.registerGlobalActionHandler('wm.app.open', ({ input }) => {
-    const appId = knownApp(input.appId)
+    const { appId, at } = target(input)
     const before = new Set(wm.windows.flatMap((w) => w.tabs.map((t) => t.id)))
-    const tabId = wm.openApp(appId, at(input))
+    const tabId = wm.openApp(appId, at)
     return { tabId, created: tabId !== null && !before.has(tabId) }
   })
-  wm.registerGlobalActionHandler('wm.tab.new', ({ input, target }) => {
-    const appId = knownApp(input.appId)
+  wm.registerGlobalActionHandler('wm.tab.new', ({ input, target: where }) => {
+    const { appId, at } = target(input)
     const before = new Set(wm.windows.flatMap((w) => w.tabs.map((t) => t.id)))
-    const tabId = wm.addTab(target.windowId ?? '', appId, at(input))
+    const tabId = wm.addTab(where.windowId ?? '', appId, at)
     return { tabId, created: tabId !== null && !before.has(tabId) }
   })
 }

@@ -1,6 +1,6 @@
 import { computed, reactive, toRefs } from 'vue'
 import { defineStore } from 'pinia'
-import { getAppDefinition, WM_APPS } from '~/lib/wm/apps'
+import { getAppDefinition, tabTitleFor, WM_APPS } from '~/lib/wm/apps'
 import {
   closeWindow as closeWindowReducer,
   createWorkspace as createWorkspaceReducer,
@@ -30,11 +30,7 @@ import type {
   TabRuntime,
   Workspace,
 } from '~/lib/wm/types'
-import {
-  createSessionSync,
-  type RestoreScope,
-  type RestoreState,
-} from '~/lib/wm/sessionSync'
+import { createSessionSync, type RestoreState } from '~/lib/wm/sessionSync'
 import { useWmSession } from '~/composables/useWmSession'
 import { createWmGuards } from '~/stores/wmGuards'
 import { createWmNavigation } from '~/stores/wmNavigation'
@@ -181,7 +177,10 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
     const runtime = runtimeFor(tab.id)
     const history = navigation.historyOf(tab.id)
     const title = history
-      ? titleForLocation(tab.appId, currentLocation(history).path)
+      ? tabTitleFor(
+          app,
+          titleForLocation(tab.appId, currentLocation(history).path),
+        )
       : { key: app?.titleKey, params: {} }
     return {
       titleKey: title.key,
@@ -356,19 +355,16 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
   const { guardResultsFor, guardResultForTab, guardResultsForWorkspace } =
     createWmGuards(state, (tabId) => tabRuntime.get(tabId)?.guard)
 
-  /** Awaits the save queue before the vault locks or closes (FR-027) — `ChatApp.vue`'s and
-   * `FederationApp.vue`'s `lock()` already call this before `useInstance().closeAsync()`. */
+  /** Awaits the save queue before the vault locks or closes (FR-027) — `ChatApp.vue`'s `lock()`
+   * already calls this before `useInstance().closeAsync()`. */
   function flushAsync(): Promise<void> {
     return session.flushAsync()
   }
 
-  /** Sets or resets the "Sitzung wiederherstellen" setting for one scope and takes over the
-   * result (spec 022 FR-005, FR-007); the settings actions call this. */
-  function setSessionRestore(
-    scope: RestoreScope,
-    enabled: boolean | null,
-  ): Promise<RestoreState> {
-    return session.setRestoreAsync(scope, enabled)
+  /** Turns the vault's "Sitzung wiederherstellen" on or off and takes over the result (spec
+   * 022 FR-005, FR-007; one vault value since spec 023); the settings action calls this. */
+  function setSessionRestore(enabled: boolean): Promise<RestoreState> {
+    return session.setRestoreAsync(enabled)
   }
 
   // Navigation changes a tab's saved history (spec 022 clarification 2026-09-26).

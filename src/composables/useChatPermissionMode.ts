@@ -6,10 +6,10 @@ const PERMISSION_MODE_KEY = 'chat.permission_mode'
 const AUTONOMY_MODE_KEY = 'chat.autonomy_mode'
 
 /**
- * Permission-mode (manual/auto/plan) and device-scoped autonomy-mode
- * preference state — extracted from `src/pages/chat/[instance].vue` (spec
+ * Permission-mode (manual/auto/plan) and autonomy-mode preference state (both
+ * vault-wide since spec 023, FR-024) — extracted from `src/pages/chat/[instance].vue` (spec
  * 015-workspace-shell, T013) to bring the orchestrator page under the
- * 500-line constitution limit. Autonomy mode is device-scoped, configured
+ * 500-line constitution limit. Autonomy mode is configured
  * on the Settings page only (see the page's own prior comment: a second,
  * delegate-only permission-style menu next to the composer's manual/
  * auto/plan control was confusing) — starts fail-closed until the
@@ -37,11 +37,7 @@ export function useChatPermissionMode(
     permissionMode.value = mode
     permissionModeSaving.value = true
     try {
-      await setPrefAsync(
-        { kind: 'device', uuid: deviceUuid.value },
-        PERMISSION_MODE_KEY,
-        mode,
-      )
+      await setPrefAsync({ kind: 'vault' }, PERMISSION_MODE_KEY, mode)
     } catch (e: unknown) {
       permissionMode.value = previousMode
       lastError.value = errString(e)
@@ -50,14 +46,11 @@ export function useChatPermissionMode(
     }
   }
 
-  async function reloadAutonomyMode(uuid: string) {
+  async function reloadAutonomyMode() {
     autonomyPreferenceLoading.value = true
     autonomyPreferenceError.value = null
     try {
-      const stored = await getPrefAsync(
-        { kind: 'device', uuid },
-        AUTONOMY_MODE_KEY,
-      )
+      const stored = await getPrefAsync({ kind: 'vault' }, AUTONOMY_MODE_KEY)
       autonomyMode.value = isAutonomyMode(stored) ? stored : 'ungated'
     } catch (e: unknown) {
       autonomyMode.value = 'standard'
@@ -71,10 +64,7 @@ export function useChatPermissionMode(
    * the page's `onMounted`. */
   async function initialize(vaultDeviceUuid: string) {
     const [permissionResult] = await Promise.allSettled([
-      getPrefAsync(
-        { kind: 'device', uuid: vaultDeviceUuid },
-        PERMISSION_MODE_KEY,
-      ),
+      getPrefAsync({ kind: 'vault' }, PERMISSION_MODE_KEY),
     ])
     if (permissionResult.status === 'fulfilled') {
       const stored = permissionResult.value
@@ -83,7 +73,7 @@ export function useChatPermissionMode(
       }
     }
     deviceUuid.value = vaultDeviceUuid
-    await reloadAutonomyMode(vaultDeviceUuid)
+    await reloadAutonomyMode()
   }
 
   return {

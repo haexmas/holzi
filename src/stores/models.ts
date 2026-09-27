@@ -49,9 +49,9 @@ export const useModelsStore = defineStore('models', () => {
   const setError = (message: string) => {
     lastError.value = message
   }
-  // This vault device's uuid — the scope of the per-model reasoning
-  // preference. Resolved once at the start of `initialize()`; nothing
-  // device-scoped is read or written before it is known.
+  // This vault device's uuid is used as the readiness gate for the
+  // vault-scoped per-model reasoning preference. Resolved once at the start of
+  // `initialize()`; nothing is read or written before it is known.
   const vaultDeviceUuid = ref<string | null>(null)
 
   const {

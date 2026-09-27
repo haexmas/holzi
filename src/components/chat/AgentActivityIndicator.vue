@@ -29,7 +29,7 @@ const title = computed(() =>
     :title="title"
   >
     <span
-      class="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500"
+      class="h-1.5 w-1.5 shrink-0 rounded-full bg-success"
       aria-hidden="true"
     />
     {{ t('chat.agentActivity.count', count) }}

@@ -56,7 +56,7 @@ const descriptionKey = computed(() => {
           class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs"
         >
           <template v-if="expectedSha256">
-            <dt class="text-neutral-500">
+            <dt class="text-muted-foreground">
               {{ t('models.integrityDialog.expected') }}
             </dt>
             <dd class="truncate font-mono">
@@ -64,7 +64,7 @@ const descriptionKey = computed(() => {
             </dd>
           </template>
           <template v-if="actualSha256">
-            <dt class="text-neutral-500">
+            <dt class="text-muted-foreground">
               {{ t('models.integrityDialog.actual') }}
             </dt>
             <dd class="truncate font-mono">
@@ -72,7 +72,7 @@ const descriptionKey = computed(() => {
             </dd>
           </template>
         </dl>
-        <p v-if="actionError" class="text-sm text-red-500" role="alert">
+        <p v-if="actionError" class="text-sm text-destructive" role="alert">
           {{ actionError }}
         </p>
       </div>

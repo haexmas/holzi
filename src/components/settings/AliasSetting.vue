@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * This device's name (spec 002 US3). Saved when the field loses focus or on Enter, without a
+ * save button (spec 023 FR-021); an empty name is not saved and the field says why.
+ */
 const { t } = useI18n()
 const { errString } = useErrorString()
 const setAlias = useActionOrThrow('settings.device.setAlias')
@@ -38,12 +42,13 @@ function onInput() {
   saveError.value = null
 }
 
-async function onSubmit() {
+async function commitAsync() {
   const trimmed = localValue.value.trim()
   if (!trimmed) {
     showRequired.value = true
     return
   }
+  if (trimmed === props.currentAlias || busy.value) return
   busy.value = true
   savedFlash.value = false
   saveError.value = null
@@ -61,45 +66,41 @@ async function onSubmit() {
 </script>
 
 <template>
-  <form class="flex flex-col gap-3" @submit.prevent="onSubmit">
-    <h2 class="text-xl font-semibold">
-      {{ t('settings.alias.title') }}
-    </h2>
-    <p class="text-sm text-neutral-500">
-      {{ t('settings.alias.description') }}
-    </p>
-    <label class="flex flex-col gap-1">
-      <span class="text-sm font-medium">{{ t('settings.alias.label') }}</span>
-      <input
+  <SettingsGroup>
+    <SettingsRow
+      :title="t('settings.alias.label')"
+      label-for="settings-alias-input"
+    >
+      <ShadcnInput
+        id="settings-alias-input"
         v-model="localValue"
         type="text"
-        class="border border-neutral-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        class="w-56 max-w-full bg-background"
         :disabled="busy"
         :aria-invalid="showRequired && !localValue.trim() ? true : undefined"
+        data-testid="settings-alias"
         @input="onInput"
+        @blur="commitAsync"
+        @keydown.enter.prevent="commitAsync"
       />
-      <span
-        v-if="showRequired && !localValue.trim()"
-        class="text-xs text-red-500"
+      <template
+        v-if="(showRequired && !localValue.trim()) || savedFlash || saveError"
+        #below
       >
-        {{ t('settings.alias.required') }}
-      </span>
-    </label>
-    <div class="flex items-center gap-3">
-      <UiButton
-        type="submit"
-        :disabled="
-          busy || !localValue.trim() || localValue.trim() === props.currentAlias
-        "
-      >
-        {{ t('settings.alias.save') }}
-      </UiButton>
-      <span v-if="savedFlash" class="text-xs text-green-600" role="status">
-        {{ t('settings.alias.saved') }}
-      </span>
-      <span v-if="saveError" class="text-xs text-red-500" role="alert">
-        {{ t('errors.aliasSaveFailed') }}: {{ saveError }}
-      </span>
-    </div>
-  </form>
+        <span
+          v-if="showRequired && !localValue.trim()"
+          class="text-xs text-destructive"
+          role="alert"
+        >
+          {{ t('settings.alias.required') }}
+        </span>
+        <span v-if="savedFlash" class="text-xs text-success" role="status">
+          {{ t('settings.alias.saved') }}
+        </span>
+        <span v-if="saveError" class="text-xs text-destructive" role="alert">
+          {{ t('errors.aliasSaveFailed') }}: {{ saveError }}
+        </span>
+      </template>
+    </SettingsRow>
+  </SettingsGroup>
 </template>

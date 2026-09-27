@@ -69,58 +69,6 @@ test('the chat page lock() swallows a rejected close and shows no error', async 
   assert.deepEqual(page.effects, [])
 })
 
-test('the federation app onLock() flushes the window manager layout, asks for the close once, and does nothing else', async () => {
-  const page = watchedPage()
-  let closes = 0
-  let flushes = 0
-  const { onLock } = loadScriptSetup<{ onLock: () => Promise<void> }>(
-    'src/components/apps/FederationApp.vue',
-    ['onLock'],
-    {
-      useInstance: () => ({
-        closeAsync: async () => {
-          closes += 1
-        },
-      }),
-      useInstancesStore: () => page.instancesStore,
-      useWindowManagerStore: () => ({
-        flushAsync: async () => {
-          flushes += 1
-        },
-      }),
-      navigateTo: page.navigateTo,
-    },
-  )
-
-  await onLock()
-
-  assert.equal(flushes, 1)
-  assert.equal(closes, 1)
-  assert.deepEqual(page.effects, [])
-})
-
-test('the federation app onLock() swallows a rejected close', async () => {
-  const page = watchedPage()
-  const { onLock } = loadScriptSetup<{ onLock: () => Promise<void> }>(
-    'src/components/apps/FederationApp.vue',
-    ['onLock'],
-    {
-      useInstance: () => ({
-        closeAsync: async () => {
-          throw new Error('the page is already gone')
-        },
-      }),
-      useInstancesStore: () => page.instancesStore,
-      useWindowManagerStore: () => ({ flushAsync: async () => {} }),
-      navigateTo: page.navigateTo,
-    },
-  )
-
-  await onLock()
-
-  assert.deepEqual(page.effects, [])
-})
-
 // US4 frontend errors (T066/T074, contracts/frontend-surface.md): `useErrorString` maps the three
 // new fieldless kinds to their own `errors.*` keys instead of falling through to a raw
 // `JSON.stringify(e)`.

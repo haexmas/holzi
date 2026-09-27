@@ -80,8 +80,7 @@
     },
     "apps": {
       "chat": "Chat",
-      "settings": "Einstellungen",
-      "federation": "Föderation"
+      "settings": "Einstellungen"
     },
     "launcher": {
       "open": "Launcher öffnen",
@@ -270,65 +269,38 @@
     }
   },
   "settings": {
-    "header": {
-      "forDevice": "Einstellungen für: {alias}"
-    },
     "alias": {
-      "title": "Gerätename",
-      "description": "Wie soll dieses Gerät im Vault heißen? Der Name erscheint in den Einstellungen und ist jederzeit änderbar.",
       "label": "Gerätename",
-      "save": "Speichern",
       "saved": "Gespeichert.",
       "required": "Bitte einen Namen eingeben."
     },
     "sessionRestore": {
       "title": "Sitzung wiederherstellen",
-      "description": "Speichert, welche Arbeitsbereiche, Fenster und Tabs offen sind, samt Vor-/Zurück-Verlauf jedes Tabs, und stellt sie beim nächsten Öffnen der Vault wieder her. Die gespeicherte Sitzung bleibt auf diesem Gerät und wird nicht mit anderen Geräten abgeglichen. „Aus“ löscht sie sofort.",
-      "choice": {
-        "off": "Aus",
-        "device": "Nur auf diesem Gerät",
-        "vault": "Auf allen Geräten dieser Vault"
-      },
       "saved": "Gespeichert.",
-      "failed": "Die Einstellung konnte nicht geändert werden"
+      "failed": "Die Einstellung konnte nicht geändert werden",
+      "description": "Offene Fenster und Tabs beim Öffnen der Vault zurückholen"
     },
     "default": {
-      "title": "Standard-Modell",
-      "description": "Wähle das Modell, das nach dem Öffnen dieses Vaults automatisch geladen wird — als Gerätestandard nur für dieses Gerät oder als Vault-weiter Standard für alle Geräte dieses Vaults.",
-      "current": {
-        "device": "Aktueller Gerätestandard",
-        "vault": "Aktueller Vault-weiter Standard",
-        "none": "nicht gesetzt"
-      },
-      "modelLabel": "Modell",
-      "modelPlaceholder": "Modell wählen …",
       "modelGroup": {
         "local": "Lokale Modelle"
       },
-      "scope": {
-        "label": "Wirkungsbereich",
-        "device": "Nur dieses Gerät",
-        "vault": "Vault-weit"
-      },
-      "save": "Als Standard setzen",
       "saved": "Standard gesetzt.",
-      "clear": "Diesen Standard löschen",
-      "cleared": "Standard gelöscht.",
-      "empty": "Es sind noch keine Modelle installiert oder Anbieter konfiguriert."
+      "empty": "Es sind noch keine Modelle installiert oder Anbieter konfiguriert.",
+      "none": "Keins",
+      "unknownModel": "{id} (nicht mehr vorhanden)",
+      "label": "Modell"
     },
     "sttModel": {
-      "title": "Sprach-zu-Text-Modell",
-      "description": "Wähle, welches lokale Modell für die Diktierfunktion auf diesem Gerät verwendet wird.",
-      "current": "Aktives Modell",
       "modelLabel": "Modell",
-      "save": "Wechseln",
       "saved": "Gewechselt.",
       "downloading": "Lade herunter…",
-      "downloadFailed": "Download fehlgeschlagen"
+      "downloadFailed": "Download fehlgeschlagen",
+      "notInstalled": "Standard (nicht installiert)",
+      "noneInstalled": "Es ist noch kein Sprach-zu-Text-Modell installiert.",
+      "availableLabel": "Weitere Modelle",
+      "downloadAndUse": "Herunterladen und verwenden"
     },
     "cliDelegate": {
-      "title": "Abo verbinden",
-      "description": "Nutze dein bestehendes Claude-Code- oder Codex-Abo als Chat-Backend — kein API-Key nötig. Die Verbindung wird einmal pro Vault hergestellt und begleitet den Vault überallhin, wo er geöffnet wird.",
       "connect": "Verbinden",
       "reconnect": "Erneut verbinden",
       "connected": "Verbunden",
@@ -346,41 +318,129 @@
       "refreshFailed": "Modelle konnten nicht aktualisiert werden"
     },
     "autonomyMode": {
-      "title": "Autonomie für Delegaten",
-      "description": "Legt fest, wie viel Freiheit ein verbundener Delegat (Claude Code oder Codex) standardmäßig beim Ausführen von Tools bekommt. Gilt nur, sobald ein Delegat verbunden ist, und für dieses Gerät.",
       "standardDescription": "Tool-Aufrufe durchlaufen dieselbe Freigabe-Regel wie bei allen anderen Modellen (Manuell/Automatisch/Plan, im Chat einstellbar).",
       "ungatedDescription": "Der Delegat läuft komplett eigenständig, mit seinem eigenen vollständigen Autonomie-Mechanismus — Holzi greift nicht ein und fragt nicht nach.",
       "gated_permissiveDescription": "Der Delegat darf frei agieren, aber die unten festgelegten Verbotsregeln bleiben tabu — ohne Rückfrage, jede Aktion wird protokolliert.",
-      "save": "Speichern",
       "saved": "Gespeichert.",
       "saveFailed": "Autonomie-Voreinstellung konnte nicht gespeichert werden.",
       "loadFailed": "Autonomie-Voreinstellung konnte nicht geladen werden."
     },
     "denyRules": {
-      "title": "Verbotsregeln für Delegaten",
-      "description": "Aktionen, die für einen verbundenen Delegaten auch unter einem sonst autonomen Modus tabu bleiben – gilt für dieses Gerät.",
       "workspace_escape": "Workspace verlassen",
       "workspace_escapeDescription": "Dateizugriffe außerhalb des Arbeitsverzeichnisses des Aufrufs blockieren.",
       "network_access": "Netzwerkzugriff",
       "network_accessDescription": "Aktionen blockieren, die auf das Netzwerk zugreifen.",
       "credential_paths": "Zugangsdaten-Pfade",
       "credential_pathsDescription": "Zugriff auf übliche Zugangsdaten-/Geheimnis-Dateipfade blockieren (.ssh, .aws, .env, …).",
-      "save": "Speichern",
       "saved": "Gespeichert.",
       "saveFailed": "Verbotsregeln konnten nicht gespeichert werden.",
       "loadFailed": "Verbotsregeln konnten nicht geladen werden."
+    },
+    "back": "Zurück zu {title}",
+    "categories": {
+      "general": {
+        "title": "Allgemein",
+        "keywords": "Gerät Gerätename Name Sitzung wiederherstellen Fenster Tabs"
+      },
+      "appearance": {
+        "title": "Darstellung",
+        "keywords": "Darstellung Farbschema hell dunkel System Theme Aussehen"
+      },
+      "models": {
+        "title": "Modelle",
+        "keywords": "Modelle LLM KI"
+      },
+      "agents": {
+        "title": "Agenten",
+        "keywords": "Agenten Delegaten Claude Codex"
+      },
+      "federation": {
+        "title": "Föderation",
+        "keywords": "Geräte Vault Synchronisation Sync"
+      }
+    },
+    "locations": {
+      "models": {
+        "default": {
+          "title": "Standard-Modell",
+          "description": "Welches Modell nach dem Öffnen der Vault geladen wird.",
+          "keywords": "Standard Chat Start laden"
+        },
+        "installed": {
+          "title": "Installierte Modelle",
+          "description": "Modelle laden, aktualisieren und löschen.",
+          "keywords": "installiert laden aktualisieren Update löschen entfernen"
+        },
+        "download": {
+          "title": "Modelle herunterladen",
+          "description": "Empfohlene Modelle oder eine Suche auf HuggingFace.",
+          "search": {
+            "title": "Auf HuggingFace suchen",
+            "description": "GGUF-Modelle auf HuggingFace finden.",
+            "keywords": "HuggingFace suchen GGUF Quantisierung"
+          },
+          "repo": {
+            "title": "{owner}/{name}"
+          },
+          "keywords": "herunterladen Download empfohlen HuggingFace"
+        },
+        "speech": {
+          "title": "Sprach-zu-Text-Modell",
+          "description": "Das Modell für die Spracheingabe auf diesem Gerät.",
+          "keywords": "Spracherkennung Spracheingabe Whisper Mikrofon Diktat STT"
+        }
+      },
+      "agents": {
+        "providers": {
+          "title": "Abo verbinden",
+          "description": "Dein Claude-Code- oder Codex-Abo als Chat-Backend nutzen.",
+          "keywords": "Abo Anbieter verbinden Claude Code Codex CLI"
+        },
+        "autonomy": {
+          "title": "Autonomie für Delegaten",
+          "description": "Wie viel ein Delegat ohne Rückfrage tun darf.",
+          "keywords": "Autonomie Rückfrage bestätigen autonom"
+        },
+        "denyRules": {
+          "title": "Verbotsregeln für Delegaten",
+          "description": "Aktionen, die auch im autonomen Modus tabu bleiben.",
+          "keywords": "verbieten Regeln tabu Befehle"
+        }
+      }
+    },
+    "downloadModels": {
+      "recommended": "Empfohlene Modelle",
+      "running": "Laufende Downloads"
+    },
+    "search": {
+      "label": "Einstellungen durchsuchen",
+      "placeholder": "Suchen",
+      "noResults": "Keine Einstellung gefunden.",
+      "open": "Einstellungen durchsuchen",
+      "clear": "Suche leeren",
+      "close": "Suche schließen"
+    },
+    "sidebar": {
+      "show": "Seitenleiste einblenden",
+      "hide": "Seitenleiste ausblenden"
+    },
+    "colorScheme": {
+      "label": "Farbschema",
+      "light": "Hell",
+      "dark": "Dunkel",
+      "system": "System",
+      "saved": "Gespeichert.",
+      "failed": "Das Farbschema konnte nicht gespeichert werden"
+    },
+    "deviceOnly": "Gilt nur für dieses Gerät",
+    "federation": {
+      "thisDevice": "Dieses Gerät",
+      "unnamed": "Unbenanntes Gerät",
+      "loadFailed": "Die Geräte der Vault ließen sich nicht laden",
+      "devicesLabel": "Geräte der Vault"
     }
   },
   "models": {
-    "management": {
-      "title": "Modelle verwalten",
-      "description": "Katalog, freie Suche und installierte Modelle an einem Ort — unabhängig vom Onboarding-Status.",
-      "tabs": {
-        "catalog": "Katalog",
-        "search": "Hugging Face durchsuchen",
-        "installed": "Installierte Modelle"
-      }
-    },
     "search": {
       "title": "Modell von Hugging Face suchen",
       "placeholder": "z. B. llama gguf",
@@ -419,7 +479,6 @@
       "noGgufFiles": "Keine installierbaren GGUF-Dateien in diesem Repository."
     },
     "filePicker": {
-      "title": "Datei auswählen",
       "size": "Größe",
       "sizeUnknown": "unbekannt",
       "quantization": "Quantisierung",
@@ -661,8 +720,13 @@
         "setMode": "Autonomie-Modus setzen"
       },
       "sessionRestore": {
-        "set": "Sitzung wiederherstellen ein- oder ausschalten",
-        "clear": "Einstellung „Sitzung wiederherstellen“ zurücksetzen"
+        "set": "Sitzung wiederherstellen ein- oder ausschalten"
+      },
+      "appearance": {
+        "setColorScheme": "Farbschema festlegen"
+      },
+      "devices": {
+        "list": "Geräte der Vault auflisten"
       }
     },
     "scopes": {

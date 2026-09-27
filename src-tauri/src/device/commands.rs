@@ -1,4 +1,4 @@
-//! `current_device_info` and `update_device_alias` Tauri commands.
+//! `current_device_info`, `update_device_alias` and `list_vault_devices` Tauri commands.
 //!
 //! See spec 002 [`contracts/tauri-commands.md`](../../../specs/002-onboarding-model-prefs/contracts/tauri-commands.md).
 //! The device info command powers the onboarding-wizard's alias prefill,
@@ -15,7 +15,7 @@ use crate::hardware::hostname;
 use crate::identity::{installation_id_path, read_or_mint_installation_uuid, VAULT_SCOPE_UUID};
 use crate::state::AppState;
 use crate::state_utils::active_database;
-use crate::storage::known_devices;
+use crate::storage::known_devices::{self, KnownDevice};
 use crate::vault_gate::VaultDb;
 
 /// Frontend view of the active device's identity + OS hostname.
@@ -199,3 +199,69 @@ pub async fn update_device_alias(
     .map_err(HolziError::from)?;
     Ok(())
 }
+
+/// One device of the vault for the settings' device list (spec 023-settings-app, FR-022,
+/// contracts §5a). `alias` is `None` for a device that has not finished onboarding.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VaultDevicePayload {
+    pub vault_device_uuid: Uuid,
+    pub alias: Option<String>,
+    pub is_current: bool,
+}
+
+/// This installation's device first, then the others by name ignoring case, devices without a
+/// name last. Marks the device of `current_installation`, if it is among them.
+pub fn order_vault_devices(
+    devices: Vec<KnownDevice>,
+    current_installation: Uuid,
+) -> Vec<VaultDevicePayload> {
+    let mut ordered: Vec<VaultDevicePayload> = devices
+        .into_iter()
+        .map(|device| VaultDevicePayload {
+            vault_device_uuid: device.vault_device_uuid,
+            alias: device.alias,
+            is_current: device.installation_uuid == current_installation,
+        })
+        .collect();
+    ordered.sort_by_cached_key(|device| {
+        (
+            !device.is_current,
+            device.alias.is_none(),
+            device.alias.as_deref().map(str::to_lowercase),
+        )
+    });
+    ordered
+}
+
+/// Lists the vault's devices (spec 023-settings-app, FR-022). Requires an open vault
+/// (`NoActiveInstance` otherwise, like [`current_device_info`]).
+#[tauri::command]
+pub async fn list_vault_devices(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<VaultDevicePayload>> {
+    let installation_id_file =
+        installation_id_path(&app.path().app_local_data_dir().map_err(|e| {
+            HolziError::PathResolution {
+                reason: format!("app_local_data_dir: {e}"),
+            }
+        })?);
+    let installation_uuid =
+        read_or_mint_installation_uuid(&installation_id_file).map_err(HolziError::from)?;
+
+    let db = active_database(&state)?;
+    let devices = tauri::async_runtime::spawn_blocking(move || {
+        db.with_connection(|conn| known_devices::list_devices(conn).map_err(haex_crdt::Error::from))
+    })
+    .await
+    .map_err(|e| HolziError::CrdtInit {
+        reason: format!("list_vault_devices join: {e}"),
+    })?
+    .map_err(HolziError::from)?;
+    Ok(order_vault_devices(devices, installation_uuid))
+}
+
+#[cfg(test)]
+#[path = "commands_tests.rs"]
+mod tests;

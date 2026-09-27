@@ -125,13 +125,11 @@ async fn gated_permissive_decision(
     let Some(database) = database else {
         return ApprovalDecision::Deny;
     };
-    let device_id = database.device_id();
     let rules = tauri::async_runtime::spawn_blocking({
         let database = database.clone();
         move || {
-            database.with_connection(|conn| {
-                Ok::<_, haex_crdt::Error>(autonomy::get_deny_rules(conn, device_id))
-            })
+            database
+                .with_connection(|conn| Ok::<_, haex_crdt::Error>(autonomy::get_deny_rules(conn)))
         }
     })
     .await
@@ -264,12 +262,11 @@ fn now_ms() -> i64 {
 
 async fn read_permission_mode(database: &VaultDb) -> PermissionMode {
     let database = database.clone();
-    let device_id = database.device_id();
     let raw = tauri::async_runtime::spawn_blocking(move || {
         database.with_connection(|conn| {
             crate::storage::preferences::get(
                 conn,
-                crate::storage::preferences::PrefScope::Device(device_id),
+                crate::storage::preferences::PrefScope::Vault,
                 PREF_PERMISSION_MODE,
             )
             .map_err(haex_crdt::Error::from)

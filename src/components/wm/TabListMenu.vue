@@ -70,7 +70,7 @@ const rows = computed(() =>
         />
         <span
           v-if="row.info.hasAttention"
-          class="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
+          class="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-warning"
           :aria-label="t('wm.attention')"
         />
       </ShadcnDropdownMenuItem>

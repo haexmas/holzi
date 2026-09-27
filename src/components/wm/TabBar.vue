@@ -165,7 +165,7 @@ watch(
       <span class="min-w-0 truncate">{{ titleFrom(collapsedTab.info) }}</span>
       <span
         v-if="collapsedTab.info.hasAttention"
-        class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
+        class="h-1.5 w-1.5 shrink-0 rounded-full bg-warning"
         :aria-label="t('wm.attention')"
       />
     </div>
@@ -203,12 +203,12 @@ watch(
         <span class="min-w-0 flex-1 truncate">{{ titleFrom(row.info) }}</span>
         <span
           v-if="row.info.hasAttention"
-          class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
+          class="h-1.5 w-1.5 shrink-0 rounded-full bg-warning"
           :aria-label="t('wm.attention')"
         />
         <button
           type="button"
-          class="shrink-0 rounded p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
+          class="shrink-0 rounded p-0.5 hover:bg-foreground/10"
           :aria-label="t('wm.tabs.close')"
           @click.stop="emit('closeTab', row.tab.id)"
         >

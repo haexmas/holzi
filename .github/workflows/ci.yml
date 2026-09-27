@@ -43,6 +43,9 @@ jobs:
       - name: Check window manager navigation
         run: corepack pnpm check:wm-navigation
 
+      - name: Check settings app
+        run: corepack pnpm check:settings
+
       - name: Check vault lifecycle
         run: corepack pnpm check:vault-lifecycle
 

@@ -235,6 +235,9 @@ it, and confirm the underlying process actually terminates.
 - **FR-014**: Configured deny rules MUST persist as a device-wide setting and MUST apply
   automatically to every gated-but-permissive run until the operator changes them — independent of,
   and not reset by, the per-request autonomy mode selection in FR-008.
+
+> **Since spec 023** (FR-024) the autonomy mode, the permission mode and the deny rules apply to the whole vault instead of one device; a device's earlier value becomes the vault value on open when the vault has none, see [`023-settings-app`](../023-settings-app/spec.md).
+
 - **FR-015**: If an enabled deny rule cannot be evaluated against a particular approval callback
   because the backend does not expose enough detail in that callback, the system MUST treat it as
   denied rather than allow it through unverified.

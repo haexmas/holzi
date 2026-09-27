@@ -11,7 +11,7 @@ export default defineNuxtConfig({
   // build. Layer declares its peers; we list them explicitly under
   // `dependencies` below. It ships no i18n: pass translated labels to
   // its components (e.g. `UiInputPassword` `labels`).
-  extends: ['github:haex-space/haextension/packages/haex-ui#db48f9a'],
+  extends: ['github:haex-space/haextension/packages/haex-ui#b8549be'],
   build: {
     transpile: ['reka-ui'],
   },
@@ -63,8 +63,11 @@ export default defineNuxtConfig({
   },
   icon: {
     mode: 'svg',
+    // Every icon ships with the app, so none waits for the network (holzi runs offline). The scan
+    // also reads `.ts`: the app list, the settings registry and other lookup tables name their icons
+    // there, and an icon only named in TypeScript would otherwise be fetched from the iconify API.
     clientBundle: {
-      scan: true,
+      scan: { globInclude: ['**/*.{vue,ts}'] },
       includeCustomCollections: true,
     },
     serverBundle: false,

@@ -291,6 +291,9 @@ Vault.
 - **FR-002**: Die Einstellung MUSS einen Wert für die ganze Vault und einen Wert
   nur für dieses Gerät haben können. Auf einem Gerät gilt der Gerätewert, falls
   gesetzt, sonst der Vault-Wert, sonst „aus“.
+
+> **Seit Spec 023** (FR-024) hat die Einstellung nur noch einen Wert für die ganze Vault, ein Schalter „ein/aus“; die gespeicherte Sitzung selbst bleibt pro Gerät. Ein früherer Gerätewert wird beim Öffnen einmal zum Vault-Wert, wenn die Vault keinen hat, siehe [`023-settings-app`](../023-settings-app/spec.md).
+
 - **FR-003**: Der Standard MUSS „aus“ sein: Eine neue Vault und eine
   aktualisierte Vault haben weder einen Vault- noch einen Gerätewert gesetzt.
 - **FR-004**: Die Einstellungsansicht MUSS eine einzige Auswahl mit den

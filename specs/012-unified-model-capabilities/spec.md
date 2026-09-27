@@ -294,6 +294,8 @@ unchanged and attachments are reported as unsupported.
   their reasoning is model-managed rather than absent.
 - Effort preferences follow the project's existing device-scoped data convention (ADR 0001): they
   belong to this device and are not shared across devices, while capability facts follow the model.
+  **Since spec 023** (FR-024) effort preferences apply to the whole vault; a device's earlier
+  value becomes the vault value on open when the vault has none, see [`023-settings-app`](../023-settings-app/spec.md).
 - Sending to the Claude Code delegate keeps its current behavior of handing the chosen provider-native
   option id to the delegate as-is; only what the composer offers changes. This is a disclosed
   user-visible change: the delegate's model may now show fewer options than the previous always-full

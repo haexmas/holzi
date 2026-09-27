@@ -143,6 +143,9 @@ Dieses Feature liefert **keinen** Retire-Vorgang. Es sorgt aber dafür, dass ein
 - **FR-010**: Ein rein passiver Auto-Load ohne Nutzerinteraktion (z. B. beim App-Start "erstes verfügbares nehmen") DARF die Erinnerung NICHT verändern.
 - **FR-011**: Der Nutzer MUSS über einen Settings-Screen ein Modell explizit als "Standard für dieses Gerät" ODER "vault-weiter Standard" setzen können. Dieser Trigger lebt NICHT im Chat-Sidebar, sondern in einem eigenen Settings-Screen analog haex-vault.
 - **FR-012**: Wenn ein expliziter Standard gesetzt ist, MUSS er den Auto-Fallback beeinflussen: gerätespezifischer Standard schlägt vault-weiten Standard, vault-weiter Standard schlägt "erstes verfügbares".
+
+> **Seit Spec 023** (FR-024) gilt der Standard nur für dieses Gerät, weil Modelle pro Gerät installiert sind; der vault-weite Standard entfällt. Ein früherer Vault-Wert wird beim Öffnen einmal zum Wert dieses Geräts, wenn es keinen hat, siehe [`023-settings-app`](../023-settings-app/spec.md).
+
 - **FR-013**: Wenn ein zuletzt aktiv genutztes Modell nicht mehr ladbar ist (z. B. Anbieter entfernt oder GGUF deinstalliert), MUSS das System den Fallback anwenden, ohne die Erinnerung stumm zu überschreiben. Wird das Modell später wieder verfügbar, MUSS es wieder automatisch geladen werden.
 
 **Session-Start-Fallback-Kette**

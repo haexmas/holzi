@@ -111,13 +111,8 @@ async fn auto_mode_allow_on_a_safe_tool_skips_the_live_round_trip() {
         .vault_db(Arc::new(open_vault(dir.path())))
         .expect("open gate");
     db.with_connection(|conn| {
-        preferences::insert_or_update(
-            conn,
-            PrefScope::Device(db.device_id()),
-            "chat.permission_mode",
-            "auto",
-        )
-        .map_err(haex_crdt::Error::from)?;
+        preferences::insert_or_update(conn, PrefScope::Vault, "chat.permission_mode", "auto")
+            .map_err(haex_crdt::Error::from)?;
         Ok(())
     })
     .expect("set permission mode");
@@ -163,13 +158,8 @@ async fn plan_mode_deny_on_a_risky_tool_skips_the_live_round_trip() {
         .vault_db(Arc::new(open_vault(dir.path())))
         .expect("open gate");
     db.with_connection(|conn| {
-        preferences::insert_or_update(
-            conn,
-            PrefScope::Device(db.device_id()),
-            "chat.permission_mode",
-            "plan",
-        )
-        .map_err(haex_crdt::Error::from)?;
+        preferences::insert_or_update(conn, PrefScope::Vault, "chat.permission_mode", "plan")
+            .map_err(haex_crdt::Error::from)?;
         Ok(())
     })
     .expect("set permission mode");

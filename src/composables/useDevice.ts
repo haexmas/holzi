@@ -18,6 +18,14 @@ export interface DeviceInfo {
   hostname: string | null
 }
 
+/** One device of the vault in the settings' device list (spec 023-settings-app, FR-022). */
+export interface VaultDevice {
+  vaultDeviceUuid: string
+  /** `null` for a device that has not finished onboarding. */
+  alias: string | null
+  isCurrent: boolean
+}
+
 /**
  * Current-device identity for the active vault. Powers the onboarding
  * wizard's alias prefill, the workspace-landing header, and the
@@ -32,5 +40,14 @@ export function useDevice() {
     await invoke('update_device_alias', { args: { alias } })
   }
 
-  return { currentDeviceInfoAsync, updateDeviceAliasAsync }
+  /** This device first, then the others by name, unnamed ones last (ordered by the backend). */
+  async function listVaultDevicesAsync(): Promise<VaultDevice[]> {
+    return await invoke<VaultDevice[]>('list_vault_devices')
+  }
+
+  return {
+    currentDeviceInfoAsync,
+    updateDeviceAliasAsync,
+    listVaultDevicesAsync,
+  }
 }

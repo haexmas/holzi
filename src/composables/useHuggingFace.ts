@@ -176,6 +176,32 @@ export function useHuggingFace() {
  * machine-readable `kind` into a UI-facing message key, mirroring the
  * `errors.${kind}` pattern already used for instance-management errors.
  */
+/**
+ * The last enriched search result list, so going back to the search view (spec 023) does not
+ * refetch every repository.
+ * ponytail: one entry for the whole process and never invalidated; a changed repository shows up
+ * after a new search. A per-query cache with an age limit would be the upgrade.
+ */
+let lastSearch: { query: string; results: HuggingFaceModelResult[] } | null =
+  null
+
+export function cachedSearchResults(
+  query: string,
+): HuggingFaceModelResult[] | null {
+  return lastSearch?.query === query ? lastSearch.results : null
+}
+
+export function rememberSearchResults(
+  query: string,
+  results: HuggingFaceModelResult[],
+) {
+  lastSearch = { query, results }
+}
+
+export function forgetSearchResults() {
+  lastSearch = null
+}
+
 export function hfErrorKey(e: unknown): string {
   const kind = structuredHfError(e)?.kind
   switch (kind) {

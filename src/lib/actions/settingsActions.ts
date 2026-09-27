@@ -11,22 +11,24 @@ const DONE: JsonSchema = {
 }
 const ANY_OBJECT: JsonSchema = { type: 'object' }
 const NO_INPUT: JsonSchema = { type: 'object', properties: {} }
-const SCOPE: JsonSchema = {
-  type: 'string',
-  enum: ['device', 'vault'],
-  description: "'device' applies to this device only, 'vault' to all devices.",
-}
 const VENDOR: JsonSchema = { type: 'string', enum: ['claude', 'codex'] }
 const RESTORE_STATE: JsonSchema = {
   type: 'object',
   description:
-    "Session restore setting: 'device' and 'vault' are true or false, and left out when unset; 'effective' is what applies on this device.",
-  properties: {
-    device: { type: 'boolean' },
-    vault: { type: 'boolean' },
-    effective: { type: 'boolean' },
-  },
-  required: ['effective'],
+    'Session restore setting of the vault: whether open workspaces, windows and tabs are saved and restored on every device.',
+  properties: { enabled: { type: 'boolean' } },
+  required: ['enabled'],
+}
+const COLOR_SCHEME: JsonSchema = {
+  type: 'string',
+  enum: ['light', 'dark', 'system'],
+}
+const COLOR_SCHEME_STATE: JsonSchema = {
+  type: 'object',
+  description:
+    "Color scheme of the vault ('system' follows the operating system).",
+  properties: { scheme: COLOR_SCHEME },
+  required: ['scheme'],
 }
 const MODEL_ID: JsonSchema = {
   type: 'string',
@@ -52,7 +54,15 @@ export const SETTINGS_ACTIONS: readonly ActionDefinition[] = [
   setting({
     id: 'settings.get',
     description:
-      'Read the current settings: device name, default and speech models, session restore, autonomy mode and delegate deny rules. Never includes credentials.',
+      'Read the current settings: device name, color scheme, default and speech models, session restore, autonomy mode and delegate deny rules. Never includes credentials.',
+    result: ANY_OBJECT,
+    scope: 'settings.read',
+    effect: 'read',
+  }),
+  setting({
+    id: 'settings.devices.list',
+    description:
+      "List the vault's devices: this device first and marked, then the others by name. A device without a name has no alias.",
     result: ANY_OBJECT,
     scope: 'settings.read',
     effect: 'read',
@@ -85,49 +95,44 @@ export const SETTINGS_ACTIONS: readonly ActionDefinition[] = [
   setting({
     id: 'settings.sessionRestore.set',
     description:
-      'Turn saving and restoring the open workspaces, windows and tabs (with their back/forward history) on or off, for this device or for the whole vault. Turning it off deletes the saved session.',
+      'Turn saving and restoring the open workspaces, windows and tabs (with their back/forward history) on or off for the whole vault. Turning it off deletes the saved session.',
     input: {
       type: 'object',
-      properties: { scope: SCOPE, enabled: { type: 'boolean' } },
-      required: ['scope', 'enabled'],
+      properties: { enabled: { type: 'boolean' } },
+      required: ['enabled'],
     },
     result: RESTORE_STATE,
     scope: 'settings.device',
     effect: 'write',
   }),
   setting({
-    id: 'settings.sessionRestore.clear',
+    id: 'settings.appearance.setColorScheme',
     description:
-      'Reset the session restore value for this device or the vault, so the other value applies (or off if neither is set).',
+      'Set the color scheme (light, dark or following the system) for the whole vault. It applies at once.',
     input: {
       type: 'object',
-      properties: { scope: SCOPE },
-      required: ['scope'],
+      properties: { scheme: COLOR_SCHEME },
+      required: ['scheme'],
     },
-    result: RESTORE_STATE,
+    result: COLOR_SCHEME_STATE,
     scope: 'settings.device',
     effect: 'write',
   }),
   setting({
     id: 'settings.models.setDefault',
     description:
-      'Set the default chat model for this device or the whole vault.',
+      'Set the default chat model of this device (models are installed per device).',
     input: {
       type: 'object',
-      properties: { modelId: MODEL_ID, scope: SCOPE },
-      required: ['modelId', 'scope'],
+      properties: { modelId: MODEL_ID },
+      required: ['modelId'],
     },
     scope: 'settings.models',
     effect: 'write',
   }),
   setting({
     id: 'settings.models.clearDefault',
-    description: 'Remove the default chat model for this device or the vault.',
-    input: {
-      type: 'object',
-      properties: { scope: SCOPE },
-      required: ['scope'],
-    },
+    description: 'Remove the default chat model of this device.',
     scope: 'settings.models',
     effect: 'write',
   }),
@@ -242,7 +247,7 @@ export const SETTINGS_ACTIONS: readonly ActionDefinition[] = [
   }),
   setting({
     id: 'settings.autonomy.setMode',
-    description: "Set this device's delegate autonomy mode. User only.",
+    description: 'Set the delegate autonomy mode of the vault. User only.',
     input: {
       type: 'object',
       properties: {
@@ -258,7 +263,7 @@ export const SETTINGS_ACTIONS: readonly ActionDefinition[] = [
   }),
   setting({
     id: 'settings.delegate.setDenyRules',
-    description: "Set this device's delegate deny rules. User only.",
+    description: 'Set the delegate deny rules of the vault. User only.',
     input: {
       type: 'object',
       properties: { rules: { type: 'array', items: { type: 'string' } } },

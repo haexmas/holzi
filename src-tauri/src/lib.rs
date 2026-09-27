@@ -43,7 +43,7 @@ use chat::session::ChatState;
 use chat::thread_commands::{
     create_thread, delete_thread, list_messages, list_threads, rename_thread,
 };
-use device::commands::{current_device_info, update_device_alias};
+use device::commands::{current_device_info, list_vault_devices, update_device_alias};
 use hardware::get_hardware_info;
 use instances::{
     cleanup_orphans_on_startup, close_instance, create_instance, list_instances, open_instance,
@@ -202,6 +202,7 @@ pub fn run() {
             delete_thread,
             current_device_info,
             update_device_alias,
+            list_vault_devices,
             get_pref,
             set_pref,
             clear_pref,
