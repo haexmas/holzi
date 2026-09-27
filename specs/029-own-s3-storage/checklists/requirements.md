@@ -1,0 +1,78 @@
+# Specification Quality Checklist: Eigener S3-Speicher für Spaces
+
+**Purpose**: Validate specification completeness and quality before proceeding to planning
+**Created**: 2026-09-28
+**Feature**: [spec.md](../spec.md)
+
+## Content Quality
+
+- [x] No implementation details (languages, frameworks, APIs)
+- [x] Focused on user value and business needs
+- [x] Written for non-technical stakeholders
+- [x] All mandatory sections completed
+
+## Requirement Completeness
+
+- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] Requirements are testable and unambiguous
+- [x] Success criteria are measurable
+- [x] Success criteria are technology-agnostic (no implementation details)
+- [x] All acceptance scenarios are defined
+- [x] Edge cases are identified
+- [x] Scope is clearly bounded
+- [x] Dependencies and assumptions identified
+
+## Feature Readiness
+
+- [x] All functional requirements have clear acceptance criteria
+- [x] User scenarios cover primary flows
+- [x] Feature meets measurable outcomes defined in Success Criteria
+- [x] No implementation details leak into specification
+
+## Notes
+
+- One clarification marker is open, in FR-008: which providers v1 must support
+  and test. Entwurf §12 (Kandidaten aus der Entwurfssitzung, ungeprüft) lists
+  Cloudflare R2, Backblaze B2, MinIO and AWS S3, plus Hetzner as unverified.
+  Whether each offers bucket-scoped tokens, bucket versioning, a retention rule
+  for old versions, and a read-write token that cannot delete old versions
+  (FR-004 c to f) is unverified. That
+  decides whether a provider lands on "geeignet" or only "nur über den
+  Ersatzweg" (FR-005). Resolve with `/speckit-clarify`, ideally after a short
+  provider check.
+- "No implementation details": S3, buckets, versioning and presigned access
+  links are named because they are the feature itself (operator instruction).
+  Wire formats, the provider admin APIs and the envelope format stay plan
+  material.
+- Decision taken without a marker: moving a space between backend A and B is in
+  scope as P3 (User Story 8), justified in the Clarifications. Cost/quota display
+  is an optional KANN requirement (FR-036).
+- Decisions taken as assumptions rather than markers: default retention of old
+  versions is 30 days (FR-011); access links on the fallback path live at most
+  15 minutes (FR-024); tokens exist per capability type, not per member, as in
+  the design; members with the delete capability get the read-write token
+  because S3 does not separate writing from deleting.
+- FR-017 and FR-033 treat the admin's full provider credentials and unwrapped
+  access tokens as Nur-direkt-Daten (spec 024): they travel only over direct
+  links between devices of the same vault, never through any relay mailbox, not
+  even the vault's own. Each device unwraps the token envelopes itself; the
+  envelopes may travel through mailboxes.
+- Cross-spec alignment (2026-09-28): the fallback path (FR-023) uses spec 027's
+  direct connection between members; the space mailbox stays on the admin's
+  relay independent of backend B, and without a relay it syncs only directly;
+  there is no default backend, the choice at space creation is mandatory (spec
+  027 FR-003); settings live in „Föderation“ (space detail view under „Spaces“,
+  own folders under „Ordner“); where saved storage connections are managed is
+  left to the plan. New FR-040: an admin device removes unreferenced objects
+  from backend B with the admin credentials.
+- FR-015 refines the design's "inside the encrypted space data": the tokens
+  travel with the space data but in per-recipient envelopes, so a read-only
+  member cannot decrypt the read-write token.
+- SC-002 (old token rejected within 5 minutes) depends on the provider's own
+  revocation latency; the plan must confirm it per supported provider.
+- Aligned with the sibling spec 027 as written: 027 excludes dissolving a space
+  and switching a space's backend. This spec lifts the switching exclusion (User
+  Story 8, also from "nur direkte Übertragung" to B) and keeps dissolving out of
+  scope. User Story 7 therefore covers giving up a bucket (after a move, or when
+  the vault's own folders stop using it) and removing a storage connection;
+  FR-034 also applies once a later spec introduces dissolving a space.
