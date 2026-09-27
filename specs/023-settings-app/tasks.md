@@ -279,7 +279,8 @@ description: 'Task list for spec 023-settings-app'
   - Done 2026-09-27: the operator confirmed that a download keeps running across category changes (S16) and that switching categories is smooth (S18).
 - [x] T058 Operator: rerun the manual scenarios of the specs whose settings moved (SC-002): 002 default model and device name, 005 HuggingFace search and download, 009 autonomy mode, 010 speech model, 022 session restore S3–S7
   - Done 2026-09-27: the operator reported the tests done and working.
-- [ ] T059 After merge: refresh the graphify graph on `main` and rerun the queries from research.md (flagged there because the worktree snapshot predates the window manager work)
+- [x] T059 After merge: refresh the graphify graph on `main` and rerun the queries from research.md (flagged there because the worktree snapshot predates the window manager work)
+  - Done 2026-09-27: graph rebuilt on `main` (`d81bf86`); results in research.md, "Graphify-Konsultation".
 
 ---
 

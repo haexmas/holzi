@@ -30,6 +30,19 @@ wurden deshalb zusätzlich direkt im Code geprüft. Ergebnis:
   werden erweitert; es gibt dort nur Lesen des eigenen Geräts und Umbenennen.
 - Zur späteren manuellen Prüfung vermerkt: Abfragen gegen einen veralteten
   Graphen.
+- **Nachtrag 2026-09-27 (T059)**: Graph auf `main` (`d81bf86`) neu gebaut,
+  6305 Knoten, 12618 Kanten, 376 Gemeinschaften. Dieselben fünf Abfragen führen
+  jetzt zu den Bausteinen dieser Spec: „settings app layout sections“ zu
+  `lib/settings/registry.ts`, `apps/SettingsApp.vue`, `lib/settings/search.ts`;
+  „tab location routing inside an app“ zu `registry.ts`, `SettingsApp.vue`,
+  `useChatNavigation.ts`; „color scheme dark mode theme“ zu
+  `lib/settings/colorScheme.ts`, `ColorSchemeSetting.vue`; „federation app
+  placeholder“ zu `useDevice.ts`, `settings/FederationView.vue`; „app definition
+  registry and deep link open at location“ zu `registry.ts`, `lib/wm/apps.ts`,
+  `stores/windowManager.ts`, `wm/Link.vue`. Keine Abfrage zeigt einen zweiten,
+  übersehenen Baustein für dieselbe Aufgabe; die Entscheidungen oben bleiben.
+  Rauschen wie `autonomy_tests.rs` bei den Tab-Orten stammt aus gemeinsamen
+  Begriffen, nicht aus einer Abhängigkeit.
 
 ## R1 Orte und Routen der Einstellungen
 
