@@ -61,6 +61,15 @@ re-delegation between people.
 | D11 | **The relay is untrusted.** It never holds a user's own S3 credentials.                                                                                                        | 2026-09-28 |
 | D12 | **Both storage backends in v1**: storage provided by the public relay (A) and the user's own S3 (B).                                                                           | 2026-09-28 |
 | D13 | **No MLS.** Its ordered epoch chain does not fit an order-free CRDT (§3.3).                                                                                                    | 2026-09-27 |
+| D14 | Vault copies made before sync keep **one shared vault identity**, derived from the common placeholder.                                                                         | 2026-09-28 |
+| D15 | Until the own relay exists, presence, NAT traversal and invitations use **preset public Nostr and iroh relays**, changeable in settings.                                       | 2026-09-28 |
+| D16 | Synced files live in a **user-chosen folder of the file system** on each device (own folders and spaces).                                                                      | 2026-09-28 |
+| D17 | A scope lives on **exactly one home relay** in v1; further relays only help with NAT traversal.                                                                                | 2026-09-28 |
+| D18 | Delete: `write` deletes own entries or files, `delete` is needed for everyone else's (§11).                                                                                    | 2026-09-28 |
+| D19 | Revocation acts **forward only**, with a receipt-time check against the newest known member list and an immediate relay block; the remaining window is accepted (§11).         | 2026-09-28 |
+| D20 | Own S3 in v1: **RustFS and AWS S3**, verified and tested. MinIO is dropped (no longer open source); R2, B2 and Hetzner follow after verification.                              | 2026-09-28 |
+| D21 | Only the **admin** of a scope uploads compaction snapshots; in the vault scope any own device.                                                                                 | 2026-09-28 |
+| D22 | **Invites also create a new key generation**; key generations and member-list versions stay one counter.                                                                       | 2026-09-28 |
 
 ## 3. What exists today, and what the references teach
 
@@ -152,6 +161,20 @@ issued_at}`. Every verifier (own devices, other users' devices, the relay) resol
   identity**: new keypair, re-attest the remaining devices, re-publish the new npub to every
   counterparty (share and space admins re-wrap keys to it). This is the accepted cost; the SQLCipher
   passphrase is what protects a lost device's database.
+- **Hand-over after rotation**: for every space and share the vault belongs to or administers, it
+  publishes a hand-over statement signed by the old identity naming the new one. Because the thief
+  also holds the old key, counterparties (and the remaining own devices) accept the new identity
+  only after confirming a check code. A hand-over signed by the old key alone never rebinds
+  anything: on the first hand-over for a scope, the relay stops accepting anything signed by the old
+  identity there and keeps serving the other members of the last list. It rebinds admin authority
+  only when a majority of the other members of the last valid list have uploaded a signed acceptance
+  of the same new identity. Among competing hand-overs, the first new identity to reach that majority
+  wins. A scope without other members (the vault's own scope) is never rebound; the rotated vault
+  starts a new one.
+- **Residual risk**: whoever holds the stolen old key can publish a member list padded with vaults
+  it controls before any hand-over, and so win the relay majority. That only captures the relay
+  binding, which is an availability problem and consistent with the untrusted relay: real members'
+  clients still accept a new identity only after their own check-code confirmation.
 - Presence and addressing: each device publishes its current iroh `NodeAddr` as an encrypted Nostr
   event addressed to its own vault identity. This replaces iroh's default pkarr/DNS discovery, so no
   third-party discovery infrastructure is required.
@@ -192,7 +215,16 @@ scope_keys(scope_id, key_id, epoch, created_by_vault, created_at_hlc,
   two valid keys — no fork to resolve.
 - Every ciphertext names its `key_id`. A receiver decrypts with whatever key it holds; it never needs
   a globally agreed "current" epoch to read.
-- A sender encrypts with the deterministically highest key (`epoch`, then `key_id`) it knows.
+- A sender encrypts with the deterministically highest key (`epoch`, then `key_id`) it knows,
+  **excluding any generation that is wrapped to a vault the sender knows to be removed**. Without
+  this exclusion, two concurrent rotations on the admin's own devices (one of them a removal) could
+  make the "highest" key one the removed member still holds.
+- **Every membership change creates a new generation**, invites and right changes included, not
+  only removals. The member list of a generation is therefore fixed once written, which is what the
+  forward-only validity rule in §11 needs: an invitee's writes are valid under the first generation
+  that lists them.
+- **New members also receive envelopes for the older generations**, so they can read content that
+  existed before they joined (the same history decision as haex-vault ADR 0002).
 - Only the scope's admin writes `scope_keys` for spaces and data shares (D6), so concurrent rotations
   can only come from the admin's own devices. For the vault-internal scope the vault key is static
   and rotates only with the vault identity.
@@ -224,9 +256,12 @@ author_vault_npub, value)`.
 
 ### 5.5 Cursors
 
-- Between peers: a **version vector** of the highest HLC seen per origin node, not a single "last
-  pushed HLC". Only a vector stays correct when changes arrive over several paths (A → B → C, relay).
-  `ScanFilters.origin_node` supports scanning per origin.
+- Between peers: every device numbers the changes it originates **without gaps** (a per-origin
+  sequence number next to the HLC, which stays for conflict resolution). Progress is, per origin
+  device, the highest number up to which all changes are present. A highest-HLC vector is not enough:
+  a newer change arriving before an older one over another path would hide the gap. Gaps are
+  requested explicitly; a second, different change under an already used (origin, number) is
+  rejected as forgery. `ScanFilters.origin_node` supports scanning per origin.
 - At the relay: a **server-assigned monotonic sequence number** per mailbox (§10.2). Nostr's
   wall-clock `since` is not used.
 
@@ -241,9 +276,20 @@ author_vault_npub, value)`.
   through `apply_remote_changes`.
 - **Discovery**: the encrypted presence event (§4). The relay also runs an **iroh relay** for NAT
   traversal, as haex-sync-server already co-hosts one.
-- **Vault identity private key**: replicates only on this plane. The sender-side filter for spaces,
-  data shares and relay snapshots MUST exclude `vault_identity` and every other vault-secret table,
-  enforced as a structural allow-list rather than a deny-list.
+- **Direct-only data**: some vault data travels only over direct links between devices of the same
+  vault, never through any relay mailbox (not even the vault's own) and never into another scope:
+  the vault identity private key, the admin's full S3 credentials (§12 B), and unwrapped content
+  keys and storage tokens of spaces and shares. Each device unwraps the envelopes addressed to the
+  vault identity itself, which D8 allows. Everything else, including the envelopes and the file
+  index of own synced folders with its per-file keys, may use the vault's own mailbox. The filter is
+  a structural allow-list rather than a deny-list.
+- **Atomicity**: a sealed batch is applied all-or-nothing; one invalid change rejects the whole batch,
+  so HLC groups stay intact. A compaction snapshot is checked per complete HLC transaction group:
+  an invalid change rejects its whole group, other groups are kept. A partial group is never applied.
+- **One-device vaults** publish no presence and open no direct links, but their device still listens
+  for presence addressed to its vault identity, and they may use relay mailboxes and talk to members
+  of spaces and shares. A fresh copy knows the source device from the copied file, so it publishes
+  presence; the source device learns of it that way.
 - **Via the relay**: the vault-internal scope also has a relay mailbox (§10), encrypted under the vault
   key, so two own devices that are never online at the same time still converge.
 
@@ -251,7 +297,8 @@ author_vault_npub, value)`.
 
 Own-device file sync is a space with exactly one member, the vault itself. It uses the same
 machinery as §8, so there is no second implementation. A user can mark folders to sync across
-devices; the file index lives in the vault-internal scope.
+devices; the file index lives in the vault-internal scope (not in a scope of its own), so it
+travels with ordinary plane-1 sync.
 
 ## 8. Plane 2: spaces (network folders for files)
 
@@ -272,7 +319,16 @@ devices; the file index lives in the vault-internal scope.
 - **Objects**: file content encrypted in chunks under the per-file DEK (the `HXFE` envelope pattern
   from haex-vault). `object_id` is the hash of the ciphertext, so storage cannot swap content
   undetected. **Objects are immutable**: modifying a file writes a new object and points the entry
-  at it; the old object is garbage-collected. Storage never sees an overwrite.
+  at it; the old object is garbage-collected by an admin device once no index entry references it.
+  Storage never sees an overwrite.
+- **Mailbox vs. object storage**: a space's mailbox (file index, member list) lives on the admin's
+  relay when one is configured, independent of where objects are stored. "Direct transfer only"
+  means objects travel only between devices. With no relay at all, the space syncs only while
+  members are online together.
+- **Direct links between member vaults**: devices of different member vaults may connect directly
+  for one scope. The handshake presents a device attestation of a vault on that scope's current
+  member list, and the link carries only that scope's data. Discovery uses presence addressed to
+  the scope's member vaults or the relay's signalling.
 - **Transfer**: objects travel as iroh-blobs (BAO-verified, resumable) between peers, or through a
   storage backend (§12). A device fetches an object from whichever source has it.
 
@@ -289,14 +345,17 @@ Delete semantics are the proposal in §11 and still need operator confirmation.
 ### 8.3 Conflicts
 
 Two concurrent modifications of the same `file_id` (neither HLC dominates the other's base) produce a
-**conflict copy** (D10): the losing version becomes a new entry `name.conflict.<device>.<ts>.ext`
-with its own `file_id`. No silent LWW loss of file content.
+**conflict copy** (D10): the losing version becomes a new entry `<name> (Konflikt <device> <time>).<ext>`
+with its own `file_id`; in spaces the device name is prefixed with the member's display name. The
+exact format is plan work. No silent LWW loss of file content.
 
 ### 8.4 Membership changes
 
-- **Invite**: the admin adds `{vault_npub → caps}`, wraps the current space key to the invitee, and
-  publishes a new signed member list to the relay (§10.3). The invite reaches the invitee as a Nostr
-  DM (NIP-17) carrying the space id and relay hints.
+- **Invite**: the invitation reaches the invitee as a Nostr DM (NIP-17) carrying the space id and
+  relay hints, but no keys. Only after the invitee returns a signed acceptance does an admin device
+  add `{vault_npub → caps}`, create a new key generation (§5.2), wrap it and all older generations to
+  the invitee, and publish the new signed member list (§10.3). Pending invitees are never on the
+  list, so the relay never authorizes them, and a declined invitation leaves no key behind.
 - **Change rights / remove**: the admin updates the member list, publishes it with a higher epoch,
   then **rotates the space key** and wraps it to the remaining members.
 - **What revocation means**: the storage gate refuses immediately; new files are unreadable to the
@@ -348,9 +407,11 @@ scope_keys(...)                                              -- §5.2, per share
   row register.
 - **Sender-side guard**: only declared tables and only rows reachable from the root leave the vault
   for that share (`ScanFilters` with `column_eq` / `row_pks`).
-- **Receiver-side guard** (`ApplyPolicy::prepare_row`): an incoming row is admitted only if its table
-  belongs to the share type's extension, it is reachable from the share root, and the author vault
-  holds the needed capability (§11). A new row from a grantee (an item added to a shared shopping
+- **Receiver-side guard** (`ApplyPolicy::prepare_row`): an incoming insert or update is admitted only
+  if its table belongs to the share type's extension, it is reachable from the share root, and the
+  author vault holds the needed capability (§11). Deletes are checked against the capability rules
+  only. When the owner moves an entry out of the shared root, recipients remove their copy without
+  sending a delete back, unless another share still covers the entry. A new row from a grantee (an item added to a shared shopping
   list) must carry an FK into the share.
 - **Where received data lands**: in the recipient's copy of the same extension tables, tagged with
   the originating `share_id` in a core-owned mapping. It then syncs to the recipient's own devices
@@ -362,7 +423,10 @@ scope_keys(...)                                              -- §5.2, per share
 
 With D4, one row can be inside two shares (an event shared individually and through its calendar). A
 write is validated against the share it arrived through. Forwarding it into the other share is done
-by the owner vault, so it is delayed until an owner device is online. Accepted for v1.
+by the owner vault, so it is delayed until an owner device is online. Accepted for v1. The owner
+re-issues the forwarded change as a new change signed by an owner device in the second share's
+scope; its original author may not be a member there. The original author is kept for display only,
+and the row's `created_by` is unchanged.
 
 ## 10. Blind relay ("Holzi Relay")
 
@@ -384,7 +448,7 @@ It bundles three services:
 - Append-only; each accepted batch gets a monotonic sequence number; clients pull `after <seq>`.
 - **No server-side merge.** Table names, columns, PKs and HLCs stay inside the ciphertext — the
   opposite of haex-sync-server's per-cell rows.
-- **Compaction is client-driven**: a member with `write` uploads an encrypted snapshot of the scope
+- **Compaction is client-driven**: the scope's admin (any own device for the vault scope, D21) uploads an encrypted snapshot of the scope
   at a sequence number; the relay then drops older batches. The snapshot carries the original
   per-column signatures (haex-crdt keeps them in `haex_column_sigs`), so a snapshot writer cannot
   forge other members' data. Receivers verify snapshots exactly like batches.
@@ -404,6 +468,10 @@ MemberList { scope_id, epoch, grants: [{vault_npub, caps}], issued_at, expires_a
   attestation**. The relay checks the admin signature, that the attested vault is in the current
   list, and that the capability fits (`read` for pulls, `write` for pushes).
 - A higher epoch replaces a lower one; missing, expired or invalid lists fail closed.
+- **Same-generation lists**: two admin devices can publish different valid lists with the same
+  generation. Relay and receivers apply one rule: the list with the lexicographically smallest hash
+  wins, and the relay replaces a stored list of the same generation only by one with a smaller hash.
+  An admin device that sees such a conflict publishes generation + 1, merging both edits.
 - **Revocation is immediate**: the admin uploads a new list. No revocation list is needed, unlike
   UCAN tokens that stay valid until expiry.
 - **Why not UCAN**: UCAN's value is verifiable _delegation chains_. With D6/D7 every chain has exactly
@@ -431,13 +499,26 @@ pseudonyms are a post-v1 option.
 | admin      | implicit for the creator only; not grantable (D6) | same                                             |
 
 - "Own" means `created_by` equals the author's vault (§5.4).
-- **Proposed, pending operator confirmation**: this three-flag split (delete-own inside `write`,
+- The levels are nested: `read` ⊂ `write` ⊂ `delete`, identically for spaces and data shares.
+- **Where it is managed**: the settings category „Föderation“ (spec 023) gets the sub-views
+  „Geräte“, „Relays“, „Ordner“, „Spaces“ and „Datenfreigaben“; a space's storage backend is set in
+  its detail view.
+- **Decided 2026-09-28 (D18)**: this three-flag split (delete-own inside `write`,
   separate `delete`). The operator named three options on 2026-09-27; this is the recommended one.
-- **Revocation vs. concurrent writes — proposed rule**: a change encrypted under key epoch _e_ is
+- **Revocation vs. concurrent writes — decided 2026-09-28 (D19)**: a change encrypted under key epoch _e_ is
   valid if its author vault held the needed capability in the member list of epoch _e_. Revocation
-  therefore acts forward only; a member writing concurrently with its removal may have that last
-  write accepted. The alternative, keeping a batch log per scope and recomputing affected cells on
-  membership change, is correct but much heavier. Needs operator confirmation.
+  therefore acts forward only, bounded by the cutoff below; a write made concurrently with the
+  removal survives only on devices that applied it before they learned of the removal. The alternative, keeping a batch log per scope and recomputing affected cells on
+  membership change, is correct but much heavier, and was not chosen.
+- **Revocation cutoff**: a member list that removes a vault or lowers its rights carries, for each
+  device of that vault, the highest per-origin sequence number (§5.5) the admin had applied. Every
+  device that knows the list rejects the affected vault's changes beyond that cutoff that need the
+  withdrawn right, whatever their timestamp. Backdating does not help, because the numbers below the
+  cutoff are already taken. The relay gate stops new uploads at once.
+- **Accepted window (D19)**: a change a device applied before it learned of the revocation stays
+  until the next authorized write to the same cell overwrites it. The guarantee is therefore "every
+  device that knows the revocation rejects everything beyond the cutoff", not "no post-revocation
+  change is ever visible anywhere".
 
 ## 12. Storage backends for spaces (D12)
 
@@ -448,8 +529,9 @@ by ciphertext hash from a signed file index. Only the way a device obtains acces
 
 - The relay operator runs the storage (S3-compatible). The relay _is_ the storage provider, so its
   access is unavoidable and harmless: it holds only ciphertext, and forgery is detected.
-- Access: the relay checks the member list and issues short-lived presigned URLs; traffic goes
-  directly between device and storage.
+- Access: the relay checks the member list and issues presigned URLs valid for at most 15 minutes;
+  traffic goes directly between device and storage. An issued URL cannot be revoked: a removal stops
+  new URLs at once, and URLs already issued expire within that lifetime.
 - Delete: the relay records the uploading vault per object and allows `DELETE` for the uploader or a
   `delete` holder.
 
@@ -457,14 +539,25 @@ by ciphertext hash from a signed file index. Only the way a device obtains acces
 
 - **The relay never receives the credentials** (D11).
 - **One bucket per space**, with **two scoped tokens**: read-only and read-write. The admin creates
-  them in their vault and wraps them with NIP-44 to members according to capability, inside the
-  encrypted space data.
+  them in their vault and wraps them with NIP-44 to each member vault separately according to
+  capability. They are not merely encrypted under the space key, since then every reader could
+  decrypt the read-write token.
 - Devices access S3 directly with those tokens; the relay is not involved for files.
-- Revocation: rotate the affected token and redistribute it, then rotate the space key.
+- Revocation: in one operation the admin device first revokes or rotates the affected token at the
+  provider, then publishes the new member list, redistributes the token and rotates the space key.
+  If the provider revocation fails, the list is still published, the admin sees a persistent
+  warning, and holzi retries until the provider confirms. The setup check requires the provider to
+  reject a revoked token within 5 minutes; providers that cannot do this use only the fallback path.
+- Members never delete objects themselves; garbage collection runs on an admin device with the
+  admin credentials (or, on the fallback path, with delete links issued only to admin devices after
+  checking that no index entry references the object).
 - **Limit**: S3 cannot enforce "delete own files only"; a read-write token can delete any object.
   File-index tombstones remain client-checked. Physically deleted objects are recovered through
   **bucket versioning**, which the setup flow MUST enable.
-- Provider support for bucket-scoped tokens must be verified per provider. Without it, the fallback
+- Provider support for bucket-scoped tokens must be verified per provider. Candidates named in the
+  design session, all unverified: Cloudflare R2, Backblaze B2, RustFS, AWS S3; Hetzner Object Storage
+  unknown. Recovery also needs a read-write token that cannot delete old versions or disable
+  versioning, which narrows the list further. Without scoped tokens, the fallback
   is an admin device issuing presigned URLs over iroh (available only while that device is online).
 
 ## 13. Threat model
@@ -497,19 +590,22 @@ vault secrets on plane 1, and `created_by` support in the core.
 
 ## 15. Open questions
 
-1. **Delete semantics** (§11) — confirm the three-flag proposal.
-2. **Revocation vs. concurrent writes** (§11) — confirm the forward-only rule.
+1. ~~**Delete semantics**~~ — decided (D18).
+2. ~~**Revocation vs. concurrent writes**~~ — decided (D19).
 3. **Admin loss**: if the admin vault is lost entirely, the space or share is frozen (content stays,
    membership cannot change). Is a "transfer admin" feature needed, and when?
 4. **Vault identity rotation flow** (D8): how counterparties learn the new npub. Inside existing
    shares the old identity can sign a hand-over statement, but only if the key is not the
    compromised one.
-5. **Snapshot authority**: whether any `write` member may upload a compaction snapshot, or only the
-   admin.
-6. **Relay discovery and trust configuration**: how a vault picks relays; whether a space may use
-   several relays for redundancy.
+5. ~~**Snapshot authority**~~ — decided (D21).
+6. **Relay discovery and trust configuration**: how a vault picks relays. Several relays per scope
+   are not v1 (D17).
 7. **Wire formats and event kinds**: sealed batch, member list, attestation, presence, invite DM.
 8. **Rotation cost**: O(recipient vaults) per membership change — measure before large spaces appear.
 9. **Mobile**: plane 1 while the app is foreground-only (v1-scope availability classes).
 10. **Extension storage in holzi**: data shares (028) need extension-owned, prefixed CRDT tables,
     which holzi does not have yet.
+11. ~~**Existing vault copies**~~ — decided (D14).
+12. ~~**Presence and NAT servers before the own relay**~~ — decided (D15).
+13. **Supported S3 providers in v1**: decided as RustFS and AWS S3 (D20); whether each supports
+    scoped tokens, versioning and tokens that cannot delete old versions is still to verify.
