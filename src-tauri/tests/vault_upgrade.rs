@@ -12,6 +12,10 @@
 //! Migration `0009_models_add_tokenizer_repo` is exactly that case, and so
 //! is `0018_models_add_capabilities`.
 
+// These tests read raw vault state (counts, CRDT columns, the schema) that the
+// CRDT write path does not expose.
+#![allow(clippy::disallowed_methods)]
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

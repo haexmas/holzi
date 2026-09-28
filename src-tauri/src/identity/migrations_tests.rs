@@ -4,6 +4,10 @@
 //! previous schema, where 0020 has to drop the spec 015 tables that already
 //! hold rows.
 
+// These tests build legacy schemas and read `sqlite_master` and the delete log
+// directly, which the CRDT write path does not expose.
+#![allow(clippy::disallowed_methods)]
+
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -59,11 +63,8 @@ fn open(
 fn device_of(db: &Database, dir: &Path) -> Uuid {
     let installation_uuid =
         read_or_mint_installation_uuid(&installation_id_path(dir)).expect("installation uuid");
-    db.with_connection(|conn| {
-        Ok(known_devices::get_vault_device_uuid(
-            conn,
-            installation_uuid,
-        )?)
+    crate::storage::query::read(db, |r| {
+        known_devices::get_vault_device_uuid(r, installation_uuid)
     })
     .expect("read vault_device_uuid")
     .expect("bootstrap registered this installation")

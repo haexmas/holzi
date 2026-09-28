@@ -6,6 +6,10 @@
 //! than a colocated `chat_messages_tests.rs` (see
 //! `src-tauri/src/storage/preferences_tests.rs` for the same split).
 
+// These tests read raw vault state (counts, CRDT columns, the schema) that the
+// CRDT write path does not expose.
+#![allow(clippy::disallowed_methods)]
+
 use std::path::PathBuf;
 use std::sync::{Arc, Barrier};
 
@@ -20,6 +24,7 @@ use holzi_lib::identity::{
     holzi_migration_source, installation_id_path, HolziBootstrap, HOLZI_TRIGGER_VERSION,
 };
 use holzi_lib::storage::chat_messages::{self, ChatMessage, FinishReason, MessageRole};
+use holzi_lib::storage::query;
 
 const PASSPHRASE: &str = "chat-message-idempotency";
 
@@ -76,8 +81,8 @@ fn sample_message(
 #[test]
 fn find_by_idempotency_key_returns_none_when_absent() {
     let db = open_db();
-    db.with_connection(|conn| {
-        assert!(chat_messages::find_by_idempotency_key(conn, "missing-key")
+    query::read(&db, |r| {
+        assert!(chat_messages::find_by_idempotency_key(r, "missing-key")
             .unwrap()
             .is_none());
         Ok(())
@@ -90,13 +95,13 @@ fn find_by_idempotency_key_returns_the_matching_row() {
     let db = open_db();
     let thread_id = Uuid::new_v4();
     let msg_id = Uuid::new_v4();
-    db.with_connection(|conn| {
+    db.write(|tx| {
         chat_messages::insert_message(
-            conn,
+            tx,
             &sample_message(msg_id, thread_id, "hello", Some("key-1")),
         )
         .unwrap();
-        let found = chat_messages::find_by_idempotency_key(conn, "key-1")
+        let found = chat_messages::find_by_idempotency_key(tx, "key-1")
             .unwrap()
             .expect("row must be found");
         assert_eq!(found.id, msg_id);
@@ -110,14 +115,14 @@ fn find_by_idempotency_key_returns_the_matching_row() {
 #[test]
 fn reusing_an_idempotency_key_on_a_second_insert_violates_the_unique_index() {
     let db = open_db();
-    db.with_connection(|conn| {
+    db.write(|tx| {
         chat_messages::insert_message(
-            conn,
+            tx,
             &sample_message(Uuid::new_v4(), Uuid::new_v4(), "first", Some("dup-key")),
         )
         .unwrap();
         let err = chat_messages::insert_message(
-            conn,
+            tx,
             &sample_message(Uuid::new_v4(), Uuid::new_v4(), "second", Some("dup-key")),
         )
         .expect_err("second insert with the same idempotency_key must fail");
@@ -130,14 +135,14 @@ fn reusing_an_idempotency_key_on_a_second_insert_violates_the_unique_index() {
 #[test]
 fn multiple_null_idempotency_keys_are_allowed() {
     let db = open_db();
-    db.with_connection(|conn| {
+    db.write(|tx| {
         chat_messages::insert_message(
-            conn,
+            tx,
             &sample_message(Uuid::new_v4(), Uuid::new_v4(), "assistant reply 1", None),
         )
         .unwrap();
         chat_messages::insert_message(
-            conn,
+            tx,
             &sample_message(Uuid::new_v4(), Uuid::new_v4(), "assistant reply 2", None),
         )
         .unwrap();
@@ -150,8 +155,8 @@ fn multiple_null_idempotency_keys_are_allowed() {
 fn resolve_fresh_key_yields_the_deterministic_ids() {
     let db = open_db();
     let (expected_user, expected_assistant) = derive_message_ids("fresh-key");
-    db.with_connection(|conn| {
-        let decision = resolve_idempotent_send(conn, "fresh-key", None, "hi there").unwrap();
+    query::read(&db, |r| {
+        let decision = resolve_idempotent_send(r, "fresh-key", None, "hi there").unwrap();
         assert_eq!(
             decision,
             IdempotentSend::Fresh {
@@ -169,15 +174,15 @@ fn resolve_duplicate_key_with_matching_thread_and_content_reuses_ids() {
     let db = open_db();
     let thread_id = Uuid::new_v4();
     let (user_id, assistant_id) = derive_message_ids("retry-key");
-    db.with_connection(|conn| {
+    db.write(|tx| {
         chat_messages::insert_message(
-            conn,
+            tx,
             &sample_message(user_id, thread_id, "same content", Some("retry-key")),
         )
         .unwrap();
 
         let decision =
-            resolve_idempotent_send(conn, "retry-key", Some(thread_id), "same content").unwrap();
+            resolve_idempotent_send(tx, "retry-key", Some(thread_id), "same content").unwrap();
         assert_eq!(
             decision,
             IdempotentSend::Duplicate {
@@ -199,14 +204,14 @@ fn resolve_duplicate_key_without_a_requested_thread_does_not_mismatch() {
     let db = open_db();
     let thread_id = Uuid::new_v4();
     let (user_id, _assistant_id) = derive_message_ids("no-thread-key");
-    db.with_connection(|conn| {
+    db.write(|tx| {
         chat_messages::insert_message(
-            conn,
+            tx,
             &sample_message(user_id, thread_id, "content", Some("no-thread-key")),
         )
         .unwrap();
 
-        let decision = resolve_idempotent_send(conn, "no-thread-key", None, "content").unwrap();
+        let decision = resolve_idempotent_send(tx, "no-thread-key", None, "content").unwrap();
         assert!(matches!(decision, IdempotentSend::Duplicate { .. }));
         Ok(())
     })
@@ -218,15 +223,15 @@ fn resolve_duplicate_key_with_mismatched_content_is_invalid_input() {
     let db = open_db();
     let thread_id = Uuid::new_v4();
     let (user_id, _) = derive_message_ids("mismatch-content-key");
-    db.with_connection(|conn| {
+    db.write(|tx| {
         chat_messages::insert_message(
-            conn,
+            tx,
             &sample_message(user_id, thread_id, "original", Some("mismatch-content-key")),
         )
         .unwrap();
 
         let decision = resolve_idempotent_send(
-            conn,
+            tx,
             "mismatch-content-key",
             Some(thread_id),
             "different content",
@@ -244,20 +249,16 @@ fn resolve_duplicate_key_with_mismatched_thread_is_invalid_input() {
     let thread_id = Uuid::new_v4();
     let other_thread_id = Uuid::new_v4();
     let (user_id, _) = derive_message_ids("mismatch-thread-key");
-    db.with_connection(|conn| {
+    db.write(|tx| {
         chat_messages::insert_message(
-            conn,
+            tx,
             &sample_message(user_id, thread_id, "content", Some("mismatch-thread-key")),
         )
         .unwrap();
 
-        let decision = resolve_idempotent_send(
-            conn,
-            "mismatch-thread-key",
-            Some(other_thread_id),
-            "content",
-        )
-        .unwrap();
+        let decision =
+            resolve_idempotent_send(tx, "mismatch-thread-key", Some(other_thread_id), "content")
+                .unwrap();
         assert_eq!(decision, IdempotentSend::Mismatch);
         Ok(())
     })
@@ -267,9 +268,9 @@ fn resolve_duplicate_key_with_mismatched_thread_is_invalid_input() {
 #[test]
 fn a_null_thread_id_always_starts_a_new_thread() {
     let db = open_db();
-    db.with_connection(|conn| {
+    db.write(|tx| {
         let first = persist_send_transaction(
-            conn,
+            tx,
             "new-chat-1",
             None,
             "first conversation",
@@ -279,7 +280,7 @@ fn a_null_thread_id_always_starts_a_new_thread() {
         )
         .unwrap();
         let second = persist_send_transaction(
-            conn,
+            tx,
             "new-chat-2",
             None,
             "second conversation",
@@ -299,8 +300,8 @@ fn a_null_thread_id_always_starts_a_new_thread() {
         };
         assert_ne!(first_thread, second_thread);
 
-        let first_messages = chat_messages::list_messages(conn, first_thread).unwrap();
-        let second_messages = chat_messages::list_messages(conn, second_thread).unwrap();
+        let first_messages = chat_messages::list_messages(tx, first_thread).unwrap();
+        let second_messages = chat_messages::list_messages(tx, second_thread).unwrap();
         assert_eq!(first_messages.len(), 1);
         assert_eq!(second_messages.len(), 1);
         assert_eq!(first_messages[0].content, "first conversation");
@@ -318,15 +319,15 @@ fn legacy_key_retries_keep_the_original_assistant_id() {
     let legacy_user_id = Uuid::new_v5(&Uuid::NAMESPACE_OID, key.as_bytes());
     let legacy_assistant_id =
         Uuid::new_v5(&Uuid::NAMESPACE_OID, format!("{key}:assistant").as_bytes());
-    db.with_connection(|conn| {
+    db.write(|tx| {
         chat_messages::insert_message(
-            conn,
+            tx,
             &sample_message(legacy_user_id, thread_id, "legacy content", Some(key)),
         )
         .unwrap();
 
         assert_eq!(
-            resolve_idempotent_send(conn, key, Some(thread_id), "legacy content").unwrap(),
+            resolve_idempotent_send(tx, key, Some(thread_id), "legacy content").unwrap(),
             IdempotentSend::Duplicate {
                 thread_id,
                 user_message_id: legacy_user_id,
@@ -348,9 +349,9 @@ fn concurrent_same_key_sends_return_one_fresh_and_one_duplicate() {
             let start = Arc::clone(&start);
             std::thread::spawn(move || {
                 start.wait();
-                db.with_connection(|conn| {
+                db.write(|tx| {
                     persist_send_transaction(
-                        conn,
+                        tx,
                         "concurrent-key",
                         None,
                         "same content",
@@ -358,7 +359,6 @@ fn concurrent_same_key_sends_return_one_fresh_and_one_duplicate() {
                         "test-model",
                         1,
                     )
-                    .map_err(haex_crdt::Error::from)
                 })
                 .unwrap()
             })
@@ -417,10 +417,10 @@ fn child_messages_sort_after_parents_when_clock_moves_backwards() {
     let mut child = sample_message(Uuid::new_v4(), thread, "next turn", None);
     child.parent_id = Some(parent.id);
     child.created_at = 1000;
-    db.with_connection(|conn| {
-        chat_messages::insert_message(conn, &parent)?;
-        chat_messages::insert_message(conn, &child)?;
-        let rows = chat_messages::list_messages(conn, thread)?;
+    db.write(|tx| {
+        chat_messages::insert_message(tx, &parent)?;
+        chat_messages::insert_message(tx, &child)?;
+        let rows = chat_messages::list_messages(tx, thread)?;
         assert_eq!(
             rows.iter().map(|m| m.id).collect::<Vec<_>>(),
             vec![parent.id, child.id]
@@ -434,10 +434,10 @@ fn child_messages_sort_after_parents_when_clock_moves_backwards() {
 #[test]
 fn a_send_naming_an_unknown_thread_is_rejected_instead_of_orphaning_rows() {
     let db = open_db();
-    db.with_connection(|conn| {
+    db.write(|tx| {
         let missing_thread_id = Uuid::new_v4();
         let decision = persist_send_transaction(
-            conn,
+            tx,
             "unknown-thread-1",
             Some(missing_thread_id),
             "message for a thread that was never created",
@@ -454,13 +454,13 @@ fn a_send_naming_an_unknown_thread_is_rejected_instead_of_orphaning_rows() {
             }
         );
         assert!(
-            chat_messages::list_messages(conn, missing_thread_id)
+            chat_messages::list_messages(tx, missing_thread_id)
                 .unwrap()
                 .is_empty(),
             "a rejected send must not leave message rows under the unknown thread"
         );
         assert!(
-            chat_messages::find_by_idempotency_key(conn, "unknown-thread-1")
+            chat_messages::find_by_idempotency_key(tx, "unknown-thread-1")
                 .unwrap()
                 .is_none(),
             "a rejected send must not reserve its idempotency key"

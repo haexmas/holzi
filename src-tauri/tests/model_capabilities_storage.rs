@@ -7,6 +7,10 @@
 //! stamp rows with `current_hlc()`, which only exists on an open
 //! `haex_crdt::Database`.
 
+// These tests read raw vault state (counts, CRDT columns, the delete log) that
+// the CRDT write path does not expose.
+#![allow(clippy::disallowed_methods)]
+
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -22,6 +26,7 @@ use holzi_lib::model_capabilities::{
     ModelCapabilities, ReasoningControl, ReasoningOption, ThinkingStyle,
 };
 use holzi_lib::storage::models::{self as models_store, IntegrityStatus, ModelRow, SourceKind};
+use holzi_lib::storage::query;
 
 const PASSPHRASE: &str = "model-capabilities-storage-test";
 
@@ -84,17 +89,19 @@ fn claude_capabilities() -> ModelCapabilities {
 }
 
 fn upsert(db: &Database, m: &ModelRow) {
-    db.with_connection(|conn| {
-        models_store::upsert_model(conn, m).expect("upsert model");
+    db.write(|tx| {
+        models_store::upsert_model(tx, m).expect("upsert model");
         Ok(())
     })
     .expect("upsert");
 }
 
 fn get(db: &Database, id: &str) -> ModelRow {
-    db.with_connection(|conn| Ok(models_store::get_model(conn, id).expect("get model")))
-        .expect("get")
-        .expect("row exists")
+    query::read(db, |r| {
+        Ok(models_store::get_model(r, id).expect("get model"))
+    })
+    .expect("get")
+    .expect("row exists")
 }
 
 /// Raw stored value, bypassing the typed reads.
@@ -112,8 +119,8 @@ fn stored_column(db: &Database, id: &str) -> Option<String> {
 }
 
 fn overwrite_column(db: &Database, id: &str, value: Option<&str>) {
-    db.with_connection(|conn| {
-        conn.execute(
+    db.write(|tx| {
+        tx.execute(
             "UPDATE models SET capabilities_json = ?1 WHERE id = ?2",
             params![value, id],
         )
@@ -140,15 +147,15 @@ fn a_populated_record_round_trips_through_every_typed_read() {
     );
 
     assert_eq!(get(&db, &id).capabilities, Some(claude_capabilities()));
-    let by_provider = db
-        .with_connection(|conn| {
-            Ok(models_store::list_models_by_provider(conn, provider).expect("list"))
-        })
-        .expect("by provider");
+    let by_provider = query::read(&db, |r| {
+        Ok(models_store::list_models_by_provider(r, provider).expect("list"))
+    })
+    .expect("by provider");
     assert_eq!(by_provider[0].capabilities, Some(claude_capabilities()));
-    let all = db
-        .with_connection(|conn| Ok(models_store::list_all_models(conn).expect("list all")))
-        .expect("all");
+    let all = query::read(&db, |r| {
+        Ok(models_store::list_all_models(r).expect("list all"))
+    })
+    .expect("all");
     assert_eq!(
         all.iter()
             .find(|m| m.id == id)
@@ -229,11 +236,10 @@ fn an_unreadable_stored_value_reads_as_none_and_keeps_the_row_listed() {
     let read = get(&db, &id);
     assert_eq!(read.capabilities, None);
     assert_eq!(read.name, id, "every other column stays intact");
-    let listed = db
-        .with_connection(|conn| {
-            Ok(models_store::list_models_by_provider(conn, provider).expect("list"))
-        })
-        .expect("list");
+    let listed = query::read(&db, |r| {
+        Ok(models_store::list_models_by_provider(r, provider).expect("list"))
+    })
+    .expect("list");
     assert_eq!(
         listed.len(),
         1,
@@ -289,9 +295,7 @@ fn backfill_fills_only_null_local_rows_and_is_idempotent() {
     upsert(&db, &row(remote, &remote_id, SourceKind::Provider, None));
 
     let updated = db
-        .with_connection(|conn| {
-            Ok(models_store::backfill_local_capabilities(conn, local).expect("backfill"))
-        })
+        .write(|tx| Ok(models_store::backfill_local_capabilities(tx, local).expect("backfill")))
         .expect("first backfill");
 
     assert_eq!(updated, 2);
@@ -319,9 +323,7 @@ fn backfill_fills_only_null_local_rows_and_is_idempotent() {
     );
 
     let second = db
-        .with_connection(|conn| {
-            Ok(models_store::backfill_local_capabilities(conn, local).expect("backfill"))
-        })
+        .write(|tx| Ok(models_store::backfill_local_capabilities(tx, local).expect("backfill")))
         .expect("second backfill");
     assert_eq!(second, 0, "a second pass changes nothing");
 }

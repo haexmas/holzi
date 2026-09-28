@@ -13,6 +13,7 @@ use crate::identity::{
     holzi_migration_source, installation_id_path, read_or_mint_installation_uuid, HolziBootstrap,
     HOLZI_TRIGGER_VERSION, VAULT_SCOPE_UUID,
 };
+use crate::storage::query;
 
 fn open_test_vault() -> (tempfile::TempDir, Database, Uuid) {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -34,8 +35,7 @@ fn open_test_vault() -> (tempfile::TempDir, Database, Uuid) {
 }
 
 fn list(db: &Database) -> Vec<KnownDevice> {
-    db.with_connection(|conn| Ok(known_devices::list_devices(conn)?))
-        .expect("list devices")
+    query::read(db, |r| known_devices::list_devices(r)).expect("list devices")
 }
 
 #[test]
@@ -55,9 +55,9 @@ fn lists_this_installation_without_the_vault_scope_row() {
 #[test]
 fn lists_another_device_and_its_missing_name() {
     let (_dir, db, installation_uuid) = open_test_vault();
-    db.with_connection(|conn| {
-        known_devices::update_alias(conn, installation_uuid, "Laptop")?;
-        conn.execute(
+    db.write(|tx| {
+        known_devices::update_alias(tx, installation_uuid, "Laptop")?;
+        tx.execute(
             "INSERT INTO known_devices (installation_uuid, vault_device_uuid, alias, first_seen) \
              VALUES (?1, ?2, NULL, 1)",
             params![Uuid::new_v4().to_string(), Uuid::new_v4().to_string()],

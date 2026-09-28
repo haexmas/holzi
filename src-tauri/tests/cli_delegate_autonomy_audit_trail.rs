@@ -24,6 +24,7 @@ use holzi_lib::adapters::{ChatMessage, ChatRequest, ChatRole, ProviderAdapter, S
 use holzi_lib::identity::{holzi_migration_source, installation_id_path, HolziBootstrap};
 use holzi_lib::storage::chat_messages::{list_messages, MessageRole};
 use holzi_lib::storage::chat_threads::{self, ChatThread};
+use holzi_lib::storage::query;
 use holzi_lib::vault_gate::VaultGate;
 
 const PASSPHRASE: &str = "cli-delegate-autonomy-audit-trail";
@@ -153,9 +154,7 @@ sys.stdin.readline()
         .expect("stream_chat should start");
     drain_to_done(stream).await;
 
-    let messages = db
-        .with_connection(|conn| list_messages(conn, thread_id).map_err(haex_crdt::Error::from))
-        .expect("list_messages");
+    let messages = query::read(&db, |r| list_messages(r, thread_id)).expect("list_messages");
     let call_rows: Vec<_> = messages
         .iter()
         .filter(|m| m.role == MessageRole::ToolCall)
@@ -189,9 +188,9 @@ async fn ungated_delegate_stream_never_produces_tool_call_rows() {
     let dir = tempfile::tempdir().expect("tempdir");
     let db = Arc::new(open_vault(dir.path()));
     let thread_id = Uuid::new_v4();
-    db.with_connection(|conn| {
+    db.write(|tx| {
         chat_threads::insert_thread(
-            conn,
+            tx,
             &ChatThread {
                 id: thread_id,
                 title: "test".to_string(),
@@ -201,7 +200,6 @@ async fn ungated_delegate_stream_never_produces_tool_call_rows() {
                 updated_at: 0,
             },
         )
-        .map_err(haex_crdt::Error::from)
     })
     .expect("insert thread");
 
@@ -280,9 +278,7 @@ sys.stdin.readline()
         .expect("stream_chat should start");
     drain_to_done(stream).await;
 
-    let messages = db
-        .with_connection(|conn| list_messages(conn, thread_id).map_err(haex_crdt::Error::from))
-        .expect("list_messages");
+    let messages = query::read(&db, |r| list_messages(r, thread_id)).expect("list_messages");
     assert!(
         messages
             .iter()

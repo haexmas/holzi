@@ -8,6 +8,7 @@ use crate::identity::{
 use crate::model_capabilities::{ModelCapabilities, ReasoningControl};
 use crate::state::{ActiveInstanceHandle, AppState};
 use crate::storage::models::{self, SourceKind};
+use crate::storage::query;
 use crate::vault_gate::VaultGate;
 
 use super::{register_downloaded, scan_installed_slug_dirs, RegisterDownloadedArgs};
@@ -97,14 +98,16 @@ async fn registration_keeps_the_vault_captured_before_a_transfer() {
     .expect("register while another instance is active");
 
     tokio::task::spawn_blocking(move || {
-        assert!(original
-            .with_connection(|conn| Ok(models::get_model(conn, "downloaded")?))
-            .expect("original model")
-            .is_some());
-        assert!(replacement
-            .with_connection(|conn| Ok(models::get_model(conn, "downloaded")?))
-            .expect("replacement model")
-            .is_none());
+        assert!(
+            query::read(&original, |r| models::get_model(r, "downloaded"))
+                .expect("original model")
+                .is_some()
+        );
+        assert!(
+            query::read(&replacement, |r| models::get_model(r, "downloaded"))
+                .expect("replacement model")
+                .is_none()
+        );
         drop(state);
         drop(other_instance_state);
         drop(original);
@@ -174,7 +177,7 @@ async fn registration_records_capabilities_derived_from_the_local_model_id() {
 
     tokio::task::spawn_blocking(move || {
         let read = |id: &str| {
-            db.with_connection(|conn| Ok(models::get_model(conn, id)?))
+            query::read(&db, |r| models::get_model(r, id))
                 .expect("read model")
                 .expect("registered row")
                 .capabilities

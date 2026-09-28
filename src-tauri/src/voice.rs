@@ -318,18 +318,11 @@ mod imp {
             })?;
         let scope = crate::storage::preferences::PrefScope::Device(device_uuid);
         let key = STT_MODEL_PREF_KEY.to_string();
-        let joined = tauri::async_runtime::spawn_blocking(move || {
-            db.with_connection(|conn| {
-                crate::storage::preferences::get(conn, scope, &key).map_err(haex_crdt::Error::from)
+        db.read(move |r| crate::storage::preferences::get(r, scope, &key))
+            .await
+            .map_err(|e| crate::stt::SttError::LocalUnavailable {
+                reason: format!("read STT preference: {e}"),
             })
-        })
-        .await
-        .map_err(|e| crate::stt::SttError::LocalUnavailable {
-            reason: format!("read STT preference task: {e}"),
-        })?;
-        joined.map_err(|e| crate::stt::SttError::LocalUnavailable {
-            reason: format!("read STT preference: {e}"),
-        })
     }
 
     /// Resolves a raw preference read (possibly missing/empty/unknown) to

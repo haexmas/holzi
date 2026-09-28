@@ -342,17 +342,9 @@ async fn resolve_provider_name(
 ) -> Option<String> {
     let provider_id = Uuid::parse_str(provider_id_str).ok()?;
     let db = active_database(state).ok()?;
-    let name = tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            Ok(providers_store::get_provider(conn, provider_id)
-                .map_err(haex_crdt::Error::from)?
-                .map(|p| p.name))
-        })
-    })
-    .await
-    .ok()?
-    .ok()?;
-    name
+    db.read(move |r| Ok(providers_store::get_provider(r, provider_id)?.map(|p| p.name)))
+        .await
+        .ok()?
 }
 
 /// Picks the load-phase for a local model.
@@ -402,29 +394,20 @@ pub(crate) async fn load_api_key_model(
     })?;
     let db = active_database(state)?;
     let id_owned = composite_id.to_string();
-    let db_read = db.clone();
-    let (provider, row) = tauri::async_runtime::spawn_blocking(move || {
-        db_read.with_connection(|conn| {
-            let provider = providers_store::get_provider(conn, provider_id)
-                .map_err(haex_crdt::Error::from)?
-                .ok_or_else(|| {
-                    haex_crdt::Error::from(haex_crdt::rusqlite::Error::QueryReturnedNoRows)
-                })?;
-            let row = models_store::get_model(conn, &id_owned)
-                .map_err(haex_crdt::Error::from)?
-                .ok_or_else(|| {
-                    haex_crdt::Error::from(haex_crdt::rusqlite::Error::QueryReturnedNoRows)
-                })?;
+    let (provider, row) = db
+        .read(move |r| {
+            let provider = providers_store::get_provider(r, provider_id)?.ok_or_else(|| {
+                haex_crdt::Error::from(haex_crdt::rusqlite::Error::QueryReturnedNoRows)
+            })?;
+            let row = models_store::get_model(r, &id_owned)?.ok_or_else(|| {
+                haex_crdt::Error::from(haex_crdt::rusqlite::Error::QueryReturnedNoRows)
+            })?;
             Ok((provider, row))
         })
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("resolve api_key model join: {e}"),
-    })?
-    .map_err(|_| HolziError::ModelNotFound {
-        id: composite_id.to_string(),
-    })?;
+        .await
+        .map_err(|_| HolziError::ModelNotFound {
+            id: composite_id.to_string(),
+        })?;
 
     let provider = crate::providers::repair_legacy_adapter(&db, &provider).await?;
     let provider_kind = provider.kind;
@@ -468,23 +451,17 @@ async fn resolve_local_model_metadata(
 
     let db = active_database(state)?;
     let id_owned = model_id.to_string();
-    let row = tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            let row = models_store::get_model(conn, &id_owned)
-                .map_err(haex_crdt::Error::from)?
-                .ok_or_else(|| {
-                    haex_crdt::Error::from(haex_crdt::rusqlite::Error::QueryReturnedNoRows)
-                })?;
+    let row = db
+        .read(move |r| {
+            let row = models_store::get_model(r, &id_owned)?.ok_or_else(|| {
+                haex_crdt::Error::from(haex_crdt::rusqlite::Error::QueryReturnedNoRows)
+            })?;
             Ok(row)
         })
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("resolve local model join: {e}"),
-    })?
-    .map_err(|_| HolziError::ModelNotFound {
-        id: model_id.to_string(),
-    })?;
+        .await
+        .map_err(|_| HolziError::ModelNotFound {
+            id: model_id.to_string(),
+        })?;
 
     if integrity_override {
         // Persist the explicit safety decision before loading. If this
@@ -492,25 +469,19 @@ async fn resolve_local_model_metadata(
         // no longer visibly marked as untrusted.
         let db = active_database(state)?;
         let id_for_update = model_id.to_string();
-        let status_update = tauri::async_runtime::spawn_blocking(move || {
-            db.with_connection(|conn| {
+        let status_update = db
+            .write(move |tx| {
                 models_store::set_integrity_status(
-                    conn,
+                    tx,
                     &id_for_update,
                     models_store::IntegrityStatus::Untrusted,
                 )
-                .map_err(haex_crdt::Error::from)
             })
-        })
-        .await
-        .map_err(|e| HolziError::ModelIntegrityError {
-            model_id: model_id.to_string(),
-            reason: format!("persisting untrusted status task join: {e}"),
-        })?
-        .map_err(|e| HolziError::ModelIntegrityError {
-            model_id: model_id.to_string(),
-            reason: format!("persisting untrusted status: {e}"),
-        })?;
+            .await
+            .map_err(|e| HolziError::ModelIntegrityError {
+                model_id: model_id.to_string(),
+                reason: format!("persisting untrusted status: {e}"),
+            })?;
         if status_update == 0 {
             return Err(HolziError::ModelIntegrityError {
                 model_id: model_id.to_string(),
@@ -583,17 +554,15 @@ async fn verify_local_model_integrity(
         // error and the expected file hash must never be rewritten here.
         if let Ok(db) = active_database(state) {
             let id_for_update = model_id.to_string();
-            let _ = tauri::async_runtime::spawn_blocking(move || {
-                db.with_connection(|conn| {
+            let _ = db
+                .write(move |tx| {
                     models_store::set_integrity_status(
-                        conn,
+                        tx,
                         &id_for_update,
                         models_store::IntegrityStatus::Untrusted,
                     )
-                    .map_err(haex_crdt::Error::from)
                 })
-            })
-            .await;
+                .await;
         }
         return Err(HolziError::ModelIntegrityMismatch {
             model_id: model_id.to_string(),
@@ -608,17 +577,15 @@ async fn verify_local_model_integrity(
     // check into a blocked load.
     if let Ok(db) = active_database(state) {
         let id_for_update = model_id.to_string();
-        let _ = tauri::async_runtime::spawn_blocking(move || {
-            db.with_connection(|conn| {
+        let _ = db
+            .write(move |tx| {
                 models_store::set_integrity_status(
-                    conn,
+                    tx,
                     &id_for_update,
                     models_store::IntegrityStatus::Verified,
                 )
-                .map_err(haex_crdt::Error::from)
             })
-        })
-        .await;
+            .await;
     }
     Ok(())
 }
@@ -657,28 +624,17 @@ pub(crate) async fn resolve_display_name(
         }
     };
     let id_owned = model_id.to_string();
-    let query = tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            Ok(models_store::get_model(conn, &id_owned)
-                .map_err(haex_crdt::Error::from)?
-                .map(|r| r.name))
-        })
-    })
-    .await;
-    // Every branch below falls back to `None` (the caller then shows the
-    // raw model id), but logs first: a DB query failure or a
-    // `spawn_blocking` join failure is a real bug worth noticing, not the
-    // same "this model just has no cached row" case a plain lookup miss
-    // is — silently collapsing all three made a DB hiccup indistinguishable
-    // from an expected miss.
+    let query = db
+        .read(move |r| Ok(models_store::get_model(r, &id_owned)?.map(|r| r.name)))
+        .await;
+    // Both branches fall back to `None` (the caller then shows the raw
+    // model id), but a failed read logs first: it is a real bug worth
+    // noticing, not the same "this model just has no cached row" case a
+    // plain lookup miss is.
     match query {
-        Ok(Ok(name)) => name,
-        Ok(Err(e)) => {
-            log::warn!("resolve_display_name: db query failed for {model_id}: {e}");
-            None
-        }
+        Ok(name) => name,
         Err(e) => {
-            log::warn!("resolve_display_name: spawn_blocking join failed for {model_id}: {e}");
+            log::warn!("resolve_display_name: db read failed for {model_id}: {e}");
             None
         }
     }

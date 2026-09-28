@@ -10,7 +10,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 use tokio_util::sync::CancellationToken;
 
-use crate::error::{HolziError, Result};
+use crate::error::Result;
 use crate::models::paths;
 use crate::state::AppState;
 use crate::state_utils::active_database;
@@ -58,54 +58,43 @@ pub async fn resolve_default_model(
 ) -> Result<ResolveDefaultModelResult> {
     let db = active_database(&state)?;
     let this_device = db.device_id();
-    let db_clone = db.clone();
-    let (result, installed_local_ids, api_key_ids) =
-        tauri::async_runtime::spawn_blocking(move || {
-            db_clone.with_connection(|conn| {
-                // 1. last_active on this device.
-                let last_active =
-                    preferences::get(conn, PrefScope::Device(this_device), PREF_LAST_ACTIVE_MODEL)
-                        .map_err(haex_crdt::Error::from)?;
-                // 2. default on this device.
-                let default_device =
-                    preferences::get(conn, PrefScope::Device(this_device), PREF_DEFAULT_MODEL)
-                        .map_err(haex_crdt::Error::from)?;
-                // 3. default vault-wide.
-                let default_vault = preferences::get(conn, PrefScope::Vault, PREF_DEFAULT_MODEL)
-                    .map_err(haex_crdt::Error::from)?;
-                // 4. Everything on this device that could load.
-                let all_models =
-                    models_store::list_all_models(conn).map_err(haex_crdt::Error::from)?;
-                let mut installed_local = Vec::new();
-                let mut api_key_ids = Vec::new();
-                for row in &all_models {
-                    if row.id.contains(':') {
-                        api_key_ids.push(row.id.clone());
-                    } else {
-                        // For local models the loadability check is
-                        // "canonical file exists". We do that outside
-                        // the DB call so `paths::canonical_model_file`
-                        // can use the AppHandle.
-                        installed_local.push(row.id.clone());
-                    }
+    let (result, installed_local_ids, api_key_ids) = db
+        .read(move |r| {
+            // 1. last_active on this device.
+            let last_active =
+                preferences::get(r, PrefScope::Device(this_device), PREF_LAST_ACTIVE_MODEL)?;
+            // 2. default on this device.
+            let default_device =
+                preferences::get(r, PrefScope::Device(this_device), PREF_DEFAULT_MODEL)?;
+            // 3. default vault-wide.
+            let default_vault = preferences::get(r, PrefScope::Vault, PREF_DEFAULT_MODEL)?;
+            // 4. Everything on this device that could load.
+            let all_models = models_store::list_all_models(r)?;
+            let mut installed_local = Vec::new();
+            let mut api_key_ids = Vec::new();
+            for row in &all_models {
+                if row.id.contains(':') {
+                    api_key_ids.push(row.id.clone());
+                } else {
+                    // For local models the loadability check is
+                    // "canonical file exists". We do that outside
+                    // the DB call so `paths::canonical_model_file`
+                    // can use the AppHandle.
+                    installed_local.push(row.id.clone());
                 }
-                let candidate_pref = |value: Option<String>| value.filter(|s| !s.is_empty());
-                Ok::<_, haex_crdt::Error>((
-                    (
-                        candidate_pref(last_active),
-                        candidate_pref(default_device),
-                        candidate_pref(default_vault),
-                    ),
-                    installed_local,
-                    api_key_ids,
-                ))
-            })
+            }
+            let candidate_pref = |value: Option<String>| value.filter(|s| !s.is_empty());
+            Ok::<_, haex_crdt::Error>((
+                (
+                    candidate_pref(last_active),
+                    candidate_pref(default_device),
+                    candidate_pref(default_vault),
+                ),
+                installed_local,
+                api_key_ids,
+            ))
         })
-        .await
-        .map_err(|e| HolziError::CrdtInit {
-            reason: format!("resolve_default_model join: {e}"),
-        })?
-        .map_err(HolziError::from)?;
+        .await?;
     let (last_active, default_device, default_vault) = result;
 
     // Validate API-key candidates through the same provider-row, model-row,
@@ -182,32 +171,21 @@ async fn resolve_default_local_model(
 ) -> Result<Option<String>> {
     let db = active_database(state)?;
     let this_device = db.device_id();
-    let db_clone = db.clone();
-    let (preferences_to_try, installed_local_ids) =
-        tauri::async_runtime::spawn_blocking(move || {
-            db_clone.with_connection(|conn| {
-                let last_active =
-                    preferences::get(conn, PrefScope::Device(this_device), PREF_LAST_ACTIVE_MODEL)
-                        .map_err(haex_crdt::Error::from)?;
-                let default_device =
-                    preferences::get(conn, PrefScope::Device(this_device), PREF_DEFAULT_MODEL)
-                        .map_err(haex_crdt::Error::from)?;
-                let default_vault = preferences::get(conn, PrefScope::Vault, PREF_DEFAULT_MODEL)
-                    .map_err(haex_crdt::Error::from)?;
-                let local_ids = models_store::list_all_models(conn)
-                    .map_err(haex_crdt::Error::from)?
-                    .into_iter()
-                    .filter(|row| !row.id.contains(':'))
-                    .map(|row| row.id)
-                    .collect::<Vec<_>>();
-                Ok::<_, haex_crdt::Error>(([last_active, default_device, default_vault], local_ids))
-            })
+    let (preferences_to_try, installed_local_ids) = db
+        .read(move |r| {
+            let last_active =
+                preferences::get(r, PrefScope::Device(this_device), PREF_LAST_ACTIVE_MODEL)?;
+            let default_device =
+                preferences::get(r, PrefScope::Device(this_device), PREF_DEFAULT_MODEL)?;
+            let default_vault = preferences::get(r, PrefScope::Vault, PREF_DEFAULT_MODEL)?;
+            let local_ids = models_store::list_all_models(r)?
+                .into_iter()
+                .filter(|row| !row.id.contains(':'))
+                .map(|row| row.id)
+                .collect::<Vec<_>>();
+            Ok::<_, haex_crdt::Error>(([last_active, default_device, default_vault], local_ids))
         })
-        .await
-        .map_err(|e| HolziError::CrdtInit {
-            reason: format!("resolve_default_local_model join: {e}"),
-        })?
-        .map_err(HolziError::from)?;
+        .await?;
 
     let loadable_local = installed_local_ids
         .into_iter()

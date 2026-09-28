@@ -20,6 +20,7 @@ use holzi_lib::identity::{
 };
 use holzi_lib::storage::models::{self as models_store, IntegrityStatus, ModelRow, SourceKind};
 use holzi_lib::storage::providers::{insert_provider, Provider, ProviderCapability, ProviderKind};
+use holzi_lib::storage::query;
 use uuid::Uuid;
 
 async fn open_test_db(name: &str) -> (tempfile::TempDir, Arc<Database>) {
@@ -88,9 +89,9 @@ async fn catalog_import_and_huggingface_rows_coexist_and_roundtrip() {
     let provider_id = Uuid::new_v4();
 
     tokio::task::spawn_blocking(move || {
-        db.with_connection(|conn| {
+        db.write(|tx| {
             insert_provider(
-                conn,
+                tx,
                 &Provider {
                     id: provider_id,
                     kind: ProviderKind::Local,
@@ -102,8 +103,8 @@ async fn catalog_import_and_huggingface_rows_coexist_and_roundtrip() {
                     capability: ProviderCapability::Chat,
                 },
             )?;
-            models_store::upsert_model(conn, &catalog_row("qwen3-0.6b", provider_id))?;
-            models_store::upsert_model(conn, &hf_row("hf-freerepo", provider_id))?;
+            models_store::upsert_model(tx, &catalog_row("qwen3-0.6b", provider_id))?;
+            models_store::upsert_model(tx, &hf_row("hf-freerepo", provider_id))?;
             let imported = ModelRow {
                 id: "imported-local".into(),
                 provider_id,
@@ -120,16 +121,12 @@ async fn catalog_import_and_huggingface_rows_coexist_and_roundtrip() {
                 source_kind: SourceKind::Imported,
                 capabilities: None,
             };
-            models_store::upsert_model(conn, &imported)?;
+            models_store::upsert_model(tx, &imported)?;
             Ok::<_, haex_crdt::Error>(())
         })
         .expect("seed rows");
 
-        let all = db
-            .with_connection(|conn| {
-                models_store::list_all_models(conn).map_err(haex_crdt::Error::from)
-            })
-            .expect("list all models");
+        let all = query::read(&db, |r| models_store::list_all_models(r)).expect("list all models");
         assert_eq!(all.len(), 3);
 
         let catalog = all
@@ -169,9 +166,9 @@ async fn a_hash_mismatch_is_never_silently_upgraded_to_verified() {
     let provider_id = Uuid::new_v4();
 
     tokio::task::spawn_blocking(move || {
-        db.with_connection(|conn| {
+        db.write(|tx| {
             insert_provider(
-                conn,
+                tx,
                 &Provider {
                     id: provider_id,
                     kind: ProviderKind::Local,
@@ -183,36 +180,28 @@ async fn a_hash_mismatch_is_never_silently_upgraded_to_verified() {
                     capability: ProviderCapability::Chat,
                 },
             )?;
-            models_store::upsert_model(conn, &hf_row("hf-freerepo", provider_id))?;
+            models_store::upsert_model(tx, &hf_row("hf-freerepo", provider_id))?;
             Ok::<_, haex_crdt::Error>(())
         })
         .expect("seed row");
 
         let expected_hash = "b".repeat(64);
 
-        db.with_connection(|conn| {
-            models_store::set_integrity_status(conn, "hf-freerepo", IntegrityStatus::Untrusted)
-                .map_err(haex_crdt::Error::from)
+        db.write(|tx| {
+            models_store::set_integrity_status(tx, "hf-freerepo", IntegrityStatus::Untrusted)
         })
         .expect("mark untrusted");
-        let row = db
-            .with_connection(|conn| {
-                models_store::get_model(conn, "hf-freerepo").map_err(haex_crdt::Error::from)
-            })
+        let row = query::read(&db, |r| models_store::get_model(r, "hf-freerepo"))
             .expect("get after untrusted")
             .expect("row exists");
         assert_eq!(row.integrity_status, IntegrityStatus::Untrusted);
         assert_eq!(row.file_sha256.as_deref(), Some(expected_hash.as_str()));
 
-        db.with_connection(|conn| {
-            models_store::set_integrity_status(conn, "hf-freerepo", IntegrityStatus::Verified)
-                .map_err(haex_crdt::Error::from)
+        db.write(|tx| {
+            models_store::set_integrity_status(tx, "hf-freerepo", IntegrityStatus::Verified)
         })
         .expect("mark verified again");
-        let row = db
-            .with_connection(|conn| {
-                models_store::get_model(conn, "hf-freerepo").map_err(haex_crdt::Error::from)
-            })
+        let row = query::read(&db, |r| models_store::get_model(r, "hf-freerepo"))
             .expect("get after verified")
             .expect("row exists");
         assert_eq!(row.integrity_status, IntegrityStatus::Verified);
@@ -229,9 +218,9 @@ async fn backfill_source_kind_reclassifies_local_rows_but_never_touches_a_provid
     let api_provider_id = Uuid::new_v4();
 
     tokio::task::spawn_blocking(move || {
-        db.with_connection(|conn| {
+        db.write(|tx| {
             insert_provider(
-                conn,
+                tx,
                 &Provider {
                     id: local_provider_id,
                     kind: ProviderKind::Local,
@@ -244,7 +233,7 @@ async fn backfill_source_kind_reclassifies_local_rows_but_never_touches_a_provid
                 },
             )?;
             insert_provider(
-                conn,
+                tx,
                 &Provider {
                     id: api_provider_id,
                     kind: ProviderKind::ApiKey,
@@ -287,25 +276,20 @@ async fn backfill_source_kind_reclassifies_local_rows_but_never_touches_a_provid
                 source_kind: SourceKind::Provider,
                 capabilities: None,
             };
-            models_store::upsert_model(conn, &legacy_catalog)?;
-            models_store::upsert_model(conn, &legacy_import)?;
-            models_store::upsert_model(conn, &real_provider_model)?;
+            models_store::upsert_model(tx, &legacy_catalog)?;
+            models_store::upsert_model(tx, &legacy_import)?;
+            models_store::upsert_model(tx, &real_provider_model)?;
             Ok::<_, haex_crdt::Error>(())
         })
         .expect("seed legacy rows");
 
-        db.with_connection(|conn| {
-            models_store::backfill_source_kind(conn, local_provider_id, &["qwen3-0.6b"])
-                .map_err(haex_crdt::Error::from)
-        })
-        .expect("backfill");
+        db.write(|tx| models_store::backfill_source_kind(tx, local_provider_id, &["qwen3-0.6b"]))
+            .expect("backfill");
 
         let get = |id: &str| -> ModelRow {
-            db.with_connection(|conn| {
-                models_store::get_model(conn, id).map_err(haex_crdt::Error::from)
-            })
-            .expect("get")
-            .unwrap_or_else(|| panic!("row {id} must exist"))
+            query::read(&db, |r| models_store::get_model(r, id))
+                .expect("get")
+                .unwrap_or_else(|| panic!("row {id} must exist"))
         };
 
         assert_eq!(get("qwen3-0.6b").source_kind, SourceKind::Catalog);
@@ -319,10 +303,7 @@ async fn backfill_source_kind_reclassifies_local_rows_but_never_touches_a_provid
 
         // Idempotent: a second pass changes nothing further.
         let updated = db
-            .with_connection(|conn| {
-                models_store::backfill_source_kind(conn, local_provider_id, &["qwen3-0.6b"])
-                    .map_err(haex_crdt::Error::from)
-            })
+            .write(|tx| models_store::backfill_source_kind(tx, local_provider_id, &["qwen3-0.6b"]))
             .expect("second backfill");
         assert_eq!(updated, 0);
     })

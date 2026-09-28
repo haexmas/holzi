@@ -19,6 +19,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use haex_crdt::Database;
 use tokio::runtime::Handle;
+use tokio::sync::Notify;
 use tokio::task::{AbortHandle, JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::task_tracker::TaskTrackerToken;
@@ -102,6 +103,9 @@ struct Inner {
     forced_end: AtomicBool,
     /// Runtime that runs tracked work. `None` means Tauri's own async runtime.
     runtime: Option<Handle>,
+    /// Woken after every committed `VaultDb` write, so the sync service (spec 024) can tell
+    /// connected devices about the new progress.
+    sync_notify: Arc<Notify>,
 }
 
 pub(crate) struct Admission<'a> {
@@ -115,7 +119,11 @@ impl Admission<'_> {
     }
 
     pub(crate) fn vault_db(&self, db: Arc<Database>) -> VaultDb {
-        VaultDb::new(db, self.tracker_token())
+        VaultDb::new(
+            db,
+            Arc::clone(&self.gate.inner.sync_notify),
+            self.tracker_token(),
+        )
     }
 
     pub(crate) fn spawn<F>(&self, fut: F) -> JoinHandle<F::Output>
@@ -168,6 +176,7 @@ impl VaultGate {
                 children: ChildRegistry::default(),
                 forced_end: AtomicBool::new(false),
                 runtime,
+                sync_notify: Arc::new(Notify::new()),
             }),
         }
     }
@@ -242,6 +251,12 @@ impl VaultGate {
     /// A token that keeps the tracker non-empty until it is dropped.
     pub fn tracker_token(&self) -> Result<TaskTrackerToken> {
         self.with_admission(|admission| Ok(admission.tracker_token()))
+    }
+
+    /// Woken after every committed [`VaultDb::write`]; one wake-up may stand for several
+    /// writes.
+    pub fn sync_notify(&self) -> Arc<Notify> {
+        Arc::clone(&self.inner.sync_notify)
     }
 
     /// Wraps a database handle so the tracker counts it while any clone is alive.

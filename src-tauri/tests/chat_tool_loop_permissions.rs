@@ -46,6 +46,7 @@ use holzi_lib::chat::commands::abort_turn;
 use holzi_lib::chat::session::ChatState;
 use holzi_lib::chat::tools::{ApprovalDecision, RiskClass};
 use holzi_lib::storage::chat_messages::{self as msg_store, FinishReason, MessageRole};
+use holzi_lib::storage::query;
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -125,11 +126,7 @@ async fn manual_mode_emits_a_permission_request_for_a_safe_tool() {
     );
     handle.await.unwrap();
 
-    let rows = db
-        .with_connection(|conn| {
-            msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)
-        })
-        .unwrap();
+    let rows = query::read(&db, |r| msg_store::list_messages(r, thread_id)).unwrap();
     let tool_result = rows
         .iter()
         .find(|m| m.role == MessageRole::ToolResult)
@@ -221,11 +218,7 @@ async fn a_leaked_tool_call_tag_is_stripped_from_the_interim_assistant_text() {
     );
     handle.await.unwrap();
 
-    let rows = db
-        .with_connection(|conn| {
-            msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)
-        })
-        .unwrap();
+    let rows = query::read(&db, |r| msg_store::list_messages(r, thread_id)).unwrap();
     // The tag carried no real text of its own, so once stripped there is
     // nothing left to show — no stray interim `Assistant` row at all, and
     // certainly none containing the raw tag.
@@ -295,11 +288,7 @@ async fn manual_mode_emits_a_permission_request_for_the_risky_cli_tool() {
     );
     handle.await.unwrap();
 
-    let rows = db
-        .with_connection(|conn| {
-            msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)
-        })
-        .unwrap();
+    let rows = query::read(&db, |r| msg_store::list_messages(r, thread_id)).unwrap();
     let tool_result = rows
         .iter()
         .find(|m| m.role == MessageRole::ToolResult)
@@ -365,11 +354,7 @@ async fn denying_a_request_produces_an_error_result_and_the_turn_continues() {
     );
     handle.await.unwrap();
 
-    let rows = db
-        .with_connection(|conn| {
-            msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)
-        })
-        .unwrap();
+    let rows = query::read(&db, |r| msg_store::list_messages(r, thread_id)).unwrap();
     let tool_result = rows
         .iter()
         .find(|m| m.role == MessageRole::ToolResult)
@@ -553,11 +538,7 @@ async fn aborting_during_tool_execution_kills_the_process_and_ends_the_turn() {
         "abort must kill the sleeping process rather than waiting it out: took {elapsed:?}"
     );
 
-    let rows = db
-        .with_connection(|conn| {
-            msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)
-        })
-        .unwrap();
+    let rows = query::read(&db, |r| msg_store::list_messages(r, thread_id)).unwrap();
     assert!(
         rows.iter()
             .all(|m| m.role != MessageRole::ToolCall && m.role != MessageRole::ToolResult),
@@ -630,11 +611,7 @@ async fn aborting_a_pending_permission_request_cancels_the_turn_not_denies_it() 
     abort_turn(&chat_state).unwrap();
     handle.await.unwrap();
 
-    let rows = db
-        .with_connection(|conn| {
-            msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)
-        })
-        .unwrap();
+    let rows = query::read(&db, |r| msg_store::list_messages(r, thread_id)).unwrap();
     assert!(
         rows.iter()
             .all(|m| m.role != MessageRole::ToolCall && m.role != MessageRole::ToolResult),
@@ -738,11 +715,7 @@ async fn two_independent_risky_calls_each_get_their_own_pending_request() {
     respond(&chat_state, id2, ApprovalDecision::Deny);
     handle.await.unwrap();
 
-    let rows = db
-        .with_connection(|conn| {
-            msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)
-        })
-        .unwrap();
+    let rows = query::read(&db, |r| msg_store::list_messages(r, thread_id)).unwrap();
     let result_a = rows
         .iter()
         .find(|m| m.role == MessageRole::ToolResult && m.tool_call_id.as_deref() == Some("call-a"))
@@ -832,11 +805,7 @@ async fn a_mode_change_while_pending_only_affects_the_next_tool_use() {
         "round 2 must observe the new mode and execute without asking"
     );
 
-    let rows = db
-        .with_connection(|conn| {
-            msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)
-        })
-        .unwrap();
+    let rows = query::read(&db, |r| msg_store::list_messages(r, thread_id)).unwrap();
     let tool_call_rows = rows
         .iter()
         .filter(|m| m.role == MessageRole::ToolCall)
@@ -949,10 +918,7 @@ async fn ci_e2e_loaded_model_can_request_and_process_a_cli_command() {
     handle.await.expect("the CI E2E turn task must not panic");
     assert!(permission_request_seen);
 
-    let rows = db
-        .with_connection(|conn| {
-            msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)
-        })
+    let rows = query::read(&db, |r| msg_store::list_messages(r, thread_id))
         .expect("the encrypted vault must contain the completed turn");
     let tool_call = rows
         .iter()
@@ -1115,11 +1081,7 @@ async fn a_real_local_model_can_request_and_process_a_cli_command() {
         "the local model did not request run_command; events={observed_events:?}; errors={observed_errors:?}; generated={generated_text:?}"
     );
 
-    let rows = db
-        .with_connection(|conn| {
-            msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)
-        })
-        .unwrap();
+    let rows = query::read(&db, |r| msg_store::list_messages(r, thread_id)).unwrap();
     let tool_call = rows
         .iter()
         .find(|message| message.role == MessageRole::ToolCall)

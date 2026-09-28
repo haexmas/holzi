@@ -262,19 +262,12 @@ pub async fn install_huggingface_update(
 ) -> Result<InstalledModelPayload> {
     let db = active_database(&state)?;
     let id_for_lookup = model_id.clone();
-    let row = tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            models_store::get_model(conn, &id_for_lookup).map_err(haex_crdt::Error::from)
-        })
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("install_huggingface_update lookup join: {e}"),
-    })?
-    .map_err(HolziError::from)?
-    .ok_or_else(|| HolziError::ModelNotFound {
-        id: model_id.clone(),
-    })?;
+    let row = db
+        .read(move |r| models_store::get_model(r, &id_for_lookup))
+        .await?
+        .ok_or_else(|| HolziError::ModelNotFound {
+            id: model_id.clone(),
+        })?;
 
     if row.source_kind != SourceKind::Huggingface {
         return Err(HolziError::InvalidInput {
@@ -318,16 +311,7 @@ pub async fn check_huggingface_model_updates(
     state: State<'_, AppState>,
 ) -> Result<Vec<HuggingFaceUpdateStatusPayload>> {
     let db = active_database(&state)?;
-    let rows = tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            models_store::list_all_models(conn).map_err(haex_crdt::Error::from)
-        })
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("check_huggingface_model_updates list join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
+    let rows = db.read(move |r| models_store::list_all_models(r)).await?;
 
     let trackable: Vec<ModelRow> = rows
         .into_iter()
@@ -406,17 +390,9 @@ async fn download_from_hf_inner(
         // source (repo + filename + revision) is already installed under
         // this id — skip the network round-trip entirely.
         let id_for_lookup = args.id.clone();
-        let db_for_lookup = db.clone();
-        let existing_row = tauri::async_runtime::spawn_blocking(move || {
-            db_for_lookup.with_connection(|conn| {
-                models_store::get_model(conn, &id_for_lookup).map_err(haex_crdt::Error::from)
-            })
-        })
-        .await
-        .map_err(|e| HolziError::CrdtInit {
-            reason: format!("download_from_hf_inner idempotency lookup join: {e}"),
-        })?
-        .map_err(HolziError::from)?;
+        let existing_row = db
+            .read(move |r| models_store::get_model(r, &id_for_lookup))
+            .await?;
         if let Some(row) = existing_row {
             let same_source = row.hf_repo.as_deref() == Some(args.hf_repo.as_str())
                 && row.hf_filename.as_deref() == Some(args.hf_filename.as_str())
@@ -620,29 +596,24 @@ pub async fn list_installed_models(
         reason: format!("list_installed_models scan join: {e}"),
     })?;
 
-    let payload = tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
+    let payload = db
+        .write(move |tx| {
             let catalog_repos: Vec<(&str, &str)> = catalog::entries()
                 .iter()
                 .map(|entry| (entry.id.as_str(), entry.tokenizer_repo.as_str()))
                 .collect();
-            models_store::backfill_tokenizer_repo(conn, &catalog_repos)
-                .map_err(haex_crdt::Error::from)?;
+            models_store::backfill_tokenizer_repo(tx, &catalog_repos)?;
 
-            let local_provider_id = ensure_local_provider(conn).map_err(haex_crdt::Error::from)?;
+            let local_provider_id = ensure_local_provider(tx)?;
             let catalog_ids: Vec<&str> = catalog::entries().iter().map(|e| e.id.as_str()).collect();
-            models_store::backfill_source_kind(conn, local_provider_id, &catalog_ids)
-                .map_err(haex_crdt::Error::from)?;
+            models_store::backfill_source_kind(tx, local_provider_id, &catalog_ids)?;
             // Models registered before capabilities existed have no provider
             // refresh to fill them (spec 012).
-            models_store::backfill_local_capabilities(conn, local_provider_id)
-                .map_err(haex_crdt::Error::from)?;
+            models_store::backfill_local_capabilities(tx, local_provider_id)?;
 
             let mut out = Vec::with_capacity(canonical_files.len());
             for (slug, cf) in canonical_files {
-                let Some(row) =
-                    models_store::get_model(conn, &slug).map_err(haex_crdt::Error::from)?
-                else {
+                let Some(row) = models_store::get_model(tx, &slug)? else {
                     continue;
                 };
                 out.push(InstalledModelPayload {
@@ -664,12 +635,7 @@ pub async fn list_installed_models(
             }
             Ok(out)
         })
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("list_installed_models join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
+        .await?;
     Ok(payload)
 }
 
@@ -746,8 +712,7 @@ struct RegisterDownloadedArgs {
 }
 
 /// Shared post-download / post-import work: hash the finalized file, then
-/// `models` upsert + ensure local provider, in the same `spawn_blocking`
-/// call. The on-disk file is authoritative for "installed here" (spec 002
+/// `models` upsert + ensure local provider, in one vault write. The on-disk file is authoritative for "installed here" (spec 002
 /// §"Installed model"); the caller has already written the finalised
 /// before invoking this helper — `download::download_to_file` and
 /// `import::copy_into_managed` both fully write the staging file first. The
@@ -803,59 +768,49 @@ async fn register_downloaded(args: RegisterDownloadedArgs) -> Result<InstalledMo
             return Err(error);
         }
     };
-    let db_result =
-        match tauri::async_runtime::spawn_blocking(move || -> Result<InstalledModelPayload> {
-            db.with_connection(|conn| {
-                let provider_id = ensure_local_provider(conn).map_err(haex_crdt::Error::from)?;
-                let m = ModelRow {
-                    id: id.clone(),
-                    provider_id,
-                    name: name.clone(),
-                    context_window,
-                    fetched_at: Some(now_ms()),
-                    tokenizer_repo,
-                    hf_repo: hf_repo.clone(),
-                    hf_filename: hf_filename.clone(),
-                    hf_revision: hf_revision.clone(),
-                    hf_revision_ref: hf_revision_ref.clone(),
-                    file_sha256: Some(file_sha256.clone()),
-                    integrity_status: IntegrityStatus::Verified,
-                    source_kind,
-                    // The one creation site every download/import path shares:
-                    // a local model has no provider to ask, so its record is
-                    // derived here (spec 012).
-                    capabilities: Some(ModelCapabilities::local(&id)),
-                };
-                models_store::upsert_model(conn, &m).map_err(haex_crdt::Error::from)?;
-                Ok(InstalledModelPayload {
-                    id,
-                    name,
-                    provider_id: provider_id.to_string(),
-                    context_window,
-                    relative_path: relative,
-                    size_bytes,
-                    source_kind,
-                    hf_repo,
-                    hf_filename,
-                    hf_revision,
-                    hf_revision_ref,
-                    file_sha256: Some(file_sha256),
-                    integrity_status: IntegrityStatus::Verified,
-                    capabilities: m.capabilities,
-                })
+    // A join failure comes back as an error here too, so it rolls the file back like any
+    // other failed registration.
+    let db_result = db
+        .write(move |tx| {
+            let provider_id = ensure_local_provider(tx)?;
+            let m = ModelRow {
+                id: id.clone(),
+                provider_id,
+                name: name.clone(),
+                context_window,
+                fetched_at: Some(now_ms()),
+                tokenizer_repo,
+                hf_repo: hf_repo.clone(),
+                hf_filename: hf_filename.clone(),
+                hf_revision: hf_revision.clone(),
+                hf_revision_ref: hf_revision_ref.clone(),
+                file_sha256: Some(file_sha256.clone()),
+                integrity_status: IntegrityStatus::Verified,
+                source_kind,
+                // The one creation site every download/import path shares:
+                // a local model has no provider to ask, so its record is
+                // derived here (spec 012).
+                capabilities: Some(ModelCapabilities::local(&id)),
+            };
+            models_store::upsert_model(tx, &m)?;
+            Ok(InstalledModelPayload {
+                id,
+                name,
+                provider_id: provider_id.to_string(),
+                context_window,
+                relative_path: relative,
+                size_bytes,
+                source_kind,
+                hf_repo,
+                hf_filename,
+                hf_revision,
+                hf_revision_ref,
+                file_sha256: Some(file_sha256),
+                integrity_status: IntegrityStatus::Verified,
+                capabilities: m.capabilities,
             })
-            .map_err(HolziError::from)
         })
-        .await
-        {
-            Ok(result) => result,
-            Err(error) => {
-                rollback_published_file(&destination, backup).await?;
-                return Err(HolziError::CrdtInit {
-                    reason: format!("register_downloaded join: {error}"),
-                });
-            }
-        };
+        .await;
 
     match db_result {
         Ok(payload) => {

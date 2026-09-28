@@ -29,14 +29,21 @@ async fn failed_thread_update_rolls_back_final_assistant_message() {
                 &crate::identity::installation_id_path(tmp.path()), true,
             )).unwrap();
             let thread_id = Uuid::new_v4();
-            db.with_connection(|conn| {
-                thread_store::insert_thread(conn, &ChatThread {
+            db.write(|tx| {
+                thread_store::insert_thread(tx, &ChatThread {
                     id: thread_id, title: "Keep me".into(), last_provider_id: None,
                     last_model_id: None, created_at: 0, updated_at: 0,
-                })?;
+                })
+            }).unwrap();
+            // A trigger is schema, which the CRDT write path does not create.
+            #[allow(clippy::disallowed_methods)]
+            db.with_connection(|conn| {
                 conn.execute_batch("CREATE TRIGGER reject_thread_update BEFORE UPDATE ON chat_threads BEGIN SELECT RAISE(ABORT, 'injected update failure'); END;")?;
                 Ok(())
             }).unwrap();
+            let db = crate::vault_gate::VaultGate::new()
+                .vault_db(std::sync::Arc::new(db))
+                .unwrap();
             (tmp, db, thread_id)
         }).await.unwrap();
     let message = ChatMessage {
@@ -49,10 +56,10 @@ async fn failed_thread_update_rolls_back_final_assistant_message() {
         .await
         .is_err());
     tokio::task::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            assert!(msg_store::list_messages(conn, thread_id)?.is_empty());
+        db.read_blocking(|r| {
+            assert!(msg_store::list_messages(r, thread_id)?.is_empty());
             assert_eq!(
-                thread_store::get_thread(conn, thread_id)?.unwrap().title,
+                thread_store::get_thread(r, thread_id)?.unwrap().title,
                 "Keep me"
             );
             Ok(())

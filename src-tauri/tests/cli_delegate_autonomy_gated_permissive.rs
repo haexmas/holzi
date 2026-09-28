@@ -32,6 +32,7 @@ use holzi_lib::adapters::cli_delegate::{
 use holzi_lib::adapters::{ChatMessage, ChatRequest, ChatRole, ProviderAdapter, StreamChunk};
 use holzi_lib::identity::{holzi_migration_source, installation_id_path, HolziBootstrap};
 use holzi_lib::storage::chat_messages::{list_messages, MessageRole};
+use holzi_lib::storage::query;
 use holzi_lib::vault_gate::VaultGate;
 
 const PASSPHRASE: &str = "cli-delegate-autonomy-gated-permissive";
@@ -220,9 +221,7 @@ sys.stdin.readline()
         "GatedPermissive must never emit tool-permission-request"
     );
 
-    let messages = db
-        .with_connection(|conn| list_messages(conn, thread_id).map_err(haex_crdt::Error::from))
-        .expect("list_messages");
+    let messages = query::read(&db, |r| list_messages(r, thread_id)).expect("list_messages");
     let call_row = messages
         .iter()
         .find(|m| m.role == MessageRole::ToolCall)

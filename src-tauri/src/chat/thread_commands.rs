@@ -62,31 +62,18 @@ pub async fn create_thread(
         updated_at: now,
     };
     let inserted = thread.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            thread_store::insert_thread(conn, &inserted).map_err(haex_crdt::Error::from)?;
-            Ok(())
-        })
+    db.write(move |tx| {
+        thread_store::insert_thread(tx, &inserted)?;
+        Ok(())
     })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("create_thread join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
+    .await?;
     Ok(thread.into())
 }
 
 #[tauri::command]
 pub async fn list_threads(state: State<'_, AppState>) -> Result<Vec<ThreadPayload>> {
     let db = active_database(&state)?;
-    let rows = tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| thread_store::list_threads(conn).map_err(haex_crdt::Error::from))
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("list_threads join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
+    let rows = db.read(move |r| thread_store::list_threads(r)).await?;
     Ok(rows.into_iter().map(Into::into).collect())
 }
 
@@ -96,16 +83,9 @@ pub async fn list_messages(
     thread_id: Uuid,
 ) -> Result<Vec<MessagePayload>> {
     let db = active_database(&state)?;
-    let rows = tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)
-        })
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("list_messages join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
+    let rows = db
+        .read(move |r| msg_store::list_messages(r, thread_id))
+        .await?;
     Ok(rows.into_iter().map(Into::into).collect())
 }
 
@@ -119,29 +99,18 @@ pub async fn rename_thread(
     })?;
     let title = validate_thread_title(&args.title)?;
     let db = active_database(&state)?;
-    let row = tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            if thread_store::get_thread(conn, thread_id)
-                .map_err(haex_crdt::Error::from)?
-                .is_none()
-            {
+    let row = db
+        .write(move |tx| {
+            if thread_store::get_thread(tx, thread_id)?.is_none() {
                 return Ok(None);
             }
-            let updated = thread_store::rename_title(conn, thread_id, &title)
-                .map_err(haex_crdt::Error::from)?;
+            let updated = thread_store::rename_title(tx, thread_id, &title)?;
             if updated != 1 {
                 return Ok(None);
             }
-            Ok(thread_store::get_thread(conn, thread_id)
-                .map_err(haex_crdt::Error::from)?
-                .map(Into::into))
+            Ok(thread_store::get_thread(tx, thread_id)?.map(Into::into))
         })
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("rename_thread join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
+        .await?;
 
     row.ok_or_else(|| HolziError::NotFound {
         name: thread_id.to_string(),
@@ -154,17 +123,9 @@ pub async fn delete_thread(state: State<'_, AppState>, args: DeleteThreadArgs) -
         reason: "threadId must be a valid UUID".into(),
     })?;
     let db = active_database(&state)?;
-    let deleted = tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            thread_store::delete_thread_and_messages(conn, thread_id)
-                .map_err(haex_crdt::Error::from)
-        })
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("delete_thread join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
+    let deleted = db
+        .write(move |tx| thread_store::delete_thread_and_messages(tx, thread_id))
+        .await?;
 
     if deleted {
         Ok(())

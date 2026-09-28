@@ -350,7 +350,7 @@ pub enum DenyRulesError {
     #[error("stored deny rules are not valid JSON or contain an unknown category: {0}")]
     InvalidValue(#[from] serde_json::Error),
     #[error("preferences storage error: {0}")]
-    Storage(#[from] haex_crdt::rusqlite::Error),
+    Storage(#[from] haex_crdt::Error),
 }
 
 /// Pure parsing step for the persisted preference value — split out from
@@ -374,9 +374,9 @@ fn parse_deny_rules(raw: Option<String>) -> Result<Vec<DenyCategory>, DenyRulesE
 /// Reads the persisted deny-rule set (see [`parse_deny_rules`] for the
 /// value-shape rules). It applies to the whole vault since spec 023 (FR-024).
 pub fn get_deny_rules(
-    conn: &haex_crdt::rusqlite::Connection,
+    q: &mut impl crate::storage::query::Query,
 ) -> Result<Vec<DenyCategory>, DenyRulesError> {
-    let raw = preferences::get(conn, PrefScope::Vault, PREF_DENY_RULES)?;
+    let raw = preferences::get(q, PrefScope::Vault, PREF_DENY_RULES)?;
     parse_deny_rules(raw)
 }
 

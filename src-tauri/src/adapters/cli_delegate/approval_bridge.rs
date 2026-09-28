@@ -125,17 +125,11 @@ async fn gated_permissive_decision(
     let Some(database) = database else {
         return ApprovalDecision::Deny;
     };
-    let rules = tauri::async_runtime::spawn_blocking({
-        let database = database.clone();
-        move || {
-            database
-                .with_connection(|conn| Ok::<_, haex_crdt::Error>(autonomy::get_deny_rules(conn)))
-        }
-    })
-    .await
-    .ok()
-    .and_then(|result| result.ok())
-    .and_then(|result| result.ok());
+    let rules = database
+        .read(|r| Ok(autonomy::get_deny_rules(r)))
+        .await
+        .ok()
+        .and_then(|result| result.ok());
 
     let decision = match rules {
         Some(rules) => autonomy::evaluate_deny_rules(&rules, payload, workspace_root),
@@ -239,17 +233,13 @@ async fn persist_gated_permissive_record(
         autonomy_mode: Some(AutonomyMode::GatedPermissive.as_str().to_string()),
     };
 
-    let database = database.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        database.with_connection(|conn| {
-            let tx = conn.unchecked_transaction()?;
-            msg_store::insert_message(&tx, &call_row)?;
-            msg_store::insert_message(&tx, &result_row)?;
-            tx.commit().map_err(haex_crdt::Error::from)
+    database
+        .write(move |tx| {
+            msg_store::insert_message(tx, &call_row)?;
+            msg_store::insert_message(tx, &result_row)
         })
-    })
-    .await
-    .is_ok_and(|result| result.is_ok())
+        .await
+        .is_ok()
 }
 
 /// Returns the current Unix timestamp in milliseconds for ordered audit rows.
@@ -261,21 +251,17 @@ fn now_ms() -> i64 {
 }
 
 async fn read_permission_mode(database: &VaultDb) -> PermissionMode {
-    let database = database.clone();
-    let raw = tauri::async_runtime::spawn_blocking(move || {
-        database.with_connection(|conn| {
+    let raw = database
+        .read(|r| {
             crate::storage::preferences::get(
-                conn,
+                r,
                 crate::storage::preferences::PrefScope::Vault,
                 PREF_PERMISSION_MODE,
             )
-            .map_err(haex_crdt::Error::from)
         })
-    })
-    .await
-    .ok()
-    .and_then(|result| result.ok())
-    .flatten();
+        .await
+        .ok()
+        .flatten();
     raw.as_deref()
         .and_then(PermissionMode::parse)
         .unwrap_or_default()

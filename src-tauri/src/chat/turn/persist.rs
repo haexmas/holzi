@@ -21,55 +21,41 @@ use super::{now_ms, TurnRunner};
 /// assistant row, which also needs `chat_threads` updated atomically
 /// (see [`persist_final_message`]).
 pub(super) async fn persist_message(
-    db: &haex_crdt::Database,
+    db: &crate::vault_gate::VaultDb,
     msg: ChatMessage,
 ) -> std::result::Result<(), String> {
-    let db = db.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            msg_store::insert_message(conn, &msg)
-                .map(|_| ())
-                .map_err(haex_crdt::Error::from)
-        })
-    })
-    .await
-    .map_err(|e| format!("persist join: {e}"))?
-    .map_err(|e| format!("persist failed: {e}"))
+    db.write(move |tx| msg_store::insert_message(tx, &msg).map(|_| ()))
+        .await
+        .map_err(|e| format!("persist failed: {e}"))
 }
 
 /// Persists the turn's terminal assistant row and updates `chat_threads`
-/// in the same connection call — mirrors the pre-tool-loop behavior where
+/// in the same transaction — mirrors the pre-tool-loop behavior where
 /// both happened atomically together.
 pub(super) async fn persist_final_message(
-    db: &haex_crdt::Database,
+    db: &crate::vault_gate::VaultDb,
     msg: ChatMessage,
     provider_id: Option<Uuid>,
     model_id: String,
 ) -> std::result::Result<(), String> {
-    let db = db.clone();
     let thread_id = msg.thread_id;
     let now = msg.created_at;
-    tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            let tx = conn.unchecked_transaction()?;
-            let thread = thread_store::get_thread(&tx, thread_id)?
-                .ok_or(haex_crdt::rusqlite::Error::QueryReturnedNoRows)?;
-            msg_store::insert_message(&tx, &msg)?;
-            thread_store::update_thread(
-                &tx,
-                thread_id,
-                &thread.title,
-                provider_id,
-                Some(&model_id),
-                now,
-            )?;
-            tx.commit().map_err(haex_crdt::Error::from)
-        })
+    db.write(move |tx| {
+        let thread = thread_store::get_thread(tx, thread_id)?
+            .ok_or(haex_crdt::rusqlite::Error::QueryReturnedNoRows)?;
+        msg_store::insert_message(tx, &msg)?;
+        thread_store::update_thread(
+            tx,
+            thread_id,
+            &thread.title,
+            provider_id,
+            Some(&model_id),
+            now,
+        )?;
+        Ok(())
     })
     .await
-    .map_err(|e| format!("persist join: {e}"))?
-    .map_err(|e| format!("persist failed: {e}"))?;
-    Ok(())
+    .map_err(|e| format!("persist failed: {e}"))
 }
 
 pub(super) fn empty_tool_message(

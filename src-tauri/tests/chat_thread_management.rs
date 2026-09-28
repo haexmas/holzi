@@ -9,6 +9,7 @@ use uuid::Uuid;
 use holzi_lib::identity::{holzi_migration_source, installation_id_path, HolziBootstrap};
 use holzi_lib::storage::chat_messages::{self, ChatMessage, FinishReason, MessageRole};
 use holzi_lib::storage::chat_threads::{self, ChatThread};
+use holzi_lib::storage::query;
 
 const PASSPHRASE: &str = "chat-thread-management";
 
@@ -60,16 +61,24 @@ fn message(thread_id: Uuid) -> ChatMessage {
     }
 }
 
+/// Installs a trigger that makes one kind of write fail. A trigger is schema, which the CRDT
+/// write path does not create.
+fn reject_with_trigger(db: &Database, sql: &str) {
+    #[allow(clippy::disallowed_methods)]
+    db.with_connection(|conn| Ok(conn.execute_batch(sql)?))
+        .expect("install trigger");
+}
+
 #[test]
 fn renaming_changes_only_the_title() {
     let dir = tempfile::tempdir().expect("tempdir");
     let db = open_vault(dir.path());
     let id = Uuid::new_v4();
 
-    db.with_connection(|conn| {
-        chat_threads::insert_thread(conn, &thread(id))?;
-        assert_eq!(chat_threads::rename_title(conn, id, "Renamed")?, 1);
-        let saved = chat_threads::get_thread(conn, id)?.expect("thread remains");
+    db.write(|tx| {
+        chat_threads::insert_thread(tx, &thread(id))?;
+        assert_eq!(chat_threads::rename_title(tx, id, "Renamed")?, 1);
+        let saved = chat_threads::get_thread(tx, id)?.expect("thread remains");
         assert_eq!(saved.title, "Renamed");
         assert_eq!(saved.created_at, 1_000);
         assert_eq!(saved.updated_at, 2_000);
@@ -85,16 +94,16 @@ fn deleting_a_thread_removes_all_messages_as_one_action() {
     let id = Uuid::new_v4();
     let other_id = Uuid::new_v4();
 
-    db.with_connection(|conn| {
-        chat_threads::insert_thread(conn, &thread(id))?;
-        chat_messages::insert_message(conn, &message(id))?;
-        chat_threads::insert_thread(conn, &thread(other_id))?;
-        chat_messages::insert_message(conn, &message(other_id))?;
-        assert!(chat_threads::delete_thread_and_messages(conn, id)?);
-        assert!(chat_threads::get_thread(conn, id)?.is_none());
-        assert!(chat_messages::list_messages(conn, id)?.is_empty());
-        assert!(chat_threads::get_thread(conn, other_id)?.is_some());
-        assert_eq!(chat_messages::list_messages(conn, other_id)?.len(), 1);
+    db.write(|tx| {
+        chat_threads::insert_thread(tx, &thread(id))?;
+        chat_messages::insert_message(tx, &message(id))?;
+        chat_threads::insert_thread(tx, &thread(other_id))?;
+        chat_messages::insert_message(tx, &message(other_id))?;
+        assert!(chat_threads::delete_thread_and_messages(tx, id)?);
+        assert!(chat_threads::get_thread(tx, id)?.is_none());
+        assert!(chat_messages::list_messages(tx, id)?.is_empty());
+        assert!(chat_threads::get_thread(tx, other_id)?.is_some());
+        assert_eq!(chat_messages::list_messages(tx, other_id)?.len(), 1);
         Ok(())
     })
     .expect("delete succeeds");
@@ -105,8 +114,8 @@ fn renaming_a_missing_thread_is_non_mutating() {
     let dir = tempfile::tempdir().expect("tempdir");
     let db = open_vault(dir.path());
 
-    db.with_connection(|conn| {
-        assert_eq!(chat_threads::rename_title(conn, Uuid::new_v4(), "New")?, 0);
+    db.write(|tx| {
+        assert_eq!(chat_threads::rename_title(tx, Uuid::new_v4(), "New")?, 0);
         Ok(())
     })
     .expect("missing rename is handled");
@@ -118,20 +127,22 @@ fn failed_thread_rename_preserves_the_original_title() {
     let db = open_vault(dir.path());
     let id = Uuid::new_v4();
 
-    db.with_connection(|conn| {
-        chat_threads::insert_thread(conn, &thread(id))?;
-        conn.execute_batch(
-            "CREATE TRIGGER reject_thread_update BEFORE UPDATE ON chat_threads
-             BEGIN SELECT RAISE(ABORT, 'injected update failure'); END;",
-        )?;
+    db.write(|tx| chat_threads::insert_thread(tx, &thread(id)))
+        .expect("seed thread");
+    reject_with_trigger(
+        &db,
+        "CREATE TRIGGER reject_thread_update BEFORE UPDATE ON chat_threads
+         BEGIN SELECT RAISE(ABORT, 'injected update failure'); END;",
+    );
 
-        assert!(chat_threads::rename_title(conn, id, "New").is_err());
-        let saved = chat_threads::get_thread(conn, id)?.expect("thread remains");
-        assert_eq!(saved.title, "Original title");
-        assert_eq!(saved.created_at, 1_000);
-        Ok(())
-    })
-    .expect("rollback preserves the title");
+    assert!(db
+        .write(|tx| chat_threads::rename_title(tx, id, "New"))
+        .is_err());
+    let saved = query::read(&db, |r| chat_threads::get_thread(r, id))
+        .expect("read thread")
+        .expect("thread remains");
+    assert_eq!(saved.title, "Original title");
+    assert_eq!(saved.created_at, 1_000);
 }
 
 #[test]
@@ -139,9 +150,9 @@ fn deleting_a_missing_thread_is_non_mutating() {
     let dir = tempfile::tempdir().expect("tempdir");
     let db = open_vault(dir.path());
 
-    db.with_connection(|conn| {
+    db.write(|tx| {
         assert!(!chat_threads::delete_thread_and_messages(
-            conn,
+            tx,
             Uuid::new_v4()
         )?);
         Ok(())
@@ -155,17 +166,23 @@ fn failed_thread_delete_rolls_back_message_removal() {
     let db = open_vault(dir.path());
     let id = Uuid::new_v4();
 
-    db.with_connection(|conn| {
-        chat_threads::insert_thread(conn, &thread(id))?;
-        chat_messages::insert_message(conn, &message(id))?;
-        conn.execute_batch(
-            "CREATE TRIGGER reject_thread_delete BEFORE DELETE ON chat_threads
-             BEGIN SELECT RAISE(ABORT, 'injected delete failure'); END;",
-        )?;
+    db.write(|tx| {
+        chat_threads::insert_thread(tx, &thread(id))?;
+        chat_messages::insert_message(tx, &message(id))
+    })
+    .expect("seed thread and message");
+    reject_with_trigger(
+        &db,
+        "CREATE TRIGGER reject_thread_delete BEFORE DELETE ON chat_threads
+         BEGIN SELECT RAISE(ABORT, 'injected delete failure'); END;",
+    );
 
-        assert!(chat_threads::delete_thread_and_messages(conn, id).is_err());
-        assert!(chat_threads::get_thread(conn, id)?.is_some());
-        assert_eq!(chat_messages::list_messages(conn, id)?.len(), 1);
+    assert!(db
+        .write(|tx| chat_threads::delete_thread_and_messages(tx, id))
+        .is_err());
+    query::read(&db, |r| {
+        assert!(chat_threads::get_thread(r, id)?.is_some());
+        assert_eq!(chat_messages::list_messages(r, id)?.len(), 1);
         Ok(())
     })
     .expect("rollback preserves the thread");

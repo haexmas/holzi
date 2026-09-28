@@ -3,12 +3,13 @@
 //! Threads are conversation containers. Individual messages live in the
 //! sibling `chat_messages` module and reference `thread_id` here.
 
-use haex_crdt::crdt::columns::HLC_TIMESTAMP_COLUMN;
-use haex_crdt::rusqlite::{params, Connection, OptionalExtension, Result};
+use haex_crdt::rusqlite::{params, Result};
+use haex_crdt::CrdtTransaction;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::storage::chat_messages;
+use crate::storage::query::Query;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatThread {
@@ -20,16 +21,12 @@ pub struct ChatThread {
     pub updated_at: i64,
 }
 
-/// Inserts a fresh chat thread. Always sets `haex_hlc_no_sync = current_hlc()`.
-pub fn insert_thread(conn: &Connection, t: &ChatThread) -> Result<usize> {
-    let sql = format!(
+/// Inserts a fresh chat thread.
+pub fn insert_thread(tx: &mut CrdtTransaction<'_>, t: &ChatThread) -> haex_crdt::Result<usize> {
+    tx.execute(
         "INSERT INTO chat_threads \
-           (id, title, last_provider_id, last_model_id, \
-            created_at, updated_at, {HLC_TIMESTAMP_COLUMN}) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, current_hlc())"
-    );
-    conn.execute(
-        &sql,
+           (id, title, last_provider_id, last_model_id, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         params![
             t.id.to_string(),
             t.title,
@@ -42,67 +39,65 @@ pub fn insert_thread(conn: &Connection, t: &ChatThread) -> Result<usize> {
 }
 
 /// Removes a thread created solely for a generation that failed to start.
-pub fn delete_thread(conn: &Connection, id: Uuid) -> Result<usize> {
-    conn.execute(
+pub fn delete_thread(tx: &mut CrdtTransaction<'_>, id: Uuid) -> haex_crdt::Result<usize> {
+    tx.execute(
         "DELETE FROM chat_threads WHERE id = ?1",
         params![id.to_string()],
     )
 }
 
 /// Renames a thread without changing its opening time or recency ordering.
-pub fn rename_title(conn: &Connection, id: Uuid, title: &str) -> Result<usize> {
-    let sql = format!(
-        "UPDATE chat_threads SET title = ?1, {HLC_TIMESTAMP_COLUMN} = current_hlc() \
-         WHERE id = ?2"
-    );
-    conn.execute(&sql, params![title, id.to_string()])
+pub fn rename_title(
+    tx: &mut CrdtTransaction<'_>,
+    id: Uuid,
+    title: &str,
+) -> haex_crdt::Result<usize> {
+    tx.execute(
+        "UPDATE chat_threads SET title = ?1 WHERE id = ?2",
+        params![title, id.to_string()],
+    )
 }
 
-/// Deletes a thread and its messages in one database transaction.
+/// Deletes a thread and its messages; run it in one `write` so both go or neither.
 ///
 /// The boolean is false when the thread did not exist. In that case no
 /// message row is touched, even if a malformed database contains rows with
 /// the same thread id.
-pub fn delete_thread_and_messages(conn: &Connection, id: Uuid) -> Result<bool> {
-    let tx = conn.unchecked_transaction()?;
-    let exists: Option<i64> = tx
-        .query_row(
-            "SELECT 1 FROM chat_threads WHERE id = ?1",
-            params![id.to_string()],
-            |row| row.get(0),
-        )
-        .optional()?;
+pub fn delete_thread_and_messages(
+    tx: &mut CrdtTransaction<'_>,
+    id: Uuid,
+) -> haex_crdt::Result<bool> {
+    let exists: Option<i64> = tx.query_row(
+        "SELECT 1 FROM chat_threads WHERE id = ?1",
+        params![id.to_string()],
+        |row| row.get(0),
+    )?;
     if exists.is_none() {
         return Ok(false);
     }
 
-    chat_messages::delete_for_thread(&tx, id)?;
-    let deleted = delete_thread(&tx, id)?;
+    chat_messages::delete_for_thread(tx, id)?;
+    let deleted = delete_thread(tx, id)?;
     if deleted != 1 {
-        return Err(haex_crdt::rusqlite::Error::QueryReturnedNoRows);
+        return Err(haex_crdt::rusqlite::Error::QueryReturnedNoRows.into());
     }
-    tx.commit()?;
     Ok(true)
 }
 
-/// Updates a thread's title, last provider/model pointer and
-/// `updated_at`. HLC injected per Etappe-0 finding #2.
+/// Updates a thread's title, last provider/model pointer and `updated_at`.
 pub fn update_thread(
-    conn: &Connection,
+    tx: &mut CrdtTransaction<'_>,
     id: Uuid,
     title: &str,
     last_provider_id: Option<Uuid>,
     last_model_id: Option<&str>,
     updated_at: i64,
-) -> Result<usize> {
-    let sql = format!(
+) -> haex_crdt::Result<usize> {
+    tx.execute(
         "UPDATE chat_threads SET \
            title = ?1, last_provider_id = COALESCE(?2, last_provider_id), last_model_id = ?3, \
-           updated_at = ?4, {HLC_TIMESTAMP_COLUMN} = current_hlc() \
-         WHERE id = ?5"
-    );
-    conn.execute(
-        &sql,
+           updated_at = ?4 \
+         WHERE id = ?5",
         params![
             title,
             last_provider_id.map(|u| u.to_string()),
@@ -114,23 +109,23 @@ pub fn update_thread(
 }
 
 /// Lists all threads, most-recently-updated first.
-pub fn list_threads(conn: &Connection) -> Result<Vec<ChatThread>> {
-    let mut stmt = conn.prepare(
+pub fn list_threads(q: &mut impl Query) -> haex_crdt::Result<Vec<ChatThread>> {
+    q.query_map(
         "SELECT id, title, last_provider_id, last_model_id, created_at, updated_at \
          FROM chat_threads ORDER BY updated_at DESC",
-    )?;
-    let rows = stmt.query_map([], row_to_thread)?;
-    rows.collect()
+        &[],
+        row_to_thread,
+    )
 }
 
 /// Fetches a single thread by id.
-pub fn get_thread(conn: &Connection, id: Uuid) -> Result<Option<ChatThread>> {
-    let mut stmt = conn.prepare(
+pub fn get_thread(q: &mut impl Query, id: Uuid) -> haex_crdt::Result<Option<ChatThread>> {
+    q.query_row(
         "SELECT id, title, last_provider_id, last_model_id, created_at, updated_at \
          FROM chat_threads WHERE id = ?1",
-    )?;
-    stmt.query_row(params![id.to_string()], row_to_thread)
-        .optional()
+        params![id.to_string()],
+        row_to_thread,
+    )
 }
 
 fn row_to_thread(row: &haex_crdt::rusqlite::Row<'_>) -> Result<ChatThread> {

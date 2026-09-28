@@ -20,6 +20,7 @@ use crate::state::AppState;
 use crate::state_utils::active_database;
 use crate::storage::known_devices;
 use crate::storage::preferences::{self, PrefScope};
+use crate::storage::query::Query;
 use crate::storage::wm_session::{self, WmSessionError};
 use crate::vault_gate::VaultDb;
 
@@ -85,16 +86,10 @@ fn current_device_uuid(app: &AppHandle, db: &VaultDb) -> Result<Uuid> {
         })?);
     let installation_uuid =
         read_or_mint_installation_uuid(&installation_id_file).map_err(HolziError::from)?;
-    db.with_connection(|conn| {
-        Ok(known_devices::get_vault_device_uuid(
-            conn,
-            installation_uuid,
-        )?)
-    })
-    .map_err(HolziError::from)?
-    .ok_or_else(|| HolziError::InvalidInput {
-        reason: "current device is not registered in known_devices".to_string(),
-    })
+    db.read_blocking(|r| known_devices::get_vault_device_uuid(r, installation_uuid))?
+        .ok_or_else(|| HolziError::InvalidInput {
+            reason: "current device is not registered in known_devices".to_string(),
+        })
 }
 
 // ---------------------------------------------------------------------------
@@ -103,7 +98,7 @@ fn current_device_uuid(app: &AppHandle, db: &VaultDb) -> Result<Uuid> {
 
 fn session_error_to_holzi(err: WmSessionError) -> HolziError {
     match err {
-        WmSessionError::Sql(e) => HolziError::from(haex_crdt::Error::from(e)),
+        WmSessionError::Crdt(e) => HolziError::from(e),
         WmSessionError::TooLarge { bytes } => HolziError::SessionTooLarge { bytes },
         other => HolziError::InvalidInput {
             reason: other.to_string(),
@@ -111,32 +106,15 @@ fn session_error_to_holzi(err: WmSessionError) -> HolziError {
     }
 }
 
-async fn blocking<T, F>(label: &'static str, f: F) -> Result<T>
-where
-    T: Send + 'static,
-    F: FnOnce() -> Result<T> + Send + 'static,
-{
-    tauri::async_runtime::spawn_blocking(f)
-        .await
-        .map_err(|e| HolziError::CrdtInit {
-            reason: format!("{label} join: {e}"),
-        })?
-}
-
 /// The vault value; unset or unreadable means off (spec 022 FR-001).
-fn restore_enabled(conn: &haex_crdt::rusqlite::Connection) -> haex_crdt::Result<bool> {
-    let value = preferences::get(conn, PrefScope::Vault, SESSION_RESTORE_KEY)?;
+fn restore_enabled(q: &mut impl Query) -> haex_crdt::Result<bool> {
+    let value = preferences::get(q, PrefScope::Vault, SESSION_RESTORE_KEY)?;
     Ok(preferences::parse_bool(value.as_deref()).unwrap_or(false))
 }
 
 async fn restore_get(db: VaultDb) -> Result<SessionRestoreState> {
-    blocking("wm_session_restore_get", move || {
-        let enabled = db
-            .with_connection(restore_enabled)
-            .map_err(HolziError::from)?;
-        Ok(SessionRestoreState { enabled })
-    })
-    .await
+    let enabled = db.read(|r| restore_enabled(r)).await?;
+    Ok(SessionRestoreState { enabled })
 }
 
 /// Writes the vault value and, in the same transaction, deletes this
@@ -147,63 +125,52 @@ async fn restore_set(
     device: Uuid,
     args: SessionRestoreSetArgs,
 ) -> Result<SessionRestoreState> {
-    blocking("wm_session_restore_set", move || {
-        db.with_connection(|conn| {
-            let tx = conn.unchecked_transaction()?;
-            let value = if args.enabled { "true" } else { "false" };
-            preferences::insert_or_update(&tx, PrefScope::Vault, SESSION_RESTORE_KEY, value)?;
-            if !args.enabled {
-                wm_session::delete(&tx, device)?;
-            }
-            tx.commit()?;
-            Ok(())
-        })
-        .map_err(HolziError::from)?;
-        Ok(SessionRestoreState {
-            enabled: args.enabled,
-        })
+    db.write(move |tx| {
+        let value = if args.enabled { "true" } else { "false" };
+        preferences::insert_or_update(tx, PrefScope::Vault, SESSION_RESTORE_KEY, value)?;
+        if !args.enabled {
+            wm_session::delete(tx, device)?;
+        }
+        Ok(())
     })
-    .await
+    .await?;
+    Ok(SessionRestoreState {
+        enabled: args.enabled,
+    })
 }
 
 /// Returns the setting and, when it applies, the saved session. When it
 /// does not apply, a leftover session is deleted first (FR-008, FR-012).
 async fn session_load(db: VaultDb, device: Uuid) -> Result<WmSessionLoad> {
-    blocking("wm_session_load", move || {
-        let result = db
-            .with_connection(|conn| {
-                if !restore_enabled(conn)? {
-                    wm_session::delete(conn, device)?;
-                    return Ok(Ok((false, None)));
-                }
-                Ok(wm_session::load(conn, device).map(|session| (true, session)))
-            })
-            .map_err(HolziError::from)?;
-        let (enabled, session) = result.map_err(session_error_to_holzi)?;
-        Ok(WmSessionLoad {
-            restore: SessionRestoreState { enabled },
-            session,
+    let (enabled, session) = db
+        .write(move |tx| {
+            if !restore_enabled(tx)? {
+                wm_session::delete(tx, device)?;
+                return Ok((false, None));
+            }
+            let session = wm_session::load(tx, device).map_err(session_error_to_holzi)?;
+            Ok((true, session))
         })
+        .await?;
+    Ok(WmSessionLoad {
+        restore: SessionRestoreState { enabled },
+        session,
     })
-    .await
 }
 
 /// Writes the session only while restore applies, so a late debounced save
 /// after turning it off creates nothing.
 async fn session_save(db: VaultDb, device: Uuid, session: Value) -> Result<WmSessionSaved> {
-    blocking("wm_session_save", move || {
-        let result = db
-            .with_connection(|conn| {
-                if !restore_enabled(conn)? {
-                    return Ok(Ok(false));
-                }
-                Ok(wm_session::save(conn, device, &session).map(|()| true))
-            })
-            .map_err(HolziError::from)?;
-        let saved = result.map_err(session_error_to_holzi)?;
-        Ok(WmSessionSaved { saved })
-    })
-    .await
+    let saved = db
+        .write(move |tx| {
+            if !restore_enabled(tx)? {
+                return Ok(false);
+            }
+            wm_session::save(tx, device, &session).map_err(session_error_to_holzi)?;
+            Ok(true)
+        })
+        .await?;
+    Ok(WmSessionSaved { saved })
 }
 
 // ---------------------------------------------------------------------------

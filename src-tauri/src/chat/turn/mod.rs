@@ -43,7 +43,7 @@ use tool_round::RoundOutcome;
 /// One in-flight turn. Fields are private to this module tree; the
 /// sub-flows reach them from the sibling modules that `impl` on this type.
 struct TurnRunner<'a> {
-    db: &'a haex_crdt::Database,
+    db: &'a crate::vault_gate::VaultDb,
     chat_state: &'a ChatState,
     session: &'a ActiveSession,
     thread_id: Uuid,
@@ -74,7 +74,7 @@ struct TurnRunner<'a> {
 /// `app.emit`.
 #[allow(clippy::too_many_arguments)]
 pub async fn run_turn(
-    db: &haex_crdt::Database,
+    db: &crate::vault_gate::VaultDb,
     chat_state: &ChatState,
     session: &ActiveSession,
     thread_id: Uuid,

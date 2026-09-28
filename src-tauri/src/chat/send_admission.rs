@@ -10,6 +10,8 @@ use uuid::Uuid;
 
 use crate::storage::chat_messages::{self as msg_store, ChatMessage, FinishReason, MessageRole};
 use crate::storage::chat_threads::{self as thread_store, ChatThread};
+use crate::storage::query::Query;
+use haex_crdt::CrdtTransaction;
 
 /// Deterministically derives the (user, assistant) message ids for a
 /// `send_message` call from its `idempotencyKey`. The same key always
@@ -62,13 +64,13 @@ pub enum IdempotentSend {
 /// retried call may not know the thread a prior, possibly
 /// unacknowledged, attempt created.
 pub fn resolve_idempotent_send(
-    conn: &haex_crdt::rusqlite::Connection,
+    q: &mut impl Query,
     idempotency_key: &str,
     requested_thread_id: Option<Uuid>,
     content: &str,
-) -> haex_crdt::rusqlite::Result<IdempotentSend> {
+) -> haex_crdt::Result<IdempotentSend> {
     let (user_message_id, assistant_message_id) = derive_message_ids(idempotency_key);
-    let Some(existing) = msg_store::find_by_idempotency_key(conn, idempotency_key)? else {
+    let Some(existing) = msg_store::find_by_idempotency_key(q, idempotency_key)? else {
         return Ok(IdempotentSend::Fresh {
             user_message_id,
             assistant_message_id,
@@ -119,113 +121,97 @@ pub enum PersistedSend {
     },
 }
 
-/// Resolves, reserves, and persists a send in one SQLite transaction.
+/// Resolves, reserves, and persists a send; run it as one `write`.
 ///
-/// `BEGIN IMMEDIATE` closes the gap between the idempotency lookup and the
-/// unique-key insert. A concurrent loser therefore re-reads the committed
-/// winner and receives the same result instead of a primary-key/unique error.
+/// The `IMMEDIATE` transaction of `Database::write` closes the gap between
+/// the idempotency lookup and the unique-key insert. A concurrent loser
+/// therefore re-reads the committed winner and receives the same result
+/// instead of a primary-key/unique error.
 pub fn persist_send_transaction(
-    conn: &haex_crdt::rusqlite::Connection,
+    tx: &mut CrdtTransaction<'_>,
     idempotency_key: &str,
     requested_thread_id: Option<Uuid>,
     content: &str,
     provider_id: Option<Uuid>,
     model_id: &str,
     now: i64,
-) -> haex_crdt::rusqlite::Result<PersistedSend> {
-    conn.execute_batch("BEGIN IMMEDIATE")?;
-    let result = (|| {
-        let decision =
-            resolve_idempotent_send(conn, idempotency_key, requested_thread_id, content)?;
-        match decision {
-            IdempotentSend::Mismatch => Ok(PersistedSend::Mismatch),
-            IdempotentSend::Duplicate {
-                thread_id,
-                user_message_id,
-                assistant_message_id,
-            } => Ok(PersistedSend::Duplicate {
-                thread_id,
-                user_message_id,
-                assistant_message_id,
-            }),
-            IdempotentSend::Fresh {
-                user_message_id,
-                assistant_message_id,
-            } => {
-                let thread_id = requested_thread_id.unwrap_or_else(Uuid::new_v4);
-                match requested_thread_id {
-                    None => thread_store::insert_thread(
-                        conn,
-                        &ChatThread {
-                            id: thread_id,
-                            title: default_thread_title(content),
-                            last_provider_id: provider_id,
-                            last_model_id: Some(model_id.to_string()),
-                            created_at: now,
-                            updated_at: now,
-                        },
-                    )?,
-                    // A named thread must already exist. `update_thread`
-                    // reports zero affected rows for an unknown id, and
-                    // without foreign keys the message insert below would
-                    // otherwise succeed against a thread nothing can list.
-                    Some(_) => {
-                        let Some(existing) = thread_store::get_thread(conn, thread_id)? else {
-                            return Ok(PersistedSend::UnknownThread { thread_id });
-                        };
-                        thread_store::update_thread(
-                            conn,
-                            thread_id,
-                            &existing.title,
-                            provider_id,
-                            Some(model_id),
-                            now,
-                        )?
-                    }
-                };
-                let parent_id = last_message_id(conn, thread_id)?;
-                msg_store::insert_message(
-                    conn,
-                    &ChatMessage {
-                        id: user_message_id,
-                        thread_id,
-                        parent_id,
-                        role: MessageRole::User,
-                        content: content.to_string(),
-                        provider_id,
-                        model_id: Some(model_id.to_string()),
-                        prompt_tokens: None,
-                        completion_tokens: None,
-                        finish_reason: Some(FinishReason::Complete),
+) -> haex_crdt::Result<PersistedSend> {
+    let decision = resolve_idempotent_send(tx, idempotency_key, requested_thread_id, content)?;
+    match decision {
+        IdempotentSend::Mismatch => Ok(PersistedSend::Mismatch),
+        IdempotentSend::Duplicate {
+            thread_id,
+            user_message_id,
+            assistant_message_id,
+        } => Ok(PersistedSend::Duplicate {
+            thread_id,
+            user_message_id,
+            assistant_message_id,
+        }),
+        IdempotentSend::Fresh {
+            user_message_id,
+            assistant_message_id,
+        } => {
+            let thread_id = requested_thread_id.unwrap_or_else(Uuid::new_v4);
+            match requested_thread_id {
+                None => thread_store::insert_thread(
+                    tx,
+                    &ChatThread {
+                        id: thread_id,
+                        title: default_thread_title(content),
+                        last_provider_id: provider_id,
+                        last_model_id: Some(model_id.to_string()),
                         created_at: now,
-                        idempotency_key: Some(idempotency_key.to_string()),
-                        tool_name: None,
-                        tool_call_id: None,
-                        tool_input: None,
-                        tool_is_error: None,
-                        tool_source: None,
-                        autonomy_mode: None,
+                        updated_at: now,
                     },
-                )?;
-                Ok(PersistedSend::Fresh {
+                )?,
+                // A named thread must already exist. `update_thread`
+                // reports zero affected rows for an unknown id, and
+                // without foreign keys the message insert below would
+                // otherwise succeed against a thread nothing can list.
+                Some(_) => {
+                    let Some(existing) = thread_store::get_thread(tx, thread_id)? else {
+                        return Ok(PersistedSend::UnknownThread { thread_id });
+                    };
+                    thread_store::update_thread(
+                        tx,
+                        thread_id,
+                        &existing.title,
+                        provider_id,
+                        Some(model_id),
+                        now,
+                    )?
+                }
+            };
+            let parent_id = last_message_id(tx, thread_id)?;
+            msg_store::insert_message(
+                tx,
+                &ChatMessage {
+                    id: user_message_id,
                     thread_id,
-                    user_message_id,
-                    assistant_message_id,
-                })
-            }
-        }
-    })();
-    match result {
-        Ok(result) => match conn.execute_batch("COMMIT") {
-            Ok(()) => Ok(result),
-            Err(error) => {
-                let _ = conn.execute_batch("ROLLBACK");
-                Err(error)
-            }
-        },
-        Err(error) => {
-            let _ = conn.execute_batch("ROLLBACK");
-            Err(error)
+                    parent_id,
+                    role: MessageRole::User,
+                    content: content.to_string(),
+                    provider_id,
+                    model_id: Some(model_id.to_string()),
+                    prompt_tokens: None,
+                    completion_tokens: None,
+                    finish_reason: Some(FinishReason::Complete),
+                    created_at: now,
+                    idempotency_key: Some(idempotency_key.to_string()),
+                    tool_name: None,
+                    tool_call_id: None,
+                    tool_input: None,
+                    tool_is_error: None,
+                    tool_source: None,
+                    autonomy_mode: None,
+                },
+            )?;
+            Ok(PersistedSend::Fresh {
+                thread_id,
+                user_message_id,
+                assistant_message_id,
+            })
         }
     }
 }
@@ -240,11 +226,8 @@ fn default_thread_title(first_message: &str) -> String {
     }
 }
 
-fn last_message_id(
-    conn: &haex_crdt::rusqlite::Connection,
-    thread_id: Uuid,
-) -> haex_crdt::rusqlite::Result<Option<Uuid>> {
-    let msgs = msg_store::list_messages(conn, thread_id)?;
+fn last_message_id(q: &mut impl Query, thread_id: Uuid) -> haex_crdt::Result<Option<Uuid>> {
+    let msgs = msg_store::list_messages(q, thread_id)?;
     Ok(msgs.last().map(|m| m.id))
 }
 
