@@ -71,6 +71,8 @@ re-delegation between people.
 | D21 | Only the **admin** of a scope uploads compaction snapshots; in the vault scope any own device.                                                                                    | 2026-09-28 |
 | D22 | **Invites also create a new key generation**; key generations and member-list versions stay one counter.                                                                          | 2026-09-28 |
 | D23 | **No admin hand-over in v1.** On rotation holzi closes the scopes the vault administers and leaves the others, signed with the old identity; nothing depends on members' consent. | 2026-09-28 |
+| D24 | On storage backend A **the relay transfers the encrypted objects itself**; there are no presigned links.                                                                          | 2026-09-28 |
+| D25 | S3 providers that fail the setup check **cannot be connected**; no fallback path.                                                                                                 | 2026-09-28 |
 
 ## 3. What exists today, and what the references teach
 
@@ -527,9 +529,11 @@ by ciphertext hash from a signed file index. Only the way a device obtains acces
 
 - The relay operator runs the storage (S3-compatible). The relay _is_ the storage provider, so its
   access is unavoidable and harmless: it holds only ciphertext, and forgery is detected.
-- Access: the relay checks the member list and issues presigned URLs valid for at most 15 minutes;
-  traffic goes directly between device and storage. An issued URL cannot be revoked: a removal stops
-  new URLs at once, and URLs already issued expire within that lifetime.
+- Access (D24): the relay transfers the encrypted objects itself between its storage and the
+  requesting device, over its own endpoint and the same protocol family as the mailboxes. There are
+  no presigned URLs. The relay checks the current member list on every request, so a removal takes
+  effect at once, running transfers included. It still sees only ciphertext; file bandwidth goes
+  through the operator's server.
 - Delete: the relay records the uploading vault per object and allows `DELETE` for the uploader or a
   `delete` holder.
 
@@ -545,18 +549,17 @@ by ciphertext hash from a signed file index. Only the way a device obtains acces
   provider, then publishes the new member list, redistributes the token and rotates the space key.
   If the provider revocation fails, the list is still published, the admin sees a persistent
   warning, and holzi retries until the provider confirms. The setup check requires the provider to
-  reject a revoked token within 5 minutes; providers that cannot do this use only the fallback path.
+  reject a revoked token within 5 minutes.
 - Members never delete objects themselves; garbage collection runs on an admin device with the
-  admin credentials (or, on the fallback path, with delete links issued only to admin devices after
-  checking that no index entry references the object).
+  admin credentials.
 - **Limit**: S3 cannot enforce "delete own files only"; a read-write token can delete any object.
   File-index tombstones remain client-checked. Physically deleted objects are recovered through
   **bucket versioning**, which the setup flow MUST enable.
 - Provider support for bucket-scoped tokens must be verified per provider. Candidates named in the
   design session, all unverified: Cloudflare R2, Backblaze B2, RustFS, AWS S3; Hetzner Object Storage
   unknown. Recovery also needs a read-write token that cannot delete old versions or disable
-  versioning, which narrows the list further. Without scoped tokens, the fallback
-  is an admin device issuing presigned URLs over iroh (available only while that device is online).
+  versioning, which narrows the list further. A provider that fails any criterion of the setup check
+  cannot be connected; there is no fallback path (D25).
 
 ## 13. Threat model
 

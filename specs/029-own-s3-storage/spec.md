@@ -12,9 +12,10 @@ Lesen und Schreiben), die der Admin in seiner Vault erzeugt und verschlüsselt a
 die Mitglieder gibt, je nach Fähigkeit. Das Relay bekommt nie Zugangsdaten. Die
 Geräte greifen direkt auf den Speicher zu. Beim Entzug von Rechten werden die
 Zugangsschlüssel erneuert. Weil S3 „nur eigene Dateien löschen“ nicht
-durchsetzen kann, MUSS die Versionierung des Buckets eingeschaltet sein. Kann ein
-Anbieter keine eingeschränkten Zugangsschlüssel erzeugen, stellt ein Gerät des
-Admins kurzlebige Zugangslinks aus, solange es online ist.
+durchsetzen kann, MUSS die Versionierung des Buckets eingeschaltet sein. Ein
+Anbieter, der diese Anforderungen nicht erfüllt (etwa keine eingeschränkten
+Zugangsschlüssel erzeugen kann), lässt sich für einen Space nicht verbinden
+(D25).
 
 ## Begriffe
 
@@ -41,14 +42,11 @@ Admins kurzlebige Zugangslinks aus, solange es online ist.
   Schreiben**. Jede Erneuerung erzeugt eine neue **Generation** des
   Zugangsschlüssels; ältere Generationen werden widerrufen.
 - **Eignungsprüfung**: die Prüfung, ob ein Anbieter mit den eingegebenen
-  Hauptzugangsdaten alles kann, was diese Spec verlangt.
+  Hauptzugangsdaten alles kann, was diese Spec verlangt. Sie endet mit
+  **geeignet** oder **ungeeignet**; eine Zwischenstufe gibt es nicht (D25).
 - **Versionierung**: die Fähigkeit eines Buckets, gelöschte oder überschriebene
   Objekte als ältere Versionen aufzubewahren. Die **Aufbewahrungsfrist** legt
   fest, wie lange ältere Versionen bleiben.
-- **Zugangslink**: ein vom Anbieter signierter, kurzlebiger Link für genau ein
-  Objekt und genau eine Art Zugriff (lesen, hochladen oder löschen). Ein Gerät des
-  Admins stellt ihn aus, wenn der Anbieter keine eingeschränkten
-  Zugangsschlüssel kann (Ersatzweg).
 - **Relay**, **Postfach**, **Mitgliederliste**: wie in Spec 026. Das Relay gilt
   als nicht vertrauenswürdig.
 - **Vault-Identität**, **Geräteschlüssel**, **Gerätebestätigung**: wie in
@@ -92,16 +90,16 @@ Admins kurzlebige Zugangslinks aus, solange es online ist.
   Zugangsschlüssel die Forderung von Spec 027, dass das Speicher-Backend
   entfernte Mitglieder abweist (FR-023 dort), mit der Frist aus SC-002; dafür
   widerruft ein Gerät des Admins den alten Zugangsschlüssel beim Anbieter, bevor
-  es die neue Mitgliederliste veröffentlicht (FR-018). Auf dem Ersatzweg begrenzt
-  die Gültigkeit der Zugangslinks (höchstens 15 Minuten, FR-024) die Frist. Die
+  es die neue Mitgliederliste veröffentlicht (FR-018). Die
   Löschregeln (Schreiben löscht nur eigene Dateien, Löschen löscht alle) und
   deren Prüfung beim Empfänger bleiben in Spec 027. Spec 027 verlangt beim
   Anlegen eine Wahl zwischen Backend A und „nur direkte Übertragung“ (FR-003
   dort); die Wahl ist Pflicht, einen Standard gibt es nicht. Diese Spec fügt
   Backend B als dritte Wahl hinzu und hebt den Ausschluss „Speicher-Backend eines
   bestehenden Space wechseln“ aus Spec 027 auf (User Story 8). Einen Space
-  aufzulösen bleibt auch hier ausgeschlossen. Für den Ersatzweg (User Story 5)
-  nutzt diese Spec die direkte Verbindung zwischen Mitgliedern aus Spec 027.
+  aufzulösen bleibt auch hier ausgeschlossen. Die direkte Verbindung zwischen
+  Mitgliedern aus Spec 027 nutzt diese Spec nicht: Kein Gerät vermittelt
+  Speicherzugriffe für ein anderes (FR-023).
 - [`028-data-shares`](../028-data-shares/spec.md) (Datenfreigaben): nicht
   betroffen. Datenfreigaben haben keine Objekte und nutzen keinen Speicher.
 - [`023-settings-app`](../023-settings-app/spec.md): Die Einstellungen dieser
@@ -148,6 +146,7 @@ Admins kurzlebige Zugangslinks aus, solange es online ist.
   Admin (D6). Mitglieder wählen keinen Speicher; sie nutzen, was der Admin
   festgelegt hat.
 - Q: Welche Anbieter muss v1 unterstützen? → A: RustFS und AWS S3, geprüft und getestet. MinIO nicht, weil es nicht mehr als Open Source weiterentwickelt wird; R2, B2 und Hetzner folgen nach Prüfung (FR-008).
+- Q: Was passiert mit Anbietern, die unsere Anforderungen nicht erfüllen? → A: Sie lassen sich nicht verbinden; einen Ersatzweg über kurzlebige Links gibt es nicht (D25).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -323,47 +322,44 @@ für alle Mitglieder wieder lesbar.
 
 ---
 
-### User Story 5 - Anbieter ohne eingeschränkte Zugangsschlüssel (Priority: P2)
+### User Story 5 - Ungeeigneter Anbieter wird abgelehnt (Priority: P2)
 
 Ein Nutzer betreibt einen S3-kompatiblen Speicher, der Versionierung kann, aber
-keine auf einen Bucket beschränkten Schlüssel ausstellt. holzi sagt ihm das bei
-der Einrichtung und bietet den Ersatzweg an: Die Mitglieder bekommen keinen
-Zugangsschlüssel, sondern fragen ein Gerät des Admins über die direkte
-Verbindung zwischen Mitgliedern (Spec 027) nach kurzlebigen Zugangslinks. Das funktioniert nur, solange
-ein Gerät des Admins online ist.
+keine auf einen Bucket beschränkten Schlüssel ausstellt. Er will ihn für einen
+Space verbinden. holzi prüft den Anbieter, nennt ihm das fehlende Kriterium und
+lehnt die Verbindung ab, ohne etwas anzulegen oder zu speichern. Für den Space
+wählt er einen anderen Anbieter oder den Speicher des Relays; für seine eigenen
+Ordner kann er den Anbieter weiter nutzen (User Story 6).
 
-**Why this priority**: Ohne diesen Weg wären Anbieter ohne eingeschränkte
-Schlüssel für Spaces mit Mitgliedern ganz ausgeschlossen. Der Weg hat aber eine
-spürbare Grenze und ist deshalb nicht der Normalfall.
+**Why this priority**: Ein Anbieter, der Entzug oder Wiederherstellung nicht
+durchsetzen kann, würde die Versprechen aus User Story 2 bis 4 stillschweigend
+brechen. Die klare Ablehnung schützt davor, ist aber erst relevant, wenn jemand
+einen solchen Anbieter wählt (D25).
 
-**Independent Test**: Gegen einen Testanbieter ohne eingeschränkte Schlüssel
-einrichten: Die Prüfung meldet das und bietet den Ersatzweg an. Ein Mitglied lädt
-eine Datei über einen Zugangslink, solange ein Gerät des Admins online ist; ist
-keines online, sieht das Mitglied, warum der Speicher gerade nicht erreichbar
-ist.
+**Independent Test**: Gegen Testanbieter prüfen, denen je genau ein Kriterium aus
+FR-004 fehlt: Jede Prüfung endet mit „ungeeignet“ und nennt das fehlende
+Kriterium; beim Anbieter bleiben weder Bucket noch Zugangsschlüssel zurück, und
+der Space nutzt weiter seinen bisherigen Speicher.
 
 **Acceptance Scenarios**:
 
 1. **Given** die Eignungsprüfung stellt fest, dass der Anbieter keine
-   eingeschränkten Zugangsschlüssel erzeugen kann, **When** sie das Ergebnis
-   zeigt, **Then** erklärt holzi den Unterschied: Zugriff für Mitglieder nur,
-   solange ein Gerät des Admins online ist.
-2. **Given** der Admin wählt den Ersatzweg, **When** ein Mitglied ein Objekt
-   braucht, **Then** fragt sein Gerät ein online erreichbares Gerät der
-   Admin-Vault über die direkte Verbindung nach einem Zugangslink und lädt das
-   Objekt damit direkt beim Anbieter.
-3. **Given** ein Gerät des Admins erhält eine Anfrage, **When** es sie prüft,
-   **Then** stellt es nur Links zum Lesen oder Hochladen aus, die zur aktuellen
-   Fähigkeit des anfragenden Mitglieds laut Mitgliederliste passen, und keine
-   Links zum Löschen von Objekten, zum Löschen älterer Versionen oder zum Ändern
-   des Buckets (FR-024).
-4. **Given** kein Gerät der Admin-Vault ist online, **When** ein Mitglied ein
-   Objekt braucht, **Then** zeigt holzi, dass der Speicher nur erreichbar ist,
-   wenn ein Gerät des Admins online ist, und bezieht das Objekt, wenn möglich, von
-   einem anderen Gerät, das es hat (Spec 025 und 027).
-5. **Given** ein Mitglied wird entfernt, **When** es danach um einen Zugangslink
-   bittet, **Then** lehnt das Gerät des Admins ab; bereits ausgestellte Links
-   laufen spätestens nach ihrer Gültigkeitsdauer ab.
+   eingeschränkten Zugangsschlüssel erzeugen kann (FR-004 e), **When** sie das
+   Ergebnis zeigt, **Then** lautet es „ungeeignet“, holzi nennt genau dieses
+   Kriterium verständlich und bietet keinen anderen Zugriffsweg an.
+2. **Given** der Schlüssel „Lesen und Schreiben“ könnte ältere Versionen löschen
+   oder die Versionierung ändern (FR-004 f), **When** die Prüfung das feststellt,
+   **Then** ist der Anbieter ungeeignet, und holzi erklärt, dass gelöschte
+   Objekte sonst nicht sicher zurückzuholen wären.
+3. **Given** der Anbieter weist einen widerrufenen Testschlüssel nicht innerhalb
+   von 5 Minuten ab (FR-004 g), **When** die Prüfung endet, **Then** ist er
+   ungeeignet, und holzi nennt die Frist, die er überschritten hat.
+4. **Given** mehrere Kriterien fehlen, **When** holzi das Ergebnis zeigt,
+   **Then** nennt es jedes fehlende Kriterium einzeln (FR-005).
+5. **Given** die Prüfung endet mit „ungeeignet“, **When** der Admin das Ergebnis
+   schließt, **Then** hat holzi keine Zugangsdaten gespeichert und beim Anbieter
+   nichts angelegt oder entfernt alles, was die Prüfung angelegt hat (FR-007), und
+   der Space behält seinen bisherigen Speicher.
 
 ---
 
@@ -400,7 +396,8 @@ obwohl beide seit dem Ablegen nie gleichzeitig online waren.
    nicht wiederherstellbar sind, erlaubt die Einrichtung aber.
 4. **Given** der Anbieter kann keine eingeschränkten Zugangsschlüssel, **When**
    der Nutzer ihn für die eigenen Ordner verbindet, **Then** ist das kein
-   Hindernis, und es gibt keinen Hinweis auf den Ersatzweg.
+   Hindernis, und die Eignungsprüfung meldet ihn deswegen nicht als ungeeignet
+   (FR-032).
 
 ---
 
@@ -490,11 +487,14 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   nach User Story 4) oder unbrauchbare Objekte hochladen (am Hash erkannt, beim
   Aufräumen entfernt), aber keine Datei fälschen.
 - **Mitglied wird während eines Downloads entfernt**: Die laufende Übertragung
-  darf mit dem Widerruf scheitern. Über den Ersatzweg ausgestellte Links bleiben
-  bis zu ihrem Ablauf gültig (höchstens 15 Minuten, FR-024).
+  darf mit dem Widerruf scheitern.
 - **Anbieter ohne Versionierung**: Für einen Space mit Mitgliedern lehnt holzi
   die Einrichtung ab und nennt den Grund (FR-006). Für die eigenen Ordner warnt
   holzi nur (User Story 6).
+- **Anbieter erfüllt nur einen Teil der Kriterien**: Es gibt keine Zwischenstufe
+  (D25). Fehlt ein Kriterium aus FR-004, ist er für Spaces ungeeignet; der Admin
+  wählt einen anderen Anbieter, Backend A oder „nur direkte Übertragung“ (Spec
+  027). Für die eigenen Ordner gilt die mildere Prüfung nach FR-032.
 - **Versionierung wird später beim Anbieter ausgeschaltet** (etwa von Hand in
   dessen Oberfläche): Ein Gerät des Admins bemerkt das bei der nächsten Prüfung,
   schaltet sie wieder ein, wenn es kann, und warnt den Admin sonst.
@@ -503,7 +503,7 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   passt nicht). Nichts wird gespeichert oder angelegt.
 - **Hauptzugangsdaten werden beim Anbieter widerrufen oder laufen ab**: Die
   Zugangsschlüssel der Mitglieder gelten weiter, solange der Anbieter sie nicht
-  mitwiderruft. Erneuerung, Wiederherstellung und Ersatzweg scheitern jedoch;
+  mitwiderruft. Erneuerung, Wiederherstellung und Aufräumen scheitern jedoch;
   holzi zeigt dem Admin, dass neue Hauptzugangsdaten nötig sind.
 - **Bucket wird außerhalb von holzi gelöscht**: Die Geräte erkennen, dass der
   Bucket fehlt, und zeigen den Speicher des Space als nicht verfügbar. Der Admin
@@ -512,8 +512,7 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   holzi als verloren.
 - **Admin offline**: Mit Zugangsschlüsseln arbeiten die Mitglieder ohne den
   Admin weiter. Rechteänderungen und Erneuerungen gibt es ohnehin nur von einem
-  Gerät des Admins aus. Auf dem Ersatzweg ist der Speicher nicht erreichbar,
-  solange kein Gerät des Admins online ist (User Story 5).
+  Gerät des Admins aus, ebenso Wiederherstellung und Aufräumen (FR-025).
 - **Zwei Geräte des Admins erneuern gleichzeitig**: Es entstehen zwei neue
   Generationen desselben Zugangsschlüssels. Mitglieder nutzen die höchste
   Generation; das Gerät des Admins, das die niedrigere sieht, widerruft sie
@@ -571,19 +570,22 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   widerrufenen Zugangsschlüssel innerhalb von 5 Minuten abweist, gemessen, indem
   die Prüfung einen Testschlüssel erzeugt, widerruft und bis zur Ablehnung
   weiter benutzt.
-- **FR-005**: Das Ergebnis der Eignungsprüfung MUSS eine von drei Stufen sein
-  und dem Admin mit Grund gezeigt werden: **geeignet** (alles aus FR-004),
-  **nur über den Ersatzweg** ((a) bis (c) erfüllt, (e), (f) oder (g) nicht) oder
-  **ungeeignet**. Jede nicht erfüllte Eigenschaft MUSS einzeln und verständlich
-  benannt werden.
-- **FR-006**: Für einen Space DARF holzi einen Anbieter ohne Versionierung NICHT
-  einrichten. Für die eigenen Ordner (FR-031) DARF holzi es mit Warnung.
+- **FR-005**: Das Ergebnis der Eignungsprüfung MUSS eines von zwei Ergebnissen
+  sein und dem Admin mit Grund gezeigt werden: **geeignet** (alles aus FR-004
+  erfüllt) oder **ungeeignet** (mindestens eine Eigenschaft aus FR-004 fehlt).
+  Eine Zwischenstufe gibt es nicht (D25). Bei „ungeeignet“ MUSS jede nicht
+  erfüllte Eigenschaft einzeln und verständlich benannt werden.
+- **FR-006**: Für einen Space DARF holzi nur einen Anbieter mit dem Ergebnis
+  „geeignet“ einrichten. Einen ungeeigneten Anbieter, etwa ohne Versionierung,
+  DARF holzi NICHT verbinden, und es DARF keinen anderen Zugriffsweg anbieten
+  (D25). Für die eigenen Ordner (FR-031) gilt die Prüfung nach FR-032; fehlende
+  Versionierung meldet holzi dort nur als Warnung.
 - **FR-007**: Scheitert die Prüfung oder die Einrichtung, DÜRFEN weder
   Zugangsdaten in der Vault noch halb angelegte Buckets oder Zugangsschlüssel
   beim Anbieter zurückbleiben; was holzi schon angelegt hat, MUSS es wieder
   entfernen.
 - **FR-008**: holzi MUSS in v1 mindestens diese Anbieter nachweislich
-  unterstützen: RustFS und AWS S3. Ob sie auf einen Bucket beschränkte Schlüssel, Versionierung, eine Aufbewahrungsfrist und Schlüssel ohne Recht zum Löschen älterer Versionen bieten und widerrufene Schlüssel rechtzeitig abweisen (FR-004 c bis g), prüft der Plan; das Ergebnis entscheidet, ob ein Anbieter „geeignet“ oder „nur über den Ersatzweg“ ist. Cloudflare R2, Backblaze B2, Hetzner Object Storage und weitere kommen hinzu, sobald sie geprüft sind. Andere S3-kompatible Anbieter DÜRFEN verbunden werden, wenn sie die
+  unterstützen: RustFS und AWS S3. Ob sie auf einen Bucket beschränkte Schlüssel, Versionierung, eine Aufbewahrungsfrist und Schlüssel ohne Recht zum Löschen älterer Versionen bieten und widerrufene Schlüssel rechtzeitig abweisen (FR-004 c bis g), prüft der Plan. Erfüllt einer von ihnen ein Kriterium nicht, ist er ungeeignet und lässt sich für Spaces nicht verbinden (FR-006); der Betreiber entscheidet dann neu über den Umfang von v1. Cloudflare R2, Backblaze B2, Hetzner Object Storage und weitere kommen hinzu, sobald sie geprüft sind. Andere S3-kompatible Anbieter DÜRFEN verbunden werden, wenn sie die
   Eignungsprüfung bestehen.
 
 **Bucket und Versionierung**
@@ -606,7 +608,7 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
 
 **Zugangsschlüssel und Verteilung**
 
-- **FR-014**: holzi MUSS bei der Einrichtung auf der Stufe „geeignet“ je Space
+- **FR-014**: holzi MUSS bei der Einrichtung je Space
   zwei Zugangsschlüssel erzeugen, die nur für dessen Bucket gelten: „nur Lesen“
   (Objekte lesen und auflisten) und „Lesen und Schreiben“ (zusätzlich Objekte
   hochladen und löschen, nicht aber ältere Versionen löschen und keine
@@ -657,31 +659,22 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   Mitglied abweist; die Wirkung beim Anbieter tritt dann erst mit dem
   bestätigten Widerruf ein.
 
-**Ersatzweg über ein Gerät des Admins**
+**Zugriffswege**
 
-- **FR-023**: Auf der Stufe „nur über den Ersatzweg“ MUSS holzi den Space ohne
-  Zugangsschlüssel einrichten. Die Geräte der Mitglieder MÜSSEN dann für jedes
-  Objekt einen Zugangslink bei einem online erreichbaren Gerät der Admin-Vault
-  anfragen, über die direkte Geräteverbindung (Spec 027, direkte Verbindung
-  zwischen Mitgliedern), nie über das Relay. Eigene Geräte des Admins brauchen
-  keine Zugangslinks; sie nutzen die Hauptzugangsdaten, die sie über die direkte
-  Verbindung zwischen eigenen Geräten (Spec 024) erhalten.
-- **FR-024**: Ein Gerät des Admins MUSS vor dem Ausstellen die Gerätebestätigung
-  des anfragenden Geräts und die Fähigkeit seiner Vault in der aktuellen
-  Mitgliederliste prüfen. Es DARF jeden Link nur für ein einzelnes Objekt und mit
-  einer Gültigkeit von höchstens 15 Minuten ausstellen. Mitgliedern DARF es nur
-  Links zum Lesen und, bei Schreiben oder Löschen, zum Hochladen ausstellen;
-  Mitglieder löschen keine Objekte selbst (Spec 027). Das Hochladen einer neuen
-  Version braucht nie ein Recht zum Löschen, weil sie ein neues Objekt ist. Links
-  zum Löschen DARF es nur Geräten der Admin-Vault ausstellen, zum Aufräumen nach
-  FR-040 (etwa für ein Gerät, das die Hauptzugangsdaten noch nicht erhalten
-  hat), und nur nachdem es geprüft hat, dass kein gültiger Eintrag im Dateiindex
-  auf das Objekt verweist. Links zum Löschen älterer Versionen oder zum Ändern
-  des Buckets DARF es nie ausstellen.
-- **FR-025**: Solange kein Gerät der Admin-Vault erreichbar ist, MUSS holzi den
-  Mitgliedern zeigen, dass der Speicher des Space nur mit einem Gerät des Admins
-  erreichbar ist, und Objekte, wenn möglich, direkt von anderen Geräten beziehen
-  (Spec 025 und 027).
+- **FR-023**: Die Geräte der Mitglieder MÜSSEN ausschließlich mit ihrem eigenen
+  Zugangsschlüssel auf den Bucket zugreifen. Kein Gerät DARF für ein anderes
+  Zugriffe beim Anbieter vermitteln oder ihm vom Anbieter signierte Einzelzugriffe
+  ausstellen, weder über das Relay noch über die direkte Verbindung zwischen
+  Mitgliedern (Spec 027) (D25).
+- **FR-024**: Geräte der Admin-Vault MÜSSEN für ihre Zugriffe auf den Bucket die
+  Hauptzugangsdaten nutzen, die sie über die direkte Verbindung zwischen eigenen
+  Geräten (Spec 024) erhalten. Ein Gerät des Admins, das die Hauptzugangsdaten
+  noch nicht hat, DARF NICHT erneuern, wiederherstellen oder aufräumen (FR-018,
+  FR-029, FR-040), bis es sie erhalten hat.
+- **FR-025**: Lesen und Hochladen MÜSSEN für die Mitglieder auch funktionieren,
+  wenn kein Gerät der Admin-Vault online ist. Nur Einrichtung, Rechteänderungen,
+  Erneuern, Prüfen der Versionierung (FR-013), Wiederherstellen (FR-029) und
+  Aufräumen (FR-040) brauchen ein Gerät des Admins.
 
 **Direkter Zugriff und was der Speicher sieht**
 
@@ -720,10 +713,11 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   Vault (Spec 025) eigenen Speicher verbinden können, mit einem eigenen Bucket für
   diese Ordner.
 - **FR-032**: Für die eigenen Ordner MÜSSEN die eigenen Geräte die
-  Speicherverbindung selbst nutzen; Zugangsschlüssel und Ersatzweg entfallen. Die
+  Speicherverbindung selbst nutzen; Zugangsschlüssel entfallen. Die
   Eignungsprüfung MUSS fehlende eingeschränkte Schlüssel und einen zu langsamen
-  Widerruf (FR-004 e bis g) dort ignorieren und
-  fehlende Versionierung nur als Warnung melden.
+  Widerruf (FR-004 e bis g) dort ignorieren und fehlende Versionierung oder
+  Aufbewahrungsfrist (FR-004 c und d) nur als Warnung melden. Ungeeignet ist ein
+  Anbieter für die eigenen Ordner nur, wenn (a) oder (b) fehlen.
 
 **Ende eines Space und Hauptzugangsdaten**
 
@@ -770,8 +764,7 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   Hauptzugangsdaten. Gehört einer Vault, liegt nur auf deren Geräten (FR-033) und
   kann von mehreren Spaces und den eigenen Ordnern genutzt werden.
 - **Speicher des Space**: welches Backend ein Space nutzt und bei Backend B
-  welcher Bucket, welche Stufe der Eignung (geeignet oder Ersatzweg) und welche
-  Aufbewahrungsfrist. Wird vom Admin geschrieben und mit den Daten des Space
+  welcher Bucket und welche Aufbewahrungsfrist. Wird vom Admin geschrieben und mit den Daten des Space
   verteilt, ohne Hauptzugangsdaten.
 - **Zugangsschlüssel**: Art (nur Lesen, Lesen und Schreiben), Generation,
   Kennung beim Anbieter (für den Widerruf) und die geheimen Schlüsseldaten. Die
@@ -779,10 +772,8 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
 - **Schlüsselumschlag für Zugangsschlüssel**: ein Zugangsschlüssel samt
   Endpunkt, Region und Bucket, verschlüsselt an die Vault-Identität genau eines
   Mitglieds.
-- **Eignungsergebnis**: Stufe (geeignet, nur über den Ersatzweg, ungeeignet)
-  und die Liste der erfüllten und nicht erfüllten Eigenschaften aus FR-004.
-- **Zugangslink**: Objekt, Art des Zugriffs, Ablaufzeit. Wird nur auf dem
-  Ersatzweg ausgestellt und nicht gespeichert.
+- **Eignungsergebnis**: Ergebnis (geeignet oder ungeeignet) und die Liste der
+  erfüllten und nicht erfüllten Eigenschaften aus FR-004.
 - **Offener Widerruf**: ein Zugangsschlüssel, dessen Widerruf beim Anbieter
   noch aussteht (FR-022).
 
@@ -796,7 +787,7 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   und in 0 % der Fälle einen Zugangsschlüssel in lesbarer Form.
 - **SC-002**: Nach dem Entfernen eines Mitglieds lehnt der Anbieter dessen alten
   Zugangsschlüssel in 100 % der Testläufe innerhalb von 5 Minuten ab, für jeden
-  Anbieter mit der Stufe „geeignet“ (die Prüfung nach FR-004 g hat diese Frist
+  Anbieter mit dem Ergebnis „geeignet“ (die Prüfung nach FR-004 g hat diese Frist
   gemessen), sofern ein Gerät des Admins online und der Anbieter erreichbar ist
   (FR-018); sonst gilt die Frist ab dem bestätigten Widerruf (FR-022).
 - **SC-003**: Eine Durchsicht des Buckets mit vollem Zugriff findet in 0 % der
@@ -816,9 +807,9 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   wenn es hochladen oder löschen will; ein Mitglied mit Schreiben scheitert in
   100 % der Versuche, ältere Versionen zu löschen oder die Versionierung
   auszuschalten.
-- **SC-008**: Auf dem Ersatzweg ist jeder Zugangslink nach höchstens 15 Minuten
-  ungültig, und ein entferntes Mitglied erhält in 0 % der Anfragen einen neuen
-  Link.
+- **SC-008**: Für jeden Testanbieter, dem genau ein Kriterium aus FR-004 (a bis
+  g) fehlt, endet die Eignungsprüfung in 100 % der Fälle mit „ungeeignet“, und in
+  0 % der Versuche lässt sich damit ein Space verbinden.
 - **SC-009**: Nach einem Umzug zwischen Backend A und B sind 100 % der Dateien
   für alle Mitglieder lesbar, und der alte Speicher enthält nach dem Aufräumen
   keine Objekte des Space mehr (Backend B: sofern der Admin den Bucket löschen
@@ -835,9 +826,7 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   rechtmäßig löschen darf, nicht, wie der Speicher geschützt wird.
 - Spec 024 liefert die direkte Verbindung zwischen eigenen Geräten, die
   Gerätebestätigung und die Liste der Nur-direkt-Daten; Spec 026 lässt diese
-  Daten auch verschlüsselt in keinem Postfach des Relays zu. Spec 027 liefert die
-  direkte Verbindung zwischen Geräten verschiedener Mitglieder eines Space, die
-  der Ersatzweg nutzt. Die Hauptzugangsdaten und geöffnete Zugangsschlüssel sind
+  Daten auch verschlüsselt in keinem Postfach des Relays zu. Die Hauptzugangsdaten und geöffnete Zugangsschlüssel sind
   Nur-direkt-Daten; FR-017 und FR-033 wiederholen das nur für sie. Ein zweites
   Gerät des Admins, das nie gleichzeitig mit einem anderen eigenen Gerät online
   ist, bekommt die Hauptzugangsdaten deshalb erst bei der nächsten direkten
@@ -860,7 +849,11 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   die Empfänger im Dateiindex (Spec 027); User Story 4 fängt die Grenze ab.
 - Die Aufbewahrungsfrist von 30 Tagen ist eine Voreinstellung, keine Garantie
   des Anbieters. Setzt der Anbieter sie nicht um, gilt sie als nicht erfüllt
-  (FR-004 d), und der Admin sieht das im Eignungsergebnis.
+  (FR-004 d), und der Anbieter ist für Spaces ungeeignet.
+- Anbieter ohne auf einen Bucket beschränkte Zugangsschlüssel sind für Spaces
+  ausgeschlossen (D25). Wer einen solchen Anbieter betreibt, nutzt für Spaces
+  Backend A oder „nur direkte Übertragung“ und für die eigenen Ordner weiter den
+  eigenen Speicher.
 - Die Wiederherstellung (FR-029) setzt voraus, dass mindestens ein Gerät des
   Admins regelmäßig online ist. Zwischen zwei Prüfungen kann eine gelöschte Datei
   für Mitglieder unerreichbar sein.
@@ -879,6 +872,9 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
 - Mehrere Speicher für einen Space gleichzeitig (Spiegelung, Redundanz über
   Anbieter hinweg).
 - Speicher, der kein S3 spricht (WebDAV, SFTP, Dateifreigaben im Netz).
+- Zugriff auf Anbieter, die die Eignungsprüfung nicht bestehen, etwa über
+  kurzlebige, vom Anbieter signierte Einzelzugriffe, die ein Gerät des Admins
+  ausstellt (D25).
 - Verwaltung von Konten, Abrechnung oder Kontingenten beim Anbieter über die
   Anzeige nach FR-036 hinaus.
 - Eine Übergabe der Admin-Rolle oder der Speicherverbindung an ein anderes

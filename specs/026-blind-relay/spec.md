@@ -69,9 +69,11 @@ nicht erreichbar ist oder ablehnt.
 - **Objekt**: verschlüsselter, unveränderlicher Dateiinhalt, benannt nach dem
   Hash seines Chiffrats (Spec 025).
 - **Speicher-Backend A**: Objektspeicher, den der Betreiber des Relays stellt.
-  **Speicher-Backend B** ist der eigene S3-Speicher des Nutzers (Spec 029).
-- **Zugangslink**: ein kurzlebiger, vom Relay ausgestellter Link, mit dem ein
-  Gerät genau ein Objekt direkt beim Speicher hoch- oder herunterlädt.
+  Das Relay überträgt die Objekte selbst zwischen diesem Speicher und dem
+  anfragenden Gerät, über seinen eigenen Endpunkt und dieselbe
+  Protokollfamilie wie beim Postfach; es ist auch für Dateien ein blinder
+  Teilnehmer. **Speicher-Backend B** ist der eigene S3-Speicher des Nutzers
+  (Spec 029).
 - **Fortschrittsstand** (Versionsvektor): je Ursprungsgerät die höchste gesehene
   Änderung (Spec 024). Er zeigt, ob einem Gerät etwas fehlt, egal über welchen
   Weg es kam.
@@ -178,6 +180,9 @@ nicht erreichbar ist oder ablehnt.
   Identität alle Bereiche, die die Vault verwaltet, und verlässt alle anderen
   (D23). Das Relay bindet einen Bereich nie um; eine Schließung ist dort
   endgültig (FR-021, FR-049).
+- Q: Wie kommen Geräte bei Speicher-Backend A an die Objekte? → A: Das Relay
+  überträgt die verschlüsselten Objekte selbst; es gibt keine zeitlich
+  begrenzten Links. Das Relay sieht dabei nur Ciphertext (D24).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -433,9 +438,9 @@ füllt ein gelöschtes Postfach wieder.
 ### User Story 7 - Dateien über den Speicher des Relays (Priority: P3)
 
 Die verschlüsselten Objekte aus dem Dateisync (Spec 025) und später aus Spaces
-(Spec 027) liegen beim Speicher-Backend A des Relays. Das Relay stellt einem
-berechtigten Gerät einen kurzlebigen Link aus; die Datei selbst fließt direkt
-zwischen Gerät und Speicher. Löschen darf ein Objekt nur, wer es hochgeladen
+(Spec 027) liegen beim Speicher-Backend A des Relays. Das Relay prüft bei jeder
+Anfrage die geltende Mitgliederliste und überträgt das Objekt selbst zwischen
+seinem Speicher und dem Gerät; es sieht dabei nur Chiffrat. Löschen darf ein Objekt nur, wer es hochgeladen
 hat, wer Löschen hat, oder der Admin.
 
 **Why this priority**: Dateien zwischen Geräten, die nie gleichzeitig online
@@ -444,29 +449,31 @@ Alternative für Nutzer mit eigenem S3.
 
 **Independent Test**: Ein Objekt über Speicher-Backend A hochladen, auf einem
 zweiten Gerät herunterladen und den Hash prüfen. Mit einer Vault ohne Löschen,
-die das Objekt nicht hochgeladen hat, einen Löschlink anfordern: abgelehnt.
-Den Link nach seiner Laufzeit, höchstens 15 Minuten, erneut benutzen:
-abgelehnt.
+die das Objekt nicht hochgeladen hat, das Objekt löschen: abgelehnt. Eine
+Vault aus der Liste entfernen und mit ihrem Gerät das Objekt erneut anfordern:
+sofort abgelehnt.
 
 **Acceptance Scenarios**:
 
 1. **Given** eine Vault mit Schreiben im Bereich, **When** ihr Gerät ein neues
-   Objekt hochladen will, **Then** bekommt es einen Link für genau dieses
-   Objekt, und das Relay vermerkt die hochladende Vault.
+   Objekt hochladen will, **Then** nimmt das Relay genau dieses Objekt über
+   seinen Endpunkt an, legt es in seinem Speicher ab und vermerkt die
+   hochladende Vault.
 2. **Given** eine Vault mit Lesen, **When** ihr Gerät ein Objekt anfordert,
-   **Then** bekommt es einen kurzlebigen Link und lädt direkt beim Speicher.
+   **Then** prüft das Relay die geltende Liste und überträgt das Objekt aus
+   seinem Speicher an das Gerät.
 3. **Given** ein Objekt existiert schon, **When** jemand es unter derselben
    Kennung erneut hochladen will, **Then** wird es nicht überschrieben.
 4. **Given** eine Vault, die das Objekt nicht hochgeladen hat, weder Löschen
    hat noch Admin ist, **When** sie es löschen will, **Then** lehnt das Relay
    ab.
-5. **Given** ein abgelaufener Link, **When** er benutzt werden soll, **Then**
-   scheitert der Zugriff.
+5. **Given** ein Gerät lädt gerade ein Objekt herunter, **When** das Relay
+   eine Liste annimmt, die seine Vault entfernt, **Then** bricht das Relay die
+   laufende Übertragung ab und bedient keine weitere (FR-023).
 6. **Given** eine Vault, die inzwischen nicht mehr in der Liste steht, **When**
-   ihr Gerät einen neuen Link anfordert, **Then** lehnt das Relay sofort ab;
-   ein Link, der vorher ausgestellt wurde, lässt sich nicht zurückziehen und
-   funktioniert höchstens bis zu seinem Ablauf, spätestens 15 Minuten nach der
-   Ausstellung (FR-026).
+   ihr Gerät ein Objekt hoch- oder herunterladen will, **Then** lehnt das
+   Relay sofort ab; es gibt keinen vorher ausgestellten Zugang, der noch
+   weiter funktioniert (FR-026).
 
 ---
 
@@ -692,8 +699,7 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   hat, MUSS das Relay ablehnen. Eine angenommene Schließung ist endgültig:
   Danach MUSS das Relay für diesen Bereich nichts mehr annehmen, keine Liste,
   kein Paket, keine Momentaufnahme und keinen Upload eines Objekts, auch nicht
-  mit Signatur der Admin-Identität, und DARF keinen Zugangslink zum Hochladen
-  mehr ausstellen. Abrufe der Mitglieder mit Lesen in der letzten gültigen
+  mit Signatur der Admin-Identität. Abrufe der Mitglieder mit Lesen in der letzten gültigen
   Liste MUSS es weiter bedienen, solange diese Liste nicht abgelaufen ist
   (FR-019), und dabei die Schließung mitliefern; jedes Mitglied prüft ihre
   Signatur selbst, zeigt „vom Admin geschlossen“, behält seine lokale Kopie
@@ -725,12 +731,10 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   „Vault“ ist das in beiden Fällen jedes eigene Gerät.
 - **FR-023**: Ein Entzug MUSS sofort wirken: Sobald das Relay eine neue Liste
   angenommen hat, MUSS jede weitere Anfrage einer nicht mehr berechtigten Vault abgelehnt werden,
-  auch auf schon bestehenden Verbindungen, und das Relay DARF ihr keinen
-  Zugangslink mehr ausstellen. Eine Widerrufsliste DARF dafür nicht nötig
-  sein. „Sofort“ gilt für den Zugriff auf das Postfach und das Ausstellen von
-  Zugangslinks; für Objekte begrenzt die Höchstlaufzeit schon ausgestellter
-  Links (FR-026) die Wirkung, was die Klärung „ein Entzug wirkt sofort“ für
-  Objekte präzisiert.
+  auch auf schon bestehenden Verbindungen. Eine Widerrufsliste DARF dafür
+  nicht nötig sein. „Sofort“ gilt für das Postfach und für Objekte
+  gleichermaßen: Eine laufende Übertragung eines Objekts an oder von einer
+  nicht mehr berechtigten Vault MUSS das Relay abbrechen (FR-026).
 - **FR-024**: Mitgliederlisten, Gerätebestätigungen und Anmeldungen MÜSSEN
   dieselben secp256k1-Schlüssel nutzen wie Vault-Identität und
   Geräteschlüssel; ein zweites Schlüsselsystem nur für das Relay DARF es nicht
@@ -744,24 +748,25 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
 **Speicher-Backend A**
 
 - **FR-026**: Das Relay DARF Speicher-Backend A anbieten, einen Objektspeicher
-  des Betreibers für die Objekte der Bereiche. Bietet es ihn an, MUSS es für
-  jedes Hoch- oder Herunterladen einen kurzlebigen Zugangslink für genau ein
-  Objekt ausstellen, nach Prüfung der Liste: Lesen zum Herunterladen, Schreiben
-  zum Hochladen, eine Berechtigung zum Löschen nach FR-028 zum Löschen. Die
-  Daten MÜSSEN direkt zwischen Gerät und Speicher fließen,
-  nicht durch das Relay. Ein Zugangslink MUSS höchstens 15 Minuten ab seiner
-  Ausstellung gültig sein. Ein ausgestellter Link lässt sich nicht
-  zurückziehen: Nach einem Entzug stellt das Relay sofort keine neuen Links
-  mehr aus (FR-023), und schon ausgestellte laufen spätestens mit ihrer
-  Laufzeit ab.
-- **FR-027**: Objekte MÜSSEN unveränderlich sein: Ein Link zum Hochladen MUSS an
-  Kennung und Größe des Objekts gebunden sein, und ein bestehendes Objekt DARF
-  NICHT überschrieben werden. Wo der Speicher es kann, MUSS er Inhalte ablehnen,
-  deren Hash nicht zur Kennung passt; unabhängig davon prüft jeder Empfänger
+  des Betreibers für die Objekte der Bereiche. Bietet es ihn an, MUSS es die
+  Objekte selbst zwischen seinem Speicher und dem anfragenden Gerät
+  übertragen, über seinen eigenen Endpunkt und dieselbe Protokollfamilie wie
+  beim Postfach. Bei jeder Anfrage für ein Objekt MUSS es die geltende Liste
+  prüfen: Lesen zum Herunterladen, Schreiben zum Hochladen, eine Berechtigung
+  zum Löschen nach FR-028 zum Löschen. Zeitlich begrenzte Links oder andere
+  Zugänge, mit denen ein Gerät am Relay vorbei auf den Speicher zugreift, DARF
+  es NICHT ausstellen. Das Relay überträgt nur Chiffrat und DARF NICHT
+  versuchen, es zu entschlüsseln. Ein Entzug wirkt damit auch für Objekte
+  sofort (FR-023).
+- **FR-027**: Objekte MÜSSEN unveränderlich sein: Ein Upload MUSS an Kennung und
+  Größe des Objekts gebunden sein, und ein bestehendes Objekt DARF NICHT
+  überschrieben werden. Das Relay MUSS einen Upload ablehnen, dessen Hash nicht
+  zur Kennung passt; unabhängig davon prüft jeder Empfänger
   den Hash (Spec 025).
 - **FR-028**: Das Relay MUSS je Objekt die hochladende Vault-Identität
   vermerken. Ein Objekt löschen DÜRFEN nur diese Vault, Vaults mit Löschen und
-  der Admin des Bereichs. Damit DARF ein Gerät des Admins alte Objekte
+  der Admin des Bereichs; das Relay prüft das bei jeder Anfrage zum Löschen
+  selbst. Damit DARF ein Gerät des Admins alte Objekte
   (überholte Fassungen, gelöschte Dateien) löschen, sobald der Dateiindex sie
   nicht mehr nennt (Spec 027); im Bereich „Vault“ ist das jedes eigene Gerät.
   Postfächer und Objekte eines Bereichs MÜSSEN auf das Kontingent des Admins
@@ -817,8 +822,8 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
 - **FR-048**: Eigene synchronisierte Ordner (Spec 025) DÜRFEN ihre Objekte im
   Speicher-Backend A des Relays ablegen, das das Postfach der Vault führt
   (FR-040), sofern es Speicher-Backend A anbietet. Die Objekte gehören dann zum
-  Bereich „Vault“: holzi MUSS die Zugangslinks dafür mit der Mitgliederliste
-  dieses Bereichs anfordern (FR-026), sie zählen auf das Kontingent der Vault
+  Bereich „Vault“: Das Relay prüft Anfragen dafür gegen die Mitgliederliste
+  dieses Bereichs (FR-026), sie zählen auf das Kontingent der Vault
   (FR-028), und eigene Geräte räumen Objekte, die der Dateiindex nicht mehr
   nennt, als Admin auf. Ohne ein solches Relay laufen die Objekte nur direkt
   zwischen eigenen Geräten (Spec 025).
@@ -906,9 +911,6 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   iroh-Endpunkts, Ausstellungszeit, Signatur der Vault-Identität (Spec 024).
 - **Objekt (Sicht des Relays)**: Bereichskennung, Objektkennung (Hash des
   Chiffrats), Größe des Chiffrats, hochladende Vault-Identität.
-- **Zugangslink**: ein Objekt, eine Richtung (hoch, herunter, löschen),
-  Ablaufzeit (höchstens 15 Minuten nach der Ausstellung); nicht
-  zurückziehbar.
 - **Schließung (Sicht des Relays)**: Bereichskennung, Zeitpunkt, Signatur der
   Vault-Identität des Admins; endgültig; bleibt mit der Bereichskennung
   erhalten, nachdem Postfach und Objekte gelöscht sind.
@@ -932,9 +934,9 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   keine Dateinamen: 0 Treffer.
 - **SC-003**: Hat das Relay eine Mitgliederliste angenommen, die eine Vault
   entfernt, wird deren nächste Anfrage für den Bereich abgelehnt, in 100 % der Fälle und
-  auch auf einer schon offenen Verbindung; sie erhält ab dann keinen neuen
-  Zugangslink, und jeder vorher ausgestellte scheitert spätestens 15 Minuten
-  nach seiner Ausstellung.
+  auch auf einer schon offenen Verbindung. Das gilt ebenso für Objekte: Jedes
+  weitere Hoch- oder Herunterladen wird abgelehnt, und eine laufende
+  Übertragung bricht ab.
 - **SC-004**: Mitgliederlisten mit niedrigerer Generation, abgelaufener
   Laufzeit, falscher Signatur oder falschem Admin werden zu 100 % abgelehnt;
   von zwei gültigen Listen derselben Generation gilt in 100 % der Fälle die
@@ -956,9 +958,10 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   außer dem Relay-Sync nutzbar, ohne blockierenden Dialog; lokale Änderungen
   sind spätestens 60 Sekunden, nachdem das Relay wieder erreichbar ist, auf
   einem anderen Gerät sichtbar.
-- **SC-009**: Beim Hoch- und Herunterladen eines Objekts von 1 GB über
-  Speicher-Backend A fließen weniger als 1 % der Objekt-Bytes durch den Dienst
-  des Relays selbst.
+- **SC-009**: Ein Objekt von 1 GB lässt sich über Speicher-Backend A hoch- und
+  auf einem zweiten Gerät herunterladen, und der Hash stimmt; eine
+  Untersuchung von Speicher und Protokollen des Relays danach findet nur das
+  Chiffrat und keinen Klartext des Objekts.
 - **SC-010**: Ein Betreiber setzt ein Relay mit Postfächern, NAT-Durchgang und
   Speicher-Backend A auf und lässt eine Vault zu, ohne ein Konto, eine
   E-Mail-Adresse oder einen fremden Dienst einzurichten; ein Nutzer trägt das
@@ -985,9 +988,13 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   weitergibt, und betreibt ein iroh-Relay für den NAT-Durchgang, wie
   haex-sync-server es schon tut. Die Anmeldung folgt dem Challenge-Response
   von NIP-42. Die optionale Signalisierung ist ein Nostr-Relay. Speicher-Backend
-  A ist S3-kompatibel, die Zugangslinks sind vorsignierte Links; sie lassen
-  sich nach der Ausstellung nicht zurückziehen, darum ist ihre Laufzeit fest
-  begrenzt (FR-026).
+  A ist S3-kompatibel und liegt hinter dem Relay; Geräte greifen nie direkt
+  darauf zu, sondern das Relay überträgt die Objekte selbst über seinen
+  Endpunkt (FR-026, D24).
+- Weil das Relay die Objekte selbst überträgt, läuft die gesamte Bandbreite
+  für Dateien über den Server des Relay-Betreibers. Das ist hingenommen, weil
+  ein Entzug so auch für Objekte sofort wirkt. Der Betreiber muss das bei
+  Leitung und Kontingenten einplanen.
 - Die Formate von Paket, Mitgliederliste, Gerätebestätigung und Momentaufnahme
   legt Spec 024 bzw. der Plan fest (Design §15 Punkt 7). Die Bereichskennung
   wird aus der Vault-Identität des Admins und einem Zufallswert abgeleitet

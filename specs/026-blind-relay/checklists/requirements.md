@@ -75,3 +75,4 @@
 - 2026-09-28: the operator answered the several-relays question (FR-040: one home relay per Bereich
   in v1). The snapshot-upload question (FR-022) is still open.
 - 2026-09-28: snapshot upload answered as well (FR-022: only the admin of the Bereich). No markers remain.
+- 2026-09-28 (D24): Speicher-Backend A has no presigned links anymore; the relay streams the encrypted Objekte itself over its own endpoint (FR-026), so a removal takes effect immediately for objects too (FR-023, SC-003, SC-009 rewritten; key entity „Zugangslink“ removed).

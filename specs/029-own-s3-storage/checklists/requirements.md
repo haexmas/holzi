@@ -37,28 +37,26 @@
   Whether each offers bucket-scoped tokens, bucket versioning, a retention rule
   for old versions, and a read-write token that cannot delete old versions
   (FR-004 c to g, g = revoked token rejected within 5 minutes) is unverified. That
-  decides whether a provider lands on "geeignet" or only "nur über den
-  Ersatzweg" (FR-005). Resolve with `/speckit-clarify`, ideally after a short
+  decides whether a provider lands on "geeignet" or "ungeeignet" (FR-005,
+  two outcomes only since D25). Resolve with `/speckit-clarify`, ideally after a short
   provider check.
-- "No implementation details": S3, buckets, versioning and presigned access
-  links are named because they are the feature itself (operator instruction).
+- "No implementation details": S3, buckets and versioning are named because
+  they are the feature itself (operator instruction).
   Wire formats, the provider admin APIs and the envelope format stay plan
   material.
 - Decision taken without a marker: moving a space between backend A and B is in
   scope as P3 (User Story 8), justified in the Clarifications. Cost/quota display
   is an optional KANN requirement (FR-036).
 - Decisions taken as assumptions rather than markers: default retention of old
-  versions is 30 days (FR-011); access links on the fallback path live at most
-  15 minutes (FR-024); tokens exist per capability type, not per member, as in
+  versions is 30 days (FR-011); tokens exist per capability type, not per member, as in
   the design; members with the delete capability get the read-write token
   because S3 does not separate writing from deleting.
 - FR-017 and FR-033 treat the admin's full provider credentials and unwrapped
   access tokens as Nur-direkt-Daten (spec 024): they travel only over direct
-  links between devices of the same vault, never through any relay mailbox, not
+  connections between devices of the same vault, never through any relay mailbox, not
   even the vault's own. Each device unwraps the token envelopes itself; the
   envelopes may travel through mailboxes.
-- Cross-spec alignment (2026-09-28): the fallback path (FR-023) uses spec 027's
-  direct connection between members; the space mailbox stays on the admin's
+- Cross-spec alignment (2026-09-28): the space mailbox stays on the admin's
   relay independent of backend B, and without a relay it syncs only directly;
   there is no default backend, the choice at space creation is mandatory (spec
   027 FR-003); settings live in „Föderation“ (space detail view under „Spaces“,
@@ -73,8 +71,7 @@
   (FR-004 g), so SC-002 holds for every provider marked „geeignet“. Review fix
   2026-09-28: FR-018 revokes at the provider before the new member list is
   published, FR-022 publishes anyway on failure and retries with a persistent
-  warning; FR-024 issues delete links only to admin devices for garbage
-  collection, members get read/upload links only.
+  warning.
 - Aligned with the sibling spec 027 as written: 027 excludes dissolving a space
   and switching a space's backend. This spec lifts the switching exclusion (User
   Story 8, also from "nur direkte Übertragung" to B) and keeps dissolving out of
@@ -85,3 +82,10 @@
 - 2026-09-28: the operator answered all clarification questions for this spec; the markers are
   resolved in the spec and recorded under Clarifications. Notes above that describe open markers are
   historical.
+- D25 (2026-09-28): providers that fail any criterion of FR-004 cannot be
+  connected for a space; the former fallback path via an admin device and
+  short-lived provider-signed access is removed. The suitability check has two
+  outcomes (FR-005). Members use their scoped token directly (FR-023), admin
+  devices use the admin credentials (FR-024), garbage collection runs on an
+  admin device (FR-040). User Story 5, FR-023 to FR-025 and SC-008 were
+  rewritten for this.

@@ -83,8 +83,8 @@ Repository `https://github.com/haex-space/haex-vault`, Revision
 - **Postfach**: der Speicherplatz eines Bereichs am Relay für Änderungspakete,
   darunter Dateiindex und Mitgliederliste. Das Postfach ist vom Speicher für
   Objekte getrennt (FR-040).
-- **Speicher-Backend A**: vom Relay bereitgestellter Speicher für Objekte
-  (Spec 026). **Speicher-Backend B**: ein eigener S3-Speicher des Admins
+- **Speicher-Backend A**: vom Relay bereitgestellter Speicher für Objekte;
+  das Relay überträgt die Objekte selbst (Spec 026). **Speicher-Backend B**: ein eigener S3-Speicher des Admins
   (Spec 029).
 - **Datenfreigabe**: das Teilen einzelner Einträge oder Sammlungen aus der
   SQLite-Datenbank mit anderen Nutzern (Spec 028). Nicht Teil von Spaces.
@@ -199,6 +199,9 @@ Repository `https://github.com/haex-space/haex-vault`, Revision
 - Q: Wie ist Löschen geregelt? → A: „Schreiben“ erlaubt das Löschen eigener Dateien (Ersteller = eigene Vault); fremde Dateien löschen erfordert die Stufe „Löschen“ (FR-016). Gilt ebenso für Spec 028.
 - Q: Wie wirkt ein Entzug bei gleichzeitigem Schreiben? → A: Nur nach vorn. Eine Änderung gilt, wenn ihr Autor in ihrer Schlüsselgeneration das Recht hatte; jedes empfangende Gerät prüft zusätzlich gegen die neueste ihm bekannte Mitgliederliste, das Relay sperrt sofort. Das verbleibende kleine Zeitfenster wird akzeptiert (FR-024). Gilt ebenso für Spec 028.
 - Q: Erzeugt auch eine Einladung eine neue Schlüsselgeneration? → A: Ja. Jede Änderung der Mitgliederliste erzeugt eine neue Generation mit fester Mitgliederliste; Datenänderungen nie (FR-019). Gilt ebenso für Spec 028.
+- Q: Wie kommen Geräte bei Speicher-Backend A an die Objekte? → A: Das Relay
+  überträgt die verschlüsselten Objekte selbst; es gibt keine zeitlich
+  begrenzten Links. Das Relay sieht dabei nur Ciphertext (D24).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -724,10 +727,10 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   des entfernten Mitglieds abweisen, sobald die neue Mitgliederliste
   hochgeladen ist. Geräte von Mitgliedern DÜRFEN Daten des Space direkt nur mit
   Geräten von Vaults austauschen, die in ihrer aktuellen Mitgliederliste
-  stehen (FR-039). Ohne Verzögerung gilt das für den Zugang zum Postfach und
-  bei Speicher-Backend A für das Ausstellen von Links zu Objekten; schon
-  ausgestellte Links laufen spätestens nach ihrer größten Lebensdauer von 15
-  Minuten ab (Spec 026). Bei Speicher-Backend B MUSS das Gerät des Admins beim Entfernen
+  stehen (FR-039). Sofort gilt das für den Zugang zum Postfach und bei
+  Speicher-Backend A auch für Objekte, weil das Relay jede Anfrage für ein
+  Objekt gegen die geltende Mitgliederliste prüft und die Objekte selbst
+  überträgt (Spec 026 FR-026). Bei Speicher-Backend B MUSS das Gerät des Admins beim Entfernen
   oder Herabstufen in einem Vorgang zuerst die betroffenen Zugangsschlüssel
   beim Anbieter widerrufen oder erneuern und dann die neue Mitgliederliste
   veröffentlichen; für Objekte gilt dort die Frist, in der der Anbieter einen
