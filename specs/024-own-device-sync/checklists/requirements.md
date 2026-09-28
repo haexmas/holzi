@@ -65,3 +65,11 @@
   processes; the plan confirms this.
 - All clarification markers are resolved and recorded under Clarifications; superseded answers are
   marked there.
+- 2026-09-28, plan review with the operator: within the vault scope there are no stored change
+  packages and no sequence numbers. Own devices exchange transaction groups from their current
+  state over the verified iroh connection; progress is the highest HLC per origin device, whose id
+  is already in every HLC (FR-012, FR-013, FR-019 to FR-021, FR-028, SC-004, SC-014). Change
+  packages remain for paths through third parties (026) and sequence numbers remain for shared
+  scopes (027, 028; FR-019, FR-042), so the references from those specs stay valid. A copy of the
+  vault file deletes nothing (FR-006). "Relay" is never used alone: Nostr-Relay, iroh-Relay or
+  Sync-Server (026, formerly "das Relay").

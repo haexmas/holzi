@@ -13,16 +13,16 @@ welche Geräte zur Vault gehören, sagt die Geräteliste, die ein Hauptgerät mi
 der Vault-Identität signiert (D27). Einen Wechsel der Vault-Identität gibt es in
 v1 nicht (D26). Kein MLS (D13). Die Geräte einer Vault finden sich über
 verschlüsselte Präsenzmeldungen über Nostr, verbinden sich direkt über iroh und
-gleichen die ganze Vault außer gerätelokalen Daten ab, auch auf direkten
-Verbindungen in verschlüsselten, signierten Änderungspaketen. Jede Änderung
-behält ihren wahren Autor, der Fortschritt wird je Ursprungsgerät verfolgt.
+gleichen die ganze Vault außer gerätelokalen Daten ab, direkt über die
+geprüfte, verschlüsselte Verbindung und in ganzen Transaktionen. Jede Änderung
+behält ihr Ursprungsgerät, der Fortschritt wird je Ursprungsgerät verfolgt.
 Heute erzeugt holzi nur einen Platzhalter anstelle eines echten Schlüsselpaars
 (`src-tauri/src/identity/bootstrap.rs`); eine kopierte Vault-Datei funktioniert
 schon. Der bevorzugte Weg zu einem weiteren Gerät ist das Verknüpfen per Code
 oder QR (P1); die Kopie der Vault-Datei bleibt ein Nebenweg (P2), ebenso P2 ist
 das Entfernen eines Geräts. Die Unteransicht „Geräte“ der Einstellungs-Kategorie
 „Föderation“ zeigt die Rollen der Geräte, die öffentliche Vault-Identität zum
-Lesen, „zuletzt online“ und den Live-Stand. Sync über das Relay und die
+Lesen, „zuletzt online“ und den Live-Stand. Sync über den Sync-Server und die
 Wiederherstellung kommen mit Spec 026.
 
 ## Begriffe
@@ -33,9 +33,11 @@ Wiederherstellung kommen mit Spec 026.
   Geräteliste. Der private Schlüssel liegt nur auf Hauptgeräten, in der
   verschlüsselten Vault (D27). In v1 wechselt die Vault-Identität nie (D26).
 - **Geräteschlüssel**: ein eigenes Schlüsselpaar je Gerät (secp256k1, im
-  Nostr-Format), die Identität des Geräts. Mit ihm signiert das Gerät alles,
-  was es schreibt, und an ihn gehen Umschläge. Es verlässt das Gerät nie und
-  wird nicht synchronisiert.
+  Nostr-Format), die Identität des Geräts. Mit ihm weist sich das Gerät beim
+  Verbinden aus und signiert, was es über Dritte veröffentlicht
+  (Präsenzmeldungen, Aufnahmeanfragen, ab Spec 026 Pakete, ab Spec 027
+  Änderungen in gemeinsamen Bereichen); an ihn gehen Umschläge. Es verlässt
+  das Gerät nie und wird nicht synchronisiert.
 - **Gerät der Vault**: eine Instanz von holzi, die die Vault geöffnet hat, mit
   eigenem Geräteschlüssel. Es gehört zur Vault, solange sein Geräteschlüssel auf
   der aktuellen Geräteliste steht. Gleichbedeutend mit einem Eintrag der
@@ -52,8 +54,8 @@ Wiederherstellung kommen mit Spec 026.
   Liste aller aktuellen Geräte der Vault (öffentlicher Geräteschlüssel, Rolle
   „Hauptgerät“ oder „verknüpftes Gerät“, Name, Netzwerkkennung), dazu die
   entfernten Geräte mit ihrer Grenze, mit einer Generation. Für sie gelten
-  dieselben Regeln wie für Mitgliederlisten (FR-005, FR-043). Relay, eigene
-  Geräte und die Geräte der Mitglieder nehmen ein Gerät nur an, wenn es auf der
+  dieselben Regeln wie für Mitgliederlisten (FR-005, FR-043). Sync-Server,
+  eigene Geräte und die Geräte der Mitglieder nehmen ein Gerät nur an, wenn es auf der
   aktuellen Geräteliste seiner Vault steht.
 - **Verknüpfen**: der bevorzugte Weg, die Vault auf einem weiteren Gerät zu
   nutzen: Die neue Instanz tritt per Code oder QR eines Hauptgeräts bei, das sie
@@ -71,16 +73,22 @@ Wiederherstellung kommen mit Spec 026.
 - **Bereich**: wozu eine Menge von Änderungen gehört: die Vault selbst (Bereich
   „Vault“), ein Space (Bereich eines Space, Spec 027) oder eine Datenfreigabe
   (Bereich einer Datenfreigabe, Spec 028). In dieser Spec gibt es nur den
-  Bereich „Vault“; auch das Postfach der eigenen Vault bei einem Relay gehört
+  Bereich „Vault“; auch das Postfach der eigenen Vault beim Sync-Server gehört
   zu ihm. (Nicht zu verwechseln mit den Unteransichten einer
   Einstellungs-Kategorie in Spec 023.)
-- **Änderungspaket**: eine verschlüsselte, signierte Gruppe von Änderungen eines
-  Bereichs. Es wird auch auf direkten Verbindungen zwischen eigenen Geräten
-  verschlüsselt. Ein Änderungspaket ist atomar (FR-013).
-- **Momentaufnahme**: ein vollständiger Stand eines Bereichs mit den
-  ursprünglichen Autoren und Signaturen jeder Änderung, etwa im Postfach eines
-  Relays (Spec 026). Anders als ein Änderungspaket wird sie je vollständiger
-  Transaktionsgruppe geprüft (FR-013).
+- **Ursprungsgerät**: das Gerät, das eine Änderung geschrieben hat. Es steht im
+  Zeitstempel der hybriden logischen Uhr jeder Änderung (dessen Gerätekennung)
+  und bleibt beim Weiterleiten erhalten.
+- **Änderungspaket**: eine verschlüsselte Gruppe vollständiger Transaktionen
+  eines Bereichs für Wege über Dritte: das Postfach beim Sync-Server (Spec 026)
+  und die gemeinsamen Bereiche (Specs 027, 028). Zwischen eigenen Geräten gibt
+  es keine Änderungspakete; dort reisen Transaktionsgruppen direkt über die
+  geprüfte, verschlüsselte Verbindung (FR-012). Ein Änderungspaket ist atomar
+  (FR-013).
+- **Momentaufnahme**: ein vollständiger Stand eines Bereichs mit dem
+  Ursprungsgerät jeder Änderung, etwa beim Verknüpfen oder im Postfach beim
+  Sync-Server (Spec 026). Anders als ein Änderungspaket wird sie je
+  vollständiger Transaktionsgruppe geprüft (FR-013).
 - **Transaktionsgruppe**: die Änderungen mit gemeinsamem Zeitstempel der
   hybriden logischen Uhr, also eine Transaktion. Sie wird nie geteilt und nie
   zum Teil angewendet (FR-013).
@@ -88,18 +96,21 @@ Wiederherstellung kommen mit Spec 026.
   gewöhnlichen Sync reist: der private Schlüssel der Vault-Identität (FR-038,
   D30).
 - **Inhaltsschlüssel** und **Schlüsselgeneration**: der Schlüssel, mit dem
-  Änderungspakete eines Bereichs verschlüsselt sind, und seine Generation. Für
+  ein Bereich alles verschlüsselt, was über Dritte reist oder dort liegt
+  (Präsenzmeldungen, Namen in der Geräteliste, ab Spec 026 Änderungspakete), und
+  seine Generation. Für
   den Bereich „Vault“ entsteht eine neue Generation mit jedem Entfernen eines
   Geräts (FR-015).
 - **Umschlag**: ein Inhaltsschlüssel, verschlüsselt (NIP-44) an den
   Geräteschlüssel genau eines Geräts.
-- **Laufnummer**: die Nummer, die ein Gerät jeder Änderung gibt, die es selbst
-  erzeugt: lückenlos aufsteigend je Ursprungsgerät, zusätzlich zum Zeitstempel
-  der hybriden logischen Uhr, der weiter über Konflikte entscheidet (FR-019).
-- **Fortschrittsstand** (Versionsvektor): für jedes Ursprungsgerät die höchste
-  Laufnummer, bis zu der ein Gerät alle Änderungen dieses Ursprungsgeräts
-  lückenlos hat („lückenloser Fortschritt“, FR-019). Zwei Geräte vergleichen
-  ihre Fortschrittsstände und tauschen nur, was dem anderen fehlt.
+- **Fortschrittsstand** (Versionsvektor): für jedes Ursprungsgerät der höchste
+  Zeitstempel, bis zu dem ein Gerät alle Änderungen dieses Ursprungsgeräts hat
+  („lückenloser Fortschritt“, FR-019). Zwei Geräte vergleichen ihre
+  Fortschrittsstände und tauschen nur, was dem anderen fehlt.
+- **Laufnummer**: die lückenlos aufsteigende Nummer je Ursprungsgerät und
+  gemeinsamem Bereich (Specs 027, 028), die eine Grenze beim Entzug
+  fälschungssicher macht (FR-019, FR-042). Im Bereich „Vault“ gibt es keine
+  Laufnummern.
 - **Mitgliederliste**: die von einem Gerät der Admin-Vault signierte Liste der
   Mitglieds-Vaults eines gemeinsamen Bereichs mit ihren Rechten und einer
   Generation (Specs 026–028). Diese Spec legt nur die Regeln fest, die alle
@@ -108,15 +119,25 @@ Wiederherstellung kommen mit Spec 026.
   (FR-039) und wer verwalten darf (FR-040).
 - **Grenze**: je Gerät einer Vault, der ein Recht entzogen wird, die höchste
   Laufnummer, die das ausstellende Gerät beim Ausstellen der Liste von ihm
-  angewendet hatte („Grenze beim Entzug“, FR-042). Dieselbe Grenze trägt die
-  Geräteliste für ein entferntes Gerät (FR-028).
+  angewendet hatte („Grenze beim Entzug“, FR-042). Die Geräteliste trägt für
+  ein entferntes Gerät eine Grenze im Bereich „Vault“: den höchsten Zeitstempel
+  dieses Geräts, den das ausstellende Hauptgerät angewendet hatte (FR-028).
 - **Gerätelokale Daten**: Tabellen und Spalten, die ausdrücklich vom Sync
   ausgenommen sind (Endung `_no_sync`), etwa gespeicherte Sitzungen (Spec 022).
-- **Relay**: das nicht vertrauenswürdige, blinde Relay aus Spec 026, ein Server
-  mit einem **Postfach** je Bereich. Diese Spec baut es noch nicht, legt aber
-  fest, welche Geräte es annehmen darf (FR-005, FR-009) und was nie als
+- **Sync-Server**: der nicht vertrauenswürdige, blinde Server aus Spec 026 für
+  die Vaults vieler Nutzer, mit einem **Postfach** je Bereich. Im Entwurf und in
+  Spec 026 heißt er bisher „das Relay“. Diese Spec baut ihn noch nicht, legt
+  aber fest, welche Geräte er annehmen darf (FR-005, FR-009) und was nie als
   gewöhnliche Vault-Information in ein Postfach darf (FR-038).
-- **Wiederherstellungspaket**: das optionale, verschlüsselt beim Relay
+- **Nostr-Relay**: ein öffentlicher Nachrichtenvermittler, über den sich die
+  Geräte einer Vault finden (Präsenzmeldungen) und über den das Verknüpfen
+  beginnt. Er speichert keine Vault-Daten.
+- **iroh-Relay**: ein Verbindungshelfer, der verschlüsselte Bytes zwischen zwei
+  Geräten weiterleitet, wenn keine direkte Verbindung zustande kommt. Er sieht
+  keinen Inhalt und speichert nichts.
+- „Relay“ allein steht in dieser Spec für nichts davon; in älteren
+  Clarifications meint es den Sync-Server.
+- **Wiederherstellungspaket**: das optionale, verschlüsselt beim Sync-Server
   hinterlegte Paket, mit dem ein Nutzer, der alle Geräte verloren hat, die
   Vault zurückholt (Spec 026, D31).
 
@@ -125,7 +146,7 @@ Wiederherstellung kommen mit Spec 026.
 - Entwurf [`2026-09-28-sync-architecture.md`](../../docs/plans/2026-09-28-sync-architecture.md):
   Diese Spec setzt §4 (Identitäten), §5 (gemeinsame Bausteine) und §6 (Ebene 1,
   Datensync zwischen eigenen Geräten) um, dazu die Grundlagen, die §14 schon
-  für 024 verlangt: Bereich und Schlüssel-Kennung in jedem Änderungspaket, die
+  für 024 verlangt: das Format der Bereiche und Schlüssel-Kennungen, die
   Stelle für echte Signaturprüfung, die Positivliste, die Vault-Geheimnisse auf
   der eigenen Vault hält, und das unveränderliche Feld „Ersteller“. Sie ist die
   Spec für Hauptgeräte, verknüpfte Geräte und die Geräteliste (D27).
@@ -170,7 +191,7 @@ Wiederherstellung kommen mit Spec 026.
   die Geräteliste lesen, aber weder verknüpfen, aufnehmen noch entfernen und
   nie an Schlüssel kommen (FR-036).
 - Folgende Specs bauen hierauf auf: **025** (Dateisync zwischen eigenen
-  Geräten), **026** (Relay mit Postfächern, auch für den Bereich „Vault“, damit
+  Geräten), **026** (Sync-Server mit Postfächern, auch für den Bereich „Vault“, damit
   Geräte sich angleichen, die nie gleichzeitig online sind, und das
   Wiederherstellungspaket, D31), **027** (Spaces), **028** (Datenfreigaben),
   **029** (eigener S3-Speicher). Sie verweisen auf diese Spec für die
@@ -207,7 +228,9 @@ Wiederherstellung kommen mit Spec 026.
   vertrauenswürdig (D11) und sieht keinen Inhalt (D9). Diese Spec baut das
   Relay noch nicht, legt aber das Format fest: Änderungen reisen immer
   verschlüsselt, auch direkt zwischen eigenen Geräten, und Vault-Geheimnisse
-  verlassen nie die eigenen Geräte.
+  verlassen nie die eigenen Geräte. (Präzisiert beim Plan: direkt über die
+  verschlüsselte, geprüfte Verbindung; eigene Änderungspakete nur auf Wegen
+  über Dritte.)
 - Q: Was gehört in diese Spec, was in die folgenden? → A: Die Aufteilung aus §14
   des Entwurfs: 024 bringt Identitäten, direkte Verbindungen, Präsenz und den
   Datensync zwischen eigenen Geräten samt der Grundlagen für Bereiche,
@@ -229,7 +252,9 @@ Wiederherstellung kommen mit Spec 026.
 - Q: Wird ein Änderungspaket ganz oder je Änderung geprüft? → A: Ein
   Änderungspaket ganz: Ist eine Änderung ungültig, fällt das ganze Paket.
   Eine Momentaufnahme je Änderung (FR-013). (Nach dem Review präzisiert: je
-  vollständiger Transaktionsgruppe, nie teilweise.)
+  vollständiger Transaktionsgruppe, nie teilweise. Beim Plan präzisiert:
+  zwischen eigenen Geräten gibt es keine Pakete; dort wird je
+  Transaktionsgruppe geprüft.)
 - Q: Leitet ein Gerät Änderungen immer mit ihrem ursprünglichen Autor weiter?
   → A: Ja, mit einer Ausnahme: Die Vault des Eigentümers gibt eine Änderung
   zwischen überlappenden Datenfreigaben als neue, eigene Änderung aus
@@ -270,6 +295,27 @@ Wiederherstellung kommen mit Spec 026.
   Wiederherstellungspaket. Abrufen erfordert den Besitznachweis des
   Wiederherstellungsschlüssels, ohne ihn zu übertragen, und einen zweiten
   Faktor (TOTP oder E-Mail-Link) (D31). Das regelt Spec 026.
+- Q: Was passiert, wenn sich zwei Hauptgeräte gegenseitig entfernen? → A: Kein
+  Wettlauf: Beide gelten danach als entfernt, weil eine Entfernung bestehen
+  bleibt (FR-005). Reparatur über ein Gerät mit dem privaten Schlüssel der
+  Vault-Identität, das sich mit neuem Geräteschlüssel wieder einträgt, oder
+  über das Wiederherstellungspaket; der Betreiber hat das als akzeptabel
+  angesehen.
+- Q: Reisen Änderungen zwischen eigenen Geräten in gespeicherten, signierten
+  Paketen mit Laufnummern? → A: Nein, das ist unnötig schwer. haex-crdt trägt
+  in jedem Zeitstempel das Ursprungsgerät. Geräte vergleichen je Ursprungsgerät
+  den höchsten Zeitstempel und schicken sich aus dem aktuellen Stand, was fehlt,
+  in ganzen Transaktionen über die geprüfte, verschlüsselte Verbindung (FR-012,
+  FR-019). Die Atomarität je Zeitstempel bleibt, wie haex-crdt sie heute
+  sichert. Änderungspakete gibt es nur auf Wegen über Dritte (Spec 026),
+  Laufnummern nur in gemeinsamen Bereichen (Specs 027, 028).
+- Q: Werden die Schlüssel des Quellgeräts aus einer kopierten Vault-Datei
+  gelöscht? → A: Nein. Eine Kopie ist ein vollständiges Backup und bleibt
+  unverändert; jede Installation nutzt nur ihren eigenen Geräteschlüssel
+  (FR-006).
+- Q: Was meint „Relay“? → A: Nie allein. Es heißt Nostr-Relay (Präsenz,
+  Verknüpfen), iroh-Relay (Verbindungshelfer) oder Sync-Server (Spec 026, bisher
+  „das Relay“); ein weiteres eigenes Gerät ist ein Gerät der Vault.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -333,7 +379,7 @@ verlässt ein Hauptgerät nur, wenn sie das beim Verknüpfen ausdrücklich wähl
 
 **Why this priority**: Die Sicherheit ist die Voraussetzung dafür, den Sync
 überhaupt einzuschalten. Sie muss vom ersten Tag an stimmen, nicht erst mit dem
-Relay.
+Sync-Server.
 
 **Independent Test**: Ein Gerät mit einer anderen Vault, ein Gerät mit einem
 Geräteschlüssel, der nicht auf der Geräteliste steht, und ein Gerät mit einer
@@ -345,7 +391,7 @@ eigenen Geräten mitschneiden: Er enthält keinen Klartext der Vault.
 
 1. **Given** ein Gerät mit einer anderen Vault, **When** es sich mit einem Gerät
    dieser Vault verbinden will, **Then** wird die Verbindung abgewiesen, und es
-   erhält keine Daten und keine Änderungspakete.
+   erhält keine Daten und keine Änderungen.
 2. **Given** ein Gerät, dessen Geräteschlüssel nicht auf der aktuellen
    Geräteliste der Vault steht oder das den Besitz seines Geräteschlüssels nicht
    beweist, **When** es sich verbinden will, **Then** wird es abgewiesen.
@@ -355,8 +401,9 @@ eigenen Geräten mitschneiden: Er enthält keinen Klartext der Vault.
 4. **Given** zwei eigene Geräte synchronisieren, **When** jemand den Verkehr
    mitliest, **Then** sieht er weder Inhalte noch Tabellen-, Spalten- oder
    Schlüsselnamen der Vault.
-5. **Given** ein Änderungspaket wurde unterwegs verändert, **When** es ankommt,
-   **Then** wird es verworfen und nicht angewendet.
+5. **Given** Daten einer Verbindung wurden unterwegs verändert, **When** sie
+   ankommen, **Then** endet die Verbindung, und nichts aus der unvollständigen
+   Lieferung wird angewendet.
 6. **Given** die Präsenzmeldung eines Geräts, **When** jemand sie liest, der
    kein Gerät dieser Vault ist, **Then** erfährt er daraus nicht, wo das Gerät
    erreichbar ist.
@@ -372,9 +419,9 @@ Laptop ändert, kommt über den Desktop auf das Arbeitsgerät und umgekehrt. Jed
 welchem Gerät sie entstand, nicht, über welches Gerät sie kam.
 
 **Why this priority**: Über indirekte Wege gehen mit einem einfachen „zuletzt
-gesendet“ Änderungen verloren, und haex-crdt trägt heute das weiterleitende
-Gerät als Autor ein (Entwurf §3.2). Spaces und Datenfreigaben (027, 028)
-brauchen den richtigen Autor für ihre Rechte.
+gesendet“ Änderungen verloren, und das Feld für das Gerät im Änderungsdatensatz
+von haex-crdt nennt das weiterleitende Gerät (Entwurf §3.2). Spaces und
+Datenfreigaben (027, 028) brauchen den richtigen Autor für ihre Rechte.
 
 **Independent Test**: Drei Geräte; A und C sind nie gleichzeitig mit B
 verbunden. Auf A und C abwechselnd Änderungen erzeugen, jeweils nur mit B
@@ -393,14 +440,10 @@ oder ist doppelt, und jede nennt ihr Ursprungsgerät.
 4. **Given** eine Verbindung bricht mitten im Austausch ab, **When** die Geräte
    sich wieder verbinden, **Then** fehlt keine Änderung, keine ist doppelt, und
    keine zusammengehörige Gruppe von Änderungen wurde nur zum Teil angewendet.
-5. **Given** eine neuere Änderung von A kommt über B bei C an, bevor eine
-   ältere Änderung von A dort ist, **When** C seinen Fortschrittsstand
-   berechnet, **Then** zählt C die neuere Änderung nicht als lückenlosen
-   Fortschritt, erkennt die Lücke und fordert die fehlende Änderung
-   ausdrücklich an.
-6. **Given** unter einer schon vergebenen Laufnummer von A trifft eine zweite,
-   andere Änderung ein, **When** C sie prüft, **Then** verwirft C sie als
-   Fälschung und behält die zuerst angenommene.
+5. **Given** C hat von A über B nur einen Teil der Änderungen erhalten, weil die
+   Verbindung abbrach, **When** C sich danach mit A oder einem anderen Gerät
+   verbindet, **Then** fordert C die Änderungen von A ab seinem
+   Fortschrittsstand an, und danach fehlt keine ältere Änderung von A.
 
 ---
 
@@ -525,7 +568,7 @@ veröffentlicht eine neue Geräteliste ohne das Arbeitsgerät und eine neue
 Generation des Inhaltsschlüssels für die verbleibenden Geräte. Der Desktop
 übernimmt beides bei der nächsten Verbindung, ohne dass sie dort etwas
 bestätigen muss. Ihre Vault-Identität bleibt, und ihre Spaces und
-Datenfreigaben laufen weiter; das Relay und die Geräte ihres Kollegen nehmen
+Datenfreigaben laufen weiter; der Sync-Server und die Geräte ihres Kollegen nehmen
 vom gestohlenen Gerät nichts mehr an, sobald sie die neue Geräteliste kennen.
 
 **Why this priority**: Selten, aber ohne diesen Weg bleibt ein gestohlenes Gerät
@@ -534,8 +577,9 @@ für immer Teil der Vault. Weil es in v1 keinen Wechsel der Vault-Identität gib
 
 **Independent Test**: Drei Geräte, eines davon ein Hauptgerät; auf ihm ein
 anderes entfernen: Das entfernte Gerät kann sich mit keinem der beiden mehr
-verbinden, erhält keine neue Änderung und kann kein Änderungspaket der neuen
-Generation entschlüsseln; die beiden verbleibenden synchronisieren weiter, die
+verbinden, erhält keine neue Änderung und kann nichts entschlüsseln, was mit
+der neuen Generation verschlüsselt ist (etwa Präsenzmeldungen); die beiden
+verbleibenden synchronisieren weiter, die
 Vault-Identität ist dieselbe. Ist die Vault Admin eines Space und Mitglied eines
 anderen (Spec 027), bleibt sie beides.
 
@@ -553,20 +597,22 @@ anderen (Spec 027), bleibt sie beides.
 3. **Given** ein verbleibendes Gerät kennt die neue Geräteliste noch nicht,
    **When** es sie erhält, **Then** übernimmt es sie ohne Zutun der Nutzerin.
 4. **Given** das Entfernen ist bekannt, **When** das entfernte Gerät sich
-   verbinden will oder Änderungspakete anbietet, **Then** wird es von jedem
-   Gerät abgewiesen, das die neue Geräteliste kennt, egal welchen Zeitstempel
-   seine Änderungen tragen.
+   verbinden will, **Then** wird es von jedem Gerät abgewiesen, das die neue
+   Geräteliste kennt; Änderungen des entfernten Geräts mit einem Zeitstempel
+   jenseits seiner Grenze lehnt jedes solche Gerät ab, auch wenn ein anderes
+   Gerät sie weiterleitet.
 5. **Given** Änderungen, die das entfernte Gerät vor dem Entfernen geschrieben
    hat und die innerhalb seiner Grenze liegen, **When** das Entfernen
    abgeschlossen ist, **Then** bleiben sie erhalten, auch wenn sie erst später
    über ein anderes Gerät ankommen.
-6. **Given** nach dem Entfernen entstehen neue Änderungen, **When** das
-   entfernte Gerät ein Änderungspaket davon in die Hände bekommt, **Then** kann
-   es dieses nicht entschlüsseln.
+6. **Given** nach dem Entfernen verschlüsseln die verbleibenden Geräte mit der
+   neuen Generation (Präsenzmeldungen, Namen in der Geräteliste, ab Spec 026
+   das Postfach beim Sync-Server), **When** das entfernte Gerät solche Daten in
+   die Hände bekommt, **Then** kann es sie nicht entschlüsseln.
 7. **Given** die Vault ist Mitglied oder Admin eines Space oder einer
    Datenfreigabe (Specs 027, 028), **When** ein Gerät entfernt wird, **Then**
-   bleiben Vault-Identität, Admin-Rollen und Mitgliedschaften unverändert; das
-   Relay und die Geräte der Mitglieder weisen das entfernte Gerät ab, sobald
+   bleiben Vault-Identität, Admin-Rollen und Mitgliedschaften unverändert; der
+   Sync-Server und die Geräte der Mitglieder weisen das entfernte Gerät ab, sobald
    sie die neue Geräteliste kennen, und niemand sonst muss etwas tun.
 8. **Given** die Nutzerin will ein Hauptgerät entfernen, **When** holzi die
    Folgen erklärt, **Then** sagt es zusätzlich, dass das nur gegen ein
@@ -607,7 +653,8 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
 
 1. **Given** eine Vault-Datei wurde auf ein anderes Gerät kopiert, **When** sie
    dort zum ersten Mal geöffnet wird, **Then** erzeugt die Kopie ihren eigenen
-   Geräteschlüssel und verwendet den des Quellgeräts nicht.
+   Geräteschlüssel und verwendet den des Quellgeräts nicht; die Datei bleibt
+   sonst unverändert, auch der Schlüssel des Quellgeräts darin.
 2. **Given** die Kopie stammt von einem Hauptgerät, **When** sie zum ersten Mal
    geöffnet wird, **Then** trägt sie sich als Hauptgerät in eine neue
    Geräteliste ein, sagt der Nutzerin, dass dieses Gerät ein Hauptgerät ist, und
@@ -637,8 +684,8 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
 
 - Eine Vault hat nur ein einziges Gerät: Es veröffentlicht im Bereich „Vault“
   keine Präsenz und baut keine direkten Verbindungen auf, lauscht aber auf
-  Präsenzmeldungen an seine Vault (FR-007). Uploads in das Postfach eines
-  Relays (Spec 026) und der Verkehr mit Mitgliedern von Spaces und
+  Präsenzmeldungen an seine Vault (FR-007). Uploads in das Postfach beim
+  Sync-Server (Spec 026) und der Verkehr mit Mitgliedern von Spaces und
   Datenfreigaben (Specs 027, 028) bleiben erlaubt.
 - Die Vault-Datei eines solchen Geräts wird kopiert: Die Kopie kennt das
   Quellgerät aus der Geräteliste in der Datei und veröffentlicht deshalb
@@ -647,14 +694,15 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   Voneinander unabhängige Vaults mit je einem Gerät bleiben still.
 - Eine Vault-Datei wird kopiert, samt der gerätelokalen Daten, die in der Datei
   liegen (ADR-0001): Das Zielgerät verwendet keinen Geräteschlüssel des
-  Quellgeräts, sondern erzeugt einen eigenen (FR-006).
+  Quellgeräts, sondern erzeugt einen eigenen (FR-006). Es löscht nichts aus der
+  Datei; die Kopie bleibt ein vollständiges Backup.
 - Zwei Geräte treten mit demselben Geräteschlüssel oder derselben Gerätekennung
   auf, etwa nach dem Klonen einer ganzen virtuellen Maschine: holzi erkennt
   das, synchronisiert mit keinem der beiden weiter und sagt der Nutzerin, dass
   ein Gerät doppelt vorhanden ist (FR-030).
 - Zwei eigene Geräte sind nie gleichzeitig online und es gibt kein drittes: Sie
-  gleichen sich in dieser Spec nicht an; das leistet erst das Postfach des
-  Relays (Spec 026). Die Geräteliste zeigt für beide „zuletzt online“.
+  gleichen sich in dieser Spec nicht an; das leistet erst das Postfach beim
+  Sync-Server (Spec 026). Die Geräteliste zeigt für beide „zuletzt online“.
 - Ein Gerät läuft mit einer älteren holzi-Version, deren Vault-Schema die
   Änderungen des anderen nicht kennt: Die Geräte synchronisieren nicht
   miteinander, bis beide passend aktualisiert sind; keine Änderung geht
@@ -663,8 +711,15 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   richtet sich nach der hybriden logischen Uhr von haex-crdt, nicht allein nach
   der Wanduhr; „zuletzt online“ kann auf diesem Gerät ungenau sein.
 - Die Nutzerin sperrt oder schließt die Vault mitten in einem Austausch: Alle
-  Verbindungen enden sofort (Spec 013); halb empfangene Änderungspakete werden
-  nicht angewendet und beim nächsten Mal neu geholt.
+  Verbindungen enden sofort (Spec 013); eine halb empfangene Lieferung wird
+  nicht angewendet und beim nächsten Mal ab dem Fortschrittsstand neu geholt.
+- Eine Transaktion von A wurde auf B schon zum Teil von einer jüngeren Änderung
+  überschrieben, bevor C sie von B holt: C erhält von dieser Transaktion nur
+  den Teil, der auf B noch gilt, und die jüngere Änderung dazu. Kommen beide in
+  derselben Lieferung, sieht C nie einen Zwischenstand; liegen sie in zwei
+  Lieferungen, kann C kurz einen Stand zeigen, den es so auf keinem Gerät gab,
+  bis die zweite ankommt. Der Endstand ist auf allen Geräten derselbe; das ist
+  die Arbeitsweise von haex-crdt und hingenommen.
 - Ein Gerät im portablen Modus (Spec 014) auf einem fremden Rechner: Es ist ein
   gewöhnliches Gerät der Vault; der passende Weg ist ein verknüpftes Gerät ohne
   Hauptgerät-Rolle. Wer es danach nicht mehr in der Vault haben will, entfernt
@@ -674,11 +729,27 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   gilt überall dieselbe (FR-043); ein Hauptgerät, das beide sieht,
   veröffentlicht eine zusammengeführte Liste der nächsten Generation, und ein
   in einer der beiden Listen entferntes Gerät bleibt entfernt (FR-005).
+- Zwei Hauptgeräte entfernen sich gleichzeitig gegenseitig: Das ist kein
+  Wettlauf, sondern eindeutig. Weil ein in einer gültigen Liste entferntes
+  Gerät entfernt bleibt (FR-005), sind danach auf allen Geräten, die beide
+  Listen kennen, beide entfernt, unabhängig von der Reihenfolge des
+  Eintreffens. Gibt es kein weiteres Hauptgerät, kann danach zunächst niemand
+  Geräte verwalten. Die Nutzerin repariert das, indem ein Gerät mit dem
+  privaten Schlüssel der Vault-Identität (etwa eines der beiden entfernten
+  Hauptgeräte) sich mit einem neuen Geräteschlüssel wieder in die Geräteliste
+  einträgt, oder über das Wiederherstellungspaket (Spec 026). Das ist
+  hingenommen.
 - Die Nutzerin entfernt ein Gerät, während keines ihrer anderen Geräte online
-  ist: Die neue Geräteliste erreicht die anderen Geräte (und ab Spec 026 das
-  Relay), sobald ein Weg besteht. Bis dahin kann das entfernte Gerät mit
+  ist: Die neue Geräteliste erreicht die anderen Geräte (und ab Spec 026 den
+  Sync-Server), sobald ein Weg besteht. Bis dahin kann das entfernte Gerät mit
   Geräten synchronisieren, die die Liste noch nicht kennen; das ist ein
-  hingenommenes Risiko.
+  hingenommenes Risiko. Ein böswilliges entferntes Gerät kann einem solchen
+  Gerät in dieser Zeit auch Änderungen mit zurückdatiertem Zeitstempel
+  unterhalb seiner Grenze geben; diese gelten danach überall. Sie verlieren
+  gegen jede jüngere Änderung derselben Zelle. Auch das ist hingenommen: Im
+  Bereich „Vault“ vertrauen sich die eigenen Geräte; eine Grenze, die
+  Zurückdatieren ausschließt, brauchen erst die gemeinsamen Bereiche mit
+  fremden Vaults (FR-042).
 - Ein Dieb hat ein verknüpftes Gerät und kennt dessen Passphrase: Bis zum
   Entfernen kann er Daten der Vault lesen und schreiben und Spaces und
   Datenfreigaben verwalten (D29). Geräte hinzufügen oder entfernen kann er
@@ -725,8 +796,9 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   Nutzerin (FR-044).
 - **FR-003**: Jedes Gerät MUSS für jede Vault, die es öffnet, einen eigenen
   Geräteschlüssel haben, der beim ersten Öffnen der Vault auf diesem Gerät
-  entsteht. Mit ihm signiert das Gerät alles, was es schreibt, und an ihn gehen
-  die Umschläge für dieses Gerät. Ein Geräteschlüssel DARF NIE synchronisiert,
+  entsteht. Mit ihm weist sich das Gerät aus und signiert, was es über Dritte
+  veröffentlicht (Begriffe), und an ihn gehen die Umschläge für dieses Gerät.
+  Ein Geräteschlüssel DARF NIE synchronisiert,
   über das Netz übertragen oder von einem anderen Gerät verwendet werden.
 - **FR-004**: Eine Vault, die vor dieser Spec angelegt wurde und nur den
   Platzhalter trägt, MUSS beim ersten Öffnen mit dieser Version eine echte
@@ -742,7 +814,7 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   jedes aktuelle Gerät mit öffentlichem Geräteschlüssel, Rolle („Hauptgerät“
   oder „verknüpftes Gerät“), Namen beim Aufnehmen und Netzwerkkennung; den
   Namen MUSS sie verschlüsselt tragen, sodass nur Geräte der eigenen Vault ihn
-  lesen können, während Relay und Mitglieder nur Schlüssel, Rolle und
+  lesen können, während Sync-Server und Mitglieder nur Schlüssel, Rolle und
   Netzwerkkennung sehen. Dazu nennt sie
   jedes entfernte Gerät mit seiner Grenze (FR-028) und trägt eine Generation.
   Nur Hauptgeräte DÜRFEN Gerätelisten ausstellen. Eine gültige Liste höherer
@@ -753,14 +825,16 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   closed). Ein Gerät, das in irgendeiner gültigen Liste als entfernt steht,
   MUSS für diesen Empfänger entfernt bleiben, auch wenn eine gewinnende Liste
   derselben Generation es noch nennt. Die Geräteliste ist gewöhnliche
-  Vault-Information und reist mit dem Sync; das Relay (Spec 026) und die Geräte
+  Vault-Information und reist mit dem Sync; der Sync-Server (Spec 026) und die Geräte
   der Mitglieder von Spaces und Datenfreigaben (Specs 027, 028) prüfen jedes
   Gerät gegen die aktuelle Geräteliste seiner Vault.
 - **FR-006**: Öffnet eine Installation eine Vault-Datei, die von einem anderen
   Gerät kopiert wurde, MUSS sie einen neuen Geräteschlüssel für sich erzeugen
   und DARF den Geräteschlüssel des Quellgeräts NICHT verwenden, auch wenn er in
-  der Datei liegt. Sie DARF erst synchronisieren, wenn ihr Geräteschlüssel auf
-  der aktuellen Geräteliste steht (FR-044).
+  der Datei liegt. Sie DARF ihn und die übrigen Daten des Quellgeräts NICHT
+  löschen: Eine Kopie bleibt ein vollständiges Backup und eine vollwertige
+  Instanz. Sie DARF erst synchronisieren, wenn ihr Geräteschlüssel auf der
+  aktuellen Geräteliste steht (FR-044).
 
 **Finden und Verbinden**
 
@@ -782,7 +856,7 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   FR-005 oder legt die Anfrage nach FR-045 ab, und sobald die Kopie auf der
   Liste steht, veröffentlichen beide. Voneinander unabhängige Vaults mit je
   einem Gerät bleiben still. Die Einschränkung gilt nur für Präsenz und
-  direkten Sync im Bereich „Vault“: Uploads in das Postfach eines Relays
+  direkten Sync im Bereich „Vault“: Uploads in das Postfach beim Sync-Server
   (Spec 026) und der Verkehr mit Mitgliedern von Spaces und Datenfreigaben
   (Specs 027, 028) bleiben auch mit einem einzigen Gerät erlaubt.
 - **FR-008**: Geräte derselben Vault MÜSSEN sich über die Präsenzmeldungen
@@ -799,40 +873,49 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   Verbindung im Bereich „Vault“ nur annehmen, wenn der Geräteschlüssel der
   Gegenseite auf der aktuellen Geräteliste der eigenen Vault steht und nicht als
   entfernt gilt. Vor dieser Prüfung DARF außer der Geräteliste kein Inhalt und
-  kein Änderungspaket fließen. Ausgenommen sind nur das Verknüpfen (FR-024) und
+  keine Änderung fließen. Ausgenommen sind nur das Verknüpfen (FR-024) und
   die Aufnahmeanfrage einer Kopie (FR-044); dabei fließt vor der Aufnahme
   nichts aus der Vault.
 - **FR-010**: Geräte MÜSSEN die Verbindung selbständig wieder aufbauen, wenn sie
   abbricht oder sich die Erreichbarkeit eines Geräts ändert (anderes Netz,
   Aufwachen aus dem Ruhezustand).
 
-**Änderungspakete und Bereiche**
+**Übertragung, Änderungspakete und Bereiche**
 
 - **FR-011**: Jede Änderung MUSS genau einem Bereich angehören. In dieser Spec
   ist das immer der Bereich „Vault“; das Format MUSS weitere Bereiche (Spaces,
   Datenfreigaben) ohne Änderung aufnehmen können.
-- **FR-012**: Änderungen MÜSSEN in Änderungspaketen reisen, auch auf direkten
-  Verbindungen zwischen eigenen Geräten. Ein Änderungspaket MUSS seinen Bereich
+- **FR-012**: Zwischen eigenen Geräten MÜSSEN Änderungen über eine nach FR-009
+  geprüfte, verschlüsselte direkte Verbindung reisen, in vollständigen
+  Transaktionsgruppen aus dem aktuellen Stand des sendenden Geräts; ein
+  eigenes Änderungspaket oder ein gespeichertes Protokoll gesendeter Änderungen
+  ist dafür nicht nötig. Wo Änderungen über Dritte reisen oder dort liegen
+  (Postfach beim Sync-Server, Spec 026; gemeinsame Bereiche, Specs 027, 028),
+  MÜSSEN sie in Änderungspaketen reisen: Ein Änderungspaket MUSS seinen Bereich
   und die Kennung seines Inhaltsschlüssels offen tragen und alles andere
   (Tabellen, Spalten, Schlüssel der Zeilen, Zeitstempel, Werte, Autoren)
-  verschlüsselt. Ein Gerät DARF ein Änderungspaket unverändert weitergeben
-  können, ohne es zu öffnen.
-- **FR-013**: Ein Änderungspaket DARF eine zusammengehörige Gruppe von
-  Änderungen (eine Transaktion, also die Änderungen mit gemeinsamem Zeitstempel
-  der hybriden logischen Uhr) nie auf mehrere Pakete aufteilen. Ein
-  Änderungspaket ist atomar: Ist auch nur eine Änderung darin ungültig (etwa
-  Signatur, Autor, Recht, Bereich oder Feld „Ersteller“ nach FR-022), MUSS der
-  Empfänger das ganze Paket verwerfen; angewendet wird es ganz oder gar nicht,
-  sodass keine Transaktion zum Teil ankommt. Eine Momentaufnahme dagegen MUSS
-  der Empfänger je vollständiger Transaktionsgruppe prüfen: Ist eine Änderung
+  verschlüsselt, und ein Gerät DARF es unverändert weitergeben können, ohne es
+  zu öffnen.
+- **FR-013**: Eine zusammengehörige Gruppe von Änderungen (eine Transaktion,
+  also die Änderungen mit gemeinsamem Zeitstempel der hybriden logischen Uhr)
+  DARF NIE auf mehrere Lieferungen oder Pakete aufgeteilt und NIE zum Teil
+  angewendet werden, wie haex-crdt es heute sichert. Auf einer direkten
+  Verbindung zwischen eigenen Geräten und bei einer Momentaufnahme MUSS der
+  Empfänger je vollständiger Transaktionsgruppe prüfen: Ist eine Änderung
   ungültig, verwirft er ihre ganze Transaktionsgruppe; die übrigen gültigen
-  Gruppen übernimmt er. Eine Transaktionsgruppe DARF NIE zum Teil angewendet
-  werden. Das verfeinert die Clarification „Eine Momentaufnahme je Änderung“:
-  geprüft wird jede Änderung, verworfen oder übernommen wird je Gruppe. Specs
-  026 und 027 wenden diese Regeln an.
+  Gruppen übernimmt er. Das verfeinert die Clarification „Eine Momentaufnahme
+  je Änderung“: geprüft wird jede Änderung, verworfen oder übernommen wird je
+  Gruppe. Ein Änderungspaket (Specs 026–028) ist dagegen atomar: Ist auch nur
+  eine Änderung darin ungültig (etwa Signatur, Autor, Recht, Bereich oder Feld
+  „Ersteller“ nach FR-022), MUSS der Empfänger das ganze Paket verwerfen;
+  angewendet wird es ganz oder gar nicht. Specs 026 und 027 wenden diese Regeln
+  an.
 - **FR-014**: Ein Empfänger MUSS ein Änderungspaket verwerfen, das sich nicht
   entschlüsseln lässt, verändert wurde oder zu einem anderen Bereich gehört als
-  angegeben, und DARF davon nichts anwenden.
+  angegeben, und DARF davon nichts anwenden. Auf einer direkten Verbindung
+  schützt die Verbindung selbst vor Veränderung; schlägt ihre Prüfung fehl,
+  endet sie, und aus der unvollständigen Lieferung DARF nichts angewendet
+  werden.
 - **FR-015**: Der Bereich „Vault“ MUSS einen Inhaltsschlüssel haben, der nur in
   der Vault liegt. Jede seiner Generationen MUSS an den Geräteschlüssel jedes
   Geräts der aktuellen Geräteliste verpackt sein (je ein Umschlag); ein
@@ -840,10 +923,11 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   bisherigen Generationen an das neue Gerät. Eine neue Generation entsteht mit
   jedem Entfernen eines Geräts (FR-026) und ist nur an die verbleibenden Geräte
   verpackt. Ein Gerät, das eine Geräteliste mit einem entfernten Gerät kennt,
-  MUSS neue Änderungspakete mit einer Generation verschlüsseln, die nicht an
-  dieses Gerät verpackt ist. Ein Empfänger MUSS jedes Paket mit dem Schlüssel
-  entschlüsseln, den dessen Kennung nennt, ohne dass eine „aktuelle“
-  Generation vereinbart sein muss.
+  MUSS alles, was es danach mit dem Inhaltsschlüssel verschlüsselt
+  (Präsenzmeldungen, Namen in der Geräteliste, ab Spec 026 Änderungspakete), mit
+  einer Generation verschlüsseln, die nicht an dieses Gerät verpackt ist. Ein
+  Empfänger MUSS alles mit dem Schlüssel entschlüsseln, den dessen Kennung
+  nennt, ohne dass eine „aktuelle“ Generation vereinbart sein muss.
 
 **Was synchronisiert wird**
 
@@ -857,7 +941,7 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
 - **FR-018**: Welche Daten die eigene Vault in einen anderen Bereich als „Vault“
   verlassen dürfen (den Bereich eines Space oder einer Datenfreigabe), MUSS
   eine ausdrückliche Positivliste festlegen, keine Ausschlussliste. Das
-  Postfach der eigenen Vault bei einem Relay (Spec 026) ist kein anderer
+  Postfach der eigenen Vault beim Sync-Server (Spec 026) ist kein anderer
   Bereich, sondern gehört zum Bereich „Vault“; was dort nicht hin darf, regelt
   FR-038. Der Inhaltsschlüssel des Bereichs „Vault“, der private Schlüssel der
   Vault-Identität, die Geräteschlüssel und alle anderen Vault-Geheimnisse, auch
@@ -870,7 +954,7 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   verlassen, wenn die Nutzerin das beim Verknüpfen ausdrücklich wählt
   (FR-024), und sonst nur verschlüsselt im Wiederherstellungspaket (Spec 026,
   D31); nie mit dem gewöhnlichen Sync, nie als Vault-Information in einem
-  Postfach eines Relays und nie in einem anderen Bereich als „Vault“.
+  Postfach beim Sync-Server und nie in einem anderen Bereich als „Vault“.
   Geräteschlüssel verlassen ihr Gerät überhaupt nicht (FR-003). Alle übrigen
   Daten der Vault außer den gerätelokalen sind gewöhnliche Vault-Information,
   auch die Geräteliste, die Umschläge, entpackte Inhaltsschlüssel von Spaces und
@@ -880,47 +964,58 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   Postfach der eigenen Vault, verschlüsselt mit dem Inhaltsschlüssel des
   Bereichs „Vault“, und lassen sich so auf jedem Gerät der Vault
   wiederherstellen. Specs 025, 026, 028 und 029 verweisen auf diese Regel; ein
-  neues Vault-Geheimnis, das nie ein Relay erreichen darf, MUSS hier
+  neues Vault-Geheimnis, das nie den Sync-Server erreichen darf, MUSS hier
   eingetragen werden.
 
 **Fortschritt und Autorenschaft**
 
-- **FR-019** („lückenloser Fortschritt“): Jedes Gerät MUSS die Änderungen, die
-  es selbst erzeugt, lückenlos aufsteigend nummerieren (Laufnummer je
-  Ursprungsgerät), zusätzlich zum Zeitstempel der hybriden logischen Uhr, der
-  weiter über Konflikte entscheidet (FR-017). Die Laufnummer gehört zu der
-  Änderung, die das Ursprungsgerät signiert (FR-021). Jedes Gerät MUSS seinen
-  Fortschritt je Ursprungsgerät führen, nicht als einen einzigen Zeitpunkt und
-  nicht als jüngsten Zeitstempel: Der Fortschrittsstand ist je Ursprungsgerät
-  die höchste Laufnummer, bis zu der alle Änderungen dieses Geräts vorliegen.
-  Eine Änderung jenseits einer Lücke DARF angewendet werden, zählt aber nicht
-  zum Fortschrittsstand; die Lücke MUSS das Gerät erkennen und die fehlenden
-  Änderungen ausdrücklich anfordern. Trifft unter einem schon belegten Paar aus
-  Ursprungsgerät und Laufnummer eine zweite, andere Änderung ein, MUSS der
-  Empfänger sie als Fälschung verwerfen. Zwei Geräte MÜSSEN beim Verbinden ihre
-  Fortschrittsstände vergleichen und nur übertragen, was dem anderen fehlt, in
-  beide Richtungen, die angeforderten Lücken eingeschlossen. Specs 026–028
-  verwenden dieselben Laufnummern, auch für die Grenze beim Entzug (FR-042)
-  und beim Entfernen (FR-028).
+- **FR-019** („lückenloser Fortschritt“): Jedes Gerät MUSS seinen Fortschritt
+  im Bereich „Vault“ je Ursprungsgerät führen, nicht als einen einzigen
+  Zeitpunkt für alle: Der Fortschrittsstand ist je Ursprungsgerät der höchste
+  Zeitstempel der hybriden logischen Uhr, bis zu dem das Gerät alle Änderungen
+  dieses Ursprungsgeräts hat, soweit sie nicht schon von jüngeren Änderungen
+  überschrieben sind. Der Zeitstempel entscheidet weiter über Konflikte
+  (FR-017). Zwei Geräte MÜSSEN beim Verbinden ihre Fortschrittsstände
+  vergleichen und nur übertragen, was dem anderen fehlt, in beide Richtungen.
+  Der Sender MUSS die Änderungen je Ursprungsgerät in aufsteigender Folge der
+  Zeitstempel liefern, und der Empfänger DARF seinen Fortschrittsstand nur im
+  selben Schritt erhöhen, in dem er die gelieferten Änderungen anwendet. So
+  entsteht keine Lücke, auch nicht über Zwischengeräte oder nach einem Abbruch.
+  In gemeinsamen Bereichen (Specs 027, 028) MUSS zusätzlich jede Änderung eine
+  Laufnummer tragen, lückenlos aufsteigend je Ursprungsgerät und Bereich und
+  von ihm signiert (FR-021); dort ist der Fortschrittsstand je Ursprungsgerät
+  die höchste Laufnummer, bis zu der alle Änderungen vorliegen. Eine Änderung
+  jenseits einer Lücke zählt dann nicht zum Fortschrittsstand, die Lücke wird
+  ausdrücklich angefordert, und eine zweite, andere Änderung unter einem schon
+  belegten Paar aus Ursprungsgerät und Laufnummer wird als Fälschung
+  verworfen. Diese Laufnummern tragen die Grenze beim Entzug (FR-042). Wie sie
+  vergeben werden, legen Specs 027 und 028 fest; diese Spec nutzt sie nicht.
 - **FR-020**: Über jeden Weg zwischen den Geräten, auch über Zwischengeräte,
-  MUSS jede Änderung jedes Gerät genau einmal erreichen, sobald ein
-  Verbindungsweg besteht. Eine abgebrochene Übertragung MUSS sich fortsetzen
-  lassen, ohne Änderungen zu verlieren oder doppelt anzuwenden.
+  MUSS jede Änderung jedes Gerät erreichen, sobald ein Verbindungsweg besteht.
+  Kommt eine Änderung mehrfach an, DARF das keine zweite Wirkung haben. Eine
+  abgebrochene Übertragung MUSS sich ab dem Fortschrittsstand fortsetzen
+  lassen, ohne Änderungen zu verlieren.
 - **FR-021**: Jede Änderung MUSS ihr Ursprungsgerät und ihre Vault als Autor
-  tragen und mit dem Geräteschlüssel des Ursprungsgeräts signiert sein. Ein
-  weiterleitendes Gerät DARF Autor und Signatur NICHT verändern; sie MÜSSEN auch
-  in gespeicherten und weitergegebenen Ständen erhalten bleiben. Einzige
-  Ausnahme ist die Neuausgabe durch die Vault des Eigentümers (Admin der
+  tragen. Im Bereich „Vault“ ist das Ursprungsgerät die Gerätekennung im
+  Zeitstempel der Änderung. Ein weiterleitendes Gerät DARF den Autor NICHT
+  verändern; er MUSS auch in gespeicherten und weitergegebenen Ständen
+  erhalten bleiben. Im Bereich „Vault“ bürgt das liefernde eigene Gerät für die
+  Echtheit: direkt durch die Prüfung der Verbindung (FR-009), über den
+  Sync-Server durch seine Signatur (Spec 026). Eine Signatur des
+  Ursprungsgeräts je Änderung ist dort nicht nötig. In gemeinsamen Bereichen
+  (Specs 027, 028) MUSS jede Änderung mit dem Geräteschlüssel des
+  Ursprungsgeräts signiert sein, und ein weiterleitendes Gerät DARF die
+  Signatur NICHT verändern. Einzige Ausnahme ist die Neuausgabe durch die
+  Vault des Eigentümers (Admin der
   Datenfreigabe) zwischen überlappenden Datenfreigaben (Spec 028): Sie gibt
   eine weitergeleitete Änderung als neue Änderung im Bereich der zweiten
   Datenfreigabe aus, signiert von einem Gerät der Eigentümer-Vault, die damit
   ihr Autor ist; der ursprüngliche Autor bleibt nur als Anzeige erhalten, nicht
-  als signierender Autor. Eine Signatur zählt nur, wenn das Ursprungsgerät auf
-  der aktuellen Geräteliste seiner Vault steht oder die Änderung innerhalb
-  seiner Grenze liegt (FR-028). Innerhalb des Bereichs „Vault“ DARF ein
-  Empfänger auf einer nach FR-009 geprüften direkten Verbindung auf die Prüfung
-  jeder einzelnen Signatur verzichten; auf allen anderen Wegen (Specs 026–028)
-  ist die Prüfung Pflicht.
+  als signierender Autor. In gemeinsamen Bereichen zählt eine Signatur nur,
+  wenn das Ursprungsgerät auf der aktuellen Geräteliste seiner Vault steht oder
+  die Änderung innerhalb seiner Grenze liegt; in jedem Bereich zählt eine
+  Änderung eines entfernten Ursprungsgeräts nur innerhalb seiner Grenze
+  (FR-028).
 
 **Grundlagen für spätere Bereiche**
 
@@ -973,14 +1068,14 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   Zeitstempel einer Änderung im Verhältnis zur Liste stützen. Das verfeinert
   D19: Die Prüfung beim Empfang richtet sich nach der Grenze, nicht nach der
   Zeit. Specs 027 und 028 wenden diese Regel an. Im Bereich „Vault“ gibt es
-  keine Rechte; dort gilt dieselbe Grenze nur für ein entferntes Gerät
-  (FR-028).
+  keine Rechte und keine Laufnummern; dort trägt nur die Geräteliste für ein
+  entferntes Gerät eine Grenze als Zeitstempel (FR-028).
 - **FR-043** („Mitgliederlisten gleicher Generation“): Mitgliederlisten
   veröffentlichen nur Geräte der Admin-Vault (FR-040), aber zwei solche Geräte
   können verschiedene gültige Listen mit derselben Generation veröffentlichen.
   Unter gültigen Listen derselben Generation MUSS die Liste mit dem
-  lexikographisch kleinsten Hash gelten, beim Relay (Spec 026) wie bei jedem
-  Empfänger. Das Relay MUSS eine gespeicherte Liste derselben Generation durch
+  lexikographisch kleinsten Hash gelten, beim Sync-Server (Spec 026) wie bei
+  jedem Empfänger. Der Sync-Server MUSS eine gespeicherte Liste derselben Generation durch
   eine mit kleinerem Hash ersetzen, statt sie abzuweisen, und DARF sie durch
   eine mit größerem Hash NICHT ersetzen. Ein Gerät der Admin-Vault, das zwei
   verschiedene Listen derselben Generation sieht, MUSS eine Liste mit der
@@ -1027,7 +1122,8 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   als entfernt führt (FR-028), und eine neue Generation des Inhaltsschlüssels
   des Bereichs „Vault“ erzeugen, die nur an die verbleibenden Geräte verpackt
   ist (FR-015). Vor der Bestätigung MUSS holzi die Folgen erklären: keine neuen
-  Daten mehr für das Gerät, neue Änderungen kann es nicht entschlüsseln,
+  Daten mehr für das Gerät, was die Vault danach verschlüsselt, kann es nicht
+  entschlüsseln,
   vorhandene Daten bleiben dort und schützt nur die Passphrase, kein Löschen
   aus der Ferne, Spaces und Datenfreigaben laufen unverändert weiter, zurück
   nur durch neues Verknüpfen; bei einem Hauptgerät zusätzlich, dass das
@@ -1046,16 +1142,21 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   eine Bestätigung auf jedem Gerät ist nicht nötig, weil nur ein Hauptgerät
   eine gültige Geräteliste signieren kann. Die Geräteliste MUSS auf denselben
   Wegen reisen wie alle Vault-Information, direkt und über das Postfach der
-  eigenen Vault (Spec 026), und das Relay und die Geräte der Mitglieder von
+  eigenen Vault (Spec 026), und der Sync-Server und die Geräte der Mitglieder von
   Spaces und Datenfreigaben erhalten sie ebenso (Specs 026–028).
 - **FR-028** („Grenze beim Entfernen“): Die Geräteliste, die ein Gerät entfernt,
-  MUSS für dieses Gerät die höchste Laufnummer (FR-019) nennen, die das
-  ausstellende Hauptgerät in diesem Moment von ihm angewendet hatte. Jedes
-  Gerät, das diese Liste kennt, MUSS Verbindungen des entfernten Geräts
-  abweisen und jede seiner Änderungen jenseits der Grenze ablehnen, in jedem
-  Bereich und egal welchen Zeitstempel sie trägt; Änderungen innerhalb der
-  Grenze bleiben gültig, auch wenn sie erst später über ein anderes Gerät
-  ankommen. Was ein Gerät vorher angewendet hatte, bleibt wie in FR-042.
+  MUSS für dieses Gerät im Bereich „Vault“ den höchsten Zeitstempel nennen,
+  bis zu dem das ausstellende Hauptgerät in diesem Moment Änderungen von ihm
+  hatte (sein Fortschrittsstand für dieses Gerät, FR-019); die Grenze in
+  gemeinsamen Bereichen ergänzen Specs 027 und 028 als Laufnummer (FR-042).
+  Jedes Gerät, das diese Liste kennt, MUSS Verbindungen des entfernten Geräts
+  abweisen und jede seiner Änderungen jenseits der Grenze ablehnen, auch wenn
+  ein anderes Gerät sie weiterleitet; Änderungen innerhalb der Grenze bleiben
+  gültig, auch wenn sie erst später über ein anderes Gerät ankommen. Was ein
+  Gerät vorher angewendet hatte, bleibt wie in FR-042. Dass ein böswilliges
+  entferntes Gerät im Bereich „Vault“ zurückdatierte Änderungen unterhalb
+  seiner Grenze über ein Gerät einschleusen kann, das die Liste noch nicht
+  kennt, ist hingenommen (Edge Cases).
   Daten, die schon auf dem entfernten Gerät liegen, bleiben dort; ein Löschen
   aus der Ferne gibt es nicht. Ein entferntes Hauptgerät hat weiter den
   privaten Schlüssel der Vault-Identität und kann damit neue Gerätelisten
@@ -1146,8 +1247,8 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   Vault, auf jedem Gerät sichtbar), privater Teil (nur auf Hauptgeräten). Wechselt
   in v1 nie.
 - **Geräteschlüssel**: Schlüsselpaar eines Geräts für eine Vault; bleibt auf
-  diesem Gerät; signiert alles, was das Gerät schreibt; Empfänger von
-  Umschlägen.
+  diesem Gerät; weist das Gerät aus und signiert, was es über Dritte
+  veröffentlicht; Empfänger von Umschlägen.
 - **Geräteliste**: Vault, Generation, aktuelle Geräte (öffentlicher
   Geräteschlüssel, Rolle, Name beim Aufnehmen, Netzwerkkennung), entfernte
   Geräte mit Grenze; mit der Vault-Identität von einem Hauptgerät signiert.
@@ -1159,18 +1260,19 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
 - **Präsenzmeldung**: vom Gerät signiert, nur für die eigene Vault lesbar;
   Erreichbarkeit, Ablaufzeit.
 - **Bereich**: Kennung und Art (in dieser Spec nur „Vault“).
-- **Änderungspaket**: Bereich, Kennung des Inhaltsschlüssels, verschlüsselter
-  Inhalt aus einer oder mehreren vollständigen Transaktionen mit Autor und
-  Signatur je Änderung.
+- **Änderungspaket** (erst ab Spec 026, auf Wegen über Dritte): Bereich,
+  Kennung des Inhaltsschlüssels, verschlüsselter Inhalt aus einer oder mehreren
+  vollständigen Transaktionen mit Autor je Änderung.
 - **Inhaltsschlüssel**: Kennung, Schlüsselgeneration, Bereich; je Gerät der
   Geräteliste ein Umschlag.
 - **Umschlag**: Inhaltsschlüssel, verschlüsselt an einen Geräteschlüssel;
   gebunden an Bereich, Generation und Empfänger.
-- **Änderung**: Bereich, Ursprungsgerät, Vault des Autors, Laufnummer,
-  Zeitstempel der hybriden logischen Uhr, Inhalt, Signatur des
-  Ursprungsgeräts.
-- **Fortschrittsstand**: je Ursprungsgerät die höchste Laufnummer, bis zu der
-  alle Änderungen vorliegen; dazu die erkannten Lücken.
+- **Änderung**: Bereich, Zeitstempel der hybriden logischen Uhr mit dem
+  Ursprungsgerät, Vault des Autors, Inhalt; in gemeinsamen Bereichen zusätzlich
+  Laufnummer und Signatur des Ursprungsgeräts.
+- **Fortschrittsstand**: im Bereich „Vault“ je Ursprungsgerät der höchste
+  Zeitstempel, bis zu dem alle Änderungen vorliegen; in gemeinsamen Bereichen
+  je Ursprungsgerät die höchste lückenlose Laufnummer.
 - **Mitgliederliste** (Grundlage für Specs 026–028): Bereich, Generation,
   Mitglieds-Vaults mit Rechten, bei einem Entzug die Grenze je Gerät der
   betroffenen Vault; von einem Gerät der Admin-Vault signiert.
@@ -1196,23 +1298,24 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   eine Änderung, keine ist doppelt angewendet, alle Geräte haben denselben
   Stand, und 100 % der Änderungen nennen ihr wahres Ursprungsgerät.
 - **SC-004**: Nach einer Trennung, in der ein Gerät N Änderungen erzeugt hat,
-  überträgt das Wiederverbinden genau diese N Änderungen und keine, die das
-  andere Gerät schon hat.
+  überträgt das Wiederverbinden höchstens diese N Änderungen (weniger, wenn
+  einige davon schon überschrieben sind) und keine, die das andere Gerät schon
+  hat.
 - **SC-005**: In 100 % der geprüften Fälle (fremde Vault, Geräteschlüssel nicht
   auf der aktuellen Geräteliste, nicht mit der Vault-Identität signierte
   Geräteliste, fehlender Besitznachweis, entferntes Gerät, Kopie vor der
-  Aufnahme) wird die Verbindung abgewiesen, bevor ein einziges Änderungspaket
+  Aufnahme) wird die Verbindung abgewiesen, bevor eine einzige Änderung
   fließt.
 - **SC-006**: Ein Mitschnitt des Verkehrs zwischen zwei Geräten enthält keinen
   Klartext von Vault-Inhalten, Tabellen- oder Spaltennamen; eine automatische
-  Prüfung zeigt, dass gerätelokale Daten und private Geräteschlüssel in keinem
-  Paket und private Schlüssel in keinem Protokoll vorkommen. Wohin der private
+  Prüfung zeigt, dass gerätelokale Daten und private Geräteschlüssel in keiner
+  Übertragung und private Schlüssel in keinem Protokoll vorkommen. Wohin der private
   Schlüssel der Vault-Identität darf, prüft SC-012.
 - **SC-007**: Ein Gerät, dessen Geräteliste nur es selbst nennt, veröffentlicht
   während einer ganzen Vault-Session keine Präsenzmeldung und baut keine
   direkte Verbindung im Bereich „Vault“ auf, solange sich kein anderes Gerät
   derselben Vault meldet; sein einziger Präsenzverkehr ist das Lauschen auf
-  Präsenzmeldungen an seine Vault. Uploads in ein Relay-Postfach (Spec 026) und
+  Präsenzmeldungen an seine Vault. Uploads in das Postfach beim Sync-Server (Spec 026) und
   Verkehr mit Mitgliedern von Spaces und Datenfreigaben (Specs 027, 028) zählen
   nicht dazu.
 - **SC-008**: Die Geräteliste zeigt einen Wechsel von online zu offline oder
@@ -1227,7 +1330,7 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
 - **SC-010**: Nach dem Entfernen nimmt kein Gerät, das die neue Geräteliste
   kennt, eine einzige Verbindung oder Änderung jenseits der Grenze des
   entfernten Geräts mehr an; das entfernte Gerät kann in 100 % der geprüften
-  Fälle kein Änderungspaket der neuen Generation entschlüsseln; die
+  Fälle nichts entschlüsseln, was mit der neuen Generation verschlüsselt ist; die
   verbleibenden Geräte synchronisieren weiter, und Vault-Identität, Admin-Rollen
   und Mitgliedschaften sind unverändert.
 - **SC-011**: Die Szenarien der User Stories 1, 2, 3 und 5 laufen als
@@ -1237,13 +1340,13 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   Vault-Identität (FR-038), dass er in 100 % der geprüften Fälle nur in der
   Übertragung eines Verknüpfens mit gewählter Hauptgerät-Rolle auf der direkten
   Verbindung und verschlüsselt im Wiederherstellungspaket (Spec 026) vorkommt:
-  in keinem Änderungspaket des gewöhnlichen Sync, auch nicht auf direkten
+  in keiner Übertragung des gewöhnlichen Sync, auch nicht auf direkten
   Verbindungen, auf keinem verknüpften Gerät, in keinem Paket und keiner
-  Momentaufnahme für ein Postfach eines Relays, in keinem Paket eines anderen
+  Momentaufnahme für ein Postfach beim Sync-Server, in keinem Paket eines anderen
   Bereichs als „Vault“ und in keinem Protokoll. Die Prüfung schlägt fehl,
   sobald er auf einem dieser Wege auftaucht.
 - **SC-013**: In 100 % der geprüften Fälle verwerfen alle Geräte (und ab Spec
-  026 das Relay) eine Geräteliste, die nicht mit der Vault-Identität signiert
+  026 der Sync-Server) eine Geräteliste, die nicht mit der Vault-Identität signiert
   ist; ein verknüpftes Gerät kann keine gültige Geräteliste ausstellen.
   Veröffentlichen zwei Hauptgeräte verschiedene Gerätelisten derselben
   Generation, wählen alle Geräte dieselbe, unabhängig von der Reihenfolge des
@@ -1251,11 +1354,10 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   der nächsten Generation, und ein in einer der beiden entferntes Gerät bleibt
   entfernt.
 - **SC-014**: In einer automatischen Prüfung, die Änderungen über mehrere Wege
-  in vertauschter Reihenfolge zustellt, erkennt jedes Gerät in 100 % der Fälle
-  jede Lücke, fordert die fehlenden Änderungen an und zählt keine Änderung
-  jenseits einer Lücke zu seinem Fortschrittsstand; am Ende sind alle Lücken
-  geschlossen. Jede zweite, andere Änderung unter einem schon belegten Paar aus
-  Ursprungsgerät und Laufnummer wird verworfen.
+  zustellt und Übertragungen an zufälligen Stellen abbricht, steht der
+  Fortschrittsstand eines Geräts in 100 % der Fälle nie über einer Änderung
+  desselben Ursprungsgeräts, die ihm fehlt und noch gilt; am Ende haben alle
+  Geräte denselben Stand. Keine Transaktionsgruppe wird zum Teil angewendet.
 - **SC-015**: Nachdem eine Mitgliederliste einer Vault ein Recht entzogen hat,
   lehnt jedes Gerät, das diese Liste kennt, in 100 % der geprüften Fälle alle
   Änderungen dieser Vault jenseits der Grenze ab, die das entzogene Recht
@@ -1264,7 +1366,7 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   derselben Zelle sie überschreibt (hingenommenes Risiko, D19). Prüfbar, sobald
   Spaces bestehen (Spec 027).
 - **SC-016**: Veröffentlichen zwei Geräte der Admin-Vault verschiedene
-  Mitgliederlisten derselben Generation, wählen das Relay und alle Empfänger in
+  Mitgliederlisten derselben Generation, wählen der Sync-Server und alle Empfänger in
   100 % der geprüften Fälle dieselbe Liste, unabhängig von der Reihenfolge des
   Eintreffens, und ein Gerät der Admin-Vault veröffentlicht danach eine
   zusammengeführte Liste der nächsten Generation. Prüfbar, sobald Spaces
@@ -1291,16 +1393,17 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   Präsenz im Nostr-Format (secp256k1), Umschläge nach NIP-44. Die
   Präsenzmeldung ersetzt die übliche Adresssuche von iroh über pkarr/DNS
   (Entwurf §4). Wie der Sync-Kanal heißt (Arbeitsname `holzi-sync/1`) und wie
-  Pakete, Gerätelisten und Meldungen kodiert sind, klärt der Plan (Entwurf §15
+  Nachrichten, Gerätelisten und Meldungen kodiert sind, klärt der Plan (Entwurf §15
   Punkt 7).
 - Die Netzwerkkennung eines Geräts ist sein iroh-Schlüssel; die Geräteliste
   bindet ihn an den Geräteschlüssel (Entwurf §4).
 - Zusammenführen, Löschvermerke und die Ausnahme gerätelokaler Daten liefert
   haex-crdt, wie holzi es einbindet: Repository
   `https://github.com/haexmas/haex-crdt`, Revision
-  `ed230d2c3f58c1b10710b6025ea0ce6c20b8d009`. Dass dort heute das
-  weiterleitende statt des ursprünglichen Geräts als Autor eingetragen wird
-  (Entwurf §3.2), wird dort behoben, nicht in holzi umgangen. Felder werden
+  `ed230d2c3f58c1b10710b6025ea0ce6c20b8d009`. Das Ursprungsgerät steht dort in
+  jedem Zeitstempel und lässt sich nach Ursprungsgerät abfragen; das Feld für
+  das Gerät im Änderungsdatensatz nennt dagegen das sendende Gerät (Entwurf
+  §3.2) und wird für den Autor nicht verwendet. Felder werden
   einzeln zusammengeführt, die jüngere Änderung gilt; Konflikte bei Dateien
   (Konfliktkopien, D10) gehören zu Spec 025.
 - Innerhalb der eigenen Vault gibt es keine Rechte an Daten: Jedes Gerät auf
@@ -1328,13 +1431,14 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   diese Spec kein Fehlerfall, sondern ein Gerät, das gerade offline ist.
   holzi läuft heute nur auf dem Desktop.
 - Die gerätelokalen Daten eines Quellgeräts liegen nach ADR-0001 physisch in
-  einer kopierten Datei. FR-006 verlangt nur, dass das Zielgerät sie nicht als
-  eigene Identität verwendet; ob der Plan den Geräteschlüssel deshalb außerhalb
-  der Vault-Datei ablegt, entscheidet er.
+  einer kopierten Datei, auch sein Geräteschlüssel. FR-006 verlangt, dass das
+  Zielgerät sie nicht als eigene Identität verwendet und nichts davon löscht.
+  Wer die Datei und ihre Passphrase hat, hat ohnehin alle Daten der Vault und,
+  bei einem Hauptgerät, den privaten Schlüssel der Vault-Identität.
 
 ## Nicht im Umfang
 
-- Sync über ein Relay und Postfächer, auch für die eigene Vault; kommt mit
+- Sync über den Sync-Server und Postfächer, auch für die eigene Vault; kommt mit
   Spec 026. Diese Spec legt nur fest, welche Geräte angenommen werden (FR-005,
   FR-009) und was nie als gewöhnliche Vault-Information in ein Postfach darf
   (FR-038). Bis dahin gleichen sich nur Geräte an, zwischen denen irgendwann
