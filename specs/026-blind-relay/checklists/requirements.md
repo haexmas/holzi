@@ -55,13 +55,12 @@
   Bereich against the admin's quota; FR-006 lets members use foreign Bereiche
   without their own admission; FR-039 pins the relay's identity; FR-020
   carries over the minimum-generation check from the deferred design §4.
-- Cross-spec alignment (2026-09-28): FR-021 accepts a hand-over signed by the
-  old Vault-Identität after a rotation and freezes the Bereich on competing
-  hand-overs (Spec 024 owns the rotation); FR-021 also carries Zulassung and
-  Kontingent over with the hand-over (addition, flagged for review); how a
-  frozen Bereich is released is left to the plan with Spec 024. FR-032 cites
-  "Spec 024, Nur-direkt-Daten" and allows envelopes and the Dateiindex in the
-  vault's Postfach. FR-037 follows 024's atomicity (package whole,
+- Cross-spec alignment (2026-09-28): FR-021 lets the admin end a Bereich
+  with a signed, final Ende-Erklärung and never binds a Bereich to another
+  Vault-Identität (earlier hand-over and identity-change content removed, D26).
+  FR-032 names the private key of the Vault-Identität as the only
+  Nur-direkt-Datum (D30) and allows envelopes, received Space keys, S3
+  credentials and the Dateiindex in the vault's Postfach. FR-037 follows 024's atomicity (package whole,
   Momentaufnahme per change). FR-028 names admin garbage collection. FR-009
   keeps signalling optional, invite transport belongs to 027. FR-038 names the
   sub-view „Relays“ of „Föderation“. New FR-048: own synced folders (025) may
@@ -76,3 +75,18 @@
   in v1). The snapshot-upload question (FR-022) is still open.
 - 2026-09-28: snapshot upload answered as well (FR-022: only the admin of the Bereich). No markers remain.
 - 2026-09-28 (D24): Speicher-Backend A has no presigned links anymore; the relay streams the encrypted Objekte itself over its own endpoint (FR-026), so a removal takes effect immediately for objects too (FR-023, SC-003, SC-009 rewritten; key entity „Zugangslink“ removed).
+- 2026-09-28 (D26–D32, identity model v2): no change of the Vault-Identität
+  (D26); the relay admits a device only if it is on the vault's current
+  Geräteliste and keeps the newest Geräteliste per vault (FR-004, FR-049,
+  D27); lists and Ende-Erklärungen are signed by any device on the admin's
+  Geräteliste (FR-018, FR-021, D29); explicit relay roles (SQLite data in
+  Postfächer only, optional Speicher-Backend A streamed by the relay, each
+  Objekt stored once; FR-026, FR-027, D32). New User Story 9 (P2) and
+  FR-050 to FR-056, SC-013 to SC-015 for recovery via an encrypted
+  Wiederherstellungspaket (D31). Additions flagged for review: the package is
+  encrypted to a public key derived from the Wiederherstellungsschlüssel, so
+  Hauptgeräte can refresh it without keeping the key (FR-052); only a
+  Hauptgerät may upload it; the recovery code embeds the relay address
+  (FR-050); the relay does not reveal whether a package exists before the
+  possession proof (FR-053); recovery defaults (128 bit, TOTP 6 digits/30 s,
+  e-mail link 15 min, lockout after 5 failures, doubling) are assumptions.

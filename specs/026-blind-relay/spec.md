@@ -20,33 +20,51 @@ nicht erreichbar ist oder ablehnt.
 
 ## Begriffe
 
-- **Vault-Identität**: das Schlüsselpaar einer Vault, auf allen ihren Geräten
-  gleich (Spec 024). Zulassung, Kontingent und Mitgliedschaft am Relay hängen
-  an ihr, nie an einem Gerät.
-- **Geräteschlüssel**: das Schlüsselpaar eines einzelnen Geräts (Spec 024).
-  Damit meldet sich ein Gerät am Relay an.
-- **Gerätebestätigung**: eine von der Vault-Identität signierte Aussage, dass
-  ein Geräteschlüssel für diese Vault handelt (Spec 024).
+- **Vault-Identität**: das secp256k1-Schlüsselpaar einer Vault (Spec 024). Ihr
+  öffentlicher Schlüssel ist die feste Adresse der Vault; Zulassung, Kontingent
+  und Mitgliedschaft am Relay hängen an ihr, nie an einem Gerät. Ihr privater
+  Schlüssel liegt nur auf Hauptgeräten.
+- **Gerät**: eine holzi-Instanz der Vault (Spec 024). Ein **Hauptgerät** hat den
+  privaten Schlüssel der Vault-Identität und darf Geräte hinzufügen und
+  entfernen; es kann mehrere geben. Ein **verknüpftes Gerät** liest und
+  schreibt alle Daten der Vault und darf Spaces und Datenfreigaben verwalten,
+  aber keine Geräte hinzufügen oder entfernen.
+- **Geräteschlüssel**: das eigene Schlüsselpaar jedes Geräts (Spec 024). Es
+  verlässt das Gerät nie. Damit meldet sich ein Gerät am Relay an und
+  signiert alles, was es schreibt.
+- **Geräteliste**: die von der Vault-Identität signierte Liste aller aktuellen
+  Geräte einer Vault, je Gerät mit öffentlichem Geräteschlüssel, Rolle
+  (Hauptgerät oder verknüpft), Name und Netzkennung, mit einer Generation
+  (Spec 024). Es gelten dieselben Regeln wie bei der Mitgliederliste: Eine
+  höhere Generation ersetzt eine niedrigere, bei gleicher Generation gilt die
+  Liste mit dem kleinsten Hash, im Zweifel wird abgelehnt. Das Relay hält je
+  Vault die neueste und nimmt ein Gerät nur an, wenn es darauf steht (FR-049).
 - **Bereich**: das, was gemeinsam synchronisiert wird: die Vault selbst, ein
   Space oder eine Datenfreigabe. Das Relay kennt einen Bereich nur als
   undurchsichtige Kennung.
 - **Admin eines Bereichs**: die Vault, die ihn angelegt hat, und nur sie. Beim
   Bereich „Vault“ ist das die Vault selbst. Die Admin-Rolle lässt sich in v1
-  nicht übertragen.
-- **Schließen**: eine von der Vault-Identität des Admins signierte, endgültige
-  Aussage, dass ein Bereich endet. Danach nimmt das Relay für den Bereich
-  nichts mehr an (FR-021); holzi schließt so beim Rotieren der Vault-Identität
-  jeden Bereich, den die Vault verwaltet (Spec 024 „Schließen und Verlassen
-  beim Rotieren“).
+  nicht übertragen. Handeln kann für den Admin jedes Gerät auf seiner
+  aktuellen Geräteliste (D29).
+- **Beenden**: eine von einem Gerät des Admins signierte, endgültige Erklärung,
+  dass ein Bereich endet, etwa „Datenfreigabe beenden“ (Spec 028 FR-036).
+  Danach nimmt das Relay für den Bereich nichts mehr an (FR-021).
 - **Änderungspaket**: ein verschlüsselter, signierter Stapel von Änderungen
   eines Bereichs (Spec 024). Das Relay sieht davon nur Bereichskennung,
   Schlüsselkennung und Länge.
 - **Inhaltsschlüssel** und **Schlüsselgeneration**: der symmetrische Schlüssel,
   mit dem ein Bereich verschlüsselt wird, und seine Generation (Spec 024, 027).
   Das Relay hat keinen davon.
-- **Relay**: der nicht vertrauenswürdige Server dieser Spec. Es bündelt
-  Postfächer, das Speicher-Backend A, ein Relay für den NAT-Durchgang und
-  optional die Signalisierung.
+- **Relay**: der nicht vertrauenswürdige Server dieser Spec. Der Dienst des
+  Relays synchronisiert nur SQLite-Daten, also Änderungspakete und
+  Momentaufnahmen in Postfächern; Dateien kommen nie in ein Postfach. Stellt
+  der Betreiber zusätzlich einen S3-kompatiblen Speicher bereit
+  (Speicher-Backend A), prüft der Dienst jeden Zugriff auf eine Datei und
+  überträgt jedes verschlüsselte Objekt selbst zwischen diesem Speicher und
+  dem Gerät (D24); jedes Objekt liegt dort genau einmal. Nutzt ein Bereich
+  eigenen S3-Speicher (Speicher-Backend B), hat das Relay mit Dateien nichts
+  zu tun. Dazu betreibt das Relay ein Relay für den NAT-Durchgang, optional
+  die Signalisierung und optional die Ablage von Wiederherstellungspaketen.
 - **Postfach**: die Ablage eines Bereichs auf einem Relay. Es nimmt
   Änderungspakete nur an und vergibt jedem angenommenen Paket eine fortlaufende
   **Sequenznummer**. Ein Gerät holt „alles nach Nummer n“; die höchste
@@ -68,12 +86,20 @@ nicht erreichbar ist oder ablehnt.
   Speicherplatz.
 - **Objekt**: verschlüsselter, unveränderlicher Dateiinhalt, benannt nach dem
   Hash seines Chiffrats (Spec 025).
-- **Speicher-Backend A**: Objektspeicher, den der Betreiber des Relays stellt.
-  Das Relay überträgt die Objekte selbst zwischen diesem Speicher und dem
-  anfragenden Gerät, über seinen eigenen Endpunkt und dieselbe
-  Protokollfamilie wie beim Postfach; es ist auch für Dateien ein blinder
-  Teilnehmer. **Speicher-Backend B** ist der eigene S3-Speicher des Nutzers
-  (Spec 029).
+- **Speicher-Backend A**: optionaler, S3-kompatibler Objektspeicher, den der
+  Betreiber des Relays zusätzlich stellt. Das Relay überträgt die Objekte
+  selbst zwischen diesem Speicher und dem anfragenden Gerät, über seinen
+  eigenen Endpunkt und dieselbe Protokollfamilie wie beim Postfach; es ist
+  auch für Dateien ein blinder Teilnehmer. **Speicher-Backend B** ist der
+  eigene S3-Speicher des Nutzers (Spec 029), ohne das Relay.
+- **Wiederherstellungsschlüssel**: ein zufälliger Schlüssel hoher Entropie,
+  den holzi beim Einrichten der Wiederherstellung einmal als Code und QR-Code
+  zeigt und den der Nutzer offline aufbewahrt (FR-050). holzi und das Relay
+  speichern ihn nicht.
+- **Wiederherstellungspaket**: verschlüsselt auf dem Relay hinterlegt; enthält
+  den privaten Schlüssel der Vault-Identität, die Generationen des
+  Inhaltsschlüssels des Bereichs „Vault“ und die Liste der Relays (FR-052).
+  Entschlüsseln kann es nur, wer den Wiederherstellungsschlüssel hat.
 - **Fortschrittsstand** (Versionsvektor): je Ursprungsgerät die höchste gesehene
   Änderung (Spec 024). Er zeigt, ob einem Gerät etwas fehlt, egal über welchen
   Weg es kam.
@@ -83,7 +109,7 @@ nicht erreichbar ist oder ablehnt.
 - Sync-Design
   [`docs/plans/2026-09-28-sync-architecture.md`](../../docs/plans/2026-09-28-sync-architecture.md):
   Quelle dieser Spec. Maßgeblich sind die Entscheidungen D1, D6, D7, D9, D11
-  und D12 (§2), die Lehren aus haex-sync-server (§3.4), die Bausteine in §5,
+  und D12 (§2) sowie D23, D24 und D26 bis D32 (Klärungen unten), die Lehren aus haex-sync-server (§3.4), die Bausteine in §5,
   das Relay in §10, Speicher-Backend A in §12 und das Bedrohungsmodell in §13.
   Offene Punkte 5 und 6 aus §15 sind unten als Klärungsbedarf markiert.
 - Früheres Design
@@ -106,13 +132,13 @@ nicht erreichbar ist oder ablehnt.
   und ein Speicher-Bucket je Nutzer mit vollen Zugangsdaten beim Server
   (`src/routes/storage.ts`).
 - **Spec 024** (Vault-Identität, Geräteschlüssel, direkter Sync eigener Geräte):
-  liefert Vault-Identität, Geräteschlüssel, Gerätebestätigung, das Format der
-  Änderungspakete, Fortschrittsstände, die Liste der Nur-direkt-Daten, die nur
-  auf dem direkten Weg zwischen eigenen Geräten reisen, und das Schließen und
-  Verlassen der Bereiche beim Rotieren der Vault-Identität (Spec 024
-  „Schließen und Verlassen beim Rotieren“). Diese Spec erweitert den Sync eigener
-  Geräte um das Postfach der Vault auf einem Relay. Der direkte Sync bleibt der
-  erste Weg; das Relay ist ein zusätzlicher.
+  liefert Vault-Identität, Geräteschlüssel, Hauptgeräte und verknüpfte Geräte,
+  die Geräteliste mit Verknüpfen und Entfernen von Geräten, das Format der
+  Änderungspakete, Fortschrittsstände und die Nur-direkt-Daten; das ist nur
+  noch der private Schlüssel der Vault-Identität (D30). Diese Spec erweitert
+  den Sync eigener Geräte um das Postfach der Vault auf einem Relay und bringt
+  die Wiederherstellung einer Vault über das Relay mit (User Story 9). Der
+  direkte Sync bleibt der erste Weg; das Relay ist ein zusätzlicher.
 - **Spec 025** (Dateisync eigener Geräte): Die Objekte eigener
   synchronisierter Ordner aus 025 dürfen mit dieser Spec über das
   Speicher-Backend A laufen (FR-048), sodass auch Dateien zwischen eigenen
@@ -123,10 +149,12 @@ nicht erreichbar ist oder ablehnt.
   gelten für die Vault, keine Knöpfe zum Speichern (FR-021 und FR-024 dort).
 - Vorwärtsverweise: **Spec 027** (Spaces) nutzt Postfächer, Mitgliederlisten
   und Speicher-Backend A, und bringt die Verwaltung der Mitglieder, Einladungen
-  und das Rotieren der Inhaltsschlüssel mit. **Spec 028** (Datenfreigaben)
+  und neue Generationen der Inhaltsschlüssel mit. **Spec 028** (Datenfreigaben)
   nutzt Postfächer und Mitgliederlisten. Spec 027 legt auch fest, wie
   Einladungen transportiert werden. **Spec 029** (eigener S3-Speicher)
-  läuft ohne das Relay; das Relay bekommt dessen Zugangsdaten nie.
+  läuft ohne das Relay. Dessen Zugangsdaten liegen im Passwortmanager (geplante
+  Spec 030) und reisen als gewöhnliche Daten der Vault nur verschlüsselt im
+  Postfach der Vault (D30); lesbar bekommt das Relay sie nie.
 
 ## Clarifications
 
@@ -135,8 +163,9 @@ nicht erreichbar ist oder ablehnt.
 - Q: Wer identifiziert sich am Relay, ein Gerät oder eine Vault? → A: Ein
   Nostr-Schlüssel steht für ein Gerät; dieselbe Vault läuft auf mehreren
   Geräten mit derselben Vault-Identität (D1). Ein Gerät meldet sich mit seinem
-  Geräteschlüssel an und weist mit der Gerätebestätigung nach, für welche Vault
-  es handelt. Rechte, Zulassung und Kontingent hängen an der Vault.
+  Geräteschlüssel an; für welche Vault es handelt, zeigt die Geräteliste der
+  Vault, auf der es stehen muss (überholt durch D27 in diesem Teil). Rechte,
+  Zulassung und Kontingent hängen an der Vault.
 - Q: Wer darf in einem Space oder einer Datenfreigabe einladen und Rechte
   ändern? → A: Nur der Admin, also die Vault, die den Bereich angelegt hat
   (D6). Empfänger können
@@ -148,11 +177,16 @@ nicht erreichbar ist oder ablehnt.
 - Q: Was darf der Betreiber des Relays sehen? → A: Für v1 gilt „der Betreiber
   sieht keine Inhalte“ (D9). Er sieht IP-Adressen, Zeitpunkte, Größen,
   Bereichskennungen, die Mitgliederlisten (Vault-Identitäten und Fähigkeiten)
-  und über die Gerätebestätigungen die Geräteschlüssel. Pseudonyme je Bereich,
-  die auch die Teilnehmer verbergen, sind nicht v1.
+  und über die Gerätelisten die Geräte jeder Vault mit Geräteschlüssel, Rolle,
+  Name und Netzkennung (überholt durch D27 in diesem Teil). Wer den zweiten
+  Faktor der Wiederherstellung per E-Mail wählt, gibt dem Relay seine Adresse
+  (D31). Pseudonyme je Bereich, die auch die Teilnehmer verbergen, sind nicht
+  v1.
 - Q: Wie weit wird dem Relay vertraut? → A: Gar nicht (D11). Es kann Daten
   löschen, zurückhalten oder veraltete Stände liefern, aber weder lesen noch
-  fälschen. Es erhält nie die S3-Zugangsdaten eines Nutzers.
+  fälschen. Es erhält die S3-Zugangsdaten eines Nutzers nie lesbar; im
+  Postfach der Vault reisen sie nur verschlüsselt (überholt durch D30 in diesem
+  Teil).
 - Q: Welche Speicher gibt es in v1? → A: Beide (D12): den vom Relay-Betreiber
   gestellten (Speicher-Backend A, diese Spec) und den eigenen S3-Speicher des
   Nutzers (Speicher-Backend B, Spec 029).
@@ -171,18 +205,39 @@ nicht erreichbar ist oder ablehnt.
 - Q: Braucht ein Relay Konten? → A: Nein. Keine Konten, keine E-Mail-Adresse;
   eine Identität ist ein Schlüssel. Aufgenommen wird in v1 über einen
   Einladungscode des Betreibers, Bezahlung kommt vielleicht später (Design
-  §10.2).
+  §10.2). Einzige Ausnahme ist die freiwillige E-Mail-Adresse als zweiter
+  Faktor der Wiederherstellung (überholt durch D31 in diesem Teil).
 - Q: Darf ein Bereich gleichzeitig auf mehreren Relays liegen? → A: Nein, nicht in v1. Jeder Bereich hat ein Heimat-Relay; weitere Relays dienen dem NAT-Durchgang (FR-040). Das gilt auch für Spaces (Spec 027).
-- Q: Wer darf eine Momentaufnahme hochladen? → A: Nur der Admin des Bereichs; beim Bereich „Vault“ jedes eigene Gerät (FR-022).
-- Q: Kann die Admin-Rolle übertragen werden, etwa nach dem Rotieren der
-  Vault-Identität? → A: Nein, in v1 gar nicht, und nichts hängt von der
-  Zustimmung der Mitglieder ab. Beim Rotieren schließt holzi mit der alten
-  Identität alle Bereiche, die die Vault verwaltet, und verlässt alle anderen
-  (D23). Das Relay bindet einen Bereich nie um; eine Schließung ist dort
-  endgültig (FR-021, FR-049).
+- Q: Wer darf eine Momentaufnahme hochladen? → A: Nur der Admin des Bereichs, also jedes Gerät auf seiner Geräteliste (D29); beim Bereich „Vault“ jedes eigene Gerät (FR-022).
+- Q: Kann die Admin-Rolle übertragen werden? → A: Nein, in v1 gar nicht, und
+  nichts hängt von der Zustimmung der Mitglieder ab (D23). Das Relay bindet
+  einen Bereich nie an eine andere Vault-Identität (FR-021). Der frühere Teil
+  dieser Antwort zum Beenden und Verlassen aller Bereiche bei einem Wechsel
+  der Vault-Identität ist überholt durch D26.
 - Q: Wie kommen Geräte bei Speicher-Backend A an die Objekte? → A: Das Relay
   überträgt die verschlüsselten Objekte selbst; es gibt keine zeitlich
   begrenzten Links. Das Relay sieht dabei nur Ciphertext (D24).
+- Q: Gibt es in v1 ein Rotieren der Vault-Identität? → A: Nein (D26). Ein
+  verlorenes Gerät ist kein Problem, solange eine Kopie oder das Relay existiert
+  und die Passphrase hält; ausgesperrt wird ein Gerät über die Geräteliste
+  (D27).
+- Q: Wer darf Geräte hinzufügen und entfernen? → A: Nur Hauptgeräte, die den
+  privaten Schlüssel der Vault-Identität haben; es kann mehrere geben. Beim
+  Verknüpfen fragt holzi, ob der Schlüssel mit übertragen wird (Standard:
+  nein). Verknüpfen ist der bevorzugte Weg, Kopieren der Datei bleibt möglich
+  (D27).
+- Q: Wie kommt ein Nutzer, der alle Kopien verloren hat, wieder an seine
+  Vault? → A: Über ein optionales, verschlüsselt auf dem Relay hinterlegtes
+  Wiederherstellungspaket. Abrufen erfordert den Besitznachweis des
+  Wiederherstellungsschlüssels, ohne ihn zu übertragen, und einen zweiten
+  Faktor (TOTP oder E-Mail-Link) (D31).
+- Q: Was synchronisiert das Relay, und wo liegen Dateien? → A: Der Dienst des
+  Relays synchronisiert nur SQLite-Daten in Postfächern; Dateien kommen nie in
+  ein Postfach. Optional stellt der Betreiber zusätzlich S3-kompatiblen
+  Speicher (Speicher-Backend A); dann prüft das Relay jeden Zugriff und
+  überträgt jedes verschlüsselte Objekt selbst, und jedes Objekt liegt dort
+  genau einmal. Mit eigenem S3 (Speicher-Backend B) ist das Relay an Dateien
+  nicht beteiligt (D32).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -213,13 +268,21 @@ demselben Relay. Auf A eine Änderung machen, A beenden, B starten: B zeigt die
    eine Änderung macht, **Then** kommt sie direkt bei B an; dass sie zusätzlich
    im Postfach liegt, führt auf B nicht zu einer doppelten Anwendung oder
    einem zweiten Eintrag.
-4. **Given** ein drittes, neu gekoppeltes Gerät C (Spec 024), **When** C das
-   Relay zum ersten Mal abfragt, **Then** holt es die letzte Momentaufnahme und
-   die Pakete danach und hat danach denselben Stand wie A und B.
+4. **Given** ein drittes, neu verknüpftes Gerät C, das ein Hauptgerät auf die
+   Geräteliste gesetzt hat (Spec 024), **When** C das Relay zum ersten Mal
+   abfragt, **Then** holt es die letzte Momentaufnahme und die Pakete danach
+   und hat danach denselben Stand wie A und B.
 5. **Given** ein Postfach der Vault, **When** jemand die Ablage des Relays
-   untersucht, **Then** findet er keine Nur-direkt-Daten (Spec 024), also
-   weder den privaten Schlüssel der Vault-Identität noch entpackte Inhalts- oder
-   Zugangsschlüssel, auch nicht verschlüsselt (FR-032).
+   untersucht, **Then** findet er weder den privaten Schlüssel der
+   Vault-Identität noch einen privaten Geräteschlüssel, auch nicht
+   verschlüsselt, in einem Paket, einer Momentaufnahme oder einem Objekt
+   (FR-032); den privaten Schlüssel der Vault-Identität gibt es auf dem Relay
+   nur verschlüsselt im Wiederherstellungspaket, wenn der Nutzer die
+   Wiederherstellung eingerichtet hat (FR-052).
+6. **Given** ein Hauptgerät hat Gerät B von der Geräteliste entfernt (Spec
+   024), **When** das Relay die neue Geräteliste angenommen hat und B danach
+   eine Anfrage stellt, **Then** lehnt das Relay sie ab, auch auf einer schon
+   offenen Verbindung, und liefert B nichts mehr aus (FR-049).
 
 ---
 
@@ -326,7 +389,8 @@ hochladen: wird abgelehnt.
 **Acceptance Scenarios**:
 
 1. **Given** eine gültige Mitgliederliste, in der eine Vault Lesen hat, **When**
-   ein Gerät dieser Vault mit gültiger Gerätebestätigung Pakete abruft,
+   ein Gerät dieser Vault, das auf ihrer aktuellen Geräteliste steht, Pakete
+   abruft,
    **Then** liefert das Relay sie aus.
 2. **Given** dieselbe Vault ohne Schreiben, **When** ihr Gerät ein Paket
    hochladen will, **Then** lehnt das Relay ab und nennt „keine Berechtigung“.
@@ -339,21 +403,21 @@ hochladen: wird abgelehnt.
 5. **Given** die gültige Liste ist abgelaufen und der Admin hat keine neue
    hochgeladen, **When** irgendein Gerät auf den Bereich zugreift, **Then**
    lehnt das Relay Lesen und Schreiben ab, bis eine gültige Liste vorliegt.
-6. **Given** eine Liste, die nicht der Admin des Bereichs signiert hat, **When**
-   sie hochgeladen wird, **Then** lehnt das Relay sie ab, auch wenn für den
-   Bereich noch keine Liste existiert.
+6. **Given** eine Liste, die kein Gerät auf der aktuellen Geräteliste des
+   Admins signiert hat, **When** sie hochgeladen wird, **Then** lehnt das Relay
+   sie ab, auch wenn für den Bereich noch keine Liste existiert.
 7. **Given** eine Liste der Generation 5 gilt, **When** ein anderes Gerät des
    Admins eine andere gültige Liste der Generation 5 hochlädt, **Then** ersetzt
    das Relay die geltende Liste nur, wenn der Hash der neuen kleiner ist, und
    lehnt sie sonst ab; ein Gerät des Admins, das beide Listen sieht,
    veröffentlicht danach eine Liste der Generation 6, die beide Änderungen
    vereint (FR-018, FR-041).
-8. **Given** der Admin hat den Bereich mit einer signierten Schließung
-   geschlossen, **When** danach irgendein Gerät eine Liste, ein Paket oder eine
-   Momentaufnahme für den Bereich hochlädt, auch mit Signatur der
-   Admin-Identität, **Then** lehnt das Relay mit „vom Admin geschlossen“ ab;
-   Mitglieder der letzten gültigen Liste können bis zu deren Ablauf noch
-   lesen, danach löscht das Relay das Postfach (FR-021).
+8. **Given** der Admin hat den Bereich mit einer signierten Erklärung beendet,
+   **When** danach irgendein Gerät eine Liste, ein Paket oder eine
+   Momentaufnahme für den Bereich hochlädt, auch ein Gerät des Admins,
+   **Then** lehnt das Relay mit „vom Admin beendet“ ab; Mitglieder der letzten
+   gültigen Liste können bis zu deren Ablauf noch lesen, danach löscht das
+   Relay das Postfach (FR-021).
 
 ---
 
@@ -438,10 +502,12 @@ füllt ein gelöschtes Postfach wieder.
 ### User Story 7 - Dateien über den Speicher des Relays (Priority: P3)
 
 Die verschlüsselten Objekte aus dem Dateisync (Spec 025) und später aus Spaces
-(Spec 027) liegen beim Speicher-Backend A des Relays. Das Relay prüft bei jeder
-Anfrage die geltende Mitgliederliste und überträgt das Objekt selbst zwischen
-seinem Speicher und dem Gerät; es sieht dabei nur Chiffrat. Löschen darf ein Objekt nur, wer es hochgeladen
-hat, wer Löschen hat, oder der Admin.
+(Spec 027) liegen beim Speicher-Backend A, das der Betreiber des Relays
+zusätzlich stellt. Das Relay prüft bei jeder Anfrage die geltende
+Mitgliederliste und überträgt das Objekt selbst zwischen diesem Speicher und
+dem Gerät; es sieht dabei nur Chiffrat. Jedes Objekt liegt dort genau einmal;
+in ein Postfach kommen Dateien nie, dort reist nur der Dateiindex. Löschen darf
+ein Objekt nur, wer es hochgeladen hat, wer Löschen hat, oder der Admin.
 
 **Why this priority**: Dateien zwischen Geräten, die nie gleichzeitig online
 sind, brauchen einen Speicher. Speicher-Backend B (Spec 029) ist die
@@ -507,6 +573,75 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
 
 ---
 
+### User Story 9 - Vault wiederherstellen, wenn alle Kopien verloren sind (Priority: P2)
+
+Ein Nutzer hat seine Vault nur auf dem Laptop, und der Laptop wird gestohlen.
+Beim Einrichten hatte er auf einem Hauptgerät die Wiederherstellung
+eingeschaltet, den Wiederherstellungsschlüssel als Code ausgedruckt und eine
+Authenticator-App als zweiten Faktor eingerichtet. Auf einem neuen Rechner
+installiert er holzi, wählt „Vault wiederherstellen“, gibt den Code ein und
+bestätigt mit einem Code aus der App. holzi entschlüsselt das Paket auf dem
+neuen Rechner, holt den Stand aus dem Postfach der Vault, lässt ihn eine neue
+Passphrase setzen und entfernt den gestohlenen Laptop aus der Geräteliste.
+
+**Why this priority**: Ohne diesen Weg ist eine Vault verloren, sobald alle
+Kopien weg sind; das Postfach allein hilft nicht, weil nur Geräte der Vault es
+entschlüsseln können. Die Funktion ist freiwillig und setzt ein Relay voraus,
+darum nach dem Sync (User Story 1 bis 3).
+
+**Independent Test**: Auf einem Hauptgerät mit Relay die Wiederherstellung mit
+TOTP einrichten, Daten ändern, eine neue Generation des Inhaltsschlüssels
+auslösen, dann alle Geräte löschen. Auf einem frischen Gerät mit Code und
+TOTP-Code wiederherstellen: Die Vault hat den letzten Stand des Postfachs, das
+neue Gerät ist Hauptgerät, und das Relay lehnt die alten Geräte ab. Danach die
+Ablage des Relays durchsuchen: kein Wiederherstellungsschlüssel und nichts,
+womit sich das Paket entschlüsseln ließe. Abrufe ohne zweiten Faktor oder mit
+falschem Code schlagen fehl, und nach wiederholten Fehlversuchen sperrt das
+Relay.
+
+**Acceptance Scenarios**:
+
+1. **Given** ein Hauptgerät mit einem Relay, **When** der Nutzer in den
+   Einstellungen „Wiederherstellung einrichten“ wählt, **Then** erklärt holzi,
+   was hinterlegt wird, erzeugt einen Wiederherstellungsschlüssel, zeigt ihn
+   genau einmal als Code und QR-Code und schaltet die Wiederherstellung erst
+   ein, wenn der Nutzer den zweiten Faktor eingerichtet und bestätigt hat
+   (FR-050).
+2. **Given** das Einrichten, **When** der Nutzer den zweiten Faktor wählt,
+   **Then** ist TOTP vorausgewählt und wird erst aktiv, wenn er einen gültigen
+   Code aus seiner App eingibt; wählt er stattdessen E-Mail, sagt holzi vorher,
+   dass das Relay dann seine Adresse kennt (FR-051).
+3. **Given** die Wiederherstellung ist eingerichtet, **When** ein Hauptgerät
+   eine neue Generation des Inhaltsschlüssels des Bereichs „Vault“ erzeugt oder
+   sich die Liste der Relays ändert, **Then** verschlüsselt es das Paket neu und
+   lädt es hoch, ohne den Nutzer zu fragen und ohne den
+   Wiederherstellungsschlüssel zu kennen (FR-052).
+4. **Given** ein frisches Gerät ohne Vault, **When** der Nutzer „Vault
+   wiederherstellen“ wählt und den Code eingibt, **Then** weist das Gerät dem
+   Relay den Besitz des Schlüssels mit einer Signatur über eine Challenge
+   nach, ohne etwas Geheimes zu senden, und verlangt danach den zweiten Faktor
+   (FR-053).
+5. **Given** ein richtiger Besitznachweis, **When** der zweite Faktor fehlt,
+   falsch oder abgelaufen ist, **Then** liefert das Relay das Paket nicht aus;
+   nach wiederholten Fehlversuchen sperrt es weitere Versuche für eine
+   wachsende Frist und zeigt holzi, bis wann (FR-053).
+6. **Given** Besitznachweis und zweiter Faktor sind richtig, **When** das
+   Relay das Paket ausliefert, **Then** entschlüsselt holzi es nur auf dem
+   Gerät, lässt den Nutzer eine neue Passphrase setzen, holt die letzte
+   Momentaufnahme und die Pakete danach aus dem Postfach der Vault und hat
+   danach deren Stand (FR-054).
+7. **Given** die wiederhergestellte Instanz, **When** holzi die Geräteliste
+   veröffentlicht, **Then** ist die neue Instanz darin ein Hauptgerät, die
+   bisherigen Geräte sind zum Entfernen vorausgewählt, der Nutzer entscheidet
+   je Gerät, und das Relay lehnt jedes entfernte Gerät danach ab (FR-049,
+   FR-054).
+8. **Given** jemand hat den Code, aber nicht den zweiten Faktor, oder den
+   zweiten Faktor, aber nicht den Code, **When** er abzurufen versucht,
+   **Then** erhält er weder das Paket noch eine Aussage darüber, ob es zu dem
+   Code ein Paket gibt (FR-053).
+
+---
+
 ### Edge Cases
 
 - **Das Relay löscht ein Postfach oder Pakete.** Die Geräte merken es an der
@@ -524,8 +659,8 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   Mindestwert (FR-020); bedient ein Relay mit einer älteren Liste, erfährt der
   Client das. Ein Relay, das selbst eine alte Liste verwendet, kann nur einem
   entfernten Mitglied Chiffrat ausliefern; neue Inhalte kann es damit nicht
-  lesen, weil der Admin nach dem Entfernen den Inhaltsschlüssel rotiert
-  (Spec 027).
+  lesen, weil der Admin nach dem Entfernen eine neue Generation des
+  Inhaltsschlüssels erzeugt (Spec 027).
 - **Die Mitgliederliste läuft ab.** Das Relay lehnt dann jeden Zugriff auf den
   Bereich ab (FR-019). holzi erneuert die Listen der Bereiche, deren Admin die
   Vault ist, rechtzeitig vorher (FR-041). Ist kein Gerät des Admins lange
@@ -535,37 +670,52 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   zählen beim Admin (FR-028); ein Mitglied kann das Kontingent des Admins durch
   Hochladen füllen, aber nur, solange es Schreiben hat.
 - **Das Relay ist kompromittiert.** Ein Angreifer erhält Chiffrat,
-  Mitgliederlisten, Gerätebestätigungen, IP-Adressen und Zeitpunkte. Er kann
-  nichts lesen, nichts fälschen, was ein Empfänger annimmt, keine S3-Zugangsdaten
-  eines Nutzers erbeuten (das Relay hat keine) und keine Inhaltsschlüssel
-  erhalten. Er kann Daten löschen, zurückhalten, Anfragen ablehnen oder
-  unberechtigte Anfragen durchlassen; durchgelassene Änderungen verwerfen die
-  Empfänger (FR-025).
+  Mitgliederlisten, Gerätelisten, Wiederherstellungspakete samt der
+  Einrichtung des zweiten Faktors, IP-Adressen und Zeitpunkte. Er kann nichts
+  lesen, nichts fälschen, was ein Empfänger annimmt, keine S3-Zugangsdaten
+  eines Nutzers lesen (sie liegen nur verschlüsselt im Postfach der Vault) und
+  keine Inhaltsschlüssel erhalten. Den zweiten Faktor prüft das Relay selbst,
+  also kann es ihn übergehen; das Paket bleibt trotzdem verschlüsselt, und
+  wegen der hohen Entropie des Wiederherstellungsschlüssels lässt es sich
+  nicht durch Raten öffnen (FR-050). Er kann Daten löschen, zurückhalten,
+  Anfragen ablehnen oder unberechtigte Anfragen durchlassen; durchgelassene
+  Änderungen verwerfen die Empfänger (FR-025).
 - **Ein Änderungspaket ist größer als die Obergrenze des Relays.** Pakete teilen
   nie eine zusammengehörige Änderungsgruppe (Spec 024). Ist schon eine einzelne
   Gruppe zu groß, lädt holzi sie nicht hoch, zeigt es beim Relay an und
   synchronisiert sie weiter direkt.
-- **Die Vault-Identität wird rotiert** (gestohlenes Gerät, Spec 024
-  „Schließen und Verlassen beim Rotieren“). Vor dem Wechsel signiert holzi mit
-  der alten Identität eine Schließung für jeden Space und jede Datenfreigabe,
-  die die Vault verwaltet, und für ihren Bereich „Vault“, und verlässt jeden
-  Bereich, in dem sie nur Mitglied ist. Das Relay nimmt für einen
-  geschlossenen Bereich nichts mehr an, hält das Postfach für die Mitglieder
-  der letzten gültigen Liste nur noch lesbar, bis diese Liste abläuft, und
-  löscht es dann (FR-021). Einen Bereich an die neue Identität binden kann es
-  nicht; die Vault legt ein neues Postfach für den Bereich „Vault“ an, und der
-  Admin kann einen Space oder eine Datenfreigabe neu anlegen und die
-  Mitglieder neu einladen (FR-049). Weil auch der Dieb die alte Identität hat,
-  kann er einen Bereich höchstens selbst schließen, mit demselben Ergebnis,
-  oder ihn weiter nutzen, bis die Rotation ihn schließt; die Admin-Rolle kann
-  er nirgendwohin verschieben. Rotiert die Vault ohne Verbindung, gehen
-  Schließungen und das Verlassen erst hinaus, wenn ein Gerät online ist; bis
-  dahin kann der Dieb mit der alten Identität handeln. Dieses Risiko ist
-  hingenommen.
-- **Ein gestohlenes Gerät meldet sich am Relay an.** Seine Gerätebestätigung ist
-  gültig, bis die Vault-Identität rotiert ist und die Bereiche der alten
-  Identität geschlossen oder verlassen sind; das Relay kann einzelne Geräte
-  nicht sperren (D8).
+- **Ein Gerät geht verloren oder wird gestohlen.** Ein Hauptgerät entfernt es
+  aus der Geräteliste und erzeugt eine neue Generation des Inhaltsschlüssels
+  des Bereichs „Vault“ (Spec 024). Sobald das Relay die neue Geräteliste
+  angenommen hat, lehnt es jede Anfrage des Geräts ab, auch auf offenen
+  Verbindungen (FR-049), und neue Änderungen kann es nicht mehr
+  entschlüsseln. Was schon auf dem Gerät liegt, bleibt dort; ein Löschen aus
+  der Ferne gibt es nicht. Bis ein Hauptgerät die neue Liste hochlädt, kann
+  das Gerät weiter synchronisieren; das ist hingenommen. War das Gerät ein
+  Hauptgerät und kennt der Dieb die Passphrase, ist die Vault verloren
+  (Spec 024); das Relay kann ein ehrliches Hauptgerät nicht von einem
+  kompromittierten unterscheiden.
+- **Zwei Hauptgeräte veröffentlichen gleichzeitig verschiedene Gerätelisten
+  derselben Generation.** Das Relay nimmt wie bei Mitgliederlisten die mit
+  dem kleinsten Hash (FR-049); ein Hauptgerät, das beide sieht, veröffentlicht
+  eine Liste der nächsten Generation, die beide Änderungen vereint (Spec 024).
+- **Der Wiederherstellungsschlüssel ist verloren.** Solange ein Hauptgerät
+  existiert, erzeugt der Nutzer dort einen neuen; der alte funktioniert danach
+  nicht mehr (FR-055). Ist auch das letzte Gerät weg, gibt es keinen Weg
+  zurück; das ist gewollt, weil sonst das Relay oder ein Dritter die Vault
+  öffnen könnte.
+- **Der zweite Faktor ist verloren** (Telefon mit der TOTP-App weg). Ein
+  Hauptgerät richtet ihn neu ein (FR-055). Sind zweiter Faktor und alle
+  Geräte weg, ist die Wiederherstellung nicht möglich.
+- **Das Relay liefert ein älteres Wiederherstellungspaket oder hat es
+  gelöscht.** Verhindern lässt sich das nicht (Design §13). Das Paket nennt
+  seinen Stand; Änderungen im Postfach, die eine neuere Schlüsselgeneration
+  brauchen, kann holzi dann nicht entschlüsseln und meldet das. Ein Hauptgerät
+  prüft, ob das Paket auf dem Relay aktuell ist, und lädt es sonst neu hoch
+  (FR-052).
+- **Das Relay mit dem Wiederherstellungspaket wird entfernt.** holzi sagt vor
+  der Bestätigung, dass die Wiederherstellung damit endet, und bietet an, sie
+  auf dem neuen Heimat-Relay neu einzurichten (FR-046, FR-055).
 - **Zwei Geräte des Admins veröffentlichen gleichzeitig verschiedene Listen
   derselben Generation.** Relay und Empfänger nehmen beide dieselbe, die mit
   dem kleinsten Hash (FR-018); ein Gerät des Admins, das den Konflikt sieht,
@@ -599,12 +749,16 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   nichts und wendet keine Änderungen an.
 - **FR-003**: Das Relay MUSS ohne Konten auskommen. Es DARF weder eine
   E-Mail-Adresse noch ein Passwort noch einen anderen Kontaktweg verlangen;
-  eine Vault ist für das Relay ihre Vault-Identität.
+  eine Vault ist für das Relay ihre Vault-Identität. Einzige Ausnahme ist die
+  E-Mail-Adresse, die ein Nutzer freiwillig als zweiten Faktor der
+  Wiederherstellung angibt (FR-051); sie DARF zu nichts anderem dienen.
 - **FR-004**: Ein Gerät MUSS sich am Relay anmelden, indem es den Besitz seines
-  Geräteschlüssels in einer Challenge-Response beweist und eine
-  Gerätebestätigung vorlegt. Das Relay MUSS die Signatur der Bestätigung durch
-  die Vault-Identität prüfen und das Gerät danach als Gerät dieser Vault
-  behandeln. Eine Anfrage ohne gültige Anmeldung MUSS abgelehnt werden.
+  Geräteschlüssels in einer Challenge-Response beweist und die Vault nennt,
+  für die es handelt. Das Relay MUSS prüfen, dass der Geräteschlüssel auf der
+  aktuellen Geräteliste dieser Vault steht (FR-049), und das Gerät danach als
+  Gerät dieser Vault behandeln. Eine Anfrage ohne gültige Anmeldung oder von
+  einem Gerät, das nicht auf der aktuellen Geräteliste steht, MUSS abgelehnt
+  werden.
 - **FR-005**: Eine Vault-Identität MUSS über einen Einladungscode des
   Betreibers zugelassen werden. Ein Einladungscode MUSS genau eine
   Vault-Identität zulassen können, DARF eine Gültigkeitsdauer haben und trägt
@@ -669,8 +823,9 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
 
 - **FR-018**: Das Relay MUSS je Bereich die geltende Mitgliederliste halten.
   Eine Liste MUSS Bereichskennung, Generation, Einträge {Vault-Identität →
-  Fähigkeiten}, Ausstellungszeit, Ablaufzeit und die Signatur des Admins
-  tragen. Eine gültige Liste mit höherer Generation MUSS die geltende ersetzen;
+  Fähigkeiten}, Ausstellungszeit, Ablaufzeit und die Signatur eines Geräts des
+  Admins tragen (D29). Eine gültige Liste mit höherer Generation MUSS die
+  geltende ersetzen;
   eine mit niedrigerer Generation MUSS abgelehnt werden. Weil mehrere Geräte
   des Admins Listen veröffentlichen, können zwei verschiedene gültige Listen
   dieselbe Generation tragen. Dann gilt nach derselben Regel wie bei jedem
@@ -688,46 +843,47 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   älteren Liste zu bedienen.
 - **FR-021**: Die Bereichskennung MUSS an die Vault-Identität ihres Admins
   gebunden sein, sodass das Relay ohne Vorwissen prüfen kann, dass eine
-  Liste vom Admin des Bereichs signiert ist. Eine von einer anderen Identität
-  signierte Liste MUSS abgelehnt werden, auch für einen Bereich, der auf dem
-  Relay noch nicht existiert. Die erste gültige Liste legt das Postfach an und
-  verlangt die Zulassung des Admins (FR-006). Das Relay DARF einen Bereich nie
-  an eine andere Vault-Identität binden; die Admin-Rolle lässt sich am Relay
-  nicht übertragen. Der Admin MUSS einen Bereich mit einer von seiner
-  Vault-Identität signierten Schließung beenden können (Spec 024 „Schließen und
-  Verlassen beim Rotieren“); eine Schließung, die eine andere Identität signiert
-  hat, MUSS das Relay ablehnen. Eine angenommene Schließung ist endgültig:
-  Danach MUSS das Relay für diesen Bereich nichts mehr annehmen, keine Liste,
-  kein Paket, keine Momentaufnahme und keinen Upload eines Objekts, auch nicht
-  mit Signatur der Admin-Identität. Abrufe der Mitglieder mit Lesen in der letzten gültigen
-  Liste MUSS es weiter bedienen, solange diese Liste nicht abgelaufen ist
-  (FR-019), und dabei die Schließung mitliefern; jedes Mitglied prüft ihre
-  Signatur selbst, zeigt „vom Admin geschlossen“, behält seine lokale Kopie
-  und beendet den Sync des Bereichs. Läuft die letzte Liste ab, MUSS das Relay
-  Postfach und Objekte des Bereichs löschen. Die Bereichskennung und die
-  Schließung MUSS es danach behalten, damit niemand, auch nicht mit dem
-  Schlüssel der alten Identität, den Bereich neu anlegen kann, und MUSS jede
-  weitere Anfrage dafür mit „vom Admin geschlossen“ ablehnen.
-- **FR-049**: Beim Rotieren der Vault-Identität (Spec 024 „Schließen und
-  Verlassen beim Rotieren“) lädt holzi, sobald ein Gerät online ist, die mit
-  der alten Identität signierten Schließungen aller Bereiche hoch, die die
-  Vault verwaltet, einschließlich ihres Bereichs „Vault“; das Relay behandelt
-  sie nach FR-021. Für den Bereich „Vault“ MUSS die Vault ein neues Postfach
-  unter einer Bereichskennung ihrer neuen Identität anlegen und es aus dem
-  eigenen Stand füllen (FR-044). Einen Space oder eine Datenfreigabe kann der
-  Admin mit der neuen Identität neu anlegen und die Mitglieder neu einladen
-  (Spec 027, 028); das ist für das Relay ein neuer Bereich. War die alte
-  Identität in einem Bereich nur Mitglied, verlässt die Vault ihn mit einer von
-  der alten Identität signierten Nachricht wie bei jedem Verlassen (Spec 027);
-  das Relay behandelt sie wie jedes Paket, und die alte Identität gilt dort,
-  bis der Admin eine Liste ohne sie hochlädt. Eine neue Identität erhält weder
-  Zulassung noch Kontingent der alten: Sie braucht eine eigene Zulassung
-  (FR-005, FR-006), bevor das Relay ein Postfach für sie anlegt. Ein
-  geschlossener Bereich zählt bis zum Löschen auf das Kontingent der alten
-  Identität (FR-028).
+  Liste vom Admin des Bereichs stammt: Sie MUSS von einem Geräteschlüssel
+  signiert sein, der auf der aktuellen Geräteliste dieser Vault-Identität
+  steht (FR-049, D29). Eine andere Signatur MUSS abgelehnt werden, auch für
+  einen Bereich, der auf dem Relay noch nicht existiert. Die erste gültige
+  Liste legt das Postfach an und verlangt die Zulassung des Admins (FR-006).
+  Das Relay DARF einen Bereich nie an eine andere Vault-Identität binden; die
+  Admin-Rolle lässt sich am Relay nicht übertragen. Der Admin MUSS einen
+  Bereich mit einer signierten Erklärung beenden können, etwa „Datenfreigabe
+  beenden“ (Spec 028 FR-036); eine Erklärung, die kein Gerät auf der
+  aktuellen Geräteliste des Admins signiert hat, MUSS das Relay ablehnen. Das
+  Beenden ist endgültig: Danach MUSS das Relay für diesen Bereich nichts mehr
+  annehmen, keine Liste, kein Paket, keine Momentaufnahme und keinen Upload
+  eines Objekts, auch nicht von einem Gerät des Admins. Abrufe der Mitglieder
+  mit Lesen in der letzten gültigen Liste MUSS es weiter bedienen, solange
+  diese Liste nicht abgelaufen ist (FR-019), und dabei die Erklärung
+  mitliefern; jedes Mitglied prüft ihre Signatur selbst, zeigt „vom Admin
+  beendet“, behält seine lokale Kopie und beendet den Sync des Bereichs. Läuft
+  die letzte Liste ab, MUSS das Relay Postfach und Objekte des Bereichs
+  löschen. Die Bereichskennung und die Erklärung MUSS es danach behalten,
+  damit niemand den Bereich unter derselben Kennung neu anlegen kann, und MUSS
+  jede weitere Anfrage dafür mit „vom Admin beendet“ ablehnen.
+- **FR-049**: Das Relay MUSS je Vault-Identität, die bei ihm zugelassen ist
+  oder in einer geltenden Mitgliederliste steht, die neueste gültige
+  Geräteliste halten (Spec 024, D27). Ein Gerät MUSS sie bei der Anmeldung
+  vorlegen oder eine neuere hochladen können. Das Relay MUSS eine Geräteliste
+  nur annehmen, wenn die Vault-Identität sie signiert hat; eine höhere
+  Generation MUSS die geltende ersetzen, eine niedrigere MUSS abgelehnt werden,
+  Gerätenamen sieht das Relay nicht, sie sind in der Liste verschlüsselt
+  (Spec 024 FR-005),
+  und bei gleicher Generation gilt wie in FR-018 die mit dem kleinsten Hash.
+  Hat das Relay eine Geräteliste angenommen, MUSS es jede weitere Anfrage
+  eines Geräts, das nicht mehr darauf steht, sofort ablehnen, auch auf schon
+  bestehenden Verbindungen und bei laufenden Übertragungen von Objekten, wie
+  beim Entzug nach FR-023. Die Rolle eines Geräts (Hauptgerät oder verknüpft)
+  MUSS das Relay nur dort prüfen, wo diese Spec es verlangt (FR-052); alle
+  anderen Rechte hängen an der Vault. Ein Gerät DARF wie in FR-020 die
+  Generation der Geräteliste nennen, die es mindestens erwartet; hält das
+  Relay eine niedrigere, MUSS es das melden.
 - **FR-022**: Das Relay MUSS Abrufe nur Vaults mit Lesen und Uploads von
   Paketen nur Vaults mit Schreiben erlauben, jeweils nach der geltenden Liste.
-  Eine Momentaufnahme DARF nur hochladen: der Admin des Bereichs. Damit kann kein Mitglied mit einer unvollständigen Momentaufnahme ältere Pakete verdrängen. Beim Bereich
+  Eine Momentaufnahme DARF nur hochladen: der Admin des Bereichs, also jedes Gerät auf seiner aktuellen Geräteliste (D29). Damit kann kein Mitglied mit einer unvollständigen Momentaufnahme ältere Pakete verdrängen. Beim Bereich
   „Vault“ ist das in beiden Fällen jedes eigene Gerät.
 - **FR-023**: Ein Entzug MUSS sofort wirken: Sobald das Relay eine neue Liste
   angenommen hat, MUSS jede weitere Anfrage einer nicht mehr berechtigten Vault abgelehnt werden,
@@ -735,20 +891,25 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   nicht nötig sein. „Sofort“ gilt für das Postfach und für Objekte
   gleichermaßen: Eine laufende Übertragung eines Objekts an oder von einer
   nicht mehr berechtigten Vault MUSS das Relay abbrechen (FR-026).
-- **FR-024**: Mitgliederlisten, Gerätebestätigungen und Anmeldungen MÜSSEN
-  dieselben secp256k1-Schlüssel nutzen wie Vault-Identität und
-  Geräteschlüssel; ein zweites Schlüsselsystem nur für das Relay DARF es nicht
-  geben.
+- **FR-024**: Mitgliederlisten, Gerätelisten, Anmeldungen und der
+  Besitznachweis der Wiederherstellung (FR-053) MÜSSEN dasselbe
+  secp256k1-Schlüsselsystem nutzen wie Vault-Identität und Geräteschlüssel;
+  ein zweites Schlüsselsystem nur für das Relay DARF es nicht geben.
 - **FR-025**: Die Prüfung am Relay ist nur eine zusätzliche Hürde. Jeder
   Empfänger MUSS jedes Paket und jede Momentaufnahme selbst prüfen (Signatur,
-  Gerätebestätigung, Fähigkeit der Autor-Vault im Bereich, Spec 024 und 027);
+  Autor-Gerät auf der aktuellen Geräteliste seiner Vault, Fähigkeit der
+  Autor-Vault im Bereich, Spec 024 und 027);
   was das Relay zu Unrecht durchlässt, DARF bei keinem Empfänger angewendet
   werden.
 
 **Speicher-Backend A**
 
-- **FR-026**: Das Relay DARF Speicher-Backend A anbieten, einen Objektspeicher
-  des Betreibers für die Objekte der Bereiche. Bietet es ihn an, MUSS es die
+- **FR-026**: Das Relay DARF Speicher-Backend A anbieten, einen zusätzlichen,
+  S3-kompatiblen Objektspeicher des Betreibers für die Objekte der Bereiche.
+  Postfächer tragen nur SQLite-Daten (Pakete und Momentaufnahmen); ein Objekt
+  DARF NIE in ein Postfach gelangen. Nutzt ein Bereich eigenen S3-Speicher
+  (Speicher-Backend B, Spec 029), ist das Relay an seinen Dateien nicht
+  beteiligt. Bietet es Speicher-Backend A an, MUSS es die
   Objekte selbst zwischen seinem Speicher und dem anfragenden Gerät
   übertragen, über seinen eigenen Endpunkt und dieselbe Protokollfamilie wie
   beim Postfach. Bei jeder Anfrage für ein Objekt MUSS es die geltende Liste
@@ -762,7 +923,8 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   Größe des Objekts gebunden sein, und ein bestehendes Objekt DARF NICHT
   überschrieben werden. Das Relay MUSS einen Upload ablehnen, dessen Hash nicht
   zur Kennung passt; unabhängig davon prüft jeder Empfänger
-  den Hash (Spec 025).
+  den Hash (Spec 025). Jedes Objekt MUSS im Speicher genau einmal liegen, nicht
+  zusätzlich in einem Postfach und nicht je Mitglied kopiert.
 - **FR-028**: Das Relay MUSS je Objekt die hochladende Vault-Identität
   vermerken. Ein Objekt löschen DÜRFEN nur diese Vault, Vaults mit Löschen und
   der Admin des Bereichs; das Relay prüft das bei jeder Anfrage zum Löschen
@@ -775,8 +937,9 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   die aus Bereichskennung und Objektkennung bestehen. Dateinamen, Pfade,
   Dateitypen und Klartextgrößen DÜRFEN dort nicht vorkommen.
 - **FR-030**: Das Relay DARF NIE Zugangsdaten für einen Speicher eines Nutzers
-  annehmen, speichern oder benutzen (D11); Speicher-Backend B (Spec 029) läuft
-  ohne das Relay.
+  lesbar annehmen, speichern oder benutzen (D11); Speicher-Backend B (Spec 029)
+  läuft ohne das Relay. Als gewöhnliche Daten der Vault reisen die
+  Zugangsdaten nur verschlüsselt im Postfach der Vault (FR-032, D30).
 
 **holzi-Client: Postfach der Vault und Sync**
 
@@ -786,13 +949,18 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   Änderungen als Änderungspakete hochladen und fremde abrufen und anwenden.
   Eigene Geräte, die nie gleichzeitig online sind, MÜSSEN so denselben Stand
   erreichen. Der direkte Sync aus Spec 024 bleibt daneben bestehen.
-- **FR-032**: Die Nur-direkt-Daten (Spec 024, Nur-direkt-Daten) DÜRFEN NICHT
-  in ein Paket, eine Momentaufnahme oder ein Objekt für ein Relay gelangen,
-  auch nicht verschlüsselt und auch nicht im Postfach der Vault. Alles andere
-  der Vault DARF über das Postfach der Vault reisen, verschlüsselt mit dem
-  Inhaltsschlüssel des Bereichs „Vault“, ausdrücklich auch die
-  Schlüsselumschläge an die Vault-Identität und der Dateiindex eigener
-  synchronisierter Ordner mit den Schlüsseln der Dateien (Spec 025). Das
+- **FR-032**: Der private Schlüssel der Vault-Identität, das einzige
+  Nur-direkt-Datum (Spec 024, D30), DARF NICHT in ein Paket, eine
+  Momentaufnahme oder ein Objekt für ein Relay gelangen, auch nicht
+  verschlüsselt und auch nicht im Postfach der Vault; zum Relay gelangt er nur
+  verschlüsselt im Wiederherstellungspaket (FR-052). Private Geräteschlüssel
+  DÜRFEN ihr Gerät nie verlassen. Alles andere der Vault DARF über das
+  Postfach der Vault reisen, verschlüsselt mit dem Inhaltsschlüssel des
+  Bereichs „Vault“, ausdrücklich auch die Schlüsselumschläge an die eigenen
+  Geräte, die entpackten Schlüssel von Spaces und Datenfreigaben, die die
+  Vault empfangen hat (D28), Zugangsdaten wie die für eigenen S3-Speicher
+  (D30) und der Dateiindex eigener synchronisierter Ordner mit den Schlüsseln
+  der Dateien (Spec 025). Das
   Postfach der Vault gehört zum Bereich „Vault“, nicht zu einem anderen
   Bereich. Tabellen mit `_no_sync` bleiben lokal.
 - **FR-033**: holzi DARF nur verschlüsselte Pakete und Momentaufnahmen zu einem
@@ -873,19 +1041,100 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
 - **FR-045**: Lehnt ein Relay ab, MUSS holzi den Grund unterscheiden und zeigen:
   nicht zugelassen, Einladungscode ungültig, keine Berechtigung, Liste fehlt
   oder abgelaufen, Kontingent fast voll (ab 80 %) oder erschöpft, Version nicht
-  unterstützt, Bereich vom Admin geschlossen (FR-021), mit dem Hinweis, dass
-  er bis zum Ablauf der letzten Liste nur noch lesbar ist bzw. gelöscht wurde,
-  und Schließung abgelehnt, weil sie nicht die Admin-Identität des Bereichs
-  signiert hat (FR-021). Wo der Nutzer etwas tun kann (neuen Code eingeben,
-  holzi aktualisieren, Platz schaffen, beim geschlossenen Bereich den Admin um
-  eine neue Einladung bitten), MUSS die Anzeige das nennen.
+  unterstützt, Gerät nicht auf der Geräteliste (FR-049), Bereich vom Admin
+  beendet (FR-021), mit dem Hinweis, dass er bis zum Ablauf der letzten Liste
+  nur noch lesbar ist bzw. gelöscht wurde, und Beenden abgelehnt, weil kein
+  Gerät des Admins die Erklärung signiert hat (FR-021). Wo der Nutzer etwas
+  tun kann (neuen Code eingeben, holzi aktualisieren, Platz schaffen, das Gerät
+  von einem Hauptgerät neu verknüpfen lassen, beim beendeten Bereich den Admin
+  um eine neue Einladung bitten), MUSS die Anzeige das nennen.
 - **FR-046**: Entfernt der Nutzer ein Relay, MUSS holzi nach Bestätigung das
   Postfach der Vault dort löschen, soweit das Relay erreichbar ist, und das
   Relay auf keinem eigenen Gerät mehr nutzen. Ist das Relay Heimat von
   Bereichen, deren Admin die Vault ist, MUSS holzi diese vor der Bestätigung
-  nennen.
+  nennen. Liegt dort das Wiederherstellungspaket, MUSS holzi vor der
+  Bestätigung sagen, dass die Wiederherstellung damit endet, und danach das
+  Einrichten auf dem neuen Heimat-Relay anbieten (FR-055).
 - **FR-047**: Alle neuen Texte der Einstellungen und Zustände MÜSSEN auf Deutsch
   und Englisch vorliegen (Spec 023 FR-020).
+
+**Wiederherstellung**
+
+- **FR-050**: holzi MUSS eine freiwillige Wiederherstellung anbieten, die der
+  Nutzer ausdrücklich einschaltet; ohne sein Zutun DARF nichts davon beim
+  Relay liegen. Einrichten DARF nur ein Hauptgerät, und nur, wenn das
+  Postfach der Vault auf einem Relay liegt. holzi MUSS dabei einen
+  Wiederherstellungsschlüssel mit mindestens 128 Bit Zufall erzeugen und ihn
+  genau einmal als Code und als QR-Code zeigen, mit dem Hinweis, ihn offline
+  aufzubewahren. holzi DARF den Wiederherstellungsschlüssel weder in der Vault
+  noch sonst speichern, anzeigen oder übertragen, nachdem der Nutzer den Dialog
+  verlassen hat. Der Code MUSS die Adresse des Relays enthalten, auf dem das
+  Paket liegt.
+- **FR-051**: Zum Einrichten gehört ein zweiter Faktor. Voreingestellt MUSS
+  TOTP sein: holzi zeigt das TOTP-Geheimnis als QR-Code für eine
+  Authenticator-App und schaltet die Wiederherstellung erst ein, wenn der
+  Nutzer einen gültigen Code eingegeben hat. Wahlweise DARF der Nutzer
+  stattdessen einen Link per E-Mail wählen, sofern das Relay ihn anbietet;
+  holzi MUSS vorher sagen, dass das Relay dann seine E-Mail-Adresse kennt
+  (FR-003), und die Adresse mit einem ersten Link bestätigen lassen.
+- **FR-052**: Aus dem Wiederherstellungsschlüssel MUSS holzi auf dem Gerät
+  ableiten: ein Schlüsselpaar zum Verschlüsseln des
+  Wiederherstellungspakets, ein Schlüsselpaar zur Authentisierung und eine
+  daraus abgeleitete Suchkennung. Auf den Geräten der Vault DARF danach nur
+  der öffentliche Schlüssel zum Verschlüsseln bleiben, damit ein Hauptgerät
+  das Paket neu verschlüsseln kann, ohne den Wiederherstellungsschlüssel zu
+  kennen. Das Paket MUSS den privaten Schlüssel der Vault-Identität, alle
+  Generationen des Inhaltsschlüssels des Bereichs „Vault“ und die Liste der
+  Relays (Adressen und festgehaltene Identitäten) enthalten und eine Nummer
+  seines Stands tragen. Ein Hauptgerät MUSS es neu verschlüsseln und
+  hochladen, sobald eine neue Generation des Inhaltsschlüssels des Bereichs
+  „Vault“ entsteht oder sich die Liste der Relays ändert, und bei jeder
+  Verbindung prüfen, ob das Relay den aktuellen Stand hat. Das Relay MUSS je
+  Vault genau ein Paket halten, ein Paket nur von einem Gerät annehmen, das
+  auf der aktuellen Geräteliste der Vault ein Hauptgerät ist (FR-049), ein
+  Paket mit niedrigerer Nummer ablehnen und das Paket auf das Kontingent der
+  Vault zählen.
+- **FR-053**: Das Relay MUSS von der Wiederherstellung nur speichern: die
+  Suchkennung, den öffentlichen Schlüssel zur Authentisierung, das
+  verschlüsselte Paket mit seiner Nummer, die Einrichtung des zweiten Faktors
+  (TOTP-Geheimnis oder E-Mail-Adresse) und die Zähler der Fehlversuche. Den
+  Wiederherstellungsschlüssel, den Schlüssel zum Entschlüsseln des Pakets und
+  den privaten Schlüssel zur Authentisierung DARF es nie erhalten. Ein Abruf
+  MUSS ohne Anmeldung als Gerät und ohne Zulassung möglich sein und beides
+  verlangen: (1) den Besitznachweis, bei dem das Gerät eine Challenge des
+  Relays mit dem privaten Schlüssel zur Authentisierung signiert, ohne etwas
+  Geheimes zu senden, und (2) danach den zweiten Faktor, also einen gültigen
+  TOTP-Code oder das Öffnen des Links aus der E-Mail. Erst wenn beides
+  gelungen ist, DARF das Relay das Paket ausliefern. Vor dem gelungenen
+  Besitznachweis DARF das Relay nicht verraten, ob es zu einer Suchkennung ein
+  Paket gibt, und DARF keine E-Mail senden. Das Relay MUSS Versuche je
+  Suchkennung und je Netzadresse begrenzen und nach wiederholten
+  Fehlversuchen weitere für eine wachsende Frist sperren; holzi MUSS die
+  Sperre mit ihrem Ende anzeigen.
+- **FR-054**: holzi MUSS das Paket nur auf dem Gerät entschlüsseln. Danach MUSS
+  es eine neue Instanz der Vault mit neuem Geräteschlüssel anlegen, den
+  Nutzer eine neue Passphrase setzen lassen, die letzte Momentaufnahme und die
+  Pakete danach aus dem Postfach der Vault holen und anwenden (FR-017,
+  FR-037) und eine neue Geräteliste mit höherer Generation als die auf dem
+  Relay veröffentlichen, in der die neue Instanz ein Hauptgerät ist. Die
+  bisherigen Geräte MUSS holzi dabei zeigen, zum Entfernen vorausgewählt; der
+  Nutzer entscheidet je Gerät. Entfernt er Geräte, gilt dasselbe wie bei jedem
+  Entfernen (Spec 024): eine neue Generation des Inhaltsschlüssels des Bereichs
+  „Vault“ und danach ein neues Paket (FR-052).
+- **FR-055**: Die Unteransicht „Relays“ (FR-038) MUSS den Zustand der
+  Wiederherstellung zeigen (aus, eingerichtet mit Art des zweiten Faktors,
+  Stand des Pakets auf dem Relay, Paket fehlt oder veraltet). Auf einem
+  Hauptgerät MUSS der Nutzer dort die Wiederherstellung einrichten, einen neuen
+  Wiederherstellungsschlüssel erzeugen, den zweiten Faktor neu einrichten und
+  die Wiederherstellung ausschalten können; ein neuer Schlüssel ersetzt Paket,
+  Suchkennung und Schlüssel zur Authentisierung auf dem Relay, sodass der alte
+  nichts mehr öffnet, und Ausschalten löscht alles davon auf dem Relay.
+  Verknüpfte Geräte zeigen den Zustand nur an. „Vault wiederherstellen“ MUSS
+  dort angeboten werden, wo holzi eine Vault anlegt oder öffnet.
+- **FR-056**: Einrichten, Ändern, Ausschalten und Abrufen der Wiederherstellung
+  MÜSSEN Aktionen im Katalog von Spec 020 sein, die nur der Nutzer auslösen
+  kann. Kein Agent und keine Erweiterung DARF den Wiederherstellungsschlüssel,
+  das TOTP-Geheimnis oder das entschlüsselte Paket sehen.
 
 ### Key Entities
 
@@ -906,14 +1155,24 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
 - **Momentaufnahme (Sicht des Relays)**: Bereichskennung, Sequenznummer, bis zu
   der sie reicht, Chiffrat, hochladende Vault.
 - **Mitgliederliste**: Bereichskennung, Generation, Einträge {Vault-Identität →
-  Fähigkeiten}, Ausstellungszeit, Ablaufzeit, Signatur des Admins.
-- **Gerätebestätigung**: Vault-Identität, Geräteschlüssel, Kennung des
-  iroh-Endpunkts, Ausstellungszeit, Signatur der Vault-Identität (Spec 024).
+  Fähigkeiten}, Ausstellungszeit, Ablaufzeit, Signatur eines Geräts des Admins.
+- **Geräteliste (Sicht des Relays)**: Vault-Identität, Generation, Einträge
+  {Geräteschlüssel → Rolle (Hauptgerät oder verknüpft), Name, Netzkennung},
+  Signatur der Vault-Identität (Spec 024); je Vault nur die neueste gültige.
 - **Objekt (Sicht des Relays)**: Bereichskennung, Objektkennung (Hash des
   Chiffrats), Größe des Chiffrats, hochladende Vault-Identität.
-- **Schließung (Sicht des Relays)**: Bereichskennung, Zeitpunkt, Signatur der
-  Vault-Identität des Admins; endgültig; bleibt mit der Bereichskennung
+- **Ende-Erklärung (Sicht des Relays)**: Bereichskennung, Zeitpunkt, Signatur
+  eines Geräts des Admins; endgültig; bleibt mit der Bereichskennung
   erhalten, nachdem Postfach und Objekte gelöscht sind.
+- **Wiederherstellungspaket (Sicht des Relays)**: Suchkennung, öffentlicher
+  Schlüssel zur Authentisierung, Chiffrat, Nummer des Stands, zugehörige
+  Vault-Identität, Art und Einrichtung des zweiten Faktors (TOTP-Geheimnis
+  oder E-Mail-Adresse), Zähler der Fehlversuche, Sperre bis. Je Vault höchstens
+  eines.
+- **Wiederherstellungsschlüssel**: nur beim Nutzer, offline; daraus abgeleitet
+  der Schlüssel zum Entschlüsseln des Pakets, das Schlüsselpaar zur
+  Authentisierung und die Suchkennung. Auf den Geräten bleibt nur der
+  öffentliche Schlüssel zum Verschlüsseln des Pakets.
 - **Relay-Eintrag (in der Vault)**: Adresse, festgehaltene Identität des
   Relays, Zeitpunkt der Zulassung; je Postfach Lesestand und Kennung der
   Nummerierung (je Gerät); Zustand je Gerät.
@@ -936,7 +1195,9 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   entfernt, wird deren nächste Anfrage für den Bereich abgelehnt, in 100 % der Fälle und
   auch auf einer schon offenen Verbindung. Das gilt ebenso für Objekte: Jedes
   weitere Hoch- oder Herunterladen wird abgelehnt, und eine laufende
-  Übertragung bricht ab.
+  Übertragung bricht ab. Ebenso wird die nächste Anfrage eines Geräts in 100 %
+  der Fälle abgelehnt, sobald das Relay eine Geräteliste ohne dieses Gerät
+  angenommen hat.
 - **SC-004**: Mitgliederlisten mit niedrigerer Generation, abgelaufener
   Laufzeit, falscher Signatur oder falschem Admin werden zu 100 % abgelehnt;
   von zwei gültigen Listen derselben Generation gilt in 100 % der Fälle die
@@ -948,7 +1209,7 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
 - **SC-006**: In Tests mit einem Relay, das Pakete auslässt, ein Postfach
   löscht oder die Nummerierung neu beginnt, zeigt holzi den passenden Zustand
   spätestens beim nächsten Abruf; kein Gerät verliert dabei Daten, die es schon
-  hatte, und ein danach neu gekoppeltes Gerät erreicht denselben Stand wie die
+  hatte, und ein danach neu verknüpftes Gerät erreicht denselben Stand wie die
   anderen.
 - **SC-007**: Nach 10.000 Änderungen an denselben 100 Einträgen sinkt der
   belegte Platz des Postfachs durch eine Momentaufnahme um mindestens 90 %; ein
@@ -968,14 +1229,33 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   Relay mit Adresse und Code in unter einer Minute ein.
 - **SC-011**: Hat eine Vault ihr Kontingent erschöpft, werden Uploads anderer
   Vaults auf demselben Relay weiter zu 100 % angenommen.
-- **SC-012**: Nach einer vom Admin signierten Schließung nimmt das Relay für
-  den Bereich in 100 % der Tests keine Liste, kein Paket, keine Momentaufnahme
-  und keinen Upload mehr an, auch nicht mit Signatur der Admin-Identität und
-  auch nicht nach dem Löschen des Postfachs; Mitglieder der letzten gültigen
-  Liste können bis zu deren Ablauf lesen und erhalten die Schließung, danach
-  ist das Postfach gelöscht. Eine Schließung, die nicht die Admin-Identität des
-  Bereichs signiert hat, wird zu 100 % abgelehnt, und kein Bereich wird je an
+- **SC-012**: Nachdem der Admin einen Bereich beendet hat, nimmt das Relay für
+  ihn in 100 % der Tests keine Liste, kein Paket, keine Momentaufnahme und
+  keinen Upload mehr an, auch nicht von einem Gerät des Admins und auch nicht
+  nach dem Löschen des Postfachs; Mitglieder der letzten gültigen Liste können
+  bis zu deren Ablauf lesen und erhalten die Ende-Erklärung, danach ist das
+  Postfach gelöscht. Eine Ende-Erklärung, die kein Gerät auf der Geräteliste
+  des Admins signiert hat, wird zu 100 % abgelehnt, und kein Bereich wird je an
   eine andere Vault-Identität gebunden.
+- **SC-013**: Eine Untersuchung der gesamten Ablage des Relays (Datenbank,
+  Dateien, Objektspeicher, Protokolle) nach Einrichten, mehreren
+  Aktualisierungen und einem Abruf der Wiederherstellung findet weder den
+  Wiederherstellungsschlüssel noch den Schlüssel zum Entschlüsseln des Pakets
+  noch den privaten Schlüssel zur Authentisierung noch sonst etwas, womit sich
+  das Paket entschlüsseln lässt: 0 Treffer. Mit allem, was das Relay hat,
+  lässt sich das Paket in 100 % der Versuche nicht entschlüsseln.
+- **SC-014**: Ein Abruf ohne gültigen zweiten Faktor schlägt in 100 % der
+  Versuche fehl, ebenso ein Abruf ohne gültigen Besitznachweis; nach der
+  festgelegten Zahl von Fehlversuchen wird in 100 % der Fälle gesperrt, und
+  vor dem Besitznachweis unterscheidet sich die Antwort des Relays für eine
+  unbekannte Suchkennung nicht von der für eine bekannte.
+- **SC-015**: Ein Nutzer, der nur Wiederherstellungsschlüssel, zweiten Faktor
+  und ein frisches Gerät hat, stellt seine Vault in 100 von 100 Versuchen mit
+  dem letzten Stand des Postfachs der Vault wieder her, auch wenn nach dem
+  Einrichten neue Generationen des Inhaltsschlüssels entstanden sind; das neue
+  Gerät ist danach Hauptgerät, und jedes dabei entfernte Gerät wird vom Relay
+  abgelehnt. Die Schritte in holzi dauern ohne die Übertragung der Daten unter
+  fünf Minuten.
 
 ## Assumptions
 
@@ -991,12 +1271,19 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   A ist S3-kompatibel und liegt hinter dem Relay; Geräte greifen nie direkt
   darauf zu, sondern das Relay überträgt die Objekte selbst über seinen
   Endpunkt (FR-026, D24).
+- Die Rollen des Relays sind getrennt (D32): Der Dienst des Relays
+  synchronisiert nur SQLite-Daten über Postfächer. Speicher-Backend A ist ein
+  zusätzliches Angebot des Betreibers, das der Dienst nur bewacht und durch
+  das er die Objekte streamt; jedes Objekt liegt dort einmal. Mit
+  Speicher-Backend B (Spec 029) ist das Relay an Dateien nicht beteiligt.
 - Weil das Relay die Objekte selbst überträgt, läuft die gesamte Bandbreite
   für Dateien über den Server des Relay-Betreibers. Das ist hingenommen, weil
   ein Entzug so auch für Objekte sofort wirkt. Der Betreiber muss das bei
   Leitung und Kontingenten einplanen.
-- Die Formate von Paket, Mitgliederliste, Gerätebestätigung und Momentaufnahme
-  legt Spec 024 bzw. der Plan fest (Design §15 Punkt 7). Die Bereichskennung
+- Die Formate von Paket, Mitgliederliste, Geräteliste, Momentaufnahme,
+  Ende-Erklärung und Wiederherstellungspaket sowie die Verfahren zum Ableiten
+  der Schlüssel aus dem Wiederherstellungsschlüssel legt Spec 024 bzw. der Plan
+  fest (Design §15 Punkt 7). Die Bereichskennung
   wird aus der Vault-Identität des Admins und einem Zufallswert abgeleitet
   (FR-021); das ist eine Ergänzung zum Design, das nur „prüft die Signatur des
   Admins“ sagt, und verhindert, dass jemand eine fremde Bereichskennung zuerst
@@ -1006,22 +1293,34 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   Zulassung (FR-006).
 - Standardwerte, die der Plan bestätigt: Höchstlaufzeit einer Liste 90 Tage,
   Erneuerung nach der Hälfte (FR-041), Warnung ab 80 % Kontingent, Frist für
-  „Daten zurückgehalten“ 24 Stunden, Toleranz für Uhrzeiten 5 Minuten.
+  „Daten zurückgehalten“ 24 Stunden, Toleranz für Uhrzeiten 5 Minuten; für die
+  Wiederherstellung TOTP mit 6 Ziffern und 30 Sekunden, ein Link per E-Mail
+  15 Minuten gültig, Sperre nach 5 Fehlversuchen für zunächst eine Stunde,
+  danach jeweils doppelt so lang (FR-053).
+- Die Wiederherstellung setzt voraus, dass das Postfach der Vault auf einem
+  Relay liegt; ohne Relay bleibt nur eine Kopie der Datei (Spec 024). Sie
+  stellt den Stand des Postfachs her, keinen früheren. Weil der
+  Wiederherstellungsschlüssel das Paket öffnet, ohne dass eine Passphrase
+  dazukommt, schützt ihn nur die Aufbewahrung durch den Nutzer; die hohe
+  Entropie schützt gegen Raten, der zweite Faktor gegen Dritte, die den Code
+  finden, aber nicht gegen den Betreiber, der ohne den Code trotzdem nichts
+  entschlüsseln kann. Ob ein Relay den Link per E-Mail anbietet, entscheidet
+  sein Betreiber; ohne ihn gibt es nur TOTP.
 - Der Einladungscode ist ein Geheimnis zur einmaligen Zulassung. Danach reicht
   die Vault-Identität; deshalb speichert holzi den Code nicht, und andere
   Geräte brauchen ihn nicht.
-- Die Rotation der Vault-Identität und das Schließen und Verlassen der Bereiche
-  dabei legt Spec 024 fest („Schließen und Verlassen beim Rotieren“, D23);
-  diese Spec regelt nur, was das Relay damit tut (FR-021, FR-049). Nichts
-  davon hängt von der Zustimmung der Mitglieder ab. Rotiert die Vault ohne
-  Verbindung, kann der Dieb mit der alten Identität handeln, bis ein Gerät
-  online ist und die Schließungen hochlädt; dieses Risiko ist hingenommen. Das
-  Format der Schließung legt der Plan zusammen mit Spec 024 fest.
+- Die Vault-Identität wechselt in v1 nie (D26). Verknüpfen, Entfernen und die
+  Geräteliste legt Spec 024 fest (D27); diese Spec regelt, was das Relay damit
+  tut (FR-004, FR-049). Ein entferntes Gerät weist das Relay erst ab, wenn ein
+  Hauptgerät die neue Geräteliste hochgeladen hat; bis dahin kann es weiter
+  synchronisieren, und dieses Risiko ist hingenommen. Das Beenden eines
+  Bereichs löst der Admin aus (Spec 027, 028); diese Spec regelt nur, was das
+  Relay damit tut (FR-021).
 - Wer Relays anbietet und wie ein Nutzer sie findet, ist nicht Teil dieser
   Spec: Der Nutzer bekommt Adresse und Code vom Betreiber.
 - Die Arbeitstitel „Relays“ und die Zustandsnamen legt der Plan endgültig fest.
-- Spec 024 ist Voraussetzung (Vault-Identität, Geräteschlüssel, Paketformat,
-  Fortschrittsstände, Nur-direkt-Daten). User Story 7 braucht zusätzlich die
+- Spec 024 ist Voraussetzung (Vault-Identität, Geräteschlüssel, Geräteliste,
+  Paketformat, Fortschrittsstände, Nur-direkt-Daten). User Story 7 braucht zusätzlich die
   Objekte aus Spec 025.
 - Die Phasenregel der Verfassung gilt: Diese Spec darf vorab geschrieben, aber
   erst umgesetzt werden, wenn Spec 024 im täglichen Gebrauch ist.
@@ -1032,20 +1331,23 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   dem Relay zu verbergen (D9); ebenso das Verbergen von IP-Adressen und
   Zeitpunkten.
 - Verwaltung der Mitglieder, Einladungen samt ihrem Transport (Spec 027),
-  Rotation der Inhaltsschlüssel und die Oberfläche dafür (Spec 027, 028). Diese
+  neue Generationen der Inhaltsschlüssel und die Oberfläche dafür (Spec 027, 028). Diese
   Spec liefert nur den Mechanismus der Mitgliederliste am Relay und optional
   eine Signalisierung (FR-009).
 - Speicher-Backend B, der eigene S3-Speicher des Nutzers (Spec 029).
 - Bezahlung für Kontingente (etwa Cashu oder Lightning); in v1 nur
   Einladungscodes.
 - Umzug eines Bereichs von einem Relay auf ein anderes.
-- Das Übertragen der Admin-Rolle, ob beim Rotieren der Vault-Identität, auf
-  Wunsch oder bei Verlust (D23); ebenso das Binden eines Bereichs an eine
-  andere Vault-Identität.
-- Konten, E-Mail-Adressen, Wiederherstellung von Schlüsseln über das Relay und
-  eine Sicherung der Vault auf dem Relay.
-- Sperren einzelner Geräte am Relay; ein Gerät wird nur über die Rotation der
-  Vault-Identität ausgesperrt (D8).
+- Das Übertragen der Admin-Rolle, auf Wunsch oder bei Verlust (D23); ebenso
+  das Binden eines Bereichs an eine andere Vault-Identität und jeder Wechsel
+  der Vault-Identität (D26).
+- Konten; E-Mail-Adressen außer dem freiwilligen zweiten Faktor der
+  Wiederherstellung (FR-051); eine Sicherung früherer Stände der Vault auf dem
+  Relay.
+- Das Hinterlegen des Wiederherstellungsschlüssels, verschlüsselt bei einer
+  anderen Person; das kommt später in einer eigenen Spec und nur auf Wunsch
+  des Nutzers.
+- Löschen von Daten auf einem entfernten Gerät aus der Ferne (D27).
 - Eine Oberfläche für Betreiber über die Verwaltung aus FR-007 hinaus.
 - Suche, Verzeichnis oder Empfehlung öffentlicher Relays.
 - Ein Verlauf früherer Stände auf dem Relay; die Momentaufnahme ersetzt ältere

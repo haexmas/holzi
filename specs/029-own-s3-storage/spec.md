@@ -8,9 +8,10 @@
 (§12 Speicher-Backend B, §13 Bedrohungsmodell, Entscheidungen D11 und D12):
 Der Admin eines Space verbindet seinen eigenen S3-kompatiblen Speicher. Je
 Space gibt es einen Bucket und zwei eingeschränkte Zugangsschlüssel (nur Lesen,
-Lesen und Schreiben), die der Admin in seiner Vault erzeugt und verschlüsselt an
-die Mitglieder gibt, je nach Fähigkeit. Das Relay bekommt nie Zugangsdaten. Die
-Geräte greifen direkt auf den Speicher zu. Beim Entzug von Rechten werden die
+Lesen und Schreiben), die der Admin in seiner Vault erzeugt, in seinem
+Passwortmanager (geplante Spec 030) ablegt und verschlüsselt an die Mitglieder
+gibt, je nach Fähigkeit. Das Relay bekommt nie Zugangsdaten in lesbarer Form und
+ist an Dateien nicht beteiligt. Die Geräte greifen direkt auf den Speicher zu. Beim Entzug von Rechten werden die
 Zugangsschlüssel erneuert. Weil S3 „nur eigene Dateien löschen“ nicht
 durchsetzen kann, MUSS die Versionierung des Buckets eingeschaltet sein. Ein
 Anbieter, der diese Anforderungen nicht erfüllt (etwa keine eingeschränkten
@@ -26,15 +27,25 @@ Zugangsschlüssel erzeugen kann), lässt sich für einen Space nicht verbinden
   der verschlüsselte, unveränderliche Inhalt einer Datei, benannt nach dem Hash
   seines Chiffretexts. Wer eine Datei ändert, schreibt ein neues Objekt; alte
   Objekte werden aufgeräumt.
-- **Speicher-Backend A**: Speicher, den das Relay bereitstellt (Spec 026).
+- **Relay**: synchronisiert nur SQLite-Daten (Postfächer); Dateien kommen nie in
+  ein Postfach (Spec 026, D32).
+- **Speicher-Backend A**: S3-kompatibler Speicher, den der Betreiber eines Relays
+  optional zusätzlich bereitstellt; der Relay-Dienst prüft dann den Zugriff und
+  reicht jedes verschlüsselte Objekt aus diesem Speicher durch (Spec 026, D24,
+  D32).
 - **Speicher-Backend B**: der eigene S3-kompatible Speicher eines Nutzers; Thema
-  dieser Spec.
+  dieser Spec. Das Relay ist an Dateien hier nicht beteiligt (D32).
+- **Passwortmanager**: fester Bestandteil von holzi, der Geheimnisse wie
+  S3-Zugangsdaten und Zugangsschlüssel in der Vault verwahrt; Erweiterungen mit
+  Berechtigung dürfen ihn nutzen. Er wird in der geplanten Spec 030 festgelegt;
+  diese Spec legt nur fest, welche Geheimnisse dort liegen (D32).
 - **Anbieter**: der Dienst, bei dem der eigene Speicher liegt (zum Beispiel ein
   Cloud-Anbieter oder ein selbst betriebener RustFS-Server).
 - **Speicherverbindung**: Endpunkt, Region, Anbieter und die
   **Hauptzugangsdaten** des Admins bei diesem Anbieter. Die Hauptzugangsdaten
   dürfen Buckets anlegen und Zugangsschlüssel erzeugen und widerrufen. Sie liegen
-  nur in der Vault des Admins.
+  im Passwortmanager der Vault des Admins und damit auf allen seinen Geräten
+  (FR-033).
 - **Space-Bucket**: der eine Bucket, der zu genau einem Space gehört und nur
   dessen Objekte enthält.
 - **Zugangsschlüssel**: ein vom Anbieter ausgestellter Schlüssel, der nur für
@@ -47,10 +58,12 @@ Zugangsschlüssel erzeugen kann), lässt sich für einen Space nicht verbinden
 - **Versionierung**: die Fähigkeit eines Buckets, gelöschte oder überschriebene
   Objekte als ältere Versionen aufzubewahren. Die **Aufbewahrungsfrist** legt
   fest, wie lange ältere Versionen bleiben.
-- **Relay**, **Postfach**, **Mitgliederliste**: wie in Spec 026. Das Relay gilt
-  als nicht vertrauenswürdig.
-- **Vault-Identität**, **Geräteschlüssel**, **Gerätebestätigung**: wie in
-  Spec 024.
+- **Postfach**, **Mitgliederliste**: wie in Spec 026. Das Relay gilt als nicht
+  vertrauenswürdig.
+- **Vault-Identität**, **Geräteschlüssel**, **Geräteliste**, **Hauptgerät**,
+  **verknüpftes Gerät**: wie in Spec 024. Grants und Mitgliederlisten nennen
+  Vaults (Vault-Identität); Schlüsselumschläge gehen an jedes Gerät auf der
+  aktuellen Geräteliste einer Mitglieds-Vault (D28).
 - **Inhaltsschlüssel**, **Schlüsselgeneration**: wie in Spec 024 und 027. Ein
   Zugangsschlüssel ist kein Inhaltsschlüssel: Er öffnet den Speicher, nicht die
   Dateien.
@@ -64,20 +77,30 @@ Zugangsschlüssel erzeugen kann), lässt sich für einen Space nicht verbinden
   [`2026-09-07-cross-user-sharing-deferred-design.md`](../../docs/plans/2026-09-07-cross-user-sharing-deferred-design.md)
   (§5 dort), wie der Sync-Entwurf es festhält.
 - [`024-own-device-sync`](../024-own-device-sync/spec.md) (Vault-Identität,
-  Geräte, Sync zwischen eigenen Geräten): Die Hauptzugangsdaten des Admins und
-  geöffnete Zugangsschlüssel gehören zu den Nur-direkt-Daten aus Spec 024: Sie
-  reisen nur über direkte Verbindungen zwischen Geräten derselben Vault, nie über
-  ein Postfach des Relays (auch nicht das der eigenen Vault) und nie in einen
-  anderen Bereich. Die Umschläge für Zugangsschlüssel sind an die Vault-Identität
-  der Mitglieder adressiert, wie jeder andere Schlüsselumschlag; jedes Gerät
-  öffnet sie selbst.
+  Geräte, Geräteliste, Sync zwischen eigenen Geräten): Die Hauptzugangsdaten des
+  Admins und die Zugangsschlüssel liegen im Passwortmanager und sind gewöhnliche
+  Vault-Daten im Bereich „Vault“ (D30): Sie gelangen mit dem Datensync von Spec
+  024 auf alle eigenen Geräte, direkt oder verschlüsselt über das eigene Postfach
+  der Vault, und kommen mit der Vault zurück, wenn sie wiederhergestellt wird
+  (Spec 026). In einen anderen Bereich gelangen sie nie. Die Umschläge für
+  Zugangsschlüssel gehen, wie jeder andere Schlüsselumschlag, an jedes Gerät auf
+  der aktuellen Geräteliste der Mitglieds-Vault (D28); jedes Gerät öffnet seinen
+  Umschlag mit seinem Geräteschlüssel. Verwalten darf den Speicher jedes Gerät
+  auf der Geräteliste der Admin-Vault, Hauptgerät oder verknüpft (D29).
+- Geplante Spec 030 (Passwortmanager): verwahrt die Hauptzugangsdaten und die
+  Zugangsschlüssel dieser Spec (D32). Wie der Passwortmanager aussieht und wie
+  Erweiterungen ihn nutzen, legt Spec 030 fest, nicht diese.
 - [`025-own-device-file-sync`](../025-own-device-file-sync/spec.md) (Dateisync
   zwischen eigenen Geräten): Die eigenen synchronisierten Ordner einer Vault
   können statt direkter Übertragung und Backend A ebenfalls Backend B nutzen
   (User Story 6). Dateiindex und Objekte bleiben unverändert; diese Spec ändert
   nur, wo die Objekte liegen.
-- [`026-blind-relay`](../026-blind-relay/spec.md) (Relay und Backend A):
-  Bei Backend B ist das Relay an Dateien nicht beteiligt. Das Postfach des Space
+- [`026-blind-relay`](../026-blind-relay/spec.md) (Relay und Backend A): Der
+  Relay-Dienst synchronisiert nur SQLite-Daten (Postfächer); Dateien kommen nie
+  in ein Postfach. Backend A ist Speicher, den der Betreiber eines Relays
+  optional zusätzlich stellt; dann prüft der Relay-Dienst den Zugriff und reicht
+  die Objekte daraus durch. Bei Backend B ist das Relay an Dateien nicht
+  beteiligt (D32). Das Postfach des Space
   (Dateiindex, Mitgliederliste, Schlüsselumschläge) liegt unabhängig davon auf
   dem Relay des Admins, wenn eines eingerichtet ist (Spec 026 und 027); ohne
   Relay synchronisiert der Space das Postfach nur direkt zwischen den Geräten der
@@ -120,7 +143,9 @@ Zugangsschlüssel erzeugen kann), lässt sich für einen Space nicht verbinden
 
 - Q: Darf das Relay die Zugangsdaten eines eigenen S3-Speichers halten? → A:
   Nein (D11). Das Relay ist nicht vertrauenswürdig. Es bekommt weder die
-  Hauptzugangsdaten noch einen Zugangsschlüssel in lesbarer Form.
+  Hauptzugangsdaten noch einen Zugangsschlüssel in lesbarer Form. (Präzisiert
+  durch D30: Verschlüsselt reisen beide als gewöhnliche Vault-Daten auch über
+  das eigene Postfach der Vault.)
 - Q: Kommen beide Speicher-Backends in v1? → A: Ja (D12): Speicher des Relays (A)
   und eigener S3-Speicher (B).
 - Q: (Betreiber) „Relay braucht dann vollen S3-Zugriff?“ → A: Nein. Bei eigenem
@@ -147,6 +172,10 @@ Zugangsschlüssel erzeugen kann), lässt sich für einen Space nicht verbinden
   festgelegt hat.
 - Q: Welche Anbieter muss v1 unterstützen? → A: RustFS und AWS S3, geprüft und getestet. MinIO nicht, weil es nicht mehr als Open Source weiterentwickelt wird; R2, B2 und Hetzner folgen nach Prüfung (FR-008).
 - Q: Was passiert mit Anbietern, die unsere Anforderungen nicht erfüllen? → A: Sie lassen sich nicht verbinden; einen Ersatzweg über kurzlebige Links gibt es nicht (D25).
+- Q: Gibt es in v1 ein Rotieren der Vault-Identität? → A: Nein (D26). Ein verlorenes Gerät ist kein Problem, solange eine Kopie oder das Relay existiert und die Passphrase hält; ausgesperrt wird ein Gerät über die Geräteliste (D27).
+- Q: An wen werden Schlüssel von Spaces und Datenfreigaben verschlüsselt? → A: An jedes Gerät der Mitglieds-Vaults laut deren aktueller Geräteliste (D28). Das gilt auch für die Umschläge der Zugangsschlüssel.
+- Q: Wo liegen die Hauptzugangsdaten des Admins und die Zugangsschlüssel, und reisen sie nur direkt? → A: Im Passwortmanager der Vault (geplante Spec 030, D32). Sie sind gewöhnliche Vault-Daten: Sie synchronisieren auf alle eigenen Geräte, auch über das eigene Postfach der Vault, und lassen sich mit der Vault wiederherstellen. Nur direkt reist allein der private Schlüssel der Vault-Identität (D30).
+- Q: Was macht das Relay bei Dateien? → A: Der Relay-Dienst synchronisiert nur SQLite-Daten (Postfächer), nie Dateien. Stellt der Betreiber zusätzlich S3-Speicher bereit (Backend A), prüft der Relay-Dienst den Zugriff und reicht die Objekte daraus durch; bei eigenem S3 (Backend B) ist das Relay an Dateien nicht beteiligt (D32).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -212,20 +241,23 @@ und keinen Klartext.
 **Acceptance Scenarios**:
 
 1. **Given** der Admin lädt ein Mitglied mit Lesen ein, **When** die Einladung
-   angenommen ist, **Then** erhält die Vault des Mitglieds den Zugangsschlüssel
-   „nur Lesen“ und keinen anderen.
+   angenommen ist, **Then** erhält jedes Gerät auf der aktuellen Geräteliste der
+   Mitglieds-Vault einen Umschlag mit dem Zugangsschlüssel „nur Lesen“ und
+   keinen anderen (D28).
 2. **Given** der Admin lädt ein Mitglied mit Schreiben oder Löschen ein, **When**
-   die Einladung angenommen ist, **Then** erhält die Vault des Mitglieds den
-   Zugangsschlüssel „Lesen und Schreiben“.
+   die Einladung angenommen ist, **Then** erhält jedes Gerät der Mitglieds-Vault
+   einen Umschlag mit dem Zugangsschlüssel „Lesen und Schreiben“.
 3. **Given** ein Mitglied hat einen Zugangsschlüssel, **When** eines seiner
    Geräte eine Datei des Space lädt oder hochlädt, **Then** geht die Übertragung
    direkt zwischen Gerät und Anbieter, nicht über das Relay.
 4. **Given** ein Mitglied mit „nur Lesen“, **When** es versucht, ein Objekt
    hochzuladen oder zu löschen, **Then** lehnt der Anbieter ab.
-5. **Given** ein Mitglied hat mehrere Geräte, **When** ein Gerät den Umschlag
-   mit dem Zugangsschlüssel erhalten hat, **Then** kommt der Umschlag über den
-   Sync zwischen eigenen Geräten (Spec 024) auf die anderen Geräte, und jedes
-   Gerät öffnet ihn selbst, ohne dass der Admin etwas tun muss.
+5. **Given** ein Mitglied verknüpft ein weiteres Gerät, nachdem es den
+   Zugangsschlüssel erhalten hat, **When** das neue Gerät auf den Space
+   zugreift, **Then** nutzt es den Zugangsschlüssel aus dem Passwortmanager der
+   eigenen Vault, den der Sync zwischen eigenen Geräten (Spec 024) mitgebracht
+   hat, ohne dass der Admin etwas tun muss; spätere Generationen bekommt es als
+   eigenen Umschlag (D28).
 6. **Given** der Bucket enthält Objekte des Space, **When** jemand mit vollem
    Zugriff den Bucket durchsieht, **Then** findet er nur Objekte mit Namen aus
    Hashes, ohne Dateinamen, Pfade, Ordnerstruktur oder lesbaren Inhalt.
@@ -376,8 +408,8 @@ Schlüsselverteilung. Es ist wertvoll, aber nicht nötig, um Spaces mit eigenem
 Speicher zu betreiben.
 
 **Independent Test**: Auf Gerät 1 den eigenen Speicher für die eigenen Ordner
-verbinden, Gerät 2 einmal direkt mit Gerät 1 verbinden (dabei erhält es die
-Speicherverbindung), Gerät 2 beenden. Dann auf Gerät 1 eine Datei ablegen,
+verbinden, warten, bis Gerät 2 die Speicherverbindung mit dem Sync der Vault
+erhalten hat (direkt oder über das eigene Postfach), Gerät 2 beenden. Dann auf Gerät 1 eine Datei ablegen,
 Gerät 1 beenden, danach Gerät 2 starten: Die Datei kommt aus dem Bucket an,
 obwohl beide seit dem Ablegen nie gleichzeitig online waren.
 
@@ -387,10 +419,11 @@ obwohl beide seit dem Ablegen nie gleichzeitig online waren.
    Einstellungen unter „Föderation“ → „Ordner“ den eigenen Speicher dafür
    verbindet, **Then** legt holzi einen Bucket für die eigenen Ordner an und
    nutzt ihn von allen eigenen Geräten aus.
-2. **Given** dieselbe Einrichtung, **When** ein weiteres eigenes Gerät sich
-   direkt mit einem Gerät verbindet, das die Speicherverbindung hat, **Then**
-   erhält es sie über diese direkte Verbindung (Spec 024, Nur-direkt-Daten) und
-   greift ohne weitere Eingabe zu.
+2. **Given** dieselbe Einrichtung, **When** ein weiteres eigenes Gerät auf der
+   Geräteliste der Vault synchronisiert, **Then** erhält es die
+   Speicherverbindung aus dem Passwortmanager mit dem Datensync der Vault
+   (Spec 024), direkt oder über das eigene Postfach, und greift ohne weitere
+   Eingabe zu (FR-033).
 3. **Given** der Anbieter kann keine Versionierung, **When** der Nutzer ihn für
    die eigenen Ordner verbindet, **Then** warnt holzi, dass gelöschte Objekte
    nicht wiederherstellbar sind, erlaubt die Einrichtung aber.
@@ -526,17 +559,24 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
 - **Anbieter-Kontingent erschöpft**: Hochladen scheitert mit einer Meldung, die
   auf den Speicher des Space verweist; die Datei bleibt lokal und wird später
   erneut versucht.
-- **Gerät des Admins wird gestohlen**: Das Gerät hat die Hauptzugangsdaten.
-  Nach dem Erneuern der Vault-Identität (Spec 024) weist holzi den Admin darauf
-  hin, dass er auch die Hauptzugangsdaten beim Anbieter erneuern und in holzi neu
-  eingeben soll, und erneuert danach alle Zugangsschlüssel aller Spaces dieser
-  Verbindung.
-- **Vault-Identität eines Mitglieds ändert sich** (Spec 024, gestohlenes
-  Gerät): Der Admin verteilt den Inhaltsschlüssel neu (Spec 027) und erneuert
-  dabei den Zugangsschlüssel dieses Mitglieds wie beim Entfernen.
+- **Gerät des Admins wird gestohlen**: Das Gerät hat die Hauptzugangsdaten und
+  die Zugangsschlüssel aus dem Passwortmanager. Nachdem ein Hauptgerät es von
+  der Geräteliste entfernt hat (Spec 024), weist holzi den Admin darauf hin, dass
+  er auch die Hauptzugangsdaten beim Anbieter erneuern und in holzi neu eingeben
+  soll, und erneuert danach alle Zugangsschlüssel aller Spaces dieser
+  Verbindung. War das gestohlene Gerät ein Hauptgerät und ist die Passphrase
+  bekannt, ist die Vault verloren (Spec 024); das kann diese Spec nicht abfangen.
+- **Ein Mitglied entfernt ein Gerät von seiner Geräteliste** (Spec 024, etwa ein
+  verlorenes Gerät): Neue Umschläge gehen nur noch an die verbleibenden Geräte
+  (D28). Weil das entfernte Gerät den bisherigen Zugangsschlüssel kennt,
+  erneuert ein Gerät des Admins, sobald es die neue Geräteliste sieht, den
+  Zugangsschlüssel der Art dieses Mitglieds wie beim Entfernen (FR-018).
 - **Neues Mitglied, während eine Erneuerung aussteht**: Es erhält die höchste
   Generation, die das Gerät des Admins kennt.
-- **Admin-Vault geht ganz verloren**: Der Space ist eingefroren (Entwurf §15,
+- **Admin-Vault geht ganz verloren**: Mit einem Wiederherstellungspaket
+  (Spec 026) holt der Admin die Vault samt Passwortmanager zurück, also auch
+  Hauptzugangsdaten und Zugangsschlüssel (D30), und verwaltet den Speicher
+  weiter. Ohne Wiederherstellung ist der Space eingefroren (Entwurf §15,
   offene Frage 3). Die Zugangsschlüssel gelten weiter, bis der Nutzer sie beim
   Anbieter selbst widerruft; holzi kann sie ohne die Admin-Vault nicht mehr
   verwalten.
@@ -618,19 +658,20 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   Schreiben oder Löschen. Ein Mitglied mit Lesen DARF den Schlüssel „Lesen und
   Schreiben“ NICHT entschlüsseln können.
 - **FR-016**: Zugangsschlüssel MÜSSEN zusammen mit den Angaben, die ein Gerät
-  zum Zugriff braucht (Endpunkt, Region, Bucket), in Umschlägen an die
-  Vault-Identität des Mitglieds verteilt werden, auf demselben Weg wie die übrigen
-  verschlüsselten Daten des Space (Spec 027). Das Relay DARF sie nur verschlüsselt
-  weiterreichen.
-- **FR-017**: Ein empfangener Umschlag für einen Zugangsschlüssel MUSS in der
-  Vault des Mitglieds liegen und über den Sync zwischen eigenen Geräten zu dessen
-  anderen Geräten gelangen; jedes Gerät MUSS den Umschlag selbst mit der
-  Vault-Identität öffnen. Geöffnete Zugangsschlüssel und die Hauptzugangsdaten
-  des Admins (FR-033) gehören zu den Nur-direkt-Daten (Spec 024): Sie DÜRFEN nur
-  über direkte Verbindungen zwischen Geräten derselben Vault reisen und NICHT in
-  ein Postfach des Relays (auch nicht das der eigenen Vault), in andere Spaces
-  oder in Datenfreigaben gelangen. Nur die Umschläge nach FR-016 reisen über das
-  Relay.
+  zum Zugriff braucht (Endpunkt, Region, Bucket), in Umschlägen verteilt werden,
+  je ein Umschlag an jedes Gerät auf der aktuellen Geräteliste der Mitglieds-Vault
+  (D28), auf demselben Weg wie die übrigen verschlüsselten Daten des Space
+  (Spec 027). Das Relay DARF sie nur verschlüsselt weiterreichen.
+- **FR-017**: Jedes Gerät des Mitglieds MUSS seinen Umschlag selbst mit seinem
+  Geräteschlüssel öffnen. Die Mitglieds-Vault MUSS den empfangenen
+  Zugangsschlüssel in ihrem Passwortmanager (geplante Spec 030) ablegen, als
+  gewöhnliche Vault-Daten im Bereich „Vault“ (D30, D32): Er gelangt mit dem Sync
+  zwischen eigenen Geräten (Spec 024) auf alle Geräte der Mitglieds-Vault, auch
+  über deren eigenes Postfach, sodass ein später verknüpftes Gerät ihn ohne
+  Zutun des Admins hat, und lässt sich mit der Vault wiederherstellen. Spätere
+  Generationen gehen als eigener Umschlag auch an dieses Gerät (FR-016).
+  Zugangsschlüssel DÜRFEN NICHT in andere Spaces, in Datenfreigaben oder an
+  andere Vaults gelangen, außer als Umschlag nach FR-016.
 
 **Erneuern bei Entzug**
 
@@ -661,16 +702,19 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
 
 **Zugriffswege**
 
-- **FR-023**: Die Geräte der Mitglieder MÜSSEN ausschließlich mit ihrem eigenen
-  Zugangsschlüssel auf den Bucket zugreifen. Kein Gerät DARF für ein anderes
+- **FR-023**: Die Geräte der Mitglieder MÜSSEN ausschließlich mit dem
+  Zugangsschlüssel aus dem Passwortmanager ihrer eigenen Vault auf den Bucket
+  zugreifen. Kein Gerät DARF für ein anderes
   Zugriffe beim Anbieter vermitteln oder ihm vom Anbieter signierte Einzelzugriffe
   ausstellen, weder über das Relay noch über die direkte Verbindung zwischen
   Mitgliedern (Spec 027) (D25).
 - **FR-024**: Geräte der Admin-Vault MÜSSEN für ihre Zugriffe auf den Bucket die
-  Hauptzugangsdaten nutzen, die sie über die direkte Verbindung zwischen eigenen
-  Geräten (Spec 024) erhalten. Ein Gerät des Admins, das die Hauptzugangsdaten
-  noch nicht hat, DARF NICHT erneuern, wiederherstellen oder aufräumen (FR-018,
-  FR-029, FR-040), bis es sie erhalten hat.
+  Hauptzugangsdaten aus dem Passwortmanager der Vault nutzen, die der Datensync
+  von Spec 024 auf alle eigenen Geräte bringt. Jedes Gerät auf der aktuellen
+  Geräteliste der Admin-Vault, Hauptgerät oder verknüpft, DARF den Speicher
+  verwalten (D29). Ein Gerät des Admins, das die Hauptzugangsdaten noch nicht
+  hat, DARF NICHT erneuern, wiederherstellen oder aufräumen (FR-018, FR-029,
+  FR-040), bis es sie erhalten hat.
 - **FR-025**: Lesen und Hochladen MÜSSEN für die Mitglieder auch funktionieren,
   wenn kein Gerät der Admin-Vault online ist. Nur Einrichtung, Rechteänderungen,
   Erneuern, Prüfen der Versionierung (FR-013), Wiederherstellen (FR-029) und
@@ -721,11 +765,16 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
 
 **Ende eines Space und Hauptzugangsdaten**
 
-- **FR-033**: Die Hauptzugangsdaten DÜRFEN die Vault des Admins NICHT verlassen,
-  außer über die direkte Verbindung zu seinen eigenen Geräten (Spec 024,
-  Nur-direkt-Daten). Sie DÜRFEN weder an Mitglieder noch in Spaces,
-  Datenfreigaben, Postfächer oder Momentaufnahmen des Relays gelangen, auch nicht
-  verschlüsselt, und DÜRFEN in keinem Protokoll stehen.
+- **FR-033**: Die Hauptzugangsdaten und die Zugangsschlüssel, die der Admin
+  erzeugt, MÜSSEN im Passwortmanager der Admin-Vault liegen (geplante Spec 030,
+  D32). Sie sind gewöhnliche Vault-Daten im Bereich „Vault“ (D30): Sie MÜSSEN mit
+  dem Datensync von Spec 024 auf alle Geräte der Admin-Vault gelangen, direkt
+  oder verschlüsselt über das eigene Postfach der Vault, und mit der Vault
+  wiederherstellbar sein (Spec 026). Die Hauptzugangsdaten DÜRFEN weder an
+  Mitglieder noch in Spaces, Datenfreigaben oder deren Postfächer und
+  Momentaufnahmen gelangen, auch nicht verschlüsselt, und DÜRFEN in keinem
+  Protokoll stehen. Das Relay DARF sie nur verschlüsselt im eigenen Postfach der
+  Admin-Vault sehen.
 - **FR-034**: Hört ein Space oder hören die eigenen Ordner auf, einen Bucket zu
   nutzen (Wechsel nach FR-037, Rückkehr der eigenen Ordner zur direkten
   Übertragung), MUSS holzi alle Generationen aller Zugangsschlüssel dieses
@@ -761,17 +810,20 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
 ### Key Entities
 
 - **Speicherverbindung**: Anbieter, Endpunkt, Region, Adressierung und
-  Hauptzugangsdaten. Gehört einer Vault, liegt nur auf deren Geräten (FR-033) und
-  kann von mehreren Spaces und den eigenen Ordnern genutzt werden.
+  Hauptzugangsdaten. Gehört einer Vault, liegt in deren Passwortmanager und
+  damit auf allen ihren Geräten (FR-033) und kann von mehreren Spaces und den
+  eigenen Ordnern genutzt werden.
 - **Speicher des Space**: welches Backend ein Space nutzt und bei Backend B
   welcher Bucket und welche Aufbewahrungsfrist. Wird vom Admin geschrieben und mit den Daten des Space
   verteilt, ohne Hauptzugangsdaten.
 - **Zugangsschlüssel**: Art (nur Lesen, Lesen und Schreiben), Generation,
-  Kennung beim Anbieter (für den Widerruf) und die geheimen Schlüsseldaten. Die
-  Vault des Admins verzeichnet alle Generationen und ob sie widerrufen sind.
+  Kennung beim Anbieter (für den Widerruf) und die geheimen Schlüsseldaten.
+  Liegt im Passwortmanager der Admin-Vault und jeder Mitglieds-Vault, die ihn
+  erhalten hat. Die Vault des Admins verzeichnet alle Generationen und ob sie
+  widerrufen sind.
 - **Schlüsselumschlag für Zugangsschlüssel**: ein Zugangsschlüssel samt
-  Endpunkt, Region und Bucket, verschlüsselt an die Vault-Identität genau eines
-  Mitglieds.
+  Endpunkt, Region und Bucket, verschlüsselt an genau ein Gerät auf der
+  aktuellen Geräteliste einer Mitglieds-Vault; je Gerät ein Umschlag (D28).
 - **Eignungsergebnis**: Ergebnis (geeignet oder ungeeignet) und die Liste der
   erfüllten und nicht erfüllten Eigenschaften aus FR-004.
 - **Offener Widerruf**: ein Zugangsschlüssel, dessen Widerruf beim Anbieter
@@ -783,8 +835,9 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
 
 - **SC-001**: Speicher, Datenbank und Protokolle des Relays enthalten nach einer
   vollständigen Testreihe (Einrichten, Einladen, Hoch- und Herunterladen, Entzug,
-  Löschen) in 0 % der Fälle Hauptzugangsdaten, weder lesbar noch verschlüsselt,
-  und in 0 % der Fälle einen Zugangsschlüssel in lesbarer Form.
+  Löschen) in 0 % der Fälle Hauptzugangsdaten oder einen Zugangsschlüssel in
+  lesbarer Form, und Hauptzugangsdaten verschlüsselt in 0 % der Fälle außerhalb
+  des eigenen Postfachs der Admin-Vault.
 - **SC-002**: Nach dem Entfernen eines Mitglieds lehnt der Anbieter dessen alten
   Zugangsschlüssel in 100 % der Testläufe innerhalb von 5 Minuten ab, für jeden
   Anbieter mit dem Ergebnis „geeignet“ (die Prüfung nach FR-004 g hat diese Frist
@@ -824,14 +877,16 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   Erneuern des Inhaltsschlüssels; diese Spec hängt nur die Zugangsschlüssel daran.
   Die dort noch offenen Löschregeln (Entwurf §11) ändern hier nur, wer
   rechtmäßig löschen darf, nicht, wie der Speicher geschützt wird.
-- Spec 024 liefert die direkte Verbindung zwischen eigenen Geräten, die
-  Gerätebestätigung und die Liste der Nur-direkt-Daten; Spec 026 lässt diese
-  Daten auch verschlüsselt in keinem Postfach des Relays zu. Die Hauptzugangsdaten und geöffnete Zugangsschlüssel sind
-  Nur-direkt-Daten; FR-017 und FR-033 wiederholen das nur für sie. Ein zweites
-  Gerät des Admins, das nie gleichzeitig mit einem anderen eigenen Gerät online
-  ist, bekommt die Hauptzugangsdaten deshalb erst bei der nächsten direkten
-  Verbindung; dasselbe gilt für die Speicherverbindung der eigenen Ordner (User
-  Story 6).
+- Spec 024 liefert die Geräteliste und den Datensync zwischen eigenen Geräten,
+  Spec 026 das eigene Postfach der Vault und die Wiederherstellung. Die
+  Hauptzugangsdaten und die Zugangsschlüssel sind gewöhnliche Vault-Daten im
+  Passwortmanager (D30, D32); ein Gerät der Vault, das nie gleichzeitig mit
+  einem anderen eigenen Gerät online ist, bekommt sie deshalb über das eigene
+  Postfach, sobald die Vault ein Relay hat. Ohne Relay kommen sie erst bei der
+  nächsten direkten Verbindung an; dasselbe gilt für die Speicherverbindung der
+  eigenen Ordner (User Story 6).
+- Der Passwortmanager (geplante Spec 030) steht bereit, bevor diese Spec
+  umgesetzt wird. Diese Spec legt nur fest, welche Geheimnisse dort liegen.
 - Das Aufräumen alter Objekte (FR-040) übernimmt bei Backend B ein Gerät des
   Admins, weil nur es die Hauptzugangsdaten hat; bei Backend A regelt Spec 026,
   wer löschen darf.
@@ -842,8 +897,8 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
 - Ein Zugangsschlüssel gilt je Art für alle Mitglieder dieser Art, nicht je
   Mitglied. Entfernen eines Mitglieds erneuert deshalb den Schlüssel aller
   verbleibenden Mitglieder dieser Art. Schlüssel je Mitglied wären feiner, aber
-  der Entwurf sieht zwei Schlüssel je Space vor, und die Rotationskosten bleiben
-  klein.
+  der Entwurf sieht zwei Schlüssel je Space vor, und die Kosten der Erneuerung
+  bleiben klein.
 - Mitglieder mit Löschen erhalten denselben Schlüssel wie Mitglieder mit
   Schreiben, weil S3 Schreiben und Löschen nicht trennt. Die Unterscheidung prüfen
   die Empfänger im Dateiindex (Spec 027); User Story 4 fängt die Grenze ab.
@@ -861,8 +916,9 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   wer mit welchem Zugangsschlüssel zugreift. Das ist wie beim Relay (Entwurf
   §10.4) hingenommen.
 - Kosten beim Anbieter trägt der Nutzer, dem die Speicherverbindung gehört.
-- Verlust der Admin-Vault friert den Space ein (Entwurf §15, offene Frage 3);
-  eine Übergabe der Admin-Rolle ist nicht Teil dieser Spec.
+- Verlust der Admin-Vault ohne Wiederherstellung (Spec 026) friert den Space
+  ein (Entwurf §15, offene Frage 3); eine Übergabe der Admin-Rolle ist nicht Teil
+  dieser Spec.
 
 ## Nicht im Umfang
 
@@ -884,6 +940,8 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
 - Ein Umzug von Backend B auf „nur direkte Übertragung“; dabei gingen Dateien
   verloren, die kein Gerät hat.
 - Datenfreigaben (Spec 028); sie nutzen keinen Objektspeicher.
+- Der Passwortmanager selbst, seine Oberfläche und sein Zugriff für
+  Erweiterungen (geplante Spec 030).
 - Eigener Speicher für das Postfach eines Space; Dateiindex, Mitgliederliste und
   Schlüsselumschläge laufen weiter über das Relay des Admins, wenn eines
   eingerichtet ist, sonst nur direkt (Spec 026 und 027).

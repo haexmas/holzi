@@ -14,10 +14,13 @@ iroh, Dateiinhalte als geprüfte, fortsetzbare iroh-Blobs.
 
 ## Begriffe
 
-- **Vault-Identität**, **Geräteschlüssel**, **Gerätebestätigung**: wie in Spec 024. Die
-  Vault-Identität ist auf allen Geräten einer Vault gleich, jedes Gerät hat seinen eigenen
-  Geräteschlüssel, und eine Gerätebestätigung, signiert von der Vault-Identität, weist ein Gerät als
-  Gerät dieser Vault aus.
+- **Vault-Identität**, **Geräteschlüssel**, **Geräteliste**, **Hauptgerät**, **verknüpftes
+  Gerät**: wie in Spec 024. Der öffentliche Schlüssel der Vault-Identität ist die feste Adresse der
+  Vault; ihr privater Schlüssel liegt nur auf Hauptgeräten. Jedes Gerät hat seinen eigenen
+  Geräteschlüssel, der es nie verlässt. Die Geräteliste, signiert mit der Vault-Identität von einem
+  Hauptgerät, führt alle aktuellen Geräte der Vault; ein Gerät gehört zur Vault, solange es auf ihrer
+  aktuellen Geräteliste steht. Für den Dateisync sind Hauptgeräte und verknüpfte Geräte gleich:
+  Beide lesen und schreiben alle Daten der Vault (D27).
 - **Bereich**: der Geltungsbereich synchronisierter Daten: der Bereich „Vault“, der Bereich eines
   Space oder der Bereich einer Datenfreigabe (Spec 024). Alles in dieser Spec gehört zum Bereich
   „Vault“; das eigene Postfach der Vault auf einem Relay (Spec 026) gehört ebenfalls dazu und ist
@@ -53,9 +56,11 @@ iroh, Dateiinhalte als geprüfte, fortsetzbare iroh-Blobs.
   des Plans.
 - **Spec 024** (Identität, Geräteschlüssel, direkte Verbindung, Datensync zwischen eigenen Geräten):
   Voraussetzung. Der Dateiindex ist gewöhnliche Vault-Information und reist mit dem Datensync von
-  Spec 024 in Änderungspaketen. Nur Geräte mit gültiger Gerätebestätigung derselben Vault-Identität
-  tauschen Objekte aus. Ein Gerät, das Spec 024 aussperrt, bekommt keine Objekte mehr und liefert
-  keine mehr.
+  Spec 024 in Änderungspaketen. Nur Geräte auf der aktuellen Geräteliste der Vault tauschen Objekte
+  aus. Ein Gerät, das ein Hauptgerät von der Geräteliste entfernt (Spec 024), bekommt keine Objekte
+  mehr und liefert keine mehr; weil beim Entfernen eine neue Generation des Inhaltsschlüssels des
+  Bereichs „Vault“ entsteht, kann es neue Einträge des Dateiindex und damit die Schlüssel neuer
+  Dateiversionen nicht mehr entschlüsseln. Was schon auf ihm liegt, bleibt dort.
 - **Spec 027** (Spaces): Ein synchronisierter Ordner nutzt dieselben Abläufe wie ein Space mit der
   eigenen Vault als einzigem Mitglied (Entwurf §7), aber ohne eigenen Bereich: Sein Dateiindex
   gehört zum Bereich „Vault“ (FR-048). Spec 027 erweitert dieselbe Grundlage um weitere Mitglieder,
@@ -67,8 +72,8 @@ iroh, Dateiinhalte als geprüfte, fortsetzbare iroh-Blobs.
   026 in einer eigenen Anforderung für den Client fest; Speicher B für eigene Ordner legt Spec 029
   (User Story 6) fest. Weil ein Objekt schon hier verschlüsselt und nach seinem Inhalt benannt ist,
   können sie es unverändert ablegen. Über das eigene Postfach der Vault auf dem Relay (Spec 026)
-  darf auch der Dateiindex samt den Schlüsseln der Dateien reisen; er gehört nicht zu den
-  Nur-direkt-Daten (Spec 024, Nur-direkt-Daten).
+  darf auch der Dateiindex samt den Schlüsseln der Dateien reisen: Er ist gewöhnliche Vault-Information.
+  Ausschließlich direkt reist nur der private Schlüssel der Vault-Identität (Spec 024, D30).
 - [`013-vault-lifecycle-isolation`](../013-vault-lifecycle-isolation/spec.md): Synchronisiert wird
   nur während einer Vault-Session. Ist die Vault gesperrt oder geschlossen, ruht der Dateisync auf
   diesem Gerät.
@@ -88,11 +93,14 @@ iroh, Dateiinhalte als geprüfte, fortsetzbare iroh-Blobs.
 
 - Q: Wofür steht ein Geräteschlüssel, und darf dieselbe Vault auf mehreren Geräten zugleich laufen? → A: Ein Nostr-Schlüssel steht für ein Gerät; dieselbe Vault läuft gleichzeitig auf mehreren Geräten, jedes mit eigenem Schlüssel, die Vault-Identität ist auf allen gleich (D1).
 - Q: Was ist ein Space? → A: Ein Netzwerkordner nur für Dateien; `Lesen` heißt alle Dateien lesen, `Schreiben` heißt Dateien hinzufügen und ändern (D2). Der Dateisync zwischen eigenen Geräten ist derselbe Mechanismus mit der eigenen Vault als einzigem Mitglied.
-- Q: Wird MLS für Schlüssel verwendet? → A: Nein (D13). Schlüssel sind gewöhnliche synchronisierte Einträge; für den Bereich „Vault“ ist der Inhaltsschlüssel fest und wechselt nur mit der Vault-Identität.
+- Q: Wird MLS für Schlüssel verwendet? → A: Nein (D13). Schlüssel sind gewöhnliche synchronisierte Einträge; für den Bereich „Vault“ ist der Inhaltsschlüssel fest und wechselt nur mit der Vault-Identität. (Überholt durch D26 und D27: Die Vault-Identität wechselt nie; eine neue Generation des Inhaltsschlüssels des Bereichs „Vault“ entsteht, wenn ein Hauptgerät ein Gerät von der Geräteliste entfernt.)
 
 ### Session 2026-09-28
 
-- Q: Wer darf zwischen eigenen Geräten was? → A: Der private Schlüssel der Vault-Identität liegt auf jedem Gerät der Vault (D8). Alle eigenen Geräte sind gleich vertrauenswürdig; zwischen ihnen gibt es keine Rechteprüfung für Dateien.
+- Q: Wer darf zwischen eigenen Geräten was? → A: Der private Schlüssel der Vault-Identität liegt auf jedem Gerät der Vault (D8). Alle eigenen Geräte sind gleich vertrauenswürdig; zwischen ihnen gibt es keine Rechteprüfung für Dateien. (Überholt durch D27, was den privaten Schlüssel betrifft: Er liegt nur auf Hauptgeräten. Für Dateien gilt weiter: Alle Geräte auf der Geräteliste sind gleichgestellt, ohne Rechteprüfung.)
+- Q: Gibt es in v1 ein Rotieren der Vault-Identität? → A: Nein (D26). Ein verlorenes Gerät ist kein Problem, solange eine Kopie oder das Relay existiert und die Passphrase hält; ausgesperrt wird ein Gerät über die Geräteliste (D27).
+- Q: Wer darf Geräte hinzufügen und entfernen? → A: Nur Hauptgeräte, die den privaten Schlüssel der Vault-Identität haben; es kann mehrere geben. Beim Verknüpfen fragt holzi, ob der Schlüssel mit übertragen wird (Standard: nein). Verknüpfen ist der bevorzugte Weg, Kopieren der Datei bleibt möglich (D27).
+- Q: Welche Daten reisen nur über die direkte Verbindung zwischen eigenen Geräten? → A: Nur der private Schlüssel der Vault-Identität (D30). Geräteschlüssel verlassen ihr Gerät nie. Dateiindex und die Schlüssel der Dateien sind gewöhnliche Vault-Information und dürfen auch über das eigene Postfach der Vault reisen.
 - Q: Was passiert, wenn dieselbe Datei gleichzeitig auf zwei Geräten geändert wird? → A: Es entsteht eine Konfliktkopie (D10), kein stilles Überschreiben.
 - Q: Wo liegen Dateiinhalte, wenn Geräte nicht gleichzeitig online sind? → A: In v1 gibt es beide Speicher: den des öffentlichen Relays (A) und das eigene S3 des Nutzers (B) (D12). Beides kommt mit Spec 026 und 029; diese Spec überträgt nur direkt.
 - Q: Werden Dateien auf der direkten Verbindung zwischen eigenen Geräten zusätzlich verschlüsselt? → A: Ja. Das Relay ist nicht vertrauenswürdig (D11), und ein einziges Format erlaubt, dass jedes Gerät und später jeder Speicher ein Objekt aufbewahrt und weitergibt, ohne den Inhalt zu sehen (Entwurf §5.1, §8.1).
@@ -337,8 +345,13 @@ Dateien, und der Ordner steht nicht mehr in der Liste.
   übersprungen, gemeldet und später erneut versucht.
 - Die Uhren zweier Geräte gehen unterschiedlich. Ob Änderungen gleichzeitig waren, hängt nicht an
   der Uhrzeit, sondern daran, welche Fassung jedes Gerät zuletzt kannte.
-- Eine Vault-Datei wird auf ein neues Gerät kopiert (Spec 024). Das neue Gerät übernimmt keine
-  Bindungen des Quellgeräts; alle Ordner erscheinen dort als verfügbar, nicht gebunden.
+- Ein neues Gerät kommt zur Vault, verknüpft oder als Kopie der Vault-Datei (Spec 024). Es übernimmt
+  keine Bindungen eines anderen Geräts; alle Ordner erscheinen dort als verfügbar, nicht gebunden.
+  Eine Kopie tauscht erst Objekte aus, wenn ein Hauptgerät sie auf die Geräteliste gesetzt hat
+  (FR-015).
+- Ein Hauptgerät entfernt ein Gerät von der Geräteliste. Die übrigen Geräte liefern ihm keine
+  Objekte mehr und nehmen keine mehr von ihm an; seine Dateien in gebundenen Ordnern bleiben auf ihm
+  liegen, holzi löscht dort nichts aus der Ferne.
 - Nur ein Gerät hat einen Ordner gebunden. Es hält den Dateiindex aktuell; ein zweites Gerät, das
   später bindet, bekommt den Stand von dort.
 - Der Dateiindex kommt über Spec 024 früher an als die Inhalte. Die Dateien erscheinen erst, wenn
@@ -396,8 +409,9 @@ Dateien, und der Ordner steht nicht mehr in der Liste.
 - **FR-014**: Dateiinhalte MÜSSEN direkt zwischen eigenen, online befindlichen Geräten übertragen
   werden. Ein Gerät MUSS eine Fassung von jedem eigenen Gerät holen können, das sie vollständig hat,
   nicht nur vom Gerät, auf dem sie entstand.
-- **FR-015**: Nur Geräte mit gültiger Gerätebestätigung derselben Vault-Identität DÜRFEN Objekte
-  anfragen oder liefern.
+- **FR-015**: Nur Geräte, deren Geräteschlüssel auf der aktuellen Geräteliste der Vault steht
+  (Spec 024), DÜRFEN Objekte anfragen oder liefern. Einem Gerät, das nicht oder nicht mehr darauf
+  steht, DARF kein Gerät Objekte liefern oder Objekte von ihm annehmen.
 - **FR-016**: Eine abgebrochene Übertragung MUSS fortgesetzt werden können, auch von einem anderen
   Gerät, ohne bereits empfangene und geprüfte Teile erneut zu übertragen.
 - **FR-017**: Die Größe einer Datei DARF nur durch Speicherplatz und Dateisystem der beteiligten
@@ -415,8 +429,8 @@ Dateien, und der Ordner steht nicht mehr in der Liste.
 
 - **FR-022**: Jede Dateiversion MUSS als Objekt verschlüsselt werden, mit einem eigenen Schlüssel je
   Datei, der nur im Dateiindex steht. Das gilt auch auf der direkten Verbindung zwischen eigenen
-  Geräten. Die Schlüssel der Dateien gehören nicht zu den Nur-direkt-Daten (Spec 024,
-  Nur-direkt-Daten): Mit dem Dateiindex DÜRFEN sie, verschlüsselt mit dem Inhaltsschlüssel des
+  Geräten. Die Schlüssel der Dateien sind gewöhnliche Vault-Information (Spec 024, D30): Mit dem
+  Dateiindex DÜRFEN sie, verschlüsselt mit dem Inhaltsschlüssel des
   Bereichs „Vault“, auch über das eigene Postfach der Vault reisen, DÜRFEN aber in keinen anderen
   Bereich gelangen.
 - **FR-023**: Ein Objekt MUSS nach der Prüfsumme seines verschlüsselten Inhalts benannt sein und
@@ -558,7 +572,7 @@ Dateien, und der Ordner steht nicht mehr in der Liste.
 - Die synchronisierten Dateien liegen in einem Ordner des Dateisystems, den der Nutzer auf jedem
   Gerät selbst wählt, wie bei Syncthing oder Dropbox (Empfehlung zur offenen Frage in FR-002).
   Andere Programme sehen und bearbeiten die Dateien dort direkt.
-- Spec 024 liefert Vault-Identität, Geräteschlüssel, Gerätebestätigungen, die direkte Verbindung
+- Spec 024 liefert Vault-Identität, Geräteschlüssel, die Geräteliste, die direkte Verbindung
   zwischen eigenen Geräten und den Datensync der Vault. Diese Spec baut darauf auf und fügt keine
   eigene Anmeldung hinzu.
 - Übertragen wird über iroh, Dateiinhalte als geprüfte, fortsetzbare iroh-Blobs (Betreibervorgabe).

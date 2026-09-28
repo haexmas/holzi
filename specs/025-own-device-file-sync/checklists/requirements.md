@@ -53,8 +53,8 @@
   name (FR-033, FR-034). The name pattern itself is fixed:
   `<Name> (Konflikt <Gerätename> <Datum Uhrzeit>).<Endung>`.
 - Cross-spec alignment (coordinator resolutions): the Dateiindex including per-file keys may travel
-  through the vault's own Relay-Postfach and is not Nur-direkt-Daten (FR-013, FR-022, referencing
-  Spec 024, Nur-direkt-Daten); folders are managed in „Föderation“ → Unteransicht „Ordner“; objects
+  through the vault's own Relay-Postfach as ordinary vault data; only the Vault-Identität private
+  key is direct-only (FR-013, FR-022, D30); folders are managed in „Föderation“ → Unteransicht „Ordner“; objects
   of own folders on backend A are specified in Spec 026, backend B in Spec 029 User Story 6;
   FR-048 uses the Space flows without an own Bereich; pausing (FR-044) stops local scanning, writing
   files to disk and object transfer; Spec 024's data sync continues, incoming Dateiindex changes are
@@ -68,3 +68,7 @@
 - 2026-09-28: the operator answered all clarification questions for this spec; the markers are
   resolved in the spec and recorded under Clarifications. Notes above that describe open markers are
   historical.
+- 2026-09-28 (D26, D27, D30): terminology moved to the Geräteliste of spec 024 (Begriffe,
+  FR-015, Beziehung zu Spec 024, Edge Cases, Assumptions); no rotation of the Vault-Identität; a
+  device removed from the Geräteliste gets and serves no objects and cannot decrypt new Dateiindex
+  entries; D8 and the D13 remark on the Vault key marked as superseded in the Clarifications.

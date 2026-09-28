@@ -67,16 +67,20 @@
     unreferenced Objekte (backend A via relay, spec 026 FR-028; backend B with
     admin credentials). FR-016 notes that members never delete objects
     themselves.
-  - Vault-Identität rotation of members and admin follows spec 024 (Edge
-    Cases); the out-of-scope item for it is gone.
+  - Identity model v2 (2026-09-28): no Vault-Identität rotation in v1 (D26);
+    FR-043 now wraps every key generation to each device on the member
+    vaults' current Gerätelisten (D28); any device of the admin vault may
+    manage (FR-019, D29); direct connections and signatures are checked
+    against the Geräteliste (FR-026, FR-039); relay syncs only Postfächer,
+    files only via Speicher-Backend A or B (FR-040, D32).
   - FR-026 cites spec 024 for atomicity (package whole, Momentaufnahme per
     change). FR-029 uses the shared Konfliktkopie name pattern.
   - Management lives in settings category „Föderation“, sub-view „Spaces“; the
     storage backend is set in the space's view (FR-037). Backend switch comes
     with spec 029 User Story 8; the choice at creation is mandatory (FR-003).
 - FR-022 forbids encrypting with a generation that is wrapped to a vault no
-  longer on the merged member list. Without it, two admin devices rotating
-  concurrently (one removing a member) could leave the removed member able to
+  longer on the merged member list. Without it, two admin devices
+  concurrently creating generations (one removing a member) could leave the removed member able to
   read new content through the other device's generation.
 - Operator constraints (iroh, Nostr, NIP-44 v2, encrypted Nostr direct message
   for invites) are named in the Input line and, for the invite transport, in

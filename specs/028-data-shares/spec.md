@@ -16,13 +16,20 @@ Synchronisierung oder Rechten in Berührung.
 
 ## Begriffe
 
-- **Vault-Identität**: der Schlüssel, der eine Vault nach außen vertritt. Er ist
-  auf allen Geräten derselben Vault gleich (Spec 024). Rechte und verschlüsselte
-  Schlüssel gehen immer an eine Vault-Identität, nie an ein Gerät.
-- **Geräteschlüssel**: der eigene Schlüssel eines Geräts; er unterschreibt die
-  Änderungen, die auf diesem Gerät entstehen (Spec 024).
-- **Gerätebestätigung**: die von der Vault-Identität unterschriebene Aussage,
-  dass ein Geräteschlüssel zu dieser Vault gehört (Spec 024).
+- **Vault-Identität**: das Schlüsselpaar, das eine Vault nach außen vertritt.
+  Sein öffentlicher Schlüssel ist die feste Adresse der Vault; Rechte und
+  Mitgliederlisten nennen immer eine Vault-Identität. Der private Schlüssel
+  liegt nur auf Hauptgeräten (Spec 024).
+- **Geräteschlüssel**: das eigene Schlüsselpaar eines Geräts; er verlässt das
+  Gerät nie, unterschreibt alles, was auf diesem Gerät entsteht, und empfängt
+  die verschlüsselten Inhaltsschlüssel (Spec 024, D28).
+- **Geräteliste**: die mit der Vault-Identität von einem Hauptgerät
+  unterschriebene Liste aller aktuellen Geräte einer Vault (öffentlicher
+  Geräteschlüssel, Rolle Hauptgerät oder verknüpftes Gerät, Name,
+  Netzwerkkennung) mit einer Generation (Spec 024). Ein Gerät gilt für eine
+  Vault nur, wenn es auf deren aktueller Geräteliste steht. **Hauptgeräte**
+  dürfen Geräte hinzufügen und entfernen, **verknüpfte Geräte** nicht;
+  Datenfreigaben verwalten dürfen beide (D29).
 - **Bereich**: eine Einheit, die gemeinsam synchronisiert und verschlüsselt
   wird: der Bereich Vault, der Bereich eines Space oder der Bereich einer
   Datenfreigabe.
@@ -36,7 +43,7 @@ Synchronisierung oder Rechten in Berührung.
   Mitgliederliste steht damit fest.
 - **Relay**: der nicht vertrauenswürdige Server aus Spec 026. Es speichert und
   verteilt nur Verschlüsseltes. **Postfach**: der Speicherplatz eines Bereichs
-  auf dem Relay. **Mitgliederliste**: die vom Eigentümer unterschriebene Liste
+  auf dem Relay. **Mitgliederliste**: die von einem Gerät des Eigentümers unterschriebene Liste
   der Vault-Identitäten und ihrer Fähigkeiten je Bereich, die auf das Relay
   hochgeladen wird. Ihre **Generation** ist die Schlüsselgeneration, zu der sie
   gehört. **Grenze**: der Teil einer Mitgliederliste, die eine Vault entfernt
@@ -53,14 +60,8 @@ Synchronisierung oder Rechten in Berührung.
   einzelnen Nutzern. Sie hat genau einen **Eigentümer (Admin der
   Datenfreigabe)**, die Vault, die sie angelegt hat, und null oder mehr
   **Empfänger**. Diese Spec sagt im Folgenden kurz „Eigentümer“. Die
-  Eigentümerschaft ist nicht übertragbar, auch nicht beim Rotieren der
-  Vault-Identität (D23).
-- **Schließen**: eine mit der Vault-Identität des Eigentümers unterschriebene,
-  endgültige Aussage, dass die Datenfreigabe endet. holzi stellt sie beim
-  Rotieren der Vault-Identität des Eigentümers mit der alten Identität aus
-  (Spec 024). Danach nimmt das Relay für die Datenfreigabe nichts mehr an
-  (Spec 026), und eine geschlossene Datenfreigabe lässt sich nicht wieder
-  öffnen (FR-043).
+  Eigentümerschaft ist nicht übertragbar (D23, D26). Jedes Gerät auf der
+  aktuellen Geräteliste des Eigentümers darf für ihn handeln (D29).
 - **Freigabetyp**: eine Art teilbarer Daten, die eine Erweiterung erklärt,
   entweder ein einzelner Eintrag (ein Kalendereintrag) oder eine Sammlung (ein
   ganzer Kalender, eine Einkaufsliste).
@@ -91,19 +92,19 @@ Synchronisierung oder Rechten in Berührung.
   Die Zugehörigkeit eines Eintrags zu einer Datenfreigabe wird aus den
   erklärten Fremdschlüsseln berechnet (FR-012). Die Tabellenliste als Schutz vor
   Datenabfluss bleibt als Schutz beim Senden (FR-013).
-- **Spec 024** (Vault-Identität, Geräteschlüssel und Sync zwischen eigenen
-  Geräten): liefert Vault-Identität, Gerätebestätigung, unterschriebene
-  Änderungen mit echtem Autor, das Führen des Erstellers durch holzi und die
-  feste Liste, welche Daten die Vault überhaupt verlassen dürfen, einschließlich
-  der Nur-direkt-Daten. Empfangene Datenfreigaben erreichen die übrigen Geräte
-  des Empfängers über diesen Sync. Spec 024 legt außerdem fest, dass ein
-  Änderungspaket nur als Ganzes angewendet wird, und wie eine Vault-Identität
-  nach Verlust eines Geräts erneuert wird („Schließen und Verlassen beim
-  Rotieren“): Mit der alten Identität schließt holzi jede Datenfreigabe, deren
-  Eigentümer die Vault ist, und tritt aus jeder anderen aus (FR-043). Die
-  Eigentümerschaft geht dabei nirgendwohin über (D23).
-- **Spec 026** (Relay): liefert Postfach und Mitgliederliste. Jede
-  Datenfreigabe ist dort ein eigener Bereich. Das Relay prüft nur grob Lesen
+- **Spec 024** (Vault-Identität, Geräteschlüssel, Geräteliste und Sync
+  zwischen eigenen Geräten): liefert Vault-Identität, Geräteliste mit
+  Hauptgeräten und verknüpften Geräten, unterschriebene Änderungen mit echtem
+  Autor, das Führen des Erstellers durch holzi und die feste Liste, welche
+  Daten die Vault überhaupt verlassen dürfen, einschließlich der
+  Nur-direkt-Daten (nur noch der private Schlüssel der Vault-Identität, D30).
+  Empfangene Datenfreigaben und die empfangenen Inhaltsschlüssel erreichen die
+  übrigen Geräte des Empfängers über diesen Sync (FR-022, D28). Spec 024 legt
+  außerdem fest, dass ein Änderungspaket nur als Ganzes angewendet wird. Ein
+  Rotieren der Vault-Identität gibt es in v1 nicht (D26); ein verlorenes Gerät
+  entfernt ein Hauptgerät aus der Geräteliste (Spec 024, D27).
+- **Spec 026** (Relay): liefert Postfach, Mitgliederliste und die Prüfung
+  der Geräteliste am Relay. Jede Datenfreigabe ist dort ein eigener Bereich. Das Relay prüft nur grob Lesen
   gegen Schreiben; alle feineren Regeln dieser Spec prüft jeder Empfänger
   selbst.
 - **Spec 027** (Spaces): Spaces teilen Dateien, Datenfreigaben teilen Daten.
@@ -157,11 +158,25 @@ Synchronisierung oder Rechten in Berührung.
   abgelehnt, nicht nur die Erklärung.
 - Q: Wie ist Löschen geregelt? → A: „Schreiben“ erlaubt das Löschen eigener Einträge (Ersteller = eigene Vault); fremde Einträge löschen erfordert die Stufe „Löschen“ (FR-028). Gilt ebenso für Spec 027.
 - Q: Wie wirkt ein Entzug bei gleichzeitigem Schreiben? → A: Nur nach vorn, mit Prüfung gegen die neueste bekannte Mitgliederliste beim Empfang und sofortiger Sperre am Relay; das verbleibende kleine Zeitfenster wird akzeptiert (FR-034). Gilt ebenso für Spec 027.
-- Q: Kann die Admin-Rolle übertragen werden, etwa nach dem Rotieren der
-  Vault-Identität? → A: Nein, in v1 gar nicht, und nichts hängt von der
-  Zustimmung der Mitglieder ab. Beim Rotieren schließt holzi mit der alten
-  Identität alle Bereiche, die die Vault verwaltet, und verlässt alle anderen
-  (D23).
+- Q: Kann die Admin-Rolle übertragen werden? → A: Nein, in v1 gar nicht, und
+  nichts hängt von der Zustimmung der Mitglieder ab (D23). (Das Schließen und
+  Verlassen aller Bereiche bei einem Wechsel der Vault-Identität ist überholt
+  durch D26.)
+- Q: Gibt es in v1 ein Rotieren der Vault-Identität? → A: Nein (D26). Ein
+  verlorenes Gerät ist kein Problem, solange eine Kopie oder das Relay existiert
+  und die Passphrase hält; ausgesperrt wird ein Gerät über die Geräteliste
+  (D27).
+- Q: An wen werden Schlüssel von Spaces und Datenfreigaben verschlüsselt? → A:
+  An jedes Gerät der Mitglieds-Vaults laut deren aktueller Geräteliste (D28).
+- Q: Welche Geräte des Eigentümers dürfen eine Datenfreigabe verwalten? → A:
+  Jedes Gerät auf der aktuellen Geräteliste der Eigentümer-Vault, auch ein
+  verknüpftes Gerät; es unterschreibt mit seinem Geräteschlüssel. Nur das
+  Verwalten der Geräte selbst bleibt Hauptgeräten vorbehalten (D29).
+- Q: Sind entpackte Inhaltsschlüssel einer empfangenen Datenfreigabe
+  Nur-direkt-Daten? → A: Nein. Nur der private Schlüssel der Vault-Identität
+  reist ausschließlich direkt; entpackte Inhaltsschlüssel sind gewöhnliche
+  Vault-Daten, die auch über das Postfach der Vault synchronisiert werden und
+  wiederherstellbar sind (D30).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -479,34 +494,31 @@ angezeigter ursprünglicher Autorin.
   Gerät des Eigentümers unterschreibt die zusammengeführte Mitgliederliste mit
   einer höheren Generation neu (FR-016); da nur der Eigentümer Rechte schreibt,
   gibt es keinen Streit zwischen Admins.
-- Die Vault des Eigentümers geht vollständig verloren. Die Datenfreigabe ist
+- Die Vault des Eigentümers geht vollständig verloren (kein Gerät, keine Kopie
+  und kein Wiederherstellungspaket mehr, Spec 026). Die Datenfreigabe ist
   eingefroren: Empfänger behalten ihre Daten und können mit ihren Rechten
   weiter untereinander arbeiten, aber niemand kann Rechte ändern oder
   Überlappungen weitergeben. Die Eigentümerschaft lässt sich nicht übertragen
   (D23).
-- Der Eigentümer erneuert seine Vault-Identität nach Verlust eines Geräts. Es
-  gilt Spec 024, „Schließen und Verlassen beim Rotieren“: holzi schließt jede
-  seiner Datenfreigaben mit der alten Identität, bevor es auf die neue wechselt
-  (FR-043). Das Relay nimmt danach für die Datenfreigabe nichts mehr an und
-  hält das Postfach nur noch lesbar, bis die letzte Mitgliederliste abläuft
-  (Spec 026). Empfänger sehen die Freigabe als „vom Admin geschlossen“,
-  behalten die empfangenen Einträge als lokale Kopie und synchronisieren nicht
-  mehr. Mit der neuen Identität kann der Eigentümer die Datenfreigabe neu
-  anlegen und die Empfänger erneut einladen; sie nehmen diese Einladung wie
-  jede andere an. Die geschlossene Datenfreigabe lässt sich nicht wieder
-  öffnen.
-- Ein Empfänger erneuert seine Vault-Identität nach Verlust eines Geräts. holzi
-  tritt mit der alten Identität aus jeder Datenfreigabe aus, wie bei einem
-  gewöhnlichen Austritt (FR-026). Will der Empfänger wieder dabei sein, lädt der
-  Eigentümer ihn wie einen neuen Empfänger ein: Der Empfänger gibt ihm seine
-  neue Vault-Identität auf einem Weg außerhalb von holzi.
-- Ein Dieb hält den alten Schlüssel des Eigentümers. Er kann die Datenfreigabe
-  höchstens ebenfalls schließen (dasselbe Ergebnis) oder sie weiterführen, bis
-  das Rotieren des Eigentümers sie schließt. Die Eigentümerschaft kann er
-  nirgendwohin übertragen (D23).
-- Die Vault rotiert, während kein Gerät online ist. Schließen und Austritt
-  gehen hinaus, sobald ein Gerät online ist (Spec 024). Bis dahin kann der Dieb
-  mit der alten Identität handeln; dieses Risiko wird für v1 hingenommen.
+- Ein Gerät des Eigentümers geht verloren oder wird gestohlen. Solange die
+  Vault eine weitere Kopie oder ein Postfach am Relay hat und die Passphrase
+  hält, ist das kein Problem für die Datenfreigabe (D26). Wer das Gerät
+  entsperrt, kann bis zu seinem Entfernen für den Eigentümer handeln, weil
+  jedes Gerät der Eigentümer-Vault die Datenfreigabe verwalten darf (D29).
+  Entfernt ein Hauptgerät es aus der Geräteliste (Spec 024), weisen Relay und
+  Empfänger seine Unterschriften und Verbindungen ab, und ein verbliebenes
+  Gerät des Eigentümers unterschreibt die aktuelle Mitgliederliste neu
+  (FR-016). Dieses Risiko wird für v1 hingenommen.
+- Ein Gerät eines Empfängers wird entfernt. Sobald die neue Geräteliste der
+  Empfänger-Vault bekannt ist, lehnen Relay und alle Beteiligten seine
+  Änderungen ab (FR-023), und spätere Schlüsselgenerationen werden nicht mehr
+  an es verschlüsselt (FR-043). Was es schon hat, bleibt bei ihm; ein Löschen
+  aus der Ferne gibt es nicht (Spec 024).
+- Ein Empfänger verknüpft ein neues Gerät. Es erhält die empfangenen Einträge
+  und die bisherigen Inhaltsschlüssel über den Sync der eigenen Vault (FR-022);
+  spätere Generationen verschlüsselt ein Gerät des Eigentümers direkt an es,
+  sobald es die neue Geräteliste kennt (FR-043). Der Eigentümer tut dafür
+  nichts, erfährt aber, wie viele Geräte die Empfänger-Vault hat (D28).
 - Ein entfernter Empfänger schreibt weiter mit der älteren Schlüsselgeneration,
   die er noch hat. Das Relay lehnt das ab (Spec 026). Was direkte oder
   anderweitig eintreffende Pakete angeht, siehe FR-034.
@@ -575,8 +587,9 @@ angezeigter ursprünglicher Autorin.
   Lesen) oder Löschen (umfasst Schreiben). Freie Kombinationen gibt es nicht.
   Admin DARF NICHT wählbar sein.
 - **FR-009**: Rechte MÜSSEN an Vault-Identitäten gehen, nie an Geräte. Der
-  Eigentümer erfährt nicht, wie viele Geräte ein Empfänger hat, und der
-  Empfänger kann Geräte hinzufügen, ohne dass der Eigentümer etwas tut.
+  Empfänger kann Geräte hinzufügen, ohne dass der Eigentümer etwas tut. Weil
+  Inhaltsschlüssel je Gerät verschlüsselt werden (FR-043), erfährt der
+  Eigentümer, wie viele Geräte ein Empfänger hat; das wird hingenommen (D28).
 - **FR-010**: Bestätigt der Eigentümer einen neuen Empfänger, MUSS holzi: die
   Datenfreigabe anlegen, falls es sie noch nicht gibt; das Recht mit dem Stand
   „eingeladen“ speichern; und dem Eingeladenen eine Einladung ohne Schlüssel
@@ -585,8 +598,8 @@ angezeigter ursprünglicher Autorin.
   Inhaltsschlüssel; das Relay gibt ihm daher keinen Zugriff. Erst wenn ein
   Gerät des Eigentümers die unterschriebene Annahme (FR-019) verarbeitet, MUSS
   es den Empfänger aufnehmen: eine neue Schlüsselgeneration anlegen, deren
-  Inhaltsschlüssel verschlüsselt an die Vault-Identität des Eigentümers und
-  jedes Empfängers der neuen Mitgliederliste geht, einmal je Vault, dem neuen
+  Inhaltsschlüssel verschlüsselt an jedes Gerät der Vault des Eigentümers und
+  jedes Empfängers der neuen Mitgliederliste geht (FR-043), dem neuen
   Empfänger zusätzlich die älteren Generationen geben (FR-011) und die neue
   Mitgliederliste mit dieser Generation auf das Relay laden (Spec 026). Wie
   bei Spaces (Spec 027) erzeugt jede Änderung der Mitglieder (Aufnahme nach
@@ -596,7 +609,8 @@ angezeigter ursprünglicher Autorin.
 - **FR-011**: Ein neu hinzugefügter Empfänger MUSS nach der Annahme den ganzen
   aktuellen Stand der Datenfreigabe erhalten, nicht nur die Änderungen nach
   seiner Einladung. Dafür MUSS holzi ihm zusätzlich die Inhaltsschlüssel aller
-  älteren Schlüsselgenerationen verschlüsselt an seine Vault-Identität geben,
+  älteren Schlüsselgenerationen verschlüsselt an jedes seiner Geräte geben
+  (FR-043),
   sodass er auch Änderungen von vor seiner Einladung lesen kann.
 - **FR-012**: Zu einer Datenfreigabe MÜSSEN genau die Wurzel und alle
   zugehörigen Einträge gehören, berechnet aus den erklärten Fremdschlüsseln.
@@ -615,7 +629,9 @@ angezeigter ursprünglicher Autorin.
   erreichen. Diese Grenze MUSS als feste Liste des Erlaubten umgesetzt sein,
   nicht als Liste des Verbotenen.
 - **FR-014**: Nur der Eigentümer DARF Empfänger hinzufügen, Fähigkeiten ändern
-  und Empfänger entfernen (D6). Für Einträge, die zu einer empfangenen
+  und Empfänger entfernen (D6). Für ihn handeln darf jedes Gerät auf der
+  aktuellen Geräteliste seiner Vault, auch ein verknüpftes Gerät; es
+  unterschreibt mit seinem Geräteschlüssel (D29). Für Einträge, die zu einer empfangenen
   Datenfreigabe gehören, DARF holzi keinen Teilen-Dialog öffnen; eine solche
   Anfrage der Erweiterung wird mit einem Hinweis abgelehnt (D7). Das gilt auch
   für Einträge, die der Empfänger selbst in der Freigabe angelegt hat.
@@ -641,7 +657,10 @@ angezeigter ursprünglicher Autorin.
   DARF ein Gerät nur eine Schlüsselgeneration verwenden, deren
   Inhaltsschlüssel an keine inzwischen entfernte Vault verschlüsselt ist; gibt
   es keine, MUSS ein Gerät des Eigentümers eine neue anlegen; (d) nur Geräte
-  des Eigentümers veröffentlichen Mitgliederlisten, doch zwei von ihnen können
+  auf der aktuellen Geräteliste des Eigentümers veröffentlichen
+  Mitgliederlisten (D29); entfernt die Vault des Eigentümers ein Gerät, das die
+  aktuelle Mitgliederliste unterschrieben hat, MUSS ein verbliebenes Gerät sie
+  neu unterschreiben und hochladen; zwei Geräte des Eigentümers können
   verschiedene Listen mit derselben Generation veröffentlichen. Unter gültigen
   Listen derselben Generation MUSS beim Relay und bei jedem Empfänger die mit
   dem lexikografisch kleinsten Hash der Liste gelten; das Relay ersetzt eine
@@ -662,8 +681,9 @@ angezeigter ursprünglicher Autorin.
 - **FR-019**: Eine Einladung MUSS zeigen: Name und Vault-Identität des
   Eigentümers, Erweiterung, Freigabetyp, Beschriftung der Wurzel und angebotene
   Fähigkeiten. Der Empfänger MUSS annehmen oder ablehnen können. Die Annahme
-  ist eine von seiner Vault-Identität unterschriebene Antwort an den
-  Eigentümer. Bis ein Gerät des Eigentümers sie nach FR-010 verarbeitet hat,
+  ist eine Antwort an den Eigentümer, unterschrieben vom Geräteschlüssel des
+  annehmenden Geräts, gültig, wenn es auf der aktuellen Geräteliste der
+  Empfänger-Vault steht; sie bringt diese Geräteliste mit. Bis ein Gerät des Eigentümers sie nach FR-010 verarbeitet hat,
   MUSS die Einladung beim Empfänger „angenommen, wartet auf Admin“ zeigen; er
   hat bis dahin keinen Schlüssel und keinen Zugriff am Relay. Vor der
   Aufnahme DARF nichts aus der Freigabe in seiner Vault gespeichert werden
@@ -678,16 +698,18 @@ angezeigter ursprünglicher Autorin.
 - **FR-021**: Nach der Annahme MÜSSEN die Daten in den Tabellen derselben
   Erweiterung in der Vault des Empfängers landen. holzi MUSS festhalten, welche
   Einträge zu welcher empfangenen Datenfreigabe gehören.
-- **FR-022**: Empfangene Daten und der an die Vault-Identität verschlüsselte
-  Inhaltsschlüssel MÜSSEN auf alle Geräte des Empfängers gelangen, über den
-  Sync zwischen eigenen Geräten (Spec 024). Entpackte Inhaltsschlüssel sind
-  Nur-direkt-Daten (Spec 024, Nur-direkt-Daten): Jedes Gerät entpackt den
-  verschlüsselten Inhaltsschlüssel selbst, und ein entpackter
-  Inhaltsschlüssel DARF kein Gerät verlassen.
+- **FR-022**: Empfangene Daten und die empfangenen Inhaltsschlüssel MÜSSEN auf
+  alle Geräte des Empfängers gelangen, über den Sync zwischen eigenen Geräten
+  (Spec 024). Das Gerät, das einen an seinen Geräteschlüssel verschlüsselten
+  Inhaltsschlüssel entpackt, MUSS ihn in den Daten der eigenen Vault ablegen
+  (D28). Entpackte Inhaltsschlüssel sind gewöhnliche Vault-Daten, keine
+  Nur-direkt-Daten: Sie reisen im Bereich „Vault“ auch über das Postfach der
+  Vault und sind wiederherstellbar (D30). Einen Bereich außer dem Bereich
+  „Vault“ DÜRFEN sie nie erreichen (FR-013).
 - **FR-023**: Jede Vault, die Änderungen einer Datenfreigabe empfängt
   (Eigentümer wie Empfänger), MUSS eine Änderung nur zulassen, wenn: (a) ihre
-  Unterschrift gültig ist und die Gerätebestätigung das Gerät der
-  Vault-Identität des Autors zuordnet; (b) ihre Tabelle zu den erklärten
+  Unterschrift gültig ist und das unterschreibende Gerät auf der aktuellen
+  Geräteliste der Vault des Autors steht; (b) ihre Tabelle zu den erklärten
   Tabellen des Freigabetyps derselben Erweiterung gehört; (c) bei Anlegen und
   Ändern der Eintrag nach der Änderung von der Wurzel aus erreichbar ist, ein
   neuer Eintrag also einen Fremdschlüssel in die Freigabe trägt; Löschungen
@@ -737,7 +759,9 @@ angezeigter ursprünglicher Autorin.
   anderen Empfänger erreichen, auch wenn der Eigentümer offline ist (über das
   Postfach, Spec 026). Sind Geräte verschiedener Beteiligter gleichzeitig
   online, DÜRFEN sie die Änderungen dieser Datenfreigabe auch direkt
-  austauschen (Spec 027, direkte Verbindung zwischen Mitgliedern).
+  austauschen (Spec 027, direkte Verbindung zwischen Mitgliedern): Jedes Gerät
+  weist sich mit seinem Geräteschlüssel aus, der auf der aktuellen Geräteliste
+  einer Vault der Mitgliederliste oder des Eigentümers stehen MUSS.
 - **FR-031**: Gleichzeitige Änderungen desselben Feldes MÜSSEN sich bei allen
   Beteiligten gleich auflösen, nach denselben Regeln wie der Sync zwischen
   eigenen Geräten. Konfliktkopien gibt es für Daten nicht.
@@ -748,8 +772,8 @@ angezeigter ursprünglicher Autorin.
   und Empfänger entfernen können. Dabei MUSS holzi eine neue Mitgliederliste auf
   das Relay laden, sodass es den Empfänger sofort nach den neuen Rechten
   behandelt, und eine neue Schlüsselgeneration anlegen, die nur an die
-  verbliebenen Empfänger geht (wie bei jeder Änderung der Mitglieder,
-  FR-010).
+  verbliebenen Empfänger geht, an jedes ihrer Geräte (wie bei jeder Änderung
+  der Mitglieder, FR-010, FR-043).
 - **FR-033**: Nach einem Entfernen DARF der entfernte Empfänger keine Änderung
   mehr lesen können, die mit einer späteren Schlüsselgeneration verschlüsselt
   ist.
@@ -803,23 +827,20 @@ angezeigter ursprünglicher Autorin.
   Freigaben, MUSS er nur einmal in dessen Vault liegen. Endet eine dieser
   Freigaben, bleibt er, solange eine andere ihn umfasst.
 
-**Rotieren der Vault-Identität**
+**Schlüssel je Gerät**
 
-- **FR-043** (Schließen beim Rotieren): Rotiert die Vault des Eigentümers ihre
-  Vault-Identität (Spec 024, „Schließen und Verlassen beim Rotieren“), MUSS
-  holzi jede ihrer Datenfreigaben mit der alten Identität schließen, bevor es
-  auf die neue wechselt; rotiert die Vault eines Empfängers, MUSS holzi mit der
-  alten Identität austreten. Anders als beim Austritt nach FR-026 MUSS der
-  Empfänger dabei seine empfangenen Einträge behalten, gekennzeichnet als
-  „Freigabe beendet“ wie in FR-035. Das Schließen ist endgültig: Eine
-  geschlossene Datenfreigabe DARF sich NICHT wieder öffnen lassen, auch nicht
-  vom Eigentümer, und holzi MUSS danach für sie nichts mehr hochladen (das
-  Relay nimmt ebenfalls nichts mehr an, Spec 026). Sobald ein Gerät eines
-  Empfängers das Schließen erfährt, MUSS es die Freigabe als „vom Admin
-  geschlossen“ zeigen, die Synchronisierung beenden und die empfangenen
-  Einträge als lokale Kopie behalten. Die Eigentümerschaft MUSS dabei bei
-  keiner anderen Identität landen (D23). Ein Empfänger, dessen Identität
-  rotiert ist, kommt nur über eine neue Einladung wieder hinein.
+- **FR-043** (Schlüssel je Gerät der Empfänger-Vault): Ein Gerät des
+  Eigentümers MUSS den Inhaltsschlüssel jeder Schlüsselgeneration mit NIP-44 an
+  jedes Gerät verschlüsseln, das auf der aktuellen Geräteliste der Vault des
+  Eigentümers oder einer Vault der zugehörigen Mitgliederliste steht, an
+  dessen Geräteschlüssel (D28). Gerätelisten der Empfänger-Vaults erfährt es
+  aus der Annahme (FR-019), über das Relay (Spec 026) oder über direkte
+  Verbindungen; eine neuere Geräteliste ersetzt eine ältere nach den Regeln von
+  Spec 024. Ein später hinzugekommenes Gerät erhält die bestehenden
+  Generationen über den Sync der eigenen Vault (FR-022); spätere Generationen
+  verschlüsselt ein Gerät des Eigentümers direkt an dieses Gerät. Ein Gerät,
+  das nicht mehr auf der Geräteliste seiner Vault steht, DARF keine
+  Inhaltsschlüssel späterer Generationen erhalten.
 
 ### Key Entities
 
@@ -828,18 +849,18 @@ angezeigter ursprünglicher Autorin.
   Fremdschlüssel, optionale Verweise auf andere Freigabetypen derselben
   Erweiterung. Bei Installation und Update geprüft (FR-002).
 - **Datenfreigabe**: Kennung, Eigentümer (Vault-Identität), Freigabetyp mit
-  Erweiterung, Wurzel, Zeitpunkt der Anlage, Zustand (aktiv, beendet oder
-  endgültig geschlossen, FR-043). Gehört der Vault des Eigentümers und
+  Erweiterung, Wurzel, Zeitpunkt der Anlage, Zustand (aktiv oder beendet,
+  FR-036). Gehört der Vault des Eigentümers und
   synchronisiert sich zwischen seinen Geräten.
 - **Recht**: Datenfreigabe, Vault-Identität des Empfängers, Fähigkeiten (Lesen,
   Schreiben, Löschen), Stand der Einladung. Nur vom Eigentümer geschrieben.
 - **Schlüsselgeneration**: je Datenfreigabe; Inhaltsschlüssel verschlüsselt an
-  jede berechtigte Vault-Identität, einmal je Vault. Eine neue entsteht bei
+  jedes Gerät laut Geräteliste jeder berechtigten Vault (FR-043). Eine neue entsteht bei
   jeder Änderung der Mitglieder (Aufnahme nach angenommener Einladung, Ändern
   von Fähigkeiten, Entfernen, Austreten); ihre Mitgliederliste steht damit
   fest. Neue Empfänger
   erhalten auch die Inhaltsschlüssel aller älteren Generationen (FR-011).
-- **Mitgliederliste**: die vom Eigentümer unterschriebene Liste der Empfänger
+- **Mitgliederliste**: die von einem Gerät des Eigentümers unterschriebene Liste der Empfänger
   mit Fähigkeiten zu einer Generation, auf dem Relay (Spec 026). Die Vault des
   Eigentümers steht nicht darin und ist am Relay dennoch mit allen ihren
   Geräten berechtigt (FR-016).
@@ -905,10 +926,10 @@ angezeigter ursprünglicher Autorin.
   Nach der Phasenregel der Constitution wird sie erst umgesetzt, wenn diese
   Grundlagen, die Specs 024 und 026 sowie Einladungen und direkte
   Verbindungen zwischen Mitgliedern aus Spec 027 im Einsatz sind.
-- Spec 024 liefert Vault-Identität, Gerätebestätigung, Unterschriften mit
-  echtem Autor, das Führen des Erstellers durch den Kern, die Nur-direkt-Daten
-  und die Erneuerung der Vault-Identität. Spec 026 liefert Relay, Postfach und
-  Mitgliederliste. Spec 027 liefert den Weg für Einladungen und die direkte
+- Spec 024 liefert Vault-Identität, Geräteliste mit Hauptgeräten und
+  verknüpften Geräten, Unterschriften mit echtem Autor, das Führen des
+  Erstellers durch den Kern und die Nur-direkt-Daten. Spec 026 liefert Relay,
+  Postfach, Mitgliederliste und die Prüfung der Geräteliste. Spec 027 liefert den Weg für Einladungen und die direkte
   Verbindung zwischen Mitgliedern.
 - Das konkrete Format der Erklärung im Manifest und die Anfragen der Erweiterung
   an holzi legt der Plan fest. Beides berührt auch die Repositories `vault-sdk`
@@ -924,9 +945,9 @@ angezeigter ursprünglicher Autorin.
   `docs/adr/0002-shared-space-authenticity-and-confidentiality.md`).
 - Anlegen von Datenfreigaben und Ändern von Rechten sind dem Nutzer
   vorbehalten, bis Spec 021 etwas anderes für Agenten festlegt.
-- Die Kosten einer neuen Schlüsselgeneration wachsen mit der Zahl der
-  Empfänger-Vaults, nicht ihrer Geräte. Für Freigaben mit wenigen Personen ist
-  das unkritisch; gemessen wird im Plan.
+- Die Kosten einer neuen Schlüsselgeneration wachsen mit der Zahl der Geräte
+  aller beteiligten Vaults, weil je Gerät verschlüsselt wird (D28). Für
+  Freigaben mit wenigen Personen ist das unkritisch; gemessen wird im Plan.
 
 ## Nicht im Umfang
 
@@ -936,14 +957,10 @@ angezeigter ursprünglicher Autorin.
   nur Daten von Erweiterungen.
 - Weiterteilen durch Empfänger und mehrere Admins (D6, D7), ebenso das
   Verhindern, dass ein Empfänger Inhalte kopiert und selbst neu teilt.
-- Die Eigentümerschaft (Admin-Rolle) übertragen, weder beim Rotieren der
-  Vault-Identität noch auf Wunsch noch nach Verlust der Vault (D23). Geht die
-  Vault des Eigentümers verloren, ist die Datenfreigabe eingefroren; rotiert
-  sie, wird die Datenfreigabe geschlossen (FR-043).
-- Eine geschlossene Datenfreigabe wieder öffnen (FR-043).
-- Eine Hilfe „neu anlegen und dieselben Empfänger einladen“ nach dem Schließen
-  beim Rotieren; der Eigentümer legt die Datenfreigabe von Hand neu an und lädt
-  ein.
+- Die Eigentümerschaft (Admin-Rolle) übertragen, weder auf Wunsch noch nach
+  Verlust der Vault (D23). Geht die Vault des Eigentümers verloren, ist die
+  Datenfreigabe eingefroren.
+- Ein Rotieren der Vault-Identität (D26).
 - Rechte feiner als je Datenfreigabe (je Eintrag oder Feld) und Gruppen als
   Empfänger.
 - Teilen mit Personen ohne holzi, öffentliche Links.

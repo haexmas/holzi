@@ -51,11 +51,10 @@
   versions is 30 days (FR-011); tokens exist per capability type, not per member, as in
   the design; members with the delete capability get the read-write token
   because S3 does not separate writing from deleting.
-- FR-017 and FR-033 treat the admin's full provider credentials and unwrapped
-  access tokens as Nur-direkt-Daten (spec 024): they travel only over direct
-  connections between devices of the same vault, never through any relay mailbox, not
-  even the vault's own. Each device unwraps the token envelopes itself; the
-  envelopes may travel through mailboxes.
+- FR-017 and FR-033 (revised 2026-09-28, D30/D32): the admin's full provider
+  credentials and the access tokens live in the Passwortmanager (planned spec 030) as ordinary vault data; they sync to all own devices, also through the
+  vault's own mailbox, and are recoverable. They never reach members (except
+  the matching access token in its envelope), spaces, data shares or logs.
 - Cross-spec alignment (2026-09-28): the space mailbox stays on the admin's
   relay independent of backend B, and without a relay it syncs only directly;
   there is no default backend, the choice at space creation is mandatory (spec

@@ -9,7 +9,7 @@
 Netzwerkordner für Dateien, und lädt andere Nutzer über ihre Vault-Identität
 ein. Jedes Mitglied bindet den Space an einen Ordner auf seinen Geräten. Der
 Ersteller ist der einzige Admin; er vergibt Lesen, Schreiben und Löschen, ändert
-Rechte und entfernt Mitglieder, wobei der Inhaltsschlüssel rotiert wird. Der
+Rechte und entfernt Mitglieder, wobei eine neue Schlüsselgeneration entsteht. Der
 Space nutzt die Maschinerie der Ordner-Synchronisierung eigener Geräte (Spec 025) für mehrere Nutzer. Vorgaben des Betreibers: Übertragung über iroh,
 Identität, Anmeldung und Schlüsselumschläge über Nostr-Schlüssel, Umschläge im
 Format NIP-44 v2, Einladungen als verschlüsselte Nostr-Direktnachricht. Kein
@@ -20,15 +20,22 @@ Repository `https://github.com/haex-space/haex-vault`, Revision
 
 ## Begriffe
 
-- **Vault-Identität**: der Schlüssel, der eine Vault als Ganzes ausweist. Er ist
-  auf allen Geräten derselben Vault gleich. Einladungen, Rechte und
-  Schlüsselumschläge gehen immer an eine Vault-Identität, nie an einzelne
-  Geräte (Spec 024).
-- **Geräteschlüssel**: der Schlüssel eines einzelnen Geräts. Mit ihm meldet sich
-  das Gerät an und unterschreibt seine Änderungen.
-- **Gerätebestätigung**: eine von der Vault-Identität unterschriebene Aussage
-  „dieses Gerät handelt für diese Vault“. Jeder Empfänger prüft damit, für
-  welche Vault ein Gerät schreibt.
+- **Vault-Identität**: das Schlüsselpaar, das eine Vault als Ganzes ausweist.
+  Sein öffentlicher Schlüssel ist die feste Adresse der Vault: Einladungen,
+  Rechte und Mitgliederlisten nennen immer eine Vault-Identität. Der private
+  Schlüssel liegt nur auf Hauptgeräten (Spec 024).
+- **Geräteschlüssel**: das Schlüsselpaar eines einzelnen Geräts. Es verlässt
+  das Gerät nie. Mit ihm meldet sich das Gerät an, unterschreibt alles, was es
+  schreibt, und empfängt Schlüsselumschläge (D28).
+- **Geräteliste**: die mit der Vault-Identität von einem Hauptgerät
+  unterschriebene Liste aller aktuellen Geräte einer Vault (öffentlicher
+  Geräteschlüssel, Rolle Hauptgerät oder verknüpftes Gerät, Name,
+  Netzwerkkennung) mit einer Generation (Spec 024). Jeder Empfänger prüft
+  damit, für welche Vault ein Gerät schreibt: Ein Gerät gilt nur, wenn es auf
+  der aktuellen Geräteliste seiner Vault steht.
+- **Hauptgerät**, **verknüpftes Gerät**: Hauptgeräte halten den privaten
+  Schlüssel der Vault-Identität und dürfen Geräte hinzufügen und entfernen;
+  verknüpfte Geräte dürfen das nicht. Spaces verwalten dürfen beide (D29).
 - **Bereich**: ein Rahmen, in dem Daten synchronisiert werden, mit eigenen
   Schlüsseln und einem eigenen Postfach am Relay: der „Bereich Vault“, der
   „Bereich eines Space“ oder der „Bereich einer Datenfreigabe“.
@@ -36,13 +43,8 @@ Repository `https://github.com/haex-space/haex-vault`, Revision
   verhält. Rechte gelten für den ganzen Ordner. Ein Space enthält nie Daten aus
   der SQLite-Datenbank der Vault.
 - **Admin**: die Vault, die den Space angelegt hat. Es gibt genau einen Admin je
-  Space; die Rolle ist nicht übertragbar und nicht vergebbar, auch nicht beim
-  Rotieren der Vault-Identität (D23).
-- **Schließen**: eine mit der Vault-Identität des Admins unterschriebene,
-  endgültige Aussage, dass der Space endet. holzi stellt sie beim Rotieren
-  der Vault-Identität des Admins mit der alten Identität aus (Spec 024). Danach
-  nimmt das Relay für den Space nichts mehr an (Spec 026), und ein
-  geschlossener Space lässt sich nicht wieder öffnen (FR-043).
+  Space; die Rolle ist nicht übertragbar und nicht vergebbar (D23, D26). Jedes
+  Gerät auf der aktuellen Geräteliste des Admins darf für ihn handeln (D29).
 - **Mitglied**: eine Vault, die der Admin in den Space eingeladen und nach
   ihrer Annahme aufgenommen hat, samt all ihren Geräten. Der Admin ist selbst Mitglied mit allen Fähigkeiten.
 - **Fähigkeit**: ein Recht eines Mitglieds im Space: **Lesen** (alle Dateien
@@ -51,7 +53,7 @@ Repository `https://github.com/haex-space/haex-vault`, Revision
 - **Eigene Datei**: eine Datei, die ein Gerät der eigenen Vault in den Space
   gebracht hat. Wer eine Datei gebracht hat, steht unveränderlich an ihrem
   Eintrag im Dateiindex; spätere Änderungen durch andere ändern das nicht.
-- **Mitgliederliste**: die vom Admin unterschriebene Liste der Mitglieder
+- **Mitgliederliste**: die von einem Gerät des Admins unterschriebene Liste der Mitglieder
   (Vault-Identitäten) und ihrer Fähigkeiten. Ihre Version ist ihre
   **Generation**, die der Schlüsselgeneration, zu der sie gehört. Sie liegt
   verschlüsselt im Space und zusätzlich lesbar am Relay, das damit entscheidet,
@@ -79,31 +81,37 @@ Repository `https://github.com/haex-space/haex-vault`, Revision
   Uhrzeit>).<Endung>“, wobei im Space vor dem Gerätenamen der Anzeigename des
   Mitglieds steht (FR-029).
 - **Relay**: der nicht vertrauenswürdige Server, über den Geräte synchronisieren,
-  die nicht gleichzeitig online sind. Es sieht keine Inhalte (Spec 026).
+  die nicht gleichzeitig online sind. Es sieht keine Inhalte (Spec 026). Der
+  Relay-Dienst synchronisiert nur Daten aus SQLite, also Postfächer; Dateien
+  kommen nie in ein Postfach (D32).
 - **Postfach**: der Speicherplatz eines Bereichs am Relay für Änderungspakete,
   darunter Dateiindex und Mitgliederliste. Das Postfach ist vom Speicher für
   Objekte getrennt (FR-040).
-- **Speicher-Backend A**: vom Relay bereitgestellter Speicher für Objekte;
-  das Relay überträgt die Objekte selbst (Spec 026). **Speicher-Backend B**: ein eigener S3-Speicher des Admins
-  (Spec 029).
+- **Speicher-Backend A**: S3-kompatibler Speicher für Objekte, den der Betreiber
+  des Relays zusätzlich anbieten kann. Der Relay-Dienst prüft dann jeden Zugriff
+  und überträgt jedes verschlüsselte Objekt selbst aus diesem Speicher (Spec
+  026, D24, D32). **Speicher-Backend B**: ein eigener S3-Speicher des Admins
+  (Spec 029); mit ihm hat das Relay mit Dateien nichts zu tun. Jedes Objekt
+  liegt nur einmal, in genau einem Speicher-Backend.
 - **Datenfreigabe**: das Teilen einzelner Einträge oder Sammlungen aus der
   SQLite-Datenbank mit anderen Nutzern (Spec 028). Nicht Teil von Spaces.
 
 ## Beziehung zu bestehenden Specs
 
 - **Spec 024** (Vault-Identität,
-  Geräteschlüssel, Gerätebestätigung, direkte Synchronisierung eigener Geräte):
-  Diese Spec setzt voraus, dass jede Vault eine echte Vault-Identität hat, dass
-  Geräte sich über Gerätebestätigungen ausweisen und dass Einträge, die eine
-  Vault erhält, über die Synchronisierung eigener Geräte auf alle ihre Geräte
-  kommen. Ein Schlüsselumschlag an ein Mitglied wird deshalb nur einmal je
-  Vault erstellt. Schlüssel der Vault selbst verlassen die Vault nie über einen
-  Space. Das Rotieren einer Vault-Identität (Gerät verloren) definiert Spec 024
-  („Schließen und Verlassen beim Rotieren“): Mit der alten Identität schließt
-  holzi jeden Space, den die Vault verwaltet, und verlässt jeden anderen. Was
-  das Relay mit einem geschlossenen Bereich tut, regelt Spec 026; diese Spec
-  legt fest, was Mitglieder dabei sehen (FR-043, Edge Cases). Die Admin-Rolle
-  geht dabei nirgendwohin über (D23). Die Anwesenheits- und
+  Geräteschlüssel, Geräteliste, Hauptgeräte und verknüpfte Geräte, direkte
+  Synchronisierung eigener Geräte): Diese Spec setzt voraus, dass jede Vault
+  eine echte Vault-Identität hat, dass Geräte sich über die Geräteliste ihrer
+  Vault ausweisen und dass Einträge, die eine Vault erhält, über die
+  Synchronisierung eigener Geräte auf alle ihre Geräte kommen. Schlüssel eines
+  Space werden an jedes Gerät auf der aktuellen Geräteliste jeder Mitglieds-Vault
+  verpackt; die Mitglieds-Vault legt empfangene Schlüssel zusätzlich in ihren
+  eigenen Daten ab, so dass ein später verknüpftes Gerät sie über die eigene
+  Synchronisierung erhält (FR-043, D28). Schlüssel der Vault selbst verlassen
+  die Vault nie über einen Space. Ein Rotieren der Vault-Identität gibt es in
+  v1 nicht (D26); ein verlorenes Gerät entfernt ein Hauptgerät aus der
+  Geräteliste (Spec 024, D27). Die Admin-Rolle ist nicht übertragbar (D23).
+  Die Anwesenheits- und
   Signalisierungsserver aus Spec 024 tragen auch Einladungen (FR-041) und das
   Auffinden von Geräten anderer Mitglieder (FR-039). Ob ein Änderungspaket als
   Ganzes oder je Transaktionsgruppe geprüft wird, legt Spec 024 fest (FR-013
@@ -113,14 +121,17 @@ Repository `https://github.com/haex-space/haex-vault`, Revision
   mehrere Nutzer. Dateiindex, Objekte, Übertragung, Konfliktkopien und die
   Bindung an einen lokalen Ordner gelten unverändert; Spec 025 ist der Fall
   „Space mit genau einem Mitglied, der eigenen Vault“. Neu sind hier Mitglieder,
-  Fähigkeiten, Einladungen, Entzug, Schlüsselrotation und direkte
+  Fähigkeiten, Einladungen, Entzug, neue Schlüsselgenerationen und direkte
   Verbindungen zwischen Geräten verschiedener Vaults. Die Verwaltung von Spaces
   steht in der Einstellungskategorie „Föderation“ (Spec 023) in der
   Unteransicht „Spaces“, neben der Unteransicht „Ordner“ aus Spec 025.
 - **Spec 026** (Relay, Postfächer, Mitgliederlisten,
   Speicher-Backend A): Das Postfach eines Space, die Prüfung der
-  Mitgliederliste am Relay, die Löschregeln für Objekte (FR-028 dort) und
-  Speicher-Backend A kommen aus Spec 026. Diese Spec legt fest, wann der Admin
+  Mitgliederliste und der Gerätelisten am Relay, die Löschregeln für Objekte
+  (FR-028 dort) und Speicher-Backend A kommen aus Spec 026. Der Relay-Dienst
+  synchronisiert nur Postfächer; Objekte eines Space überträgt er nur, wenn der
+  Betreiber zusätzlich Speicher-Backend A anbietet und der Space es nutzt
+  (D32). Diese Spec legt fest, wann der Admin
   eine neue Mitgliederliste hochlädt, was Mitglieder prüfen, wenn das Relay
   etwas Unberechtigtes durchlässt, und dass ein Gerät des Admins alte Objekte
   aufräumt (FR-042).
@@ -167,8 +178,8 @@ Repository `https://github.com/haex-space/haex-vault`, Revision
   Änderung unterschiedlich annahmen, zu Lücken, die das Abholen ganzer
   Änderungsgruppen blockierten, und zu Geräten, die dauerhaft ausgesperrt
   blieben. Schlüsselgenerationen werden deshalb gewöhnliche synchronisierte
-  Einträge, die nebeneinander gelten dürfen, und Umschläge gehen an die Vault,
-  nicht an das Gerät.
+  Einträge, die nebeneinander gelten dürfen. (Dass Umschläge an die Vault und
+  nicht an das Gerät gehen, ist überholt durch D28.)
 
 ### Session 2026-09-28
 
@@ -189,11 +200,10 @@ Repository `https://github.com/haex-space/haex-vault`, Revision
   dann eingefroren: Inhalte bleiben, Mitglieder arbeiten mit ihren bisherigen
   Rechten weiter, aber die Mitgliedschaft kann sich nicht mehr ändern. Eine
   Funktion „Admin übertragen“ ist nicht Teil dieser Spec (Entwurf §15, Punkt 3).
-- Q: Kann die Admin-Rolle übertragen werden, etwa nach dem Rotieren der
-  Vault-Identität? → A: Nein, in v1 gar nicht, und nichts hängt von der
-  Zustimmung der Mitglieder ab. Beim Rotieren schließt holzi mit der alten
-  Identität alle Bereiche, die die Vault verwaltet, und verlässt alle anderen
-  (D23).
+- Q: Kann die Admin-Rolle übertragen werden? → A: Nein, in v1 gar nicht, und
+  nichts hängt von der Zustimmung der Mitglieder ab (D23). (Das Schließen und
+  Verlassen aller Bereiche bei einem Wechsel der Vault-Identität ist überholt
+  durch D26.)
 - Q: Wo liegen die Dateien eines Space auf dem Gerät? → A: In einem Ordner des Dateisystems, den das Mitglied je Gerät wählt (wie Spec 025).
 - Q: Darf ein Space auf mehreren Relays liegen? → A: Nein, nicht in v1: ein Heimat-Relay, das Relay des Admins (Spec 026 FR-040).
 - Q: Wie ist Löschen geregelt? → A: „Schreiben“ erlaubt das Löschen eigener Dateien (Ersteller = eigene Vault); fremde Dateien löschen erfordert die Stufe „Löschen“ (FR-016). Gilt ebenso für Spec 028.
@@ -202,6 +212,23 @@ Repository `https://github.com/haex-space/haex-vault`, Revision
 - Q: Wie kommen Geräte bei Speicher-Backend A an die Objekte? → A: Das Relay
   überträgt die verschlüsselten Objekte selbst; es gibt keine zeitlich
   begrenzten Links. Das Relay sieht dabei nur Ciphertext (D24).
+- Q: Gibt es in v1 ein Rotieren der Vault-Identität? → A: Nein (D26). Ein
+  verlorenes Gerät ist kein Problem, solange eine Kopie oder das Relay existiert
+  und die Passphrase hält; ausgesperrt wird ein Gerät über die Geräteliste
+  (D27).
+- Q: An wen werden Schlüssel von Spaces und Datenfreigaben verschlüsselt? → A:
+  An jedes Gerät der Mitglieds-Vaults laut deren aktueller Geräteliste (D28).
+- Q: Welche Geräte des Admins dürfen einen Space verwalten? → A: Jedes Gerät auf
+  der aktuellen Geräteliste der Admin-Vault, auch ein verknüpftes Gerät; es
+  unterschreibt mit seinem Geräteschlüssel. Nur das Verwalten der Geräte selbst
+  bleibt Hauptgeräten vorbehalten (D29).
+- Q: Was synchronisiert das Relay, und wo liegen die Dateien eines Space? → A:
+  Der Relay-Dienst synchronisiert nur Daten aus SQLite (Postfächer); Dateien
+  kommen nie in ein Postfach. Bietet der Betreiber zusätzlich S3-kompatiblen
+  Speicher an (Speicher-Backend A), prüft der Relay-Dienst jeden Zugriff und
+  überträgt die verschlüsselten Objekte daraus; mit eigenem S3 (Speicher-Backend
+  B) hat das Relay mit Dateien nichts zu tun. Jedes Objekt liegt nur einmal
+  (D32).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -501,7 +528,7 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   oder Objekt hochzuladen, weist das Relay es ab; kommt es auf einem anderen Weg
   an, verwirft jedes Mitglied es (FR-026).
 - **Relay lässt eine unberechtigte Änderung durch**: Jedes empfangende Gerät
-  prüft Unterschrift, Gerätebestätigung, Fähigkeit und Ersteller selbst und
+  prüft Unterschrift, Geräteliste, Fähigkeit und Ersteller selbst und
   verwirft die Änderung. Sie wird nicht angewendet, und holzi vermerkt sie im
   Protokoll, ohne den Nutzer mit Fehlermeldungen zu überhäufen.
 - **Relay hält Daten zurück oder liefert Altes**: Das Relay kann Daten nicht
@@ -510,36 +537,30 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
 - **Speicher liefert ein falsches Objekt**: Das Objekt passt nicht zu seinem
   Namen oder lässt sich nicht entschlüsseln; das Gerät verwirft es und holt es
   anderswo.
-- **Die Vault des Admins geht verloren**: Der Space ist eingefroren. Mitglieder
+- **Die Vault des Admins geht verloren** (kein Gerät, keine Kopie und kein
+  Wiederherstellungspaket mehr, Spec 026): Der Space ist eingefroren. Mitglieder
   lesen und schreiben mit ihren bisherigen Rechten weiter, aber niemand kann
   einladen, Rechte ändern oder entfernen. Eine Mitgliederliste mit Ablaufzeit
   am Relay läuft dann irgendwann ab; wie lange sie gilt, regelt Spec 026. Danach
   bleibt nur die direkte Übertragung.
-- **Ein Mitglied rotiert seine Vault-Identität** (Gerät verloren): Es gilt
-  Spec 024, „Schließen und Verlassen beim Rotieren“. holzi verlässt den Space
-  mit der alten Identität, genau wie beim Verlassen nach FR-033: Die Geräte
-  dieser Vault synchronisieren ihn nicht mehr, die Dateien im Ordner bleiben
-  liegen, und ein Gerät des Admins entfernt die alte Identität nach FR-018.
-  Will das Mitglied wieder dabei sein, lädt der Admin es wie ein neues Mitglied
-  ein (FR-008): Das Mitglied gibt ihm seine neue Vault-Identität auf einem Weg
-  außerhalb von holzi, und es nimmt die Einladung wie jede andere an.
-- **Der Admin rotiert seine Vault-Identität**: Es gilt Spec 024, „Schließen und
-  Verlassen beim Rotieren“. holzi schließt den Space mit der alten Identität,
-  bevor es auf die neue wechselt (FR-043). Das Relay nimmt danach für den Space
-  nichts mehr an und hält das Postfach nur noch lesbar, bis die letzte
-  Mitgliederliste abläuft (Spec 026). Mitglieder sehen den Space als „vom Admin
-  geschlossen“, behalten ihre Dateien und synchronisieren nicht mehr. Mit der
-  neuen Identität kann der Admin einen neuen Space anlegen und die Mitglieder
-  erneut einladen; sie nehmen diese Einladung wie jede andere an. Der
-  geschlossene Space lässt sich nicht wieder öffnen.
-- **Der Dieb hält den alten Schlüssel des Admins**: Er kann den Space höchstens
-  ebenfalls schließen (dasselbe Ergebnis) oder ihn weiterführen, bis das
-  Rotieren der Nutzerin ihn schließt. Die Admin-Rolle kann er nirgendwohin
-  übertragen, weil es kein Übertragen gibt (D23).
-- **Rotieren ohne Verbindung**: Rotiert die Vault, während kein Gerät online
-  ist, gehen Schließen und Verlassen hinaus, sobald ein Gerät online ist (Spec
-  024). Bis dahin kann der Dieb mit der alten Identität handeln, etwa Mitglieder
-  einladen oder entfernen; dieses Risiko wird für v1 hingenommen.
+- **Ein Gerät des Admins geht verloren oder wird gestohlen**: Solange die
+  Vault eine weitere Kopie oder ein Postfach am Relay hat und die Passphrase
+  hält, ist das kein Problem für den Space (D26). Wer das Gerät entsperrt,
+  kann bis zu seinem Entfernen für den Admin handeln, weil jedes Gerät der
+  Admin-Vault den Space verwalten darf (D29). Entfernt ein Hauptgerät es aus der
+  Geräteliste (Spec 024), weisen Relay und Mitglieder seine Unterschriften und
+  Verbindungen ab, und ein verbliebenes Gerät des Admins unterschreibt die
+  aktuelle Mitgliederliste neu (FR-019). Dieses Risiko wird für v1 hingenommen.
+- **Ein Gerät eines Mitglieds wird entfernt**: Sobald die neue Geräteliste der
+  Mitglieds-Vault bekannt ist, weisen Relay und Geräte der Mitglieder das Gerät
+  ab (FR-026, FR-039), und spätere Schlüsselgenerationen werden nicht mehr an
+  es verpackt (FR-043). Schlüssel und Dateien, die es schon hat, bleiben bei
+  ihm; ein Löschen aus der Ferne gibt es nicht (Spec 024).
+- **Ein Mitglied verknüpft ein neues Gerät**: Das Gerät erhält die bisherigen
+  Schlüssel des Space über die Synchronisierung der eigenen Vault; spätere
+  Generationen verpackt ein Gerät des Admins direkt an es, sobald es die neue
+  Geräteliste kennt (FR-043). Der Admin tut dafür nichts, erfährt aber, wie
+  viele Geräte die Mitglieds-Vault hat (D28).
 - **Admin lädt eine Vault ein, die schon Mitglied ist**: holzi lehnt das mit
   dem Hinweis ab, die Rechte stattdessen zu ändern.
 - **Ein Gerät eines Mitglieds wurde nie an einen Ordner gebunden**: Es zeigt den
@@ -593,19 +614,27 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
 - **FR-039** (direkte Verbindung zwischen Mitgliedern): Geräte verschiedener
   Vaults, die Mitglieder desselben Space sind, MÜSSEN sich für diesen einen
   Bereich direkt verbinden können. Beim Verbindungsaufbau MUSS jedes Gerät
-  seinen Geräteschlüssel und eine Gerätebestätigung einer Vault nachweisen,
-  die auf der aktuellen Mitgliederliste dieses Bereichs steht; die Gegenseite
-  prüft beides gegen die neueste ihr bekannte Mitgliederliste und bricht die
-  Verbindung sonst ab. Eine solche Verbindung DARF NUR Daten dieses einen
+  seinen Geräteschlüssel nachweisen, und dieser MUSS auf der aktuellen
+  Geräteliste einer Vault stehen, die auf der aktuellen Mitgliederliste dieses
+  Bereichs steht. Dazu legt jedes Gerät die aktuelle, mit der Vault-Identität
+  unterschriebene Geräteliste seiner Vault vor; die Gegenseite prüft deren
+  Unterschrift gegen die Vault-Identität aus der Mitgliederliste, nimmt von der
+  vorgelegten und der ihr sonst bekannten Geräteliste (etwa vom Relay, Spec 026) die neuere nach den Regeln von Spec 024 und bricht die Verbindung ab,
+  wenn der Geräteschlüssel dort fehlt oder die Vault nicht auf der neuesten ihr
+  bekannten Mitgliederliste steht. Eine solche Verbindung DARF NUR Daten dieses einen
   Bereichs tragen, nie Daten des Bereichs Vault oder eines anderen Bereichs.
   Geräte finden einander über eine verschlüsselte Anwesenheitsmeldung, die an
-  die Mitglieds-Vaults des Bereichs adressiert ist (über die Anwesenheits- und
+  die Geräte der Mitglieds-Vaults laut deren Gerätelisten adressiert ist (über die Anwesenheits- und
   Signalisierungsserver aus Spec 024), oder über die Signalisierung des Relays
   (Spec 026 FR-009). Datenfreigaben (Spec 028) und Spaces mit
   Speicher-Backend B (Spec 029) nutzen dieselbe Regel für ihre Bereiche.
 - **FR-040** (Postfach getrennt vom Objektspeicher): Das Postfach eines Space (Änderungspakete mit Dateiindex und
   Mitgliederliste) MUSS auf dem Relay liegen, das die Vault des Admins
-  eingerichtet hat, unabhängig davon, wo die Objekte liegen. Hat die Vault des
+  eingerichtet hat, unabhängig davon, wo die Objekte liegen. Objekte DÜRFEN NIE
+  in ein Postfach gelangen: Sie liegen bei Speicher-Backend A im S3-kompatiblen
+  Speicher, den der Betreiber des Relays zusätzlich anbietet und aus dem der
+  Relay-Dienst sie nach Prüfung überträgt, bei Speicher-Backend B im eigenen
+  S3-Speicher ohne Beteiligung des Relays (D32). Hat die Vault des
   Admins kein Relay eingerichtet, MUSS der Space nur direkt synchronisieren
   (FR-039); Mitglieder müssen dann gleichzeitig online sein, und die Ansicht
   des Space MUSS das anzeigen.
@@ -614,8 +643,8 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
 
 - **FR-007**: Nur der Admin DARF einladen. holzi DARF Mitgliedern, die nicht
   Admin sind, keine Möglichkeit zum Einladen oder Weiterteilen anbieten, und
-  Mitglieder MÜSSEN jede Mitgliederliste verwerfen, die nicht der Admin
-  unterschrieben hat.
+  Mitglieder MÜSSEN jede Mitgliederliste verwerfen, die nicht ein Gerät auf der
+  aktuellen Geräteliste des Admins unterschrieben hat (D29).
 - **FR-008**: Der Admin MUSS ein Mitglied über dessen Vault-Identität einladen
   können, mit einem Namen, unter dem es im Space erscheint, und einer
   Fähigkeitsstufe (FR-015). holzi MUSS ungültige Vault-Identitäten, die eigene
@@ -625,10 +654,11 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   Hinweisen auf das Relay senden (FR-041), ohne Schlüssel. Die eingeladene
   Vault steht bis zur Annahme NICHT in der Mitgliederliste und erhält keine
   Umschläge; das Relay gibt ihr deshalb keinen Zugang. Nimmt sie an, schickt
-  sie eine unterschriebene Annahme; erst dann MUSS ein Gerät des Admins sie in
-  die Mitgliederliste aufnehmen, eine neue Schlüsselgeneration für die neue
-  Mitgliederliste erzeugen und deren Schlüssel und die aller älteren
-  Generationen an sie verpacken (FR-019). Bis ein Gerät des Admins die Annahme
+  sie eine unterschriebene Annahme mit ihrer aktuellen Geräteliste; erst dann
+  MUSS ein Gerät des Admins sie in die Mitgliederliste aufnehmen, eine neue
+  Schlüsselgeneration für die neue Mitgliederliste erzeugen und deren Schlüssel
+  und die aller älteren Generationen an jedes ihrer Geräte verpacken (FR-019,
+  FR-043). Bis ein Gerät des Admins die Annahme
   verarbeitet hat, MUSS die Einladung auf beiden Seiten als „angenommen,
   wartet auf Admin“ erscheinen. Das präzisiert D22: Die neue Generation
   entsteht mit der Aufnahme nach der Annahme, nicht schon beim Verschicken.
@@ -651,11 +681,19 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   die danach ein Gerät des Admins erreicht, DARF NICHT zur Aufnahme führen.
   Die Mitgliederliste ändert sich dadurch nicht.
 - **FR-014**: Nimmt eine Vault an, MÜSSEN alle Geräte dieser Vault den Space
-  erhalten, ohne dass der Admin etwas tut. Der Admin DARF NICHT erfahren, wie
-  viele Geräte die Vault hat.
+  erhalten, ohne dass der Admin etwas tut. Weil Umschläge je Gerät entstehen,
+  erfährt der Admin, wie viele Geräte die Vault hat; das wird hingenommen
+  (D28).
 - **FR-041** (Zustellung von Einladungen): Einladungen, ihr Zurückziehen und
   die Antworten darauf („angenommen“, „abgelehnt“, „verlassen“) MÜSSEN als verschlüsselte
-  Nostr-Nachricht an die Vault-Identität des Empfängers gehen. Zugestellt
+  Nostr-Nachricht an die Vault-Identität des Empfängers gehen und, soweit dem
+  Absender die aktuelle Geräteliste des Empfängers bekannt ist, zusätzlich an
+  jedes Gerät darauf, weil nur Hauptgeräte den privaten Schlüssel der
+  Vault-Identität haben (Spec 024). Unterschrieben wird jede solche Nachricht
+  mit dem Geräteschlüssel des sendenden Geräts; sie gilt, wenn das Gerät auf
+  der aktuellen Geräteliste seiner Vault steht (D29). Das empfangende Gerät
+  legt sie in den Daten seiner Vault ab, damit alle ihre Geräte sie sehen
+  (FR-010). Zugestellt
   werden sie über die Anwesenheits- und Signalisierungsserver aus Spec 024 und
   zusätzlich über die Signalisierung des Relays des Admins, wenn dieses sie
   anbietet (Spec 026 FR-009). Die Server DÜRFEN vom Inhalt nichts sehen außer
@@ -693,12 +731,17 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   Mitglieder erzeugen.
 - **FR-019**: Jede Änderung der Mitgliederliste (Aufnehmen nach einer Annahme,
   Rechte ändern, Entfernen, Verlassen) MUSS eine neue Schlüsselgeneration erzeugen,
-  deren Schlüssel an jede Vault der neuen Mitgliederliste verpackt wird, einmal
-  je Vault, nie je Gerät. Die Mitgliederliste einer Generation steht danach
+  deren Schlüssel an jedes Gerät jeder Vault der neuen Mitgliederliste
+  verpackt wird (FR-043). Die Mitgliederliste einer Generation steht danach
   fest. Kommt ein Mitglied neu hinzu, MUSS es zusätzlich Umschläge für alle
   älteren Generationen erhalten, damit es ältere Inhalte lesen kann. Nur
-  Geräte des Admins DÜRFEN Mitgliederlisten und Schlüsselgenerationen eines
-  Space erstellen.
+  Geräte auf der aktuellen Geräteliste des Admins DÜRFEN Mitgliederlisten und
+  Schlüsselgenerationen eines Space erstellen, jedes davon, auch ein
+  verknüpftes Gerät; es unterschreibt mit seinem Geräteschlüssel (D29).
+  Entfernt die Vault des Admins ein Gerät aus ihrer Geräteliste, MUSS ein
+  verbliebenes Gerät des Admins die aktuelle Mitgliederliste neu
+  unterschreiben und hochladen, wenn das entfernte Gerät sie unterschrieben
+  hatte.
 - **FR-020**: Hat der Space ein Postfach am Relay (FR-040), MUSS das Gerät des
   Admins eine geänderte Mitgliederliste an das Relay hochladen, bevor es neue Inhalte mit der neuen Generation verschickt,
   und sofort, sobald es online ist, wenn die Änderung offline geschah.
@@ -763,8 +806,8 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   Ordner liegen lassen.
 - **FR-026**: Jedes Gerät eines Mitglieds MUSS jede eingehende Änderung selbst
   prüfen, unabhängig davon, was Relay oder Speicher durchgelassen haben:
-  Unterschrift des Geräts, Gerätebestätigung durch eine Vault der
-  Mitgliederliste, die nötige Fähigkeit dieser Vault nach FR-024 und dass der
+  Unterschrift des Geräts, dass das Gerät auf der aktuellen Geräteliste einer
+  Vault der Mitgliederliste steht, die nötige Fähigkeit dieser Vault nach FR-024 und dass der
   Ersteller einer Datei unverändert bleibt. Eine Änderung, die eine Prüfung
   nicht besteht, MUSS verworfen und protokolliert werden. Dabei gilt Spec 024:
   Ein Änderungspaket ist unteilbar und wird als Ganzes verworfen, wenn eine
@@ -826,26 +869,27 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   Admin MUSS eine Nachricht erhalten, auf die hin ein Gerät des Admins das
   Mitglied nach FR-018 entfernt.
 - **FR-034**: Der Admin DARF den eigenen Space nicht verlassen.
-- **FR-043** (Schließen beim Rotieren): Rotiert die Vault des Admins ihre
-  Vault-Identität (Spec 024, „Schließen und Verlassen beim Rotieren“), MUSS
-  holzi den Space mit der alten Identität schließen, bevor es auf die neue
-  wechselt; rotiert die Vault eines Mitglieds, MUSS holzi den Space mit der
-  alten Identität nach FR-033 verlassen. Das Schließen ist endgültig: Ein
-  geschlossener Space DARF sich NICHT wieder öffnen lassen, auch nicht vom
-  Admin, und holzi MUSS danach für ihn nichts mehr hochladen (das Relay nimmt
-  ebenfalls nichts mehr an, Spec 026). Sobald ein Gerät eines Mitglieds das
-  Schließen erfährt, MUSS es den Space als „vom Admin geschlossen“ zeigen, die
-  Synchronisierung beenden und die Dateien im Ordner liegen lassen. Die
-  Admin-Rolle MUSS dabei bei keiner anderen Identität landen (D23). Ein
-  Mitglied, dessen Identität rotiert ist, kommt nur über eine neue Einladung
-  (FR-008) wieder hinein.
+
+**Schlüssel je Gerät**
+
+- **FR-043** (Schlüssel je Gerät der Mitglieds-Vault): Ein Gerät des Admins
+  MUSS jede Schlüsselgeneration eines Space mit NIP-44 an jedes Gerät
+  verpacken, das auf der aktuellen Geräteliste einer Vault der zugehörigen
+  Mitgliederliste steht, an dessen Geräteschlüssel (D28). Gerätelisten der
+  Mitglieds-Vaults erfährt es aus der Annahme (FR-009), über das Relay (Spec 026) oder über direkte Verbindungen; eine neuere Geräteliste ersetzt eine
+  ältere nach den Regeln von Spec 024. Jede Mitglieds-Vault MUSS die
+  empfangenen Schlüssel zusätzlich in ihren eigenen Vault-Daten ablegen, damit
+  ein später hinzugekommenes Gerät die bestehenden Generationen über die
+  Synchronisierung der eigenen Vault erhält; spätere Generationen verpackt ein
+  Gerät des Admins direkt an dieses Gerät. Ein Gerät, das nicht mehr auf der
+  Geräteliste seiner Vault steht, DARF keine Umschläge späterer Generationen
+  erhalten.
 
 **Anzeige**
 
 - **FR-035**: holzi MUSS eine Übersicht aller Spaces der Vault zeigen, mit Name,
   Rolle (Admin oder Mitglied), eigener Fähigkeitsstufe und Zustand auf diesem
-  Gerät („synchronisiert“, „noch nicht gebunden“, „angehalten“, „entfernt“,
-  „vom Admin geschlossen“, FR-043).
+  Gerät („synchronisiert“, „noch nicht gebunden“, „angehalten“, „entfernt“).
   Offene Einladungen stehen darüber.
 - **FR-036**: Die Ansicht eines Space MUSS Name, gebundenen Ordner dieses Geräts,
   Speicher-Backend, den Admin und alle Mitglieder mit Namen, Vault-Identität,
@@ -870,19 +914,19 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
 - **Space**: Kennung, Name (nur verschlüsselt außerhalb der Geräte), Admin
   (Vault-Identität), Speicher-Backend, Dateiindex, Mitgliederlisten und
   Schlüsselgenerationen. Der Bereich eines Space, mit eigenem Postfach am
-  Relay, sofern der Admin eines eingerichtet hat. Zustand: offen oder
-  endgültig geschlossen (FR-043).
+  Relay, sofern der Admin eines eingerichtet hat.
 - **Mitgliederliste**: Kennung des Space, Generation, Einträge
   „Vault-Identität → Fähigkeitsstufe“, Ausstellungs- und Ablaufzeit, bei
   Entfernen oder Herabstufen die Grenze je Gerät der betroffenen Vault
-  (FR-024), Unterschrift des Admins. Verschlüsselt im Space; eine lesbare Fassung am
+  (FR-024), Unterschrift eines Geräts des Admins (D29). Verschlüsselt im Space; eine lesbare Fassung am
   Relay (Spec 026).
 - **Mitglied**: Vault-Identität, Name im Space, Fähigkeitsstufe. Nur
   aufgenommene Vaults sind Mitglieder. Namen stehen nur im verschlüsselten
   Teil.
 - **Schlüsselgeneration**: Nummer, zugehörige Mitgliederliste, erstellendes
-  Gerät des Admins, Inhaltsschlüssel verpackt je Vault der Mitgliederliste und
-  je später hinzugekommenem Mitglied. Mehrere Generationen gelten
+  Gerät des Admins, Inhaltsschlüssel verpackt je Gerät laut Geräteliste jeder
+  Vault der Mitgliederliste und je Gerät später hinzugekommener Mitglieder
+  (FR-043). Mehrere Generationen gelten
   nebeneinander.
 - **Einladung**: verschlüsselte Direktnachricht (FR-041) an eine Vault-Identität mit
   Kennung und Name des Space, Admin, Fähigkeitsstufe und Hinweisen auf das
@@ -931,8 +975,8 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
 
 ## Assumptions
 
-- Spec 024 liefert Vault-Identität, Geräteschlüssel, Gerätebestätigungen und die
-  Synchronisierung eigener Geräte; Spec 025 Dateiindex, Objekte, Konfliktkopien
+- Spec 024 liefert Vault-Identität, Geräteschlüssel, Gerätelisten, Hauptgeräte
+  und verknüpfte Geräte und die Synchronisierung eigener Geräte; Spec 025 Dateiindex, Objekte, Konfliktkopien
   und die Bindung an einen lokalen Ordner; Spec 026 Relay, Postfächer, die
   Prüfung der Mitgliederliste und Speicher-Backend A.
 - Wie für eigene Geräte (Spec 025) wählt jedes Gerät den lokalen Ordner selbst.
@@ -957,26 +1001,23 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   Mitgliederliste (Vault-Identitäten und Fähigkeiten), Zeiten und Größen (D9).
 - Das Relay kann Daten zurückhalten, aber weder lesen noch fälschen (D11).
   Verfügbarkeit sichern direkte Übertragung und mehrere Geräte.
-- Die Kosten einer Rotation wachsen mit der Zahl der Mitglieds-Vaults, nicht
-  der Geräte. Für v1 wird mit Spaces bis etwa 20 Mitgliedern gerechnet.
+- Die Kosten einer neuen Schlüsselgeneration wachsen mit der Zahl der Geräte
+  aller Mitglieds-Vaults, weil je Gerät ein Umschlag entsteht (D28). Für v1 wird
+  mit Spaces bis etwa 20 Mitgliedern mit je wenigen Geräten gerechnet.
 
 ## Nicht im Umfang
 
 - Weiterteilen durch Mitglieder oder Einladen durch andere als den Admin (D7).
   Dass jemand Dateien herunterlädt und anderswo erneut teilt, wird nicht
   verhindert.
-- Admin-Rolle übertragen, weder beim Rotieren der Vault-Identität noch auf
-  Wunsch noch nach Verlust, dazu mehrere Admins oder vergebbare Admin-Rechte
-  (D6, D23, Entwurf §15 Punkt 3). Geht die Vault des Admins verloren, ist der
-  Space eingefroren; rotiert sie, wird er geschlossen (FR-043).
-- Einen geschlossenen Space wieder öffnen (FR-043).
-- Eine Hilfe „neu anlegen und dieselben Mitglieder einladen“ nach dem Schließen
-  beim Rotieren; der Admin legt den Space von Hand neu an und lädt ein.
+- Admin-Rolle übertragen, weder auf Wunsch noch nach Verlust, dazu mehrere
+  Admins oder vergebbare Admin-Rechte (D6, D23, Entwurf §15 Punkt 3). Geht die
+  Vault des Admins verloren, ist der Space eingefroren.
+- Ein Rotieren der Vault-Identität (D26).
 - Vollständiges Neuverschlüsseln alter Dateien nach einem Entzug.
 - Daten aus der SQLite-Datenbank in Spaces (D3; dafür Spec 028).
 - Rechte je Unterordner oder je Datei; Rechte gelten für den ganzen Space.
-- Einen Space auflösen oder löschen, abgesehen vom Schließen beim Rotieren
-  (FR-043). Das Speicher-Backend eines bestehenden
+- Einen Space auflösen oder löschen. Das Speicher-Backend eines bestehenden
   Space zu wechseln kommt mit Spec 029 (User Story 8).
 - Papierkorb oder Wiederherstellen gelöschter Dateien (für Speicher-Backend B
   siehe Spec 029).

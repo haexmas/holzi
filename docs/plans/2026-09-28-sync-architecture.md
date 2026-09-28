@@ -46,33 +46,40 @@ re-delegation between people.
 
 ## 2. Operator decisions
 
-| #   | Decision                                                                                                                                                                          | Date       |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| D1  | A Nostr pubkey identifies one **device**. The same vault runs on several devices at once, each with its own Nostr identity; the **vault identity** is the same on all of them.    | 2026-09-27 |
-| D2  | **Spaces are network folders for files only.** `read` = read all files in the space; `write` = add new files and modify existing ones.                                            | 2026-09-27 |
-| D3  | **SQLite data is not shared via spaces.** Read/write on data is granted individually per user.                                                                                    | 2026-09-27 |
-| D4  | Data shares exist for **single entries and whole collections**. Extensions declare what is shareable through **one uniform schema** the core can check for every extension.       | 2026-09-27 |
-| D5  | An extension may only declare shareables over **its own tables** (prefix `{public_key}__{extension_name}__`).                                                                     | 2026-09-28 |
-| D6  | The **creator of a space or share is its only admin**: invites members, assigns, changes and revokes rights, removes members.                                                     | 2026-09-27 |
-| D7  | Only the admin invites. A recipient cannot re-share. Downloading content and sharing it again in their own space is out of scope to prevent.                                      | 2026-09-27 |
-| D8  | The **vault identity private key lives on every device** of the vault (inside the SQLCipher database). A lost or stolen device is locked out by rotating the vault identity.      | 2026-09-28 |
-| D9  | For v1 the relay guarantee is **"the operator sees no content"**. Per-space pseudonyms are not v1.                                                                                | 2026-09-28 |
-| D10 | Concurrent edits of the same file produce a **conflict copy**.                                                                                                                    | 2026-09-28 |
-| D11 | **The relay is untrusted.** It never holds a user's own S3 credentials.                                                                                                           | 2026-09-28 |
-| D12 | **Both storage backends in v1**: storage provided by the public relay (A) and the user's own S3 (B).                                                                              | 2026-09-28 |
-| D13 | **No MLS.** Its ordered epoch chain does not fit an order-free CRDT (§3.3).                                                                                                       | 2026-09-27 |
-| D14 | Vault copies made before sync keep **one shared vault identity**, derived from the common placeholder.                                                                            | 2026-09-28 |
-| D15 | Until the own relay exists, presence, NAT traversal and invitations use **preset public Nostr and iroh relays**, changeable in settings.                                          | 2026-09-28 |
-| D16 | Synced files live in a **user-chosen folder of the file system** on each device (own folders and spaces).                                                                         | 2026-09-28 |
-| D17 | A scope lives on **exactly one home relay** in v1; further relays only help with NAT traversal.                                                                                   | 2026-09-28 |
-| D18 | Delete: `write` deletes own entries or files, `delete` is needed for everyone else's (§11).                                                                                       | 2026-09-28 |
-| D19 | Revocation acts **forward only**, with a receipt-time check against the newest known member list and an immediate relay block; the remaining window is accepted (§11).            | 2026-09-28 |
-| D20 | Own S3 in v1: **RustFS and AWS S3**, verified and tested. MinIO is dropped (no longer open source); R2, B2 and Hetzner follow after verification.                                 | 2026-09-28 |
-| D21 | Only the **admin** of a scope uploads compaction snapshots; in the vault scope any own device.                                                                                    | 2026-09-28 |
-| D22 | **Invites also create a new key generation**; key generations and member-list versions stay one counter.                                                                          | 2026-09-28 |
-| D23 | **No admin hand-over in v1.** On rotation holzi closes the scopes the vault administers and leaves the others, signed with the old identity; nothing depends on members' consent. | 2026-09-28 |
-| D24 | On storage backend A **the relay transfers the encrypted objects itself**; there are no presigned links.                                                                          | 2026-09-28 |
-| D25 | S3 providers that fail the setup check **cannot be connected**; no fallback path.                                                                                                 | 2026-09-28 |
+| #   | Decision                                                                                                                                                                                                                                                                                              | Date       |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| D1  | A Nostr pubkey identifies one **device**. The same vault runs on several devices at once, each with its own Nostr identity; the **vault identity** is the same on all of them.                                                                                                                        | 2026-09-27 |
+| D2  | **Spaces are network folders for files only.** `read` = read all files in the space; `write` = add new files and modify existing ones.                                                                                                                                                                | 2026-09-27 |
+| D3  | **SQLite data is not shared via spaces.** Read/write on data is granted individually per user.                                                                                                                                                                                                        | 2026-09-27 |
+| D4  | Data shares exist for **single entries and whole collections**. Extensions declare what is shareable through **one uniform schema** the core can check for every extension.                                                                                                                           | 2026-09-27 |
+| D5  | An extension may only declare shareables over **its own tables** (prefix `{public_key}__{extension_name}__`).                                                                                                                                                                                         | 2026-09-28 |
+| D6  | The **creator of a space or share is its only admin**: invites members, assigns, changes and revokes rights, removes members.                                                                                                                                                                         | 2026-09-27 |
+| D7  | Only the admin invites. A recipient cannot re-share. Downloading content and sharing it again in their own space is out of scope to prevent.                                                                                                                                                          | 2026-09-27 |
+| D8  | ~~Superseded by D27.~~ The **vault identity private key lives on every device** of the vault (inside the SQLCipher database). A lost or stolen device is locked out by rotating the vault identity.                                                                                                   | 2026-09-28 |
+| D9  | For v1 the relay guarantee is **"the operator sees no content"**. Per-space pseudonyms are not v1.                                                                                                                                                                                                    | 2026-09-28 |
+| D10 | Concurrent edits of the same file produce a **conflict copy**.                                                                                                                                                                                                                                        | 2026-09-28 |
+| D11 | **The relay is untrusted.** It never holds a user's own S3 credentials.                                                                                                                                                                                                                               | 2026-09-28 |
+| D12 | **Both storage backends in v1**: storage provided by the public relay (A) and the user's own S3 (B).                                                                                                                                                                                                  | 2026-09-28 |
+| D13 | **No MLS.** Its ordered epoch chain does not fit an order-free CRDT (§3.3).                                                                                                                                                                                                                           | 2026-09-27 |
+| D14 | Vault copies made before sync keep **one shared vault identity**, derived from the common placeholder.                                                                                                                                                                                                | 2026-09-28 |
+| D15 | Until the own relay exists, presence, NAT traversal and invitations use **preset public Nostr and iroh relays**, changeable in settings.                                                                                                                                                              | 2026-09-28 |
+| D16 | Synced files live in a **user-chosen folder of the file system** on each device (own folders and spaces).                                                                                                                                                                                             | 2026-09-28 |
+| D17 | A scope lives on **exactly one home relay** in v1; further relays only help with NAT traversal.                                                                                                                                                                                                       | 2026-09-28 |
+| D18 | Delete: `write` deletes own entries or files, `delete` is needed for everyone else's (§11).                                                                                                                                                                                                           | 2026-09-28 |
+| D19 | Revocation acts **forward only**, with a receipt-time check against the newest known member list and an immediate relay block; the remaining window is accepted (§11).                                                                                                                                | 2026-09-28 |
+| D20 | Own S3 in v1: **RustFS and AWS S3**, verified and tested. MinIO is dropped (no longer open source); R2, B2 and Hetzner follow after verification.                                                                                                                                                     | 2026-09-28 |
+| D21 | Only the **admin** of a scope uploads compaction snapshots; in the vault scope any own device.                                                                                                                                                                                                        | 2026-09-28 |
+| D22 | **Invites also create a new key generation**; key generations and member-list versions stay one counter.                                                                                                                                                                                              | 2026-09-28 |
+| D23 | **No admin hand-over in v1.** (Rotation part superseded by D26.) On rotation holzi closes the scopes the vault administers and leaves the others, signed with the old identity; nothing depends on members' consent.                                                                                  | 2026-09-28 |
+| D24 | On storage backend A **the relay transfers the encrypted objects itself**; there are no presigned links.                                                                                                                                                                                              | 2026-09-28 |
+| D25 | S3 providers that fail the setup check **cannot be connected**; no fallback path.                                                                                                                                                                                                                     | 2026-09-28 |
+| D26 | **No identity rotation in v1.** A lost device is no problem while a copy or the relay exists and the passphrase holds. Replaces the rotation parts of D23; the admin role stays non-transferable.                                                                                                     | 2026-09-28 |
+| D27 | **Main and linked devices**: only main devices hold the vault identity private key and may add or remove devices; several are possible; a signed device list replaces attestations; linking is preferred over copying; transferring the vault key when linking is opt-in with a warning. Replaces D8. | 2026-09-28 |
+| D28 | Space and share keys are wrapped to **every device** on the member vault's device list.                                                                                                                                                                                                               | 2026-09-28 |
+| D29 | **Any device** of the admin vault may manage spaces and shares; only device management needs a main device.                                                                                                                                                                                           | 2026-09-28 |
+| D30 | Only the vault identity private key is direct-only; S3 credentials and content keys are ordinary, recoverable vault data.                                                                                                                                                                             | 2026-09-28 |
+| D31 | Optional **recovery package** on the relay: recovery key never leaves the device, possession proof plus second factor (TOTP or e-mail link).                                                                                                                                                          | 2026-09-28 |
+| D32 | The relay syncs **SQLite data only**; files go only through optional operator storage (backend A). A **password manager** (spec 030) holds secrets such as S3 credentials.                                                                                                                            | 2026-09-28 |
 
 ## 3. What exists today, and what the references teach
 
@@ -84,8 +91,8 @@ re-delegation between people.
   `NoopSignatureProvider` is configured in `src-tauri/src/instances/vault_config.rs`.
 - `src-tauri/src/identity/bootstrap.rs` mints a **placeholder** `vault_identity` keypair (random
   bytes shaped like secp256k1 keys); real key generation was explicitly deferred to the sync slice.
-- `vault_identity` has no `_no_sync` suffix, so its private key replicates with the vault. This is
-  intended under D8, but it must never leave the vault-internal channel (§6).
+- `vault_identity` has no `_no_sync` suffix, so its private key replicates with the vault. Under D27
+  it must reach only main devices, so this storage has to change.
 - `known_devices` (`src-tauri/src/storage/known_devices.rs`) maps installation UUIDs to vault-device
   UUIDs; the vault-device UUID is the HLC node id.
 
@@ -148,35 +155,39 @@ is not what holzi wants:
 
 ## 4. Identity model
 
-| Key                                   | Scope      | Held by                        | Used for                                                                                                                  |
-| ------------------------------------- | ---------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| **Device key** (secp256k1, Nostr)     | one device | that device only (`_no_sync`)  | NIP-42 auth at relays, signing changes and file-index entries, signing the device's iroh NodeId                           |
-| **iroh endpoint key** (ed25519)       | one device | that device only               | QUIC transport; bound to the device key by a signed statement                                                             |
-| **Vault identity** (secp256k1, Nostr) | one vault  | every device of the vault (D8) | device attestations, admin signatures on member lists, receiving NIP-44 key envelopes, the vault's public npub for grants |
+**Revised 2026-09-28 (D26–D30); replaces D8 and the rotation parts of D23.**
 
-- **Device attestation**: the vault identity signs `{vault_npub, device_npub, iroh_node_id,
-issued_at}`. Every verifier (own devices, other users' devices, the relay) resolves "device D acts
-  for vault V" through this attestation.
-- **Grants name vaults, never devices.** The granter does not learn how many devices the recipient
-  has, and the recipient adds devices without the granter acting.
-- **Device revocation (D8)**: because every device holds the vault private key, a stolen device can
-  mint attestations for itself. Locking one device out therefore means **rotating the vault
-  identity**: new keypair, re-attest the remaining devices, and close or leave every
-  shared scope (next bullet); counterparties learn the new npub only through new invitations. This
-  is the accepted cost; the SQLCipher
-  passphrase is what protects a lost device's database.
-- **No hand-over of the admin role (D23)**: the admin role is never transferred in v1, and nothing
-  depends on members' consent. As part of a rotation, holzi uses the old identity one last time to
-  **close** every space and share the vault administers and to **leave** every one it is a member
-  of. A signed closure is terminal: the relay accepts nothing more for that scope, members see
-  "closed by the admin", keep their local copies, and sync stops. The relay keeps the mailbox
-  read-only until the last member list expires, then deletes it. The vault's own scope gets a new
-  mailbox under the new identity. With the new identity the admin can create the scope again and
-  re-invite; a rotated member is re-invited like any new member. The thief, who also holds the old
-  key, can at most close a scope as well or keep it alive until the rightful rotation closes it; it
-  can never move the admin role.
+| Key                                   | Scope                 | Held by                           | Used for                                                                                                                       |
+| ------------------------------------- | --------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **Device key** (secp256k1, Nostr)     | one device (instance) | that device only, never leaves it | the device's own identity: signing changes, lists and file-index entries, NIP-42 auth at relays, receiving key envelopes (D28) |
+| **iroh endpoint key** (ed25519)       | one device            | that device only                  | QUIC transport; bound to the device key by a signed statement                                                                  |
+| **Vault identity** (secp256k1, Nostr) | one vault             | **main devices only** (D27)       | the vault's stable public address (grants, member lists, invitations); signs the device list                                   |
+
+- **Main devices and linked devices (D27)**: a vault runs on several devices, each an instance with
+  its own device key. A **main device** (Hauptgerät) holds the vault identity private key and may add
+  and remove devices; there may be several. The first instance is a main device. A **linked device**
+  (verknüpftes Gerät) reads and writes all vault data and may manage spaces and shares (D29), but
+  cannot add or remove devices.
+- **Device list** (Geräteliste): signed with the vault identity by a main device; lists every current
+  device (public device key, role, network id, and the device name encrypted for the vault's own devices only) with a generation. It follows the member-list
+  rules (§10.3): higher generation replaces lower, same generation → smallest hash wins, fail
+  closed. Relay, own devices and member devices accept a device only if it is on the vault's current
+  device list. It replaces per-device attestations.
+- **Linking** is the preferred way to add a device: the new instance joins via code or QR from a main
+  device, which adds it to the device list and wraps the vault's content-key generations to its
+  device key. holzi asks whether to also transfer the vault identity private key (making it a main
+  device); the default is no, with the warning that a compromised main device plus a known
+  passphrase is a total loss. The key travels only over the direct link. Copying the SQLite file
+  stays possible as a secondary way; the copy gets a new device key and syncs only once a main device
+  lists it (a copy of a main device can list itself).
+- **Removing** a device (main devices only): a new device list without it, plus a new generation of
+  the vault's own content key wrapped to the remaining devices. From then on nobody delivers anything
+  to it and it cannot decrypt new changes; data already on it stays. Removing a main device only
+  works against an honest device.
+- **No identity rotation in v1 (D26)**: a lost device is no problem as long as a copy or the relay
+  exists and the passphrase holds. The admin role of a space or share is never transferable (D23).
 - Presence and addressing: each device publishes its current iroh `NodeAddr` as an encrypted Nostr
-  event addressed to its own vault identity. This replaces iroh's default pkarr/DNS discovery, so no
+  event for its own vault's devices. This replaces iroh's default pkarr/DNS discovery, so no
   third-party discovery infrastructure is required.
 
 ## 5. Common building blocks
@@ -226,26 +237,27 @@ scope_keys(scope_id, key_id, epoch, created_by_vault, created_at_hlc,
 - **New members also receive envelopes for the older generations**, so they can read content that
   existed before they joined (the same history decision as haex-vault ADR 0002).
 - Only the scope's admin writes `scope_keys` for spaces and data shares (D6), so concurrent rotations
-  can only come from the admin's own devices. For the vault-internal scope the vault key is static
-  and rotates only with the vault identity.
+  can only come from the admin vault's own devices. The vault-internal scope gets a new generation
+  whenever a device is removed (D27), wrapped to the remaining devices.
 - Envelope format: as specified in the deferred design §2 (canonical JSON `{content_key, epoch,
 scope_id}` in NIP-44 v2, envelope bound to scope, epoch and recipient).
 
-### 5.3 Wrap to the vault, not the device
+### 5.3 Wrap to every device of the member vault (D28)
 
-Envelopes are addressed to the recipient's **vault identity**. The first device of the recipient
-vault that sees the envelope unwraps it and stores the content key in its own vault. Vault-internal
-sync (§6) distributes it to that user's other devices. Consequences:
-
-- Multi-device is entirely separated from cross-user key management.
-- Rotation costs O(recipient vaults), not O(devices).
+Grants and member lists name vaults, but envelopes are addressed to **each device** on the member
+vault's current device list. A member vault also stores the keys it receives in its own vault data,
+so a device linked later gets existing keys through the vault's own sync; later generations are
+wrapped to it directly. The admin therefore learns how many devices a member vault has (accepted).
+Rotation costs O(devices of the member vaults). Admin actions may come from any device of the admin
+vault (D29); the signature is the device's, and it is valid while that device is on the admin
+vault's device list.
 
 ### 5.4 Authorship
 
 - Every change carries `author_device_npub` and `author_vault_npub` inside the sealed payload; the
   per-column signature is made with the device key over `(scope_id, table, pks, column, hlc,
 author_vault_npub, value)`.
-- Receivers verify signature → attestation (device ∈ vault) → capability of that vault in that
+- Receivers verify signature → device list (device ∈ vault) → capability of that vault in that
   scope. This is the real `SignatureProvider` for shared scopes; `NoopSignatureProvider` remains
   valid only for the vault-internal scope over an authenticated iroh link.
 - `haex-crdt` must stop stamping the scanning device as `device_id` for relayed changes (§3.2). The
@@ -270,19 +282,17 @@ author_vault_npub, value)`.
 - **Scope**: the whole vault except `_no_sync` tables. No permission checks between own devices;
   trust comes from the vault identity.
 - **Transport**: an iroh ALPN, working name `holzi-sync/1`. Handshake: both sides present their
-  device attestation and prove possession of the device key; the peer accepts only attestations
-  signed by its own vault identity.
+  device key and prove possession of it; the peer accepts only devices on its own vault's current
+  device list.
 - **Exchange**: swap version vectors, stream the missing sealed batches in both directions, apply
   through `apply_remote_changes`.
 - **Discovery**: the encrypted presence event (§4). The relay also runs an **iroh relay** for NAT
   traversal, as haex-sync-server already co-hosts one.
-- **Direct-only data**: some vault data travels only over direct links between devices of the same
-  vault, never through any relay mailbox (not even the vault's own) and never into another scope:
-  the vault identity private key, the admin's full S3 credentials (§12 B), and unwrapped content
-  keys and storage tokens of spaces and shares. Each device unwraps the envelopes addressed to the
-  vault identity itself, which D8 allows. Everything else, including the envelopes and the file
-  index of own synced folders with its per-file keys, may use the vault's own mailbox. The filter is
-  a structural allow-list rather than a deny-list.
+- **Direct-only data (D30)**: only the vault identity private key is direct-only. It goes to a new
+  main device only by explicit choice over the direct link, and otherwise only inside the encrypted
+  recovery package (§10.5). Device keys never leave their device at all. Everything else, including
+  S3 credentials in the password manager and unwrapped content keys, is ordinary vault data: it
+  syncs, also through the vault's own mailbox, and is recoverable.
 - **Atomicity**: a sealed batch is applied all-or-nothing; one invalid change rejects the whole batch,
   so HLC groups stay intact. A compaction snapshot is checked per complete HLC transaction group:
   an invalid change rejects its whole group, other groups are kept. A partial group is never applied.
@@ -326,8 +336,8 @@ travels with ordinary plane-1 sync.
   means objects travel only between devices. With no relay at all, the space syncs only while
   members are online together.
 - **Direct links between member vaults**: devices of different member vaults may connect directly
-  for one scope. The handshake presents a device attestation of a vault on that scope's current
-  member list, and the link carries only that scope's data. Discovery uses presence addressed to
+  for one scope. The handshake proves a device key that is on the device list of a vault on that
+  scope's current member list, and the link carries only that scope's data. Discovery uses presence addressed to
   the scope's member vaults or the relay's signalling.
 - **Transfer**: objects travel as iroh-blobs (BAO-verified, resumable) between peers, or through a
   storage backend (§12). A device fetches an object from whichever source has it.
@@ -437,11 +447,16 @@ neither read nor forge. It is not a peer: no vault, no passphrase, no apply.
 
 It bundles three services:
 
-1. **Mailboxes** for sealed batches, one per scope (vault-internal, space, data share). Served over
-   the same iroh ALPN family, so the relay is a "blind peer" that speaks the sync protocol but only
-   stores and forwards.
+1. **Mailboxes** for sealed batches of **SQLite data only**, one per scope (vault-internal, space,
+   data share). Served over the same iroh ALPN family, so the relay is a "blind peer" that speaks
+   the sync protocol but only stores and forwards. Files never go into a mailbox (D32).
 2. An **iroh relay** for NAT traversal.
 3. Optionally a **Nostr relay** for presence, invites and signaling.
+4. Optionally **storage backend A**: S3-compatible storage run by the relay operator for space
+   files. The relay service checks access and streams each encrypted object from that storage
+   (D24); every object exists once. With the user's own S3 (backend B) the relay is not involved in
+   files.
+5. Optionally **recovery packages** (§10.5).
 
 ### 10.2 Mailboxes
 
@@ -464,9 +479,9 @@ list** that the admin uploads (the deferred design's §4 projection):
 MemberList { scope_id, epoch, grants: [{vault_npub, caps}], issued_at, expires_at, admin_sig }
 ```
 
-- A request authenticates with the **device key** (NIP-42 challenge) and presents its **device
-  attestation**. The relay checks the admin signature, that the attested vault is in the current
-  list, and that the capability fits (`read` for pulls, `write` for pushes).
+- A request authenticates with the **device key** (NIP-42 challenge). The relay keeps the latest
+  device list of every vault it serves and checks the admin-device signature, that the device is on
+  the device list of a vault in the current member list, and that the capability fits (`read` for pulls, `write` for pushes).
 - A higher epoch replaces a lower one; missing, expired or invalid lists fail closed.
 - **Same-generation lists**: two admin devices can publish different valid lists with the same
   generation. Relay and receivers apply one rule: the list with the lexicographically smallest hash
@@ -485,9 +500,28 @@ MemberList { scope_id, epoch, grants: [{vault_npub, caps}], issued_at, expires_a
 ### 10.4 What the relay sees (D9)
 
 Sees: IP addresses, timing, sizes, scope ids, the member list per scope (vault npubs + capabilities),
-device npubs through attestations. Does not see: any content, table or column names, PKs, HLCs, file
+device npubs through the device lists. Does not see: any content, table or column names, PKs, HLCs, file
 names, file sizes beyond ciphertext length. Batches may be padded to size buckets. Per-scope
 pseudonyms are a post-v1 option.
+
+### 10.5 Recovery package (D31)
+
+Optional and opt-in. holzi generates a high-entropy **recovery key**, shows it once as code or QR,
+and the user keeps it offline. From it the device derives an encryption key for the **recovery
+package** and an authentication keypair. The relay stores only the public authentication key (and a
+lookup id derived from it), the encrypted package and the second-factor setup. It never sees the
+recovery key, the encryption key or the private authentication key.
+
+- Content: the vault identity private key, the vault's content-key generations, the list of relays.
+  A main device keeps it current (re-encrypts and uploads on every new generation).
+- Retrieval needs both a **possession proof** (the device signs a relay challenge with the private
+  authentication key; nothing secret is sent) and a **second factor**: TOTP by default, or a link to
+  a stored e-mail address, which the user opts into knowing the relay then holds that address (the
+  only exception to D9). Rate limit and lockout after failed attempts.
+- Decryption happens only on the device. holzi then restores the vault from its mailbox (snapshot
+  plus batches); the user sets a new passphrase; the restored instance is a main device and
+  publishes a new device list.
+- Storing the recovery key encrypted with another person is a later spec and always user-initiated.
 
 ## 11. Capabilities
 
@@ -563,27 +597,28 @@ by ciphertext hash from a signed file index. Only the way a device obtains acces
 
 ## 13. Threat model
 
-| Property                 | Secured by                                                                                                        | Relay / storage can                                                                                  |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Confidentiality          | encryption; keys only in members' vaults                                                                          | nothing                                                                                              |
-| Integrity / authenticity | per-chunk AEAD, ciphertext-hash object ids, per-column device signatures, attestations, admin-signed member lists | nothing — forgery is rejected by receivers                                                           |
-| Authorization            | receivers enforce all rules; relay gate is additional                                                             | let an unauthorized request through (still not applied) or refuse a valid one                        |
-| Availability             | redundancy: direct iroh sync, several own devices, snapshots                                                      | delete, withhold, serve stale state — detected by version vectors and sequence gaps, not preventable |
-| Removed member           | key rotation, relay gate, token rotation                                                                          | — ; the removed member keeps what it could already decrypt (accepted, as in haex-vault ADR 0002)     |
-| Stolen device            | SQLCipher passphrase; vault identity rotation (D8)                                                                | —                                                                                                    |
+| Property                 | Secured by                                                                                                  | Relay / storage can                                                                                  |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Confidentiality          | encryption; keys only in members' vaults                                                                    | nothing                                                                                              |
+| Integrity / authenticity | per-chunk AEAD, ciphertext-hash object ids, per-column device signatures, device lists, signed member lists | nothing — forgery is rejected by receivers                                                           |
+| Authorization            | receivers enforce all rules; relay gate is additional                                                       | let an unauthorized request through (still not applied) or refuse a valid one                        |
+| Availability             | redundancy: direct iroh sync, several own devices, snapshots                                                | delete, withhold, serve stale state — detected by version vectors and sequence gaps, not preventable |
+| Removed member           | key rotation, relay gate, token rotation                                                                    | — ; the removed member keeps what it could already decrypt (accepted, as in haex-vault ADR 0002)     |
+| Stolen device            | SQLCipher passphrase; removal from the device list (D27)                                                    | —                                                                                                    |
 
 ## 14. Proposed spec cut
 
 Spec numbers 017–021 are reserved for agent control; the next free numbers start at 024.
 
-| Spec | Scope                                                                                                                                                                            | Depends on                                 |
-| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| 024  | Real secp256k1 vault identity and device keys, device attestations, iroh endpoint, presence via Nostr, `holzi-sync/1` between own devices (plane 1), authorship fix in haex-crdt | —                                          |
-| 025  | Own-device file sync: file index, encrypted immutable objects, iroh-blobs, conflict copies                                                                                       | 024                                        |
-| 026  | Blind relay: mailboxes, sequence cursors, client snapshots, signed member lists, iroh relay, storage backend A                                                                   | 024                                        |
-| 027  | Spaces: member lists, invites, capabilities, key epochs, revocation, rotation                                                                                                    | 025, 026                                   |
-| 028  | Data shares: shareable declaration schema, prefix validation, closure computation, sender/receiver guards                                                                        | 024, 026, extension table storage in holzi |
-| 029  | Storage backend B: own S3, scoped tokens, versioning                                                                                                                             | 027                                        |
+| Spec | Scope                                                                                                                                                                                                      | Depends on                                 |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| 024  | Real secp256k1 vault identity and device keys, main and linked devices, device list, linking, iroh endpoint, presence via Nostr, `holzi-sync/1` between own devices (plane 1), authorship fix in haex-crdt | —                                          |
+| 025  | Own-device file sync: file index, encrypted immutable objects, iroh-blobs, conflict copies                                                                                                                 | 024                                        |
+| 026  | Blind relay: mailboxes, sequence cursors, client snapshots, signed member lists, iroh relay, storage backend A                                                                                             | 024                                        |
+| 027  | Spaces: member lists, invites, capabilities, key epochs, revocation, rotation                                                                                                                              | 025, 026                                   |
+| 028  | Data shares: shareable declaration schema, prefix validation, closure computation, sender/receiver guards                                                                                                  | 024, 026, extension table storage in holzi |
+| 029  | Storage backend B: own S3, scoped tokens, versioning                                                                                                                                                       | 027, 030                                   |
+| 030  | Password manager: integral secret store (e.g. S3 credentials), usable by extensions with permission, synced and recoverable like other vault data                                                          | 024                                        |
 
 Structural items that belong in 024 even though only the vault-internal scope exists then: the real
 `SignatureProvider` seam, the sealed-batch format with `scope_id`/`key_id`, the allow-list that keeps
@@ -595,13 +630,12 @@ vault secrets on plane 1, and `created_by` support in the core.
 2. ~~**Revocation vs. concurrent writes**~~ — decided (D19).
 3. **Admin loss**: if the admin vault is lost entirely, the space or share is frozen (content stays,
    membership cannot change). Is a "transfer admin" feature needed, and when?
-4. ~~**Vault identity rotation flow**~~ — decided (D23): no hand-over; scopes are closed or left and
-   re-created or re-joined by invitation.
+4. ~~**Vault identity rotation flow**~~ — dropped: no rotation in v1 (D26).
 5. ~~**Snapshot authority**~~ — decided (D21).
 6. **Relay discovery and trust configuration**: how a vault picks relays. Several relays per scope
    are not v1 (D17).
-7. **Wire formats and event kinds**: sealed batch, member list, attestation, presence, invite DM.
-8. **Rotation cost**: O(recipient vaults) per membership change — measure before large spaces appear.
+7. **Wire formats and event kinds**: sealed batch, member list, device list, presence, invite DM, recovery package.
+8. **Rotation cost**: O(devices of the member vaults) per membership change — measure before large spaces appear.
 9. **Mobile**: plane 1 while the app is foreground-only (v1-scope availability classes).
 10. **Extension storage in holzi**: data shares (028) need extension-owned, prefixed CRDT tables,
     which holzi does not have yet.

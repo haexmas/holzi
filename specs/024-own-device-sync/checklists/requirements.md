@@ -31,59 +31,37 @@
 
 ## Notes
 
-- Two clarification markers remain open for `/speckit-clarify`:
-  - FR-004: whether vault copies made before this spec (placeholder identity)
-    keep one shared identity derived from the placeholder, or each copy gets a
-    fresh identity and becomes a separate vault.
-  - FR-008: which servers carry presence and NAT traversal before the own
-    relay (spec 026) exists: preset public Nostr/iroh relays, user-entered
-    servers only, or local network only without a configured server. The
-    same servers carry invitations to spaces and data shares (spec 027), so
-    the answer applies to them too.
-- iroh, Nostr and secp256k1 are operator-mandated constraints from the design
-  document; they are named in the Input, Begriffe and Assumptions. The
-  requirements describe observable behaviour and security properties
-  (mutual attestation check, encrypted change packages on every link,
-  allow-list for anything leaving the vault scope). The "no implementation
-  details" items are ticked on that basis.
-- Operator decisions D1, D8, D9, D11 and D13 are recorded as clarifications;
-  the spec cut (§14 of the design) sets P1 for sync via copied vault files,
-  P2 for pairing a fresh install and P3 for locking out a lost device.
-- Lock-out acceptance on remaining devices (FR-027) requires a per-device user
-  confirmation with a check code, because a stolen device holds the old vault
-  identity (D8) and could sign any hand-over itself. This answers design §15
-  item 4. Spec 024 is the single owner of vault identity rotation, also for
-  shared scopes: FR-039 to FR-041 add the signed hand-over per space/data
-  share, check-code confirmation by members, and the relay freezing a scope on
-  competing hand-overs; specs 026–028 reference 024 for it (SC-013).
-- Cross-spec resolutions applied: the Nur-direkt-Daten list (FR-038, tested by
-  SC-012; FR-018 now treats the vault's own relay mailbox as scope „Vault“),
-  package atomicity vs per-change snapshot checks (FR-013), the owner re-issue
-  exception for forwarding between overlapping data shares (FR-021), the
-  one-device rule limited to presence and direct sync in scope „Vault“
-  (FR-007, SC-007), and the device list as sub-view „Geräte“ of „Föderation“
-  (FR-033, FR-035).
-- The pairing flow replaces the unbuilt "Verbinden" flow of spec 001 (user
-  story 2, FR-015 to FR-017 there); `peer_instances` and the
-  `pairing-authority`/`confirmation-authority` capabilities of v1-scope §4 are
-  explicitly out of scope, since all devices of a vault are equal under D8.
-- "Bereich" (scope) collides with the "Bereich / Unteransicht" of settings
-  categories in spec 023; the Begriffe section disambiguates it.
-- SC-011 (multi-process end-to-end tests) depends on the spec 016 rig being
-  able to run several app processes; the plan confirms this.
-
-- 2026-09-28: the operator answered all clarification questions for this spec; the markers are
-  resolved in the spec and recorded under Clarifications. Notes above that describe open markers are
-  historical.
-- 2026-09-28, review of PR #155/#156: FR-019 now defines „lückenloser Fortschritt“ (gap-free
-  per-origin sequence numbers next to the HLC, explicit gap requests, forgery rejection; SC-014).
-  New FR-042 „Grenze beim Entzug“ (revocation cutoff by sequence number, no timestamp rule; SC-015,
-  narrowed to the D19 window) and FR-043 „Mitgliederlisten gleicher Generation“ (smallest list hash
-  wins; SC-016). FR-013 checks snapshots per complete transaction group (SC-017). FR-007 lets
-  one-device vaults listen for presence so a fresh copy is found (SC-002, SC-007). FR-040/FR-041
-  replaced the relay freeze by a majority rule (SC-013). The note above about the relay freezing a
-  scope is historical.
-- 2026-09-28, operator decision D23: no admin hand-over in v1. FR-039 „Schließen und Verlassen beim
-  Rotieren“, FR-040 „Schließen ist endgültig“ and FR-041 „Admin-Rolle nicht übertragbar“ replace the
-  hand-over, member acceptances and majority rule; User Story 6 scenarios 6–9 and SC-013 test the new
-  model. The majority note above is historical.
+- 2026-09-28, operator decisions D26 to D31 (identity model v2) replace D8 and the rotation parts of
+  D23; they supersede every earlier note about identity rotation, lock-out by a new vault identity,
+  per-device attestations and closing or leaving shared scopes on rotation. Those notes are removed.
+- There is no vault identity rotation in v1 (D26). Only main devices (Hauptgeräte) hold the vault
+  identity private key and sign the device list (Geräteliste, FR-005), which replaces per-device
+  attestations everywhere; several main devices are allowed (D27). Linked devices (verknüpfte
+  Geräte) read and write all vault data and may manage spaces and data shares (D29, FR-040).
+- User stories: US1 data sync (P1), US2 only own devices (P1), US3 gap-free progress and authorship
+  (P1), US4 Föderation → Geräte with roles and the read-only public vault identity (P2, FR-033 to
+  FR-035, new FR-046), US5 link a device (P1, FR-023 to FR-025; role question, default linked device,
+  total-loss warning), US6 remove a device (P2, FR-026 to FR-028: new device list with a cutoff
+  „Grenze beim Entfernen“ plus a new generation of the vault content key), US7 copy of the vault file
+  as a secondary way (P2, new FR-044 „Kopie der Vault-Datei“ and FR-045 „Aufnahmeanfrage“).
+- FR-039 is now „Umschläge an jedes Gerät“ (D28, own side: the vault stores received keys; SC-019),
+  FR-040 „Jedes Gerät der Admin-Vault verwaltet“ (D29), FR-041 „Admin-Rolle nicht übertragbar“ (D23,
+  without rotation). FR-038 „Nur-direkt-Daten“ now covers only the vault identity private key (D30;
+  SC-012). SC-013 now tests device-list integrity and same-generation merges. Recovery is spec 026
+  (D31).
+- Kept mechanisms: package atomicity and per-group snapshot checks (FR-013, SC-017), gap-free
+  progress (FR-019, SC-014), revocation cutoff (FR-042, SC-015), same-generation lists (FR-043,
+  SC-016, now also for device lists), one-device presence bootstrap adapted to the device list
+  (FR-007, SC-002, SC-007).
+- iroh, Nostr, secp256k1 and NIP-44 are operator-mandated constraints from the design document;
+  they are named in the Input, Begriffe and Assumptions. The requirements describe observable
+  behaviour and security properties. The "no implementation details" items are ticked on that basis.
+- The linking flow replaces the unbuilt "Verbinden" flow of spec 001 (user story 2, FR-015 to
+  FR-017 there); the main-device role corresponds to `pairing-authority` of v1-scope §4, while
+  `peer_instances` and `confirmation-authority` are out of scope.
+- "Bereich" (scope) collides with the "Bereich / Unteransicht" of settings categories in spec 023;
+  the Begriffe section disambiguates it.
+- SC-011 (multi-process end-to-end tests) depends on the spec 016 rig being able to run several app
+  processes; the plan confirms this.
+- All clarification markers are resolved and recorded under Clarifications; superseded answers are
+  marked there.

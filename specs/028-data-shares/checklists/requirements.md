@@ -45,9 +45,11 @@
   invite, creates a new key generation, and new recipients get all older
   generations (FR-010, FR-011); capabilities are three nested levels as in 027
   (FR-008); member-list rules adopted from 027 (FR-016); unwrapped content keys
-  are "Nur-direkt-Daten" per 024 (FR-022); package atomicity per 024 (FR-024);
-  invite transport and direct connections between members come from 027;
-  identity rotation is owned by 024 (edge cases); management lives in the
+  are ordinary vault data, not "Nur-direkt-Daten" (FR-022, D30); package
+  atomicity per 024 (FR-024); invite transport and direct connections between
+  members come from 027; no identity rotation in v1 (D26); keys are wrapped
+  per device on each vault's Geräteliste (FR-043, D28); any device of the
+  owner vault may manage (FR-014, FR-016, D29); management lives in the
   settings category "Föderation", sub-view "Datenfreigaben" (FR-015).
 - The declaration schema is described by the information it must carry (FR-001),
   not by syntax; the manifest format is plan work and touches `vault-sdk` and
