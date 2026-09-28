@@ -589,11 +589,12 @@ by ciphertext hash from a signed file index. Only the way a device obtains acces
 - **Limit**: S3 cannot enforce "delete own files only"; a read-write token can delete any object.
   File-index tombstones remain client-checked. Physically deleted objects are recovered through
   **bucket versioning**, which the setup flow MUST enable.
-- Provider support for bucket-scoped tokens must be verified per provider. Candidates named in the
-  design session, all unverified: Cloudflare R2, Backblaze B2, RustFS, AWS S3; Hetzner Object Storage
-  unknown. Recovery also needs a read-write token that cannot delete old versions or disable
-  versioning, which narrows the list further. A provider that fails any criterion of the setup check
-  cannot be connected; there is no fallback path (D25).
+- RustFS and AWS S3 are the v1 providers from D20 and have been verified and tested against the
+  setup criteria. The remaining candidates named in the design session — Cloudflare R2, Backblaze
+  B2 and Hetzner Object Storage — are not v1 providers until that verification is done. Recovery
+  also needs a read-write token that cannot delete old versions or disable versioning, which narrows
+  the list further. A provider that fails any criterion of the setup check cannot be connected; there
+  is no fallback path (D25).
 
 ## 13. Threat model
 
@@ -641,5 +642,5 @@ vault secrets on plane 1, and `created_by` support in the core.
     which holzi does not have yet.
 11. ~~**Existing vault copies**~~ — decided (D14).
 12. ~~**Presence and NAT servers before the own relay**~~ — decided (D15).
-13. **Supported S3 providers in v1**: decided as RustFS and AWS S3 (D20); whether each supports
-    scoped tokens, versioning and tokens that cannot delete old versions is still to verify.
+13. **Additional S3 providers**: RustFS and AWS S3 are the verified v1 providers (D20); whether
+    Cloudflare R2, Backblaze B2 or Hetzner Object Storage meet the same criteria remains to verify.
