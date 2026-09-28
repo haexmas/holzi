@@ -23,10 +23,10 @@ Technischer Ansatz (Begründungen in [research.md](./research.md)):
 - **Schlüssel** (R2, R3): Vault-Identität öffentlich synchronisiert, privat nur in
   `vault_identity_secret_no_sync` auf Hauptgeräten; Geräte- und iroh-Schlüssel je Installation in
   `device_keys_no_sync`; alte Vaults leiten ihre Identität deterministisch aus dem Platzhalter ab.
-- **Schreiben über `execute_with_crdt`** (R19, Betreiber-Entscheidung): alle 24 Schreibstellen
-  laufen über ein Modul `storage/vault_db.rs` auf einer kleinen Erweiterung von haex-crdt
-  (`Database::write` mit mehreren `execute_with_crdt` in einer Transaktion, BLOB-Parameter,
-  einstellbare Größengrenze). Der Transformer setzt den HLC, das von Hand gesetzte
+- **Schreiben über den CRDT-Weg** (R19, Betreiber-Entscheidung): alle Zugriffe (heute 56 Aufrufe
+  von `with_connection` in 15 Produktionsdateien) laufen über ein Modul `storage/vault_db.rs` auf
+  `Database::write` und `Database::read` von haex-crdt (#34 bis #36): mehrere
+  `CrdtTransaction::execute` in einer Transaktion, BLOB-Parameter, einstellbare Größengrenze. Der Transformer setzt den HLC, das von Hand gesetzte
   `haex_hlc_no_sync = current_hlc()` entfällt. Jede Schreibung ist eine Transaktion und damit eine
   Transaktionsgruppe, und nach dem Commit stößt sie den Sync an.
 - **Abgleich je Ursprungsgerät** (R4): kein Paketprotokoll, keine Laufnummern. Der Ursprung steht im
@@ -87,7 +87,7 @@ VII); Ende der Vault-Session beendet alles innerhalb der Fristen von Spec 013 (F
 Schlüssel nie in Protokollen (FR-002); Dateien ≤ 500 Zeilen; Rahmen ≤ 4 MiB
 
 **Scale/Scope**: 1–10 Geräte je Vault; 1 neues Rust-Modul `sync/` mit rund 15 Dateien, 1 neues
-Modul `storage/vault_db.rs` mit 24 umgestellten Stellen; 10 neue Tabellen, 1 geänderte; 13 Befehle; 3 Ereignisse; 5 neue Aktionen; 2 Oberflächen (Unteransicht „Geräte“,
+Modul `storage/vault_db.rs`, auf das alle heutigen Datenbankzugriffe umziehen; 10 neue Tabellen, 1 geänderte; 13 Befehle; 3 Ereignisse; 5 neue Aktionen; 2 Oberflächen (Unteransicht „Geräte“,
 „Mit einer Vault verknüpfen“)
 
 ## Constitution Check
@@ -158,7 +158,7 @@ src-tauri/
 ├── clippy.toml                        # Database::with_connection unter disallowed-methods (R19)
 ├── src/storage/vault_db.rs, _tests.rs # NEU: read, write über CrdtTransaction, Anstoß des Sync (R19)
 ├── src/storage/{chat_*,models,preferences,providers,known_devices,…}.rs  # ohne current_hlc() von Hand
-├── src/{chat,providers,models,device,storage,adapters,voice}/…  # 24 Stellen auf vault_db umgestellt
+├── src/{chat,providers,models,device,storage,adapters,voice}/…  # alle Zugriffe auf vault_db umgestellt
 ├── src/sync/                          # NEU
 │   ├── mod.rs                         # SyncService: Start nach dem Öffnen, Ende am Gate-Token
 │   ├── keys.rs, keys_tests.rs         # Vault-Identität, Geräte-/iroh-Schlüssel, Ableitungen (R2, R3)
@@ -228,8 +228,8 @@ Reine Anzeige-Logik unter `src/lib/sync/` (unter Node testbar wie `src/lib/setti
 Jeder Schritt ist ein eigener PR und für sich prüfbar.
 
 0. **haex-crdt E1/E2** im Repository haex-crdt, danach neue Revision in holzi pinnen.
-1. **Schreiben über `execute_with_crdt`** (R19): zuerst jede heutige Anweisung durch den
-   Transformer testen, dann `storage/vault_db.rs`, alle 24 Stellen umstellen, mehrteilige
+1. **Schreiben über den CRDT-Weg** (R19): zuerst jede heutige Anweisung durch den
+   Transformer testen, dann `storage/vault_db.rs`, alle Zugriffe umstellen, mehrteilige
    Schreibungen in eine Transaktion, von Hand gesetzte HLCs entfernen, `clippy.toml`, Aufräumen der
    Löschvermerke (R20). Ohne Verhaltensänderung für die Nutzerin; bestehende Tests bleiben grün.
 2. **Schlüssel und Geräteliste** ohne Netz: Migrationen, Bootstrap, Ableitung aus dem Platzhalter,

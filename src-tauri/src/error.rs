@@ -4,6 +4,7 @@
 use serde::Serialize;
 use ts_rs::TS;
 
+use haex_crdt::db::error::DatabaseError;
 use haex_crdt::{Error as CrdtError, MigrationJournal};
 
 #[derive(Debug, thiserror::Error, Serialize, TS)]
@@ -118,6 +119,16 @@ pub enum HolziError {
         bytes: usize,
     },
 
+    /// The parameters of one vault write transaction exceed
+    /// `DatabaseConfig::max_transaction_bytes` (spec 024, research R20); nothing was written.
+    #[error("The change is too large to save ({bytes} bytes, limit {limit})")]
+    TransactionTooLarge {
+        #[ts(type = "number")]
+        bytes: usize,
+        #[ts(type = "number")]
+        limit: usize,
+    },
+
     // --- HuggingFace discovery / install (spec 005) ---------------------
     #[error("Network error contacting Hugging Face: {reason}")]
     Network { reason: String },
@@ -218,12 +229,34 @@ impl From<CrdtError> for HolziError {
                 HolziError::MigrationCompatibility { reason }
             }
             CrdtError::CrdtAlreadyInstalled { table } => HolziError::CrdtAlreadyInstalled { table },
-            // RemoteHlcDriftTooLarge is not part of the MVP mapping — sync
-            // is deferred. Catch-all Message covers it until sync lands.
+            CrdtError::Database(DatabaseError::VaultAlreadyOpenElsewhere { .. }) => {
+                HolziError::VaultAlreadyOpenElsewhere
+            }
+            CrdtError::Database(DatabaseError::TransactionTooLarge { bytes, limit }) => {
+                HolziError::TransactionTooLarge { bytes, limit }
+            }
+            // A `HolziError` returned from inside a `Database::write` / `Database::read`
+            // closure travels as `Consumer` and comes back out unchanged.
+            CrdtError::Consumer(source) => match source.downcast::<HolziError>() {
+                Ok(holzi) => *holzi,
+                Err(source) => HolziError::CrdtInit {
+                    reason: source.to_string(),
+                },
+            },
+            // RemoteHlcDriftTooLarge and the remaining database-layer variants have no
+            // dedicated holzi variant yet; sync (spec 024) adds the ones it surfaces.
             other => HolziError::CrdtInit {
                 reason: other.to_string(),
             },
         }
+    }
+}
+
+impl From<HolziError> for CrdtError {
+    /// Carries a holzi error out of a `Database::write` / `Database::read` closure; the
+    /// reverse mapping above unwraps it again.
+    fn from(err: HolziError) -> Self {
+        CrdtError::consumer(err)
     }
 }
 
@@ -243,3 +276,7 @@ fn journal_label(j: MigrationJournal) -> &'static str {
         MigrationJournal::ConsumerOwned => "haex_app_migrations_no_sync",
     }
 }
+
+#[cfg(test)]
+#[path = "error_tests.rs"]
+mod tests;

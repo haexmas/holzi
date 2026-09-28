@@ -588,6 +588,7 @@
     "vaultAlreadyOpenElsewhere": "This vault is open in another Holzi instance.",
     "vaultAlreadyActive": "A vault is already open in this window.",
     "vaultClosed": "The vault was closed.",
+    "transactionTooLarge": "The change is too large to save. Large files do not belong in the vault database.",
     "hf": {
       "invalidInput": "Invalid input.",
       "network": "Network error — please check your connection.",
