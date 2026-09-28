@@ -26,8 +26,9 @@ lp(endpoint_x) ‖ lp(endpoint_y) ‖ lp(vault)))`, `lp` = `u32 BE Länge ‖ By
 - `ListRef = { generation, list_hash }`. Kennt eine Seite eine höhere oder gleich hohe Liste mit
   kleinerem Hash, sendet sie diese auf einem eigenen Kontroll-Stream (`DeviceListPush`), bevor
   irgendetwas anderes fließt. Der Empfänger wartet auf den vollständigen Stream, prüft Hash,
-  Vault-Signatur, Generation, `issued_by`, Basisliste und Inhalt nach FR-005 und übernimmt die Liste
-  atomar. Erst danach wird die geltende Liste neu gewählt.
+  Vault-Signatur, Generation, Basisliste und Inhalt nach FR-005 und übernimmt die Liste atomar.
+  `issued_by` wird dabei als Information gespeichert, ist aber keine Berechtigungs- oder
+  Übernahmebedingung. Erst danach wird die geltende Liste neu gewählt.
 - Vor dem Listenabgleich prüft jede Seite weiterhin `endpoint` des Gegenübers gleich
   `Connection::remote_id()`, die Authentifizierungssignatur, `vault` gleich der eigenen und
   `schema` verträglich. Nach dem vollständigen Listenabgleich prüft sie mit der aktualisierten
@@ -65,12 +66,14 @@ Ablauf:
    Transaktionsgruppe teilen. Gerätelokale Tabellen scannt er nie.
 4. Passt eine Gruppe nicht in einen Rahmen, reist sie in mehreren `Page`s mit
    `group_continues = true` bis auf die letzte. Der Empfänger puffert sie und wendet sie erst an,
-   wenn sie vollständig ist; übersteigt sie die eingestellte Transaktionsgrenze
-   (`DatabaseConfig.max_transaction_bytes`), bricht er den `Pull` ab.
-5. Der Empfänger prüft jede Seite je Transaktionsgruppe (research R5), wendet die gültigen Gruppen
-   in einer Transaktion an und erhöht danach je Ursprung seinen Fortschritt auf den höchsten HLC
-   dieses Ursprungs in der Seite, angewendet oder abgelehnt. Bricht die Verbindung vorher ab, gilt
-   der Stand der zuletzt angewendeten Seite.
+   wenn sie vollständig ist. Er berechnet ihre Größe mit derselben kanonischen
+   `serialized_parameter_bytes`-Regel wie `CrdtTransaction`; übersteigt sie
+   `DatabaseConfig.max_transaction_bytes`, bricht er den `Pull` ab.
+5. Der Empfänger prüft jede vollständige Transaktionsgruppe je Seite (research R5), wendet die
+   gültigen Gruppen in einer Transaktion an und erhöht danach je Ursprung seinen Fortschritt auf
+   den höchsten HLC der vollständig angewendeten oder abgelehnten Gruppe. Für eine unvollständige
+   Gruppe schreibt er weder Fortschritt noch Checkpoint. Bricht die Verbindung vorher ab, verwirft
+   er den Puffer; der nächste `Pull` beginnt beim zuletzt dauerhaft geschriebenen Fortschritt.
 
 **Resync** (research R20): Nennt ein `Pull` für irgendeinen Ursprung einen Stand, der älter ist als
 die Frist für Löschvermerke, antwortet der Sender mit `Resync`. Das veraltete Gerät lässt die
@@ -120,8 +123,10 @@ lp(endpoint_n) ‖ lp(device_h) ‖ lp(device_n) ‖ rolle_x)`, `rolle_x` ∈ {`
   dem ersten Listen-Commit möglich, ohne den verbrauchten Code erneut zu verwenden.
 - `snapshot` sind `Page`s wie in Abschnitt 2 mit dem Stand „nichts“ für jeden Ursprung: alle Zellen
   des Bereichs „Vault“ mit ihren ursprünglichen HLCs, samt Lösch-Log, ohne gerätelokale Tabellen.
-  `progress` ist der Fortschrittsstand von H nach der letzten Seite. N prüft je Transaktionsgruppe
-  (FR-013) und wendet an. `key_generations` und `envelopes_for_n` sind dabei nur der initiale
+  `progress` ist der Fortschrittsstand von H nach der letzten vollständig angewendeten
+  Transaktionsgruppe. N prüft je vollständiger Transaktionsgruppe (FR-013) und wendet an;
+  unvollständige Gruppen ändern weder Fortschritt noch Checkpoint. `key_generations` und
+  `envelopes_for_n` sind dabei nur der initiale
   Link-Transfer; im anschließenden gewöhnlichen Sync laufen diese Zeilen ausschließlich über
   `Pull`/`Page`.
 - Bricht die Verbindung vor `LinkDone` ab, löscht N die angelegte Vault; H verwirft den offenen

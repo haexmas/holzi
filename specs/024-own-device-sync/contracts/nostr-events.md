@@ -41,9 +41,10 @@ Generation, info = "holzi/presence/v1" ‖ tag_u32)`, `tag` = Tage seit 1970 (UT
 - Absender: nur ein Gerät, dessen Geräteliste mindestens ein weiteres Gerät nennt (FR-007). Takt:
   beim Öffnen, bei Adressänderung, alle 60 s.
 - Empfänger prüft: Siegel mit einem Geräteschlüssel der geltenden Geräteliste signiert und gleich
-  `device`; `ts` nicht älter als 150 s; dann Adresse in den `MemoryLookup`, Verbindung aufbauen,
-  wenn noch keine besteht. Meldungen unbekannter Geräte führen zu keiner Verbindung, außer zur
-  Prüfung einer neueren Geräteliste (Kopie eines Hauptgeräts, FR-007).
+  `device`; `ts` nicht älter als 150 s und nicht mehr als 30 s in der Zukunft; erst dann Adresse in
+  den `MemoryLookup` übernehmen und, wenn noch keine besteht, eine Verbindung aufbauen. Meldungen
+  unbekannter Geräte führen zu keiner Verbindung, außer zur Prüfung einer neueren Geräteliste
+  (Kopie eines Hauptgeräts, FR-007).
 - Abo: `{kinds: [21059], "#p": [mb_pk(heute), mb_pk(gestern)]}`, beim Tageswechsel erneuert.
 
 ## Aufnahmeanfrage (inneres Ereignis Art 24101)

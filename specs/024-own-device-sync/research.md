@@ -112,17 +112,17 @@ Es gibt keine gespeicherten Pakete und keine Laufnummern.
   packt es in Seiten, die nie eine Transaktionsgruppe teilen (R6). Das schließt
   `vault_key_generations` und `vault_key_envelopes` ein; sie haben keinen zweiten Lieferweg. Ein
   Ursprung, den die Gegenseite nicht nennt, hat den Cursor „nichts“.
-- **Anwenden**: Der Empfänger prüft jede Seite je Transaktionsgruppe (R5), wendet die gültigen
-  Gruppen über `Database::apply_remote_changes` in einer Transaktion an und erhöht danach je
-  Ursprung seinen Fortschritt auf den höchsten HLC dieses Ursprungs in der Seite, angewendet oder
-  abgelehnt. Der Fortschritt wird erst nach dem Commit geschrieben: Bricht es dazwischen ab, holt das
-  Gerät die Seite noch einmal, `apply` überspringt, was es schon hat (gleicher HLC, LWW), und R5
-  lehnt dieselben Gruppen wieder ab. Ein Fortschritt über dem wirklichen Stand kann so nicht
-  entstehen.
-- **Lückenlos**: Weil jede Seite je Ursprung aufsteigend ist und der Fortschritt nur mit
-  angewendeten Seiten wächst, hat jedes Gerät von jedem Ursprung immer einen Anfang ohne Lücke. Ein
-  Gerät, das über B nur einen Teil von A bekam, fordert beim nächsten Mal ab genau diesem Stand an,
-  bei wem auch immer.
+- **Anwenden**: Der Empfänger puffert unvollständige Gruppen über mehrere Seiten. Er prüft und
+  wendet nur vollständige Gruppen über `Database::apply_remote_changes` in einer Transaktion an;
+  erst nach deren Commit erhöht er je Ursprung den Fortschritt auf den höchsten HLC der Gruppe,
+  angewendet oder abgelehnt. Für eine unvollständige Gruppe schreibt er weder Fortschritt noch
+  Checkpoint. Bei einem Abbruch verwirft er den Puffer und fordert ab dem letzten dauerhaft
+  geschriebenen Stand erneut an; `apply` überspringt dabei, was bereits vorhanden ist (gleicher
+  HLC, LWW).
+- **Lückenlos**: Weil jede Gruppe je Ursprung aufsteigend ist und der Fortschritt nur mit
+  vollständig angewendeten oder abgelehnten Gruppen wächst, hat jedes Gerät von jedem Ursprung
+  immer einen Anfang ohne Lücke. Ein Gerät, das über B nur einen Teil von A bekam, fordert beim
+  nächsten Mal ab genau diesem Stand an, bei wem auch immer.
 - **Überschriebene Spalten**: haex-crdt speichert je Spalte nur den aktuellen Wert mit seinem HLC.
   Hat P eine Spalte aus einer Transaktion von A schon überschrieben, gibt es A's alten Wert auf dem
   Sender nicht mehr; geliefert wird von dieser Transaktion, was noch gilt, und P's Spalte im Ursprung
@@ -272,19 +272,20 @@ Spalte, die Signatur deckt also jedes Feld. Der Name ist mit einem aus dem Inhal
 abgeleiteten Schlüssel verschlüsselt (FR-005: Sync-Server und Mitglieder sehen ihn nicht).
 Gespeichert in der synchronisierten Tabelle `device_lists(list_hash PK, generation, payload,
 signature)`; die geltende Liste ist die höchste Generation, bei Gleichstand der kleinste Hash. Ein
-Gerät gilt als entfernt, sobald irgendeine gültige Liste es als entfernt führt, außer nach der
-Ausnahme unten. Jede Liste führt alle Entfernungen ihrer Basisliste weiter.
+Gerät gilt als entfernt, wenn es die maßgebliche Liste als entfernt führt. Jede Liste führt alle
+Entfernungen ihrer Basisliste weiter.
 
 - **`issued_by`** ist nur eine Angabe. Alle Hauptgeräte haben denselben privaten Schlüssel der
   Vault-Identität, auch ein entferntes; wer die Liste wirklich ausgestellt hat, lässt sich nicht
   fälschungssicher belegen. Eine zweite Signatur mit dem Geräteschlüssel hülfe nicht: Ein entferntes
   Hauptgerät kann über eine ältere Basisliste einen neuen Geräteschlüssel als Hauptgerät eintragen.
   Das ist die hingenommene Grenze aus FR-028.
-- **Gleiche Generation** (FR-043): Gilt Liste L1 (kleinster Hash) und verliert L2, zählen die
-  Entfernungen in L2 nicht, wenn `issued_by` von L2 in L1 entfernt ist (FR-005). Beim gegenseitigen
-  Entfernen zweier Hauptgeräte bleibt so genau eines, das andere wird zum Solitär. Ein Hauptgerät,
-  das beide Listen sieht, veröffentlicht die Vereinigung (aktuelle Geräte beider, abzüglich der
-  zählenden Entfernungen) als nächste Generation.
+- **Gleiche Generation** (FR-043): Gilt Liste L1 (kleinster Hash) und verliert L2, bestimmen nur
+  L1s Geräte- und Entfernungsmenge den geltenden Stand; `issued_by` ist keine Prüf- oder
+  Konfliktregel. Beim gegenseitigen Entfernen zweier Hauptgeräte bleibt so das Hauptgerät aus L1,
+  das andere wird zum Solitär. Ein Hauptgerät, das beide Listen sieht, veröffentlicht eine Liste
+  der nächsten Generation, die den geltenden Stand von L1 und zulässige neue Geräte aus L2
+  zusammenführt, die geltenden Entfernungen weiterführt und mindestens ein Hauptgerät enthält.
 - **Mindestens ein Hauptgerät**: Ein Hauptgerät kann sich nicht selbst entfernen (FR-026); mit der
   Regel für gleiche Generation nennt jede geltende Liste mindestens ein Hauptgerät.
 - **Kopie eines Hauptgeräts** (FR-044): Sie trägt sich mit neuem Geräteschlüssel in eine neue Liste
@@ -296,8 +297,8 @@ Gespeichert als unveränderliche Zeilen statt als eine überschriebene Zeile, da
 entfernt“ aus allen je gesehenen Listen folgt. Aufräumen: R20.
 
 **Verworfen**: `issued_by` als Prüfregel (kausal prior nicht entferntes Hauptgerät; nicht
-fälschungssicher, sperrt aber die Kopie eines Hauptgeräts aus), „beide entfernt“ beim gegenseitigen
-Entfernen (hinterlässt eine Vault ohne Hauptgerät; Betreiber-Entscheidung).
+fälschungssicher, sperrt aber die Kopie eines Hauptgeräts aus), eine Zusammenführung, die die
+maßgebliche Liste ignoriert oder dadurch alle Hauptgeräte entfernt.
 
 ## R9 Inhaltsschlüssel und Umschläge (FR-015)
 
@@ -476,7 +477,7 @@ Transaktion auf. Es hat aber drei Lücken für holzi:
 
 **Entscheidung**:
 
-- **haex-crdt**, ein kleiner, rückwärtsverträglicher PR
+- **haex-crdt**, ein kleiner PR; Rückwärtsverträglichkeit der freien Hilfsfunktionen ist optional
   ([contracts/haex-crdt-upstream.md](./contracts/haex-crdt-upstream.md)):
   `Database::write(|tx: &mut CrdtTransaction| …)` öffnet eine Transaktion; darin laufen beliebig
   viele `tx.execute_with_crdt(sql, params)` und `tx.query_with_crdt(sql, params)` mit einem
@@ -517,11 +518,11 @@ nur aus dem Backend; ein SQL-Befehl wäre eine neue Angriffsfläche für Erweite
 | Tabelle                   | Wächst mit            | Regel                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | ------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `haex_deleted_rows`       | jeder Löschung        | holzi räumt heute nie auf (geprüft: kein Aufruf von `cleanup_deleted_rows`). Neu: Löschvermerke älter als 90 Tage werden gelöscht (`RetentionPolicy::TimeBasedDays { days: 90 }`). Nennt ein `Pull` für irgendeinen Ursprung einen Stand vor dieser Frist, liefert der Sender keine Seiten, sondern `Resync`: Das veraltete Gerät schickt zuerst seine eigenen, noch nicht übertragenen Änderungen (die Gegenseite holt sie per `Pull`) und ersetzt danach seine synchronisierten Tabellen durch eine Momentaufnahme. Sonst tauchten gelöschte Einträge wieder auf. |
-| `device_lists`            | jeder Geräteänderung  | Jede Liste führt alle Entfernungen weiter (R8). Ältere Listen werden gelöscht, sobald eine gültige Nachfolgerin höherer Generation da ist; Listen gleicher Generation bleiben, bis die zusammengeführte Liste da ist.                                                                                                                                                                                                                                                                                                                                               |
+| `device_lists`            | jeder Geräteänderung  | Jede Liste führt alle Entfernungen weiter (R8). Eine ältere Liste darf erst gelöscht werden, wenn keine behaltene Liste mehr in `base_list_hash` auf sie verweist; Listen gleicher Generation bleiben, bis die zusammengeführte Liste da ist. So bleibt für jede behaltene Liste der gesamte gültige Ahnenpfad erhalten.                                                                                                                                                                                                                                            |
 | `sync_progress_no_sync`   | jedem Ursprungsgerät  | eine Zeile je Ursprung, keine abgelehnten Bereiche (R5); Zeilen entfernter Geräte fallen mit ihrer Liste weg, sobald ihr Stand die Grenze erreicht hat.                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `admission_requests`      | Kopien                | nach „Aufnehmen“ oder „Ablehnen“ gelöscht; höchstens 20 offene, jede weitere wird abgewiesen; offene nach 30 Tagen gelöscht.                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `admission_requests`      | Kopien                | Nach jeder Zusammenführung bleiben deterministisch nur die 20 kleinsten offenen Anfragen nach `(requested_at, device_pubkey)` offen; alle übrigen werden `rejected`. Nach „Aufnehmen“ oder „Ablehnen“ gelöscht; offene nach 30 Tagen gelöscht.                                                                                                                                                                                                                                                                                                                      |
 | `pending_links_no_sync`   | Verknüpfungen         | nach Abschluss gelöscht; ohne Abschluss nach 24 h, oder wenn die Nutzerin das Verknüpfen abbricht.                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `vault_key_*`             | jedem Entfernen       | je Generation 32 Byte je Gerät; bleibt in 024. Alte Generationen aufräumen, sobald keine gespeicherten Daten sie mehr brauchen, regelt Spec 026.                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `vault_key_*`             | jedem Entfernen       | je Generation 32 Byte je Gerät. Die Tabellen dürfen erst mit einem Release aktiviert werden, für das Spec 026 eine konkrete, begrenzte Aufbewahrung und den Resync veralteter Geräte definiert; bis dahin ist die Aktivierung ein Release-Gate. Damit gilt „Keine Tabelle wächst ohne Grenze“ für den aktivierten Funktionsumfang.                                                                                                                                                                                                                                  |
 | `device_presence_no_sync` | jedem Gerät der Liste | Zeile beim Entfernen des Geräts gelöscht.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 Die Aufräumarbeiten laufen nach dem Öffnen im vorhandenen Wartungsablauf (`storage/maintenance.rs`)

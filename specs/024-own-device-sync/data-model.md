@@ -80,9 +80,11 @@ Prüfregeln: Signatur der Vault-Identität über den ganzen Datensatz; `base_lis
 bei der ersten Liste, auf eine gültige Liste mit niedrigerer Generation; die Liste führt alle
 Entfernungen ihrer Basisliste weiter; kein Gerät steht zugleich in `devices` und `removed`; kein
 Geräteschlüssel und keine `vault_device_uuid` doppelt; mindestens ein Gerät mit Rolle `main`.
-`issued_by` ist nur eine Angabe und wird nicht als Berechtigung geprüft (research R8). Bei zwei
-gültigen Listen derselben Generation gilt die mit dem kleinsten Hash; Entfernungen in der anderen
-zählen nicht, wenn deren `issued_by` in der gewinnenden entfernt ist (FR-005, FR-043).
+`issued_by` ist nur eine Angabe und wird weder als Berechtigung noch als Bedingung für die
+Übernahme geprüft (research R8). Bei zwei gültigen Listen derselben Generation ist die mit dem
+kleinsten Hash maßgeblich; nur ihre Geräte- und Entfernungsmengen bestimmen den geltenden Stand.
+Eine zusammengeführte Liste der nächsten Generation muss die geltenden Entfernungen dieser Liste
+weiterführen und mindestens ein Hauptgerät enthalten (FR-005, FR-043).
 
 ### `vault_key_generations` (neu, synchronisiert, nur Einfügen)
 
@@ -130,8 +132,10 @@ Generation genau an die Liste gebunden sein, die diese Entfernung und ihre `limi
 | `origin`  | TEXT PK | `vault_device_uuid` des Ursprungsgeräts = Knoten-ID im HLC                                  |
 | `max_hlc` | TEXT    | höchster HLC, bis zu dem alle Änderungen dieses Ursprungs angewendet oder nach R5 abgelehnt |
 
-Geschrieben nur nach dem Commit einer Seite und nur nach oben. Abgelehnte Gruppen eines entfernten
-Geräts werden nicht gespeichert: Die Regel aus research R5 lehnt sie bei jedem Empfang wieder ab.
+Geschrieben nur nach dem Commit einer vollständigen Transaktionsgruppe und nur nach oben. Für eine
+unvollständige Gruppe werden weder Fortschritt noch Checkpoint geschrieben; bei einem Abbruch wird
+der Puffer verworfen. Abgelehnte Gruppen eines entfernten Geräts werden nicht gespeichert: Die
+Regel aus research R5 lehnt sie bei jedem Empfang wieder ab.
 Für das eigene Gerät wird der Fortschritt nicht gespeichert, sondern aus dem eigenen jüngsten HLC
 gebildet. Fehlt ein Ursprung, gilt „nichts“.
 
@@ -167,8 +171,11 @@ die Nutzerin das Verknüpfen ab oder ist der Datensatz älter als 24 h, wird er 
 | `state`             | TEXT        | `open` \| `admitted` \| `rejected`                                |
 
 Übergänge: `open → admitted` (Hauptgerät, „Aufnehmen“, gleichzeitig neue Geräteliste) und `open →
-rejected` („Ablehnen“). Keine Rückkehr. Nach der Entscheidung wird die Zeile gelöscht; höchstens 20
-offene Anfragen, offene nach 30 Tagen gelöscht (R20).
+rejected` („Ablehnen“). Keine Rückkehr. Nach jeder Zusammenführung sortiert jedes Gerät offene
+Anfragen deterministisch nach `(requested_at, device_pubkey)` und lässt nur die ersten 20 offen;
+alle weiteren werden idempotent zu `rejected`. So führt dieselbe zusammengeführte Menge auf allen
+Geräten zum selben Ergebnis. Nach der Entscheidung wird die Zeile gelöscht; offene Anfragen nach
+30 Tagen ebenfalls (R20).
 
 ### `device_presence_no_sync` (neu, gerätelokal)
 

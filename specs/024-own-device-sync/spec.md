@@ -295,12 +295,11 @@ Wiederherstellung kommen mit Spec 026.
   Wiederherstellungspaket. Abrufen erfordert den Besitznachweis des
   Wiederherstellungsschlüssels, ohne ihn zu übertragen, und einen zweiten
   Faktor (TOTP oder E-Mail-Link) (D31). Das regelt Spec 026.
-- Q: Was passiert, wenn sich zwei Hauptgeräte gegenseitig entfernen? → A: Kein
-  Wettlauf: Beide gelten danach als entfernt, weil eine Entfernung bestehen
-  bleibt (FR-005). Reparatur über ein Gerät mit dem privaten Schlüssel der
-  Vault-Identität, das sich mit neuem Geräteschlüssel wieder einträgt, oder
-  über das Wiederherstellungspaket; der Betreiber hat das als akzeptabel
-  angesehen. (Überholt beim Review des Plans, siehe unten.)
+- Q: Was passiert, wenn sich zwei Hauptgeräte gegenseitig entfernen? → A: Die
+  gültige Liste derselben Generation mit dem kleinsten Hash ist maßgeblich. Ihre
+  Entfernung zählt, die Entfernung der verlierenden Liste nicht; so bleibt das
+  Hauptgerät der gewinnenden Liste erhalten. Eine zusammengeführte Liste der
+  nächsten Generation führt diese Entfernung weiter.
 - Q: Reisen Änderungen zwischen eigenen Geräten in gespeicherten, signierten
   Paketen mit Laufnummern? → A: Nein, das ist unnötig schwer. haex-crdt trägt
   in jedem Zeitstempel das Ursprungsgerät. Geräte vergleichen je Ursprungsgerät
@@ -317,13 +316,11 @@ Wiederherstellung kommen mit Spec 026.
   Verknüpfen), iroh-Relay (Verbindungshelfer) oder Sync-Server (Spec 026, bisher
   „das Relay“); ein weiteres eigenes Gerät ist ein Gerät der Vault.
 - Q: Darf eine Geräteliste ohne Hauptgerät entstehen, wenn sich zwei
-  Hauptgeräte gegenseitig entfernen? → A: Nein. Es muss immer mindestens ein
-  Hauptgerät geben: Wer ein anderes Hauptgerät entfernt, bleibt selbst
-  Hauptgerät und signiert die Liste für alle übrigen. Beim gleichzeitigen
-  gegenseitigen Entfernen gilt die Liste mit dem kleinsten Hash (FR-043); die
-  Entfernung in der anderen Liste zählt nicht, weil ihr Aussteller in der
-  gewinnenden Liste entfernt ist. Genau ein Hauptgerät bleibt, das andere wird
-  zum Solitär (FR-005).
+  Hauptgeräte gegenseitig entfernen? → A: Nein. Jede gültige Liste muss
+  mindestens ein Hauptgerät nennen. Beim gleichzeitigen gegenseitigen Entfernen
+  gilt die Liste mit dem kleinsten Hash (FR-043) samt ihrer Entfernung; die
+  verlierende Liste ist für Geräte und Entfernungen nicht maßgeblich. Genau ein
+  Hauptgerät bleibt, das andere wird zum Solitär (FR-005).
 - Q: Lässt sich fälschungssicher prüfen, welches Hauptgerät eine Geräteliste
   ausgestellt hat? → A: Nein. Alle Hauptgeräte haben denselben privaten
   Schlüssel der Vault-Identität; auch ein entferntes Hauptgerät kann damit
@@ -745,12 +742,11 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   in einer der beiden Listen entferntes Gerät bleibt entfernt (FR-005).
 - Zwei Hauptgeräte entfernen sich gleichzeitig gegenseitig: Das ist kein
   Wettlauf, sondern eindeutig. Unter den beiden Listen derselben Generation
-  gilt die mit dem kleinsten Hash (FR-043). Die Entfernung in der anderen Liste
-  zählt nicht, weil deren Aussteller in der gewinnenden Liste entfernt ist
-  (FR-005). Auf allen Geräten, die beide Listen kennen, bleibt so unabhängig
-  von der Reihenfolge des Eintreffens genau eines der beiden Hauptgerät; das
-  andere ist entfernt und wird zum Solitär. Eine Geräteliste ohne Hauptgerät
-  entsteht dadurch nie.
+  gilt die mit dem kleinsten Hash samt ihrer Geräte- und Entfernungsmenge
+  (FR-043). Die Entfernung der anderen Liste zählt nicht. Auf allen Geräten,
+  die beide Listen kennen, bleibt so unabhängig von der Reihenfolge des
+  Eintreffens genau eines der beiden Hauptgerät; das andere ist entfernt und
+  wird zum Solitär. Eine Geräteliste ohne Hauptgerät entsteht dadurch nie.
 - Die Nutzerin entfernt ein Gerät, während keines ihrer anderen Geräte online
   ist: Die neue Geräteliste erreicht die anderen Geräte (und ab Spec 026 den
   Sync-Server), sobald ein Weg besteht. Bis dahin kann das entfernte Gerät mit
@@ -834,14 +830,14 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   FR-043. Ein Empfänger MUSS jede Liste verwerfen, deren Signatur nicht zur
   Vault-Identität passt, und die letzte gültige behalten; kann er keine gültige
   Liste prüfen, DARF er mit keinem Gerät dieser Vault synchronisieren (fail
-  closed). Ein Gerät, das in irgendeiner gültigen Liste als entfernt steht,
-  MUSS für diesen Empfänger entfernt bleiben, auch wenn eine gewinnende Liste
-  derselben Generation es noch nennt. Einzige Ausnahme: Eine Entfernung zählt
-  nicht, wenn die Liste, die sie enthält, eine Liste derselben Generation
-  verliert (FR-043), in der ihr Aussteller selbst entfernt ist. So bleibt beim
-  gegenseitigen Entfernen zweier Hauptgeräte genau eines Hauptgerät, und jede
-  gültige Geräteliste nennt mindestens ein Hauptgerät. Der Aussteller einer
-  Liste ist nur eine Angabe und nicht fälschungssicher (Clarifications). Die Geräteliste ist gewöhnliche
+  closed). Ein Gerät, das in der maßgeblichen gültigen Liste als entfernt steht,
+  MUSS für diesen Empfänger entfernt bleiben, auch wenn eine andere Liste
+  derselben Generation es noch nennt. Bei Listen derselben Generation ist nur die
+  Liste mit dem kleinsten Hash für Geräte und Entfernungen maßgeblich;
+  Entfernungen der verlierenden Liste zählen nicht. So bleibt beim gegenseitigen
+  Entfernen zweier Hauptgeräte genau eines Hauptgerät, und jede gültige
+  Geräteliste nennt mindestens ein Hauptgerät. Der Aussteller einer Liste ist
+  nur eine Angabe und nicht fälschungssicher (Clarifications). Die Geräteliste ist gewöhnliche
   Vault-Information und reist mit dem Sync; der Sync-Server (Spec 026) und die Geräte
   der Mitglieder von Spaces und Datenfreigaben (Specs 027, 028) prüfen jedes
   Gerät gegen die aktuelle Geräteliste seiner Vault.
@@ -1100,9 +1096,9 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   zusammenführt. Dieselbe Regel gilt für Gerätelisten (FR-005): Ein
   Hauptgerät, das zwei verschiedene Gerätelisten derselben Generation sieht,
   MUSS eine zusammengeführte Liste der nächsthöheren Generation
-  veröffentlichen, in der ein in einer der beiden Listen entferntes Gerät
-  entfernt bleibt, außer nach der Ausnahme in FR-005. Specs 026, 027 und 028
-  wenden diese Regel an.
+  veröffentlichen, die den geltenden Stand der Liste mit dem kleinsten Hash und
+  neue zulässige Geräte aus der anderen Liste zusammenführt und die geltenden
+  Entfernungen weiterführt. Specs 026, 027 und 028 wenden diese Regel an.
 
 **Gerät verknüpfen (P1)**
 
@@ -1369,8 +1365,8 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   Veröffentlichen zwei Hauptgeräte verschiedene Gerätelisten derselben
   Generation, wählen alle Geräte dieselbe, unabhängig von der Reihenfolge des
   Eintreffens, ein Hauptgerät veröffentlicht danach eine zusammengeführte Liste
-  der nächsten Generation, und ein in einer der beiden entferntes Gerät bleibt
-  entfernt, außer nach der Ausnahme in FR-005. Entfernen sich zwei Hauptgeräte
+  der nächsten Generation, und die geltenden Entfernungen der maßgeblichen
+  kleinsten Hash-Liste bleiben erhalten. Entfernen sich zwei Hauptgeräte
   gegenseitig, bleibt auf allen Geräten dasselbe der beiden Hauptgerät.
 - **SC-014**: In einer automatischen Prüfung, die Änderungen über mehrere Wege
   zustellt und Übertragungen an zufälligen Stellen abbricht, steht der

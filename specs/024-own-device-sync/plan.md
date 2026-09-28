@@ -40,8 +40,9 @@ Technischer Ansatz (Begründungen in [research.md](./research.md)):
 - **Präsenz** (R7): flüchtige Nostr-Ereignisse im NIP-59-Aufbau an einen täglich wechselnden
   Postfach-Schlüssel aus dem Inhaltsschlüssel.
 - **Geräteliste** (R8) als unveränderliche, signierte Zeilen; höchste Generation, dann kleinster
-  Hash; entfernt bleibt entfernt, außer die Entfernung stammt aus einer verlierenden Liste, deren
-  Aussteller die gewinnende entfernt. So nennt jede geltende Liste mindestens ein Hauptgerät.
+  Hash; bei gleicher Generation ist die Liste mit dem kleinsten Hash maßgeblich und ihre
+  Entfernungen sind die geltenden Entfernungen. `issued_by` bleibt informativ und entscheidet keine
+  Entfernung. Eine gültige geltende Liste nennt daher mindestens ein Hauptgerät.
 - **Grenzen** (R6, R7, R20): Rahmen vor dem Handshake ≤ 64 KiB, danach ≤ 4 MiB, große Gruppen über
   mehrere Rahmen; Nostr-Ereignisse ≤ 16 KiB; jede Tabelle mit Aufräumregel, Löschvermerke nach 90
   Tagen mit `Resync` für veraltete Geräte.

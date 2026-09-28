@@ -42,11 +42,17 @@ impl CrdtTransaction<'_> {
 ## E2 Einstellbare Grenze je Transaktion
 
 - `DatabaseConfig.max_transaction_bytes: usize`, Standard `MAX_CRDT_TRANSACTION_BYTES` (100 MiB).
-- `CrdtTransaction` zählt die serialisierte Größe aller Parameter aller Anweisungen einer
-  Transaktion und bricht mit `DatabaseError::TransactionTooLarge` ab, sobald die Summe die Grenze
-  übersteigt, bevor die überschreitende Anweisung schreibt.
+- Die kanonische Byteabrechnung `serialized_parameter_bytes` ist die Summe der Längen der
+  kanonischen Serialisierung jedes Bind-Parameters, in Anweisungs- und Parameterreihenfolge.
+  SQL-Text, Spaltennamen, HLC-Metadaten sowie Transaktions- und Seitenrahmen zählen nicht. Diese
+  eine Abrechnung wird sowohl von `CrdtTransaction` als auch vom Sync für die zum Anwenden einer
+  vollständigen Transaktionsgruppe gebildete Parameterliste verwendet; dadurch prüfen lokaler
+  Schreibweg und Empfänger dieselbe Größe.
+- `CrdtTransaction` bricht mit `DatabaseError::TransactionTooLarge` ab, sobald die Summe die
+  Grenze übersteigt, bevor die überschreitende Anweisung schreibt.
 - `Database::max_transaction_bytes()` gibt den Wert heraus; holzi nutzt ihn als Obergrenze für eine
-  Transaktionsgruppe im Sync (contracts/sync-protocol.md).
+  Transaktionsgruppe im Sync. Der Sync verwirft eine Gruppe, sobald ihre vollständige
+  `serialized_parameter_bytes`-Summe diese Grenze übersteigt (contracts/sync-protocol.md).
 
 ## Tests in haex-crdt
 
