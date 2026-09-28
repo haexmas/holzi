@@ -300,7 +300,7 @@ Wiederherstellung kommen mit Spec 026.
   bleibt (FR-005). Reparatur über ein Gerät mit dem privaten Schlüssel der
   Vault-Identität, das sich mit neuem Geräteschlüssel wieder einträgt, oder
   über das Wiederherstellungspaket; der Betreiber hat das als akzeptabel
-  angesehen.
+  angesehen. (Überholt beim Review des Plans, siehe unten.)
 - Q: Reisen Änderungen zwischen eigenen Geräten in gespeicherten, signierten
   Paketen mit Laufnummern? → A: Nein, das ist unnötig schwer. haex-crdt trägt
   in jedem Zeitstempel das Ursprungsgerät. Geräte vergleichen je Ursprungsgerät
@@ -316,6 +316,19 @@ Wiederherstellung kommen mit Spec 026.
 - Q: Was meint „Relay“? → A: Nie allein. Es heißt Nostr-Relay (Präsenz,
   Verknüpfen), iroh-Relay (Verbindungshelfer) oder Sync-Server (Spec 026, bisher
   „das Relay“); ein weiteres eigenes Gerät ist ein Gerät der Vault.
+- Q: Darf eine Geräteliste ohne Hauptgerät entstehen, wenn sich zwei
+  Hauptgeräte gegenseitig entfernen? → A: Nein. Es muss immer mindestens ein
+  Hauptgerät geben: Wer ein anderes Hauptgerät entfernt, bleibt selbst
+  Hauptgerät und signiert die Liste für alle übrigen. Beim gleichzeitigen
+  gegenseitigen Entfernen gilt die Liste mit dem kleinsten Hash (FR-043); die
+  Entfernung in der anderen Liste zählt nicht, weil ihr Aussteller in der
+  gewinnenden Liste entfernt ist. Genau ein Hauptgerät bleibt, das andere wird
+  zum Solitär (FR-005).
+- Q: Lässt sich fälschungssicher prüfen, welches Hauptgerät eine Geräteliste
+  ausgestellt hat? → A: Nein. Alle Hauptgeräte haben denselben privaten
+  Schlüssel der Vault-Identität; auch ein entferntes Hauptgerät kann damit
+  signieren. Der Aussteller steht in der Liste nur als Angabe. Das ist die
+  hingenommene Grenze aus FR-028 und der Warnung in FR-024.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -715,7 +728,8 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   nicht angewendet und beim nächsten Mal ab dem Fortschrittsstand neu geholt.
 - Eine Transaktion von A wurde auf B schon zum Teil von einer jüngeren Änderung
   überschrieben, bevor C sie von B holt: C erhält von dieser Transaktion nur
-  den Teil, der auf B noch gilt, und die jüngere Änderung dazu. Kommen beide in
+  die Spalten, die auf B noch gelten, und die jüngere Änderung dazu; die alten
+  Werte gibt es auf B nicht mehr. Kommen beide in
   derselben Lieferung, sieht C nie einen Zwischenstand; liegen sie in zwei
   Lieferungen, kann C kurz einen Stand zeigen, den es so auf keinem Gerät gab,
   bis die zweite ankommt. Der Endstand ist auf allen Geräten derselbe; das ist
@@ -730,15 +744,13 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   veröffentlicht eine zusammengeführte Liste der nächsten Generation, und ein
   in einer der beiden Listen entferntes Gerät bleibt entfernt (FR-005).
 - Zwei Hauptgeräte entfernen sich gleichzeitig gegenseitig: Das ist kein
-  Wettlauf, sondern eindeutig. Weil ein in einer gültigen Liste entferntes
-  Gerät entfernt bleibt (FR-005), sind danach auf allen Geräten, die beide
-  Listen kennen, beide entfernt, unabhängig von der Reihenfolge des
-  Eintreffens. Gibt es kein weiteres Hauptgerät, kann danach zunächst niemand
-  Geräte verwalten. Die Nutzerin repariert das, indem ein Gerät mit dem
-  privaten Schlüssel der Vault-Identität (etwa eines der beiden entfernten
-  Hauptgeräte) sich mit einem neuen Geräteschlüssel wieder in die Geräteliste
-  einträgt, oder über das Wiederherstellungspaket (Spec 026). Das ist
-  hingenommen.
+  Wettlauf, sondern eindeutig. Unter den beiden Listen derselben Generation
+  gilt die mit dem kleinsten Hash (FR-043). Die Entfernung in der anderen Liste
+  zählt nicht, weil deren Aussteller in der gewinnenden Liste entfernt ist
+  (FR-005). Auf allen Geräten, die beide Listen kennen, bleibt so unabhängig
+  von der Reihenfolge des Eintreffens genau eines der beiden Hauptgerät; das
+  andere ist entfernt und wird zum Solitär. Eine Geräteliste ohne Hauptgerät
+  entsteht dadurch nie.
 - Die Nutzerin entfernt ein Gerät, während keines ihrer anderen Geräte online
   ist: Die neue Geräteliste erreicht die anderen Geräte (und ab Spec 026 den
   Sync-Server), sobald ein Weg besteht. Bis dahin kann das entfernte Gerät mit
@@ -824,7 +836,12 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   Liste prüfen, DARF er mit keinem Gerät dieser Vault synchronisieren (fail
   closed). Ein Gerät, das in irgendeiner gültigen Liste als entfernt steht,
   MUSS für diesen Empfänger entfernt bleiben, auch wenn eine gewinnende Liste
-  derselben Generation es noch nennt. Die Geräteliste ist gewöhnliche
+  derselben Generation es noch nennt. Einzige Ausnahme: Eine Entfernung zählt
+  nicht, wenn die Liste, die sie enthält, eine Liste derselben Generation
+  verliert (FR-043), in der ihr Aussteller selbst entfernt ist. So bleibt beim
+  gegenseitigen Entfernen zweier Hauptgeräte genau eines Hauptgerät, und jede
+  gültige Geräteliste nennt mindestens ein Hauptgerät. Der Aussteller einer
+  Liste ist nur eine Angabe und nicht fälschungssicher (Clarifications). Die Geräteliste ist gewöhnliche
   Vault-Information und reist mit dem Sync; der Sync-Server (Spec 026) und die Geräte
   der Mitglieder von Spaces und Datenfreigaben (Specs 027, 028) prüfen jedes
   Gerät gegen die aktuelle Geräteliste seiner Vault.
@@ -1084,7 +1101,8 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   Hauptgerät, das zwei verschiedene Gerätelisten derselben Generation sieht,
   MUSS eine zusammengeführte Liste der nächsthöheren Generation
   veröffentlichen, in der ein in einer der beiden Listen entferntes Gerät
-  entfernt bleibt. Specs 026, 027 und 028 wenden diese Regel an.
+  entfernt bleibt, außer nach der Ausnahme in FR-005. Specs 026, 027 und 028
+  wenden diese Regel an.
 
 **Gerät verknüpfen (P1)**
 
@@ -1352,7 +1370,8 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   Generation, wählen alle Geräte dieselbe, unabhängig von der Reihenfolge des
   Eintreffens, ein Hauptgerät veröffentlicht danach eine zusammengeführte Liste
   der nächsten Generation, und ein in einer der beiden entferntes Gerät bleibt
-  entfernt.
+  entfernt, außer nach der Ausnahme in FR-005. Entfernen sich zwei Hauptgeräte
+  gegenseitig, bleibt auf allen Geräten dasselbe der beiden Hauptgerät.
 - **SC-014**: In einer automatischen Prüfung, die Änderungen über mehrere Wege
   zustellt und Übertragungen an zufälligen Stellen abbricht, steht der
   Fortschrittsstand eines Geräts in 100 % der Fälle nie über einer Änderung
@@ -1399,8 +1418,9 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   bindet ihn an den Geräteschlüssel (Entwurf §4).
 - Zusammenführen, Löschvermerke und die Ausnahme gerätelokaler Daten liefert
   haex-crdt, wie holzi es einbindet: Repository
-  `https://github.com/haexmas/haex-crdt`, Revision
-  `ed230d2c3f58c1b10710b6025ea0ce6c20b8d009`. Das Ursprungsgerät steht dort in
+  `https://github.com/haexmas/haex-crdt`, heute Revision
+  `ed230d2c3f58c1b10710b6025ea0ce6c20b8d009`; der Plan nennt eine kleine
+  Erweiterung für Schreibvorgänge und die Revision, die danach gilt. Das Ursprungsgerät steht dort in
   jedem Zeitstempel und lässt sich nach Ursprungsgerät abfragen; das Feld für
   das Gerät im Änderungsdatensatz nennt dagegen das sendende Gerät (Entwurf
   §3.2) und wird für den Autor nicht verwendet. Felder werden

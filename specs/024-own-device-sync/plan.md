@@ -23,10 +23,12 @@ Technischer Ansatz (Begründungen in [research.md](./research.md)):
 - **Schlüssel** (R2, R3): Vault-Identität öffentlich synchronisiert, privat nur in
   `vault_identity_secret_no_sync` auf Hauptgeräten; Geräte- und iroh-Schlüssel je Installation in
   `device_keys_no_sync`; alte Vaults leiten ihre Identität deterministisch aus dem Platzhalter ab.
-- **Zentrale Schreib- und Lesewege** (R19): alle 24 Schreibstellen laufen über ein Modul
-  `storage/vault_db.rs`; jede Schreibung ist eine Transaktion und damit eine Transaktionsgruppe, und
-  nach dem Commit stößt sie den Sync an. Das kommt vor dem Sync und macht holzi auch ohne Sync
-  atomar.
+- **Schreiben über `execute_with_crdt`** (R19, Betreiber-Entscheidung): alle 24 Schreibstellen
+  laufen über ein Modul `storage/vault_db.rs` auf einer kleinen Erweiterung von haex-crdt
+  (`Database::write` mit mehreren `execute_with_crdt` in einer Transaktion, BLOB-Parameter,
+  einstellbare Größengrenze). Der Transformer setzt den HLC, das von Hand gesetzte
+  `haex_hlc_no_sync = current_hlc()` entfällt. Jede Schreibung ist eine Transaktion und damit eine
+  Transaktionsgruppe, und nach dem Commit stößt sie den Sync an.
 - **Abgleich je Ursprungsgerät** (R4): kein Paketprotokoll, keine Laufnummern. Der Ursprung steht im
   HLC jeder Zelle; der Fortschrittsstand ist je Ursprungsgerät der höchste HLC. Der Sender liefert
   aus dem aktuellen Stand, was jenseits des Stands der Gegenseite liegt, nach HLC sortiert in
@@ -38,12 +40,17 @@ Technischer Ansatz (Begründungen in [research.md](./research.md)):
 - **Präsenz** (R7): flüchtige Nostr-Ereignisse im NIP-59-Aufbau an einen täglich wechselnden
   Postfach-Schlüssel aus dem Inhaltsschlüssel.
 - **Geräteliste** (R8) als unveränderliche, signierte Zeilen; höchste Generation, dann kleinster
-  Hash; entfernt bleibt entfernt.
+  Hash; entfernt bleibt entfernt, außer die Entfernung stammt aus einer verlierenden Liste, deren
+  Aussteller die gewinnende entfernt. So nennt jede geltende Liste mindestens ein Hauptgerät.
+- **Grenzen** (R6, R7, R20): Rahmen vor dem Handshake ≤ 64 KiB, danach ≤ 4 MiB, große Gruppen über
+  mehrere Rahmen; Nostr-Ereignisse ≤ 16 KiB; jede Tabelle mit Aufräumregel, Löschvermerke nach 90
+  Tagen mit `Resync` für veraltete Geräte.
 - **Verknüpfen** (R11) mit 128-Bit-Code, Treffpunkt über Nostr, HMAC-Nachweis, Übertragung als
   Momentaufnahme.
-- **haex-crdt** bleibt unverändert auf der gepinnten Revision: HLC je Transaktion, Ursprung im
-  HLC, Scanner mit Cursor, Seiten ohne geteilte Gruppe und idempotentes `apply` sind schon da
-  (geprüft, R4).
+- **haex-crdt**: HLC je Transaktion, Ursprung im HLC, Scanner mit Cursor und idempotentes `apply`
+  sind schon da (geprüft, R4). Neu ist nur die Erweiterung des Schreibwegs
+  ([contracts/haex-crdt-upstream.md](./contracts/haex-crdt-upstream.md)), danach neue Revision
+  pinnen.
 
 ## Technical Context
 
@@ -52,7 +59,7 @@ Vue 3.5, Nuxt 4.5 (SPA)
 
 **Primary Dependencies**: neu `iroh` 1.2 (`tls-ring`), `nostr` 0.45 (`nip44`, `nip59`),
 `nostr-sdk` 0.45, `secp256k1` 0.30, `hkdf` 0.13, `chacha20poly1305` 0.10, `postcard` 1, `qrcode`
-0.14 (R1); vorhanden haex-crdt (unverändert), tokio, tokio-util, zeroize, sha2, serde,
+0.14 (R1); vorhanden haex-crdt (neue Revision nach E1/E2), tokio, tokio-util, zeroize, sha2, serde,
 ts-rs; Frontend nur Vorhandenes (haex-ui Group/Row/OptionRow, Pinia, vue-i18n)
 
 **Storage**: SQLCipher-Vault über haex-crdt; neue Tabellen laut [data-model.md](./data-model.md)
@@ -89,34 +96,35 @@ _GATE: Muss vor Phase 0 bestehen. Nach Phase 1 erneut geprüft — Ergebnis unte
 Geprüft gegen `.specify/memory/constitution.md` (v1.4.0) und die spaex-Constitution
 `.spaex/constitution.md`.
 
-| Prinzip / Vorgabe                                                          | Status | Begründung                                                                                                                           |
-| -------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| I Keine Geheimnisse in Git                                                 | ✅     | Schlüssel entstehen zur Laufzeit; Testvektoren sind öffentliche NIP-44-Vektoren, keine echten Schlüssel                              |
-| II Keine lokalen absoluten Pfade                                           | ✅     | Nur repo-relative Pfade                                                                                                              |
-| III Projektidentität geräteunabhängig                                      | ✅     | Berührt nicht                                                                                                                        |
-| IV Cross-Repo-Referenzen gepinnt                                           | ✅     | haex-vault `8dce379d94e18fcd42c3b73686a06f984ca3f574`, haex-crdt `ed230d2c3f58c1b10710b6025ea0ce6c20b8d009` bleibt gepinnt           |
-| V Externe Quellen nur per Opt-in                                           | ✅     | Keine neue Harness-Quelle; neue Crates sind Bibliotheken, keine Harness-Inhalte                                                      |
-| VI Selbstverändernde Anweisungen review-pflichtig                          | ✅     | Keine Änderung an Constitution oder Skills                                                                                           |
-| VII Relay-Ausfall blockiert lokale Arbeit nicht                            | ✅     | Ohne Nostr- oder iroh-Relay findet der Sync keine Geräte; lokale Arbeit läuft unverändert (quickstart M9)                            |
-| VIII Keine Verheimlichung in Agent-Ausgaben                                | ✅     | –                                                                                                                                    |
-| Workflow: speckit-Stufen, PR auf `main`, Conventional Commits, kein Squash | ✅     | Spec über #156; Plan im Topic-Branch `024-own-device-sync-plan`                                                                      |
-| ADR bei prinzipienrelevanter Entscheidung                                  | ✅     | Keine Entscheidung berührt ein Prinzip; das Identitätsmodell steht im Entwurf (D26–D32)                                              |
-| Neue Crates nur bei konkretem Problem                                      | ✅     | Jede neue Abhängigkeit löst eine Vorgabe der Spec, die das Vorhandene nicht kann (R1); Verworfenes in R1                             |
-| Test-Code in separaten Dateien                                             | ✅     | `*_tests.rs` je Modul, Integrationstests unter `src-tauri/tests/`                                                                    |
-| Keine willkürlichen Wartezeiten in async-Tests                             | ✅     | Warten auf Ereignisse mit Zeitgrenze (R16)                                                                                           |
-| Kein blockierendes Arbeiten auf dem async-Executor                         | ✅     | SQLite-Zugriffe des Sync über `spawn_blocking` wie im übrigen Backend                                                                |
-| Worktree je Änderung                                                       | ✅     | `.worktrees/024-own-device-sync-plan`                                                                                                |
-| 500-LoC-Grenze                                                             | ✅     | `sync/` in kleine Dateien je Aufgabe; `FederationView.vue` wird aufgeteilt                                                           |
-| Graphify vor neuen benannten Artefakten                                    | ⚠️     | Abfragen in R18; der Graph (21.09.) ist älter als 022/023, Kandidaten zusätzlich im Code geprüft; zur manuellen Nachprüfung vermerkt |
-| Nicht-triviale Logik hinterlässt einen ausführbaren Check                  | ✅     | Unit- und Integrationstests, E2E-Szenarien                                                                                           |
-| Keine Selbstreferenzen von Agenten in Artefakten/Commits                   | ✅     | Wird bei Commits eingehalten                                                                                                         |
-| **Phasen-Disziplin**                                                       | ✅     | Setzt 013, 016, 020, 022, 023 voraus, alle auf `main` und im Einsatz                                                                 |
+| Prinzip / Vorgabe                                                          | Status | Begründung                                                                                                                                 |
+| -------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| I Keine Geheimnisse in Git                                                 | ✅     | Schlüssel entstehen zur Laufzeit; Testvektoren sind öffentliche NIP-44-Vektoren, keine echten Schlüssel                                    |
+| II Keine lokalen absoluten Pfade                                           | ✅     | Nur repo-relative Pfade                                                                                                                    |
+| III Projektidentität geräteunabhängig                                      | ✅     | Berührt nicht                                                                                                                              |
+| IV Cross-Repo-Referenzen gepinnt                                           | ✅     | haex-vault `8dce379d94e18fcd42c3b73686a06f984ca3f574`, haex-crdt `ed230d2c3f58c1b10710b6025ea0ce6c20b8d009`; nach E1/E2 die neue volle SHA |
+| V Externe Quellen nur per Opt-in                                           | ✅     | Keine neue Harness-Quelle; neue Crates sind Bibliotheken, keine Harness-Inhalte                                                            |
+| VI Selbstverändernde Anweisungen review-pflichtig                          | ✅     | Keine Änderung an Constitution oder Skills                                                                                                 |
+| VII Relay-Ausfall blockiert lokale Arbeit nicht                            | ✅     | Ohne Nostr- oder iroh-Relay findet der Sync keine Geräte; lokale Arbeit läuft unverändert (quickstart M9)                                  |
+| VIII Keine Verheimlichung in Agent-Ausgaben                                | ✅     | –                                                                                                                                          |
+| Workflow: speckit-Stufen, PR auf `main`, Conventional Commits, kein Squash | ✅     | Spec über #156; Plan im Topic-Branch `024-own-device-sync-plan`                                                                            |
+| ADR bei prinzipienrelevanter Entscheidung                                  | ✅     | Keine Entscheidung berührt ein Prinzip; das Identitätsmodell steht im Entwurf (D26–D32)                                                    |
+| Neue Crates nur bei konkretem Problem                                      | ✅     | Jede neue Abhängigkeit löst eine Vorgabe der Spec, die das Vorhandene nicht kann (R1); Verworfenes in R1                                   |
+| Test-Code in separaten Dateien                                             | ✅     | `*_tests.rs` je Modul, Integrationstests unter `src-tauri/tests/`                                                                          |
+| Keine willkürlichen Wartezeiten in async-Tests                             | ✅     | Warten auf Ereignisse mit Zeitgrenze (R16)                                                                                                 |
+| Kein blockierendes Arbeiten auf dem async-Executor                         | ✅     | SQLite-Zugriffe des Sync über `spawn_blocking` wie im übrigen Backend                                                                      |
+| Worktree je Änderung                                                       | ✅     | `.worktrees/024-own-device-sync-plan`                                                                                                      |
+| 500-LoC-Grenze                                                             | ✅     | `sync/` in kleine Dateien je Aufgabe; `FederationView.vue` wird aufgeteilt                                                                 |
+| Graphify vor neuen benannten Artefakten                                    | ⚠️     | Abfragen in R18; der Graph (21.09.) ist älter als 022/023, Kandidaten zusätzlich im Code geprüft; zur manuellen Nachprüfung vermerkt       |
+| Nicht-triviale Logik hinterlässt einen ausführbaren Check                  | ✅     | Unit- und Integrationstests, E2E-Szenarien                                                                                                 |
+| Keine Selbstreferenzen von Agenten in Artefakten/Commits                   | ✅     | Wird bei Commits eingehalten                                                                                                               |
+| **Phasen-Disziplin**                                                       | ✅     | Setzt 013, 016, 020, 022, 023 voraus, alle auf `main` und im Einsatz                                                                       |
 
 **Ergebnis vor Phase 0**: kein Verstoß; die Graphify-Einschränkung ist eine Warnung nach der Regel
 für abgeschnittene Abfragen.
 
-**Ergebnis nach Phase 1**: unverändert. Nach dem Review mit dem Betreiber entfallen Paketprotokoll,
-Laufnummern und alle Änderungen an haex-crdt; es kommt kein Prinzip dazu, das zu prüfen wäre.
+**Ergebnis nach Phase 1**: unverändert. Nach dem Review mit dem Betreiber entfallen Paketprotokoll
+und Laufnummern; die einzige Änderung an haex-crdt ist der Schreibweg (E1, E2), allgemein und dort
+geprüft, bevor holzi ihn pinnt.
 
 ## Project Structure
 
@@ -125,13 +133,14 @@ Laufnummern und alle Änderungen an haex-crdt; es kommt kein Prinzip dazu, das z
 ```text
 specs/024-own-device-sync/
 ├── plan.md                    # Dieses Dokument
-├── research.md                # Phase 0 (R1–R19)
+├── research.md                # Phase 0 (R1–R20)
 ├── data-model.md              # Phase 1: Tabellen, Werte, Zustände
 ├── quickstart.md              # Phase 1: automatische (A1–A9) und manuelle (M1–M9) Validierung
 ├── contracts/
 │   ├── sync-protocol.md       # holzi-sync/1, holzi-link/1: Handshake, Nachrichten, Seiten
 │   ├── nostr-events.md        # Präsenz, Aufnahmeanfrage, Treffpunkt
-│   └── tauri-commands.md      # Befehle, Ereignisse, Aktionen, Orte
+│   ├── tauri-commands.md      # Befehle, Ereignisse, Aktionen, Orte
+│   └── haex-crdt-upstream.md  # E1 mehrteilige CRDT-Schreibung, E2 einstellbare Grenze
 ├── checklists/requirements.md # Spec-Qualitätscheckliste
 └── tasks.md                   # Phase 2 — NICHT von /speckit-plan erzeugt
 ```
@@ -139,10 +148,15 @@ specs/024-own-device-sync/
 ### Source Code (repository root)
 
 ```text
+haex-crdt (eigenes Repository, PR vor holzi)
+├── src/database/mod.rs, src/db/core/execute/  # E1 Database::write, CrdtTransaction; E2 Grenze
+└── Tests zu E1/E2
+
 src-tauri/
-├── Cargo.toml                         # neue Crates (R1)
+├── Cargo.toml                         # neue Crates (R1), neue haex-crdt-Revision
 ├── clippy.toml                        # Database::with_connection unter disallowed-methods (R19)
-├── src/storage/vault_db.rs, _tests.rs # NEU: read, write (Transaktion + Anstoß), write_untracked (R19)
+├── src/storage/vault_db.rs, _tests.rs # NEU: read, write über CrdtTransaction, Anstoß des Sync (R19)
+├── src/storage/{chat_*,models,preferences,providers,known_devices,…}.rs  # ohne current_hlc() von Hand
 ├── src/{chat,providers,models,device,storage,adapters,voice}/…  # 24 Stellen auf vault_db umgestellt
 ├── src/sync/                          # NEU
 │   ├── mod.rs                         # SyncService: Start nach dem Öffnen, Ende am Gate-Token
@@ -212,9 +226,11 @@ Reine Anzeige-Logik unter `src/lib/sync/` (unter Node testbar wie `src/lib/setti
 
 Jeder Schritt ist ein eigener PR und für sich prüfbar.
 
-1. **Zentrale Schreib- und Lesewege** (R19): `storage/vault_db.rs`, alle 24 Stellen umstellen,
-   mehrteilige Schreibungen in eine Transaktion, `clippy.toml`. Ohne Verhaltensänderung für die
-   Nutzerin; bestehende Tests bleiben grün.
+0. **haex-crdt E1/E2** im Repository haex-crdt, danach neue Revision in holzi pinnen.
+1. **Schreiben über `execute_with_crdt`** (R19): zuerst jede heutige Anweisung durch den
+   Transformer testen, dann `storage/vault_db.rs`, alle 24 Stellen umstellen, mehrteilige
+   Schreibungen in eine Transaktion, von Hand gesetzte HLCs entfernen, `clippy.toml`, Aufräumen der
+   Löschvermerke (R20). Ohne Verhaltensänderung für die Nutzerin; bestehende Tests bleiben grün.
 2. **Schlüssel und Geräteliste** ohne Netz: Migrationen, Bootstrap, Ableitung aus dem Platzhalter,
    Geräteliste, Inhaltsschlüssel, Umschläge (FR-001 bis FR-006, FR-015, FR-038).
 3. **Abgleich** mit In-Prozess-Austausch ohne Transport: Fortschrittsstand, Liefern, Prüfen,
