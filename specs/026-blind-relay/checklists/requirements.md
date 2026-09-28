@@ -71,3 +71,6 @@
 - Default values (list lifetime 90 days, renewal at half, 80 % quota warning,
   24 h withholding deadline, 5 min clock tolerance) are assumptions for the
   plan to confirm.
+
+- 2026-09-28: the operator answered the several-relays question (FR-040: one home relay per Bereich
+  in v1). The snapshot-upload question (FR-022) is still open.

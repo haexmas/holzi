@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -33,7 +33,7 @@
 
 - One clarification marker is open, in FR-008: which providers v1 must support
   and test. Entwurf §12 (Kandidaten aus der Entwurfssitzung, ungeprüft) lists
-  Cloudflare R2, Backblaze B2, MinIO and AWS S3, plus Hetzner as unverified.
+  Cloudflare R2, Backblaze B2, MinIO and AWS S3, plus Hetzner as unverified (superseded: v1 = RustFS and AWS S3).
   Whether each offers bucket-scoped tokens, bucket versioning, a retention rule
   for old versions, and a read-write token that cannot delete old versions
   (FR-004 c to f) is unverified. That
@@ -76,3 +76,7 @@
   scope. User Story 7 therefore covers giving up a bucket (after a move, or when
   the vault's own folders stop using it) and removing a storage connection;
   FR-034 also applies once a later spec introduces dissolving a space.
+
+- 2026-09-28: the operator answered all clarification questions for this spec; the markers are
+  resolved in the spec and recorded under Clarifications. Notes above that describe open markers are
+  historical.

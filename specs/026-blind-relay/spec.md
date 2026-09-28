@@ -160,6 +160,7 @@ nicht erreichbar ist oder ablehnt.
   eine Identität ist ein Schlüssel. Aufgenommen wird in v1 über einen
   Einladungscode des Betreibers, Bezahlung kommt vielleicht später (Design
   §10.2).
+- Q: Darf ein Bereich gleichzeitig auf mehreren Relays liegen? → A: Nein, nicht in v1. Jeder Bereich hat ein Heimat-Relay; weitere Relays dienen dem NAT-Durchgang (FR-040). Das gilt auch für Spaces (Spec 027).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -755,13 +756,7 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   MÜSSEN Aktionen im Katalog von Spec 020 sein, die nur der Nutzer auslösen
   kann; die Liste mit Zuständen MUSS für Agenten mit Leserecht auf die
   Einstellungen abrufbar sein. Mehrere Relays DÜRFEN eingetragen sein; welche
-  davon das Postfach der Vault führen: [NEEDS CLARIFICATION: darf ein Bereich
-  gleichzeitig auf mehreren Relays liegen, um Ausfälle abzufangen (Design §15
-  Punkt 6)? Wenn nicht, liegt das Postfach der Vault auf dem zuerst
-  eingetragenen Relay, und weitere Relays dienen nur dem NAT-Durchgang und als
-  Heimat für Spaces und Datenfreigaben. Auch Spec 027 hängt von der Antwort
-  ab (Heimat-Relay eines Space); es ist die gemeinsame Frage für Spec 026 und
-  027.]
+  davon das Postfach der Vault führen: Ein Bereich liegt in v1 auf genau einem Relay, seinem Heimat-Relay: das Postfach der Vault auf dem zuerst eingetragenen Relay, ein Space oder eine Datenfreigabe auf dem Relay ihres Admins. Weitere Relays dienen nur dem NAT-Durchgang und als Heimat anderer Bereiche.
 - **FR-041**: holzi MUSS die Mitgliederliste jedes Bereichs, dessen Admin die
   Vault ist, erneuern, bevor die Hälfte ihrer Laufzeit verstrichen ist, sofern
   ein Gerät der Vault online ist und das Relay erreicht.

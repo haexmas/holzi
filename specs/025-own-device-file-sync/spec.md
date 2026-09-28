@@ -97,6 +97,7 @@ iroh, Dateiinhalte als geprüfte, fortsetzbare iroh-Blobs.
 - Q: Wo liegen Dateiinhalte, wenn Geräte nicht gleichzeitig online sind? → A: In v1 gibt es beide Speicher: den des öffentlichen Relays (A) und das eigene S3 des Nutzers (B) (D12). Beides kommt mit Spec 026 und 029; diese Spec überträgt nur direkt.
 - Q: Werden Dateien auf der direkten Verbindung zwischen eigenen Geräten zusätzlich verschlüsselt? → A: Ja. Das Relay ist nicht vertrauenswürdig (D11), und ein einziges Format erlaubt, dass jedes Gerät und später jeder Speicher ein Objekt aufbewahrt und weitergibt, ohne den Inhalt zu sehen (Entwurf §5.1, §8.1).
 - Q: Braucht der Dateisync zwischen eigenen Geräten eine eigene Umsetzung? → A: Nein. Er ist ein Space mit genau einem Mitglied, der Vault; der Dateiindex liegt im Bereich „Vault“ (Entwurf §7).
+- Q: Wo liegen die synchronisierten Dateien auf dem Gerät? → A: In einem Ordner des Dateisystems, den der Nutzer je Gerät wählt, wie bei Syncthing oder Dropbox (FR-002). Das gilt auch für Spaces (Spec 027).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -355,8 +356,7 @@ Dateien, und der Ordner steht nicht mehr in der Liste.
 - **FR-002**: Eine Bindung MUSS einem synchronisierten Ordner auf genau einem Gerät einen Ort
   zuordnen. Sie gehört diesem Gerät und DARF NICHT an andere Geräte weitergegeben werden; jedes
   Gerät bindet selbst. Wo die Dateien auf dem Gerät liegen:
-  [NEEDS CLARIFICATION: Wo liegen die synchronisierten Dateien auf dem Gerät – in einem vom Nutzer gewählten Ordner des Dateisystems (wie Syncthing/Dropbox, Empfehlung) oder in einem von holzi verwalteten Speicher, der nur über holzi sichtbar ist?]
-  Die übrigen Anforderungen gehen von der Empfehlung aus (siehe Assumptions).
+  in einem Ordner des Dateisystems, den der Nutzer auf diesem Gerät wählt (wie bei Syncthing oder Dropbox).
 - **FR-003**: Ein Gerät ohne Bindung DARF keine Dateien des Ordners anlegen oder speichern; es kennt
   nur Name und Zustand.
 - **FR-004**: Beim Binden an einen Ort, der schon Dateien enthält, MUSS holzi den vorhandenen Inhalt

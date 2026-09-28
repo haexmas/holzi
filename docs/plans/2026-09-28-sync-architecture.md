@@ -61,6 +61,13 @@ re-delegation between people.
 | D11 | **The relay is untrusted.** It never holds a user's own S3 credentials.                                                                                                        | 2026-09-28 |
 | D12 | **Both storage backends in v1**: storage provided by the public relay (A) and the user's own S3 (B).                                                                           | 2026-09-28 |
 | D13 | **No MLS.** Its ordered epoch chain does not fit an order-free CRDT (§3.3).                                                                                                    | 2026-09-27 |
+| D14 | Vault copies made before sync keep **one shared vault identity**, derived from the common placeholder.                                                                         | 2026-09-28 |
+| D15 | Until the own relay exists, presence, NAT traversal and invitations use **preset public Nostr and iroh relays**, changeable in settings.                                       | 2026-09-28 |
+| D16 | Synced files live in a **user-chosen folder of the file system** on each device (own folders and spaces).                                                                      | 2026-09-28 |
+| D17 | A scope lives on **exactly one home relay** in v1; further relays only help with NAT traversal.                                                                                | 2026-09-28 |
+| D18 | Delete: `write` deletes own entries or files, `delete` is needed for everyone else's (§11).                                                                                    | 2026-09-28 |
+| D19 | Revocation acts **forward only**, with a receipt-time check against the newest known member list and an immediate relay block; the remaining window is accepted (§11).         | 2026-09-28 |
+| D20 | Own S3 in v1: **RustFS and AWS S3**, verified and tested. MinIO is dropped (no longer open source); R2, B2 and Hetzner follow after verification.                              | 2026-09-28 |
 
 ## 3. What exists today, and what the references teach
 
@@ -474,13 +481,13 @@ pseudonyms are a post-v1 option.
 - **Where it is managed**: the settings category „Föderation“ (spec 023) gets the sub-views
   „Geräte“, „Relays“, „Ordner“, „Spaces“ and „Datenfreigaben“; a space's storage backend is set in
   its detail view.
-- **Proposed, pending operator confirmation**: this three-flag split (delete-own inside `write`,
+- **Decided 2026-09-28 (D18)**: this three-flag split (delete-own inside `write`,
   separate `delete`). The operator named three options on 2026-09-27; this is the recommended one.
-- **Revocation vs. concurrent writes — proposed rule**: a change encrypted under key epoch _e_ is
+- **Revocation vs. concurrent writes — decided 2026-09-28 (D19)**: a change encrypted under key epoch _e_ is
   valid if its author vault held the needed capability in the member list of epoch _e_. Revocation
   therefore acts forward only; a member writing concurrently with its removal may have that last
   write accepted. The alternative, keeping a batch log per scope and recomputing affected cells on
-  membership change, is correct but much heavier. Needs operator confirmation.
+  membership change, is correct but much heavier, and was not chosen.
 - **Known gap in the forward-only rule**: a removed member still holds the old generation's key and
   could keep writing under it, backdating its changes. The relay gate stops this at once (new member
   list). Over direct links, every receiving device additionally checks the author against the
@@ -515,7 +522,7 @@ by ciphertext hash from a signed file index. Only the way a device obtains acces
   File-index tombstones remain client-checked. Physically deleted objects are recovered through
   **bucket versioning**, which the setup flow MUST enable.
 - Provider support for bucket-scoped tokens must be verified per provider. Candidates named in the
-  design session, all unverified: Cloudflare R2, Backblaze B2, MinIO, AWS S3; Hetzner Object Storage
+  design session, all unverified: Cloudflare R2, Backblaze B2, RustFS, AWS S3; Hetzner Object Storage
   unknown. Recovery also needs a read-write token that cannot delete old versions or disable
   versioning, which narrows the list further. Without scoped tokens, the fallback
   is an admin device issuing presigned URLs over iroh (available only while that device is online).
@@ -550,8 +557,8 @@ vault secrets on plane 1, and `created_by` support in the core.
 
 ## 15. Open questions
 
-1. **Delete semantics** (§11) — confirm the three-flag proposal.
-2. **Revocation vs. concurrent writes** (§11) — confirm the forward-only rule.
+1. ~~**Delete semantics**~~ — decided (D18).
+2. ~~**Revocation vs. concurrent writes**~~ — decided (D19).
 3. **Admin loss**: if the admin vault is lost entirely, the space or share is frozen (content stays,
    membership cannot change). Is a "transfer admin" feature needed, and when?
 4. **Vault identity rotation flow** (D8): how counterparties learn the new npub. Inside existing
@@ -559,16 +566,14 @@ vault secrets on plane 1, and `created_by` support in the core.
    compromised one.
 5. **Snapshot authority**: whether any `write` member may upload a compaction snapshot, or only the
    admin.
-6. **Relay discovery and trust configuration**: how a vault picks relays; whether a space may use
-   several relays for redundancy.
+6. **Relay discovery and trust configuration**: how a vault picks relays. Several relays per scope
+   are not v1 (D17).
 7. **Wire formats and event kinds**: sealed batch, member list, attestation, presence, invite DM.
 8. **Rotation cost**: O(recipient vaults) per membership change — measure before large spaces appear.
 9. **Mobile**: plane 1 while the app is foreground-only (v1-scope availability classes).
 10. **Extension storage in holzi**: data shares (028) need extension-owned, prefixed CRDT tables,
     which holzi does not have yet.
-11. **Existing vault copies** (spec 024): whether copies made before sync existed keep one shared
-    vault identity (derived from the common placeholder) or each become a separate vault.
-12. **Presence and NAT servers before the own relay** (spec 024): preset public Nostr and iroh relays,
-    only user-configured servers, or local network only until spec 026 ships.
-13. **Supported S3 providers in v1** (spec 029), including whether each supports versioning and
-    tokens that cannot delete old versions.
+11. ~~**Existing vault copies**~~ — decided (D14).
+12. ~~**Presence and NAT servers before the own relay**~~ — decided (D15).
+13. **Supported S3 providers in v1**: decided as RustFS and AWS S3 (D20); whether each supports
+    scoped tokens, versioning and tokens that cannot delete old versions is still to verify.

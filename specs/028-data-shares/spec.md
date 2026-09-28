@@ -140,6 +140,8 @@ Synchronisierung oder Rechten in Berührung.
   (D5). Fremdschlüssel dürfen nur zwischen diesen Tabellen verlaufen, und nur
   synchronisierte Tabellen sind erlaubt. Sonst wird die ganze Erweiterung
   abgelehnt, nicht nur die Erklärung.
+- Q: Wie ist Löschen geregelt? → A: „Schreiben“ erlaubt das Löschen eigener Einträge (Ersteller = eigene Vault); fremde Einträge löschen erfordert die Stufe „Löschen“ (FR-028). Gilt ebenso für Spec 027.
+- Q: Wie wirkt ein Entzug bei gleichzeitigem Schreiben? → A: Nur nach vorn, mit Prüfung gegen die neueste bekannte Mitgliederliste beim Empfang und sofortiger Sperre am Relay; das verbleibende kleine Zeitfenster wird akzeptiert (FR-034). Gilt ebenso für Spec 027.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -657,7 +659,6 @@ angezeigter ursprünglicher Autorin.
 - **FR-028**: Löschen: Schreiben MUSS das Löschen eigener Einträge (Ersteller
   ist die eigene Vault-Identität) erlauben; fremde Einträge zu löschen MUSS die
   Fähigkeit Löschen erfordern. Der Eigentümer darf alles löschen.
-  [NEEDS CLARIFICATION: Löschen – Vorschlag: „Schreiben“ erlaubt das Löschen eigener Einträge bzw. Dateien (Ersteller = eigene Vault), fremde löschen erfordert „Löschen“. Alternativen: Löschen ganz in „Schreiben“ enthalten, oder nur eigene löschbar ohne eigene Stufe „Löschen“. (Gemeinsame Frage für Spec 027 und 028.)]
 - **FR-029**: holzi MUSS in der Vault des Empfängers jede Änderung an Einträgen
   einer empfangenen Freigabe ablehnen, die die eigenen Fähigkeiten nicht
   erlauben, bevor sie gespeichert wird: Ändern und Anlegen ohne Schreiben,
@@ -689,7 +690,6 @@ angezeigter ursprünglicher Autorin.
   gegen die neueste ihm bekannte Mitgliederliste prüfen, sodass ein entfernter
   Empfänger mit der älteren Generation nicht dauerhaft weiterschreiben kann;
   das Relay sperrt ihn sofort (Spec 026).
-  [NEEDS CLARIFICATION: Entzug bei gleichzeitigem Schreiben – Vorschlag: Eine Änderung gilt, wenn ihr Autor in der Schlüsselgeneration, mit der sie verschlüsselt ist, das Recht hatte, und wenn jedes empfangende Gerät den Autor beim Empfang zusätzlich gegen die neueste ihm bekannte Mitgliederliste prüft; das Relay sperrt sofort. Es bleibt ein Zeitfenster für Änderungen, die ein Gerät vor der Nachricht über den Entzug erhalten hat. Alternative: nachträgliche Neuberechnung aus einem Änderungsprotokoll (schließt das Fenster, deutlich aufwändiger). (Gemeinsame Frage für Spec 027 und 028.)]
 - **FR-035**: Was ein entfernter Empfänger schon empfangen hat, MUSS in seiner
   Vault bleiben, gekennzeichnet als „Freigabe beendet“ und ohne weitere
   Aktualisierung. Er MUSS es in einem Schritt entfernen können; wie beim

@@ -179,6 +179,10 @@ Repository `https://github.com/haex-space/haex-vault`, Revision
   dann eingefroren: Inhalte bleiben, Mitglieder arbeiten mit ihren bisherigen
   Rechten weiter, aber die Mitgliedschaft kann sich nicht mehr ändern. Eine
   Funktion „Admin übertragen“ ist nicht Teil dieser Spec (Entwurf §15, Punkt 3).
+- Q: Wo liegen die Dateien eines Space auf dem Gerät? → A: In einem Ordner des Dateisystems, den das Mitglied je Gerät wählt (wie Spec 025).
+- Q: Darf ein Space auf mehreren Relays liegen? → A: Nein, nicht in v1: ein Heimat-Relay, das Relay des Admins (Spec 026 FR-040).
+- Q: Wie ist Löschen geregelt? → A: „Schreiben“ erlaubt das Löschen eigener Dateien (Ersteller = eigene Vault); fremde Dateien löschen erfordert die Stufe „Löschen“ (FR-016). Gilt ebenso für Spec 028.
+- Q: Wie wirkt ein Entzug bei gleichzeitigem Schreiben? → A: Nur nach vorn. Eine Änderung gilt, wenn ihr Autor in ihrer Schlüsselgeneration das Recht hatte; jedes empfangende Gerät prüft zusätzlich gegen die neueste ihm bekannte Mitgliederliste, das Relay sperrt sofort. Das verbleibende kleine Zeitfenster wird akzeptiert (FR-024). Gilt ebenso für Spec 028.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -623,8 +627,6 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   Vaults mit „Löschen“, Admin; Spec 026 FR-028) widerspricht dem deshalb
   nicht.
 
-  [NEEDS CLARIFICATION: Löschen – Vorschlag: „Schreiben“ erlaubt das Löschen eigener Einträge bzw. Dateien (Ersteller = eigene Vault), fremde löschen erfordert „Löschen“. Alternativen: Löschen ganz in „Schreiben“ enthalten, oder nur eigene löschbar ohne eigene Stufe „Löschen“. (Gemeinsame Frage für Spec 027 und 028.)]
-
 - **FR-017**: Der Admin MUSS die Fähigkeitsstufe jedes Mitglieds außer seiner
   eigenen ändern können. Die Wahl MUSS sofort gelten, ohne Knopf zum
   Übernehmen, und eine neue Mitgliederliste und eine neue Schlüsselgeneration
@@ -670,8 +672,6 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   Mitglied erreichen, nachdem es selbst eine neuere Mitgliederliste ohne das
   Recht des Autors kennt, und deren Zeitstempel nach dieser Änderung der
   Mitgliederliste liegt, MÜSSEN verworfen werden.
-
-  [NEEDS CLARIFICATION: Entzug bei gleichzeitigem Schreiben – Vorschlag: Eine Änderung gilt, wenn ihr Autor in der Schlüsselgeneration, mit der sie verschlüsselt ist, das Recht hatte, und wenn jedes empfangende Gerät den Autor beim Empfang zusätzlich gegen die neueste ihm bekannte Mitgliederliste prüft; das Relay sperrt sofort. Es bleibt ein Zeitfenster für Änderungen, die ein Gerät vor der Nachricht über den Entzug erhalten hat. Alternative: nachträgliche Neuberechnung aus einem Änderungsprotokoll (schließt das Fenster, deutlich aufwändiger). (Gemeinsame Frage für Spec 027 und 028.)]
 
 - **FR-025**: Ein entferntes Mitglied DARF keine Datei und keine Fassung lesen
   können, die nach dem Entzug hinzukommt oder entsteht. Was es vor dem Entzug

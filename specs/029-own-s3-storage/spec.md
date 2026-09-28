@@ -29,7 +29,7 @@ Admins kurzlebige Zugangslinks aus, solange es online ist.
 - **Speicher-Backend B**: der eigene S3-kompatible Speicher eines Nutzers; Thema
   dieser Spec.
 - **Anbieter**: der Dienst, bei dem der eigene Speicher liegt (zum Beispiel ein
-  Cloud-Anbieter oder ein selbst betriebener MinIO-Server).
+  Cloud-Anbieter oder ein selbst betriebener RustFS-Server).
 - **Speicherverbindung**: Endpunkt, Region, Anbieter und die
   **Hauptzugangsdaten** des Admins bei diesem Anbieter. Die Hauptzugangsdaten
   dürfen Buckets anlegen und Zugangsschlüssel erzeugen und widerrufen. Sie liegen
@@ -144,6 +144,7 @@ Admins kurzlebige Zugangslinks aus, solange es online ist.
 - Q: Wer darf den Speicher eines Space verbinden oder wechseln? → A: Nur der
   Admin (D6). Mitglieder wählen keinen Speicher; sie nutzen, was der Admin
   festgelegt hat.
+- Q: Welche Anbieter muss v1 unterstützen? → A: RustFS und AWS S3, geprüft und getestet. MinIO nicht, weil es nicht mehr als Open Source weiterentwickelt wird; R2, B2 und Hetzner folgen nach Prüfung (FR-008).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -566,13 +567,7 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   beim Anbieter zurückbleiben; was holzi schon angelegt hat, MUSS es wieder
   entfernen.
 - **FR-008**: holzi MUSS in v1 mindestens diese Anbieter nachweislich
-  unterstützen: [NEEDS CLARIFICATION: Welche Anbieter muss v1 geprüft und
-  getestet unterstützen? Entwurf §12 (Kandidaten aus der Entwurfssitzung,
-  ungeprüft) nennt Cloudflare R2, Backblaze B2, MinIO und AWS S3, dazu Hetzner
-  Object Storage als ungeprüft. Ob diese Anbieter auf einen Bucket beschränkte
-  Schlüssel, Versionierung, eine Aufbewahrungsfrist und Schlüssel ohne Recht zum
-  Löschen älterer Versionen bieten (FR-004 c bis f), ist ungeprüft und
-  entscheidet, ob sie „geeignet“ oder „nur über den Ersatzweg“ sind.] Andere S3-kompatible Anbieter DÜRFEN verbunden werden, wenn sie die
+  unterstützen: RustFS und AWS S3. Ob sie auf einen Bucket beschränkte Schlüssel, Versionierung, eine Aufbewahrungsfrist und Schlüssel ohne Recht zum Löschen älterer Versionen bieten (FR-004 c bis f), prüft der Plan; das Ergebnis entscheidet, ob ein Anbieter „geeignet“ oder „nur über den Ersatzweg“ ist. Cloudflare R2, Backblaze B2, Hetzner Object Storage und weitere kommen hinzu, sobald sie geprüft sind. Andere S3-kompatible Anbieter DÜRFEN verbunden werden, wenn sie die
   Eignungsprüfung bestehen.
 
 **Bucket und Versionierung**

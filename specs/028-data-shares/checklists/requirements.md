@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -69,3 +69,7 @@
 - "Content quality" is checked with the caveat that the spec necessarily names
   protocol-level concepts (signatures, key generations, member lists) because
   the feature is a security boundary; no library, format or API is prescribed.
+
+- 2026-09-28: the operator answered all clarification questions for this spec; the markers are
+  resolved in the spec and recorded under Clarifications. Notes above that describe open markers are
+  historical.

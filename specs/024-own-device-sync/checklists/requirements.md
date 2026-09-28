@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -71,3 +71,7 @@
   categories in spec 023; the Begriffe section disambiguates it.
 - SC-011 (multi-process end-to-end tests) depends on the spec 016 rig being
   able to run several app processes; the plan confirms this.
+
+- 2026-09-28: the operator answered all clarification questions for this spec; the markers are
+  resolved in the spec and recorded under Clarifications. Notes above that describe open markers are
+  historical.

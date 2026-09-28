@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -24,7 +24,7 @@
 
 ## Feature Readiness
 
-- [ ] All functional requirements have clear acceptance criteria
+- [x] All functional requirements have clear acceptance criteria
 - [x] User scenarios cover primary flows
 - [x] Feature meets measurable outcomes defined in Success Criteria
 - [x] No implementation details leak into specification
@@ -83,3 +83,7 @@
   FR-041. The haex-vault reference is given as repository, full SHA and path.
 - Links to specs 024, 025, 026, 028 and 029 are plain references because those
   directories were written in parallel.
+
+- 2026-09-28: the operator answered all clarification questions for this spec; the markers are
+  resolved in the spec and recorded under Clarifications. Notes above that describe open markers are
+  historical.

@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -63,3 +63,7 @@
   resurrects (FR-029).
 - SC-001 and SC-009 depend on hardware and network; they are checked in a manual quickstart run on
   a local network and a laptop with SSD.
+
+- 2026-09-28: the operator answered all clarification questions for this spec; the markers are
+  resolved in the spec and recorded under Clarifications. Notes above that describe open markers are
+  historical.

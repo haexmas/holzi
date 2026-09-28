@@ -174,6 +174,8 @@ P3. Die Unteransicht „Geräte“ der Einstellungs-Kategorie „Föderation“ 
   → A: Ja, mit einer Ausnahme: Die Vault des Eigentümers gibt eine Änderung
   zwischen überlappenden Datenfreigaben als neue, eigene Änderung aus
   (FR-021, Spec 028).
+- Q: Bekommen Kopien einer Vault, die schon vor dieser Spec auf mehrere Geräte kopiert wurden, dieselbe Vault-Identität? → A: Ja. Die Identität wird aus dem gemeinsamen Platzhalter abgeleitet; die Kopien bleiben eine Vault (FR-004).
+- Q: Welche Server nutzt holzi für Präsenz, NAT-Durchgang und Einladungen, solange es kein eigenes Relay gibt? → A: Voreingestellte öffentliche Nostr- und iroh-Relays, änderbar in den Einstellungen (FR-008).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -493,12 +495,7 @@ zwei konkurrierende Übergaben frieren den Bereich beim Relay ein.
   übertragen oder von einem anderen Gerät verwendet werden.
 - **FR-004**: Eine Vault, die vor dieser Spec angelegt wurde und nur den
   Platzhalter trägt, MUSS beim ersten Öffnen mit dieser Version eine echte
-  Vault-Identität bekommen. [NEEDS CLARIFICATION: Sollen Kopien derselben
-  Vault, die schon vor dieser Spec auf mehrere Geräte kopiert wurden, dabei
-  dieselbe Vault-Identität bekommen (aus dem gemeinsamen Platzhalter
-  abgeleitet, die Kopien bleiben eine Vault und synchronisieren miteinander)
-  oder erzeugt jede Kopie eine eigene neue (die Kopien sind danach getrennte
-  Vaults und müssen neu gekoppelt werden)?]
+  Vault-Identität bekommen. Kopien derselben Vault, die schon vor dieser Spec auf mehrere Geräte kopiert wurden, MÜSSEN dabei dieselbe Vault-Identität bekommen, abgeleitet aus dem gemeinsamen Platzhalter; sie bleiben eine Vault und synchronisieren miteinander. Wie abgeleitet wird, klärt der Plan.
 - **FR-005**: Jedes Gerät MUSS eine Gerätebestätigung besitzen, die die
   Vault-Identität signiert hat und die Vault, den öffentlichen Geräteschlüssel,
   die Netzwerkkennung des Geräts und den Zeitpunkt der Ausstellung nennt. Weil
@@ -526,13 +523,7 @@ zwei konkurrierende Übergaben frieren den Bereich beim Relay ein.
 - **FR-008**: Geräte derselben Vault MÜSSEN sich über die Präsenzmeldungen
   finden und selbständig eine direkte Verbindung aufbauen, im selben Netz wie
   über das Internet, auch hinter üblichen Heimroutern. Die Nutzerin MUSS dafür
-  keine Adresse eingeben. [NEEDS CLARIFICATION: Welche Server nutzt holzi in
-  dieser Spec für Präsenzmeldungen und für den Verbindungsaufbau durch NAT,
-  solange es das eigene Relay (Spec 026) noch nicht gibt: voreingestellte
-  öffentliche Nostr- und iroh-Relays, nur vom Nutzer eingetragene Server, oder
-  ohne eingetragenen Server nur Geräte im selben lokalen Netz? Dieselben Server
-  tragen auch die Einladungen zu Spaces und Datenfreigaben (Spec 027,
-  Einladungen), die Antwort gilt also auch für sie.]
+  keine Adresse eingeben. holzi MUSS dafür voreingestellte öffentliche Nostr-Relays und iroh-Relays nutzen, die der Nutzer in den Einstellungen ändern oder durch eigene Server ersetzen kann. Dieselben Server tragen auch die Einladungen zu Spaces und Datenfreigaben (Spec 027, Einladungen).
 - **FR-009**: Beim Verbindungsaufbau MÜSSEN beide Seiten ihre Gerätebestätigung
   vorlegen und beweisen, dass sie den zugehörigen Geräteschlüssel besitzen. Ein
   Gerät DARF eine Verbindung nur annehmen, wenn die Bestätigung von seiner
