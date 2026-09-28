@@ -32,6 +32,9 @@ scenario('settings-color-scheme', {}, async (ctx) => {
 
   // Non-text contrast of the off switch's track against its card, at least 3:1 (WCAG 1.4.11).
   const trackContrast = async () => {
+    // General settings load the session-restore preference asynchronously after navigation.
+    // Wait for the control before measuring it so the assertion does not race that load.
+    await instance.waitForDisplayed('session-restore-switch')
     const ratio = await backgroundContrast(
       instance,
       '[data-testid="session-restore-switch"]',
