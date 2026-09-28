@@ -68,6 +68,8 @@ re-delegation between people.
 | D18 | Delete: `write` deletes own entries or files, `delete` is needed for everyone else's (§11).                                                                                    | 2026-09-28 |
 | D19 | Revocation acts **forward only**, with a receipt-time check against the newest known member list and an immediate relay block; the remaining window is accepted (§11).         | 2026-09-28 |
 | D20 | Own S3 in v1: **RustFS and AWS S3**, verified and tested. MinIO is dropped (no longer open source); R2, B2 and Hetzner follow after verification.                              | 2026-09-28 |
+| D21 | Only the **admin** of a scope uploads compaction snapshots; in the vault scope any own device.                                                                                 | 2026-09-28 |
+| D22 | **Invites also create a new key generation**; key generations and member-list versions stay one counter.                                                                       | 2026-09-28 |
 
 ## 3. What exists today, and what the references teach
 
@@ -564,8 +566,7 @@ vault secrets on plane 1, and `created_by` support in the core.
 4. **Vault identity rotation flow** (D8): how counterparties learn the new npub. Inside existing
    shares the old identity can sign a hand-over statement, but only if the key is not the
    compromised one.
-5. **Snapshot authority**: whether any `write` member may upload a compaction snapshot, or only the
-   admin.
+5. ~~**Snapshot authority**~~ — decided (D21).
 6. **Relay discovery and trust configuration**: how a vault picks relays. Several relays per scope
    are not v1 (D17).
 7. **Wire formats and event kinds**: sealed batch, member list, attestation, presence, invite DM.

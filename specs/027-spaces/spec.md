@@ -183,6 +183,7 @@ Repository `https://github.com/haex-space/haex-vault`, Revision
 - Q: Darf ein Space auf mehreren Relays liegen? → A: Nein, nicht in v1: ein Heimat-Relay, das Relay des Admins (Spec 026 FR-040).
 - Q: Wie ist Löschen geregelt? → A: „Schreiben“ erlaubt das Löschen eigener Dateien (Ersteller = eigene Vault); fremde Dateien löschen erfordert die Stufe „Löschen“ (FR-016). Gilt ebenso für Spec 028.
 - Q: Wie wirkt ein Entzug bei gleichzeitigem Schreiben? → A: Nur nach vorn. Eine Änderung gilt, wenn ihr Autor in ihrer Schlüsselgeneration das Recht hatte; jedes empfangende Gerät prüft zusätzlich gegen die neueste ihm bekannte Mitgliederliste, das Relay sperrt sofort. Das verbleibende kleine Zeitfenster wird akzeptiert (FR-024). Gilt ebenso für Spec 028.
+- Q: Erzeugt auch eine Einladung eine neue Schlüsselgeneration? → A: Ja. Jede Änderung der Mitgliederliste erzeugt eine neue Generation mit fester Mitgliederliste; Datenänderungen nie (FR-019). Gilt ebenso für Spec 028.
 
 ## User Scenarios & Testing _(mandatory)_
 

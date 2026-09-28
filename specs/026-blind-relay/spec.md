@@ -161,6 +161,7 @@ nicht erreichbar ist oder ablehnt.
   Einladungscode des Betreibers, Bezahlung kommt vielleicht später (Design
   §10.2).
 - Q: Darf ein Bereich gleichzeitig auf mehreren Relays liegen? → A: Nein, nicht in v1. Jeder Bereich hat ein Heimat-Relay; weitere Relays dienen dem NAT-Durchgang (FR-040). Das gilt auch für Spaces (Spec 027).
+- Q: Wer darf eine Momentaufnahme hochladen? → A: Nur der Admin des Bereichs; beim Bereich „Vault“ jedes eigene Gerät (FR-022).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -641,11 +642,7 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   Die bis dahin geltende Liste bleibt bis zu ihrem Ablauf gültig.
 - **FR-022**: Das Relay MUSS Abrufe nur Vaults mit Lesen und Uploads von
   Paketen nur Vaults mit Schreiben erlauben, jeweils nach der geltenden Liste.
-  Eine Momentaufnahme DARF nur hochladen: [NEEDS CLARIFICATION: jedes Mitglied
-  mit Schreiben oder nur der Admin des Bereichs (Design §15 Punkt 5)? Schreiben
-  verteilt die Arbeit und kommt ohne Admin aus; nur der Admin verhindert, dass
-  ein Mitglied mit einer unvollständigen Momentaufnahme ältere Pakete
-  verdrängt, die FR-042 dann erst wieder einsammeln muss.] Beim Bereich
+  Eine Momentaufnahme DARF nur hochladen: der Admin des Bereichs. Damit kann kein Mitglied mit einer unvollständigen Momentaufnahme ältere Pakete verdrängen. Beim Bereich
   „Vault“ ist das in beiden Fällen jedes eigene Gerät.
 - **FR-023**: Ein Entzug MUSS sofort wirken: Nach Annahme einer neuen Liste MUSS
   jede weitere Anfrage einer nicht mehr berechtigten Vault abgelehnt werden,

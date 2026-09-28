@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -74,3 +74,4 @@
 
 - 2026-09-28: the operator answered the several-relays question (FR-040: one home relay per Bereich
   in v1). The snapshot-upload question (FR-022) is still open.
+- 2026-09-28: snapshot upload answered as well (FR-022: only the admin of the Bereich). No markers remain.
