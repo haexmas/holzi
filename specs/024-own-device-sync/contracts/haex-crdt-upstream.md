@@ -2,8 +2,9 @@
 
 Repository `https://github.com/haexmas/haex-crdt`, Grundlage Revision
 `ed230d2c3f58c1b10710b6025ea0ce6c20b8d009` (heute in holzi gepinnt). Die Änderung kommt als PR in
-haex-crdt; holzi pinnt danach die neue Revision mit voller SHA (Constitution IV). Sie ist allgemein,
-enthält nichts holzi-Eigenes und ändert das Verhalten für haex-vault nicht. Begründung: research R19.
+haex-crdt; holzi pinnt danach die neue Revision mit voller SHA (Constitution IV). Sie ist allgemein
+und enthält nichts holzi-Eigenes. Rückwärtsverträglichkeit ist nicht verlangt: holzi löst haex-vault
+ab (Betreiber-Entscheidung), die API darf sich also ändern. Begründung: research R19.
 
 ## E1 Transaktion mit mehreren CRDT-Anweisungen
 
@@ -32,10 +33,11 @@ impl CrdtTransaction<'_> {
 - `execute_local` führt eine Anweisung ohne Transformer aus und weist sie ab, wenn ihre Zieltabelle
   eine CRDT-Tabelle ist (`extract_primary_table_name_from_sql` gegen die installierten
   CRDT-Tabellen). So kann keine synchronisierte Tabelle versehentlich ohne HLC beschrieben werden.
-- `SqlValue` ist `rusqlite::types::Value`, BLOBs eingeschlossen. Die JSON-Parameter des heutigen
-  `execute_with_crdt` bleiben für haex-vault unverändert.
-- Das heutige freie `execute_with_crdt(sql, params, connection, …)` bleibt und ruft intern dieselbe
-  Logik mit einer Anweisung auf.
+- `SqlValue` ist `rusqlite::types::Value`, BLOBs eingeschlossen.
+- Die freien Funktionen auf `DbConnection` (`execute_with_crdt`, `execute`, `select*` mit
+  JSON-Parametern) dürfen sich dabei ändern oder wegfallen; holzi nutzt sie nicht. Ob sie im selben
+  PR wegfallen oder als dünne Hülle bleiben, entscheidet der PR nach dem Umfang der Tests, die an
+  ihnen hängen.
 
 ## E2 Einstellbare Grenze je Transaktion
 
@@ -54,4 +56,4 @@ impl CrdtTransaction<'_> {
 - `execute_local` auf eine CRDT-Tabelle → Fehler; auf eine `_no_sync`-Tabelle → geschrieben.
 - BLOB-Parameter kommen unverändert an.
 - Summe über der eingestellten Grenze → `TransactionTooLarge`, nichts geschrieben.
-- Das bestehende freie `execute_with_crdt` verhält sich wie vorher (vorhandene Tests grün).
+- Die vorhandenen Tests des Transformers laufen weiter, gegen die neue oder die alte Schnittstelle.
