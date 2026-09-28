@@ -658,9 +658,9 @@ angezeigter ursprünglicher Autorin.
   Inhaltsschlüssel an keine inzwischen entfernte Vault verschlüsselt ist; gibt
   es keine, MUSS ein Gerät des Eigentümers eine neue anlegen; (d) nur Geräte
   auf der aktuellen Geräteliste des Eigentümers veröffentlichen
-  Mitgliederlisten (D29); entfernt die Vault des Eigentümers ein Gerät, das die
-  aktuelle Mitgliederliste unterschrieben hat, MUSS ein verbliebenes Gerät sie
-  neu unterschreiben und hochladen; zwei Geräte des Eigentümers können
+  Mitgliederlisten (D29); entfernt ein Hauptgerät des Eigentümers ein Gerät, das die
+  aktuelle Mitgliederliste unterschrieben hat, MUSS dieses Hauptgerät sie im
+  selben Vorgang neu unterschreiben und hochladen (Spec 024 FR-026); zwei Geräte des Eigentümers können
   verschiedene Listen mit derselben Generation veröffentlichen. Unter gültigen
   Listen derselben Generation MUSS beim Relay und bei jedem Empfänger die mit
   dem lexikografisch kleinsten Hash der Liste gelten; das Relay ersetzt eine

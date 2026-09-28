@@ -549,8 +549,8 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   kann bis zu seinem Entfernen für den Admin handeln, weil jedes Gerät der
   Admin-Vault den Space verwalten darf (D29). Entfernt ein Hauptgerät es aus der
   Geräteliste (Spec 024), weisen Relay und Mitglieder seine Unterschriften und
-  Verbindungen ab, und ein verbliebenes Gerät des Admins unterschreibt die
-  aktuelle Mitgliederliste neu (FR-019). Dieses Risiko wird für v1 hingenommen.
+  Verbindungen ab, und das entfernende Hauptgerät unterschreibt im selben Vorgang die
+  aktuelle Mitgliederliste neu (FR-019, Spec 024 FR-026). Dieses Risiko wird für v1 hingenommen.
 - **Ein Gerät eines Mitglieds wird entfernt**: Sobald die neue Geräteliste der
   Mitglieds-Vault bekannt ist, weisen Relay und Geräte der Mitglieder das Gerät
   ab (FR-026, FR-039), und spätere Schlüsselgenerationen werden nicht mehr an
@@ -738,10 +738,10 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   Geräte auf der aktuellen Geräteliste des Admins DÜRFEN Mitgliederlisten und
   Schlüsselgenerationen eines Space erstellen, jedes davon, auch ein
   verknüpftes Gerät; es unterschreibt mit seinem Geräteschlüssel (D29).
-  Entfernt die Vault des Admins ein Gerät aus ihrer Geräteliste, MUSS ein
-  verbliebenes Gerät des Admins die aktuelle Mitgliederliste neu
-  unterschreiben und hochladen, wenn das entfernte Gerät sie unterschrieben
-  hatte.
+  Entfernt ein Hauptgerät der Admin-Vault ein Gerät, das die aktuelle
+  Mitgliederliste unterschrieben hatte, MUSS dieses Hauptgerät sie im selben
+  Vorgang neu unterschreiben und hochladen (Spec 024 FR-026); ein Gerät kann
+  sich nicht selbst entfernen.
 - **FR-020**: Hat der Space ein Postfach am Relay (FR-040), MUSS das Gerät des
   Admins eine geänderte Mitgliederliste an das Relay hochladen, bevor es neue Inhalte mit der neuen Generation verschickt,
   und sofort, sobald es online ist, wenn die Änderung offline geschah.

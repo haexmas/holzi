@@ -1032,7 +1032,15 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   aus der Ferne, Spaces und Datenfreigaben laufen unverändert weiter, zurück
   nur durch neues Verknüpfen; bei einem Hauptgerät zusätzlich, dass das
   Entfernen nur gegen ein ehrliches Gerät hilft. Vault-Identität, Admin-Rollen
-  und Mitgliedschaften bleiben unverändert (D26).
+  und Mitgliedschaften bleiben unverändert (D26). Ein Gerät DARF sich NICHT
+  selbst entfernen; entfernt wird es nur von einem anderen Hauptgerät. Hat das
+  entfernte Gerät die geltende Mitgliederliste eines Space oder einer
+  Datenfreigabe unterschrieben, deren Admin die Vault ist, MUSS das entfernende
+  Hauptgerät diese Listen im selben Vorgang mit höherer Generation neu
+  unterschreiben und hochladen (Specs 027, 028). Geheimnisse wie Einträge im
+  Passwortmanager oder S3-Zugangsdaten DARF holzi beim Entfernen NICHT
+  automatisch ändern: Ob sie als kompromittiert gelten und ersetzt werden,
+  entscheidet die Nutzerin.
 - **FR-027**: Jedes verbleibende Gerät MUSS eine gültige neue Geräteliste und
   die neue Schlüsselgeneration ohne Zutun der Nutzerin übernehmen (FR-005);
   eine Bestätigung auf jedem Gerät ist nicht nötig, weil nur ein Hauptgerät

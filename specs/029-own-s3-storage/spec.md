@@ -561,16 +561,16 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   erneut versucht.
 - **Gerät des Admins wird gestohlen**: Das Gerät hat die Hauptzugangsdaten und
   die Zugangsschlüssel aus dem Passwortmanager. Nachdem ein Hauptgerät es von
-  der Geräteliste entfernt hat (Spec 024), weist holzi den Admin darauf hin, dass
-  er auch die Hauptzugangsdaten beim Anbieter erneuern und in holzi neu eingeben
-  soll, und erneuert danach alle Zugangsschlüssel aller Spaces dieser
-  Verbindung. War das gestohlene Gerät ein Hauptgerät und ist die Passphrase
+  der Geräteliste entfernt hat (Spec 024), bekommt es nichts Neues mehr. holzi
+  ändert dabei keine Hauptzugangsdaten und keine Zugangsschlüssel automatisch
+  (Spec 024 FR-026): Ob sie als kompromittiert gelten und beim Anbieter ersetzt
+  werden, entscheidet der Admin; die Erneuerung von Hand bietet FR-020. War das gestohlene Gerät ein Hauptgerät und ist die Passphrase
   bekannt, ist die Vault verloren (Spec 024); das kann diese Spec nicht abfangen.
 - **Ein Mitglied entfernt ein Gerät von seiner Geräteliste** (Spec 024, etwa ein
   verlorenes Gerät): Neue Umschläge gehen nur noch an die verbleibenden Geräte
-  (D28). Weil das entfernte Gerät den bisherigen Zugangsschlüssel kennt,
-  erneuert ein Gerät des Admins, sobald es die neue Geräteliste sieht, den
-  Zugangsschlüssel der Art dieses Mitglieds wie beim Entfernen (FR-018).
+  (D28). Den Zugangsschlüssel erneuert holzi dafür nicht automatisch; ob das
+  Mitglied oder der Admin ihn als kompromittiert betrachtet, entscheiden sie
+  selbst (FR-020).
 - **Neues Mitglied, während eine Erneuerung aussteht**: Es erhält die höchste
   Generation, die das Gerät des Admins kennt.
 - **Admin-Vault geht ganz verloren**: Mit einem Wiederherstellungspaket
