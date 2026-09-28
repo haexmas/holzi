@@ -34,31 +34,33 @@ lp(endpoint_x) ‖ lp(endpoint_y) ‖ lp(vault)))`, `lp` = `u32 BE Länge ‖ By
 
 ### 2. Nachrichten nach dem Handshake
 
-| Nachricht        | Richtung             | Inhalt                                                                                                   | Antwort                                     |
-| ---------------- | -------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| `DeviceListPush` | beide                | `{ payload, signature }`                                                                                 | –                                           |
-| `Progress`       | beide                | `{ contiguous: Vec<(origin, seq)>, have_beyond: Vec<(origin, Vec<seq>)>, last_seen: Vec<(device, ms)> }` | `Progress` der Gegenseite                   |
-| `Want`           | beide                | `{ ranges: Vec<(origin, from_seq, to_seq)> }`                                                            | `Packages` (seitenweise, ≤ 4 MiB je Rahmen) |
-| `Packages`       | beide                | `{ packages: Vec<SealedPackage>, more: bool }`                                                           | –                                           |
-| `Push`           | Ursprung → verbunden | `{ packages: Vec<SealedPackage> }` (neu versiegelte eigene Pakete, sofort)                               | –                                           |
-| `Envelopes`      | beide                | neue Zeilen aus `vault_key_envelopes`/`vault_key_generations` für die Gegenseite                         | –                                           |
+| Nachricht        | Richtung | Inhalt                                                                           | Antwort                              |
+| ---------------- | -------- | -------------------------------------------------------------------------------- | ------------------------------------ |
+| `DeviceListPush` | beide    | `{ payload, signature }`                                                         | –                                    |
+| `Progress`       | beide    | `{ vector: Vec<(origin: Uuid, max_hlc: String)>, last_seen: Vec<(device, ms)> }` | –                                    |
+| `Pull`           | beide    | `{ vector: Vec<(origin, max_hlc)> }` (eigener Fortschrittsstand des Anfragenden) | `Page`, dann weitere `Page` bis Ende |
+| `Page`           | beide    | `{ changes: Vec<ColumnChange>, more: bool }` (≤ 4 MiB je Rahmen)                 | –                                    |
+| `Envelopes`      | beide    | neue Zeilen aus `vault_key_envelopes`/`vault_key_generations` für die Gegenseite | –                                    |
 
-Ablauf nach dem Handshake: beide senden `Progress`; jede Seite berechnet aus dem Vergleich, was ihr
-fehlt (auch Lücken), und schickt `Want`; die Antworten kommen als `Packages`. Neu versiegelte
-eigene Pakete gehen als `Push` an jedes verbundene Gerät. Weitergeleitete Pakete sind die
-gespeicherten Bytes aus `sync_packages_no_sync`, unverändert (FR-012, FR-021).
+Ablauf:
 
-`SealedPackage = { scope: "vault", key_id: [u8;16], origin: [u8;32], seq: u64, nonce: [u8;24],
-ciphertext: Vec<u8> }`. Der Empfänger:
+1. Nach dem Handshake senden beide `Progress`. Nach jedem lokalen Commit (research R19) und nach
+   jeder angewendeten Seite sendet ein Gerät erneut `Progress` an jedes verbundene Gerät, dicht
+   folgende Anstöße zusammengefasst.
+2. Wer im `Progress` der Gegenseite für irgendeinen Ursprung einen höheren `max_hlc` sieht als im
+   eigenen Stand, schickt `Pull` mit seinem eigenen Stand. Höchstens ein `Pull` je Verbindung
+   gleichzeitig.
+3. Der Sender scannt jede CRDT-Tabelle und das Lösch-Log ab dem kleinsten Cursor im `Pull`, behält
+   je Zelle nur, was jenseits des Cursors ihres Ursprungs liegt (ein fehlender Ursprung heißt
+   „alles“), sortiert nach HLC aufsteigend über alle Ursprünge und schickt `Page`s, die nie eine
+   Transaktionsgruppe teilen (`paginate_changes`). Gerätelokale Tabellen scannt er nie.
+4. Der Empfänger prüft jede Seite je Transaktionsgruppe (research R5), wendet sie in einer
+   Transaktion an und erhöht danach je Ursprung seinen Fortschritt auf den höchsten HLC dieses
+   Ursprungs in der Seite. Bricht die Verbindung ab, gilt der Stand der zuletzt angewendeten Seite.
 
-1. verwirft, wenn `key_id` unbekannt ist und sich auch nach dem nächsten `Envelopes` nicht
-   entpacken lässt (Paket bleibt liegen und wird erneut angefordert),
-2. prüft, dass `origin` auf der geltenden Geräteliste steht oder `seq ≤ limit` seiner Entfernung,
-3. verwirft als Fälschung, wenn unter (`origin`, `seq`) schon ein anderes Paket liegt,
-4. entschlüsselt (AEAD mit `scope ‖ key_id ‖ origin ‖ seq`), prüft jede Zellsignatur (auf direkten,
-   geprüften Verbindungen im Bereich „Vault“ darf das entfallen, FR-021),
-5. wendet über `apply_remote_changes_with_policy` atomar an und schreibt im selben Commit Paket und
-   Fortschritt.
+Daten gehen nie ungefragt über die Leitung; so entsteht beim Empfänger keine Lücke (FR-019).
+`ColumnChange.device_id` wird nicht gesendet oder beim Empfang ignoriert; der Ursprung ist der
+Knoten im `hlc_timestamp`.
 
 ## ALPN `holzi-link/1` (Verknüpfen)
 
@@ -83,8 +85,10 @@ N → H  LinkDone    { applied: true }
 lp(endpoint_n) ‖ lp(device_h) ‖ lp(device_n) ‖ rolle_x)`, `rolle_x` ∈ {`H`, `N`}.
 - Falscher `mac`, abgelaufener oder verbrauchter Code: Verbindung zu, nichts übertragen (FR-024).
   Der Code ist verbraucht, sobald `LinkHello` gesendet wurde.
-- `snapshot` sind Seiten von Zellen des Bereichs „Vault“ mit ihren Originalsignaturen, ohne
-  gerätelokale Tabellen. N prüft je Transaktionsgruppe (FR-013) und wendet an.
+- `snapshot` sind `Page`s wie in Abschnitt 2 mit dem Stand „nichts“ für jeden Ursprung: alle Zellen
+  des Bereichs „Vault“ mit ihren ursprünglichen HLCs, samt Lösch-Log, ohne gerätelokale Tabellen.
+  `progress` ist der Fortschrittsstand von H nach der letzten Seite. N prüft je Transaktionsgruppe
+  (FR-013) und wendet an.
 - Bricht die Verbindung vor `LinkDone` ab, löscht N die angelegte Vault; H hat nichts
   veröffentlicht (FR-025).
 - `vault_secret` wird nur bei gewählter Hauptgerät-Rolle gesendet und nur auf dieser Verbindung

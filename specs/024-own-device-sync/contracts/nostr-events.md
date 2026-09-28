@@ -4,7 +4,7 @@ Alle Ereignisse sind flüchtig (Art 21059, NIP-01: nicht gespeichert). Aufbau wi
 Ereignis, signiert mit einem Einmalschlüssel, `p`-Tag an den Empfänger, Inhalt mit NIP-44 v2
 verschlüsselt; darin ein Siegel (Art 13), signiert mit dem Geräteschlüssel des Absenders; darin das
 eigentliche Ereignis (unsigniert, Art unten). Zeitstempel außen nicht verschoben (flüchtig, kein
-Ablauf nötig). Relays: die eingestellten Nostr-Relays (FR-008).
+Ablauf nötig). Server: die eingestellten Nostr-Relays (FR-008).
 
 ## Präsenzmeldung (inneres Ereignis Art 24100)
 
@@ -17,7 +17,7 @@ Generation, info = "holzi/presence/v1" ‖ tag_u32)`, `tag` = Tage seit 1970 (UT
   "v": 1,
   "device": "<hex device_pubkey>",
   "endpoint": "<hex endpoint_id>",
-  "relay": "https://…",
+  "iroh_relay": "https://…",
   "addrs": ["203.0.113.5:4433"],
   "list_generation": 7,
   "ts": 1790000000000,
@@ -45,12 +45,12 @@ Generation, info = "holzi/presence/v1" ‖ tag_u32)`, `tag` = Tage seit 1970 (UT
 
 - Empfänger: `rv_pk` aus `rv_sk = HKDF-SHA256(ikm = code, info = "holzi/link/rendezvous/v1")`.
 - Absender: die neue Installation mit ihrem frisch erzeugten Geräteschlüssel.
-- Inhalt: `{v, endpoint, relay, addrs, ts}`.
+- Inhalt: `{v, endpoint, iroh_relay, addrs, ts}`.
 - Das Hauptgerät abonniert `#p = rv_pk`, solange der Code gilt, und wählt die Installation über
   `holzi-link/1` an (contracts/sync-protocol.md). Mehr als eine Meldung für denselben Code: nur die
   erste wird verfolgt.
 
-## Metadaten, die ein Relay sieht (D9)
+## Metadaten, die ein Nostr-Relay sieht (D9)
 
 IP-Adressen und Zeiten der Verbindungen, Größe der Ereignisse, einen täglich wechselnden
 Empfänger je Vault, einen zufälligen Absender je Ereignis. Nicht: Vault-Identität,

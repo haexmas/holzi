@@ -74,7 +74,7 @@ type LinkJoinState =
 | Ereignis               | Nutzdaten                                  | Wann                                                                                              |
 | ---------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------- |
 | `sync-devices-changed` | –                                          | Geräteliste, Online-Stand, Name, Problem oder Aufnahmeanfragen ändern sich (FR-034)               |
-| `sync-data-changed`    | `{ tables: string[] }`                     | ein empfangenes Paket wurde angewendet; offene Ansichten laden die betroffenen Daten neu (FR-032) |
+| `sync-data-changed`    | `{ tables: string[] }`                     | eine empfangene Seite wurde angewendet; offene Ansichten laden die betroffenen Daten neu (FR-032) |
 | `link-state-changed`   | `SyncStatus['linking']` \| `LinkJoinState` | Fortschritt eines Verknüpfens auf beiden Seiten                                                   |
 
 `sync-data-changed` ersetzt kein eigenes Neuladen der Stores; die vorhandenen Stores (Chat,

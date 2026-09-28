@@ -4,9 +4,8 @@
 
 Tabellen mit Endung `_no_sync` bleiben auf dem Gerät (haex-crdt nimmt sie vom Sync aus); alle
 anderen sind CRDT-Tabellen und reisen mit dem Sync. Migrationsnummern schließen an die letzte
-vorhandene an (heute `0020_wm_session_no_sync` und folgende; beim Umsetzen prüfen).
-`HOLZI_TRIGGER_VERSION` steigt, weil die Trigger von haex-crdt die Transaktionstabelle füllen
-(U2).
+vorhandene an (heute `0020_wm_session_no_sync` und folgende; beim Umsetzen prüfen). haex-crdt
+bleibt unverändert; es kommt keine Tabelle und keine neue Trigger-Version von dort dazu.
 
 ## Tabellen
 
@@ -44,8 +43,8 @@ mit (FR-044).
 | `endpoint_id`       | BLOB(32) | öffentlicher iroh-Schlüssel                |
 | `created_at`        | INTEGER  | ms seit Epoch                              |
 
-Beim Öffnen: gibt es keine Zeile zur eigenen Installation, werden Zeilen anderer Installationen
-gelöscht und neue Schlüssel erzeugt (Kopie, FR-006, R12).
+Beim Öffnen: gibt es keine Zeile zur eigenen Installation, entsteht eine neue mit neuen Schlüsseln.
+Zeilen anderer Installationen bleiben unverändert und werden nie gelesen (Kopie, FR-006, R12).
 
 ### `device_lists` (neu, synchronisiert, nur Einfügen)
 
@@ -67,7 +66,7 @@ entfernt führt (FR-005).
 | `vault`      | öffentlicher Schlüssel der Vault-Identität                                                                                                                                                          |
 | `generation` | Generation                                                                                                                                                                                          |
 | `devices[]`  | `device_pubkey`, `endpoint_id`, `role` (`main` \| `linked`), `vault_device_uuid`, `name_sealed` (Name, verschlüsselt mit einem aus dem Inhaltsschlüssel abgeleiteten Schlüssel, FR-005), `added_at` |
-| `removed[]`  | `device_pubkey`, `limit` (höchste lückenlose Laufnummer, Grenze beim Entfernen, FR-028), `removed_at`                                                                                               |
+| `removed[]`  | `device_pubkey`, `vault_device_uuid`, `limit_hlc` (Grenze beim Entfernen: Fortschrittsstand des Ausstellers für dieses Gerät, FR-028), `removed_at`                                                 |
 | `issued_by`  | Geräteschlüssel des ausstellenden Hauptgeräts                                                                                                                                                       |
 | `issued_at`  | ms seit Epoch                                                                                                                                                                                       |
 
@@ -104,61 +103,28 @@ zwei Hauptgeräte entfernen sich gegenseitig).
 | `generation` | INTEGER     |                                                       |
 | `key`        | BLOB(32)    | entpackt aus dem eigenen Umschlag; nie in Protokollen |
 
-### `sync_packages_no_sync` (neu, gerätelokal)
-
-| Spalte         | Typ               | Regeln                                                                            |
-| -------------- | ----------------- | --------------------------------------------------------------------------------- |
-| `origin`       | BLOB(32)          | Geräteschlüssel des Ursprungsgeräts                                               |
-| `seq`          | INTEGER           | Laufnummer, ≥ 1                                                                   |
-| `package_hash` | BLOB(32)          | `SHA-256(sealed)`                                                                 |
-| `hlc`          | TEXT              | Zeitstempel der Transaktion (nur für den Ursprung lesbar; für fremde Pakete leer) |
-| `scope`        | TEXT              | `vault`                                                                           |
-| `key_id`       | BLOB(16)          |                                                                                   |
-| `sealed`       | BLOB              | Änderungspaket, wie es auf dem Draht reist                                        |
-| `received_at`  | INTEGER           | ms                                                                                |
-| PK             | (`origin`, `seq`) | ein zweites, anderes Paket unter demselben Schlüssel ist eine Fälschung (FR-019)  |
-
-Aufräumen: löschbar, sobald jedes Gerät der geltenden Geräteliste laut `sync_peer_progress_no_sync`
-die Laufnummer hat (R4).
-
 ### `sync_progress_no_sync` (neu, gerätelokal)
 
-| Spalte       | Typ         | Regeln                                                                      |
-| ------------ | ----------- | --------------------------------------------------------------------------- |
-| `origin`     | BLOB(32) PK |                                                                             |
-| `contiguous` | INTEGER     | höchste Laufnummer, bis zu der alle Pakete dieses Ursprungs angewendet sind |
+| Spalte    | Typ     | Regeln                                                                           |
+| --------- | ------- | -------------------------------------------------------------------------------- |
+| `origin`  | TEXT PK | `vault_device_uuid` des Ursprungsgeräts = Knoten-ID im HLC                       |
+| `max_hlc` | TEXT    | höchster HLC, bis zu dem alle Änderungen dieses Ursprungs vorliegen (FR-019, R4) |
 
-Lücken ergeben sich aus `sync_packages_no_sync`: jede fehlende Laufnummer zwischen `contiguous` und
-der höchsten vorhandenen. Pakete jenseits einer Lücke werden angewendet (FR-019), zählen aber nicht.
-
-### `sync_peer_progress_no_sync` (neu, gerätelokal)
-
-| Spalte        | Typ                | Regeln                                            |
-| ------------- | ------------------ | ------------------------------------------------- |
-| `peer`        | BLOB(32)           | Geräteschlüssel des anderen Geräts                |
-| `origin`      | BLOB(32)           |                                                   |
-| `contiguous`  | INTEGER            | zuletzt gemeldeter Fortschritt des anderen Geräts |
-| `reported_at` | INTEGER            | ms                                                |
-| PK            | (`peer`, `origin`) |                                                   |
-
-### `sync_sealer_no_sync` (neu, gerätelokal)
-
-| Spalte       | Typ        | Regeln                                |
-| ------------ | ---------- | ------------------------------------- |
-| `id`         | INTEGER PK | immer `1`                             |
-| `cursor_hlc` | TEXT       | letzte versiegelte eigene Transaktion |
-| `next_seq`   | INTEGER    | nächste zu versiegelnde Laufnummer    |
+Geschrieben nur nach dem Commit einer angewendeten Seite und nur nach oben. Für das eigene Gerät
+nicht gespeichert, sondern aus dem eigenen jüngsten HLC gebildet. Fehlt ein Ursprung, gilt
+„nichts“.
 
 ### `admission_requests` (neu, synchronisiert)
 
-| Spalte          | Typ         | Regeln                                          |
-| --------------- | ----------- | ----------------------------------------------- |
-| `device_pubkey` | BLOB(32) PK | der Kopie                                       |
-| `endpoint_id`   | BLOB(32)    |                                                 |
-| `name`          | TEXT        |                                                 |
-| `requested_at`  | INTEGER     | ms                                              |
-| `signature`     | BLOB(64)    | Schnorr der Kopie über `holzi-admission/v1 ‖ …` |
-| `state`         | TEXT        | `open` \| `admitted` \| `rejected`              |
+| Spalte              | Typ         | Regeln                                                            |
+| ------------------- | ----------- | ----------------------------------------------------------------- |
+| `device_pubkey`     | BLOB(32) PK | der Kopie                                                         |
+| `vault_device_uuid` | TEXT        | Knoten-ID der Kopie; ihre Änderungen aus der Wartezeit tragen sie |
+| `endpoint_id`       | BLOB(32)    |                                                                   |
+| `name`              | TEXT        |                                                                   |
+| `requested_at`      | INTEGER     | ms                                                                |
+| `signature`         | BLOB(64)    | Schnorr der Kopie über `holzi-admission/v1 ‖ …`                   |
+| `state`             | TEXT        | `open` \| `admitted` \| `rejected`                                |
 
 Übergänge: `open → admitted` (Hauptgerät, „Aufnehmen“, gleichzeitig neue Geräteliste) und `open →
 rejected` („Ablehnen“). Keine Rückkehr.
@@ -181,23 +147,13 @@ Bleibt die Quelle für Installation ↔ `vault_device_uuid` und den änderbaren 
 ist keine Spalte; die Verbindung zum Geräteschlüssel führt die Geräteliste über
 `vault_device_uuid`.
 
-### `haex_crdt_local_tx_no_sync` (neu in haex-crdt, U2)
-
-| Spalte | Typ     | Regeln                                         |
-| ------ | ------- | ---------------------------------------------- |
-| `hlc`  | TEXT PK | Zeitstempel einer lokal begonnenen Transaktion |
-| `node` | TEXT    | HLC-Knoten (= `vault_device_uuid`)             |
-| `seq`  | INTEGER | lückenlos je `node`, `UNIQUE(node, seq)`       |
-
 ## Werte, die nicht in Tabellen liegen
 
-- **Änderungspaket** (`SealedPackage`): `scope`, `key_id`, `origin`, `seq`, `nonce(24)`,
-  `ciphertext`. Klartext: `{changes: [ColumnChange mit sig]}`, alle Zellen einer Transaktion.
-  Zusätzliche Daten der Verschlüsselung: `scope ‖ key_id ‖ origin ‖ seq` (R9).
-- **Zellsignatur** (`sig`-JSON in haex-crdt): `{v: 1, dev: device_pubkey, vault: vault_pubkey, seq,
-sig: schnorr}` über den Preimage aus R10.
+- **Seite** einer Lieferung: `ColumnChange`-Werte von haex-crdt (Tabelle, PKs, Spalte, HLC, Wert),
+  über alle Ursprünge nach HLC aufsteigend, nie eine Transaktionsgruppe geteilt
+  (contracts/sync-protocol.md). Nicht gespeichert; entsteht beim Senden aus dem aktuellen Stand.
 - **Präsenzmeldung**: flüchtiges Ereignis Art 21059 an `mb_pk` (R7), Inhalt `{device_pubkey,
-endpoint_id, relay_url, direct_addrs, device_list_generation, ts, nonce}`.
+endpoint_id, iroh_relay_url, direct_addrs, device_list_generation, ts, nonce}`.
 - **Verknüpfungscode**: 16 Byte Zufall, `expires_at`, `used`; nur im Speicher des Hauptgeräts.
 
 ## Zustände
