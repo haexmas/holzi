@@ -36,7 +36,7 @@
   Cloudflare R2, Backblaze B2, MinIO and AWS S3, plus Hetzner as unverified (superseded: v1 = RustFS and AWS S3).
   Whether each offers bucket-scoped tokens, bucket versioning, a retention rule
   for old versions, and a read-write token that cannot delete old versions
-  (FR-004 c to f) is unverified. That
+  (FR-004 c to g, g = revoked token rejected within 5 minutes) is unverified. That
   decides whether a provider lands on "geeignet" or only "nur über den
   Ersatzweg" (FR-005). Resolve with `/speckit-clarify`, ideally after a short
   provider check.
@@ -69,7 +69,12 @@
   travel with the space data but in per-recipient envelopes, so a read-only
   member cannot decrypt the read-write token.
 - SC-002 (old token rejected within 5 minutes) depends on the provider's own
-  revocation latency; the plan must confirm it per supported provider.
+  revocation latency; the suitability check measures it with a test key
+  (FR-004 g), so SC-002 holds for every provider marked „geeignet“. Review fix
+  2026-09-28: FR-018 revokes at the provider before the new member list is
+  published, FR-022 publishes anyway on failure and retries with a persistent
+  warning; FR-024 issues delete links only to admin devices for garbage
+  collection, members get read/upload links only.
 - Aligned with the sibling spec 027 as written: 027 excludes dissolving a space
   and switching a space's backend. This spec lifts the switching exclusion (User
   Story 8, also from "nur direkte Übertragung" to B) and keeps dissolving out of

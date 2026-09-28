@@ -31,14 +31,18 @@ Synchronisierung oder Rechten in Berührung.
   Paket trennt nie Änderungen, die zusammen geschrieben wurden.
 - **Inhaltsschlüssel**: der Schlüssel, mit dem die Änderungspakete eines
   Bereichs verschlüsselt sind. **Schlüsselgeneration**: eine Fassung davon;
-  jede Änderung der Mitglieder (Einladen, Ändern von Fähigkeiten, Entfernen,
-  Austreten) erzeugt eine neue, und ihre Mitgliederliste steht damit fest.
+  jede Änderung der Mitglieder (Aufnahme nach angenommener Einladung, Ändern
+  von Fähigkeiten, Entfernen, Austreten) erzeugt eine neue, und ihre
+  Mitgliederliste steht damit fest.
 - **Relay**: der nicht vertrauenswürdige Server aus Spec 026. Es speichert und
   verteilt nur Verschlüsseltes. **Postfach**: der Speicherplatz eines Bereichs
   auf dem Relay. **Mitgliederliste**: die vom Eigentümer unterschriebene Liste
   der Vault-Identitäten und ihrer Fähigkeiten je Bereich, die auf das Relay
   hochgeladen wird. Ihre **Generation** ist die Schlüsselgeneration, zu der sie
-  gehört.
+  gehört. **Grenze**: der Teil einer Mitgliederliste, die eine Vault entfernt
+  oder ihre Fähigkeiten senkt; er nennt für jedes Gerät dieser Vault die
+  höchste lückenlose Nummer je Ursprungsgerät, die das erstellende Gerät da
+  angewendet hatte (Spec 024).
 - **Erweiterung**: eine haextension im Sinne von ADR-0004. **Eigene Tabellen**
   einer Erweiterung sind die Tabellen mit ihrem Präfix aus öffentlichem
   Schlüssel und Name der Erweiterung (dieselbe Konvention wie haex-vault,
@@ -217,8 +221,9 @@ Vault erreicht eine der beiden.
    Freigabetyps, Name der Erweiterung und den bisherigen Empfängern.
 2. **Given** der Teilen-Dialog, **When** Anna eine Vault-Identität hinzufügt,
    eine Fähigkeitsstufe wählt und bestätigt, **Then** besteht die
-   Datenfreigabe mit diesem Empfänger, eine neue Schlüsselgeneration ist
-   angelegt, und der Empfänger erhält eine Einladung.
+   Datenfreigabe, der Empfänger steht darin als eingeladen und erhält eine
+   Einladung ohne Schlüssel; Mitgliederliste und Schlüsselgeneration ändern
+   sich erst, wenn ein Gerät von Anna seine Annahme verarbeitet (FR-010).
 3. **Given** der Kalender „Familie“ ist mit Carl geteilt, **When** Anna darin
    einen Termin anlegt, **Then** gehört der Termin samt Teilnehmern und
    Erinnerungen zur Datenfreigabe und erreicht Carl.
@@ -274,6 +279,11 @@ Erweiterung öffnen: Sie nennt die Erweiterung und bietet die Installation an.
    aus erreichbar ist, eine fremde Tabelle betrifft oder von einer Vault ohne
    passende Fähigkeit stammt, **When** es bei Carl eintrifft, **Then** wird es
    nicht angewendet.
+7. **Given** Carl hat angenommen und kein Gerät von Anna ist online, **When**
+   er die Einladung ansieht, **Then** steht sie auf „angenommen, wartet auf
+   Admin“, Carl hat noch keinen Schlüssel, und das Relay gibt ihm keinen
+   Zugriff auf das Postfach der Freigabe, bis ein Gerät von Anna die Annahme
+   verarbeitet hat (FR-010, FR-019).
 
 ---
 
@@ -537,15 +547,21 @@ angezeigter ursprünglicher Autorin.
   Eigentümer erfährt nicht, wie viele Geräte ein Empfänger hat, und der
   Empfänger kann Geräte hinzufügen, ohne dass der Eigentümer etwas tut.
 - **FR-010**: Bestätigt der Eigentümer einen neuen Empfänger, MUSS holzi: die
-  Datenfreigabe anlegen, falls es sie noch nicht gibt; das Recht speichern;
-  eine neue Schlüsselgeneration anlegen, deren Inhaltsschlüssel verschlüsselt
-  an die Vault-Identität des Eigentümers und jedes Empfängers der neuen
-  Mitgliederliste geht, einmal je Vault; eine neue Mitgliederliste mit dieser
-  Generation auf das Relay laden (Spec 026); und dem Empfänger eine Einladung
-  schicken, auf dem Weg für Einladungen aus Spec 027. Wie bei Spaces erzeugt
-  jede Änderung der Mitglieder (Einladen, Ändern von Fähigkeiten, Entfernen,
-  Austreten, Ablehnen) eine neue Schlüsselgeneration mit fester
-  Mitgliederliste.
+  Datenfreigabe anlegen, falls es sie noch nicht gibt; das Recht mit dem Stand
+  „eingeladen“ speichern; und dem Eingeladenen eine Einladung ohne Schlüssel
+  schicken, auf dem Weg für Einladungen aus Spec 027. Ein Eingeladener steht
+  NICHT in der Mitgliederliste und erhält keinen verschlüsselten
+  Inhaltsschlüssel; das Relay gibt ihm daher keinen Zugriff. Erst wenn ein
+  Gerät des Eigentümers die unterschriebene Annahme (FR-019) verarbeitet, MUSS
+  es den Empfänger aufnehmen: eine neue Schlüsselgeneration anlegen, deren
+  Inhaltsschlüssel verschlüsselt an die Vault-Identität des Eigentümers und
+  jedes Empfängers der neuen Mitgliederliste geht, einmal je Vault, dem neuen
+  Empfänger zusätzlich die älteren Generationen geben (FR-011) und die neue
+  Mitgliederliste mit dieser Generation auf das Relay laden (Spec 026). Wie
+  bei Spaces (Spec 027) erzeugt jede Änderung der Mitglieder (Aufnahme nach
+  angenommener Einladung, Ändern von Fähigkeiten, Entfernen, Austreten) eine
+  neue Schlüsselgeneration mit fester Mitgliederliste; Einladen und Ablehnen
+  ändern die Mitglieder nicht.
 - **FR-011**: Ein neu hinzugefügter Empfänger MUSS nach der Annahme den ganzen
   aktuellen Stand der Datenfreigabe erhalten, nicht nur die Änderungen nach
   seiner Einladung. Dafür MUSS holzi ihm zusätzlich die Inhaltsschlüssel aller
@@ -556,7 +572,11 @@ angezeigter ursprünglicher Autorin.
   Neue Einträge unter der Wurzel gehören sofort dazu. Ein Eintrag, der durch
   eine Änderung des Eigentümers nicht mehr erreichbar ist, MUSS bei den
   Empfängern aus deren Kopie verschwinden, ohne beim Eigentümer gelöscht zu
-  werden; ein Eintrag, der erreichbar wird, gehört ab dann dazu.
+  werden; ein Eintrag, der erreichbar wird, gehört ab dann dazu. Dieses
+  Verlassen des Umfangs darf allein der Eigentümer auslösen: Die Empfänger
+  entfernen ihre Kopie, ohne eine Löschung zurückzuschicken, und die Zeile des
+  Eigentümers bleibt; gehört der Eintrag beim Empfänger noch zu einer anderen
+  empfangenen Freigabe, bleibt er (FR-042).
 - **FR-013**: Beim Senden für eine Datenfreigabe DÜRFEN nur Einträge aus FR-012,
   nur aus den erklärten Tabellen und nur synchronisierte Spalten die Vault
   verlassen. Die Vault-Identität, Geräteschlüssel, Inhaltsschlüssel anderer
@@ -589,9 +609,15 @@ angezeigter ursprünglicher Autorin.
   entstandenen Schlüsselgenerationen bleiben gültig; (c) zum Verschlüsseln
   DARF ein Gerät nur eine Schlüsselgeneration verwenden, deren
   Inhaltsschlüssel an keine inzwischen entfernte Vault verschlüsselt ist; gibt
-  es keine, MUSS ein Gerät des Eigentümers eine neue anlegen; (d) zwei
-  verschiedene Mitgliederlisten mit derselben Generation MÜSSEN abgelehnt
-  werden.
+  es keine, MUSS ein Gerät des Eigentümers eine neue anlegen; (d) nur Geräte
+  des Eigentümers veröffentlichen Mitgliederlisten, doch zwei von ihnen können
+  verschiedene Listen mit derselben Generation veröffentlichen. Unter gültigen
+  Listen derselben Generation MUSS beim Relay und bei jedem Empfänger die mit
+  dem lexikografisch kleinsten Hash der Liste gelten; das Relay ersetzt eine
+  gespeicherte Liste derselben Generation nur durch eine mit kleinerem Hash
+  (Spec 026). Ein Gerät des Eigentümers, das zwei Listen derselben Generation
+  sieht, MUSS nach (b) die Generation + 1 veröffentlichen, die beide
+  Änderungen zusammenführt.
 - **FR-017**: Die Erweiterung DARF nie Inhaltsschlüssel, Mitgliederlisten,
   Rechte anderer Empfänger oder Zugriff auf die Synchronisierung erhalten.
 - **FR-018**: Die Erweiterung MUSS für Einträge ihrer Wurzeltabellen und deren
@@ -604,9 +630,14 @@ angezeigter ursprünglicher Autorin.
 
 - **FR-019**: Eine Einladung MUSS zeigen: Name und Vault-Identität des
   Eigentümers, Erweiterung, Freigabetyp, Beschriftung der Wurzel und angebotene
-  Fähigkeiten. Der Empfänger MUSS annehmen oder ablehnen können. Vor der
-  Annahme DARF nichts aus der Freigabe in seiner Vault gespeichert werden außer
-  der Einladung selbst.
+  Fähigkeiten. Der Empfänger MUSS annehmen oder ablehnen können. Die Annahme
+  ist eine von seiner Vault-Identität unterschriebene Antwort an den
+  Eigentümer. Bis ein Gerät des Eigentümers sie nach FR-010 verarbeitet hat,
+  MUSS die Einladung beim Empfänger „angenommen, wartet auf Admin“ zeigen; er
+  hat bis dahin keinen Schlüssel und keinen Zugriff am Relay. Vor der
+  Aufnahme DARF nichts aus der Freigabe in seiner Vault gespeichert werden
+  außer der Einladung selbst. Eine Ablehnung hinterlässt beim Eingeladenen
+  keinen Schlüssel, weil er nie einen erhalten hat.
 - **FR-020**: Ist die benötigte Erweiterung nicht installiert, oder kennt die
   installierte Version den Freigabetyp nicht, MUSS die Einladung das nennen und
   die Installation beziehungsweise das Update über die übliche Bestätigung
@@ -626,9 +657,12 @@ angezeigter ursprünglicher Autorin.
   (Eigentümer wie Empfänger), MUSS eine Änderung nur zulassen, wenn: (a) ihre
   Unterschrift gültig ist und die Gerätebestätigung das Gerät der
   Vault-Identität des Autors zuordnet; (b) ihre Tabelle zu den erklärten
-  Tabellen des Freigabetyps derselben Erweiterung gehört; (c) der Eintrag nach
-  der Änderung von der Wurzel aus erreichbar ist, ein neuer Eintrag also einen
-  Fremdschlüssel in die Freigabe trägt; (d) der Autor die nötige Fähigkeit hat
+  Tabellen des Freigabetyps derselben Erweiterung gehört; (c) bei Anlegen und
+  Ändern der Eintrag nach der Änderung von der Wurzel aus erreichbar ist, ein
+  neuer Eintrag also einen Fremdschlüssel in die Freigabe trägt; Löschungen
+  prüft (c) nicht, sie werden allein nach den Fähigkeitsregeln aus FR-028
+  geprüft, und eine Änderung des Eigentümers, die einen Eintrag aus dem Umfang
+  nimmt, gilt als Verlassen des Umfangs nach FR-012; (d) der Autor die nötige Fähigkeit hat
   (FR-027, FR-028, FR-034) oder der Eigentümer ist; (e) der Ersteller eines
   bestehenden Eintrags unverändert bleibt und der eines neuen Eintrags der
   Autor ist. Ausgenommen von (e) sind Änderungen, die der Eigentümer nach
@@ -636,8 +670,10 @@ angezeigter ursprünglicher Autorin.
   unterschreibender Autor ist der Eigentümer.
 - **FR-024**: Ein Änderungspaket ist atomar (Spec 024): Enthält es eine
   Änderung, die FR-023 verletzt, DARF KEINE Änderung aus diesem Paket
-  angewendet werden. Eine Momentaufnahme wird dagegen je Änderung geprüft:
-  unzulässige Änderungen werden verworfen, die übrigen angewendet. holzi MUSS
+  angewendet werden. Eine Momentaufnahme wird dagegen je vollständiger
+  Transaktionsgruppe geprüft (Spec 024): Eine unzulässige Änderung verwirft
+  ihre ganze Gruppe, die übrigen Gruppen werden angewendet; eine Gruppe wird
+  nie teilweise angewendet. holzi MUSS
   jede Ablehnung protokollieren und mit den folgenden Paketen weitermachen.
 - **FR-025**: Enthält ein Paket Tabellen oder Spalten des Freigabetyps, die die
   installierte Version der Erweiterung noch nicht kennt, MUSS holzi es
@@ -648,8 +684,10 @@ angezeigter ursprünglicher Autorin.
   Einträge, die nur über diese Freigabe in seiner Vault sind, auf allen seinen
   Geräten entfernt werden. Diese Entfernung DARF die Datenfreigabe NICHT als
   Löschung erreichen. Ablehnung und Austritt MÜSSEN dem Eigentümer mitgeteilt
-  werden; seine Vault entfernt das Recht, sobald eines seiner Geräte davon
-  erfährt, wie bei einem Entzug (FR-032).
+  werden. Bei einer Ablehnung entfernt seine Vault das offene Recht ohne neue
+  Schlüsselgeneration, weil der Eingeladene nie Mitglied war (FR-010); beim
+  Austritt entfernt sie das Recht, sobald eines seiner Geräte davon erfährt,
+  wie bei einem Entzug (FR-032).
 
 **Bearbeiten**
 
@@ -684,12 +722,21 @@ angezeigter ursprünglicher Autorin.
 - **FR-033**: Nach einem Entfernen DARF der entfernte Empfänger keine Änderung
   mehr lesen können, die mit einer späteren Schlüsselgeneration verschlüsselt
   ist.
-- **FR-034**: Eine Änderung gilt, wenn ihr Autor in der Schlüsselgeneration,
-  mit der sie verschlüsselt ist, die nötige Fähigkeit hatte; ein Entzug wirkt
-  nur nach vorn. Zusätzlich MUSS jedes empfangende Gerät den Autor beim Empfang
-  gegen die neueste ihm bekannte Mitgliederliste prüfen, sodass ein entfernter
-  Empfänger mit der älteren Generation nicht dauerhaft weiterschreiben kann;
-  das Relay sperrt ihn sofort (Spec 026).
+- **FR-034**: Ein Entzug (Entfernen oder Zurückstufen) wirkt nur nach vorn und
+  wird über die Grenze aus Spec 024 abgegrenzt, nicht über Zeitstempel: Die
+  neue Mitgliederliste trägt für jedes Gerät der betroffenen Vault die höchste
+  lückenlose Nummer, die das erstellende Gerät des Eigentümers da angewendet
+  hatte. Jedes Gerät, das diese Liste kennt, MUSS jede Änderung der
+  betroffenen Vault jenseits der Grenze ablehnen, die das entzogene Recht
+  braucht, gleich welchen Zeitstempel und welche Schlüsselgeneration sie
+  trägt; Änderungen bis zur Grenze prüft es nach den vorherigen Fähigkeiten.
+  Zurückdatieren ist unmöglich, weil die Nummern bis zur Grenze schon vergeben
+  sind (Spec 024). Hat ein Gerät eine solche Änderung angewendet, bevor es die
+  Liste kannte, bleibt sie (das akzeptierte Zeitfenster); die nächste
+  berechtigte Änderung desselben Feldes behebt die Abweichung. Das Relay
+  sperrt den Betroffenen sofort (Spec 026). Diese Regel präzisiert die Klärung
+  vom 2026-09-28 zum Entzug: Die Prüfung gegen die neueste bekannte
+  Mitgliederliste ist die Prüfung gegen deren Grenze.
 - **FR-035**: Was ein entfernter Empfänger schon empfangen hat, MUSS in seiner
   Vault bleiben, gekennzeichnet als „Freigabe beendet“ und ohne weitere
   Aktualisierung. Er MUSS es in einem Schritt entfernen können; wie beim
@@ -739,8 +786,9 @@ angezeigter ursprünglicher Autorin.
   Schreiben, Löschen), Stand der Einladung. Nur vom Eigentümer geschrieben.
 - **Schlüsselgeneration**: je Datenfreigabe; Inhaltsschlüssel verschlüsselt an
   jede berechtigte Vault-Identität, einmal je Vault. Eine neue entsteht bei
-  jeder Änderung der Mitglieder (Einladen, Ändern von Fähigkeiten, Entfernen,
-  Austreten, Ablehnen); ihre Mitgliederliste steht damit fest. Neue Empfänger
+  jeder Änderung der Mitglieder (Aufnahme nach angenommener Einladung, Ändern
+  von Fähigkeiten, Entfernen, Austreten); ihre Mitgliederliste steht damit
+  fest. Neue Empfänger
   erhalten auch die Inhaltsschlüssel aller älteren Generationen (FR-011).
 - **Mitgliederliste**: die vom Eigentümer unterschriebene Liste der Empfänger
   mit Fähigkeiten zu einer Generation, auf dem Relay (Spec 026). Die Vault des
@@ -749,7 +797,9 @@ angezeigter ursprünglicher Autorin.
 - **Einladung**: eine verschlüsselte Nachricht an die Vault-Identität des
   Empfängers mit Datenfreigabe, Eigentümer, Erweiterung, Freigabetyp,
   Beschriftung und Fähigkeiten, zugestellt auf dem Weg für Einladungen aus
-  Spec 027.
+  Spec 027. Sie enthält keinen Schlüssel; die Annahme ist eine vom Empfänger
+  unterschriebene Antwort, die ein Gerät des Eigentümers verarbeitet (FR-010,
+  FR-019).
 - **Zuordnung empfangener Einträge**: beim Empfänger; welcher Eintrag in den
   Tabellen einer Erweiterung zu welcher empfangenen Datenfreigabe gehört. Vom
   Kern geführt, nicht von der Erweiterung.
@@ -773,7 +823,8 @@ angezeigter ursprünglicher Autorin.
   Bereiche) oder Daten einer Tabelle des Kerns.
 - **SC-004**: 100 % der eingeschleusten unzulässigen Änderungen (ohne Fähigkeit,
   mit geändertem Ersteller, in fremder Tabelle, nicht erreichbar, falsche
-  Unterschrift) werden von jeder empfangenden Vault abgelehnt.
+  Unterschrift) werden von jeder empfangenden Vault abgelehnt. Für Änderungen,
+  die erst durch einen Entzug unzulässig werden, gilt SC-010.
 - **SC-005**: Ein Nutzer teilt einen Eintrag mit einer Person in weniger als 30
   Sekunden, ausgehend vom geöffneten Eintrag in der Erweiterung.
 - **SC-006**: Sind Absender und Empfänger online, erscheint ein neuer Eintrag
@@ -786,6 +837,15 @@ angezeigter ursprünglicher Autorin.
   Rechte.
 - **SC-009**: Nach Austritt oder Entfernen der eigenen Kopie verliert der
   Eigentümer in 100 % der Fälle keinen Eintrag.
+- **SC-010**: Nach einem Entfernen oder Zurückstufen lehnt jedes Gerät, das die
+  neue Mitgliederliste kennt, 100 % der Änderungen der betroffenen Vault
+  jenseits der Grenze ab, die das entzogene Recht brauchen, auch zurückdatierte.
+  Änderungen, die ein Gerät schon vorher angewendet hat, können bleiben, bis
+  eine berechtigte Änderung sie überschreibt (dokumentiertes Risiko, Klärung
+  vom 2026-09-28 zum Entzug).
+- **SC-011**: Ein Eingeladener, dessen Annahme noch kein Gerät des Eigentümers
+  verarbeitet hat, erhält in 100 % der Testfälle keinen Inhaltsschlüssel und
+  keinen Zugriff auf das Postfach der Freigabe am Relay.
 
 ## Assumptions
 

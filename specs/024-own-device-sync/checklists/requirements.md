@@ -75,3 +75,11 @@
 - 2026-09-28: the operator answered all clarification questions for this spec; the markers are
   resolved in the spec and recorded under Clarifications. Notes above that describe open markers are
   historical.
+- 2026-09-28, review of PR #155/#156: FR-019 now defines „lückenloser Fortschritt“ (gap-free
+  per-origin sequence numbers next to the HLC, explicit gap requests, forgery rejection; SC-014).
+  New FR-042 „Grenze beim Entzug“ (revocation cutoff by sequence number, no timestamp rule; SC-015,
+  narrowed to the D19 window) and FR-043 „Mitgliederlisten gleicher Generation“ (smallest list hash
+  wins; SC-016). FR-013 checks snapshots per complete transaction group (SC-017). FR-007 lets
+  one-device vaults listen for presence so a fresh copy is found (SC-002, SC-007). FR-040/FR-041
+  replace the relay freeze by „Übernahme erst nach Mehrheitsbestätigung“ (SC-013). The note above
+  about the relay freezing a scope is historical.

@@ -37,8 +37,8 @@ Repository `https://github.com/haex-space/haex-vault`, Revision
   der SQLite-Datenbank der Vault.
 - **Admin**: die Vault, die den Space angelegt hat. Es gibt genau einen Admin je
   Space; die Rolle ist nicht übertragbar und nicht vergebbar.
-- **Mitglied**: eine Vault, die der Admin in den Space eingeladen hat, samt all
-  ihren Geräten. Der Admin ist selbst Mitglied mit allen Fähigkeiten.
+- **Mitglied**: eine Vault, die der Admin in den Space eingeladen und nach
+  ihrer Annahme aufgenommen hat, samt all ihren Geräten. Der Admin ist selbst Mitglied mit allen Fähigkeiten.
 - **Fähigkeit**: ein Recht eines Mitglieds im Space: **Lesen** (alle Dateien
   lesen), **Schreiben** (neue Dateien hinzufügen, bestehende ändern, eigene
   Dateien löschen), **Löschen** (auch fremde Dateien löschen).
@@ -97,7 +97,8 @@ Repository `https://github.com/haex-space/haex-vault`, Revision
   Spec wendet sie auf Spaces an (siehe Edge Cases). Die Anwesenheits- und
   Signalisierungsserver aus Spec 024 tragen auch Einladungen (FR-041) und das
   Auffinden von Geräten anderer Mitglieder (FR-039). Ob ein Änderungspaket als
-  Ganzes oder je Änderung geprüft wird, legt Spec 024 fest (FR-026).
+  Ganzes oder je Transaktionsgruppe geprüft wird, legt Spec 024 fest (FR-013
+  dort); diese Spec wendet es in FR-026 an.
 - [`025-own-device-file-sync`](../025-own-device-file-sync/spec.md) (Ordner-Synchronisierung
   eigener Geräte): Diese Spec **erweitert** die Maschinerie aus Spec 025 auf
   mehrere Nutzer. Dateiindex, Objekte, Übertragung, Konfliktkopien und die
@@ -234,28 +235,35 @@ ein, die ablehnt.
 
 **Why this priority**: Das Teilen mit anderen Nutzern ist der Kern der Spec.
 
-**Independent Test**: Zwei Vaults A und B. A lädt B mit „Lesen“ ein. B nimmt an
-und wählt einen Ordner: Alle Dateien des Space erscheinen dort, auch die, die
-vor der Einladung hinzugekommen sind. Mit einer dritten Vault C wiederholen und
-ablehnen: C hat danach keinen Space und keinen Schlüssel dazu; A sieht C als
-„abgelehnt“ und nicht mehr als Mitglied.
+**Independent Test**: Zwei Vaults A und B. A lädt B mit „Lesen“ ein: B steht
+danach nicht in der Mitgliederliste und hat keinen Schlüssel des Space. B nimmt
+an und wählt einen Ordner, während kein Gerät von A online ist: Die Einladung
+zeigt „angenommen, wartet auf Admin“, B hat weiter keinen Schlüssel, und das
+Relay weist B ab. Sobald ein Gerät von A online ist, nimmt es B auf, und alle
+Dateien des Space erscheinen bei B, auch die, die vor der Einladung
+hinzugekommen sind. Mit einer dritten Vault C wiederholen und ablehnen: C hat
+danach keinen Space und keinen Schlüssel dazu, stand nie in der
+Mitgliederliste, und A sieht C als „abgelehnt“.
 
 **Acceptance Scenarios**:
 
 1. **Given** Anna ist Admin eines Space, **When** sie „Mitglied einladen“ wählt,
    eine gültige Vault-Identität, einen Namen und eine Fähigkeitsstufe angibt,
-   **Then** erscheint Ben in der Mitgliederliste als „eingeladen“ mit diesen
-   Rechten.
+   **Then** erscheint Ben unter den offenen Einladungen als „eingeladen“ mit
+   diesen Rechten; in der Mitgliederliste steht er noch nicht, und er erhält
+   keinen Schlüssel.
 2. **Given** die Einladung ist verschickt, **When** ein Gerät von Bens Vault
    online ist, **Then** zeigt holzi die Einladung mit Name des Space, Name und
    Vault-Identität des Admins und Bens Rechten, mit „Annehmen“ und „Ablehnen“.
 3. **Given** die Einladung, **When** Ben „Annehmen“ wählt und einen Ordner
-   angibt, **Then** erscheinen alle Dateien des Space in diesem Ordner, und
-   Anna sieht Ben als Mitglied statt als „eingeladen“.
+   angibt, **Then** zeigt die Einladung „angenommen, wartet auf Admin“, bis ein
+   Gerät von Anna die Annahme verarbeitet; danach steht Ben in der
+   Mitgliederliste, erhält die Schlüssel, alle Dateien des Space erscheinen in
+   seinem Ordner, und Anna sieht Ben als Mitglied.
 4. **Given** die Einladung, **When** die Eingeladene „Ablehnen“ wählt, **Then**
    verschwindet die Einladung auf allen Geräten ihrer Vault, Anna sieht sie als
-   „abgelehnt“, und sie wird aus der Mitgliederliste entfernt wie in
-   User Story 4.
+   „abgelehnt“, die Mitgliederliste bleibt unverändert, und bei der
+   Eingeladenen bleibt kein Schlüssel des Space.
 5. **Given** Ben hat mehrere Geräte, **When** er die Einladung auf einem Gerät
    annimmt, **Then** kennen seine anderen Geräte den Space ebenfalls, ohne dass
    Anna etwas tut; jedes Gerät bindet ihn an einen eigenen Ordner.
@@ -370,8 +378,9 @@ Schreiben und Löschen“ setzen: Es kann fremde Dateien löschen.
 2. **Given** Ben hat nun „Löschen“, **When** er eine Datei löscht, die Anna
    angelegt hat, **Then** verschwindet sie bei allen Mitgliedern.
 3. **Given** Anna nimmt der Tante „Schreiben“, **When** die Tante danach eine
-   Datei ändert, **Then** übernimmt kein anderes Mitglied diese Änderung (siehe
-   FR-024 zu einer gleichzeitig geschriebenen letzten Änderung).
+   Datei ändert, **Then** übernimmt kein Mitglied, das die neue
+   Mitgliederliste kennt, diese Änderung (siehe FR-024 zur Grenze und zu
+   Änderungen, die vorher schon angewendet waren).
 4. **Given** Anna ändert Rechte, **When** das betroffene Mitglied das nächste
    Mal online ist, **Then** zeigt holzi ihm seine neuen Rechte.
 5. **Given** Anna selbst, **When** sie die Mitgliederliste ansieht, **Then**
@@ -443,8 +452,12 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
 
 - **Eingeladene Vault offline**: Die Einladung wartet, bis ein Gerät der
   eingeladenen Vault online ist. Sie bleibt offen, bis sie angenommen,
-  abgelehnt oder vom Admin durch Entfernen zurückgezogen wird. Bis dahin steht
-  die Vault als „eingeladen“ in der Mitgliederliste.
+  abgelehnt oder vom Admin zurückgezogen wird. Bis dahin steht die Vault als
+  „eingeladen“ unter den offenen Einladungen, nicht in der Mitgliederliste.
+- **Admin offline, wenn die Annahme kommt**: Die Einladung zeigt auf beiden
+  Seiten „angenommen, wartet auf Admin“. Die Vault hat bis dahin keinen
+  Schlüssel und keinen Zugang zum Relay; das nächste Gerät des Admins, das
+  online ist, nimmt sie auf (FR-009).
 - **Einladung wird zurückgezogen, bevor sie ankommt**: Kommt die Einladung
   danach an, zeigt holzi sie nicht mehr an oder als „zurückgezogen“; es entsteht
   kein Space auf den Geräten der Eingeladenen.
@@ -456,9 +469,10 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   für denselben Fall bei eigenen Geräten gilt entsprechend).
 - **Entferntes Mitglied ist noch online und schreibt weiter**: Seine Geräte
   wissen vielleicht noch nichts vom Entzug. Das Relay nimmt seine Pakete nicht
-  mehr an, Mitglieder geben ihm direkt keine Daten und nehmen keine an. Eine
-  Änderung, die es gleichzeitig mit dem Entzug geschrieben hat, kann noch
-  angenommen werden (FR-024); alles Spätere wird verworfen.
+  mehr an, Mitglieder geben ihm direkt keine Daten und nehmen keine an. Jedes
+  Gerät, das die neue Mitgliederliste kennt, verwirft seine Änderungen
+  jenseits der Grenze (FR-024), egal welchen Zeitstempel sie tragen; was ein
+  Gerät vorher schon angewendet hat, bleibt, bis es überschrieben wird.
 - **Die Geräte des Admins ändern gleichzeitig Rechte**: Anna entfernt Ben auf
   dem Laptop, während sie auf dem Rechner Carlas Rechte ändert. Beide Geräte
   erzeugen eine neue Schlüsselgeneration; beide gelten. Sobald die Änderungen
@@ -577,32 +591,41 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   können, mit einem Namen, unter dem es im Space erscheint, und einer
   Fähigkeitsstufe (FR-015). holzi MUSS ungültige Vault-Identitäten, die eigene
   und die eines bestehenden Mitglieds abweisen.
-- **FR-009**: Eine Einladung MUSS die eingeladene Vault in die Mitgliederliste
-  aufnehmen, eine neue Schlüsselgeneration für die neue Mitgliederliste
-  erzeugen, deren Schlüssel und die Schlüssel aller älteren Generationen an
-  die eingeladene Vault verpacken und der eingeladenen Vault eine
-  verschlüsselte Direktnachricht mit Kennung und Name des Space, Admin,
-  Fähigkeiten und Hinweisen auf das Relay senden (FR-041).
+- **FR-009**: Eine Einladung MUSS der eingeladenen Vault eine verschlüsselte
+  Direktnachricht mit Kennung und Name des Space, Admin, Fähigkeiten und
+  Hinweisen auf das Relay senden (FR-041), ohne Schlüssel. Die eingeladene
+  Vault steht bis zur Annahme NICHT in der Mitgliederliste und erhält keine
+  Umschläge; das Relay gibt ihr deshalb keinen Zugang. Nimmt sie an, schickt
+  sie eine unterschriebene Annahme; erst dann MUSS ein Gerät des Admins sie in
+  die Mitgliederliste aufnehmen, eine neue Schlüsselgeneration für die neue
+  Mitgliederliste erzeugen und deren Schlüssel und die aller älteren
+  Generationen an sie verpacken (FR-019). Bis ein Gerät des Admins die Annahme
+  verarbeitet hat, MUSS die Einladung auf beiden Seiten als „angenommen,
+  wartet auf Admin“ erscheinen. Das präzisiert D22: Die neue Generation
+  entsteht mit der Aufnahme nach der Annahme, nicht schon beim Verschicken.
 - **FR-010**: Die Einladung MUSS auf allen Geräten der eingeladenen Vault
   angezeigt werden, sobald eines davon online ist, mit Name des Space, Name und
   Vault-Identität des Admins und den eigenen Fähigkeiten, und mit „Annehmen“
   und „Ablehnen“. Sie MUSS offen bleiben, bis sie angenommen, abgelehnt oder
   zurückgezogen ist.
 - **FR-011**: Nimmt die eingeladene Vault an, MUSS das annehmende Gerät nach
-  einem Ordner fragen und dann alle aktuellen Dateien des Space erhalten
-  können, auch die, die vor der Einladung hinzugekommen sind. Der Admin MUSS
-  die Annahme angezeigt bekommen, sobald sie ihn erreicht.
+  einem Ordner fragen und, sobald ein Gerät des Admins sie nach FR-009
+  aufgenommen hat, alle aktuellen Dateien des Space erhalten können, auch die,
+  die vor der Einladung hinzugekommen sind. Der Admin MUSS die Annahme
+  angezeigt bekommen, sobald sie ihn erreicht.
 - **FR-012**: Lehnt die eingeladene Vault ab, MUSS die Einladung auf allen
   ihren Geräten verschwinden, und der Admin MUSS darüber eine Nachricht
-  erhalten. Das nächste online befindliche Gerät des Admins MUSS die Vault dann
-  entfernen wie in FR-018 und sie als „abgelehnt“ anzeigen.
-- **FR-013**: Der Admin MUSS eine offene Einladung zurückziehen können; das ist
-  ein Entfernen nach FR-018.
+  erhalten und sie als „abgelehnt“ sehen. Die Mitgliederliste ändert sich
+  dadurch nicht, und bei der Vault bleibt kein Schlüssel des Space.
+- **FR-013**: Der Admin MUSS eine offene Einladung zurückziehen können. Die
+  eingeladene Vault MUSS darüber eine Nachricht erhalten, und eine Annahme,
+  die danach ein Gerät des Admins erreicht, DARF NICHT zur Aufnahme führen.
+  Die Mitgliederliste ändert sich dadurch nicht.
 - **FR-014**: Nimmt eine Vault an, MÜSSEN alle Geräte dieser Vault den Space
   erhalten, ohne dass der Admin etwas tut. Der Admin DARF NICHT erfahren, wie
   viele Geräte die Vault hat.
-- **FR-041** (Zustellung von Einladungen): Einladungen und die Antworten darauf
-  („angenommen“, „abgelehnt“, „verlassen“) MÜSSEN als verschlüsselte
+- **FR-041** (Zustellung von Einladungen): Einladungen, ihr Zurückziehen und
+  die Antworten darauf („angenommen“, „abgelehnt“, „verlassen“) MÜSSEN als verschlüsselte
   Nostr-Nachricht an die Vault-Identität des Empfängers gehen. Zugestellt
   werden sie über die Anwesenheits- und Signalisierungsserver aus Spec 024 und
   zusätzlich über die Signalisierung des Relays des Admins, wenn dieses sie
@@ -639,8 +662,8 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   Rückfrage entfernen können. Entfernen MUSS eine neue Mitgliederliste ohne
   das Mitglied und eine neue Schlüsselgeneration nur für die verbleibenden
   Mitglieder erzeugen.
-- **FR-019**: Jede Änderung der Mitgliederliste (Einladen, Rechte ändern,
-  Entfernen, Verlassen, Ablehnen) MUSS eine neue Schlüsselgeneration erzeugen,
+- **FR-019**: Jede Änderung der Mitgliederliste (Aufnehmen nach einer Annahme,
+  Rechte ändern, Entfernen, Verlassen) MUSS eine neue Schlüsselgeneration erzeugen,
   deren Schlüssel an jede Vault der neuen Mitgliederliste verpackt wird, einmal
   je Vault, nie je Gerät. Die Mitgliederliste einer Generation steht danach
   fest. Kommt ein Mitglied neu hinzu, MUSS es zusätzlich Umschläge für alle
@@ -655,24 +678,53 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   Mitgliederliste ergeben, und ein Gerät des Admins MUSS sie mit einer höheren
   Generation als jede der zusammengeführten neu unterschreiben und hochladen. Alle
   gleichzeitig entstandenen Schlüsselgenerationen MÜSSEN gültig bleiben, so
-  dass Inhalte, die mit einer davon verschlüsselt sind, lesbar bleiben.
+  dass Inhalte, die mit einer davon verschlüsselt sind, lesbar bleiben. Tragen
+  zwei gültige Mitgliederlisten dieselbe Generation, MÜSSEN Relay und jedes
+  empfangende Gerät dieselbe wählen: die mit dem lexikographisch kleinsten
+  Prüfwert der Liste (Spec 024 FR-043). Das Relay ersetzt eine gespeicherte Liste derselben
+  Generation nur durch eine mit kleinerem Prüfwert (Spec 026). Ein Gerät des
+  Admins, das zwei verschiedene Listen derselben Generation sieht, MUSS eine
+  Liste mit der nächsthöheren Generation veröffentlichen, die die Änderungen
+  beider zusammenführt.
 - **FR-022**: Ein Gerät DARF zum Verschlüsseln nur eine Schlüsselgeneration
   verwenden, die an keine Vault außerhalb der aktuellen Mitgliederliste
-  verpackt ist; unter diesen die höchste nach einer festen, auf allen Geräten
-  gleichen Regel. Gibt es keine solche Generation, MUSS ein Gerät des Admins
-  eine neue erzeugen.
+  verpackt ist; unter diesen nach einer festen, auf allen Geräten gleichen
+  Regel die mit der höchsten Nummer, bei gleicher Nummer die, deren
+  Mitgliederliste nach FR-021 gewinnt. Aktuell ist die Mitgliederliste mit
+  der höchsten Generation, bei gleicher Generation die nach FR-021 gewinnende.
+  Gibt es keine solche Schlüsselgeneration, MUSS ein Gerät des Admins eine
+  neue erzeugen.
 - **FR-023**: Nach einem Entzug MÜSSEN Relay und Speicher-Backend die Geräte
   des entfernten Mitglieds abweisen, sobald die neue Mitgliederliste
   hochgeladen ist. Geräte von Mitgliedern DÜRFEN Daten des Space direkt nur mit
   Geräten von Vaults austauschen, die in ihrer aktuellen Mitgliederliste
-  stehen (FR-039).
+  stehen (FR-039). Ohne Verzögerung gilt das für den Zugang zum Postfach und
+  bei Speicher-Backend A für das Ausstellen von Links zu Objekten; schon
+  ausgestellte Links laufen spätestens nach ihrer größten Lebensdauer von 15
+  Minuten ab (Spec 026). Bei Speicher-Backend B MUSS das Gerät des Admins beim Entfernen
+  oder Herabstufen in einem Vorgang zuerst die betroffenen Zugangsschlüssel
+  beim Anbieter widerrufen oder erneuern und dann die neue Mitgliederliste
+  veröffentlichen; für Objekte gilt dort die Frist, in der der Anbieter einen
+  widerrufenen Zugangsschlüssel abweist, bei geeigneten Anbietern höchstens 5
+  Minuten (Spec 029). Schlägt der Widerruf beim
+  Anbieter fehl, MUSS die Mitgliederliste trotzdem veröffentlicht werden, der
+  Admin MUSS eine bleibende Warnung sehen, und holzi MUSS den Widerruf
+  wiederholen, bis der Anbieter ihn bestätigt.
 - **FR-024**: Eine Änderung MUSS angenommen werden, wenn ihr Autor in der
   Schlüsselgeneration, mit der sie verschlüsselt ist, die nötige Fähigkeit
-  hatte. Ein Entzug wirkt nur nach vorn; eine gleichzeitig mit dem Entzug
-  geschriebene letzte Änderung kann noch angenommen werden. Änderungen, die ein
-  Mitglied erreichen, nachdem es selbst eine neuere Mitgliederliste ohne das
-  Recht des Autors kennt, und deren Zeitstempel nach dieser Änderung der
-  Mitgliederliste liegt, MÜSSEN verworfen werden.
+  hatte und sie nicht jenseits der Grenze einer bekannten Mitgliederliste
+  liegt. Entfernt eine Mitgliederliste eine Vault oder senkt sie deren Rechte,
+  MUSS sie die Grenze tragen (Spec 024 FR-042): für jedes Gerät der betroffenen
+  Vault die höchste Laufnummer, bis zu der das erstellende Gerät des Admins
+  dessen Änderungen angewendet hatte. Jedes Gerät,
+  das diese Mitgliederliste kennt, MUSS jede Änderung eines Geräts der
+  betroffenen Vault, die das entzogene Recht braucht und jenseits der Grenze
+  liegt, verwerfen, unabhängig von ihrem Zeitstempel; zurückdatieren geht nicht, weil
+  die Nummern unterhalb der Grenze schon vergeben sind (Spec 024 FR-019). Änderungen,
+  die ein Gerät angewendet hat, bevor es die Mitgliederliste kannte, bleiben
+  (das akzeptierte Zeitfenster aus D19); die nächste berechtigte Änderung
+  derselben Datei gleicht die Abweichung aus. Das präzisiert D19 „nur nach
+  vorn“: An die Stelle des Zeitstempels tritt die Grenze.
 
 - **FR-025**: Ein entferntes Mitglied DARF keine Datei und keine Fassung lesen
   können, die nach dem Entzug hinzukommt oder entsteht. Was es vor dem Entzug
@@ -687,8 +739,9 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   Ersteller einer Datei unverändert bleibt. Eine Änderung, die eine Prüfung
   nicht besteht, MUSS verworfen und protokolliert werden. Dabei gilt Spec 024:
   Ein Änderungspaket ist unteilbar und wird als Ganzes verworfen, wenn eine
-  seiner Änderungen ungültig ist; eine Momentaufnahme wird je Änderung geprüft,
-  ungültige Änderungen fallen weg, der Rest bleibt.
+  seiner Änderungen ungültig ist; eine Momentaufnahme wird je vollständiger
+  Transaktionsgruppe geprüft, eine ungültige Änderung verwirft ihre ganze
+  Gruppe, die übrigen Gruppen bleiben.
 - **FR-027**: Ist die Vault des Admins nicht erreichbar oder verloren, MÜSSEN
   Mitglieder mit ihren bisherigen Rechten weiterarbeiten können. Die
   Mitgliedschaft kann sich dann nicht ändern; holzi MUSS das nicht verhindern
@@ -753,8 +806,9 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   Offene Einladungen stehen darüber.
 - **FR-036**: Die Ansicht eines Space MUSS Name, gebundenen Ordner dieses Geräts,
   Speicher-Backend, den Admin und alle Mitglieder mit Namen, Vault-Identität,
-  Fähigkeitsstufe und Zustand („eingeladen“, „Mitglied“) zeigen, dem Admin
-  zusätzlich abgelehnte Einladungen als „abgelehnt“; die eigene Zeile MUSS
+  Fähigkeitsstufe und Zustand zeigen, dazu getrennt die offenen Einladungen
+  („eingeladen“, „angenommen, wartet auf Admin“), dem Admin zusätzlich
+  abgelehnte Einladungen als „abgelehnt“; die eigene Zeile MUSS
   hervorgehoben sein. Nur der Admin sieht die Bedienelemente
   zum Einladen, Ändern und Entfernen.
 - **FR-037**: Die Ansichten MÜSSEN dem Aufbau der Einstellungs-App folgen
@@ -775,11 +829,12 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   Schlüsselgenerationen. Der Bereich eines Space, mit eigenem Postfach am
   Relay, sofern der Admin eines eingerichtet hat.
 - **Mitgliederliste**: Kennung des Space, Generation, Einträge
-  „Vault-Identität → Fähigkeitsstufe“, Ausstellungs- und Ablaufzeit,
-  Unterschrift des Admins. Verschlüsselt im Space; eine lesbare Fassung am
+  „Vault-Identität → Fähigkeitsstufe“, Ausstellungs- und Ablaufzeit, bei
+  Entfernen oder Herabstufen die Grenze je Gerät der betroffenen Vault
+  (FR-024), Unterschrift des Admins. Verschlüsselt im Space; eine lesbare Fassung am
   Relay (Spec 026).
-- **Mitglied**: Vault-Identität, Name im Space, Fähigkeitsstufe, Zustand
-  („eingeladen“, „Mitglied“, „abgelehnt“). Namen stehen nur im verschlüsselten
+- **Mitglied**: Vault-Identität, Name im Space, Fähigkeitsstufe. Nur
+  aufgenommene Vaults sind Mitglieder. Namen stehen nur im verschlüsselten
   Teil.
 - **Schlüsselgeneration**: Nummer, zugehörige Mitgliederliste, erstellendes
   Gerät des Admins, Inhaltsschlüssel verpackt je Vault der Mitgliederliste und
@@ -787,7 +842,10 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   nebeneinander.
 - **Einladung**: verschlüsselte Direktnachricht (FR-041) an eine Vault-Identität mit
   Kennung und Name des Space, Admin, Fähigkeitsstufe und Hinweisen auf das
-  Relay; Antwort „angenommen“, „abgelehnt“ oder „verlassen“ zurück an den Admin.
+  Relay, ohne Schlüssel; Antwort „angenommen“ (unterschrieben), „abgelehnt“
+  oder „verlassen“ zurück an den Admin. Zustand: „eingeladen“, „angenommen,
+  wartet auf Admin“, „abgelehnt“, „zurückgezogen“; mit der Aufnahme wird die
+  Vault Mitglied.
 - **Ordnerbindung**: je Gerät und Space der gewählte lokale Ordner. Verlässt
   das Gerät nie (Spec 025).
 - **Dateiindex-Eintrag, Objekt, Konfliktkopie**: wie in Spec 025, ergänzt um
@@ -803,9 +861,12 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
 - **SC-002**: Eine Untersuchung von Relay und Speicher-Backend findet in 0 Fällen
   Namen von Spaces, Ordnern oder Dateien, Pfade, Klartextgrößen oder Inhalte.
 - **SC-003**: 100 % der Änderungen, die ein Autor ohne die nötige Fähigkeit
-  verschickt (nur „Lesen“, fremde Datei ohne „Löschen“, nach dem Entzug, fremde
-  Vault), werden von jedem Gerät jedes Mitglieds verworfen, auch wenn das Relay
-  sie weitergibt.
+  verschickt (nur „Lesen“, fremde Datei ohne „Löschen“, fremde Vault), werden
+  von jedem Gerät jedes Mitglieds verworfen, auch wenn das Relay sie
+  weitergibt. Nach einem Entzug verwirft jedes Gerät, das die neue
+  Mitgliederliste kennt, 100 % der Änderungen der betroffenen Vault jenseits
+  der Grenze (FR-024); Änderungen, die ein Gerät vorher angewendet hat, können
+  bleiben, bis sie überschrieben werden (dokumentiertes Risiko, D19).
 - **SC-004**: Ist ein Gerät des Admins online, weist das Relay ein entferntes
   Mitglied spätestens 10 Sekunden nach dem Bestätigen des Entfernens ab.
 - **SC-005**: Ein Admin lädt jemanden in unter 1 Minute ein, ausgehend von der
@@ -843,12 +904,11 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   Speicher-Backends eines bestehenden Space bringt Spec 029 (User Story 8).
 - Neue Mitglieder lesen alle Dateien, auch ältere, weil sie Umschläge für alle
   älteren Schlüsselgenerationen erhalten (FR-009, FR-019).
-- Die Regel nach FR-024 lässt eine Lücke: Ein entferntes Mitglied, das noch
-  ältere Schlüssel hat, könnte einer Änderung einen frühen Zeitstempel geben.
-  Das Relay nimmt seine Pakete nicht mehr an, und Mitglieder tauschen mit ihm
-  direkt nichts aus (FR-023), so dass solche Änderungen nur über ein Mitglied
-  ankommen, das sie vor dem Entzug erhalten hat. Die Betreiberentscheidung zu
-  FR-024 muss diese Lücke mit bewerten.
+- Die Regel nach FR-024 hängt nicht vom Zeitstempel einer Änderung ab: Ein
+  entferntes Mitglied kann eine Änderung nicht vor die Grenze zurückdatieren.
+  Es bleibt das akzeptierte Zeitfenster aus D19: Eine Änderung, die ein Gerät
+  angewendet hat, bevor es die neue Mitgliederliste kannte, bleibt dort, bis
+  eine berechtigte Änderung derselben Datei sie überschreibt.
 - Die Verschlüsselung versteckt nicht, wer Mitglied ist: Das Relay sieht die
   Mitgliederliste (Vault-Identitäten und Fähigkeiten), Zeiten und Größen (D9).
 - Das Relay kann Daten zurückhalten, aber weder lesen noch fälschen (D11).

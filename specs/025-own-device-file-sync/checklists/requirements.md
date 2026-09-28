@@ -56,8 +56,9 @@
   through the vault's own Relay-Postfach and is not Nur-direkt-Daten (FR-013, FR-022, referencing
   Spec 024, Nur-direkt-Daten); folders are managed in „Föderation“ → Unteransicht „Ordner“; objects
   of own folders on backend A are specified in Spec 026, backend B in Spec 029 User Story 6;
-  FR-048 uses the Space flows without an own Bereich; pausing (FR-044) stops indexing and object
-  transfer only, Spec 024's data sync continues. No new FRs were added.
+  FR-048 uses the Space flows without an own Bereich; pausing (FR-044) stops local scanning, writing
+  files to disk and object transfer; Spec 024's data sync continues, incoming Dateiindex changes are
+  applied atomically with their Änderungspaket and materialized on disk after resume. No new FRs were added.
 - Edit-versus-delete keeps the edited version (FR-030). This is stricter than "deleted files do not
   come back" and follows the zero-data-loss priority of D10; a deletion of an unchanged file never
   resurrects (FR-029).

@@ -90,7 +90,10 @@ Admins kurzlebige Zugangslinks aus, solange es online ist.
   Rechteänderung und jedes Entfernen verteilt oder erneuert zusätzlich die
   Zugangsschlüssel (FR-015 bis FR-021). Für Backend B erfüllt das Erneuern der
   Zugangsschlüssel die Forderung von Spec 027, dass das Speicher-Backend
-  entfernte Mitglieder abweist (FR-023 dort), mit der Frist aus SC-002. Die
+  entfernte Mitglieder abweist (FR-023 dort), mit der Frist aus SC-002; dafür
+  widerruft ein Gerät des Admins den alten Zugangsschlüssel beim Anbieter, bevor
+  es die neue Mitgliederliste veröffentlicht (FR-018). Auf dem Ersatzweg begrenzt
+  die Gültigkeit der Zugangslinks (höchstens 15 Minuten, FR-024) die Frist. Die
   Löschregeln (Schreiben löscht nur eigene Dateien, Löschen löscht alle) und
   deren Prüfung beim Empfänger bleiben in Spec 027. Spec 027 verlangt beim
   Anlegen eine Wahl zwischen Backend A und „nur direkte Übertragung“ (FR-003
@@ -233,8 +236,9 @@ und keinen Klartext.
 ### User Story 3 - Entzug erneuert die Zugangsschlüssel (Priority: P1)
 
 Der Admin entfernt ein Mitglied aus dem Space. holzi erneuert sofort den
-Zugangsschlüssel, den das Mitglied hatte, widerruft den alten beim Anbieter und
-gibt den neuen allen verbleibenden Mitgliedern mit derselben Fähigkeit. Der alte
+Zugangsschlüssel, den das Mitglied hatte, und widerruft den alten beim Anbieter;
+erst danach veröffentlicht es die neue Mitgliederliste und gibt den neuen
+Schlüssel allen verbleibenden Mitgliedern mit derselben Fähigkeit. Der alte
 Schlüssel in der Vault des entfernten Mitglieds öffnet den Bucket nicht mehr.
 
 **Why this priority**: Ein entferntes Mitglied darf nicht weiter Objekte laden
@@ -247,17 +251,19 @@ zurückstufen: Es kann nicht mehr hochladen, aber weiter lesen.
 
 **Acceptance Scenarios**:
 
-1. **Given** der Admin entfernt ein Mitglied, **When** das Entfernen wirksam
-   ist, **Then** erzeugt holzi eine neue Generation des Zugangsschlüssels, den das
-   Mitglied hatte, gibt sie allen verbleibenden Mitgliedern mit dieser Art und
-   widerruft die alte Generation beim Anbieter.
+1. **Given** der Admin entfernt ein Mitglied, **When** er das Entfernen
+   bestätigt, **Then** erzeugt holzi in einem Vorgang eine neue Generation des
+   Zugangsschlüssels, den das Mitglied hatte, widerruft die alte Generation beim
+   Anbieter, veröffentlicht danach die neue Mitgliederliste und gibt die neue
+   Generation allen verbleibenden Mitgliedern mit dieser Art (FR-018).
 2. **Given** dieselbe Lage, **When** das entfernte Mitglied danach mit dem alten
    Schlüssel auf den Bucket zugreift, **Then** lehnt der Anbieter ab (SC-002).
 3. **Given** der Admin stuft ein Mitglied von Schreiben oder Löschen auf Lesen
    zurück, **When** die Änderung wirksam ist, **Then** wird der Zugangsschlüssel
-   „Lesen und Schreiben“ erneuert und nur an die verbleibenden Schreibenden
-   verteilt, und das zurückgestufte Mitglied erhält den aktuellen
-   Zugangsschlüssel „nur Lesen“.
+   „Lesen und Schreiben“ in derselben Reihenfolge wie beim Entfernen erneuert
+   (erst beim Anbieter widerrufen, dann die Mitgliederliste veröffentlichen) und
+   nur an die verbleibenden Schreibenden verteilt, und das zurückgestufte
+   Mitglied erhält den aktuellen Zugangsschlüssel „nur Lesen“.
 4. **Given** der Admin stuft ein Mitglied von Lesen auf Schreiben hoch, **When**
    die Änderung wirksam ist, **Then** erhält das Mitglied den aktuellen
    Zugangsschlüssel „Lesen und Schreiben“, ohne dass ein Zugangsschlüssel
@@ -268,6 +274,12 @@ zurückstufen: Es kann nicht mehr hochladen, aber weiter lesen.
 6. **Given** die Erneuerung ist abgeschlossen, **When** die verbleibenden
    Mitglieder auf den Bucket zugreifen, **Then** nutzen sie ohne eigenes Zutun die
    neue Generation.
+7. **Given** der Anbieter ist beim Entfernen nicht erreichbar oder lehnt den
+   Widerruf ab, **When** das Gerät des Admins den Vorgang abschließt, **Then**
+   veröffentlicht es die neue Mitgliederliste trotzdem (das Relay weist das
+   entfernte Mitglied damit schon ab), zeigt dem Admin eine bleibende Warnung,
+   dass der alte Zugangsschlüssel noch gilt, und versucht den Widerruf erneut, bis
+   der Anbieter ihn bestätigt (FR-022).
 
 ---
 
@@ -341,9 +353,10 @@ ist.
    Admin-Vault über die direkte Verbindung nach einem Zugangslink und lädt das
    Objekt damit direkt beim Anbieter.
 3. **Given** ein Gerät des Admins erhält eine Anfrage, **When** es sie prüft,
-   **Then** stellt es nur Links aus, die zur aktuellen Fähigkeit des anfragenden
-   Mitglieds laut Mitgliederliste passen, und keine Links zum Löschen älterer
-   Versionen oder zum Ändern des Buckets.
+   **Then** stellt es nur Links zum Lesen oder Hochladen aus, die zur aktuellen
+   Fähigkeit des anfragenden Mitglieds laut Mitgliederliste passen, und keine
+   Links zum Löschen von Objekten, zum Löschen älterer Versionen oder zum Ändern
+   des Buckets (FR-024).
 4. **Given** kein Gerät der Admin-Vault ist online, **When** ein Mitglied ein
    Objekt braucht, **Then** zeigt holzi, dass der Speicher nur erreichbar ist,
    wenn ein Gerät des Admins online ist, und bezieht das Objekt, wenn möglich, von
@@ -552,12 +565,15 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   erreichbar ist, (b) Buckets angelegt werden können, (c) die Versionierung
   eingeschaltet werden kann, (d) eine Aufbewahrungsfrist für ältere Versionen
   gesetzt werden kann, (e) auf einen Bucket beschränkte Zugangsschlüssel „nur
-  Lesen“ und „Lesen und Schreiben“ erzeugt und widerrufen werden können und
+  Lesen“ und „Lesen und Schreiben“ erzeugt und widerrufen werden können,
   (f) der Schlüssel „Lesen und Schreiben“ weder ältere Versionen löschen noch
-  Versionierung oder Aufbewahrungsfrist ändern kann.
+  Versionierung oder Aufbewahrungsfrist ändern kann und (g) der Anbieter einen
+  widerrufenen Zugangsschlüssel innerhalb von 5 Minuten abweist, gemessen, indem
+  die Prüfung einen Testschlüssel erzeugt, widerruft und bis zur Ablehnung
+  weiter benutzt.
 - **FR-005**: Das Ergebnis der Eignungsprüfung MUSS eine von drei Stufen sein
   und dem Admin mit Grund gezeigt werden: **geeignet** (alles aus FR-004),
-  **nur über den Ersatzweg** ((a) bis (c) erfüllt, (e) oder (f) nicht) oder
+  **nur über den Ersatzweg** ((a) bis (c) erfüllt, (e), (f) oder (g) nicht) oder
   **ungeeignet**. Jede nicht erfüllte Eigenschaft MUSS einzeln und verständlich
   benannt werden.
 - **FR-006**: Für einen Space DARF holzi einen Anbieter ohne Versionierung NICHT
@@ -567,7 +583,7 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   beim Anbieter zurückbleiben; was holzi schon angelegt hat, MUSS es wieder
   entfernen.
 - **FR-008**: holzi MUSS in v1 mindestens diese Anbieter nachweislich
-  unterstützen: RustFS und AWS S3. Ob sie auf einen Bucket beschränkte Schlüssel, Versionierung, eine Aufbewahrungsfrist und Schlüssel ohne Recht zum Löschen älterer Versionen bieten (FR-004 c bis f), prüft der Plan; das Ergebnis entscheidet, ob ein Anbieter „geeignet“ oder „nur über den Ersatzweg“ ist. Cloudflare R2, Backblaze B2, Hetzner Object Storage und weitere kommen hinzu, sobald sie geprüft sind. Andere S3-kompatible Anbieter DÜRFEN verbunden werden, wenn sie die
+  unterstützen: RustFS und AWS S3. Ob sie auf einen Bucket beschränkte Schlüssel, Versionierung, eine Aufbewahrungsfrist und Schlüssel ohne Recht zum Löschen älterer Versionen bieten und widerrufene Schlüssel rechtzeitig abweisen (FR-004 c bis g), prüft der Plan; das Ergebnis entscheidet, ob ein Anbieter „geeignet“ oder „nur über den Ersatzweg“ ist. Cloudflare R2, Backblaze B2, Hetzner Object Storage und weitere kommen hinzu, sobald sie geprüft sind. Andere S3-kompatible Anbieter DÜRFEN verbunden werden, wenn sie die
   Eignungsprüfung bestehen.
 
 **Bucket und Versionierung**
@@ -617,11 +633,13 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
 **Erneuern bei Entzug**
 
 - **FR-018**: Entfernt der Admin ein Mitglied oder nimmt ihm eine Fähigkeit,
-  MUSS holzi den betroffenen Zugangsschlüssel erneuern: neue Generation beim
-  Anbieter erzeugen, an alle verbleibenden Mitglieder mit dieser Art verteilen,
-  danach die vorherige Generation beim Anbieter widerrufen. Welcher Schlüssel
-  betroffen ist, folgt aus FR-015. Das Erneuern des Inhaltsschlüssels (Spec 027)
-  geschieht unabhängig davon.
+  MUSS holzi den betroffenen Zugangsschlüssel in einem Vorgang und in dieser
+  Reihenfolge erneuern: neue Generation beim Anbieter erzeugen, die vorherige
+  Generation beim Anbieter widerrufen, erst danach die neue Mitgliederliste
+  veröffentlichen (Spec 027) und die neue Generation an alle verbleibenden
+  Mitglieder mit dieser Art verteilen. Welcher Schlüssel betroffen ist, folgt aus
+  FR-015. Das Erneuern des Inhaltsschlüssels (Spec 027) geschieht unabhängig
+  davon.
 - **FR-019**: Beim Anbieter DARF je Art höchstens die höchste Generation
   gültig bleiben, sobald die Verteilung abgeschlossen ist. Sieht ein Gerät des
   Admins eine niedrigere, noch gültige Generation, MUSS es sie widerrufen.
@@ -632,8 +650,12 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   Zugangsschlüssel erneuert wird. Die neue Schlüsselgeneration des
   Inhaltsschlüssels nach Spec 027 bleibt davon unberührt.
 - **FR-022**: Scheitert ein Widerruf beim Anbieter, MUSS holzi ihn als offen
-  festhalten, erneut versuchen, sobald der Anbieter erreichbar ist, und ihn dem
-  Admin bis zum Erfolg anzeigen.
+  festhalten, erneut versuchen, bis der Anbieter ihn bestätigt, und dem Admin bis
+  dahin eine bleibende Warnung zeigen, dass der alte Zugangsschlüssel noch gilt.
+  Scheitert der Widerruf beim Entfernen oder Zurückstufen (FR-018), MUSS holzi
+  die neue Mitgliederliste trotzdem veröffentlichen, damit das Relay das
+  Mitglied abweist; die Wirkung beim Anbieter tritt dann erst mit dem
+  bestätigten Widerruf ein.
 
 **Ersatzweg über ein Gerät des Admins**
 
@@ -646,10 +668,16 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   Verbindung zwischen eigenen Geräten (Spec 024) erhalten.
 - **FR-024**: Ein Gerät des Admins MUSS vor dem Ausstellen die Gerätebestätigung
   des anfragenden Geräts und die Fähigkeit seiner Vault in der aktuellen
-  Mitgliederliste prüfen. Es DARF nur Links für Lesen, Hochladen oder Löschen
-  eines einzelnen Objekts ausstellen, passend zur Fähigkeit, mit einer
-  Gültigkeit von höchstens 15 Minuten, und keine Links zum Löschen älterer
-  Versionen oder zum Ändern des Buckets.
+  Mitgliederliste prüfen. Es DARF jeden Link nur für ein einzelnes Objekt und mit
+  einer Gültigkeit von höchstens 15 Minuten ausstellen. Mitgliedern DARF es nur
+  Links zum Lesen und, bei Schreiben oder Löschen, zum Hochladen ausstellen;
+  Mitglieder löschen keine Objekte selbst (Spec 027). Das Hochladen einer neuen
+  Version braucht nie ein Recht zum Löschen, weil sie ein neues Objekt ist. Links
+  zum Löschen DARF es nur Geräten der Admin-Vault ausstellen, zum Aufräumen nach
+  FR-040 (etwa für ein Gerät, das die Hauptzugangsdaten noch nicht erhalten
+  hat), und nur nachdem es geprüft hat, dass kein gültiger Eintrag im Dateiindex
+  auf das Objekt verweist. Links zum Löschen älterer Versionen oder zum Ändern
+  des Buckets DARF es nie ausstellen.
 - **FR-025**: Solange kein Gerät der Admin-Vault erreichbar ist, MUSS holzi den
   Mitgliedern zeigen, dass der Speicher des Space nur mit einem Gerät des Admins
   erreichbar ist, und Objekte, wenn möglich, direkt von anderen Geräten beziehen
@@ -659,7 +687,8 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
 
 - **FR-026**: Mit Zugangsschlüssel MÜSSEN die Geräte Objekte direkt beim
   Anbieter lesen und hochladen. Das Relay DARF an diesen Übertragungen NICHT
-  beteiligt sein.
+  beteiligt sein. Geräte der Mitglieder löschen dabei keine Objekte; das
+  Aufräumen übernimmt ein Gerät des Admins (FR-040).
 - **FR-027**: Im Bucket DÜRFEN nur Objekte liegen, benannt nach dem Hash ihres
   Chiffretexts. Dateinamen, Pfade, Ordnerstruktur, Klartextgrößen und
   Klartext-Hashes DÜRFEN weder in Objektnamen noch in Metadaten der Objekte
@@ -692,7 +721,8 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   diese Ordner.
 - **FR-032**: Für die eigenen Ordner MÜSSEN die eigenen Geräte die
   Speicherverbindung selbst nutzen; Zugangsschlüssel und Ersatzweg entfallen. Die
-  Eignungsprüfung MUSS fehlende eingeschränkte Schlüssel dort ignorieren und
+  Eignungsprüfung MUSS fehlende eingeschränkte Schlüssel und einen zu langsamen
+  Widerruf (FR-004 e bis g) dort ignorieren und
   fehlende Versionierung nur als Warnung melden.
 
 **Ende eines Space und Hauptzugangsdaten**
@@ -765,8 +795,10 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   Löschen) in 0 % der Fälle Hauptzugangsdaten, weder lesbar noch verschlüsselt,
   und in 0 % der Fälle einen Zugangsschlüssel in lesbarer Form.
 - **SC-002**: Nach dem Entfernen eines Mitglieds lehnt der Anbieter dessen alten
-  Zugangsschlüssel in 100 % der Testläufe innerhalb von 5 Minuten ab, sofern ein
-  Gerät des Admins online ist und der Anbieter die Stufe „geeignet“ hat.
+  Zugangsschlüssel in 100 % der Testläufe innerhalb von 5 Minuten ab, für jeden
+  Anbieter mit der Stufe „geeignet“ (die Prüfung nach FR-004 g hat diese Frist
+  gemessen), sofern ein Gerät des Admins online und der Anbieter erreichbar ist
+  (FR-018); sonst gilt die Frist ab dem bestätigten Widerruf (FR-022).
 - **SC-003**: Eine Durchsicht des Buckets mit vollem Zugriff findet in 0 % der
   Objekte einen Dateinamen, Pfad oder lesbaren Inhalt, und der Name des Buckets
   enthält weder Namen noch Kennung des Space.

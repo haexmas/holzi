@@ -48,8 +48,11 @@ P3. Die Unteransicht „Geräte“ der Einstellungs-Kategorie „Föderation“ 
   verschlüsselt. Ein Änderungspaket ist atomar (FR-013).
 - **Momentaufnahme**: ein vollständiger Stand eines Bereichs mit den
   ursprünglichen Autoren und Signaturen jeder Änderung, etwa im Postfach eines
-  Relays (Spec 026). Anders als ein Änderungspaket wird sie je Änderung geprüft
-  (FR-013).
+  Relays (Spec 026). Anders als ein Änderungspaket wird sie je vollständiger
+  Transaktionsgruppe geprüft (FR-013).
+- **Transaktionsgruppe**: die Änderungen mit gemeinsamem Zeitstempel der
+  hybriden logischen Uhr, also eine Transaktion. Sie wird nie geteilt und nie
+  zum Teil angewendet (FR-013).
 - **Nur-direkt-Daten**: die Vault-Geheimnisse, die nur auf direkten
   Verbindungen zwischen Geräten derselben Vault reisen, nie durch ein Postfach
   eines Relays und nie in einen anderen Bereich (FR-038).
@@ -57,9 +60,21 @@ P3. Die Unteransicht „Geräte“ der Einstellungs-Kategorie „Föderation“ 
   Änderungspakete eines Bereichs verschlüsselt sind, und seine Generation. Für
   den Bereich „Vault“ gibt es genau einen Inhaltsschlüssel je Vault-Identität;
   eine neue Generation entsteht nur mit einer neuen Vault-Identität.
-- **Fortschrittsstand** (Versionsvektor): für jedes Ursprungsgerät die jüngste
-  Änderung, die ein Gerät von ihm kennt. Zwei Geräte vergleichen ihre
-  Fortschrittsstände und tauschen nur, was dem anderen fehlt.
+- **Laufnummer**: die Nummer, die ein Gerät jeder Änderung gibt, die es selbst
+  erzeugt: lückenlos aufsteigend je Ursprungsgerät, zusätzlich zum Zeitstempel
+  der hybriden logischen Uhr, der weiter über Konflikte entscheidet (FR-019).
+- **Fortschrittsstand** (Versionsvektor): für jedes Ursprungsgerät die höchste
+  Laufnummer, bis zu der ein Gerät alle Änderungen dieses Ursprungsgeräts
+  lückenlos hat („lückenloser Fortschritt“, FR-019). Zwei Geräte vergleichen
+  ihre Fortschrittsstände und tauschen nur, was dem anderen fehlt.
+- **Mitgliederliste**: die von einem Admin-Gerät signierte Liste der
+  Mitglieds-Vaults eines gemeinsamen Bereichs mit ihren Rechten und einer
+  Generation (Specs 026–028). Diese Spec legt nur die Regeln fest, die alle
+  gemeinsamen Bereiche teilen: die Grenze beim Entzug (FR-042) und die Wahl
+  zwischen Listen gleicher Generation (FR-043).
+- **Grenze**: der Teil einer Mitgliederliste, die einer Vault Rechte entzieht:
+  je Gerät dieser Vault die höchste Laufnummer, die das Admin-Gerät beim
+  Ausstellen angewendet hatte („Grenze beim Entzug“, FR-042).
 - **Gerätelokale Daten**: Tabellen und Spalten, die ausdrücklich vom Sync
   ausgenommen sind (Endung `_no_sync`), etwa gespeicherte Sitzungen (Spec 022).
 - **Relay**: das nicht vertrauenswürdige, blinde Relay aus Spec 026, ein Server
@@ -68,7 +83,12 @@ P3. Die Unteransicht „Geräte“ der Einstellungs-Kategorie „Föderation“ 
   Vault-Identität verhält (FR-041).
 - **Übergabe**: eine mit der alten Vault-Identität signierte Aussage „Vault V
   heißt jetzt neue Identität N“, die die Vault nach einem Wechsel ihrer
-  Identität in jedem gemeinsamen Bereich veröffentlicht (FR-039).
+  Identität in jedem gemeinsamen Bereich veröffentlicht (FR-039). Eine
+  Übergabe allein bindet nichts um (FR-041).
+- **Annahme**: eine von einer Mitglieds-Vault signierte Aussage „wir übernehmen
+  für Vault V die neue Identität N“, die sie nach dem Prüfcode-Abgleich in den
+  Bereich hochlädt (FR-040). Erst eine Mehrheit von Annahmen bindet die
+  Admin-Rechte um („Übernahme erst nach Mehrheitsbestätigung“, FR-041).
 
 ## Beziehung zu bestehenden Specs
 
@@ -118,8 +138,11 @@ P3. Die Unteransicht „Geräte“ der Einstellungs-Kategorie „Föderation“ 
   Geräte sich angleichen, die nie gleichzeitig online sind), **027** (Spaces),
   **028** (Datenfreigaben), **029** (eigener S3-Speicher). Sie verweisen für
   die Nur-direkt-Daten (FR-038), die Atomarität von Änderungspaketen und die
-  Prüfung von Momentaufnahmen (FR-013) sowie für den Wechsel der
-  Vault-Identität in gemeinsamen Bereichen (FR-039 bis FR-041) auf diese Spec.
+  Prüfung von Momentaufnahmen je Transaktionsgruppe (FR-013), den lückenlosen
+  Fortschritt (FR-019), die Grenze beim Entzug (FR-042), die Mitgliederlisten
+  gleicher Generation (FR-043) sowie für den Wechsel der Vault-Identität in
+  gemeinsamen Bereichen samt der Übernahme erst nach Mehrheitsbestätigung
+  (FR-039 bis FR-041) auf diese Spec.
 
 ## Clarifications
 
@@ -169,7 +192,8 @@ P3. Die Unteransicht „Geräte“ der Einstellungs-Kategorie „Föderation“ 
   ein (FR-039 bis FR-041).
 - Q: Wird ein Änderungspaket ganz oder je Änderung geprüft? → A: Ein
   Änderungspaket ganz: Ist eine Änderung ungültig, fällt das ganze Paket.
-  Eine Momentaufnahme je Änderung (FR-013).
+  Eine Momentaufnahme je Änderung (FR-013). (Nach dem Review präzisiert: je
+  vollständiger Transaktionsgruppe, nie teilweise.)
 - Q: Leitet ein Gerät Änderungen immer mit ihrem ursprünglichen Autor weiter?
   → A: Ja, mit einer Ausnahme: Die Vault des Eigentümers gibt eine Änderung
   zwischen überlappenden Datenfreigaben als neue, eigene Änderung aus
@@ -219,6 +243,11 @@ holt alles nach.
 6. **Given** gerätelokale Daten wie die gespeicherte Sitzung eines Geräts
    (Spec 022), **When** die Geräte synchronisieren, **Then** kommen diese Daten
    nie auf dem anderen Gerät an.
+7. **Given** der Laptop war bisher das einzige Gerät der Vault und
+   veröffentlicht deshalb keine Präsenz, **When** die kopierte Vault-Datei auf
+   dem Desktop zum ersten Mal geöffnet wird, **Then** findet der Laptop die
+   Kopie über deren Präsenzmeldung, die beiden verbinden sich, und von da an
+   veröffentlichen beide Präsenz (FR-007).
 
 ---
 
@@ -289,6 +318,14 @@ oder ist doppelt, und jede nennt ihr Ursprungsgerät.
 4. **Given** eine Verbindung bricht mitten im Austausch ab, **When** die Geräte
    sich wieder verbinden, **Then** fehlt keine Änderung, keine ist doppelt, und
    keine zusammengehörige Gruppe von Änderungen wurde nur zum Teil angewendet.
+5. **Given** eine neuere Änderung von A kommt über B bei C an, bevor eine
+   ältere Änderung von A dort ist, **When** C seinen Fortschrittsstand
+   berechnet, **Then** zählt C die neuere Änderung nicht als lückenlosen
+   Fortschritt, erkennt die Lücke und fordert die fehlende Änderung
+   ausdrücklich an.
+6. **Given** unter einer schon vergebenen Laufnummer von A trifft eine zweite,
+   andere Änderung ein, **When** C sie prüft, **Then** verwirft C sie als
+   Fälschung und behält die zuerst angenommene.
 
 ---
 
@@ -390,7 +427,9 @@ Identität bestätigen lassen: Das ausgesperrte Gerät kann sich mit keinem der
 beiden mehr verbinden und erhält keine neue Änderung; die beiden verbleibenden
 synchronisieren weiter. Ist die Vault Mitglied eines Space (Spec 027), übernimmt
 die andere Mitglieds-Vault die neue Identität erst nach Abgleich des Prüfcodes;
-zwei konkurrierende Übergaben frieren den Bereich beim Relay ein.
+das Relay nimmt ab der ersten Übergabe nichts mehr von der alten Identität an
+und bindet die Admin-Rechte erst um, wenn eine Mehrheit der übrigen Mitglieder
+dieselbe neue Identität angenommen hat.
 
 **Acceptance Scenarios**:
 
@@ -419,21 +458,32 @@ zwei konkurrierende Übergaben frieren den Bereich beim Relay ein.
    neue Identität erst, nachdem sein Nutzer einen Prüfcode mit der Nutzerin
    abgeglichen und bestätigt hat; bis dahin nimmt es von der neuen Identität
    nichts an.
-8. **Given** für dieselbe alte Identität treffen zwei verschiedene Übergaben
-   ein (etwa eine der Nutzerin und eine des Diebs), **When** das Relay oder ein
-   Mitglied sie sieht, **Then** nimmt das Relay für diesen Bereich keine neue
-   Mitgliederliste mehr an, bis die Mitglieder den Konflikt aufgelöst haben,
-   und jedes Mitglied zeigt den Konflikt, statt eine der Übergaben zu
-   übernehmen.
+8. **Given** die Vault der Nutzerin ist Admin eines Space, **When** die erste
+   Übergabe für diesen Bereich beim Relay eintrifft, **Then** nimmt das Relay
+   dort nichts mehr an, was mit der alten Identität signiert ist, bedient die
+   Lesezugriffe der übrigen Mitglieder weiter und bindet die Admin-Rechte erst
+   an die neue Identität, wenn eine Mehrheit der übrigen Mitglieder der
+   letzten gültigen Mitgliederliste eine Annahme genau dieser neuen Identität
+   hochgeladen hat.
+9. **Given** für dieselbe alte Identität treffen zwei verschiedene Übergaben
+   ein (etwa eine der Nutzerin und eine des Diebs), **When** ein Mitglied sie
+   sieht, **Then** zeigt es den Konflikt und übernimmt keine von sich aus; die
+   neue Identität, die zuerst die Mehrheit der Annahmen erreicht, gilt beim
+   Relay und bei allen Mitgliedern, die andere wird abgewiesen.
 
 ---
 
 ### Edge Cases
 
 - Eine Vault hat nur ein einziges Gerät: Es veröffentlicht im Bereich „Vault“
-  keine Präsenz und baut keine direkten Verbindungen auf (FR-007). Uploads in
-  das Postfach eines Relays (Spec 026) und der Verkehr mit Mitgliedern von
-  Spaces und Datenfreigaben (Specs 027, 028) bleiben erlaubt.
+  keine Präsenz und baut keine direkten Verbindungen auf, lauscht aber auf
+  Präsenzmeldungen an seine Vault-Identität (FR-007). Uploads in das Postfach
+  eines Relays (Spec 026) und der Verkehr mit Mitgliedern von Spaces und
+  Datenfreigaben (Specs 027, 028) bleiben erlaubt.
+- Die Vault-Datei eines solchen Geräts wird kopiert: Die Kopie kennt das
+  Quellgerät aus der Datei und veröffentlicht deshalb Präsenz; das Quellgerät
+  erfährt so von ihr, und ab dann veröffentlichen beide (FR-007). Voneinander
+  unabhängige Vaults mit je einem Gerät bleiben still.
 - Eine Vault-Datei wird kopiert, samt der gerätelokalen Daten, die in der Datei
   liegen (ADR-0001): Das Zielgerät verwendet keinen Geräteschlüssel und keine
   Gerätebestätigung des Quellgeräts, sondern erzeugt eigene (FR-006).
@@ -464,9 +514,10 @@ zwei konkurrierende Übergaben frieren den Bereich beim Relay ein.
   Geräte übernehmen seine neue Identität nur mit ihrer Bestätigung auf jedem
   Gerät (FR-027), also nie. Veröffentlicht er in gemeinsamen Bereichen eine
   eigene Übergabe, übernehmen die Mitglieder sie nur nach einem
-  Prüfcode-Abgleich (FR-040); trifft sie neben der Übergabe der Nutzerin ein,
-  friert das Relay den Bereich ein, und die Mitglieder sehen den Konflikt
-  (FR-041).
+  Prüfcode-Abgleich (FR-040). Seine Übergabe allein bindet beim Relay nichts
+  um; trifft sie neben der Übergabe der Nutzerin ein, sehen die Mitglieder den
+  Konflikt, und es gilt nur die neue Identität, die zuerst die Mehrheit der
+  Annahmen erreicht (FR-041).
 - Eine Vault aus einer Zeit vor dieser Spec hat nur einen Platzhalter als
   Vault-Identität und wurde schon auf mehrere Geräte kopiert (FR-004).
 - Während der Kopplung verliert eine Seite die Verbindung: Die Kopplung bricht
@@ -509,13 +560,22 @@ zwei konkurrierende Übergaben frieren den Bereich beim Relay ein.
 
 **Finden und Verbinden**
 
-- **FR-007**: Jedes Gerät einer Vault mit mehr als einem Gerät MUSS, solange die
-  Vault offen ist, eine Präsenzmeldung veröffentlichen, die nur Geräte derselben
-  Vault entschlüsseln können und die angibt, wie das Gerät gerade erreichbar ist.
-  Eine Präsenzmeldung MUSS von ihrem Gerät signiert sein und nach kurzer Zeit
-  ablaufen, wenn sie nicht erneuert wird. Eine Vault mit nur einem bekannten
-  Gerät DARF im Bereich „Vault“ keine Präsenzmeldung veröffentlichen und keine
-  direkte Verbindung aufbauen, außer während einer Kopplung (FR-023). Das gilt
+- **FR-007**: Jedes Gerät, dessen Vault mindestens ein weiteres Gerät kennt
+  (einen weiteren Eintrag der Geräteliste mit gültiger Gerätebestätigung), MUSS,
+  solange die Vault offen ist, eine Präsenzmeldung veröffentlichen, die nur
+  Geräte derselben Vault entschlüsseln können und die angibt, wie das Gerät
+  gerade erreichbar ist. Eine Präsenzmeldung MUSS von ihrem Gerät signiert sein
+  und nach kurzer Zeit ablaufen, wenn sie nicht erneuert wird. Eine Vault mit
+  nur einem bekannten Gerät DARF im Bereich „Vault“ keine Präsenzmeldung
+  veröffentlichen und keine direkte Verbindung aufbauen, außer während einer
+  Kopplung (FR-023) oder als Antwort auf eine gültige Präsenzmeldung eines
+  anderen Geräts derselben Vault. Ihr Gerät MUSS trotzdem, solange die Vault
+  offen ist, auf Präsenzmeldungen an seine Vault-Identität lauschen. So findet
+  ein Quellgerät eine frische Kopie seiner Vault-Datei: Die Kopie kennt das
+  Quellgerät aus der kopierten Datei und veröffentlicht deshalb Präsenz; das
+  Quellgerät erfährt von ihr aus deren Präsenzmeldung, nimmt sie nach FR-009
+  in seine Geräteliste auf, und von da an veröffentlichen beide. Voneinander
+  unabhängige Vaults mit je einem Gerät bleiben still. Die Einschränkung gilt
   nur für Präsenz und direkten Sync im Bereich „Vault“: Uploads in das Postfach
   eines Relays (Spec 026) und der Verkehr mit Mitgliedern von Spaces und
   Datenfreigaben (Specs 027, 028) bleiben auch mit einem einzigen Gerät
@@ -552,8 +612,12 @@ zwei konkurrierende Übergaben frieren den Bereich beim Relay ein.
   Signatur, Autor, Recht, Bereich oder Feld „Ersteller“ nach FR-022), MUSS der
   Empfänger das ganze Paket verwerfen; angewendet wird es ganz oder gar nicht,
   sodass keine Transaktion zum Teil ankommt. Eine Momentaufnahme dagegen MUSS
-  der Empfänger je Änderung prüfen: Ungültige Änderungen verwirft er, die
-  gültigen übrigen übernimmt er. Specs 026 und 027 wenden diese Regeln an.
+  der Empfänger je vollständiger Transaktionsgruppe prüfen: Ist eine Änderung
+  ungültig, verwirft er ihre ganze Transaktionsgruppe; die übrigen gültigen
+  Gruppen übernimmt er. Eine Transaktionsgruppe DARF NIE zum Teil angewendet
+  werden. Das verfeinert die Clarification „Eine Momentaufnahme je Änderung“:
+  geprüft wird jede Änderung, verworfen oder übernommen wird je Gruppe. Specs
+  026 und 027 wenden diese Regeln an.
 - **FR-014**: Ein Empfänger MUSS ein Änderungspaket verwerfen, das sich nicht
   entschlüsseln lässt, verändert wurde oder zu einem anderen Bereich gehört als
   angegeben, und DARF davon nichts anwenden.
@@ -599,10 +663,22 @@ zwei konkurrierende Übergaben frieren den Bereich beim Relay ein.
 
 **Fortschritt und Autorenschaft**
 
-- **FR-019**: Jedes Gerät MUSS seinen Fortschritt je Ursprungsgerät führen, nicht
-  als einen einzigen Zeitpunkt. Zwei Geräte MÜSSEN beim Verbinden ihre
+- **FR-019** („lückenloser Fortschritt“): Jedes Gerät MUSS die Änderungen, die
+  es selbst erzeugt, lückenlos aufsteigend nummerieren (Laufnummer je
+  Ursprungsgerät), zusätzlich zum Zeitstempel der hybriden logischen Uhr, der
+  weiter über Konflikte entscheidet (FR-017). Die Laufnummer gehört zu der
+  Änderung, die das Ursprungsgerät signiert (FR-021). Jedes Gerät MUSS seinen
+  Fortschritt je Ursprungsgerät führen, nicht als einen einzigen Zeitpunkt und
+  nicht als jüngsten Zeitstempel: Der Fortschrittsstand ist je Ursprungsgerät
+  die höchste Laufnummer, bis zu der alle Änderungen dieses Geräts vorliegen.
+  Eine Änderung jenseits einer Lücke DARF angewendet werden, zählt aber nicht
+  zum Fortschrittsstand; die Lücke MUSS das Gerät erkennen und die fehlenden
+  Änderungen ausdrücklich anfordern. Trifft unter einem schon belegten Paar aus
+  Ursprungsgerät und Laufnummer eine zweite, andere Änderung ein, MUSS der
+  Empfänger sie als Fälschung verwerfen. Zwei Geräte MÜSSEN beim Verbinden ihre
   Fortschrittsstände vergleichen und nur übertragen, was dem anderen fehlt, in
-  beide Richtungen.
+  beide Richtungen, die angeforderten Lücken eingeschlossen. Specs 026–028
+  verwenden dieselben Laufnummern, auch für die Grenze beim Entzug (FR-042).
 - **FR-020**: Über jeden Weg zwischen den Geräten, auch über Zwischengeräte,
   MUSS jede Änderung jedes Gerät genau einmal erreichen, sobald ein
   Verbindungsweg besteht. Eine abgebrochene Übertragung MUSS sich fortsetzen
@@ -628,6 +704,33 @@ zwei konkurrierende Übergaben frieren den Bereich beim Relay ein.
   des Autors gefüllt und DARF danach von niemandem geändert werden; ein
   Empfänger MUSS jede Änderung dieses Felds ablehnen. In dieser Spec nutzt es
   noch keine Tabelle; Specs 025, 027 und 028 bauen darauf auf.
+- **FR-042** („Grenze beim Entzug“): Eine neue Mitgliederliste, die eine Vault
+  entfernt oder ihre Rechte senkt, MUSS eine Grenze tragen: für jedes Gerät der
+  betroffenen Vault die höchste Laufnummer (FR-019), die das ausstellende
+  Admin-Gerät in diesem Moment von ihm angewendet hatte. Jedes Gerät, das diese
+  Liste kennt, MUSS jede Änderung der betroffenen Vault mit einer Laufnummer
+  jenseits der Grenze ihres Geräts ablehnen, die das entzogene Recht braucht,
+  egal welchen Zeitstempel sie trägt. Rückdatieren ist nicht möglich, weil die
+  Laufnummern bis zur Grenze schon vergeben sind (FR-019). Ein Gerät der
+  betroffenen Vault, das in der Grenze fehlt, gilt mit Grenze null. Änderungen,
+  die ein Gerät angewendet hatte, bevor es die Liste kannte, bleiben (das
+  hingenommene Fenster aus D19); die nächste berechtigte Änderung derselben
+  Zelle behebt die Abweichung. Keine Regel DARF sich auf den Zeitstempel einer
+  Änderung im Verhältnis zur Liste stützen. Das verfeinert D19: Die Prüfung
+  beim Empfang richtet sich nach der Grenze, nicht nach der Zeit. Specs 027 und
+  028 wenden diese Regel an; im Bereich „Vault“ gibt es keine Rechte und damit
+  keine Grenze.
+- **FR-043** („Mitgliederlisten gleicher Generation“): Mitgliederlisten
+  veröffentlichen nur Admin-Geräte, aber zwei Admin-Geräte können verschiedene
+  gültige Listen mit derselben Generation veröffentlichen. Unter gültigen
+  Listen derselben Generation MUSS die Liste mit dem lexikographisch kleinsten
+  Hash gelten, beim Relay (Spec 026) wie bei jedem Empfänger. Das Relay MUSS
+  eine gespeicherte Liste derselben Generation durch eine mit kleinerem Hash
+  ersetzen, statt sie abzuweisen, und DARF sie durch eine mit größerem Hash
+  NICHT ersetzen. Ein Admin-Gerät, das zwei verschiedene Listen derselben
+  Generation sieht, MUSS eine Liste mit der nächsthöheren Generation
+  veröffentlichen, die die Änderungen beider Listen zusammenführt. Specs 026,
+  027 und 028 wenden diese Regel an.
 
 **Gerät koppeln (P2)**
 
@@ -683,17 +786,38 @@ zwei konkurrierende Übergaben frieren den Bereich beim Relay ein.
   hat, wie bei eigenen Geräten (FR-027); die Übergabe allein DARF NICHT
   genügen, weil auch der Dieb die alte Identität besitzt. Bis dahin MUSS es den
   offenen Wechsel anzeigen und DARF von der neuen Identität keine
-  Änderungen, Mitgliederlisten oder Rechte annehmen.
-- **FR-041**: Ist die wechselnde Vault Admin eines Bereichs, dessen Kennung an
-  ihre Identität gebunden ist (Spec 026 FR-021), MUSS das Relay (Spec 026) die
-  Übergabe annehmen und den Bereich danach an die neue Identität binden.
-  Treffen für dieselbe alte Identität zwei verschiedene Übergaben ein, MUSS es
-  diesen Bereich einfrieren (im Zweifel sperren): Es DARF keine neue
-  Mitgliederliste mehr annehmen, bis die Clients der Mitglieder den Konflikt
-  aufgelöst haben. Jeder Client, der
+  Änderungen, Mitgliederlisten oder Rechte annehmen. Nach der Bestätigung MUSS
+  es eine mit seiner eigenen Vault-Identität signierte Annahme genau dieser
+  neuen Identität in den Bereich hochladen. Eine Mitglieds-Vault DARF je
+  Bereich und alter Identität nur eine Annahme ausstellen. Mitgliederlisten und
+  Admin-Rechte der neuen Identität nimmt es erst nach FR-041 an.
+- **FR-041** („Übernahme erst nach Mehrheitsbestätigung“): Eine Übergabe, die
+  nur mit der alten Identität signiert ist, DARF NIE etwas umbinden. Mit der
+  ersten Übergabe für einen Bereich MUSS das Relay (Spec 026) dort nichts mehr
+  annehmen, was mit der alten Identität signiert ist, weil deren Schlüssel als
+  kompromittiert gilt, und MUSS die Lesezugriffe der übrigen Mitglieder der
+  letzten gültigen Mitgliederliste weiter bedienen. Ist die wechselnde Vault
+  Admin eines Bereichs, dessen Kennung an ihre Identität gebunden ist (Spec 026
+  FR-021), DARF das Relay die Admin-Rechte erst dann an eine neue Identität
+  binden, wenn mehr als die Hälfte der übrigen Mitglieds-Vaults der letzten
+  gültigen Mitgliederliste eine Annahme (FR-040) genau dieser neuen Identität
+  hochgeladen hat. Konkurrieren mehrere Übergaben, gilt die neue Identität, die
+  zuerst diese Mehrheit erreicht; weil jede Mitglieds-Vault nur eine Annahme
+  ausstellt, kann das höchstens eine sein, und alle anderen MUSS das Relay
+  abweisen. Dieselbe Regel MÜSSEN die Geräte der Mitglieder selbst anwenden:
+  Mitgliederlisten und Admin-Rechte der neuen Identität nehmen sie erst an,
+  wenn sie die Mehrheit der Annahmen selbst geprüft haben. Jeder Client, der
   zwei verschiedene Übergaben derselben alten Identität sieht, MUSS den
-  Konflikt anzeigen und DARF keine der beiden von sich aus übernehmen. Wie die
-  Auflösung beim Relay ankommt, klärt der Plan.
+  Konflikt anzeigen und DARF keine der beiden von sich aus übernehmen. Ist die
+  wechselnde Vault nur Mitglied, bindet das Relay nichts um; die neue Identität
+  bekommt Zugang erst über eine neue Mitgliederliste eines Admins, der sie
+  nach FR-040 übernommen hat. Ein Bereich ohne andere Mitglieder, etwa das
+  Postfach der eigenen Vault im Bereich „Vault“, wird nie umgebunden; die
+  Vault legt mit der neuen Identität ein neues Postfach und damit einen neuen
+  Bereich an (Spec 026). Das verfeinert die Clarification, nach der zwei
+  konkurrierende Übergaben den Bereich beim Relay einfrieren: Eingefroren ist
+  ab der ersten Übergabe alles, was die alte Identität signiert, aufgelöst wird
+  durch die Mehrheit der Annahmen.
 
 **Verträglichkeit und Betrieb**
 
@@ -753,11 +877,23 @@ zwei konkurrierende Übergaben frieren den Bereich beim Relay ein.
   Inhalt aus einer oder mehreren vollständigen Transaktionen mit Autor und
   Signatur je Änderung.
 - **Inhaltsschlüssel**: Kennung, Schlüsselgeneration, Bereich.
-- **Fortschrittsstand**: je Ursprungsgerät die jüngste bekannte Änderung.
+- **Änderung**: Bereich, Ursprungsgerät, Vault des Autors, Laufnummer,
+  Zeitstempel der hybriden logischen Uhr, Inhalt, Signatur des
+  Ursprungsgeräts.
+- **Fortschrittsstand**: je Ursprungsgerät die höchste Laufnummer, bis zu der
+  alle Änderungen vorliegen; dazu die erkannten Lücken.
+- **Mitgliederliste** (Grundlage für Specs 026–028): Bereich, Generation,
+  Mitglieds-Vaults mit Rechten, bei einem Entzug die Grenze je Gerät der
+  betroffenen Vault; von einem Admin-Gerät signiert.
 - **Kopplungscode**: einmalig, kurzlebig; Erreichbarkeit des anbietenden Geräts
   und ein Geheimnis für den gegenseitigen Nachweis.
 - **Übergabe**: alte und neue Vault-Identität, Bereich, Zeitpunkt; mit der alten
-  Identität signiert. Je Mitglied: offen, bestätigt oder im Konflikt.
+  Identität signiert. Je Mitglied: offen, angenommen oder im Konflikt; beim
+  Relay: alte Identität gesperrt, umgebunden (sobald die Mehrheit erreicht ist)
+  oder abgewiesen.
+- **Annahme**: Mitglieds-Vault, Bereich, alte und neue Identität; mit der
+  Vault-Identität des Mitglieds signiert, höchstens eine je Bereich und alter
+  Identität.
 - **Nur-direkt-Daten**: feste Liste von Vault-Geheimnissen (FR-038), die nie
   ein Relay und nie einen anderen Bereich erreichen.
 
@@ -769,7 +905,9 @@ zwei konkurrierende Übergaben frieren den Bereich beim Relay ein.
   Fälle innerhalb von 5 Sekunden auf dem anderen Gerät, im selben Netz wie über
   das Internet.
 - **SC-002**: Zwei Geräte, die beide online sind, sind nach dem Öffnen der Vault
-  innerhalb von 30 Sekunden verbunden, ohne Zutun der Nutzerin.
+  innerhalb von 30 Sekunden verbunden, ohne Zutun der Nutzerin. Das gilt auch
+  für eine frische Kopie der Vault-Datei und ihr Quellgerät, das bis dahin das
+  einzige Gerät der Vault war.
 - **SC-003**: In einer automatischen Prüfung mit drei Geräten und wechselnden,
   indirekten Wegen (mindestens 1.000 Änderungen) fehlt am Ende auf keinem Gerät
   eine Änderung, keine ist doppelt angewendet, alle Geräte haben denselben
@@ -785,10 +923,13 @@ zwei konkurrierende Übergaben frieren den Bereich beim Relay ein.
   Prüfung zeigt, dass gerätelokale Daten in keinem Paket und der private
   Schlüssel der Vault-Identität in keinem Protokoll vorkommen. Wohin die
   übrigen Vault-Geheimnisse dürfen, prüft SC-012.
-- **SC-007**: Eine Vault mit nur einem Gerät erzeugt während einer ganzen
-  Vault-Session keinen Netzverkehr für Präsenz oder direkten Sync im Bereich
-  „Vault“. Uploads in ein Relay-Postfach (Spec 026) und Verkehr mit Mitgliedern
-  von Spaces und Datenfreigaben (Specs 027, 028) zählen nicht dazu.
+- **SC-007**: Eine Vault mit nur einem Gerät veröffentlicht während einer
+  ganzen Vault-Session keine Präsenzmeldung und baut keine direkte Verbindung
+  im Bereich „Vault“ auf, solange sich kein anderes Gerät derselben Vault
+  meldet; ihr einziger Präsenzverkehr ist das Lauschen auf Präsenzmeldungen an
+  ihre Vault-Identität. Uploads in ein Relay-Postfach (Spec 026) und Verkehr
+  mit Mitgliedern von Spaces und Datenfreigaben (Specs 027, 028) zählen nicht
+  dazu.
 - **SC-008**: Die Geräteliste zeigt einen Wechsel von online zu offline oder
   umgekehrt innerhalb von 60 Sekunden, eine Umbenennung innerhalb der Zeit aus
   SC-001.
@@ -810,10 +951,35 @@ zwei konkurrierende Übergaben frieren den Bereich beim Relay ein.
   Eintrag der Liste auf einem dieser Wege auftaucht.
 - **SC-013**: Nach einem Wechsel der Vault-Identität übernimmt in 100 % der
   geprüften Fälle kein Mitglied eines gemeinsamen Bereichs die neue Identität
-  ohne bestätigten Prüfcode-Abgleich, und zwei konkurrierende Übergaben
-  derselben alten Identität führen immer dazu, dass das Relay keine neue
-  Mitgliederliste des Bereichs mehr annimmt und jedes Mitglied den Konflikt
-  zeigt. Prüfbar, sobald Spaces bestehen (Spec 027).
+  ohne bestätigten Prüfcode-Abgleich; ab der ersten Übergabe nimmt das Relay im
+  Bereich nichts mehr an, was mit der alten Identität signiert ist; die
+  Admin-Rechte gehen nie ohne Annahmen einer Mehrheit der übrigen Mitglieder
+  auf eine neue Identität über; und bei zwei konkurrierenden Übergaben gilt bei
+  Relay und Mitgliedern genau die Identität, die zuerst die Mehrheit erreicht,
+  während jedes Mitglied bis dahin den Konflikt zeigt. Prüfbar, sobald Spaces
+  bestehen (Spec 027).
+- **SC-014**: In einer automatischen Prüfung, die Änderungen über mehrere Wege
+  in vertauschter Reihenfolge zustellt, erkennt jedes Gerät in 100 % der Fälle
+  jede Lücke, fordert die fehlenden Änderungen an und zählt keine Änderung
+  jenseits einer Lücke zu seinem Fortschrittsstand; am Ende sind alle Lücken
+  geschlossen. Jede zweite, andere Änderung unter einem schon belegten Paar aus
+  Ursprungsgerät und Laufnummer wird verworfen.
+- **SC-015**: Nachdem eine Mitgliederliste einer Vault ein Recht entzogen hat,
+  lehnt jedes Gerät, das diese Liste kennt, in 100 % der geprüften Fälle alle
+  Änderungen dieser Vault jenseits der Grenze ab, die das entzogene Recht
+  brauchen, auch rückdatierte. Änderungen, die ein Gerät angewendet hatte,
+  bevor es die Liste kannte, dürfen bleiben, bis eine berechtigte Änderung
+  derselben Zelle sie überschreibt (hingenommenes Risiko, D19). Prüfbar, sobald
+  Spaces bestehen (Spec 027).
+- **SC-016**: Veröffentlichen zwei Admin-Geräte verschiedene Listen derselben
+  Generation, wählen das Relay und alle Empfänger in 100 % der geprüften Fälle
+  dieselbe Liste, unabhängig von der Reihenfolge des Eintreffens, und ein
+  Admin-Gerät veröffentlicht danach eine zusammengeführte Liste der nächsten
+  Generation. Prüfbar, sobald Spaces bestehen (Spec 027).
+- **SC-017**: Eine Momentaufnahme mit einer ungültigen Änderung verliert beim
+  Empfänger in 100 % der geprüften Fälle genau die Transaktionsgruppe dieser
+  Änderung; alle anderen Gruppen kommen an, keine Gruppe zum Teil. Prüfbar,
+  sobald es Momentaufnahmen gibt (Spec 026).
 
 ## Assumptions
 

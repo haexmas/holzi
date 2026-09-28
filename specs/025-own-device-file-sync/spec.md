@@ -246,7 +246,8 @@ vertrauenswürdig. Pausieren und Plattenschutz verhindern Schaden in Grenzsituat
 
 **Independent Test**: Während einer großen Übertragung die Statusansicht öffnen: Sie zeigt Datei,
 Fortschritt und Gegengerät. Pausieren: Die Übertragung steht, lokale Änderungen werden nicht
-erfasst und nicht verschickt. Fortsetzen: Alles läuft weiter. Einen Ordner binden, dessen Inhalt nicht auf die Platte
+erfasst und nicht verschickt, eingehende Änderungen landen im Dateiindex, aber nicht auf der
+Platte. Fortsetzen: Das Gerät setzt sie auf der Platte um, und alles läuft weiter. Einen Ordner binden, dessen Inhalt nicht auf die Platte
 passt: holzi lädt bis zur Reserve, hält an und meldet es.
 
 **Acceptance Scenarios**:
@@ -255,9 +256,11 @@ passt: holzi lädt bis zur Reserve, hält an und meldet es.
    sie seinen Zustand (aktuell, wird synchronisiert, pausiert, wartet auf ein Gerät, Problem),
    laufende Übertragungen mit Fortschritt und die Geräte, die ihn gebunden haben.
 2. **Given** der Sync läuft, **When** die Nutzerin ihn für einen Ordner oder für dieses Gerät
-   pausiert, **Then** erfasst dieses Gerät für diesen Umfang keine lokalen Änderungen mehr und
-   überträgt keine Objekte, bis sie fortsetzt; der Datensync von Spec 024 läuft weiter (FR-044),
-   und die anderen Geräte synchronisieren untereinander weiter.
+   pausiert, **Then** erfasst dieses Gerät für diesen Umfang keine lokalen Änderungen mehr,
+   schreibt keine Dateien auf die Platte und überträgt keine Objekte, bis sie fortsetzt; der
+   Datensync von Spec 024 läuft weiter, eingehende Änderungen des Dateiindex werden mit ihrem
+   Änderungspaket atomar übernommen und erst nach dem Fortsetzen auf der Platte umgesetzt
+   (FR-044), und die anderen Geräte synchronisieren untereinander weiter.
 3. **Given** der Sync war pausiert, **When** die Nutzerin fortsetzt, **Then** holt das Gerät alle
    zwischenzeitlichen Änderungen in beide Richtungen nach.
 4. **Given** der freie Platz würde durch eine eingehende Datei unter die Reserve fallen, **When**
@@ -477,12 +480,15 @@ Dateien, und der Ordner steht nicht mehr in der Liste.
 - **FR-043**: Wartet eine Datei auf Inhalt, den kein online befindliches Gerät hat, MUSS die
   Statusansicht das mit den Geräten zeigen, die ihn haben.
 - **FR-044**: Der Nutzer MUSS den Sync je Ordner und für dieses Gerät als Ganzes pausieren und
-  fortsetzen können. Pausieren hält für die betroffenen Ordner das Erfassen lokaler Änderungen im
-  Dateiindex und die Übertragung von Objekten an; der Datensync von Spec 024 läuft weiter, so dass
-  Einträge des Dateiindex von anderen Geräten weiter ankommen, auf diesem Gerät aber erst nach dem
-  Fortsetzen angewendet werden. Die Pausierung gilt nur für dieses Gerät, bleibt über das Schließen
-  der Vault erhalten und DARF keine Änderung verlieren: Beim Fortsetzen werden alle
-  zwischenzeitlichen Änderungen in beide Richtungen nachgeholt.
+  fortsetzen können. Pausieren hält für die betroffenen Ordner das Erfassen lokaler Änderungen, das
+  Schreiben von Dateien auf die Platte und die Übertragung von Objekten an. Der Datensync von Spec
+  024 läuft weiter, sodass Einträge des Dateiindex von anderen Geräten weiter ankommen und
+  zusammen mit ihrem Änderungspaket atomar in den Dateiindex übernommen werden (Spec 024); auf der
+  Platte umgesetzt werden sie erst nach dem Fortsetzen. Die Pausierung gilt nur für dieses Gerät,
+  bleibt über das Schließen der Vault erhalten und DARF keine Änderung verlieren: Beim Fortsetzen
+  erfasst das Gerät die zwischenzeitlichen lokalen Änderungen, setzt die zwischenzeitlich
+  übernommenen Einträge auf der Platte um und behandelt Überschneidungen wie jeden anderen
+  Konflikt (FR-030, FR-032).
 - **FR-045**: holzi MUSS vor jedem Empfang prüfen, ob der Platz reicht, und DARF den freien Platz
   des Ziellaufwerks NICHT unter eine Reserve bringen. Eine Datei, die nicht passt, wird nicht
   begonnen und mit Grund gemeldet; andere Dateien laufen weiter.

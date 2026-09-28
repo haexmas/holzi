@@ -47,11 +47,12 @@ nicht erreichbar ist oder ablehnt.
   verarbeitete Nummer ist sein **Lesestand**.
 - **Momentaufnahme**: ein verschlüsselter Stand eines Bereichs bis zu einer
   Sequenznummer, von einem Client erstellt, mit den ursprünglichen Signaturen
-  jeder Änderung. Danach verwirft das Relay die älteren Pakete (Kompaktierung).
+  jeder Änderung, in vollständigen Transaktionen (Spec 024). Danach verwirft das Relay die älteren Pakete (Kompaktierung).
 - **Mitgliederliste**: eine vom Admin signierte Liste {Vault-Identität →
   Fähigkeiten} je Bereich, mit Generation, Ausstellungs- und Ablaufzeit. Das
   Relay hält die jeweils gültige Liste; eine höhere Generation ersetzt eine
-  niedrigere; fehlt die Liste, ist sie abgelaufen oder ungültig, wird
+  niedrigere, bei gleicher Generation gilt die Liste mit dem kleinsten Hash
+  (FR-018); fehlt die Liste, ist sie abgelaufen oder ungültig, wird
   abgelehnt.
 - **Fähigkeiten**: **Lesen**, **Schreiben**, **Löschen**; die Rolle **Admin**
   hat nur der Admin des Bereichs. Das Relay prüft davon nur, was es sehen kann
@@ -82,8 +83,10 @@ nicht erreichbar ist oder ablehnt.
   Das Relay dieser Spec ist das dortige „Buffer Relay“ (§3): kein Peer, keine
   Passphrase, kein Anwenden von Änderungen. Die Mitgliederliste ist die dortige
   vom Relay lesbare, signierte Projektion der Mitgliedschaft (§4), mit
-  Generation, Ablaufzeit, Ablehnung gleicher Generation mit anderem Inhalt und
-  Ablehnung bei fehlender Liste. Die Mindest-Generation, die ein Client
+  Generation, Ablaufzeit und Ablehnung bei fehlender Liste. Die dortige
+  Ablehnung gleicher Generation mit anderem Inhalt ersetzt diese Spec durch
+  eine feste Regel, weil mehrere Geräte des Admins Listen veröffentlichen
+  (FR-018). Die Mindest-Generation, die ein Client
   verlangen darf (§4 dort), übernimmt FR-020.
 - Referenz haex-sync-server, Repository
   `https://github.com/haex-space/haex-sync-server` @
@@ -313,14 +316,20 @@ hochladen: wird abgelehnt.
    hoch, **When** das Gerät der Vault danach irgendeine Anfrage für den Bereich
    stellt, **Then** wird sie abgelehnt, ohne Wartezeit.
 4. **Given** eine Liste der Generation 5 gilt, **When** jemand eine signierte
-   Liste der Generation 4 oder eine andere Liste der Generation 5 hochlädt,
-   **Then** lehnt das Relay sie ab, und die Liste der Generation 5 gilt weiter.
+   Liste der Generation 4 hochlädt, **Then** lehnt das Relay sie ab, und die
+   Liste der Generation 5 gilt weiter.
 5. **Given** die gültige Liste ist abgelaufen und der Admin hat keine neue
    hochgeladen, **When** irgendein Gerät auf den Bereich zugreift, **Then**
    lehnt das Relay Lesen und Schreiben ab, bis eine gültige Liste vorliegt.
 6. **Given** eine Liste, die nicht der Admin des Bereichs signiert hat, **When**
    sie hochgeladen wird, **Then** lehnt das Relay sie ab, auch wenn für den
    Bereich noch keine Liste existiert.
+7. **Given** eine Liste der Generation 5 gilt, **When** ein anderes Gerät des
+   Admins eine andere gültige Liste der Generation 5 hochlädt, **Then** ersetzt
+   das Relay die geltende Liste nur, wenn der Hash der neuen kleiner ist, und
+   lehnt sie sonst ab; ein Gerät des Admins, das beide Listen sieht,
+   veröffentlicht danach eine Liste der Generation 6, die beide Änderungen
+   vereint (FR-018, FR-041).
 
 ---
 
@@ -348,10 +357,11 @@ restlichen Paketen denselben Stand.
    mit Lesestand kleiner n abruft, **Then** bekommt es die Momentaufnahme und
    danach die Pakete nach n.
 3. **Given** eine Momentaufnahme, **When** ein Empfänger sie prüft, **Then**
-   prüft er jede darin enthaltene Änderung mit ihrer ursprünglichen Signatur wie
-   bei einem Paket; eine Änderung, die das Gerät, das die Momentaufnahme
-   erstellt hat, verfälscht oder für ein anderes Mitglied erfunden hat, wird
-   verworfen.
+   prüft er jede darin enthaltene Transaktion (Spec 024) mit den ursprünglichen
+   Signaturen ihrer Änderungen wie bei einem Paket; enthält eine Transaktion
+   eine Änderung, die das Gerät, das die Momentaufnahme erstellt hat,
+   verfälscht oder für ein anderes Mitglied erfunden hat, wird die ganze
+   Transaktion verworfen, und die übrigen Transaktionen bleiben erhalten.
 4. **Given** ein Gerät besitzt Änderungen, die weder in der neuen
    Momentaufnahme noch in späteren Paketen stehen, **When** es die
    Momentaufnahme sieht, **Then** lädt es diese Änderungen erneut hoch.
@@ -416,7 +426,8 @@ Alternative für Nutzer mit eigenem S3.
 **Independent Test**: Ein Objekt über Speicher-Backend A hochladen, auf einem
 zweiten Gerät herunterladen und den Hash prüfen. Mit einer Vault ohne Löschen,
 die das Objekt nicht hochgeladen hat, einen Löschlink anfordern: abgelehnt.
-Den Link nach seiner Laufzeit erneut benutzen: abgelehnt.
+Den Link nach seiner Laufzeit, höchstens 15 Minuten, erneut benutzen:
+abgelehnt.
 
 **Acceptance Scenarios**:
 
@@ -430,9 +441,13 @@ Den Link nach seiner Laufzeit erneut benutzen: abgelehnt.
 4. **Given** eine Vault, die das Objekt nicht hochgeladen hat, weder Löschen
    hat noch Admin ist, **When** sie es löschen will, **Then** lehnt das Relay
    ab.
-5. **Given** ein abgelaufener Link oder eine Vault, die inzwischen nicht mehr in
-   der Liste steht, **When** der Link oder ein neuer Link benutzt werden soll,
-   **Then** scheitert der Zugriff.
+5. **Given** ein abgelaufener Link, **When** er benutzt werden soll, **Then**
+   scheitert der Zugriff.
+6. **Given** eine Vault, die inzwischen nicht mehr in der Liste steht, **When**
+   ihr Gerät einen neuen Link anfordert, **Then** lehnt das Relay sofort ab;
+   ein Link, der vorher ausgestellt wurde, lässt sich nicht zurückziehen und
+   funktioniert höchstens bis zu seinem Ablauf, spätestens 15 Minuten nach der
+   Ausstellung (FR-026).
 
 ---
 
@@ -506,15 +521,24 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   synchronisiert sie weiter direkt.
 - **Die Vault-Identität wird rotiert** (gestohlenes Gerät, Spec 024). Die Vault
   veröffentlicht für jeden Bereich, in dem sie Mitglied oder Admin ist, eine
-  von der alten Identität signierte Übergabe an die neue (Spec 024). Das Relay
-  nimmt sie für Bereiche an, deren Kennung an die alte Identität gebunden ist
-  (FR-021). Weil auch der Dieb die alte Identität hat, kann er eine eigene
-  Übergabe ausstellen; kommen zwei verschiedene Übergaben für dieselbe alte
-  Identität an, friert das Relay den Bereich ein, und die Clients zeigen den
-  Konflikt (FR-045).
+  von der alten Identität signierte Übergabe an die neue (Spec 024). Weil auch
+  der Dieb die alte Identität hat, bindet eine Übergabe allein nichts um: Mit
+  der ersten Übergabe für einen Bereich nimmt das Relay dort nichts mehr an,
+  was sich auf die alte Identität stützt, und an eine neue Identität bindet es
+  den Bereich erst, wenn eine Mehrheit der übrigen Mitglieder sie nach
+  Abgleich des Prüfcodes angenommen hat (FR-021). Stellt der Dieb eine eigene
+  Übergabe aus, gewinnt die neue Identität, die zuerst die Mehrheit erreicht;
+  die Clients zeigen den Stand (FR-045). Den Bereich „Vault“ und andere
+  Bereiche ohne übrige Mitglieder bindet das Relay nie um; die Vault legt dafür
+  ein neues Postfach an (FR-049).
 - **Ein gestohlenes Gerät meldet sich am Relay an.** Seine Gerätebestätigung ist
   gültig, bis die Vault-Identität rotiert ist; das Relay kann einzelne Geräte
   nicht sperren (D8).
+- **Zwei Geräte des Admins veröffentlichen gleichzeitig verschiedene Listen
+  derselben Generation.** Relay und Empfänger nehmen beide dieselbe, die mit
+  dem kleinsten Hash (FR-018); ein Gerät des Admins, das den Konflikt sieht,
+  veröffentlicht eine Liste der nächsten Generation, die beide Änderungen
+  vereint (FR-041).
 - **Zwei Geräte der Vault legen gleichzeitig eine Momentaufnahme an.** Das Relay
   nimmt nur eine an, deren Nummer über der geltenden liegt; die andere wird
   abgelehnt, das Gerät holt die neue Momentaufnahme und prüft FR-042.
@@ -614,9 +638,14 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
 - **FR-018**: Das Relay MUSS je Bereich die geltende Mitgliederliste halten.
   Eine Liste MUSS Bereichskennung, Generation, Einträge {Vault-Identität →
   Fähigkeiten}, Ausstellungszeit, Ablaufzeit und die Signatur des Admins
-  tragen. Eine Liste mit höherer Generation MUSS die geltende ersetzen; eine
-  mit niedrigerer Generation oder mit gleicher Generation und anderem Inhalt
-  MUSS abgelehnt werden.
+  tragen. Eine gültige Liste mit höherer Generation MUSS die geltende ersetzen;
+  eine mit niedrigerer Generation MUSS abgelehnt werden. Weil mehrere Geräte
+  des Admins Listen veröffentlichen, können zwei verschiedene gültige Listen
+  dieselbe Generation tragen. Dann gilt nach derselben Regel wie bei jedem
+  Empfänger (Spec 024) die Liste mit dem lexikografisch kleinsten Hash der
+  vollständigen, signierten Liste: Das Relay MUSS die geltende Liste durch eine
+  andere gültige Liste derselben Generation genau dann ersetzen, wenn deren
+  Hash kleiner ist, und MUSS sie sonst ablehnen.
 - **FR-019**: Fehlt die Liste eines Bereichs, ist sie abgelaufen, noch nicht
   gültig oder ungültig signiert, MUSS das Relay jeden Zugriff auf den Bereich
   ablehnen (fail closed). Die Laufzeit einer Liste DARF die Höchstdauer, die
@@ -631,23 +660,46 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   signierte Liste MUSS abgelehnt werden, auch für einen Bereich, der auf dem
   Relay noch nicht existiert. Die erste gültige Liste legt das Postfach an und
   verlangt die Zulassung des Admins (FR-006). Nach einer Rotation der
-  Vault-Identität des Admins (Spec 024, Übergabe nach Rotation) MUSS das Relay
-  eine von der alten Identität signierte Übergabe an eine neue Identität
-  annehmen; danach gelten für den Bereich Listen der neuen Identität, und die
-  nächste Liste MUSS eine höhere Generation tragen. Zulassung und Kontingent der
-  alten Identität MÜSSEN mit derselben Übergabe übergehen. Kommen für dieselbe
-  alte Identität zwei verschiedene Übergaben an, MUSS das Relay jeden
-  betroffenen Bereich einfrieren (fail closed): Es DARF dann keine neue
-  Mitgliederliste mehr annehmen, bis der Konflikt nach Spec 024 aufgelöst ist.
-  Die bis dahin geltende Liste bleibt bis zu ihrem Ablauf gültig.
+  Vault-Identität (Spec 024 FR-041, Übergabe) gilt: Eine nur mit der alten
+  Identität signierte Übergabe DARF beim Relay nie etwas umbinden. Mit der
+  ersten Übergabe für einen Bereich MUSS das Relay für diesen Bereich nichts
+  mehr annehmen, was mit der alten Identität signiert ist oder sich auf sie
+  stützt (Listen, Gerätebestätigungen und damit Anfragen ihrer Geräte), weil
+  ihr Schlüssel als kompromittiert gilt. Abrufe der übrigen Mitglieder der
+  letzten gültigen Liste vor dieser ersten Übergabe MUSS es weiter bedienen, solange diese Liste nicht
+  abgelaufen ist (FR-019). War die alte Identität Admin des Bereichs, MUSS das
+  Relay die Admin-Rolle erst dann an eine neue Identität binden, wenn mehr als
+  die Hälfte der übrigen Mitglieder der letzten gültigen Liste je eine
+  signierte Annahme genau dieser neuen Identität hochgeladen hat; jedes
+  Mitglied signiert sie erst nach Abgleich des Prüfcodes (Spec 024).
+  Konkurrieren Übergaben an verschiedene neue Identitäten, gewinnt die, die
+  zuerst diese Mehrheit erreicht; alle anderen MUSS das Relay ablehnen. Nach
+  der Umbindung gelten für den Bereich nur Listen der neuen Identität, und die
+  nächste Liste MUSS eine höhere Generation tragen. Das ersetzt das frühere
+  Einfrieren eines Bereichs bei konkurrierenden Übergaben.
+- **FR-049**: Ein Bereich ohne übrige Mitglieder in der letzten gültigen Liste,
+  etwa der Bereich „Vault“, DARF NICHT umgebunden werden (FR-021); die
+  rotierte Vault MUSS dafür ein neues Postfach unter einer Bereichskennung
+  ihrer neuen Identität anlegen und es aus dem eigenen Stand füllen (FR-044).
+  War die alte Identität in einem Bereich nur Mitglied, bindet das Relay nichts
+  um; der Admin nimmt die neue Identität nach Abgleich des Prüfcodes in eine
+  neue Liste auf (Spec 024). Eine Übergabe überträgt weder Zulassung noch
+  Kontingent: Die neue Identität braucht eine eigene Zulassung (FR-005,
+  FR-006), bevor das Relay einen Bereich an sie bindet oder ein neues Postfach
+  für sie anlegt, und ein umgebundener Bereich zählt ab der Umbindung auf ihr
+  Kontingent (FR-028).
 - **FR-022**: Das Relay MUSS Abrufe nur Vaults mit Lesen und Uploads von
   Paketen nur Vaults mit Schreiben erlauben, jeweils nach der geltenden Liste.
   Eine Momentaufnahme DARF nur hochladen: der Admin des Bereichs. Damit kann kein Mitglied mit einer unvollständigen Momentaufnahme ältere Pakete verdrängen. Beim Bereich
   „Vault“ ist das in beiden Fällen jedes eigene Gerät.
 - **FR-023**: Ein Entzug MUSS sofort wirken: Nach Annahme einer neuen Liste MUSS
   jede weitere Anfrage einer nicht mehr berechtigten Vault abgelehnt werden,
-  auch auf schon bestehenden Verbindungen. Eine Widerrufsliste DARF dafür
-  nicht nötig sein.
+  auch auf schon bestehenden Verbindungen, und das Relay DARF ihr keinen
+  Zugangslink mehr ausstellen. Eine Widerrufsliste DARF dafür nicht nötig
+  sein. „Sofort“ gilt für den Zugriff auf das Postfach und das Ausstellen von
+  Zugangslinks; für Objekte begrenzt die Höchstlaufzeit schon ausgestellter
+  Links (FR-026) die Wirkung, was die Klärung „ein Entzug wirkt sofort“ für
+  Objekte präzisiert.
 - **FR-024**: Mitgliederlisten, Gerätebestätigungen und Anmeldungen MÜSSEN
   dieselben secp256k1-Schlüssel nutzen wie Vault-Identität und
   Geräteschlüssel; ein zweites Schlüsselsystem nur für das Relay DARF es nicht
@@ -666,7 +718,11 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   Objekt ausstellen, nach Prüfung der Liste: Lesen zum Herunterladen, Schreiben
   zum Hochladen, eine Berechtigung zum Löschen nach FR-028 zum Löschen. Die
   Daten MÜSSEN direkt zwischen Gerät und Speicher fließen,
-  nicht durch das Relay.
+  nicht durch das Relay. Ein Zugangslink MUSS höchstens 15 Minuten ab seiner
+  Ausstellung gültig sein. Ein ausgestellter Link lässt sich nicht
+  zurückziehen: Nach einem Entzug stellt das Relay sofort keine neuen Links
+  mehr aus (FR-023), und schon ausgestellte laufen spätestens mit ihrer
+  Laufzeit ab.
 - **FR-027**: Objekte MÜSSEN unveränderlich sein: Ein Link zum Hochladen MUSS an
   Kennung und Größe des Objekts gebunden sein, und ein bestehendes Objekt DARF
   NICHT überschrieben werden. Wo der Speicher es kann, MUSS er Inhalte ablehnen,
@@ -716,12 +772,17 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
 - **FR-036**: holzi MUSS eine Momentaufnahme des Bereichs „Vault“ erstellen und
   hochladen, wenn die Pakete im Postfach eine Schwelle an Anzahl oder Größe
   überschreiten, und bevor das Kontingent voll ist. Die Momentaufnahme MUSS
-  die ursprünglichen Signaturen jeder Änderung enthalten.
+  die ursprünglichen Signaturen jeder Änderung enthalten und jede Transaktion
+  (Spec 024 FR-013) vollständig.
 - **FR-037**: holzi MUSS Pakete und Momentaufnahmen nach FR-025 prüfen, mit den
   Regeln von Spec 024 zur Unteilbarkeit: Ein Änderungspaket ist unteilbar; ist
   eine Änderung darin ungültig, MUSS holzi das ganze Paket verwerfen. Eine
-  Momentaufnahme MUSS holzi dagegen je Änderung prüfen und jede Änderung mit
-  fehlender oder falscher Signatur verwerfen, ohne den Rest zu verwerfen.
+  Momentaufnahme MUSS holzi dagegen je vollständiger Transaktion prüfen, also
+  je Gruppe der Änderungen mit gemeinsamem HLC-Zeitstempel (Spec 024 FR-013):
+  Ist eine Änderung einer Transaktion ungültig, etwa mit fehlender oder
+  falscher Signatur, MUSS holzi die ganze Transaktion verwerfen und die
+  übrigen Transaktionen behalten. Eine Transaktion DARF nie zum Teil
+  angewendet werden.
 - **FR-048**: Eigene synchronisierte Ordner (Spec 025) DÜRFEN ihre Objekte im
   Speicher-Backend A des Relays ablegen, das das Postfach der Vault führt
   (FR-040), sofern es Speicher-Backend A anbietet. Die Objekte gehören dann zum
@@ -756,7 +817,10 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   davon das Postfach der Vault führen: Ein Bereich liegt in v1 auf genau einem Relay, seinem Heimat-Relay: das Postfach der Vault auf dem zuerst eingetragenen Relay, ein Space oder eine Datenfreigabe auf dem Relay ihres Admins. Weitere Relays dienen nur dem NAT-Durchgang und als Heimat anderer Bereiche.
 - **FR-041**: holzi MUSS die Mitgliederliste jedes Bereichs, dessen Admin die
   Vault ist, erneuern, bevor die Hälfte ihrer Laufzeit verstrichen ist, sofern
-  ein Gerät der Vault online ist und das Relay erreicht.
+  ein Gerät der Vault online ist und das Relay erreicht. Sieht ein Gerät des
+  Admins zwei verschiedene gültige Listen derselben Generation (FR-018), MUSS
+  es eine Liste der nächsten Generation veröffentlichen, die die Änderungen
+  beider vereint (Spec 024).
 - **FR-042**: holzi MUSS prüfen, ob die eigenen hochgeladenen Pakete später
   im Postfach auftauchen, und ob nach einer Momentaufnahme eigene Änderungen
   fehlen. Fehlt etwas, das dieses Gerät hat, MUSS es das erneut hochladen.
@@ -773,9 +837,13 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
 - **FR-045**: Lehnt ein Relay ab, MUSS holzi den Grund unterscheiden und zeigen:
   nicht zugelassen, Einladungscode ungültig, keine Berechtigung, Liste fehlt
   oder abgelaufen, Kontingent fast voll (ab 80 %) oder erschöpft, Version nicht
-  unterstützt, Bereich eingefroren wegen konkurrierender Übergaben der
-  Vault-Identität (FR-021). Wo der Nutzer etwas tun kann (neuen Code eingeben,
-  holzi aktualisieren, Platz schaffen), MUSS die Anzeige das nennen.
+  unterstützt, alte Vault-Identität für den Bereich gesperrt und Übergabe
+  wartet auf die Mehrheit der Mitglieder (FR-021), Übergabe abgelehnt, weil
+  eine andere neue Identität zuerst die Mehrheit erreicht hat (FR-021),
+  Bereich ohne übrige Mitglieder nicht umbindbar, neues Postfach nötig
+  (FR-049). Wo der Nutzer etwas tun kann (neuen Code eingeben, holzi
+  aktualisieren, Platz schaffen, Mitglieder um den Abgleich des Prüfcodes
+  bitten), MUSS die Anzeige das nennen.
 - **FR-046**: Entfernt der Nutzer ein Relay, MUSS holzi nach Bestätigung das
   Postfach der Vault dort löschen, soweit das Relay erreichbar ist, und das
   Relay auf keinem eigenen Gerät mehr nutzen. Ist das Relay Heimat von
@@ -809,7 +877,13 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
 - **Objekt (Sicht des Relays)**: Bereichskennung, Objektkennung (Hash des
   Chiffrats), Größe des Chiffrats, hochladende Vault-Identität.
 - **Zugangslink**: ein Objekt, eine Richtung (hoch, herunter, löschen),
-  Ablaufzeit.
+  Ablaufzeit (höchstens 15 Minuten nach der Ausstellung); nicht
+  zurückziehbar.
+- **Übergabe (Sicht des Relays)**: Bereichskennung, alte und neue
+  Vault-Identität, Signatur der alten Identität; bindet allein nichts um.
+- **Annahme einer Übergabe**: Bereichskennung, Vault-Identität des Mitglieds,
+  angenommene neue Identität, Signatur des Mitglieds nach Abgleich des
+  Prüfcodes.
 - **Relay-Eintrag (in der Vault)**: Adresse, festgehaltene Identität des
   Relays, Zeitpunkt der Zulassung; je Postfach Lesestand und Kennung der
   Nummerierung (je Gerät); Zustand je Gerät.
@@ -830,11 +904,14 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   keine Dateinamen: 0 Treffer.
 - **SC-003**: Nach Annahme einer Mitgliederliste, die eine Vault entfernt,
   wird deren nächste Anfrage für den Bereich abgelehnt, in 100 % der Fälle und
-  auch auf einer schon offenen Verbindung.
-- **SC-004**: Mitgliederlisten mit niedrigerer Generation, gleicher Generation
-  und anderem Inhalt, abgelaufener Laufzeit, falscher Signatur oder falschem
-  Admin werden zu 100 % abgelehnt; ohne gültige Liste liefert das Relay für den
-  Bereich nichts aus.
+  auch auf einer schon offenen Verbindung; sie erhält ab dann keinen neuen
+  Zugangslink, und jeder vorher ausgestellte scheitert spätestens 15 Minuten
+  nach seiner Ausstellung.
+- **SC-004**: Mitgliederlisten mit niedrigerer Generation, abgelaufener
+  Laufzeit, falscher Signatur oder falschem Admin werden zu 100 % abgelehnt;
+  von zwei gültigen Listen derselben Generation gilt in 100 % der Fälle die
+  mit dem kleineren Hash, unabhängig von der Reihenfolge des Hochladens; ohne
+  gültige Liste liefert das Relay für den Bereich nichts aus.
 - **SC-005**: Pakete oder Momentaufnahmen, deren Inhalt das Relay oder ein
   Mitglied verändert oder für ein anderes Mitglied erfunden hat, werden von
   100 % der Empfänger verworfen, ohne dass etwas davon angewendet wird.
@@ -860,6 +937,11 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   Relay mit Adresse und Code in unter einer Minute ein.
 - **SC-011**: Hat eine Vault ihr Kontingent erschöpft, werden Uploads anderer
   Vaults auf demselben Relay weiter zu 100 % angenommen.
+- **SC-012**: Eine nur mit der alten Vault-Identität signierte Übergabe bindet
+  in 100 % der Tests keinen Bereich um; nach der ersten Übergabe für einen
+  Bereich wird jede Anfrage mit der alten Identität dort abgelehnt, und die
+  Admin-Rolle geht erst an eine neue Identität über, wenn mehr als die Hälfte
+  der übrigen Mitglieder sie angenommen hat.
 
 ## Assumptions
 
@@ -872,7 +954,9 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   weitergibt, und betreibt ein iroh-Relay für den NAT-Durchgang, wie
   haex-sync-server es schon tut. Die Anmeldung folgt dem Challenge-Response
   von NIP-42. Die optionale Signalisierung ist ein Nostr-Relay. Speicher-Backend
-  A ist S3-kompatibel, die Zugangslinks sind vorsignierte Links.
+  A ist S3-kompatibel, die Zugangslinks sind vorsignierte Links; sie lassen
+  sich nach der Ausstellung nicht zurückziehen, darum ist ihre Laufzeit fest
+  begrenzt (FR-026).
 - Die Formate von Paket, Mitgliederliste, Gerätebestätigung und Momentaufnahme
   legt Spec 024 bzw. der Plan fest (Design §15 Punkt 7). Die Bereichskennung
   wird aus der Vault-Identität des Admins und einem Zufallswert abgeleitet
@@ -891,9 +975,9 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
 - Die Rotation der Vault-Identität und die Übergabe an die neue Identität in
   geteilten Bereichen legt Spec 024 fest (Design §15 Punkt 4); diese Spec
   regelt nur, was das Relay damit tut (FR-021). Mitglieder übernehmen die neue
-  Identität erst nach Abgleich eines Prüfcodes (Spec 024). Wie ein
-  eingefrorener Bereich am Relay wieder frei wird, sobald die Mitglieder den
-  Konflikt aufgelöst haben, legt der Plan zusammen mit Spec 024 fest.
+  Identität erst nach Abgleich eines Prüfcodes (Spec 024) und laden danach ihre
+  signierte Annahme zum Relay (FR-021). Das Format dieser Annahme legt der
+  Plan zusammen mit Spec 024 fest.
 - Wer Relays anbietet und wie ein Nutzer sie findet, ist nicht Teil dieser
   Spec: Der Nutzer bekommt Adresse und Code vom Betreiber.
 - Die Arbeitstitel „Relays“ und die Zustandsnamen legt der Plan endgültig fest.
