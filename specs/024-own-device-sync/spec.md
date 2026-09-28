@@ -270,6 +270,12 @@ Wiederherstellung kommen mit Spec 026.
   Wiederherstellungspaket. Abrufen erfordert den Besitznachweis des
   Wiederherstellungsschlüssels, ohne ihn zu übertragen, und einen zweiten
   Faktor (TOTP oder E-Mail-Link) (D31). Das regelt Spec 026.
+- Q: Was passiert, wenn sich zwei Hauptgeräte gegenseitig entfernen? → A: Kein
+  Wettlauf: Beide gelten danach als entfernt, weil eine Entfernung bestehen
+  bleibt (FR-005). Reparatur über ein Gerät mit dem privaten Schlüssel der
+  Vault-Identität, das sich mit neuem Geräteschlüssel wieder einträgt, oder
+  über das Wiederherstellungspaket; der Betreiber hat das als akzeptabel
+  angesehen.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -674,6 +680,16 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   gilt überall dieselbe (FR-043); ein Hauptgerät, das beide sieht,
   veröffentlicht eine zusammengeführte Liste der nächsten Generation, und ein
   in einer der beiden Listen entferntes Gerät bleibt entfernt (FR-005).
+- Zwei Hauptgeräte entfernen sich gleichzeitig gegenseitig: Das ist kein
+  Wettlauf, sondern eindeutig. Weil ein in einer gültigen Liste entferntes
+  Gerät entfernt bleibt (FR-005), sind danach auf allen Geräten, die beide
+  Listen kennen, beide entfernt, unabhängig von der Reihenfolge des
+  Eintreffens. Gibt es kein weiteres Hauptgerät, kann danach zunächst niemand
+  Geräte verwalten. Die Nutzerin repariert das, indem ein Gerät mit dem
+  privaten Schlüssel der Vault-Identität (etwa eines der beiden entfernten
+  Hauptgeräte) sich mit einem neuen Geräteschlüssel wieder in die Geräteliste
+  einträgt, oder über das Wiederherstellungspaket (Spec 026). Das ist
+  hingenommen.
 - Die Nutzerin entfernt ein Gerät, während keines ihrer anderen Geräte online
   ist: Die neue Geräteliste erreicht die anderen Geräte (und ab Spec 026 das
   Relay), sobald ein Weg besteht. Bis dahin kann das entfernte Gerät mit
