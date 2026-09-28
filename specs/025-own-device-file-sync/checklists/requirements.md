@@ -31,13 +31,9 @@
 
 ## Notes
 
-- One clarification marker is open, in FR-002: whether synced files live in a folder of the file
-  system that the user picks on each device (recommended, like Syncthing/Dropbox) or in a store
-  managed by holzi and visible only through holzi. The operator has not made this scope decision.
-  The rest of the spec assumes the recommended answer (see Assumptions); if the operator picks the
-  holzi-managed store, FR-004, FR-005, FR-008 to FR-012, FR-028, FR-038 to FR-041 and several edge
-  cases (vanished folder, names not allowed on another OS, files still being written) must be
-  revisited.
+- The operator resolved FR-002 in favor of a user-chosen file-system folder on each device. The
+  earlier alternative of a holzi-managed store is retained only in the clarification history; the
+  requirements and assumptions below use the chosen folder model.
 - iroh and iroh-blobs are named only in the Input line and the Assumptions, as an operator
   constraint. The FRs use the shared glossary (Dateiindex, Objekt, Konfliktkopie, Bereich,
   Änderungspaket) and the field names `created_by`/`modified_by` from the design doc, which are
@@ -65,9 +61,8 @@
 - SC-001 and SC-009 depend on hardware and network; they are checked in a manual quickstart run on
   a local network and a laptop with SSD.
 
-- 2026-09-28: the operator answered all clarification questions for this spec; the markers are
-  resolved in the spec and recorded under Clarifications. Notes above that describe open markers are
-  historical.
+- 2026-09-28: the operator answered all clarification questions for this spec; the decision is
+  recorded under Clarifications.
 - 2026-09-28 (D26, D27, D30): terminology moved to the Geräteliste of spec 024 (Begriffe,
   FR-015, Beziehung zu Spec 024, Edge Cases, Assumptions); no rotation of the Vault-Identität; a
   device removed from the Geräteliste gets and serves no objects and cannot decrypt new Dateiindex

@@ -31,17 +31,9 @@
 
 ## Notes
 
-- Two clarification markers remain open, both taken from the design's open
-  questions (§15):
-  - FR-022: who may upload a Momentaufnahme — any member with Schreiben, or
-    only the admin of the Bereich (§15 item 5). For the Bereich "Vault" both
-    answers mean every own device. FR-042 (re-upload of own changes missing
-    after a snapshot) limits the damage of an incomplete snapshot either way.
-  - FR-040: whether one Bereich may live on several relays at once for
-    redundancy (§15 item 6). The marker states the fallback: without
-    redundancy the vault's Postfach lives on the first configured relay. This
-    is the single shared question for 026 and 027; Spec 027 references it
-    instead of asking it separately.
+- The clarification history records two questions that are now resolved: FR-022
+  limits snapshot uploads to the admin of the Bereich, and FR-040 selects one
+  home relay per Bereich in v1. Spec 027 uses the same relay decision.
 - "No implementation details": iroh, NIP-42, Nostr and S3 appear only in the
   Input line and in the Assumptions, as operator constraints from the design.
   FR-024 names secp256k1 because the operator's rationale for dropping UCAN
@@ -72,8 +64,7 @@
   plan to confirm.
 
 - 2026-09-28: the operator answered the several-relays question (FR-040: one home relay per Bereich
-  in v1). The snapshot-upload question (FR-022) is still open.
-- 2026-09-28: snapshot upload answered as well (FR-022: only the admin of the Bereich). No markers remain.
+  in v1) and the snapshot-upload question (FR-022: only the admin of the Bereich). No markers remain.
 - 2026-09-28 (D24): Speicher-Backend A has no presigned links anymore; the relay streams the encrypted Objekte itself over its own endpoint (FR-026), so a removal takes effect immediately for objects too (FR-023, SC-003, SC-009 rewritten; key entity „Zugangslink“ removed).
 - 2026-09-28 (D26–D32, identity model v2): no change of the Vault-Identität
   (D26); the relay admits a device only if it is on the vault's current

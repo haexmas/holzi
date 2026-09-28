@@ -31,15 +31,9 @@
 
 ## Notes
 
-- One clarification marker is open, in FR-008: which providers v1 must support
-  and test. Entwurf §12 (Kandidaten aus der Entwurfssitzung, ungeprüft) lists
-  Cloudflare R2, Backblaze B2, MinIO and AWS S3, plus Hetzner as unverified (superseded: v1 = RustFS and AWS S3).
-  Whether each offers bucket-scoped tokens, bucket versioning, a retention rule
-  for old versions, and a read-write token that cannot delete old versions
-  (FR-004 c to g, g = revoked token rejected within 5 minutes) is unverified. That
-  decides whether a provider lands on "geeignet" or "ungeeignet" (FR-005,
-  two outcomes only since D25). Resolve with `/speckit-clarify`, ideally after a short
-  provider check.
+- FR-008 is resolved: RustFS and AWS S3 are the verified and tested v1 providers.
+  Cloudflare R2, Backblaze B2, Hetzner Object Storage and further providers remain
+  outside v1 until they pass the suitability checks in FR-004.
 - "No implementation details": S3, buckets and versioning are named because
   they are the feature itself (operator instruction).
   Wire formats, the provider admin APIs and the envelope format stay plan
@@ -78,9 +72,8 @@
   the vault's own folders stop using it) and removing a storage connection;
   FR-034 also applies once a later spec introduces dissolving a space.
 
-- 2026-09-28: the operator answered all clarification questions for this spec; the markers are
-  resolved in the spec and recorded under Clarifications. Notes above that describe open markers are
-  historical.
+- 2026-09-28: the operator answered all clarification questions for this spec; the decision is
+  recorded under Clarifications.
 - D25 (2026-09-28): providers that fail any criterion of FR-004 cannot be
   connected for a space; the former fallback path via an admin device and
   short-lived provider-signed access is removed. The suitability check has two

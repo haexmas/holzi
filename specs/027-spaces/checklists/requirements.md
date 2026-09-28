@@ -31,23 +31,14 @@
 
 ## Notes
 
-- Two clarification markers are open. Both use the unified texts shared with
-  spec 028 (FR-028 and FR-034 there). The spec is written assuming the proposal
-  in each:
-  - FR-016, delete semantics: "Schreiben" deletes own files, deleting other
-    members' files needs "Löschen".
-  - FR-024, revocation vs. concurrent writes: a change counts if its author
-    held the right in the key generation it is encrypted with and passes a
-    check against the newest member list the receiving device knows; the relay
-    blocks at once. A window remains for changes received before the
-    revocation message.
-    The Assumptions section names a residual gap in this rule (a removed member
-    who still holds older keys can backdate a change); the operator decision
-    should weigh it.
+- The clarification history records the resolved decisions shared with spec
+  028: "Schreiben" deletes only own files, while "Löschen" is needed for other
+  members' files; revocation uses the causal cutoff and forward-only acceptance
+  rule documented in FR-024.
 - The "several relays per Bereich" question is not asked here; the spec refers
   to spec 026 FR-040's marker.
-- "All functional requirements have clear acceptance criteria" stays open until
-  both markers are resolved; FR-016 and FR-024 depend on them.
+- FR-016 and FR-024 use the resolved decisions recorded in the Clarifications
+  section and have clear acceptance criteria.
 - Cross-spec resolutions applied (coordinator brief, 2026-09-28):
   - Every member list change creates a new key generation with a fixed member
     list, invites included (FR-009, FR-019). New members also get envelopes for

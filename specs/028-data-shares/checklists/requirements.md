@@ -31,16 +31,10 @@
 
 ## Notes
 
-- Two clarification markers remain open, both taken from the proposed rules in
-  the sync design §11 and §15 items 1 and 2:
-  - FR-028, delete semantics: the spec is written assuming the proposal
-    ("Schreiben" deletes own entries, deleting others' entries needs "Löschen").
-  - FR-034, revocation vs. concurrent writes: the spec is written assuming the
-    proposal (a change counts if its author held the capability in the key
-    generation it is encrypted with, and every receiving device also checks the
-    author against the newest member list it knows; the relay blocks at once).
-  - Both markers use the unified texts shared with spec 027 (FR-016, FR-024
-    there).
+- The clarification history records the resolved decisions shared with spec
+  027: "Schreiben" deletes only own entries, while "Löschen" is needed for
+  others' entries; revocation uses the causal cutoff and forward-only
+  acceptance rule documented in FR-034.
 - Cross-spec alignment (2026-09-28): every membership change, including an
   invite, creates a new key generation, and new recipients get all older
   generations (FR-010, FR-011); capabilities are three nested levels as in 027

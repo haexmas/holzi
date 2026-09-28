@@ -625,8 +625,11 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   beim Anbieter zurückbleiben; was holzi schon angelegt hat, MUSS es wieder
   entfernen.
 - **FR-008**: holzi MUSS in v1 mindestens diese Anbieter nachweislich
-  unterstützen: RustFS und AWS S3. Ob sie auf einen Bucket beschränkte Schlüssel, Versionierung, eine Aufbewahrungsfrist und Schlüssel ohne Recht zum Löschen älterer Versionen bieten und widerrufene Schlüssel rechtzeitig abweisen (FR-004 c bis g), prüft der Plan. Erfüllt einer von ihnen ein Kriterium nicht, ist er ungeeignet und lässt sich für Spaces nicht verbinden (FR-006); der Betreiber entscheidet dann neu über den Umfang von v1. Cloudflare R2, Backblaze B2, Hetzner Object Storage und weitere kommen hinzu, sobald sie geprüft sind. Andere S3-kompatible Anbieter DÜRFEN verbunden werden, wenn sie die
-  Eignungsprüfung bestehen.
+  unterstützen: RustFS und AWS S3. Beide sind nach den Kriterien aus FR-004 geprüft und getestet.
+  Erfüllt einer von ihnen ein Kriterium nicht, ist er ungeeignet und lässt sich für Spaces nicht
+  verbinden (FR-006); der Betreiber entscheidet dann neu über den Umfang von v1. Cloudflare R2,
+  Backblaze B2, Hetzner Object Storage und weitere kommen hinzu, sobald sie geprüft sind. Andere
+  S3-kompatible Anbieter DÜRFEN verbunden werden, wenn sie die Eignungsprüfung bestehen.
 
 **Bucket und Versionierung**
 
