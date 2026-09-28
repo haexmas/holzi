@@ -73,3 +73,9 @@
   scopes (027, 028; FR-019, FR-042), so the references from those specs stay valid. A copy of the
   vault file deletes nothing (FR-006). "Relay" is never used alone: Nostr-Relay, iroh-Relay or
   Sync-Server (026, formerly "das Relay").
+- 2026-09-28, second plan review with the operator: a device list never ends up without a main
+  device; among valid same-generation lists the smallest-hash list is authoritative for devices
+  and removals, and a next-generation merge carries those removals forward. `issued_by` cannot be
+  made forgery-proof (all main devices share the vault identity key) and is informational only.
+  Columns overwritten later are delivered as the subset that still holds, as haex-crdt does today.
+  Writes move to `execute_with_crdt` via a small haex-crdt extension (plan).

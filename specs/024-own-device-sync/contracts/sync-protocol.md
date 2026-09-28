@@ -1,13 +1,11 @@
 # Contract: Sync-Protokoll zwischen eigenen Geräten (`holzi-sync/1`, `holzi-link/1`)
 
 Transport: iroh 1.2, QUIC. Jede Anfrage ist ein eigener Bi-Stream. Rahmen: `u32 BE Länge ‖
-postcard(Nachricht)`, höchstens 4 MiB, die Länge wird vor dem Anlegen des Puffers geprüft. Eine
-vollständig serialisierte Transaktionsgruppe darf höchstens `3 MiB` groß sein; so bleiben für
-Rahmen- und Postcard-Metadaten mindestens `1 MiB` Reserve. `paginate_changes` misst jede komplette
-Gruppe vor dem Aufteilen. Ist sie größer, bricht es mit `TransactionGroupTooLarge` ab, statt die
-Gruppe zu teilen. Nach dem letzten Rahmen einer Richtung `finish()`. Höchstens 8 gleichzeitige
-Bi-Streams je Verbindung. Unbekannte Nachrichten oder zu große Rahmen schließen die Verbindung
-mit einem Fehlercode.
+postcard(Nachricht)`, die Länge wird vor dem Anlegen des Puffers geprüft: vor `Accept` höchstens
+64 KiB, danach höchstens 4 MiB. Diese Grenzen sind eine Wahl dieses Plans für den Speicher je
+Verbindung (research R6), keine Vorgabe von iroh oder Nostr. Nach dem letzten Rahmen einer Richtung
+`finish()`. Höchstens 8 gleichzeitige Bi-Streams und ein `Pull` je Verbindung. Unbekannte
+Nachrichten oder zu große Rahmen schließen die Verbindung mit einem Fehlercode.
 
 ## ALPN `holzi-sync/1`
 
@@ -28,8 +26,9 @@ lp(endpoint_x) ‖ lp(endpoint_y) ‖ lp(vault)))`, `lp` = `u32 BE Länge ‖ By
 - `ListRef = { generation, list_hash }`. Kennt eine Seite eine höhere oder gleich hohe Liste mit
   kleinerem Hash, sendet sie diese auf einem eigenen Kontroll-Stream (`DeviceListPush`), bevor
   irgendetwas anderes fließt. Der Empfänger wartet auf den vollständigen Stream, prüft Hash,
-  Vault-Signatur, Generation, `issued_by`, Basisliste und Inhalt nach FR-005 und übernimmt die Liste
-  atomar. Erst danach wird die geltende Liste neu gewählt.
+  Vault-Signatur, Generation, Basisliste und Inhalt nach FR-005 und übernimmt die Liste atomar.
+  `issued_by` wird dabei als Information gespeichert, ist aber keine Berechtigungs- oder
+  Übernahmebedingung. Erst danach wird die geltende Liste neu gewählt.
 - Vor dem Listenabgleich prüft jede Seite weiterhin `endpoint` des Gegenübers gleich
   `Connection::remote_id()`, die Authentifizierungssignatur, `vault` gleich der eigenen und
   `schema` verträglich. Nach dem vollständigen Listenabgleich prüft sie mit der aktualisierten
@@ -42,12 +41,13 @@ lp(endpoint_x) ‖ lp(endpoint_y) ‖ lp(vault)))`, `lp` = `u32 BE Länge ‖ By
 
 ### 2. Nachrichten nach dem Handshake
 
-| Nachricht        | Richtung | Inhalt                                                                           | Antwort                              |
-| ---------------- | -------- | -------------------------------------------------------------------------------- | ------------------------------------ |
-| `DeviceListPush` | beide    | `{ payload, signature }`                                                         | –                                    |
-| `Progress`       | beide    | `{ vector: Vec<(origin: Uuid, max_hlc: String)>, last_seen: Vec<(device, ms)> }` | –                                    |
-| `Pull`           | beide    | `{ vector: Vec<(origin, max_hlc)> }` (eigener Fortschrittsstand des Anfragenden) | `Page`, dann weitere `Page` bis Ende |
-| `Page`           | beide    | `{ changes: Vec<ColumnChange>, more: bool }` (≤ 4 MiB je Rahmen)                 | –                                    |
+| Nachricht        | Richtung | Inhalt                                                                              | Antwort                                   |
+| ---------------- | -------- | ----------------------------------------------------------------------------------- | ----------------------------------------- |
+| `DeviceListPush` | beide    | `{ payload, signature }`                                                            | –                                         |
+| `Progress`       | beide    | `{ vector: Vec<(origin: Uuid, max_hlc: String)>, last_seen: Vec<(device, ms)> }`    | –                                         |
+| `Pull`           | beide    | `{ vector: Vec<(origin, max_hlc)>, replace: bool }` (eigener Stand des Anfragenden) | `Page`s bis `more = false`, oder `Resync` |
+| `Page`           | beide    | `{ changes: Vec<ColumnChange>, group_continues: bool, more: bool }` (≤ 4 MiB)       | –                                         |
+| `Resync`         | beide    | `{ reason: TombstonesExpired }`                                                     | Ablauf „Resync“ unten                     |
 
 Ablauf:
 
@@ -55,21 +55,31 @@ Ablauf:
    jeder angewendeten Seite sendet ein Gerät erneut `Progress` an jedes verbundene Gerät, dicht
    folgende Anstöße zusammengefasst.
 2. Wer im `Progress` der Gegenseite für irgendeinen Ursprung einen höheren `max_hlc` sieht als im
-   eigenen Stand, schickt `Pull` mit seinem eigenen Stand. Höchstens ein `Pull` je Verbindung
-   gleichzeitig.
+   eigenen Stand, schickt `Pull` mit seinem eigenen Stand.
 3. Der Sender scannt jede CRDT-Tabelle und das Lösch-Log ab dem kleinsten Cursor im `Pull`,
-   einschließlich `vault_key_generations` und `vault_key_envelopes`. Fehlt ein Ursprung, gilt der
-   Cursor „nichts“. Enthält eine Transaktionsgruppe mindestens eine Änderung jenseits des Cursors,
-   liefert er die vollständige Gruppe mit ihren ursprünglichen HLCs; effektive Zell-Teilmengen sind
-   nicht erlaubt. Er sortiert die vollständigen Gruppen nach HLC aufsteigend über alle Ursprünge und
-   schickt `Page`s, die nie eine Transaktionsgruppe teilen (`paginate_changes`). Gerätelokale Tabellen
-   scannt er nie. Schlüsselgenerationen und Umschläge haben damit keinen zweiten Lieferweg.
-4. Der Empfänger prüft jede Seite je Transaktionsgruppe (research R5), wendet gültige Gruppen in
-   einer Transaktion an und verbucht dauerhaft abgewiesene Gruppen als Skip-Range. Danach erhöht er
-   je Ursprung seinen Fortschritt auf den höchsten HLC dieses Ursprungs, der in dieser Seite entweder
-   angewendet oder als Skip-Range verbucht wurde. Fortschritt und Skip-Ranges werden atomar mit der
-   Anwendung geschrieben. Bricht die Verbindung vorher ab, gilt der Stand der zuletzt vollständig
-   angewendeten oder verbuchten Seite.
+   einschließlich `vault_key_generations` und `vault_key_envelopes`; Schlüsselgenerationen und
+   Umschläge haben damit keinen zweiten Lieferweg. Fehlt ein Ursprung, gilt der Cursor „nichts“. Er
+   behält je Spalte, was jenseits des Cursors ihres Ursprungs liegt, mit ihrem ursprünglichen HLC.
+   Von einer Transaktion, deren Spalten zum Teil schon von jüngeren Änderungen überschrieben sind,
+   liefert er die Spalten, die noch gelten; die alten Werte gibt es nicht mehr (research R4). Er
+   sortiert nach HLC aufsteigend über alle Ursprünge und schickt `Page`s, die nie eine
+   Transaktionsgruppe teilen. Gerätelokale Tabellen scannt er nie.
+4. Passt eine Gruppe nicht in einen Rahmen, reist sie in mehreren `Page`s mit
+   `group_continues = true` bis auf die letzte. Der Empfänger puffert sie und wendet sie erst an,
+   wenn sie vollständig ist. Er berechnet ihre Größe mit derselben kanonischen
+   `serialized_parameter_bytes`-Regel wie `CrdtTransaction`; übersteigt sie
+   `DatabaseConfig.max_transaction_bytes`, bricht er den `Pull` ab.
+5. Der Empfänger prüft jede vollständige Transaktionsgruppe je Seite (research R5), wendet die
+   gültigen Gruppen in einer Transaktion an und erhöht danach je Ursprung seinen Fortschritt auf
+   den höchsten HLC der vollständig angewendeten oder abgelehnten Gruppe. Für eine unvollständige
+   Gruppe schreibt er weder Fortschritt noch Checkpoint. Bricht die Verbindung vorher ab, verwirft
+   er den Puffer; der nächste `Pull` beginnt beim zuletzt dauerhaft geschriebenen Fortschritt.
+
+**Resync** (research R20): Nennt ein `Pull` für irgendeinen Ursprung einen Stand, der älter ist als
+die Frist für Löschvermerke, antwortet der Sender mit `Resync`. Das veraltete Gerät lässt die
+Gegenseite zuerst seine eigenen Änderungen per `Pull` holen, dann fordert es eine Momentaufnahme an
+(`Pull` mit leerem Stand und dem Merkmal `replace`) und ersetzt damit seine synchronisierten Tabellen
+in einer Transaktion.
 
 Daten gehen nie ungefragt über die Leitung; so entsteht beim Empfänger keine Lücke (FR-019).
 `ColumnChange.device_id` wird nicht gesendet oder beim Empfang ignoriert; der Ursprung ist der
@@ -113,8 +123,10 @@ lp(endpoint_n) ‖ lp(device_h) ‖ lp(device_n) ‖ rolle_x)`, `rolle_x` ∈ {`
   dem ersten Listen-Commit möglich, ohne den verbrauchten Code erneut zu verwenden.
 - `snapshot` sind `Page`s wie in Abschnitt 2 mit dem Stand „nichts“ für jeden Ursprung: alle Zellen
   des Bereichs „Vault“ mit ihren ursprünglichen HLCs, samt Lösch-Log, ohne gerätelokale Tabellen.
-  `progress` ist der Fortschrittsstand von H nach der letzten Seite. N prüft je Transaktionsgruppe
-  (FR-013) und wendet an. `key_generations` und `envelopes_for_n` sind dabei nur der initiale
+  `progress` ist der Fortschrittsstand von H nach der letzten vollständig angewendeten
+  Transaktionsgruppe. N prüft je vollständiger Transaktionsgruppe (FR-013) und wendet an;
+  unvollständige Gruppen ändern weder Fortschritt noch Checkpoint. `key_generations` und
+  `envelopes_for_n` sind dabei nur der initiale
   Link-Transfer; im anschließenden gewöhnlichen Sync laufen diese Zeilen ausschließlich über
   `Pull`/`Page`.
 - Bricht die Verbindung vor `LinkDone` ab, löscht N die angelegte Vault; H verwirft den offenen

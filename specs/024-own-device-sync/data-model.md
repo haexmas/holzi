@@ -5,7 +5,9 @@
 Tabellen mit Endung `_no_sync` bleiben auf dem Gerät (haex-crdt nimmt sie vom Sync aus); alle
 anderen sind CRDT-Tabellen und reisen mit dem Sync. Migrationsnummern schließen an die letzte
 vorhandene an (heute `0020_wm_session_no_sync` und folgende; beim Umsetzen prüfen). haex-crdt
-bleibt unverändert; es kommt keine Tabelle und keine neue Trigger-Version von dort dazu.
+bringt keine neue Tabelle und keine neue Trigger-Version; die Erweiterung dort betrifft nur den
+Schreibweg (contracts/haex-crdt-upstream.md). Alle Schreibungen laufen über `storage/vault_db.rs`
+(research R19); Grenzen für das Wachstum jeder Tabelle stehen in research R20.
 
 ## Tabellen
 
@@ -74,14 +76,15 @@ entfernt führt (FR-005).
 | `issued_at`      | ms seit Epoch                                                                                                                                                                                       |
 | `base_list_hash` | Hash der kausal bekannten gültigen Vorgängerliste; bei der ersten lokalen Liste NULL                                                                                                                |
 
-Prüfregeln: Signatur passt zur Vault-Identität; `base_list_hash` verweist, außer bei der ersten
-Liste, auf eine kausal bekannte gültige Liste mit niedrigerer Generation; kein Gerät steht zugleich
-in `devices` und `removed`; kein Geräteschlüssel und keine `vault_device_uuid` doppelt. Gegen diese
-Vorgängerliste muss `issued_by` als aktuelles, nicht entferntes Hauptgerät eingetragen sein. Eine
-Liste, deren `issued_by` in einer kausal prioren gültigen Liste entfernt ist, wird abgewiesen; die
-Vault-Signatur allein reicht dafür nicht. Die neue Generation muss höher als die Basisgeneration sein.
-Eine Liste ohne Hauptgerät ist gültig (Edge Case: zwei Hauptgeräte entfernen sich gegenseitig),
-aber sie kann keine weitere Liste ausstellen.
+Prüfregeln: Signatur der Vault-Identität über den ganzen Datensatz; `base_list_hash` verweist, außer
+bei der ersten Liste, auf eine gültige Liste mit niedrigerer Generation; die Liste führt alle
+Entfernungen ihrer Basisliste weiter; kein Gerät steht zugleich in `devices` und `removed`; kein
+Geräteschlüssel und keine `vault_device_uuid` doppelt; mindestens ein Gerät mit Rolle `main`.
+`issued_by` ist nur eine Angabe und wird weder als Berechtigung noch als Bedingung für die
+Übernahme geprüft (research R8). Bei zwei gültigen Listen derselben Generation ist die mit dem
+kleinsten Hash maßgeblich; nur ihre Geräte- und Entfernungsmengen bestimmen den geltenden Stand.
+Eine zusammengeführte Liste der nächsten Generation muss die geltenden Entfernungen dieser Liste
+weiterführen und mindestens ein Hauptgerät enthalten (FR-005, FR-043).
 
 ### `vault_key_generations` (neu, synchronisiert, nur Einfügen)
 
@@ -110,7 +113,8 @@ aber sie kann keine weitere Liste ausstellen.
 `created_by` und `sender` sind nur Datenfelder. Eine Zeile wird erst angenommen, wenn die referenzierte
 Geräteliste gültig ist, `device_list_hash` die konkrete autorisierende Listen-Transaktion bezeichnet,
 die Generation zu dieser Liste gehört und die jeweilige `authorization` mit dem Schlüssel eines in
-der kausal prioren Liste nicht entfernten Hauptgeräts verifiziert. Bei einer Entfernung muss die
+der referenzierten Liste als Hauptgerät eingetragenen Geräts verifiziert. So kann kein verknüpftes
+Gerät eine Generation oder einen Umschlag ausstellen. Bei einer Entfernung muss die
 Generation genau an die Liste gebunden sein, die diese Entfernung und ihre `limit_hlc` enthält.
 
 ### `vault_content_keys_no_sync` (neu, gerätelokal)
@@ -123,17 +127,17 @@ Generation genau an die Liste gebunden sein, die diese Entfernung und ihre `limi
 
 ### `sync_progress_no_sync` (neu, gerätelokal)
 
-| Spalte           | Typ     | Regeln                                                                                                          |
-| ---------------- | ------- | --------------------------------------------------------------------------------------------------------------- |
-| `origin`         | TEXT PK | `vault_device_uuid` des Ursprungsgeräts = Knoten-ID im HLC                                                      |
-| `max_hlc`        | TEXT    | höchster HLC, bis zu dem alle Änderungen dieses Ursprungs angewendet oder dauerhaft verworfen sind (FR-019, R4) |
-| `skipped_ranges` | BLOB    | kanonisches `postcard(Vec<SkipRange>)` für wegen einer Entfernung dauerhaft verworfene Gruppen                  |
+| Spalte    | Typ     | Regeln                                                                                      |
+| --------- | ------- | ------------------------------------------------------------------------------------------- |
+| `origin`  | TEXT PK | `vault_device_uuid` des Ursprungsgeräts = Knoten-ID im HLC                                  |
+| `max_hlc` | TEXT    | höchster HLC, bis zu dem alle Änderungen dieses Ursprungs angewendet oder nach R5 abgelehnt |
 
-Geschrieben nur nach dem Commit einer angewendeten Seite oder zusammen mit dem Commit einer
-`SkipRange`; `max_hlc` steigt nur über lückenlos angewendete oder verbuchte Gruppen. Eine
-`SkipRange = { origin, first_hlc, last_hlc, reason: removed_after_limit }` ist unveränderlich und
-wird beim erneuten Empfang idempotent wiedererkannt. Für das eigene Gerät wird der Fortschritt nicht
-gespeichert, sondern aus dem eigenen jüngsten HLC gebildet. Fehlt ein Ursprung, gilt „nichts“.
+Geschrieben nur nach dem Commit einer vollständigen Transaktionsgruppe und nur nach oben. Für eine
+unvollständige Gruppe werden weder Fortschritt noch Checkpoint geschrieben; bei einem Abbruch wird
+der Puffer verworfen. Abgelehnte Gruppen eines entfernten Geräts werden nicht gespeichert: Die
+Regel aus research R5 lehnt sie bei jedem Empfang wieder ab.
+Für das eigene Gerät wird der Fortschritt nicht gespeichert, sondern aus dem eigenen jüngsten HLC
+gebildet. Fehlt ein Ursprung, gilt „nichts“.
 
 ### `pending_links_no_sync` (neu, gerätelokal)
 
@@ -147,10 +151,12 @@ gespeichert, sondern aus dem eigenen jüngsten HLC gebildet. Fehlt ein Ursprung,
 | `role`               | TEXT        | `main` \| `linked`                                             |
 | `resume_secret`      | BLOB(32)    | lokales Sitzungsgeheimnis für `LinkResume`, nie synchronisiert |
 | `state`              | TEXT        | `transferring` \| `awaiting_publication` \| `completed`        |
+| `created_at`         | INTEGER     | ms; nach 24 h ohne Abschluss wird der Datensatz gelöscht       |
 
 H legt den Datensatz vor `LinkTransfer` an und löscht ihn erst nach dem idempotenten Commit der
 neuen Geräteliste. N legt ihn vor `LinkDone` an und behält ihn, bis die neue Liste eingetroffen ist.
-Ein Neustart kann damit die Veröffentlichung ohne den verbrauchten Einmalcode wiederholen.
+Ein Neustart kann damit die Veröffentlichung ohne den verbrauchten Einmalcode wiederholen. Bricht
+die Nutzerin das Verknüpfen ab oder ist der Datensatz älter als 24 h, wird er gelöscht (R20).
 
 ### `admission_requests` (neu, synchronisiert)
 
@@ -165,7 +171,11 @@ Ein Neustart kann damit die Veröffentlichung ohne den verbrauchten Einmalcode w
 | `state`             | TEXT        | `open` \| `admitted` \| `rejected`                                |
 
 Übergänge: `open → admitted` (Hauptgerät, „Aufnehmen“, gleichzeitig neue Geräteliste) und `open →
-rejected` („Ablehnen“). Keine Rückkehr.
+rejected` („Ablehnen“). Keine Rückkehr. Nach jeder Zusammenführung sortiert jedes Gerät offene
+Anfragen deterministisch nach `(requested_at, device_pubkey)` und lässt nur die ersten 20 offen;
+alle weiteren werden idempotent zu `rejected`. So führt dieselbe zusammengeführte Menge auf allen
+Geräten zum selben Ergebnis. Nach der Entscheidung wird die Zeile gelöscht; offene Anfragen nach
+30 Tagen ebenfalls (R20).
 
 ### `device_presence_no_sync` (neu, gerätelokal)
 
@@ -177,7 +187,7 @@ rejected` („Ablehnen“). Keine Rückkehr.
 | `problem`       | TEXT NULL   | `incompatible_version` \| `duplicate` \| NULL                          |
 
 „Zuletzt online“ über ein drittes Gerät: Geräte tauschen im Handshake ihre `last_seen`-Werte aus
-und übernehmen den jeweils jüngeren.
+und übernehmen den jeweils jüngeren. Die Zeile eines entfernten Geräts wird gelöscht.
 
 ### `known_devices` (vorhanden, synchronisiert)
 

@@ -1,8 +1,8 @@
 # Quickstart: Validierung von Spec 024
 
 Voraussetzungen: `nix develop` (Rust-Werkzeuge, Host-Bridge für WebKit), `pnpm install` im
-Worktree (kein Symlink auf `node_modules`), gebaute E2E-App nach Spec 016. haex-crdt
-bleibt auf der heute gepinnten Revision.
+Worktree (kein Symlink auf `node_modules`), gebaute E2E-App nach Spec 016. Die
+haex-crdt-Revision mit E1/E2 (contracts/haex-crdt-upstream.md) ist in `src-tauri/Cargo.toml` gepinnt.
 
 ## Automatisch
 
@@ -37,9 +37,9 @@ Zwei Rechner (oder zwei Instanzen mit getrennten App-Daten-Verzeichnissen), holz
 - **M6 Entfernen** (US6): Auf A das Gerät D entfernen; die Folgen stehen vor der Bestätigung. D
   bekommt nichts Neues mehr und zeigt, dass es entfernt wurde. A, B, C synchronisieren weiter.
 - **M7 Gegenseitiges Entfernen** (Edge Case): A und C offline nehmen, auf A C entfernen und auf C A
-  entfernen, dann beide online. Erwartet: auf allen Geräten sind A und C entfernt; B zeigt, dass
-  kein Hauptgerät mehr da ist. C mit der Datei eines Hauptgeräts neu eintragen → wieder ein
-  Hauptgerät.
+  entfernen, dann beide online. Erwartet: auf allen Geräten bleibt dasselbe der beiden Hauptgerät
+  (das mit der Liste mit dem kleineren Hash), das andere ist entfernt und zeigt das; B hat
+  weiterhin ein Hauptgerät.
 - **M8 Sperren** (FR-031): Während eines großen Abgleichs die Vault auf A sperren → alle
   Verbindungen enden sofort; beim nächsten Öffnen läuft der Abgleich weiter, nichts fehlt.
 - **M9 Server** (FR-008): In „Verbindungsserver“ die Nostr-Relays leeren → Geräte finden sich nicht

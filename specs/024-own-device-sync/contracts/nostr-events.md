@@ -4,10 +4,18 @@ Alle Ereignisse sind flüchtig (Art 21059, NIP-01: nicht gespeichert). Aufbau wi
 Ereignis, signiert mit einem Einmalschlüssel, `p`-Tag an den Empfänger, Inhalt mit NIP-44 v2
 verschlüsselt; darin ein Siegel (Art 13), signiert mit dem Geräteschlüssel des Absenders; darin das
 eigentliche Ereignis (unsigniert, Art unten). Das innere Ereignis trägt den kanonischen `ts`-Wert
-für Frischeprüfungen. Die `created_at`-Werte von Siegel und Gift-Wrap werden unabhängig voneinander
-zufällig in die vergangenen zwei Tage gelegt, damit Verbindungszeit und Ereignisse nicht über den
-Zeitstempel korreliert werden können (NIP-59/NIP-17). Server: die eingestellten Nostr-Relays
+für Frischeprüfungen. `created_at` (das Zeitfeld jedes Nostr-Ereignisses, NIP-01) ist bei Siegel und
+Gift-Wrap die aktuelle Zeit, nicht zufällig in die Vergangenheit verschoben wie bei gespeicherten
+NIP-59-Nachrichten: Ein Nostr-Relay sieht die Ankunftszeit ohnehin, flüchtige Ereignisse speichert es
+nicht, und verschobene Zeiten würden von Abos mit `since` weggefiltert und von Nostr-Relays mit
+`created_at_lower_limit` (NIP-11) abgewiesen (research R7). Server: die eingestellten Nostr-Relays
 (FR-008).
+
+**Abos und Größen**: Abos setzen kein `since` (den Zeitfilter eines Abos, NIP-01). holzi sendet kein
+Ereignis über 16 KiB und verwirft empfangene Ereignisse über 16 KiB, bevor es sie entschlüsselt;
+Präsenzmeldungen sind unter 1 KiB. Je Gerät höchstens eine Präsenzmeldung pro Minute, außer bei einer
+Adressänderung. Frisch ist eine Meldung, wenn ihr `ts` höchstens 150 s alt und höchstens 30 s in der
+Zukunft liegt.
 
 ## Präsenzmeldung (inneres Ereignis Art 24100)
 
@@ -33,9 +41,10 @@ Generation, info = "holzi/presence/v1" ‖ tag_u32)`, `tag` = Tage seit 1970 (UT
 - Absender: nur ein Gerät, dessen Geräteliste mindestens ein weiteres Gerät nennt (FR-007). Takt:
   beim Öffnen, bei Adressänderung, alle 60 s.
 - Empfänger prüft: Siegel mit einem Geräteschlüssel der geltenden Geräteliste signiert und gleich
-  `device`; `ts` nicht älter als 150 s; dann Adresse in den `MemoryLookup`, Verbindung aufbauen,
-  wenn noch keine besteht. Meldungen unbekannter Geräte führen zu keiner Verbindung, außer zur
-  Prüfung einer neueren Geräteliste (Kopie eines Hauptgeräts, FR-007).
+  `device`; `ts` nicht älter als 150 s und nicht mehr als 30 s in der Zukunft; erst dann Adresse in
+  den `MemoryLookup` übernehmen und, wenn noch keine besteht, eine Verbindung aufbauen. Meldungen
+  unbekannter Geräte führen zu keiner Verbindung, außer zur Prüfung einer neueren Geräteliste
+  (Kopie eines Hauptgeräts, FR-007).
 - Abo: `{kinds: [21059], "#p": [mb_pk(heute), mb_pk(gestern)]}`, beim Tageswechsel erneuert.
 
 ## Aufnahmeanfrage (inneres Ereignis Art 24101)
