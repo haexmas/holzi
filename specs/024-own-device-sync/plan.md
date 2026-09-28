@@ -58,7 +58,8 @@ ts-rs; Frontend nur Vorhandenes (haex-ui Group/Row/OptionRow, Pinia, vue-i18n)
 **Storage**: SQLCipher-Vault über haex-crdt; neue Tabellen laut [data-model.md](./data-model.md)
 (synchronisiert: `device_lists`, `vault_key_generations`, `vault_key_envelopes`,
 `admission_requests`; gerätelokal: `vault_identity_secret_no_sync`, `device_keys_no_sync`,
-`vault_content_keys_no_sync`, `sync_progress_no_sync`, `device_presence_no_sync`); Migration von
+`vault_content_keys_no_sync`, `sync_progress_no_sync`, `pending_links_no_sync`,
+`device_presence_no_sync`); Migration von
 `vault_identity`
 
 **Testing**: `cargo test` mit Unit-Tests in `*_tests.rs` und Integrationstests
@@ -78,7 +79,7 @@ VII); Ende der Vault-Session beendet alles innerhalb der Fristen von Spec 013 (F
 Schlüssel nie in Protokollen (FR-002); Dateien ≤ 500 Zeilen; Rahmen ≤ 4 MiB
 
 **Scale/Scope**: 1–10 Geräte je Vault; 1 neues Rust-Modul `sync/` mit rund 15 Dateien, 1 neues
-Modul `storage/vault_db.rs` mit 24 umgestellten Stellen; 8 neue Tabellen, 1 geänderte; 13 Befehle; 3 Ereignisse; 5 neue Aktionen; 2 Oberflächen (Unteransicht „Geräte“,
+Modul `storage/vault_db.rs` mit 24 umgestellten Stellen; 10 neue Tabellen, 1 geänderte; 13 Befehle; 3 Ereignisse; 5 neue Aktionen; 2 Oberflächen (Unteransicht „Geräte“,
 „Mit einer Vault verknüpfen“)
 
 ## Constitution Check

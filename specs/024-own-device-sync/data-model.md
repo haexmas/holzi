@@ -16,10 +16,13 @@ bleibt unverändert; es kommt keine Tabelle und keine neue Trigger-Version von d
 | `id`     | INTEGER PK | immer `1`                                               |
 | `pubkey` | BLOB(32)   | x-only secp256k1, unveränderlich nach dem Anlegen (D26) |
 
-Die Spalte `privkey` entfällt. Migration: Liegt noch der Platzhalter vor, wird daraus nach R3 die
-echte Identität abgeleitet; `pubkey` kommt hierher, der private Schlüssel nach
-`vault_identity_secret_no_sync`. Die Zeile bekommt dabei zum ersten Mal einen HLC-Zeitstempel und
-wird damit gesynct.
+Die Spalte `privkey` entfällt. Die Migration leitet aus dem Platzhalter nach R3 die echte Identität
+ab und legt den privaten Schlüssel in `vault_identity_secret_no_sync`; sie ändert die synchronisierte
+Identitätszeile aber noch nicht. Erst nachdem die HLC-Strukturen und das eigene Gerät initialisiert
+sind, führt der Bootstrap eine eigene, wiederholbare Transaktion über `storage/vault_db.rs` aus,
+schreibt `pubkey` in die Zeile und erzeugt damit deren ersten HLC-Zeitstempel. Bricht dieser
+Bootstrap ab, wird dieselbe Transaktion beim nächsten Öffnen anhand der unveränderlichen abgeleiteten
+Identität erneut ausgeführt; es entsteht kein zweiter Identitätsdatensatz.
 
 ### `vault_identity_secret_no_sync` (neu, gerätelokal)
 
@@ -61,39 +64,54 @@ entfernt führt (FR-005).
 
 **Payload `DeviceList`**:
 
-| Feld         | Inhalt                                                                                                                                                                                              |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `vault`      | öffentlicher Schlüssel der Vault-Identität                                                                                                                                                          |
-| `generation` | Generation                                                                                                                                                                                          |
-| `devices[]`  | `device_pubkey`, `endpoint_id`, `role` (`main` \| `linked`), `vault_device_uuid`, `name_sealed` (Name, verschlüsselt mit einem aus dem Inhaltsschlüssel abgeleiteten Schlüssel, FR-005), `added_at` |
-| `removed[]`  | `device_pubkey`, `vault_device_uuid`, `limit_hlc` (Grenze beim Entfernen: Fortschrittsstand des Ausstellers für dieses Gerät, FR-028), `removed_at`                                                 |
-| `issued_by`  | Geräteschlüssel des ausstellenden Hauptgeräts                                                                                                                                                       |
-| `issued_at`  | ms seit Epoch                                                                                                                                                                                       |
+| Feld             | Inhalt                                                                                                                                                                                              |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vault`          | öffentlicher Schlüssel der Vault-Identität                                                                                                                                                          |
+| `generation`     | Generation                                                                                                                                                                                          |
+| `devices[]`      | `device_pubkey`, `endpoint_id`, `role` (`main` \| `linked`), `vault_device_uuid`, `name_sealed` (Name, verschlüsselt mit einem aus dem Inhaltsschlüssel abgeleiteten Schlüssel, FR-005), `added_at` |
+| `removed[]`      | `device_pubkey`, `vault_device_uuid`, `limit_hlc` (Grenze beim Entfernen: Fortschrittsstand des Ausstellers für dieses Gerät, FR-028), `removed_at`                                                 |
+| `issued_by`      | Geräteschlüssel des ausstellenden Hauptgeräts                                                                                                                                                       |
+| `issued_at`      | ms seit Epoch                                                                                                                                                                                       |
+| `base_list_hash` | Hash der kausal bekannten gültigen Vorgängerliste; bei der ersten lokalen Liste NULL                                                                                                                |
 
-Prüfregeln: Signatur passt zur Vault-Identität; kein Gerät zugleich in `devices` und `removed`;
-kein Geräteschlüssel und keine `vault_device_uuid` doppelt; `generation` größer als die jeder
-Liste, die der Aussteller beim Ausstellen kannte. Eine Liste ohne Hauptgerät ist gültig (Edge Case:
-zwei Hauptgeräte entfernen sich gegenseitig).
+Prüfregeln: Signatur passt zur Vault-Identität; `base_list_hash` verweist, außer bei der ersten
+Liste, auf eine kausal bekannte gültige Liste mit niedrigerer Generation; kein Gerät steht zugleich
+in `devices` und `removed`; kein Geräteschlüssel und keine `vault_device_uuid` doppelt. Gegen diese
+Vorgängerliste muss `issued_by` als aktuelles, nicht entferntes Hauptgerät eingetragen sein. Eine
+Liste, deren `issued_by` in einer kausal prioren gültigen Liste entfernt ist, wird abgewiesen; die
+Vault-Signatur allein reicht dafür nicht. Die neue Generation muss höher als die Basisgeneration sein.
+Eine Liste ohne Hauptgerät ist gültig (Edge Case: zwei Hauptgeräte entfernen sich gegenseitig),
+aber sie kann keine weitere Liste ausstellen.
 
 ### `vault_key_generations` (neu, synchronisiert, nur Einfügen)
 
-| Spalte       | Typ         | Regeln                                          |
-| ------------ | ----------- | ----------------------------------------------- |
-| `key_id`     | BLOB(16) PK | `SHA-256("holzi-key-id/v1" ‖ schlüssel)[0..16]` |
-| `scope`      | TEXT        | in 024 immer `vault`                            |
-| `generation` | INTEGER     | steigt mit jedem Entfernen (FR-015)             |
-| `created_by` | BLOB(32)    | Geräteschlüssel des Ausstellers                 |
-| `created_at` | INTEGER     | ms                                              |
+| Spalte             | Typ         | Regeln                                                                                                      |
+| ------------------ | ----------- | ----------------------------------------------------------------------------------------------------------- |
+| `key_id`           | BLOB(16) PK | `SHA-256("holzi-key-id/v1" ‖ schlüssel)[0..16]`                                                             |
+| `scope`            | TEXT        | in 024 immer `vault`                                                                                        |
+| `generation`       | INTEGER     | steigt mit jedem Entfernen (FR-015)                                                                         |
+| `created_by`       | BLOB(32)    | Geräteschlüssel des Ausstellers                                                                             |
+| `created_at`       | INTEGER     | ms                                                                                                          |
+| `device_list_hash` | BLOB(32)    | Hash der gültigen Geräteliste, die diese Generation ausstellt; bei einer Entfernung genau deren Transaktion |
+| `authorization`    | BLOB(64)    | Schnorr des ausstellenden Hauptgeräts über den kanonischen Datensatz samt `device_list_hash`                |
 
 ### `vault_key_envelopes` (neu, synchronisiert, nur Einfügen)
 
-| Spalte      | Typ                     | Regeln                                               |
-| ----------- | ----------------------- | ---------------------------------------------------- |
-| `key_id`    | BLOB(16)                | → `vault_key_generations`                            |
-| `recipient` | BLOB(32)                | Geräteschlüssel des Empfängers                       |
-| `sender`    | BLOB(32)                | Geräteschlüssel des Ausstellers                      |
-| `envelope`  | TEXT                    | NIP-44 v2, Inhalt `{scope, generation, key_id, key}` |
-| PK          | (`key_id`, `recipient`) |                                                      |
+| Spalte             | Typ                     | Regeln                                                                                          |
+| ------------------ | ----------------------- | ----------------------------------------------------------------------------------------------- |
+| `key_id`           | BLOB(16)                | → `vault_key_generations`                                                                       |
+| `recipient`        | BLOB(32)                | Geräteschlüssel des Empfängers                                                                  |
+| `sender`           | BLOB(32)                | Geräteschlüssel des Ausstellers                                                                 |
+| `envelope`         | TEXT                    | NIP-44 v2, Inhalt `{scope, generation, key_id, key}`                                            |
+| `device_list_hash` | BLOB(32)                | Geräteliste, deren autorisierte Generation diesen Umschlag erlaubt                              |
+| `authorization`    | BLOB(64)                | Schnorr eines aktuellen Hauptgeräts über Generation, Empfänger, Umschlag und `device_list_hash` |
+| PK                 | (`key_id`, `recipient`) |                                                                                                 |
+
+`created_by` und `sender` sind nur Datenfelder. Eine Zeile wird erst angenommen, wenn die referenzierte
+Geräteliste gültig ist, `device_list_hash` die konkrete autorisierende Listen-Transaktion bezeichnet,
+die Generation zu dieser Liste gehört und die jeweilige `authorization` mit dem Schlüssel eines in
+der kausal prioren Liste nicht entfernten Hauptgeräts verifiziert. Bei einer Entfernung muss die
+Generation genau an die Liste gebunden sein, die diese Entfernung und ihre `limit_hlc` enthält.
 
 ### `vault_content_keys_no_sync` (neu, gerätelokal)
 
@@ -105,14 +123,34 @@ zwei Hauptgeräte entfernen sich gegenseitig).
 
 ### `sync_progress_no_sync` (neu, gerätelokal)
 
-| Spalte    | Typ     | Regeln                                                                           |
-| --------- | ------- | -------------------------------------------------------------------------------- |
-| `origin`  | TEXT PK | `vault_device_uuid` des Ursprungsgeräts = Knoten-ID im HLC                       |
-| `max_hlc` | TEXT    | höchster HLC, bis zu dem alle Änderungen dieses Ursprungs vorliegen (FR-019, R4) |
+| Spalte           | Typ     | Regeln                                                                                                          |
+| ---------------- | ------- | --------------------------------------------------------------------------------------------------------------- |
+| `origin`         | TEXT PK | `vault_device_uuid` des Ursprungsgeräts = Knoten-ID im HLC                                                      |
+| `max_hlc`        | TEXT    | höchster HLC, bis zu dem alle Änderungen dieses Ursprungs angewendet oder dauerhaft verworfen sind (FR-019, R4) |
+| `skipped_ranges` | BLOB    | kanonisches `postcard(Vec<SkipRange>)` für wegen einer Entfernung dauerhaft verworfene Gruppen                  |
 
-Geschrieben nur nach dem Commit einer angewendeten Seite und nur nach oben. Für das eigene Gerät
-nicht gespeichert, sondern aus dem eigenen jüngsten HLC gebildet. Fehlt ein Ursprung, gilt
-„nichts“.
+Geschrieben nur nach dem Commit einer angewendeten Seite oder zusammen mit dem Commit einer
+`SkipRange`; `max_hlc` steigt nur über lückenlos angewendete oder verbuchte Gruppen. Eine
+`SkipRange = { origin, first_hlc, last_hlc, reason: removed_after_limit }` ist unveränderlich und
+wird beim erneuten Empfang idempotent wiedererkannt. Für das eigene Gerät wird der Fortschritt nicht
+gespeichert, sondern aus dem eigenen jüngsten HLC gebildet. Fehlt ein Ursprung, gilt „nichts“.
+
+### `pending_links_no_sync` (neu, gerätelokal)
+
+| Spalte               | Typ         | Regeln                                                         |
+| -------------------- | ----------- | -------------------------------------------------------------- |
+| `link_id`            | BLOB(32) PK | zufällige Kennung des Verknüpfungsvorgangs                     |
+| `peer_device_pubkey` | BLOB(32)    | Gerät der Gegenseite                                           |
+| `new_list_hash`      | BLOB(32)    | noch nicht veröffentlichte neue Geräteliste                    |
+| `new_list_payload`   | BLOB        | vollständige kanonische Geräteliste                            |
+| `new_list_signature` | BLOB(64)    | Signatur der neuen Liste                                       |
+| `role`               | TEXT        | `main` \| `linked`                                             |
+| `resume_secret`      | BLOB(32)    | lokales Sitzungsgeheimnis für `LinkResume`, nie synchronisiert |
+| `state`              | TEXT        | `transferring` \| `awaiting_publication` \| `completed`        |
+
+H legt den Datensatz vor `LinkTransfer` an und löscht ihn erst nach dem idempotenten Commit der
+neuen Geräteliste. N legt ihn vor `LinkDone` an und behält ihn, bis die neue Liste eingetroffen ist.
+Ein Neustart kann damit die Veröffentlichung ohne den verbrauchten Einmalcode wiederholen.
 
 ### `admission_requests` (neu, synchronisiert)
 

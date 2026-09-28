@@ -3,13 +3,18 @@
 Alle Ereignisse sind flüchtig (Art 21059, NIP-01: nicht gespeichert). Aufbau wie NIP-59: außen ein
 Ereignis, signiert mit einem Einmalschlüssel, `p`-Tag an den Empfänger, Inhalt mit NIP-44 v2
 verschlüsselt; darin ein Siegel (Art 13), signiert mit dem Geräteschlüssel des Absenders; darin das
-eigentliche Ereignis (unsigniert, Art unten). Zeitstempel außen nicht verschoben (flüchtig, kein
-Ablauf nötig). Server: die eingestellten Nostr-Relays (FR-008).
+eigentliche Ereignis (unsigniert, Art unten). Das innere Ereignis trägt den kanonischen `ts`-Wert
+für Frischeprüfungen. Die `created_at`-Werte von Siegel und Gift-Wrap werden unabhängig voneinander
+zufällig in die vergangenen zwei Tage gelegt, damit Verbindungszeit und Ereignisse nicht über den
+Zeitstempel korreliert werden können (NIP-59/NIP-17). Server: die eingestellten Nostr-Relays
+(FR-008).
 
 ## Präsenzmeldung (inneres Ereignis Art 24100)
 
 - Empfänger (`p`-Tag): `mb_pk` aus `mb_sk = HKDF-SHA256(ikm = inhaltsschlüssel der höchsten
-Generation, info = "holzi/presence/v1" ‖ tag_u32)`, `tag` = Tage seit 1970 (UTC).
+Generation, info = "holzi/presence/v1" ‖ tag_u32)`, `tag` = Tage seit 1970 (UTC). `tag_u32` ist
+  die unsigned 32-bit Darstellung von `tag` in Big-Endian-Reihenfolge; sie wird ohne Textkodierung
+  direkt an die UTF-8-Bytes des Info-Präfixes angehängt.
 - Inhalt (JSON):
 
 ```json

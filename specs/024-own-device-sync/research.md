@@ -77,9 +77,11 @@ neue Generation mit dem Sync an Geräte tragen, die sie nicht bekommen sollen).
 **Entscheidung**: Trägt eine Vault nur den Platzhalter, berechnet holzi beim ersten Öffnen
 `sk = HKDF-SHA256(ikm = platzhalter_privkey, salt = "holzi", info = "holzi/vault-identity/v1" ||
 zähler)` und erhöht `zähler`, bis `sk` ein gültiger secp256k1-Skalar ist. Jede Kopie rechnet
-dasselbe und kommt zur selben Vault-Identität. Jede Kopie ist danach ein Hauptgerät und trägt sich
-in eine eigene Geräteliste der Generation 1 ein; treffen sich zwei Kopien, gilt FR-043 und ein
-Hauptgerät veröffentlicht die zusammengeführte Generation 2.
+dasselbe und kommt zur selben Vault-Identität. Die Migration schreibt die synchronisierte
+`vault_identity`-Zeile erst nach der HLC-Initialisierung in einer idempotenten
+Bootstrap-Transaktion; dadurch erhält die Identität ihren ersten echten HLC. Jede Kopie ist danach
+ein Hauptgerät und trägt sich in eine eigene Geräteliste der Generation 1 ein; treffen sich zwei
+Kopien, gilt FR-043 und ein Hauptgerät veröffentlicht die zusammengeführte Generation 2.
 
 **Begründung**: deterministisch, ohne Abstimmung zwischen den Kopien; der Platzhalter ist echter
 Zufall aus `bootstrap.rs` und damit als Eingabe geeignet.
@@ -100,29 +102,30 @@ Es gibt keine gespeicherten Pakete und keine Laufnummern.
   erhalten. Das Feld `ColumnChange.device_id` füllt der Scanner mit dem scannenden Gerät; holzi
   verwendet es nicht und liest den Ursprung aus `hlc_timestamp`.
 - **Fortschrittsstand**: `sync_progress_no_sync(origin, max_hlc)`, je Ursprungsgerät der höchste HLC,
-  bis zu dem dieses Gerät alle Änderungen des Ursprungs hat. Für sich selbst ist es der eigene
-  jüngste HLC.
+  bis zu dem dieses Gerät alle Änderungen des Ursprungs angewendet oder dauerhaft als Skip-Range
+  verbucht hat. Für sich selbst ist es der eigene jüngste HLC.
 - **Liefern**: Die Gegenseite schickt ihren Fortschrittsstand. Der Sender scannt jede CRDT-Tabelle
   und das Lösch-Log (`haex_deleted_rows`) einmal ab dem kleinsten Cursor der Gegenseite
   (`scan_table_for_local_changes` mit `after_hlc`; geprüft: Zeilen werden nach dem Zeilen-HLC
-  vorgefiltert, dann jede Spalte nach ihrem eigenen HLC), behält je Zelle nur, was jenseits des
-  Cursors ihres Ursprungs liegt, sortiert alles nach HLC aufsteigend über alle Ursprünge hinweg und
-  packt es mit `paginate_changes` in Seiten, die nie eine Transaktionsgruppe teilen (geprüft). Ein
-  Ursprung, den die Gegenseite nicht nennt, hat den Cursor „nichts“.
-- **Anwenden**: Der Empfänger prüft jede Seite je Transaktionsgruppe (R5), wendet sie über
-  `Database::apply_remote_changes` in einer Transaktion an und erhöht danach je Ursprung seinen
-  Fortschritt auf den höchsten HLC dieses Ursprungs in der Seite. Der Fortschritt wird erst nach
-  dem Commit geschrieben: Bricht es dazwischen ab, holt das Gerät die Seite noch einmal, und
-  `apply` überspringt, was es schon hat (gleicher HLC, LWW). Ein Fortschritt über dem wirklichen
-  Stand kann so nicht entstehen.
+  vorgefiltert, dann jede Spalte nach ihrem eigenen HLC). Sobald eine Transaktionsgruppe eine
+  Änderung jenseits des Cursors enthält, liefert er die vollständige Gruppe, nicht nur die noch
+  effektiven Zellen. Das bewahrt FR-013 und die Atomizität auch dann, wenn eine spätere Gruppe eine
+  Zelle bereits überschrieben hat. `paginate_changes` sortiert vollständige Gruppen nach HLC und
+  teilt keine Gruppe; ein Ursprung, den die Gegenseite nicht nennt, hat den Cursor „nichts“.
+- **Anwenden**: Der Empfänger prüft jede Seite je Transaktionsgruppe (R5), wendet gültige Gruppen
+  über `Database::apply_remote_changes` in einer Transaktion an und schreibt abgewiesene Gruppen
+  jenseits einer Entfernung als dauerhafte Skip-Range in dieselbe Transaktion. Danach erhöht er je
+  Ursprung den Fortschritt auf den höchsten HLC, der in der Seite angewendet oder verbucht wurde.
+  Der Fortschritt wird erst nach diesem Commit geschrieben: Bricht es dazwischen ab, holt das Gerät
+  die Seite noch einmal, und `apply` bzw. die Skip-Range-Verbuchung sind idempotent.
 - **Lückenlos**: Weil jede Seite je Ursprung aufsteigend ist und der Fortschritt nur mit
-  angewendeten Seiten wächst, hat jedes Gerät von jedem Ursprung immer einen Anfang ohne Lücke. Ein
-  Gerät, das über B nur einen Teil von A bekam, fordert beim nächsten Mal ab genau diesem Stand an,
-  bei wem auch immer.
+  angewendeten oder dauerhaft verbuchten Gruppen wächst, hat jedes Gerät von jedem Ursprung immer
+  einen Anfang ohne unverbuchte Lücke. Ein Gerät, das über B nur einen Teil von A bekam, fordert beim
+  nächsten Mal ab genau diesem Stand an, bei wem auch immer.
 - **Überschriebene Zellen**: Hat P eine Zelle einer Transaktion von A schon überschrieben, liefert
-  der Sender von dieser Transaktion nur den Rest und P's Zelle im Ursprung P. Weil die Seiten über
-  alle Ursprünge nach HLC sortiert sind, folgt P's Zelle kurz danach, meist in derselben Seite; der
-  Endstand stimmt immer (Edge Case in der Spec).
+  der Sender trotzdem die vollständige Gruppe von A. Die spätere überschreibende Gruppe von P wird
+  ebenfalls als vollständige Gruppe geliefert, sobald sie jenseits des Cursors liegt. Die HLC-Reihenfolge
+  stellt so den Endstand her, ohne FR-013 durch effektive Teilmengen zu verletzen.
 - **Anstoßen**: Nach jedem lokalen Commit (R19) und nach jedem angewendeten Empfang sendet ein
   Gerät seinen neuen Fortschrittsstand an jedes verbundene Gerät; wer daraus erkennt, dass ihm
   etwas fehlt, fordert es an. Daten werden nie ungefragt geschoben, so entsteht auch beim Anstoßen
@@ -143,8 +146,10 @@ Zwischengeräte), Daten ungefragt nach jedem Commit schieben (Lücken beim Empf�
 **Entscheidung**: holzi prüft vor `apply`, gruppiert nach Transaktions-HLC
 (`group_by_hlc_key`, geprüft). Eine Gruppe hat genau einen Ursprung. Verworfen wird eine ganze
 Gruppe, wenn ihr Ursprung in einer bekannten gültigen Geräteliste als entfernt steht und ihr HLC
-jenseits seiner Grenze liegt, oder wenn sie eine Tabelle berührt, die dieses Gerät nicht als
-CRDT-Tabelle kennt. Die übrigen Gruppen gehen an `Database::apply_remote_changes` (heute mit
+jenseits seiner Grenze liegt. Berührt sie eine Tabelle, die dieses Gerät nicht als CRDT-Tabelle
+kennt, bricht es den Pull mit einem Schemafehler ab und erhöht den Fortschritt nicht. Eine Gruppe
+jenseits der Entfernung wird als unveränderliche `SkipRange` persistiert; nur dadurch darf der
+Fortschritt über sie hinausgehen. Die übrigen Gruppen gehen an `Database::apply_remote_changes` (heute mit
 `SignatureApplyPolicy` und `NoopSignatureProvider`, geprüft `database/mod.rs`). Ein Ursprung, der
 auf keiner Geräteliste steht, wird angenommen, wenn ein geprüftes eigenes Gerät ihn liefert: Das
 betrifft Daten aus der Zeit vor dieser Spec und Kopien in der Wartezeit (FR-044).
@@ -152,13 +157,16 @@ betrifft Daten aus der Zeit vor dieser Spec und Kopien in der Wartezeit (FR-044)
 Momentaufnahmen beim Verknüpfen prüft holzi auf dieselbe Weise.
 
 **Begründung**: Im Bereich „Vault“ bürgt das liefernde Gerät (FR-021); die Prüfung richtet sich nur
-gegen entfernte Geräte. Weil sie vor `apply` stattfindet und der Fortschritt nach dem Commit
-geschrieben wird, braucht holzi keine eigene `ApplyPolicy` und keinen neuen Einstieg in haex-crdt.
+gegen entfernte Geräte. Weil sie vor `apply` stattfindet und Prüfung, Skip-Range und Fortschritt in
+einem Commit geschrieben werden, braucht holzi keine eigene `ApplyPolicy` und keinen neuen Einstieg
+in haex-crdt. Der nächste `Pull` beginnt dadurch hinter der verbuchten Range und sendet sie nicht
+erneut.
 
 **Verworfen**: eine eigene `ApplyPolicy` über einen neuen Einstieg `apply_remote_changes_with_policy`
 (nur nötig, um den Fortschritt im selben Commit zu schreiben; das ist wegen des idempotenten
-`apply` unnötig), eine ganze Seite verwerfen, wenn eine Gruppe ungültig ist (der Sender liefert die
-Gruppe immer wieder, der Abgleich stünde still).
+`apply` unnötig), eine ganze Seite verwerfen, wenn eine Gruppe ungültig ist (gültige Gruppen würden
+verloren gehen), oder eine abgewiesene Gruppe ohne Skip-Range zu überspringen (der Sender lieferte
+sie immer wieder).
 
 ## R6 Transport: iroh-Endpunkt und Protokoll
 
@@ -228,9 +236,12 @@ Präsenz an jedes Gerät einzeln (mehr Ereignisse, Geräteanzahl sichtbar), mDNS
 ## R8 Geräteliste (FR-005, FR-043)
 
 **Entscheidung**: Die Liste ist ein kanonisch kodierter Datensatz (postcard, feste Feldfolge) mit
-Vault-Identität, Generation, Einträgen (Geräteschlüssel, `endpoint_id`, Rolle, `vault_device_uuid`,
-verschlüsselter Name) und entfernten Einträgen (Geräteschlüssel, `vault_device_uuid`, Grenze als HLC), signiert mit der
-Vault-Identität über `SHA-256("holzi-device-list/v1" || bytes)`. Der Name ist mit einem aus dem
+Vault-Identität, Generation, `base_list_hash`, Einträgen (Geräteschlüssel, `endpoint_id`, Rolle,
+`vault_device_uuid`, verschlüsselter Name) und entfernten Einträgen (Geräteschlüssel,
+`vault_device_uuid`, Grenze als HLC), signiert mit der Vault-Identität über
+`SHA-256("holzi-device-list/v1" || bytes)`. `issued_by` muss in der kausal prioren Basisliste als
+nicht entferntes Hauptgerät stehen; eine bereits entfernte ausstellende Identität wird abgewiesen.
+Der Name ist mit einem aus dem
 Inhaltsschlüssel abgeleiteten Schlüssel verschlüsselt (FR-005: Sync-Server und Mitglieder
 sehen ihn nicht). Gespeichert in der synchronisierten Tabelle `device_lists(list_hash PK, generation,
 payload, signature)`; die geltende Liste ist die höchste Generation, bei Gleichstand der kleinste
@@ -248,9 +259,13 @@ entfernt“ aus allen je gesehenen Listen folgt.
 ## R9 Inhaltsschlüssel und Umschläge (FR-015)
 
 **Entscheidung**: Ein Inhaltsschlüssel sind 32 Zufallsbytes mit `key_id = SHA-256("holzi-key-id/v1"
-|| schlüssel)[0..16]`, einer Generation und dem Bereich. Umschlag: NIP-44 v2 vom Geräteschlüssel
-des ausstellenden Hauptgeräts an den Geräteschlüssel des Empfängers, Inhalt `{bereich, generation,
-key_id, schlüssel}` (Format aus dem Entwurf, §5.2). In 024 verwendet ihn holzi für zweierlei: den
+|| schlüssel)[0..16]`, einer Generation und dem Bereich. Jede Generation referenziert den Hash der
+gültigen Geräteliste, die sie ausstellt, und trägt eine Schnorr-Autorisierung des dort kausal
+berechtigten Hauptgeräts. Ein Umschlag referenziert dieselbe Liste und trägt zusätzlich eine
+Schnorr-Autorisierung über Generation, Empfänger und verschlüsselten Inhalt. NIP-44 v2 läuft vom
+Geräteschlüssel des ausstellenden Hauptgeräts an den Geräteschlüssel des Empfängers, Inhalt
+`{bereich, generation, key_id, schlüssel}` (Format aus dem Entwurf, §5.2). `created_by` und `sender`
+allein sind keine Autorisierung. In 024 verwendet ihn holzi für zweierlei: den
 Postfach-Schlüssel der Präsenz (R7) und die Namen in der Geräteliste (XChaCha20-Poly1305 mit 24 Byte
 Nonce und einem abgeleiteten Schlüssel `HKDF(inhaltsschlüssel, "holzi/device-name/v1")`, zusätzliche
 Daten `generation ‖ device_pubkey`). Beides nutzt die höchste Generation, die an kein entferntes
@@ -264,7 +279,8 @@ schützt dort nichts zusätzlich).
 
 **Entscheidung**: Signiert wird immer `SHA-256(domänen-tag ‖ kanonische bytes)` mit BIP-340;
 kanonische Bytes sind postcard eines festen Structs. Domänen-Tags: `holzi-device-auth/v1`,
-`holzi-device-list/v1`, `holzi-admission/v1`, `holzi-link/v1`; die Präsenzmeldung ist ein
+`holzi-device-list/v1`, `holzi-key-generation/v1`, `holzi-key-envelope/v1`,
+`holzi-admission/v1`, `holzi-link/v1`, `holzi-link-resume/v1`; die Präsenzmeldung ist ein
 Nostr-Ereignis und trägt dessen Signatur (R7). Signaturen
 je Änderung gibt es in 024 nicht (FR-021); die Zellsignatur mit Laufnummer für gemeinsame Bereiche
 legen Specs 027 und 028 fest und bauen dafür auf `column_sig_preimage*` von haex-crdt auf.
@@ -292,7 +308,10 @@ legen Specs 027 und 028 fest und bauen dafür auf `column_sig_preimage*` von hae
   gewählter Hauptgerät-Rolle der private Schlüssel der Vault-Identität, alles auf dieser
   Verbindung. Die neue Installation legt ihre Vault mit ihrer Passphrase an, wendet die
   Momentaufnahme an und behält bei Abbruch nichts (FR-025). Das Hauptgerät veröffentlicht die neue
-  Geräteliste erst danach.
+  Geräteliste erst danach. H persistiert vor der Übertragung den neuen Listensatz und eine
+  `link_id`; nach `LinkDone` wird die Veröffentlichung wiederaufnehmbar und idempotent. N bewahrt
+  bis zum Empfang der neuen Liste den angewendeten Transfer als `awaiting_publication` und sendet
+  bei einer Wiederaufnahme erneut `LinkDone`, ohne den Code erneut zu verbrauchen.
 - Die neue Installation muss dieselbe Version des Sync-Protokolls und des Vault-Schemas haben
   (FR-029); sonst bricht das Verknüpfen mit einer Meldung ab.
 
