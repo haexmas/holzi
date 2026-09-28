@@ -31,7 +31,13 @@ nicht erreichbar ist oder ablehnt.
   Space oder eine Datenfreigabe. Das Relay kennt einen Bereich nur als
   undurchsichtige Kennung.
 - **Admin eines Bereichs**: die Vault, die ihn angelegt hat, und nur sie. Beim
-  Bereich „Vault“ ist das die Vault selbst.
+  Bereich „Vault“ ist das die Vault selbst. Die Admin-Rolle lässt sich in v1
+  nicht übertragen.
+- **Schließen**: eine von der Vault-Identität des Admins signierte, endgültige
+  Aussage, dass ein Bereich endet. Danach nimmt das Relay für den Bereich
+  nichts mehr an (FR-021); holzi schließt so beim Rotieren der Vault-Identität
+  jeden Bereich, den die Vault verwaltet (Spec 024 „Schließen und Verlassen
+  beim Rotieren“).
 - **Änderungspaket**: ein verschlüsselter, signierter Stapel von Änderungen
   eines Bereichs (Spec 024). Das Relay sieht davon nur Bereichskennung,
   Schlüsselkennung und Länge.
@@ -100,8 +106,9 @@ nicht erreichbar ist oder ablehnt.
 - **Spec 024** (Vault-Identität, Geräteschlüssel, direkter Sync eigener Geräte):
   liefert Vault-Identität, Geräteschlüssel, Gerätebestätigung, das Format der
   Änderungspakete, Fortschrittsstände, die Liste der Nur-direkt-Daten, die nur
-  auf dem direkten Weg zwischen eigenen Geräten reisen, und die Übergabe nach
-  einer Rotation der Vault-Identität. Diese Spec erweitert den Sync eigener
+  auf dem direkten Weg zwischen eigenen Geräten reisen, und das Schließen und
+  Verlassen der Bereiche beim Rotieren der Vault-Identität (Spec 024
+  „Schließen und Verlassen beim Rotieren“). Diese Spec erweitert den Sync eigener
   Geräte um das Postfach der Vault auf einem Relay. Der direkte Sync bleibt der
   erste Weg; das Relay ist ein zusätzlicher.
 - **Spec 025** (Dateisync eigener Geräte): Die Objekte eigener
@@ -165,6 +172,12 @@ nicht erreichbar ist oder ablehnt.
   §10.2).
 - Q: Darf ein Bereich gleichzeitig auf mehreren Relays liegen? → A: Nein, nicht in v1. Jeder Bereich hat ein Heimat-Relay; weitere Relays dienen dem NAT-Durchgang (FR-040). Das gilt auch für Spaces (Spec 027).
 - Q: Wer darf eine Momentaufnahme hochladen? → A: Nur der Admin des Bereichs; beim Bereich „Vault“ jedes eigene Gerät (FR-022).
+- Q: Kann die Admin-Rolle übertragen werden, etwa nach dem Rotieren der
+  Vault-Identität? → A: Nein, in v1 gar nicht, und nichts hängt von der
+  Zustimmung der Mitglieder ab. Beim Rotieren schließt holzi mit der alten
+  Identität alle Bereiche, die die Vault verwaltet, und verlässt alle anderen
+  (D23). Das Relay bindet einen Bereich nie um; eine Schließung ist dort
+  endgültig (FR-021, FR-049).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -330,6 +343,12 @@ hochladen: wird abgelehnt.
    lehnt sie sonst ab; ein Gerät des Admins, das beide Listen sieht,
    veröffentlicht danach eine Liste der Generation 6, die beide Änderungen
    vereint (FR-018, FR-041).
+8. **Given** der Admin hat den Bereich mit einer signierten Schließung
+   geschlossen, **When** danach irgendein Gerät eine Liste, ein Paket oder eine
+   Momentaufnahme für den Bereich hochlädt, auch mit Signatur der
+   Admin-Identität, **Then** lehnt das Relay mit „vom Admin geschlossen“ ab;
+   Mitglieder der letzten gültigen Liste können bis zu deren Ablauf noch
+   lesen, danach löscht das Relay das Postfach (FR-021).
 
 ---
 
@@ -519,20 +538,26 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   nie eine zusammengehörige Änderungsgruppe (Spec 024). Ist schon eine einzelne
   Gruppe zu groß, lädt holzi sie nicht hoch, zeigt es beim Relay an und
   synchronisiert sie weiter direkt.
-- **Die Vault-Identität wird rotiert** (gestohlenes Gerät, Spec 024). Die Vault
-  veröffentlicht für jeden Bereich, in dem sie Mitglied oder Admin ist, eine
-  von der alten Identität signierte Übergabe an die neue (Spec 024). Weil auch
-  der Dieb die alte Identität hat, bindet eine Übergabe allein nichts um: Mit
-  der ersten Übergabe für einen Bereich nimmt das Relay dort nichts mehr an,
-  was sich auf die alte Identität stützt, und an eine neue Identität bindet es
-  den Bereich erst, wenn eine Mehrheit der übrigen Mitglieder sie nach
-  Abgleich des Prüfcodes angenommen hat (FR-021). Stellt der Dieb eine eigene
-  Übergabe aus, gewinnt die neue Identität, die zuerst die Mehrheit erreicht;
-  die Clients zeigen den Stand (FR-045). Den Bereich „Vault“ und andere
-  Bereiche ohne übrige Mitglieder bindet das Relay nie um; die Vault legt dafür
-  ein neues Postfach an (FR-049).
+- **Die Vault-Identität wird rotiert** (gestohlenes Gerät, Spec 024
+  „Schließen und Verlassen beim Rotieren“). Vor dem Wechsel signiert holzi mit
+  der alten Identität eine Schließung für jeden Space und jede Datenfreigabe,
+  die die Vault verwaltet, und für ihren Bereich „Vault“, und verlässt jeden
+  Bereich, in dem sie nur Mitglied ist. Das Relay nimmt für einen
+  geschlossenen Bereich nichts mehr an, hält das Postfach für die Mitglieder
+  der letzten gültigen Liste nur noch lesbar, bis diese Liste abläuft, und
+  löscht es dann (FR-021). Einen Bereich an die neue Identität binden kann es
+  nicht; die Vault legt ein neues Postfach für den Bereich „Vault“ an, und der
+  Admin kann einen Space oder eine Datenfreigabe neu anlegen und die
+  Mitglieder neu einladen (FR-049). Weil auch der Dieb die alte Identität hat,
+  kann er einen Bereich höchstens selbst schließen, mit demselben Ergebnis,
+  oder ihn weiter nutzen, bis die Rotation ihn schließt; die Admin-Rolle kann
+  er nirgendwohin verschieben. Rotiert die Vault ohne Verbindung, gehen
+  Schließungen und das Verlassen erst hinaus, wenn ein Gerät online ist; bis
+  dahin kann der Dieb mit der alten Identität handeln. Dieses Risiko ist
+  hingenommen.
 - **Ein gestohlenes Gerät meldet sich am Relay an.** Seine Gerätebestätigung ist
-  gültig, bis die Vault-Identität rotiert ist; das Relay kann einzelne Geräte
+  gültig, bis die Vault-Identität rotiert ist und die Bereiche der alten
+  Identität geschlossen oder verlassen sind; das Relay kann einzelne Geräte
   nicht sperren (D8).
 - **Zwei Geräte des Admins veröffentlichen gleichzeitig verschiedene Listen
   derselben Generation.** Relay und Empfänger nehmen beide dieselbe, die mit
@@ -628,8 +653,8 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
 - **FR-017**: Ein Gerät mit der nötigen Fähigkeit (FR-022) MUSS eine
   Momentaufnahme eines Bereichs bis zu einer Sequenznummer n hochladen können.
   Das Relay MUSS sie nur annehmen, wenn n über der Nummer der geltenden
-  Momentaufnahme liegt und nicht über der höchsten vergebenen Nummer. Nach der
-  Annahme MUSS es die Pakete bis n verwerfen, die Pakete nach n behalten und
+  Momentaufnahme liegt und nicht über der höchsten vergebenen Nummer. Hat es sie
+  angenommen, MUSS es die Pakete bis n verwerfen, die Pakete nach n behalten und
   einem Gerät mit Lesestand unter n zuerst die Momentaufnahme liefern. Die
   Nummerierung läuft danach unverändert weiter.
 
@@ -659,41 +684,47 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   Liste vom Admin des Bereichs signiert ist. Eine von einer anderen Identität
   signierte Liste MUSS abgelehnt werden, auch für einen Bereich, der auf dem
   Relay noch nicht existiert. Die erste gültige Liste legt das Postfach an und
-  verlangt die Zulassung des Admins (FR-006). Nach einer Rotation der
-  Vault-Identität (Spec 024 FR-041, Übergabe) gilt: Eine nur mit der alten
-  Identität signierte Übergabe DARF beim Relay nie etwas umbinden. Mit der
-  ersten Übergabe für einen Bereich MUSS das Relay für diesen Bereich nichts
-  mehr annehmen, was mit der alten Identität signiert ist oder sich auf sie
-  stützt (Listen, Gerätebestätigungen und damit Anfragen ihrer Geräte), weil
-  ihr Schlüssel als kompromittiert gilt. Abrufe der übrigen Mitglieder der
-  letzten gültigen Liste vor dieser ersten Übergabe MUSS es weiter bedienen, solange diese Liste nicht
-  abgelaufen ist (FR-019). War die alte Identität Admin des Bereichs, MUSS das
-  Relay die Admin-Rolle erst dann an eine neue Identität binden, wenn mehr als
-  die Hälfte der übrigen Mitglieder der letzten gültigen Liste je eine
-  signierte Annahme genau dieser neuen Identität hochgeladen hat; jedes
-  Mitglied signiert sie erst nach Abgleich des Prüfcodes (Spec 024).
-  Konkurrieren Übergaben an verschiedene neue Identitäten, gewinnt die, die
-  zuerst diese Mehrheit erreicht; alle anderen MUSS das Relay ablehnen. Nach
-  der Umbindung gelten für den Bereich nur Listen der neuen Identität, und die
-  nächste Liste MUSS eine höhere Generation tragen. Das ersetzt das frühere
-  Einfrieren eines Bereichs bei konkurrierenden Übergaben.
-- **FR-049**: Ein Bereich ohne übrige Mitglieder in der letzten gültigen Liste,
-  etwa der Bereich „Vault“, DARF NICHT umgebunden werden (FR-021); die
-  rotierte Vault MUSS dafür ein neues Postfach unter einer Bereichskennung
-  ihrer neuen Identität anlegen und es aus dem eigenen Stand füllen (FR-044).
-  War die alte Identität in einem Bereich nur Mitglied, bindet das Relay nichts
-  um; der Admin nimmt die neue Identität nach Abgleich des Prüfcodes in eine
-  neue Liste auf (Spec 024). Eine Übergabe überträgt weder Zulassung noch
-  Kontingent: Die neue Identität braucht eine eigene Zulassung (FR-005,
-  FR-006), bevor das Relay einen Bereich an sie bindet oder ein neues Postfach
-  für sie anlegt, und ein umgebundener Bereich zählt ab der Umbindung auf ihr
-  Kontingent (FR-028).
+  verlangt die Zulassung des Admins (FR-006). Das Relay DARF einen Bereich nie
+  an eine andere Vault-Identität binden; die Admin-Rolle lässt sich am Relay
+  nicht übertragen. Der Admin MUSS einen Bereich mit einer von seiner
+  Vault-Identität signierten Schließung beenden können (Spec 024 „Schließen und
+  Verlassen beim Rotieren“); eine Schließung, die eine andere Identität signiert
+  hat, MUSS das Relay ablehnen. Eine angenommene Schließung ist endgültig:
+  Danach MUSS das Relay für diesen Bereich nichts mehr annehmen, keine Liste,
+  kein Paket, keine Momentaufnahme und keinen Upload eines Objekts, auch nicht
+  mit Signatur der Admin-Identität, und DARF keinen Zugangslink zum Hochladen
+  mehr ausstellen. Abrufe der Mitglieder mit Lesen in der letzten gültigen
+  Liste MUSS es weiter bedienen, solange diese Liste nicht abgelaufen ist
+  (FR-019), und dabei die Schließung mitliefern; jedes Mitglied prüft ihre
+  Signatur selbst, zeigt „vom Admin geschlossen“, behält seine lokale Kopie
+  und beendet den Sync des Bereichs. Läuft die letzte Liste ab, MUSS das Relay
+  Postfach und Objekte des Bereichs löschen. Die Bereichskennung und die
+  Schließung MUSS es danach behalten, damit niemand, auch nicht mit dem
+  Schlüssel der alten Identität, den Bereich neu anlegen kann, und MUSS jede
+  weitere Anfrage dafür mit „vom Admin geschlossen“ ablehnen.
+- **FR-049**: Beim Rotieren der Vault-Identität (Spec 024 „Schließen und
+  Verlassen beim Rotieren“) lädt holzi, sobald ein Gerät online ist, die mit
+  der alten Identität signierten Schließungen aller Bereiche hoch, die die
+  Vault verwaltet, einschließlich ihres Bereichs „Vault“; das Relay behandelt
+  sie nach FR-021. Für den Bereich „Vault“ MUSS die Vault ein neues Postfach
+  unter einer Bereichskennung ihrer neuen Identität anlegen und es aus dem
+  eigenen Stand füllen (FR-044). Einen Space oder eine Datenfreigabe kann der
+  Admin mit der neuen Identität neu anlegen und die Mitglieder neu einladen
+  (Spec 027, 028); das ist für das Relay ein neuer Bereich. War die alte
+  Identität in einem Bereich nur Mitglied, verlässt die Vault ihn mit einer von
+  der alten Identität signierten Nachricht wie bei jedem Verlassen (Spec 027);
+  das Relay behandelt sie wie jedes Paket, und die alte Identität gilt dort,
+  bis der Admin eine Liste ohne sie hochlädt. Eine neue Identität erhält weder
+  Zulassung noch Kontingent der alten: Sie braucht eine eigene Zulassung
+  (FR-005, FR-006), bevor das Relay ein Postfach für sie anlegt. Ein
+  geschlossener Bereich zählt bis zum Löschen auf das Kontingent der alten
+  Identität (FR-028).
 - **FR-022**: Das Relay MUSS Abrufe nur Vaults mit Lesen und Uploads von
   Paketen nur Vaults mit Schreiben erlauben, jeweils nach der geltenden Liste.
   Eine Momentaufnahme DARF nur hochladen: der Admin des Bereichs. Damit kann kein Mitglied mit einer unvollständigen Momentaufnahme ältere Pakete verdrängen. Beim Bereich
   „Vault“ ist das in beiden Fällen jedes eigene Gerät.
-- **FR-023**: Ein Entzug MUSS sofort wirken: Nach Annahme einer neuen Liste MUSS
-  jede weitere Anfrage einer nicht mehr berechtigten Vault abgelehnt werden,
+- **FR-023**: Ein Entzug MUSS sofort wirken: Sobald das Relay eine neue Liste
+  angenommen hat, MUSS jede weitere Anfrage einer nicht mehr berechtigten Vault abgelehnt werden,
   auch auf schon bestehenden Verbindungen, und das Relay DARF ihr keinen
   Zugangslink mehr ausstellen. Eine Widerrufsliste DARF dafür nicht nötig
   sein. „Sofort“ gilt für den Zugriff auf das Postfach und das Ausstellen von
@@ -837,13 +868,12 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
 - **FR-045**: Lehnt ein Relay ab, MUSS holzi den Grund unterscheiden und zeigen:
   nicht zugelassen, Einladungscode ungültig, keine Berechtigung, Liste fehlt
   oder abgelaufen, Kontingent fast voll (ab 80 %) oder erschöpft, Version nicht
-  unterstützt, alte Vault-Identität für den Bereich gesperrt und Übergabe
-  wartet auf die Mehrheit der Mitglieder (FR-021), Übergabe abgelehnt, weil
-  eine andere neue Identität zuerst die Mehrheit erreicht hat (FR-021),
-  Bereich ohne übrige Mitglieder nicht umbindbar, neues Postfach nötig
-  (FR-049). Wo der Nutzer etwas tun kann (neuen Code eingeben, holzi
-  aktualisieren, Platz schaffen, Mitglieder um den Abgleich des Prüfcodes
-  bitten), MUSS die Anzeige das nennen.
+  unterstützt, Bereich vom Admin geschlossen (FR-021), mit dem Hinweis, dass
+  er bis zum Ablauf der letzten Liste nur noch lesbar ist bzw. gelöscht wurde,
+  und Schließung abgelehnt, weil sie nicht die Admin-Identität des Bereichs
+  signiert hat (FR-021). Wo der Nutzer etwas tun kann (neuen Code eingeben,
+  holzi aktualisieren, Platz schaffen, beim geschlossenen Bereich den Admin um
+  eine neue Einladung bitten), MUSS die Anzeige das nennen.
 - **FR-046**: Entfernt der Nutzer ein Relay, MUSS holzi nach Bestätigung das
   Postfach der Vault dort löschen, soweit das Relay erreichbar ist, und das
   Relay auf keinem eigenen Gerät mehr nutzen. Ist das Relay Heimat von
@@ -867,7 +897,7 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   höchste vergebene Sequenznummer, geltende Momentaufnahme (mit ihrer Nummer)
   und die Pakete danach.
 - **Änderungspaket (Sicht des Relays)**: Bereichskennung, Schlüsselkennung,
-  Chiffrat, Länge, Sequenznummer, Zeitpunkt der Annahme.
+  Chiffrat, Länge, Sequenznummer, Zeitpunkt des Eingangs.
 - **Momentaufnahme (Sicht des Relays)**: Bereichskennung, Sequenznummer, bis zu
   der sie reicht, Chiffrat, hochladende Vault.
 - **Mitgliederliste**: Bereichskennung, Generation, Einträge {Vault-Identität →
@@ -879,11 +909,9 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
 - **Zugangslink**: ein Objekt, eine Richtung (hoch, herunter, löschen),
   Ablaufzeit (höchstens 15 Minuten nach der Ausstellung); nicht
   zurückziehbar.
-- **Übergabe (Sicht des Relays)**: Bereichskennung, alte und neue
-  Vault-Identität, Signatur der alten Identität; bindet allein nichts um.
-- **Annahme einer Übergabe**: Bereichskennung, Vault-Identität des Mitglieds,
-  angenommene neue Identität, Signatur des Mitglieds nach Abgleich des
-  Prüfcodes.
+- **Schließung (Sicht des Relays)**: Bereichskennung, Zeitpunkt, Signatur der
+  Vault-Identität des Admins; endgültig; bleibt mit der Bereichskennung
+  erhalten, nachdem Postfach und Objekte gelöscht sind.
 - **Relay-Eintrag (in der Vault)**: Adresse, festgehaltene Identität des
   Relays, Zeitpunkt der Zulassung; je Postfach Lesestand und Kennung der
   Nummerierung (je Gerät); Zustand je Gerät.
@@ -902,8 +930,8 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   Dateinamen synchronisiert haben, findet keinen Klartext, keine Tabellen- oder
   Spaltennamen, keine Primärschlüssel, keine Zeitstempel der Änderungen und
   keine Dateinamen: 0 Treffer.
-- **SC-003**: Nach Annahme einer Mitgliederliste, die eine Vault entfernt,
-  wird deren nächste Anfrage für den Bereich abgelehnt, in 100 % der Fälle und
+- **SC-003**: Hat das Relay eine Mitgliederliste angenommen, die eine Vault
+  entfernt, wird deren nächste Anfrage für den Bereich abgelehnt, in 100 % der Fälle und
   auch auf einer schon offenen Verbindung; sie erhält ab dann keinen neuen
   Zugangslink, und jeder vorher ausgestellte scheitert spätestens 15 Minuten
   nach seiner Ausstellung.
@@ -937,11 +965,14 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
   Relay mit Adresse und Code in unter einer Minute ein.
 - **SC-011**: Hat eine Vault ihr Kontingent erschöpft, werden Uploads anderer
   Vaults auf demselben Relay weiter zu 100 % angenommen.
-- **SC-012**: Eine nur mit der alten Vault-Identität signierte Übergabe bindet
-  in 100 % der Tests keinen Bereich um; nach der ersten Übergabe für einen
-  Bereich wird jede Anfrage mit der alten Identität dort abgelehnt, und die
-  Admin-Rolle geht erst an eine neue Identität über, wenn mehr als die Hälfte
-  der übrigen Mitglieder sie angenommen hat.
+- **SC-012**: Nach einer vom Admin signierten Schließung nimmt das Relay für
+  den Bereich in 100 % der Tests keine Liste, kein Paket, keine Momentaufnahme
+  und keinen Upload mehr an, auch nicht mit Signatur der Admin-Identität und
+  auch nicht nach dem Löschen des Postfachs; Mitglieder der letzten gültigen
+  Liste können bis zu deren Ablauf lesen und erhalten die Schließung, danach
+  ist das Postfach gelöscht. Eine Schließung, die nicht die Admin-Identität des
+  Bereichs signiert hat, wird zu 100 % abgelehnt, und kein Bereich wird je an
+  eine andere Vault-Identität gebunden.
 
 ## Assumptions
 
@@ -972,12 +1003,13 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
 - Der Einladungscode ist ein Geheimnis zur einmaligen Zulassung. Danach reicht
   die Vault-Identität; deshalb speichert holzi den Code nicht, und andere
   Geräte brauchen ihn nicht.
-- Die Rotation der Vault-Identität und die Übergabe an die neue Identität in
-  geteilten Bereichen legt Spec 024 fest (Design §15 Punkt 4); diese Spec
-  regelt nur, was das Relay damit tut (FR-021). Mitglieder übernehmen die neue
-  Identität erst nach Abgleich eines Prüfcodes (Spec 024) und laden danach ihre
-  signierte Annahme zum Relay (FR-021). Das Format dieser Annahme legt der
-  Plan zusammen mit Spec 024 fest.
+- Die Rotation der Vault-Identität und das Schließen und Verlassen der Bereiche
+  dabei legt Spec 024 fest („Schließen und Verlassen beim Rotieren“, D23);
+  diese Spec regelt nur, was das Relay damit tut (FR-021, FR-049). Nichts
+  davon hängt von der Zustimmung der Mitglieder ab. Rotiert die Vault ohne
+  Verbindung, kann der Dieb mit der alten Identität handeln, bis ein Gerät
+  online ist und die Schließungen hochlädt; dieses Risiko ist hingenommen. Das
+  Format der Schließung legt der Plan zusammen mit Spec 024 fest.
 - Wer Relays anbietet und wie ein Nutzer sie findet, ist nicht Teil dieser
   Spec: Der Nutzer bekommt Adresse und Code vom Betreiber.
 - Die Arbeitstitel „Relays“ und die Zustandsnamen legt der Plan endgültig fest.
@@ -1000,6 +1032,9 @@ erschöpft“ abgelehnt, andere Vaults auf demselben Relay sind nicht betroffen.
 - Bezahlung für Kontingente (etwa Cashu oder Lightning); in v1 nur
   Einladungscodes.
 - Umzug eines Bereichs von einem Relay auf ein anderes.
+- Das Übertragen der Admin-Rolle, ob beim Rotieren der Vault-Identität, auf
+  Wunsch oder bei Verlust (D23); ebenso das Binden eines Bereichs an eine
+  andere Vault-Identität.
 - Konten, E-Mail-Adressen, Wiederherstellung von Schlüsseln über das Relay und
   eine Sicherung der Vault auf dem Relay.
 - Sperren einzelner Geräte am Relay; ein Gerät wird nur über die Rotation der

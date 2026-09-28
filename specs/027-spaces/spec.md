@@ -36,7 +36,13 @@ Repository `https://github.com/haex-space/haex-vault`, Revision
   verhält. Rechte gelten für den ganzen Ordner. Ein Space enthält nie Daten aus
   der SQLite-Datenbank der Vault.
 - **Admin**: die Vault, die den Space angelegt hat. Es gibt genau einen Admin je
-  Space; die Rolle ist nicht übertragbar und nicht vergebbar.
+  Space; die Rolle ist nicht übertragbar und nicht vergebbar, auch nicht beim
+  Rotieren der Vault-Identität (D23).
+- **Schließen**: eine mit der Vault-Identität des Admins unterschriebene,
+  endgültige Aussage, dass der Space endet. holzi stellt sie beim Rotieren
+  der Vault-Identität des Admins mit der alten Identität aus (Spec 024). Danach
+  nimmt das Relay für den Space nichts mehr an (Spec 026), und ein
+  geschlossener Space lässt sich nicht wieder öffnen (FR-043).
 - **Mitglied**: eine Vault, die der Admin in den Space eingeladen und nach
   ihrer Annahme aufgenommen hat, samt all ihren Geräten. Der Admin ist selbst Mitglied mit allen Fähigkeiten.
 - **Fähigkeit**: ein Recht eines Mitglieds im Space: **Lesen** (alle Dateien
@@ -92,9 +98,12 @@ Repository `https://github.com/haex-space/haex-vault`, Revision
   Vault erhält, über die Synchronisierung eigener Geräte auf alle ihre Geräte
   kommen. Ein Schlüsselumschlag an ein Mitglied wird deshalb nur einmal je
   Vault erstellt. Schlüssel der Vault selbst verlassen die Vault nie über einen
-  Space. Das Rotieren einer Vault-Identität (Gerät verloren) und die Übergabe
-  an die neue Identität in jedem geteilten Bereich definiert Spec 024; diese
-  Spec wendet sie auf Spaces an (siehe Edge Cases). Die Anwesenheits- und
+  Space. Das Rotieren einer Vault-Identität (Gerät verloren) definiert Spec 024
+  („Schließen und Verlassen beim Rotieren“): Mit der alten Identität schließt
+  holzi jeden Space, den die Vault verwaltet, und verlässt jeden anderen. Was
+  das Relay mit einem geschlossenen Bereich tut, regelt Spec 026; diese Spec
+  legt fest, was Mitglieder dabei sehen (FR-043, Edge Cases). Die Admin-Rolle
+  geht dabei nirgendwohin über (D23). Die Anwesenheits- und
   Signalisierungsserver aus Spec 024 tragen auch Einladungen (FR-041) und das
   Auffinden von Geräten anderer Mitglieder (FR-039). Ob ein Änderungspaket als
   Ganzes oder je Transaktionsgruppe geprüft wird, legt Spec 024 fest (FR-013
@@ -180,6 +189,11 @@ Repository `https://github.com/haex-space/haex-vault`, Revision
   dann eingefroren: Inhalte bleiben, Mitglieder arbeiten mit ihren bisherigen
   Rechten weiter, aber die Mitgliedschaft kann sich nicht mehr ändern. Eine
   Funktion „Admin übertragen“ ist nicht Teil dieser Spec (Entwurf §15, Punkt 3).
+- Q: Kann die Admin-Rolle übertragen werden, etwa nach dem Rotieren der
+  Vault-Identität? → A: Nein, in v1 gar nicht, und nichts hängt von der
+  Zustimmung der Mitglieder ab. Beim Rotieren schließt holzi mit der alten
+  Identität alle Bereiche, die die Vault verwaltet, und verlässt alle anderen
+  (D23).
 - Q: Wo liegen die Dateien eines Space auf dem Gerät? → A: In einem Ordner des Dateisystems, den das Mitglied je Gerät wählt (wie Spec 025).
 - Q: Darf ein Space auf mehreren Relays liegen? → A: Nein, nicht in v1: ein Heimat-Relay, das Relay des Admins (Spec 026 FR-040).
 - Q: Wie ist Löschen geregelt? → A: „Schreiben“ erlaubt das Löschen eigener Dateien (Ersteller = eigene Vault); fremde Dateien löschen erfordert die Stufe „Löschen“ (FR-016). Gilt ebenso für Spec 028.
@@ -498,19 +512,31 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   einladen, Rechte ändern oder entfernen. Eine Mitgliederliste mit Ablaufzeit
   am Relay läuft dann irgendwann ab; wie lange sie gilt, regelt Spec 026. Danach
   bleibt nur die direkte Übertragung.
-- **Ein Mitglied rotiert seine Vault-Identität** (Gerät verloren): Es gilt die
-  Übergabe aus Spec 024. Die Vault veröffentlicht für den Space eine von der
-  alten Identität unterschriebene Übergabe an die neue. Der Admin und die
-  anderen Mitglieder übernehmen die neue Identität erst, nachdem sie sie per
-  Prüfcode bestätigt haben, weil auch der Dieb den alten Schlüssel hat. Danach
-  ersetzt ein Gerät des Admins die alte Identität in der Mitgliederliste; das
-  ist eine Änderung der Mitgliederliste nach FR-019.
-- **Der Admin rotiert seine Vault-Identität**: Es gilt ebenfalls Spec 024. Das
-  Relay nimmt die Übergabe für den an die Admin-Identität gebundenen Bereich an
-  (Spec 026 FR-021). Kommen zwei konkurrierende Übergaben für dieselbe alte
-  Identität an, friert das Relay den Bereich ein und nimmt keine neue
-  Mitgliederliste an, bis die Clients der Mitglieder den Konflikt lösen; holzi
-  zeigt den Konflikt an.
+- **Ein Mitglied rotiert seine Vault-Identität** (Gerät verloren): Es gilt
+  Spec 024, „Schließen und Verlassen beim Rotieren“. holzi verlässt den Space
+  mit der alten Identität, genau wie beim Verlassen nach FR-033: Die Geräte
+  dieser Vault synchronisieren ihn nicht mehr, die Dateien im Ordner bleiben
+  liegen, und ein Gerät des Admins entfernt die alte Identität nach FR-018.
+  Will das Mitglied wieder dabei sein, lädt der Admin es wie ein neues Mitglied
+  ein (FR-008): Das Mitglied gibt ihm seine neue Vault-Identität auf einem Weg
+  außerhalb von holzi, und es nimmt die Einladung wie jede andere an.
+- **Der Admin rotiert seine Vault-Identität**: Es gilt Spec 024, „Schließen und
+  Verlassen beim Rotieren“. holzi schließt den Space mit der alten Identität,
+  bevor es auf die neue wechselt (FR-043). Das Relay nimmt danach für den Space
+  nichts mehr an und hält das Postfach nur noch lesbar, bis die letzte
+  Mitgliederliste abläuft (Spec 026). Mitglieder sehen den Space als „vom Admin
+  geschlossen“, behalten ihre Dateien und synchronisieren nicht mehr. Mit der
+  neuen Identität kann der Admin einen neuen Space anlegen und die Mitglieder
+  erneut einladen; sie nehmen diese Einladung wie jede andere an. Der
+  geschlossene Space lässt sich nicht wieder öffnen.
+- **Der Dieb hält den alten Schlüssel des Admins**: Er kann den Space höchstens
+  ebenfalls schließen (dasselbe Ergebnis) oder ihn weiterführen, bis das
+  Rotieren der Nutzerin ihn schließt. Die Admin-Rolle kann er nirgendwohin
+  übertragen, weil es kein Übertragen gibt (D23).
+- **Rotieren ohne Verbindung**: Rotiert die Vault, während kein Gerät online
+  ist, gehen Schließen und Verlassen hinaus, sobald ein Gerät online ist (Spec
+  024). Bis dahin kann der Dieb mit der alten Identität handeln, etwa Mitglieder
+  einladen oder entfernen; dieses Risiko wird für v1 hingenommen.
 - **Admin lädt eine Vault ein, die schon Mitglied ist**: holzi lehnt das mit
   dem Hinweis ab, die Rechte stattdessen zu ändern.
 - **Ein Gerät eines Mitglieds wurde nie an einen Ordner gebunden**: Es zeigt den
@@ -797,12 +823,26 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   Admin MUSS eine Nachricht erhalten, auf die hin ein Gerät des Admins das
   Mitglied nach FR-018 entfernt.
 - **FR-034**: Der Admin DARF den eigenen Space nicht verlassen.
+- **FR-043** (Schließen beim Rotieren): Rotiert die Vault des Admins ihre
+  Vault-Identität (Spec 024, „Schließen und Verlassen beim Rotieren“), MUSS
+  holzi den Space mit der alten Identität schließen, bevor es auf die neue
+  wechselt; rotiert die Vault eines Mitglieds, MUSS holzi den Space mit der
+  alten Identität nach FR-033 verlassen. Das Schließen ist endgültig: Ein
+  geschlossener Space DARF sich NICHT wieder öffnen lassen, auch nicht vom
+  Admin, und holzi MUSS danach für ihn nichts mehr hochladen (das Relay nimmt
+  ebenfalls nichts mehr an, Spec 026). Sobald ein Gerät eines Mitglieds das
+  Schließen erfährt, MUSS es den Space als „vom Admin geschlossen“ zeigen, die
+  Synchronisierung beenden und die Dateien im Ordner liegen lassen. Die
+  Admin-Rolle MUSS dabei bei keiner anderen Identität landen (D23). Ein
+  Mitglied, dessen Identität rotiert ist, kommt nur über eine neue Einladung
+  (FR-008) wieder hinein.
 
 **Anzeige**
 
 - **FR-035**: holzi MUSS eine Übersicht aller Spaces der Vault zeigen, mit Name,
   Rolle (Admin oder Mitglied), eigener Fähigkeitsstufe und Zustand auf diesem
-  Gerät („synchronisiert“, „noch nicht gebunden“, „angehalten“, „entfernt“).
+  Gerät („synchronisiert“, „noch nicht gebunden“, „angehalten“, „entfernt“,
+  „vom Admin geschlossen“, FR-043).
   Offene Einladungen stehen darüber.
 - **FR-036**: Die Ansicht eines Space MUSS Name, gebundenen Ordner dieses Geräts,
   Speicher-Backend, den Admin und alle Mitglieder mit Namen, Vault-Identität,
@@ -827,7 +867,8 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
 - **Space**: Kennung, Name (nur verschlüsselt außerhalb der Geräte), Admin
   (Vault-Identität), Speicher-Backend, Dateiindex, Mitgliederlisten und
   Schlüsselgenerationen. Der Bereich eines Space, mit eigenem Postfach am
-  Relay, sofern der Admin eines eingerichtet hat.
+  Relay, sofern der Admin eines eingerichtet hat. Zustand: offen oder
+  endgültig geschlossen (FR-043).
 - **Mitgliederliste**: Kennung des Space, Generation, Einträge
   „Vault-Identität → Fähigkeitsstufe“, Ausstellungs- und Ablaufzeit, bei
   Entfernen oder Herabstufen die Grenze je Gerät der betroffenen Vault
@@ -921,12 +962,18 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
 - Weiterteilen durch Mitglieder oder Einladen durch andere als den Admin (D7).
   Dass jemand Dateien herunterlädt und anderswo erneut teilt, wird nicht
   verhindert.
-- Admin übertragen, mehrere Admins oder vergebbare Admin-Rechte (D6, Entwurf
-  §15 Punkt 3). Geht die Vault des Admins verloren, ist der Space eingefroren.
+- Admin-Rolle übertragen, weder beim Rotieren der Vault-Identität noch auf
+  Wunsch noch nach Verlust, dazu mehrere Admins oder vergebbare Admin-Rechte
+  (D6, D23, Entwurf §15 Punkt 3). Geht die Vault des Admins verloren, ist der
+  Space eingefroren; rotiert sie, wird er geschlossen (FR-043).
+- Einen geschlossenen Space wieder öffnen (FR-043).
+- Eine Hilfe „neu anlegen und dieselben Mitglieder einladen“ nach dem Schließen
+  beim Rotieren; der Admin legt den Space von Hand neu an und lädt ein.
 - Vollständiges Neuverschlüsseln alter Dateien nach einem Entzug.
 - Daten aus der SQLite-Datenbank in Spaces (D3; dafür Spec 028).
 - Rechte je Unterordner oder je Datei; Rechte gelten für den ganzen Space.
-- Einen Space auflösen oder löschen. Das Speicher-Backend eines bestehenden
+- Einen Space auflösen oder löschen, abgesehen vom Schließen beim Rotieren
+  (FR-043). Das Speicher-Backend eines bestehenden
   Space zu wechseln kommt mit Spec 029 (User Story 8).
 - Papierkorb oder Wiederherstellen gelöschter Dateien (für Speicher-Backend B
   siehe Spec 029).

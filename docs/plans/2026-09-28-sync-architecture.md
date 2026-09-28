@@ -46,30 +46,31 @@ re-delegation between people.
 
 ## 2. Operator decisions
 
-| #   | Decision                                                                                                                                                                       | Date       |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
-| D1  | A Nostr pubkey identifies one **device**. The same vault runs on several devices at once, each with its own Nostr identity; the **vault identity** is the same on all of them. | 2026-09-27 |
-| D2  | **Spaces are network folders for files only.** `read` = read all files in the space; `write` = add new files and modify existing ones.                                         | 2026-09-27 |
-| D3  | **SQLite data is not shared via spaces.** Read/write on data is granted individually per user.                                                                                 | 2026-09-27 |
-| D4  | Data shares exist for **single entries and whole collections**. Extensions declare what is shareable through **one uniform schema** the core can check for every extension.    | 2026-09-27 |
-| D5  | An extension may only declare shareables over **its own tables** (prefix `{public_key}__{extension_name}__`).                                                                  | 2026-09-28 |
-| D6  | The **creator of a space or share is its only admin**: invites members, assigns, changes and revokes rights, removes members.                                                  | 2026-09-27 |
-| D7  | Only the admin invites. A recipient cannot re-share. Downloading content and sharing it again in their own space is out of scope to prevent.                                   | 2026-09-27 |
-| D8  | The **vault identity private key lives on every device** of the vault (inside the SQLCipher database). A lost or stolen device is locked out by rotating the vault identity.   | 2026-09-28 |
-| D9  | For v1 the relay guarantee is **"the operator sees no content"**. Per-space pseudonyms are not v1.                                                                             | 2026-09-28 |
-| D10 | Concurrent edits of the same file produce a **conflict copy**.                                                                                                                 | 2026-09-28 |
-| D11 | **The relay is untrusted.** It never holds a user's own S3 credentials.                                                                                                        | 2026-09-28 |
-| D12 | **Both storage backends in v1**: storage provided by the public relay (A) and the user's own S3 (B).                                                                           | 2026-09-28 |
-| D13 | **No MLS.** Its ordered epoch chain does not fit an order-free CRDT (§3.3).                                                                                                    | 2026-09-27 |
-| D14 | Vault copies made before sync keep **one shared vault identity**, derived from the common placeholder.                                                                         | 2026-09-28 |
-| D15 | Until the own relay exists, presence, NAT traversal and invitations use **preset public Nostr and iroh relays**, changeable in settings.                                       | 2026-09-28 |
-| D16 | Synced files live in a **user-chosen folder of the file system** on each device (own folders and spaces).                                                                      | 2026-09-28 |
-| D17 | A scope lives on **exactly one home relay** in v1; further relays only help with NAT traversal.                                                                                | 2026-09-28 |
-| D18 | Delete: `write` deletes own entries or files, `delete` is needed for everyone else's (§11).                                                                                    | 2026-09-28 |
-| D19 | Revocation acts **forward only**, with a receipt-time check against the newest known member list and an immediate relay block; the remaining window is accepted (§11).         | 2026-09-28 |
-| D20 | Own S3 in v1: **RustFS and AWS S3**, verified and tested. MinIO is dropped (no longer open source); R2, B2 and Hetzner follow after verification.                              | 2026-09-28 |
-| D21 | Only the **admin** of a scope uploads compaction snapshots; in the vault scope any own device.                                                                                 | 2026-09-28 |
-| D22 | **Invites also create a new key generation**; key generations and member-list versions stay one counter.                                                                       | 2026-09-28 |
+| #   | Decision                                                                                                                                                                          | Date       |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| D1  | A Nostr pubkey identifies one **device**. The same vault runs on several devices at once, each with its own Nostr identity; the **vault identity** is the same on all of them.    | 2026-09-27 |
+| D2  | **Spaces are network folders for files only.** `read` = read all files in the space; `write` = add new files and modify existing ones.                                            | 2026-09-27 |
+| D3  | **SQLite data is not shared via spaces.** Read/write on data is granted individually per user.                                                                                    | 2026-09-27 |
+| D4  | Data shares exist for **single entries and whole collections**. Extensions declare what is shareable through **one uniform schema** the core can check for every extension.       | 2026-09-27 |
+| D5  | An extension may only declare shareables over **its own tables** (prefix `{public_key}__{extension_name}__`).                                                                     | 2026-09-28 |
+| D6  | The **creator of a space or share is its only admin**: invites members, assigns, changes and revokes rights, removes members.                                                     | 2026-09-27 |
+| D7  | Only the admin invites. A recipient cannot re-share. Downloading content and sharing it again in their own space is out of scope to prevent.                                      | 2026-09-27 |
+| D8  | The **vault identity private key lives on every device** of the vault (inside the SQLCipher database). A lost or stolen device is locked out by rotating the vault identity.      | 2026-09-28 |
+| D9  | For v1 the relay guarantee is **"the operator sees no content"**. Per-space pseudonyms are not v1.                                                                                | 2026-09-28 |
+| D10 | Concurrent edits of the same file produce a **conflict copy**.                                                                                                                    | 2026-09-28 |
+| D11 | **The relay is untrusted.** It never holds a user's own S3 credentials.                                                                                                           | 2026-09-28 |
+| D12 | **Both storage backends in v1**: storage provided by the public relay (A) and the user's own S3 (B).                                                                              | 2026-09-28 |
+| D13 | **No MLS.** Its ordered epoch chain does not fit an order-free CRDT (§3.3).                                                                                                       | 2026-09-27 |
+| D14 | Vault copies made before sync keep **one shared vault identity**, derived from the common placeholder.                                                                            | 2026-09-28 |
+| D15 | Until the own relay exists, presence, NAT traversal and invitations use **preset public Nostr and iroh relays**, changeable in settings.                                          | 2026-09-28 |
+| D16 | Synced files live in a **user-chosen folder of the file system** on each device (own folders and spaces).                                                                         | 2026-09-28 |
+| D17 | A scope lives on **exactly one home relay** in v1; further relays only help with NAT traversal.                                                                                   | 2026-09-28 |
+| D18 | Delete: `write` deletes own entries or files, `delete` is needed for everyone else's (§11).                                                                                       | 2026-09-28 |
+| D19 | Revocation acts **forward only**, with a receipt-time check against the newest known member list and an immediate relay block; the remaining window is accepted (§11).            | 2026-09-28 |
+| D20 | Own S3 in v1: **RustFS and AWS S3**, verified and tested. MinIO is dropped (no longer open source); R2, B2 and Hetzner follow after verification.                                 | 2026-09-28 |
+| D21 | Only the **admin** of a scope uploads compaction snapshots; in the vault scope any own device.                                                                                    | 2026-09-28 |
+| D22 | **Invites also create a new key generation**; key generations and member-list versions stay one counter.                                                                          | 2026-09-28 |
+| D23 | **No admin hand-over in v1.** On rotation holzi closes the scopes the vault administers and leaves the others, signed with the old identity; nothing depends on members' consent. | 2026-09-28 |
 
 ## 3. What exists today, and what the references teach
 
@@ -158,23 +159,20 @@ issued_at}`. Every verifier (own devices, other users' devices, the relay) resol
   has, and the recipient adds devices without the granter acting.
 - **Device revocation (D8)**: because every device holds the vault private key, a stolen device can
   mint attestations for itself. Locking one device out therefore means **rotating the vault
-  identity**: new keypair, re-attest the remaining devices, re-publish the new npub to every
-  counterparty (share and space admins re-wrap keys to it). This is the accepted cost; the SQLCipher
+  identity**: new keypair, re-attest the remaining devices, and close or leave every
+  shared scope (next bullet); counterparties learn the new npub only through new invitations. This
+  is the accepted cost; the SQLCipher
   passphrase is what protects a lost device's database.
-- **Hand-over after rotation**: for every space and share the vault belongs to or administers, it
-  publishes a hand-over statement signed by the old identity naming the new one. Because the thief
-  also holds the old key, counterparties (and the remaining own devices) accept the new identity
-  only after confirming a check code. A hand-over signed by the old key alone never rebinds
-  anything: on the first hand-over for a scope, the relay stops accepting anything signed by the old
-  identity there and keeps serving the other members of the last list. It rebinds admin authority
-  only when a majority of the other members of the last valid list have uploaded a signed acceptance
-  of the same new identity. Among competing hand-overs, the first new identity to reach that majority
-  wins. A scope without other members (the vault's own scope) is never rebound; the rotated vault
-  starts a new one.
-- **Residual risk**: whoever holds the stolen old key can publish a member list padded with vaults
-  it controls before any hand-over, and so win the relay majority. That only captures the relay
-  binding, which is an availability problem and consistent with the untrusted relay: real members'
-  clients still accept a new identity only after their own check-code confirmation.
+- **No hand-over of the admin role (D23)**: the admin role is never transferred in v1, and nothing
+  depends on members' consent. As part of a rotation, holzi uses the old identity one last time to
+  **close** every space and share the vault administers and to **leave** every one it is a member
+  of. A signed closure is terminal: the relay accepts nothing more for that scope, members see
+  "closed by the admin", keep their local copies, and sync stops. The relay keeps the mailbox
+  read-only until the last member list expires, then deletes it. The vault's own scope gets a new
+  mailbox under the new identity. With the new identity the admin can create the scope again and
+  re-invite; a rotated member is re-invited like any new member. The thief, who also holds the old
+  key, can at most close a scope as well or keep it alive until the rightful rotation closes it; it
+  can never move the admin role.
 - Presence and addressing: each device publishes its current iroh `NodeAddr` as an encrypted Nostr
   event addressed to its own vault identity. This replaces iroh's default pkarr/DNS discovery, so no
   third-party discovery infrastructure is required.
@@ -594,9 +592,8 @@ vault secrets on plane 1, and `created_by` support in the core.
 2. ~~**Revocation vs. concurrent writes**~~ — decided (D19).
 3. **Admin loss**: if the admin vault is lost entirely, the space or share is frozen (content stays,
    membership cannot change). Is a "transfer admin" feature needed, and when?
-4. **Vault identity rotation flow** (D8): how counterparties learn the new npub. Inside existing
-   shares the old identity can sign a hand-over statement, but only if the key is not the
-   compromised one.
+4. ~~**Vault identity rotation flow**~~ — decided (D23): no hand-over; scopes are closed or left and
+   re-created or re-joined by invitation.
 5. ~~**Snapshot authority**~~ — decided (D21).
 6. **Relay discovery and trust configuration**: how a vault picks relays. Several relays per scope
    are not v1 (D17).

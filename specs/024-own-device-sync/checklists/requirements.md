@@ -81,5 +81,9 @@
   narrowed to the D19 window) and FR-043 „Mitgliederlisten gleicher Generation“ (smallest list hash
   wins; SC-016). FR-013 checks snapshots per complete transaction group (SC-017). FR-007 lets
   one-device vaults listen for presence so a fresh copy is found (SC-002, SC-007). FR-040/FR-041
-  replace the relay freeze by „Übernahme erst nach Mehrheitsbestätigung“ (SC-013). The note above
-  about the relay freezing a scope is historical.
+  replaced the relay freeze by a majority rule (SC-013). The note above about the relay freezing a
+  scope is historical.
+- 2026-09-28, operator decision D23: no admin hand-over in v1. FR-039 „Schließen und Verlassen beim
+  Rotieren“, FR-040 „Schließen ist endgültig“ and FR-041 „Admin-Rolle nicht übertragbar“ replace the
+  hand-over, member acceptances and majority rule; User Story 6 scenarios 6–9 and SC-013 test the new
+  model. The majority note above is historical.

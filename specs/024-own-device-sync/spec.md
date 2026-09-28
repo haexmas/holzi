@@ -79,16 +79,23 @@ P3. Die Unteransicht „Geräte“ der Einstellungs-Kategorie „Föderation“ 
   ausgenommen sind (Endung `_no_sync`), etwa gespeicherte Sitzungen (Spec 022).
 - **Relay**: das nicht vertrauenswürdige, blinde Relay aus Spec 026, ein Server
   mit einem **Postfach** je Bereich. Diese Spec baut es noch nicht, legt aber
-  fest, was es nie erhalten darf (FR-038) und wie es sich beim Wechsel der
-  Vault-Identität verhält (FR-041).
-- **Übergabe**: eine mit der alten Vault-Identität signierte Aussage „Vault V
-  heißt jetzt neue Identität N“, die die Vault nach einem Wechsel ihrer
-  Identität in jedem gemeinsamen Bereich veröffentlicht (FR-039). Eine
-  Übergabe allein bindet nichts um (FR-041).
-- **Annahme**: eine von einer Mitglieds-Vault signierte Aussage „wir übernehmen
-  für Vault V die neue Identität N“, die sie nach dem Prüfcode-Abgleich in den
-  Bereich hochlädt (FR-040). Erst eine Mehrheit von Annahmen bindet die
-  Admin-Rechte um („Übernahme erst nach Mehrheitsbestätigung“, FR-041).
+  fest, was es nie erhalten darf (FR-038) und wie es einen geschlossenen
+  Bereich behandelt (FR-040).
+- **Rotieren** (der Vault-Identität): der Wechsel der Vault zu einem neuen
+  Schlüsselpaar, wenn die Nutzerin ein Gerät aussperrt (FR-026). Die neue
+  Identität übernimmt keine Admin-Rolle und keine Mitgliedschaft der alten
+  (FR-041).
+- **Schließen**: eine mit der Vault-Identität des Admins signierte Aussage
+  „dieser Bereich ist geschlossen“ für einen Space oder eine Datenfreigabe. Sie
+  ist endgültig: Danach nimmt das Relay für den Bereich nichts mehr an, und die
+  Mitglieder behalten ihre lokalen Kopien, synchronisieren den Bereich aber
+  nicht mehr („Schließen ist endgültig“, FR-040). Beim Rotieren schließt holzi
+  jeden Bereich, den die Vault verwaltet („Schließen und Verlassen beim
+  Rotieren“, FR-039).
+- **Verlassen**: eine mit der Vault-Identität eines Mitglieds signierte
+  Aussage, dass es einen Bereich verlässt, wie beim gewöhnlichen Austritt
+  (Specs 027, 028). Beim Rotieren verlässt holzi jeden Bereich, dessen Mitglied
+  die Vault ist (FR-039).
 
 ## Beziehung zu bestehenden Specs
 
@@ -140,9 +147,10 @@ P3. Die Unteransicht „Geräte“ der Einstellungs-Kategorie „Föderation“ 
   die Nur-direkt-Daten (FR-038), die Atomarität von Änderungspaketen und die
   Prüfung von Momentaufnahmen je Transaktionsgruppe (FR-013), den lückenlosen
   Fortschritt (FR-019), die Grenze beim Entzug (FR-042), die Mitgliederlisten
-  gleicher Generation (FR-043) sowie für den Wechsel der Vault-Identität in
-  gemeinsamen Bereichen samt der Übernahme erst nach Mehrheitsbestätigung
-  (FR-039 bis FR-041) auf diese Spec.
+  gleicher Generation (FR-043) sowie für das Rotieren der Vault-Identität in
+  gemeinsamen Bereichen, also Schließen und Verlassen beim Rotieren (FR-039),
+  Schließen ist endgültig (FR-040) und die nicht übertragbare Admin-Rolle
+  (FR-041), auf diese Spec.
 
 ## Clarifications
 
@@ -186,10 +194,10 @@ P3. Die Unteransicht „Geräte“ der Einstellungs-Kategorie „Föderation“ 
   eigene Postfach, das zum Bereich „Vault“ gehört (FR-018, FR-038).
 - Q: Wer regelt den Wechsel der Vault-Identität gegenüber Spaces und
   Datenfreigaben? → A: Diese Spec allein. Die Vault veröffentlicht in jedem
-  gemeinsamen Bereich eine mit der alten Identität signierte Übergabe;
-  Mitglieder übernehmen die neue Identität erst nach Abgleich eines
-  Prüfcodes, und zwei konkurrierende Übergaben frieren den Bereich beim Relay
-  ein (FR-039 bis FR-041).
+  gemeinsamen Bereich eine mit der alten Identität signierte Nachricht, die die
+  neue Identität nennt; Mitglieder bestätigen sie per Prüfcode, und zwei
+  konkurrierende Nachrichten frieren den Bereich beim Relay ein (FR-039 bis
+  FR-041). (überholt durch D23)
 - Q: Wird ein Änderungspaket ganz oder je Änderung geprüft? → A: Ein
   Änderungspaket ganz: Ist eine Änderung ungültig, fällt das ganze Paket.
   Eine Momentaufnahme je Änderung (FR-013). (Nach dem Review präzisiert: je
@@ -200,6 +208,7 @@ P3. Die Unteransicht „Geräte“ der Einstellungs-Kategorie „Föderation“ 
   (FR-021, Spec 028).
 - Q: Bekommen Kopien einer Vault, die schon vor dieser Spec auf mehrere Geräte kopiert wurden, dieselbe Vault-Identität? → A: Ja. Die Identität wird aus dem gemeinsamen Platzhalter abgeleitet; die Kopien bleiben eine Vault (FR-004).
 - Q: Welche Server nutzt holzi für Präsenz, NAT-Durchgang und Einladungen, solange es kein eigenes Relay gibt? → A: Voreingestellte öffentliche Nostr- und iroh-Relays, änderbar in den Einstellungen (FR-008).
+- Q: Kann die Admin-Rolle übertragen werden, etwa nach dem Rotieren der Vault-Identität? → A: Nein, in v1 gar nicht, und nichts hängt von der Zustimmung der Mitglieder ab. Beim Rotieren schließt holzi mit der alten Identität alle Bereiche, die die Vault verwaltet, und verlässt alle anderen (D23).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -414,9 +423,12 @@ keine neuen Daten mehr, die Daten, die schon darauf sind, schützt weiter nur
 die Passphrase, und jedes verbleibende Gerät muss die neue Identität einmal
 bestätigen. Sie bestätigt. Auf dem Desktop fragt holzi beim nächsten Start
 nach, ob er die neue Identität übernehmen soll; sie gleicht dazu einen Code mit
-dem Laptop ab. Die Nutzerin ist außerdem Mitglied eines Space ihres Kollegen:
-holzi teilt dem Space mit, dass ihre Vault jetzt die neue Identität hat, und der
-Kollege übernimmt sie erst, nachdem er mit ihr einen Prüfcode abgeglichen hat.
+dem Laptop ab. Die Nutzerin ist außerdem Mitglied eines Space ihres Kollegen
+und Admin einer Datenfreigabe für ihn: Noch mit der alten Identität verlässt
+holzi den Space und schließt die Datenfreigabe. Der Kollege sieht die
+Datenfreigabe als „vom Admin geschlossen“ und behält seine Kopie. Danach legt
+die Nutzerin die Datenfreigabe mit der neuen Identität neu an und lädt ihn
+wieder ein, und er lädt ihre neue Identität wieder in seinen Space ein.
 
 **Why this priority**: Selten, aber ohne diesen Weg bleibt ein gestohlenes
 Gerät für immer Teil der Vault. Der Wechsel der Vault-Identität ist die einzige
@@ -425,11 +437,12 @@ Möglichkeit (D8), weil jedes Gerät den privaten Schlüssel hat.
 **Independent Test**: Drei Geräte; eines aussperren und das dritte die neue
 Identität bestätigen lassen: Das ausgesperrte Gerät kann sich mit keinem der
 beiden mehr verbinden und erhält keine neue Änderung; die beiden verbleibenden
-synchronisieren weiter. Ist die Vault Mitglied eines Space (Spec 027), übernimmt
-die andere Mitglieds-Vault die neue Identität erst nach Abgleich des Prüfcodes;
-das Relay nimmt ab der ersten Übergabe nichts mehr von der alten Identität an
-und bindet die Admin-Rechte erst um, wenn eine Mehrheit der übrigen Mitglieder
-dieselbe neue Identität angenommen hat.
+synchronisieren weiter. Ist die Vault Admin eines Space und Mitglied eines
+anderen (Spec 027), schließt sie mit der alten Identität den ersten und verlässt
+den zweiten; danach nimmt das Relay für den geschlossenen Space nichts mehr an,
+egal mit welcher Identität signiert, die übrigen Mitglieder behalten ihre
+Kopien, und die neue Identität ist in keinem der beiden Spaces Admin oder
+Mitglied.
 
 **Acceptance Scenarios**:
 
@@ -450,26 +463,25 @@ dieselbe neue Identität angenommen hat.
    geschrieben hat und die schon angekommen waren, **When** das Aussperren
    abgeschlossen ist, **Then** bleiben sie erhalten.
 6. **Given** die Vault ist Mitglied oder Admin eines Space oder einer
-   Datenfreigabe (Specs 027, 028), **When** das Aussperren abgeschlossen ist,
-   **Then** veröffentlicht sie in jedem dieser Bereiche eine mit der alten
-   Identität signierte Übergabe, die die neue Identität nennt.
-7. **Given** ein Gerät einer anderen Vault, die Mitglied eines solchen Bereichs
-   ist, erhält die Übergabe, **When** es sie anzeigt, **Then** übernimmt es die
-   neue Identität erst, nachdem sein Nutzer einen Prüfcode mit der Nutzerin
-   abgeglichen und bestätigt hat; bis dahin nimmt es von der neuen Identität
-   nichts an.
-8. **Given** die Vault der Nutzerin ist Admin eines Space, **When** die erste
-   Übergabe für diesen Bereich beim Relay eintrifft, **Then** nimmt das Relay
-   dort nichts mehr an, was mit der alten Identität signiert ist, bedient die
-   Lesezugriffe der übrigen Mitglieder weiter und bindet die Admin-Rechte erst
-   an die neue Identität, wenn eine Mehrheit der übrigen Mitglieder der
-   letzten gültigen Mitgliederliste eine Annahme genau dieser neuen Identität
-   hochgeladen hat.
-9. **Given** für dieselbe alte Identität treffen zwei verschiedene Übergaben
-   ein (etwa eine der Nutzerin und eine des Diebs), **When** ein Mitglied sie
-   sieht, **Then** zeigt es den Konflikt und übernimmt keine von sich aus; die
-   neue Identität, die zuerst die Mehrheit der Annahmen erreicht, gilt beim
-   Relay und bei allen Mitgliedern, die andere wird abgewiesen.
+   Datenfreigabe (Specs 027, 028), **When** das Aussperren bestätigt ist,
+   **Then** schließt holzi, bevor die Vault zur neuen Identität wechselt, mit
+   der alten Identität jeden Bereich, den die Vault verwaltet, und verlässt
+   jeden, dessen Mitglied sie ist; ihr Postfach im Bereich „Vault“ wird ebenso
+   geschlossen und durch ein neues unter der neuen Identität ersetzt.
+7. **Given** ein Bereich ist geschlossen, **When** danach eine
+   Mitgliederliste, ein Änderungspaket oder eine Momentaufnahme für ihn beim
+   Relay eintrifft, egal mit welcher Identität signiert, **Then** weist das
+   Relay sie ab; die Mitglieder können das Postfach nur noch lesen, bis die
+   letzte Mitgliederliste abgelaufen ist, danach löscht das Relay es.
+8. **Given** ein Gerät einer Mitglieds-Vault erhält das Schließen eines
+   Bereichs, **When** es das Schließen geprüft hat, **Then** zeigt es den
+   Bereich als „vom Admin geschlossen“, behält die lokale Kopie und
+   synchronisiert den Bereich nicht mehr; die Nutzerin dieses Geräts muss
+   dafür nichts bestätigen.
+9. **Given** das Rotieren ist abgeschlossen, **When** die Nutzerin mit der
+   neuen Identität einen Space neu anlegt oder von einem anderen Admin wieder
+   eingeladen wird, **Then** läuft das wie jede Einladung; keine Admin-Rolle
+   und keine Mitgliedschaft geht von der alten Identität auf die neue über.
 
 ---
 
@@ -512,12 +524,17 @@ dieselbe neue Identität angenommen hat.
   übernommen hat, synchronisiert es sie wie sonst.
 - Ein Dieb sperrt mit dem gestohlenen Gerät seinerseits die Nutzerin aus: Ihre
   Geräte übernehmen seine neue Identität nur mit ihrer Bestätigung auf jedem
-  Gerät (FR-027), also nie. Veröffentlicht er in gemeinsamen Bereichen eine
-  eigene Übergabe, übernehmen die Mitglieder sie nur nach einem
-  Prüfcode-Abgleich (FR-040). Seine Übergabe allein bindet beim Relay nichts
-  um; trifft sie neben der Übergabe der Nutzerin ein, sehen die Mitglieder den
-  Konflikt, und es gilt nur die neue Identität, die zuerst die Mehrheit der
-  Annahmen erreicht (FR-041).
+  Gerät (FR-027), also nie. Mit der alten Identität kann er gemeinsame Bereiche
+  höchstens selbst schließen (dasselbe Ergebnis wie beim Rotieren der
+  Nutzerin) oder weiter nutzen, bis ihr Rotieren sie schließt; die Admin-Rolle
+  kann er nirgendwohin übertragen (FR-040, FR-041).
+- Die Nutzerin sperrt ein Gerät aus, während keines ihrer Geräte online ist:
+  holzi sendet das Schließen und Verlassen (FR-039), sobald ein Gerät der Vault
+  online ist. Bis dahin kann der Dieb mit der alten Identität in den
+  gemeinsamen Bereichen handeln; das ist ein hingenommenes Risiko.
+- Die Identität einer Mitglieds-Vault rotiert: Die Vault verlässt den Bereich
+  (FR-039); der Admin lädt ihre neue Identität wie jedes neue Mitglied ein,
+  nachdem die Mitglieds-Vault sie ihm auf einem anderen Weg mitgeteilt hat.
 - Eine Vault aus einer Zeit vor dieser Spec hat nur einen Platzhalter als
   Vault-Identität und wurde schon auf mehrere Geräte kopiert (FR-004).
 - Während der Kopplung verliert eine Seite die Verbindung: Die Kopplung bricht
@@ -756,68 +773,59 @@ dieselbe neue Identität angenommen hat.
 - **FR-026**: Die Nutzerin MUSS ein anderes Gerät der Vault aussperren können.
   Das Aussperren MUSS eine neue Vault-Identität und damit eine neue
   Schlüsselgeneration des Bereichs „Vault“ erzeugen, die verbleibenden Geräte
-  neu bestätigen, das ausgesperrte Gerät als ausgesperrt vermerken und die
-  neue Identität in allen gemeinsamen Bereichen übergeben (FR-039). Vor der
-  Bestätigung MUSS holzi die Folgen erklären (neue Identität, keine neuen Daten
-  mehr für das Gerät, vorhandene Daten dort schützt nur die Passphrase,
-  Bestätigung auf jedem verbleibenden Gerät nötig, Mitglieder gemeinsamer
-  Spaces und Datenfreigaben müssen die neue Identität per Prüfcode
-  bestätigen, nicht umkehrbar). Diese Spec ist die einzige, die den Wechsel
+  neu bestätigen, das ausgesperrte Gerät als ausgesperrt vermerken und mit der
+  alten Identität alle gemeinsamen Bereiche schließen oder verlassen
+  (FR-039). Vor der Bestätigung MUSS holzi die Folgen erklären (neue
+  Identität, keine neuen Daten mehr für das Gerät, vorhandene Daten dort
+  schützt nur die Passphrase, Bestätigung auf jedem verbleibenden Gerät nötig,
+  Spaces und Datenfreigaben, die die Vault verwaltet, werden geschlossen und
+  müssen neu angelegt werden, aus allen anderen tritt die Vault aus und muss
+  neu eingeladen werden, nicht umkehrbar). Diese Spec ist die einzige, die den Wechsel
   der Vault-Identität regelt; Specs 026, 027 und 028 verweisen hierauf.
 - **FR-027**: Ein Gerät, das noch die alte Vault-Identität hat, DARF die neue
   nur übernehmen, wenn die Nutzerin das auf diesem Gerät bestätigt, nachdem sie
   einen Prüfcode mit einem Gerät der neuen Identität abgeglichen hat. Eine mit
-  der alten Identität signierte Übergabe allein DARF NICHT genügen, weil auch
+  der alten Identität signierte Nachricht allein DARF NICHT genügen, weil auch
   das ausgesperrte Gerät die alte Identität besitzt. Den privaten Schlüssel der
   neuen Identität erhält es nur auf einer direkten Verbindung (FR-038).
 - **FR-028**: Nach dem Aussperren MUSS jedes Gerät der neuen Identität
   Verbindungen und Änderungspakete des ausgesperrten Geräts abweisen, egal
   welchen Zeitstempel diese tragen. Änderungen, die vorher angekommen waren,
   bleiben erhalten.
-- **FR-039**: Nach einem Wechsel der Vault-Identität MUSS die Vault für jeden
-  Bereich, dessen Mitglied oder Admin sie ist (Bereich eines Space oder einer
-  Datenfreigabe, Specs 027, 028), eine Übergabe veröffentlichen: mit der alten
-  Identität signiert, die neue Identität nennend. Sie geht auf denselben Wegen
-  wie die übrigen Nachrichten des Bereichs (Postfach beim Relay, direkte
-  Verbindungen zwischen Mitgliedern).
-- **FR-040**: Ein Gerät einer anderen Vault, die Mitglied eines solchen
-  Bereichs ist, DARF die neue Identität erst übernehmen, wenn sein Nutzer einen
-  Prüfcode mit der Nutzerin der wechselnden Vault abgeglichen und das bestätigt
-  hat, wie bei eigenen Geräten (FR-027); die Übergabe allein DARF NICHT
-  genügen, weil auch der Dieb die alte Identität besitzt. Bis dahin MUSS es den
-  offenen Wechsel anzeigen und DARF von der neuen Identität keine
-  Änderungen, Mitgliederlisten oder Rechte annehmen. Nach der Bestätigung MUSS
-  es eine mit seiner eigenen Vault-Identität signierte Annahme genau dieser
-  neuen Identität in den Bereich hochladen. Eine Mitglieds-Vault DARF je
-  Bereich und alter Identität nur eine Annahme ausstellen. Mitgliederlisten und
-  Admin-Rechte der neuen Identität nimmt es erst nach FR-041 an.
-- **FR-041** („Übernahme erst nach Mehrheitsbestätigung“): Eine Übergabe, die
-  nur mit der alten Identität signiert ist, DARF NIE etwas umbinden. Mit der
-  ersten Übergabe für einen Bereich MUSS das Relay (Spec 026) dort nichts mehr
-  annehmen, was mit der alten Identität signiert ist, weil deren Schlüssel als
-  kompromittiert gilt, und MUSS die Lesezugriffe der übrigen Mitglieder der
-  letzten gültigen Mitgliederliste weiter bedienen. Ist die wechselnde Vault
-  Admin eines Bereichs, dessen Kennung an ihre Identität gebunden ist (Spec 026
-  FR-021), DARF das Relay die Admin-Rechte erst dann an eine neue Identität
-  binden, wenn mehr als die Hälfte der übrigen Mitglieds-Vaults der letzten
-  gültigen Mitgliederliste eine Annahme (FR-040) genau dieser neuen Identität
-  hochgeladen hat. Konkurrieren mehrere Übergaben, gilt die neue Identität, die
-  zuerst diese Mehrheit erreicht; weil jede Mitglieds-Vault nur eine Annahme
-  ausstellt, kann das höchstens eine sein, und alle anderen MUSS das Relay
-  abweisen. Dieselbe Regel MÜSSEN die Geräte der Mitglieder selbst anwenden:
-  Mitgliederlisten und Admin-Rechte der neuen Identität nehmen sie erst an,
-  wenn sie die Mehrheit der Annahmen selbst geprüft haben. Jeder Client, der
-  zwei verschiedene Übergaben derselben alten Identität sieht, MUSS den
-  Konflikt anzeigen und DARF keine der beiden von sich aus übernehmen. Ist die
-  wechselnde Vault nur Mitglied, bindet das Relay nichts um; die neue Identität
-  bekommt Zugang erst über eine neue Mitgliederliste eines Admins, der sie
-  nach FR-040 übernommen hat. Ein Bereich ohne andere Mitglieder, etwa das
-  Postfach der eigenen Vault im Bereich „Vault“, wird nie umgebunden; die
-  Vault legt mit der neuen Identität ein neues Postfach und damit einen neuen
-  Bereich an (Spec 026). Das verfeinert die Clarification, nach der zwei
-  konkurrierende Übergaben den Bereich beim Relay einfrieren: Eingefroren ist
-  ab der ersten Übergabe alles, was die alte Identität signiert, aufgelöst wird
-  durch die Mehrheit der Annahmen.
+- **FR-039** („Schließen und Verlassen beim Rotieren“): Beim Rotieren der
+  Vault-Identität MUSS holzi ohne weiteres Zutun, mit der alten Identität
+  signiert und bevor die Vault zur neuen wechselt, (a) jeden Space und jede
+  Datenfreigabe schließen, deren Admin die Vault ist (Specs 027, 028), (b)
+  jeden Space und jede Datenfreigabe verlassen, deren Mitglied sie ist, wie
+  beim gewöhnlichen Austritt, und (c) das Postfach der eigenen Vault im Bereich
+  „Vault“ ebenso schließen; die Vault legt mit der neuen Identität ein neues
+  Postfach an (Spec 026). Schließen und Verlassen gehen auf denselben Wegen wie
+  die übrigen Nachrichten des Bereichs (Postfach beim Relay, direkte
+  Verbindungen zwischen Mitgliedern). Ist beim Rotieren kein Gerät der Vault
+  online, MUSS holzi sie senden, sobald eines online ist; bis dahin kann der
+  Dieb mit der alten Identität handeln (hingenommenes Risiko).
+- **FR-040** („Schließen ist endgültig“): Ein gültig signiertes Schließen
+  beendet einen Bereich für immer. Danach DARF das Relay (Spec 026) für diesen
+  Bereich nichts mehr annehmen, keine Mitgliederliste, kein Änderungspaket und
+  keine Momentaufnahme, egal mit welcher Identität signiert; es MUSS das
+  Postfach für die Mitglieder der letzten gültigen Mitgliederliste nur noch
+  lesbar halten, bis diese Liste abgelaufen ist, und es danach löschen. Die
+  Geräte der Mitglieder MÜSSEN den Bereich als „vom Admin geschlossen“ zeigen,
+  ihre lokalen Kopien behalten und den Bereich nicht mehr synchronisieren; sie
+  DÜRFEN für ihn nichts mehr annehmen und nichts mehr senden, und sie müssen
+  dafür nichts bestätigen. Weil auch der Dieb die alte Identität besitzt, kann
+  er einen Bereich höchstens selbst schließen (dasselbe Ergebnis) oder weiter
+  nutzen, bis das Rotieren der Nutzerin ihn schließt.
+- **FR-041** („Admin-Rolle nicht übertragbar“): In v1 DARF die Admin-Rolle
+  eines Bereichs nie auf eine andere Identität übergehen, weder beim Rotieren
+  noch auf Wunsch noch bei Verlust; keine Regel dieser Spec DARF von der
+  Zustimmung der Mitglieder abhängen. Nach dem Rotieren ist die neue Identität
+  in keinem gemeinsamen Bereich Admin oder Mitglied: Die Nutzerin legt einen
+  Space oder eine Datenfreigabe mit der neuen Identität neu an und lädt die
+  Mitglieder ein, die die Einladung wie jede andere annehmen; eine
+  Mitglieds-Vault, deren Identität rotiert ist, lädt der Admin wie jedes neue
+  Mitglied ein, nachdem sie ihm ihre neue Identität auf einem anderen Weg
+  mitgeteilt hat (Specs 027, 028).
 
 **Verträglichkeit und Betrieb**
 
@@ -887,13 +895,12 @@ dieselbe neue Identität angenommen hat.
   betroffenen Vault; von einem Admin-Gerät signiert.
 - **Kopplungscode**: einmalig, kurzlebig; Erreichbarkeit des anbietenden Geräts
   und ein Geheimnis für den gegenseitigen Nachweis.
-- **Übergabe**: alte und neue Vault-Identität, Bereich, Zeitpunkt; mit der alten
-  Identität signiert. Je Mitglied: offen, angenommen oder im Konflikt; beim
-  Relay: alte Identität gesperrt, umgebunden (sobald die Mehrheit erreicht ist)
-  oder abgewiesen.
-- **Annahme**: Mitglieds-Vault, Bereich, alte und neue Identität; mit der
-  Vault-Identität des Mitglieds signiert, höchstens eine je Bereich und alter
-  Identität.
+- **Schließen**: Bereich, Zeitpunkt; mit der Vault-Identität des Admins
+  signiert (beim Rotieren mit der alten). Beim Relay: Postfach nur noch
+  lesbar, gelöscht, sobald die letzte Mitgliederliste abgelaufen ist; bei den
+  Mitgliedern: „vom Admin geschlossen“, lokale Kopie bleibt.
+- **Verlassen**: Bereich, Mitglieds-Vault, Zeitpunkt; mit deren
+  Vault-Identität signiert (beim Rotieren mit der alten).
 - **Nur-direkt-Daten**: feste Liste von Vault-Geheimnissen (FR-038), die nie
   ein Relay und nie einen anderen Bereich erreichen.
 
@@ -949,15 +956,14 @@ dieselbe neue Identität angenommen hat.
   nicht das der eigenen Vault), in keinem Paket eines anderen Bereichs als
   „Vault“ und in keinem Protokoll. Die Prüfung schlägt fehl, sobald ein
   Eintrag der Liste auf einem dieser Wege auftaucht.
-- **SC-013**: Nach einem Wechsel der Vault-Identität übernimmt in 100 % der
-  geprüften Fälle kein Mitglied eines gemeinsamen Bereichs die neue Identität
-  ohne bestätigten Prüfcode-Abgleich; ab der ersten Übergabe nimmt das Relay im
-  Bereich nichts mehr an, was mit der alten Identität signiert ist; die
-  Admin-Rechte gehen nie ohne Annahmen einer Mehrheit der übrigen Mitglieder
-  auf eine neue Identität über; und bei zwei konkurrierenden Übergaben gilt bei
-  Relay und Mitgliedern genau die Identität, die zuerst die Mehrheit erreicht,
-  während jedes Mitglied bis dahin den Konflikt zeigt. Prüfbar, sobald Spaces
-  bestehen (Spec 027).
+- **SC-013**: Nach dem Rotieren der Vault-Identität hat die Vault in 100 % der
+  geprüften Fälle, sobald eines ihrer Geräte online war, jeden Bereich, den sie
+  verwaltet, mit der alten Identität geschlossen und jeden anderen verlassen;
+  nach dem Schließen nimmt das Relay für den Bereich nichts mehr an, egal mit
+  welcher Identität signiert, und die Mitglieder zeigen ihn als „vom Admin
+  geschlossen“ und behalten ihre lokalen Kopien; in keinem Fall geht die
+  Admin-Rolle oder eine Mitgliedschaft auf die neue Identität über. Prüfbar,
+  sobald Spaces bestehen (Spec 027).
 - **SC-014**: In einer automatischen Prüfung, die Änderungen über mehrere Wege
   in vertauschter Reihenfolge zustellt, erkennt jedes Gerät in 100 % der Fälle
   jede Lücke, fordert die fehlenden Änderungen an und zählt keine Änderung
@@ -1011,11 +1017,15 @@ dieselbe neue Identität angenommen hat.
 - Beim Aussperren bestätigt die Nutzerin die neue Identität auf jedem
   verbleibenden Gerät durch Abgleich eines Prüfcodes. Das ist die sichere
   Antwort auf Entwurf §15 Punkt 4 für die eigenen Geräte: Der Dieb hat die alte
-  Identität und könnte jede mit ihr signierte Übergabe selbst ausstellen. Für
-  andere Nutzer, mit denen Spaces oder Datenfreigaben bestehen, gilt dasselbe:
-  Sie erfahren die neue Identität durch eine Übergabe und übernehmen sie erst
-  nach Abgleich eines Prüfcodes (FR-039 bis FR-041). Diese Spec regelt das für
-  alle Bereiche; Specs 026, 027 und 028 bauen die Wege dafür.
+  Identität und könnte jede mit ihr signierte Nachricht selbst ausstellen.
+  Andere Nutzer, mit denen Spaces oder Datenfreigaben bestehen, müssen nichts
+  bestätigen: holzi schließt beim Rotieren mit der alten Identität jeden
+  Bereich, den die Vault verwaltet, und verlässt alle anderen; die
+  Admin-Rolle ist in v1 nicht übertragbar (FR-039 bis FR-041, D23). Diese Spec
+  regelt das für alle Bereiche; Specs 026, 027 und 028 bauen die Wege dafür.
+- Wird beim Rotieren offline gearbeitet, erreichen Schließen und Verlassen die
+  Bereiche erst, wenn ein Gerät der Vault online ist; bis dahin kann der Dieb
+  mit der alten Identität handeln. Dieses Risiko ist hingenommen.
 - Mobile Geräte sind nur im Vordergrund erreichbar (v1-scope §7); das ist für
   diese Spec kein Fehlerfall, sondern ein Gerät, das gerade offline ist.
   holzi läuft heute nur auf dem Desktop.
@@ -1028,7 +1038,7 @@ dieselbe neue Identität angenommen hat.
 
 - Sync über ein Relay und Postfächer, auch für die eigene Vault; kommt mit
   Spec 026. Diese Spec legt nur fest, was nie in ein Postfach darf (FR-038)
-  und wie das Relay Übergaben behandelt (FR-041). Bis dahin gleichen sich nur
+  und wie das Relay einen geschlossenen Bereich behandelt (FR-040). Bis dahin gleichen sich nur
   Geräte an, zwischen denen irgendwann ein Weg über gleichzeitig laufende
   Geräte besteht.
 - Dateisync zwischen eigenen Geräten (Spec 025), Spaces (027),
@@ -1042,6 +1052,10 @@ dieselbe neue Identität angenommen hat.
   Vault dort selbst.
 - Das Aussperren rückgängig machen; ein ausgesperrtes Gerät kommt nur durch eine
   neue Kopplung zurück.
+- Die Admin-Rolle übertragen, weder beim Rotieren noch auf Wunsch noch bei
+  Verlust (FR-041). Ist der Admin verloren, bleibt der Bereich eingefroren.
+- Ein Helfer „neu anlegen und dieselben Mitglieder einladen“ nach dem Rotieren
+  (P3); bis dahin legt die Nutzerin geschlossene Bereiche selbst neu an.
 - Wiederherstellung, wenn alle Geräte verloren sind; dafür bleibt eine Kopie der
   Vault-Datei.
 - Verstecken, welche Geräte zu einer Vault gehören, vor den genutzten Servern

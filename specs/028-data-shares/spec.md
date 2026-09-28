@@ -52,7 +52,15 @@ Synchronisierung oder Rechten in Berührung.
 - **Datenfreigabe**: das Teilen von SQLite-Daten einer Erweiterung mit
   einzelnen Nutzern. Sie hat genau einen **Eigentümer (Admin der
   Datenfreigabe)**, die Vault, die sie angelegt hat, und null oder mehr
-  **Empfänger**. Diese Spec sagt im Folgenden kurz „Eigentümer“.
+  **Empfänger**. Diese Spec sagt im Folgenden kurz „Eigentümer“. Die
+  Eigentümerschaft ist nicht übertragbar, auch nicht beim Rotieren der
+  Vault-Identität (D23).
+- **Schließen**: eine mit der Vault-Identität des Eigentümers unterschriebene,
+  endgültige Aussage, dass die Datenfreigabe endet. holzi stellt sie beim
+  Rotieren der Vault-Identität des Eigentümers mit der alten Identität aus
+  (Spec 024). Danach nimmt das Relay für die Datenfreigabe nichts mehr an
+  (Spec 026), und eine geschlossene Datenfreigabe lässt sich nicht wieder
+  öffnen (FR-043).
 - **Freigabetyp**: eine Art teilbarer Daten, die eine Erweiterung erklärt,
   entweder ein einzelner Eintrag (ein Kalendereintrag) oder eine Sammlung (ein
   ganzer Kalender, eine Einkaufsliste).
@@ -90,7 +98,10 @@ Synchronisierung oder Rechten in Berührung.
   der Nur-direkt-Daten. Empfangene Datenfreigaben erreichen die übrigen Geräte
   des Empfängers über diesen Sync. Spec 024 legt außerdem fest, dass ein
   Änderungspaket nur als Ganzes angewendet wird, und wie eine Vault-Identität
-  nach Verlust eines Geräts erneuert und in geteilten Bereichen übergeben wird.
+  nach Verlust eines Geräts erneuert wird („Schließen und Verlassen beim
+  Rotieren“): Mit der alten Identität schließt holzi jede Datenfreigabe, deren
+  Eigentümer die Vault ist, und tritt aus jeder anderen aus (FR-043). Die
+  Eigentümerschaft geht dabei nirgendwohin über (D23).
 - **Spec 026** (Relay): liefert Postfach und Mitgliederliste. Jede
   Datenfreigabe ist dort ein eigener Bereich. Das Relay prüft nur grob Lesen
   gegen Schreiben; alle feineren Regeln dieser Spec prüft jeder Empfänger
@@ -146,6 +157,11 @@ Synchronisierung oder Rechten in Berührung.
   abgelehnt, nicht nur die Erklärung.
 - Q: Wie ist Löschen geregelt? → A: „Schreiben“ erlaubt das Löschen eigener Einträge (Ersteller = eigene Vault); fremde Einträge löschen erfordert die Stufe „Löschen“ (FR-028). Gilt ebenso für Spec 027.
 - Q: Wie wirkt ein Entzug bei gleichzeitigem Schreiben? → A: Nur nach vorn, mit Prüfung gegen die neueste bekannte Mitgliederliste beim Empfang und sofortiger Sperre am Relay; das verbleibende kleine Zeitfenster wird akzeptiert (FR-034). Gilt ebenso für Spec 027.
+- Q: Kann die Admin-Rolle übertragen werden, etwa nach dem Rotieren der
+  Vault-Identität? → A: Nein, in v1 gar nicht, und nichts hängt von der
+  Zustimmung der Mitglieder ab. Beim Rotieren schließt holzi mit der alten
+  Identität alle Bereiche, die die Vault verwaltet, und verlässt alle anderen
+  (D23).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -466,16 +482,31 @@ angezeigter ursprünglicher Autorin.
 - Die Vault des Eigentümers geht vollständig verloren. Die Datenfreigabe ist
   eingefroren: Empfänger behalten ihre Daten und können mit ihren Rechten
   weiter untereinander arbeiten, aber niemand kann Rechte ändern oder
-  Überlappungen weitergeben. Eine Übergabe der Eigentümerschaft ist nicht im
-  Umfang.
-- Die Vault-Identität eines Empfängers oder des Eigentümers wird nach Verlust
-  eines Geräts erneuert. Spec 024 regelt das für alle Bereiche: Die Vault
-  veröffentlicht für jede Datenfreigabe, in der sie Mitglied oder Eigentümer
-  ist, eine mit der alten Identität unterschriebene Übergabe an die neue; die
-  anderen Beteiligten übernehmen die neue Identität erst nach Abgleich eines
-  Prüfcodes, weil auch ein Dieb den alten Schlüssel hat. Treffen zwei
-  konkurrierende Übergaben ein, friert das Relay die Datenfreigabe ein, bis die
-  Beteiligten den Konflikt gelöst haben.
+  Überlappungen weitergeben. Die Eigentümerschaft lässt sich nicht übertragen
+  (D23).
+- Der Eigentümer erneuert seine Vault-Identität nach Verlust eines Geräts. Es
+  gilt Spec 024, „Schließen und Verlassen beim Rotieren“: holzi schließt jede
+  seiner Datenfreigaben mit der alten Identität, bevor es auf die neue wechselt
+  (FR-043). Das Relay nimmt danach für die Datenfreigabe nichts mehr an und
+  hält das Postfach nur noch lesbar, bis die letzte Mitgliederliste abläuft
+  (Spec 026). Empfänger sehen die Freigabe als „vom Admin geschlossen“,
+  behalten die empfangenen Einträge als lokale Kopie und synchronisieren nicht
+  mehr. Mit der neuen Identität kann der Eigentümer die Datenfreigabe neu
+  anlegen und die Empfänger erneut einladen; sie nehmen diese Einladung wie
+  jede andere an. Die geschlossene Datenfreigabe lässt sich nicht wieder
+  öffnen.
+- Ein Empfänger erneuert seine Vault-Identität nach Verlust eines Geräts. holzi
+  tritt mit der alten Identität aus jeder Datenfreigabe aus, wie bei einem
+  gewöhnlichen Austritt (FR-026). Will der Empfänger wieder dabei sein, lädt der
+  Eigentümer ihn wie einen neuen Empfänger ein: Der Empfänger gibt ihm seine
+  neue Vault-Identität auf einem Weg außerhalb von holzi.
+- Ein Dieb hält den alten Schlüssel des Eigentümers. Er kann die Datenfreigabe
+  höchstens ebenfalls schließen (dasselbe Ergebnis) oder sie weiterführen, bis
+  das Rotieren des Eigentümers sie schließt. Die Eigentümerschaft kann er
+  nirgendwohin übertragen (D23).
+- Die Vault rotiert, während kein Gerät online ist. Schließen und Austritt
+  gehen hinaus, sobald ein Gerät online ist (Spec 024). Bis dahin kann der Dieb
+  mit der alten Identität handeln; dieses Risiko wird für v1 hingenommen.
 - Ein entfernter Empfänger schreibt weiter mit der älteren Schlüsselgeneration,
   die er noch hat. Das Relay lehnt das ab (Spec 026). Was direkte oder
   anderweitig eintreffende Pakete angeht, siehe FR-034.
@@ -772,6 +803,24 @@ angezeigter ursprünglicher Autorin.
   Freigaben, MUSS er nur einmal in dessen Vault liegen. Endet eine dieser
   Freigaben, bleibt er, solange eine andere ihn umfasst.
 
+**Rotieren der Vault-Identität**
+
+- **FR-043** (Schließen beim Rotieren): Rotiert die Vault des Eigentümers ihre
+  Vault-Identität (Spec 024, „Schließen und Verlassen beim Rotieren“), MUSS
+  holzi jede ihrer Datenfreigaben mit der alten Identität schließen, bevor es
+  auf die neue wechselt; rotiert die Vault eines Empfängers, MUSS holzi mit der
+  alten Identität austreten. Anders als beim Austritt nach FR-026 MUSS der
+  Empfänger dabei seine empfangenen Einträge behalten, gekennzeichnet als
+  „Freigabe beendet“ wie in FR-035. Das Schließen ist endgültig: Eine
+  geschlossene Datenfreigabe DARF sich NICHT wieder öffnen lassen, auch nicht
+  vom Eigentümer, und holzi MUSS danach für sie nichts mehr hochladen (das
+  Relay nimmt ebenfalls nichts mehr an, Spec 026). Sobald ein Gerät eines
+  Empfängers das Schließen erfährt, MUSS es die Freigabe als „vom Admin
+  geschlossen“ zeigen, die Synchronisierung beenden und die empfangenen
+  Einträge als lokale Kopie behalten. Die Eigentümerschaft MUSS dabei bei
+  keiner anderen Identität landen (D23). Ein Empfänger, dessen Identität
+  rotiert ist, kommt nur über eine neue Einladung wieder hinein.
+
 ### Key Entities
 
 - **Freigabetyp-Erklärung**: Teil des signierten Manifests einer Erweiterung.
@@ -779,9 +828,9 @@ angezeigter ursprünglicher Autorin.
   Fremdschlüssel, optionale Verweise auf andere Freigabetypen derselben
   Erweiterung. Bei Installation und Update geprüft (FR-002).
 - **Datenfreigabe**: Kennung, Eigentümer (Vault-Identität), Freigabetyp mit
-  Erweiterung, Wurzel, Zeitpunkt der Anlage, Zustand (aktiv oder beendet).
-  Gehört der Vault des Eigentümers und synchronisiert sich zwischen seinen
-  Geräten.
+  Erweiterung, Wurzel, Zeitpunkt der Anlage, Zustand (aktiv, beendet oder
+  endgültig geschlossen, FR-043). Gehört der Vault des Eigentümers und
+  synchronisiert sich zwischen seinen Geräten.
 - **Recht**: Datenfreigabe, Vault-Identität des Empfängers, Fähigkeiten (Lesen,
   Schreiben, Löschen), Stand der Einladung. Nur vom Eigentümer geschrieben.
 - **Schlüsselgeneration**: je Datenfreigabe; Inhaltsschlüssel verschlüsselt an
@@ -887,8 +936,14 @@ angezeigter ursprünglicher Autorin.
   nur Daten von Erweiterungen.
 - Weiterteilen durch Empfänger und mehrere Admins (D6, D7), ebenso das
   Verhindern, dass ein Empfänger Inhalte kopiert und selbst neu teilt.
-- Übergabe der Eigentümerschaft, auch wenn die Vault des Eigentümers verloren
-  ist.
+- Die Eigentümerschaft (Admin-Rolle) übertragen, weder beim Rotieren der
+  Vault-Identität noch auf Wunsch noch nach Verlust der Vault (D23). Geht die
+  Vault des Eigentümers verloren, ist die Datenfreigabe eingefroren; rotiert
+  sie, wird die Datenfreigabe geschlossen (FR-043).
+- Eine geschlossene Datenfreigabe wieder öffnen (FR-043).
+- Eine Hilfe „neu anlegen und dieselben Empfänger einladen“ nach dem Schließen
+  beim Rotieren; der Eigentümer legt die Datenfreigabe von Hand neu an und lädt
+  ein.
 - Rechte feiner als je Datenfreigabe (je Eintrag oder Feld) und Gruppen als
   Empfänger.
 - Teilen mit Personen ohne holzi, öffentliche Links.
