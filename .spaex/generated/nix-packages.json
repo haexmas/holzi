@@ -3,6 +3,7 @@
   "cairo",
   "cargo",
   "clippy",
+  "corepack_22",
   "cudatoolkit",
   "curl",
   "dbus.lib",
