@@ -185,6 +185,11 @@ impl SyncNode {
         self.inner.bump.send_modify(|n| *n = n.wrapping_add(1));
     }
 
+    /// This device's own key, which is on its device list but never a peer.
+    pub fn device_pubkey(&self) -> [u8; 32] {
+        self.inner.keys.device_pubkey
+    }
+
     /// Devices with a live session.
     pub fn connected(&self) -> Vec<[u8; 32]> {
         let peers = self.inner.peers.lock().unwrap_or_else(|e| e.into_inner());
@@ -198,12 +203,13 @@ impl SyncNode {
         self.inner.lookup.add_endpoint_info(addr);
     }
 
-    /// Brings the endpoint's relay set in line with `urls` (spec 024,
-    /// FR-008: relay changes from the settings apply at runtime). Invalid
-    /// URLs are dropped with a log line; a relay that fails to add or
-    /// remove is likewise only logged (Constitution VII).
-    pub async fn apply_relays(&self, urls: &[String]) {
-        let want = crate::sync::servers::parse_relay_urls(urls);
+    /// Brings the endpoint's relay set in line with `mode` (spec 024,
+    /// FR-008: relay changes from the settings apply at runtime). Takes the
+    /// same [`RelayMode`] as [`Self::bind`] (from
+    /// [`crate::sync::servers::ServerConfig::relay_mode`]), so an emptied
+    /// setting goes back to iroh's default relays instead of to none.
+    pub async fn apply_relays(&self, mode: &RelayMode) {
+        let want = mode.relay_map().urls::<Vec<RelayUrl>>();
         let have = {
             let applied = self
                 .inner

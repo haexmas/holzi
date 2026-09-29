@@ -51,8 +51,12 @@ pub async fn reconnect_missing(node: &endpoint::SyncNode, replica: &replica::Rep
             }
         };
     let connected: std::collections::HashSet<[u8; 32]> = node.connected().into_iter().collect();
+    let own = node.device_pubkey();
     for row in rows {
-        if !known.contains(&row.device_pubkey) || connected.contains(&row.device_pubkey) {
+        if row.device_pubkey == own
+            || !known.contains(&row.device_pubkey)
+            || connected.contains(&row.device_pubkey)
+        {
             continue;
         }
         let Some(addr) = row.endpoint_addr else {

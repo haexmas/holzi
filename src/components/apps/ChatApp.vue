@@ -322,9 +322,11 @@ const { chatTitle, syncFromLocation, ui } = useChatTab({
 // must appear here without reloading; the messages of the open thread
 // already arrive over `chat.on*` regardless of origin.
 const sync = useSync()
-watch(sync.lastChangedAt, () => {
-  if (sync.lastChangedTables.value.includes('chat_threads'))
-    void refreshThreads()
+watch(sync.changeCount, () => {
+  if (!sync.lastChangedTables.value.includes('chat_threads')) return
+  refreshThreads().catch((e: unknown) => {
+    if (!unmounted) lastError.value = errString(e)
+  })
 })
 
 onMounted(async () => {

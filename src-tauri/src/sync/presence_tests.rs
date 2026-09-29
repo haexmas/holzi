@@ -176,13 +176,18 @@ async fn a_fresh_meeting_from_a_listed_device_is_recorded_and_looked_up() {
     // a real relay never redelivers one to a subscription opened after
     // the fact) has a live subscription to actually land on.
     let linked_node = Arc::new(bind_loopback(&linked).await);
+    let reconnect = Arc::new(tokio::sync::Notify::new());
     let receiver = {
         let linked_node = Arc::clone(&linked_node);
         let replica = Arc::clone(&linked.device.replica);
         let keys = linked.keys.clone();
         let vault = linked.vault;
         let relay_urls = vec![url.to_string()];
+        let reconnect = Arc::clone(&reconnect);
         tokio::spawn(async move {
+            // The sender stays alive for the whole run: a dropped one closes
+            // the channel, and `run` ends on a closed `changed`.
+            let (_changed_tx, changed_rx) = tokio::sync::watch::channel(0u64);
             let _ = tokio::time::timeout(
                 Duration::from_secs(10),
                 run(
@@ -191,7 +196,8 @@ async fn a_fresh_meeting_from_a_listed_device_is_recorded_and_looked_up() {
                     &keys,
                     vault,
                     relay_urls,
-                    tokio::sync::watch::channel(0u64).1,
+                    changed_rx,
+                    &reconnect,
                 ),
             )
             .await;
@@ -246,13 +252,64 @@ async fn a_fresh_meeting_from_a_listed_device_is_recorded_and_looked_up() {
     // A fresh, authenticated meeting also nudges reconnect right away
     // (T039): recording presence and never dialing would leave two
     // devices that just found each other waiting out a whole idle tick.
+    // Presence only wakes the reconnect loop (`SyncService` runs it); here
+    // the test stands in for that loop.
+    tokio::time::timeout(Duration::from_secs(5), reconnect.notified())
+        .await
+        .expect("presence recording a fresh meeting wakes reconnect");
+    crate::sync::reconnect_missing(&linked_node, &linked.device.replica).await;
     tokio::time::timeout(Duration::from_secs(5), async {
         while linked_node.connected().is_empty() {
             tokio::task::yield_now().await;
         }
     })
     .await
-    .expect("presence recording a fresh meeting also dials it");
+    .expect("reconnect dials the device presence just recorded");
     assert_eq!(linked_node.connected(), vec![main.keys.device_pubkey]);
     receiver.abort();
+}
+
+/// The relay hands a device its own meetings back (it subscribes to the
+/// mailbox it publishes to); recording those would list this device as its
+/// own peer and have reconnect dial itself.
+#[tokio::test]
+async fn a_device_ignores_its_own_meeting() {
+    let main = Member::genesis();
+    let node = bind_loopback(&main).await;
+    let content_key = crate::storage::query::read(main.device.db(), |r| {
+        crate::sync::content_keys::current_key(r, &[])
+    })
+    .expect("read")
+    .expect("a content key");
+    let day = day_tag_now();
+    let (_, mb_pk) = mailbox_keys(&content_key.key, day).expect("mailbox keys");
+    let addr = node.addr();
+    let content = PresenceContent::own(
+        main.keys.device_pubkey,
+        main.keys.endpoint_id,
+        None,
+        addr.ip_addrs().copied().collect(),
+        1,
+    );
+    let event = build(&main.keys, &content, &mb_pk).expect("build");
+
+    let recorded = handle_incoming(
+        &node,
+        &main.device.replica,
+        &main.keys,
+        main.vault,
+        day,
+        &event,
+    )
+    .await;
+    assert!(!recorded);
+    let rows =
+        crate::storage::query::read(main.device.db(), |r| load_all(r)).expect("read presence");
+    assert!(rows.is_empty());
+}
+
+#[test]
+fn a_crypto_provider_is_installed_for_the_relay_websocket() {
+    ensure_crypto_provider();
+    assert!(rustls::crypto::CryptoProvider::get_default().is_some());
 }

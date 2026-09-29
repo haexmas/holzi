@@ -150,6 +150,9 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
     // device-list change this session just issued) goes through this
     // `watch` channel instead.
     let (changed_tx, changed_rx) = tokio::sync::watch::channel(0u64);
+    // Presence wakes reconnect as soon as it records a fresh meeting, so a
+    // device that just appeared is dialed without waiting out the tick.
+    let reconnect_now = Notify::new();
     let notify_loop = async {
         loop {
             notify.notified().await;
@@ -164,11 +167,15 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
         vault,
         nostr_relays,
         changed_rx,
+        &reconnect_now,
     );
     let reconnect_loop = async {
         let mut tick = tokio::time::interval(RECONNECT_INTERVAL);
         loop {
-            tick.tick().await;
+            tokio::select! {
+                _ = tick.tick() => {}
+                _ = reconnect_now.notified() => {}
+            }
             crate::sync::reconnect_missing(&node, &replica).await;
         }
     };

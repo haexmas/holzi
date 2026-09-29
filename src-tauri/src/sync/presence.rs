@@ -326,9 +326,21 @@ pub fn load_all(q: &mut impl Query) -> haex_crdt::Result<Vec<StoredPresence>> {
 /// How often this device republishes its own presence, absent an address
 /// change (contracts/nostr-events.md).
 const PUBLISH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
-/// How long connecting to one relay may take before moving on
-/// (Constitution VII: a slow or dead relay never blocks the others).
+/// How long presence waits for its relays before it goes on without them
+/// (Constitution VII: a slow or dead relay never blocks the others). The
+/// relays keep connecting, and reconnecting, in the background.
 const RELAY_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Installs `ring` as the process-wide rustls crypto provider, unless one is
+/// already installed. The relay client's `wss://` websocket asks rustls for
+/// that default, and with both `ring` (iroh) and `aws-lc-rs` (reqwest) in
+/// the dependency tree rustls cannot choose on its own and panics instead.
+pub fn ensure_crypto_provider() {
+    if rustls::crypto::CryptoProvider::get_default().is_none() {
+        // A concurrent install winning the race is just as good.
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+}
 
 /// Runs presence for as long as this device's session lasts: connects to
 /// `relay_urls`, subscribes to today's and yesterday's mailbox, publishes
@@ -336,7 +348,9 @@ const RELAY_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_sec
 /// right away whenever `changed` fires, so a device list this session just
 /// issued (linking, removing) does not wait out the rest of the 60 s tick
 /// — and feeds every fresh, authenticated meeting it receives into `node`'s
-/// address book and `device_presence_no_sync`. Returns only if the relay
+/// address book and `device_presence_no_sync`, then wakes `reconnect` so
+/// the caller's reconnect loop dials it (dialing here would stall presence
+/// for as long as an offline device's dial takes). Returns only if the relay
 /// client itself ends; the caller races this against its own cancellation.
 pub async fn run(
     node: &crate::sync::endpoint::SyncNode,
@@ -345,21 +359,21 @@ pub async fn run(
     vault: [u8; 32],
     relay_urls: Vec<String>,
     mut changed: tokio::sync::watch::Receiver<u64>,
+    reconnect: &tokio::sync::Notify,
 ) {
     use futures::StreamExt;
 
+    ensure_crypto_provider();
     let client = nostr_sdk::client::Client::new();
     for url in &relay_urls {
-        match client.add_relay(url.as_str()).await {
-            Ok(_) => {
-                let _ = client
-                    .try_connect_relay(url.as_str(), RELAY_CONNECT_TIMEOUT)
-                    .await
-                    .inspect_err(|e| log::warn!("sync: presence relay {url} did not connect: {e}"));
-            }
-            Err(error) => log::warn!("sync: presence relay {url} is not a valid URL: {error}"),
+        if let Err(error) = client.add_relay(url.as_str()).await {
+            log::warn!("sync: presence relay {url} is not a valid URL: {error}");
         }
     }
+    // Unlike `try_connect_relay`, `connect` keeps a relay that is down right
+    // now (e.g. the device opened the vault offline) reconnecting in the
+    // background, and each reconnect renews the subscription (FR-010).
+    client.connect().and_wait(RELAY_CONNECT_TIMEOUT).await;
 
     let mut notifications = client.notifications();
     let mut publish_tick = tokio::time::interval(PUBLISH_INTERVAL);
@@ -392,7 +406,9 @@ pub async fn run(
             notification = notifications.next() => {
                 let Some(notification) = notification else { break };
                 if let nostr_sdk::client::ClientNotification::Event { event, .. } = notification {
-                    handle_incoming(node, replica, vault, day, &event).await;
+                    if handle_incoming(node, replica, keys, vault, day, &event).await {
+                        reconnect.notify_one();
+                    }
                 }
             }
         }
@@ -461,41 +477,49 @@ async fn publish_own(
 /// nostr-events.md's receiver checks): fresh, signed by a device the
 /// current effective list still names with that same endpoint, and (except
 /// for a still-unlisted copy checking a newer list) not from a stranger.
+/// Returns whether it recorded one, i.e. whether reconnect has something
+/// new to dial.
 async fn handle_incoming(
     node: &crate::sync::endpoint::SyncNode,
     replica: &crate::sync::replica::Replica,
+    keys: &DeviceKeys,
     vault: [u8; 32],
     day: u32,
     event: &Event,
-) {
+) -> bool {
     let roster = match read_roster(replica, vault) {
         Ok(Some(roster)) => roster,
-        Ok(None) => return,
+        Ok(None) => return false,
         Err(error) => {
             log::warn!("sync: presence could not load the current state: {error}");
-            return;
+            return false;
         }
     };
     let Ok((mb_sk_today, _)) = mailbox_keys(&roster.content_key, day) else {
-        return;
+        return false;
     };
     let Ok((mb_sk_yesterday, _)) = mailbox_keys(&roster.content_key, day.saturating_sub(1)) else {
-        return;
+        return false;
     };
     let opened = open(event, &mb_sk_today).or_else(|_| open(event, &mb_sk_yesterday));
     let (sender, content) = match opened {
         Ok(pair) => pair,
-        Err(_) => return,
+        Err(_) => return false,
     };
+    // The relay delivers this device's own meetings back to it, since it
+    // subscribes to the same mailbox it publishes to.
+    if sender == keys.device_pubkey {
+        return false;
+    }
     if content.device != sender || !content.is_fresh(now_ms()) {
-        return;
+        return false;
     }
     if roster.effective_devices.iter().all(|d| *d != sender) {
         // Meetings of unknown devices lead to no connection, except a
         // newer list from a copy of this vault — left for a later story
         // (FR-007's admission path) to act on; presence still records
         // nothing for them.
-        return;
+        return false;
     }
 
     let endpoint_addr = content.endpoint_addr().ok();
@@ -508,11 +532,12 @@ async fn handle_incoming(
     });
     if let Err(error) = write_result {
         log::warn!("sync: recording presence for a device failed: {error}");
+        return false;
     }
     // This write does not go through `VaultDb`, so it never reaches the
-    // gate's sync-notify signal (spec 024, FR-010): reconnect is nudged
-    // directly, right here, instead of waiting for its own periodic tick.
-    crate::sync::reconnect_missing(node, replica).await;
+    // gate's sync-notify signal (spec 024, FR-010): the caller nudges
+    // reconnect directly instead of leaving it to its own periodic tick.
+    true
 }
 
 /// This device's current presence-relevant state: the content key it holds

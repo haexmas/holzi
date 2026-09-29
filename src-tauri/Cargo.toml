@@ -87,6 +87,11 @@ zeroize = { version = "1", features = ["serde"] }
 # instead of a real server.
 nostr = { version = "0.45", features = ["nip44", "nip59", "os-rng"] }
 nostr-sdk = "0.45"
+# The relay client's websocket (tungstenite over rustls) takes the process-wide
+# default crypto provider, and with both `ring` (iroh) and `aws-lc-rs`
+# (reqwest) in the tree rustls cannot pick one itself: the first `wss://`
+# connect panics. `sync::presence` installs `ring` explicitly.
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 secp256k1 = "0.30"
 iroh = { version = "1.2", default-features = false, features = ["tls-ring"] }
 hkdf = "0.13"

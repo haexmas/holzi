@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import { listen } from '@tauri-apps/api/event'
 
 const SYNC_DATA_CHANGED = 'sync-data-changed'
 
@@ -17,29 +17,36 @@ interface SyncDataChangedPayload {
  * the end of the vault session (one vault per process, spec 013).
  *
  * Views interested in a specific table watch `lastChangedTables`/
- * `lastChangedAt` themselves (e.g. `watch(lastChangedAt, () => { if
+ * `changeCount` themselves (e.g. `watch(changeCount, () => { if
  * (lastChangedTables.value.includes('chat_threads')) refreshThreads() })`)
- * rather than `useSync` calling into every consumer directly.
+ * rather than `useSync` calling into every consumer directly. `changeCount`
+ * goes up by one per event, so two events in quick succession still wake a
+ * watcher twice.
  */
 const lastChangedTables = ref<string[]>([])
-const lastChangedAt = ref(0)
-let unlisten: UnlistenFn | null = null
+const changeCount = ref(0)
+let listening: Promise<void> | null = null
 
 export function useSync() {
-  async function startListening() {
-    if (unlisten) return
-    unlisten = await listen<SyncDataChangedPayload>(
-      SYNC_DATA_CHANGED,
-      (event) => {
-        lastChangedTables.value = event.payload.tables
-        lastChangedAt.value = Date.now()
+  function startListening(): Promise<void> {
+    // Shared while `listen` is pending, so a second caller does not
+    // register a second listener; a failed registration may be retried.
+    listening ??= listen<SyncDataChangedPayload>(SYNC_DATA_CHANGED, (event) => {
+      lastChangedTables.value = event.payload.tables
+      changeCount.value += 1
+    }).then(
+      () => {},
+      (error: unknown) => {
+        listening = null
+        throw error
       },
     )
+    return listening
   }
 
   return {
     lastChangedTables,
-    lastChangedAt,
+    changeCount,
     startListening,
   }
 }
