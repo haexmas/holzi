@@ -110,3 +110,36 @@ fn legacy_rows_move_to_the_fixed_id_with_their_references() {
     .expect("count markers");
     assert_eq!(markers, 2, "both legacy rows leave a delete marker");
 }
+
+#[test]
+fn an_older_legacy_row_wins_over_an_existing_fixed_row() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db = open_vault(dir.path());
+    let legacy = Uuid::new_v4();
+    db.write(|tx| {
+        insert_legacy_row(tx, legacy, 10)?;
+        insert_provider(
+            tx,
+            &Provider {
+                id: local_provider_id(),
+                kind: ProviderKind::Local,
+                adapter: None,
+                name: "new fixed value".to_string(),
+                base_url: None,
+                credentials: None,
+                created_at: 20,
+                capability: ProviderCapability::Chat,
+            },
+        )?;
+        Ok(())
+    })
+    .expect("seed providers");
+
+    db.write(ensure_local_provider).expect("move");
+
+    let fixed = query::read(&db, |r| get_provider(r, local_provider_id()))
+        .expect("read")
+        .expect("fixed row");
+    assert_eq!((fixed.name.as_str(), fixed.created_at), ("legacy 10", 10));
+    assert_eq!(local_chat_ids(&db), vec![local_provider_id()]);
+}

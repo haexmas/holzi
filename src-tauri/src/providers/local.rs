@@ -12,8 +12,8 @@ use uuid::Uuid;
 
 use crate::storage::providers::{
     delete_provider, find_provider_by_kind_and_capability, get_provider, insert_provider,
-    move_provider_references, provider_ids_by_kind_and_capability, Provider, ProviderCapability,
-    ProviderKind,
+    move_provider_references, provider_ids_by_kind_and_capability, update_provider, Provider,
+    ProviderCapability, ProviderKind,
 };
 use crate::storage::query::Query;
 
@@ -82,22 +82,35 @@ fn ensure_fixed(
     name: &str,
 ) -> Result<Uuid> {
     let existing = provider_ids_by_kind_and_capability(tx, ProviderKind::Local, capability)?;
-    if !existing.contains(&id) {
-        let provider = match existing.first() {
-            Some(&oldest) => get_provider(tx, oldest)?.map(|p| Provider { id, ..p }),
-            None => None,
-        };
-        let provider = provider.unwrap_or_else(|| Provider {
-            id,
-            kind: ProviderKind::Local,
-            adapter: adapter.map(str::to_string),
-            name: name.to_string(),
-            base_url: None,
-            credentials: None,
-            created_at: now_ms(),
-            capability,
-        });
-        insert_provider(tx, &provider)?;
+    let replacement = match existing.first() {
+        Some(&oldest) => get_provider(tx, oldest)?,
+        None => None,
+    };
+    match replacement {
+        Some(provider) if provider.id != id => {
+            let provider = Provider { id, ..provider };
+            if existing.contains(&id) {
+                update_provider(tx, &provider)?;
+            } else {
+                insert_provider(tx, &provider)?;
+            }
+        }
+        None if !existing.contains(&id) => {
+            insert_provider(
+                tx,
+                &Provider {
+                    id,
+                    kind: ProviderKind::Local,
+                    adapter: adapter.map(str::to_string),
+                    name: name.to_string(),
+                    base_url: None,
+                    credentials: None,
+                    created_at: now_ms(),
+                    capability,
+                },
+            )?;
+        }
+        _ => {}
     }
     for old in existing.into_iter().filter(|&old| old != id) {
         move_provider_references(tx, old, id)?;

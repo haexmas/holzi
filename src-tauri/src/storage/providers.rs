@@ -112,6 +112,24 @@ pub fn insert_provider(tx: &mut CrdtTransaction<'_>, p: &Provider) -> haex_crdt:
     )
 }
 
+/// Replaces a provider's fields while preserving its id.
+pub fn update_provider(tx: &mut CrdtTransaction<'_>, p: &Provider) -> haex_crdt::Result<usize> {
+    tx.execute(
+        "UPDATE providers SET kind = ?1, adapter = ?2, name = ?3, base_url = ?4, \
+         credentials = ?5, created_at = ?6, capability = ?7 WHERE id = ?8",
+        params![
+            p.kind.as_str(),
+            p.adapter,
+            p.name,
+            p.base_url,
+            p.credentials,
+            p.created_at,
+            p.capability.as_str(),
+            p.id.to_string(),
+        ],
+    )
+}
+
 /// Deletes a provider by id.
 pub fn delete_provider(tx: &mut CrdtTransaction<'_>, id: Uuid) -> haex_crdt::Result<usize> {
     tx.execute(
