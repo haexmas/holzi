@@ -10,6 +10,10 @@
 //! device. These tests pin the behaviour against the real vault so the
 //! delete-then-insert shape cannot come back unnoticed.
 
+// These tests read raw vault state (counts, CRDT columns, the delete log) that
+// the CRDT write path does not expose.
+#![allow(clippy::disallowed_methods)]
+
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -21,6 +25,7 @@ use uuid::Uuid;
 
 use holzi_lib::identity::{holzi_migration_source, installation_id_path, HolziBootstrap};
 use holzi_lib::storage::models::{self as models_store, IntegrityStatus, ModelRow, SourceKind};
+use holzi_lib::storage::query;
 
 const PASSPHRASE: &str = "provider-models-integration-test";
 
@@ -36,6 +41,7 @@ fn open_vault(dir: &Path) -> Database {
         signature_provider: Arc::new(NoopSignatureProvider),
         migration_source: holzi_migration_source(),
         trigger_version: DEFAULT_TRIGGER_VERSION,
+        max_transaction_bytes: haex_crdt::MAX_CRDT_TRANSACTION_BYTES,
     })
     .expect("vault open")
 }
@@ -75,8 +81,8 @@ fn tombstones(db: &Database) -> i64 {
 
 /// The cached model ids for one provider, ordered by name.
 fn cached_ids(db: &Database, provider_id: Uuid) -> Vec<String> {
-    db.with_connection(|conn| {
-        Ok(models_store::list_models_by_provider(conn, provider_id)
+    query::read(db, |r| {
+        Ok(models_store::list_models_by_provider(r, provider_id)
             .expect("list models")
             .into_iter()
             .map(|m| m.id)
@@ -94,8 +100,8 @@ fn refresh_keeps_surviving_rows_out_of_the_delete_log() {
     let provider_id = Uuid::new_v4();
 
     let fresh = vec![model(provider_id, "opus"), model(provider_id, "haiku")];
-    db.with_connection(|conn| {
-        models_store::replace_provider_models(conn, provider_id, &fresh).expect("first refresh");
+    db.write(|tx| {
+        models_store::replace_provider_models(tx, provider_id, &fresh).expect("first refresh");
         Ok(())
     })
     .expect("first refresh");
@@ -103,8 +109,8 @@ fn refresh_keeps_surviving_rows_out_of_the_delete_log() {
 
     // Second refresh, identical listing — the classic delete-all +
     // re-insert shape would emit one tombstone per surviving model.
-    db.with_connection(|conn| {
-        models_store::replace_provider_models(conn, provider_id, &fresh).expect("second refresh");
+    db.write(|tx| {
+        models_store::replace_provider_models(tx, provider_id, &fresh).expect("second refresh");
         Ok(())
     })
     .expect("second refresh");
@@ -133,16 +139,16 @@ fn refresh_removes_models_the_provider_no_longer_reports() {
     let db = open_vault(tmp.path());
     let provider_id = Uuid::new_v4();
 
-    db.with_connection(|conn| {
+    db.write(|tx| {
         let initial = vec![model(provider_id, "opus"), model(provider_id, "retired")];
-        models_store::replace_provider_models(conn, provider_id, &initial).expect("seed");
+        models_store::replace_provider_models(tx, provider_id, &initial).expect("seed");
         Ok(())
     })
     .expect("seed");
 
-    db.with_connection(|conn| {
+    db.write(|tx| {
         let shrunk = vec![model(provider_id, "opus")];
-        models_store::replace_provider_models(conn, provider_id, &shrunk).expect("shrink");
+        models_store::replace_provider_models(tx, provider_id, &shrunk).expect("shrink");
         Ok(())
     })
     .expect("shrink");
@@ -167,13 +173,13 @@ fn refresh_tolerates_a_duplicate_model_id() {
     let db = open_vault(tmp.path());
     let provider_id = Uuid::new_v4();
 
-    db.with_connection(|conn| {
+    db.write(|tx| {
         let overlapping = vec![
             model(provider_id, "opus"),
             model(provider_id, "haiku"),
             model(provider_id, "opus"),
         ];
-        models_store::replace_provider_models(conn, provider_id, &overlapping)
+        models_store::replace_provider_models(tx, provider_id, &overlapping)
             .expect("duplicate ids must not fail the refresh");
         Ok(())
     })
@@ -200,14 +206,14 @@ fn refresh_leaves_other_providers_alone() {
     let refreshed = Uuid::new_v4();
     let other = Uuid::new_v4();
 
-    db.with_connection(|conn| {
-        conn.execute(
+    db.write(|tx| {
+        tx.execute(
             "INSERT INTO models (id, provider_id, name, context_window, fetched_at, \
-             tokenizer_repo, haex_hlc_no_sync) \
-             VALUES (?1, ?2, 'local gguf', 4096, NULL, 'org/tok', current_hlc())",
+             tokenizer_repo) \
+             VALUES (?1, ?2, 'local gguf', 4096, NULL, 'org/tok')",
             params!["qwen2.5-0.5b", other.to_string()],
         )?;
-        models_store::replace_provider_models(conn, refreshed, &[model(refreshed, "opus")])
+        models_store::replace_provider_models(tx, refreshed, &[model(refreshed, "opus")])
             .expect("refresh");
         Ok(())
     })

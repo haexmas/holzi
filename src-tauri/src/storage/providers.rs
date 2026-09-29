@@ -5,10 +5,12 @@
 //! later slice; this module makes sure the row layout the deferred sync
 //! path expects is already frozen.
 
-use haex_crdt::crdt::columns::HLC_TIMESTAMP_COLUMN;
-use haex_crdt::rusqlite::{params, Connection, OptionalExtension, Result};
+use haex_crdt::rusqlite::{params, Result};
+use haex_crdt::CrdtTransaction;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+use crate::storage::query::Query;
 
 /// Provider row as stored in SQLite. `credentials` is opaque bytes — for
 /// `api_key` providers it is the API key, and for `cli_delegate`
@@ -91,16 +93,12 @@ impl ProviderCapability {
     }
 }
 
-/// Inserts a provider row. Always sets `haex_hlc_no_sync = current_hlc()`
-/// so the write is visible to the sync scanner (Etappe-0 finding #2).
-pub fn insert_provider(conn: &Connection, p: &Provider) -> Result<usize> {
-    let sql = format!(
+/// Inserts a provider row.
+pub fn insert_provider(tx: &mut CrdtTransaction<'_>, p: &Provider) -> haex_crdt::Result<usize> {
+    tx.execute(
         "INSERT INTO providers \
-           (id, kind, adapter, name, base_url, credentials, created_at, capability, {HLC_TIMESTAMP_COLUMN}) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, current_hlc())"
-    );
-    conn.execute(
-        &sql,
+           (id, kind, adapter, name, base_url, credentials, created_at, capability) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
             p.id.to_string(),
             p.kind.as_str(),
@@ -115,47 +113,53 @@ pub fn insert_provider(conn: &Connection, p: &Provider) -> Result<usize> {
 }
 
 /// Deletes a provider by id.
-pub fn delete_provider(conn: &Connection, id: Uuid) -> Result<usize> {
-    conn.execute(
+pub fn delete_provider(tx: &mut CrdtTransaction<'_>, id: Uuid) -> haex_crdt::Result<usize> {
+    tx.execute(
         "DELETE FROM providers WHERE id = ?1",
         params![id.to_string()],
     )
 }
 
 /// Persists a repaired adapter discriminator and marks the CRDT row dirty.
-pub fn set_adapter(conn: &Connection, id: Uuid, adapter: &str) -> Result<usize> {
-    let sql = format!(
-        "UPDATE providers SET adapter = ?1, {HLC_TIMESTAMP_COLUMN} = current_hlc() \
-         WHERE id = ?2"
-    );
-    conn.execute(&sql, params![adapter, id.to_string()])
+pub fn set_adapter(
+    tx: &mut CrdtTransaction<'_>,
+    id: Uuid,
+    adapter: &str,
+) -> haex_crdt::Result<usize> {
+    tx.execute(
+        "UPDATE providers SET adapter = ?1 WHERE id = ?2",
+        params![adapter, id.to_string()],
+    )
 }
 
 /// Overwrites a provider's stored credentials in place (spec 007-cli-delegate
 /// `connect_cli_delegate`/`submit_cli_delegate_code` upsert semantics,
 /// contracts/tauri-commands.md — a reconnect updates the existing
 /// `cli_delegate` row instead of inserting a duplicate).
-pub fn update_credentials(conn: &Connection, id: Uuid, credentials: &[u8]) -> Result<usize> {
-    let sql = format!(
-        "UPDATE providers SET credentials = ?1, {HLC_TIMESTAMP_COLUMN} = current_hlc() \
-         WHERE id = ?2"
-    );
-    conn.execute(&sql, params![credentials, id.to_string()])
+pub fn update_credentials(
+    tx: &mut CrdtTransaction<'_>,
+    id: Uuid,
+    credentials: &[u8],
+) -> haex_crdt::Result<usize> {
+    tx.execute(
+        "UPDATE providers SET credentials = ?1 WHERE id = ?2",
+        params![credentials, id.to_string()],
+    )
 }
 
 /// Finds the singleton `cli_delegate` provider row for one vendor, if any
 /// (mirrors `providers::local::find_local_provider`'s one-row-per-kind
 /// pattern, scoped further by `adapter`).
-pub fn find_cli_delegate_provider(conn: &Connection, vendor: &str) -> Result<Option<Uuid>> {
-    let mut stmt = conn.prepare(
+pub fn find_cli_delegate_provider(
+    q: &mut impl Query,
+    vendor: &str,
+) -> haex_crdt::Result<Option<Uuid>> {
+    let raw: Option<String> = q.query_row(
         "SELECT id FROM providers WHERE kind = ?1 AND adapter = ?2 \
          ORDER BY created_at ASC LIMIT 1",
+        params![ProviderKind::CliDelegate.as_str(), vendor],
+        |r| r.get(0),
     )?;
-    let raw: Option<String> = stmt
-        .query_row(params![ProviderKind::CliDelegate.as_str(), vendor], |r| {
-            r.get(0)
-        })
-        .optional()?;
     Ok(raw.and_then(|s| Uuid::parse_str(&s).ok()))
 }
 
@@ -167,38 +171,37 @@ pub fn find_cli_delegate_provider(conn: &Connection, vendor: &str) -> Result<Opt
 /// which one an unqualified `kind`-only query returns would depend on
 /// `created_at` ordering.
 pub fn find_provider_by_kind_and_capability(
-    conn: &Connection,
+    q: &mut impl Query,
     kind: ProviderKind,
     capability: ProviderCapability,
-) -> Result<Option<Uuid>> {
-    let mut stmt = conn.prepare(
+) -> haex_crdt::Result<Option<Uuid>> {
+    let raw: Option<String> = q.query_row(
         "SELECT id FROM providers WHERE kind = ?1 AND capability = ?2 \
          ORDER BY created_at ASC LIMIT 1",
+        params![kind.as_str(), capability.as_str()],
+        |r| r.get(0),
     )?;
-    let raw: Option<String> = stmt
-        .query_row(params![kind.as_str(), capability.as_str()], |r| r.get(0))
-        .optional()?;
     Ok(raw.and_then(|s| Uuid::parse_str(&s).ok()))
 }
 
 /// Lists all providers ordered by creation time (oldest first).
-pub fn list_providers(conn: &Connection) -> Result<Vec<Provider>> {
-    let mut stmt = conn.prepare(
+pub fn list_providers(q: &mut impl Query) -> haex_crdt::Result<Vec<Provider>> {
+    q.query_map(
         "SELECT id, kind, adapter, name, base_url, credentials, created_at, capability \
          FROM providers ORDER BY created_at ASC",
-    )?;
-    let rows = stmt.query_map([], row_to_provider)?;
-    rows.collect()
+        &[],
+        row_to_provider,
+    )
 }
 
 /// Fetches one provider by id.
-pub fn get_provider(conn: &Connection, id: Uuid) -> Result<Option<Provider>> {
-    let mut stmt = conn.prepare(
+pub fn get_provider(q: &mut impl Query, id: Uuid) -> haex_crdt::Result<Option<Provider>> {
+    q.query_row(
         "SELECT id, kind, adapter, name, base_url, credentials, created_at, capability \
          FROM providers WHERE id = ?1",
-    )?;
-    stmt.query_row(params![id.to_string()], row_to_provider)
-        .optional()
+        params![id.to_string()],
+        row_to_provider,
+    )
 }
 
 fn row_to_provider(row: &haex_crdt::rusqlite::Row<'_>) -> Result<Provider> {

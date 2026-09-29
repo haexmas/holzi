@@ -8,9 +8,12 @@
 //! reaches another device, and `delete` is a real local delete (FR-010).
 //! The content is opaque here; the frontend validates it on load.
 
-use haex_crdt::rusqlite::{self, params, Connection, OptionalExtension};
+use haex_crdt::rusqlite::params;
+use haex_crdt::CrdtTransaction;
 use serde_json::Value;
 use uuid::Uuid;
+
+use crate::storage::query::Query;
 
 /// Upper bound for one serialized session. Typical sessions are a few KB;
 /// the frontend drops the tab histories and retries once if it is exceeded.
@@ -25,18 +28,16 @@ pub enum WmSessionError {
     #[error("the stored session is not valid JSON: {0}")]
     Json(#[from] serde_json::Error),
     #[error(transparent)]
-    Sql(#[from] rusqlite::Error),
+    Crdt(#[from] haex_crdt::Error),
 }
 
 /// Returns the device's saved session, or `None` if there is none.
-pub fn load(conn: &Connection, device: Uuid) -> Result<Option<Value>, WmSessionError> {
-    let stored: Option<String> = conn
-        .query_row(
-            "SELECT session_json FROM wm_sessions_no_sync WHERE vault_device_uuid = ?1",
-            params![device.to_string()],
-            |r| r.get(0),
-        )
-        .optional()?;
+pub fn load(q: &mut impl Query, device: Uuid) -> Result<Option<Value>, WmSessionError> {
+    let stored: Option<String> = q.query_row(
+        "SELECT session_json FROM wm_sessions_no_sync WHERE vault_device_uuid = ?1",
+        params![device.to_string()],
+        |r| r.get(0),
+    )?;
     Ok(stored.map(|json| serde_json::from_str(&json)).transpose()?)
 }
 
@@ -45,7 +46,11 @@ pub fn load(conn: &Connection, device: Uuid) -> Result<Option<Value>, WmSessionE
 /// `ON CONFLICT DO UPDATE` is fine here, unlike on CRDT tables
 /// (`preferences::insert_or_update`): a `_no_sync` table has no triggers
 /// whose dirty-table writes could collide.
-pub fn save(conn: &Connection, device: Uuid, session: &Value) -> Result<(), WmSessionError> {
+pub fn save(
+    tx: &mut CrdtTransaction<'_>,
+    device: Uuid,
+    session: &Value,
+) -> Result<(), WmSessionError> {
     if !session.is_object() {
         return Err(WmSessionError::NotAnObject);
     }
@@ -53,7 +58,7 @@ pub fn save(conn: &Connection, device: Uuid, session: &Value) -> Result<(), WmSe
     if json.len() > MAX_SESSION_BYTES {
         return Err(WmSessionError::TooLarge { bytes: json.len() });
     }
-    conn.execute(
+    tx.execute(
         "INSERT INTO wm_sessions_no_sync (vault_device_uuid, session_json, updated_at) \
          VALUES (?1, ?2, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) \
          ON CONFLICT(vault_device_uuid) DO UPDATE SET \
@@ -69,8 +74,8 @@ pub fn save(conn: &Connection, device: Uuid, session: &Value) -> Result<(), WmSe
 /// another peer leaves this row behind. haex-crdt applies remote deletes
 /// with foreign keys off, so a cascade would not fire anyway; an orphan
 /// row is harmless because only the own device's row is ever read.
-pub fn delete(conn: &Connection, device: Uuid) -> rusqlite::Result<usize> {
-    conn.execute(
+pub fn delete(tx: &mut CrdtTransaction<'_>, device: Uuid) -> haex_crdt::Result<usize> {
+    tx.execute(
         "DELETE FROM wm_sessions_no_sync WHERE vault_device_uuid = ?1",
         params![device.to_string()],
     )

@@ -180,18 +180,11 @@ pub async fn add_provider(
         capability: ProviderCapability::Chat,
     };
     let inserted = provider.clone();
-    let insert_db = db.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        insert_db.with_connection(|conn| {
-            storage::insert_provider(conn, &inserted).map_err(haex_crdt::Error::from)?;
-            Ok(())
-        })
+    db.write(move |tx| {
+        storage::insert_provider(tx, &inserted)?;
+        Ok(())
     })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("insert_provider join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
+    .await?;
 
     // Auto-refresh remote providers so the model picker is populated
     // immediately after the credentials land. Refresh failures are
@@ -220,14 +213,7 @@ pub async fn add_provider(
 #[tauri::command]
 pub async fn list_providers(state: State<'_, AppState>) -> Result<Vec<ProviderPayload>> {
     let db = active_database(&state)?;
-    let rows = tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| storage::list_providers(conn).map_err(haex_crdt::Error::from))
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("list_providers join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
+    let rows = db.read(move |r| storage::list_providers(r)).await?;
     Ok(rows.into_iter().map(Into::into).collect())
 }
 
@@ -257,20 +243,12 @@ pub async fn refresh_provider_models(
     provider_id: Uuid,
 ) -> Result<RefreshProviderModelsResult> {
     let db = active_database(&state)?;
-    let db_read = db.clone();
-    let provider = tauri::async_runtime::spawn_blocking(move || {
-        db_read.with_connection(|conn| {
-            storage::get_provider(conn, provider_id).map_err(haex_crdt::Error::from)
-        })
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("get_provider join: {e}"),
-    })?
-    .map_err(HolziError::from)?
-    .ok_or_else(|| HolziError::InvalidInput {
-        reason: format!("provider {provider_id} not found"),
-    })?;
+    let provider = db
+        .read(move |r| storage::get_provider(r, provider_id))
+        .await?
+        .ok_or_else(|| HolziError::InvalidInput {
+            reason: format!("provider {provider_id} not found"),
+        })?;
 
     let model_count = state.gate().run(do_refresh(&db, &provider)).await??;
 
@@ -304,16 +282,9 @@ pub async fn list_provider_models(
     provider_id: Uuid,
 ) -> Result<Vec<ProviderModelPayload>> {
     let db = active_database(&state)?;
-    let rows = tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            models_store::list_models_by_provider(conn, provider_id).map_err(haex_crdt::Error::from)
-        })
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("list_provider_models join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
+    let rows = db
+        .read(move |r| models_store::list_models_by_provider(r, provider_id))
+        .await?;
     Ok(rows
         .into_iter()
         .map(|r| ProviderModelPayload {
@@ -341,19 +312,11 @@ async fn do_refresh(db: &VaultDb, provider: &Provider) -> Result<usize> {
         .collect();
     let model_count = rows.len();
 
-    let db_write = db.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        db_write.with_connection(|conn| {
-            models_store::replace_provider_models(conn, provider_id, &rows)
-                .map_err(haex_crdt::Error::from)?;
-            Ok(())
-        })
+    db.write(move |tx| {
+        models_store::replace_provider_models(tx, provider_id, &rows)?;
+        Ok(())
     })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("replace_provider_models join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
+    .await?;
 
     Ok(model_count)
 }
@@ -370,18 +333,11 @@ pub(crate) async fn repair_legacy_adapter(db: &VaultDb, provider: &Provider) -> 
     };
 
     let provider_id = provider.id;
-    let db_write = db.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        db_write.with_connection(|conn| {
-            storage::set_adapter(conn, provider_id, adapter).map_err(haex_crdt::Error::from)?;
-            Ok(())
-        })
+    db.write(move |tx| {
+        storage::set_adapter(tx, provider_id, adapter)?;
+        Ok(())
     })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("repair provider adapter join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
+    .await?;
 
     let mut repaired = provider.clone();
     repaired.adapter = Some(adapter.to_string());
@@ -551,17 +507,11 @@ fn format_holzi_error(err: &HolziError) -> String {
 #[tauri::command]
 pub async fn delete_provider(state: State<'_, AppState>, id: Uuid) -> Result<()> {
     let db = active_database(&state)?;
-    tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            storage::delete_provider(conn, id).map_err(haex_crdt::Error::from)?;
-            Ok(())
-        })
+    db.write(move |tx| {
+        storage::delete_provider(tx, id)?;
+        Ok(())
     })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("delete_provider join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
+    .await?;
     Ok(())
 }
 

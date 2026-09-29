@@ -5,10 +5,12 @@
 //! cancelled). Every insert therefore already knows its
 //! `finish_reason` and token counts.
 
-use haex_crdt::crdt::columns::HLC_TIMESTAMP_COLUMN;
-use haex_crdt::rusqlite::{params, Connection, OptionalExtension, Result};
+use haex_crdt::rusqlite::{params, Result};
+use haex_crdt::CrdtTransaction;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+use crate::storage::query::Query;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
@@ -175,26 +177,21 @@ impl FinishReason {
     }
 }
 
-/// Inserts a finalised message. Always sets `haex_hlc_no_sync = current_hlc()`.
-/// A child must sort after its persisted parent, even when the wall clock
+/// Inserts a finalised message. A child must sort after its persisted parent, even when the wall clock
 /// moves backwards or an earlier tool round advanced logical timestamps.
-pub fn insert_message(conn: &Connection, m: &ChatMessage) -> Result<usize> {
+pub fn insert_message(tx: &mut CrdtTransaction<'_>, m: &ChatMessage) -> haex_crdt::Result<usize> {
     validate(m).map_err(validation_error)?;
-    let sql = format!(
+    tx.execute(
         "INSERT INTO chat_messages \
            (id, thread_id, parent_id, role, content, \
             provider_id, model_id, prompt_tokens, completion_tokens, \
             finish_reason, created_at, idempotency_key, \
             tool_name, tool_call_id, tool_input, tool_is_error, tool_source, \
-            autonomy_mode, \
-            {HLC_TIMESTAMP_COLUMN}) \
+            autonomy_mode) \
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, \
                  MAX(?11, COALESCE((SELECT created_at + 1 FROM chat_messages \
                                    WHERE id = ?3 AND thread_id = ?2), ?11)), ?12, \
-                 ?13, ?14, ?15, ?16, ?17, ?18, current_hlc())"
-    );
-    conn.execute(
-        &sql,
+                 ?13, ?14, ?15, ?16, ?17, ?18)",
         params![
             m.id.to_string(),
             m.thread_id.to_string(),
@@ -221,29 +218,36 @@ pub fn insert_message(conn: &Connection, m: &ChatMessage) -> Result<usize> {
 /// Looks up the user-message row carrying the given `idempotency_key`,
 /// if any. Used by `send_message` to dedup retries before minting a new
 /// insert (contract §send_message).
-pub fn find_by_idempotency_key(conn: &Connection, key: &str) -> Result<Option<ChatMessage>> {
-    let mut stmt = conn.prepare(
+pub fn find_by_idempotency_key(
+    q: &mut impl Query,
+    key: &str,
+) -> haex_crdt::Result<Option<ChatMessage>> {
+    q.query_row(
         "SELECT id, thread_id, parent_id, role, content, \
                 provider_id, model_id, prompt_tokens, completion_tokens, \
                 finish_reason, created_at, idempotency_key, \
                 tool_name, tool_call_id, tool_input, tool_is_error, tool_source, \
                 autonomy_mode \
          FROM chat_messages WHERE idempotency_key = ?1",
-    )?;
-    stmt.query_row(params![key], row_to_message).optional()
+        params![key],
+        row_to_message,
+    )
 }
 
 /// Removes a message that was staged before adapter startup completed.
-pub fn delete_message(conn: &Connection, id: Uuid) -> Result<usize> {
-    conn.execute(
+pub fn delete_message(tx: &mut CrdtTransaction<'_>, id: Uuid) -> haex_crdt::Result<usize> {
+    tx.execute(
         "DELETE FROM chat_messages WHERE id = ?1",
         params![id.to_string()],
     )
 }
 
 /// Removes every persisted message belonging to a thread.
-pub fn delete_for_thread(conn: &Connection, thread_id: Uuid) -> Result<usize> {
-    conn.execute(
+pub fn delete_for_thread(
+    tx: &mut CrdtTransaction<'_>,
+    thread_id: Uuid,
+) -> haex_crdt::Result<usize> {
+    tx.execute(
         "DELETE FROM chat_messages WHERE thread_id = ?1",
         params![thread_id.to_string()],
     )
@@ -254,8 +258,8 @@ pub fn delete_for_thread(conn: &Connection, thread_id: Uuid) -> Result<usize> {
 /// demands per-thread ordering by logical time + id; this helper uses
 /// `created_at` then `id` as a stable proxy sufficient for the MVP
 /// (single-writer path). Full CRDT ordering lands with sync.
-pub fn list_messages(conn: &Connection, thread_id: Uuid) -> Result<Vec<ChatMessage>> {
-    let mut stmt = conn.prepare(
+pub fn list_messages(q: &mut impl Query, thread_id: Uuid) -> haex_crdt::Result<Vec<ChatMessage>> {
+    q.query_map(
         "SELECT id, thread_id, parent_id, role, content, \
                 provider_id, model_id, prompt_tokens, completion_tokens, \
                 finish_reason, created_at, idempotency_key, \
@@ -263,9 +267,9 @@ pub fn list_messages(conn: &Connection, thread_id: Uuid) -> Result<Vec<ChatMessa
                 autonomy_mode \
          FROM chat_messages WHERE thread_id = ?1 \
          ORDER BY created_at ASC, id ASC",
-    )?;
-    let rows = stmt.query_map(params![thread_id.to_string()], row_to_message)?;
-    rows.collect()
+        params![thread_id.to_string()],
+        row_to_message,
+    )
 }
 
 fn row_to_message(row: &haex_crdt::rusqlite::Row<'_>) -> Result<ChatMessage> {

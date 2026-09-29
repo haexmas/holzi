@@ -9,6 +9,7 @@
 
 use std::path::PathBuf;
 
+use haex_crdt::db::error::DatabaseError;
 use haex_crdt::rusqlite::{params, OptionalExtension, Transaction};
 use haex_crdt::{DatabaseBootstrap, Error as CrdtError, Result as CrdtResult};
 use uuid::Uuid;
@@ -57,12 +58,15 @@ impl DatabaseBootstrap for HolziBootstrap {
              VALUES (?1, ?2, NULL, 0)",
             params![VAULT_SCOPE_UUID.to_string(), VAULT_SCOPE_UUID.to_string()],
         )
-        .map_err(|e| CrdtError::Message(format!("known_devices sentinel insert: {e}")))?;
+        .map_err(step("known_devices sentinel insert"))?;
 
         // 1. Installation UUID from `<AppLocalData>/installation-id`, minted
         //    and fsynced on first open of this installation.
         let installation_uuid = read_or_mint_installation_uuid(&self.installation_id_path)
-            .map_err(|e| CrdtError::Message(format!("installation-id: {e}")))?;
+            .map_err(|source| DatabaseError::IoError {
+                path: self.installation_id_path.display().to_string(),
+                source,
+            })?;
 
         // 2. Look up this installation's row in `known_devices`.
         let existing: Option<String> = tx
@@ -73,14 +77,13 @@ impl DatabaseBootstrap for HolziBootstrap {
                 |r| r.get(0),
             )
             .optional()
-            .map_err(|e| CrdtError::Message(format!("known_devices lookup: {e}")))?;
+            .map_err(step("known_devices lookup"))?;
 
         // 3. Reuse the existing UUID or mint + insert a fresh row. MUST NOT
         //    write the three `_no_sync`-suffixed metadata columns — the crate
         //    fills those in only after HLC init.
         let vault_device_uuid = match existing {
-            Some(s) => Uuid::parse_str(&s)
-                .map_err(|e| CrdtError::Message(format!("stored vault_device_uuid: {e}")))?,
+            Some(s) => Uuid::parse_str(&s).map_err(CrdtError::consumer)?,
             None => {
                 let fresh = Uuid::new_v4();
                 let first_seen = std::time::SystemTime::now()
@@ -98,7 +101,7 @@ impl DatabaseBootstrap for HolziBootstrap {
                         first_seen,
                     ],
                 )
-                .map_err(|e| CrdtError::Message(format!("known_devices insert: {e}")))?;
+                .map_err(step("known_devices insert"))?;
                 fresh
             }
         };
@@ -111,19 +114,27 @@ impl DatabaseBootstrap for HolziBootstrap {
         //    needed when real keys land.
         let ident_count: i64 = tx
             .query_row("SELECT COUNT(*) FROM vault_identity", [], |r| r.get(0))
-            .map_err(|e| CrdtError::Message(format!("vault_identity count: {e}")))?;
+            .map_err(step("vault_identity count"))?;
         if ident_count == 0 {
             let (pubkey, privkey) = mint_placeholder_keypair();
             tx.execute(
                 "INSERT INTO vault_identity (id, pubkey, privkey) VALUES (1, ?1, ?2)",
                 params![pubkey.as_slice(), privkey.as_slice()],
             )
-            .map_err(|e| CrdtError::Message(format!("vault_identity insert: {e}")))?;
+            .map_err(step("vault_identity insert"))?;
         }
 
         // 5. Return the vault-device UUID; the crate uses it as HLC node id
         //    for this open.
         Ok(vault_device_uuid)
+    }
+}
+
+/// Wraps a SQLite failure of one bootstrap step, keeping the typed source.
+fn step(step: &'static str) -> impl FnOnce(haex_crdt::rusqlite::Error) -> DatabaseError {
+    move |source| DatabaseError::SqliteStep {
+        step: step.to_string(),
+        source,
     }
 }
 

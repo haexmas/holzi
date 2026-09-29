@@ -175,31 +175,15 @@ fn open_existing_database(
             Ok(Arc::new(db))
         }
         Err(e) if is_wrong_passphrase(&e) => Err(HolziError::WrongPassphrase),
-        Err(e) if is_locked_elsewhere(&e) => Err(HolziError::VaultAlreadyOpenElsewhere),
+        // A held `fs2` lock maps to `VaultAlreadyOpenElsewhere` in `From<CrdtError>`.
         Err(e) => Err(HolziError::from(e)),
     }
 }
 
-/// haex-crdt's own `DatabaseError::VaultAlreadyOpenElsewhere { path, reason }` (its `fs2` advisory
-/// lock is already held by another process) exists as a distinct variant, but its error boundary
-/// collapses every `DatabaseError` into an opaque `Error::Message(String)` before it reaches this
-/// crate (`From<DatabaseError> for Error` keeps only the rendered `Display` text) — so, like
-/// [`is_wrong_passphrase`] above, the message is classified by its stable text rather than a typed
-/// variant that never survives the crossing.
-fn is_locked_elsewhere(err: &haex_crdt::Error) -> bool {
-    matches!(err, haex_crdt::Error::Message(msg) if msg.contains("already open in another instance"))
-}
-
-/// SQLCipher rejects a bad key by reporting `SQLITE_NOTADB` (`code = 26`)
-/// from the first page read. We can't reach that as a typed variant
-/// because rusqlite wraps it inside `Error::SqliteFailure`, so pattern-
-/// match the primary error code. Fallback string-check catches the same
-/// condition when the error was massaged by an intermediate layer.
+/// SQLCipher rejects a bad key by reporting `SQLITE_NOTADB` from the first page read, wherever
+/// in haex-crdt's open path that read happens.
 fn is_wrong_passphrase(err: &haex_crdt::Error) -> bool {
-    if let haex_crdt::Error::Sqlite(rusqlite::Error::SqliteFailure(code, _)) = err {
-        if code.code == rusqlite::ErrorCode::NotADatabase {
-            return true;
-        }
-    }
-    err.to_string().to_lowercase().contains("not a database")
+    err.sqlite_error()
+        .and_then(rusqlite::Error::sqlite_error_code)
+        == Some(rusqlite::ErrorCode::NotADatabase)
 }

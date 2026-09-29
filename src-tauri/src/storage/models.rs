@@ -7,12 +7,13 @@
 
 use std::collections::HashSet;
 
-use haex_crdt::crdt::columns::HLC_TIMESTAMP_COLUMN;
-use haex_crdt::rusqlite::{params, Connection, OptionalExtension, Result};
+use haex_crdt::rusqlite::{params, Result};
+use haex_crdt::CrdtTransaction;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::model_capabilities::ModelCapabilities;
+use crate::storage::query::Query;
 
 /// Where a `models` row's file came from. Persisted in `source_kind`
 /// (migration `0015_models_add_huggingface_source`).
@@ -129,8 +130,7 @@ const SELECT_COLUMNS: &str = "id, provider_id, name, context_window, fetched_at,
      capabilities_json";
 
 /// Inserts or updates a model row while preserving CRDT column metadata on
-/// conflicts. Always sets `haex_hlc_no_sync = current_hlc()` (Etappe-0
-/// finding #2).
+/// conflicts.
 ///
 /// The HF source, hash and status columns are overwritten unconditionally
 /// (unlike `tokenizer_repo`'s `COALESCE`) — every caller of this function
@@ -143,13 +143,14 @@ const SELECT_COLUMNS: &str = "id, provider_id, name, context_window, fetched_at,
 /// replaces what was known about a model entirely, so a stale answer is
 /// never merged with a newer one. An undetermined record is stored as SQL
 /// `NULL`, not as a JSON object of nulls.
-pub fn upsert_model(conn: &Connection, m: &ModelRow) -> Result<usize> {
-    let sql = format!(
+pub fn upsert_model(tx: &mut CrdtTransaction<'_>, m: &ModelRow) -> haex_crdt::Result<usize> {
+    let capabilities_json = capabilities_to_column(m.capabilities.as_ref())?;
+    tx.execute(
         "INSERT INTO models \
            (id, provider_id, name, context_window, fetched_at, tokenizer_repo, \
             hf_repo, hf_filename, hf_revision, hf_revision_ref, file_sha256, \
-            integrity_status, source_kind, capabilities_json, {HLC_TIMESTAMP_COLUMN}) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, current_hlc()) \
+            integrity_status, source_kind, capabilities_json) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14) \
          ON CONFLICT(id) DO UPDATE SET \
            provider_id = excluded.provider_id, \
            name = excluded.name, \
@@ -163,12 +164,7 @@ pub fn upsert_model(conn: &Connection, m: &ModelRow) -> Result<usize> {
            file_sha256 = excluded.file_sha256, \
            integrity_status = excluded.integrity_status, \
            source_kind = excluded.source_kind, \
-           capabilities_json = excluded.capabilities_json, \
-           {HLC_TIMESTAMP_COLUMN} = current_hlc()"
-    );
-    let capabilities_json = capabilities_to_column(m.capabilities.as_ref())?;
-    conn.execute(
-        &sql,
+           capabilities_json = excluded.capabilities_json",
         params![
             m.id,
             m.provider_id.to_string(),
@@ -218,29 +214,33 @@ pub(crate) fn capabilities_from_column(
 }
 
 /// Lists all models for a provider, ordered by name.
-pub fn list_models_by_provider(conn: &Connection, provider_id: Uuid) -> Result<Vec<ModelRow>> {
-    let mut stmt = conn.prepare(&format!(
-        "SELECT {SELECT_COLUMNS} FROM models WHERE provider_id = ?1 ORDER BY name ASC"
-    ))?;
-    let rows = stmt.query_map(params![provider_id.to_string()], row_to_model)?;
-    rows.collect()
+pub fn list_models_by_provider(
+    q: &mut impl Query,
+    provider_id: Uuid,
+) -> haex_crdt::Result<Vec<ModelRow>> {
+    q.query_map(
+        &format!("SELECT {SELECT_COLUMNS} FROM models WHERE provider_id = ?1 ORDER BY name ASC"),
+        params![provider_id.to_string()],
+        row_to_model,
+    )
 }
 
 /// Lists all models across every provider.
-pub fn list_all_models(conn: &Connection) -> Result<Vec<ModelRow>> {
-    let mut stmt = conn.prepare(&format!(
-        "SELECT {SELECT_COLUMNS} FROM models ORDER BY name ASC"
-    ))?;
-    let rows = stmt.query_map([], row_to_model)?;
-    rows.collect()
+pub fn list_all_models(q: &mut impl Query) -> haex_crdt::Result<Vec<ModelRow>> {
+    q.query_map(
+        &format!("SELECT {SELECT_COLUMNS} FROM models ORDER BY name ASC"),
+        &[],
+        row_to_model,
+    )
 }
 
 /// Reads a single model row by id, or `None` when missing.
-pub fn get_model(conn: &Connection, id: &str) -> Result<Option<ModelRow>> {
-    let mut stmt = conn.prepare(&format!(
-        "SELECT {SELECT_COLUMNS} FROM models WHERE id = ?1"
-    ))?;
-    stmt.query_row(params![id], row_to_model).optional()
+pub fn get_model(q: &mut impl Query, id: &str) -> haex_crdt::Result<Option<ModelRow>> {
+    q.query_row(
+        &format!("SELECT {SELECT_COLUMNS} FROM models WHERE id = ?1"),
+        params![id],
+        row_to_model,
+    )
 }
 
 /// Narrowly updates `integrity_status` without touching any other column —
@@ -250,12 +250,15 @@ pub fn get_model(conn: &Connection, id: &str) -> Result<Option<ModelRow>> {
 /// niemals aktualisieren"). Used both by a successful pre-load hash match
 /// (-> `Verified`) and by the explicit `load_model_with_integrity_override`
 /// path (-> `Untrusted`).
-pub fn set_integrity_status(conn: &Connection, id: &str, status: IntegrityStatus) -> Result<usize> {
-    let sql = format!(
-        "UPDATE models SET integrity_status = ?1, {HLC_TIMESTAMP_COLUMN} = current_hlc() \
-         WHERE id = ?2"
-    );
-    conn.execute(&sql, params![status.as_str(), id])
+pub fn set_integrity_status(
+    tx: &mut CrdtTransaction<'_>,
+    id: &str,
+    status: IntegrityStatus,
+) -> haex_crdt::Result<usize> {
+    tx.execute(
+        "UPDATE models SET integrity_status = ?1 WHERE id = ?2",
+        params![status.as_str(), id],
+    )
 }
 
 /// Records a successful upstream revision replacement for the same model
@@ -265,17 +268,13 @@ pub fn set_integrity_status(conn: &Connection, id: &str, status: IntegrityStatus
 /// (data-model.md "Ein Update ersetzt die Datei unter derselben Modell-ID
 /// erst nach erfolgreicher atomarer Veröffentlichung").
 pub fn update_hf_revision_and_hash(
-    conn: &Connection,
+    tx: &mut CrdtTransaction<'_>,
     id: &str,
     new_revision: &str,
     new_file_sha256: &str,
-) -> Result<usize> {
-    let sql = format!(
-        "UPDATE models SET hf_revision = ?1, file_sha256 = ?2, integrity_status = ?3, \
-         {HLC_TIMESTAMP_COLUMN} = current_hlc() WHERE id = ?4"
-    );
-    conn.execute(
-        &sql,
+) -> haex_crdt::Result<usize> {
+    tx.execute(
+        "UPDATE models SET hf_revision = ?1, file_sha256 = ?2, integrity_status = ?3 WHERE id = ?4",
         params![
             new_revision,
             new_file_sha256,
@@ -287,13 +286,13 @@ pub fn update_hf_revision_and_hash(
 
 /// Replaces the entire model cache for a provider: every entry in
 /// `fresh` is upserted, then rows for `provider_id` that are absent
-/// from `fresh` are removed. Runs inside a single transaction so a
-/// partial refresh cannot leave the cache in an inconsistent state.
+/// from `fresh` are removed. Run it in one `write` so a partial refresh
+/// cannot leave the cache in an inconsistent state.
 ///
 /// Order matters, and so does upserting rather than delete-then-insert.
 /// `models` is CRDT-tracked: a DELETE fires the BEFORE-DELETE trigger,
 /// which appends a tombstone to `haex_deleted_rows` carrying
-/// `current_hlc()`. That value is pinned per transaction, so a
+/// the transaction HLC. That value is pinned per transaction, so a
 /// re-INSERT of the same id in the same transaction lands on the *same*
 /// HLC — and `delete_shadows_insert` resolves that tie in favour of the
 /// delete, meaning a peer applying the payload would drop every
@@ -310,34 +309,28 @@ pub fn update_hf_revision_and_hash(
 /// per plan §"Anbietermodelle" ("Fehlgeschlagener Abruf erhält den
 /// vorhandenen Cache").
 pub fn replace_provider_models(
-    conn: &Connection,
+    tx: &mut CrdtTransaction<'_>,
     provider_id: Uuid,
     fresh: &[ModelRow],
-) -> Result<()> {
-    let tx = conn.unchecked_transaction()?;
-
+) -> haex_crdt::Result<()> {
     for m in fresh {
-        upsert_model(&tx, m)?;
+        upsert_model(tx, m)?;
     }
 
     let keep: HashSet<&str> = fresh.iter().map(|m| m.id.as_str()).collect();
-    let stale: Vec<String> = {
-        let mut stmt = tx.prepare("SELECT id FROM models WHERE provider_id = ?1")?;
-        let rows = stmt.query_map(params![provider_id.to_string()], |r| r.get::<_, String>(0))?;
-        let mut stale = Vec::new();
-        for row in rows {
-            let id = row?;
-            if !keep.contains(id.as_str()) {
-                stale.push(id);
-            }
-        }
-        stale
-    };
+    let stale: Vec<String> = tx
+        .query_map(
+            "SELECT id FROM models WHERE provider_id = ?1",
+            params![provider_id.to_string()],
+            |r| r.get::<_, String>(0),
+        )?
+        .into_iter()
+        .filter(|id| !keep.contains(id.as_str()))
+        .collect();
     for id in stale {
         tx.execute("DELETE FROM models WHERE id = ?1", params![id])?;
     }
-
-    tx.commit()
+    Ok(())
 }
 
 /// Fills `tokenizer_repo` for the ids in `catalog` that still have the
@@ -349,16 +342,17 @@ pub fn replace_provider_models(
 /// written by `replace_provider_models` keep `tokenizer_repo` NULL
 /// forever (API providers tokenize server-side), so scanning for NULLs
 /// would re-read every remote model on every call. Bounded by the
-/// catalog size, which is what makes this safe on a hot path.
-pub fn backfill_tokenizer_repo(conn: &Connection, catalog: &[(&str, &str)]) -> Result<usize> {
-    let update_sql = format!(
-        "UPDATE models \
-         SET tokenizer_repo = ?1, {HLC_TIMESTAMP_COLUMN} = current_hlc() \
-         WHERE id = ?2 AND tokenizer_repo IS NULL"
-    );
+/// catalog size, which is what makes this safe during open-time maintenance.
+pub fn backfill_tokenizer_repo(
+    tx: &mut CrdtTransaction<'_>,
+    catalog: &[(&str, &str)],
+) -> haex_crdt::Result<usize> {
     let mut updated = 0usize;
     for (id, repo) in catalog {
-        updated += conn.execute(&update_sql, params![repo, id])?;
+        updated += tx.execute(
+            "UPDATE models SET tokenizer_repo = ?1 WHERE id = ?2 AND tokenizer_repo IS NULL",
+            params![repo, id],
+        )?;
     }
     Ok(updated)
 }
@@ -367,42 +361,39 @@ pub fn backfill_tokenizer_repo(conn: &Connection, catalog: &[(&str, &str)]) -> R
 /// `source_kind = 'provider'` into `catalog` or `imported`. A SQL-only
 /// migration cannot see the compiled catalog id list, so this mirrors the
 /// existing [`backfill_tokenizer_repo`] idiom: driven by the (small,
-/// compile-time) catalog rather than a full-table scan, called
-/// opportunistically from `list_installed_models`. Idempotent — every
+/// compile-time) catalog rather than a full-table scan, called from
+/// open-time maintenance. Idempotent — every
 /// `WHERE` clause re-selects only rows still at the migration default.
 ///
 /// Rows under an `api_key` provider are never touched: the `provider_id =
 /// ?1` (local provider) predicate excludes them, so a true provider row
 /// keeps `source_kind = 'provider'` regardless of its id.
 pub fn backfill_source_kind(
-    conn: &Connection,
+    tx: &mut CrdtTransaction<'_>,
     local_provider_id: Uuid,
     catalog_ids: &[&str],
-) -> Result<usize> {
+) -> haex_crdt::Result<usize> {
     let local_provider = local_provider_id.to_string();
     let mut updated = 0usize;
     for id in catalog_ids {
-        updated += conn.execute(
-            &format!(
-                "UPDATE models SET source_kind = 'catalog', {HLC_TIMESTAMP_COLUMN} = current_hlc() \
-                 WHERE id = ?1 AND provider_id = ?2 AND source_kind = 'provider'"
-            ),
+        updated += tx.execute(
+            "UPDATE models SET source_kind = 'catalog' \
+             WHERE id = ?1 AND provider_id = ?2 AND source_kind = 'provider'",
             params![id, local_provider],
         )?;
     }
     // `NOT IN ()` is invalid SQLite syntax for an empty list — fall back
     // to the unconditional form when there is nothing to exclude.
     let sql = if catalog_ids.is_empty() {
-        format!(
-            "UPDATE models SET source_kind = 'imported', {HLC_TIMESTAMP_COLUMN} = current_hlc() \
-             WHERE provider_id = ?1 AND source_kind = 'provider'"
-        )
+        "UPDATE models SET source_kind = 'imported' \
+         WHERE provider_id = ?1 AND source_kind = 'provider'"
+            .to_string()
     } else {
         let placeholders = std::iter::repeat_n("?", catalog_ids.len())
             .collect::<Vec<_>>()
             .join(", ");
         format!(
-            "UPDATE models SET source_kind = 'imported', {HLC_TIMESTAMP_COLUMN} = current_hlc() \
+            "UPDATE models SET source_kind = 'imported' \
              WHERE provider_id = ?1 AND source_kind = 'provider' AND id NOT IN ({placeholders})"
         )
     };
@@ -410,7 +401,7 @@ pub fn backfill_source_kind(
     for id in catalog_ids {
         params_vec.push(id);
     }
-    updated += conn.execute(&sql, params_vec.as_slice())?;
+    updated += tx.execute(&sql, params_vec.as_slice())?;
     Ok(updated)
 }
 
@@ -421,25 +412,24 @@ pub fn backfill_source_kind(
 /// local provider's own rows, so `api_key`/`cli_delegate` rows — whose
 /// `NULL` honestly means "not refreshed yet" — are never touched.
 ///
-/// ponytail: runs on every installed-model listing. Ceiling: one scan of
-/// the (small) set of local rows per call. Upgrade path: a one-time
-/// post-migration hook.
-pub fn backfill_local_capabilities(conn: &Connection, local_provider_id: Uuid) -> Result<usize> {
-    let pending: Vec<String> = {
-        let mut stmt = conn.prepare(
-            "SELECT id FROM models WHERE provider_id = ?1 AND capabilities_json IS NULL",
-        )?;
-        let rows = stmt.query_map(params![local_provider_id.to_string()], |r| r.get(0))?;
-        rows.collect::<Result<_>>()?
-    };
-    let sql = format!(
-        "UPDATE models SET capabilities_json = ?1, {HLC_TIMESTAMP_COLUMN} = current_hlc() \
-         WHERE id = ?2 AND capabilities_json IS NULL"
-    );
+/// Runs during open-time maintenance, so the installed-model listing remains
+/// a read-only hot path.
+pub fn backfill_local_capabilities(
+    tx: &mut CrdtTransaction<'_>,
+    local_provider_id: Uuid,
+) -> haex_crdt::Result<usize> {
+    let pending: Vec<String> = tx.query_map(
+        "SELECT id FROM models WHERE provider_id = ?1 AND capabilities_json IS NULL",
+        params![local_provider_id.to_string()],
+        |r| r.get(0),
+    )?;
     let mut updated = 0usize;
     for id in pending {
         let json = capabilities_to_column(Some(&ModelCapabilities::local(&id)))?;
-        updated += conn.execute(&sql, params![json, id])?;
+        updated += tx.execute(
+            "UPDATE models SET capabilities_json = ?1 WHERE id = ?2 AND capabilities_json IS NULL",
+            params![json, id],
+        )?;
     }
     Ok(updated)
 }

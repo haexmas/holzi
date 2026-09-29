@@ -58,26 +58,19 @@ async fn cleanup_staged_send(
     thread_id: Uuid,
     is_new_thread: bool,
 ) -> Result<()> {
-    let cleanup = tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            msg_store::delete_message(conn, user_message_id).map_err(haex_crdt::Error::from)?;
+    let cleanup = db
+        .write(move |tx| {
+            msg_store::delete_message(tx, user_message_id)?;
             if is_new_thread {
-                thread_store::delete_thread(conn, thread_id).map_err(haex_crdt::Error::from)?;
+                thread_store::delete_thread(tx, thread_id)?;
             }
             Ok(())
         })
-    })
-    .await;
+        .await;
 
-    match cleanup {
-        Ok(Ok(())) => Ok(()),
-        Ok(Err(error)) => Err(HolziError::CrdtInit {
-            reason: format!("failed to clean up staged message or thread: {error}"),
-        }),
-        Err(error) => Err(HolziError::CrdtInit {
-            reason: format!("failed to clean up staged message or thread: {error}"),
-        }),
-    }
+    cleanup.map_err(|error| HolziError::CrdtInit {
+        reason: format!("failed to clean up staged message or thread: {error}"),
+    })
 }
 
 #[derive(Debug, Deserialize)]
@@ -272,17 +265,10 @@ pub async fn inspect_attachment(
         return Ok(info);
     };
     let db = active_database(&state)?;
-    let capabilities = tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            models_store::get_model(conn, &model_id).map_err(haex_crdt::Error::from)
-        })
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("get_model join: {e}"),
-    })?
-    .map_err(HolziError::from)?
-    .and_then(|row| row.capabilities);
+    let capabilities = db
+        .read(move |r| models_store::get_model(r, &model_id))
+        .await?
+        .and_then(|row| row.capabilities);
 
     match usability_for(&kind.into(), capabilities.as_ref()) {
         AttachmentUsability::Usable => {}
@@ -332,21 +318,12 @@ pub async fn send_message(
     // minting anything new (contract §send_message). This only guards
     // the frontend retrying its own uncertain `invoke()` call — it
     // never resumes a generation that failed after acceptance.
-    let dedup_db = db.clone();
     let dedup_key = args.idempotency_key.clone();
     let dedup_thread_id = args.thread_id;
     let dedup_content = args.content.clone();
-    let decision = tauri::async_runtime::spawn_blocking(move || {
-        dedup_db.with_connection(|conn| {
-            resolve_idempotent_send(conn, &dedup_key, dedup_thread_id, &dedup_content)
-                .map_err(haex_crdt::Error::from)
-        })
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("resolve_idempotent_send join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
+    let decision = db
+        .read(move |r| resolve_idempotent_send(r, &dedup_key, dedup_thread_id, &dedup_content))
+        .await?;
 
     match decision {
         IdempotentSend::Mismatch => {
@@ -382,11 +359,10 @@ pub async fn send_message(
     let persist_content = args.content.clone();
     let persist_provider_id = session.provider_id;
     let persist_model_id = session.model_id.clone();
-    let persist_db = db.clone();
-    let persisted = tauri::async_runtime::spawn_blocking(move || {
-        persist_db.with_connection(|conn| {
+    let persisted = db
+        .write(move |tx| {
             persist_send_transaction(
-                conn,
+                tx,
                 &persist_key,
                 persist_thread_id,
                 &persist_content,
@@ -394,14 +370,8 @@ pub async fn send_message(
                 &persist_model_id,
                 now_ms(),
             )
-            .map_err(haex_crdt::Error::from)
         })
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("persist send join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
+        .await?;
 
     let (thread_id, user_message_id, assistant_message_id) = match persisted {
         PersistedSend::Mismatch => {
@@ -443,25 +413,18 @@ pub async fn send_message(
     let is_new_thread = args.thread_id.is_none();
 
     // Build the request from full history + the just-inserted user turn.
-    let history_db = db.clone();
     let capabilities_model_id = session.model_id.clone();
-    let (history, model_capabilities) = tauri::async_runtime::spawn_blocking(move || {
-        history_db.with_connection(|conn| {
-            let msgs = msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)?;
+    let (history, model_capabilities) = db
+        .read(move |r| {
+            let msgs = msg_store::list_messages(r, thread_id)?;
             // The selected model's cached capabilities, read in this same
             // blocking lookup (spec 012): one snapshot drives reasoning,
             // the validated option and the serializer.
-            let capabilities = models_store::get_model(conn, &capabilities_model_id)
-                .map_err(haex_crdt::Error::from)?
+            let capabilities = models_store::get_model(r, &capabilities_model_id)?
                 .and_then(|row| row.capabilities);
             Ok((msgs, capabilities))
         })
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("history load join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
+        .await?;
 
     // For api_key models the adapter needs the raw remote id, not the
     // composite one — split it off here so the adapter stays vendor-
@@ -588,24 +551,16 @@ pub async fn send_message(
         }
     };
 
-    let preference_db = db.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        preference_db.with_connection(|conn| {
-            preferences::insert_or_update(
-                conn,
-                PrefScope::Device(this_device),
-                PREF_LAST_ACTIVE_MODEL,
-                &preference_model_id,
-            )
-            .map(|_| ())
-            .map_err(haex_crdt::Error::from)
-        })
+    db.write(move |tx| {
+        preferences::insert_or_update(
+            tx,
+            PrefScope::Device(this_device),
+            PREF_LAST_ACTIVE_MODEL,
+            &preference_model_id,
+        )
+        .map(|_| ())
     })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("persist last active model join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
+    .await?;
 
     let app_for_task = app.clone();
     let session_for_task = session.clone();

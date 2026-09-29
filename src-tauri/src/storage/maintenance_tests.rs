@@ -3,6 +3,10 @@
 //! preference delete needs `current_hlc()` and the maintenance table only
 //! exists after holzi's migrations.
 
+// These tests seed and inspect raw vault state that the CRDT write path does
+// not expose.
+#![allow(clippy::disallowed_methods)]
+
 use std::sync::Arc;
 
 use haex_crdt::rusqlite::params;
@@ -10,15 +14,18 @@ use haex_crdt::{Database, DatabaseConfig, NoopSignatureProvider, SqlCipherKey};
 use uuid::Uuid;
 
 use super::maintenance::{
-    fold_scoped_preferences, run_after_open, run_pending_tasks, LEGACY_ACTIVE_WORKSPACE_KEY,
-    VACUUM_TASK,
+    fold_scoped_preferences, prune_delete_markers, run_after_open, run_pending_tasks,
+    DELETE_MARKER_RETENTION_DAYS, LEGACY_ACTIVE_WORKSPACE_KEY, VACUUM_TASK,
 };
 use super::preferences::{self, PrefScope};
 use crate::identity::{
     holzi_migration_source, installation_id_path, read_or_mint_installation_uuid, HolziBootstrap,
     HOLZI_TRIGGER_VERSION,
 };
+use crate::providers::local::ensure_local_provider;
 use crate::storage::known_devices;
+use crate::storage::models::{self, IntegrityStatus, ModelRow, SourceKind};
+use crate::storage::query;
 
 fn open_test_vault(passphrase: &str) -> (tempfile::TempDir, Database, Uuid) {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -31,19 +38,16 @@ fn open_test_vault(passphrase: &str) -> (tempfile::TempDir, Database, Uuid) {
         signature_provider: Arc::new(NoopSignatureProvider),
         migration_source: holzi_migration_source(),
         trigger_version: HOLZI_TRIGGER_VERSION,
+        max_transaction_bytes: haex_crdt::MAX_CRDT_TRANSACTION_BYTES,
     })
     .expect("open test vault");
     let installation_uuid =
         read_or_mint_installation_uuid(&install_path).expect("installation uuid");
-    let device = db
-        .with_connection(|conn| {
-            Ok(known_devices::get_vault_device_uuid(
-                conn,
-                installation_uuid,
-            )?)
-        })
-        .expect("read vault_device_uuid")
-        .expect("bootstrap registered this installation");
+    let device = query::read(&db, |r| {
+        known_devices::get_vault_device_uuid(r, installation_uuid)
+    })
+    .expect("read vault_device_uuid")
+    .expect("bootstrap registered this installation");
     (dir, db, device)
 }
 
@@ -74,35 +78,77 @@ fn run_after_open_turns_on_secure_delete() {
 #[test]
 fn run_after_open_deletes_the_legacy_active_workspace_preference_everywhere() {
     let (_dir, db, device) = open_test_vault("maintenance-legacy-pref");
-    db.with_connection(|conn| {
+    db.write(|tx| {
         preferences::insert_or_update(
-            conn,
+            tx,
             PrefScope::Device(device),
             LEGACY_ACTIVE_WORKSPACE_KEY,
             "ws-1",
         )?;
-        preferences::insert_or_update(conn, PrefScope::Vault, LEGACY_ACTIVE_WORKSPACE_KEY, "ws-2")?;
-        preferences::insert_or_update(conn, PrefScope::Device(device), "voice.auto_send", "true")?;
+        preferences::insert_or_update(tx, PrefScope::Vault, LEGACY_ACTIVE_WORKSPACE_KEY, "ws-2")?;
+        preferences::insert_or_update(tx, PrefScope::Device(device), "voice.auto_send", "true")?;
         Ok(())
     })
     .expect("write preferences");
 
     run_after_open(&db);
 
-    let legacy = db
-        .with_connection(|conn| Ok(preferences::list_by_key(conn, LEGACY_ACTIVE_WORKSPACE_KEY)?))
-        .expect("list legacy");
+    let legacy = query::read(&db, |r| {
+        preferences::list_by_key(r, LEGACY_ACTIVE_WORKSPACE_KEY)
+    })
+    .expect("list legacy");
     assert!(legacy.is_empty());
-    let kept = db
-        .with_connection(|conn| {
-            Ok(preferences::get(
-                conn,
-                PrefScope::Device(device),
-                "voice.auto_send",
-            )?)
-        })
-        .expect("read kept");
+    let kept = query::read(&db, |r| {
+        preferences::get(r, PrefScope::Device(device), "voice.auto_send")
+    })
+    .expect("read kept");
     assert_eq!(kept.as_deref(), Some("true"));
+}
+
+#[test]
+fn run_after_open_backfills_model_metadata() {
+    let (_dir, db, _device) = open_test_vault("maintenance-model-backfills");
+    let entry = crate::catalog::entries()
+        .first()
+        .expect("the built-in catalog is not empty");
+    let local_provider_id = db
+        .write(|tx| {
+            let provider_id = ensure_local_provider(tx)?;
+            models::upsert_model(
+                tx,
+                &ModelRow {
+                    id: entry.id.clone(),
+                    provider_id,
+                    name: entry.name.clone(),
+                    context_window: Some(entry.context_window as i64),
+                    fetched_at: None,
+                    tokenizer_repo: None,
+                    hf_repo: None,
+                    hf_filename: None,
+                    hf_revision: None,
+                    hf_revision_ref: None,
+                    file_sha256: None,
+                    integrity_status: IntegrityStatus::Unknown,
+                    source_kind: SourceKind::Provider,
+                    capabilities: None,
+                },
+            )?;
+            Ok(provider_id)
+        })
+        .expect("seed model metadata");
+
+    run_after_open(&db);
+
+    let model = query::read(&db, |r| models::get_model(r, &entry.id))
+        .expect("read backfilled model")
+        .expect("seeded model");
+    assert_eq!(model.provider_id, local_provider_id);
+    assert_eq!(
+        model.tokenizer_repo.as_deref(),
+        Some(entry.tokenizer_repo.as_str())
+    );
+    assert_eq!(model.source_kind, SourceKind::Catalog);
+    assert!(model.capabilities.is_some());
 }
 
 #[test]
@@ -137,17 +183,16 @@ fn a_failing_vacuum_keeps_the_task_for_the_next_open() {
 }
 
 fn set(db: &Database, scope: PrefScope, key: &str, value: &str) {
-    db.with_connection(|conn| Ok(preferences::insert_or_update(conn, scope, key, value)?))
+    db.write(|tx| preferences::insert_or_update(tx, scope, key, value))
         .expect("set preference");
 }
 
 fn get(db: &Database, scope: PrefScope, key: &str) -> Option<String> {
-    db.with_connection(|conn| Ok(preferences::get(conn, scope, key)?))
-        .expect("get preference")
+    query::read(db, |r| preferences::get(r, scope, key)).expect("get preference")
 }
 
 fn fold(db: &Database, device: Uuid) {
-    db.with_connection(|conn| fold_scoped_preferences(conn, device))
+    db.write(|tx| fold_scoped_preferences(tx, device))
         .expect("fold preferences");
 }
 
@@ -260,5 +305,45 @@ fn folding_leaves_device_settings_alone_and_runs_on_open() {
     assert_eq!(
         get(&db, PrefScope::Device(device), "appearance.color_scheme"),
         None
+    );
+}
+
+#[test]
+fn delete_markers_older_than_the_retention_are_pruned_and_newer_ones_stay() {
+    let (_dir, db, _device) = open_test_vault("maintenance-prune-markers");
+    set(&db, PrefScope::Vault, "chat.permission_mode", "auto");
+    db.write(|tx| preferences::delete(tx, PrefScope::Vault, "chat.permission_mode"))
+        .expect("delete leaves a marker");
+
+    // A copy of that marker, dated one day past the retention. The time part of an HLC is an
+    // NTP64 timestamp: seconds in the upper 32 bits.
+    let age = (i64::from(DELETE_MARKER_RETENTION_DAYS + 1) * 86_400) << 32;
+    db.with_connection(|conn| {
+        conn.execute(
+            "INSERT INTO haex_deleted_rows (id, table_name, row_pks, haex_hlc_no_sync) \
+             SELECT 'old-marker', table_name, row_pks, \
+               (CAST(substr(haex_hlc_no_sync, 1, instr(haex_hlc_no_sync, '/') - 1) AS INTEGER) \
+                 - ?1) || substr(haex_hlc_no_sync, instr(haex_hlc_no_sync, '/')) \
+             FROM haex_deleted_rows WHERE table_name = 'preferences'",
+            params![age],
+        )?;
+        Ok(())
+    })
+    .expect("backdate a copy of the marker");
+    assert_eq!(query_i64(&db, "SELECT COUNT(*) FROM haex_deleted_rows"), 2);
+
+    assert_eq!(prune_delete_markers(&db).expect("prune"), 1);
+    assert_eq!(
+        query_i64(
+            &db,
+            "SELECT COUNT(*) FROM haex_deleted_rows WHERE id = 'old-marker'"
+        ),
+        0,
+        "the old marker is gone"
+    );
+    assert_eq!(
+        query_i64(&db, "SELECT COUNT(*) FROM haex_deleted_rows"),
+        1,
+        "the recent marker stays"
     );
 }

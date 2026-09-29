@@ -183,6 +183,43 @@ this device first and marked "Dieses Gerät", the others by Gerätename, unnamed
 ones as "Unbenanntes Gerät". Other devices appear once the sync exists or in a
 copied vault; "zuletzt online" waits for the sync spec.
 
+### Sync zwischen eigenen Geräten (spec 024)
+
+**Hauptgerät (main device)**:
+A device of the vault that holds the private key of the vault identity. Only
+main devices sign device lists, so only they add or remove devices. A vault can
+have several; its first installation is one.
+
+**Verknüpftes Gerät (linked device)**:
+A device of the vault without the private key of the vault identity. It reads
+and writes all vault data but cannot add or remove devices.
+
+**Geräteliste (device list)**:
+The device list signed with the vault identity: the current devices (device
+key, role, name, network id) and the removed devices with their limit, under a
+generation. The valid list is the one with the highest generation; on a tie the
+one with the smallest hash. Devices accept each other only when both are on it.
+
+**Ursprungsgerät (origin device)**:
+The device that wrote a change. It is the node id in the change's HLC (its
+`vault_device_uuid`) and stays the same when the change is passed on.
+_Avoid_: author, sender (the sender of a change can be a third device).
+
+**Fortschrittsstand (progress)**:
+Per origin device, the highest HLC this device has fully applied. Two devices
+compare their progress and pull what they are missing.
+
+**Transaktionsgruppe (transaction group)**:
+All changes that share one HLC, which is one `Database::write` transaction.
+It is never split and never applied in part.
+
+**Nostr-Relay / iroh-Relay / Sync-Server**:
+Three different third parties: a Nostr-Relay carries presence messages and
+link rendezvous, an iroh-Relay forwards encrypted connections between devices
+that cannot reach each other directly, and the Sync-Server (spec 026) keeps a
+mailbox for devices that are offline.
+_Avoid_: "Relay" on its own.
+
 ### Internationalisierung (i18n)
 
 All user-visible text uses `@nuxtjs/i18n`. Backend commands and

@@ -17,13 +17,30 @@
 //!    default model applies to the device, so a vault value becomes this
 //!    device's when it has none. The old value is deleted either way.
 //!    Idempotent; other devices fold their own values when they open.
+//! 5. Remove delete markers older than [`DELETE_MARKER_RETENTION_DAYS`] from
+//!    `haex_deleted_rows` (spec 024, research R20), so the delete log stays
+//!    bounded. A device that has not synced for longer catches up with a
+//!    full resync instead.
+//! 6. Backfill model metadata introduced by later migrations: tokenizer
+//!    repositories, source kinds and local capabilities. The catalog is
+//!    compiled into the application, so this is the first point at which
+//!    those rows can be repaired without putting a write on a listing hot
+//!    path.
+//!
+//! Steps 2, 4, 5 and 6 go through haex-crdt's write path. Steps 1 and 3 need
+//! the raw connection: a PRAGMA and a `VACUUM` cannot run inside a CRDT
+//! transaction.
 //!
 //! Every failure is logged and never stops the vault from opening (FR-012);
 //! a failed task stays queued for the next open.
 
 use haex_crdt::rusqlite::{params, Connection};
-use haex_crdt::Database;
+use haex_crdt::{CrdtTransaction, Database, RetentionPolicy};
 use uuid::Uuid;
+
+use crate::catalog;
+use crate::providers::local::ensure_local_provider;
+use crate::storage::models as models_store;
 
 use super::preferences::{self, PrefScope};
 
@@ -45,6 +62,9 @@ pub const VAULT_PREFERENCE_KEYS: &[&str] = &[
 /// Key prefixes of vault preferences with one key per model.
 pub const VAULT_PREFERENCE_PREFIXES: &[&str] = &["chat.reasoning_option."];
 
+/// How long a delete marker stays in `haex_deleted_rows` (research R20).
+pub const DELETE_MARKER_RETENTION_DAYS: u32 = 90;
+
 /// Preferences that apply to one device only: the model files live there.
 pub const DEVICE_PREFERENCE_KEYS: &[&str] = &["chat.default_model_id"];
 
@@ -55,47 +75,52 @@ fn is_vault_preference(key: &str) -> bool {
             .any(|prefix| key.starts_with(prefix))
 }
 
-/// Step 4 above, in one transaction.
-pub fn fold_scoped_preferences(conn: &Connection, device: Uuid) -> haex_crdt::Result<()> {
-    let tx = conn.unchecked_transaction()?;
-    for row in preferences::list_by_scope(&tx, PrefScope::Device(device))? {
+/// Step 4 above; run it in one `write`.
+pub fn fold_scoped_preferences(
+    tx: &mut CrdtTransaction<'_>,
+    device: Uuid,
+) -> haex_crdt::Result<()> {
+    for row in preferences::list_by_scope(tx, PrefScope::Device(device))? {
         if !is_vault_preference(&row.key) {
             continue;
         }
         if let Some(value) = row.value.as_deref() {
-            if preferences::get(&tx, PrefScope::Vault, &row.key)?.is_none() {
-                preferences::insert_or_update(&tx, PrefScope::Vault, &row.key, value)?;
+            if preferences::get(tx, PrefScope::Vault, &row.key)?.is_none() {
+                preferences::insert_or_update(tx, PrefScope::Vault, &row.key, value)?;
             }
         }
-        preferences::delete(&tx, PrefScope::Device(device), &row.key)?;
+        preferences::delete(tx, PrefScope::Device(device), &row.key)?;
     }
     for key in DEVICE_PREFERENCE_KEYS {
-        let Some(value) = preferences::get(&tx, PrefScope::Vault, key)? else {
+        let Some(value) = preferences::get(tx, PrefScope::Vault, key)? else {
             continue;
         };
-        if preferences::get(&tx, PrefScope::Device(device), key)?.is_none() {
-            preferences::insert_or_update(&tx, PrefScope::Device(device), key, &value)?;
+        if preferences::get(tx, PrefScope::Device(device), key)?.is_none() {
+            preferences::insert_or_update(tx, PrefScope::Device(device), key, &value)?;
         }
-        preferences::delete(&tx, PrefScope::Vault, key)?;
+        preferences::delete(tx, PrefScope::Vault, key)?;
     }
-    tx.commit()?;
     Ok(())
 }
 
 /// Runs the steps above; logs failures and always returns.
 pub fn run_after_open(db: &Database) {
+    // A PRAGMA cannot run in a CRDT transaction (module docs).
+    #[allow(clippy::disallowed_methods)]
     if let Err(e) = db.with_connection(|conn| Ok(conn.execute_batch("PRAGMA secure_delete = ON;")?))
     {
         log::warn!("maintenance: could not turn on secure_delete: {e}");
     }
-    if let Err(e) = db.with_connection(|conn| {
-        Ok(conn.execute(
+    if let Err(e) = db.write(|tx| {
+        tx.execute(
             "DELETE FROM preferences WHERE key = ?1",
             params![LEGACY_ACTIVE_WORKSPACE_KEY],
-        )?)
+        )
     }) {
         log::warn!("maintenance: could not delete {LEGACY_ACTIVE_WORKSPACE_KEY}: {e}");
     }
+    // `VACUUM` cannot run inside a transaction at all (module docs).
+    #[allow(clippy::disallowed_methods)]
     match db.with_connection(|conn| Ok(run_pending_tasks(conn))) {
         Ok(Ok(())) => {}
         Ok(Err(e)) | Err(e) => {
@@ -103,9 +128,38 @@ pub fn run_after_open(db: &Database) {
         }
     }
     let device = db.device_id();
-    if let Err(e) = db.with_connection(|conn| fold_scoped_preferences(conn, device)) {
+    if let Err(e) = db.write(|tx| fold_scoped_preferences(tx, device)) {
         log::warn!("maintenance: could not fold preferences into their scope: {e}");
     }
+    if let Err(e) = db.write(|tx| {
+        let catalog_repos: Vec<(&str, &str)> = catalog::entries()
+            .iter()
+            .map(|entry| (entry.id.as_str(), entry.tokenizer_repo.as_str()))
+            .collect();
+        models_store::backfill_tokenizer_repo(tx, &catalog_repos)?;
+
+        let local_provider_id = ensure_local_provider(tx)?;
+        let catalog_ids: Vec<&str> = catalog::entries().iter().map(|e| e.id.as_str()).collect();
+        models_store::backfill_source_kind(tx, local_provider_id, &catalog_ids)?;
+        models_store::backfill_local_capabilities(tx, local_provider_id)?;
+        Ok(())
+    }) {
+        log::warn!("maintenance: could not backfill model metadata: {e}");
+    }
+    if let Err(e) = prune_delete_markers(db) {
+        log::warn!("maintenance: could not prune old delete markers: {e}");
+    }
+}
+
+/// Step 5 above.
+pub fn prune_delete_markers(db: &Database) -> haex_crdt::Result<usize> {
+    let result = db.cleanup_deleted_rows(
+        RetentionPolicy::TimeBasedDays {
+            days: DELETE_MARKER_RETENTION_DAYS,
+        },
+        |_, _| Ok(()),
+    )?;
+    Ok(result.rows_deleted)
 }
 
 /// Runs every queued task and removes it once it succeeded.

@@ -62,17 +62,7 @@ pub async fn get_pref(state: State<'_, AppState>, args: GetPrefArgs) -> Result<O
     let scope = PrefScope::try_from(args.scope)?;
     let key = args.key;
     let db = active_database(&state)?;
-    let value = tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            preferences::get(conn, scope, &key).map_err(haex_crdt::Error::from)
-        })
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("get_pref join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
-    Ok(value)
+    db.read(move |r| preferences::get(r, scope, &key)).await
 }
 
 #[derive(Debug, Deserialize)]
@@ -90,19 +80,8 @@ pub async fn set_pref(state: State<'_, AppState>, args: SetPrefArgs) -> Result<(
     let scope = PrefScope::try_from(args.scope)?;
     let SetPrefArgs { key, value, .. } = args;
     let db = active_database(&state)?;
-    tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            preferences::insert_or_update(conn, scope, &key, &value)
-                .map_err(haex_crdt::Error::from)
-                .map(|_| ())
-        })
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("set_pref join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
-    Ok(())
+    db.write(move |tx| preferences::insert_or_update(tx, scope, &key, &value).map(|_| ()))
+        .await
 }
 
 #[derive(Debug, Deserialize)]
@@ -120,17 +99,6 @@ pub async fn clear_pref(state: State<'_, AppState>, args: ClearPrefArgs) -> Resu
     let scope = PrefScope::try_from(args.scope)?;
     let key = args.key;
     let db = active_database(&state)?;
-    tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            preferences::delete(conn, scope, &key)
-                .map_err(haex_crdt::Error::from)
-                .map(|_| ())
-        })
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("clear_pref join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
-    Ok(())
+    db.write(move |tx| preferences::delete(tx, scope, &key).map(|_| ()))
+        .await
 }

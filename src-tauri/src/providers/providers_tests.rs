@@ -16,6 +16,7 @@ use crate::identity::{
 use crate::model_capabilities::{ModelCapabilities, ReasoningControl};
 use crate::storage::models::{self as models_store, IntegrityStatus, ModelRow, SourceKind};
 use crate::storage::providers::{Provider, ProviderCapability, ProviderKind};
+use crate::storage::query;
 use crate::vault_gate::VaultGate;
 
 #[test]
@@ -55,6 +56,7 @@ fn open_vault(dir: &std::path::Path) -> Arc<Database> {
             signature_provider: Arc::new(NoopSignatureProvider),
             migration_source: holzi_migration_source(),
             trigger_version: HOLZI_TRIGGER_VERSION,
+            max_transaction_bytes: haex_crdt::MAX_CRDT_TRANSACTION_BYTES,
         })
         .expect("open vault"),
     )
@@ -94,8 +96,8 @@ fn cached_row(provider: &Provider, capabilities: Option<ModelCapabilities>) -> M
 
 fn seed(db: &Arc<Database>, provider: &Provider, capabilities: Option<ModelCapabilities>) {
     let row = cached_row(provider, capabilities);
-    db.with_connection(|conn| {
-        models_store::replace_provider_models(conn, provider.id, &[row]).expect("seed cache");
+    db.write(|tx| {
+        models_store::replace_provider_models(tx, provider.id, &[row]).expect("seed cache");
         Ok(())
     })
     .expect("seed");
@@ -103,10 +105,12 @@ fn seed(db: &Arc<Database>, provider: &Provider, capabilities: Option<ModelCapab
 
 fn stored_capabilities(db: &Arc<Database>, provider: &Provider) -> Option<ModelCapabilities> {
     let id = format!("{}:claude-opus-5", provider.id);
-    db.with_connection(|conn| Ok(models_store::get_model(conn, &id).expect("get model")))
-        .expect("read")
-        .expect("row exists")
-        .capabilities
+    query::read(db, |r| {
+        Ok(models_store::get_model(r, &id).expect("get model"))
+    })
+    .expect("read")
+    .expect("row exists")
+    .capabilities
 }
 
 fn full_listing() -> serde_json::Value {

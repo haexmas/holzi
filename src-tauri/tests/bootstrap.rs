@@ -7,6 +7,10 @@
 //! production code in `holzi_lib::identity::HolziBootstrap` + `MigrationSource`,
 //! not a spike.
 
+// These tests read raw vault state (counts, CRDT columns, the delete log) that
+// the CRDT write path does not expose.
+#![allow(clippy::disallowed_methods)]
+
 use std::path::PathBuf;
 use std::sync::{Arc, Barrier};
 use std::thread;
@@ -37,6 +41,7 @@ fn make_config(
         signature_provider: Arc::new(NoopSignatureProvider),
         migration_source: holzi_migration_source(),
         trigger_version: HOLZI_TRIGGER_VERSION,
+        max_transaction_bytes: haex_crdt::MAX_CRDT_TRANSACTION_BYTES,
     }
 }
 
@@ -137,10 +142,8 @@ fn known_devices_row_syncs_via_row_pks() {
         holzi_lib::identity::read_or_mint_installation_uuid(&installation_id_file)
             .expect("read installation id");
 
-    db.with_connection(|c| {
-        known_devices::update_alias(c, installation_uuid, "renamed").map_err(Into::into)
-    })
-    .expect("alias update");
+    db.write(|tx| known_devices::update_alias(tx, installation_uuid, "renamed"))
+        .expect("alias update");
 
     let changes = db
         .scan_table_for_local_changes("known_devices", None, ScanFilters::default())

@@ -10,7 +10,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use haex_crdt::{DatabaseConfig, NoopSignatureProvider, SqlCipherKey};
+use haex_crdt::{DatabaseConfig, NoopSignatureProvider, SqlCipherKey, MAX_CRDT_TRANSACTION_BYTES};
 
 use crate::identity::{holzi_migration_source, HolziBootstrap, HOLZI_TRIGGER_VERSION};
 
@@ -33,5 +33,6 @@ pub fn vault_config(
         signature_provider: Arc::new(NoopSignatureProvider),
         migration_source: holzi_migration_source(),
         trigger_version: HOLZI_TRIGGER_VERSION,
+        max_transaction_bytes: MAX_CRDT_TRANSACTION_BYTES,
     }
 }

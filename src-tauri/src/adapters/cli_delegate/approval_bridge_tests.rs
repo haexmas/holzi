@@ -15,6 +15,7 @@ use crate::chat::tools::ApprovalDecision;
 use crate::identity::{holzi_migration_source, installation_id_path, HolziBootstrap};
 use crate::storage::chat_messages::{self as msg_store, MessageRole};
 use crate::storage::preferences::{self, PrefScope};
+use crate::storage::query;
 use crate::vault_gate::VaultGate;
 
 const PASSPHRASE: &str = "approval-bridge-posture-test";
@@ -29,6 +30,7 @@ fn open_vault(dir: &Path) -> Database {
         signature_provider: Arc::new(NoopSignatureProvider),
         migration_source: holzi_migration_source(),
         trigger_version: haex_crdt::DEFAULT_TRIGGER_VERSION,
+        max_transaction_bytes: haex_crdt::MAX_CRDT_TRANSACTION_BYTES,
     })
     .expect("vault open")
 }
@@ -110,11 +112,11 @@ async fn auto_mode_allow_on_a_safe_tool_skips_the_live_round_trip() {
     let db = VaultGate::new()
         .vault_db(Arc::new(open_vault(dir.path())))
         .expect("open gate");
-    db.with_connection(|conn| {
-        preferences::insert_or_update(conn, PrefScope::Vault, "chat.permission_mode", "auto")
-            .map_err(haex_crdt::Error::from)?;
+    db.write(|tx| {
+        preferences::insert_or_update(tx, PrefScope::Vault, "chat.permission_mode", "auto")?;
         Ok(())
     })
+    .await
     .expect("set permission mode");
 
     let pending: PendingToolApprovals = Arc::new(Mutex::new(HashMap::new()));
@@ -157,11 +159,11 @@ async fn plan_mode_deny_on_a_risky_tool_skips_the_live_round_trip() {
     let db = VaultGate::new()
         .vault_db(Arc::new(open_vault(dir.path())))
         .expect("open gate");
-    db.with_connection(|conn| {
-        preferences::insert_or_update(conn, PrefScope::Vault, "chat.permission_mode", "plan")
-            .map_err(haex_crdt::Error::from)?;
+    db.write(|tx| {
+        preferences::insert_or_update(tx, PrefScope::Vault, "chat.permission_mode", "plan")?;
         Ok(())
     })
+    .await
     .expect("set permission mode");
 
     let pending: PendingToolApprovals = Arc::new(Mutex::new(HashMap::new()));
@@ -235,10 +237,7 @@ async fn gated_permissive_allow_persists_an_audit_pair_without_raw_input() {
         "gated-permissive must never emit tool-permission-request"
     );
 
-    let rows = db
-        .with_connection(|conn| {
-            msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)
-        })
+    let rows = query::read(&db, |r| msg_store::list_messages(r, thread_id))
         .expect("list persisted audit rows");
     assert_eq!(rows.len(), 2, "expected exactly one call/result row pair");
     let call_row = rows

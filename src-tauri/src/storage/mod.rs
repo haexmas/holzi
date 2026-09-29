@@ -1,18 +1,18 @@
-//! CRDT-aware write helpers.
+//! Typed reads and writes of the vault tables (spec 024, research R19).
 //!
-//! Etappe-0 finding #2: every INSERT/UPDATE on a CRDT-tracked table must set
-//! `haex_hlc_no_sync = current_hlc()` in the SET/VALUES clause. Without it,
-//! the row-level HLC stays NULL, the trigger skips the column-HLC map, and
-//! the write is invisible to the sync scanner (LWW/sync silently breaks).
+//! Writes take haex-crdt's [`haex_crdt::CrdtTransaction`] and run inside
+//! [`crate::vault_gate::VaultDb::write`]: the CRDT transformer stamps every
+//! statement with the transaction HLC, so no helper sets
+//! `haex_hlc_no_sync` itself (haex-crdt rejects that), and everything one
+//! `write` does is one transaction group for sync. Tables ending in
+//! `_no_sync` go through the same call and stay device-local. Reads take any
+//! [`query::Query`], so they run on [`crate::vault_gate::VaultDb::read`] or
+//! inside a `write` that reads, then writes.
 //!
-//! This module makes it impossible to forget the convention: writes go
-//! through typed helpers that always append the HLC column.
-//!
-//! Bootstrap-time inserts (`HolziBootstrap`) are the deliberate exception —
-//! the crate hasn't initialised HLC yet inside the bootstrap transaction, so
-//! `current_hlc()` would fail. Those rows carry NULL row-level HLC and stay
-//! sync-invisible until a later UPDATE fires the trigger. See contract
-//! §"Vault identity and device model".
+//! Bootstrap-time inserts (`HolziBootstrap`) are the exception: they run in
+//! haex-crdt's own bootstrap transaction before the HLC exists, so those rows
+//! carry a NULL row-level HLC and stay sync-invisible until a later write
+//! touches them. See contract §"Vault identity and device model".
 
 pub mod chat_messages;
 #[cfg(test)]
@@ -32,6 +32,7 @@ pub mod preferences_commands_tests;
 #[cfg(test)]
 pub mod preferences_tests;
 pub mod providers;
+pub mod query;
 pub mod wm_session;
 pub mod wm_session_commands;
 #[cfg(test)]

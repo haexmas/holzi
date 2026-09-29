@@ -6,43 +6,39 @@
 //! that surface the bootstrap row to sync scanners, and the device list of
 //! the settings (spec 023-settings-app, FR-022).
 
-use haex_crdt::crdt::columns::HLC_TIMESTAMP_COLUMN;
-use haex_crdt::rusqlite::{params, Connection};
+use haex_crdt::rusqlite::params;
+use haex_crdt::CrdtTransaction;
 use uuid::Uuid;
 
 use crate::identity::VAULT_SCOPE_UUID;
+use crate::storage::query::Query;
 
 /// Updates the human-readable alias on this replica's `known_devices` row.
-/// Injects `haex_hlc_no_sync = current_hlc()` — the write becomes visible
-/// to the sync scanner after this call (Etappe-0 finding #2).
+/// The transformer stamps the HLC, so the bootstrap row becomes visible to
+/// the sync scanner with this write.
 pub fn update_alias(
-    conn: &Connection,
+    tx: &mut CrdtTransaction<'_>,
     installation_uuid: Uuid,
     alias: &str,
-) -> haex_crdt::rusqlite::Result<usize> {
-    let sql = format!(
-        "UPDATE known_devices \
-         SET alias = ?1, {HLC_TIMESTAMP_COLUMN} = current_hlc() \
-         WHERE installation_uuid = ?2"
-    );
-    conn.execute(&sql, params![alias, installation_uuid.to_string()])
+) -> haex_crdt::Result<usize> {
+    tx.execute(
+        "UPDATE known_devices SET alias = ?1 WHERE installation_uuid = ?2",
+        params![alias, installation_uuid.to_string()],
+    )
 }
 
 /// Reads this installation's `vault_device_uuid` from `known_devices`. Never
 /// mutates; safe to call in read-only contexts.
 pub fn get_vault_device_uuid(
-    conn: &Connection,
+    q: &mut impl Query,
     installation_uuid: Uuid,
-) -> haex_crdt::rusqlite::Result<Option<Uuid>> {
-    use haex_crdt::rusqlite::OptionalExtension;
-    let raw: Option<String> = conn
-        .query_row(
-            "SELECT vault_device_uuid FROM known_devices \
-             WHERE installation_uuid = ?1",
-            params![installation_uuid.to_string()],
-            |r| r.get(0),
-        )
-        .optional()?;
+) -> haex_crdt::Result<Option<Uuid>> {
+    let raw: Option<String> = q.query_row(
+        "SELECT vault_device_uuid FROM known_devices \
+         WHERE installation_uuid = ?1",
+        params![installation_uuid.to_string()],
+        |r| r.get(0),
+    )?;
     Ok(raw.and_then(|s| Uuid::parse_str(&s).ok()))
 }
 
@@ -58,21 +54,21 @@ pub struct KnownDevice {
 /// Every device of the vault except the internal vault-scope row that
 /// `identity::bootstrap` inserts for vault-wide preferences. Rows whose UUIDs
 /// do not parse are skipped; the order is the caller's.
-pub fn list_devices(conn: &Connection) -> haex_crdt::rusqlite::Result<Vec<KnownDevice>> {
-    let mut stmt = conn.prepare(
+pub fn list_devices(q: &mut impl Query) -> haex_crdt::Result<Vec<KnownDevice>> {
+    let rows = q.query_map(
         "SELECT installation_uuid, vault_device_uuid, alias FROM known_devices \
          WHERE installation_uuid != ?1",
+        params![VAULT_SCOPE_UUID.to_string()],
+        |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, Option<String>>(2)?,
+            ))
+        },
     )?;
-    let rows = stmt.query_map(params![VAULT_SCOPE_UUID.to_string()], |r| {
-        Ok((
-            r.get::<_, String>(0)?,
-            r.get::<_, String>(1)?,
-            r.get::<_, Option<String>>(2)?,
-        ))
-    })?;
     let mut devices = Vec::new();
-    for row in rows {
-        let (installation, vault_device, alias) = row?;
+    for (installation, vault_device, alias) in rows {
         if let (Ok(installation_uuid), Ok(vault_device_uuid)) = (
             Uuid::parse_str(&installation),
             Uuid::parse_str(&vault_device),

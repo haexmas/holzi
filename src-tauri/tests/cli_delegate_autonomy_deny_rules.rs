@@ -24,6 +24,7 @@ use holzi_lib::adapters::{ChatMessage, ChatRequest, ChatRole, ProviderAdapter, S
 use holzi_lib::identity::{holzi_migration_source, installation_id_path, HolziBootstrap};
 use holzi_lib::storage::chat_messages::{list_messages, MessageRole};
 use holzi_lib::storage::preferences::{self, PrefScope};
+use holzi_lib::storage::query;
 use holzi_lib::vault_gate::VaultGate;
 
 const PASSPHRASE: &str = "cli-delegate-autonomy-deny-rules";
@@ -39,14 +40,12 @@ fn open_vault_with_deny_rules(dir: &Path, categories: &[&str]) -> Database {
         signature_provider: Arc::new(NoopSignatureProvider),
         migration_source: holzi_migration_source(),
         trigger_version: haex_crdt::DEFAULT_TRIGGER_VERSION,
+        max_transaction_bytes: haex_crdt::MAX_CRDT_TRANSACTION_BYTES,
     })
     .expect("vault open");
     let json = serde_json::to_string(categories).unwrap();
-    db.with_connection(|conn| {
-        preferences::insert_or_update(conn, PrefScope::Vault, PREF_DENY_RULES, &json)
-            .map_err(haex_crdt::Error::from)
-    })
-    .expect("set deny rules");
+    db.write(|tx| preferences::insert_or_update(tx, PrefScope::Vault, PREF_DENY_RULES, &json))
+        .expect("set deny rules");
     db
 }
 
@@ -183,9 +182,7 @@ async fn network_access_deny_rule_blocks_a_codex_command_with_network_context() 
         "network_access must deny a networked command"
     );
 
-    let messages = db
-        .with_connection(|conn| list_messages(conn, thread_id).map_err(haex_crdt::Error::from))
-        .expect("list_messages");
+    let messages = query::read(&db, |r| list_messages(r, thread_id)).expect("list_messages");
     let result_row = messages
         .iter()
         .find(|m| m.role == MessageRole::ToolResult)
@@ -231,9 +228,8 @@ async fn workspace_escape_deny_rule_fails_closed_on_a_codex_file_change() {
 async fn malformed_deny_rules_preference_fails_closed_to_deny() {
     let dir = tempfile::tempdir().expect("tempdir");
     let db = Arc::new(open_vault_with_deny_rules(dir.path(), &[]));
-    db.with_connection(|conn| {
-        preferences::insert_or_update(conn, PrefScope::Vault, PREF_DENY_RULES, "not valid json")
-            .map_err(haex_crdt::Error::from)
+    db.write(|tx| {
+        preferences::insert_or_update(tx, PrefScope::Vault, PREF_DENY_RULES, "not valid json")
     })
     .expect("corrupt the deny rules preference");
 

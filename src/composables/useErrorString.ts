@@ -50,6 +50,7 @@ export function useErrorString() {
         return t('errors.vaultAlreadyOpenElsewhere')
       if (kind === 'VaultAlreadyActive') return t('errors.vaultAlreadyActive')
       if (kind === 'VaultClosed') return t('errors.vaultClosed')
+      if (kind === 'TransactionTooLarge') return t('errors.transactionTooLarge')
       if (kind === 'InvalidInput' && typeof reason === 'string') {
         if (reason.startsWith(AUTONOMY_UNAVAILABLE_PREFIX))
           return t('errors.autonomyUnavailable')

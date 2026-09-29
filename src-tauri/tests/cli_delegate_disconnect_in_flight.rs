@@ -23,6 +23,7 @@ use holzi_lib::adapters::cli_delegate::{CliDelegateAdapter, DelegateChatContext,
 use holzi_lib::adapters::{ChatMessage, ChatRequest, ChatRole, ProviderAdapter, StreamChunk};
 use holzi_lib::identity::{holzi_migration_source, installation_id_path, HolziBootstrap};
 use holzi_lib::storage::providers::{self as storage, Provider, ProviderCapability, ProviderKind};
+use holzi_lib::storage::query;
 
 const PASSPHRASE: &str = "cli-delegate-disconnect-in-flight-test";
 const STUB_TRANSCRIPT: &str = r#"{"type":"system","subtype":"init"}
@@ -41,6 +42,7 @@ fn open_vault(dir: &Path) -> Database {
         signature_provider: Arc::new(NoopSignatureProvider),
         migration_source: holzi_migration_source(),
         trigger_version: haex_crdt::DEFAULT_TRIGGER_VERSION,
+        max_transaction_bytes: haex_crdt::MAX_CRDT_TRANSACTION_BYTES,
     })
     .expect("vault open")
 }
@@ -76,8 +78,8 @@ async fn disconnect_during_a_response_does_not_affect_that_response() {
         created_at: 0,
         capability: ProviderCapability::Chat,
     };
-    db.with_connection(|conn| {
-        storage::insert_provider(conn, &provider).map_err(haex_crdt::Error::from)?;
+    db.write(|tx| {
+        storage::insert_provider(tx, &provider)?;
         Ok(())
     })
     .expect("insert provider");
@@ -118,17 +120,15 @@ async fn disconnect_during_a_response_does_not_affect_that_response() {
         .expect("stream_chat should start");
 
     // Disconnect while the response is still in flight.
-    db.with_connection(|conn| {
-        storage::delete_provider(conn, provider_id).map_err(haex_crdt::Error::from)?;
+    db.write(|tx| {
+        storage::delete_provider(tx, provider_id)?;
         Ok(())
     })
     .expect("delete provider mid-flight");
     assert!(
-        db.with_connection(|conn| {
-            storage::get_provider(conn, provider_id).map_err(haex_crdt::Error::from)
-        })
-        .expect("get_provider query")
-        .is_none(),
+        query::read(&db, |r| { storage::get_provider(r, provider_id) })
+            .expect("get_provider query")
+            .is_none(),
         "provider row should be gone",
     );
 

@@ -12,6 +12,7 @@ use uuid::Uuid;
 use super::*;
 use crate::identity::{holzi_migration_source, HolziBootstrap, HOLZI_TRIGGER_VERSION};
 use crate::state::{ActiveInstanceHandle, AppState};
+use crate::storage::query;
 
 fn open_test_state(passphrase: &str) -> (tempfile::TempDir, AppState, Uuid) {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -25,20 +26,17 @@ fn open_test_state(passphrase: &str) -> (tempfile::TempDir, AppState, Uuid) {
             signature_provider: Arc::new(NoopSignatureProvider),
             migration_source: holzi_migration_source(),
             trigger_version: HOLZI_TRIGGER_VERSION,
+            max_transaction_bytes: haex_crdt::MAX_CRDT_TRANSACTION_BYTES,
         })
         .expect("open test vault"),
     );
     let installation_uuid =
         read_or_mint_installation_uuid(&install_path).expect("installation uuid");
-    let device = db
-        .with_connection(|conn| {
-            Ok(known_devices::get_vault_device_uuid(
-                conn,
-                installation_uuid,
-            )?)
-        })
-        .expect("read vault_device_uuid")
-        .expect("bootstrap registered this installation");
+    let device = query::read(&db, |r| {
+        known_devices::get_vault_device_uuid(r, installation_uuid)
+    })
+    .expect("read vault_device_uuid")
+    .expect("bootstrap registered this installation");
 
     let state = AppState::default();
     state
@@ -70,8 +68,7 @@ async fn turn(state: &AppState, device: Uuid, enabled: bool) -> SessionRestoreSt
 async fn stored_session(state: &AppState, device: Uuid) -> Option<serde_json::Value> {
     let db = db_of(state);
     tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| Ok(wm_session::load(conn, device).expect("load")))
-            .expect("load")
+        query::read(&db, |r| Ok(wm_session::load(r, device).expect("load"))).expect("load")
     })
     .await
     .expect("join")
@@ -110,13 +107,13 @@ async fn an_old_device_value_no_longer_applies() {
     let (_dir, state, device) = open_test_state("wm-session-cmd-old-device-value");
     let db = db_of(&state);
     tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            Ok(preferences::insert_or_update(
-                conn,
+        db.write_blocking(|tx| {
+            preferences::insert_or_update(
+                tx,
                 PrefScope::Device(device),
                 SESSION_RESTORE_KEY,
                 "true",
-            )?)
+            )
         })
         .expect("set device value")
     })
@@ -145,8 +142,8 @@ async fn load_with_restore_off_deletes_a_leftover_session() {
     let (_dir, state, device) = open_test_state("wm-session-cmd-load-off");
     let db = db_of(&state);
     tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            wm_session::save(conn, device, &snapshot("leftover")).expect("save");
+        db.write_blocking(|tx| {
+            wm_session::save(tx, device, &snapshot("leftover")).expect("save");
             Ok(())
         })
         .expect("save leftover")

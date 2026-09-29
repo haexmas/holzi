@@ -16,6 +16,7 @@ use crate::identity::{installation_id_path, read_or_mint_installation_uuid, VAUL
 use crate::state::AppState;
 use crate::state_utils::active_database;
 use crate::storage::known_devices::{self, KnownDevice};
+use crate::storage::query::Query;
 use crate::vault_gate::VaultDb;
 
 /// Frontend view of the active device's identity + OS hostname.
@@ -56,26 +57,16 @@ pub async fn current_device_info(
 
     let db = active_database(&state)?;
     let installation_for_query = installation_uuid;
-    let row = tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            use haex_crdt::rusqlite::{params, OptionalExtension};
-            let raw: Option<(String, Option<String>)> = conn
-                .query_row(
-                    "SELECT vault_device_uuid, alias FROM known_devices \
-                     WHERE installation_uuid = ?1",
-                    params![installation_for_query.to_string()],
-                    |r| Ok((r.get(0)?, r.get(1)?)),
-                )
-                .optional()
-                .map_err(haex_crdt::Error::from)?;
-            Ok(raw)
+    let row: Option<(String, Option<String>)> = db
+        .read(move |r| {
+            r.query_row(
+                "SELECT vault_device_uuid, alias FROM known_devices \
+                 WHERE installation_uuid = ?1",
+                haex_crdt::rusqlite::params![installation_for_query.to_string()],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
         })
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("current_device_info join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
+        .await?;
 
     let (vault_device_uuid, alias) = row.ok_or_else(|| HolziError::CrdtInit {
         reason: format!("no known_devices row for installation {installation_uuid}"),
@@ -114,26 +105,15 @@ pub async fn resolve_vault_device_uuid(app: &AppHandle, db: &VaultDb) -> Result<
     let installation_uuid =
         read_or_mint_installation_uuid(&installation_id_file).map_err(HolziError::from)?;
 
-    let db = db.clone();
-    let raw = tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            use haex_crdt::rusqlite::{params, OptionalExtension};
-            let raw: Option<String> = conn
-                .query_row(
-                    "SELECT vault_device_uuid FROM known_devices WHERE installation_uuid = ?1",
-                    params![installation_uuid.to_string()],
-                    |r| r.get(0),
-                )
-                .optional()
-                .map_err(haex_crdt::Error::from)?;
-            Ok(raw)
+    let raw: Option<String> = db
+        .read(move |r| {
+            r.query_row(
+                "SELECT vault_device_uuid FROM known_devices WHERE installation_uuid = ?1",
+                haex_crdt::rusqlite::params![installation_uuid.to_string()],
+                |row| row.get(0),
+            )
         })
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("resolve_vault_device_uuid join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
+        .await?;
 
     let vault_device_uuid = raw.ok_or_else(|| HolziError::CrdtInit {
         reason: format!("no known_devices row for installation {installation_uuid}"),
@@ -185,19 +165,11 @@ pub async fn update_device_alias(
 
     let db = active_database(&state)?;
     let alias_owned = trimmed;
-    tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| {
-            known_devices::update_alias(conn, installation_uuid, &alias_owned)
-                .map_err(haex_crdt::Error::from)?;
-            Ok(())
-        })
+    db.write(move |tx| {
+        known_devices::update_alias(tx, installation_uuid, &alias_owned)?;
+        Ok(())
     })
     .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("update_device_alias join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
-    Ok(())
 }
 
 /// One device of the vault for the settings' device list (spec 023-settings-app, FR-022,
@@ -251,14 +223,7 @@ pub async fn list_vault_devices(
         read_or_mint_installation_uuid(&installation_id_file).map_err(HolziError::from)?;
 
     let db = active_database(&state)?;
-    let devices = tauri::async_runtime::spawn_blocking(move || {
-        db.with_connection(|conn| known_devices::list_devices(conn).map_err(haex_crdt::Error::from))
-    })
-    .await
-    .map_err(|e| HolziError::CrdtInit {
-        reason: format!("list_vault_devices join: {e}"),
-    })?
-    .map_err(HolziError::from)?;
+    let devices = db.read(|r| known_devices::list_devices(r)).await?;
     Ok(order_vault_devices(devices, installation_uuid))
 }
 

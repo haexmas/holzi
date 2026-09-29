@@ -353,16 +353,13 @@ async fn upsert_delegate_provider(
 ) -> Result<Provider> {
     let db = active_database(state)?;
     let vendor_owned = vendor.to_string();
-    let db_write = db.clone();
-    let provider = tauri::async_runtime::spawn_blocking(move || {
-        db_write.with_connection(|conn| {
-            let existing = storage::find_cli_delegate_provider(conn, &vendor_owned)
-                .map_err(haex_crdt::Error::from)?;
+    let provider = db
+        .write(move |tx| {
+            let existing = storage::find_cli_delegate_provider(tx, &vendor_owned)?;
             match existing {
                 Some(id) => {
-                    storage::update_credentials(conn, id, &credentials)
-                        .map_err(haex_crdt::Error::from)?;
-                    storage::get_provider(conn, id).map_err(haex_crdt::Error::from)
+                    storage::update_credentials(tx, id, &credentials)?;
+                    storage::get_provider(tx, id)
                 }
                 None => {
                     let provider = Provider {
@@ -375,20 +372,15 @@ async fn upsert_delegate_provider(
                         created_at: super::now_ms(),
                         capability: ProviderCapability::Chat,
                     };
-                    storage::insert_provider(conn, &provider).map_err(haex_crdt::Error::from)?;
+                    storage::insert_provider(tx, &provider)?;
                     Ok(Some(provider))
                 }
             }
         })
-    })
-    .await
-    .map_err(|error| HolziError::CrdtInit {
-        reason: format!("cli_delegate provider upsert join: {error}"),
-    })?
-    .map_err(HolziError::from)?
-    .ok_or_else(|| HolziError::CrdtInit {
-        reason: "cli_delegate provider vanished immediately after being written".into(),
-    })?;
+        .await?
+        .ok_or_else(|| HolziError::CrdtInit {
+            reason: "cli_delegate provider vanished immediately after being written".into(),
+        })?;
 
     if let Err(error) = super::do_refresh(&db, &provider).await {
         log::warn!(

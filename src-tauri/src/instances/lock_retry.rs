@@ -1,12 +1,9 @@
 //! Retrying `open_instance` while another process holds the vault's advisory file lock (spec 013
 //! FR-018 to FR-020, US4).
 //!
-//! `haex-crdt`'s own error boundary collapses every `DatabaseError` variant — including its
-//! already-distinct `VaultAlreadyOpenElsewhere { path, reason }` — into an opaque
-//! `Error::Message(String)` before it reaches this crate (`From<DatabaseError> for Error` in
-//! `haex-crdt`'s `src/error.rs`), so `open.rs` classifies the message text the same way
-//! `is_wrong_passphrase` already does for a bad passphrase, rather than pattern-matching a variant
-//! that never survives the crossing.
+//! `open.rs` recognises the held lock by haex-crdt's typed
+//! `DatabaseError::VaultAlreadyOpenElsewhere`, which it maps to
+//! `HolziError::VaultAlreadyOpenElsewhere`; only that error is retried here.
 
 use std::future::Future;
 use std::time::Duration;

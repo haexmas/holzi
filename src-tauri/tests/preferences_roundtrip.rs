@@ -15,6 +15,10 @@
 //! `foreign_key_check` pass haex-crdt runs before commit. Adding a
 //! duplicate here would only re-exercise the crate we depend on.
 
+// These tests read raw vault state (counts, CRDT columns, the schema) that the
+// CRDT write path does not expose.
+#![allow(clippy::disallowed_methods)]
+
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -28,6 +32,7 @@ use holzi_lib::identity::{
     VAULT_SCOPE_UUID,
 };
 use holzi_lib::storage::preferences::{self, PrefScope};
+use holzi_lib::storage::query;
 
 const PASSPHRASE: &str = "preferences-roundtrip";
 
@@ -45,6 +50,7 @@ fn make_config(
         signature_provider: Arc::new(NoopSignatureProvider),
         migration_source: holzi_migration_source(),
         trigger_version: HOLZI_TRIGGER_VERSION,
+        max_transaction_bytes: haex_crdt::MAX_CRDT_TRANSACTION_BYTES,
     }
 }
 
@@ -161,15 +167,15 @@ fn preferences_set_get_update_delete_roundtrip() {
     let key = "chat.default_model_id";
 
     // Insert.
-    db.with_connection(|conn| {
-        assert!(preferences::get(conn, scope, key).unwrap().is_none());
-        preferences::insert_or_update(conn, scope, key, "model-A").unwrap();
+    db.write(|tx| {
+        assert!(preferences::get(tx, scope, key).unwrap().is_none());
+        preferences::insert_or_update(tx, scope, key, "model-A").unwrap();
         Ok(())
     })
     .unwrap();
-    db.with_connection(|conn| {
+    query::read(&db, |r| {
         assert_eq!(
-            preferences::get(conn, scope, key).unwrap().as_deref(),
+            preferences::get(r, scope, key).unwrap().as_deref(),
             Some("model-A")
         );
         Ok(())
@@ -177,14 +183,14 @@ fn preferences_set_get_update_delete_roundtrip() {
     .unwrap();
 
     // Update to a new value.
-    db.with_connection(|conn| {
-        preferences::insert_or_update(conn, scope, key, "model-B").unwrap();
+    db.write(|tx| {
+        preferences::insert_or_update(tx, scope, key, "model-B").unwrap();
         Ok(())
     })
     .unwrap();
-    db.with_connection(|conn| {
+    query::read(&db, |r| {
         assert_eq!(
-            preferences::get(conn, scope, key).unwrap().as_deref(),
+            preferences::get(r, scope, key).unwrap().as_deref(),
             Some("model-B")
         );
         Ok(())
@@ -192,10 +198,10 @@ fn preferences_set_get_update_delete_roundtrip() {
     .unwrap();
 
     // Delete, then delete again (idempotent).
-    db.with_connection(|conn| {
-        preferences::delete(conn, scope, key).unwrap();
-        preferences::delete(conn, scope, key).unwrap();
-        assert!(preferences::get(conn, scope, key).unwrap().is_none());
+    db.write(|tx| {
+        preferences::delete(tx, scope, key).unwrap();
+        preferences::delete(tx, scope, key).unwrap();
+        assert!(preferences::get(tx, scope, key).unwrap().is_none());
         Ok(())
     })
     .unwrap();
@@ -214,28 +220,24 @@ fn scope_isolation_between_device_and_vault_rows() {
     let vault_scope = PrefScope::Vault;
     let key = "chat.default_model_id";
 
-    db.with_connection(|conn| {
-        preferences::insert_or_update(conn, device_scope, key, "device-model").unwrap();
-        preferences::insert_or_update(conn, vault_scope, key, "vault-model").unwrap();
+    db.write(|tx| {
+        preferences::insert_or_update(tx, device_scope, key, "device-model").unwrap();
+        preferences::insert_or_update(tx, vault_scope, key, "vault-model").unwrap();
 
         assert_eq!(
-            preferences::get(conn, device_scope, key)
-                .unwrap()
-                .as_deref(),
+            preferences::get(tx, device_scope, key).unwrap().as_deref(),
             Some("device-model")
         );
         assert_eq!(
-            preferences::get(conn, vault_scope, key).unwrap().as_deref(),
+            preferences::get(tx, vault_scope, key).unwrap().as_deref(),
             Some("vault-model")
         );
 
         // Deleting the vault row leaves the device row untouched.
-        preferences::delete(conn, vault_scope, key).unwrap();
-        assert!(preferences::get(conn, vault_scope, key).unwrap().is_none());
+        preferences::delete(tx, vault_scope, key).unwrap();
+        assert!(preferences::get(tx, vault_scope, key).unwrap().is_none());
         assert_eq!(
-            preferences::get(conn, device_scope, key)
-                .unwrap()
-                .as_deref(),
+            preferences::get(tx, device_scope, key).unwrap().as_deref(),
             Some("device-model")
         );
         Ok(())
@@ -255,16 +257,14 @@ fn null_stored_value_folds_to_absent_on_get() {
     let scope = PrefScope::Device(db.device_id());
     let key = "chat.default_model_id";
 
-    db.with_connection(|conn| {
-        let sql = format!(
-            "INSERT INTO preferences \
-               (vault_device_uuid, key, value, {HLC_TIMESTAMP_COLUMN}) \
-             VALUES (?1, ?2, NULL, current_hlc())"
-        );
-        conn.execute(&sql, params![scope.to_uuid().to_string(), key])
-            .unwrap();
+    db.write(|tx| {
+        tx.execute(
+            "INSERT INTO preferences (vault_device_uuid, key, value) VALUES (?1, ?2, NULL)",
+            params![scope.to_uuid().to_string(), key],
+        )
+        .unwrap();
 
-        assert!(preferences::get(conn, scope, key).unwrap().is_none());
+        assert!(preferences::get(tx, scope, key).unwrap().is_none());
         Ok(())
     })
     .unwrap();
@@ -288,40 +288,40 @@ fn deleting_known_device_cascades_into_preferences() {
     let own_scope = PrefScope::Device(db.device_id());
     let vault_scope = PrefScope::Vault;
 
-    db.with_connection(|conn| {
-        preferences::insert_or_update(conn, extra_scope, "chat.default_model_id", "extra-A")
+    db.write(|tx| {
+        preferences::insert_or_update(tx, extra_scope, "chat.default_model_id", "extra-A").unwrap();
+        preferences::insert_or_update(tx, extra_scope, "chat.last_active_model_id", "extra-B")
             .unwrap();
-        preferences::insert_or_update(conn, extra_scope, "chat.last_active_model_id", "extra-B")
-            .unwrap();
-        preferences::insert_or_update(conn, own_scope, "chat.default_model_id", "own-A").unwrap();
-        preferences::insert_or_update(conn, vault_scope, "chat.default_model_id", "vault-A")
-            .unwrap();
+        preferences::insert_or_update(tx, own_scope, "chat.default_model_id", "own-A").unwrap();
+        preferences::insert_or_update(tx, vault_scope, "chat.default_model_id", "vault-A").unwrap();
 
-        let before: i64 = conn
+        let before: i64 = tx
             .query_row(
                 "SELECT COUNT(*) FROM preferences WHERE vault_device_uuid = ?1",
                 params![extra_device.to_string()],
                 |r| r.get(0),
             )
-            .unwrap();
+            .unwrap()
+            .unwrap_or(0);
         assert_eq!(
             before, 2,
             "extra device must have 2 preferences before delete"
         );
 
-        conn.execute(
+        tx.execute(
             "DELETE FROM known_devices WHERE vault_device_uuid = ?1",
             params![extra_device.to_string()],
         )
         .unwrap();
 
-        let after: i64 = conn
+        let after: i64 = tx
             .query_row(
                 "SELECT COUNT(*) FROM preferences WHERE vault_device_uuid = ?1",
                 params![extra_device.to_string()],
                 |r| r.get(0),
             )
-            .unwrap();
+            .unwrap()
+            .unwrap_or(0);
         assert_eq!(
             after, 0,
             "FK cascade must drop the extra device's preferences"
@@ -329,14 +329,14 @@ fn deleting_known_device_cascades_into_preferences() {
 
         // Other scopes untouched.
         assert_eq!(
-            preferences::get(conn, own_scope, "chat.default_model_id")
+            preferences::get(tx, own_scope, "chat.default_model_id")
                 .unwrap()
                 .as_deref(),
             Some("own-A"),
             "own device preference must survive the extra-device delete"
         );
         assert_eq!(
-            preferences::get(conn, vault_scope, "chat.default_model_id")
+            preferences::get(tx, vault_scope, "chat.default_model_id")
                 .unwrap()
                 .as_deref(),
             Some("vault-A"),

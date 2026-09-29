@@ -9,15 +9,15 @@
 //! `known_devices(vault_device_uuid) ON DELETE CASCADE` guarantees that
 //! retiring a device automatically drops its per-device preferences.
 //!
-//! Every write goes through the helpers here so
-//! `haex_hlc_no_sync = current_hlc()` is set — the Etappe-0 convention
-//! from `storage::` module docs.
+//! Writes take a [`CrdtTransaction`]; haex-crdt stamps the HLC. Reads take
+//! any [`Query`], so they also run inside a write.
 
-use haex_crdt::crdt::columns::HLC_TIMESTAMP_COLUMN;
-use haex_crdt::rusqlite::{params, Connection, OptionalExtension, Result};
+use haex_crdt::rusqlite::params;
+use haex_crdt::{CrdtTransaction, Result};
 use uuid::Uuid;
 
 use crate::identity::VAULT_SCOPE_UUID;
+use crate::storage::query::Query;
 
 /// Scope of a preference row: vault-wide (sentinel-backed) or a
 /// specific device.
@@ -86,20 +86,17 @@ pub fn validate_scope(scope: PrefScope) -> std::result::Result<(), PrefError> {
 /// Reads a single preference value. Returns `None` when the row is
 /// absent OR when the stored value is SQL NULL — the two are folded
 /// together by design (data-model.md).
-pub fn get(conn: &Connection, scope: PrefScope, key: &str) -> Result<Option<String>> {
-    let raw: Option<Option<String>> = conn
-        .query_row(
-            "SELECT value FROM preferences \
-             WHERE vault_device_uuid = ?1 AND key = ?2",
-            params![scope.to_uuid().to_string(), key],
-            |r| r.get::<_, Option<String>>(0),
-        )
-        .optional()?;
+pub fn get(q: &mut impl Query, scope: PrefScope, key: &str) -> Result<Option<String>> {
+    let raw: Option<Option<String>> = q.query_row(
+        "SELECT value FROM preferences \
+         WHERE vault_device_uuid = ?1 AND key = ?2",
+        params![scope.to_uuid().to_string(), key],
+        |r| r.get::<_, Option<String>>(0),
+    )?;
     Ok(raw.flatten())
 }
 
-/// Inserts or updates a preference row. Always sets
-/// `haex_hlc_no_sync = current_hlc()`.
+/// Inserts or updates a preference row.
 ///
 /// Uses a check-then-write path rather than `INSERT ... ON CONFLICT DO
 /// UPDATE`: the ON-CONFLICT form makes SQLite fire both the row's
@@ -111,39 +108,38 @@ pub fn get(conn: &Connection, scope: PrefScope, key: &str) -> Result<Option<Stri
 /// (the winning path — INSERT or UPDATE — fires exactly one CRDT
 /// trigger, so the row is marked dirty exactly once).
 pub fn insert_or_update(
-    conn: &Connection,
+    tx: &mut CrdtTransaction<'_>,
     scope: PrefScope,
     key: &str,
     value: &str,
 ) -> Result<usize> {
     let uuid_str = scope.to_uuid().to_string();
-    let exists: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM preferences \
-         WHERE vault_device_uuid = ?1 AND key = ?2",
-        params![uuid_str, key],
-        |r| r.get(0),
-    )?;
+    let exists = tx
+        .query_row(
+            "SELECT COUNT(*) FROM preferences \
+             WHERE vault_device_uuid = ?1 AND key = ?2",
+            params![uuid_str, key],
+            |r| r.get::<_, i64>(0),
+        )?
+        .unwrap_or(0);
     if exists > 0 {
-        let update_sql = format!(
-            "UPDATE preferences \
-             SET value = ?1, {HLC_TIMESTAMP_COLUMN} = current_hlc() \
-             WHERE vault_device_uuid = ?2 AND key = ?3"
-        );
-        conn.execute(&update_sql, params![value, uuid_str, key])
+        tx.execute(
+            "UPDATE preferences SET value = ?1 \
+             WHERE vault_device_uuid = ?2 AND key = ?3",
+            params![value, uuid_str, key],
+        )
     } else {
-        let insert_sql = format!(
-            "INSERT INTO preferences \
-               (vault_device_uuid, key, value, {HLC_TIMESTAMP_COLUMN}) \
-             VALUES (?1, ?2, ?3, current_hlc())"
-        );
-        conn.execute(&insert_sql, params![uuid_str, key, value])
+        tx.execute(
+            "INSERT INTO preferences (vault_device_uuid, key, value) VALUES (?1, ?2, ?3)",
+            params![uuid_str, key, value],
+        )
     }
 }
 
 /// Deletes a preference row. Idempotent — deleting an absent row is
 /// not an error.
-pub fn delete(conn: &Connection, scope: PrefScope, key: &str) -> Result<usize> {
-    conn.execute(
+pub fn delete(tx: &mut CrdtTransaction<'_>, scope: PrefScope, key: &str) -> Result<usize> {
+    tx.execute(
         "DELETE FROM preferences WHERE vault_device_uuid = ?1 AND key = ?2",
         params![scope.to_uuid().to_string(), key],
     )
@@ -161,50 +157,50 @@ pub fn parse_bool(value: Option<&str>) -> Option<bool> {
 }
 
 /// Lists every preference row for the given scope, ordered by key.
-pub fn list_by_scope(conn: &Connection, scope: PrefScope) -> Result<Vec<PrefRow>> {
-    let mut stmt = conn.prepare(
+pub fn list_by_scope(q: &mut impl Query, scope: PrefScope) -> Result<Vec<PrefRow>> {
+    q.query_map(
         "SELECT key, value FROM preferences \
          WHERE vault_device_uuid = ?1 \
          ORDER BY key ASC",
-    )?;
-    let rows = stmt.query_map(params![scope.to_uuid().to_string()], |r| {
-        Ok(PrefRow {
-            scope,
-            key: r.get(0)?,
-            value: r.get(1)?,
-        })
-    })?;
-    rows.collect()
+        params![scope.to_uuid().to_string()],
+        |r| {
+            Ok(PrefRow {
+                scope,
+                key: r.get(0)?,
+                value: r.get(1)?,
+            })
+        },
+    )
 }
 
 /// Lists every preference row for the given key across all scopes,
 /// ordered by `vault_device_uuid`.
-pub fn list_by_key(conn: &Connection, key: &str) -> Result<Vec<PrefRow>> {
-    let mut stmt = conn.prepare(
+pub fn list_by_key(q: &mut impl Query, key: &str) -> Result<Vec<PrefRow>> {
+    let key_owned = key.to_string();
+    q.query_map(
         "SELECT vault_device_uuid, value FROM preferences \
          WHERE key = ?1 \
          ORDER BY vault_device_uuid ASC",
-    )?;
-    let key_owned = key.to_string();
-    let rows = stmt.query_map(params![key], move |r| {
-        let uuid_str: String = r.get(0)?;
-        let uuid = Uuid::parse_str(&uuid_str).map_err(|e| {
-            haex_crdt::rusqlite::Error::FromSqlConversionFailure(
-                0,
-                haex_crdt::rusqlite::types::Type::Text,
-                Box::new(e),
-            )
-        })?;
-        let scope = if uuid == VAULT_SCOPE_UUID {
-            PrefScope::Vault
-        } else {
-            PrefScope::Device(uuid)
-        };
-        Ok(PrefRow {
-            scope,
-            key: key_owned.clone(),
-            value: r.get(1)?,
-        })
-    })?;
-    rows.collect()
+        params![key],
+        move |r| {
+            let uuid_str: String = r.get(0)?;
+            let uuid = Uuid::parse_str(&uuid_str).map_err(|e| {
+                haex_crdt::rusqlite::Error::FromSqlConversionFailure(
+                    0,
+                    haex_crdt::rusqlite::types::Type::Text,
+                    Box::new(e),
+                )
+            })?;
+            let scope = if uuid == VAULT_SCOPE_UUID {
+                PrefScope::Vault
+            } else {
+                PrefScope::Device(uuid)
+            };
+            Ok(PrefRow {
+                scope,
+                key: key_owned.clone(),
+                value: r.get(1)?,
+            })
+        },
+    )
 }

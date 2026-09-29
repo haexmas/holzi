@@ -451,63 +451,61 @@ werden erweitert; `instances/presence.rs` meint Prozesse, nicht Geräte, und pas
 nicht; `src-tauri/src/sync/` ist neu. Der Graph ist vom 2026-09-21 und älter als 022/023; die
 Kandidaten wurden im Code geprüft (zur manuellen Nachprüfung vermerkt).
 
-## R19 Schreiben über `execute_with_crdt` (Betreiber-Entscheidung)
+## R19 Schreiben über den CRDT-Weg von haex-crdt (Betreiber-Entscheidung)
 
 **Befund** (geprüft): holzi hat keinen allgemeinen Befehl wie `sql_execute`/`sql_execute_with_crdt`
-in haex-vault. Chat, Einstellungen, Sitzung, Provider, Modelle, Wartung und Freigaben schreiben an
-24 Stellen in 15 Dateien selbst über `haex_crdt::Database::with_connection`, den Notausgang hinter
+in haex-vault. Chat, Einstellungen, Sitzung, Provider, Modelle, Wartung und Freigaben greifen mit
+56 Aufrufen in 15 Produktionsdateien selbst über `haex_crdt::Database::with_connection` zu (dazu
+14 Integrationstestdateien), den Notausgang hinter
 dem Feature `raw-connection`, jede mit eigenem `spawn_blocking` und eigener Fehlerumwandlung. Die
 Arbeit des CRDT-Transformers macht holzi dabei von Hand: Jede INSERT- und UPDATE-Anweisung auf eine
 CRDT-Tabelle muss `haex_hlc_no_sync = current_hlc()` selbst setzen (`storage/mod.rs`, „Etappe-0
 finding #2“). Die Trigger übernehmen den HLC nur aus diesem Feld (geprüft, `crdt/trigger/mod.rs`:
 `WHEN NEW.haex_hlc_no_sync IS NOT NULL`). Fehlt es, ist die Schreibung für den Sync unsichtbar,
-ohne dass etwas fehlschlägt. Außerdem öffnet in 10 der 15 Dateien keine Stelle eine Transaktion;
+ohne dass etwas fehlschlägt. Außerdem öffnet in den meisten Dateien keine Stelle eine Transaktion;
 eine Stelle mit mehreren Anweisungen (etwa `rename_thread`: lesen, dann schreiben) läuft in mehreren
 Transaktionen mit je eigenem HLC und ist nicht atomar, auch ohne Sync.
 
-`execute_with_crdt` (geprüft, `db/core/execute/mod.rs`) setzt den HLC über den Transformer selbst,
-auch in `ON CONFLICT … DO UPDATE` (geprüft, `insert_transformer.rs`), verbietet Schreibungen auf
-CRDT-Metaspalten, prüft die Größe der Transaktion und ruft `PostWriteHook`s in derselben
-Transaktion auf. Es hat aber drei Lücken für holzi:
-
-1. eine Anweisung je Aufruf, jede in eigener Transaktion (`conn.transaction()` im Aufruf);
-2. Parameter nur als `serde_json::Value`, also keine BLOBs (geprüft, `db/core/value.rs`), und es
-   hängt an `DbConnection`, nicht an `Database`;
-3. die Grenze `MAX_CRDT_TRANSACTION_BYTES` (100 MiB) ist eine Konstante.
+Das damalige `execute_with_crdt` auf `DbConnection` setzte den HLC über den Transformer selbst,
+auch in `ON CONFLICT … DO UPDATE` (geprüft, `insert_transformer.rs`), und verbot Schreibungen auf
+CRDT-Metaspalten, konnte aber nur eine Anweisung je Transaktion, nahm Parameter nur als JSON (keine
+BLOBs) und hatte eine feste Größengrenze.
 
 **Entscheidung**:
 
-- **haex-crdt**, ein kleiner PR; Rückwärtsverträglichkeit der freien Hilfsfunktionen ist optional
-  ([contracts/haex-crdt-upstream.md](./contracts/haex-crdt-upstream.md)):
-  `Database::write(|tx: &mut CrdtTransaction| …)` öffnet eine Transaktion; darin laufen beliebig
-  viele `tx.execute_with_crdt(sql, params)` und `tx.query_with_crdt(sql, params)` mit einem
-  gemeinsamen HLC, `tx.execute_local(sql, params)` für `_no_sync`-Tabellen (weist eine CRDT-Tabelle
-  als Ziel ab) und `tx.select(sql, params)`. Parameter sind rusqlite-Werte, BLOBs eingeschlossen. Die
-  Größengrenze gilt für die Summe der Transaktion und kommt aus `DatabaseConfig.max_transaction_bytes`
-  (Standard 100 MiB). Die Hooks laufen je Anweisung in derselben Transaktion. Das heutige
-  `execute_with_crdt` wird ein Aufruf mit einer Anweisung darauf; haex-vault ändert sich nicht.
+- **haex-crdt** (umgesetzt in haexmas/haex-crdt#34 bis #36, gepinnt in holzi mit voller SHA;
+  [contracts/haex-crdt-upstream.md](./contracts/haex-crdt-upstream.md)):
+  `Database::write(|tx: &mut CrdtTransaction| …)` öffnet eine `IMMEDIATE`-Transaktion mit einem
+  HLC; darin laufen beliebig viele `tx.execute`, `tx.query_map` und `tx.query_row`, jede Schreibung
+  durch den Transformer. Tabellen mit Endung `_no_sync` lässt der Transformer am Namen unberührt,
+  derselbe Aufruf schreibt also auch gerätelokale Tabellen. Parameter sind `&[&dyn ToSql]`, BLOBs
+  eingeschlossen. Die Größengrenze gilt für die Summe der Transaktion, gemessen mit
+  `serialized_parameter_bytes`, und kommt aus `DatabaseConfig.max_transaction_bytes`.
+  `Database::read(|conn: &ReadOnlyConnection| …)` liest; `PRAGMA query_only` und ein Authorizer
+  weisen dort jede Schreibung ab. Fehler kommen typisiert an (`Error::Database(DatabaseError)`,
+  `Error::Consumer` für eigene Fehler aus dem Closure, `Error::sqlite_error()`). Die alte
+  `DbConnection`-Schicht aus haex-vault mit `execute_with_crdt`, `select_with_crdt` und den Hooks
+  ist entfernt; `select_with_crdt` änderte unter harten Löschungen an einem `SELECT` nichts.
 - **holzi**: Ein Modul `src-tauri/src/storage/vault_db.rs` kapselt das asynchron (`spawn_blocking`,
-  einheitliche Umwandlung in `HolziError`): `read(|tx| …)` und `write(|tx| …)`. Nach dem Commit
+  einheitliche Umwandlung in `HolziError`): `read(|conn| …)` und `write(|tx| …)`. Nach dem Commit
   stößt `write` den Sync-Dienst an (`tokio::sync::Notify`); der fasst dicht folgende Anstöße
   zusammen und schickt verbundenen Geräten seinen Fortschrittsstand (R4).
-- Alle 24 Stellen ziehen um; jedes von Hand gesetzte `haex_hlc_no_sync = current_hlc()` entfällt.
-  Ob mit oder ohne CRDT-Erfassung geschrieben wird, sagt der Aufruf (`execute_with_crdt` oder
-  `execute_local`), und haex-crdt prüft, dass er zur Tabelle passt.
+- Alle Zugriffe ziehen um; jedes von Hand gesetzte `haex_hlc_no_sync = current_hlc()` entfällt
+  (haex-crdt lehnt es ab: `CrdtMetaColumnWriteForbidden`).
 - `Database::with_connection` steht danach in `clippy.toml` unter `disallowed-methods`. Ausnahmen mit
-  Begründung nur für Wartung (`PRAGMA`, `VACUUM` in `storage/maintenance.rs`), den Bootstrap (dort
-  gibt es noch keinen HLC) und die Tests. Der Sync-Dienst nutzt `scan_table_for_local_changes` und
-  `apply_remote_changes` von `Database`.
+  Begründung nur für Wartung (`PRAGMA`, `VACUUM` in `storage/maintenance.rs`) und die Tests. Der
+  Sync-Dienst nutzt `scan_table_for_local_changes` und `apply_remote_changes` von `Database`.
 - Der erste Umsetzungsschritt lässt jede heutige Anweisung durch den Transformer laufen (Tests je
   Speicher-Modul), bevor die Stellen umziehen; sqlparser muss holzis SQL verstehen.
 
 **Begründung**: Der Weg, den haex-crdt für CRDT-Schreibungen vorsieht, statt der eigenen Konvention;
 eine vergessene HLC-Zuweisung kann es nicht mehr geben; ein Ort für Transaktion, Größengrenze, Fehler
-und Anstoß des Sync statt 24; atomare Schreibvorgänge unabhängig vom Sync. Dieselben Hooks tragen
-später die Signaturen je Änderung in gemeinsamen Bereichen (Specs 027, 028).
+und Anstoß des Sync statt vieler; atomare Schreibvorgänge unabhängig vom Sync. Die Signaturen je Änderung in gemeinsamen Bereichen
+(Specs 027, 028) hängen sich später an `Database::write`.
 
-**Verworfen**: das heutige `execute_with_crdt` direkt (eine Anweisung je Transaktion, keine BLOBs),
+**Verworfen**: das damalige `execute_with_crdt` direkt (eine Anweisung je Transaktion, keine BLOBs),
 eine eigene `write`-Hülle über dem rohen Weg mit von Hand gesetztem HLC (die Konvention bliebe, die
-Größengrenze greift dort nicht), ein Commit-Beobachter in haex-crdt (behandelt das Symptom, die 24
+Größengrenze greift dort nicht), ein Commit-Beobachter in haex-crdt (behandelt das Symptom, die vielen
 Stellen blieben), ein allgemeiner SQL-Befehl für die Oberfläche wie in haex-vault (holzi schreibt
 nur aus dem Backend; ein SQL-Befehl wäre eine neue Angriffsfläche für Erweiterungen und Agenten).
 

@@ -34,6 +34,8 @@ use holzi_lib::storage::chat_messages::{
 use holzi_lib::storage::chat_threads::{self as thread_store, ChatThread};
 use holzi_lib::storage::preferences::{self, PrefScope};
 use holzi_lib::storage::providers::ProviderKind;
+use holzi_lib::storage::query;
+use holzi_lib::vault_gate::{VaultDb, VaultGate};
 
 /// Matches the private `chat.permission_mode` key in `chat/commands.rs`
 /// (data-model.md) — there is no dedicated get/set command, only the
@@ -41,10 +43,8 @@ use holzi_lib::storage::providers::ProviderKind;
 const PREF_PERMISSION_MODE: &str = "chat.permission_mode";
 
 pub fn set_permission_mode(db: &Database, mode: &str) {
-    db.with_connection(|conn| {
-        preferences::insert_or_update(conn, PrefScope::Vault, PREF_PERMISSION_MODE, mode)
-            .map(|_| ())
-            .map_err(haex_crdt::Error::from)
+    db.write(|tx| {
+        preferences::insert_or_update(tx, PrefScope::Vault, PREF_PERMISSION_MODE, mode).map(|_| ())
     })
     .unwrap();
 }
@@ -61,6 +61,7 @@ fn make_config(db_path: PathBuf, installation_id: PathBuf) -> DatabaseConfig {
         signature_provider: Arc::new(NoopSignatureProvider),
         migration_source: holzi_migration_source(),
         trigger_version: HOLZI_TRIGGER_VERSION,
+        max_transaction_bytes: haex_crdt::MAX_CRDT_TRANSACTION_BYTES,
     }
 }
 
@@ -75,9 +76,9 @@ pub fn open_db() -> Database {
 
 /// Seeds a thread with a single persisted `user` message and returns its id.
 pub fn seed_thread(db: &Database, thread_id: Uuid, user_message_id: Uuid) {
-    db.with_connection(|conn| {
+    db.write(|tx| {
         thread_store::insert_thread(
-            conn,
+            tx,
             &ChatThread {
                 id: thread_id,
                 title: "test thread".to_string(),
@@ -88,7 +89,7 @@ pub fn seed_thread(db: &Database, thread_id: Uuid, user_message_id: Uuid) {
             },
         )?;
         msg_store::insert_message(
-            conn,
+            tx,
             &ChatMessage {
                 id: user_message_id,
                 thread_id,
@@ -271,7 +272,7 @@ pub fn spawn_turn(
             let _ = tx.send((name.to_string(), payload));
         };
         run_turn(
-            &db,
+            &vault_db(&db),
             &chat_state,
             &session,
             thread_id,
@@ -286,6 +287,13 @@ pub fn spawn_turn(
         .await;
     });
     (handle, rx)
+}
+
+/// The tracked handle `run_turn` writes through, on a gate of its own.
+pub fn vault_db(db: &Database) -> VaultDb {
+    VaultGate::new()
+        .vault_db(Arc::new(db.clone()))
+        .expect("open gate")
 }
 
 pub fn extract_request_id(payload: &Value) -> Uuid {
@@ -329,7 +337,7 @@ pub async fn run_scripted_turn(
     };
 
     run_turn(
-        db,
+        &vault_db(db),
         chat_state,
         session,
         thread_id,
@@ -343,10 +351,6 @@ pub async fn run_scripted_turn(
     )
     .await;
 
-    let rows = db
-        .with_connection(|conn| {
-            msg_store::list_messages(conn, thread_id).map_err(haex_crdt::Error::from)
-        })
-        .unwrap();
+    let rows = query::read(db, |r| msg_store::list_messages(r, thread_id)).unwrap();
     (rows, events)
 }
