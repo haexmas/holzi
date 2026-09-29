@@ -17,7 +17,7 @@ jobs:
       # immediately. The workflow token cannot approve pull requests, and
       # main does not require an approving review.
       - name: Enable auto-merge
-        run: gh pr merge --auto --squash "$PR_URL"
+        run: gh pr merge --auto --rebase "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
