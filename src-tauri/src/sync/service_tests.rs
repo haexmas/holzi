@@ -1,27 +1,46 @@
+use std::net::Ipv4Addr;
+use std::sync::Arc;
 use std::time::Duration;
 
-use super::*;
+use tauri::test::{mock_builder, mock_context, noop_assets};
 
-/// Waits until `condition` holds, polling within a bound; no fixed sleep
-/// decides the outcome.
-async fn eventually(condition: impl Fn() -> bool) {
-    tokio::time::timeout(Duration::from_secs(5), async {
-        while !condition() {
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .expect("the condition holds within the bound");
+use super::*;
+use crate::sync::test_support::Member;
+
+fn mock_app() -> AppHandle<tauri::test::MockRuntime> {
+    mock_builder()
+        .build(mock_context(noop_assets()))
+        .expect("mock app")
+        .handle()
+        .clone()
+}
+
+fn deps(member: &Member) -> SyncDeps<tauri::test::MockRuntime> {
+    SyncDeps {
+        replica: Arc::clone(&member.device.replica),
+        keys: member.keys.clone(),
+        vault: member.vault,
+        relay_mode: RelayMode::Disabled,
+        nostr_relays: Vec::new(),
+        bind_addr: Some((Ipv4Addr::LOCALHOST, 0).into()),
+        app: mock_app(),
+    }
 }
 
 #[tokio::test]
-async fn a_commit_wakes_the_service_and_the_close_ends_it() {
+async fn a_closing_gate_before_start_refuses() {
+    let gate = VaultGate::with_runtime(tokio::runtime::Handle::current());
+    gate.request_close();
+    let member = Member::genesis();
+    assert!(SyncService::start(&gate, deps(&member)).is_err());
+}
+
+#[tokio::test]
+async fn a_closing_gate_ends_the_bound_service_within_budget() {
+    let member = Member::genesis();
     let gate = VaultGate::with_runtime(tokio::runtime::Handle::current());
     gate.begin_session().expect("session");
-    let service = SyncService::start(&gate).expect("start");
-
-    gate.sync_notify().notify_one();
-    eventually(|| service.rounds() >= 1).await;
+    SyncService::start(&gate, deps(&member)).expect("start");
 
     gate.request_close();
     tokio::time::timeout(Duration::from_secs(5), async {
@@ -31,11 +50,4 @@ async fn a_commit_wakes_the_service_and_the_close_ends_it() {
     })
     .await
     .expect("the service ends once the close starts");
-}
-
-#[tokio::test]
-async fn a_closing_gate_starts_no_service() {
-    let gate = VaultGate::with_runtime(tokio::runtime::Handle::current());
-    gate.request_close();
-    assert!(SyncService::start(&gate).is_err());
 }

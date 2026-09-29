@@ -19,6 +19,7 @@ import {
   ref,
   nextTick,
   useTemplateRef,
+  watch,
 } from 'vue'
 import type { UnlistenFn } from '@tauri-apps/api/event'
 import type { Message, SendMessageArgs } from '~/composables/useChat'
@@ -315,6 +316,15 @@ const { chatTitle, syncFromLocation, ui } = useChatTab({
   abort,
   newChat,
   updatePermissionMode,
+})
+
+// Spec 024 (FR-032): a thread created/renamed/deleted on another device
+// must appear here without reloading; the messages of the open thread
+// already arrive over `chat.on*` regardless of origin.
+const sync = useSync()
+watch(sync.lastChangedAt, () => {
+  if (sync.lastChangedTables.value.includes('chat_threads'))
+    void refreshThreads()
 })
 
 onMounted(async () => {

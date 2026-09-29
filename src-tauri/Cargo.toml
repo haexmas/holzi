@@ -81,8 +81,12 @@ zeroize = { version = "1", features = ["serde"] }
 # `iroh` owns the device's QUIC endpoint key. `hkdf` derives the vault identity
 # from the placeholder (R3) and the per-purpose keys, `chacha20poly1305`
 # seals device names in the device list, `postcard` encodes everything that
-# is signed (R10).
+# is signed (R10). `nostr-sdk` (research R7) is the relay client for presence
+# (T037) and the link rendezvous (US5); its `local-relay` dev-dependency
+# feature gives tests an in-process relay (`nostr_sdk::local_relay::MockRelay`)
+# instead of a real server.
 nostr = { version = "0.45", features = ["nip44", "nip59", "os-rng"] }
+nostr-sdk = "0.45"
 secp256k1 = "0.30"
 iroh = { version = "1.2", default-features = false, features = ["tls-ring"] }
 hkdf = "0.13"
@@ -192,6 +196,9 @@ libc = "0.2"
 [dev-dependencies]
 # Mock runtime for IPC-level tests of the vault gateway (spec 013).
 tauri = { version = "2.6.2", features = ["test"] }
+# Additive to the `[dependencies]` nostr-sdk entry: an in-process relay for
+# presence/link tests (spec 024), no real server needed.
+nostr-sdk = { version = "0.45", features = ["local-relay"] }
 # `tempfile` moved to `[dependencies]` above — tests already get it
 # transitively, no separate dev-dependency entry needed.
 # Additive to the `[dependencies]` rmcp entry: test-only `server` support

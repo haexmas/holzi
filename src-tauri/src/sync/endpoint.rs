@@ -16,7 +16,7 @@ use std::time::Duration;
 use iroh::address_lookup::MemoryLookup;
 use iroh::endpoint::{presets, Connection};
 use iroh::protocol::{AcceptError, ProtocolHandler, Router};
-use iroh::{Endpoint, EndpointAddr, RelayMode, SecretKey};
+use iroh::{Endpoint, EndpointAddr, RelayConfig, RelayMode, RelayUrl, SecretKey};
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
@@ -71,6 +71,10 @@ struct Inner {
     tracker: TaskTracker,
     /// Live connections per device key.
     peers: Mutex<HashMap<[u8; 32], Connection>>,
+    /// The relay URLs last applied to `endpoint` (spec 024, FR-008):
+    /// `Endpoint` has no getter for its own relay set, so this is the
+    /// only record of it, seeded from the bind-time `RelayMode`.
+    applied_relays: Mutex<Vec<RelayUrl>>,
 }
 
 impl std::fmt::Debug for Inner {
@@ -116,6 +120,7 @@ impl SyncNode {
         on_applied: Arc<dyn Fn(BTreeSet<String>) + Send + Sync>,
     ) -> Result<Self, NodeError> {
         let lookup = MemoryLookup::new();
+        let initial_relays = config.relay_mode.relay_map().urls::<Vec<RelayUrl>>();
         let mut builder = Endpoint::builder(presets::Minimal)
             .secret_key(SecretKey::from_bytes(&keys.endpoint_secret))
             .alpns(vec![SYNC_ALPN.to_vec()])
@@ -145,6 +150,7 @@ impl SyncNode {
             cancel: CancellationToken::new(),
             tracker: TaskTracker::new(),
             peers: Mutex::new(HashMap::new()),
+            applied_relays: Mutex::new(initial_relays),
         });
         let router = Router::builder(endpoint)
             .accept(SYNC_ALPN, SyncProtocol(Arc::clone(&inner)))
@@ -183,6 +189,47 @@ impl SyncNode {
     pub fn connected(&self) -> Vec<[u8; 32]> {
         let peers = self.inner.peers.lock().unwrap_or_else(|e| e.into_inner());
         peers.keys().copied().collect()
+    }
+
+    /// Records a device's address from presence (spec 024, FR-007), so
+    /// dialing it later can find it. Does not dial by itself; reconnect
+    /// (FR-010) decides when to.
+    pub async fn note_presence(&self, addr: EndpointAddr) {
+        self.inner.lookup.add_endpoint_info(addr);
+    }
+
+    /// Brings the endpoint's relay set in line with `urls` (spec 024,
+    /// FR-008: relay changes from the settings apply at runtime). Invalid
+    /// URLs are dropped with a log line; a relay that fails to add or
+    /// remove is likewise only logged (Constitution VII).
+    pub async fn apply_relays(&self, urls: &[String]) {
+        let want = crate::sync::servers::parse_relay_urls(urls);
+        let have = {
+            let applied = self
+                .inner
+                .applied_relays
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            applied.clone()
+        };
+        let (to_insert, to_remove) = crate::sync::servers::diff_relays(&have, &want);
+        for url in &to_remove {
+            self.inner.endpoint.remove_relay(url).await;
+        }
+        for url in &to_insert {
+            self.inner
+                .endpoint
+                .insert_relay(url.clone(), Arc::new(RelayConfig::from(url.clone())))
+                .await;
+        }
+        if !to_insert.is_empty() || !to_remove.is_empty() {
+            let mut applied = self
+                .inner
+                .applied_relays
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            *applied = want;
+        }
     }
 
     /// Ends every session and closes the endpoint (FR-031).

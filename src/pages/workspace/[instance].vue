@@ -84,6 +84,14 @@ onMounted(async () => {
     .catch((error: unknown) => {
       console.error('[models] watching download progress failed', error)
     })
+  // Spec 024 (FR-032): received sync changes must appear in open windows
+  // and tabs without reloading. Started once per vault session, never
+  // torn down — same lifecycle as the subscription above.
+  void useSync()
+    .startListening()
+    .catch((error: unknown) => {
+      console.error('[sync] listening for data changes failed', error)
+    })
 
   sessionRestored.value = true
 })
