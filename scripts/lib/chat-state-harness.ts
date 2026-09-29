@@ -392,6 +392,7 @@ export function createChatState(
     'useChatNavigation',
     'useAction',
     'useChatTab',
+    'useSync',
     'useModelsStore',
     'storeToRefs',
     'navigateTo',
@@ -449,6 +450,7 @@ export function createChatState(
         return { ok: true, result: null }
       },
     req('~/composables/useChatTab').useChatTab,
+    req('~/composables/useSync').useSync,
     () => modelStore,
     pinia.storeToRefs,
     pageGlobals.navigateTo ?? (() => {}),

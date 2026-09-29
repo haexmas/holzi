@@ -87,6 +87,14 @@ impl VaultDb {
     ) -> Result<R> {
         Ok(crate::storage::query::read(&self.db, f)?)
     }
+
+    /// The underlying database handle, for building an owner of the vault
+    /// for the session's lifetime (spec 024: [`crate::sync::replica::Replica`]).
+    /// Cloning this `Arc` does not extend the tracker token's lifetime; the
+    /// caller's own task must still observe the gate's cancellation.
+    pub fn database(&self) -> Arc<Database> {
+        Arc::clone(&self.db)
+    }
 }
 
 impl Deref for VaultDb {

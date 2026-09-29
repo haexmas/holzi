@@ -142,9 +142,7 @@ pub async fn create_instance(
 ) -> Result<CreateInstanceResult> {
     let result = create_instance_core(&app, &state, &chat, &args.name, args.passphrase).await?;
     // Spec 024: the sync service runs as tracked session work and ends with the close.
-    if let Err(e) = crate::sync::SyncService::start(state.gate()) {
-        log::warn!("sync: the sync service did not start: {e}");
-    }
+    crate::sync::start_for_active_instance(&app, &state).await;
 
     *chat.session.lock().unwrap_or_else(|e| e.into_inner()) = None;
     voice.invalidate_whisper_cache().await;
