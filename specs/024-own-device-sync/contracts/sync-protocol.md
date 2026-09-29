@@ -46,8 +46,15 @@ lp(endpoint_x) ‖ lp(endpoint_y) ‖ lp(vault)))`, `lp` = `u32 BE Länge ‖ By
 | `DeviceListPush` | beide    | `{ payload, signature }`                                                            | –                                         |
 | `Progress`       | beide    | `{ vector: Vec<(origin: Uuid, max_hlc: String)>, last_seen: Vec<(device, ms)> }`    | –                                         |
 | `Pull`           | beide    | `{ vector: Vec<(origin, max_hlc)>, replace: bool }` (eigener Stand des Anfragenden) | `Page`s bis `more = false`, oder `Resync` |
-| `Page`           | beide    | `{ changes: Vec<ColumnChange>, group_continues: bool, more: bool }` (≤ 4 MiB)       | –                                         |
+| `Page`           | beide    | `{ changes: Vec<Change>, group_continues: bool, more: bool, served }` (≤ 4 MiB)     | –                                         |
 | `Resync`         | beide    | `{ reason: TombstonesExpired }`                                                     | Ablauf „Resync“ unten                     |
+
+`Change = { table, row_pks, column, hlc, value, continues }`: `ColumnChange` von haex-crdt ohne
+`device_id` und `sig`; `value` ist der JSON-Text des Werts in der Kodierung von haex-crdt (BLOB als
+`{"$blob_hex": …}`), weil postcard keinen `serde_json::Value` tragen kann. Ein Wert, der allein nicht
+in eine Seite passt, reist in Teilen: Jeder Teil außer dem letzten trägt `continues`, die Teile einer
+Zelle folgen aufeinander. `served` ist nur auf der letzten Seite (`more = false`) gefüllt: der
+Fortschrittsstand des Senders, gegen den er den `Pull` bedient hat.
 
 Ablauf:
 
@@ -74,6 +81,13 @@ Ablauf:
    den höchsten HLC der vollständig angewendeten oder abgelehnten Gruppe. Für eine unvollständige
    Gruppe schreibt er weder Fortschritt noch Checkpoint. Bricht die Verbindung vorher ab, verwirft
    er den Puffer; der nächste `Pull` beginnt beim zuletzt dauerhaft geschriebenen Fortschritt.
+6. Der Sender liest seinen Fortschrittsstand vor dem Scan und liefert je Ursprung nichts, was darüber
+   liegt; Anwenden und Liefern schließen sich auf einem Gerät gegenseitig aus. Nach der letzten
+   Seite hebt der Empfänger seinen Fortschritt je Ursprung auf `served`. Ohne diesen Schritt fände
+   er nach einem Commit, der nur gerätelokale Tabellen berührt, immer wieder „mehr“ beim Sender.
+   Der eigene Stand eines Geräts ist deshalb auch nicht der gespeicherte HLC von haex-crdt (den
+   jede Schreibung erhöht), sondern der jüngste eigene Spalten-HLC in einer synchronisierten
+   Tabelle.
 
 **Resync** (research R20): Nennt ein `Pull` für irgendeinen Ursprung einen Stand, der älter ist als
 die Frist für Löschvermerke, antwortet der Sender mit `Resync`. Das veraltete Gerät lässt die

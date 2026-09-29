@@ -140,8 +140,11 @@ Geschrieben nur nach dem Commit einer vollständigen Transaktionsgruppe und nur 
 unvollständige Gruppe werden weder Fortschritt noch Checkpoint geschrieben; bei einem Abbruch wird
 der Puffer verworfen. Abgelehnte Gruppen eines entfernten Geräts werden nicht gespeichert: Die
 Regel aus research R5 lehnt sie bei jedem Empfang wieder ab.
-Für das eigene Gerät wird der Fortschritt nicht gespeichert, sondern aus dem eigenen jüngsten HLC
-gebildet. Fehlt ein Ursprung, gilt „nichts“.
+Für das eigene Gerät wird der Fortschritt nicht gespeichert, sondern aus dem jüngsten eigenen
+Spalten-HLC in einer synchronisierten Tabelle gebildet; der gespeicherte HLC von haex-crdt taugt
+dafür nicht, weil auch Schreibungen auf gerätelokale Tabellen ihn erhöhen. Eine Zeile für das
+eigene Gerät entsteht nur, wenn ein anderes Gerät eigene Änderungen liefert, die diese Datei nicht
+hat (etwa nach dem Wiederherstellen einer älteren Kopie). Fehlt ein Ursprung, gilt „nichts“.
 
 ### `pending_links_no_sync` (neu, gerätelokal)
 
