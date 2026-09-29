@@ -193,18 +193,45 @@ pub fn build(
     content: &PresenceContent,
     mb_pk: &PublicKey,
 ) -> Result<Event, PresenceError> {
-    let sender_secret = nostr_secret(&sender.device_secret)?;
+    let json =
+        serde_json::to_string(content).map_err(|e| PresenceError::Malformed(e.to_string()))?;
+    wrap_payload(PRESENCE_KIND, &sender.device_secret, &json, mb_pk)
+}
+
+/// Opens a received gift-wrapped meeting: decrypts both layers, verifies the
+/// seal's signature, and returns the authenticated sender device pubkey
+/// (contracts/nostr-events.md — the caller still has to check it against the
+/// effective device list) together with the presence content.
+pub fn open(
+    gift_wrap: &Event,
+    mb_sk: &SecretKey,
+) -> Result<([u8; 32], PresenceContent), PresenceError> {
+    let (sender, json) = unwrap_payload(gift_wrap, mb_sk, PRESENCE_KIND)?;
+    let content: PresenceContent =
+        serde_json::from_str(&json).map_err(|e| PresenceError::Malformed(e.to_string()))?;
+    Ok((sender, content))
+}
+
+/// The three layers of a meeting (gift wrap, seal, unsigned inner event of
+/// `inner_kind` carrying `payload`), sealed by `sender_secret` for the shared
+/// mailbox key `recipient`. Presence and the link rendezvous use the same
+/// layers with different inner kinds (contracts/nostr-events.md).
+pub(crate) fn wrap_payload(
+    inner_kind: Kind,
+    sender_secret: &[u8; 32],
+    payload: &str,
+    recipient: &PublicKey,
+) -> Result<Event, PresenceError> {
+    let sender_secret = nostr_secret(sender_secret)?;
     let sender_keys = Keys::new(sender_secret.clone());
 
-    let inner_content =
-        serde_json::to_string(content).map_err(|e| PresenceError::Malformed(e.to_string()))?;
     let rumor: UnsignedEvent =
-        EventBuilder::new(PRESENCE_KIND, inner_content).finalize_unsigned(sender_keys.public_key());
+        EventBuilder::new(inner_kind, payload).finalize_unsigned(sender_keys.public_key());
     let rumor_json =
         serde_json::to_string(&rumor).map_err(|e| PresenceError::Malformed(e.to_string()))?;
     let sealed = nip44::encrypt(
         &sender_secret,
-        mb_pk,
+        recipient,
         rumor_json.as_bytes(),
         nip44::Version::V2,
     )
@@ -218,26 +245,25 @@ pub fn build(
     let onetime = Keys::generate();
     let wrapped = nip44::encrypt(
         onetime.secret_key(),
-        mb_pk,
+        recipient,
         seal_json.as_bytes(),
         nip44::Version::V2,
     )
     .map_err(|e| PresenceError::Crypto(e.to_string()))?;
-    let gift_wrap: Event = EventBuilder::new(GIFT_WRAP_KIND, wrapped)
-        .tag(Tag::public_key(*mb_pk))
+    EventBuilder::new(GIFT_WRAP_KIND, wrapped)
+        .tag(Tag::public_key(*recipient))
         .finalize(&onetime)
-        .map_err(|e| PresenceError::Crypto(e.to_string()))?;
-    Ok(gift_wrap)
+        .map_err(|e| PresenceError::Crypto(e.to_string()))
 }
 
-/// Opens a received gift-wrapped meeting: decrypts both layers, verifies the
-/// seal's signature, and returns the authenticated sender device pubkey
-/// (contracts/nostr-events.md — the caller still has to check it against the
-/// effective device list) together with the presence content.
-pub fn open(
+/// Opens a gift wrap made by [`wrap_payload`]: decrypts both layers with
+/// `mb_sk`, verifies the seal's signature and that the inner event has
+/// `inner_kind`, and returns the seal signer with the inner payload.
+pub(crate) fn unwrap_payload(
     gift_wrap: &Event,
     mb_sk: &SecretKey,
-) -> Result<([u8; 32], PresenceContent), PresenceError> {
+    inner_kind: Kind,
+) -> Result<([u8; 32], String), PresenceError> {
     if gift_wrap.as_json().len() > MAX_EVENT_BYTES {
         return Err(PresenceError::TooLarge);
     }
@@ -255,12 +281,10 @@ pub fn open(
         .map_err(|e| PresenceError::Crypto(e.to_string()))?;
     let rumor: UnsignedEvent =
         serde_json::from_slice(&rumor_json).map_err(|e| PresenceError::Malformed(e.to_string()))?;
-    if rumor.kind != PRESENCE_KIND {
+    if rumor.kind != inner_kind {
         return Err(PresenceError::WrongKind);
     }
-    let content: PresenceContent = serde_json::from_str(&rumor.content)
-        .map_err(|e| PresenceError::Malformed(e.to_string()))?;
-    Ok((seal.pubkey.to_bytes(), content))
+    Ok((seal.pubkey.to_bytes(), rumor.content))
 }
 
 /// Checks a device pubkey is a real secp256k1 key, for callers that only
@@ -622,7 +646,7 @@ fn read_roster(
     .map_err(|e| PresenceError::Malformed(e.to_string()))
 }
 
-mod hex_bytes32 {
+pub(crate) mod hex_bytes32 {
     use serde::{Deserialize, Deserializer, Serializer};
 
     /// Writes the 32 bytes as lowercase hex.

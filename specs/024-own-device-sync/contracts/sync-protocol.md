@@ -116,7 +116,7 @@ H = Hauptgerät, N = neue Installation; beide kennen den Code c
 
 N findet H über den Treffpunkt (contracts/nostr-events.md) und wählt H an.
 H → N  LinkHello   { nonce_h, endpoint_h, device_h }
-N → H  LinkProof   { nonce_n, endpoint_n, device_n, name, schema, mac_n }
+N → H  LinkProof   { nonce_n, endpoint_n, device_n, vault_device_uuid, name, schema, mac_n }
 H → N  LinkProof   { mac_h }
        -- H zeigt Name und Rollenfrage; wartet auf die Nutzerin --
 H → N  LinkDecision { accepted: bool }

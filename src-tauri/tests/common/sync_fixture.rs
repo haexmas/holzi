@@ -114,7 +114,7 @@ impl Instance {
 }
 
 /// A Tauri app on the mock runtime; its handle resolves the app data paths.
-fn mock_app() -> AppHandle<MockRuntime> {
+pub fn mock_app() -> AppHandle<MockRuntime> {
     mock_builder()
         .build(mock_context(noop_assets()))
         .expect("mock app")

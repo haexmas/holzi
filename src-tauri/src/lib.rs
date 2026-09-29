@@ -133,6 +133,10 @@ pub fn run() {
     let builder = builder.manage(ChatState::with_children(gate.children()));
     let builder = builder.manage(DelegateConnectState::new());
     let builder = builder.manage(voice::VoiceState::new());
+    // Spec 024: commands reach the sync service of the open vault through this registry, and the
+    // start page's link join runs without a vault.
+    let builder = builder.manage(std::sync::Arc::new(sync::registry::SyncRegistry::default()));
+    let builder = builder.manage(sync::link::join_task::LinkJoin::default());
     builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -204,6 +208,13 @@ pub fn run() {
             current_device_info,
             update_device_alias,
             list_vault_devices,
+            sync::commands::link_code_create,
+            sync::commands::link_code_cancel,
+            sync::commands::link_confirm,
+            sync::commands::link_reject,
+            sync::commands::link_join_start,
+            sync::commands::link_join_status,
+            sync::commands::link_join_cancel,
             get_pref,
             set_pref,
             clear_pref,

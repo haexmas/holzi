@@ -186,6 +186,18 @@ impl SyncNode {
         Ok(())
     }
 
+    /// Dials `addr` on the link protocol and hands the connection to the
+    /// caller, which runs the exchange itself (user story 5: the main device
+    /// dials the new installation).
+    pub async fn dial_link(&self, addr: EndpointAddr) -> Result<Connection, NodeError> {
+        self.inner.lookup.add_endpoint_info(addr.clone());
+        self.inner
+            .endpoint
+            .connect(addr, crate::sync::wire::LINK_ALPN)
+            .await
+            .map_err(|e| NodeError::Connect(e.to_string()))
+    }
+
     /// Tells every session that this device's progress may have moved, as
     /// after a local commit. Close signals collapse into one.
     pub fn local_changed(&self) {
@@ -212,6 +224,12 @@ impl SyncNode {
     /// its live session, since the real one cannot be told from the copy.
     pub async fn flag(&self, device: [u8; 32], problem: Problem) {
         flag(&self.inner, device, problem).await;
+    }
+
+    /// Tells the interface the device list or a device's state changed,
+    /// for changes made outside the node (a link that just published).
+    pub fn announce_devices_changed(&self) {
+        notify_devices_changed(&self.inner);
     }
 
     /// Devices with a live session.
@@ -263,7 +281,7 @@ impl SyncNode {
     }
 
     /// Ends every session and closes the endpoint (FR-031).
-    pub async fn shutdown(self) {
+    pub async fn shutdown(&self) {
         self.inner.cancel.cancel();
         self.inner.tracker.close();
         if tokio::time::timeout(SHUTDOWN_TIMEOUT, self.router.shutdown())

@@ -3,18 +3,22 @@
 //! per-session sync service. The transport follows with user story 1.
 
 pub mod change;
+pub mod commands;
 pub mod content_keys;
 pub mod device_list;
 pub mod endpoint;
+pub mod envelopes;
 pub mod events;
 pub mod genesis;
 pub mod handshake;
 pub mod inbound;
 pub mod keys;
+pub mod link;
 pub mod outbound;
 pub mod presence;
 pub mod problems;
 pub mod progress;
+pub mod registry;
 pub mod replica;
 pub mod resync;
 pub mod servers;

@@ -30,7 +30,7 @@ use super::vault_config::vault_config;
 
 /// Minimum passphrase length. Kept low for the MVP; can be tightened
 /// later without a wire-contract change.
-const MIN_PASSPHRASE_LEN: usize = 8;
+pub(super) const MIN_PASSPHRASE_LEN: usize = 8;
 
 #[derive(Debug, Deserialize, TS)]
 #[ts(export, export_to = "../../src/types/bindings/")]

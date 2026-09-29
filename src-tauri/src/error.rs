@@ -90,6 +90,11 @@ pub enum HolziError {
     #[error("No active instance for this operation")]
     NoActiveInstance,
 
+    /// An action only a main device may take (spec 024, FR-024); the backend checks, not
+    /// only the interface.
+    #[error("This device is not a main device")]
+    NotMainDevice,
+
     #[error("Catalog entry not found: {id}")]
     CatalogEntryNotFound { id: String },
 

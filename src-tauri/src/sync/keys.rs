@@ -179,6 +179,20 @@ pub fn vault_secret(q: &mut impl Query) -> haex_crdt::Result<Option<Zeroizing<[u
     .transpose()
 }
 
+/// Stores the private key of the vault identity on a device that just became
+/// a main device by linking (FR-024, FR-038). A device that already holds one
+/// keeps it.
+pub fn store_vault_secret(
+    tx: &mut CrdtTransaction<'_>,
+    secret: &[u8; 32],
+) -> haex_crdt::Result<()> {
+    tx.execute(
+        "INSERT OR IGNORE INTO vault_identity_secret_no_sync (id, privkey) VALUES (1, ?1)",
+        params![secret.as_slice()],
+    )?;
+    Ok(())
+}
+
 /// Publishes the vault identity if it is not published yet, and returns its
 /// public key.
 ///
