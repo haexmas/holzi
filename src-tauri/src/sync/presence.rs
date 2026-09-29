@@ -70,6 +70,7 @@ pub enum PresenceError {
 }
 
 impl From<PresenceError> for haex_crdt::Error {
+    /// Carries a presence failure through a storage transaction as a consumer error.
     fn from(error: PresenceError) -> Self {
         haex_crdt::Error::consumer(error.to_string())
     }
@@ -140,6 +141,7 @@ impl PresenceContent {
     }
 }
 
+/// Wall-clock milliseconds since the Unix epoch; 0 if the clock is before it.
 fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -152,6 +154,7 @@ pub fn day_tag_now() -> u32 {
     day_tag_at(now_ms())
 }
 
+/// Days since 1970-01-01 UTC at `now_ms`, the mailbox rotation step.
 fn day_tag_at(now_ms: u64) -> u32 {
     (now_ms / 86_400_000) as u32
 }
@@ -174,10 +177,12 @@ pub fn mailbox_keys(
     Ok((secret, public))
 }
 
+/// A raw device secret as a Nostr secret key.
 fn nostr_secret(secret: &[u8; 32]) -> Result<SecretKey, PresenceError> {
     SecretKey::from_slice(secret).map_err(|_| PresenceError::InvalidKey)
 }
 
+/// A raw x-only pubkey as a Nostr public key.
 fn nostr_public(pubkey: &[u8; 32]) -> Result<PublicKey, PresenceError> {
     PublicKey::from_slice(pubkey).map_err(|_| PresenceError::InvalidKey)
 }
@@ -550,11 +555,14 @@ struct Roster {
 }
 
 impl Roster {
+    /// Whether the effective list names any device besides this one.
     fn has_peers(&self) -> bool {
         self.effective_devices.len() > 1
     }
 }
 
+/// Reads the [`Roster`] from storage; `None` while this device holds no
+/// content key or no valid device list yet.
 fn read_roster(
     replica: &crate::sync::replica::Replica,
     vault: [u8; 32],
@@ -595,10 +603,12 @@ fn read_roster(
 mod hex_bytes32 {
     use serde::{Deserialize, Deserializer, Serializer};
 
+    /// Writes the 32 bytes as lowercase hex.
     pub fn serialize<S: Serializer>(bytes: &[u8; 32], s: S) -> Result<S::Ok, S::Error> {
         s.serialize_str(&crate::sync::keys::hex(bytes))
     }
 
+    /// Reads 32 bytes from a hex string.
     pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<[u8; 32], D::Error> {
         let text = String::deserialize(d)?;
         let bytes = super::decode_hex(&text).map_err(serde::de::Error::custom)?;
@@ -611,10 +621,12 @@ mod hex_bytes32 {
 mod hex_nonce {
     use serde::{Deserialize, Deserializer, Serializer};
 
+    /// Writes the 16-byte nonce as lowercase hex.
     pub fn serialize<S: Serializer>(bytes: &[u8; 16], s: S) -> Result<S::Ok, S::Error> {
         s.serialize_str(&crate::sync::keys::hex(bytes))
     }
 
+    /// Reads a 16-byte nonce from a hex string.
     pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<[u8; 16], D::Error> {
         let text = String::deserialize(d)?;
         let bytes = super::decode_hex(&text).map_err(serde::de::Error::custom)?;
@@ -624,6 +636,7 @@ mod hex_nonce {
     }
 }
 
+/// Decodes an even-length hex string (either case).
 fn decode_hex(text: &str) -> Result<Vec<u8>, &'static str> {
     if !text.is_ascii() || !text.len().is_multiple_of(2) {
         return Err("not an even-length hex string");

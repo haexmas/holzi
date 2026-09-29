@@ -108,6 +108,7 @@ fn a_one_device_vault_has_no_peers_to_publish_to() {
     );
 }
 
+/// Binds `member`'s endpoint on loopback with no iroh-Relay.
 async fn bind_loopback(member: &Member) -> SyncNode {
     SyncNode::bind(
         Arc::clone(&member.device.replica),

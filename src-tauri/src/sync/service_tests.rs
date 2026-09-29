@@ -7,6 +7,7 @@ use tauri::test::{mock_builder, mock_context, noop_assets};
 use super::*;
 use crate::sync::test_support::Member;
 
+/// A Tauri app on the mock runtime, to emit events into.
 fn mock_app() -> AppHandle<tauri::test::MockRuntime> {
     mock_builder()
         .build(mock_context(noop_assets()))
@@ -15,6 +16,7 @@ fn mock_app() -> AppHandle<tauri::test::MockRuntime> {
         .clone()
 }
 
+/// Sync deps for `member`, bound to loopback with no relays at all.
 fn deps(member: &Member) -> SyncDeps<tauri::test::MockRuntime> {
     SyncDeps {
         replica: Arc::clone(&member.device.replica),

@@ -75,6 +75,7 @@ pub fn read(q: &mut impl Query) -> haex_crdt::Result<ServerConfig> {
     })
 }
 
+/// Reads one URL-list preference; unset or undecodable reads as empty.
 fn read_urls(q: &mut impl Query, key: &str) -> haex_crdt::Result<Vec<String>> {
     let Some(raw) = preferences::get(q, PrefScope::Vault, key)? else {
         return Ok(Vec::new());

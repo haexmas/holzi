@@ -83,6 +83,8 @@ pub async fn start_for_active_instance<R: Runtime>(app: &AppHandle<R>, state: &A
     }
 }
 
+/// Reads the device keys, vault identity and server preferences genesis
+/// left in the open vault, off the async runtime.
 async fn resolve_deps<R: Runtime>(app: &AppHandle<R>, state: &AppState) -> Result<SyncDeps<R>> {
     let db = state.database()?.database();
     let app_local_data = get_app_local_data(app)?;
@@ -124,6 +126,9 @@ async fn resolve_deps<R: Runtime>(app: &AppHandle<R>, state: &AppState) -> Resul
     })
 }
 
+/// The service body: binds the endpoint, then runs the commit-notify,
+/// presence and reconnect loops until `token` is cancelled, and shuts the
+/// endpoint down.
 async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: SyncDeps<R>) {
     let replica = Arc::clone(&deps.replica);
     let presence_keys = deps.keys.clone();

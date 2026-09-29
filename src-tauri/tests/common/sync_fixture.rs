@@ -55,6 +55,7 @@ pub struct Instance {
 }
 
 impl Instance {
+    /// The open vault's database handle.
     pub fn database(&self) -> Arc<Database> {
         self.state.database().expect("active instance").database()
     }
@@ -80,6 +81,7 @@ impl Instance {
             .expect("write thread");
     }
 
+    /// The title of chat thread `id` as this instance currently stores it.
     pub fn thread_title(&self, id: &str) -> Option<String> {
         holzi_lib::storage::query::read(&self.database(), |r| {
             r.query_row(
@@ -92,6 +94,7 @@ impl Instance {
     }
 }
 
+/// A Tauri app on the mock runtime; its handle resolves the app data paths.
 fn mock_app() -> AppHandle<MockRuntime> {
     mock_builder()
         .build(mock_context(noop_assets()))
@@ -264,6 +267,7 @@ fn set_nostr_relay(db: &Database, url: &str) {
     .expect("set relay preferences");
 }
 
+/// This instance's installation UUID, minted on first use.
 fn read_installation_uuid(app: &AppHandle<MockRuntime>) -> Uuid {
     let app_local_data =
         holzi_lib::instances::paths::get_app_local_data(app).expect("app local data");

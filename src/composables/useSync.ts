@@ -27,7 +27,9 @@ const lastChangedTables = ref<string[]>([])
 const changeCount = ref(0)
 let listening: Promise<void> | null = null
 
+/** The session-wide sync change state, plus the call that starts it. */
 export function useSync() {
+  /** Registers the one `sync-data-changed` listener; later calls reuse it. */
   function startListening(): Promise<void> {
     // Shared while `listen` is pending, so a second caller does not
     // register a second listener; a failed registration may be retried.

@@ -8,6 +8,7 @@ use super::*;
 use crate::sync::endpoint::{NodeConfig, SyncNode};
 use crate::sync::test_support::Member;
 
+/// Binds `member`'s endpoint on loopback with no iroh-Relay.
 async fn bind_loopback(member: &Member) -> SyncNode {
     SyncNode::bind(
         Arc::clone(&member.device.replica),
