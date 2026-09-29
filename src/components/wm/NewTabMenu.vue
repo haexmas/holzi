@@ -39,6 +39,7 @@ function select(appId: string) {
       <ShadcnDropdownMenuItem
         v-for="app in WM_APPS"
         :key="app.id"
+        :data-app-id="app.id"
         class="gap-2"
         @select="select(app.id)"
       >

@@ -251,6 +251,7 @@ watch(
     <WmNewTabMenu :window-id="windowId">
       <button
         type="button"
+        data-testid="wm-new-tab"
         class="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
         :aria-label="t('wm.tabs.newTab')"
         @pointerdown.stop
