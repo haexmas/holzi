@@ -185,7 +185,7 @@ fn an_envelope_with_a_tampered_sender_is_ignored() {
     db.write(|tx| issue_generation(tx, &key, &list, &main, 5))
         .expect("issue");
     db.write(|tx| {
-        tx.execute("DELETE FROM vault_content_keys_no_sync", [])?;
+        tx.execute("DELETE FROM vault_content_keys_no_sync", &[])?;
         tx.execute(
             "UPDATE vault_key_envelopes SET sender = ?1 WHERE key_id = ?2",
             rusqlite::params![[0u8; 32].as_slice(), key.key_id.as_slice()],
