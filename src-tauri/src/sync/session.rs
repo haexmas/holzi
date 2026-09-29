@@ -78,6 +78,15 @@ pub async fn run(
     peer: Peer,
 ) {
     let ctx = Arc::new(ctx);
+    // Best-effort catch-up: a prior session's pull() can be dropped by this
+    // same select! after a page with envelope/device-list rows already
+    // committed but before they were unwrapped (the pull future simply loses
+    // the race and never reaches the end of its loop). unwrap_envelopes is
+    // idempotent, so retrying it here recovers that state on the next
+    // session with any peer instead of leaving it stuck forever.
+    if let Err(error) = unwrap_envelopes(&ctx).await {
+        log::warn!("sync: unwrapping pending envelopes at session start failed: {error}");
+    }
     let (theirs_tx, theirs_rx) = watch::channel(Vector::new());
     let result = tokio::select! {
         biased;

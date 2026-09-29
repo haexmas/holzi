@@ -74,6 +74,8 @@ pub enum HandshakeError {
     Crdt(#[from] haex_crdt::Error),
     #[error("a database task failed: {0}")]
     Join(#[from] tokio::task::JoinError),
+    #[error(transparent)]
+    Signing(#[from] signing::SigningError),
 }
 
 /// The schema this build syncs with: all three must match (FR-029).
@@ -146,12 +148,7 @@ where
 
     let lists = store_pushed(replica, local.vault, pushed, lists).await?;
     let own = effective_ref(&lists)?;
-    if device_list::ranks_before(
-        (own.generation, &own.list_hash),
-        (their_list.generation, &their_list.list_hash),
-    ) {
-        push_lists(send, &lists, &own).await?;
-    }
+    push_if_better(send, &lists, &own, &their_list).await?;
     let peer = match admit(&lists, &device_d, &remote_endpoint, local) {
         Ok(peer) => peer,
         Err(code) => return refuse(send, code).await,
@@ -204,12 +201,7 @@ where
 
     let lists = load_lists(replica, local.vault).await?;
     let own = effective_ref(&lists)?;
-    if device_list::ranks_before(
-        (own.generation, &own.list_hash),
-        (their_list.generation, &their_list.list_hash),
-    ) {
-        push_lists(send, &lists, &own).await?;
-    }
+    push_if_better(send, &lists, &own, &their_list).await?;
     let nonce_d = *keys::random_bytes::<32>();
     let own_transcript = transcript(
         &nonce_a,
@@ -272,8 +264,11 @@ fn transcript(
 }
 
 fn sign(local: &Local<'_>, transcript: &[u8]) -> Result<[u8; 64], HandshakeError> {
-    signing::sign(Domain::DeviceAuth, transcript, &local.keys.device_secret)
-        .map_err(|_| HandshakeError::Protocol("the device key does not sign"))
+    Ok(signing::sign(
+        Domain::DeviceAuth,
+        transcript,
+        &local.keys.device_secret,
+    )?)
 }
 
 /// Looks the peer up in the effective list.
@@ -286,10 +281,13 @@ fn admit(
     if device == &local.keys.device_pubkey || endpoint == &local.keys.endpoint_id {
         return Err(RejectCode::Duplicate);
     }
-    if device_list::is_removed(lists, device) {
+    let effective = device_list::effective(lists).ok_or(RejectCode::NotOnList)?;
+    // Only the effective list's own (carried-forward) removals are final; a
+    // same-generation fork that lost the tie-break (FR-005, FR-043) does not
+    // get a say in who stays removed.
+    if effective.list.removes(device) {
         return Err(RejectCode::Removed);
     }
-    let effective = device_list::effective(lists).ok_or(RejectCode::NotOnList)?;
     let entry = effective.list.device(device).ok_or(RejectCode::NotOnList)?;
     if &entry.endpoint_id != endpoint {
         return Err(RejectCode::NotOnList);
@@ -332,13 +330,43 @@ async fn read_pushes_until<R: AsyncRead + Unpin>(
     }
 }
 
-/// Sends `own` with its base lists, oldest first.
+/// Pushes `own` with its base lists when it ranks before `their_list`.
+async fn push_if_better<W: AsyncWrite + Unpin>(
+    send: &mut W,
+    lists: &BTreeMap<[u8; 32], SignedList>,
+    own: &ListRef,
+    their_list: &ListRef,
+) -> Result<(), HandshakeError> {
+    if device_list::ranks_before(
+        (own.generation, &own.list_hash),
+        (their_list.generation, &their_list.list_hash),
+    ) {
+        push_lists(send, lists, own, their_list).await?;
+    }
+    Ok(())
+}
+
+/// Sends `own` with its base lists, oldest first, leaving out `theirs` and
+/// everything before it: the peer already holds those. Fails locally,
+/// without writing anything, when what is left still exceeds
+/// [`MAX_PUSHED_LISTS`] (the receiving side hard-rejects that many pushes in
+/// one handshake).
 async fn push_lists<W: AsyncWrite + Unpin>(
     send: &mut W,
     lists: &BTreeMap<[u8; 32], SignedList>,
     own: &ListRef,
+    theirs: &ListRef,
 ) -> Result<(), HandshakeError> {
-    for signed in device_list::ancestry(lists, &own.list_hash) {
+    let chain = device_list::ancestry(lists, &own.list_hash);
+    let start = chain
+        .iter()
+        .position(|signed| signed.hash == theirs.list_hash)
+        .map_or(0, |i| i + 1);
+    let chain = &chain[start..];
+    if chain.len() > MAX_PUSHED_LISTS {
+        return Err(HandshakeError::Protocol("too many device lists to push"));
+    }
+    for signed in chain {
         let push = Message::DeviceListPush {
             payload: signed.payload.clone(),
             signature: Signature(signed.signature),
@@ -384,7 +412,13 @@ async fn store_pushed(
     let fresh: Vec<SignedList> = pushed
         .iter()
         .filter_map(|(payload, signature)| {
-            device_list::check_pushed(payload, signature, &vault).ok()
+            match device_list::check_pushed(payload, signature, &vault) {
+                Ok(signed) => Some(signed),
+                Err(error) => {
+                    log::warn!("sync: a pushed device list did not check out: {error}");
+                    None
+                }
+            }
         })
         .filter(|signed| !lists.contains_key(&signed.hash))
         .collect();

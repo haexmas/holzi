@@ -360,13 +360,6 @@ pub fn check_pushed(
     .check(vault_pubkey)
 }
 
-/// Whether any of `valid` removes `device_pubkey`: a removal is final.
-pub fn is_removed(valid: &BTreeMap<[u8; 32], SignedList>, device_pubkey: &[u8; 32]) -> bool {
-    valid
-        .values()
-        .any(|signed| signed.list.removes(device_pubkey))
-}
-
 /// Stores a signed list. Idempotent: a list that is already stored stays as it is.
 pub fn insert(tx: &mut CrdtTransaction<'_>, signed: &SignedList) -> haex_crdt::Result<()> {
     let generation = i64::try_from(signed.list.generation)

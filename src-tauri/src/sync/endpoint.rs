@@ -86,8 +86,16 @@ struct SyncProtocol(Arc<Inner>);
 
 impl ProtocolHandler for SyncProtocol {
     async fn accept(&self, connection: Connection) -> Result<(), AcceptError> {
+        // Tracked, not just awaited inline: `Router::shutdown` aborts this
+        // future right after the (default, no-op) `ProtocolHandler::shutdown`
+        // resolves, with no grace period. Spawning onto `inner.tracker` moves
+        // the actual session work to a task that keeps running independently
+        // and that `SyncNode::shutdown`'s own `tracker.wait()` waits for, so
+        // it can still observe `cancel` and close the connection cleanly.
         let inner = Arc::clone(&self.0);
-        run_connection(inner, connection, Side::Accept).await;
+        inner
+            .tracker
+            .spawn(run_connection(Arc::clone(&inner), connection, Side::Accept));
         Ok(())
     }
 }
@@ -187,7 +195,15 @@ impl SyncNode {
         {
             log::warn!("sync: the endpoint did not shut down within {SHUTDOWN_TIMEOUT:?}");
         }
-        let _ = tokio::time::timeout(SHUTDOWN_TIMEOUT, self.inner.tracker.wait()).await;
+        if tokio::time::timeout(SHUTDOWN_TIMEOUT, self.inner.tracker.wait())
+            .await
+            .is_err()
+        {
+            log::warn!(
+                "sync: {SHUTDOWN_TIMEOUT:?} was not enough for every session to end; \
+                 some may keep running in the background"
+            );
+        }
     }
 }
 
@@ -221,7 +237,7 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
         Err(error) => {
             log::info!("sync: handshake failed: {error}");
             let _ = send.finish();
-            connection.close(ErrorCode::Rejected.as_u32().into(), b"rejected");
+            connection.close(handshake_close_code(&error).as_u32().into(), b"rejected");
             return;
         }
     };
@@ -247,6 +263,23 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
         .is_some_and(|live| live.stable_id() == connection.stable_id())
     {
         peers.remove(&peer.device_pubkey);
+    }
+}
+
+/// The code to close the connection with: a wire error keeps its own
+/// (already distinct) code, everything else collapses to one of the two
+/// handshake-level codes.
+fn handshake_close_code(error: &handshake::HandshakeError) -> ErrorCode {
+    match error {
+        handshake::HandshakeError::Wire(e) => e.code(),
+        handshake::HandshakeError::Refused(_) | handshake::HandshakeError::RefusedByPeer(_) => {
+            ErrorCode::Rejected
+        }
+        handshake::HandshakeError::Protocol(_)
+        | handshake::HandshakeError::NoDeviceList
+        | handshake::HandshakeError::Crdt(_)
+        | handshake::HandshakeError::Join(_)
+        | handshake::HandshakeError::Signing(_) => ErrorCode::Protocol,
     }
 }
 

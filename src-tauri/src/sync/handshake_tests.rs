@@ -1,7 +1,8 @@
 use tokio::io::{duplex, split};
+use zeroize::Zeroizing;
 
 use super::*;
-use crate::sync::device_list::RemovedDevice;
+use crate::sync::device_list::{DeviceList, ListedDevice, RemovedDevice};
 use crate::sync::test_support::Member;
 
 /// Runs `accept` on `a` and `dial` on `d` against each other, each seeing
@@ -126,6 +127,109 @@ async fn a_removed_device_stays_refused() {
         at_main,
         Err(HandshakeError::Refused(RejectCode::Removed))
     ));
+}
+
+#[test]
+fn a_same_generation_tie_break_loser_does_not_remove_the_winner() {
+    // Two main devices, A and B, each remove the other at generation 2 from
+    // the same generation-1 base. Per FR-005/FR-043 the removal of the
+    // losing (larger-hash) fork must not count: exactly one main device
+    // stays admitted.
+    let secret = [7u8; 32];
+    let vault = signing::xonly_public_key(&secret).expect("pubkey");
+    let a_pubkey = [1u8; 32];
+    let a_endpoint = [2u8; 32];
+    let a_uuid = Uuid::new_v4();
+    let b_pubkey = [3u8; 32];
+    let b_endpoint = [4u8; 32];
+    let b_uuid = Uuid::new_v4();
+
+    let main_device = |pubkey: [u8; 32], endpoint: [u8; 32], uuid: Uuid| ListedDevice {
+        device_pubkey: pubkey,
+        endpoint_id: endpoint,
+        role: Role::Main,
+        vault_device_uuid: uuid,
+        name_sealed: Vec::new(),
+        added_at: 0,
+    };
+    let genesis = DeviceList {
+        vault,
+        generation: 1,
+        devices: vec![
+            main_device(a_pubkey, a_endpoint, a_uuid),
+            main_device(b_pubkey, b_endpoint, b_uuid),
+        ],
+        removed: Vec::new(),
+        issued_by: a_pubkey,
+        issued_at: 0,
+        base_list_hash: None,
+    };
+    let genesis = device_list::sign_list(genesis, &secret).expect("sign genesis");
+
+    let fork = |issued_by: [u8; 32], keeps, removes: [u8; 32], removes_uuid: Uuid| DeviceList {
+        vault,
+        generation: 2,
+        devices: vec![keeps],
+        removed: vec![RemovedDevice {
+            device_pubkey: removes,
+            vault_device_uuid: removes_uuid,
+            limit_hlc: "0/0".to_string(),
+            removed_at: 1,
+        }],
+        issued_by,
+        issued_at: 1,
+        base_list_hash: Some(genesis.hash),
+    };
+    let removes_b = device_list::sign_list(
+        fork(
+            a_pubkey,
+            main_device(a_pubkey, a_endpoint, a_uuid),
+            b_pubkey,
+            b_uuid,
+        ),
+        &secret,
+    )
+    .expect("sign fork");
+    let removes_a = device_list::sign_list(
+        fork(
+            b_pubkey,
+            main_device(b_pubkey, b_endpoint, b_uuid),
+            a_pubkey,
+            a_uuid,
+        ),
+        &secret,
+    )
+    .expect("sign fork");
+
+    let mut lists = BTreeMap::new();
+    lists.insert(genesis.hash, genesis);
+    lists.insert(removes_b.hash, removes_b.clone());
+    lists.insert(removes_a.hash, removes_a.clone());
+
+    // Whichever fork has the smaller hash wins (FR-043); its own device
+    // stays admitted, regardless of what the losing fork claims.
+    let (winner_pubkey, winner_endpoint, loser_pubkey) = if removes_b.hash < removes_a.hash {
+        (a_pubkey, a_endpoint, b_pubkey)
+    } else {
+        (b_pubkey, b_endpoint, a_pubkey)
+    };
+
+    let observer_keys = DeviceKeys {
+        device_secret: Zeroizing::new([9; 32]),
+        device_pubkey: [9; 32],
+        endpoint_secret: Zeroizing::new([9; 32]),
+        endpoint_id: [9; 32],
+    };
+    let observer = Local {
+        keys: &observer_keys,
+        vault,
+        schema: local_schema(),
+    };
+
+    let peer = admit(&lists, &winner_pubkey, &winner_endpoint, &observer)
+        .expect("the tie-break winner stays admitted");
+    assert_eq!(peer.device_pubkey, winner_pubkey);
+    assert_ne!(winner_pubkey, loser_pubkey);
 }
 
 #[tokio::test]
