@@ -81,6 +81,25 @@ impl Instance {
             .expect("write thread");
     }
 
+    /// This installation's device id, the origin of its own changes.
+    pub fn device_uuid(&self) -> Uuid {
+        self.database().device_id()
+    }
+
+    /// The device a chat thread's latest change came from, read off the
+    /// node in its row HLC (what a shared space would check for authorship).
+    pub fn thread_origin(&self, id: &str) -> Option<Uuid> {
+        let hlc: Option<String> = holzi_lib::storage::query::read(&self.database(), |r| {
+            r.query_row(
+                "SELECT haex_hlc_no_sync FROM chat_threads WHERE id = ?1",
+                params![id],
+                |row| row.get(0),
+            )
+        })
+        .expect("read hlc");
+        hlc.and_then(|hlc| sync::progress::origin_of(&hlc))
+    }
+
     /// The title of chat thread `id` as this instance currently stores it.
     pub fn thread_title(&self, id: &str) -> Option<String> {
         holzi_lib::storage::query::read(&self.database(), |r| {
@@ -201,7 +220,10 @@ pub async fn join(main: &Instance, nostr_relay: &str) -> Instance {
                 .map_err(haex_crdt::Error::consumer)?;
             sync::device_list::insert(tx, &signed)?;
 
-            let key = sync::content_keys::ContentKey::generate(effective.list.generation + 1);
+            // The vault's current key, wrapped for the new device too, as
+            // linking does (no rotation: a device linked earlier would
+            // otherwise lose the mailbox the others publish to).
+            let key = sync::content_keys::current_key(tx, &[])?.expect("main holds a content key");
             sync::content_keys::issue_generation(tx, &key, &signed, &main_keys, 2)
         })
         .await

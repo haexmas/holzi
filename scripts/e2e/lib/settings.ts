@@ -158,7 +158,10 @@ export async function clearAlias(instance: FlowInstance): Promise<void> {
     const shown = await instance.exec<string>(
       'return document.querySelector(\'[data-testid="settings-alias"]\').value',
     )
-    if (stored !== null && shown === stored) {
+    const enabled = await instance.exec<boolean>(
+      'return !document.querySelector(\'[data-testid="settings-alias"]\').disabled',
+    )
+    if (stored !== null && shown === stored && enabled) {
       await instance.type('settings-alias', KEY.backspace.repeat(shown.length))
       return
     }

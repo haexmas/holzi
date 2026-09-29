@@ -20,10 +20,13 @@ use crate::sync::device_list;
 use crate::sync::handshake::Peer;
 use crate::sync::inbound::Inbox;
 use crate::sync::keys::DeviceKeys;
-use crate::sync::outbound::serve_pull;
+use crate::sync::outbound::{serve, Served};
 use crate::sync::progress::{self, Vector};
 use crate::sync::replica::Replica;
-use crate::sync::wire::{expect_frame, read_frame, write_frame, ErrorCode, Message, FRAME_LIMIT};
+use crate::sync::resync;
+use crate::sync::wire::{
+    expect_frame, read_frame, write_frame, ErrorCode, Message, ResyncReason, FRAME_LIMIT,
+};
 
 /// What a session needs from the node.
 pub struct SessionContext {
@@ -173,31 +176,50 @@ async fn pull_when_behind(
     }
 }
 
-/// One pull on its own stream.
+/// One pull on its own stream. A `Resync` answer turns into a snapshot pull
+/// right away (research R20).
 async fn pull(
     ctx: &SessionContext,
     connection: &Connection,
     own: Vector,
 ) -> Result<(), SessionError> {
+    if !pull_pages(ctx, connection, own, false).await? {
+        log::info!("sync: this device is too far behind, replacing from a snapshot");
+        if !pull_pages(ctx, connection, Vector::new(), true).await? {
+            return Err(SessionError::Protocol("a resync answered a snapshot pull"));
+        }
+    }
+    Ok(())
+}
+
+/// Sends one `Pull` and applies the pages it is answered with; `false` when
+/// the answer is `Resync` instead. A snapshot (`replace`) also removes the
+/// local rows it did not carry once its last page is applied.
+async fn pull_pages(
+    ctx: &SessionContext,
+    connection: &Connection,
+    own: Vector,
+    replace: bool,
+) -> Result<bool, SessionError> {
     let (mut send, mut recv) = connection.open_bi().await?;
     let request = Message::Pull {
         vector: own,
-        replace: false,
+        replace,
     };
     write_frame(&mut send, &request, FRAME_LIMIT).await?;
     send.finish()
         .map_err(|e| SessionError::Stream(e.to_string()))?;
 
-    let mut inbox = Inbox::new();
+    let mut inbox = if replace {
+        Inbox::for_snapshot()
+    } else {
+        Inbox::new()
+    };
     let mut tables = BTreeSet::new();
     loop {
         let page = match expect_frame(&mut recv, FRAME_LIMIT).await? {
             Message::Page(page) => page,
-            Message::Resync { reason } => {
-                // Replacing the synced tables follows with user story 3.
-                log::warn!("sync: the other device asks for a resync ({reason:?})");
-                return Ok(());
-            }
+            Message::Resync { .. } if !replace => return Ok(false),
             _ => return Err(SessionError::Protocol("expected a Page")),
         };
         let replica = Arc::clone(&ctx.replica);
@@ -214,13 +236,22 @@ async fn pull(
             break;
         }
     }
+    if let Some((kept, served)) = inbox.into_snapshot() {
+        let replica = Arc::clone(&ctx.replica);
+        let pruned = tokio::task::spawn_blocking(move || {
+            resync::prune_absent_and_advance(&replica, &kept, &served)
+        })
+        .await??;
+        tables.extend(pruned);
+        ctx.bump.send_modify(|n| *n = n.wrapping_add(1));
+    }
     if tables.contains("vault_key_envelopes") || tables.contains("device_lists") {
         unwrap_envelopes(ctx).await?;
     }
     if !tables.is_empty() {
         (ctx.on_applied)(tables);
     }
-    Ok(())
+    Ok(true)
 }
 
 /// Serves the other side's pulls, one at a time.
@@ -230,13 +261,21 @@ async fn serve_pulls(ctx: &SessionContext, connection: &Connection) -> Result<()
         let Message::Pull { vector, replace } = expect_frame(&mut recv, FRAME_LIMIT).await? else {
             return Err(SessionError::Protocol("expected a Pull"));
         };
-        if replace {
-            // A snapshot for replacing follows with user story 3.
-            return Err(SessionError::Protocol("replace is not supported yet"));
-        }
         let replica = Arc::clone(&ctx.replica);
-        let mut outbox =
-            tokio::task::spawn_blocking(move || serve_pull(&replica, &vector)).await??;
+        let served =
+            tokio::task::spawn_blocking(move || serve(&replica, &vector, replace)).await??;
+        let mut outbox = match served {
+            Served::Pages(outbox) => outbox,
+            Served::Resync => {
+                let answer = Message::Resync {
+                    reason: ResyncReason::TombstonesExpired,
+                };
+                write_frame(&mut send, &answer, FRAME_LIMIT).await?;
+                send.finish()
+                    .map_err(|e| SessionError::Stream(e.to_string()))?;
+                continue;
+            }
+        };
         while let Some(page) = outbox.next_page() {
             write_frame(&mut send, &Message::Page(page), FRAME_LIMIT).await?;
         }

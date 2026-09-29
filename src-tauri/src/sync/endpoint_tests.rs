@@ -141,3 +141,159 @@ async fn two_devices_dialing_each_other_keep_one_connection() {
     a.node.shutdown().await;
     b.node.shutdown().await;
 }
+
+/// Forwards UDP between a dialer and `target`, keeping every datagram it
+/// sees in both directions, like someone reading the network. Returns the
+/// address to dial instead of `target` and the record.
+async fn sniffing_proxy(
+    target: std::net::SocketAddr,
+) -> (std::net::SocketAddr, Arc<Mutex<Vec<u8>>>) {
+    use tokio::net::UdpSocket;
+
+    let record = Arc::new(Mutex::new(Vec::new()));
+    let front = Arc::new(
+        UdpSocket::bind((std::net::Ipv4Addr::LOCALHOST, 0))
+            .await
+            .expect("bind"),
+    );
+    let back = Arc::new(
+        UdpSocket::bind((std::net::Ipv4Addr::LOCALHOST, 0))
+            .await
+            .expect("bind"),
+    );
+    back.connect(target).await.expect("connect upstream");
+    let client = Arc::new(Mutex::new(None));
+    let address = front.local_addr().expect("address");
+
+    let (front_in, back_out, seen, from) = (
+        Arc::clone(&front),
+        Arc::clone(&back),
+        Arc::clone(&record),
+        Arc::clone(&client),
+    );
+    tokio::spawn(async move {
+        let mut buffer = vec![0u8; 65536];
+        while let Ok((n, source)) = front_in.recv_from(&mut buffer).await {
+            *from.lock().expect("lock") = Some(source);
+            seen.lock().expect("lock").extend_from_slice(&buffer[..n]);
+            let _ = back_out.send(&buffer[..n]).await;
+        }
+    });
+    let (front_out, back_in, seen, to) = (front, back, Arc::clone(&record), client);
+    tokio::spawn(async move {
+        let mut buffer = vec![0u8; 65536];
+        while let Ok(n) = back_in.recv(&mut buffer).await {
+            seen.lock().expect("lock").extend_from_slice(&buffer[..n]);
+            let destination = *to.lock().expect("lock");
+            if let Some(destination) = destination {
+                let _ = front_out.send_to(&buffer[..n], destination).await;
+            }
+        }
+    });
+    (address, record)
+}
+
+/// SC-006, FR-002 (quickstart A9): what crosses the network between two own
+/// devices shows no table or column name, no content, no device key and no
+/// private key of the vault identity.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_traffic_between_two_devices_shows_nothing_in_the_clear() {
+    let (main, linked) = pair();
+    let a = start(&main).await;
+    let b = start(&linked).await;
+    let addr = a.node.addr();
+    let target = addr.ip_addrs().next().copied().expect("a direct address");
+    let (proxy, record) = sniffing_proxy(target).await;
+
+    b.node
+        .connect(EndpointAddr::from_parts(
+            addr.id,
+            [iroh::TransportAddr::Ip(proxy)],
+        ))
+        .await
+        .expect("connect through the proxy");
+    write_thread(&main, "t1", "a-distinctive-thread-title-4711");
+    a.node.local_changed();
+    wait_for(&b.applied, || {
+        title(&linked, "t1").as_deref() == Some("a-distinctive-thread-title-4711")
+    })
+    .await;
+    write_thread(&linked, "t2", "another-distinctive-title-0815");
+    b.node.local_changed();
+    wait_for(&a.applied, || {
+        title(&main, "t2").as_deref() == Some("another-distinctive-title-0815")
+    })
+    .await;
+
+    let vault_secret = query::read(main.device.db(), |r| crate::sync::keys::vault_secret(r))
+        .expect("read")
+        .expect("main holds the vault secret");
+    let seen = record.lock().expect("lock").clone();
+    assert!(
+        seen.len() > 2000,
+        "the proxy saw the exchange ({} bytes)",
+        seen.len()
+    );
+    let contains = |needle: &[u8]| seen.windows(needle.len()).any(|w| w == needle);
+    for (what, needle) in [
+        ("a table name", b"chat_threads".as_slice()),
+        ("a column name", b"updated_at".as_slice()),
+        ("a title", b"distinctive".as_slice()),
+        ("the protocol's own name", b"holzi-sync".as_slice()),
+        ("the main device's key", main.keys.device_pubkey.as_slice()),
+        (
+            "the linked device's key",
+            linked.keys.device_pubkey.as_slice(),
+        ),
+        ("the vault's private key", vault_secret.as_slice()),
+    ] {
+        assert!(!contains(needle), "{what} crossed the network in the clear");
+    }
+    a.node.shutdown().await;
+    b.node.shutdown().await;
+}
+
+/// R14, FR-030: a copy of a listed device that dials in from another
+/// endpoint gets refused, and the device it copies is marked as duplicated.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_copy_of_a_listed_device_marks_it_as_duplicated() {
+    use crate::sync::problems::{self, Problem};
+
+    let (main, linked) = pair();
+    let a = start(&main).await;
+    let changed = Arc::new(Notify::new());
+    let signal = Arc::clone(&changed);
+    a.node
+        .on_devices_changed(Arc::new(move || signal.notify_one()));
+    // The copy has the device key of `linked`, but an endpoint of its own.
+    let elsewhere = crate::sync::keys::DeviceKeys::generate();
+    let mut copy_keys = linked.keys.clone();
+    copy_keys.endpoint_secret = elsewhere.endpoint_secret.clone();
+    copy_keys.endpoint_id = elsewhere.endpoint_id;
+    let copy = SyncNode::bind(
+        Arc::clone(&linked.device.replica),
+        copy_keys,
+        linked.vault,
+        NodeConfig {
+            relay_mode: RelayMode::Disabled,
+            bind_addr: Some((std::net::Ipv4Addr::LOCALHOST, 0).into()),
+        },
+        Arc::new(|_| {}),
+    )
+    .await
+    .expect("bind the copy");
+
+    copy.connect(a.node.addr()).await.expect("dial");
+
+    tokio::time::timeout(EVENT_LIMIT, changed.notified())
+        .await
+        .expect("the problem is announced");
+    let recorded = query::read(main.device.db(), |r| {
+        problems::of(r, &linked.keys.device_pubkey)
+    })
+    .expect("read");
+    assert_eq!(recorded, Some(Problem::Duplicate));
+    assert!(a.node.connected().is_empty(), "no session with a duplicate");
+    a.node.shutdown().await;
+    copy.shutdown().await;
+}

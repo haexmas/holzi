@@ -28,6 +28,29 @@ pub struct Outbox {
     finished: bool,
 }
 
+/// The answer to a pull request.
+#[derive(Debug)]
+pub enum Served {
+    Pages(Outbox),
+    /// The puller is too far behind for an incremental pull
+    /// ([`crate::sync::resync`]).
+    Resync,
+}
+
+/// Answers a `Pull`: a snapshot (served as a pull from nothing) when
+/// `replace` is set, `Resync` when the puller is too far behind, otherwise
+/// what `theirs` lacks.
+pub fn serve(replica: &Replica, theirs: &Vector, replace: bool) -> haex_crdt::Result<Served> {
+    if replace {
+        return Ok(Served::Pages(serve_pull(replica, &Vector::new())?));
+    }
+    let served = replica.progress()?;
+    if crate::sync::resync::is_stale(theirs, &served, std::time::SystemTime::now()) {
+        return Ok(Served::Resync);
+    }
+    Ok(Served::Pages(serve_pull(replica, theirs)?))
+}
+
 /// Collects what `theirs` lacks from this device.
 pub fn serve_pull(replica: &Replica, theirs: &Vector) -> haex_crdt::Result<Outbox> {
     serve_pull_with_budget(replica, theirs, PAGE_BUDGET)

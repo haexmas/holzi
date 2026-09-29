@@ -30,6 +30,7 @@ use crate::sync::device_list;
 use crate::sync::keys;
 use crate::sync::progress::{self, Vector};
 use crate::sync::replica::{synced_tables, Replica};
+use crate::sync::resync::RowKey;
 
 /// haex-crdt's delete log, a synced table like any other.
 const DELETED_ROWS_TABLE: &str = "haex_deleted_rows";
@@ -75,11 +76,38 @@ pub struct Inbox {
     /// never be requested again.
     last_received: Vector,
     finished: bool,
+    /// Set for the pull of a resync snapshot: what it carried.
+    snapshot: Option<Snapshot>,
+}
+
+/// What a snapshot pull carried, for pruning what it did not
+/// ([`crate::sync::resync`]).
+#[derive(Debug, Default)]
+struct Snapshot {
+    rows: HashSet<RowKey>,
+    served: Vector,
 }
 
 impl Inbox {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// An inbox for the pull of a resync snapshot, which remembers the rows
+    /// it applied.
+    pub fn for_snapshot() -> Self {
+        Self {
+            snapshot: Some(Snapshot::default()),
+            ..Self::default()
+        }
+    }
+
+    /// The rows a finished snapshot carried and the progress its sender
+    /// served against; `None` for an ordinary pull or an unfinished one.
+    pub fn into_snapshot(self) -> Option<(HashSet<RowKey>, Vector)> {
+        self.snapshot
+            .filter(|_| self.finished)
+            .map(|s| (s.rows, s.served))
     }
 
     /// Checks and applies the complete groups of `page`.
@@ -160,9 +188,20 @@ impl Inbox {
             accepted.extend(columns);
         }
         updates.extend(group_updates.clone());
+        if let Some(snapshot) = &mut self.snapshot {
+            snapshot.rows.extend(
+                accepted
+                    .iter()
+                    .map(|c| (c.table_name.clone(), c.row_pks.clone())),
+            );
+        }
         if !page.more {
-            for (origin, hlc) in page.served {
-                progress::raise(&mut updates, origin, hlc);
+            if let Some(snapshot) = &mut self.snapshot {
+                snapshot.served = page.served;
+            } else {
+                for (origin, hlc) in page.served {
+                    progress::raise(&mut updates, origin, hlc);
+                }
             }
             self.finished = true;
         }

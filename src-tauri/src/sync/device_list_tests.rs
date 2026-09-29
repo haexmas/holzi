@@ -282,3 +282,59 @@ fn stored_lists_round_trip_through_the_vault() {
     let rows = crate::storage::query::read(&db, |r| load_all(r)).expect("load");
     assert_eq!(rows, vec![stored(&signed)]);
 }
+
+#[test]
+fn two_keys_for_one_device_id_after_a_fork_are_both_in_conflict() {
+    let v = vault();
+    let base = sign_list(list(&v, 1, None, vec![device(1, Role::Main)]), &v.secret).expect("sign");
+    // Two main devices each add a different key for the same device id.
+    let mut first_copy = device(2, Role::Linked);
+    first_copy.vault_device_uuid = Uuid::from_bytes([9; 16]);
+    let mut second_copy = device(3, Role::Linked);
+    second_copy.vault_device_uuid = Uuid::from_bytes([9; 16]);
+    let a = sign_list(
+        list(
+            &v,
+            2,
+            Some(base.hash),
+            vec![device(1, Role::Main), first_copy.clone()],
+        ),
+        &v.secret,
+    )
+    .expect("sign");
+    let b = sign_list(
+        list(
+            &v,
+            2,
+            Some(base.hash),
+            vec![device(1, Role::Main), second_copy.clone()],
+        ),
+        &v.secret,
+    )
+    .expect("sign");
+
+    let valid = valid_lists(&[stored(&base), stored(&a), stored(&b)], &v.pubkey);
+    let conflicts = uuid_conflicts(&valid);
+
+    assert_eq!(
+        conflicts,
+        HashSet::from([first_copy.device_pubkey, second_copy.device_pubkey])
+    );
+}
+
+#[test]
+fn a_list_without_a_shared_device_id_has_no_conflict() {
+    let v = vault();
+    let base = sign_list(
+        list(
+            &v,
+            1,
+            None,
+            vec![device(1, Role::Main), device(2, Role::Linked)],
+        ),
+        &v.secret,
+    )
+    .expect("sign");
+
+    assert!(uuid_conflicts(&valid_lists(&[stored(&base)], &v.pubkey)).is_empty());
+}

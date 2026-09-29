@@ -232,6 +232,84 @@ fn a_same_generation_tie_break_loser_does_not_remove_the_winner() {
     assert_ne!(winner_pubkey, loser_pubkey);
 }
 
+#[test]
+fn two_keys_for_one_device_id_are_admitted_as_neither() {
+    // Two main devices, A and B, each list a different key for one device id
+    // from the same base: whichever list wins, its device shares that id with
+    // a key of the fork, and neither may sync (FR-030).
+    let secret = [7u8; 32];
+    let vault = signing::xonly_public_key(&secret).expect("pubkey");
+    let shared_uuid = Uuid::new_v4();
+    let device = |pubkey: [u8; 32], endpoint: [u8; 32], role: Role, uuid: Uuid| ListedDevice {
+        device_pubkey: pubkey,
+        endpoint_id: endpoint,
+        role,
+        vault_device_uuid: uuid,
+        name_sealed: Vec::new(),
+        added_at: 0,
+    };
+    let main = device([1; 32], [2; 32], Role::Main, Uuid::new_v4());
+    let genesis = device_list::sign_list(
+        DeviceList {
+            vault,
+            generation: 1,
+            devices: vec![main.clone()],
+            removed: Vec::new(),
+            issued_by: [1; 32],
+            issued_at: 0,
+            base_list_hash: None,
+        },
+        &secret,
+    )
+    .expect("sign genesis");
+    let fork = |copy: ListedDevice| {
+        device_list::sign_list(
+            DeviceList {
+                vault,
+                generation: 2,
+                devices: vec![main.clone(), copy],
+                removed: Vec::new(),
+                issued_by: [1; 32],
+                issued_at: 1,
+                base_list_hash: Some(genesis.hash),
+            },
+            &secret,
+        )
+        .expect("sign fork")
+    };
+    let first = fork(device([3; 32], [4; 32], Role::Linked, shared_uuid));
+    let second = fork(device([5; 32], [6; 32], Role::Linked, shared_uuid));
+    let mut lists = BTreeMap::new();
+    lists.insert(genesis.hash, genesis);
+    lists.insert(first.hash, first.clone());
+    lists.insert(second.hash, second.clone());
+    let winner = if first.hash < second.hash {
+        &first
+    } else {
+        &second
+    };
+    let copy = winner.list.devices[1].clone();
+
+    let observer_keys = DeviceKeys {
+        device_secret: Zeroizing::new([9; 32]),
+        device_pubkey: [9; 32],
+        endpoint_secret: Zeroizing::new([9; 32]),
+        endpoint_id: [9; 32],
+    };
+    let observer = Local {
+        keys: &observer_keys,
+        vault,
+        schema: local_schema(),
+    };
+
+    let refused = admit(&lists, &copy.device_pubkey, &copy.endpoint_id, &observer);
+
+    assert_eq!(
+        refused.expect_err("a duplicate device id"),
+        RejectCode::Duplicate
+    );
+}
+
 #[tokio::test]
 async fn a_signature_for_another_endpoint_is_refused() {
     let main = Member::genesis();
@@ -275,14 +353,99 @@ async fn another_schema_version_is_refused() {
     let (at_main, at_linked) =
         run(&main, &linked, main.local(), newer, linked.keys.endpoint_id).await;
 
-    assert!(matches!(
-        at_main,
-        Err(HandshakeError::Refused(RejectCode::Incompatible))
-    ));
+    assert!(
+        matches!(
+            at_main,
+            Err(HandshakeError::Halted {
+                problem: Problem::IncompatibleVersion,
+                device,
+            }) if device == linked.keys.device_pubkey
+        ),
+        "{at_main:?}"
+    );
     assert!(matches!(
         at_linked,
         Err(HandshakeError::RefusedByPeer(RejectCode::Incompatible))
     ));
+}
+
+#[tokio::test]
+async fn the_schema_is_only_judged_after_the_peer_proved_its_key() {
+    let main = Member::genesis();
+    let linked = Member::join(&main);
+    main.add(&linked);
+    let mut newer = linked.local();
+    newer.schema.crdt_trigger += 1;
+
+    // The connection claims to come from an endpoint the dialer did not
+    // sign for: nobody proved anything, so no device gets a problem.
+    let (at_main, _) = run(&main, &linked, main.local(), newer, [9; 32]).await;
+
+    assert!(matches!(
+        at_main,
+        Err(HandshakeError::Refused(RejectCode::BadSignature))
+    ));
+}
+
+#[tokio::test]
+async fn a_listed_key_speaking_from_another_endpoint_is_a_duplicate() {
+    let main = Member::genesis();
+    let linked = Member::join(&main);
+    main.add(&linked);
+    // A copy of the linked installation: same device key, other endpoint.
+    let mut copy_keys = linked.keys.clone();
+    copy_keys.endpoint_id = [5; 32];
+    let copy = Local {
+        keys: &copy_keys,
+        vault: linked.vault,
+        schema: local_schema(),
+    };
+
+    let (at_main, at_copy) = run(&main, &linked, main.local(), copy, [5; 32]).await;
+
+    assert!(
+        matches!(
+            at_main,
+            Err(HandshakeError::Halted {
+                problem: Problem::Duplicate,
+                device,
+            }) if device == linked.keys.device_pubkey
+        ),
+        "{at_main:?}"
+    );
+    assert!(matches!(
+        at_copy,
+        Err(HandshakeError::RefusedByPeer(RejectCode::Duplicate))
+    ));
+}
+
+#[tokio::test]
+async fn a_copy_of_the_accepting_device_is_a_duplicate() {
+    let main = Member::genesis();
+    let linked = Member::join(&main);
+    main.add(&linked);
+    linked.device.pull_from(&main.device);
+    // Dials with main's own device key from another endpoint.
+    let mut copy_keys = main.keys.clone();
+    copy_keys.endpoint_id = [6; 32];
+    let copy = Local {
+        keys: &copy_keys,
+        vault: main.vault,
+        schema: local_schema(),
+    };
+
+    let (at_main, _) = run(&main, &linked, main.local(), copy, [6; 32]).await;
+
+    assert!(
+        matches!(
+            at_main,
+            Err(HandshakeError::Halted {
+                problem: Problem::Duplicate,
+                device,
+            }) if device == main.keys.device_pubkey
+        ),
+        "{at_main:?}"
+    );
 }
 
 #[test]
