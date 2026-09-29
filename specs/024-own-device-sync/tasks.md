@@ -323,10 +323,11 @@ Task: "Rahmen und Nachrichten in src-tauri/src/sync/wire.rs"
 
 ## Notes
 
-- Vor US1, aus der Umsetzung von 2b:
-  - **haex-crdt neu pinnen** nach haexmas/haex-crdt#37 (BLOB-Werte und BLOB-Schlüssel reisen typtreu, auch `providers.credentials`) und dem Folge-PR, der die im Bootstrap ohne HLC angelegten Zeilen beim Öffnen vollständig stempelt. Dabei `HOLZI_TRIGGER_VERSION` erneut erhöhen, sonst behalten bestehende Vaults die alten Trigger (der alte Lösch-Trigger scheitert an BLOB-Schlüsseln).
-  - **Doppelte lokale Provider:** `ensure_local_provider` legt auf jedem Gerät eine Zeile mit zufälliger UUID an; nach dem ersten Abgleich gibt es mehrere `kind = local`-Zeilen. Vor US1 eine deterministische ID (etwa UUIDv5 aus Art und Fähigkeit) oder eine gerätelokale Zuordnung festlegen.
-  - **Verknüpfen (US5):** Die neue Installation darf beim Anlegen ihrer Vault keine eigene Vault-Identität erzeugen; `sync::genesis::ensure_sync_state` hat dafür `allow_genesis`, `create.rs` setzt es heute immer.
+- Vor US1, aus der Umsetzung von 2b (erledigt im Vorbereitungs-PR):
+  - **haex-crdt neu gepinnt** auf den Merge von haexmas/haex-crdt#38 (`d35d43f9250a7d9a7d2dca3a0c8ee7ffabc750a7`, enthält #37): BLOB-Werte und BLOB-Schlüssel reisen typtreu, auch `providers.credentials`, und im Bootstrap ohne HLC angelegte Zeilen werden beim Öffnen gestempelt. `HOLZI_TRIGGER_VERSION` ist 13, damit bestehende Vaults die neuen Trigger bekommen.
+  - **Lokale Provider mit fester ID:** `providers::local` legt die lokalen Provider unter UUIDv5-IDs an (`holzi:provider/local/chat`, `holzi:provider/local/transcription`), so teilen sich alle Geräte einer Vault eine Zeile. Zeilen mit zufälliger ID aus der Zeit davor zieht die Wartung beim Öffnen auf die feste ID um, samt Verweisen in `models`, `chat_threads` und `chat_messages`.
+  - **Verknüpfen (US5):** `open_instance` ruft `ensure_sync_state` mit `allow_genesis = false`, `create_instance` mit `true`. Die neue Installation beim Verknüpfen darf ihre Vault nicht über `create_instance` anlegen, sonst erzeugt sie eine eigene Vault-Identität.
+- Offen: `cli_delegate`-Provider sind je Anbieter ein Singleton mit zufälliger ID. Verbindet man denselben Anbieter auf zwei Geräten, entstehen nach dem Abgleich zwei Zeilen; `find_cli_delegate_provider` nimmt die älteste. Das ist wie zweimal Verbinden auf einem Gerät und kein Datenverlust, gehört aber in US1-Tests beobachtet.
 
 - [P] = andere Dateien, keine offene Abhängigkeit.
 - Nie „Relay“ allein schreiben: Nostr-Relay, iroh-Relay, Sync-Server.

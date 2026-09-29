@@ -112,12 +112,64 @@ pub fn insert_provider(tx: &mut CrdtTransaction<'_>, p: &Provider) -> haex_crdt:
     )
 }
 
+/// Replaces a provider's fields while preserving its id.
+pub fn update_provider(tx: &mut CrdtTransaction<'_>, p: &Provider) -> haex_crdt::Result<usize> {
+    tx.execute(
+        "UPDATE providers SET kind = ?1, adapter = ?2, name = ?3, base_url = ?4, \
+         credentials = ?5, created_at = ?6, capability = ?7 WHERE id = ?8",
+        params![
+            p.kind.as_str(),
+            p.adapter,
+            p.name,
+            p.base_url,
+            p.credentials,
+            p.created_at,
+            p.capability.as_str(),
+            p.id.to_string(),
+        ],
+    )
+}
+
 /// Deletes a provider by id.
 pub fn delete_provider(tx: &mut CrdtTransaction<'_>, id: Uuid) -> haex_crdt::Result<usize> {
     tx.execute(
         "DELETE FROM providers WHERE id = ?1",
         params![id.to_string()],
     )
+}
+
+/// Points every model, thread and message that uses provider `from` at
+/// provider `to` instead. Used when a local provider row moves to its fixed
+/// id (`providers::local`, spec 024).
+pub fn move_provider_references(
+    tx: &mut CrdtTransaction<'_>,
+    from: Uuid,
+    to: Uuid,
+) -> haex_crdt::Result<()> {
+    let (from, to) = (from.to_string(), to.to_string());
+    for sql in [
+        "UPDATE models SET provider_id = ?1 WHERE provider_id = ?2",
+        "UPDATE chat_threads SET last_provider_id = ?1 WHERE last_provider_id = ?2",
+        "UPDATE chat_messages SET provider_id = ?1 WHERE provider_id = ?2",
+    ] {
+        tx.execute(sql, params![to, from])?;
+    }
+    Ok(())
+}
+
+/// Ids of every row of one `(kind, capability)` pair, oldest first.
+pub fn provider_ids_by_kind_and_capability(
+    q: &mut impl Query,
+    kind: ProviderKind,
+    capability: ProviderCapability,
+) -> haex_crdt::Result<Vec<Uuid>> {
+    let raw: Vec<String> = q.query_map(
+        "SELECT id FROM providers WHERE kind = ?1 AND capability = ?2 \
+         ORDER BY created_at ASC",
+        params![kind.as_str(), capability.as_str()],
+        |r| r.get(0),
+    )?;
+    Ok(raw.iter().filter_map(|s| Uuid::parse_str(s).ok()).collect())
 }
 
 /// Persists a repaired adapter discriminator and marks the CRDT row dirty.
