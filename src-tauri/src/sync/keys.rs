@@ -60,6 +60,7 @@ pub fn derive_vault_identity(seed: &[u8; 32]) -> Zeroizing<[u8; 32]> {
 }
 
 /// The keys of this installation in this vault.
+#[derive(Clone)]
 pub struct DeviceKeys {
     pub device_secret: Zeroizing<[u8; 32]>,
     pub device_pubkey: [u8; 32],

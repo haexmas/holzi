@@ -322,6 +322,51 @@ pub fn merge_next(
     }
 }
 
+/// Whether list `a` ranks before list `b`: a higher generation, or the same
+/// generation with a smaller hash.
+pub fn ranks_before(a: (u64, &[u8; 32]), b: (u64, &[u8; 32])) -> bool {
+    a.0 > b.0 || (a.0 == b.0 && a.1 < b.1)
+}
+
+/// The list `hash` and its base lists, oldest first: what a device needs to
+/// check it.
+pub fn ancestry<'a>(
+    valid: &'a BTreeMap<[u8; 32], SignedList>,
+    hash: &[u8; 32],
+) -> Vec<&'a SignedList> {
+    let mut chain = Vec::new();
+    let mut next = valid.get(hash);
+    while let Some(signed) = next {
+        chain.push(signed);
+        next = signed.list.base_list_hash.and_then(|base| valid.get(&base));
+    }
+    chain.reverse();
+    chain
+}
+
+/// Checks a list another device sent: the same checks as a stored row.
+pub fn check_pushed(
+    payload: &[u8],
+    signature: &[u8; 64],
+    vault_pubkey: &[u8; 32],
+) -> Result<SignedList, ListError> {
+    let list: DeviceList = postcard::from_bytes(payload).map_err(|_| ListError::Malformed)?;
+    StoredList {
+        hash: list_hash(payload).to_vec(),
+        generation: i64::try_from(list.generation).map_err(|_| ListError::GenerationMismatch)?,
+        payload: payload.to_vec(),
+        signature: signature.to_vec(),
+    }
+    .check(vault_pubkey)
+}
+
+/// Whether any of `valid` removes `device_pubkey`: a removal is final.
+pub fn is_removed(valid: &BTreeMap<[u8; 32], SignedList>, device_pubkey: &[u8; 32]) -> bool {
+    valid
+        .values()
+        .any(|signed| signed.list.removes(device_pubkey))
+}
+
 /// Stores a signed list. Idempotent: a list that is already stored stays as it is.
 pub fn insert(tx: &mut CrdtTransaction<'_>, signed: &SignedList) -> haex_crdt::Result<()> {
     let generation = i64::try_from(signed.list.generation)
