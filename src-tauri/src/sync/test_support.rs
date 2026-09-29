@@ -32,13 +32,13 @@ pub fn open_vault_with_limit(dir: &Path, limit: usize) -> Database {
 /// A device: its own directory, vault file and installation.
 pub struct Device {
     _dir: tempfile::TempDir,
-    pub replica: Replica,
+    pub replica: Arc<Replica>,
 }
 
 impl Device {
     pub fn new() -> Self {
         let dir = tempfile::tempdir().expect("tempdir");
-        let replica = Replica::new(Arc::new(open_vault(dir.path())));
+        let replica = Arc::new(Replica::new(Arc::new(open_vault(dir.path()))));
         Self { _dir: dir, replica }
     }
 
@@ -65,5 +65,99 @@ impl Device {
             received.push(inbox.receive(&self.replica, page)?);
         }
         Ok(received)
+    }
+}
+
+/// A device of a vault together with its keys.
+pub struct Member {
+    pub device: Device,
+    pub keys: crate::sync::keys::DeviceKeys,
+    pub vault: [u8; 32],
+}
+
+impl Member {
+    /// How the member presents itself in a handshake.
+    pub fn local(&self) -> crate::sync::handshake::Local<'_> {
+        crate::sync::handshake::Local {
+            keys: &self.keys,
+            vault: self.vault,
+            schema: crate::sync::handshake::local_schema(),
+        }
+    }
+
+    /// The first device of a fresh vault: main device on list generation 1.
+    pub fn genesis() -> Self {
+        let device = Device::new();
+        let installation = uuid::Uuid::new_v4();
+        let state = crate::sync::genesis::ensure_sync_state(device.db(), installation, true)
+            .expect("genesis");
+        let keys = crate::storage::query::read(device.db(), |r| {
+            crate::sync::keys::load_device_keys(r, installation)
+        })
+        .expect("read keys")
+        .expect("keys");
+        Self {
+            device,
+            keys,
+            vault: state.vault_pubkey.expect("identity"),
+        }
+    }
+
+    /// A second installation of `main`'s vault: it holds `main`'s data and
+    /// its own keys, but no list names it yet.
+    pub fn join(main: &Member) -> Self {
+        let device = Device::new();
+        device.pull_from(&main.device);
+        let keys = device
+            .db()
+            .write(|tx| crate::sync::keys::ensure_device_keys(tx, uuid::Uuid::new_v4(), 1))
+            .expect("keys");
+        Self {
+            device,
+            keys,
+            vault: main.vault,
+        }
+    }
+
+    /// Issues the next list generation on this main device, built by `edit`
+    /// from the effective one.
+    pub fn issue_list(
+        &self,
+        edit: impl FnOnce(crate::sync::device_list::DeviceList) -> crate::sync::device_list::DeviceList,
+    ) {
+        use crate::sync::{device_list, keys};
+        self.device
+            .db()
+            .write(|tx| {
+                let secret = keys::vault_secret(tx)?.expect("a main device");
+                let valid = device_list::valid_lists(&device_list::load_all(tx)?, &self.vault);
+                let effective = device_list::effective(&valid).expect("a list").clone();
+                let next = device_list::DeviceList {
+                    generation: effective.list.generation + 1,
+                    base_list_hash: Some(effective.hash),
+                    issued_by: self.keys.device_pubkey,
+                    ..effective.list
+                };
+                let signed = device_list::sign_list(edit(next), &secret)
+                    .map_err(haex_crdt::Error::consumer)?;
+                device_list::insert(tx, &signed)
+            })
+            .expect("issue list");
+    }
+
+    /// Lists `other` as a linked device in a new generation.
+    pub fn add(&self, other: &Member) {
+        let entry = crate::sync::device_list::ListedDevice {
+            device_pubkey: other.keys.device_pubkey,
+            endpoint_id: other.keys.endpoint_id,
+            role: crate::sync::device_list::Role::Linked,
+            vault_device_uuid: other.device.db().device_id(),
+            name_sealed: Vec::new(),
+            added_at: 2,
+        };
+        self.issue_list(|mut list| {
+            list.devices.push(entry);
+            list
+        });
     }
 }

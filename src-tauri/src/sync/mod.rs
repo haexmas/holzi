@@ -5,15 +5,19 @@
 pub mod change;
 pub mod content_keys;
 pub mod device_list;
+pub mod endpoint;
 pub mod events;
 pub mod genesis;
+pub mod handshake;
 pub mod inbound;
 pub mod keys;
 pub mod outbound;
 pub mod progress;
 pub mod replica;
 mod service;
+pub mod session;
 pub mod signing;
+pub mod wire;
 
 pub use service::SyncService;
 

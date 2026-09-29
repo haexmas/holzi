@@ -14,21 +14,25 @@ Nachrichten oder zu große Rahmen schließen die Verbindung mit einem Fehlercode
 ```text
 A = annehmendes Gerät, D = wählendes Gerät
 
-A → D  Challenge   { v: 1, nonce_a: [u8;32], endpoint_a: [u8;32] }
+A → D  Challenge   { v: 1, nonce_a: [u8;32], endpoint_a: [u8;32], list: ListRef }
+D → A  DeviceListPush*   (wenn die geltende Liste von D vor der von A rangiert)
 D → A  Response    { v: 1, device_d: [u8;32], vault: [u8;32], nonce_d: [u8;32],
                      schema: SchemaVersion, list: ListRef, sig_d: [u8;64] }
+A → D  DeviceListPush*   (wenn die geltende Liste von A vor der von D rangiert)
 A → D  Accept      { device_a: [u8;32], schema: SchemaVersion, list: ListRef, sig_a: [u8;64] }
        | Reject    { code: RejectCode }
 ```
 
 - `sig_x = schnorr(device_x, SHA-256("holzi-device-auth/v1" ‖ lp(nonce_a) ‖ lp(nonce_d) ‖
 lp(endpoint_x) ‖ lp(endpoint_y) ‖ lp(vault)))`, `lp` = `u32 BE Länge ‖ Bytes`.
-- `ListRef = { generation, list_hash }`. Kennt eine Seite eine höhere oder gleich hohe Liste mit
-  kleinerem Hash, sendet sie diese auf einem eigenen Kontroll-Stream (`DeviceListPush`), bevor
-  irgendetwas anderes fließt. Der Empfänger wartet auf den vollständigen Stream, prüft Hash,
-  Vault-Signatur, Generation, Basisliste und Inhalt nach FR-005 und übernimmt die Liste atomar.
-  `issued_by` wird dabei als Information gespeichert, ist aber keine Berechtigungs- oder
-  Übernahmebedingung. Erst danach wird die geltende Liste neu gewählt.
+- `ListRef = { generation, list_hash }`. Eine Liste rangiert vor einer anderen bei höherer Generation
+  oder bei gleicher Generation mit kleinerem Hash. Die Seite mit der vorrangigen Liste schickt sie
+  samt ihren Basislisten (älteste zuerst) als `DeviceListPush` auf dem Handshake-Stream, vor ihrer
+  nächsten Handshake-Nachricht; deshalb nennt schon `Challenge` die Liste von A. Der Empfänger
+  prüft Hash, Vault-Signatur, Generation, Basisliste und Inhalt nach FR-005 und übernimmt die
+  Listen atomar. `issued_by` wird dabei als Information gespeichert, ist aber keine Berechtigungs-
+  oder Übernahmebedingung. Erst danach wird die geltende Liste neu gewählt. Höchstens 64 Listen je
+  Handshake.
 - Vor dem Listenabgleich prüft jede Seite weiterhin `endpoint` des Gegenübers gleich
   `Connection::remote_id()`, die Authentifizierungssignatur, `vault` gleich der eigenen und
   `schema` verträglich. Nach dem vollständigen Listenabgleich prüft sie mit der aktualisierten
@@ -40,6 +44,12 @@ lp(endpoint_x) ‖ lp(endpoint_y) ‖ lp(vault)))`, `lp` = `u32 BE Länge ‖ By
 `SchemaVersion = { protocol: 1, holzi_migration: u32, crdt_trigger: u32 }`.
 
 ### 2. Nachrichten nach dem Handshake
+
+Der Handshake-Stream bleibt als Kontroll-Stream offen; auf ihm senden beide Seiten `Progress`
+(und später `DeviceListPush`). Jeder `Pull` öffnet einen eigenen Bi-Stream: der Anfragende schreibt
+`Pull` und schließt seine Richtung, der Sender antwortet mit `Page`s und schließt dann seine. Zwischen
+zwei Geräten lebt höchstens eine Verbindung; wählen sich beide gleichzeitig an, bleibt die, die das
+Gerät mit der kleineren `endpoint_id` gewählt hat.
 
 | Nachricht        | Richtung | Inhalt                                                                              | Antwort                                   |
 | ---------------- | -------- | ----------------------------------------------------------------------------------- | ----------------------------------------- |
