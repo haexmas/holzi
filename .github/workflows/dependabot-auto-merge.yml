@@ -10,7 +10,7 @@ jobs:
   dependabot:
     name: Enable auto-merge
     runs-on: ubuntu-24.04
-    if: github.actor == 'dependabot[bot]'
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
     steps:
       # Auto-merge only marks the PR to merge once its required checks
       # (see branch protection on main) turn green; it does not merge
