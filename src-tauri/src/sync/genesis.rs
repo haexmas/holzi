@@ -103,7 +103,7 @@ pub fn ensure_sync_state(
 /// Runs [`ensure_sync_state`] after a vault opened, before the frontend sees
 /// it. A failure is logged and does not stop the vault from opening; the next
 /// open retries, since every step is idempotent.
-pub fn run_after_open(db: &Database, installation_id_file: &std::path::Path) {
+pub fn run_after_open(db: &Database, installation_id_file: &std::path::Path, allow_genesis: bool) {
     let installation_uuid =
         match crate::identity::read_or_mint_installation_uuid(installation_id_file) {
             Ok(uuid) => uuid,
@@ -112,7 +112,7 @@ pub fn run_after_open(db: &Database, installation_id_file: &std::path::Path) {
                 return;
             }
         };
-    if let Err(e) = ensure_sync_state(db, installation_uuid, true) {
+    if let Err(e) = ensure_sync_state(db, installation_uuid, allow_genesis) {
         log::warn!("sync: could not bring the sync state up to date: {e}");
     }
 }

@@ -114,6 +114,7 @@ struct EnvelopeRecord<'a> {
     key_id: [u8; 16],
     generation: u64,
     recipient: [u8; 32],
+    sender: [u8; 32],
     envelope: &'a str,
     device_list_hash: [u8; 32],
 }
@@ -167,6 +168,7 @@ pub fn issue_generation(
             key_id: key.key_id,
             generation: key.generation,
             recipient: device.device_pubkey,
+            sender: issuer.device_pubkey,
             envelope: &envelope,
             device_list_hash: list.hash,
         };
@@ -250,6 +252,7 @@ impl StoredEnvelope {
             key_id: fixed(&self.key_id)?,
             generation,
             recipient: fixed(&self.recipient)?,
+            sender: fixed(&self.sender)?,
             envelope: &self.envelope,
             device_list_hash: list_hash,
         };
@@ -285,11 +288,18 @@ pub fn unwrap_own_envelopes(
         if envelope.verify(generation_number, valid).is_err() {
             continue;
         }
-        let key = unwrap(&envelope, own)?;
+        let key = match unwrap(&envelope, own) {
+            Ok(key) => key,
+            Err(error) => {
+                log::warn!("sync: an authorized envelope does not open: {error}");
+                continue;
+            }
+        };
         if key.key_id.as_slice() != envelope.key_id.as_slice()
             || key.generation != generation_number
         {
-            return Err(KeyError::KeyMismatch.into());
+            log::warn!("sync: {}", KeyError::KeyMismatch);
+            continue;
         }
         store_own_key(tx, &key)?;
         added += 1;
@@ -533,7 +543,7 @@ fn fixed<const N: usize>(bytes: &[u8]) -> Result<[u8; N], KeyError> {
 }
 
 fn from_hex(hex: &str) -> Result<Vec<u8>, KeyError> {
-    if !hex.len().is_multiple_of(2) {
+    if !hex.is_ascii() || !hex.len().is_multiple_of(2) {
         return Err(KeyError::Malformed);
     }
     (0..hex.len())

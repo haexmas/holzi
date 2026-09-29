@@ -198,7 +198,7 @@ fn a_vault_from_before_spec_024_gets_its_derived_identity_and_first_device_list(
     }
 
     let db = open_vault(dir.path(), holzi_migration_source(), HOLZI_TRIGGER_VERSION);
-    holzi_lib::sync::genesis::run_after_open(&db, &installation_id_path(dir.path()));
+    holzi_lib::sync::genesis::run_after_open(&db, &installation_id_path(dir.path()), true);
 
     let derived = holzi_lib::sync::keys::derive_vault_identity(&placeholder);
     let expected = holzi_lib::sync::signing::xonly_public_key(&derived).expect("public key");

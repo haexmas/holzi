@@ -192,7 +192,7 @@ fn open_new_database(
     // empty vault.
     crate::storage::maintenance::run_after_open(&db);
     // Spec 024: vault identity, device keys, first device list and content key.
-    crate::sync::genesis::run_after_open(&db, installation_id_file);
+    crate::sync::genesis::run_after_open(&db, installation_id_file, true);
     Ok(Arc::new(db))
 }
 

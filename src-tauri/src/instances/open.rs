@@ -177,7 +177,7 @@ fn open_existing_database(
             // frontend sees the vault. Logs and carries on on failure.
             crate::storage::maintenance::run_after_open(&db);
             // Spec 024: vault identity, device keys, first device list and content key.
-            crate::sync::genesis::run_after_open(&db, installation_id_file);
+            crate::sync::genesis::run_after_open(&db, installation_id_file, false);
             Ok(Arc::new(db))
         }
         Err(e) if is_wrong_passphrase(&e) => Err(HolziError::WrongPassphrase),

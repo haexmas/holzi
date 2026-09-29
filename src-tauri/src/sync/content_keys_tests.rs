@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use haex_crdt::rusqlite;
 use uuid::Uuid;
 
 use super::*;
@@ -167,6 +168,41 @@ fn a_generation_for_an_unknown_list_is_rejected() {
         generations[0].verify(&BTreeMap::new()).err(),
         Some(KeyError::UnknownList)
     );
+}
+
+#[test]
+fn an_envelope_with_a_tampered_sender_is_ignored() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db = open_vault(dir.path());
+    let main = DeviceKeys::generate();
+    let linked = DeviceKeys::generate();
+    let list = signed_list(vec![
+        listed(&main, Role::Main, 1),
+        listed(&linked, Role::Linked, 2),
+    ]);
+    let key = ContentKey::generate(1);
+
+    db.write(|tx| issue_generation(tx, &key, &list, &main, 5))
+        .expect("issue");
+    db.write(|tx| {
+        tx.execute("DELETE FROM vault_content_keys_no_sync", [])?;
+        tx.execute(
+            "UPDATE vault_key_envelopes SET sender = ?1 WHERE key_id = ?2",
+            rusqlite::params![[0u8; 32].as_slice(), key.key_id.as_slice()],
+        )?;
+        Ok(())
+    })
+    .expect("tamper envelope");
+
+    let added = db
+        .write(|tx| unwrap_own_envelopes(tx, &linked, &valid(&list)))
+        .expect("a malformed envelope does not abort the write");
+    assert_eq!(added, 0);
+}
+
+#[test]
+fn from_hex_rejects_non_ascii_input() {
+    assert_eq!(from_hex("éé"), Err(KeyError::Malformed));
 }
 
 #[test]
