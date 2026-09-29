@@ -39,8 +39,7 @@ scenario('lock-while-streaming', {}, async (ctx) => {
     'an alert was already showing just before the press',
   )
 
-  const pressedAt = Date.now()
-  await instance.press('lock-instance-header')
+  const pressedAt = await instance.press('lock-instance-header')
 
   const samples = await instance.sampleUntilEnd<boolean>(ALERT_SCRIPT, 50)
   assert.ok(

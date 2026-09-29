@@ -90,6 +90,7 @@ async function clickDisplayed(
   client: WebDriverClient,
   hook: string,
   deadlineMs = 5000,
+  onClickSent?: () => void,
 ): Promise<string> {
   const end = Date.now() + deadlineMs
   for (;;) {
@@ -99,6 +100,7 @@ async function clickDisplayed(
       Math.max(0, end - Date.now()),
     )
     try {
+      onClickSent?.()
       await client.click(element)
       return element
     } catch (error) {
@@ -165,6 +167,11 @@ export interface PressOptions {
  * be displayed; unlike `click`, this does not poll for it, so a scenario relying on it being on screen
  * right now gets a clear failure instead of a silent wait.
  *
+ * Resolves with the runner-clock time the first click request was sent: the moment of the press itself,
+ * for a deadline measured from it. The element lookups before it are WebDriver round trips that, under
+ * load (a reply streaming on a CI runner), took over a second - time a deadline taken before the call
+ * would wrongly charge to the application.
+ *
  * A click can find the application already ending: the session may disappear after the browser
  * dispatches the lock event but before WebDriver answers, or - seen for real, under load - only the
  * element it found may be stale because the DOM was torn down first. Either quietly stops the
@@ -174,16 +181,20 @@ export async function press(
   client: WebDriverClient,
   hook: string,
   options: PressOptions,
-): Promise<void> {
+): Promise<number> {
   const selector = toSelector(hook)
   let [element] = await displayedNow(client, selector)
   if (element === undefined) {
     throw new Error(`hook "${hook}" (selector ${selector}) is not displayed`)
   }
+  let pressedAt = Date.now()
   const times = options.times ?? 1
   for (let i = 0; i < times; i++) {
     try {
-      if (i === 0) element = await clickDisplayed(client, hook)
+      if (i === 0)
+        element = await clickDisplayed(client, hook, undefined, () => {
+          pressedAt = Date.now()
+        })
       else await client.click(element)
     } catch (error) {
       if (isGoneMidPress(error)) break
@@ -191,6 +202,7 @@ export async function press(
     }
   }
   options.step('press', hook)
+  return pressedAt
 }
 
 /**
@@ -255,7 +267,7 @@ export interface Page {
   waitForDisplayed(hook: string, deadlineMs?: number): Promise<void>
   type(hook: string, text: string, deadlineMs?: number): Promise<void>
   typeToFocused(text: string): Promise<void>
-  press(hook: string, options?: { times?: number }): Promise<void>
+  press(hook: string, options?: { times?: number }): Promise<number>
   closeWindow(): Promise<void>
   navigate(url: string): Promise<void>
   exec<T = unknown>(script: string, args?: unknown[]): Promise<T>
