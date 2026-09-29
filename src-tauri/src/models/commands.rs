@@ -558,9 +558,9 @@ pub async fn import_model_from_file(
 /// `resolve_default_model` so one broken slug cannot make the entire
 /// installed-model list unavailable.
 ///
-/// Opportunistically back-fills `models.tokenizer_repo` and
-/// `models.source_kind` for pre-0009/pre-0015 catalog rows in the same
-/// call (both idempotent).
+/// Lists installed models and joins their on-disk files with the vault
+/// catalog. Metadata backfills run during vault-open maintenance, so this
+/// read command does not commit or wake the sync service.
 #[tauri::command]
 pub async fn list_installed_models(
     app: AppHandle,
@@ -597,23 +597,10 @@ pub async fn list_installed_models(
     })?;
 
     let payload = db
-        .write(move |tx| {
-            let catalog_repos: Vec<(&str, &str)> = catalog::entries()
-                .iter()
-                .map(|entry| (entry.id.as_str(), entry.tokenizer_repo.as_str()))
-                .collect();
-            models_store::backfill_tokenizer_repo(tx, &catalog_repos)?;
-
-            let local_provider_id = ensure_local_provider(tx)?;
-            let catalog_ids: Vec<&str> = catalog::entries().iter().map(|e| e.id.as_str()).collect();
-            models_store::backfill_source_kind(tx, local_provider_id, &catalog_ids)?;
-            // Models registered before capabilities existed have no provider
-            // refresh to fill them (spec 012).
-            models_store::backfill_local_capabilities(tx, local_provider_id)?;
-
+        .read(move |r| {
             let mut out = Vec::with_capacity(canonical_files.len());
             for (slug, cf) in canonical_files {
-                let Some(row) = models_store::get_model(tx, &slug)? else {
+                let Some(row) = models_store::get_model(r, &slug)? else {
                     continue;
                 };
                 out.push(InstalledModelPayload {

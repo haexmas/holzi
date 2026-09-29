@@ -342,7 +342,7 @@ pub fn replace_provider_models(
 /// written by `replace_provider_models` keep `tokenizer_repo` NULL
 /// forever (API providers tokenize server-side), so scanning for NULLs
 /// would re-read every remote model on every call. Bounded by the
-/// catalog size, which is what makes this safe on a hot path.
+/// catalog size, which is what makes this safe during open-time maintenance.
 pub fn backfill_tokenizer_repo(
     tx: &mut CrdtTransaction<'_>,
     catalog: &[(&str, &str)],
@@ -361,8 +361,8 @@ pub fn backfill_tokenizer_repo(
 /// `source_kind = 'provider'` into `catalog` or `imported`. A SQL-only
 /// migration cannot see the compiled catalog id list, so this mirrors the
 /// existing [`backfill_tokenizer_repo`] idiom: driven by the (small,
-/// compile-time) catalog rather than a full-table scan, called
-/// opportunistically from `list_installed_models`. Idempotent — every
+/// compile-time) catalog rather than a full-table scan, called from
+/// open-time maintenance. Idempotent — every
 /// `WHERE` clause re-selects only rows still at the migration default.
 ///
 /// Rows under an `api_key` provider are never touched: the `provider_id =
@@ -412,9 +412,8 @@ pub fn backfill_source_kind(
 /// local provider's own rows, so `api_key`/`cli_delegate` rows — whose
 /// `NULL` honestly means "not refreshed yet" — are never touched.
 ///
-/// ponytail: runs on every installed-model listing. Ceiling: one scan of
-/// the (small) set of local rows per call. Upgrade path: a one-time
-/// post-migration hook.
+/// Runs during open-time maintenance, so the installed-model listing remains
+/// a read-only hot path.
 pub fn backfill_local_capabilities(
     tx: &mut CrdtTransaction<'_>,
     local_provider_id: Uuid,

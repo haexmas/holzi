@@ -22,7 +22,9 @@ use crate::identity::{
     holzi_migration_source, installation_id_path, read_or_mint_installation_uuid, HolziBootstrap,
     HOLZI_TRIGGER_VERSION,
 };
+use crate::providers::local::ensure_local_provider;
 use crate::storage::known_devices;
+use crate::storage::models::{self, IntegrityStatus, ModelRow, SourceKind};
 use crate::storage::query;
 
 fn open_test_vault(passphrase: &str) -> (tempfile::TempDir, Database, Uuid) {
@@ -101,6 +103,52 @@ fn run_after_open_deletes_the_legacy_active_workspace_preference_everywhere() {
     })
     .expect("read kept");
     assert_eq!(kept.as_deref(), Some("true"));
+}
+
+#[test]
+fn run_after_open_backfills_model_metadata() {
+    let (_dir, db, _device) = open_test_vault("maintenance-model-backfills");
+    let entry = crate::catalog::entries()
+        .first()
+        .expect("the built-in catalog is not empty");
+    let local_provider_id = db
+        .write(|tx| {
+            let provider_id = ensure_local_provider(tx)?;
+            models::upsert_model(
+                tx,
+                &ModelRow {
+                    id: entry.id.clone(),
+                    provider_id,
+                    name: entry.name.clone(),
+                    context_window: Some(entry.context_window as i64),
+                    fetched_at: None,
+                    tokenizer_repo: None,
+                    hf_repo: None,
+                    hf_filename: None,
+                    hf_revision: None,
+                    hf_revision_ref: None,
+                    file_sha256: None,
+                    integrity_status: IntegrityStatus::Unknown,
+                    source_kind: SourceKind::Provider,
+                    capabilities: None,
+                },
+            )?;
+            Ok(provider_id)
+        })
+        .expect("seed model metadata");
+
+    run_after_open(&db);
+
+    let model = query::read(&db, |r| models::get_model(r, &entry.id))
+        .expect("read backfilled model")
+        .expect("seeded model");
+    assert_eq!(model.provider_id, local_provider_id);
+    assert_eq!(
+        model.tokenizer_repo.as_deref(),
+        Some(entry.tokenizer_repo.as_str())
+    );
+    assert_eq!(model.source_kind, SourceKind::Catalog);
+    assert!(model.capabilities.is_some());
 }
 
 #[test]

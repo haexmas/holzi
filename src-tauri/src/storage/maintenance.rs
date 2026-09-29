@@ -21,8 +21,13 @@
 //!    `haex_deleted_rows` (spec 024, research R20), so the delete log stays
 //!    bounded. A device that has not synced for longer catches up with a
 //!    full resync instead.
+//! 6. Backfill model metadata introduced by later migrations: tokenizer
+//!    repositories, source kinds and local capabilities. The catalog is
+//!    compiled into the application, so this is the first point at which
+//!    those rows can be repaired without putting a write on a listing hot
+//!    path.
 //!
-//! Steps 2, 4 and 5 go through haex-crdt's write path. Steps 1 and 3 need
+//! Steps 2, 4, 5 and 6 go through haex-crdt's write path. Steps 1 and 3 need
 //! the raw connection: a PRAGMA and a `VACUUM` cannot run inside a CRDT
 //! transaction.
 //!
@@ -32,6 +37,10 @@
 use haex_crdt::rusqlite::{params, Connection};
 use haex_crdt::{CrdtTransaction, Database, RetentionPolicy};
 use uuid::Uuid;
+
+use crate::catalog;
+use crate::providers::local::ensure_local_provider;
+use crate::storage::models as models_store;
 
 use super::preferences::{self, PrefScope};
 
@@ -121,6 +130,21 @@ pub fn run_after_open(db: &Database) {
     let device = db.device_id();
     if let Err(e) = db.write(|tx| fold_scoped_preferences(tx, device)) {
         log::warn!("maintenance: could not fold preferences into their scope: {e}");
+    }
+    if let Err(e) = db.write(|tx| {
+        let catalog_repos: Vec<(&str, &str)> = catalog::entries()
+            .iter()
+            .map(|entry| (entry.id.as_str(), entry.tokenizer_repo.as_str()))
+            .collect();
+        models_store::backfill_tokenizer_repo(tx, &catalog_repos)?;
+
+        let local_provider_id = ensure_local_provider(tx)?;
+        let catalog_ids: Vec<&str> = catalog::entries().iter().map(|e| e.id.as_str()).collect();
+        models_store::backfill_source_kind(tx, local_provider_id, &catalog_ids)?;
+        models_store::backfill_local_capabilities(tx, local_provider_id)?;
+        Ok(())
+    }) {
+        log::warn!("maintenance: could not backfill model metadata: {e}");
     }
     if let Err(e) = prune_delete_markers(db) {
         log::warn!("maintenance: could not prune old delete markers: {e}");
