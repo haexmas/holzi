@@ -22,6 +22,8 @@
   Backend) folgt — Spec 016 ist bereits an `016-e2e-testing` vergeben. Diese
   Spec bereitet nur das Fenster- und Tab-Modell darauf vor; sie erlaubt
   weiterhin genau **einen** Chat (ein Tab in einem Fenster).
+  _Seit Spec 030 gilt das nicht mehr: Chat ist eine Mehrfachinstanz-App,
+  siehe FR-017 und [`030-app-multi-instance`](../030-app-multi-instance/spec.md)._
 - Die Specs 017/018 (Haextension-Host und MCP-Anbindung) folgen. Extensions als
   Fensterinhalt sind nicht Teil dieser Spec.
 - Setzt voraus, dass zu jedem Zeitpunkt genau eine Vault-Session aktiv ist
@@ -483,6 +485,11 @@ den ausgelieferten Apps öffnet ein zweiter Aufruf keine zweite Instanz.
   „+“, alte Adresse) den vorhandenen Tab aktivieren, dessen Fenster
   wiederherstellen und fokussieren und dessen Arbeitsbereich aktivieren, statt
   eine zweite Instanz zu erzeugen.
+
+> **Seit Spec 030** ist Chat eine Mehrfachinstanz-App; FR-017 galt nur zum
+> Zeitpunkt dieser Spec. Einstellungen bleibt unverändert Einzelinstanz-App.
+> Siehe [`030-app-multi-instance`](../030-app-multi-instance/spec.md).
+
 - **FR-017**: Chat, Einstellungen und Föderation MÜSSEN in dieser Spec
   Einzelinstanz-Apps sein. Identität und Persistenz MÜSSEN je Fenster und je
   Tab statt je App geführt werden, sodass mehrere Instanzen derselben App (als

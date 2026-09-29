@@ -10,6 +10,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import type { AppDefinition } from '../src/lib/wm/apps.ts'
+import { WM_APPS } from '../src/lib/wm/apps.ts'
 import type { PersistedLayout } from '../src/lib/wm/types.ts'
 import {
   closeWindow,
@@ -394,4 +395,89 @@ test('hydrate restores multiple windows sharing the same multi-instance appId wi
     state.windows.map((w) => w.tabs.map((t) => t.appId)),
     [[MULTI_APP.id], [MULTI_APP.id]],
   )
+})
+
+// ---------------------------------------------------------------------------
+// The shipped registry (spec 030-app-multi-instance): system.chat is now
+// multiInstance, system.settings stays a singleton — same behavior the
+// synthetic MULTI_APP above already proved, checked here against WM_APPS
+// itself so a future accidental flip is caught.
+// ---------------------------------------------------------------------------
+
+function freshShippedState() {
+  return hydrate(
+    { workspaces: [], windows: [], activeWorkspaceId: '' },
+    WM_APPS,
+    AREA,
+  )
+}
+
+test('openApp opens a new window every time for the shipped system.chat app', () => {
+  const state = freshShippedState()
+  openApp(state, 'system.chat', WM_APPS)
+  openApp(state, 'system.chat', WM_APPS)
+  assert.equal(state.windows.length, 2)
+  assert.notEqual(state.windows[0]?.id, state.windows[1]?.id)
+})
+
+test('addTab appends a second system.chat tab in the same window instead of activating a singleton elsewhere', () => {
+  const state = freshShippedState()
+  openApp(state, 'system.chat', WM_APPS)
+  const windowId = state.windows[0]?.id
+  assert.ok(windowId)
+  addTab(state, windowId, 'system.chat', WM_APPS)
+  assert.equal(state.windows.length, 1, 'still one window, not a second one')
+  const window = state.windows.find((w) => w.id === windowId)
+  assert.equal(window?.tabs.length, 2)
+  assert.notEqual(window?.tabs[0]?.id, window?.tabs[1]?.id)
+})
+
+test('hydrate restores two windows sharing system.chat without collapsing them', () => {
+  const layout: PersistedLayout = {
+    workspaces: [{ id: 'ws-1', position: 0 }],
+    windows: [
+      {
+        id: 'w1',
+        workspaceId: 'ws-1',
+        x: 0,
+        y: 0,
+        width: 400,
+        height: 300,
+        minimized: false,
+        maximized: false,
+        stack: 0,
+        tabs: [{ id: 't1', appId: 'system.chat' }],
+        activeTabId: 't1',
+      },
+      {
+        id: 'w2',
+        workspaceId: 'ws-1',
+        x: 50,
+        y: 50,
+        width: 400,
+        height: 300,
+        minimized: false,
+        maximized: false,
+        stack: 1,
+        tabs: [{ id: 't2', appId: 'system.chat' }],
+        activeTabId: 't2',
+      },
+    ],
+    activeWorkspaceId: 'ws-1',
+  }
+  const state = hydrate(layout, WM_APPS, AREA)
+  assert.equal(state.windows.length, 2)
+  assert.deepEqual(
+    state.windows.map((w) => w.tabs.map((t) => t.appId)),
+    [['system.chat'], ['system.chat']],
+  )
+})
+
+test('system.settings still activates its existing tab instead of opening a second one (no regression)', () => {
+  const state = freshShippedState()
+  openApp(state, 'system.settings', WM_APPS)
+  assert.equal(state.windows.length, 1)
+  openApp(state, 'system.settings', WM_APPS)
+  assert.equal(state.windows.length, 1, 'a second window was opened')
+  assert.equal(state.windows[0]?.tabs.length, 1)
 })

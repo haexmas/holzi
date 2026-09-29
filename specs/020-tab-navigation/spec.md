@@ -638,6 +638,12 @@ Spec noch keinen Zugang)
   Aufrufers.
 - **Mittelklick oder Strg+Klick zum Öffnen in neuem Tab** ist nicht Teil dieser
   Spec, weil alle ausgelieferten Apps Einzelinstanz-Apps sind.
+  _Seit Spec 030 gilt das nicht mehr uneingeschränkt: Chat ist eine
+  Mehrfachinstanz-App und öffnet über „+“ ohnehin immer eine neue Instanz,
+  siehe [`030-app-multi-instance`](../030-app-multi-instance/spec.md). Die
+  Frage nach Mittelklick/Strg+Klick für eine gezielt zweite Instanz einer
+  Einzelinstanz-App bleibt unbeantwortet und ist weiterhin nicht Teil dieser
+  Spec._
 - **Vorgaben aus dem Projekt** (Randbedingungen an die Planung):
   - Referenz zum Verhalten, nicht zum Übernehmen: `haex-space/haex-vault` @
     `8dce379d94e18fcd42c3b73686a06f984ca3f574`, `src/stores/navigation.ts` und
