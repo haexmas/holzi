@@ -380,6 +380,8 @@ pub fn sealed_name_key_id(sealed: &[u8]) -> Option<[u8; 16]> {
     sealed.get(..16)?.try_into().ok()
 }
 
+/// Derives the device-name encryption key with HKDF-SHA256 and initializes
+/// an XChaCha20-Poly1305 cipher.
 fn name_cipher(key: &ContentKey) -> XChaCha20Poly1305 {
     let hkdf = Hkdf::<Sha256>::new(None, key.key.as_slice());
     let mut derived = Zeroizing::new([0u8; 32]);
@@ -388,12 +390,16 @@ fn name_cipher(key: &ContentKey) -> XChaCha20Poly1305 {
     XChaCha20Poly1305::new_from_slice(derived.as_slice()).expect("a 32-byte key")
 }
 
+/// Encodes the name's authenticated data as the big-endian key generation
+/// followed by the device public key.
 fn name_aad(generation: u64, device_pubkey: &[u8; 32]) -> Vec<u8> {
     let mut aad = generation.to_be_bytes().to_vec();
     aad.extend_from_slice(device_pubkey);
     aad
 }
 
+/// Serializes the vault content key and its metadata into a JSON payload and
+/// encrypts it for `recipient` with NIP-44 v2 using the sender's device secret.
 fn wrap(key: &ContentKey, sender: &DeviceKeys, recipient: &[u8; 32]) -> haex_crdt::Result<String> {
     let content = serde_json::to_string(&EnvelopeContent {
         scope: SCOPE_VAULT.to_string(),
@@ -410,6 +416,9 @@ fn wrap(key: &ContentKey, sender: &DeviceKeys, recipient: &[u8; 32]) -> haex_crd
         .map_err(|e| KeyError::Envelope(e.to_string()).into())
 }
 
+/// Decrypts an envelope with this device's secret and decodes its content key,
+/// checking the vault scope and that the payload's key id matches the key.
+/// The caller must verify authorization and match the key to the stored row.
 fn unwrap(envelope: &StoredEnvelope, own: &DeviceKeys) -> haex_crdt::Result<ContentKey> {
     let secret = nostr_secret(&own.device_secret)?;
     let sender = nostr::key::PublicKey::from_slice(&envelope.sender)
@@ -433,6 +442,8 @@ fn unwrap(envelope: &StoredEnvelope, own: &DeviceKeys) -> haex_crdt::Result<Cont
     })
 }
 
+/// Stores an unwrapped key in device-local storage, leaving an existing row
+/// with the same key id unchanged.
 fn store_own_key(tx: &mut CrdtTransaction<'_>, key: &ContentKey) -> haex_crdt::Result<()> {
     tx.execute(
         "INSERT OR IGNORE INTO vault_content_keys_no_sync (key_id, generation, key) \
