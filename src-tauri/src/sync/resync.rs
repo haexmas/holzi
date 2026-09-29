@@ -133,6 +133,19 @@ pub fn prune_absent(
     Ok(touched)
 }
 
+/// Prunes a completed snapshot before exposing the progress it covered.
+/// Keeping both operations in one blocking task means cancellation cannot
+/// leave the snapshot progress advanced while its prune is still pending.
+pub fn prune_absent_and_advance(
+    replica: &Replica,
+    kept: &HashSet<RowKey>,
+    served: &Vector,
+) -> haex_crdt::Result<Vec<String>> {
+    let touched = prune_absent(replica, kept, served)?;
+    replica.db().write(|tx| progress::advance(tx, served))?;
+    Ok(touched)
+}
+
 /// Deletes the row `row_pks` (a JSON object of primary key columns) of
 /// `table`.
 fn delete_row(

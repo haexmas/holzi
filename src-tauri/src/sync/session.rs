@@ -238,9 +238,10 @@ async fn pull_pages(
     }
     if let Some((kept, served)) = inbox.into_snapshot() {
         let replica = Arc::clone(&ctx.replica);
-        let pruned =
-            tokio::task::spawn_blocking(move || resync::prune_absent(&replica, &kept, &served))
-                .await??;
+        let pruned = tokio::task::spawn_blocking(move || {
+            resync::prune_absent_and_advance(&replica, &kept, &served)
+        })
+        .await??;
         tables.extend(pruned);
         ctx.bump.send_modify(|n| *n = n.wrapping_add(1));
     }

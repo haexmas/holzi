@@ -63,7 +63,7 @@ fn replace_from(from: &Device, into: &Device) -> Vec<String> {
         inbox.receive(&into.replica, page).expect("receive page");
     }
     let (kept, served) = inbox.into_snapshot().expect("a finished snapshot");
-    prune_absent(&into.replica, &kept, &served).expect("prune")
+    prune_absent_and_advance(&into.replica, &kept, &served).expect("prune")
 }
 
 fn purge_delete_markers(device: &Device) {
@@ -145,6 +145,42 @@ fn a_snapshot_removes_rows_deleted_while_their_markers_were_pruned() {
 
     assert_eq!(threads(&b), ["t1"]);
     assert_eq!(touched, ["chat_threads"]);
+}
+
+#[test]
+fn a_snapshot_does_not_advance_progress_until_pruning_finishes() {
+    let (a, b) = (Device::new(), Device::new());
+    write_thread(&a, "t1");
+    let origin = a.db().device_id();
+    let served = a.replica.progress().expect("sender progress");
+    let mut inbox = Inbox::for_snapshot();
+    inbox
+        .receive(
+            &b.replica,
+            crate::sync::change::Page {
+                changes: Vec::new(),
+                group_continues: false,
+                more: false,
+                served: served.clone(),
+            },
+        )
+        .expect("receive final page");
+
+    assert!(
+        progress::has_more(&served, &b.replica.progress().expect("receiver progress")),
+        "the final snapshot page must not publish served progress before pruning"
+    );
+    let (kept, served) = inbox.into_snapshot().expect("a finished snapshot");
+    prune_absent_and_advance(&b.replica, &kept, &served).expect("prune");
+    assert!(!progress::has_more(
+        &a.replica.progress().expect("sender progress"),
+        &b.replica.progress().expect("receiver progress")
+    ));
+    assert!(b
+        .replica
+        .progress()
+        .expect("receiver progress")
+        .contains_key(&origin));
 }
 
 #[test]

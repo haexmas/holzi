@@ -353,10 +353,10 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
 /// device that proved its key, or, when the peer refused this device for
 /// its version or as a duplicate, the device the list gives that endpoint.
 async fn note_failure(inner: &Arc<Inner>, error: &handshake::HandshakeError, remote: [u8; 32]) {
-    use handshake::HandshakeError::{Halted, Refused, RefusedByPeer};
+    use handshake::HandshakeError::{Halted, RefusedByPeer};
     let (device, problem) = match error {
         Halted { problem, device } => (Some(*device), *problem),
-        Refused(RejectCode::Incompatible) | RefusedByPeer(RejectCode::Incompatible) => {
+        RefusedByPeer(RejectCode::Incompatible) => {
             (device_at(inner, remote).await, Problem::IncompatibleVersion)
         }
         RefusedByPeer(RejectCode::Duplicate) => {

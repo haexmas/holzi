@@ -197,10 +197,11 @@ impl Inbox {
         }
         if !page.more {
             if let Some(snapshot) = &mut self.snapshot {
-                snapshot.served = page.served.clone();
-            }
-            for (origin, hlc) in page.served {
-                progress::raise(&mut updates, origin, hlc);
+                snapshot.served = page.served;
+            } else {
+                for (origin, hlc) in page.served {
+                    progress::raise(&mut updates, origin, hlc);
+                }
             }
             self.finished = true;
         }
