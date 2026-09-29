@@ -13,4 +13,4 @@ pub mod signing;
 pub use service::SyncService;
 
 #[cfg(test)]
-mod test_support;
+pub(crate) mod test_support;

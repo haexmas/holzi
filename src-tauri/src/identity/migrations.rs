@@ -62,7 +62,10 @@ use haex_crdt::{MigrationName, StaticMigrationSource};
 /// - 11: `0019_shell_layout` introduced three new CRDT-tracked tables.
 /// - 12: `0021_own_device_sync` rebuilt `vault_identity` and introduced four
 ///   new CRDT-tracked tables.
-pub const HOLZI_TRIGGER_VERSION: i32 = 12;
+/// - 13: no migration; haex-crdt's triggers changed (haexmas/haex-crdt#37,
+///   #38): BLOB values and keys keep their type, and the update trigger
+///   stamps rows written before the HLC existed.
+pub const HOLZI_TRIGGER_VERSION: i32 = 13;
 
 /// Returns the frozen holzi migration set at the pinned haex-crdt revision.
 pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {

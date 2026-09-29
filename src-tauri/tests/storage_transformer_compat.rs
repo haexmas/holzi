@@ -228,18 +228,16 @@ fn preference_insert_update_and_delete() {
 fn device_alias_update() {
     let v = open_vault();
     let installation = v.installation_uuid;
+    // The bootstrap inserts this row before the HLC exists; `Database::open` stamps it
+    // (haexmas/haex-crdt#38), so the update records per-column HLCs like any other write.
     v.db.write(|tx| known_devices::update_alias(tx, installation, "Laptop"))
         .expect("update alias");
-    let (_hlc, column_hlcs) = crdt_meta(
+    assert_synced(
         &v.db,
         "known_devices",
         "installation_uuid = ?1",
         params![installation.to_string()],
     );
-    // The bootstrap inserts this row before the HLC exists, so its column-HLC map starts NULL
-    // and the update trigger's `json_set(NULL, …)` keeps it NULL — as on the old write path.
-    // The bootstrap rework of spec 024 (T026) has to give bootstrap rows a real HLC.
-    assert_eq!(column_hlcs, None);
 }
 
 #[test]

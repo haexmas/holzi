@@ -1,8 +1,10 @@
 # Contract: Erweiterung von haex-crdt für mehrteilige CRDT-Schreibungen
 
 Repository `https://github.com/haexmas/haex-crdt`. Umgesetzt in haexmas/haex-crdt#34 (Transaktionen),
-#35 (typisierte Fehler) und #36 (Entfernen der `DbConnection`-Schicht); holzi pinnt den Merge von
-#36, `b8194662ac8f55f4c2b01453606e83bdb3f783d2` (Constitution IV). Die Änderung ist allgemein und
+#35 (typisierte Fehler) und #36 (Entfernen der `DbConnection`-Schicht). Dazu kommen #37 (BLOB-Werte
+und BLOB-Schlüssel reisen typtreu) und #38 (Zeilen aus der Zeit vor dem HLC werden beim Öffnen
+gestempelt); holzi pinnt den Merge von #38, `d35d43f9250a7d9a7d2dca3a0c8ee7ffabc750a7`
+(Constitution IV). Die Änderung ist allgemein und
 enthält nichts holzi-Eigenes. Rückwärtsverträglichkeit war nicht verlangt: holzi löst haex-vault
 ab (Betreiber-Entscheidung). Begründung: research R19.
 
