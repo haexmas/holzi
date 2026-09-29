@@ -16,7 +16,7 @@ export type AppDefinition = {
   defaultSize: Size
   minSize: Size
   /** `false` = singleton: re-opening activates the existing tab instead of creating a second one
-   * (FR-016). All shipped apps are singletons (015 FR-017). */
+   * (FR-016). Settings is a singleton; Chat is multi-instance (030 FR-001, amending 015 FR-017). */
   multiInstance: boolean
   /** What the tab shows as its title: the current location's title (default, e.g. the chat's
    * conversation) or always the app's own title (the settings, spec 023 research R2). The history
@@ -31,7 +31,7 @@ export const WM_APPS: readonly AppDefinition[] = [
     icon: 'lucide:message-square',
     defaultSize: { width: 960, height: 640 },
     minSize: { width: 420, height: 360 },
-    multiInstance: false,
+    multiInstance: true,
   },
   {
     id: 'system.settings',

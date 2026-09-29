@@ -49,7 +49,7 @@ llm-metal = ["llm-cpu", "mistralrs/metal"]
 voice = ["dep:cpal"]
 
 [dependencies]
-tauri = { version = "2.6.2", features = [] }
+tauri = { version = "2.12.0", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2.5.4"
@@ -200,7 +200,7 @@ libc = "0.2"
 
 [dev-dependencies]
 # Mock runtime for IPC-level tests of the vault gateway (spec 013).
-tauri = { version = "2.6.2", features = ["test"] }
+tauri = { version = "2.12.0", features = ["test"] }
 # Additive to the `[dependencies]` nostr-sdk entry: an in-process relay for
 # presence/link tests (spec 024), no real server needed.
 nostr-sdk = { version = "0.45", features = ["local-relay"] }

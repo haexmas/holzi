@@ -209,7 +209,11 @@
       "settingsPopover": {
         "title": "Chat-Einstellungen",
         "modelLabel": "Modell",
-        "effortLabel": "Aufwand"
+        "effortLabel": "Aufwand",
+        "modelSearch": {
+          "placeholder": "Modell suchen …",
+          "noResults": "Kein Modell gefunden"
+        }
       },
       "attachments": {
         "attachButton": "Dateien anhängen",

@@ -149,6 +149,33 @@ describe('press', () => {
     assert.deepEqual(steps, [['press', 'lock-instance']])
   })
 
+  it('resolves with the time the click was sent, after the element lookups before it', async () => {
+    driver.onFind(() => ['el-1'])
+    let lastLookupAt = 0
+    driver.onDisplayed(() => {
+      const until = Date.now() + 30 // a slow lookup, as under load on CI
+      while (Date.now() < until) {
+        // spin
+      }
+      lastLookupAt = Date.now()
+      return true
+    })
+    let clickedAt = 0
+    driver.onClick(() => {
+      clickedAt = Date.now()
+      return 'ok'
+    })
+    const pressedAt = await press(client, 'lock-instance', { step: () => {} })
+    assert.ok(
+      pressedAt >= lastLookupAt,
+      `pressedAt ${pressedAt} before lookup ${lastLookupAt}`,
+    )
+    assert.ok(
+      pressedAt <= clickedAt,
+      `pressedAt ${pressedAt} after click ${clickedAt}`,
+    )
+  })
+
   it('with times: 2 clicks the same element twice', async () => {
     driver.onFind(() => ['el-1'])
     driver.onDisplayed(() => true)

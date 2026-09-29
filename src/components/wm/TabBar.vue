@@ -5,8 +5,11 @@
  * with no tab frame (FR-031); two or more show a full ARIA tab-list with a
  * close button per tab — unless compact (FR-036), which always collapses
  * to the active tab's title regardless of count, dropping the tablist and
- * its scroll arrows entirely. The "+" sits immediately after the last tab
- * (FR-032) either way, wrapped in `wm/NewTabMenu.vue`'s dropdown.
+ * its scroll arrows entirely. With more than one tab, the collapsed title
+ * keeps its own close button so a tab can be closed without closing the
+ * whole window (only the window's close remains for a single tab, same as
+ * the non-collapsed FR-031 case). The "+" sits immediately after the last
+ * tab (FR-032) either way, wrapped in `wm/NewTabMenu.vue`'s dropdown.
  * Activating a tab scrolls it into view (FR-035). Like Firefox, tabs take up
  * to 14rem each and shrink evenly to 6rem before the strip scrolls.
  */
@@ -154,7 +157,7 @@ watch(
 
     <div
       v-if="collapsedTab"
-      class="flex min-w-0 items-center gap-1.5 px-1.5 py-1 text-sm font-medium"
+      class="flex min-w-0 flex-1 items-center gap-1.5 px-1.5 py-1 text-sm font-medium"
     >
       <Icon
         v-if="collapsedTab.info.icon"
@@ -162,12 +165,25 @@ watch(
         class="h-3.5 w-3.5 shrink-0"
         :aria-hidden="true"
       />
-      <span class="min-w-0 truncate">{{ titleFrom(collapsedTab.info) }}</span>
+      <span class="min-w-0 flex-1 truncate">{{
+        titleFrom(collapsedTab.info)
+      }}</span>
       <span
         v-if="collapsedTab.info.hasAttention"
         class="h-1.5 w-1.5 shrink-0 rounded-full bg-warning"
         :aria-label="t('wm.attention')"
       />
+      <button
+        v-if="tabs.length > 1"
+        type="button"
+        data-testid="tab-close"
+        class="shrink-0 rounded p-0.5 hover:bg-foreground/10"
+        :aria-label="t('wm.tabs.close')"
+        @pointerdown.stop
+        @click.stop="emit('closeTab', collapsedTab.tab.id)"
+      >
+        <Icon name="lucide:x" class="h-3.5 w-3.5" :aria-hidden="true" />
+      </button>
     </div>
 
     <div
@@ -235,6 +251,7 @@ watch(
     <WmNewTabMenu :window-id="windowId">
       <button
         type="button"
+        data-testid="wm-new-tab"
         class="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
         :aria-label="t('wm.tabs.newTab')"
         @pointerdown.stop

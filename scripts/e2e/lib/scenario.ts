@@ -10,7 +10,7 @@ import type { ColorScheme, Instance } from './instance.ts'
 import { toTools } from './preflight.ts'
 import type { Tools } from './preflight.ts'
 import { startProvider } from './provider.ts'
-import type { Behavior, Provider } from './provider.ts'
+import type { Behavior, Provider, StandInModel } from './provider.ts'
 import { captureFailure } from './artifacts.ts'
 
 export type CloseBehavior = 'exit' | 'relaunch'
@@ -113,7 +113,10 @@ export interface ScenarioContext {
     framebufferDir?: string
   }): Promise<Instance>
   /** Starts a stand-in model provider ([stand-in-provider.md](stand-in-provider.md)); ended with the context. */
-  provider(behavior?: Behavior): Promise<Provider>
+  provider(
+    behavior?: Behavior,
+    options?: { models?: StandInModel[] },
+  ): Promise<Provider>
   /** A passphrase and a provider key generated for this run; no credential is ever committed. */
   credentials(): { passphrase: string; providerKey: string }
 }
@@ -296,8 +299,8 @@ export async function runScenario(
         pendingStep = undefined
       }
     },
-    async provider(behavior) {
-      const started = await startProvider(behavior)
+    async provider(behavior, options) {
+      const started = await startProvider(behavior, options)
       providers.push(started)
       teardowns.push(() => started.close())
       return started
