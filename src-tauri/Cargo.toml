@@ -75,6 +75,22 @@ unicode-segmentation = "1.13"
 # argument types deserialize straight into the erasing wrapper.
 zeroize = { version = "1", features = ["serde"] }
 
+# Own-device sync (spec 024, research R1). `nostr` carries the secp256k1 keys,
+# BIP-340 signatures and NIP-44 envelopes; `secp256k1` is the same version
+# `nostr` uses and verifies Schnorr signatures over holzi's own payloads.
+# `iroh` owns the device's QUIC endpoint key. `hkdf` derives the vault identity
+# from the placeholder (R3) and the per-purpose keys, `chacha20poly1305`
+# seals device names in the device list, `postcard` encodes everything that
+# is signed (R10).
+nostr = { version = "0.45", features = ["nip44", "nip59", "os-rng"] }
+secp256k1 = "0.30"
+iroh = { version = "1.2", default-features = false, features = ["tls-ring"] }
+hkdf = "0.13"
+chacha20poly1305 = { version = "0.10", features = ["std"] }
+postcard = { version = "1", features = ["use-std"] }
+# Randomness for content keys and nonces. Already in the lock via other crates.
+getrandom = "0.3"
+
 # haex-crdt 0.4.0, originally pinned per plans/001-desktop-mvp.md at commit
 # 1c069ef; no tagged releases past v0.1.0 exist yet, so holzi pins main by
 # full SHA. Bumped (spec 013, T084) for an erasing `SqlCipherKey`

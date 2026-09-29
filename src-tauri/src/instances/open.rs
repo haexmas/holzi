@@ -139,6 +139,10 @@ pub async fn open_instance(
 ) -> Result<InstanceInfo> {
     let OpenInstanceArgs { name, passphrase } = args;
     let db_path = open_instance_core(&app, &state, &chat, &name, passphrase).await?;
+    // Spec 024: the sync service runs as tracked session work and ends with the close.
+    if let Err(e) = crate::sync::SyncService::start(state.gate()) {
+        log::warn!("sync: the sync service did not start: {e}");
+    }
 
     chat.bump_vault_generation();
     voice.invalidate_whisper_cache().await;
@@ -172,6 +176,8 @@ fn open_existing_database(
             // Spec 022: secure_delete, legacy cleanup and the one-time VACUUM, before the
             // frontend sees the vault. Logs and carries on on failure.
             crate::storage::maintenance::run_after_open(&db);
+            // Spec 024: vault identity, device keys, first device list and content key.
+            crate::sync::genesis::run_after_open(&db, installation_id_file);
             Ok(Arc::new(db))
         }
         Err(e) if is_wrong_passphrase(&e) => Err(HolziError::WrongPassphrase),

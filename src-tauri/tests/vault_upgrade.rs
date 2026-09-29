@@ -25,7 +25,9 @@ use haex_crdt::{
     StaticMigrationSource, DEFAULT_TRIGGER_VERSION,
 };
 
-use holzi_lib::identity::{holzi_migration_source, installation_id_path, HolziBootstrap};
+use holzi_lib::identity::{
+    holzi_migration_source, installation_id_path, HolziBootstrap, HOLZI_TRIGGER_VERSION,
+};
 use holzi_lib::instances::vault_config::vault_config;
 
 const PASSPHRASE: &str = "vault-upgrade-integration-test";
@@ -163,5 +165,66 @@ fn reopening_a_pre_0018_vault_tracks_capabilities_json() {
         "0018 added `capabilities_json` to the CRDT-tracked `models` table, but the \
          production open path left the trigger untracked — capability records will \
          not sync. Bump HOLZI_TRIGGER_VERSION.\n{sql}"
+    );
+}
+
+#[test]
+fn a_vault_from_before_spec_024_gets_its_derived_identity_and_first_device_list() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let placeholder = [21u8; 32];
+    {
+        let old = open_vault(
+            dir.path(),
+            source_without("0021_own_device_sync"),
+            DEFAULT_TRIGGER_VERSION,
+        );
+        old.with_connection(|conn| {
+            conn.execute(
+                "INSERT INTO vault_identity (id, pubkey, privkey) VALUES (1, ?1, ?2)",
+                haex_crdt::rusqlite::params![[3u8; 33].as_slice(), placeholder.as_slice()],
+            )?;
+            Ok(())
+        })
+        .expect("placeholder identity");
+        old.write(|tx| {
+            holzi_lib::storage::preferences::insert_or_update(
+                tx,
+                holzi_lib::storage::preferences::PrefScope::Vault,
+                "chat.permission_mode",
+                "auto",
+            )
+        })
+        .expect("old data");
+    }
+
+    let db = open_vault(dir.path(), holzi_migration_source(), HOLZI_TRIGGER_VERSION);
+    holzi_lib::sync::genesis::run_after_open(&db, &installation_id_path(dir.path()));
+
+    let derived = holzi_lib::sync::keys::derive_vault_identity(&placeholder);
+    let expected = holzi_lib::sync::signing::xonly_public_key(&derived).expect("public key");
+    let pubkey = holzi_lib::storage::query::read(&db, |r| holzi_lib::sync::keys::vault_pubkey(r))
+        .expect("read identity")
+        .expect("published identity");
+    assert_eq!(pubkey, expected);
+
+    let rows = holzi_lib::storage::query::read(&db, |r| holzi_lib::sync::device_list::load_all(r))
+        .expect("device lists");
+    let valid = holzi_lib::sync::device_list::valid_lists(&rows, &pubkey);
+    let effective = holzi_lib::sync::device_list::effective(&valid).expect("first list");
+    assert_eq!(effective.list.generation, 1);
+    assert_eq!(effective.list.devices[0].vault_device_uuid, db.device_id());
+
+    let kept = holzi_lib::storage::query::read(&db, |r| {
+        holzi_lib::storage::preferences::get(
+            r,
+            holzi_lib::storage::preferences::PrefScope::Vault,
+            "chat.permission_mode",
+        )
+    })
+    .expect("read preference");
+    assert_eq!(
+        kept.as_deref(),
+        Some("auto"),
+        "the old data survives the upgrade"
     );
 }

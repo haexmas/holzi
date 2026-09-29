@@ -6,6 +6,10 @@
 //! this transaction, so the inserted rows carry NULL row-level HLC and stay
 //! sync-invisible until a subsequent UPDATE fires the trigger (documented
 //! in the contract; verified in Etappe 0).
+//!
+//! The vault identity is no longer minted here: without an HLC its row
+//! could not sync. `sync::genesis::ensure_sync_state` publishes it after the
+//! open (spec 024).
 
 use std::path::PathBuf;
 
@@ -106,25 +110,7 @@ impl DatabaseBootstrap for HolziBootstrap {
             }
         };
 
-        // 4. Genesis: if `vault_identity` is empty, mint the singleton row.
-        //    Real secp256k1 keypair generation is deferred to the sync slice
-        //    when proof-of-possession auth between replicas is exercised.
-        //    Until then, placeholder random blobs occupy the columns — the
-        //    row exists, subsequent opens see it, and no schema change is
-        //    needed when real keys land.
-        let ident_count: i64 = tx
-            .query_row("SELECT COUNT(*) FROM vault_identity", [], |r| r.get(0))
-            .map_err(step("vault_identity count"))?;
-        if ident_count == 0 {
-            let (pubkey, privkey) = mint_placeholder_keypair();
-            tx.execute(
-                "INSERT INTO vault_identity (id, pubkey, privkey) VALUES (1, ?1, ?2)",
-                params![pubkey.as_slice(), privkey.as_slice()],
-            )
-            .map_err(step("vault_identity insert"))?;
-        }
-
-        // 5. Return the vault-device UUID; the crate uses it as HLC node id
+        // 4. Return the vault-device UUID; the crate uses it as HLC node id
         //    for this open.
         Ok(vault_device_uuid)
     }
@@ -135,28 +121,5 @@ fn step(step: &'static str) -> impl FnOnce(haex_crdt::rusqlite::Error) -> Databa
     move |source| DatabaseError::SqliteStep {
         step: step.to_string(),
         source,
-    }
-}
-
-/// Placeholder for a real secp256k1 keypair. Sized to the target shapes so
-/// swapping in `secp256k1` later needs no schema change: 33-byte compressed
-/// public key, 32-byte private key. Randomness source is `uuid::Uuid::new_v4`
-/// chunks — cryptographically inadequate for anything shipping, kept only
-/// so migrations land at the right column widths before real crypto arrives.
-fn mint_placeholder_keypair() -> ([u8; 33], [u8; 32]) {
-    let mut pubkey = [0u8; 33];
-    let mut privkey = [0u8; 32];
-    fill_random(&mut pubkey);
-    fill_random(&mut privkey);
-    (pubkey, privkey)
-}
-
-/// Fills a placeholder key buffer with fresh UUID bytes.
-fn fill_random(buf: &mut [u8]) {
-    for chunk in buf.chunks_mut(16) {
-        let bytes = *Uuid::new_v4().as_bytes();
-        for (i, b) in chunk.iter_mut().enumerate() {
-            *b = bytes[i];
-        }
     }
 }

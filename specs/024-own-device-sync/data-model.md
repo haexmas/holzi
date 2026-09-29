@@ -18,11 +18,14 @@ Schreibweg (contracts/haex-crdt-upstream.md). Alle Schreibungen laufen über `st
 | `id`     | INTEGER PK | immer `1`                                               |
 | `pubkey` | BLOB(32)   | x-only secp256k1, unveränderlich nach dem Anlegen (D26) |
 
-Die Spalte `privkey` entfällt. Die Migration leitet aus dem Platzhalter nach R3 die echte Identität
-ab und legt den privaten Schlüssel in `vault_identity_secret_no_sync`; sie ändert die synchronisierte
-Identitätszeile aber noch nicht. Erst nachdem die HLC-Strukturen und das eigene Gerät initialisiert
-sind, führt der Bootstrap eine eigene, wiederholbare Transaktion über `storage/vault_db.rs` aus,
-schreibt `pubkey` in die Zeile und erzeugt damit deren ersten HLC-Zeitstempel. Bricht dieser
+Die Spalte `privkey` entfällt. Die Migration legt den Platzhalter als Ausgangswert in
+`vault_identity_secret_no_sync` (SQL kann nicht ableiten); sie ändert die synchronisierte
+Identitätszeile nicht, die neu angelegte Tabelle bleibt leer. Erst nachdem die HLC-Strukturen und das eigene Gerät initialisiert
+sind, führt `sync::genesis::ensure_sync_state` eine eigene, wiederholbare Transaktion aus: Sie
+ersetzt den Ausgangswert durch die nach R3 abgeleitete Identität, schreibt `pubkey` in die Zeile
+und erzeugt damit deren ersten HLC-Zeitstempel. Eine neue Vault bekommt dabei einen frischen
+Ausgangswert. Liegt `pubkey` noch nicht vor, ist die Zeile in `vault_identity_secret_no_sync` also
+ein Ausgangswert, sonst der private Schlüssel. Bricht dieser
 Bootstrap ab, wird dieselbe Transaktion beim nächsten Öffnen anhand der unveränderlichen abgeleiteten
 Identität erneut ausgeführt; es entsteht kein zweiter Identitätsdatensatz.
 
@@ -48,7 +51,8 @@ mit (FR-044).
 | `endpoint_id`       | BLOB(32) | öffentlicher iroh-Schlüssel                |
 | `created_at`        | INTEGER  | ms seit Epoch                              |
 
-Beim Öffnen: gibt es keine Zeile zur eigenen Installation, entsteht eine neue mit neuen Schlüsseln.
+Nach dem Öffnen (`sync::genesis`): gibt es keine Zeile zur eigenen Installation, entsteht eine neue
+mit neuen Schlüsseln.
 Zeilen anderer Installationen bleiben unverändert und werden nie gelesen (Kopie, FR-006, R12).
 
 ### `device_lists` (neu, synchronisiert, nur Einfügen)
@@ -66,15 +70,15 @@ entfernt führt (FR-005).
 
 **Payload `DeviceList`**:
 
-| Feld             | Inhalt                                                                                                                                                                                              |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `vault`          | öffentlicher Schlüssel der Vault-Identität                                                                                                                                                          |
-| `generation`     | Generation                                                                                                                                                                                          |
-| `devices[]`      | `device_pubkey`, `endpoint_id`, `role` (`main` \| `linked`), `vault_device_uuid`, `name_sealed` (Name, verschlüsselt mit einem aus dem Inhaltsschlüssel abgeleiteten Schlüssel, FR-005), `added_at` |
-| `removed[]`      | `device_pubkey`, `vault_device_uuid`, `limit_hlc` (Grenze beim Entfernen: Fortschrittsstand des Ausstellers für dieses Gerät, FR-028), `removed_at`                                                 |
-| `issued_by`      | Geräteschlüssel des ausstellenden Hauptgeräts                                                                                                                                                       |
-| `issued_at`      | ms seit Epoch                                                                                                                                                                                       |
-| `base_list_hash` | Hash der kausal bekannten gültigen Vorgängerliste; bei der ersten lokalen Liste NULL                                                                                                                |
+| Feld             | Inhalt                                                                                                                                                                                                                                                                                                  |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vault`          | öffentlicher Schlüssel der Vault-Identität                                                                                                                                                                                                                                                              |
+| `generation`     | Generation                                                                                                                                                                                                                                                                                              |
+| `devices[]`      | `device_pubkey`, `endpoint_id`, `role` (`main` \| `linked`), `vault_device_uuid`, `name_sealed` (Name, verschlüsselt mit einem aus dem Inhaltsschlüssel abgeleiteten Schlüssel, FR-005; Format `key_id ‖ nonce(24) ‖ Chiffretext`, zusätzliche Daten `Schlüsselgeneration ‖ device_pubkey`), `added_at` |
+| `removed[]`      | `device_pubkey`, `vault_device_uuid`, `limit_hlc` (Grenze beim Entfernen: Fortschrittsstand des Ausstellers für dieses Gerät, FR-028), `removed_at`                                                                                                                                                     |
+| `issued_by`      | Geräteschlüssel des ausstellenden Hauptgeräts                                                                                                                                                                                                                                                           |
+| `issued_at`      | ms seit Epoch                                                                                                                                                                                                                                                                                           |
+| `base_list_hash` | Hash der kausal bekannten gültigen Vorgängerliste; bei der ersten lokalen Liste NULL                                                                                                                                                                                                                    |
 
 Prüfregeln: Signatur der Vault-Identität über den ganzen Datensatz; `base_list_hash` verweist, außer
 bei der ersten Liste, auf eine gültige Liste mit niedrigerer Generation; die Liste führt alle

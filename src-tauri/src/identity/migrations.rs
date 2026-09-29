@@ -60,7 +60,9 @@ use haex_crdt::{MigrationName, StaticMigrationSource};
 ///   `chat_messages`.
 /// - 10: `0018_models_add_capabilities` added a column to `models`.
 /// - 11: `0019_shell_layout` introduced three new CRDT-tracked tables.
-pub const HOLZI_TRIGGER_VERSION: i32 = 11;
+/// - 12: `0021_own_device_sync` rebuilt `vault_identity` and introduced four
+///   new CRDT-tracked tables.
+pub const HOLZI_TRIGGER_VERSION: i32 = 12;
 
 /// Returns the frozen holzi migration set at the pinned haex-crdt revision.
 pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
@@ -453,6 +455,113 @@ pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
          INSERT INTO holzi_maintenance_no_sync (task) \
          VALUES ('vacuum_after_legacy_wm_drop');"
             .to_string(),
+    );
+
+    // Own-device sync (spec 024, data-model.md, research R2/R3). The
+    // placeholder secret of `vault_identity` moves to the device-local
+    // `vault_identity_secret_no_sync` as the seed the real identity is derived
+    // from after open (`sync::keys::ensure_vault_identity`); it is copied,
+    // never regenerated. `vault_identity` is then rebuilt without `privkey`:
+    // its placeholder row never had an HLC and never synced, and `DROP TABLE`
+    // fires no triggers, so no delete marker reaches other devices (as in
+    // 0020). The rebuilt table stays empty until the identity is published
+    // with its first HLC. The other tables are new. Bumps
+    // HOLZI_TRIGGER_VERSION to 12: the rebuilt and the four new CRDT tables
+    // need their triggers on every existing vault.
+    m.insert(
+        MigrationName::from("0021_own_device_sync"),
+        "CREATE TABLE vault_identity_secret_no_sync (\
+            id INTEGER PRIMARY KEY CHECK (id = 1), \
+            privkey BLOB NOT NULL CHECK (length(privkey) = 32)\
+         );\n\
+         --> statement-breakpoint\n\
+         INSERT OR IGNORE INTO vault_identity_secret_no_sync (id, privkey) \
+         SELECT id, privkey FROM vault_identity WHERE id = 1 AND length(privkey) = 32;\n\
+         --> statement-breakpoint\n\
+         DROP TABLE vault_identity;\n\
+         --> statement-breakpoint\n\
+         CREATE TABLE vault_identity (\
+            id INTEGER PRIMARY KEY CHECK (id = 1), \
+            pubkey BLOB NOT NULL\
+         );\n\
+         --> statement-breakpoint\n\
+         CREATE TABLE device_keys_no_sync (\
+            installation_uuid TEXT PRIMARY KEY NOT NULL, \
+            device_secret BLOB NOT NULL CHECK (length(device_secret) = 32), \
+            device_pubkey BLOB NOT NULL CHECK (length(device_pubkey) = 32), \
+            endpoint_secret BLOB NOT NULL CHECK (length(endpoint_secret) = 32), \
+            endpoint_id BLOB NOT NULL CHECK (length(endpoint_id) = 32), \
+            created_at INTEGER NOT NULL\
+         );\n\
+         --> statement-breakpoint\n\
+         CREATE TABLE device_lists (\
+            list_hash BLOB PRIMARY KEY NOT NULL, \
+            generation INTEGER NOT NULL, \
+            payload BLOB NOT NULL, \
+            signature BLOB NOT NULL\
+         );\n\
+         --> statement-breakpoint\n\
+         CREATE TABLE vault_key_generations (\
+            key_id BLOB PRIMARY KEY NOT NULL, \
+            scope TEXT NOT NULL, \
+            generation INTEGER NOT NULL, \
+            created_by BLOB NOT NULL, \
+            created_at INTEGER NOT NULL, \
+            device_list_hash BLOB NOT NULL, \
+            authorization BLOB NOT NULL\
+         );\n\
+         --> statement-breakpoint\n\
+         CREATE TABLE vault_key_envelopes (\
+            key_id BLOB NOT NULL, \
+            recipient BLOB NOT NULL, \
+            sender BLOB NOT NULL, \
+            envelope TEXT NOT NULL, \
+            device_list_hash BLOB NOT NULL, \
+            authorization BLOB NOT NULL, \
+            PRIMARY KEY (key_id, recipient)\
+         );\n\
+         --> statement-breakpoint\n\
+         CREATE TABLE vault_content_keys_no_sync (\
+            key_id BLOB PRIMARY KEY NOT NULL, \
+            generation INTEGER NOT NULL, \
+            key BLOB NOT NULL CHECK (length(key) = 32)\
+         );\n\
+         --> statement-breakpoint\n\
+         CREATE TABLE sync_progress_no_sync (\
+            origin TEXT PRIMARY KEY NOT NULL, \
+            max_hlc TEXT NOT NULL\
+         );\n\
+         --> statement-breakpoint\n\
+         CREATE TABLE pending_links_no_sync (\
+            link_id BLOB PRIMARY KEY NOT NULL, \
+            peer_device_pubkey BLOB NOT NULL, \
+            new_list_hash BLOB NOT NULL, \
+            new_list_payload BLOB NOT NULL, \
+            new_list_signature BLOB NOT NULL, \
+            role TEXT NOT NULL CHECK (role IN ('main', 'linked')), \
+            resume_secret BLOB NOT NULL, \
+            state TEXT NOT NULL \
+              CHECK (state IN ('transferring', 'awaiting_publication', 'completed')), \
+            created_at INTEGER NOT NULL\
+         );\n\
+         --> statement-breakpoint\n\
+         CREATE TABLE admission_requests (\
+            device_pubkey BLOB PRIMARY KEY NOT NULL, \
+            vault_device_uuid TEXT NOT NULL, \
+            endpoint_id BLOB NOT NULL, \
+            name TEXT NOT NULL, \
+            requested_at INTEGER NOT NULL, \
+            signature BLOB NOT NULL, \
+            state TEXT NOT NULL\
+         );\n\
+         --> statement-breakpoint\n\
+         CREATE TABLE device_presence_no_sync (\
+            device_pubkey BLOB PRIMARY KEY NOT NULL, \
+            last_seen INTEGER NOT NULL, \
+            endpoint_addr BLOB, \
+            problem TEXT CHECK (problem IN ('incompatible_version', 'duplicate'))\
+         );"
+        .to_string(),
     );
 
     Arc::new(StaticMigrationSource(m))
