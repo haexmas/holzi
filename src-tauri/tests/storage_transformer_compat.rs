@@ -475,3 +475,27 @@ fn a_no_sync_table_is_written_without_crdt_bookkeeping() {
         .expect("count delete markers");
     assert_eq!(markers, 0, "a device-local delete leaves no delete marker");
 }
+
+#[test]
+fn the_sync_setup_writes_crdt_rows() {
+    let v = open_vault();
+    let state = holzi_lib::sync::genesis::ensure_sync_state(&v.db, v.installation_uuid, true)
+        .expect("sync state");
+    let device = state.device_pubkey.expect("device key");
+
+    let identity = assert_synced(&v.db, "vault_identity", "id = 1", &[]);
+    let list = assert_synced(&v.db, "device_lists", "generation = 1", &[]);
+    let generation = assert_synced(&v.db, "vault_key_generations", "generation = 1", &[]);
+    let envelope = assert_synced(
+        &v.db,
+        "vault_key_envelopes",
+        "recipient = ?1",
+        params![device.as_slice()],
+    );
+    assert!(
+        identity == list && list == generation && generation == envelope,
+        "the whole setup is one transaction group"
+    );
+    assert_eq!(row_count(&v.db, "device_keys_no_sync"), 1);
+    assert_eq!(row_count(&v.db, "vault_content_keys_no_sync"), 1);
+}

@@ -141,6 +141,10 @@ pub async fn create_instance(
     args: CreateInstanceArgs,
 ) -> Result<CreateInstanceResult> {
     let result = create_instance_core(&app, &state, &chat, &args.name, args.passphrase).await?;
+    // Spec 024: the sync service runs as tracked session work and ends with the close.
+    if let Err(e) = crate::sync::SyncService::start(state.gate()) {
+        log::warn!("sync: the sync service did not start: {e}");
+    }
 
     *chat.session.lock().unwrap_or_else(|e| e.into_inner()) = None;
     voice.invalidate_whisper_cache().await;
@@ -187,6 +191,8 @@ fn open_new_database(
     // Spec 022: secure_delete from the start; the VACUUM queued by migration 0020 is cheap on an
     // empty vault.
     crate::storage::maintenance::run_after_open(&db);
+    // Spec 024: vault identity, device keys, first device list and content key.
+    crate::sync::genesis::run_after_open(&db, installation_id_file, true);
     Ok(Arc::new(db))
 }
 

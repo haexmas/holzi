@@ -80,14 +80,34 @@ fn bootstrap_genesis_and_reopen_reuse_uuid() {
         "bootstrap must mint <AppLocalData>/installation-id"
     );
 
-    // vault_identity singleton present after genesis.
+    // The bootstrap no longer mints an identity: it has no HLC yet. The vault
+    // identity is published after open, with its first HLC (spec 024, T026).
     let ident_count: i64 = db
         .with_connection(|c| {
             c.query_row("SELECT COUNT(*) FROM vault_identity", [], |r| r.get(0))
                 .map_err(Into::into)
         })
         .expect("vault_identity count");
-    assert_eq!(ident_count, 1, "genesis must insert vault_identity");
+    assert_eq!(
+        ident_count, 0,
+        "the bootstrap leaves vault_identity to the sync setup"
+    );
+    let installation =
+        holzi_lib::identity::read_or_mint_installation_uuid(&installation_id_file).expect("id");
+    let state =
+        holzi_lib::sync::genesis::ensure_sync_state(&db, installation, true).expect("sync state");
+    assert!(state.vault_pubkey.is_some() && state.is_main);
+    let ident_count: i64 = db
+        .with_connection(|c| {
+            c.query_row(
+                "SELECT COUNT(*) FROM vault_identity WHERE haex_hlc_no_sync IS NOT NULL",
+                [],
+                |r| r.get(0),
+            )
+            .map_err(Into::into)
+        })
+        .expect("vault_identity count");
+    assert_eq!(ident_count, 1, "the published identity carries an HLC");
 
     // known_devices row for this installation present after genesis
     // (the sentinel row is filtered out — see spec 002 §"Vault Scope Sentinel").
