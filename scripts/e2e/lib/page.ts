@@ -143,6 +143,17 @@ export async function type(
   await client.sendKeys(element, text)
 }
 
+/** Sends a key to wherever focus currently is, rather than re-selecting (and so re-focusing) a
+ * named hook — for a key meant to land where an earlier key (e.g. Arrow Down in a listbox) moved
+ * focus to, such as Enter to commit a highlighted option. */
+export async function typeToFocused(
+  client: WebDriverClient,
+  text: string,
+): Promise<void> {
+  const element = await client.activeElement()
+  await client.sendKeys(element, text)
+}
+
 export interface PressOptions {
   /** Click this many times in a row (the lock-twice check). Default 1. */
   times?: number
@@ -243,6 +254,7 @@ export interface Page {
   click(hook: string, deadlineMs?: number): Promise<void>
   waitForDisplayed(hook: string, deadlineMs?: number): Promise<void>
   type(hook: string, text: string, deadlineMs?: number): Promise<void>
+  typeToFocused(text: string): Promise<void>
   press(hook: string, options?: { times?: number }): Promise<void>
   closeWindow(): Promise<void>
   navigate(url: string): Promise<void>
@@ -272,6 +284,7 @@ export function createPage(options: PageOptions): Page {
     waitForDisplayed: (hook, deadlineMs) =>
       waitForDisplayed(client, hook, deadlineMs),
     type: (hook, text, deadlineMs) => type(client, hook, text, deadlineMs),
+    typeToFocused: (text) => typeToFocused(client, text),
     press: (hook, pressOptions) =>
       press(client, hook, { ...pressOptions, step }),
     closeWindow: () => client.closeWindow(),

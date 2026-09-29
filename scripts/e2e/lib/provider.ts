@@ -51,20 +51,28 @@ function sseEvent(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
 }
 
-function modelsBody() {
+export interface StandInModel {
+  id: string
+  displayName: string
+}
+
+const DEFAULT_MODELS: StandInModel[] = [
+  { id: MODEL_ID, displayName: 'Stand-in model' },
+]
+
+function modelsBody(models: StandInModel[]) {
+  const ids = models.map((m) => m.id)
   return {
-    data: [
-      {
-        id: MODEL_ID,
-        display_name: 'Stand-in model',
-        type: 'model',
-        created_at: '2026-01-01T00:00:00Z',
-        max_input_tokens: 200000,
-      },
-    ],
+    data: models.map((m) => ({
+      id: m.id,
+      display_name: m.displayName,
+      type: 'model',
+      created_at: '2026-01-01T00:00:00Z',
+      max_input_tokens: 200000,
+    })),
     has_more: false,
-    first_id: MODEL_ID,
-    last_id: MODEL_ID,
+    first_id: ids[0],
+    last_id: ids[ids.length - 1],
   }
 }
 
@@ -151,8 +159,12 @@ function errorBody(behavior: { status?: number; body?: unknown }) {
  * Starts the stand-in on `127.0.0.1`, on a port the operating system chooses. Started and closed by the
  * scenario context; it never outlives its scenario.
  */
-export async function startProvider(initial?: Behavior): Promise<Provider> {
+export async function startProvider(
+  initial?: Behavior,
+  options?: { models?: StandInModel[] },
+): Promise<Provider> {
   let behavior: Behavior = initial ?? { kind: 'stream-then-finish' }
+  const models = options?.models ?? DEFAULT_MODELS
   const connections: Connection[] = []
   const requests: RecordedRequest[] = []
   let nextRequestId = 1
@@ -183,7 +195,7 @@ export async function startProvider(initial?: Behavior): Promise<Provider> {
 
         if (method === 'GET' && url.startsWith('/v1/models')) {
           res.writeHead(200, { 'content-type': 'application/json' })
-          res.end(JSON.stringify(modelsBody()))
+          res.end(JSON.stringify(modelsBody(models)))
           return
         }
         if (method === 'POST' && url === '/v1/messages') {
@@ -232,7 +244,7 @@ export async function startProvider(initial?: Behavior): Promise<Provider> {
 
   return {
     baseUrl: `http://127.0.0.1:${address.port}`,
-    modelId: MODEL_ID,
+    modelId: models[0]!.id,
     behave: (next) => {
       behavior = next
     },

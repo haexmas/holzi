@@ -139,6 +139,7 @@ export const KEY = {
   enter: '\uE007',
   escape: '\uE00C',
   backspace: '\uE003',
+  arrowDown: '\uE015',
 } as const
 
 /**

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { EffortState } from '~/composables/useReasoningPreference'
+import { filterModelGroups } from '~/lib/models/search'
 
 export type ModelGroup = {
   providerId: string
@@ -45,6 +46,19 @@ const trigger = ref<HTMLButtonElement | null>(null)
 const popover = ref<HTMLElement | null>(null)
 const isOpen = ref(false)
 const popoverStyle = ref<Record<string, string>>({})
+const modelQuery = ref('')
+const modelSearchInput = ref<HTMLInputElement | null>(null)
+const filteredModelGroups = computed(() =>
+  filterModelGroups(props.modelGroups, modelQuery.value),
+)
+
+/** Resets the search on every open of the model select (FR-006) and focuses it, so typing
+ * filters right away instead of first hitting Reka Select's own jump-to-letter search. */
+function onModelSelectOpenChange(open: boolean) {
+  if (!open) return
+  modelQuery.value = ''
+  nextTick(() => modelSearchInput.value?.focus())
+}
 
 const truncatedModelName = computed(() => {
   const name = props.modelName || t('chat.model.choose')
@@ -56,6 +70,21 @@ const truncatedModelName = computed(() => {
 
 function updateModel(value: unknown) {
   if (typeof value === 'string') emit('update:modelId', value)
+}
+
+/** Keeps typing in the model search field from also triggering Reka Select's own
+ * jump-to-letter type-ahead (research 031-chat-model-search R2) — every other key
+ * (arrows, Enter, Escape, Tab) still reaches the listbox to move or commit the
+ * highlighted item. */
+const MODEL_SEARCH_PASSTHROUGH_KEYS = new Set([
+  'ArrowDown',
+  'ArrowUp',
+  'Enter',
+  'Escape',
+  'Tab',
+])
+function onModelSearchKeydown(event: KeyboardEvent) {
+  if (!MODEL_SEARCH_PASSTHROUGH_KEYS.has(event.key)) event.stopPropagation()
 }
 
 function updateEffort(value: unknown) {
@@ -155,6 +184,7 @@ onBeforeUnmount(() => {
     <button
       ref="trigger"
       type="button"
+      data-testid="chat-settings-trigger"
       class="flex max-w-[min(17rem,calc(100vw-7rem))] cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-muted-foreground outline-none transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none"
       :class="{ 'pointer-events-none opacity-50': disabled }"
       :aria-label="
@@ -209,6 +239,7 @@ onBeforeUnmount(() => {
           :model-value="modelId || undefined"
           :disabled="disabled || modelDisabled"
           @update:model-value="updateModel"
+          @update:open="onModelSelectOpenChange"
         >
           <ShadcnSelectTrigger
             id="chat-model-popover"
@@ -220,8 +251,30 @@ onBeforeUnmount(() => {
           <ShadcnSelectContent
             class="w-[min(20rem,calc(100vw-2rem))] max-h-[60vh] !overflow-y-auto"
           >
+            <input
+              ref="modelSearchInput"
+              v-model="modelQuery"
+              type="text"
+              data-testid="chat-model-search"
+              :placeholder="
+                t('chat.composer.settingsPopover.modelSearch.placeholder')
+              "
+              :aria-label="
+                t('chat.composer.settingsPopover.modelSearch.placeholder')
+              "
+              class="mb-2 h-8 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              @pointerdown.stop
+              @keydown="onModelSearchKeydown"
+            />
+            <div
+              v-if="filteredModelGroups.length === 0"
+              data-testid="chat-model-search-empty"
+              class="px-2 py-1.5 text-sm text-muted-foreground"
+            >
+              {{ t('chat.composer.settingsPopover.modelSearch.noResults') }}
+            </div>
             <ShadcnSelectGroup
-              v-for="group in modelGroups"
+              v-for="group in filteredModelGroups"
               :key="group.providerId"
             >
               <ShadcnSelectLabel>{{ group.providerName }}</ShadcnSelectLabel>
@@ -229,6 +282,7 @@ onBeforeUnmount(() => {
                 v-for="model in group.models"
                 :key="model.id"
                 :value="model.id"
+                :data-value="model.id"
               >
                 {{ model.name }}
               </ShadcnSelectItem>
