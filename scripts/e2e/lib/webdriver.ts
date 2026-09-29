@@ -177,6 +177,16 @@ export class WebDriverClient {
     await this.call('POST', this.session(`/element/${element}/click`), {})
   }
 
+  /** The element id currently holding focus — for a key (e.g. Enter) meant for wherever a prior
+   * key (e.g. ArrowDown) moved focus to, not back to the element that sent that prior key. */
+  async activeElement(): Promise<string> {
+    const found = (await this.call(
+      'GET',
+      this.session('/element/active'),
+    )) as Record<string, string>
+    return found[ELEMENT_KEY]!
+  }
+
   async sendKeys(element: string, text: string): Promise<void> {
     await this.call('POST', this.session(`/element/${element}/value`), { text })
   }
