@@ -309,6 +309,113 @@ async fn a_device_ignores_its_own_meeting() {
     assert!(rows.is_empty());
 }
 
+/// A meeting `signer` published for `endpoint`, sealed for `day`'s mailbox
+/// of `receiver`'s content key.
+fn meeting(receiver: &Member, signer: &DeviceKeys, endpoint: [u8; 32], day: u32) -> Event {
+    let content_key = crate::storage::query::read(receiver.device.db(), |r| {
+        crate::sync::content_keys::current_key(r, &[])
+    })
+    .expect("read")
+    .expect("a content key");
+    let (_, mb_pk) = mailbox_keys(&content_key.key, day).expect("mailbox keys");
+    let content = PresenceContent::own(
+        signer.device_pubkey,
+        endpoint,
+        None,
+        vec![(Ipv4Addr::LOCALHOST, 4000).into()],
+        2,
+    );
+    build(signer, &content, &mb_pk).expect("build")
+}
+
+fn problem_of(member: &Member, device: &[u8; 32]) -> Option<crate::sync::problems::Problem> {
+    crate::storage::query::read(member.device.db(), |r| crate::sync::problems::of(r, device))
+        .expect("read problem")
+}
+
+/// R14, FR-030: a listed device key speaking from an endpoint the list does
+/// not name means two installations act as one device.
+#[tokio::test]
+async fn a_listed_key_meeting_from_another_endpoint_halts_that_device() {
+    let main = Member::genesis();
+    let linked = Member::join(&main);
+    main.add(&linked);
+    let node = bind_loopback(&main).await;
+    let day = day_tag_now();
+    let event = meeting(&main, &linked.keys, [5; 32], day);
+
+    let recorded = handle_incoming(
+        &node,
+        &main.device.replica,
+        &main.keys,
+        main.vault,
+        day,
+        &event,
+    )
+    .await;
+
+    assert!(!recorded, "a duplicate is never dialed");
+    assert_eq!(
+        problem_of(&main, &linked.keys.device_pubkey),
+        Some(crate::sync::problems::Problem::Duplicate)
+    );
+    let rows = crate::storage::query::read(main.device.db(), |r| load_all(r)).expect("read");
+    assert!(
+        rows.iter().all(|row| row.endpoint_addr.is_none()),
+        "no address of a duplicate is recorded"
+    );
+}
+
+/// A copy of this very installation on another endpoint shows up in this
+/// device's own mailbox: this device notes that it is duplicated.
+#[tokio::test]
+async fn a_meeting_with_this_devices_key_from_another_endpoint_marks_it_duplicated() {
+    let main = Member::genesis();
+    let node = bind_loopback(&main).await;
+    let day = day_tag_now();
+    let event = meeting(&main, &main.keys, [6; 32], day);
+
+    let recorded = handle_incoming(
+        &node,
+        &main.device.replica,
+        &main.keys,
+        main.vault,
+        day,
+        &event,
+    )
+    .await;
+
+    assert!(!recorded);
+    assert_eq!(
+        problem_of(&main, &main.keys.device_pubkey),
+        Some(crate::sync::problems::Problem::Duplicate)
+    );
+}
+
+/// A fresh meeting from the endpoint the list names is no duplicate.
+#[tokio::test]
+async fn a_meeting_from_the_listed_endpoint_records_no_problem() {
+    let main = Member::genesis();
+    let linked = Member::join(&main);
+    main.add(&linked);
+    let node = bind_loopback(&main).await;
+    let day = day_tag_now();
+    let event = meeting(&main, &linked.keys, linked.keys.endpoint_id, day);
+
+    let recorded = handle_incoming(
+        &node,
+        &main.device.replica,
+        &main.keys,
+        main.vault,
+        day,
+        &event,
+    )
+    .await;
+
+    assert!(recorded);
+    assert_eq!(problem_of(&main, &linked.keys.device_pubkey), None);
+}
+
 #[test]
 fn a_crypto_provider_is_installed_for_the_relay_websocket() {
     ensure_crypto_provider();

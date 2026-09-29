@@ -272,8 +272,9 @@ pub fn public_key(pubkey: &[u8; 32]) -> Result<PublicKey, PresenceError> {
 
 /// Records that `device_pubkey` was seen just now, reachable at
 /// `endpoint_addr` (or with no address, if the meeting named none this
-/// device could parse). Clears any earlier `problem` — a fresh, valid
-/// meeting is itself evidence the device is not a duplicate.
+/// device could parse). An earlier `problem` stays: a device that is
+/// reachable can still be one this device must not sync with, and only a
+/// successful handshake clears it.
 pub fn record_seen(
     tx: &mut CrdtTransaction<'_>,
     device_pubkey: &[u8; 32],
@@ -290,7 +291,7 @@ pub fn record_seen(
         "INSERT INTO device_presence_no_sync (device_pubkey, last_seen, endpoint_addr, problem) \
          VALUES (?1, ?2, ?3, NULL) \
          ON CONFLICT(device_pubkey) DO UPDATE SET \
-           last_seen = excluded.last_seen, endpoint_addr = excluded.endpoint_addr, problem = NULL",
+           last_seen = excluded.last_seen, endpoint_addr = excluded.endpoint_addr",
         params![device_pubkey.as_slice(), last_seen, encoded],
     )?;
     Ok(())
@@ -511,19 +512,36 @@ async fn handle_incoming(
         Ok(pair) => pair,
         Err(_) => return false,
     };
-    // The relay delivers this device's own meetings back to it, since it
-    // subscribes to the same mailbox it publishes to.
-    if sender == keys.device_pubkey {
-        return false;
-    }
     if content.device != sender || !content.is_fresh(now_ms()) {
         return false;
     }
-    if roster.effective_devices.iter().all(|d| *d != sender) {
+    // The relay delivers this device's own meetings back to it, since it
+    // subscribes to the same mailbox it publishes to. One from this key at
+    // another endpoint is a copy of this installation (FR-030).
+    if sender == keys.device_pubkey {
+        if content.endpoint != keys.endpoint_id {
+            node.flag(sender, crate::sync::problems::Problem::Duplicate)
+                .await;
+        }
+        return false;
+    }
+    let Some(listed_endpoint) = roster
+        .effective_devices
+        .iter()
+        .find_map(|(device, endpoint)| (*device == sender).then_some(*endpoint))
+    else {
         // Meetings of unknown devices lead to no connection, except a
         // newer list from a copy of this vault — left for a later story
         // (FR-007's admission path) to act on; presence still records
         // nothing for them.
+        return false;
+    };
+    // A listed key speaking from another endpoint, or sharing its device id
+    // with another key, means two installations act as one device (R14,
+    // FR-030): sync with it stops until that ends.
+    if content.endpoint != listed_endpoint || roster.conflicting.contains(&sender) {
+        node.flag(sender, crate::sync::problems::Problem::Duplicate)
+            .await;
         return false;
     }
 
@@ -551,7 +569,10 @@ async fn handle_incoming(
 struct Roster {
     content_key: [u8; 32],
     list_generation: u64,
-    effective_devices: Vec<[u8; 32]>,
+    /// Each device the list names, with the endpoint it names for it.
+    effective_devices: Vec<([u8; 32], [u8; 32])>,
+    /// Keys that share a device id with another key.
+    conflicting: std::collections::HashSet<[u8; 32]>,
 }
 
 impl Roster {
@@ -593,8 +614,9 @@ fn read_roster(
                 .list
                 .devices
                 .iter()
-                .map(|d| d.device_pubkey)
+                .map(|d| (d.device_pubkey, d.endpoint_id))
                 .collect(),
+            conflicting: crate::sync::device_list::uuid_conflicts(&valid),
         }))
     })
     .map_err(|e| PresenceError::Malformed(e.to_string()))
@@ -637,7 +659,7 @@ mod hex_nonce {
 }
 
 /// Decodes an even-length hex string (either case).
-fn decode_hex(text: &str) -> Result<Vec<u8>, &'static str> {
+pub(crate) fn decode_hex(text: &str) -> Result<Vec<u8>, &'static str> {
     if !text.is_ascii() || !text.len().is_multiple_of(2) {
         return Err("not an even-length hex string");
     }

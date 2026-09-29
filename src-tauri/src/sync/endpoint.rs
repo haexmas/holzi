@@ -23,9 +23,10 @@ use tokio_util::task::TaskTracker;
 
 use crate::sync::handshake::{self, local_schema, Local, Peer};
 use crate::sync::keys::DeviceKeys;
+use crate::sync::problems::{self, DuplicateWatch, Problem};
 use crate::sync::replica::Replica;
 use crate::sync::session::{self, SessionContext};
-use crate::sync::wire::{ErrorCode, SYNC_ALPN};
+use crate::sync::wire::{ErrorCode, RejectCode, SYNC_ALPN};
 
 /// How long binding may take; it can hang on resolving iroh-Relays.
 const BIND_TIMEOUT: Duration = Duration::from_secs(15);
@@ -75,6 +76,10 @@ struct Inner {
     /// `Endpoint` has no getter for its own relay set, so this is the
     /// only record of it, seeded from the bind-time `RelayMode`.
     applied_relays: Mutex<Vec<RelayUrl>>,
+    /// Devices seen as duplicates lately; sync with them stays halted.
+    duplicates: DuplicateWatch,
+    /// Called when a device's problem was set or cleared (FR-034).
+    devices_changed: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
 }
 
 impl std::fmt::Debug for Inner {
@@ -151,6 +156,8 @@ impl SyncNode {
             tracker: TaskTracker::new(),
             peers: Mutex::new(HashMap::new()),
             applied_relays: Mutex::new(initial_relays),
+            duplicates: DuplicateWatch::default(),
+            devices_changed: Mutex::new(None),
         });
         let router = Router::builder(endpoint)
             .accept(SYNC_ALPN, SyncProtocol(Arc::clone(&inner)))
@@ -188,6 +195,23 @@ impl SyncNode {
     /// This device's own key, which is on its device list but never a peer.
     pub fn device_pubkey(&self) -> [u8; 32] {
         self.inner.keys.device_pubkey
+    }
+
+    /// Sets what runs when a device's problem appears or goes away.
+    pub fn on_devices_changed(&self, hook: Arc<dyn Fn() + Send + Sync>) {
+        let mut slot = self
+            .inner
+            .devices_changed
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        *slot = Some(hook);
+    }
+
+    /// Halts sync with `device` on evidence of `problem` (FR-029, FR-030):
+    /// records it, and for a duplicate also holds the device back and ends
+    /// its live session, since the real one cannot be told from the copy.
+    pub async fn flag(&self, device: [u8; 32], problem: Problem) {
+        flag(&self.inner, device, problem).await;
     }
 
     /// Devices with a live session.
@@ -289,11 +313,17 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
         Ok(peer) => peer,
         Err(error) => {
             log::info!("sync: handshake failed: {error}");
+            note_failure(&inner, &error, remote).await;
             let _ = send.finish();
             connection.close(handshake_close_code(&error).as_u32().into(), b"rejected");
             return;
         }
     };
+    if inner.duplicates.holds(&peer.device_pubkey) {
+        connection.close(ErrorCode::Rejected.as_u32().into(), b"duplicate");
+        return;
+    }
+    clear_problem(&inner, peer.device_pubkey).await;
     if !register(&inner, &peer, &connection, side, remote) {
         connection.close(ErrorCode::Closed.as_u32().into(), b"duplicate");
         return;
@@ -319,15 +349,92 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
     }
 }
 
+/// Turns a handshake failure into a halted device where it names one: the
+/// device that proved its key, or, when the peer refused this device for
+/// its version or as a duplicate, the device the list gives that endpoint.
+async fn note_failure(inner: &Arc<Inner>, error: &handshake::HandshakeError, remote: [u8; 32]) {
+    use handshake::HandshakeError::{Halted, Refused, RefusedByPeer};
+    let (device, problem) = match error {
+        Halted { problem, device } => (Some(*device), *problem),
+        Refused(RejectCode::Incompatible) | RefusedByPeer(RejectCode::Incompatible) => {
+            (device_at(inner, remote).await, Problem::IncompatibleVersion)
+        }
+        RefusedByPeer(RejectCode::Duplicate) => {
+            (device_at(inner, remote).await, Problem::Duplicate)
+        }
+        _ => return,
+    };
+    if let Some(device) = device {
+        flag(inner, device, problem).await;
+    }
+}
+
+async fn device_at(inner: &Arc<Inner>, endpoint: [u8; 32]) -> Option<[u8; 32]> {
+    let replica = Arc::clone(&inner.replica);
+    let vault = inner.vault;
+    tokio::task::spawn_blocking(move || problems::device_at_endpoint(&replica, vault, &endpoint))
+        .await
+        .ok()?
+        .ok()?
+}
+
+async fn flag(inner: &Arc<Inner>, device: [u8; 32], problem: Problem) {
+    if problem == Problem::Duplicate {
+        inner.duplicates.note(device);
+        let live = inner
+            .peers
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&device);
+        if let Some(live) = live {
+            live.close(ErrorCode::Rejected.as_u32().into(), b"duplicate");
+        }
+    }
+    let replica = Arc::clone(&inner.replica);
+    let changed = tokio::task::spawn_blocking(move || problems::set(&replica, &device, problem))
+        .await
+        .map_err(|e| e.to_string())
+        .and_then(|r| r.map_err(|e| e.to_string()));
+    match changed {
+        Ok(true) => notify_devices_changed(inner),
+        Ok(false) => {}
+        Err(error) => log::warn!("sync: recording a device problem failed: {error}"),
+    }
+}
+
+async fn clear_problem(inner: &Arc<Inner>, device: [u8; 32]) {
+    let replica = Arc::clone(&inner.replica);
+    let cleared = tokio::task::spawn_blocking(move || problems::clear(&replica, &device))
+        .await
+        .map_err(|e| e.to_string())
+        .and_then(|r| r.map_err(|e| e.to_string()));
+    match cleared {
+        Ok(true) => notify_devices_changed(inner),
+        Ok(false) => {}
+        Err(error) => log::warn!("sync: clearing a device problem failed: {error}"),
+    }
+}
+
+fn notify_devices_changed(inner: &Inner) {
+    let hook = inner
+        .devices_changed
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    if let Some(hook) = hook {
+        hook();
+    }
+}
+
 /// The code to close the connection with: a wire error keeps its own
 /// (already distinct) code, everything else collapses to one of the two
 /// handshake-level codes.
 fn handshake_close_code(error: &handshake::HandshakeError) -> ErrorCode {
     match error {
         handshake::HandshakeError::Wire(e) => e.code(),
-        handshake::HandshakeError::Refused(_) | handshake::HandshakeError::RefusedByPeer(_) => {
-            ErrorCode::Rejected
-        }
+        handshake::HandshakeError::Refused(_)
+        | handshake::HandshakeError::RefusedByPeer(_)
+        | handshake::HandshakeError::Halted { .. } => ErrorCode::Rejected,
         handshake::HandshakeError::Protocol(_)
         | handshake::HandshakeError::NoDeviceList
         | handshake::HandshakeError::Crdt(_)

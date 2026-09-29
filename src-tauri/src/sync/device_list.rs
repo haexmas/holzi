@@ -284,6 +284,29 @@ pub fn effective(valid: &BTreeMap<[u8; 32], SignedList>) -> Option<&SignedList> 
         })
 }
 
+/// Device keys that share a `vault_device_uuid` with another key across the
+/// valid lists of the highest generation (FR-030). One list never has that
+/// (`check_structure`), so it only shows after a fork, when two main devices
+/// added different keys for one device id. Neither may sync until a merged
+/// list settles it.
+pub fn uuid_conflicts(valid: &BTreeMap<[u8; 32], SignedList>) -> HashSet<[u8; 32]> {
+    let top = valid.values().map(|s| s.list.generation).max();
+    let mut owners: BTreeMap<Uuid, HashSet<[u8; 32]>> = BTreeMap::new();
+    for signed in valid.values().filter(|s| Some(s.list.generation) == top) {
+        for device in &signed.list.devices {
+            owners
+                .entry(device.vault_device_uuid)
+                .or_default()
+                .insert(device.device_pubkey);
+        }
+    }
+    owners
+        .into_values()
+        .filter(|keys| keys.len() > 1)
+        .flatten()
+        .collect()
+}
+
 /// The next generation over `effective`, merging in the devices of
 /// `others` (lists of the same or a lower generation that lost) that the
 /// effective list neither lists nor removes (FR-043). The effective list's

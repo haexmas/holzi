@@ -29,6 +29,7 @@ use crate::identity::{holzi_migration_source, HOLZI_TRIGGER_VERSION};
 use crate::storage::query;
 use crate::sync::device_list::{self, Role, SignedList};
 use crate::sync::keys::{self, DeviceKeys};
+use crate::sync::problems::Problem;
 use crate::sync::replica::Replica;
 use crate::sync::signing::{self, lp, Domain};
 use crate::sync::wire::{
@@ -64,6 +65,10 @@ pub enum HandshakeError {
     Refused(RejectCode),
     #[error("the peer refused this device: {0:?}")]
     RefusedByPeer(RejectCode),
+    /// A device that proved its key and belongs to this vault, with which
+    /// this device must not sync for now (FR-029, FR-030).
+    #[error("sync with a device is halted: {}", .problem.as_str())]
+    Halted { problem: Problem, device: [u8; 32] },
     #[error("handshake protocol violation: {0}")]
     Protocol(&'static str),
     #[error("this device holds no valid device list")]
@@ -133,17 +138,17 @@ where
         &local.keys.endpoint_id,
         &vault,
     );
-    let checked = if v != PROTOCOL_VERSION || schema != local.schema {
-        Err(RejectCode::Incompatible)
-    } else if vault != local.vault {
+    let checked = if vault != local.vault {
         Err(RejectCode::ForeignVault)
     } else if signing::verify(Domain::DeviceAuth, &their_transcript, &sig_d.0, &device_d).is_err() {
         Err(RejectCode::BadSignature)
+    } else if v != PROTOCOL_VERSION || schema != local.schema {
+        Err(RejectCode::Incompatible)
     } else {
         Ok(())
     };
     if let Err(code) = checked {
-        return refuse(send, code).await;
+        return refuse(send, code, &device_d).await;
     }
 
     let lists = store_pushed(replica, local.vault, pushed, lists).await?;
@@ -151,7 +156,7 @@ where
     push_if_better(send, &lists, &own, &their_list).await?;
     let peer = match admit(&lists, &device_d, &remote_endpoint, local) {
         Ok(peer) => peer,
-        Err(code) => return refuse(send, code).await,
+        Err(code) => return refuse(send, code, &device_d).await,
     };
 
     let own_transcript = transcript(
@@ -235,9 +240,6 @@ where
         Message::Reject { code } => return Err(HandshakeError::RefusedByPeer(code)),
         _ => return Err(HandshakeError::Protocol("expected Accept or Reject")),
     };
-    if schema != local.schema {
-        return Err(HandshakeError::Refused(RejectCode::Incompatible));
-    }
     let their_transcript = transcript(
         &nonce_a,
         &nonce_d,
@@ -248,8 +250,28 @@ where
     if signing::verify(Domain::DeviceAuth, &their_transcript, &sig_a.0, &device_a).is_err() {
         return Err(HandshakeError::Refused(RejectCode::BadSignature));
     }
+    if schema != local.schema {
+        return Err(halted(RejectCode::Incompatible, device_a));
+    }
     let lists = store_pushed(replica, local.vault, pushed, lists).await?;
-    admit(&lists, &device_a, &remote_endpoint, local).map_err(HandshakeError::Refused)
+    admit(&lists, &device_a, &remote_endpoint, local).map_err(|code| halted(code, device_a))
+}
+
+/// The error for a refusal of `code` toward a peer whose key is verified:
+/// version and duplicate refusals halt sync with that device, the rest are
+/// plain refusals.
+fn halted(code: RejectCode, device: [u8; 32]) -> HandshakeError {
+    match code {
+        RejectCode::Incompatible => HandshakeError::Halted {
+            problem: Problem::IncompatibleVersion,
+            device,
+        },
+        RejectCode::Duplicate => HandshakeError::Halted {
+            problem: Problem::Duplicate,
+            device,
+        },
+        code => HandshakeError::Refused(code),
+    }
 }
 
 /// The signed bytes, `own` being the signer's endpoint.
@@ -271,7 +293,10 @@ fn sign(local: &Local<'_>, transcript: &[u8]) -> Result<[u8; 64], HandshakeError
     )?)
 }
 
-/// Looks the peer up in the effective list.
+/// Looks the peer up in the effective list. The peer proved its device key
+/// before this runs, so a key the list names with another endpoint (or one
+/// that shares its device id with another key) is a duplicate, not a
+/// stranger.
 fn admit(
     lists: &BTreeMap<[u8; 32], SignedList>,
     device: &[u8; 32],
@@ -289,8 +314,8 @@ fn admit(
         return Err(RejectCode::Removed);
     }
     let entry = effective.list.device(device).ok_or(RejectCode::NotOnList)?;
-    if &entry.endpoint_id != endpoint {
-        return Err(RejectCode::NotOnList);
+    if &entry.endpoint_id != endpoint || device_list::uuid_conflicts(lists).contains(device) {
+        return Err(RejectCode::Duplicate);
     }
     Ok(Peer {
         device_pubkey: *device,
@@ -301,12 +326,15 @@ fn admit(
     })
 }
 
+/// Sends `Reject` and fails with the matching error for `device`, whose
+/// signature this side already checked unless `code` says it did not.
 async fn refuse<W: AsyncWrite + Unpin>(
     send: &mut W,
     code: RejectCode,
+    device: &[u8; 32],
 ) -> Result<Peer, HandshakeError> {
     write_frame(send, &Message::Reject { code }, HANDSHAKE_FRAME_LIMIT).await?;
-    Err(HandshakeError::Refused(code))
+    Err(halted(code, *device))
 }
 
 /// Reads pushed lists until a frame `is_end` accepts.

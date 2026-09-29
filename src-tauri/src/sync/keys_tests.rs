@@ -134,3 +134,145 @@ fn a_placeholder_seed_becomes_the_derived_identity() {
         "the seed is replaced"
     );
 }
+
+/// A logger that keeps every record, for searching it for secrets. The
+/// logger is process-wide and other tests log into it too, which only makes
+/// the search stricter.
+mod capture {
+    use std::sync::{Mutex, Once};
+
+    static RECORDS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    static INSTALL: Once = Once::new();
+    struct Capture;
+
+    impl log::Log for Capture {
+        fn enabled(&self, _: &log::Metadata<'_>) -> bool {
+            true
+        }
+        fn log(&self, record: &log::Record<'_>) {
+            RECORDS
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push(format!("{}", record.args()));
+        }
+        fn flush(&self) {}
+    }
+
+    pub fn install() {
+        INSTALL.call_once(|| {
+            let _ = log::set_logger(&Capture);
+            log::set_max_level(log::LevelFilter::Trace);
+        });
+    }
+
+    pub fn all() -> String {
+        RECORDS.lock().unwrap_or_else(|e| e.into_inner()).join("\n")
+    }
+}
+
+/// Every way a secret's bytes could reach a log line: hex, the decimal list
+/// `{:?}` prints for a byte array, and the `Zeroizing` wrapper's own debug.
+fn secret_forms(secret: &[u8; 32]) -> Vec<String> {
+    vec![
+        hex(secret),
+        format!("{:?}", secret.as_slice()),
+        format!("{secret:?}"),
+    ]
+}
+
+#[test]
+fn no_key_holding_type_prints_its_secret() {
+    // FR-002: the private key of the vault identity, the device keys and the
+    // content key never appear in a Debug rendering of anything that holds
+    // them.
+    let device = DeviceKeys::generate();
+    let content = crate::sync::content_keys::ContentKey::generate(1);
+    let vault_secret = random_secret_key();
+    let local = crate::sync::handshake::Local {
+        keys: &device,
+        vault: [3; 32],
+        schema: crate::sync::handshake::local_schema(),
+    };
+    let secrets = [
+        *device.device_secret,
+        *device.endpoint_secret,
+        *content.key,
+        *vault_secret,
+    ];
+
+    let renderings = [
+        format!("{device:?}"),
+        format!("{content:?}"),
+        format!("{:?}", std::sync::Arc::new(device.clone())),
+        format!("{:?}", Some(&device)),
+        format!("{:#?}", local.keys),
+    ];
+    for rendering in &renderings {
+        for secret in &secrets {
+            for form in secret_forms(secret) {
+                assert!(!rendering.contains(&form), "{rendering} shows a secret");
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_failing_handshake_logs_no_secret_bytes() {
+    use tokio::io::{duplex, split};
+
+    use crate::sync::handshake::{accept, dial};
+    use crate::sync::test_support::Member;
+
+    capture::install();
+    let main = Member::genesis();
+    let foreign = Member::genesis();
+    let main_vault_secret = query::read(main.device.db(), |r| vault_secret(r))
+        .expect("read")
+        .expect("main holds the vault secret");
+    let foreign_vault_secret = query::read(foreign.device.db(), |r| vault_secret(r))
+        .expect("read")
+        .expect("foreign holds its vault secret");
+
+    let (a_side, d_side) = duplex(1 << 20);
+    let (mut a_recv, mut a_send) = split(a_side);
+    let (mut d_recv, mut d_send) = split(d_side);
+    let (main_local, foreign_local) = (main.local(), foreign.local());
+    let (at_main, at_foreign) = tokio::join!(
+        accept(
+            &mut a_send,
+            &mut a_recv,
+            &main.device.replica,
+            &main_local,
+            foreign.keys.endpoint_id
+        ),
+        dial(
+            &mut d_send,
+            &mut d_recv,
+            &foreign.device.replica,
+            &foreign_local,
+            main.keys.endpoint_id
+        ),
+    );
+    // Log the errors the way `endpoint.rs` does, plus everything a careless
+    // line could add.
+    log::info!("sync: handshake failed: {}", at_main.expect_err("refused"));
+    log::info!(
+        "sync: handshake failed: {}",
+        at_foreign.expect_err("refused")
+    );
+    log::debug!("sync: keys {:?} {:?}", main.keys, foreign.keys);
+
+    let logs = capture::all();
+    for secret in [
+        &*main.keys.device_secret,
+        &*main.keys.endpoint_secret,
+        &*foreign.keys.device_secret,
+        &*foreign.keys.endpoint_secret,
+        &*main_vault_secret,
+        &*foreign_vault_secret,
+    ] {
+        for form in secret_forms(secret) {
+            assert!(!logs.contains(&form), "a log line shows a secret");
+        }
+    }
+}

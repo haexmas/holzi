@@ -68,3 +68,80 @@ async fn two_devices_connect_on_their_own_and_exchange_a_change() {
     })
     .await;
 }
+
+/// US2 scenario 1 and SC-005 (spec.md): a device of another vault, running
+/// the same sync service against the same Nostr relay, neither finds nor
+/// receives anything of this vault, and this vault receives nothing of it.
+/// (The refusals a stranger that does dial gets — foreign vault, not on the
+/// list, bad signature — are `sync::handshake` unit tests, where the
+/// handshake is exercised message by message.)
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_device_of_another_vault_neither_gets_nor_gives_anything() {
+    let _turn = TURN.lock().await;
+    let relay = nostr_sdk::local_relay::MockRelay::run()
+        .await
+        .expect("mock relay");
+    let relay_url = relay.url().await.to_string();
+
+    let main = sync_fixture::create_main("mine", &relay_url).await;
+    let linked = sync_fixture::join(&main, &relay_url).await;
+    let foreign = sync_fixture::create_main("theirs", &relay_url).await;
+    foreign.write_thread("theirs", "not for you").await;
+
+    // The two own devices sync (the positive control that the sync had
+    // time to happen), and by then the foreign device has nothing.
+    eventually(&main, "secret", "mine only", || {
+        linked.thread_title("secret").as_deref() == Some("mine only")
+    })
+    .await;
+    assert_eq!(foreign.thread_title("secret"), None);
+    assert_eq!(main.thread_title("theirs"), None);
+    assert_eq!(linked.thread_title("theirs"), None);
+}
+
+/// US3 scenarios 1 to 3 (spec.md): three devices end with the same data, no
+/// change is lost or doubled, and each change still names the device it
+/// came from, not the one it came through.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn three_devices_converge_and_each_change_keeps_its_author() {
+    let _turn = TURN.lock().await;
+    let relay = nostr_sdk::local_relay::MockRelay::run()
+        .await
+        .expect("mock relay");
+    let relay_url = relay.url().await.to_string();
+
+    let a = sync_fixture::create_main("main", &relay_url).await;
+    let b = sync_fixture::join(&a, &relay_url).await;
+    let c = sync_fixture::join(&a, &relay_url).await;
+    let devices = [&a, &b, &c];
+    let threads = ["from-a", "from-b", "from-c"];
+
+    // Each device rewrites its own thread until all three have all threads
+    // (the same settle race `eventually` documents).
+    tokio::time::timeout(Duration::from_secs(40), async {
+        loop {
+            for (device, id) in devices.iter().zip(threads) {
+                device.write_thread(id, id).await;
+            }
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            let converged = devices
+                .iter()
+                .all(|d| threads.iter().all(|id| d.thread_title(id).is_some()));
+            if converged {
+                break;
+            }
+        }
+    })
+    .await
+    .expect("all three devices hold all three threads");
+
+    for device in devices {
+        for (writer, id) in devices.iter().zip(threads) {
+            assert_eq!(
+                device.thread_origin(id),
+                Some(writer.device_uuid()),
+                "{id} names the device that wrote it"
+            );
+        }
+    }
+}

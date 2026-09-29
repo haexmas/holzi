@@ -23,7 +23,7 @@ use crate::error::{HolziError, Result};
 use crate::instances::paths::get_app_local_data;
 use crate::state::AppState;
 use crate::sync::endpoint::{NodeConfig, SyncNode};
-use crate::sync::events::{self, SyncDataChanged, SYNC_DATA_CHANGED};
+use crate::sync::events::{self, SyncDataChanged, SYNC_DATA_CHANGED, SYNC_DEVICES_CHANGED};
 use crate::sync::keys::{self, DeviceKeys};
 use crate::sync::replica::Replica;
 use crate::vault_gate::VaultGate;
@@ -135,6 +135,7 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
     let vault = deps.vault;
     let nostr_relays = deps.nostr_relays;
     let bind_addr = deps.bind_addr;
+    let devices_app = deps.app.clone();
     let on_applied = applied_event_sink(deps.app);
     let config = NodeConfig {
         relay_mode: deps.relay_mode,
@@ -148,6 +149,10 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
             return;
         }
     };
+
+    node.on_devices_changed(Arc::new(move || {
+        events::emit(&devices_app, SYNC_DEVICES_CHANGED, ());
+    }));
 
     // `notify` (the gate's shared commit signal) wakes at most one waiter
     // per commit, so it gets exactly one consumer here; fanning that out to
