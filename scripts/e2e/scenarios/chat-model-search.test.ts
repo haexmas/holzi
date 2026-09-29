@@ -27,22 +27,36 @@ scenario('chat-model-search', {}, async (ctx) => {
   const provider = await ctx.provider(undefined, { models: MODELS })
 
   await createAndUnlock(instance, { name: 'e2e-model-search' })
-  await openChat(instance)
+  // Before opening the chat: the chat reads the provider list and their cached models once, when it
+  // mounts (`modelStore.initialize`), and a provider added behind its back afterwards never reaches
+  // the picker. `add_provider` caches the models inline, so they are all there by then.
   await connectProvider(instance, provider)
+  await openChat(instance)
 
   await instance.click('chat-settings-trigger')
   await instance.click('#chat-model-popover')
   await instance.waitForDisplayed('chat-model-search')
-  // `add_provider`'s model-list refresh lands asynchronously; `connectProvider` only guarantees
-  // `load_model` (the active model) resolved, not that `modelGroups` already reflects the fetch.
+  // The chat's own initial load still lands asynchronously after the page shows.
   for (const model of MODELS) {
     await ctx.waitFor(`${model.displayName} to be listed`, () =>
       optionShown(instance, model.id),
     )
   }
+  await ctx.waitFor('the search field to hold focus', async () =>
+    instance.exec<boolean>(
+      'return document.activeElement?.getAttribute("data-testid") === "chat-model-search"',
+    ),
+  )
   ctx.step('all models shown before searching')
 
-  await instance.type('chat-model-search', 'gpt4o')
+  // Typed to wherever focus is, as a user does, not sent to the search field by hook.
+  await instance.typeToFocused('gpt4o')
+  await ctx.waitFor('the query to reach the search field', async () => {
+    const value = await instance.exec<string>(
+      'return document.querySelector(\'[data-testid="chat-model-search"]\')?.value ?? ""',
+    )
+    return value === 'gpt4o'
+  })
   assert.ok(await optionShown(instance, 'gpt-4o'), 'GPT-4o was filtered out')
   assert.ok(
     await optionShown(instance, 'gpt-4o-mini'),
@@ -58,8 +72,15 @@ scenario('chat-model-search', {}, async (ctx) => {
   )
   ctx.step('non-contiguous query filters to matching models')
 
+  // Backspace from an option (focus moved there by Arrow Down) still edits the search.
+  await instance.type('chat-model-search', KEY.arrowDown)
+  await ctx.waitFor('an option to hold focus', async () =>
+    instance.exec<boolean>(
+      'return document.activeElement?.getAttribute("role") === "option"',
+    ),
+  )
   for (const key of Array(5).fill(KEY.backspace))
-    await instance.type('chat-model-search', key)
+    await instance.typeToFocused(key)
   for (const model of MODELS) {
     assert.ok(
       await optionShown(instance, model.id),
@@ -105,4 +126,25 @@ scenario('chat-model-search', {}, async (ctx) => {
     )
   }
   ctx.step('reopening resets the search and shows every model again')
+
+  await instance.type('chat-model-search', 'zzzzzzzz')
+  await instance.waitForDisplayed('chat-model-search-empty')
+  await instance.typeToFocused(KEY.escape)
+  await ctx.waitFor(
+    'the model select to close',
+    async () => !(await isShown(instance, '[data-testid="chat-model-search"]')),
+  )
+  // Escape may close the whole settings popover along with the model select.
+  if (!(await isShown(instance, '#chat-model-popover')))
+    await instance.click('chat-settings-trigger')
+  await ctx.waitFor(
+    'the model control to still name the active model',
+    async () =>
+      (
+        await instance.exec<string>(
+          "return document.querySelector('#chat-model-popover')?.textContent ?? ''",
+        )
+      ).includes('Claude'),
+  )
+  ctx.step('closing with a non-matching query keeps the active model shown')
 })

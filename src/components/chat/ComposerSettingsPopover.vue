@@ -52,12 +52,39 @@ const filteredModelGroups = computed(() =>
   filterModelGroups(props.modelGroups, modelQuery.value),
 )
 
+let reclaimSearchFocus = false
+
 /** Resets the search on every open of the model select (FR-006) and focuses it, so typing
  * filters right away instead of first hitting Reka Select's own jump-to-letter search. */
 function onModelSelectOpenChange(open: boolean) {
   if (!open) return
   modelQuery.value = ''
+  reclaimSearchFocus = true
   nextTick(() => modelSearchInput.value?.focus())
+}
+
+/** Reka focuses the selected option once the list is positioned — after the focus
+ * above. The first such focus move, before the user has pressed a key or moved the
+ * pointer in the list, is taken back to the search field. Deferred: Reka tries
+ * `[selected option, listbox]` in turn and moves on to the listbox itself if focus
+ * is not where it put it once `focus()` returns. */
+function onModelListFocusin(event: FocusEvent) {
+  const input = modelSearchInput.value
+  if (!reclaimSearchFocus || !input || event.target === input) return
+  reclaimSearchFocus = false
+  queueMicrotask(() => input.focus())
+}
+function stopReclaimingSearchFocus() {
+  reclaimSearchFocus = false
+}
+
+/** Also clears the search once the model select has closed (Reka's `closeAutoFocus`
+ * fires after the close animation, so the list does not visibly refill while fading
+ * out). A closed Reka Select still renders its items to know the selected label; a
+ * leftover query that filtered the selected model out would leave the trigger showing
+ * the placeholder instead of the active model. */
+function onModelSelectClosed() {
+  modelQuery.value = ''
 }
 
 const truncatedModelName = computed(() => {
@@ -87,6 +114,22 @@ function onModelSearchKeydown(event: KeyboardEvent) {
   if (!MODEL_SEARCH_PASSTHROUGH_KEYS.has(event.key)) event.stopPropagation()
 }
 
+/** Typing while focus sits on an option (the user arrowed down, or Reka's own focus on
+ * the selected item was not taken back) moves focus back to the search field, so the key edits the query
+ * there instead of running Reka's jump-to-letter search. Space is left alone: on an
+ * option it selects, as in any listbox. */
+function onModelListKeydownCapture(event: KeyboardEvent) {
+  reclaimSearchFocus = false
+  const input = modelSearchInput.value
+  if (!input || event.target === input) return
+  if (event.ctrlKey || event.altKey || event.metaKey) return
+  const edits =
+    (event.key.length === 1 && event.key !== ' ') || event.key === 'Backspace'
+  if (!edits) return
+  event.stopPropagation()
+  input.focus()
+}
+
 function updateEffort(value: unknown) {
   if (typeof value !== 'string') return
   emit('update:effortLevel', value === AUTO_VALUE ? null : value)
@@ -111,6 +154,7 @@ function positionPopover() {
 
 function openPopover() {
   if (props.disabled) return
+  modelQuery.value = ''
   isOpen.value = true
   nextTick(() => requestAnimationFrame(positionPopover))
 }
@@ -250,43 +294,50 @@ onBeforeUnmount(() => {
           </ShadcnSelectTrigger>
           <ShadcnSelectContent
             class="w-[min(20rem,calc(100vw-2rem))] max-h-[60vh] !overflow-y-auto"
+            @close-auto-focus="onModelSelectClosed"
           >
-            <input
-              ref="modelSearchInput"
-              v-model="modelQuery"
-              type="text"
-              data-testid="chat-model-search"
-              :placeholder="
-                t('chat.composer.settingsPopover.modelSearch.placeholder')
-              "
-              :aria-label="
-                t('chat.composer.settingsPopover.modelSearch.placeholder')
-              "
-              class="mb-2 h-8 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              @pointerdown.stop
-              @keydown="onModelSearchKeydown"
-            />
             <div
-              v-if="filteredModelGroups.length === 0"
-              data-testid="chat-model-search-empty"
-              class="px-2 py-1.5 text-sm text-muted-foreground"
+              @keydown.capture="onModelListKeydownCapture"
+              @pointermove.capture="stopReclaimingSearchFocus"
+              @focusin="onModelListFocusin"
             >
-              {{ t('chat.composer.settingsPopover.modelSearch.noResults') }}
-            </div>
-            <ShadcnSelectGroup
-              v-for="group in filteredModelGroups"
-              :key="group.providerId"
-            >
-              <ShadcnSelectLabel>{{ group.providerName }}</ShadcnSelectLabel>
-              <ShadcnSelectItem
-                v-for="model in group.models"
-                :key="model.id"
-                :value="model.id"
-                :data-value="model.id"
+              <input
+                ref="modelSearchInput"
+                v-model="modelQuery"
+                type="text"
+                data-testid="chat-model-search"
+                :placeholder="
+                  t('chat.composer.settingsPopover.modelSearch.placeholder')
+                "
+                :aria-label="
+                  t('chat.composer.settingsPopover.modelSearch.placeholder')
+                "
+                class="mb-2 h-8 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                @pointerdown.stop
+                @keydown="onModelSearchKeydown"
+              />
+              <div
+                v-if="filteredModelGroups.length === 0"
+                data-testid="chat-model-search-empty"
+                class="px-2 py-1.5 text-sm text-muted-foreground"
               >
-                {{ model.name }}
-              </ShadcnSelectItem>
-            </ShadcnSelectGroup>
+                {{ t('chat.composer.settingsPopover.modelSearch.noResults') }}
+              </div>
+              <ShadcnSelectGroup
+                v-for="group in filteredModelGroups"
+                :key="group.providerId"
+              >
+                <ShadcnSelectLabel>{{ group.providerName }}</ShadcnSelectLabel>
+                <ShadcnSelectItem
+                  v-for="model in group.models"
+                  :key="model.id"
+                  :value="model.id"
+                  :data-value="model.id"
+                >
+                  {{ model.name }}
+                </ShadcnSelectItem>
+              </ShadcnSelectGroup>
+            </div>
           </ShadcnSelectContent>
         </ShadcnSelect>
 
