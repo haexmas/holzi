@@ -28,6 +28,7 @@ pub struct Replica {
 }
 
 impl Replica {
+    /// Wraps the vault database with an exchange lock and an empty own-progress cache.
     pub fn new(db: Arc<Database>) -> Self {
         Self {
             db,
