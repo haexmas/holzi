@@ -56,8 +56,15 @@ pub fn serve_pull_with_budget(
     Ok(Outbox::new(changes, served, budget))
 }
 
-/// Where the scan starts: the smallest cursor the receiver named, or the
-/// beginning when it lacks an origin this device knows.
+/// Where the scan starts: a safe SQL lower bound for the smallest cursor the
+/// receiver named, or the beginning when it lacks an origin this device knows.
+///
+/// haex-crdt's scanner uses the row HLC in a SQL text comparison as a cheap
+/// pre-filter, then compares each column HLC numerically. HLC node suffixes
+/// are variable-width hexadecimal, so using the exact cursor there could
+/// hide a numerically newer `time/100` row behind `time/ff`. Dropping the
+/// node suffix keeps every HLC at the cursor's physical time in the scan;
+/// the scanner's per-column comparison still applies the exact lower bound.
 fn scan_cursor(theirs: &Vector, served: &Vector) -> Option<String> {
     if served.keys().any(|origin| !theirs.contains_key(origin)) {
         return None;
@@ -65,7 +72,7 @@ fn scan_cursor(theirs: &Vector, served: &Vector) -> Option<String> {
     theirs
         .values()
         .min_by(|a, b| compare_hlc_strings(a, b))
-        .cloned()
+        .and_then(|cursor| cursor.split_once('/').map(|(time, _)| format!("{time}/")))
 }
 
 /// Whether the receiver lacks `change` and this pull may serve it.

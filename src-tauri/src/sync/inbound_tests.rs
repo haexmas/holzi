@@ -221,6 +221,40 @@ fn a_broken_pull_resumes_after_the_last_complete_group() {
     ));
 }
 
+#[test]
+fn a_pull_cannot_apply_an_older_group_after_a_newer_page() {
+    let b = Device::new();
+    write_thread(&b, "x", "base");
+    let (origin, newer) = foreign_change("chat_threads");
+    let newer_time = newer
+        .hlc
+        .split_once('/')
+        .and_then(|(time, _)| time.parse::<u64>().ok())
+        .expect("timestamp");
+    let node = u128::from_le_bytes(*origin.as_bytes());
+    let mut older = newer.clone();
+    older.hlc = format!("{}/{node:x}", newer_time - 1);
+
+    let mut inbox = Inbox::new();
+    inbox
+        .receive(
+            &b.replica,
+            Page {
+                changes: vec![newer],
+                group_continues: false,
+                more: true,
+                served: Vector::new(),
+            },
+        )
+        .expect("newer page");
+    assert!(matches!(
+        inbox.receive(&b.replica, page_with(older)),
+        Err(InboundError::Malformed(
+            "groups out of HLC order across pages"
+        ))
+    ));
+}
+
 fn page_with(change: Change) -> Page {
     Page {
         changes: vec![change],

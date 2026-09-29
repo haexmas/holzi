@@ -146,7 +146,7 @@ fn the_scan_starts_at_the_smallest_cursor_unless_an_origin_is_missing() {
     let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
     let served = Vector::from([(a, hlc(30, a)), (b, hlc(30, b))]);
     let complete = Vector::from([(a, hlc(20, a)), (b, hlc(10, b))]);
-    assert_eq!(scan_cursor(&complete, &served), Some(hlc(10, b)));
+    assert_eq!(scan_cursor(&complete, &served), Some("10/".to_string()));
     let partial = Vector::from([(a, hlc(20, a))]);
     assert_eq!(scan_cursor(&partial, &served), None);
 }

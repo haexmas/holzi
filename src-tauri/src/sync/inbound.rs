@@ -69,6 +69,11 @@ pub struct Received {
 pub struct Inbox {
     /// The start of a group that continues on the next page.
     pending: Vec<Change>,
+    /// The last complete group received for each origin in this pull.
+    /// Retaining this across pages prevents a malformed pull from advancing
+    /// an origin past a later group and then applying an older group that can
+    /// never be requested again.
+    last_received: Vector,
     finished: bool,
 }
 
@@ -118,9 +123,19 @@ impl Inbox {
         };
         let mut accepted: Vec<ColumnChange> = Vec::new();
         let mut updates = Vector::new();
+        let mut group_updates = Vector::new();
         for (hlc, group) in groups {
             let origin = progress::origin_of(&hlc)
                 .ok_or(InboundError::Malformed("an HLC without origin"))?;
+            if self
+                .last_received
+                .get(&origin)
+                .is_some_and(|last| compare_hlc_strings(&hlc, last) != Ordering::Greater)
+            {
+                return Err(InboundError::Malformed(
+                    "groups out of HLC order across pages",
+                ));
+            }
             let columns = group
                 .iter()
                 .map(|change| {
@@ -134,7 +149,7 @@ impl Inbox {
             if bytes > limit {
                 return Err(InboundError::GroupTooLarge { bytes, limit });
             }
-            progress::raise(&mut updates, origin, hlc.clone());
+            progress::raise(&mut group_updates, origin, hlc.clone());
             if is_removed_at(&limits, origin, &hlc) {
                 received.rejected_groups += 1;
                 continue;
@@ -144,6 +159,7 @@ impl Inbox {
                 .extend(columns.iter().filter_map(changed_table));
             accepted.extend(columns);
         }
+        updates.extend(group_updates.clone());
         if !page.more {
             for (origin, hlc) in page.served {
                 progress::raise(&mut updates, origin, hlc);
@@ -163,6 +179,9 @@ impl Inbox {
         }
         if !updates.is_empty() {
             db.write(|tx| progress::advance(tx, &updates))?;
+        }
+        for (origin, hlc) in group_updates {
+            progress::raise(&mut self.last_received, origin, hlc);
         }
         Ok(received)
     }
