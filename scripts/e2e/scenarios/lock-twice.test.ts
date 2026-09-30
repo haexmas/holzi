@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { scenario } from '../lib/scenario.ts'
-import { createAndUnlock, openChat } from '../lib/flows.ts'
+import { createAndUnlock, openChat, openLauncher } from '../lib/flows.ts'
 import { PROCESS_END_LIMIT_MS } from '../lib/close-promises.ts'
 
 const ALERT_SCRIPT =
@@ -25,7 +25,8 @@ scenario('lock-twice', {}, async (ctx) => {
     'an alert was already showing just before the press',
   )
 
-  await instance.press('lock-instance-sidebar', { times: 2 })
+  await openLauncher(instance)
+  await instance.press('lock-instance', { times: 2 })
 
   const samples = await instance.sampleUntilEnd<boolean>(ALERT_SCRIPT, 50)
   assert.ok(

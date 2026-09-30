@@ -114,6 +114,7 @@
       "settings": "Einstellungen"
     },
     "launcher": {
+      "lock": "Sperren",
       "open": "Launcher öffnen",
       "title": "Launcher"
     },
@@ -206,8 +207,6 @@
       "titleRequired": "Bitte gib einen Titel ein.",
       "titleTooLong": "Der Titel darf höchstens 120 Zeichen enthalten."
     },
-    "settings": "Einstellungen",
-    "lock": "Sperren",
     "close": "Schließen",
     "send": "Senden",
     "cancel": "Abbruch",

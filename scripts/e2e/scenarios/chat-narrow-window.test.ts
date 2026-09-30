@@ -35,7 +35,6 @@ scenario('chat-narrow-window', {}, async (ctx) => {
   await ctx.waitFor('the sidebar over the content', () =>
     sidebarShown(instance),
   )
-  await instance.waitForDisplayed('lock-instance-sidebar')
   await instance.type('chat-sidebar-toggle', KEY.escape)
   await ctx.waitFor(
     'Escape to close the sidebar',
@@ -48,5 +47,5 @@ scenario('chat-narrow-window', {}, async (ctx) => {
     'the toggle to close the sidebar',
     async () => !(await sidebarShown(instance)),
   )
-  ctx.step('narrow: open over the content, lock reachable, toggle closes')
+  ctx.step('narrow: open over the content, toggle closes')
 })

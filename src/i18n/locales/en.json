@@ -114,6 +114,7 @@
       "settings": "Settings"
     },
     "launcher": {
+      "lock": "Lock",
       "open": "Open Launcher",
       "title": "Launcher"
     },
@@ -206,8 +207,6 @@
       "titleRequired": "Please enter a title.",
       "titleTooLong": "The title can contain at most 120 characters."
     },
-    "settings": "Settings",
-    "lock": "Lock",
     "close": "Close",
     "send": "Send",
     "cancel": "Cancel",

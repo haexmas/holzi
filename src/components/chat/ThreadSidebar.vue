@@ -38,8 +38,6 @@ const emit = defineEmits<{
   requestDelete: [thread: Thread]
   closeDeleteDialog: [open: boolean]
   confirmDelete: []
-  lock: []
-  openSettings: []
 }>()
 
 const { t } = useI18n()
@@ -201,26 +199,6 @@ watch(
         {{ t('chat.threads.empty') }}
       </div>
     </div>
-
-    <div class="flex-1" />
-    <button
-      type="button"
-      class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-      @click="emit('openSettings')"
-    >
-      <Icon name="lucide:settings-2" class="h-4 w-4" />
-      {{ t('chat.settings') }}
-    </button>
-    <UiButton
-      class="justify-start gap-2"
-      size="sm"
-      variant="ghost"
-      data-testid="lock-instance-sidebar"
-      @click="emit('lock')"
-    >
-      <Icon name="lucide:lock-keyhole" class="h-4 w-4" />
-      {{ t('chat.lock') }}
-    </UiButton>
   </aside>
 
   <UiDrawerModal

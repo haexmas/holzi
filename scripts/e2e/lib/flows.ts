@@ -120,7 +120,13 @@ export async function openChat(instance: FlowInstance): Promise<void> {
   await instance.click('open-launcher')
   await instance.click('open-chat')
   await waitForPath(instance, '/workspace/')
-  await instance.waitForDisplayed('lock-instance-sidebar')
+  await instance.waitForDisplayed('chat-sidebar-toggle')
+}
+
+/** Opens the app launcher, where the lock tile is. */
+export async function openLauncher(instance: FlowInstance): Promise<void> {
+  await instance.click('open-launcher')
+  await instance.waitForDisplayed('lock-instance')
 }
 
 interface AddProviderResult {

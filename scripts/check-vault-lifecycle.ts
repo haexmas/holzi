@@ -19,54 +19,51 @@ test('the shared harness boots the chat page against the IPC double', () => {
 })
 
 // The lock flows (US1, FR-002): the lock control only asks the backend to close. The backend
-// replaces the page with a spinner and ends the process, so the page keeps no closing state,
-// navigates nowhere and does not clear the active instance itself.
+// replaces the page with a spinner and ends the process, so `useVaultLock` keeps no closing state,
+// navigates nowhere and does not clear the active instance itself. It provides neither
+// `navigateTo` nor the instances store, so touching them fails the case.
 
-/** Records what a lock flow does besides asking for the close. */
-function watchedPage() {
-  const effects: string[] = []
-  return {
-    effects,
-    instancesStore: {
-      setActiveInstance: () => effects.push('cleared the instance'),
+/** Runs the real `useVaultLock` against doubles that record what it does, in order. */
+function loadVaultLock(closeAsync: () => Promise<void>) {
+  const calls: string[] = []
+  const composable = runComposable(
+    composablePath('useVaultLock'),
+    (specifier) => {
+      throw new Error(`useVaultLock sandbox: unexpected import '${specifier}'`)
     },
-    navigateTo: (to: string) => effects.push(`navigated to ${to}`),
-  }
-}
-
-test('the chat page lock() asks for the close once and does nothing else', async () => {
-  const invokes: string[] = []
-  const page = watchedPage()
-  const state = createChatState({}, {}, {}, invokes, page)
-  invokes.length = 0
-
-  await state.lock()
-
-  assert.deepEqual(invokes, ['close_instance'])
-  assert.deepEqual(page.effects, [])
-})
-
-test('the chat page lock() swallows a rejected close and shows no error', async () => {
-  const page = watchedPage()
-  const state = createChatState(
-    {},
-    {},
     {
+      useWindowManagerStore: () => ({
+        flushAsync: async () => {
+          calls.push('flush')
+        },
+      }),
       useInstance: () => ({
         closeAsync: async () => {
-          throw new Error('the page is already gone')
+          calls.push('close')
+          await closeAsync()
         },
       }),
     },
-    undefined,
-    page,
-  )
-  const before = state.lastError.value
+  ) as { useVaultLock: () => { lock: () => Promise<void> } }
+  return { calls, ...composable.useVaultLock() }
+}
 
-  await state.lock()
+test('useVaultLock flushes the layout, then asks for the close once and does nothing else', async () => {
+  const { calls, lock } = loadVaultLock(async () => {})
 
-  assert.equal(state.lastError.value, before)
-  assert.deepEqual(page.effects, [])
+  await lock()
+
+  assert.deepEqual(calls, ['flush', 'close'])
+})
+
+test('useVaultLock swallows a rejected close and shows no error', async () => {
+  const { calls, lock } = loadVaultLock(async () => {
+    throw new Error('the page is already gone')
+  })
+
+  await lock()
+
+  assert.deepEqual(calls, ['flush', 'close'])
 })
 
 // US4 frontend errors (T066/T074, contracts/frontend-surface.md): `useErrorString` maps the three

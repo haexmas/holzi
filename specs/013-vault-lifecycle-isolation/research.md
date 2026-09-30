@@ -21,7 +21,8 @@ not be verified from source are marked **Open** and carry a manual check in
   vault is already active, `open_instance` mounts a **second read-only connection** only to check
   the passphrase (`open.rs`, around line 91).
 - The frontend never resets a store. `lock()` (chat page) and `onLock()` (federation page) call
-  `closeAsync()`, clear the active instance and navigate to `/`.
+  `closeAsync()`, clear the active instance and navigate to `/`. (Since 2026-09-30 the lock lives in
+  `useVaultLock`, called by the launcher's lock tile.)
 - Only model-load events carry a vault generation.
 - `haex-crdt::Database` is `Clone` over `Arc<DatabaseInner>` with one `Mutex<Connection>`. The
   `DatabaseConfig` (and its `SqlCipherKey`) is consumed by `Database::open`; no key is stored.

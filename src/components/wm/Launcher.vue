@@ -7,7 +7,8 @@
  * the affected window is elsewhere. Compact mode (T050) drops to two
  * columns so each tile stays a comfortable touch target on a narrow
  * screen, instead of three cramped ones. Spec 015-workspace-shell, T023,
- * T041, T050.
+ * T041, T050. The last tile locks the vault (`useVaultLock`) — the one place
+ * to lock now that the chat has no lock button.
  */
 import { WM_APPS } from '~/lib/wm/apps'
 
@@ -17,6 +18,7 @@ const wm = useWindowManagerStore()
 const { t } = useI18n()
 
 const openApp = useAction('wm.app.open')
+const { lock } = useVaultLock()
 
 function launch(appId: string) {
   void openApp({ appId })
@@ -51,6 +53,19 @@ function launch(appId: string) {
           />
           <Icon :name="app.icon" class="h-6 w-6" :aria-hidden="true" />
           <span class="truncate">{{ t(app.titleKey) }}</span>
+        </button>
+        <button
+          type="button"
+          class="flex flex-col items-center gap-2 rounded-lg p-3 text-sm text-foreground hover:bg-accent"
+          data-testid="lock-instance"
+          @click="lock"
+        >
+          <Icon
+            name="lucide:lock-keyhole"
+            class="h-6 w-6"
+            :aria-hidden="true"
+          />
+          <span class="truncate">{{ t('wm.launcher.lock') }}</span>
         </button>
       </div>
     </template>

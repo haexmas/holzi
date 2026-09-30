@@ -193,7 +193,7 @@ const RETURN_STATEMENT = `
       composerInputDisabled, sendDisabled, pendingApprovals, streamingMessageId,
       streamingThreadId, lastError,
       updatePermissionMode, permissionMode, permissionModeSaving, syncFromLocation,
-      addAttachments, attachments, lock };
+      addAttachments, attachments };
 `
 
 /** Resolves a store module name to its source file in this checkout. */

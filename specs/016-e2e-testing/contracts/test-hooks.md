@@ -23,21 +23,21 @@ They are part of this contract now: renaming one means updating the helpers in t
 
 ## Hooks to add
 
-| Hook                                                             | Element                                                                  | File                                                     | Lines added |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------- | ----------- |
-| `data-testid="instance-entry"` and `data-instance-name="<name>"` | The button of each instance in the start list                            | `src/components/onboarding/InstancesList.vue` (44 lines) | 2           |
-| `data-testid="open-launcher"`                                    | The round button that opens the workspace app launcher                   | `src/components/shell/ShellDesktop.vue`                  | 1           |
-| `data-testid="open-chat"`                                        | The Chat tile in the workspace app launcher                              | `src/components/shell/ShellLauncher.vue`                 | 1           |
-| `data-testid="lock-instance-sidebar"`                            | The lock button in the chat sidebar (visible while the sidebar is shown) | `src/components/chat/ThreadSidebar.vue`                  | 1           |
-| `data-testid="nav-back"`, `data-testid="nav-forward"`            | A window's back/forward buttons (spec 020)                               | `src/components/shell/ShellNavButtons.vue`               | 1           |
+| Hook                                                             | Element                                                          | File                                                     | Lines added |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------- | ----------- |
+| `data-testid="instance-entry"` and `data-instance-name="<name>"` | The button of each instance in the start list                    | `src/components/onboarding/InstancesList.vue` (44 lines) | 2           |
+| `data-testid="open-launcher"`                                    | The round button that opens the workspace app launcher           | `src/components/shell/ShellDesktop.vue`                  | 1           |
+| `data-testid="open-chat"`                                        | The Chat tile in the workspace app launcher                      | `src/components/shell/ShellLauncher.vue`                 | 1           |
+| `data-testid="lock-instance"`                                    | The lock tile in the app launcher (open it with `open-launcher`) | `src/components/wm/Launcher.vue`                         | 1           |
+| `data-testid="nav-back"`, `data-testid="nav-forward"`            | A window's back/forward buttons (spec 020)                       | `src/components/shell/ShellNavButtons.vue`               | 1           |
 
 `data-instance-name` carries the instance's name, which is data, not interface text, so an entry can be
 found by name without reading what is displayed.
 
-The two lock hooks are separate, not a shared one: the sidebar hook identifies the desktop sidebar
-control, while the header hook identifies the lock control that remains reachable in the Shell window's
-header at every viewport size. Scenarios use the header hook because the Shell window can be smaller than
-the virtual desktop even when the sidebar itself is in desktop mode.
+The lock control is the last tile of the launcher (it used to be a button in the chat sidebar and one in
+the chat header, with a hook each; both are gone). It is reachable at every window size, so scenarios
+open the launcher with `open-launcher` (the `openLauncher` flow) and press `lock-instance`. The chat's
+sidebar is reached through `chat-sidebar-toggle`, which is also what `openChat` waits for.
 
 Not added now: hooks for the composer, the message list or settings. Each scenario that needs one adds
 it with the scenario, so no hook exists without a use.

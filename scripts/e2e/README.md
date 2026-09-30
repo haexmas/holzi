@@ -148,7 +148,7 @@ authoritative list of existing hooks before adding a new `data-testid`, so you d
 already exists.
 
 ```ts
-instance.click('lock-instance-sidebar') // [data-testid="lock-instance-sidebar"]
+instance.click('lock-instance') // [data-testid="lock-instance"]
 instance.click('#unlock-passphrase') // a selector starting with # . [ is used as is
 ```
 
