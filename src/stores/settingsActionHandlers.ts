@@ -5,6 +5,7 @@ import { useHuggingFace } from '~/composables/useHuggingFace'
 import { useModels } from '~/composables/useModels'
 import { usePreferences, type PrefScope } from '~/composables/usePreferences'
 import { useProviders, type DelegateVendor } from '~/composables/useProviders'
+import { useSync } from '~/composables/useSync'
 import { useSttModels } from '~/composables/useSttModels'
 import { parseColorScheme } from '~/lib/settings/colorScheme'
 import type { useWindowManagerStore } from '~/stores/windowManager'
@@ -35,6 +36,7 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
   const providers = useProviders()
   const sttModels = useSttModels()
   const colorScheme = useColorScheme()
+  const sync = useSync()
   const done = { done: true }
   const on = wm.registerGlobalActionHandler
 
@@ -72,8 +74,23 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
       vaultDeviceUuid: device.vaultDeviceUuid,
       ...(device.alias === null ? {} : { alias: device.alias }),
       isCurrent: device.isCurrent,
+      role: device.role,
+      online: device.online,
+      ...(device.lastSeen === null ? {} : { lastSeen: device.lastSeen }),
+      ...(device.problem === null ? {} : { problem: device.problem }),
     })),
   }))
+  on('settings.devices.identity', async () => {
+    const identity = await sync.vaultPublicIdentityAsync()
+    return { npub: identity.npub, hex: identity.hex }
+  })
+  on('settings.sync.servers.set', async ({ input }) => {
+    await sync.syncServersSetAsync({
+      nostrRelays: input.nostrRelays as string[],
+      irohRelays: input.irohRelays as string[],
+    })
+    return done
+  })
   on('settings.devices.link', () => {
     wm.openApp('system.settings', '/federation/devices/link')
     return done

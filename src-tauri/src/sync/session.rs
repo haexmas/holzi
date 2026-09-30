@@ -24,6 +24,7 @@ use crate::sync::outbound::{serve, Served};
 use crate::sync::progress::{self, Vector};
 use crate::sync::replica::Replica;
 use crate::sync::resync;
+use crate::sync::seen;
 use crate::sync::wire::{
     expect_frame, read_frame, write_frame, ErrorCode, Message, ResyncReason, FRAME_LIMIT,
 };
@@ -39,6 +40,8 @@ pub struct SessionContext {
     pub bump: Arc<watch::Sender<u64>>,
     /// Receives the tables a pull changed.
     pub on_applied: Arc<dyn Fn(BTreeSet<String>) + Send + Sync>,
+    /// Notifies the device view when a reported last-seen value advances.
+    pub on_devices_changed: Arc<dyn Fn() + Send + Sync>,
     pub cancel: CancellationToken,
 }
 
@@ -98,7 +101,7 @@ pub async fn run(
             log::debug!("sync: the connection ended: {error}");
             Ok(())
         }
-        result = read_progress(control_recv, theirs_tx) => result,
+        result = read_progress(&ctx, control_recv, theirs_tx) => result,
         result = send_progress(&ctx, control_send) => result,
         result = pull_when_behind(&ctx, &connection, theirs_rx) => result,
         result = serve_pulls(&ctx, &connection) => result,
@@ -115,15 +118,18 @@ pub async fn run(
     }
 }
 
-/// Keeps the other side's latest progress.
+/// Keeps the other side's latest progress, and what it knows of when
+/// devices were last online (FR-033).
 async fn read_progress(
+    ctx: &SessionContext,
     mut recv: RecvStream,
     theirs: watch::Sender<Vector>,
 ) -> Result<(), SessionError> {
     while let Some(message) = read_frame(&mut recv, FRAME_LIMIT).await? {
         match message {
-            Message::Progress { vector, .. } => {
+            Message::Progress { vector, last_seen } => {
                 theirs.send_replace(vector);
+                merge_last_seen(ctx, last_seen).await;
             }
             // Pushes after the handshake are for user story 2.
             Message::DeviceListPush { .. } => {}
@@ -131,6 +137,23 @@ async fn read_progress(
         }
     }
     Ok(())
+}
+
+/// Takes over the times a peer reports. Best-effort: a failure only leaves
+/// "last online" a little older.
+async fn merge_last_seen(ctx: &SessionContext, reports: Vec<([u8; 32], u64)>) {
+    if reports.is_empty() {
+        return;
+    }
+    let replica = Arc::clone(&ctx.replica);
+    let own = ctx.keys.device_pubkey;
+    match tokio::task::spawn_blocking(move || seen::merge(&replica, &reports, &own, now_ms())).await
+    {
+        Ok(Ok(true)) => (ctx.on_devices_changed)(),
+        Ok(Ok(false)) => {}
+        Ok(Err(error)) => log::debug!("sync: merging last-seen times failed: {error}"),
+        Err(error) => log::debug!("sync: merging last-seen times did not run: {error}"),
+    }
 }
 
 /// Sends this device's progress at the start and whenever it moved.
@@ -143,7 +166,7 @@ async fn send_progress(ctx: &SessionContext, mut send: SendStream) -> Result<(),
         if last_sent.as_ref() != Some(&own) {
             let message = Message::Progress {
                 vector: own.clone(),
-                last_seen: Vec::new(),
+                last_seen: last_seen_report(ctx).await,
             };
             write_frame(&mut send, &message, FRAME_LIMIT).await?;
             last_sent = Some(own);
@@ -152,6 +175,28 @@ async fn send_progress(ctx: &SessionContext, mut send: SendStream) -> Result<(),
             return Ok(());
         }
     }
+}
+
+/// What this device knows of when devices were last online, for the peer
+/// (FR-033). Empty when it cannot be read; the next message carries it.
+async fn last_seen_report(ctx: &SessionContext) -> Vec<([u8; 32], u64)> {
+    let replica = Arc::clone(&ctx.replica);
+    let own = ctx.keys.device_pubkey;
+    tokio::task::spawn_blocking(move || {
+        crate::storage::query::read(replica.db(), |r| seen::snapshot(r, &own, now_ms()))
+    })
+    .await
+    .ok()
+    .and_then(Result::ok)
+    .unwrap_or_default()
+}
+
+/// Wall-clock milliseconds since the Unix epoch.
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 /// Pulls whenever the other side is further for some origin.

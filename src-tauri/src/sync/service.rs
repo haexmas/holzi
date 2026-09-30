@@ -301,6 +301,10 @@ fn applied_event_sink<R: Runtime>(
                 }
             });
         }
+        // A name, the device list or who belongs to the vault changed: the device view reloads.
+        if tables.contains("known_devices") || tables.contains("device_lists") {
+            events::emit(&app, SYNC_DEVICES_CHANGED, ());
+        }
         events::emit(
             &app,
             SYNC_DATA_CHANGED,

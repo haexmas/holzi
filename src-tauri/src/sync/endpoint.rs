@@ -23,7 +23,7 @@ use tokio_util::task::TaskTracker;
 
 use crate::sync::handshake::{self, local_schema, Local, Peer};
 use crate::sync::keys::DeviceKeys;
-use crate::sync::problems::{self, DuplicateWatch, Problem};
+use crate::sync::problems::{DuplicateWatch, Problem};
 use crate::sync::replica::Replica;
 use crate::sync::session::{self, SessionContext};
 use crate::sync::wire::{ErrorCode, RejectCode, SYNC_ALPN};
@@ -346,6 +346,9 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
         connection.close(ErrorCode::Closed.as_u32().into(), b"duplicate");
         return;
     }
+    // The device is online now: its time is now, and the list shows it.
+    mark_seen(&inner, peer.device_pubkey).await;
+    notify_devices_changed(&inner);
 
     let ctx = SessionContext {
         replica: Arc::clone(&inner.replica),
@@ -354,93 +357,28 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
         changed: inner.changed.clone(),
         bump: Arc::clone(&inner.bump),
         on_applied: Arc::clone(&inner.on_applied),
+        on_devices_changed: {
+            let inner = Arc::clone(&inner);
+            Arc::new(move || notify_devices_changed(&inner))
+        },
         cancel: inner.cancel.child_token(),
     };
     session::run(ctx, connection.clone(), send, recv, peer.clone()).await;
 
-    let mut peers = inner.peers.lock().unwrap_or_else(|e| e.into_inner());
-    if peers
-        .get(&peer.device_pubkey)
-        .is_some_and(|live| live.stable_id() == connection.stable_id())
-    {
-        peers.remove(&peer.device_pubkey);
-    }
-}
-
-/// Turns a handshake failure into a halted device where it names one: the
-/// device that proved its key, or, when the peer refused this device for
-/// its version or as a duplicate, the device the list gives that endpoint.
-async fn note_failure(inner: &Arc<Inner>, error: &handshake::HandshakeError, remote: [u8; 32]) {
-    use handshake::HandshakeError::{Halted, RefusedByPeer};
-    let (device, problem) = match error {
-        Halted { problem, device } => (Some(*device), *problem),
-        RefusedByPeer(RejectCode::Incompatible) => {
-            (device_at(inner, remote).await, Problem::IncompatibleVersion)
+    let was_live = {
+        let mut peers = inner.peers.lock().unwrap_or_else(|e| e.into_inner());
+        let live = peers
+            .get(&peer.device_pubkey)
+            .is_some_and(|live| live.stable_id() == connection.stable_id());
+        if live {
+            peers.remove(&peer.device_pubkey);
         }
-        RefusedByPeer(RejectCode::Duplicate) => {
-            (device_at(inner, remote).await, Problem::Duplicate)
-        }
-        _ => return,
+        live
     };
-    if let Some(device) = device {
-        flag(inner, device, problem).await;
-    }
-}
-
-async fn device_at(inner: &Arc<Inner>, endpoint: [u8; 32]) -> Option<[u8; 32]> {
-    let replica = Arc::clone(&inner.replica);
-    let vault = inner.vault;
-    tokio::task::spawn_blocking(move || problems::device_at_endpoint(&replica, vault, &endpoint))
-        .await
-        .ok()?
-        .ok()?
-}
-
-async fn flag(inner: &Arc<Inner>, device: [u8; 32], problem: Problem) {
-    if problem == Problem::Duplicate {
-        inner.duplicates.note(device);
-        let live = inner
-            .peers
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(&device);
-        if let Some(live) = live {
-            live.close(ErrorCode::Rejected.as_u32().into(), b"duplicate");
-        }
-    }
-    let replica = Arc::clone(&inner.replica);
-    let changed = tokio::task::spawn_blocking(move || problems::set(&replica, &device, problem))
-        .await
-        .map_err(|e| e.to_string())
-        .and_then(|r| r.map_err(|e| e.to_string()));
-    match changed {
-        Ok(true) => notify_devices_changed(inner),
-        Ok(false) => {}
-        Err(error) => log::warn!("sync: recording a device problem failed: {error}"),
-    }
-}
-
-async fn clear_problem(inner: &Arc<Inner>, device: [u8; 32]) {
-    let replica = Arc::clone(&inner.replica);
-    let cleared = tokio::task::spawn_blocking(move || problems::clear(&replica, &device))
-        .await
-        .map_err(|e| e.to_string())
-        .and_then(|r| r.map_err(|e| e.to_string()));
-    match cleared {
-        Ok(true) => notify_devices_changed(inner),
-        Ok(false) => {}
-        Err(error) => log::warn!("sync: clearing a device problem failed: {error}"),
-    }
-}
-
-fn notify_devices_changed(inner: &Inner) {
-    let hook = inner
-        .devices_changed
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .clone();
-    if let Some(hook) = hook {
-        hook();
+    if was_live {
+        // The last moment it was online is when the session ended.
+        mark_seen(&inner, peer.device_pubkey).await;
+        notify_devices_changed(&inner);
     }
 }
 
@@ -489,6 +427,10 @@ fn register(
         }
     }
 }
+
+#[path = "endpoint_devices.rs"]
+mod devices;
+use devices::{clear_problem, flag, mark_seen, note_failure, notify_devices_changed};
 
 #[cfg(test)]
 #[path = "endpoint_tests.rs"]

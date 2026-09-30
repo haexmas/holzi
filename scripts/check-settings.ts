@@ -15,6 +15,14 @@ import {
   settingsRoutePatterns,
 } from '../src/lib/settings/registry.ts'
 import { isDark, parseColorScheme } from '../src/lib/settings/colorScheme.ts'
+import {
+  canManageDevices,
+  deviceStatus,
+  elapsedSince,
+  problemLabelKey,
+  roleLabelKey,
+  sortDevices,
+} from '../src/lib/sync/deviceStatus.ts'
 import { searchSettings } from '../src/lib/settings/search.ts'
 import {
   getAppDefinition,
@@ -313,4 +321,89 @@ test('color scheme: dark follows the system only for system', () => {
   assert.equal(isDark('system', false), false)
   assert.equal(isDark('light', true), false)
   assert.equal(isDark('dark', false), true)
+})
+
+test('device status: online, never seen, or the last time (FR-033)', () => {
+  const base = { alias: 'A', isCurrent: false }
+  assert.deepEqual(deviceStatus({ ...base, online: true, lastSeen: 5 }), {
+    kind: 'online',
+  })
+  assert.deepEqual(deviceStatus({ ...base, online: false, lastSeen: null }), {
+    kind: 'neverSeen',
+  })
+  assert.deepEqual(deviceStatus({ ...base, online: false, lastSeen: 1234 }), {
+    kind: 'lastSeen',
+    at: 1234,
+  })
+})
+
+test('elapsed time reads in the largest whole unit, and the future as just now', () => {
+  const now = 1_000_000_000
+  assert.deepEqual(elapsedSince(now - 30_000, now), { unit: 'justNow' })
+  assert.deepEqual(elapsedSince(now - 5 * 60_000, now), {
+    unit: 'minutes',
+    value: 5,
+  })
+  assert.deepEqual(elapsedSince(now - 59 * 60_000, now), {
+    unit: 'minutes',
+    value: 59,
+  })
+  assert.deepEqual(elapsedSince(now - 3 * 3_600_000 - 1000, now), {
+    unit: 'hours',
+    value: 3,
+  })
+  assert.deepEqual(elapsedSince(now - 2 * 86_400_000, now), {
+    unit: 'days',
+    value: 2,
+  })
+  assert.deepEqual(elapsedSince(now + 99_000, now), { unit: 'justNow' })
+})
+
+test('devices sort this one first, then by name ignoring case, unnamed last', () => {
+  const device = (alias: string | null, isCurrent = false) => ({
+    alias,
+    isCurrent,
+    online: false,
+    lastSeen: null,
+  })
+  const sorted = sortDevices([
+    device(null),
+    device('beta'),
+    device('Zeta', true),
+    device('Alpha'),
+    device('  '),
+  ])
+  assert.deepEqual(
+    sorted.map((d) => d.alias),
+    ['Zeta', 'Alpha', 'beta', null, '  '],
+  )
+})
+
+test('roles and problems name texts that exist in German and English (FR-037)', () => {
+  const keys = [
+    roleLabelKey('main'),
+    roleLabelKey('linked'),
+    problemLabelKey('incompatible_version'),
+    problemLabelKey('duplicate'),
+  ]
+  for (const locale of ['de', 'en'] as const) {
+    const available = localeKeys(locale)
+    assert.deepEqual(
+      keys.filter((key) => !available.has(key)),
+      [],
+      locale,
+    )
+  }
+})
+
+test('only a main device manages devices (FR-035)', () => {
+  assert.equal(canManageDevices('main'), true)
+  for (const other of [
+    'linked',
+    'awaiting_admission',
+    'removed',
+    null,
+  ] as const) {
+    assert.equal(canManageDevices(other), false, String(other))
+  }
 })

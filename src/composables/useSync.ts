@@ -1,5 +1,9 @@
 import { ref } from 'vue'
+import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import type { SyncServers } from '@bindings/SyncServers'
+import type { SyncStatus } from '@bindings/SyncStatus'
+import type { VaultPublicIdentity } from '@bindings/VaultPublicIdentity'
 
 const SYNC_DATA_CHANGED = 'sync-data-changed'
 
@@ -46,9 +50,32 @@ export function useSync() {
     return listening
   }
 
+  /** Who this device is in the vault, open requests, and a link in progress. */
+  async function syncStatusAsync(): Promise<SyncStatus> {
+    return await invoke<SyncStatus>('sync_status')
+  }
+
+  /** The public key of the vault identity, as `npub` and hex. */
+  async function vaultPublicIdentityAsync(): Promise<VaultPublicIdentity> {
+    return await invoke<VaultPublicIdentity>('vault_public_identity')
+  }
+
+  /** The servers devices find each other through; an empty list means the defaults. */
+  async function syncServersGetAsync(): Promise<SyncServers> {
+    return await invoke<SyncServers>('sync_servers_get')
+  }
+
+  async function syncServersSetAsync(args: SyncServers): Promise<void> {
+    await invoke('sync_servers_set', { args })
+  }
+
   return {
     lastChangedTables,
     changeCount,
     startListening,
+    syncStatusAsync,
+    vaultPublicIdentityAsync,
+    syncServersGetAsync,
+    syncServersSetAsync,
   }
 }

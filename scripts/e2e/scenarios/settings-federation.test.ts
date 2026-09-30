@@ -22,7 +22,7 @@ const rows = (instance: { exec<T>(s: string): Promise<T> }) =>
 // Spec 023-settings-app, quickstart S13a without the second installation (FR-022): the category
 // "Föderation" lists this device once, first and marked; after a rename in "Allgemein" it shows the new
 // name. The same list is readable as the action `settings.devices.list`. Ordering with other and
-// unnamed devices is covered by the Rust tests (`device/commands_tests.rs`, `known_devices_tests.rs`).
+// unnamed devices is covered by the Rust tests (`sync/device_view_tests.rs`, `known_devices_tests.rs`).
 scenario('settings-federation', {}, async (ctx) => {
   const instance = await ctx.startInstance()
   await createAndUnlock(instance, { name: 'e2e-settings-federation' })

@@ -62,10 +62,34 @@ export const SETTINGS_ACTIONS: readonly ActionDefinition[] = [
   setting({
     id: 'settings.devices.list',
     description:
-      "List the vault's devices: this device first and marked, then the others by name. A device without a name has no alias.",
+      "List the vault's devices: this device first and marked, then the others by name, each with its role (main or linked), whether it is online, when it was last online (epoch milliseconds, absent if never seen) and why sync with it is halted, if it is. A device without a name has no alias.",
     result: ANY_OBJECT,
     scope: 'settings.read',
     effect: 'read',
+  }),
+  setting({
+    id: 'settings.devices.identity',
+    description:
+      "The vault's public identity: its public key as npub and hex, the address others invite the vault at. Never a private key.",
+    result: ANY_OBJECT,
+    scope: 'settings.read',
+    effect: 'read',
+  }),
+  setting({
+    // Changes where devices find each other: a guardrail, never callable by agents (FR-036).
+    id: 'settings.sync.servers.set',
+    description:
+      'Set the Nostr and iroh servers devices find each other through. Empty lists bring back the built-in public servers.',
+    input: {
+      type: 'object',
+      properties: {
+        nostrRelays: { type: 'array', items: { type: 'string' } },
+        irohRelays: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['nostrRelays', 'irohRelays'],
+    },
+    scope: 'guardrails',
+    effect: 'write',
   }),
   setting({
     // Opens the view that shows a link code. Linking adds a device to the vault, so it is a

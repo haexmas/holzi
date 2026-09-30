@@ -196,17 +196,17 @@ Vault-Identität, live aktualisiert.
 
 ### Tests für User Story 4
 
-- [ ] T058 [P] [US4] Reine Anzeige-Logik `src/lib/sync/deviceStatus.ts` mit Test unter `scripts/check-settings.ts` (online bis 150 s nach letzter Meldung, „noch nie online gesehen“, Sortierung, Rollenbeschriftung)
-- [ ] T059 [P] [US4] Test der erweiterten Geräteliste in `src-tauri/src/device/commands_tests.rs` (Rolle, `isCurrent`, `online`, `lastSeen`, `problem`)
+- [x] T058 [P] [US4] Reine Anzeige-Logik `src/lib/sync/deviceStatus.ts` mit Test unter `scripts/check-settings.ts` (online bis 150 s nach letzter Meldung, „noch nie online gesehen“, Sortierung, Rollenbeschriftung)
+- [x] T059 [P] [US4] Test der erweiterten Geräteliste in `src-tauri/src/device/commands_tests.rs` (Rolle, `isCurrent`, `online`, `lastSeen`, `problem`)
 
 ### Implementierung für User Story 4
 
-- [ ] T060 [US4] `list_vault_devices` in `src-tauri/src/device/commands.rs` und `src-tauri/src/storage/known_devices.rs` um `role`, `devicePubkey`, `online`, `lastSeen`, `problem` erweitern (Typ `VaultDevice` laut contracts/tauri-commands.md); „zuletzt online“ über dritte Geräte aus dem `last_seen`-Austausch im Handshake (data-model.md)
-- [ ] T061 [US4] Befehle `sync_status`, `vault_public_identity` (`{ npub, hex }`), `sync_servers_get`/`sync_servers_set` in `src-tauri/src/sync/commands.rs`; `sync-devices-changed` bei jeder Änderung von Liste, Online-Stand, Name, Problem, Aufnahmeanfragen (FR-034)
-- [ ] T062 [P] [US4] `src/stores/syncDevices.ts` (Liste live über `sync-devices-changed`) und `src/composables/useSync.ts` (Befehle)
-- [ ] T063 [US4] Unteransicht „Geräte“: `src/components/settings/FederationView.vue` aufteilen in `DeviceRow.vue` (Name, Rolle, dieses Gerät, online/zuletzt online, Grund bei Problemen), `VaultIdentityRow.vue` (öffentlicher Schlüssel als `npub`, kopierbar, nicht änderbar, FR-046) und `SyncServersGroup.vue` (Nostr- und iroh-Relays); auf verknüpften Geräten fehlen „Gerät verknüpfen“ und „Gerät entfernen“ mit Hinweis (FR-035); COSMIC/GNOME-Aufbau mit Group/Row/OptionRow; jede Datei ≤ 500 Zeilen
-- [ ] T064 [US4] Aktionen `settings.devices.list` (erweitert, für Agenten lesbar), `settings.devices.identity` (lesbar), `settings.sync.servers.set` (nicht für Agenten) in `src/lib/actions/settingsActions.ts` und `src/stores/settingsActionHandlers.ts`; keine Aktion gibt Schlüssel, Codes oder Umschläge heraus (FR-036)
-- [ ] T065 [US4] Texte de/en für US4 in `src/i18n/locales/de.json` und `en.json`; `pnpm check:settings` prüft beide Sprachen (FR-037)
+- [x] T060 [US4] `list_vault_devices` in `src-tauri/src/device/commands.rs` und `src-tauri/src/storage/known_devices.rs` um `role`, `devicePubkey`, `online`, `lastSeen`, `problem` erweitern (Typ `VaultDevice` laut contracts/tauri-commands.md); „zuletzt online“ über dritte Geräte aus dem `last_seen`-Austausch im Handshake (data-model.md)
+- [x] T061 [US4] Befehle `sync_status`, `vault_public_identity` (`{ npub, hex }`), `sync_servers_get`/`sync_servers_set` in `src-tauri/src/sync/commands.rs`; `sync-devices-changed` bei jeder Änderung von Liste, Online-Stand, Name, Problem, Aufnahmeanfragen (FR-034)
+- [x] T062 [P] [US4] `src/stores/syncDevices.ts` (Liste live über `sync-devices-changed`) und `src/composables/useSync.ts` (Befehle)
+- [x] T063 [US4] Unteransicht „Geräte“: `src/components/settings/FederationView.vue` aufteilen in `DeviceRow.vue` (Name, Rolle, dieses Gerät, online/zuletzt online, Grund bei Problemen), `VaultIdentityRow.vue` (öffentlicher Schlüssel als `npub`, kopierbar, nicht änderbar, FR-046) und `SyncServersGroup.vue` (Nostr- und iroh-Relays); auf verknüpften Geräten fehlen „Gerät verknüpfen“ und „Gerät entfernen“ mit Hinweis (FR-035); COSMIC/GNOME-Aufbau mit Group/Row/OptionRow; jede Datei ≤ 500 Zeilen
+- [x] T064 [US4] Aktionen `settings.devices.list` (erweitert, für Agenten lesbar), `settings.devices.identity` (lesbar), `settings.sync.servers.set` (nicht für Agenten) in `src/lib/actions/settingsActions.ts` und `src/stores/settingsActionHandlers.ts`; keine Aktion gibt Schlüssel, Codes oder Umschläge heraus (FR-036)
+- [x] T065 [US4] Texte de/en für US4 in `src/i18n/locales/de.json` und `en.json`; `pnpm check:settings` prüft beide Sprachen (FR-037)
 
 **Checkpoint**: Geräteansicht zeigt den Live-Stand beider Rollen.
 

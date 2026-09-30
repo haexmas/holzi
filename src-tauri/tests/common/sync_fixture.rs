@@ -290,7 +290,7 @@ fn set_nostr_relay(db: &Database, url: &str) {
 }
 
 /// This instance's installation UUID, minted on first use.
-fn read_installation_uuid(app: &AppHandle<MockRuntime>) -> Uuid {
+pub fn read_installation_uuid(app: &AppHandle<MockRuntime>) -> Uuid {
     let app_local_data =
         holzi_lib::instances::paths::get_app_local_data(app).expect("app local data");
     holzi_lib::identity::read_or_mint_installation_uuid(&installation_id_path(&app_local_data))

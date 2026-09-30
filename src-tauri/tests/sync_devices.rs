@@ -9,7 +9,7 @@
 //! sequentially in one process).
 #![cfg(target_os = "linux")]
 
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
 use tokio::sync::Mutex;
@@ -144,4 +144,70 @@ async fn three_devices_converge_and_each_change_keeps_its_author() {
             );
         }
     }
+}
+
+/// US4 scenarios 1, 3 and 5 (spec.md), FR-033, FR-034: a connected device is
+/// online with its role, and the device view is told when that changes.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_connected_device_shows_as_online_with_its_role_and_the_view_is_told() {
+    use std::collections::HashSet;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use tauri::{Listener, Manager};
+
+    let _turn = TURN.lock().await;
+    let relay = nostr_sdk::local_relay::MockRelay::run()
+        .await
+        .expect("mock relay");
+    let relay_url = relay.url().await.to_string();
+    let main = sync_fixture::create_main("main", &relay_url).await;
+    let told = Arc::new(AtomicUsize::new(0));
+    let counter = Arc::clone(&told);
+    main.app.listen("sync-devices-changed", move |_| {
+        counter.fetch_add(1, Ordering::SeqCst);
+    });
+    // Read before `join` points `XDG_DATA_HOME` at the other device's directory.
+    let installation = sync_fixture::read_installation_uuid(&main.app);
+    let linked = sync_fixture::join(&main, &relay_url).await;
+
+    // The linked device connects on its own; the list then shows it online.
+    let devices = tokio::time::timeout(Duration::from_secs(30), async {
+        loop {
+            main.write_thread("poke", "poke").await;
+            let connected: HashSet<[u8; 32]> = main
+                .app
+                .state::<Arc<holzi_lib::sync::registry::SyncRegistry>>()
+                .get()
+                .map(|runtime| runtime.node.connected().into_iter().collect())
+                .unwrap_or_default();
+            let devices = holzi_lib::storage::query::read(&main.database(), |r| {
+                holzi_lib::sync::device_view::load(r, installation, &connected)
+            })
+            .expect("load devices");
+            if devices.iter().any(|d| !d.is_current && d.online) {
+                break devices;
+            }
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+    })
+    .await
+    .expect("the linked device shows as online");
+
+    let this = devices.iter().find(|d| d.is_current).expect("this device");
+    let other = devices
+        .iter()
+        .find(|d| !d.is_current)
+        .expect("the other device");
+    assert_eq!(this.role, holzi_lib::sync::device_view::DeviceRole::Main);
+    assert_eq!(other.role, holzi_lib::sync::device_view::DeviceRole::Linked);
+    assert_eq!(
+        other.device_pubkey,
+        holzi_lib::sync::keys::hex(&linked.keys.device_pubkey)
+    );
+    assert!(other.last_seen.is_some(), "a connected device has a time");
+    assert_eq!(other.problem, None);
+    assert!(
+        told.load(Ordering::SeqCst) > 0,
+        "FR-034: the device view was told a device came online"
+    );
 }

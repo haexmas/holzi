@@ -33,6 +33,9 @@ pub struct AppState {
     /// `None` on boot; published once by `create_instance`/`open_instance` (a second attempt is
     /// refused by the gate before either reaches here); cleared by `close_instance`.
     active_instance: Mutex<Option<ActiveInstanceHandle>>,
+    /// Serializes relay preference persistence with applying the new set to
+    /// the running endpoint.
+    sync_servers_update: tokio::sync::Mutex<()>,
     /// The gate whose tracker counts every `VaultDb` this state hands out, and whose phase
     /// `install` advances in the same breath as publishing.
     gate: VaultGate,
@@ -43,8 +46,15 @@ impl AppState {
     pub fn new(gate: VaultGate) -> Self {
         Self {
             active_instance: Mutex::new(None),
+            sync_servers_update: tokio::sync::Mutex::new(()),
             gate,
         }
+    }
+
+    /// Holds the relay-settings update lock across persistence and runtime
+    /// application so concurrent settings writes cannot interleave.
+    pub(crate) async fn lock_sync_servers(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.sync_servers_update.lock().await
     }
 
     fn slot(&self, context: &str) -> Result<MutexGuard<'_, Option<ActiveInstanceHandle>>> {

@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
+import type { VaultDevice } from '@bindings/VaultDevice'
 
 export interface DeviceInfo {
   installationUuid: string
@@ -18,13 +19,7 @@ export interface DeviceInfo {
   hostname: string | null
 }
 
-/** One device of the vault in the settings' device list (spec 023-settings-app, FR-022). */
-export interface VaultDevice {
-  vaultDeviceUuid: string
-  /** `null` for a device that has not finished onboarding. */
-  alias: string | null
-  isCurrent: boolean
-}
+export type { VaultDevice }
 
 /**
  * Current-device identity for the active vault. Powers the onboarding
