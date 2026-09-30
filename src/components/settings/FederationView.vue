@@ -36,6 +36,16 @@ onMounted(async () => {
       {{ t('settings.federation.loadFailed') }}: {{ loadError }}
     </p>
 
+    <SettingsGroup>
+      <SettingsRow
+        to="/federation/devices/link"
+        icon="lucide:qr-code"
+        :title="t('settings.locations.federation.link.title')"
+        :description="t('settings.locations.federation.link.description')"
+        data-testid="settings-link-device"
+      />
+    </SettingsGroup>
+
     <SettingsGroup
       v-if="!loading && !loadError"
       :label="t('settings.federation.devicesLabel')"

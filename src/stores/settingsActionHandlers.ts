@@ -74,6 +74,10 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
       isCurrent: device.isCurrent,
     })),
   }))
+  on('settings.devices.link', () => {
+    wm.openApp('system.settings', '/federation/devices/link')
+    return done
+  })
   on('settings.models.list', async () => ({
     models: (await models.listInstalledAsync()).map((model) => ({
       modelId: model.id,

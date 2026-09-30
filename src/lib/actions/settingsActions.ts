@@ -68,6 +68,15 @@ export const SETTINGS_ACTIONS: readonly ActionDefinition[] = [
     effect: 'read',
   }),
   setting({
+    // Opens the view that shows a link code. Linking adds a device to the vault, so it is a
+    // guardrail: never callable by agents (spec 024, FR-036).
+    id: 'settings.devices.link',
+    description:
+      'Open the settings view that links a new device to this vault with a code (main devices only).',
+    scope: 'guardrails',
+    effect: 'write',
+  }),
+  setting({
     id: 'settings.models.list',
     description: 'List the installed models.',
     result: ANY_OBJECT,
