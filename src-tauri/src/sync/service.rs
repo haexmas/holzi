@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use iroh::RelayMode;
-use tauri::{AppHandle, Runtime};
+use tauri::{AppHandle, Manager, Runtime};
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 
@@ -23,8 +23,12 @@ use crate::error::{HolziError, Result};
 use crate::instances::paths::get_app_local_data;
 use crate::state::AppState;
 use crate::sync::endpoint::{NodeConfig, SyncNode};
-use crate::sync::events::{self, SyncDataChanged, SYNC_DATA_CHANGED, SYNC_DEVICES_CHANGED};
+use crate::sync::events::{
+    self, SyncDataChanged, LINK_HOST_STATE_CHANGED, SYNC_DATA_CHANGED, SYNC_DEVICES_CHANGED,
+};
 use crate::sync::keys::{self, DeviceKeys};
+use crate::sync::link::host_task::LinkHost;
+use crate::sync::registry::{SyncRegistry, SyncRuntime};
 use crate::sync::replica::Replica;
 use crate::vault_gate::VaultGate;
 
@@ -71,6 +75,8 @@ impl SyncService {
 /// publish the active instance (spec 024); a failure at any step is logged
 /// and this vault session simply does not sync (Constitution VII, FR-031).
 pub async fn start_for_active_instance<R: Runtime>(app: &AppHandle<R>, state: &AppState) {
+    // Idempotent: a second vault session in the process finds it managed.
+    let _ = app.manage(Arc::new(SyncRegistry::default()));
     let deps = match resolve_deps(app, state).await {
         Ok(deps) => deps,
         Err(error) => {
@@ -136,7 +142,13 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
     let nostr_relays = deps.nostr_relays;
     let bind_addr = deps.bind_addr;
     let devices_app = deps.app.clone();
-    let on_applied = applied_event_sink(deps.app);
+    let link_app = deps.app.clone();
+    let registry = deps
+        .app
+        .try_state::<Arc<SyncRegistry>>()
+        .map(|state| Arc::clone(&*state));
+    let on_applied =
+        applied_event_sink(deps.app, Arc::clone(&replica), presence_keys.clone(), vault);
     let config = NodeConfig {
         relay_mode: deps.relay_mode,
         bind_addr,
@@ -150,6 +162,7 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
         }
     };
 
+    let node = Arc::new(node);
     node.on_devices_changed(Arc::new(move || {
         events::emit(&devices_app, SYNC_DEVICES_CHANGED, ());
     }));
@@ -160,6 +173,32 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
     // device-list change this session just issued) goes through this
     // `watch` channel instead.
     let (changed_tx, changed_rx) = tokio::sync::watch::channel(0u64);
+    let changed_tx = Arc::new(changed_tx);
+
+    // Commands reach the running node through the registry (linking a
+    // device); it is cleared again when this service ends.
+    let runtime = Arc::new(SyncRuntime {
+        node: Arc::clone(&node),
+        replica: Arc::clone(&replica),
+        keys: presence_keys.clone(),
+        vault,
+        nostr_relays: nostr_relays.clone(),
+        cancel: token.child_token(),
+        link: LinkHost::new(Arc::new(move |status| {
+            events::emit(&link_app, LINK_HOST_STATE_CHANGED, status);
+        })),
+        wake: {
+            let (node, changed_tx) = (Arc::clone(&node), Arc::clone(&changed_tx));
+            Arc::new(move || {
+                node.local_changed();
+                changed_tx.send_modify(|n| *n = n.wrapping_add(1));
+            })
+        },
+    });
+    if let Some(registry) = &registry {
+        registry.set(Arc::clone(&runtime));
+    }
+    finish_pending_links(&replica, &presence_keys, vault).await;
     // Presence wakes reconnect as soon as it records a fresh meeting, so a
     // device that just appeared is dialed without waiting out the tick.
     let reconnect_now = Notify::new();
@@ -197,15 +236,71 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
         _ = presence_loop => {}
         _ = reconnect_loop => {}
     }
+    runtime.cancel.cancel();
+    if let Some(registry) = &registry {
+        registry.clear();
+    }
     node.shutdown().await;
 }
 
-/// Builds the closure [`SyncNode::bind`] calls after applying a pull: turns
-/// the changed tables into the [`SYNC_DATA_CHANGED`] event (FR-032).
+/// Finishes links this device began before it last stopped: a main device
+/// publishes a list whose new device already confirmed, a new installation
+/// drops its record once the list names it. Best-effort, and idempotent.
+async fn finish_pending_links(replica: &Arc<Replica>, keys: &DeviceKeys, vault: [u8; 32]) {
+    let (replica, keys) = (Arc::clone(replica), keys.clone());
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
+        .unwrap_or(0);
+    let result = tokio::task::spawn_blocking(move || {
+        crate::sync::link::host::finish_pending(&replica, &keys, vault, now)?;
+        crate::sync::link::join::finish_pending(&replica, now)?;
+        Ok::<_, haex_crdt::Error>(())
+    })
+    .await;
+    match result {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => log::warn!("sync: finishing pending links failed: {error}"),
+        Err(error) => log::warn!("sync: finishing pending links did not run: {error}"),
+    }
+}
+
+/// Builds the closure [`SyncNode::bind`] calls after applying a pull: finishes
+/// join records when a remote device-list update is evidence of host
+/// publication, then turns the changed tables into the [`SYNC_DATA_CHANGED`]
+/// event (FR-032).
 fn applied_event_sink<R: Runtime>(
     app: AppHandle<R>,
+    replica: Arc<Replica>,
+    keys: DeviceKeys,
+    vault: [u8; 32],
 ) -> Arc<dyn Fn(std::collections::BTreeSet<String>) + Send + Sync> {
     Arc::new(move |tables| {
+        if tables.contains("device_lists") {
+            let replica = Arc::clone(&replica);
+            let keys = keys.clone();
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
+                .unwrap_or(0);
+            tokio::spawn(async move {
+                match tokio::task::spawn_blocking(move || {
+                    crate::sync::link::join::finish_pending_after_host_publication(
+                        &replica, &keys, vault, now,
+                    )
+                })
+                .await
+                {
+                    Ok(Ok(_)) => {}
+                    Ok(Err(error)) => {
+                        log::warn!("sync: finishing published join links failed: {error}")
+                    }
+                    Err(error) => {
+                        log::warn!("sync: finishing published join links did not run: {error}")
+                    }
+                }
+            });
+        }
         events::emit(
             &app,
             SYNC_DATA_CHANGED,

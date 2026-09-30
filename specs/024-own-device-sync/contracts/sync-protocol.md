@@ -115,15 +115,15 @@ Knoten im `hlc_timestamp`.
 H = Hauptgerät, N = neue Installation; beide kennen den Code c
 
 N findet H über den Treffpunkt (contracts/nostr-events.md) und wählt H an.
-H → N  LinkHello   { nonce_h, endpoint_h, device_h }
-N → H  LinkProof   { nonce_n, endpoint_n, device_n, name, schema, mac_n }
-H → N  LinkProof   { mac_h }
+H → N  Hello      { nonce_h, endpoint_h, device_h }
+N → H  Proof      { nonce_n, endpoint_n, device_n, vault_device_uuid, name, schema, mac_n }
+H → N  HostProof  { mac_h }
        -- H zeigt Name und Rollenfrage; wartet auf die Nutzerin --
-H → N  LinkDecision { accepted: bool }
-H → N  LinkTransfer { snapshot pages…, progress, key_generations, envelopes_for_n,
-                      device_list (neu, noch nicht veröffentlicht),
-                      vault_secret: Option<[u8;32]> (nur bei Rolle Hauptgerät) }
-N → H  LinkDone    { link_id, applied: true }
+H → N  Decision   { accepted: bool }
+H → N  Page(page)  -- wiederholt für jede Snapshot-Seite
+H → N  Transfer   { link_id, envelopes, list_payload, list_signature,
+                    vault_secret: Option<SecretBytes> }
+N → H  Done       { link_id }
        -- H veröffentlicht die neue Geräteliste --
 ```
 
@@ -131,19 +131,19 @@ N → H  LinkDone    { link_id, applied: true }
   `mac_x = HMAC-SHA256(k, "holzi-link/v1" ‖ lp(nonce_h) ‖ lp(nonce_n) ‖ lp(endpoint_h) ‖
 lp(endpoint_n) ‖ lp(device_h) ‖ lp(device_n) ‖ rolle_x)`, `rolle_x` ∈ {`H`, `N`}.
 - Falscher `mac`, abgelaufener oder verbrauchter Code: Verbindung zu, nichts übertragen (FR-024).
-  Der Code ist verbraucht, sobald `LinkHello` gesendet wurde.
-- H erzeugt vor `LinkTransfer` eine zufällige `link_id` und legt einen dauerhaften
+  Der Code ist verbraucht, sobald `Hello` gesendet wurde.
+- H erzeugt vor `Transfer` eine zufällige `link_id` und legt einen dauerhaften
   `pending_link`-Datensatz mit `link_id`, dem vollständigen neuen Gerätelistensatz und dem Zustand
   `transferring` an. N speichert `link_id` und den Zustand `awaiting_publication`, bevor es
-  `LinkDone` sendet. Beide Seiten behalten dafür das aus dem einmal verwendeten Code abgeleitete
+  `Done` sendet. Beide Seiten behalten dafür das aus dem einmal verwendeten Code abgeleitete
   Link-Sitzungsgeheimnis; der Code selbst muss nicht erneut vorgelegt werden.
-- Nach einem Abbruch oder Neustart darf H mit `LinkResume { link_id, mac }` die offene Sitzung
-  wiederaufnehmen. N bestätigt dabei ein bereits angewendetes `LinkTransfer` erneut mit
-  `LinkDone`; die MAC wird über `"holzi-link-resume/v1" ‖ lp(link_id) ‖ lp(state)` mit dem
+- Nach einem Abbruch oder Neustart darf H mit `Resume { link_id, state, mac }` die offene Sitzung
+  wiederaufnehmen. N bestätigt dabei ein bereits angewendetes `Transfer` erneut mit
+  `Done`; die MAC wird über `"holzi-link-resume/v1" ‖ lp(link_id) ‖ lp(state)` mit dem
   Link-Sitzungsgeheimnis gebildet. H veröffentlicht den gespeicherten Gerätelistensatz in einer
   idempotenten Einfügeoperation, markiert `pending_link` als abgeschlossen und löscht ihn erst
-  danach. Ein erneutes `LinkDone` wiederholt nur diese Veröffentlichung und überträgt weder Snapshot
-  noch private Daten. So ist die Veröffentlichung auch nach einem Absturz zwischen `LinkDone` und
+  danach. Ein erneutes `Done` wiederholt nur diese Veröffentlichung und überträgt weder Snapshot
+  noch private Daten. So ist die Veröffentlichung auch nach einem Absturz zwischen `Done` und
   dem ersten Listen-Commit möglich, ohne den verbrauchten Code erneut zu verwenden.
 - `snapshot` sind `Page`s wie in Abschnitt 2 mit dem Stand „nichts“ für jeden Ursprung: alle Zellen
   des Bereichs „Vault“ mit ihren ursprünglichen HLCs, samt Lösch-Log, ohne gerätelokale Tabellen.
@@ -153,11 +153,11 @@ lp(endpoint_n) ‖ lp(device_h) ‖ lp(device_n) ‖ rolle_x)`, `rolle_x` ∈ {`
   `envelopes_for_n` sind dabei nur der initiale
   Link-Transfer; im anschließenden gewöhnlichen Sync laufen diese Zeilen ausschließlich über
   `Pull`/`Page`.
-- Bricht die Verbindung vor `LinkDone` ab, löscht N die angelegte Vault; H verwirft den offenen
+- Bricht die Verbindung vor `Done` ab, löscht N die angelegte Vault; H verwirft den offenen
   `pending_link`-Datensatz nur nach einem ausdrücklich authentifizierten Abbruch. Ein bloßer
-  Verbindungsabbruch lässt ihn für `LinkResume` bestehen, falls N `LinkDone` bereits dauerhaft
+  Verbindungsabbruch lässt ihn für `Resume` bestehen, falls N `Done` bereits dauerhaft
   gespeichert hat. Nach einem bestätigten
-  `LinkDone` bleibt N bis zur beobachteten neuen Geräteliste im Zustand `awaiting_publication` und
-  wiederholt `LinkDone` bei einer Wiederaufnahme.
+  `Done` bleibt N bis zur beobachteten neuen Geräteliste im Zustand `awaiting_publication` und
+  wiederholt `Done` bei einer Wiederaufnahme.
 - `vault_secret` wird nur bei gewählter Hauptgerät-Rolle gesendet und nur auf dieser Verbindung
   (FR-038).

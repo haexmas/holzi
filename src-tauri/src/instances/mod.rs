@@ -4,6 +4,7 @@
 //! One file per command mirrors haex-vault's convention.
 
 pub mod close;
+pub mod link_vault;
 pub mod lock_retry;
 pub mod passphrase;
 pub mod paths;

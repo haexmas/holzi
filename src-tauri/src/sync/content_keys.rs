@@ -110,13 +110,13 @@ struct GenerationRecord<'a> {
 
 /// The canonical record an envelope's authorization signs.
 #[derive(Serialize)]
-struct EnvelopeRecord<'a> {
-    key_id: [u8; 16],
-    generation: u64,
-    recipient: [u8; 32],
-    sender: [u8; 32],
-    envelope: &'a str,
-    device_list_hash: [u8; 32],
+pub(crate) struct EnvelopeRecord<'a> {
+    pub(crate) key_id: [u8; 16],
+    pub(crate) generation: u64,
+    pub(crate) recipient: [u8; 32],
+    pub(crate) sender: [u8; 32],
+    pub(crate) envelope: &'a str,
+    pub(crate) device_list_hash: [u8; 32],
 }
 
 /// What an envelope carries.
@@ -206,7 +206,7 @@ pub struct StoredGeneration {
 }
 
 /// A `vault_key_envelopes` row as read.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StoredEnvelope {
     pub key_id: Vec<u8>,
     pub recipient: Vec<u8>,
@@ -410,7 +410,11 @@ fn name_aad(generation: u64, device_pubkey: &[u8; 32]) -> Vec<u8> {
 
 /// Serializes the vault content key and its metadata into a JSON payload and
 /// encrypts it for `recipient` with NIP-44 v2 using the sender's device secret.
-fn wrap(key: &ContentKey, sender: &DeviceKeys, recipient: &[u8; 32]) -> haex_crdt::Result<String> {
+pub(crate) fn wrap(
+    key: &ContentKey,
+    sender: &DeviceKeys,
+    recipient: &[u8; 32],
+) -> haex_crdt::Result<String> {
     let content = serde_json::to_string(&EnvelopeContent {
         scope: SCOPE_VAULT.to_string(),
         generation: key.generation,
@@ -525,7 +529,7 @@ fn authorized_by_main<T: Serialize>(
     }
 }
 
-fn sign<T: Serialize>(
+pub(crate) fn sign<T: Serialize>(
     domain: Domain,
     record: &T,
     secret: &[u8; 32],
@@ -538,7 +542,7 @@ fn nostr_secret(secret: &[u8; 32]) -> Result<nostr::key::SecretKey, KeyError> {
     nostr::key::SecretKey::from_slice(secret).map_err(|e| KeyError::Envelope(e.to_string()))
 }
 
-fn fixed<const N: usize>(bytes: &[u8]) -> Result<[u8; N], KeyError> {
+pub(crate) fn fixed<const N: usize>(bytes: &[u8]) -> Result<[u8; N], KeyError> {
     bytes.try_into().map_err(|_| KeyError::Malformed)
 }
 

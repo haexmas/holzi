@@ -185,6 +185,15 @@ pub async fn write_frame<W: AsyncWrite + Unpin>(
     message: &Message,
     limit: usize,
 ) -> Result<(), WireError> {
+    write_value(writer, message, limit).await
+}
+
+/// [`write_frame`] for any message type, as the link protocol has its own.
+pub async fn write_value<W: AsyncWrite + Unpin, T: Serialize>(
+    writer: &mut W,
+    message: &T,
+    limit: usize,
+) -> Result<(), WireError> {
     let bytes = postcard::to_stdvec(message).map_err(WireError::Codec)?;
     if bytes.len() > limit {
         return Err(WireError::FrameTooLarge {
@@ -207,6 +216,14 @@ pub async fn read_frame<R: AsyncRead + Unpin>(
     reader: &mut R,
     limit: usize,
 ) -> Result<Option<Message>, WireError> {
+    read_value(reader, limit).await
+}
+
+/// [`read_frame`] for any message type.
+pub async fn read_value<R: AsyncRead + Unpin, T: serde::de::DeserializeOwned>(
+    reader: &mut R,
+    limit: usize,
+) -> Result<Option<T>, WireError> {
     let mut len = [0u8; 4];
     match reader.read_exact(&mut len).await {
         Ok(_) => {}
@@ -228,6 +245,14 @@ pub async fn read_frame<R: AsyncRead + Unpin>(
     postcard::from_bytes(&bytes)
         .map(Some)
         .map_err(WireError::Codec)
+}
+
+/// [`expect_frame`] for any message type.
+pub async fn expect_value<R: AsyncRead + Unpin, T: serde::de::DeserializeOwned>(
+    reader: &mut R,
+    limit: usize,
+) -> Result<T, WireError> {
+    read_value(reader, limit).await?.ok_or(WireError::Closed)
 }
 
 /// Reads one frame that must be there.

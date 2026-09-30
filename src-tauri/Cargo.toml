@@ -95,6 +95,10 @@ rustls = { version = "0.23", default-features = false, features = ["ring"] }
 secp256k1 = "0.30"
 iroh = { version = "1.2", default-features = false, features = ["tls-ring"] }
 hkdf = "0.13"
+# Link code proofs (spec 024, R11): HMAC-SHA256 over the link transcript, and the
+# QR code the main device shows.
+hmac = "0.13"
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 chacha20poly1305 = { version = "0.10", features = ["std"] }
 postcard = { version = "1", features = ["use-std"] }
 # Randomness for content keys and nonces. Already in the lock via other crates.
