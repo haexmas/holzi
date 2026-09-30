@@ -76,8 +76,15 @@ scenario('settings-narrow-window', {}, async (ctx) => {
     'federation',
   ]) {
     await instance.click('settings-sidebar-toggle')
+    await ctx.waitFor('the sidebar to finish opening', () =>
+      sidebarShown(instance),
+    )
     await instance.click(`settings-category-${id}`)
     await waitForLocation(instance, id)
+    await ctx.waitFor(
+      'the category selection to finish closing the sidebar',
+      async () => !(await sidebarShown(instance)),
+    )
     const overflow = await instance.exec<number>(
       `const frame = document.querySelector('[data-testid="settings-title"]').closest('[data-wm-window-id]')
        const right = frame.getBoundingClientRect().right
