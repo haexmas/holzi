@@ -82,6 +82,9 @@ pub fn remove_device(
             let effective = device_list::effective(&valid)
                 .ok_or_else(|| fail(RemovalError::NoDeviceList))?
                 .clone();
+            if !effective.list.is_main(&own.device_pubkey) {
+                return Err(fail(RemovalError::NotMainDevice));
+            }
             let entry = effective
                 .list
                 .device(&target)

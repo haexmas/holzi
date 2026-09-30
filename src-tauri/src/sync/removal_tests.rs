@@ -281,6 +281,26 @@ fn only_a_main_device_removes() {
 }
 
 #[test]
+fn a_device_with_a_vault_secret_but_without_the_main_role_cannot_remove() {
+    let (main, linked, third) = three();
+    main.issue_list(|mut list| {
+        for device in &mut list.devices {
+            if device.device_pubkey == main.keys.device_pubkey {
+                device.role = device_list::Role::Linked;
+            } else if device.device_pubkey == third.keys.device_pubkey {
+                device.role = device_list::Role::Main;
+            }
+        }
+        list
+    });
+
+    let refused = remove(&main, &linked);
+
+    assert!(matches!(refused, Err(RemovalError::NotMainDevice)));
+    assert_eq!(listed(&main).len(), 3, "nothing was published");
+}
+
+#[test]
 fn removing_a_device_twice_is_refused_the_second_time() {
     let (main, linked, _third) = three();
     remove(&main, &linked).expect("removed");

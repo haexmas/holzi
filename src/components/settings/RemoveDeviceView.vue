@@ -24,6 +24,10 @@ onMounted(async () => {
   await store.loadAsync()
 })
 
+onBeforeUnmount(() => {
+  store.stopListening()
+})
+
 /** A device that is gone, or this device, has nothing to remove here. */
 const missing = computed(
   () => !store.loading && (!device.value || device.value.isCurrent),
