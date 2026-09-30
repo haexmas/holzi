@@ -1,0 +1,100 @@
+# Vertrag: Commands und Ereignisse (Rust ↔ Frontend)
+
+**Spec**: [../spec.md](../spec.md) | **Datenmodell**: [../data-model.md](../data-model.md)
+
+Alle Nutzlasten camelCase. „Command“ meint hier ausschließlich Tauri-Commands
+(Begriff aus `CONTEXT.md`); fachlich heißt es „Aktion“. Die Commands laufen
+durch das Tresor-Gate (`vault_gate`) und sind nur bei offener Sitzung
+aufrufbar.
+
+## Commands
+
+### `set_agent_actions`
+
+Ersetzt alle Werkzeuge der Quelle `action` im Register durch die übergebenen.
+Wird vom Frontend nach dem Start der Tresor-Sitzung und nach jedem
+Sprachwechsel aufgerufen. Idempotent.
+
+```text
+args:   { actions: AgentActionDef[] }         // Form: data-model.md §2
+result: { registered: number }
+errors: InvalidInput  // doppelter toolName, toolName verletzt ^[A-Za-z0-9_-]{1,64}$,
+                      // Schema außerhalb der Teilmenge
+```
+
+Nebenwirkung: `ToolRegistry` behält `run_command` und MCP-Werkzeuge, ersetzt nur
+Werkzeuge mit Quelle `action`. Das Meta-Werkzeug `list_actions` ist immer
+vorhanden, sobald mindestens eine Aktion registriert ist.
+
+### `respond_action_call`
+
+Antwort des Frontends auf `action-call-request`.
+
+```text
+args:   { requestId: Uuid, outcome: ActionOutcomeWire }
+        ActionOutcomeWire = { ok: true, result: any }
+                          | { ok: false, code: string, field?: string, message: string }
+result: ()
+errors: nie für eine unbekannte oder späte requestId (stilles Nichts)
+```
+
+Das Frontend sendet nur `code`, `field` und `message` des Runners. Das Feld
+`error` (roher Fehler) wird nicht übertragen (FR-006). Bei `code == "failed"`
+ersetzt Rust die `message` durch den festen Text `"The action failed."`.
+
+## Ereignisse (Rust → Frontend)
+
+### `action-call-request`
+
+```text
+{ requestId: Uuid, threadId: Uuid, actionId: string, input: object }
+```
+
+Der globale Listener (`src/plugins/agentActions.client.ts`) führt
+`wm.runAction(actionId, input, { kind: 'builtinAgent' })` aus und antwortet mit
+`respond_action_call`. Bleibt die Antwort 60 s aus, bricht Rust mit dem
+Werkzeugfehler `action_timeout` ab.
+
+### `chat-tool-availability`
+
+```text
+{ threadId: Uuid, state: "offered" | "offeredUnverified" | "unsupported" | "delegate" }
+```
+
+Einmal je Zug zu Beginn gesendet. Das Frontend zeigt für die drei Zustände
+außer `offered` einmal je Unterhaltung und Zustand pro App-Sitzung einen
+schließbaren Hinweis (`chat.toolNotice.*`).
+
+### `model-tool-use-updated`
+
+```text
+{ modelId: string }
+```
+
+Nach Probe oder Selbsttest. Das Frontend lädt die Modelllisten neu
+(`list_installed_models` / `list_provider_models`), die `toolUse` in
+`capabilities` tragen.
+
+## Geänderte bestehende Verträge
+
+| Vertrag                                          | Änderung                                                                                                                |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `tool-permission-request.riskClass`              | neuer Wert `"change"` (vorher `"safe" \| "risky"`)                                                                      |
+| `chat-tool-call.toolSource`                      | neuer Wert `"action"` (vorher `"mcp" \| "cli"`); TS-Typ `ToolCallEvent.toolSource`                                      |
+| `list_installed_models` / `list_provider_models` | `capabilities.toolUse` (`{ support, basis, maxTools } \| null`)                                                         |
+| Werkzeug-Fehlertexte                             | neu: `action_timeout`, `action_unavailable`; bestehend: `denied_by_user`, `blocked_by_plan_mode`, `tool_call_cancelled` |
+
+## Meta-Werkzeug `list_actions` (für das Modell)
+
+```text
+name:        list_actions
+description: List the actions holzi offers, optionally filtered by a search
+             text. Returns id, one-line description and input schema.
+input:       { query?: string }
+risk:        Safe, source "action"
+result:      { actions: [{ tool: string, description: string, inputSchema: object }] }
+```
+
+Antwort höchstens 30 Einträge; ohne `query` die Kernaktionen plus Hinweis,
+dass `query` die Liste eingrenzt. Die Einträge stammen aus dem Register,
+nicht aus einem Frontend-Umlauf.
