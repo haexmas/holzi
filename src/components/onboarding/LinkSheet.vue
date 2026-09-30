@@ -64,11 +64,21 @@ onMounted(async () => {
 onBeforeUnmount(() => stopListening?.())
 
 // Closing the sheet ends a link in progress; its vault is removed (FR-025).
+let closeRequested = false
+let cancelOnClose: Promise<void> | undefined
+
 watch(
   () => props.open,
   (isOpen) => {
+    closeRequested = !isOpen
     if (isOpen) return
-    if (running.value) void joinCancelAsync()
+    if (running.value) {
+      cancelOnClose = joinCancelAsync().finally(() => {
+        cancelOnClose = undefined
+        if (!props.open) reset()
+      })
+      return
+    }
     reset()
   },
 )
@@ -96,6 +106,11 @@ async function onSubmit() {
       deviceName: deviceName.value.trim(),
       passphrase: passphrase.value,
     })
+    if (closeRequested) {
+      await cancelOnClose
+      await joinCancelAsync()
+      return
+    }
     // An event may already have moved on; only the first state is replaced.
     if (state.value?.state === 'searching') state.value = started
     // The passphrase is only needed to create the vault; do not keep it in the form.

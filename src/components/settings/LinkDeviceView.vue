@@ -74,7 +74,7 @@ onBeforeUnmount(() => {
   clearInterval(ticker)
   for (const stop of stops) stop()
   if (phase.value === 'code' || phase.value === 'confirm') {
-    void cancelCodeAsync()
+    cancelCodeAsync().catch(() => {})
   }
 })
 
@@ -124,10 +124,11 @@ async function onConfirm() {
   busy.value = true
   error.value = null
   devicesChanged = false
+  phase.value = 'sending'
   try {
     await confirmAsync(asMain.value)
-    phase.value = 'sending'
   } catch (e) {
+    if (phase.value === 'sending') phase.value = 'confirm'
     error.value = errString(e)
   } finally {
     busy.value = false
@@ -194,7 +195,7 @@ function onAgain() {
           <img
             :src="qrSource"
             :alt="t('settings.link.qrAlt')"
-            class="size-48 rounded-md bg-white p-2"
+            class="size-48 rounded-md bg-background p-2"
           />
           <p
             class="font-mono text-lg tracking-wider select-all"

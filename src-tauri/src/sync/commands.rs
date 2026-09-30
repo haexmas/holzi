@@ -114,6 +114,6 @@ pub async fn link_join_status(join: State<'_, LinkJoin>) -> Result<LinkJoinState
 /// Cancels the join; its vault is removed.
 #[tauri::command]
 pub async fn link_join_cancel(join: State<'_, LinkJoin>) -> Result<()> {
-    join.cancel();
+    join.cancel().await;
     Ok(())
 }

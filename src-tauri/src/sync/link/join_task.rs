@@ -15,6 +15,7 @@ use iroh::endpoint::{presets, Connection};
 use iroh::{Endpoint, RelayMode, SecretKey};
 use nostr_sdk::client::Client;
 use tauri::{AppHandle, Runtime};
+use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 
 use crate::error::HolziError;
@@ -82,6 +83,7 @@ pub type Emit = Arc<dyn Fn(&LinkJoinState) + Send + Sync>;
 struct Running {
     state: LinkJoinState,
     cancel: CancellationToken,
+    done: Arc<Notify>,
 }
 
 /// The join of this installation; one at a time.
@@ -117,21 +119,53 @@ impl LinkJoin {
                 let state = LinkJoinState::Failed {
                     reason: LinkFailure::WrongCode,
                 };
-                self.set(&emit, CancellationToken::new(), state.clone());
+                self.set(
+                    &emit,
+                    CancellationToken::new(),
+                    Arc::new(Notify::new()),
+                    state.clone(),
+                );
                 return Ok(state);
             }
         };
-        let vault =
-            LinkVault::create(app, &args.vault_name, &args.device_name, args.passphrase).await?;
         let cancel = CancellationToken::new();
+        let done = Arc::new(Notify::new());
         let state = LinkJoinState::Searching;
-        self.set(&emit, cancel.clone(), state.clone());
+        self.set(&emit, cancel.clone(), done.clone(), state.clone());
+        let vault = match LinkVault::create(
+            app,
+            &args.vault_name,
+            &args.device_name,
+            args.passphrase,
+        )
+        .await
+        {
+            Ok(vault) => vault,
+            Err(error) => {
+                self.clear_if(&done);
+                return Err(error);
+            }
+        };
+        if cancel.is_cancelled() {
+            vault.discard();
+            let state = LinkJoinState::Failed {
+                reason: LinkFailure::ConnectionLost,
+            };
+            self.set(&emit, cancel, done, state.clone());
+            return Ok(state);
+        }
 
         let this = self.clone();
         tokio::spawn(async move {
             let outcome = drive(&this, &emit, &cancel, &vault, &code, &config).await;
             let name = vault.name.clone();
             let end = match outcome {
+                Ok(()) if cancel.is_cancelled() => {
+                    vault.discard();
+                    LinkJoinState::Failed {
+                        reason: LinkFailure::ConnectionLost,
+                    }
+                }
                 Ok(()) => match vault.keep() {
                     Ok(()) => LinkJoinState::Done { vault_name: name },
                     Err(error) => {
@@ -146,15 +180,31 @@ impl LinkJoin {
                     LinkJoinState::Failed { reason: failure }
                 }
             };
-            this.set(&emit, cancel, end);
+            this.set(&emit, cancel, done, end);
         });
         Ok(state)
     }
 
     /// Cancels a join in progress; its vault is removed.
-    pub fn cancel(&self) {
-        if let Some(running) = self.slot().as_ref() {
-            running.cancel.cancel();
+    pub async fn cancel(&self) {
+        let Some((cancel, done)) = self
+            .slot()
+            .as_ref()
+            .filter(|running| !is_over(&running.state))
+            .map(|running| (running.cancel.clone(), Arc::clone(&running.done)))
+        else {
+            return;
+        };
+        cancel.cancel();
+        loop {
+            let notified = done.notified();
+            let still_running = self.slot().as_ref().is_some_and(|running| {
+                Arc::ptr_eq(&running.done, &done) && !is_over(&running.state)
+            });
+            if !still_running {
+                return;
+            }
+            notified.await;
         }
     }
 
@@ -162,12 +212,34 @@ impl LinkJoin {
         self.slot.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    fn set(&self, emit: &Emit, cancel: CancellationToken, state: LinkJoinState) {
+    fn set(
+        &self,
+        emit: &Emit,
+        cancel: CancellationToken,
+        done: Arc<Notify>,
+        state: LinkJoinState,
+    ) {
+        let terminal = is_over(&state);
         *self.slot() = Some(Running {
             state: state.clone(),
             cancel,
+            done: Arc::clone(&done),
         });
         emit(&state);
+        if terminal {
+            done.notify_one();
+        }
+    }
+
+    fn clear_if(&self, done: &Arc<Notify>) {
+        let mut slot = self.slot();
+        if slot
+            .as_ref()
+            .is_some_and(|running| Arc::ptr_eq(&running.done, done))
+        {
+            slot.take();
+            done.notify_one();
+        }
     }
 
     fn update(&self, emit: &Emit, state: LinkJoinState) {
@@ -293,7 +365,7 @@ async fn exchange(
     };
     match result {
         Ok(_) => {
-            wait_for_close(&connection).await;
+            wait_for_close(&connection, cancel).await;
             Ok(())
         }
         Err(error) => {
@@ -324,8 +396,11 @@ fn device_name(replica: &Replica, vault: &LinkVault) -> String {
 }
 
 /// Gives the host the chance to finish: it closes after publishing.
-async fn wait_for_close(connection: &Connection) {
-    let _ = tokio::time::timeout(CLOSE_TIMEOUT, connection.closed()).await;
+async fn wait_for_close(connection: &Connection, cancel: &CancellationToken) {
+    tokio::select! {
+        _ = cancel.cancelled() => connection.close(0u32.into(), b"cancelled"),
+        _ = tokio::time::timeout(CLOSE_TIMEOUT, connection.closed()) => {}
+    }
 }
 
 /// What the user is told for a failed link.

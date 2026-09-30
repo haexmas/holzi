@@ -310,6 +310,36 @@ async fn a_declined_link_leaves_nothing_behind() {
     assert_eq!(runtime_of(&main).await.link.status(), None);
 }
 
+/// FR-025: cancelling a join waits for the background task to discard its
+/// pending vault before the caller continues.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn cancelling_a_join_waits_until_the_pending_vault_is_removed() {
+    let _turn = TURN.lock().await;
+    let relay = nostr_sdk::local_relay::MockRelay::run()
+        .await
+        .expect("mock relay");
+    let relay_url = relay.url().await.to_string();
+    let main = sync_fixture::create_main("main", &relay_url).await;
+    let runtime = runtime_of(&main).await;
+    let info = runtime.link.create_code(&runtime).await.expect("a code");
+    let fresh = NewInstallation::new();
+
+    fresh
+        .start(&info.code, &relay_url, Duration::from_secs(60))
+        .await
+        .expect("the join starts");
+    fresh.join.cancel().await;
+
+    assert_eq!(
+        fresh.join.status(),
+        Some(LinkJoinState::Failed {
+            reason: LinkFailure::ConnectionLost
+        })
+    );
+    assert!(!fresh.vault_exists(), "FR-025: no vault stays after cancel");
+    runtime.link.cancel();
+}
+
 /// US5 scenario 6: a code that is mistyped, or already used, transfers
 /// nothing and says so.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
