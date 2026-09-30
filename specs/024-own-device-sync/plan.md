@@ -178,7 +178,7 @@ src-tauri/
 │   ├── removal.rs, removal_tests.rs   # Entfernen (R13)
 │   ├── servers.rs                     # Verbindungsserver aus den Einstellungen (FR-008)
 │   ├── commands.rs, commands_tests.rs # Tauri-Befehle (contracts/tauri-commands.md)
-│   └── events.rs                      # sync-devices-changed, sync-data-changed, link-host/join-state-changed
+│   └── events.rs                      # sync-devices-changed, link-host/join-state-changed
 ├── src/identity/bootstrap.rs          # echte Schlüssel statt Platzhalter, erste Geräteliste
 ├── src/identity/migrations.rs         # neue Migrationen; Trigger für die neuen CRDT-Tabellen wie bisher
 ├── src/instances/open.rs, create.rs   # Sync nach dem Öffnen starten, Kopie erkennen; Vault aus Verknüpfen anlegen
@@ -262,7 +262,7 @@ Jeder Schritt ist ein eigener PR und für sich prüfbar.
 | FR-023 bis FR-025 (Verknüpfen)                            | `sync/link.rs`, `LinkDeviceView.vue`, `LinkSheet.vue` (R11)                                        |
 | FR-026 bis FR-028 (Entfernen)                             | `sync/removal.rs`, `RemoveDeviceView.vue` (R13)                                                    |
 | FR-029, FR-030 (Versionen, doppelt)                       | `sync/handshake.rs`, `sync/presence.rs` (R14)                                                      |
-| FR-031, FR-032 (Session-Ende, Hintergrund)                | `sync/mod.rs` am Gate-Token, Ereignis `sync-data-changed`                                          |
+| FR-031, FR-032 (Session-Ende, Hintergrund)                | `sync/mod.rs` am Gate-Token, Ereignis `vault-data-changed` (`vault_events.rs`)                     |
 | FR-033 bis FR-035, FR-046 (Oberfläche)                    | `FederationView.vue` und neue Komponenten (R15)                                                    |
 | FR-036 (Agenten)                                          | Aktionen mit `agentCallable` nur für Lesen                                                         |
 | FR-037 (de, en)                                           | i18n; `check:settings` prüft beide Sprachen                                                        |

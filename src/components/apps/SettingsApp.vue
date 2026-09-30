@@ -162,6 +162,9 @@ function goBack() {
   else router.push(step.path)
 }
 
+// The device's name is a vault row (`known_devices`) that can change on another device.
+onVaultTablesChanged(['known_devices'], reloadDeviceInfoAsync)
+
 onMounted(() => {
   wide.value = isWide()
   void reloadDeviceInfoAsync()

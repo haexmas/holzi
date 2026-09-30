@@ -29,9 +29,12 @@ const savedFlash = ref(false)
 const opError = ref<string | null>(null)
 const loadError = ref<string | null>(null)
 
-/** Reloads and validates the vault's deny-rule selection (spec 023 FR-024). */
-async function reloadAsync() {
-  loading.value = true
+/**
+ * Reloads and validates the vault's deny-rule selection (spec 023 FR-024). A `quiet` reload
+ * (after a change from elsewhere) keeps the shown selection until the new one is read.
+ */
+async function reloadAsync(quiet = false) {
+  if (!quiet) loading.value = true
   loadError.value = null
   try {
     const raw = await getPrefAsync({ kind: 'vault' }, PREF_KEY)
@@ -71,7 +74,10 @@ async function toggleAsync(category: string, checked: boolean) {
   }
 }
 
-onMounted(reloadAsync)
+onMounted(() => reloadAsync())
+onVaultTablesChanged(['preferences'], () => {
+  if (!busy.value) return reloadAsync(true)
+})
 </script>
 
 <template>

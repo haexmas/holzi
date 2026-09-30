@@ -75,6 +75,11 @@ are that direction's normal traffic.
 - The manifest schema gains a tools block. That touches `vault-sdk` and
   `haextension` as well as holzi; cross-repo references stay pinned to full
   commit SHAs.
+- Direction B pushes data changes as well as answering requests: the bridge relays
+  `vault-data-changed` (`src-tauri/src/vault_events.rs`) to an extension, cut down to the
+  tables the extension may read, so an extension's view follows a write from another device,
+  window or agent as the built-in views do. The chokepoint filters by the extension's grants,
+  never by anything the extension sends.
 - Holzi does not plan native-webview extension windows. The iframe plus
   port model leaves one chokepoint and needs no per-command Tauri ACL
   allowlist.

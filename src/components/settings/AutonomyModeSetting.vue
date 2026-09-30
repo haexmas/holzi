@@ -30,9 +30,12 @@ const savedFlash = ref(false)
 const opError = ref<string | null>(null)
 const loadError = ref<string | null>(null)
 
-/** Reloads the vault-scoped autonomy default, falling back to 'ungated'. */
-async function reloadAsync() {
-  loading.value = true
+/**
+ * Reloads the vault-scoped autonomy default, falling back to 'ungated'. A `quiet` reload (after
+ * a change from elsewhere) keeps the shown value until the new one is read.
+ */
+async function reloadAsync(quiet = false) {
+  if (!quiet) loading.value = true
   loadError.value = null
   try {
     const raw = await getPrefAsync({ kind: 'vault' }, PREF_KEY)
@@ -68,7 +71,10 @@ function onChoose(mode: AutonomyMode) {
   void chooseAsync(mode)
 }
 
-onMounted(reloadAsync)
+onMounted(() => reloadAsync())
+onVaultTablesChanged(['preferences'], () => {
+  if (!busy.value) return reloadAsync(true)
+})
 </script>
 
 <template>

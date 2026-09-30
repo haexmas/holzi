@@ -108,6 +108,7 @@ aus); auf jedem etwas ändern → erscheint auf dem anderen; eines beenden, weit
 - [x] T038 [US1] `src-tauri/src/sync/servers.rs`: voreingestellte Nostr-Relays und iroh-Relays (research R7) aus den Einstellungen lesen, Änderungen zur Laufzeit übernehmen (FR-008); ohne Server läuft lokale Arbeit unverändert (Constitution VII)
 - [x] T039 [US1] Wiederaufbau (FR-010): Verbindungen nach Abbruch oder Adressänderung selbständig neu aufbauen in `src-tauri/src/sync/mod.rs`
 - [x] T040 [US1] Offene Ansichten laden bei `sync-data-changed` gezielt neu: `src/composables/useSync.ts` (neu, Ereignisse abonnieren) und die Stores für Chat, Einstellungen und Sitzung (`src/stores/`, `src/composables/useChat.ts`, `usePreferences.ts`, `useWmSession.ts`) (FR-032)
+- [x] T040a [US1] Nachtrag zu T040: `sync-data-changed` ist durch `vault-data-changed` ersetzt, das für jeden Schreiber gilt (`src-tauri/src/vault_events.rs`, `Database::observe_committed_changes` aus haex-crdt, `src/composables/useVaultData.ts`); Farbschema, Einstellungen, Chat, Anbieter und Modelle laden bei Änderungen still nach
 
 **Checkpoint**: US1 läuft in `sync_devices.rs`; zwei Geräte gleichen sich ab.
 

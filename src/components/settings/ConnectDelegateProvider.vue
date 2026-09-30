@@ -72,8 +72,9 @@ function connectedProvider(vendor: DelegateVendor): Provider | undefined {
   )
 }
 
-async function reloadAsync() {
-  loading.value = true
+/** A `quiet` reload (after a change from elsewhere) keeps the shown providers until the new ones are read. */
+async function reloadAsync(quiet = false) {
+  if (!quiet) loading.value = true
   loadError.value = null
   try {
     providerList.value = await listAsync()
@@ -178,6 +179,8 @@ onMounted(async () => {
     }
   })
 })
+
+onVaultTablesChanged(['providers'], () => reloadAsync(true))
 
 onBeforeUnmount(() => {
   unlisten?.()

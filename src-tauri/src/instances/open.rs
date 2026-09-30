@@ -140,6 +140,7 @@ pub async fn open_instance(
     let OpenInstanceArgs { name, passphrase } = args;
     let db_path = open_instance_core(&app, &state, &chat, &name, passphrase).await?;
     // Spec 024: the sync service runs as tracked session work and ends with the close.
+    crate::vault_events::start_for_active_instance(&app, &state);
     crate::sync::start_for_active_instance(&app, &state).await;
 
     chat.bump_vault_generation();

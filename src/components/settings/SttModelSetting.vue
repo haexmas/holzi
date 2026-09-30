@@ -48,8 +48,9 @@ const available = computed(() =>
   catalog.value.filter((entry) => !installedIds.value.has(entry.id)),
 )
 
-async function reloadAsync() {
-  loading.value = true
+/** A `quiet` reload (after a change from elsewhere) keeps the shown values until the new ones are read. */
+async function reloadAsync(quiet = false) {
+  if (!quiet) loading.value = true
   loadError.value = null
   try {
     const [entries, installedModels, pref] = await Promise.all([
@@ -89,7 +90,10 @@ async function activateAsync(catalogId: string) {
   }
 }
 
-onMounted(reloadAsync)
+onMounted(() => reloadAsync())
+onVaultTablesChanged(['preferences'], () => {
+  if (!busyId.value) return reloadAsync(true)
+})
 </script>
 
 <template>

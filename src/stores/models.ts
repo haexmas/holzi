@@ -406,6 +406,16 @@ export const useModelsStore = defineStore('models', () => {
     )
   }
 
+  // Providers and their cached models come from the vault, so another device or window can
+  // change them (spec 024 FR-032). Reads the local cache only, so it writes nothing itself.
+  onVaultTablesChanged(['providers', 'models'], async () => {
+    try {
+      await refreshProviders()
+    } catch (e: unknown) {
+      lastError.value = errString(e)
+    }
+  })
+
   /** Stops future subscriptions and disposes every active listener. */
   function stopListening() {
     stopped = true
