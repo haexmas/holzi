@@ -72,6 +72,7 @@ pub struct LinkHost {
 }
 
 impl LinkHost {
+    /// Creates an idle host that reports link status changes through `emit`.
     pub fn new(emit: Emit) -> Self {
         Self {
             shared: Arc::new(Shared {
@@ -168,6 +169,8 @@ impl LinkHost {
         self.decide(Decision::Reject)
     }
 
+    /// Consumes the pending decision sender and attempts to send the user's answer.
+    /// Returns `InvalidInput` if no device awaits an answer or one was already sent.
     fn decide(&self, decision: Decision) -> Result<(), HolziError> {
         let mut slot = self.shared.slot();
         match &mut *slot {
@@ -188,6 +191,7 @@ impl LinkHost {
 }
 
 impl Shared {
+    /// Locks the live code slot, recovering its contents if the mutex is poisoned.
     fn slot(&self) -> std::sync::MutexGuard<'_, Slot> {
         self.slot.lock().unwrap_or_else(|e| e.into_inner())
     }
@@ -201,6 +205,7 @@ impl Shared {
         }
     }
 
+    /// Emits the current link status, or `None` when the host is idle.
     fn announce(&self) {
         let status = match &*self.slot() {
             Slot::Idle => None,
@@ -228,6 +233,7 @@ impl Shared {
         }
     }
 
+    /// Records and announces a device awaiting approval if `id` is still shown.
     fn awaiting(&self, id: u64, name: String, decide: oneshot::Sender<Decision>) {
         let mut slot = self.slot();
         if let Slot::CodeShown { id: live, cancel } = &*slot {
@@ -360,6 +366,7 @@ async fn wait_for_meeting(
     }
 }
 
+/// Returns milliseconds since the Unix epoch, or zero if the clock precedes it.
 fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)

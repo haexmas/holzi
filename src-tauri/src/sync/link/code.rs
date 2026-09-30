@@ -36,6 +36,7 @@ pub enum Role {
 }
 
 impl Role {
+    /// The byte tag that distinguishes the host's proof from the joiner's.
     fn tag(self) -> &'static [u8] {
         match self {
             Role::Host => b"H",
@@ -58,6 +59,7 @@ pub enum CodeError {
 pub struct LinkCode(Zeroizing<[u8; CODE_BYTES]>);
 
 impl std::fmt::Debug for LinkCode {
+    /// Formats a placeholder without exposing the code's secret bytes.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("LinkCode(..)")
     }
@@ -146,6 +148,7 @@ impl LinkCode {
             .build()
     }
 
+    /// Derives 32 bytes with HKDF-SHA256 using the given salt and purpose label.
     fn expand(&self, salt: Option<&[u8]>, info: &[u8]) -> Zeroizing<[u8; 32]> {
         let mut okm = Zeroizing::new([0u8; 32]);
         Hkdf::<Sha256>::new(salt, self.0.as_slice())
@@ -177,6 +180,7 @@ impl LinkCode {
         mac.verify_slice(tag).is_ok()
     }
 
+    /// Initializes HMAC-SHA256 with the proof key derived from this code.
     fn proof_mac(&self) -> Hmac<Sha256> {
         let key = self.expand(None, b"holzi/link/proof/v1");
         Hmac::<Sha256>::new_from_slice(key.as_slice()).expect("HMAC takes any key length")
@@ -205,6 +209,7 @@ pub struct Transcript {
 }
 
 impl Transcript {
+    /// Encodes the protocol label, length-prefixed fields and role for the proof.
     fn bytes(&self, role: Role) -> Vec<u8> {
         [
             b"holzi-link/v1".to_vec(),
@@ -235,10 +240,12 @@ pub fn verify_resume_mac(secret: &[u8; 32], link_id: &[u8; 32], state: &str, tag
     mac.verify_slice(tag).is_ok()
 }
 
+/// Initializes HMAC-SHA256 with the shared session secret for a resume proof.
 fn resume_hmac(secret: &[u8; 32]) -> Hmac<Sha256> {
     Hmac::<Sha256>::new_from_slice(secret).expect("HMAC takes any key length")
 }
 
+/// Encodes the resume protocol label and length-prefixed link id and state.
 fn resume_bytes(link_id: &[u8; 32], state: &str) -> Vec<u8> {
     [
         b"holzi-link-resume/v1".to_vec(),
