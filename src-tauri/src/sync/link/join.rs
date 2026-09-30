@@ -259,9 +259,22 @@ fn store(
         })
 }
 
-/// Drops the record of a finished link on the joining side once its own key
-/// is on the effective list (the host published), or once it went stale.
-pub fn finish_pending(
+/// Drops only stale link records on the joining side.
+///
+/// A locally received transfer already inserts the new device list before the
+/// joiner sends `Done`, so the effective list is not publication evidence.
+/// Cleanup after a host publication is handled by
+/// [`finish_pending_after_host_publication`] from the remote-pull path.
+pub fn finish_pending(replica: &Replica, now_ms: i64) -> haex_crdt::Result<usize> {
+    replica.db().write(|tx| pending::delete_stale(tx, now_ms))
+}
+
+/// Drops join records after a device-list update arrived through sync.
+///
+/// The caller supplies this evidence by choosing this function only from the
+/// remote-pull callback. That keeps a list inserted by the link transfer
+/// itself from being mistaken for the host's later publication.
+pub fn finish_pending_after_host_publication(
     replica: &Replica,
     own: &DeviceKeys,
     vault: [u8; 32],

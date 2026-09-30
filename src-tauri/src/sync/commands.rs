@@ -12,7 +12,7 @@ use ts_rs::TS;
 use crate::error::{HolziError, Result};
 use crate::instances::passphrase::Passphrase;
 use crate::state::AppState;
-use crate::sync::events::{self, LINK_STATE_CHANGED};
+use crate::sync::events::{self, LINK_JOIN_STATE_CHANGED};
 use crate::sync::link::host_task::LinkHost;
 use crate::sync::link::join_task::{JoinArgs, JoinConfig, LinkJoin};
 use crate::sync::link::status::{LinkCodeInfo, LinkJoinState};
@@ -87,7 +87,7 @@ pub async fn link_join_start(
     state.gate().ensure_can_open()?;
     let emit_app = app.clone();
     let emit = Arc::new(move |state: &LinkJoinState| {
-        events::emit(&emit_app, LINK_STATE_CHANGED, state.clone());
+        events::emit(&emit_app, LINK_JOIN_STATE_CHANGED, state.clone());
     });
     join.start(
         &app,

@@ -24,7 +24,7 @@ use crate::instances::paths::get_app_local_data;
 use crate::state::AppState;
 use crate::sync::endpoint::{NodeConfig, SyncNode};
 use crate::sync::events::{
-    self, SyncDataChanged, LINK_STATE_CHANGED, SYNC_DATA_CHANGED, SYNC_DEVICES_CHANGED,
+    self, SyncDataChanged, LINK_HOST_STATE_CHANGED, SYNC_DATA_CHANGED, SYNC_DEVICES_CHANGED,
 };
 use crate::sync::keys::{self, DeviceKeys};
 use crate::sync::link::host_task::LinkHost;
@@ -147,7 +147,8 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
         .app
         .try_state::<Arc<SyncRegistry>>()
         .map(|state| Arc::clone(&*state));
-    let on_applied = applied_event_sink(deps.app);
+    let on_applied =
+        applied_event_sink(deps.app, Arc::clone(&replica), presence_keys.clone(), vault);
     let config = NodeConfig {
         relay_mode: deps.relay_mode,
         bind_addr,
@@ -184,7 +185,7 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
         nostr_relays: nostr_relays.clone(),
         cancel: token.child_token(),
         link: LinkHost::new(Arc::new(move |status| {
-            events::emit(&link_app, LINK_STATE_CHANGED, status);
+            events::emit(&link_app, LINK_HOST_STATE_CHANGED, status);
         })),
         wake: {
             let (node, changed_tx) = (Arc::clone(&node), Arc::clone(&changed_tx));
@@ -253,7 +254,7 @@ async fn finish_pending_links(replica: &Arc<Replica>, keys: &DeviceKeys, vault: 
         .unwrap_or(0);
     let result = tokio::task::spawn_blocking(move || {
         crate::sync::link::host::finish_pending(&replica, &keys, vault, now)?;
-        crate::sync::link::join::finish_pending(&replica, &keys, vault, now)?;
+        crate::sync::link::join::finish_pending(&replica, now)?;
         Ok::<_, haex_crdt::Error>(())
     })
     .await;
@@ -264,12 +265,42 @@ async fn finish_pending_links(replica: &Arc<Replica>, keys: &DeviceKeys, vault: 
     }
 }
 
-/// Builds the closure [`SyncNode::bind`] calls after applying a pull: turns
-/// the changed tables into the [`SYNC_DATA_CHANGED`] event (FR-032).
+/// Builds the closure [`SyncNode::bind`] calls after applying a pull: finishes
+/// join records when a remote device-list update is evidence of host
+/// publication, then turns the changed tables into the [`SYNC_DATA_CHANGED`]
+/// event (FR-032).
 fn applied_event_sink<R: Runtime>(
     app: AppHandle<R>,
+    replica: Arc<Replica>,
+    keys: DeviceKeys,
+    vault: [u8; 32],
 ) -> Arc<dyn Fn(std::collections::BTreeSet<String>) + Send + Sync> {
     Arc::new(move |tables| {
+        if tables.contains("device_lists") {
+            let replica = Arc::clone(&replica);
+            let keys = keys.clone();
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
+                .unwrap_or(0);
+            tokio::spawn(async move {
+                match tokio::task::spawn_blocking(move || {
+                    crate::sync::link::join::finish_pending_after_host_publication(
+                        &replica, &keys, vault, now,
+                    )
+                })
+                .await
+                {
+                    Ok(Ok(_)) => {}
+                    Ok(Err(error)) => {
+                        log::warn!("sync: finishing published join links failed: {error}")
+                    }
+                    Err(error) => {
+                        log::warn!("sync: finishing published join links did not run: {error}")
+                    }
+                }
+            });
+        }
         events::emit(
             &app,
             SYNC_DATA_CHANGED,

@@ -502,8 +502,18 @@ async fn the_joiner_drops_its_record_once_the_host_list_names_it() {
     .expect("joined");
     assert_eq!(pending_of(&joiner.device).len(), 1);
 
-    let dropped = join::finish_pending(&joiner.device.replica, &joiner.keys, main.vault, 2_000)
-        .expect("finish");
+    let dropped = join::finish_pending(&joiner.device.replica, 2_000).expect("finish");
+
+    assert_eq!(dropped, 0);
+    assert_eq!(pending_of(&joiner.device).len(), 1);
+
+    let dropped = join::finish_pending_after_host_publication(
+        &joiner.device.replica,
+        &joiner.keys,
+        main.vault,
+        2_000,
+    )
+    .expect("finish after publication");
 
     assert_eq!(dropped, 1);
     assert!(pending_of(&joiner.device).is_empty());
