@@ -150,9 +150,9 @@ export function useThreadSidebar(
    * added shows in an open thread. A thread a turn is streaming into is left alone: its
    * turn-complete reload catches up.
    */
-  async function refreshLoadedMessages() {
+  async function refreshLoadedMessages(skipThreadId = streamingThreadId.value) {
     const ids = Object.keys(messagesByThread.value).filter(
-      (id) => id !== streamingThreadId.value,
+      (id) => id !== skipThreadId,
     )
     const loaded = await Promise.all(
       ids.map(async (id) => [id, await chat.listMessagesAsync(id)] as const),

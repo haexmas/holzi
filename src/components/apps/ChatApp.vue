@@ -316,9 +316,11 @@ onVaultTablesChanged(['chat_threads'], async () => {
   }
 })
 onVaultTablesChanged(['chat_messages'], async () => {
-  if (busy.value || turnSetupPending.value) return
+  if (turnSetupPending.value) return
   try {
-    await refreshLoadedMessages()
+    // Keep the active thread untouched while its local turn runs, but do not let that
+    // suppress updates for other already-loaded threads.
+    await refreshLoadedMessages(busy.value ? activeThreadId.value : undefined)
   } catch (e: unknown) {
     if (!unmounted) lastError.value = errString(e)
   }

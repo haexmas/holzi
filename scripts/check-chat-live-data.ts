@@ -13,10 +13,10 @@ function thread(id: string, title: string) {
   return { id, title, lastModelId: null, createdAt: NOW, updatedAt: NOW }
 }
 
-function message(id: string, content: string) {
+function message(id: string, content: string, threadId = 'a') {
   return {
     id,
-    threadId: 'a',
+    threadId,
     role: 'user',
     content,
     createdAt: NOW,
@@ -86,6 +86,25 @@ test('messages are not reloaded while a turn runs here', async () => {
   await state.emitVaultChange(['chat_messages'])
 
   assert.equal(state.messagesByThread.value.a.length, 1)
+})
+
+test('a background thread still refreshes while another thread is running here', async () => {
+  const remote: Record<string, ReturnType<typeof message>[]> = {
+    a: [message('a1', 'first', 'a')],
+    b: [message('b1', 'first', 'b')],
+  }
+  const state = createChatState({
+    listMessagesAsync: async (threadId: string) => remote[threadId] ?? [],
+  })
+  await state.selectThread('a')
+  await state.selectThread('b')
+
+  state.busy.value = true
+  remote.a = [message('a1', 'first', 'a'), message('a2', 'remote', 'a')]
+  await state.emitVaultChange(['chat_messages'])
+
+  assert.equal(state.messagesByThread.value.a.length, 2)
+  assert.equal(state.messagesByThread.value.b.length, 1)
 })
 
 test('the thread a reply is streaming into is left alone', async () => {
