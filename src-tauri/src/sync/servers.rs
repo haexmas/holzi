@@ -7,6 +7,7 @@
 //! failure to apply a relay change, they never fail the vault open or the
 //! sync service over it.
 
+use haex_crdt::CrdtTransaction;
 use iroh::{RelayMap, RelayMode, RelayUrl};
 
 use crate::storage::preferences::{self, PrefScope};
@@ -87,6 +88,47 @@ fn read_urls(q: &mut impl Query, key: &str) -> haex_crdt::Result<Vec<String>> {
             Ok(Vec::new())
         }
     }
+}
+
+/// Most servers of one kind the settings accept.
+const MAX_SERVERS: usize = 10;
+
+/// Checks the servers a user typed: Nostr servers are `ws://` or `wss://`
+/// URLs, iroh servers `http://` or `https://`. The error names the first
+/// that is not, and is the user's to fix, not a failure.
+pub fn validate(nostr: &[String], iroh: &[String]) -> Result<(), String> {
+    check_list(nostr, &["ws", "wss"], "a Nostr server")?;
+    check_list(iroh, &["http", "https"], "an iroh server")
+}
+
+fn check_list(urls: &[String], schemes: &[&str], what: &str) -> Result<(), String> {
+    if urls.len() > MAX_SERVERS {
+        return Err(format!("at most {MAX_SERVERS} servers of one kind"));
+    }
+    for url in urls {
+        let scheme_ok = url
+            .split_once("://")
+            .is_some_and(|(scheme, rest)| schemes.contains(&scheme) && !rest.is_empty());
+        if !scheme_ok || url.len() > 256 || url.chars().any(char::is_whitespace) {
+            return Err(format!("{url:?} is not {what}"));
+        }
+    }
+    Ok(())
+}
+
+/// Stores the servers, replacing the stored ones; an empty list brings back
+/// the defaults.
+pub fn write(
+    tx: &mut CrdtTransaction<'_>,
+    nostr: &[String],
+    iroh: &[String],
+) -> haex_crdt::Result<()> {
+    for (key, urls) in [(PREF_NOSTR_RELAYS, nostr), (PREF_IROH_RELAYS, iroh)] {
+        let json =
+            serde_json::to_string(urls).map_err(|e| haex_crdt::Error::consumer(e.to_string()))?;
+        preferences::insert_or_update(tx, PrefScope::Vault, key, &json)?;
+    }
+    Ok(())
 }
 
 /// Parses `urls`, logging and dropping anything that does not parse as a

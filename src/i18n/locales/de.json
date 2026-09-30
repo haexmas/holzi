@@ -479,7 +479,42 @@
       "thisDevice": "Dieses Gerät",
       "unnamed": "Unbenanntes Gerät",
       "loadFailed": "Die Geräte der Vault ließen sich nicht laden",
-      "devicesLabel": "Geräte der Vault"
+      "devicesLabel": "Geräte der Vault",
+      "role": {
+        "main": "Hauptgerät",
+        "linked": "Verknüpftes Gerät"
+      },
+      "status": {
+        "online": "online",
+        "neverSeen": "noch nie online gesehen",
+        "justNow": "gerade eben online",
+        "minutes": "zuletzt online vor {n} Min.",
+        "hours": "zuletzt online vor {n} Std.",
+        "days": "zuletzt online vor {n} Tagen"
+      },
+      "problem": {
+        "incompatible_version": "Eines der Geräte muss aktualisiert werden, sonst synchronisieren sie nicht.",
+        "duplicate": "Dieses Gerät ist doppelt vorhanden. Der Sync mit ihm ist angehalten."
+      },
+      "notice": {
+        "awaiting_admission": "Dieses Gerät wartet auf Aufnahme durch ein Hauptgerät.",
+        "removed": "Dieses Gerät wurde aus der Vault entfernt und synchronisiert nicht mehr."
+      },
+      "mainOnly": "Geräte werden nur auf einem Hauptgerät verknüpft, aufgenommen und entfernt.",
+      "identityLabel": "Vault-Identität",
+      "identityTitle": "Öffentlicher Schlüssel",
+      "identityDescription": "Unter dieser Adresse laden andere die Vault in Spaces und Datenfreigaben ein. Sie lässt sich kopieren, nicht ändern.",
+      "identityCopy": "Kopieren",
+      "identityCopied": "Kopiert",
+      "servers": {
+        "nostr": "Nostr-Relays",
+        "nostrDescription": "Darüber melden sich deine Geräte beieinander. Gilt ab dem nächsten Öffnen der Vault.",
+        "iroh": "iroh-Relays",
+        "irohDescription": "Darüber verbinden sich deine Geräte, auch hinter Heimroutern. Gilt sofort.",
+        "defaults": "Keine eigenen eingetragen: holzi nutzt seine voreingestellten öffentlichen Server.",
+        "add": "Hinzufügen",
+        "remove": "{url} entfernen"
+      }
     },
     "link": {
       "startTitle": "Neues Gerät verknüpfen",
@@ -798,7 +833,13 @@
       },
       "devices": {
         "list": "Geräte der Vault auflisten",
-        "link": "Gerät verknüpfen öffnen"
+        "link": "Gerät verknüpfen öffnen",
+        "identity": "Identität der Vault lesen"
+      },
+      "sync": {
+        "servers": {
+          "set": "Verbindungsserver setzen"
+        }
       }
     },
     "scopes": {

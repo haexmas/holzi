@@ -479,7 +479,42 @@
       "thisDevice": "This device",
       "unnamed": "Unnamed device",
       "loadFailed": "Could not load the vault's devices",
-      "devicesLabel": "Devices of the vault"
+      "devicesLabel": "Devices of the vault",
+      "role": {
+        "main": "Main device",
+        "linked": "Linked device"
+      },
+      "status": {
+        "online": "online",
+        "neverSeen": "never seen online",
+        "justNow": "online just now",
+        "minutes": "last online {n} min ago",
+        "hours": "last online {n} h ago",
+        "days": "last online {n} days ago"
+      },
+      "problem": {
+        "incompatible_version": "One of the devices has to be updated, or they will not sync.",
+        "duplicate": "This device exists twice. Sync with it is halted."
+      },
+      "notice": {
+        "awaiting_admission": "This device is waiting to be admitted by a main device.",
+        "removed": "This device was removed from the vault and no longer syncs."
+      },
+      "mainOnly": "Devices are only linked, admitted and removed on a main device.",
+      "identityLabel": "Vault identity",
+      "identityTitle": "Public key",
+      "identityDescription": "Others invite the vault at this address in spaces and shares. It can be copied, not changed.",
+      "identityCopy": "Copy",
+      "identityCopied": "Copied",
+      "servers": {
+        "nostr": "Nostr relays",
+        "nostrDescription": "Your devices announce themselves to each other through these. Applies the next time the vault is opened.",
+        "iroh": "iroh relays",
+        "irohDescription": "Your devices connect through these, also behind home routers. Applies at once.",
+        "defaults": "None of your own listed: holzi uses its built-in public servers.",
+        "add": "Add",
+        "remove": "Remove {url}"
+      }
     },
     "link": {
       "startTitle": "Link a new device",
@@ -798,7 +833,13 @@
       },
       "devices": {
         "list": "List the vault's devices",
-        "link": "Open linking a device"
+        "link": "Open linking a device",
+        "identity": "Read the vault identity"
+      },
+      "sync": {
+        "servers": {
+          "set": "Set the connection servers"
+        }
       }
     },
     "scopes": {

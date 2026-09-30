@@ -15,8 +15,10 @@ use crate::hardware::hostname;
 use crate::identity::{installation_id_path, read_or_mint_installation_uuid, VAULT_SCOPE_UUID};
 use crate::state::AppState;
 use crate::state_utils::active_database;
-use crate::storage::known_devices::{self, KnownDevice};
+use crate::storage::known_devices;
 use crate::storage::query::Query;
+use crate::sync::device_view::{self, VaultDevice};
+use crate::sync::registry::SyncRegistry;
 use crate::vault_gate::VaultDb;
 
 /// Frontend view of the active device's identity + OS hostname.
@@ -172,47 +174,15 @@ pub async fn update_device_alias(
     .await
 }
 
-/// One device of the vault for the settings' device list (spec 023-settings-app, FR-022,
-/// contracts §5a). `alias` is `None` for a device that has not finished onboarding.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct VaultDevicePayload {
-    pub vault_device_uuid: Uuid,
-    pub alias: Option<String>,
-    pub is_current: bool,
-}
-
-/// This installation's device first, then the others by name ignoring case, devices without a
-/// name last. Marks the device of `current_installation`, if it is among them.
-pub fn order_vault_devices(
-    devices: Vec<KnownDevice>,
-    current_installation: Uuid,
-) -> Vec<VaultDevicePayload> {
-    let mut ordered: Vec<VaultDevicePayload> = devices
-        .into_iter()
-        .map(|device| VaultDevicePayload {
-            vault_device_uuid: device.vault_device_uuid,
-            alias: device.alias,
-            is_current: device.installation_uuid == current_installation,
-        })
-        .collect();
-    ordered.sort_by_cached_key(|device| {
-        (
-            !device.is_current,
-            device.alias.is_none(),
-            device.alias.as_deref().map(str::to_lowercase),
-        )
-    });
-    ordered
-}
-
-/// Lists the vault's devices (spec 023-settings-app, FR-022). Requires an open vault
-/// (`NoActiveInstance` otherwise, like [`current_device_info`]).
+/// Lists the vault's devices with role, online state, last time online and any problem (spec
+/// 024, FR-033; spec 023 FR-022). Requires an open vault (`NoActiveInstance` otherwise, like
+/// [`current_device_info`]). Without a running sync service nobody counts as online.
 #[tauri::command]
 pub async fn list_vault_devices(
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<Vec<VaultDevicePayload>> {
+    registry: State<'_, std::sync::Arc<SyncRegistry>>,
+) -> Result<Vec<VaultDevice>> {
     let installation_id_file =
         installation_id_path(&app.path().app_local_data_dir().map_err(|e| {
             HolziError::PathResolution {
@@ -221,12 +191,12 @@ pub async fn list_vault_devices(
         })?);
     let installation_uuid =
         read_or_mint_installation_uuid(&installation_id_file).map_err(HolziError::from)?;
+    let connected: std::collections::HashSet<[u8; 32]> = registry
+        .get()
+        .map(|runtime| runtime.node.connected().into_iter().collect())
+        .unwrap_or_default();
 
     let db = active_database(&state)?;
-    let devices = db.read(|r| known_devices::list_devices(r)).await?;
-    Ok(order_vault_devices(devices, installation_uuid))
+    db.read(move |r| device_view::load(r, installation_uuid, &connected))
+        .await
 }
-
-#[cfg(test)]
-#[path = "commands_tests.rs"]
-mod tests;

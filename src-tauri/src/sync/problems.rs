@@ -35,7 +35,7 @@ impl Problem {
         }
     }
 
-    fn parse(text: &str) -> Option<Self> {
+    pub(crate) fn parse(text: &str) -> Option<Self> {
         match text {
             "incompatible_version" => Some(Problem::IncompatibleVersion),
             "duplicate" => Some(Problem::Duplicate),
