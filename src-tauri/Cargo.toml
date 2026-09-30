@@ -110,10 +110,11 @@ getrandom = "0.3"
 # (haexmas/haex-crdt#30), and again (spec 024, T001) for the transactional
 # write path `Database::write` / `Database::read` (#34), typed errors (#35)
 # and the removal of the `DbConnection` layer (#36), then for typed BLOB sync
-# (#37) and the stamping of rows written before the HLC (#38). `raw-connection` stays
+# (#37) and the stamping of rows written before the HLC (#38), then for the observer of
+# committed changes (#39, `vault_events`). `raw-connection` stays
 # for the few statements that cannot run in a CRDT transaction (PRAGMA,
 # VACUUM in `storage::maintenance`); `clippy.toml` bans it everywhere else.
-haex-crdt = { git = "https://github.com/haexmas/haex-crdt", rev = "d35d43f9250a7d9a7d2dca3a0c8ee7ffabc750a7", features = ["raw-connection"] }
+haex-crdt = { git = "https://github.com/haexmas/haex-crdt", rev = "aeb26ebb67b3faba5e8c9b34c84d7291e44107a4", features = ["raw-connection"] }
 
 # Local inference runtime chosen in plans/001-desktop-mvp.md §"Lokale Inferenz".
 # Pinned to 0.8.1 per Etappe 0 finding #1 (0.6 line does not exist on
