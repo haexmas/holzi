@@ -183,7 +183,10 @@
       "answeredByDelegate": "Answered by {name}"
     },
     "newChat": "New chat",
-    "newChatShort": "New",
+    "sidebar": {
+      "show": "Show sidebar",
+      "hide": "Hide sidebar"
+    },
     "threads": {
       "title": "Conversations",
       "empty": "No conversations yet",

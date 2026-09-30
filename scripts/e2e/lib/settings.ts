@@ -94,15 +94,20 @@ export async function choose(
   await instance.click(`[role="option"][data-value="${value}"]`)
 }
 
-/** Resizes the window holding the settings through `wm.window.setGeometry` (FR-004 is about the
+/** Resizes the window holding the app's first tab through `wm.window.setGeometry` (FR-004 is about the
  * window's width, not the screen's). */
-export async function resizeSettingsWindow(
+export async function resizeAppWindow(
   instance: FlowInstance,
+  appId: string,
   width: number,
   height = 700,
 ): Promise<void> {
-  const [tab] = settingsTabs(await wmSnapshot(instance))
-  if (!tab) throw new Error('no settings window to resize')
+  const tab = (await wmSnapshot(instance)).windows
+    .flatMap((w) =>
+      w.tabs.filter((t) => t.appId === appId).map(() => ({ windowId: w.id })),
+    )
+    .at(0)
+  if (!tab) throw new Error(`no ${appId} window to resize`)
   const outcome = await runAction(instance, 'wm.window.setGeometry', {
     windowId: tab.windowId,
     x: 20,
@@ -113,6 +118,15 @@ export async function resizeSettingsWindow(
   if (!outcome.ok) {
     throw new Error(`wm.window.setGeometry failed: ${JSON.stringify(outcome)}`)
   }
+}
+
+/** Resizes the window holding the settings. */
+export function resizeSettingsWindow(
+  instance: FlowInstance,
+  width: number,
+  height = 700,
+): Promise<void> {
+  return resizeAppWindow(instance, 'system.settings', width, height)
 }
 
 /** Whether the element found by selector is on screen: laid out, visible and not scrolled or slid
