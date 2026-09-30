@@ -85,6 +85,7 @@ function onEscape() {
         :aria-expanded="visible"
         aria-controls="chat-sidebar"
         data-testid="chat-sidebar-toggle"
+        @keydown.esc="onEscape"
         @click="toggle"
       >
         <Icon name="lucide:panel-left" class="size-4" />

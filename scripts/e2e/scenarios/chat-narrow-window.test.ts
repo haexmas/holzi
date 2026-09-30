@@ -1,6 +1,6 @@
 import { scenario } from '../lib/scenario.ts'
 import { createAndUnlock, openChat } from '../lib/flows.ts'
-import { isShown, resizeAppWindow } from '../lib/settings.ts'
+import { KEY, isShown, resizeAppWindow } from '../lib/settings.ts'
 
 const sidebarShown = (instance: Parameters<typeof isShown>[0]) =>
   isShown(instance, '#chat-sidebar')
@@ -36,6 +36,13 @@ scenario('chat-narrow-window', {}, async (ctx) => {
     sidebarShown(instance),
   )
   await instance.waitForDisplayed('lock-instance-sidebar')
+  await instance.type('chat-sidebar-toggle', KEY.escape)
+  await ctx.waitFor(
+    'Escape to close the sidebar',
+    async () => !(await sidebarShown(instance)),
+  )
+  await instance.click('chat-sidebar-toggle')
+  await ctx.waitFor('the sidebar to reopen', () => sidebarShown(instance))
   await instance.click('chat-sidebar-toggle')
   await ctx.waitFor(
     'the toggle to close the sidebar',
