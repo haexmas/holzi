@@ -88,18 +88,26 @@ Nach Probe oder Selbsttest. Das Frontend lädt die Modelllisten neu
 
 ```text
 name:        find_actions
-description: Search the actions holzi offers by keywords (English works best)
-             and get up to 5 matches with id, description and input schema.
+description: Search the actions holzi offers by keywords (English works best),
+             or enumerate the complete catalog page by page when query is absent.
              Matches become callable tools in the next step.
-input:       { query: string }
+input:       { query?: string, cursor?: string, limit?: integer }
 risk:        Safe, source "action"
-result:      { actions: [{ tool: string, description: string, inputSchema: object }] }
+result:      { actions: [{ tool: string, description: string, inputSchema: object }],
+              nextCursor: string | null }
 ```
 
-- Höchstens 5 Treffer, wortbasiert über camelCase-zerlegte ID-Segmente,
-  Beschreibung und die deutschen und englischen Titel; Gleichstand nach
-  stabiler ID-Reihenfolge. Ohne Treffer: `{ actions: [] }` und der Hinweis
-  `"no matching action"`.
+- `limit` ist optional, standardmäßig 5 und höchstens 5. Mit `query` gibt es
+  höchstens 5 Treffer je Seite, wortbasiert über camelCase-zerlegte
+  ID-Segmente, Beschreibung und deutsche und englische Titel; Gleichstand nach
+  stabiler ID-Reihenfolge. Ohne Treffer: `{ actions: [], nextCursor: null }`
+  und der Hinweis `"no matching action"`.
+- Ohne `query` werden alle registrierten, für den eingebauten Agenten
+  aufrufbaren Aktionen in stabiler ID-Reihenfolge paginiert. `nextCursor` ist
+  ein undurchsichtiger Fortsetzungstoken oder `null` auf der letzten Seite.
+  Der vollständige Katalog ist daher abrufbar, indem der Aufrufer denselben
+  Suchaufruf mit jedem `nextCursor` wiederholt; ein fehlender `query` bedeutet
+  ausdrücklich „alle Aktionen“, nicht nur das Kernangebot.
 - Die Treffer stammen aus dem Register, nicht aus einem Frontend-Umlauf.
   Nach einer Runde mit diesem Werkzeug hängt der Zug die Treffer an
   `request.tools` an; eine spätere Suche ersetzt die früheren (Angebot

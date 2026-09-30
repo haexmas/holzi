@@ -59,9 +59,12 @@ einmal Claude per API-Key, einmal das lokale Qwen3-4B.
 6. Ein Modell ohne Werkzeug-Vorlage wählen → Chat antwortet normal, Hinweis
    „kann holzi nicht bedienen“ (einmal).
 7. Ein frisch geladenes lokales Modell mit Werkzeug-Vorlage wählen → sofort
-   chatbar mit Unzuverlässigkeits-Hinweis; nach Abschluss des Selbsttests
-   (≤ 2 Minuten) wechselt der Wert, der Hinweis erscheint bei der nächsten
-   Unterhaltung nicht mehr.
+   chatbar mit Unzuverlässigkeits-Hinweis; nach einem bestandenen Selbsttest
+   (≤ 2 Minuten, vorläufig `SELF_TEST_PASS = 0.6`) wechselt der Wert auf
+   „Supported“, und der Hinweis erscheint bei der nächsten Unterhaltung nicht
+   mehr. Bei einem Ergebnis unter der Schwelle wechselt der Wert auf
+   „Unsupported“; das Modell bleibt ohne holzi-Werkzeuge chatbar und erklärt,
+   dass es holzi nicht bedienen kann.
 8. Claude Code oder Codex als Delegate wählen → Chat wie bisher, einmal der
    Delegate-Hinweis, keine holzi-Werkzeuge.
 

@@ -358,8 +358,9 @@ hintereinander zeigt nur geringe Abweichung.
 
 **Aktionen als Werkzeuge**
 
-- **FR-001**: Das System MUSS jede Aktion, die für Agenten aufrufbar
-  markiert ist, dem eingebauten Agenten im Chat als Werkzeug anbieten können;
+- **FR-001**: Das System MUSS jede Aktion, die für Agenten aufrufbar und für
+  den eingebauten Agenten freigegeben ist (`builtinAgentCallable !== false`),
+  dem eingebauten Agenten im Chat als Werkzeug anbieten können;
   Name, Beschreibung und Eingabeschema stammen aus der Aktionsdefinition, es
   gibt keine zweite, parallel gepflegte Werkzeugbeschreibung. Ausgenommen
   sind Aktionen, die sich im laufenden Chat selbst auslösen würden
@@ -533,7 +534,9 @@ hintereinander zeigt nur geringe Abweichung.
   abgelehnt, in jedem Modus.
 - **SC-004**: Kein Ergebnis einer vom Modell ausgelösten Aktion enthält
   Zugangsdaten oder Schlüssel (geprüft über alle für Agenten aufrufbaren
-  Lese-Aktionen).
+  Lese-Aktionen). Für `chat.messages.list` bestätigt ein Test mit einer
+  geheimnisbehafteten Nachricht zusätzlich, dass das Agent-Ergebnis weder
+  `content` noch den geheimen Wert enthält.
 - **SC-005**: Auch bei einer größeren Aktionsliste werden in keinem Schritt
   mehr als 15 Werkzeuge angeboten (Kernangebot höchstens 10 plus höchstens 5
   gefundene), das Kernangebot ist für alle Modelle identisch, und für

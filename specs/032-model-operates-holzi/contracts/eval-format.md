@@ -16,7 +16,7 @@
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "sentences": [
     {
       "id": "read-tabs-de-1",
@@ -46,6 +46,35 @@
       "text": "Wie wird das Wetter morgen?",
       "expect": "none",
       "selfTest": true
+    },
+    {
+      "id": "read-settings-en-1",
+      "lang": "en",
+      "kind": "read",
+      "text": "What are the current settings?",
+      "expect": [{ "tool": "settings_get", "args": {} }],
+      "selfTest": true
+    },
+    {
+      "id": "change-scheme-de-1",
+      "lang": "de",
+      "kind": "change",
+      "text": "Stelle auf das helle Farbschema um.",
+      "expect": [
+        {
+          "tool": "settings_appearance_setColorScheme",
+          "args": { "scheme": "light" }
+        }
+      ],
+      "selfTest": true
+    },
+    {
+      "id": "smalltalk-en-1",
+      "lang": "en",
+      "kind": "smalltalk",
+      "text": "Tell me a joke.",
+      "expect": "none",
+      "selfTest": true
     }
   ]
 }
@@ -55,11 +84,15 @@ Regeln:
 
 - `lang` ∈ `de`, `en`; `kind` ∈ `read`, `change`, `smalltalk`.
 - `expect` ist `"none"` (kein Werkzeugaufruf erwartet) oder eine nicht leere
-  Liste. Die Reihenfolge der Liste zählt nicht. Der Lauf bewertet bis zu
-  **zwei Schritte**: liegt die erwartete Aktion nicht im Kernangebot, erwartet
-  er im ersten Schritt einen Aufruf von `find_actions`; er führt die reine Suche
-  über `tools.json` aus (keine Aktion, keine Nebenwirkung), bietet die Treffer
-  an und bewertet den Aufruf im zweiten Schritt. Längere Ketten gibt es nicht.
+  Liste; die Liste darf mehrere Werkzeugaufrufe eines Batches enthalten. Die
+  Reihenfolge zählt nicht, aber die beobachtete Menge muss am bewerteten
+  Aktionsschritt exakt mit der erwarteten Menge übereinstimmen: fehlende,
+  doppelte und unerwartete Aufrufe sind ein Fehler. Der Lauf bewertet bis zu
+  **zwei Schritte**: liegt die erwartete Aktion nicht im Kernangebot, muss der
+  erste Schritt genau einen `find_actions`-Aufruf enthalten; der Lauf führt die
+  reine Suche über `tools.json` aus (keine Aktion, keine Nebenwirkung), bietet
+  die Treffer an und bewertet den vollständigen Aufruf-Batch im zweiten Schritt.
+  Längere Ketten sowie Text nach dem bewerteten Schritt werden nicht bewertet.
 - `args` enthält nur die Felder, auf die es ankommt; zusätzliche, schema-gültige
   Felder des Modells schaden nicht.
 - `selfTest: true` markiert die Teilmenge (≈ 5 Sätze, jeweils Deutsch und
@@ -77,9 +110,9 @@ Regeln:
 
 | Ergebnis     | Bedingung                                                                                                                                                            |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pass`       | erwartet `expect` als Liste: jede erwartete Aktion genau einmal gerufen, Eingaben schema-gültig und die erwarteten `args` stimmen; bei `"none"`: kein Werkzeugaufruf |
-| `wrong_tool` | andere Aktion als erwartet                                                                                                                                           |
-| `bad_args`   | richtige Aktion, Eingaben ungültig oder falsch                                                                                                                       |
+| `pass`       | erwartete und beobachtete Aufrufmenge stimmen exakt überein, jede Eingabe ist schema-gültig und die erwarteten `args` stimmen; bei `"none"`: kein Werkzeugaufruf |
+| `wrong_tool` | Aufrufmenge enthält eine andere, fehlende, doppelte oder zusätzliche Aktion                                                                                         |
+| `bad_args`   | Aufrufnamen stimmen, aber eine Eingabe ist ungültig oder falsch                                                                                                     |
 | `missed`     | erwartet Aufruf, Modell antwortet nur mit Text                                                                                                                       |
 | `spurious`   | erwartet `"none"`, Modell ruft trotzdem ein Werkzeug                                                                                                                 |
 | `not_found`  | die Suche des Modells hat die erwartete Aktion nicht geliefert (zählt gegen die `reachRate`, nicht als falscher Aufruf)                                              |

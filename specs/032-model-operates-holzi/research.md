@@ -179,11 +179,13 @@ Code `forbidden_for_agents` ab, und `set_agent_actions` enthält sie nicht.
    `settings.models.list`); das Frontend markiert sie mit `core: true` in
    `AgentActionDef`. Die endgültige Zusammensetzung bestätigt der erste
    Messlauf (T046).
-2. **Suche durch das Modell**: `find_actions({ query })` durchsucht alle
-   registrierten Aktionen wortbasiert (camelCase-zerlegte ID-Segmente,
+2. **Suche durch das Modell**: `find_actions({ query, cursor, limit })` durchsucht
+   alle registrierten Aktionen wortbasiert (camelCase-zerlegte ID-Segmente,
    Beschreibung, deutsche und englische Titel; Gleichstand: stabile
    ID-Reihenfolge) und liefert höchstens 5 Treffer mit Name, Beschreibung und
-   Eingabeschema. Das Modell schreibt den Suchbegriff selbst, meist auf Englisch.
+   Eingabeschema. Ohne `query` wird derselbe stabile Katalog paginiert, bis
+   `nextCursor` null ist; so ist jede registrierte Aktion abrufbar. Das Modell
+   schreibt den Suchbegriff selbst, meist auf Englisch.
 3. **Treffer werden angeboten**: nach einer Runde, in der `find_actions` lief,
    hängt der Zug die Treffer an `request.tools` an (eine Stelle,
    `extend_offer` in `chat/tools/offer.rs`, aufgerufen dort, wo die Runde an die
@@ -289,11 +291,14 @@ Lark, JSON-Schema, Llguidance).
 - `scoring.rs` (reine Bewertung: richtige Aktion, gültige und richtige
   Eingaben, keine unnötigen Aufrufe, Quoten gesamt, je Sprache, je Art,
   Recall der Auswahl),
-- `runner.rs`: nimmt ein `Arc<dyn ProviderAdapter>`, ruft je Satz **einen**
-  Schritt mit der Auswahl aus R6 (deterministischer Sampler, wo der Adapter es
-  zulässt), wertet den ersten Werkzeugaufruf bzw. den Text aus. Ersatzhandler
-  gibt es nicht: der Lauf führt nie eine Aktion aus, er bewertet nur den
-  Aufruf, darum kann er keine Daten verändern (FR-021).
+- `runner.rs`: nimmt ein `Arc<dyn ProviderAdapter>`, ruft je Satz bis zu zwei
+  Schritte mit der Auswahl aus R6 (deterministischer Sampler, wo der Adapter es
+  zulässt) ab und bewertet den vollständigen Werkzeugaufruf-Batch jedes
+  bewerteten Schritts. Die erwartete und beobachtete Aufrufmenge muss exakt
+  übereinstimmen; fehlende, doppelte oder unerwartete Aufrufe dürfen nicht als
+  korrekt gelten. Ersatzhandler gibt es nicht: der Lauf führt nie eine Aktion
+  aus, er bewertet nur die Aufrufe, darum kann er keine Daten verändern
+  (FR-021).
 
 Einstiege:
 
@@ -382,6 +387,12 @@ Text. `riskClass` zeigt „Änderung“ für `change`.
   Leitplanken-Aktionen sind bereits gesperrt.
 - `settings.devices.identity` gibt laut Beschreibung nur öffentliche
   Schlüssel zurück; ein Test prüft die Antwortform.
+- `chat.messages.list` bleibt für den eingebauten Agenten aufrufbar, liefert
+  aber nur eine sichere Projektion je Nachricht (`id`, `role`, `createdAt` und
+  `status`). `content`, Vorschauen und daraus abgeleitete Felder werden aus
+  dem Agent-Ergebnis entfernt. Der SC-004-Test legt eine Nachricht mit einem
+  bekannten geheimen Wert an und bestätigt, dass weder der Wert noch ein
+  `content`-Feld im Ergebnis auftaucht.
 
 **Grenze**: Das Schema-Prüfen fängt nur Felder, die im Ergebnisschema
 stehen. Werte, die ein Handler über ein allgemeines Feld durchreicht, fängt es
