@@ -216,6 +216,8 @@ pub fn run() {
             sync::commands::link_join_status,
             sync::commands::link_join_cancel,
             sync::commands::device_remove,
+            sync::commands::admission_decide,
+            sync::commands::sync_copy_notice_dismiss,
             sync::commands::sync_status,
             sync::commands::vault_public_identity,
             sync::commands::sync_servers_get,

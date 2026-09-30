@@ -25,6 +25,7 @@
 #![cfg(target_os = "linux")]
 #![allow(dead_code)]
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use haex_crdt::rusqlite::params;
@@ -51,6 +52,8 @@ pub struct Instance {
     pub chat: ChatState,
     pub keys: sync::keys::DeviceKeys,
     pub vault: [u8; 32],
+    /// The vault file of this instance, what copying it takes.
+    pub db_path: PathBuf,
     _data_home: tempfile::TempDir,
 }
 
@@ -136,6 +139,8 @@ pub async fn create_main(vault_name: &str, nostr_relay: &str) -> Instance {
     create_instance_core(&app, &state, &chat, vault_name, PASSPHRASE.into())
         .await
         .expect("create instance");
+    let db_path =
+        holzi_lib::instances::paths::get_instance_path(&app, vault_name).expect("vault path");
 
     let db = state.database().expect("active instance").database();
     let (keys, vault) = holzi_lib::storage::query::read(&db, |r| {
@@ -154,6 +159,7 @@ pub async fn create_main(vault_name: &str, nostr_relay: &str) -> Instance {
         chat,
         keys,
         vault,
+        db_path,
         _data_home: data_home,
     }
 }
@@ -258,6 +264,67 @@ pub async fn join(main: &Instance, nostr_relay: &str) -> Instance {
         chat,
         keys,
         vault: main.vault,
+        db_path,
+        _data_home: data_home,
+    }
+}
+
+/// The vault file of `source` opened by a new installation, as when the file
+/// is copied to another computer and opened there with the same passphrase
+/// (spec 024 user story 7): the file is taken as it is while `source` keeps
+/// running, the copy gets its own installation id, genesis runs on it the way
+/// `open_instance` runs it, and the real sync service starts on it, pointed
+/// at `nostr_relay`.
+pub async fn copy_of(source: &Instance, nostr_relay: &str) -> Instance {
+    // The file on disk must hold everything the source has committed.
+    #[allow(clippy::disallowed_methods)]
+    source
+        .database()
+        .with_connection(|conn| {
+            Ok(conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()))?)
+        })
+        .expect("checkpoint the source");
+    let data_home = tempfile::tempdir().expect("tempdir");
+    std::env::set_var("XDG_DATA_HOME", data_home.path());
+    let app = mock_app();
+    let installation_uuid = read_installation_uuid(&app);
+    let installation_id_file = installation_id_path(
+        &holzi_lib::instances::paths::get_app_local_data(&app).expect("app local data"),
+    );
+    let db_path = data_home.path().join("copy.db");
+    std::fs::copy(&source.db_path, &db_path).expect("copy the vault file");
+
+    let config = vault_config(PASSPHRASE, &db_path, &installation_id_file, false);
+    let db = Arc::new(Database::open(config).expect("open the copy"));
+    sync::genesis::run_after_open(&db, &installation_id_file, false);
+    let (keys, vault) = holzi_lib::storage::query::read(&db, |r| {
+        let keys = sync::keys::load_device_keys(r, installation_uuid)?
+            .expect("the copy created keys of its own");
+        let vault = sync::keys::vault_pubkey(r)?.expect("vault identity");
+        Ok((keys, vault))
+    })
+    .expect("read the copy's state");
+    set_nostr_relay(&db, nostr_relay);
+
+    let state = AppState::new(VaultGate::new());
+    let chat = ChatState::with_children(state.gate().children());
+    state
+        .install(
+            ActiveInstanceHandle {
+                name: "copy".to_string(),
+                database: Arc::clone(&db),
+            },
+            || Ok(()),
+        )
+        .expect("install the copy");
+    sync::start_for_active_instance(&app, &state).await;
+    Instance {
+        app,
+        state,
+        chat,
+        keys,
+        vault,
+        db_path,
         _data_home: data_home,
     }
 }
@@ -300,7 +367,7 @@ pub fn read_installation_uuid(app: &AppHandle<MockRuntime>) -> Uuid {
 /// A raw, network-free pull of everything `from` has that `into` lacks —
 /// the same primitive two real devices' sessions use (`sync::outbound`/
 /// `sync::inbound`), just driven directly instead of over a connection.
-fn pull_all(from: &Instance, into: &Arc<Database>) {
+pub fn pull_all(from: &Instance, into: &Arc<Database>) {
     let from_replica = sync::replica::Replica::new(from.database());
     let into_replica = sync::replica::Replica::new(Arc::clone(into));
     let theirs = into_replica.progress().expect("read progress");

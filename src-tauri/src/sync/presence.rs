@@ -50,10 +50,10 @@ const MAX_AGE_MS: u64 = 150_000;
 /// How far into the future a meeting's `ts` may claim to be.
 const MAX_FUTURE_MS: u64 = 30_000;
 /// The presence event kind (contracts/nostr-events.md).
-const PRESENCE_KIND: Kind = Kind::Custom(24100);
+pub(crate) const PRESENCE_KIND: Kind = Kind::Custom(24100);
 /// The gift-wrap kind holzi uses (not NIP-59's standard 1059: presence is
 /// ephemeral and never stored, so it uses the ephemeral range instead).
-const GIFT_WRAP_KIND: Kind = Kind::Custom(21059);
+pub(crate) const GIFT_WRAP_KIND: Kind = Kind::Custom(21059);
 
 #[derive(Debug, thiserror::Error)]
 pub enum PresenceError {
@@ -124,25 +124,31 @@ impl PresenceContent {
 
     /// The [`EndpointAddr`] this meeting names, for [`iroh::address_lookup::MemoryLookup`].
     pub fn endpoint_addr(&self) -> Result<EndpointAddr, PresenceError> {
-        let id =
-            iroh::EndpointId::from_bytes(&self.endpoint).map_err(|_| PresenceError::InvalidKey)?;
-        let mut addrs: Vec<TransportAddr> = self
-            .addrs
-            .iter()
-            .filter_map(|a| a.parse::<SocketAddr>().ok())
-            .map(TransportAddr::Ip)
-            .collect();
-        if let Some(relay) = &self.iroh_relay {
-            if let Ok(url) = relay.parse::<RelayUrl>() {
-                addrs.push(TransportAddr::Relay(url));
-            }
-        }
-        Ok(EndpointAddr::from_parts(id, addrs))
+        endpoint_addr_of(&self.endpoint, self.iroh_relay.as_deref(), &self.addrs)
     }
 }
 
+/// The [`EndpointAddr`] of `endpoint` reachable at the relay and the socket
+/// addresses a meeting names; an address that does not parse is left out.
+pub(crate) fn endpoint_addr_of(
+    endpoint: &[u8; 32],
+    iroh_relay: Option<&str>,
+    addrs: &[String],
+) -> Result<EndpointAddr, PresenceError> {
+    let id = iroh::EndpointId::from_bytes(endpoint).map_err(|_| PresenceError::InvalidKey)?;
+    let mut addrs: Vec<TransportAddr> = addrs
+        .iter()
+        .filter_map(|a| a.parse::<SocketAddr>().ok())
+        .map(TransportAddr::Ip)
+        .collect();
+    if let Some(url) = iroh_relay.and_then(|relay| relay.parse::<RelayUrl>().ok()) {
+        addrs.push(TransportAddr::Relay(url));
+    }
+    Ok(EndpointAddr::from_parts(id, addrs))
+}
+
 /// Wall-clock milliseconds since the Unix epoch; 0 if the clock is before it.
-fn now_ms() -> u64 {
+pub(crate) fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
@@ -264,6 +270,20 @@ pub(crate) fn unwrap_payload(
     mb_sk: &SecretKey,
     inner_kind: Kind,
 ) -> Result<([u8; 32], String), PresenceError> {
+    let (sender, kind, payload) = unwrap_rumor(gift_wrap, mb_sk)?;
+    if kind != inner_kind {
+        return Err(PresenceError::WrongKind);
+    }
+    Ok((sender, payload))
+}
+
+/// Opens a gift wrap like [`unwrap_payload`] without knowing the inner kind
+/// in advance: returns the seal signer, the inner event's kind and its
+/// payload, for a mailbox that carries presence and admission requests.
+pub(crate) fn unwrap_rumor(
+    gift_wrap: &Event,
+    mb_sk: &SecretKey,
+) -> Result<([u8; 32], Kind, String), PresenceError> {
     if gift_wrap.as_json().len() > MAX_EVENT_BYTES {
         return Err(PresenceError::TooLarge);
     }
@@ -281,10 +301,7 @@ pub(crate) fn unwrap_payload(
         .map_err(|e| PresenceError::Crypto(e.to_string()))?;
     let rumor: UnsignedEvent =
         serde_json::from_slice(&rumor_json).map_err(|e| PresenceError::Malformed(e.to_string()))?;
-    if rumor.kind != inner_kind {
-        return Err(PresenceError::WrongKind);
-    }
-    Ok((seal.pubkey.to_bytes(), rumor.content))
+    Ok((seal.pubkey.to_bytes(), rumor.kind, rumor.content))
 }
 
 /// Checks a device pubkey is a real secp256k1 key, for callers that only
@@ -353,14 +370,6 @@ pub fn load_all(q: &mut impl Query) -> haex_crdt::Result<Vec<StoredPresence>> {
         .collect()
 }
 
-/// How often this device republishes its own presence, absent an address
-/// change (contracts/nostr-events.md).
-const PUBLISH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
-/// How long presence waits for its relays before it goes on without them
-/// (Constitution VII: a slow or dead relay never blocks the others). The
-/// relays keep connecting, and reconnecting, in the background.
-const RELAY_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
-
 /// Installs `ring` as the process-wide rustls crypto provider, unless one is
 /// already installed. The relay client's `wss://` websocket asks rustls for
 /// that default, and with both `ring` (iroh) and `aws-lc-rs` (reqwest) in
@@ -370,280 +379,6 @@ pub fn ensure_crypto_provider() {
         // A concurrent install winning the race is just as good.
         let _ = rustls::crypto::ring::default_provider().install_default();
     }
-}
-
-/// Runs presence for as long as this device's session lasts: connects to
-/// `relay_urls`, subscribes to today's and yesterday's mailbox, publishes
-/// this device's own reachability on the contract's cadence — and also
-/// right away whenever `changed` fires, so a device list this session just
-/// issued (linking, removing) does not wait out the rest of the 60 s tick
-/// — and feeds every fresh, authenticated meeting it receives into `node`'s
-/// address book and `device_presence_no_sync`, then wakes `reconnect` so
-/// the caller's reconnect loop dials it (dialing here would stall presence
-/// for as long as an offline device's dial takes). Returns only if the relay
-/// client itself ends; the caller races this against its own cancellation.
-pub async fn run(
-    node: &crate::sync::endpoint::SyncNode,
-    replica: &crate::sync::replica::Replica,
-    keys: &DeviceKeys,
-    vault: [u8; 32],
-    relay_urls: Vec<String>,
-    mut changed: tokio::sync::watch::Receiver<u64>,
-    reconnect: &tokio::sync::Notify,
-) {
-    use futures::StreamExt;
-
-    ensure_crypto_provider();
-    let client = nostr_sdk::client::Client::new();
-    for url in &relay_urls {
-        if let Err(error) = client.add_relay(url.as_str()).await {
-            log::warn!("sync: presence relay {url} is not a valid URL: {error}");
-        }
-    }
-    // Unlike `try_connect_relay`, `connect` keeps a relay that is down right
-    // now (e.g. the device opened the vault offline) reconnecting in the
-    // background, and each reconnect renews the subscription (FR-010).
-    client.connect().and_wait(RELAY_CONNECT_TIMEOUT).await;
-
-    let mut notifications = client.notifications();
-    let mut publish_tick = tokio::time::interval(PUBLISH_INTERVAL);
-    let mut subscribed_day: Option<u32> = None;
-
-    loop {
-        let day = day_tag_now();
-        if subscribed_day != Some(day) {
-            if let Err(error) = resubscribe(&client, replica, vault, day).await {
-                log::warn!("sync: presence subscription failed, retrying next tick: {error}");
-            } else {
-                subscribed_day = Some(day);
-            }
-        }
-
-        tokio::select! {
-            _ = publish_tick.tick() => {
-                if let Err(error) = publish_own(&client, node, replica, keys, vault, day).await {
-                    log::warn!("sync: publishing presence failed: {error}");
-                }
-            }
-            result = changed.changed() => {
-                if result.is_err() {
-                    return;
-                }
-                if let Err(error) = publish_own(&client, node, replica, keys, vault, day).await {
-                    log::warn!("sync: publishing presence failed: {error}");
-                }
-            }
-            notification = notifications.next() => {
-                let Some(notification) = notification else { break };
-                if let nostr_sdk::client::ClientNotification::Event { event, .. } = notification {
-                    if handle_incoming(node, replica, keys, vault, day, &event).await {
-                        reconnect.notify_one();
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Subscribes to today's and yesterday's mailbox, replacing any earlier
-/// subscription (contracts/nostr-events.md: no `since`, renewed on day
-/// rollover).
-async fn resubscribe(
-    client: &nostr_sdk::client::Client,
-    replica: &crate::sync::replica::Replica,
-    vault: [u8; 32],
-    day: u32,
-) -> Result<(), PresenceError> {
-    let Some(roster) = read_roster(replica, vault)? else {
-        return Ok(());
-    };
-    let (_, today) = mailbox_keys(&roster.content_key, day)?;
-    let (_, yesterday) = mailbox_keys(&roster.content_key, day.saturating_sub(1))?;
-    let _ = client.unsubscribe_all().await;
-    let filter = nostr::filter::Filter::new()
-        .kind(GIFT_WRAP_KIND)
-        .pubkeys([today, yesterday]);
-    client
-        .subscribe(filter)
-        .await
-        .map_err(|e| PresenceError::Crypto(e.to_string()))?;
-    Ok(())
-}
-
-/// Publishes this device's own presence, unless its device list names only
-/// itself (FR-007: a one-device vault only listens).
-async fn publish_own(
-    client: &nostr_sdk::client::Client,
-    node: &crate::sync::endpoint::SyncNode,
-    replica: &crate::sync::replica::Replica,
-    keys: &DeviceKeys,
-    vault: [u8; 32],
-    day: u32,
-) -> Result<(), PresenceError> {
-    let Some(roster) = read_roster(replica, vault)? else {
-        return Ok(());
-    };
-    if !roster.has_peers() {
-        return Ok(());
-    }
-    let (_, mb_pk) = mailbox_keys(&roster.content_key, day)?;
-    let addr = node.addr();
-    let content = PresenceContent::own(
-        keys.device_pubkey,
-        keys.endpoint_id,
-        addr.relay_urls().next().map(RelayUrl::to_string),
-        addr.ip_addrs().copied().collect(),
-        roster.list_generation,
-    );
-    let event = build(keys, &content, &mb_pk)?;
-    client
-        .send_event(&event)
-        .await
-        .map_err(|e| PresenceError::Crypto(e.to_string()))?;
-    Ok(())
-}
-
-/// Opens and validates a received meeting, then records it (contracts/
-/// nostr-events.md's receiver checks): fresh, signed by a device the
-/// current effective list still names with that same endpoint, and (except
-/// for a still-unlisted copy checking a newer list) not from a stranger.
-/// Returns whether it recorded one, i.e. whether reconnect has something
-/// new to dial.
-async fn handle_incoming(
-    node: &crate::sync::endpoint::SyncNode,
-    replica: &crate::sync::replica::Replica,
-    keys: &DeviceKeys,
-    vault: [u8; 32],
-    day: u32,
-    event: &Event,
-) -> bool {
-    let roster = match read_roster(replica, vault) {
-        Ok(Some(roster)) => roster,
-        Ok(None) => return false,
-        Err(error) => {
-            log::warn!("sync: presence could not load the current state: {error}");
-            return false;
-        }
-    };
-    let Ok((mb_sk_today, _)) = mailbox_keys(&roster.content_key, day) else {
-        return false;
-    };
-    let Ok((mb_sk_yesterday, _)) = mailbox_keys(&roster.content_key, day.saturating_sub(1)) else {
-        return false;
-    };
-    let opened = open(event, &mb_sk_today).or_else(|_| open(event, &mb_sk_yesterday));
-    let (sender, content) = match opened {
-        Ok(pair) => pair,
-        Err(_) => return false,
-    };
-    if content.device != sender || !content.is_fresh(now_ms()) {
-        return false;
-    }
-    // The relay delivers this device's own meetings back to it, since it
-    // subscribes to the same mailbox it publishes to. One from this key at
-    // another endpoint is a copy of this installation (FR-030).
-    if sender == keys.device_pubkey {
-        if content.endpoint != keys.endpoint_id {
-            node.flag(sender, crate::sync::problems::Problem::Duplicate)
-                .await;
-        }
-        return false;
-    }
-    let Some(listed_endpoint) = roster
-        .effective_devices
-        .iter()
-        .find_map(|(device, endpoint)| (*device == sender).then_some(*endpoint))
-    else {
-        // Meetings of unknown devices lead to no connection, except a
-        // newer list from a copy of this vault — left for a later story
-        // (FR-007's admission path) to act on; presence still records
-        // nothing for them.
-        return false;
-    };
-    // A listed key speaking from another endpoint, or sharing its device id
-    // with another key, means two installations act as one device (R14,
-    // FR-030): sync with it stops until that ends.
-    if content.endpoint != listed_endpoint || roster.conflicting.contains(&sender) {
-        node.flag(sender, crate::sync::problems::Problem::Duplicate)
-            .await;
-        return false;
-    }
-
-    let endpoint_addr = content.endpoint_addr().ok();
-    if let Some(addr) = &endpoint_addr {
-        node.note_presence(addr.clone()).await;
-    }
-    let write_result = replica.db().write(|tx| {
-        record_seen(tx, &sender, now_ms(), endpoint_addr.as_ref())?;
-        Ok(())
-    });
-    if let Err(error) = write_result {
-        log::warn!("sync: recording presence for a device failed: {error}");
-        return false;
-    }
-    // This write does not go through `VaultDb`, so it never reaches the
-    // gate's sync-notify signal (spec 024, FR-010): the caller nudges
-    // reconnect directly instead of leaving it to its own periodic tick.
-    true
-}
-
-/// This device's current presence-relevant state: the content key it holds
-/// (R9: skipping a generation wrapped for a removed device), the effective
-/// list's generation, and the device keys that list currently names.
-struct Roster {
-    content_key: [u8; 32],
-    list_generation: u64,
-    /// Each device the list names, with the endpoint it names for it.
-    effective_devices: Vec<([u8; 32], [u8; 32])>,
-    /// Keys that share a device id with another key.
-    conflicting: std::collections::HashSet<[u8; 32]>,
-}
-
-impl Roster {
-    /// Whether the effective list names any device besides this one.
-    fn has_peers(&self) -> bool {
-        self.effective_devices.len() > 1
-    }
-}
-
-/// Reads the [`Roster`] from storage; `None` while this device holds no
-/// content key or no valid device list yet.
-fn read_roster(
-    replica: &crate::sync::replica::Replica,
-    vault: [u8; 32],
-) -> Result<Option<Roster>, PresenceError> {
-    crate::storage::query::read(replica.db(), |r| {
-        let vault_pubkey = crate::sync::keys::vault_pubkey(r)?.unwrap_or(vault);
-        let rows = crate::sync::device_list::load_all(r)?;
-        // Every list this device holds that still checks out, not just the
-        // effective one: a same-generation fork that lost the tie-break
-        // (FR-005/FR-043) must not make a key generation it saw look safe.
-        let mut removed = Vec::new();
-        for row in &rows {
-            if let Ok(signed) = row.check(&vault_pubkey) {
-                removed.extend(signed.list.removed.iter().map(|r| r.device_pubkey));
-            }
-        }
-        let Some(key) = crate::sync::content_keys::current_key(r, &removed)? else {
-            return Ok(None);
-        };
-        let valid = crate::sync::device_list::valid_lists(&rows, &vault_pubkey);
-        let Some(effective) = crate::sync::device_list::effective(&valid) else {
-            return Ok(None);
-        };
-        Ok(Some(Roster {
-            content_key: *key.key,
-            list_generation: effective.list.generation,
-            effective_devices: effective
-                .list
-                .devices
-                .iter()
-                .map(|d| (d.device_pubkey, d.endpoint_id))
-                .collect(),
-            conflicting: crate::sync::device_list::uuid_conflicts(&valid),
-        }))
-    })
-    .map_err(|e| PresenceError::Malformed(e.to_string()))
 }
 
 pub(crate) mod hex_bytes32 {

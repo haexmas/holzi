@@ -177,12 +177,16 @@ die Nutzerin das Verknüpfen ab oder ist der Datensatz älter als 24 h, wird er 
 | `signature`         | BLOB(64)    | Schnorr der Kopie über `holzi-admission/v1 ‖ …`                   |
 | `state`             | TEXT        | `open` \| `admitted` \| `rejected`                                |
 
-Übergänge: `open → admitted` (Hauptgerät, „Aufnehmen“, gleichzeitig neue Geräteliste) und `open →
-rejected` („Ablehnen“). Keine Rückkehr. Nach jeder Zusammenführung sortiert jedes Gerät offene
-Anfragen deterministisch nach `(requested_at, device_pubkey)` und lässt nur die ersten 20 offen;
-alle weiteren werden idempotent zu `rejected`. So führt dieselbe zusammengeführte Menge auf allen
-Geräten zum selben Ergebnis. Nach der Entscheidung wird die Zeile gelöscht; offene Anfragen nach
-30 Tagen ebenfalls (R20).
+Übergänge: „Aufnehmen“ (Hauptgerät, gleichzeitig neue Geräteliste) löscht die Zeile, und `open →
+rejected` („Ablehnen“) behält sie als Merkzeichen: Die Kopie wiederholt ihre Anfrage, und eine
+gelöschte Zeile ließe sie sofort wieder erscheinen. Eine abgelehnte Zeile wird nicht wieder
+geöffnet. Nach jeder Zusammenführung sortiert jedes Gerät offene Anfragen deterministisch nach
+`(requested_at, device_pubkey)` und lässt nur die ersten 20 offen; alle weiteren werden idempotent
+zu `rejected`. So führt dieselbe zusammengeführte Menge auf allen Geräten zum selben Ergebnis.
+Jedes Gerät löscht nach der Zusammenführung Zeilen von Geräten, die auf der geltenden Liste
+stehen oder dort entfernt sind, sowie Zeilen (offen oder abgelehnt), die älter als 30 Tage sind
+(R20). Der Zustand `admitted` kommt nicht vor: Wer aufgenommen ist, steht auf der Liste.
+`vault_device_uuid` kommt aus der signierten Anfrage.
 
 ### `device_presence_no_sync` (neu, gerätelokal)
 

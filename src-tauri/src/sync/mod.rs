@@ -2,6 +2,7 @@
 //! content keys, the exchange of changes by progress per origin, and the
 //! per-session sync service. The transport follows with user story 1.
 
+pub mod admission;
 pub mod change;
 pub mod commands;
 pub mod content_keys;
@@ -17,6 +18,7 @@ pub mod keys;
 pub mod link;
 pub mod outbound;
 pub mod presence;
+pub mod presence_loop;
 pub mod problems;
 pub mod progress;
 pub mod registry;
@@ -73,6 +75,13 @@ pub async fn reconnect_missing(node: &endpoint::SyncNode, replica: &replica::Rep
         };
         if let Err(error) = node.connect(addr).await {
             log::debug!("sync: reconnect to a known device did not succeed yet: {error}");
+        }
+    }
+    // A device the list does not name yet announced a newer list: one dial
+    // fetches it, and the handshake then decides (FR-007).
+    for addr in node.take_candidates() {
+        if let Err(error) = node.connect(addr).await {
+            log::debug!("sync: a device with a newer list did not answer yet: {error}");
         }
     }
 }

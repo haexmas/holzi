@@ -44,16 +44,30 @@ Generation, info = "holzi/presence/v1" ‖ tag_u32)`, `tag` = Tage seit 1970 (UT
   `device`; `ts` nicht älter als 150 s und nicht mehr als 30 s in der Zukunft; erst dann Adresse in
   den `MemoryLookup` übernehmen und, wenn noch keine besteht, eine Verbindung aufbauen. Meldungen
   unbekannter Geräte führen zu keiner Verbindung, außer zur Prüfung einer neueren Geräteliste
-  (Kopie eines Hauptgeräts, FR-007).
+  (Kopie eines Hauptgeräts, FR-007): Nennt eine solche Meldung eine höhere `list_generation` als die
+  eigene und ist der Absender nicht entfernt, wählt ein gelistetes Gerät ihn einmal je Meldung an
+  (höchstens 16 Kandidaten zugleich); der Handshake übernimmt die Liste oder lehnt ab.
 - Abo: `{kinds: [21059], "#p": [mb_pk(heute), mb_pk(gestern)]}`, beim Tageswechsel erneuert.
 
 ## Aufnahmeanfrage (inneres Ereignis Art 24101)
 
 - Empfänger: `mb_pk` wie oben (die Kopie hat den Inhaltsschlüssel aus der kopierten Datei).
-- Inhalt: `{v, device, endpoint, name, requested_at, sig}`; `sig` = Schnorr des Geräteschlüssels
-  über `holzi-admission/v1 ‖ lp(device) ‖ lp(endpoint) ‖ lp(name) ‖ requested_at`.
-- Jedes Gerät der Vault, das sie empfängt, legt sie in `admission_requests` ab (FR-045); die Kopie
-  wiederholt sie im Präsenztakt, bis sie auf der Geräteliste steht.
+- Inhalt: `{v, device, endpoint, vault_device_uuid, name, requested_at, sig, iroh_relay?, addrs?}`;
+  `sig` = Schnorr des Geräteschlüssels über `holzi-admission/v1 ‖ lp(device) ‖ lp(endpoint) ‖
+lp(vault_device_uuid) ‖ lp(name) ‖ requested_at` (`requested_at` als 8 Byte Big-Endian).
+  `vault_device_uuid` ist die Knoten-ID der Kopie: Die Geräteliste nennt ein Gerät damit, und die
+  Änderungen aus der Wartezeit tragen sie. `iroh_relay` und `addrs` sagen, wo die Kopie gerade
+  erreichbar ist; sie sind nicht signiert (das Siegel beglaubigt sie) und werden nie gespeichert.
+- Der Empfänger verwirft eine Anfrage, wenn der Siegel-Signierer nicht `device` ist, die Signatur
+  nicht passt, der Name über 256 Byte hat oder `requested_at` mehr als 30 s in der Zukunft oder
+  mehr als 30 Tage in der Vergangenheit liegt.
+- Jedes gelistete Gerät der Vault, das sie empfängt, legt sie in `admission_requests` ab (FR-045),
+  solange der Absender weder auf der Liste steht noch entfernt ist; die Kopie wiederholt sie im
+  Präsenztakt, bis sie auf der Geräteliste steht, und erneuert `requested_at`, wenn die Sitzung
+  älter als 7 Tage wird. Steht der Absender inzwischen auf der Liste (aufgenommen, aber noch ohne
+  die neue Liste), gilt die Anfrage als Präsenzmeldung: Das Gerät wird angewählt und bekommt die
+  Liste im Handshake.
+- Ein Gerät, das auf keiner Liste steht, legt keine Anfragen ab.
 
 ## Treffpunkt beim Verknüpfen (inneres Ereignis Art 24102)
 

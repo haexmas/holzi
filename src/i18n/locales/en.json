@@ -562,6 +562,18 @@
       "cancel": "Cancel",
       "missing": "This device is not (or no longer) in the vault, or it is this device itself. It cannot be removed.",
       "notMain": "Only a main device can remove devices."
+    },
+    "admission": {
+      "title": "Requests to join",
+      "description": "These copies of a vault file ask to join. Admit only devices you know.",
+      "admit": "Admit",
+      "reject": "Refuse",
+      "admitLabel": "Admit “{name}”",
+      "rejectLabel": "Refuse “{name}”",
+      "failed": "The request could not be answered.",
+      "notMain": "Only a main device can answer requests.",
+      "copyNotice": "This vault file is a copy of a main device. This device is now a main device too and can link, admit and remove devices.",
+      "dismiss": "Got it"
     }
   },
   "models": {
@@ -854,7 +866,8 @@
         "list": "List the vault's devices",
         "link": "Open linking a device",
         "identity": "Read the vault identity",
-        "remove": "Remove a device from the vault"
+        "remove": "Remove a device from the vault",
+        "admit": "Answer a copy's request to join"
       },
       "sync": {
         "servers": {
