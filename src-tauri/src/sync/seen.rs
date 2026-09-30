@@ -7,7 +7,7 @@
 //! forward, and a report from the future is clamped to now, so a device
 //! with a wrong clock cannot push another device's "last online" ahead.
 
-use haex_crdt::rusqlite::params;
+use haex_crdt::{rusqlite::params, CrdtTransaction};
 
 use crate::storage::query::Query;
 use crate::sync::replica::Replica;
@@ -17,33 +17,39 @@ const MAX_FUTURE_MS: u64 = 30_000;
 
 /// Raises `device`'s last-seen time to `at_ms`; returns whether it moved.
 pub fn touch(replica: &Replica, device: &[u8; 32], at_ms: u64) -> haex_crdt::Result<bool> {
+    replica.db().write(|tx| touch_in(tx, device, at_ms))
+}
+
+fn touch_in(
+    tx: &mut CrdtTransaction<'_>,
+    device: &[u8; 32],
+    at_ms: u64,
+) -> haex_crdt::Result<bool> {
     let at = i64::try_from(at_ms).unwrap_or(i64::MAX);
-    replica.db().write(|tx| {
-        let known: Option<i64> = tx.query_row(
-            "SELECT last_seen FROM device_presence_no_sync WHERE device_pubkey = ?1",
-            params![device.as_slice()],
-            |r| r.get(0),
-        )?;
-        match known {
-            Some(seen) if seen >= at => Ok(false),
-            Some(_) => {
-                tx.execute(
-                    "UPDATE device_presence_no_sync SET last_seen = ?2 WHERE device_pubkey = ?1",
-                    params![device.as_slice(), at],
-                )?;
-                Ok(true)
-            }
-            None => {
-                tx.execute(
-                    "INSERT INTO device_presence_no_sync \
-                       (device_pubkey, last_seen, endpoint_addr, problem) \
-                     VALUES (?1, ?2, NULL, NULL)",
-                    params![device.as_slice(), at],
-                )?;
-                Ok(true)
-            }
+    let known: Option<i64> = tx.query_row(
+        "SELECT last_seen FROM device_presence_no_sync WHERE device_pubkey = ?1",
+        params![device.as_slice()],
+        |r| r.get(0),
+    )?;
+    match known {
+        Some(seen) if seen >= at => Ok(false),
+        Some(_) => {
+            tx.execute(
+                "UPDATE device_presence_no_sync SET last_seen = ?2 WHERE device_pubkey = ?1",
+                params![device.as_slice(), at],
+            )?;
+            Ok(true)
         }
-    })
+        None => {
+            tx.execute(
+                "INSERT INTO device_presence_no_sync \
+                   (device_pubkey, last_seen, endpoint_addr, problem) \
+                 VALUES (?1, ?2, NULL, NULL)",
+                params![device.as_slice(), at],
+            )?;
+            Ok(true)
+        }
+    }
 }
 
 /// Folds what a third device reported into the stored times. `own` is never
@@ -56,16 +62,18 @@ pub fn merge(
     now_ms: u64,
 ) -> haex_crdt::Result<bool> {
     let ceiling = now_ms.saturating_add(MAX_FUTURE_MS);
-    let mut moved = false;
-    for (device, at) in reports {
-        if device == own {
-            continue;
+    replica.db().write(|tx| {
+        let mut moved = false;
+        for (device, at) in reports {
+            if device == own {
+                continue;
+            }
+            let at = if *at > ceiling { now_ms } else { *at };
+            // A device a report names but this device never met gets a row too.
+            moved |= touch_in(tx, device, at)?;
         }
-        let at = if *at > ceiling { now_ms } else { *at };
-        // A device a report names but this device never met gets a row too.
-        moved |= touch(replica, device, at)?;
-    }
-    Ok(moved)
+        Ok(moved)
+    })
 }
 
 /// What this device tells a peer it knows: every stored time, and itself as

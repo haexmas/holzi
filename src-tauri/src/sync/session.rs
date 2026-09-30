@@ -40,6 +40,8 @@ pub struct SessionContext {
     pub bump: Arc<watch::Sender<u64>>,
     /// Receives the tables a pull changed.
     pub on_applied: Arc<dyn Fn(BTreeSet<String>) + Send + Sync>,
+    /// Notifies the device view when a reported last-seen value advances.
+    pub on_devices_changed: Arc<dyn Fn() + Send + Sync>,
     pub cancel: CancellationToken,
 }
 
@@ -147,7 +149,8 @@ async fn merge_last_seen(ctx: &SessionContext, reports: Vec<([u8; 32], u64)>) {
     let own = ctx.keys.device_pubkey;
     match tokio::task::spawn_blocking(move || seen::merge(&replica, &reports, &own, now_ms())).await
     {
-        Ok(Ok(_)) => {}
+        Ok(Ok(true)) => (ctx.on_devices_changed)(),
+        Ok(Ok(false)) => {}
         Ok(Err(error)) => log::debug!("sync: merging last-seen times failed: {error}"),
         Err(error) => log::debug!("sync: merging last-seen times did not run: {error}"),
     }

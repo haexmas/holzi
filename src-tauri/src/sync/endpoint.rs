@@ -357,6 +357,10 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
         changed: inner.changed.clone(),
         bump: Arc::clone(&inner.bump),
         on_applied: Arc::clone(&inner.on_applied),
+        on_devices_changed: {
+            let inner = Arc::clone(&inner);
+            Arc::new(move || notify_devices_changed(&inner))
+        },
         cancel: inner.cancel.child_token(),
     };
     session::run(ctx, connection.clone(), send, recv, peer.clone()).await;

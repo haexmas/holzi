@@ -9,6 +9,7 @@
 
 use haex_crdt::CrdtTransaction;
 use iroh::{RelayMap, RelayMode, RelayUrl};
+use nostr::types::RelayUrl as NostrRelayUrl;
 
 use crate::storage::preferences::{self, PrefScope};
 use crate::storage::query::Query;
@@ -97,11 +98,20 @@ const MAX_SERVERS: usize = 10;
 /// URLs, iroh servers `http://` or `https://`. The error names the first
 /// that is not, and is the user's to fix, not a failure.
 pub fn validate(nostr: &[String], iroh: &[String]) -> Result<(), String> {
-    check_list(nostr, &["ws", "wss"], "a Nostr server")?;
-    check_list(iroh, &["http", "https"], "an iroh server")
+    check_list(nostr, &["ws", "wss"], "a Nostr server", |url| {
+        NostrRelayUrl::parse(url).is_ok()
+    })?;
+    check_list(iroh, &["http", "https"], "an iroh server", |url| {
+        url.parse::<RelayUrl>().is_ok()
+    })
 }
 
-fn check_list(urls: &[String], schemes: &[&str], what: &str) -> Result<(), String> {
+fn check_list(
+    urls: &[String],
+    schemes: &[&str],
+    what: &str,
+    parses: impl Fn(&str) -> bool,
+) -> Result<(), String> {
     if urls.len() > MAX_SERVERS {
         return Err(format!("at most {MAX_SERVERS} servers of one kind"));
     }
@@ -109,7 +119,7 @@ fn check_list(urls: &[String], schemes: &[&str], what: &str) -> Result<(), Strin
         let scheme_ok = url
             .split_once("://")
             .is_some_and(|(scheme, rest)| schemes.contains(&scheme) && !rest.is_empty());
-        if !scheme_ok || url.len() > 256 || url.chars().any(char::is_whitespace) {
+        if !scheme_ok || !parses(url) || url.len() > 256 || url.chars().any(char::is_whitespace) {
             return Err(format!("{url:?} is not {what}"));
         }
     }

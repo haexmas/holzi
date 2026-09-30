@@ -107,6 +107,9 @@ fn servers_are_checked_by_scheme_and_count() {
     assert!(ok(&["wss://"], &[]).is_err());
     assert!(ok(&["not a url"], &[]).is_err());
     assert!(ok(&["wss://relay example"], &[]).is_err());
+    assert!(ok(&[], &["https://iroh.example:abc"]).is_err());
+    assert!(ok(&[], &["https://[::1]:443"]).is_ok());
+    assert!(ok(&[], &["https://[::1"]).is_err());
     assert!(
         ok(&["wss://a.example"; 11], &[]).is_err(),
         "at most ten of one kind"

@@ -279,6 +279,7 @@ pub async fn sync_servers_set(
         nostr_relays: args.nostr_relays.clone(),
         iroh_relays: args.iroh_relays.clone(),
     };
+    let _servers_guard = state.lock_sync_servers().await;
     let db = crate::state_utils::active_database(&state)?;
     db.write(move |tx| servers::write(tx, &args.nostr_relays, &args.iroh_relays))
         .await?;

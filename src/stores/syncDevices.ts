@@ -24,6 +24,8 @@ export const useSyncDevicesStore = defineStore('syncDevices', () => {
   const error = ref<string | null>(null)
 
   let unlisten: UnlistenFn | null = null
+  let pendingListen: Promise<void> | null = null
+  let listenGeneration = 0
   let loadingNow = false
   let again = false
 
@@ -67,14 +69,35 @@ export const useSyncDevicesStore = defineStore('syncDevices', () => {
 
   async function startListening(): Promise<void> {
     if (unlisten) return
-    unlisten = await listen(SYNC_DEVICES_CHANGED, () => {
+    if (pendingListen) return await pendingListen
+
+    const generation = ++listenGeneration
+    const registration = listen(SYNC_DEVICES_CHANGED, () => {
       void loadAsync()
+    }).then((cleanup) => {
+      if (
+        generation !== listenGeneration ||
+        pendingListen !== registration ||
+        unlisten
+      ) {
+        cleanup()
+        return
+      }
+      unlisten = cleanup
     })
+    pendingListen = registration
+    try {
+      await registration
+    } finally {
+      if (pendingListen === registration) pendingListen = null
+    }
   }
 
   function stopListening(): void {
+    listenGeneration += 1
     unlisten?.()
     unlisten = null
+    pendingListen = null
   }
 
   return {
