@@ -46,6 +46,12 @@ Vorkehrungen, die kleine lokale Modelle dafür brauchen.
   vorhandenes Abo im holzi-Chat ohne eigenen API-Key erschließen; mit
   Spec 021 sollen sie holzi über MCP bedienen können (siehe Annahmen).
   Bis dahin zeigt der Chat bei einem Delegate einen Hinweis (US4, FR-023).
+- **Download- und Sync-Steuerung (Datenvolumen)**: Große Downloads (Modelle)
+  und die Dateisynchronisation pausieren zu können, um auf Mobilgeräten das
+  Datenvolumen zu schonen, ist ein eigenes Vorhaben mit eigener Spec (berührt
+  005, 025 und 029) und nicht Teil dieser Spec. Bis dahin gilt: Ein Modell
+  darf Downloads im Modus „Auto“ wie jede andere ändernde Aktion ohne
+  Rückfrage anstoßen (Desktop ist heute das einzige Ziel).
 
 ## Clarifications
 
@@ -60,6 +66,16 @@ Vorkehrungen, die kleine lokale Modelle dafür brauchen.
   abschalten können (eigener Schalter, unabhängig vom Freigabe-Modus)?
   → A: Nein, kein eigener Schalter; die Steuerung läuft allein über die
   Freigabe-Modi (Manuell / Auto / Plan), Standard bleibt „immer fragen“.
+- Q: Müssen Downloads, die ein Modell anstößt (z. B. ein Modell laden), extra
+  erfragt werden? → A: Nein, sie gelten wie jede ändernde Aktion. Eine
+  allgemeine Steuerung für große Downloads und Dateisync auf Mobilgeräten
+  (pausieren, Datenvolumen schonen) kommt mit einer eigenen Spec.
+- Q: Soll die Werkzeug-Obergrenze pro Antwort für lokale und Cloud-Modelle
+  gleich sein? → A: Ja, eine einheitliche Obergrenze für alle Modelle; nur
+  eine ausdrücklich für ein Modell hinterlegte Obergrenze weicht ab.
+- Q: Gelten für lokale und Cloud-Modelle dieselben Werkzeuge und dasselbe
+  Muster? → A: Ja. Jedes Modell, bei dem holzi den Ablauf fährt, bekommt
+  dieselben Werkzeuge auf demselben Weg; es gibt keinen Sonderweg je Anbieter.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -235,7 +251,7 @@ Werkzeuge werden angeboten.
    dessen Vorlage Werkzeuge grundsätzlich vorsieht, **When** es zum ersten
    Mal für den Chat gewählt wird, **Then** startet holzi im Hintergrund einen
    kurzen Selbsttest mit wenigen Sätzen aus dem Beispielsatz-Satz (US5)
-   gegen Ersatzhandler; der Chat ist währenddessen sofort nutzbar (mit dem
+   ohne dass eine Aktion ausgeführt wird; der Chat ist währenddessen sofort nutzbar (mit dem
    Hinweis aus Szenario 3), und nach Abschluss wechselt der Wert auf
    „unterstützt“ oder „nicht unterstützt“, ohne dass der Nutzer etwas tun
    muss.
@@ -331,7 +347,11 @@ hintereinander zeigt nur geringe Abweichung.
 - **FR-001**: Das System MUSS jede Aktion, die für Agenten aufrufbar
   markiert ist, dem eingebauten Agenten im Chat als Werkzeug anbieten können;
   Name, Beschreibung und Eingabeschema stammen aus der Aktionsdefinition, es
-  gibt keine zweite, parallel gepflegte Werkzeugbeschreibung.
+  gibt keine zweite, parallel gepflegte Werkzeugbeschreibung. Ausgenommen
+  sind Aktionen, die sich im laufenden Chat selbst auslösen würden
+  (Nachricht senden, Antwort wiederholen, Antwort abbrechen); sie bleiben
+  für externe Agenten (Spec 021) aufrufbar, dem eingebauten Agenten aber
+  verschlossen.
 - **FR-002**: Wird ein solches Werkzeug aufgerufen, MUSS das System die
   Aktion über denselben Ablauf ausführen wie bei Bedienung durch den Nutzer
   (Prüfung der Eingaben, Zielauflösung, Öffnen der zugehörigen App), mit
@@ -381,11 +401,14 @@ hintereinander zeigt nur geringe Abweichung.
 - **FR-011**: Das System MUSS pro Antwort höchstens eine festgelegte
   Obergrenze an Werkzeugen anbieten, ausgewählt nach Bezug zur aktuellen
   Anfrage und Lage (z. B. welche App im Vordergrund ist); die Obergrenze ist
-  pro Modell konfigurierbar, damit leistungsfähigere Modelle mehr erhalten
-  können.
+  für alle Modelle gleich (lokal wie Cloud) und weicht nur ab, wenn für ein
+  Modell ausdrücklich eine andere hinterlegt ist.
 - **FR-012**: Das Modell MUSS bei Bedarf die vollständige Liste der
   verfügbaren (für Agenten aufrufbaren) Aktionen abrufen und danach eine
-  dort gefundene Aktion nutzen können, ohne Eingriff des Nutzers.
+  dort gefundene Aktion nutzen können, ohne Eingriff des Nutzers. Aktionen,
+  die das Modell so findet, MÜSSEN ihm ab dem nächsten Schritt derselben
+  Antwort als Werkzeuge zur Verfügung stehen, bei lokalen und bei Cloud-Modellen
+  auf demselben Weg.
 - **FR-013**: Die Auswahl MUSS ohne Zutun des Nutzers erfolgen und darf die
   Erreichbarkeit einer Aktion nicht einschränken — sie bestimmt nur, was
   zuerst angeboten wird.
@@ -415,7 +438,7 @@ hintereinander zeigt nur geringe Abweichung.
 - **FR-018b**: Bei einem lokalen Modell mit Wert „unbekannt“, dessen Vorlage
   Werkzeuge vorsieht, MUSS das System einmalig einen kurzen Selbsttest mit
   wenigen Sätzen des Beispielsatz-Satzes im Hintergrund durchführen
-  (Ersatzhandler, keine echten Daten, derselbe Bewertungsablauf wie FR-020).
+  (es wird keine Aktion ausgeführt, derselbe Bewertungsablauf wie FR-020).
   Der Chat MUSS währenddessen ohne Wartezeit nutzbar bleiben. Nach dem Test
   MUSS der Wert auf „unterstützt“ oder „nicht unterstützt“ wechseln; der
   Selbsttest MUSS für Modelle mit Anbieter-Angabe oder Empfehlungsliste
@@ -431,7 +454,7 @@ hintereinander zeigt nur geringe Abweichung.
   richtige Aktion gewählt, Eingaben gültig und korrekt, keine unnötigen
   Aufrufe; und eine Gesamtquote sowie Quoten je Sprache und Art ausweisen.
 - **FR-021**: Ein Lauf DARF keine echten Nutzerdaten oder Einstellungen
-  verändern (Aktionen laufen gegen Ersatzhandler), MUSS mit festen
+  verändern (es wird keine Aktion ausgeführt, nur der Aufruf bewertet), MUSS mit festen
   Einstellungen (keine Zufallsstreuung, soweit das Modell es zulässt)
   ausführbar sein und MUSS wiederholbar vergleichbare Ergebnisse liefern.
 - **FR-022**: Die Prüfung MUSS ohne Zugriff auf einen Tresor des Nutzers
@@ -483,7 +506,8 @@ hintereinander zeigt nur geringe Abweichung.
 - **SC-002**: Ein Modell, das im Messlauf unter 50 % der Einzelschritt-Sätze
   erreicht, wird nicht als „Werkzeugnutzung: unterstützt“ geführt.
 - **SC-002a**: Der Selbsttest (FR-018b) blockiert den Chat nie; er ist
-  nach spätestens zwei Minuten auf einem üblichen Rechner abgeschlossen,
+  nach spätestens zwei Minuten auf einem Rechner ohne Grafikbeschleunigung
+  (nur Prozessor) mit dem Standard-Modell Qwen3-4B abgeschlossen,
   und sein Ergebnis stimmt bei mindestens 90 % der vollständig gemessenen
   Modelle mit dem Ergebnis des vollständigen Messlaufs überein.
 - **SC-003**: 100 % der vom Modell ausgelösten ändernden und zerstörenden
@@ -562,8 +586,9 @@ hintereinander zeigt nur geringe Abweichung.
   Ergebnissen von Lese-Aktionen — an den gewählten Anbieter gehen, wie bei
   jeder anderen Chat-Eingabe. Geheimnisse gehören nie dazu (FR-010).
 - Die Obergrenze der Werkzeuge pro Antwort beginnt klein (Größenordnung
-  zehn) und ist je Modell anpassbar; der Startwert wird aus dem ersten
-  Messlauf abgeleitet.
+  zehn) und ist für alle Modelle gleich; der Startwert wird aus dem ersten
+  Messlauf abgeleitet. Ein einzelnes Modell kann ausdrücklich eine andere
+  Obergrenze erhalten, das ist aber eine Ausnahme und kein Standard.
 - Der Katalog der Empfehlungsliste für lokale Modelle enthält heute nur
   kleine Modelle; ob ein größeres Modell aufgenommen wird, entscheidet sich
   nach dem ersten Messlauf und gehört nicht zu dieser Spec.

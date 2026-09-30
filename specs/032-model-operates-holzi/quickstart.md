@@ -27,7 +27,7 @@ Beispielsatz eine unbekannte Aktion nennt.
 ## 2. Freigabe-Matrix (US2, FR-007)
 
 Rust-Tests (`permission_tests.rs`, `tests/chat_tool_loop_permissions.rs`)
-prüfen alle neun Zellen (3 Modi × 3 Stufen), `alwaysAsk`, die Leitplanken-Sperre
+prüfen alle neun Zellen (3 Modi × 3 Stufen), die Leitplanken-Sperre
 und das Verhalten nach Ablehnung. Erwartet: Manuell fragt immer; Auto lässt
 `Safe` und `Change` laufen und fragt bei `Risky`; Plan lässt nur `Safe` laufen.
 

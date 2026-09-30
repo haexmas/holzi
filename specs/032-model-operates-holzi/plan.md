@@ -23,13 +23,15 @@ Technischer Ansatz (Begründungen und verworfene Alternativen in
   `runAction(…, { kind: 'builtinAgent' })` aufruft.
 - **Freigabe** (R4): `RiskClass` bekommt die Stufe `Change`. `read` → `Safe`,
   `write` → `Change`, `destructive` → `Risky`; Auto lässt lesen und ändern
-  laufen, Plan nur lesen. Neues Katalogfeld `alwaysAsk` für teure
-  `write`-Aktionen (Modell-Downloads), `builtinAgentCallable` schließt die
-  selbstbezüglichen Chat-Aktionen aus (R5).
+  laufen, Plan nur lesen. Das Katalogfeld `builtinAgentCallable` schließt die
+  selbstbezüglichen Chat-Aktionen aus (R5). Downloads gelten wie jede
+  Änderung; die Steuerung großer Downloads und des Dateisyncs auf Mobilgeräten
+  kommt mit einer eigenen Spec.
 - **Auswahl pro Antwort** (R6): `select_tools` wählt deterministisch nach
-  Wort-Treffern (ohne Modellaufruf) höchstens 10 (lokal) bzw. 24 (API-Key)
-  Werkzeuge; das Meta-Werkzeug `list_actions` macht den Rest erreichbar, weil
-  der Lookup gegen das Register läuft, nicht gegen das Angebot.
+  Wort-Treffern (ohne Modellaufruf) höchstens 10 Werkzeuge, für lokale und
+  Cloud-Modelle gleich; das Meta-Werkzeug `list_actions` macht den Rest
+  erreichbar: was es liefert, wird dem Modell ab dem nächsten Schritt
+  derselben Antwort angeboten (auf demselben Weg für alle Modelle).
 - **Fähigkeit „Werkzeugnutzung“** (R7–R9): `ModelCapabilities.tool_use`
   (unbekannt / unterstützt / nicht unterstützt) ohne Migration; Anthropic
   setzt „unterstützt“, lokale Modelle durchlaufen eine Vorlagenprobe
@@ -76,7 +78,7 @@ Standard und `--no-default-features`
 **Project Type**: desktop-app (Nuxt-SPA-Frontend + Rust-Backend in einem Tauri-Projekt)
 
 **Performance Goals**: Auswahl pro Zug < 5 ms bei ≈ 60 Aktionen (reine
-Wortsuche); Probe < 2 s; Selbsttest ≤ 2 Minuten auf einem üblichen Rechner und
+Wortsuche); Probe < 2 s; Selbsttest ≤ 2 Minuten (nur Prozessor, Qwen3-4B) und
 ohne den Chat zu blockieren (SC-002a); ein Aktionsumlauf ohne Nutzerfreigabe
 < 100 ms Overhead über dem Handler selbst
 
@@ -184,7 +186,7 @@ src-tauri/tests/
 
 src/
 ├── lib/actions/
-│   ├── types.ts                   # alwaysAsk, builtinAgentCallable               [ändern]
+│   ├── types.ts                   # builtinAgentCallable               [ändern]
 │   ├── agentTools.ts              # toToolName, toAgentActionDef                  [neu]
 │   ├── runner.ts                  # builtinAgentCallable-Prüfung                  [ändern]
 │   ├── settingsActions.ts, chatActions.ts     # Felder setzen                     [ändern]
@@ -209,11 +211,11 @@ einer neuen reinen TS-Datei.
 
 ## Complexity Tracking
 
-| Verstoß / Aufwand                                                       | Warum nötig                                                                                                  | Einfachere Alternative verworfen, weil                                                                        |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `RiskClass` um `Change` erweitern (≈ 10 Stellen, Rust + TS)             | FR-007 verlangt „Auto erlaubt Ändern, Plan blockiert“; zwei Stufen reichen nicht                             | Zwei Stufen plus Sonderfall im Modus würden die Logik in `decide()` und im Dialog verstreuen                  |
-| Zwei neue optionale Katalogfelder (`alwaysAsk`, `builtinAgentCallable`) | Teure Downloads dürfen in „Auto“ nicht ungefragt laufen (R4); Chat-Aktionen würden sich selbst aufrufen (R5) | Wirkungsart umdeuten verfälscht Spec 020; versteckte Ausschlussliste im Bridge-Code wäre eine zweite Wahrheit |
-| `chat/commands.rs` bleibt über 500 Zeilen                               | Bestehende dokumentierte Ausnahme; 032 fügt nur wenige Zeilen hinzu                                          | Eine Aufspaltung gehört in eine eigene Änderung und ist kein Ziel von 032                                     |
+| Verstoß / Aufwand                                           | Warum nötig                                                                      | Einfachere Alternative verworfen, weil                                                                                             |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `RiskClass` um `Change` erweitern (≈ 10 Stellen, Rust + TS) | FR-007 verlangt „Auto erlaubt Ändern, Plan blockiert“; zwei Stufen reichen nicht | Zwei Stufen plus Sonderfall im Modus würden die Logik in `decide()` und im Dialog verstreuen                                       |
+| Ein neues optionales Katalogfeld (`builtinAgentCallable`)   | Chat-Aktionen würden sich im laufenden Zug selbst aufrufen (R5)                  | `agentCallable` auf `false` sperrt sie auch für Spec 021; eine versteckte Ausschlussliste im Bridge-Code wäre eine zweite Wahrheit |
+| `chat/commands.rs` bleibt über 500 Zeilen                   | Bestehende dokumentierte Ausnahme; 032 fügt nur wenige Zeilen hinzu              | Eine Aufspaltung gehört in eine eigene Änderung und ist kein Ziel von 032                                                          |
 
 ## Bewusste Grenzen (aus research.md)
 

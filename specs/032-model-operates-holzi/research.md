@@ -74,7 +74,9 @@ Freigaben). Doppelte oder späte Antwort → stilles Nichts (Muster
 
 **Befund**: Aktions-IDs enthalten Punkte (`wm.tab.back`). Anthropic erlaubt
 Werkzeugnamen nur aus `[a-zA-Z0-9_-]` mit höchstens 64 Zeichen (allgemeines
-Wissen, nicht im Repository belegt). Im Repository gibt es keine
+Wissen, nicht im Repository belegt; vor der Umsetzung gegen die
+API-Dokumentation prüfen, `check:agent-actions` erzwingt die Regel ohnehin).
+Im Repository gibt es keine
 Namensbereinigung; bestehende MCP-Namen (`mcp:server:name`) verstoßen schon
 dagegen, das ist nicht Teil dieser Spec.
 
@@ -112,19 +114,16 @@ CLI-Delegates bleibt die Freigabe-Brücke unverändert: die Delegates
 klassifizieren selbst, der `match` in `approval_bridge.rs` wird um die neue
 Stufe ergänzt (Ergebnis wie `Safe` → unverändert).
 
-**Zusatz `alwaysAsk`**: Drei Aktionen sind als `write` markiert, sind aber
-teuer und laden Gigabyte aus dem Netz (`settings.models.downloadCatalog`,
-`settings.models.downloadFromHf`, `settings.models.installUpdate`). Ohne
-Gegenmaßnahme liefen sie im Modus „Auto“ ohne Rückfrage. Der Katalog bekommt
-das optionale Feld `alwaysAsk: true`; der Umlauf ordnet solche Aktionen
-`Risky` zu, egal welche Wirkungsart sie haben. Das ändert an Spec 020 nur ein
-optionales Feld und hilft Spec 021 später ebenfalls. **Dies ist eine
-Ergänzung des Plans, nicht der Spec** — im PR ausdrücklich zur Prüfung
-markiert.
+**Downloads**: Aktionen wie `settings.models.downloadFromHf` sind `write` und
+laufen daher im Modus „Auto“ ohne Rückfrage. Das ist Absicht (Klärung
+2026-09-30). Eine allgemeine Steuerung großer Downloads und des Dateisyncs auf
+Mobilgeräten (pausieren, Datenvolumen schonen) ist eine eigene Spec; bis dahin
+ist Desktop das einzige Ziel.
 
-**Verworfen**: Wirkungsart der drei Aktionen auf `destructive` setzen (falsche
-Aussage über die Daten, verändert 020); alle `write` fragen lassen (nimmt
-Auto seinen Sinn, widerspricht der Klärung vom 2026-09-30).
+**Verworfen**: alle `write` fragen lassen (nimmt Auto seinen Sinn,
+widerspricht der Klärung vom 2026-09-30); ein Feld `alwaysAsk` für teure
+Aktionen (Downloads brauchen keine Extra-Frage, die Steuerung kommt mit der
+Download-Spec).
 
 ## R5 — Chat-Aktionen, die sich selbst auslösen würden
 
@@ -146,13 +145,18 @@ Code `forbidden_for_agents` ab, und `set_agent_actions` enthält sie nicht.
 
 **Befund**: Werkzeuge werden in `send_message` (`commands.rs` ~438–446) einmal
 je Zug in `ChatRequest.tools` gesetzt (`tool_specs()`, `commands.rs:189`);
-`append_round_to_request` ändert sie nicht. Der Lookup einer Werkzeug-Anfrage
-läuft gegen das **Register**, nicht gegen die angebotene Liste
-(`tool_round.rs:plan_calls`).
+`append_round_to_request` ändert sie nicht, `TurnRunner.request` wird aber für
+jeden Schritt wiederverwendet und lässt sich zwischen den Schritten ändern. Das
+Modell kann nur Werkzeuge rufen, die in der Anfrage des jeweiligen Schrittes
+stehen: der Anthropic-Adapter schickt `tools` im Request, der lokale Adapter
+übergibt sie an mistralrs, das Aufrufe gegen genau diese Werkzeuge parst
+(`llm/local/stream.rs`). Der Lookup in holzi gegen das **Register**
+(`tool_round.rs:plan_calls`) allein reicht also nicht: ein Werkzeug, das nicht
+in der Anfrage steht, kann das Modell nicht ordnungsgemäß aufrufen.
 
 **Entscheidung**: Neues Modul `chat/tools/select.rs` mit der reinen Funktion
-`select_tools(defs, context_text, limit) -> Vec<ToolSpec>`. Ein Zug ruft sie
-einmal auf. Verfahren (deterministisch, ohne Modellaufruf):
+`select_tools(defs, context_text, limit) -> Vec<ToolSpec>`. Verfahren
+(deterministisch, ohne Modellaufruf):
 
 1. Immer angeboten: ein kleiner Kern lesender Aktionen (`wm_state_get`,
    `wm_apps_list`, `settings_get`) und das Meta-Werkzeug `list_actions`.
@@ -161,14 +165,20 @@ einmal auf. Verfahren (deterministisch, ohne Modellaufruf):
    zerlegt), Beschreibung und den Titeln in Deutsch und Englisch, die das
    Frontend mitliefert. Gleichstand: Bereich des zuletzt genutzten
    Werkzeugs, dann stabile ID-Reihenfolge.
-3. Auf die Obergrenze kürzen. Startwert: 10 für lokale Modelle, 24 für
-   API-Key-Anbieter; je Modell in den Fähigkeiten überschreibbar
-   (`toolUse.maxTools`).
+3. Auf die Obergrenze kürzen: **eine einheitliche Obergrenze von 10 für alle
+   Modelle** (lokal wie Cloud, Klärung 2026-09-30). Nur ein ausdrücklich für ein
+   Modell hinterlegter Wert (`toolUse.maxTools`) weicht ab; der Standard setzt
+   keinen.
 
 `list_actions(query?)` liefert ID, eine Zeile Beschreibung und das
-Eingabeschema der passenden Aktionen aus dem vollständigen Register. Ruft das
-Modell danach eine nicht angebotene, aber registrierte Aktion, läuft sie: der
-Lookup geht gegen das Register (FR-013).
+Eingabeschema der passenden Aktionen aus dem vollständigen Register. **Nach
+einer Runde, in der `list_actions` lief, hängt der Zug die gelieferten
+Werkzeuge an `request.tools` an** (am selben Ort, an dem
+`append_round_to_request` die Runde einträgt, ohne `tool_round.rs` über 500
+Zeilen zu schieben: die Logik steht in `select.rs`). Der nächste Schritt
+bietet sie dem Modell an. Das gilt für jeden Adapter gleich, weil alle
+`request.tools` nur in ihr Format übersetzen; es gibt keinen Sonderweg je
+Anbieter. Der Lookup gegen das Register bleibt als Sicherheitsnetz (FR-013).
 
 **Grenze** (`ponytail:`-Kommentar am Code): „Lage“ ist in der ersten Fassung
 nur der Gesprächstext, nicht die Vordergrund-App; die Erweiterung ist ein
@@ -366,8 +376,8 @@ Kein neuer Code in `adapters/cli_delegate/`.
 **Entscheidung**: ADR-0006 „Aktionen als Werkzeuge des eingebauten Agenten:
 im Prozess, nicht über MCP“. Die Nummer 0005 bleibt für Spec 021
 reserviert (Spec 020 verweist darauf). Inhalt: eine Definition, zwei
-Eingänge; Risiko-Abbildung auf drei Stufen; `alwaysAsk` und
-`builtinAgentCallable`; was 021 übernimmt.
+Eingänge; Risiko-Abbildung auf drei Stufen; `builtinAgentCallable`; was 021
+übernimmt.
 
 ## R16 — Offene Stellen, bewusst nicht gelöst
 

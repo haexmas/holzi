@@ -3,7 +3,7 @@
 **Spec**: [spec.md](./spec.md) | **Plan**: [plan.md](./plan.md) | **Research**: [research.md](./research.md)
 
 Es gibt **keine Migration** und keine neue Tabelle. Neu sind ein Feld in der
-bestehenden Fähigkeiten-JSON, drei optionale Felder im Aktionskatalog (nur
+bestehenden Fähigkeiten-JSON, ein optionales Feld im Aktionskatalog (nur
 Speicher, TypeScript), eine Zustandsmenge im Speicher von Rust und zwei
 eingebettete JSON-Dateien.
 
@@ -11,12 +11,9 @@ eingebettete JSON-Dateien.
 
 | Feld                   | Typ        | Bedeutung                                                                                 |
 | ---------------------- | ---------- | ----------------------------------------------------------------------------------------- |
-| `alwaysAsk`            | `boolean?` | `true`: der Umlauf stuft die Aktion als `Risky` ein, unabhängig von `effect` (R4)         |
 | `builtinAgentCallable` | `boolean?` | Standard `true`; `false`: nur für externe Agenten, nicht für den eingebauten Agenten (R5) |
 
-Belegung: `alwaysAsk: true` bei `settings.models.downloadCatalog`,
-`settings.models.downloadFromHf`, `settings.models.installUpdate`.
-`builtinAgentCallable: false` bei `chat.message.send`, `chat.message.retry`,
+Belegung: `builtinAgentCallable: false` bei `chat.message.send`, `chat.message.retry`,
 `chat.reply.cancel`. Der Runner lehnt `builtinAgent`-Aufrufe für
 `builtinAgentCallable === false` mit `forbidden_for_agents` ab.
 
@@ -32,7 +29,6 @@ Reine Daten, abgeleitet aus `ActionDefinition` durch
 | `description` | `string`                           | `ActionDefinition.description` (Englisch) unverändert (FR-001) |
 | `inputSchema` | JSON-Schema-Teilmenge              | `ActionDefinition.input` unverändert                           |
 | `effect`      | `read` \| `write` \| `destructive` | aus der Aktion                                                 |
-| `alwaysAsk`   | `boolean`                          | Standard `false`                                               |
 | `scope`       | `string`                           | Bereichs-ID, Gleichstand-Kriterium der Auswahl (R6)            |
 | `titles`      | `{ de: string, en: string }`       | lokalisierte Titel für die Wortsuche der Auswahl               |
 
@@ -42,7 +38,9 @@ sie ab (Verteidigung in der Tiefe).
 
 ## 3. `ActionTool` (Rust, `chat/tools/action_tool.rs`)
 
-Implementiert `Tool` aus `chat/tools/mod.rs`.
+Implementiert `Tool` aus `chat/tools/mod.rs`. Ein `ActionTool` hält die
+vollständige `AgentActionDef` (§2), nicht nur Name und Schema: die Auswahl
+(`select_tools`, R6) braucht `scope` und `titles`.
 
 | Methode          | Wert                                                                                               |
 | ---------------- | -------------------------------------------------------------------------------------------------- |
@@ -50,7 +48,7 @@ Implementiert `Tool` aus `chat/tools/mod.rs`.
 | `description()`  | `description`                                                                                      |
 | `source()`       | `"action"`                                                                                         |
 | `input_schema()` | `inputSchema`                                                                                      |
-| `risk_class()`   | `alwaysAsk` → `Risky`; sonst `read` → `Safe`, `write` → `Change`, `destructive` → `Risky`          |
+| `risk_class()`   | `read` → `Safe`, `write` → `Change`, `destructive` → `Risky`                                       |
 | `execute()`      | Umlauf über `ActionBridge` (Vertrag: [contracts/tauri-commands.md](./contracts/tauri-commands.md)) |
 
 `RiskClass` (`chat/tools/mod.rs`) wird zu `Safe | Change | Risky`. Wire-Werte
