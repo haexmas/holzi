@@ -108,14 +108,14 @@ Regeln:
 
 ## Bewertung je Satz
 
-| Ergebnis     | Bedingung                                                                                                                                                            |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ergebnis     | Bedingung                                                                                                                                                        |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pass`       | erwartete und beobachtete Aufrufmenge stimmen exakt überein, jede Eingabe ist schema-gültig und die erwarteten `args` stimmen; bei `"none"`: kein Werkzeugaufruf |
-| `wrong_tool` | Aufrufmenge enthält eine andere, fehlende, doppelte oder zusätzliche Aktion                                                                                         |
-| `bad_args`   | Aufrufnamen stimmen, aber eine Eingabe ist ungültig oder falsch                                                                                                     |
-| `missed`     | erwartet Aufruf, Modell antwortet nur mit Text                                                                                                                       |
-| `spurious`   | erwartet `"none"`, Modell ruft trotzdem ein Werkzeug                                                                                                                 |
-| `not_found`  | die Suche des Modells hat die erwartete Aktion nicht geliefert (zählt gegen die `reachRate`, nicht als falscher Aufruf)                                              |
+| `wrong_tool` | Aufrufmenge enthält eine andere, fehlende, doppelte oder zusätzliche Aktion                                                                                      |
+| `bad_args`   | Aufrufnamen stimmen, aber eine Eingabe ist ungültig oder falsch                                                                                                  |
+| `missed`     | erwartet Aufruf, Modell antwortet nur mit Text                                                                                                                   |
+| `spurious`   | erwartet `"none"`, Modell ruft trotzdem ein Werkzeug                                                                                                             |
+| `not_found`  | die Suche des Modells hat die erwartete Aktion nicht geliefert (zählt gegen die `reachRate`, nicht als falscher Aufruf)                                          |
 
 ## `EvalReport`
 
