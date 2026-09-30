@@ -8,8 +8,7 @@
  * listener setup, and the window manager-app contract (`useWmTab`, T032).
  *
  * Moved from `pages/chat/[instance].vue` into a window manager app (T021): instance
- * name from `useInstancesStore()` (no route of its own anymore); `lock()`
- * flushes the window manager layout first (FR-027). Onboarding enforcement moved to
+ * name from `useInstancesStore()` (no route of its own anymore). Onboarding enforcement moved to
  * the window manager host page (T025).
  */
 import {
@@ -28,10 +27,8 @@ import type { PendingApproval } from '~/components/chat/PermissionPrompt.vue'
 const instancesStore = useInstancesStore()
 const wm = useWindowManagerStore()
 const wmTab = useWmTab()
-const openApp = useAction('wm.app.open')
 const { t } = useI18n()
 const chat = useChat()
-const { closeAsync } = useInstance()
 const { getPrefAsync, setPrefAsync } = usePreferences()
 const { currentDeviceInfoAsync } = useDevice()
 const { errString } = useErrorString()
@@ -223,16 +220,6 @@ async function scrollToBottom() {
   if (el) el.scrollTop = el.scrollHeight
 }
 
-/**
- * Flushes the window manager layout (FR-027), then asks the backend to close the vault. It replaces this
- * page with a spinner and ends the process (spec 013), so nothing is navigated or cleared here and
- * a failed call has nothing to show.
- */
-async function lock() {
-  await wm.flushAsync()
-  await closeAsync().catch(() => {})
-}
-
 /** Whether the active model resolves to a `cli_delegate` provider — the
  * same provider lookup `MessageList.vue`'s `delegateAnsweredByLabel` does
  * (spec 009-autonomous-delegate-mode: the autonomy control only makes
@@ -408,8 +395,6 @@ onBeforeUnmount(() => {
         @request-delete="requestDelete"
         @close-delete-dialog="closeDeleteDialog"
         @confirm-delete="ui.confirmDelete"
-        @lock="lock"
-        @open-settings="run(() => openApp({ appId: 'system.settings' }))"
       />
     </template>
 

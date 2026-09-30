@@ -20,7 +20,7 @@ scenario('tab-content-isolation', {}, async (ctx) => {
     afterTopBack.startsWith('/workspace/'),
     `webview back left the workspace page: ${afterTopBack}`,
   )
-  await instance.waitForDisplayed('lock-instance-sidebar')
+  await instance.waitForDisplayed('chat-sidebar-toggle')
   ctx.step('webview back ignored')
 
   await instance.exec(`
@@ -45,7 +45,7 @@ scenario('tab-content-isolation', {}, async (ctx) => {
     afterFrame.startsWith('/workspace/'),
     `embedded history left the workspace page: ${afterFrame}`,
   )
-  await instance.waitForDisplayed('lock-instance-sidebar')
+  await instance.waitForDisplayed('chat-sidebar-toggle')
   const backDisabled = await instance.exec<boolean>(
     'return [...document.querySelectorAll(\'[data-testid="nav-back"]\')].every((b) => b.disabled)',
   )

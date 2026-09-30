@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { scenario } from '../lib/scenario.ts'
-import { createAndUnlock, openChat } from '../lib/flows.ts'
+import { createAndUnlock, openChat, openLauncher } from '../lib/flows.ts'
 import {
   PROCESS_END_LIMIT_MS,
   RELAUNCH_LIMIT_MS,
@@ -29,7 +29,8 @@ scenario(
     await openChat(instance)
 
     const originalPid = instance.pid
-    await instance.press('lock-instance-sidebar')
+    await openLauncher(instance)
+    await instance.press('lock-instance')
 
     // (1) the original process ends.
     await instance.waitForEnd(PROCESS_END_LIMIT_MS)

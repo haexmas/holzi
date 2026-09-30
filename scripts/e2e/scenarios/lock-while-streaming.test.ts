@@ -5,6 +5,7 @@ import {
   openChat,
   connectProvider,
   startReply,
+  openLauncher,
 } from '../lib/flows.ts'
 import {
   PROCESS_END_LIMIT_MS,
@@ -39,7 +40,8 @@ scenario('lock-while-streaming', {}, async (ctx) => {
     'an alert was already showing just before the press',
   )
 
-  const pressedAt = await instance.press('lock-instance-sidebar')
+  await openLauncher(instance)
+  const pressedAt = await instance.press('lock-instance')
 
   const samples = await instance.sampleUntilEnd<boolean>(ALERT_SCRIPT, 50)
   assert.ok(
