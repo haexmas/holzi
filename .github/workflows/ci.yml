@@ -43,6 +43,9 @@ jobs:
       - name: Check window manager navigation
         run: corepack pnpm check:wm-navigation
 
+      - name: Check agent actions
+        run: corepack pnpm check:agent-actions
+
       - name: Check settings app
         run: corepack pnpm check:settings
 

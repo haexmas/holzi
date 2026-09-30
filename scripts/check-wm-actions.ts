@@ -18,6 +18,7 @@ import type {
   JsonSchema,
   ActionDefinition,
 } from '../src/lib/actions/types.ts'
+import { catalogRunner, sample } from './lib/actions-harness.ts'
 
 const USER: ActionCaller = { kind: 'user' }
 const BUILTIN: ActionCaller = { kind: 'builtinAgent' }
@@ -334,46 +335,6 @@ const EXPECTED_GUARDRAILS = [
   'settings.autonomy.setMode',
   'settings.delegate.setDenyRules',
 ]
-
-function sample(schema: JsonSchema): unknown {
-  if (schema.enum) return schema.enum[0]
-  switch (schema.type) {
-    case 'string':
-      return 'x'
-    case 'integer':
-    case 'number':
-      return 1
-    case 'boolean':
-      return true
-    case 'array':
-      return []
-    case 'object': {
-      const value: Record<string, unknown> = {}
-      for (const key of schema.required ?? []) {
-        const child = schema.properties?.[key]
-        if (child) value[key] = sample(child)
-      }
-      return value
-    }
-  }
-}
-
-function catalogRunner(calls: string[]) {
-  const record =
-    (id: string): ActionHandler =>
-    () => {
-      calls.push('handled')
-      const definition = ALL_ACTIONS.find((action) => action.id === id)
-      return definition ? sample(definition.result) : {}
-    }
-  return createActionRunner({
-    catalog: ALL_ACTIONS,
-    globalHandler: (id) => record(id),
-    resolveFocus: () => 'focused',
-    targetExists: () => true,
-    awaitTabHandler: async (_appId, id) => record(id),
-  })
-}
 
 test('the guardrail scope contains every expected user-only action', () => {
   const guardrails = ALL_ACTIONS.filter((a) => a.scope === 'guardrails').map(

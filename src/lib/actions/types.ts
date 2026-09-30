@@ -38,6 +38,9 @@ export type ActionDefinition = {
   effect: ActionEffect
   /** `false` for every `guardrails` action (FR-032). */
   agentCallable: boolean
+  /** `false`: external agents (spec 021) may call the action, the built-in agent may not, because
+   * it would re-enter the running chat turn (spec 032, ADR-0006). Absent means `true`. */
+  builtinAgentCallable?: boolean
   /** `global`: handler registered at startup; `tab`: registered by the mounted app instance
    * (research R19), and the runner opens `appId` first if needed. */
   binding: 'global' | 'tab'

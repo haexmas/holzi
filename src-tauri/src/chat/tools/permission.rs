@@ -37,17 +37,20 @@ pub enum Decision {
     /// `respond_tool_permission` (T026).
     Ask,
     /// Skip execution entirely — no request is ever emitted (Plan mode
-    /// blocking a `Risky` action, spec.md FR-006).
+    /// blocking a `Change` or `Risky` action, spec.md FR-006).
     Deny,
 }
 
-/// The Manual/Auto/Plan × Safe/Risky decision matrix (spec.md FR-003–FR-006).
+/// The Manual/Auto/Plan × Safe/Change/Risky decision matrix (spec.md
+/// FR-003–FR-006; the `Change` stage is spec 032 FR-007, ADR-0006): Manual
+/// asks for everything, Auto lets reading and changing run and asks for
+/// `Risky`, Plan lets only reading run.
 pub fn decide(mode: PermissionMode, risk: RiskClass) -> Decision {
     match (mode, risk) {
         (PermissionMode::Manual, _) => Decision::Ask,
-        (PermissionMode::Auto, RiskClass::Safe) => Decision::Allow,
+        (PermissionMode::Auto, RiskClass::Safe | RiskClass::Change) => Decision::Allow,
         (PermissionMode::Auto, RiskClass::Risky) => Decision::Ask,
         (PermissionMode::Plan, RiskClass::Safe) => Decision::Allow,
-        (PermissionMode::Plan, RiskClass::Risky) => Decision::Deny,
+        (PermissionMode::Plan, RiskClass::Change | RiskClass::Risky) => Decision::Deny,
     }
 }

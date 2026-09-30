@@ -79,11 +79,7 @@ function onUpdateOpen(open: boolean) {
               : 'text-muted-foreground'
           "
         >
-          {{
-            pendingApprovals[0].riskClass === 'risky'
-              ? t('chat.permission.risky')
-              : t('chat.permission.safe')
-          }}
+          {{ t(`chat.permission.${pendingApprovals[0].riskClass}`) }}
         </div>
         <pre
           class="text-xs bg-muted/30 rounded p-2 overflow-x-auto whitespace-pre-wrap"

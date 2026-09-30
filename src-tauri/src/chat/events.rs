@@ -175,6 +175,7 @@ pub(crate) struct ToolPermissionRequestEvent {
 pub(crate) fn risk_class_str(risk: crate::chat::tools::RiskClass) -> &'static str {
     match risk {
         crate::chat::tools::RiskClass::Safe => "safe",
+        crate::chat::tools::RiskClass::Change => "change",
         crate::chat::tools::RiskClass::Risky => "risky",
     }
 }

@@ -84,6 +84,12 @@ export function createActionRunner(deps: ActionRunnerDeps) {
         `${id} can only be triggered by the user`,
       )
 
+    if (caller.kind === 'builtinAgent' && action.builtinAgentCallable === false)
+      return failure(
+        'forbidden_for_agents',
+        `${id} is not available to the built-in agent`,
+      )
+
     const validation = validate(action.input, input)
     if (!validation.ok)
       return failure('invalid_input', validation.message, validation.field)

@@ -4,8 +4,14 @@
 //! adapter as a [`crate::adapters::types::ToolSpec`] and later execute once
 //! the model asks for it. The registry holds every tool from every source
 //! (host-CLI, MCP) behind one `Arc<dyn Tool>` so the loop never branches on
-//! where a tool came from.
+//! where a tool came from (host-CLI, MCP, or an action of the app, spec 032).
 
+pub mod action_bridge;
+#[cfg(test)]
+mod action_bridge_tests;
+pub mod action_tool;
+#[cfg(test)]
+mod action_tool_tests;
 pub mod cli;
 #[cfg(test)]
 mod cli_tests;
@@ -22,11 +28,15 @@ use async_trait::async_trait;
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
-/// Whether a tool call may run without confirmation under `auto` mode.
-/// See `permission::decide` for the full Manual/Auto/Plan matrix.
+/// How far a tool call reaches, which decides whether it may run without
+/// confirmation. `Safe` only reads, `Change` alters state that the user can
+/// change back (an action with effect `write`, spec 032), `Risky` is
+/// everything else: destructive actions, shell commands and MCP tools. See
+/// `permission::decide` for the full Manual/Auto/Plan matrix.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RiskClass {
     Safe,
+    Change,
     Risky,
 }
 
@@ -66,7 +76,7 @@ pub trait Tool: Send + Sync {
     /// name the server reported.
     fn name(&self) -> &str;
     fn description(&self) -> &str;
-    /// `mcp` or `cli` — persisted verbatim into `chat_messages.tool_source`
+    /// `mcp`, `cli` or `action` — persisted verbatim into `chat_messages.tool_source`
     /// (data-model.md).
     fn source(&self) -> &'static str;
     /// JSON-Schema-shaped object, reused as-is for both the Anthropic
@@ -110,6 +120,12 @@ impl ToolRegistry {
         } else {
             self.tools.push(tool);
         }
+    }
+
+    /// Drops every tool of one source. `set_agent_actions` replaces all tools of the source
+    /// `action` this way and leaves the host-CLI and MCP tools alone (spec 032).
+    pub fn remove_source(&mut self, source: &str) {
+        self.tools.retain(|tool| tool.source() != source);
     }
 
     /// Drops every currently-registered tool. Used before an MCP

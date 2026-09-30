@@ -11,6 +11,8 @@
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import type { Message } from '~/composables/useChat'
+import { fromToolName } from '~/lib/actions/agentTools'
+import { ALL_ACTIONS } from '~/lib/actions/catalog'
 import type { Provider } from '~/composables/useProviders'
 
 const props = defineProps<{
@@ -30,6 +32,13 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+/** Tool rows of an action show the action's localized title, other tools their own name. */
+function toolLabel(m: Message): string {
+  if (m.toolSource !== 'action') return m.toolName ?? ''
+  const action = fromToolName(m.toolName ?? '', ALL_ACTIONS)
+  return action ? t(action.titleKey) : (m.toolName ?? '')
+}
 
 /** Markers `approval_bridge.rs` persists as a `gated-permissive` audit
  * row's content (spec 009-autonomous-delegate-mode US2) — fixed and
@@ -127,7 +136,7 @@ function renderMarkdown(content: string): string {
       >
         <div class="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
           <template v-if="m.role === 'tool_call'">
-            {{ t('chat.tool.call', { name: m.toolName }) }}
+            {{ t('chat.tool.call', { name: toolLabel(m) }) }}
           </template>
           <template v-else-if="m.role === 'tool_result'">
             {{
