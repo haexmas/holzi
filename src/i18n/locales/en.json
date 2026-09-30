@@ -449,6 +449,9 @@
           "title": "Link a device",
           "description": "Add a new device to this vault with a code.",
           "keywords": "link device code QR add pair"
+        },
+        "remove": {
+          "title": "Remove a device"
         }
       }
     },
@@ -545,6 +548,20 @@
       "ended": "The code is no longer valid.",
       "failed": "Linking failed. No device was added.",
       "declined": "You declined the link. The code is used up."
+    },
+    "remove": {
+      "button": "Remove device",
+      "title": "Remove “{name}”",
+      "consequences": "What removing does:",
+      "noNewData": "The device gets no new data and can no longer read new changes.",
+      "staysOnDevice": "What is already on the device stays there. Only the passphrase protects it.",
+      "noRemoteWipe": "There is no remote wipe.",
+      "linkAgain": "The device only comes back if you link it again.",
+      "mainWarning": "This device is a main device. Removing only helps against an honest device: if someone has the main device and knows the passphrase, the vault is lost (total loss).",
+      "confirm": "Remove",
+      "cancel": "Cancel",
+      "missing": "This device is not (or no longer) in the vault, or it is this device itself. It cannot be removed.",
+      "notMain": "Only a main device can remove devices."
     }
   },
   "models": {
@@ -836,7 +853,8 @@
       "devices": {
         "list": "List the vault's devices",
         "link": "Open linking a device",
-        "identity": "Read the vault identity"
+        "identity": "Read the vault identity",
+        "remove": "Remove a device from the vault"
       },
       "sync": {
         "servers": {

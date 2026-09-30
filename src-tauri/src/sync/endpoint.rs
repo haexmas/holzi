@@ -30,6 +30,9 @@ use crate::sync::wire::{ErrorCode, RejectCode, SYNC_ALPN};
 
 /// How long binding may take; it can hang on resolving iroh-Relays.
 const BIND_TIMEOUT: Duration = Duration::from_secs(15);
+/// How long a refusing side waits for the refused peer to read the refusal and close, before
+/// it closes itself.
+const REFUSAL_GRACE: Duration = Duration::from_secs(2);
 /// How long the router may take to shut down at the session end.
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -226,6 +229,24 @@ impl SyncNode {
         flag(&self.inner, device, problem).await;
     }
 
+    /// Lets go of a device that was removed from the vault (FR-027): ends
+    /// its live session and forgets where it could be reached, so nothing
+    /// dials it again. A connection it opens later fails the handshake.
+    pub fn forget(&self, device: [u8; 32], endpoint_id: [u8; 32]) {
+        let live = self
+            .inner
+            .peers
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&device);
+        if let Some(live) = live {
+            live.close(ErrorCode::Rejected.as_u32().into(), b"removed");
+        }
+        if let Ok(id) = iroh::EndpointId::from_bytes(&endpoint_id) {
+            self.inner.lookup.remove_endpoint_info(id);
+        }
+    }
+
     /// Tells the interface the device list or a device's state changed,
     /// for changes made outside the node (a link that just published).
     pub fn announce_devices_changed(&self) {
@@ -333,6 +354,13 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
             log::info!("sync: handshake failed: {error}");
             note_failure(&inner, &error, remote).await;
             let _ = send.finish();
+            if side == Side::Accept {
+                // What this side wrote last — the lists it pushed and the refusal — must reach
+                // the peer before the connection closes, or the peer sees only "connection
+                // lost" and never learns, for example, that it was removed (FR-034). The peer
+                // closes when it has read it.
+                let _ = tokio::time::timeout(REFUSAL_GRACE, connection.closed()).await;
+            }
             connection.close(handshake_close_code(&error).as_u32().into(), b"rejected");
             return;
         }

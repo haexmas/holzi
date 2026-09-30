@@ -237,7 +237,17 @@ where
             sig_a,
             ..
         } => (device_a, schema, sig_a),
-        Message::Reject { code } => return Err(HandshakeError::RefusedByPeer(code)),
+        Message::Reject { code } => {
+            // What the peer pushed before refusing is still true: a list is signed by the vault
+            // identity and checked on its own. It is how a removed device hears that it was
+            // removed (FR-034), so it is kept although the peer refuses this device.
+            if !pushed.is_empty() {
+                if let Err(error) = store_pushed(replica, local.vault, pushed, lists).await {
+                    log::debug!("sync: a list pushed before a refusal was not stored: {error}");
+                }
+            }
+            return Err(HandshakeError::RefusedByPeer(code));
+        }
         _ => return Err(HandshakeError::Protocol("expected Accept or Reject")),
     };
     let their_transcript = transcript(

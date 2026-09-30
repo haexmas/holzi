@@ -91,6 +91,10 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
     })
     return done
   })
+  on('settings.devices.remove', async ({ input }) => {
+    await sync.deviceRemoveAsync(input.devicePubkey as string)
+    return done
+  })
   on('settings.devices.link', () => {
     wm.openApp('system.settings', '/federation/devices/link')
     return done

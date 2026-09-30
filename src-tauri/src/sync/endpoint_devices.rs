@@ -43,6 +43,11 @@ pub(super) async fn note_failure(
         RefusedByPeer(RejectCode::Duplicate) => {
             (device_at(inner, remote).await, Problem::Duplicate)
         }
+        // This device may just have heard, from the list the peer pushed, that it was removed.
+        RefusedByPeer(RejectCode::Removed) => {
+            notify_devices_changed(inner);
+            return;
+        }
         _ => return,
     };
     if let Some(device) = device {

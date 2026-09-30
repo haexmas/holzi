@@ -69,6 +69,11 @@ export function useSync() {
     await invoke('sync_servers_set', { args })
   }
 
+  /** Removes a device from the vault (main device only, never this one). */
+  async function deviceRemoveAsync(devicePubkey: string): Promise<void> {
+    await invoke('device_remove', { args: { devicePubkey } })
+  }
+
   return {
     lastChangedTables,
     changeCount,
@@ -77,5 +82,6 @@ export function useSync() {
     vaultPublicIdentityAsync,
     syncServersGetAsync,
     syncServersSetAsync,
+    deviceRemoveAsync,
   }
 }

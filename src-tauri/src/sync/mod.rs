@@ -20,6 +20,7 @@ pub mod presence;
 pub mod problems;
 pub mod progress;
 pub mod registry;
+pub mod removal;
 pub mod replica;
 pub mod resync;
 pub mod seen;

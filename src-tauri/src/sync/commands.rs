@@ -122,6 +122,57 @@ pub async fn link_join_cancel(join: State<'_, LinkJoin>) -> Result<()> {
     Ok(())
 }
 
+#[derive(Debug, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings/")]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceRemoveArgs {
+    /// The device key as hex.
+    pub device_pubkey: String,
+}
+
+/// Reads a device key written as 64 hex characters.
+fn parse_device(text: &str) -> Result<[u8; 32]> {
+    crate::sync::presence::decode_hex(text)
+        .ok()
+        .and_then(|bytes| <[u8; 32]>::try_from(bytes).ok())
+        .ok_or_else(|| HolziError::InvalidInput {
+            reason: "a device key has 64 hex characters".into(),
+        })
+}
+
+/// Removes a device from the vault (spec 024, FR-026 to FR-028). Only a main
+/// device may, and never for itself; the backend checks, not only the view.
+#[tauri::command]
+pub async fn device_remove(
+    registry: State<'_, Arc<SyncRegistry>>,
+    args: DeviceRemoveArgs,
+) -> Result<()> {
+    let target = parse_device(&args.device_pubkey)?;
+    remove_device_now(&runtime(&registry)?, target).await
+}
+
+/// What `device_remove` does once the running service is at hand: publishes
+/// the removal, ends the device's session and forgets its address, and
+/// tells the others and the view.
+pub async fn remove_device_now(runtime: &Arc<SyncRuntime>, target: [u8; 32]) -> Result<()> {
+    let (replica, own) = (Arc::clone(&runtime.replica), runtime.keys.clone());
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    let removal = tokio::task::spawn_blocking(move || {
+        crate::sync::removal::remove_device(&replica, &own, &target, now)
+    })
+    .await
+    .map_err(crate::sync::removal::RemovalError::from)??;
+    runtime.node.forget(target, removal.endpoint_id);
+    // The list changed behind `VaultDb`: wake the session and presence as a
+    // commit would, so the others hear of it at once, and tell the view.
+    (runtime.wake)();
+    runtime.node.announce_devices_changed();
+    Ok(())
+}
+
 /// What this device is in the vault (spec 024, FR-034).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[ts(export, export_to = "../../src/types/bindings/")]
