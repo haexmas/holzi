@@ -27,11 +27,13 @@ Technischer Ansatz (Begründungen und verworfene Alternativen in
   selbstbezüglichen Chat-Aktionen aus (R5). Downloads gelten wie jede
   Änderung; die Steuerung großer Downloads und des Dateisyncs auf Mobilgeräten
   kommt mit einer eigenen Spec.
-- **Auswahl pro Antwort** (R6): `select_tools` wählt deterministisch nach
-  Wort-Treffern (ohne Modellaufruf) höchstens 10 Werkzeuge, für lokale und
-  Cloud-Modelle gleich; das Meta-Werkzeug `list_actions` macht den Rest
-  erreichbar: was es liefert, wird dem Modell ab dem nächsten Schritt
-  derselben Antwort angeboten (auf demselben Weg für alle Modelle).
+- **Werkzeug-Angebot** (R6): ein einziges Verfahren für alle Modelle: ein
+  festes Kernangebot (neun häufige Aktionen plus `find_actions`, zusammen
+  höchstens 10), in jedem Schritt gleich und unabhängig vom Nutzertext. Alles
+  andere sucht das Modell selbst mit `find_actions`; die höchstens 5 Treffer
+  werden ab dem nächsten Schritt derselben Antwort angeboten (Angebot
+  insgesamt höchstens 15). Kein Raten anhand des Nutzersatzes, keine
+  Sonderwege je Anbieter.
 - **Fähigkeit „Werkzeugnutzung“** (R7–R9): `ModelCapabilities.tool_use`
   (unbekannt / unterstützt / nicht unterstützt) ohne Migration; Anthropic
   setzt „unterstützt“, lokale Modelle durchlaufen eine Vorlagenprobe
@@ -62,7 +64,7 @@ Technischer Ansatz (Begründungen und verworfene Alternativen in
 JSON-Dateien (`eval_set.json`, `tools.json`)
 
 **Testing**: Rust — Einheitstests in `*_tests.rs` (`permission_tests.rs`,
-`select_tests.rs`, `action_tool_tests.rs`, `scoring_tests.rs`), Integration in
+`offer_tests.rs`, `action_tool_tests.rs`, `scoring_tests.rs`), Integration in
 `src-tauri/tests/` (`action_bridge.rs`, erweitertes
 `chat_tool_loop_permissions.rs`), Messlauf `model_tool_eval.rs`
 (`#[ignore]`, `HOLZI_TEST_GGUF` bzw. `HOLZI_EVAL_*`); Frontend — neues
@@ -77,8 +79,7 @@ Standard und `--no-default-features`
 
 **Project Type**: desktop-app (Nuxt-SPA-Frontend + Rust-Backend in einem Tauri-Projekt)
 
-**Performance Goals**: Auswahl pro Zug < 5 ms bei ≈ 60 Aktionen (reine
-Wortsuche); Probe < 2 s; Selbsttest ≤ 2 Minuten (nur Prozessor, Qwen3-4B) und
+**Performance Goals**: Suche über ≈ 60 Aktionen < 5 ms (reine Wortsuche); Probe < 2 s; Selbsttest ≤ 2 Minuten (nur Prozessor, Qwen3-4B) und
 ohne den Chat zu blockieren (SC-002a); ein Aktionsumlauf ohne Nutzerfreigabe
 < 100 ms Overhead über dem Handler selbst
 
@@ -102,26 +103,26 @@ _GATE: Muss vor Phase 0 bestehen. Nach Phase 1 erneut geprüft — Ergebnis unte
 Geprüft gegen `.specify/memory/constitution.md` und die spaex-Constitution
 `.spaex/constitution.md`.
 
-| Prinzip / Vorgabe                                                          | Status | Begründung                                                                                                                                                      |
-| -------------------------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| I Keine Geheimnisse in Git                                                 | ✅     | Messlauf liest Schlüssel aus der Umgebung, nie aus Dateien; Geheimnis-Stichprobe im Prüfskript (R13); keine Schlüssel im Schnappschuss                          |
-| II Keine lokalen absoluten Pfade in versionierter Konfiguration            | ✅     | Quickstart und Skripte nutzen Platzhalter und repo-relative Pfade                                                                                               |
-| III Projektidentität geräteunabhängig                                      | ✅     | Berührt nicht                                                                                                                                                   |
-| IV Cross-Repo-Referenzen an unveränderliche SHAs gepinnt                   | ✅     | Keine neue Cross-Repo-Referenz                                                                                                                                  |
-| V Externe Quellen nur per Opt-in                                           | ✅     | Keine neue Quelle                                                                                                                                               |
-| VI Selbstverändernde Anweisungen review-pflichtig                          | ✅     | Keine Änderung an Constitution, Skills oder Berechtigungen des Werkzeugs; die Leitplanken bleiben für den eingebauten Agenten gesperrt (FR-003, FR-010)         |
-| VII Relay-Ausfall blockiert lokale Arbeit nicht                            | ✅     | Rein lokal; Cloud-Modelle sind Wahl des Nutzers                                                                                                                 |
-| VIII Keine Verheimlichung in Agent-Ausgaben                                | ✅     | Jede Aktion des Modells erscheint im Verlauf; Hinweise benennen Einschränkungen                                                                                 |
-| Workflow: speckit-Stufen, PR auf `main`, Conventional Commits, kein Squash | ✅     | specify → clarify → plan → tasks → implement; Topic-Branch im Worktree                                                                                          |
-| ADR bei prinzipienrelevanter Entscheidung                                  | ✅     | ADR-0006 „Aktionen als Werkzeuge des eingebauten Agenten“ (Aufgabe in tasks); 0005 bleibt für Spec 021 reserviert                                               |
-| Test-Code in separaten Dateien                                             | ✅     | `*_tests.rs` per `#[path]`, `src-tauri/tests/`, `scripts/check-agent-actions.ts`                                                                                |
-| Worktree je Änderung                                                       | ✅     | `.worktrees/032-model-operates-holzi`                                                                                                                           |
-| 500-LoC-Grenze                                                             | ⚠️     | Neue Dateien bleiben darunter; `chat/commands.rs` (733, dokumentierte Ausnahme) bekommt nur wenige Zeilen, neue Commands liegen in `action_commands.rs`         |
-| Graphify vor neuen benannten Artefakten                                    | ✅     | Aufgabe T001: Abfragen für `ActionBridge`, `select_tools`, `ToolUse`, `agentTools` vor dem ersten neuen Namen                                                   |
-| `ponytail:`-Kommentar bei bewusster Vereinfachung                          | ✅     | Geplant an Auswahl („Lage“ = Gesprächstext, R6), Hinweis nach Neustart (R11), Platzhalter-Schwelle des Selbsttests (R9), Selbsttest ohne Abbruch bei Chat-Start |
-| Nicht-triviale Logik hinterlässt einen ausführbaren Check                  | ✅     | `check:agent-actions`, Rust-Tests, `model_tool_eval`                                                                                                            |
-| Keine Selbstreferenzen von Agenten in Artefakten/Commits                   | ✅     | Commits und PR ohne Agent-Zusätze (holzi-Regel)                                                                                                                 |
-| Phasen-Disziplin                                                           | ✅     | Baut auf 003 und 020, beide gemerged und im Einsatz; 021 folgt nach 032                                                                                         |
+| Prinzip / Vorgabe                                                          | Status | Begründung                                                                                                                                              |
+| -------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| I Keine Geheimnisse in Git                                                 | ✅     | Messlauf liest Schlüssel aus der Umgebung, nie aus Dateien; Geheimnis-Stichprobe im Prüfskript (R13); keine Schlüssel im Schnappschuss                  |
+| II Keine lokalen absoluten Pfade in versionierter Konfiguration            | ✅     | Quickstart und Skripte nutzen Platzhalter und repo-relative Pfade                                                                                       |
+| III Projektidentität geräteunabhängig                                      | ✅     | Berührt nicht                                                                                                                                           |
+| IV Cross-Repo-Referenzen an unveränderliche SHAs gepinnt                   | ✅     | Keine neue Cross-Repo-Referenz                                                                                                                          |
+| V Externe Quellen nur per Opt-in                                           | ✅     | Keine neue Quelle                                                                                                                                       |
+| VI Selbstverändernde Anweisungen review-pflichtig                          | ✅     | Keine Änderung an Constitution, Skills oder Berechtigungen des Werkzeugs; die Leitplanken bleiben für den eingebauten Agenten gesperrt (FR-003, FR-010) |
+| VII Relay-Ausfall blockiert lokale Arbeit nicht                            | ✅     | Rein lokal; Cloud-Modelle sind Wahl des Nutzers                                                                                                         |
+| VIII Keine Verheimlichung in Agent-Ausgaben                                | ✅     | Jede Aktion des Modells erscheint im Verlauf; Hinweise benennen Einschränkungen                                                                         |
+| Workflow: speckit-Stufen, PR auf `main`, Conventional Commits, kein Squash | ✅     | specify → clarify → plan → tasks → implement; Topic-Branch im Worktree                                                                                  |
+| ADR bei prinzipienrelevanter Entscheidung                                  | ✅     | ADR-0006 „Aktionen als Werkzeuge des eingebauten Agenten“ (Aufgabe in tasks); 0005 bleibt für Spec 021 reserviert                                       |
+| Test-Code in separaten Dateien                                             | ✅     | `*_tests.rs` per `#[path]`, `src-tauri/tests/`, `scripts/check-agent-actions.ts`                                                                        |
+| Worktree je Änderung                                                       | ✅     | `.worktrees/032-model-operates-holzi`                                                                                                                   |
+| 500-LoC-Grenze                                                             | ⚠️     | Neue Dateien bleiben darunter; `chat/commands.rs` (733, dokumentierte Ausnahme) bekommt nur wenige Zeilen, neue Commands liegen in `action_commands.rs` |
+| Graphify vor neuen benannten Artefakten                                    | ✅     | Aufgabe T001: Abfragen für `ActionBridge`, `core_offer`, `ToolUse`, `agentTools` vor dem ersten neuen Namen                                             |
+| `ponytail:`-Kommentar bei bewusster Vereinfachung                          | ✅     | Geplant an der wortbasierten Suche (R6), Hinweis nach Neustart (R11), Platzhalter-Schwelle des Selbsttests (R9), Selbsttest ohne Abbruch bei Chat-Start |
+| Nicht-triviale Logik hinterlässt einen ausführbaren Check                  | ✅     | `check:agent-actions`, Rust-Tests, `model_tool_eval`                                                                                                    |
+| Keine Selbstreferenzen von Agenten in Artefakten/Commits                   | ✅     | Commits und PR ohne Agent-Zusätze (holzi-Regel)                                                                                                         |
+| Phasen-Disziplin                                                           | ✅     | Baut auf 003 und 020, beide gemerged und im Einsatz; 021 folgt nach 032                                                                                 |
 
 **Ergebnis vor Phase 0**: kein unbegründeter Verstoß; ein ⚠️ dokumentiert.
 
@@ -157,16 +158,16 @@ src-tauri/src/
 │   │   ├── permission.rs          # decide(): 3×3-Matrix                          [ändern]
 │   │   ├── action_tool.rs         # ActionTool (Tool-Implementierung)             [neu]
 │   │   ├── action_bridge.rs       # Umlauf, Zeitgrenze, Sperre                    [neu]
-│   │   ├── list_actions.rs        # Meta-Werkzeug list_actions                    [neu]
-│   │   ├── select.rs              # select_tools (reine Funktion)                 [neu]
+│   │   ├── find_actions.rs        # Suchwerkzeug find_actions                     [neu]
+│   │   ├── offer.rs               # Kernangebot, Suche, extend_offer              [neu]
 │   │   ├── selftest.rs            # Hintergrund-Selbsttest                        [neu]
-│   │   └── *_tests.rs             # permission, select, action_tool, selftest
+│   │   └── *_tests.rs             # permission, offer, action_tool, selftest
 │   ├── eval/
 │   │   ├── mod.rs, scoring.rs, runner.rs, *_tests.rs                               [neu]
 │   │   ├── eval_set.json          # versionierter Satz                            [neu]
 │   │   └── tools.json             # Katalog-Schnappschuss                         [neu]
 │   ├── action_commands.rs         # set_agent_actions, respond_action_call        [neu]
-│   ├── commands.rs                # send_message: Auswahl, Availability           [ändern, klein]
+│   ├── commands.rs                # send_message: Angebot, Availability           [ändern, klein]
 │   ├── events.rs                  # risk_class_str, neue Ereignisse               [ändern]
 │   ├── session.rs                 # ChatState.action_bridge, reset_for_close      [ändern]
 │   └── model_loading.rs           # Probe + Selbsttest beim ersten Laden          [ändern]
@@ -204,7 +205,7 @@ package.json, .github/workflows/ci.yml             # check:agent-actions        
 ```
 
 **Structure Decision**: Erweiterung der vorhandenen Module; neue Dateien je
-Verantwortung (Umlauf, Werkzeug, Auswahl, Selbsttest, Messlauf), damit
+Verantwortung (Umlauf, Werkzeug, Angebot, Selbsttest, Messlauf), damit
 `commands.rs` und `tool_round.rs` nicht wachsen. Das Frontend verändert den
 Katalog nur um zwei optionale Felder, die Logik (Namen, Übergabe) liegt in
 einer neuen reinen TS-Datei.
@@ -221,8 +222,11 @@ einer neuen reinen TS-Datei.
 
 - Constrained Decoding bleibt außen vor, bis der Messlauf zeigt, dass es nötig
   ist (R10).
-- „Lage“ der Auswahl ist der Gesprächstext, nicht die Vordergrund-App (R6).
-- Die Hinweise erscheinen nach einem App-Neustart erneut (R11).
+- Liegt die Aktion nicht im Kernangebot, braucht die Antwort einen zusätzlichen
+  Schritt (Suche), bei lokalen Modellen ein weiterer Modelllauf; der Messlauf
+  weist das aus (`reachRate`, R6).
+- Die Hinweise erscheinen nach einem App-Neustart erneut (R11, entschieden).
 - Die Selbsttest-Schwelle ist ein Platzhalter bis zum ersten Messlauf (R9).
-- Die Mindestquote, die Obergrenze je Modell und die Aufnahme größerer lokaler
+- Die Mindestquote, die endgültige Zusammensetzung des Kernangebots und die
+  Aufnahme größerer lokaler
   Modelle in den Katalog entscheiden sich nach dem ersten Messlauf (R16).

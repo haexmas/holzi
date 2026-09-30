@@ -70,9 +70,14 @@ Vorkehrungen, die kleine lokale Modelle dafür brauchen.
   erfragt werden? → A: Nein, sie gelten wie jede ändernde Aktion. Eine
   allgemeine Steuerung für große Downloads und Dateisync auf Mobilgeräten
   (pausieren, Datenvolumen schonen) kommt mit einer eigenen Spec.
-- Q: Soll die Werkzeug-Obergrenze pro Antwort für lokale und Cloud-Modelle
-  gleich sein? → A: Ja, eine einheitliche Obergrenze für alle Modelle; nur
-  eine ausdrücklich für ein Modell hinterlegte Obergrenze weicht ab.
+- Q: Wie entscheidet holzi, welche Werkzeuge ein Modell in einer Antwort
+  sieht? → A: Nicht anhand des Nutzertextes. Jedes Modell, lokal wie Cloud,
+  bekommt dasselbe feste Kernangebot der häufigsten Aktionen plus ein
+  Suchwerkzeug und findet alles Weitere selbst; eine einheitliche Obergrenze
+  gilt für alle Modelle, ohne Ausnahme je Modell.
+- Q: Dürfen die Hinweise (unbekanntes Modell, nicht unterstütztes Modell,
+  Delegate) nach einem App-Neustart erneut erscheinen? → A: Ja, sie erscheinen
+  einmal je Unterhaltung und Zustand, solange die App läuft.
 - Q: Gelten für lokale und Cloud-Modelle dieselben Werkzeuge und dasselbe
   Muster? → A: Ja. Jedes Modell, bei dem holzi den Ablauf fährt, bekommt
   dieselben Werkzeuge auf demselben Weg; es gibt keinen Sonderweg je Anbieter.
@@ -168,41 +173,50 @@ dass sie abgelehnt wird.
 
 ---
 
-### User Story 3 - Kleine Modelle bekommen nur die passenden Werkzeuge (Priority: P2)
+### User Story 3 - Alle Modelle bekommen ein kleines, gleiches Angebot und finden den Rest selbst (Priority: P2)
 
-Ein Nutzer mit einem kleinen lokalen Modell (wenige Milliarden Parameter)
-stellt dieselben Fragen. Damit das Modell nicht von der vollen Liste aller
-Aktionen überfordert wird, bekommt es pro Antwort nur eine kleine, zur Frage
-und zur aktuellen Lage passende Auswahl. Der Nutzer merkt davon nichts außer
-zuverlässigeren Ergebnissen.
+Jedes Modell — lokal oder Cloud — bekommt in jedem Schritt einer Antwort
+dasselbe kleine, feste Kernangebot an Werkzeugen (die häufigsten Aktionen)
+plus ein Suchwerkzeug. Braucht es etwas anderes („Stelle auf das dunkle
+Farbschema um“), sucht es danach; die gefundenen Werkzeuge stehen ihm ab dem
+nächsten Schritt derselben Antwort zur Verfügung. Holzi rät nicht aus dem
+Text des Nutzers, was gebraucht wird: das Modell formuliert die Suche selbst.
+Das Angebot bleibt damit für kleine Modelle überschaubar, sieht für alle
+Modelle gleich aus und wächst nicht mit der Zahl der Aktionen, auch nicht,
+wenn später Werkzeuge aus haextensions dazukommen.
 
-**Why this priority**: Mit der vollen Aktionsliste verschlechtern sich
-Trefferquote und Geschwindigkeit kleiner Modelle deutlich; ohne diese Story
-bleibt die lokale Bedienung unzuverlässig. Sie ist aber erst sinnvoll, wenn
-US1/US2 Aktionen überhaupt anbieten.
+**Why this priority**: Alle Werkzeuge mitzuschicken kostet heute rund 4 000
+Token je Anfrage (51 Aktionen) und wächst mit jeder neuen Quelle; kleine
+Modelle werden dadurch langsamer und ungenauer. Ein festes Kernangebot ist
+zudem in jeder Antwort dasselbe und damit stabil. Die Story ist erst sinnvoll,
+wenn US1/US2 Aktionen überhaupt anbieten.
 
-**Independent Test**: Bei einer Aktionsliste, die größer ist als die erlaubte
-Auswahl, eine Reihe von Beispielsätzen stellen und prüfen, dass (a) pro
-Antwort nicht mehr Werkzeuge angeboten werden als die Obergrenze und (b) das
-passende Werkzeug in der Auswahl enthalten ist.
+**Independent Test**: Bei einer Aktionsliste, die größer ist als die
+Obergrenze, eine Reihe von Beispielsätzen stellen und prüfen, dass (a) in
+keinem Schritt mehr Werkzeuge angeboten werden als die Obergrenze, (b) das
+Kernangebot in jeder Antwort und für jedes Modell identisch ist, (c) das
+passende Werkzeug entweder im Kernangebot ist oder nach der Suche im nächsten
+Schritt angeboten wird und (d) das Modell es aufrufen kann.
 
 **Acceptance Scenarios**:
 
-1. **Given** mehr Aktionen, als für ein Modell sinnvoll gleichzeitig
-   angeboten werden, **When** der Nutzer eine Frage stellt, **Then** enthält
-   das Angebot für diese Antwort höchstens die festgelegte Obergrenze an
-   Werkzeugen.
-2. **Given** eine Frage zu einem erkennbaren Thema (z. B. Einstellungen,
-   Tabs), **When** das Angebot zusammengestellt wird, **Then** enthält es die
-   dazu passenden Aktionen; Aktionen, die Agenten nie aufrufen dürfen, sind
-   nie enthalten.
-3. **Given** das Modell braucht eine Aktion, die nicht im Angebot ist,
-   **When** es nach weiteren verfügbaren Aktionen fragt, **Then** kann es die
-   Liste abrufen und danach die gewünschte Aktion nutzen, ohne dass der Nutzer
-   eingreifen muss.
-4. **Given** ein leistungsstarkes Cloud-Modell, **When** der Nutzer eine
-   Frage stellt, **Then** gilt dieselbe Begrenzung, sofern sie nicht für
-   dieses Modell ausdrücklich gelockert ist (siehe Annahmen).
+1. **Given** mehr Aktionen, als gleichzeitig angeboten werden sollen,
+   **When** eine Antwort beginnt, **Then** bietet holzi jedem Modell dasselbe
+   feste Kernangebot an (höchstens die festgelegte Anzahl, einschließlich
+   Suchwerkzeug), unabhängig von Anbieter, Modell und Nutzertext.
+2. **Given** eine Bitte, deren Aktion nicht im Kernangebot ist, **When** das
+   Modell das Suchwerkzeug mit einem Suchbegriff aufruft, **Then** liefert es
+   die passendsten Aktionen (Name, Beschreibung, Eingaben), und sie stehen dem
+   Modell ab dem nächsten Schritt derselben Antwort als Werkzeuge zur
+   Verfügung; es kann sie danach aufrufen, ohne Eingriff des Nutzers.
+3. **Given** Aktionen, die Agenten nie aufrufen dürfen, **When** das Angebot
+   oder ein Suchergebnis entsteht, **Then** sind sie nie enthalten.
+4. **Given** eine Suche ohne passende Aktion, **When** das Modell das Ergebnis
+   erhält, **Then** bekommt es eine eindeutige Antwort „keine passende
+   Aktion“ und kann dem Nutzer erklären, dass holzi das nicht kann.
+5. **Given** ein leistungsstarkes Cloud-Modell, **When** der Nutzer eine
+   Frage stellt, **Then** gelten dasselbe Verfahren und dieselbe Obergrenze
+   wie für ein kleines lokales Modell.
 
 ---
 
@@ -396,22 +410,24 @@ hintereinander zeigt nur geringe Abweichung.
   möglichst auch nicht lesbar sein; Zugangsdaten und Schlüssel DÜRFEN nie im
   Ergebnis einer Aktion an ein Modell gelangen.
 
-**Werkzeug-Auswahl pro Antwort**
+**Werkzeug-Angebot pro Schritt**
 
-- **FR-011**: Das System MUSS pro Antwort höchstens eine festgelegte
-  Obergrenze an Werkzeugen anbieten, ausgewählt nach Bezug zur aktuellen
-  Anfrage und Lage (z. B. welche App im Vordergrund ist); die Obergrenze ist
-  für alle Modelle gleich (lokal wie Cloud) und weicht nur ab, wenn für ein
-  Modell ausdrücklich eine andere hinterlegt ist.
-- **FR-012**: Das Modell MUSS bei Bedarf die vollständige Liste der
-  verfügbaren (für Agenten aufrufbaren) Aktionen abrufen und danach eine
-  dort gefundene Aktion nutzen können, ohne Eingriff des Nutzers. Aktionen,
-  die das Modell so findet, MÜSSEN ihm ab dem nächsten Schritt derselben
-  Antwort als Werkzeuge zur Verfügung stehen, bei lokalen und bei Cloud-Modellen
-  auf demselben Weg.
-- **FR-013**: Die Auswahl MUSS ohne Zutun des Nutzers erfolgen und darf die
-  Erreichbarkeit einer Aktion nicht einschränken — sie bestimmt nur, was
-  zuerst angeboten wird.
+- **FR-011**: Das System MUSS in jedem Schritt einer Antwort ein begrenztes
+  Werkzeug-Angebot machen: ein fest definiertes Kernangebot der häufigsten
+  Aktionen (höchstens 10 Werkzeuge, einschließlich des Suchwerkzeugs) plus
+  höchstens 5 zuvor gefundene. Das Kernangebot ist für alle Modelle gleich
+  (lokal wie Cloud), hängt nicht vom Text der Nutzernachricht ab, und die
+  Obergrenze gilt einheitlich ohne Ausnahme je Modell.
+- **FR-012**: Das System MUSS ein Suchwerkzeug anbieten, mit dem das Modell
+  unter allen für Agenten aufrufbaren Aktionen nach einem Suchbegriff suchen
+  kann (höchstens 5 Treffer mit Name, Beschreibung und Eingabeschema). Gefundene
+  Aktionen MÜSSEN dem Modell ab dem nächsten Schritt derselben Antwort als
+  Werkzeuge zur Verfügung stehen, bei lokalen und Cloud-Modellen auf demselben
+  Weg; eine spätere Suche ersetzt die früheren Treffer, damit die Obergrenze
+  eingehalten bleibt.
+- **FR-013**: Das Angebot MUSS ohne Zutun des Nutzers entstehen und darf die
+  Erreichbarkeit einer Aktion nicht einschränken: jede für Agenten aufrufbare
+  Aktion ist über die Suche erreichbar.
 
 **Fähigkeit „Werkzeugnutzung“**
 
@@ -481,9 +497,10 @@ hintereinander zeigt nur geringe Abweichung.
 - **Aktion**: Benannte Bedienung von holzi aus Spec 020 mit Eingabeschema,
   Wirkungsart (lesen / ändern / zerstörend), Bereich und Kennzeichen „durch
   Agenten aufrufbar“. Hier Quelle der Werkzeuge des Modells.
-- **Werkzeug-Angebot**: Die Auswahl an Aktionen, die einem Modell für genau
-  eine Antwort gezeigt wird; hat eine Obergrenze und hängt von Anfrage,
-  Lage und Modell ab.
+- **Werkzeug-Angebot**: Die Aktionen, die einem Modell in einem Schritt
+  gezeigt werden: ein festes Kernangebot (höchstens 10, einschließlich
+  Suchwerkzeug), für alle Modelle gleich, plus bis zu 5 zuvor vom Modell
+  gefundene Aktionen.
 - **Werkzeugnutzung (Fähigkeit)**: Wert im Fähigkeiten-Eintrag eines
   Modells — unterstützt, nicht unterstützt, unbekannt —, bestimmt, ob ein
   Werkzeug-Angebot gemacht wird.
@@ -517,10 +534,12 @@ hintereinander zeigt nur geringe Abweichung.
 - **SC-004**: Kein Ergebnis einer vom Modell ausgelösten Aktion enthält
   Zugangsdaten oder Schlüssel (geprüft über alle für Agenten aufrufbaren
   Lese-Aktionen).
-- **SC-005**: Auch bei einer größeren Aktionsliste werden pro Antwort nicht
-  mehr als die festgelegte Obergrenze an Werkzeugen angeboten, und das für
-  den Beispielsatz passende Werkzeug ist in mindestens 95 % der Sätze im
-  Angebot enthalten.
+- **SC-005**: Auch bei einer größeren Aktionsliste werden in keinem Schritt
+  mehr als 15 Werkzeuge angeboten (Kernangebot höchstens 10 plus höchstens 5
+  gefundene), das Kernangebot ist für alle Modelle identisch, und für
+  mindestens 95 % der Beispielsätze steht das passende Werkzeug spätestens im
+  zweiten Schritt zur Verfügung (im Kernangebot oder nach einer Suche), mit
+  höchstens einem zusätzlichen Schritt.
 - **SC-006**: Mit einem Modell „Werkzeugnutzung: nicht unterstützt“ oder
   mit einem CLI-Delegate werden in 100 % der Antworten keine holzi-Werkzeuge
   angeboten, und der Chat antwortet weiterhin normal; bei einem Delegate
@@ -548,8 +567,8 @@ hintereinander zeigt nur geringe Abweichung.
 - Die Werkzeug-Definition (Name, Beschreibung, Eingabeschema) ist dieselbe,
   die Spec 021 später als MCP-Werkzeug für externe Agenten veröffentlicht.
   Der Chat selbst geht dafür nicht über das MCP-Protokoll, sondern ruft die
-  Aktionen im Prozess auf; damit kann 021 ohne Umbau darauf aufsetzen. Die
-  Auswahl pro Antwort (FR-011) und die Fähigkeit „Werkzeugnutzung“ gelten
+  Aktionen im Prozess auf; damit kann 021 ohne Umbau darauf aufsetzen. Das
+  Werkzeug-Angebot (FR-011) und die Fähigkeit „Werkzeugnutzung“ gelten
   für Modelle, bei denen holzi den Werkzeug-Ablauf selbst fährt: lokale
   Modelle und Anbieter mit API-Key (z. B. Claude per Schlüssel). Externe
   Agenten bringen ihr Modell mit und erhalten in 021 die vollständige Liste
@@ -585,10 +604,15 @@ hintereinander zeigt nur geringe Abweichung.
 - Wer ein Cloud-Modell wählt, akzeptiert, dass Chat-Inhalte — einschließlich
   Ergebnissen von Lese-Aktionen — an den gewählten Anbieter gehen, wie bei
   jeder anderen Chat-Eingabe. Geheimnisse gehören nie dazu (FR-010).
-- Die Obergrenze der Werkzeuge pro Antwort beginnt klein (Größenordnung
-  zehn) und ist für alle Modelle gleich; der Startwert wird aus dem ersten
-  Messlauf abgeleitet. Ein einzelnes Modell kann ausdrücklich eine andere
-  Obergrenze erhalten, das ist aber eine Ausnahme und kein Standard.
+- Das Kernangebot besteht am Anfang aus neun häufigen Aktionen (Tabs und
+  Apps öffnen und wechseln, Zustand und Einstellungen lesen, Farbschema
+  setzen, Modelle auflisten) plus dem Suchwerkzeug; welche Aktionen dazugehören,
+  wird nach dem ersten Messlauf bestätigt oder angepasst. Die Suche arbeitet
+  wortbasiert über Name, Beschreibung und die deutschen und englischen Titel
+  der Aktionen; das Modell formuliert den Suchbegriff.
+- Die Hinweise zu unbekannten und nicht unterstützten Modellen und zu
+  Delegates erscheinen einmal je Unterhaltung und Zustand, solange die App
+  läuft; nach einem Neustart können sie erneut erscheinen.
 - Der Katalog der Empfehlungsliste für lokale Modelle enthält heute nur
   kleine Modelle; ob ein größeres Modell aufgenommen wird, entscheidet sich
   nach dem ersten Messlauf und gehört nicht zu dieser Spec.

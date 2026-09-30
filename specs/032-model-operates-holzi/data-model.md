@@ -22,15 +22,15 @@ Belegung: `builtinAgentCallable: false` bei `chat.message.send`, `chat.message.r
 Reine Daten, abgeleitet aus `ActionDefinition` durch
 `toAgentActionDef(def, locale)` in `src/lib/actions/agentTools.ts`.
 
-| Feld          | Typ                                | Regel                                                          |
-| ------------- | ---------------------------------- | -------------------------------------------------------------- |
-| `toolName`    | `string`                           | `id` mit `.` → `_`; `^[A-Za-z0-9_-]{1,64}$`, eindeutig (R3)    |
-| `actionId`    | `string`                           | Original-ID, dient Rust nur als Rückgabewert an das Frontend   |
-| `description` | `string`                           | `ActionDefinition.description` (Englisch) unverändert (FR-001) |
-| `inputSchema` | JSON-Schema-Teilmenge              | `ActionDefinition.input` unverändert                           |
-| `effect`      | `read` \| `write` \| `destructive` | aus der Aktion                                                 |
-| `scope`       | `string`                           | Bereichs-ID, Gleichstand-Kriterium der Auswahl (R6)            |
-| `titles`      | `{ de: string, en: string }`       | lokalisierte Titel für die Wortsuche der Auswahl               |
+| Feld          | Typ                                | Regel                                                                    |
+| ------------- | ---------------------------------- | ------------------------------------------------------------------------ |
+| `toolName`    | `string`                           | `id` mit `.` → `_`; `^[A-Za-z0-9_-]{1,64}$`, eindeutig (R3)              |
+| `actionId`    | `string`                           | Original-ID, dient Rust nur als Rückgabewert an das Frontend             |
+| `description` | `string`                           | `ActionDefinition.description` (Englisch) unverändert (FR-001)           |
+| `inputSchema` | JSON-Schema-Teilmenge              | `ActionDefinition.input` unverändert                                     |
+| `effect`      | `read` \| `write` \| `destructive` | aus der Aktion                                                           |
+| `core`        | `boolean`                          | `true` für die Aktionen des festen Kernangebots (`CORE_AGENT_TOOLS`, R6) |
+| `titles`      | `{ de: string, en: string }`       | lokalisierte Titel für die Wortsuche von `find_actions`                  |
 
 Enthalten sind nur Aktionen mit `agentCallable && builtinAgentCallable !== false`.
 Leitplanken sind damit nie im Register (FR-003); zusätzlich lehnt der Runner
@@ -39,8 +39,8 @@ sie ab (Verteidigung in der Tiefe).
 ## 3. `ActionTool` (Rust, `chat/tools/action_tool.rs`)
 
 Implementiert `Tool` aus `chat/tools/mod.rs`. Ein `ActionTool` hält die
-vollständige `AgentActionDef` (§2), nicht nur Name und Schema: die Auswahl
-(`select_tools`, R6) braucht `scope` und `titles`.
+vollständige `AgentActionDef` (§2), nicht nur Name und Schema: das
+Kernangebot braucht `core`, die Suche `titles` (R6).
 
 | Methode          | Wert                                                                                               |
 | ---------------- | -------------------------------------------------------------------------------------------------- |
@@ -74,8 +74,7 @@ Nichts.
 ```text
 ModelCapabilities { …, tool_use: Option<ToolUse> }   // None = unbekannt
 ToolUse { support: Supported | Unsupported,
-          basis:   Provider | Curated | Template | SelfTest,
-          max_tools: Option<u32> }                   // Obergrenze pro Antwort, None = Standard
+          basis:   Provider | Curated | Template | SelfTest }
 ```
 
 JSON (`capabilities_json`, camelCase, `#[serde(default)]`): ein Eintrag ohne
@@ -92,7 +91,7 @@ neue Modelldatei (erneuter Download) ──────▶ unbekannt (Feld zurü
 ```
 
 `basis` dient nur der Rangfolge und der Fehlersuche, das Frontend zeigt sie
-nicht. TypeScript: `ModelCapabilities.toolUse: { support, basis, maxTools } | null`
+nicht. TypeScript: `ModelCapabilities.toolUse: { support, basis } | null`
 in `src/composables/useModels.ts`.
 
 **Katalog** (`src-tauri/src/catalog/model_catalog.json`): `CatalogEntry`
@@ -118,7 +117,7 @@ dann `Curated`). Zunächst leer; nach dem ersten Messlauf gefüllt.
 | `EvalSet`      | `version` (ganze Zahl), `sentences[]`                                                                                                                 |
 | `EvalSentence` | `id`, `lang` (`de` \| `en`), `kind` (`read` \| `change` \| `smalltalk`), `text`, `expect` (`none` oder Liste aus `{ tool, args }`), `selfTest` (bool) |
 | `EvalTools`    | Schnappschuss der `AgentActionDef`-Liste, erzeugt aus dem Katalog                                                                                     |
-| `EvalReport`   | `setVersion`, `model`, `total`, `perLang`, `perKind`, `selectionRecall`, `spuriousCalls`, `failures[]`                                                |
+| `EvalReport`   | `setVersion`, `model`, `total`, `perLang`, `perKind`, `reachRate`, `spuriousCalls`, `failures[]`                                                      |
 
 Regel `expect.args`: nur die Felder, auf die es ankommt; zusätzliche Felder
 des Modells sind erlaubt, solange das Schema sie zulässt.

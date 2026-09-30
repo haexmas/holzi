@@ -55,8 +55,11 @@ Regeln:
 
 - `lang` ∈ `de`, `en`; `kind` ∈ `read`, `change`, `smalltalk`.
 - `expect` ist `"none"` (kein Werkzeugaufruf erwartet) oder eine nicht leere
-  Liste. Die Reihenfolge der Liste zählt nicht. Der Satz bewertet nur den
-  **ersten Schritt** des Modells (ein Aufruf oder Text), keine Mehrschritt-Ketten.
+  Liste. Die Reihenfolge der Liste zählt nicht. Der Lauf bewertet bis zu
+  **zwei Schritte**: liegt die erwartete Aktion nicht im Kernangebot, erwartet
+  er im ersten Schritt einen Aufruf von `find_actions`; er führt die reine Suche
+  über `tools.json` aus (keine Aktion, keine Nebenwirkung), bietet die Treffer
+  an und bewertet den Aufruf im zweiten Schritt. Längere Ketten gibt es nicht.
 - `args` enthält nur die Felder, auf die es ankommt; zusätzliche, schema-gültige
   Felder des Modells schaden nicht.
 - `selfTest: true` markiert die Teilmenge (≈ 5 Sätze, jeweils Deutsch und
@@ -72,14 +75,14 @@ Regeln:
 
 ## Bewertung je Satz
 
-| Ergebnis      | Bedingung                                                                                                                                                            |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pass`        | erwartet `expect` als Liste: jede erwartete Aktion genau einmal gerufen, Eingaben schema-gültig und die erwarteten `args` stimmen; bei `"none"`: kein Werkzeugaufruf |
-| `wrong_tool`  | andere Aktion als erwartet                                                                                                                                           |
-| `bad_args`    | richtige Aktion, Eingaben ungültig oder falsch                                                                                                                       |
-| `missed`      | erwartet Aufruf, Modell antwortet nur mit Text                                                                                                                       |
-| `spurious`    | erwartet `"none"`, Modell ruft trotzdem ein Werkzeug                                                                                                                 |
-| `not_offered` | erwartete Aktion war **nicht** im Angebot der Auswahl (zählt für den Recall, nicht gegen das Modell)                                                                 |
+| Ergebnis     | Bedingung                                                                                                                                                            |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pass`       | erwartet `expect` als Liste: jede erwartete Aktion genau einmal gerufen, Eingaben schema-gültig und die erwarteten `args` stimmen; bei `"none"`: kein Werkzeugaufruf |
+| `wrong_tool` | andere Aktion als erwartet                                                                                                                                           |
+| `bad_args`   | richtige Aktion, Eingaben ungültig oder falsch                                                                                                                       |
+| `missed`     | erwartet Aufruf, Modell antwortet nur mit Text                                                                                                                       |
+| `spurious`   | erwartet `"none"`, Modell ruft trotzdem ein Werkzeug                                                                                                                 |
+| `not_found`  | die Suche des Modells hat die erwartete Aktion nicht geliefert (zählt gegen die `reachRate`, nicht als falscher Aufruf)                                              |
 
 ## `EvalReport`
 
@@ -97,7 +100,8 @@ Regeln:
     "change": { "...": "..." },
     "smalltalk": { "...": "..." }
   },
-  "selectionRecall": 0.964,
+  "reachRate": 0.964,
+  "extraSteps": 7,
   "spuriousCalls": 1,
   "failures": [
     {
@@ -109,9 +113,10 @@ Regeln:
 }
 ```
 
-- `rate` = `pass / of` ohne `not_offered`-Sätze im Nenner des Modells;
-  `selectionRecall` = Anteil der Sätze mit erwarteter Aktion, bei denen die
-  Auswahl sie angeboten hat (SC-005).
+- `rate` = `pass / of`; `reachRate` = Anteil der Sätze mit erwarteter Aktion,
+  bei denen die Aktion spätestens im zweiten Schritt zur Verfügung stand
+  (Kernangebot oder Suche, SC-005); `extraSteps` = Zahl der Sätze, die einen
+  zusätzlichen Suchschritt brauchten (höchstens einer je Satz).
 - Zwei Läufe mit demselben Modell und festem Sampler weichen um höchstens 10
   Prozentpunkte in `total.rate` ab (SC-008). Bei Modellen, die deterministisches
   Sampling nicht zulassen (Cloud), ist das die Mess­grenze und der Bericht

@@ -79,6 +79,6 @@ HOLZI_EVAL_PROVIDER=anthropic HOLZI_EVAL_MODEL=<modell-id> \
 ```
 
 Erwartet: `target/eval/<modell>.json` mit Quoten je Gesamt, Sprache und Art,
-`selectionRecall` und Fehltreffern. Zweimal ausführen und die Abweichung der
+`reachRate` und Fehltreffern. Zweimal ausführen und die Abweichung der
 Gesamtquote prüfen (≤ 10 Prozentpunkte). Die Ergebnisse tragen die erste
 Mindestquote des Selbsttests und die Katalogeinträge (`tool_use`) nach.

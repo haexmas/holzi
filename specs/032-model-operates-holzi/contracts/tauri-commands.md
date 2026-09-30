@@ -23,7 +23,7 @@ errors: InvalidInput  // doppelter toolName, toolName verletzt ^[A-Za-z0-9_-]{1,
 ```
 
 Nebenwirkung: `ToolRegistry` behält `run_command` und MCP-Werkzeuge, ersetzt nur
-Werkzeuge mit Quelle `action`. Das Meta-Werkzeug `list_actions` ist immer
+Werkzeuge mit Quelle `action`. Das Meta-Werkzeug `find_actions` ist immer
 vorhanden, sobald mindestens eine Aktion registriert ist.
 
 ### `respond_action_call`
@@ -81,20 +81,28 @@ Nach Probe oder Selbsttest. Das Frontend lädt die Modelllisten neu
 | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
 | `tool-permission-request.riskClass`              | neuer Wert `"change"` (vorher `"safe" \| "risky"`)                                                                      |
 | `chat-tool-call.toolSource`                      | neuer Wert `"action"` (vorher `"mcp" \| "cli"`); TS-Typ `ToolCallEvent.toolSource`                                      |
-| `list_installed_models` / `list_provider_models` | `capabilities.toolUse` (`{ support, basis, maxTools } \| null`)                                                         |
+| `list_installed_models` / `list_provider_models` | `capabilities.toolUse` (`{ support, basis } \| null`)                                                                   |
 | Werkzeug-Fehlertexte                             | neu: `action_timeout`, `action_unavailable`; bestehend: `denied_by_user`, `blocked_by_plan_mode`, `tool_call_cancelled` |
 
-## Meta-Werkzeug `list_actions` (für das Modell)
+## Suchwerkzeug `find_actions` (für das Modell)
 
 ```text
-name:        list_actions
-description: List the actions holzi offers, optionally filtered by a search
-             text. Returns id, one-line description and input schema.
-input:       { query?: string }
+name:        find_actions
+description: Search the actions holzi offers by keywords (English works best)
+             and get up to 5 matches with id, description and input schema.
+             Matches become callable tools in the next step.
+input:       { query: string }
 risk:        Safe, source "action"
 result:      { actions: [{ tool: string, description: string, inputSchema: object }] }
 ```
 
-Antwort höchstens 30 Einträge; ohne `query` die Kernaktionen plus Hinweis,
-dass `query` die Liste eingrenzt. Die Einträge stammen aus dem Register,
-nicht aus einem Frontend-Umlauf.
+- Höchstens 5 Treffer, wortbasiert über camelCase-zerlegte ID-Segmente,
+  Beschreibung und die deutschen und englischen Titel; Gleichstand nach
+  stabiler ID-Reihenfolge. Ohne Treffer: `{ actions: [] }` und der Hinweis
+  `"no matching action"`.
+- Die Treffer stammen aus dem Register, nicht aus einem Frontend-Umlauf.
+  Nach einer Runde mit diesem Werkzeug hängt der Zug die Treffer an
+  `request.tools` an; eine spätere Suche ersetzt die früheren (Angebot
+  insgesamt höchstens 15: Kernangebot ≤ 10 plus ≤ 5 Treffer).
+- Das Kernangebot (`core: true` in `AgentActionDef`) ist in jedem Schritt für
+  jedes Modell gleich.

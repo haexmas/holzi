@@ -24,7 +24,7 @@ Eingabeschema der Aktion. Das ist für kleine Modelle entscheidend.
 
 **Verworfen**:
 
-- _Zwei Meta-Werkzeuge_ (`list_actions`, `call_action(id, input)`): verschachtelte
+- _Zwei Meta-Werkzeuge_ (`find_actions`, `call_action(id, input)`): verschachtelte
   Argumente, das Modell sieht das Schema der Zielaktion nicht. Kleine Modelle
   scheitern daran deutlich öfter.
 - _Katalog in Rust duplizieren_: zwei Wahrheiten, Drift garantiert; verletzt FR-001.
@@ -141,52 +141,80 @@ Code `forbidden_for_agents` ab, und `set_agent_actions` enthält sie nicht.
 **Verworfen**: Sie im Bridge-Code ausblenden (versteckte zweite Liste);
 `agentCallable` auf `false` setzen (sperrt sie auch für 021).
 
-## R6 — Werkzeug-Auswahl pro Antwort (FR-011 bis FR-013)
+## R6 — Werkzeug-Angebot pro Schritt: festes Kernangebot plus Suche (FR-011 bis FR-013)
 
-**Befund**: Werkzeuge werden in `send_message` (`commands.rs` ~438–446) einmal
-je Zug in `ChatRequest.tools` gesetzt (`tool_specs()`, `commands.rs:189`);
-`append_round_to_request` ändert sie nicht, `TurnRunner.request` wird aber für
-jeden Schritt wiederverwendet und lässt sich zwischen den Schritten ändern. Das
-Modell kann nur Werkzeuge rufen, die in der Anfrage des jeweiligen Schrittes
-stehen: der Anthropic-Adapter schickt `tools` im Request, der lokale Adapter
-übergibt sie an mistralrs, das Aufrufe gegen genau diese Werkzeuge parst
-(`llm/local/stream.rs`). Der Lookup in holzi gegen das **Register**
-(`tool_round.rs:plan_calls`) allein reicht also nicht: ein Werkzeug, das nicht
-in der Anfrage steht, kann das Modell nicht ordnungsgemäß aufrufen.
+**Befund**:
 
-**Entscheidung**: Neues Modul `chat/tools/select.rs` mit der reinen Funktion
-`select_tools(defs, context_text, limit) -> Vec<ToolSpec>`. Verfahren
-(deterministisch, ohne Modellaufruf):
+- Alle 51 für den eingebauten Agenten aufrufbaren Aktionen als Werkzeugdefinitionen
+  (Name, Beschreibung, Eingabeschema) sind gemessen rund 13 200 Zeichen, also
+  etwa 3 800 Token je Anfrage. Die lokalen Modelle haben laut Katalog ein
+  Kontextfenster von 32 768 Token. Das wäre für Cloud-Modelle kaum spürbar,
+  kostet aber bei einem Modell wie Qwen3-4B auf der CPU Zeit und wächst mit
+  jeder neuen Quelle (haextensions bringen später viele Werkzeuge mit).
+- Eine Liste, die sich je Nutzersatz ändert, verhindert, dass ein Anbieter oder
+  die lokale Laufzeit den Anfangsteil des Prompts wiederverwenden kann. Eine
+  feste Liste ist in jedem Zug gleich.
+- Werkzeuge werden in `send_message` (`commands.rs` ~438–446) einmal je Zug in
+  `ChatRequest.tools` gesetzt (`tool_specs()`, `commands.rs:189`);
+  `append_round_to_request` ändert sie nicht, `TurnRunner.request` wird aber
+  für jeden Schritt wiederverwendet und lässt sich zwischen den Schritten
+  ändern.
+- Das Modell kann nur Werkzeuge rufen, die in der Anfrage des jeweiligen
+  Schrittes stehen: der Anthropic-Adapter schickt `tools` im Request, der
+  lokale Adapter übergibt sie an mistralrs, das Aufrufe gegen genau diese
+  Werkzeuge parst (`llm/local/stream.rs`). Der Lookup gegen das **Register**
+  (`tool_round.rs:plan_calls`) allein reicht nicht.
+- Wort-Treffer zwischen dem (deutschen) Nutzersatz und den (englischen)
+  Beschreibungen sind unzuverlässig („mach es dunkler“ trifft „color scheme“
+  nicht). Holzi soll deshalb nicht raten, was der Nutzer will.
 
-1. Immer angeboten: ein kleiner Kern lesender Aktionen (`wm_state_get`,
-   `wm_apps_list`, `settings_get`) und das Meta-Werkzeug `list_actions`.
-2. Rest nach Trefferzahl: Wörter der letzten Nutzernachricht (und der
-   vorherigen, als „Lage“) gegen die Wörter aus ID-Segmenten (camelCase
-   zerlegt), Beschreibung und den Titeln in Deutsch und Englisch, die das
-   Frontend mitliefert. Gleichstand: Bereich des zuletzt genutzten
-   Werkzeugs, dann stabile ID-Reihenfolge.
-3. Auf die Obergrenze kürzen: **eine einheitliche Obergrenze von 10 für alle
-   Modelle** (lokal wie Cloud, Klärung 2026-09-30). Nur ein ausdrücklich für ein
-   Modell hinterlegter Wert (`toolUse.maxTools`) weicht ab; der Standard setzt
-   keinen.
+**Entscheidung**: Ein einziges Verfahren für alle Modelle, lokal und Cloud.
 
-`list_actions(query?)` liefert ID, eine Zeile Beschreibung und das
-Eingabeschema der passenden Aktionen aus dem vollständigen Register. **Nach
-einer Runde, in der `list_actions` lief, hängt der Zug die gelieferten
-Werkzeuge an `request.tools` an** (am selben Ort, an dem
-`append_round_to_request` die Runde einträgt, ohne `tool_round.rs` über 500
-Zeilen zu schieben: die Logik steht in `select.rs`). Der nächste Schritt
-bietet sie dem Modell an. Das gilt für jeden Adapter gleich, weil alle
-`request.tools` nur in ihr Format übersetzen; es gibt keinen Sonderweg je
-Anbieter. Der Lookup gegen das Register bleibt als Sicherheitsnetz (FR-013).
+1. **Festes Kernangebot**: höchstens 10 Werkzeuge, einschließlich des
+   Suchwerkzeugs `find_actions`, in jedem Schritt und für jedes Modell
+   identisch. Die Liste ist eine Konstante `CORE_AGENT_TOOLS` in
+   `src/lib/actions/agentTools.ts` (neun Aktionen: `wm.state.get`,
+   `wm.apps.list`, `wm.app.open`, `wm.tab.new`, `wm.tab.activate`,
+   `wm.tab.close`, `settings.get`, `settings.appearance.setColorScheme`,
+   `settings.models.list`); das Frontend markiert sie mit `core: true` in
+   `AgentActionDef`. Die endgültige Zusammensetzung bestätigt der erste
+   Messlauf (T046).
+2. **Suche durch das Modell**: `find_actions({ query })` durchsucht alle
+   registrierten Aktionen wortbasiert (camelCase-zerlegte ID-Segmente,
+   Beschreibung, deutsche und englische Titel; Gleichstand: stabile
+   ID-Reihenfolge) und liefert höchstens 5 Treffer mit Name, Beschreibung und
+   Eingabeschema. Das Modell schreibt den Suchbegriff selbst, meist auf Englisch.
+3. **Treffer werden angeboten**: nach einer Runde, in der `find_actions` lief,
+   hängt der Zug die Treffer an `request.tools` an (eine Stelle,
+   `extend_offer` in `chat/tools/offer.rs`, aufgerufen dort, wo die Runde an die
+   Anfrage angehängt wird). Der nächste Schritt bietet sie an. Eine spätere
+   Suche ersetzt die früheren Treffer, damit das Angebot höchstens 15 Werkzeuge
+   umfasst. Alle Adapter übersetzen nur `request.tools` in ihr Format; es gibt
+   keinen Sonderweg je Anbieter. Der Lookup gegen das Register bleibt als
+   Sicherheitsnetz.
 
-**Grenze** (`ponytail:`-Kommentar am Code): „Lage“ ist in der ersten Fassung
-nur der Gesprächstext, nicht die Vordergrund-App; die Erweiterung ist ein
-weiteres Feld im Aufruf.
+Keine Obergrenze je Modell: einheitlich, ohne Ausnahme (Klärung 2026-09-30).
+Werkzeuge anderer Quellen (`run_command`, MCP) bleiben wie bisher im Angebot.
 
-**Verworfen**: Embedding-Suche (neue Abhängigkeit, Start-Latenz, für ≈ 60
-Aktionen unverhältnismäßig); zweiter Modellaufruf zur Auswahl (Kosten,
-Nichtdeterminismus, bei lokalen Modellen doppelte Wartezeit).
+**Kosten, offen benannt**: Liegt die gewünschte Aktion nicht im Kernangebot,
+braucht die Antwort einen zusätzlichen Schritt (Suche, dann Aufruf), bei
+lokalen Modellen also einen weiteren Modelllauf. Und ein kleines Modell muss
+von sich aus suchen, statt zu antworten, dass es das nicht kann. Der
+Messlauf (US5) bewertet deshalb zwei Schritte und weist den Anteil der Sätze
+aus, die das Ziel erreichen (`reachRate`). Zeigt er, dass das nicht reicht,
+ist die Gegenprobe „alle Werkzeuge mitschicken“ für Cloud-Modelle ein Schalter
+im Runner, keine neue Architektur.
+
+**Verworfen**:
+
+- _Alle Werkzeuge immer mitschicken_: einfachste Form, aber rund 4 000 Token
+  je Anfrage und wachsend; für kleine lokale Modelle langsam und vermutlich
+  ungenauer (nicht gemessen, darum Gegenprobe im Runner).
+- _Auswahl nach Wörtern des Nutzersatzes_ (erste Fassung dieses Plans):
+  unzuverlässig (Sprache, Synonyme), wechselt je Nutzersatz und verhindert
+  Wiederverwendung des Prompt-Anfangs, dazu Sonderverhalten je Anfrage.
+- _Embedding-Suche_ (neue Abhängigkeit, Start-Latenz); _zweiter Modellaufruf
+  zur Auswahl_ (Kosten, Nichtdeterminismus).
 
 ## R7 — Fähigkeit „Werkzeugnutzung“
 
@@ -200,7 +228,7 @@ Werkzeugfeld (`anthropic_capabilities.rs`).
 
 **Entscheidung**: Neues Feld `tool_use: Option<ToolUse>` mit
 `ToolUse { support: Supported | Unsupported, basis: Provider | Curated |
-Template | SelfTest, max_tools: Option<u32> }`; `None` heißt „unbekannt“.
+Template | SelfTest }`; `None` heißt „unbekannt“.
 
 - **Anthropic**: `map_capabilities` setzt `Supported`/`Provider`. Die Wire-API
   kennt kein Feld; alle aktuellen Claude-Modelle unterstützen Werkzeuge
