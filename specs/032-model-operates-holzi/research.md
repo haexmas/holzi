@@ -189,11 +189,14 @@ Code `forbidden_for_agents` ab, und `set_agent_actions` enthält sie nicht.
 3. **Treffer werden angeboten**: nach einer Runde, in der `find_actions` lief,
    hängt der Zug die Treffer an `request.tools` an (eine Stelle,
    `extend_offer` in `chat/tools/offer.rs`, aufgerufen dort, wo die Runde an die
-   Anfrage angehängt wird). Der nächste Schritt bietet sie an. Eine spätere
-   Suche ersetzt die früheren Treffer, damit das Angebot höchstens 15 Werkzeuge
-   umfasst. Alle Adapter übersetzen nur `request.tools` in ihr Format; es gibt
-   keinen Sonderweg je Anbieter. Der Lookup gegen das Register bleibt als
-   Sicherheitsnetz.
+   Anfrage angehängt wird). Vor dem Anhängen werden Treffer aus dem Kernangebot
+   und doppelte `toolName`s entfernt. Der nächste Schritt bietet höchstens fünf
+   eindeutige Nicht-Kern-Treffer zusätzlich zum Kernangebot an; eine spätere
+   Suche ersetzt die früheren Treffer. Damit gibt es höchstens 15
+   Aktionswerkzeuge. `run_command` und MCP-Werkzeuge bleiben zusätzlich im
+   Angebot und zählen nicht in dieses Aktionslimit. Alle Adapter übersetzen nur
+   `request.tools` in ihr Format; es gibt keinen Sonderweg je Anbieter. Der
+   Lookup gegen das Register bleibt als Sicherheitsnetz.
 
 Keine Obergrenze je Modell: einheitlich, ohne Ausnahme (Klärung 2026-09-30).
 Werkzeuge anderer Quellen (`run_command`, MCP) bleiben wie bisher im Angebot.

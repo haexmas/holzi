@@ -121,7 +121,7 @@ Regeln:
 
 ```json
 {
-  "setVersion": 1,
+  "setVersion": 2,
   "model": "qwen3-4b-instruct-q4_k_m",
   "total": { "pass": 22, "of": 28, "rate": 0.786 },
   "perLang": {

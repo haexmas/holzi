@@ -100,11 +100,11 @@ description: 'Task list for spec 032-model-operates-holzi'
 
 **Goal**: Every model, local or cloud, gets the same small fixed core offer plus a search tool; the model finds the rest itself, and what it finds is offered from the next step of the same answer.
 
-**Independent Test**: With the full catalog, in no step more than 15 tools are offered (core ≤ 10 plus ≤ 5 found); the core offer is identical for every model and every answer; after `find_actions` the found tools are part of the next request and callable.
+**Independent Test**: With the full catalog, in no step more than 15 action tools are offered (core ≤ 10 plus ≤ 5 unique non-core results); retained `run_command` and MCP tools are outside this action-only limit; the core offer is identical for every model and every answer; after `find_actions` the found tools are part of the next request and callable.
 
 ### Tests for User Story 3
 
-- [ ] T028 [P] [US3] Write `src-tauri/src/chat/tools/offer_tests.rs` (wired via `#[path]`): `core_offer` returns exactly the `core: true` definitions plus `find_actions` (≤ 10) and is identical for any input, provider and model; `search_actions` ranks by word hits over camelCase-split id segments, description and both titles, breaks ties by stable id order, returns ≤ 5, never returns a non-builtin-callable action, and gives an empty result with the hint `"no matching action"` for no hit; `extend_offer` replaces earlier found tools by the new ones and keeps the total ≤ 15
+- [ ] T028 [P] [US3] Write `src-tauri/src/chat/tools/offer_tests.rs` (wired via `#[path]`): `core_offer` returns exactly the `core: true` definitions plus `find_actions` (≤ 10) and is identical for any input, provider and model; `search_actions` ranks by word hits over camelCase-split id segments, description and both titles, breaks ties by stable id order, returns ≤ 5, never returns a non-builtin-callable action, and gives an empty result with the hint `"no matching action"` for no hit; `extend_offer` replaces earlier found tools, filters a search result overlapping a core action such as `wm.tab.activate`, deduplicates by `toolName`, keeps at most 15 action tools, and leaves non-action tools untouched
 
 ### Implementation for User Story 3
 

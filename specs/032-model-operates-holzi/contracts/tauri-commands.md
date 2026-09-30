@@ -24,7 +24,9 @@ errors: InvalidInput  // doppelter toolName, toolName verletzt ^[A-Za-z0-9_-]{1,
 
 Nebenwirkung: `ToolRegistry` behält `run_command` und MCP-Werkzeuge, ersetzt nur
 Werkzeuge mit Quelle `action`. Das Meta-Werkzeug `find_actions` ist immer
-vorhanden, sobald mindestens eine Aktion registriert ist.
+vorhanden, sobald mindestens eine Aktion registriert ist. Die Begrenzung auf
+15 gilt nur für Aktionswerkzeuge; `run_command` und MCP-Werkzeuge bleiben
+zusätzlich erhalten und zählen nicht in dieses Limit.
 
 ### `respond_action_call`
 
@@ -110,7 +112,11 @@ result:      { actions: [{ tool: string, description: string, inputSchema: objec
   ausdrücklich „alle Aktionen“, nicht nur das Kernangebot.
 - Die Treffer stammen aus dem Register, nicht aus einem Frontend-Umlauf.
   Nach einer Runde mit diesem Werkzeug hängt der Zug die Treffer an
-  `request.tools` an; eine spätere Suche ersetzt die früheren (Angebot
-  insgesamt höchstens 15: Kernangebot ≤ 10 plus ≤ 5 Treffer).
+  `request.tools` an. Vor dem Anhängen entfernt `extend_offer` Treffer, deren
+  `toolName` bereits im Kernangebot vorkommt, und dedupliziert die übrigen
+  Treffer nach `toolName`; eine spätere Suche ersetzt die früheren. So bleiben
+  höchstens 15 Aktionswerkzeuge im Angebot (Kernangebot ≤ 10 plus höchstens 5
+  eindeutige Nicht-Kern-Treffer). `run_command` und MCP-Werkzeuge sind davon
+  ausgenommen und werden nicht entfernt.
 - Das Kernangebot (`core: true` in `AgentActionDef`) ist in jedem Schritt für
   jedes Modell gleich.

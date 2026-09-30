@@ -538,8 +538,10 @@ hintereinander zeigt nur geringe Abweichung.
   geheimnisbehafteten Nachricht zusätzlich, dass das Agent-Ergebnis weder
   `content` noch den geheimen Wert enthält.
 - **SC-005**: Auch bei einer größeren Aktionsliste werden in keinem Schritt
-  mehr als 15 Werkzeuge angeboten (Kernangebot höchstens 10 plus höchstens 5
-  gefundene), das Kernangebot ist für alle Modelle identisch, und für
+  mehr als 15 Aktionswerkzeuge angeboten (Kernangebot höchstens 10 plus
+  höchstens 5 eindeutige Nicht-Kern-Treffer). `run_command` und
+  MCP-Werkzeuge bleiben zusätzlich erhalten und zählen nicht in dieses
+  Aktionslimit. Das Kernangebot ist für alle Modelle identisch, und für
   mindestens 95 % der Beispielsätze steht das passende Werkzeug spätestens im
   zweiten Schritt zur Verfügung (im Kernangebot oder nach einer Suche), mit
   höchstens einem zusätzlichen Schritt.

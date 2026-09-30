@@ -30,10 +30,11 @@ Technischer Ansatz (Begründungen und verworfene Alternativen in
 - **Werkzeug-Angebot** (R6): ein einziges Verfahren für alle Modelle: ein
   festes Kernangebot (neun häufige Aktionen plus `find_actions`, zusammen
   höchstens 10), in jedem Schritt gleich und unabhängig vom Nutzertext. Alles
-  andere sucht das Modell selbst mit `find_actions`; die höchstens 5 Treffer
-  werden ab dem nächsten Schritt derselben Antwort angeboten (Angebot
-  insgesamt höchstens 15). Kein Raten anhand des Nutzersatzes, keine
-  Sonderwege je Anbieter.
+  andere sucht das Modell selbst mit `find_actions`; höchstens 5 eindeutige
+  Nicht-Kern-Treffer werden ab dem nächsten Schritt derselben Antwort
+  angeboten, sodass höchstens 15 Aktionswerkzeuge vorliegen. `run_command` und
+  MCP-Werkzeuge bleiben zusätzlich erhalten und zählen nicht in dieses Limit.
+  Kein Raten anhand des Nutzersatzes, keine Sonderwege je Anbieter.
 - **Fähigkeit „Werkzeugnutzung“** (R7–R9): `ModelCapabilities.tool_use`
   (unbekannt / unterstützt / nicht unterstützt) ohne Migration; Anthropic
   setzt „unterstützt“, lokale Modelle durchlaufen eine Vorlagenprobe
