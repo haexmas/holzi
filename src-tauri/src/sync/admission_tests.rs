@@ -565,3 +565,47 @@ fn device_key_rows(member: &Member) -> Vec<(String, Vec<u8>, Vec<u8>)> {
     })
     .expect("read key rows")
 }
+
+fn alias_of(member: &Member) -> Option<String> {
+    query::read(member.device.db(), |r| {
+        r.query_row(
+            "SELECT alias FROM known_devices WHERE vault_device_uuid = ?1",
+            params![member.device.db().device_id().to_string()],
+            |row| row.get(0),
+        )
+    })
+    .expect("read alias")
+}
+
+#[test]
+fn a_copy_takes_the_computers_name_so_it_and_its_source_tell_apart() {
+    let Some(computer) = crate::hardware::hostname::suggested_alias() else {
+        return;
+    };
+    let main = Member::genesis();
+    let (main_copy, _) = main.copy_of();
+    let (_main, linked) = main_and_linked();
+    let (linked_copy, _) = linked.copy_of();
+
+    assert_eq!(alias_of(&main_copy), Some(computer.clone()));
+    assert_eq!(alias_of(&linked_copy), Some(computer));
+}
+
+#[test]
+fn a_name_the_user_chose_stays() {
+    let main = Member::genesis();
+    let (copy, _) = main.copy_of();
+    let uuid = copy.device.db().device_id();
+    copy.device
+        .db()
+        .write(|tx| {
+            tx.execute(
+                "UPDATE known_devices SET alias = 'Büro' WHERE vault_device_uuid = ?1",
+                params![uuid.to_string()],
+            )?;
+            adopt_computer_name(tx, uuid)
+        })
+        .expect("adopt");
+
+    assert_eq!(alias_of(&copy).as_deref(), Some("Büro"));
+}

@@ -566,6 +566,12 @@
     "admission": {
       "title": "Anfragen zur Aufnahme",
       "description": "Diese Kopien einer Vault-Datei bitten um Aufnahme. Nimm nur Geräte auf, die du kennst.",
+      "asked": {
+        "justNow": "gerade eben angefragt",
+        "minutes": "angefragt vor {n} Min.",
+        "hours": "angefragt vor {n} Std.",
+        "days": "angefragt vor {n} Tagen"
+      },
       "admit": "Aufnehmen",
       "reject": "Ablehnen",
       "admitLabel": "„{name}“ aufnehmen",

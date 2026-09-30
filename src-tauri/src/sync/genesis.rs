@@ -100,11 +100,17 @@ pub fn ensure_sync_state(
             }
         }
 
-        let enrolled_as_copy = match vault_secret.as_ref() {
-            Some(secret) if !had_keys && !issued_first_list => {
-                enroll_copy(tx, &device, secret, vault_pubkey, vault_device_uuid, now)?
-            }
-            _ => false,
+        let enrolled_as_copy = if !had_keys && !issued_first_list {
+            open_copy(
+                tx,
+                &device,
+                vault_secret.as_deref(),
+                vault_pubkey,
+                vault_device_uuid,
+                now,
+            )?
+        } else {
+            false
         };
 
         let valid = device_list::valid_lists(&device_list::load_all(tx)?, &vault_pubkey);
@@ -119,13 +125,16 @@ pub fn ensure_sync_state(
     })
 }
 
-/// A main device's vault file opened by an installation that has no keys in
-/// it yet: a copy. Enrolls this device as a main device unless the list
-/// names or removed it already, and leaves the notice for the user.
-fn enroll_copy(
+/// A vault file opened by an installation that has no keys in it yet while
+/// its list does not name this device: a copy. The copy takes the computer's
+/// name while its own is still the default, so the devices tell apart. A copy
+/// of a main device's file (`secret` is there) enrolls itself as a main device
+/// and leaves the notice for the user; a copy of a linked device's file has
+/// nothing more to do here: it asks for admission once presence runs.
+fn open_copy(
     tx: &mut haex_crdt::CrdtTransaction<'_>,
     device: &keys::DeviceKeys,
-    secret: &[u8; 32],
+    secret: Option<&[u8; 32]>,
     vault_pubkey: [u8; 32],
     vault_device_uuid: Uuid,
     now: u64,
@@ -137,6 +146,10 @@ fn enroll_copy(
     if !admission::needs_request(&effective, &device.device_pubkey) {
         return Ok(false);
     }
+    admission::adopt_computer_name(tx, vault_device_uuid)?;
+    let Some(secret) = secret else {
+        return Ok(false);
+    };
     let name = admission::own_name(tx, vault_device_uuid)?;
     let enrolled = admission::enroll_as_main(
         tx,

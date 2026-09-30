@@ -5,6 +5,8 @@
  * admits a copy without this decision. Hidden while there is no request. The list comes from the
  * device store, so it follows `sync-devices-changed`.
  */
+import { elapsedSince } from '~/lib/sync/deviceStatus'
+
 const { t } = useI18n()
 const { errString } = useErrorString()
 const store = useSyncDevicesStore()
@@ -14,6 +16,17 @@ const busy = ref<string | null>(null)
 const error = ref<string | null>(null)
 
 const requests = computed(() => store.status?.openAdmissions ?? [])
+
+// The ages are read when the list changes; a request does not need a ticking clock.
+const now = computed(() => (requests.value, Date.now()))
+
+/** "angefragt vor 3 Min." for a request of `requestedAt` ms. */
+function asked(requestedAt: number): string {
+  const elapsed = elapsedSince(requestedAt, now.value)
+  return elapsed.unit === 'justNow'
+    ? t('settings.admission.asked.justNow')
+    : t(`settings.admission.asked.${elapsed.unit}`, { n: elapsed.value })
+}
 
 /** Answers one request, ignoring a second click while an answer is pending. */
 async function onDecide(devicePubkey: string, admit: boolean) {
@@ -50,7 +63,7 @@ async function onDecide(devicePubkey: string, admit: boolean) {
         data-testid="admission-request"
       >
         <template #description>
-          {{ t('settings.admission.description') }}
+          {{ asked(request.requestedAt) }}
         </template>
         <UiButton
           variant="outline"
@@ -76,6 +89,9 @@ async function onDecide(devicePubkey: string, admit: boolean) {
         </UiButton>
       </SettingsRow>
     </SettingsGroup>
+    <p class="px-1 text-sm text-muted-foreground">
+      {{ t('settings.admission.description') }}
+    </p>
     <p
       v-if="error"
       class="px-1 text-sm text-destructive"

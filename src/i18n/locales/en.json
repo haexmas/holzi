@@ -566,6 +566,12 @@
     "admission": {
       "title": "Requests to join",
       "description": "These copies of a vault file ask to join. Admit only devices you know.",
+      "asked": {
+        "justNow": "asked just now",
+        "minutes": "asked {n} min. ago",
+        "hours": "asked {n} h ago",
+        "days": "asked {n} days ago"
+      },
       "admit": "Admit",
       "reject": "Refuse",
       "admitLabel": "Admit “{name}”",

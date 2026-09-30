@@ -542,6 +542,28 @@ pub fn own_name(q: &mut impl Query, vault_device_uuid: Uuid) -> haex_crdt::Resul
         .unwrap_or_else(|| crate::sync::genesis::FALLBACK_DEVICE_NAME.to_string()))
 }
 
+/// Gives a copy the computer's name as its alias while the alias is still the
+/// default, so the copy and its source do not both show as "holzi". A name the
+/// user chose stays; without a computer name nothing changes.
+pub fn adopt_computer_name(
+    tx: &mut CrdtTransaction<'_>,
+    vault_device_uuid: Uuid,
+) -> haex_crdt::Result<()> {
+    let Some(name) = crate::hardware::hostname::suggested_alias() else {
+        return Ok(());
+    };
+    tx.execute(
+        "UPDATE known_devices SET alias = ?1 \
+         WHERE vault_device_uuid = ?2 AND (alias IS NULL OR alias = ?3)",
+        params![
+            name,
+            vault_device_uuid.to_string(),
+            crate::sync::genesis::FALLBACK_DEVICE_NAME
+        ],
+    )?;
+    Ok(())
+}
+
 /// Whether this device has to ask to be admitted: it is neither on the
 /// effective list nor removed by it.
 pub fn needs_request(effective: &SignedList, own: &[u8; 32]) -> bool {
