@@ -451,6 +451,16 @@ werden erweitert; `instances/presence.rs` meint Prozesse, nicht Geräte, und pas
 nicht; `src-tauri/src/sync/` ist neu. Der Graph ist vom 2026-09-21 und älter als 022/023; die
 Kandidaten wurden im Code geprüft (zur manuellen Nachprüfung vermerkt).
 
+**Nachprüfung nach dem Bau von `sync/` (2026-10-01, T080)**: Mit einer Suche im Code statt einer neuen
+Graphify-Abfrage (der Graph ist weiter veraltet): Außerhalb von `src-tauri/src/sync/` kommen die Namen
+„Geräteliste“, „Inhaltsschlüssel“, „Vault-Identität“ nur in `identity/migrations.rs` (Tabellen) und in
+der Verdrahtung (`lib.rs`, `state.rs`) vor. `instances/presence.rs` meint weiter Prozesse, nicht
+Geräte. `chat/send_admission.rs` meint das Zulassen einer Chat-Nachricht zum Senden und hat mit
+`sync/admission` (Aufnahme einer Kopie) nichts zu tun; beide Namen sind durch ihr Modul eindeutig.
+Doppelte Begriffe oder Module gibt es nicht. Die Dateigrößen sind geprüft: Im Bereich `sync/`, in den
+Sync-Integrationstests und den neuen E2E-Szenarien ist keine Datei über 500 Zeilen, und in keiner
+Produktionsdatei stehen Tests.
+
 ## R19 Schreiben über den CRDT-Weg von haex-crdt (Betreiber-Entscheidung)
 
 **Befund** (geprüft): holzi hat keinen allgemeinen Befehl wie `sql_execute`/`sql_execute_with_crdt`
@@ -525,6 +535,25 @@ nur aus dem Backend; ein SQL-Befehl wäre eine neue Angriffsfläche für Erweite
 
 Die Aufräumarbeiten laufen nach dem Öffnen im vorhandenen Wartungsablauf (`storage/maintenance.rs`)
 und nach jedem Abgleich für die Löschvermerke.
+
+**Stand der Umsetzung (2026-10-01)**: Umgesetzt und getestet sind `haex_deleted_rows` (90 Tage),
+`pending_links_no_sync` (24 Stunden, beim Öffnen), `admission_requests` (nach jeder Zusammenführung und
+beim Öffnen) und `device_presence_no_sync` (beim Entfernen). Bewusst **nicht** umgesetzt sind zwei Regeln:
+
+- `device_lists`: Eine Liste zu löschen ist ein synchronisiertes Löschen. Der Löschvermerk erreicht die
+  anderen Geräte, die eine andere Sicht haben können: Kennt ein Gerät schon eine Liste höherer
+  Generation, die auf die gelöschte aufbaut, verliert es deren Ahnenpfad, und die höhere Liste gilt
+  dort nicht mehr. Löschbar wären ohnehin nur Zweige, die verloren haben; der Ahnenpfad jeder
+  behaltenen Liste bleibt. Der Gewinn ist eine kleine Zeile je gleichzeitiger Änderung, das Risiko eine
+  verlorene Geräteliste.
+- `sync_progress_no_sync` entfernter Geräte: „Fehlt ein Ursprung, heißt das: nichts“ (`progress.rs`).
+  Ohne Zeile holte jeder Abgleich alle Änderungen des entfernten Geräts erneut; setzte man stattdessen
+  die Grenze ein, hielte man ein Gerät, das nie Änderungen des entfernten Geräts erhielt, für
+  vollständig, und diese Änderungen fehlten für immer. Eine Zeile je entferntes Gerät wächst nur mit
+  Entfernungen, also mit Handlungen der Nutzerin.
+
+Beide Regeln bleiben offen, bis sich ein Weg findet, der kein Löschen auf fremder Sicht und keine
+falsche Vollständigkeit braucht (etwa ein lokales Löschen mit Tombstone).
 
 **Begründung**: Jede synchronisierte Tabelle, die nur wächst, macht jede Momentaufnahme und jeden
 Scan teurer; Löschvermerke sind heute schon ohne Grenze. Die Fristen sind großzügig, weil ein

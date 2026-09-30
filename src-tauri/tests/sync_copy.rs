@@ -13,67 +13,32 @@
 //! `XDG_DATA_HOME`).
 #![cfg(target_os = "linux")]
 
-use std::sync::{Arc, LazyLock};
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use haex_crdt::rusqlite::params;
-use tauri::Manager;
 use tokio::sync::Mutex;
 
 use holzi_lib::storage::query::{self, Query};
 use holzi_lib::sync::commands::{decide_admission_now, this_device, ThisDevice};
-use holzi_lib::sync::registry::{SyncRegistry, SyncRuntime};
 use holzi_lib::sync::{admission, device_list};
 
 #[path = "common/sync_fixture.rs"]
 mod sync_fixture;
+#[path = "common/sync_helpers.rs"]
+mod sync_helpers;
 
 use sync_fixture::Instance;
+use sync_helpers::{listed, runtime_of, until};
 
 /// `XDG_DATA_HOME` is process-wide; tests that set it take turns.
 static TURN: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
-
-async fn until<T>(what: &str, mut check: impl FnMut() -> Option<T>) -> T {
-    tokio::time::timeout(Duration::from_secs(40), async {
-        loop {
-            if let Some(found) = check() {
-                return found;
-            }
-            tokio::time::sleep(Duration::from_millis(100)).await;
-        }
-    })
-    .await
-    .unwrap_or_else(|_| panic!("timed out waiting for {what}"))
-}
-
-async fn runtime_of(device: &Instance) -> Arc<SyncRuntime> {
-    until("the sync service to come up", || {
-        device.app.state::<Arc<SyncRegistry>>().get()
-    })
-    .await
-}
 
 fn place_of(device: &Instance) -> ThisDevice {
     query::read(&device.database(), |r| {
         this_device(r, &device.keys.device_pubkey)
     })
     .expect("read this device's place")
-}
-
-fn listed(device: &Instance) -> Vec<([u8; 32], bool)> {
-    query::read(&device.database(), |r| {
-        let valid = device_list::valid_lists(&device_list::load_all(r)?, &device.vault);
-        Ok(device_list::effective(&valid)
-            .map(|s| {
-                s.list
-                    .devices
-                    .iter()
-                    .map(|d| (d.device_pubkey, d.role == device_list::Role::Main))
-                    .collect()
-            })
-            .unwrap_or_default())
-    })
-    .expect("read list")
 }
 
 /// The open requests `device` holds for devices the list has not settled.

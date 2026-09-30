@@ -475,5 +475,8 @@ pub(crate) fn read_roster(
 }
 
 #[cfg(test)]
+#[path = "presence_loop_request_tests.rs"]
+mod request_tests;
+#[cfg(test)]
 #[path = "presence_loop_tests.rs"]
 mod tests;

@@ -477,5 +477,8 @@ async fn store_pushed(
 }
 
 #[cfg(test)]
+#[path = "handshake_refusal_tests.rs"]
+mod refusal_tests;
+#[cfg(test)]
 #[path = "handshake_tests.rs"]
 mod tests;
