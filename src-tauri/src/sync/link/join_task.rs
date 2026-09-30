@@ -212,13 +212,7 @@ impl LinkJoin {
         self.slot.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    fn set(
-        &self,
-        emit: &Emit,
-        cancel: CancellationToken,
-        done: Arc<Notify>,
-        state: LinkJoinState,
-    ) {
+    fn set(&self, emit: &Emit, cancel: CancellationToken, done: Arc<Notify>, state: LinkJoinState) {
         let terminal = is_over(&state);
         *self.slot() = Some(Running {
             state: state.clone(),
