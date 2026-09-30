@@ -5,7 +5,9 @@
  * research R10). Presentational only: all state and the actions it emits
  * live in `useThreadSidebar` (page-level), except the edited-row input's
  * focus/select, which this component owns since it is DOM-local to a row
- * this component renders.
+ * this component renders. Where the sidebar sits and how wide it is, the frame
+ * (`apps/ChatApp.vue`, `useChatSidebar`) decides; it fills what it is given and keeps
+ * its width while the frame slides it.
  */
 import { nextTick, shallowRef, watch, type ComponentPublicInstance } from 'vue'
 import type { Thread } from '~/composables/useChat'
@@ -62,7 +64,7 @@ watch(
 
 <template>
   <aside
-    class="hidden md:flex w-64 shrink-0 border-r border-border bg-background p-4 flex-col gap-4 overflow-y-auto"
+    class="flex h-full w-full min-w-64 flex-col gap-4 overflow-y-auto border-r border-border bg-background p-4"
   >
     <div class="flex items-center gap-3 min-w-0">
       <div

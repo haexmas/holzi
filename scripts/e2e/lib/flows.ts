@@ -120,7 +120,7 @@ export async function openChat(instance: FlowInstance): Promise<void> {
   await instance.click('open-launcher')
   await instance.click('open-chat')
   await waitForPath(instance, '/workspace/')
-  await instance.waitForDisplayed('lock-instance-header')
+  await instance.waitForDisplayed('lock-instance-sidebar')
 }
 
 interface AddProviderResult {

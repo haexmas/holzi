@@ -288,7 +288,7 @@ const {
 )
 
 // Spec 020: tab history, tab-bound chat actions, approval response and close guard (useChatTab).
-const { chatTitle, syncFromLocation, ui } = useChatTab({
+const { syncFromLocation, ui } = useChatTab({
   wmTab,
   router: useTabRouter(),
   runAction: wm.runAction,
@@ -383,45 +383,37 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="flex h-full min-h-0 bg-muted/20">
-    <ChatThreadSidebar
-      :instance-name="instanceName"
-      :busy="busy"
-      :threads="threads"
-      :active-thread-id="activeThreadId"
-      :editing-thread-id="editingThreadId"
-      :draft-title="draftTitle"
-      :edit-title-error="editTitleError"
-      :renaming-thread-id="renamingThreadId"
-      :delete-candidate="deleteCandidate"
-      :delete-error="deleteError"
-      :deleting-thread="deletingThread"
-      :history-duration-label="historyDurationLabel"
-      :opening-time-label="openingTimeLabel"
-      @update:draft-title="draftTitle = $event"
-      @new-chat="ui.newConversation"
-      @select-thread="ui.openConversation"
-      @start-editing="startEditing"
-      @save-title="ui.saveTitle"
-      @cancel-editing="cancelEditing"
-      @request-delete="requestDelete"
-      @close-delete-dialog="closeDeleteDialog"
-      @confirm-delete="ui.confirmDelete"
-      @lock="lock"
-      @open-settings="openApp({ appId: 'system.settings' })"
-    />
+  <ChatSidebarLayout>
+    <template #sidebar="{ run }">
+      <ChatThreadSidebar
+        :instance-name="instanceName"
+        :busy="busy"
+        :threads="threads"
+        :active-thread-id="activeThreadId"
+        :editing-thread-id="editingThreadId"
+        :draft-title="draftTitle"
+        :edit-title-error="editTitleError"
+        :renaming-thread-id="renamingThreadId"
+        :delete-candidate="deleteCandidate"
+        :delete-error="deleteError"
+        :deleting-thread="deletingThread"
+        :history-duration-label="historyDurationLabel"
+        :opening-time-label="openingTimeLabel"
+        @update:draft-title="draftTitle = $event"
+        @new-chat="run(ui.newConversation)"
+        @select-thread="(id) => run(() => ui.openConversation(id))"
+        @start-editing="startEditing"
+        @save-title="ui.saveTitle"
+        @cancel-editing="cancelEditing"
+        @request-delete="requestDelete"
+        @close-delete-dialog="closeDeleteDialog"
+        @confirm-delete="ui.confirmDelete"
+        @lock="lock"
+        @open-settings="run(() => openApp({ appId: 'system.settings' }))"
+      />
+    </template>
 
     <section class="min-w-0 flex-1 flex flex-col">
-      <ChatHeader
-        :title="chatTitle"
-        :model-loaded="!!activeModel"
-        :model-name="activeModel?.name || t('chat.model.notLoaded')"
-        :busy="busy"
-        @lock="lock"
-        @new-chat="ui.newConversation"
-        @open-settings="openApp({ appId: 'system.settings' })"
-      />
-
       <ChatStatusBanners
         :displayed-error="displayedError"
         :can-retry-send="!!pendingSend"
@@ -480,18 +472,20 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <ModelsModelIntegrityDialog
-      v-if="integrityDialog"
-      :open="integrityDialog !== null"
-      :error-kind="integrityDialog.errorKind"
-      :expected-sha256="integrityDialog.expected"
-      :actual-sha256="integrityDialog.actual"
-      :busy="integrityBusy"
-      :action-error="integrityActionError"
-      @update:open="onIntegrityDialogOpenChange"
-      @load-untrusted="decideIntegrity({ decision: 'loadUntrusted' })"
-      @repair-source="decideIntegrity({ decision: 'repairSource' })"
-      @choose-other="decideIntegrity({ decision: 'chooseOther' })"
-    />
-  </main>
+    <template #dialogs>
+      <ModelsModelIntegrityDialog
+        v-if="integrityDialog"
+        :open="integrityDialog !== null"
+        :error-kind="integrityDialog.errorKind"
+        :expected-sha256="integrityDialog.expected"
+        :actual-sha256="integrityDialog.actual"
+        :busy="integrityBusy"
+        :action-error="integrityActionError"
+        @update:open="onIntegrityDialogOpenChange"
+        @load-untrusted="decideIntegrity({ decision: 'loadUntrusted' })"
+        @repair-source="decideIntegrity({ decision: 'repairSource' })"
+        @choose-other="decideIntegrity({ decision: 'chooseOther' })"
+      />
+    </template>
+  </ChatSidebarLayout>
 </template>

@@ -183,7 +183,10 @@
       "answeredByDelegate": "Beantwortet von {name}"
     },
     "newChat": "Neuer Chat",
-    "newChatShort": "Neu",
+    "sidebar": {
+      "show": "Seitenleiste einblenden",
+      "hide": "Seitenleiste ausblenden"
+    },
     "threads": {
       "title": "Verläufe",
       "empty": "Noch keine Gespräche",
