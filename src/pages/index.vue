@@ -3,6 +3,7 @@ const { t } = useI18n()
 const store = useInstancesStore()
 
 const createSheetOpen = ref(false)
+const linkSheetOpen = ref(false)
 const unlockSheetOpen = ref(false)
 const selectedName = ref<string | null>(null)
 
@@ -50,6 +51,13 @@ async function onCreated(name: string) {
   await navigateTo(`/workspace/${encodeURIComponent(name)}`, { replace: true })
 }
 
+/** A link finished: the new vault exists, so it appears in the list and opens like any other, with
+ * the passphrase chosen for it. */
+async function onLinked(name: string) {
+  await store.syncAsync()
+  onSelect(name)
+}
+
 /** Activates an unlocked instance and opens its workspace-landing. */
 async function onUnlocked(name: string) {
   store.setActiveInstance(name)
@@ -71,6 +79,14 @@ async function onUnlocked(name: string) {
       <UiButton class="w-full" @click="createSheetOpen = true">
         {{ t('onboarding.create.title') }}
       </UiButton>
+      <UiButton
+        class="w-full"
+        variant="outline"
+        data-testid="landing-link"
+        @click="linkSheetOpen = true"
+      >
+        {{ t('onboarding.link.title') }}
+      </UiButton>
     </div>
 
     <OnboardingInstancesList :instances="store.instances" @select="onSelect" />
@@ -83,6 +99,8 @@ async function onUnlocked(name: string) {
       v-model:open="createSheetOpen"
       @created="onCreated"
     />
+
+    <OnboardingLinkSheet v-model:open="linkSheetOpen" @linked="onLinked" />
 
     <OnboardingUnlockSheet
       v-model:open="unlockSheetOpen"

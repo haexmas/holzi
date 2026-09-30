@@ -148,6 +148,10 @@ export const SETTINGS_LOCATIONS: readonly SettingsLocation[] = [
     overviewRow: true,
   }),
   categoryLocation('federation'),
+  subView('federation.link', 'federation/devices/link', 'federation', {
+    icon: 'lucide:qr-code',
+    row: true,
+  }),
 ]
 
 /** A `RoutePattern` that also names its location, so `appRoutes.ts` can attach the view. */

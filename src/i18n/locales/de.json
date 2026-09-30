@@ -65,6 +65,37 @@
       "hide": "Passwort verbergen",
       "copy": "Kopieren",
       "copied": "Kopiert!"
+    },
+    "link": {
+      "title": "Mit einer Vault verknüpfen",
+      "intro": "Zeige auf einem Hauptgerät unter „Föderation“ einen Code an und gib ihn hier ein. Die Vault entsteht erst, wenn das Hauptgerät zustimmt.",
+      "code": "Code vom Hauptgerät",
+      "codePlaceholder": "ABCD-EFGH-IJKL-MNOP-QRST-UV",
+      "deviceName": "Name dieses Geräts",
+      "vaultName": "Name der Vault auf diesem Gerät",
+      "passphrase": "Passphrase für diese Vault",
+      "passphraseHint": "Nur für dieses Gerät. Sie wird nie übertragen.",
+      "submit": "Verknüpfen",
+      "cancel": "Abbrechen",
+      "retry": "Erneut versuchen",
+      "openVault": "Vault öffnen",
+      "searchingHint": "Der Code muss auf dem Hauptgerät gerade angezeigt werden.",
+      "done": "Die Vault „{name}“ ist verknüpft.",
+      "doneHint": "Öffne sie mit der Passphrase, die du eben vergeben hast.",
+      "failedHint": "Auf diesem Gerät wurde nichts angelegt.",
+      "state": {
+        "searching": "Suche das Hauptgerät …",
+        "waiting_for_confirmation": "Warte auf die Bestätigung am Hauptgerät …",
+        "transferring": "Übertrage die Daten …"
+      },
+      "failed": {
+        "expired": "Kein Hauptgerät hat geantwortet. Der Code ist abgelaufen, wurde schon benutzt oder falsch eingegeben.",
+        "used": "Dieser Code wurde schon benutzt.",
+        "wrong_code": "Das ist kein gültiger Code. Prüfe die Eingabe.",
+        "rejected": "Das Hauptgerät hat das Verknüpfen abgelehnt.",
+        "incompatible": "Dieses Gerät und das Hauptgerät haben Versionen, die sich nicht synchronisieren lassen. Aktualisiere das ältere.",
+        "connection_lost": "Die Verbindung ist abgebrochen."
+      }
     }
   },
   "wm": {
@@ -410,6 +441,13 @@
           "description": "Aktionen, die auch im autonomen Modus tabu bleiben.",
           "keywords": "verbieten Regeln tabu Befehle"
         }
+      },
+      "federation": {
+        "link": {
+          "title": "Gerät verknüpfen",
+          "description": "Ein neues Gerät mit einem Code zu dieser Vault hinzufügen.",
+          "keywords": "Gerät verknüpfen Code QR hinzufügen koppeln"
+        }
       }
     },
     "downloadModels": {
@@ -442,6 +480,34 @@
       "unnamed": "Unbenanntes Gerät",
       "loadFailed": "Die Geräte der Vault ließen sich nicht laden",
       "devicesLabel": "Geräte der Vault"
+    },
+    "link": {
+      "startTitle": "Neues Gerät verknüpfen",
+      "startDescription": "Zeigt einen Code, den du auf dem neuen Gerät eingibst.",
+      "showCode": "Code anzeigen",
+      "codeLabel": "Code für das neue Gerät",
+      "qrAlt": "QR-Code zum Verknüpfen",
+      "codeHint": "Gib diesen Code auf dem neuen Gerät unter „Mit einer Vault verknüpfen“ ein. Er gilt einmal.",
+      "validFor": "Gültig noch {time}",
+      "copy": "Code kopieren",
+      "copied": "Kopiert",
+      "cancel": "Abbrechen",
+      "notMain": "Nur ein Hauptgerät kann Geräte verknüpfen.",
+      "confirmTitle": "„{name}“ möchte sich verknüpfen",
+      "roleLinked": "Verknüpftes Gerät",
+      "roleLinkedDescription": "Liest und schreibt alle Daten. Bekommt nicht den privaten Schlüssel der Vault und kann keine Geräte hinzufügen oder entfernen.",
+      "roleMain": "Auch Hauptgerät",
+      "roleMainDescription": "Bekommt den privaten Schlüssel der Vault und kann selbst Geräte verknüpfen und entfernen.",
+      "totalLossWarning": "Wird ein Hauptgerät kompromittiert und ist die Passphrase bekannt, ist die Vault verloren (Totalausfall).",
+      "confirm": "Verknüpfen",
+      "reject": "Ablehnen",
+      "sending": "Übertrage die Vault an „{name}“ …",
+      "done": "„{name}“ ist jetzt mit der Vault verknüpft.",
+      "another": "Weiteres Gerät verknüpfen",
+      "again": "Neuen Code anzeigen",
+      "ended": "Der Code ist nicht mehr gültig.",
+      "failed": "Das Verknüpfen ist fehlgeschlagen. Es wurde kein Gerät hinzugefügt.",
+      "declined": "Du hast das Verknüpfen abgelehnt. Der Code ist verbraucht."
     }
   },
   "models": {
@@ -731,7 +797,8 @@
         "setColorScheme": "Farbschema festlegen"
       },
       "devices": {
-        "list": "Geräte der Vault auflisten"
+        "list": "Geräte der Vault auflisten",
+        "link": "Gerät verknüpfen öffnen"
       }
     },
     "scopes": {

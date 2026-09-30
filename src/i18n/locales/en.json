@@ -65,6 +65,37 @@
       "hide": "Hide password",
       "copy": "Copy",
       "copied": "Copied!"
+    },
+    "link": {
+      "title": "Link to a vault",
+      "intro": "On a main device, open “Federation” and show a code, then enter it here. The vault is only created once the main device agrees.",
+      "code": "Code from the main device",
+      "codePlaceholder": "ABCD-EFGH-IJKL-MNOP-QRST-UV",
+      "deviceName": "Name of this device",
+      "vaultName": "Name of the vault on this device",
+      "passphrase": "Passphrase for this vault",
+      "passphraseHint": "For this device only. It is never sent.",
+      "submit": "Link",
+      "cancel": "Cancel",
+      "retry": "Try again",
+      "openVault": "Open vault",
+      "searchingHint": "The code has to be showing on the main device right now.",
+      "done": "The vault “{name}” is linked.",
+      "doneHint": "Open it with the passphrase you just chose.",
+      "failedHint": "Nothing was created on this device.",
+      "state": {
+        "searching": "Looking for the main device …",
+        "waiting_for_confirmation": "Waiting for confirmation on the main device …",
+        "transferring": "Transferring the data …"
+      },
+      "failed": {
+        "expired": "No main device answered. The code has expired, was used already, or was typed wrongly.",
+        "used": "This code was used already.",
+        "wrong_code": "That is not a valid code. Check what you typed.",
+        "rejected": "The main device declined the link.",
+        "incompatible": "This device and the main device run versions that cannot sync. Update the older one.",
+        "connection_lost": "The connection was lost."
+      }
     }
   },
   "wm": {
@@ -410,6 +441,13 @@
           "description": "Actions that stay off-limits even in an autonomous mode.",
           "keywords": "deny rules forbidden commands"
         }
+      },
+      "federation": {
+        "link": {
+          "title": "Link a device",
+          "description": "Add a new device to this vault with a code.",
+          "keywords": "link device code QR add pair"
+        }
       }
     },
     "downloadModels": {
@@ -442,6 +480,34 @@
       "unnamed": "Unnamed device",
       "loadFailed": "Could not load the vault's devices",
       "devicesLabel": "Devices of the vault"
+    },
+    "link": {
+      "startTitle": "Link a new device",
+      "startDescription": "Shows a code that you enter on the new device.",
+      "showCode": "Show code",
+      "codeLabel": "Code for the new device",
+      "qrAlt": "QR code for linking",
+      "codeHint": "Enter this code on the new device under “Link to a vault”. It works once.",
+      "validFor": "Valid for another {time}",
+      "copy": "Copy code",
+      "copied": "Copied",
+      "cancel": "Cancel",
+      "notMain": "Only a main device can link devices.",
+      "confirmTitle": "“{name}” wants to link",
+      "roleLinked": "Linked device",
+      "roleLinkedDescription": "Reads and writes all data. Does not get the vault’s private key and cannot add or remove devices.",
+      "roleMain": "Main device as well",
+      "roleMainDescription": "Gets the vault’s private key and can link and remove devices itself.",
+      "totalLossWarning": "If a main device is compromised and the passphrase is known, the vault is lost (total loss).",
+      "confirm": "Link",
+      "reject": "Decline",
+      "sending": "Sending the vault to “{name}” …",
+      "done": "“{name}” is now linked to the vault.",
+      "another": "Link another device",
+      "again": "Show a new code",
+      "ended": "The code is no longer valid.",
+      "failed": "Linking failed. No device was added.",
+      "declined": "You declined the link. The code is used up."
     }
   },
   "models": {
@@ -731,7 +797,8 @@
         "setColorScheme": "Set the color scheme"
       },
       "devices": {
-        "list": "List the vault's devices"
+        "list": "List the vault's devices",
+        "link": "Open linking a device"
       }
     },
     "scopes": {

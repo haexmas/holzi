@@ -40,6 +40,7 @@ const LOCATION_PATHS: Record<string, string> = {
   'agents.autonomy': '/agents/autonomy',
   'agents.denyRules': '/agents/deny-rules',
   federation: '/federation',
+  'federation.link': '/federation/devices/link',
 }
 
 function flatKeys(tree: unknown, prefix = ''): Set<string> {
