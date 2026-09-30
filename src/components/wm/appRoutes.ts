@@ -73,6 +73,9 @@ const SETTINGS_VIEWS: Record<string, Component> = {
   'federation.link': defineAsyncComponent(
     () => import('~/components/settings/LinkDeviceView.vue'),
   ),
+  'federation.remove': defineAsyncComponent(
+    () => import('~/components/settings/RemoveDeviceView.vue'),
+  ),
 }
 
 /** The settings routes from the registry: `SettingsApp` as the frame, one flat child per location. */

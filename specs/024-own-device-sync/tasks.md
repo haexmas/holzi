@@ -223,14 +223,14 @@ synchronisieren weiter (quickstart M6, M7, SC-010).
 
 ### Tests für User Story 6
 
-- [ ] T066 [P] [US6] Integrationstest in `src-tauri/tests/sync_link.rs` für US6: Szenarien 1–9 aus spec.md und SC-010; gegenseitiges Entfernen zweier Hauptgeräte offline → auf allen Geräten bleibt dasselbe Hauptgerät (Liste mit kleinerem Hash), das andere ist Solitär
+- [x] T066 [P] [US6] Integrationstest in `src-tauri/tests/sync_link.rs` für US6: Szenarien 1–9 aus spec.md und SC-010; gegenseitiges Entfernen zweier Hauptgeräte offline → auf allen Geräten bleibt dasselbe Hauptgerät (Liste mit kleinerem Hash), das andere ist Solitär
 
 ### Implementierung für User Story 6
 
-- [ ] T067 [US6] `src-tauri/src/sync/removal.rs` + `removal_tests.rs`: in einer `VaultDb::write`-Transaktion Geräteliste Generation+1 ohne das Gerät, mit `limit_hlc` = eigener Fortschrittsstand für dieses Gerät (FR-028), und neue Inhaltsschlüssel-Generation nur an die Verbleibenden (FR-026); sich selbst entfernen verboten; laufende Verbindungen schließen, `MemoryLookup`-Eintrag und `device_presence_no_sync`-Zeile löschen; Geheimnisse nicht verändern; Erweiterungspunkt für Mitgliederlisten (027/028) leer anlegen
-- [ ] T068 [US6] Grenze beim Empfang in `src-tauri/src/sync/inbound.rs`: Gruppen eines entfernten Ursprungs jenseits `limit_hlc` ablehnen, Fortschritt darf darüber hinaus (R5); übrige Geräte übernehmen neue Liste und Generation ohne Zutun (FR-027); Test in `inbound_tests.rs`
-- [ ] T069 [US6] Befehl `device_remove { devicePubkey }` in `src-tauri/src/sync/commands.rs` (nur Hauptgerät, nicht für sich selbst); Aktion `settings.devices.remove` (nicht für Agenten) in `src/lib/actions/settingsActions.ts` und `src/stores/settingsActionHandlers.ts`
-- [ ] T070 [US6] `src/components/settings/RemoveDeviceView.vue` mit Ort `/federation/devices/:devicePubkey/remove` in `src/lib/settings/registry.ts`: Folgen vor der Bestätigung erklären (FR-026), bei Hauptgeräten zusätzlich „hilft nur gegen ein ehrliches Gerät“; Texte de/en in `src/i18n/locales/de.json` und `en.json`
+- [x] T067 [US6] `src-tauri/src/sync/removal.rs` + `removal_tests.rs`: in einer `VaultDb::write`-Transaktion Geräteliste Generation+1 ohne das Gerät, mit `limit_hlc` = eigener Fortschrittsstand für dieses Gerät (FR-028), und neue Inhaltsschlüssel-Generation nur an die Verbleibenden (FR-026); sich selbst entfernen verboten; laufende Verbindungen schließen, `MemoryLookup`-Eintrag und `device_presence_no_sync`-Zeile löschen; Geheimnisse nicht verändern; Erweiterungspunkt für Mitgliederlisten (027/028) leer anlegen
+- [x] T068 [US6] Grenze beim Empfang in `src-tauri/src/sync/inbound.rs`: Gruppen eines entfernten Ursprungs jenseits `limit_hlc` ablehnen, Fortschritt darf darüber hinaus (R5); übrige Geräte übernehmen neue Liste und Generation ohne Zutun (FR-027); Test in `inbound_tests.rs`
+- [x] T069 [US6] Befehl `device_remove { devicePubkey }` in `src-tauri/src/sync/commands.rs` (nur Hauptgerät, nicht für sich selbst); Aktion `settings.devices.remove` (nicht für Agenten) in `src/lib/actions/settingsActions.ts` und `src/stores/settingsActionHandlers.ts`
+- [x] T070 [US6] `src/components/settings/RemoveDeviceView.vue` mit Ort `/federation/devices/:devicePubkey/remove` in `src/lib/settings/registry.ts`: Folgen vor der Bestätigung erklären (FR-026), bei Hauptgeräten zusätzlich „hilft nur gegen ein ehrliches Gerät“; Texte de/en in `src/i18n/locales/de.json` und `en.json`
 
 **Checkpoint**: Entfernen wirkt überall, wo die neue Liste bekannt ist.
 

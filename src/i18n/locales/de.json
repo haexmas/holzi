@@ -449,6 +449,9 @@
           "title": "Gerät verknüpfen",
           "description": "Ein neues Gerät mit einem Code zu dieser Vault hinzufügen.",
           "keywords": "Gerät verknüpfen Code QR hinzufügen koppeln"
+        },
+        "remove": {
+          "title": "Gerät entfernen"
         }
       }
     },
@@ -545,6 +548,20 @@
       "ended": "Der Code ist nicht mehr gültig.",
       "failed": "Das Verknüpfen ist fehlgeschlagen. Es wurde kein Gerät hinzugefügt.",
       "declined": "Du hast das Verknüpfen abgelehnt. Der Code ist verbraucht."
+    },
+    "remove": {
+      "button": "Gerät entfernen",
+      "title": "„{name}“ entfernen",
+      "consequences": "Was das Entfernen bewirkt:",
+      "noNewData": "Das Gerät bekommt keine neuen Daten mehr und kann neue Änderungen nicht mehr lesen.",
+      "staysOnDevice": "Was schon auf dem Gerät ist, bleibt dort. Dagegen schützt nur die Passphrase.",
+      "noRemoteWipe": "Ein Löschen aus der Ferne gibt es nicht.",
+      "linkAgain": "Das Gerät kommt nur zurück, indem du es neu verknüpfst.",
+      "mainWarning": "Das Gerät ist ein Hauptgerät. Entfernen hilft nur gegen ein ehrliches Gerät: Hat jemand das Hauptgerät und kennt die Passphrase, ist die Vault verloren (Totalausfall).",
+      "confirm": "Entfernen",
+      "cancel": "Abbrechen",
+      "missing": "Dieses Gerät gibt es nicht (mehr) in der Vault, oder es ist dieses Gerät selbst. Das lässt sich nicht entfernen.",
+      "notMain": "Nur ein Hauptgerät kann Geräte entfernen."
     }
   },
   "models": {
@@ -836,7 +853,8 @@
       "devices": {
         "list": "Geräte der Vault auflisten",
         "link": "Gerät verknüpfen öffnen",
-        "identity": "Identität der Vault lesen"
+        "identity": "Identität der Vault lesen",
+        "remove": "Gerät aus der Vault entfernen"
       },
       "sync": {
         "servers": {

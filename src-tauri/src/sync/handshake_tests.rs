@@ -129,6 +129,61 @@ async fn a_removed_device_stays_refused() {
     ));
 }
 
+#[tokio::test]
+async fn a_device_refused_as_removed_still_learns_of_its_removal() {
+    let main = Member::genesis();
+    let linked = Member::join(&main);
+    main.add(&linked);
+    linked.device.pull_from(&main.device);
+    let removed = RemovedDevice {
+        device_pubkey: linked.keys.device_pubkey,
+        vault_device_uuid: linked.device.db().device_id(),
+        limit_hlc: "0/0".to_string(),
+        removed_at: 3,
+    };
+    main.issue_list(|mut list| {
+        list.devices
+            .retain(|d| d.device_pubkey != removed.device_pubkey);
+        list.removed.push(removed);
+        list
+    });
+    let knows_removal = |member: &Member| {
+        crate::storage::query::read(member.device.db(), |r| {
+            let valid = device_list::valid_lists(&device_list::load_all(r)?, &member.vault);
+            Ok(device_list::effective(&valid)
+                .is_some_and(|s| s.list.removes(&linked.keys.device_pubkey)))
+        })
+        .expect("read list")
+    };
+    assert!(
+        !knows_removal(&linked),
+        "the linked device has not heard yet"
+    );
+
+    // The linked device dials the main device, which knows and refuses it.
+    let (at_main, at_linked) = run(
+        &main,
+        &linked,
+        main.local(),
+        linked.local(),
+        linked.keys.endpoint_id,
+    )
+    .await;
+
+    assert!(matches!(
+        at_main,
+        Err(HandshakeError::Refused(RejectCode::Removed))
+    ));
+    assert!(matches!(
+        at_linked,
+        Err(HandshakeError::RefusedByPeer(RejectCode::Removed))
+    ));
+    assert!(
+        knows_removal(&linked),
+        "FR-034: the list pushed before the refusal is kept"
+    );
+}
+
 #[test]
 fn a_same_generation_tie_break_loser_does_not_remove_the_winner() {
     // Two main devices, A and B, each remove the other at generation 2 from

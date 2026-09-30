@@ -92,6 +92,19 @@ export const SETTINGS_ACTIONS: readonly ActionDefinition[] = [
     effect: 'write',
   }),
   setting({
+    // Locks a device out of the vault: a guardrail, never callable by agents (FR-036).
+    id: 'settings.devices.remove',
+    description:
+      'Remove a device from the vault (main devices only, never the device itself). It gets no new data and cannot read new changes; what is on it stays.',
+    input: {
+      type: 'object',
+      properties: { devicePubkey: { type: 'string' } },
+      required: ['devicePubkey'],
+    },
+    scope: 'guardrails',
+    effect: 'destructive',
+  }),
+  setting({
     // Opens the view that shows a link code. Linking adds a device to the vault, so it is a
     // guardrail: never callable by agents (spec 024, FR-036).
     id: 'settings.devices.link',

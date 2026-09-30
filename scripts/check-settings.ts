@@ -49,6 +49,7 @@ const LOCATION_PATHS: Record<string, string> = {
   'agents.denyRules': '/agents/deny-rules',
   federation: '/federation',
   'federation.link': '/federation/devices/link',
+  'federation.remove': '/federation/devices/abc123/remove',
 }
 
 function flatKeys(tree: unknown, prefix = ''): Set<string> {

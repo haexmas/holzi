@@ -152,6 +152,12 @@ export const SETTINGS_LOCATIONS: readonly SettingsLocation[] = [
     icon: 'lucide:qr-code',
     row: true,
   }),
+  // Reached from a device's row in the list, never searched for (spec 024, FR-026).
+  subView(
+    'federation.remove',
+    'federation/devices/:devicePubkey/remove',
+    'federation',
+  ),
 ]
 
 /** A `RoutePattern` that also names its location, so `appRoutes.ts` can attach the view. */

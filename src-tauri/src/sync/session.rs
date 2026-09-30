@@ -62,6 +62,10 @@ pub enum SessionError {
     Join(#[from] tokio::task::JoinError),
     #[error("session protocol violation: {0}")]
     Protocol(&'static str),
+    /// The device list this device holds no longer names the peer, or
+    /// removes it (FR-027).
+    #[error("the peer is no longer a device of the vault")]
+    NoLongerListed,
 }
 
 impl SessionError {
@@ -70,6 +74,7 @@ impl SessionError {
             SessionError::Wire(e) => e.code(),
             SessionError::Inbound(_) => ErrorCode::PullFailed,
             SessionError::Protocol(_) => ErrorCode::Protocol,
+            SessionError::NoLongerListed => ErrorCode::Rejected,
             _ => ErrorCode::Closed,
         }
     }
@@ -103,8 +108,8 @@ pub async fn run(
         }
         result = read_progress(&ctx, control_recv, theirs_tx) => result,
         result = send_progress(&ctx, control_send) => result,
-        result = pull_when_behind(&ctx, &connection, theirs_rx) => result,
-        result = serve_pulls(&ctx, &connection) => result,
+        result = pull_when_behind(&ctx, &connection, theirs_rx, &peer) => result,
+        result = serve_pulls(&ctx, &connection, &peer) => result,
     };
     match result {
         Ok(()) => connection.close(ErrorCode::Closed.as_u32().into(), b"closed"),
@@ -177,6 +182,32 @@ async fn send_progress(ctx: &SessionContext, mut send: SendStream) -> Result<(),
     }
 }
 
+/// Ends the session when the effective device list no longer names `peer`
+/// with its endpoint, or removes it. A session is admitted once, at its
+/// handshake; a removal this device learns of later has to reach it too.
+async fn ensure_listed(ctx: &SessionContext, peer: &Peer) -> Result<(), SessionError> {
+    let (replica, vault) = (Arc::clone(&ctx.replica), ctx.vault);
+    let (device, endpoint) = (peer.device_pubkey, peer.endpoint_id);
+    let listed = tokio::task::spawn_blocking(move || {
+        crate::storage::query::read(replica.db(), |r| {
+            let valid = device_list::valid_lists(&device_list::load_all(r)?, &vault);
+            Ok(device_list::effective(&valid).is_some_and(|signed| {
+                !signed.list.removes(&device)
+                    && signed
+                        .list
+                        .device(&device)
+                        .is_some_and(|entry| entry.endpoint_id == endpoint)
+            }))
+        })
+    })
+    .await??;
+    if listed {
+        Ok(())
+    } else {
+        Err(SessionError::NoLongerListed)
+    }
+}
+
 /// What this device knows of when devices were last online, for the peer
 /// (FR-033). Empty when it cannot be read; the next message carries it.
 async fn last_seen_report(ctx: &SessionContext) -> Vec<([u8; 32], u64)> {
@@ -204,6 +235,7 @@ async fn pull_when_behind(
     ctx: &SessionContext,
     connection: &Connection,
     mut theirs: watch::Receiver<Vector>,
+    peer: &Peer,
 ) -> Result<(), SessionError> {
     let mut changed = ctx.changed.clone();
     loop {
@@ -212,6 +244,8 @@ async fn pull_when_behind(
         let own = own_progress(&ctx.replica).await?;
         if progress::has_more(&their_vector, &own) {
             pull(ctx, connection, own).await?;
+            // The pull may have brought a list that removes the peer.
+            ensure_listed(ctx, peer).await?;
             continue;
         }
         tokio::select! {
@@ -300,7 +334,11 @@ async fn pull_pages(
 }
 
 /// Serves the other side's pulls, one at a time.
-async fn serve_pulls(ctx: &SessionContext, connection: &Connection) -> Result<(), SessionError> {
+async fn serve_pulls(
+    ctx: &SessionContext,
+    connection: &Connection,
+    peer: &Peer,
+) -> Result<(), SessionError> {
     loop {
         let (mut send, mut recv) = connection.accept_bi().await?;
         let Message::Pull { vector, replace } = expect_frame(&mut recv, FRAME_LIMIT).await? else {
@@ -309,6 +347,11 @@ async fn serve_pulls(ctx: &SessionContext, connection: &Connection) -> Result<()
         let replica = Arc::clone(&ctx.replica);
         let served =
             tokio::task::spawn_blocking(move || serve(&replica, &vector, replace)).await??;
+        // A session opened before the peer was removed must not go on serving it once this
+        // device knows (FR-027). Checked after the data is read, not before: a removal and the
+        // changes that follow it can be applied between the two, and only a check that comes
+        // last sees every list the served data was read under.
+        ensure_listed(ctx, peer).await?;
         let mut outbox = match served {
             Served::Pages(outbox) => outbox,
             Served::Resync => {

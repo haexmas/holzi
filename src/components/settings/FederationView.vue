@@ -85,6 +85,7 @@ onBeforeUnmount(() => {
         :key="device.vaultDeviceUuid"
         :device="device"
         :now="now"
+        :removable="manages"
       />
     </SettingsGroup>
 

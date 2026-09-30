@@ -15,9 +15,16 @@ import {
 const props = defineProps<{
   device: VaultDevice
   now: number
+  /** A main device may remove any other device (FR-035); never this one (FR-026). */
+  removable?: boolean
 }>()
 
 const { t } = useI18n()
+const router = useTabRouter()
+
+function onRemove() {
+  router.push(`/federation/devices/${props.device.devicePubkey}/remove`)
+}
 
 const status = computed(() => {
   const state = deviceStatus(props.device)
@@ -71,5 +78,13 @@ const status = computed(() => {
     >
       {{ t('settings.federation.status.online') }}
     </span>
+    <UiButton
+      v-if="removable && !device.isCurrent"
+      variant="outline"
+      data-testid="settings-device-remove"
+      @click="onRemove"
+    >
+      {{ t('settings.remove.button') }}
+    </UiButton>
   </SettingsRow>
 </template>
