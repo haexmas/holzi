@@ -49,13 +49,15 @@ ersetzt Rust die `message` durch den festen Text `"The action failed."`.
 ### `action-call-request`
 
 ```text
-{ requestId: Uuid, threadId: Uuid, actionId: string, input: object }
+{ requestId: Uuid, actionId: string, input: object }
 ```
 
-Der globale Listener (`src/plugins/agentActions.client.ts`) führt
+Der globale Listener (`src/composables/useAgentActions.ts`, gestartet von der
+Workspace-Seite, sobald der Tresor offen ist) führt
 `wm.runAction(actionId, input, { kind: 'builtinAgent' })` aus und antwortet mit
 `respond_action_call`. Bleibt die Antwort 60 s aus, bricht Rust mit dem
-Werkzeugfehler `action_timeout` ab.
+Werkzeugfehler `action_timeout` ab. Ein Thread ist nicht Teil der Nutzlast:
+`Tool::execute` kennt ihn nicht, und der Listener braucht ihn nicht.
 
 ### `chat-tool-availability`
 
