@@ -7,9 +7,8 @@
  * the affected window is elsewhere. Compact mode (T050) drops to two
  * columns so each tile stays a comfortable touch target on a narrow
  * screen, instead of three cramped ones. Spec 015-workspace-shell, T023,
- * T041, T050. The last tile locks the vault (it flushes the layout first,
- * FR-027, then closes the instance, which ends the process, spec 013) —
- * the one place to lock now that the chat has no lock button.
+ * T041, T050. The last tile locks the vault (`useVaultLock`) — the one place
+ * to lock now that the chat has no lock button.
  */
 import { WM_APPS } from '~/lib/wm/apps'
 
@@ -19,18 +18,11 @@ const wm = useWindowManagerStore()
 const { t } = useI18n()
 
 const openApp = useAction('wm.app.open')
-const { closeAsync } = useInstance()
+const { lock } = useVaultLock()
 
 function launch(appId: string) {
   void openApp({ appId })
   open.value = false
-}
-
-/** Replaces the page with a spinner and ends the process, so nothing is navigated or cleared here
- * and a failed call has nothing to show. */
-async function lock() {
-  await wm.flushAsync()
-  await closeAsync().catch(() => {})
 }
 </script>
 

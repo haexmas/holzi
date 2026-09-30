@@ -5,8 +5,9 @@ the user sees, how errors read, and how long a secret lives in the interface.
 
 ## Closing the vault (FR-001, FR-002, FR-009)
 
-- The lock control on the chat page and on the federation page calls `closeAsync()` and does nothing
-  else afterwards. The current steps `store.setActiveInstance(null)` and `navigateTo('/')` are
+- The lock control (since 2026-09-30 the last tile of the launcher, `useVaultLock`; before that a
+  button on the chat page and on the federation page) flushes the layout, calls `closeAsync()` and
+  does nothing else afterwards. The current steps `store.setActiveInstance(null)` and `navigateTo('/')` are
   removed, because the backend replaces the page.
 - The frontend keeps **no closing state and shows no overlay** (operator decision 2026-09-21). The
   backend navigates the webview in the same synchronous step that shuts the gate, so the old page,

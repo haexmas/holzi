@@ -583,6 +583,22 @@ den ausgelieferten Apps öffnet ein zweiter Aufruf keine zweite Instanz.
 - **FR-038**: Die Tab-Leiste MUSS für Tastatur und Screenreader als Tab-Liste
   bedienbar sein (Pfeiltasten wechseln zwischen Tabs, Eingabe aktiviert);
   „+“ und Chevron MÜSSEN ohne Maus erreichbar sein.
+- **FR-039** (Nachtrag 2026-09-30): Die Chat-App MUSS ohne eigene Kopfzeile
+  auskommen (kein Titel, keine Modell-Anzeige, keine Knöpfe für Sperren,
+  Einstellungen oder neuen Chat oberhalb des Inhalts). Die Eingabe MUSS immer am
+  unteren Rand des Fensters sitzen. Die Seitenleiste mit „Neuer Chat“ und den
+  Verläufen folgt der Breite des Fensters, nicht der des Bildschirms: ab 42 rem
+  Fensterbreite steht sie neben dem Inhalt, ein Knopf in der Werkzeugzeile
+  blendet sie aus und wieder ein; darunter ist sie ausgeblendet, derselbe Knopf
+  öffnet sie über dem Inhalt, und Auswahl eines Verlaufs, „Neuer Chat“ oder
+  Escape schließen sie wieder. Der Zustand gilt nur für den geöffneten Tab und
+  wird nicht gespeichert. Das Muster entspricht der Einstellungs-App (Spec 023,
+  FR-004).
+- **FR-040** (Nachtrag 2026-09-30): Die Seitenleiste des Chats MUSS nur den
+  Chat-Inhalt tragen (neue Unterhaltung, Verläufe), keine Einstellungen und kein
+  Sperren. Einstellungen öffnet der Launcher als App; das Sperren der Vault ist
+  der letzte Eintrag des Launchers (Spec 013, `useVaultLock`) und damit unabhängig
+  von Fenstergröße und geöffneter App erreichbar.
 
 ### Key Entities
 

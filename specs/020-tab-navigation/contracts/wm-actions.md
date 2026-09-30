@@ -11,8 +11,9 @@ Aktionen; `wm.actions.list` liefert ihn zur Laufzeit). Gegenüber der Liste unte
 kamen `wm.window.setGeometry`, `wm.workspaces.overview`,
 `chat.model.retryLoad`, `chat.model.downloadRecommended`,
 `chat.modelIntegrity.decide` (Leitplanke), `chat.voice.setAutoSend` sowie weitere
-Einstellungsaktionen hinzu. Der Sperren-Knopf bleibt bewusst direkt
-(`action-exempt:`, Spec 013 prüft ihn); eine Aktion `wm.vault.lock` folgt mit
+Einstellungsaktionen hinzu. Der Sperren-Knopf (seit der Chat-Rahmen-Änderung
+der letzte Eintrag des Launchers, Logik in `useVaultLock`) bleibt bewusst direkt
+(Spec 013 prüft ihn); eine Aktion `wm.vault.lock` folgt mit
 der Spec für Tastenkürzel.
 
 Die folgende Liste ist der Mindestumfang. Die endgültige Liste der
