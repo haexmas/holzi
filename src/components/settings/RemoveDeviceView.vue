@@ -29,6 +29,10 @@ const missing = computed(
   () => !store.loading && (!device.value || device.value.isCurrent),
 )
 
+/**
+ * Removes the selected device, ignoring calls while removal is pending.
+ * Returns to the previous view on success or displays the removal error.
+ */
 async function onRemove() {
   if (!device.value || busy.value) return
   busy.value = true
