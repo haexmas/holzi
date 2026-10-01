@@ -452,5 +452,29 @@ Smalltalk-Sätze (0,4). `SELF_TEST_PASS = 0,6` trennt beides; es gibt nur diesen
 Messpunkt (Qwen3 0,6B und 1,7B waren nicht installiert, ein Claude-Modell nicht
 messbar ohne Schlüssel). Der Katalogeintrag von Qwen3-4B trägt `tool_use: supported`.
 
-**Offen**: Ob ein kurzer, für alle Modelle gleicher Systemprompt die Suche anstößt, ist
-nicht gemessen und eine Änderung am Chatverhalten, kein Teil dieser Messung.
+**Offen**: Ob eine kurze Anweisung an das Modell hilft, misst R18.
+
+## R18 — Anweisung zu den Werkzeugen (Systemprompt)
+
+Jeder Zug mit Werkzeugen trägt einen kurzen englischen Text (`chat/tools/prompt.rs`):
+holzi mit den Werkzeugen bedienen, ein Werkzeug aufrufen statt zu beschreiben, mit
+`find_actions` suchen, wenn keines passt, in der Sprache des Nutzers antworten. Derselbe
+Text für jedes Modell; ein Zug ohne Werkzeuge bekommt ihn nicht, ein Zug ohne Suche eine
+Fassung ohne den Suchsatz (Review von #198). Der Messlauf und der Selbsttest senden ihn
+ebenfalls.
+
+Qwen3-4B, gleiche Bedingungen wie R17, mit Anweisung: 20 von 30 (67 %), je 10 von 15 auf
+Deutsch und Englisch, Lesen 7 von 11, Ändern 7 von 13, Smalltalk 6 von 6, `reachRate`
+0,67, `extraSteps` 3, keine unnötigen Aufrufe, Selbsttest-Teilmenge 5 von 5. Der Lauf
+dauerte 768 Sekunden (R17: 464).
+
+**Befund**: Alle 13 Sätze mit Werkzeug im Kernangebot bestehen jetzt (vorher scheiterten
+dort fünf Lesesätze mit Text). Von den 11 Sätzen außerhalb des Kernangebots besteht einer:
+das Modell sucht dreimal, ruft sonst meist ein falsches Kernwerkzeug auf oder antwortet in
+Text, zweimal mit erfundenem Inhalt. Der Suchweg bleibt für ein 4B-Modell unzuverlässig.
+
+**Selbsttest**: `SELF_TEST_PASS = 0,6` bleibt: Qwen3-4B 1,0, ein Modell, das nur redet, 0,4.
+Weiterhin nur ein gemessenes Modell.
+
+**Offen**: die kleineren Qwen3-Modelle, ein Claude-Modell, und wie sich die Suche für kleine
+Modelle zuverlässiger machen lässt (zum Beispiel Treffer sofort im selben Schritt anbieten).

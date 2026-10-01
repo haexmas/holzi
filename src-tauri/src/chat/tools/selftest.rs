@@ -20,8 +20,9 @@ use crate::storage::models as models_store;
 
 /// The share of the self-test sentences a model has to get right to count as able to call tools.
 ///
-/// ponytail: set from one measured model (spec 032 T046). Qwen3-4B passes 4 of the 5 sentences
-/// (0.8), a model that only talks passes the 2 smalltalk ones (0.4), so 0.6 separates the two.
+/// ponytail: set from one measured model (spec 032 T046, research R17/R18). Qwen3-4B passes all 5
+/// sentences with the tool instruction (1.0; 0.8 without it), a model that only talks passes the 2
+/// smalltalk ones (0.4), so 0.6 separates the two.
 /// Ceiling: no weaker model was measured (Qwen3 0.6B and 1.7B were not installed), so a model near
 /// the line may flip between supported and unsupported across a re-install. Upgrade path: measure
 /// the smaller catalog models and move the line to where they fall.
