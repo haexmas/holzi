@@ -136,3 +136,26 @@ fn longest_prefix_overlap_finds_the_longest_match() {
     assert_eq!(longest_prefix_overlap("<tool_call>", "<tool_call>"), 11);
     assert_eq!(longest_prefix_overlap("", "<tool_call>"), 0);
 }
+
+#[test]
+fn a_tool_found_by_the_search_is_forwarded_as_a_mistralrs_function() {
+    let spec = ToolSpec {
+        name: "settings_sync_setEnabled".to_string(),
+        description: "Turn sync on or off".to_string(),
+        input_schema: serde_json::json!({
+            "type": "object",
+            "properties": { "enabled": { "type": "boolean" } },
+        }),
+    };
+    let tool = to_mistralrs_tool(&spec);
+    assert_eq!(tool.function.name, "settings_sync_setEnabled");
+    assert_eq!(
+        tool.function.description.as_deref(),
+        Some("Turn sync on or off")
+    );
+    let parameters = tool
+        .function
+        .parameters
+        .expect("object schema becomes parameters");
+    assert!(parameters.contains_key("properties"));
+}

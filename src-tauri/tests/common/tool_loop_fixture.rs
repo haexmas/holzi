@@ -122,13 +122,24 @@ pub fn seed_thread(db: &Database, thread_id: Uuid, user_message_id: Uuid) {
 /// not a case to handle gracefully.
 pub struct StubAdapter {
     steps: StdMutex<VecDeque<Vec<Result<StreamChunk, StreamError>>>>,
+    requests: Arc<StdMutex<Vec<ChatRequest>>>,
 }
 
 impl StubAdapter {
     pub fn new(steps: Vec<Vec<Result<StreamChunk, StreamError>>>) -> Self {
         Self {
             steps: StdMutex::new(steps.into()),
+            requests: Arc::default(),
         }
+    }
+
+    /// Like `new`, plus a log of every `ChatRequest` the adapter receives, in order.
+    pub fn recording(
+        steps: Vec<Vec<Result<StreamChunk, StreamError>>>,
+    ) -> (Self, Arc<StdMutex<Vec<ChatRequest>>>) {
+        let adapter = Self::new(steps);
+        let log = adapter.requests.clone();
+        (adapter, log)
     }
 
     /// An adapter that always answers with the same tool call, forever —
@@ -152,7 +163,8 @@ impl ProviderAdapter for StubAdapter {
         Ok(Vec::new())
     }
 
-    async fn stream_chat(&self, _req: ChatRequest) -> Result<AdapterStream, AdapterError> {
+    async fn stream_chat(&self, req: ChatRequest) -> Result<AdapterStream, AdapterError> {
+        self.requests.lock().unwrap().push(req);
         let chunks = self
             .steps
             .lock()

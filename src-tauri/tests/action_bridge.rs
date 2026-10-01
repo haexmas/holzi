@@ -16,6 +16,7 @@ use action_fixture::*;
 
 use std::time::Duration;
 
+use holzi_lib::adapters::types::ChatRequest;
 use holzi_lib::adapters::types::ToolCall as LlmToolCall;
 use holzi_lib::adapters::StreamChunk;
 use holzi_lib::chat::session::ChatState;
@@ -64,6 +65,15 @@ struct Turn {
 
 /// Starts a turn in which the stub model calls `calls` (one round), then answers.
 async fn start_turn(chat_state: ChatState, calls: Vec<StreamChunk>) -> Turn {
+    let steps = vec![calls.into_iter().map(Ok).collect(), final_answer()];
+    start_turn_with_steps(chat_state, steps).await.0
+}
+
+/// Starts a turn over scripted `steps` and also returns the requests the model received.
+async fn start_turn_with_steps(
+    chat_state: ChatState,
+    steps: Vec<Vec<Result<StreamChunk, holzi_lib::adapters::StreamError>>>,
+) -> (Turn, Arc<std::sync::Mutex<Vec<ChatRequest>>>) {
     let db = open_db();
     let thread_id = Uuid::new_v4();
     let user_message_id = Uuid::new_v4();
@@ -71,7 +81,7 @@ async fn start_turn(chat_state: ChatState, calls: Vec<StreamChunk>) -> Turn {
     // `Change` and `Safe` run under Auto, which keeps the approval dialog out of these tests.
     set_permission_mode(&db, "auto");
     let chat_state = Arc::new(chat_state);
-    let adapter = StubAdapter::new(vec![calls.into_iter().map(Ok).collect(), final_answer()]);
+    let (adapter, requests) = StubAdapter::recording(steps);
     let session = session_with(adapter).await;
     let mut request = base_request();
     request.tools = core_offer(
@@ -91,12 +101,13 @@ async fn start_turn(chat_state: ChatState, calls: Vec<StreamChunk>) -> Turn {
         request,
         stream,
     );
-    Turn {
+    let turn = Turn {
         chat_state,
         db,
         thread_id,
         handle,
-    }
+    };
+    (turn, requests)
 }
 
 /// Reads the persisted messages for this turn's thread, failing on a storage error.
@@ -337,4 +348,125 @@ async fn the_calls_of_one_round_run_one_after_the_other() {
     );
     (&mut turn.handle).await.unwrap();
     assert_eq!(tool_results(&turn).len(), 2);
+}
+
+fn tool_names(request: &ChatRequest) -> Vec<&str> {
+    request
+        .tools
+        .iter()
+        .map(|tool| tool.name.as_str())
+        .collect()
+}
+
+fn hidden_action(
+    tool_name: &str,
+    action_id: &str,
+) -> holzi_lib::chat::tools::action_tool::AgentActionDef {
+    let mut def = action_def(tool_name, action_id, "read");
+    def.core = false;
+    def.description = format!("hidden action {action_id}");
+    def
+}
+
+fn registry_with_search(chat_state: &ChatState) {
+    register_action(
+        chat_state,
+        action_def("wm_state_get", "wm.state.get", "read"),
+    );
+    register_action(chat_state, hidden_action("shelf_one", "shelf.one"));
+    register_action(chat_state, hidden_action("drawer_two", "drawer.two"));
+    let defs = chat_state.tool_registry.lock().unwrap().action_defs();
+    chat_state.tool_registry.lock().unwrap().register(Arc::new(
+        holzi_lib::chat::tools::find_actions::FindActionsTool::new(defs),
+    ));
+}
+
+fn search_call(id: &str, query: &str) -> StreamChunk {
+    StreamChunk::ToolCalls(vec![LlmToolCall {
+        id: id.to_string(),
+        name: "find_actions".to_string(),
+        input: json!({ "query": query }),
+    }])
+}
+
+#[tokio::test]
+async fn the_first_request_offers_the_same_core_whatever_is_registered() {
+    let chat_state = ChatState::new();
+    registry_with_search(&chat_state);
+    for index in 0..50 {
+        register_action(
+            &chat_state,
+            hidden_action(&format!("extra_{index}"), &format!("extra.item{index}")),
+        );
+    }
+    let (mut turn, requests) = start_turn_with_steps(chat_state, vec![final_answer()]).await;
+    (&mut turn.handle).await.unwrap();
+    let first = requests.lock().unwrap()[0].clone();
+    let mut names = tool_names(&first);
+    names.sort_unstable();
+    // `run_command` is not an action: it stays offered, outside the action limit.
+    assert_eq!(names, ["find_actions", "run_command", "wm_state_get"]);
+}
+
+#[tokio::test]
+async fn what_find_actions_finds_is_offered_next_and_a_later_search_replaces_it() {
+    let chat_state = ChatState::new();
+    registry_with_search(&chat_state);
+    let mut events = attach_action_events(&chat_state);
+    let steps = vec![
+        vec![Ok(search_call("call-1", "shelf"))],
+        vec![Ok(tool_call("call-2", "shelf_one"))],
+        vec![Ok(search_call("call-3", "drawer"))],
+        final_answer(),
+    ];
+    let (mut turn, requests) = start_turn_with_steps(chat_state, steps).await;
+
+    // The found tool runs: the frontend sees its call.
+    let payload = next_call(&mut events).await;
+    assert_eq!(payload["actionId"], "shelf.one");
+    answer(
+        &turn.chat_state,
+        &payload,
+        ActionReply::Ok { result: json!({}) },
+    );
+    (&mut turn.handle).await.unwrap();
+
+    let requests = requests.lock().unwrap();
+    assert_eq!(requests.len(), 4);
+    assert!(!tool_names(&requests[0]).contains(&"shelf_one"));
+    assert!(tool_names(&requests[1]).contains(&"shelf_one"));
+    assert!(!tool_names(&requests[1]).contains(&"drawer_two"));
+    assert!(tool_names(&requests[3]).contains(&"drawer_two"));
+    assert!(!tool_names(&requests[3]).contains(&"shelf_one"));
+}
+
+#[tokio::test]
+async fn a_search_in_the_same_round_as_another_tool_still_extends_the_offer() {
+    let chat_state = ChatState::new();
+    registry_with_search(&chat_state);
+    let mut events = attach_action_events(&chat_state);
+    let round = StreamChunk::ToolCalls(vec![
+        LlmToolCall {
+            id: "call-1".into(),
+            name: "find_actions".into(),
+            input: json!({ "query": "shelf" }),
+        },
+        LlmToolCall {
+            id: "call-2".into(),
+            name: "wm_state_get".into(),
+            input: json!({}),
+        },
+    ]);
+    let steps = vec![vec![Ok(round)], final_answer()];
+    let (mut turn, requests) = start_turn_with_steps(chat_state, steps).await;
+    let payload = next_call(&mut events).await;
+    answer(
+        &turn.chat_state,
+        &payload,
+        ActionReply::Ok {
+            result: json!({"windows": []}),
+        },
+    );
+    (&mut turn.handle).await.unwrap();
+    assert!(tool_names(&requests.lock().unwrap()[1]).contains(&"shelf_one"));
 }
