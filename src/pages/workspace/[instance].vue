@@ -97,10 +97,13 @@ onMounted(async () => {
     })
 
   // Spec 032 (ADR-0006): offer the actions to the built-in agent. Started once per vault session,
-  // like the sync listener; without it the chat simply has no holzi tools.
-  void agentActions.startAsync().catch((error: unknown) => {
+  // like the sync listener; without it the chat simply has no holzi tools. Wait for the initial
+  // registration so the first chat turn cannot race the action list being installed in Rust.
+  try {
+    await agentActions.startAsync()
+  } catch (error: unknown) {
     console.error('[agent] offering the actions to the model failed', error)
-  })
+  }
 
   sessionRestored.value = true
 })

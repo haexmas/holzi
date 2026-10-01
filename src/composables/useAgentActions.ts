@@ -15,7 +15,9 @@ interface ActionCallRequest {
   input: Record<string, unknown>
 }
 
-let started = false
+let listener: Promise<void> | null = null
+let startup: Promise<void> | null = null
+let localeWatchStarted = false
 
 /**
  * The built-in agent's access to the actions (spec 032, ADR-0006). Pushes the definitions the
@@ -62,20 +64,41 @@ export function useAgentActions() {
   }
 
   /** Installs the listener once, publishes the catalog, and refreshes it on language changes. */
-  async function startAsync(): Promise<void> {
-    if (started) return
-    started = true
-    await listen<ActionCallRequest>('action-call-request', (event) => {
-      void runCallAsync(event.payload).catch((error: unknown) => {
-        console.error('[agent] answering an action call failed', error)
-      })
+  function startAsync(): Promise<void> {
+    if (startup) return startup
+
+    const pending = (async () => {
+      listener ??= listen<ActionCallRequest>('action-call-request', (event) => {
+        void runCallAsync(event.payload).catch((error: unknown) => {
+          console.error('[agent] answering an action call failed', error)
+        })
+      }).then(
+        () => {},
+        (error: unknown) => {
+          listener = null
+          throw error
+        },
+      )
+      await listener
+      await pushDefinitionsAsync()
+      if (!localeWatchStarted) {
+        localeWatchStarted = true
+        watch(locale, () => {
+          void pushDefinitionsAsync().catch((error: unknown) => {
+            console.error(
+              '[agent] updating the action definitions failed',
+              error,
+            )
+          })
+        })
+      }
+    })()
+
+    startup = pending
+    void pending.catch(() => {
+      if (startup === pending) startup = null
     })
-    await pushDefinitionsAsync()
-    watch(locale, () => {
-      void pushDefinitionsAsync().catch((error: unknown) => {
-        console.error('[agent] updating the action definitions failed', error)
-      })
-    })
+    return pending
   }
 
   return { startAsync }

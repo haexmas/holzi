@@ -18,6 +18,7 @@ use crate::chat::events::{
     EVENT_TOOL_PERMISSION_REQUEST,
 };
 use crate::chat::session::ChatState;
+use crate::chat::tools::offer::{extend_offer, found_tools};
 use crate::chat::tools::permission::{self, PermissionMode};
 use crate::chat::tools::{ApprovalDecision, Tool, ToolResult as ToolExecResult};
 use crate::storage::chat_messages::{ChatMessage, FinishReason, MessageRole};
@@ -172,6 +173,13 @@ impl TurnRunner<'_> {
     async fn plan_calls(&mut self, tool_calls: Vec<LlmToolCall>) -> Vec<(LlmToolCall, ToolPlan)> {
         let mut plans: Vec<(LlmToolCall, ToolPlan)> = Vec::with_capacity(tool_calls.len());
         for call in tool_calls {
+            // The registry is the execution safety net, not the model's offer.
+            // A provider must not be able to call a non-core action it was
+            // never given in this request by merely guessing its name.
+            if !self.request.tools.iter().any(|tool| tool.name == call.name) {
+                plans.push((call, ToolPlan::Unknown));
+                continue;
+            }
             let tool = {
                 let registry = self
                     .chat_state
@@ -388,6 +396,14 @@ impl TurnRunner<'_> {
     /// message followed by one tool-result message, not call/result pairs
     /// per call.
     fn append_round_to_request(&mut self, executed: &[ExecutedCall]) {
+        let search_result = executed
+            .iter()
+            .rev()
+            .find(|(_, result, _)| result.content.starts_with('{') && !result.is_error)
+            .and_then(|(call, result, _)| {
+                (call.name == crate::chat::tools::offer::FIND_ACTIONS_TOOL_NAME)
+                    .then(|| found_tools(&result.content))
+            });
         for (call, _, _) in executed {
             self.request.messages.push(LlmMessage {
                 role: ChatRole::ToolCall {
@@ -409,6 +425,15 @@ impl TurnRunner<'_> {
                 attachments: Vec::new(),
                 content: String::new(),
             });
+        }
+        if let Some(found) = search_result {
+            let defs = self
+                .chat_state
+                .tool_registry
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .action_defs();
+            extend_offer(&mut self.request.tools, &found, &defs);
         }
     }
 

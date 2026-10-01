@@ -22,6 +22,7 @@ use holzi_lib::chat::session::ChatState;
 use holzi_lib::chat::tools::action_bridge::{
     ActionBridge, ActionOutcomeWire, ActionReply, ACTION_FAILED_MESSAGE, EVENT_ACTION_CALL_REQUEST,
 };
+use holzi_lib::chat::tools::offer::core_offer;
 use holzi_lib::storage::chat_messages::{self as msg_store, ChatMessage, MessageRole};
 use holzi_lib::storage::query;
 use serde_json::{json, Value};
@@ -72,7 +73,13 @@ async fn start_turn(chat_state: ChatState, calls: Vec<StreamChunk>) -> Turn {
     let chat_state = Arc::new(chat_state);
     let adapter = StubAdapter::new(vec![calls.into_iter().map(Ok).collect(), final_answer()]);
     let session = session_with(adapter).await;
-    let request = base_request();
+    let mut request = base_request();
+    request.tools = core_offer(
+        &chat_state
+            .tool_registry
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()),
+    );
     let stream = session.adapter.stream_chat(request.clone()).await.unwrap();
     let (handle, _events) = spawn_turn(
         db.clone(),
@@ -148,6 +155,24 @@ async fn an_action_call_round_trips_and_persists_with_the_source_action() {
     let result = &tool_results(&turn)[0];
     assert_eq!(result.tool_is_error, Some(false));
     assert!(result.content.contains("windows"), "{}", result.content);
+}
+
+#[tokio::test]
+async fn an_action_not_in_the_current_offer_is_not_executed() {
+    let chat_state = ChatState::new();
+    let mut hidden = action_def("hidden_action", "hidden.action", "read");
+    hidden.core = false;
+    register_action(&chat_state, hidden);
+    let mut events = attach_action_events(&chat_state);
+    let mut turn = start_turn(chat_state, vec![tool_call("call-1", "hidden_action")]).await;
+    (&mut turn.handle).await.unwrap();
+
+    assert!(
+        events.try_recv().is_err(),
+        "an unoffered action must not reach the frontend bridge"
+    );
+    let result = &tool_results(&turn)[0];
+    assert!(result.content.contains("unknown tool: hidden_action"));
 }
 
 #[tokio::test]

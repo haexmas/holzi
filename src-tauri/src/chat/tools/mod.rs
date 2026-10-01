@@ -15,9 +15,13 @@ mod action_tool_tests;
 pub mod cli;
 #[cfg(test)]
 mod cli_tests;
+pub mod find_actions;
 pub mod mcp;
 #[cfg(test)]
 mod mcp_tests;
+pub mod offer;
+#[cfg(test)]
+mod offer_tests;
 pub mod permission;
 #[cfg(test)]
 mod permission_tests;
@@ -84,6 +88,12 @@ pub trait Tool: Send + Sync {
     /// §1/§2 — both are JSON-Schema-shaped).
     fn input_schema(&self) -> Value;
     fn risk_class(&self) -> RiskClass;
+    /// Returns the frontend definition when this tool is a built-in action.
+    /// Other tool sources leave it absent so offer construction can preserve
+    /// them without downcasting trait objects.
+    fn action_definition(&self) -> Option<&action_tool::AgentActionDef> {
+        None
+    }
     /// `cancel` fires when `abort_current_generation` cancels the turn
     /// this call belongs to (T032). Implementations that own a cancellable
     /// resource (a child process, an MCP request) MUST race it against
@@ -140,6 +150,13 @@ impl ToolRegistry {
 
     pub fn iter(&self) -> impl Iterator<Item = &Arc<dyn Tool>> {
         self.tools.iter()
+    }
+
+    pub fn action_defs(&self) -> Vec<action_tool::AgentActionDef> {
+        self.tools
+            .iter()
+            .filter_map(|tool| tool.action_definition().cloned())
+            .collect()
     }
 }
 

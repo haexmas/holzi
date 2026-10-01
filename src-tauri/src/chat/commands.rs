@@ -30,7 +30,8 @@ use uuid::Uuid;
 
 use crate::adapters::cli_delegate::autonomy::AutonomyMode;
 use crate::adapters::types::{ChatMessage as LlmMessage, ChatRequest, ChatRole, ToolSpec};
-use crate::chat::tools::{ApprovalDecision, ToolRegistry};
+use crate::chat::tools::offer::core_offer;
+use crate::chat::tools::ApprovalDecision;
 use crate::error::{HolziError, Result};
 use crate::model_capabilities::ModelCapabilities;
 use crate::state::AppState;
@@ -180,19 +181,6 @@ fn history_to_messages(history: &[ChatMessage]) -> Vec<LlmMessage> {
                 attachments: Vec::new(),
                 content: String::new(),
             }),
-        })
-        .collect()
-}
-
-/// Builds the `ToolSpec` list offered to the model this step from every
-/// tool currently in the registry.
-fn tool_specs(registry: &ToolRegistry) -> Vec<ToolSpec> {
-    registry
-        .iter()
-        .map(|t| ToolSpec {
-            name: t.name().to_string(),
-            description: t.description().to_string(),
-            input_schema: t.input_schema(),
         })
         .collect()
 }
@@ -441,7 +429,7 @@ pub async fn send_message(
             .map_err(|e| HolziError::CrdtInit {
                 reason: format!("chat.tool_registry mutex poisoned: {e}"),
             })?;
-        tool_specs(&registry)
+        core_offer(&registry)
     };
     let reasoning_requested =
         reasoning_requested_for(model_capabilities.as_ref(), &request_model_id, &tools);

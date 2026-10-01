@@ -106,6 +106,10 @@ impl Tool for ActionTool {
         self.def.effect.risk_class()
     }
 
+    fn action_definition(&self) -> Option<&AgentActionDef> {
+        Some(&self.def)
+    }
+
     /// Dispatches through the bridge and converts its reply into model-visible tool content.
     async fn execute(&self, input: Value, cancel: CancellationToken) -> ToolResult {
         into_tool_result(self.bridge.call(&self.def.action_id, input, &cancel).await)

@@ -14,6 +14,7 @@ use super::tools::action_bridge::ActionOutcomeWire;
 use super::tools::action_tool::{
     is_valid_tool_name, schema_in_subset, ActionTool, AgentActionDef, ACTION_SOURCE,
 };
+use super::tools::find_actions::{FindActionsTool, FIND_ACTIONS_TOOL_NAME};
 use crate::error::{HolziError, Result};
 
 #[derive(Debug, Deserialize)]
@@ -50,6 +51,11 @@ pub fn register_agent_actions(chat: &ChatState, actions: Vec<AgentActionDef>) ->
                 reason: format!("duplicate tool name: {}", def.tool_name),
             });
         }
+        if def.tool_name == FIND_ACTIONS_TOOL_NAME {
+            return Err(HolziError::InvalidInput {
+                reason: format!("reserved tool name: {}", def.tool_name),
+            });
+        }
         if !schema_in_subset(&def.input_schema) {
             return Err(HolziError::InvalidInput {
                 reason: format!(
@@ -65,8 +71,12 @@ pub fn register_agent_actions(chat: &ChatState, actions: Vec<AgentActionDef>) ->
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     registry.remove_source(ACTION_SOURCE);
+    let search_defs = actions.clone();
     for def in actions {
         registry.register(Arc::new(ActionTool::new(def, chat.action_bridge.clone())));
+    }
+    if !search_defs.is_empty() {
+        registry.register(Arc::new(FindActionsTool::new(search_defs)));
     }
     Ok(count)
 }
