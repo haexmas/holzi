@@ -5,6 +5,6 @@
  */
 export type VaultPublicIdentity = {
 /**
- * Nostr `npub` form, the address others invite the vault at.
+ * Nostr `npub` form, naming the vault in member lists and rights; not an invitation address.
  */
 npub: string, hex: string, };

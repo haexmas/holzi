@@ -521,7 +521,7 @@
       "mainOnly": "Geräte werden nur auf einem Hauptgerät verknüpft, aufgenommen und entfernt.",
       "identityLabel": "Vault-Identität",
       "identityTitle": "Öffentlicher Schlüssel",
-      "identityDescription": "Unter dieser Adresse laden andere die Vault in Spaces und Datenfreigaben ein. Sie lässt sich kopieren, nicht ändern.",
+      "identityDescription": "Benennt diese Vault in Mitgliederlisten und Rechten von Spaces und Datenfreigaben. Sie lässt sich kopieren, nicht ändern.",
       "identityCopy": "Kopieren",
       "identityCopied": "Kopiert",
       "servers": {

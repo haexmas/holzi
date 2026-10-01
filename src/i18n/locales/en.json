@@ -521,7 +521,7 @@
       "mainOnly": "Devices are only linked, admitted and removed on a main device.",
       "identityLabel": "Vault identity",
       "identityTitle": "Public key",
-      "identityDescription": "Others invite the vault at this address in spaces and shares. It can be copied, not changed.",
+      "identityDescription": "Names this vault in member lists and rights of spaces and shares. It can be copied, not changed.",
       "identityCopy": "Copy",
       "identityCopied": "Copied",
       "servers": {

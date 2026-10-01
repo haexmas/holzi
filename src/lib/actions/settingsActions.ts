@@ -70,7 +70,7 @@ export const SETTINGS_ACTIONS: readonly ActionDefinition[] = [
   setting({
     id: 'settings.devices.identity',
     description:
-      "The vault's public identity: its public key as npub and hex, the address others invite the vault at. Never a private key.",
+      "The vault's public identity: its public key as npub and hex, which names the vault in member lists and rights. Never a private key.",
     result: {
       type: 'object',
       properties: { npub: { type: 'string' }, hex: { type: 'string' } },

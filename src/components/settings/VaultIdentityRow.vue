@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
- * The vault's public identity (spec 024, FR-046): the key others invite the vault at in spaces and
- * shares, as `npub`. It can be copied and not changed; the private key is shown nowhere (FR-002).
+ * The vault's public identity (spec 024, FR-046): the key that names the vault in member lists and
+ * rights of spaces and shares, as `npub`; not an address to invite the vault at. It can be copied
+ * and not changed; the private key is shown nowhere (FR-002).
  */
 import type { VaultPublicIdentity } from '@bindings/VaultPublicIdentity'
 
