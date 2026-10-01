@@ -568,33 +568,30 @@ pub async fn list_installed_models(
 ) -> Result<Vec<InstalledModelPayload>> {
     let db = active_database(&state)?;
 
-    // Enumerate the models root. A missing root means "nothing
-    // installed", not an error — fresh installs never open this dir.
-    let models_root = paths::models_root(&app)?;
-    let slug_dirs = scan_installed_slug_dirs(&models_root)?;
-
-    // Resolve canonical files on the async runtime's blocking pool so
-    // syscalls do not hold the executor. Per-slug tolerance: a slug
+    // Resolve the models root and canonical files on the async runtime's
+    // blocking pool so all filesystem syscalls stay off the executor.
+    // Per-slug tolerance: a slug
     // whose resolver errors (e.g. `canonical_model_file` ambiguity from
     // two finalised GGUFs under one slug — see `paths::canonical_model_file`)
     // is skipped so a single broken slug does not make the whole
     // installed-model list unusable. Same shape as `resolve_default_model`
     // which already skips such slugs via `if let Ok(Some(_))`.
     let app_for_scan = app.clone();
-    let scan_slugs = slug_dirs.clone();
     let canonical_files = tauri::async_runtime::spawn_blocking(move || {
+        let models_root = paths::models_root(&app_for_scan)?;
+        let slug_dirs = scan_installed_slug_dirs(&models_root)?;
         let mut resolved: Vec<(String, paths::CanonicalModelFile)> = Vec::new();
-        for slug in scan_slugs {
+        for slug in slug_dirs {
             if let Ok(Some(cf)) = paths::canonical_model_file(&app_for_scan, &slug) {
                 resolved.push((slug, cf));
             }
         }
-        resolved
+        Ok::<_, HolziError>(resolved)
     })
     .await
     .map_err(|e| HolziError::CrdtInit {
         reason: format!("list_installed_models scan join: {e}"),
-    })?;
+    })??;
 
     let payload = db
         .read(move |r| {
