@@ -148,22 +148,24 @@ hat (etwa nach dem Wiederherstellen einer älteren Kopie). Fehlt ein Ursprung, g
 
 ### `pending_links_no_sync` (neu, gerätelokal)
 
-| Spalte               | Typ         | Regeln                                                         |
-| -------------------- | ----------- | -------------------------------------------------------------- |
-| `link_id`            | BLOB(32) PK | zufällige Kennung des Verknüpfungsvorgangs                     |
-| `peer_device_pubkey` | BLOB(32)    | Gerät der Gegenseite                                           |
-| `new_list_hash`      | BLOB(32)    | noch nicht veröffentlichte neue Geräteliste                    |
-| `new_list_payload`   | BLOB        | vollständige kanonische Geräteliste                            |
-| `new_list_signature` | BLOB(64)    | Signatur der neuen Liste                                       |
-| `role`               | TEXT        | `main` \| `linked`                                             |
-| `resume_secret`      | BLOB(32)    | lokales Sitzungsgeheimnis für `LinkResume`, nie synchronisiert |
-| `state`              | TEXT        | `transferring` \| `awaiting_publication` \| `completed`        |
-| `created_at`         | INTEGER     | ms; nach 24 h ohne Abschluss wird der Datensatz gelöscht       |
+| Spalte               | Typ         | Regeln                                                                                            |
+| -------------------- | ----------- | ------------------------------------------------------------------------------------------------- |
+| `link_id`            | BLOB(32) PK | zufällige Kennung des Verknüpfungsvorgangs                                                        |
+| `peer_device_pubkey` | BLOB(32)    | Gerät der Gegenseite                                                                              |
+| `new_list_hash`      | BLOB(32)    | noch nicht veröffentlichte neue Geräteliste                                                       |
+| `new_list_payload`   | BLOB        | vollständige kanonische Geräteliste                                                               |
+| `new_list_signature` | BLOB(64)    | Signatur der neuen Liste                                                                          |
+| `role`               | TEXT        | `main` \| `linked`                                                                                |
+| `resume_secret`      | BLOB(32)    | reserviertes lokales Sitzungsgeheimnis für eine nicht umgesetzte `LinkResume`, nie synchronisiert |
+| `state`              | TEXT        | `transferring` \| `awaiting_publication` \| `completed`                                           |
+| `created_at`         | INTEGER     | ms; nach 24 h ohne Abschluss wird der Datensatz gelöscht                                          |
 
 H legt den Datensatz vor `LinkTransfer` an und löscht ihn erst nach dem idempotenten Commit der
 neuen Geräteliste. N legt ihn vor `LinkDone` an und behält ihn, bis die neue Liste eingetroffen ist.
-Ein Neustart kann damit die Veröffentlichung ohne den verbrauchten Einmalcode wiederholen. Bricht
-die Nutzerin das Verknüpfen ab oder ist der Datensatz älter als 24 h, wird er gelöscht (R20).
+Ein Neustart kann damit die Veröffentlichung ohne den verbrauchten Einmalcode wiederholen. Eine
+Netz-Wiederaufnahme mit `LinkResume` ist nicht umgesetzt; ein gespeicherter Transfer findet den
+Host stattdessen über die gewöhnliche Gerätelisten-Synchronisation. Bricht die Nutzerin das
+Verknüpfen ab oder ist der Datensatz älter als 24 h, wird er gelöscht (R20).
 
 ### `admission_requests` (neu, synchronisiert)
 

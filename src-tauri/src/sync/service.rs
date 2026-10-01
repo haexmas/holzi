@@ -285,6 +285,7 @@ fn applied_event_sink<R: Runtime>(
                 .unwrap_or(0);
             tokio::spawn(async move {
                 match tokio::task::spawn_blocking(move || {
+                    crate::sync::link::host::drop_listed(&replica, vault)?;
                     crate::sync::link::join::finish_pending_after_host_publication(
                         &replica, &keys, vault, now,
                     )

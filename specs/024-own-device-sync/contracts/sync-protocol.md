@@ -137,14 +137,11 @@ lp(endpoint_n) ‖ lp(device_h) ‖ lp(device_n) ‖ rolle_x)`, `rolle_x` ∈ {`
   `transferring` an. N speichert `link_id` und den Zustand `awaiting_publication`, bevor es
   `Done` sendet. Beide Seiten behalten dafür das aus dem einmal verwendeten Code abgeleitete
   Link-Sitzungsgeheimnis; der Code selbst muss nicht erneut vorgelegt werden.
-- Nach einem Abbruch oder Neustart darf H mit `Resume { link_id, state, mac }` die offene Sitzung
-  wiederaufnehmen. N bestätigt dabei ein bereits angewendetes `Transfer` erneut mit
-  `Done`; die MAC wird über `"holzi-link-resume/v1" ‖ lp(link_id) ‖ lp(state)` mit dem
-  Link-Sitzungsgeheimnis gebildet. H veröffentlicht den gespeicherten Gerätelistensatz in einer
-  idempotenten Einfügeoperation, markiert `pending_link` als abgeschlossen und löscht ihn erst
-  danach. Ein erneutes `Done` wiederholt nur diese Veröffentlichung und überträgt weder Snapshot
-  noch private Daten. So ist die Veröffentlichung auch nach einem Absturz zwischen `Done` und
-  dem ersten Listen-Commit möglich, ohne den verbrauchten Code erneut zu verwenden.
+- Eine Netz-Wiederaufnahme mit `Resume { link_id, state, mac }` ist in dieser Implementierung nicht
+  umgesetzt. `Resume` und das zugehörige Sitzungsgeheimnis bleiben für eine spätere Protokollversion
+  reserviert. Ein Absturz zwischen `Done` und dem ersten Listen-Commit wird stattdessen beim Öffnen
+  durch `finish_pending` idempotent abgeschlossen; der verbrauchte Code muss dafür nicht erneut
+  vorgelegt werden.
 - `snapshot` sind `Page`s wie in Abschnitt 2 mit dem Stand „nichts“ für jeden Ursprung: alle Zellen
   des Bereichs „Vault“ mit ihren ursprünglichen HLCs, samt Lösch-Log, ohne gerätelokale Tabellen.
   `progress` ist der Fortschrittsstand von H nach der letzten vollständig angewendeten
@@ -153,11 +150,14 @@ lp(endpoint_n) ‖ lp(device_h) ‖ lp(device_n) ‖ rolle_x)`, `rolle_x` ∈ {`
   `envelopes_for_n` sind dabei nur der initiale
   Link-Transfer; im anschließenden gewöhnlichen Sync laufen diese Zeilen ausschließlich über
   `Pull`/`Page`.
-- Bricht die Verbindung vor `Done` ab, löscht N die angelegte Vault; H verwirft den offenen
-  `pending_link`-Datensatz nur nach einem ausdrücklich authentifizierten Abbruch. Ein bloßer
-  Verbindungsabbruch lässt ihn für `Resume` bestehen, falls N `Done` bereits dauerhaft
-  gespeichert hat. Nach einem bestätigten
-  `Done` bleibt N bis zur beobachteten neuen Geräteliste im Zustand `awaiting_publication` und
-  wiederholt `Done` bei einer Wiederaufnahme.
+- Bricht die Verbindung ab, bevor N den vollständigen Transfer gespeichert hat, ist der Link nicht
+  abgeschlossen. Hat N dagegen alles gespeichert und kommt `Done` nicht bei H an, bleibt N
+  verknüpft (die Vault bleibt in `awaiting_publication`), und H behält seinen Datensatz im Zustand
+  `transferring`; H veröffentlicht nichts. Die beiden finden sich, sobald beide online sind, über
+  die gewöhnliche Begegnung: N trägt die Liste mit sich, die H nicht hat (höhere `list_generation`
+  in der Präsenz, Kandidat, einmal anwählen, R7), genau wie eine Kopie, die sich selbst aufgenommen
+  hat (FR-007). Sobald das neue Gerät auf Hs wirksamer Liste steht, löscht H den Datensatz
+  (`host::drop_listed`); sonst nach 24 Stunden. Liegt der Datensatz schon in
+  `awaiting_publication`, veröffentlicht H ihn beim Öffnen wie beschrieben.
 - `vault_secret` wird nur bei gewählter Hauptgerät-Rolle gesendet und nur auf dieser Verbindung
   (FR-038).
