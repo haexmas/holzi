@@ -327,11 +327,11 @@ pub(super) async fn spawn_codex_app_server(
     let tmp = TempDir::new().map_err(|error| AdapterError::Http {
         reason: format!("failed to create temp dir for codex invocation: {error}"),
     })?;
-    std::fs::write(tmp.path().join("auth.json"), &credentials).map_err(|error| {
-        AdapterError::Http {
+    tokio::fs::write(tmp.path().join("auth.json"), &credentials)
+        .await
+        .map_err(|error| AdapterError::Http {
             reason: format!("failed to write codex auth.json: {error}"),
-        }
-    })?;
+        })?;
 
     let mut command = build_command(&binary, &tmp);
     configure_process_group(&mut command);

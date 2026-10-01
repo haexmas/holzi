@@ -340,14 +340,14 @@ pub(super) async fn spawn_claude_invocation(
         for attachment in &message.attachments {
             let sandbox_name = format!("attachment-{attachment_index}-{}", attachment.name);
             attachment_index += 1;
-            std::fs::write(tmp.path().join(&sandbox_name), &attachment.bytes).map_err(|error| {
-                AdapterError::Http {
+            tokio::fs::write(tmp.path().join(&sandbox_name), &attachment.bytes)
+                .await
+                .map_err(|error| AdapterError::Http {
                     reason: format!(
                         "failed to write attachment {} for claude invocation: {error}",
                         attachment.name
                     ),
-                }
-            })?;
+                })?;
         }
     }
     let system_prompt_path = req.system_prompt.as_deref().map(|system_prompt| {
@@ -355,9 +355,11 @@ pub(super) async fn spawn_claude_invocation(
         (path, system_prompt)
     });
     if let Some((path, system_prompt)) = &system_prompt_path {
-        std::fs::write(path, system_prompt).map_err(|error| AdapterError::Http {
-            reason: format!("failed to write Claude system prompt: {error}"),
-        })?;
+        tokio::fs::write(path, system_prompt)
+            .await
+            .map_err(|error| AdapterError::Http {
+                reason: format!("failed to write Claude system prompt: {error}"),
+            })?;
     }
     let autonomy_mode = req.autonomy_mode;
     // `Ungated` never needs a bridge process at all — Claude is told to
@@ -390,12 +392,13 @@ pub(super) async fn spawn_claude_invocation(
                 }
             }
         });
-        std::fs::write(
+        tokio::fs::write(
             &mcp_config_path,
             serde_json::to_vec(&mcp_config).map_err(|error| AdapterError::Http {
                 reason: format!("failed to serialize Claude MCP config: {error}"),
             })?,
         )
+        .await
         .map_err(|error| AdapterError::Http {
             reason: format!("failed to write Claude MCP config: {error}"),
         })?;
