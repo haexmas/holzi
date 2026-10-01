@@ -4,6 +4,7 @@ import {
   createHandlerRegistry,
   type ActionHandler,
 } from '~/lib/actions/handlers'
+import { tabCandidates } from '~/lib/actions/handlers'
 import { createActionRunner } from '~/lib/actions/runner'
 import type { ActionCaller, ActionOutcome } from '~/lib/actions/types'
 import type { TabHistory, TabLocation } from '~/lib/wm/navigation'
@@ -129,13 +130,19 @@ export function createWmNavigation(deps: {
       if (target === 'window') return state.windows.some((w) => w.id === id)
       return state.windows.some((w) => w.tabs.some((t) => t.id === id))
     },
-    awaitTabHandler: (appId, actionId, timeoutMs) => {
-      // A mounted instance answers directly; otherwise open/activate the app (which also mounts a
-      // lazily mounted tab) and wait for it to register.
-      const ready = handlers.findTab(tabIdsOf(appId), actionId)
+    awaitTabHandler: (appId, actionId, timeoutMs, originTabId) => {
+      // UI actions carry their originating tab so a second instance of the same app cannot answer
+      // on its behalf. Calls without an origin keep the global app activation behavior for agents
+      // and other non-tab UI callers.
+      const active = state.windows.find((w) => w.id === state.activeWindowId)
+      const activeTab = active?.tabs.find((t) => t.id === active.activeTabId)
+      const candidateTabIds = originTabId
+        ? [originTabId]
+        : tabCandidates(appId, activeTab, tabIdsOf(appId))
+      const ready = handlers.findTab(candidateTabIds, actionId)
       if (ready) return Promise.resolve(ready)
-      deps.openApp(appId)
-      return handlers.awaitTab(tabIdsOf(appId), actionId, timeoutMs)
+      if (!originTabId) deps.openApp(appId)
+      return handlers.awaitTab(candidateTabIds, actionId, timeoutMs)
     },
   })
 
@@ -143,8 +150,9 @@ export function createWmNavigation(deps: {
     id: string,
     input: Record<string, unknown> = {},
     caller: ActionCaller = { kind: 'user' },
+    originTabId?: string,
   ): Promise<ActionOutcome> {
-    return runner.runAction(id, input, caller)
+    return runner.runAction(id, input, caller, originTabId)
   }
 
   function registerGlobalActionHandler(id: string, handler: ActionHandler) {

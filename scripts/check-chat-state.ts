@@ -462,6 +462,45 @@ test('completion clears approvals queued on a background conversation', async ()
   assert.deepEqual(state.pendingApprovals.value, [])
 })
 
+test('a slower thread selection cannot restore approvals after a newer selection', async () => {
+  let resolveB!: (messages: unknown[]) => void
+  const state = createChatState({
+    listMessagesAsync: async (threadId: string) => {
+      if (threadId === 'b')
+        return new Promise((resolve) => {
+          resolveB = resolve
+        })
+      return []
+    },
+  })
+  state.activeThreadId.value = 'a'
+  state.pendingApprovals.value = [
+    {
+      requestId: 'approval-a',
+      toolName: 'run_command',
+      toolInput: {},
+      riskClass: 'change',
+    },
+  ]
+
+  const selectingB = state.selectThread('b')
+  await flush()
+  await state.selectThread('a')
+  assert.equal(state.activeThreadId.value, 'a')
+  assert.deepEqual(
+    state.pendingApprovals.value.map((approval) => approval.requestId),
+    ['approval-a'],
+  )
+
+  resolveB([])
+  await selectingB
+  assert.equal(state.activeThreadId.value, 'a')
+  assert.deepEqual(
+    state.pendingApprovals.value.map((approval) => approval.requestId),
+    ['approval-a'],
+  )
+})
+
 test('a terminal event before the invoke response cannot leave the composer busy', async () => {
   let acceptSend!: (value?: unknown) => void
   const state = createChatState({

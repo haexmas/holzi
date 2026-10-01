@@ -5,12 +5,14 @@ import { useChatNavigation } from '~/composables/useChatNavigation'
 import type { WmTabApi } from '~/composables/useWmTab'
 import type { TabRouter } from '~/composables/useTabRouter'
 import { agentSafeMessages } from '~/lib/actions/agentTools'
-import type { ActionOutcome } from '~/lib/actions/types'
+import type { ActionCaller, ActionOutcome } from '~/lib/actions/types'
 
 type PermissionMode = 'manual' | 'auto' | 'plan'
 type RunAction = (
   id: string,
   input?: Record<string, unknown>,
+  caller?: ActionCaller,
+  originTabId?: string,
 ) => Promise<ActionOutcome>
 
 /**
@@ -184,7 +186,7 @@ export function useChatTab(deps: {
   })
 
   const run = (id: string, input: Record<string, unknown> = {}) => {
-    void runAction(id, { ...input })
+    void runAction(id, { ...input }, { kind: 'user' }, wmTab.tabId)
   }
 
   return {

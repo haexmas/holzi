@@ -96,4 +96,22 @@ export function createHandlerRegistry() {
   }
 }
 
+/**
+ * The tabs of an app in the order they may answer a tab-bound action that did not come from a tab
+ * (a shortcut, the palette, an agent): the active tab of the focused window when it runs this app,
+ * then every open tab of the app in the order they were opened. Without this the first tab ever
+ * opened answered for all.
+ */
+export function tabCandidates(
+  appId: string,
+  activeTab: { id: string; appId: string } | undefined,
+  tabIdsOfApp: readonly string[],
+): string[] {
+  const ordered = [
+    ...(activeTab?.appId === appId ? [activeTab.id] : []),
+    ...tabIdsOfApp,
+  ]
+  return [...new Set(ordered)]
+}
+
 export type HandlerRegistry = ReturnType<typeof createHandlerRegistry>

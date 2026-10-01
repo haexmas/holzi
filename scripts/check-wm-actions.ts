@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import { ALL_ACTIONS } from '../src/lib/actions/catalog.ts'
+import { tabCandidates } from '../src/lib/actions/handlers.ts'
 import {
   createActionRunner,
   type ActionHandler,
@@ -241,6 +242,24 @@ test('tab-bound actions wait for their app; no handler in time → app_unavailab
   assert.equal(!outcome.ok && outcome.code, 'app_unavailable')
 })
 
+test('tab-bound actions preserve the originating tab for handler lookup', async () => {
+  let originTabId: string | undefined
+  const { deps } = harness({
+    awaitTabHandler: async (_appId, _actionId, _timeoutMs, origin) => {
+      originTabId = origin
+      return () => ({ done: true })
+    },
+  })
+  const outcome = await createActionRunner(deps).runAction(
+    CHAT_SEND.id,
+    { text: 'from second tab' },
+    USER,
+    'chat-tab-2',
+  )
+  assert.equal(outcome.ok, true)
+  assert.equal(originTabId, 'chat-tab-2')
+})
+
 test('a structured backend error keeps its reason and travels raw in error', async () => {
   const raw = { kind: 'InvalidInput', reason: 'bad title' }
   const { deps } = harness({
@@ -400,4 +419,22 @@ test('the catalog offers the read actions agents observe with (FR-028)', () => {
     'settings.get',
   ])
     assert.ok(reads.has(id), id)
+})
+
+test('without an originating tab the active tab answers first, then the tabs in opening order', () => {
+  const all = ['chat-1', 'chat-2', 'chat-3']
+  assert.deepEqual(
+    tabCandidates('system.chat', { id: 'chat-3', appId: 'system.chat' }, all),
+    ['chat-3', 'chat-1', 'chat-2'],
+  )
+  // The active tab runs another app: it is no candidate.
+  assert.deepEqual(
+    tabCandidates(
+      'system.chat',
+      { id: 'set-1', appId: 'system.settings' },
+      all,
+    ),
+    all,
+  )
+  assert.deepEqual(tabCandidates('system.chat', undefined, all), all)
 })

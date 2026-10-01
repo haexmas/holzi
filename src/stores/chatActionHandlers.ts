@@ -20,32 +20,54 @@ export function registerChatActionHandlers(wm: WmStore): void {
   const done = { done: true }
   const on = wm.registerGlobalActionHandler
 
+  function beginModelAction() {
+    const store = models()
+    store.lastError = null
+    store.integrityActionError = null
+    return store
+  }
+
+  function ensureModelActionSucceeded(store: ReturnType<typeof models>) {
+    const error = store.lastError ?? store.integrityActionError
+    if (error) throw new Error(error)
+  }
+
   on('chat.model.select', async ({ input }) => {
-    await models().loadModel(String(input.modelId))
+    const store = beginModelAction()
+    await store.loadModel(String(input.modelId))
+    ensureModelActionSucceeded(store)
     return done
   })
   on('chat.reasoning.set', async ({ input }) => {
-    await models().updateEffortLevel(
+    const store = beginModelAction()
+    await store.updateEffortLevel(
       typeof input.level === 'string' ? input.level : null,
     )
+    ensureModelActionSucceeded(store)
     return done
   })
   on('chat.model.retryLoad', async () => {
-    await models().retryModelLoad()
+    const store = beginModelAction()
+    await store.retryModelLoad()
+    ensureModelActionSucceeded(store)
     return done
   })
   on('chat.model.downloadRecommended', async ({ input }) => {
-    const entry = models().catalogEntries.find((e) => e.id === input.entryId)
+    const store = beginModelAction()
+    const entry = store.catalogEntries.find((e) => e.id === input.entryId)
     if (!entry) throw new Error(`no catalog entry ${String(input.entryId)}`)
-    await models().downloadCatalogEntry(entry)
+    await store.downloadCatalogEntry(entry)
+    ensureModelActionSucceeded(store)
     return done
   })
   on('chat.modelIntegrity.decide', async ({ input }) => {
+    const store = beginModelAction()
     if (input.decision === 'loadUntrusted')
-      await models().onIntegrityLoadUntrusted()
+      await store.onIntegrityLoadUntrusted()
     else if (input.decision === 'repairSource')
-      await models().onIntegrityRepairSource()
-    else await models().onIntegrityChooseOther()
+      await store.onIntegrityRepairSource()
+    else await store.onIntegrityChooseOther()
+    ensureModelActionSucceeded(store)
     return done
   })
   on('chat.voice.setAutoSend', async ({ input }) => {

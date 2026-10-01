@@ -375,8 +375,10 @@ export const useModelsStore = defineStore('models', () => {
     await loadModel(result.modelId)
   }
 
-  let stopped = false
   const unlisteners: UnlistenFn[] = []
+  let listenerConsumers = 0
+  let listenerGeneration = 0
+  let listenerRegistration: Promise<void> | null = null
 
   /**
    * Subscribes to the model-load + download-progress events. Mirrors the
@@ -386,8 +388,14 @@ export const useModelsStore = defineStore('models', () => {
    * is disposed immediately instead of leaking.
    */
   async function startListening() {
-    stopped = false
-    await Promise.all(
+    listenerConsumers += 1
+    if (listenerRegistration) {
+      await listenerRegistration
+      return
+    }
+    if (listenerConsumers > 1) return
+    const generation = ++listenerGeneration
+    const registration: Promise<void> = Promise.all(
       [
         chat.onModelLoadProgress(applyLoadProgress),
         chat.onModelLoadStatus(applyLoadStatus),
@@ -407,10 +415,14 @@ export const useModelsStore = defineStore('models', () => {
         }),
       ].map(async (subscription) => {
         const unlisten = await subscription
-        if (stopped) unlisten()
+        if (generation !== listenerGeneration || listenerConsumers === 0)
+          unlisten()
         else unlisteners.push(unlisten)
       }),
-    )
+    ).then(() => undefined)
+    listenerRegistration = registration
+    await registration
+    if (listenerRegistration === registration) listenerRegistration = null
   }
 
   // Providers and their cached models come from the vault, so another device or window can
@@ -425,7 +437,13 @@ export const useModelsStore = defineStore('models', () => {
 
   /** Stops future subscriptions and disposes every active listener. */
   function stopListening() {
-    stopped = true
+    if (listenerConsumers === 0) return
+    listenerConsumers -= 1
+    if (listenerConsumers > 0) return
+    listenerGeneration += 1
+    // A new tab may mount before an old async subscription registration resolves. Detach the
+    // in-flight generation so that the new consumer starts a fresh set of listeners.
+    listenerRegistration = null
     for (const unlisten of unlisteners.splice(0)) unlisten()
   }
 
