@@ -31,6 +31,7 @@ pub enum Which {
     SelfTest,
 }
 
+/// Failure while asking a model or cancelling an evaluation run.
 #[derive(Debug, thiserror::Error)]
 pub enum EvalError {
     #[error("the model could not be asked ({sentence}): {reason}")]
@@ -39,6 +40,7 @@ pub enum EvalError {
     Cancelled,
 }
 
+/// Converts a catalog action into the provider-neutral tool specification.
 fn spec_of(def: &AgentActionDef) -> ToolSpec {
     ToolSpec {
         name: def.tool_name.clone(),
@@ -54,6 +56,7 @@ fn core_offer(tools: &[AgentActionDef]) -> Vec<ToolSpec> {
     offer
 }
 
+/// Builds a history message without attachments for an evaluation request.
 fn message(role: ChatRole, content: &str) -> ChatMessage {
     ChatMessage {
         role,
@@ -62,6 +65,7 @@ fn message(role: ChatRole, content: &str) -> ChatMessage {
     }
 }
 
+/// Builds one adapter request with the evaluation's bounded output and sampling mode.
 fn request(
     model: &str,
     messages: Vec<ChatMessage>,
@@ -118,6 +122,7 @@ async fn ask(
     }
 }
 
+/// Copies provider-neutral tool calls into the pure scoring representation.
 fn observed_calls(calls: &[ToolCall]) -> Vec<ObservedCall> {
     calls
         .iter()

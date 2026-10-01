@@ -180,6 +180,7 @@ fn the_schema_check_is_strict_like_the_frontend_runner() {
     let schema = json!({ "type": "object", "properties": { "n": { "type": "integer" },
         "xs": { "type": "array", "items": { "type": "string" } } }, "required": ["n"] });
     assert!(valid_against(&schema, &json!({ "n": 1, "xs": ["a"] })));
+    assert!(valid_against(&schema, &json!({ "n": 1.0 })));
     assert!(!valid_against(&schema, &json!({ "n": 1.5 })));
     assert!(!valid_against(&schema, &json!({ "xs": [] })));
     assert!(!valid_against(&schema, &json!({ "n": 1, "xs": [2] })));

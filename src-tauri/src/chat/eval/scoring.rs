@@ -8,6 +8,7 @@ use serde_json::Value;
 
 use crate::chat::tools::action_tool::AgentActionDef;
 
+/// Language of an evaluation sentence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Lang {
@@ -15,6 +16,7 @@ pub enum Lang {
     En,
 }
 
+/// User-intent category of an evaluation sentence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Kind {
@@ -23,7 +25,7 @@ pub enum Kind {
     Smalltalk,
 }
 
-/// One tool call a sentence is expected to produce. `args` holds only the fields that matter.
+/// One expected tool call and the argument fields that matter for scoring.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct ExpectedCall {
     pub tool: String,
@@ -35,7 +37,7 @@ fn empty_object() -> Value {
     Value::Object(Default::default())
 }
 
-/// `"none"` (no tool call) or the complete, non-empty batch of calls, in any order.
+/// Expected outcome for one sentence: no call or a complete unordered batch.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expect {
     None,
@@ -63,6 +65,7 @@ impl<'de> Deserialize<'de> for Expect {
     }
 }
 
+/// One sentence in the versioned evaluation set.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Sentence {
@@ -75,13 +78,14 @@ pub struct Sentence {
     pub self_test: bool,
 }
 
+/// Versioned collection of sentences used by a measurement run.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct EvalSet {
     pub version: u32,
     pub sentences: Vec<Sentence>,
 }
 
-/// A tool call as the model made it.
+/// One tool call observed in the model's response.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ObservedCall {
     pub tool: String,
@@ -99,6 +103,7 @@ pub struct Observed {
     pub reached: bool,
 }
 
+/// Classification assigned to one sentence after scoring.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SentenceResult {
@@ -118,7 +123,13 @@ pub fn valid_against(schema: &Value, value: &Value) -> bool {
         Some("array") => value.is_array(),
         Some("string") => value.is_string(),
         Some("boolean") => value.is_boolean(),
-        Some("integer") => value.is_i64() || value.is_u64(),
+        Some("integer") => {
+            value.is_i64()
+                || value.is_u64()
+                || value
+                    .as_f64()
+                    .is_some_and(|number| number.is_finite() && number.fract() == 0.0)
+        }
         Some("number") => value.is_number(),
         _ => false,
     };
@@ -166,6 +177,7 @@ pub fn valid_against(schema: &Value, value: &Value) -> bool {
 
 /// Every field of `expected` is present in `actual` with the same value; objects match as a
 /// subset, everything else exactly.
+/// Checks the expected argument object as a recursive subset of the observed object.
 fn contains_subset(actual: &Value, expected: &Value) -> bool {
     match (actual, expected) {
         (Value::Object(actual), Value::Object(expected)) => expected.iter().all(|(key, value)| {
@@ -177,6 +189,7 @@ fn contains_subset(actual: &Value, expected: &Value) -> bool {
     }
 }
 
+/// Sorts tool names so a complete batch can be compared without call-order significance.
 fn names_of<'a>(names: impl Iterator<Item = &'a str>) -> Vec<&'a str> {
     let mut names: Vec<&str> = names.collect();
     names.sort_unstable();
@@ -230,7 +243,7 @@ pub fn score(sentence: &Sentence, observed: &Observed, defs: &[AgentActionDef]) 
     SentenceResult::Pass
 }
 
-/// `pass` of `of`, with the rate.
+/// A pass count and its denominator, together with the calculated rate.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct Rate {
     pub pass: usize,
@@ -239,6 +252,7 @@ pub struct Rate {
 }
 
 impl Rate {
+    /// Builds a rate without producing `NaN` for an empty group.
     fn new(pass: usize, of: usize) -> Self {
         let rate = if of == 0 {
             0.0
@@ -249,6 +263,7 @@ impl Rate {
     }
 }
 
+/// A failed sentence and the first observed call, when one exists.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Failure {
     pub id: String,
@@ -257,6 +272,7 @@ pub struct Failure {
     pub got: Option<ObservedCall>,
 }
 
+/// Aggregate result of one evaluation run.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EvalReport {
@@ -277,7 +293,7 @@ pub struct EvalReport {
     pub failures: Vec<Failure>,
 }
 
-/// One scored sentence, as the runner collects them.
+/// One scored sentence, as the runner collects it before report aggregation.
 pub struct Scored<'a> {
     pub sentence: &'a Sentence,
     pub observed: Observed,
