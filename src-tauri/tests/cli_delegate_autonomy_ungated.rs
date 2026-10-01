@@ -41,6 +41,7 @@ fn channel_emitter() -> (EventEmitter, mpsc::UnboundedReceiver<(String, Value)>)
 
 fn base_request(model_id: &str, autonomy_mode: AutonomyMode) -> ChatRequest {
     ChatRequest {
+        sampling: Default::default(),
         model_id: model_id.to_string(),
         thread_id: None,
         system_prompt: None,

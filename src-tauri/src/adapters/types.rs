@@ -136,6 +136,20 @@ pub struct ChatRequest {
     /// `send_message` so no adapter re-derives them from the model id.
     /// `None` when the model has no row or nothing is determined.
     pub capabilities: Option<ModelCapabilities>,
+    /// How the model picks its next token. `Default` is what every chat uses; `Deterministic`
+    /// is for the evaluation of tool use (spec 032 FR-022), which compares runs of one model.
+    /// Only the local adapter can honor it; every other adapter ignores it.
+    pub sampling: Sampling,
+}
+
+/// Sampling mode of one request (see [`ChatRequest::sampling`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Sampling {
+    /// The adapter's or the model's own defaults.
+    #[default]
+    Default,
+    /// Greedy decoding, so two runs of one model give the same answers.
+    Deterministic,
 }
 
 /// One event on an [`AdapterStream`]. `Delta` carries either content,

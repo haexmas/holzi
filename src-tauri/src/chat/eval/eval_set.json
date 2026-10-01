@@ -1,0 +1,385 @@
+{
+  "version": 2,
+  "sentences": [
+    {
+      "id": "read-tabs-de-1",
+      "lang": "de",
+      "kind": "read",
+      "text": "Welche Tabs sind gerade offen?",
+      "expect": [
+        {
+          "tool": "wm_state_get",
+          "args": {}
+        }
+      ],
+      "selfTest": true
+    },
+    {
+      "id": "read-tabs-en-1",
+      "lang": "en",
+      "kind": "read",
+      "text": "Which tabs are open right now?",
+      "expect": [
+        {
+          "tool": "wm_state_get",
+          "args": {}
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "read-settings-de-1",
+      "lang": "de",
+      "kind": "read",
+      "text": "Wie sind meine Einstellungen aktuell?",
+      "expect": [
+        {
+          "tool": "settings_get",
+          "args": {}
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "read-settings-en-1",
+      "lang": "en",
+      "kind": "read",
+      "text": "What are the current settings?",
+      "expect": [
+        {
+          "tool": "settings_get",
+          "args": {}
+        }
+      ],
+      "selfTest": true
+    },
+    {
+      "id": "read-apps-de-1",
+      "lang": "de",
+      "kind": "read",
+      "text": "Welche Apps kann ich öffnen?",
+      "expect": [
+        {
+          "tool": "wm_apps_list",
+          "args": {}
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "read-models-en-1",
+      "lang": "en",
+      "kind": "read",
+      "text": "Which models are installed?",
+      "expect": [
+        {
+          "tool": "settings_models_list",
+          "args": {}
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "read-models-de-1",
+      "lang": "de",
+      "kind": "read",
+      "text": "Welche Modelle habe ich installiert?",
+      "expect": [
+        {
+          "tool": "settings_models_list",
+          "args": {}
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "change-scheme-de-1",
+      "lang": "de",
+      "kind": "change",
+      "text": "Stelle auf das helle Farbschema um.",
+      "expect": [
+        {
+          "tool": "settings_appearance_setColorScheme",
+          "args": {
+            "scheme": "light"
+          }
+        }
+      ],
+      "selfTest": true
+    },
+    {
+      "id": "change-scheme-en-1",
+      "lang": "en",
+      "kind": "change",
+      "text": "Switch to the dark color scheme.",
+      "expect": [
+        {
+          "tool": "settings_appearance_setColorScheme",
+          "args": {
+            "scheme": "dark"
+          }
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "change-scheme-de-2",
+      "lang": "de",
+      "kind": "change",
+      "text": "Bitte nutze das dunkle Design.",
+      "expect": [
+        {
+          "tool": "settings_appearance_setColorScheme",
+          "args": {
+            "scheme": "dark"
+          }
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "change-scheme-en-2",
+      "lang": "en",
+      "kind": "change",
+      "text": "Follow the system color scheme.",
+      "expect": [
+        {
+          "tool": "settings_appearance_setColorScheme",
+          "args": {
+            "scheme": "system"
+          }
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "change-open-de-1",
+      "lang": "de",
+      "kind": "change",
+      "text": "Öffne die Einstellungen.",
+      "expect": [
+        {
+          "tool": "wm_app_open",
+          "args": {
+            "appId": "system.settings"
+          }
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "change-open-en-1",
+      "lang": "en",
+      "kind": "change",
+      "text": "Open the chat app.",
+      "expect": [
+        {
+          "tool": "wm_app_open",
+          "args": {
+            "appId": "system.chat"
+          }
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "read-devices-de-1",
+      "lang": "de",
+      "kind": "read",
+      "text": "Welche Geräte sind mit meinem Tresor verbunden?",
+      "expect": [
+        {
+          "tool": "settings_devices_list",
+          "args": {}
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "read-devices-en-1",
+      "lang": "en",
+      "kind": "read",
+      "text": "Which devices are connected to my vault?",
+      "expect": [
+        {
+          "tool": "settings_devices_list",
+          "args": {}
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "change-workspace-de-1",
+      "lang": "de",
+      "kind": "change",
+      "text": "Lege einen neuen Arbeitsbereich an.",
+      "expect": [
+        {
+          "tool": "wm_workspace_create",
+          "args": {}
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "change-workspace-en-1",
+      "lang": "en",
+      "kind": "change",
+      "text": "Create a new workspace.",
+      "expect": [
+        {
+          "tool": "wm_workspace_create",
+          "args": {}
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "change-alias-de-1",
+      "lang": "de",
+      "kind": "change",
+      "text": "Nenne dieses Gerät Küchen-Laptop.",
+      "expect": [
+        {
+          "tool": "settings_device_setAlias",
+          "args": {
+            "alias": "Küchen-Laptop"
+          }
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "change-alias-en-1",
+      "lang": "en",
+      "kind": "change",
+      "text": "Rename this device to Work Laptop.",
+      "expect": [
+        {
+          "tool": "settings_device_setAlias",
+          "args": {
+            "alias": "Work Laptop"
+          }
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "read-conversations-de-1",
+      "lang": "de",
+      "kind": "read",
+      "text": "Welche Unterhaltungen habe ich im Chat?",
+      "expect": [
+        {
+          "tool": "chat_conversations_list",
+          "args": {}
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "read-conversations-en-1",
+      "lang": "en",
+      "kind": "read",
+      "text": "List my chat conversations.",
+      "expect": [
+        {
+          "tool": "chat_conversations_list",
+          "args": {}
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "change-restore-de-1",
+      "lang": "de",
+      "kind": "change",
+      "text": "Schalte die Sitzungswiederherstellung ein.",
+      "expect": [
+        {
+          "tool": "settings_sessionRestore_set",
+          "args": {
+            "enabled": true
+          }
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "change-restore-en-1",
+      "lang": "en",
+      "kind": "change",
+      "text": "Turn session restore off.",
+      "expect": [
+        {
+          "tool": "settings_sessionRestore_set",
+          "args": {
+            "enabled": false
+          }
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "change-launcher-en-1",
+      "lang": "en",
+      "kind": "change",
+      "text": "Show me the app launcher.",
+      "expect": [
+        {
+          "tool": "wm_launcher_open",
+          "args": {}
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "smalltalk-de-1",
+      "lang": "de",
+      "kind": "smalltalk",
+      "text": "Wie wird das Wetter morgen?",
+      "expect": "none",
+      "selfTest": true
+    },
+    {
+      "id": "smalltalk-en-1",
+      "lang": "en",
+      "kind": "smalltalk",
+      "text": "Tell me a joke.",
+      "expect": "none",
+      "selfTest": true
+    },
+    {
+      "id": "smalltalk-de-2",
+      "lang": "de",
+      "kind": "smalltalk",
+      "text": "Was ist die Hauptstadt von Frankreich?",
+      "expect": "none",
+      "selfTest": false
+    },
+    {
+      "id": "smalltalk-en-2",
+      "lang": "en",
+      "kind": "smalltalk",
+      "text": "Write a two-line poem about autumn.",
+      "expect": "none",
+      "selfTest": false
+    },
+    {
+      "id": "smalltalk-de-3",
+      "lang": "de",
+      "kind": "smalltalk",
+      "text": "Danke, das war hilfreich.",
+      "expect": "none",
+      "selfTest": false
+    },
+    {
+      "id": "smalltalk-en-3",
+      "lang": "en",
+      "kind": "smalltalk",
+      "text": "How do I say good morning in Spanish?",
+      "expect": "none",
+      "selfTest": false
+    }
+  ]
+}

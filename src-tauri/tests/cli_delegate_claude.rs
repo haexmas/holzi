@@ -38,6 +38,7 @@ fn write_stub(dir: &std::path::Path) -> std::path::PathBuf {
 
 fn sample_request() -> ChatRequest {
     ChatRequest {
+        sampling: Default::default(),
         model_id: "claude-delegate".to_string(),
         thread_id: None,
         system_prompt: None,

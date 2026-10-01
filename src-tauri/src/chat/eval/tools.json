@@ -1,0 +1,1015 @@
+[
+  {
+    "toolName": "wm_tab_back",
+    "actionId": "wm.tab.back",
+    "description": "Go back one entry in a tab's own history.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "tabId": {
+          "type": "string",
+          "description": "Tab to act on. Required for agents; users default to the focused tab."
+        }
+      }
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Zurück",
+      "en": "Back"
+    }
+  },
+  {
+    "toolName": "wm_tab_forward",
+    "actionId": "wm.tab.forward",
+    "description": "Go forward one entry in a tab's own history.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "tabId": {
+          "type": "string",
+          "description": "Tab to act on. Required for agents; users default to the focused tab."
+        }
+      }
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Vor",
+      "en": "Forward"
+    }
+  },
+  {
+    "toolName": "wm_tab_go",
+    "actionId": "wm.tab.go",
+    "description": "Jump several entries in a tab's history: negative steps go back, positive steps go forward.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "tabId": {
+          "type": "string",
+          "description": "Tab to act on. Required for agents; users default to the focused tab."
+        },
+        "steps": {
+          "type": "integer",
+          "description": "Signed number of entries."
+        }
+      },
+      "required": ["steps"]
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Im Verlauf springen",
+      "en": "Jump in history"
+    }
+  },
+  {
+    "toolName": "wm_tab_navigate",
+    "actionId": "wm.tab.navigate",
+    "description": "Navigate a tab to a location inside its app, e.g. '/thread/<id>'. replace=true changes the current entry instead of adding one.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "tabId": {
+          "type": "string",
+          "description": "Tab to act on. Required for agents; users default to the focused tab."
+        },
+        "to": {
+          "type": "string",
+          "description": "App-relative location starting with '/', optionally with a query."
+        },
+        "replace": {
+          "type": "boolean"
+        }
+      },
+      "required": ["to"]
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Im Tab navigieren",
+      "en": "Navigate in tab"
+    }
+  },
+  {
+    "toolName": "wm_app_open",
+    "actionId": "wm.app.open",
+    "description": "Open an app in a new window, optionally at a location. A single-instance app that is already open is activated and navigated there instead.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "appId": {
+          "type": "string",
+          "description": "App id, e.g. 'system.chat', 'system.settings' (see wm.apps.list)."
+        },
+        "at": {
+          "type": "string",
+          "description": "Optional app-relative start location, e.g. '/thread/<id>'."
+        }
+      },
+      "required": ["appId"]
+    },
+    "effect": "write",
+    "core": true,
+    "titles": {
+      "de": "App öffnen",
+      "en": "Open app"
+    }
+  },
+  {
+    "toolName": "wm_tab_new",
+    "actionId": "wm.tab.new",
+    "description": "Open an app as a new tab in a window, optionally at a location. A single-instance app that is already open is activated instead.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "windowId": {
+          "type": "string",
+          "description": "Window to add the tab to. Required for agents; users default to the focused window."
+        },
+        "appId": {
+          "type": "string",
+          "description": "App id, e.g. 'system.chat', 'system.settings' (see wm.apps.list)."
+        },
+        "at": {
+          "type": "string",
+          "description": "Optional app-relative start location, e.g. '/thread/<id>'."
+        }
+      },
+      "required": ["appId"]
+    },
+    "effect": "write",
+    "core": true,
+    "titles": {
+      "de": "Neuer Tab",
+      "en": "New tab"
+    }
+  },
+  {
+    "toolName": "wm_tab_activate",
+    "actionId": "wm.tab.activate",
+    "description": "Make a tab the active tab of its window and focus the window.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "tabId": {
+          "type": "string",
+          "description": "Tab to act on. Required for agents; users default to the focused tab."
+        }
+      }
+    },
+    "effect": "write",
+    "core": true,
+    "titles": {
+      "de": "Tab aktivieren",
+      "en": "Activate tab"
+    }
+  },
+  {
+    "toolName": "wm_tab_close",
+    "actionId": "wm.tab.close",
+    "description": "Close a tab (and its window if it was the last tab). The user confirms if a reply is running or an approval is pending.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "tabId": {
+          "type": "string",
+          "description": "Tab to act on. Required for agents; users default to the focused tab."
+        }
+      }
+    },
+    "effect": "destructive",
+    "core": true,
+    "titles": {
+      "de": "Tab schließen",
+      "en": "Close tab"
+    }
+  },
+  {
+    "toolName": "wm_window_focus",
+    "actionId": "wm.window.focus",
+    "description": "Restore a window if minimized and bring it to the front.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "windowId": {
+          "type": "string",
+          "description": "Window to act on. Required for agents; users default to the focused window."
+        }
+      }
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Fenster fokussieren",
+      "en": "Focus window"
+    }
+  },
+  {
+    "toolName": "wm_window_minimize",
+    "actionId": "wm.window.minimize",
+    "description": "Minimize a window.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "windowId": {
+          "type": "string",
+          "description": "Window to act on. Required for agents; users default to the focused window."
+        }
+      }
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Fenster minimieren",
+      "en": "Minimize window"
+    }
+  },
+  {
+    "toolName": "wm_window_toggleMaximize",
+    "actionId": "wm.window.toggleMaximize",
+    "description": "Maximize a window to the workspace area, or restore it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "windowId": {
+          "type": "string",
+          "description": "Window to act on. Required for agents; users default to the focused window."
+        }
+      }
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Fenster maximieren oder wiederherstellen",
+      "en": "Maximize or restore window"
+    }
+  },
+  {
+    "toolName": "wm_window_setGeometry",
+    "actionId": "wm.window.setGeometry",
+    "description": "Move and resize a window (CSS pixels within the workspace area); the window manager keeps it reachable and above its minimum size.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "windowId": {
+          "type": "string",
+          "description": "Window to act on. Required for agents; users default to the focused window."
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "width": {
+          "type": "number"
+        },
+        "height": {
+          "type": "number"
+        }
+      },
+      "required": ["x", "y", "width", "height"]
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Fenster verschieben und skalieren",
+      "en": "Move and resize window"
+    }
+  },
+  {
+    "toolName": "wm_window_close",
+    "actionId": "wm.window.close",
+    "description": "Close a window with all its tabs. The user confirms if a reply is running or an approval is pending.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "windowId": {
+          "type": "string",
+          "description": "Window to act on. Required for agents; users default to the focused window."
+        }
+      }
+    },
+    "effect": "destructive",
+    "core": false,
+    "titles": {
+      "de": "Fenster schließen",
+      "en": "Close window"
+    }
+  },
+  {
+    "toolName": "wm_window_moveToWorkspace",
+    "actionId": "wm.window.moveToWorkspace",
+    "description": "Move a window with all its tabs to another workspace.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "windowId": {
+          "type": "string",
+          "description": "Window to act on. Required for agents; users default to the focused window."
+        },
+        "toWorkspaceId": {
+          "type": "string",
+          "description": "Destination workspace."
+        }
+      },
+      "required": ["toWorkspaceId"]
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Fenster in Arbeitsbereich verschieben",
+      "en": "Move window to workspace"
+    }
+  },
+  {
+    "toolName": "wm_workspace_create",
+    "actionId": "wm.workspace.create",
+    "description": "Create a new empty workspace at the end and switch to it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Arbeitsbereich anlegen",
+      "en": "Create workspace"
+    }
+  },
+  {
+    "toolName": "wm_workspace_switch",
+    "actionId": "wm.workspace.switch",
+    "description": "Show another workspace.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "description": "Workspace to act on. Required for agents; users default to the active workspace."
+        }
+      }
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Arbeitsbereich wechseln",
+      "en": "Switch workspace"
+    }
+  },
+  {
+    "toolName": "wm_workspace_delete",
+    "actionId": "wm.workspace.delete",
+    "description": "Delete a workspace and close its windows. The last workspace cannot be deleted; the user confirms open windows.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "description": "Workspace to act on. Required for agents; users default to the active workspace."
+        }
+      }
+    },
+    "effect": "destructive",
+    "core": false,
+    "titles": {
+      "de": "Arbeitsbereich löschen",
+      "en": "Delete workspace"
+    }
+  },
+  {
+    "toolName": "wm_windows_overview",
+    "actionId": "wm.windows.overview",
+    "description": "Open the window overview.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Fensterübersicht öffnen",
+      "en": "Open window overview"
+    }
+  },
+  {
+    "toolName": "wm_workspaces_overview",
+    "actionId": "wm.workspaces.overview",
+    "description": "Open the workspace overview.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Arbeitsbereichsübersicht öffnen",
+      "en": "Open workspace overview"
+    }
+  },
+  {
+    "toolName": "wm_launcher_open",
+    "actionId": "wm.launcher.open",
+    "description": "Open the app launcher.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Launcher öffnen",
+      "en": "Open launcher"
+    }
+  },
+  {
+    "toolName": "wm_state_get",
+    "actionId": "wm.state.get",
+    "description": "Read the open workspaces, windows (geometry, minimized, maximized) and their tabs with app, current location, title and attention flag. Workspaces carry a workspaceId, windows a windowId and tabs a tabId; actions on a tab, window or workspace need that id as their target.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "effect": "read",
+    "core": true,
+    "titles": {
+      "de": "Zustand von Arbeitsbereichen, Fenstern und Tabs lesen",
+      "en": "Read workspaces, windows and tabs"
+    }
+  },
+  {
+    "toolName": "wm_tab_history",
+    "actionId": "wm.tab.history",
+    "description": "Read a tab's back/forward history and its current position.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "tabId": {
+          "type": "string",
+          "description": "Tab to act on. Required for agents; users default to the focused tab."
+        }
+      }
+    },
+    "effect": "read",
+    "core": false,
+    "titles": {
+      "de": "Tab-Verlauf lesen",
+      "en": "Read tab history"
+    }
+  },
+  {
+    "toolName": "wm_apps_list",
+    "actionId": "wm.apps.list",
+    "description": "List the apps that can be opened, with their title, whether several instances are allowed, and their location patterns.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "effect": "read",
+    "core": true,
+    "titles": {
+      "de": "Apps auflisten",
+      "en": "List apps"
+    }
+  },
+  {
+    "toolName": "wm_actions_list",
+    "actionId": "wm.actions.list",
+    "description": "List every action with its description, input schema, target, permission scope, effect and whether agents may call it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "effect": "read",
+    "core": false,
+    "titles": {
+      "de": "Aktionen auflisten",
+      "en": "List actions"
+    }
+  },
+  {
+    "toolName": "chat_conversation_new",
+    "actionId": "chat.conversation.new",
+    "description": "Start a new conversation in the chat.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Neue Unterhaltung",
+      "en": "New conversation"
+    }
+  },
+  {
+    "toolName": "chat_conversation_open",
+    "actionId": "chat.conversation.open",
+    "description": "Open an existing conversation in the chat.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "threadId": {
+          "type": "string",
+          "description": "Conversation id (see chat.conversations.list)."
+        }
+      },
+      "required": ["threadId"]
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Unterhaltung öffnen",
+      "en": "Open conversation"
+    }
+  },
+  {
+    "toolName": "chat_conversation_rename",
+    "actionId": "chat.conversation.rename",
+    "description": "Rename a conversation.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "threadId": {
+          "type": "string",
+          "description": "Conversation id (see chat.conversations.list)."
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": ["threadId", "title"]
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Unterhaltung umbenennen",
+      "en": "Rename conversation"
+    }
+  },
+  {
+    "toolName": "chat_conversation_delete",
+    "actionId": "chat.conversation.delete",
+    "description": "Delete a conversation with all its messages; a running reply in it is cancelled first.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "threadId": {
+          "type": "string",
+          "description": "Conversation id (see chat.conversations.list)."
+        }
+      },
+      "required": ["threadId"]
+    },
+    "effect": "destructive",
+    "core": false,
+    "titles": {
+      "de": "Unterhaltung löschen",
+      "en": "Delete conversation"
+    }
+  },
+  {
+    "toolName": "chat_conversations_list",
+    "actionId": "chat.conversations.list",
+    "description": "List all conversations with id, title and creation time.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "effect": "read",
+    "core": false,
+    "titles": {
+      "de": "Unterhaltungen auflisten",
+      "en": "List conversations"
+    }
+  },
+  {
+    "toolName": "chat_messages_list",
+    "actionId": "chat.messages.list",
+    "description": "List the messages of a conversation: for a person with the text, for an agent only id, role, time and status (never the text).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "threadId": {
+          "type": "string",
+          "description": "Conversation id (see chat.conversations.list)."
+        }
+      },
+      "required": ["threadId"]
+    },
+    "effect": "read",
+    "core": false,
+    "titles": {
+      "de": "Nachrichten lesen",
+      "en": "Read messages"
+    }
+  },
+  {
+    "toolName": "chat_model_select",
+    "actionId": "chat.model.select",
+    "description": "Choose and load the model the chat answers with.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "modelId": {
+          "type": "string"
+        }
+      },
+      "required": ["modelId"]
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Modell wählen",
+      "en": "Choose model"
+    }
+  },
+  {
+    "toolName": "chat_reasoning_set",
+    "actionId": "chat.reasoning.set",
+    "description": "Set the reasoning effort for the active model; omit 'level' for automatic.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "level": {
+          "type": "string"
+        }
+      }
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Denkaufwand setzen",
+      "en": "Set reasoning effort"
+    }
+  },
+  {
+    "toolName": "chat_model_retryLoad",
+    "actionId": "chat.model.retryLoad",
+    "description": "Retry loading the active model after a failure.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Modell erneut laden",
+      "en": "Retry loading model"
+    }
+  },
+  {
+    "toolName": "chat_model_downloadRecommended",
+    "actionId": "chat.model.downloadRecommended",
+    "description": "Download a model from the recommended catalog.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "entryId": {
+          "type": "string"
+        }
+      },
+      "required": ["entryId"]
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Empfohlenes Modell herunterladen",
+      "en": "Download recommended model"
+    }
+  },
+  {
+    "toolName": "chat_voice_setAutoSend",
+    "actionId": "chat.voice.setAutoSend",
+    "description": "Send dictated text automatically when recording stops, or not.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "required": ["enabled"]
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Automatisches Senden nach Diktat",
+      "en": "Auto-send after dictation"
+    }
+  },
+  {
+    "toolName": "settings_get",
+    "actionId": "settings.get",
+    "description": "Read the current settings: device name, color scheme, default and speech models, session restore, autonomy mode and delegate deny rules. Never includes credentials.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "effect": "read",
+    "core": true,
+    "titles": {
+      "de": "Einstellungen lesen",
+      "en": "Read settings"
+    }
+  },
+  {
+    "toolName": "settings_devices_list",
+    "actionId": "settings.devices.list",
+    "description": "List the vault's devices: this device first and marked, then the others by name, each with its role (main or linked), whether it is online, when it was last online (epoch milliseconds, absent if never seen) and why sync with it is halted, if it is. A device without a name has no alias.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "effect": "read",
+    "core": false,
+    "titles": {
+      "de": "Geräte der Vault auflisten",
+      "en": "List the vault's devices"
+    }
+  },
+  {
+    "toolName": "settings_devices_identity",
+    "actionId": "settings.devices.identity",
+    "description": "The vault's public identity: its public key as npub and hex, the address others invite the vault at. Never a private key.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "effect": "read",
+    "core": false,
+    "titles": {
+      "de": "Identität der Vault lesen",
+      "en": "Read the vault identity"
+    }
+  },
+  {
+    "toolName": "settings_models_list",
+    "actionId": "settings.models.list",
+    "description": "List the installed models.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "effect": "read",
+    "core": true,
+    "titles": {
+      "de": "Installierte Modelle auflisten",
+      "en": "List installed models"
+    }
+  },
+  {
+    "toolName": "settings_models_checkUpdates",
+    "actionId": "settings.models.checkUpdates",
+    "description": "Check installed HuggingFace models for newer revisions.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "effect": "read",
+    "core": false,
+    "titles": {
+      "de": "Modell-Updates prüfen",
+      "en": "Check model updates"
+    }
+  },
+  {
+    "toolName": "settings_device_setAlias",
+    "actionId": "settings.device.setAlias",
+    "description": "Rename this device (the name other devices see).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "alias": {
+          "type": "string"
+        }
+      },
+      "required": ["alias"]
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Gerätename ändern",
+      "en": "Rename device"
+    }
+  },
+  {
+    "toolName": "settings_sessionRestore_set",
+    "actionId": "settings.sessionRestore.set",
+    "description": "Turn saving and restoring the open workspaces, windows and tabs (with their back/forward history) on or off for the whole vault. Turning it off deletes the saved session.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "required": ["enabled"]
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Sitzung wiederherstellen ein- oder ausschalten",
+      "en": "Turn session restore on or off"
+    }
+  },
+  {
+    "toolName": "settings_appearance_setColorScheme",
+    "actionId": "settings.appearance.setColorScheme",
+    "description": "Set the color scheme (light, dark or following the system) for the whole vault. It applies at once.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "scheme": {
+          "type": "string",
+          "enum": ["light", "dark", "system"]
+        }
+      },
+      "required": ["scheme"]
+    },
+    "effect": "write",
+    "core": true,
+    "titles": {
+      "de": "Farbschema festlegen",
+      "en": "Set the color scheme"
+    }
+  },
+  {
+    "toolName": "settings_models_setDefault",
+    "actionId": "settings.models.setDefault",
+    "description": "Set the default chat model of this device (models are installed per device).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "modelId": {
+          "type": "string",
+          "description": "Installed model id (see settings.models.list)."
+        }
+      },
+      "required": ["modelId"]
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Standard-Modell setzen",
+      "en": "Set default model"
+    }
+  },
+  {
+    "toolName": "settings_models_clearDefault",
+    "actionId": "settings.models.clearDefault",
+    "description": "Remove the default chat model of this device.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Standard-Modell entfernen",
+      "en": "Clear default model"
+    }
+  },
+  {
+    "toolName": "settings_models_setStt",
+    "actionId": "settings.models.setStt",
+    "description": "Switch the speech-to-text model to a catalog entry, downloading it if needed.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "catalogId": {
+          "type": "string"
+        }
+      },
+      "required": ["catalogId"]
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Spracherkennungsmodell wechseln",
+      "en": "Switch speech model"
+    }
+  },
+  {
+    "toolName": "settings_models_downloadCatalog",
+    "actionId": "settings.models.downloadCatalog",
+    "description": "Download a chat model from the recommended catalog.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "entryId": {
+          "type": "string"
+        }
+      },
+      "required": ["entryId"]
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Modell aus dem Katalog herunterladen",
+      "en": "Download catalog model"
+    }
+  },
+  {
+    "toolName": "settings_models_downloadFromHf",
+    "actionId": "settings.models.downloadFromHf",
+    "description": "Download a GGUF file from a HuggingFace repository as a model.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "repoId": {
+          "type": "string"
+        },
+        "filename": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "tokenizerRepo": {
+          "type": "string"
+        },
+        "contextWindow": {
+          "type": "integer"
+        },
+        "forceTooBig": {
+          "type": "boolean"
+        }
+      },
+      "required": ["repoId", "filename"]
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Modell von HuggingFace herunterladen",
+      "en": "Download model from HuggingFace"
+    }
+  },
+  {
+    "toolName": "settings_models_installUpdate",
+    "actionId": "settings.models.installUpdate",
+    "description": "Install the newer revision of an installed HuggingFace model.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "modelId": {
+          "type": "string",
+          "description": "Installed model id (see settings.models.list)."
+        }
+      },
+      "required": ["modelId"]
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Modell-Update installieren",
+      "en": "Install model update"
+    }
+  },
+  {
+    "toolName": "settings_models_delete",
+    "actionId": "settings.models.delete",
+    "description": "Delete an installed model from disk.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "modelId": {
+          "type": "string",
+          "description": "Installed model id (see settings.models.list)."
+        }
+      },
+      "required": ["modelId"]
+    },
+    "effect": "destructive",
+    "core": false,
+    "titles": {
+      "de": "Modell löschen",
+      "en": "Delete model"
+    }
+  },
+  {
+    "toolName": "settings_delegate_refreshModels",
+    "actionId": "settings.delegate.refreshModels",
+    "description": "Refresh a connected delegate provider's model list.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "providerId": {
+          "type": "string"
+        }
+      },
+      "required": ["providerId"]
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Anbieter-Modelle aktualisieren",
+      "en": "Refresh provider models"
+    }
+  }
+]

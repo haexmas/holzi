@@ -36,6 +36,7 @@
     "tauri:build": "scripts/with-nix-host-bridge.sh tauri build",
     "tauri:build:cuda": "scripts/with-nix-host-bridge.sh tauri build -- --features llm-cuda",
     "tauri:build:metal": "tauri build -- --features llm-metal",
+    "export:eval-tools": "node scripts/export-eval-tools.ts",
     "generate:ts-types": "scripts/with-nix-host-bridge.sh cargo test --manifest-path src-tauri/Cargo.toml export_bindings -- --nocapture && sed -i -E 's/[[:space:]]+$//' src/types/bindings/*.ts"
   },
   "dependencies": {

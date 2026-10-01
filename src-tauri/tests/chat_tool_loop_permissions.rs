@@ -857,6 +857,7 @@ async fn ci_e2e_loaded_model_can_request_and_process_a_cli_command() {
     assert_eq!(session.model_id, "stub-model");
 
     let request = ChatRequest {
+        sampling: Default::default(),
         model_id: session.model_id.clone(),
         thread_id: None,
         system_prompt: Some("Use run_command exactly once.".to_string()),
@@ -987,6 +988,7 @@ async fn a_real_local_model_can_request_and_process_a_cli_command() {
         context_window: None,
     };
     let request = ChatRequest {
+        sampling: Default::default(),
         model_id: String::new(),
         thread_id: None,
         system_prompt: Some("You are an agent with a run_command tool. Use the tool when the user asks you to run a command. After the tool result, answer with the command output and nothing else.".to_string()),

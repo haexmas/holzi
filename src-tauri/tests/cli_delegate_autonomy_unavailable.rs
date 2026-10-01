@@ -66,6 +66,7 @@ EOF
 
     let result = adapter
         .stream_chat(ChatRequest {
+            sampling: Default::default(),
             model_id: "claude-delegate".to_string(),
             thread_id: None,
             system_prompt: None,
@@ -140,6 +141,7 @@ sys.stdin.readline()
 
     let result = adapter
         .stream_chat(ChatRequest {
+            sampling: Default::default(),
             model_id: "codex-delegate".to_string(),
             thread_id: None,
             system_prompt: None,

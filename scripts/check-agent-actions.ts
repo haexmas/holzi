@@ -3,6 +3,7 @@
 // that keep the model's offer safe — tool names, the guardrail lock, the actions withheld from the
 // built-in agent, the core offer, and that every read action runs for a built-in agent caller.
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 
 import {
@@ -21,6 +22,7 @@ import {
 } from '../src/lib/actions/agentTools.ts'
 import { ALL_ACTIONS } from '../src/lib/actions/catalog.ts'
 import type { ActionCaller, JsonSchema } from '../src/lib/actions/types.ts'
+import { TOOLS_PATH, evalTools } from './export-eval-tools.ts'
 import { TARGET_FIELD, catalogRunner, sample } from './lib/actions-harness.ts'
 
 const BUILTIN: ActionCaller = { kind: 'builtinAgent' }
@@ -311,4 +313,79 @@ test('describeToolCall falls back for a name that is no offered action', () => {
     undefined,
   )
   assert.ok(describeToolCall('settings_get', null, ALL_ACTIONS, resolve))
+})
+
+const EVAL_DIR = new URL('../src-tauri/src/chat/eval/', import.meta.url)
+
+type EvalExpect = 'none' | { tool: string; args?: Record<string, unknown> }[]
+type EvalSentence = {
+  id: string
+  lang: string
+  kind: string
+  text: string
+  expect: EvalExpect
+  selfTest?: boolean
+}
+
+function evalSet(): { version: number; sentences: EvalSentence[] } {
+  return JSON.parse(readFileSync(new URL('eval_set.json', EVAL_DIR), 'utf8'))
+}
+
+test('the tool snapshot of the evaluation is the catalog as it is (run pnpm export:eval-tools)', () => {
+  const snapshot = JSON.parse(readFileSync(TOOLS_PATH, 'utf8'))
+  assert.deepEqual(snapshot, JSON.parse(JSON.stringify(evalTools())))
+})
+
+test('every sentence of the evaluation set is well formed and names tools of the snapshot', () => {
+  const { version, sentences } = evalSet()
+  const tools = evalTools()
+  assert.equal(version, 2)
+  assert.equal(new Set(sentences.map((x) => x.id)).size, sentences.length)
+  const runtimeIds = new Set([...Object.values(TARGET_FIELD), 'threadId'])
+  for (const sentence of sentences) {
+    assert.ok(['de', 'en'].includes(sentence.lang), sentence.id)
+    assert.ok(
+      ['read', 'change', 'smalltalk'].includes(sentence.kind),
+      sentence.id,
+    )
+    assert.ok(sentence.text.trim().length > 0, sentence.id)
+    if (sentence.expect === 'none') {
+      assert.equal(sentence.kind, 'smalltalk', sentence.id)
+      continue
+    }
+    assert.notEqual(sentence.kind, 'smalltalk', sentence.id)
+    assert.ok(sentence.expect.length > 0, sentence.id)
+    for (const call of sentence.expect) {
+      assert.ok(
+        tools.some((tool) => tool.toolName === call.tool),
+        `${sentence.id}: ${call.tool} is not in the snapshot`,
+      )
+      for (const field of Object.keys(call.args ?? {}))
+        assert.ok(
+          !runtimeIds.has(field),
+          `${sentence.id}: ${field} is a runtime id`,
+        )
+    }
+  }
+})
+
+test('the evaluation set covers both languages, smalltalk and tools outside the core offer', () => {
+  const { sentences } = evalSet()
+  const tools = evalTools()
+  const count = (pick: (x: EvalSentence) => boolean) =>
+    sentences.filter(pick).length
+  assert.ok(count((x) => x.kind === 'smalltalk') >= 6)
+  const outsideCore = count(
+    (x) =>
+      x.expect !== 'none' &&
+      x.expect.some((c) => !tools.find((t) => t.toolName === c.tool)?.core),
+  )
+  assert.ok(outsideCore >= 8, `${outsideCore} sentences need the search`)
+  const selfTest = sentences.filter((x) => x.selfTest)
+  assert.ok(selfTest.length >= 5 && selfTest.length <= 6, `${selfTest.length}`)
+  assert.deepEqual([...new Set(selfTest.map((x) => x.lang))].sort(), [
+    'de',
+    'en',
+  ])
+  assert.ok(selfTest.some((x) => x.kind === 'smalltalk'))
 })

@@ -490,6 +490,7 @@ pub async fn send_message(
     }
 
     let request = ChatRequest {
+        sampling: Default::default(),
         model_id: request_model_id,
         thread_id: Some(thread_id),
         system_prompt: args.system_prompt.clone(),
