@@ -3,7 +3,7 @@
 // own command wrappers (src/composables/useInstance.ts, useProviders.ts, useChat.ts), duck-typed here
 // rather than imported, since scripts/e2e runs outside the frontend's own build.
 import { randomBytes, randomUUID } from 'node:crypto'
-import type { InvokeOptions, InvokeResult } from './webdriver.ts'
+import type { InvokeOptions, InvokeResult } from './platform/host.ts'
 import type { StepRecorder } from './page.ts'
 import type { Provider } from './provider.ts'
 

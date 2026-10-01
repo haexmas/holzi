@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { scenario } from '../lib/scenario.ts'
 import { createAndUnlock } from '../lib/flows.ts'
-import type { InvokeResult } from '../lib/webdriver.ts'
+import type { InvokeResult } from '../lib/platform/host.ts'
 import {
   KEY,
   clearAlias,
