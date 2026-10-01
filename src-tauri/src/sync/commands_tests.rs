@@ -141,3 +141,25 @@ fn stored_servers_read_back_and_an_empty_list_brings_back_the_defaults() {
         servers::default_nostr_relays()
     );
 }
+
+#[test]
+fn a_join_uses_the_servers_it_is_given_and_the_built_in_ones_for_empty_lists() {
+    use crate::sync::link::join_task::JoinConfig;
+    use crate::sync::servers::{default_nostr_relays, ServerConfig};
+
+    let own = JoinConfig::with_servers(ServerConfig {
+        nostr_relays: vec!["wss://nostr.example.org".to_string()],
+        iroh_relays: Vec::new(),
+    });
+    assert_eq!(
+        own.nostr_relays,
+        vec!["wss://nostr.example.org".to_string()]
+    );
+
+    let empty = JoinConfig::with_servers(ServerConfig::default());
+    assert_eq!(empty.nostr_relays, default_nostr_relays());
+    assert_eq!(
+        JoinConfig::production().nostr_relays,
+        default_nostr_relays()
+    );
+}

@@ -78,6 +78,11 @@ pub struct LinkJoinStartArgs {
     pub device_name: String,
     #[ts(type = "string")]
     pub passphrase: Passphrase,
+    /// The servers the vault's devices find each other through, when they are
+    /// not the built-in ones; empty lists mean the built-in ones.
+    #[serde(default)]
+    #[ts(optional)]
+    pub servers: Option<SyncServers>,
 }
 
 /// Starts joining a vault with a code; the vault is created here, with its
@@ -90,6 +95,17 @@ pub async fn link_join_start(
     args: LinkJoinStartArgs,
 ) -> Result<LinkJoinState> {
     state.gate().ensure_can_open()?;
+    let config = match &args.servers {
+        Some(servers) => {
+            servers::validate(&servers.nostr_relays, &servers.iroh_relays)
+                .map_err(|reason| HolziError::InvalidInput { reason })?;
+            JoinConfig::with_servers(servers::ServerConfig {
+                nostr_relays: servers.nostr_relays.clone(),
+                iroh_relays: servers.iroh_relays.clone(),
+            })
+        }
+        None => JoinConfig::production(),
+    };
     let emit_app = app.clone();
     let emit = Arc::new(move |state: &LinkJoinState| {
         events::emit(&emit_app, LINK_JOIN_STATE_CHANGED, state.clone());
@@ -103,7 +119,7 @@ pub async fn link_join_start(
             device_name: args.device_name,
             passphrase: args.passphrase,
         },
-        JoinConfig::production(),
+        config,
     )
     .await
 }

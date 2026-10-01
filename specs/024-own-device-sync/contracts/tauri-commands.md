@@ -6,26 +6,31 @@ Oberfläche erzeugt `ts-rs` wie bisher.
 
 ## Befehle
 
-| Befehl                                     | Eingabe                                                                       | Ergebnis                                             | Wer                                           |
-| ------------------------------------------ | ----------------------------------------------------------------------------- | ---------------------------------------------------- | --------------------------------------------- |
-| `sync_status`                              | –                                                                             | `SyncStatus`                                         | jedes Gerät                                   |
-| `list_vault_devices` (erweitert, Spec 023) | –                                                                             | `VaultDevice[]`                                      | jedes Gerät                                   |
-| `vault_public_identity`                    | –                                                                             | `{ npub: string, hex: string }`                      | jedes Gerät                                   |
-| `link_code_create`                         | –                                                                             | `{ code: string, qrSvg: string, expiresAt: number }` | nur Hauptgerät                                |
-| `link_code_cancel`                         | –                                                                             | –                                                    | nur Hauptgerät                                |
-| `link_confirm`                             | `{ asMainDevice: boolean }`                                                   | –                                                    | nur Hauptgerät, nur während eines Verknüpfens |
-| `link_reject`                              | –                                                                             | –                                                    | nur Hauptgerät                                |
-| `link_join_start`                          | `{ code: string, vaultName: string, deviceName: string, passphrase: string }` | `{ state: 'waiting_for_confirmation' }`              | Startseite, ohne offene Vault                 |
-| `link_join_status`                         | –                                                                             | `LinkJoinState`                                      | Startseite                                    |
-| `link_join_cancel`                         | –                                                                             | –                                                    | Startseite                                    |
-| `admission_decide`                         | `{ devicePubkey: string, admit: boolean }`                                    | –                                                    | nur Hauptgerät                                |
-| `device_remove`                            | `{ devicePubkey: string }`                                                    | –                                                    | nur Hauptgerät, nicht für sich selbst         |
-| `sync_copy_notice_dismiss`                 | –                                                                             | –                                                    | jedes Gerät                                   |
-| `sync_servers_get`                         | –                                                                             | `{ nostrRelays: string[], irohRelays: string[] }`    | jedes Gerät                                   |
-| `sync_servers_set`                         | `{ nostrRelays: string[], irohRelays: string[] }`                             | –                                                    | jedes Gerät                                   |
+| Befehl                                     | Eingabe                                                                                                                                  | Ergebnis                                             | Wer                                           |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | --------------------------------------------- |
+| `sync_status`                              | –                                                                                                                                        | `SyncStatus`                                         | jedes Gerät                                   |
+| `list_vault_devices` (erweitert, Spec 023) | –                                                                                                                                        | `VaultDevice[]`                                      | jedes Gerät                                   |
+| `vault_public_identity`                    | –                                                                                                                                        | `{ npub: string, hex: string }`                      | jedes Gerät                                   |
+| `link_code_create`                         | –                                                                                                                                        | `{ code: string, qrSvg: string, expiresAt: number }` | nur Hauptgerät                                |
+| `link_code_cancel`                         | –                                                                                                                                        | –                                                    | nur Hauptgerät                                |
+| `link_confirm`                             | `{ asMainDevice: boolean }`                                                                                                              | –                                                    | nur Hauptgerät, nur während eines Verknüpfens |
+| `link_reject`                              | –                                                                                                                                        | –                                                    | nur Hauptgerät                                |
+| `link_join_start`                          | `{ code: string, vaultName: string, deviceName: string, passphrase: string, servers?: { nostrRelays: string[], irohRelays: string[] } }` | `{ state: 'waiting_for_confirmation' }`              | Startseite, ohne offene Vault                 |
+| `link_join_status`                         | –                                                                                                                                        | `LinkJoinState`                                      | Startseite                                    |
+| `link_join_cancel`                         | –                                                                                                                                        | –                                                    | Startseite                                    |
+| `admission_decide`                         | `{ devicePubkey: string, admit: boolean }`                                                                                               | –                                                    | nur Hauptgerät                                |
+| `device_remove`                            | `{ devicePubkey: string }`                                                                                                               | –                                                    | nur Hauptgerät, nicht für sich selbst         |
+| `sync_copy_notice_dismiss`                 | –                                                                                                                                        | –                                                    | jedes Gerät                                   |
+| `sync_servers_get`                         | –                                                                                                                                        | `{ nostrRelays: string[], irohRelays: string[] }`    | jedes Gerät                                   |
+| `sync_servers_set`                         | `{ nostrRelays: string[], irohRelays: string[] }`                                                                                        | –                                                    | jedes Gerät                                   |
 
 „Nur Hauptgerät“ prüft das Backend (`NotMainDevice`), nicht nur die Oberfläche. `passphrase` in
 `link_join_start` wird wie beim Anlegen einer Vault behandelt (`Passphrase`, nie protokolliert).
+`servers` nennt die Server, über die sich die Geräte der Vault finden, wenn es nicht die eingebauten
+sind; leere Listen oder fehlendes `servers` heißen die eingebauten. Eine neue Installation kann die
+Server nicht aus einer Vault lesen, die sie noch nicht hat; ohne diese Angabe fände sie ein
+Hauptgerät mit eigenen Servern nicht. Die Oberfläche der Startseite bietet das Feld bisher nicht an
+(die E2E-Szenarien mit eigenem Nostr-Relay nutzen die Angabe).
 
 ### Typen
 

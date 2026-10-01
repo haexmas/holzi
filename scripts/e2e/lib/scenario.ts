@@ -9,6 +9,8 @@ import { removeRoot, startInstance } from './instance.ts'
 import type { ColorScheme, Instance } from './instance.ts'
 import { toTools } from './preflight.ts'
 import type { Tools } from './preflight.ts'
+import { startNostrRelay } from './nostr-relay.ts'
+import type { NostrRelay } from './nostr-relay.ts'
 import { startProvider } from './provider.ts'
 import type { Behavior, Provider, StandInModel } from './provider.ts'
 import { captureFailure } from './artifacts.ts'
@@ -117,6 +119,8 @@ export interface ScenarioContext {
     behavior?: Behavior,
     options?: { models?: StandInModel[] },
   ): Promise<Provider>
+  /** A Nostr relay (the binary built with `--features e2e`) the instances of a scenario can share; ended with the context. */
+  nostrRelay(): Promise<NostrRelay>
   /** A passphrase and a provider key generated for this run; no credential is ever committed. */
   credentials(): { passphrase: string; providerKey: string }
 }
@@ -298,6 +302,13 @@ export async function runScenario(
       } finally {
         pendingStep = undefined
       }
+    },
+    async nostrRelay() {
+      const relay = await startNostrRelay({
+        logFile: join(env.runDir, name, 'nostr-relay.log'),
+      })
+      teardowns.push(() => relay.stop())
+      return relay
     },
     async provider(behavior, options) {
       const started = await startProvider(behavior, options)

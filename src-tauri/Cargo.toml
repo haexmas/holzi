@@ -1,5 +1,6 @@
 [package]
 name = "holzi"
+default-run = "holzi"
 version = "0.1.0"
 description = "Portable personal-agent Tauri app with embedded encrypted store"
 authors = ["haexmas"]
@@ -11,6 +12,11 @@ rust-version = "1.95"
 [lib]
 name = "holzi_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "e2e_nostr_relay"
+path = "src/bin/e2e_nostr_relay.rs"
+required-features = ["e2e"]
 
 [build-dependencies]
 tauri-build = { version = "2.3.0", features = [] }
@@ -47,6 +53,11 @@ llm-metal = ["llm-cpu", "mistralrs/metal"]
 # (audio module, interrupt matcher, voice Tauri commands). Independent of
 # llm-cpu — see the llm-cpu comment above for what running without it means.
 voice = ["dep:cpal"]
+
+# End-to-end tests (spec 024, T078): builds `e2e_nostr_relay`, an in-process
+# `MockRelay` as a process the two application processes of a scenario share.
+# Not part of any default build.
+e2e = ["nostr-sdk/local-relay"]
 
 [dependencies]
 tauri = { version = "2.12.0", features = [] }
