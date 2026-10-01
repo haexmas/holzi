@@ -25,10 +25,12 @@ Repository `https://github.com/haex-space/haex-vault`, Revision
   Mitgliederlisten nennen immer eine Vault-Identität. Sie genügt aber nicht, um
   jemanden einzuladen (FR-008). Der private Schlüssel liegt nur auf Hauptgeräten
   (Spec 024).
-- **Einladungslink**: ein vom Admin erzeugter Text (auch als QR-Code) mit Kennung
-  und Name des Space, Vault-Identität des Admins, Fähigkeitsstufe, einem
-  Einmalgeheimnis, Ablaufzeit und Hinweisen auf das Relay, ohne Schlüssel. Der
-  Admin gibt ihn selbst weiter, etwa über einen Messenger.
+- **Einladungslink**: ein vom Admin erzeugter und mit der Vault-Identität des
+  Admins signierter Text (auch als QR-Code) mit Kennung und Name des Space,
+  Vault-Identität des Admins, Fähigkeitsstufe, einem Einmalgeheimnis, Ablaufzeit
+  und Hinweisen auf das Relay, ohne Schlüssel. Die Signatur umfasst alle diese
+  Angaben und schützt sie vor Änderung. Der Admin gibt ihn selbst weiter, etwa
+  über einen Messenger.
 - **Geräteschlüssel**: das Schlüsselpaar eines einzelnen Geräts. Es verlässt
   das Gerät nie. Mit ihm meldet sich das Gerät an, unterschreibt alles, was es
   schreibt, und empfängt Schlüsselumschläge (D28).
@@ -358,6 +360,9 @@ erfundenem Geheimnis: A zeigt nichts an, speichert nichts und antwortet nicht.
    etwas anzuzeigen, zu speichern oder zu antworten.
 9. **Given** Ben ist Mitglied mit „Schreiben“, **When** er die Mitgliederliste
    öffnet, **Then** gibt es für ihn keine Möglichkeit, jemanden einzuladen.
+10. **Given** ein Einladungslink ist gefälscht oder nachträglich verändert,
+    **When** ihn jemand öffnet, **Then** weist holzi ihn vor der Vorschau ab und
+    sendet weder eine Annahme noch andere Daten an die darin genannte Identität.
 
 ---
 
@@ -709,13 +714,16 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   können, mit einem Namen, unter dem es im Space erscheint, einer
   Fähigkeitsstufe (FR-015) und einer Gültigkeit (Standard 7 Tage, wählbar). Der
   Link MUSS enthalten: Kennung und Name des Space, Vault-Identität des Admins,
-  Fähigkeitsstufe, ein zufälliges Einmalgeheimnis, die Ablaufzeit und Hinweise
-  auf das Relay, und keinen Schlüssel. holzi MUSS ihn als Text und als QR-Code
-  anbieten; weitergeben MUSS der Admin ihn selbst. Das Einmalgeheimnis MUSS
-  mindestens 128 Bit Zufall haben. Die Vault-Identität allein DARF NICHT
-  genügen, um eine Einladung auszulösen; holzi DARF keinen Weg anbieten, eine
-  Einladung an eine eingegebene Vault-Identität zu schicken. holzi MUSS beim
-  Öffnen einen unlesbaren, abgelaufenen oder bereits eingelösten Link und einen
+  Fähigkeitsstufe, ein zufälliges Einmalgeheimnis, die Ablaufzeit, Hinweise auf
+  das Relay und eine Signatur der Admin-Vault-Identität über alle diese Angaben,
+  aber keinen Schlüssel. holzi MUSS ihn als Text und als QR-Code anbieten;
+  weitergeben MUSS der Admin ihn selbst. Das Einmalgeheimnis MUSS mindestens
+  128 Bit Zufall haben. Die Signatur MUSS vor der Vorschau geprüft werden, damit
+  ein gefälschter oder veränderter Link lokal abgewiesen wird und keine Annahme
+  gesendet werden kann. Die Vault-Identität allein DARF NICHT genügen, um eine
+  Einladung auszulösen; holzi DARF keinen Weg anbieten, eine Einladung an eine
+  eingegebene Vault-Identität zu schicken. holzi MUSS beim Öffnen einen
+  unlesbaren, ungültigen, abgelaufenen oder bereits eingelösten Link und einen
   Link des eigenen Space oder eines Space, in dem die eigene Vault schon
   Mitglied ist, mit einem Hinweis abweisen.
 - **FR-009**: Das Öffnen eines Links MUSS der Vault zunächst nur eine Vorschau
@@ -1013,8 +1021,9 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   nebeneinander.
 - **Einladung**: ein vom Admin erzeugter Einladungslink (siehe Begriffe) mit
   Kennung und Name des Space, Admin, Fähigkeitsstufe, Einmalgeheimnis,
-  Ablaufzeit und Hinweisen auf das Relay, ohne Schlüssel. Der Admin speichert
-  je Einladung Namen, Fähigkeitsstufe, Geheimnis, Ablaufzeit und Zustand; die
+  Ablaufzeit, Hinweisen auf das Relay und einer Signatur der Admin-Vault-Identität
+  über diese Angaben, ohne Schlüssel. Der Admin speichert je Einladung Namen,
+  Fähigkeitsstufe, Geheimnis, Ablaufzeit und Zustand; die
   Antwort „angenommen“ (unterschrieben, mit Geheimnis und Geräteliste) geht als
   Nachricht (FR-041) an den Admin, ebenso die Ablehnung der Annahme und das
   Zurückziehen danach. Zustand beim Admin: „offen“, „angenommen, wartet auf

@@ -693,9 +693,12 @@ angezeigter ursprünglicher Autorin.
 
 **Empfangen**
 
-- **FR-019**: Das Öffnen eines Einladungslinks MUSS eine Vorschau zeigen: Name
-  und Vault-Identität des Eigentümers, Erweiterung, Freigabetyp, Beschriftung
-  der Wurzel und angebotene Fähigkeiten; dabei geht nichts an den Eigentümer.
+- **FR-019**: Das Öffnen eines Einladungslinks MUSS zuerst dessen Signatur nach
+  Spec 027 FR-008 prüfen und erst danach eine Vorschau zeigen: Name und
+  Vault-Identität des Eigentümers, Erweiterung, Freigabetyp, Beschriftung der
+  Wurzel und angebotene Fähigkeiten; dabei geht nichts an den Eigentümer.
+  Einen gefälschten oder veränderten Link MUSS holzi lokal abweisen und darf
+  keine Annahme senden.
   Der Empfänger MUSS annehmen oder verwerfen können. Die Annahme ist eine
   Antwort an den Eigentümer mit dem Einmalgeheimnis, unterschrieben vom
   Geräteschlüssel des annehmenden Geräts, gültig, wenn es auf der aktuellen
@@ -711,8 +714,9 @@ angezeigter ursprünglicher Autorin.
   installierte Version den Freigabetyp nicht, MUSS die Einladung das nennen und
   die Installation beziehungsweise das Update über die übliche Bestätigung
   anbieten. Die Einladung MUSS offen bleiben, bis der Empfänger annimmt oder
-  ablehnt. Als dieselbe Erweiterung gilt nur eine mit gleichem öffentlichem
-  Schlüssel und Namen.
+  verwirft; mit Ablauf oder Zurückziehen des Links endet sie ebenfalls. Als
+  dieselbe Erweiterung gilt nur eine mit gleichem öffentlichem Schlüssel und
+  Namen.
 - **FR-021**: Nach der Annahme MÜSSEN die Daten in den Tabellen derselben
   Erweiterung in der Vault des Empfängers landen. holzi MUSS festhalten, welche
   Einträge zu welcher empfangenen Datenfreigabe gehören.
@@ -884,10 +888,10 @@ angezeigter ursprünglicher Autorin.
   mit Fähigkeiten zu einer Generation, auf dem Relay (Spec 026). Die Vault des
   Eigentümers steht nicht darin und ist am Relay dennoch mit allen ihren
   Geräten berechtigt (FR-016).
-- **Einladung**: ein vom Eigentümer erzeugter Einladungslink aus Spec 027 mit
-  Datenfreigabe, Eigentümer, Erweiterung, Freigabetyp, Beschriftung,
-  Fähigkeiten, Einmalgeheimnis und Ablaufzeit, ohne Schlüssel. Der Eigentümer
-  speichert sie mit Namen und Stand (offen, angenommen, abgelehnt, abgelaufen,
+- **Einladung**: ein vom Eigentümer erzeugter, nach Spec 027 FR-008 signierter
+  Einladungslink mit Datenfreigabe, Eigentümer, Erweiterung, Freigabetyp,
+  Beschriftung, Fähigkeiten, Einmalgeheimnis und Ablaufzeit, ohne Schlüssel.
+  Der Eigentümer speichert sie mit Namen und Stand (offen, angenommen, abgelehnt, abgelaufen,
   zurückgezogen). Die Annahme ist eine vom Empfänger unterschriebene Antwort,
   die der Eigentümer bestätigt (FR-010, FR-019).
 - **Zuordnung empfangener Einträge**: beim Empfänger; welcher Eintrag in den

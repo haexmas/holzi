@@ -363,8 +363,12 @@ exact format is plan work. No silent LWW loss of file content.
 ### 8.4 Membership changes
 
 - **Invite** (D33): the admin creates an **invite link** (space id and name, admin vault identity,
-  capability, a 128-bit one-time secret, expiry, relay hints; no keys) and hands it over out of
-  band. Opening it only shows a preview; nothing is sent. Accepting sends a signed acceptance
+  capability, a 128-bit one-time secret, expiry, relay hints and an admin-vault signature over
+  those fields; no keys) and hands it over out of band. The recipient verifies that signature
+  before seeing the preview; a forged or modified link is rejected locally and sends nothing.
+  Any admin device may initiate link creation; if it is a linked device without the vault private
+  key, a main device signs the payload through the own-vault sync path.
+  Accepting sends a signed acceptance
   carrying the secret and the invitee's device list to the admin vault as a Nostr DM (NIP-17). An
   admin device drops every message without a valid, still open secret without display, storage or
   reply, so knowing a vault identity buys no way to send invitations. Only after the admin has
