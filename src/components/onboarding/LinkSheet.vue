@@ -4,7 +4,9 @@
  * new installation enters the code a main device shows, gives this device a name and the new vault
  * its own passphrase. The vault is created here and stays only when the link finishes; nothing is
  * created before the user chose to link, so there is no vault to leave behind (FR-025). The
- * passphrase never leaves this device.
+ * passphrase never leaves this device. A main device that uses its own Nostr servers cannot tell a
+ * new installation about them, so the form takes them; the built-in ones are shown while none is
+ * entered.
  */
 import type { LinkJoinState } from '@bindings/LinkJoinState'
 
@@ -27,12 +29,16 @@ const passwordLabels = computed(() => ({
   copied: t('onboarding.passwordField.copied'),
 }))
 const { joinStartAsync, joinCancelAsync, onJoinState } = useDeviceLink()
+const { syncServersDefaultsAsync } = useSync()
 
 const code = ref('')
 const vaultName = ref('')
 const deviceName = ref('')
 const passphrase = ref('')
 const passphraseConfirm = ref('')
+/** The Nostr servers entered here; empty means the built-in ones. */
+const nostrRelays = ref<string[]>([])
+const defaultNostrRelays = ref<string[]>([])
 const submitting = ref(false)
 const error = ref<string | null>(null)
 /** `null` while the form is shown. */
@@ -51,12 +57,17 @@ function reset() {
   deviceName.value = ''
   passphrase.value = ''
   passphraseConfirm.value = ''
+  nostrRelays.value = []
   error.value = null
   state.value = null
 }
 
 let stopListening: (() => void) | undefined
 onMounted(async () => {
+  // Only for showing; linking works without, with the backend's own built-in servers.
+  syncServersDefaultsAsync()
+    .then((defaults) => (defaultNostrRelays.value = defaults.nostrRelays))
+    .catch(() => {})
   stopListening = await onJoinState((next) => {
     if (state.value !== null) state.value = next
   })
@@ -105,6 +116,9 @@ async function onSubmit() {
       vaultName: vaultName.value,
       deviceName: deviceName.value.trim(),
       passphrase: passphrase.value,
+      servers: nostrRelays.value.length
+        ? { nostrRelays: nostrRelays.value, irohRelays: [] }
+        : undefined,
     })
     if (closeRequested) {
       await cancelOnClose
@@ -119,11 +133,15 @@ async function onSubmit() {
   } catch (e: unknown) {
     state.value = null
     // The backend names error kinds in PascalCase; the texts are keyed in camelCase.
-    const kind = (e as { kind?: string })?.kind
+    const { kind, reason } = (e as { kind?: string; reason?: string }) ?? {}
     const key = kind
       ? kind.charAt(0).toLowerCase() + kind.slice(1)
       : 'openFailed'
-    error.value = t(`errors.${key}`, t('errors.openFailed'))
+    // An invalid server says which one; every other kind has its own text.
+    error.value =
+      kind === 'InvalidInput' && reason
+        ? reason
+        : t(`errors.${key}`, t('errors.openFailed'))
   } finally {
     submitting.value = false
   }
@@ -131,6 +149,11 @@ async function onSubmit() {
 
 async function onCancel() {
   await joinCancelAsync()
+}
+
+async function addNostrRelayAsync(url: string): Promise<boolean> {
+  nostrRelays.value = [...nostrRelays.value, url]
+  return true
 }
 
 /** Back to the form after a failure. */
@@ -221,6 +244,16 @@ function onOpenVault() {
             :labels="passwordLabels"
           />
         </div>
+        <SettingsServerList
+          :label="t('onboarding.link.nostr')"
+          :description="t('onboarding.link.nostrDescription')"
+          :servers="nostrRelays"
+          :defaults="defaultNostrRelays"
+          placeholder="wss://"
+          test-id="link-servers-nostr"
+          :add-async="addNostrRelayAsync"
+          @remove="nostrRelays = nostrRelays.filter((url) => url !== $event)"
+        />
         <p v-if="error" class="text-sm text-destructive" role="alert">
           {{ error }}
         </p>

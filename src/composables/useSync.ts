@@ -23,6 +23,11 @@ export function useSync() {
     return await invoke<SyncServers>('sync_servers_get')
   }
 
+  /** The built-in servers used while none are listed; needs no vault. */
+  async function syncServersDefaultsAsync(): Promise<SyncServers> {
+    return await invoke<SyncServers>('sync_servers_defaults')
+  }
+
   async function syncServersSetAsync(args: SyncServers): Promise<void> {
     await invoke('sync_servers_set', { args })
   }
@@ -49,6 +54,7 @@ export function useSync() {
     syncStatusAsync,
     vaultPublicIdentityAsync,
     syncServersGetAsync,
+    syncServersDefaultsAsync,
     syncServersSetAsync,
     deviceRemoveAsync,
     admissionDecideAsync,
