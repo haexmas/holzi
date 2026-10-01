@@ -1,7 +1,7 @@
 //! Unit tests for the tier-selection algorithm. Uses the compiled-in
 //! catalog against synthetic `HardwareInfo` scenarios.
 
-use super::{recommend_tiers, Tier};
+use super::{entries, recommend_tiers, CatalogEntry, Tier};
 use crate::hardware::{Backend, Fit, HardwareInfo};
 
 fn hw(backend: Backend, ram: u64, vram: Option<u64>) -> HardwareInfo {
@@ -81,4 +81,37 @@ fn catalog_contains_the_selected_qwen3_profiles() {
         crate::catalog::get("qwen3-0.6b-instruct-q4_k_m").expect("mobile low-memory profile");
     assert_eq!(low_memory.family, "Qwen 3");
     assert_eq!(low_memory.parameters, "0.6B");
+}
+
+#[test]
+fn tool_use_is_optional_and_absent_for_every_shipped_entry_until_measured() {
+    // Filled after the first evaluation run (spec 032 T046); until then no entry claims anything.
+    assert!(entries().iter().all(|entry| entry.tool_use.is_none()));
+    let entry: CatalogEntry = serde_json::from_value(serde_json::json!({
+        "id": "x", "name": "x", "family": "x", "parameters": "1B", "quantization": "Q4",
+        "hf_repo": "a/b", "hf_filename": "c.gguf", "tokenizer_repo": "a/b",
+        "approx_size_bytes": 1, "context_window": 1, "license": "MIT",
+        "tool_use": "unsupported",
+    }))
+    .unwrap();
+    assert_eq!(
+        entry.tool_use,
+        Some(crate::model_capabilities::ToolSupport::Unsupported)
+    );
+}
+
+#[test]
+fn a_local_record_without_a_catalog_answer_starts_with_tool_use_not_determined() {
+    for entry in entries() {
+        assert_eq!(
+            crate::model_capabilities::ModelCapabilities::local(&entry.id).tool_use,
+            None,
+            "{}",
+            entry.id
+        );
+    }
+    assert_eq!(
+        crate::model_capabilities::ModelCapabilities::local("my-own-finetune").tool_use,
+        None
+    );
 }

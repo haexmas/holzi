@@ -331,6 +331,12 @@ export function createChatState(
       const override = dependencyOverrides[name]
       return override ? { ...real, [name]: override } : real
     }
+    // Pure TS shared with the check scripts (the notice logic); runs as it is.
+    if (specifier === '~/lib/chat/toolNotice')
+      return runComposable(
+        resolvePath(repoRoot, 'src/lib/chat/toolNotice.ts'),
+        req,
+      )
     // Used only inside an action handler (`chat.messages.list`), which these tests never call.
     if (specifier === '~/lib/actions/agentTools')
       return { agentSafeMessages: () => ({ messages: [] }) }
@@ -403,6 +409,7 @@ export function createChatState(
     'useChatNavigation',
     'useAction',
     'useChatTab',
+    'useToolNotice',
     'onVaultTablesChanged',
     'useModelsStore',
     'storeToRefs',
@@ -461,6 +468,7 @@ export function createChatState(
         return { ok: true, result: null }
       },
     req('~/composables/useChatTab').useChatTab,
+    req('~/composables/useToolNotice').useToolNotice,
     onVaultTablesChanged,
     () => modelStore,
     pinia.storeToRefs,

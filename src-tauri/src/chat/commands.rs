@@ -30,6 +30,8 @@ use uuid::Uuid;
 
 use crate::adapters::cli_delegate::autonomy::AutonomyMode;
 use crate::adapters::types::{ChatMessage as LlmMessage, ChatRequest, ChatRole, ToolSpec};
+use crate::chat::events::EVENT_CHAT_TOOL_AVAILABILITY;
+use crate::chat::tools::availability::{ToolAvailability, ToolAvailabilityEvent};
 use crate::chat::tools::offer::core_offer;
 use crate::chat::tools::ApprovalDecision;
 use crate::error::{HolziError, Result};
@@ -422,7 +424,10 @@ pub async fn send_message(
         .split_once(':')
         .map(|(_, remote)| remote.to_string())
         .unwrap_or_else(|| session.model_id.clone());
-    let tools = {
+    // Tools only for a model that can use them; a delegate runs its own agent (spec 032 R14).
+    let tool_availability =
+        ToolAvailability::of(session.provider_kind, model_capabilities.as_ref());
+    let tools = if tool_availability.offers_tools() {
         let registry = chat
             .tool_registry
             .lock()
@@ -430,6 +435,8 @@ pub async fn send_message(
                 reason: format!("chat.tool_registry mutex poisoned: {e}"),
             })?;
         core_offer(&registry)
+    } else {
+        Vec::new()
     };
     let reasoning_requested =
         reasoning_requested_for(model_capabilities.as_ref(), &request_model_id, &tools);
@@ -549,6 +556,14 @@ pub async fn send_message(
         .map(|_| ())
     })
     .await?;
+
+    let _ = app.emit(
+        EVENT_CHAT_TOOL_AVAILABILITY,
+        ToolAvailabilityEvent {
+            thread_id,
+            state: tool_availability,
+        },
+    );
 
     let app_for_task = app.clone();
     let session_for_task = session.clone();

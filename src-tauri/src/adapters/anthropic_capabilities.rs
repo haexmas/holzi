@@ -15,7 +15,8 @@ use std::fmt;
 
 use crate::adapters::AttachmentKind;
 use crate::model_capabilities::{
-    ModelCapabilities, ReasoningControl, ReasoningOption, ThinkingStyle,
+    ModelCapabilities, ReasoningControl, ReasoningOption, ThinkingStyle, ToolSupport, ToolUse,
+    ToolUseBasis,
 };
 
 /// `{"supported": <bool>}` — the shape of every capability leaf.
@@ -180,6 +181,9 @@ pub(super) fn map_capabilities(wire: &WireCapabilities) -> ModelCapabilities {
         reasoning: reasoning(wire),
         accepted_attachment_kinds: attachment_kinds(wire),
         thinking_style: thinking_style(wire),
+        // The wire API has no tool field; every current Claude model calls tools. A provider that
+        // reports the opposite takes precedence (spec 032 FR-015), there is no such signal yet.
+        tool_use: Some(ToolUse::new(ToolSupport::Supported, ToolUseBasis::Provider)),
     }
 }
 

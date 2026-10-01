@@ -27,6 +27,8 @@ pub(crate) const EVENT_CHAT_TOOL_RESULT: &str = "chat-tool-result";
 pub(crate) const EVENT_CHAT_TURN_COMPLETE: &str = "chat-turn-complete";
 pub(crate) const EVENT_TOOL_PERMISSION_REQUEST: &str = "tool-permission-request";
 pub(crate) const EVENT_CHAT_RETRY: &str = "chat-retry";
+/// Once per turn: whether the model got tools (spec 032 US4, `ToolAvailabilityEvent`).
+pub(crate) const EVENT_CHAT_TOOL_AVAILABILITY: &str = "chat-tool-availability";
 const EVENT_MODEL_LOAD_ERROR: &str = "model-load-error";
 pub(crate) const EVENT_CHAT_AGENT_ACTIVITY: &str = "chat-agent-activity";
 

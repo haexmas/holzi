@@ -12,6 +12,7 @@ mod action_bridge_tests;
 pub mod action_tool;
 #[cfg(test)]
 mod action_tool_tests;
+pub mod availability;
 pub mod cli;
 #[cfg(test)]
 mod cli_tests;

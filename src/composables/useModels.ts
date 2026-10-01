@@ -33,6 +33,11 @@ export interface ModelCapabilities {
   reasoning: ReasoningControl | null
   acceptedAttachmentKinds: AttachmentKind[] | null
   thinkingStyle: 'adaptive' | 'manual' | null
+  /** Whether the model can call tools (spec 032); `null` = not determined. */
+  toolUse: {
+    support: 'supported' | 'unsupported'
+    basis: 'provider' | 'curated' | 'template' | 'self_test'
+  } | null
 }
 
 export interface InstalledModel {
@@ -101,6 +106,11 @@ export interface DownloadProgressEvent {
   modelId: string
   bytesDownloaded: number
   bytesTotal: number | null
+}
+
+/** Emitted after a local model's tool-use capability was measured. */
+export interface ModelToolUseUpdatedEvent {
+  modelId: string
 }
 
 export interface DownloadFromHfArgs {
@@ -249,6 +259,16 @@ export function useModels() {
     })
   }
 
+  /** Subscribes to capability updates produced by a local-model probe/self-test. */
+  async function onToolUseUpdated(
+    handler: (event: ModelToolUseUpdatedEvent) => void,
+  ): Promise<UnlistenFn> {
+    return await listen<ModelToolUseUpdatedEvent>(
+      'model-tool-use-updated',
+      (e) => handler(e.payload),
+    )
+  }
+
   return {
     listInstalledAsync,
     downloadFromCatalogAsync,
@@ -257,5 +277,6 @@ export function useModels() {
     deleteAsync,
     onDownloadProgress,
     onDownloadComplete,
+    onToolUseUpdated,
   }
 }

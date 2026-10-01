@@ -274,6 +274,10 @@ const {
   pendingApprovalsByThread,
 )
 
+// Spec 032 US4: the once-per-conversation notice about a model's tool use.
+const { toolNoticeKey, handleToolAvailability, dismissToolNotice } =
+  useToolNotice(activeThreadId)
+
 // Spec 020: tab history, tab-bound chat actions, approval response and close guard (useChatTab).
 const { syncFromLocation, ui } = useChatTab({
   wmTab,
@@ -345,6 +349,7 @@ onMounted(async () => {
             wmTab.clearAttention()
             return handleTurnComplete(e)
           }),
+          chat.onToolAvailability(handleToolAvailability),
           chat.onToolPermissionRequest((e) => {
             wmTab.requestAttention()
             return handleToolPermissionRequest(e)
@@ -416,6 +421,8 @@ onBeforeUnmount(() => {
         :autonomy-preference-error="autonomyPreferenceError"
         :autonomy-preference-loading="autonomyPreferenceLoading"
         :loading-label="loadingLabel"
+        :tool-notice-key="toolNoticeKey"
+        @dismiss-tool-notice="dismissToolNotice"
         @retry-send="ui.retrySend"
         @retry-model-load="retryLoad()"
         @dismiss-error="dismissError"

@@ -44,6 +44,9 @@ pub struct CatalogEntry {
     pub approx_size_bytes: u64,
     pub context_window: u64,
     pub license: String,
+    /// Measured once for a curated model (spec 032); absent until the first evaluation run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_use: Option<crate::model_capabilities::ToolSupport>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

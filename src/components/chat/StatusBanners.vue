@@ -13,6 +13,8 @@ defineProps<{
   autonomyPreferenceError: string | null
   autonomyPreferenceLoading: boolean
   loadingLabel: string | null
+  /** i18n key of the tool-use notice to show (spec 032 US4), or `null`. */
+  toolNoticeKey?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -20,6 +22,7 @@ const emit = defineEmits<{
   retryModelLoad: []
   dismissError: []
   retryAutonomyMode: []
+  dismissToolNotice: []
 }>()
 
 const { t } = useI18n()
@@ -67,6 +70,20 @@ const { t } = useI18n()
       @click="emit('retryAutonomyMode')"
     >
       {{ t('chat.loading.retry') }}
+    </button>
+  </div>
+
+  <div
+    v-if="toolNoticeKey"
+    class="border-b border-primary/20 bg-primary/10 p-3 text-sm text-primary flex items-start justify-between gap-2"
+    role="status"
+  >
+    <span>{{ t(toolNoticeKey) }}</span>
+    <button
+      class="text-xs underline shrink-0"
+      @click="emit('dismissToolNotice')"
+    >
+      {{ t('chat.close') }}
     </button>
   </div>
 

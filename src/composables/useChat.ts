@@ -10,6 +10,7 @@
  * into a type-only `useChatTypes.ts` re-exported from here, leaving the
  * command and event wrappers in `useChat()`.
  */
+import type { ToolAvailability } from '~/lib/chat/toolNotice'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 
@@ -180,6 +181,12 @@ export interface ToolPermissionRequestEvent {
   toolInput: unknown
   riskClass: RiskClass
   toolSource: 'mcp' | 'cli' | 'action'
+}
+
+/** Fires once per `send_message` call: whether the model got tools (spec 032 US4). */
+export interface ToolAvailabilityEvent {
+  threadId: string
+  state: ToolAvailability
 }
 
 /** Fires exactly once per `send_message` call, after that turn's last
@@ -485,6 +492,15 @@ export function useChat() {
     )
   }
 
+  /** Subscribes to `chat-tool-availability` and returns the unlisten function. */
+  async function onToolAvailability(
+    handler: (e: ToolAvailabilityEvent) => void,
+  ): Promise<UnlistenFn> {
+    return await listen<ToolAvailabilityEvent>('chat-tool-availability', (ev) =>
+      handler(ev.payload),
+    )
+  }
+
   /**
    * Subscribes to `model-load-progress` and returns the unlisten
    * function. Payload carries the semantic phase + parameters; the
@@ -565,6 +581,7 @@ export function useChat() {
     onRetry,
     onTurnComplete,
     onToolPermissionRequest,
+    onToolAvailability,
     onModelLoadProgress,
     modelLoadStatusAsync,
     onModelLoadStatus,

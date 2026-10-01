@@ -138,7 +138,8 @@ async fn codex_model_capabilities_are_not_determined_rather_than_unsupported() {
     let models = adapter.list_models().await.expect("model listing");
 
     let caps = &models[0].capabilities;
-    assert!(caps.is_undetermined());
+    assert_eq!(caps.reasoning, None);
+    assert_eq!(caps.accepted_attachment_kinds, None);
     assert_eq!(caps.reasoning, None, "not Some(Unavailable)");
     assert_eq!(caps.accepted_attachment_kinds, None, "not Some(vec![])");
 
@@ -223,9 +224,9 @@ async fn claude_model_list_comes_from_the_models_api_via_oauth_bearer() {
         opus.thinking_style,
         Some(crate::model_capabilities::ThinkingStyle::Adaptive)
     );
-    assert!(
-        models[1].capabilities.is_undetermined(),
-        "an entry without a capabilities object is not determined"
+    assert_eq!(
+        models[1].capabilities.reasoning, None,
+        "an entry without a capabilities object leaves reasoning not determined"
     );
 }
 

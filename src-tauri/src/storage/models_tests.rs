@@ -5,7 +5,8 @@
 
 use crate::adapters::AttachmentKind;
 use crate::model_capabilities::{
-    ModelCapabilities, ReasoningControl, ReasoningOption, ThinkingStyle,
+    ModelCapabilities, ReasoningControl, ReasoningOption, ThinkingStyle, ToolSupport, ToolUse,
+    ToolUseBasis,
 };
 
 use super::{capabilities_from_column, capabilities_to_column};
@@ -18,6 +19,7 @@ fn determined() -> ModelCapabilities {
         }])),
         accepted_attachment_kinds: Some(vec![AttachmentKind::Text]),
         thinking_style: Some(ThinkingStyle::Manual),
+        tool_use: Some(ToolUse::new(ToolSupport::Supported, ToolUseBasis::Provider)),
     }
 }
 
