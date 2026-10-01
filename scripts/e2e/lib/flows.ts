@@ -57,7 +57,7 @@ async function invokeAfterBusyOperation(
 }
 
 /** The data of a successful `invoke`, or a clear error naming the command that failed or never answered. */
-function unwrap<T>(action: string, result: InvokeResult): T {
+export function unwrap<T>(action: string, result: InvokeResult): T {
   if ('ended' in result) {
     throw new Error(`${action}: the application ended before it answered`)
   }
@@ -67,7 +67,7 @@ function unwrap<T>(action: string, result: InvokeResult): T {
   return result.data as T
 }
 
-async function waitForPath(
+export async function waitForPath(
   instance: FlowInstance,
   prefix: string,
   deadlineMs = 5000,

@@ -59,7 +59,13 @@ pub struct JoinConfig {
 impl JoinConfig {
     /// The built-in servers: a new installation has no settings yet.
     pub fn production() -> Self {
-        let servers = crate::sync::servers::ServerConfig::default();
+        Self::with_servers(crate::sync::servers::ServerConfig::default())
+    }
+
+    /// The given servers, where an empty list means the built-in ones: for a
+    /// vault whose devices use servers of their own, which a new installation
+    /// cannot read from a vault it does not have yet.
+    pub fn with_servers(servers: crate::sync::servers::ServerConfig) -> Self {
         Self {
             nostr_relays: servers.effective_nostr_relays(),
             relay_mode: servers.relay_mode(),

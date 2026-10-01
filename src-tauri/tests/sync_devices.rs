@@ -88,15 +88,22 @@ async fn a_device_of_another_vault_neither_gets_nor_gives_anything() {
     let main = sync_fixture::create_main("mine", &relay_url).await;
     let linked = sync_fixture::join(&main, &relay_url).await;
     let foreign = sync_fixture::create_main("theirs", &relay_url).await;
+    let foreign_peer = sync_fixture::join(&foreign, &relay_url).await;
     foreign.write_thread("theirs", "not for you").await;
 
-    // The two own devices sync (the positive control that the sync had
-    // time to happen), and by then the foreign device has nothing.
+    // Both vaults complete a positive synchronization round before the
+    // isolation assertions. This makes the negative checks observe a settled
+    // exchange rather than only the initial state.
     eventually(&main, "secret", "mine only", || {
         linked.thread_title("secret").as_deref() == Some("mine only")
     })
     .await;
+    eventually(&foreign, "theirs", "not for you", || {
+        foreign_peer.thread_title("theirs").as_deref() == Some("not for you")
+    })
+    .await;
     assert_eq!(foreign.thread_title("secret"), None);
+    assert_eq!(foreign_peer.thread_title("secret"), None);
     assert_eq!(main.thread_title("theirs"), None);
     assert_eq!(linked.thread_title("theirs"), None);
 }

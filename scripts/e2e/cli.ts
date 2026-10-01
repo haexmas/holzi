@@ -18,6 +18,7 @@ import {
   targetDirectory,
 } from './lib/build.ts'
 import type { ApplicationInfo } from './lib/build.ts'
+import { buildNostrRelay } from './lib/nostr-relay.ts'
 import { checkPreflight } from './lib/preflight.ts'
 import type { ToolFacts, ToolName } from './lib/preflight.ts'
 import { newMarker, stopGroup, stopRun, sweepOrphans } from './lib/processes.ts'
@@ -357,9 +358,19 @@ function realDeps(env: NodeJS.ProcessEnv): CliDeps {
           `the build finished but ${app.path} does not exist`,
         )
     },
-    async runScenarios({ names, runDir: _runDir, env: scenarioEnv, signal }) {
+    async runScenarios({ names, runDir, env: scenarioEnv, signal }) {
       if (names.length === 0) return
       const files = names.map((name) => join(SCENARIOS_DIR, `${name}.test.ts`))
+      // A scenario that shares a Nostr relay between instances needs the relay program (built with
+      // `--features e2e`); it is built here, before any scenario's own deadline starts.
+      if (
+        files.some((file) => readFileSync(file, 'utf8').includes('nostrRelay('))
+      ) {
+        await buildNostrRelay(join(runDir, 'nostr-relay-build.log'), {
+          ...process.env,
+          ...scenarioEnv,
+        })
+      }
       // Own process group, so the terminal's Ctrl-C reaches only this command, which cleans up in order.
       const child = spawn(
         process.execPath,

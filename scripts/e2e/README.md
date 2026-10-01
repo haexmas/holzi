@@ -83,6 +83,20 @@ nix develop --command scripts/with-nix-host-bridge.sh pnpm test:e2e --app <path 
 A simple scenario like the one above typically finishes in 5-15 s; if it is still running well past
 that, something is stuck rather than merely slow.
 
+## Scenarios with several devices
+
+A scenario for the sync of one vault (`sync-*.test.ts`) runs several application processes, each with
+data of its own, and a Nostr relay they share: `ctx.nostrRelay()` starts `e2e_nostr_relay`, the same
+in-process relay the integration tests use, as a process. It is a binary of the main package behind the
+Cargo feature `e2e` (`src-tauri/src/bin/e2e_nostr_relay.rs`), built by the command before the scenarios
+start, only if one of them asks for a relay. The helpers in [`lib/sync-flows.ts`](lib/sync-flows.ts) make a
+device the way a user does: `startFirstDevice` creates a vault and points it at the relay (the Nostr
+relays of a vault apply the next time it opens, so it is opened again), `linkDevice` links a new device
+with a code, `restartDevice` and `closeDevice` end and bring back a device's process, and `addThread`,
+`renameThread`, `removeThread` and `expectThreads` write and read the chat threads that stand for the
+vault's data. The new installation of a link is driven by command (`link_join_start` with the servers of
+the vault), because the form on the start page has no field for servers of its own.
+
 ## Helpers
 
 The tables below are enough to write an ordinary scenario; open

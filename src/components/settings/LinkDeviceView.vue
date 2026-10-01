@@ -281,7 +281,7 @@ function onAgain() {
         <p class="font-medium">
           {{ t('settings.link.done', { name: newDeviceName }) }}
         </p>
-        <UiButton variant="outline" @click="onAgain">
+        <UiButton variant="outline" data-testid="link-again" @click="onAgain">
           {{ t('settings.link.another') }}
         </UiButton>
       </template>
@@ -290,7 +290,7 @@ function onAgain() {
         <p class="font-medium">
           {{ t(`settings.link.${phase}`) }}
         </p>
-        <UiButton variant="outline" @click="onAgain">
+        <UiButton variant="outline" data-testid="link-again" @click="onAgain">
           {{ t('settings.link.again') }}
         </UiButton>
       </template>
