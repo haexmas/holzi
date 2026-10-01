@@ -1,0 +1,636 @@
+# Feature Specification: Passwortmanager
+
+**Feature Branch**: `034-password-manager`
+**Created**: 2026-10-02
+**Status**: Draft
+**Input**: holzi bekommt einen festen Passwortmanager, der Zugangsdaten und andere
+Geheimnisse in der Vault verwahrt. Vorlage ist der Passwortmanager von haex-vault
+(Einträge, Ordner, Tags, eigene Felder, TOTP, Passkeys als Daten, Passwortgenerator,
+Verlauf, Anhänge, Papierkorb, Import aus KeePass, Bitwarden und LastPass, Zugriff für
+Erweiterungen über Tag-Berechtigungen). Das Datenmodell wird möglichst 1:1 übernommen;
+die Oberfläche wird ein App-Fenster im Window Manager (wm) im Stil von holzi. Die
+Anbindung der External Bridge (Autofill, Passkey-Signieren, Browser-Erweiterung) ist
+ausdrücklich nicht Teil dieser Spec. Referenz: haex-vault @
+`8dce379d94e18fcd42c3b73686a06f984ca3f574`, `src/database/schemas/passwords.ts`,
+`src/components/haex/system/passwords/`, `src-tauri/src/passwords/` und
+`src-tauri/src/extension/permissions/manager/check/passwords.rs`.
+
+## Beziehung zu bestehenden Specs
+
+- [`015-workspace-shell`](../015-workspace-shell/spec.md) und
+  [`030-app-multi-instance`](../030-app-multi-instance/spec.md): Der Passwortmanager ist
+  eine App im Window Manager wie Chat und Einstellungen; Fenster, Tabs und mehrere
+  Instanzen folgen diesen Specs.
+- [`020-tab-navigation`](../020-tab-navigation/spec.md): Jeder Ort im Passwortmanager
+  (Ordner, Eintrag, Papierkorb) ist ein Ort im Tab mit Vor, Zurück und Verlaufsliste.
+  Seine agentenfähigen Aktionen stehen im Aktionskatalog.
+- [`022-session-restore`](../022-session-restore/spec.md): Ein Passwortmanager-Tab kommt
+  mit Ort und Verlauf zurück, aber nie mit entsperrten oder aufgedeckten Geheimnissen.
+- [`024-own-device-sync`](../024-own-device-sync/spec.md): Alle Tabellen des
+  Passwortmanagers sind Vault-Daten und gehen wie alle Vault-Daten über den Sync der
+  eigenen Geräte (iroh direkt, Relay optional). Diese Spec baut keinen eigenen Sync.
+- [`025-own-device-file-sync`](../025-own-device-file-sync/spec.md): Dateisync betrifft
+  Ordner im Dateisystem, nicht die Anhänge der Einträge; sie liegen in der Vault-Datenbank.
+- [`029-own-s3-storage`](../029-own-s3-storage/spec.md): Diese Spec liefert den
+  Passwortmanager, den 029 voraussetzt. Die Hauptzugangsdaten des Admins und die
+  Zugangsschlüssel liegen dort als gewöhnliche Einträge (FR-033 bis FR-035).
+- [`032-model-operates-holzi`](../032-model-operates-holzi/spec.md): Dessen Regel, dass
+  Zugangsdaten und Schlüssel nie im Ergebnis einer Aktion an ein Modell gelangen
+  (FR-010 dort), gilt hier für den eingebauten Agenten ohne Ausnahme (FR-027).
+- Geplante Specs **017–019 (haextensions)** und **021 (MCP-Server, Freigaben je Agent)**:
+  Sie vergeben und verwalten Freigaben und zeigen Anfragen. Diese Spec legt fest, was
+  eine Freigabe für Passwörter bedeutet und wie der Passwortmanager sie prüft
+  (FR-024 bis FR-032).
+
+## Clarifications
+
+### Session 2026-10-02
+
+- Q: Werden Geheimnisse zusätzlich zur Vault-Verschlüsselung verschlüsselt? → A: Nein.
+  Passwörter, TOTP-Secrets und private Passkey-Schlüssel liegen unverschlüsselt in der
+  Vault-Datenbank (wie in haex-vault); geschützt sind sie durch die Verschlüsselung der
+  Vault und durch Berechtigungen für jeden Zugriff von außen.
+- Q: Gehört die External Bridge (Browser-Erweiterung, Autofill, Passkey-Signieren) zum
+  ersten Wurf? → A: Nein, sie kommt später. Der Passwortmanager wird so gebaut, dass sie
+  als weiterer Aufrufer an dieselbe Zugriffsprüfung andocken kann, ohne das Datenmodell
+  zu ändern.
+- Q: Wie liegen Dateianhänge in der Datenbank? → A: Wie in haex-vault in der Vault-Datenbank
+  und per SHA-256 dedupliziert, aber als Binärdaten (BLOB) statt als Base64-Text. Das ist
+  ein bewusster Bruch mit haex-vault: Die Tabelle der Binärdaten ist nicht mit der von
+  haex-vault austauschbar.
+- Q: Über welchen Weg synchronisieren Passwörter und Anhänge? → A: Wie alle Vault-Daten
+  über den Datensync von Spec 024 (iroh direkt zwischen den eigenen Geräten, Relay
+  optional). Das Sync-Postfach eines Relays ist nur ein zusätzlicher Weg; ein zu großer
+  Anhang kommt dann weiter direkt an (Spec 026).
+- Q: Wie groß darf ein einzelner Anhang höchstens sein? → A: 25 MiB. Der Wert schützt die
+  Größe der Vault-Datenbank, nicht den Sync: Ein Anhang über der Obergrenze des Relay-Postfachs
+  (Spec 026) käme weiter direkt über iroh an.
+- Q: Soll das Datenmodell von haex-vault 1:1 übernommen werden? → A: Ja, Tabellen- und
+  Spaltennamen und deren Bedeutung bleiben, mit der einen Ausnahme der Binärdaten.
+
+## User Scenarios & Testing _(mandatory)_
+
+### User Story 1 - Zugangsdaten ablegen, finden und benutzen (Priority: P1)
+
+Ein Nutzer öffnet den Passwortmanager, legt einen Eintrag für ein Konto an (Titel,
+Benutzername, Passwort, Adresse, Notiz, Symbol und Farbe, optional ein
+Ablaufdatum und ein TOTP-Secret) und findet ihn später über die Suche wieder. Er kopiert
+Benutzername oder Passwort, deckt das Passwort bei Bedarf auf, sieht den aktuellen
+TOTP-Code mit Restzeit und kopiert ihn. Eigene Felder wie „Wiederherstellungscode“ oder
+„PIN“ kann er hinzufügen.
+
+**Why this priority**: Ohne Einträge, die sich anlegen, finden und benutzen lassen, gibt
+es keinen Passwortmanager; alle weiteren Stories bauen darauf auf.
+
+**Independent Test**: Einen Eintrag mit Passwort und TOTP-Secret anlegen, per Suche finden,
+das Passwort kopieren, den TOTP-Code anzeigen und mit einem Referenzwert für den
+Zeitpunkt vergleichen. Das Ergebnis ist der Kern des Passwortmanagers.
+
+**Acceptance Scenarios**:
+
+1. **Given** die Vault ist offen, **When** der Nutzer einen Eintrag mit Titel und Passwort
+   speichert, **Then** erscheint er in der Liste und nach einem Neustart von holzi wieder.
+2. **Given** ein Eintrag mit Passwort, **When** der Nutzer ihn öffnet, **Then** ist das
+   Passwort verdeckt, bis er es aufdeckt (Halten mit der Maus oder Tippen auf Mobilgeräten),
+   und es wird nie in der Verlaufsliste des Tabs oder im Fenstertitel angezeigt.
+3. **Given** ein Eintrag mit TOTP-Secret, **When** der Nutzer ihn öffnet, **Then** zeigt er
+   den aktuellen Code und die Restzeit und wechselt zum nächsten Code, ohne dass der Nutzer
+   etwas tut.
+4. **Given** der Nutzer hat ein Passwort kopiert, **When** die eingestellte Zeit abläuft,
+   **Then** wird die Zwischenablage geleert, sofern sie noch dasselbe Passwort enthält.
+5. **Given** mehrere Einträge, **When** der Nutzer in der Suche einen Teil von Titel,
+   Benutzername oder Adresse eingibt, **Then** bleiben genau die passenden Einträge übrig.
+6. **Given** ein Eintrag, **When** der Nutzer ein eigenes Feld hinzufügt, ändert oder löscht,
+   **Then** bleibt das nach dem Speichern erhalten und gehört zu diesem Eintrag.
+7. **Given** ein Eintrag mit Ablaufdatum in der Vergangenheit, **When** die Liste angezeigt
+   wird, **Then** ist er als abgelaufen gekennzeichnet.
+
+---
+
+### User Story 2 - Einträge ordnen mit Ordnern und Tags (Priority: P1)
+
+Ein Nutzer legt Ordner an (auch verschachtelt), verschiebt Einträge hinein und vergibt Tags
+(„Arbeit“, „Bank“). Er wählt mehrere Einträge zugleich aus und verschiebt, taggt oder löscht
+sie gemeinsam. Tags sind frei vergebene Bezeichnungen und der Maßstab für die Reichweite von
+Berechtigungen (US6).
+
+**Why this priority**: Ab ein paar Dutzend Einträgen ist der Passwortmanager ohne Ordnung
+nicht mehr benutzbar, und Tags tragen das Berechtigungsmodell.
+
+**Independent Test**: Zwei verschachtelte Ordner anlegen, drei Einträge verschieben, zwei
+Tags vergeben, per Mehrfachauswahl zwei Einträge in einen anderen Ordner verschieben und
+nach den Tags filtern.
+
+**Acceptance Scenarios**:
+
+1. **Given** ein Eintrag, **When** der Nutzer ihn in einen Ordner verschiebt, **Then** liegt
+   er in genau diesem einen Ordner und nicht mehr im vorherigen.
+2. **Given** ein Ordner mit Unterordnern, **When** der Nutzer den Ordner umbenennt, ihm ein
+   Symbol oder eine Farbe gibt oder die Reihenfolge ändert, **Then** bleibt das erhalten.
+3. **Given** Einträge mit Tags, **When** der Nutzer nach einem Tag filtert, **Then** sieht er
+   alle Einträge mit diesem Tag, auch aus verschiedenen Ordnern.
+4. **Given** ein Tag, **When** der Nutzer ihn umbenennt oder löscht, **Then** gilt das für
+   alle Einträge, die ihn tragen; ein Tagname kommt in der Vault nur einmal vor.
+5. **Given** mehrere ausgewählte Einträge, **When** der Nutzer sie löscht, verschiebt oder
+   mit einem Tag versieht, **Then** gilt die Aktion für alle, und der Nutzer sieht vorher,
+   wie viele betroffen sind.
+6. **Given** ein Ordner mit Einträgen, **When** der Nutzer ihn löscht, **Then** landet er samt
+   Inhalt im Papierkorb (US4) und nicht endgültig gelöscht.
+
+---
+
+### User Story 3 - Starke Passwörter erzeugen (Priority: P1)
+
+Beim Anlegen oder Ändern eines Eintrags öffnet der Nutzer den Passwortgenerator, wählt Länge,
+Zeichenarten, ausgeschlossene Zeichen oder ein Muster, sieht das Ergebnis und übernimmt es.
+Er speichert eine Konfiguration als Voreinstellung, macht eine zur Standardvoreinstellung und
+benutzt sie beim nächsten Mal sofort.
+
+**Why this priority**: Ein Passwortmanager, der keine Passwörter erzeugt, wird zum Ablageort
+für schwache Passwörter. Der Generator ist klein und liefert sofortigen Nutzen.
+
+**Independent Test**: Voreinstellung mit Länge 24 ohne Sonderzeichen anlegen, als Standard
+setzen, im Editor ein Passwort erzeugen und prüfen, dass es die Regeln einhält.
+
+**Acceptance Scenarios**:
+
+1. **Given** Länge 20 mit Groß- und Kleinbuchstaben und Ziffern, **When** der Nutzer ein
+   Passwort erzeugt, **Then** hat es genau 20 Zeichen aus diesen Klassen, und jede gewählte
+   Klasse kommt mindestens einmal vor.
+2. **Given** ausgeschlossene Zeichen, **When** der Nutzer erzeugt, **Then** kommt keines
+   davon im Ergebnis vor.
+3. **Given** ein Muster, **When** der Nutzer erzeugt, **Then** entspricht das Ergebnis dem Muster.
+4. **Given** eine gespeicherte Standardvoreinstellung, **When** der Nutzer den Generator
+   öffnet, **Then** ist sie vorausgewählt; genau eine Voreinstellung ist Standard.
+5. **Given** der Nutzer hat ein erzeugtes Passwort übernommen, **When** er den Eintrag
+   speichert, **Then** ist genau dieses Passwort gespeichert.
+6. **Given** die Auswahl lässt keine gültige Ausgabe zu (etwa Länge kleiner als die Zahl der
+   gewählten Klassen), **When** der Nutzer erzeugt, **Then** sagt holzi, was zu ändern ist,
+   und erzeugt nichts.
+
+---
+
+### User Story 4 - Papierkorb und Verlauf: nichts geht versehentlich verloren (Priority: P2)
+
+Löscht der Nutzer einen Eintrag oder Ordner, landet er im Papierkorb, aus dem er ihn
+wiederherstellt oder endgültig entfernt; löscht er etwas im Papierkorb, ist es endgültig weg.
+Bei jeder Änderung eines Eintrags legt holzi eine Sicherung des vorherigen Stands an. Der
+Nutzer sieht den Verlauf eines Eintrags, vergleicht Stände und stellt einen früheren Stand
+wieder her.
+
+**Why this priority**: Bei Geheimnissen ist ein versehentliches Überschreiben oder Löschen
+nicht reparabel, wenn man das Passwort nicht anderswo hat. Es ist aber nach der Grundfunktion
+nachrangig.
+
+**Independent Test**: Passwort eines Eintrags ändern, im Verlauf den alten Stand finden und
+wiederherstellen; Eintrag löschen, im Papierkorb finden, wiederherstellen, erneut löschen und
+endgültig entfernen.
+
+**Acceptance Scenarios**:
+
+1. **Given** ein Eintrag, **When** der Nutzer ihn löscht, **Then** erscheint er im
+   Papierkorb mit seinem Ordnerpfad und taucht in Liste und Suche nicht mehr auf.
+2. **Given** ein Eintrag im Papierkorb, **When** der Nutzer ihn wiederherstellt, **Then**
+   erscheint er wieder in seinem früheren Ordner, oder an der Wurzel, wenn der Ordner nicht
+   mehr existiert.
+3. **Given** ein Eintrag im Papierkorb, **When** der Nutzer ihn endgültig löscht (einzeln
+   oder „Papierkorb leeren“ nach Bestätigung), **Then** sind Eintrag, Verlauf, Passkeys,
+   Verknüpfungen und nur noch von ihm genutzte Anhänge entfernt.
+4. **Given** ein Eintrag, **When** der Nutzer eine Änderung speichert, **Then** gibt es einen
+   neuen Eintrag im Verlauf mit Zeitpunkt und dem vorherigen Stand samt Anhängen.
+5. **Given** der Verlauf eines Eintrags, **When** der Nutzer einen Stand wählt, **Then** sieht
+   er, was sich geändert hat, ohne dass Passwörter im Klartext aufgedeckt werden, bevor er es
+   verlangt.
+6. **Given** ein früherer Stand, **When** der Nutzer ihn wiederherstellt, **Then** wird er der
+   aktuelle Stand, und der bisherige Stand bleibt als neuer Verlaufseintrag erhalten.
+
+---
+
+### User Story 5 - Dateien an Einträge hängen (Priority: P2)
+
+Ein Nutzer hängt Dateien an einen Eintrag (Wiederherstellungsschlüssel als Textdatei, einen
+Scan, ein Zertifikat), sieht Bilder und PDFs als Vorschau, benennt Anhänge um, lädt sie in
+eine Datei herunter und entfernt sie. Dieselbe Datei an mehreren Einträgen belegt nur einmal
+Platz.
+
+**Why this priority**: Anhänge sind in haex-vault vorhanden und gehören für viele
+Nutzer zu den Daten, die sie sonst nirgends sicher ablegen. Sie sind nicht nötig, damit der
+Passwortmanager nützlich ist.
+
+**Independent Test**: Dieselbe Datei an zwei Einträge hängen und prüfen, dass nur ein Satz
+Binärdaten gespeichert ist; Datei herunterladen und byteweise mit dem Original vergleichen.
+
+**Acceptance Scenarios**:
+
+1. **Given** ein Eintrag, **When** der Nutzer eine Datei hinzufügt, **Then** zeigt der Eintrag
+   Name und Größe, und der Download liefert byteweise die Originaldatei.
+2. **Given** dieselbe Datei an zwei Einträgen, **When** der Nutzer sie von einem entfernt,
+   **Then** bleibt sie am anderen erhalten; entfernt er sie auch dort, werden die Binärdaten
+   gelöscht.
+3. **Given** eine Datei über dem Größenlimit, **When** der Nutzer sie hinzufügen will,
+   **Then** lehnt holzi sie mit einer verständlichen Meldung ab und ändert den Eintrag nicht.
+4. **Given** ein Bild oder PDF, **When** der Nutzer den Anhang öffnet, **Then** sieht er eine
+   Vorschau in holzi.
+5. **Given** ein Anhang, **When** der Nutzer ihn umbenennt, **Then** ändert sich nur der Name
+   an diesem Eintrag.
+6. **Given** nicht mehr referenzierte Binärdaten (etwa nach einer Sync-Zusammenführung),
+   **When** holzi die Vault öffnet, **Then** werden sie entfernt.
+
+---
+
+### User Story 6 - Zugriff für Erweiterungen, Agenten und holzi-Funktionen mit Berechtigungen (Priority: P1)
+
+Eine haextension, ein externer Agent über MCP oder eine Funktion von holzi (etwa der eigene
+S3-Speicher aus Spec 029) braucht Zugangsdaten aus dem Passwortmanager. Der Nutzer erlaubt
+das nicht pauschal, sondern für Einträge mit bestimmten Tags und für Lesen oder Lesen und
+Schreiben. Wer anfragt, bekommt in Listen nur Kopfdaten ohne Geheimnisse; das Geheimnis eines
+einzelnen Eintrags gibt es nur auf eine einzelne Anfrage und nur, wenn eine Freigabe es
+deckt. Der eingebaute Agent im Chat bekommt nie Geheimnisse.
+
+**Why this priority**: Spec 029 setzt diesen Zugriff voraus, und ohne ihn wäre die Aussage
+„der Schutz der Geheimnisse sind die Berechtigungen“ leer. Die Verwaltung der Freigaben
+selbst kommt mit den Specs 017–019 und 021.
+
+**Independent Test**: Mit einer Test-Freigabe für das Tag „s3“ (Lesen) eine Liste abfragen,
+das Geheimnis eines Eintrags mit diesem Tag lesen, das eines Eintrags ohne dieses Tag
+anfordern (abgelehnt) und einen Eintrag schreiben wollen (abgelehnt).
+
+**Acceptance Scenarios**:
+
+1. **Given** eine Freigabe „Lesen“ für das Tag „s3“, **When** ein Aufrufer die Liste abfragt,
+   **Then** sieht er nur Einträge mit diesem Tag, und keine Antwort der Liste enthält
+   Passwort, TOTP-Secret, private Passkey-Schlüssel, eigene Felder oder Notiz.
+2. **Given** dieselbe Freigabe, **When** er das Geheimnis eines Eintrags mit dem Tag „s3“
+   liest, **Then** erhält er es; **When** er ein Geheimnis eines Eintrags ohne dieses Tag
+   liest, **Then** wird er abgelehnt.
+3. **Given** eine Freigabe „Lesen“, **When** der Aufrufer schreiben will, **Then** wird er
+   abgelehnt und nichts ändert sich.
+4. **Given** eine Freigabe „Lesen und Schreiben“ für das Tag „s3“, **When** er einen Eintrag
+   mit diesem Tag anlegt oder ändert, **Then** gelingt das; **When** der Eintrag nach der
+   Änderung kein Tag aus seinem Bereich mehr trägt, **Then** wird die Änderung abgelehnt.
+5. **Given** mehrere Freigaben mit verschiedenen Tags, **When** der Aufrufer abfragt,
+   **Then** gilt die Vereinigung der Tags; eine Freigabe für „alle“ deckt alle Einträge.
+6. **Given** keine passende Freigabe, **When** ein Aufrufer etwas abfragt, **Then** wird er
+   abgelehnt und erfährt nicht, ob ein bestimmter Eintrag existiert.
+7. **Given** der eingebaute Agent im Chat, **When** er den Passwortmanager benutzt, **Then**
+   kann er höchstens Kopfdaten ohne Geheimnisse sehen; kein Aktionsergebnis, keine
+   Fehlermeldung und kein Eintrag im Chatverlauf enthält je ein Geheimnis.
+8. **Given** eine holzi-Funktion, die einen Eintrag selbst angelegt hat (029), **When** der
+   Nutzer ihn im Passwortmanager öffnet, **Then** sieht er ihn wie jeden anderen Eintrag und
+   kann ihn ändern oder löschen.
+
+---
+
+### User Story 7 - Import aus anderen Passwortmanagern (Priority: P2)
+
+Ein Nutzer wechselt von KeePass, Bitwarden oder LastPass zu holzi. Er wählt die Exportdatei
+(bei KeePass die Datei der Datenbank mit Passwort oder Schlüsseldatei), sieht eine Vorschau,
+wie viele Einträge, Ordner und Anhänge gefunden wurden, und startet den Import. holzi
+übernimmt Einträge samt Ordnerstruktur, TOTP, eigenen Feldern, Tags, Anhängen und, wo die
+Quelle sie liefert, Passkeys, und meldet danach, was importiert wurde und was nicht.
+
+**Why this priority**: Ohne Import startet jeder Nutzer bei null und bleibt bei seinem alten
+Manager. Importieren ist aber nicht nötig, um den Passwortmanager zu benutzen.
+
+**Independent Test**: Je eine Beispieldatei pro Format importieren und die Zahl der Einträge,
+die Ordnerstruktur und je ein Passwort, TOTP-Secret und Anhang mit der Quelle vergleichen.
+
+**Acceptance Scenarios**:
+
+1. **Given** eine gültige KeePass-Datei und das richtige Passwort, **When** der Nutzer
+   importiert, **Then** erscheinen Einträge und Ordner wie in der Quelle, und der Nutzer
+   sieht die Zahl der importierten Einträge.
+2. **Given** ein falsches Passwort oder eine beschädigte Datei, **When** der Nutzer
+   importiert, **Then** nennt holzi den Grund und importiert nichts.
+3. **Given** eine Bitwarden- oder LastPass-Exportdatei, **When** der Nutzer importiert,
+   **Then** erscheinen die Einträge mit Ordnern, eigenen Feldern und TOTP.
+4. **Given** ein Eintrag der Quelle, den holzi nicht vollständig abbilden kann, **When** der
+   Import läuft, **Then** übernimmt holzi, was geht, und der Bericht nennt den Eintrag und
+   was fehlt, statt den Import abzubrechen.
+5. **Given** ein Import wurde gestartet, **When** er abgebrochen wird oder mitten drin
+   scheitert, **Then** bleibt die Vault in dem Zustand vor dem Import (alles oder nichts).
+6. **Given** ein Import hat Einträge angelegt, **When** der Nutzer ihn wiederholt, **Then**
+   fragt holzi, ob doppelte Einträge übersprungen oder angelegt werden sollen.
+
+---
+
+### User Story 8 - Dieselben Passwörter auf allen eigenen Geräten (Priority: P2)
+
+Ein Nutzer ändert auf einem Gerät ein Passwort und sieht es kurz darauf auf seinem anderen
+Gerät, ohne etwas zu tun. Änderungen auf zwei Geräten gehen nicht verloren, wenn sie
+verschiedene Felder betreffen.
+
+**Why this priority**: Die Zusammenführung leisten die CRDT-Tabellen und der Sync aus Spec 024. Diese Story prüft, dass der Passwortmanager so aufgebaut ist, dass sie für ihn gilt.
+
+**Independent Test**: Auf zwei verbundenen Geräten Titel und Passwort desselben Eintrags
+gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Geräten da.
+
+**Acceptance Scenarios**:
+
+1. **Given** zwei verbundene Geräte, **When** der Nutzer auf dem einen einen Eintrag anlegt,
+   **Then** erscheint er auf dem anderen, ohne dass die Ansicht neu geöffnet werden muss.
+2. **Given** zwei Geräte ändern gleichzeitig verschiedene Felder desselben Eintrags,
+   **When** sie sich abgleichen, **Then** haben beide beide Änderungen.
+3. **Given** ein Eintrag wird auf einem Gerät gelöscht oder in den Papierkorb verschoben,
+   **When** die Geräte sich abgleichen, **Then** gilt das auf beiden; ein später eintreffender
+   alter Stand erweckt ihn nicht wieder.
+4. **Given** zwei Geräte legen denselben Anhang an, **When** sie sich abgleichen, **Then**
+   gibt es die Binärdaten nur einmal.
+5. **Given** zwei Geräte legen ein Tag mit demselben Namen an, **When** sie sich abgleichen,
+   **Then** gibt es dieses Tag danach nur einmal, und alle Einträge behalten ihr Tag.
+
+---
+
+### Edge Cases
+
+- **Nutzer verlässt den Editor mit ungespeicherten Änderungen.** holzi fragt, ob er speichern,
+  verwerfen oder bleiben will.
+- **Ein Eintrag wird gleichzeitig auf einem anderen Gerät gelöscht**, während der Nutzer ihn
+  bearbeitet. Beim Speichern sagt holzi, dass der Eintrag gelöscht wurde, und bietet an, ihn
+  neu anzulegen; nichts wird still verworfen.
+- **Ein TOTP-Secret ist ungültig** (falsches Format, unbekannter Algorithmus). holzi zeigt
+  statt eines Codes eine Meldung an diesem Eintrag und speichert das Secret trotzdem nicht
+  stillschweigend verändert.
+- **Die Uhr eines Geräts geht falsch.** Der TOTP-Code weicht dann ab; holzi weist an der
+  Anzeige darauf hin, dass der Code von der Systemzeit abhängt.
+- **Ein Anhang ist leer, sehr groß oder hat einen ungewöhnlichen Namen** (Sonderzeichen,
+  Pfadtrenner, sehr lang). holzi behandelt den Namen als Text, nie als Pfad.
+- **Ein Ordner wird in seinen eigenen Unterordner verschoben.** holzi verbietet es.
+- **Ein in Benutzung befindlicher Eintrag** (etwa die Zugangsdaten des eigenen S3-Speichers
+  nach Spec 029) wird gelöscht. holzi warnt vorher, dass eine Funktion ihn nutzt, und
+  verhindert das Löschen nicht.
+- **Der Nutzer legt zwei Tags mit gleichem Namen an** oder benennt ein Tag um in einen
+  bestehenden Namen. holzi verhindert die Doppelung.
+- **Ein importierter Passkey hat dieselbe Credential-ID wie ein vorhandener.** holzi legt ihn
+  nicht doppelt an.
+- **Die Vault ist groß** (mehrere tausend Einträge). Liste und Suche bleiben benutzbar.
+- **Zwei Fenster des Passwortmanagers sind offen** (Spec 030). Eine Änderung im einen
+  erscheint ohne Zutun im anderen; ein Eintrag, der in beiden bearbeitet wird, überschreibt
+  nicht still den anderen.
+- **Das Fenster ist schmal** (360 px). Alle Funktionen sind ohne waagerechtes Scrollen
+  erreichbar; die Seitenleiste ist ausblendbar.
+- **Ein Aufrufer fragt in sehr kurzer Folge viele Geheimnisse ab.** Jede Abfrage wird einzeln
+  geprüft; eine Liste liefert nie Geheimnisse mit.
+
+## Requirements _(mandatory)_
+
+### Functional Requirements
+
+**Einträge, Felder und Darstellung**
+
+- **FR-001**: Das System MUSS Einträge mit Titel, Benutzername, Passwort, Notiz, Adresse,
+  Symbol, Farbe, Ablaufdatum, Erstellungs- und Änderungszeitpunkt und den Autofill-Aliasen
+  (Zuordnung von Feldnamen zu alternativen Bezeichnungen für den späteren Browser-Abgleich)
+  speichern; alle Felder außer der Kennung DÜRFEN leer sein.
+- **FR-002**: Das System MUSS je Eintrag beliebig viele eigene Felder aus Name und Wert
+  erlauben, die zum Eintrag gehören und mit ihm gelöscht werden.
+- **FR-003**: Das System MUSS je Eintrag TOTP (Secret, Ziffernzahl, Periode, Algorithmus,
+  Standard 6 Ziffern, 30 Sekunden, SHA-1) speichern, daraus den aktuellen Code berechnen,
+  die Restzeit zeigen und den Code ohne Zutun des Nutzers erneuern; `otpauth://`-Adressen
+  und reine Secrets MÜSSEN als Eingabe akzeptiert werden.
+- **FR-004**: Das System MUSS Passkeys eines Eintrags (Credential-ID, Relying Party, Nutzer,
+  Schlüsselpaar, Algorithmus, Zähler, Erkennbarkeit, Symbol, Farbe, Spitzname, letzte
+  Nutzung) als Daten speichern, anzeigen und löschen können. Das Anlegen und Benutzen von
+  Passkeys (Signieren, Autofill) ist nicht Teil dieser Spec. Eine Credential-ID MUSS in der
+  Vault eindeutig sein.
+- **FR-005**: Passwörter, TOTP-Secrets, eigene Felder und Passkey-Schlüssel MÜSSEN
+  standardmäßig verdeckt sein; Aufdecken MUSS eine bewusste Handlung des Nutzers sein (Halten
+  mit der Maus, Tippen auf Mobilgeräten) und MUSS beim Verlassen des Eintrags enden.
+- **FR-006**: Das System MUSS Benutzername, Passwort und TOTP-Code in die Zwischenablage
+  kopieren können und sie nach einer einstellbaren Zeit leeren (Standard 30 Sekunden), sofern
+  sie noch den kopierten Wert enthält; die Einstellung speichert bei Auswahl, ohne Knopf zum
+  Übernehmen.
+- **FR-007**: Das System MUSS Einträge nach Titel, Benutzername, Adresse und Tag-Namen
+  durchsuchen und in einer Liste und einem Baum mit Ordnern darstellen; Geheimnisse und
+  Notizen DÜRFEN nicht Gegenstand der Suche sein.
+- **FR-008**: Das System MUSS Einträge als abgelaufen kennzeichnen, wenn ihr Ablaufdatum
+  überschritten ist.
+
+**Ordnung**
+
+- **FR-009**: Das System MUSS verschachtelte Ordner mit Name, Beschreibung, Symbol, Farbe und
+  Reihenfolge erlauben; ein Eintrag liegt in höchstens einem Ordner, ohne Ordner liegt er an
+  der Wurzel.
+- **FR-010**: Das System MUSS verhindern, dass ein Ordner in sich selbst oder einen seiner
+  Unterordner verschoben wird.
+- **FR-011**: Das System MUSS Tags (Name eindeutig, Farbe) verwalten und Einträgen beliebig
+  viele zuordnen; Umbenennen und Löschen eines Tags MUSS für alle Einträge gelten.
+- **FR-012**: Das System MUSS Mehrfachauswahl für Verschieben, Taggen und Löschen
+  unterstützen und vor einer Massenaktion die Zahl der betroffenen Einträge nennen.
+
+**Generator**
+
+- **FR-013**: Das System MUSS Passwörter nach Länge, Zeichenklassen (Groß, Klein, Ziffern,
+  Sonderzeichen), ausgeschlossenen Zeichen oder einem Muster erzeugen, mit einer
+  kryptografisch sicheren Zufallsquelle; jede gewählte Klasse MUSS im Ergebnis vorkommen.
+- **FR-014**: Das System MUSS Voreinstellungen (Name, die genannten Optionen) speichern,
+  ändern und löschen und genau eine als Standard führen; es MUSS bei einer nicht erfüllbaren
+  Auswahl erklären, was zu ändern ist, statt etwas zu erzeugen.
+
+**Papierkorb und Verlauf**
+
+- **FR-015**: Löschen eines Eintrags oder Ordners MUSS ihn in den Papierkorb verschieben, den
+  die Vault als besonderen Ordner mit fester Kennung führt; Löschen eines Elements im
+  Papierkorb MUSS es endgültig entfernen, samt allem, was nur von ihm abhängt. „Papierkorb
+  leeren“ MUSS eine Bestätigung verlangen.
+- **FR-016**: Wiederherstellen aus dem Papierkorb MUSS den früheren Ort wiederherstellen,
+  oder die Wurzel, wenn der Ordner nicht mehr existiert.
+- **FR-017**: Das System MUSS bei jeder Änderung eines Eintrags den vorherigen Stand samt der
+  Verknüpfung zu seinen Anhängen als Verlaufseintrag sichern (Zeitpunkt, Stand als
+  eigenständig lesbares Dokument), den Verlauf anzeigen, Stände vergleichen und einen Stand
+  wiederherstellen, ohne den bisherigen Stand zu verlieren.
+- **FR-018**: Der Verlauf MUSS Anhänge behalten, die am Eintrag selbst inzwischen ersetzt
+  wurden; sie MÜSSEN erst entfernt werden, wenn kein Eintrag und kein Verlaufsstand sie mehr
+  braucht.
+
+**Anhänge**
+
+- **FR-019**: Das System MUSS Dateien an Einträge hängen und Name und Größe anzeigen; Binärdaten
+  MÜSSEN als Binärdaten (nicht als Text) in der Vault-Datenbank liegen, durch den
+  SHA-256-Wert ihres Inhalts eindeutig, und MÜSSEN je Eintrag unter einem eigenen Namen
+  verknüpft sein.
+- **FR-020**: Das System MUSS das Größenlimit pro Anhang durchsetzen, bevor etwas gespeichert
+  wird, und die Ablehnung begründen. Das Limit beträgt
+  25 MiB je Anhang; es schützt Größe und Speicherbedarf der Vault-Datenbank, in der die
+  Anhänge liegen und die auf alle Geräte synchronisiert wird.
+- **FR-021**: Das System MUSS Anhänge herunterladen (byteweise gleich dem Original), umbenennen
+  und entfernen sowie Bilder und PDFs in einer Vorschau zeigen; Dateinamen MÜSSEN als Text
+  behandelt werden, nie als Pfad.
+- **FR-022**: Das System MUSS Binärdaten entfernen, die kein Eintrag und kein Verlaufsstand
+  mehr braucht, beim Öffnen der Vault und nach dem endgültigen Löschen.
+
+**Import**
+
+- **FR-023**: Das System MUSS Einträge aus KeePass-Datenbanken (kdbx, mit Passwort und
+  optional Schlüsseldatei), Bitwarden-Exporten und LastPass-Exporten importieren, mit
+  Ordnerstruktur, eigenen Feldern, TOTP, Tags, Anhängen und, wo die Quelle sie liefert,
+  Passkeys. Der Import MUSS vorher eine Vorschau (Zahl der Einträge, Ordner, Anhänge) und
+  nachher einen Bericht (importiert, mit Verlust, übersprungen) zeigen, MUSS beim Scheitern
+  oder Abbruch die Vault unverändert lassen und bei erkannten Doppelten fragen.
+
+**Zugriff von außen und Berechtigungen**
+
+- **FR-024**: Jeder Zugriff auf Passwortmanager-Daten außer durch die Oberfläche des Nutzers
+  selbst (Erweiterungen, externe Agenten, der eingebaute Agent, holzi-Funktionen) MUSS über
+  eine Zugriffsprüfung gehen; kein Weg DARF die Tabellen am Passwortmanager vorbei lesen
+  oder schreiben.
+- **FR-025**: Eine Freigabe MUSS eine Art (Lesen oder Lesen und Schreiben) und einen Bereich
+  (alle Einträge oder Einträge mit einem bestimmten Tag) haben; mehrere Freigaben eines
+  Aufrufers gelten als Vereinigung ihrer Bereiche, „alle“ deckt alles, „Lesen und Schreiben“
+  deckt auch Lesen.
+- **FR-026**: Listen MÜSSEN nur Kopfdaten liefern (Kennung, Titel, Benutzername, Adresse,
+  Symbol, Farbe, Tags, Ablaufdatum, Hinweis, ob TOTP oder Passkeys vorhanden sind) und nie
+  Passwort, TOTP-Secret, Passkey-Schlüssel, eigene Felder, Notiz oder Anhänge. Geheimnisse
+  gibt es nur auf eine Einzelabfrage je Eintrag.
+- **FR-027**: Der eingebaute Agent im Chat (Spec 032) MUSS vom Passwortmanager höchstens die
+  Kopfdaten nach FR-026 erhalten und DARF Geheimnisse nie lesen, auch nicht mit Zustimmung im
+  Chat und auch nicht indirekt über Fehlermeldungen, Protokolle oder Chatverlauf; die
+  Aktionen für Geheimnisse MÜSSEN für ihn nicht aufrufbar sein.
+- **FR-028**: Schreibzugriffe MÜSSEN verlangen, dass der Eintrag nach der Änderung mindestens
+  ein Tag aus dem Bereich des Aufrufers trägt; andernfalls MUSS die Änderung abgelehnt werden,
+  damit ein Aufrufer Einträge nicht aus seinem Bereich herausschreibt. Das Löschen eines
+  Eintrags MUSS einen Eintrag mit einem Tag aus seinem Bereich voraussetzen.
+- **FR-029**: Fehlt eine passende Freigabe, MUSS die Anfrage abgelehnt werden, ohne preiszugeben,
+  ob ein bestimmter Eintrag außerhalb des Bereichs existiert.
+- **FR-030**: Wo Freigaben gespeichert, erteilt, angezeigt und widerrufen werden, regeln die
+  Specs 017–019 und 021. Diese Spec MUSS die Prüfung unabhängig davon über eine Schnittstelle
+  bieten, die ein Aufrufer-Kennzeichen und die Freigaben des Aufrufers entgegennimmt, damit
+  sie ohne diese Specs automatisch geprüft werden kann.
+- **FR-031**: Der Zugriff der Oberfläche des Nutzers selbst auf eigene Einträge MUSS ohne
+  Freigabe möglich sein.
+- **FR-032**: Die Zugriffsprüfung MUSS so gebaut sein, dass die External Bridge später als
+  weiterer Aufrufer ohne Änderung von Datenmodell oder Freigabe-Semantik andocken kann; sie
+  selbst ist nicht Teil dieser Spec.
+
+**Nutzung durch holzi-Funktionen**
+
+- **FR-033**: holzi-Funktionen (zunächst Spec 029) MÜSSEN Einträge im Passwortmanager als
+  gewöhnliche Einträge mit einem Tag anlegen, lesen und ändern können; der Nutzer MUSS sie in
+  der Oberfläche sehen, ändern und löschen können.
+- **FR-034**: Das System MUSS vor dem Löschen eines Eintrags, den eine holzi-Funktion nutzt,
+  warnen; das Löschen MUSS erlaubt bleiben.
+- **FR-035**: Geheimnisse MÜSSEN mit der Vault und deren Sync wandern wie alle Einträge; sie
+  DÜRFEN nur für Geräte der Vault sichtbar sein (Spec 024).
+
+**Daten, Sync und Fenster**
+
+- **FR-036**: Tabellen- und Spaltennamen des Datenmodells MÜSSEN die von haex-vault
+  übernehmen (`haex_passwords_item_details`, `_item_key_values`, `_groups`, `_group_items`,
+  `_binaries`, `_item_binaries`, `_item_snapshots`, `_snapshot_binaries`,
+  `_generator_presets`, `_tags`, `_item_tags`, `_passkeys`), mit gleicher Bedeutung. Einzige
+  Ausnahme: Die Spalte der Binärdaten ist Binär statt Base64-Text (Clarifications).
+- **FR-037**: Alle Tabellen MÜSSEN CRDT-synchronisiert sein und je Zeile zusammengeführt
+  werden; Eindeutigkeitsregeln (Tagname, Credential-ID, Hash der Binärdaten) MÜSSEN
+  bestehen bleiben, ohne dass ein Sync-Abgleich Daten verliert; Löschen MUSS Löschmarker
+  hinterlassen, und Löschen auf einem Gerät MUSS auf allen gelten.
+- **FR-038**: Der Passwortmanager MUSS sich bei Änderungen der Tabellen durch ein anderes
+  Fenster, einen Agenten oder einen Sync live aktualisieren, ohne eine laufende Bearbeitung
+  zu überschreiben.
+- **FR-039**: Der Passwortmanager MUSS eine App im Window Manager sein (Spec 015) mit Orten
+  im Tab nach Spec 020, deren Wiederherstellung (Spec 022) nie Geheimnisse im Verlauf oder in
+  der gespeicherten Sitzung ablegt, und MUSS dem Stil der anderen holzi-Oberflächen
+  folgen (Werkzeugleiste, große Überschrift, Listen in Boxen, ausblendbare Seitenleiste).
+- **FR-040**: Geheimnisse DÜRFEN weder in Protokolle, Fehlermeldungen, Fenstertitel, die
+  Verlaufsliste der Tabs, die gespeicherte Sitzung noch in die Aktionsprotokolle des Agenten
+  gelangen.
+- **FR-041**: Die Oberfläche MUSS bei jeder Breite ab 360 px ohne waagerechtes Scrollen
+  bedienbar sein und alle Texte auf Deutsch zeigen, mit Texten auch auf Englisch (wie Spec
+  023, FR-020).
+
+### Key Entities
+
+- **Eintrag**: ein Geheimnis oder Konto mit Titel, Benutzername, Passwort, Notiz, Adresse,
+  Symbol, Farbe, Ablaufdatum, TOTP-Angaben und Autofill-Aliasen; liegt in höchstens einem
+  Ordner, trägt beliebig viele Tags.
+- **Eigenes Feld**: Name und Wert, gehört zu genau einem Eintrag.
+- **Ordner**: hierarchischer Behälter mit Name, Beschreibung, Symbol, Farbe und Reihenfolge; der
+  Papierkorb ist ein Ordner mit fester Kennung.
+- **Tag**: eindeutig benannte Bezeichnung mit Farbe; zugleich Maßstab für den Bereich einer
+  Freigabe.
+- **Passkey**: gespeichertes Schlüsselpaar mit Credential-ID und Relying Party, gehört zu
+  einem Eintrag; nur als Daten.
+- **Binärdaten**: Inhalt einer Datei, durch den SHA-256-Wert eindeutig, mit Größe und Art
+  (Anhang oder Symbol).
+- **Anhang**: Verknüpfung eines Eintrags (oder eines Verlaufsstands) mit Binärdaten unter einem
+  Dateinamen.
+- **Verlaufsstand**: Sicherung eines Eintrags mit Zeitpunkt und den damals verknüpften
+  Anhängen.
+- **Voreinstellung des Generators**: Name, Länge, Zeichenklassen, ausgeschlossene Zeichen,
+  Muster, Standardmarkierung.
+- **Freigabe**: Aufrufer, Art (Lesen, Lesen und Schreiben) und Bereich (alle oder ein Tag);
+  Verwaltung in den Specs 017–019 und 021.
+- **Kopfdaten**: die Sicht eines Eintrags ohne Geheimnisse, die Listen liefern.
+- **Aufrufer**: Oberfläche des Nutzers, eingebauter Agent, Erweiterung, externer Agent oder
+  holzi-Funktion.
+
+## Success Criteria _(mandatory)_
+
+### Measurable Outcomes
+
+- **SC-001**: Ein Nutzer legt einen Eintrag mit Titel, Benutzername und Passwort in höchstens
+  30 Sekunden an und findet ihn danach über die Suche in höchstens 10 Sekunden.
+- **SC-002**: In einer Vault mit 5.000 Einträgen erscheint das Ergebnis der Suche in weniger
+  als 200 ms nach der Eingabe.
+- **SC-003**: 100 % der TOTP-Codes stimmen mit den Referenzwerten aus der Spezifikation des
+  Verfahrens für die geprüften Eingaben (alle Algorithmen, 6 und 8 Ziffern) überein.
+- **SC-004**: Von 1.000 erzeugten Passwörtern erfüllen 100 % die gewählten Regeln.
+- **SC-005**: In den automatischen Prüfungen enthält keine Antwort einer Liste und keine
+  Antwort an den eingebauten Agenten ein Geheimnis (0 Fundstellen bei allen Abfragearten).
+- **SC-006**: Jede Anfrage ohne passende Freigabe wird abgelehnt (100 % der Prüffälle,
+  einschließlich Schreiben außerhalb des Bereichs und Herausschreiben aus dem Bereich).
+- **SC-007**: Ein Eintrag, den ein Gerät ändert, erscheint auf einem verbundenen Gerät in
+  weniger als 5 Sekunden ohne manuelles Neuladen.
+- **SC-008**: Bei gleichzeitiger Änderung verschiedener Felder auf zwei Geräten gehen 0 Änderungen
+  verloren.
+- **SC-009**: Eine heruntergeladene Datei ist in 100 % der Fälle byteweise gleich dem Original.
+- **SC-010**: Beim Import der Beispieldateien aller drei Formate stimmen Zahl der Einträge und
+  Ordner zu 100 % mit der Quelle überein, und ein abgebrochener Import hinterlässt 0
+  veränderte Einträge.
+- **SC-011**: Bei 360 px Breite sind alle Funktionen ohne waagerechtes Scrollen bedienbar.
+- **SC-012**: Jedes Quickstart-Szenario, das weder Netz noch ein zweites Gerät noch eine
+  Zeitmessung braucht, läuft als End-to-End-Test gegen die gebaute App und besteht.
+
+## Assumptions
+
+- holzi hat nur einen Nutzer pro Vault; es gibt keine Freigabe von Einträgen an andere
+  Nutzer. Das Teilen mit anderen Personen folgt später über Spaces (Spec 027), nicht über
+  einzelne Einträge.
+- Die Vault-Verschlüsselung im Ruhezustand genügt; es gibt keine zweite Hülle oder
+  Hauptpasswort des Passwortmanagers. Eine zusätzliche Sperre des Passwortmanagers nach
+  Leerlauf ist nicht Teil dieser Spec.
+- Die Tabellennamen mit dem Präfix `haex_` weichen vom Muster der übrigen holzi-Tabellen ab
+  (zum Beispiel `chat_threads`). Das ist bewusst, damit Datenmodell und Werkzeuge mit
+  haex-vault vergleichbar bleiben; der Plan prüft, dass das Präfix in haex-crdt keine
+  Sonderbehandlung auslöst.
+- Passkeys entstehen in dieser Spec nur durch Import, Sync oder später durch die External
+  Bridge; die Oberfläche kann sie anzeigen und löschen, aber nicht neu anlegen.
+- Der Aufrufer „Oberfläche“ ist der Nutzer selbst; er braucht keine Freigabe (FR-031).
+- Standard der Zwischenablage-Löschung sind 30 Sekunden, die Auswahl reicht von „aus“ bis
+  2 Minuten; der Plan legt die Auswahl fest.
+- Der Papierkorb wird nicht automatisch geleert; der Nutzer leert ihn selbst.
+- Der Verlauf eines Eintrags wird nicht automatisch gekürzt; eine Obergrenze für die Zahl der
+  Stände je Eintrag legt der Plan fest, falls Messungen sie nötig machen.
+- Für Aufrufer von außen bestimmt Spec 021 (und 017–019), wie eine Freigabe vergeben und
+  angezeigt wird. Bis dahin gibt es keinen Weg für Erweiterungen und Agenten, Freigaben zu
+  erhalten; die internen holzi-Funktionen (Spec 029) tragen ihren Bereich fest.
+- Die Datei- und Anhang-Aufnahme geht über den Dateidialog des Systems; Ziehen und Ablegen
+  ist eine Verbesserung, keine Bedingung.
+- Beim KeePass-Import werden die Anhänge der Einträge übernommen, der Papierkorb der Quelle
+  nicht.
+- Alle neuen Texte entstehen auf Deutsch und Englisch; weitere Sprachen sind nicht Teil dieser
+  Spec.
+
+## Nicht im Umfang
+
+- Die External Bridge: Browser-Erweiterung, Autofill, das Signieren und Anlegen von Passkeys.
+  Später, mit eigener Spec; FR-032 hält den Weg frei.
+- Eine eigene Verschlüsselung der Geheimnisse über die der Vault hinaus.
+- Teilen einzelner Einträge mit anderen Personen oder Spaces.
+- Notfallzugriff, Passwort-Gesundheitsprüfung (Wiederverwendung, Datenlecks, Stärkeanzeige als
+  Auswertung) und automatisches Ändern von Passwörtern.
+- Ein Export der Einträge (nach KeePass, Bitwarden oder CSV); er kommt mit einer späteren
+  Spec.
+- Die Verwaltung der Freigaben für Erweiterungen und Agenten (Anlegen, Anzeigen, Widerrufen,
+  Anfragedialog): Specs 017–019 und 021.
+- Dateisync der Anhänge als Dateien im Dateisystem (Spec 025 betrifft Ordner).
+- Eine Obergrenze oder Bereinigung des Verlaufs sowie ein zeitgesteuerter Papierkorb.
