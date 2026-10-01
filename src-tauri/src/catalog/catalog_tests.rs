@@ -84,9 +84,14 @@ fn catalog_contains_the_selected_qwen3_profiles() {
 }
 
 #[test]
-fn tool_use_is_optional_and_absent_for_every_shipped_entry_until_measured() {
-    // Filled after the first evaluation run (spec 032 T046); until then no entry claims anything.
-    assert!(entries().iter().all(|entry| entry.tool_use.is_none()));
+fn tool_use_is_optional_and_only_measured_entries_carry_it() {
+    // Qwen3-4B was measured (spec 032 T046: 16 of 30 sentences, it calls the core tools); the
+    // smaller models were not, so the self-test finds out at their first load.
+    for entry in entries() {
+        let expected = (entry.id == "qwen3-4b-instruct-q4_k_m")
+            .then_some(crate::model_capabilities::ToolSupport::Supported);
+        assert_eq!(entry.tool_use, expected, "{}", entry.id);
+    }
     let entry: CatalogEntry = serde_json::from_value(serde_json::json!({
         "id": "x", "name": "x", "family": "x", "parameters": "1B", "quantization": "Q4",
         "hf_repo": "a/b", "hf_filename": "c.gguf", "tokenizer_repo": "a/b",
@@ -101,17 +106,15 @@ fn tool_use_is_optional_and_absent_for_every_shipped_entry_until_measured() {
 }
 
 #[test]
-fn a_local_record_without_a_catalog_answer_starts_with_tool_use_not_determined() {
-    for entry in entries() {
-        assert_eq!(
-            crate::model_capabilities::ModelCapabilities::local(&entry.id).tool_use,
-            None,
-            "{}",
-            entry.id
-        );
-    }
+fn a_local_record_takes_the_catalog_answer_as_curated_and_otherwise_starts_unknown() {
+    use crate::model_capabilities::{ModelCapabilities, ToolSupport, ToolUse, ToolUseBasis};
     assert_eq!(
-        crate::model_capabilities::ModelCapabilities::local("my-own-finetune").tool_use,
+        ModelCapabilities::local("qwen3-4b-instruct-q4_k_m").tool_use,
+        Some(ToolUse::new(ToolSupport::Supported, ToolUseBasis::Curated))
+    );
+    assert_eq!(
+        ModelCapabilities::local("qwen3-1.7b-instruct-q4_k_m").tool_use,
         None
     );
+    assert_eq!(ModelCapabilities::local("my-own-finetune").tool_use, None);
 }
