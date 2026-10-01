@@ -170,6 +170,8 @@ pub(crate) struct ToolPermissionRequestEvent {
     pub(crate) tool_name: String,
     pub(crate) tool_input: Value,
     pub(crate) risk_class: &'static str,
+    /// `mcp`, `cli` or `action`: the dialog words an action in plain language (spec 032 FR-008).
+    pub(crate) tool_source: &'static str,
 }
 
 pub(crate) fn risk_class_str(risk: crate::chat::tools::RiskClass) -> &'static str {

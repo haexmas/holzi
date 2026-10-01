@@ -220,6 +220,7 @@ impl TurnRunner<'_> {
                             tool_name: call.name.clone(),
                             tool_input: call.input.clone(),
                             risk_class: risk_class_str(tool.risk_class()),
+                            tool_source: tool.source(),
                         },
                     );
                     plans.push((

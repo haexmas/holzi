@@ -103,7 +103,8 @@ export const CHAT_ACTIONS: readonly ActionDefinition[] = [
   }),
   inChat({
     id: 'chat.messages.list',
-    description: 'List the messages of a conversation.',
+    description:
+      'List the messages of a conversation: for a person with the text, for an agent only id, role, time and status (never the text).',
     input: {
       type: 'object',
       properties: { threadId: THREAD_ID },

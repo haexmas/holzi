@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import type { RiskClass } from '~/composables/useChat'
+import { describeToolCall, type ResolveTarget } from '~/lib/actions/agentTools'
+import { ALL_ACTIONS } from '~/lib/actions/catalog'
+import { useWindowManagerStore } from '~/stores/windowManager'
 
 export interface PendingApproval {
   requestId: string
   toolName: string
   toolInput: unknown
   riskClass: RiskClass
+  /** `action` tools are worded in plain language; others keep the raw layout. */
+  toolSource?: 'mcp' | 'cli' | 'action'
 }
 
 const { t } = useI18n()
@@ -18,6 +23,45 @@ const props = defineProps<{
    * their own request). */
   pendingApprovals: PendingApproval[]
 }>()
+
+const wm = useWindowManagerStore()
+
+type TabInfo = ReturnType<typeof wm.tabDisplayInfo>
+
+function titleFrom(info: TabInfo): string {
+  return (
+    info.titleOverride ??
+    (info.titleKey ? t(info.titleKey, info.titleParams) : '')
+  )
+}
+
+/** Names what an action acts on as the tab bar and the overviews name it. */
+const resolveTarget: ResolveTarget = (kind, id) => {
+  if (kind === 'workspace') {
+    const position = wm.workspaces.findIndex((w) => w.id === id)
+    return position < 0
+      ? undefined
+      : t('wm.workspaces.numbered', { number: position + 1 })
+  }
+  if (kind === 'window') {
+    const window = wm.windows.find((w) => w.id === id)
+    const info = window ? wm.windowDisplayInfo(window) : null
+    return info ? titleFrom(info) : undefined
+  }
+  const tab = wm.windows.flatMap((w) => w.tabs).find((item) => item.id === id)
+  return tab ? titleFrom(wm.tabDisplayInfo(tab)) : undefined
+}
+
+const description = computed(() => {
+  const approval = props.pendingApprovals[0]
+  if (!approval || approval.toolSource !== 'action') return undefined
+  return describeToolCall(
+    approval.toolName,
+    approval.toolInput,
+    ALL_ACTIONS,
+    resolveTarget,
+  )
+})
 
 const permissionModeLabel = computed(() => t(`chat.permission.${props.mode}`))
 
@@ -64,7 +108,9 @@ function onUpdateOpen(open: boolean) {
     :open="true"
     :title="
       t('chat.permission.requestTitle', {
-        name: pendingApprovals[0].toolName,
+        name: description
+          ? t(description.titleKey)
+          : pendingApprovals[0].toolName,
       })
     "
     @update:open="onUpdateOpen"
@@ -81,7 +127,24 @@ function onUpdateOpen(open: boolean) {
         >
           {{ t(`chat.permission.${pendingApprovals[0].riskClass}`) }}
         </div>
+        <dl v-if="description" class="space-y-1 text-sm">
+          <div v-if="description.target" class="flex gap-2">
+            <dt class="text-muted-foreground">
+              {{ t(`chat.permission.target.${description.target.kind}`) }}:
+            </dt>
+            <dd>{{ description.target.label }}</dd>
+          </div>
+          <div
+            v-for="[field, value] in description.inputs"
+            :key="field"
+            class="flex gap-2"
+          >
+            <dt class="text-muted-foreground">{{ field }}:</dt>
+            <dd class="break-words">{{ value }}</dd>
+          </div>
+        </dl>
         <pre
+          v-else
           class="text-xs bg-muted/30 rounded p-2 overflow-x-auto whitespace-pre-wrap"
           >{{ JSON.stringify(pendingApprovals[0].toolInput, null, 2) }}</pre>
       </div>

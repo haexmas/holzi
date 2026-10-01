@@ -40,7 +40,7 @@ export interface Message {
   toolInput: string | null
   /** Set only when `role === 'tool_result'`. */
   toolIsError: boolean | null
-  /** `mcp` or `cli`. Set only when `role === 'tool_call'`. */
+  /** `mcp`, `cli` or `action`. Set only when `role === 'tool_call'`. */
   toolSource: string | null
   /** Which autonomy mode the turn ran under (spec
    * 009-autonomous-delegate-mode). `null` for legacy and non-delegate
@@ -179,6 +179,7 @@ export interface ToolPermissionRequestEvent {
   toolName: string
   toolInput: unknown
   riskClass: RiskClass
+  toolSource: 'mcp' | 'cli' | 'action'
 }
 
 /** Fires exactly once per `send_message` call, after that turn's last

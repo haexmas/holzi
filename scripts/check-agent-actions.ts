@@ -7,6 +7,9 @@ import { test } from 'node:test'
 
 import {
   CORE_AGENT_TOOLS,
+  agentSafeMessages,
+  describeAction,
+  describeToolCall,
   TOOL_NAME_PATTERN,
   fromToolName,
   isBuiltinAgentAction,
@@ -17,7 +20,7 @@ import {
   type TitleOf,
 } from '../src/lib/actions/agentTools.ts'
 import { ALL_ACTIONS } from '../src/lib/actions/catalog.ts'
-import type { ActionCaller } from '../src/lib/actions/types.ts'
+import type { ActionCaller, JsonSchema } from '../src/lib/actions/types.ts'
 import { TARGET_FIELD, catalogRunner, sample } from './lib/actions-harness.ts'
 
 const BUILTIN: ActionCaller = { kind: 'builtinAgent' }
@@ -163,4 +166,149 @@ test('toOutcomeWire never carries the raw error of a failed handler (FR-006)', (
     ok: true,
     result: { done: true },
   })
+})
+
+test('every guardrail action is refused for the built-in agent before its handler runs (FR-003, SC-003)', async () => {
+  const guardrails = ALL_ACTIONS.filter((a) => a.scope === 'guardrails')
+  assert.ok(guardrails.length > 0)
+  for (const action of guardrails) {
+    const input = sample(action.input) as Record<string, unknown>
+    if (action.target !== 'none') input[TARGET_FIELD[action.target]] = 'target'
+    for (const caller of [BUILTIN, EXTERNAL]) {
+      const calls: string[] = []
+      const outcome = await catalogRunner(calls).runAction(
+        action.id,
+        input,
+        caller,
+      )
+      assert.equal(
+        !outcome.ok && outcome.code,
+        'forbidden_for_agents',
+        action.id,
+      )
+      assert.equal(calls.length, 0, `${action.id} ran`)
+    }
+  }
+})
+
+const SECRET_NAME =
+  /secret|private|password|passphrase|token|apiKey|credential/i
+
+/** Names allowed to match, each with the reason it is no secret. Keep this short. */
+const SECRET_NAME_ALLOWED: Record<string, string> = {
+  tokenizerRepo:
+    'a Hugging Face repository id of a tokenizer, not a credential',
+}
+
+function propertyNames(schema: JsonSchema): string[] {
+  return [
+    ...Object.entries(schema.properties ?? {}).flatMap(([name, child]) => [
+      name,
+      ...propertyNames(child),
+    ]),
+    ...(schema.items ? propertyNames(schema.items) : []),
+  ]
+}
+
+test('no input or result schema of an agent-callable action names a secret (FR-010, SC-004)', () => {
+  for (const action of ALL_ACTIONS.filter(isBuiltinAgentAction)) {
+    for (const [kind, schema] of [
+      ['input', action.input],
+      ['result', action.result],
+    ] as const) {
+      for (const name of propertyNames(schema)) {
+        if (name in SECRET_NAME_ALLOWED) continue
+        assert.doesNotMatch(
+          name,
+          SECRET_NAME,
+          `${action.id} ${kind} has a field named ${name}`,
+        )
+      }
+    }
+  }
+})
+
+test('settings.devices.identity exposes the public key and nothing else', () => {
+  const action = ALL_ACTIONS.find((a) => a.id === 'settings.devices.identity')
+  assert.ok(action && isBuiltinAgentAction(action))
+  assert.deepEqual(Object.keys(action.result.properties ?? {}).sort(), [
+    'hex',
+    'npub',
+  ])
+})
+
+test('chat.messages.list shows an agent no text, neither as content nor inside another field (SC-004)', () => {
+  const secret = 'sk-ant-api03-this-is-a-secret'
+  const rows = [
+    {
+      id: 'm1',
+      role: 'user',
+      content: `my key is ${secret}`,
+      createdAt: 1,
+      finishReason: null,
+      toolInput: JSON.stringify({ key: secret }),
+    },
+    {
+      id: 'm2',
+      role: 'assistant',
+      content: 'ok',
+      createdAt: 2,
+      finishReason: 'complete',
+      toolInput: null,
+    },
+  ]
+  const projected = agentSafeMessages(rows)
+  assert.deepEqual(projected, {
+    messages: [
+      { id: 'm1', role: 'user', createdAt: 1, status: null },
+      { id: 'm2', role: 'assistant', createdAt: 2, status: 'complete' },
+    ],
+  })
+  assert.ok(!JSON.stringify(projected).includes(secret))
+  assert.ok(!JSON.stringify(projected).includes('content'))
+})
+
+test('describeAction names the action, its target and its inputs for the approval dialog (FR-008)', () => {
+  const close = ALL_ACTIONS.find((a) => a.id === 'wm.tab.close')
+  assert.ok(close)
+  const resolve = (kind: string, id: string) =>
+    kind === 'tab' && id === 't1' ? 'Settings' : undefined
+  const known = describeAction(close, { tabId: 't1' }, resolve)
+  assert.equal(known.titleKey, close.titleKey)
+  assert.deepEqual(known.target, { kind: 'tab', label: 'Settings' })
+  assert.deepEqual(known.inputs, [])
+  // A target that does not exist keeps its id as the label rather than hiding it.
+  assert.deepEqual(describeAction(close, { tabId: 'gone' }, resolve).target, {
+    kind: 'tab',
+    label: 'gone',
+  })
+  // No target given: none is shown.
+  assert.equal(describeAction(close, {}, resolve).target, undefined)
+  // Other inputs become fields; long values are cut.
+  const rename = ALL_ACTIONS.find((a) => a.id === 'chat.conversation.rename')
+  assert.ok(rename)
+  const long = describeAction(
+    rename,
+    { threadId: 'x', title: 'a'.repeat(300) },
+    resolve,
+  )
+  assert.equal(long.inputs.length, 2)
+  assert.equal(long.inputs[1]?.[1].length, 201)
+})
+
+test('describeToolCall falls back for a name that is no offered action', () => {
+  const resolve = () => undefined
+  assert.equal(
+    describeToolCall('run_command', {}, ALL_ACTIONS, resolve),
+    undefined,
+  )
+  assert.equal(
+    describeToolCall('find_actions', {}, ALL_ACTIONS, resolve),
+    undefined,
+  )
+  assert.equal(
+    describeToolCall('chat_message_send', { text: 'x' }, ALL_ACTIONS, resolve),
+    undefined,
+  )
+  assert.ok(describeToolCall('settings_get', null, ALL_ACTIONS, resolve))
 })

@@ -294,7 +294,12 @@
       "safe": "Safe action",
       "allow": "Allow",
       "deny": "Deny",
-      "stopGenerating": "Stop generating"
+      "stopGenerating": "Stop generating",
+      "target": {
+        "tab": "Tab",
+        "window": "Window",
+        "workspace": "Workspace"
+      }
     },
     "autonomy": {
       "standard": "Standard",

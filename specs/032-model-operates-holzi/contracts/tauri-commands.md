@@ -84,6 +84,7 @@ Nach Probe oder Selbsttest. Das Frontend lädt die Modelllisten neu
 | Vertrag                                          | Änderung                                                                                                                |
 | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
 | `tool-permission-request.riskClass`              | neuer Wert `"change"` (vorher `"safe" \| "risky"`)                                                                      |
+| `tool-permission-request.toolSource`             | neu: `"mcp" \| "cli" \| "action"`; der Dialog formuliert Aktionen in Klartext                                           |
 | `chat-tool-call.toolSource`                      | neuer Wert `"action"` (vorher `"mcp" \| "cli"`); TS-Typ `ToolCallEvent.toolSource`                                      |
 | `list_installed_models` / `list_provider_models` | `capabilities.toolUse` (`{ support, basis } \| null`)                                                                   |
 | Werkzeug-Fehlertexte                             | neu: `action_timeout`, `action_unavailable`; bestehend: `denied_by_user`, `blocked_by_plan_mode`, `tool_call_cancelled` |

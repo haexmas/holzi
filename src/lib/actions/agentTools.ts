@@ -2,7 +2,13 @@
 // single source of the definitions; this module maps an action to the tool description the Rust
 // `ToolRegistry` keeps (`set_agent_actions`). Pure TS, relative `.ts` imports only, no i18n: titles
 // come in through `titleOf` so the Node check scripts can load the module.
-import type { ActionDefinition, ActionOutcome, JsonSchema } from './types.ts'
+import { TARGET_FIELD } from './runner.ts'
+import type {
+  ActionDefinition,
+  ActionOutcome,
+  ActionTarget,
+  JsonSchema,
+} from './types.ts'
 
 export type ActionLocale = 'de' | 'en'
 
@@ -107,4 +113,97 @@ export function toOutcomeWire(outcome: ActionOutcome): ActionOutcomeWire {
     ...(outcome.field === undefined ? {} : { field: outcome.field }),
     message: outcome.message,
   }
+}
+
+/** A message as `chat.messages.list` shows it to an agent: no text (FR-010). */
+export type AgentMessage = {
+  id: string
+  role: string
+  createdAt: number
+  status: string | null
+}
+
+/**
+ * The safe projection of a conversation for an agent: who spoke, when, and how the turn ended.
+ * The text can hold anything the user pasted, so it stays out of what a model or an agent reads.
+ */
+export function agentSafeMessages(
+  messages: readonly {
+    id: string
+    role: string
+    createdAt: number
+    finishReason: string | null
+  }[],
+): { messages: AgentMessage[] } {
+  return {
+    messages: messages.map((m) => ({
+      id: m.id,
+      role: m.role,
+      createdAt: m.createdAt,
+      status: m.finishReason,
+    })),
+  }
+}
+
+export type TargetKind = Exclude<ActionTarget, 'none'>
+
+/** What the approval dialog shows for one call (spec 032 FR-008). */
+export type ActionDescription = {
+  titleKey: string
+  target?: { kind: TargetKind; label: string }
+  /** `[field, value]` pairs without the target id, values as short text. */
+  inputs: Array<[string, string]>
+}
+
+/** Names the tab, window or workspace behind an id; `undefined` when it does not exist. */
+export type ResolveTarget = (kind: TargetKind, id: string) => string | undefined
+
+const MAX_INPUT_VALUE_LENGTH = 200
+
+function inputText(value: unknown): string {
+  const text = typeof value === 'string' ? value : JSON.stringify(value)
+  return text.length > MAX_INPUT_VALUE_LENGTH
+    ? `${text.slice(0, MAX_INPUT_VALUE_LENGTH)}…`
+    : text
+}
+
+/** The call of one action in terms a person reads: its title, what it acts on, what it carries. */
+export function describeAction(
+  def: ActionDefinition,
+  input: Record<string, unknown>,
+  resolveTarget: ResolveTarget,
+): ActionDescription {
+  const targetField =
+    def.target === 'none' ? undefined : TARGET_FIELD[def.target]
+  const targetId = targetField ? input[targetField] : undefined
+  const target =
+    def.target !== 'none' && typeof targetId === 'string'
+      ? {
+          kind: def.target,
+          label: resolveTarget(def.target, targetId) ?? targetId,
+        }
+      : undefined
+  return {
+    titleKey: def.titleKey,
+    ...(target ? { target } : {}),
+    inputs: Object.entries(input)
+      .filter(([field]) => field !== targetField)
+      .map(([field, value]) => [field, inputText(value)]),
+  }
+}
+
+/** `describeAction` for a tool call; `undefined` for a name that is no action offered to the agent. */
+export function describeToolCall(
+  toolName: string,
+  input: unknown,
+  catalog: readonly ActionDefinition[],
+  resolveTarget: ResolveTarget,
+): ActionDescription | undefined {
+  const def = fromToolName(toolName, catalog)
+  if (!def || !isBuiltinAgentAction(def)) return undefined
+  const fields =
+    typeof input === 'object' && input !== null && !Array.isArray(input)
+      ? (input as Record<string, unknown>)
+      : {}
+  return describeAction(def, fields, resolveTarget)
 }

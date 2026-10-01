@@ -4,6 +4,7 @@ import type { Message, Thread, useChat } from '~/composables/useChat'
 import { useChatNavigation } from '~/composables/useChatNavigation'
 import type { WmTabApi } from '~/composables/useWmTab'
 import type { TabRouter } from '~/composables/useTabRouter'
+import { agentSafeMessages } from '~/lib/actions/agentTools'
 import type { ActionOutcome } from '~/lib/actions/types'
 
 type PermissionMode = 'manual' | 'auto' | 'plan'
@@ -140,18 +141,23 @@ export function useChatTab(deps: {
       updatedAt: thread.updatedAt,
     })),
   }))
-  handle('chat.messages.list', async (input) => {
-    const messages: Message[] = await deps.chat.listMessagesAsync(
-      String(input.threadId),
-    )
-    return {
-      messages: messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-        createdAt: m.createdAt,
-      })),
-    }
-  })
+  // Agents get who spoke, when and how the turn ended, never the text (spec 032 FR-010).
+  wmTab.registerActionHandler(
+    'chat.messages.list',
+    async ({ input, caller }) => {
+      const messages: Message[] = await deps.chat.listMessagesAsync(
+        String(input.threadId),
+      )
+      if (caller.kind !== 'user') return agentSafeMessages(messages)
+      return {
+        messages: messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+          createdAt: m.createdAt,
+        })),
+      }
+    },
+  )
   handle('chat.message.send', async (input) => {
     state.input.value = String(input.text)
     await deps.send()

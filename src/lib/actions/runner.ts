@@ -34,7 +34,8 @@ export type ActionRunnerDeps = {
 
 export const TAB_HANDLER_TIMEOUT_MS = 5000
 
-const TARGET_FIELD = {
+/** The input field that names the target of an action, per target kind. */
+export const TARGET_FIELD = {
   tab: 'tabId',
   window: 'windowId',
   workspace: 'workspaceId',
