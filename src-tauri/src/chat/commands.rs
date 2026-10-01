@@ -33,6 +33,7 @@ use crate::adapters::types::{ChatMessage as LlmMessage, ChatRequest, ChatRole, T
 use crate::chat::events::EVENT_CHAT_TOOL_AVAILABILITY;
 use crate::chat::tools::availability::{ToolAvailability, ToolAvailabilityEvent};
 use crate::chat::tools::offer::core_offer;
+use crate::chat::tools::prompt::system_prompt;
 use crate::chat::tools::ApprovalDecision;
 use crate::error::{HolziError, Result};
 use crate::model_capabilities::ModelCapabilities;
@@ -495,7 +496,7 @@ pub async fn send_message(
         sampling: Default::default(),
         model_id: request_model_id,
         thread_id: Some(thread_id),
-        system_prompt: args.system_prompt.clone(),
+        system_prompt: system_prompt(args.system_prompt.as_deref(), &tools),
         messages,
         reasoning_requested,
         max_new_tokens: args.max_new_tokens,

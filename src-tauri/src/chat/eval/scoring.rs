@@ -101,6 +101,8 @@ pub struct Observed {
     pub searched: bool,
     /// The expected tools were offered by the second step at the latest (core offer or search).
     pub reached: bool,
+    /// What the model wrote in the scored step, to see what it said instead of a call.
+    pub text: String,
 }
 
 /// Classification assigned to one sentence after scoring.
@@ -270,7 +272,13 @@ pub struct Failure {
     pub result: SentenceResult,
     /// The first call the model made, if it made any.
     pub got: Option<ObservedCall>,
+    /// The start of what the model wrote in the scored step, if anything.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
 }
+
+/// How much of an answer the report keeps.
+const TEXT_EXCERPT_CHARS: usize = 300;
 
 /// Aggregate result of one evaluation run.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -356,6 +364,9 @@ pub fn report(
                 id: s.sentence.id.clone(),
                 result: s.result,
                 got: s.observed.calls.first().cloned(),
+                text: Some(s.observed.text.trim())
+                    .filter(|text| !text.is_empty())
+                    .map(|text| text.chars().take(TEXT_EXCERPT_CHARS).collect()),
             })
             .collect(),
     }
