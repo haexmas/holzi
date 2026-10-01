@@ -39,7 +39,7 @@ Technischer Ansatz (Begründungen und verworfene Alternativen in
   `expectedUpdatedAt` erkennt Änderungen und Löschen durch ein anderes Gerät.
 - **Import** (R12): in Rust, ein Einlesen, eine Transaktion (alles oder nichts), Vorschau
   vorab; KeePass über `keepass`, Bitwarden und LastPass über `csv` und `serde_json`. Die
-  Eignung von `keepass` prüft Aufgabe T001; zweite Wahl ist der Weg von haex-vault.
+  Eignung von `keepass` prüft Aufgabe T003; zweite Wahl ist der Weg von haex-vault.
 - **Oberfläche** (R10, R11, R13, R17): App `system.passwords`, Mehrfachinstanz, Orte im Tab nur
   mit Kennungen, Generator und Suche als reines TS unter `src/lib/passwords/` (Node-Tests),
   vorhandene Bausteine (`SettingsGroup`/`Row`, `WmRouterView`, `onVaultTablesChanged`).
@@ -55,11 +55,11 @@ optional); TypeScript 6 (strict), Vue 3.5, Nuxt 4.5.2 (SPA), Node 22.19 für die
 **Primary Dependencies**: vorhanden — `haex-crdt` (gepinnt auf `aeb26eb`), `rusqlite` über haex-crdt,
 `hmac` 0.13, `sha2` 0.11, `getrandom` 0.3, `zeroize`, `base64`, `uuid` (v4, v5), `serde_json`,
 `thiserror`, `ts-rs`, `tauri-plugin-dialog`; Frontend: Pinia, `@nuxtjs/i18n`, `reka-ui`/haex-ui-Layer.
-**Neu (Rust)**: `keepass` (KDBX, Version und Features prüft T001), `csv` (RFC 4180; in
+**Neu (Rust)**: `keepass` (KDBX, Version und Features prüft T003), `csv` (RFC 4180; in
 `Cargo.lock` nur über `llm-cpu`, daher direkte Abhängigkeit), `sha1` (RustCrypto),
 `tauri-plugin-clipboard-manager` (nur Rust-API). Base32 wird selbst geschrieben (R8).
 
-**Storage**: Migration `0022_passwords`: zwölf CRDT-Tabellen `haex_passwords_*`, 15 Indizes,
+**Storage**: Migration `0022_passwords`: zwölf CRDT-Tabellen `haex_passwords_*`, 14 Indizes,
 kein `_no_sync`. `HOLZI_TRIGGER_VERSION` 13 → 14. Eine Vault-Einstellung
 `passwords.clipboard_clear_seconds`. Details in [data-model.md](./data-model.md).
 
@@ -253,4 +253,4 @@ legt die Seitenleisten-Entscheidung in Aufgabe T002 (Graph-Abfrage), nicht jetzt
   Nicht im Umfang; R18, R12).
 - Der eingebaute Agent kennt nur Titel, Tags und Ordnernamen; mehr kommt mit 017–019 und 021
   über deren Eingänge (R6, R14).
-- Ob `keepass` den Bedarf deckt, zeigt T001; sonst gilt die zweite Wahl (R12).
+- Ob `keepass` den Bedarf deckt, zeigt T003; sonst gilt die zweite Wahl (R12).

@@ -7,7 +7,7 @@ Belege sind Dateien im Repository (Stand `main` am 2026-10-02) und im Quellstand
 haex-vault (`8dce379d94e18fcd42c3b73686a06f984ca3f574`). Wo etwas aus allgemeinem
 Wissen und nicht aus dem Code stammt, steht es dabei. **Nicht geprüft** wurde, ob die
 neuen Crates (`keepass`, `csv`, `sha1`, `tauri-plugin-clipboard-manager`) mit den
-gewünschten Funktionen bauen; das klärt Aufgabe T001 (R12, R9).
+gewünschten Funktionen bauen; das klärt Aufgabe T003 (R12, R9).
 
 ## R1 — Zwölf Tabellen in einer Migration `0022`, Triggerversion 14, SQL in eigener Datei
 
@@ -397,7 +397,7 @@ Argon2-Shim aus `hash-wasm`; Schlüsseldateien werden nicht unterstützt. Im Fro
 5. Passwort und Schlüsseldatei-Pfad laufen als `Passphrase`-artiger Typ (zeroizing, `Debug`
    geschwärzt) durch den Command.
 
-**Ungeprüft und deshalb Aufgabe T001**: ob `keepass` KDBX 3 und 4, Argon2-Varianten,
+**Ungeprüft und deshalb Aufgabe T003**: ob `keepass` KDBX 3 und 4, Argon2-Varianten,
 Schlüsseldateien, Anhänge und Eigenschaften der Einträge in der benötigten Form liefert und in
 beiden Feature-Konfigurationen baut. Fällt die Prüfung negativ aus, ist die zweite Wahl der
 Weg von haex-vault (`kdbxweb` plus `hash-wasm` im Frontend, Parser liefert `ImportModel` als
