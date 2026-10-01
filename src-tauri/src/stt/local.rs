@@ -25,11 +25,12 @@ use async_trait::async_trait;
 use candle::{Device, IndexOp, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::models::whisper::{self as m, audio, Config};
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 use tokenizers::Tokenizer;
 
 use crate::models::download::download_to_file;
 use crate::models::paths as model_paths;
+use crate::state::AppState;
 
 use super::catalog::SttCatalogEntry;
 use super::{CanonicalPcm, SttAdapter, SttError};
@@ -81,7 +82,14 @@ impl LocalWhisperAdapter {
         .map_err(|e| SttError::LocalUnavailable {
             reason: format!("resolve Whisper model directory: {e}"),
         })??;
+        let token = app.state::<AppState>().gate().token();
+        let _publication_lock = model_paths::acquire_model_publication_lock(app, &entry.id, &token)
+            .await
+            .map_err(|error| SttError::LocalUnavailable {
+                reason: format!("acquire Whisper model lock: {error}"),
+            })?;
         ensure_model_files(&dir, entry).await?;
+        drop(_publication_lock);
         tauri::async_runtime::spawn_blocking(move || Self::load_from_dir(&dir))
             .await
             .map_err(|e| SttError::LocalUnavailable {
@@ -312,7 +320,24 @@ pub fn is_complete_file(path: &Path) -> bool {
 pub fn is_complete_model(dir: &Path) -> bool {
     [CONFIG_FILENAME, TOKENIZER_FILENAME, WEIGHTS_FILENAME]
         .iter()
-        .all(|filename| is_complete_file(&dir.join(filename)))
+        .all(|filename| is_complete_artifact(&dir.join(filename), filename))
+}
+
+/// Checks the lightweight metadata files deeply enough to reject a truncated
+/// or otherwise corrupt JSON document. Weight files intentionally keep the
+/// cheap non-empty check; hashing them on every listing would turn discovery
+/// into a full model read.
+fn is_complete_artifact(path: &Path, filename: &str) -> bool {
+    if !is_complete_file(path) {
+        return false;
+    }
+    if matches!(filename, CONFIG_FILENAME | TOKENIZER_FILENAME) {
+        return std::fs::read(path)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+            .is_some();
+    }
+    true
 }
 
 /// Resolves `entry`'s canonical `models::paths` slug directory, creating it
@@ -336,7 +361,7 @@ pub fn resolve_model_dir(app: &AppHandle, entry: &SttCatalogEntry) -> Result<Pat
 pub async fn ensure_model_files(dir: &Path, entry: &SttCatalogEntry) -> Result<(), SttError> {
     for filename in [CONFIG_FILENAME, TOKENIZER_FILENAME, WEIGHTS_FILENAME] {
         let dest = dir.join(filename);
-        if is_complete_file(&dest) {
+        if is_complete_artifact(&dest, filename) {
             continue;
         }
         let url = format!(
