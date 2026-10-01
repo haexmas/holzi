@@ -131,6 +131,11 @@ impl Inbox {
         }
         let db = replica.db();
         let limit = db.max_transaction_bytes();
+        // Device removal publishes its limit under the same exchange lock. Read the
+        // current limits only after acquiring that lock and keep it until the changes
+        // and their progress are committed, so a removal cannot race this admission
+        // decision (FR-027, research R5).
+        let _exchange = replica.exchange();
 
         let mut changes = std::mem::take(&mut self.pending);
         changes.extend(page.changes);
@@ -261,7 +266,6 @@ impl Inbox {
             self.finished = true;
         }
 
-        let _exchange = replica.exchange();
         if !accepted.is_empty() {
             let outcome = db.apply_remote_changes(accepted)?;
             if !outcome.skipped.is_empty() {

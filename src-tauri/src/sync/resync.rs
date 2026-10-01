@@ -31,7 +31,7 @@ use haex_crdt::rusqlite::types::Value;
 use haex_crdt::{compare_hlc_strings, ScanFilters};
 
 use crate::storage::maintenance::DELETE_MARKER_RETENTION_DAYS;
-use crate::storage::query;
+use crate::storage::query::{self, Query};
 use crate::sync::progress::{self, Vector};
 use crate::sync::replica::{synced_tables, Replica};
 
@@ -119,18 +119,72 @@ pub fn prune_absent(
     if doomed.is_empty() {
         return Ok(Vec::new());
     }
-    db.write(|tx| {
+    let deleted = db.write(|tx| {
         // Children may go before their parents, or the other way round.
         tx.execute("PRAGMA defer_foreign_keys = 1", &[])?;
+        let mut deleted = Vec::new();
         for (table, pks) in &doomed {
+            // The candidate scan runs before this transaction. Re-read the current
+            // per-column HLCs while the write transaction is open so a local write
+            // that landed during the scan keeps its row and is never deleted as a
+            // stale snapshot candidate.
+            if !row_is_still_covered(tx, table, pks, served)? {
+                continue;
+            }
             delete_row(tx, table, pks)?;
+            deleted.push((table.clone(), pks.clone()));
         }
-        Ok(())
+        Ok(deleted)
     })?;
-    let mut touched: Vec<String> = doomed.into_iter().map(|(table, _)| table).collect();
+    let mut touched: Vec<String> = deleted.into_iter().map(|(table, _)| table).collect();
     touched.sort();
     touched.dedup();
     Ok(touched)
+}
+
+/// Re-checks a prune candidate against the row's current per-column HLC map.
+/// The initial scan is intentionally cheap and happens outside the write
+/// transaction; this second read is the safety boundary against a local write
+/// racing the scan (R02).
+fn row_is_still_covered(
+    tx: &mut impl Query,
+    table: &str,
+    row_pks: &str,
+    served: &Vector,
+) -> haex_crdt::Result<bool> {
+    let pks: BTreeMap<String, serde_json::Value> = serde_json::from_str(row_pks)
+        .map_err(|e| haex_crdt::Error::consumer(format!("row key of {table}: {e}")))?;
+    if pks.is_empty() {
+        return Ok(false);
+    }
+    let values: Vec<Value> = pks
+        .values()
+        .map(sql_value)
+        .collect::<haex_crdt::Result<_>>()?;
+    let filter = pks
+        .keys()
+        .enumerate()
+        .map(|(i, column)| format!("\"{column}\" = ?{}", i + 1))
+        .collect::<Vec<_>>()
+        .join(" AND ");
+    let query = format!("SELECT haex_column_hlcs_no_sync FROM \"{table}\" WHERE {filter}");
+    let sql_params: Vec<&dyn haex_crdt::rusqlite::ToSql> = values
+        .iter()
+        .map(|value| value as &dyn haex_crdt::rusqlite::ToSql)
+        .collect();
+    let Some(raw): Option<String> = tx.query_row(&query, &sql_params, |row| row.get(0))? else {
+        return Ok(false);
+    };
+    let cells: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&raw)
+        .map_err(|e| haex_crdt::Error::consumer(format!("column HLCs of {table}: {e}")))?;
+    Ok(cells.values().all(|value| {
+        let Some(hlc) = value.as_str() else {
+            return false;
+        };
+        progress::origin_of(hlc)
+            .and_then(|origin| served.get(&origin))
+            .is_some_and(|cap| compare_hlc_strings(hlc, cap) != Ordering::Greater)
+    }))
 }
 
 /// Prunes a completed snapshot before exposing the progress it covered.
