@@ -422,6 +422,16 @@ pub async fn vault_public_identity(state: State<'_, AppState>) -> Result<VaultPu
         })
 }
 
+/// The built-in servers used when none are stored. Needs no vault, so the
+/// landing page's link form can show them too.
+#[tauri::command]
+pub fn sync_servers_defaults() -> SyncServers {
+    SyncServers {
+        nostr_relays: servers::default_nostr_relays(),
+        iroh_relays: servers::default_iroh_relays(),
+    }
+}
+
 /// The servers as stored; empty lists mean the built-in defaults.
 #[tauri::command]
 pub async fn sync_servers_get(state: State<'_, AppState>) -> Result<SyncServers> {

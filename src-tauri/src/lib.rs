@@ -232,6 +232,7 @@ pub fn run() {
             sync::commands::sync_copy_notice_dismiss,
             sync::commands::sync_status,
             sync::commands::vault_public_identity,
+            sync::commands::sync_servers_defaults,
             sync::commands::sync_servers_get,
             sync::commands::sync_servers_set,
             get_pref,

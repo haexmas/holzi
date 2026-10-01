@@ -75,6 +75,8 @@
       "vaultName": "Name der Vault auf diesem Gerät",
       "passphrase": "Passphrase für diese Vault",
       "passphraseHint": "Nur für dieses Gerät. Sie wird nie übertragen.",
+      "nostr": "Nostr-Relays",
+      "nostrDescription": "Nur nötig, wenn das Hauptgerät eigene Nostr-Relays nutzt (Einstellungen, Föderation). Sonst bleibt es bei den Standardservern.",
       "submit": "Verknüpfen",
       "cancel": "Abbrechen",
       "retry": "Erneut versuchen",
@@ -527,7 +529,8 @@
         "nostrDescription": "Darüber melden sich deine Geräte beieinander. Gilt ab dem nächsten Öffnen der Vault.",
         "iroh": "iroh-Relays",
         "irohDescription": "Darüber verbinden sich deine Geräte, auch hinter Heimroutern. Gilt sofort.",
-        "defaults": "Keine eigenen eingetragen: holzi nutzt seine voreingestellten öffentlichen Server.",
+        "default": "Standard",
+        "replaces": "Deine Server ersetzen die Standardserver: {urls}",
         "add": "Hinzufügen",
         "remove": "{url} entfernen"
       }

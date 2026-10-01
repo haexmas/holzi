@@ -143,6 +143,19 @@ fn stored_servers_read_back_and_an_empty_list_brings_back_the_defaults() {
 }
 
 #[test]
+fn the_defaults_the_settings_show_are_the_ones_in_use() {
+    let defaults = sync_servers_defaults();
+    assert_eq!(defaults.nostr_relays, servers::default_nostr_relays());
+    assert!(!defaults.iroh_relays.is_empty());
+    // What is shown must be accepted when typed back in.
+    servers::validate(&defaults.nostr_relays, &defaults.iroh_relays).expect("valid");
+    assert!(defaults
+        .iroh_relays
+        .iter()
+        .all(|url| url.starts_with("https://") && !url.ends_with(['/', '.'])));
+}
+
+#[test]
 fn a_join_uses_the_servers_it_is_given_and_the_built_in_ones_for_empty_lists() {
     use crate::sync::link::join_task::JoinConfig;
     use crate::sync::servers::{default_nostr_relays, ServerConfig};

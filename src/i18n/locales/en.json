@@ -75,6 +75,8 @@
       "vaultName": "Name of the vault on this device",
       "passphrase": "Passphrase for this vault",
       "passphraseHint": "For this device only. It is never sent.",
+      "nostr": "Nostr relays",
+      "nostrDescription": "Only needed if the main device uses its own Nostr relays (Settings, Federation). Otherwise the default servers stay.",
       "submit": "Link",
       "cancel": "Cancel",
       "retry": "Try again",
@@ -527,7 +529,8 @@
         "nostrDescription": "Your devices announce themselves to each other through these. Applies the next time the vault is opened.",
         "iroh": "iroh relays",
         "irohDescription": "Your devices connect through these, also behind home routers. Applies at once.",
-        "defaults": "None of your own listed: holzi uses its built-in public servers.",
+        "default": "Default",
+        "replaces": "Your servers replace the default servers: {urls}",
         "add": "Add",
         "remove": "Remove {url}"
       }

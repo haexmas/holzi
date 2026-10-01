@@ -32,6 +32,24 @@ pub fn default_nostr_relays() -> Vec<String> {
     ]
 }
 
+/// The iroh-Relays used when nothing is configured: the ones iroh itself
+/// ships ([`RelayMode::Default`]), written the way a person would type them
+/// (no trailing `/` or root-label `.`) and sorted so the settings list them
+/// in a stable order.
+pub fn default_iroh_relays() -> Vec<String> {
+    let mut urls: Vec<String> = RelayMode::Default
+        .relay_map()
+        .urls::<Vec<RelayUrl>>()
+        .iter()
+        .map(|url| {
+            let text = url.to_string();
+            text.trim_end_matches('/').trim_end_matches('.').to_string()
+        })
+        .collect();
+    urls.sort();
+    urls
+}
+
 /// The server preferences as currently stored.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ServerConfig {
