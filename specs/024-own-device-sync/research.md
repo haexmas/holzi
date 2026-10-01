@@ -369,11 +369,11 @@ legen Specs 027 und 028 fest und bauen dafür auf `column_sig_preimage*` von hae
   Verbindung. Die neue Installation legt ihre Vault mit ihrer Passphrase an, wendet die
   Momentaufnahme an und behält bei Abbruch nichts (FR-025). Das Hauptgerät veröffentlicht die neue
   Geräteliste erst danach. H persistiert vor der Übertragung den neuen Listensatz und eine
-  `link_id`; nach `LinkDone` wird die Veröffentlichung wiederaufnehmbar und idempotent. N bewahrt
-  bis zum Empfang der neuen Liste den angewendeten Transfer als `awaiting_publication` und sendet
-  bei einer Wiederaufnahme erneut `LinkDone`, ohne den Code erneut zu verbrauchen. (Gebaut ist
-  diese Wiederaufnahme ohne eigene Nachricht: geht `LinkDone` verloren, bleibt N verknüpft und die
-  beiden Geräte treffen sich über die neuere Liste von N, siehe `contracts/sync-protocol.md`.)
+  `link_id`; nach `LinkDone` wird die Veröffentlichung beim Öffnen idempotent abschließbar. N
+  bewahrt bis zum Empfang der neuen Liste den angewendeten Transfer als `awaiting_publication`.
+  Eine eigene Netz-Nachricht für die Wiederaufnahme ist nicht gebaut: geht `LinkDone` verloren,
+  bleibt N verknüpft und die beiden Geräte treffen sich über die neuere Liste von N, siehe
+  `contracts/sync-protocol.md`.)
 - Die neue Installation muss dieselbe Version des Sync-Protokolls und des Vault-Schemas haben
   (FR-029); sonst bricht das Verknüpfen mit einer Meldung ab.
 
