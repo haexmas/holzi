@@ -586,12 +586,12 @@ pub async fn list_installed_models(
                 resolved.push((slug, cf));
             }
         }
-        resolved
+        Ok::<_, HolziError>(resolved)
     })
     .await
     .map_err(|e| HolziError::CrdtInit {
         reason: format!("list_installed_models scan join: {e}"),
-    })?;
+    })??;
 
     let payload = db
         .read(move |r| {
