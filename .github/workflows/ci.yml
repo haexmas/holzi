@@ -52,6 +52,9 @@ jobs:
       - name: Check live vault data
         run: corepack pnpm check:vault-data
 
+      - name: Check chat model search
+        run: corepack pnpm check:chat-model-search
+
       - name: Check vault lifecycle
         run: corepack pnpm check:vault-lifecycle
 
@@ -93,6 +96,9 @@ jobs:
 
       - name: Validate documentation
         run: python3 scripts/ci/check-docs.py
+
+      - name: Test documentation checker
+        run: python3 -B -m unittest discover -s scripts/ci -p 'test_*.py'
   build:
     name: Frontend build
     runs-on: ubuntu-24.04
@@ -199,6 +205,21 @@ jobs:
       # it only wraps workspace crates — so the order here is deliberate.
       - name: Run tests
         run: cargo test --manifest-path src-tauri/Cargo.toml ${{ matrix.flags }}
+
+      # `ts-rs` writes bindings while running the export tests. Normalize the
+      # known trailing whitespace and fail when the checked-in TypeScript
+      # contract differs from a fresh Rust export (spec 001, types.md §CI).
+      - name: Check generated TypeScript bindings
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i -E 's/[[:space:]]+$//' src/types/bindings/*.ts
+          if [ -n "$(git status --short --untracked-files=all -- src/types/bindings)" ]; then
+            echo 'Generated bindings differ from the checked-in files or are untracked.' >&2
+            git status --short --untracked-files=all -- src/types/bindings >&2
+            exit 1
+          fi
+          git diff --exit-code -- src/types/bindings
 
       - name: Run Clippy
         run: cargo clippy --manifest-path src-tauri/Cargo.toml ${{ matrix.flags }} --all-targets -- -D warnings
