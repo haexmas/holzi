@@ -29,8 +29,8 @@ Wiederherstellung kommen mit Spec 026.
 
 - **Vault-Identität**: das Schlüsselpaar der Vault (secp256k1, im Nostr-Format).
   Sein öffentlicher Schlüssel ist die feste Adresse der Vault für andere Nutzer
-  (Rechte, Mitgliederlisten, Einladungen; Specs 027, 028) und prüft die
-  Geräteliste. Der private Schlüssel liegt nur auf Hauptgeräten, in der
+  (Rechte, Mitgliederlisten; Specs 027, 028; keine Einladeadresse, siehe
+  Spec 027 FR-008) und prüft die Geräteliste. Der private Schlüssel liegt nur auf Hauptgeräten, in der
   verschlüsselten Vault (D27). In v1 wechselt die Vault-Identität nie (D26).
 - **Geräteschlüssel**: ein eigenes Schlüsselpaar je Gerät (secp256k1, im
   Nostr-Format), die Identität des Geräts. Mit ihm weist sich das Gerät beim
@@ -462,9 +462,9 @@ oder ist doppelt, und jede nennt ihr Ursprungsgerät.
 In den Einstellungen, Kategorie „Föderation“, Unteransicht „Geräte“, sieht die
 Nutzerin ihre Geräte. Bei jedem steht, ob es ein Hauptgerät oder ein
 verknüpftes Gerät ist, ob es gerade verbunden ist oder wann es zuletzt online
-war. Oben steht die öffentliche Vault-Identität, die Adresse, unter der andere
-sie in Spaces und Datenfreigaben einladen; sie kann sie kopieren, aber nicht
-ändern. Schaltet sie ein Gerät ein, springt es in der Liste auf „online“;
+war. Oben steht die öffentliche Vault-Identität, die die Vault in Mitgliederlisten
+und Rechten von Spaces und Datenfreigaben benennt; sie kann sie kopieren, aber
+nicht ändern. Schaltet sie ein Gerät ein, springt es in der Liste auf „online“;
 benennt sie ein Gerät auf diesem um, steht der neue Name gleich darauf auch auf
 den anderen. Ein neu hinzugekommenes Gerät erscheint, sobald es auf der
 Geräteliste steht.
@@ -878,7 +878,7 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   keine Adresse eingeben. holzi MUSS dafür voreingestellte öffentliche
   Nostr-Relays und iroh-Relays nutzen, die der Nutzer in den Einstellungen
   ändern oder durch eigene Server ersetzen kann. Dieselben Server tragen auch
-  die Einladungen zu Spaces und Datenfreigaben (Spec 027, Einladungen).
+  die Antworten auf Einladungen zu Spaces und Datenfreigaben (Spec 027, FR-041).
 - **FR-009**: Beim Verbindungsaufbau MÜSSEN beide Seiten ihren Geräteschlüssel
   nennen, seinen Besitz beweisen und die Generation ihrer Geräteliste nennen;
   kennt eine Seite eine höhere Generation, MUSS sie diese Liste vorlegen, und
@@ -1242,8 +1242,10 @@ erhält keine Änderung, bis ein Hauptgerät sie aufnimmt; danach kommen auch di
   werden.
 - **FR-046** („öffentliche Vault-Identität“): Die Unteransicht „Geräte“ MUSS auf
   jedem Gerät der Vault den öffentlichen Schlüssel der Vault-Identität im
-  Nostr-Format zeigen, als die Adresse, unter der andere die Vault in Spaces
-  und Datenfreigaben einladen (Specs 027, 028). Er MUSS sich kopieren, aber
+  Nostr-Format zeigen, als den Namen der Vault in Mitgliederlisten und Rechten
+  von Spaces und Datenfreigaben (Specs 027, 028). Er ist keine Adresse zum
+  Einladen: Eingeladen wird nur über einen Einladungslink des Admins (Spec 027
+  FR-008). Er MUSS sich kopieren, aber
   nicht ändern lassen (D26). Den privaten Schlüssel DARF die Oberfläche nie
   zeigen (FR-002).
 - **FR-036**: Agenten mit Leserecht auf die Einstellungen DÜRFEN die Geräteliste

@@ -80,6 +80,7 @@ re-delegation between people.
 | D30 | Only the vault identity private key is direct-only; S3 credentials and content keys are ordinary, recoverable vault data.                                                                                                                                                                             | 2026-09-28 |
 | D31 | Optional **recovery package** on the relay: recovery key never leaves the device, possession proof plus second factor (TOTP or e-mail link).                                                                                                                                                          | 2026-09-28 |
 | D32 | The relay syncs **SQLite data only**; files go only through optional operator storage (backend A). A **password manager** (spec 030) holds secrets such as S3 credentials.                                                                                                                            | 2026-09-28 |
+| D33 | **Invites are links the admin creates and hands over**, never a message to a bare vault identity: one-time secret, expiry, withdrawable; the admin confirms the acceptance. Messages without a valid open secret are dropped silently.                                                                | 2026-10-01 |
 
 ## 3. What exists today, and what the references teach
 
@@ -361,11 +362,21 @@ exact format is plan work. No silent LWW loss of file content.
 
 ### 8.4 Membership changes
 
-- **Invite**: the invitation reaches the invitee as a Nostr DM (NIP-17) carrying the space id and
-  relay hints, but no keys. Only after the invitee returns a signed acceptance does an admin device
-  add `{vault_npub → caps}`, create a new key generation (§5.2), wrap it and all older generations to
-  the invitee, and publish the new signed member list (§10.3). Pending invitees are never on the
-  list, so the relay never authorizes them, and a declined invitation leaves no key behind.
+- **Invite** (D33): the admin creates an **invite link** (space id and name, admin vault identity,
+  capability, a 128-bit one-time secret, expiry, relay hints and an admin-vault signature over
+  those fields; no keys) and hands it over out of band. The recipient verifies that signature
+  before seeing the preview; a forged or modified link is rejected locally and sends nothing.
+  Any admin device may initiate link creation; if it is a linked device without the vault private
+  key, a main device signs the payload through the own-vault sync path.
+  Accepting sends a signed acceptance
+  carrying the secret and the invitee's device list to the admin vault as a Nostr DM (NIP-17). An
+  admin device drops every message without a valid, still open secret without display, storage or
+  reply, so knowing a vault identity buys no way to send invitations. Only after the admin has
+  confirmed the invitee's identity does an admin device add `{vault_npub → caps}`, create a new key
+  generation (§5.2), wrap it and all older generations to the invitee, and publish the new signed
+  member list (§10.3). Pending invitees are never on the list, so the relay never authorizes them,
+  and a declined or discarded invitation leaves no key behind. Discarding sends nothing; open links
+  are bounded by the links the admin created.
 - **Change rights / remove**: the admin updates the member list, publishes it with a higher epoch,
   then **rotates the space key** and wraps it to the remaining members.
 - **What revocation means**: the storage gate refuses immediately; new files are unreadable to the
@@ -598,14 +609,15 @@ by ciphertext hash from a signed file index. Only the way a device obtains acces
 
 ## 13. Threat model
 
-| Property                 | Secured by                                                                                                  | Relay / storage can                                                                                  |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Confidentiality          | encryption; keys only in members' vaults                                                                    | nothing                                                                                              |
-| Integrity / authenticity | per-chunk AEAD, ciphertext-hash object ids, per-column device signatures, device lists, signed member lists | nothing — forgery is rejected by receivers                                                           |
-| Authorization            | receivers enforce all rules; relay gate is additional                                                       | let an unauthorized request through (still not applied) or refuse a valid one                        |
-| Availability             | redundancy: direct iroh sync, several own devices, snapshots                                                | delete, withhold, serve stale state — detected by version vectors and sequence gaps, not preventable |
-| Removed member           | key rotation, relay gate, token rotation                                                                    | — ; the removed member keeps what it could already decrypt (accepted, as in haex-vault ADR 0002)     |
-| Stolen device            | SQLCipher passphrase; removal from the device list (D27)                                                    | —                                                                                                    |
+| Property                 | Secured by                                                                                                   | Relay / storage can                                                                                  |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| Confidentiality          | encryption; keys only in members' vaults                                                                     | nothing                                                                                              |
+| Integrity / authenticity | per-chunk AEAD, ciphertext-hash object ids, per-column device signatures, device lists, signed member lists  | nothing — forgery is rejected by receivers                                                           |
+| Unsolicited invitations  | no invitation without an admin-created link; messages without a valid open secret are dropped silently (D33) | n/a (cannot read messages)                                                                           |
+| Authorization            | receivers enforce all rules; relay gate is additional                                                        | let an unauthorized request through (still not applied) or refuse a valid one                        |
+| Availability             | redundancy: direct iroh sync, several own devices, snapshots                                                 | delete, withhold, serve stale state — detected by version vectors and sequence gaps, not preventable |
+| Removed member           | key rotation, relay gate, token rotation                                                                     | — ; the removed member keeps what it could already decrypt (accepted, as in haex-vault ADR 0002)     |
+| Stolen device            | SQLCipher passphrase; removal from the device list (D27)                                                     | —                                                                                                    |
 
 ## 14. Proposed spec cut
 

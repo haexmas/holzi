@@ -38,7 +38,7 @@ Synchronisierung oder Rechten in Berührung.
   Paket trennt nie Änderungen, die zusammen geschrieben wurden.
 - **Inhaltsschlüssel**: der Schlüssel, mit dem die Änderungspakete eines
   Bereichs verschlüsselt sind. **Schlüsselgeneration**: eine Fassung davon;
-  jede Änderung der Mitglieder (Aufnahme nach angenommener Einladung, Ändern
+  jede Änderung der Mitglieder (Aufnahme nach bestätigter Annahme, Ändern
   von Fähigkeiten, Entfernen, Austreten) erzeugt eine neue, und ihre
   Mitgliederliste steht damit fest.
 - **Relay**: der nicht vertrauenswürdige Server aus Spec 026. Es speichert und
@@ -111,7 +111,7 @@ Synchronisierung oder Rechten in Berührung.
   Beide verwenden dieselben Fähigkeitsstufen, dieselbe Regel für eigene
   Einträge, dieselben Regeln für die Mitgliederliste und dasselbe Muster einer
   neuen Schlüsselgeneration bei jeder Änderung der Mitglieder. Diese Spec
-  übernimmt aus Spec 027 den Weg für Einladungen und die direkte Verbindung
+  übernimmt aus Spec 027 den Einladungslink, den Weg für die Antworten darauf und die direkte Verbindung
   zwischen Mitgliedern. Dateien, die ein Eintrag einer Erweiterung
   referenziert, teilt diese Spec nicht.
 - **Spec 023** (Einstellungen): Die Verwaltung der Datenfreigaben liegt in der
@@ -178,6 +178,14 @@ Synchronisierung oder Rechten in Berührung.
   Vault-Daten, die auch über das Postfach der Vault synchronisiert werden und
   wiederherstellbar sind (D30).
 
+### Session 2026-10-01
+
+- Q: Wie wird jemand zu einer Datenfreigabe eingeladen? → A: Wie bei Spaces
+  (Spec 027, Klärung vom 2026-10-01) nur über einen Einladungslink, den der
+  Eigentümer erzeugt und selbst weitergibt, nie über die Vault-Identität allein.
+  Das Recht entsteht erst, wenn der Eigentümer die Annahme bestätigt (FR-008,
+  FR-010, FR-019).
+
 ## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Erweiterung erklärt, was sich teilen lässt (Priority: P1)
@@ -228,8 +236,8 @@ installiert.
 Anna möchte ihrem Kollegen Ben einen einzelnen Termin zeigen und ihrer Familie
 den ganzen Kalender „Familie“. In der Kalender-Erweiterung wählt sie beim Termin
 „Teilen“. Es öffnet sich der Teilen-Dialog von holzi, nicht einer der
-Erweiterung. Er zeigt den Titel des Termins, Anna fügt Ben über seine
-Vault-Identität hinzu und lässt es bei „Lesen“. Den Kalender „Familie“ teilt sie
+Erweiterung. Er zeigt den Titel des Termins, Anna erzeugt für Ben
+einen Einladungslink, schickt ihn ihm selbst und lässt es bei „Lesen“. Den Kalender „Familie“ teilt sie
 mit ihrem Mann Carl mit „Schreiben“. Trägt sie danach einen neuen
 Termin in „Familie“ ein, sieht Carl ihn, ohne dass Anna ihn eigens teilt.
 
@@ -250,11 +258,12 @@ Vault erreicht eine der beiden.
    „Kalendereintrag“, **When** die Erweiterung das Teilen anfragt, **Then**
    öffnet holzi seinen Teilen-Dialog mit Titel des Termins, Name des
    Freigabetyps, Name der Erweiterung und den bisherigen Empfängern.
-2. **Given** der Teilen-Dialog, **When** Anna eine Vault-Identität hinzufügt,
-   eine Fähigkeitsstufe wählt und bestätigt, **Then** besteht die
-   Datenfreigabe, der Empfänger steht darin als eingeladen und erhält eine
-   Einladung ohne Schlüssel; Mitgliederliste und Schlüsselgeneration ändern
-   sich erst, wenn ein Gerät von Anna seine Annahme verarbeitet (FR-010).
+2. **Given** der Teilen-Dialog, **When** Anna einen Namen für den Empfänger
+   angibt, eine Fähigkeitsstufe wählt und bestätigt, **Then** besteht die
+   Datenfreigabe, und holzi zeigt einen Einladungslink ohne Schlüssel (Text und
+   QR-Code), den Anna selbst weitergibt; die Einladung steht als „offen“ in der
+   Übersicht. Mitgliederliste und Schlüsselgeneration ändern sich erst, wenn
+   Anna die Annahme bestätigt hat (FR-010).
 3. **Given** der Kalender „Familie“ ist mit Carl geteilt, **When** Anna darin
    einen Termin anlegt, **Then** gehört der Termin samt Teilnehmern und
    Erinnerungen zur Datenfreigabe und erreicht Carl.
@@ -272,8 +281,8 @@ Vault erreicht eine der beiden.
 
 ### User Story 3 - Eine Freigabe empfangen und in der eigenen Erweiterung sehen (Priority: P1)
 
-Carl erhält Annas Einladung zum Kalender „Familie“. Er sieht, von wem sie
-kommt, welche Erweiterung sie braucht und welche Fähigkeiten er bekommt, und
+Carl erhält Annas Einladungslink zum Kalender „Familie“ und öffnet ihn. Er
+sieht, von wem er kommt, welche Erweiterung sie braucht und welche Fähigkeiten er bekommt, und
 nimmt an. Der Kalender erscheint in seiner eigenen Kalender-Erweiterung als
 „geteilt von Anna“, auf seinem Laptop und seinem Telefon. Hätte er die
 Erweiterung nicht installiert, böte ihm die Einladung die Installation an.
@@ -284,7 +293,7 @@ benutzbar.
 
 **Independent Test**: Eine Einladung auf einer Empfänger-Vault mit zwei Geräten
 annehmen: Die Daten erscheinen in der Erweiterung auf beiden Geräten mit dem
-Hinweis auf die Herkunft. Eine zweite Einladung ablehnen: Die Vault enthält
+Hinweis auf die Herkunft. Eine zweite Einladung verwerfen: Die Vault enthält
 danach nichts aus dieser Freigabe. Eine Einladung auf einer Vault ohne die
 Erweiterung öffnen: Sie nennt die Erweiterung und bietet die Installation an.
 
@@ -303,9 +312,11 @@ Erweiterung öffnen: Sie nennt die Erweiterung und bietet die Installation an.
 4. **Given** Carl hat die Erweiterung nicht installiert, **When** er die
    Einladung öffnet, **Then** nennt sie die benötigte Erweiterung und bietet die
    Installation mit der üblichen Bestätigung an; die Einladung bleibt offen, bis
-   er annimmt oder ablehnt.
-5. **Given** Carl lehnt ab, **When** die Ablehnung wirksam ist, **Then** enthält
-   seine Vault nichts aus der Freigabe, und Anna sieht, dass Carl abgelehnt hat.
+   er annimmt oder verwirft.
+5. **Given** Carl verwirft die Einladung, **When** das wirksam ist, **Then**
+   enthält seine Vault nichts aus der Freigabe, und es wurde nichts an Anna
+   geschickt; der Link bleibt bei ihr „offen“, bis er abläuft oder sie ihn
+   zurückzieht.
 6. **Given** ein Änderungspaket enthält einen Eintrag, der nicht von der Wurzel
    aus erreichbar ist, eine fremde Tabelle betrifft oder von einer Vault ohne
    passende Fähigkeit stammt, **When** es bei Carl eintrifft, **Then** wird es
@@ -582,30 +593,34 @@ angezeigter ursprünglicher Autorin.
 - **FR-008**: Der Teilen-Dialog MUSS zeigen: die Beschriftung der Wurzel, den
   Freigabetyp, die Erweiterung, was mitgeteilt wird (bei einer Sammlung: „mit
   allen Einträgen“) und die bisherigen Empfänger mit ihren Fähigkeiten. Er MUSS
-  erlauben, eine Person über ihre Vault-Identität hinzuzufügen und für jeden
-  Empfänger genau eine Fähigkeitsstufe zu wählen: Lesen, Schreiben (umfasst
+  erlauben, einen Empfänger durch einen Einladungslink einzuladen (Spec 027
+  FR-008) und für jeden Empfänger genau eine Fähigkeitsstufe zu wählen: Lesen, Schreiben (umfasst
   Lesen) oder Löschen (umfasst Schreiben). Freie Kombinationen gibt es nicht.
   Admin DARF NICHT wählbar sein.
 - **FR-009**: Rechte MÜSSEN an Vault-Identitäten gehen, nie an Geräte. Der
   Empfänger kann Geräte hinzufügen, ohne dass der Eigentümer etwas tut. Weil
   Inhaltsschlüssel je Gerät verschlüsselt werden (FR-043), erfährt der
   Eigentümer, wie viele Geräte ein Empfänger hat; das wird hingenommen (D28).
-- **FR-010**: Bestätigt der Eigentümer einen neuen Empfänger, MUSS holzi: die
-  Datenfreigabe anlegen, falls es sie noch nicht gibt; das Recht mit dem Stand
-  „eingeladen“ speichern; und dem Eingeladenen eine Einladung ohne Schlüssel
-  schicken, auf dem Weg für Einladungen aus Spec 027. Ein Eingeladener steht
-  NICHT in der Mitgliederliste und erhält keinen verschlüsselten
-  Inhaltsschlüssel; das Relay gibt ihm daher keinen Zugriff. Erst wenn ein
-  Gerät des Eigentümers die unterschriebene Annahme (FR-019) verarbeitet, MUSS
-  es den Empfänger aufnehmen: eine neue Schlüsselgeneration anlegen, deren
-  Inhaltsschlüssel verschlüsselt an jedes Gerät der Vault des Eigentümers und
-  jedes Empfängers der neuen Mitgliederliste geht (FR-043), dem neuen
-  Empfänger zusätzlich die älteren Generationen geben (FR-011) und die neue
-  Mitgliederliste mit dieser Generation auf das Relay laden (Spec 026). Wie
-  bei Spaces (Spec 027) erzeugt jede Änderung der Mitglieder (Aufnahme nach
-  angenommener Einladung, Ändern von Fähigkeiten, Entfernen, Austreten) eine
-  neue Schlüsselgeneration mit fester Mitgliederliste; Einladen und Ablehnen
-  ändern die Mitglieder nicht.
+- **FR-010**: Bestätigt der Eigentümer im Teilen-Dialog einen neuen Empfänger,
+  MUSS holzi: die Datenfreigabe anlegen, falls es sie noch nicht gibt; die
+  Einladung mit Namen, Fähigkeitsstufe, Einmalgeheimnis, Ablaufzeit und Stand
+  „offen“ speichern; und den Einladungslink ohne Schlüssel zeigen, den der
+  Eigentümer selbst weitergibt (Spec 027 FR-008). Kein Recht und kein
+  Eintrag in der Mitgliederliste entstehen vorher; ein Eingeladener erhält
+  keinen verschlüsselten Inhaltsschlüssel, und das Relay gibt ihm keinen
+  Zugriff. Erst wenn ein Gerät des Eigentümers die unterschriebene Annahme
+  (FR-019) mit gültigem, offenem Geheimnis erhalten hat und der Eigentümer sie
+  nach Prüfung der Vault-Identität bestätigt hat (Spec 027 FR-009), MUSS es den
+  Empfänger aufnehmen: das Recht mit der Vault-Identität des Empfängers
+  speichern, eine neue Schlüsselgeneration anlegen, deren Inhaltsschlüssel
+  verschlüsselt an jedes Gerät der Vault des Eigentümers und jedes Empfängers
+  der neuen Mitgliederliste geht (FR-043), dem neuen Empfänger zusätzlich die
+  älteren Generationen geben (FR-011) und die neue Mitgliederliste mit dieser
+  Generation auf das Relay laden (Spec 026). Wie bei Spaces (Spec 027) erzeugt
+  jede Änderung der Mitglieder (Aufnahme nach bestätigter Annahme, Ändern von
+  Fähigkeiten, Entfernen, Austreten) eine neue Schlüsselgeneration mit fester
+  Mitgliederliste; Einladen, Verwerfen und Ablehnen der Annahme ändern die
+  Mitglieder nicht.
 - **FR-011**: Ein neu hinzugefügter Empfänger MUSS nach der Annahme den ganzen
   aktuellen Stand der Datenfreigabe erhalten, nicht nur die Änderungen nach
   seiner Einladung. Dafür MUSS holzi ihm zusätzlich die Inhaltsschlüssel aller
@@ -638,7 +653,7 @@ angezeigter ursprünglicher Autorin.
 - **FR-015**: holzi MUSS in der Einstellungskategorie „Föderation“ (Spec 023)
   eine Unteransicht „Datenfreigaben“ anbieten, die alle Datenfreigaben zeigt:
   die eigenen mit Empfängern, Fähigkeiten und dem Stand jeder Einladung
-  (offen, angenommen, abgelehnt), die empfangenen mit Eigentümer und eigenen
+  (offen, angenommen, abgelehnt, abgelaufen, zurückgezogen), die empfangenen mit Eigentümer und eigenen
   Fähigkeiten. Aus ihr MÜSSEN sich Rechte ändern, Empfänger entfernen und eigene
   Freigaben beenden lassen. Der Teilen-Dialog (FR-007, FR-008) bleibt ein
   allgemeiner Dialog des Kerns, den die Erweiterung öffnet; er gehört nicht zu
@@ -678,23 +693,30 @@ angezeigter ursprünglicher Autorin.
 
 **Empfangen**
 
-- **FR-019**: Eine Einladung MUSS zeigen: Name und Vault-Identität des
-  Eigentümers, Erweiterung, Freigabetyp, Beschriftung der Wurzel und angebotene
-  Fähigkeiten. Der Empfänger MUSS annehmen oder ablehnen können. Die Annahme
-  ist eine Antwort an den Eigentümer, unterschrieben vom Geräteschlüssel des
-  annehmenden Geräts, gültig, wenn es auf der aktuellen Geräteliste der
-  Empfänger-Vault steht; sie bringt diese Geräteliste mit. Bis ein Gerät des Eigentümers sie nach FR-010 verarbeitet hat,
-  MUSS die Einladung beim Empfänger „angenommen, wartet auf Admin“ zeigen; er
-  hat bis dahin keinen Schlüssel und keinen Zugriff am Relay. Vor der
-  Aufnahme DARF nichts aus der Freigabe in seiner Vault gespeichert werden
-  außer der Einladung selbst. Eine Ablehnung hinterlässt beim Eingeladenen
-  keinen Schlüssel, weil er nie einen erhalten hat.
+- **FR-019**: Das Öffnen eines Einladungslinks MUSS zuerst dessen Signatur nach
+  Spec 027 FR-008 prüfen und erst danach eine Vorschau zeigen: Name und
+  Vault-Identität des Eigentümers, Erweiterung, Freigabetyp, Beschriftung der
+  Wurzel und angebotene Fähigkeiten; dabei geht nichts an den Eigentümer.
+  Einen gefälschten oder veränderten Link MUSS holzi lokal abweisen und darf
+  keine Annahme senden.
+  Der Empfänger MUSS annehmen oder verwerfen können. Die Annahme ist eine
+  Antwort an den Eigentümer mit dem Einmalgeheimnis, unterschrieben vom
+  Geräteschlüssel des annehmenden Geräts, gültig, wenn es auf der aktuellen
+  Geräteliste der Empfänger-Vault steht; sie bringt diese Geräteliste mit. Bis
+  der Eigentümer sie nach FR-010 bestätigt hat, MUSS die Einladung beim
+  Empfänger „angenommen, wartet auf Admin“ zeigen; er hat bis dahin keinen
+  Schlüssel und keinen Zugriff am Relay. Vor der Aufnahme DARF nichts aus der
+  Freigabe in seiner Vault gespeichert werden außer der Einladung selbst. Ein
+  Verwerfen hinterlässt beim Eingeladenen keinen Schlüssel, weil er nie einen
+  erhalten hat. Ein Gerät des Eigentümers MUSS Nachrichten ohne gültiges,
+  offenes Geheimnis still verwerfen (Spec 027 FR-041).
 - **FR-020**: Ist die benötigte Erweiterung nicht installiert, oder kennt die
   installierte Version den Freigabetyp nicht, MUSS die Einladung das nennen und
   die Installation beziehungsweise das Update über die übliche Bestätigung
   anbieten. Die Einladung MUSS offen bleiben, bis der Empfänger annimmt oder
-  ablehnt. Als dieselbe Erweiterung gilt nur eine mit gleichem öffentlichem
-  Schlüssel und Namen.
+  verwirft; mit Ablauf oder Zurückziehen des Links endet sie ebenfalls. Als
+  dieselbe Erweiterung gilt nur eine mit gleichem öffentlichem Schlüssel und
+  Namen.
 - **FR-021**: Nach der Annahme MÜSSEN die Daten in den Tabellen derselben
   Erweiterung in der Vault des Empfängers landen. holzi MUSS festhalten, welche
   Einträge zu welcher empfangenen Datenfreigabe gehören.
@@ -732,13 +754,14 @@ angezeigter ursprünglicher Autorin.
   installierte Version der Erweiterung noch nicht kennt, MUSS holzi es
   zurückhalten statt es zu verwerfen, und die Freigabe MUSS auf ein Update der
   Erweiterung hinweisen. Nach dem Update wird es angewendet.
-- **FR-026**: Der Empfänger MUSS eine Einladung ablehnen und aus einer
+- **FR-026**: Der Empfänger MUSS eine Einladung verwerfen und aus einer
   angenommenen Freigabe jederzeit austreten können. Beim Austritt MÜSSEN die
   Einträge, die nur über diese Freigabe in seiner Vault sind, auf allen seinen
   Geräten entfernt werden. Diese Entfernung DARF die Datenfreigabe NICHT als
-  Löschung erreichen. Ablehnung und Austritt MÜSSEN dem Eigentümer mitgeteilt
-  werden. Bei einer Ablehnung entfernt seine Vault das offene Recht ohne neue
-  Schlüsselgeneration, weil der Eingeladene nie Mitglied war (FR-010); beim
+  Löschung erreichen. Der Austritt MUSS dem Eigentümer mitgeteilt werden, ein Verwerfen
+  nicht (Spec 027 FR-012). Beim Verwerfen entfernt seine Vault die offene
+  Einladung ohne neue Schlüsselgeneration, weil der Eingeladene nie Mitglied
+  war (FR-010); beim
   Austritt entfernt sie das Recht, sobald eines seiner Geräte davon erfährt,
   wie bei einem Entzug (FR-032).
 
@@ -853,10 +876,11 @@ angezeigter ursprünglicher Autorin.
   FR-036). Gehört der Vault des Eigentümers und
   synchronisiert sich zwischen seinen Geräten.
 - **Recht**: Datenfreigabe, Vault-Identität des Empfängers, Fähigkeiten (Lesen,
-  Schreiben, Löschen), Stand der Einladung. Nur vom Eigentümer geschrieben.
+  Schreiben, Löschen). Entsteht erst mit der Aufnahme nach bestätigter
+  Annahme; nur vom Eigentümer geschrieben.
 - **Schlüsselgeneration**: je Datenfreigabe; Inhaltsschlüssel verschlüsselt an
   jedes Gerät laut Geräteliste jeder berechtigten Vault (FR-043). Eine neue entsteht bei
-  jeder Änderung der Mitglieder (Aufnahme nach angenommener Einladung, Ändern
+  jeder Änderung der Mitglieder (Aufnahme nach bestätigter Annahme, Ändern
   von Fähigkeiten, Entfernen, Austreten); ihre Mitgliederliste steht damit
   fest. Neue Empfänger
   erhalten auch die Inhaltsschlüssel aller älteren Generationen (FR-011).
@@ -864,12 +888,12 @@ angezeigter ursprünglicher Autorin.
   mit Fähigkeiten zu einer Generation, auf dem Relay (Spec 026). Die Vault des
   Eigentümers steht nicht darin und ist am Relay dennoch mit allen ihren
   Geräten berechtigt (FR-016).
-- **Einladung**: eine verschlüsselte Nachricht an die Vault-Identität des
-  Empfängers mit Datenfreigabe, Eigentümer, Erweiterung, Freigabetyp,
-  Beschriftung und Fähigkeiten, zugestellt auf dem Weg für Einladungen aus
-  Spec 027. Sie enthält keinen Schlüssel; die Annahme ist eine vom Empfänger
-  unterschriebene Antwort, die ein Gerät des Eigentümers verarbeitet (FR-010,
-  FR-019).
+- **Einladung**: ein vom Eigentümer erzeugter, nach Spec 027 FR-008 signierter
+  Einladungslink mit Datenfreigabe, Eigentümer, Erweiterung, Freigabetyp,
+  Beschriftung, Fähigkeiten, Einmalgeheimnis und Ablaufzeit, ohne Schlüssel.
+  Der Eigentümer speichert sie mit Namen und Stand (offen, angenommen, abgelehnt, abgelaufen,
+  zurückgezogen). Die Annahme ist eine vom Empfänger unterschriebene Antwort,
+  die der Eigentümer bestätigt (FR-010, FR-019).
 - **Zuordnung empfangener Einträge**: beim Empfänger; welcher Eintrag in den
   Tabellen einer Erweiterung zu welcher empfangenen Datenfreigabe gehört. Vom
   Kern geführt, nicht von der Erweiterung.
@@ -913,8 +937,8 @@ angezeigter ursprünglicher Autorin.
   Änderungen, die ein Gerät schon vorher angewendet hat, können bleiben, bis
   eine berechtigte Änderung sie überschreibt (dokumentiertes Risiko, Klärung
   vom 2026-09-28 zum Entzug).
-- **SC-011**: Ein Eingeladener, dessen Annahme noch kein Gerät des Eigentümers
-  verarbeitet hat, erhält in 100 % der Testfälle keinen Inhaltsschlüssel und
+- **SC-011**: Ein Eingeladener, dessen Annahme der Eigentümer noch nicht
+  bestätigt hat, erhält in 100 % der Testfälle keinen Inhaltsschlüssel und
   keinen Zugriff auf das Postfach der Freigabe am Relay.
 
 ## Assumptions
@@ -929,15 +953,16 @@ angezeigter ursprünglicher Autorin.
 - Spec 024 liefert Vault-Identität, Geräteliste mit Hauptgeräten und
   verknüpften Geräten, Unterschriften mit echtem Autor, das Führen des
   Erstellers durch den Kern und die Nur-direkt-Daten. Spec 026 liefert Relay,
-  Postfach, Mitgliederliste und die Prüfung der Geräteliste. Spec 027 liefert den Weg für Einladungen und die direkte
+  Postfach, Mitgliederliste und die Prüfung der Geräteliste. Spec 027 liefert den Einladungslink samt Antworten und die direkte
   Verbindung zwischen Mitgliedern.
 - Das konkrete Format der Erklärung im Manifest und die Anfragen der Erweiterung
   an holzi legt der Plan fest. Beides berührt auch die Repositories `vault-sdk`
   und `haextension`; Verweise darauf werden mit vollem Commit-SHA angegeben.
 - Eigentümer und Empfänger nutzen holzi und dieselbe Erweiterung (gleicher
   öffentlicher Schlüssel und Name), nicht zwingend dieselbe Version.
-- Personen werden über ihre Vault-Identität ausgewählt. Ein Adressbuch gibt es
-  nicht; den Namen in der Einladung gibt der Eigentümer für sich selbst an.
+- Personen werden über einen Einladungslink eingeladen, den der Eigentümer
+  selbst weitergibt. Ein Adressbuch gibt es nicht; den Namen in der Einladung
+  gibt der Eigentümer für sich selbst an.
 - Ein entfernter Empfänger behält, was er schon entschlüsseln konnte, wie beim
   Entfernen aus einem Space (Entwurf §13; haex-vault ADR 0002, Repository
   `https://github.com/haex-space/haex-vault`, Revision

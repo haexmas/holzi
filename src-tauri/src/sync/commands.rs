@@ -230,7 +230,7 @@ pub struct SyncStatus {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[ts(export, export_to = "../../src/types/bindings/")]
 pub struct VaultPublicIdentity {
-    /// Nostr `npub` form, the address others invite the vault at.
+    /// Nostr `npub` form, naming the vault in member lists and rights; not an invitation address.
     pub npub: String,
     pub hex: String,
 }
