@@ -167,3 +167,33 @@ async fn cancelling_stops_the_run() {
     .await;
     assert!(matches!(result, Err(EvalError::Cancelled)));
 }
+
+#[tokio::test]
+async fn every_step_carries_the_tool_instruction_of_a_chat_turn() {
+    let adapter = oracle();
+    run(&adapter, Which::All, true).await;
+    let seen = adapter.seen.lock().unwrap();
+    assert!(!seen.is_empty());
+    assert!(seen.iter().all(|req| {
+        req.system_prompt.as_deref() == Some(crate::chat::tools::prompt::TOOL_INSTRUCTION)
+    }));
+}
+
+#[tokio::test]
+async fn a_failure_keeps_the_start_of_what_the_model_said_instead_of_a_call() {
+    let talker = Scripted::new(|_| {
+        vec![StreamChunk::Delta {
+            content: "x".repeat(500),
+            reasoning: None,
+        }]
+    });
+    let report = run(&talker, Which::All, true).await;
+    let missed = report
+        .failures
+        .iter()
+        .find(|f| f.id == "read-tabs-de-1")
+        .expect("a model that only talks misses it");
+    assert_eq!(missed.text.as_deref().map(str::len), Some(300));
+    let json = serde_json::to_value(&report).unwrap();
+    assert!(json["failures"][0]["text"].is_string());
+}

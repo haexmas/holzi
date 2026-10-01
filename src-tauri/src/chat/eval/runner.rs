@@ -15,6 +15,7 @@ use crate::adapters::ProviderAdapter;
 use crate::chat::tools::action_tool::AgentActionDef;
 use crate::chat::tools::find_actions::{FindActionsTool, FIND_ACTIONS_TOOL_NAME};
 use crate::chat::tools::offer::{extend_offer, found_tools, tool_spec};
+use crate::chat::tools::prompt::system_prompt;
 use crate::chat::tools::Tool;
 
 use super::scoring::{report, score, EvalReport, EvalSet, Expect, Observed, ObservedCall, Scored};
@@ -75,7 +76,8 @@ fn request(
     ChatRequest {
         model_id: model.to_owned(),
         thread_id: None,
-        system_prompt: None,
+        // The instruction a chat turn with tools carries, so the run measures what the app does.
+        system_prompt: system_prompt(None, &tools),
         messages,
         reasoning_requested: false,
         max_new_tokens: Some(MAX_NEW_TOKENS),
@@ -91,13 +93,19 @@ fn request(
     }
 }
 
-/// Runs one step and returns the tool calls the model made (none for a text answer).
+/// What a model did in one step: the tool calls it made and the text it wrote.
+struct Answer {
+    calls: Vec<ToolCall>,
+    text: String,
+}
+
+/// Runs one step and returns what the model did.
 async fn ask(
     adapter: &dyn ProviderAdapter,
     req: ChatRequest,
     sentence: &str,
     cancel: &CancellationToken,
-) -> Result<Vec<ToolCall>, EvalError> {
+) -> Result<Answer, EvalError> {
     let model_error = |reason: String| EvalError::Model {
         sentence: sentence.to_owned(),
         reason,
@@ -107,6 +115,7 @@ async fn ask(
         .await
         .map_err(|e| model_error(e.to_string()))?;
     let mut calls = Vec::new();
+    let mut text = String::new();
     loop {
         let item = tokio::select! {
             biased;
@@ -114,8 +123,9 @@ async fn ask(
             item = stream.next() => item,
         };
         match item {
-            None | Some(Ok(StreamChunk::Done { .. })) => return Ok(calls),
+            None | Some(Ok(StreamChunk::Done { .. })) => return Ok(Answer { calls, text }),
             Some(Ok(StreamChunk::ToolCalls(batch))) => calls.extend(batch),
+            Some(Ok(StreamChunk::Delta { content, .. })) => text.push_str(&content),
             Some(Ok(_)) => {}
             Some(Err(error)) => return Err(model_error(error.to_string())),
         }
@@ -172,11 +182,12 @@ pub async fn run_eval(
 
         let observed = if !needs_search {
             Observed {
-                calls: observed_calls(&first),
+                calls: observed_calls(&first.calls),
                 searched: false,
                 reached: true,
+                text: first.text.clone(),
             }
-        } else if let [lone] = first.as_slice() {
+        } else if let [lone] = first.calls.as_slice() {
             if lone.name == FIND_ACTIONS_TOOL_NAME {
                 let result = search.execute(lone.input.clone(), cancel.clone()).await;
                 let mut next = offer.clone();
@@ -187,7 +198,7 @@ pub async fn run_eval(
                 let reached = expected
                     .iter()
                     .all(|name| next.iter().any(|spec| spec.name == *name));
-                let calls = if reached {
+                let (calls, text) = if reached {
                     let messages = vec![
                         user,
                         message(
@@ -214,27 +225,30 @@ pub async fn run_eval(
                         cancel,
                     )
                     .await?;
-                    observed_calls(&second)
+                    (observed_calls(&second.calls), second.text)
                 } else {
-                    Vec::new()
+                    (Vec::new(), first.text.clone())
                 };
                 Observed {
                     calls,
                     searched: true,
                     reached,
+                    text,
                 }
             } else {
                 Observed {
-                    calls: observed_calls(&first),
+                    calls: observed_calls(&first.calls),
                     searched: false,
                     reached: false,
+                    text: first.text.clone(),
                 }
             }
         } else {
             Observed {
-                calls: observed_calls(&first),
+                calls: observed_calls(&first.calls),
                 searched: false,
                 reached: false,
+                text: first.text.clone(),
             }
         };
 

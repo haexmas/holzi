@@ -49,6 +49,7 @@ fn observed(calls: Vec<ObservedCall>) -> Observed {
         calls,
         searched: false,
         reached: true,
+        ..Default::default()
     }
 }
 
@@ -148,12 +149,14 @@ fn a_search_that_did_not_offer_the_tool_is_not_found_not_a_wrong_call() {
         calls: Vec::new(),
         searched: true,
         reached: false,
+        ..Default::default()
     };
     assert_eq!(result_of(&dark(), &seen), NotFound);
     let found = Observed {
         calls: vec![call("settings_appearance_setColorScheme", scheme("dark"))],
         searched: true,
         reached: true,
+        ..Default::default()
     };
     assert_eq!(result_of(&dark(), &found), Pass);
 }
@@ -215,6 +218,7 @@ fn rates_come_overall_per_language_and_per_kind_with_the_reach_of_the_search() {
             calls: Vec::new(),
             searched: true,
             reached: false,
+            ..Default::default()
         },
         // c passes, d is spurious.
         observed(Vec::new()),

@@ -26,6 +26,7 @@ mod offer_tests;
 pub mod permission;
 #[cfg(test)]
 mod permission_tests;
+pub mod prompt;
 pub mod selftest;
 
 use std::sync::Arc;
