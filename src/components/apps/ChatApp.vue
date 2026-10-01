@@ -414,7 +414,7 @@ onBeforeUnmount(() => {
       />
     </template>
 
-    <section class="min-w-0 flex-1 flex flex-col">
+    <section class="min-h-0 min-w-0 flex-1 flex flex-col">
       <ChatStatusBanners
         :displayed-error="displayedError"
         :can-retry-send="!!pendingSend"
@@ -430,7 +430,7 @@ onBeforeUnmount(() => {
         @retry-autonomy-mode="reloadAutonomyMode()"
       />
 
-      <div class="flex-1 flex flex-col overflow-hidden">
+      <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div
           ref="messagesScroll"
           data-messages-scroll
