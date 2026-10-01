@@ -23,6 +23,11 @@ import {
   roleLabelKey,
   sortDevices,
 } from '../src/lib/sync/deviceStatus.ts'
+import {
+  serverEntries,
+  withEnabled,
+  withoutServer,
+} from '../src/lib/sync/serverEntries.ts'
 import { searchSettings } from '../src/lib/settings/search.ts'
 import {
   getAppDefinition,
@@ -407,4 +412,30 @@ test('only a main device manages devices (FR-035)', () => {
   ] as const) {
     assert.equal(canManageDevices(other), false, String(other))
   }
+})
+
+test('server entries list the built-in servers first, then the added ones, with the switched off ones kept', () => {
+  assert.deepEqual(
+    serverEntries(['wss://a', 'wss://b'], ['wss://c', 'wss://a'], ['wss://b']),
+    [
+      { url: 'wss://a', enabled: true, isDefault: true },
+      { url: 'wss://b', enabled: false, isDefault: true },
+      { url: 'wss://c', enabled: true, isDefault: false },
+    ],
+  )
+})
+
+test('switching a server off remembers it once, switching it on forgets it', () => {
+  assert.deepEqual(withEnabled([], 'wss://a', false), ['wss://a'])
+  assert.deepEqual(withEnabled(['wss://a'], 'wss://a', false), ['wss://a'])
+  assert.deepEqual(withEnabled(['wss://a', 'wss://b'], 'wss://a', true), [
+    'wss://b',
+  ])
+})
+
+test('removing an added server forgets that it was switched off', () => {
+  assert.deepEqual(
+    withoutServer(['wss://c', 'wss://d'], ['wss://c', 'wss://b'], 'wss://c'),
+    { added: ['wss://d'], disabled: ['wss://b'] },
+  )
 })

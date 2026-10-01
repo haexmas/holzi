@@ -304,8 +304,9 @@ impl SyncNode {
     /// Brings the endpoint's relay set in line with `mode` (spec 024,
     /// FR-008: relay changes from the settings apply at runtime). Takes the
     /// same [`RelayMode`] as [`Self::bind`] (from
-    /// [`crate::sync::servers::ServerConfig::relay_mode`]), so an emptied
-    /// setting goes back to iroh's default relays instead of to none.
+    /// [`crate::sync::servers::ServerConfig::relay_mode`]), so disabling every
+    /// configured relay produces a relay-free endpoint instead of restoring
+    /// the defaults.
     pub async fn apply_relays(&self, mode: &RelayMode) {
         let want = mode.relay_map().urls::<Vec<RelayUrl>>();
         let have = {

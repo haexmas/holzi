@@ -4,44 +4,106 @@ use super::*;
 use crate::storage::preferences::{self, PrefScope};
 use crate::sync::test_support::open_vault;
 
+fn urls(list: &[&str]) -> Vec<String> {
+    list.iter().map(|s| s.to_string()).collect()
+}
+
 #[test]
-fn unset_relays_fall_back_to_defaults() {
+fn unset_servers_mean_the_built_in_ones_are_in_use() {
     let config = ServerConfig::default();
     assert_eq!(config.effective_nostr_relays(), default_nostr_relays());
+    assert_eq!(config.effective_iroh_relays(), default_iroh_relays());
     assert!(matches!(config.relay_mode(), RelayMode::Default));
 }
 
 #[test]
-fn configured_nostr_relays_replace_the_defaults() {
+fn added_nostr_relays_are_used_besides_the_built_in_ones() {
     let config = ServerConfig {
-        nostr_relays: vec!["wss://relay.example.org".to_string()],
-        iroh_relays: Vec::new(),
+        nostr_relays: urls(&["wss://relay.example.org"]),
+        ..ServerConfig::default()
+    };
+    let mut expected = default_nostr_relays();
+    expected.push("wss://relay.example.org".to_string());
+    assert_eq!(config.effective_nostr_relays(), expected);
+}
+
+#[test]
+fn a_switched_off_server_is_not_used_and_an_added_one_equal_to_a_built_in_one_counts_once() {
+    let config = ServerConfig {
+        nostr_relays: urls(&["wss://nos.lol", "wss://relay.example.org"]),
+        disabled: urls(&["wss://relay.damus.io", "wss://relay.example.org"]),
+        ..ServerConfig::default()
     };
     assert_eq!(
         config.effective_nostr_relays(),
-        vec!["wss://relay.example.org".to_string()]
+        urls(&["wss://nos.lol", "wss://relay.primal.net"])
     );
 }
 
 #[test]
-fn configured_iroh_relays_build_a_custom_relay_mode() {
+fn only_leaves_nothing_but_the_given_servers() {
+    let config = ServerConfig::only(
+        urls(&["wss://relay.example.org"]),
+        urls(&["https://iroh.example.org"]),
+    );
+    assert_eq!(
+        config.effective_nostr_relays(),
+        urls(&["wss://relay.example.org"])
+    );
+    assert_eq!(
+        config.effective_iroh_relays(),
+        urls(&["https://iroh.example.org"])
+    );
+}
+
+#[test]
+fn added_iroh_relays_build_a_custom_relay_mode_with_the_built_in_ones() {
     let config = ServerConfig {
-        nostr_relays: Vec::new(),
-        iroh_relays: vec!["https://relay.example.org".to_string()],
+        iroh_relays: urls(&["https://relay.example.org"]),
+        ..ServerConfig::default()
     };
     let RelayMode::Custom(map) = config.relay_mode() else {
         panic!("expected a custom relay map");
     };
-    assert_eq!(map.urls::<Vec<_>>().len(), 1);
+    assert_eq!(map.urls::<Vec<_>>().len(), default_iroh_relays().len() + 1);
 }
 
 #[test]
-fn an_invalid_iroh_relay_url_falls_back_to_the_default_mode() {
+fn switching_off_some_built_in_iroh_relays_keeps_the_others_as_they_are() {
+    let defaults = default_iroh_relays();
     let config = ServerConfig {
-        nostr_relays: Vec::new(),
-        iroh_relays: vec!["not a url".to_string()],
+        disabled: defaults[1..].to_vec(),
+        ..ServerConfig::default()
     };
-    assert!(matches!(config.relay_mode(), RelayMode::Default));
+    let RelayMode::Custom(map) = config.relay_mode() else {
+        panic!("expected a custom relay map");
+    };
+    let kept: Vec<RelayUrl> = map.urls();
+    assert_eq!(kept.len(), 1);
+    // Still the built-in configuration, not a re-parsed copy of the listed form.
+    assert!(RelayMode::Default
+        .relay_map()
+        .urls::<Vec<RelayUrl>>()
+        .contains(&kept[0]));
+}
+
+#[test]
+fn switching_off_every_iroh_relay_uses_no_relay() {
+    let config = ServerConfig::only(Vec::new(), Vec::new());
+    assert!(config.effective_iroh_relays().is_empty());
+    assert!(matches!(config.relay_mode(), RelayMode::Disabled));
+}
+
+#[test]
+fn an_invalid_added_iroh_relay_url_is_left_out() {
+    let config = ServerConfig {
+        iroh_relays: urls(&["not a url"]),
+        ..ServerConfig::default()
+    };
+    let RelayMode::Custom(map) = config.relay_mode() else {
+        panic!("expected a custom relay map");
+    };
+    assert_eq!(map.urls::<Vec<_>>().len(), default_iroh_relays().len());
 }
 
 #[test]
@@ -54,7 +116,8 @@ fn read_reflects_the_stored_preferences() {
             PrefScope::Vault,
             PREF_NOSTR_RELAYS,
             r#"["wss://relay.example.org"]"#,
-        )
+        )?;
+        preferences::insert_or_update(tx, PrefScope::Vault, PREF_DISABLED_RELAYS, "[]")
     })
     .expect("write nostr relays");
 
@@ -64,6 +127,7 @@ fn read_reflects_the_stored_preferences() {
         vec!["wss://relay.example.org".to_string()]
     );
     assert!(config.iroh_relays.is_empty());
+    assert!(config.disabled.is_empty());
 }
 
 #[test]
@@ -77,6 +141,37 @@ fn an_unparseable_stored_value_reads_as_empty() {
 
     let config = crate::storage::query::read(&db, |r| read(r)).expect("read config");
     assert!(config.iroh_relays.is_empty());
+}
+
+#[test]
+fn legacy_preferences_keep_custom_servers_without_reenabling_built_ins() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db = open_vault(dir.path());
+    db.write(|tx| {
+        preferences::insert_or_update(
+            tx,
+            PrefScope::Vault,
+            PREF_NOSTR_RELAYS,
+            r#"["wss://relay.example.org"]"#,
+        )?;
+        preferences::insert_or_update(
+            tx,
+            PrefScope::Vault,
+            PREF_IROH_RELAYS,
+            r#"["https://iroh.example.org"]"#,
+        )
+    })
+    .expect("write legacy preferences");
+
+    let config = crate::storage::query::read(&db, |r| read(r)).expect("read config");
+    assert_eq!(
+        config.effective_nostr_relays(),
+        urls(&["wss://relay.example.org"])
+    );
+    assert_eq!(
+        config.effective_iroh_relays(),
+        urls(&["https://iroh.example.org"])
+    );
 }
 
 #[test]

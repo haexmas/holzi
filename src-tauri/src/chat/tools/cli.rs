@@ -42,7 +42,7 @@ where
             return Ok(output);
         }
         let within_limit = total
-            .fetch_update(Ordering::AcqRel, Ordering::Relaxed, |current| {
+            .try_update(Ordering::AcqRel, Ordering::Relaxed, |current| {
                 current
                     .checked_add(read)
                     .filter(|next| *next <= MAX_OUTPUT_BYTES)

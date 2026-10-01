@@ -5,9 +5,14 @@
  * its own passphrase. The vault is created here and stays only when the link finishes; nothing is
  * created before the user chose to link, so there is no vault to leave behind (FR-025). The
  * passphrase never leaves this device. A main device that uses its own Nostr servers cannot tell a
- * new installation about them, so the form takes them; the built-in ones are shown while none is
- * entered.
+ * new installation about them, so the form takes them: the built-in ones are listed and can be
+ * switched off, added ones switched off or removed, as in the settings.
  */
+import {
+  serverEntries,
+  withEnabled,
+  withoutServer,
+} from '~/lib/sync/serverEntries'
 import type { LinkJoinState } from '@bindings/LinkJoinState'
 
 interface Props {
@@ -36,8 +41,9 @@ const vaultName = ref('')
 const deviceName = ref('')
 const passphrase = ref('')
 const passphraseConfirm = ref('')
-/** The Nostr servers entered here; empty means the built-in ones. */
+/** The Nostr servers added here, and the ones, built-in or added, switched off. */
 const nostrRelays = ref<string[]>([])
+const disabledRelays = ref<string[]>([])
 const defaultNostrRelays = ref<string[]>([])
 const submitting = ref(false)
 const error = ref<string | null>(null)
@@ -58,6 +64,7 @@ function reset() {
   passphrase.value = ''
   passphraseConfirm.value = ''
   nostrRelays.value = []
+  disabledRelays.value = []
   error.value = null
   state.value = null
 }
@@ -116,9 +123,14 @@ async function onSubmit() {
       vaultName: vaultName.value,
       deviceName: deviceName.value.trim(),
       passphrase: passphrase.value,
-      servers: nostrRelays.value.length
-        ? { nostrRelays: nostrRelays.value, irohRelays: [] }
-        : undefined,
+      servers:
+        nostrRelays.value.length || disabledRelays.value.length
+          ? {
+              nostrRelays: nostrRelays.value,
+              irohRelays: [],
+              disabled: disabledRelays.value,
+            }
+          : undefined,
     })
     if (closeRequested) {
       await cancelOnClose
@@ -154,6 +166,16 @@ async function onCancel() {
 async function addNostrRelayAsync(url: string): Promise<boolean> {
   nostrRelays.value = [...nostrRelays.value, url]
   return true
+}
+
+function onToggleRelay(url: string, enabled: boolean) {
+  disabledRelays.value = withEnabled(disabledRelays.value, url, enabled)
+}
+
+function onRemoveRelay(url: string) {
+  const rest = withoutServer(nostrRelays.value, disabledRelays.value, url)
+  nostrRelays.value = rest.added
+  disabledRelays.value = rest.disabled
 }
 
 /** Back to the form after a failure. */
@@ -247,12 +269,15 @@ function onOpenVault() {
         <SettingsServerList
           :label="t('onboarding.link.nostr')"
           :description="t('onboarding.link.nostrDescription')"
-          :servers="nostrRelays"
-          :defaults="defaultNostrRelays"
+          :entries="
+            serverEntries(defaultNostrRelays, nostrRelays, disabledRelays)
+          "
           placeholder="wss://"
+          :none-note="t('settings.federation.servers.nostrNone')"
           test-id="link-servers-nostr"
           :add-async="addNostrRelayAsync"
-          @remove="nostrRelays = nostrRelays.filter((url) => url !== $event)"
+          @toggle="onToggleRelay"
+          @remove="onRemoveRelay"
         />
         <p v-if="error" class="text-sm text-destructive" role="alert">
           {{ error }}

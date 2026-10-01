@@ -260,7 +260,8 @@ geprüft).
 - **Server** (FR-008): voreingestellte öffentliche Nostr-Relays, die der Nutzer ändern kann; vor
   der Auslieferung prüft ein Task per NIP-11, dass sie flüchtige Ereignisse annehmen. Kandidaten
   (zu prüfen): `wss://relay.damus.io`, `wss://nos.lol`, `wss://relay.primal.net`. iroh-Relays:
-  die n0-Standardrelays, ersetzbar.
+  die n0-Standardrelays. Die eingebauten Server stehen immer in der Liste und lassen sich abschalten,
+  nicht löschen; hinzugefügte lassen sich abschalten oder löschen.
 
 **Begründung**: Präsenz nützt nur, wenn beide Geräte online sind, denn der Sync ist direkt; ein
 gespeichertes Ereignis (1059) würde Nostr-Relays mit Meldungen füllen und wegen der Zeitverschiebung von

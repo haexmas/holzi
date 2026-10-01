@@ -62,7 +62,7 @@ impl JoinConfig {
         Self::with_servers(crate::sync::servers::ServerConfig::default())
     }
 
-    /// The given servers, where an empty list means the built-in ones: for a
+    /// The given servers, besides the built-in ones unless switched off: for a
     /// vault whose devices use servers of their own, which a new installation
     /// cannot read from a vault it does not have yet.
     pub fn with_servers(servers: crate::sync::servers::ServerConfig) -> Self {

@@ -1,26 +1,34 @@
 //! Preferred Nostr- and iroh-Relays for own-device sync (spec 024, FR-008,
 //! research R7).
 //!
-//! Read from the vault-wide `preferences` table; unset or unparseable
-//! falls back to the built-in defaults. A relay that cannot be reached
+//! The built-in servers are always listed and can be switched off but not
+//! removed; the servers a user adds are listed after them and can be switched
+//! off or removed. What is used is everything listed that is not switched off.
+//! Read from the vault-wide `preferences` table; unset or unparseable reads as
+//! "nothing added, nothing switched off". A relay that cannot be reached
 //! never blocks local work (Constitution VII): callers only log a
 //! failure to apply a relay change, they never fail the vault open or the
 //! sync service over it.
 
+use std::sync::Arc;
+
 use haex_crdt::CrdtTransaction;
-use iroh::{RelayMap, RelayMode, RelayUrl};
+use iroh::{RelayConfig, RelayMap, RelayMode, RelayUrl};
 use nostr::types::RelayUrl as NostrRelayUrl;
 
 use crate::storage::preferences::{self, PrefScope};
 use crate::storage::query::Query;
 
 /// Preference key for the Nostr relays this device publishes presence to
-/// and subscribes on. Value: a JSON array of relay URLs.
+/// and subscribes on, besides the built-in ones. Value: a JSON array of
+/// relay URLs.
 pub const PREF_NOSTR_RELAYS: &str = "sync.servers.nostr";
-/// Preference key for the iroh-Relays used to reach other devices. Value:
-/// a JSON array of relay URLs. An empty or absent value means "use iroh's
-/// own production relays" ([`RelayMode::Default`]), not "use none".
+/// Preference key for the iroh-Relays used to reach other devices, besides
+/// iroh's own production relays. Value: a JSON array of relay URLs.
 pub const PREF_IROH_RELAYS: &str = "sync.servers.iroh";
+/// Preference key for the servers switched off, built-in or added, of either
+/// kind. Value: a JSON array of relay URLs.
+pub const PREF_DISABLED_RELAYS: &str = "sync.servers.disabled";
 
 /// The Nostr relays used when nothing is configured (research R7):
 /// public relays checked to support ephemeral events (NIP-11).
@@ -41,57 +49,117 @@ pub fn default_iroh_relays() -> Vec<String> {
         .relay_map()
         .urls::<Vec<RelayUrl>>()
         .iter()
-        .map(|url| {
-            let text = url.to_string();
-            text.trim_end_matches('/').trim_end_matches('.').to_string()
-        })
+        .map(pretty)
         .collect();
     urls.sort();
     urls
 }
 
+/// A relay URL the way a person would type it.
+fn pretty(url: &RelayUrl) -> String {
+    let text = url.to_string();
+    text.trim_end_matches('/').trim_end_matches('.').to_string()
+}
+
 /// The server preferences as currently stored.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ServerConfig {
-    /// Empty means "use [`default_nostr_relays`]".
+    /// The Nostr servers added besides the built-in ones.
     pub nostr_relays: Vec<String>,
-    /// Empty means "use iroh's own default relays" ([`RelayMode::Default`]).
+    /// The iroh servers added besides the built-in ones.
     pub iroh_relays: Vec<String>,
+    /// The servers, of either kind, that are switched off.
+    pub disabled: Vec<String>,
 }
 
 impl ServerConfig {
-    /// The Nostr relays to actually use: configured, or the defaults.
-    pub fn effective_nostr_relays(&self) -> Vec<String> {
-        if self.nostr_relays.is_empty() {
-            default_nostr_relays()
-        } else {
-            self.nostr_relays.clone()
+    /// Only the given servers: the built-in ones are switched off. For tests
+    /// and tooling that must not reach a public server.
+    pub fn only(nostr: Vec<String>, iroh: Vec<String>) -> Self {
+        let disabled = default_nostr_relays()
+            .into_iter()
+            .chain(default_iroh_relays())
+            .collect();
+        Self {
+            nostr_relays: nostr,
+            iroh_relays: iroh,
+            disabled,
         }
     }
 
-    /// The iroh `RelayMode` to bind or reconfigure the endpoint with.
-    pub fn relay_mode(&self) -> RelayMode {
-        if self.iroh_relays.is_empty() {
-            return RelayMode::Default;
-        }
-        match RelayMap::try_from_iter(self.iroh_relays.iter().map(String::as_str)) {
-            Ok(map) => RelayMode::Custom(map),
-            Err(error) => {
-                log::warn!(
-                    "sync: {PREF_IROH_RELAYS} has an invalid relay URL, using defaults: {error}"
-                );
-                RelayMode::Default
+    /// The Nostr relays to actually use: built-in and added, not switched off.
+    pub fn effective_nostr_relays(&self) -> Vec<String> {
+        self.in_use(default_nostr_relays(), &self.nostr_relays)
+    }
+
+    /// The iroh-Relays to actually use: built-in and added, not switched off.
+    pub fn effective_iroh_relays(&self) -> Vec<String> {
+        self.in_use(default_iroh_relays(), &self.iroh_relays)
+    }
+
+    fn in_use(&self, defaults: Vec<String>, added: &[String]) -> Vec<String> {
+        let mut urls: Vec<String> = Vec::new();
+        for url in defaults.iter().chain(added) {
+            if !self.disabled.contains(url) && !urls.contains(url) {
+                urls.push(url.clone());
             }
         }
+        urls
+    }
+
+    /// The iroh `RelayMode` to bind or reconfigure the endpoint with. None
+    /// in use means no relay: devices then reach each other directly only.
+    pub fn relay_mode(&self) -> RelayMode {
+        let in_use = self.effective_iroh_relays();
+        if in_use == default_iroh_relays() {
+            return RelayMode::Default;
+        }
+        if in_use.is_empty() {
+            return RelayMode::Disabled;
+        }
+        // The built-in ones keep their own configuration (their host names
+        // end in a root-label dot the listed form leaves out).
+        let mut configs: Vec<RelayConfig> = RelayMode::Default
+            .relay_map()
+            .relays::<Vec<Arc<RelayConfig>>>()
+            .into_iter()
+            .filter(|config| in_use.contains(&pretty(&config.url)))
+            .map(|config| (*config).clone())
+            .collect();
+        for url in in_use
+            .iter()
+            .filter(|url| !default_iroh_relays().contains(url))
+        {
+            match url.parse::<RelayUrl>() {
+                Ok(url) => configs.push(RelayConfig::from(url)),
+                Err(error) => {
+                    log::warn!(
+                        "sync: {PREF_IROH_RELAYS} has an invalid relay URL {url:?}: {error}"
+                    );
+                }
+            }
+        }
+        RelayMode::Custom(RelayMap::from_iter(configs))
     }
 }
 
-/// Reads the current server preferences; a missing or unparseable value
-/// reads as empty (falls back to defaults), never as an error.
+/// Reads the current server preferences; missing or unparseable values read
+/// as empty, except that a missing disabled list preserves legacy semantics.
 pub fn read(q: &mut impl Query) -> haex_crdt::Result<ServerConfig> {
+    let nostr_relays = read_urls(q, PREF_NOSTR_RELAYS)?;
+    let iroh_relays = read_urls(q, PREF_IROH_RELAYS)?;
+    // Before `PREF_DISABLED_RELAYS` existed, a non-empty list replaced the
+    // built-ins. Preserve that effective configuration when an older vault is
+    // first opened by this version; the next settings write stores the
+    // explicit disabled list.
+    let disabled = match preferences::get(q, PrefScope::Vault, PREF_DISABLED_RELAYS)? {
+        Some(raw) => parse_urls(PREF_DISABLED_RELAYS, &raw),
+        None => legacy_disabled(&nostr_relays, &iroh_relays),
+    };
     Ok(ServerConfig {
-        nostr_relays: read_urls(q, PREF_NOSTR_RELAYS)?,
-        iroh_relays: read_urls(q, PREF_IROH_RELAYS)?,
+        nostr_relays,
+        iroh_relays,
+        disabled,
     })
 }
 
@@ -100,28 +168,55 @@ fn read_urls(q: &mut impl Query, key: &str) -> haex_crdt::Result<Vec<String>> {
     let Some(raw) = preferences::get(q, PrefScope::Vault, key)? else {
         return Ok(Vec::new());
     };
-    match serde_json::from_str::<Vec<String>>(&raw) {
-        Ok(urls) => Ok(urls),
+    Ok(parse_urls(key, &raw))
+}
+
+fn parse_urls(key: &str, raw: &str) -> Vec<String> {
+    match serde_json::from_str::<Vec<String>>(raw) {
+        Ok(urls) => urls,
         Err(error) => {
-            log::warn!("sync: {key} does not decode as a URL list, using defaults: {error}");
-            Ok(Vec::new())
+            log::warn!("sync: {key} does not decode as a URL list, reading it as empty: {error}");
+            Vec::new()
         }
     }
+}
+
+fn legacy_disabled(nostr_relays: &[String], iroh_relays: &[String]) -> Vec<String> {
+    let mut disabled = Vec::new();
+    if !nostr_relays.is_empty() {
+        disabled.extend(default_nostr_relays());
+    }
+    if !iroh_relays.is_empty() {
+        disabled.extend(default_iroh_relays());
+    }
+    disabled
 }
 
 /// Most servers of one kind the settings accept.
 const MAX_SERVERS: usize = 10;
 
-/// Checks the servers a user typed: Nostr servers are `ws://` or `wss://`
+/// Checks the servers a user added: Nostr servers are `ws://` or `wss://`
 /// URLs, iroh servers `http://` or `https://`. The error names the first
 /// that is not, and is the user's to fix, not a failure.
-pub fn validate(nostr: &[String], iroh: &[String]) -> Result<(), String> {
-    check_list(nostr, &["ws", "wss"], "a Nostr server", |url| {
-        NostrRelayUrl::parse(url).is_ok()
-    })?;
-    check_list(iroh, &["http", "https"], "an iroh server", |url| {
-        url.parse::<RelayUrl>().is_ok()
-    })
+pub fn validate(config: &ServerConfig) -> Result<(), String> {
+    check_list(
+        &config.nostr_relays,
+        &["ws", "wss"],
+        "a Nostr server",
+        |url| NostrRelayUrl::parse(url).is_ok(),
+    )?;
+    check_list(
+        &config.iroh_relays,
+        &["http", "https"],
+        "an iroh server",
+        |url| url.parse::<RelayUrl>().is_ok(),
+    )?;
+    // Switched off servers are only compared with, never dialed.
+    if config.disabled.len() > 4 * MAX_SERVERS || config.disabled.iter().any(|url| url.len() > 256)
+    {
+        return Err("too many servers switched off".to_string());
+    }
+    Ok(())
 }
 
 fn check_list(
@@ -144,14 +239,13 @@ fn check_list(
     Ok(())
 }
 
-/// Stores the servers, replacing the stored ones; an empty list brings back
-/// the defaults.
-pub fn write(
-    tx: &mut CrdtTransaction<'_>,
-    nostr: &[String],
-    iroh: &[String],
-) -> haex_crdt::Result<()> {
-    for (key, urls) in [(PREF_NOSTR_RELAYS, nostr), (PREF_IROH_RELAYS, iroh)] {
+/// Stores the servers, replacing the stored ones.
+pub fn write(tx: &mut CrdtTransaction<'_>, config: &ServerConfig) -> haex_crdt::Result<()> {
+    for (key, urls) in [
+        (PREF_NOSTR_RELAYS, &config.nostr_relays),
+        (PREF_IROH_RELAYS, &config.iroh_relays),
+        (PREF_DISABLED_RELAYS, &config.disabled),
+    ] {
         let json =
             serde_json::to_string(urls).map_err(|e| haex_crdt::Error::consumer(e.to_string()))?;
         preferences::insert_or_update(tx, PrefScope::Vault, key, &json)?;

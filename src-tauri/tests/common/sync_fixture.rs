@@ -342,23 +342,12 @@ pub async fn copy_of(source: &Instance, nostr_relay: &str) -> Instance {
 /// sandboxed test run should not depend on reaching; a closed local port
 /// refuses the connection immediately instead of timing out.
 fn set_nostr_relay(db: &Database, url: &str) {
-    let nostr = serde_json::to_string(&[url]).expect("encode relay list");
-    let iroh = serde_json::to_string(&["https://127.0.0.1:1"]).expect("encode relay list");
-    db.write(|tx| {
-        holzi_lib::storage::preferences::insert_or_update(
-            tx,
-            holzi_lib::storage::preferences::PrefScope::Vault,
-            sync::servers::PREF_NOSTR_RELAYS,
-            &nostr,
-        )?;
-        holzi_lib::storage::preferences::insert_or_update(
-            tx,
-            holzi_lib::storage::preferences::PrefScope::Vault,
-            sync::servers::PREF_IROH_RELAYS,
-            &iroh,
-        )
-    })
-    .expect("set relay preferences");
+    let config = sync::servers::ServerConfig::only(
+        vec![url.to_string()],
+        vec!["https://127.0.0.1:1".to_string()],
+    );
+    db.write(|tx| sync::servers::write(tx, &config))
+        .expect("set relay preferences");
 }
 
 /// This instance's installation UUID, minted on first use.

@@ -88,6 +88,7 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
     await sync.syncServersSetAsync({
       nostrRelays: input.nostrRelays as string[],
       irohRelays: input.irohRelays as string[],
+      disabled: input.disabled as string[],
     })
     return done
   })

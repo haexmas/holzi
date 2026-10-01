@@ -2,19 +2,13 @@ import assert from 'node:assert/strict'
 import { scenario } from '../lib/scenario.ts'
 import { unwrap } from '../lib/flows.ts'
 import { openSettings, runAction } from '../lib/settings.ts'
-import { startFirstDevice } from '../lib/sync-flows.ts'
-
-const SERVERS = (relayUrl: string) => ({
-  nostrRelays: [relayUrl],
-  irohRelays: ['https://127.0.0.1:1'],
-})
+import { onlyServers, startFirstDevice } from '../lib/sync-flows.ts'
 
 // Spec 024, user story 5 (SC-009, SC-011): linking a new device, with the main device driven through
 // its own window and the new installation a second application process. The code shown in the window
 // brings the new device up, the main device shows its name and asks, "Verknüpfen" gives it the vault;
 // a second new device that is refused gets nothing and no vault is left on it. (The new installation
-// is driven by command: its form has no field for servers of its own, so it could not find a relay
-// that is not one of the built-in ones.)
+// is driven by command, which is how it names the test relay without a network.)
 scenario('sync-link', { timeoutMs: 360_000 }, async (ctx) => {
   const relay = await ctx.nostrRelay()
   const main = await startFirstDevice(ctx, relay.url, 'e2e-link')
@@ -48,7 +42,7 @@ scenario('sync-link', { timeoutMs: 360_000 }, async (ctx) => {
           vaultName: 'e2e-link',
           deviceName,
           passphrase,
-          servers: SERVERS(relay.url),
+          servers: await onlyServers(fresh, relay.url),
         },
       }),
     )

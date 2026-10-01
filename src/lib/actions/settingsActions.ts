@@ -83,14 +83,15 @@ export const SETTINGS_ACTIONS: readonly ActionDefinition[] = [
     // Changes where devices find each other: a guardrail, never callable by agents (FR-036).
     id: 'settings.sync.servers.set',
     description:
-      'Set the Nostr and iroh servers devices find each other through. Empty lists bring back the built-in public servers.',
+      'Set the Nostr and iroh servers devices find each other through: the ones added besides the built-in public servers, and the ones (built-in or added) switched off.',
     input: {
       type: 'object',
       properties: {
         nostrRelays: { type: 'array', items: { type: 'string' } },
         irohRelays: { type: 'array', items: { type: 'string' } },
+        disabled: { type: 'array', items: { type: 'string' } },
       },
-      required: ['nostrRelays', 'irohRelays'],
+      required: ['nostrRelays', 'irohRelays', 'disabled'],
     },
     scope: 'guardrails',
     effect: 'write',

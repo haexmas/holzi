@@ -2,6 +2,7 @@
 // application process with its own data, all pointed at one Nostr test relay. A device is made the
 // way a user does it: the first by creating a vault, the others by linking with a code (user story 5).
 import type { Instance } from './instance.ts'
+import type { Page } from './page.ts'
 import type { ScenarioContext } from './scenario.ts'
 import { unwrap, waitForPath } from './flows.ts'
 
@@ -21,8 +22,17 @@ interface Thread {
   title: string
 }
 
-function servers(relayUrl: string) {
-  return { nostrRelays: [relayUrl], irohRelays: NO_IROH_RELAY }
+/** Only the test relay: the built-in servers, which would need a network, are switched off. */
+export async function onlyServers(page: Page, relayUrl: string) {
+  const defaults = unwrap<{ nostrRelays: string[]; irohRelays: string[] }>(
+    'sync_servers_defaults',
+    await page.invoke('sync_servers_defaults'),
+  )
+  return {
+    nostrRelays: [relayUrl],
+    irohRelays: NO_IROH_RELAY,
+    disabled: [...defaults.nostrRelays, ...defaults.irohRelays],
+  }
 }
 
 async function openAndShow(
@@ -64,7 +74,9 @@ export async function startFirstDevice(
   )
   unwrap(
     'sync_servers_set',
-    await first.invoke('sync_servers_set', { args: servers(relayUrl) }),
+    await first.invoke('sync_servers_set', {
+      args: await onlyServers(first, relayUrl),
+    }),
   )
   await first.stop()
   const instance = await openAndShow(ctx, first.root, vaultName, passphrase)
@@ -117,7 +129,7 @@ export async function linkDevice(
         vaultName: host.vaultName,
         deviceName: options.deviceName,
         passphrase,
-        servers: servers(relayUrl),
+        servers: await onlyServers(fresh, relayUrl),
       },
     }),
   )

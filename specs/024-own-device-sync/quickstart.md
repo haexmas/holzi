@@ -42,5 +42,5 @@ Zwei Rechner (oder zwei Instanzen mit getrennten App-Daten-Verzeichnissen), holz
   weiterhin ein Hauptgerät.
 - **M8 Sperren** (FR-031): Während eines großen Abgleichs die Vault auf A sperren → alle
   Verbindungen enden sofort; beim nächsten Öffnen läuft der Abgleich weiter, nichts fehlt.
-- **M9 Server** (FR-008): In „Verbindungsserver“ die Nostr-Relays leeren → Geräte finden sich nicht
-  mehr, lokale Arbeit geht weiter (Constitution VII); Standard wiederherstellen → finden sich wieder.
+- **M9 Server** (FR-008): In „Verbindungsserver“ alle Nostr-Relays abschalten (Kästchen) → Geräte finden sich nicht
+  mehr, lokale Arbeit geht weiter (Constitution VII); wieder anschalten → finden sich wieder.
