@@ -27,6 +27,9 @@ pub mod permission;
 #[cfg(test)]
 mod permission_tests;
 pub mod prompt;
+#[cfg(test)]
+#[path = "prompt_tests.rs"]
+mod prompt_tests;
 pub mod selftest;
 
 use std::sync::Arc;
