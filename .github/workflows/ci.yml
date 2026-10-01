@@ -127,6 +127,7 @@ jobs:
     # default-features half dominates because it builds mistralrs.
     name: Rust checks (${{ matrix.features }})
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -151,8 +152,11 @@ jobs:
 
       - name: Install Linux build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends \
+          timeout 10m sudo env DEBIAN_FRONTEND=noninteractive apt-get update \
+            -o Acquire::Retries=3 \
+            -o Acquire::http::Timeout=30 \
+            -o Acquire::https::Timeout=30
+          timeout 10m sudo env DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends \
             libwebkit2gtk-4.1-dev \
             build-essential \
             curl \
@@ -239,8 +243,11 @@ jobs:
       # virtual screen the suite needs (preflight.ts's REQUIRED_TOOLS).
       - name: Install Linux build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends \
+          timeout 10m sudo env DEBIAN_FRONTEND=noninteractive apt-get update \
+            -o Acquire::Retries=3 \
+            -o Acquire::http::Timeout=30 \
+            -o Acquire::https::Timeout=30
+          timeout 10m sudo env DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends \
             libwebkit2gtk-4.1-dev \
             build-essential \
             curl \

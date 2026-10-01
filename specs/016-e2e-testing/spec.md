@@ -337,9 +337,10 @@ failing scenario uploads its kept material.
 ## Assumptions
 
 - The target is a Linux development machine with the web view library the application already needs
-  to build and the project's Nix development shell. Windows, macOS and Android are out of scope, and
-  so are scenarios that run two application processes at once (spec 013 user story 4). Each instance
-  having its own data, ports and virtual screen keeps that door open.
+  to build and the project's Nix development shell. Windows, macOS and Android are out of scope. Scenarios
+  that run several application processes at once were out of scope here and have since been added by spec
+  024 and extended by spec 033; each instance having its own data, ports and virtual screen made that
+  possible.
 - The behavior under test exists: spec 013 is merged (pull request 112). Its close policy is exit in a
   debug build and relaunch in a release build, so the relaunch scenario needs a release-profile build.
   The ordinary run uses the debug build, which keeps it fast enough to run before every push. The
