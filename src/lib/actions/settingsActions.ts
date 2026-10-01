@@ -105,6 +105,23 @@ export const SETTINGS_ACTIONS: readonly ActionDefinition[] = [
     effect: 'destructive',
   }),
   setting({
+    // Lets a copy of the vault file into the vault (or keeps it out): a guardrail, never callable
+    // by agents (spec 024, FR-036, FR-045).
+    id: 'settings.devices.admit',
+    description:
+      'Admit or refuse the request of a copy of the vault file to join the vault (main devices only).',
+    input: {
+      type: 'object',
+      properties: {
+        devicePubkey: { type: 'string' },
+        admit: { type: 'boolean' },
+      },
+      required: ['devicePubkey', 'admit'],
+    },
+    scope: 'guardrails',
+    effect: 'write',
+  }),
+  setting({
     // Opens the view that shows a link code. Linking adds a device to the vault, so it is a
     // guardrail: never callable by agents (spec 024, FR-036).
     id: 'settings.devices.link',

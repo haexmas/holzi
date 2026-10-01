@@ -207,7 +207,7 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
             changed_tx.send_modify(|n| *n = n.wrapping_add(1));
         }
     };
-    let presence_loop = crate::sync::presence::run(
+    let presence_loop = crate::sync::presence_loop::run(
         &node,
         &replica,
         &presence_keys,
@@ -253,6 +253,7 @@ async fn finish_pending_links(replica: &Arc<Replica>, keys: &DeviceKeys, vault: 
     let result = tokio::task::spawn_blocking(move || {
         crate::sync::link::host::finish_pending(&replica, &keys, vault, now)?;
         crate::sync::link::join::finish_pending(&replica, now)?;
+        crate::sync::admission::sweep_now(&replica, u64::try_from(now).unwrap_or(0))?;
         Ok::<_, haex_crdt::Error>(())
     })
     .await;
@@ -300,8 +301,39 @@ fn applied_event_sink<R: Runtime>(
                 }
             });
         }
-        // A name, the device list or who belongs to the vault changed: the device view reloads.
-        if tables.contains("known_devices") || tables.contains("device_lists") {
+        // Requests to join and the list they are measured against meet here: the same merged set
+        // ends in the same state on every device (R20).
+        if tables.contains("device_lists") || tables.contains("admission_requests") {
+            let replica = Arc::clone(&replica);
+            tokio::spawn(async move {
+                let now = u64::try_from(
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_millis())
+                        .unwrap_or(0),
+                )
+                .unwrap_or(0);
+                match tokio::task::spawn_blocking(move || {
+                    crate::sync::admission::sweep_now(&replica, now)
+                })
+                .await
+                {
+                    Ok(Ok(_)) => {}
+                    Ok(Err(error)) => {
+                        log::warn!("sync: sweeping admission requests failed: {error}")
+                    }
+                    Err(error) => {
+                        log::warn!("sync: sweeping admission requests did not run: {error}")
+                    }
+                }
+            });
+        }
+        // A name, the device list, a request to join or who belongs to the vault changed: the
+        // device view reloads.
+        if tables.contains("known_devices")
+            || tables.contains("device_lists")
+            || tables.contains("admission_requests")
+        {
             events::emit(&app, SYNC_DEVICES_CHANGED, ());
         }
     })

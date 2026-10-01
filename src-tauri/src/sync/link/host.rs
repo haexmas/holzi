@@ -363,5 +363,8 @@ pub fn finish_pending(
 }
 
 #[cfg(test)]
+#[path = "host_cut_tests.rs"]
+mod cut_tests;
+#[cfg(test)]
 #[path = "host_tests.rs"]
 mod tests;

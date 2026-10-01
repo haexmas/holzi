@@ -9,7 +9,12 @@
 //! 3. on a main device of a vault without any device list, issue the first
 //!    device list (generation 1, this device as main device) and the first
 //!    content key generation, wrapped for this device;
-//! 4. unwrap every content key addressed to this device.
+//! 4. unwrap every content key addressed to this device;
+//! 5. in a copy of a main device's vault file (keys created just now, a list
+//!    that does not name this device, the vault secret in the file), enroll
+//!    this device as a main device and leave a notice for the user (FR-044).
+//!    A copy of a linked device has no secret: it asks for admission
+//!    ([`crate::sync::admission`]) once presence runs.
 //!
 //! Each copy of a legacy vault derives the same identity and issues its own
 //! first list; when two copies meet, the device list rules merge them
@@ -20,12 +25,13 @@ use haex_crdt::Database;
 use uuid::Uuid;
 
 use crate::storage::query::Query;
+use crate::sync::admission;
 use crate::sync::content_keys::{self, ContentKey};
 use crate::sync::device_list::{self, DeviceList, ListedDevice, Role};
 use crate::sync::keys;
 
 /// Name used in the device list when this installation has no alias yet.
-const FALLBACK_DEVICE_NAME: &str = "holzi";
+pub(crate) const FALLBACK_DEVICE_NAME: &str = "holzi";
 
 /// What [`ensure_sync_state`] found or created.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,6 +43,9 @@ pub struct SyncState {
     pub is_main: bool,
     /// Whether this run issued the first device list.
     pub issued_first_list: bool,
+    /// Whether this run enrolled this device as a main device because the
+    /// vault file is a copy of a main device's.
+    pub enrolled_as_copy: bool,
 }
 
 /// Brings the vault's sync state up to date; see the module docs.
@@ -55,8 +64,10 @@ pub fn ensure_sync_state(
                 device_pubkey: None,
                 is_main: false,
                 issued_first_list: false,
+                enrolled_as_copy: false,
             });
         };
+        let had_keys = keys::load_device_keys(tx, installation_uuid)?.is_some();
         let device = keys::ensure_device_keys(tx, installation_uuid, now_i64(now))?;
         let vault_secret = keys::vault_secret(tx)?;
 
@@ -89,6 +100,19 @@ pub fn ensure_sync_state(
             }
         }
 
+        let enrolled_as_copy = if !had_keys && !issued_first_list {
+            open_copy(
+                tx,
+                &device,
+                vault_secret.as_deref(),
+                vault_pubkey,
+                vault_device_uuid,
+                now,
+            )?
+        } else {
+            false
+        };
+
         let valid = device_list::valid_lists(&device_list::load_all(tx)?, &vault_pubkey);
         content_keys::unwrap_own_envelopes(tx, &device, &valid)?;
         Ok(SyncState {
@@ -96,8 +120,55 @@ pub fn ensure_sync_state(
             device_pubkey: Some(device.device_pubkey),
             is_main: vault_secret.is_some(),
             issued_first_list,
+            enrolled_as_copy,
         })
     })
+}
+
+/// A vault file opened by an installation that has no keys in it yet while
+/// its list does not name this device: a copy. The copy takes the computer's
+/// name while its own is still the default, so the devices tell apart. A copy
+/// of a main device's file (`secret` is there) enrolls itself as a main device
+/// and leaves the notice for the user; a copy of a linked device's file has
+/// nothing more to do here: it asks for admission once presence runs.
+fn open_copy(
+    tx: &mut haex_crdt::CrdtTransaction<'_>,
+    device: &keys::DeviceKeys,
+    secret: Option<&[u8; 32]>,
+    vault_pubkey: [u8; 32],
+    vault_device_uuid: Uuid,
+    now: u64,
+) -> haex_crdt::Result<bool> {
+    let valid = device_list::valid_lists(&device_list::load_all(tx)?, &vault_pubkey);
+    let Some(effective) = device_list::effective(&valid).cloned() else {
+        return Ok(false);
+    };
+    if !admission::needs_request(&effective, &device.device_pubkey) {
+        return Ok(false);
+    }
+    admission::adopt_computer_name(tx, vault_device_uuid)?;
+    let Some(secret) = secret else {
+        return Ok(false);
+    };
+    let name = admission::own_name(tx, vault_device_uuid)?;
+    let enrolled = admission::enroll_as_main(
+        tx,
+        device,
+        secret,
+        &effective,
+        vault_device_uuid,
+        &name,
+        now,
+    )?;
+    if enrolled {
+        crate::storage::preferences::insert_or_update(
+            tx,
+            crate::storage::preferences::PrefScope::Device(vault_device_uuid),
+            admission::PREF_ENROLLED_AS_MAIN,
+            "1",
+        )?;
+    }
+    Ok(enrolled)
 }
 
 /// Runs [`ensure_sync_state`] after a vault opened, before the frontend sees

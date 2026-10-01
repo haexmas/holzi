@@ -248,14 +248,14 @@ Datei eines verknüpften Geräts kopieren → „wartet auf Aufnahme“, nach �
 
 ### Tests für User Story 7
 
-- [ ] T071 [P] [US7] Integrationstest in `src-tauri/tests/sync_link.rs` für US7: Szenarien 1–6 aus spec.md und SC-018; Zeile des Quellgeräts in `device_keys_no_sync` bleibt unverändert; Quellgerät als bisher einziges Gerät findet die Kopie über deren Präsenz (SC-002)
+- [x] T071 [P] [US7] Integrationstest in `src-tauri/tests/sync_copy.rs` (eigene Datei, `sync_link.rs` ist über 500 Zeilen) für US7: Szenarien 1–6 aus spec.md und SC-018; Zeile des Quellgeräts in `device_keys_no_sync` bleibt unverändert; Quellgerät als bisher einziges Gerät findet die Kopie über deren Präsenz (SC-002)
 
 ### Implementierung für User Story 7
 
-- [ ] T072 [US7] `src-tauri/src/sync/admission.rs` + Einbindung in `src-tauri/src/instances/open.rs`: Kopie erkennen (keine Zeile für die eigene Installations-UUID, aber fremde), neue Schlüssel und neue `vault_device_uuid` über `known_devices`; mit `vault_identity_secret_no_sync` neue Geräteliste mit sich als Hauptgerät plus Hinweis an die Nutzerin; ohne signierte Aufnahmeanfrage (innere Art 24101) im Präsenztakt; bis zur Aufnahme kein Sync
-- [ ] T073 [US7] Aufnahmeanfragen empfangen und begrenzen in `src-tauri/src/sync/presence.rs` und `src-tauri/src/sync/admission.rs`: gültige Anfrage in `admission_requests` ablegen; nach jeder Zusammenführung deterministisch nur die 20 kleinsten offenen nach `(requested_at, device_pubkey)` offen lassen, übrige idempotent `rejected`; nach Entscheidung löschen, offene nach 30 Tagen löschen (R20)
-- [ ] T074 [US7] Befehl `admission_decide { devicePubkey, admit }` in `src-tauri/src/sync/commands.rs` (nur Hauptgerät): „Aufnehmen“ trägt als verknüpftes Gerät ein und verpackt alle Generationen, „Ablehnen“ verwirft; Aktion `settings.devices.admit` (nicht für Agenten)
-- [ ] T075 [US7] `src/components/settings/AdmissionRequests.vue` in der Unteransicht „Geräte“ (Name, „Aufnehmen“, „Ablehnen“), Zustand „wartet auf Aufnahme durch ein Hauptgerät“ auf der Kopie; Texte de/en in `src/i18n/locales/de.json` und `en.json`
+- [x] T072 [US7] `src-tauri/src/sync/admission.rs` + Einbindung in `src-tauri/src/instances/open.rs`: Kopie erkennen (keine Zeile für die eigene Installations-UUID, aber fremde), neue Schlüssel und neue `vault_device_uuid` über `known_devices`; mit `vault_identity_secret_no_sync` neue Geräteliste mit sich als Hauptgerät plus Hinweis an die Nutzerin; ohne signierte Aufnahmeanfrage (innere Art 24101) im Präsenztakt; bis zur Aufnahme kein Sync
+- [x] T073 [US7] Aufnahmeanfragen empfangen und begrenzen in `src-tauri/src/sync/presence.rs` und `src-tauri/src/sync/admission.rs`: gültige Anfrage in `admission_requests` ablegen; nach jeder Zusammenführung deterministisch nur die 20 kleinsten offenen nach `(requested_at, device_pubkey)` offen lassen, übrige idempotent `rejected`; nach Entscheidung löschen, offene nach 30 Tagen löschen (R20)
+- [x] T074 [US7] Befehl `admission_decide { devicePubkey, admit }` in `src-tauri/src/sync/commands.rs` (nur Hauptgerät): „Aufnehmen“ trägt als verknüpftes Gerät ein und verpackt alle Generationen, „Ablehnen“ verwirft; Aktion `settings.devices.admit` (nicht für Agenten)
+- [x] T075 [US7] `src/components/settings/AdmissionRequests.vue` in der Unteransicht „Geräte“ (Name, „Aufnehmen“, „Ablehnen“), Zustand „wartet auf Aufnahme durch ein Hauptgerät“ auf der Kopie; Texte de/en in `src/i18n/locales/de.json` und `en.json`
 
 **Checkpoint**: Alle Stories unabhängig grün.
 
@@ -263,11 +263,11 @@ Datei eines verknüpften Geräts kopieren → „wartet auf Aufnahme“, nach �
 
 ## Phase 10: Polish & Cross-Cutting
 
-- [ ] T076 [P] Aufräumen je Tabelle (R20) im Wartungsablauf `src-tauri/src/storage/maintenance.rs`: `device_lists` nur löschen, wenn keine behaltene Liste per `base_list_hash` auf sie verweist; `pending_links_no_sync` nach 24 h; `sync_progress_no_sync`-Zeilen entfernter Geräte, sobald ihr Stand die Grenze erreicht hat; Tests in `maintenance_tests.rs`
-- [ ] T077 Release-Gate für `vault_key_*` (R20) festhalten: Aktivierung erst mit einem Release, für das Spec 026 eine begrenzte Aufbewahrung definiert; Vermerk in `plans/README.md` (Zeile 024) und im PR-Text
+- [x] T076 [P] Aufräumen je Tabelle (R20; ohne `device_lists` und `sync_progress_no_sync`, siehe R20 „Stand der Umsetzung“) im Wartungsablauf `src-tauri/src/storage/maintenance.rs`: `device_lists` nur löschen, wenn keine behaltene Liste per `base_list_hash` auf sie verweist; `pending_links_no_sync` nach 24 h; `sync_progress_no_sync`-Zeilen entfernter Geräte, sobald ihr Stand die Grenze erreicht hat; Tests in `maintenance_tests.rs`
+- [x] T077 Release-Gate für `vault_key_*` (R20) festhalten: Aktivierung erst mit einem Release, für das Spec 026 eine begrenzte Aufbewahrung definiert; Vermerk in `plans/README.md` (Zeile 024) und im PR-Text
 - [ ] T078 [P] E2E-Szenarien mit zwei App-Prozessen: `scripts/e2e/scenarios/sync-two-devices.test.ts` (US1), `sync-own-devices-only.test.ts` (US2), `sync-indirect.test.ts` (US3), `sync-link.test.ts` (US5); Nostr-Test-Relay über `scripts/e2e/lib/nostr-relay.ts` und `src-tauri/src/bin/e2e_nostr_relay.rs` (nur mit Feature `e2e`, `MockRelay` als Prozess) (SC-011)
 - [ ] T079 [P] Leistung prüfen (R17, SC-001, SC-002): Zeit bis zur Anzeige auf dem anderen Gerät in `src-tauri/tests/sync_devices.rs` messen und gegen 5 s (95 %) und 30 s bis zur Verbindung prüfen
-- [ ] T080 Constitution-Nachprüfung: Graphify-Warnung aus plan.md (R18) nach dem Bau des Moduls `sync/` mit einer neuen Abfrage auflösen; alle Dateien ≤ 500 Zeilen; keine Tests in Produktionsdateien
+- [x] T080 Constitution-Nachprüfung: Graphify-Warnung aus plan.md (R18) nach dem Bau des Moduls `sync/` mit einer neuen Abfrage auflösen; alle Dateien ≤ 500 Zeilen; keine Tests in Produktionsdateien
 - [ ] T081 quickstart.md vollständig durchlaufen (A1–A9 automatisch, M1–M9 manuell) und Ergebnis im PR festhalten; CI-Satz: `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`, `pnpm lint:rust`, `cargo test --manifest-path src-tauri/Cargo.toml`, `pnpm check:settings`, `pnpm check:templates`, `pnpm typecheck`, `pnpm typecheck:scripts`, `pnpm lint`, `pnpm format:check`
 
 ---

@@ -20,6 +20,7 @@ Oberfläche erzeugt `ts-rs` wie bisher.
 | `link_join_cancel`                         | –                                                                             | –                                                    | Startseite                                    |
 | `admission_decide`                         | `{ devicePubkey: string, admit: boolean }`                                    | –                                                    | nur Hauptgerät                                |
 | `device_remove`                            | `{ devicePubkey: string }`                                                    | –                                                    | nur Hauptgerät, nicht für sich selbst         |
+| `sync_copy_notice_dismiss`                 | –                                                                             | –                                                    | jedes Gerät                                   |
 | `sync_servers_get`                         | –                                                                             | `{ nostrRelays: string[], irohRelays: string[] }`    | jedes Gerät                                   |
 | `sync_servers_set`                         | `{ nostrRelays: string[], irohRelays: string[] }`                             | –                                                    | jedes Gerät                                   |
 
@@ -50,6 +51,9 @@ interface SyncStatus {
     stage: 'code_shown' | 'awaiting_confirmation'
     newDeviceName?: string
   }
+  // Diese Vault-Datei ist die Kopie eines Hauptgeräts und dieses Gerät hat sich als Hauptgerät
+  // eingetragen; die Nutzerin hat den Hinweis (FR-044) noch nicht gelesen.
+  copyEnrolledAsMain: boolean
 }
 
 type LinkJoinState =

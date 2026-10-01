@@ -32,11 +32,26 @@ export function useSync() {
     await invoke('device_remove', { args: { devicePubkey } })
   }
 
+  /** Admits (`admit`) or refuses the request of a copy of the vault file (main device only). */
+  async function admissionDecideAsync(
+    devicePubkey: string,
+    admit: boolean,
+  ): Promise<void> {
+    await invoke('admission_decide', { args: { devicePubkey, admit } })
+  }
+
+  /** The user has read that this copy enrolled itself as a main device. */
+  async function copyNoticeDismissAsync(): Promise<void> {
+    await invoke('sync_copy_notice_dismiss')
+  }
+
   return {
     syncStatusAsync,
     vaultPublicIdentityAsync,
     syncServersGetAsync,
     syncServersSetAsync,
     deviceRemoveAsync,
+    admissionDecideAsync,
+    copyNoticeDismissAsync,
   }
 }

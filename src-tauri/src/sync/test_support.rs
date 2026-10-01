@@ -46,6 +46,11 @@ impl Device {
         self.replica.db()
     }
 
+    /// The directory holding this device's vault file.
+    pub fn dir(&self) -> &Path {
+        self._dir.path()
+    }
+
     /// Pulls everything `from` has and this device lacks, as one pull.
     pub fn pull_from(&self, from: &Device) -> Vec<Received> {
         self.try_pull_from(from, PAGE_BUDGET).expect("pull")
@@ -117,6 +122,47 @@ impl Member {
             keys,
             vault: main.vault,
         }
+    }
+
+    /// A copy of this member's vault file opened by a new installation, as
+    /// when the file is copied to another computer: the file is taken as it is
+    /// (the source keeps running), the copy gets its own installation id, and
+    /// genesis runs on it without permission to mint a vault. Returns the
+    /// copy and what genesis found.
+    pub fn copy_of(&self) -> (Member, crate::sync::genesis::SyncState) {
+        #[allow(clippy::disallowed_methods)]
+        self.device
+            .db()
+            .with_connection(|conn| {
+                Ok(conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()))?)
+            })
+            .expect("checkpoint the source");
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::copy(
+            self.device.dir().join("vault.db"),
+            dir.path().join("vault.db"),
+        )
+        .expect("copy the vault file");
+        let replica = Arc::new(Replica::new(Arc::new(open_vault(dir.path()))));
+        let device = Device { _dir: dir, replica };
+        let installation =
+            crate::identity::read_or_mint_installation_uuid(&installation_id_path(device.dir()))
+                .expect("installation id");
+        let state = crate::sync::genesis::ensure_sync_state(device.db(), installation, false)
+            .expect("genesis on the copy");
+        let keys = crate::storage::query::read(device.db(), |r| {
+            crate::sync::keys::load_device_keys(r, installation)
+        })
+        .expect("read keys")
+        .expect("the copy has keys of its own");
+        (
+            Member {
+                device,
+                keys,
+                vault: self.vault,
+            },
+            state,
+        )
     }
 
     /// Issues the next list generation on this main device, built by `edit`

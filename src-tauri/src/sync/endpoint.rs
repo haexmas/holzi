@@ -83,7 +83,14 @@ struct Inner {
     duplicates: DuplicateWatch,
     /// Called when a device's problem was set or cleared (FR-034).
     devices_changed: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
+    /// Devices this device's list does not name whose presence claimed a
+    /// newer list, waiting to be dialed once to fetch it (FR-007).
+    candidates: Mutex<HashMap<[u8; 32], EndpointAddr>>,
 }
+
+/// Most devices kept as candidates at once, so a flood of meetings cannot
+/// make this device dial without end.
+const MAX_CANDIDATES: usize = 16;
 
 impl std::fmt::Debug for Inner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -161,6 +168,7 @@ impl SyncNode {
             applied_relays: Mutex::new(initial_relays),
             duplicates: DuplicateWatch::default(),
             devices_changed: Mutex::new(None),
+            candidates: Mutex::new(HashMap::new()),
         });
         let router = Router::builder(endpoint)
             .accept(SYNC_ALPN, SyncProtocol(Arc::clone(&inner)))
@@ -264,6 +272,33 @@ impl SyncNode {
     /// (FR-010) decides when to.
     pub async fn note_presence(&self, addr: EndpointAddr) {
         self.inner.lookup.add_endpoint_info(addr);
+    }
+
+    /// Keeps the address of a device that is not on this device's list but
+    /// announced a newer list (a copy of a main device enrolled itself, FR-007),
+    /// for one dial that fetches the list. `false` when too many wait already.
+    pub fn note_candidate(&self, device: [u8; 32], addr: EndpointAddr) -> bool {
+        let mut candidates = self
+            .inner
+            .candidates
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if candidates.len() >= MAX_CANDIDATES && !candidates.contains_key(&device) {
+            return false;
+        }
+        self.inner.lookup.add_endpoint_info(addr.clone());
+        candidates.insert(device, addr);
+        true
+    }
+
+    /// The candidates to dial now; each is dialed once per announcement.
+    pub fn take_candidates(&self) -> Vec<EndpointAddr> {
+        let mut candidates = self
+            .inner
+            .candidates
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        candidates.drain().map(|(_, addr)| addr).collect()
     }
 
     /// Brings the endpoint's relay set in line with `mode` (spec 024,

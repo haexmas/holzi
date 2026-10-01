@@ -59,6 +59,8 @@ onBeforeUnmount(() => {
       :identity="store.identity"
     />
 
+    <SettingsAdmissionRequests v-if="manages" />
+
     <SettingsGroup v-if="manages">
       <SettingsRow
         to="/federation/devices/link"

@@ -562,6 +562,24 @@
       "cancel": "Abbrechen",
       "missing": "Dieses Gerät gibt es nicht (mehr) in der Vault, oder es ist dieses Gerät selbst. Das lässt sich nicht entfernen.",
       "notMain": "Nur ein Hauptgerät kann Geräte entfernen."
+    },
+    "admission": {
+      "title": "Anfragen zur Aufnahme",
+      "description": "Diese Kopien einer Vault-Datei bitten um Aufnahme. Nimm nur Geräte auf, die du kennst.",
+      "asked": {
+        "justNow": "gerade eben angefragt",
+        "minutes": "angefragt vor {n} Min.",
+        "hours": "angefragt vor {n} Std.",
+        "days": "angefragt vor {n} Tagen"
+      },
+      "admit": "Aufnehmen",
+      "reject": "Ablehnen",
+      "admitLabel": "„{name}“ aufnehmen",
+      "rejectLabel": "„{name}“ ablehnen",
+      "failed": "Die Anfrage ließ sich nicht beantworten.",
+      "notMain": "Nur ein Hauptgerät kann Anfragen beantworten.",
+      "copyNotice": "Diese Vault-Datei ist die Kopie eines Hauptgeräts. Dieses Gerät ist jetzt ebenfalls ein Hauptgerät und kann Geräte verknüpfen, aufnehmen und entfernen.",
+      "dismiss": "Verstanden"
     }
   },
   "models": {
@@ -854,7 +872,8 @@
         "list": "Geräte der Vault auflisten",
         "link": "Gerät verknüpfen öffnen",
         "identity": "Identität der Vault lesen",
-        "remove": "Gerät aus der Vault entfernen"
+        "remove": "Gerät aus der Vault entfernen",
+        "admit": "Aufnahmeanfrage einer Kopie beantworten"
       },
       "sync": {
         "servers": {

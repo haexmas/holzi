@@ -13,6 +13,7 @@ use crate::error::{HolziError, Result};
 use crate::instances::passphrase::Passphrase;
 use crate::instances::paths::get_app_local_data;
 use crate::state::AppState;
+use crate::sync::admission;
 use crate::sync::device_list;
 use crate::sync::events::{self, LINK_JOIN_STATE_CHANGED};
 use crate::sync::keys;
@@ -206,6 +207,9 @@ pub struct SyncStatus {
     pub this_device: ThisDevice,
     pub open_admissions: Vec<OpenAdmission>,
     pub linking: Option<LinkingStatus>,
+    /// This vault file is the copy of a main device and this device enrolled
+    /// itself as a main device; the user has not read that yet (FR-044).
+    pub copy_enrolled_as_main: bool,
 }
 
 /// The public key of the vault identity (FR-046).
@@ -277,20 +281,117 @@ pub async fn sync_status(
     let installation = crate::identity::read_or_mint_installation_uuid(&installation_id_file)
         .map_err(HolziError::from)?;
     let db = crate::state_utils::active_database(&state)?;
-    let this = db
+    let device = db.device_id();
+    let (this, open_admissions, copy_enrolled_as_main) = db
         .read(move |r| {
-            Ok(match keys::load_device_keys(r, installation)? {
+            let this = match keys::load_device_keys(r, installation)? {
                 Some(own) => this_device(r, &own.device_pubkey)?,
                 None => ThisDevice::AwaitingAdmission,
-            })
+            };
+            Ok((this, open_admissions(r)?, copy_notice_pending(r, device)?))
         })
         .await?;
     Ok(SyncStatus {
         this_device: this,
-        // Admission requests arrive with user story 7.
-        open_admissions: Vec::new(),
+        open_admissions,
         linking: registry.get().and_then(|runtime| runtime.link.status()),
+        copy_enrolled_as_main,
     })
+}
+
+/// The requests of copies to join the vault that wait for a decision.
+fn open_admissions(
+    q: &mut impl crate::storage::query::Query,
+) -> haex_crdt::Result<Vec<OpenAdmission>> {
+    let Some(vault) = keys::vault_pubkey(q)? else {
+        return Ok(Vec::new());
+    };
+    let valid = device_list::valid_lists(&device_list::load_all(q)?, &vault);
+    let Some(effective) = device_list::effective(&valid) else {
+        return Ok(Vec::new());
+    };
+    Ok(admission::load_open(q, &admission::settled(effective))?
+        .into_iter()
+        .map(|open| OpenAdmission {
+            device_pubkey: keys::hex(&open.device),
+            name: open.name,
+            requested_at: open.requested_at,
+        })
+        .collect())
+}
+
+/// Whether this device's notice that it enrolled as a main device is still
+/// unread.
+fn copy_notice_pending(
+    q: &mut impl crate::storage::query::Query,
+    device: uuid::Uuid,
+) -> haex_crdt::Result<bool> {
+    Ok(crate::storage::preferences::get(
+        q,
+        crate::storage::preferences::PrefScope::Device(device),
+        admission::PREF_ENROLLED_AS_MAIN,
+    )?
+    .is_some())
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings/")]
+#[serde(rename_all = "camelCase")]
+pub struct AdmissionDecideArgs {
+    /// The key of the copy as hex.
+    pub device_pubkey: String,
+    /// `true` admits the copy, `false` keeps it out.
+    pub admit: bool,
+}
+
+/// A main device's answer to the request of a copy of the vault file
+/// (spec 024, FR-045). Nothing admits a copy without it; the backend checks
+/// that this is a main device, not only the view.
+#[tauri::command]
+pub async fn admission_decide(
+    registry: State<'_, Arc<SyncRegistry>>,
+    args: AdmissionDecideArgs,
+) -> Result<()> {
+    let target = parse_device(&args.device_pubkey)?;
+    decide_admission_now(&runtime(&registry)?, target, args.admit).await
+}
+
+/// What `admission_decide` does once the running service is at hand: stores
+/// the decision, and for an admission wakes the session and presence, so the
+/// copy hears of it at once, and tells the view.
+pub async fn decide_admission_now(
+    runtime: &Arc<SyncRuntime>,
+    target: [u8; 32],
+    admit: bool,
+) -> Result<()> {
+    let (replica, own) = (Arc::clone(&runtime.replica), runtime.keys.clone());
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    tokio::task::spawn_blocking(move || admission::decide(&replica, &own, &target, admit, now))
+        .await
+        .map_err(admission::AdmissionError::from)??;
+    (runtime.wake)();
+    runtime.node.announce_devices_changed();
+    Ok(())
+}
+
+/// The user read that this copy enrolled itself as a main device.
+#[tauri::command]
+pub async fn sync_copy_notice_dismiss(state: State<'_, AppState>) -> Result<()> {
+    let db = crate::state_utils::active_database(&state)?;
+    let device = db.device_id();
+    db.write(move |tx| {
+        crate::storage::preferences::delete(
+            tx,
+            crate::storage::preferences::PrefScope::Device(device),
+            admission::PREF_ENROLLED_AS_MAIN,
+        )?;
+        Ok(())
+    })
+    .await?;
+    Ok(())
 }
 
 /// The public key of the vault identity; `NoActiveInstance` without an open
