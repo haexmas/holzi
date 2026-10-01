@@ -21,7 +21,12 @@ const ANY_OBJECT: JsonSchema = { type: 'object' }
 const NO_INPUT: JsonSchema = { type: 'object', properties: {} }
 
 type Spec = Pick<ActionDefinition, 'id' | 'description' | 'scope' | 'effect'> &
-  Partial<Pick<ActionDefinition, 'input' | 'result' | 'agentCallable'>>
+  Partial<
+    Pick<
+      ActionDefinition,
+      'input' | 'result' | 'agentCallable' | 'builtinAgentCallable'
+    >
+  >
 
 function inChat(spec: Spec): ActionDefinition {
   return {
@@ -119,18 +124,21 @@ export const CHAT_ACTIONS: readonly ActionDefinition[] = [
     },
     scope: 'chat.write',
     effect: 'write',
+    builtinAgentCallable: false,
   }),
   inChat({
     id: 'chat.message.retry',
     description: 'Retry the last message that failed to send.',
     scope: 'chat.write',
     effect: 'write',
+    builtinAgentCallable: false,
   }),
   inChat({
     id: 'chat.reply.cancel',
     description: 'Cancel the running reply.',
     scope: 'chat.write',
     effect: 'write',
+    builtinAgentCallable: false,
   }),
   inChat({
     id: 'chat.approval.decide',

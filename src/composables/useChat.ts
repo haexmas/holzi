@@ -148,7 +148,7 @@ export interface ToolCallEvent {
   threadId: string
   toolName: string
   toolInput: unknown
-  toolSource: 'mcp' | 'cli'
+  toolSource: 'mcp' | 'cli' | 'action'
 }
 
 export interface ToolResultEvent {
@@ -169,7 +169,7 @@ export interface AgentActivityEvent {
   batchSize?: number
 }
 
-export type RiskClass = 'safe' | 'risky'
+export type RiskClass = 'safe' | 'change' | 'risky'
 
 /** Fires when the Manual/Auto/Plan gate needs a human decision (contracts/
  * tauri-commands.md). Answered via `respondToolPermissionAsync`. */

@@ -93,10 +93,7 @@ pub async fn request_approval(
                     "threadId": thread_id.unwrap_or_else(Uuid::nil),
                     "toolName": tool_name,
                     "toolInput": input,
-                    "riskClass": match risk {
-                        crate::chat::tools::RiskClass::Safe => "safe",
-                        crate::chat::tools::RiskClass::Risky => "risky",
-                    },
+                    "riskClass": crate::chat::events::risk_class_str(risk),
                 }),
             );
             receiver.await.unwrap_or(ApprovalDecision::Deny)

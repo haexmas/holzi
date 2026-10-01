@@ -192,7 +192,7 @@ src/
 │   ├── agentTools.ts              # toToolName, toAgentActionDef                  [neu]
 │   ├── runner.ts                  # builtinAgentCallable-Prüfung                  [ändern]
 │   ├── settingsActions.ts, chatActions.ts     # Felder setzen                     [ändern]
-├── plugins/agentActions.client.ts # Listener, set_agent_actions                   [neu]
+├── composables/useAgentActions.ts # Listener, set_agent_actions                   [neu]
 ├── composables/useChat.ts, useModels.ts       # Typen, Ereignisse                 [ändern]
 ├── components/chat/PermissionPrompt.vue, StatusBanners.vue   # Klartext, Hinweis [ändern]
 └── i18n/locales/{de,en}.json      # chat.toolNotice.*, chat.permission.change    [ändern]

@@ -39,6 +39,9 @@ useModelsStore()
 // Spec 020: global shortcuts for window manager actions (back/forward).
 useWmKeyboard()
 
+// Spec 032: the actions a model in the chat may call (set up in `onMounted` once the vault is open).
+const agentActions = useAgentActions()
+
 // Spec 020 (research R7, FR-020, FR-035): the webview history is never navigation state. Pages
 // reach this one with `replace`, so the top document's history stays flat, and every router
 // navigation away from it — a webview back, or an embedded document's `history.back()` — is
@@ -92,6 +95,15 @@ onMounted(async () => {
   void startVaultDataListening().catch((error: unknown) => {
     console.error('[vault-data] listening for data changes failed', error)
   })
+
+  // Spec 032 (ADR-0006): offer the actions to the built-in agent. Started once per vault session,
+  // like the sync listener; without it the chat simply has no holzi tools. Wait for the initial
+  // registration so the first chat turn cannot race the action list being installed in Rust.
+  try {
+    await agentActions.startAsync()
+  } catch (error: unknown) {
+    console.error('[agent] offering the actions to the model failed', error)
+  }
 
   sessionRestored.value = true
 })

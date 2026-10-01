@@ -15,6 +15,7 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::adapters::{AbortHandle, ProviderAdapter};
+use crate::chat::tools::action_bridge::ActionBridge;
 use crate::chat::tools::cli::CliTool;
 use crate::chat::tools::mcp::{self, McpServerConfig};
 use crate::chat::tools::{ApprovalDecision, Tool, ToolRegistry};
@@ -148,6 +149,8 @@ pub struct ChatState {
     pub session: Arc<Mutex<Option<ActiveSession>>>,
     pub current_generation: Arc<Mutex<Option<AbortHandle>>>,
     pub tool_registry: Arc<Mutex<ToolRegistry>>,
+    /// The round trip to the action runner in the webview (spec 032, ADR-0006).
+    pub action_bridge: ActionBridge,
     pub pending_tool_approvals: Arc<Mutex<HashMap<Uuid, oneshot::Sender<ApprovalDecision>>>>,
     /// Session-lifetime tombstones make late replies to cancelled prompts harmless.
     pub cancelled_tool_approvals: Arc<Mutex<HashSet<Uuid>>>,
@@ -164,6 +167,7 @@ impl Clone for ChatState {
             session: Arc::clone(&self.session),
             current_generation: Arc::clone(&self.current_generation),
             tool_registry: Arc::clone(&self.tool_registry),
+            action_bridge: self.action_bridge.clone(),
             pending_tool_approvals: Arc::clone(&self.pending_tool_approvals),
             cancelled_tool_approvals: Arc::clone(&self.cancelled_tool_approvals),
             turn_cancellation: Arc::clone(&self.turn_cancellation),
@@ -190,6 +194,7 @@ impl ChatState {
             session: Arc::new(Mutex::new(None)),
             current_generation: Arc::new(Mutex::new(None)),
             tool_registry: Arc::new(Mutex::new(registry)),
+            action_bridge: ActionBridge::default(),
             pending_tool_approvals: Arc::new(Mutex::new(HashMap::new())),
             cancelled_tool_approvals: Arc::new(Mutex::new(HashSet::new())),
             turn_cancellation: Arc::new(Mutex::new(None)),
@@ -400,6 +405,9 @@ impl ChatState {
             &mut *self.tool_registry.lock().unwrap_or_else(|e| e.into_inner()),
             host_only,
         );
+        // The registry above already dropped the action tools; open calls end as cancelled. The
+        // bridge keeps its emitter, which belongs to the app and not to the vault session.
+        self.action_bridge.drop_pending();
         drop((session, generation, cancellation, pending, tools));
     }
 
@@ -429,7 +437,8 @@ impl ChatState {
         .await;
 
         let mut registry = self.tool_registry.lock().unwrap_or_else(|e| e.into_inner());
-        registry.clear();
+        // Only the MCP tools are rebuilt; the actions of the app (spec 032) stay registered.
+        registry.remove_source("mcp");
         registry.register(Arc::new(CliTool::new(self.children.clone())));
         for tool in discovered {
             registry.register(tool);

@@ -192,7 +192,7 @@ export const WM_READ_ACTIONS: readonly ActionDefinition[] = [
   read({
     id: 'wm.state.get',
     description:
-      'Read the open workspaces, windows (geometry, minimized, maximized) and their tabs with app, current location, title and attention flag.',
+      'Read the open workspaces, windows (geometry, minimized, maximized) and their tabs with app, current location, title and attention flag. Workspaces carry a workspaceId, windows a windowId and tabs a tabId; actions on a tab, window or workspace need that id as their target.',
     input: { type: 'object', properties: {} },
     target: 'none',
   }),

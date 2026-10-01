@@ -290,6 +290,7 @@
       "plan": "Plan",
       "requestTitle": "Approve: {name}",
       "risky": "Risky action",
+      "change": "Change",
       "safe": "Safe action",
       "allow": "Allow",
       "deny": "Deny",

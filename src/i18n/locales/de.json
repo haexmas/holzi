@@ -290,6 +290,7 @@
       "plan": "Plan",
       "requestTitle": "Freigabe anfragen: {name}",
       "risky": "Riskante Aktion",
+      "change": "Änderung",
       "safe": "Unbedenkliche Aktion",
       "allow": "Erlauben",
       "deny": "Ablehnen",

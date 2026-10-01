@@ -34,6 +34,7 @@ pub use state::{ActiveInstanceHandle, AppState};
 
 use catalog::commands::catalog_recommend_tiers;
 use catalog::list_catalog;
+use chat::action_commands::{respond_action_call, set_agent_actions};
 use chat::commands::{
     abort_current_generation, inspect_attachment, respond_tool_permission, send_message,
 };
@@ -68,7 +69,7 @@ use storage::wm_session_commands::{
 use stt::commands::{
     download_stt_model, list_installed_stt_models, list_stt_catalog, stt_recommend_tiers,
 };
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use voice::{
     cancel_voice_recording, invalidate_stt_model_cache, start_voice_recording, stop_voice_recording,
 };
@@ -164,6 +165,14 @@ pub fn run() {
                 }
             })?;
             app.manage(presence);
+            // Spec 032: actions of a model's tool call go out as events; `ChatState` is managed
+            // without an `AppHandle`, so the emitter is set here.
+            let handle = app.handle().clone();
+            app.state::<ChatState>()
+                .action_bridge
+                .set_emitter(std::sync::Arc::new(move |event, payload| {
+                    let _ = handle.emit(event, payload);
+                }));
             Ok(())
         })
         .invoke_handler(gate.wrap(tauri::generate_handler![
@@ -201,6 +210,8 @@ pub fn run() {
             inspect_attachment,
             abort_current_generation,
             respond_tool_permission,
+            set_agent_actions,
+            respond_action_call,
             create_thread,
             list_threads,
             list_messages,

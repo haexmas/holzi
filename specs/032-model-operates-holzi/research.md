@@ -56,8 +56,10 @@ gibt genau ein Fenster (`main`), Chat und Window Manager teilen eine Webview.
   gleichzeitig startet und zwei gleichzeitige Fenster-Aktionen sich sonst
   ins Gehege kommen.
 
-Der Listener liegt **global** im Frontend (neues Plugin
-`src/plugins/agentActions.client.ts`), nicht in `ChatApp.vue`: dessen
+Der Listener liegt **global** im Frontend (Composable
+`src/composables/useAgentActions.ts`, von der Workspace-Seite gestartet, sobald
+der Tresor offen ist, denn ein Plugin liefe schon vor dem Entsperren und beide
+Commands brauchen einen offenen Tresor), nicht in `ChatApp.vue`: dessen
 Listener existieren nur, solange ein Chat-Tab gemountet ist, und Aktionen wie
 `wm.app.open` sollen auch dann laufen, wenn der Chat-Tab im Hintergrund liegt.
 
