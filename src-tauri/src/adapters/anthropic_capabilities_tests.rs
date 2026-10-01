@@ -112,7 +112,22 @@ fn neither_thinking_nor_effort_is_an_authoritative_unavailable() {
 fn an_absent_capabilities_object_leaves_everything_not_determined() {
     let caps = map(json!({}));
 
-    assert!(caps.is_undetermined());
+    assert_eq!(caps.reasoning, None);
+    assert_eq!(caps.accepted_attachment_kinds, None);
+    assert_eq!(caps.thinking_style, None);
+}
+
+#[test]
+fn every_claude_model_is_reported_as_calling_tools() {
+    for wire in [json!({}), json!({ "effort": { "supported": false } })] {
+        assert_eq!(
+            map(wire).tool_use,
+            Some(crate::model_capabilities::ToolUse::new(
+                crate::model_capabilities::ToolSupport::Supported,
+                crate::model_capabilities::ToolUseBasis::Provider,
+            ))
+        );
+    }
 }
 
 #[test]

@@ -23,7 +23,8 @@ use uuid::Uuid;
 use holzi_lib::adapters::AttachmentKind;
 use holzi_lib::identity::{holzi_migration_source, installation_id_path, HolziBootstrap};
 use holzi_lib::model_capabilities::{
-    ModelCapabilities, ReasoningControl, ReasoningOption, ThinkingStyle,
+    ModelCapabilities, ReasoningControl, ReasoningOption, ThinkingStyle, ToolSupport, ToolUse,
+    ToolUseBasis,
 };
 use holzi_lib::storage::models::{self as models_store, IntegrityStatus, ModelRow, SourceKind};
 use holzi_lib::storage::query;
@@ -85,6 +86,7 @@ fn claude_capabilities() -> ModelCapabilities {
         ])),
         accepted_attachment_kinds: Some(vec![AttachmentKind::Text, AttachmentKind::Image]),
         thinking_style: Some(ThinkingStyle::Adaptive),
+        tool_use: Some(ToolUse::new(ToolSupport::Supported, ToolUseBasis::Provider)),
     }
 }
 
@@ -277,6 +279,7 @@ fn backfill_fills_only_null_local_rows_and_is_idempotent() {
         reasoning: Some(ReasoningControl::Unavailable),
         accepted_attachment_kinds: Some(vec![AttachmentKind::Image]),
         thinking_style: None,
+        tool_use: None,
     };
     upsert(
         &db,
@@ -326,4 +329,106 @@ fn backfill_fills_only_null_local_rows_and_is_idempotent() {
         .write(|tx| Ok(models_store::backfill_local_capabilities(tx, local).expect("backfill")))
         .expect("second backfill");
     assert_eq!(second, 0, "a second pass changes nothing");
+}
+
+fn set_tool_use(db: &Database, id: &str, tool_use: ToolUse) -> bool {
+    let mut changed = false;
+    db.write(|tx| {
+        changed = models_store::set_tool_use(tx, id, tool_use).expect("set tool use");
+        Ok(())
+    })
+    .expect("write");
+    changed
+}
+
+#[test]
+fn set_tool_use_replaces_only_that_field() {
+    let tmp = tempfile::tempdir().expect("tmp dir");
+    let db = open_vault(tmp.path());
+    let provider = Uuid::new_v4();
+    let id = format!("{provider}:some-model");
+    let mut record = claude_capabilities();
+    record.tool_use = None;
+    upsert(
+        &db,
+        &row(provider, &id, SourceKind::Provider, Some(record.clone())),
+    );
+
+    let found = ToolUse::new(ToolSupport::Unsupported, ToolUseBasis::Template);
+    assert!(set_tool_use(&db, &id, found));
+
+    let stored = get(&db, &id).capabilities.expect("record");
+    assert_eq!(stored.tool_use, Some(found));
+    assert_eq!(stored.reasoning, record.reasoning);
+    assert_eq!(
+        stored.accepted_attachment_kinds,
+        record.accepted_attachment_kinds
+    );
+    assert_eq!(stored.thinking_style, record.thinking_style);
+}
+
+#[test]
+fn set_tool_use_fills_a_row_with_no_record_and_ignores_a_missing_row() {
+    let tmp = tempfile::tempdir().expect("tmp dir");
+    let db = open_vault(tmp.path());
+    let provider = Uuid::new_v4();
+    let id = format!("{provider}:bare");
+    upsert(&db, &row(provider, &id, SourceKind::Imported, None));
+    let found = ToolUse::new(ToolSupport::Supported, ToolUseBasis::SelfTest);
+    assert!(set_tool_use(&db, &id, found));
+    assert_eq!(get(&db, &id).capabilities.unwrap().tool_use, Some(found));
+    assert!(!set_tool_use(&db, "no-such-model", found));
+}
+
+#[test]
+fn a_finding_of_lower_rank_never_overwrites_a_higher_one() {
+    let tmp = tempfile::tempdir().expect("tmp dir");
+    let db = open_vault(tmp.path());
+    let provider = Uuid::new_v4();
+    let id = format!("{provider}:ranked");
+    upsert(&db, &row(provider, &id, SourceKind::Imported, None));
+
+    let self_test = ToolUse::new(ToolSupport::Unsupported, ToolUseBasis::SelfTest);
+    let template = ToolUse::new(ToolSupport::Unsupported, ToolUseBasis::Template);
+    let curated = ToolUse::new(ToolSupport::Supported, ToolUseBasis::Curated);
+    assert!(set_tool_use(&db, &id, self_test));
+    assert!(set_tool_use(&db, &id, template));
+    assert!(!set_tool_use(&db, &id, self_test), "downward is dropped");
+    assert_eq!(get(&db, &id).capabilities.unwrap().tool_use, Some(template));
+    assert!(set_tool_use(&db, &id, curated));
+    assert!(!set_tool_use(&db, &id, template));
+    assert_eq!(get(&db, &id).capabilities.unwrap().tool_use, Some(curated));
+}
+
+#[test]
+fn installing_the_same_model_again_resets_the_finding() {
+    let tmp = tempfile::tempdir().expect("tmp dir");
+    let db = open_vault(tmp.path());
+    let provider = Uuid::new_v4();
+    let id = "my-own-finetune";
+    upsert(
+        &db,
+        &row(
+            provider,
+            id,
+            SourceKind::Imported,
+            Some(ModelCapabilities::local(id)),
+        ),
+    );
+    set_tool_use(
+        &db,
+        id,
+        ToolUse::new(ToolSupport::Unsupported, ToolUseBasis::Template),
+    );
+    // A new file under the same id is installed: the record is written again from scratch.
+    upsert(
+        &db,
+        &row(
+            provider,
+            id,
+            SourceKind::Imported,
+            Some(ModelCapabilities::local(id)),
+        ),
+    );
+    assert_eq!(get(&db, id).capabilities.unwrap().tool_use, None);
 }

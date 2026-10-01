@@ -13,7 +13,9 @@ use crate::error::HolziError;
 use crate::identity::{
     holzi_migration_source, installation_id_path, HolziBootstrap, HOLZI_TRIGGER_VERSION,
 };
-use crate::model_capabilities::{ModelCapabilities, ReasoningControl};
+use crate::model_capabilities::{
+    ModelCapabilities, ReasoningControl, ToolSupport, ToolUse, ToolUseBasis,
+};
 use crate::storage::models::{self as models_store, IntegrityStatus, ModelRow, SourceKind};
 use crate::storage::providers::{Provider, ProviderCapability, ProviderKind};
 use crate::storage::query;
@@ -205,7 +207,14 @@ async fn a_refresh_with_absent_capabilities_replaces_the_stored_record() {
     .await
     .expect("refresh succeeds");
 
-    assert_eq!(stored_capabilities(&db, &provider), None);
+    // The refresh replaced the local record entirely: only what Anthropic always states remains.
+    assert_eq!(
+        stored_capabilities(&db, &provider),
+        Some(ModelCapabilities {
+            tool_use: Some(ToolUse::new(ToolSupport::Supported, ToolUseBasis::Provider)),
+            ..ModelCapabilities::default()
+        })
+    );
 }
 
 #[tokio::test]

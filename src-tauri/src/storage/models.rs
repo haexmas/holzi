@@ -12,7 +12,7 @@ use haex_crdt::CrdtTransaction;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::model_capabilities::ModelCapabilities;
+use crate::model_capabilities::{ModelCapabilities, ToolUse};
 use crate::storage::query::Query;
 
 /// Where a `models` row's file came from. Persisted in `source_kind`
@@ -192,6 +192,40 @@ fn capabilities_to_column(capabilities: Option<&ModelCapabilities>) -> Result<Op
         .map(serde_json::to_string)
         .transpose()
         .map_err(|e| haex_crdt::rusqlite::Error::ToSqlConversionFailure(Box::new(e)))
+}
+
+/// Writes what was found about a model's tool use into its record, keeping every other field.
+/// A value of lower rank than the stored one is dropped (spec 032 FR-015: provider and catalog
+/// beat the template finding, which beats a self-test). Returns whether the row changed.
+///
+/// A read-modify-write of `capabilities_json`, not an upsert: the rest of the record (reasoning,
+/// attachments) came from another source and must survive.
+pub fn set_tool_use(
+    tx: &mut CrdtTransaction<'_>,
+    id: &str,
+    tool_use: ToolUse,
+) -> haex_crdt::Result<bool> {
+    let stored: Vec<Option<String>> = tx.query_map(
+        "SELECT capabilities_json FROM models WHERE id = ?1",
+        params![id],
+        |r| r.get(0),
+    )?;
+    let Some(raw) = stored.into_iter().next() else {
+        return Ok(false);
+    };
+    let mut capabilities = capabilities_from_column(id, raw).unwrap_or_default();
+    if capabilities
+        .tool_use
+        .is_some_and(|current| !tool_use.may_replace(&current))
+    {
+        return Ok(false);
+    }
+    capabilities.tool_use = Some(tool_use);
+    let json = capabilities_to_column(Some(&capabilities))?;
+    Ok(tx.execute(
+        "UPDATE models SET capabilities_json = ?1 WHERE id = ?2",
+        params![json, id],
+    )? > 0)
 }
 
 /// Reads `capabilities_json` leniently: a value that cannot be parsed reads

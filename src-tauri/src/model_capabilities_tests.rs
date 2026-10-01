@@ -6,6 +6,7 @@ use serde_json::json;
 
 use super::{
     local_model_reasoning, ModelCapabilities, ReasoningControl, ReasoningOption, ThinkingStyle,
+    ToolSupport, ToolUse, ToolUseBasis,
 };
 use crate::adapters::AttachmentKind;
 
@@ -46,6 +47,7 @@ fn serialized_shape_matches_the_documented_examples() {
         ])),
         accepted_attachment_kinds: Some(vec![AttachmentKind::Text, AttachmentKind::Image]),
         thinking_style: Some(ThinkingStyle::Adaptive),
+        tool_use: Some(ToolUse::new(ToolSupport::Supported, ToolUseBasis::Provider)),
     };
 
     assert_eq!(
@@ -60,6 +62,7 @@ fn serialized_shape_matches_the_documented_examples() {
             },
             "acceptedAttachmentKinds": ["text", "image"],
             "thinkingStyle": "adaptive",
+            "toolUse": { "support": "supported", "basis": "provider" },
         })
     );
     assert_eq!(
@@ -68,6 +71,7 @@ fn serialized_shape_matches_the_documented_examples() {
             "reasoning": { "kind": "model_managed" },
             "acceptedAttachmentKinds": [],
             "thinkingStyle": null,
+            "toolUse": null,
         })
     );
 }
@@ -234,4 +238,49 @@ fn only_selectable_and_model_managed_reasoning_counts_as_reasoning() {
     assert!(ReasoningControl::ModelManaged.reasons());
     assert!(ReasoningControl::presets(vec![option("low")]).reasons());
     assert!(!ReasoningControl::Unavailable.reasons());
+}
+
+#[test]
+fn a_record_without_tool_use_reads_as_not_determined() {
+    let caps: ModelCapabilities =
+        serde_json::from_value(json!({ "reasoning": { "kind": "unavailable" } })).unwrap();
+    assert_eq!(caps.tool_use, None);
+    let known: ModelCapabilities = serde_json::from_value(
+        json!({ "toolUse": { "support": "unsupported", "basis": "template" } }),
+    )
+    .unwrap();
+    assert_eq!(
+        known.tool_use,
+        Some(ToolUse::new(
+            ToolSupport::Unsupported,
+            ToolUseBasis::Template
+        ))
+    );
+}
+
+#[test]
+fn tool_use_alone_makes_a_record_determined() {
+    assert!(ModelCapabilities::default().is_undetermined());
+    assert!(!ModelCapabilities {
+        tool_use: Some(ToolUse::new(ToolSupport::Supported, ToolUseBasis::SelfTest)),
+        ..ModelCapabilities::default()
+    }
+    .is_undetermined());
+}
+
+#[test]
+fn a_finding_never_replaces_one_of_higher_rank() {
+    use ToolSupport::{Supported, Unsupported};
+    use ToolUseBasis::{Curated, Provider, SelfTest, Template};
+    let self_test = ToolUse::new(Unsupported, SelfTest);
+    let template = ToolUse::new(Unsupported, Template);
+    let curated = ToolUse::new(Supported, Curated);
+    let provider = ToolUse::new(Supported, Provider);
+    assert!(template.may_replace(&self_test));
+    assert!(curated.may_replace(&template));
+    assert!(provider.may_replace(&curated) && curated.may_replace(&provider));
+    assert!(self_test.may_replace(&self_test));
+    assert!(!self_test.may_replace(&template));
+    assert!(!template.may_replace(&curated));
+    assert!(!self_test.may_replace(&provider));
 }

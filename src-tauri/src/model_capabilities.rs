@@ -35,6 +35,62 @@ pub struct ModelCapabilities {
     /// adapter-private hint read only by the adapter that produced it.
     /// `None` for local, Codex and undetermined models.
     pub thinking_style: Option<ThinkingStyle>,
+    /// Whether the model can call tools (spec 032). `None` = not determined: tools are offered
+    /// with a hint. The value is vault-wide and syncs with the `models` row.
+    pub tool_use: Option<ToolUse>,
+}
+
+/// Whether a model can call tools, and where that knowledge comes from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolUse {
+    pub support: ToolSupport,
+    pub basis: ToolUseBasis,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolSupport {
+    Supported,
+    Unsupported,
+}
+
+/// How a [`ToolUse`] value was found. Used for precedence and debugging only; the frontend does
+/// not show it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolUseBasis {
+    /// The provider said so.
+    Provider,
+    /// The built-in catalog says so (measured once for a curated model).
+    Curated,
+    /// The chat template of a local model ignores tools.
+    Template,
+    /// The background self-test of this installation.
+    SelfTest,
+}
+
+impl ToolUseBasis {
+    /// Higher wins (spec 032 FR-015): what a provider or the catalog states beats a template
+    /// finding, which beats a self-test.
+    fn rank(self) -> u8 {
+        match self {
+            Self::Provider | Self::Curated => 3,
+            Self::Template => 2,
+            Self::SelfTest => 1,
+        }
+    }
+}
+
+impl ToolUse {
+    pub fn new(support: ToolSupport, basis: ToolUseBasis) -> Self {
+        Self { support, basis }
+    }
+
+    /// Whether this value may replace `current`: a value never replaces one of higher rank.
+    pub fn may_replace(&self, current: &ToolUse) -> bool {
+        self.basis.rank() >= current.basis.rank()
+    }
 }
 
 /// A model's answer to "can the user influence reasoning?".
@@ -131,6 +187,11 @@ impl ModelCapabilities {
             reasoning: Some(local_model_reasoning(model_id)),
             accepted_attachment_kinds: Some(Vec::new()),
             thinking_style: None,
+            // A curated model may carry a measured answer; every other local model starts
+            // unknown, which also resets the field when its file is installed again.
+            tool_use: crate::catalog::get(model_id)
+                .and_then(|entry| entry.tool_use)
+                .map(|support| ToolUse::new(support, ToolUseBasis::Curated)),
         }
     }
 }

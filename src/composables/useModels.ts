@@ -33,6 +33,11 @@ export interface ModelCapabilities {
   reasoning: ReasoningControl | null
   acceptedAttachmentKinds: AttachmentKind[] | null
   thinkingStyle: 'adaptive' | 'manual' | null
+  /** Whether the model can call tools (spec 032); `null` = not determined. */
+  toolUse: {
+    support: 'supported' | 'unsupported'
+    basis: 'provider' | 'curated' | 'template' | 'self_test'
+  } | null
 }
 
 export interface InstalledModel {

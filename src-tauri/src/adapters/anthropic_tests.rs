@@ -292,8 +292,15 @@ async fn list_models_maps_live_capabilities_and_tolerates_their_absence() {
         opus.accepted_attachment_kinds.as_ref().map(Vec::len),
         Some(3)
     );
-    assert!(
-        models[1].capabilities.is_undetermined(),
-        "an entry without a capabilities object is not determined, not unsupported"
+    assert_eq!(
+        models[1].capabilities,
+        crate::model_capabilities::ModelCapabilities {
+            tool_use: Some(crate::model_capabilities::ToolUse::new(
+                crate::model_capabilities::ToolSupport::Supported,
+                crate::model_capabilities::ToolUseBasis::Provider,
+            )),
+            ..Default::default()
+        },
+        "an entry without a capabilities object leaves reasoning and attachments not determined"
     );
 }
