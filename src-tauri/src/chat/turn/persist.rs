@@ -29,6 +29,22 @@ pub(super) async fn persist_message(
         .map_err(|e| format!("persist failed: {e}"))
 }
 
+/// Persists one tool call together with its result so a failed write cannot
+/// leave an unmatched call row in the conversation history.
+pub(super) async fn persist_tool_pair(
+    db: &crate::vault_gate::VaultDb,
+    call: ChatMessage,
+    result: ChatMessage,
+) -> std::result::Result<(), String> {
+    db.write(move |tx| {
+        msg_store::insert_message(tx, &call)?;
+        msg_store::insert_message(tx, &result)?;
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("persist failed: {e}"))
+}
+
 /// Persists the turn's terminal assistant row and updates `chat_threads`
 /// in the same transaction — mirrors the pre-tool-loop behavior where
 /// both happened atomically together.
