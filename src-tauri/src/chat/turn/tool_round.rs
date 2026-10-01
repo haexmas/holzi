@@ -25,7 +25,9 @@ use crate::chat::tools::{ApprovalDecision, Tool, ToolResult as ToolExecResult};
 use crate::storage::chat_messages::{ChatMessage, FinishReason, MessageRole};
 use crate::storage::preferences::{self, PrefScope};
 
-use super::persist::{empty_tool_message, persist_final_message, persist_message};
+use super::persist::{
+    empty_tool_message, persist_final_message, persist_message, persist_tool_pair,
+};
 use super::step::StepResult;
 use super::TurnRunner;
 
@@ -347,11 +349,23 @@ impl TurnRunner<'_> {
                 ..empty_tool_message(tool_call_row_id, self.thread_id, Some(self.parent_id))
             };
             self.next_created_at = self.next_created_at.saturating_add(1);
-            if let Err(reason) = persist_message(self.db, call_msg).await {
+            let tool_result_row_id = Uuid::new_v4();
+            let result_msg = ChatMessage {
+                role: MessageRole::ToolResult,
+                content: result.content.clone(),
+                provider_id: self.session.provider_id,
+                model_id: Some(self.session.model_id.clone()),
+                tool_call_id: Some(call.id.clone()),
+                tool_is_error: Some(result.is_error),
+                created_at: self.next_created_at,
+                ..empty_tool_message(tool_result_row_id, self.thread_id, Some(tool_call_row_id))
+            };
+            self.next_created_at = self.next_created_at.saturating_add(1);
+            if let Err(reason) = persist_tool_pair(self.db, call_msg, result_msg).await {
                 self.fail(reason);
                 return Err(());
             }
-            self.parent_id = tool_call_row_id;
+            self.parent_id = tool_result_row_id;
             self.emit_event(
                 EVENT_CHAT_TOOL_CALL,
                 ToolCallEvent {
@@ -362,24 +376,6 @@ impl TurnRunner<'_> {
                     tool_source: source.to_string(),
                 },
             );
-
-            let tool_result_row_id = Uuid::new_v4();
-            let result_msg = ChatMessage {
-                role: MessageRole::ToolResult,
-                content: result.content.clone(),
-                provider_id: self.session.provider_id,
-                model_id: Some(self.session.model_id.clone()),
-                tool_call_id: Some(call.id.clone()),
-                tool_is_error: Some(result.is_error),
-                created_at: self.next_created_at,
-                ..empty_tool_message(tool_result_row_id, self.thread_id, Some(self.parent_id))
-            };
-            self.next_created_at = self.next_created_at.saturating_add(1);
-            if let Err(reason) = persist_message(self.db, result_msg).await {
-                self.fail(reason);
-                return Err(());
-            }
-            self.parent_id = tool_result_row_id;
             self.emit_event(
                 EVENT_CHAT_TOOL_RESULT,
                 ToolResultEvent {
