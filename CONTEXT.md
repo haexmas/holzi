@@ -161,6 +161,17 @@ schema, a target, a **Berechtigungsbereich** and an effect; the
 Actions in the `guardrails` scope are user-only.
 _Avoid_: "command" for these — in holzi "command" means Tauri commands.
 
+**Werkzeug (tool) / Wirkungsart / Risikostufe** (spec 032):
+A **Werkzeug** is an **Aktion** offered to a model that holzi's own chat
+drives, local or reached with an API key; the tool loop lists it with source
+`action`. A chat turn starts with a fixed core of tools and the search
+`find_actions`; the model finds the rest and gets it from the next step on. The
+**Wirkungsart** of an action (`read`, `write`, `destructive`) maps to the
+**Risikostufe** the approval mode decides on: `Safe`, `Change`, `Risky`.
+Actions in the `guardrails` scope are never offered. Whether a model can call
+tools at all is its capability `tool_use` (`ModelCapabilities`).
+_Avoid_: "command" for tools — in holzi "command" means Tauri commands.
+
 **Einstellungskategorie (settings category) / Unteransicht** (spec 023):
 A group in the settings' sidebar — Allgemein, Darstellung, Modelle, Agenten,
 Föderation (`SETTINGS_CATEGORIES` in `src/lib/settings/registry.ts`). A

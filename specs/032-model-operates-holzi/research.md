@@ -434,3 +434,23 @@ Eingänge; Risiko-Abbildung auf drei Stufen; `builtinAgentCallable`; was 021
   Quelle im Register; `source` ist ein freier Text in `chat_messages.tool_source`
   (kein CHECK), das TS-Typfeld `toolSource` wird auf `'mcp' | 'cli' | 'action'`
   erweitert.
+
+## R17 — Erste Messung (T046)
+
+Qwen3-4B (Q4_K_M, CPU, Release-Build, deterministisch, kein Systemprompt, wie in der App):
+16 von 30 Sätzen (53 %), je 8 von 15 auf Deutsch und Englisch, Smalltalk 6 von 6,
+Lesen 4 von 11, Ändern 6 von 13. `reachRate` 0,54, `extraSteps` 0, keine unnötigen
+Aufrufe. Zwei Läufe ergaben denselben Bericht (SC-008).
+
+**Befund**: Das Modell ruft `find_actions` nie auf. Für die 11 Sätze mit einem
+Werkzeug außerhalb des Kernangebots antwortet es mit Text oder ruft ein falsches
+Kernwerkzeug auf (meist `settings_get`); auch zwei Kernsätze (offene Tabs, Apps)
+enden als Text. Der Suchweg trägt bei diesem Modell nicht.
+
+**Selbsttest**: 4 von 5 Sätzen (0,8). Ein Modell, das nur redet, bestünde die zwei
+Smalltalk-Sätze (0,4). `SELF_TEST_PASS = 0,6` trennt beides; es gibt nur diesen einen
+Messpunkt (Qwen3 0,6B und 1,7B waren nicht installiert, ein Claude-Modell nicht
+messbar ohne Schlüssel). Der Katalogeintrag von Qwen3-4B trägt `tool_use: supported`.
+
+**Offen**: Ob ein kurzer, für alle Modelle gleicher Systemprompt die Suche anstößt, ist
+nicht gemessen und eine Änderung am Chatverhalten, kein Teil dieser Messung.

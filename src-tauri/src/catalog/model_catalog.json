@@ -47,7 +47,8 @@
       "tokenizer_repo": "Qwen/Qwen3-4B",
       "approx_size_bytes": 2500000000,
       "context_window": 32768,
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "tool_use": "supported"
     }
   ]
 }

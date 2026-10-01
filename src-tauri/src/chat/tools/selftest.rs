@@ -20,9 +20,11 @@ use crate::storage::models as models_store;
 
 /// The share of the self-test sentences a model has to get right to count as able to call tools.
 ///
-/// ponytail: a placeholder until the first full measurement (spec 032 T046) shows where models
-/// that work well and models that do not separate. Ceiling: a model near the line may flip
-/// between supported and unsupported across a re-install. Upgrade path: the measured threshold.
+/// ponytail: set from one measured model (spec 032 T046). Qwen3-4B passes 4 of the 5 sentences
+/// (0.8), a model that only talks passes the 2 smalltalk ones (0.4), so 0.6 separates the two.
+/// Ceiling: no weaker model was measured (Qwen3 0.6B and 1.7B were not installed), so a model near
+/// the line may flip between supported and unsupported across a re-install. Upgrade path: measure
+/// the smaller catalog models and move the line to where they fall.
 pub const SELF_TEST_PASS: f64 = 0.6;
 
 /// What a self-test score means.
