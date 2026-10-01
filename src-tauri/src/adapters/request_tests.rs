@@ -16,6 +16,7 @@ use crate::model_capabilities::{
 
 fn sample_request(model: &str) -> ChatRequest {
     ChatRequest {
+        sampling: Default::default(),
         model_id: model.to_string(),
         thread_id: None,
         system_prompt: None,
@@ -288,6 +289,7 @@ async fn stream_chat_groups_ordered_tool_calls_and_results_into_two_messages() {
 
     let adapter = AnthropicAdapter::new(server.uri(), "sk-any".to_string()).unwrap();
     let request = ChatRequest {
+        sampling: Default::default(),
         model_id: "claude-opus-5".to_string(),
         thread_id: None,
         system_prompt: None,

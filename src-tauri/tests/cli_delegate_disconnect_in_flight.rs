@@ -101,6 +101,7 @@ async fn disconnect_during_a_response_does_not_affect_that_response() {
 
     let mut stream = adapter
         .stream_chat(ChatRequest {
+            sampling: Default::default(),
             model_id: format!("{provider_id}:claude"),
             thread_id: None,
             system_prompt: None,

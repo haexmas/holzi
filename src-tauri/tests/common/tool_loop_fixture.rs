@@ -224,6 +224,7 @@ impl Tool for ScriptedTool {
 
 pub fn base_request() -> ChatRequest {
     ChatRequest {
+        sampling: Default::default(),
         model_id: "stub-model".to_string(),
         thread_id: None,
         system_prompt: None,

@@ -11,6 +11,7 @@ use super::{AdapterError, ProviderAdapter};
 
 fn sample_request(model: &str) -> ChatRequest {
     ChatRequest {
+        sampling: Default::default(),
         model_id: model.to_string(),
         thread_id: None,
         system_prompt: None,

@@ -28,6 +28,7 @@ fn delegate_vendor_rejects_unknown_strings() {
 #[test]
 fn transcript_gives_duplicate_attachment_names_unique_sandbox_names() {
     let request = ChatRequest {
+        sampling: Default::default(),
         model_id: "claude-opus-5".to_string(),
         thread_id: None,
         system_prompt: None,

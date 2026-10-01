@@ -135,6 +135,7 @@ sys.stdin.readline()
 
     let stream = adapter
         .stream_chat(ChatRequest {
+            sampling: Default::default(),
             model_id: "codex-delegate".to_string(),
             thread_id: Some(thread_id),
             system_prompt: None,
@@ -259,6 +260,7 @@ sys.stdin.readline()
     // would duplicate `tests/chat_tool_loop_permissions.rs`'s fixture.
     let stream = adapter
         .stream_chat(ChatRequest {
+            sampling: Default::default(),
             model_id: "codex-delegate".to_string(),
             thread_id: Some(thread_id),
             system_prompt: None,

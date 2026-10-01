@@ -20,7 +20,7 @@ use tokio::sync::mpsc;
 
 use super::LocalModel;
 use crate::adapters::types::{
-    AdapterStream, ChatRequest, ChatRole, StreamChunk, StreamError, ToolCall, ToolSpec,
+    AdapterStream, ChatRequest, ChatRole, Sampling, StreamChunk, StreamError, ToolCall, ToolSpec,
 };
 
 /// JSON-Schema `input_schema` → mistralrs' `Function.parameters` shape
@@ -139,6 +139,9 @@ fn longest_prefix_overlap(text: &str, marker: &str) -> usize {
 /// different wire encodings).
 fn build_request(req: &ChatRequest) -> RequestBuilder {
     let mut builder = RequestBuilder::new();
+    if req.sampling == Sampling::Deterministic {
+        builder = builder.set_deterministic_sampler();
+    }
     if let Some(sys) = req.system_prompt.as_ref() {
         builder = builder.add_message(TextMessageRole::System, sys);
     }

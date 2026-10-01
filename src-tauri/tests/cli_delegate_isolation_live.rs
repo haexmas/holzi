@@ -24,6 +24,7 @@ use holzi_lib::adapters::{ChatMessage, ChatRequest, ChatRole, ProviderAdapter, S
 
 fn sample_request() -> ChatRequest {
     ChatRequest {
+        sampling: Default::default(),
         model_id: "delegate".to_string(),
         thread_id: None,
         system_prompt: None,
