@@ -4,23 +4,29 @@ The only place that knows the platform. One implementation now (`scripts/e2e/lib
 
 ```ts
 interface DeviceHost {
-  // lifecycle
-  start(opts: { dataRoot: DataHandle; app: string }): Promise<RunningDevice>
-  // operations of a running device are the Page of spec 016 plus:
+  newData(folder: string): DataHandle // empty data for a device that does not exist yet
+  start(options: {
+    data: DataHandle
+    folder: string
+    step?: (name: string, detail?: string) => void
+  }): Promise<RunningDevice> // a fresh start when the data is empty
 }
 interface RunningDevice extends Page {
-  stop(): Promise<void> // graceful
+  stop(): Promise<void> // graceful, safe to call twice
   kill(): Promise<void> // no cleanup
   alive(): boolean
-  screenshot(name: string): Promise<void>
+  step(name: string, detail?: string): void
+  screenshot(): Promise<Uint8Array> // PNG bytes
 }
 interface DataHandle {
   // opaque to scenarios
   copyVaultFile(vaultName: string, to: DataHandle): Promise<void>
+  keep(folder: string): void // copy the data into a folder, for the failure material
+  dispose(): void
 }
 ```
 
-Operations of FR-021 and where each lives: start and stop a device (`start`, `stop`, `kill`), click, type, read, call a backend command, wait for a condition (`Page`), take a screenshot (`screenshot`), control a device's network (`goOffline` and `goOnline` in the group helper, built on start, stop and the servers action, so no extra platform operation), and copy a vault file (`DataHandle.copyVaultFile`). Waiting uses fixed real-time deadlines; the driver layer exposes no clock-control operation.
+Operations of FR-021 and where each lives: start and stop a device (`start`, `stop`, `kill`), click, type, read, call a backend command, wait for a condition (`Page`), take a screenshot (`screenshot`, which returns the bytes), control a device's network (`goOffline` and `goOnline` in the group helper, built on start, stop and the servers action, so no extra platform operation), and copy a vault file (`DataHandle.copyVaultFile`). Waiting uses fixed real-time deadlines; the driver layer exposes no clock-control operation.
 
 ## Rules
 

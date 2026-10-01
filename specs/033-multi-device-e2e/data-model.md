@@ -31,7 +31,7 @@ One running application process of a vault, addressed by `<user>/<device>`. Fiel
 | `state`        | `running`, `stopped`, `offline` (running, no servers), `killed`  |
 | `page`         | the `Page` operations of spec 016 for this device                |
 
-State transitions: `stopped -> running` (start), `running -> stopped` (stop), `running -> killed` (kill), `running -> offline` (goOffline: servers none, restart), `offline -> running` (goOnline: servers back, restart), `killed -> running` (start over the same data). Any state ends at `stopped` when the scenario ends.
+State transitions: `stopped -> running` (start), `running -> stopped` (stop), `running -> killed` (kill), `running -> offline` (goOffline: servers none, restart), `offline -> running` (goOnline: servers back, restart), `killed -> running` (start over the same data); a device that was taken offline starts `offline` again, because its servers are stored none. Any state ends at `stopped` when the scenario ends.
 
 ## Test relay
 
