@@ -211,7 +211,7 @@ jobs:
           set -euo pipefail
           sed -i -E 's/[[:space:]]+$//' src/types/bindings/*.ts
           if [ -n "$(git status --short --untracked-files=all -- src/types/bindings)" ]; then
-            echo 'Generated bindings contain untracked files.' >&2
+            echo 'Generated bindings differ from the checked-in files or are untracked.' >&2
             git status --short --untracked-files=all -- src/types/bindings >&2
             exit 1
           fi
