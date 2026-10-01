@@ -143,13 +143,23 @@ impl ServerConfig {
     }
 }
 
-/// Reads the current server preferences; a missing or unparseable value
-/// reads as empty, never as an error.
+/// Reads the current server preferences; missing or unparseable values read
+/// as empty, except that a missing disabled list preserves legacy semantics.
 pub fn read(q: &mut impl Query) -> haex_crdt::Result<ServerConfig> {
+    let nostr_relays = read_urls(q, PREF_NOSTR_RELAYS)?;
+    let iroh_relays = read_urls(q, PREF_IROH_RELAYS)?;
+    // Before `PREF_DISABLED_RELAYS` existed, a non-empty list replaced the
+    // built-ins. Preserve that effective configuration when an older vault is
+    // first opened by this version; the next settings write stores the
+    // explicit disabled list.
+    let disabled = match preferences::get(q, PrefScope::Vault, PREF_DISABLED_RELAYS)? {
+        Some(raw) => parse_urls(PREF_DISABLED_RELAYS, &raw),
+        None => legacy_disabled(&nostr_relays, &iroh_relays),
+    };
     Ok(ServerConfig {
-        nostr_relays: read_urls(q, PREF_NOSTR_RELAYS)?,
-        iroh_relays: read_urls(q, PREF_IROH_RELAYS)?,
-        disabled: read_urls(q, PREF_DISABLED_RELAYS)?,
+        nostr_relays,
+        iroh_relays,
+        disabled,
     })
 }
 
@@ -158,13 +168,28 @@ fn read_urls(q: &mut impl Query, key: &str) -> haex_crdt::Result<Vec<String>> {
     let Some(raw) = preferences::get(q, PrefScope::Vault, key)? else {
         return Ok(Vec::new());
     };
-    match serde_json::from_str::<Vec<String>>(&raw) {
-        Ok(urls) => Ok(urls),
+    Ok(parse_urls(key, &raw))
+}
+
+fn parse_urls(key: &str, raw: &str) -> Vec<String> {
+    match serde_json::from_str::<Vec<String>>(raw) {
+        Ok(urls) => urls,
         Err(error) => {
             log::warn!("sync: {key} does not decode as a URL list, reading it as empty: {error}");
-            Ok(Vec::new())
+            Vec::new()
         }
     }
+}
+
+fn legacy_disabled(nostr_relays: &[String], iroh_relays: &[String]) -> Vec<String> {
+    let mut disabled = Vec::new();
+    if !nostr_relays.is_empty() {
+        disabled.extend(default_nostr_relays());
+    }
+    if !iroh_relays.is_empty() {
+        disabled.extend(default_iroh_relays());
+    }
+    disabled
 }
 
 /// Most servers of one kind the settings accept.

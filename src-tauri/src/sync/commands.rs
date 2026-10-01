@@ -79,7 +79,8 @@ pub struct LinkJoinStartArgs {
     #[ts(type = "string")]
     pub passphrase: Passphrase,
     /// The servers the vault's devices find each other through, when they are
-    /// not the built-in ones; empty lists mean the built-in ones.
+    /// not the built-in ones; omitted `servers` means the built-in ones, while
+    /// explicit `disabled` entries can switch any listed server off.
     #[serde(default)]
     #[ts(optional)]
     pub servers: Option<SyncServers>,

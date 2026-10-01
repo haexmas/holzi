@@ -143,6 +143,37 @@ fn an_unparseable_stored_value_reads_as_empty() {
 }
 
 #[test]
+fn legacy_preferences_keep_custom_servers_without_reenabling_built_ins() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db = open_vault(dir.path());
+    db.write(|tx| {
+        preferences::insert_or_update(
+            tx,
+            PrefScope::Vault,
+            PREF_NOSTR_RELAYS,
+            r#"["wss://relay.example.org"]"#,
+        )?;
+        preferences::insert_or_update(
+            tx,
+            PrefScope::Vault,
+            PREF_IROH_RELAYS,
+            r#"["https://iroh.example.org"]"#,
+        )
+    })
+    .expect("write legacy preferences");
+
+    let config = crate::storage::query::read(&db, |r| read(r)).expect("read config");
+    assert_eq!(
+        config.effective_nostr_relays(),
+        urls(&["wss://relay.example.org"])
+    );
+    assert_eq!(
+        config.effective_iroh_relays(),
+        urls(&["https://iroh.example.org"])
+    );
+}
+
+#[test]
 fn diff_relays_finds_what_to_insert_and_remove() {
     let a: RelayUrl = "https://a.example.org".parse().expect("url");
     let b: RelayUrl = "https://b.example.org".parse().expect("url");
