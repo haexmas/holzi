@@ -9,6 +9,9 @@
 mod loader;
 #[cfg(test)]
 mod loader_tests;
+mod probe;
+#[cfg(test)]
+mod probe_tests;
 mod stream;
 
 pub use loader::{LocalModel, LocalModelError};

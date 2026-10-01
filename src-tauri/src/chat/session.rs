@@ -155,6 +155,8 @@ pub struct ChatState {
     /// Session-lifetime tombstones make late replies to cancelled prompts harmless.
     pub cancelled_tool_approvals: Arc<Mutex<HashSet<Uuid>>>,
     pub turn_cancellation: Arc<Mutex<Option<CancellationToken>>>,
+    /// The background check of a local model's tool use (spec 032 FR-018b), at most one.
+    tool_check: Arc<Mutex<Option<CancellationToken>>>,
     model_load: Arc<Mutex<ModelLoadRuntime>>,
     /// Where the tools register the child processes they start, so ending the vault ends them.
     children: ChildRegistry,
@@ -171,6 +173,7 @@ impl Clone for ChatState {
             pending_tool_approvals: Arc::clone(&self.pending_tool_approvals),
             cancelled_tool_approvals: Arc::clone(&self.cancelled_tool_approvals),
             turn_cancellation: Arc::clone(&self.turn_cancellation),
+            tool_check: Arc::clone(&self.tool_check),
             model_load: Arc::clone(&self.model_load),
             children: self.children.clone(),
         }
@@ -198,6 +201,7 @@ impl ChatState {
             pending_tool_approvals: Arc::new(Mutex::new(HashMap::new())),
             cancelled_tool_approvals: Arc::new(Mutex::new(HashSet::new())),
             turn_cancellation: Arc::new(Mutex::new(None)),
+            tool_check: Arc::new(Mutex::new(None)),
             model_load: Arc::new(Mutex::new(ModelLoadRuntime {
                 vault_generation: 0,
                 next_load_id: 0,
@@ -207,6 +211,33 @@ impl ChatState {
                 preload: None,
             })),
             children,
+        }
+    }
+
+    /// Starts the check of a model's tool use: ends the one still running and hands out the
+    /// token that ends this one when the model changes, a message is sent or the vault closes.
+    pub fn begin_tool_check(&self) -> CancellationToken {
+        let token = CancellationToken::new();
+        let previous = self
+            .tool_check
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .replace(token.clone());
+        if let Some(previous) = previous {
+            previous.cancel();
+        }
+        token
+    }
+
+    /// Ends the running check of a model's tool use, if any. Idempotent.
+    pub fn cancel_tool_check(&self) {
+        let token = self
+            .tool_check
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        if let Some(token) = token {
+            token.cancel();
         }
     }
 
@@ -372,6 +403,7 @@ impl ChatState {
     /// [`ChatState::new`]. Dropping the session is what releases the database handle a delegate
     /// adapter holds, so the close calls this before it waits for the drain. Idempotent.
     pub fn reset_for_close(&self) {
+        self.cancel_tool_check();
         // Take each value out under its lock and drop it after the guard is gone, so no drop of
         // an adapter or tool ever runs while a lock is held.
         let session = self

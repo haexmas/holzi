@@ -6,7 +6,7 @@
 
 use async_trait::async_trait;
 
-use super::types::{AdapterStream, ChatRequest};
+use super::types::{AdapterStream, ChatRequest, ToolTemplateProbe};
 use super::{AdapterError, ProviderAdapter, ProviderModel};
 use crate::llm::local::LocalModel;
 
@@ -32,5 +32,9 @@ impl ProviderAdapter for LocalAdapter {
         // in `adapters::types` so no adapter has to translate between
         // stream shapes.
         Ok(self.model.stream_chat(req))
+    }
+
+    async fn probe_tool_template(&self) -> ToolTemplateProbe {
+        self.model.probe_tool_template().await
     }
 }

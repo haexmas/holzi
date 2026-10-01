@@ -42,6 +42,7 @@ use crate::storage::{models as models_store, providers as providers_store};
 
 use super::events::{emit_load_error, emit_load_progress, emit_model_load_status};
 use super::session::{ActiveSession, ChatState};
+use super::tools::selftest::spawn_tool_use_check;
 
 /// Semantic phase of a model-load. See spec 002 §FR-015b + contracts.
 /// Backend never emits localised strings; frontend translates via
@@ -145,6 +146,8 @@ pub(crate) async fn load_model_inner(
     if cancelled(cancel) || !chat.is_current_load(identity.vault_generation, identity.load_id) {
         return Ok(LoadOutcome::Cancelled);
     }
+    // Another model is about to be the active one: the check of the last one is moot.
+    chat.cancel_tool_check();
 
     let name = resolve_display_name(state, model_id)
         .await
@@ -220,6 +223,12 @@ pub(crate) async fn load_model_inner(
         return Ok(LoadOutcome::Cancelled);
     }
 
+    // A local model nobody knows anything about is checked in the background (spec 032 FR-018b).
+    let local_adapter = session
+        .provider_id
+        .is_none()
+        .then(|| Arc::clone(&session.adapter));
+
     let info = LoadedModelInfo {
         model_id: session.model_id.clone(),
         name,
@@ -244,6 +253,10 @@ pub(crate) async fn load_model_inner(
         LoadPhase::Ready,
         None,
     );
+    if let Some(adapter) = local_adapter {
+        let token = chat.begin_tool_check();
+        spawn_tool_use_check(app, info.model_id.clone(), adapter, token);
+    }
     Ok(LoadOutcome::Loaded(info))
 }
 
@@ -643,6 +656,7 @@ pub(crate) async fn resolve_display_name(
 /// Drops the current session, if any. Idempotent.
 #[tauri::command]
 pub async fn unload_local_model(app: AppHandle, chat: State<'_, ChatState>) -> Result<()> {
+    chat.cancel_tool_check();
     chat.cancel_preload_and_wait().await;
     emit_model_load_status(&app, &chat);
     let _operation = chat.acquire_operation()?;

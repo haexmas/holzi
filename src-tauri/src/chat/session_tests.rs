@@ -226,3 +226,19 @@ async fn cancel_preload_fires_the_signal_without_waiting_for_the_preload() {
     chat.cancel_preload();
     ChatState::new().cancel_preload();
 }
+
+#[test]
+fn a_new_tool_check_ends_the_one_before_and_closing_ends_the_last() {
+    let chat = ChatState::new();
+    let first = chat.begin_tool_check();
+    let second = chat.begin_tool_check();
+    assert!(first.is_cancelled(), "one check at a time");
+    assert!(!second.is_cancelled());
+    chat.cancel_tool_check();
+    assert!(second.is_cancelled());
+    // Idempotent, and the vault close ends a check as well.
+    chat.cancel_tool_check();
+    let third = chat.begin_tool_check();
+    chat.reset_for_close();
+    assert!(third.is_cancelled());
+}

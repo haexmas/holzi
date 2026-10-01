@@ -424,6 +424,8 @@ pub async fn send_message(
         .split_once(':')
         .map(|(_, remote)| remote.to_string())
         .unwrap_or_else(|| session.model_id.clone());
+    // The person comes first: a check of the model's tool use must not make the answer wait.
+    chat.cancel_tool_check();
     // Tools only for a model that can use them; a delegate runs its own agent (spec 032 R14).
     let tool_availability =
         ToolAvailability::of(session.provider_kind, model_capabilities.as_ref());

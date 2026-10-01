@@ -27,7 +27,7 @@ use crate::adapters::types::{
 /// (research.md §2). `None` when the schema is not a JSON object (should
 /// not happen for a well-formed `ToolSpec`, but mistralrs' type is an
 /// `Option` so there is no lossy fallback needed).
-fn to_mistralrs_tool(spec: &ToolSpec) -> Tool {
+pub(super) fn to_mistralrs_tool(spec: &ToolSpec) -> Tool {
     let parameters = spec
         .input_schema
         .as_object()

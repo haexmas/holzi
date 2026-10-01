@@ -161,3 +161,22 @@ async fn abort_stops_generation_before_completion() {
         .await
         .expect("abort did not close the stream within the drain window");
 }
+
+/// The probe of the chat template (spec 032 R8) against a real model: Qwen3's template names
+/// tools, so it must not be read as ignoring them.
+#[tokio::test]
+#[ignore = "requires HOLZI_TEST_GGUF pointing at a real GGUF file"]
+async fn the_template_probe_does_not_flag_a_template_that_takes_tools() {
+    use holzi_lib::adapters::ToolTemplateProbe;
+
+    let path = model_path_from_env().expect("HOLZI_TEST_GGUF is not set");
+    let tokenizer =
+        env::var("HOLZI_TEST_GGUF_TOKENIZER").unwrap_or_else(|_| DEFAULT_TOKENIZER.to_string());
+    let model = LocalModel::load(&path, Some(&tokenizer))
+        .await
+        .expect("model load");
+    assert_eq!(
+        model.probe_tool_template().await,
+        ToolTemplateProbe::Inconclusive
+    );
+}
