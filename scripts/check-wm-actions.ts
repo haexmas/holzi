@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import { ALL_ACTIONS } from '../src/lib/actions/catalog.ts'
+import { tabCandidates } from '../src/lib/actions/handlers.ts'
 import {
   createActionRunner,
   type ActionHandler,
@@ -418,4 +419,22 @@ test('the catalog offers the read actions agents observe with (FR-028)', () => {
     'settings.get',
   ])
     assert.ok(reads.has(id), id)
+})
+
+test('without an originating tab the active tab answers first, then the tabs in opening order', () => {
+  const all = ['chat-1', 'chat-2', 'chat-3']
+  assert.deepEqual(
+    tabCandidates('system.chat', { id: 'chat-3', appId: 'system.chat' }, all),
+    ['chat-3', 'chat-1', 'chat-2'],
+  )
+  // The active tab runs another app: it is no candidate.
+  assert.deepEqual(
+    tabCandidates(
+      'system.chat',
+      { id: 'set-1', appId: 'system.settings' },
+      all,
+    ),
+    all,
+  )
+  assert.deepEqual(tabCandidates('system.chat', undefined, all), all)
 })

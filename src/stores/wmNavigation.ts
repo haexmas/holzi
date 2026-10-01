@@ -4,6 +4,7 @@ import {
   createHandlerRegistry,
   type ActionHandler,
 } from '~/lib/actions/handlers'
+import { tabCandidates } from '~/lib/actions/handlers'
 import { createActionRunner } from '~/lib/actions/runner'
 import type { ActionCaller, ActionOutcome } from '~/lib/actions/types'
 import type { TabHistory, TabLocation } from '~/lib/wm/navigation'
@@ -133,7 +134,11 @@ export function createWmNavigation(deps: {
       // UI actions carry their originating tab so a second instance of the same app cannot answer
       // on its behalf. Calls without an origin keep the global app activation behavior for agents
       // and other non-tab UI callers.
-      const candidateTabIds = originTabId ? [originTabId] : tabIdsOf(appId)
+      const active = state.windows.find((w) => w.id === state.activeWindowId)
+      const activeTab = active?.tabs.find((t) => t.id === active.activeTabId)
+      const candidateTabIds = originTabId
+        ? [originTabId]
+        : tabCandidates(appId, activeTab, tabIdsOf(appId))
       const ready = handlers.findTab(candidateTabIds, actionId)
       if (ready) return Promise.resolve(ready)
       if (!originTabId) deps.openApp(appId)

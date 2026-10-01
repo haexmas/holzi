@@ -13,6 +13,7 @@ import { marked } from 'marked'
 import type { Message } from '~/composables/useChat'
 import { fromToolName } from '~/lib/actions/agentTools'
 import { ALL_ACTIONS } from '~/lib/actions/catalog'
+import { prettyToolText } from '~/lib/chat/toolText'
 import type { Provider } from '~/composables/useProviders'
 
 const props = defineProps<{
@@ -195,7 +196,7 @@ function renderMarkdown(content: string): string {
           </template>
         </div>
         <div
-          class="rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm"
+          class="rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm [overflow-wrap:anywhere]"
           :class="{
             'whitespace-pre-wrap':
               m.role === 'user' ||
@@ -209,9 +210,13 @@ function renderMarkdown(content: string): string {
               (m.role === 'tool_result' && !m.toolIsError),
             'rounded-lg bg-destructive/10 text-destructive font-mono text-xs leading-5':
               m.role === 'tool_result' && m.toolIsError,
+            'max-h-96 overflow-y-auto':
+              m.role === 'tool_call' || m.role === 'tool_result',
           }"
         >
-          <template v-if="m.role === 'tool_call'">{{ m.toolInput }}</template>
+          <template v-if="m.role === 'tool_call'">{{
+            prettyToolText(m.toolInput ?? '')
+          }}</template>
           <!-- eslint-disable vue/no-v-html -->
           <div
             v-else-if="m.role === 'assistant' || m.role === 'system'"
@@ -223,7 +228,9 @@ function renderMarkdown(content: string): string {
             "
           />
           <!-- eslint-enable vue/no-v-html -->
-          <template v-else>{{ toolResultContentLabel(m) }}</template>
+          <template v-else>{{
+            prettyToolText(toolResultContentLabel(m))
+          }}</template>
         </div>
         <ChatReasoningAccordion
           v-if="m.role === 'assistant' && reasoningFor(m.id)"
