@@ -187,6 +187,15 @@ mod completeness {
     }
 
     #[test]
+    fn model_with_nonempty_invalid_metadata_is_incomplete() {
+        let dir = tempdir().unwrap();
+        write(dir.path(), CONFIG_FILENAME, b"not-json");
+        write(dir.path(), TOKENIZER_FILENAME, b"{}");
+        write(dir.path(), WEIGHTS_FILENAME, b"weights");
+        assert!(!is_complete_model(dir.path()));
+    }
+
+    #[test]
     fn model_with_all_three_nonempty_files_is_complete() {
         let dir = tempdir().unwrap();
         write(dir.path(), CONFIG_FILENAME, b"{}");

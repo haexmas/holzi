@@ -7,12 +7,12 @@
 use std::path::PathBuf;
 
 #[cfg(feature = "llm-cpu")]
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, State};
 
 use crate::error::{HolziError, Result};
 use crate::hardware;
 #[cfg(feature = "llm-cpu")]
-use crate::vault_gate::VaultGate;
+use crate::state::AppState;
 
 use super::catalog::{self, SttCatalogEntry, SttCatalogEntryWithFit, SttTierRecommendation};
 
@@ -127,8 +127,18 @@ pub fn resolve_catalog_entry(catalog_id: &str) -> Result<&'static SttCatalogEntr
 /// `downloadFromCatalogAsync` then `setPrefAsync` as two separate steps).
 #[cfg(feature = "llm-cpu")]
 #[tauri::command]
-pub async fn download_stt_model(app: AppHandle, catalog_id: String) -> Result<InstalledSttModel> {
+pub async fn download_stt_model(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    catalog_id: String,
+) -> Result<InstalledSttModel> {
     let entry = resolve_catalog_entry(&catalog_id)?;
+    let _publication_lock = crate::models::paths::acquire_model_publication_lock(
+        &app,
+        &entry.id,
+        &state.gate().token(),
+    )
+    .await?;
     let app_for_dir = app.clone();
     let dir = tauri::async_runtime::spawn_blocking(move || {
         super::local::resolve_model_dir(&app_for_dir, entry)
@@ -137,7 +147,8 @@ pub async fn download_stt_model(app: AppHandle, catalog_id: String) -> Result<In
     .map_err(|e| HolziError::CrdtInit {
         reason: format!("resolve STT model directory: {e}"),
     })??;
-    app.state::<VaultGate>()
+    state
+        .gate()
         .run(super::local::ensure_model_files(&dir, entry))
         .await??;
     Ok(InstalledSttModel {
