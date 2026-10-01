@@ -19,22 +19,34 @@ scenario('sync-own-devices-only', { timeoutMs: 300_000 }, async (ctx) => {
     deviceName: 'Mein zweites Gerät',
   })
   const foreign = await startFirstDevice(ctx, relay.url, 'e2e-theirs')
+  const foreignPeer = await linkDevice(ctx, foreign, relay.url, {
+    deviceName: 'Noch ein fremdes Gerät',
+  })
 
   await addThread(foreign, 'nur beim Fremden')
   await addThread(mine, 'nur bei mir')
-  await expectThreads(
-    ctx,
-    linked,
-    ['nur bei mir'],
-    'the thread to reach the own second device',
-  )
-  ctx.step('the own devices sync')
+  await Promise.all([
+    expectThreads(
+      ctx,
+      linked,
+      ['nur bei mir'],
+      'the thread to reach the own second device',
+    ),
+    expectThreads(
+      ctx,
+      foreignPeer,
+      ['nur beim Fremden'],
+      'the foreign thread to reach the foreign second device',
+    ),
+  ])
+  ctx.step('both vaults complete a synchronization round')
 
   assert.deepEqual(
     await threadTitles(foreign),
     ['nur beim Fremden'],
     'the foreign device received something of this vault',
   )
+  assert.deepEqual(await threadTitles(foreignPeer), ['nur beim Fremden'])
   assert.deepEqual(await threadTitles(mine), ['nur bei mir'])
   assert.deepEqual(await threadTitles(linked), ['nur bei mir'])
   ctx.step('the foreign device neither got nor gave anything')
