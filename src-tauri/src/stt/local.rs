@@ -390,7 +390,7 @@ pub async fn ensure_model_files(dir: &Path, entry: &SttCatalogEntry) -> Result<(
 ///
 /// Row-major, shape `(n_mels, n_fft / 2 + 1)` — the layout
 /// `audio::pcm_to_mel` expects.
-fn mel_filterbank(sample_rate: u32, n_fft: usize, n_mels: usize) -> Vec<f32> {
+pub(crate) fn mel_filterbank(sample_rate: u32, n_fft: usize, n_mels: usize) -> Vec<f32> {
     let n_freqs = n_fft / 2 + 1;
     let fmax = sample_rate as f64 / 2.0;
 
@@ -446,32 +446,5 @@ fn mel_to_hz(mel: f64) -> f64 {
         MIN_LOG_HZ * (logstep * (mel - min_log_mel)).exp()
     } else {
         F_SP * mel
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::mel_filterbank;
-
-    /// Cross-checked against `librosa.filters.mel(sr=16000, n_fft=400,
-    /// n_mels=80, norm="slaney", htk=False)` — the values Whisper's
-    /// preprocessing was trained against.
-    #[test]
-    fn mel_filterbank_matches_known_shape_and_support() {
-        let n_mels = 80;
-        let n_freqs = 400 / 2 + 1;
-        let filters = mel_filterbank(16_000, 400, n_mels);
-        assert_eq!(filters.len(), n_mels * n_freqs);
-        assert!(filters.iter().all(|&w| w.is_finite() && w >= 0.0));
-
-        // First filter sits right at the bottom of the spectrum.
-        let row0 = &filters[0..n_freqs];
-        let first_nonzero = row0.iter().position(|&w| w > 0.0).unwrap();
-        assert!(first_nonzero <= 1);
-
-        // Last filter sits right at the top, near the Nyquist bin.
-        let row_last = &filters[(n_mels - 1) * n_freqs..n_mels * n_freqs];
-        let last_nonzero = row_last.iter().rposition(|&w| w > 0.0).unwrap();
-        assert!(last_nonzero >= n_freqs - 20);
     }
 }

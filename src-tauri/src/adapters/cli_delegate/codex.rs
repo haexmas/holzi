@@ -1,4 +1,9 @@
 //! `codex app-server --stdio` process driver.
+//!
+//! Maintainability exception (spaex 500-LoC rule): this driver keeps protocol
+//! framing, request/response correlation, and process shutdown together because
+//! they share one app-server lifecycle. When the next protocol feature lands,
+//! split framing/correlation into `codex_protocol.rs` and leave lifecycle I/O here.
 
 use std::io;
 use std::path::Path;

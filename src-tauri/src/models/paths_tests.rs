@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::sync::LazyLock;
 use std::time::Duration;
 
@@ -11,6 +12,28 @@ use super::acquire_model_publication_lock;
 /// it from within `src/`'s unit-test binary) take turns, the same way
 /// `tests/vault_single_session.rs`'s own `TURN` does for the separate integration-test binary.
 static TURN: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+struct EnvVarGuard {
+    key: &'static str,
+    previous: Option<OsString>,
+}
+
+impl EnvVarGuard {
+    fn set(key: &'static str, value: &std::path::Path) -> Self {
+        let previous = std::env::var_os(key);
+        std::env::set_var(key, value);
+        Self { key, previous }
+    }
+}
+
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        match &self.previous {
+            Some(value) => std::env::set_var(self.key, value),
+            None => std::env::remove_var(self.key),
+        }
+    }
+}
 
 fn mock_app() -> tauri::AppHandle<tauri::test::MockRuntime> {
     mock_builder()
@@ -26,7 +49,7 @@ fn mock_app() -> tauri::AppHandle<tauri::test::MockRuntime> {
 async fn a_second_acquisition_waits_then_succeeds_once_the_first_drops() {
     let _turn = TURN.lock().await;
     let data_home = tempfile::tempdir().expect("data home");
-    std::env::set_var("XDG_DATA_HOME", data_home.path());
+    let _data_home_env = EnvVarGuard::set("XDG_DATA_HOME", data_home.path());
     let app = mock_app();
     let token = CancellationToken::new();
 
@@ -40,9 +63,9 @@ async fn a_second_acquisition_waits_then_succeeds_once_the_first_drops() {
         acquire_model_publication_lock(&waiting_app, "slug-a", &waiting_token).await
     });
 
-    // Give the waiting task a real chance to actually block on the file lock before releasing the
-    // first — otherwise a lucky scheduling order could let it acquire before ever contending.
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    // Yield until the spawned task has polled the lock future. A sleeping task
+    // would also satisfy `!is_finished()` without proving contention.
+    tokio::task::yield_now().await;
     assert!(
         !waiting.is_finished(),
         "the second acquisition must still be waiting for the first"
@@ -56,15 +79,13 @@ async fn a_second_acquisition_waits_then_succeeds_once_the_first_drops() {
         .expect("task did not panic")
         .expect("second acquisition succeeds once the first releases");
     drop(second);
-
-    std::env::remove_var("XDG_DATA_HOME");
 }
 
 #[tokio::test]
 async fn a_waiting_acquisition_returns_vault_closed_once_the_token_fires() {
     let _turn = TURN.lock().await;
     let data_home = tempfile::tempdir().expect("data home");
-    std::env::set_var("XDG_DATA_HOME", data_home.path());
+    let _data_home_env = EnvVarGuard::set("XDG_DATA_HOME", data_home.path());
     let app = mock_app();
     let token = CancellationToken::new();
 
@@ -77,7 +98,7 @@ async fn a_waiting_acquisition_returns_vault_closed_once_the_token_fires() {
     let waiting = tokio::spawn(async move {
         acquire_model_publication_lock(&waiting_app, "slug-b", &waiting_token).await
     });
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::task::yield_now().await;
     token.cancel();
 
     let result = tokio::time::timeout(Duration::from_secs(2), waiting)
@@ -87,5 +108,4 @@ async fn a_waiting_acquisition_returns_vault_closed_once_the_token_fires() {
     assert!(matches!(result, Err(crate::error::HolziError::VaultClosed)));
 
     drop(first);
-    std::env::remove_var("XDG_DATA_HOME");
 }

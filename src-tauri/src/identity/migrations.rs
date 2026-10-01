@@ -1,5 +1,11 @@
 //! holzi-owned migrations shipped via `MigrationSource`.
 //!
+//! Maintainability exception (spaex 500-LoC rule): migration SQL and its
+//! versioned ordering are intentionally co-located so the schema history stays
+//! reviewable in one place. The next migration batch should extract each table
+//! family into `identity_migrations.rs` and `conversation_migrations.rs`, while
+//! retaining this file as the ordered `MigrationSource`.
+//!
 //! Contract: `tauri-commands.md` §"holzi-owned data layer". Slices a and b
 //! land seven tables: identity (`vault_identity`, `known_devices`) plus the
 //! Etappe-2 tables (`providers`, `models`, `chat_threads`, `chat_messages`,
