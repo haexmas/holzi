@@ -145,6 +145,19 @@ Datenhaltung, vier Änderungen an haex-crdt, Nutzen erst bei Fremden; Laufnummer
 027/028), ein einziger Zeitpunkt „zuletzt synchronisiert“ je Gegenseite (verliert Änderungen über
 Zwischengeräte), Daten ungefragt nach jedem Commit schieben (Lücken beim Empfänger).
 
+**Zeilen aus mehreren Gruppen (gefunden vom Lasttest T048, 2026-10-01)**: Die Zellen einer Zeile können aus
+verschiedenen Transaktionsgruppen stammen. Wurde eine Zeile angelegt und danach geändert, trägt die
+Gruppe der Anlage nur noch die Zellen, die die Änderung nicht überschrieben hat. Der Pull liefert die
+Gruppen nach HLC; trennen die Seiten beide, legte die erste Seite die Zeile ohne eine Spalte an, die
+einen Wert braucht (`NOT NULL`, kein Standardwert), und `apply_remote_changes` scheiterte, bei jedem
+Versuch an derselben Stelle. Bei 4 MiB je Seite trifft das einen Abgleich über mehr als eine Seite oder
+einen dort abgebrochenen. Der Empfänger hält deshalb eine Gruppe zurück, deren Zeilen noch nicht
+angelegt werden können, bis die fehlenden Zellen in einer späteren Gruppe desselben Pulls ankommen, und
+der Fortschritt je Ursprung bleibt unter der ältesten zurückgehaltenen Gruppe. Bricht der Pull ab, geht
+nichts verloren, was der nächste nicht noch einmal sendet; auf der letzten Seite wird angewendet, was
+übrig ist. Die Alternative „unvollständige Zeile verwerfen“ (`ConstraintDecision::SkipRow` in
+haex-crdt) verlöre die Zellen dauerhaft, da der Fortschritt weiterliefe.
+
 ## R5 Prüfen beim Empfang (FR-013, FR-014, FR-021, FR-028)
 
 **Entscheidung**: holzi prüft vor `apply`, gruppiert nach Transaktions-HLC
@@ -202,7 +215,9 @@ len‖fremde endpoint_id || len‖vault_pubkey)`. Geprüft wird: `endpoint_id` g
   Rahmen derselben Seite (`Page { part, last }`), und der Empfänger wendet sie erst an, wenn sie
   vollständig ist. Eine Gruppe darf höchstens so groß sein wie die eingestellte Transaktionsgrenze
   (R19, Standard 100 MiB); größere lehnt schon das Schreiben ab. So hält keine große Transaktion den
-  Abgleich an, und kein Gerät puffert mehr als eine Gruppe je Verbindung.
+  Abgleich an, und der Empfänger puffert je Verbindung höchstens `2 * max_transaction_bytes` plus
+  1 MiB Slack an zurückgehaltenen Gruppen; dazu kommt höchstens eine noch nicht vollständige Gruppe
+  derselben Grenze.
 - **Ende der Session** (FR-031): der Sync-Dienst hängt am Abbruch-Token des Vault-Gates;
   `router.shutdown()` mit 2 s Zeitgrenze, danach alle Endpunkt-Klone freigeben (geprüft: UDP-Sockets
   schließen erst, wenn der letzte Klon weg ist).

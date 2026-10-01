@@ -11,11 +11,13 @@
 //!   aborts the pull;
 //! - a group whose origin a known valid device list names as removed, with
 //!   an HLC beyond its limit, is rejected (R5);
+//! - a group whose rows cannot be created yet, because the cells they lack
+//!   come in a later group, waits ([`hold`]);
 //! - the rest goes to `Database::apply_remote_changes` in one transaction.
 //!
 //! Only after that commit does progress rise, per origin to the highest
-//! group applied or rejected, and after the last page to the progress the
-//! sender served against. An origin on no list is accepted: an own device
+//! group applied or rejected that lies below every group held, and after the
+//! last page to the progress the sender served against. An origin on no list is accepted: an own device
 //! vouches for what it delivers (FR-021).
 
 use std::cmp::Ordering;
@@ -31,6 +33,10 @@ use crate::sync::keys;
 use crate::sync::progress::{self, Vector};
 use crate::sync::replica::{synced_tables, Replica};
 use crate::sync::resync::RowKey;
+
+#[path = "inbound_hold.rs"]
+mod hold;
+use hold::{settle, Group, Settled};
 
 /// haex-crdt's delete log, a synced table like any other.
 const DELETED_ROWS_TABLE: &str = "haex_deleted_rows";
@@ -70,6 +76,8 @@ pub struct Received {
 pub struct Inbox {
     /// The start of a group that continues on the next page.
     pending: Vec<Change>,
+    /// Complete groups waiting for the cells their rows lack ([`hold`]).
+    held: Vec<Group>,
     /// The last complete group received for each origin in this pull.
     /// Retaining this across pages prevents a malformed pull from advancing
     /// an origin past a later group and then applying an older group that can
@@ -89,6 +97,7 @@ struct Snapshot {
 }
 
 impl Inbox {
+    /// Creates an empty receiver for an ordinary pull.
     pub fn new() -> Self {
         Self::default()
     }
@@ -149,8 +158,8 @@ impl Inbox {
             done: !page.more,
             ..Received::default()
         };
-        let mut accepted: Vec<ColumnChange> = Vec::new();
-        let mut updates = Vector::new();
+        let mut arrived: Vec<Group> = Vec::new();
+        let mut rejected: Vec<(Uuid, String)> = Vec::new();
         let mut group_updates = Vector::new();
         for (hlc, group) in groups {
             let origin = progress::origin_of(&hlc)
@@ -180,14 +189,60 @@ impl Inbox {
             progress::raise(&mut group_updates, origin, hlc.clone());
             if is_removed_at(&limits, origin, &hlc) {
                 received.rejected_groups += 1;
+                rejected.push((origin, hlc));
                 continue;
             }
-            received
-                .tables
-                .extend(columns.iter().filter_map(changed_table));
-            accepted.extend(columns);
+            arrived.push(Group {
+                origin,
+                hlc,
+                columns,
+            });
         }
-        updates.extend(group_updates.clone());
+        let mut candidates = std::mem::take(&mut self.held);
+        candidates.extend(arrived);
+        let Settled { apply, held } = settle(db, candidates, !page.more)?;
+        let held_bytes = held.iter().try_fold(0usize, |total, group| {
+            group_bytes(&group.columns).map(|bytes| total.saturating_add(bytes))
+        })?;
+        if held_bytes > limit.saturating_mul(2).saturating_add(BUFFER_SLACK) {
+            return Err(InboundError::GroupTooLarge {
+                bytes: held_bytes,
+                limit,
+            });
+        }
+        received.tables.extend(
+            apply
+                .iter()
+                .flat_map(|g| g.columns.iter().filter_map(changed_table)),
+        );
+        let accepted: Vec<ColumnChange> = apply
+            .iter()
+            .flat_map(|g| g.columns.iter().cloned())
+            .collect();
+        // Progress rises only below every group still held: those come
+        // again in a pull that starts from it.
+        let mut lowest_held: HashMap<Uuid, String> = HashMap::new();
+        for group in &held {
+            let lowest = lowest_held
+                .entry(group.origin)
+                .or_insert_with(|| group.hlc.clone());
+            if compare_hlc_strings(&group.hlc, lowest) == Ordering::Less {
+                *lowest = group.hlc.clone();
+            }
+        }
+        let mut updates = Vector::new();
+        for (origin, hlc) in rejected
+            .into_iter()
+            .chain(apply.iter().map(|g| (g.origin, g.hlc.clone())))
+        {
+            if lowest_held
+                .get(&origin)
+                .is_none_or(|lowest| compare_hlc_strings(&hlc, lowest) == Ordering::Less)
+            {
+                progress::raise(&mut updates, origin, hlc);
+            }
+        }
+        self.held = held;
         if let Some(snapshot) = &mut self.snapshot {
             snapshot.rows.extend(
                 accepted
