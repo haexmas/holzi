@@ -100,6 +100,7 @@ const { attachments, addAttachments, removeAttachment } =
 const composerRef = useTemplateRef<{ reset: () => Promise<void> } | null>(
   'composer',
 )
+const messagesScroll = useTemplateRef<HTMLElement>('messagesScroll')
 async function resetTextarea() {
   await composerRef.value?.reset()
 }
@@ -216,7 +217,7 @@ const showModelSelection = computed(() => noModelsInstalled.value)
 /** Scrolls the message viewport to its newest item after rendering. */
 async function scrollToBottom() {
   await nextTick()
-  const el = document.querySelector('[data-messages-scroll]')
+  const el = messagesScroll.value
   if (el) el.scrollTop = el.scrollHeight
 }
 
@@ -431,6 +432,7 @@ onBeforeUnmount(() => {
 
       <div class="flex-1 flex flex-col overflow-hidden">
         <div
+          ref="messagesScroll"
           data-messages-scroll
           class="flex-1 min-h-0 overflow-y-auto px-4 py-6 md:px-8"
         >

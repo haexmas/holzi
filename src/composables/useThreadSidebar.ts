@@ -60,6 +60,7 @@ export function useThreadSidebar(
   const deleteCandidate = ref<Thread | null>(null)
   const deleteError = ref<string | null>(null)
   const deletingThread = ref(false)
+  let threadSelectionGeneration = 0
 
   /** Projects a persisted Unix-millisecond opening time into the compact UI form. */
   function historyDuration(
@@ -274,6 +275,7 @@ export function useThreadSidebar(
 
   /** Selects a thread, loading its persisted messages on first access. */
   async function selectThread(id: string) {
+    const selectionGeneration = ++threadSelectionGeneration
     const previousThreadId = activeThreadId.value
     if (
       previousThreadId &&
@@ -292,6 +294,13 @@ export function useThreadSidebar(
     if (!existing) {
       messagesByThread.value[id] = await chat.listMessagesAsync(id)
     }
+    // A slower request from an earlier click must not restore approvals or queued tool events
+    // after the user has already switched to another thread.
+    if (
+      selectionGeneration !== threadSelectionGeneration ||
+      activeThreadId.value !== id
+    )
+      return
     const queuedApprovals = pendingApprovalsByThread.get(id)
     if (queuedApprovals) {
       // Merge, don't overwrite: a `tool-permission-request` for `id` may
