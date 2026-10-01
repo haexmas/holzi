@@ -29,6 +29,7 @@ pub(super) fn decide(without: Result<&str, &str>, with: Result<&str, &str>) -> T
     }
 }
 
+/// Builds the stable tool definition used to compare the model's template output.
 fn dummy_tool() -> ToolSpec {
     ToolSpec {
         name: "holzi_probe_tool".to_owned(),
@@ -52,6 +53,7 @@ impl LocalModel {
         )
     }
 
+    /// Renders the fixed probe message with the requested optional tool.
     async fn render_probe(&self, tool: Option<ToolSpec>) -> Result<String, String> {
         let messages =
             TextMessages::new().add_message(TextMessageRole::User, "Please open the settings.");

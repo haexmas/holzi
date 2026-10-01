@@ -23,6 +23,7 @@ pub(crate) struct Scripted {
 }
 
 impl Scripted {
+    /// Creates a scripted adapter whose responses are determined by `script`.
     pub(crate) fn new(
         script: impl Fn(&ChatRequest) -> Vec<StreamChunk> + Send + Sync + 'static,
     ) -> Self {
@@ -64,6 +65,7 @@ impl ProviderAdapter for Scripted {
     }
 }
 
+/// Builds one scripted batch of provider-neutral tool calls.
 pub(crate) fn calls(batch: Vec<(&str, serde_json::Value)>) -> StreamChunk {
     StreamChunk::ToolCalls(
         batch
@@ -78,10 +80,12 @@ pub(crate) fn calls(batch: Vec<(&str, serde_json::Value)>) -> StreamChunk {
     )
 }
 
+/// Returns the first user message in an evaluation request.
 fn user_text(req: &ChatRequest) -> &str {
     &req.messages[0].content
 }
 
+/// Looks up the versioned evaluation sentence matching the request text.
 fn sentence<'a>(text: &str, set: &'a super::scoring::EvalSet) -> &'a Sentence {
     set.sentences.iter().find(|s| s.text == text).unwrap()
 }
