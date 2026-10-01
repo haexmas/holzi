@@ -184,6 +184,40 @@ fn a_snapshot_does_not_advance_progress_until_pruning_finishes() {
 }
 
 #[test]
+fn prune_rechecks_a_candidate_after_a_local_write() {
+    let device = Device::new();
+    write_thread(&device, "t1");
+    let served = device.replica.progress().expect("progress after insert");
+
+    // The row was covered when a snapshot scan would have selected it. A local
+    // update after that scan gets a newer cell HLC and must make the candidate
+    // ineligible when the delete transaction rechecks it.
+    device
+        .db()
+        .write(|tx| {
+            tx.execute(
+                "UPDATE chat_threads SET title = 'newer' WHERE id = 't1'",
+                &[],
+            )?;
+            Ok(())
+        })
+        .expect("update thread");
+
+    device
+        .db()
+        .write(|tx| {
+            assert!(!row_is_still_covered(
+                tx,
+                "chat_threads",
+                r#"{"id":"t1"}"#,
+                &served,
+            )?);
+            Ok(())
+        })
+        .expect("recheck candidate");
+}
+
+#[test]
 fn a_snapshot_keeps_what_the_sender_had_not_seen() {
     let (a, b) = (Device::new(), Device::new());
     write_thread(&a, "t1");

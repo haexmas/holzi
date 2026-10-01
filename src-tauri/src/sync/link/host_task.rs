@@ -223,14 +223,17 @@ impl Shared {
 
     /// Back to idle when `id` is still the live code.
     fn finish(&self, id: u64) {
+        let mut slot = self.slot();
         let mine = matches!(
-            &*self.slot(),
+            &*slot,
             Slot::CodeShown { id: live, .. } | Slot::Awaiting { id: live, .. } if *live == id
         );
-        if mine {
-            *self.slot() = Slot::Idle;
-            self.announce();
+        if !mine {
+            return;
         }
+        *slot = Slot::Idle;
+        drop(slot);
+        self.announce();
     }
 
     /// Records and announces a device awaiting approval if `id` is still shown.
