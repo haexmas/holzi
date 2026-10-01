@@ -285,9 +285,10 @@ result names the scenario and keeps the material of the failure.
   removed device receives nothing new and shows that it was removed, and that the others go on syncing
   (M6).
 - **FR-008**: The mutual-removal scenario MUST take two main devices offline, let each remove the other,
-  bring both online, and check that all devices agree on the same remaining main device (the one whose
-  list has the smaller hash), that the other shows it was removed, and that the linked device still has a
-  main device (M7).
+  bring both online, and check that all devices agree on the same remaining main device, that the other
+  shows it was removed, and that the linked device still has a main device (M7). Which of the two remains
+  is decided by the smaller list hash, which is covered by the unit tests of the device list; the scenario
+  checks what must hold for either outcome.
 - **FR-009**: The lock scenario MUST lock a vault during a large sync, check that all connections end at
   once, and check that the next opening completes the sync with nothing missing and nothing duplicated
   (M8).
@@ -306,9 +307,10 @@ result names the scenario and keeps the material of the failure.
 - **FR-013**: The rig MUST let a scenario control the network per device while the application keeps
   running: make a device unreachable for the other devices and the test relay and restore it, and switch
   the test relay itself off and on.
-- **FR-014**: The rig MUST let a scenario control the waiting time of time-based expectations, so that the
-  60-second expectation of M4 does not cost 60 seconds per run, or, where that is impossible, document
-  the real wait and keep it within the bounds of SC-004.
+- **FR-014**: Time-based expectations MUST use a fixed deadline equal to the promise they check, which the
+  time scale of the suite does not stretch. The 60-second expectation of M4 waits in real time and ends as
+  soon as the expectation holds, within the bounds of SC-004. The application is not changed to let a
+  scenario move its clock (plan, research R1).
 - **FR-015**: The rig MUST give a scenario read access to a device's device list, its own role and the
   online state of other devices, as the interface shows them.
 - **FR-016**: The rig MUST provide a helper that copies a vault file consistently from one named device to
