@@ -407,7 +407,7 @@ impl TurnRunner<'_> {
             .find(|(call, result, _)| {
                 call.name == crate::chat::tools::offer::FIND_ACTIONS_TOOL_NAME && !result.is_error
             })
-            .map(|(_, result, _)| found_tools(&result.content));
+            .and_then(|(_, result, _)| found_tools(&result.content));
         for (call, _, _) in executed {
             self.request.messages.push(LlmMessage {
                 role: ChatRole::ToolCall {

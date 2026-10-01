@@ -106,8 +106,12 @@ fn found_tools_only_accepts_the_search_result_shape() {
         })
         .to_string(),
     );
-    assert_eq!(found[0].name, "settings_get");
-    assert!(found_tools("not json").is_empty());
+    assert_eq!(
+        found.as_ref().expect("valid result")[0].name,
+        "settings_get"
+    );
+    assert!(found_tools("not json").is_none());
+    assert!(found_tools("{}").is_none());
 }
 
 #[test]

@@ -75,24 +75,22 @@ pub fn extend_offer(
 }
 
 /// Extracts the `find_actions` result into adapter tool specs for the next
-/// request. Invalid or failed results are ignored and leave the prior offer.
-pub fn found_tools(result: &str) -> Vec<ToolSpec> {
-    let Ok(value) = serde_json::from_str::<Value>(result) else {
-        return Vec::new();
-    };
-    value
-        .get("actions")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|action| {
-            Some(ToolSpec {
-                name: action.get("tool")?.as_str()?.to_owned(),
-                description: action.get("description")?.as_str()?.to_owned(),
-                input_schema: action.get("inputSchema")?.clone(),
+/// request. Invalid results are ignored so the prior offer remains available.
+pub fn found_tools(result: &str) -> Option<Vec<ToolSpec>> {
+    let value = serde_json::from_str::<Value>(result).ok()?;
+    let actions = value.get("actions")?.as_array()?;
+    Some(
+        actions
+            .iter()
+            .filter_map(|action| {
+                Some(ToolSpec {
+                    name: action.get("tool")?.as_str()?.to_owned(),
+                    description: action.get("description")?.as_str()?.to_owned(),
+                    input_schema: action.get("inputSchema")?.clone(),
+                })
             })
-        })
-        .collect()
+            .collect(),
+    )
 }
 
 fn words(text: &str) -> Vec<String> {
