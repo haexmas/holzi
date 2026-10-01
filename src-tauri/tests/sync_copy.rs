@@ -91,6 +91,7 @@ async fn a_copy_of_a_main_devices_file_becomes_a_main_device_and_syncs_with_its_
     let source = sync_fixture::create_main("main", &relay_url).await;
     source.write_thread("before-copy", "before-copy").await;
 
+    let copy_up = Instant::now();
     let copy = sync_fixture::copy_of(&source, &relay_url).await;
 
     // Scenario 1: its own keys, the source's left alone in the file.
@@ -124,7 +125,6 @@ async fn a_copy_of_a_main_devices_file_becomes_a_main_device_and_syncs_with_its_
     // Scenario 6 and SC-002: the source had no peer and published nothing; the
     // copy's presence brings it a newer list, and the two connect, within 30
     // seconds of the copy coming up.
-    let copy_up = Instant::now();
     until("the source to take over the copy's list", || {
         listed(&source)
             .iter()

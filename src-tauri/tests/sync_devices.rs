@@ -232,10 +232,10 @@ async fn devices_connect_within_thirty_seconds_and_changes_show_within_five() {
         .expect("mock relay");
     let relay_url = relay.url().await.to_string();
     let main = sync_fixture::create_main("main", &relay_url).await;
+    let up = Instant::now();
     let linked = sync_fixture::join(&main, &relay_url).await;
 
     // SC-002: from the moment the second device is up to the connection.
-    let up = Instant::now();
     let main_runtime = sync_helpers::runtime_of(&main).await;
     let linked_key = linked.keys.device_pubkey;
     let connected_after = tokio::time::timeout(CONNECT_LIMIT, async {

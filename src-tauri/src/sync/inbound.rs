@@ -200,6 +200,15 @@ impl Inbox {
         let mut candidates = std::mem::take(&mut self.held);
         candidates.extend(arrived);
         let Settled { apply, held } = settle(db, candidates, !page.more)?;
+        let held_bytes = held.iter().try_fold(0usize, |total, group| {
+            group_bytes(&group.columns).map(|bytes| total.saturating_add(bytes))
+        })?;
+        if held_bytes > limit.saturating_mul(2).saturating_add(BUFFER_SLACK) {
+            return Err(InboundError::GroupTooLarge {
+                bytes: held_bytes,
+                limit,
+            });
+        }
         received.tables.extend(
             apply
                 .iter()
