@@ -20,22 +20,15 @@ use crate::chat::events::{
 use crate::chat::session::ChatState;
 use crate::chat::tools::action_tool::ACTION_SOURCE;
 use crate::chat::tools::offer::{extend_offer, found_tools};
-use crate::chat::tools::permission::{self, PermissionMode};
+use crate::chat::tools::permission;
 use crate::chat::tools::{ApprovalDecision, Tool, ToolResult as ToolExecResult};
 use crate::storage::chat_messages::{ChatMessage, FinishReason, MessageRole};
-use crate::storage::preferences::{self, PrefScope};
 
 use super::persist::{
     empty_tool_message, persist_final_message, persist_message, persist_tool_pair,
 };
 use super::step::StepResult;
 use super::TurnRunner;
-
-/// Device preference read fresh before every tool call (T024B); parsed via
-/// `PermissionMode::parse`, defaulting to `Manual` when unset or invalid
-/// (spec.md Assumptions). No dedicated get/set command — read/written
-/// through the existing generic `get_pref`/`set_pref` (data-model.md).
-const PREF_PERMISSION_MODE: &str = "chat.permission_mode";
 
 /// Fixed cap on the number of tool-calling rounds within one turn
 /// (spec.md FR-016). A "round" is one step whose response contained at
@@ -67,19 +60,6 @@ enum ToolPlan {
     },
     Deny(Arc<dyn Tool>),
     Unknown,
-}
-
-/// Reads `chat.permission_mode` for the vault (spec 023, FR-024), defaulting
-/// to `Manual` when unset or unparseable (spec.md Assumptions).
-async fn read_permission_mode(db: &crate::vault_gate::VaultDb) -> PermissionMode {
-    let raw = db
-        .read(|r| preferences::get(r, PrefScope::Vault, PREF_PERMISSION_MODE))
-        .await
-        .ok()
-        .flatten();
-    raw.as_deref()
-        .and_then(PermissionMode::parse)
-        .unwrap_or_default()
 }
 
 impl TurnRunner<'_> {
@@ -202,7 +182,7 @@ impl TurnRunner<'_> {
             // change must not retroactively affect a decision already
             // made for an earlier call, but the very next tool use
             // must observe it (T024B).
-            let mode = read_permission_mode(self.db).await;
+            let mode = permission::read_from_vault(self.db).await;
             match permission::decide(mode, tool.risk_class()) {
                 permission::Decision::Allow => plans.push((call, ToolPlan::Allow(tool))),
                 permission::Decision::Deny => plans.push((call, ToolPlan::Deny(tool))),

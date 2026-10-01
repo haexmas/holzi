@@ -57,6 +57,28 @@ pub struct InstalledModelPayload {
     pub capabilities: Option<ModelCapabilities>,
 }
 
+impl InstalledModelPayload {
+    /// Projects the vault row and file metadata into the shared frontend payload.
+    fn from_row(row: ModelRow, relative_path: String, size_bytes: i64) -> Self {
+        Self {
+            id: row.id,
+            name: row.name,
+            provider_id: row.provider_id.to_string(),
+            context_window: row.context_window,
+            relative_path,
+            size_bytes,
+            source_kind: row.source_kind,
+            hf_repo: row.hf_repo,
+            hf_filename: row.hf_filename,
+            hf_revision: row.hf_revision,
+            hf_revision_ref: row.hf_revision_ref,
+            file_sha256: row.file_sha256,
+            integrity_status: row.integrity_status,
+            capabilities: row.capabilities,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct ProgressEvent {
@@ -398,22 +420,11 @@ async fn download_from_hf_inner(
                 && row.hf_filename.as_deref() == Some(args.hf_filename.as_str())
                 && row.hf_revision.as_deref() == Some(args.hf_revision.as_str());
             if same_source && !args.force_repair.unwrap_or(false) {
-                return Ok(InstalledModelPayload {
-                    id: row.id,
-                    name: row.name,
-                    provider_id: row.provider_id.to_string(),
-                    context_window: row.context_window,
-                    relative_path: existing.relative_path,
-                    size_bytes: existing.size_bytes as i64,
-                    source_kind: row.source_kind,
-                    hf_repo: row.hf_repo,
-                    hf_filename: row.hf_filename,
-                    hf_revision: row.hf_revision,
-                    hf_revision_ref: row.hf_revision_ref,
-                    file_sha256: row.file_sha256,
-                    integrity_status: row.integrity_status,
-                    capabilities: row.capabilities,
-                });
+                return Ok(InstalledModelPayload::from_row(
+                    row,
+                    existing.relative_path,
+                    existing.size_bytes as i64,
+                ));
             }
         }
     }
@@ -600,22 +611,11 @@ pub async fn list_installed_models(
                 let Some(row) = models_store::get_model(r, &slug)? else {
                     continue;
                 };
-                out.push(InstalledModelPayload {
-                    id: row.id,
-                    name: row.name,
-                    provider_id: row.provider_id.to_string(),
-                    context_window: row.context_window,
-                    relative_path: cf.relative_path,
-                    size_bytes: cf.size_bytes as i64,
-                    source_kind: row.source_kind,
-                    hf_repo: row.hf_repo,
-                    hf_filename: row.hf_filename,
-                    hf_revision: row.hf_revision,
-                    hf_revision_ref: row.hf_revision_ref,
-                    file_sha256: row.file_sha256,
-                    integrity_status: row.integrity_status,
-                    capabilities: row.capabilities,
-                });
+                out.push(InstalledModelPayload::from_row(
+                    row,
+                    cf.relative_path,
+                    cf.size_bytes as i64,
+                ));
             }
             Ok(out)
         })
@@ -777,22 +777,7 @@ async fn register_downloaded(args: RegisterDownloadedArgs) -> Result<InstalledMo
                 capabilities: Some(ModelCapabilities::local(&id)),
             };
             models_store::upsert_model(tx, &m)?;
-            Ok(InstalledModelPayload {
-                id,
-                name,
-                provider_id: provider_id.to_string(),
-                context_window,
-                relative_path: relative,
-                size_bytes,
-                source_kind,
-                hf_repo,
-                hf_filename,
-                hf_revision,
-                hf_revision_ref,
-                file_sha256: Some(file_sha256),
-                integrity_status: IntegrityStatus::Verified,
-                capabilities: m.capabilities,
-            })
+            Ok(InstalledModelPayload::from_row(m, relative, size_bytes))
         })
         .await;
 
