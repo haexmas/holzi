@@ -151,6 +151,8 @@ async fn a_removed_device_gets_nothing_new_while_the_others_keep_syncing() {
         )
     });
     assert_eq!(removed, ThisDevice::Removed);
+
+    tokio::join!(a.shutdown(), b.shutdown(), c.shutdown());
 }
 
 /// US6 scenario 9 at the backend: a linked device cannot remove anything,
@@ -181,4 +183,6 @@ async fn only_a_main_device_removes_and_never_itself() {
         Err(holzi_lib::error::HolziError::NotMainDevice)
     ));
     assert_eq!(listed(&a).len(), 2, "nothing was removed");
+
+    tokio::join!(a.shutdown(), b.shutdown());
 }

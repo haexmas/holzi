@@ -94,6 +94,7 @@ pub async fn request_approval(
                     "toolName": tool_name,
                     "toolInput": input,
                     "riskClass": crate::chat::events::risk_class_str(risk),
+                    "toolSource": "cli",
                 }),
             );
             receiver.await.unwrap_or(ApprovalDecision::Deny)

@@ -294,7 +294,12 @@
       "safe": "Unbedenkliche Aktion",
       "allow": "Erlauben",
       "deny": "Ablehnen",
-      "stopGenerating": "Generierung abbrechen"
+      "stopGenerating": "Generierung abbrechen",
+      "target": {
+        "tab": "Tab",
+        "window": "Fenster",
+        "workspace": "Arbeitsbereich"
+      }
     },
     "autonomy": {
       "standard": "Standard",

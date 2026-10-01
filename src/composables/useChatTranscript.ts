@@ -330,6 +330,7 @@ export function useChatTranscript(
       toolName: e.toolName,
       toolInput: e.toolInput,
       riskClass: e.riskClass,
+      toolSource: e.toolSource,
     }
     if (e.threadId !== activeThreadId.value) {
       const queued = pendingApprovalsByThread.get(e.threadId) ?? []

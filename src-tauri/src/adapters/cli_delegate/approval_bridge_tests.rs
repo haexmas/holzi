@@ -88,6 +88,7 @@ async fn manual_approval_uses_the_existing_pending_request_flow() {
         .as_str()
         .and_then(|value| Uuid::parse_str(value).ok())
         .expect("approval event should contain a UUID");
+    assert_eq!(payload["toolSource"], "cli");
     let sender = pending
         .lock()
         .expect("pending map lock")
