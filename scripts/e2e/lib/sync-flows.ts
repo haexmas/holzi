@@ -5,6 +5,7 @@ import type { Instance } from './instance.ts'
 import type { Page } from './page.ts'
 import type { ScenarioContext } from './scenario.ts'
 import { unwrap, waitForPath } from './flows.ts'
+import type { FlowInstance } from './flows.ts'
 
 /** Devices on one machine find each other by address; the iroh relays would need a network, so they
  * point at a closed port, which refuses at once (as in `tests/common/sync_fixture.rs`). */
@@ -35,6 +36,46 @@ export async function onlyServers(page: Page, relayUrl: string) {
   }
 }
 
+/** What the steps below need of a scenario: its timeline and its waits. */
+export type WaitContext = Pick<ScenarioContext, 'waitFor' | 'step'>
+
+/** Opens the vault in a started application and shows its workspace. */
+export async function openVault(
+  page: FlowInstance,
+  vaultName: string,
+  passphrase: string,
+): Promise<void> {
+  unwrap(
+    'open_instance',
+    await page.invoke('open_instance', {
+      args: { name: vaultName, passphrase },
+    }),
+  )
+  await page.navigate(`tauri://localhost/workspace/${vaultName}`)
+  await waitForPath(page, '/workspace/')
+}
+
+/** Creates the vault and points it at the test relay only (the servers apply at the next opening). */
+export async function createVaultOnRelay(
+  page: Page,
+  relayUrl: string,
+  vaultName: string,
+  passphrase: string,
+): Promise<void> {
+  unwrap(
+    'create_instance',
+    await page.invoke('create_instance', {
+      args: { name: vaultName, passphrase },
+    }),
+  )
+  unwrap(
+    'sync_servers_set',
+    await page.invoke('sync_servers_set', {
+      args: await onlyServers(page, relayUrl),
+    }),
+  )
+}
+
 async function openAndShow(
   ctx: ScenarioContext,
   root: string | undefined,
@@ -44,14 +85,7 @@ async function openAndShow(
   const instance = await ctx.startInstance(
     root === undefined ? {} : { reusesRoot: root },
   )
-  unwrap(
-    'open_instance',
-    await instance.invoke('open_instance', {
-      args: { name: vaultName, passphrase },
-    }),
-  )
-  await instance.navigate(`tauri://localhost/workspace/${vaultName}`)
-  await waitForPath(instance, '/workspace/')
+  await openVault(instance, vaultName, passphrase)
   return instance
 }
 
@@ -66,18 +100,7 @@ export async function startFirstDevice(
 ): Promise<Device> {
   const { passphrase } = ctx.credentials()
   const first = await ctx.startInstance()
-  unwrap(
-    'create_instance',
-    await first.invoke('create_instance', {
-      args: { name: vaultName, passphrase },
-    }),
-  )
-  unwrap(
-    'sync_servers_set',
-    await first.invoke('sync_servers_set', {
-      args: await onlyServers(first, relayUrl),
-    }),
-  )
+  await createVaultOnRelay(first, relayUrl, vaultName, passphrase)
   await first.stop()
   const instance = await openAndShow(ctx, first.root, vaultName, passphrase)
   return { instance, vaultName, passphrase }
@@ -105,55 +128,59 @@ export async function closeDevice(device: Device): Promise<void> {
 }
 
 /**
- * Links a new device to `host` with a code: the main device shows the code, the new installation
- * enters it with the servers of the vault, the main device agrees, and the new device opens the
- * vault it was given.
+ * The steps of linking through commands: the host shows a code, the new installation enters it with
+ * the servers of the vault, the host agrees, and the new installation reports it is done. The new
+ * installation still has to be reopened over its data to open the vault it was given.
  */
-export async function linkDevice(
-  ctx: ScenarioContext,
-  host: Device,
-  relayUrl: string,
-  options: { deviceName: string; asMainDevice?: boolean },
-): Promise<Device> {
-  const { passphrase } = ctx.credentials()
-  const fresh = await ctx.startInstance()
+export async function runLink(
+  ctx: WaitContext,
+  host: Page,
+  fresh: Page,
+  link: {
+    vaultName: string
+    deviceName: string
+    passphrase: string
+    relayUrl: string
+    asMainDevice?: boolean
+  },
+): Promise<void> {
   const { code } = unwrap<{ code: string }>(
     'link_code_create',
-    await host.instance.invoke('link_code_create'),
+    await host.invoke('link_code_create'),
   )
   unwrap(
     'link_join_start',
     await fresh.invoke('link_join_start', {
       args: {
         code,
-        vaultName: host.vaultName,
-        deviceName: options.deviceName,
-        passphrase,
-        servers: await onlyServers(fresh, relayUrl),
+        vaultName: link.vaultName,
+        deviceName: link.deviceName,
+        passphrase: link.passphrase,
+        servers: await onlyServers(fresh, link.relayUrl),
       },
     }),
   )
   await ctx.waitFor(
-    `the main device to ask about "${options.deviceName}"`,
+    `the main device to ask about "${link.deviceName}"`,
     async () => {
       const status = unwrap<{
         linking: { stage: string; newDeviceName?: string } | null
-      }>('sync_status', await host.instance.invoke('sync_status'))
+      }>('sync_status', await host.invoke('sync_status'))
       return (
         status.linking?.stage === 'awaiting_confirmation' &&
-        status.linking.newDeviceName === options.deviceName
+        status.linking.newDeviceName === link.deviceName
       )
     },
     { timeoutMs: 40_000, fixed: true },
   )
   unwrap(
     'link_confirm',
-    await host.instance.invoke('link_confirm', {
-      args: { asMainDevice: options.asMainDevice === true },
+    await host.invoke('link_confirm', {
+      args: { asMainDevice: link.asMainDevice === true },
     }),
   )
   await ctx.waitFor(
-    `the link of "${options.deviceName}" to finish`,
+    `the link of "${link.deviceName}" to finish`,
     async () => {
       const state = unwrap<{ state: string; reason?: unknown }>(
         'link_join_status',
@@ -166,7 +193,29 @@ export async function linkDevice(
     },
     { timeoutMs: 40_000, fixed: true },
   )
-  ctx.step('linked', options.deviceName)
+  ctx.step('linked', link.deviceName)
+}
+
+/**
+ * Links a new device to `host` with a code: the main device shows the code, the new installation
+ * enters it with the servers of the vault, the main device agrees, and the new device opens the
+ * vault it was given.
+ */
+export async function linkDevice(
+  ctx: ScenarioContext,
+  host: Device,
+  relayUrl: string,
+  options: { deviceName: string; asMainDevice?: boolean },
+): Promise<Device> {
+  const { passphrase } = ctx.credentials()
+  const fresh = await ctx.startInstance()
+  await runLink(ctx, host.instance, fresh, {
+    vaultName: host.vaultName,
+    deviceName: options.deviceName,
+    passphrase,
+    relayUrl,
+    asMainDevice: options.asMainDevice,
+  })
   // The linked vault is a file of the new installation like any other: it is opened with the
   // passphrase chosen for it, in a process over the same data.
   await fresh.stop()
@@ -221,7 +270,7 @@ export async function removeThread(device: Device, id: string): Promise<void> {
 
 /** Waits until the device's threads have exactly these titles. */
 export async function expectThreads(
-  ctx: ScenarioContext,
+  ctx: WaitContext,
   device: Device,
   titles: string[],
   description: string,

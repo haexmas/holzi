@@ -12,6 +12,9 @@ import { startNostrRelay } from './nostr-relay.ts'
 import { startProvider } from './provider.ts'
 import type { Provider } from './provider.ts'
 import { captureFailure } from './artifacts.ts'
+import { createGroup, maxDevicesFrom } from './group.ts'
+import type { CaptureDevice } from './group.ts'
+import { createLinuxHost } from './platform/linux.ts'
 import type {
   E2EEnv,
   RunDeps,
@@ -131,6 +134,7 @@ export async function runScenario(
   const teardowns: Array<() => Promise<void> | void> = []
   const instances: Instance[] = []
   const providers: Provider[] = []
+  const deviceLists: Array<() => CaptureDevice[]> = []
   let pendingStep: string | undefined
   let instanceCount = 0
 
@@ -220,6 +224,27 @@ export async function runScenario(
       teardowns.push(() => relay.stop())
       return relay
     },
+    async group(spec) {
+      if (deps.createHost === undefined) {
+        throw new Error(
+          'this run has no driver layer, so it cannot make a group',
+        )
+      }
+      return createGroup(
+        {
+          host: deps.createHost({ scenario: name, env }),
+          relay: await ctx.nostrRelay(),
+          credentials: ctx.credentials,
+          onTeardown: ctx.onTeardown,
+          keep: env.keep,
+          maxDevices: maxDevicesFrom(process.env),
+          waitFor: ctx.waitFor,
+          step,
+          captureWith: (devices) => void deviceLists.push(devices),
+        },
+        spec,
+      )
+    },
     async provider(behavior, options) {
       const started = await startProvider(behavior, options)
       providers.push(started)
@@ -259,6 +284,7 @@ export async function runScenario(
         steps,
         instances,
         providers,
+        devices: deviceLists.flatMap((list) => list()),
         failedStep,
         deadlineMs:
           failure instanceof ScenarioDeadlineError ? limit : undefined,
@@ -300,6 +326,7 @@ export async function runScenario(
           steps,
           instances,
           providers,
+          devices: deviceLists.flatMap((list) => list()),
           failedStep,
         })
       } catch {
@@ -374,6 +401,7 @@ export function scenario(
           step: request.step,
           framebufferDir: request.framebufferDir,
         }),
+      createHost: (request) => createLinuxHost(request),
       onFailure: (info) =>
         captureFailure({
           runDir: info.env.runDir,
@@ -384,6 +412,7 @@ export function scenario(
           deadlineMs: info.deadlineMs,
           instances: info.instances,
           providers: info.providers,
+          devices: info.devices,
         }),
     })
     if (result.status === 'skipped') t.skip(result.skipReason)

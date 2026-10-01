@@ -10,6 +10,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { captureFailure } from './artifacts.ts'
+import type { CaptureDevice } from './group.ts'
 import type { Instance } from './instance.ts'
 import type { Provider } from './provider.ts'
 
@@ -162,4 +163,101 @@ describe('captureFailure', () => {
       })
     })
   })
+})
+
+describe('captureFailure with several devices', () => {
+  function device(
+    folder: string,
+    overrides: Partial<CaptureDevice> = {},
+  ): CaptureDevice {
+    return {
+      folder,
+      alive: () => true,
+      screenshot: async () => new Uint8Array([1, 2, 3]),
+      keepData: (into) => writeFileSync(join(into, 'data.txt'), folder),
+      ...overrides,
+    }
+  }
+
+  const base = {
+    scenario: 'sc',
+    error: new Error('boom'),
+    steps: [],
+    instances: [],
+    providers: [],
+  }
+
+  it('gives each device a folder with its screenshot and its data', () =>
+    withRunDir(async (runDir) => {
+      await captureFailure({
+        ...base,
+        runDir,
+        devices: [device('4-anna-6-laptop'), device('3-ben-2-pc')],
+      })
+      for (const folder of ['4-anna-6-laptop', '3-ben-2-pc']) {
+        assert.ok(existsSync(join(runDir, 'sc', folder, 'screenshot.png')))
+        assert.equal(
+          readFileSync(join(runDir, 'sc', folder, 'data.txt'), 'utf8'),
+          folder,
+        )
+      }
+      const timeline = JSON.parse(
+        readFileSync(join(runDir, 'sc', 'timeline.json'), 'utf8'),
+      )
+      assert.deepEqual(timeline.devices, [
+        { folder: '4-anna-6-laptop', files: ['data.txt', 'screenshot.png'] },
+        { folder: '3-ben-2-pc', files: ['data.txt', 'screenshot.png'] },
+      ])
+    }))
+
+  it('leaves a note for a device that was not running', () =>
+    withRunDir(async (runDir) => {
+      await captureFailure({
+        ...base,
+        runDir,
+        devices: [device('d', { alive: () => false })],
+      })
+      assert.match(
+        readFileSync(join(runDir, 'sc', 'd', 'screenshot-note.txt'), 'utf8'),
+        /not running/,
+      )
+      assert.equal(existsSync(join(runDir, 'sc', 'd', 'screenshot.png')), false)
+    }))
+
+  it('notes a failed screenshot and a failed data copy and still handles the next device', () =>
+    withRunDir(async (runDir) => {
+      await captureFailure({
+        ...base,
+        runDir,
+        devices: [
+          device('a', {
+            screenshot: async () => {
+              throw new Error('the session is gone')
+            },
+            keepData: () => {
+              throw new Error('disk full')
+            },
+          }),
+          device('b'),
+        ],
+      })
+      assert.match(
+        readFileSync(join(runDir, 'sc', 'a', 'screenshot-note.txt'), 'utf8'),
+        /the session is gone/,
+      )
+      assert.match(
+        readFileSync(join(runDir, 'sc', 'a', 'data-note.txt'), 'utf8'),
+        /disk full/,
+      )
+      assert.ok(existsSync(join(runDir, 'sc', 'b', 'screenshot.png')))
+    }))
+
+  it('writes no device section for a scenario without a group', () =>
+    withRunDir(async (runDir) => {
+      await captureFailure({ ...base, runDir })
+      const timeline = JSON.parse(
+        readFileSync(join(runDir, 'sc', 'timeline.json'), 'utf8'),
+      )
+      assert.equal('devices' in timeline, false)
+    }))
 })

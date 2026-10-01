@@ -1,9 +1,11 @@
 // The types of a scenario's shell: what the command passes in, the context a scenario body gets, and
 // what a run produces. Kept apart from `scenario.ts` (the logic) so that file stays under the 500-line
 // boundary; `scenario.ts` re-exports every name, so importers do not change.
+import type { CaptureDevice, Group, GroupSpec } from './group.ts'
 import type { ColorScheme, Instance } from './instance.ts'
 import type { Tools } from './preflight.ts'
 import type { NostrRelay } from './nostr-relay.ts'
+import type { DeviceHost } from './platform/host.ts'
 import type { Behavior, Provider, StandInModel } from './provider.ts'
 
 export type CloseBehavior = 'exit' | 'relaunch'
@@ -69,6 +71,8 @@ export interface FailureInfo {
   steps: Step[]
   instances: Instance[]
   providers: Provider[]
+  /** The devices of the scenario's group, if it made one. */
+  devices: CaptureDevice[]
   failedStep?: string
   deadlineMs?: number
 }
@@ -76,6 +80,8 @@ export interface FailureInfo {
 export interface RunDeps {
   env: E2EEnv
   startInstance: (request: StartInstanceRequest) => Promise<Instance>
+  /** The driver layer for groups; a run without one cannot make a group. */
+  createHost?: (request: { scenario: string; env: E2EEnv }) => DeviceHost
   /** Called before teardown for body failures and after teardown for teardown failures. */
   onFailure?: (info: FailureInfo) => Promise<void>
 }
@@ -112,6 +118,11 @@ export interface ScenarioContext {
   ): Promise<Provider>
   /** A Nostr relay (the binary built with `--features e2e`) the instances of a scenario can share; ended with the context. */
   nostrRelay(): Promise<NostrRelay>
+  /**
+   * Users with vaults and devices over one test relay (contracts/group.md); the devices start with
+   * their own data and all of it ends with the scenario.
+   */
+  group(spec: GroupSpec): Promise<Group>
   /** A passphrase and a provider key generated for this run; no credential is ever committed. */
   credentials(): { passphrase: string; providerKey: string }
 }
