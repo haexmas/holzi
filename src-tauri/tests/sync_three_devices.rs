@@ -43,6 +43,7 @@ const NAMES: [&str; 3] = ["A", "B", "C"];
 struct Rng(u64);
 
 impl Rng {
+    /// Advances the xorshift64* state and returns the next deterministic value.
     fn next(&mut self) -> u64 {
         self.0 ^= self.0 >> 12;
         self.0 ^= self.0 << 25;
@@ -50,6 +51,7 @@ impl Rng {
         self.0.wrapping_mul(0x2545_F491_4F6C_DD1D)
     }
 
+    /// Returns the next value reduced to `0..n`; `n` must be nonzero.
     fn below(&mut self, n: usize) -> usize {
         usize::try_from(self.next() % n as u64).expect("fits")
     }
@@ -63,6 +65,7 @@ struct Dev {
 }
 
 impl Dev {
+    /// Creates a replica in a temporary vault with its own installation and origin.
     fn new() -> Self {
         let dir = tempfile::tempdir().expect("tempdir");
         let config = vault_config(
@@ -80,6 +83,7 @@ impl Dev {
         }
     }
 
+    /// Borrows the replica's database for test reads and writes.
     fn db(&self) -> &Database {
         self.replica.db()
     }
@@ -103,6 +107,7 @@ struct Model {
     changes: usize,
 }
 
+/// Reads the row HLC of an existing chat thread on its writing device.
 fn hlc_of(dev: &Dev, id: &str) -> String {
     query::read(dev.db(), |r| {
         r.query_row(
@@ -274,6 +279,7 @@ fn check(model: &Model, devs: &[Dev], context: &str) {
     }
 }
 
+/// Reads `HOLZI_LOAD_SEED` as a `u64`, defaulting to `0xC0FFEE` if absent or invalid.
 fn seed() -> u64 {
     std::env::var("HOLZI_LOAD_SEED")
         .ok()
@@ -281,6 +287,8 @@ fn seed() -> u64 {
         .unwrap_or(0xC0FFEE)
 }
 
+/// Checks convergence, progress and batch integrity under interrupted transfers,
+/// then verifies that reconnecting sends only changes the receiver lacks.
 #[test]
 #[ignore = "slow and random: run on request, see the module docs"]
 fn three_devices_converge_over_changing_ways_with_cut_transfers() {
