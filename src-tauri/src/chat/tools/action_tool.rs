@@ -68,6 +68,7 @@ pub struct ActionTool {
 }
 
 impl ActionTool {
+    /// Binds an action definition to the bridge that will dispatch its calls to the webview.
     pub fn new(def: AgentActionDef, bridge: ActionBridge) -> Self {
         Self { def, bridge }
     }
@@ -80,26 +81,32 @@ impl ActionTool {
 
 #[async_trait]
 impl Tool for ActionTool {
+    /// Returns the provider-facing tool name supplied in the action definition.
     fn name(&self) -> &str {
         &self.def.tool_name
     }
 
+    /// Returns the catalog description offered to the model.
     fn description(&self) -> &str {
         &self.def.description
     }
 
+    /// Identifies this tool as an app action in persisted chat messages.
     fn source(&self) -> &'static str {
         ACTION_SOURCE
     }
 
+    /// Copies the action's input schema for the model's tool definition.
     fn input_schema(&self) -> Value {
         self.def.input_schema.clone()
     }
 
+    /// Maps the action's effect to the risk class used by the permission gate.
     fn risk_class(&self) -> RiskClass {
         self.def.effect.risk_class()
     }
 
+    /// Dispatches through the bridge and converts its reply into model-visible tool content.
     async fn execute(&self, input: Value, cancel: CancellationToken) -> ToolResult {
         into_tool_result(self.bridge.call(&self.def.action_id, input, &cancel).await)
     }

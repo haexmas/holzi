@@ -28,6 +28,7 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use uuid::Uuid;
 
+/// Builds a stub model chunk requesting one named tool with a fixed input payload.
 fn tool_call(id: &str, name: &str) -> StreamChunk {
     StreamChunk::ToolCalls(vec![LlmToolCall {
         id: id.to_string(),
@@ -36,6 +37,7 @@ fn tool_call(id: &str, name: &str) -> StreamChunk {
     }])
 }
 
+/// Supplies the stub model's final text and completion metadata after the tool round.
 fn final_answer() -> Vec<Result<StreamChunk, holzi_lib::adapters::StreamError>> {
     vec![
         Ok(StreamChunk::Delta {
@@ -90,10 +92,12 @@ async fn start_turn(chat_state: ChatState, calls: Vec<StreamChunk>) -> Turn {
     }
 }
 
+/// Reads the persisted messages for this turn's thread, failing on a storage error.
 fn rows(turn: &Turn) -> Vec<ChatMessage> {
     query::read(&turn.db, |r| msg_store::list_messages(r, turn.thread_id)).unwrap()
 }
 
+/// Selects the tool-result messages persisted in this turn's thread.
 fn tool_results(turn: &Turn) -> Vec<ChatMessage> {
     rows(turn)
         .into_iter()
@@ -101,6 +105,8 @@ fn tool_results(turn: &Turn) -> Vec<ChatMessage> {
         .collect()
 }
 
+/// Waits up to ten seconds for an action request and returns its payload.
+/// Panics if the channel closes, the wait expires, or a different event arrives.
 async fn next_call(events: &mut tokio::sync::mpsc::UnboundedReceiver<(String, Value)>) -> Value {
     let (event, payload) = tokio::time::timeout(Duration::from_secs(10), events.recv())
         .await

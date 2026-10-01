@@ -15,6 +15,8 @@ interface ActionCallRequest {
   input: Record<string, unknown>
 }
 
+let started = false
+
 /**
  * The built-in agent's access to the actions (spec 032, ADR-0006). Pushes the definitions the
  * built-in agent may call to Rust as tools (`set_agent_actions`) and runs the calls Rust sends back
@@ -24,21 +26,22 @@ interface ActionCallRequest {
  * an open vault, and the listener stays for the session like the sync listener. Definitions are
  * pushed again when the language changes, because they carry localized titles for the search.
  */
-let started = false
-
 export function useAgentActions() {
   const wm = useWindowManagerStore()
   const { t, locale } = useI18n()
 
+  /** Translates an action title in the requested catalog language. */
   const titleOf = (key: string, language: ActionLocale) =>
     t(key, {}, { locale: language })
 
+  /** Replaces Rust's action tools with the eligible catalog and its localized titles. */
   async function pushDefinitionsAsync(): Promise<void> {
     await invoke('set_agent_actions', {
       args: { actions: listAgentActions(ALL_ACTIONS, titleOf) },
     })
   }
 
+  /** Runs a request as the built-in agent and sends its outcome without raw errors to Rust. */
   async function runCallAsync(request: ActionCallRequest): Promise<void> {
     let outcome: ActionOutcome
     try {
@@ -58,6 +61,7 @@ export function useAgentActions() {
     })
   }
 
+  /** Installs the listener once, publishes the catalog, and refreshes it on language changes. */
   async function startAsync(): Promise<void> {
     if (started) return
     started = true

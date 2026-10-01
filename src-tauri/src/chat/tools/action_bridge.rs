@@ -47,6 +47,7 @@ pub enum ActionReply {
 }
 
 impl ActionReply {
+    /// Creates a bridge error without an input-field association.
     fn error(code: &str, message: &str) -> Self {
         Self::Err {
             code: code.to_owned(),
@@ -73,6 +74,7 @@ pub struct ActionOutcomeWire {
 }
 
 impl From<ActionOutcomeWire> for ActionReply {
+    /// Converts a frontend outcome, defaulting absent results to null and hiding handler errors.
     fn from(wire: ActionOutcomeWire) -> Self {
         if wire.ok {
             return Self::Ok {
@@ -109,12 +111,15 @@ pub struct ActionBridge {
 }
 
 impl Default for ActionBridge {
+    /// Creates an unattached bridge with the default webview response timeout.
     fn default() -> Self {
         Self::with_timeout(DEFAULT_ACTION_TIMEOUT)
     }
 }
 
 impl ActionBridge {
+    /// Creates a bridge with no emitter or pending calls and the given response timeout.
+    /// The timeout starts after a call acquires the execution lock and emits its request.
     pub fn with_timeout(timeout: Duration) -> Self {
         Self {
             inner: Arc::new(Inner {
@@ -194,6 +199,7 @@ impl ActionBridge {
         drop(pending);
     }
 
+    /// Locks the pending replies, recovering the map if an earlier holder poisoned the mutex.
     fn lock_pending(
         &self,
     ) -> std::sync::MutexGuard<'_, HashMap<Uuid, oneshot::Sender<ActionReply>>> {
@@ -204,6 +210,7 @@ impl ActionBridge {
     }
 }
 
+/// Builds the cancellation reply shared by cancelled turns and dropped pending calls.
 fn cancelled_reply() -> ActionReply {
     ActionReply::error("tool_call_cancelled", "the call was cancelled")
 }

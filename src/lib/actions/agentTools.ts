@@ -61,6 +61,7 @@ export function fromToolName(
   return catalog.find((def) => toToolName(def.id) === toolName)
 }
 
+/** Maps a catalog action to its tool definition, including core membership and both titles. */
 export function toAgentActionDef(
   def: ActionDefinition,
   titleOf: TitleOf,
