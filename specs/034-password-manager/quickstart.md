@@ -1,0 +1,132 @@
+# Quickstart: Passwortmanager
+
+**Spec**: [spec.md](./spec.md) | **Plan**: [plan.md](./plan.md)
+
+Validierungsleitfaden, kein Bauplan. Jeder Abschnitt nennt Voraussetzung, Aufruf und
+erwartetes Ergebnis. Rust-Aufrufe brauchen die Umgebung aus dem Memory „cargo in holzi
+worktrees“ (`nix develop`, Host-Bridge, `-j 4` und nur gezielte Testziele); im Worktree gilt
+ein echtes `pnpm install` (kein Symlink auf `node_modules`). Beispieldateien und Geheimnisse in
+Tests sind erfunden; echte Passwörter gehören nie in Fixtures (Constitution I).
+
+## 1. Automatische Prüfungen (CI-gleich)
+
+```bash
+pnpm check:passwords          # neu: Generator, Suche, Orte und Sitzungs-Stichprobe, Aktionen
+pnpm check:agent-actions      # Regression: Namensregel für Geheimnisse, Schnappschuss tools.json
+pnpm check:wm-navigation
+pnpm check:templates
+pnpm typecheck && pnpm typecheck:scripts && pnpm lint && pnpm format:check
+cargo test --manifest-path src-tauri/Cargo.toml passwords
+cargo test --manifest-path src-tauri/Cargo.toml --no-default-features passwords
+cargo test --manifest-path src-tauri/Cargo.toml --test passwords_roundtrip --test passwords_access
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+pnpm generate:ts-types        # danach darf git diff src/types/bindings leer sein
+pnpm export:eval-tools        # danach darf git diff src-tauri/src/chat/eval/tools.json leer sein
+python3 scripts/ci/check-docs.py
+```
+
+Erwartet: alles grün. `check:passwords` schlägt fehl, wenn ein Ort einen Titel oder Wert in
+Pfad oder Abfrage trägt, wenn der Generator eine gewählte Klasse auslässt oder wenn die Suche
+ein Geheimnis oder eine Notiz berücksichtigt.
+
+## 2. Datenmodell und Migration (FR-036, FR-037)
+
+`cargo test … migrations` und `--test vault_upgrade`: Eine frische Vault und eine Vault vor
+`0022` haben danach alle zwölf Tabellen und die Trigger (`HOLZI_TRIGGER_VERSION` 14); die
+Spalten entsprechen [data-model.md](./data-model.md), `binaries.data` ist `BLOB`, kein
+UNIQUE auf Tagname, Credential-ID und Tag-Paar.
+
+## 3. Einträge, TOTP, Zwischenablage (US1)
+
+Automatisch: `totp_tests.rs` rechnet die Testvektoren der RFC 6238 für SHA-1, SHA-256 und
+SHA-512 mit 8 Ziffern; ungültige Secrets, Ziffern, Perioden und Algorithmen liefern `InvalidInput`
+mit Feldnamen (SC-003). `passwords_roundtrip.rs` prüft Anlegen, Ändern und Lesen mit den
+Geheimnis-Regeln (Teil-Update lässt ein nicht gesendetes Passwort unverändert).
+
+Manuell (`pnpm tauri:dev`, Vault öffnen, App „Passwörter“ aus dem Starter):
+
+1. Eintrag mit Titel, Benutzername, Passwort und TOTP-Secret `JBSWY3DPEHPK3PXP` anlegen.
+   Erwartet: in der Liste, nach Neustart von holzi wieder da, Passwort verdeckt.
+2. Eintrag öffnen: Code mit Restzeit wechselt ohne Zutun; „Kopieren“ beim Code und beim
+   Passwort; nach der eingestellten Zeit ist die Zwischenablage leer (Wert vorher in ein
+   Textfeld einfügbar). Einstellung auf 15 s stellen: gilt ohne Speichern-Knopf.
+3. Tab-Verlaufsliste und Fenstertitel ansehen: kein Titel eines Eintrags, kein Wert.
+4. „Abgelaufen“-Kennzeichnung: Ablaufdatum in der Vergangenheit setzen.
+
+## 4. Ordnen (US2)
+
+Zwei verschachtelte Ordner anlegen, drei Einträge verschieben, Tags vergeben, per
+Mehrfachauswahl zwei verschieben, nach Tag filtern. Ordner in den eigenen Unterordner ziehen:
+abgelehnt. Tag umbenennen in einen vorhandenen Namen: abgelehnt. `trash_tests.rs` und
+`tags_tests.rs` decken Zyklus, Tag-Kennungen (`fold`) und das Zusammenführen ab.
+
+## 5. Generator (US3)
+
+`pnpm check:passwords`: 1.000 Ausgaben je Konfiguration erfüllen Länge und Klassen (SC-004);
+Muster- und Ausschlussfälle; nicht erfüllbare Auswahl liefert einen Fehlercode statt eines
+leeren Wertes. Manuell: Voreinstellung speichern, als Standard setzen, Generator öffnen:
+vorausgewählt.
+
+## 6. Papierkorb und Verlauf (US4)
+
+`trash_tests.rs`, `snapshots_tests.rs`: Löschen, Wiederherstellen an den früheren Ort (und
+an die Wurzel, wenn der Ordner fehlt), endgültiges Löschen mit Kindern, Verlaufsstand nach
+jeder Änderung, kein Stand bei unveränderten Werten, Wiederherstellen erzeugt einen neuen
+Stand. Manuell: Passwort ändern, im Verlauf den alten Stand öffnen (Passwort verdeckt, per
+„Anzeigen“ sichtbar), wiederherstellen.
+
+## 7. Anhänge (US5)
+
+`binaries_tests.rs`: Hash über Rohdaten, Deduplizierung, 25-MiB-Grenze (Datei vorher geprüft,
+26 MiB wird abgelehnt, ohne zu lesen), Karenzzeit beim Aufräumen (frische verwaiste Binärzeile
+bleibt, acht Tage alte verschwindet). Manuell: dieselbe Datei an zwei Einträge hängen,
+herunterladen und mit `cmp` gegen das Original vergleichen (SC-009), Bild-Vorschau, PDF nur
+Herunterladen, 26-MiB-Datei zeigt die Meldung.
+
+## 8. Zugriff und Berechtigungen (US6)
+
+`access_tests.rs` (Tabelle der Fälle aus [contracts/access.md](./contracts/access.md)) und
+`tests/passwords_access.rs`: Liste ohne Geheimnisse (der markierte Wert `SECRET-MARKER-…` darf in
+keiner serialisierten Antwort stehen, SC-005), Freigabe `Read` für Tag `s3`, Schreiben und
+Herausschreiben abgelehnt (SC-006), `BuiltinAgent` sieht nur `AgentHeader`. Manuell im Chat
+mit einem Modell: „Welche Einträge habe ich zu GitHub?“ → Treffer mit Titel und Tags; „Zeig mir
+das Passwort“ → das Modell kann es nicht lesen, es gibt keine Aktion dafür.
+
+## 9. Import (US7)
+
+`passwords_import.rs` mit Beispieldateien aus `src-tauri/tests/fixtures/passwords/` (je eine
+KeePass-, Bitwarden- und LastPass-Datei, Passwörter erfunden): Zahl der Einträge und Ordner
+stimmt mit der Quelle (SC-010), falsches Passwort und beschädigte Datei ändern nichts, ein
+Fehler in der Mitte hinterlässt nichts (Abbruch durch eine absichtlich ungültige Zeile),
+Doppelte erscheinen in der Vorschau, `onDuplicate: skip` überspringt sie, Zeilenumbrüche in
+Notizen bleiben erhalten. Manuell: den Assistenten mit einer eigenen Exportdatei ausprobieren.
+
+## 10. Sync zwischen eigenen Geräten (US8)
+
+`tests/passwords_sync.rs` mit zwei und drei Geräten (Fixture `sync_helpers.rs`): Anlegen
+erscheint auf dem anderen Gerät; gleichzeitige Änderung verschiedener Felder bleibt erhalten
+(SC-008); Löschen eines Eintrags **mit Kindern** (Tags, Felder, Anhänge, Verlauf) kommt als
+Löschung je Zeile beim Peer an und ein später eintreffender alter Stand erweckt ihn nicht;
+dasselbe Tag unabhängig auf beiden Geräten angelegt ergibt eine Zeile; ein 25-MiB-Anhang
+kommt vollständig an. Manuell nach Spec 033 mit dem Mehrgeräte-Rahmen: zwei Geräte, ein
+Eintrag, Änderung sichtbar in unter fünf Sekunden (SC-007).
+
+Hinweis: Nach Migration `0022` synchronisieren Geräte erst, wenn **alle** auf dem neuen Stand
+sind (Handshake, Spec 024).
+
+## 11. Schmale Fenster und Sitzung (FR-039, FR-041)
+
+Fenster auf 360 px verkleinern: Seitenleiste als Überlagerung, kein waagerechtes Scrollen,
+alle Aktionen erreichbar. Sitzungswiederherstellung einschalten, Passwortmanager mit
+aufgedecktem Passwort offen lassen, holzi neu starten: der Tab kommt mit Ort und Verlauf
+zurück, das Passwort ist verdeckt, die gespeicherte Sitzung enthält keinen Wert
+(`check-passwords-routes.ts` prüft die Stichprobe gegen `snapshotSession`).
+
+## 12. End-to-End (SC-012)
+
+```bash
+pnpm test:e2e passwords-basic          # anlegen, suchen, TOTP-Code, Papierkorb
+pnpm test:e2e passwords-sync-two-devices
+```
+
+Erwartet: beide bestehen gegen die gebaute App; sie brauchen weder Netz noch Zeitmessung.
