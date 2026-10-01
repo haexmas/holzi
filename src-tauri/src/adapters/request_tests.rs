@@ -8,7 +8,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::anthropic::AnthropicAdapter;
 use super::request::build_messages_body;
-use super::types::{Attachment, AttachmentKind, ChatMessage, ChatRequest, ChatRole};
+use super::types::{Attachment, AttachmentKind, ChatMessage, ChatRequest, ChatRole, ToolSpec};
 use super::ProviderAdapter;
 use crate::model_capabilities::{
     ModelCapabilities, ReasoningControl, ReasoningOption, ThinkingStyle,
@@ -349,4 +349,23 @@ async fn stream_chat_groups_ordered_tool_calls_and_results_into_two_messages() {
 
     let mut stream = adapter.stream_chat(request).await.unwrap();
     while stream.next().await.is_some() {}
+}
+
+#[test]
+fn a_tool_found_by_the_search_is_sent_in_the_anthropic_tool_format() {
+    let mut request = sample_request("claude-sonnet-4-20250514");
+    request.tools = vec![ToolSpec {
+        name: "settings_sync_setEnabled".to_string(),
+        description: "Turn sync on or off".to_string(),
+        input_schema: serde_json::json!({ "type": "object", "properties": {} }),
+    }];
+    let body = build_messages_body(&request);
+    assert_eq!(
+        body["tools"],
+        serde_json::json!([{
+            "name": "settings_sync_setEnabled",
+            "description": "Turn sync on or off",
+            "input_schema": { "type": "object", "properties": {} },
+        }])
+    );
 }

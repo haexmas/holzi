@@ -400,14 +400,14 @@ impl TurnRunner<'_> {
     /// message followed by one tool-result message, not call/result pairs
     /// per call.
     fn append_round_to_request(&mut self, executed: &[ExecutedCall]) {
+        // The last successful search of the round decides what the next step offers.
         let search_result = executed
             .iter()
             .rev()
-            .find(|(_, result, _)| result.content.starts_with('{') && !result.is_error)
-            .and_then(|(call, result, _)| {
-                (call.name == crate::chat::tools::offer::FIND_ACTIONS_TOOL_NAME)
-                    .then(|| found_tools(&result.content))
-            });
+            .find(|(call, result, _)| {
+                call.name == crate::chat::tools::offer::FIND_ACTIONS_TOOL_NAME && !result.is_error
+            })
+            .and_then(|(_, result, _)| found_tools(&result.content));
         for (call, _, _) in executed {
             self.request.messages.push(LlmMessage {
                 role: ChatRole::ToolCall {
