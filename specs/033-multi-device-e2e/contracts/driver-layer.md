@@ -12,6 +12,7 @@ interface RunningDevice extends Page {
   stop(): Promise<void> // graceful
   kill(): Promise<void> // no cleanup
   alive(): boolean
+  setNetworkAccess(enabled: boolean): Promise<void>
   screenshot(name: string): Promise<void>
 }
 interface DataHandle {
@@ -20,7 +21,7 @@ interface DataHandle {
 }
 ```
 
-Operations of FR-021 and where each lives: start and stop a device (`start`, `stop`, `kill`), click, type, read, call a backend command, wait for a condition (`Page`), take a screenshot (`screenshot`), control a device's network (`goOffline` and `goOnline` in the group helper, built on start, stop and the servers action, so no extra platform operation), copy a vault file (`DataHandle.copyVaultFile`).
+Operations of FR-021 and where each lives: start and stop a device (`start`, `stop`, `kill`), click, type, read, call a backend command, wait for a condition (`Page`), take a screenshot (`screenshot`), control a running device's network (`setNetworkAccess`, used by `goOffline` and `goOnline` in the group helper), and copy a vault file (`DataHandle.copyVaultFile`). Waiting uses fixed real-time deadlines; the driver layer exposes no clock-control operation.
 
 ## Rules
 

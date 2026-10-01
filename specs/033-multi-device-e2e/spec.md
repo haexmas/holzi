@@ -24,7 +24,7 @@ its own spec."
   hides the platform, and the spec names what each further platform (Windows, macOS, Android, iOS) would need,
   but implements none of them; each gets its own follow-up spec.
 - Q: Does the spec fix the building blocks for later features too? → A: Yes, as general multi-vault helpers
-  (named groups, per-device network control, clock or equivalent, online state and device list, vault-file
+  (named groups, per-device network control, fixed real-time deadlines, online state and device list, vault-file
   copy, scenario template). Later specs (025, 027, 028, haextensions) add scenarios on top and do not
   rebuild the helpers.
 
@@ -169,7 +169,7 @@ missing and none duplicated.
 
 A contributor who adds a feature that spans vaults (own file sync, spaces, data shares, a haextension)
 writes a scenario by naming the vaults, the users and the devices, saying how they are connected, and
-then driving and checking them. The helpers for groups, network, clock, device state and copying a vault
+then driving and checking them. The helpers for groups, network, fixed real-time deadlines, device state and copying a vault
 file already exist.
 
 **Why this priority**: Spec 025, 027 and 028 and the haextensions all need exactly these abilities, and
@@ -212,7 +212,7 @@ four further platforms, what is needed to run a scenario there.
 
 1. **Given** the scenarios of this spec, **When** they are searched for platform specifics, **Then** none
    is found; they use only operations of the driver layer (start and stop a device, click, type, read,
-   call a backend command, wait for something, take a screenshot, control a device's network and clock).
+   call a backend command, wait for something, take a screenshot, and control a running device's network).
 2. **Given** the platform document, **When** a maintainer reads the entry of a platform, **Then** it names
    the driver, the runner or device type, how several devices would be connected there and the known
    limits, without implementing any of it.
@@ -301,11 +301,12 @@ result names the scenario and keeps the material of the failure.
 
 **Building blocks for several vaults and devices**
 
-- **FR-012**: The rig MUST let a scenario declare a group of vaults, users and devices with names, start
-  them with separate data, and address each by name. Several users with their own vaults in one scenario
-  MUST be possible, each with several devices.
+- **FR-012**: The rig MUST let a scenario declare a group of users and devices with names, start them with
+  separate data, and address each by name. Each user has exactly one vault in the group. Several users with
+  their own vaults in one scenario MUST be possible, each with several devices.
 - **FR-013**: The rig MUST let a scenario control the network per device while the application keeps
-  running: make a device unreachable for the other devices and the test relay and restore it, and switch
+  running: make a device unreachable for the other devices and the test relay and restore it without
+  stopping or restarting the application, and switch
   the test relay itself off and on.
 - **FR-014**: Time-based expectations MUST use a fixed deadline equal to the promise they check, which the
   time scale of the suite does not stretch. The 60-second expectation of M4 waits in real time and ends as
@@ -331,7 +332,7 @@ result names the scenario and keeps the material of the failure.
 
 - **FR-021**: Scenarios and helpers MUST use only operations of a driver layer that hides the platform
   (start and stop a device, click, type, read, call a backend command, wait for a condition, take a
-  screenshot, control a device's network and clock, and copy a vault file between named devices). They
+  screenshot, control a running device's network, and copy a vault file between named devices). They
   MUST NOT use the Linux driver, the virtual screen, process signals or host file paths directly; those
   belong to the one Linux implementation of the layer. The vault-file-copy operation MUST accept device
   identities rather than host paths and MUST report a failed copy without leaving a partial destination.
@@ -349,7 +350,7 @@ result names the scenario and keeps the material of the failure.
 ### Key Entities
 
 - **Group**: the set of users, vaults and devices of one scenario, with names, started and ended together.
-- **User**: a person of the scenario with one or more vaults; users never share data unless the feature
+- **User**: a person of the scenario with exactly one vault; users never share data unless the feature
   under test shares it.
 - **Device**: one running application process of a vault, with its own data, ports and screen, addressed by
   name; it can be stopped, restarted, made unreachable and restored.

@@ -4,20 +4,20 @@ Prerequisites: the Nix development shell, a real `pnpm install` in the worktree 
 
 ## Automatic
 
-| Step                  | Command                                                                                               | Expected                                                                                                                              |
-| --------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| V1 Helper checks      | `pnpm check:e2e-lib`                                                                                  | group, host interface, seam scan and failure-material layout pass with no display                                                     |
-| V2 Scripts type check | `pnpm typecheck:scripts`                                                                              | no error                                                                                                                              |
-| V3 Seam scan          | part of V1                                                                                            | no scenario or non-platform helper uses a platform specific (SC-005)                                                                  |
-| V4 The nine scenarios | `nix develop --command scripts/with-nix-host-bridge.sh pnpm test:e2e --grep sync-`                    | all `sync-*` scenarios pass, including the nine from M1 to M9                                                                         |
-| V5 Whole suite        | `nix develop --command scripts/with-nix-host-bridge.sh pnpm test:e2e`                                 | every scenario passes, no process of the run is left                                                                                  |
-| V6 Leftovers          | run V4 twice in a row                                                                                 | the second run starts at once and its start-up sweep reports no leftovers of the first (SC-006)                                       |
-| V7 Deliberate failure | break the sync on purpose (for example make `device_remove` do nothing) and run the matching scenario | the scenario fails, names the device in the step, and keeps `<device>/screenshot.png` and `driver.log` for each device that took part |
-| V8 Size               | one scenario with two users and two devices each, written from the template                           | 60 lines or fewer (SC-003)                                                                                                            |
+| Step                  | Command                                                                                               | Expected                                                                                                                   |
+| --------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| V1 Helper checks      | `pnpm check:e2e-lib`                                                                                  | group, host interface, seam scan and failure-material layout pass with no display                                          |
+| V2 Scripts type check | `pnpm typecheck:scripts`                                                                              | no error                                                                                                                   |
+| V3 Seam scan          | part of V1                                                                                            | no scenario or non-platform helper uses a platform specific (SC-005)                                                       |
+| V4 The nine scenarios | `nix develop --command scripts/with-nix-host-bridge.sh pnpm test:e2e --grep sync-`                    | all `sync-*` scenarios pass, including the nine from M1 to M9                                                              |
+| V5 Whole suite        | `nix develop --command scripts/with-nix-host-bridge.sh pnpm test:e2e`                                 | every scenario passes, no process of the run is left                                                                       |
+| V6 Leftovers          | run V4 twice in a row                                                                                 | the second run starts at once and its start-up sweep reports no leftovers of the first (SC-006)                            |
+| V7 Deliberate failure | break the sync on purpose (for example make `device_remove` do nothing) and run the matching scenario | the scenario fails, names the device in the step, and keeps each encoded device folder's `screenshot.png` and `driver.log` |
+| V8 Size               | one scenario with two users and two devices each, written from the template                           | 60 lines or fewer (SC-003)                                                                                                 |
 
 ## Gates (research)
 
-- **G1** relay returns on the same URL and the application's client reconnects (Stage 1).
+- **G1** relay returns on the same URL and the application's client reconnects (Stage 2; blocks the Stage 2 gate if it fails).
 - **G2** link through the form works on loopback with default iroh relays (Stage 2).
 - **G3** a data volume exists whose sync window is at least 2 s on the stock runner (Stage 3).
 

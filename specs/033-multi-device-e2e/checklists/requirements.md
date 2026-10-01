@@ -34,5 +34,5 @@
 - The users of this spec are maintainers, so the rig of spec 016 and the product views it observes are named as the
   subject, not as implementation choices. Platform drivers are named only in the Assumptions as facts to confirm in
   the follow-up specs.
-- Time control and per-device network control are left as plan decisions (Assumptions); the observable promises are
+- Fixed real-time deadlines and per-device running-application network control are defined by the plan; the observable promises are
   fixed in FR-005, FR-013 and FR-014.

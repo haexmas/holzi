@@ -23,15 +23,15 @@ A person with one vault. Fields: `name`, `vaultName`, `passphrase` (random per r
 
 One running application process of a vault, addressed by `<user>/<device>`. Fields a scenario can read:
 
-| Field          | Meaning                                                          |
-| -------------- | ---------------------------------------------------------------- |
-| `name`, `user` | address                                                          |
-| `host`         | the `DeviceHost` handle (driver layer)                           |
-| `role`         | `main` or `linked`, as set when the device was created or linked |
-| `state`        | `running`, `stopped`, `offline` (running, no servers), `killed`  |
-| `page`         | the `Page` operations of spec 016 for this device                |
+| Field          | Meaning                                                               |
+| -------------- | --------------------------------------------------------------------- |
+| `name`, `user` | address                                                               |
+| `host`         | the `DeviceHost` handle (driver layer)                                |
+| `role`         | `main` or `linked`, as set when the device was created or linked      |
+| `state`        | `running`, `stopped`, `offline` (running, network disabled), `killed` |
+| `page`         | the `Page` operations of spec 016 for this device                     |
 
-State transitions: `stopped -> running` (start), `running -> stopped` (stop), `running -> killed` (kill), `running -> offline` (goOffline: servers none, restart), `offline -> running` (goOnline: servers back, restart), `killed -> running` (start over the same data). Any state ends at `stopped` when the scenario ends.
+State transitions: `stopped -> running` (start), `running -> stopped` (stop), `running -> killed` (kill), `running -> offline` (goOffline: network disabled while running), `offline -> running` (goOnline: network restored while running), `killed -> running` (start over the same data). Any state ends at `stopped` when the scenario ends.
 
 ## Test relay
 
