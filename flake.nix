@@ -77,6 +77,17 @@
             # comparing derivations would evaluate cudatoolkit for every consumer,
             # and it does not evaluate on platforms nixpkgs does not support it on.
             export CUDA_ROOT="${pkgs.cudatoolkit}"
+          '' + pkgs.lib.optionalString (builtins.elem "llvmPackages.libclang.lib" packageNames) ''
+            # `bindgen` (via `clang-sys`, used by crates that build bindings at compile
+            # time, e.g. `libsqlite3-sys` with rusqlite's `preupdate_hook`) loads
+            # libclang at *build* time. Left to itself it takes the host's
+            # /usr/lib/libclang.so first, which cannot find its own libLLVM from inside
+            # this shell's dynamic linker and fails with "Unable to find libclang".
+            # `LIBCLANG_PATH` takes precedence over that search. It must be the libclang
+            # of *this* nixpkgs: one from another nixpkgs brings another glibc and fails
+            # with `GLIBC_PRIVATE` errors in the build script. Gated on the contributed
+            # *name*, like CUDA_ROOT above.
+            export LIBCLANG_PATH="${pkgs.llvmPackages.libclang.lib}/lib"
           '';
         };
       });

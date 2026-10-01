@@ -16,6 +16,7 @@
   "librsvg",
   "libsoup_3",
   "lld",
+  "llvmPackages.libclang.lib",
   "nodejs_22",
   "openssl",
   "pkg-config",
