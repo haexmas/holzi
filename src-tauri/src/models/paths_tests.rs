@@ -1,5 +1,6 @@
 use std::ffi::OsString;
 use std::sync::LazyLock;
+use std::time::Duration;
 
 use tauri::test::{mock_builder, mock_context, noop_assets};
 use tokio::sync::Mutex;
