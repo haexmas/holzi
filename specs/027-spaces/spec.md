@@ -12,8 +12,8 @@ Ersteller ist der einzige Admin; er vergibt Lesen, Schreiben und Löschen, ände
 Rechte und entfernt Mitglieder, wobei eine neue Schlüsselgeneration entsteht. Der
 Space nutzt die Maschinerie der Ordner-Synchronisierung eigener Geräte (Spec 025) für mehrere Nutzer. Vorgaben des Betreibers: Übertragung über iroh,
 Identität, Anmeldung und Schlüsselumschläge über Nostr-Schlüssel, Umschläge im
-Format NIP-44 v2, Einladungen als verschlüsselte Nostr-Direktnachricht. Kein
-MLS. Referenz für den Umgang mit entfernten Mitgliedern: haex-vault ADR 0002,
+Format NIP-44 v2, Einladungen als Einladungslink des Admins, die Antworten darauf
+als verschlüsselte Nostr-Direktnachricht. Kein MLS. Referenz für den Umgang mit entfernten Mitgliedern: haex-vault ADR 0002,
 Repository `https://github.com/haex-space/haex-vault`, Revision
 `8dce379d94e18fcd42c3b73686a06f984ca3f574`, Pfad
 `docs/adr/0002-shared-space-authenticity-and-confidentiality.md`.
@@ -21,9 +21,14 @@ Repository `https://github.com/haex-space/haex-vault`, Revision
 ## Begriffe
 
 - **Vault-Identität**: das Schlüsselpaar, das eine Vault als Ganzes ausweist.
-  Sein öffentlicher Schlüssel ist die feste Adresse der Vault: Einladungen,
-  Rechte und Mitgliederlisten nennen immer eine Vault-Identität. Der private
-  Schlüssel liegt nur auf Hauptgeräten (Spec 024).
+  Sein öffentlicher Schlüssel ist die feste Adresse der Vault: Rechte und
+  Mitgliederlisten nennen immer eine Vault-Identität. Sie genügt aber nicht, um
+  jemanden einzuladen (FR-008). Der private Schlüssel liegt nur auf Hauptgeräten
+  (Spec 024).
+- **Einladungslink**: ein vom Admin erzeugter Text (auch als QR-Code) mit Kennung
+  und Name des Space, Vault-Identität des Admins, Fähigkeitsstufe, einem
+  Einmalgeheimnis, Ablaufzeit und Hinweisen auf das Relay, ohne Schlüssel. Der
+  Admin gibt ihn selbst weiter, etwa über einen Messenger.
 - **Geräteschlüssel**: das Schlüsselpaar eines einzelnen Geräts. Es verlässt
   das Gerät nie. Mit ihm meldet sich das Gerät an, unterschreibt alles, was es
   schreibt, und empfängt Schlüsselumschläge (D28).
@@ -46,7 +51,7 @@ Repository `https://github.com/haex-space/haex-vault`, Revision
   Space; die Rolle ist nicht übertragbar und nicht vergebbar (D23, D26). Jedes
   Gerät auf der aktuellen Geräteliste des Admins darf für ihn handeln (D29).
 - **Mitglied**: eine Vault, die der Admin in den Space eingeladen und nach
-  ihrer Annahme aufgenommen hat, samt all ihren Geräten. Der Admin ist selbst Mitglied mit allen Fähigkeiten.
+  ihrer Annahme und seiner Bestätigung aufgenommen hat, samt all ihren Geräten. Der Admin ist selbst Mitglied mit allen Fähigkeiten.
 - **Fähigkeit**: ein Recht eines Mitglieds im Space: **Lesen** (alle Dateien
   lesen), **Schreiben** (neue Dateien hinzufügen, bestehende ändern, eigene
   Dateien löschen), **Löschen** (auch fremde Dateien löschen).
@@ -112,7 +117,7 @@ Repository `https://github.com/haex-space/haex-vault`, Revision
   v1 nicht (D26); ein verlorenes Gerät entfernt ein Hauptgerät aus der
   Geräteliste (Spec 024, D27). Die Admin-Rolle ist nicht übertragbar (D23).
   Die Anwesenheits- und
-  Signalisierungsserver aus Spec 024 tragen auch Einladungen (FR-041) und das
+  Signalisierungsserver aus Spec 024 tragen auch die Antworten auf Einladungen (FR-041) und das
   Auffinden von Geräten anderer Mitglieder (FR-039). Ob ein Änderungspaket als
   Ganzes oder je Transaktionsgruppe geprüft wird, legt Spec 024 fest (FR-013
   dort); diese Spec wendet es in FR-026 an.
@@ -140,7 +145,7 @@ Repository `https://github.com/haex-space/haex-vault`, Revision
   Datenfreigaben. Beide nutzen dieselben Bausteine (Vault-Identität,
   Schlüsselgenerationen, Mitgliederliste, Relay), sind aber getrennte Bereiche.
   Spec 028 übernimmt von hier die direkte Verbindung zwischen Mitgliedern
-  (FR-039) und die Zustellung von Einladungen (FR-041).
+  (FR-039) und die Einladungslinks samt der Zustellung der Antworten (FR-008, FR-041).
 - **Spec 029** (Speicher-Backend B): Spec 029 fügt den
   eigenen S3-Speicher als Wahl beim Anlegen eines Space hinzu und bringt den
   Wechsel des Speicher-Backends eines bestehenden Space (User Story 8 dort).
@@ -152,8 +157,9 @@ Repository `https://github.com/haex-space/haex-vault`, Revision
   Übernehmen (FR-021 dort). Nur unumkehrbare Schritte (Mitglied entfernen, Space
   verlassen) fragen einmal nach.
 - [`020-tab-navigation`](../020-tab-navigation/spec.md): Jede Ansicht dieser Spec
-  ist ein Ort im Tab. Anlegen, Einladen, Rechte ändern, Entfernen, Annehmen,
-  Ablehnen und Verlassen sind Aktionen im Katalog von Spec 020.
+  ist ein Ort im Tab. Anlegen, Einladen (Link erzeugen und zurückziehen), Link öffnen,
+  Annehmen, Verwerfen, Aufnahme bestätigen oder ablehnen, Rechte ändern,
+  Entfernen und Verlassen sind Aktionen im Katalog von Spec 020.
 
 ## Clarifications
 
@@ -230,6 +236,24 @@ Repository `https://github.com/haex-space/haex-vault`, Revision
   B) hat das Relay mit Dateien nichts zu tun. Jedes Objekt liegt nur einmal
   (D32).
 
+### Session 2026-10-01
+
+- Q: Wie wird jemand eingeladen? → A: Nur über einen Einladungslink, den der Admin
+  erzeugt und selbst weitergibt, nie über die Vault-Identität allein. Grund: Wer
+  die Vault-Identität kannte, konnte beliebig viele Einladungen schicken;
+  Schlüssel sind kostenlos, Sperren einzelner Absender hilft deshalb nicht
+  (FR-008, FR-041). Gilt ebenso für Spec 028.
+- Q: Was passiert mit Nachrichten an den Admin, die kein gültiges Geheimnis
+  tragen? → A: Ein Gerät des Admins verwirft sie still, ohne Anzeige, Speicherung
+  oder Antwort (FR-041).
+- Q: Wie oft, wie lange und von wem gilt ein Einladungslink? → A: Einmal
+  einlösbar, begrenzt gültig (Standard 7 Tage, wählbar), vom Admin jederzeit
+  zurückziehbar. Die Aufnahme bestätigt der Admin nach Prüfung der Identität
+  (FR-008, FR-009, FR-013).
+- Q: Erfährt der Admin, wenn der Eingeladene den Link verwirft? → A: Nein. Ein
+  Verwerfen schickt nichts; der Link bleibt offen, bis er abläuft oder
+  zurückgezogen wird (FR-012).
+
 ## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Einen Space anlegen und an einen Ordner binden (Priority: P1)
@@ -269,51 +293,70 @@ Space noch Dateiinhalte.
 
 ---
 
-### User Story 2 - Jemanden einladen, und die Einladung annehmen oder ablehnen (Priority: P1)
+### User Story 2 - Jemanden per Einladungslink einladen, und die Einladung annehmen oder verwerfen (Priority: P1)
 
-Anna lädt ihren Bruder Ben ein. Sie fügt seine Vault-Identität ein, gibt ihm
-einen Namen und wählt „Lesen und Schreiben“. Ben bekommt in holzi eine
-Einladung: Space „Familienfotos“ von Anna, mit seinen Rechten. Er nimmt an,
-wählt einen Ordner, und die Fotos erscheinen. Später lädt Anna eine Bekannte
-ein, die ablehnt.
+Anna lädt ihren Bruder Ben ein. Sie wählt im Space „Familienfotos“ „Mitglied
+einladen“, gibt einen Namen für ihn an und wählt „Lesen und Schreiben“. holzi
+erzeugt einen Einladungslink, den Anna ihm selbst schickt, etwa über einen
+Messenger. Ben öffnet ihn in holzi und sieht: Space „Familienfotos“ von Anna,
+mit seinen Rechten. Er nimmt an, wählt einen Ordner, Anna bestätigt ihn, und die
+Fotos erscheinen. Später gibt Anna einer Bekannten einen Link, die ihn
+verwirft.
+
+Niemand kann Anna oder Ben mit Einladungen überhäufen, nur weil er ihre
+Vault-Identität kennt: Ohne einen Link, den Anna erzeugt hat, gibt es nichts,
+was bei ihr oder bei Ben ankommt.
 
 **Why this priority**: Das Teilen mit anderen Nutzern ist der Kern der Spec.
 
-**Independent Test**: Zwei Vaults A und B. A lädt B mit „Lesen“ ein: B steht
-danach nicht in der Mitgliederliste und hat keinen Schlüssel des Space. B nimmt
-an und wählt einen Ordner, während kein Gerät von A online ist: Die Einladung
-zeigt „angenommen, wartet auf Admin“, B hat weiter keinen Schlüssel, und das
-Relay weist B ab. Sobald ein Gerät von A online ist, nimmt es B auf, und alle
-Dateien des Space erscheinen bei B, auch die, die vor der Einladung
-hinzugekommen sind. Mit einer dritten Vault C wiederholen und ablehnen: C hat
-danach keinen Space und keinen Schlüssel dazu, stand nie in der
-Mitgliederliste, und A sieht C als „abgelehnt“.
+**Independent Test**: Zwei Vaults A und B. A erzeugt einen Link für B mit
+„Lesen“: B steht danach nicht in der Mitgliederliste und hat keinen Schlüssel
+des Space. B öffnet den Link und nimmt an, während kein Gerät von A online ist:
+Die Einladung zeigt „angenommen, wartet auf Admin“, B hat weiter keinen
+Schlüssel, und das Relay weist B ab. Sobald ein Gerät von A online ist und A
+bestätigt, nimmt es B auf, und alle Dateien des Space erscheinen bei B, auch
+die, die vor der Einladung hinzugekommen sind. Mit einer dritten Vault C
+wiederholen und verwerfen: C hat danach keinen Space und keinen Schlüssel dazu,
+und A hat nichts davon erfahren. Eine vierte Vault D schickt A eine Annahme mit
+erfundenem Geheimnis: A zeigt nichts an, speichert nichts und antwortet nicht.
 
 **Acceptance Scenarios**:
 
 1. **Given** Anna ist Admin eines Space, **When** sie „Mitglied einladen“ wählt,
-   eine gültige Vault-Identität, einen Namen und eine Fähigkeitsstufe angibt,
-   **Then** erscheint Ben unter den offenen Einladungen als „eingeladen“ mit
-   diesen Rechten; in der Mitgliederliste steht er noch nicht, und er erhält
-   keinen Schlüssel.
-2. **Given** die Einladung ist verschickt, **When** ein Gerät von Bens Vault
-   online ist, **Then** zeigt holzi die Einladung mit Name des Space, Name und
-   Vault-Identität des Admins und Bens Rechten, mit „Annehmen“ und „Ablehnen“.
+   einen Namen und eine Fähigkeitsstufe angibt und optional eine Gültigkeit
+   wählt, **Then** erscheint ein Einladungslink (als Text zum Kopieren und als
+   QR-Code) und unter den offenen Einladungen ein Eintrag „offen“ mit diesen
+   Rechten; in der Mitgliederliste steht niemand Neues, und es wurde kein
+   Schlüssel erzeugt oder verschickt.
+2. **Given** Ben hat den Link, **When** er ihn in holzi öffnet, **Then** zeigt
+   holzi eine Vorschau mit Name des Space, Name und Vault-Identität des Admins
+   und Bens Rechten, mit „Annehmen“ und „Verwerfen“; bis dahin wurde nichts an
+   Anna geschickt, und die Einladung steht auf allen Geräten von Bens Vault.
 3. **Given** die Einladung, **When** Ben „Annehmen“ wählt und einen Ordner
-   angibt, **Then** zeigt die Einladung „angenommen, wartet auf Admin“, bis ein
-   Gerät von Anna die Annahme verarbeitet; danach steht Ben in der
-   Mitgliederliste, erhält die Schlüssel, alle Dateien des Space erscheinen in
-   seinem Ordner, und Anna sieht Ben als Mitglied.
-4. **Given** die Einladung, **When** die Eingeladene „Ablehnen“ wählt, **Then**
-   verschwindet die Einladung auf allen Geräten ihrer Vault, Anna sieht sie als
-   „abgelehnt“, die Mitgliederliste bleibt unverändert, und bei der
-   Eingeladenen bleibt kein Schlüssel des Space.
+   angibt, **Then** zeigt sie „angenommen, wartet auf Admin“, bis Anna die
+   Annahme bestätigt; Anna sieht die Annahme mit der Vault-Identität des
+   Annehmenden. Nach ihrer Bestätigung steht Ben in der Mitgliederliste, erhält
+   die Schlüssel, alle Dateien des Space erscheinen in seinem Ordner, und Anna
+   sieht Ben als Mitglied.
+4. **Given** die Einladung, **When** die Eingeladene „Verwerfen“ wählt, **Then**
+   verschwindet die Einladung auf allen Geräten ihrer Vault, es wird nichts
+   verschickt, die Mitgliederliste bleibt unverändert, und bei der Eingeladenen
+   bleibt kein Schlüssel des Space. Der Link bleibt bei Anna „offen“, bis er
+   abläuft oder sie ihn zurückzieht.
 5. **Given** Ben hat mehrere Geräte, **When** er die Einladung auf einem Gerät
    annimmt, **Then** kennen seine anderen Geräte den Space ebenfalls, ohne dass
    Anna etwas tut; jedes Gerät bindet ihn an einen eigenen Ordner.
-6. **Given** Anna gibt eine ungültige Vault-Identität oder ihre eigene ein,
-   **When** sie einladen will, **Then** lehnt holzi das mit einem Hinweis ab.
-7. **Given** Ben ist Mitglied mit „Schreiben“, **When** er die Mitgliederliste
+6. **Given** ein Link, der schon eingelöst, abgelaufen oder zurückgezogen ist,
+   **When** jemand ihn öffnet oder annimmt, **Then** nennt holzi den Grund, und
+   es entsteht keine Mitgliedschaft.
+7. **Given** Anna erhält eine Annahme von einer Vault, die nicht die erwartete
+   ist, **When** sie die Annahme prüft, **Then** kann sie die Aufnahme
+   ablehnen; die Vault steht nie in der Mitgliederliste und der Link ist
+   verbraucht.
+8. **Given** ein Gerät des Admins erhält eine Nachricht, die kein gültiges, noch
+   offenes Geheimnis trägt, **When** es sie prüft, **Then** verwirft es sie, ohne
+   etwas anzuzeigen, zu speichern oder zu antworten.
+9. **Given** Ben ist Mitglied mit „Schreiben“, **When** er die Mitgliederliste
    öffnet, **Then** gibt es für ihn keine Möglichkeit, jemanden einzuladen.
 
 ---
@@ -494,17 +537,34 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
 
 ### Edge Cases
 
-- **Eingeladene Vault offline**: Die Einladung wartet, bis ein Gerät der
-  eingeladenen Vault online ist. Sie bleibt offen, bis sie angenommen,
-  abgelehnt oder vom Admin zurückgezogen wird. Bis dahin steht die Vault als
-  „eingeladen“ unter den offenen Einladungen, nicht in der Mitgliederliste.
+- **Eingeladene Vault offline**: Der Link wartet beim Eingeladenen, bis er ihn
+  öffnet; die Annahme schickt ein Gerät erneut, bis der Admin antwortet. Bis zur
+  Aufnahme steht die Vault als „offen“ oder „angenommen, wartet auf Admin“ unter
+  den offenen Einladungen, nicht in der Mitgliederliste.
 - **Admin offline, wenn die Annahme kommt**: Die Einladung zeigt auf beiden
   Seiten „angenommen, wartet auf Admin“. Die Vault hat bis dahin keinen
   Schlüssel und keinen Zugang zum Relay; das nächste Gerät des Admins, das
-  online ist, nimmt sie auf (FR-009).
-- **Einladung wird zurückgezogen, bevor sie ankommt**: Kommt die Einladung
-  danach an, zeigt holzi sie nicht mehr an oder als „zurückgezogen“; es entsteht
-  kein Space auf den Geräten der Eingeladenen.
+  online ist, zeigt die Annahme an, und erst nach der Bestätigung des Admins
+  wird die Vault aufgenommen (FR-009). Maßgeblich für die Gültigkeit ist der
+  unterschriebene Zeitpunkt der Annahme, nicht der ihres Eintreffens.
+- **Link wird zurückgezogen oder läuft ab, bevor er eingelöst wird**: Die
+  Vorschau und die Annahme scheitern mit dem Grund; es entsteht kein Space auf
+  den Geräten der Eingeladenen.
+- **Link geht verloren oder an Unbefugte**: Er gilt nur einmal und nur bis zur
+  Ablaufzeit, der Admin sieht vor der Aufnahme die Vault-Identität des
+  Annehmenden und kann ablehnen oder den Link zurückziehen. Ein Link verschafft
+  nie Schlüssel oder Zugang am Relay.
+- **Zwei Vaults lösen denselben Link fast gleichzeitig ein**: Der Link ist
+  einmalig. Die Annahme, die ein Gerät des Admins zuerst verarbeitet, sperrt ihn;
+  die zweite wird verworfen. Erreichen die Annahmen verschiedene Geräte des
+  Admins, bevor diese sich abgeglichen haben, nimmt der Admin höchstens eine auf,
+  die andere gilt nach dem Abgleich als abgelehnt.
+- **Jemand überhäuft eine Vault mit Nachrichten**: Wer die Vault-Identität kennt,
+  kann zwar Nachrichten an sie schicken, aber keine Einladung. Ein Gerät des
+  Admins verwirft Nachrichten ohne gültiges, offenes Geheimnis ohne Anzeige,
+  Speicherung oder Antwort (FR-041); es gibt dabei keine Rückmeldung, an der der
+  Absender gültige von ungültigen Geheimnissen unterscheiden könnte. Die
+  Zahl offener Annahmen ist durch die Zahl der erzeugten Links begrenzt.
 - **Zwei Nutzer ändern dieselbe Datei gleichzeitig**: Es entsteht genau eine
   Konfliktkopie (FR-029). Ändern mehr als zwei Mitglieder gleichzeitig, entsteht
   je unterlegener Fassung eine Konfliktkopie.
@@ -645,61 +705,82 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   Admin sind, keine Möglichkeit zum Einladen oder Weiterteilen anbieten, und
   Mitglieder MÜSSEN jede Mitgliederliste verwerfen, die nicht ein Gerät auf der
   aktuellen Geräteliste des Admins unterschrieben hat (D29).
-- **FR-008**: Der Admin MUSS ein Mitglied über dessen Vault-Identität einladen
-  können, mit einem Namen, unter dem es im Space erscheint, und einer
-  Fähigkeitsstufe (FR-015). holzi MUSS ungültige Vault-Identitäten, die eigene
-  und die eines bestehenden Mitglieds abweisen.
-- **FR-009**: Eine Einladung MUSS der eingeladenen Vault eine verschlüsselte
-  Direktnachricht mit Kennung und Name des Space, Admin, Fähigkeiten und
-  Hinweisen auf das Relay senden (FR-041), ohne Schlüssel. Die eingeladene
-  Vault steht bis zur Annahme NICHT in der Mitgliederliste und erhält keine
-  Umschläge; das Relay gibt ihr deshalb keinen Zugang. Nimmt sie an, schickt
-  sie eine unterschriebene Annahme mit ihrer aktuellen Geräteliste; erst dann
-  MUSS ein Gerät des Admins sie in die Mitgliederliste aufnehmen, eine neue
+- **FR-008**: Der Admin MUSS ein Mitglied über einen Einladungslink einladen
+  können, mit einem Namen, unter dem es im Space erscheint, einer
+  Fähigkeitsstufe (FR-015) und einer Gültigkeit (Standard 7 Tage, wählbar). Der
+  Link MUSS enthalten: Kennung und Name des Space, Vault-Identität des Admins,
+  Fähigkeitsstufe, ein zufälliges Einmalgeheimnis, die Ablaufzeit und Hinweise
+  auf das Relay, und keinen Schlüssel. holzi MUSS ihn als Text und als QR-Code
+  anbieten; weitergeben MUSS der Admin ihn selbst. Das Einmalgeheimnis MUSS
+  mindestens 128 Bit Zufall haben. Die Vault-Identität allein DARF NICHT
+  genügen, um eine Einladung auszulösen; holzi DARF keinen Weg anbieten, eine
+  Einladung an eine eingegebene Vault-Identität zu schicken. holzi MUSS beim
+  Öffnen einen unlesbaren, abgelaufenen oder bereits eingelösten Link und einen
+  Link des eigenen Space oder eines Space, in dem die eigene Vault schon
+  Mitglied ist, mit einem Hinweis abweisen.
+- **FR-009**: Das Öffnen eines Links MUSS der Vault zunächst nur eine Vorschau
+  geben und nichts an den Admin schicken. Nimmt die Vault an, MUSS ein Gerät
+  eine unterschriebene Annahme mit dem Einmalgeheimnis und der aktuellen
+  Geräteliste der Vault an den Admin schicken (FR-041). Die Vault steht bis zur
+  Aufnahme NICHT in der Mitgliederliste und erhält keine Umschläge; das Relay
+  gibt ihr deshalb keinen Zugang. Erst wenn ein Gerät des Admins die Annahme
+  mit gültigem, noch offenem Geheimnis erhalten hat UND der Admin sie nach
+  Prüfung der Vault-Identität und des Namens bestätigt hat, MUSS ein Gerät des
+  Admins die Vault in die Mitgliederliste aufnehmen, eine neue
   Schlüsselgeneration für die neue Mitgliederliste erzeugen und deren Schlüssel
   und die aller älteren Generationen an jedes ihrer Geräte verpacken (FR-019,
-  FR-043). Bis ein Gerät des Admins die Annahme
-  verarbeitet hat, MUSS die Einladung auf beiden Seiten als „angenommen,
-  wartet auf Admin“ erscheinen. Das präzisiert D22: Die neue Generation
-  entsteht mit der Aufnahme nach der Annahme, nicht schon beim Verschicken.
-- **FR-010**: Die Einladung MUSS auf allen Geräten der eingeladenen Vault
-  angezeigt werden, sobald eines davon online ist, mit Name des Space, Name und
-  Vault-Identität des Admins und den eigenen Fähigkeiten, und mit „Annehmen“
-  und „Ablehnen“. Sie MUSS offen bleiben, bis sie angenommen, abgelehnt oder
-  zurückgezogen ist.
-- **FR-011**: Nimmt die eingeladene Vault an, MUSS das annehmende Gerät nach
-  einem Ordner fragen und, sobald ein Gerät des Admins sie nach FR-009
-  aufgenommen hat, alle aktuellen Dateien des Space erhalten können, auch die,
-  die vor der Einladung hinzugekommen sind. Der Admin MUSS die Annahme
-  angezeigt bekommen, sobald sie ihn erreicht.
-- **FR-012**: Lehnt die eingeladene Vault ab, MUSS die Einladung auf allen
-  ihren Geräten verschwinden, und der Admin MUSS darüber eine Nachricht
-  erhalten und sie als „abgelehnt“ sehen. Die Mitgliederliste ändert sich
-  dadurch nicht, und bei der Vault bleibt kein Schlüssel des Space.
-- **FR-013**: Der Admin MUSS eine offene Einladung zurückziehen können. Die
-  eingeladene Vault MUSS darüber eine Nachricht erhalten, und eine Annahme,
-  die danach ein Gerät des Admins erreicht, DARF NICHT zur Aufnahme führen.
-  Die Mitgliederliste ändert sich dadurch nicht.
-- **FR-014**: Nimmt eine Vault an, MÜSSEN alle Geräte dieser Vault den Space
-  erhalten, ohne dass der Admin etwas tut. Weil Umschläge je Gerät entstehen,
+  FR-043). Mit der Annahme MUSS das Geheimnis verbraucht sein. Bis zur
+  Bestätigung MUSS die Einladung auf beiden Seiten als „angenommen, wartet auf
+  Admin“ erscheinen. Das präzisiert D22: Die neue Generation entsteht mit der
+  Aufnahme nach der Bestätigung, nicht schon beim Erzeugen des Links.
+- **FR-010**: Hat eine Vault einen Link geöffnet, MUSS die Einladung auf allen
+  Geräten dieser Vault angezeigt werden, sobald eines davon online ist, mit
+  Name des Space, Name und Vault-Identität des Admins und den eigenen
+  Fähigkeiten, und mit „Annehmen“ und „Verwerfen“. Sie MUSS offen bleiben, bis
+  sie angenommen oder verworfen ist.
+- **FR-011**: Nimmt die Vault an, MUSS das annehmende Gerät nach einem Ordner
+  fragen und, sobald der Admin sie nach FR-009 aufgenommen hat, alle aktuellen
+  Dateien des Space erhalten können, auch die, die vor der Einladung
+  hinzugekommen sind. Der Admin MUSS die Annahme angezeigt bekommen, sobald sie
+  ihn erreicht.
+- **FR-012**: Verwirft die Vault die Einladung, MUSS sie auf allen ihren Geräten
+  verschwinden. Dabei DARF NICHTS an den Admin gehen; der Link bleibt beim
+  Admin „offen“, bis er abläuft oder zurückgezogen wird. Die Mitgliederliste
+  ändert sich dadurch nicht, und bei der Vault bleibt kein Schlüssel des Space.
+  Lehnt der Admin eine Annahme ab (FR-009), MUSS die Vault darüber eine
+  Nachricht erhalten und der Admin die Einladung als „abgelehnt“ sehen.
+- **FR-013**: Der Admin MUSS einen Link jederzeit zurückziehen können, auch
+  nachdem eine Annahme eingetroffen ist. Eine Annahme, die danach ein Gerät des
+  Admins erreicht oder die bereits wartet, DARF NICHT zur Aufnahme führen; die
+  Vault MUSS darüber eine Nachricht erhalten, sofern sie das Geheimnis schon
+  eingelöst hatte. Die Mitgliederliste ändert sich dadurch nicht.
+- **FR-014**: Ist eine Vault aufgenommen, MÜSSEN alle Geräte dieser Vault den
+  Space erhalten, ohne dass der Admin etwas tut. Weil Umschläge je Gerät entstehen,
   erfährt der Admin, wie viele Geräte die Vault hat; das wird hingenommen
   (D28).
-- **FR-041** (Zustellung von Einladungen): Einladungen, ihr Zurückziehen und
-  die Antworten darauf („angenommen“, „abgelehnt“, „verlassen“) MÜSSEN als verschlüsselte
-  Nostr-Nachricht an die Vault-Identität des Empfängers gehen und, soweit dem
-  Absender die aktuelle Geräteliste des Empfängers bekannt ist, zusätzlich an
-  jedes Gerät darauf, weil nur Hauptgeräte den privaten Schlüssel der
-  Vault-Identität haben (Spec 024). Unterschrieben wird jede solche Nachricht
-  mit dem Geräteschlüssel des sendenden Geräts; sie gilt, wenn das Gerät auf
-  der aktuellen Geräteliste seiner Vault steht (D29). Das empfangende Gerät
-  legt sie in den Daten seiner Vault ab, damit alle ihre Geräte sie sehen
-  (FR-010). Zugestellt
-  werden sie über die Anwesenheits- und Signalisierungsserver aus Spec 024 und
+- **FR-041** (Zustellung der Antworten auf Einladungen): Der Einladungslink
+  selbst geht nicht über Nostr; der Admin gibt ihn weiter (FR-008). Über Nostr
+  gehen nur die Antworten darauf: die Annahme, die Ablehnung der Annahme, das
+  Zurückziehen nach der Annahme und „verlassen“. Sie MÜSSEN als
+  verschlüsselte Nostr-Nachricht an die Vault-Identität des Empfängers gehen
+  und, soweit dem Absender die aktuelle Geräteliste des Empfängers bekannt ist,
+  zusätzlich an jedes Gerät darauf, weil nur Hauptgeräte den privaten Schlüssel
+  der Vault-Identität haben (Spec 024). Unterschrieben wird jede solche
+  Nachricht mit dem Geräteschlüssel des sendenden Geräts; sie gilt, wenn das
+  Gerät auf der aktuellen Geräteliste seiner Vault steht (D29). Die Annahme
+  MUSS außerdem das Einmalgeheimnis eines offenen Links des Admins tragen. Ein
+  Gerät des Admins MUSS jede Nachricht, die keine gültige Signatur oder kein
+  gültiges, noch offenes Geheimnis trägt, still verwerfen: ohne Anzeige, ohne
+  Speicherung über die Prüfung hinaus und ohne Antwort, auch keine
+  Fehlermeldung. Das empfangende Gerät legt gültige Nachrichten in den Daten
+  seiner Vault ab, damit alle ihre Geräte sie sehen (FR-010). Zugestellt werden
+  sie über die Anwesenheits- und Signalisierungsserver aus Spec 024 und
   zusätzlich über die Signalisierung des Relays des Admins, wenn dieses sie
   anbietet (Spec 026 FR-009). Die Server DÜRFEN vom Inhalt nichts sehen außer
   Empfänger, Zeit und Länge. Solange keine Antwort eingetroffen ist, MÜSSEN
-  Geräte des Admins die Zustellung einer offenen Einladung wiederholen, wenn
-  sie online sind. Datenfreigaben (Spec 028) nutzen denselben Weg.
+  Geräte der Vault, die angenommen hat, die Annahme wiederholen, wenn sie
+  online sind, bis der Link abläuft. Datenfreigaben (Spec 028) nutzen denselben
+  Weg.
 
 **Fähigkeiten**
 
@@ -894,16 +975,18 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
 - **FR-036**: Die Ansicht eines Space MUSS Name, gebundenen Ordner dieses Geräts,
   Speicher-Backend, den Admin und alle Mitglieder mit Namen, Vault-Identität,
   Fähigkeitsstufe und Zustand zeigen, dazu getrennt die offenen Einladungen
-  („eingeladen“, „angenommen, wartet auf Admin“), dem Admin zusätzlich
-  abgelehnte Einladungen als „abgelehnt“; die eigene Zeile MUSS
+  („offen“ mit Ablaufzeit, „angenommen, wartet auf Admin“), dem Admin
+  zusätzlich abgelehnte, abgelaufene und zurückgezogene Einladungen; die eigene Zeile MUSS
   hervorgehoben sein. Nur der Admin sieht die Bedienelemente
-  zum Einladen, Ändern und Entfernen.
+  zum Einladen (Link erzeugen und zurückziehen), Bestätigen, Ändern und
+  Entfernen.
 - **FR-037**: Die Ansichten MÜSSEN dem Aufbau der Einstellungs-App folgen
   (Spec 023: Werkzeugleiste, großer Titel, abgerundete Gruppen mit Zeilen) und
   Orte im Tab sein (Spec 020). Sie liegen in der Einstellungskategorie
   „Föderation“ (Spec 023), Unteransicht „Spaces“; das Speicher-Backend eines
-  Space wird in dessen Ansicht eingestellt. Anlegen, Einladen, Rechte ändern, Entfernen,
-  Annehmen, Ablehnen und Verlassen MÜSSEN Aktionen im Katalog von Spec 020
+  Space wird in dessen Ansicht eingestellt. Anlegen, Einladen (Link erzeugen und
+  zurückziehen), Link öffnen, Annehmen, Verwerfen, Aufnahme bestätigen oder
+  ablehnen, Rechte ändern, Entfernen und Verlassen MÜSSEN Aktionen im Katalog von Spec 020
   sein.
 - **FR-038**: holzi MUSS dem betroffenen Mitglied zeigen, wenn sich seine Rechte
   geändert haben oder es entfernt wurde, sobald eines seiner Geräte davon
@@ -928,12 +1011,15 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   Vault der Mitgliederliste und je Gerät später hinzugekommener Mitglieder
   (FR-043). Mehrere Generationen gelten
   nebeneinander.
-- **Einladung**: verschlüsselte Direktnachricht (FR-041) an eine Vault-Identität mit
-  Kennung und Name des Space, Admin, Fähigkeitsstufe und Hinweisen auf das
-  Relay, ohne Schlüssel; Antwort „angenommen“ (unterschrieben), „abgelehnt“
-  oder „verlassen“ zurück an den Admin. Zustand: „eingeladen“, „angenommen,
-  wartet auf Admin“, „abgelehnt“, „zurückgezogen“; mit der Aufnahme wird die
-  Vault Mitglied.
+- **Einladung**: ein vom Admin erzeugter Einladungslink (siehe Begriffe) mit
+  Kennung und Name des Space, Admin, Fähigkeitsstufe, Einmalgeheimnis,
+  Ablaufzeit und Hinweisen auf das Relay, ohne Schlüssel. Der Admin speichert
+  je Einladung Namen, Fähigkeitsstufe, Geheimnis, Ablaufzeit und Zustand; die
+  Antwort „angenommen“ (unterschrieben, mit Geheimnis und Geräteliste) geht als
+  Nachricht (FR-041) an den Admin, ebenso die Ablehnung der Annahme und das
+  Zurückziehen danach. Zustand beim Admin: „offen“, „angenommen, wartet auf
+  Admin“, „abgelehnt“, „abgelaufen“, „zurückgezogen“; mit der Aufnahme wird die
+  Vault Mitglied und der Link ist verbraucht.
 - **Ordnerbindung**: je Gerät und Space der gewählte lokale Ordner. Verlässt
   das Gerät nie (Spec 025).
 - **Dateiindex-Eintrag, Objekt, Konfliktkopie**: wie in Spec 025, ergänzt um
@@ -958,8 +1044,8 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
 - **SC-004**: Ist ein Gerät des Admins online, weist das Relay ein entferntes
   Mitglied spätestens 10 Sekunden nach dem Bestätigen des Entfernens ab.
 - **SC-005**: Ein Admin lädt jemanden in unter 1 Minute ein, ausgehend von der
-  Übersicht der Spaces; sind beide online, sieht die eingeladene Vault die
-  Einladung in unter 30 Sekunden.
+  Übersicht der Spaces; sind beide online, erreicht die Annahme den Admin
+  in unter 30 Sekunden nach dem Annehmen.
 - **SC-006**: Bei gleichzeitigen Änderungen derselben Datei gehen in 0 % der
   Fälle Fassungen verloren, und jede Konfliktkopie existiert auf allen Geräten
   aller Mitglieder genau einmal.
@@ -980,10 +1066,11 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
   und die Bindung an einen lokalen Ordner; Spec 026 Relay, Postfächer, die
   Prüfung der Mitgliederliste und Speicher-Backend A.
 - Wie für eigene Geräte (Spec 025) wählt jedes Gerät den lokalen Ordner selbst.
-- Die Vault-Identität eines anderen Nutzers kommt auf einem Weg außerhalb von
-  holzi zum Admin (Kopieren, QR-Code). Spec 024 sorgt dafür, dass ein Nutzer
-  seine eigene Vault-Identität anzeigen und kopieren kann. Ein Adressbuch ist
-  nicht Teil dieser Spec.
+- Der Einladungslink kommt auf einem Weg außerhalb von holzi vom Admin zum
+  Eingeladenen (Kopieren, QR-Code); der Admin muss dessen Vault-Identität
+  vorher nicht kennen, sie kommt mit der Annahme (FR-009). Spec 024 zeigt die
+  eigene Vault-Identität weiter an, sie ist aber keine Einladeadresse mehr.
+  Ein Adressbuch ist nicht Teil dieser Spec.
 - Ein Space nutzt das Relay, das die Vault des Admins eingerichtet hat; die
   Einladung nennt es. Ob ein Bereich zugleich auf mehreren Relays liegen darf,
   ist die offene Frage aus Spec 026 FR-040; sie gilt für Spaces ebenso und wird
@@ -1010,6 +1097,11 @@ in der Mitgliederliste, und eine neue Schlüsselgeneration ist entstanden.
 - Weiterteilen durch Mitglieder oder Einladen durch andere als den Admin (D7).
   Dass jemand Dateien herunterlädt und anderswo erneut teilt, wird nicht
   verhindert.
+- Einladen über die bloße Vault-Identität, ein Adress- oder Kontaktbuch und
+  das Blockieren einzelner Absender: Es gibt keine Einladung ohne Link des
+  Admins, deshalb auch nichts zu blockieren (2026-10-01).
+- Das Weitergeben des Links: Wie der Admin ihn überträgt, bestimmt er selbst.
+  holzi bietet Kopieren und einen QR-Code, keinen eigenen Versandweg.
 - Admin-Rolle übertragen, weder auf Wunsch noch nach Verlust, dazu mehrere
   Admins oder vergebbare Admin-Rechte (D6, D23, Entwurf §15 Punkt 3). Geht die
   Vault des Admins verloren, ist der Space eingefroren.
