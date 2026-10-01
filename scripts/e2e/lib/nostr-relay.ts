@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { targetDirectory } from './build.ts'
+import { freePort } from './ports.ts'
 import { spawnMarked, stopGroup } from './processes.ts'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -13,9 +14,45 @@ const REPO_ROOT = resolve(HERE, '..', '..', '..')
 const URL_LINE = /stdout (ws:\/\/\S+)/
 
 export interface NostrRelay {
-  /** `ws://127.0.0.1:<port>`, what the instances are pointed at. */
+  /** `ws://127.0.0.1:<port>`, what the instances are pointed at; the same after a stop and a start. */
   url: string
+  /** `up` while the process runs. */
+  readonly state: 'up' | 'down'
+  /** Ends the process; safe to call twice. */
   stop(): Promise<void>
+  /** Starts the process again on the same address; an error while it is up. */
+  start(): Promise<void>
+}
+
+/** One running relay process. */
+export interface RelayProcess {
+  stop(): Promise<void>
+}
+
+/** Starts a relay process listening on `port`. */
+export type LaunchRelay = (port: number) => Promise<RelayProcess>
+
+/** The environment variable the relay binary reads its port from (src-tauri/src/bin/e2e_nostr_relay.rs). */
+export const PORT_VARIABLE = 'HOLZI_E2E_RELAY_PORT'
+
+/** The state of a relay that can go down and come back on its address; the process comes from `launch`. */
+export function createRelay(port: number, launch: LaunchRelay): NostrRelay {
+  let running: RelayProcess | undefined
+  return {
+    url: `ws://127.0.0.1:${port}`,
+    get state() {
+      return running === undefined ? 'down' : 'up'
+    },
+    async start() {
+      if (running !== undefined) throw new Error('the relay is already up')
+      running = await launch(port)
+    },
+    async stop() {
+      const process = running
+      running = undefined
+      if (process !== undefined) await process.stop()
+    },
+  }
 }
 
 let built: Promise<string> | undefined
@@ -59,7 +96,17 @@ export function buildNostrRelay(
   return built
 }
 
-/** Starts the relay and waits for the address it prints. */
+function printedUrls(logFile: string): string[] {
+  const log = existsSync(logFile) ? readFileSync(logFile, 'utf8') : ''
+  return [...log.matchAll(new RegExp(URL_LINE, 'g'))].map((m) => m[1] ?? '')
+}
+
+/**
+ * Starts the relay on a port chosen here, so it can be stopped and started again on the same address,
+ * and waits for the address it prints. The relay never outlives its scenario.
+ * ponytail: the port is free when chosen, so another process could take it before the relay binds;
+ * the relay would then end at once and the error says so. The upgrade path is a retry with a new port.
+ */
 export async function startNostrRelay(options: {
   logFile: string
   env?: NodeJS.ProcessEnv
@@ -67,33 +114,41 @@ export async function startNostrRelay(options: {
 }): Promise<NostrRelay> {
   const env = options.env ?? process.env
   const binary = await buildNostrRelay(options.logFile, env)
-  const { child } = spawnMarked(binary, [], {
-    env: { ...env },
-    logFile: options.logFile,
-  })
-  const end = Date.now() + (options.limitMs ?? 15_000)
-  for (;;) {
-    if (child.exitCode !== null) {
-      throw new Error(`the Nostr test relay ended; see ${options.logFile}`)
-    }
-    const log = existsSync(options.logFile)
-      ? readFileSync(options.logFile, 'utf8')
-      : ''
-    const match = [...log.matchAll(new RegExp(URL_LINE, 'g'))].at(-1)
-    if (match?.[1] !== undefined) {
-      return {
-        url: match[1],
-        stop: async () => {
-          if (child.pid !== undefined) await stopGroup(child.pid)
-        },
-      }
-    }
-    if (Date.now() >= end) {
+  const launch: LaunchRelay = async (port) => {
+    const before = printedUrls(options.logFile).length
+    const { child } = spawnMarked(binary, [], {
+      env: { ...env, [PORT_VARIABLE]: String(port) },
+      logFile: options.logFile,
+    })
+    const stop = async () => {
       if (child.pid !== undefined) await stopGroup(child.pid)
-      throw new Error(
-        `the Nostr test relay printed no address; see ${options.logFile}`,
-      )
     }
-    await new Promise((resolveWait) => setTimeout(resolveWait, 100))
+    const end = Date.now() + (options.limitMs ?? 15_000)
+    for (;;) {
+      if (child.exitCode !== null) {
+        throw new Error(`the Nostr test relay ended; see ${options.logFile}`)
+      }
+      const printed = printedUrls(options.logFile)
+      if (printed.length > before) {
+        const url = printed[printed.length - 1]
+        if (url !== `ws://127.0.0.1:${port}`) {
+          await stop()
+          throw new Error(
+            `the Nostr test relay listens on ${url}, not on port ${port}; see ${options.logFile}`,
+          )
+        }
+        return { stop }
+      }
+      if (Date.now() >= end) {
+        await stop()
+        throw new Error(
+          `the Nostr test relay printed no address; see ${options.logFile}`,
+        )
+      }
+      await new Promise((resolveWait) => setTimeout(resolveWait, 100))
+    }
   }
+  const relay = createRelay(await freePort(), launch)
+  await relay.start()
+  return relay
 }
