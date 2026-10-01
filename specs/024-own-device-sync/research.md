@@ -145,6 +145,19 @@ Datenhaltung, vier Änderungen an haex-crdt, Nutzen erst bei Fremden; Laufnummer
 027/028), ein einziger Zeitpunkt „zuletzt synchronisiert“ je Gegenseite (verliert Änderungen über
 Zwischengeräte), Daten ungefragt nach jedem Commit schieben (Lücken beim Empfänger).
 
+**Zeilen aus mehreren Gruppen (gefunden vom Lasttest T048, 2026-10-01)**: Die Zellen einer Zeile können aus
+verschiedenen Transaktionsgruppen stammen. Wurde eine Zeile angelegt und danach geändert, trägt die
+Gruppe der Anlage nur noch die Zellen, die die Änderung nicht überschrieben hat. Der Pull liefert die
+Gruppen nach HLC; trennen die Seiten beide, legte die erste Seite die Zeile ohne eine Spalte an, die
+einen Wert braucht (`NOT NULL`, kein Standardwert), und `apply_remote_changes` scheiterte, bei jedem
+Versuch an derselben Stelle. Bei 4 MiB je Seite trifft das einen Abgleich über mehr als eine Seite oder
+einen dort abgebrochenen. Der Empfänger hält deshalb eine Gruppe zurück, deren Zeilen noch nicht
+angelegt werden können, bis die fehlenden Zellen in einer späteren Gruppe desselben Pulls ankommen, und
+der Fortschritt je Ursprung bleibt unter der ältesten zurückgehaltenen Gruppe. Bricht der Pull ab, geht
+nichts verloren, was der nächste nicht noch einmal sendet; auf der letzten Seite wird angewendet, was
+übrig ist. Die Alternative „unvollständige Zeile verwerfen“ (`ConstraintDecision::SkipRow` in
+haex-crdt) verlöre die Zellen dauerhaft, da der Fortschritt weiterliefe.
+
 ## R5 Prüfen beim Empfang (FR-013, FR-014, FR-021, FR-028)
 
 **Entscheidung**: holzi prüft vor `apply`, gruppiert nach Transaktions-HLC

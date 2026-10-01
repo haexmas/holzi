@@ -10,12 +10,14 @@
 #![cfg(target_os = "linux")]
 
 use std::sync::{Arc, LazyLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tokio::sync::Mutex;
 
 #[path = "common/sync_fixture.rs"]
 mod sync_fixture;
+#[path = "common/sync_helpers.rs"]
+mod sync_helpers;
 
 /// `XDG_DATA_HOME` is process-wide; tests that set it take turns (same
 /// reasoning as `tests/vault_single_session.rs`).
@@ -209,5 +211,76 @@ async fn a_connected_device_shows_as_online_with_its_role_and_the_view_is_told()
     assert!(
         told.load(Ordering::SeqCst) > 0,
         "FR-034: the device view was told a device came online"
+    );
+}
+
+/// SC-001 and SC-002 (spec.md, T079): two devices are connected within 30
+/// seconds of coming up, and once connected a change shows on the other device
+/// within 5 seconds in 95 % of the cases. Measured over a real in-process
+/// relay and real endpoints on loopback: the times printed are those of this
+/// path (relay and sockets), not of a network between homes, so the bounds are
+/// the specification's, not a promise about a slow link.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn devices_connect_within_thirty_seconds_and_changes_show_within_five() {
+    const CONNECT_LIMIT: Duration = Duration::from_secs(30);
+    const SHOW_LIMIT: Duration = Duration::from_secs(5);
+    const CHANGES: usize = 20;
+
+    let _turn = TURN.lock().await;
+    let relay = nostr_sdk::local_relay::MockRelay::run()
+        .await
+        .expect("mock relay");
+    let relay_url = relay.url().await.to_string();
+    let main = sync_fixture::create_main("main", &relay_url).await;
+    let linked = sync_fixture::join(&main, &relay_url).await;
+
+    // SC-002: from the moment the second device is up to the connection.
+    let up = Instant::now();
+    let main_runtime = sync_helpers::runtime_of(&main).await;
+    let linked_key = linked.keys.device_pubkey;
+    let connected_after = tokio::time::timeout(CONNECT_LIMIT, async {
+        loop {
+            if main_runtime.node.connected().contains(&linked_key) {
+                return up.elapsed();
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .expect("SC-002: the devices are connected within 30 seconds");
+
+    // SC-001: a change on one device, the time until the other shows it, both ways.
+    let mut times: Vec<Duration> = Vec::new();
+    for n in 0..CHANGES {
+        let (from, to) = if n % 2 == 0 {
+            (&main, &linked)
+        } else {
+            (&linked, &main)
+        };
+        let id = format!("timed-{n}");
+        let started = Instant::now();
+        from.write_thread(&id, &id).await;
+        let shown = tokio::time::timeout(Duration::from_secs(30), async {
+            while to.thread_title(&id).is_none() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            started.elapsed()
+        })
+        .await
+        .expect("a change shows on the other device at all");
+        times.push(shown);
+        tokio::time::sleep(Duration::from_millis(150)).await;
+    }
+    times.sort();
+    let p95 = times[(CHANGES * 95).div_ceil(100) - 1];
+    println!(
+        "sync_devices: connected {connected_after:?} after coming up; {CHANGES} changes shown in \
+         median {:?}, p95 {p95:?}, max {:?}",
+        times[CHANGES / 2],
+        times[CHANGES - 1]
+    );
+    assert!(
+        p95 <= SHOW_LIMIT,
+        "SC-001: the 95th percentile is {p95:?}, over {SHOW_LIMIT:?}: {times:?}"
     );
 }

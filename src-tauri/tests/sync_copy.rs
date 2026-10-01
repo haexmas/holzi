@@ -14,7 +14,7 @@
 #![cfg(target_os = "linux")]
 
 use std::sync::LazyLock;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use haex_crdt::rusqlite::params;
 use tokio::sync::Mutex;
@@ -121,8 +121,10 @@ async fn a_copy_of_a_main_devices_file_becomes_a_main_device_and_syncs_with_its_
     );
     assert!(copy.thread_title("before-copy").is_some());
 
-    // Scenario 6: the source had no peer and published nothing; the copy's
-    // presence brings it a newer list, and the two connect.
+    // Scenario 6 and SC-002: the source had no peer and published nothing; the
+    // copy's presence brings it a newer list, and the two connect, within 30
+    // seconds of the copy coming up.
+    let copy_up = Instant::now();
     until("the source to take over the copy's list", || {
         listed(&source)
             .iter()
@@ -137,6 +139,12 @@ async fn a_copy_of_a_main_devices_file_becomes_a_main_device_and_syncs_with_its_
         "the copy's change reaches the source",
     )
     .await;
+    let found_after = copy_up.elapsed();
+    println!("sync_copy: the source found the copy and synced {found_after:?} after it came up");
+    assert!(
+        found_after <= Duration::from_secs(30),
+        "SC-002: the source took {found_after:?} to find its copy"
+    );
     reaches(
         &source,
         &copy,
