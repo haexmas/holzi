@@ -28,6 +28,10 @@ const route = useRoute()
 const router = useRouter()
 const instancesStore = useInstancesStore()
 const wm = useWindowManagerStore()
+const colorScheme = useColorScheme()
+
+// The color scheme is a vault preference: another device or window can change it.
+onVaultTablesChanged(['preferences'], colorScheme.refreshAsync)
 // Spec 020: create the models store here, inside a component setup (its setup calls `useI18n()`),
 // so the global chat actions (`stores/chatActionHandlers.ts`) find it when an action runs.
 useModelsStore()
@@ -74,24 +78,20 @@ onMounted(async () => {
     console.error('[wm] restoring the session failed; starting empty', error)
   }
   // Spec 023 (FR-014): the vault's color scheme; a read error leaves the system's.
-  void useColorScheme()
-    .loadAsync()
-    .catch((error: unknown) => {
-      console.error('[settings] reading the color scheme failed', error)
-    })
+  void colorScheme.loadAsync().catch((error: unknown) => {
+    console.error('[settings] reading the color scheme failed', error)
+  })
   void useModelDownloadsStore()
     .watchDownloads()
     .catch((error: unknown) => {
       console.error('[models] watching download progress failed', error)
     })
-  // Spec 024 (FR-032): received sync changes must appear in open windows
-  // and tabs without reloading. Started once per vault session, never
-  // torn down — same lifecycle as the subscription above.
-  void useSync()
-    .startListening()
-    .catch((error: unknown) => {
-      console.error('[sync] listening for data changes failed', error)
-    })
+  // Spec 024 (FR-032): changes to the vault's data, whoever made them, must appear in open
+  // windows and tabs without reloading. Started once per vault session, never torn down — same
+  // lifecycle as the subscription above.
+  void startVaultDataListening().catch((error: unknown) => {
+    console.error('[vault-data] listening for data changes failed', error)
+  })
 
   sessionRestored.value = true
 })

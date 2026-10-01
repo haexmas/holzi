@@ -46,14 +46,15 @@ export function useChatPermissionMode(
     }
   }
 
-  async function reloadAutonomyMode() {
-    autonomyPreferenceLoading.value = true
+  /** A `quiet` reload (after a change from elsewhere) keeps what is shown if the read fails. */
+  async function reloadAutonomyMode(quiet = false) {
+    if (!quiet) autonomyPreferenceLoading.value = true
     autonomyPreferenceError.value = null
     try {
       const stored = await getPrefAsync({ kind: 'vault' }, AUTONOMY_MODE_KEY)
       autonomyMode.value = isAutonomyMode(stored) ? stored : 'ungated'
     } catch (e: unknown) {
-      autonomyMode.value = 'standard'
+      if (!quiet) autonomyMode.value = 'standard'
       autonomyPreferenceError.value = errString(e)
     } finally {
       autonomyPreferenceLoading.value = false
@@ -75,6 +76,18 @@ export function useChatPermissionMode(
     deviceUuid.value = vaultDeviceUuid
     await reloadAutonomyMode()
   }
+
+  // Both modes are vault preferences another device or window can change (spec 024 FR-032).
+  onVaultTablesChanged(['preferences'], async () => {
+    if (!deviceUuid.value) return // not initialized yet
+    if (!permissionModeSaving.value) {
+      const stored = await getPrefAsync({ kind: 'vault' }, PERMISSION_MODE_KEY)
+      if (stored === 'manual' || stored === 'auto' || stored === 'plan') {
+        permissionMode.value = stored
+      }
+    }
+    await reloadAutonomyMode(true)
+  })
 
   return {
     permissionMode,

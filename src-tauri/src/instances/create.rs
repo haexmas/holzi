@@ -142,6 +142,7 @@ pub async fn create_instance(
 ) -> Result<CreateInstanceResult> {
     let result = create_instance_core(&app, &state, &chat, &args.name, args.passphrase).await?;
     // Spec 024: the sync service runs as tracked session work and ends with the close.
+    crate::vault_events::start_for_active_instance(&app, &state);
     crate::sync::start_for_active_instance(&app, &state).await;
 
     *chat.session.lock().unwrap_or_else(|e| e.into_inner()) = None;

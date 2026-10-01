@@ -71,15 +71,20 @@ type LinkJoinState =
 
 ## Ereignisse (Backend → Oberfläche)
 
-| Ereignis                  | Nutzdaten               | Wann                                                                                              |
-| ------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------- |
-| `sync-devices-changed`    | –                       | Geräteliste, Online-Stand, Name, Problem oder Aufnahmeanfragen ändern sich (FR-034)               |
-| `sync-data-changed`       | `{ tables: string[] }`  | eine empfangene Seite wurde angewendet; offene Ansichten laden die betroffenen Daten neu (FR-032) |
-| `link-host-state-changed` | `SyncStatus['linking']` | Fortschritt eines Verknüpfens auf dem Hauptgerät                                                  |
-| `link-join-state-changed` | `LinkJoinState`         | Fortschritt eines Verknüpfens auf der neuen Installation                                          |
+| Ereignis                  | Nutzdaten               | Wann                                                                                                                                                                      |
+| ------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sync-devices-changed`    | –                       | Geräteliste, Online-Stand, Name, Problem oder Aufnahmeanfragen ändern sich (FR-034)                                                                                       |
+| `vault-data-changed`      | `{ tables: string[] }`  | Tabellen des offenen Vaults wurden geschrieben, gleich von wem: lokal (ein Fenster, ein Agent, eine Erweiterung), von einem anderen Gerät empfangen, Neuabgleich (FR-032) |
+| `link-host-state-changed` | `SyncStatus['linking']` | Fortschritt eines Verknüpfens auf dem Hauptgerät                                                                                                                          |
+| `link-join-state-changed` | `LinkJoinState`         | Fortschritt eines Verknüpfens auf der neuen Installation                                                                                                                  |
 
-`sync-data-changed` ersetzt kein eigenes Neuladen der Stores; die vorhandenen Stores (Chat,
-Einstellungen, Sitzung) hören darauf und laden gezielt.
+`vault-data-changed` kommt aus `src-tauri/src/vault_events.rs`: haex-crdt meldet nach jedem
+Commit die geänderten Tabellen (`Database::observe_committed_changes`), holzi fasst Meldungen
+innerhalb von 50 ms zu einem Ereignis zusammen. Die Quelle einer Änderung spielt für die Ansicht
+keine Rolle. Jede Ansicht, die Vault-Daten zeigt, meldet sich mit `onVaultTablesChanged(tabellen,
+laden)` (`src/composables/useVaultData.ts`) für genau die Tabellen an, die sie zeigt, und lädt
+still nach: ohne Ladeanzeige und ohne eine laufende Eingabe zu überschreiben. Wer neue Daten aus
+dem Vault zeigt, meldet sich dort an; das Neuladen im Ablauf des Sync selbst ist nicht mehr nötig.
 
 ## Aktionen (Katalog, Spec 020)
 

@@ -18,7 +18,6 @@ import {
   ref,
   nextTick,
   useTemplateRef,
-  watch,
 } from 'vue'
 import type { UnlistenFn } from '@tauri-apps/api/event'
 import type { Message, SendMessageArgs } from '~/composables/useChat'
@@ -172,6 +171,7 @@ const {
   openingTimeLabel,
   stopDurationRefresh,
   refreshThreads,
+  refreshLoadedMessages,
   startEditing,
   cancelEditing,
   saveThreadTitle,
@@ -305,15 +305,25 @@ const { syncFromLocation, ui } = useChatTab({
   updatePermissionMode,
 })
 
-// Spec 024 (FR-032): a thread created/renamed/deleted on another device
-// must appear here without reloading; the messages of the open thread
-// already arrive over `chat.on*` regardless of origin.
-const sync = useSync()
-watch(sync.changeCount, () => {
-  if (!sync.lastChangedTables.value.includes('chat_threads')) return
-  refreshThreads().catch((e: unknown) => {
+// Spec 024 (FR-032): a thread or message created, renamed or deleted by another device or window
+// must appear here without reloading. While a turn runs here its own events and its turn-complete
+// reload keep the transcript current, so messages are left alone until it is over.
+onVaultTablesChanged(['chat_threads'], async () => {
+  try {
+    await refreshThreads()
+  } catch (e: unknown) {
     if (!unmounted) lastError.value = errString(e)
-  })
+  }
+})
+onVaultTablesChanged(['chat_messages'], async () => {
+  if (turnSetupPending.value) return
+  try {
+    // Keep the active thread untouched while its local turn runs, but do not let that
+    // suppress updates for other already-loaded threads.
+    await refreshLoadedMessages(busy.value ? activeThreadId.value : undefined)
+  } catch (e: unknown) {
+    if (!unmounted) lastError.value = errString(e)
+  }
 })
 
 onMounted(async () => {

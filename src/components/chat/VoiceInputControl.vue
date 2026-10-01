@@ -61,14 +61,19 @@ let unlistenCapped: (() => void) | null = null
 let disposed = false
 let startPending = false
 
-onMounted(async () => {
+async function loadAutoSendAsync() {
   try {
     const stored = await getPrefAsync({ kind: 'vault' }, AUTO_SEND_PREF_KEY)
     // No stored value yet -> the documented default (FR-005: on).
     if (!disposed) autoSend.value = stored === null ? true : stored === 'true'
   } catch {
-    // A failed preference read must not block dictation — keep the default.
+    // A failed preference read must not block dictation — keep the shown value.
   }
+}
+onVaultTablesChanged(['preferences'], loadAutoSendAsync)
+
+onMounted(async () => {
+  await loadAutoSendAsync()
   const unlisten = await listen<TranscriptionResult | null>(
     'voice-recording-capped',
     ({ payload }) => {

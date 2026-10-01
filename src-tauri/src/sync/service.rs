@@ -23,9 +23,7 @@ use crate::error::{HolziError, Result};
 use crate::instances::paths::get_app_local_data;
 use crate::state::AppState;
 use crate::sync::endpoint::{NodeConfig, SyncNode};
-use crate::sync::events::{
-    self, SyncDataChanged, LINK_HOST_STATE_CHANGED, SYNC_DATA_CHANGED, SYNC_DEVICES_CHANGED,
-};
+use crate::sync::events::{self, LINK_HOST_STATE_CHANGED, SYNC_DEVICES_CHANGED};
 use crate::sync::keys::{self, DeviceKeys};
 use crate::sync::link::host_task::LinkHost;
 use crate::sync::registry::{SyncRegistry, SyncRuntime};
@@ -267,8 +265,9 @@ async fn finish_pending_links(replica: &Arc<Replica>, keys: &DeviceKeys, vault: 
 
 /// Builds the closure [`SyncNode::bind`] calls after applying a pull: finishes
 /// join records when a remote device-list update is evidence of host
-/// publication, then turns the changed tables into the [`SYNC_DATA_CHANGED`]
-/// event (FR-032).
+/// publication and tells the device view when the device list changed. Announcing the changed
+/// data to the frontend is not its job: `crate::vault_events` does that for every writer
+/// (FR-032).
 fn applied_event_sink<R: Runtime>(
     app: AppHandle<R>,
     replica: Arc<Replica>,
@@ -305,13 +304,6 @@ fn applied_event_sink<R: Runtime>(
         if tables.contains("known_devices") || tables.contains("device_lists") {
             events::emit(&app, SYNC_DEVICES_CHANGED, ());
         }
-        events::emit(
-            &app,
-            SYNC_DATA_CHANGED,
-            SyncDataChanged {
-                tables: tables.into_iter().collect(),
-            },
-        );
     })
 }
 

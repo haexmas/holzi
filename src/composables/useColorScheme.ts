@@ -51,6 +51,16 @@ export function useColorScheme() {
     apply()
   }
 
+  /**
+   * Re-reads the vault's value after a synced change (spec 024, FR-032): unlike `loadAsync` it keeps
+   * the shown scheme while reading, so nothing flashes. A read error keeps what is shown.
+   */
+  async function refreshAsync(): Promise<void> {
+    const stored = await getPrefAsync({ kind: 'vault' }, COLOR_SCHEME_KEY)
+    scheme.value = parseColorScheme(stored) ?? 'system'
+    apply()
+  }
+
   /** Writes the vault's value and applies it at once (SC-005). */
   async function setAsync(next: ColorScheme): Promise<ColorScheme> {
     await setPrefAsync({ kind: 'vault' }, COLOR_SCHEME_KEY, next)
@@ -60,5 +70,11 @@ export function useColorScheme() {
     return next
   }
 
-  return { scheme: readonly(scheme), startSystem, loadAsync, setAsync }
+  return {
+    scheme: readonly(scheme),
+    startSystem,
+    loadAsync,
+    refreshAsync,
+    setAsync,
+  }
 }

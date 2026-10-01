@@ -145,6 +145,24 @@ export function useThreadSidebar(
     scheduleDurationRefresh()
   }
 
+  /**
+   * Reloads the messages of every thread already loaded, so a message another device or window
+   * added shows in an open thread. A thread a turn is streaming into is left alone: its
+   * turn-complete reload catches up.
+   */
+  async function refreshLoadedMessages(skipThreadId = streamingThreadId.value) {
+    const ids = Object.keys(messagesByThread.value).filter(
+      (id) => id !== skipThreadId,
+    )
+    const loaded = await Promise.all(
+      ids.map(async (id) => [id, await chat.listMessagesAsync(id)] as const),
+    )
+    for (const [id, messages] of loaded) {
+      if (streamingThreadId.value === id) continue
+      messagesByThread.value[id] = messages
+    }
+  }
+
   function startEditing(thread: Thread) {
     if (deletingThread.value || renamingThreadId.value) return
     editingThreadId.value = thread.id
@@ -309,6 +327,7 @@ export function useThreadSidebar(
     openingTimeLabel,
     stopDurationRefresh,
     refreshThreads,
+    refreshLoadedMessages,
     startEditing,
     cancelEditing,
     saveThreadTitle,

@@ -44,6 +44,9 @@ async function toggleAsync(enabled: boolean) {
 }
 
 onMounted(reloadAsync)
+onVaultTablesChanged(['preferences'], () => {
+  if (!busy.value) return reloadAsync()
+})
 </script>
 
 <template>

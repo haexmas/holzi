@@ -57,7 +57,7 @@ pub enum InboundError {
 /// What one page did.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Received {
-    /// Tables with at least one applied change, for `sync-data-changed`.
+    /// Tables with at least one applied change, for the follow-up work after a pull.
     pub tables: BTreeSet<String>,
     /// Groups rejected under research R5.
     pub rejected_groups: usize,

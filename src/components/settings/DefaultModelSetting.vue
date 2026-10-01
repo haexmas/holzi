@@ -86,8 +86,9 @@ const selectGroups = computed(() =>
   })),
 )
 
-async function reloadAsync() {
-  loading.value = true
+/** A `quiet` reload (after a change from elsewhere) keeps the shown lists until the new ones are read. */
+async function reloadAsync(quiet = false) {
+  if (!quiet) loading.value = true
   loadError.value = null
   modelListError.value = false
   try {
@@ -139,7 +140,10 @@ async function chooseAsync(value: string) {
   }
 }
 
-onMounted(reloadAsync)
+onMounted(() => reloadAsync())
+onVaultTablesChanged(['preferences', 'providers'], () => {
+  if (!busy.value) return reloadAsync(true)
+})
 </script>
 
 <template>

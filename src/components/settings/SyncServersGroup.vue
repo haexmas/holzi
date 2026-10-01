@@ -21,13 +21,19 @@ const drafts = reactive<Record<'nostrRelays' | 'irohRelays', string>>({
 })
 const busy = ref(false)
 
-onMounted(async () => {
+async function loadAsync() {
   try {
     servers.value = await syncServersGetAsync()
     loaded.value = true
   } catch (e) {
     error.value = errString(e)
   }
+}
+
+onMounted(loadAsync)
+// The servers are vault preferences: a change made on another device shows here at once.
+onVaultTablesChanged(['preferences'], () => {
+  if (!busy.value) return loadAsync()
 })
 
 type Kind = 'nostrRelays' | 'irohRelays'

@@ -22,6 +22,7 @@ import { createRequire } from 'node:module'
 import { dirname, resolve as resolvePath } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
+import { createVaultDataHub } from '../../src/lib/sync/vaultData.ts'
 import { nextTick, reactive } from 'vue'
 
 /** Same shape the page's own `useI18n()` gets — see the bare-globals list below. */
@@ -321,15 +322,12 @@ export function createChatState(
     }
     if (specifier.startsWith('~/composables/')) {
       const name = specifier.slice('~/composables/'.length)
-      const real = runComposable(
-        composablePath(name),
-        req,
-        name === 'useErrorString'
-          ? {
-              hfErrorKey: req('~/composables/useHuggingFace').hfErrorKey,
-            }
-          : {},
-      )
+      const real = runComposable(composablePath(name), req, {
+        onVaultTablesChanged,
+        ...(name === 'useErrorString'
+          ? { hfErrorKey: req('~/composables/useHuggingFace').hfErrorKey }
+          : {}),
+      })
       const override = dependencyOverrides[name]
       return override ? { ...real, [name]: override } : real
     }
@@ -340,6 +338,15 @@ export function createChatState(
       `check-chat-state harness: unexpected import '${specifier}'`,
     )
   }
+
+  // The real subscriber hub behind `onVaultTablesChanged`, so a test can fire a change.
+  const vaultData = createVaultDataHub((error) => {
+    throw error
+  })
+  const onVaultTablesChanged = (
+    tables: readonly string[],
+    handler: () => void | Promise<void>,
+  ) => vaultData.subscribe({ tables, handler })
 
   const chat = {
     ...runComposable(composablePath('useChat'), req).useChat(),
@@ -354,6 +361,7 @@ export function createChatState(
   const pinia = nodeRequire('pinia')
   pinia.setActivePinia(pinia.createPinia())
   const modelStore = runComposable(storePath('models'), req, {
+    onVaultTablesChanged,
     useChat: () => chat,
     useModels: () => req('~/composables/useModels').useModels(),
     useCatalog: () => req('~/composables/useCatalog').useCatalog(),
@@ -392,7 +400,7 @@ export function createChatState(
     'useChatNavigation',
     'useAction',
     'useChatTab',
-    'useSync',
+    'onVaultTablesChanged',
     'useModelsStore',
     'storeToRefs',
     'navigateTo',
@@ -450,7 +458,7 @@ export function createChatState(
         return { ok: true, result: null }
       },
     req('~/composables/useChatTab').useChatTab,
-    req('~/composables/useSync').useSync,
+    onVaultTablesChanged,
     () => modelStore,
     pinia.storeToRefs,
     pageGlobals.navigateTo ?? (() => {}),
@@ -466,6 +474,8 @@ export function createChatState(
 
   return {
     ...state,
+    /** Announces a change of `tables` as the backend's `vault-data-changed` event does. */
+    emitVaultChange: (tables: string[]) => vaultData.dispatch(tables),
     modelStore,
     mount: () => Promise.all(mountHooks.map((hook) => hook())),
     unmount: () => Promise.all(unmountHooks.map((hook) => hook())),
