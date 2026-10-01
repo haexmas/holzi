@@ -170,7 +170,12 @@ where
     };
     let (replica, own, now) = (Arc::clone(join.replica), join.keys.clone(), join.now_ms);
     let as_main = tokio::task::spawn_blocking(move || store(&replica, &own, record, now)).await??;
-    write_value(send, &LinkMessage::Done { link_id }, FRAME_LIMIT).await?;
+    // Everything is stored. A `Done` that does not get through does not undo that: the host keeps
+    // its record, and the two devices meet through this device's newer list as soon as both are
+    // online (research R20), so the link ends the same way.
+    if let Err(error) = write_value(send, &LinkMessage::Done { link_id }, FRAME_LIMIT).await {
+        log::info!("sync: the link's Done did not reach the main device: {error}");
+    }
     Ok(Joined { link_id, as_main })
 }
 

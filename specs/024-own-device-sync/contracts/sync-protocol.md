@@ -159,5 +159,14 @@ lp(endpoint_n) ‖ lp(device_h) ‖ lp(device_n) ‖ rolle_x)`, `rolle_x` ∈ {`
   gespeichert hat. Nach einem bestätigten
   `Done` bleibt N bis zur beobachteten neuen Geräteliste im Zustand `awaiting_publication` und
   wiederholt `Done` bei einer Wiederaufnahme.
+- **Umgesetzt ohne `Resume` auf dem Netz:** `Resume` ist als Nachricht und MAC vorgesehen
+  (`wire.rs`, `link/code.rs`), aber nichts sendet oder beantwortet es. Hat N alles gespeichert und
+  `Done` kommt nicht an, bleibt N verknüpft (die Vault bleibt, `awaiting_publication`), und H
+  behält seinen Datensatz im Zustand `transferring`; H veröffentlicht nichts. Die beiden finden
+  sich, sobald beide online sind, über die gewöhnliche Begegnung: N trägt die Liste mit sich, die
+  H nicht hat (höhere `list_generation` in der Präsenz, Kandidat, einmal anwählen, R7), genau wie
+  eine Kopie, die sich selbst aufgenommen hat (FR-007). Sobald das neue Gerät auf H's wirksamer
+  Liste steht, löscht H den Datensatz (`host::drop_listed`); sonst nach 24 Stunden. Liegt der
+  Datensatz schon in `awaiting_publication`, veröffentlicht H ihn beim Öffnen wie beschrieben.
 - `vault_secret` wird nur bei gewählter Hauptgerät-Rolle gesendet und nur auf dieser Verbindung
   (FR-038).

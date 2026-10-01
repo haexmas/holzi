@@ -336,6 +336,31 @@ fn publish_now(
     })
 }
 
+/// Drops the records of links whose new device is on the effective list
+/// already: the device's `Done` never reached this one, and the list came
+/// through the device itself when they met, so there is nothing to publish.
+/// Only records still `transferring` are dropped; one in `awaiting_publication`
+/// is published by [`finish_pending`], which also wraps the keys for the device.
+/// Returns how many records it dropped.
+pub fn drop_listed(replica: &Replica, vault: [u8; 32]) -> haex_crdt::Result<usize> {
+    replica.db().write(|tx| {
+        let valid = device_list::valid_lists(&device_list::load_all(tx)?, &vault);
+        let Some(effective) = device_list::effective(&valid) else {
+            return Ok(0);
+        };
+        let mut dropped = 0;
+        for record in pending::load_all(tx)? {
+            if record.state == State::Transferring
+                && effective.list.device(&record.peer_device).is_some()
+            {
+                pending::delete(tx, &record.link_id)?;
+                dropped += 1;
+            }
+        }
+        Ok(dropped)
+    })
+}
+
 /// Finishes every link that reached `awaiting_publication` before this
 /// device stopped, and drops records too old to matter. Run when a vault
 /// opens; returns how many lists it published.
@@ -346,6 +371,7 @@ pub fn finish_pending(
     now_ms: i64,
 ) -> haex_crdt::Result<usize> {
     replica.db().write(|tx| pending::delete_stale(tx, now_ms))?;
+    drop_listed(replica, vault)?;
     let open: Vec<[u8; 32]> = crate::storage::query::read(replica.db(), |r| {
         Ok(pending::load_all(r)?
             .into_iter()
