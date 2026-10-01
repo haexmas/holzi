@@ -46,6 +46,15 @@ pub fn decide(
             let fail = |error: AdmissionError| haex_crdt::Error::consumer(error);
             let vault_secret =
                 keys::vault_secret(tx)?.ok_or_else(|| fail(AdmissionError::NotMainDevice))?;
+            let vault =
+                keys::vault_pubkey(tx)?.ok_or_else(|| fail(AdmissionError::NoDeviceList))?;
+            let valid = device_list::valid_lists(&device_list::load_all(tx)?, &vault);
+            let effective = device_list::effective(&valid)
+                .ok_or_else(|| fail(AdmissionError::NoDeviceList))?
+                .clone();
+            if !effective.list.is_main(&own.device_pubkey) {
+                return Err(fail(AdmissionError::NotMainDevice));
+            }
             let request =
                 load_request(tx, &target)?.ok_or_else(|| fail(AdmissionError::NoRequest))?;
             if !admit {
@@ -56,12 +65,6 @@ pub fn decide(
                 return Ok(Decided::Refused);
             }
 
-            let vault =
-                keys::vault_pubkey(tx)?.ok_or_else(|| fail(AdmissionError::NoDeviceList))?;
-            let valid = device_list::valid_lists(&device_list::load_all(tx)?, &vault);
-            let effective = device_list::effective(&valid)
-                .ok_or_else(|| fail(AdmissionError::NoDeviceList))?
-                .clone();
             if effective.list.device(&target).is_some() {
                 delete_request(tx, &target)?;
                 return Ok(Decided::AlreadyListed);

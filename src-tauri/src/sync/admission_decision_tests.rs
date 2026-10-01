@@ -76,6 +76,35 @@ fn a_linked_device_neither_admits_nor_refuses() {
 }
 
 #[test]
+fn a_device_with_a_vault_secret_but_without_the_main_role_cannot_decide() {
+    let (main, linked) = main_and_linked();
+    main.issue_list(|mut list| {
+        for device in &mut list.devices {
+            if device.device_pubkey == main.keys.device_pubkey {
+                device.role = Role::Linked;
+            } else if device.device_pubkey == linked.keys.device_pubkey {
+                device.role = Role::Main;
+            }
+        }
+        list
+    });
+    let (copy, _) = linked.copy_of();
+    keep(&main, &request_of(&copy, "Zweitrechner", 100));
+
+    let refused = decide(
+        &main.device.replica,
+        &main.keys,
+        &copy.keys.device_pubkey,
+        true,
+        NOW,
+    );
+
+    assert!(matches!(refused, Err(AdmissionError::NotMainDevice)));
+    assert_eq!(count_requests(&main), 1, "the request remains undecided");
+    assert_eq!(listed_roles(&main).len(), 2, "nothing was published");
+}
+
+#[test]
 fn a_decision_needs_an_open_request_and_is_made_once() {
     let (main, linked) = main_and_linked();
     let (copy, _) = linked.copy_of();
