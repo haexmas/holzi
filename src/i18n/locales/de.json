@@ -76,7 +76,7 @@
       "passphrase": "Passphrase für diese Vault",
       "passphraseHint": "Nur für dieses Gerät. Sie wird nie übertragen.",
       "nostr": "Nostr-Relays",
-      "nostrDescription": "Nur nötig, wenn das Hauptgerät eigene Nostr-Relays nutzt (Einstellungen, Föderation). Sonst bleibt es bei den Standardservern.",
+      "nostrDescription": "Nur nötig, wenn das Hauptgerät eigene Nostr-Relays nutzt (Einstellungen, Föderation): füge sie hinzu und schalte die Standardserver ab, die es nicht nutzt.",
       "submit": "Verknüpfen",
       "cancel": "Abbrechen",
       "retry": "Erneut versuchen",
@@ -526,13 +526,15 @@
       "identityCopied": "Kopiert",
       "servers": {
         "nostr": "Nostr-Relays",
-        "nostrDescription": "Darüber melden sich deine Geräte beieinander. Gilt ab dem nächsten Öffnen der Vault.",
+        "nostrDescription": "Darüber melden sich deine Geräte beieinander. Gilt ab dem nächsten Öffnen der Vault. Die Standardserver lassen sich abschalten, eigene auch löschen.",
         "iroh": "iroh-Relays",
-        "irohDescription": "Darüber verbinden sich deine Geräte, auch hinter Heimroutern. Gilt sofort.",
+        "irohDescription": "Darüber verbinden sich deine Geräte, auch hinter Heimroutern. Gilt sofort. Die Standardserver lassen sich abschalten, eigene auch löschen.",
         "default": "Standard",
-        "replaces": "Deine Server ersetzen die Standardserver: {urls}",
+        "nostrNone": "Alle abgeschaltet: Deine Geräte finden sich so nicht.",
+        "irohNone": "Alle abgeschaltet: Deine Geräte verbinden sich nur direkt, nicht über das Internet hinter Routern.",
+        "use": "{url} verwenden",
         "add": "Hinzufügen",
-        "remove": "{url} entfernen"
+        "remove": "{url} löschen"
       }
     },
     "link": {

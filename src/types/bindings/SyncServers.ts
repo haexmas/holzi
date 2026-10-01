@@ -3,4 +3,12 @@
 /**
  * The servers devices find each other through (FR-008).
  */
-export type SyncServers = { nostrRelays: Array<string>, irohRelays: Array<string>, };
+export type SyncServers = {
+/**
+ * The servers added besides the built-in ones.
+ */
+nostrRelays: Array<string>, irohRelays: Array<string>,
+/**
+ * The servers, built-in or added, of either kind, that are switched off.
+ */
+disabled: Array<string>, };

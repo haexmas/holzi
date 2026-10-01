@@ -2,17 +2,18 @@
 /**
  * One kind of server (spec 024, FR-008) as a list with an input to add one: in the settings, where
  * each change is saved at once, and in the link form of the landing page, where it only applies to
- * the link. With none listed holzi uses its built-in servers, so those are always shown: as the
- * entries in use while the list is empty, and named underneath while own servers replace them.
+ * the link. The built-in servers are always listed and can be switched off, not removed; added
+ * ones can be switched off or removed. Switched off ones stay listed.
  */
+import type { ServerEntry } from '~/lib/sync/serverEntries'
+
 interface Props {
   label: string
   description: string
-  /** What the user listed; empty means the built-in servers are in use. */
-  servers: string[]
-  /** The built-in servers. */
-  defaults: string[]
+  entries: ServerEntry[]
   placeholder: string
+  /** Said while every server is switched off. */
+  noneNote: string
   /** Prefix of the test ids, e.g. `settings-servers-nostrRelays`. */
   testId: string
   busy?: boolean
@@ -21,14 +22,18 @@ interface Props {
 }
 
 const props = defineProps<Props>()
-const emit = defineEmits<{ remove: [url: string] }>()
+const emit = defineEmits<{
+  toggle: [url: string, enabled: boolean]
+  remove: [url: string]
+}>()
 
 const { t } = useI18n()
 const draft = ref('')
+const noneInUse = computed(() => props.entries.every((e) => !e.enabled))
 
 async function onAdd() {
   const url = draft.value.trim()
-  if (!url || props.busy || props.servers.includes(url)) return
+  if (!url || props.busy || props.entries.some((e) => e.url === url)) return
   if (await props.addAsync(url)) draft.value = ''
 }
 </script>
@@ -38,46 +43,54 @@ async function onAdd() {
     <li class="px-4 py-3 text-sm text-muted-foreground">
       {{ props.description }}
     </li>
-    <template v-if="props.servers.length === 0">
-      <SettingsRow
-        v-for="url in props.defaults"
-        :key="url"
-        :title="url"
-        :description="t('settings.federation.servers.default')"
-        icon="lucide:server"
-        :data-testid="`${props.testId}-default`"
-      />
-    </template>
-    <template v-else>
-      <SettingsRow
-        v-for="url in props.servers"
-        :key="url"
-        :title="url"
-        icon="lucide:server"
-        :data-testid="props.testId"
+    <li
+      v-for="entry in props.entries"
+      :key="entry.url"
+      class="flex items-center gap-2 pr-4 hover:bg-foreground/5"
+      :data-testid="`${props.testId}-${entry.isDefault ? 'default' : 'added'}`"
+      :data-enabled="entry.enabled"
+    >
+      <label
+        class="flex min-h-14 min-w-0 flex-1 cursor-pointer items-center gap-4 px-4 py-3 has-disabled:cursor-default"
       >
-        <UiButton
-          variant="outline"
-          type="button"
+        <ShadcnCheckbox
+          :model-value="entry.enabled"
           :disabled="props.busy"
-          :data-testid="`${props.testId}-remove`"
-          :aria-label="t('settings.federation.servers.remove', { url })"
-          @click="emit('remove', url)"
+          :aria-label="t('settings.federation.servers.use', { url: entry.url })"
+          :data-testid="`${props.testId}-toggle`"
+          @update:model-value="emit('toggle', entry.url, $event === true)"
+        />
+        <span
+          class="flex min-w-0 flex-1 flex-col"
+          :class="{ 'opacity-60': !entry.enabled }"
         >
-          <Icon name="lucide:trash-2" class="size-4" />
-        </UiButton>
-      </SettingsRow>
-      <li
-        class="px-4 py-3 text-sm text-muted-foreground"
-        :data-testid="`${props.testId}-replaced`"
+          <span class="break-all">{{ entry.url }}</span>
+          <span v-if="entry.isDefault" class="text-sm text-muted-foreground">
+            {{ t('settings.federation.servers.default') }}
+          </span>
+        </span>
+      </label>
+      <UiButton
+        v-if="!entry.isDefault"
+        variant="outline"
+        type="button"
+        :disabled="props.busy"
+        :data-testid="`${props.testId}-remove`"
+        :aria-label="
+          t('settings.federation.servers.remove', { url: entry.url })
+        "
+        @click="emit('remove', entry.url)"
       >
-        {{
-          t('settings.federation.servers.replaces', {
-            urls: props.defaults.join(', '),
-          })
-        }}
-      </li>
-    </template>
+        <Icon name="lucide:trash-2" class="size-4" />
+      </UiButton>
+    </li>
+    <li
+      v-if="noneInUse"
+      class="px-4 py-3 text-sm text-muted-foreground"
+      :data-testid="`${props.testId}-none`"
+    >
+      {{ props.noneNote }}
+    </li>
     <li class="flex items-center gap-2 px-4 py-3">
       <ShadcnInput
         v-model="draft"

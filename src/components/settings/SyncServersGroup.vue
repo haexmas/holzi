@@ -2,18 +2,32 @@
 /**
  * The servers devices find each other through (spec 024, FR-008): Nostr-Relays for the presence
  * meetings and iroh-Relays for the connections. Each change is saved at once, without a save button
- * (spec 023 FR-021); with none listed, holzi uses its built-in public servers, which are always
- * shown. The iroh-Relays apply at once, the Nostr-Relays when the vault is opened next.
+ * (spec 023 FR-021). The built-in public servers are always listed and can be switched off, not
+ * removed; added ones can be switched off or removed. The iroh-Relays apply at once, the
+ * Nostr-Relays when the vault is opened next.
  */
 import type { SyncServers } from '@bindings/SyncServers'
+import {
+  serverEntries,
+  withEnabled,
+  withoutServer,
+} from '~/lib/sync/serverEntries'
 
 const { t } = useI18n()
 const { errString } = useErrorString()
 const { syncServersGetAsync, syncServersDefaultsAsync } = useSync()
 const setServers = useActionOrThrow('settings.sync.servers.set')
 
-const servers = ref<SyncServers>({ nostrRelays: [], irohRelays: [] })
-const defaults = ref<SyncServers>({ nostrRelays: [], irohRelays: [] })
+const servers = ref<SyncServers>({
+  nostrRelays: [],
+  irohRelays: [],
+  disabled: [],
+})
+const defaults = ref<SyncServers>({
+  nostrRelays: [],
+  irohRelays: [],
+  disabled: [],
+})
 const loaded = ref(false)
 const error = ref<string | null>(null)
 const busy = ref(false)
@@ -61,12 +75,18 @@ function addAsync(kind: Kind, url: string): Promise<boolean> {
   })
 }
 
-async function onRemove(kind: Kind, url: string) {
+async function onToggle(url: string, enabled: boolean) {
   if (busy.value) return
   await save({
     ...servers.value,
-    [kind]: servers.value[kind].filter((entry) => entry !== url),
+    disabled: withEnabled(servers.value.disabled, url, enabled),
   })
+}
+
+async function onRemove(kind: Kind, url: string) {
+  if (busy.value) return
+  const rest = withoutServer(servers.value[kind], servers.value.disabled, url)
+  await save({ ...servers.value, [kind]: rest.added, disabled: rest.disabled })
 }
 
 const groups = computed(() => [
@@ -75,12 +95,14 @@ const groups = computed(() => [
     label: t('settings.federation.servers.nostr'),
     description: t('settings.federation.servers.nostrDescription'),
     placeholder: 'wss://',
+    noneNote: t('settings.federation.servers.nostrNone'),
   },
   {
     kind: 'irohRelays' as const,
     label: t('settings.federation.servers.iroh'),
     description: t('settings.federation.servers.irohDescription'),
     placeholder: 'https://',
+    noneNote: t('settings.federation.servers.irohNone'),
   },
 ])
 </script>
@@ -92,12 +114,19 @@ const groups = computed(() => [
       :key="group.kind"
       :label="group.label"
       :description="group.description"
-      :servers="servers[group.kind]"
-      :defaults="defaults[group.kind]"
+      :entries="
+        serverEntries(
+          defaults[group.kind],
+          servers[group.kind],
+          servers.disabled,
+        )
+      "
       :placeholder="group.placeholder"
+      :none-note="group.noneNote"
       :test-id="`settings-servers-${group.kind}`"
       :busy="busy"
       :add-async="(url: string) => addAsync(group.kind, url)"
+      @toggle="onToggle"
       @remove="onRemove(group.kind, $event)"
     />
     <p v-if="error" class="px-1 text-sm text-destructive" role="alert">

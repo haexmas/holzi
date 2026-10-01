@@ -84,10 +84,11 @@ fn no_private_key_ever_shows_in_the_identity() {
 #[test]
 fn servers_are_checked_by_scheme_and_count() {
     let ok = |n: &[&str], i: &[&str]| {
-        servers::validate(
-            &n.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
-            &i.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
-        )
+        servers::validate(&servers::ServerConfig {
+            nostr_relays: n.iter().map(|s| s.to_string()).collect(),
+            iroh_relays: i.iter().map(|s| s.to_string()).collect(),
+            disabled: Vec::new(),
+        })
     };
 
     assert!(ok(
@@ -95,7 +96,7 @@ fn servers_are_checked_by_scheme_and_count() {
         &["https://iroh.example"]
     )
     .is_ok());
-    assert!(ok(&[], &[]).is_ok(), "empty means the defaults");
+    assert!(ok(&[], &[]).is_ok(), "none added is fine");
     assert!(
         ok(&["https://relay.example"], &[]).is_err(),
         "a Nostr server is ws or wss"
@@ -118,28 +119,24 @@ fn servers_are_checked_by_scheme_and_count() {
 }
 
 #[test]
-fn stored_servers_read_back_and_an_empty_list_brings_back_the_defaults() {
+fn stored_servers_read_back() {
     let main = Member::genesis();
-    let nostr = vec!["wss://relay.example".to_string()];
-    let iroh = vec!["https://iroh.example".to_string()];
+    let config = servers::ServerConfig {
+        nostr_relays: vec!["wss://relay.example".to_string()],
+        iroh_relays: vec!["https://iroh.example".to_string()],
+        disabled: vec!["wss://nos.lol".to_string()],
+    };
 
+    let stored = config.clone();
     main.device
         .db()
-        .write(|tx| servers::write(tx, &nostr, &iroh))
+        .write(move |tx| servers::write(tx, &stored))
         .expect("write");
-    let stored = query::read(main.device.db(), |r| servers::read(r)).expect("read");
-    assert_eq!(stored.nostr_relays, nostr);
-    assert_eq!(stored.iroh_relays, iroh);
-
-    main.device
-        .db()
-        .write(|tx| servers::write(tx, &[], &[]))
-        .expect("write empty");
-    let cleared = query::read(main.device.db(), |r| servers::read(r)).expect("read");
-    assert_eq!(
-        cleared.effective_nostr_relays(),
-        servers::default_nostr_relays()
-    );
+    let read = query::read(main.device.db(), |r| servers::read(r)).expect("read");
+    assert_eq!(read, config);
+    assert!(!read
+        .effective_nostr_relays()
+        .contains(&"wss://nos.lol".to_string()));
 }
 
 #[test]
@@ -148,7 +145,12 @@ fn the_defaults_the_settings_show_are_the_ones_in_use() {
     assert_eq!(defaults.nostr_relays, servers::default_nostr_relays());
     assert!(!defaults.iroh_relays.is_empty());
     // What is shown must be accepted when typed back in.
-    servers::validate(&defaults.nostr_relays, &defaults.iroh_relays).expect("valid");
+    servers::validate(&servers::ServerConfig {
+        nostr_relays: defaults.nostr_relays.clone(),
+        iroh_relays: defaults.iroh_relays.clone(),
+        disabled: Vec::new(),
+    })
+    .expect("valid");
     assert!(defaults
         .iroh_relays
         .iter()
@@ -156,16 +158,24 @@ fn the_defaults_the_settings_show_are_the_ones_in_use() {
 }
 
 #[test]
-fn a_join_uses_the_servers_it_is_given_and_the_built_in_ones_for_empty_lists() {
+fn a_join_uses_the_built_in_servers_besides_the_ones_it_is_given_unless_switched_off() {
     use crate::sync::link::join_task::JoinConfig;
     use crate::sync::servers::{default_nostr_relays, ServerConfig};
 
+    let mut besides = default_nostr_relays();
+    besides.push("wss://nostr.example.org".to_string());
     let own = JoinConfig::with_servers(ServerConfig {
         nostr_relays: vec!["wss://nostr.example.org".to_string()],
-        iroh_relays: Vec::new(),
+        ..ServerConfig::default()
     });
+    assert_eq!(own.nostr_relays, besides);
+
+    let only = JoinConfig::with_servers(ServerConfig::only(
+        vec!["wss://nostr.example.org".to_string()],
+        Vec::new(),
+    ));
     assert_eq!(
-        own.nostr_relays,
+        only.nostr_relays,
         vec!["wss://nostr.example.org".to_string()]
     );
 

@@ -56,41 +56,44 @@ scenario('settings-federation', {}, async (ctx) => {
   assert.equal(devices[0]?.alias, renamed)
   assert.equal(devices[0]?.isCurrent, true)
   ctx.step('settings.devices.list')
-  // FR-008: the built-in servers are always shown, as the ones in use while none is listed and named
-  // while own servers replace them.
-  const count = (hook: string) =>
+  // FR-008: the built-in servers are always listed and can be switched off, not removed; added ones
+  // can be switched off or removed.
+  const serverRows = (kind: string, part: string, enabled?: boolean) =>
     instance.exec<number>(
-      `return document.querySelectorAll('[data-testid="${hook}"]').length`,
+      `return document.querySelectorAll('[data-testid="settings-servers-${kind}-${part}"]${
+        enabled === undefined ? '' : `[data-enabled="${enabled}"]`
+      }').length`,
     )
   await instance.waitForDisplayed('settings-servers-nostrRelays-input')
-  assert.equal(await count('settings-servers-nostrRelays-default'), 3)
-  assert.equal(await count('settings-servers-irohRelays-default'), 4)
-  ctx.step('the built-in Nostr and iroh servers are shown')
+  assert.equal(await serverRows('nostrRelays', 'default', true), 3)
+  assert.equal(await serverRows('irohRelays', 'default', true), 4)
+  assert.equal(await serverRows('nostrRelays', 'remove'), 0)
+  ctx.step(
+    'the built-in Nostr and iroh servers are listed, all in use, none deletable',
+  )
+
+  await instance.click('settings-servers-nostrRelays-toggle')
+  await ctx.waitFor('the first Nostr server to be switched off', async () => {
+    return (await serverRows('nostrRelays', 'default', false)) === 1
+  })
+  assert.equal(await serverRows('nostrRelays', 'default'), 3)
+  ctx.step('a built-in server is switched off and stays listed')
 
   await instance.type(
     'settings-servers-irohRelays-input',
     'https://iroh.example.org',
   )
   await instance.click('settings-servers-irohRelays-add')
-  await ctx.waitFor(
-    'the own iroh server to replace the built-in ones',
-    async () => {
-      return (
-        (await count('settings-servers-irohRelays')) === 1 &&
-        (await count('settings-servers-irohRelays-default')) === 0
-      )
-    },
-  )
-  assert.equal(await count('settings-servers-irohRelays-replaced'), 1)
-  assert.equal(await count('settings-servers-nostrRelays-default'), 3)
-  ctx.step('an own iroh server replaces the built-in ones, which stay named')
+  await ctx.waitFor('the added iroh server to be listed', async () => {
+    return (await serverRows('irohRelays', 'added', true)) === 1
+  })
+  assert.equal(await serverRows('irohRelays', 'default'), 4)
+  ctx.step('an added iroh server is listed after the built-in ones')
 
   await instance.click('settings-servers-irohRelays-remove')
-  await ctx.waitFor(
-    'the built-in iroh servers to be in use again',
-    async () => {
-      return (await count('settings-servers-irohRelays-default')) === 4
-    },
-  )
-  ctx.step('removing the last own server brings the built-in ones back')
+  await ctx.waitFor('the added iroh server to be deleted', async () => {
+    return (await serverRows('irohRelays', 'added')) === 0
+  })
+  assert.equal(await serverRows('irohRelays', 'default'), 4)
+  ctx.step('deleting it leaves the built-in ones')
 })

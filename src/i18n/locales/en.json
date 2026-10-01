@@ -76,7 +76,7 @@
       "passphrase": "Passphrase for this vault",
       "passphraseHint": "For this device only. It is never sent.",
       "nostr": "Nostr relays",
-      "nostrDescription": "Only needed if the main device uses its own Nostr relays (Settings, Federation). Otherwise the default servers stay.",
+      "nostrDescription": "Only needed if the main device uses its own Nostr relays (Settings, Federation): add them and switch off the default servers it does not use.",
       "submit": "Link",
       "cancel": "Cancel",
       "retry": "Try again",
@@ -526,13 +526,15 @@
       "identityCopied": "Copied",
       "servers": {
         "nostr": "Nostr relays",
-        "nostrDescription": "Your devices announce themselves to each other through these. Applies the next time the vault is opened.",
+        "nostrDescription": "Your devices announce themselves to each other through these. Applies the next time the vault is opened. The default servers can be switched off, your own also deleted.",
         "iroh": "iroh relays",
-        "irohDescription": "Your devices connect through these, also behind home routers. Applies at once.",
+        "irohDescription": "Your devices connect through these, also behind home routers. Applies at once. The default servers can be switched off, your own also deleted.",
         "default": "Default",
-        "replaces": "Your servers replace the default servers: {urls}",
+        "nostrNone": "All switched off: your devices cannot find each other.",
+        "irohNone": "All switched off: your devices only connect directly, not over the internet behind routers.",
+        "use": "Use {url}",
         "add": "Add",
-        "remove": "Remove {url}"
+        "remove": "Delete {url}"
       }
     },
     "link": {

@@ -97,12 +97,9 @@ pub async fn link_join_start(
     state.gate().ensure_can_open()?;
     let config = match &args.servers {
         Some(servers) => {
-            servers::validate(&servers.nostr_relays, &servers.iroh_relays)
-                .map_err(|reason| HolziError::InvalidInput { reason })?;
-            JoinConfig::with_servers(servers::ServerConfig {
-                nostr_relays: servers.nostr_relays.clone(),
-                iroh_relays: servers.iroh_relays.clone(),
-            })
+            let config = servers::ServerConfig::from(servers.clone());
+            servers::validate(&config).map_err(|reason| HolziError::InvalidInput { reason })?;
+            JoinConfig::with_servers(config)
         }
         None => JoinConfig::production(),
     };
@@ -242,8 +239,31 @@ pub struct VaultPublicIdentity {
 #[ts(export, export_to = "../../src/types/bindings/")]
 #[serde(rename_all = "camelCase")]
 pub struct SyncServers {
+    /// The servers added besides the built-in ones.
     pub nostr_relays: Vec<String>,
     pub iroh_relays: Vec<String>,
+    /// The servers, built-in or added, of either kind, that are switched off.
+    pub disabled: Vec<String>,
+}
+
+impl From<SyncServers> for servers::ServerConfig {
+    fn from(args: SyncServers) -> Self {
+        Self {
+            nostr_relays: args.nostr_relays,
+            iroh_relays: args.iroh_relays,
+            disabled: args.disabled,
+        }
+    }
+}
+
+impl From<servers::ServerConfig> for SyncServers {
+    fn from(config: servers::ServerConfig) -> Self {
+        Self {
+            nostr_relays: config.nostr_relays,
+            iroh_relays: config.iroh_relays,
+            disabled: config.disabled,
+        }
+    }
 }
 
 /// Reads this device's place in the vault from the lists and the vault
@@ -422,45 +442,41 @@ pub async fn vault_public_identity(state: State<'_, AppState>) -> Result<VaultPu
         })
 }
 
-/// The built-in servers used when none are stored. Needs no vault, so the
-/// landing page's link form can show them too.
+/// The built-in servers, as `nostrRelays` and `irohRelays` (nothing is
+/// switched off). Needs no vault, so the landing page's link form can show
+/// them too.
 #[tauri::command]
 pub fn sync_servers_defaults() -> SyncServers {
     SyncServers {
         nostr_relays: servers::default_nostr_relays(),
         iroh_relays: servers::default_iroh_relays(),
+        disabled: Vec::new(),
     }
 }
 
-/// The servers as stored; empty lists mean the built-in defaults.
+/// The servers as stored: the ones added and the ones switched off. The
+/// built-in servers are listed by `sync_servers_defaults`.
 #[tauri::command]
 pub async fn sync_servers_get(state: State<'_, AppState>) -> Result<SyncServers> {
     let db = crate::state_utils::active_database(&state)?;
     let config = db.read(|r| servers::read(r)).await?;
-    Ok(SyncServers {
-        nostr_relays: config.nostr_relays,
-        iroh_relays: config.iroh_relays,
-    })
+    Ok(config.into())
 }
 
-/// Stores the servers. Empty lists go back to the defaults. The iroh relays
-/// apply at once; the Nostr relays when the vault is opened next.
+/// Stores the servers. The iroh relays apply at once; the Nostr relays when
+/// the vault is opened next.
 #[tauri::command]
 pub async fn sync_servers_set(
     state: State<'_, AppState>,
     registry: State<'_, Arc<SyncRegistry>>,
     args: SyncServers,
 ) -> Result<()> {
-    servers::validate(&args.nostr_relays, &args.iroh_relays)
-        .map_err(|reason| HolziError::InvalidInput { reason })?;
-    let config = servers::ServerConfig {
-        nostr_relays: args.nostr_relays.clone(),
-        iroh_relays: args.iroh_relays.clone(),
-    };
+    let config = servers::ServerConfig::from(args);
+    servers::validate(&config).map_err(|reason| HolziError::InvalidInput { reason })?;
     let _servers_guard = state.lock_sync_servers().await;
     let db = crate::state_utils::active_database(&state)?;
-    db.write(move |tx| servers::write(tx, &args.nostr_relays, &args.iroh_relays))
-        .await?;
+    let stored = config.clone();
+    db.write(move |tx| servers::write(tx, &stored)).await?;
     if let Some(runtime) = registry.get() {
         runtime.node.apply_relays(&config.relay_mode()).await;
     }
