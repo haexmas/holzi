@@ -5,12 +5,13 @@
 //! later slice; this module makes sure the row layout the deferred sync
 //! path expects is already frozen.
 
+use ::uuid::Uuid;
 use haex_crdt::rusqlite::{params, Result};
 use haex_crdt::CrdtTransaction;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use crate::storage::query::Query;
+use crate::storage::uuid;
 
 /// Provider row as stored in SQLite. `credentials` is opaque bytes — for
 /// `api_key` providers it is the API key, and for `cli_delegate`
@@ -169,7 +170,9 @@ pub fn provider_ids_by_kind_and_capability(
         params![kind.as_str(), capability.as_str()],
         |r| r.get(0),
     )?;
-    Ok(raw.iter().filter_map(|s| Uuid::parse_str(s).ok()).collect())
+    raw.into_iter()
+        .map(|value| uuid::parse(&value, 0).map_err(Into::into))
+        .collect()
 }
 
 /// Persists a repaired adapter discriminator and marks the CRDT row dirty.
@@ -212,7 +215,7 @@ pub fn find_cli_delegate_provider(
         params![ProviderKind::CliDelegate.as_str(), vendor],
         |r| r.get(0),
     )?;
-    Ok(raw.and_then(|s| Uuid::parse_str(&s).ok()))
+    Ok(raw.map(|value| uuid::parse(&value, 0)).transpose()?)
 }
 
 /// Finds the singleton row for one `(kind, capability)` pair, if any —
@@ -233,7 +236,7 @@ pub fn find_provider_by_kind_and_capability(
         params![kind.as_str(), capability.as_str()],
         |r| r.get(0),
     )?;
-    Ok(raw.and_then(|s| Uuid::parse_str(&s).ok()))
+    Ok(raw.map(|value| uuid::parse(&value, 0)).transpose()?)
 }
 
 /// Lists all providers ordered by creation time (oldest first).
@@ -261,13 +264,7 @@ fn row_to_provider(row: &haex_crdt::rusqlite::Row<'_>) -> Result<Provider> {
     let kind_str: String = row.get(1)?;
     let capability_str: String = row.get(7)?;
     Ok(Provider {
-        id: Uuid::parse_str(&id_str).map_err(|e| {
-            haex_crdt::rusqlite::Error::FromSqlConversionFailure(
-                0,
-                haex_crdt::rusqlite::types::Type::Text,
-                Box::new(e),
-            )
-        })?,
+        id: uuid::parse(&id_str, 0)?,
         kind: ProviderKind::parse(&kind_str).ok_or_else(|| {
             haex_crdt::rusqlite::Error::FromSqlConversionFailure(
                 1,

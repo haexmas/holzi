@@ -33,6 +33,7 @@ pub mod preferences_commands_tests;
 pub mod preferences_tests;
 pub mod providers;
 pub mod query;
+pub mod uuid;
 pub mod wm_session;
 pub mod wm_session_commands;
 #[cfg(test)]

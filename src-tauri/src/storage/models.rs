@@ -7,13 +7,14 @@
 
 use std::collections::HashSet;
 
+use ::uuid::Uuid;
 use haex_crdt::rusqlite::{params, Result};
 use haex_crdt::CrdtTransaction;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use crate::model_capabilities::{ModelCapabilities, ToolUse};
 use crate::storage::query::Query;
+use crate::storage::uuid;
 
 /// Where a `models` row's file came from. Persisted in `source_kind`
 /// (migration `0015_models_add_huggingface_source`).
@@ -469,20 +470,13 @@ pub fn backfill_local_capabilities(
 }
 
 fn row_to_model(row: &haex_crdt::rusqlite::Row<'_>) -> Result<ModelRow> {
-    let provider_id_str: String = row.get(1)?;
     let integrity_status_str: String = row.get(11)?;
     let source_kind_str: String = row.get(12)?;
     let id: String = row.get(0)?;
     let capabilities = capabilities_from_column(&id, row.get(13)?);
     Ok(ModelRow {
         id,
-        provider_id: Uuid::parse_str(&provider_id_str).map_err(|e| {
-            haex_crdt::rusqlite::Error::FromSqlConversionFailure(
-                1,
-                haex_crdt::rusqlite::types::Type::Text,
-                Box::new(e),
-            )
-        })?,
+        provider_id: uuid::from_row(row, 1)?,
         name: row.get(2)?,
         context_window: row.get(3)?,
         fetched_at: row.get(4)?,

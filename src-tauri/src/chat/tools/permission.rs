@@ -6,6 +6,10 @@
 //! turn loop proceeds (T026).
 
 use super::RiskClass;
+use crate::storage::preferences::{self, PrefScope};
+use crate::vault_gate::VaultDb;
+
+pub const PREF_PERMISSION_MODE: &str = "chat.permission_mode";
 
 /// Parsed from the `chat.permission_mode` device preference (T028);
 /// defaults to `Manual` when unset (spec.md Assumptions).
@@ -26,6 +30,19 @@ impl PermissionMode {
             _ => None,
         }
     }
+}
+
+/// Reads the vault-scoped permission mode and applies the documented Manual
+/// fallback for missing or invalid values.
+pub async fn read_from_vault(database: &VaultDb) -> PermissionMode {
+    let raw = database
+        .read(|r| preferences::get(r, PrefScope::Vault, PREF_PERMISSION_MODE))
+        .await
+        .ok()
+        .flatten();
+    raw.as_deref()
+        .and_then(PermissionMode::parse)
+        .unwrap_or_default()
 }
 
 /// The gate's verdict for one tool call, before any human is involved.

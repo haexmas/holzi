@@ -31,8 +31,6 @@ const MARKER_PERMITTED: &str = "gated_permissive_call_permitted";
 /// credentials).
 const REDACTED_TOOL_INPUT: &str = "[redacted]";
 
-const PREF_PERMISSION_MODE: &str = "chat.permission_mode";
-
 #[derive(Debug, Deserialize)]
 struct ApprovalRequest {
     tool_name: String,
@@ -68,7 +66,7 @@ pub async fn request_approval(
     }
 
     let mode = match database {
-        Some(database) => read_permission_mode(database).await,
+        Some(database) => permission::read_from_vault(database).await,
         None => PermissionMode::Manual,
     };
     let risk = if is_risky_tool(&tool_name) {
@@ -246,23 +244,6 @@ fn now_ms() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0)
-}
-
-async fn read_permission_mode(database: &VaultDb) -> PermissionMode {
-    let raw = database
-        .read(|r| {
-            crate::storage::preferences::get(
-                r,
-                crate::storage::preferences::PrefScope::Vault,
-                PREF_PERMISSION_MODE,
-            )
-        })
-        .await
-        .ok()
-        .flatten();
-    raw.as_deref()
-        .and_then(PermissionMode::parse)
-        .unwrap_or_default()
 }
 
 fn is_risky_tool(name: &str) -> bool {

@@ -3,13 +3,14 @@
 //! Threads are conversation containers. Individual messages live in the
 //! sibling `chat_messages` module and reference `thread_id` here.
 
+use ::uuid::Uuid;
 use haex_crdt::rusqlite::{params, Result};
 use haex_crdt::CrdtTransaction;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use crate::storage::chat_messages;
 use crate::storage::query::Query;
+use crate::storage::uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatThread {
@@ -129,24 +130,13 @@ pub fn get_thread(q: &mut impl Query, id: Uuid) -> haex_crdt::Result<Option<Chat
 }
 
 fn row_to_thread(row: &haex_crdt::rusqlite::Row<'_>) -> Result<ChatThread> {
-    let id_str: String = row.get(0)?;
     let last_provider_str: Option<String> = row.get(2)?;
     Ok(ChatThread {
-        id: parse_uuid(&id_str, 0)?,
+        id: uuid::from_row(row, 0)?,
         title: row.get(1)?,
-        last_provider_id: last_provider_str.map(|s| parse_uuid(&s, 2)).transpose()?,
+        last_provider_id: uuid::optional(last_provider_str, 2)?,
         last_model_id: row.get(3)?,
         created_at: row.get(4)?,
         updated_at: row.get(5)?,
-    })
-}
-
-fn parse_uuid(s: &str, col: usize) -> Result<Uuid> {
-    Uuid::parse_str(s).map_err(|e| {
-        haex_crdt::rusqlite::Error::FromSqlConversionFailure(
-            col,
-            haex_crdt::rusqlite::types::Type::Text,
-            Box::new(e),
-        )
     })
 }

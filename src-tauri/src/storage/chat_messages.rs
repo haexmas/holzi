@@ -5,12 +5,13 @@
 //! cancelled). Every insert therefore already knows its
 //! `finish_reason` and token counts.
 
+use ::uuid::Uuid;
 use haex_crdt::rusqlite::{params, Result};
 use haex_crdt::CrdtTransaction;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use crate::storage::query::Query;
+use crate::storage::uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
@@ -273,20 +274,20 @@ pub fn list_messages(q: &mut impl Query, thread_id: Uuid) -> haex_crdt::Result<V
 }
 
 fn row_to_message(row: &haex_crdt::rusqlite::Row<'_>) -> Result<ChatMessage> {
-    let id_str: String = row.get(0)?;
-    let thread_id_str: String = row.get(1)?;
+    let id = uuid::from_row(row, 0)?;
+    let thread_id = uuid::from_row(row, 1)?;
     let parent_id_str: Option<String> = row.get(2)?;
     let provider_id_str: Option<String> = row.get(5)?;
     let role_str: String = row.get(3)?;
     let finish_str: Option<String> = row.get(9)?;
 
     Ok(ChatMessage {
-        id: parse_uuid(&id_str, 0)?,
-        thread_id: parse_uuid(&thread_id_str, 1)?,
-        parent_id: parent_id_str.map(|s| parse_uuid(&s, 2)).transpose()?,
+        id,
+        thread_id,
+        parent_id: uuid::optional(parent_id_str, 2)?,
         role: MessageRole::parse(&role_str).ok_or_else(|| bad_enum(3, &role_str))?,
         content: row.get(4)?,
-        provider_id: provider_id_str.map(|s| parse_uuid(&s, 5)).transpose()?,
+        provider_id: uuid::optional(provider_id_str, 5)?,
         model_id: row.get(6)?,
         prompt_tokens: row.get(7)?,
         completion_tokens: row.get(8)?,
@@ -302,16 +303,6 @@ fn row_to_message(row: &haex_crdt::rusqlite::Row<'_>) -> Result<ChatMessage> {
         tool_is_error: row.get(15)?,
         tool_source: row.get(16)?,
         autonomy_mode: row.get(17)?,
-    })
-}
-
-fn parse_uuid(s: &str, col: usize) -> Result<Uuid> {
-    Uuid::parse_str(s).map_err(|e| {
-        haex_crdt::rusqlite::Error::FromSqlConversionFailure(
-            col,
-            haex_crdt::rusqlite::types::Type::Text,
-            Box::new(e),
-        )
     })
 }
 
