@@ -25,8 +25,8 @@ const laptop = g.device('anna/laptop')
 | `device.kill()`                             | end without cleanup (SIGKILL on Linux), data kept                                                                                       |
 | `device.start()`                            | start over the same data and open the vault                                                                                             |
 | `device.restart()`                          | `stop()` then `start()`                                                                                                                 |
-| `device.goOffline()`                        | disable network access for the running application; it keeps running and working locally but cannot reach or be reached                 |
-| `device.goOnline()`                         | restore the group's network access while the application keeps running                                                                  |
+| `device.goOffline()`                        | set servers to none, restart; the device runs and works locally but cannot reach or be reached                                          |
+| `device.goOnline()`                         | set the group's servers back, restart                                                                                                   |
 | `device.setNostrRelays(urls, { disabled })` | the settings action of the servers view, through the interface                                                                          |
 | `device.deviceList()`                       | the rows the device view shows: `{ name, role, current, online, lastSeen, text }`                                                       |
 | `device.status()`                           | `sync_status` of the device                                                                                                             |
