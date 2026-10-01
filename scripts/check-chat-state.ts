@@ -613,6 +613,7 @@ test('listener registrations finishing after unmount are disposed without contin
       }),
       useModels: () => ({
         onDownloadProgress: async () => () => released.push('download'),
+        onToolUseUpdated: async () => () => released.push('toolUseUpdated'),
       }),
     },
   )
@@ -621,7 +622,10 @@ test('listener registrations finishing after unmount are disposed without contin
   await state.unmount()
   finishRegistration(() => released.push('onToken'))
   await mounting
-  assert.deepEqual(released.sort(), [...subscriptions, 'download'].sort())
+  assert.deepEqual(
+    released.sort(),
+    [...subscriptions, 'download', 'toolUseUpdated'].sort(),
+  )
   assert.equal(deviceReads, 0)
 })
 

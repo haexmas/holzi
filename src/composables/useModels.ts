@@ -108,6 +108,11 @@ export interface DownloadProgressEvent {
   bytesTotal: number | null
 }
 
+/** Emitted after a local model's tool-use capability was measured. */
+export interface ModelToolUseUpdatedEvent {
+  modelId: string
+}
+
 export interface DownloadFromHfArgs {
   id: string
   name: string
@@ -254,6 +259,16 @@ export function useModels() {
     })
   }
 
+  /** Subscribes to capability updates produced by a local-model probe/self-test. */
+  async function onToolUseUpdated(
+    handler: (event: ModelToolUseUpdatedEvent) => void,
+  ): Promise<UnlistenFn> {
+    return await listen<ModelToolUseUpdatedEvent>(
+      'model-tool-use-updated',
+      (e) => handler(e.payload),
+    )
+  }
+
   return {
     listInstalledAsync,
     downloadFromCatalogAsync,
@@ -262,5 +277,6 @@ export function useModels() {
     deleteAsync,
     onDownloadProgress,
     onDownloadComplete,
+    onToolUseUpdated,
   }
 }

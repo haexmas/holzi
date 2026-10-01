@@ -398,6 +398,13 @@ export const useModelsStore = defineStore('models', () => {
             downloadTotalBytes.value = e.bytesTotal
           }
         }),
+        models.onToolUseUpdated(({ modelId }) => {
+          if (!installedModels.value.some((model) => model.id === modelId))
+            return
+          void refreshInstalledAndCatalog().catch((e: unknown) => {
+            lastError.value = errString(e)
+          })
+        }),
       ].map(async (subscription) => {
         const unlisten = await subscription
         if (stopped) unlisten()
