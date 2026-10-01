@@ -17,7 +17,9 @@ scenario('link-sheet-servers', {}, async (ctx) => {
 
   await instance.click('landing-link')
   await instance.waitForDisplayed('link-servers-nostr-input')
-  assert.equal(await count('link-servers-nostr-default'), 3)
+  await ctx.waitFor('the built-in Nostr servers to load', async () => {
+    return (await count('link-servers-nostr-default')) === 3
+  })
   assert.equal(await count('link-servers-nostr'), 0)
   ctx.step('the three built-in Nostr servers are shown')
 
