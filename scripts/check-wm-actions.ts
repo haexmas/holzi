@@ -241,6 +241,24 @@ test('tab-bound actions wait for their app; no handler in time → app_unavailab
   assert.equal(!outcome.ok && outcome.code, 'app_unavailable')
 })
 
+test('tab-bound actions preserve the originating tab for handler lookup', async () => {
+  let originTabId: string | undefined
+  const { deps } = harness({
+    awaitTabHandler: async (_appId, _actionId, _timeoutMs, origin) => {
+      originTabId = origin
+      return () => ({ done: true })
+    },
+  })
+  const outcome = await createActionRunner(deps).runAction(
+    CHAT_SEND.id,
+    { text: 'from second tab' },
+    USER,
+    'chat-tab-2',
+  )
+  assert.equal(outcome.ok, true)
+  assert.equal(originTabId, 'chat-tab-2')
+})
+
 test('a structured backend error keeps its reason and travels raw in error', async () => {
   const raw = { kind: 'InvalidInput', reason: 'bad title' }
   const { deps } = harness({

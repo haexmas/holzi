@@ -29,6 +29,7 @@ export type ActionRunnerDeps = {
     appId: string,
     actionId: string,
     timeoutMs: number,
+    originTabId?: string,
   ) => Promise<ActionHandler | null>
 }
 
@@ -75,6 +76,7 @@ export function createActionRunner(deps: ActionRunnerDeps) {
     id: string,
     input: Record<string, unknown> = {},
     caller: ActionCaller = { kind: 'user' },
+    originTabId?: string,
   ): Promise<ActionOutcome> {
     const action = deps.catalog.find((a) => a.id === id)
     if (!action) return failure('unknown_action', `unknown action ${id}`)
@@ -131,6 +133,7 @@ export function createActionRunner(deps: ActionRunnerDeps) {
         action.appId ?? '',
         id,
         TAB_HANDLER_TIMEOUT_MS,
+        originTabId,
       )
       if (!handler)
         return failure(
