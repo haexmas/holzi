@@ -10,9 +10,9 @@
 //! classifying its exit failures are one cohesive "drive this subprocess
 //! call" responsibility with a single change reason (the `claude -p`
 //! contract), and splitting them across files would scatter one thing
-//! readers need to see together. Revisit if a genuinely separate
-//! responsibility (e.g. a second CLI's own driver) lands here instead of
-//! in its own module the way `codex.rs` already does.
+//! readers need to see together. When the parser gains another event family,
+//! extract the stream-json parser into `claude_protocol.rs` and leave process
+//! setup/shutdown in this module.
 
 use std::path::Path;
 use std::process::Stdio;

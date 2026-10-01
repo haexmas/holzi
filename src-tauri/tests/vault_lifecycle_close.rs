@@ -3,6 +3,12 @@
 //! Phase 1 (`begin_close`) is synchronous and cannot fail; phase 2 (`finish_close`) drains the
 //! work, drops the database and asks for the end of the process. The effects that touch the outside
 //! world are recorded instead of performed, so each ordering claim can be checked.
+//!
+//! Maintainability exception (spaex 500-LoC rule): this integration test keeps
+//! the close state machine and its recorded side effects together because the
+//! assertions describe one lifecycle contract. When another close phase is
+//! added, move the IPC harness into `vault_lifecycle_harness.rs` and retain
+//! phase-specific tests here.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};

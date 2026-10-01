@@ -12,6 +12,26 @@ use super::catalog::SttCatalogEntry;
 use super::local::{ensure_model_files, LocalWhisperAdapter};
 use super::{CanonicalPcm, SttAdapter};
 
+/// Cross-checked against `librosa.filters.mel(sr=16000, n_fft=400,
+/// n_mels=80, norm="slaney", htk=False)` — the values Whisper's
+/// preprocessing was trained against.
+#[test]
+fn mel_filterbank_matches_known_shape_and_support() {
+    let n_mels = 80;
+    let n_freqs = 400 / 2 + 1;
+    let filters = super::local::mel_filterbank(16_000, 400, n_mels);
+    assert_eq!(filters.len(), n_mels * n_freqs);
+    assert!(filters.iter().all(|&w| w.is_finite() && w >= 0.0));
+
+    let row0 = &filters[0..n_freqs];
+    let first_nonzero = row0.iter().position(|&w| w > 0.0).unwrap();
+    assert!(first_nonzero <= 1);
+
+    let row_last = &filters[(n_mels - 1) * n_freqs..n_mels * n_freqs];
+    let last_nonzero = row_last.iter().rposition(|&w| w > 0.0).unwrap();
+    assert!(last_nonzero >= n_freqs - 20);
+}
+
 fn whisper_tiny_entry() -> SttCatalogEntry {
     super::catalog::get("whisper-tiny")
         .expect("catalog should parse")

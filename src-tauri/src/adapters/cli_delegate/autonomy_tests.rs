@@ -1,3 +1,9 @@
+//! Maintainability exception (spaex 500-LoC rule): these tests share fixtures
+//! and helpers for the autonomy policy matrix, so splitting individual cases
+//! would duplicate setup and hide the policy table. If a second autonomy
+//! backend is added, extract the shared workspace/fixture helpers first and
+//! split backend-specific cases into separate test modules.
+
 use std::path::Path;
 use std::sync::OnceLock;
 
