@@ -116,7 +116,8 @@ fn read_reflects_the_stored_preferences() {
             PrefScope::Vault,
             PREF_NOSTR_RELAYS,
             r#"["wss://relay.example.org"]"#,
-        )
+        )?;
+        preferences::insert_or_update(tx, PrefScope::Vault, PREF_DISABLED_RELAYS, "[]")
     })
     .expect("write nostr relays");
 
