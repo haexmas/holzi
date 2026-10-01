@@ -311,8 +311,9 @@ result names the scenario and keeps the material of the failure.
   the real wait and keep it within the bounds of SC-004.
 - **FR-015**: The rig MUST give a scenario read access to a device's device list, its own role and the
   online state of other devices, as the interface shows them.
-- **FR-016**: The rig MUST provide a helper that copies a vault file consistently to another device's data
-  and reports failure instead of a partial copy.
+- **FR-016**: The rig MUST provide a helper that copies a vault file consistently from one named device to
+  another device's data and reports failure instead of a partial copy. The helper MUST use the driver
+  layer's vault-file-copy operation and MUST NOT expose host paths to scenarios or helpers.
 - **FR-017**: The rig MUST provide a scenario template for several vaults with different users, and
   documentation with an example, so that a contributor needs no knowledge of how processes, ports,
   screens or relays are arranged.
@@ -328,9 +329,10 @@ result names the scenario and keeps the material of the failure.
 
 - **FR-021**: Scenarios and helpers MUST use only operations of a driver layer that hides the platform
   (start and stop a device, click, type, read, call a backend command, wait for a condition, take a
-  screenshot, control a device's network and clock). They MUST NOT use the Linux driver, the virtual
-  screen, process signals or host file paths directly; those belong to the one Linux implementation of the
-  layer.
+  screenshot, control a device's network and clock, and copy a vault file between named devices). They
+  MUST NOT use the Linux driver, the virtual screen, process signals or host file paths directly; those
+  belong to the one Linux implementation of the layer. The vault-file-copy operation MUST accept device
+  identities rather than host paths and MUST report a failed copy without leaving a partial destination.
 - **FR-022**: The spec MUST be accompanied by a platform document that names, for Windows, macOS, Android
   and iOS, the driver, the runner or device type, how several devices would be connected there, and the
   known limits. It MUST NOT implement any of them.
