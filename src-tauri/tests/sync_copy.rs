@@ -34,6 +34,7 @@ use sync_helpers::{listed, runtime_of, until};
 /// `XDG_DATA_HOME` is process-wide; tests that set it take turns.
 static TURN: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
+/// Reads the current device's role from its persisted sync state.
 fn place_of(device: &Instance) -> ThisDevice {
     query::read(&device.database(), |r| {
         this_device(r, &device.keys.device_pubkey)

@@ -97,6 +97,7 @@ struct Snapshot {
 }
 
 impl Inbox {
+    /// Creates an empty receiver for an ordinary pull.
     pub fn new() -> Self {
         Self::default()
     }
