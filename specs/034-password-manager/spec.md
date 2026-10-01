@@ -65,6 +65,12 @@ ausdrücklich nicht Teil dieser Spec. Referenz: haex-vault @
 - Q: Wie groß darf ein einzelner Anhang höchstens sein? → A: 25 MiB. Der Wert schützt die
   Größe der Vault-Datenbank, nicht den Sync: Ein Anhang über der Obergrenze des Relay-Postfachs
   (Spec 026) käme weiter direkt über iroh an.
+- Q: (Planung) Welche Abweichungen vom Datenmodell von haex-vault sind nötig? → A: Keine
+  UNIQUE-Constraints (ein Konflikt hält den Sync an; abgeleitete Kennungen für Tags,
+  Tag-Zuordnungen und Passkeys), zwei Spalten für den früheren Ort im Papierkorb, `RESTRICT` bei
+  den Verweisen auf Binärdaten. Der Verlauf speichert den neuen Zustand; Aufräumen mit Karenzzeit
+  von sieben Tagen; PDFs nur zum Herunterladen; der eingebaute Agent sieht nur Titel, Tags und
+  Ordnernamen (Plan, R2–R6, R18).
 - Q: Soll das Datenmodell von haex-vault 1:1 übernommen werden? → A: Ja, Tabellen- und
   Spaltennamen und deren Bedeutung bleiben, mit der einen Ausnahme der Binärdaten.
 
@@ -174,9 +180,9 @@ setzen, im Editor ein Passwort erzeugen und prüfen, dass es die Regeln einhält
 
 Löscht der Nutzer einen Eintrag oder Ordner, landet er im Papierkorb, aus dem er ihn
 wiederherstellt oder endgültig entfernt; löscht er etwas im Papierkorb, ist es endgültig weg.
-Bei jeder Änderung eines Eintrags legt holzi eine Sicherung des vorherigen Stands an. Der
-Nutzer sieht den Verlauf eines Eintrags, vergleicht Stände und stellt einen früheren Stand
-wieder her.
+Nach jeder Änderung eines Eintrags legt holzi einen Verlaufsstand mit dem neuen Zustand an; die
+früheren Stände bleiben. Der Nutzer sieht den Verlauf eines Eintrags, vergleicht Stände und
+stellt einen früheren Stand wieder her.
 
 **Why this priority**: Bei Geheimnissen ist ein versehentliches Überschreiben oder Löschen
 nicht reparabel, wenn man das Passwort nicht anderswo hat. Es ist aber nach der Grundfunktion
@@ -197,7 +203,8 @@ endgültig entfernen.
    oder „Papierkorb leeren“ nach Bestätigung), **Then** sind Eintrag, Verlauf, Passkeys,
    Verknüpfungen und nur noch von ihm genutzte Anhänge entfernt.
 4. **Given** ein Eintrag, **When** der Nutzer eine Änderung speichert, **Then** gibt es einen
-   neuen Eintrag im Verlauf mit Zeitpunkt und dem vorherigen Stand samt Anhängen.
+   neuen Eintrag im Verlauf mit Zeitpunkt und dem neuen Stand samt Anhängen, und der Stand
+   davor bleibt als früherer Eintrag erhalten.
 5. **Given** der Verlauf eines Eintrags, **When** der Nutzer einen Stand wählt, **Then** sieht
    er, was sich geändert hat, ohne dass Passwörter im Klartext aufgedeckt werden, bevor er es
    verlangt.
@@ -229,12 +236,14 @@ Binärdaten gespeichert ist; Datei herunterladen und byteweise mit dem Original 
    gelöscht.
 3. **Given** eine Datei über dem Größenlimit, **When** der Nutzer sie hinzufügen will,
    **Then** lehnt holzi sie mit einer verständlichen Meldung ab und ändert den Eintrag nicht.
-4. **Given** ein Bild oder PDF, **When** der Nutzer den Anhang öffnet, **Then** sieht er eine
-   Vorschau in holzi.
+4. **Given** ein Bild, **When** der Nutzer den Anhang öffnet, **Then** sieht er eine Vorschau in
+   holzi; andere Dateien, auch PDFs, lädt er herunter.
 5. **Given** ein Anhang, **When** der Nutzer ihn umbenennt, **Then** ändert sich nur der Name
    an diesem Eintrag.
-6. **Given** nicht mehr referenzierte Binärdaten (etwa nach einer Sync-Zusammenführung),
-   **When** holzi die Vault öffnet, **Then** werden sie entfernt.
+6. **Given** nicht mehr referenzierte Binärdaten, die älter als sieben Tage sind (etwa nach
+   einer Sync-Zusammenführung), **When** holzi die Vault öffnet, **Then** werden sie entfernt;
+   jüngere bleiben, damit ein noch nicht eingetroffener Verweis eines anderen Geräts nicht ins
+   Leere läuft.
 
 ---
 
@@ -435,10 +444,11 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
   leeren“ MUSS eine Bestätigung verlangen.
 - **FR-016**: Wiederherstellen aus dem Papierkorb MUSS den früheren Ort wiederherstellen,
   oder die Wurzel, wenn der Ordner nicht mehr existiert.
-- **FR-017**: Das System MUSS bei jeder Änderung eines Eintrags den vorherigen Stand samt der
+- **FR-017**: Das System MUSS nach jeder Änderung eines Eintrags den neuen Zustand samt der
   Verknüpfung zu seinen Anhängen als Verlaufseintrag sichern (Zeitpunkt, Stand als
-  eigenständig lesbares Dokument), den Verlauf anzeigen, Stände vergleichen und einen Stand
-  wiederherstellen, ohne den bisherigen Stand zu verlieren.
+  eigenständig lesbares Dokument; kein neuer Eintrag, wenn sich nichts geändert hat), den
+  Verlauf anzeigen, Stände vergleichen und einen Stand wiederherstellen, ohne frühere Stände
+  zu verlieren.
 - **FR-018**: Der Verlauf MUSS Anhänge behalten, die am Eintrag selbst inzwischen ersetzt
   wurden; sie MÜSSEN erst entfernt werden, wenn kein Eintrag und kein Verlaufsstand sie mehr
   braucht.
@@ -454,10 +464,10 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
   25 MiB je Anhang; es schützt Größe und Speicherbedarf der Vault-Datenbank, in der die
   Anhänge liegen und die auf alle Geräte synchronisiert wird.
 - **FR-021**: Das System MUSS Anhänge herunterladen (byteweise gleich dem Original), umbenennen
-  und entfernen sowie Bilder und PDFs in einer Vorschau zeigen; Dateinamen MÜSSEN als Text
-  behandelt werden, nie als Pfad.
+  und entfernen sowie Bilder in einer Vorschau zeigen; andere Dateien, auch PDFs, MÜSSEN sich
+  herunterladen lassen. Dateinamen MÜSSEN als Text behandelt werden, nie als Pfad.
 - **FR-022**: Das System MUSS Binärdaten entfernen, die kein Eintrag und kein Verlaufsstand
-  mehr braucht, beim Öffnen der Vault und nach dem endgültigen Löschen.
+  mehr braucht und die älter als sieben Tage sind, beim Öffnen der Vault.
 
 **Import**
 
@@ -466,7 +476,10 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
   Ordnerstruktur, eigenen Feldern, TOTP, Tags, Anhängen und, wo die Quelle sie liefert,
   Passkeys. Der Import MUSS vorher eine Vorschau (Zahl der Einträge, Ordner, Anhänge) und
   nachher einen Bericht (importiert, mit Verlust, übersprungen) zeigen, MUSS beim Scheitern
-  oder Abbruch die Vault unverändert lassen und bei erkannten Doppelten fragen.
+  oder Abbruch die Vault unverändert lassen und bei erkannten Doppelten fragen. Übersteigt ein
+  Import insgesamt die Obergrenze einer Schreibtransaktion von 100 MiB, MUSS er vor dem
+  Schreiben mit einer Meldung abgelehnt werden; einzelne Anhänge über dem Limit aus FR-020
+  werden übersprungen und im Bericht genannt.
 
 **Zugriff von außen und Berechtigungen**
 
@@ -482,8 +495,10 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
   Symbol, Farbe, Tags, Ablaufdatum, Hinweis, ob TOTP oder Passkeys vorhanden sind) und nie
   Passwort, TOTP-Secret, Passkey-Schlüssel, eigene Felder, Notiz oder Anhänge. Geheimnisse
   gibt es nur auf eine Einzelabfrage je Eintrag.
-- **FR-027**: Der eingebaute Agent im Chat (Spec 032) MUSS vom Passwortmanager höchstens die
-  Kopfdaten nach FR-026 erhalten und DARF Geheimnisse nie lesen, auch nicht mit Zustimmung im
+- **FR-027**: Der eingebaute Agent im Chat (Spec 032) MUSS vom Passwortmanager höchstens eine
+  engere Auswahl der Kopfdaten erhalten (Kennung, Titel, Tags, Ordnername, Hinweis auf TOTP;
+  ohne Benutzername und Adresse, damit nicht die Liste der Konten an einen Cloud-Anbieter geht)
+  und DARF Geheimnisse nie lesen, auch nicht mit Zustimmung im
   Chat und auch nicht indirekt über Fehlermeldungen, Protokolle oder Chatverlauf; die
   Aktionen für Geheimnisse MÜSSEN für ihn nicht aufrufbar sein.
 - **FR-028**: Schreibzugriffe MÜSSEN verlangen, dass der Eintrag nach der Änderung mindestens
@@ -517,11 +532,16 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
 - **FR-036**: Tabellen- und Spaltennamen des Datenmodells MÜSSEN die von haex-vault
   übernehmen (`haex_passwords_item_details`, `_item_key_values`, `_groups`, `_group_items`,
   `_binaries`, `_item_binaries`, `_item_snapshots`, `_snapshot_binaries`,
-  `_generator_presets`, `_tags`, `_item_tags`, `_passkeys`), mit gleicher Bedeutung. Einzige
-  Ausnahme: Die Spalte der Binärdaten ist Binär statt Base64-Text (Clarifications).
+  `_generator_presets`, `_tags`, `_item_tags`, `_passkeys`), mit gleicher Bedeutung. Die
+  Abweichungen sind abschließend: die Spalte der Binärdaten ist Binär statt Base64-Text
+  (Clarifications); zwei zusätzliche nullbare Spalten merken den früheren Ort für das
+  Wiederherstellen (FR-016); die Verweise auf Binärdaten löschen nicht mit (`RESTRICT`);
+  Eindeutigkeit entsteht nicht durch UNIQUE-Constraints (FR-037).
 - **FR-037**: Alle Tabellen MÜSSEN CRDT-synchronisiert sein und je Zeile zusammengeführt
   werden; Eindeutigkeitsregeln (Tagname, Credential-ID, Hash der Binärdaten) MÜSSEN
-  bestehen bleiben, ohne dass ein Sync-Abgleich Daten verliert; Löschen MUSS Löschmarker
+  bestehen bleiben, ohne dass ein Sync-Abgleich Daten verliert oder anhält. Sie gelten durch
+  abgeleitete Kennungen und Prüfung in der Anwendung, nicht durch UNIQUE-Constraints, weil
+  ein Konflikt dort den Abgleich anhält; Löschen MUSS Löschmarker
   hinterlassen, und Löschen auf einem Gerät MUSS auf allen gelten.
 - **FR-038**: Der Passwortmanager MUSS sich bei Änderungen der Tabellen durch ein anderes
   Fenster, einen Agenten oder einen Sync live aktualisieren, ohne eine laufende Bearbeitung
