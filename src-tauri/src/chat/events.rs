@@ -29,6 +29,8 @@ pub(crate) const EVENT_TOOL_PERMISSION_REQUEST: &str = "tool-permission-request"
 pub(crate) const EVENT_CHAT_RETRY: &str = "chat-retry";
 /// Once per turn: whether the model got tools (spec 032 US4, `ToolAvailabilityEvent`).
 pub(crate) const EVENT_CHAT_TOOL_AVAILABILITY: &str = "chat-tool-availability";
+/// After the probe or the self-test wrote what a model can do with tools (spec 032).
+pub(crate) const EVENT_MODEL_TOOL_USE_UPDATED: &str = "model-tool-use-updated";
 const EVENT_MODEL_LOAD_ERROR: &str = "model-load-error";
 pub(crate) const EVENT_CHAT_AGENT_ACTIVITY: &str = "chat-agent-activity";
 

@@ -12,6 +12,8 @@ mod runner_tests;
 #[cfg(test)]
 #[path = "scoring_tests.rs"]
 mod scoring_tests;
+#[cfg(test)]
+pub(crate) mod testing;
 
 use crate::chat::tools::action_tool::AgentActionDef;
 

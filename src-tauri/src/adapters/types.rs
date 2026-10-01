@@ -142,6 +142,17 @@ pub struct ChatRequest {
     pub sampling: Sampling,
 }
 
+/// What the chat template of a local model says about tools (spec 032 R8).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolTemplateProbe {
+    /// The template renders the same text with and without a tool, or refuses tools: this model
+    /// cannot be shown any.
+    IgnoresTools,
+    /// The template takes tools, or nothing could be told. Whether the model uses them well is
+    /// for the self-test.
+    Inconclusive,
+}
+
 /// Sampling mode of one request (see [`ChatRequest::sampling`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Sampling {

@@ -28,7 +28,7 @@ pub mod types;
 
 pub use types::{
     AbortHandle, AdapterStream, Attachment, AttachmentKind, ChatMessage, ChatRequest, ChatRole,
-    StreamChunk, StreamError,
+    StreamChunk, StreamError, ToolTemplateProbe,
 };
 
 use async_trait::async_trait;
@@ -127,4 +127,10 @@ pub trait ProviderAdapter: Send + Sync {
     /// [`AdapterError`], while failures mid-stream ride the stream's
     /// `Err` branch as [`StreamError`].
     async fn stream_chat(&self, req: ChatRequest) -> Result<AdapterStream, AdapterError>;
+
+    /// Asks the adapter whether its model's chat template takes tools at all (spec 032 R8). Only
+    /// a local model has a template to look at; every other adapter cannot tell.
+    async fn probe_tool_template(&self) -> ToolTemplateProbe {
+        ToolTemplateProbe::Inconclusive
+    }
 }

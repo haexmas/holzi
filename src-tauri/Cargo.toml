@@ -37,6 +37,7 @@ default = ["llm-cpu", "voice"]
 # backend at runtime (`SttError::LocalSttUnavailable`).
 llm-cpu = [
     "dep:mistralrs",
+    "dep:either",
     "dep:candle",
     "dep:candle-nn",
     "dep:candle-transformers",
@@ -132,6 +133,9 @@ haex-crdt = { git = "https://github.com/haexmas/haex-crdt", rev = "aeb26ebb67b3f
 # crates.io; API moved between 0.6 expectation and 0.8.1). Kept optional so
 # `--no-default-features` builds skip the candle/nvcc dependency graph.
 mistralrs = { version = "0.8.1", optional = true }
+# `Model::tokenize` takes an `Either` (the chat-template probe, spec 032 R8); the version mistralrs
+# already resolves to.
+either = { version = "1", optional = true }
 # Tokio is unconditional: reqwest and the download commands need an async
 # runtime even without local inference, and Tauri already pulls tokio in
 # transitively. The extra `sync` and `fs` features are cheap. `net` is for
