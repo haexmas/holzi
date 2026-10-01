@@ -114,6 +114,11 @@ impl Instance {
         })
         .expect("read title")
     }
+
+    /// Stops the tracked sync service before the fixture's database is dropped.
+    pub async fn shutdown(self) {
+        self.state.gate().drain().await;
+    }
 }
 
 /// A Tauri app on the mock runtime; its handle resolves the app data paths.
