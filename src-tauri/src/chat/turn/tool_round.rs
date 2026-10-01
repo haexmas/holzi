@@ -18,6 +18,7 @@ use crate::chat::events::{
     EVENT_TOOL_PERMISSION_REQUEST,
 };
 use crate::chat::session::ChatState;
+use crate::chat::tools::action_tool::ACTION_SOURCE;
 use crate::chat::tools::offer::{extend_offer, found_tools};
 use crate::chat::tools::permission::{self, PermissionMode};
 use crate::chat::tools::{ApprovalDecision, Tool, ToolResult as ToolExecResult};
@@ -173,13 +174,6 @@ impl TurnRunner<'_> {
     async fn plan_calls(&mut self, tool_calls: Vec<LlmToolCall>) -> Vec<(LlmToolCall, ToolPlan)> {
         let mut plans: Vec<(LlmToolCall, ToolPlan)> = Vec::with_capacity(tool_calls.len());
         for call in tool_calls {
-            // The registry is the execution safety net, not the model's offer.
-            // A provider must not be able to call a non-core action it was
-            // never given in this request by merely guessing its name.
-            if !self.request.tools.iter().any(|tool| tool.name == call.name) {
-                plans.push((call, ToolPlan::Unknown));
-                continue;
-            }
             let tool = {
                 let registry = self
                     .chat_state
@@ -192,6 +186,16 @@ impl TurnRunner<'_> {
                 plans.push((call, ToolPlan::Unknown));
                 continue;
             };
+            // The registry is the execution safety net, not the model's offer.
+            // A provider must not be able to call a non-core action it was
+            // never given in this request by merely guessing its name. CLI
+            // and MCP tools retain their existing registry-based behavior.
+            if tool.source() == ACTION_SOURCE
+                && !self.request.tools.iter().any(|spec| spec.name == call.name)
+            {
+                plans.push((call, ToolPlan::Unknown));
+                continue;
+            }
             // Read fresh per call, not cached for the round: a mode
             // change must not retroactively affect a decision already
             // made for an earlier call, but the very next tool use
