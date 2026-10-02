@@ -26,6 +26,12 @@ Oberflächenschicht haex-ui (Pull Request haex-space/haextension#65, gepinnt auf
 - Geplante Spec **036 (Passwortmanager-Oberfläche)** baut auf den Feldern und der
   einstellbaren Akzentfarbe auf, etwa für die Auswahlleiste.
 
+## Clarifications
+
+### Session 2026-10-02
+
+- Q: Gelten Fenster- und Container-Hintergrund getrennt je Schema oder als Tönung für beide? → A: Eine Wahl, die als Tönung in beiden Schemata gilt; Hell bleibt hell, Dunkel bleibt dunkel. Der Umfang der Regler folgt dem Dialog „Aussehen“ von COSMIC (Akzent, Fensterhintergrund, Container-Hintergrund, Texttönung, Komponententönung, Hinweis für das aktive Fenster, alles auf Standard zurücksetzbar, Import und Export). Wird das zu aufwändig, darf der Plan Texttönung, Komponententönung und den Fensterhinweis als eigene spätere Stufe abtrennen.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Eingabefelder sehen überall gleich aus (Priority: P1)
@@ -66,10 +72,10 @@ Standardfarbe einheitlich sind.
 ### User Story 2 - Akzentfarbe und Hintergrund wählen (Priority: P1)
 
 In den Einstellungen unter „Darstellung“ wählt der Nutzer die Akzentfarbe aus einer Reihe
-von Farbfeldern oder legt über „+“ eine eigene Farbe fest, und wählt Fensterhintergrund und
-Container-Hintergrund. Die Auswahl wirkt sofort in der ganzen App und bleibt, ohne dass der
-Nutzer etwas speichert. Schalter, Knöpfe, Fokusringe, Auswahlmarkierungen, Links und alle
-Flächen folgen der Wahl.
+von Farbfeldern oder legt über „+“ eine eigene Farbe fest, und stellt wie in COSMIC
+Fensterhintergrund, Container-Hintergrund, Texttönung und Komponententönung ein. Die Auswahl
+wirkt sofort in der ganzen App und bleibt, ohne dass der Nutzer etwas speichert. Schalter,
+Knöpfe, Fokusringe, Auswahlmarkierungen, Links und alle Flächen folgen der Wahl.
 
 **Why this priority**: Das ist der zweite Teil des Auftrags und der Grund, warum die Primärfarbe
 nicht fest im Layer stehen darf.
@@ -93,6 +99,12 @@ prüfen, dass sie bleibt.
 5. **Given** der Nutzer wählt Fenster- oder Container-Hintergrund, **When** die Wahl
    getroffen ist, **Then** ändern sich nur die jeweiligen Flächen (Fenster, Seitenleisten
    und Listen als Container) und der Text darauf bleibt lesbar.
+6. **Given** der Nutzer ändert Texttönung oder Komponententönung, **When** die Wahl getroffen
+   ist, **Then** ändern sich die Textfarben der Oberfläche beziehungsweise die Hintergründe
+   von Schaltflächen, Suchfeldern und Eingabefeldern, und alles bleibt lesbar.
+7. **Given** der Nutzer schaltet „Akzentfarbe als Hinweis für das aktive Fenster“ ein,
+   **When** er zwischen Fenstern des Window Managers (wm) wechselt, **Then** trägt nur das
+   aktive Fenster eine Umrandung in der Akzentfarbe.
 
 ---
 
@@ -125,7 +137,7 @@ zusammenspielen und bleibt Teil derselben Gruppe.
 Der Nutzer kann eine Farbe wählen, bei der Text oder Bedienelemente schwer lesbar würden.
 holzi verhindert das: Beschriftung auf Knöpfen und Auswahlleisten wechselt automatisch
 zwischen hell und dunkel, und eine Wahl, die die Mindestkontraste nicht einhalten kann,
-wird abgelehnt oder angepasst und der Nutzer erfährt das. „Auf Standard zurücksetzen“ bringt
+wird auf den nächsten erlaubten Wert angepasst und der Nutzer erfährt das. „Auf Standard zurücksetzen“ bringt
 Akzent und Hintergründe zurück.
 
 **Why this priority**: Verhindert, dass eine Geschmacksentscheidung die App unbenutzbar macht.
@@ -139,10 +151,11 @@ Kontraste messen; zurücksetzen und die Standardwerte prüfen.
    Schrift auf Knöpfen und Auswahlleisten lesbar (mindestens 4,5:1) und Ringe, Schalter und
    Ränder erreichen mindestens 3:1 gegen ihren Untergrund.
 2. **Given** ein Hintergrund, der gegen den Text weniger als 4,5:1 hätte, **When** er
-   gewählt wird, **Then** wird er nicht übernommen, und der Nutzer sieht den Grund.
-3. **Given** eine geänderte Darstellung, **When** der Nutzer auf Standard zurücksetzt,
-   **Then** gelten wieder Standardakzent und Standardhintergründe und das Schema bleibt
-   unverändert.
+   gewählt wird, **Then** wird der nächste erlaubte Ton angezeigt und gespeichert, und der
+   Nutzer sieht, dass und warum angepasst wurde.
+3. **Given** eine geänderte Darstellung, **When** der Nutzer auf Standard zurücksetzt und
+   bestätigt, **Then** gelten wieder alle Standardwerte der Darstellung und das Schema
+   bleibt unverändert.
 
 ---
 
@@ -229,17 +242,23 @@ Darstellung wiederfinden; eine kaputte Datei importieren und eine verständliche
 **Darstellung**
 
 - **FR-011**: Die Einstellungen MUSS eine Gruppe „Darstellung“ haben, die das bestehende
-  Farbschema aufnimmt und um Akzentfarbe, Fensterhintergrund und Container-Hintergrund
-  erweitert; sie MUSS wie die anderen Einstellungen ohne Speichern-, Übernehmen- und
+  Farbschema aufnimmt und um Akzentfarbe, Fensterhintergrund, Container-Hintergrund,
+  Texttönung, Komponententönung und den Fensterhinweis (FR-024) erweitert, in der
+  Reihenfolge und Art des Dialogs „Aussehen“ von COSMIC; sie MUSS wie die anderen Einstellungen ohne Speichern-, Übernehmen- und
   Zurücksetzen-Knopf pro Feld auskommen (Auswahl wird gespeichert); das gemeinsame
   „Auf Standard zurücksetzen“ der Gruppe ist ausdrücklich erlaubt (FR-017).
 - **FR-012**: Der Nutzer MUSS die Akzentfarbe aus einer Reihe vordefinierter Farbfelder
   wählen oder über „+“ eine eigene Farbe festlegen können; die Reihe MUSS die gewählte eigene
   Farbe als weiteres Feld zeigen.
-- **FR-013**: Der Nutzer MUSS Fensterhintergrund und Container-Hintergrund wählen können, aus
-  einer kleinen Reihe vordefinierter Töne (Standard und mehrere Alternativen) und per
-  eigener Farbe; „Fenster“ ist die Fläche hinter allem, „Container“ sind Seitenleisten,
-  Listenboxen, Karten und Dialoge.
+- **FR-013**: Der Nutzer MUSS Fensterhintergrund, Container-Hintergrund, Texttönung und
+  Komponententönung wählen können, aus einer kleinen Reihe vordefinierter Töne (Standard und
+  mehrere Alternativen) und per eigener Farbe. „Fenster“ ist die Fläche hinter allem,
+  „Container“ sind Seitenleisten, Listenboxen, Karten und Dialoge, die „Texttönung“ ist die
+  Grundlage, aus der die Textfarben der Oberfläche abgeleitet werden, und die
+  „Komponententönung“ liefert die Hintergründe von Schaltflächen, Suchfeldern und
+  Eingabefeldern. Jede dieser Wahlen ist eine Tönung (Farbton und Stärke), die auf die
+  Standardflächen des jeweiligen Schemas wirkt und in Hell und Dunkel gilt; Hell bleibt
+  dadurch hell und Dunkel dunkel.
 - **FR-014**: Eine Änderung der Darstellung MUSS sofort in der ganzen App wirken, in allen
   offenen Fenstern und Tabs, ohne neu zu laden.
 - **FR-015**: Die Primärfarbe MUSS dort wirken, wo holzi heute die Primärfarbe zeigt:
@@ -250,14 +269,17 @@ Darstellung wiederfinden; eine kaputte Datei importieren und eine verständliche
   und die Akzentfarbe in Hell und Dunkel so anpassen, dass Text auf Flächen mit der Farbe
   mindestens 4,5:1 und Bedienelemente (Ring, Schalterspur, Rand) gegen ihren Untergrund
   mindestens 3:1 erreichen.
-- **FR-017**: Eine Wahl von Fenster- oder Container-Hintergrund, die den Normaltext oder den
-  gedämpften Text unter 4,5:1 oder Ränder unter 3:1 brächte, MUSS abgelehnt oder auf den
-  nächsten erlaubten Wert angepasst werden, und der Nutzer MUSS den Grund sehen. „Auf
-  Standard zurücksetzen“ MUSS Akzent und beide Hintergründe zurückbringen und das Schema
-  unverändert lassen.
+- **FR-017**: Eine Wahl von Fenster- oder Container-Hintergrund, Texttönung oder
+  Komponententönung, die den Normaltext oder den gedämpften Text unter 4,5:1 oder Ränder und
+  Bedienelemente unter 3:1 brächte, MUSS auf den nächsten erlaubten Wert angepasst werden
+  (nicht stillschweigend abgelehnt), und der Nutzer MUSS sehen, dass und warum. „Auf
+  Standard zurücksetzen“ MUSS alle Werte der Darstellung (Akzent, beide Hintergründe, beide
+  Tönungen, Fensterhinweis, eigene Farben) zurückbringen und das Schema unverändert lassen;
+  es MUSS erst nach einer Bestätigung wirken.
 - **FR-018**: Das Farbschema (Hell, Dunkel, Automatisch) MUSS bleiben wie in 023 (Automatisch
-  folgt dem System live), und Akzent und Hintergründe MÜSSEN in beiden Schemata gelten.
-- **FR-019**: Die Darstellung (Schema, Akzent, eigene Farben, Hintergründe) MUSS als
+  folgt dem System live), und Akzent, Hintergründe und Tönungen MÜSSEN in beiden Schemata gelten.
+- **FR-019**: Die Darstellung (Schema, Akzent, eigene Farben, Hintergründe, Tönungen,
+  Fensterhinweis) MUSS als
   Vault-Einstellung gespeichert werden und damit über den Sync der eigenen Geräte auf alle
   Geräte der Vault gehen, wie das Farbschema seit 023; vor dem Öffnen der Vault gilt der
   Standard.
@@ -271,12 +293,17 @@ Darstellung wiederfinden; eine kaputte Datei importieren und eine verständliche
   einer eigenen Farbe in beiden Schemata gemessen.
 - **FR-023**: Alle Texte der Darstellung MÜSSEN Deutsch und Englisch haben, und die
   Einstellungen sagen „Sitzung“ und „Window Manager (wm)“ statt „Layout“ oder „Shell“.
+- **FR-024**: Der Nutzer MUSS einschalten können, dass das aktive Fenster des Window
+  Managers (wm) eine Umrandung in der Akzentfarbe trägt (Standard: aus, das heutige
+  Aussehen); nur ein Fenster trägt sie zur gleichen Zeit, und sie erreicht gegen den
+  Untergrund mindestens 3:1.
 
 ### Key Entities *(include if feature involves data)*
 
 - **Darstellung**: Die Gesamtheit der Einstellungen der Oberfläche einer Vault: Schema
-  (hell, dunkel, automatisch), Akzentfarbe, Fensterhintergrund, Container-Hintergrund und
-  die vom Nutzer angelegten eigenen Farben.
+  (hell, dunkel, automatisch), Akzentfarbe, Fensterhintergrund, Container-Hintergrund,
+  Texttönung, Komponententönung, Fensterhinweis und die vom Nutzer angelegten eigenen
+  Farben.
 - **Farbfeld**: Eine benannte oder eigene Farbe, die als Akzent oder Hintergrund wählbar ist.
 - **Darstellungsdatei**: Das Austauschformat für Export und Import; enthält nur die Werte
   der Darstellung und eine Versionsangabe.
@@ -313,10 +340,14 @@ Darstellung wiederfinden; eine kaputte Datei importieren und eine verständliche
   Geräte mit anderen Bildschirmen stellen weiter per „Automatisch“ das System-Schema ein.
 - Die Feldarten kommen aus der Oberflächenschicht haex-ui im Stand `2dcb8bc`; holzi ändert
   diese Schicht nicht, sondern wünscht Änderungen im Repo haex-space/haextension.
-- Zielfarben und Hintergründe sind eine kleine feste Reihe (acht bis zwölf Akzente, fünf
-  bis sieben Hintergrundtöne); die genaue Liste legt der Plan fest.
-- Schriftgrößen, Schriftarten, Dichte der Oberfläche und „Aktives Fenster mit Akzent
-  hervorheben“ sind nicht Teil dieser Spec.
+- Akzente und Töne sind je eine kleine feste Reihe (acht bis zwölf Akzente, fünf bis sieben
+  Töne je Regler) plus eigene Farbe; die genaue Liste legt der Plan fest.
+- Schriftgrößen, Schriftarten, Dichte der Oberfläche und Stil (Eckenradius, Abstände wie
+  „Stil“ in COSMIC) sind nicht Teil dieser Spec.
+- Der Umfang folgt dem Dialog „Aussehen“ von COSMIC; ist das zu aufwändig, trennt der Plan
+  Texttönung, Komponententönung und den Fensterhinweis (FR-013, FR-024) als spätere Stufe ab,
+  ohne die Stufe mit Akzent, Hintergründen, Schema, Zurücksetzen, Export und Import zu
+  verzögern.
 - Der Chat darf sein mehrzeiliges Eingabefeld mit eigenem Verhalten behalten, wenn die
   gemeinsame Feldart es nicht abbilden kann (Begründung im Pull Request, FR-001).
 - Die Darstellung wirkt auf holzi selbst. Erweiterungen im Window Manager (wm) mit eigener
