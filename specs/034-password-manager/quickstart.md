@@ -86,10 +86,11 @@ Stand. Manuell: Passwort ändern, im Verlauf den alten Stand öffnen (Passwort v
 ## 7. Anhänge (US5)
 
 `binaries_tests.rs`: Hash über Rohdaten, Deduplizierung, 25-MiB-Grenze (Datei vorher geprüft,
-26 MiB wird abgelehnt, ohne zu lesen), Karenzzeit beim Aufräumen (frische verwaiste Binärzeile
-bleibt, acht Tage alte verschwindet; ein eigenes Symbol, das ein Eintrag, ein Ordner, ein Passkey
-oder ein Verlaufsstand noch nennt, bleibt auch nach acht Tagen, ein nicht mehr genanntes
-verschwindet). Manuell: dieselbe Datei an zwei Einträge hängen,
+26 MiB wird abgelehnt, ohne zu lesen), Karenzzeit beim Aufräumen (`orphaned_at` wird beim
+Verwaisen gesetzt: eine alte Binärzeile, die erst jetzt verwaist, bleibt, eine seit acht Tagen
+verwaiste verschwindet; ein verspäteter Verweis setzt `orphaned_at` zurück; ein eigenes Symbol,
+das ein Eintrag, ein Ordner, ein Passkey oder ein Verlaufsstand noch nennt, bleibt auch nach acht
+Tagen, ein nicht mehr genanntes verschwindet). Manuell: dieselbe Datei an zwei Einträge hängen,
 herunterladen und mit `cmp` gegen das Original vergleichen (SC-009), Bild-Vorschau, PDF nur
 Herunterladen, 26-MiB-Datei zeigt die Meldung.
 

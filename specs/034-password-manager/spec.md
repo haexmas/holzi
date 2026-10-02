@@ -69,7 +69,7 @@ ausdrücklich nicht Teil dieser Spec. Referenz: haex-vault @
   UNIQUE-Constraints (ein Konflikt hält den Sync an; abgeleitete Kennungen für Tags,
   Tag-Zuordnungen und Passkeys), zwei Spalten für den früheren Ort im Papierkorb, `RESTRICT` bei
   den Verweisen auf Binärdaten. Der Verlauf speichert den neuen Zustand; Aufräumen mit Karenzzeit
-  von sieben Tagen; PDFs nur zum Herunterladen; der eingebaute Agent sieht nur Titel, Tags und
+  von sieben Tagen ab dem Verlust des letzten bekannten Verweises (geprüft beim nächsten Öffnen); PDFs nur zum Herunterladen; der eingebaute Agent sieht nur Titel, Tags und
   Ordnernamen (Plan, R2–R6, R18).
 - Q: (Analyse) Müssen Passkeys im ersten Wurf auch aus Importen kommen? → A: Ja (Bitwarden
   und KeePassXC). haex-vault importiert keine Passkeys; es erzeugt sie selbst über die Bridge und
@@ -236,7 +236,8 @@ endgültig entfernen.
 3. **Given** ein Eintrag im Papierkorb, **When** der Nutzer ihn endgültig löscht (einzeln
    oder „Papierkorb leeren“ nach Bestätigung), **Then** sind Eintrag, Verlauf, Passkeys,
    Verknüpfungen entfernt; nur noch von ihm genutzte Anhänge und Symbole sind danach nicht mehr
-   erreichbar und geben ihren Platz nach höchstens sieben Tagen frei (US5, Szenario 6).
+   erreichbar; beim nächsten Öffnen geben sie ihren Platz frei, sobald seit dem Verlust des
+   letzten bekannten Verweises mindestens sieben Tage vergangen sind (US5, Szenario 6).
 4. **Given** ein Eintrag, **When** der Nutzer eine Änderung speichert, **Then** gibt es einen
    neuen Eintrag im Verlauf mit Zeitpunkt und dem neuen Stand samt Anhängen, und der Stand
    davor bleibt als früherer Eintrag erhalten.
@@ -268,17 +269,19 @@ Binärdaten gespeichert ist; Datei herunterladen und byteweise mit dem Original 
    Name und Größe, und der Download liefert byteweise die Originaldatei.
 2. **Given** dieselbe Datei an zwei Einträgen, **When** der Nutzer sie von einem entfernt,
    **Then** bleibt sie am anderen erhalten; entfernt er sie auch dort, ist sie nicht mehr erreichbar, und
-   ihre Binärdaten geben den Platz nach höchstens sieben Tagen frei (Szenario 6).
+   ihre Binärdaten geben beim nächsten Öffnen den Platz frei, sobald sie mindestens sieben Tage
+   ohne bekannten Verweis waren (Szenario 6).
 3. **Given** eine Datei über dem Größenlimit, **When** der Nutzer sie hinzufügen will,
    **Then** lehnt holzi sie mit einer verständlichen Meldung ab und ändert den Eintrag nicht.
 4. **Given** ein Bild, **When** der Nutzer den Anhang öffnet, **Then** sieht er eine Vorschau in
    holzi; andere Dateien, auch PDFs, lädt er herunter.
 5. **Given** ein Anhang, **When** der Nutzer ihn umbenennt, **Then** ändert sich nur der Name
    an diesem Eintrag.
-6. **Given** nicht mehr referenzierte Binärdaten, die älter als sieben Tage sind (etwa nach
-   einer Sync-Zusammenführung oder nach dem Entfernen des letzten Anhangs), **When** holzi die Vault öffnet, **Then** werden sie entfernt;
-   jüngere bleiben, damit ein noch nicht eingetroffener Verweis eines anderen Geräts nicht ins
-   Leere läuft.
+6. **Given** nicht mehr referenzierte Binärdaten, deren `orphaned_at` mindestens sieben Tage
+   zurückliegt (etwa nach einer Sync-Zusammenführung oder nach dem Entfernen des letzten
+   Anhangs), **When** holzi die Vault öffnet, **Then** werden sie entfernt; eine alte Binärzeile,
+   die erst jetzt verwaist wird, bleibt für die Karenzzeit, damit ein noch nicht eingetroffener
+   Verweis eines anderen Geräts sie noch erreichen kann.
 
 ---
 
@@ -545,8 +548,10 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
   und entfernen sowie Bilder in einer Vorschau zeigen; andere Dateien, auch PDFs, MÜSSEN sich
   herunterladen lassen. Dateinamen MÜSSEN als Text behandelt werden, nie als Pfad.
 - **FR-022**: Das System MUSS Binärdaten entfernen, die kein Eintrag, kein Ordner, kein Passkey und
-  kein Verlaufsstand mehr braucht (als Anhang oder als Symbol) und die älter als sieben Tage
-  sind, beim Öffnen der Vault; benutzte Symbole bleiben.
+  kein Verlaufsstand mehr braucht (als Anhang oder als Symbol) und deren `orphaned_at` beim
+  Öffnen der Vault mindestens sieben Tage zurückliegt; der Zeitpunkt wird gesetzt, sobald der
+  letzte bekannte Verweis entfällt, und eine neue Referenz setzt ihn zurück. Benutzte Symbole
+  bleiben.
 
 **Import**
 
@@ -643,7 +648,8 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
   Abweichungen sind abschließend: die Spalte der Binärdaten ist Binär statt Base64-Text
   (Clarifications); zwei zusätzliche nullbare Spalten merken den früheren Ort für das
   Wiederherstellen (FR-016); die Verweise auf Binärdaten löschen nicht mit (`RESTRICT`);
-  Eindeutigkeit entsteht nicht durch UNIQUE-Constraints (FR-037).
+  `orphaned_at` merkt den Beginn der Karenzzeit nach dem Verlust des letzten bekannten
+  Verweises; Eindeutigkeit entsteht nicht durch UNIQUE-Constraints (FR-037).
 - **FR-037**: Alle Tabellen MÜSSEN CRDT-synchronisiert sein und je Zeile zusammengeführt
   werden; Eindeutigkeitsregeln (Tagname, Credential-ID, Hash der Binärdaten) MÜSSEN
   bestehen bleiben, ohne dass ein Sync-Abgleich Daten verliert oder anhält. Sie gelten durch

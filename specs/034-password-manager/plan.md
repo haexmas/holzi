@@ -79,7 +79,8 @@ kein `_no_sync`. `HOLZI_TRIGGER_VERSION` 13 → 14. Eine Vault-Einstellung
 Migrationstests (`migrations_tests.rs`, `vault_upgrade.rs`); Frontend — neues
 `pnpm check:passwords` (Vorbild `check-wm-actions.ts`), Regression `check:agent-actions`,
 `check:wm-navigation`, `check:templates`, `typecheck`, `typecheck:scripts`, `lint`,
-`format:check`; End-to-End `passwords-basic`, `passwords-sync-two-devices`; manuell nach
+`format:check`; End-to-End `passwords-basic`, `passwords-sync-two-devices`,
+`passwords-narrow-window`, `passwords-session-restore`; manuell nach
 [quickstart.md](./quickstart.md)
 
 **Target Platform**: Tauri-Desktop (Linux, macOS, Windows). Mobile ist vorbereitet, aber nicht
@@ -138,7 +139,7 @@ Geprüft gegen `.specify/memory/constitution.md` (v1.4.0) und die spaex-Constitu
 
 **Ergebnis nach Phase 1**: unverändert. Das Design fügt neun direkte Abhängigkeiten hinzu (Rust; einige schon transitiv im Lock) und eine
 Migration; beides begründet in research.md (R1, R8, R9, R12). Die Abweichungen vom Datenmodell von
-haex-vault sind in [data-model.md](./data-model.md) als A1–A5 gelistet. Die Spec wurde an sieben
+haex-vault sind in [data-model.md](./data-model.md) als A1–A6 gelistet. Die Spec wurde an sieben
 Stellen an die Planung angeglichen (R20).
 
 ## Project Structure
@@ -247,7 +248,7 @@ legt die Seitenleisten-Entscheidung in Aufgabe T002 (Graph-Abfrage), nicht jetzt
 
 | Verstoß / Aufwand                                                        | Warum nötig                                                                                                                                     | Einfachere Alternative verworfen, weil                                                                                                                                                                          |
 | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Abweichung vom Datenmodell von haex-vault (A1–A5, vor allem kein UNIQUE) | UNIQUE-Konflikte halten den Sync an (R2); der Papierkorb soll den Ort merken (R3); BLOB statt Base64 (R4)                                       | 1:1-Übernahme brächte einen Sync, der wegen eines Tagnamens stehen bleibt, und den Verlust des Ortes beim Wiederherstellen                                                                                      |
+| Abweichung vom Datenmodell von haex-vault (A1–A6, vor allem kein UNIQUE) | UNIQUE-Konflikte halten den Sync an (R2); der Papierkorb soll den Ort merken (R3); BLOB statt Base64 und `orphaned_at` schützen den Sync (R4) | 1:1-Übernahme brächte einen Sync, der wegen eines Tagnamens stehen bleibt, den Verlust des Ortes beim Wiederherstellen oder das Löschen einer verspäteten Referenz |
 | Neun Rust-Abhängigkeiten (mehrere schon transitiv im Lock)               | KDBX, RFC-4180-CSV, SHA-1 für TOTP, P-256, EdDSA und RSA-Schlüsselteile für den öffentlichen Passkey-Schlüssel, Zwischenablage mit Löschen, NFC | TOTP und Base32 selbst zu schreiben ist vertretbar (R8) und geschieht; KDBX/Argon2, CSV, Elliptische Kurven, ASN.1-Schlüsselformate und Unicode-Normalisierung selbst zu schreiben wäre riskanter als ein Crate |
 | Teil-Update und `reveal` statt Klartext-Detail                           | Geheimnisse bleiben im Backend (R7, FR-005, FR-040)                                                                                             | Alle Felder im Klartext zu laden ist einfacher, legt aber alle Geheimnisse in den Webview                                                                                                                       |
 | Aufrufer-/Freigabe-Modul und Dienst ohne Verwalter für Freigaben         | FR-024 bis FR-030 verlangen die Prüfung jetzt; Spec 029 braucht den Zugriff, 017–019/021 den Rest                                               | Prüfung später nachrüsten hieße, die Commands und den Dienst ein zweites Mal anzufassen; die Prüfung ist rein und klein                                                                                         |

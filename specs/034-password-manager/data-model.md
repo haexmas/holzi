@@ -19,6 +19,7 @@ Zeitstempel `TEXT` (`CURRENT_TIMESTAMP`, wo nicht anders gesagt).
 | A3  | kein UNIQUE auf `tags.name`, `passkeys.credential_id` und `item_tags (item_id, tag_id)`; stattdessen Indizes | R2    |
 | A4  | `item_binaries.binary_hash` und `snapshot_binaries.binary_hash`: `ON DELETE RESTRICT` statt `CASCADE`        | R4    |
 | A5  | zusätzliche Indizes auf Fremdschlüsselspalten                                                                | R1    |
+| A6  | `binaries.orphaned_at` (nullable): Beginn der Karenzzeit nach Verlust des letzten bekannten Verweises     | R4    |
 
 ## Tabellen
 
@@ -75,7 +76,8 @@ CASCADE (leer = Wurzel) · **`trashed_from_group_id` TEXT (A2)**. Index:
 | `data`       | **BLOB** NOT NULL (A1) | höchstens 25 MiB                                                                                |
 | `size`       | INTEGER NOT NULL       | Länge von `data`                                                                                |
 | `type`       | TEXT                   | `attachment` (Standard) oder `icon` (eigenes Symbol, vom Import; Verweis über `binary:<hash>`)  |
-| `created_at` | TEXT                   | Rust schreibt RFC 3339 mit Millisekunden; die Karenzzeit vergleicht über `datetime(created_at)` |
+| `created_at`  | TEXT                   | Zeitpunkt der Anlage; Rust schreibt RFC 3339 mit Millisekunden                                  |
+| `orphaned_at` | TEXT                  | nullable; Zeitpunkt, an dem kein Verweis mehr bekannt war; Karenzzeit über `datetime(orphaned_at)` |
 
 `data` wird nur in eigenen Abfragen gelesen. `size`, nicht `length(data)`, trägt die Anzeige.
 
@@ -205,16 +207,19 @@ im Papierkorb
 ### Binärdaten
 
 ```text
-angelegt (created_at = jetzt)
+angelegt (created_at = jetzt, orphaned_at = NULL)
   ── Verweis in item_binaries oder snapshot_binaries ──▶ in Benutzung
-in Benutzung ── letzter Verweis entfällt ──▶ verwaist
-verwaist ── beim Öffnen der Vault, created_at älter als 7 Tage ──▶ gelöscht
+in Benutzung ── letzter bekannte Verweis entfällt ──▶ verwaist (orphaned_at = jetzt)
+verwaist ── neuer Verweis trifft ein ──▶ in Benutzung (orphaned_at = NULL)
+verwaist ── beim Öffnen der Vault, orphaned_at mindestens 7 Tage alt ──▶ gelöscht
 ```
 
 Verweis heißt bei Anhängen eine Zeile in `item_binaries` oder `snapshot_binaries`. Bei `type = 'icon'`
 nennt `binary:<hash>` in `item_details.icon`, `groups.icon`, `passkeys.icon` oder im JSON eines
-Verlaufsstands den Hash; solange eine Stelle ihn nennt, gilt die Zeile als benutzt und wird nicht
-aufgeräumt (R4).
+Verlaufsstands den Hash; solange eine Stelle ihn nennt, gilt die Zeile als benutzt, setzt
+`orphaned_at` zurück auf `NULL` und wird nicht aufgeräumt (R4). `created_at` beschreibt nur die
+Anlage; auch eine alte Binärzeile bekommt beim ersten Erkennen ohne Verweis einen neuen
+`orphaned_at`-Zeitpunkt.
 
 ## Rust-Typen (nicht gespeichert; ts-rs-Export nach `src/types/bindings/`)
 

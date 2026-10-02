@@ -176,15 +176,20 @@ unabhängig von einer ungeprüften Annahme über die Kaskade.
 - Die Fremdschlüssel von `item_binaries.binary_hash` und `snapshot_binaries.binary_hash`
   auf `binaries.hash` sind `ON DELETE RESTRICT` (haex-vault: `CASCADE`). Lokal kann so keine
   Binärzeile gelöscht werden, die noch einer braucht.
-- **Aufräumen** (`prune_binaries`) löscht nur Binärzeilen ohne Verweis, die älter als **sieben
-  Tage** sind (`created_at`). Ein Verweis ist bei Anhängen eine Zeile in `item_binaries` oder
-  `snapshot_binaries`. Eigene Symbole (`type = 'icon'`) haben keine solche Zeile, sie hängen am
-  Text `binary:<hash>` in `item_details.icon`, `groups.icon`, `passkeys.icon` oder im JSON eines
-  Verlaufsstands (`snapshot_data`); solange eine dieser Stellen den Hash nennt, ist die Zeile
-  benutzt und bleibt, sonst würden importierte Symbole nach sieben Tagen verschwinden. Ein Symbol,
-  das nichts mehr nennt (Eintrag endgültig gelöscht), fällt nach der Karenzzeit weg. Es läuft einmal beim Öffnen der Vault (Hook neben
-  `vault_events::start_for_active_instance`, `instances/open.rs:143`), nicht nach jedem
-  Löschen. Endgültig gelöschte Anhänge belegen also noch bis zu sieben Tage Platz.
+- **Aufräumen** (`prune_binaries`) löscht nur Binärzeilen ohne Verweis, deren `orphaned_at` mindestens
+  **sieben Tage** zurückliegt. `created_at` bezeichnet nur die Anlage und entscheidet nicht über
+  die Karenzzeit. Beim Verlust des letzten bekannten Verweises setzt derselbe `write`
+  `orphaned_at` auf jetzt; trifft ein Verweis ein, setzt er den Wert auf `NULL`. Eine alte
+  Binärzeile, die erst jetzt verwaist wird, bleibt so mindestens sieben Tage erhalten, und ein
+  verspäteter Verweis kann die Löschung verhindern. Ein Verweis ist bei Anhängen eine Zeile in
+  `item_binaries` oder `snapshot_binaries`. Eigene Symbole (`type = 'icon'`) haben keine solche
+  Zeile, sie hängen am Text `binary:<hash>` in `item_details.icon`, `groups.icon`, `passkeys.icon`
+  oder im JSON eines Verlaufsstands (`snapshot_data`); solange eine dieser Stellen den Hash nennt,
+  ist die Zeile benutzt und bleibt. Ein Symbol, das nichts mehr nennt (Eintrag endgültig gelöscht),
+  fällt nach der Karenzzeit weg. Die Prüfung läuft einmal beim Öffnen der Vault (Hook neben
+  `vault_events::start_for_active_instance`, `instances/open.rs:143`), nicht nach jedem Löschen.
+  Endgültig gelöschte Anhänge belegen also bis zum nächsten Öffnen und mindestens sieben Tage
+  Platz.
 - Importierte Anhänge über dem Limit werden übersprungen und im Bericht genannt.
 
 **ponytail** (Symbole): die Suche nach dem Hash im JSON der Verlaufsstände ist ein Textvergleich
@@ -260,12 +265,13 @@ Oberfläche (FR-024). Wichtig:
 - Rechte: `User` darf alles ohne Freigabe (FR-031). `BuiltinAgent` bekommt nie Geheimnisse
   und nie eine Freigabe (FR-027): nur `list_headers` mit dem Ergebnis `AgentHeader` ist erlaubt. Alle anderen
   Aufrufer folgen den Regeln aus FR-025 bis FR-029.
-- **Papierkorb (Z13)**: Einträge im Papierkorb sind für jeden Aufrufer außer `User` nicht
-  vorhanden: Lesen, Ändern und Löschen sind `NotFound`. Grund: `trash` auf ein Ziel, das schon im
-  Papierkorb liegt, ist `delete_permanently` (R3, für `User`); ohne diese Regel könnte ein zweites
-  „Löschen“ durch eine Erweiterung, einen Agenten oder eine holzi-Funktion einen Eintrag endgültig
-  entfernen und FR-015 verletzen. `delete_item` der Aufrufer ruft deshalb nur `trash` für Einträge
-  außerhalb des Papierkorbs.
+- **Papierkorb (Z13)**: Für `read_secret_item`, `update_item` und `delete_item` prüft Z3 zuerst
+  die verlangte Freigabe. Fehlt sie, ist das Ergebnis `Forbidden`; erst bei passender Freigabe
+  sind Einträge im Papierkorb für jeden Aufrufer außer `User` nicht vorhanden und ist das Ergebnis
+  `NotFound`. Grund: `trash` auf ein Ziel, das schon im Papierkorb liegt, ist `delete_permanently`
+  (R3, für `User`); ohne diese Regel könnte ein zweites „Löschen“ durch eine Erweiterung, einen
+  Agenten oder eine holzi-Funktion einen Eintrag endgültig entfernen und FR-015 verletzen.
+  `delete_item` der Aufrufer ruft deshalb nur `trash` für Einträge außerhalb des Papierkorbs.
 - Fehler: eine fehlende **Art** (Lesen gegeben, Schreiben verlangt) ist `Forbidden`; ein
   Eintrag **außerhalb des Bereichs** ist `NotFound` wie ein nicht vorhandener (FR-029).
 - Beim Schreiben im Bereich `Tags` darf die gesendete Tagliste nur Tags des Bereichs enthalten
@@ -688,10 +694,15 @@ Die folgenden Punkte stehen jetzt in der Spec (eigener Commit, mit Begründung h
 19. **FR-015**, **FR-028**, **US6 Szenario 9** (zweite Analyse): Einträge im Papierkorb sind für
     Aufrufer von außen nicht vorhanden (Z13, R6).
 20. **FR-022**, **US4 Szenario 3**, **US5 Szenario 2 und 6**: benutzte Symbole bleiben beim
-    Aufräumen, entfernte Anhänge geben den Platz nach höchstens sieben Tagen frei (R4).
+    Aufräumen; entfernte Anhänge geben den Platz beim nächsten Öffnen frei, sobald `orphaned_at`
+    mindestens sieben Tage zurückliegt (R4).
 21. **FR-023**, Edge Case „gleiche Credential-ID“: Ein nicht angelegter doppelter Passkey steht im
     Bericht (R12).
 22. **SC-012**: nennt die End-to-End-Abläufe aus dem Quickstart statt „jedes Szenario“ (R16).
+23. **FR-022**, **US4 Szenario 3**, **US5 Szenario 2 und 6** (zweite Analyse): Die Karenzzeit
+    beginnt mit `orphaned_at` beim Verlust des letzten bekannten Verweises, nicht mit
+    `created_at`; ein verspäteter Verweis kann die Löschung während der Karenzzeit verhindern
+    (R4).
 
 **Entscheidungen, die der Betreiber bestätigen sollte** (im Bericht an ihn genannt):
 PDF-Vorschau entfällt (R18); der eingebaute Agent sieht nur Titel und Tags (R6, R14);
