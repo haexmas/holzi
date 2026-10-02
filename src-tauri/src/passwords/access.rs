@@ -1,0 +1,297 @@
+//! The access rules of the password manager (spec 034, `contracts/access.md`, rules Z1–Z13).
+//!
+//! Pure: no database, no frontend. A caller (the window, the built-in agent, an extension, an
+//! external agent, a holzi function) and the caller's grants go in, the decision comes out. The
+//! service ([`super::service`]) calls these functions before every method; where grants are stored,
+//! issued, shown and revoked is the business of the specs 017–019 and 021, not of this module.
+//!
+//! An item outside the scope is `NotFound`, the same answer as for a missing one (FR-029); a missing
+//! grant of the asked kind is `Forbidden` and is checked first (Z3). Tag names compare through
+//! [`ids::fold`].
+
+use std::collections::BTreeSet;
+
+use super::ids::fold;
+use crate::error::HolziError;
+
+/// Who asks. The caller is the entrance, never an argument of a command (research R6).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Caller {
+    /// The window of the user.
+    User,
+    /// The model of the holzi chat (spec 032).
+    BuiltinAgent,
+    /// A haextension (specs 017–019).
+    Extension { id: String },
+    /// An MCP client (spec 021).
+    ExternalAgent { id: String },
+    /// A holzi function, such as the own S3 storage (spec 029), with a grant fixed in the code.
+    Internal { feature: &'static str },
+}
+
+/// `ReadWrite` covers `Read`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GrantAction {
+    Read,
+    ReadWrite,
+}
+
+/// Which entries a grant covers: all of them, or those that carry one of the (folded) tags.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Scope {
+    All,
+    Tags(BTreeSet<String>),
+}
+
+impl Scope {
+    /// A scope from tag names; a `*` anywhere makes it [`Scope::All`].
+    pub fn tags<I, S>(names: I) -> Scope
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let mut folded = BTreeSet::new();
+        for name in names {
+            if name.as_ref().trim() == "*" {
+                return Scope::All;
+            }
+            folded.insert(fold(name.as_ref()));
+        }
+        Scope::Tags(folded)
+    }
+
+    fn union(self, other: Scope) -> Scope {
+        match (self, other) {
+            (Scope::All, _) | (_, Scope::All) => Scope::All,
+            (Scope::Tags(mut a), Scope::Tags(b)) => {
+                a.extend(b);
+                Scope::Tags(a)
+            }
+        }
+    }
+
+    /// Whether a tag name lies in this scope.
+    pub fn contains(&self, name: &str) -> bool {
+        match self {
+            Scope::All => true,
+            Scope::Tags(tags) => tags.contains(&fold(name)),
+        }
+    }
+
+    /// Whether an entry with these tags lies in this scope.
+    pub fn covers(&self, tags: &[String]) -> bool {
+        match self {
+            Scope::All => true,
+            Scope::Tags(_) => tags.iter().any(|tag| self.contains(tag)),
+        }
+    }
+}
+
+/// What a caller may do with which entries; issued by the specs 017–019 and 021.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Grant {
+    pub action: GrantAction,
+    pub scope: Scope,
+}
+
+impl Grant {
+    pub fn new(action: GrantAction, scope: Scope) -> Self {
+        Self { action, scope }
+    }
+}
+
+/// What the rules need to know about a stored entry: its tag names and whether it is in the trash.
+#[derive(Debug, Clone, Copy)]
+pub struct ItemState<'a> {
+    pub tags: &'a [String],
+    pub in_trash: bool,
+}
+
+/// Why a request is refused.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Denied {
+    /// No grant of the asked kind (Z3), or a method that only the user may call (Z11).
+    Forbidden,
+    /// The entry is outside the scope, in the trash for a caller from outside, or missing; the
+    /// three cannot be told apart (Z5, Z13).
+    NotFound,
+}
+
+impl From<Denied> for HolziError {
+    fn from(denied: Denied) -> Self {
+        match denied {
+            Denied::Forbidden => HolziError::PasswordsForbidden,
+            Denied::NotFound => HolziError::PasswordsNotFound,
+        }
+    }
+}
+
+/// What `list_headers` delivers to the caller.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ListView {
+    /// The headers of the entries in the scope.
+    Items(Scope),
+    /// The narrow agent headers (title, tags, folder, TOTP flag) of the built-in agent (Z2).
+    Agent,
+}
+
+/// What a caller may reach with one kind of grant.
+struct Reach {
+    scope: Scope,
+    /// Only the user sees entries in the trash (Z13).
+    sees_trash: bool,
+}
+
+/// The reach of the caller for the asked kind: the user everything, the built-in agent nothing
+/// (Z2), everybody else the union of the scopes of the grants that cover the kind (Z3).
+// ponytail: the scope is recomputed on every call (ceiling: callers with many grants; upgrade
+// path: cache the union per caller until its grants change).
+fn reach(caller: &Caller, grants: &[Grant], needed: GrantAction) -> Result<Reach, Denied> {
+    match caller {
+        Caller::User => Ok(Reach {
+            scope: Scope::All,
+            sees_trash: true,
+        }),
+        Caller::BuiltinAgent => Err(Denied::Forbidden),
+        Caller::Extension { .. } | Caller::ExternalAgent { .. } | Caller::Internal { .. } => grants
+            .iter()
+            .filter(|grant| covers(grant.action, needed))
+            .map(|grant| grant.scope.clone())
+            .reduce(Scope::union)
+            .map(|scope| Reach {
+                scope,
+                sees_trash: false,
+            })
+            .ok_or(Denied::Forbidden),
+    }
+}
+
+/// `ReadWrite` covers `Read`, nothing else crosses over.
+fn covers(granted: GrantAction, needed: GrantAction) -> bool {
+    granted == GrantAction::ReadWrite || needed == GrantAction::Read
+}
+
+/// Z11: every method beyond the five item methods is for the user alone.
+pub fn require_user(caller: &Caller) -> Result<(), Denied> {
+    match caller {
+        Caller::User => Ok(()),
+        _ => Err(Denied::Forbidden),
+    }
+}
+
+/// `list_headers`: the user and any caller with a read grant see items (the user all of them, also
+/// the trash for the user's own overview); the built-in agent gets the agent headers (Z2, Z4).
+pub fn authorize_list(caller: &Caller, grants: &[Grant]) -> Result<ListView, Denied> {
+    if matches!(caller, Caller::BuiltinAgent) {
+        return Ok(ListView::Agent);
+    }
+    reach(caller, grants, GrantAction::Read).map(|reach| ListView::Items(reach.scope))
+}
+
+/// An entry is visible to the caller when it is in the scope and, outside the user, not in the
+/// trash (Z5, Z13).
+fn visible(reach: &Reach, state: &ItemState<'_>) -> Result<(), Denied> {
+    if state.in_trash && !reach.sees_trash {
+        return Err(Denied::NotFound);
+    }
+    if !reach.scope.covers(state.tags) {
+        return Err(Denied::NotFound);
+    }
+    Ok(())
+}
+
+/// `read_secret_item` (Z3, Z5, Z13).
+pub fn authorize_read(
+    caller: &Caller,
+    grants: &[Grant],
+    state: &ItemState<'_>,
+) -> Result<(), Denied> {
+    visible(&reach(caller, grants, GrantAction::Read)?, state)
+}
+
+/// `create_item` (Z6): with a tag scope the submitted tags must all lie in it and there must be at
+/// least one.
+pub fn authorize_create(
+    caller: &Caller,
+    grants: &[Grant],
+    submitted: &[String],
+) -> Result<(), Denied> {
+    let reach = reach(caller, grants, GrantAction::ReadWrite)?;
+    match reach.scope {
+        Scope::All => Ok(()),
+        Scope::Tags(_) => {
+            let all_in_scope = submitted.iter().all(|tag| reach.scope.contains(tag));
+            if !submitted.is_empty() && all_in_scope {
+                Ok(())
+            } else {
+                Err(Denied::Forbidden)
+            }
+        }
+    }
+}
+
+/// `update_item` (Z7, Z12): returns the tag names the entry carries afterwards. Tags outside the
+/// scope stay as they are, a tag outside the scope cannot be added, and the entry must keep at
+/// least one tag of the scope. `submitted` is `None` when the update does not touch the tags.
+pub fn authorize_update(
+    caller: &Caller,
+    grants: &[Grant],
+    state: &ItemState<'_>,
+    submitted: Option<&[String]>,
+) -> Result<Vec<String>, Denied> {
+    let reach = reach(caller, grants, GrantAction::ReadWrite)?;
+    visible(&reach, state)?;
+    let Some(submitted) = submitted else {
+        return Ok(state.tags.to_vec());
+    };
+    if matches!(reach.scope, Scope::All) {
+        return Ok(submitted.to_vec());
+    }
+    // Sending a tag outside the scope that the entry already carries is not adding it.
+    let carries = |name: &str| state.tags.iter().any(|tag| fold(tag) == fold(name));
+    if submitted
+        .iter()
+        .any(|tag| !reach.scope.contains(tag) && !carries(tag))
+    {
+        return Err(Denied::Forbidden);
+    }
+    let mut result: Vec<String> = state
+        .tags
+        .iter()
+        .filter(|tag| !reach.scope.contains(tag))
+        .cloned()
+        .collect();
+    let mut seen = BTreeSet::new();
+    for tag in submitted.iter().filter(|tag| reach.scope.contains(tag)) {
+        if seen.insert(fold(tag)) {
+            result.push(tag.clone());
+        }
+    }
+    if result.iter().any(|tag| reach.scope.contains(tag)) {
+        Ok(result)
+    } else {
+        Err(Denied::Forbidden)
+    }
+}
+
+/// `delete_item` (Z8): moves the entry to the trash; needs a write grant and an entry in the scope.
+pub fn authorize_delete(
+    caller: &Caller,
+    grants: &[Grant],
+    state: &ItemState<'_>,
+) -> Result<(), Denied> {
+    visible(&reach(caller, grants, GrantAction::ReadWrite)?, state)
+}
+
+/// A record without an entry (a passkey with no `item_id`) belongs to no tag scope; only a grant
+/// for all entries covers it (Z9).
+pub fn authorize_unassigned(
+    caller: &Caller,
+    grants: &[Grant],
+    needed: GrantAction,
+) -> Result<(), Denied> {
+    match reach(caller, grants, needed)?.scope {
+        Scope::All => Ok(()),
+        Scope::Tags(_) => Err(Denied::NotFound),
+    }
+}

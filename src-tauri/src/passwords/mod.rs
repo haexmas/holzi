@@ -11,9 +11,14 @@ pub const ORPHAN_GRACE_DAYS: i64 = 7;
 /// The id of the trash folder (FR-015): a folder row with a fixed id, `name` stays empty.
 pub const TRASH_GROUP_ID: &str = "trash";
 
+pub mod access;
+#[cfg(test)]
+mod access_tests;
+pub mod commands;
 pub mod ids;
 #[cfg(test)]
 mod ids_tests;
 pub mod model;
 #[cfg(test)]
 mod model_tests;
+pub mod service;
