@@ -12,8 +12,10 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
+  appInGroup,
   buildInstanceEnv,
   driverCommand,
+  NEW_SESSION_ATTEMPTS,
   newSessionWithRetry,
   prepareRoot,
   removeRoot,
@@ -141,6 +143,31 @@ describe('prepareRoot and removeRoot', () => {
   })
 })
 
+describe('appInGroup', () => {
+  const groups = new Map([
+    [100, 10],
+    [200, 20],
+    [300, 20],
+  ])
+  const groupOf = (pid: number) => groups.get(pid) ?? null
+
+  it('picks the application of the instance whose driver leads the group, not the first one found', () => {
+    const candidates = [{ pid: 100 }, { pid: 200 }]
+    assert.equal(appInGroup(candidates, 20, groupOf), 200)
+    assert.equal(appInGroup(candidates, 10, groupOf), 100)
+  })
+
+  it('finds nothing when no candidate is in the group', () => {
+    assert.equal(appInGroup([{ pid: 100 }], 99, groupOf), undefined)
+    assert.equal(appInGroup([], 10, groupOf), undefined)
+  })
+
+  it('never picks the runner itself', () => {
+    const groupOfAll = () => 20
+    assert.equal(appInGroup([{ pid: process.pid }], 20, groupOfAll), undefined)
+  })
+})
+
 describe('driverCommand', () => {
   it('starts the driver on its own virtual screen with the given ports and tools', () => {
     const tools = {
@@ -208,9 +235,24 @@ describe('newSessionWithRetry', () => {
     assert.equal(client.sessionId, driver.sessionId)
   })
 
-  it('does not retry a second failure', async () => {
-    driver.onNewSession(() => 'drop')
+  it('retries a few times and then gives up with the last failure', async () => {
+    let calls = 0
+    driver.onNewSession(() => {
+      calls += 1
+      return 'drop'
+    })
     await assert.rejects(newSessionWithRetry(client, '/some/app'))
+    assert.equal(calls, NEW_SESSION_ATTEMPTS)
+  })
+
+  it('succeeds when a later attempt does', async () => {
+    let calls = 0
+    driver.onNewSession(() => {
+      calls += 1
+      return calls < 3 ? 'drop' : 'ok'
+    })
+    await newSessionWithRetry(client, '/some/app')
+    assert.equal(calls, 3)
   })
 
   it('does not retry a definitive session creation failure', async () => {

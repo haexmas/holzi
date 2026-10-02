@@ -12,6 +12,7 @@ import {
   newMarker,
   parseMarker,
   pidAlive,
+  processGroupOf,
   runnerStartTime,
   spawnMarked,
   stopGroup,
@@ -195,3 +196,19 @@ describe(
     })
   },
 )
+
+describe('processGroupOf', () => {
+  it('is the pid of a detached child that leads its own group, and differs for an attached one', () => {
+    const leader = sleeper(undefined, true)
+    const member = sleeper()
+    assert.equal(processGroupOf(leader.pid), leader.pid)
+    assert.notEqual(processGroupOf(member.pid), member.pid)
+  })
+
+  it('is null for a process that is gone', async () => {
+    const child = sleeper()
+    child.kill('SIGKILL')
+    await once(child, 'exit') // reaped: no entry of its own is left
+    assert.equal(processGroupOf(child.pid), null)
+  })
+})

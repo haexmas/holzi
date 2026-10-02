@@ -20,6 +20,7 @@ import {
   MARKER_ENV,
   findByMarker,
   pidAlive,
+  processGroupOf,
   spawnMarked,
   stopGroup,
 } from './processes.ts'
@@ -251,20 +252,47 @@ async function launchDriver(
 /**
  * The driver's own port can answer (satisfying `launchDriver`'s poll) before its connection to the
  * native webview driver is ready behind it: seen for real, under load, as `POST /session got no answer`
- * - a `SessionGoneError`, even though the port itself was open a moment before. One short retry covers
- * it in practice; any other error, or a second failure, is not retried and reaches the caller as is.
+ * - a `SessionGoneError`, even though the port itself was open a moment before. A few short retries
+ * cover it in practice (a scenario with several devices starts several drivers at once, and one retry
+ * was not always enough); any other error, or a failure on the last attempt, is not retried and reaches
+ * the caller as is.
  */
+export const NEW_SESSION_ATTEMPTS = 4
+
 export async function newSessionWithRetry(
   client: WebDriverClient,
   app: string,
 ): Promise<void> {
-  try {
-    await client.newSession(app)
-  } catch (error) {
-    if (!(error instanceof SessionGoneError) || !error.retryable) throw error
-    await sleep(300)
-    await client.newSession(app)
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await client.newSession(app)
+      return
+    } catch (error) {
+      if (
+        !(error instanceof SessionGoneError) ||
+        !error.retryable ||
+        attempt >= NEW_SESSION_ATTEMPTS
+      ) {
+        throw error
+      }
+      await sleep(300 * attempt)
+    }
   }
+}
+
+/**
+ * The application process of the instance whose driver leads process group `driverPid`. Every instance
+ * of a run carries the same marker and runs the same executable, so with several instances up at once
+ * only the group tells them apart.
+ */
+export function appInGroup(
+  candidates: Array<{ pid: number }>,
+  driverPid: number,
+  groupOf: (pid: number) => number | null,
+): number | undefined {
+  return candidates.find(
+    (p) => p.pid !== process.pid && groupOf(p.pid) === driverPid,
+  )?.pid
 }
 
 export async function startInstance(
@@ -298,9 +326,11 @@ export async function startInstance(
     // ponytail: a poll with a fixed deadline; the application appears within milliseconds of the session.
     const end = Date.now() + 5000
     while (pid === undefined && Date.now() < end) {
-      pid = findByMarker(options.marker, executable).find(
-        (p) => p.pid !== process.pid,
-      )?.pid
+      pid = appInGroup(
+        findByMarker(options.marker, executable),
+        driverPid,
+        processGroupOf,
+      )
       if (pid === undefined) await sleep(50)
     }
     if (pid === undefined)
