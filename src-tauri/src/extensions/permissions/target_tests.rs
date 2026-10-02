@@ -167,6 +167,31 @@ fn a_url_pattern_matches_scheme_host_port_and_path() {
 }
 
 #[test]
+fn a_host_with_a_trailing_dot_is_the_same_host() {
+    // `example.org.` reaches the same server as `example.org`; a denial must not miss it.
+    assert!(matches(
+        PermissionKind::Web,
+        "example.org",
+        &url("https://example.org./x")
+    ));
+    assert!(matches(
+        PermissionKind::Web,
+        "*.example.org",
+        &url("https://dav.example.org./")
+    ));
+    assert!(matches(
+        PermissionKind::Web,
+        "https://dav.example.org/cal/*",
+        &url("https://dav.example.org./cal/1.ics")
+    ));
+    let imap = RequestTarget::MailServer {
+        host: "imap.example.org.".to_string(),
+        port: 993,
+    };
+    assert!(matches(PermissionKind::Mail, "imap.example.org", &imap));
+}
+
+#[test]
 fn only_http_and_https_are_web_requests() {
     assert!(WebRequest::parse("file:///etc/passwd").is_none());
     assert!(WebRequest::parse("ftp://x.test/").is_none());

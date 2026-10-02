@@ -30,3 +30,7 @@ pub mod default_limits {
     pub const TIMEOUT_MS: u64 = 5_000;
     pub const MAX_RESPONSE_BYTES: u64 = 16 * 1024 * 1024;
 }
+
+#[cfg(test)]
+#[path = "capabilities_tests.rs"]
+mod capabilities_tests;

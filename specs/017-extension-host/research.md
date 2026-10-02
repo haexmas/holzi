@@ -631,7 +631,11 @@ setOf("*"))` (`wry-0.57.0/src/android/kotlin/RustWebView.kt:31`), ohne `for_main
   (`WebResourceRequest.isForMainFrame()`) nur Skripte, die nicht auf den Hauptrahmen beschränkt sind. Die
   Origin-Regeln bleiben `"*"` (Umsetzung, 2026-10-03): Sie filtern nach Ursprung, nicht nach Rahmen, würden
   legitime Hauptrahmen auf anderen Ursprüngen (Remote-Capabilities, Entwicklungsserver) die IPC nehmen und einen
-  Unterrahmen mit gleichem Ursprung trotzdem nicht ausschließen; der Wächter ist der Schutz. Ein Rahmen einer
+  Unterrahmen mit gleichem Ursprung trotzdem nicht ausschließen; der Wächter ist der Schutz. Ein Hauptrahmen auf
+  fremdem Ursprung (etwa nach einer Navigation) bekommt die Skripte auf jeder Plattform, auch unter Linux und
+  macOS; ihn hält Tauris ACL ab: Anfragen von nicht lokalen Ursprüngen werden abgelehnt, solange keine Capability
+  den Ursprung unter `remote` nennt (`tauri-2.12.1/src/webview/mod.rs:2075-2108`). holzi hat keine solche
+  Capability, und `src-tauri/src/extensions/capabilities_tests.rs` lässt keine zu. Ein Rahmen einer
   Erweiterung bekommt den Schlüssel damit nie. Ein Block statt einer Funktion hält `var` und Funktionsdeklarationen
   global; Tauris Init-Skripte binden nichts mit `let`/`const` auf oberster Ebene (`tauri-2.12.1/scripts/*.js`). PR an `tauri-apps/wry`; bis zur
   Veröffentlichung nutzt holzi einen Fork über `[patch.crates-io]`, gepinnt auf den vollen SHA (Constitution

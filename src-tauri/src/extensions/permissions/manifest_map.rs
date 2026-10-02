@@ -18,7 +18,8 @@ pub struct DeclaredPermission {
     pub kind: PermissionKind,
     pub action: Action,
     pub target: Target,
-    /// The target as written, normalised only where the kind requires it; this is what is stored.
+    /// The target exactly as the manifest writes it; this is what is stored, and [`Target::parse`]
+    /// reads it back the same way.
     pub target_text: String,
 }
 
@@ -54,8 +55,9 @@ fn category_kind(category: &str) -> Option<PermissionKind> {
     }
 }
 
-/// The action a declaration without one gets: the narrowest of its kind. `mail` has no narrowest
-/// action and must name one.
+/// The action a declaration without one gets: `read` where a kind has `read` and `readWrite`,
+/// every method for `web`, the only action of `notifications` and `shell`.
+/// `mail` has no such default and must name its action.
 fn default_action(kind: PermissionKind) -> Option<&'static str> {
     match kind {
         PermissionKind::Database

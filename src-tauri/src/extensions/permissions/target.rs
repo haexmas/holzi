@@ -81,7 +81,7 @@ pub enum RequestTarget {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WebRequest {
     pub scheme: String,
-    /// Lower case.
+    /// Lower case, without a trailing dot.
     pub host: String,
     /// `None` for the default port of the scheme.
     pub port: Option<u16>,
@@ -97,7 +97,7 @@ impl WebRequest {
         }
         Some(Self {
             scheme: url.scheme().to_owned(),
-            host: url.host_str()?.to_ascii_lowercase(),
+            host: canonical_host(url.host_str()?),
             port: url.port(),
             path: url.path().to_owned(),
         })
@@ -150,7 +150,10 @@ impl Target {
                     host: asked,
                     port: asked_port,
                 },
-            ) => host.eq_ignore_ascii_case(asked) && port.is_none_or(|port| port == *asked_port),
+            ) => {
+                host.eq_ignore_ascii_case(&canonical_host(asked))
+                    && port.is_none_or(|port| port == *asked_port)
+            }
             (Self::Program(program), RequestTarget::Program(asked)) => program == asked,
             (Self::Tag(tag), RequestTarget::Tag(asked)) => *tag == fold(asked),
             (Self::StorageId(id), RequestTarget::StorageId(asked)) => id == asked,
@@ -161,7 +164,7 @@ impl Target {
 
 impl HostPattern {
     pub fn matches(&self, host: &str) -> bool {
-        let host = host.to_ascii_lowercase();
+        let host = canonical_host(host);
         let below = |domain: &str| {
             host.strip_suffix(domain)
                 .is_some_and(|rest| rest.ends_with('.') && rest.len() > 1)
@@ -211,6 +214,16 @@ fn clean_absolute(value: &str) -> Option<PathBuf> {
             .components()
             .all(|c| !matches!(c, Component::CurDir | Component::ParentDir));
     clean.then(|| path.to_path_buf())
+}
+
+/// A requested host as it is compared: lower case, without the trailing dot of a fully qualified
+/// name, so `example.org.` (the same server) never escapes a rule for `example.org`.
+fn canonical_host(host: &str) -> String {
+    let host = host.to_ascii_lowercase();
+    match host.strip_suffix('.') {
+        Some(stripped) => stripped.to_owned(),
+        None => host,
+    }
 }
 
 /// A host name: lower-case letters, digits, `-` and `.`, no empty label.
