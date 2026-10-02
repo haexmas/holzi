@@ -57,9 +57,20 @@ Hier lesbar umbrochen; die Datei selbst ist kompakt (JCS, ohne Leerzeichen).
 
 ## Prüfung in holzi
 
-1. Archiv und Pfade nach den Regeln oben lesen (nie `extract`).
-2. Für jeden Eintrag Pfad, Größe und SHA-256 berechnen; die Menge muss genau `files` entsprechen.
-3. `manifest.publicKey == signature.publicKey`; Manifest gültig, sonst `manifest_invalid`:
+Reihenfolge wie `haex verify` und die Testvektoren (`test-vectors/bundles/README.md`); die erste verletzte
+Regel bestimmt die Fehlerart.
+
+1. Archiv nach den Regeln oben lesen (nie `extract`): Größe, Archivende und zentrales Verzeichnis lesbar,
+   Eintragszahl.
+2. Erkennung des alten Formats, vor allen Eintragsregeln (alte Bundles enthalten verbotene Dateien und
+   Verzeichniseinträge): Manifest mit Feld `signature` und keine `signature.json` → Fehler
+   `legacy_signature_format` („mit dem aktuellen Werkzeug `haex` neu signieren“).
+3. Jeder Eintrag in der Reihenfolge des zentralen Verzeichnisses: Art, Pfadregeln, Duplikate, Größen und
+   Verhältnis, lokaler Kopf, gelieferte Bytes und CRC-32.
+4. Steuerdateien: Manifest vorhanden und kanonisch, `signature.json` vorhanden, kanonisch und wohlgeformt.
+5. Für jeden Eintrag außer `signature.json` Pfad, Größe und SHA-256 berechnen; die Menge muss genau `files`
+   entsprechen.
+6. `manifest.publicKey == signature.publicKey`; Manifest gültig, sonst `manifest_invalid`:
    - `name` nach FR-004; `publicKey` gültiger Ed25519-Schlüssel, nicht von kleiner Ordnung;
    - `version` SemVer 2.0.0, wie das Rust-Crate `semver` sie liest (keine führenden Nullen außer in den
      Build-Metadaten, keine leeren Teile, Haupt-, Neben- und Patchnummer ≤ u64);
@@ -70,15 +81,13 @@ Hier lesbar umbrochen; die Datei selbst ist kompakt (JCS, ohne Leerzeichen).
      unbedingt kanonisch) mit einem Feld `entries`; jeder Eintrag hat ein eindeutiges ganzzahliges `idx` ≥ 0
      und ein eindeutiges `tag`, und `<migrationsDir>/<tag>.sql` ist eine Datei des Bundles. Ohne Journal sind
      die Migrationen die `*.sql`-Dateien direkt in `migrationsDir`. Jede Migrationsdatei ist UTF-8.
-4. Signatur prüfen.
-5. Erkennung des alten Formats: Manifest mit Feld `signature` und keine `signature.json` → Fehler
-   `legacy_signature_format` („mit dem aktuellen Werkzeug `haex` neu signieren“).
+7. Signatur prüfen.
 
 Fehlerarten (für Installation und Start): `archive_too_large`, `archive_invalid`, `entry_path_invalid`,
 `entry_duplicate`, `entry_too_large`, `entry_ratio`, `entry_kind`, `manifest_not_canonical`,
 `manifest_invalid`, `file_mismatch { path }`, `public_key_mismatch`, `signature_invalid`,
 `legacy_signature_format`. Jede Art hat einen Test mit einem schlechten Bundle aus den Testvektoren, jede
-Manifestregel aus Schritt 3 einen eigenen Vektor. `haex verify` und holzi müssen für jeden Vektor dieselbe
+Manifestregel aus Schritt 6 einen eigenen Vektor. `haex verify` und holzi müssen für jeden Vektor dieselbe
 Fehlerart melden; eine Regel ohne Vektor gilt als nicht abgestimmt.
 
 ## Werkzeug `haex` (Änderung im vault-sdk, L0)
