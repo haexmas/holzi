@@ -1199,6 +1199,19 @@
         "keyValues": "Eigene Felder",
         "attachments": "Anhänge"
       }
+    },
+    "attachments": {
+      "title": "Anhänge",
+      "add": "Datei hinzufügen",
+      "addMore": "Weitere Datei anhängen",
+      "empty": "Noch keine Anhänge",
+      "hint": "Wähle eine Datei oder ziehe sie hierher. Jeweils bis 25 MiB.",
+      "name": "Dateiname",
+      "rename": "Umbenennen",
+      "remove": "Anhang entfernen",
+      "download": "Herunterladen",
+      "preview": "Vorschau",
+      "saved": "Datei gespeichert."
     }
   }
 }

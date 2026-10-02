@@ -11,6 +11,7 @@ import type { Preset } from '@bindings/Preset'
 import type { PresetInput } from '@bindings/PresetInput'
 import type { PresetSaveResult } from '@bindings/PresetSaveResult'
 import type { MoveResult } from '@bindings/MoveResult'
+import type { AttachmentView } from '@bindings/AttachmentView'
 import type { AffectedResult } from '@bindings/AffectedResult'
 import type { HistorySecret } from '@bindings/HistorySecret'
 import type { ItemUsageResult } from '@bindings/ItemUsageResult'
@@ -65,6 +66,24 @@ export function usePasswords() {
 
   const deletePasskeyAsync = (passkeyId: string) =>
     invoke<null>('passwords_passkey_delete', { args: { passkeyId } })
+
+  // Files travel as paths from the system's dialogs, never as bytes (FR-019).
+  const attachmentAddAsync = (itemId: string, path: string) =>
+    invoke<AttachmentView>('passwords_attachment_add', {
+      args: { itemId, path },
+    })
+  const attachmentRenameAsync = (attachmentId: string, fileName: string) =>
+    invoke<string>('passwords_attachment_rename', {
+      args: { attachmentId, fileName },
+    })
+  const attachmentRemoveAsync = (attachmentId: string) =>
+    invoke<null>('passwords_attachment_remove', { args: { attachmentId } })
+  const attachmentSaveAsync = (attachmentId: string, path: string) =>
+    invoke<null>('passwords_attachment_save', { args: { attachmentId, path } })
+  const attachmentPreviewAsync = (attachmentId: string) =>
+    invoke<ArrayBuffer>('passwords_attachment_preview', {
+      args: { attachmentId },
+    })
 
   const createGroupAsync = (args: {
     name: string
@@ -173,5 +192,10 @@ export function usePasswords() {
     updateItemAsync,
     renamePasskeyAsync,
     deletePasskeyAsync,
+    attachmentAddAsync,
+    attachmentRenameAsync,
+    attachmentRemoveAsync,
+    attachmentSaveAsync,
+    attachmentPreviewAsync,
   }
 }

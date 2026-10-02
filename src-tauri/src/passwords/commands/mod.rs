@@ -4,6 +4,7 @@
 //! caller as an argument.
 
 pub mod agent;
+pub mod attachments;
 pub mod history;
 pub mod items;
 pub mod organize;

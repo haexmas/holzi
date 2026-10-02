@@ -52,3 +52,19 @@ export function safeFileName(name: string): string {
     .join('')
   return Array.from(cleaned).slice(0, 255).join('')
 }
+
+const IMAGE_MIME: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+}
+
+/** The mime type of an attachment that can be previewed, derived from its file name (the same five
+ * extensions the backend previews); `null` for everything else, which only offers a download. */
+export function imageMime(fileName: string): string | null {
+  const dot = fileName.lastIndexOf('.')
+  if (dot < 0) return null
+  return IMAGE_MIME[fileName.slice(dot + 1).toLowerCase()] ?? null
+}

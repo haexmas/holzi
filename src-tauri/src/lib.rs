@@ -60,6 +60,10 @@ use models::commands::{
     search_huggingface_models,
 };
 use passwords::commands::agent::passwords_agent_search;
+use passwords::commands::attachments::{
+    passwords_attachment_add, passwords_attachment_preview, passwords_attachment_remove,
+    passwords_attachment_rename, passwords_attachment_save,
+};
 use passwords::commands::history::{
     passwords_history_get, passwords_history_list, passwords_history_restore,
     passwords_history_reveal,
@@ -307,6 +311,11 @@ pub fn run() {
             passwords_history_get,
             passwords_history_reveal,
             passwords_history_restore,
+            passwords_attachment_add,
+            passwords_attachment_rename,
+            passwords_attachment_remove,
+            passwords_attachment_save,
+            passwords_attachment_preview,
         ]))
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

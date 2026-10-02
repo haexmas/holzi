@@ -1199,6 +1199,19 @@
         "keyValues": "Custom fields",
         "attachments": "Attachments"
       }
+    },
+    "attachments": {
+      "title": "Attachments",
+      "add": "Add file",
+      "addMore": "Attach another file",
+      "empty": "No attachments yet",
+      "hint": "Choose a file or drop it here. Up to 25 MiB each.",
+      "name": "File name",
+      "rename": "Rename",
+      "remove": "Remove attachment",
+      "download": "Download",
+      "preview": "Preview",
+      "saved": "File saved."
     }
   }
 }

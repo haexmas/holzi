@@ -403,3 +403,88 @@ async fn deleting_for_good_leaves_one_delete_marker_per_removed_row() {
     assert_eq!(markers("haex_passwords_item_snapshots"), 2);
     assert_eq!(markers("haex_passwords_group_items"), 1);
 }
+
+#[tokio::test]
+async fn attachments_of_the_largest_size_go_through_the_service_one_transaction_each() {
+    use holzi_lib::passwords::ATTACHMENT_LIMIT_BYTES;
+    let f = fixture();
+    let id = f
+        .service
+        .create_item(&Caller::User, &[], ItemInput::default(), None)
+        .await
+        .expect("create");
+    let dir = tempfile::tempdir().expect("dir");
+    let big = dir.path().join("big.bin");
+    let mut bytes = vec![0u8; ATTACHMENT_LIMIT_BYTES as usize];
+    for (i, b) in bytes.iter_mut().enumerate() {
+        *b = (i % 251) as u8;
+    }
+    std::fs::write(&big, &bytes).expect("write");
+    let first = f
+        .service
+        .attachment_add(
+            &Caller::User,
+            id.clone(),
+            big.to_string_lossy().into_owned(),
+        )
+        .await
+        .expect("a 25 MiB attachment fits its own transaction");
+    assert_eq!(first.size, ATTACHMENT_LIMIT_BYTES);
+
+    // A second attachment of different data is a second transaction.
+    let small = dir.path().join("note.txt");
+    std::fs::write(&small, b"hello").expect("write");
+    let second = f
+        .service
+        .attachment_add(
+            &Caller::User,
+            id.clone(),
+            small.to_string_lossy().into_owned(),
+        )
+        .await
+        .expect("second attachment");
+    assert_ne!(first.binary_hash, second.binary_hash);
+
+    // One byte over the limit is refused before it is read.
+    let over = dir.path().join("over.bin");
+    std::fs::write(&over, vec![1u8; ATTACHMENT_LIMIT_BYTES as usize + 1]).expect("write");
+    assert!(matches!(
+        f.service
+            .attachment_add(
+                &Caller::User,
+                id.clone(),
+                over.to_string_lossy().into_owned()
+            )
+            .await,
+        Err(HolziError::PasswordsAttachmentTooLarge { .. })
+    ));
+
+    // The data comes back byte for byte, and a non-image has no preview.
+    let saved = dir.path().join("saved.bin");
+    f.service
+        .attachment_save(
+            &Caller::User,
+            first.id.clone(),
+            saved.to_string_lossy().into_owned(),
+        )
+        .await
+        .expect("save");
+    assert_eq!(std::fs::read(&saved).expect("read"), bytes);
+    assert!(f
+        .service
+        .attachment_preview(&Caller::User, second.id.clone())
+        .await
+        .is_err());
+
+    // An agent has no entrance to attachments (rule Z11).
+    assert!(matches!(
+        f.service
+            .attachment_remove(&Caller::BuiltinAgent, first.id.clone())
+            .await,
+        Err(HolziError::PasswordsForbidden)
+    ));
+    f.service
+        .attachment_remove(&Caller::User, first.id)
+        .await
+        .expect("remove");
+}

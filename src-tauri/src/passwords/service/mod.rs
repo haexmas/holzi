@@ -19,6 +19,7 @@ use std::sync::Arc;
 use super::access::{self, Caller};
 use super::usage::UsageRegistry;
 
+mod attachments;
 mod history;
 mod items;
 mod organize;

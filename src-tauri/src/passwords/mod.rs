@@ -15,6 +15,8 @@ pub mod access;
 #[cfg(test)]
 mod access_tests;
 pub mod binaries;
+#[cfg(test)]
+mod binaries_tests;
 pub mod clipboard;
 #[cfg(test)]
 mod clipboard_tests;
@@ -31,6 +33,7 @@ mod ids_tests;
 pub mod items;
 #[cfg(test)]
 mod items_tests;
+pub mod maintenance;
 pub mod model;
 #[cfg(test)]
 mod model_tests;

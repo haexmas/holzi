@@ -52,6 +52,17 @@ const generatorOpen = ref(false)
 const isNew = computed(() => props.itemId === null)
 const dirty = computed(() => isDirty(initial.value, draft.value))
 
+/** Refreshes only the attachment list: the draft and the update token stay as they are. */
+async function reloadAttachmentsAsync() {
+  if (props.itemId === null || !detail.value) return
+  try {
+    const fresh = await getItemAsync(props.itemId)
+    detail.value = { ...detail.value, attachments: fresh.attachments }
+  } catch (cause) {
+    toast.error(errString(cause))
+  }
+}
+
 async function loadAsync() {
   if (props.itemId === null) return
   loading.value = true
@@ -540,6 +551,14 @@ watch(saveError, (message) => {
             />
           </li>
         </SettingsGroup>
+
+        <!-- An attachment is saved at once and does not touch the draft or the update token. -->
+        <PasswordsAttachments
+          v-if="itemId !== null && detail"
+          :item-id="itemId"
+          :attachments="detail.attachments"
+          @changed="reloadAttachmentsAsync"
+        />
 
         <SettingsGroup :label="t('passwords.editor.look')">
           <li class="flex flex-col gap-3 px-4 py-3">

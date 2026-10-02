@@ -6,6 +6,7 @@ import { test } from 'node:test'
 import {
   displayTitle,
   formatFileSize,
+  imageMime,
   isExpired,
   localDay,
   safeFileName,
@@ -50,4 +51,15 @@ test('a file name becomes text: separators and control characters are replaced',
   assert.equal(safeFileName('line\nbreak\t\u0000'), 'line_break__')
   assert.equal(safeFileName('Übergrößen 🔑.txt'), 'Übergrößen 🔑.txt')
   assert.equal(safeFileName('x'.repeat(300)).length, 255)
+})
+
+test('only the five image extensions can be previewed, whatever their case', () => {
+  assert.equal(imageMime('photo.PNG'), 'image/png')
+  assert.equal(imageMime('a.b.jpeg'), 'image/jpeg')
+  assert.equal(imageMime('x.jpg'), 'image/jpeg')
+  assert.equal(imageMime('x.gif'), 'image/gif')
+  assert.equal(imageMime('x.webp'), 'image/webp')
+  assert.equal(imageMime('x.svg'), null)
+  assert.equal(imageMime('archive.zip'), null)
+  assert.equal(imageMime('noextension'), null)
 })

@@ -309,6 +309,12 @@ async function removeOtpAsync() {
           </ShadcnBadge>
         </div>
 
+        <PasswordsAttachments
+          :item-id="itemId"
+          :attachments="detail.attachments"
+          @changed="loadAsync"
+        />
+
         <PasswordsPasskeys
           :item-id="itemId"
           :passkeys="detail.passkeys"

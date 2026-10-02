@@ -1,0 +1,103 @@
+//! Attachment commands (spec 034, US5, `contracts/tauri-commands.md` §Anhänge). Files travel as
+//! paths from the system's dialogs, never as bytes through the webview; only the bytes of an image
+//! preview go back, as raw bytes (`tauri::ipc::Response`).
+
+use serde::Deserialize;
+use tauri::ipc::Response;
+use tauri::State;
+use ts_rs::TS;
+
+use super::service;
+use crate::error::Result;
+use crate::passwords::access::Caller;
+use crate::passwords::model::AttachmentView;
+use crate::state::AppState;
+
+#[derive(Debug, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings/")]
+#[serde(rename_all = "camelCase")]
+pub struct AttachmentAddArgs {
+    pub item_id: String,
+    /// A path from the open dialog.
+    pub path: String,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings/")]
+#[serde(rename_all = "camelCase")]
+pub struct AttachmentRenameArgs {
+    pub attachment_id: String,
+    pub file_name: String,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings/")]
+#[serde(rename_all = "camelCase")]
+pub struct AttachmentIdArgs {
+    pub attachment_id: String,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings/")]
+#[serde(rename_all = "camelCase")]
+pub struct AttachmentSaveArgs {
+    pub attachment_id: String,
+    /// A path from the save dialog.
+    pub path: String,
+}
+
+/// Attaches a file; above 25 MiB it is refused before it is read.
+#[tauri::command]
+pub async fn passwords_attachment_add(
+    state: State<'_, AppState>,
+    args: AttachmentAddArgs,
+) -> Result<AttachmentView> {
+    service(&state)?
+        .attachment_add(&Caller::User, args.item_id, args.path)
+        .await
+}
+
+/// Renames an attachment on its entry; returns the stored name.
+#[tauri::command]
+pub async fn passwords_attachment_rename(
+    state: State<'_, AppState>,
+    args: AttachmentRenameArgs,
+) -> Result<String> {
+    service(&state)?
+        .attachment_rename(&Caller::User, args.attachment_id, args.file_name)
+        .await
+}
+
+/// Removes the link of an attachment (the data stays until the clean-up).
+#[tauri::command]
+pub async fn passwords_attachment_remove(
+    state: State<'_, AppState>,
+    args: AttachmentIdArgs,
+) -> Result<()> {
+    service(&state)?
+        .attachment_remove(&Caller::User, args.attachment_id)
+        .await
+}
+
+/// Writes an attachment byte for byte to the chosen path.
+#[tauri::command]
+pub async fn passwords_attachment_save(
+    state: State<'_, AppState>,
+    args: AttachmentSaveArgs,
+) -> Result<()> {
+    service(&state)?
+        .attachment_save(&Caller::User, args.attachment_id, args.path)
+        .await
+}
+
+/// The bytes of an image attachment; anything that is not an image is `not_previewable`.
+#[tauri::command]
+pub async fn passwords_attachment_preview(
+    state: State<'_, AppState>,
+    args: AttachmentIdArgs,
+) -> Result<Response> {
+    let bytes = service(&state)?
+        .attachment_preview(&Caller::User, args.attachment_id)
+        .await?;
+    Ok(Response::new(bytes))
+}
