@@ -380,6 +380,7 @@ impl SyncNode {
 /// Handshake, then the session, for one connection.
 async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
     let remote = *connection.remote_id().as_bytes();
+    let list_marker_before_handshake = current_device_list_marker(&inner);
     let streams = match side {
         Side::Accept => connection.open_bi().await,
         Side::Dial => connection.accept_bi().await,
@@ -402,6 +403,13 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
         }
         Side::Dial => handshake::dial(&mut send, &mut recv, &inner.replica, &local, remote).await,
     };
+    if list_marker_before_handshake != current_device_list_marker(&inner) {
+        // A handshake can store a newer effective list before it becomes a
+        // session, including when this peer is refused as removed. Discard
+        // only peers that are stale under that list; reset_stale_connections
+        // wakes reconnect only when it actually closed one.
+        reset_stale_connections(&inner);
+    }
     let peer = match handshake {
         Ok(peer) => peer,
         Err(error) => {
