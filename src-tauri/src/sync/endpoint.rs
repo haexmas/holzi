@@ -438,7 +438,20 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
         vault: inner.vault,
         changed: inner.changed.clone(),
         bump: Arc::clone(&inner.bump),
-        on_applied: Arc::clone(&inner.on_applied),
+        on_applied: {
+            let inner = Arc::clone(&inner);
+            let on_applied = Arc::clone(&inner.on_applied);
+            Arc::new(move |tables| {
+                if tables.contains("device_lists") {
+                    // A new effective list can leave an old session open
+                    // while its peer has already moved on. Rebuild all
+                    // sessions so the next handshake starts from the same
+                    // membership state on both devices.
+                    reset_connections(&inner);
+                }
+                on_applied(tables);
+            })
+        },
         on_devices_changed: {
             let inner = Arc::clone(&inner);
             Arc::new(move || notify_devices_changed(&inner))
@@ -474,6 +487,24 @@ fn notify_connection_ended(inner: &Inner) {
     if let Some(hook) = hook {
         hook();
     }
+}
+
+fn reset_connections(inner: &Arc<Inner>) {
+    let connections: Vec<_> = inner
+        .peers
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .drain()
+        .map(|(_, connection)| connection)
+        .collect();
+    if connections.is_empty() {
+        return;
+    }
+    for connection in connections {
+        connection.close(ErrorCode::Closed.as_u32().into(), b"device list changed");
+    }
+    notify_devices_changed(inner);
+    notify_connection_ended(inner);
 }
 
 /// The code to close the connection with: a wire error keeps its own
