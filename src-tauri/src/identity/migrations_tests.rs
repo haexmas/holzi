@@ -31,7 +31,7 @@ const LEGACY_TABLES: [&str; 3] = ["workspaces", "shell_windows", "shell_window_t
 /// The frozen migration set, truncated to everything before `name` — models
 /// "a vault provisioned by an older holzi build that hasn't seen this
 /// migration yet".
-fn migration_source_before(name: &str) -> Arc<StaticMigrationSource> {
+pub(super) fn migration_source_before(name: &str) -> Arc<StaticMigrationSource> {
     let full = holzi_migration_source();
     let filtered: BTreeMap<MigrationName, String> = full
         .0
@@ -42,7 +42,7 @@ fn migration_source_before(name: &str) -> Arc<StaticMigrationSource> {
     Arc::new(StaticMigrationSource(filtered))
 }
 
-fn open(
+pub(super) fn open(
     dir: &Path,
     passphrase: &str,
     create: bool,
@@ -71,7 +71,7 @@ fn device_of(db: &Database, dir: &Path) -> Uuid {
     .expect("bootstrap registered this installation")
 }
 
-fn table_exists(db: &Database, name: &str) -> bool {
+pub(super) fn table_exists(db: &Database, name: &str) -> bool {
     db.with_connection(|conn| {
         Ok(conn.query_row(
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
@@ -204,7 +204,7 @@ const SYNC_TABLES: [&str; 10] = [
     "device_presence_no_sync",
 ];
 
-fn column_names(db: &Database, table: &str) -> Vec<String> {
+pub(super) fn column_names(db: &Database, table: &str) -> Vec<String> {
     db.with_connection(|conn| {
         let mut stmt = conn.prepare("SELECT name FROM pragma_table_info(?1) ORDER BY cid")?;
         let rows = stmt.query_map(params![table], |r| r.get::<_, String>(0))?;
@@ -467,7 +467,7 @@ const PASSWORDS_TABLES: [(&str, &[&str]); 12] = [
 ];
 
 /// The columns of `table` without the metadata haex-crdt adds to every tracked table.
-fn own_columns(db: &Database, table: &str) -> Vec<String> {
+pub(super) fn own_columns(db: &Database, table: &str) -> Vec<String> {
     column_names(db, table)
         .into_iter()
         .filter(|name| !name.starts_with("haex_"))

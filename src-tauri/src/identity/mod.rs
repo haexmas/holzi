@@ -11,6 +11,9 @@
 pub mod bootstrap;
 pub mod installation;
 pub mod migrations;
+pub mod migrations_extensions;
+#[cfg(test)]
+mod migrations_extensions_tests;
 mod migrations_passwords;
 #[cfg(test)]
 mod migrations_tests;
