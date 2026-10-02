@@ -8,7 +8,7 @@
 //! Per device at most one connection lives: when both dial each other at
 //! once, the connection dialed by the smaller endpoint id stays.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -452,11 +452,11 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
                     changed
                 };
                 if list_changed {
-                    // A new effective list can leave an old session open
-                    // while its peer has already moved on. Rebuild all
-                    // sessions so the next handshake starts from the same
-                    // membership state on both devices.
-                    reset_connections(&inner);
+                    // A new effective list can leave a session to a removed
+                    // peer open while that peer has already moved on. Close
+                    // only those stale sessions; valid peers can continue
+                    // syncing while the list converges.
+                    reset_stale_connections(&inner);
                 }
                 on_applied(tables);
             })
@@ -510,14 +510,38 @@ fn current_device_list_marker(inner: &Inner) -> Option<([u8; 32], u64)> {
     .flatten()
 }
 
-fn reset_connections(inner: &Arc<Inner>) {
-    let connections: Vec<_> = inner
-        .peers
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .drain()
-        .map(|(_, connection)| connection)
-        .collect();
+fn reset_stale_connections(inner: &Arc<Inner>) {
+    let listed = crate::storage::query::read(inner.replica.db(), |r| {
+        let valid = crate::sync::device_list::valid_lists(
+            &crate::sync::device_list::load_all(r)?,
+            &inner.vault,
+        );
+        Ok(crate::sync::device_list::effective(&valid).map(|signed| {
+            signed
+                .list
+                .devices
+                .iter()
+                .map(|device| (device.device_pubkey, device.endpoint_id))
+                .collect::<HashSet<_>>()
+        }))
+    })
+    .ok()
+    .flatten()
+    .unwrap_or_default();
+    let connections: Vec<_> = {
+        let mut peers = inner.peers.lock().unwrap_or_else(|e| e.into_inner());
+        let stale: Vec<_> = peers
+            .iter()
+            .filter(|(device, connection)| {
+                !listed.contains(&(**device, *connection.remote_id().as_bytes()))
+            })
+            .map(|(device, _)| *device)
+            .collect();
+        stale
+            .into_iter()
+            .filter_map(|device| peers.remove(&device))
+            .collect()
+    };
     if connections.is_empty() {
         return;
     }
