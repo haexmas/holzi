@@ -5,8 +5,10 @@
 //! identifiers, the error codes of the bridge and the pure permission model.
 
 pub mod bundle;
+pub mod commands;
 pub mod error;
 pub mod ids;
+pub mod mime;
 pub mod permissions;
 pub mod registry;
 

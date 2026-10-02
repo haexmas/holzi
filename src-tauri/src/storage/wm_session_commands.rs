@@ -77,7 +77,7 @@ pub struct WmSessionSaved {
 
 /// Resolves the current device's `vault_device_uuid` from the installation
 /// id, the same pair `current_device_info` uses.
-fn current_device_uuid(app: &AppHandle, db: &VaultDb) -> Result<Uuid> {
+pub(crate) fn current_device_uuid(app: &AppHandle, db: &VaultDb) -> Result<Uuid> {
     let installation_id_file =
         installation_id_path(&app.path().app_local_data_dir().map_err(|e| {
             HolziError::PathResolution {

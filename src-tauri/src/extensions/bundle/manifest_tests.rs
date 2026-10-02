@@ -66,3 +66,13 @@ fn declared_permissions_are_mapped() {
     assert_eq!(manifest.permissions.declared[0].kind, PermissionKind::Web);
     assert_eq!(manifest.permissions.unsupported_categories, ["spaces"]);
 }
+
+#[test]
+fn the_stored_manifest_bytes_give_the_same_view() {
+    let bundle = vector("good-notes-like.xt");
+    assert_eq!(
+        Manifest::from_stored(&bundle.manifest_bytes).unwrap(),
+        Manifest::from_verified(&bundle).unwrap()
+    );
+    assert!(Manifest::from_stored(b"{ }").is_err());
+}
