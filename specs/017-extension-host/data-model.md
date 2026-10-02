@@ -10,7 +10,7 @@ Konventionen:
   (UUIDv5, je Tabelle ein eigener Namensraum `NS_*`, Konstanten in `extensions/ids.rs`).
 - Gerätebezogene, dauerhafte Zeilen folgen ADR-0001: Spalte `vault_device_uuid` mit Verweis auf
   `known_devices`; die Nil-Kennung bedeutet „vault-weit“.
-- `_no_sync`-Tabellen beschreiben den Zustand dieser Datei (Journal, Protokolle, geparkte Gruppen,
+- `_no_sync`-Tabellen beschreiben den Zustand dieser Datei (Journal, ausgeführtes Aufräumen, Protokolle, geparkte Gruppen,
   Entwicklermodus) und gehen nie in den Sync.
 - Eine Migration `0023_extensions` (nach `0022_passwords` aus 034) in einer eigenen Datei
   `identity/migrations_extensions.rs`; `HOLZI_TRIGGER_VERSION` 14 → 15.
@@ -33,19 +33,20 @@ Konventionen:
 | `purge_hlc`                  | TEXT NULL | HLC des Entfernens; ältere Änderungen an Tabellen der Erweiterung werden verworfen (R11) |
 | `installed_at`, `updated_at` | INTEGER   | Millisekunden                                                                            |
 
-Die Zeile bleibt nach dem Entfernen als Grabstein. Eine Neuinstallation setzt `state = installed`.
+Die Zeile bleibt nach dem Entfernen als Grabstein. Eine Neuinstallation setzt `state = installed` und lässt
+`purge_data` und `purge_hlc` stehen; das Aufräumen richtet sich nach `purge_hlc`, nicht nach `state` (R11).
 
-### `extension_bundles` — Fassung (unveränderlich)
+### `extension_bundles` — Fassung (unveränderlich bis auf `retired`)
 
-| Spalte           | Typ                                      | Bedeutung                                                                           |
-| ---------------- | ---------------------------------------- | ----------------------------------------------------------------------------------- |
-| `id`             | TEXT PK                                  | v5(`NS_BUNDLE`, SHA-256 der signierten Nachricht) — gleiche Signatur, gleiche Zeile |
-| `extension_id`   | TEXT FK → `extensions` ON DELETE CASCADE |                                                                                     |
-| `version`        | TEXT                                     | Semver aus dem Manifest                                                             |
-| `manifest_json`  | BLOB                                     | exakte Bytes (JCS, R2)                                                              |
-| `signature_json` | BLOB                                     | exakte Bytes von `haextension/signature.json`                                       |
-| `retired`        | INTEGER                                  | 1 = durch ein bestätigtes Downgrade zurückgezogen (R11)                             |
-| `added_at`       | INTEGER                                  |                                                                                     |
+| Spalte           | Typ                                      | Bedeutung                                                                                                       |
+| ---------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `id`             | TEXT PK                                  | v5(`NS_BUNDLE`, SHA-256 der signierten Nachricht) — gleiche Signatur, gleiche Zeile                             |
+| `extension_id`   | TEXT FK → `extensions` ON DELETE CASCADE |                                                                                                                 |
+| `version`        | TEXT                                     | Semver aus dem Manifest                                                                                         |
+| `manifest_json`  | BLOB                                     | exakte Bytes (JCS, R2)                                                                                          |
+| `signature_json` | BLOB                                     | exakte Bytes von `haextension/signature.json`                                                                   |
+| `retired`        | INTEGER                                  | 1 = durch ein bestätigtes Downgrade zurückgezogen (R11); einzige änderbare Spalte, erneute Installation setzt 0 |
+| `added_at`       | INTEGER                                  |                                                                                                                 |
 
 **Wirksame Fassung**: höchste Semver mit `retired = 0`, bei Gleichstand die größere `id`.
 
@@ -167,17 +168,24 @@ Ringpuffer: höchstens 5.000 Einträge je Erweiterung, älteste fallen weg.
 
 ### `sync_parked_groups_no_sync` — geparkte Sync-Gruppe
 
-| Spalte             | Typ                      | Bedeutung                           |
-| ------------------ | ------------------------ | ----------------------------------- |
-| `id`               | INTEGER PK AUTOINCREMENT |                                     |
-| `origin`           | TEXT                     | Ursprungsgerät                      |
-| `hlc`              | TEXT                     | HLC der Gruppe                      |
-| `extension_prefix` | TEXT                     | `<publicKey>__<name>__`             |
-| `tables`           | TEXT                     | JSON-Liste der berührten Tabellen   |
-| `group_blob`       | BLOB                     | die Gruppe, wie sie ankam           |
-| `bytes`            | INTEGER                  | Grenze je Erweiterung 256 MiB       |
-| `reason`           | TEXT                     | `missing_table` \| `missing_column` |
-| `parked_at`        | INTEGER                  |                                     |
+| Spalte             | Typ                      | Bedeutung                                                                                     |
+| ------------------ | ------------------------ | --------------------------------------------------------------------------------------------- |
+| `id`               | INTEGER PK AUTOINCREMENT |                                                                                               |
+| `origin`           | TEXT                     | Ursprungsgerät                                                                                |
+| `hlc`              | TEXT                     | HLC der Gruppe                                                                                |
+| `extension_prefix` | TEXT                     | `<publicKey>__<name>__`                                                                       |
+| `tables`           | TEXT                     | JSON-Liste der berührten Tabellen                                                             |
+| `group_blob`       | BLOB                     | die Gruppe, wie sie ankam                                                                     |
+| `bytes`            | INTEGER                  | Grenze je Erweiterung 256 MiB; an der Grenze hält der Empfang an, nichts wird verworfen (R10) |
+| `reason`           | TEXT                     | `missing_table` \| `missing_column`                                                           |
+| `parked_at`        | INTEGER                  |                                                                                               |
+
+### `extension_purges_applied_no_sync` — ausgeführtes Aufräumen (lokal)
+
+| Spalte         | Typ     | Bedeutung                                               |
+| -------------- | ------- | ------------------------------------------------------- |
+| `extension_id` | TEXT PK | Erweiterung                                             |
+| `purge_hlc`    | TEXT    | zuletzt auf diesem Gerät ausgeführter `purge_hlc` (R11) |
 
 ### `dev_extensions_no_sync`, `dev_extension_permissions_no_sync` — Entwicklermodus
 
@@ -217,6 +225,8 @@ erklärt + abgewählt ──▶ ask
 nicht erklärt, angefragt ──Erlauben/Verweigern ohne Merken──▶ vorläufig (Speicher)
                         ──mit Merken──▶ granted/denied (Geltungsbereich nach Art und Wahl)
 Einstellungen ──ändern/widerrufen──▶ neuer Zustand, sofort wirksam (Cache verworfen)
+erklärt, Update erklärt sie nicht mehr ──▶ gelöscht
+nicht erklärt + gemerkt, Update erklärt sie ──▶ declared = 1, Zustand bleibt
 ```
 
 ## Rust-Typen (nicht gespeichert; ts-rs-Export nach `src/types/bindings/`)

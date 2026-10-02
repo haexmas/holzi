@@ -73,8 +73,8 @@ Veröffentlichung Fork über `[patch.crates-io]`); alle mit voller Revision gepi
 **Storage**: Migration `0023_extensions` (nach `0022_passwords` aus 034) in
 `identity/migrations_extensions.rs`: neun synchronisierte Tabellen (`extensions`, `extension_bundles`,
 `extension_bundle_files`, `extension_blobs`, `extension_migrations`, `extension_permissions`,
-`extension_limits`, `extension_device_status`, `extension_kv`) und fünf `_no_sync`-Tabellen (Journal,
-Protokolle, geparkte Sync-Gruppen, zwei für den Entwicklermodus). `HOLZI_TRIGGER_VERSION` 14 → 15. Tabellen der
+`extension_limits`, `extension_device_status`, `extension_kv`) und sechs `_no_sync`-Tabellen (Journal,
+ausgeführtes Aufräumen, Protokolle, geparkte Sync-Gruppen, zwei für den Entwicklermodus). `HOLZI_TRIGGER_VERSION` 14 → 15. Tabellen der
 Erweiterungen entstehen zur Laufzeit über deren Migrationen. Details in [data-model.md](./data-model.md).
 
 **Testing**: Rust — Einheitstests in `*_tests.rs` je Modul; Integration in `src-tauri/tests/`
@@ -98,13 +98,13 @@ länger (SC-006)
 
 **Constraints**: Dateien ≤ 500 Zeilen (`identity/migrations.rs` steht bei 585 → SQL in eigener Datei;
 `lib.rs` 351 bekommt nur `mod`/Registrierungen); Testcode in eigenen Dateien; keine `unwrap`/`expect` auf
-Eingaben von Erweiterungen; Identität einer Erweiterung nie aus ihren Angaben; Kern- und Erweiterungstabellen
-nie in einer Transaktion; jede Schreibgruppe < 100 MiB (BLOBs einzeln); kein Zugriff über `with_connection`
+Eingaben von Erweiterungen; Identität einer Erweiterung nie aus ihren Angaben; synchronisierte Zeilen von Kern-
+und Erweiterungstabellen nie in einer Schreibgruppe; jede Schreibgruppe < 100 MiB (BLOBs einzeln); kein Zugriff über `with_connection`
 (Clippy-Sperre); kein lokalisierter Text im Backend; Fehlertexte ohne Namen außerhalb der Berechtigungen
 
-**Scale/Scope**: 14 Tabellen, rund 25 Tauri-Commands für die Oberfläche plus der eine Brücken-Command mit
+**Scale/Scope**: 15 Tabellen, rund 25 Tauri-Commands für die Oberfläche plus der eine Brücken-Command mit
 rund 75 Methoden der Erlaubtliste, rund 35 Rust-Module in `src-tauri/src/extensions/`, eine Änderung im
-Sync-Empfang, rund 15 Vue-Komponenten, 4 reine TS-Module, 9 Rust-Integrationstests, 4 End-to-End-Szenen, je
+Sync-Empfang, rund 15 Vue-Komponenten, 4 reine TS-Module, 16 Rust-Integrationstests, 4 End-to-End-Szenen, je
 ein PR in haex-crdt und vault-sdk
 
 ## Constitution Check
@@ -148,7 +148,7 @@ angeglichen (R22).
 ```text
 specs/017-extension-host/
 ├── plan.md                  # dieser Plan
-├── research.md              # Phase 0: Entscheidungen R1–R24
+├── research.md              # Phase 0: Entscheidungen R1–R25
 ├── data-model.md            # Phase 1
 ├── quickstart.md            # Phase 1
 ├── contracts/
@@ -167,7 +167,7 @@ specs/017-extension-host/
 src-tauri/src/
 ├── identity/
 │   ├── migrations.rs                 # HOLZI_TRIGGER_VERSION 15, Eintrag 0023         [ändern, klein]
-│   └── migrations_extensions.rs      # SQL der 14 Tabellen                                [neu]
+│   └── migrations_extensions.rs      # SQL der 15 Tabellen                                [neu]
 ├── extensions/
 │   ├── mod.rs                        # Modulliste, Konstanten (Grenzen)                   [neu, L1]
 │   ├── ids.rs                        # Namensräume, abgeleitete Kennungen, TablePrefix    [neu, L1]
@@ -204,7 +204,8 @@ src/
 ├── stores/windowManager.ts           # App-Liste statt WM_APPS                            [ändern, L1]
 ├── composables/useExtensionFrame.ts  # Kanal, Puffer, Shim, Tab-Schnittstelle             [neu, L1]
 ├── components/wm/TabPanel.vue        # ExtensionFrame für extension.*                     [ändern, L1]
-├── components/wm/{Launcher,NewTabMenu}.vue, appRoutes.ts, wmLayoutHandlers.ts, wmActionHandlers.ts [ändern, L1]
+├── components/wm/{Launcher,NewTabMenu}.vue, appRoutes.ts                                   [ändern, L1]
+├── stores/{wmLayoutHandlers,wmActionHandlers}.ts                                          [ändern, L1]
 ├── pages/workspace/[instance].vue    # Erweiterungen vor dem Wiederherstellen laden       [ändern, L1]
 ├── components/extensions/            # ExtensionFrame.vue, PermissionRequestDialog.vue, InstallDialog.vue, FrameError.vue, DevConsole.vue [neu]
 ├── components/settings/extensions/   # Liste, Details, Berechtigungen, Grenzen, Protokolle, Behaltene Daten, Entwicklermodus [neu, L1/L3]
@@ -244,5 +245,7 @@ Prüfstelle in einem Modul liegt. Bestehende Module ändern sich nur an den Stel
 - Auf Android laufen Erweiterungen erst mit der wry-Korrektur (R25); auf Mobilgeräten keine Shell, kein
   Beobachten von Ordnern und nur Dateien aus der System-Auswahl.
 - Ganze Zahlen über 2^53 kommen ungenau an, wie in haex-vault (R7).
+- Hat ein Rahmen den Fokus, kann die Erweiterung ein gebundenes Kürzel von holzi auslösen, als hätte der Nutzer
+  die Taste gedrückt; ohne Fokus nicht (contracts/bridge.md §Rahmen-Shim, R17).
 - Eine Erweiterung, die nur mit `allow-same-origin` funktioniert (Service Worker, IndexedDB), läuft nicht
   (R12).

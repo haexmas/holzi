@@ -8,7 +8,7 @@ Quellen (alle gepinnt):
   nicht geändert (Spec, Clarifications 2026-10-02).
 - vault-sdk @ `502593e84b8d289b0986a2777754d6bd8f52da5e` (v3.7.0, kurz **SDK**).
 - haextension @ `db48f9a948522c18a00331aac232718825cc9317`.
-- haex-crdt @ `aeb26ebb67b3faba5e8c9b34c84d7291e44107a4` (Pin in `src-tauri/Cargo.toml:129`), tauri 2.12.1,
+- haex-crdt @ `aeb26ebb67b3faba5e8c9b34c84d7291e44107a4` (Pin in `src-tauri/Cargo.toml:147`), tauri 2.12.1,
   wry 0.57.0, zip 7.2.0 (im `Cargo.lock`).
 
 Wo „(vermutet)“ steht, ist das Verhalten nicht im Code nachgelesen, sondern abgeleitet; diese Stellen haben
@@ -253,7 +253,7 @@ Start (nicht atomar, kein Schema-Modus, kein metadatentreuer Umbau); haex-crdt-E
 `broadcast::Sender<Arc<Vec<String>>>`. Der Host kürzt sie je offenem Rahmen mit derselben Funktion
 `policy::can_read(ext, table)`, die der Authorizer nutzt (eigene Tabellen einschließlich `_no_sync` oder
 Leseberechtigung, nie Kerntabellen), und schickt sie als `haextension:sync:tables-updated` (SDK-Name) an den
-Rahmen. Nach Migrationen kommt eine eigene Meldung „Schema geändert“. Berechtigungen werden im Speicher
+Rahmen. Nach Migrationen kommt dieselbe Meldung mit allen Tabellen, deren Schema sich geändert hat (das SDK hat keinen eigenen Typ dafür). Berechtigungen werden im Speicher
 gehalten und bei Änderung verworfen.
 
 **Begründung**: `observe_committed_changes` ersetzt einen früheren Beobachter (`database/mod.rs:174-188`); ein
@@ -272,11 +272,12 @@ oder eine Spalte, die einer Erweiterungstabelle noch fehlt? Dann wird die **ganz
 läuft weiter (FR-037). Unbekannte Tabellen ohne Präfix brechen weiter ab; `_no_sync`-Tabellen einer
 Erweiterung auf der Leitung sind ein Protokollfehler. Der Lebenszyklus-Dienst (R11) wendet nach den Migrationen
 die geparkten Gruppen dieses Präfixes in HLC-Reihenfolge an (`apply_remote_changes`) und löscht sie danach.
-Grenze für geparkte Bytes je Erweiterung; „Daten löschen“ verwirft sie. Nach jedem Anwenden wird geprüft, dass
+Grenze für geparkte Bytes je Erweiterung (256 MiB): an der Grenze wird keine Gruppe verworfen, sondern der Fortschritt des Ursprungsgeräts hält vor der nächsten Gruppe dieses Präfixes an, mit einer Statusmeldung; „Daten löschen“ verwirft die geparkten Gruppen. Nach jedem Anwenden wird geprüft, dass
 keine unbekannte Spalte übersprungen wurde.
 
-Regel für holzi: Kern- und Erweiterungstabellen werden nie in einer Transaktion geschrieben (sonst warten
-Kerndaten mit einer geparkten Gruppe).
+Regel für holzi: synchronisierte Zeilen von Kern- und Erweiterungstabellen werden nie in einer Schreibgruppe
+geschrieben (sonst warten Kerndaten mit einer geparkten Gruppe). Lokale Journalzeilen (`_no_sync`) dürfen mit in
+der Transaktion stehen.
 
 **Begründung**: Heute bricht der Empfang bei jeder unbekannten Tabelle ab (`inbound.rs:178-189`, Test
 `inbound_tests.rs:293-305`), und haex-crdt überspringt unbekannte Spalten still (`crdt/apply/row.rs:182-186`)
@@ -296,15 +297,23 @@ Austauschs).
   Gleichstand die größere Bundle-Kennung; damit ergibt sich auf jedem Gerät dieselbe. Ein bestätigtes
   Downgrade zieht alle höheren Bundles zurück; eine gleichzeitige neuere Installation gewinnt trotzdem.
 - Vor dem Wechsel prüft ein Gerät, dass die Migrationen der neuen Fassung eine Obermenge der angewendeten
-  (Name, SHA-256) sind; sonst startet die Erweiterung dort nicht.
+  (Name, SHA-256) sind; sonst startet die Erweiterung dort nicht. Ausnahme bestätigtes Downgrade: die
+  Migrationen der älteren Fassung müssen mit den angewendeten übereinstimmen, soweit sie dieselben Namen haben;
+  angewendete, die die ältere Fassung nicht kennt, bleiben (nichts wird zurückgenommen, US7-3).
 - **Deaktivieren**: Last-Writer-Wins auf `extensions.enabled` (FR-039).
 - **Entfernen**: Das auslösende Gerät setzt `state = removed`, `purge_data` und `purge_hlc` an der
-  Erweiterungszeile (sie bleibt als Grabstein) und löscht seine Registry-Zeilen normal. Jedes Gerät, das die
-  Marke sieht, räumt lokal in einem `write` auf: Tabellen mit Präfix löschen (nur bei `purge_data`), Journal,
-  Schlüssel-Wert-Einträge, Protokolle, geparkte Gruppen. Schemaänderungen synchronisieren nicht (keine
-  Zeilentrigger auf `DROP TABLE`), deshalb diese Marke.
-- **Empfang** (Ergänzung zu R10): Änderungen und Löschmarken an Tabellen einer entfernten Erweiterung mit HLC
-  vor `purge_hlc` werden verworfen.
+  Erweiterungszeile (sie bleibt als Grabstein) und löscht seine Registry-Zeilen normal. Jedes Gerät räumt
+  lokal in einem `write` auf: immer Schlüssel-Wert-Einträge und Protokolle; nur bei `purge_data` zusätzlich
+  Tabellen mit Präfix, Journal und geparkte Gruppen. Bei „Daten behalten“ bleiben Tabellen, Journal und
+  geparkte Gruppen, damit eine Neuinstallation die Migrationen nicht erneut ausführt. Schemaänderungen
+  synchronisieren nicht (keine Zeilentrigger auf `DROP TABLE`), deshalb diese Marke.
+- **Auslöser** ist `purge_hlc`, nicht `state`: `state` ist Last-Writer-Wins, und ein Gerät, das offline war,
+  während entfernt und neu installiert wurde, sieht nur `installed`. Jedes Gerät merkt sich in
+  `extension_purges_applied_no_sync` den zuletzt ausgeführten `purge_hlc` je Erweiterung und räumt auf,
+  sobald ein neuerer ankommt, auch wenn `state` inzwischen wieder `installed` ist. Eine Neuinstallation lässt
+  `purge_data` und `purge_hlc` stehen.
+- **Empfang** (Ergänzung zu R10): Änderungen und Löschmarken an Tabellen einer mit `purge_data` entfernten
+  Erweiterung mit HLC vor `purge_hlc` werden verworfen; bei „Daten behalten“ werden sie übernommen.
 - **Neuinstallation** nach dem Entfernen nutzt dieselbe abgeleitete Kennung; neuere HLCs gewinnen über das
   Lösch-Log.
 - Gerätezustand („bereit“, „wird übertragen“, „Migration fehlgeschlagen“ mit Fehler) als synchronisierte,
@@ -443,9 +452,13 @@ Wiederholungslogik des SDK).
 **Entscheidung**: Schalter als gerätebezogene Einstellung (ADR-0001). Die Entwicklerin wählt den
 Projektordner; holzi liest `haextension/manifest.json` und die Migrationen von dort. Host der Adresse nur
 `localhost`, `127.0.0.1` oder `[::1]`. Registrierung und Berechtigungen in `dev_extensions_no_sync` und
-`dev_extension_permissions_no_sync` mit Gerätekennung. Laden wird abgelehnt, wenn dieselbe Erweiterung
-installiert ist (FR-065); eine spätere Installation wird abgelehnt, solange Entwicklungs-Tabellen mit diesem
-Präfix bestehen. Entwicklungs-Tabellen entstehen im lokalen Modus von haex-crdt **ohne** CRDT-Spalten; die
+`dev_extension_permissions_no_sync` mit Gerätekennung. Laden wird abgelehnt, wenn es für dasselbe
+`(publicKey, name)` eine Zeile in `extensions` gibt (gleich welcher `state`, also auch nach „Daten behalten“)
+oder eine Tabelle mit diesem Präfix besteht (FR-065); der Schlüssel im Manifest ist unsigniert und darf nicht
+an fremde Daten kommen. Eine spätere Installation wird abgelehnt, solange Entwicklungs-Tabellen mit diesem
+Präfix bestehen. Kommt eine Installation desselben Präfixes über den Sync von einem anderen Gerät, startet sie
+auf diesem Gerät nicht (`migration_failed` mit Fehler `dev_prefix_conflict`), und Gruppen für dieses Präfix
+werden weiter geparkt, bis die Entwicklungsfassung entladen und ihre Tabellen gelöscht sind. Entwicklungs-Tabellen entstehen im lokalen Modus von haex-crdt **ohne** CRDT-Spalten; die
 Erkennung synchronisierter Tabellen und die Trigger lassen sie dadurch aus (`sync/replica.rs:113-124`,
 `db/init.rs:39-52`). Die Adresse des Entwicklungsservers kommt nicht in die feste CSP. holzi setzt `frame-src`
 für sie zur Laufzeit in die CSP des Hauptdokuments über `on_web_resource_request` (Muster
@@ -482,7 +495,7 @@ aber ohne dessen synchronisierte Registrierung (HV `dev_server.rs:266, 301`).
   gespeicherten Bytes), das auf ein eigenes `holzi:frame:init` mit zweitem Port hört (Prüfung `event.source
 === parent`) und Web-Standards abbildet: `hashchange`/`popstate` → Ort im Tab (`{path, query, replace}`),
   `document.title` → Tabtitel, registriertes `beforeunload` → Schließen-Wächter, `window.close()` → Tab
-  schließen, `keydown` für die gebundenen Kürzel (holzi schickt die Liste) → Aktion. holzis Zurück schickt
+  schließen, `keydown` für die gebundenen Kürzel (holzi schickt die Liste) → Aktion, nur solange der Rahmen den Fokus hat und das Fenster aktiv ist (der Shim läuft im Code der Erweiterung, seine Nachrichten sind fälschbar). holzis Zurück schickt
   den Zielort, der Shim setzt den Hash. Aufmerksamkeit hat kein Web-Gegenstück; dafür bekommt das SDK in L0
   `client.tab.requestAttention(active)`, das die Brückenmethode `extension_tab_attention {active}` sendet. Rust
   prüft den Rahmen und meldet `extension-tab-attention {frame, active}` an die Oberfläche.
@@ -498,7 +511,7 @@ FR-012); dauerhafte Rahmenebene sofort (Z-Reihenfolge und Fokus deutlich aufwend
 höchstens zehn Weiterleitungen selbst und prüft jedes Ziel mit derselben Regel, einschließlich Methode
 (FR-050); bei Ursprungswechsel fallen `Authorization` und `Cookie` weg. Nur http/https. Zeitlimit und
 Größengrenze der Antwort aus den Grenzwerten. Muster: `*`, `schema://host/pfad*` mit `*.` für Subdomains,
-blanke Domain genau oder als Suffix (wie HV `manager/url.rs`). Öffnen im Browser über
+blanke Domain genau oder als Suffix an einer Label-Grenze (`.example.org`; HV `manager/url.rs` prüft das ohne Punkt). Öffnen im Browser über
 `tauri-plugin-opener` nach der Prüfung. Keine neue Abhängigkeit.
 
 **Begründung**: HV folgt Weiterleitungen ungeprüft und prüft die Methode nie (`check/web.rs:16`); eine eigene
@@ -583,7 +596,7 @@ Eingetragen als „(Planung)“ in den Clarifications der Spec:
 - Rust-Integrationstests unter `src-tauri/tests/`: `extension_bundle_format.rs` (Testvektoren aus dem
   vault-sdk, Kopf mit Repository, SHA und Pfad), `extension_sql_bypass.rs` (Umgehungssammlung SC-002,
   tabellengetrieben, dreimal: nur Vorprüfung, nur Authorizer per Test-Haken, beide; **jede** Schicht muss jeden
-  Fall allein ablehnen), `extension_migrations.rs`, `extension_sql_exec.rs` (Ergebnisform, Grenzen, Laufzeit),
+  verbotenen Fall allein ablehnen, positive Fälle und Fälle mit eigener Regel je Schicht nach sql-policy.md), `extension_migrations.rs`, `extension_sql_exec.rs` (Ergebnisform, Grenzen, Laufzeit),
   `sync_extension_parking.rs` und `extension_lifecycle_sync.rs` (mit `tests/common/sync_fixture.rs`),
   `extension_bridge_contract.rs` (FR-009), später `extension_fs.rs`, `extension_web.rs`.
 - Einheitstests je Modul in `*_tests.rs` über `#[path]`.

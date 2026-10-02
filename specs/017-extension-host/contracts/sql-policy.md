@@ -8,7 +8,10 @@ Begründung: [research.md](../research.md) R6–R8. Gilt für `extension_databas
 - **Präfix** einer Erweiterung: `<publicKey>__<name>__`. Ein Tabellenname wird exakt in genau drei Teile an
   `__` zerlegt (ohne Rücksicht auf Groß-/Kleinschreibung); Name der Erweiterung und Tabelle enthalten kein `__`.
 - **Eigene Tabelle**: Präfix = Präfix der aufrufenden Erweiterung.
-- **Fremde Tabelle**: Präfix einer anderen installierten Erweiterung.
+- **Fremde Tabelle**: Präfix einer anderen installierten Erweiterung. Ein wohlgeformtes Präfix
+  (`<64 Hex>__<name>__`) einer nicht installierten Erweiterung bekommt dieselbe Antwort wie eine fremde Tabelle
+  ohne Berechtigung (FR-062); die Anfrage an den Nutzer zeigt dann „nicht installiert“ und bietet nur
+  „Verweigern“.
 - **Kerntabelle**: alles andere, einschließlich `sqlite_*`, `haex_*`, `pragma_*`-Funktionen.
 
 ## Laufzeit
@@ -68,7 +71,9 @@ Lehnt der Authorizer etwas ab, was die Vorprüfung durchgelassen hat: 1000 „Fo
 
 ## Migrationen
 
-Zusätzlich zur Laufzeitprüfung je Anweisung:
+Je Anweisung gelten die Tabellenregeln der Laufzeit (Qualifizierer, ASCII, `WITH`-Namen, Sync-Spalten,
+eigene/fremde/Kerntabelle) ohne die Regel zur Art der Anweisung; `__new_<eigenes Präfix>…` zählt als eigene
+Tabelle. Fremde Tabellen sind in Migrationen nie erlaubt. Dazu:
 
 | erlaubt                                             | Bedingung                                                                                                                                |
 | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
@@ -81,13 +86,27 @@ Zusätzlich zur Laufzeitprüfung je Anweisung:
 
 Verboten: `VIEW`, `TRIGGER`, `VIRTUAL`, `ATTACH`, `DETACH`, jedes andere `PRAGMA`, `VACUUM`, Transaktionssteuerung.
 
+**Authorizer im Migrationsprofil** (oberste Ebene, `database = main`):
+
+| Aktion                                                                                                            | erlaubt, wenn                                                                 |
+| ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `CreateTable`, `DropTable`, `AlterTable`                                                                          | Tabelle eigen oder `__new_<eigenes Präfix>…`                                  |
+| `CreateIndex`, `DropIndex`                                                                                        | Index auf einer solchen Tabelle                                               |
+| `Read`, `Select`, `Insert`, `Update`, `Delete`                                                                    | Tabelle eigen oder `__new_<eigenes Präfix>…`                                  |
+| `Function`, `Recursive`                                                                                           | wie zur Laufzeit                                                              |
+| Schreiben in `sqlite_master` durch eine erlaubte DDL                                                              | erlaubt (SQLite meldet es als `Insert`/`Update`/`Delete` auf `sqlite_master`) |
+| alles andere (`CreateTemp*`, `CreateView`, `CreateTrigger`, `CreateVtable`, `Pragma`, `Attach`, `Transaction`, …) | nie                                                                           |
+
+Die Trigger und der Umbau, die haex-crdt nach einer DDL selbst anlegt, laufen außerhalb des Authorizers (T005).
+
 Ablauf je Migration in einem `write_guarded` im Schema-Modus (Fremdschlüssel aus, `foreign_key_check` vor dem
 Commit): Anweisungen ausführen → für jede geänderte synchronisierte Tabelle Trigger neu anlegen → Umbau mit
 unveränderten Sync-Spalten → Journalzeile schreiben. Scheitert etwas, wird alles zurückgerollt (FR-034).
 
 ## Umgehungssammlung (SC-002, `src-tauri/tests/extension_sql_bypass.rs`)
 
-Jeder Fall muss von der Vorprüfung **und** vom Authorizer jeweils allein abgelehnt werden. Mindestens:
+Jeder Fall dieser Liste ist eine verbotene Form und muss von der Vorprüfung **und** vom Authorizer jeweils
+allein abgelehnt werden. Positive Fälle und Fälle mit eigener Regel je Schicht stehen darunter. Mindestens:
 
 - `WITH x AS (SELECT * FROM chat_threads) SELECT * FROM x`; `WITH` mit eigenem Präfix als Name über eine
   Kerntabelle; `WITH` mit dem Namen einer Kerntabelle
@@ -98,9 +117,26 @@ Jeder Fall muss von der Vorprüfung **und** vom Authorizer jeweils allein abgele
 - `sqlite_master`, `sqlite_schema`, `pragma_table_info('chat_threads')`, `json_each((SELECT … FROM
 chat_threads))`
 - `load_extension(...)`, `sqlcipher_export(...)`, `fts3_tokenizer(...)`
-- `BEGIN`, `COMMIT`, `SAVEPOINT`, `ATTACH`, zwei Anweisungen in einer Zeichenkette, Kommentar-Tricks
-- Schreiben in `haex_hlc_no_sync` und andere Sync-Spalten
+- `BEGIN`, `COMMIT`, `SAVEPOINT`, `ATTACH`, Kommentar-Tricks
 - in Migrationen: `CREATE VIEW`, `CREATE TRIGGER`, `CREATE VIRTUAL TABLE`, `CREATE TEMP TABLE`, Spalte
   `haex_hlc_no_sync` in einer `_no_sync`-Tabelle, `REFERENCES chat_threads`, `PRAGMA writable_schema`,
   `INSERT INTO chat_threads …`, `UPDATE haex_crdt_configs_no_sync …`
-- `DELETE` in einer eigenen `_no_sync`-Tabelle erzeugt keine Löschmarke (FR-029)
+
+Positive Fälle, die beide Schichten zusammen und jede allein durchlassen müssen: Lesen, Einfügen, Ändern und
+Löschen in eigenen Tabellen, `RETURNING`, `ON CONFLICT DO UPDATE`, rekursives `WITH` über eigene Tabellen,
+`json_each` über ein Literal, `DELETE` in einer eigenen `_no_sync`-Tabelle (erzeugt keine Löschmarke, FR-029).
+
+Fälle mit eigener Regel je Schicht:
+
+- Trigger: Schreiben in eine eigene synchronisierte Tabelle löst `z_dirty_<T>_*` aus; der Authorizer lässt
+  diesen Zugriff zu. Ein Trigger-Zugriff auf eine Tabelle, die die Anweisung nicht schreiben darf, lehnt er ab.
+  Die Vorprüfung sieht Trigger nicht.
+- Transformer: vom CRDT-Transformer eingesetzte Funktionen lässt der Authorizer zu. Ruft die Erweiterung
+  dieselbe Funktion selbst auf, lehnt die Vorprüfung ab.
+- Sync-Spalten: Schreiben in `haex_hlc_no_sync` und andere `haex_*`-Spalten lehnt die Vorprüfung ab (1000).
+  Der Authorizer sieht bei `INSERT` keine Spalten, und der Transformer schreibt diese Spalten selbst; ohne
+  Vorprüfung muss der gespeicherte Wert trotzdem vom Transformer stammen (er überschreibt oder verwirft Werte
+  der Anweisung).
+- Zwei Anweisungen in einer Zeichenkette: die Vorprüfung lehnt ab (1000); ohne Vorprüfung lehnen
+  `write_guarded`/`read_guarded` einen nicht leeren Rest nach der ersten Anweisung ab, statt ihn still zu
+  verwerfen (T005).

@@ -5,16 +5,16 @@ Begründung: [research.md](../research.md) R15, R18–R21. Modul `src-tauri/src/
 
 ## Arten, Aktionen, Ziele
 
-| Art (`kind`)    | Aktionen                | Ziel                                                                  | Abgleich                                        | Geltungsbereich gemerkt              |
-| --------------- | ----------------------- | --------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------ |
-| `database`      | `read`, `readWrite`     | Präfix einer Erweiterung (`<pk>__<name>__*`) oder eine ihrer Tabellen | exakt zerlegt (sql-policy)                      | vault-weit                           |
-| `filesystem`    | `read`, `readWrite`     | Pfad (Ordner mit Unterordnern) oder Datei                             | Präfix auf dem aufgelösten Pfad                 | **Gerät**, wählbar „für alle Geräte“ |
-| `web`           | HTTP-Methode oder `*`   | `*`, `schema://host/pfad*`, `*.domain`, Domain                        | wie HV `manager/url.rs`, jede Weiterleitung neu | vault-weit                           |
-| `notifications` | `show`                  | `*`                                                                   | –                                               | vault-weit                           |
-| `passwords`     | `read`, `readWrite`     | Tag oder `*`                                                          | über 034 (`Grant`, `Scope`)                     | vault-weit                           |
-| `remoteStorage` | `read`, `readWrite`     | Kennung der Speicherverbindung oder `*`                               | exakt                                           | vault-weit                           |
-| `mail`          | `fetch`, `send`, `poll` | `host:port` oder `host` (alle Ports)                                  | Host ohne Rücksicht auf Groß-/Kleinschreibung   | vault-weit                           |
-| `shell`         | `execute`               | Programm (kanonischer Pfad) oder `*`                                  | exakt nach Auflösung                            | **Gerät**, wählbar „für alle Geräte“ |
+| Art (`kind`)    | Aktionen                | Ziel                                                                  | Abgleich                                                                    | Geltungsbereich gemerkt              |
+| --------------- | ----------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------ |
+| `database`      | `read`, `readWrite`     | Präfix einer Erweiterung (`<pk>__<name>__*`) oder eine ihrer Tabellen | exakt zerlegt (sql-policy)                                                  | vault-weit                           |
+| `filesystem`    | `read`, `readWrite`     | Pfad (Ordner mit Unterordnern) oder Datei                             | Präfix aus ganzen Pfadteilen (`Path::starts_with`) auf dem aufgelösten Pfad | **Gerät**, wählbar „für alle Geräte“ |
+| `web`           | HTTP-Methode oder `*`   | `*`, `schema://host/pfad*`, `*.domain`, Domain                        | wie HV `manager/url.rs`, jede Weiterleitung neu                             | vault-weit                           |
+| `notifications` | `show`                  | `*`                                                                   | –                                                                           | vault-weit                           |
+| `passwords`     | `read`, `readWrite`     | Tag oder `*`                                                          | über 034 (`Grant`, `Scope`)                                                 | vault-weit                           |
+| `remoteStorage` | `read`, `readWrite`     | Kennung der Speicherverbindung oder `*`                               | exakt                                                                       | vault-weit                           |
+| `mail`          | `fetch`, `send`, `poll` | `host:port` oder `host` (alle Ports)                                  | Host ohne Rücksicht auf Groß-/Kleinschreibung                               | vault-weit                           |
+| `shell`         | `execute`               | Programm (kanonischer Pfad) oder `*`                                  | exakt nach Auflösung                                                        | **Gerät**, wählbar „für alle Geräte“ |
 
 - `readWrite` deckt `read`.
 - Manifest-Schreibweisen werden vereinheitlicht: `readWrite`/`read_write`, `http`/`web`,
@@ -41,7 +41,11 @@ Feste Regeln vor der Auswertung (keine Berechtigung ändert sie): Kerntabellen (
 - Jede erklärte Berechtigung erscheint mit Art, Aktion, Ziel; Vorgabe angehakt.
 - Angehakt → `granted`, abgehakt → `ask`; beides mit `declared = 1`.
 - Gerätebezogene Arten bekommen die Kennung dieses Geräts, außer der Nutzer wählt „für alle Geräte“.
-- Update: nur neu erklärte Berechtigungen werden vorgelegt; vorhandene Zeilen bleiben.
+- Update: nur neu erklärte Berechtigungen werden vorgelegt. Gemerkte Zeilen mit `declared = 1`, deren
+  (Art, Aktion, Ziel) das neue Manifest nicht mehr erklärt, werden gelöscht; erklärt ein späteres Update sie
+  wieder, gelten sie als neu und werden wieder vorgelegt. Zeilen mit `declared = 0` (zur Laufzeit gemerkt)
+  bleiben; erklärt das neue Manifest eine davon, wird sie `declared = 1` mit unverändertem Zustand. Alle
+  übrigen Zeilen bleiben unverändert.
 
 ## Anfrage zur Laufzeit
 

@@ -9,8 +9,8 @@ Richtung B aus ADR-0004. Protokoll des vault-sdk v3.7.0 (`src/messages.ts`, `src
 - `<iframe sandbox="allow-scripts" src="holzi-ext://localhost/<extId>/<entry>?hf=<token>#<ort>">`
   (Windows: `http://holzi-ext.localhost/…`), kein `allow-same-origin`, `allow-popups`,
   `allow-top-navigation`, `allow-forms`.
-- Das Frontend legt die Rahmensitzung mit `extension_frame_open(extId, tabId)` an und bekommt `frame`,
-  `token` und die URL. `frame` erreicht die Erweiterung nie.
+- Das Frontend legt die Rahmensitzung mit `extension_frame_open(extId, tabId)` an und bekommt `frame`
+  und die URL mit dem Start-Token (`?hf=<token>`). `frame` erreicht die Erweiterung nie.
 - Der Protokoll-Handler liefert HTML nur bei gültigem `token` für die `extId` des Pfads, setzt die CSP
   aus R12 als Header und fügt den Rahmen-Shim (unten) ein.
 
@@ -32,6 +32,12 @@ Inline-Skript, das holzi in jedes ausgelieferte HTML-Dokument der Erweiterung ei
 schickt `{type: "holzi:frame:init", shortcuts: [...]}` mit einem eigenen Port; der Shim nimmt es nur von
 `window.parent` an.
 
+Der Shim läuft im JavaScript der Erweiterung; jede Nachricht auf seinem Port ist eine Eingabe der Erweiterung
+und kann gefälscht sein. `nav`, `title`, `closeGuard` und `close` wirken nur auf den eigenen Tab. `shortcut`
+führt holzi nur aus, wenn der Rahmen gerade den Fokus hat (`document.activeElement` ist das iframe) und das
+Fenster von holzi aktiv ist; sonst wird es verworfen. Mehr als ein Tastendruck des Nutzers in diesem Moment
+kann die Erweiterung damit nicht auslösen.
+
 | Shim → holzi                 | Auslöser                                    | Wirkung in holzi                         |
 | ---------------------------- | ------------------------------------------- | ---------------------------------------- |
 | `nav {path, query, replace}` | `hashchange`, `popstate`                    | `useTabRouter().push/replace` (Spec 020) |
@@ -47,7 +53,7 @@ schickt `{type: "holzi:frame:init", shortcuts: [...]}` mit einem eigenen Port; d
 
 ## Weiterleitung an Rust
 
-Das Frontend ruft für jede Anfrage `extension_bridge_call({frame, method, params})` und gibt die Antwort
+Das Frontend ruft für jede Anfrage `extension_bridge_call({frame, id, method, params})` und gibt die Antwort
 unverändert zurück. Ereignisse von Rust: `extension-frame-event {frame, type, data}` (bereits gefiltert),
 `extension-permission-request` (nur für die Oberfläche, siehe [permissions.md](./permissions.md)).
 `Uint8Array`/`ArrayBuffer` in `params` werden zu `{"$bytes": "<base64>"}`.
@@ -97,15 +103,15 @@ Jede Methode, die hier nicht steht, antwortet 8000. Spalte „L“ = Lieferung (
 
 ## Meldungen holzi → Erweiterung
 
-| Typ                               | Daten                                            | L   |
-| --------------------------------- | ------------------------------------------------ | --- |
-| `haextension:context:changed`     | `{context}`                                      | L3  |
-| `haextension:sync:tables-updated` | `{tables: string[]}` (gefiltert, R9)             | L3  |
-| `extension:permission-resolved`   | `{resource, action, target, status}`             | L1  |
-| `filesync:file-changed`           | flach: `ruleId, changeType, path`                | L4  |
-| `haextension:notification:click`  | `{notificationId, actionId?, path?}`             | L4  |
-| `mail:new-messages`               | `{accountId, mailboxName, newCount}`             | L5  |
-| `shell:output`, `shell:exit`      | flach: `sessionId, data` / `sessionId, exitCode` | L5  |
+| Typ                               | Daten                                                                                                        | L   |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------ | --- |
+| `haextension:context:changed`     | `{context}`                                                                                                  | L3  |
+| `haextension:sync:tables-updated` | `{tables: string[]}` (gefiltert, R9)                                                                         | L3  |
+| `extension:permission-resolved`   | `{resourceType, action, target, decision}` (`decision` = `granted` \| `denied`, `target` wie in der Anfrage) | L1  |
+| `filesync:file-changed`           | flach: `ruleId, changeType, path`                                                                            | L4  |
+| `haextension:notification:click`  | `{notificationId, actionId?, path?}`                                                                         | L4  |
+| `mail:new-messages`               | `{accountId, mailboxName, newCount}`                                                                         | L5  |
+| `shell:output`, `shell:exit`      | flach: `sessionId, data` / `sessionId, exitCode`                                                             | L5  |
 
 `haextension:action:request` und `haextension:external:request` sendet holzi nicht (Specs 018 und 034).
 

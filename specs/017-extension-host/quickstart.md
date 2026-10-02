@@ -43,7 +43,7 @@ und scheitert, wenn eine Schicht allein einen Fall durchlässt ([contracts/sql-p
 
 ## 2. Installieren und öffnen (US1, L1)
 
-1. Einstellungen → Erweiterungen → „Aus Datei installieren“ → `good-notes.xt`.
+1. Einstellungen → Erweiterungen → „Aus Datei installieren“ → `good-notes-like.xt`.
    Erwartet: Name, Fassung, Herausgeber-Kürzel, „Signatur gültig“, alle erklärten Berechtigungen, abwählbar.
 2. Installieren, im Launcher öffnen. Erwartet: Tab mit der Erweiterung, Theme und Sprache wie holzi.
 3. In der Erweiterung navigieren, in holzi Zurück. Erwartet: Ort im Verlauf, Zurück führt dorthin

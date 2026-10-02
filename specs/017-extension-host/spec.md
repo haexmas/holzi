@@ -24,7 +24,7 @@ Schlüssel-Wert-Speicher). Die Entscheidungen von ADR-0004 gelten. Referenzen: h
   Manifest. Eine Erweiterung ist eindeutig durch **Herausgeberschlüssel** (der öffentliche
   Ed25519-Schlüssel im Manifest) und **Name**. Zwei Bundles mit demselben Paar sind Fassungen
   derselben Erweiterung.
-- **Bundle**: die Installationsdatei (`.haextension`) mit Manifest, Signatur und den Dateien
+- **Bundle**: die Installationsdatei (`.xt`) mit Manifest, Signatur und den Dateien
   der Erweiterung.
 - **Manifest**: die Angaben der Erweiterung zu Name, Fassung, Herausgeberschlüssel, Signatur,
   Einstiegsdatei, Symbol, Beschreibung, Darstellung (eine oder mehrere Instanzen),
@@ -89,8 +89,7 @@ Schlüssel-Wert-Speicher). Die Entscheidungen von ADR-0004 gelten. Referenzen: h
   bildet diese Spec deshalb bewusst nicht nach (FR-061). Spec 028 baut auf dieser Spec auf:
   Sie ergänzt das Manifest um Freigabetypen und die Brücke um zwei Anfragen.
 - [`029-own-s3-storage`](../029-own-s3-storage/spec.md): Die Funktionen für entfernten
-  Speicher nutzen die Speicher aus 029. 029 verweist dafür auf eine „Spec 030“; gemeint ist
-  diese Spec.
+  Speicher nutzen die Speicher aus 029.
 - [`032-model-operates-holzi`](../032-model-operates-holzi/spec.md): Kein Weg aus einer
   Erweiterung erreicht den eingebauten Agenten oder ein Modell (ADR-0004, FR-009).
 - [`034-password-manager`](../034-password-manager/spec.md): Diese Spec erteilt, speichert,
@@ -151,7 +150,7 @@ Schlüssel-Wert-Speicher). Die Entscheidungen von ADR-0004 gelten. Referenzen: h
 
 ### User Story 1 - Eine Erweiterung installieren und als App öffnen (Priority: P1)
 
-Ein Nutzer hat eine Datei `haex-notes.haextension`. Er öffnet in den Einstellungen die
+Ein Nutzer hat eine Datei `haex-notes.xt`. Er öffnet in den Einstellungen die
 Kategorie „Erweiterungen“ und wählt „Aus Datei installieren“. holzi zeigt ihm Name, Fassung,
 Beschreibung und Herausgeber (eine kurze, gut vergleichbare Form des Herausgeberschlüssels),
 ob die Signatur gültig ist, und alle Berechtigungen, die die Erweiterung erklärt. Er kann
@@ -271,7 +270,8 @@ Einstellungen widerrufen und prüfen, dass die nächste Anfrage wieder fragt.
    Erweiterung.
 8. **Given** ein Update, das neue Berechtigungen erklärt, **When** der Nutzer es installiert,
    **Then** muss er die neuen Berechtigungen bestätigen; die bisherigen Entscheidungen
-   bleiben.
+   bleiben, außer für erklärte Berechtigungen, die das Update nicht mehr erklärt; diese
+   entfallen.
 9. **Given** eine Erweiterung, **When** sie versucht, sich selbst eine Berechtigung zu geben,
    eine Anfrage selbst zu beantworten oder ihre Grenzwerte zu ändern, **Then** gibt es dafür
    keine Host-Funktion, und der Versuch scheitert.
@@ -475,8 +475,8 @@ dem Ordner herauszukommen (abgelehnt) und beobachtet den Ordner.
 **Acceptance Scenarios**:
 
 1. **Given** der Nutzer wählt im Dialog zum Öffnen oder Speichern eine Datei oder einen
-   Ordner, **When** die Erweiterung diese eine Datei oder diesen Ordner in derselben Aktion
-   liest oder schreibt, **Then** braucht sie keine weitere Berechtigung.
+   Ordner, **When** die Erweiterung diese eine Datei oder diesen Ordner liest oder schreibt,
+   solange ihr Rahmen offen ist, **Then** braucht sie keine weitere Berechtigung.
 2. **Given** eine Berechtigung „Lesen“ für einen Ordner, **When** die Erweiterung darin oder
    in Unterordnern liest, **Then** gelingt das; **When** sie schreiben will, **Then** fragt
    holzi.
@@ -604,7 +604,9 @@ erscheint), Entwicklermodus ausschalten (Erweiterung verschwindet).
 - **Eine Erweiterung versucht, das Fenster von holzi zu steuern** (Navigation, Fokus, Vollbild,
   Pop-ups, Tastenkürzel abfangen): Das bleibt ohne Wirkung auf holzi (Spec 020 FR-034).
   Tastenkürzel von holzi funktionieren auch, wenn der Fokus im Rahmen liegt; die Brücke leitet
-  sie weiter.
+  sie weiter, aber nur, solange der Rahmen den Fokus hat und das Fenster von holzi aktiv ist.
+  Eine Erweiterung kann damit nicht mehr auslösen als ein Tastendruck des Nutzers in diesem
+  Moment.
 - **Zwei Geräte installieren gleichzeitig verschiedene Fassungen**: Nach dem Sync gilt auf
   allen Geräten die höhere Fassung. Migrationen, die ein Gerät schon angewendet hat, bleiben
   angewendet; die höhere Fassung muss sie enthalten.
@@ -652,7 +654,8 @@ erscheint), Entwicklermodus ausschalten (Erweiterung verschwindet).
   Geräte gelangen. Jedes Gerät MUSS ein empfangenes Bundle selbst prüfen (FR-002), bevor es
   die Erweiterung anbietet.
 - **FR-006**: Bei einem Update MUSS holzi nur die neu erklärten Berechtigungen zur Bestätigung
-  vorlegen. Bisherige Entscheidungen bleiben. Ein Downgrade MUSS eine ausdrückliche
+  vorlegen. Bisherige Entscheidungen bleiben, außer für erklärte Berechtigungen, die das neue
+  Manifest nicht mehr erklärt: diese MÜSSEN entfernt werden. Ein Downgrade MUSS eine ausdrückliche
   Bestätigung verlangen.
 - **FR-007**: Der Nutzer MUSS eine Erweiterung deaktivieren und wieder aktivieren können. Eine
   deaktivierte Erweiterung DARF keine Host-Funktion mehr ausführen; ihre Tabs schließen sich,
@@ -817,7 +820,8 @@ erscheint), Entwicklermodus ausschalten (Erweiterung verschwindet).
   Auflösen von `..` und symbolischen Links. Eine geräteeigene Berechtigung gilt nur auf ihrem
   Gerät; eine vault-weite gilt auf jedem Gerät für denselben Pfad, wenn es ihn dort gibt.
 - **FR-048**: Was der Nutzer in einem Dialog zum Öffnen oder Speichern selbst auswählt, MUSS
-  die Erweiterung in derselben Aktion ohne weitere Berechtigung lesen oder schreiben dürfen.
+  die Erweiterung ohne weitere Berechtigung lesen (Öffnen) oder lesen und schreiben (Speichern)
+  dürfen, solange der Rahmen offen ist, aus dem der Dialog kam; danach nicht mehr.
 - **FR-049**: Vault-Dateien, Bundles, Daten und Konfiguration von holzi MÜSSEN für
   Erweiterungen immer gesperrt sein, auch mit einer Berechtigung für einen übergeordneten
   Ordner.
