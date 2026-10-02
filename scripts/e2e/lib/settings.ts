@@ -6,6 +6,32 @@ import type { FlowInstance } from './flows.ts'
 /** The window manager store, reached through the Vue app the page mounted on `#__nuxt`. */
 const WM = `document.querySelector('#__nuxt').__vue_app__.config.globalProperties.$pinia._s.get('windowManager')`
 
+/**
+ * The workspace can remount while a vault is being reopened. The mount check and the following
+ * window-manager call are separate WebDriver requests, so the app may disappear between them on a
+ * slow runner. Retry only that transient condition; all other script failures remain real failures.
+ */
+async function withMounted<T>(
+  instance: FlowInstance,
+  action: () => Promise<T>,
+): Promise<T> {
+  const end = Date.now() + 15_000
+  for (;;) {
+    try {
+      return await action()
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !error.message.includes('__vue_app__') ||
+        Date.now() >= end
+      ) {
+        throw error
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+}
+
 export interface ActionOutcome {
   ok: boolean
   result?: unknown
@@ -19,9 +45,11 @@ export async function runAction(
   id: string,
   input: Record<string, unknown> = {},
 ): Promise<ActionOutcome> {
-  return instance.exec<ActionOutcome>(
-    `return ${WM}.runAction(arguments[0], arguments[1]).then((outcome) => JSON.parse(JSON.stringify(outcome)))`,
-    [id, input],
+  return withMounted(instance, () =>
+    instance.exec<ActionOutcome>(
+      `return ${WM}.runAction(arguments[0], arguments[1]).then((outcome) => JSON.parse(JSON.stringify(outcome)))`,
+      [id, input],
+    ),
   )
 }
 
@@ -35,8 +63,10 @@ export interface WmSnapshot {
 }
 
 export async function wmSnapshot(instance: FlowInstance): Promise<WmSnapshot> {
-  return instance.exec<WmSnapshot>(
-    `const wm = ${WM}; return JSON.parse(JSON.stringify({ windows: wm.windows.map((w) => ({ id: w.id, activeTabId: w.activeTabId, tabs: w.tabs.map((t) => ({ id: t.id, appId: t.appId })) })) }))`,
+  return withMounted(instance, () =>
+    instance.exec<WmSnapshot>(
+      `const wm = ${WM}; return JSON.parse(JSON.stringify({ windows: wm.windows.map((w) => ({ id: w.id, activeTabId: w.activeTabId, tabs: w.tabs.map((t) => ({ id: t.id, appId: t.appId })) })) }))`,
+    ),
   )
 }
 
