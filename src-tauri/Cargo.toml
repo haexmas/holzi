@@ -80,7 +80,7 @@ sha2 = "0.11"
 # API content blocks (spec 011-composer-toolbar-parity). Already present as
 # a transitive dependency; pinned directly here for the same reason as
 # sha2 above.
-base64 = "0.22"
+base64 = "0.23"
 unicode-segmentation = "1.13"
 # Erases the vault passphrase from memory when it is dropped (spec 013, FR-014).
 # Already in the lock as a transitive dependency; the `serde` feature lets the
@@ -104,7 +104,7 @@ nostr-sdk = "0.45"
 # (reqwest) in the tree rustls cannot pick one itself: the first `wss://`
 # connect panics. `sync::presence` installs `ring` explicitly.
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
-secp256k1 = "0.30"
+secp256k1 = "0.33"
 iroh = { version = "1.2", default-features = false, features = ["tls-ring"] }
 hkdf = "0.13"
 # Link code proofs (spec 024, R11): HMAC-SHA256 over the link transcript, and the
@@ -173,7 +173,7 @@ eventsource-stream = "0.2"
 # minimal hand-rolled stdio JSON-RPC loop instead of depending on rmcp's
 # `server`/`transport-io` features for one tool — considered and
 # rejected as unnecessary weight for that single-tool surface.
-rmcp = { version = "=3.4.1", default-features = false, features = ["client", "transport-child-process"] }
+rmcp = { version = "=3.5.0", default-features = false, features = ["client", "transport-child-process"] }
 
 # Per-invocation disposable CLAUDE_CONFIG_DIR/CODEX_HOME + cwd (spec
 # 007-cli-delegate FR-003) — was dev-dependency-only (tests used it for
@@ -234,7 +234,7 @@ nostr-sdk = { version = "0.45", features = ["local-relay"] }
 # `cli_delegate`'s own MCP server (permission_mcp_server.rs) does not use
 # this — it's a minimal hand-rolled stdio loop, not an rmcp `ServerHandler`
 # (Cargo.toml `[dependencies]` comment above).
-rmcp = { version = "=3.4.1", default-features = false, features = ["server"] }
+rmcp = { version = "=3.5.0", default-features = false, features = ["server"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "test-util"] }
 futures = "0.3"
 # HTTP mock server for adapter tests — spins a local listener on a

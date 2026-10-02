@@ -34,7 +34,7 @@ pub fn random_bytes<const N: usize>() -> Zeroizing<[u8; N]> {
 pub fn random_secret_key() -> Zeroizing<[u8; 32]> {
     loop {
         let bytes = random_bytes::<32>();
-        if SecretKey::from_byte_array(&bytes).is_ok() {
+        if SecretKey::from_secret_bytes(*bytes).is_ok() {
             return bytes;
         }
     }
@@ -52,7 +52,7 @@ pub fn derive_vault_identity(seed: &[u8; 32]) -> Zeroizing<[u8; 32]> {
         let mut okm = Zeroizing::new([0u8; 32]);
         hkdf.expand(&info, okm.as_mut())
             .expect("32 bytes are a valid HKDF-SHA256 output length");
-        if SecretKey::from_byte_array(&okm).is_ok() {
+        if SecretKey::from_secret_bytes(*okm).is_ok() {
             return okm;
         }
     }

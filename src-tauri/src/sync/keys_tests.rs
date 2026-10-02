@@ -10,7 +10,7 @@ fn two_copies_of_a_seed_derive_the_same_valid_identity() {
     let first = derive_vault_identity(&seed);
     let second = derive_vault_identity(&seed);
     assert_eq!(first.as_slice(), second.as_slice());
-    assert!(SecretKey::from_byte_array(&first).is_ok());
+    assert!(SecretKey::from_secret_bytes(*first).is_ok());
     assert_ne!(
         derive_vault_identity(&[43u8; 32]).as_slice(),
         first.as_slice()
