@@ -116,7 +116,7 @@ pub fn list(q: &mut impl Query, device: Uuid) -> Result<Vec<ExtensionSummary>> {
             status_here,
         });
     }
-    out.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+    out.sort_by_key(|e| e.title.to_lowercase());
     Ok(out)
 }
 

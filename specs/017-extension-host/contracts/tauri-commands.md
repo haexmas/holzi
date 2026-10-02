@@ -49,6 +49,10 @@ Ereignis `extension-permission-request` (siehe [permissions.md](./permissions.md
 
 Ereignis `extension-frame-event {frame, type, data, timestamp}`.
 
+`extension_host_context_set {theme, locale}` (nur holzis Fenster): Farbschema (`light` | `dark` | `system`) und
+Sprache, wie holzis Oberfläche sie anwendet; Grundlage von `extension_context_get`. So liest nur das Frontend
+die Einstellungen, und Rust kennt sie trotzdem.
+
 ## Weitere Ereignisse
 
 | Ereignis                   | Daten                           | Zweck                                                             |

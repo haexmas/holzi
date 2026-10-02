@@ -74,7 +74,7 @@ impl FrameRegistry {
             .filter(|s| s.extension_id == extension_id)
             .cloned()
             .collect();
-        frames.sort_by(|a, b| b.opened_at.cmp(&a.opened_at));
+        frames.sort_by_key(|s| std::cmp::Reverse(s.opened_at));
         frames
     }
 }
