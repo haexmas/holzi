@@ -101,6 +101,14 @@ scenario('sync-link', { timeoutMs: 360_000 }, async (ctx) => {
     { timeoutMs: 40_000, fixed: true },
   )
   assert.deepEqual(
+    unwrap<{ state: string; reason?: string }>(
+      'link_join_status',
+      await stranger.page.invoke('link_join_status'),
+    ),
+    { state: 'failed', reason: 'rejected' },
+    'the stranger hears that the link was rejected',
+  )
+  assert.deepEqual(
     unwrap<unknown[]>(
       'list_instances',
       await stranger.page.invoke('list_instances'),

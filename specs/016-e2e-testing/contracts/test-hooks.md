@@ -42,8 +42,8 @@ the chat header, with a hook each; both are gone). It is reachable at every wind
 open the launcher with `open-launcher` (the `openLauncher` flow) and press `lock-instance`. The chat's
 sidebar is reached through `chat-sidebar-toggle`, which is also what `openChat` waits for.
 
-Not added now: hooks for the composer, the message list or settings. Each scenario that needs one adds
-it with the scenario, so no hook exists without a use.
+Not added now: hooks for the message list or settings. Each scenario that needs one adds it with the
+scenario, so no hook exists without a use.
 
 ## Finding a control
 
