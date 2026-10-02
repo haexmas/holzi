@@ -1,0 +1,30 @@
+//! Helpers shared by the unit tests of the password manager: a real temporary vault with the
+//! production migrations and triggers (spec 034).
+
+use std::sync::Arc;
+
+use haex_crdt::{Database, DatabaseConfig, NoopSignatureProvider, SqlCipherKey};
+
+use crate::identity::{
+    holzi_migration_source, installation_id_path, HolziBootstrap, HOLZI_TRIGGER_VERSION,
+};
+
+/// A value no secret of a test may ever show up as outside the places that are meant to hold it.
+pub const MARKER: &str = "SECRET-MARKER-UNIT";
+
+/// Opens a fresh temporary vault; the directory lives as long as the returned guard.
+pub fn open_test_vault() -> (tempfile::TempDir, Database) {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db = Database::open(DatabaseConfig {
+        path: dir.path().join("vault.db"),
+        key: SqlCipherKey::new("passwords-unit-test"),
+        create_if_missing: true,
+        bootstrap: Arc::new(HolziBootstrap::new(installation_id_path(dir.path()))),
+        signature_provider: Arc::new(NoopSignatureProvider),
+        migration_source: holzi_migration_source(),
+        trigger_version: HOLZI_TRIGGER_VERSION,
+        max_transaction_bytes: haex_crdt::MAX_CRDT_TRANSACTION_BYTES,
+    })
+    .expect("open the test vault");
+    (dir, db)
+}

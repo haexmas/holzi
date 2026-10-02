@@ -272,6 +272,8 @@ pub enum Patch<T> {
     Set(T),
 }
 
+// Derived `Default` would require `T: Default`, which a `Keep` does not need.
+#[allow(clippy::derivable_impls)]
 impl<T> Default for Patch<T> {
     fn default() -> Self {
         Patch::Keep
@@ -400,4 +402,16 @@ impl fmt::Debug for RevealedSecret {
 /// `Some(<redacted>)` or `None`: whether a secret is present, never what it is.
 fn redacted(value: &Option<String>) -> Option<&'static str> {
     value.as_ref().map(|_| "<redacted>")
+}
+
+/// Everything the window needs for its store in one answer: every entry (also those in the trash,
+/// the window separates them), every folder, every tag with its count. The user's overview only;
+/// callers from outside get `list_headers`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings/")]
+#[serde(rename_all = "camelCase")]
+pub struct Overview {
+    pub headers: Vec<ItemHeader>,
+    pub groups: Vec<GroupRow>,
+    pub tags: Vec<TagRow>,
 }
