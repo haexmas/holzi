@@ -1,0 +1,366 @@
+---
+description: 'Task list for spec 017-extension-host'
+---
+
+# Tasks: Erweiterungs-Host für haextensions
+
+**Input**: Design documents from `/specs/017-extension-host/`
+
+**Prerequisites**: [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/bundle-format.md](./contracts/bundle-format.md), [contracts/bridge.md](./contracts/bridge.md), [contracts/sql-policy.md](./contracts/sql-policy.md), [contracts/permissions.md](./contracts/permissions.md), [contracts/tauri-commands.md](./contracts/tauri-commands.md), [quickstart.md](./quickstart.md)
+
+**Tests**: Included. The constitution requires an executable check for non-trivial logic, and SC-002 requires a bypass corpus that every delivery extends. Rust unit tests live in sibling `*_tests.rs` files (`#[cfg(test)] #[path = "…_tests.rs"] mod tests;`), integration tests in `src-tauri/tests/`, frontend checks in `scripts/check-extensions-*.ts` (`pnpm check:extensions`, in CI), end-to-end scenes in `scripts/e2e/scenarios/`. Write each test task before its implementation and see it fail first.
+
+**Organization**: Grouped by user story in priority order (P1: US1, US2, US3, US4; P2: US5, US6, US7, US12, US8, US9; P3: US10, US11). Phases also carry the delivery (L0–L5, [research.md](./research.md) R1); every delivery is its own PR on `main` and is done only with its share of the bypass corpus. The branch `017-extension-host` starts from `main` at `ef4998c` (specs 015, 020, 022, 023, 024, 030, 032, 033, 034 merged). Every file stays ≤ 500 lines (`src-tauri/src/identity/migrations.rs` is at 585 and only receives a few lines; `src-tauri/src/lib.rs` is at 351). Commits follow Conventional Commits and carry **no agent attribution** (holzi and haextension rule; also in haex-crdt, vault-sdk and the wry fork). Before authoring any new named artifact, consult graphify (T002). Rust commands run as `nix develop --command scripts/with-nix-host-bridge.sh cargo …` with `-j 4` and targeted test targets only (a full local `cargo test` once took the editor down); frontend commands as `nix develop --command bash -c '…'`. Everything new in Rust must compile in the default and the `--no-default-features` configuration. The extension's identity never comes from data the extension sends; test bundles are signed with a test key generated for the fixtures only.
+
+**Shipping note**: L0 (other repositories) first, then L1 = US1 + US2 + US3 (the MVP: one device), L2 = US4, L3 = US5 + US6 + US7 + US12, L4 = US8 + US9, L5 = US10 + US11. The mobile phase (FR-066) runs once the Android/iOS targets of holzi exist (own spec); its code-side tasks (wry fix, content URIs, "nicht verfügbar") are part of L0 and L4.
+
+## Format: `[ID] [P?] [Story] Description`
+
+- **[P]**: Can run in parallel (different files, no dependency on an incomplete task)
+- **[Story]**: User story from spec.md (US1–US12)
+
+---
+
+## Phase 1: Setup
+
+- [ ] T001 Prepare `.worktrees/017-extension-host`: real `pnpm install` (no symlinked `node_modules`), reflink the Rust build cache from the primary checkout if `src-tauri/Cargo.lock` matches (`cp -a --reflink=always ../../src-tauri/target src-tauri/target`); record baseline counts of `pnpm check:wm-navigation`, `check:wm-state`, `check:settings`, `check:templates` and `cargo test --manifest-path src-tauri/Cargo.toml -j 4 --lib storage` in this task's note
+- [ ] T002 [P] Before the first new name, run bounded `graphify query … --budget 1200` for: "tab api app frame useWmTab", "vault read write VaultDb guarded", "vault data changed observer", "sync inbound unknown table hold", "settings registry category view", "permission prompt dialog queue", "app registry WM_APPS launcher", "custom protocol webview csp", "error kind HolziError serialisation"; prefer an existing candidate over a new artifact and note which candidates were evaluated and why they did not match; stop and ask the operator on a borderline match (constitution)
+- [ ] T003 [P] Write `docs/adr/0008-extension-bundle-signature-and-sql-authorizer.md` (status accepted, date of writing): bundle format `haextension-bundle/2` replaces haex-vault's signature; SQL of extensions is enforced by the ported Rust pre-check **and** the SQLite authorizer, an allowlist of own and granted extension tables, never core tables; the extension's identity comes from the frame session, never from its payload; 0005 stays reserved for spec 021, 0007 is spec 034. Content per [research.md](./research.md) R2, R6, R14, R24
+- [ ] T004 [P] Add a row for 017 to `plans/README.md` (priority P1, effort L, status "Spezifiziert und geplant 2026-10-02", gate: L0 PRs in haex-crdt, vault-sdk and wry merged and pinned; L2 needs 024 in daily use; L5 remote storage needs 029)
+
+---
+
+## Phase 2: Foundational — L0 (other repositories) and shared base
+
+**Purpose**: The changes in other repositories that L1 depends on, then schema, identifiers, error codes and the pure permission model that every story builds on.
+
+**⚠️ CRITICAL**: No user story work can begin until this phase is complete.
+
+### L0 — haex-crdt (`haexmas/haex-crdt`, local clone `../haex-crdt`, own worktree and topic branch from the commit holzi pins, `aeb26ebb67b3faba5e8c9b34c84d7291e44107a4`)
+
+- [ ] T005 In haex-crdt, write tests first for a guarded execution API ([research.md](./research.md) R6, R7): `Database::write_guarded(&SqlGuard, f)` and `read_guarded(&SqlGuard, f)` where `SqlGuard { authorizer: Arc<dyn Fn(&AuthContext<'_>) -> Authorization + Send + Sync>, progress: Option<(i32, Arc<dyn Fn() -> bool + Send + Sync>)> }`; the authorizer is active **only** while the consumer statement is prepared and stepped, never around haex-crdt's own statements (`SELECT current_hlc()`, `persist_timestamp`, `db/core/execute/mod.rs:60-81`); it is combined with (not replacing) the read-only authorizer of `read` (`database/write.rs:171-183, 213-219`); a denial surfaces as a typed error; a non-empty tail after the first statement (other than whitespace and comments) is a typed error instead of being dropped silently (`parsing.rs:10-27`); the progress callback returning `true` interrupts and rolls back the transaction; a guarded query also exposes the column names when zero rows come back
+- [ ] T006 In haex-crdt, implement T005 in `src/database/` (keep files ≤ 500 lines, tests in separate files per the repository convention); `CrdtTransaction` stays private; document the API in the crate docs
+- [ ] T007 In haex-crdt, write tests first, then implement schema changes inside a guarded write ([research.md](./research.md) R8): (a) after a statement that modified the schema (`transform_write` result, today discarded at `execute/mod.rs:51`), call `setup_triggers_for_table(tx, T, recreate = true)` in the same transaction and drop old-name triggers on `RENAME`; (b) a schema mode: foreign keys off before `BEGIN`, `PRAGMA foreign_key_check` before commit (fail = rollback), restored afterwards, all under the lock; (c) a table rebuild that copies the `haex_*` columns verbatim with `triggers_enabled = '0'` and then recreates the triggers (no re-stamping of every row); (d) a local mode in which `CREATE TABLE` gets no CRDT columns and no triggers (developer mode, R16). Tests: `ADD COLUMN` then insert gives a correct column HLC; a Drizzle-style rebuild (`__new_X`, `INSERT … SELECT`, `DROP X`, `ALTER … RENAME`) keeps HLCs and writes no delete markers into child tables; a `_no_sync` table gets neither CRDT columns nor a delete trigger
+- [ ] T008 Open the haex-crdt PR via the `haexmas` account (memory "holzi GitHub accounts"; no agent attribution), get it merged, then bump the pin in `src-tauri/Cargo.toml:147` to the full merge SHA, keep `features = ["raw-connection"]`, update the comment block above it (spec 017, T005–T007) and run `cargo check` in both configurations plus `--test storage_transformer_compat --test sync_devices --test sync_link`
+
+### L0 — vault-sdk (`haex-space/vault-sdk`, local clone next to holzi, own worktree and topic branch from `502593e84b8d289b0986a2777754d6bd8f52da5e`)
+
+- [ ] T009 In vault-sdk, write the shared test vectors first under a new `test-vectors/bundles/` directory: `good-minimal.xt`, `good-notes-like.xt` (Nuxt build with inline scripts and migrations), and one bad bundle per rule of [contracts/bundle-format.md](./contracts/bundle-format.md) (`bad-moved-content`, `bad-renamed-file`, `bad-extra-file`, `bad-missing-file`, `bad-empty-file-added`, `bad-duplicate-entry`, `bad-case-collision`, `bad-dotdot`, `bad-absolute`, `bad-backslash`, `bad-symlink`, `bad-not-nfc`, `bad-manifest-not-canonical`, `bad-manifest-float`, `bad-key-mismatch`, `bad-signature`, `bad-zip-bomb`, `bad-ratio`, `bad-too-many-entries`, `bad-forbidden-private-key`, `legacy-format`), each with a one-line `README` entry naming the expected error kind; generate them with a script and a test key that exists only for the vectors
+- [ ] T010 In vault-sdk, rewrite `src/crypto/signing.ts` and the CLI (`src/cli/index.ts`) to format v2: walk with `lstat` and fail on symlinks, apply the path rules, write `haextension/manifest.json` as JCS without `signature` (drop the field from `src/types.ts:341`, `src/cli/index.ts:64`, `src/manifest.ts:66`), write `haextension/signature.json` per the contract (files sorted with `Buffer.compare`, signed message `"haextension-bundle/2\n"` + JCS without `signature`), never package `haextension.config.json`, `public.key` or `private.key`, deterministic zip (fixed mtime, no directory entries); add `haex verify <file.xt>`; rename the commander program to `haex` (today `haexhub`, `src/cli/index.ts:13`) and fix the `init` scripts; keep the key format. All vectors of T009 pass
+- [ ] T011 In vault-sdk, fix the handshake ([research.md](./research.md) R13): `waitForHostPortAsync` in `src/client/init.ts` accepts `haexspace:port:init` only when `event.source === window.parent` (today any sender, `init.ts:351-366`); add a test that a `port:init` from a sibling frame is ignored. Also add `client.tab.requestAttention(active: boolean)` sending the request method `extension_tab_attention {active}` over the port (FR-012; no web equivalent exists, [research.md](./research.md) R17), with a test
+- [ ] T012 Open the vault-sdk PR via the `haexmas` fork (no agent attribution) as a breaking change (`feat(cli)!:`, major 4.0.0); after merge, record the full merge SHA and the paths `src/crypto/signing.ts` and `test-vectors/bundles/` in [research.md](./research.md) R2 and copy the vectors to `src-tauri/tests/fixtures/extension_bundles/` with a `SOURCE.md` naming repository, SHA and path (constitution IV)
+
+### L0 — wry (Android and Windows, [research.md](./research.md) R12, R25)
+
+- [ ] T013 Fork `tauri-apps/wry` to `haexmas/wry`, branch from the `wry-v0.57.0` tag, and make `for_main_frame_only` hold on every platform: on platforms that ignore the flag today — Android (`src/android/kotlin/RustWebView.kt:31`, `addDocumentStartJavaScript(…, setOf("*"))`) and Windows (`src/lib.rs:1029`, `src/webview2/mod.rs:506-508`, scripts added to every frame) — wrap each main-frame-only script in `if (window === window.top) { … }` before injecting it, and on Android additionally restrict the allowed origin rules of main-frame-only scripts to the app's own origin (e.g. `http://tauri.localhost`) instead of `"*"`; Linux and macOS/iOS stay unchanged (they honour the flag natively). Add tests per platform (Android example/instrumentation test, Windows example) showing that a sandboxed iframe sees neither `__TAURI_INTERNALS__` nor the invoke key; open the upstream PR to `tauri-apps/wry` (no agent attribution)
+- [ ] T014 Pin the fork in `src-tauri/Cargo.toml` as `[patch.crates-io] wry = { git = "https://github.com/haexmas/wry", rev = "<full sha>" }` with a comment linking the upstream PR and the condition to remove the patch (upstream release); run `cargo check` in both configurations on Linux and a Windows build in CI (Android build follows with the mobile spec)
+
+### Shared base in holzi
+
+- [ ] T015 Create `src-tauri/src/identity/migrations_extensions.rs` with `pub const EXTENSIONS_0023: &str` holding the SQL of all tables of [data-model.md](./data-model.md) (statements separated by `\n--> statement-breakpoint\n`; no HLC columns, haex-crdt adds them; every table has a `PRIMARY KEY`; no UNIQUE except primary keys). Quote verbatim: `extensions(id TEXT PRIMARY KEY, public_key TEXT NOT NULL, name TEXT NOT NULL, display_name TEXT, enabled INTEGER NOT NULL DEFAULT 1, state TEXT NOT NULL DEFAULT 'installed', purge_data INTEGER NOT NULL DEFAULT 0, purge_hlc TEXT, installed_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`; `extension_bundles(id TEXT PRIMARY KEY, extension_id TEXT NOT NULL REFERENCES extensions(id) ON DELETE CASCADE, version TEXT NOT NULL, manifest_json BLOB NOT NULL, signature_json BLOB NOT NULL, retired INTEGER NOT NULL DEFAULT 0, added_at INTEGER NOT NULL)`; `extension_bundle_files(id TEXT PRIMARY KEY, bundle_id TEXT NOT NULL REFERENCES extension_bundles(id) ON DELETE CASCADE, path TEXT NOT NULL, size INTEGER NOT NULL, sha256 TEXT NOT NULL)` (no FK to blobs); `extension_blobs(hash TEXT PRIMARY KEY, data BLOB NOT NULL, size INTEGER NOT NULL, orphaned_at INTEGER)`; `extension_migrations(id TEXT PRIMARY KEY, extension_id TEXT NOT NULL REFERENCES extensions(id) ON DELETE CASCADE, name TEXT NOT NULL, position INTEGER NOT NULL, sql TEXT NOT NULL, sql_sha256 TEXT NOT NULL)`; `extension_permissions(id TEXT PRIMARY KEY, extension_id TEXT NOT NULL REFERENCES extensions(id) ON DELETE CASCADE, kind TEXT NOT NULL, action TEXT NOT NULL, target TEXT NOT NULL, status TEXT NOT NULL, declared INTEGER NOT NULL DEFAULT 0, vault_device_uuid TEXT NOT NULL REFERENCES known_devices(vault_device_uuid) ON DELETE CASCADE, updated_at INTEGER NOT NULL)`; `extension_limits(id TEXT PRIMARY KEY, extension_id TEXT NOT NULL REFERENCES extensions(id) ON DELETE CASCADE, max_rows INTEGER NOT NULL DEFAULT 10000, max_concurrent INTEGER NOT NULL DEFAULT 20, max_sql_bytes INTEGER NOT NULL DEFAULT 1000000, timeout_ms INTEGER NOT NULL DEFAULT 5000, max_response_bytes INTEGER NOT NULL DEFAULT 16777216)`; `extension_device_status(id TEXT PRIMARY KEY, extension_id TEXT NOT NULL REFERENCES extensions(id) ON DELETE CASCADE, vault_device_uuid TEXT NOT NULL REFERENCES known_devices(vault_device_uuid) ON DELETE CASCADE, status TEXT NOT NULL, bundle_id TEXT, error TEXT, updated_at INTEGER NOT NULL)`; `extension_kv(vault_device_uuid TEXT NOT NULL REFERENCES known_devices(vault_device_uuid) ON DELETE CASCADE, extension_id TEXT NOT NULL REFERENCES extensions(id) ON DELETE CASCADE, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY (vault_device_uuid, extension_id, key))`; `extension_migrations_applied_no_sync(extension_id TEXT NOT NULL, name TEXT NOT NULL, sql_sha256 TEXT NOT NULL, applied_at INTEGER NOT NULL, PRIMARY KEY (extension_id, name))`; `extension_purges_applied_no_sync(extension_id TEXT PRIMARY KEY, purge_hlc TEXT NOT NULL)`; `extension_logs_no_sync(id INTEGER PRIMARY KEY AUTOINCREMENT, extension_id TEXT NOT NULL, vault_device_uuid TEXT NOT NULL, level TEXT NOT NULL, message TEXT NOT NULL, metadata TEXT, created_at INTEGER NOT NULL)`; `sync_parked_groups_no_sync(id INTEGER PRIMARY KEY AUTOINCREMENT, origin TEXT NOT NULL, hlc TEXT NOT NULL, extension_prefix TEXT NOT NULL, tables TEXT NOT NULL, group_blob BLOB NOT NULL, bytes INTEGER NOT NULL, reason TEXT NOT NULL, parked_at INTEGER NOT NULL)`; `dev_extensions_no_sync` and `dev_extension_permissions_no_sync` like `extensions`/`extension_permissions` plus `vault_device_uuid TEXT NOT NULL`, `project_path TEXT NOT NULL`, `dev_url TEXT NOT NULL` (registration table only). Non-unique indexes: `idx_ext_bundles_ext(extension_id)`, `idx_ext_bfiles_bundle(bundle_id)`, `idx_ext_bfiles_hash(sha256)`, `idx_ext_mig_ext(extension_id, position)`, `idx_ext_perm_ext(extension_id, kind)`, `idx_ext_devst_ext(extension_id)`, `idx_ext_logs_ext(extension_id, created_at)`, `idx_sync_parked_prefix(extension_prefix, hlc)`
+- [ ] T016 Register the migration in `src-tauri/src/identity/migrations.rs` with at most five changed lines: `MigrationName::from("0023_extensions")` mapped to `EXTENSIONS_0023`, `HOLZI_TRIGGER_VERSION` + 1 (14 → 15) and one line in the constant's doc comment naming spec 017; declare `mod migrations_extensions;`
+- [ ] T017 Extend `src-tauri/src/identity/migrations_tests.rs`: a fresh vault and an upgrade from `migration_source_before("0023_extensions")` both end with all tables of T015 and their columns; no unique index other than primary keys (`pragma_index_list`); the nine synced tables carry `haex_hlc_no_sync` and the six `_no_sync` tables do not; extend `src-tauri/tests/vault_upgrade.rs`: after reopening, the synced tables have `z_dirty_*` triggers (trigger version 15)
+- [ ] T018 [P] Create `src-tauri/src/extensions/ids.rs` and write `ids_tests.rs` first: fixed namespace UUIDs `NS_EXT`, `NS_BUNDLE`, `NS_BFILE`, `NS_MIG`, `NS_PERM`, `NS_LIM`, `NS_DEVST`, `NS_DEV` (generate once, never change, comment why); `extension_id(public_key, name)` from `lower(publicKey) ":" name`, `bundle_id(signed_message_sha256)`, `bundle_file_id(bundle_id, path)`, `migration_id(extension_id, name, sql_sha256)`, `permission_id(extension_id, kind, action, target, vault_device_uuid)`; `TablePrefix::parse(table)` splits **exactly** into three parts at `__`, case-insensitive, rejects names with more or fewer parts and any part containing `__`; `ExtensionName::parse` enforces `^[a-z][a-z0-9-]*$` without `__` and `PublicKey::parse` 64 lowercase hex (FR-004). Tests pin expected UUID strings, the `a` vs `a__b` collision is rejected, upper/lower case variants map to the same prefix
+- [ ] T019 [P] Create `src-tauri/src/extensions/error.rs`: `ExtensionErrorCode` with the codes of [contracts/bridge.md](./contracts/bridge.md) §Fehlercodes (1000, 1001, 1002, 1004, 2000, 2001, 2002, 2003, 2005, 3000, 3001, 7000, 8000 `NotSupported`, 8001 `NotAvailable`, 8002 `Disabled`), `BridgeError { code, message, details }` serialised as `{code, message, details?}`; messages never name a table, file or entry outside the caller's grants (FR-062). Add `HolziError::ExtensionInstall { kind }`, `ExtensionNotFound`, `ExtensionNotReady { status }`, `ExtensionDisabled` to `src-tauri/src/error.rs` with serialisation cases in `src-tauri/src/error_tests.rs`
+- [ ] T020 Write `src-tauri/src/extensions/permissions/evaluate_tests.rs` first, then create `src-tauri/src/extensions/permissions/{mod.rs,model.rs,evaluate.rs}` (pure, no database) per [contracts/permissions.md](./contracts/permissions.md): `PermissionKind` (`database`, `filesystem`, `web`, `notifications`, `passwords`, `remoteStorage`, `mail`, `shell`), actions per kind, `PermissionTarget` matching per kind (database: extension prefix or one of its tables; web: `*`, `scheme://host/path*`, `*.domain`, domain; filesystem: prefix of whole path components (`Path::starts_with`) on an already resolved path, `/a/docs` does not match `/a/docs-private`; web: a bare domain matches itself or a subdomain at a label boundary, `example.org` does not match `badexample.org`; mail: `host:port` or `host`; shell: exact canonical path or `*`), `PermissionStatus`, `GrantScope { Vault, Device(Uuid) }`; `evaluate(candidates, request, device) -> Allow | Deny | Prompt` with "denied before granted before ask", `readWrite` covers `read`, candidates only with scope `Vault` or `Device(device)`; unknown kind/action/target parse to "absent", never to another permission (FR-022); a `database` target that is not an extension prefix is rejected at parse time; `is_device_scoped(kind)` is true for `filesystem` and `shell`. Test table covers each rule
+- [ ] T021 [P] Create `src-tauri/src/extensions/permissions/manifest_map.rs` with `manifest_map_tests.rs` first: map manifest declarations (`database`, `filesystem`, `http`/`web`, `shell`, `passwords`, `notifications`, `cloudStorage`/`remoteStorage`, `mail`; field `operation` or `action`; `readWrite`/`read_write`) to `DeclaredPermission`s; categories holzi does not offer (`spaces`, `identities`, `bookmarks`, `syncServers`, `syncRules`) go to `unsupported_categories` and are never stored; inputs from the real manifests of haex-notes, haex-calendar, haex-pass and haex-files at haextension `db48f9a948522c18a00331aac232718825cc9317` are covered
+- [ ] T022 Create `src-tauri/src/extensions/mod.rs` (module list, constants from [data-model.md](./data-model.md): `MAX_BUNDLE_BYTES = 64 MiB`, `MAX_ENTRY_BYTES = 25 MiB`, `MAX_TOTAL_UNPACKED = 64 MiB`, `MAX_ENTRIES = 2000`, `MAX_RATIO = 200`, `BLOB_ORPHAN_GRACE_DAYS = 7`, default limits) and declare `pub mod extensions;` in `src-tauri/src/lib.rs` (one line)
+- [ ] T023 Edit `src-tauri/src/vault_events.rs`: next to the existing `app.emit`, send each coalesced table list to a `tokio::sync::broadcast::Sender<Arc<Vec<String>>>` held in app state (one observer only, `observe_committed_changes` replaces earlier ones, `haex-crdt src/database/mod.rs:174-188`); extend `src-tauri/src/vault_events_tests.rs` with a case that a subscriber receives local and remote commits; used by the lifecycle service (US4) and the change filter (US5)
+
+**Checkpoint**: haex-crdt, vault-sdk and wry changes merged and pinned; `cargo test` (both configurations, targets `migrations`, `ids`, `error`, `permissions`, `manifest_map`) green; nothing user-visible yet.
+
+---
+
+## Phase 3: User Story 1 — Eine Erweiterung installieren und als App öffnen (P1, L1) 🎯 MVP
+
+**Goal**: Install a signed bundle from a file with all declared permissions shown and deselectable, open it as an app tab, navigate inside it with tab history, restore it with the session.
+
+**Independent Test**: [quickstart.md](./quickstart.md) §2 and §5.
+
+### Tests for User Story 1
+
+- [ ] T024 [P] [US1] Write `src-tauri/tests/extension_bundle_format.rs` first: every vector in `src-tauri/tests/fixtures/extension_bundles/` gives exactly the error kind its `SOURCE.md`/README entry names (`archive_too_large`, `archive_invalid`, `entry_path_invalid`, `entry_duplicate`, `entry_too_large`, `entry_ratio`, `entry_kind`, `manifest_not_canonical`, `manifest_invalid`, `file_mismatch { path }`, `public_key_mismatch`, `signature_invalid`, `legacy_signature_format`); the good vectors verify and yield manifest, file list and CSP hashes
+- [ ] T025 [P] [US1] Write `scripts/check-extensions-apps.ts` first (`node:test`, relative `.ts` imports): `allApps()` contains `WM_APPS` plus one `extension.<id>` definition per installed and enabled extension with literal title, icon URL and `multiInstance` from the manifest; a session snapshot with an `extension.*` tab survives hydration when the extension list is passed as a getter and is dropped only when the extension is unknown after the list has loaded; add `"check:extensions": "node --test scripts/check-extensions-*.ts"` to `package.json` and a CI step "Check extensions" running `corepack pnpm check:extensions` after "Check passwords" in `.github/workflows/ci.yml`
+- [ ] T026 [P] [US1] Write `scripts/check-extensions-shim.ts` first: the pure mapping in `src/lib/extensions/shim-protocol.ts` turns shim messages `nav {path, query, replace}`, `title`, `closeGuard`, `close`, `shortcut` into the tab API calls of [contracts/bridge.md](./contracts/bridge.md) §Rahmen-Shim, rejects unknown types and over-long titles (> 200 characters), and turns holzi Back into `navigate {path, query}`
+
+### Implementation for User Story 1 — bundle and install
+
+- [ ] T027 [US1] Add the direct dependencies `zip = { version = "7", default-features = false, features = ["deflate-flate2"] }` and `ed25519-dalek = "3"` (shared with 034 if already direct; check `Cargo.toml`) to `src-tauri/Cargo.toml` with a comment citing spec 017; `cargo check` in both configurations
+- [ ] T028 [P] [US1] Create `src-tauri/src/extensions/bundle/archive.rs` with `archive_tests.rs` first ([research.md](./research.md) R3): open a `.xt` of at most `MAX_BUNDLE_BYTES` from bytes; compare the end-of-central-directory entry count with `archive.len()` (zip 7.2 collapses duplicates, `read.rs:71-74`); check every raw name per [contracts/bundle-format.md](./contracts/bundle-format.md) §Pfade (UTF-8 in NFC via `unicode-normalization`, no `\`, `:`, NUL, control characters, leading `/`, empty/`.`/`..` parts, part ≤ 255 bytes, path ≤ 1024 bytes, no NFC+lowercase collision); only regular files (no symlink by unix mode, no encrypted entries, compression Stored or Deflate); read each entry through `take(size + 1)` and fail on excess; enforce `MAX_ENTRY_BYTES`, `MAX_TOTAL_UNPACKED`, `MAX_ENTRIES`, `MAX_RATIO`; never call `extract`. Returns `Vec<(path, bytes)>`
+- [ ] T029 [P] [US1] Create `src-tauri/src/extensions/bundle/jcs.rs` with `jcs_tests.rs` first: a canonicaliser for the restricted JSON of the contract (ASCII keys only, integers within ±2^53, no floats, no duplicate keys, sorted keys, no whitespace, JCS string escaping); `is_canonical(bytes)` compares byte-exactly; test vectors from RFC 8785 that fit the restriction
+- [ ] T030 [US1] Create `src-tauri/src/extensions/bundle/signature.rs` with `signature_tests.rs` first: parse `haextension/signature.json` (must be canonical), require `format == "haextension-bundle/2"`, compare the recomputed `{path, size, sha256}` set of all entries except `signature.json` with `files` exactly (error `file_mismatch { path }` naming the first differing path), require `manifest.publicKey == signature.publicKey`, verify Ed25519 over `"haextension-bundle/2\n" + JCS(signature.json without "signature")` with `VerifyingKey::verify_strict` and reject weak keys; detect the legacy format (manifest has `signature`, no `signature.json`) as `legacy_signature_format`; return `signed_message_sha256` for `bundle_id`
+- [ ] T031 [P] [US1] Create `src-tauri/src/extensions/bundle/manifest.rs` with `manifest_tests.rs` first: parse the canonical manifest into `Manifest` ([data-model.md](./data-model.md) §Rust-Typen); `name` per FR-004, `version` semver, `entry` default `index.html` and must be a listed file, `singleInstance`, `displayMode` accepted and ignored (FR-014), `migrationsDir`, `i18n`, permissions through `manifest_map` (T021); read migrations from `<migrationsDir>/meta/_journal.json` ordered by `idx` with the SQL of `<tag>.sql`, or sorted by file name if no journal exists
+- [ ] T032 [US1] Create `src-tauri/src/extensions/bundle/store.rs` with tests in `store_tests.rs`: write each blob in its own `VaultDb::write` (`INSERT … ON CONFLICT(hash) DO NOTHING`, clear `orphaned_at` when referenced again), then in one write the `extensions` row (`state = 'installed'`), the `extension_bundles` row (exact `manifest_json` and `signature_json` bytes), its `extension_bundle_files`, its `extension_migrations` (`position` from the journal order) and the `extension_limits` default row if absent; installing a bundle whose row already exists sets its `retired = 0` (re-upgrade after a downgrade); `read_verified_file(bundle_id, path)` reads by expected hash and re-hashes ([research.md](./research.md) R4); `verify_bundle(bundle_id)` re-checks `signature.json` against the stored bytes and every blob hash (FR-003); never write synced rows of core and extension tables in one write group
+- [ ] T033 [US1] Create `src-tauri/src/extensions/registry/{mod.rs,install.rs,effective.rs}` with tests: `install_preview(path)` reads the file in Rust (size checked before reading), runs archive + signature + manifest checks without writing and returns `InstallPreview` of [contracts/tauri-commands.md](./contracts/tauri-commands.md) (publisher fingerprint = first 4 and last 4 byte groups of the key in hex, `existing` with downgrade flag and new permissions); `install(path, accepted, confirm_downgrade)` re-checks, rejects an update whose `(publicKey, name)` differs from the existing row (FR-004, US7-2), rejects a downgrade without confirmation, stores via T032 and writes permissions: accepted → `granted`, deselected → `ask`, both `declared = 1`; device-scoped kinds get this device's `vault_device_uuid` unless the choice says "all devices", others the nil UUID; on update only new declarations are written, rows with `declared = 1` whose (kind, action, target) the new manifest no longer declares are deleted, and rows with `declared = 0` that the new manifest declares become `declared = 1` with their state kept ([contracts/permissions.md](./contracts/permissions.md) §Installation); `effective_bundle(extension_id)` = highest semver with `retired = 0`, tie → higher `id` ([research.md](./research.md) R11)
+- [ ] T034 [US1] Create `src-tauri/src/extensions/commands/install.rs` and `manage.rs` with `extension_install_preview`, `extension_install`, `extension_list`, `extension_icon` per [contracts/tauri-commands.md](./contracts/tauri-commands.md); ts-rs exports to `src/types/bindings/`; register them in `src-tauri/src/lib.rs` (`generate_handler!` only); emit `extensions-changed` after install
+
+### Implementation for User Story 1 — serving, frame and bridge
+
+- [ ] T035 [US1] Create `src-tauri/src/extensions/protocol/token.rs` and `src-tauri/src/extensions/bridge/frames.rs` with tests: a frame session registry in Rust (`frame` random id, `extension_id`, `tab_id`, `frame_instance_id`, start token, generation, opened at); `extension_frame_open(extensionId, tabId)` checks enabled, runs pending migrations (T060, which sets the device status) and then requires device status `ready`, runs `verify_bundle` (FR-003), creates the session and returns `{frame, url}` with `?hf=<token>` and the entry path; `extension_frame_close(frame)` ends the session; sessions end when the vault closes (ADR-0003)
+- [ ] T036 [US1] Create `src-tauri/src/extensions/protocol/csp.rs` with `csp_tests.rs` first: after verification, compute SHA-256 hashes of every inline `<script>` in every HTML file of the bundle plus the shim of T038, and build the header of [research.md](./research.md) R12 (`default-src 'none'; script-src P 'sha256-…'; style-src P 'unsafe-inline'; img-src P data: blob:; font-src P data:; media-src P data: blob:; connect-src P; worker-src P blob:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors <holzi origins>`) with P = the extension's own URL prefix for the current platform; never `'unsafe-eval'`, never `ipc:` or `http://ipc.localhost`
+- [ ] T037 [US1] Create `src-tauri/src/extensions/protocol/handler.rs` and register an asynchronous URI scheme `holzi-ext` in `src-tauri/src/lib.rs` (builder chain, one call): route only by path `/<extId>/<file>`; HTML documents only with a valid start token for that `extId` (otherwise 403); files read via `read_verified_file` off the async executor; `Access-Control-Allow-Origin: *`; CSP header from T036; SPA fallback to the entry for paths without a file extension; MIME from the extension of the path; 404 for anything else; never resolve the extension from Origin, Referer or a cache (haex-vault `protocol.rs:21-24, 498-560`)
+- [ ] T038 [US1] Create `src-tauri/src/extensions/protocol/shim.rs` holding the frame shim as a static script and its insertion into served HTML right after `<head>`: listens only to `event.source === window.parent` for `holzi:frame:init` with a port; maps `hashchange`/`popstate` → `nav {path, query, replace}`, `document.title` (MutationObserver) → `title`, a registered `beforeunload` handler → `closeGuard {active}`, `window.close()` → `close`, `keydown` matching the shortcut list → `shortcut {id}` (and `preventDefault`); handles `navigate {path, query}` by setting the hash; `ponytail:` note that attention has no web equivalent
+- [ ] T039 [US1] Edit `src-tauri/tauri.conf.json`: add `frame-src holzi-ext://localhost http://holzi-ext.localhost` and the same sources in `img-src` to both `csp` and `devCsp`; do not add `http://localhost:*`
+- [ ] T040 [US1] Create `src-tauri/src/extensions/bridge/dispatch.rs` and `src-tauri/src/extensions/commands/frames.rs` with `extension_bridge_call({frame, id, method, params})`: resolve the frame session (unknown → 1000), check enabled (8002), look the method up in a single allowlist table (`static METHODS: &[(&str, Handler, Delivery)]`), unknown or deliberately unsupported (`extension_space_*`, `set_auth_token`, `extension_context_set`, `extension_signal_ready`, permission granting, limits) → 8000 (FR-060, FR-061, FR-021); answer in SDK form `{id, result}` / `{id, error}`; L1 methods: `extension_context_get` (`{theme, locale, platform, deviceId}`), `extension_get_info` (own extension only), `extension_tab_attention {active}` (emits `extension-tab-attention {frame, active}` to the main window for that frame only), the database methods of US2 and the permission checks of US3; methods of later deliveries answer 8001 until they land
+- [ ] T041 [US1] Create `src-tauri/src/extensions/bridge/events.rs`: `emit_to_frames(extension_id, type, data)` sends `extension-frame-event {frame, type, data, timestamp}` to the main window for every open frame of that extension; nothing is sent for a frame of another extension
+- [ ] T042 [P] [US1] Create `src/lib/extensions/bridge.ts` (pure TS): relay of a port message to `extension_bridge_call` with the frame id, encoding `Uint8Array`/`ArrayBuffer` in `params` as `{"$bytes": "<base64>"}`; routing of `extension-frame-event` to the right port; buffering of events until `ready` (FR-042); covered by `scripts/check-extensions-bridge.ts` written first
+- [ ] T043 [P] [US1] Create `src/lib/extensions/apps.ts` and `src/stores/extensions.ts`: load `extension_list`, listen to `extensions-changed` and `extension-status-changed`, expose `allApps()` (T025) and `extensionAppId(id) = 'extension.' + id`
+- [ ] T044 [US1] Replace the direct uses of `WM_APPS` by the app list: `src/lib/wm/apps.ts` (`allApps` getter, literal `title?` next to `titleKey`), `src/components/wm/Launcher.vue`, `src/components/wm/NewTabMenu.vue`, `src/stores/windowManager.ts`, `src/components/wm/wmLayoutHandlers.ts`, `src/components/wm/wmActionHandlers.ts`, `titleForLocation` in `src/components/wm/appRoutes.ts`, `src/components/wm/Window.vue`; in `src/pages/workspace/[instance].vue` load the extension list before `wm.restoreSessionAsync()` and pass the apps as a getter to the session sync so `layoutState.ts:243` keeps extension tabs; `pnpm check:wm-navigation`, `check:wm-state` unchanged green
+- [ ] T045 [P] [US1] Scan the apps of haextension `db48f9a948522c18a00331aac232718825cc9317` (`apps/*/app`, `apps/*/src`) for `alert(`, `confirm(`, `prompt(`, `window.open(`, `target="_blank"`, `<form` without a `preventDefault`/`@submit.prevent` handler and `download` attributes, all blocked by `sandbox="allow-scripts"` without further tokens; record the findings per app in [research.md](./research.md) R12; if an app depends on one of them, stop and ask the operator whether to add a token (`allow-modals`, `allow-forms`, `allow-downloads`) or to replace the use through an SDK function — never add `allow-same-origin`, `allow-top-navigation` or `allow-popups-to-escape-sandbox`
+- [ ] T046 [US1] Create `src/composables/useExtensionFrame.ts` and `src/components/extensions/ExtensionFrame.vue`: call `extension_frame_open` on mount, render `<iframe sandbox="allow-scripts">` (no other sandbox token) with the returned URL plus the tab's current location as hash; on **every** `load` close the old port, create a new `MessageChannel`, post `haexspace:port:init` every 200 ms to `iframe.contentWindow` until `haexspace:port:ready` arrives on that port (max 10 s → `FrameError.vue` with "Neu laden"); then send `holzi:frame:init` with a second port and the shortcut list to the shim; map shim messages via `shim-protocol.ts` to `useWmTab()` (`setTitle`, `registerCloseGuard`, `closeSelf`) and `useTabRouter()`; map `extension-tab-attention` for this frame to `requestAttention`/`clearAttention`; console/debug messages count only with `event.source === iframe.contentWindow`; call `extension_frame_close` on unmount; `ponytail:` note that moving the tab or switching the workspace reloads the frame (R17)
+- [ ] T047 [US1] Edit `src/components/wm/TabPanel.vue` to render `<ExtensionFrame>` instead of `WmRouterView` when `appId` starts with `extension.`; keep the file small (one `v-if` branch)
+- [ ] T048 [P] [US1] Create `src/components/extensions/InstallDialog.vue`: file dialog (`.xt`), `extension_install_preview`, show name, version, description, publisher fingerprint, signature state or error, every declared permission with kind, action, target and a checkbox (default on), unsupported categories as "wird von holzi nicht unterstützt", for device-scoped kinds a choice "nur dieses Gerät" / "alle Geräte", for an update only the new permissions and a downgrade warning; install via `extension_install`
+- [ ] T049 [US1] Add the settings category "Erweiterungen" to `src/lib/settings/registry.ts` with its places and register the views in `src/components/wm/appRoutes.ts`; create `src/components/settings/extensions/ExtensionsListView.vue` (installed extensions with icon, name, version, state per device, "Aus Datei installieren" opening `InstallDialog`) using `Group.vue`/`Row.vue`/`OptionRow.vue` in the COSMIC/GNOME style; selection saves immediately (023 FR-021)
+- [ ] T050 [P] [US1] Add texts to `src/i18n/locales/de.json` and `en.json` (same key trees): `wm.apps.extensions` not needed for dynamic apps; `settings.extensions.*`, `extensions.install.*` (one key per error kind of T024), `extensions.frame.*` (loading, error, reload), `errors.extensions.*` for the `HolziError` variants of T019; extend `src/composables/useErrorString.ts`
+- [ ] T051 [US1] End-to-end scene `scripts/e2e/scenarios/extension-install-open.test.ts`: install `good-notes-like.xt` from the fixtures, open it from the launcher, navigate inside, go back in holzi, restart and see the tab restored; install `bad-moved-content.xt` and `legacy-format.xt` and see the refusal
+
+**Checkpoint**: a signed test bundle installs and opens as a tab; manipulated and legacy bundles are refused; nothing can call SQL yet.
+
+---
+
+## Phase 4: User Story 2 — Eigene Daten per SQL speichern und lesen (P1, L1)
+
+**Goal**: An extension creates its tables through migrations and reads/writes its own data with Drizzle via the SDK; everything goes through the CRDT write path; the ported haex-vault check plus the SQLite authorizer enforce the rules.
+
+**Independent Test**: [quickstart.md](./quickstart.md) §3 and the bypass corpus.
+
+### Tests for User Story 2
+
+- [ ] T052 [P] [US2] Write `src-tauri/tests/extension_sql_bypass.rs` first: a table-driven corpus with every case of [contracts/sql-policy.md](./contracts/sql-policy.md) §Umgehungssammlung, run three ways — pre-check only, authorizer only (pre-check disabled by a `#[cfg(test)]`-gated hook in `extensions/sql/exec.rs`), both — and each way must reject every forbidden case; the positive cases of that section (own table read/insert/update/delete, `RETURNING`, `ON CONFLICT DO UPDATE`, recursive `WITH` over own tables, `json_each` over a literal, `DELETE` in an own `_no_sync` table) must pass all three ways; the trigger and transformer cases are asserted per layer as the contract states. Port the cases of haex-vault `src-tauri/src/extension/database/tests/` (`sql_injection_tests/`, `sql_parsing_tests.rs`, `executor_tests.rs`) at `8dce379d94e18fcd42c3b73686a06f984ca3f574` as a starting set, with a header naming repository, SHA and path
+- [ ] T053 [P] [US2] Write `src-tauri/tests/extension_sql_exec.rs` first: result shape `{rows, columns, rowsAffected, lastInsertId}` for select, insert with `RETURNING`, update, delete; `SELECT` through `extension_database_execute` works; `columns` with zero rows; sync columns stripped from `SELECT *`; values (BLOB → base64 text, `{"$bytes"}` param → BLOB, bool → 0/1, array/object → JSON text, REAL NaN → `null`); a transaction of three statements where the third fails leaves nothing; row cap, SQL length cap and timeout end with 7000 and roll back; more than `max_concurrent` parallel calls wait or fail with 7000 without blocking another extension
+- [ ] T054 [P] [US2] Write `src-tauri/tests/extension_migrations.rs` first: two migrations apply in order once; a second start applies nothing; changed SQL under the same name refuses to start; a migration with `CREATE VIEW`, `CREATE TRIGGER`, `CREATE VIRTUAL TABLE`, `CREATE TEMP TABLE`, `ATTACH`, a `haex_*` column, `REFERENCES` to a core table, `INSERT INTO` a core table or any `PRAGMA` other than `foreign_keys` is refused as a whole and nothing of it is applied (FR-033, FR-034); after `ADD COLUMN` and after a Drizzle rebuild the triggers are current and HLCs unchanged; a `_no_sync` table has no CRDT columns and a `DELETE` there writes no row to `haex_deleted_rows` (FR-029); runtime DDL outside a migration is refused (US2 scenario 5); `extension_database_register_migrations` accepts only migrations contained in the installed bundle
+
+### Implementation for User Story 2
+
+- [ ] T055 [US2] Port the pre-check from haex-vault into `src-tauri/src/extensions/sql/` (header comment on each file naming `haex-space/haex-vault`, `8dce379d94e18fcd42c3b73686a06f984ca3f574` and the source path): `parse.rs` from `src-tauri/src/database/core/parsing.rs` (exactly one statement via `parse_sql_statements(..).len() == 1`, unlike haex-crdt's `parse_single_statement`), `plan.rs` from `src-tauri/src/extension/database/planner.rs` (statement kind allowlist Query/Insert/Update/Delete, placeholder count), `ast_check.rs` from `src-tauri/src/database/core/extract.rs` and `src-tauri/src/extension/permissions/validator.rs`; while porting, close the gaps of [research.md](./research.md) R6 point 1: tables via `sqlparser::ast::visit_relations` (covers `WITH`, `EXISTS`, subqueries in every clause, `JOIN … ON`, `CASE`, function arguments), subtract the statement's own `WITH` names and reject a `WITH` name equal to a real table, qualifier only `main` or none, ASCII identifiers only, no sync columns by name, function names against the allowlist of [contracts/sql-policy.md](./contracts/sql-policy.md); output `RequiredAccess { reads: Vec<TableRef>, writes: Vec<TableRef> }` with every table classified own / foreign extension / core (core → reject with 1000, no prompt). Each file ≤ 500 lines with `*_tests.rs` siblings
+- [ ] T056 [US2] Create `src-tauri/src/extensions/sql/policy.rs` (shared by pre-check, authorizer and change filter): `can_read(ext, table)`, `can_write(ext, table)` over own tables and resolved grants; allowlist only, no `haex_*` deny list; grants cached per extension and invalidated on change
+- [ ] T057 [US2] Create `src-tauri/src/extensions/sql/authorizer.rs` with `authorizer_tests.rs` first: build the `SqlGuard` authorizer of [contracts/sql-policy.md](./contracts/sql-policy.md) §Authorizer: top level `Read`/`Select`/`Insert`/`Update`/`Delete` only for `database == "main"` and `policy` approval, `Function` only from the allowlist, `Recursive` allowed, everything else denied; inside triggers only accessors `z_dirty_<T>_(insert|update|delete)` for a T this statement may write; a denial for a table the pre-check did not list is reported as 1000 "Form nicht zuordenbar"; verify with a test whether the CRDT transformer injects HLC values as literals or as a function call and allow that function only in that position ([contracts/sql-policy.md](./contracts/sql-policy.md) note)
+- [ ] T058 [US2] Create `src-tauri/src/extensions/sql/values.rs` with tests: JSON params → SQLite values and results → JSON per [research.md](./research.md) R7 (BLOB ↔ base64, `{"$bytes"}`, bool → 0/1, array/object → JSON text, REAL NaN/Inf → `null`, integers as numbers)
+- [ ] T059 [US2] Create `src-tauri/src/extensions/sql/exec.rs`: `query`, `execute`, `transaction` for a frame session — pre-check (T055) → permission evaluation (US3 adds prompts; in L1 own tables only until T068) → `VaultDb::write_guarded`/`read_guarded` (add both thin wrappers to `src-tauri/src/vault_gate/db.rs`) with the authorizer of T057 and a progress callback for `timeout_ms`; route result statements (`SELECT`, `RETURNING`) through `query_map`, others through `execute`; row and byte caps inside the row callback; `lastInsertId` via `last_insert_rowid()` in the same transaction; strip `haex_*_no_sync` columns; per-extension semaphore of `max_concurrent`; SQL length ≤ `max_sql_bytes`; accept both param keys `sql` and `query` and `{statements: [[sql, params], …]}`
+- [ ] T060 [US2] Create `src-tauri/src/extensions/sql/migrate.rs` and `migrate_rules.rs`: read the extension's `extension_migrations` ordered by `position`, skip entries in `extension_migrations_applied_no_sync` (same name and `sql_sha256`; different hash → refuse to start, status `migration_failed`), split on `--> statement-breakpoint`, check each statement with the migration rules of [contracts/sql-policy.md](./contracts/sql-policy.md) §Migrationen (own name or `__new_<own prefix>…`, no `AS SELECT`, `TEMP`, `haex_*` columns, foreign `REFERENCES`, `VIEW`, `TRIGGER`, `VIRTUAL`, `ATTACH`, other `PRAGMA`, no rename across `_no_sync`; `PRAGMA foreign_keys` only switches the schema mode), run the whole migration plus its journal row in one `write_guarded` in schema mode with the migration authorizer profile (FR-034); `register_migrations` (SDK) accepts only migrations equal by name and hash to those of the effective bundle; run pending migrations in `extension_frame_open` before the first frame of an extension starts; set `extension_device_status`
+- [ ] T061 [US2] Register the database methods `extension_database_query`, `_execute`, `_transaction`, `_register_migrations` in the allowlist of `bridge/dispatch.rs`
+- [ ] T062 [US2] Manual check per [quickstart.md](./quickstart.md) §3 with haex-notes from haextension `db48f9a948522c18a00331aac232718825cc9317` built and signed with the new `haex`: create a notebook and a page, restart, data present; open its share dialog and check that the space calls answer 8000 and the app keeps running with an understandable notice (FR-061, SC-001; if it breaks, stop and ask the operator); record the result in this task's note
+
+**Checkpoint**: haex-notes stores and reads its data; the bypass corpus passes three ways.
+
+---
+
+## Phase 5: User Story 3 — Berechtigungen zur Laufzeit erteilen, merken und verwalten (P1, L1)
+
+**Goal**: Runtime prompts with remember (vault-wide or device), queue and dedup, SDK-compatible retry, a settings view to change and revoke.
+
+**Independent Test**: [quickstart.md](./quickstart.md) §4.
+
+### Tests for User Story 3
+
+- [ ] T063 [P] [US3] Write `src-tauri/tests/extension_permissions.rs` first: a grant passes silently; `ask` or no match → 1004 and one `extension-permission-request`; resolving with remember stores a row (vault-wide, or this device for `filesystem`/`shell`, or vault-wide with `allDevices`), without remember holds it in memory until the vault closes; a matching `denied` beats a matching `granted`; ten identical requests produce one request event; a changed or revoked permission applies to the next call of an open frame; an unknown stored kind/action/target is treated as absent; no bridge method can grant, resolve or change limits (8000); closing the vault rejects every waiting request and running query and nothing executes afterwards (ADR-0003)
+- [ ] T064 [P] [US3] Write `scripts/check-extensions-queue.ts` first: the pure queue in `src/lib/extensions/queue.ts` merges identical requests (`extensionId, kind, action, target`), shows one at a time, drops a request when all waiting frames are gone, and closing the dialog cancels (does not deny)
+
+### Implementation for User Story 3
+
+- [ ] T065 [US3] Create `src-tauri/src/extensions/permissions/store.rs`: read candidate rows for (extension, kind) with `vault_device_uuid IN (nil, this device)`, write rows with derived ids (T018), update status and scope, delete; temporary grants in an in-memory map cleared on vault close; frame-bound grants from dialogs (US9) in the frame session
+- [ ] T066 [US3] Create `src-tauri/src/extensions/permissions/prompts.rs`: on `Prompt` return 1004 with `{resourceType, action, target}` and emit `extension-permission-request {requestId, extensionId, displayName, kind, action, target, declared, deviceScoped}` once per identical open request; keep waiting frames per request; on resolve store or hold, invalidate the policy cache, emit `extension:permission-resolved` to all frames of the extension via `bridge/events.rs`; drop a request whose frames are all closed
+- [ ] T067 [US3] Create `src-tauri/src/extensions/commands/permissions.rs`: `extension_permissions_list`, `extension_permission_set`, `extension_permission_remove`, `extension_permission_resolve` per [contracts/tauri-commands.md](./contracts/tauri-commands.md) (UI only; not reachable through `extension_bridge_call`); register in `lib.rs`
+- [ ] T068 [US3] Wire permission evaluation into `extensions/sql/exec.rs` (foreign tables from `RequiredAccess`) and add `extension_permissions_check_database` to the allowlist (returns state, grants nothing)
+- [ ] T069 [P] [US3] Create `src/lib/extensions/queue.ts` and `src/components/extensions/PermissionRequestDialog.vue` following the controlled-dialog pattern of `src/components/chat/PermissionPrompt.vue` (close = cancel): extension name, kind, action, target, "nicht erklärt" label, "Erlauben", "Verweigern", "Merken", for device-scoped kinds "für alle Geräte merken" with a note that it then applies on the other devices, a strong warning for `shell`; mount once in `src/components/wm/Desktop.vue`
+- [ ] T070 [US3] Create `src/components/settings/extensions/ExtensionDetailView.vue` and `ExtensionPermissionsView.vue`: per permission kind, action, target, state, scope ("alle Geräte" or the device name), declared or not; change state and scope, revoke; temporary permissions of this device with "Entfernen"; saves on selection
+- [ ] T071 [P] [US3] Add the texts of T069/T070 to both locale files
+- [ ] T072 [US3] End-to-end scene `scripts/e2e/scenarios/extension-permission-prompt.test.ts` with a `perm-probe` test bundle (signed fixture): allow once, allow with remember (survives restart), deny, revoke in settings
+- [ ] T073 [US3] End-to-end scene `scripts/e2e/scenarios/extension-isolation.test.ts` per [quickstart.md](./quickstart.md) §5: from inside the frame `parent.document`, holzi's storage, `fetch('https://…')`, `new WebSocket(…)`, `<img src="https://…">`, `location = 'https://…'`, `window.open`, `__TAURI_INTERNALS__` and `ipc:` all fail; a sibling frame's `port:init` is ignored by an SDK v4 extension; a forged `shortcut` message on the shim port while the frame has no focus does nothing; navigating to another extension's page without its token is not served
+- [ ] T074 [US3] Create `src-tauri/tests/extension_bridge_contract.rs` (FR-009): enumerate `bridge::dispatch::METHODS`, fail if any method has no row in [contracts/bridge.md](./contracts/bridge.md) §Methoden (parse the table) or if any handler's module path is under `chat`, `llm`, `adapters` or `providers` (check via a `module_path!()` recorded per handler)
+
+**Checkpoint (end of L1)**: US1–US3 complete; quickstart §1–§5 green; open the L1 PR.
+
+---
+
+## Phase 6: User Story 4 — Dieselbe Erweiterung auf allen eigenen Geräten (P1, L2)
+
+**Goal**: Installation, updates, permissions and data reach all own devices; each device verifies itself; a device without an extension's tables parks its groups and keeps syncing everything else.
+
+**Independent Test**: [quickstart.md](./quickstart.md) §6 with the multi-device rig of spec 033.
+
+### Tests for User Story 4
+
+- [ ] T075 [P] [US4] Write `src-tauri/tests/sync_extension_parking.rs` first (with `tests/common/sync_fixture.rs`): rows arrive before the tables → the whole group is parked, progress advances, core data in the same pull is applied; a row with a column a later migration adds is parked; a delete marker for a missing extension table is parked; after the migrations the parked groups apply in HLC order and are deleted; an unknown table **without** an extension prefix still aborts; an extension `_no_sync` table on the wire is a protocol error; after apply no unknown column was skipped
+- [ ] T076 [P] [US4] Write `src-tauri/tests/extension_lifecycle_sync.rs` first: install on A → B verifies and reaches `ready`; a bundle corrupted on B → `signature_failed`, other data keeps syncing; update on A → B applies new migrations and switches; concurrent installs of 1.2 (A) and 1.3 (B) → both end on 1.3; a device-scoped permission from A does not apply on B; remove with "delete data" on A → tables dropped on B, late groups with an HLC before `purge_hlc` discarded; reinstall after removal works with newer HLCs; C offline while A removes with "delete data" and reinstalls → C purges on reconnect although it only sees `state = installed`; remove with "keep data" on A → B keeps tables, journal and parked groups, and a reinstall starts without re-running migrations
+
+### Implementation for User Story 4
+
+- [ ] T077 [US4] Create `src-tauri/src/sync/inbound_park.rs` and edit `src-tauri/src/sync/inbound.rs` ([research.md](./research.md) R10): before applying a group, check every table (including the target of a delete marker, `inbound.rs:290-299`) against a cached `sqlite_master` view; a missing extension-prefixed table or column → write the whole group to `sync_parked_groups_no_sync` in the same `db.write` that advances progress; keep `UnknownTable` for unprefixed tables; at 256 MiB parked bytes per extension never drop a group: stop advancing the progress of the origin that sent the next group for that prefix (it is fetched again later) and show a status error until the extension is installed there or removed with "delete data"; after apply assert no skipped unknown column; keep `inbound.rs` ≤ 500 lines
+- [ ] T078 [US4] Create `src-tauri/src/extensions/registry/lifecycle.rs` and `status.rs`: react to incoming changes of `extensions`, `extension_bundles`, `extension_bundle_files`, `extension_blobs`, `extension_migrations` (subscribe to the broadcast of T023): compute the effective bundle, set `transferring` while blobs are missing, verify (`signature_failed` on error), check that the new migrations are a superset of the applied ones, run pending migrations (`migration_failed` on error), then replay parked groups for the prefix via `apply_remote_changes` and delete them; write `extension_device_status`; emit `extension-status-changed`; tabs of an extension whose effective bundle changed reload (FR-038)
+- [ ] T079 [US4] Create `src-tauri/src/extensions/registry/purge.rs`: when an incoming `purge_hlc` is newer than the one recorded in `extension_purges_applied_no_sync` for that extension (whatever `state` says now, [research.md](./research.md) R11), run one local write that clears kv rows of this device and logs, and only with `purge_data` also drops the prefixed tables, clears the journal and the parked groups of that prefix; then record the `purge_hlc`; in `inbound.rs` drop changes and delete markers with an HLC before `purge_hlc` for tables of an extension removed with `purge_data`
+- [ ] T080 [US4] Show per-device states in `src/components/settings/extensions/ExtensionDetailView.vue` ("wird übertragen", "Signatur ungültig", "Migration fehlgeschlagen" with the error kind) and in the launcher (disabled entry with reason)
+- [ ] T081 [US4] End-to-end scene `scripts/e2e/scenarios/extension-two-devices.test.ts` on the rig of spec 033: install on A, open on B, write on both, update on A, remove with "delete data"
+
+**Checkpoint (end of L2)**: quickstart §6 green; open the L2 PR.
+
+---
+
+## Phase 7: User Story 5 — Ansichten bleiben aktuell, und die Erweiterung passt zu holzi (P2, L3)
+
+**Goal**: Filtered change notifications from every source, context and its changes, a persistent key-value store per device, logs.
+
+**Independent Test**: [quickstart.md](./quickstart.md) §7 first two bullets.
+
+- [ ] T082 [P] [US5] Write `src-tauri/tests/extension_changes.rs` first: changes by the extension itself, a second frame, another extension, holzi and another device reach a frame with read access as `haextension:sync:tables-updated {tables}`; a table without read access and every core table never appear; a migration produces `haextension:sync:tables-updated` with every table whose schema changed
+- [ ] T083 [US5] Create `src-tauri/src/extensions/sql/changes.rs` subscribed to the broadcast of T023 that filters per open frame with `policy::can_read` and emits via `bridge/events.rs`; after a migration (T060) it emits the tables whose schema changed
+- [ ] T084 [US5] Emit `haextension:context:changed {context}` to all frames when theme or locale changes (hook into the existing preference change path found in T002)
+- [ ] T085 [P] [US5] Create `src-tauri/src/extensions/kv.rs` with `kv_tests.rs` first: `extension_web_storage_get_item`/`_set_item`/`_remove_item`/`_clear`/`_keys` on `extension_kv` for (this device, calling extension) only; limits "key ≤ 1 KiB", "value ≤ 1 MiB", "total per extension and device ≤ 10 MiB" (7000 beyond); register in the allowlist
+- [ ] T086 [P] [US5] Create `src-tauri/src/extensions/logs.rs` with tests: `extension_logging_write {level, message, metadata?}` (level `debug`/`info`/`warn`/`error`, "message ≤ 4 KiB", "metadata ≤ 16 KiB") and `extension_logging_read {level?, limit?, offset?}` for the own extension and device only; ring buffer of 5,000 entries per extension; `extension_logs_read` command for the settings; register in the allowlist
+- [ ] T087 [US5] Create `src/components/settings/extensions/ExtensionLogsView.vue` and add texts
+
+---
+
+## Phase 8: User Story 6 — Daten einer anderen Erweiterung mitnutzen (P2, L3)
+
+**Goal**: Read and write other extensions' tables with grants; never their schema; core tables never.
+
+**Independent Test**: [quickstart.md](./quickstart.md) §7 third bullet.
+
+- [ ] T088 [P] [US6] Extend `src-tauri/tests/extension_sql_bypass.rs` and `extension_permissions.rs` first: with `read` on extension B, A reads B's tables (also joined with its own), a write prompts for `readWrite`, DDL on B's tables is refused in migrations and at runtime; after B is removed A gets a "no such table" style error that does not reveal B's data; a `database` grant target `chat_*` is rejected when stored
+- [ ] T089 [US6] Extend `extensions/sql/policy.rs` and `ast_check.rs` with foreign extension tables (classification "foreign", grant check per table or whole extension) and add a two-extension fixture pair to `src-tauri/tests/fixtures/extension_bundles/` (signed with the fixture key)
+
+---
+
+## Phase 9: User Story 7 — Erweiterungen aktualisieren, deaktivieren und entfernen (P2, L3)
+
+**Goal**: Update with only new permissions, confirmed downgrade, disable/enable, remove with or without data, kept data visible and deletable.
+
+**Independent Test**: [quickstart.md](./quickstart.md) §7 fourth bullet.
+
+- [ ] T090 [P] [US7] Write `src-tauri/tests/extension_lifecycle.rs` first: update keeps data and asks only for new permissions; same name with another key is a separate extension; downgrade only with confirmation retires higher bundles; disabled → every bridge call 8002, tabs closed, not in launcher; remove "keep data" → tables and migrations stay, reinstall finds them; remove "delete data" → tables, permissions, kv, logs gone; orphaned blobs are freed after seven days
+- [ ] T091 [US7] Implement `extension_set_enabled`, `extension_remove`, `extension_purge_kept_data` in `src-tauri/src/extensions/commands/manage.rs` on top of `registry/purge.rs`; orphan marking and cleanup of `extension_blobs` on vault open (grace `BLOB_ORPHAN_GRACE_DAYS`)
+- [ ] T092 [US7] Add enable switch, update, remove (with "Daten behalten"/"Daten löschen"), kept data list with size and delete, and limits (`extension_limits_get`/`_set`) to the settings views; texts
+
+---
+
+## Phase 10: User Story 12 — Erweiterungen entwickeln (P2, L3)
+
+**Goal**: Developer mode per device, load from `localhost`, device-local registration and tables, marked tab, console output.
+
+**Independent Test**: [quickstart.md](./quickstart.md) §7 last bullet.
+
+- [ ] T093 [P] [US12] Write `src-tauri/tests/extension_dev_mode.rs` first: loading is refused while developer mode is off, for a non-loopback host, when an `extensions` row with the same `(publicKey, name)` exists in any `state` (also removed with "keep data") and when a table with that prefix exists; an install of the same prefix arriving via sync from another device does not start here (`migration_failed`, `dev_prefix_conflict`) and its groups stay parked; a later signed install is refused while dev tables with that prefix exist; dev tables have no CRDT columns and never appear in `synced_tables`; registration and permissions live only in the `dev_*_no_sync` tables of this device
+- [ ] T094 [US12] Create `src-tauri/src/extensions/dev.rs` and `commands/dev.rs` (`extension_dev_mode_set`, `extension_dev_load`, `extension_dev_confirm`, `extension_dev_unload`): device-scoped preference, project folder via dialog, manifest and migrations from disk, host `localhost`/`127.0.0.1`/`[::1]` only, migrations in haex-crdt local mode (T007 d), all other rules unchanged
+- [ ] T095 [US12] Main-window CSP for the dev server: add `frame-src <dev url>` at runtime via `on_web_resource_request` for the main document and reload the main window when developer mode is switched; verify on Linux, macOS and Windows and record the result (spike, [research.md](./research.md) R16); the dev frame keeps `sandbox="allow-scripts"` only
+- [ ] T096 [US12] Frontend: settings view "Entwicklermodus" (switch, load project, confirm declared permissions, unload), a permanent "Entwicklungsfassung" badge on the tab and `src/components/extensions/DevConsole.vue` showing forwarded console output; texts
+
+**Checkpoint (end of L3)**: quickstart §7 green; open the L3 PR.
+
+---
+
+## Phase 11: User Story 8 — Netzwerk und Benachrichtigungen (P2, L4)
+
+**Goal**: Fetch through holzi with re-checked redirects and method; open URLs; notifications with click.
+
+**Independent Test**: [quickstart.md](./quickstart.md) §8.
+
+- [ ] T097 [P] [US8] Write `src-tauri/tests/extension_web.rs` first (local test HTTP server): granted URL succeeds with status, headers, body (base64) and final URL; method checked; a redirect to an ungranted host prompts/fails; `Authorization` and `Cookie` dropped on a cross-origin hop; more than ten hops fail; body cap and timeout from the limits; only http/https
+- [ ] T098 [US8] Create `src-tauri/src/extensions/web.rs`: `extension_web_fetch` with a dedicated `reqwest::Client` (`redirect::Policy::none()`, manual loop with the permission check per hop) and `extension_web_open` through `tauri-plugin-opener` after the check; register in the allowlist; `extension_permissions_check_web`
+- [ ] T099 [US8] Spike for notification clicks ([research.md](./research.md) R20): add `tauri-plugin-notification`; on Linux test `notify-rust` actions; on macOS and Windows test what the system reports; record the result; if clicks cannot be delivered on a platform, stop and bring FR-052 back to the operator
+- [ ] T100 [US8] Create `src-tauri/src/extensions/notifications.rs`: `extension_notifications_show` (title, body, icon only as `data:` URL or a bundle file, up to three actions) and `_dismiss` with an owner check; click → `haextension:notification:click` to the owning extension and bring its tab to the front; register in the allowlist
+
+---
+
+## Phase 12: User Story 9 — Dateien des Geräts lesen und schreiben (P2, L4)
+
+**Goal**: The filesystem API of the SDK with resolved targets, a fixed deny list, dialog choices as frame-bound grants and owner-checked watches.
+
+**Independent Test**: [quickstart.md](./quickstart.md) §8.
+
+- [ ] T101 [P] [US9] Write `src-tauri/tests/extension_fs.rs` first: read inside a granted folder; write needs `readWrite`; `..`, a symlink and a different spelling out of the folder are checked at the real target; vault file, app data and config are always denied even under a granted parent; a dialog choice allows exactly that file or folder for the frame without prompt; `open_file` uses only the file name; watches are keyed by (extension, `ruleId`) and report every path of a debounced batch only to the owning extension
+- [ ] T102 [US9] Create `src-tauri/src/extensions/fs/{resolve.rs,denylist.rs,ops.rs,dialogs.rs,watch.rs}` per [research.md](./research.md) R19 with the 18 methods of the SDK (`extension_filesystem_*`); add `notify` and `notify-debouncer-full`; on Android/iOS only dialog choices and app-own places, watch and free paths answer 8001 (FR-066); register in the allowlist; `extension_permissions_check_filesystem`
+
+- [ ] T103 [US9] SC-001 check for haex-pass from haextension `db48f9a948522c18a00331aac232718825cc9317`, built and signed with the new `haex`: entries, favicons through `web.fetchAsync` (prompt for `https://icons.duckduckgo.com/*`), `web.openAsync`, saving an attachment through `filesystem.saveFileAsync`, live update via `SYNC_TABLES_UPDATED`; the external bridge handlers stay unused (034); record the result in this task's note
+
+**Checkpoint (end of L4)**: quickstart §8 green; open the L4 PR.
+
+---
+
+## Phase 13: User Story 10 — Passwörter und entfernter Speicher über holzi (P3, L5)
+
+**Goal**: The SDK's password functions through 034's access check; remote storage through 029.
+
+**Independent Test**: [quickstart.md](./quickstart.md) §9 first bullet.
+
+- [ ] T104 [P] [US10] Write `src-tauri/tests/extension_passwords.rs` first: with a `passwords` grant for tag `haex-calendar` list, read, create, update and delete (to trash) work for in-scope items; out-of-scope items are `NotFound`; list results contain no secret; the rules Z1–Z13 of `specs/034-password-manager/contracts/access.md` hold with `Caller::Extension { id }`
+- [ ] T105 [US10] Create `src-tauri/src/extensions/passwords.rs`: map `passwords` permissions to `Grant { action, scope }` (`src-tauri/src/passwords/access.rs`) and call the `PasswordsService` methods (`list_headers`, `read_secret_item`, `create_item`, `update_item` with a patch built from the full SDK input, `delete_item`); shape results as the SDK's `PasswordItemSummary`/`PasswordItemFull`; register `extension_password_*` in the allowlist
+- [ ] T106 [US10] Remote storage ([research.md](./research.md) R21): define the `RemoteStore` trait and the `extension_remote_storage_*` methods answering 8001 until spec 029 provides storage connections; when 029 lands, add per-connection grants, a per-extension key prefix, and a holzi dialog for add/update/test/remove with credentials stored in the password manager (blocked on 029; leave this task open with a note until then)
+
+---
+
+## Phase 14: User Story 11 — Mail und Shell für spezialisierte Erweiterungen (P3, L5)
+
+**Goal**: IMAP/SMTP with host+port grants and owner-bound watches; PTY shells with per-program grants that end with the last frame.
+
+**Independent Test**: [quickstart.md](./quickstart.md) §9 second and third bullet.
+
+- [ ] T107 [P] [US11] Write `src-tauri/tests/extension_mail.rs` first against a local test IMAP/SMTP server: list mailboxes, fetch envelopes/message/attachment, set flags, move, append, send with a grant for `host:port`; another port prompts; a watch reports `mail:new-messages` and ends with the last frame, on disable and on vault close
+- [ ] T108 [US11] Create `src-tauri/src/extensions/mail/` (`imap.rs`, `smtp.rs`, `watch.rs`, `commands.rs`) with `async-imap` (tokio, `tokio-rustls`), `lettre` (rustls, ring) and `mail-parser`; credentials only from the call or through 034 with the extension as caller (never read the password tables directly); register `extension_mail_*`
+- [ ] T109 [P] [US11] Write `src-tauri/tests/extension_shell.rs` first: a granted `/bin/sh` runs `echo`, resize works, output decodes multi-byte UTF-8 across chunk borders, closing the last frame kills the process group; an ungranted program prompts; on non-desktop builds every method answers 8001
+- [ ] T110 [US11] Create `src-tauri/src/extensions/shell.rs` on `portable-pty` 0.9: canonicalise `options.shell` and check per program, session owner check, streaming UTF-8 decoder, process group kill on last frame close, disable and vault close; `cfg(desktop)` else 8001; register `extension_shell_*`; the prompt for `shell` shows the strong warning (T069)
+
+- [ ] T111 [US11] SC-001 check for haex-calendar from haextension `db48f9a948522c18a00331aac232718825cc9317`, built and signed with the new `haex`: calendars and events, CalDAV through `web.fetchAsync` (prompt, its manifest declares no `http`), account credentials through the password functions (tag `haex-calendar`), reminders through notifications, space calls answering 8000 without breaking the app; record the result in this task's note
+
+**Checkpoint (end of L5)**: quickstart §9 green except remote storage (029); open the L5 PR.
+
+---
+
+## Phase 15: Polish, mobile and cross-cutting
+
+- [ ] T112 [P] Mobile acceptance (FR-066, once the Android/iOS targets of holzi exist): run `extension-isolation` and `extension-install-open` on the Android emulator with the wry fork of T014 and on the iOS simulator; inside a frame `__TAURI_INTERNALS__` is absent and a call through `window.ipc` fails; record results; remove the `[patch.crates-io]` entry once wry upstream releases the fix
+- [ ] T113 [P] Update `src/types/bindings/` (`pnpm generate:ts-types`, then `git diff src/types/bindings` empty) and `python3 scripts/ci/check-docs.py`
+- [ ] T114 [P] Glossary and docs: add "Erweiterung", "Prüfstelle", "Erweiterungsrahmen", "Berechtigung (vault-weit/Gerät)" to `CONTEXT.md` if it keeps a glossary; link ADR-0008 from spec 017 and from `docs/adr/0004-extension-protocol-split.md` §Consequences
+- [ ] T115 Run the full [quickstart.md](./quickstart.md) for the delivered parts and record the results per section in this task's note
+- [ ] T116 Re-check the bypass corpus against the delivered host functions (SC-002): every delivery's cases present, each layer alone rejects each SQL case
+
+---
+
+## Dependencies & Execution Order
+
+### Phase dependencies
+
+- **Setup (Phase 1)**: none.
+- **Foundational (Phase 2)**: L0 tasks T005–T014 block L1; T015–T023 depend only on Setup.
+- **US1 (Phase 3)** needs Phase 2; **US2 (Phase 4)** needs T035/T040 (frame session, dispatch) and the haex-crdt pin (T008); **US3 (Phase 5)** needs T040 and T059. US1–US3 ship together as L1.
+- **US4 (Phase 6)** needs L1 and spec 024 in daily use.
+- **US5, US6, US7, US12 (Phases 7–10)** need L1; their effect on all devices needs L2.
+- **US8, US9 (Phases 11–12)** need L1 (US3 for prompts).
+- **US10, US11 (Phases 13–14)** need L1; T106 additionally needs spec 029.
+- **Polish (Phase 15)**: T112 needs the mobile targets of holzi (own spec).
+
+### Within each story
+
+Tests first and failing → pure modules → storage → commands/bridge methods → frontend → end-to-end.
+
+### Parallel opportunities
+
+- L0: haex-crdt (T005–T008), vault-sdk (T009–T012) and wry (T013–T014) in parallel.
+- Shared base: T018, T019, T021 in parallel; T020 in parallel with them.
+- US1: T024, T025, T026 in parallel; T028, T029, T031 in parallel; T042, T043, T048, T050 in parallel.
+- US2: T052, T053, T054 in parallel.
+- After L1: US5/US6/US7/US12 and US8/US9 in parallel by different people; US10 and US11 in parallel.
+
+## Parallel Example: User Story 1
+
+```text
+Task: "T024 Write src-tauri/tests/extension_bundle_format.rs"
+Task: "T025 Write scripts/check-extensions-apps.ts"
+Task: "T026 Write scripts/check-extensions-shim.ts"
+then
+Task: "T028 Create src-tauri/src/extensions/bundle/archive.rs"
+Task: "T029 Create src-tauri/src/extensions/bundle/jcs.rs"
+Task: "T031 Create src-tauri/src/extensions/bundle/manifest.rs"
+```
+
+## Implementation Strategy
+
+### MVP first (L0 + L1)
+
+1. Phase 1 and Phase 2 (L0 PRs merged and pinned).
+2. US1 → US2 → US3, each test-first; quickstart §1–§5.
+3. **Stop and validate**: haex-notes runs on one device, the bypass corpus and the isolation scene pass. Open the L1 PR.
+
+### Incremental delivery
+
+L2 (US4) → L3 (US5, US6, US7, US12) → L4 (US8, US9) → L5 (US10, US11). Each delivery is a PR with its quickstart sections and bypass cases green. Mobile acceptance (T112) follows the mobile spec.
