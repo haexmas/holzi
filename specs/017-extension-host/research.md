@@ -63,6 +63,10 @@ in HV `src-tauri/src/extension/crypto.rs:43-136`, das nur Inhalte aneinanderhän
 Signaturdatei erspart das „Feld leeren und neu serialisieren“, das in HV von gleicher Ausgabe von JS und
 serde abhängt. Die Fehlermeldung kann die geänderte Datei nennen.
 
+**Umsetzung im Werkzeug**: haex-space/vault-sdk `c8588aadc7bac13f628cfb9c93e269edd5f7a81b` (#52), Signieren und
+Prüfen in `src/bundle/` (`sign.ts`, `verify.ts`, `jcs.ts`, `zip.ts`), Testvektoren unter `test-vectors/bundles/`,
+kopiert nach `src-tauri/tests/fixtures/extension_bundles/` (`SOURCE.md`).
+
 **Alternativen**: Signatur als Manifest-Feld (wieder das Leeren); Merkle-Wurzel (keine lesbaren Fehler);
 abgesetzte `.sig`-Datei (geht beim Kopieren verloren); HV-Format (Spec-Entscheidung dagegen).
 
