@@ -4,12 +4,15 @@
 //! This module grows with the deliveries of the spec (research R1). The foundation holds the
 //! identifiers, the error codes of the bridge and the pure permission model.
 
+pub mod bridge;
 pub mod bundle;
 pub mod commands;
 pub mod error;
+pub mod host;
 pub mod ids;
 pub mod mime;
 pub mod permissions;
+pub mod protocol;
 pub mod registry;
 
 // The limits of a bundle (size, entries, ratio) belong to the bundle format and live in the crate

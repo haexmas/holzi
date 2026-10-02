@@ -49,6 +49,7 @@ use chat::thread_commands::{
     create_thread, delete_thread, list_messages, list_threads, rename_thread,
 };
 use device::commands::{current_device_info, list_vault_devices, update_device_alias};
+use extensions::commands::frames::{extension_frame_close, extension_frame_open};
 use extensions::commands::install::{extension_install, extension_install_preview};
 use extensions::commands::manage::{extension_icon, extension_list};
 use hardware::get_hardware_info;
@@ -173,6 +174,8 @@ pub fn run() {
     // start page's link join runs without a vault.
     let builder = builder.manage(std::sync::Arc::new(sync::registry::SyncRegistry::default()));
     let builder = builder.manage(sync::link::join_task::LinkJoin::default());
+    // Spec 017: files of extensions for their sandboxed frames.
+    let builder = extensions::protocol::handler::register(builder);
     builder
         .plugin(tauri_plugin_dialog::init())
         // Password manager (spec 034, research R9): used from Rust only, so a copied secret and its
@@ -336,6 +339,8 @@ pub fn run() {
             extension_install,
             extension_list,
             extension_icon,
+            extension_frame_open,
+            extension_frame_close,
         ]))
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

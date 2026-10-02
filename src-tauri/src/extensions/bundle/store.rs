@@ -16,13 +16,11 @@ use crate::error::{HolziError, Result};
 use crate::extensions::default_limits;
 use crate::extensions::ids::{bundle_file_id, bundle_id, extension_id, limits_id, migration_id};
 use crate::storage::query::Query;
+use crate::sync::keys::hex;
 use crate::vault_gate::VaultDb;
 
 fn sha256_hex(data: &[u8]) -> String {
-    Sha256::digest(data)
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect()
+    hex(&Sha256::digest(data))
 }
 
 fn exists(q: &mut impl Query, sql: &str, key: &str) -> Result<bool> {

@@ -1,6 +1,7 @@
 //! Tauri commands of the extension host for holzi's own window (contracts/tauri-commands.md). An
 //! extension never reaches these; it only reaches `extension_bridge_call`.
 
+pub mod frames;
 pub mod install;
 pub mod manage;
 
