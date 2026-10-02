@@ -55,3 +55,60 @@ fn foreign_consumer_error_falls_back_to_crdt_init_with_its_text() {
         HolziError::CrdtInit { reason } if reason == "hook failed"
     ));
 }
+
+/// Spec 034 (contracts/tauri-commands.md §Fehlerarten): the password manager's own kinds
+/// serialise as `{ kind, ...fields }` with the `Passwords` prefix and never carry a value.
+#[test]
+fn password_manager_errors_serialise_with_their_kind_and_fields() {
+    let cases = [
+        (
+            HolziError::PasswordsNotFound,
+            serde_json::json!({ "kind": "PasswordsNotFound" }),
+        ),
+        (
+            HolziError::PasswordsForbidden,
+            serde_json::json!({ "kind": "PasswordsForbidden" }),
+        ),
+        (
+            HolziError::PasswordsConflict {
+                reason: "changed".to_string(),
+            },
+            serde_json::json!({ "kind": "PasswordsConflict", "reason": "changed" }),
+        ),
+        (
+            HolziError::PasswordsAttachmentTooLarge {
+                bytes: 27_000_000,
+                limit: 26_214_400,
+            },
+            serde_json::json!({
+                "kind": "PasswordsAttachmentTooLarge",
+                "bytes": 27_000_000,
+                "limit": 26_214_400,
+            }),
+        ),
+        (
+            HolziError::PasswordsImportFailed {
+                reason: "wrong_credentials".to_string(),
+            },
+            serde_json::json!({
+                "kind": "PasswordsImportFailed",
+                "reason": "wrong_credentials",
+            }),
+        ),
+    ];
+    for (error, expected) in cases {
+        assert_eq!(serde_json::to_value(&error).expect("serialise"), expected);
+    }
+}
+
+#[test]
+fn password_manager_errors_survive_the_consumer_round_trip() {
+    let err = CrdtError::from(HolziError::PasswordsConflict {
+        reason: "deleted".to_string(),
+    });
+
+    assert!(matches!(
+        HolziError::from(err),
+        HolziError::PasswordsConflict { reason } if reason == "deleted"
+    ));
+}

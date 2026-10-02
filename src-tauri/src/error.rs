@@ -194,6 +194,35 @@ pub enum HolziError {
 
     #[error("Transcription failed: {reason}")]
     TranscriptionFailed { reason: String },
+
+    // --- Password manager (spec 034, contracts/tauri-commands.md §Fehlerarten) ---
+    // None of these carries the value of a secret in a field.
+    /// The entry, attachment or passkey does not exist, or the caller may not know that it does
+    /// (rule Z5 of `contracts/access.md`).
+    #[error("Not found")]
+    PasswordsNotFound,
+
+    /// The caller has no grant for this operation (rules Z3 and Z11).
+    #[error("Not permitted")]
+    PasswordsForbidden,
+
+    /// A save found the entry changed or deleted since it was read (`reason`: `changed` or
+    /// `deleted`).
+    #[error("Conflict: {reason}")]
+    PasswordsConflict { reason: String },
+
+    #[error("The attachment is too large ({bytes} bytes, limit {limit})")]
+    PasswordsAttachmentTooLarge {
+        #[ts(type = "number")]
+        bytes: u64,
+        #[ts(type = "number")]
+        limit: u64,
+    },
+
+    /// An import stopped as a whole (`unreadable`, `wrong_credentials`, `corrupt`,
+    /// `unsupported_format`, `encrypted_export`).
+    #[error("Import failed: {reason}")]
+    PasswordsImportFailed { reason: String },
 }
 
 pub type Result<T> = std::result::Result<T, HolziError>;

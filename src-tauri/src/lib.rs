@@ -11,6 +11,7 @@ pub mod instances;
 pub mod llm;
 pub mod model_capabilities;
 pub mod models;
+pub mod passwords;
 pub mod providers;
 pub mod state;
 pub mod state_utils;
