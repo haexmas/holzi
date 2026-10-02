@@ -171,7 +171,7 @@ pub struct SnapshotHeader {
 }
 
 /// What an import could not bring over unchanged (contracts/import-mapping.md §Bericht).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/types/bindings/")]
 #[serde(rename_all = "snake_case")]
 pub enum AttentionKind {
@@ -188,7 +188,7 @@ pub enum AttentionKind {
 
 /// One place where the user has to rework by hand: entry, folder path and what is missing; never a
 /// value of a secret.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/types/bindings/")]
 #[serde(rename_all = "camelCase")]
 pub struct AttentionRow {
@@ -200,7 +200,7 @@ pub struct AttentionRow {
     pub size_mib: Option<f64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/types/bindings/")]
 #[serde(rename_all = "camelCase")]
 pub struct ImportReport {
@@ -209,6 +209,23 @@ pub struct ImportReport {
     pub history_states: u32,
     pub skipped_duplicates: u32,
     pub needs_attention: Vec<AttentionRow>,
+}
+
+/// What an import would bring over, counted before anything is written (FR-023). `warnings` are
+/// the kinds of [`AttentionKind`] that occur, as their snake_case names; the window gives each a
+/// text. Never a value of a secret.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings/")]
+#[serde(rename_all = "camelCase")]
+pub struct ImportPreview {
+    pub entries: u32,
+    pub groups: u32,
+    pub trashed_entries: u32,
+    pub history_states: u32,
+    pub attachments: u32,
+    pub passkeys: u32,
+    pub duplicates: u32,
+    pub warnings: Vec<String>,
 }
 
 /// A custom field to create.

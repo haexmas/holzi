@@ -30,6 +30,7 @@ mod groups_tests;
 pub mod ids;
 #[cfg(test)]
 mod ids_tests;
+pub mod import;
 pub mod items;
 #[cfg(test)]
 mod items_tests;

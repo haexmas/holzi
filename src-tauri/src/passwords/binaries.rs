@@ -119,6 +119,21 @@ pub fn add_bytes(
         return Err(HolziError::PasswordsNotFound);
     }
     let hash = hash_bytes(data);
+    ensure_binary(tx, &hash, data, "attachment")?;
+    let view = link_attachment(tx, item_id, file_name, &hash, size)?;
+    snapshots::take_snapshot(tx, item_id)?;
+    Ok(view)
+}
+
+/// Makes sure the binary row of `hash` exists: a known one just ends its grace period, a new one is
+/// inserted with the given type (`attachment` or `icon`). Returns whether a row was inserted, so a
+/// caller that may have to undo its work knows what it created.
+pub fn ensure_binary(
+    tx: &mut CrdtTransaction<'_>,
+    hash: &str,
+    data: &[u8],
+    kind: &str,
+) -> Result<bool> {
     let known = tx
         .query_row(
             "SELECT COUNT(*) FROM haex_passwords_binaries WHERE hash = ?1",
@@ -128,14 +143,25 @@ pub fn add_bytes(
         .unwrap_or(0)
         > 0;
     if known {
-        clear_orphan_mark(tx, &hash)?;
-    } else {
-        tx.execute(
-            "INSERT INTO haex_passwords_binaries (hash, data, size, type, created_at) \
-             VALUES (?1, ?2, ?3, 'attachment', ?4)",
-            params![hash, data, size as i64, clock::now()],
-        )?;
+        clear_orphan_mark(tx, hash)?;
+        return Ok(false);
     }
+    tx.execute(
+        "INSERT INTO haex_passwords_binaries (hash, data, size, type, created_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![hash, data, data.len() as i64, kind, clock::now()],
+    )?;
+    Ok(true)
+}
+
+/// Links an entry to a binary under a (sanitised) file name, without a history state.
+pub fn link_attachment(
+    tx: &mut CrdtTransaction<'_>,
+    item_id: &str,
+    file_name: &str,
+    hash: &str,
+    size: u64,
+) -> Result<AttachmentView> {
     let name = sanitize_file_name(file_name);
     let id = Uuid::new_v4().to_string();
     tx.execute(
@@ -143,12 +169,11 @@ pub fn add_bytes(
          VALUES (?1, ?2, ?3, ?4)",
         params![id, item_id, hash, name],
     )?;
-    snapshots::take_snapshot(tx, item_id)?;
     Ok(AttachmentView {
         id,
         file_name: name,
         size,
-        binary_hash: hash,
+        binary_hash: hash.to_string(),
     })
 }
 

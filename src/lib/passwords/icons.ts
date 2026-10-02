@@ -31,6 +31,72 @@ export const ENTRY_ICONS = [
   'lucide:graduation-cap',
 ] as const
 
+/** The pictures the import maps the KeePass standard icons to (`import/icons.rs`). They are not in
+ * the picker, but an entry may hold them, so they are literals here for the icon scan. */
+export const IMPORT_ICONS = [
+  'lucide:apple',
+  'lucide:award',
+  'lucide:banknote',
+  'lucide:bluetooth',
+  'lucide:book-open',
+  'lucide:calculator',
+  'lucide:camera',
+  'lucide:circle-check',
+  'lucide:clipboard',
+  'lucide:clipboard-check',
+  'lucide:contact',
+  'lucide:feather',
+  'lucide:file-archive',
+  'lucide:file-check',
+  'lucide:file-lock',
+  'lucide:file-pen',
+  'lucide:file-plus',
+  'lucide:files',
+  'lucide:folder',
+  'lucide:folder-archive',
+  'lucide:folder-check',
+  'lucide:folder-open',
+  'lucide:globe',
+  'lucide:hard-drive',
+  'lucide:house',
+  'lucide:id-card',
+  'lucide:image',
+  'lucide:key',
+  'lucide:key-round',
+  'lucide:key-square',
+  'lucide:list',
+  'lucide:lock-open',
+  'lucide:mail',
+  'lucide:mailbox',
+  'lucide:message-circle',
+  'lucide:monitor',
+  'lucide:network',
+  'lucide:nfc',
+  'lucide:notebook',
+  'lucide:notebook-text',
+  'lucide:package',
+  'lucide:pen',
+  'lucide:plug',
+  'lucide:printer',
+  'lucide:puzzle',
+  'lucide:scan',
+  'lucide:screen-share',
+  'lucide:server',
+  'lucide:settings',
+  'lucide:shield',
+  'lucide:smartphone',
+  'lucide:star',
+  'lucide:tablet',
+  'lucide:terminal',
+  'lucide:timer',
+  'lucide:triangle-alert',
+  'lucide:user-key',
+  'lucide:wallet',
+  'lucide:wifi',
+  'lucide:wrench',
+  'lucide:zap',
+] as const
+
 /** Shown when an entry has no icon or an unknown one. */
 export const DEFAULT_ENTRY_ICON = 'lucide:key-round'
 
@@ -50,6 +116,7 @@ export const ENTRY_COLORS = [
 export function isKnownIcon(name: string | null | undefined): boolean {
   return (
     typeof name === 'string' &&
-    (ENTRY_ICONS as readonly string[]).includes(name)
+    ((ENTRY_ICONS as readonly string[]).includes(name) ||
+      (IMPORT_ICONS as readonly string[]).includes(name))
   )
 }

@@ -68,6 +68,10 @@ use passwords::commands::history::{
     passwords_history_get, passwords_history_list, passwords_history_restore,
     passwords_history_reveal,
 };
+use passwords::commands::import::{
+    passwords_icon_preview, passwords_import_cancel, passwords_import_preview,
+    passwords_import_report_save, passwords_import_run,
+};
 use passwords::commands::items::{passwords_create_item, passwords_update_item};
 use passwords::commands::organize::{
     passwords_create_group, passwords_delete_tag, passwords_move, passwords_rename_tag,
@@ -316,6 +320,11 @@ pub fn run() {
             passwords_attachment_remove,
             passwords_attachment_save,
             passwords_attachment_preview,
+            passwords_import_preview,
+            passwords_import_run,
+            passwords_import_cancel,
+            passwords_import_report_save,
+            passwords_icon_preview,
         ]))
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

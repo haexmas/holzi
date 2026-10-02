@@ -1,6 +1,6 @@
 //! Tests for the time stamps of the password manager (spec 034).
 
-use super::clock::{format_millis, now, now_after, parse_millis};
+use super::clock::{format_millis, now, now_after, parse_iso_millis, parse_millis};
 
 #[test]
 fn formats_known_instants() {
@@ -41,4 +41,48 @@ fn now_after_never_returns_the_previous_token() {
     assert_eq!(parse_millis(&next), Some(32_503_680_000_001));
     assert!(now_after(None) > format_millis(1_700_000_000_000));
     assert!(now_after(Some("not a time")) > format_millis(1_700_000_000_000));
+}
+
+#[test]
+fn reads_the_iso_forms_of_other_products() {
+    assert_eq!(parse_iso_millis("1970-01-01T00:00:00Z"), Some(0));
+    assert_eq!(
+        parse_iso_millis("2005-03-18T01:58:29.123Z"),
+        Some(1_111_111_109_123)
+    );
+    // A fraction of any length keeps the first three digits.
+    assert_eq!(
+        parse_iso_millis("2005-03-18T01:58:29.1234567Z"),
+        Some(1_111_111_109_123)
+    );
+    assert_eq!(
+        parse_iso_millis("2005-03-18T01:58:29.5Z"),
+        Some(1_111_111_109_500)
+    );
+    // An offset is taken off; no zone reads as UTC; a space may stand for the T.
+    assert_eq!(
+        parse_iso_millis("2005-03-18T03:58:29+02:00"),
+        Some(1_111_111_109_000)
+    );
+    assert_eq!(
+        parse_iso_millis("2005-03-17T20:58:29-0500"),
+        Some(1_111_111_109_000)
+    );
+    assert_eq!(
+        parse_iso_millis("2005-03-18 01:58:29"),
+        Some(1_111_111_109_000)
+    );
+}
+
+#[test]
+fn refuses_what_is_not_a_time() {
+    for text in [
+        "",
+        "yesterday",
+        "2005-13-01T00:00:00Z",
+        "2005-03-18",
+        "2005-03-18T25:00:00Z",
+    ] {
+        assert_eq!(parse_iso_millis(text), None, "{text}");
+    }
 }

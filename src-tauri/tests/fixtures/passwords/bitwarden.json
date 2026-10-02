@@ -1,0 +1,273 @@
+{
+  "encrypted": false,
+  "folders": [
+    {
+      "id": "f-work",
+      "name": "Work"
+    },
+    {
+      "id": "f-email",
+      "name": "Work/Email"
+    }
+  ],
+  "collections": [
+    {
+      "id": "col-1",
+      "name": "Team",
+      "organizationId": "org-1"
+    }
+  ],
+  "items": [
+    {
+      "id": "00000000-0000-0000-0000-000000000001",
+      "organizationId": null,
+      "folderId": "f-email",
+      "type": 1,
+      "reprompt": 1,
+      "name": "Mail",
+      "notes": "line one\nline two",
+      "favorite": true,
+      "collectionIds": null,
+      "revisionDate": "2024-03-02T10:00:00.000Z",
+      "creationDate": "2024-01-05T08:30:00.000Z",
+      "deletedDate": null,
+      "login": {
+        "username": "alice@example.invalid",
+        "password": "SECRET-MARKER-IMPORT-mail",
+        "totp": "JBSWY3DPEHPK3PXP",
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://mail.example.invalid"
+          },
+          {
+            "match": 1,
+            "uri": "https://alt.example.invalid"
+          },
+          {
+            "match": null,
+            "uri": "https://third.example.invalid"
+          }
+        ],
+        "passwordRevisionDate": "2024-02-01T00:00:00.000Z"
+      },
+      "fields": [
+        {
+          "name": "Security question",
+          "value": "first pet",
+          "type": 0,
+          "linkedId": null
+        },
+        {
+          "name": "PIN",
+          "value": "SECRET-MARKER-IMPORT-pin",
+          "type": 1,
+          "linkedId": null
+        },
+        {
+          "name": "Newsletter",
+          "value": "true",
+          "type": 2,
+          "linkedId": null
+        },
+        {
+          "name": "Linked user",
+          "value": null,
+          "type": 3,
+          "linkedId": 100
+        }
+      ],
+      "passwordHistory": [
+        {
+          "lastUsedDate": "2023-06-01T09:00:00.000Z",
+          "password": "SECRET-MARKER-IMPORT-old1"
+        },
+        {
+          "lastUsedDate": "2023-12-01T09:00:00.000Z",
+          "password": "SECRET-MARKER-IMPORT-old2"
+        }
+      ]
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000002",
+      "organizationId": null,
+      "folderId": null,
+      "type": 1,
+      "reprompt": 0,
+      "name": "Broken TOTP",
+      "notes": null,
+      "favorite": false,
+      "collectionIds": null,
+      "revisionDate": "2024-03-02T10:00:00.000Z",
+      "creationDate": "2024-01-05T08:30:00.000Z",
+      "deletedDate": null,
+      "login": {
+        "username": "bob",
+        "password": "pw",
+        "totp": "not a secret!",
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://totp.example.invalid"
+          }
+        ]
+      }
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000003",
+      "organizationId": null,
+      "folderId": null,
+      "type": 2,
+      "reprompt": 0,
+      "name": "Wifi note",
+      "notes": "SSID: home\nkey inside",
+      "favorite": false,
+      "collectionIds": null,
+      "revisionDate": "2024-03-02T10:00:00.000Z",
+      "creationDate": "2024-01-05T08:30:00.000Z",
+      "deletedDate": null,
+      "secureNote": {
+        "type": 0
+      }
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000004",
+      "organizationId": null,
+      "folderId": null,
+      "type": 3,
+      "reprompt": 0,
+      "name": "Visa",
+      "notes": null,
+      "favorite": false,
+      "collectionIds": null,
+      "revisionDate": "2024-03-02T10:00:00.000Z",
+      "creationDate": "2024-01-05T08:30:00.000Z",
+      "deletedDate": null,
+      "card": {
+        "cardholderName": "A. Example",
+        "brand": "Visa",
+        "number": "4111111111111111",
+        "expMonth": "12",
+        "expYear": "2030",
+        "code": "123"
+      }
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000005",
+      "organizationId": null,
+      "folderId": null,
+      "type": 4,
+      "reprompt": 0,
+      "name": "Me",
+      "notes": null,
+      "favorite": false,
+      "collectionIds": null,
+      "revisionDate": "2024-03-02T10:00:00.000Z",
+      "creationDate": "2024-01-05T08:30:00.000Z",
+      "deletedDate": null,
+      "identity": {
+        "title": "Dr",
+        "firstName": "Alice",
+        "middleName": null,
+        "lastName": "Example",
+        "address1": "1 Test Way",
+        "address2": null,
+        "address3": null,
+        "city": "Testville",
+        "state": "TS",
+        "postalCode": "12345",
+        "country": "DE",
+        "company": "Example Ltd",
+        "email": "alice@example.invalid",
+        "phone": "555-0100",
+        "ssn": "SSN-SECRET-MARKER-IMPORT",
+        "username": "alice",
+        "passportNumber": "P-SECRET-MARKER-IMPORT",
+        "licenseNumber": "L-SECRET-MARKER-IMPORT"
+      }
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000006",
+      "organizationId": null,
+      "folderId": null,
+      "type": 5,
+      "reprompt": 0,
+      "name": "Deploy key",
+      "notes": null,
+      "favorite": false,
+      "collectionIds": null,
+      "revisionDate": "2024-03-02T10:00:00.000Z",
+      "creationDate": "2024-01-05T08:30:00.000Z",
+      "deletedDate": null,
+      "sshKey": {
+        "privateKey": "-----BEGIN-FAKE-----SECRET-MARKER-IMPORT",
+        "publicKey": "ssh-ed25519 AAAAFAKE",
+        "keyFingerprint": "SHA256:fake"
+      }
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000007",
+      "organizationId": null,
+      "folderId": null,
+      "type": 99,
+      "reprompt": 0,
+      "name": "Future thing",
+      "notes": null,
+      "favorite": false,
+      "collectionIds": null,
+      "revisionDate": "2024-03-02T10:00:00.000Z",
+      "creationDate": "2024-01-05T08:30:00.000Z",
+      "deletedDate": null,
+      "newThing": {
+        "a": 1,
+        "b": "two"
+      },
+      "another": "value"
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000008",
+      "organizationId": null,
+      "folderId": "f-work",
+      "type": 1,
+      "reprompt": 0,
+      "name": "Deleted login",
+      "notes": null,
+      "favorite": false,
+      "collectionIds": null,
+      "revisionDate": "2024-03-02T10:00:00.000Z",
+      "creationDate": "2024-01-05T08:30:00.000Z",
+      "deletedDate": "2024-04-01T12:00:00.000Z",
+      "login": {
+        "username": "gone",
+        "password": "pw2",
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://deleted.example.invalid"
+          }
+        ]
+      }
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000009",
+      "organizationId": "org-1",
+      "folderId": null,
+      "type": 1,
+      "reprompt": 0,
+      "name": "Shared",
+      "notes": null,
+      "favorite": false,
+      "collectionIds": [
+        "col-1"
+      ],
+      "revisionDate": "2024-03-02T10:00:00.000Z",
+      "creationDate": "2024-01-05T08:30:00.000Z",
+      "deletedDate": null,
+      "login": {
+        "username": "team",
+        "password": "pw3",
+        "uris": []
+      }
+    }
+  ]
+}

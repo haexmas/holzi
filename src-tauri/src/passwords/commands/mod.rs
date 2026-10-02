@@ -6,6 +6,7 @@
 pub mod agent;
 pub mod attachments;
 pub mod history;
+pub mod import;
 pub mod items;
 pub mod organize;
 pub mod passkeys;

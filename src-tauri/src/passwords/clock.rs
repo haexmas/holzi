@@ -79,6 +79,55 @@ pub fn parse_millis(text: &str) -> Option<i64> {
     Some(((days * 24 + hour) * 60 + minute) * 60_000 + second * 1000 + ms)
 }
 
+/// Milliseconds since the epoch for an ISO 8601 time as the exporters of other products write it:
+/// `2024-01-05T10:20:30Z`, with a fraction of any length (`.1234567`) and with `Z`, an offset
+/// (`+02:00`, `+0200`) or none (read as UTC); a space may stand for the `T`. `None` for anything else.
+pub fn parse_iso_millis(text: &str) -> Option<i64> {
+    let text = text.trim();
+    let (date, rest) = text.split_once(['T', ' '])?;
+    let mut date_parts = date.split('-');
+    let year = date_parts.next()?.parse::<i64>().ok()?;
+    let month = date_parts.next()?.parse::<i64>().ok()?;
+    let day = date_parts.next()?.parse::<i64>().ok()?;
+    if date_parts.next().is_some() || !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+    let zone_at = rest.find(['Z', 'z', '+', '-']).unwrap_or(rest.len());
+    let (clock, zone) = rest.split_at(zone_at);
+    let (hms, fraction) = clock.split_once('.').unwrap_or((clock, ""));
+    let mut time_parts = hms.split(':');
+    let hour = time_parts.next()?.parse::<i64>().ok()?;
+    let minute = time_parts.next()?.parse::<i64>().ok()?;
+    let second = time_parts
+        .next()
+        .map_or(Some(0), |p| p.parse::<i64>().ok())?;
+    if time_parts.next().is_some() || hour > 23 || minute > 59 || second > 60 {
+        return None;
+    }
+    let ms = if fraction.is_empty() {
+        0
+    } else if fraction.bytes().all(|b| b.is_ascii_digit()) {
+        format!("{:0<3}", &fraction[..fraction.len().min(3)])
+            .parse::<i64>()
+            .ok()?
+    } else {
+        return None;
+    };
+    let offset_minutes = match zone {
+        "" | "Z" | "z" => 0,
+        z => {
+            let sign = if z.starts_with('-') { -1 } else { 1 };
+            let digits: String = z[1..].chars().filter(char::is_ascii_digit).collect();
+            if digits.len() != 4 {
+                return None;
+            }
+            sign * (digits[..2].parse::<i64>().ok()? * 60 + digits[2..].parse::<i64>().ok()?)
+        }
+    };
+    let days = days_from_civil(year, month, day);
+    Some(((days * 24 + hour) * 60 + minute) * 60_000 + second * 1000 + ms - offset_minutes * 60_000)
+}
+
 /// Calendar date to days since 1970-01-01 (the inverse of `civil_from_days`).
 fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
     let y = if month <= 2 { year - 1 } else { year };

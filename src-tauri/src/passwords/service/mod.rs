@@ -21,6 +21,7 @@ use super::usage::UsageRegistry;
 
 mod attachments;
 mod history;
+pub mod import;
 mod items;
 mod organize;
 mod passkeys;
