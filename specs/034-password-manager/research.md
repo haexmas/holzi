@@ -176,10 +176,19 @@ unabhängig von einer ungeprüften Annahme über die Kaskade.
   auf `binaries.hash` sind `ON DELETE RESTRICT` (haex-vault: `CASCADE`). Lokal kann so keine
   Binärzeile gelöscht werden, die noch einer braucht.
 - **Aufräumen** (`prune_binaries`) löscht nur Binärzeilen ohne Verweis, die älter als **sieben
-  Tage** sind (`created_at`); es läuft einmal beim Öffnen der Vault (Hook neben
+  Tage** sind (`created_at`). Ein Verweis ist bei Anhängen eine Zeile in `item_binaries` oder
+  `snapshot_binaries`. Eigene Symbole (`type = 'icon'`) haben keine solche Zeile, sie hängen am
+  Text `binary:<hash>` in `item_details.icon`, `groups.icon`, `passkeys.icon` oder im JSON eines
+  Verlaufsstands (`snapshot_data`); solange eine dieser Stellen den Hash nennt, ist die Zeile
+  benutzt und bleibt, sonst würden importierte Symbole nach sieben Tagen verschwinden. Ein Symbol,
+  das nichts mehr nennt (Eintrag endgültig gelöscht), fällt nach der Karenzzeit weg. Es läuft einmal beim Öffnen der Vault (Hook neben
   `vault_events::start_for_active_instance`, `instances/open.rs:143`), nicht nach jedem
   Löschen. Endgültig gelöschte Anhänge belegen also noch bis zu sieben Tage Platz.
 - Importierte Anhänge über dem Limit werden übersprungen und im Bericht genannt.
+
+**ponytail** (Symbole): die Suche nach dem Hash im JSON der Verlaufsstände ist ein Textvergleich
+über alle Stände (Obergrenze: Zehntausende Stände beim Öffnen; Aufrüstweg: eine Verweistabelle
+für Symbole).
 
 **Begründung**: Pfad-basierte Übergabe vermeidet den teuersten Fehler (Speicher und IPC);
 die Karenzzeit schließt den Wettlauf, ohne einen Sync-Eingriff zu verlangen.
@@ -248,8 +257,14 @@ Oberfläche (FR-024). Wichtig:
   holzi-Funktionen rufen ihn aus Rust mit `Caller::Internal{…}` und fest einkompilierter
   Freigabe. Erweiterungen und externe Agenten bekommen mit 017–019 und 021 eigene Eingänge.
 - Rechte: `User` darf alles ohne Freigabe (FR-031). `BuiltinAgent` bekommt nie Geheimnisse
-  und nie eine Freigabe (FR-027): nur `list_headers_for_agent` ist erlaubt. Alle anderen
+  und nie eine Freigabe (FR-027): nur `list_headers` mit dem Ergebnis `AgentHeader` ist erlaubt. Alle anderen
   Aufrufer folgen den Regeln aus FR-025 bis FR-029.
+- **Papierkorb (Z13)**: Einträge im Papierkorb sind für jeden Aufrufer außer `User` nicht
+  vorhanden: Lesen, Ändern und Löschen sind `NotFound`. Grund: `trash` auf ein Ziel, das schon im
+  Papierkorb liegt, ist `delete_permanently` (R3, für `User`); ohne diese Regel könnte ein zweites
+  „Löschen“ durch eine Erweiterung, einen Agenten oder eine holzi-Funktion einen Eintrag endgültig
+  entfernen und FR-015 verletzen. `delete_item` der Aufrufer ruft deshalb nur `trash` für Einträge
+  außerhalb des Papierkorbs.
 - Fehler: eine fehlende **Art** (Lesen gegeben, Schreiben verlangt) ist `Forbidden`; ein
   Eintrag **außerhalb des Bereichs** ist `NotFound` wie ein nicht vorhandener (FR-029).
 - Beim Schreiben im Bereich `Tags` darf die gesendete Tagliste nur Tags des Bereichs enthalten
@@ -429,7 +444,8 @@ Zuordnungen je Format stehen in [contracts/import-mapping.md](./contracts/import
    Rest des Eintrags wird übernommen und die Stelle kommt in den Bericht.
 4. **Bericht** (`ImportReport`): Zahlen und eine Liste `needsAttention` mit Eintragstitel,
    Ordnerpfad, Art der Stelle (`attachment_too_large`, `passkey_key_unreadable`,
-   `passkey_public_key_missing`, `totp_invalid`, `value_not_storable`, `source_setting`, …),
+   `passkey_public_key_missing`, `passkey_duplicate`, `totp_invalid`, `value_not_storable`,
+   `source_setting`, …),
    Feldname beziehungsweise Dateiname und Größe, aber **nie ein Wert eines Geheimnisses**. Die
    Oberfläche zeigt die Liste und bietet an, sie als Textdatei zu speichern.
 5. **Formate**: KeePass-`kdbx` (Passwort, optional Schlüsseldatei) über das Crate `keepass`;
@@ -437,7 +453,9 @@ Zuordnungen je Format stehen in [contracts/import-mapping.md](./contracts/import
 { reason: "encrypted_export" }`, weil ohne dessen Kennwort nichts lesbar ist) und CSV; LastPass
    CSV, beide mit `csv` (RFC 4180, Zeilenumbrüche in Feldern).
 6. **Papierkorb und Verlauf**: KeePass-Papierkorb und Bitwarden-Einträge mit `deletedDate` landen
-   als Inhalt in unserem Papierkorb (ohne Herkunft, Wiederherstellen legt sie an die Wurzel);
+   als Inhalt in unserem Papierkorb; nennt die Quelle den früheren Ordner (Bitwarden `folderId`,
+   KeePass 4.1 `PreviousParentGroup`), wird er als `trashed_from_group_id` gemerkt, sonst
+   legt Wiederherstellen sie an die Wurzel;
    KeePass-Verlauf und Bitwarden-`passwordHistory` werden Verlaufsstände mit den Zeitpunkten
    der Quelle.
 7. **Symbole**: KeePass-Standardsymbole (0–68) werden über eine Tabelle zu Symbolnamen von
@@ -458,7 +476,9 @@ Zuordnungen je Format stehen in [contracts/import-mapping.md](./contracts/import
    Laufzeit im Test, nie als Datei im Repository (Constitution I). Die Kodierungen der Felder
    (Base64 oder Base64url bei Credential-ID und Benutzerkennung, UUID-Form der
    Bitwarden-Credential-ID) und die Kodierung in haex-vault prüft Aufgabe T003, damit gespeicherte
-   Passkeys zwischen beiden Produkten lesbar bleiben. **Warum nicht wie in haex-vault**: haex-vault
+   Passkeys zwischen beiden Produkten lesbar bleiben. Ein Passkey, dessen Credential-ID in der Vault
+   schon vorkommt (gleiche abgeleitete Kennung), wird nicht doppelt angelegt und nicht still
+   übersprungen: der Bericht nennt ihn (Art `passkey_duplicate`). **Warum nicht wie in haex-vault**: haex-vault
    importiert keine Passkeys; es erzeugt sie selbst (`generatePasskeyPairAsync`, ES256) und hat
    deshalb beide Schlüssel.
 9. **Ungültiges TOTP** wird wie es ist als `otp_secret` übernommen (bei einer `otpauth://`-Adresse
@@ -486,6 +506,11 @@ im Frontend, Parser liefert `ImportModel` als JSON an einen Rust-Command `apply_
   Betreiber will die Ablehnung mit klarer Meldung (Klärung).
 - _Import im Frontend wie haex-vault_ (kein Rückgängigmachen, Passwörter und Anhänge durchlaufen
   den Webview, doppelte Parser für Test und Betrieb), _Import je Format als eigene App_.
+
+**Bewusste Grenze**: Das Modell hält alle Anhänge der Quelle im Speicher (je Anhang höchstens
+25 MiB, die größeren werden vor dem Lesen aussortiert, aber die Summe ist nicht begrenzt); bei
+einer sehr großen KDBX-Datei steigt der Speicherbedarf mit ihrer Größe (Aufrüstweg: Anhänge beim
+Schreiben nachladen).
 
 **ponytail**: Das Verzeichnis der angelegten Zeilen liegt nur im Speicher; ein Absturz mitten im
 Import hinterlässt Teile (Erkennung von Doppelten hilft beim erneuten Lauf). Aufrüstweg: eine
@@ -586,8 +611,11 @@ Millisekunde würden nicht erkannt. Aufrüstweg: HLC der Zeile als Token.
   `-routes.ts` mit Sitzungs-Stichprobe, `-actions.ts`), Regression `check:agent-actions`,
   `check:wm-navigation`, `check:templates`, `typecheck`, `lint`, `format:check`.
 - Eine End-to-End-Szene `scripts/e2e/scenarios/passwords-basic.test.ts` (anlegen, suchen,
-  TOTP-Code, Papierkorb) und eine Sync-Szene mit zwei Geräten (Tag und Löschen) nach
-  `sync-two-devices.test.ts`.
+  TOTP-Code, Papierkorb), eine Sync-Szene mit zwei Geräten (Tag und Löschen) nach
+  `sync-two-devices.test.ts`, eine Szene für das schmale Fenster und eine für die
+  Sitzungswiederherstellung (SC-012). Ordnen, Verlauf, Generator, Anhänge und Import prüfen
+  Integrationstests und die manuellen Schritte des Quickstarts; Anhänge und Import gehen über
+  Dateidialoge des Systems und sind nicht Teil der End-to-End-Szenen.
 - CI: `check:passwords` neben den anderen `check:*`; die Rust-Konfigurationen
   (Standard und `--no-default-features`) bauen alle neuen Crates in beiden.
 
@@ -654,6 +682,13 @@ Die folgenden Punkte stehen jetzt in der Spec (eigener Commit, mit Begründung h
 17. **FR-033/034**: keine reservierten Tags; holzi-Funktionen melden ihre genutzten Einträge
     (`EntryUsage`).
 18. **FR-001**: Der Titel darf leer sein; die Oberfläche zeigt „(ohne Titel)“.
+19. **FR-015**, **FR-028**, **US6 Szenario 9** (zweite Analyse): Einträge im Papierkorb sind für
+    Aufrufer von außen nicht vorhanden (Z13, R6).
+20. **FR-022**, **US4 Szenario 3**, **US5 Szenario 2 und 6**: benutzte Symbole bleiben beim
+    Aufräumen, entfernte Anhänge geben den Platz nach höchstens sieben Tagen frei (R4).
+21. **FR-023**, Edge Case „gleiche Credential-ID“: Ein nicht angelegter doppelter Passkey steht im
+    Bericht (R12).
+22. **SC-012**: nennt die End-to-End-Abläufe aus dem Quickstart statt „jedes Szenario“ (R16).
 
 **Entscheidungen, die der Betreiber bestätigen sollte** (im Bericht an ihn genannt):
 PDF-Vorschau entfällt (R18); der eingebaute Agent sieht nur Titel und Tags (R6, R14);

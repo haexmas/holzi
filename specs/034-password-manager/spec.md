@@ -99,6 +99,10 @@ ausdrücklich nicht Teil dieser Spec. Referenz: haex-vault @
   abgelehnt, aber im Bericht genannt; Fehler im Import stehen im Bericht, damit der Nutzer von
   Hand nacharbeiten kann. Der Import schreibt in mehreren Schritten und macht bei einem
   Gesamtfehler oder Abbruch alles rückgängig (Option A).
+- Q: (Analyse 2) Was dürfen Aufrufer von außen mit Einträgen im Papierkorb tun? → A: Nichts, sie
+  sind für sie nicht vorhanden; sonst könnte ein zweites „Löschen“ endgültig entfernen. Benutzte
+  eigene Symbole aus dem Import zählen beim Aufräumen als benutzt; ein Passkey mit schon vorhandener
+  Credential-ID steht im Importbericht.
 - Q: (Analyse) Wie hart sind Zeitvorgaben? → A: Grobe Zielgrenzen genügen; es gibt keine
   Messaufgaben für Zeiten.
 - Q: Soll das Datenmodell von haex-vault 1:1 übernommen werden? → A: Ja, Tabellen- und
@@ -231,7 +235,8 @@ endgültig entfernen.
    mehr existiert.
 3. **Given** ein Eintrag im Papierkorb, **When** der Nutzer ihn endgültig löscht (einzeln
    oder „Papierkorb leeren“ nach Bestätigung), **Then** sind Eintrag, Verlauf, Passkeys,
-   Verknüpfungen und nur noch von ihm genutzte Anhänge entfernt.
+   Verknüpfungen entfernt; nur noch von ihm genutzte Anhänge und Symbole sind danach nicht mehr
+   erreichbar und geben ihren Platz nach höchstens sieben Tagen frei (US5, Szenario 6).
 4. **Given** ein Eintrag, **When** der Nutzer eine Änderung speichert, **Then** gibt es einen
    neuen Eintrag im Verlauf mit Zeitpunkt und dem neuen Stand samt Anhängen, und der Stand
    davor bleibt als früherer Eintrag erhalten.
@@ -262,8 +267,8 @@ Binärdaten gespeichert ist; Datei herunterladen und byteweise mit dem Original 
 1. **Given** ein Eintrag, **When** der Nutzer eine Datei hinzufügt, **Then** zeigt der Eintrag
    Name und Größe, und der Download liefert byteweise die Originaldatei.
 2. **Given** dieselbe Datei an zwei Einträgen, **When** der Nutzer sie von einem entfernt,
-   **Then** bleibt sie am anderen erhalten; entfernt er sie auch dort, werden die Binärdaten
-   gelöscht.
+   **Then** bleibt sie am anderen erhalten; entfernt er sie auch dort, ist sie nicht mehr erreichbar, und
+   ihre Binärdaten geben den Platz nach höchstens sieben Tagen frei (Szenario 6).
 3. **Given** eine Datei über dem Größenlimit, **When** der Nutzer sie hinzufügen will,
    **Then** lehnt holzi sie mit einer verständlichen Meldung ab und ändert den Eintrag nicht.
 4. **Given** ein Bild, **When** der Nutzer den Anhang öffnet, **Then** sieht er eine Vorschau in
@@ -271,7 +276,7 @@ Binärdaten gespeichert ist; Datei herunterladen und byteweise mit dem Original 
 5. **Given** ein Anhang, **When** der Nutzer ihn umbenennt, **Then** ändert sich nur der Name
    an diesem Eintrag.
 6. **Given** nicht mehr referenzierte Binärdaten, die älter als sieben Tage sind (etwa nach
-   einer Sync-Zusammenführung), **When** holzi die Vault öffnet, **Then** werden sie entfernt;
+   einer Sync-Zusammenführung oder nach dem Entfernen des letzten Anhangs), **When** holzi die Vault öffnet, **Then** werden sie entfernt;
    jüngere bleiben, damit ein noch nicht eingetroffener Verweis eines anderen Geräts nicht ins
    Leere läuft.
 
@@ -317,6 +322,10 @@ anfordern (abgelehnt) und einen Eintrag schreiben wollen (abgelehnt).
 8. **Given** eine holzi-Funktion, die einen Eintrag selbst angelegt hat (029), **When** der
    Nutzer ihn im Passwortmanager öffnet, **Then** sieht er ihn wie jeden anderen Eintrag und
    kann ihn ändern oder löschen.
+9. **Given** ein Eintrag im Papierkorb, der noch ein Tag aus dem Bereich einer Freigabe trägt,
+   **When** der Aufrufer ihn liest, ändert oder löscht, **Then** wird er abgelehnt wie bei einem
+   nicht vorhandenen Eintrag, und der Eintrag bleibt unverändert im Papierkorb; er wird durch
+   keinen Aufruf von außen endgültig entfernt.
 
 ---
 
@@ -425,7 +434,7 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
 - **Der Nutzer legt zwei Tags mit gleichem Namen an** oder benennt ein Tag um in einen
   bestehenden Namen. holzi verhindert die Doppelung.
 - **Ein importierter Passkey hat dieselbe Credential-ID wie ein vorhandener.** holzi legt ihn
-  nicht doppelt an.
+  nicht doppelt an, überspringt ihn nicht still, sondern nennt ihn im Bericht.
 - **Die Vault ist groß** (mehrere tausend Einträge). Liste und Suche bleiben benutzbar.
 - **Zwei Fenster des Passwortmanagers sind offen** (Spec 030). Eine Änderung im einen
   erscheint ohne Zutun im anderen; ein Eintrag, der in beiden bearbeitet wird, überschreibt
@@ -509,6 +518,8 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
   leeren“ MUSS eine Bestätigung verlangen. Das gilt für **jeden** Aufrufer: Löschen durch eine
   holzi-Funktion, Erweiterung oder einen Agenten verschiebt ebenfalls nur in den Papierkorb;
   endgültig entfernt ein Eintrag nur dadurch, dass der Nutzer ihn **im Papierkorb** löscht.
+  Einträge im Papierkorb sind für andere Aufrufer als den Nutzer nicht vorhanden (sie lesen,
+  ändern und löschen sie nicht); so führt ein Aufruf von außen nie zum endgültigen Löschen.
 - **FR-016**: Wiederherstellen aus dem Papierkorb MUSS den früheren Ort wiederherstellen,
   oder die Wurzel, wenn der Ordner nicht mehr existiert.
 - **FR-017**: Das System MUSS nach jeder Änderung eines Eintrags den neuen Zustand samt der
@@ -533,8 +544,9 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
 - **FR-021**: Das System MUSS Anhänge herunterladen (byteweise gleich dem Original), umbenennen
   und entfernen sowie Bilder in einer Vorschau zeigen; andere Dateien, auch PDFs, MÜSSEN sich
   herunterladen lassen. Dateinamen MÜSSEN als Text behandelt werden, nie als Pfad.
-- **FR-022**: Das System MUSS Binärdaten entfernen, die kein Eintrag und kein Verlaufsstand
-  mehr braucht und die älter als sieben Tage sind, beim Öffnen der Vault.
+- **FR-022**: Das System MUSS Binärdaten entfernen, die kein Eintrag, kein Ordner, kein Passkey und
+  kein Verlaufsstand mehr braucht (als Anhang oder als Symbol) und die älter als sieben Tage
+  sind, beim Öffnen der Vault; benutzte Symbole bleiben.
 
 **Import**
 
@@ -558,8 +570,8 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
   Der Import MUSS vorher eine Vorschau (Zahl der Einträge, Ordner, Anhänge, Verlaufsstände,
   Doppelte) zeigen und bei erkannten Doppelten fragen. Anhänge über dem Limit aus FR-020 MÜSSEN
   abgelehnt werden. Jeder Fehler und jede Auffälligkeit, die der Import nicht selbst auflöst
-  (abgelehnter Anhang mit Dateiname und Größe, unlesbarer Schlüssel, ein nicht speicherbarer
-  Wert), MUSS in einem Bericht stehen, der Eintrag, Ordnerpfad und das Fehlende nennt, damit der
+  (abgelehnter Anhang mit Dateiname und Größe, unlesbarer Schlüssel, ein Passkey, dessen
+  Credential-ID schon vorhanden ist, ein nicht speicherbarer Wert), MUSS in einem Bericht stehen, der Eintrag, Ordnerpfad und das Fehlende nennt, damit der
   Nutzer weiß, wo er nacharbeiten muss; der Bericht enthält keine Geheimnisse und lässt sich als
   Textdatei speichern. Der Import schreibt in mehreren Schritten (jeder Anhang für sich); ein
   Fehler, der den Import insgesamt stoppt, und ein Abbruch durch den Nutzer MÜSSEN alles wieder
@@ -705,8 +717,12 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
   die nicht verlustfrei ankam, steht im Bericht (0 stille Verluste), und ein abgebrochener Import
   hinterlässt 0 angelegte Einträge.
 - **SC-011**: Bei 360 px Breite sind alle Funktionen ohne waagerechtes Scrollen bedienbar.
-- **SC-012**: Jedes Quickstart-Szenario, das weder Netz noch ein zweites Gerät noch eine
-  Zeitmessung braucht, läuft als End-to-End-Test gegen die gebaute App und besteht.
+- **SC-012**: Die in der Quickstart-Anleitung (§12) benannten Abläufe laufen als
+  End-to-End-Test gegen die gebaute App und bestehen: Eintrag anlegen, suchen, TOTP-Code,
+  Papierkorb; Synchronisation auf zwei eigenen Geräten; schmales Fenster; Sitzungswiederherstellung
+  ohne Werte. Die übrigen Abläufe (Ordnen, Verlauf, Generator, Anhänge, Import) deckt die
+  Quickstart-Anleitung durch Integrationstests und manuelle Schritte ab; die Dateidialoge von
+  Anhängen und Import sind nicht Teil der End-to-End-Tests.
 
 ## Assumptions
 

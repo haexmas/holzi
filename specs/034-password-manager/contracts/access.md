@@ -67,6 +67,7 @@ Eintragskennung die Namen der nutzenden Funktionen liefert.
 | Z10 | Keine Antwort, kein Fehler, keine Protokollzeile enthält einen Wert eines Geheimnisses.                                                                                                                                                                                                                                                                                                                | FR-040         |
 | Z11 | Jede Methode außer `list_headers`, `read_secret_item`, `create_item`, `update_item` und `delete_item` ist für andere Aufrufer als `User` `Forbidden` (Ordner, Verschieben, Reihenfolge, Tags, Papierkorb, Verlauf, Anhänge, Passkeys, Voreinstellungen, Import), bis eine spätere Spec dafür eine Regel schreibt.                                                                                      | FR-024         |
 | Z12 | Ein Aufrufer sieht alle Tags eines Eintrags im Bereich (`list_headers`, `read_secret_item`), aber ein Tag außerhalb seines Bereichs bleibt bei seiner Änderung unverändert: er kann es nicht entfernen (ein Weglassen in der gesendeten Liste ändert nichts), nicht hinzufügen (ein neues Tag außerhalb des Bereichs in der gesendeten Liste ist `Forbidden`) und nicht umbenennen oder löschen (Z11). | FR-028         |
+| Z13 | Einträge im Papierkorb (`group_id` ist `trash` oder ein Nachfahre) sind für jeden Aufrufer außer `User` nicht vorhanden: `read_secret_item`, `update_item` und `delete_item` sind `NotFound`, nichts ändert sich. Grund: `trash` auf ein Ziel im Papierkorb ist `delete_permanently` und gehört zu Z11.                                                                                                | FR-015, FR-028 |
 
 ## Aufrufer und Eingang
 
@@ -86,10 +87,11 @@ Eingang ist.
 
 `access.rs` ist rein und wird in `access_tests.rs` ohne Datenbank und ohne Freigabespeicher
 geprüft: eine Tabelle aus Aufrufer, Freigaben, Methode, Eintrag-Tags und erwartetem Ergebnis
-deckt die Regeln Z1–Z9 und Z11–Z12 ab (mindestens: eine Freigabe `Read` für Tag `s3` liest ein
+deckt die Regeln Z1–Z9 und Z11–Z13 ab (mindestens: eine Freigabe `Read` für Tag `s3` liest ein
 `s3`-Eintrag, wird bei einem Eintrag ohne `s3` mit `NotFound` abgewiesen, wird beim
 Schreiben mit `Forbidden` abgewiesen; zwei Tags vereinigen sich; `All` deckt alles;
 `ReadWrite` deckt Lesen; `BuiltinAgent` mit einer beliebigen Freigabe bekommt nichts
-außer Kopfdaten). Die Dienst-Tests (`tests/passwords_access.rs`) prüfen dasselbe gegen die
+außer Kopfdaten; ein Eintrag im Papierkorb mit Tag im Bereich ist für `Read`, `ReadWrite` und `All`
+beim Lesen, Ändern und Löschen `NotFound` und bleibt unverändert, Z13). Die Dienst-Tests (`tests/passwords_access.rs`) prüfen dasselbe gegen die
 echte Datenbank, einschließlich „kein Geheimnis in der Liste“ durch Suche nach einem
 markierten Wert in der serialisierten Antwort.

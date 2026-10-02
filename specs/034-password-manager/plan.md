@@ -49,7 +49,7 @@ Technischer Ansatz (Begründungen und verworfene Alternativen in
 - **Oberfläche** (R10, R11, R13, R17): App `system.passwords`, Mehrfachinstanz, Orte im Tab nur
   mit Kennungen, Generator und Suche als reines TS unter `src/lib/passwords/` (Node-Tests),
   vorhandene Bausteine (`SettingsGroup`/`Row`, `WmRouterView`, `onVaultTablesChanged`).
-- **Neue Abhängigkeiten**: Rust `keepass`, `csv`, `sha1`, `p256`, `ed25519-dalek` und `pkcs1`
+- **Neue Abhängigkeiten**: Rust `keepass`, `csv`, `sha1`, `p256`, `ed25519-dalek`, `pkcs1` und `spki`
   (öffentlicher Schlüssel beim Passkey-Import), `tauri-plugin-clipboard-manager` und
   `unicode-normalization` (steht schon transitiv im `Cargo.lock`); Frontend keine. ADR-0007 hält „Geheimnisse unverschlüsselt in der Vault, Schutz durch
   Freigaben“ fest (R19).
@@ -64,8 +64,8 @@ optional); TypeScript 6 (strict), Vue 3.5, Nuxt 4.5.2 (SPA), Node 22.19 für die
 `thiserror`, `ts-rs`, `tauri-plugin-dialog`; Frontend: Pinia, `@nuxtjs/i18n`, `reka-ui`/haex-ui-Layer.
 **Neu (Rust)**: `keepass` (KDBX, Version und Features prüft T003), `csv` (RFC 4180; in
 `Cargo.lock` nur über `llm-cpu`, daher direkte Abhängigkeit), `sha1` (RustCrypto), `p256`
-(Features `pkcs8`, `pem`), `ed25519-dalek` (Feature `pkcs8`) und `pkcs1` (leiten den öffentlichen
-Passkey-Schlüssel für ES256, EdDSA und RS256 ab, R12),
+(Features `pkcs8`, `pem`), `ed25519-dalek` (Feature `pkcs8`), `pkcs1` und `spki` (leiten den
+öffentlichen Passkey-Schlüssel für ES256, EdDSA und RS256 ab, R12),
 `tauri-plugin-clipboard-manager` (nur Rust-API), `unicode-normalization` (NFC für Tag-Kennungen,
 R2; schon transitiv im Lock). Base32 wird selbst geschrieben (R8).
 
@@ -101,7 +101,7 @@ Schreibtransaktion unter 100 MiB (Anhänge einzeln); Tabellen- und Spaltennamen 
 Aufrufer nie als Command-Argument
 
 **Scale/Scope**: 12 Tabellen, rund 37 Commands, eine Aktion, rund 20 Rust-Module (dazu `service/`
-mit 10, `import/` mit 6 und `commands/` mit 11 Dateien), rund 35 Vue-Komponenten, 8 reine
+mit 10, `import/` mit 8 und `commands/` mit 11 Dateien), rund 35 Vue-Komponenten, 8 reine
 TS-Module, 8 Prüfskripte, 4 Rust-Integrationstests, 4 End-to-End-Szenen; Vorlage umfasst rund 12.000 Zeilen Vue/TS, von denen Logik und Struktur,
 nicht Code, übernommen werden
 
@@ -136,7 +136,7 @@ Geprüft gegen `.specify/memory/constitution.md` (v1.4.0) und die spaex-Constitu
 
 **Ergebnis vor Phase 0**: kein unbegründeter Verstoß; ein ⚠️ dokumentiert.
 
-**Ergebnis nach Phase 1**: unverändert. Das Design fügt vier Abhängigkeiten hinzu (Rust) und eine
+**Ergebnis nach Phase 1**: unverändert. Das Design fügt neun direkte Abhängigkeiten hinzu (Rust; einige schon transitiv im Lock) und eine
 Migration; beides begründet in research.md (R1, R8, R9, R12). Die Abweichungen vom Datenmodell von
 haex-vault sind in [data-model.md](./data-model.md) als A1–A5 gelistet. Die Spec wurde an sieben
 Stellen an die Planung angeglichen (R20).
@@ -153,7 +153,7 @@ specs/034-password-manager/
 ├── quickstart.md                  # Phase 1
 ├── contracts/
 │   ├── tauri-commands.md          # Commands, Fehlerarten
-│   └── access.md                  # Aufrufer, Freigaben, Regeln Z1–Z12
+│   └── access.md                  # Aufrufer, Freigaben, Regeln Z1–Z13
 ├── checklists/requirements.md
 └── tasks.md                       # Phase 2 (/speckit-tasks)
 ```
@@ -169,7 +169,7 @@ src-tauri/src/
 │   ├── mod.rs                     # Modulliste, Konstanten (Limit, Karenzzeit)      [neu]
 │   ├── ids.rs                     # Namensräume, abgeleitete Kennungen, fold        [neu]
 │   ├── model.rs                   # Zeilen-/Antworttypen (ts-rs), Debug geschwärzt  [neu]
-│   ├── access.rs                  # Caller, Grant, Scope, Regeln Z1–Z12 (rein)      [neu]
+│   ├── access.rs                  # Caller, Grant, Scope, Regeln Z1–Z13 (rein)      [neu]
 │   ├── service/                   # PasswordsService: der einzige Eingang, prüft den Aufrufer
 │   │   ├── mod.rs, items.rs, organize.rs, trash.rs, history.rs, attachments.rs,
 │   │   │   passkeys.rs, presets.rs, import.rs, usage.rs                             [neu]
@@ -180,7 +180,7 @@ src-tauri/src/
 │   ├── tags.rs                    # Tags, Zuordnung, reconcile_tags                 [neu]
 │   ├── binaries.rs                # Anhänge, Hash, Limit, prune_binaries            [neu]
 │   ├── snapshots.rs               # Verlaufsstände, Änderungsliste, Wiederherstellen[neu]
-│   ├── passkeys.rs                # Liste, Spitzname, Löschen, ES256-Ableitung      [neu]
+│   ├── passkeys.rs                # Liste, Spitzname, Löschen, Schlüsselableitung   [neu]
 │   ├── usage.rs                   # EntryUsage-Trait: holzi-Funktionen melden genutzte Einträge [neu]
 │   ├── presets.rs                 # Generator-Voreinstellungen                      [neu]
 │   ├── totp.rs                    # RFC 6238, Base32, otpauth-Eingabe               [neu]
@@ -210,7 +210,8 @@ src/
 │   ├── generator.ts               # Passwortgenerator (reines TS)                   [neu]
 │   ├── search.ts                  # fold, Filter über Kopfdaten                     [neu]
 │   ├── tree.ts                    # Ordnerbaum, Sortierung, Papierkorb-Erkennung    [neu]
-│   └── format.ts                  # Dateigröße, Bildtyp, Dateiname bereinigen       [neu]
+│   ├── format.ts                  # Dateigröße, Bildtyp, Dateiname bereinigen       [neu]
+│   └── selection.ts, icons.ts, usage.ts   # Mehrfachauswahl, Symbolliste, Warnentscheidung [neu]
 ├── lib/actions/
 │   ├── passwordsActions.ts        # passwords.items.search                          [neu]
 │   ├── scopes.ts, catalog.ts      # Bereich passwords.read, Anhängen an ALL_ACTIONS [ändern]
@@ -228,9 +229,10 @@ src/
 └── types/bindings/*.ts            # ts-rs-Export (pnpm generate:ts-types)           [generiert]
 
 scripts/
-├── check-passwords-generator.ts, check-passwords-search.ts,
-│   check-passwords-routes.ts, check-passwords-actions.ts                            [neu]
-└── e2e/scenarios/passwords-basic.test.ts, passwords-sync-two-devices.test.ts, lib/passwords.ts [neu]
+├── check-passwords-generator.ts, -search.ts, -routes.ts, -actions.ts,
+│   -tree.ts, -format.ts, -selection.ts, -usage.ts                                   [neu]
+└── e2e/scenarios/passwords-basic.test.ts, passwords-sync-two-devices.test.ts,
+    passwords-narrow-window.test.ts, passwords-session-restore.test.ts, lib/passwords.ts [neu]
 
 docs/adr/0007-secrets-in-vault-db-protected-by-grants.md                             [neu]
 package.json, .github/workflows/ci.yml          # check:passwords                    [ändern]
@@ -246,7 +248,7 @@ legt die Seitenleisten-Entscheidung in Aufgabe T002 (Graph-Abfrage), nicht jetzt
 | Verstoß / Aufwand                                                        | Warum nötig                                                                                                                                     | Einfachere Alternative verworfen, weil                                                                                                                                                                          |
 | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Abweichung vom Datenmodell von haex-vault (A1–A5, vor allem kein UNIQUE) | UNIQUE-Konflikte halten den Sync an (R2); der Papierkorb soll den Ort merken (R3); BLOB statt Base64 (R4)                                       | 1:1-Übernahme brächte einen Sync, der wegen eines Tagnamens stehen bleibt, und den Verlust des Ortes beim Wiederherstellen                                                                                      |
-| Acht Rust-Abhängigkeiten (mehrere schon transitiv im Lock)               | KDBX, RFC-4180-CSV, SHA-1 für TOTP, P-256, EdDSA und RSA-Schlüsselteile für den öffentlichen Passkey-Schlüssel, Zwischenablage mit Löschen, NFC | TOTP und Base32 selbst zu schreiben ist vertretbar (R8) und geschieht; KDBX/Argon2, CSV, Elliptische Kurven, ASN.1-Schlüsselformate und Unicode-Normalisierung selbst zu schreiben wäre riskanter als ein Crate |
+| Neun Rust-Abhängigkeiten (mehrere schon transitiv im Lock)               | KDBX, RFC-4180-CSV, SHA-1 für TOTP, P-256, EdDSA und RSA-Schlüsselteile für den öffentlichen Passkey-Schlüssel, Zwischenablage mit Löschen, NFC | TOTP und Base32 selbst zu schreiben ist vertretbar (R8) und geschieht; KDBX/Argon2, CSV, Elliptische Kurven, ASN.1-Schlüsselformate und Unicode-Normalisierung selbst zu schreiben wäre riskanter als ein Crate |
 | Teil-Update und `reveal` statt Klartext-Detail                           | Geheimnisse bleiben im Backend (R7, FR-005, FR-040)                                                                                             | Alle Felder im Klartext zu laden ist einfacher, legt aber alle Geheimnisse in den Webview                                                                                                                       |
 | Aufrufer-/Freigabe-Modul und Dienst ohne Verwalter für Freigaben         | FR-024 bis FR-030 verlangen die Prüfung jetzt; Spec 029 braucht den Zugriff, 017–019/021 den Rest                                               | Prüfung später nachrüsten hieße, die Commands und den Dienst ein zweites Mal anzufassen; die Prüfung ist rein und klein                                                                                         |
 | `identity/migrations.rs` bleibt über 500 Zeilen                          | Bestehende Überschreitung (577), nicht von dieser Spec                                                                                          | Aufspaltung ist eine eigene Änderung; hier genügt eine neue Datei für das neue SQL                                                                                                                              |

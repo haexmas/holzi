@@ -74,7 +74,7 @@ CASCADE (leer = Wurzel) · **`trashed_from_group_id` TEXT (A2)**. Index:
 | `hash`       | TEXT PK                | SHA-256 der Rohdaten, kleingeschriebenes Hex                                                    |
 | `data`       | **BLOB** NOT NULL (A1) | höchstens 25 MiB                                                                                |
 | `size`       | INTEGER NOT NULL       | Länge von `data`                                                                                |
-| `type`       | TEXT                   | `attachment` (Standard) oder `icon` (nur von haex-vault)                                        |
+| `type`       | TEXT                   | `attachment` (Standard) oder `icon` (eigenes Symbol, vom Import; Verweis über `binary:<hash>`)  |
 | `created_at` | TEXT                   | Rust schreibt RFC 3339 mit Millisekunden; die Karenzzeit vergleicht über `datetime(created_at)` |
 
 `data` wird nur in eigenen Abfragen gelesen. `size`, nicht `length(data)`, trägt die Anzeige.
@@ -210,6 +210,11 @@ angelegt (created_at = jetzt)
 in Benutzung ── letzter Verweis entfällt ──▶ verwaist
 verwaist ── beim Öffnen der Vault, created_at älter als 7 Tage ──▶ gelöscht
 ```
+
+Verweis heißt bei Anhängen eine Zeile in `item_binaries` oder `snapshot_binaries`. Bei `type = 'icon'`
+nennt `binary:<hash>` in `item_details.icon`, `groups.icon`, `passkeys.icon` oder im JSON eines
+Verlaufsstands den Hash; solange eine Stelle ihn nennt, gilt die Zeile als benutzt und wird nicht
+aufgeräumt (R4).
 
 ## Rust-Typen (nicht gespeichert; ts-rs-Export nach `src/types/bindings/`)
 
