@@ -8,6 +8,7 @@ pub mod bundle;
 pub mod error;
 pub mod ids;
 pub mod permissions;
+pub mod registry;
 
 // The limits of a bundle (size, entries, ratio) belong to the bundle format and live in the crate
 // `haex-bundle` (`haex_bundle::format::limits`), the one implementation shared with the `haex` tool.
