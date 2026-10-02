@@ -5,13 +5,13 @@ Variablen aus `src/assets/css/tailwind.css` (haex-ui-Tokens); nichts kommt neu h
 
 ## Welcher Regler setzt was
 
-| Regler | Variablen (beide Schemata, Helligkeit aus dem Standardwert des Schemas) |
-|---|---|
-| `accent` | `--primary`, `--primary-foreground`, `--ring`, `--sidebar-primary`, `--sidebar-primary-foreground`, `--sidebar-ring` |
-| `window` | `--background` |
-| `container` | `--card`, `--popover`, `--sidebar` |
-| `component` | `--secondary`, `--muted`, `--accent`, `--input`, `--border`, `--sidebar-accent`, `--sidebar-border` |
-| `text` | `--foreground`, `--card-foreground`, `--popover-foreground`, `--secondary-foreground`, `--accent-foreground`, `--sidebar-foreground`, `--sidebar-accent-foreground`, `--muted-foreground` |
+| Regler      | Variablen (beide Schemata, Helligkeit aus dem Standardwert des Schemas)                                                                                                                   |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `accent`    | `--primary`, `--primary-foreground`, `--ring`, `--sidebar-primary`, `--sidebar-primary-foreground`, `--sidebar-ring`                                                                      |
+| `window`    | `--background`                                                                                                                                                                            |
+| `container` | `--card`, `--popover`, `--sidebar`                                                                                                                                                        |
+| `component` | `--secondary`, `--muted`, `--accent`, `--input`, `--border`, `--sidebar-accent`, `--sidebar-border`                                                                                       |
+| `text`      | `--foreground`, `--card-foreground`, `--popover-foreground`, `--secondary-foreground`, `--accent-foreground`, `--sidebar-foreground`, `--sidebar-accent-foreground`, `--muted-foreground` |
 
 Nicht angefasst: `--destructive*`, `--error*`, `--success*`, `--warning*`, `--chart-*`, `--radius`.
 
@@ -23,18 +23,18 @@ Nicht angefasst: `--destructive*`, `--error*`, `--success*`, `--warning*`, `--ch
 Schwelle „Text“ = 4,5:1, „Bedienelement“ = 3:1. Jedes Paar wird für jedes Farbfeld und jede
 Extremwert-Eingabe in `light` und `dark` gemessen.
 
-| Art | Vordergrund | Hintergrund |
-|---|---|---|
-| Text | `--foreground` | `--background`, `--card`, `--popover`, `--sidebar`, `--secondary`, `--muted`, `--accent` |
-| Text | `--card-foreground` | `--card` |
-| Text | `--popover-foreground` | `--popover` |
-| Text | `--sidebar-foreground` | `--sidebar` |
-| Text | `--secondary-foreground` | `--secondary` |
-| Text | `--accent-foreground` | `--accent` |
-| Text (gedämpft) | `--muted-foreground` | `--background`, `--card`, `--muted` |
-| Text auf Akzent | `--primary-foreground` | `--primary` |
-| Bedienelement | `--primary` (Schalterspur, Hinweisumrandung) | `--background`, `--card` |
-| Bedienelement | `--ring` | `--background`, `--card` |
+| Art             | Vordergrund                                  | Hintergrund                                                                              |
+| --------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Text            | `--foreground`                               | `--background`, `--card`, `--popover`, `--sidebar`, `--secondary`, `--muted`, `--accent` |
+| Text            | `--card-foreground`                          | `--card`                                                                                 |
+| Text            | `--popover-foreground`                       | `--popover`                                                                              |
+| Text            | `--sidebar-foreground`                       | `--sidebar`                                                                              |
+| Text            | `--secondary-foreground`                     | `--secondary`                                                                            |
+| Text            | `--accent-foreground`                        | `--accent`                                                                               |
+| Text (gedämpft) | `--muted-foreground`                         | `--background`, `--card`, `--muted`                                                      |
+| Text auf Akzent | `--primary-foreground`                       | `--primary`                                                                              |
+| Bedienelement   | `--primary` (Schalterspur, Hinweisumrandung) | `--background`, `--card`                                                                 |
+| Bedienelement   | `--ring`                                     | `--background`, `--card`                                                                 |
 
 Zierränder (`--border`, `--input` gegen ihre Fläche) gehören **nicht** zur Prüfung (Spec FR-016);
 ein Eingabefeld erkennt man am Fokusring und am Label, nicht am Rand allein.

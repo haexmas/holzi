@@ -50,18 +50,18 @@ DOM nach.
 
 ## Constitution Check
 
-*GATE: Muss vor Phase 0 bestehen. Nach Phase 1 erneut geprüft.*
+_GATE: Muss vor Phase 0 bestehen. Nach Phase 1 erneut geprüft._
 
-| Prinzip | Bewertung |
-|---|---|
-| I Keine Geheimnisse in Git | Berührt nicht; Darstellungsdatei enthält nur Farbwerte. |
-| II Keine lokalen absoluten Pfade | Berührt nicht; Spec und Plan nennen keine Pfade außer Repo-relativen. |
-| III Projektidentität geräteunabhängig | Berührt nicht. |
+| Prinzip                                          | Bewertung                                                                                            |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| I Keine Geheimnisse in Git                       | Berührt nicht; Darstellungsdatei enthält nur Farbwerte.                                              |
+| II Keine lokalen absoluten Pfade                 | Berührt nicht; Spec und Plan nennen keine Pfade außer Repo-relativen.                                |
+| III Projektidentität geräteunabhängig            | Berührt nicht.                                                                                       |
 | IV Fremdreferenzen mit unveränderlicher Revision | haex-ui ist per SHA gepinnt (`2dcb8bc`); die Pin-Änderung ist eine eigene Zeile in `nuxt.config.ts`. |
-| V Externe Quellen opt-in | Keine neuen Quellen. |
-| VI Änderung von Anweisungen nur per Review | Keine Skills/Konstitution betroffen. |
-| VII Relay-Ausfall blockiert lokale Arbeit nicht | Darstellung liegt in der lokalen Vault; Sync ist nachgelagert. |
-| VIII Keine Verheimlichungsanweisungen | Berührt nicht. |
+| V Externe Quellen opt-in                         | Keine neuen Quellen.                                                                                 |
+| VI Änderung von Anweisungen nur per Review       | Keine Skills/Konstitution betroffen.                                                                 |
+| VII Relay-Ausfall blockiert lokale Arbeit nicht  | Darstellung liegt in der lokalen Vault; Sync ist nachgelagert.                                       |
+| VIII Keine Verheimlichungsanweisungen            | Berührt nicht.                                                                                       |
 
 Arbeitsablauf: Worktree `035-ui-foundation`, Konventionelle Commits, PR nach `main`
 (Rebase- oder Merge-Commit), keine Agenten-Attribution, Tests getrennt vom Produktivcode.

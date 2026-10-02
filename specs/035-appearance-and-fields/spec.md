@@ -32,7 +32,7 @@ Oberflächenschicht haex-ui (Pull Request haex-space/haextension#65, gepinnt auf
 
 - Q: Gelten Fenster- und Container-Hintergrund getrennt je Schema oder als Tönung für beide? → A: Eine Wahl, die als Tönung in beiden Schemata gilt; Hell bleibt hell, Dunkel bleibt dunkel. Der Umfang der Regler folgt dem Dialog „Aussehen“ von COSMIC (Akzent, Fensterhintergrund, Container-Hintergrund, Texttönung, Komponententönung, Hinweis für das aktive Fenster, alles auf Standard zurücksetzbar, Import und Export). Wird das zu aufwändig, darf der Plan Texttönung, Komponententönung und den Fensterhinweis als eigene spätere Stufe abtrennen.
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Eingabefelder sehen überall gleich aus (Priority: P1)
 
@@ -202,7 +202,7 @@ Darstellung wiederfinden; eine kaputte Datei importieren und eine verständliche
 - Tastatur, Screenreader und Reduzierte Bewegung: Das Label erreicht sein Ziel ohne
   Animation, wenn der Nutzer reduzierte Bewegung eingestellt hat.
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 ### Functional Requirements
 
@@ -299,7 +299,7 @@ Darstellung wiederfinden; eine kaputte Datei importieren und eine verständliche
   Aussehen); nur ein Fenster trägt sie zur gleichen Zeit, und sie erreicht gegen den
   Untergrund mindestens 3:1.
 
-### Key Entities *(include if feature involves data)*
+### Key Entities _(include if feature involves data)_
 
 - **Darstellung**: Die Gesamtheit der Einstellungen der Oberfläche einer Vault: Schema
   (hell, dunkel, automatisch), Akzentfarbe, Fensterhintergrund, Container-Hintergrund,
@@ -311,7 +311,7 @@ Darstellung wiederfinden; eine kaputte Datei importieren und eine verständliche
 - **Feld**: Das gemeinsame Eingabeelement mit Label, Fokusring, Fehler, Löschen und Kopieren
   in den Varianten einzeilig, Passwort, mehrzeilig und Auswahlliste.
 
-## Success Criteria *(mandatory)*
+## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
 

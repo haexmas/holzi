@@ -5,10 +5,10 @@ Es gibt keine neue Tabelle. Die Darstellung ist ein Wert der bestehenden Tabelle
 
 ## Schlüssel
 
-| Schlüssel | Scope | Wert | Besitzer |
-|---|---|---|---|
-| `appearance.color_scheme` | vault | `light` \| `dark` \| `system` | 023, unverändert |
-| `appearance.theme` | vault | JSON-Text der **Darstellung** (unten) | diese Spec |
+| Schlüssel                 | Scope | Wert                                  | Besitzer         |
+| ------------------------- | ----- | ------------------------------------- | ---------------- |
+| `appearance.color_scheme` | vault | `light` \| `dark` \| `system`         | 023, unverändert |
+| `appearance.theme`        | vault | JSON-Text der **Darstellung** (unten) | diese Spec       |
 
 Fehlt ein Schlüssel oder ist der Wert kein JSON beziehungsweise `v` unbekannt, gilt der ganze
 Standard (FR-020). Ist nur ein einzelnes Feld ungültig, fällt dieses Feld auf seinen Standard und
@@ -19,10 +19,10 @@ die übrigen bleiben; der Import (Datei) ist dagegen streng und nimmt nur ganz g
 ```json
 {
   "v": 1,
-  "accent":    { "preset": "teal" },
-  "window":    { "preset": "neutral" },
+  "accent": { "preset": "teal" },
+  "window": { "preset": "neutral" },
   "container": { "preset": "neutral" },
-  "text":      { "preset": "neutral" },
+  "text": { "preset": "neutral" },
   "component": { "preset": "neutral" },
   "windowHint": false
 }
@@ -33,15 +33,15 @@ Jede Farbangabe (`accent`, `window`, `container`, `text`, `component`) ist genau
 - `{ "preset": "<id>" }` – ein Farbfeld aus `presets.ts`;
 - `{ "custom": "#rrggbb" }` – eine eigene Farbe (Hex, sechsstellig, Kleinbuchstaben, ohne Alpha).
 
-| Feld | Typ | Regel | Standard |
-|---|---|---|---|
-| `v` | Ganzzahl | muss `1` sein; andere Werte → ganze Darstellung ungültig | `1` |
-| `accent` | Farbangabe | Preset aus der Akzentreihe oder Hex | `{preset:"teal"}` |
-| `window` | Farbangabe | Preset aus der Tönungsreihe oder Hex | `{preset:"neutral"}` |
-| `container` | Farbangabe | wie `window` | `{preset:"neutral"}` |
-| `text` | Farbangabe | wie `window` | `{preset:"neutral"}` |
-| `component` | Farbangabe | wie `window` | `{preset:"neutral"}` |
-| `windowHint` | Wahrheitswert | Fensterhinweis (FR-024) | `false` |
+| Feld         | Typ           | Regel                                                    | Standard             |
+| ------------ | ------------- | -------------------------------------------------------- | -------------------- |
+| `v`          | Ganzzahl      | muss `1` sein; andere Werte → ganze Darstellung ungültig | `1`                  |
+| `accent`     | Farbangabe    | Preset aus der Akzentreihe oder Hex                      | `{preset:"teal"}`    |
+| `window`     | Farbangabe    | Preset aus der Tönungsreihe oder Hex                     | `{preset:"neutral"}` |
+| `container`  | Farbangabe    | wie `window`                                             | `{preset:"neutral"}` |
+| `text`       | Farbangabe    | wie `window`                                             | `{preset:"neutral"}` |
+| `component`  | Farbangabe    | wie `window`                                             | `{preset:"neutral"}` |
+| `windowHint` | Wahrheitswert | Fensterhinweis (FR-024)                                  | `false`              |
 
 Unbekannte Felder werden beim Lesen ignoriert und beim Schreiben weggelassen (Vorwärtsverträglichkeit
 von einer neueren Version). Ein unbekannter Preset-Name zählt als ungültiges Feld; dieses Feld
@@ -80,15 +80,15 @@ Darstellung, Schema oder System-Schema neu berechnet.
 
 ## Zustandsübergänge
 
-| Auslöser | Wirkung |
-|---|---|
-| Vault geöffnet | `loadAsync`: Standard anwenden, Darstellung lesen, anwenden |
-| Auswahl eines Reglers | Teilwert schreiben (`setPrefAsync`), dann anwenden; bei Schreibfehler bleibt der alte Zustand, Zeile zeigt den Fehler |
-| `preferences` geändert (Sync, anderes Fenster) | `refreshAsync`: neu lesen, ohne Zwischenzustand anwenden |
-| Schema oder System-Schema wechselt | neu ableiten und anwenden |
-| Zurücksetzen (nach Bestätigung) | Darstellung auf Standard schreiben (Schema bleibt), anwenden |
-| Import | Datei ganz prüfen; bei Erfolg Darstellung **und** Schema schreiben, anwenden; bei Fehler nichts ändern |
-| Vault gesperrt/gewechselt | Variablen entfernen, Standard (`tailwind.css`) gilt |
+| Auslöser                                       | Wirkung                                                                                                               |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Vault geöffnet                                 | `loadAsync`: Standard anwenden, Darstellung lesen, anwenden                                                           |
+| Auswahl eines Reglers                          | Teilwert schreiben (`setPrefAsync`), dann anwenden; bei Schreibfehler bleibt der alte Zustand, Zeile zeigt den Fehler |
+| `preferences` geändert (Sync, anderes Fenster) | `refreshAsync`: neu lesen, ohne Zwischenzustand anwenden                                                              |
+| Schema oder System-Schema wechselt             | neu ableiten und anwenden                                                                                             |
+| Zurücksetzen (nach Bestätigung)                | Darstellung auf Standard schreiben (Schema bleibt), anwenden                                                          |
+| Import                                         | Datei ganz prüfen; bei Erfolg Darstellung **und** Schema schreiben, anwenden; bei Fehler nichts ändern                |
+| Vault gesperrt/gewechselt                      | Variablen entfernen, Standard (`tailwind.css`) gilt                                                                   |
 
 ## Standardwerte (Tabelle wird bei der Umsetzung gefüllt)
 

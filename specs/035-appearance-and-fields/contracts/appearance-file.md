@@ -9,10 +9,10 @@ Dateiendung `.holzi-appearance.json`, UTF-8, höchstens 16 KiB.
   "colorScheme": "system",
   "appearance": {
     "v": 1,
-    "accent":    { "preset": "teal" },
-    "window":    { "preset": "neutral" },
+    "accent": { "preset": "teal" },
+    "window": { "preset": "neutral" },
     "container": { "preset": "neutral" },
-    "text":      { "preset": "neutral" },
+    "text": { "preset": "neutral" },
     "component": { "preset": "neutral" },
     "windowHint": false
   }
@@ -24,17 +24,17 @@ Dateiendung `.holzi-appearance.json`, UTF-8, höchstens 16 KiB.
 Die Datei wird **vollständig** gelesen und geprüft, bevor etwas geschrieben wird. Jede Verletzung
 bricht den Import ab; die Meldung nennt die erste Ursache (Schlüssel, nicht den Wert):
 
-| Fall | Meldungsschlüssel |
-|---|---|
-| größer als 16 KiB oder kein JSON | `settings.appearance.import.notJson` |
-| `format` ≠ `holzi-appearance` | `settings.appearance.import.notAppearance` |
-| `v` oder `appearance.v` unbekannt | `settings.appearance.import.version` |
-| `colorScheme` nicht `light`, `dark`, `system` | `settings.appearance.import.field` (mit Feldname) |
-| Farbangabe weder gültiges `preset` noch `custom` | `settings.appearance.import.field` |
-| Preset nicht in der passenden Reihe | `settings.appearance.import.field` |
-| `custom` kein sechsstelliges Hex | `settings.appearance.import.field` |
-| `windowHint` kein Wahrheitswert | `settings.appearance.import.field` |
-| fehlendes Feld | `settings.appearance.import.field` |
+| Fall                                             | Meldungsschlüssel                                 |
+| ------------------------------------------------ | ------------------------------------------------- |
+| größer als 16 KiB oder kein JSON                 | `settings.appearance.import.notJson`              |
+| `format` ≠ `holzi-appearance`                    | `settings.appearance.import.notAppearance`        |
+| `v` oder `appearance.v` unbekannt                | `settings.appearance.import.version`              |
+| `colorScheme` nicht `light`, `dark`, `system`    | `settings.appearance.import.field` (mit Feldname) |
+| Farbangabe weder gültiges `preset` noch `custom` | `settings.appearance.import.field`                |
+| Preset nicht in der passenden Reihe              | `settings.appearance.import.field`                |
+| `custom` kein sechsstelliges Hex                 | `settings.appearance.import.field`                |
+| `windowHint` kein Wahrheitswert                  | `settings.appearance.import.field`                |
+| fehlendes Feld                                   | `settings.appearance.import.field`                |
 
 Anders als beim Lesen aus der Vault (ungültiges Feld → Standard, R1/data-model) ist der Import
 **streng**: kein Feld fällt auf den Standard, die Datei ist ganz gültig oder wird abgelehnt.

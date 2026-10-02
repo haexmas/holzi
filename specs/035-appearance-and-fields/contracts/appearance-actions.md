@@ -12,11 +12,11 @@ Eingabe (mindestens ein Feld):
 
 ```json
 {
-  "accent":     { "preset": "blue" },
-  "window":     { "custom": "#223344" },
-  "container":  { "preset": "warm" },
-  "text":       { "preset": "neutral" },
-  "component":  { "preset": "cool" },
+  "accent": { "preset": "blue" },
+  "window": { "custom": "#223344" },
+  "container": { "preset": "warm" },
+  "text": { "preset": "neutral" },
+  "component": { "preset": "cool" },
   "windowHint": true
 }
 ```
