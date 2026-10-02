@@ -112,3 +112,34 @@ fn password_manager_errors_survive_the_consumer_round_trip() {
         HolziError::PasswordsConflict { reason } if reason == "deleted"
     ));
 }
+
+/// Spec 017 (contracts/tauri-commands.md): the extension host's own kinds serialise as
+/// `{ kind, ...fields }` with the `Extension` prefix and never carry content of an extension.
+#[test]
+fn extension_errors_serialise_with_their_kind_and_fields() {
+    let cases = [
+        (
+            HolziError::ExtensionInstall {
+                reason: "signature_invalid".to_string(),
+            },
+            serde_json::json!({ "kind": "ExtensionInstall", "reason": "signature_invalid" }),
+        ),
+        (
+            HolziError::ExtensionNotFound,
+            serde_json::json!({ "kind": "ExtensionNotFound" }),
+        ),
+        (
+            HolziError::ExtensionNotReady {
+                status: "migration_failed".to_string(),
+            },
+            serde_json::json!({ "kind": "ExtensionNotReady", "status": "migration_failed" }),
+        ),
+        (
+            HolziError::ExtensionDisabled,
+            serde_json::json!({ "kind": "ExtensionDisabled" }),
+        ),
+    ];
+    for (error, expected) in cases {
+        assert_eq!(serde_json::to_value(&error).expect("serialise"), expected);
+    }
+}
