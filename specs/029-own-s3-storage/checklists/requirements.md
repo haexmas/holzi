@@ -46,7 +46,7 @@
   the design; members with the delete capability get the read-write token
   because S3 does not separate writing from deleting.
 - FR-017 and FR-033 (revised 2026-09-28, D30/D32): the admin's full provider
-  credentials and the access tokens live in the Passwortmanager (planned spec 030) as ordinary vault data; they sync to all own devices, also through the
+  credentials and the access tokens live in the Passwortmanager ([spec 034](../../034-password-manager/spec.md)) as ordinary vault data; they sync to all own devices, also through the
   vault's own mailbox, and are recoverable. They never reach members (except
   the matching access token in its envelope), spaces, data shares or logs.
 - Cross-spec alignment (2026-09-28): the space mailbox stays on the admin's

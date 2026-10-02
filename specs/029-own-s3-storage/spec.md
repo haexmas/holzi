@@ -9,7 +9,7 @@
 Der Admin eines Space verbindet seinen eigenen S3-kompatiblen Speicher. Je
 Space gibt es einen Bucket und zwei eingeschränkte Zugangsschlüssel (nur Lesen,
 Lesen und Schreiben), die der Admin in seiner Vault erzeugt, in seinem
-Passwortmanager (geplante Spec 030) ablegt und verschlüsselt an die Mitglieder
+Passwortmanager ([Spec 034](../034-password-manager/spec.md)) ablegt und verschlüsselt an die Mitglieder
 gibt, je nach Fähigkeit. Das Relay bekommt nie Zugangsdaten in lesbarer Form und
 ist an Dateien nicht beteiligt. Die Geräte greifen direkt auf den Speicher zu. Beim Entzug von Rechten werden die
 Zugangsschlüssel erneuert. Weil S3 „nur eigene Dateien löschen“ nicht
@@ -37,7 +37,7 @@ Zugangsschlüssel erzeugen kann), lässt sich für einen Space nicht verbinden
   dieser Spec. Das Relay ist an Dateien hier nicht beteiligt (D32).
 - **Passwortmanager**: fester Bestandteil von holzi, der Geheimnisse wie
   S3-Zugangsdaten und Zugangsschlüssel in der Vault verwahrt; Erweiterungen mit
-  Berechtigung dürfen ihn nutzen. Er wird in der geplanten Spec 030 festgelegt;
+  Berechtigung dürfen ihn nutzen. Er wird in der Spec 034 festgelegt;
   diese Spec legt nur fest, welche Geheimnisse dort liegen (D32).
 - **Anbieter**: der Dienst, bei dem der eigene Speicher liegt (zum Beispiel ein
   Cloud-Anbieter oder ein selbst betriebener RustFS-Server).
@@ -87,9 +87,9 @@ Zugangsschlüssel erzeugen kann), lässt sich für einen Space nicht verbinden
   der aktuellen Geräteliste der Mitglieds-Vault (D28); jedes Gerät öffnet seinen
   Umschlag mit seinem Geräteschlüssel. Verwalten darf den Speicher jedes Gerät
   auf der Geräteliste der Admin-Vault, Hauptgerät oder verknüpft (D29).
-- Geplante Spec 030 (Passwortmanager): verwahrt die Hauptzugangsdaten und die
+- Spec 034 (Passwortmanager): verwahrt die Hauptzugangsdaten und die
   Zugangsschlüssel dieser Spec (D32). Wie der Passwortmanager aussieht und wie
-  Erweiterungen ihn nutzen, legt Spec 030 fest, nicht diese.
+  Erweiterungen ihn nutzen, legt Spec 034 fest, nicht diese.
 - [`025-own-device-file-sync`](../025-own-device-file-sync/spec.md) (Dateisync
   zwischen eigenen Geräten): Die eigenen synchronisierten Ordner einer Vault
   können statt direkter Übertragung und Backend A ebenfalls Backend B nutzen
@@ -174,7 +174,7 @@ Zugangsschlüssel erzeugen kann), lässt sich für einen Space nicht verbinden
 - Q: Was passiert mit Anbietern, die unsere Anforderungen nicht erfüllen? → A: Sie lassen sich nicht verbinden; einen Ersatzweg über kurzlebige Links gibt es nicht (D25).
 - Q: Gibt es in v1 ein Rotieren der Vault-Identität? → A: Nein (D26). Ein verlorenes Gerät ist kein Problem, solange eine Kopie oder das Relay existiert und die Passphrase hält; ausgesperrt wird ein Gerät über die Geräteliste (D27).
 - Q: An wen werden Schlüssel von Spaces und Datenfreigaben verschlüsselt? → A: An jedes Gerät der Mitglieds-Vaults laut deren aktueller Geräteliste (D28). Das gilt auch für die Umschläge der Zugangsschlüssel.
-- Q: Wo liegen die Hauptzugangsdaten des Admins und die Zugangsschlüssel, und reisen sie nur direkt? → A: Im Passwortmanager der Vault (geplante Spec 030, D32). Sie sind gewöhnliche Vault-Daten: Sie synchronisieren auf alle eigenen Geräte, auch über das eigene Postfach der Vault, und lassen sich mit der Vault wiederherstellen. Nur direkt reist allein der private Schlüssel der Vault-Identität (D30).
+- Q: Wo liegen die Hauptzugangsdaten des Admins und die Zugangsschlüssel, und reisen sie nur direkt? → A: Im Passwortmanager der Vault (Spec 034, D32). Sie sind gewöhnliche Vault-Daten: Sie synchronisieren auf alle eigenen Geräte, auch über das eigene Postfach der Vault, und lassen sich mit der Vault wiederherstellen. Nur direkt reist allein der private Schlüssel der Vault-Identität (D30).
 - Q: Was macht das Relay bei Dateien? → A: Der Relay-Dienst synchronisiert nur SQLite-Daten (Postfächer), nie Dateien. Stellt der Betreiber zusätzlich S3-Speicher bereit (Backend A), prüft der Relay-Dienst den Zugriff und reicht die Objekte daraus durch; bei eigenem S3 (Backend B) ist das Relay an Dateien nicht beteiligt (D32).
 
 ## User Scenarios & Testing _(mandatory)_
@@ -667,7 +667,7 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   (Spec 027). Das Relay DARF sie nur verschlüsselt weiterreichen.
 - **FR-017**: Jedes Gerät des Mitglieds MUSS seinen Umschlag selbst mit seinem
   Geräteschlüssel öffnen. Die Mitglieds-Vault MUSS den empfangenen
-  Zugangsschlüssel in ihrem Passwortmanager (geplante Spec 030) ablegen, als
+  Zugangsschlüssel in ihrem Passwortmanager (Spec 034) ablegen, als
   gewöhnliche Vault-Daten im Bereich „Vault“ (D30, D32): Er gelangt mit dem Sync
   zwischen eigenen Geräten (Spec 024) auf alle Geräte der Mitglieds-Vault, auch
   über deren eigenes Postfach, sodass ein später verknüpftes Gerät ihn ohne
@@ -769,7 +769,7 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
 **Ende eines Space und Hauptzugangsdaten**
 
 - **FR-033**: Die Hauptzugangsdaten und die Zugangsschlüssel, die der Admin
-  erzeugt, MÜSSEN im Passwortmanager der Admin-Vault liegen (geplante Spec 030,
+  erzeugt, MÜSSEN im Passwortmanager der Admin-Vault liegen (Spec 034,
   D32). Sie sind gewöhnliche Vault-Daten im Bereich „Vault“ (D30): Sie MÜSSEN mit
   dem Datensync von Spec 024 auf alle Geräte der Admin-Vault gelangen, direkt
   oder verschlüsselt über das eigene Postfach der Vault, und mit der Vault
@@ -888,7 +888,7 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   Postfach, sobald die Vault ein Relay hat. Ohne Relay kommen sie erst bei der
   nächsten direkten Verbindung an; dasselbe gilt für die Speicherverbindung der
   eigenen Ordner (User Story 6).
-- Der Passwortmanager (geplante Spec 030) steht bereit, bevor diese Spec
+- Der Passwortmanager (Spec 034) steht bereit, bevor diese Spec
   umgesetzt wird. Diese Spec legt nur fest, welche Geheimnisse dort liegen.
 - Das Aufräumen alter Objekte (FR-040) übernimmt bei Backend B ein Gerät des
   Admins, weil nur es die Hauptzugangsdaten hat; bei Backend A regelt Spec 026,
@@ -944,7 +944,7 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
   verloren, die kein Gerät hat.
 - Datenfreigaben (Spec 028); sie nutzen keinen Objektspeicher.
 - Der Passwortmanager selbst, seine Oberfläche und sein Zugriff für
-  Erweiterungen (geplante Spec 030).
+  Erweiterungen (Spec 034).
 - Eigener Speicher für das Postfach eines Space; Dateiindex, Mitgliederliste und
   Schlüsselumschläge laufen weiter über das Relay des Admins, wenn eines
   eingerichtet ist, sonst nur direkt (Spec 026 und 027).

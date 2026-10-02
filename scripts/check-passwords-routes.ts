@@ -2,6 +2,7 @@
 // password manager (src/lib/passwords/registry.ts). Every place resolves, no place can carry a
 // title or value, and a tab history of all places passes the saved session without a planted marker.
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 
 import { openApp } from '../src/lib/wm/layoutState.ts'
@@ -142,5 +143,60 @@ test('a place that would carry an entry title is refused before it reaches a his
   ]
   for (const location of leaking) {
     assert.equal(isSecretFreeLocation(location), false, location.path)
+  }
+})
+
+// The locale files stay in lockstep for everything the password manager introduces (T098): every
+// key under these prefixes exists in German and English, and no value is empty.
+const LOCALE_PREFIXES = [
+  'passwords',
+  'wm.passwords',
+  'actions.passwords',
+  'errors.passwords',
+]
+
+function flatten(value: unknown, prefix = ''): Map<string, string> {
+  const out = new Map<string, string>()
+  if (value && typeof value === 'object') {
+    for (const [key, child] of Object.entries(value)) {
+      const path = prefix ? `${prefix}.${key}` : key
+      if (child && typeof child === 'object') {
+        for (const [k, v] of flatten(child, path)) out.set(k, v)
+      } else {
+        out.set(path, String(child))
+      }
+    }
+  }
+  return out
+}
+
+function locale(name: 'de' | 'en'): Map<string, string> {
+  const url = new URL(`../src/i18n/locales/${name}.json`, import.meta.url)
+  return flatten(JSON.parse(readFileSync(url, 'utf8')))
+}
+
+test('the German and English texts of the password manager have the same keys', () => {
+  const de = locale('de')
+  const en = locale('en')
+  const owned = (key: string) =>
+    LOCALE_PREFIXES.some(
+      (prefix) => key === prefix || key.startsWith(`${prefix}.`),
+    )
+  const deKeys = [...de.keys()].filter(owned).sort()
+  const enKeys = [...en.keys()].filter(owned).sort()
+  assert.ok(deKeys.length > 100, 'the password manager has its texts')
+  assert.deepEqual(
+    deKeys.filter((key) => !en.has(key)),
+    [],
+    'keys that only German has',
+  )
+  assert.deepEqual(
+    enKeys.filter((key) => !de.has(key)),
+    [],
+    'keys that only English has',
+  )
+  for (const key of deKeys) {
+    assert.notEqual(de.get(key)?.trim(), '', `empty German text ${key}`)
+    assert.notEqual(en.get(key)?.trim(), '', `empty English text ${key}`)
   }
 })

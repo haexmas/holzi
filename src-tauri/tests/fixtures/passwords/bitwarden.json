@@ -257,9 +257,7 @@
       "name": "Shared",
       "notes": null,
       "favorite": false,
-      "collectionIds": [
-        "col-1"
-      ],
+      "collectionIds": ["col-1"],
       "revisionDate": "2024-03-02T10:00:00.000Z",
       "creationDate": "2024-01-05T08:30:00.000Z",
       "deletedDate": null,

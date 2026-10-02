@@ -152,8 +152,7 @@ nicht erreichbar ist oder ablehnt.
   und neue Generationen der Inhaltsschlüssel mit. **Spec 028** (Datenfreigaben)
   nutzt Postfächer und Mitgliederlisten. Spec 027 legt auch fest, wie
   Einladungen transportiert werden. **Spec 029** (eigener S3-Speicher)
-  läuft ohne das Relay. Dessen Zugangsdaten liegen im Passwortmanager (geplante
-  Spec 030) und reisen als gewöhnliche Daten der Vault nur verschlüsselt im
+  läuft ohne das Relay. Dessen Zugangsdaten liegen im Passwortmanager ([Spec 034](../034-password-manager/spec.md)) und reisen als gewöhnliche Daten der Vault nur verschlüsselt im
   Postfach der Vault (D30); lesbar bekommt das Relay sie nie.
 
 ## Clarifications

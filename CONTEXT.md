@@ -172,6 +172,29 @@ Actions in the `guardrails` scope are never offered. Whether a model can call
 tools at all is its capability `tool_use` (`ModelCapabilities`).
 _Avoid_: "command" for tools — in holzi "command" means Tauri commands.
 
+**Passwortmanager / Kopfdaten / Verlaufsstand** (spec 034):
+The built-in secret store: the app `system.passwords` of the window manager
+over the tables `haex_passwords_*` of the vault, synced like all vault data.
+**Kopfdaten** (`ItemHeader`) are an entry without its secrets — title,
+user name, address, tags, folder, markers for a TOTP or passkeys; lists and
+the search hold nothing else. A **Verlaufsstand** (`SnapshotData`) is one
+saved state of an entry; restoring one makes it current and adds a state of
+its own, so no state is lost. Secrets sit unencrypted in the vault database
+(ADR 0007); they stay in the backend until the user asks to see or copy one.
+_Avoid_: "Version" for a Verlaufsstand, "Passwort" for an entry (an entry
+holds a password, a TOTP secret, custom fields, attachments and passkeys).
+
+**Aufrufer (`Caller`) / Freigabe (`Grant`) / Bereich (`Scope`)** (spec 034):
+Every access to the password manager goes through one `PasswordsService` that
+takes a **Caller** — the user, the built-in agent, an extension, an external
+agent, or a holzi function (`Internal`) — fixed by the entrance, never by an
+argument. A **Freigabe** gives a caller `Read` or `ReadWrite` for a **Bereich**:
+all entries, or those with a tag. The user needs none. The built-in agent can
+only search titles, tags and folder names; no action reads a secret.
+_Avoid_: confusing the **Bereich** of a Freigabe with the
+**Berechtigungsbereich** (`scope`) of an action (spec 020); they are different
+things that happen to share the English word.
+
 **Einstellungskategorie (settings category) / Unteransicht** (spec 023):
 A group in the settings' sidebar — Allgemein, Darstellung, Modelle, Agenten,
 Föderation (`SETTINGS_CATEGORIES` in `src/lib/settings/registry.ts`). A
