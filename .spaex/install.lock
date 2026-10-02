@@ -4,14 +4,14 @@
     ".envrc": "sha256:1d26c74fd25a4c3dbb09e029fc609588da499fd4af2a41c88f6316c7f8c54cf1",
     "flake.nix": "sha256:91b1fd600593a91b2c864018db9de1da1364601795e5c6344ad5b76f1608f1e9"
   },
-  "generation_id": "g_20261001T064555Z_e3b0",
+  "generation_id": "g_20261002T095608Z_e3b0",
   "molecules": [
     {
       "id": "com.github.haexmas.atoms.ast-grep",
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "764e209c32aaa9c329045b986e7ed68c79316205",
+      "revision": "fe9c6faafc88091956132cf9dbd5e9a911851521",
       "source": "https://github.com/haexmas/atoms"
     },
     {
@@ -19,7 +19,7 @@
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "764e209c32aaa9c329045b986e7ed68c79316205",
+      "revision": "fe9c6faafc88091956132cf9dbd5e9a911851521",
       "source": "https://github.com/haexmas/atoms"
     },
     {
@@ -27,7 +27,7 @@
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "764e209c32aaa9c329045b986e7ed68c79316205",
+      "revision": "fe9c6faafc88091956132cf9dbd5e9a911851521",
       "source": "https://github.com/haexmas/atoms"
     },
     {
@@ -35,7 +35,7 @@
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "764e209c32aaa9c329045b986e7ed68c79316205",
+      "revision": "fe9c6faafc88091956132cf9dbd5e9a911851521",
       "source": "https://github.com/haexmas/atoms"
     },
     {
@@ -43,7 +43,7 @@
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "764e209c32aaa9c329045b986e7ed68c79316205",
+      "revision": "fe9c6faafc88091956132cf9dbd5e9a911851521",
       "source": "https://github.com/haexmas/atoms"
     },
     {
@@ -52,7 +52,7 @@
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "764e209c32aaa9c329045b986e7ed68c79316205",
+      "revision": "fe9c6faafc88091956132cf9dbd5e9a911851521",
       "source": "https://github.com/haexmas/atoms"
     },
     {
@@ -61,7 +61,7 @@
         ".devshell/packages.nix",
         ".spaex/generated/nix-packages.json"
       ],
-      "revision": "764e209c32aaa9c329045b986e7ed68c79316205",
+      "revision": "fe9c6faafc88091956132cf9dbd5e9a911851521",
       "source": "https://github.com/haexmas/atoms"
     },
     {
@@ -71,7 +71,7 @@
         ".envrc",
         "flake.nix"
       ],
-      "revision": "764e209c32aaa9c329045b986e7ed68c79316205",
+      "revision": "fe9c6faafc88091956132cf9dbd5e9a911851521",
       "source": "https://github.com/haexmas/atoms"
     },
     {
@@ -79,7 +79,7 @@
       "paths": [
         ".spaex/generated/nix-packages.json"
       ],
-      "revision": "764e209c32aaa9c329045b986e7ed68c79316205",
+      "revision": "fe9c6faafc88091956132cf9dbd5e9a911851521",
       "source": "https://github.com/haexmas/atoms"
     },
     {
@@ -87,7 +87,7 @@
       "paths": [
         ".spaex/generated/nix-packages.json"
       ],
-      "revision": "764e209c32aaa9c329045b986e7ed68c79316205",
+      "revision": "fe9c6faafc88091956132cf9dbd5e9a911851521",
       "source": "https://github.com/haexmas/atoms"
     },
     {
@@ -95,7 +95,7 @@
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "764e209c32aaa9c329045b986e7ed68c79316205",
+      "revision": "fe9c6faafc88091956132cf9dbd5e9a911851521",
       "source": "https://github.com/haexmas/atoms"
     },
     {
@@ -103,17 +103,17 @@
       "paths": [
         ".spaex/constitution.md"
       ],
-      "revision": "764e209c32aaa9c329045b986e7ed68c79316205",
+      "revision": "fe9c6faafc88091956132cf9dbd5e9a911851521",
       "source": "https://github.com/haexmas/atoms"
     },
     {
       "id": "com.github.haexmas.atoms.speckit",
       "paths": [],
-      "revision": "764e209c32aaa9c329045b986e7ed68c79316205",
+      "revision": "fe9c6faafc88091956132cf9dbd5e9a911851521",
       "source": "https://github.com/haexmas/atoms",
       "speckit": {
         "cli_version": "1.0.11",
-        "declaration_fingerprint": "sha256:0aadc4a8773459ba7b9648024c17efab4943756298a4c6dd82c77633cd2707f2",
+        "declaration_fingerprint": "sha256:c27e4ad1a99810a5cf37bffe02ccc24935c26906fc06c78b9e4e359dc8f4de22",
         "outcomes": {
           "claude": "installed",
           "codex": "installed"
