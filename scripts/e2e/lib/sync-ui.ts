@@ -225,6 +225,7 @@ export async function showApp(
   page: FlowInstance,
   appId: string,
 ): Promise<void> {
+  await waitForMounted(page)
   const tab = (await wmSnapshot(page)).windows
     .flatMap((window) => window.tabs.filter((t) => t.appId === appId))
     .at(0)
@@ -234,5 +235,22 @@ export async function showApp(
       : await runAction(page, 'wm.tab.activate', { tabId: tab.id })
   if (!outcome.ok) {
     throw new Error(`showing ${appId}: ${JSON.stringify(outcome)}`)
+  }
+}
+
+/**
+ * Waits until the page's Vue app is mounted. The path of a freshly opened vault is already
+ * `/workspace/…` while the app is still starting, and the window manager cannot be reached before
+ * (seen on a slow CI runner: "undefined is not an object (evaluating '….__vue_app__.config')").
+ */
+async function waitForMounted(page: FlowInstance): Promise<void> {
+  const end = Date.now() + 15_000
+  while (
+    !(await page.exec<boolean>(
+      `return Boolean(document.querySelector('#__nuxt')?.__vue_app__)`,
+    ))
+  ) {
+    if (Date.now() > end) throw new Error('the app did not mount')
+    await new Promise((resolve) => setTimeout(resolve, 100))
   }
 }
