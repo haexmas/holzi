@@ -3,6 +3,13 @@
     "welcome": "Welcome to Holzi",
     "lastUsed": "Recently used"
   },
+  "fields": {
+    "show": "Show password",
+    "hide": "Hide password",
+    "copy": "Copy",
+    "copied": "Copied!",
+    "clear": "Clear"
+  },
   "onboarding": {
     "create": {
       "title": "Create instance",
@@ -59,12 +66,6 @@
       "downloadFailed": "Download failed",
       "empty": "No speech-to-text models available.",
       "skip": "Decide later"
-    },
-    "passwordField": {
-      "show": "Show password",
-      "hide": "Hide password",
-      "copy": "Copy",
-      "copied": "Copied!"
     },
     "link": {
       "title": "Link to a vault",

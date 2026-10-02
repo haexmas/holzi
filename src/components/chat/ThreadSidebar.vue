@@ -42,19 +42,27 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const editingTitleInput = shallowRef<HTMLInputElement | null>(null)
+// `UiInput` wraps the real input, so the ref holds the wrapper element and the
+// input is looked up inside it.
+const editingTitleField = shallowRef<HTMLElement | null>(null)
 function setEditingTitleInput(
   element: Element | ComponentPublicInstance | null,
 ) {
-  editingTitleInput.value = element as HTMLInputElement | null
+  editingTitleField.value =
+    element === null
+      ? null
+      : element instanceof HTMLElement
+        ? element
+        : ((element as ComponentPublicInstance).$el as HTMLElement)
 }
 watch(
   () => props.editingThreadId,
   (id) => {
     if (id === null) return
     void nextTick(() => {
-      editingTitleInput.value?.focus()
-      editingTitleInput.value?.select()
+      const input = editingTitleField.value?.querySelector('input')
+      input?.focus()
+      input?.select()
     })
   },
 )
@@ -110,17 +118,13 @@ watch(
       >
         <template v-if="editingThreadId === thread.id">
           <div class="min-w-0 flex-1 px-2 py-1.5">
-            <input
+            <UiInput
               :ref="setEditingTitleInput"
-              :value="draftTitle"
-              class="w-full rounded border border-border bg-background px-2 py-1 text-sm outline-none focus:border-foreground/50"
+              :model-value="draftTitle"
               :aria-label="t('chat.threads.editTitle')"
               :disabled="renamingThreadId === thread.id"
-              @input="
-                emit(
-                  'update:draftTitle',
-                  ($event.target as HTMLInputElement).value,
-                )
+              @update:model-value="
+                emit('update:draftTitle', String($event ?? ''))
               "
               @keydown.enter.prevent="emit('saveTitle')"
               @keydown.esc.prevent="emit('cancelEditing')"

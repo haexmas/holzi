@@ -11,13 +11,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-// haex-ui ships German defaults only; pass the translated tooltips.
-const passwordLabels = computed(() => ({
-  show: t('onboarding.passwordField.show'),
-  hide: t('onboarding.passwordField.hide'),
-  copy: t('onboarding.passwordField.copy'),
-  copied: t('onboarding.passwordField.copied'),
-}))
+const { password: passwordLabels } = useFieldLabels()
 const { openAsync } = useInstance()
 
 const passphrase = ref('')

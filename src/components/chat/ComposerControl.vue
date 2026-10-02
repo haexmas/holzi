@@ -28,35 +28,24 @@ function updateValue(nextValue: unknown) {
   <div
     class="flex min-w-0 shrink-0 items-center gap-1 rounded-xl border border-border/70 bg-muted/20 px-2 py-1"
   >
-    <ShadcnSelect
-      :model-value="value || undefined"
-      :disabled="disabled"
-      @update:model-value="updateValue"
-    >
-      <ShadcnSelectTrigger
+    <Icon
+      v-if="icon"
+      :name="icon"
+      class="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+      :aria-hidden="true"
+    />
+    <div class="min-w-0 max-w-44">
+      <UiSelect
         :id="controlId"
+        :model-value="value || undefined"
+        :options="options"
+        :placeholder="displayValue ?? label"
         :aria-label="
           (displayValue ?? value) ? `${label}: ${displayValue ?? value}` : label
         "
-        class="h-7 w-auto min-w-0 max-w-44 gap-1 border-0 bg-transparent px-1.5 py-0 text-xs font-medium text-foreground/80 shadow-none focus:ring-0"
-      >
-        <Icon
-          v-if="icon"
-          :name="icon"
-          class="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-          :aria-hidden="true"
-        />
-        <ShadcnSelectValue :placeholder="displayValue ?? label" />
-      </ShadcnSelectTrigger>
-      <ShadcnSelectContent>
-        <ShadcnSelectItem
-          v-for="option in options"
-          :key="option.value"
-          :value="option.value"
-        >
-          {{ option.label }}
-        </ShadcnSelectItem>
-      </ShadcnSelectContent>
-    </ShadcnSelect>
+        :disabled="disabled"
+        @update:model-value="updateValue"
+      />
+    </div>
   </div>
 </template>

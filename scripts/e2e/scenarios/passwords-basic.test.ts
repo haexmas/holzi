@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { scenario } from '../lib/scenario.ts'
 import { createAndUnlock, unwrap } from '../lib/flows.ts'
+import { clearButtonOf } from '../lib/fields.ts'
 import {
   createEntry,
   entryTitles,
@@ -41,11 +42,11 @@ scenario('passwords-basic', {}, async (ctx) => {
   await instance.waitForDisplayed(`passwords-entry-${id}`)
   await instance.type('passwords-search', 'zzz-nothing')
   await instance.waitForDisplayed('passwords-empty')
-  await instance.click('passwords-search-clear')
+  await instance.click(clearButtonOf('passwords-search'))
   await instance.waitForDisplayed(`passwords-entry-${id}`)
   await instance.type('passwords-search', 'git')
   await instance.waitForDisplayed(`passwords-entry-${id}`)
-  await instance.click('passwords-search-clear')
+  await instance.click(clearButtonOf('passwords-search'))
   ctx.step('searched')
 
   // The TOTP code of the entry has six digits and the time left; the backend computes it.

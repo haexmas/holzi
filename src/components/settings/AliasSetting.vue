@@ -5,6 +5,7 @@
  */
 const { t } = useI18n()
 const { errString } = useErrorString()
+const fieldLabels = useFieldLabels()
 const setAlias = useActionOrThrow('settings.device.setAlias')
 
 const props = defineProps<{
@@ -71,29 +72,25 @@ async function commitAsync() {
       :title="t('settings.alias.label')"
       label-for="settings-alias-input"
     >
-      <ShadcnInput
-        id="settings-alias-input"
-        v-model="localValue"
-        type="text"
-        class="w-56 max-w-full bg-background"
-        :disabled="busy"
-        :aria-invalid="showRequired && !localValue.trim() ? true : undefined"
-        data-testid="settings-alias"
-        @input="onInput"
-        @blur="commitAsync"
-        @keydown.enter.prevent="commitAsync"
-      />
-      <template
-        v-if="(showRequired && !localValue.trim()) || savedFlash || saveError"
-        #below
-      >
-        <span
-          v-if="showRequired && !localValue.trim()"
-          class="text-xs text-destructive"
-          role="alert"
-        >
-          {{ t('settings.alias.required') }}
-        </span>
+      <div class="w-56 max-w-full">
+        <UiInput
+          id="settings-alias-input"
+          v-model="localValue"
+          type="text"
+          :error="
+            showRequired && !localValue.trim()
+              ? t('settings.alias.required')
+              : undefined
+          "
+          :labels="fieldLabels.input.value"
+          :disabled="busy"
+          data-testid="settings-alias"
+          @input="onInput"
+          @blur="commitAsync"
+          @keydown.enter.prevent="commitAsync"
+        />
+      </div>
+      <template v-if="savedFlash || saveError" #below>
         <span v-if="savedFlash" class="text-xs text-success" role="status">
           {{ t('settings.alias.saved') }}
         </span>

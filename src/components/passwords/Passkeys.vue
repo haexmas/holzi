@@ -85,14 +85,15 @@ async function confirmDeleteAsync() {
       icon="lucide:fingerprint"
     >
       <template v-if="editing === passkey.id">
-        <ShadcnInput
-          v-model="nickname"
-          class="w-40"
-          :aria-label="t('passwords.passkeys.nickname')"
-          :data-testid="`passwords-passkey-nickname-${passkey.id}`"
-          @keydown.enter.prevent="saveRenameAsync(passkey)"
-          @keydown.esc.prevent="editing = null"
-        />
+        <div class="w-40">
+          <UiInput
+            v-model="nickname"
+            :aria-label="t('passwords.passkeys.nickname')"
+            :data-testid="`passwords-passkey-nickname-${passkey.id}`"
+            @keydown.enter.prevent="saveRenameAsync(passkey)"
+            @keydown.esc.prevent="editing = null"
+          />
+        </div>
         <UiButton size="sm" @click="saveRenameAsync(passkey)">{{
           t('passwords.save')
         }}</UiButton>

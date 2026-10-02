@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { Search, X } from '@lucide/vue'
+
 /**
  * The first row of the settings frame (spec 023-settings-app, FR-004, FR-023): only the sidebar
  * button and the search, like the COSMIC and GNOME settings. The search button opens a search
@@ -19,7 +21,8 @@ const query = defineModel<string>('query', { required: true })
 const searchOpen = defineModel<boolean>('searchOpen', { required: true })
 
 const { t } = useI18n()
-const input = useTemplateRef<HTMLInputElement>('input')
+const fieldLabels = useFieldLabels()
+const input = useTemplateRef<{ focus: () => void }>('input')
 const searchButton = useTemplateRef<{ $el: HTMLElement }>('searchButton')
 
 const sidebarLabel = computed(() =>
@@ -61,34 +64,34 @@ async function clearOrClose() {
     >
       <Icon name="lucide:panel-left" class="size-4" />
     </UiButton>
-    <label v-if="searchOpen" class="relative w-full max-w-72 min-w-0">
-      <span class="sr-only">{{ t('settings.search.label') }}</span>
-      <Icon
-        name="lucide:search"
-        class="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-      />
-      <input
-        ref="input"
-        v-model="query"
-        type="search"
-        :placeholder="t('settings.search.placeholder')"
-        class="h-9 w-full rounded-full border border-input bg-background pr-9 pl-9 text-sm [&::-webkit-search-cancel-button]:hidden focus:ring-2 focus:ring-ring focus:outline-none"
-        data-testid="settings-search"
-        @keydown.enter.prevent="emit('submit')"
-        @keydown.esc.prevent.stop="clearOrClose"
-      />
-      <button
-        type="button"
-        class="absolute top-1/2 right-1.5 flex size-6 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-        :aria-label="
-          query ? t('settings.search.clear') : t('settings.search.close')
-        "
-        data-testid="settings-search-clear"
-        @click="clearOrClose"
-      >
-        <Icon name="lucide:x" class="size-4" />
-      </button>
-    </label>
+    <UiInput
+      v-if="searchOpen"
+      ref="input"
+      v-model="query"
+      type="search"
+      :placeholder="t('settings.search.placeholder')"
+      :aria-label="t('settings.search.label')"
+      :labels="fieldLabels.input.value"
+      :prepend-icon="Search"
+      clearable
+      class="max-w-72 min-w-0 [&_input::-webkit-search-cancel-button]:hidden"
+      data-testid="settings-search"
+      @keydown.enter.prevent="emit('submit')"
+      @keydown.esc.prevent.stop="clearOrClose"
+    >
+      <!-- With text the field's own clear button shows; an empty search keeps its close button. -->
+      <template #append>
+        <UiButton
+          v-if="!query"
+          :icon="X"
+          :tooltip="t('settings.search.close')"
+          variant="ghost"
+          class="shadow-none"
+          data-testid="settings-search-clear"
+          @click.prevent="clearOrClose"
+        />
+      </template>
+    </UiInput>
     <UiButton
       v-else
       ref="searchButton"

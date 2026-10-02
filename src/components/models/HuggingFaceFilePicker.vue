@@ -14,6 +14,7 @@ import type { InstalledModel } from '~/composables/useModels'
 import { humanBytes } from '~/lib/models/format'
 
 const { t } = useI18n()
+const fieldLabels = useFieldLabels()
 const router = useTabRouter()
 const { detailsAsync, previewInstallAsync } = useHuggingFace()
 const downloadFromHf = useActionOrThrow('settings.models.downloadFromHf')
@@ -259,15 +260,13 @@ onMounted(loadDetailsAsync)
             <p class="text-xs text-warning">
               {{ t('models.filePicker.tokenizerHint') }}
             </p>
-            <label class="flex flex-col gap-1">
-              <span class="text-sm font-medium">{{
-                t('models.filePicker.tokenizerRepoLabel')
-              }}</span>
-              <ShadcnInput
-                v-model="tokenizerRepoInput"
-                :placeholder="t('models.filePicker.tokenizerRepoPlaceholder')"
-              />
-            </label>
+            <UiInput
+              v-model="tokenizerRepoInput"
+              :label="t('models.filePicker.tokenizerRepoLabel')"
+              :placeholder="t('models.filePicker.tokenizerRepoPlaceholder')"
+              :labels="fieldLabels.input.value"
+              label-bg="var(--muted)"
+            />
           </div>
 
           <div v-if="needsTooBigConfirmation" class="flex flex-col gap-1">

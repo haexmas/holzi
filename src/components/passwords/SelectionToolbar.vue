@@ -12,6 +12,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const fieldLabels = useFieldLabels()
 const { errString } = useErrorString()
 const store = usePasswordsStore()
 const selection = usePasswordsSelectionStore()
@@ -72,11 +73,26 @@ async function confirmAsync() {
   }
 }
 
+/** The select cannot hold an empty value, so "top level" gets a placeholder value. */
+const TOP_LEVEL = '__top__'
+const targetOptions = computed(() => [
+  { value: TOP_LEVEL, label: t('passwords.selection.topLevel') },
+  ...folders.value.map((folder) => ({
+    value: folder.id,
+    label: `${'– '.repeat(folder.depth)}${folder.name}`,
+  })),
+])
+const tagOptions = computed(() =>
+  selectedTags.value.map((name) => ({ value: name, label: name })),
+)
 const targetValue = computed({
   get: () =>
-    pending.value?.kind === 'move' ? (pending.value.groupId ?? '') : '',
-  set: (value: string) => {
-    if (pending.value?.kind === 'move') pending.value.groupId = value || null
+    pending.value?.kind === 'move'
+      ? (pending.value.groupId ?? TOP_LEVEL)
+      : TOP_LEVEL,
+  set: (value: string | null | undefined) => {
+    if (pending.value?.kind === 'move')
+      pending.value.groupId = !value || value === TOP_LEVEL ? null : value
   },
 })
 </script>
@@ -165,38 +181,27 @@ const targetValue = computed({
         </ShadcnAlertDialogTitle>
         <ShadcnAlertDialogDescription as-child>
           <div class="flex flex-col gap-2">
-            <select
+            <UiSelect
               v-if="pending.kind === 'move'"
               v-model="targetValue"
-              class="h-9 rounded-md border border-input bg-background px-2 text-sm"
+              :options="targetOptions"
               :aria-label="t('passwords.selection.target')"
               data-testid="passwords-selection-target"
-            >
-              <option value="">{{ t('passwords.selection.topLevel') }}</option>
-              <option
-                v-for="folder in folders"
-                :key="folder.id"
-                :value="folder.id"
-              >
-                {{ '– '.repeat(folder.depth) }}{{ folder.name }}
-              </option>
-            </select>
-            <ShadcnInput
+            />
+            <UiInput
               v-else-if="pending.kind === 'addTag'"
               v-model="pending.name"
+              :labels="fieldLabels.input.value"
               :placeholder="t('passwords.editor.tagPlaceholder')"
               data-testid="passwords-selection-tagname"
             />
-            <select
+            <UiSelect
               v-else
-              v-model="pending.name"
-              class="h-9 rounded-md border border-input bg-background px-2 text-sm"
+              :model-value="pending.name"
+              :options="tagOptions"
               :aria-label="t('passwords.fields.tags')"
-            >
-              <option v-for="name in selectedTags" :key="name" :value="name">
-                {{ name }}
-              </option>
-            </select>
+              @update:model-value="pending.name = $event ?? ''"
+            />
           </div>
         </ShadcnAlertDialogDescription>
       </ShadcnAlertDialogHeader>

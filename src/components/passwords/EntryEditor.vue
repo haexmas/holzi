@@ -28,6 +28,7 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
+const fieldLabels = useFieldLabels()
 const { errString } = useErrorString()
 const router = useTabRouter()
 const tab = useWmTab()
@@ -337,32 +338,35 @@ watch(saveError, (message) => {
 
       <template v-else>
         <SettingsGroup>
-          <li class="flex flex-col gap-1.5 px-4 py-3">
-            <ShadcnLabel for="pw-title">{{
-              t('passwords.fields.title')
-            }}</ShadcnLabel>
-            <ShadcnInput
+          <li class="px-4 py-3">
+            <UiInput
               id="pw-title"
               v-model="draft.title"
+              :label="t('passwords.fields.title')"
               :placeholder="t('passwords.untitled')"
+              :labels="fieldLabels.input.value"
+              label-bg="var(--muted)"
               data-testid="passwords-field-title"
             />
           </li>
-          <li class="flex flex-col gap-1.5 px-4 py-3">
-            <ShadcnLabel for="pw-username">{{
-              t('passwords.fields.username')
-            }}</ShadcnLabel>
-            <ShadcnInput
+          <li class="px-4 py-3">
+            <UiInput
               id="pw-username"
               v-model="draft.username"
+              :label="t('passwords.fields.username')"
+              :labels="fieldLabels.input.value"
+              label-bg="var(--muted)"
               autocomplete="off"
+              copyable
               data-testid="passwords-field-username"
             />
           </li>
           <li class="flex flex-col gap-1.5 px-4 py-3">
-            <ShadcnLabel for="pw-password">{{
-              t('passwords.fields.password')
-            }}</ShadcnLabel>
+            <ShadcnLabel
+              v-if="draft.password.mode === 'keep'"
+              for="pw-password"
+              >{{ t('passwords.fields.password') }}</ShadcnLabel
+            >
             <div
               v-if="draft.password.mode === 'keep'"
               class="flex items-center gap-2"
@@ -393,6 +397,9 @@ watch(saveError, (message) => {
               <UiInputPassword
                 id="pw-password"
                 v-model="passwordValue"
+                :label="t('passwords.fields.password')"
+                :labels="fieldLabels.password.value"
+                label-bg="var(--muted)"
                 autocomplete="new-password"
                 class="flex-1"
                 data-testid="passwords-field-password"
@@ -409,15 +416,16 @@ watch(saveError, (message) => {
               </UiButton>
             </div>
           </li>
-          <li class="flex flex-col gap-1.5 px-4 py-3">
-            <ShadcnLabel for="pw-url">{{
-              t('passwords.fields.url')
-            }}</ShadcnLabel>
-            <ShadcnInput
+          <li class="px-4 py-3">
+            <UiInput
               id="pw-url"
               v-model="draft.url"
+              :label="t('passwords.fields.url')"
+              :labels="fieldLabels.input.value"
+              label-bg="var(--muted)"
               type="url"
               inputmode="url"
+              copyable
               data-testid="passwords-field-url"
             />
           </li>
@@ -425,29 +433,20 @@ watch(saveError, (message) => {
 
         <SettingsGroup :label="t('passwords.fields.totp')">
           <li class="flex flex-col gap-1.5 px-4 py-3">
-            <template v-if="showOtpInput">
-              <ShadcnLabel for="pw-otp">{{
-                t('passwords.editor.otpLabel')
-              }}</ShadcnLabel>
-              <ShadcnInput
-                id="pw-otp"
-                :model-value="otpText()"
-                autocomplete="off"
-                spellcheck="false"
-                :placeholder="t('passwords.editor.otpPlaceholder')"
-                :aria-invalid="otpError !== null"
-                data-testid="passwords-field-otp"
-                @update:model-value="setOtpText(String($event))"
-              />
-              <p
-                v-if="otpError"
-                class="text-sm text-destructive"
-                role="alert"
-                data-testid="passwords-otp-error"
-              >
-                {{ otpError }}
-              </p>
-            </template>
+            <UiInput
+              v-if="showOtpInput"
+              id="pw-otp"
+              :model-value="otpText()"
+              :label="t('passwords.editor.otpLabel')"
+              :labels="fieldLabels.input.value"
+              label-bg="var(--muted)"
+              :error="otpError ?? undefined"
+              autocomplete="off"
+              spellcheck="false"
+              :placeholder="t('passwords.editor.otpPlaceholder')"
+              data-testid="passwords-field-otp"
+              @update:model-value="setOtpText(String($event ?? ''))"
+            />
             <div v-else class="flex flex-wrap items-center gap-2">
               <span
                 class="min-w-0 flex-1 text-sm"
@@ -496,33 +495,30 @@ watch(saveError, (message) => {
         </SettingsGroup>
 
         <SettingsGroup>
-          <li class="flex flex-col gap-1.5 px-4 py-3">
-            <ShadcnLabel for="pw-note">{{
-              t('passwords.fields.note')
-            }}</ShadcnLabel>
-            <ShadcnTextarea
+          <li class="px-4 py-3">
+            <UiTextarea
               id="pw-note"
               v-model="draft.note"
+              :label="t('passwords.fields.note')"
+              label-bg="var(--muted)"
               rows="4"
               data-testid="passwords-field-note"
             />
           </li>
-          <li class="flex flex-col gap-1.5 px-4 py-3">
-            <ShadcnLabel for="pw-expires">{{
-              t('passwords.fields.expires')
-            }}</ShadcnLabel>
-            <ShadcnInput
-              id="pw-expires"
-              v-model="draft.expiresAt"
-              type="date"
-              class="w-48"
-              data-testid="passwords-field-expires"
-            />
+          <li class="px-4 py-3">
+            <div class="w-48">
+              <UiInput
+                id="pw-expires"
+                v-model="draft.expiresAt"
+                :label="t('passwords.fields.expires')"
+                :labels="fieldLabels.input.value"
+                label-bg="var(--muted)"
+                type="date"
+                data-testid="passwords-field-expires"
+              />
+            </div>
           </li>
           <li class="flex flex-col gap-2 px-4 py-3">
-            <ShadcnLabel for="pw-tag">{{
-              t('passwords.fields.tags')
-            }}</ShadcnLabel>
             <div v-if="draft.tags.length" class="flex flex-wrap gap-1.5">
               <ShadcnBadge
                 v-for="tag in draft.tags"
@@ -541,9 +537,12 @@ watch(saveError, (message) => {
                 </button>
               </ShadcnBadge>
             </div>
-            <ShadcnInput
+            <UiInput
               id="pw-tag"
               v-model="tagInput"
+              :label="t('passwords.fields.tags')"
+              :labels="fieldLabels.input.value"
+              label-bg="var(--muted)"
               :placeholder="t('passwords.editor.tagPlaceholder')"
               data-testid="passwords-field-tag"
               @keydown.enter.prevent="addTag"
