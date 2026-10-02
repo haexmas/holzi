@@ -46,6 +46,9 @@ jobs:
       - name: Check agent actions
         run: corepack pnpm check:agent-actions
 
+      - name: Check passwords
+        run: corepack pnpm check:passwords
+
       - name: Check settings app
         run: corepack pnpm check:settings
 

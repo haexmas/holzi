@@ -36,6 +36,8 @@ use std::sync::Arc;
 
 use haex_crdt::{MigrationName, StaticMigrationSource};
 
+use super::migrations_passwords::PASSWORDS_0022;
+
 /// CRDT trigger-schema version holzi installs on open.
 ///
 /// haex-crdt bakes the tracked-column list into each table's
@@ -71,7 +73,8 @@ use haex_crdt::{MigrationName, StaticMigrationSource};
 /// - 13: no migration; haex-crdt's triggers changed (haexmas/haex-crdt#37,
 ///   #38): BLOB values and keys keep their type, and the update trigger
 ///   stamps rows written before the HLC existed.
-pub const HOLZI_TRIGGER_VERSION: i32 = 13;
+/// - 14: `0022_passwords` (spec 034) introduced twelve new CRDT-tracked tables.
+pub const HOLZI_TRIGGER_VERSION: i32 = 14;
 
 /// Returns the frozen holzi migration set at the pinned haex-crdt revision.
 pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
@@ -571,6 +574,11 @@ pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
             problem TEXT CHECK (problem IN ('incompatible_version', 'duplicate'))\
          );"
         .to_string(),
+    );
+
+    m.insert(
+        MigrationName::from("0022_passwords"),
+        PASSWORDS_0022.to_owned(),
     );
 
     Arc::new(StaticMigrationSource(m))

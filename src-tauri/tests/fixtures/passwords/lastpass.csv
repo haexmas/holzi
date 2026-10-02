@@ -1,0 +1,7 @@
+url,username,password,totp,extra,name,grouping,fav
+https://shop.example.invalid,carol,SECRET-MARKER-IMPORT-lp,JBSWY3DPEHPK3PXP,"plain note
+second line",Shop,Shopping\Online,1
+http://sn,,,,"NoteType:Server
+Hostname:srv.example.invalid
+Username:root",Server note,Servers/Prod,0
+https://plain.example.invalid,dave,pw,,Meeting at 10:30,Plain,,0

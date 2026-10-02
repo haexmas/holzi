@@ -113,7 +113,8 @@
     },
     "apps": {
       "chat": "Chat",
-      "settings": "Settings"
+      "settings": "Settings",
+      "passwords": "Passwords"
     },
     "launcher": {
       "lock": "Lock",
@@ -156,6 +157,15 @@
     },
     "chat": {
       "thread": "Conversation"
+    },
+    "passwords": {
+      "list": "Passwords",
+      "folder": "Folder",
+      "entry": "Entry",
+      "history": "History",
+      "trash": "Trash",
+      "generator": "Generator",
+      "import": "Import"
     }
   },
   "chat": {
@@ -760,6 +770,24 @@
       "modelRegistrationFailed": "The installation could not be completed.",
       "modelNotFound": "Model not found.",
       "generic": "Unknown error."
+    },
+    "passwords": {
+      "notFound": "The entry was not found.",
+      "forbidden": "This is not permitted.",
+      "conflictChanged": "The entry has changed in the meantime.",
+      "conflictDeleted": "The entry has been deleted in the meantime.",
+      "conflict": "The entry has changed or been deleted in the meantime.",
+      "attachmentTooLarge": "The file is larger than the limit of {limit} MiB.",
+      "importFailed": "The import failed.",
+      "importReason": {
+        "unreadable": "The file cannot be read.",
+        "wrong_credentials": "The password or key file is wrong.",
+        "corrupt": "The file is damaged.",
+        "unsupported_format": "The format is not supported.",
+        "encrypted_export": "The export is encrypted and cannot be read without its password.",
+        "cancelled": "The import was cancelled.",
+        "unwritable": "The file could not be written."
+      }
     }
   },
   "actions": {
@@ -912,7 +940,377 @@
         "device": "Change device settings",
         "models": "Manage models"
       },
-      "guardrails": "Guardrails (user only)"
+      "guardrails": "Guardrails (user only)",
+      "passwords": {
+        "read": "Search passwords"
+      }
+    },
+    "passwords": {
+      "items": {
+        "search": "Search the password manager (titles and tags only)"
+      }
+    }
+  },
+  "passwords": {
+    "title": "Passwords",
+    "empty": "No entries yet. Use “New” to add the first one.",
+    "search": {
+      "label": "Search entries",
+      "placeholder": "Title, username, address, tag",
+      "clear": "Clear search"
+    },
+    "sidebar": {
+      "show": "Show sidebar",
+      "hide": "Hide sidebar",
+      "all": "All entries"
+    },
+    "loading": "Loading …",
+    "noMatches": "No matching entries",
+    "noValue": "(empty)",
+    "untitled": "(untitled)",
+    "expired": "Expired",
+    "expiredOn": "Expired on {date}",
+    "new": "New",
+    "back": "Back",
+    "edit": "Edit",
+    "save": "Save",
+    "cancel": "Cancel",
+    "entryGone": "This entry no longer exists.",
+    "markers": {
+      "totp": "Has a TOTP code",
+      "passkey": "Has passkeys"
+    },
+    "reveal": "Show {field}",
+    "revealHint": "Hold to show (tap on a touch screen)",
+    "copy": "Copy {field}",
+    "copied": "{field} copied. The clipboard is cleared in {seconds} s.",
+    "copiedKept": "{field} copied.",
+    "fields": {
+      "title": "Title",
+      "username": "Username",
+      "password": "Password",
+      "url": "Address",
+      "note": "Note",
+      "expires": "Expiry date",
+      "totp": "TOTP code",
+      "custom": "Custom fields",
+      "tags": "Tags",
+      "icon": "Icon",
+      "color": "Color",
+      "name": "Name",
+      "description": "Description"
+    },
+    "totp": {
+      "left": "{seconds} s left",
+      "clockHint": "The code depends on this device’s system clock.",
+      "invalid": "The stored TOTP secret is invalid. It cannot produce a code.",
+      "replace": "Replace secret",
+      "remove": "Remove"
+    },
+    "passkeys": {
+      "title": "Passkeys",
+      "rename": "Change nickname",
+      "delete": "Delete passkey",
+      "nickname": "Nickname",
+      "created": "Created: {date}",
+      "lastUsed": "last used: {date}",
+      "otherAlgorithm": "Algorithm {number}",
+      "deleteTitle": "Delete passkey?",
+      "deleteBody": "The passkey for {name} will be removed for good."
+    },
+    "editor": {
+      "newTitle": "New entry",
+      "editTitle": "Edit entry",
+      "replace": "Replace",
+      "fieldName": "Name",
+      "fieldValue": "Value",
+      "keepValue": "(unchanged)",
+      "addField": "Add field",
+      "removeField": "Remove field",
+      "otpLabel": "TOTP secret or otpauth address",
+      "otpPlaceholder": "JBSWY3DPEHPK3PXP",
+      "otpSet": "A TOTP secret is stored.",
+      "otpWillBeRemoved": "The TOTP secret is removed when you save.",
+      "otpErrors": {
+        "otpSecret": "This is not a valid TOTP secret (Base32) or otpauth address.",
+        "otpDigits": "The number of digits must be between 6 and 10.",
+        "otpPeriod": "The period must be between 1 and 300 seconds.",
+        "otpAlgorithm": "Allowed are SHA1, SHA256 and SHA512."
+      },
+      "tagPlaceholder": "Type a tag, Enter to add",
+      "removeTag": "Remove tag {tag}",
+      "look": "Appearance"
+    },
+    "conflict": {
+      "title": "The entry has changed",
+      "changed": "The entry was changed on another device or in another window in the meantime. Your changes have not been saved.",
+      "deleted": "The entry was deleted in the meantime. Secret values you did not change can no longer be read and will not be part of the new entry.",
+      "stay": "Keep editing",
+      "takeCurrent": "Take over the current state",
+      "saveAsNew": "Save my changes as a new entry"
+    },
+    "unsaved": {
+      "title": "Unsaved changes",
+      "body": "You have changes that are not saved yet.",
+      "save": "Save",
+      "discard": "Discard",
+      "stay": "Stay",
+      "reason": "An entry in the password manager has unsaved changes."
+    },
+    "settings": {
+      "open": "Settings",
+      "title": "Password manager settings",
+      "clipboard": {
+        "title": "Clear clipboard after",
+        "off": "Never",
+        "seconds": "{seconds} seconds",
+        "description": "A copied value is removed from the clipboard after this time, if it still holds the same value."
+      }
+    },
+    "moved": "{count} entry moved | {count} entries moved",
+    "folders": {
+      "new": "New folder",
+      "edit": "Edit folder",
+      "newChild": "New subfolder",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "delete": "Delete",
+      "expand": "Expand",
+      "collapse": "Collapse",
+      "menu": "Actions for folder {name}",
+      "nameRequired": "A folder needs a name.",
+      "unknown": "Folder"
+    },
+    "tags": {
+      "manage": "Manage tags",
+      "none": "No tags yet.",
+      "name": "Tag name",
+      "rename": "Rename",
+      "delete": "Delete tag",
+      "count": "no entries | {count} entry | {count} entries",
+      "deleteTitle": "Delete tag?",
+      "deleteBody": "The tag “{name}” is removed from {count} entries. The entries stay.",
+      "errors": {
+        "exists": "A tag with this name exists already.",
+        "empty": "A tag needs a name.",
+        "too_long": "The name is too long (at most 64 characters)."
+      }
+    },
+    "selection": {
+      "label": "Selection",
+      "count": "{count} selected | {count} selected",
+      "move": "Move",
+      "addTag": "Add tag",
+      "removeTag": "Remove tag",
+      "delete": "Delete",
+      "clear": "Clear selection",
+      "target": "Target folder",
+      "topLevel": "Top level",
+      "run": "Run",
+      "confirm": {
+        "move": "Move {count} entry? | Move {count} entries?",
+        "addTag": "Add a tag to {count} entry? | Add a tag to {count} entries?",
+        "removeTag": "Remove a tag from {count} entry? | Remove a tag from {count} entries?"
+      }
+    },
+    "trash": {
+      "title": "Trash",
+      "topLevel": "top level",
+      "isEmpty": "The trash is empty.",
+      "folders": "Folders",
+      "entries": "Entries",
+      "cameFrom": "From: {path}",
+      "entriesInside": "no entries | {count} entry | {count} entries",
+      "restore": "Restore",
+      "restored": "Restored.",
+      "deleteForGood": "Delete for good",
+      "deleteTitle": "Delete for good?",
+      "deleteBody": "“{name}” is removed for good with everything that belongs to it (history, passkeys, links).",
+      "deleteFolderBody": "The folder “{name}” is removed for good with everything in it.",
+      "empty": "Empty trash",
+      "emptyTitle": "Empty the trash?",
+      "emptyBody": "{entries} entries and {folders} folders are removed for good. This cannot be undone."
+    },
+    "generator": {
+      "title": "Password generator",
+      "open": "Generate",
+      "again": "Generate again",
+      "copy": "Copy",
+      "copied": "Password copied.",
+      "use": "Use",
+      "preset": "Preset",
+      "noPreset": "None (defaults)",
+      "presetName": "Preset name",
+      "save": "Save as preset",
+      "makeDefault": "Save as default",
+      "delete": "Delete preset",
+      "usePattern": "Pattern instead of character classes",
+      "pattern": "Pattern",
+      "patternHelp": "c/C consonant, v/V vowel, a/A letter, d digit, s symbol (lower case: lowercase, upper case: uppercase). Every other character stands for itself; put \\ before a letter to keep it.",
+      "length": "Length: {length}",
+      "uppercase": "Uppercase letters",
+      "lowercase": "Lowercase letters",
+      "numbers": "Digits",
+      "symbols": "Symbols",
+      "exclude": "Excluded characters",
+      "errors": {
+        "length_range": "The length must be between 1 and 256.",
+        "no_class": "Choose at least one kind of character.",
+        "length_below_classes": "The length must be at least the number of chosen kinds of character.",
+        "class_empty": "The excluded characters leave nothing for a chosen kind of character.",
+        "pattern_empty": "Enter a pattern."
+      },
+      "presetErrors": {
+        "name": "A preset needs a name.",
+        "length": "The length must be between 1 and 256."
+      }
+    },
+    "delete": {
+      "title": "Delete",
+      "items": "{count} entry | {count} entries",
+      "folders": "{count} folder | {count} folders",
+      "toTrash": "They go to the trash, where they can be restored.",
+      "folderContent": "A folder takes its content to the trash with it.",
+      "usedBy": "Used by these functions: {features}. You can still delete.",
+      "confirm": "Move to trash",
+      "done": "Moved to the trash."
+    },
+    "history": {
+      "open": "History",
+      "title": "History",
+      "states": "States (newest first)",
+      "restore": "Restore this state",
+      "restored": "State restored.",
+      "skipped": "Restored, but these attachments are missing and were not taken over: {files}",
+      "attachmentGone": "The data of this attachment no longer exists.",
+      "fields": {
+        "title": "Title",
+        "username": "Username",
+        "password": "Password",
+        "url": "Address",
+        "note": "Note",
+        "icon": "Icon",
+        "color": "Color",
+        "expiresAt": "Expiry date",
+        "otpSecret": "TOTP secret",
+        "otpDigits": "TOTP digits",
+        "otpPeriod": "TOTP period",
+        "otpAlgorithm": "TOTP algorithm",
+        "autofillAliases": "Autofill aliases",
+        "tags": "Tags",
+        "keyValues": "Custom fields",
+        "attachments": "Attachments"
+      }
+    },
+    "attachments": {
+      "title": "Attachments",
+      "add": "Add file",
+      "addMore": "Attach another file",
+      "empty": "No attachments yet",
+      "hint": "Choose a file or drop it here. Up to 25 MiB each.",
+      "name": "File name",
+      "rename": "Rename",
+      "remove": "Remove attachment",
+      "download": "Download",
+      "preview": "Preview",
+      "saved": "File saved."
+    },
+    "import": {
+      "open": "Import",
+      "title": "Import",
+      "source": "Source",
+      "file": "File",
+      "sources": {
+        "keepass": "KeePass (kdbx)",
+        "bitwarden": "Bitwarden (JSON or CSV)",
+        "lastpass": "LastPass (CSV)"
+      },
+      "hints": {
+        "keepass": "A database from KeePass or KeePassXC, with its password and optionally a key file.",
+        "bitwarden": "An unencrypted export from the vault (JSON holds more than CSV).",
+        "lastpass": "The CSV export from the vault."
+      },
+      "noFile": "No file chosen yet",
+      "chooseFile": "Choose file",
+      "fileHint": "The file is only read; nothing of it stays outside the vault.",
+      "password": "Database password",
+      "noKeyFile": "No key file",
+      "chooseKeyFile": "Choose key file",
+      "removeKeyFile": "Remove",
+      "keyFileHint": "Only needed if the database has a key file.",
+      "showPreview": "Preview",
+      "previewTitle": "What the file holds",
+      "counts": {
+        "entries": "Entries",
+        "groups": "Folders",
+        "trashedEntries": "Entries in the trash of the source",
+        "historyStates": "History states",
+        "attachments": "Attachments",
+        "passkeys": "Passkeys",
+        "duplicates": "Entries that already exist"
+      },
+      "warnings": "Notes",
+      "warningKinds": {
+        "attachment_too_large": "Attachments above 25 MiB are not taken over.",
+        "attachment_unreadable": "An attachment could not be read.",
+        "passkey_key_unreadable": "The key of a passkey could not be read.",
+        "passkey_public_key_missing": "A passkey has no public key.",
+        "passkey_duplicate": "A passkey already exists.",
+        "totp_invalid": "A TOTP secret is not valid and is taken over as it is.",
+        "icon_not_mapped": "An icon of the source could not be matched.",
+        "value_not_storable": "A value could not be stored.",
+        "source_setting": "Settings of the source are not taken over."
+      },
+      "onDuplicate": "If an entry already exists",
+      "skip": "Skip",
+      "skipHint": "Same title, user name and address: the entry is not created again.",
+      "create": "Create anyway",
+      "createHint": "The entry is created a second time.",
+      "change": "Back",
+      "start": "Import",
+      "running": "Import running",
+      "cancel": "Cancel",
+      "cancelled": "Import cancelled, nothing was taken over.",
+      "rollingBack": "What was already written is being removed again.",
+      "phases": {
+        "reading": "Reading the file",
+        "groups": "Folders",
+        "items": "Entries",
+        "attachments": "Attachments",
+        "rollback": "Undoing"
+      },
+      "done": "Import finished",
+      "report": {
+        "imported": "Entries read",
+        "trashed": "of them in the trash",
+        "historyStates": "History states",
+        "skippedDuplicates": "Skipped duplicates"
+      },
+      "needsAttention": "To rework by hand",
+      "sourceGroup": "The source as a whole",
+      "openEntry": "Open entry",
+      "nothingToDo": "Nothing needs to be reworked.",
+      "saveReport": "Save report as text file",
+      "reportSaved": "Report saved.",
+      "another": "Another file",
+      "toList": "To the list",
+      "kinds": {
+        "attachment_too_large": "Attachment “{file}” is {size} MiB, above the limit of {limit} MiB, and was not taken over.",
+        "attachment_unreadable": "Attachment “{file}” could not be read.",
+        "passkey_key_unreadable": "Passkey “{field}”: the key could not be read.",
+        "passkey_public_key_missing": "Passkey “{field}”: the public key could not be derived.",
+        "passkey_duplicate": "Passkey “{field}” already existed and was not created again.",
+        "totp_invalid": "The TOTP secret is not valid and stands in the entry as it was.",
+        "icon_not_mapped": "The icon of the source could not be matched.",
+        "value_not_storable": "A value could not be stored.",
+        "source_setting": "Settings of the source (search, Auto-Type per group, quality check) were not taken over."
+      }
+    },
+    "stale": {
+      "changed": "This entry was changed on another device.",
+      "deleted": "This entry was deleted on another device.",
+      "reload": "Reload",
+      "back": "Back"
     }
   }
 }

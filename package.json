@@ -14,6 +14,7 @@
     "check:wm-state": "node --test scripts/check-wm-state.ts scripts/check-wm-geometry.ts scripts/check-wm-persistence.ts scripts/check-wm-session.ts",
     "check:settings": "node --test scripts/check-settings.ts",
     "check:vault-data": "node --test scripts/check-vault-data.ts",
+    "check:passwords": "node --test scripts/check-passwords-*.ts",
     "check:chat-model-search": "node --test scripts/check-chat-model-search.ts",
     "check:vault-lifecycle": "node scripts/check-vault-lifecycle.ts",
     "check:vault-passphrase-lifetime": "node scripts/check-vault-passphrase-lifetime.ts",

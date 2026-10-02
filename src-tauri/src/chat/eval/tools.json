@@ -1011,5 +1011,33 @@
       "de": "Anbieter-Modelle aktualisieren",
       "en": "Refresh provider models"
     }
+  },
+  {
+    "toolName": "passwords_items_search",
+    "actionId": "passwords.items.search",
+    "description": "Search the password manager by title, tag name or folder name. Returns id, title, tag names, folder name and whether the entry has a one-time code. It never returns usernames, addresses or any secret, and there is no way to read one.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Words to look for in the title, the tag names and the folder name of an entry; every word must match."
+        },
+        "tag": {
+          "type": "string",
+          "description": "Only entries that carry this tag."
+        },
+        "limit": {
+          "type": "integer",
+          "description": "At most this many entries (at most 50, 20 by default)."
+        }
+      }
+    },
+    "effect": "read",
+    "core": false,
+    "titles": {
+      "de": "Passwortmanager durchsuchen (nur Titel und Tags)",
+      "en": "Search the password manager (titles and tags only)"
+    }
   }
 ]

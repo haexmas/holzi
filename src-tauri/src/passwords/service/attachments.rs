@@ -1,0 +1,96 @@
+//! Attachment methods of the service (spec 034, US5, FR-019..FR-021): add from a file, rename,
+//! remove, save to a file and preview an image. For the user alone (rule Z11). The file travels as
+//! a path chosen in the system's dialog and is read and written on a blocking thread, so a 25 MiB
+//! attachment never crosses the webview.
+
+use std::path::PathBuf;
+
+use super::{require_user, PasswordsService};
+use crate::error::{HolziError, Result};
+use crate::passwords::access::Caller;
+use crate::passwords::binaries;
+use crate::passwords::model::AttachmentView;
+
+fn io_failed(error: tauri::Error) -> HolziError {
+    HolziError::Io {
+        reason: format!("attachment task failed: {error}"),
+    }
+}
+
+impl PasswordsService {
+    /// Attaches the file at `path` to an entry. The size is checked on the file before it is read.
+    pub async fn attachment_add(
+        &self,
+        caller: &Caller,
+        item_id: String,
+        path: String,
+    ) -> Result<AttachmentView> {
+        require_user(caller)?;
+        let (name, bytes) = tauri::async_runtime::spawn_blocking(move || {
+            binaries::read_attachment_file(&PathBuf::from(path))
+        })
+        .await
+        .map_err(io_failed)??;
+        self.db()
+            .write(move |tx| binaries::add_bytes(tx, &item_id, &name, &bytes).map_err(Into::into))
+            .await
+    }
+
+    /// Renames an attachment on its entry only; returns the stored name.
+    pub async fn attachment_rename(
+        &self,
+        caller: &Caller,
+        attachment_id: String,
+        file_name: String,
+    ) -> Result<String> {
+        require_user(caller)?;
+        self.db()
+            .write(move |tx| {
+                binaries::rename_attachment(tx, &attachment_id, &file_name).map_err(Into::into)
+            })
+            .await
+    }
+
+    /// Removes the link of an attachment; the data stays until the clean-up.
+    pub async fn attachment_remove(&self, caller: &Caller, attachment_id: String) -> Result<()> {
+        require_user(caller)?;
+        self.db()
+            .write(move |tx| binaries::remove_link(tx, &attachment_id).map_err(Into::into))
+            .await
+    }
+
+    /// Writes an attachment byte for byte to the file the user chose.
+    pub async fn attachment_save(
+        &self,
+        caller: &Caller,
+        attachment_id: String,
+        path: String,
+    ) -> Result<()> {
+        require_user(caller)?;
+        let (_, bytes) = self
+            .db()
+            .read(move |q| binaries::attachment_data(q, &attachment_id).map_err(Into::into))
+            .await?;
+        tauri::async_runtime::spawn_blocking(move || {
+            binaries::save_to(&PathBuf::from(path), &bytes)
+        })
+        .await
+        .map_err(io_failed)?
+    }
+
+    /// The bytes of an image attachment for the preview.
+    pub async fn attachment_preview(
+        &self,
+        caller: &Caller,
+        attachment_id: String,
+    ) -> Result<Vec<u8>> {
+        require_user(caller)?;
+        self.db()
+            .read(move |q| {
+                binaries::preview_bytes(q, &attachment_id)
+                    .map(|(bytes, _)| bytes)
+                    .map_err(Into::into)
+            })
+            .await
+    }
+}

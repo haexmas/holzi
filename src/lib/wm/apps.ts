@@ -42,6 +42,17 @@ export const WM_APPS: readonly AppDefinition[] = [
     multiInstance: false,
     tabTitle: 'app',
   },
+  // Spec 034-password-manager: several windows may be open (a second one while copying from the
+  // first); the tab shows the app's name, never the title of an entry.
+  {
+    id: 'system.passwords',
+    titleKey: 'wm.apps.passwords',
+    icon: 'lucide:key-round',
+    defaultSize: { width: 960, height: 640 },
+    minSize: { width: 360, height: 360 },
+    multiInstance: true,
+    tabTitle: 'app',
+  },
 ]
 
 /** Apps that no longer exist and where their callers land now (spec 023 research R11): the

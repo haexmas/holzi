@@ -142,6 +142,8 @@ pub async fn open_instance(
     // Spec 024: the sync service runs as tracked session work and ends with the close.
     crate::vault_events::start_for_active_instance(&app, &state);
     crate::sync::start_for_active_instance(&app, &state).await;
+    // Spec 034: the password manager tidies its binary data once per open.
+    crate::passwords::maintenance::start_after_open(&state);
 
     chat.bump_vault_generation();
     voice.invalidate_whisper_cache().await;

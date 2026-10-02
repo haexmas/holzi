@@ -5,7 +5,7 @@
 
 use uuid::Uuid;
 
-use super::preferences_commands::PrefScopeWire;
+use super::preferences_commands::{validate_value, PrefScopeWire};
 use crate::identity::VAULT_SCOPE_UUID;
 use crate::storage::preferences::PrefScope;
 
@@ -29,4 +29,18 @@ fn device_wire_rejects_the_nil_uuid() {
     })
     .expect_err("nil UUID must be rejected in device scope");
     assert!(format!("{err:?}").contains("nil UUID"));
+}
+
+#[test]
+fn the_clipboard_setting_takes_only_its_choices() {
+    for value in ["0", "15", "30", "60", "120"] {
+        validate_value("passwords.clipboard_clear_seconds", value).expect("a choice");
+    }
+    for value in ["", "10", "-1", "abc", "300"] {
+        let err =
+            validate_value("passwords.clipboard_clear_seconds", value).expect_err("not a choice");
+        assert!(format!("{err:?}").contains("InvalidInput"));
+    }
+    // Other keys take any value.
+    validate_value("chat.permission_mode", "whatever").expect("unrelated key");
 }

@@ -14,6 +14,9 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use haex_crdt::Database;
 
 use crate::error::{HolziError, Result};
+use crate::passwords::clipboard::ClipboardClearer;
+use crate::passwords::import::registry::ImportRegistry;
+use crate::passwords::usage::UsageRegistry;
 use crate::vault_gate::{VaultDb, VaultGate};
 
 /// Handle to the currently-active instance's runtime. Dropping the last
@@ -39,6 +42,12 @@ pub struct AppState {
     /// The gate whose tracker counts every `VaultDb` this state hands out, and whose phase
     /// `install` advances in the same breath as publishing.
     gate: VaultGate,
+    /// The pending clearing of the clipboard after a password manager copy (spec 034, FR-006).
+    clipboard: ClipboardClearer,
+    /// The holzi functions that report entries of the password manager as in use (FR-034).
+    usage: Arc<UsageRegistry>,
+    /// The import of the password manager that is running, if any (spec 034, US7).
+    password_import: Arc<ImportRegistry>,
 }
 
 impl AppState {
@@ -48,7 +57,25 @@ impl AppState {
             active_instance: Mutex::new(None),
             sync_servers_update: tokio::sync::Mutex::new(()),
             gate,
+            clipboard: ClipboardClearer::new(),
+            usage: Arc::new(UsageRegistry::new()),
+            password_import: ImportRegistry::new(),
         }
+    }
+
+    /// The registry in which a holzi function registers that it uses entries (spec 034, FR-034).
+    pub fn usage(&self) -> Arc<UsageRegistry> {
+        Arc::clone(&self.usage)
+    }
+
+    /// The slot of the password manager import and the flag that cancels it.
+    pub fn password_import(&self) -> Arc<ImportRegistry> {
+        Arc::clone(&self.password_import)
+    }
+
+    /// The clearer of the clipboard; a close clears what it still holds (spec 034, FR-006).
+    pub fn clipboard(&self) -> &ClipboardClearer {
+        &self.clipboard
     }
 
     /// Holds the relay-settings update lock across persistence and runtime

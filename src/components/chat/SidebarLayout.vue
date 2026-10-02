@@ -3,41 +3,17 @@
  * The chat frame: a toolbar row with only the sidebar button, below it the thread sidebar and the
  * content. Like the settings frame (`apps/SettingsApp.vue`) it is a size container, so the sidebar
  * follows the window's width, not the screen's: from `@2xl` it sits beside the content and can be
- * hidden, below that it is gone and opens over the content. Nothing is kept — the state is local
- * to the open tab. Whether the frame is wide is read from the panel's CSS (`position`) rather
- * than a second copy of the threshold. The `sidebar` slot gets `run`, to wrap what a pick in the
- * overlay does.
+ * hidden, below that it is gone and opens over the content; the width logic is
+ * `useSidebarFrame`. The `sidebar` slot gets `run`, to wrap what a pick in the overlay does.
  */
 const { t } = useI18n()
 
 const frame = useTemplateRef<HTMLElement>('frame')
 const panel = useTemplateRef<HTMLElement>('panel')
 
-/** Wide window: the operator hid the sidebar. */
-const wideHidden = ref(false)
-/** Narrow window: the sidebar is open over the content. */
-const menuOpen = ref(false)
-const wide = ref(true)
+const { wideHidden, menuOpen, visible, overlaying, toggle, close } =
+  useSidebarFrame(frame, () => panel.value)
 
-function isWide(): boolean {
-  const el = panel.value
-  return el ? getComputedStyle(el).position !== 'absolute' : true
-}
-
-const { width } = useElementSize(frame)
-watch(width, () => {
-  wide.value = isWide()
-  if (wide.value) menuOpen.value = false
-})
-onMounted(() => {
-  wide.value = isWide()
-})
-
-const visible = computed(() =>
-  wide.value ? !wideHidden.value : menuOpen.value,
-)
-/** The sidebar covers the content, which must not take focus meanwhile. */
-const overlaying = computed(() => menuOpen.value && !wide.value)
 const label = computed(() =>
   visible.value ? t('chat.sidebar.hide') : t('chat.sidebar.show'),
 )
@@ -48,15 +24,6 @@ const panelClass = computed(() => [
   menuOpen.value ? 'visible translate-x-0' : 'invisible -translate-x-full',
   wideHidden.value ? '@2xl:invisible @2xl:w-0' : '@2xl:visible @2xl:w-64',
 ])
-
-function toggle() {
-  if (isWide()) wideHidden.value = visible.value
-  else menuOpen.value = !menuOpen.value
-}
-
-function close() {
-  menuOpen.value = false
-}
 
 /** For what is picked in the sidebar: the overlay closes, back to the content; a wide window keeps
  * its sidebar. */

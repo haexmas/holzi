@@ -168,6 +168,61 @@ fn reopening_a_pre_0018_vault_tracks_capabilities_json() {
     );
 }
 
+/// `0022_passwords` introduces twelve CRDT-tracked tables: a vault provisioned before it must have
+/// the `z_dirty_*` triggers on all of them after reopening through the production config (trigger
+/// version 14), or nothing written to the password manager would ever sync.
+#[test]
+fn reopening_a_pre_0022_vault_installs_the_password_table_triggers() {
+    const PASSWORD_TABLES: [&str; 12] = [
+        "haex_passwords_item_details",
+        "haex_passwords_item_key_values",
+        "haex_passwords_groups",
+        "haex_passwords_group_items",
+        "haex_passwords_binaries",
+        "haex_passwords_item_binaries",
+        "haex_passwords_item_snapshots",
+        "haex_passwords_snapshot_binaries",
+        "haex_passwords_generator_presets",
+        "haex_passwords_tags",
+        "haex_passwords_item_tags",
+        "haex_passwords_passkeys",
+    ];
+    let trigger_count = |db: &Database, table: &str| -> i64 {
+        db.with_connection(|conn| {
+            Ok(conn.query_row(
+                "SELECT COUNT(*) FROM sqlite_master \
+                 WHERE type = 'trigger' AND name LIKE 'z_dirty_' || ?1 || '_%'",
+                [table],
+                |r| r.get(0),
+            )?)
+        })
+        .expect("count triggers")
+    };
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db_path = dir.path().join("vault.db");
+    let installation_id = installation_id_path(dir.path());
+
+    let old = open_vault(
+        dir.path(),
+        source_without("0022_passwords"),
+        DEFAULT_TRIGGER_VERSION,
+    );
+    for table in PASSWORD_TABLES {
+        assert_eq!(trigger_count(&old, table), 0, "{table} does not exist yet");
+    }
+    drop(old);
+
+    let upgraded = Database::open(vault_config(PASSPHRASE, &db_path, &installation_id, false))
+        .expect("reopen upgraded vault");
+    for table in PASSWORD_TABLES {
+        assert!(
+            trigger_count(&upgraded, table) > 0,
+            "{table} is CRDT-tracked, but the production open path left it without triggers — \
+             its writes will not sync. Bump HOLZI_TRIGGER_VERSION."
+        );
+    }
+}
+
 #[test]
 fn a_vault_from_before_spec_024_gets_its_derived_identity_and_first_device_list() {
     let dir = tempfile::tempdir().expect("tempdir");

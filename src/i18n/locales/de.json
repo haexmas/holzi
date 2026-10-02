@@ -113,7 +113,8 @@
     },
     "apps": {
       "chat": "Chat",
-      "settings": "Einstellungen"
+      "settings": "Einstellungen",
+      "passwords": "Passwörter"
     },
     "launcher": {
       "lock": "Sperren",
@@ -156,6 +157,15 @@
     },
     "chat": {
       "thread": "Unterhaltung"
+    },
+    "passwords": {
+      "list": "Passwörter",
+      "folder": "Ordner",
+      "entry": "Eintrag",
+      "history": "Verlauf",
+      "trash": "Papierkorb",
+      "generator": "Generator",
+      "import": "Import"
     }
   },
   "chat": {
@@ -760,6 +770,24 @@
       "modelRegistrationFailed": "Die Installation konnte nicht abgeschlossen werden.",
       "modelNotFound": "Modell wurde nicht gefunden.",
       "generic": "Unbekannter Fehler."
+    },
+    "passwords": {
+      "notFound": "Der Eintrag wurde nicht gefunden.",
+      "forbidden": "Dafür fehlt die Berechtigung.",
+      "conflictChanged": "Der Eintrag wurde inzwischen geändert.",
+      "conflictDeleted": "Der Eintrag wurde inzwischen gelöscht.",
+      "conflict": "Der Eintrag wurde inzwischen geändert oder gelöscht.",
+      "attachmentTooLarge": "Die Datei ist größer als das Limit von {limit} MiB.",
+      "importFailed": "Der Import ist fehlgeschlagen.",
+      "importReason": {
+        "unreadable": "Die Datei lässt sich nicht lesen.",
+        "wrong_credentials": "Passwort oder Schlüsseldatei sind falsch.",
+        "corrupt": "Die Datei ist beschädigt.",
+        "unsupported_format": "Das Format wird nicht unterstützt.",
+        "encrypted_export": "Der Export ist verschlüsselt und lässt sich ohne sein Kennwort nicht lesen.",
+        "cancelled": "Der Import wurde abgebrochen.",
+        "unwritable": "Die Datei ließ sich nicht schreiben."
+      }
     }
   },
   "actions": {
@@ -912,7 +940,377 @@
         "device": "Geräte-Einstellungen ändern",
         "models": "Modelle verwalten"
       },
-      "guardrails": "Leitplanken (nur Nutzer)"
+      "guardrails": "Leitplanken (nur Nutzer)",
+      "passwords": {
+        "read": "Passwörter durchsuchen"
+      }
+    },
+    "passwords": {
+      "items": {
+        "search": "Passwortmanager durchsuchen (nur Titel und Tags)"
+      }
+    }
+  },
+  "passwords": {
+    "title": "Passwörter",
+    "empty": "Noch keine Einträge. Lege mit „Neu“ den ersten an.",
+    "search": {
+      "label": "Einträge suchen",
+      "placeholder": "Titel, Benutzername, Adresse, Tag",
+      "clear": "Suche leeren"
+    },
+    "sidebar": {
+      "show": "Seitenleiste einblenden",
+      "hide": "Seitenleiste ausblenden",
+      "all": "Alle Einträge"
+    },
+    "loading": "Lädt …",
+    "noMatches": "Keine passenden Einträge",
+    "noValue": "(leer)",
+    "untitled": "(ohne Titel)",
+    "expired": "Abgelaufen",
+    "expiredOn": "Abgelaufen am {date}",
+    "new": "Neu",
+    "back": "Zurück",
+    "edit": "Bearbeiten",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "entryGone": "Dieser Eintrag existiert nicht mehr.",
+    "markers": {
+      "totp": "Hat einen TOTP-Code",
+      "passkey": "Hat Passkeys"
+    },
+    "reveal": "{field} anzeigen",
+    "revealHint": "Gedrückt halten (am Touchscreen tippen)",
+    "copy": "{field} kopieren",
+    "copied": "{field} kopiert. Die Zwischenablage wird in {seconds} s geleert.",
+    "copiedKept": "{field} kopiert.",
+    "fields": {
+      "title": "Titel",
+      "username": "Benutzername",
+      "password": "Passwort",
+      "url": "Adresse",
+      "note": "Notiz",
+      "expires": "Ablaufdatum",
+      "totp": "TOTP-Code",
+      "custom": "Eigene Felder",
+      "tags": "Tags",
+      "icon": "Symbol",
+      "color": "Farbe",
+      "name": "Name",
+      "description": "Beschreibung"
+    },
+    "totp": {
+      "left": "noch {seconds} s",
+      "clockHint": "Der Code hängt von der Systemzeit dieses Geräts ab.",
+      "invalid": "Das gespeicherte TOTP-Secret ist ungültig. Es kann keinen Code liefern.",
+      "replace": "Secret ersetzen",
+      "remove": "Entfernen"
+    },
+    "passkeys": {
+      "title": "Passkeys",
+      "rename": "Spitzname ändern",
+      "delete": "Passkey löschen",
+      "nickname": "Spitzname",
+      "created": "Angelegt: {date}",
+      "lastUsed": "zuletzt genutzt: {date}",
+      "otherAlgorithm": "Algorithmus {number}",
+      "deleteTitle": "Passkey löschen?",
+      "deleteBody": "Der Passkey für {name} wird endgültig entfernt."
+    },
+    "editor": {
+      "newTitle": "Neuer Eintrag",
+      "editTitle": "Eintrag bearbeiten",
+      "replace": "Ersetzen",
+      "fieldName": "Name",
+      "fieldValue": "Wert",
+      "keepValue": "(unverändert)",
+      "addField": "Feld hinzufügen",
+      "removeField": "Feld entfernen",
+      "otpLabel": "TOTP-Secret oder otpauth-Adresse",
+      "otpPlaceholder": "JBSWY3DPEHPK3PXP",
+      "otpSet": "Ein TOTP-Secret ist gespeichert.",
+      "otpWillBeRemoved": "Das TOTP-Secret wird beim Speichern entfernt.",
+      "otpErrors": {
+        "otpSecret": "Das ist kein gültiges TOTP-Secret (Base32) und keine gültige otpauth-Adresse.",
+        "otpDigits": "Die Ziffernzahl muss zwischen 6 und 10 liegen.",
+        "otpPeriod": "Die Periode muss zwischen 1 und 300 Sekunden liegen.",
+        "otpAlgorithm": "Erlaubt sind SHA1, SHA256 und SHA512."
+      },
+      "tagPlaceholder": "Tag eingeben, Enter zum Hinzufügen",
+      "removeTag": "Tag {tag} entfernen",
+      "look": "Aussehen"
+    },
+    "conflict": {
+      "title": "Der Eintrag hat sich geändert",
+      "changed": "Der Eintrag wurde inzwischen auf einem anderen Gerät oder in einem anderen Fenster geändert. Deine Änderungen wurden nicht gespeichert.",
+      "deleted": "Der Eintrag wurde inzwischen gelöscht. Geheime Werte, die du nicht geändert hast, lassen sich dafür nicht mehr lesen und gehören dann nicht zum neuen Eintrag.",
+      "stay": "Weiter bearbeiten",
+      "takeCurrent": "Aktuellen Stand übernehmen",
+      "saveAsNew": "Meine Änderungen als neuen Eintrag speichern"
+    },
+    "unsaved": {
+      "title": "Ungespeicherte Änderungen",
+      "body": "Du hast Änderungen, die noch nicht gespeichert sind.",
+      "save": "Speichern",
+      "discard": "Verwerfen",
+      "stay": "Bleiben",
+      "reason": "Ein Eintrag im Passwortmanager hat ungespeicherte Änderungen."
+    },
+    "settings": {
+      "open": "Einstellungen",
+      "title": "Einstellungen des Passwortmanagers",
+      "clipboard": {
+        "title": "Zwischenablage leeren nach",
+        "off": "Nie",
+        "seconds": "{seconds} Sekunden",
+        "description": "Ein kopierter Wert wird nach dieser Zeit aus der Zwischenablage entfernt, sofern sie noch denselben Wert enthält."
+      }
+    },
+    "moved": "{count} Eintrag verschoben | {count} Einträge verschoben",
+    "folders": {
+      "new": "Neuer Ordner",
+      "edit": "Ordner bearbeiten",
+      "newChild": "Unterordner anlegen",
+      "moveUp": "Nach oben",
+      "moveDown": "Nach unten",
+      "delete": "Löschen",
+      "expand": "Aufklappen",
+      "collapse": "Zuklappen",
+      "menu": "Aktionen für Ordner {name}",
+      "nameRequired": "Ein Ordner braucht einen Namen.",
+      "unknown": "Ordner"
+    },
+    "tags": {
+      "manage": "Tags verwalten",
+      "none": "Noch keine Tags.",
+      "name": "Tagname",
+      "rename": "Umbenennen",
+      "delete": "Tag löschen",
+      "count": "kein Eintrag | {count} Eintrag | {count} Einträge",
+      "deleteTitle": "Tag löschen?",
+      "deleteBody": "Der Tag „{name}“ wird von {count} Einträgen entfernt. Die Einträge bleiben.",
+      "errors": {
+        "exists": "Einen Tag mit diesem Namen gibt es schon.",
+        "empty": "Ein Tag braucht einen Namen.",
+        "too_long": "Der Name ist zu lang (höchstens 64 Zeichen)."
+      }
+    },
+    "selection": {
+      "label": "Auswahl",
+      "count": "{count} ausgewählt | {count} ausgewählt",
+      "move": "Verschieben",
+      "addTag": "Tag hinzufügen",
+      "removeTag": "Tag entfernen",
+      "delete": "Löschen",
+      "clear": "Auswahl aufheben",
+      "target": "Zielordner",
+      "topLevel": "Oberste Ebene",
+      "run": "Ausführen",
+      "confirm": {
+        "move": "{count} Eintrag verschieben? | {count} Einträge verschieben?",
+        "addTag": "Tag zu {count} Eintrag hinzufügen? | Tag zu {count} Einträgen hinzufügen?",
+        "removeTag": "Tag von {count} Eintrag entfernen? | Tag von {count} Einträgen entfernen?"
+      }
+    },
+    "trash": {
+      "title": "Papierkorb",
+      "topLevel": "oberste Ebene",
+      "isEmpty": "Der Papierkorb ist leer.",
+      "folders": "Ordner",
+      "entries": "Einträge",
+      "cameFrom": "Aus: {path}",
+      "entriesInside": "kein Eintrag | {count} Eintrag | {count} Einträge",
+      "restore": "Wiederherstellen",
+      "restored": "Wiederhergestellt.",
+      "deleteForGood": "Endgültig löschen",
+      "deleteTitle": "Endgültig löschen?",
+      "deleteBody": "„{name}“ wird mit allem, was dazugehört (Verlauf, Passkeys, Verknüpfungen), endgültig entfernt.",
+      "deleteFolderBody": "Der Ordner „{name}“ wird mit allem, was darin liegt, endgültig entfernt.",
+      "empty": "Papierkorb leeren",
+      "emptyTitle": "Papierkorb leeren?",
+      "emptyBody": "{entries} Einträge und {folders} Ordner werden endgültig entfernt. Das lässt sich nicht rückgängig machen."
+    },
+    "generator": {
+      "title": "Passwortgenerator",
+      "open": "Generieren",
+      "again": "Neu erzeugen",
+      "copy": "Kopieren",
+      "copied": "Passwort kopiert.",
+      "use": "Übernehmen",
+      "preset": "Voreinstellung",
+      "noPreset": "Keine (Standardwerte)",
+      "presetName": "Name der Voreinstellung",
+      "save": "Als Voreinstellung speichern",
+      "makeDefault": "Als Standard speichern",
+      "delete": "Voreinstellung löschen",
+      "usePattern": "Muster statt Zeichenklassen",
+      "pattern": "Muster",
+      "patternHelp": "c/C Konsonant, v/V Vokal, a/A Buchstabe, d Ziffer, s Sonderzeichen (klein: Kleinbuchstabe, groß: Großbuchstabe). Alle anderen Zeichen stehen für sich; mit \\ davor auch die Buchstaben.",
+      "length": "Länge: {length}",
+      "uppercase": "Großbuchstaben",
+      "lowercase": "Kleinbuchstaben",
+      "numbers": "Ziffern",
+      "symbols": "Sonderzeichen",
+      "exclude": "Ausgeschlossene Zeichen",
+      "errors": {
+        "length_range": "Die Länge muss zwischen 1 und 256 liegen.",
+        "no_class": "Wähle mindestens eine Zeichenart.",
+        "length_below_classes": "Die Länge muss mindestens so groß sein wie die Zahl der gewählten Zeichenarten.",
+        "class_empty": "Die ausgeschlossenen Zeichen lassen für eine gewählte Zeichenart nichts übrig.",
+        "pattern_empty": "Gib ein Muster ein."
+      },
+      "presetErrors": {
+        "name": "Eine Voreinstellung braucht einen Namen.",
+        "length": "Die Länge muss zwischen 1 und 256 liegen."
+      }
+    },
+    "delete": {
+      "title": "Löschen",
+      "items": "{count} Eintrag | {count} Einträge",
+      "folders": "{count} Ordner | {count} Ordner",
+      "toTrash": "Sie kommen in den Papierkorb und lassen sich dort wiederherstellen.",
+      "folderContent": "Ein Ordner nimmt seinen Inhalt mit in den Papierkorb.",
+      "usedBy": "Wird von diesen Funktionen genutzt: {features}. Du kannst trotzdem löschen.",
+      "confirm": "In den Papierkorb",
+      "done": "In den Papierkorb verschoben."
+    },
+    "history": {
+      "open": "Verlauf",
+      "title": "Verlauf",
+      "states": "Stände (neueste zuerst)",
+      "restore": "Diesen Stand wiederherstellen",
+      "restored": "Stand wiederhergestellt.",
+      "skipped": "Wiederhergestellt, aber diese Anhänge fehlen und wurden nicht übernommen: {files}",
+      "attachmentGone": "Die Daten dieses Anhangs gibt es nicht mehr.",
+      "fields": {
+        "title": "Titel",
+        "username": "Benutzername",
+        "password": "Passwort",
+        "url": "Adresse",
+        "note": "Notiz",
+        "icon": "Symbol",
+        "color": "Farbe",
+        "expiresAt": "Ablaufdatum",
+        "otpSecret": "TOTP-Secret",
+        "otpDigits": "TOTP-Ziffern",
+        "otpPeriod": "TOTP-Periode",
+        "otpAlgorithm": "TOTP-Algorithmus",
+        "autofillAliases": "Autofill-Aliase",
+        "tags": "Tags",
+        "keyValues": "Eigene Felder",
+        "attachments": "Anhänge"
+      }
+    },
+    "attachments": {
+      "title": "Anhänge",
+      "add": "Datei hinzufügen",
+      "addMore": "Weitere Datei anhängen",
+      "empty": "Noch keine Anhänge",
+      "hint": "Wähle eine Datei oder ziehe sie hierher. Jeweils bis 25 MiB.",
+      "name": "Dateiname",
+      "rename": "Umbenennen",
+      "remove": "Anhang entfernen",
+      "download": "Herunterladen",
+      "preview": "Vorschau",
+      "saved": "Datei gespeichert."
+    },
+    "import": {
+      "open": "Import",
+      "title": "Import",
+      "source": "Quelle",
+      "file": "Datei",
+      "sources": {
+        "keepass": "KeePass (kdbx)",
+        "bitwarden": "Bitwarden (JSON oder CSV)",
+        "lastpass": "LastPass (CSV)"
+      },
+      "hints": {
+        "keepass": "Datenbank von KeePass oder KeePassXC, mit Passwort und optional einer Schlüsseldatei.",
+        "bitwarden": "Unverschlüsselter Export aus dem Tresor (JSON enthält mehr als CSV).",
+        "lastpass": "Der CSV-Export aus dem Tresor."
+      },
+      "noFile": "Noch keine Datei gewählt",
+      "chooseFile": "Datei wählen",
+      "fileHint": "Die Datei wird nur gelesen, nichts davon bleibt außerhalb der Vault.",
+      "password": "Passwort der Datenbank",
+      "noKeyFile": "Keine Schlüsseldatei",
+      "chooseKeyFile": "Schlüsseldatei wählen",
+      "removeKeyFile": "Entfernen",
+      "keyFileHint": "Nur nötig, wenn die Datenbank eine Schlüsseldatei hat.",
+      "showPreview": "Vorschau",
+      "previewTitle": "Das steht in der Datei",
+      "counts": {
+        "entries": "Einträge",
+        "groups": "Ordner",
+        "trashedEntries": "Einträge im Papierkorb der Quelle",
+        "historyStates": "Verlaufsstände",
+        "attachments": "Anhänge",
+        "passkeys": "Passkeys",
+        "duplicates": "Einträge, die es schon gibt"
+      },
+      "warnings": "Hinweise",
+      "warningKinds": {
+        "attachment_too_large": "Anhänge über 25 MiB werden nicht übernommen.",
+        "attachment_unreadable": "Ein Anhang ließ sich nicht lesen.",
+        "passkey_key_unreadable": "Der Schlüssel eines Passkeys ließ sich nicht lesen.",
+        "passkey_public_key_missing": "Zu einem Passkey fehlt der öffentliche Schlüssel.",
+        "passkey_duplicate": "Ein Passkey kommt schon vor.",
+        "totp_invalid": "Ein TOTP-Secret ist ungültig und wird unverändert übernommen.",
+        "icon_not_mapped": "Ein Symbol der Quelle ließ sich nicht zuordnen.",
+        "value_not_storable": "Ein Wert ließ sich nicht speichern.",
+        "source_setting": "Einstellungen der Quelle werden nicht übernommen."
+      },
+      "onDuplicate": "Wenn es einen Eintrag schon gibt",
+      "skip": "Überspringen",
+      "skipHint": "Gleicher Titel, Benutzername und gleiche Adresse: der Eintrag wird nicht noch einmal angelegt.",
+      "create": "Trotzdem anlegen",
+      "createHint": "Der Eintrag wird ein zweites Mal angelegt.",
+      "change": "Zurück",
+      "start": "Importieren",
+      "running": "Import läuft",
+      "cancel": "Abbrechen",
+      "cancelled": "Import abgebrochen, es wurde nichts übernommen.",
+      "rollingBack": "Was schon geschrieben war, wird wieder entfernt.",
+      "phases": {
+        "reading": "Die Datei wird gelesen",
+        "groups": "Ordner",
+        "items": "Einträge",
+        "attachments": "Anhänge",
+        "rollback": "Rückgängig machen"
+      },
+      "done": "Import beendet",
+      "report": {
+        "imported": "Eingelesene Einträge",
+        "trashed": "davon im Papierkorb",
+        "historyStates": "Verlaufsstände",
+        "skippedDuplicates": "Übersprungene Doppelte"
+      },
+      "needsAttention": "Hier musst du nacharbeiten",
+      "sourceGroup": "Quelle insgesamt",
+      "openEntry": "Eintrag öffnen",
+      "nothingToDo": "Es gibt nichts nachzuarbeiten.",
+      "saveReport": "Bericht als Textdatei speichern",
+      "reportSaved": "Bericht gespeichert.",
+      "another": "Weitere Datei",
+      "toList": "Zur Liste",
+      "kinds": {
+        "attachment_too_large": "Anhang „{file}“ ist mit {size} MiB größer als das Limit von {limit} MiB und wurde nicht übernommen.",
+        "attachment_unreadable": "Anhang „{file}“ ließ sich nicht lesen.",
+        "passkey_key_unreadable": "Passkey „{field}“: der Schlüssel ließ sich nicht lesen.",
+        "passkey_public_key_missing": "Passkey „{field}“: der öffentliche Schlüssel konnte nicht abgeleitet werden.",
+        "passkey_duplicate": "Passkey „{field}“ gab es schon und wurde nicht noch einmal angelegt.",
+        "totp_invalid": "Das TOTP-Secret ist ungültig und steht unverändert im Eintrag.",
+        "icon_not_mapped": "Das Symbol der Quelle ließ sich nicht zuordnen.",
+        "value_not_storable": "Ein Wert ließ sich nicht speichern.",
+        "source_setting": "Einstellungen der Quelle (Suche, Auto-Type je Gruppe, Qualitätsprüfung) wurden nicht übernommen."
+      }
+    },
+    "stale": {
+      "changed": "Dieser Eintrag wurde auf einem anderen Gerät geändert.",
+      "deleted": "Dieser Eintrag wurde auf einem anderen Gerät gelöscht.",
+      "reload": "Neu laden",
+      "back": "Zurück"
     }
   }
 }

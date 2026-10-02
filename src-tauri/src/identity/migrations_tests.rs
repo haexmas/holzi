@@ -1,5 +1,6 @@
 //! Migration tests for `0020_wm_session_no_sync` (spec 022-session-restore,
-//! research R5) and `0021_own_device_sync` (spec 024, research R2/R3). Each
+//! research R5), `0021_own_device_sync` (spec 024, research R2/R3) and `0022_passwords` (spec 034,
+//! data-model.md). Each
 //! case runs against a genesis vault (every migration applied at
 //! `Database::open`) and against a vault upgraded from the previous schema,
 //! where the migration has to carry existing rows along.
@@ -345,6 +346,249 @@ async fn two_copies_of_a_legacy_vault_derive_the_same_identity() {
             first,
             crate::sync::signing::xonly_public_key(&derived).expect("public key")
         );
+    })
+    .await
+    .expect("join");
+}
+
+const PASSWORDS_TABLES: [(&str, &[&str]); 12] = [
+    (
+        "haex_passwords_item_details",
+        &[
+            "id",
+            "title",
+            "username",
+            "password",
+            "note",
+            "icon",
+            "color",
+            "url",
+            "otp_secret",
+            "otp_digits",
+            "otp_period",
+            "otp_algorithm",
+            "expires_at",
+            "autofill_aliases",
+            "created_at",
+            "updated_at",
+        ],
+    ),
+    (
+        "haex_passwords_item_key_values",
+        &["id", "item_id", "key", "value", "updated_at"],
+    ),
+    (
+        "haex_passwords_groups",
+        &[
+            "id",
+            "name",
+            "description",
+            "icon",
+            "sort_order",
+            "color",
+            "parent_id",
+            "created_at",
+            "updated_at",
+            "trashed_from_parent_id",
+        ],
+    ),
+    (
+        "haex_passwords_group_items",
+        &["item_id", "group_id", "trashed_from_group_id"],
+    ),
+    (
+        "haex_passwords_binaries",
+        &["hash", "data", "size", "type", "created_at", "orphaned_at"],
+    ),
+    (
+        "haex_passwords_item_binaries",
+        &["id", "item_id", "binary_hash", "file_name"],
+    ),
+    (
+        "haex_passwords_item_snapshots",
+        &[
+            "id",
+            "item_id",
+            "snapshot_data",
+            "created_at",
+            "modified_at",
+        ],
+    ),
+    (
+        "haex_passwords_snapshot_binaries",
+        &["id", "snapshot_id", "binary_hash", "file_name"],
+    ),
+    (
+        "haex_passwords_generator_presets",
+        &[
+            "id",
+            "name",
+            "length",
+            "uppercase",
+            "lowercase",
+            "numbers",
+            "symbols",
+            "exclude_chars",
+            "use_pattern",
+            "pattern",
+            "is_default",
+            "created_at",
+            "updated_at",
+        ],
+    ),
+    (
+        "haex_passwords_tags",
+        &["id", "name", "color", "created_at"],
+    ),
+    ("haex_passwords_item_tags", &["id", "item_id", "tag_id"]),
+    (
+        "haex_passwords_passkeys",
+        &[
+            "id",
+            "item_id",
+            "credential_id",
+            "relying_party_id",
+            "relying_party_name",
+            "user_name",
+            "user_display_name",
+            "user_handle",
+            "private_key",
+            "public_key",
+            "algorithm",
+            "sign_count",
+            "is_discoverable",
+            "icon",
+            "color",
+            "nickname",
+            "created_at",
+            "last_used_at",
+        ],
+    ),
+];
+
+/// The columns of `table` without the metadata haex-crdt adds to every tracked table.
+fn own_columns(db: &Database, table: &str) -> Vec<String> {
+    column_names(db, table)
+        .into_iter()
+        .filter(|name| !name.starts_with("haex_"))
+        .collect()
+}
+
+fn assert_passwords_schema(db: &Database) {
+    for (table, columns) in PASSWORDS_TABLES {
+        assert!(table_exists(db, table), "{table} must exist after 0022");
+        assert_eq!(own_columns(db, table), columns, "columns of {table}");
+    }
+    let declared_type = db
+        .with_connection(|conn| {
+            Ok(conn.query_row(
+                "SELECT type FROM pragma_table_info('haex_passwords_binaries') WHERE name = 'data'",
+                [],
+                |r| r.get::<_, String>(0),
+            )?)
+        })
+        .expect("declared type of the binary column");
+    assert_eq!(
+        declared_type, "BLOB",
+        "attachments are binary, not Base64 text (A1)"
+    );
+    for (table, _) in PASSWORDS_TABLES {
+        let unique_indexes = db
+            .with_connection(|conn| {
+                Ok(conn.query_row(
+                    "SELECT COUNT(*) FROM pragma_index_list(?1) \
+                     WHERE \"unique\" = 1 AND origin IN ('c', 'u')",
+                    params![table],
+                    |r| r.get::<_, i64>(0),
+                )?)
+            })
+            .expect("index list");
+        assert_eq!(
+            unique_indexes, 0,
+            "{table}: a UNIQUE constraint would halt the sync on a conflict (A3)"
+        );
+    }
+}
+
+#[tokio::test]
+async fn migration_0022_gives_a_fresh_vault_the_password_tables() {
+    tokio::task::spawn_blocking(|| {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = open(
+            dir.path(),
+            "passwords-migration-fresh",
+            true,
+            holzi_migration_source(),
+        );
+        assert_passwords_schema(&db);
+    })
+    .await
+    .expect("join");
+}
+
+#[tokio::test]
+async fn migration_0022_upgrades_a_vault_from_before_it() {
+    tokio::task::spawn_blocking(|| {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let old = open(
+            dir.path(),
+            "passwords-migration-upgrade",
+            true,
+            migration_source_before("0022_passwords"),
+        );
+        assert!(!table_exists(&old, "haex_passwords_item_details"));
+        drop(old);
+
+        let db = open(
+            dir.path(),
+            "passwords-migration-upgrade",
+            false,
+            holzi_migration_source(),
+        );
+        assert_passwords_schema(&db);
+    })
+    .await
+    .expect("join");
+}
+
+#[tokio::test]
+async fn a_binary_that_an_attachment_still_links_cannot_be_deleted() {
+    tokio::task::spawn_blocking(|| {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = open(
+            dir.path(),
+            "passwords-migration-restrict",
+            true,
+            holzi_migration_source(),
+        );
+        db.with_connection(|conn| {
+            conn.execute(
+                "INSERT INTO haex_passwords_item_details (id) VALUES ('item-1')",
+                [],
+            )?;
+            conn.execute(
+                "INSERT INTO haex_passwords_binaries (hash, data, size) VALUES ('h1', x'0102', 2)",
+                [],
+            )?;
+            conn.execute(
+                "INSERT INTO haex_passwords_item_binaries (id, item_id, binary_hash, file_name) \
+                 VALUES ('l1', 'item-1', 'h1', 'a.txt')",
+                [],
+            )?;
+            let refused = conn.execute("DELETE FROM haex_passwords_binaries WHERE hash = 'h1'", []);
+            assert!(
+                refused.is_err(),
+                "ON DELETE RESTRICT must refuse deleting a linked binary (A4)"
+            );
+            // Without the link the binary can go.
+            conn.execute(
+                "DELETE FROM haex_passwords_item_binaries WHERE id = 'l1'",
+                [],
+            )?;
+            conn.execute("DELETE FROM haex_passwords_binaries WHERE hash = 'h1'", [])?;
+            Ok(())
+        })
+        .expect("restrict test");
     })
     .await
     .expect("join");

@@ -31,7 +31,7 @@ const HF_ERROR_KINDS = new Set([
  * lifecycle errors) so the HF/idempotency-kind mapping has one source.
  */
 export function useErrorString() {
-  const { t } = useI18n()
+  const { t, te } = useI18n()
 
   /** Maps a caught value to a localized or safely serialized error message. */
   function errString(e: unknown): string {
@@ -51,6 +51,27 @@ export function useErrorString() {
       if (kind === 'VaultAlreadyActive') return t('errors.vaultAlreadyActive')
       if (kind === 'VaultClosed') return t('errors.vaultClosed')
       if (kind === 'TransactionTooLarge') return t('errors.transactionTooLarge')
+      // Spec 034 (contracts/tauri-commands.md §Fehlerarten): the password manager's own kinds. They
+      // carry a reason or numbers, never a value, so they must not reach `JSON.stringify` below.
+      if (kind === 'PasswordsNotFound') return t('errors.passwords.notFound')
+      if (kind === 'PasswordsForbidden') return t('errors.passwords.forbidden')
+      if (kind === 'PasswordsConflict') {
+        if (reason === 'changed') return t('errors.passwords.conflictChanged')
+        if (reason === 'deleted') return t('errors.passwords.conflictDeleted')
+        return t('errors.passwords.conflict')
+      }
+      if (kind === 'PasswordsAttachmentTooLarge') {
+        const limit = (e as { limit?: unknown }).limit
+        const mib = typeof limit === 'number' ? Math.floor(limit / 1048576) : 0
+        return t('errors.passwords.attachmentTooLarge', { limit: mib })
+      }
+      if (kind === 'PasswordsImportFailed') {
+        if (typeof reason === 'string' && reason.length > 0) {
+          const key = `errors.passwords.importReason.${reason}`
+          return te(key) ? t(key) : t('errors.passwords.importFailed')
+        }
+        return t('errors.passwords.importFailed')
+      }
       if (kind === 'InvalidInput' && typeof reason === 'string') {
         if (reason.startsWith(AUTONOMY_UNAVAILABLE_PREFIX))
           return t('errors.autonomyUnavailable')

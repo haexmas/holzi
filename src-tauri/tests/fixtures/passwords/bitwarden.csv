@@ -1,0 +1,6 @@
+folder,favorite,type,name,notes,fields,reprompt,login_uri,login_username,login_password,login_totp
+Work/Email,1,login,Mail,"line one
+line two","Security question: first pet
+PIN: 1234",1,"https://mail.example.invalid
+https://alt.example.invalid",alice,SECRET-MARKER-IMPORT-csv,JBSWY3DPEHPK3PXP
+,0,note,Wifi note,SSID: home,,0,,,,

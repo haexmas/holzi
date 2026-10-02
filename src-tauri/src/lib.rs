@@ -11,6 +11,7 @@ pub mod instances;
 pub mod llm;
 pub mod model_capabilities;
 pub mod models;
+pub mod passwords;
 pub mod providers;
 pub mod state;
 pub mod state_utils;
@@ -58,6 +59,36 @@ use models::commands::{
     install_huggingface_update, list_installed_models, preview_huggingface_install,
     search_huggingface_models,
 };
+use passwords::commands::agent::passwords_agent_search;
+use passwords::commands::attachments::{
+    passwords_attachment_add, passwords_attachment_preview, passwords_attachment_remove,
+    passwords_attachment_rename, passwords_attachment_save,
+};
+use passwords::commands::history::{
+    passwords_history_get, passwords_history_list, passwords_history_restore,
+    passwords_history_reveal,
+};
+use passwords::commands::import::{
+    passwords_icon_preview, passwords_import_cancel, passwords_import_preview,
+    passwords_import_report_save, passwords_import_run,
+};
+use passwords::commands::items::{passwords_create_item, passwords_update_item};
+use passwords::commands::organize::{
+    passwords_create_group, passwords_delete_tag, passwords_move, passwords_rename_tag,
+    passwords_reorder_groups, passwords_set_tag_color, passwords_set_tags, passwords_update_group,
+};
+use passwords::commands::passkeys::{passwords_passkey_delete, passwords_passkey_rename};
+use passwords::commands::presets::{
+    passwords_preset_delete, passwords_preset_list, passwords_preset_save,
+};
+use passwords::commands::read::{
+    passwords_copy_field, passwords_get_item, passwords_load_overview, passwords_reveal,
+    passwords_totp_code,
+};
+use passwords::commands::trash::{
+    passwords_delete_permanently, passwords_empty_trash, passwords_restore, passwords_trash,
+};
+use passwords::commands::usage::passwords_item_usage;
 use providers::connect::{connect_cli_delegate, submit_cli_delegate_code, DelegateConnectState};
 use providers::{
     add_provider, delete_provider, list_provider_models, list_providers, refresh_provider_models,
@@ -141,6 +172,9 @@ pub fn run() {
     let builder = builder.manage(sync::link::join_task::LinkJoin::default());
     builder
         .plugin(tauri_plugin_dialog::init())
+        // Password manager (spec 034, research R9): used from Rust only, so a copied secret and its
+        // timed clearing never pass through the webview. No JS permission is granted for it.
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             if cfg!(debug_assertions) {
@@ -250,6 +284,47 @@ pub fn run() {
             stt_recommend_tiers,
             list_installed_stt_models,
             download_stt_model,
+            // Password manager (spec 034).
+            passwords_load_overview,
+            passwords_get_item,
+            passwords_reveal,
+            passwords_totp_code,
+            passwords_copy_field,
+            passwords_create_item,
+            passwords_update_item,
+            passwords_passkey_rename,
+            passwords_passkey_delete,
+            passwords_create_group,
+            passwords_update_group,
+            passwords_reorder_groups,
+            passwords_move,
+            passwords_set_tags,
+            passwords_rename_tag,
+            passwords_set_tag_color,
+            passwords_delete_tag,
+            passwords_preset_list,
+            passwords_preset_save,
+            passwords_preset_delete,
+            passwords_item_usage,
+            passwords_agent_search,
+            passwords_trash,
+            passwords_restore,
+            passwords_delete_permanently,
+            passwords_empty_trash,
+            passwords_history_list,
+            passwords_history_get,
+            passwords_history_reveal,
+            passwords_history_restore,
+            passwords_attachment_add,
+            passwords_attachment_rename,
+            passwords_attachment_remove,
+            passwords_attachment_save,
+            passwords_attachment_preview,
+            passwords_import_preview,
+            passwords_import_run,
+            passwords_import_cancel,
+            passwords_import_report_save,
+            passwords_icon_preview,
         ]))
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

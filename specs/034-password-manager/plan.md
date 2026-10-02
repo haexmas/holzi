@@ -49,7 +49,7 @@ Technischer Ansatz (Begründungen und verworfene Alternativen in
 - **Oberfläche** (R10, R11, R13, R17): App `system.passwords`, Mehrfachinstanz, Orte im Tab nur
   mit Kennungen, Generator und Suche als reines TS unter `src/lib/passwords/` (Node-Tests),
   vorhandene Bausteine (`SettingsGroup`/`Row`, `WmRouterView`, `onVaultTablesChanged`).
-- **Neue Abhängigkeiten**: Rust `keepass`, `csv`, `sha1`, `p256`, `ed25519-dalek`, `pkcs1` und `spki`
+- **Neue Abhängigkeiten**: Rust `keepass`, `csv`, `sha1`, `p256`, `ed25519-dalek`, `pkcs1`, `pkcs8` und `spki`
   (öffentlicher Schlüssel beim Passkey-Import), `tauri-plugin-clipboard-manager` und
   `unicode-normalization` (steht schon transitiv im `Cargo.lock`); Frontend keine. ADR-0007 hält „Geheimnisse unverschlüsselt in der Vault, Schutz durch
   Freigaben“ fest (R19).
@@ -64,7 +64,7 @@ optional); TypeScript 6 (strict), Vue 3.5, Nuxt 4.5.2 (SPA), Node 22.19 für die
 `thiserror`, `ts-rs`, `tauri-plugin-dialog`; Frontend: Pinia, `@nuxtjs/i18n`, `reka-ui`/haex-ui-Layer.
 **Neu (Rust)**: `keepass` (KDBX, Version und Features prüft T003), `csv` (RFC 4180; in
 `Cargo.lock` nur über `llm-cpu`, daher direkte Abhängigkeit), `sha1` (RustCrypto), `p256`
-(Features `pkcs8`, `pem`), `ed25519-dalek` (Feature `pkcs8`), `pkcs1` und `spki` (leiten den
+(Features `pkcs8`, `pem`), `ed25519-dalek` (Feature `pkcs8`), `pkcs1`, `pkcs8` und `spki` (leiten den
 öffentlichen Passkey-Schlüssel für ES256, EdDSA und RS256 ab, R12),
 `tauri-plugin-clipboard-manager` (nur Rust-API), `unicode-normalization` (NFC für Tag-Kennungen,
 R2; schon transitiv im Lock). Base32 wird selbst geschrieben (R8).
@@ -137,7 +137,7 @@ Geprüft gegen `.specify/memory/constitution.md` (v1.4.0) und die spaex-Constitu
 
 **Ergebnis vor Phase 0**: kein unbegründeter Verstoß; ein ⚠️ dokumentiert.
 
-**Ergebnis nach Phase 1**: unverändert. Das Design fügt neun direkte Abhängigkeiten hinzu (Rust; einige schon transitiv im Lock) und eine
+**Ergebnis nach Phase 1**: unverändert. Das Design fügt zehn direkte Abhängigkeiten hinzu (Rust; einige schon transitiv im Lock) und eine
 Migration; beides begründet in research.md (R1, R8, R9, R12). Die Abweichungen vom Datenmodell von
 haex-vault sind in [data-model.md](./data-model.md) als A1–A6 gelistet. Die Spec wurde an sieben
 Stellen an die Planung angeglichen (R20).
@@ -249,7 +249,7 @@ legt die Seitenleisten-Entscheidung in Aufgabe T002 (Graph-Abfrage), nicht jetzt
 | Verstoß / Aufwand                                                        | Warum nötig                                                                                                                                     | Einfachere Alternative verworfen, weil                                                                                                                                                                          |
 | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Abweichung vom Datenmodell von haex-vault (A1–A6, vor allem kein UNIQUE) | UNIQUE-Konflikte halten den Sync an (R2); der Papierkorb soll den Ort merken (R3); BLOB statt Base64 und `orphaned_at` schützen den Sync (R4)   | 1:1-Übernahme brächte einen Sync, der wegen eines Tagnamens stehen bleibt, den Verlust des Ortes beim Wiederherstellen oder das Löschen einer verspäteten Referenz                                              |
-| Neun Rust-Abhängigkeiten (mehrere schon transitiv im Lock)               | KDBX, RFC-4180-CSV, SHA-1 für TOTP, P-256, EdDSA und RSA-Schlüsselteile für den öffentlichen Passkey-Schlüssel, Zwischenablage mit Löschen, NFC | TOTP und Base32 selbst zu schreiben ist vertretbar (R8) und geschieht; KDBX/Argon2, CSV, Elliptische Kurven, ASN.1-Schlüsselformate und Unicode-Normalisierung selbst zu schreiben wäre riskanter als ein Crate |
+| Zehn Rust-Abhängigkeiten (mehrere schon transitiv im Lock)               | KDBX, RFC-4180-CSV, SHA-1 für TOTP, P-256, EdDSA und RSA-Schlüsselteile für den öffentlichen Passkey-Schlüssel, Zwischenablage mit Löschen, NFC | TOTP und Base32 selbst zu schreiben ist vertretbar (R8) und geschieht; KDBX/Argon2, CSV, Elliptische Kurven, ASN.1-Schlüsselformate und Unicode-Normalisierung selbst zu schreiben wäre riskanter als ein Crate |
 | Teil-Update und `reveal` statt Klartext-Detail                           | Geheimnisse bleiben im Backend (R7, FR-005, FR-040)                                                                                             | Alle Felder im Klartext zu laden ist einfacher, legt aber alle Geheimnisse in den Webview                                                                                                                       |
 | Aufrufer-/Freigabe-Modul und Dienst ohne Verwalter für Freigaben         | FR-024 bis FR-030 verlangen die Prüfung jetzt; Spec 029 braucht den Zugriff, 017–019/021 den Rest                                               | Prüfung später nachrüsten hieße, die Commands und den Dienst ein zweites Mal anzufassen; die Prüfung ist rein und klein                                                                                         |
 | `identity/migrations.rs` bleibt über 500 Zeilen                          | Bestehende Überschreitung (577), nicht von dieser Spec                                                                                          | Aufspaltung ist eine eigene Änderung; hier genügt eine neue Datei für das neue SQL                                                                                                                              |
