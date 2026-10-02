@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { scenario } from '../lib/scenario.ts'
 import type { Device } from '../lib/group.ts'
+import { expectOnline } from '../lib/group-expect.ts'
 import { addThread, expectThreads, threadTitles } from '../lib/sync-flows.ts'
 import {
   confirmRemoveDevice,
@@ -90,6 +91,8 @@ scenario('sync-mutual-removal', { timeoutMs: 600_000 }, async (ctx) => {
     !(await b.deviceList()).some((row) => row.devicePubkey === loserKey),
     'the linked device no longer lists the removed one',
   )
+  await expectOnline(ctx, winner, b, true)
+  await expectOnline(ctx, b, winner, true)
   ctx.step('the linked device follows the winner')
 
   await addThread(winner, AFTER)
