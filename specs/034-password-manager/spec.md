@@ -80,6 +80,19 @@ ausdrücklich nicht Teil dieser Spec. Referenz: haex-vault @
 - Q: (Analyse) Dürfen ungültige Secrets angelegt werden? → A: Nein, das wird abgelehnt und
   fehlende Angaben bekommen Standardwerte; was per Sync oder Import ungültig ankommt, muss
   erkannt und behebbar sein.
+- Q: (Klärung) Verschiebt Löschen durch eine holzi-Funktion, Erweiterung oder einen Agenten in den
+  Papierkorb oder entfernt es endgültig? → A: In den Papierkorb, wie bei jedem Aufrufer. Endgültig
+  entfernt wird erst, wenn der Nutzer einen Eintrag im Papierkorb löscht.
+- Q: (Klärung) Sind „Work“ und „work“ derselbe Tag? → A: Ja, Tagnamen sind ohne Rücksicht auf
+  Groß-/Kleinschreibung und Umlautform eindeutig; die Schreibweise des ersten Anlegers bleibt.
+- Q: (Klärung) Sieht ein Aufrufer mit Freigabe für „s3“ auch die anderen Tags eines Eintrags? →
+  A: Ja, er darf sie sehen, aber Tags außerhalb seines Bereichs darf er auf keinen Fall ändern
+  oder löschen; sie bleiben bei jeder seiner Änderungen unverändert.
+- Q: (Klärung) Ist das Tag-Präfix „holzi:“ für holzi-Funktionen reserviert? → A: Nein, es gibt
+  keine reservierten Tags. Die Warnung vor dem Löschen beruht darauf, dass eine holzi-Funktion
+  ihre genutzten Einträge selbst meldet.
+- Q: (Klärung) Darf ein Eintrag ohne Titel gespeichert werden? → A: Ja, auch in der Oberfläche;
+  der Titel ist nicht Pflicht. Die Oberfläche zeigt dann den Platzhalter „(ohne Titel)“.
 - Q: (Analyse) Wie hart sind Zeitvorgaben? → A: Grobe Zielgrenzen genügen; es gibt keine
   Messaufgaben für Zeiten.
 - Q: Soll das Datenmodell von haex-vault 1:1 übernommen werden? → A: Ja, Tabellen- und
@@ -411,7 +424,10 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
 - **FR-001**: Das System MUSS Einträge mit Titel, Benutzername, Passwort, Notiz, Adresse,
   Symbol, Farbe, Ablaufdatum, Erstellungs- und Änderungszeitpunkt und den Autofill-Aliasen
   (Zuordnung von Feldnamen zu alternativen Bezeichnungen für den späteren Browser-Abgleich)
-  speichern; alle Felder außer der Kennung DÜRFEN leer sein.
+  speichern; alle Felder außer der Kennung DÜRFEN leer sein, auch der Titel. Die Listen und die
+  Ansicht MÜSSEN einen Eintrag ohne Titel erkennbar zeigen (Platzhalter „(ohne Titel)“, als
+  Text der Oberfläche, nicht als gespeicherter Wert) und ihn über Benutzername oder Adresse
+  auffindbar machen.
 - **FR-002**: Das System MUSS je Eintrag beliebig viele eigene Felder aus Name und Wert
   erlauben, die zum Eintrag gehören und mit ihm gelöscht werden.
 - **FR-003**: Das System MUSS je Eintrag TOTP (Secret, Ziffernzahl, Periode, Algorithmus,
@@ -449,7 +465,10 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
 - **FR-010**: Das System MUSS verhindern, dass ein Ordner in sich selbst oder einen seiner
   Unterordner verschoben wird.
 - **FR-011**: Das System MUSS Tags (Name eindeutig, Farbe) verwalten und Einträgen beliebig
-  viele zuordnen; Umbenennen und Löschen eines Tags MUSS für alle Einträge gelten.
+  viele zuordnen; Umbenennen und Löschen eines Tags MUSS für alle Einträge gelten. Ein Tagname
+  ist eindeutig ohne Rücksicht auf Groß-/Kleinschreibung und auf die Schreibweise von Umlauten
+  (zusammengesetzt oder zerlegt): „Work“ und „work“ sind derselbe Tag, die Schreibweise des
+  ersten Anlegers bleibt sichtbar.
 - **FR-012**: Das System MUSS Mehrfachauswahl für Verschieben, Taggen und Löschen
   unterstützen und vor einer Massenaktion die Zahl der betroffenen Einträge nennen.
 
@@ -467,7 +486,9 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
 - **FR-015**: Löschen eines Eintrags oder Ordners MUSS ihn in den Papierkorb verschieben, den
   die Vault als besonderen Ordner mit fester Kennung führt; Löschen eines Elements im
   Papierkorb MUSS es endgültig entfernen, samt allem, was nur von ihm abhängt. „Papierkorb
-  leeren“ MUSS eine Bestätigung verlangen.
+  leeren“ MUSS eine Bestätigung verlangen. Das gilt für **jeden** Aufrufer: Löschen durch eine
+  holzi-Funktion, Erweiterung oder einen Agenten verschiebt ebenfalls nur in den Papierkorb;
+  endgültig entfernt ein Eintrag nur dadurch, dass der Nutzer ihn **im Papierkorb** löscht.
 - **FR-016**: Wiederherstellen aus dem Papierkorb MUSS den früheren Ort wiederherstellen,
   oder die Wurzel, wenn der Ordner nicht mehr existiert.
 - **FR-017**: Das System MUSS nach jeder Änderung eines Eintrags den neuen Zustand samt der
@@ -534,7 +555,13 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
 - **FR-028**: Schreibzugriffe MÜSSEN verlangen, dass der Eintrag nach der Änderung mindestens
   ein Tag aus dem Bereich des Aufrufers trägt; andernfalls MUSS die Änderung abgelehnt werden,
   damit ein Aufrufer Einträge nicht aus seinem Bereich herausschreibt. Das Löschen eines
-  Eintrags MUSS einen Eintrag mit einem Tag aus seinem Bereich voraussetzen.
+  Eintrags (Verschieben in den Papierkorb, FR-015) MUSS einen Eintrag mit einem Tag aus seinem
+  Bereich voraussetzen; das endgültige Löschen im Papierkorb steht anderen Aufrufern nicht
+  offen. Ein Aufrufer DARF alle Tags eines Eintrags sehen, den er sehen darf, aber ein Tag
+  außerhalb seines Bereichs MUSS bei jeder Änderung unverändert bleiben: er darf es weder
+  entfernen noch hinzufügen noch umbenennen oder löschen (Tags umbenennen und löschen kann nur
+  der Nutzer). Hinzufügen darf er nur Tags seines Bereichs, damit er einen Eintrag nicht in
+  den Bereich eines anderen Aufrufers hebt.
 - **FR-029**: Fehlt eine passende Freigabe, MUSS die Anfrage abgelehnt werden, ohne preiszugeben,
   ob ein bestimmter Eintrag außerhalb des Bereichs existiert.
 - **FR-030**: Wo Freigaben gespeichert, erteilt, angezeigt und widerrufen werden, regeln die
@@ -550,10 +577,13 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
 **Nutzung durch holzi-Funktionen**
 
 - **FR-033**: holzi-Funktionen (zunächst Spec 029) MÜSSEN Einträge im Passwortmanager als
-  gewöhnliche Einträge mit einem Tag anlegen, lesen und ändern können; der Nutzer MUSS sie in
-  der Oberfläche sehen, ändern und löschen können.
+  gewöhnliche Einträge mit einem frei gewählten Tag anlegen, lesen und ändern können; es gibt
+  keine für holzi reservierten Tags oder Tagnamen. Der Nutzer MUSS sie in der Oberfläche sehen,
+  ändern und löschen können.
 - **FR-034**: Das System MUSS vor dem Löschen eines Eintrags, den eine holzi-Funktion nutzt,
-  warnen; das Löschen MUSS erlaubt bleiben.
+  warnen und die Funktion nennen; das Löschen MUSS erlaubt bleiben. Welche Einträge eine
+  Funktion nutzt, meldet die Funktion selbst (sie kennt ihre Verweise auf Einträge); der
+  Passwortmanager erkennt das nicht an Tags oder Namen.
 - **FR-035**: Geheimnisse MÜSSEN mit der Vault und deren Sync wandern wie alle Einträge; sie
   DÜRFEN nur für Geräte der Vault sichtbar sein (Spec 024).
 

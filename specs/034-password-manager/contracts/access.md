@@ -26,7 +26,7 @@ struct Grant { action: GrantAction, scope: Scope }
 den ganzen Bereich `All`. Es zählt, was eine Freigabe **zum Zeitpunkt der Anfrage** deckt; es
 gibt keine Zwischenspeicherung im Dienst.
 
-## Dienst (`passwords/service.rs`)
+## Dienst (`passwords/service/`)
 
 Der **einzige Weg zu den Daten**, auch für die Oberfläche (FR-024). Jede Methode nimmt `&Caller`
 und die Freigaben des Aufrufers (`&[Grant]`; für `User` und `BuiltinAgent` ignoriert) und prüft
@@ -37,7 +37,7 @@ list_headers(caller, grants)                       -> Vec<ItemHeader> | Vec<Agen
 read_secret_item(caller, grants, item_id)          -> SecretItem        // Geheimnisse einer Einzelabfrage
 create_item(caller, grants, input)                 -> item_id
 update_item(caller, grants, item_id, patch)        -> ()
-delete_item(caller, grants, item_id)               -> ()                // endgültig, nicht Papierkorb
+delete_item(caller, grants, item_id)               -> ()                // verschiebt in den Papierkorb (FR-015)
 ```
 
 Daneben hat der Dienst je eine Methode für jede Funktion der Oberfläche (`service/organize.rs`:
@@ -45,24 +45,27 @@ Ordner, Verschieben, Reihenfolge, Tags; `trash.rs`; `history.rs`; `attachments.r
 `presets.rs`; `import.rs`), die alle `Caller::User` verlangen (Z11). Es gibt keine zweite Lese-
 oder Schreibschicht für Tabellen, an der die Prüfung vorbeiliefe; die Commands rufen nur den
 Dienst. `Internal`-Aufrufer legen ihre Freigabe fest im
-Code ab (zum Beispiel `Grant { ReadWrite, Tags({"holzi:s3"}) }`), mit dem reservierten
-Tag-Präfix `holzi:` (Hinweis vor dem Löschen, FR-034).
+Code ab (zum Beispiel `Grant { ReadWrite, Tags({"s3"}) }`); es gibt keine für holzi reservierten
+Tags. Welche Einträge eine holzi-Funktion nutzt, meldet sie über `EntryUsage` (`usage.rs`,
+Hinweis vor dem Löschen, FR-034): ein Trait, das die Funktion beim Start anmeldet und das zu einer
+Eintragskennung die Namen der nutzenden Funktionen liefert.
 
 ## Regeln
 
-| Nr. | Regel                                                                                                                                                                                                                                                                                                             | Spec        |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| Z1  | `User` darf alles ohne Freigabe.                                                                                                                                                                                                                                                                                  | FR-031      |
-| Z2  | `BuiltinAgent` bekommt höchstens `AgentHeader` über `list_headers`; jede andere Methode ist `Forbidden`, Freigaben haben keine Wirkung.                                                                                                                                                                           | FR-027      |
-| Z3  | Für alle anderen Aufrufer: ohne passende Freigabe der verlangten Art ist die Anfrage `Forbidden`.                                                                                                                                                                                                                 | FR-029      |
-| Z4  | `list_headers` liefert nur Einträge im Bereich, nur `ItemHeader`-Felder (nie Passwort, TOTP-Secret, Passkey-Schlüssel, eigene Felder, Notiz, Anhänge); Einträge im Papierkorb nie.                                                                                                                                | FR-026      |
-| Z5  | `read_secret_item` für einen Eintrag **außerhalb** des Bereichs ist `NotFound`, nicht von „nicht vorhanden“ zu unterscheiden.                                                                                                                                                                                     | FR-029      |
-| Z6  | `create_item` mit Bereich `Tags`: die gesendete Tagliste muss mindestens ein Tag im Bereich enthalten, sonst `Forbidden`.                                                                                                                                                                                         | FR-028      |
-| Z7  | `update_item` mit Bereich `Tags`: der Eintrag muss **vor** der Änderung im Bereich liegen (sonst `NotFound`) und **danach** mindestens ein Tag im Bereich tragen (sonst `Forbidden`, nichts ändert sich).                                                                                                         | FR-028      |
-| Z8  | `delete_item` verlangt `ReadWrite` und einen Eintrag im Bereich (sonst `NotFound`).                                                                                                                                                                                                                               | FR-028      |
-| Z9  | Passkeys ohne `item_id` gehören zu keinem Tag-Bereich; nur `All` deckt sie.                                                                                                                                                                                                                                       | Datenmodell |
-| Z10 | Keine Antwort, kein Fehler, keine Protokollzeile enthält einen Wert eines Geheimnisses.                                                                                                                                                                                                                           | FR-040      |
-| Z11 | Jede Methode außer `list_headers`, `read_secret_item`, `create_item`, `update_item` und `delete_item` ist für andere Aufrufer als `User` `Forbidden` (Ordner, Verschieben, Reihenfolge, Tags, Papierkorb, Verlauf, Anhänge, Passkeys, Voreinstellungen, Import), bis eine spätere Spec dafür eine Regel schreibt. | FR-024      |
+| Nr. | Regel                                                                                                                                                                                                                                                                                                                                                                                                  | Spec           |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------- |
+| Z1  | `User` darf alles ohne Freigabe.                                                                                                                                                                                                                                                                                                                                                                       | FR-031         |
+| Z2  | `BuiltinAgent` bekommt höchstens `AgentHeader` über `list_headers`; jede andere Methode ist `Forbidden`, Freigaben haben keine Wirkung.                                                                                                                                                                                                                                                                | FR-027         |
+| Z3  | Für alle anderen Aufrufer: ohne passende Freigabe der verlangten Art ist die Anfrage `Forbidden`.                                                                                                                                                                                                                                                                                                      | FR-029         |
+| Z4  | `list_headers` liefert nur Einträge im Bereich, nur `ItemHeader`-Felder (nie Passwort, TOTP-Secret, Passkey-Schlüssel, eigene Felder, Notiz, Anhänge); Einträge im Papierkorb nie.                                                                                                                                                                                                                     | FR-026         |
+| Z5  | `read_secret_item` für einen Eintrag **außerhalb** des Bereichs ist `NotFound`, nicht von „nicht vorhanden“ zu unterscheiden.                                                                                                                                                                                                                                                                          | FR-029         |
+| Z6  | `create_item` mit Bereich `Tags`: die gesendete Tagliste darf nur Tags des Bereichs enthalten und muss mindestens eines enthalten, sonst `Forbidden`.                                                                                                                                                                                                                                                  | FR-028         |
+| Z7  | `update_item` mit Bereich `Tags`: der Eintrag muss **vor** der Änderung im Bereich liegen (sonst `NotFound`) und **danach** mindestens ein Tag im Bereich tragen (sonst `Forbidden`, nichts ändert sich). Tags außerhalb des Bereichs bleiben unverändert (Z12).                                                                                                                                       | FR-028         |
+| Z8  | `delete_item` verlangt `ReadWrite` und einen Eintrag im Bereich (sonst `NotFound`) und **verschiebt ihn in den Papierkorb**; endgültiges Löschen, Wiederherstellen und Papierkorb leeren gehören zu Z11.                                                                                                                                                                                               | FR-015, FR-028 |
+| Z9  | Passkeys ohne `item_id` gehören zu keinem Tag-Bereich; nur `All` deckt sie.                                                                                                                                                                                                                                                                                                                            | Datenmodell    |
+| Z10 | Keine Antwort, kein Fehler, keine Protokollzeile enthält einen Wert eines Geheimnisses.                                                                                                                                                                                                                                                                                                                | FR-040         |
+| Z11 | Jede Methode außer `list_headers`, `read_secret_item`, `create_item`, `update_item` und `delete_item` ist für andere Aufrufer als `User` `Forbidden` (Ordner, Verschieben, Reihenfolge, Tags, Papierkorb, Verlauf, Anhänge, Passkeys, Voreinstellungen, Import), bis eine spätere Spec dafür eine Regel schreibt.                                                                                      | FR-024         |
+| Z12 | Ein Aufrufer sieht alle Tags eines Eintrags im Bereich (`list_headers`, `read_secret_item`), aber ein Tag außerhalb seines Bereichs bleibt bei seiner Änderung unverändert: er kann es nicht entfernen (ein Weglassen in der gesendeten Liste ändert nichts), nicht hinzufügen (ein neues Tag außerhalb des Bereichs in der gesendeten Liste ist `Forbidden`) und nicht umbenennen oder löschen (Z11). | FR-028         |
 
 ## Aufrufer und Eingang
 
@@ -82,7 +85,7 @@ Eingang ist.
 
 `access.rs` ist rein und wird in `access_tests.rs` ohne Datenbank und ohne Freigabespeicher
 geprüft: eine Tabelle aus Aufrufer, Freigaben, Methode, Eintrag-Tags und erwartetem Ergebnis
-deckt die Regeln Z1–Z9 ab (mindestens: eine Freigabe `Read` für Tag `s3` liest ein
+deckt die Regeln Z1–Z9 und Z11–Z12 ab (mindestens: eine Freigabe `Read` für Tag `s3` liest ein
 `s3`-Eintrag, wird bei einem Eintrag ohne `s3` mit `NotFound` abgewiesen, wird beim
 Schreiben mit `Forbidden` abgewiesen; zwei Tags vereinigen sich; `All` deckt alles;
 `ReadWrite` deckt Lesen; `BuiltinAgent` mit einer beliebigen Freigabe bekommt nichts

@@ -175,6 +175,7 @@ src-tauri/src/
 │   ├── binaries.rs                # Anhänge, Hash, Limit, prune_binaries            [neu]
 │   ├── snapshots.rs               # Verlaufsstände, Änderungsliste, Wiederherstellen[neu]
 │   ├── passkeys.rs                # Liste, Spitzname, Löschen, ES256-Ableitung      [neu]
+│   ├── usage.rs                   # EntryUsage-Trait: holzi-Funktionen melden genutzte Einträge [neu]
 │   ├── presets.rs                 # Generator-Voreinstellungen                      [neu]
 │   ├── totp.rs                    # RFC 6238, Base32, otpauth-Eingabe               [neu]
 │   ├── clipboard.rs               # Schreiben + abbrechbares Löschen                [neu]

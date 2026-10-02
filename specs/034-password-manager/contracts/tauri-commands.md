@@ -77,7 +77,7 @@ args:   { input: ItemInput, groupId?: string }
 result: { itemId }
 ```
 
-`ItemInput`: `title` (Pflicht, nicht leer), `username`, `password`, `note`, `url`, `icon`, `color`,
+`ItemInput`: `title` (optional, auch leer; die Oberfläche zeigt dann „(ohne Titel)“), `username`, `password`, `note`, `url`, `icon`, `color`,
 `expiresAt`, `otpSecret` (Secret oder `otpauth://`-Adresse; wird normalisiert und geprüft),
 `otpDigits`, `otpPeriod`, `otpAlgorithm`, `autofillAliases`, `tags: string[]` (Namen),
 `keyValues: { key, value }[]`. Legt Eintrag, Tags, Felder, Zuordnung und den ersten Verlaufsstand
@@ -147,6 +147,16 @@ delete args: { tagId }           // löscht Verknüpfungen zuerst
 ```
 
 ## Papierkorb
+
+### `passwords_item_usage`
+
+```text
+args:   { itemId }
+result: { features: string[] }          // Namen der holzi-Funktionen, die den Eintrag nutzen
+```
+
+Fragt alle angemeldeten `EntryUsage`-Anbieter ([access.md](./access.md)) und dient der Warnung vor dem
+Löschen (FR-034). In dieser Spec ist kein Anbieter angemeldet (Spec 029 meldet den ersten).
 
 ### `passwords_trash` / `passwords_restore` / `passwords_delete_permanently` / `passwords_empty_trash`
 

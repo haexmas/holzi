@@ -252,10 +252,18 @@ Oberfläche (FR-024). Wichtig:
   Aufrufer folgen den Regeln aus FR-025 bis FR-029.
 - Fehler: eine fehlende **Art** (Lesen gegeben, Schreiben verlangt) ist `Forbidden`; ein
   Eintrag **außerhalb des Bereichs** ist `NotFound` wie ein nicht vorhandener (FR-029).
-- Beim Schreiben im Bereich `Tags` muss die gesendete Tagliste mindestens ein Tag des Bereichs
-  enthalten (Anlegen und Ändern), und der Zieleintrag muss bereits im Bereich liegen
-  (Ändern, Löschen). Es gibt **keine** automatische Standard-Tag-Ergänzung wie in
-  haex-vault (die Spec fordert sie nicht, ein Aufrufer sendet seine Tags selbst).
+- Beim Schreiben im Bereich `Tags` darf die gesendete Tagliste nur Tags des Bereichs enthalten
+  und muss mindestens eines enthalten (Anlegen); beim Ändern muss der Zieleintrag bereits im
+  Bereich liegen und danach mindestens ein Tag des Bereichs tragen. **Tags außerhalb des Bereichs
+  bleiben unverändert** (Klärung): der Aufrufer sieht sie, kann sie aber weder entfernen noch
+  hinzufügen noch umbenennen oder löschen; ein neues Tag außerhalb des Bereichs in der
+  gesendeten Liste ist `Forbidden`, damit er einen Eintrag nicht in den Bereich eines anderen
+  Aufrufers hebt. haex-vault ersetzt dagegen die ganze Tagliste und entfernt unsichtbare Tags
+  still. Es gibt **keine** automatische Standard-Tag-Ergänzung wie in haex-vault.
+- **Löschen** durch andere Aufrufer als `User` verschiebt in den Papierkorb (FR-015); endgültiges
+  Löschen, Wiederherstellen und Papierkorb leeren sind `User` vorbehalten (Z8, Z11).
+- **Nutzungsmeldung statt reservierter Tags** (Klärung): eine holzi-Funktion meldet über das Trait
+  `EntryUsage`, welche Einträge sie nutzt; der Passwortmanager erkennt das nicht an Tags oder Namen.
 - Passkeys ohne Eintrag (`item_id` leer) liegen außerhalb jedes Tag-Bereichs.
 - **Alles läuft über den Dienst**, auch die Oberfläche (Betreiber-Entscheidung zur Analyse):
   `PasswordsService` hat für jede Funktion der Oberfläche eine Methode (Ordner, Tags, Papierkorb,
@@ -592,6 +600,14 @@ Die folgenden Punkte stehen jetzt in der Spec (eigener Commit, mit Begründung h
 11. **FR-024**: Auch die Oberfläche läuft über den Dienst (R6).
 12. **SC-002**, **SC-007**: grobe Zielgrenzen statt harter Zeiten.
 13. **FR-017**: Wortwahl „Verlaufsstand“.
+14. **FR-015** und **FR-028** (Klärung 2026-10-02): Löschen durch jeden Aufrufer verschiebt in den
+    Papierkorb, endgültig nur der Nutzer im Papierkorb.
+15. **FR-011**: Tagnamen sind ohne Rücksicht auf Groß-/Kleinschreibung und Umlautform eindeutig.
+16. **FR-028**: Ein Aufrufer sieht alle Tags, ändert aber keine außerhalb seines Bereichs und
+    fügt keine hinzu.
+17. **FR-033/034**: keine reservierten Tags; holzi-Funktionen melden ihre genutzten Einträge
+    (`EntryUsage`).
+18. **FR-001**: Der Titel darf leer sein; die Oberfläche zeigt „(ohne Titel)“.
 
 **Entscheidungen, die der Betreiber bestätigen sollte** (im Bericht an ihn genannt):
 PDF-Vorschau entfällt (R18); der eingebaute Agent sieht nur Titel und Tags (R6, R14);
