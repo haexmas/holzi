@@ -7,7 +7,7 @@
 
 use uuid::Uuid;
 
-use unicode_normalization::UnicodeNormalization;
+use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 /// Namespace of `haex_passwords_tags.id`. Generated once; **never change** it, or the same tag
 /// would get different ids on old and new devices.
@@ -37,4 +37,13 @@ pub fn item_tag_id(item_id: &str, tag_id: &str) -> Uuid {
 /// The id of the passkey with this credential id: `UUIDv5(NS_PASSKEY, credential_id)`.
 pub fn passkey_id(credential_id: &str) -> Uuid {
     Uuid::new_v5(&NS_PASSKEY, credential_id.as_bytes())
+}
+
+/// The form in which a search compares text: decomposed, accents dropped, lower case. "gerat"
+/// finds "Gerät"; unlike [`fold`] it is for searching, not for naming a tag.
+pub fn fold_for_search(text: &str) -> String {
+    text.nfd()
+        .filter(|c| !is_combining_mark(*c))
+        .collect::<String>()
+        .to_lowercase()
 }

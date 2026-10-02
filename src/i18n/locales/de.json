@@ -938,7 +938,15 @@
         "device": "Geräte-Einstellungen ändern",
         "models": "Modelle verwalten"
       },
-      "guardrails": "Leitplanken (nur Nutzer)"
+      "guardrails": "Leitplanken (nur Nutzer)",
+      "passwords": {
+        "read": "Passwörter durchsuchen"
+      }
+    },
+    "passwords": {
+      "items": {
+        "search": "Passwortmanager durchsuchen (nur Titel und Tags)"
+      }
     }
   },
   "passwords": {

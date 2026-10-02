@@ -15,6 +15,7 @@ use haex_crdt::Database;
 
 use crate::error::{HolziError, Result};
 use crate::passwords::clipboard::ClipboardClearer;
+use crate::passwords::usage::UsageRegistry;
 use crate::vault_gate::{VaultDb, VaultGate};
 
 /// Handle to the currently-active instance's runtime. Dropping the last
@@ -42,6 +43,8 @@ pub struct AppState {
     gate: VaultGate,
     /// The pending clearing of the clipboard after a password manager copy (spec 034, FR-006).
     clipboard: ClipboardClearer,
+    /// The holzi functions that report entries of the password manager as in use (FR-034).
+    usage: Arc<UsageRegistry>,
 }
 
 impl AppState {
@@ -52,7 +55,13 @@ impl AppState {
             sync_servers_update: tokio::sync::Mutex::new(()),
             gate,
             clipboard: ClipboardClearer::new(),
+            usage: Arc::new(UsageRegistry::new()),
         }
+    }
+
+    /// The registry in which a holzi function registers that it uses entries (spec 034, FR-034).
+    pub fn usage(&self) -> Arc<UsageRegistry> {
+        Arc::clone(&self.usage)
     }
 
     /// The clearer of the clipboard; a close clears what it still holds (spec 034, FR-006).

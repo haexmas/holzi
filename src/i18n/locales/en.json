@@ -938,7 +938,15 @@
         "device": "Change device settings",
         "models": "Manage models"
       },
-      "guardrails": "Guardrails (user only)"
+      "guardrails": "Guardrails (user only)",
+      "passwords": {
+        "read": "Search passwords"
+      }
+    },
+    "passwords": {
+      "items": {
+        "search": "Search the password manager (titles and tags only)"
+      }
     }
   },
   "passwords": {

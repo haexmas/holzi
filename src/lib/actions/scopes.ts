@@ -11,6 +11,7 @@ export const ACTION_SCOPE_IDS = [
   'settings.read',
   'settings.device',
   'settings.models',
+  'passwords.read',
   'guardrails',
 ] as const
 
@@ -34,6 +35,8 @@ const DESCRIPTIONS: Record<ActionScopeId, string> = {
   'settings.read': 'Read current settings, never provider credentials.',
   'settings.device': 'Change device settings such as the device name.',
   'settings.models': 'Choose, download and delete models.',
+  'passwords.read':
+    'Search the titles, tags and folders of the password manager. Never usernames, addresses or secrets.',
   guardrails:
     'Autonomy mode, delegate deny rules, provider connections, approvals and permission mode. Never callable by agents.',
 }

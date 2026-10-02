@@ -1,5 +1,6 @@
 import { onBackButtonPress } from '@tauri-apps/api/app'
 import { registerChatActionHandlers } from '~/stores/chatActionHandlers'
+import { registerPasswordsActionHandlers } from '~/stores/passwordsActionHandlers'
 import { registerSettingsActionHandlers } from '~/stores/settingsActionHandlers'
 import type { Translate } from '~/composables/useModelInventory'
 import { registerWmActionHandlers } from '~/stores/wmActionHandlers'
@@ -21,6 +22,7 @@ export default defineNuxtPlugin((nuxtApp) => {
   registerWmLayoutHandlers(wm, t)
   registerChatActionHandlers(wm)
   registerSettingsActionHandlers(wm)
+  registerPasswordsActionHandlers(wm)
 
   // ponytail: holzi has no Android target yet, so this hook is untested end to end; the decision
   // logic behind `wm.system.back` is covered by `pnpm check:wm-navigation`.

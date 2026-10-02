@@ -55,3 +55,6 @@ pub(crate) mod test_support;
 pub mod totp;
 #[cfg(test)]
 mod totp_tests;
+pub mod usage;
+#[cfg(test)]
+mod usage_tests;

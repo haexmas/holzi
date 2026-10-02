@@ -59,6 +59,7 @@ use models::commands::{
     install_huggingface_update, list_installed_models, preview_huggingface_install,
     search_huggingface_models,
 };
+use passwords::commands::agent::passwords_agent_search;
 use passwords::commands::items::{passwords_create_item, passwords_update_item};
 use passwords::commands::organize::{
     passwords_create_group, passwords_delete_tag, passwords_move, passwords_rename_tag,
@@ -72,6 +73,7 @@ use passwords::commands::read::{
     passwords_copy_field, passwords_get_item, passwords_load_overview, passwords_reveal,
     passwords_totp_code,
 };
+use passwords::commands::usage::passwords_item_usage;
 use providers::connect::{connect_cli_delegate, submit_cli_delegate_code, DelegateConnectState};
 use providers::{
     add_provider, delete_provider, list_provider_models, list_providers, refresh_provider_models,
@@ -288,6 +290,8 @@ pub fn run() {
             passwords_preset_list,
             passwords_preset_save,
             passwords_preset_delete,
+            passwords_item_usage,
+            passwords_agent_search,
         ]))
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

@@ -14,12 +14,16 @@
 //! `PasswordsNotFound`. Everything beyond the five item methods is for the user alone ([`require_user`],
 //! rule Z11).
 
+use std::sync::Arc;
+
 use super::access::{self, Caller};
+use super::usage::UsageRegistry;
 
 mod items;
 mod organize;
 mod passkeys;
 mod presets;
+mod usage;
 
 use crate::error::Result;
 use crate::vault_gate::VaultDb;
@@ -29,11 +33,22 @@ pub use items::Headers;
 #[derive(Clone)]
 pub struct PasswordsService {
     db: VaultDb,
+    usage: Arc<UsageRegistry>,
 }
 
 impl PasswordsService {
+    /// A service with no function that reports entries in use (tests, and a vault without any).
     pub fn new(db: VaultDb) -> Self {
-        Self { db }
+        Self::with_usage(db, Arc::new(UsageRegistry::new()))
+    }
+
+    /// A service that asks `usage` which functions use an entry.
+    pub fn with_usage(db: VaultDb, usage: Arc<UsageRegistry>) -> Self {
+        Self { db, usage }
+    }
+
+    pub(super) fn usage(&self) -> &UsageRegistry {
+        &self.usage
     }
 
     /// The vault handle for the area files of this module; nothing outside `passwords::service`

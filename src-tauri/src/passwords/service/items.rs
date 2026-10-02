@@ -10,6 +10,7 @@ use crate::passwords::access::{
     authorize_create, authorize_list, authorize_read, authorize_update, Caller, Grant, ItemState,
     ListView,
 };
+use crate::passwords::ids::fold_for_search;
 use crate::passwords::items;
 use crate::passwords::model::{
     AgentHeader, CopyField, ItemDetail, ItemHeader, ItemInput, ItemPatch, Overview, RevealedSecret,
@@ -47,6 +48,60 @@ impl PasswordsService {
                 })
             })
             .await
+    }
+
+    /// The search of the built-in agent (FR-027, action `passwords.items.search`): title, tag
+    /// names and folder name of the entries outside the trash that match `query` (every word) and
+    /// carry `tag`, at most `limit` (default 20, at most 50). Closed to every other caller.
+    pub async fn agent_search(
+        &self,
+        caller: &Caller,
+        query: Option<String>,
+        tag: Option<String>,
+        limit: Option<u32>,
+    ) -> Result<Vec<AgentHeader>> {
+        match authorize_list(caller, &[])? {
+            ListView::Agent => {}
+            ListView::Items(_) => return Err(HolziError::PasswordsForbidden),
+        }
+        let limit = limit.unwrap_or(20).clamp(1, 50) as usize;
+        let words: Vec<String> = query
+            .as_deref()
+            .map(fold_for_search)
+            .map(|q| q.split_whitespace().map(str::to_string).collect())
+            .unwrap_or_default();
+        let tag = tag
+            .as_deref()
+            .map(fold_for_search)
+            .filter(|t| !t.is_empty());
+        let all = self
+            .db()
+            .read(|q| items::agent_headers(q).map_err(Into::into))
+            .await?;
+        Ok(all
+            .into_iter()
+            .filter(|header| {
+                tag.as_ref().is_none_or(|wanted| {
+                    header
+                        .tags
+                        .iter()
+                        .any(|name| &fold_for_search(name) == wanted)
+                })
+            })
+            .filter(|header| {
+                let texts: Vec<String> = header
+                    .title
+                    .iter()
+                    .chain(header.tags.iter())
+                    .chain(header.folder.iter())
+                    .map(|text| fold_for_search(text))
+                    .collect();
+                words
+                    .iter()
+                    .all(|word| texts.iter().any(|text| text.contains(word)))
+            })
+            .take(limit)
+            .collect())
     }
 
     /// The entry without secrets, for the window. Z11 (the other callers read through

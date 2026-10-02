@@ -1,6 +1,8 @@
 //! Tests for the derived identifiers of the password manager (spec 034, T008).
 
-use super::ids::{fold, item_tag_id, passkey_id, tag_id, NS_ITEM_TAG, NS_PASSKEY, NS_TAG};
+use super::ids::{
+    fold, fold_for_search, item_tag_id, passkey_id, tag_id, NS_ITEM_TAG, NS_PASSKEY, NS_TAG,
+};
 
 // Escapes keep the two forms visibly different in the source. The pinned ids below were
 // computed independently with Python's `uuid.uuid5`.
@@ -68,4 +70,12 @@ fn a_name_that_is_empty_after_trim_folds_to_the_empty_string() {
     // The caller rejects it; `fold` only reports it.
     assert_eq!(fold("   "), "");
     assert_eq!(fold(""), "");
+}
+
+#[test]
+fn search_folding_drops_accents_and_case() {
+    assert_eq!(fold_for_search("Gerät"), "gerat");
+    assert_eq!(fold_for_search("CAF\u{c9}"), "cafe");
+    assert_eq!(fold_for_search("cafe\u{301}"), "cafe");
+    assert_eq!(fold_for_search("Mail"), fold_for_search("mAIL"));
 }
