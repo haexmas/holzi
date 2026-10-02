@@ -122,6 +122,22 @@ export class Device {
     this.group.deps.step('device-started', this.address)
   }
 
+  /**
+   * Starts the application over this device's data without opening a vault: for a device that does not
+   * have one yet because the scenario links it through the start page.
+   */
+  async startUnopened(): Promise<void> {
+    const next = nextState(this.state, 'start', this.offlineMode)
+    this.process = await this.group.deps.host.start({
+      data: this.data,
+      folder: this.folder,
+      step: (name, detail) =>
+        this.group.deps.step(name, detail ?? this.address),
+    })
+    this.state = next
+    this.group.deps.step('device-started', `${this.address} (no vault yet)`)
+  }
+
   private async launch(): Promise<void> {
     const { host } = this.group.deps
     this.process = await host.start({
@@ -263,6 +279,8 @@ export class Group {
   readonly deps: GroupDeps
   /** Every device by address (`<user>/<device>`). */
   readonly devices = new Map<string, Device>()
+  /** The vault of each user. */
+  readonly users = new Map<string, { vaultName: string }>()
 
   constructor(deps: GroupDeps) {
     this.deps = deps
@@ -280,6 +298,34 @@ export class Group {
       )
     }
     return device
+  }
+
+  /**
+   * A new device of an existing user that has no vault yet and does not run: the scenario links it,
+   * for instance through the start page. It has a passphrase of its own, as a linked device does.
+   */
+  addDevice(user: string, name: string): Device {
+    const entry = this.users.get(user)
+    if (entry === undefined) {
+      throw new Error(
+        `no user "${user}" in the group (${[...this.users.keys()].join(', ')})`,
+      )
+    }
+    return this.add(
+      {
+        user,
+        name,
+        address: `${user}/${name}`,
+        folder: deviceFolder(user, name),
+        first: false,
+        main: false,
+      },
+      {
+        vaultName: entry.vaultName,
+        passphrase: this.deps.credentials().passphrase,
+        role: 'linked',
+      },
+    )
   }
 
   /** Registers a device that does not run yet; refuses one more than the limit allows. */
@@ -329,6 +375,7 @@ export async function createGroup(
     })),
   )
   for (const user of plan) {
+    group.users.set(user.name, { vaultName: user.vaultName })
     const { passphrase } = deps.credentials()
     const [first, ...others] = user.devices
     if (first === undefined) continue

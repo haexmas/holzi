@@ -343,6 +343,36 @@ describe('device operations', () => {
   })
 })
 
+describe('a device added later', () => {
+  it('belongs to an existing user, has its own passphrase and no process yet', async () => {
+    const { group } = await make({ anna: ['laptop'] })
+    const phone = group.addDevice('anna', 'phone')
+    assert.equal(phone.state, 'stopped')
+    assert.equal(phone.vaultName, 'e2e-anna')
+    assert.equal(phone.role, 'linked')
+    assert.notEqual(phone.passphrase, group.device('anna/laptop').passphrase)
+    assert.equal(group.device('anna/phone'), phone)
+  })
+
+  it('starts without a vault and then counts as running', async () => {
+    const { group, host } = await make({ anna: ['laptop'] })
+    const phone = group.addDevice('anna', 'phone')
+    host.calls.length = 0
+    await phone.startUnopened()
+    assert.equal(phone.state, 'running')
+    assert.deepEqual(host.calls, ['start 4-anna-5-phone'])
+  })
+
+  it('refuses an unknown user and a device over the limit', async () => {
+    const { group } = await make({ anna: ['laptop'] }, { maxDevices: 1 })
+    assert.throws(() => group.addDevice('ben', 'pc'), /no user "ben"/)
+    assert.throws(
+      () => group.addDevice('anna', 'phone'),
+      /more than the limit of 1/,
+    )
+  })
+})
+
 describe('copying a vault file', () => {
   it('needs a stopped source and makes a stopped device of the same user', async () => {
     const { group, host } = await make({ anna: ['laptop'] })

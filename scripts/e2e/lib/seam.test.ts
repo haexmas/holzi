@@ -19,6 +19,7 @@ const SCENARIO_FACING = [
   'lib/group.ts',
   'lib/group-plan.ts',
   'lib/group-expect.ts',
+  'lib/sync-ui.ts',
   'lib/device-folder.ts',
 ]
 

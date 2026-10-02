@@ -23,6 +23,11 @@ interface Thread {
   title: string
 }
 
+/** Anything with a page to call backend commands on: a device of this file or of a group. */
+export interface ThreadDevice {
+  instance: Pick<Page, 'invoke'>
+}
+
 /** Only the test relay: the built-in servers, which would need a network, are switched off. */
 export async function onlyServers(page: Page, relayUrl: string) {
   const defaults = unwrap<{ nostrRelays: string[]; irohRelays: string[] }>(
@@ -229,7 +234,7 @@ export async function linkDevice(
 }
 
 /** The titles of a device's threads, sorted. */
-export async function threadTitles(device: Device): Promise<string[]> {
+export async function threadTitles(device: ThreadDevice): Promise<string[]> {
   const threads = unwrap<Thread[]>(
     'list_threads',
     await device.instance.invoke('list_threads'),
@@ -239,7 +244,7 @@ export async function threadTitles(device: Device): Promise<string[]> {
 
 /** A new thread with the title; returns its id. */
 export async function addThread(
-  device: Device,
+  device: ThreadDevice,
   title: string,
 ): Promise<string> {
   return unwrap<Thread>(
@@ -249,7 +254,7 @@ export async function addThread(
 }
 
 export async function renameThread(
-  device: Device,
+  device: ThreadDevice,
   id: string,
   title: string,
 ): Promise<void> {
@@ -261,7 +266,10 @@ export async function renameThread(
   )
 }
 
-export async function removeThread(device: Device, id: string): Promise<void> {
+export async function removeThread(
+  device: ThreadDevice,
+  id: string,
+): Promise<void> {
   unwrap(
     'delete_thread',
     await device.instance.invoke('delete_thread', { args: { threadId: id } }),
@@ -271,7 +279,7 @@ export async function removeThread(device: Device, id: string): Promise<void> {
 /** Waits until the device's threads have exactly these titles. */
 export async function expectThreads(
   ctx: WaitContext,
-  device: Device,
+  device: ThreadDevice,
   titles: string[],
   description: string,
 ): Promise<void> {
