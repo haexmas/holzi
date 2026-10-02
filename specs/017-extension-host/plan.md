@@ -15,7 +15,7 @@ Analyse dort gefunden hat, schließt holzi beim Portieren (Spec, Clarifications 
 
 Technischer Ansatz (Begründungen und verworfene Alternativen in [research.md](./research.md)):
 
-- **Sechs Lieferungen** (R1): L0 Vorarbeit in haex-crdt, vault-sdk und wry (Android), L1 der nutzbare Kern auf einem Gerät
+- **Sechs Lieferungen** (R1): L0 Vorarbeit in haex-crdt, vault-sdk und wry (Android, Windows), L1 der nutzbare Kern auf einem Gerät
   (US1–US3), L2 mehrere Geräte (US4), L3 Meldungen, Speicher, fremde Tabellen, Lebenszyklus, Entwicklermodus,
   L4 Netz, Benachrichtigungen, Dateien, L5 Passwörter, entfernter Speicher, Mail, Shell. Jede Lieferung bringt
   ihre Fälle der Umgehungssammlung (SC-002) mit.
@@ -67,7 +67,7 @@ Technischer Ansatz (Begründungen und verworfene Alternativen in [research.md](.
 L5: `async-imap` (tokio, `tokio-rustls`), `lettre` (rustls/ring), `mail-parser`. TLS überall rustls mit ring.
 **Andere Repositories (L0)**: `haexmas/haex-crdt` (SqlGuard, Trigger nach DDL, Schema-Modus, metadatentreuer
 Umbau, Spaltennamen, lokaler Modus), `haex-space/vault-sdk` (Format v2 in `haex`, `haex verify`, Testvektoren,
-`event.source`-Prüfung), `tauri-apps/wry` (Android: Init-Skripte nur in den Hauptrahmen, R25; bis zur
+`event.source`-Prüfung), `tauri-apps/wry` (Android und Windows: Init-Skripte nur in den Hauptrahmen, R12, R25; bis zur
 Veröffentlichung Fork über `[patch.crates-io]`); alle mit voller Revision gepinnt.
 
 **Storage**: Migration `0023_extensions` (nach `0022_passwords` aus 034) in
@@ -224,13 +224,13 @@ Prüfstelle in einem Modul liegt. Bestehende Module ändern sich nur an den Stel
 
 ## Complexity Tracking
 
-| Abweichung                                      | Warum nötig                                                                                                                                                               | Einfachere Alternative verworfen, weil                                                                                          |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Änderung in haex-crdt (anderes Repository)      | Der Authorizer muss um genau die Anweisung der Erweiterung liegen, und DDL zur Laufzeit braucht Trigger, Schema-Modus und metadatentreuen Umbau im selben Commit (R6, R8) | Nur AST-Prüfung ist die Lücke von haex-vault; `install_crdt` nachträglich ist nicht atomar und kaskadiert Löschungen beim Umbau |
-| Änderung im vault-sdk (anderes Repository)      | Signaturformat v2 und `event.source`-Prüfung (R2, R13)                                                                                                                    | Altes Format ist manipulierbar; ohne die Prüfung kann ein Geschwisterrahmen einen falschen Kanal unterschieben                  |
-| Fork von wry (Android) bis zur Veröffentlichung | Ohne Korrektur bekäme jeder Rahmen auf Android den Invoke-Key und damit holzis Commands (R25)                                                                             | Erweiterungen auf Android sperren (vom Betreiber abgelehnt); eigenes Webview je Erweiterung (auf Mobilgeräten nicht möglich)    |
-| Eingriff in den Sync-Empfang                    | FR-037: Gerät ohne Tabellen einer Erweiterung darf den Sync nicht anhalten (R10)                                                                                          | Ohne Parken bricht der Empfang ab oder verliert Daten still                                                                     |
-| Rahmen-Shim in ausgelieferten HTML-Dokumenten   | FR-012/FR-013 ohne Änderung am Code der Erweiterungen (R17)                                                                                                               | SDK v3.7.0 hat keine Meldungen für Navigation, Titel, Tastatur                                                                  |
+| Abweichung                                               | Warum nötig                                                                                                                                                               | Einfachere Alternative verworfen, weil                                                                                          |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Änderung in haex-crdt (anderes Repository)               | Der Authorizer muss um genau die Anweisung der Erweiterung liegen, und DDL zur Laufzeit braucht Trigger, Schema-Modus und metadatentreuen Umbau im selben Commit (R6, R8) | Nur AST-Prüfung ist die Lücke von haex-vault; `install_crdt` nachträglich ist nicht atomar und kaskadiert Löschungen beim Umbau |
+| Änderung im vault-sdk (anderes Repository)               | Signaturformat v2 und `event.source`-Prüfung (R2, R13)                                                                                                                    | Altes Format ist manipulierbar; ohne die Prüfung kann ein Geschwisterrahmen einen falschen Kanal unterschieben                  |
+| Fork von wry (Android, Windows) bis zur Veröffentlichung | Ohne Korrektur bekäme jeder Rahmen auf Android und Windows den Invoke-Key und damit holzis Commands (R25)                                                                 | Erweiterungen auf Android sperren (vom Betreiber abgelehnt); eigenes Webview je Erweiterung (auf Mobilgeräten nicht möglich)    |
+| Eingriff in den Sync-Empfang                             | FR-037: Gerät ohne Tabellen einer Erweiterung darf den Sync nicht anhalten (R10)                                                                                          | Ohne Parken bricht der Empfang ab oder verliert Daten still                                                                     |
+| Rahmen-Shim in ausgelieferten HTML-Dokumenten            | FR-012/FR-013 ohne Änderung am Code der Erweiterungen (R17)                                                                                                               | SDK v3.7.0 hat keine Meldungen für Navigation, Titel, Tastatur                                                                  |
 
 ## Bewusste Grenzen (aus research.md)
 

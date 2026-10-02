@@ -20,7 +20,7 @@ eine Prüfaufgabe in tasks.md.
 
 | Lieferung | Inhalt                                                                                                                                                | Stories             | Voraussetzung                           |
 | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | --------------------------------------- |
-| **L0**    | Vorarbeit in anderen Repositories: haex-crdt (R6, R8, R9), vault-sdk (R3, R13), wry für Android (R25)                                                 | –                   | –                                       |
+| **L0**    | Vorarbeit in anderen Repositories: haex-crdt (R6, R8, R9), vault-sdk (R3, R13), wry für Android und Windows (R12, R25)                                | –                   | –                                       |
 | **L1**    | Registry, Installation, Signatur v2, Rahmen und Brücke, SQL auf eigene Tabellen, Migrationen, Berechtigungen mit Anfrage und Einstellungen; ein Gerät | US1, US2, US3       | L0 gepinnt                              |
 | **L2**    | Mehrere Geräte: Bundles als Vault-Daten, geparkte Sync-Gruppen, Lebenszyklus je Gerät                                                                 | US4                 | L1, 024 im Einsatz                      |
 | **L3**    | Meldungen, Kontext, Schlüssel-Wert-Speicher, Protokolle, Tabellen anderer Erweiterungen, Update/Deaktivieren/Entfernen, Entwicklermodus               | US5, US6, US7, US12 | L1 (L2 für die Wirkung auf alle Geräte) |
@@ -344,9 +344,12 @@ object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors <holzi>`
 http://holzi-ext.localhost` (in `csp` und `devCsp`) und dasselbe in `img-src` für Symbole. `frame-src` der
   Elternseite regelt auch Selbstnavigationen des Rahmens und ist damit der Schutz gegen
   `location = 'https://…?daten'` (FR-010). `http://localhost:*` kommt **nicht** in die feste CSP (R16).
-- `ipc:` und `http://ipc.localhost` stehen nie in der CSP des Rahmens: Auf Windows spritzt wry die
-  IPC-Skripte in jeden Rahmen (`wry lib.rs:1029`, `webview2/mod.rs:506-508`); das IPC-Protokoll lehnt
-  `Origin: null` ab (`tauri-2.12.1/src/ipc/protocol.rs:486-494`), und `connect-src` sperrt den Weg zusätzlich.
+- **Windows**: wry spritzt die IPC-Skripte samt Invoke-Key in jeden Rahmen (`wry lib.rs:1029`,
+  `webview2/mod.rs:506-508`). Das IPC-Protokoll lehnt `Origin: null` zwar ab
+  (`tauri-2.12.1/src/ipc/protocol.rs:486-494`), und `ipc:`/`http://ipc.localhost` stehen nie in der CSP des
+  Rahmens; das genügt FR-066 aber nicht, weil der Schlüssel im Rahmen läge. Deshalb korrigiert L0 wry auch für
+  Windows: Skripte mit `for_main_frame_only` werden dort in `if (window === window.top) { … }` eingeschlossen
+  (R25).
 
 **Begründung**: ein CSP-fester Host auf allen Plattformen; das SDK erzwingt relative Pfade
 (`src/nuxt.ts:115-116`). Ein Host je Erweiterung brächte unter dem undurchsichtigen Ursprung nichts und ließe
@@ -480,8 +483,9 @@ aber ohne dessen synchronisierte Registrierung (HV `dev_server.rs:266, 301`).
 === parent`) und Web-Standards abbildet: `hashchange`/`popstate` → Ort im Tab (`{path, query, replace}`),
   `document.title` → Tabtitel, registriertes `beforeunload` → Schließen-Wächter, `window.close()` → Tab
   schließen, `keydown` für die gebundenen Kürzel (holzi schickt die Liste) → Aktion. holzis Zurück schickt
-  den Zielort, der Shim setzt den Hash. Aufmerksamkeit hat kein Web-Gegenstück und bleibt einer späteren
-  SDK-Meldung vorbehalten.
+  den Zielort, der Shim setzt den Hash. Aufmerksamkeit hat kein Web-Gegenstück; dafür bekommt das SDK in L0
+  `client.tab.requestAttention(active)`, das die Brückenmethode `extension_tab_attention {active}` sendet. Rust
+  prüft den Rahmen und meldet `extension-tab-attention {frame, active}` an die Oberfläche.
 
 **Begründung**: FR-012 und Spec 020 FR-034/035 ohne Änderung am Code der Erweiterungen (FR-013).
 
@@ -601,14 +605,15 @@ reserviert.
 Rust). Die mobilen Builds von holzi selbst sind eigene Arbeit (eigene Spec, siehe plan.md); 017 baut alles so,
 dass es dort läuft, und wird dort abgenommen, sobald die Ziele bestehen.
 
-- **Android, IPC in Rahmen (L0, wry)**: wry spritzt die Init-Skripte von Tauri — darunter den IPC-Code mit dem
+- **Android und Windows, IPC in Rahmen (L0, wry)**: wry spritzt die Init-Skripte von Tauri — darunter den IPC-Code mit dem
   `__TAURI_INVOKE_KEY__` — in **jeden** Rahmen: `WebViewCompat.addDocumentStartJavaScript(this, script,
 setOf("*"))` (`wry-0.57.0/src/android/kotlin/RustWebView.kt:31`), ohne `for_main_frame_only` zu beachten.
   Die Java-Brücke `window.ipc` (`addJavascriptInterface`, `src/android/main_pipe.rs:308-311`) ist ohnehin in
   allen Rahmen sichtbar; Tauri lehnt aber jede Nachricht ohne den richtigen Invoke-Key ab
-  (`tauri-2.12.1/src/error.rs:166-167`, `manager/mod.rs:688`). **Korrektur**: Skripte mit
-  `for_main_frame_only` nur für den Ursprung der App injizieren (`setOf("http://tauri.localhost")` bzw. den
-  konfigurierten Ursprung statt `"*"`). Ein Rahmen einer Erweiterung hat einen undurchsichtigen Ursprung bzw.
+  (`tauri-2.12.1/src/error.rs:166-167`, `manager/mod.rs:688`). Windows hat dasselbe Problem (R12).
+  **Korrektur** auf beiden Plattformen: Skripte mit `for_main_frame_only` in `if (window === window.top) { … }`
+  einschließen; auf Android zusätzlich nur für den Ursprung der App injizieren
+  (`setOf("http://tauri.localhost")` bzw. den konfigurierten Ursprung statt `"*"`). Ein Rahmen einer Erweiterung hat einen undurchsichtigen Ursprung bzw.
   `http://holzi-ext.localhost` und bekommt den Schlüssel dann nie. PR an `tauri-apps/wry`; bis zur
   Veröffentlichung nutzt holzi einen Fork über `[patch.crates-io]`, gepinnt auf den vollen SHA (Constitution
   IV). Abnahme: End-to-End-Szene auf dem Emulator prüft, dass `__TAURI_INTERNALS__` im Rahmen fehlt und ein

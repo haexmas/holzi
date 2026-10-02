@@ -882,7 +882,9 @@ erscheint), Entwicklermodus ausschalten (Erweiterung verschwindet).
   für dieses Gerät.
 - **FR-064**: Im Entwicklermodus MUSS holzi eine Erweiterung von einer Adresse auf `localhost`
   ohne Signatur laden, ihren Tab dauerhaft kennzeichnen und ihre erklärten Berechtigungen beim
-  Laden bestätigen lassen. Sonst gelten alle Regeln dieser Spec.
+  Laden bestätigen lassen. Sonst gelten alle Regeln dieser Spec, mit einer Ausnahme: Für Antworten des
+  Entwicklungsservers setzt holzi keine eigene Inhaltsrichtlinie, die Netzsperre aus FR-010 gilt dort also
+  nicht. Host-Funktionen prüft holzi weiter wie bei einer installierten Erweiterung.
 - **FR-065**: Eine Erweiterung im Entwicklermodus DARF keine installierte Erweiterung mit
   demselben Herausgeberschlüssel und Namen ersetzen oder deren Daten oder Berechtigungen
   nutzen. Ihre Registrierung, Berechtigungen und Tabellen MÜSSEN auf dem Gerät bleiben und
