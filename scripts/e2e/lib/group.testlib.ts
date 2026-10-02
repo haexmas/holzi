@@ -48,6 +48,7 @@ export class FakeHost implements DeviceHost {
   /** The arguments of every `link_join_start`. */
   readonly joins: unknown[] = []
   private joining = ''
+  failOpenVault = false
 
   newData(folder: string): DataHandle {
     const data = new FakeData(folder, this.calls)
@@ -63,6 +64,8 @@ export class FakeHost implements DeviceHost {
     const invoke = async (command: string, args?: unknown) => {
       this.calls.push(`${folder}: ${command}`)
       const reply = (value: unknown) => ({ ok: true as const, data: value })
+      if (command === 'open_instance' && this.failOpenVault)
+        return { ok: false as const, error: 'opening failed' }
       switch (command) {
         case 'sync_servers_defaults':
           return reply({

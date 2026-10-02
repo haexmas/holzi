@@ -143,6 +143,7 @@ export async function runLink(
     passphrase: string
     relayUrl: string
     asMainDevice?: boolean
+    device?: string
   },
 ): Promise<void> {
   const { code } = unwrap<{ code: string }>(
@@ -194,7 +195,7 @@ export async function runLink(
     },
     { timeoutMs: 40_000, fixed: true },
   )
-  ctx.step('linked', link.deviceName)
+  ctx.step('linked', link.deviceName, link.device)
 }
 
 /**

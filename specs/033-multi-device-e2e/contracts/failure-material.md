@@ -4,7 +4,7 @@ Extends the failure material of spec 016 (see `specs/016-e2e-testing/contracts/r
 
 ```text
 <runDir>/<scenario>/
-├── timeline.json            # steps; each step names the device it touched
+├── timeline.json            # steps; multi-device steps include their device address
 ├── nostr-relay.log          # as today
 ├── <encoded-device>/        # one folder per device of the group, e.g. 4-anna-6-laptop/
 │   ├── driver.log           # that device's driver and application output
@@ -15,4 +15,5 @@ Extends the failure material of spec 016 (see `specs/016-e2e-testing/contracts/r
 - Device folders encode the two address segments unambiguously as `<encoded-user-length>-<encoded-user>-<encoded-device-length>-<encoded-device>`; each segment is percent-encoded before its length is written. For example, `anna/laptop` becomes `4-anna-6-laptop`, and a `/` inside either name cannot create a path separator or a collision.
 - A passing scenario's folder is removed unless `--keep`, as today.
 - `timeline.json` lists, per failed scenario, the devices and the files kept in each folder.
+- Each multi-device timeline step includes the touched device's `<user>/<device>` address in its `device` field.
 - CI uploads `src-tauri/target/e2e` as today; the layout above is inside it.

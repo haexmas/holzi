@@ -28,7 +28,7 @@ export type { DeviceState, GroupSpec }
 export interface CaptureDevice {
   folder: string
   alive(): boolean
-  screenshot(): Promise<Uint8Array>
+  screenshot(callLimitMs?: number): Promise<Uint8Array>
   keepData(folder: string): void
 }
 
@@ -119,18 +119,28 @@ export class Device {
     const next = nextState(this.state, 'start', this.offlineMode)
     await this.launch()
     this.state = next
-    this.group.deps.step('device-started', this.address)
+    this.group.deps.step('device-started', this.address, this.address)
   }
 
   private async launch(): Promise<void> {
     const { host } = this.group.deps
-    this.process = await host.start({
+    const process = await host.start({
       data: this.data,
       folder: this.folder,
       step: (name, detail) =>
-        this.group.deps.step(name, detail ?? this.address),
+        this.group.deps.step(name, detail ?? this.address, this.address),
     })
-    await openVault(this.process, this.vaultName, this.passphrase)
+    try {
+      await openVault(process, this.vaultName, this.passphrase)
+    } catch (error) {
+      try {
+        await process.stop()
+      } catch {
+        // Preserve the vault-opening failure; teardown can report a separate stop failure.
+      }
+      throw error
+    }
+    this.process = process
   }
 
   async stop(): Promise<void> {
@@ -138,7 +148,7 @@ export class Device {
     await this.process?.stop()
     this.process = undefined
     this.state = next
-    this.group.deps.step('device-stopped', this.address)
+    this.group.deps.step('device-stopped', this.address, this.address)
   }
 
   /** Ends the device without the application's shutdown. */
@@ -147,7 +157,7 @@ export class Device {
     await this.process?.kill()
     this.process = undefined
     this.state = next
-    this.group.deps.step('device-killed', this.address)
+    this.group.deps.step('device-killed', this.address, this.address)
   }
 
   /** Stop, then start again; a device that is offline comes back offline. */
@@ -165,10 +175,11 @@ export class Device {
     await this.setServers({
       ...(await onlyServers(this.page, this.group.deps.relay.url)),
       nostrRelays: [],
+      irohRelays: [],
     })
     this.offlineMode = true
     await this.restart()
-    this.group.deps.step('device-offline', this.address)
+    this.group.deps.step('device-offline', this.address, this.address)
   }
 
   /** The group's servers back, and a restart to apply them. */
@@ -179,7 +190,7 @@ export class Device {
     )
     this.offlineMode = false
     await this.restart()
-    this.group.deps.step('device-online', this.address)
+    this.group.deps.step('device-online', this.address, this.address)
   }
 
   /** The server lists of the vault (they apply at the next opening). */
@@ -250,10 +261,21 @@ export class Device {
       passphrase: this.passphrase,
       role: this.role,
     })
-    await this.data.copyVaultFile(this.vaultName, copy.data)
+    try {
+      await this.data.copyVaultFile(this.vaultName, copy.data)
+    } catch (error) {
+      this.group.devices.delete(copy.address)
+      try {
+        copy.data.dispose()
+      } catch {
+        // Preserve the copy failure; the failed target is no longer registered.
+      }
+      throw error
+    }
     this.group.deps.step(
       'vault-file-copied',
       `${this.address} -> ${copy.address}`,
+      this.address,
     )
     return copy
   }
@@ -324,7 +346,7 @@ export async function createGroup(
     [...group.devices.values()].map((device) => ({
       folder: device.folder,
       alive: () => device.state === 'running' || device.state === 'offline',
-      screenshot: () => device.page.screenshot(),
+      screenshot: (callLimitMs) => device.page.screenshot(callLimitMs),
       keepData: (folder: string) => device.data.keep(folder),
     })),
   )
@@ -351,7 +373,7 @@ async function createFirstDevice(group: Group, device: Device): Promise<void> {
   const fresh = await host.start({
     data: device.data,
     folder: device.folder,
-    step,
+    step: (name, detail) => step(name, detail, device.address),
   })
   try {
     await createVaultOnRelay(
@@ -382,7 +404,7 @@ async function linkDeviceInto(
   const fresh = await host.start({
     data: device.data,
     folder: device.folder,
-    step,
+    step: (name, detail) => step(name, detail, device.address),
   })
   try {
     await runLink(group.deps, origin.page, fresh, {
@@ -391,6 +413,7 @@ async function linkDeviceInto(
       passphrase,
       relayUrl: relay.url,
       asMainDevice: planned.main,
+      device: device.address,
     })
   } finally {
     await fresh.stop()

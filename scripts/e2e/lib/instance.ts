@@ -191,7 +191,7 @@ export interface Instance extends Page {
   driverPid: number
   /** The pid of the application process this instance started. */
   pid: number
-  screenshot(): Promise<Buffer>
+  screenshot(callLimitMs?: number): Promise<Buffer>
   alive(): boolean
   /** End the session and everything the instance started. Safe to call more than once. */
   stop(): Promise<void>
@@ -334,7 +334,7 @@ export async function startInstance(
     ports,
     driverPid,
     pid: appPid,
-    screenshot: () => client.screenshot(),
+    screenshot: (callLimitMs) => client.screenshot(callLimitMs),
     alive: () => pidAlive(appPid),
     stop,
     step,

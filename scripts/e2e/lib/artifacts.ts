@@ -9,6 +9,8 @@ import type { Instance } from './instance.ts'
 import type { Provider } from './provider.ts'
 import type { Step } from './scenario.ts'
 
+const FAILURE_SCREENSHOT_LIMIT_MS = 5_000
+
 export interface CaptureFailureOptions {
   runDir: string
   scenario: string
@@ -41,7 +43,10 @@ async function screenshotOrNote(
     return 'no screenshot: the application had already ended'
   }
   try {
-    writeFileSync(join(dir, 'screenshot.png'), await instance.screenshot())
+    writeFileSync(
+      join(dir, 'screenshot.png'),
+      await instance.screenshot(FAILURE_SCREENSHOT_LIMIT_MS),
+    )
     return undefined
   } catch (error) {
     return `no screenshot: ${describeError(error)}`
@@ -66,7 +71,7 @@ async function captureDevices(
         try {
           writeFileSync(
             join(deviceDir, 'screenshot.png'),
-            await device.screenshot(),
+            await device.screenshot(FAILURE_SCREENSHOT_LIMIT_MS),
           )
         } catch (error) {
           writeFileSync(

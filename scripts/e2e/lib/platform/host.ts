@@ -29,7 +29,7 @@ export interface RunningDevice extends Page {
   /** Records a timeline entry of the scenario that started the device. */
   step(name: string, detail?: string): void
   /** The current window as PNG bytes. */
-  screenshot(): Promise<Uint8Array>
+  screenshot(callLimitMs?: number): Promise<Uint8Array>
 }
 
 export interface StartDeviceOptions {

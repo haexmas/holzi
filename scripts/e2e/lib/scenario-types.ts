@@ -31,6 +31,8 @@ export interface Step {
   atMs: number
   at: string
   detail?: string
+  /** Address of the device touched by a multi-device step. */
+  device?: string
 }
 
 export interface ScenarioResult {
@@ -59,7 +61,7 @@ export interface StartInstanceRequest {
   reuse: boolean
   env: E2EEnv
   /** Records a timeline entry on the scenario that made the request. */
-  step: (name: string, detail?: string) => void
+  step: (name: string, detail?: string, device?: string) => void
   /** Keeps the screen's current XWD image at `<framebufferDir>/Xvfb_screen0` (research R11, T068). */
   framebufferDir?: string
 }
@@ -98,7 +100,7 @@ export interface ScenarioContext {
   name: string
   /** Aborted when the scenario reaches its deadline. */
   signal: AbortSignal
-  step(name: string, detail?: string): void
+  step(name: string, detail?: string, device?: string): void
   waitFor<T>(
     description: string,
     predicate: () => T | Promise<T>,

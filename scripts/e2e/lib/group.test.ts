@@ -130,7 +130,7 @@ interface Made {
   group: Group
   host: FakeHost
   teardowns: Array<() => Promise<void> | void>
-  steps: string[]
+  steps: Array<{ name: string; detail?: string; device?: string }>
   captured: Array<() => CaptureDevice[]>
 }
 
@@ -140,7 +140,7 @@ async function make(
 ): Promise<Made> {
   const host = new FakeHost()
   const teardowns: Made['teardowns'] = []
-  const steps: string[] = []
+  const steps: Made['steps'] = []
   const captured: Made['captured'] = []
   let counter = 0
   const deps: GroupDeps = {
@@ -151,8 +151,7 @@ async function make(
     keep: options.keep ?? false,
     maxDevices: options.maxDevices ?? 6,
     waitFor: pollingWaitFor,
-    step: (name, detail) =>
-      void steps.push(detail ? `${name} ${detail}` : name),
+    step: (name, detail, device) => void steps.push({ name, detail, device }),
     captureWith: (devices) => void captured.push(devices),
   }
   const group = await createGroup(deps, { users })
@@ -161,7 +160,7 @@ async function make(
 
 describe('creating a group', () => {
   it('creates each vault on its first device, on the relay only, and reopens it', async () => {
-    const { group, host } = await make({ anna: ['laptop'], ben: ['pc'] })
+    const { group, host, steps } = await make({ anna: ['laptop'], ben: ['pc'] })
     assert.deepEqual(group.devices.size, 2)
     assert.deepEqual(
       host.servers.map((entry) => entry.folder),
@@ -181,6 +180,12 @@ describe('creating a group', () => {
       'start 4-anna-6-laptop',
     ])
     assert.equal(group.device('anna/laptop').state, 'running')
+    assert.ok(
+      steps.some(
+        (step) =>
+          step.name === 'device-started' && step.device === 'anna/laptop',
+      ),
+    )
   })
 
   it('links the other devices of a user with a code, as main or linked', async () => {
@@ -277,10 +282,11 @@ describe('device operations', () => {
     host.servers.length = 0
     await laptop.goOffline()
     assert.equal(laptop.state, 'offline')
-    assert.deepEqual(
-      (host.servers[0]?.args as { nostrRelays: string[] }).nostrRelays,
-      [],
-    )
+    assert.deepEqual(host.servers[0]?.args, {
+      nostrRelays: [],
+      irohRelays: [],
+      disabled: ['wss://default-nostr', 'https://default-iroh'],
+    })
     assert.deepEqual(
       host.calls.filter((c) => /^(start|stop) /.test(c)),
       ['stop 4-anna-6-laptop', 'start 4-anna-6-laptop'],
@@ -365,5 +371,32 @@ describe('copying a vault file', () => {
     const laptop = group.device('anna/laptop')
     await laptop.stop()
     await assert.rejects(laptop.copyVaultTo('copy'), /more than the limit of 1/)
+  })
+
+  it('removes and disposes a copy when copying fails', async () => {
+    const { group, host } = await make({ anna: ['laptop'] })
+    const laptop = group.device('anna/laptop')
+    await laptop.stop()
+    const source = host.data.get('4-anna-6-laptop')
+    assert.ok(source)
+    source.copyVaultFile = async () => {
+      throw new Error('copy failed')
+    }
+
+    await assert.rejects(laptop.copyVaultTo('copy'), /copy failed/)
+    assert.equal(group.devices.has('anna/copy'), false)
+    assert.equal(host.data.get('4-anna-4-copy')?.disposed, true)
+  })
+
+  it('stops a process when opening its vault fails', async () => {
+    const { group, host } = await make({ anna: ['laptop'] })
+    const laptop = group.device('anna/laptop')
+    await laptop.stop()
+    host.failOpenVault = true
+
+    await assert.rejects(laptop.start(), /opening failed/)
+    assert.equal(laptop.state, 'stopped')
+    assert.equal(host.data.get('4-anna-6-laptop')?.running, false)
+    assert.throws(() => laptop.page, /it has no page/)
   })
 })

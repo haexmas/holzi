@@ -138,13 +138,14 @@ export async function runScenario(
   let pendingStep: string | undefined
   let instanceCount = 0
 
-  const step = (stepName: string, detail?: string) => {
+  const step = (stepName: string, detail?: string, device?: string) => {
     const entry: Step = {
       name: stepName,
       atMs: Math.round(performance.now() - startedAt),
       at: new Date().toISOString(),
     }
     if (detail !== undefined) entry.detail = detail
+    if (device !== undefined) entry.device = device
     steps.push(entry)
   }
   const scaled = (ms: number) => Math.round(ms * env.timeScale)

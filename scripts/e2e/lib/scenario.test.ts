@@ -334,12 +334,14 @@ describe('runScenario', () => {
         async (ctx) => {
           ctx.step('first')
           ctx.step('second', 'with detail')
+          ctx.step('device-step', undefined, 'anna/laptop')
         },
         depsFor(runDir),
       )
-      const [a, b] = result.steps
+      const [a, b, deviceStep] = result.steps
       assert.deepEqual([a.name, b.name], ['first', 'second'])
       assert.equal(b.detail, 'with detail')
+      assert.equal(deviceStep?.device, 'anna/laptop')
       assert.ok(Number.isInteger(a.atMs) && a.atMs >= 0 && b.atMs >= a.atMs)
     }))
 
