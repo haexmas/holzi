@@ -4,20 +4,14 @@
 //! This module grows with the deliveries of the spec (research R1). The foundation holds the
 //! identifiers, the error codes of the bridge and the pure permission model.
 
+pub mod bundle;
 pub mod error;
 pub mod ids;
 pub mod permissions;
 
-/// Largest `.xt` file holzi opens (contracts/bundle-format.md).
-pub const MAX_BUNDLE_BYTES: u64 = 64 * 1024 * 1024;
-/// Largest single file inside a bundle, unpacked; the proven attachment size of spec 034.
-pub const MAX_ENTRY_BYTES: u64 = 25 * 1024 * 1024;
-/// Largest sum of all files of a bundle, unpacked.
-pub const MAX_TOTAL_UNPACKED: u64 = 64 * 1024 * 1024;
-/// Most entries a bundle may have.
-pub const MAX_ENTRIES: usize = 2000;
-/// Largest compression ratio of one entry (zip bombs).
-pub const MAX_RATIO: u64 = 200;
+// The limits of a bundle (size, entries, ratio) belong to the bundle format and live in the crate
+// `haex-bundle` (`haex_bundle::format::limits`), the one implementation shared with the `haex` tool.
+
 /// Days an unreferenced blob is kept before it is freed, as for attachments in spec 034: another
 /// device may be about to reference it.
 pub const BLOB_ORPHAN_GRACE_DAYS: u64 = 7;

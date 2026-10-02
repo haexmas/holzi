@@ -72,27 +72,33 @@ abgesetzte `.sig`-Datei (geht beim Kopieren verloren); HV-Format (Spec-Entscheid
 
 ## R3 — Archiv lesen: Regeln und Grenzen
 
-**Entscheidung**: Direkte Abhängigkeit `zip = { version = "7", default-features = false,
-features = ["deflate-flate2"] }` (7.2.0 und flate2 sind schon im Lock). Nie `extract` aufrufen; Einträge in
-den Speicher lesen. Regeln, gleich im Werkzeug `haex` und in holzi, geprüft auf den rohen Namensbytes:
+**Entscheidung**: Das Bundle-Format hat genau eine Umsetzung, das Rust-Crate `haex-bundle` im vault-sdk
+(`crates/haex-bundle`, haex-space/vault-sdk#54). holzi bindet es per Git-Revision ein, das Werkzeug `haex` nutzt
+seinen WebAssembly-Build. Es liest das Archiv mit einem eigenen Leser (nicht dem `zip`-Crate) in den Speicher,
+ruft nie `extract` auf und prüft auf den rohen Namensbytes:
 
 - gültiges UTF-8 in NFC (sonst ablehnen, nie stillschweigend normalisieren); nur `/`; kein führendes `/`, kein
   `\`, `:`, NUL oder Steuerzeichen; keine leeren, `.`- oder `..`-Teile; Teil ≤ 255 Bytes, Pfad ≤ 1024 Bytes;
 - keine zwei Pfade, die nach NFC und Kleinschreibung gleich sind;
 - nur reguläre Dateien (keine Symlinks, keine Verzeichniseinträge mit Daten, nichts Verschlüsseltes), nur
   `Stored` oder `Deflate`;
-- **doppelte Namen**: zip 7.2 fasst sie still zusammen (`zip-7.2.0/src/read.rs:71-74`); holzi vergleicht
-  die Eintragszahl aus dem Archivende mit `archive.len()` und lehnt bei Abweichung ab;
+- **doppelte Namen**: das zentrale Verzeichnis wird roh gelesen, jeder Name einzeln geprüft (das `zip`-Crate
+  fasst sie still zusammen, `zip-7.2.0/src/read.rs:71-74`);
+- lokaler Kopf gleich dem Eintrag im zentralen Verzeichnis (Name, Methode, Verschlüsselung, CRC-32, Größen);
 - Grenzen: `.xt` ≤ 64 MiB vor dem Öffnen; je Datei ≤ 25 MiB, gesamt ≤ 64 MiB entpackt, ≤ 2.000 Einträge,
-  Verhältnis ≤ 200:1 je Eintrag; jeder Eintrag wird über `take(size + 1)` gelesen und scheitert, wenn mehr
-  kommt als angegeben.
+  Verhältnis ≤ 200:1 je Eintrag; jeder Eintrag scheitert, sobald er mehr Bytes liefert als angegeben.
 
 **Begründung**: Zip-Bomben, Pfad-Tricks und doppelte Einträge sind die üblichen Angriffe auf Installer; HV
 ruft `archive.extract` ohne Grenzen auf (HV `installer.rs:84-90`). 25 MiB je Datei entspricht der bewährten
 Grenze für Anhänge in 034 (R4 dort).
 
-**Alternativen**: zip 8 wie HV (zweite Hauptversion im Build); Entpacken in ein Verzeichnis (unnötige Kopie
-im Klartext, siehe R4).
+Ein Crate statt je einer Umsetzung in TypeScript (Werkzeug) und Rust (holzi): sonst müsste jede Regeländerung
+an zwei Stellen nachgezogen werden (Entscheidung des Betreibers, 2026-10-03). Die Testvektoren erzeugt weiter
+ein unabhängiges Node.js-Skript; sie prüfen das Crate nativ und über WebAssembly.
+
+**Alternativen**: `zip`-Crate 7 oder 8 wie HV (Duplikate unsichtbar, kein Vergleich der lokalen Köpfe, eigene
+Fehlerabbildung); zwei Umsetzungen mit gemeinsamen Testvektoren (doppelte Pflege); Entpacken in ein
+Verzeichnis (unnötige Kopie im Klartext, siehe R4).
 
 ## R4 — Bundles als Vault-Daten und Ausliefern aus der Datenbank
 

@@ -48,8 +48,8 @@ Technischer Ansatz (Begründungen und verworfene Alternativen in [research.md](.
 - **Übrige Host-Funktionen** (R18–R21): Netz mit selbst geprüften Weiterleitungen, Dateien mit aufgelöstem
   Ziel, Sperrliste und Dialog-Auswahl als Berechtigung, Benachrichtigungen mit Klick, Passwörter als Adapter
   auf 034, entfernter Speicher auf 029, Mail mit Host und Port, Shell je Programm.
-- **Neue Abhängigkeiten**: Rust `zip` (7, nur Deflate; schon im Lock), `ed25519-dalek` (gemeinsam mit 034,
-  schon im Lock), in L4 `notify` + `notify-debouncer-full`, `tauri-plugin-notification`, ggf. `notify-rust`,
+- **Neue Abhängigkeiten**: Rust `haex-bundle` (Crate im vault-sdk, per Git-Revision gepinnt; die einzige
+  Umsetzung des Bundle-Formats, R3), `ed25519-dalek` (gemeinsam mit 034, schon im Lock), in L4 `notify` + `notify-debouncer-full`, `tauri-plugin-notification`, ggf. `notify-rust`,
   in L5 `async-imap`, `lettre`, `mail-parser`; Frontend keine. haex-crdt- und vault-sdk-Pins werden
   angehoben. ADR-0008 hält Signaturformat und Authorizer fest (R24).
 
@@ -62,7 +62,7 @@ Technischer Ansatz (Begründungen und verworfene Alternativen in [research.md](.
 über haex-crdt, sqlparser 0.62 über `haex_crdt::sqlparser`, `sha2` 0.11, `uuid` (v5), `serde_json`
 (`preserve_order`), `reqwest` 0.13 (rustls), `portable-pty` 0.9, `tauri-plugin-dialog`,
 `tauri-plugin-opener`, `thiserror`, `ts-rs`; Frontend: Pinia, `@nuxtjs/i18n`, haex-ui-Layer.
-**Neu (Rust)**: `zip` 7 (`deflate-flate2`), `ed25519-dalek` 3 (mit 034 geteilt); L4: `notify`,
+**Neu (Rust)**: `haex-bundle` (vault-sdk, R3), `ed25519-dalek` 3 (mit 034 geteilt); L4: `notify`,
 `notify-debouncer-full`, `tauri-plugin-notification`, `notify-rust` (nur Linux, nach Machbarkeitsprüfung);
 L5: `async-imap` (tokio, `tokio-rustls`), `lettre` (rustls/ring), `mail-parser`. TLS überall rustls mit ring.
 **Andere Repositories (L0)**: `haexmas/haex-crdt` (SqlGuard, Trigger nach DDL, Schema-Modus, metadatentreuer
@@ -172,7 +172,7 @@ src-tauri/src/
 │   ├── mod.rs                        # Modulliste, Konstanten (Grenzen)                   [neu, L1]
 │   ├── ids.rs                        # Namensräume, abgeleitete Kennungen, TablePrefix    [neu, L1]
 │   ├── error.rs                      # ExtensionErrorCode, Abbildung auf SDK-Fehler      [neu, L1]
-│   ├── bundle/                       # archive.rs (R3), jcs.rs, signature.rs (R2), manifest.rs, store.rs (BLOBs, R4) [neu, L1]
+│   ├── bundle/                       # mod.rs (Aufruf von haex-bundle, R3), manifest.rs, store.rs (BLOBs, R4) [neu, L1]
 │   ├── registry/                     # install.rs, effective.rs (R11), lifecycle.rs, status.rs, purge.rs [neu, L1/L2/L3]
 │   ├── protocol/                     # handler.rs (holzi-ext), csp.rs (Hashes), shim.rs (Rahmen-Shim), token.rs [neu, L1]
 │   ├── bridge/                       # frames.rs (Rahmensitzungen), dispatch.rs (Erlaubtliste), events.rs [neu, L1]
