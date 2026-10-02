@@ -406,7 +406,13 @@ const PASSWORDS_TABLES: [(&str, &[&str]); 12] = [
     ),
     (
         "haex_passwords_item_snapshots",
-        &["id", "item_id", "snapshot_data", "created_at", "modified_at"],
+        &[
+            "id",
+            "item_id",
+            "snapshot_data",
+            "created_at",
+            "modified_at",
+        ],
     ),
     (
         "haex_passwords_snapshot_binaries",
@@ -430,7 +436,10 @@ const PASSWORDS_TABLES: [(&str, &[&str]); 12] = [
             "updated_at",
         ],
     ),
-    ("haex_passwords_tags", &["id", "name", "color", "created_at"]),
+    (
+        "haex_passwords_tags",
+        &["id", "name", "color", "created_at"],
+    ),
     ("haex_passwords_item_tags", &["id", "item_id", "tag_id"]),
     (
         "haex_passwords_passkeys",
@@ -479,7 +488,10 @@ fn assert_passwords_schema(db: &Database) {
             )?)
         })
         .expect("declared type of the binary column");
-    assert_eq!(declared_type, "BLOB", "attachments are binary, not Base64 text (A1)");
+    assert_eq!(
+        declared_type, "BLOB",
+        "attachments are binary, not Base64 text (A1)"
+    );
     for (table, _) in PASSWORDS_TABLES {
         let unique_indexes = db
             .with_connection(|conn| {
@@ -569,7 +581,10 @@ async fn a_binary_that_an_attachment_still_links_cannot_be_deleted() {
                 "ON DELETE RESTRICT must refuse deleting a linked binary (A4)"
             );
             // Without the link the binary can go.
-            conn.execute("DELETE FROM haex_passwords_item_binaries WHERE id = 'l1'", [])?;
+            conn.execute(
+                "DELETE FROM haex_passwords_item_binaries WHERE id = 'l1'",
+                [],
+            )?;
             conn.execute("DELETE FROM haex_passwords_binaries WHERE hash = 'h1'", [])?;
             Ok(())
         })

@@ -576,7 +576,10 @@ pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
         .to_string(),
     );
 
-    m.insert(MigrationName::from("0022_passwords"), PASSWORDS_0022.to_owned());
+    m.insert(
+        MigrationName::from("0022_passwords"),
+        PASSWORDS_0022.to_owned(),
+    );
 
     Arc::new(StaticMigrationSource(m))
 }

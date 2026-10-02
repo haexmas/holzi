@@ -81,7 +81,10 @@ fn a_patch_with_tags_and_fields_replaces_those_sets() {
         "keyValues": [{ "id": "k1", "key": "PIN" }, { "key": "New", "value": "v" }],
     }))
     .expect("patch");
-    assert_eq!(patch.tags.as_deref(), Some(&["a".to_string(), "b".to_string()][..]));
+    assert_eq!(
+        patch.tags.as_deref(),
+        Some(&["a".to_string(), "b".to_string()][..])
+    );
     let fields = patch.key_values.expect("fields");
     assert_eq!(fields.len(), 2);
     assert_eq!(fields[0].id.as_deref(), Some("k1"));
