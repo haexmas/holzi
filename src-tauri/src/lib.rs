@@ -49,7 +49,9 @@ use chat::thread_commands::{
     create_thread, delete_thread, list_messages, list_threads, rename_thread,
 };
 use device::commands::{current_device_info, list_vault_devices, update_device_alias};
-use extensions::commands::frames::{extension_frame_close, extension_frame_open};
+use extensions::commands::frames::{
+    extension_bridge_call, extension_frame_close, extension_frame_open, extension_host_context_set,
+};
 use extensions::commands::install::{extension_install, extension_install_preview};
 use extensions::commands::manage::{extension_icon, extension_list};
 use hardware::get_hardware_info;
@@ -341,6 +343,8 @@ pub fn run() {
             extension_icon,
             extension_frame_open,
             extension_frame_close,
+            extension_bridge_call,
+            extension_host_context_set,
         ]))
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

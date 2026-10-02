@@ -9,11 +9,29 @@ use uuid::Uuid;
 use super::bridge::frames::FrameRegistry;
 use super::registry::start::Started;
 
+/// What holzi's window reports about itself for `extension_context_get`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostContext {
+    /// `light`, `dark` or `system`, as the SDK's `ApplicationContext` names them.
+    pub theme: &'static str,
+    pub locale: String,
+}
+
+impl Default for HostContext {
+    fn default() -> Self {
+        Self {
+            theme: "system",
+            locale: "de".to_owned(),
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct ExtensionHost {
     pub frames: FrameRegistry,
     /// Entry and Content-Security-Policy per bundle started in this process.
     started: Mutex<HashMap<Uuid, Arc<Started>>>,
+    context: Mutex<HostContext>,
 }
 
 impl ExtensionHost {
@@ -30,5 +48,26 @@ impl ExtensionHost {
 
     pub fn started(&self, bundle_id: Uuid) -> Option<Arc<Started>> {
         self.started_map().get(&bundle_id).cloned()
+    }
+
+    pub fn context(&self) -> HostContext {
+        self.context
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    /// Sets the context holzi's window reports; a theme outside the SDK's names counts as
+    /// `system`.
+    pub fn set_context(&self, theme: &str, locale: &str) {
+        let theme = match theme {
+            "light" => "light",
+            "dark" => "dark",
+            _ => "system",
+        };
+        *self.context.lock().unwrap_or_else(PoisonError::into_inner) = HostContext {
+            theme,
+            locale: locale.to_owned(),
+        };
     }
 }
