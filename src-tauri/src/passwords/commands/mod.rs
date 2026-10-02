@@ -3,6 +3,10 @@
 //! window are `Caller::User`, `passwords_agent_search` is `Caller::BuiltinAgent`. No command takes a
 //! caller as an argument.
 
+pub mod items;
+pub mod passkeys;
+pub mod read;
+
 use serde::Deserialize;
 use tauri::State;
 use ts_rs::TS;

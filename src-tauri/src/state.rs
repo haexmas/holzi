@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use haex_crdt::Database;
 
 use crate::error::{HolziError, Result};
+use crate::passwords::clipboard::ClipboardClearer;
 use crate::vault_gate::{VaultDb, VaultGate};
 
 /// Handle to the currently-active instance's runtime. Dropping the last
@@ -39,6 +40,8 @@ pub struct AppState {
     /// The gate whose tracker counts every `VaultDb` this state hands out, and whose phase
     /// `install` advances in the same breath as publishing.
     gate: VaultGate,
+    /// The pending clearing of the clipboard after a password manager copy (spec 034, FR-006).
+    clipboard: ClipboardClearer,
 }
 
 impl AppState {
@@ -48,7 +51,13 @@ impl AppState {
             active_instance: Mutex::new(None),
             sync_servers_update: tokio::sync::Mutex::new(()),
             gate,
+            clipboard: ClipboardClearer::new(),
         }
+    }
+
+    /// The clearer of the clipboard; a close clears what it still holds (spec 034, FR-006).
+    pub fn clipboard(&self) -> &ClipboardClearer {
+        &self.clipboard
     }
 
     /// Holds the relay-settings update lock across persistence and runtime

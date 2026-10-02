@@ -415,3 +415,67 @@ pub struct Overview {
     pub groups: Vec<GroupRow>,
     pub tags: Vec<TagRow>,
 }
+
+/// Which value `passwords_copy_field` puts on the clipboard.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings/")]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum CopyField {
+    Username,
+    Password,
+    /// The current TOTP code, not the secret.
+    Totp,
+    KeyValue {
+        id: String,
+    },
+}
+
+/// The current TOTP code of an entry, computed in Rust (FR-003).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings/")]
+#[serde(rename_all = "camelCase")]
+pub struct TotpCode {
+    pub code: String,
+    pub remaining_seconds: u32,
+    pub period: u32,
+    pub digits: u32,
+}
+
+/// A custom field with its value, as the single-entry secret read delivers it.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SecretKeyValue {
+    pub key: Option<String>,
+    pub value: Option<String>,
+}
+
+/// The whole entry with its secrets, the answer of the single-entry read for callers from outside
+/// (FR-026: only on a request for one entry that a grant covers). `Debug` prints no value.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SecretItem {
+    pub id: String,
+    pub title: Option<String>,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub note: Option<String>,
+    pub url: Option<String>,
+    pub expires_at: Option<String>,
+    pub otp_secret: Option<String>,
+    pub otp_digits: Option<u32>,
+    pub otp_period: Option<u32>,
+    pub otp_algorithm: Option<String>,
+    /// All tag names of the entry (rule Z12).
+    pub tags: Vec<String>,
+    pub key_values: Vec<SecretKeyValue>,
+}
+
+impl fmt::Debug for SecretItem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SecretItem")
+            .field("id", &self.id)
+            .field("title", &self.title)
+            .field("secrets", &"<redacted>")
+            .finish_non_exhaustive()
+    }
+}

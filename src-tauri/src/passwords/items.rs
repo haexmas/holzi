@@ -6,15 +6,15 @@
 //! devices that change different fields of one entry both keep their change (FR-037). Writes use
 //! check-then-write instead of `ON CONFLICT DO UPDATE` (see `storage/preferences.rs`).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use haex_crdt::rusqlite::{params, ToSql};
 use haex_crdt::CrdtTransaction;
 use uuid::Uuid;
 
 use super::model::{
-    AttachmentView, GroupRow, ItemDetail, ItemHeader, ItemInput, ItemPatch, KeyValuePatch,
-    KeyValueView, Overview, Patch, TagRef, TagRow,
+    AgentHeader, AttachmentView, GroupRow, ItemDetail, ItemHeader, ItemInput, ItemPatch,
+    KeyValuePatch, KeyValueView, Overview, Patch, TagRef, TagRow,
 };
 use super::totp::{self, otp_state, OtpParams};
 use super::{clock, passkeys, tags};
@@ -37,7 +37,7 @@ type HeaderRow = (String, ItemHeader);
 
 /// The headers (all, or the one of `only`) with tags and counts attached. Never selects a note, a
 /// secret or a binary.
-fn load_headers(q: &mut impl Query, only: Option<&str>) -> Result<Vec<ItemHeader>> {
+pub(super) fn load_headers(q: &mut impl Query, only: Option<&str>) -> Result<Vec<ItemHeader>> {
     let filter = if only.is_some() {
         "WHERE d.id = ?1"
     } else {
@@ -680,4 +680,60 @@ pub fn item_state(q: &mut impl Query, id: &str) -> Result<Option<(Vec<String>, b
         .unwrap_or(0)
         > 0;
     Ok(Some((tags::names_of_item(q, id)?, in_trash)))
+}
+
+/// The ids of the entries in the trash: those whose folder is the trash or lies below it.
+pub fn trashed_item_ids(q: &mut impl Query) -> Result<HashSet<String>> {
+    Ok(q.query_map(
+        "WITH RECURSIVE trash_groups(id) AS ( \
+           SELECT ?1 \
+           UNION \
+           SELECT g.id FROM haex_passwords_groups g JOIN trash_groups t ON g.parent_id = t.id) \
+         SELECT gi.item_id FROM haex_passwords_group_items gi \
+         JOIN trash_groups tg ON tg.id = gi.group_id",
+        params![super::TRASH_GROUP_ID],
+        |r| r.get::<_, String>(0),
+    )?
+    .into_iter()
+    .collect())
+}
+
+/// The headers a caller from outside may see: entries that are not in the trash and whose tags
+/// meet the scope (Z4, Z13).
+pub fn headers_in_scope(
+    q: &mut impl Query,
+    scope: &super::access::Scope,
+) -> Result<Vec<ItemHeader>> {
+    let trashed = trashed_item_ids(q)?;
+    Ok(load_headers(q, None)?
+        .into_iter()
+        .filter(|h| !trashed.contains(&h.id))
+        .filter(|h| scope.covers(&h.tags.iter().map(|t| t.name.clone()).collect::<Vec<_>>()))
+        .collect())
+}
+
+/// What the built-in agent may see of every entry that is not in the trash (FR-027): title, tag
+/// names, folder name and whether a TOTP exists.
+pub fn agent_headers(q: &mut impl Query) -> Result<Vec<AgentHeader>> {
+    let trashed = trashed_item_ids(q)?;
+    let folders: HashMap<String, Option<String>> = q
+        .query_map("SELECT id, name FROM haex_passwords_groups", &[], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?))
+        })?
+        .into_iter()
+        .collect();
+    Ok(load_headers(q, None)?
+        .into_iter()
+        .filter(|h| !trashed.contains(&h.id))
+        .map(|h| AgentHeader {
+            folder: h
+                .group_id
+                .as_ref()
+                .and_then(|g| folders.get(g).cloned().flatten()),
+            tags: h.tags.iter().map(|t| t.name.clone()).collect(),
+            has_totp: h.has_totp,
+            title: h.title,
+            id: h.id,
+        })
+        .collect())
 }

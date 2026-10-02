@@ -47,6 +47,19 @@ fn validate_key(key: &str) -> Result<()> {
     preferences::validate_key(key).map_err(pref_error_to_holzi)
 }
 
+/// Checks the value of a key that has a fixed set of choices; every other key takes any value.
+/// Spec 034: the clipboard clearing time of the password manager (0, 15, 30, 60 or 120 seconds).
+pub(crate) fn validate_value(key: &str, value: &str) -> Result<()> {
+    if key == crate::passwords::settings::CLIPBOARD_CLEAR_KEY
+        && !crate::passwords::settings::is_valid_clear_seconds(value)
+    {
+        return Err(HolziError::InvalidInput {
+            reason: format!("{key} must be one of 0, 15, 30, 60, 120"),
+        });
+    }
+    Ok(())
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetPrefArgs {
@@ -77,6 +90,7 @@ pub struct SetPrefArgs {
 #[tauri::command]
 pub async fn set_pref(state: State<'_, AppState>, args: SetPrefArgs) -> Result<()> {
     validate_key(&args.key)?;
+    validate_value(&args.key, &args.value)?;
     let scope = PrefScope::try_from(args.scope)?;
     let SetPrefArgs { key, value, .. } = args;
     let db = active_database(&state)?;

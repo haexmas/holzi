@@ -15,8 +15,13 @@
 //! rule Z11).
 
 use super::access::{self, Caller};
+
+mod items;
+mod passkeys;
+
 use crate::error::Result;
 use crate::vault_gate::VaultDb;
+pub use items::Headers;
 
 /// The service over one open vault. Cheap to build per request; it holds only the tracked handle.
 #[derive(Clone)]
