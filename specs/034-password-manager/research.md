@@ -60,8 +60,14 @@ Primärschlüssel dagegen sind kein Konflikt: Die Zeilen werden spaltenweise zus
    `item_tags.id = v5(NS_ITEM_TAG, itemId ":" tagId)`, `passkeys.id = v5(NS_PASSKEY, credentialId)`.
    Unabhängig angelegte gleiche Tags, Verknüpfungen oder Passkeys treffen so dieselbe Zeile
    und führen sich zusammen (US8, Szenario 5). Die Anwendung prüft die Eindeutigkeit vor dem
-   Schreiben (`fold`: NFC, Kleinschreibung, Leerraum trimmen, damit „Work“ und „work“ ein
-   Tag sind; die Schreibweise des ersten Anlegers bleibt sichtbar).
+   Schreiben (`fold`: Unicode-Normalform NFC, Kleinschreibung, Leerraum trimmen, damit „Work“
+   und „work“ ein Tag sind; die Schreibweise des ersten Anlegers bleibt sichtbar). **Warum
+   Unicode-Normalisierung nötig ist**: Dasselbe sichtbare Zeichen hat oft zwei Schreibweisen,
+   etwa „é“ als ein Zeichen (U+00E9) oder als „e“ plus Akzent (U+0065 U+0301); macOS und
+   manche Exporte liefern die zerlegte Form. Die abgeleitete Kennung hängt an den Bytes des
+   Namens: ohne NFC bekäme „Café“ je nach Quelle zwei Kennungen, und der Import würde Tags
+   verdoppeln. `unicode-normalization` steht schon im `Cargo.lock` (transitiv) und wird direkte
+   Abhängigkeit; das ändert den Bauumfang nicht.
 3. Ein Tag bekommt beim Umbenennen **nicht** die Kennung des neuen Namens. Benennen zwei
    Geräte gleichzeitig verschieden um oder legt ein Gerät einen Namen an, den das andere
    gerade vergibt, können zwei Zeilen mit demselben Namen entstehen. Beim Öffnen der Vault
@@ -251,6 +257,12 @@ Oberfläche (FR-024). Wichtig:
   (Ändern, Löschen). Es gibt **keine** automatische Standard-Tag-Ergänzung wie in
   haex-vault (die Spec fordert sie nicht, ein Aufrufer sendet seine Tags selbst).
 - Passkeys ohne Eintrag (`item_id` leer) liegen außerhalb jedes Tag-Bereichs.
+- **Alles läuft über den Dienst**, auch die Oberfläche (Betreiber-Entscheidung zur Analyse):
+  `PasswordsService` hat für jede Funktion der Oberfläche eine Methode (Ordner, Tags, Papierkorb,
+  Verlauf, Anhänge, Passkeys, Voreinstellungen, Import). Jede Methode prüft den Aufrufer zuerst;
+  für alles außer Eintrag lesen, anlegen, ändern und löschen gilt **Z11**: andere Aufrufer als
+  `User` sind `Forbidden`, bis eine spätere Spec für sie eine Regel schreibt. So gibt es einen
+  einzigen Eingang und keine zweite Schicht, an der die Prüfung vorbeiliefe.
 
 **Der eingebaute Agent**: Kopfdaten für ihn sind enger als FR-026: nur Kennung, Titel, Tags,
 Ordnername, `hasTotp`; ohne Benutzername und Adresse, damit auch ohne Geheimnisse nicht
@@ -302,6 +314,15 @@ kommt als direkte Abhängigkeit hinzu (RustCrypto, gleiche Familie wie `sha2`). 
 geprüft: Ziffern 6–10, Periode 1–300 s, Algorithmus aus der Liste, Secret dekodierbar;
 sonst `InvalidInput` mit Feldnamen. `parse_otp_input` nimmt `otpauth://totp/…` oder ein
 nacktes Secret (Verhalten von `parseOtpData` aus haex-vault, plus die Prüfung, die dort fehlt).
+
+**Defaults und ungültige Daten**: Beim Anlegen und Ändern wird ein ungültiger Wert abgelehnt
+(`InvalidInput` mit Feldname) und ein fehlender bekommt den Standard (6, 30, `SHA1`). Gelesen
+werden `NULL`-Werte ebenfalls als Standard. Per Sync oder Import kann trotzdem ein ungültiger
+Wert in die Tabelle kommen (anderes Gerät, andere Programmversion); darum meldet `get_item`
+einen Zustand `otpState` (`none`, `valid`, `invalid`), `passwords_totp_code` liefert für
+`invalid` einen `InvalidInput`, und die Oberfläche zeigt am Eintrag eine Meldung mit „Ersetzen“
+und „Entfernen“, ohne etwas still zu ändern. Beim Import wird ein ungültiges Secret nicht
+übernommen: der Eintrag entsteht ohne TOTP und steht im Bericht als „mit Verlust“.
 
 **Verworfen**: _`totp-rs`_ (zusätzliche Abhängigkeiten, die QR- und Serde-Funktionen
 nicht gebraucht werden), _`otpauth` im Frontend_ (Secret im Webview, R7).
@@ -387,9 +408,19 @@ Argon2-Shim aus `hash-wasm`; Schlüsseldateien werden nicht unterstützt. Im Fro
    (RFC 4180, Zeilenumbrüche in Feldern). Zuordnungen wie in haex-vault, soweit sie dort
    funktionieren: Ordner (LastPass: `grouping` an `/` teilen), Tags (Bitwarden-Typen werden
    Tags `secure-note`, `credit-card`, `identity`), eigene Felder, TOTP (vorher geprüft, R8),
-   Anhänge (KeePass), Passkeys, wo die Quelle sie liefert (Bitwarden `fido2Credentials`,
-   KeePassXC-Attribute); gelingt die Abbildung eines Passkeys nicht, steht er als
-   „nicht übernommen“ im Bericht. Der KeePass-Papierkorb wird nicht übernommen (Annahme der
+   Anhänge (KeePass) und **Passkeys** (Bitwarden `fido2Credentials`, KeePassXC-Attribute). Die
+   Quellen liefern nur den privaten Schlüssel (PKCS8); die Tabelle verlangt auch den öffentlichen
+   (SPKI, `NOT NULL`). Er wird für **ES256 (P-256)** mit dem Crate `p256` (Features `pkcs8`,
+   `pem`; `pkcs8`, `spki` und `pem-rfc7468` stehen schon im `Cargo.lock`) abgeleitet. Passkeys
+   mit anderem Algorithmus oder unlesbarem Schlüssel stehen als „nicht übernommen“ im Bericht.
+   Schlüsselpaare für Tests entstehen zur Laufzeit im Test, nie als Datei im Repository
+   (Constitution I). Die Kodierungen der Felder (Base64 oder Base64url bei Credential-ID und
+   Benutzerkennung, UUID-Form der Bitwarden-Credential-ID) und die Kodierung in haex-vault prüft
+   Aufgabe T003 anhand des Codes dort und eigener Beispieldaten, damit gespeicherte Passkeys
+   zwischen beiden Produkten lesbar bleiben. **Warum nicht wie in haex-vault**: haex-vault
+   importiert keine Passkeys; es erzeugt sie selbst (`generatePasskeyPairAsync`, ES256) und hat
+   deshalb beide Schlüssel zur Hand. Der Fall „nur der private Schlüssel ist bekannt“ kommt dort
+   nicht vor. Der KeePass-Papierkorb wird nicht übernommen (Annahme der
    Spec). Symbole und Verlauf der Quelle werden im ersten Wurf nicht importiert.
 4. Kennungen sind neu (v4); Doppelte erkennt `(title, username, url)` gegen vorhandene
    Einträge **außerhalb** des Papierkorbs; `onDuplicate: skip | create` entscheidet die
@@ -553,6 +584,14 @@ Die folgenden Punkte stehen jetzt in der Spec (eigener Commit, mit Begründung h
 6. **FR-023**: Gesamtgröße eines Imports über 100 MiB wird vor dem Schreiben abgelehnt;
    Anhänge über 25 MiB werden übersprungen und gemeldet (R12).
 7. **FR-027**: Kopfdaten für den eingebauten Agenten ohne Benutzername und Adresse (R6).
+8. **FR-023** und **US7**: Passkeys (ES256) werden importiert, der öffentliche Schlüssel wird
+   abgeleitet; ungültiges TOTP führt zu einem Eintrag ohne TOTP (R12).
+9. **FR-003** und der Edge Case „TOTP-Secret ungültig“: Ablehnen beim Anlegen und Ändern,
+   Standardwerte, Erkennen und Beheben bei Sync und Import (R8).
+10. **FR-009**: Reihenfolge der Ordner ist änderbar, auch ohne Maus.
+11. **FR-024**: Auch die Oberfläche läuft über den Dienst (R6).
+12. **SC-002**, **SC-007**: grobe Zielgrenzen statt harter Zeiten.
+13. **FR-017**: Wortwahl „Verlaufsstand“.
 
 **Entscheidungen, die der Betreiber bestätigen sollte** (im Bericht an ihn genannt):
 PDF-Vorschau entfällt (R18); der eingebaute Agent sieht nur Titel und Tags (R6, R14);

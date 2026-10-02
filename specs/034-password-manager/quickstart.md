@@ -41,7 +41,10 @@ UNIQUE auf Tagname, Credential-ID und Tag-Paar.
 Automatisch: `totp_tests.rs` rechnet die Testvektoren der RFC 6238 für SHA-1, SHA-256 und
 SHA-512 mit 8 Ziffern; ungültige Secrets, Ziffern, Perioden und Algorithmen liefern `InvalidInput`
 mit Feldnamen (SC-003). `passwords_roundtrip.rs` prüft Anlegen, Ändern und Lesen mit den
-Geheimnis-Regeln (Teil-Update lässt ein nicht gesendetes Passwort unverändert).
+Geheimnis-Regeln (Teil-Update lässt ein nicht gesendetes Passwort unverändert). Ein ungültig in
+die Tabelle geschriebenes TOTP-Secret (simulierter Sync) meldet `otpState: invalid`, der Code-Aufruf
+liefert `InvalidInput`, und Ersetzen sowie Entfernen funktionieren; `NULL` bei Ziffern, Periode und
+Algorithmus gilt als 6, 30, `SHA1`.
 
 Manuell (`pnpm tauri:dev`, Vault öffnen, App „Passwörter“ aus dem Starter):
 
@@ -52,13 +55,18 @@ Manuell (`pnpm tauri:dev`, Vault öffnen, App „Passwörter“ aus dem Starter)
    Textfeld einfügbar). Einstellung auf 15 s stellen: gilt ohne Speichern-Knopf.
 3. Tab-Verlaufsliste und Fenstertitel ansehen: kein Titel eines Eintrags, kein Wert.
 4. „Abgelaufen“-Kennzeichnung: Ablaufdatum in der Vergangenheit setzen.
+5. Ein TOTP-Secret mit Tippfehler (`JBSWY3DPEHPK3PX!`) speichern: abgelehnt mit Meldung am Feld.
+6. Passkeys eines Eintrags (aus einem Import, siehe §9) werden mit Relying Party und Nutzer
+   angezeigt, der Spitzname ist änderbar, das Löschen entfernt den Passkey.
 
 ## 4. Ordnen (US2)
 
 Zwei verschachtelte Ordner anlegen, drei Einträge verschieben, Tags vergeben, per
 Mehrfachauswahl zwei verschieben, nach Tag filtern. Ordner in den eigenen Unterordner ziehen:
-abgelehnt. Tag umbenennen in einen vorhandenen Namen: abgelehnt. `trash_tests.rs` und
-`tags_tests.rs` decken Zyklus, Tag-Kennungen (`fold`) und das Zusammenführen ab.
+abgelehnt. Tag umbenennen in einen vorhandenen Namen: abgelehnt. Ordner mit „nach oben“ /
+„nach unten“ und per Ziehen umsortieren: die Reihenfolge bleibt nach Neustart erhalten.
+`groups_tests.rs`, `trash_tests.rs` und `tags_tests.rs` decken Zyklus, Reihenfolge, Tag-Kennungen
+(`fold`, auch zerlegte Umlaute) und das Zusammenführen ab.
 
 ## 5. Generator (US3)
 
@@ -99,7 +107,12 @@ KeePass-, Bitwarden- und LastPass-Datei, Passwörter erfunden): Zahl der Einträ
 stimmt mit der Quelle (SC-010), falsches Passwort und beschädigte Datei ändern nichts, ein
 Fehler in der Mitte hinterlässt nichts (Abbruch durch eine absichtlich ungültige Zeile),
 Doppelte erscheinen in der Vorschau, `onDuplicate: skip` überspringt sie, Zeilenumbrüche in
-Notizen bleiben erhalten. Manuell: den Assistenten mit einer eigenen Exportdatei ausprobieren.
+Notizen bleiben erhalten. Passkeys: ein zur Laufzeit erzeugtes P-256-Schlüsselpaar wird als
+Bitwarden-`fido2Credentials` und als KeePassXC-Attribute exportiert, importiert, und der
+abgeleitete öffentliche Schlüssel stimmt mit dem erzeugten überein; ein Passkey mit anderem
+Algorithmus steht im Bericht als nicht übernommen; ein ungültiges TOTP führt zu einem Eintrag ohne
+TOTP und einer Zeile im Bericht. Manuell: den Assistenten mit einer eigenen Exportdatei
+ausprobieren.
 
 ## 10. Sync zwischen eigenen Geräten (US8)
 

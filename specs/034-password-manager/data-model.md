@@ -58,6 +58,8 @@ Regel: Beim Speichern entfallen Felder mit leerem Schlüssel.
 Regeln: kein Zyklus (`parent_id` darf nicht der Ordner selbst oder ein Nachfahre sein); der
 Papierkorb `id = 'trash'` hat `parent_id NULL` und `name NULL`; Geschwister sortieren nach
 `sort_order` (leer = 0), dann nach `name` (Unicode-Reihenfolge ohne Rücksicht auf Groß-/Kleinschreibung).
+Das Umsortieren (`reorder_groups`) vergibt den Geschwistern einer Ebene `sort_order` 0, 1, 2, … in der
+neuen Reihenfolge, in einem `write`; Ordner ohne eigene Reihenfolge bleiben alphabetisch.
 
 ### `haex_passwords_group_items` — Ordnerzuordnung
 
@@ -67,13 +69,13 @@ CASCADE (leer = Wurzel) · **`trashed_from_group_id` TEXT (A2)**. Index:
 
 ### `haex_passwords_binaries` — Binärdaten
 
-| Spalte       | Typ                    | Regel                                                    |
-| ------------ | ---------------------- | -------------------------------------------------------- |
-| `hash`       | TEXT PK                | SHA-256 der Rohdaten, kleingeschriebenes Hex             |
-| `data`       | **BLOB** NOT NULL (A1) | höchstens 25 MiB                                         |
-| `size`       | INTEGER NOT NULL       | Länge von `data`                                         |
-| `type`       | TEXT                   | `attachment` (Standard) oder `icon` (nur von haex-vault) |
-| `created_at` | TEXT                   | Standard `CURRENT_TIMESTAMP`; Grundlage der Karenzzeit   |
+| Spalte       | Typ                    | Regel                                                                                           |
+| ------------ | ---------------------- | ----------------------------------------------------------------------------------------------- |
+| `hash`       | TEXT PK                | SHA-256 der Rohdaten, kleingeschriebenes Hex                                                    |
+| `data`       | **BLOB** NOT NULL (A1) | höchstens 25 MiB                                                                                |
+| `size`       | INTEGER NOT NULL       | Länge von `data`                                                                                |
+| `type`       | TEXT                   | `attachment` (Standard) oder `icon` (nur von haex-vault)                                        |
+| `created_at` | TEXT                   | Rust schreibt RFC 3339 mit Millisekunden; die Karenzzeit vergleicht über `datetime(created_at)` |
 
 `data` wird nur in eigenen Abfragen gelesen. `size`, nicht `length(data)`, trägt die Anzeige.
 
@@ -140,7 +142,10 @@ Indizes: `idx_pw_item_tags_item (item_id)`, `idx_pw_item_tags_tag (tag_id)`.
 | `created_at`, `last_used_at`                           | TEXT                  |                                                             |
 
 Regel: Die Oberfläche legt keine Passkeys an; sie entstehen durch Import oder Sync
-(später durch die External Bridge). Löschen und Spitznamen sind erlaubt.
+(später durch die External Bridge). Löschen und Spitznamen sind erlaubt. Beim Import liefern
+die Quellen nur den privaten Schlüssel; `public_key` wird für ES256 (P-256) aus ihm abgeleitet
+(`passkeys.rs`), andere Algorithmen werden nicht übernommen. Die Kodierung von `credential_id`,
+`user_handle` und der Schlüssel entspricht der von haex-vault (Prüfung in T003).
 
 ## Abgeleitete Kennungen
 
@@ -206,15 +211,15 @@ verwaist ── beim Öffnen der Vault, created_at älter als 7 Tage ──▶ g
 
 ## Rust-Typen (nicht gespeichert; ts-rs-Export nach `src/types/bindings/`)
 
-| Typ              | Inhalt                                                                                                                                                                                                                                                              |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ItemHeader`     | id, title, username, url, icon, color, groupId, tags `[{id,name,color}]`, expiresAt, hasPassword, hasTotp, passkeyCount, attachmentCount, createdAt, updatedAt                                                                                                      |
-| `ItemDetail`     | `ItemHeader` plus note, autofillAliases, otpDigits, otpPeriod, otpAlgorithm, hasOtpSecret, keyValues `[{id,key,hasValue}]`, attachments `[{id,fileName,size,binaryHash}]`, passkeys `[{id,relyingPartyId,relyingPartyName,userName,nickname,createdAt,lastUsedAt}]` |
-| `AgentHeader`    | id, title, tags (Namen), folder (Name), hasTotp                                                                                                                                                                                                                     |
-| `GroupRow`       | id, name, description, icon, color, sortOrder, parentId, trashedFromParentId                                                                                                                                                                                        |
-| `TagRow`         | id, name, color, itemCount                                                                                                                                                                                                                                          |
-| `SnapshotHeader` | id, itemId, modifiedAt, changedFields `string[]`, attachmentCount                                                                                                                                                                                                   |
-| `ImportReport`   | imported, skippedDuplicates, lossy `[{title, missing[]}]`, skipped `[{title, reason}]`, attachmentsSkipped                                                                                                                                                          |
+| Typ              | Inhalt                                                                                                                                                                                                                                                                                                     |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ItemHeader`     | id, title, username, url, icon, color, groupId, tags `[{id,name,color}]`, expiresAt, hasPassword, hasTotp, passkeyCount, attachmentCount, createdAt, updatedAt                                                                                                                                             |
+| `ItemDetail`     | `ItemHeader` plus note, autofillAliases, otpDigits, otpPeriod, otpAlgorithm, hasOtpSecret, otpState (`none`, `valid`, `invalid`), keyValues `[{id,key,hasValue}]`, attachments `[{id,fileName,size,binaryHash}]`, passkeys `[{id,relyingPartyId,relyingPartyName,userName,nickname,createdAt,lastUsedAt}]` |
+| `AgentHeader`    | id, title, tags (Namen), folder (Name), hasTotp                                                                                                                                                                                                                                                            |
+| `GroupRow`       | id, name, description, icon, color, sortOrder, parentId, trashedFromParentId                                                                                                                                                                                                                               |
+| `TagRow`         | id, name, color, itemCount                                                                                                                                                                                                                                                                                 |
+| `SnapshotHeader` | id, itemId, modifiedAt, changedFields `string[]`, attachmentCount                                                                                                                                                                                                                                          |
+| `ImportReport`   | imported, skippedDuplicates, lossy `[{title, missing[]}]`, skipped `[{title, reason}]`, attachmentsSkipped                                                                                                                                                                                                 |
 
 Typen mit Geheimnissen (`PasswordInput`, `RevealedSecret`, `SnapshotData`) implementieren
 `Debug` ohne Werte; sie stehen nie in `Display` oder in Fehlerfeldern.

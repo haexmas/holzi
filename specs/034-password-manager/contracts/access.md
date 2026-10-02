@@ -28,8 +28,9 @@ gibt keine Zwischenspeicherung im Dienst.
 
 ## Dienst (`passwords/service.rs`)
 
-Der einzige Weg zu den Daten außer der Oberfläche. Jede Methode nimmt `&Caller` und die
-Freigaben des Aufrufers (`&[Grant]`; für `User` und `BuiltinAgent` ignoriert):
+Der **einzige Weg zu den Daten**, auch für die Oberfläche (FR-024). Jede Methode nimmt `&Caller`
+und die Freigaben des Aufrufers (`&[Grant]`; für `User` und `BuiltinAgent` ignoriert) und prüft
+zuerst den Aufrufer:
 
 ```text
 list_headers(caller, grants)                       -> Vec<ItemHeader> | Vec<AgentHeader>
@@ -39,25 +40,29 @@ update_item(caller, grants, item_id, patch)        -> ()
 delete_item(caller, grants, item_id)               -> ()                // endgültig, nicht Papierkorb
 ```
 
-Die Oberfläche geht über dieselben Funktionen (`Caller::User`); daneben gibt es keine zweite
-Lese- oder Schreibschicht für Tabellen (FR-024). `Internal`-Aufrufer legen ihre Freigabe fest im
+Daneben hat der Dienst je eine Methode für jede Funktion der Oberfläche (`service/organize.rs`:
+Ordner, Verschieben, Reihenfolge, Tags; `trash.rs`; `history.rs`; `attachments.rs`; `passkeys.rs`;
+`presets.rs`; `import.rs`), die alle `Caller::User` verlangen (Z11). Es gibt keine zweite Lese-
+oder Schreibschicht für Tabellen, an der die Prüfung vorbeiliefe; die Commands rufen nur den
+Dienst. `Internal`-Aufrufer legen ihre Freigabe fest im
 Code ab (zum Beispiel `Grant { ReadWrite, Tags({"holzi:s3"}) }`), mit dem reservierten
 Tag-Präfix `holzi:` (Hinweis vor dem Löschen, FR-034).
 
 ## Regeln
 
-| Nr. | Regel                                                                                                                                                                                                     | Spec        |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| Z1  | `User` darf alles ohne Freigabe.                                                                                                                                                                          | FR-031      |
-| Z2  | `BuiltinAgent` bekommt höchstens `AgentHeader` über `list_headers`; jede andere Methode ist `Forbidden`, Freigaben haben keine Wirkung.                                                                   | FR-027      |
-| Z3  | Für alle anderen Aufrufer: ohne passende Freigabe der verlangten Art ist die Anfrage `Forbidden`.                                                                                                         | FR-029      |
-| Z4  | `list_headers` liefert nur Einträge im Bereich, nur `ItemHeader`-Felder (nie Passwort, TOTP-Secret, Passkey-Schlüssel, eigene Felder, Notiz, Anhänge); Einträge im Papierkorb nie.                        | FR-026      |
-| Z5  | `read_secret_item` für einen Eintrag **außerhalb** des Bereichs ist `NotFound`, nicht von „nicht vorhanden“ zu unterscheiden.                                                                             | FR-029      |
-| Z6  | `create_item` mit Bereich `Tags`: die gesendete Tagliste muss mindestens ein Tag im Bereich enthalten, sonst `Forbidden`.                                                                                 | FR-028      |
-| Z7  | `update_item` mit Bereich `Tags`: der Eintrag muss **vor** der Änderung im Bereich liegen (sonst `NotFound`) und **danach** mindestens ein Tag im Bereich tragen (sonst `Forbidden`, nichts ändert sich). | FR-028      |
-| Z8  | `delete_item` verlangt `ReadWrite` und einen Eintrag im Bereich (sonst `NotFound`).                                                                                                                       | FR-028      |
-| Z9  | Passkeys ohne `item_id` gehören zu keinem Tag-Bereich; nur `All` deckt sie.                                                                                                                               | Datenmodell |
-| Z10 | Keine Antwort, kein Fehler, keine Protokollzeile enthält einen Wert eines Geheimnisses.                                                                                                                   | FR-040      |
+| Nr. | Regel                                                                                                                                                                                                                                                                                                             | Spec        |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| Z1  | `User` darf alles ohne Freigabe.                                                                                                                                                                                                                                                                                  | FR-031      |
+| Z2  | `BuiltinAgent` bekommt höchstens `AgentHeader` über `list_headers`; jede andere Methode ist `Forbidden`, Freigaben haben keine Wirkung.                                                                                                                                                                           | FR-027      |
+| Z3  | Für alle anderen Aufrufer: ohne passende Freigabe der verlangten Art ist die Anfrage `Forbidden`.                                                                                                                                                                                                                 | FR-029      |
+| Z4  | `list_headers` liefert nur Einträge im Bereich, nur `ItemHeader`-Felder (nie Passwort, TOTP-Secret, Passkey-Schlüssel, eigene Felder, Notiz, Anhänge); Einträge im Papierkorb nie.                                                                                                                                | FR-026      |
+| Z5  | `read_secret_item` für einen Eintrag **außerhalb** des Bereichs ist `NotFound`, nicht von „nicht vorhanden“ zu unterscheiden.                                                                                                                                                                                     | FR-029      |
+| Z6  | `create_item` mit Bereich `Tags`: die gesendete Tagliste muss mindestens ein Tag im Bereich enthalten, sonst `Forbidden`.                                                                                                                                                                                         | FR-028      |
+| Z7  | `update_item` mit Bereich `Tags`: der Eintrag muss **vor** der Änderung im Bereich liegen (sonst `NotFound`) und **danach** mindestens ein Tag im Bereich tragen (sonst `Forbidden`, nichts ändert sich).                                                                                                         | FR-028      |
+| Z8  | `delete_item` verlangt `ReadWrite` und einen Eintrag im Bereich (sonst `NotFound`).                                                                                                                                                                                                                               | FR-028      |
+| Z9  | Passkeys ohne `item_id` gehören zu keinem Tag-Bereich; nur `All` deckt sie.                                                                                                                                                                                                                                       | Datenmodell |
+| Z10 | Keine Antwort, kein Fehler, keine Protokollzeile enthält einen Wert eines Geheimnisses.                                                                                                                                                                                                                           | FR-040      |
+| Z11 | Jede Methode außer `list_headers`, `read_secret_item`, `create_item`, `update_item` und `delete_item` ist für andere Aufrufer als `User` `Forbidden` (Ordner, Verschieben, Reihenfolge, Tags, Papierkorb, Verlauf, Anhänge, Passkeys, Voreinstellungen, Import), bis eine spätere Spec dafür eine Regel schreibt. | FR-024      |
 
 ## Aufrufer und Eingang
 

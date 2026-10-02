@@ -71,6 +71,17 @@ ausdrücklich nicht Teil dieser Spec. Referenz: haex-vault @
   den Verweisen auf Binärdaten. Der Verlauf speichert den neuen Zustand; Aufräumen mit Karenzzeit
   von sieben Tagen; PDFs nur zum Herunterladen; der eingebaute Agent sieht nur Titel, Tags und
   Ordnernamen (Plan, R2–R6, R18).
+- Q: (Analyse) Müssen Passkeys im ersten Wurf auch aus Importen kommen? → A: Ja (Bitwarden
+  und KeePassXC). haex-vault importiert keine Passkeys; es erzeugt sie selbst über die Bridge und
+  hat deshalb beide Schlüssel. Importquellen liefern nur den privaten Schlüssel, der öffentliche
+  wird für ES256 abgeleitet; dafür kommt `p256` hinzu.
+- Q: (Analyse) Läuft die Oberfläche am Dienst vorbei? → A: Nein. Alles läuft über den Dienst; die
+  Oberfläche ist der Aufrufer „Nutzer“.
+- Q: (Analyse) Dürfen ungültige Secrets angelegt werden? → A: Nein, das wird abgelehnt und
+  fehlende Angaben bekommen Standardwerte; was per Sync oder Import ungültig ankommt, muss
+  erkannt und behebbar sein.
+- Q: (Analyse) Wie hart sind Zeitvorgaben? → A: Grobe Zielgrenzen genügen; es gibt keine
+  Messaufgaben für Zeiten.
 - Q: Soll das Datenmodell von haex-vault 1:1 übernommen werden? → A: Ja, Tabellen- und
   Spaltennamen und deren Bedeutung bleiben, mit der einen Ausnahme der Binärdaten.
 
@@ -209,7 +220,7 @@ endgültig entfernen.
    er, was sich geändert hat, ohne dass Passwörter im Klartext aufgedeckt werden, bevor er es
    verlangt.
 6. **Given** ein früherer Stand, **When** der Nutzer ihn wiederherstellt, **Then** wird er der
-   aktuelle Stand, und der bisherige Stand bleibt als neuer Verlaufseintrag erhalten.
+   aktuelle Stand, und der bisherige Stand bleibt als neuer Verlaufsstand erhalten.
 
 ---
 
@@ -295,8 +306,8 @@ anfordern (abgelehnt) und einen Eintrag schreiben wollen (abgelehnt).
 Ein Nutzer wechselt von KeePass, Bitwarden oder LastPass zu holzi. Er wählt die Exportdatei
 (bei KeePass die Datei der Datenbank mit Passwort oder Schlüsseldatei), sieht eine Vorschau,
 wie viele Einträge, Ordner und Anhänge gefunden wurden, und startet den Import. holzi
-übernimmt Einträge samt Ordnerstruktur, TOTP, eigenen Feldern, Tags, Anhängen und, wo die
-Quelle sie liefert, Passkeys, und meldet danach, was importiert wurde und was nicht.
+übernimmt Einträge samt Ordnerstruktur, TOTP, eigenen Feldern, Tags, Anhängen und Passkeys,
+und meldet danach, was importiert wurde und was nicht.
 
 **Why this priority**: Ohne Import startet jeder Nutzer bei null und bleibt bei seinem alten
 Manager. Importieren ist aber nicht nötig, um den Passwortmanager zu benutzen.
@@ -320,6 +331,12 @@ die Ordnerstruktur und je ein Passwort, TOTP-Secret und Anhang mit der Quelle ve
    scheitert, **Then** bleibt die Vault in dem Zustand vor dem Import (alles oder nichts).
 6. **Given** ein Import hat Einträge angelegt, **When** der Nutzer ihn wiederholt, **Then**
    fragt holzi, ob doppelte Einträge übersprungen oder angelegt werden sollen.
+7. **Given** ein Eintrag der Quelle mit einem ES256-Passkey, **When** der Nutzer importiert,
+   **Then** erscheint der Passkey am Eintrag mit Relying Party und Nutzer, und sein öffentlicher
+   Schlüssel passt zum privaten; ein Passkey mit anderem Algorithmus steht im Bericht als nicht
+   übernommen.
+8. **Given** ein Eintrag der Quelle mit ungültigem TOTP-Secret, **When** der Nutzer importiert,
+   **Then** wird der Eintrag ohne TOTP angelegt und der Bericht nennt ihn.
 
 ---
 
@@ -357,9 +374,13 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
 - **Ein Eintrag wird gleichzeitig auf einem anderen Gerät gelöscht**, während der Nutzer ihn
   bearbeitet. Beim Speichern sagt holzi, dass der Eintrag gelöscht wurde, und bietet an, ihn
   neu anzulegen; nichts wird still verworfen.
-- **Ein TOTP-Secret ist ungültig** (falsches Format, unbekannter Algorithmus). holzi zeigt
-  statt eines Codes eine Meldung an diesem Eintrag und speichert das Secret trotzdem nicht
-  stillschweigend verändert.
+- **Ein TOTP-Secret ist ungültig** (falsches Format, unbekannter Algorithmus, Ziffernzahl oder
+  Periode außerhalb des Zulässigen). Beim Anlegen und Ändern lehnt holzi das mit einer Meldung
+  am Feld ab; fehlende Angaben bekommen die Standardwerte. Kommt ein ungültiger Wert dennoch
+  an (Sync von einem anderen Gerät, ein anderes Programm), zeigt der Eintrag statt eines Codes
+  eine Meldung und lässt zu, das Secret zu ersetzen oder zu entfernen; holzi stürzt nicht ab
+  und verändert nichts still. Beim Import wird der Eintrag ohne TOTP angelegt und im Bericht
+  genannt.
 - **Die Uhr eines Geräts geht falsch.** Der TOTP-Code weicht dann ab; holzi weist an der
   Anzeige darauf hin, dass der Code von der Systemzeit abhängt.
 - **Ein Anhang ist leer, sehr groß oder hat einen ungewöhnlichen Namen** (Sonderzeichen,
@@ -396,11 +417,15 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
 - **FR-003**: Das System MUSS je Eintrag TOTP (Secret, Ziffernzahl, Periode, Algorithmus,
   Standard 6 Ziffern, 30 Sekunden, SHA-1) speichern, daraus den aktuellen Code berechnen,
   die Restzeit zeigen und den Code ohne Zutun des Nutzers erneuern; `otpauth://`-Adressen
-  und reine Secrets MÜSSEN als Eingabe akzeptiert werden.
+  und reine Secrets MÜSSEN als Eingabe akzeptiert werden. Ungültige Secrets, Ziffernzahlen,
+  Perioden und Algorithmen MÜSSEN beim Anlegen und Ändern abgelehnt werden; fehlende Angaben
+  MÜSSEN die Standardwerte erhalten. Ein ungültiger Wert, der per Sync oder Import eintrifft,
+  MUSS erkannt, am Eintrag angezeigt und vom Nutzer behebbar sein.
 - **FR-004**: Das System MUSS Passkeys eines Eintrags (Credential-ID, Relying Party, Nutzer,
   Schlüsselpaar, Algorithmus, Zähler, Erkennbarkeit, Symbol, Farbe, Spitzname, letzte
-  Nutzung) als Daten speichern, anzeigen und löschen können. Das Anlegen und Benutzen von
-  Passkeys (Signieren, Autofill) ist nicht Teil dieser Spec. Eine Credential-ID MUSS in der
+  Nutzung) als Daten speichern, anzeigen, umbenennen (Spitzname) und löschen können. Das Anlegen
+  durch die Oberfläche und das Benutzen von Passkeys (Signieren, Autofill) ist nicht Teil dieser
+  Spec. Passkeys kommen durch Import (FR-023) oder Sync hinein. Eine Credential-ID MUSS in der
   Vault eindeutig sein.
 - **FR-005**: Passwörter, TOTP-Secrets, eigene Felder und Passkey-Schlüssel MÜSSEN
   standardmäßig verdeckt sein; Aufdecken MUSS eine bewusste Handlung des Nutzers sein (Halten
@@ -419,7 +444,8 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
 
 - **FR-009**: Das System MUSS verschachtelte Ordner mit Name, Beschreibung, Symbol, Farbe und
   Reihenfolge erlauben; ein Eintrag liegt in höchstens einem Ordner, ohne Ordner liegt er an
-  der Wurzel.
+  der Wurzel. Der Nutzer MUSS die Reihenfolge der Ordner einer Ebene ändern können, auch ohne
+  Maus (Aktionen „nach oben“ und „nach unten“); ohne eigene Reihenfolge gilt die alphabetische.
 - **FR-010**: Das System MUSS verhindern, dass ein Ordner in sich selbst oder einen seiner
   Unterordner verschoben wird.
 - **FR-011**: Das System MUSS Tags (Name eindeutig, Farbe) verwalten und Einträgen beliebig
@@ -445,7 +471,7 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
 - **FR-016**: Wiederherstellen aus dem Papierkorb MUSS den früheren Ort wiederherstellen,
   oder die Wurzel, wenn der Ordner nicht mehr existiert.
 - **FR-017**: Das System MUSS nach jeder Änderung eines Eintrags den neuen Zustand samt der
-  Verknüpfung zu seinen Anhängen als Verlaufseintrag sichern (Zeitpunkt, Stand als
+  Verknüpfung zu seinen Anhängen als Verlaufsstand sichern (Zeitpunkt, Stand als
   eigenständig lesbares Dokument; kein neuer Eintrag, wenn sich nichts geändert hat), den
   Verlauf anzeigen, Stände vergleichen und einen Stand wiederherstellen, ohne frühere Stände
   zu verlieren.
@@ -473,8 +499,10 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
 
 - **FR-023**: Das System MUSS Einträge aus KeePass-Datenbanken (kdbx, mit Passwort und
   optional Schlüsseldatei), Bitwarden-Exporten und LastPass-Exporten importieren, mit
-  Ordnerstruktur, eigenen Feldern, TOTP, Tags, Anhängen und, wo die Quelle sie liefert,
-  Passkeys. Der Import MUSS vorher eine Vorschau (Zahl der Einträge, Ordner, Anhänge) und
+  Ordnerstruktur, eigenen Feldern, TOTP, Tags, Anhängen und Passkeys (Bitwarden, KeePassXC).
+  Weil diese Quellen nur den privaten Schlüssel liefern, MUSS der Import den öffentlichen
+  Schlüssel daraus ableiten; das gilt für ES256 (P-256). Ein Passkey mit anderem Algorithmus oder
+  unlesbarem Schlüssel MUSS im Bericht genannt und nicht übernommen werden. Der Import MUSS vorher eine Vorschau (Zahl der Einträge, Ordner, Anhänge) und
   nachher einen Bericht (importiert, mit Verlust, übersprungen) zeigen, MUSS beim Scheitern
   oder Abbruch die Vault unverändert lassen und bei erkannten Doppelten fragen. Übersteigt ein
   Import insgesamt die Obergrenze einer Schreibtransaktion von 100 MiB, MUSS er vor dem
@@ -483,10 +511,12 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
 
 **Zugriff von außen und Berechtigungen**
 
-- **FR-024**: Jeder Zugriff auf Passwortmanager-Daten außer durch die Oberfläche des Nutzers
-  selbst (Erweiterungen, externe Agenten, der eingebaute Agent, holzi-Funktionen) MUSS über
-  eine Zugriffsprüfung gehen; kein Weg DARF die Tabellen am Passwortmanager vorbei lesen
-  oder schreiben.
+- **FR-024**: Jeder Zugriff auf Passwortmanager-Daten (Oberfläche, Erweiterungen, externe
+  Agenten, der eingebaute Agent, holzi-Funktionen) MUSS über denselben Dienst und dessen
+  Zugriffsprüfung gehen; kein Weg DARF die Tabellen am Passwortmanager vorbei lesen oder
+  schreiben. Die Oberfläche läuft dort als Aufrufer „Nutzer“ ohne Freigabe (FR-031); alle
+  Funktionen jenseits von Eintrag lesen, anlegen, ändern und löschen stehen anderen Aufrufern
+  nicht offen.
 - **FR-025**: Eine Freigabe MUSS eine Art (Lesen oder Lesen und Schreiben) und einen Bereich
   (alle Einträge oder Einträge mit einem bestimmten Tag) haben; mehrere Freigaben eines
   Aufrufers gelten als Vereinigung ihrer Bereiche, „alle“ deckt alles, „Lesen und Schreiben“
@@ -589,8 +619,8 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
 
 - **SC-001**: Ein Nutzer legt einen Eintrag mit Titel, Benutzername und Passwort in höchstens
   30 Sekunden an und findet ihn danach über die Suche in höchstens 10 Sekunden.
-- **SC-002**: In einer Vault mit 5.000 Einträgen erscheint das Ergebnis der Suche in weniger
-  als 200 ms nach der Eingabe.
+- **SC-002**: In einer Vault mit 5.000 Einträgen erscheint das Ergebnis der Suche ohne
+  spürbare Verzögerung (grob unter einer Sekunde nach der Eingabe).
 - **SC-003**: 100 % der TOTP-Codes stimmen mit den Referenzwerten aus der Spezifikation des
   Verfahrens für die geprüften Eingaben (alle Algorithmen, 6 und 8 Ziffern) überein.
 - **SC-004**: Von 1.000 erzeugten Passwörtern erfüllen 100 % die gewählten Regeln.
@@ -599,7 +629,7 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
 - **SC-006**: Jede Anfrage ohne passende Freigabe wird abgelehnt (100 % der Prüffälle,
   einschließlich Schreiben außerhalb des Bereichs und Herausschreiben aus dem Bereich).
 - **SC-007**: Ein Eintrag, den ein Gerät ändert, erscheint auf einem verbundenen Gerät in
-  weniger als 5 Sekunden ohne manuelles Neuladen.
+  wenigen Sekunden (grob unter 10) ohne manuelles Neuladen.
 - **SC-008**: Bei gleichzeitiger Änderung verschiedener Felder auf zwei Geräten gehen 0 Änderungen
   verloren.
 - **SC-009**: Eine heruntergeladene Datei ist in 100 % der Fälle byteweise gleich dem Original.
@@ -623,7 +653,7 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
   haex-vault vergleichbar bleiben; der Plan prüft, dass das Präfix in haex-crdt keine
   Sonderbehandlung auslöst.
 - Passkeys entstehen in dieser Spec nur durch Import, Sync oder später durch die External
-  Bridge; die Oberfläche kann sie anzeigen und löschen, aber nicht neu anlegen.
+  Bridge; die Oberfläche kann sie anzeigen, umbenennen und löschen, aber nicht neu anlegen.
 - Der Aufrufer „Oberfläche“ ist der Nutzer selbst; er braucht keine Freigabe (FR-031).
 - Standard der Zwischenablage-Löschung sind 30 Sekunden, die Auswahl reicht von „aus“ bis
   2 Minuten; der Plan legt die Auswahl fest.

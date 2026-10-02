@@ -54,7 +54,9 @@ errors: NotFound, InvalidInput { field: 'otpSecret' | 'otpDigits' | 'otpPeriod' 
 ```
 
 Rechnet mit der Systemzeit des Backends. Das Frontend fragt neu, wenn `remainingSeconds`
-abgelaufen ist.
+abgelaufen ist. Ein ungültig gespeichertes Secret (`ItemDetail.otpState == invalid`, etwa nach
+Sync) liefert `InvalidInput`; die Oberfläche zeigt dann eine Meldung mit „Ersetzen“ und
+„Entfernen“. Fehlende Ziffernzahl, Periode und Algorithmus gelten als 6, 30 und `SHA1`.
 
 ### `passwords_copy_field`
 
@@ -104,6 +106,17 @@ create args: { name, description?, icon?, color?, parentId? }   result: { groupI
 update args: { groupId, patch: { name?, description?, icon?, color?, sortOrder? } }
 errors:      InvalidInput, NotFound
 ```
+
+### `passwords_reorder_groups`
+
+```text
+args:   { parentId: string | null, orderedIds: string[] }    // alle Geschwister einer Ebene
+result: ()
+errors: InvalidInput { reason: 'not_siblings' | 'in_trash' }, NotFound
+```
+
+Setzt `sort_order` der Geschwister auf 0, 1, 2, … in dieser Reihenfolge, atomar. Die
+Oberfläche bietet es per Ziehen und per „nach oben“ / „nach unten“ an.
 
 ### `passwords_move`
 
