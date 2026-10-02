@@ -3950,6 +3950,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "haex-bundle"
+version = "0.1.0"
+source = "git+https://github.com/haexmas/vault-sdk?rev=979074e8e644242ad81fb4a567a9fcfcbeb2f259#979074e8e644242ad81fb4a567a9fcfcbeb2f259"
+dependencies = [
+ "crc32fast",
+ "ed25519-dalek",
+ "flate2",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "unicode-normalization",
+]
+
+[[package]]
 name = "haex-crdt"
 version = "0.4.0"
 source = "git+https://github.com/haexmas/haex-crdt?rev=d4b4088b570b863c979a12b9581b53c7637986e0#d4b4088b570b863c979a12b9581b53c7637986e0"
@@ -4180,6 +4195,7 @@ dependencies = [
  "filetime",
  "futures",
  "getrandom 0.4.3",
+ "haex-bundle",
  "haex-crdt",
  "hkdf",
  "hmac",
@@ -4201,6 +4217,7 @@ dependencies = [
  "rsa",
  "rustls",
  "secp256k1 0.33.1",
+ "semver",
  "serde",
  "serde_json",
  "sha1 0.11.0",

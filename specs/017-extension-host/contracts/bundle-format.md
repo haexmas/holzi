@@ -1,6 +1,7 @@
 # Vertrag: Bundle-Format `haextension-bundle/2`
 
-Gilt für holzi (Prüfen) und das Werkzeug `haex` im vault-sdk (Erzeugen). Begründung:
+Gilt für holzi (Prüfen) und das Werkzeug `haex` im vault-sdk (Erzeugen und Prüfen). Beide nutzen dieselbe
+Umsetzung, das Rust-Crate `haex-bundle` im vault-sdk (holzi nativ, `haex` als WebAssembly). Begründung:
 [research.md](../research.md) R2, R3. Die Testvektoren liegen im vault-sdk und werden mit Repository, voller
 Revision und Pfad nach `src-tauri/tests/fixtures/extension_bundles/` kopiert (Constitution IV).
 

@@ -80,11 +80,10 @@ impl PublicKey {
 pub struct ExtensionName(String);
 
 impl ExtensionName {
+    /// The rule is the bundle format's (`haex-bundle`), so a name the tool signs is a name holzi
+    /// accepts.
     pub fn parse(value: &str) -> Result<Self, IdError> {
-        let mut bytes = value.bytes();
-        let valid = matches!(bytes.next(), Some(b'a'..=b'z'))
-            && bytes.all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-');
-        if valid {
+        if haex_bundle::verify::is_valid_extension_name(value) {
             Ok(Self(value.to_owned()))
         } else {
             Err(IdError::InvalidName)
