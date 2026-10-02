@@ -85,6 +85,7 @@ watch(
       class="w-full justify-start gap-2"
       variant="outline"
       :disabled="busy"
+      data-testid="chat-new"
       @click="emit('newChat')"
     >
       <Icon name="lucide:plus" class="h-4 w-4" />
@@ -103,6 +104,7 @@ watch(
       <div
         v-for="thread in threads"
         :key="thread.id"
+        data-testid="chat-thread"
         class="group flex w-full min-w-0 items-center gap-1 rounded-lg text-sm transition-colors hover:bg-accent focus-within:bg-accent"
         :class="{ 'bg-accent font-medium': activeThreadId === thread.id }"
       >
