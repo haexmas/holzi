@@ -70,11 +70,11 @@ Umbau, Spaltennamen, lokaler Modus), `haex-space/vault-sdk` (Format v2 in `haex`
 `event.source`-Prüfung), `tauri-apps/wry` (Android: Init-Skripte nur in den Hauptrahmen, R25; bis zur
 Veröffentlichung Fork über `[patch.crates-io]`); alle mit voller Revision gepinnt.
 
-**Storage**: Migration `00NN_extensions` (nächste freie Nummer nach `0022` aus 034) in
+**Storage**: Migration `0023_extensions` (nach `0022_passwords` aus 034) in
 `identity/migrations_extensions.rs`: neun synchronisierte Tabellen (`extensions`, `extension_bundles`,
 `extension_bundle_files`, `extension_blobs`, `extension_migrations`, `extension_permissions`,
 `extension_limits`, `extension_device_status`, `extension_kv`) und fünf `_no_sync`-Tabellen (Journal,
-Protokolle, geparkte Sync-Gruppen, zwei für den Entwicklermodus). `HOLZI_TRIGGER_VERSION` + 1. Tabellen der
+Protokolle, geparkte Sync-Gruppen, zwei für den Entwicklermodus). `HOLZI_TRIGGER_VERSION` 14 → 15. Tabellen der
 Erweiterungen entstehen zur Laufzeit über deren Migrationen. Details in [data-model.md](./data-model.md).
 
 **Testing**: Rust — Einheitstests in `*_tests.rs` je Modul; Integration in `src-tauri/tests/`
@@ -166,7 +166,7 @@ specs/017-extension-host/
 ```text
 src-tauri/src/
 ├── identity/
-│   ├── migrations.rs                 # HOLZI_TRIGGER_VERSION + 1, Eintrag 00NN          [ändern, klein]
+│   ├── migrations.rs                 # HOLZI_TRIGGER_VERSION 15, Eintrag 0023         [ändern, klein]
 │   └── migrations_extensions.rs      # SQL der 14 Tabellen                                [neu]
 ├── extensions/
 │   ├── mod.rs                        # Modulliste, Konstanten (Grenzen)                   [neu, L1]

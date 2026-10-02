@@ -12,8 +12,8 @@ Konventionen:
   `known_devices`; die Nil-Kennung bedeutet „vault-weit“.
 - `_no_sync`-Tabellen beschreiben den Zustand dieser Datei (Journal, Protokolle, geparkte Gruppen,
   Entwicklermodus) und gehen nie in den Sync.
-- Eine Migration `00NN_extensions` (nächste freie Nummer nach `0022_passwords` aus 034) in einer eigenen Datei
-  `identity/migrations_extensions.rs`; `HOLZI_TRIGGER_VERSION` + 1.
+- Eine Migration `0023_extensions` (nach `0022_passwords` aus 034) in einer eigenen Datei
+  `identity/migrations_extensions.rs`; `HOLZI_TRIGGER_VERSION` 14 → 15.
 - Tabellen **einer Erweiterung** (`<publicKey>__<name>__<tabelle>`) entstehen nur über deren Migrationen
   (R8) und sind hier nicht beschrieben.
 
