@@ -431,6 +431,7 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
     // The device is online now: its time is now, and the list shows it.
     mark_seen(&inner, peer.device_pubkey).await;
     notify_devices_changed(&inner);
+    let list_marker = Arc::new(Mutex::new(current_device_list_marker(&inner)));
 
     let ctx = SessionContext {
         replica: Arc::clone(&inner.replica),
@@ -441,8 +442,16 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
         on_applied: {
             let inner = Arc::clone(&inner);
             let on_applied = Arc::clone(&inner.on_applied);
+            let list_marker = Arc::clone(&list_marker);
             Arc::new(move |tables| {
-                if tables.contains("device_lists") {
+                let list_changed = tables.contains("device_lists") && {
+                    let current = current_device_list_marker(&inner);
+                    let mut previous = list_marker.lock().unwrap_or_else(|e| e.into_inner());
+                    let changed = *previous != current;
+                    *previous = current;
+                    changed
+                };
+                if list_changed {
                     // A new effective list can leave an old session open
                     // while its peer has already moved on. Rebuild all
                     // sessions so the next handshake starts from the same
@@ -487,6 +496,18 @@ fn notify_connection_ended(inner: &Inner) {
     if let Some(hook) = hook {
         hook();
     }
+}
+
+fn current_device_list_marker(inner: &Inner) -> Option<([u8; 32], u64)> {
+    crate::storage::query::read(inner.replica.db(), |r| {
+        let vault = crate::sync::keys::vault_pubkey(r)?.unwrap_or([0; 32]);
+        let valid =
+            crate::sync::device_list::valid_lists(&crate::sync::device_list::load_all(r)?, &vault);
+        Ok(crate::sync::device_list::effective(&valid)
+            .map(|signed| (signed.hash, signed.list.generation)))
+    })
+    .ok()
+    .flatten()
 }
 
 fn reset_connections(inner: &Arc<Inner>) {
