@@ -116,6 +116,24 @@ postcard = { version = "1", features = ["use-std"] }
 # Randomness for content keys and nonces. Already in the lock via other crates.
 getrandom = "0.4"
 
+# Password manager (spec 034, plan "Neue Abhängigkeiten"). `keepass` reads KDBX 3 and 4 for the
+# import (research R12, verdict of the spike T003); `csv` parses the Bitwarden and LastPass exports
+# (RFC 4180, line breaks inside quotes); `sha1` is the SHA-1 of TOTP (R8, with `hmac` and `sha2`);
+# `p256`, `ed25519-dalek`, `pkcs1` and `spki` derive the public passkey key from the private one of
+# an import for ES256, EdDSA and RS256 (R12); `unicode-normalization` folds tag names (NFC, R2);
+# the clipboard plugin is used from Rust only, so that copying and the timed clearing never put a
+# secret into the webview (R9).
+keepass = "0.15"
+csv = "1.4"
+sha1 = "0.11"
+p256 = { version = "0.14", features = ["pkcs8", "pem"] }
+ed25519-dalek = { version = "3", features = ["pkcs8"] }
+pkcs1 = "0.8.0-rc.4"
+pkcs8 = "0.11"
+spki = "0.8"
+unicode-normalization = "0.1"
+tauri-plugin-clipboard-manager = "2"
+
 # haex-crdt 0.4.0, originally pinned per plans/001-desktop-mvp.md at commit
 # 1c069ef; no tagged releases past v0.1.0 exist yet, so holzi pins main by
 # full SHA. Bumped (spec 013, T084) for an erasing `SqlCipherKey`
@@ -240,6 +258,10 @@ futures = "0.3"
 # HTTP mock server for adapter tests — spins a local listener on a
 # random port, allows scripted responses, and shuts down on Drop.
 wiremock = "0.6"
+# Spec 034 (spike T003, fixtures T079): writing a KDBX 4 file and generating an RSA key exist only
+# in tests, the shipped build reads KDBX and never writes it or generates keys.
+keepass = { version = "0.15", features = ["save_kdbx4"] }
+rsa = { version = "0.10.0-rc.18", features = ["getrandom"] }
 
 # Local Whisper (spec 008) runs candle's CPU kernels in-process. At the default
 # dev `opt-level = 0` those kernels are unusably slow — measured 137 s to

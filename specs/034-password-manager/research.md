@@ -498,14 +498,60 @@ Zuordnungen je Format stehen in [contracts/import-mapping.md](./contracts/import
 11. Passwort und Schlüsseldatei-Pfad laufen als zeroizing Typ mit geschwärztem `Debug` durch den
     Command.
 
-**Ungeprüft und deshalb Aufgabe T003**: ob `keepass` KDBX 3 und 4, Argon2-Varianten,
-Schlüsseldateien, Anhänge, Verlauf, eigene Symbole, benutzerdefinierte Daten, Auto-Type und die
-Eigenschaften der Einträge in der benötigten Form liefert und in beiden Feature-Konfigurationen
-baut, und ob `p256`, `ed25519-dalek`, `pkcs1` und `spki` die Ableitung wie beschrieben leisten.
-Fällt die Prüfung
-für `keepass` negativ aus, ist die zweite Wahl der Weg von haex-vault (`kdbxweb` plus `hash-wasm`
-im Frontend, Parser liefert `ImportModel` als JSON an einen Rust-Command `apply_import`); die
-übrigen Teile des Plans ändern sich dann nicht.
+**Ergebnis des Spikes T003 (2026-10-02, Wegwerf-Tests, danach entfernt)**:
+
+- **Versionen**: `keepass` 0.15.0 (Standard-Features zum Lesen; `save_kdbx4` nur als
+  Dev-Abhängigkeit für die Testdateien), `csv` 1.4, `sha1` 0.11, `p256` 0.14.0 (`pkcs8`, `pem`),
+  `ed25519-dalek` 3.0.0 (`pkcs8`), `pkcs1` 0.8.0-rc.4, `pkcs8` 0.11, `spki` 0.8,
+  `unicode-normalization` 0.1.25, `tauri-plugin-clipboard-manager` 2.4.1; dev: `rsa`
+  0.10.0-rc.18 (Feature `getrandom`, erzeugt nur den RSA-Testschlüssel). Beide Konfigurationen
+  (Standard und `--no-default-features`) bauen. `pkcs8` ist hinzugekommen (liest den PKCS8-Mantel
+  des RSA-Schlüssels); `pkcs1` hat bisher nur eine Vorabversion für `der` 0.8.
+- **KDBX lesen, Urteil: positiv für KDBX 4 (4.1)**. Gelesen und mit einer zur Laufzeit geschriebenen
+  Datei (Passwort **und** Schlüsseldatei, Argon2) bestätigt: verschachtelte Gruppen mit Notizen,
+  Tags, Standardsymbol und eigenem Symbol, Suche/Auto-Type-Einstellungen je Gruppe; der Papierkorb
+  (`meta.recyclebin_uuid`) mit Eintrag und Untergruppe; Einträge mit Titel, Benutzername,
+  Passwort, Adresse, Notiz, geschützten und ungeschützten eigenen Feldern, Tags, Ablauf
+  (`times.expires`, `times.expiry`), Zeitstempeln, Vorder-/Hintergrundfarbe, `override_url`,
+  Auto-Type (Aktivierung, Folge, Verschleierung, Fensterzuordnungen), `custom_data`, Anhängen
+  (auch 26 MiB), eigenem Symbol am Eintrag, dem Feld `otp` (auch ungültiger Text), `TOTP Seed` und
+  `TOTP Settings`, dem früheren Ordner (`previous_parent`, KeePass 4.1) und dem Verlauf mit seinen
+  Anhängen (`historical(i).attachments_named()`). Fehler sind Werte, keine Abstürze: falsches
+  Passwort und fehlende Schlüsseldatei ergeben beide „Incorrect key“ (nicht zu unterscheiden, daher
+  `wrong_credentials`), eine abgeschnittene Datei „unexpected end of file“ und Text statt KDBX
+  „Invalid KDBX identifier“ (beide `corrupt`); die Zuordnung geht über die Fehlervarianten
+  (`DatabaseOpenError`), nicht über den Text.
+- **Nicht belegt**: KDBX 3 (der Parser `parse_kdbx3` ist im Crate, aber das Crate schreibt nur
+  KDBX 4, im Crate-Paket liegen keine Beispieldateien und auf dem Rechner keine `.kdbx`); die
+  Testbasis ist deshalb KDBX 4, KDBX 3 prüft der Betreiber mit einer eigenen Datei (Quickstart §9).
+  Ebenso unbelegt: Dateien, die KeePass/KeePassXC selbst geschrieben haben (Besonderheiten wie
+  `Binaries` im Kopf, Verlaufsanhänge in alten Dateien), die Dauer von Argon2 in Debug-Builds mit
+  echten Parametern (eine Datenbank mit 64 MiB und mehreren Durchläufen kann im Entwicklungsbau
+  Sekunden brauchen; Aufrüstweg: `argon2` und `blake2` in den optimierten Paketen von
+  `[profile.dev.package]`).
+- **Passkeys, öffentlicher Schlüssel, Urteil: positiv für alle drei**. Aus einem zur Laufzeit
+  erzeugten PKCS8-Schlüssel ergibt die Ableitung genau den SPKI-Schlüssel des Paars: ES256 über
+  `p256::SecretKey::from_pkcs8_der` und `public_key().to_public_key_der()`, EdDSA über
+  `ed25519_dalek::SigningKey::from_pkcs8_der` und `verifying_key().to_public_key_der()`, RS256 ohne
+  das `rsa`-Crate: `pkcs8::PrivateKeyInfoRef` → `pkcs1::RsaPrivateKey` (Modulus, Exponent) →
+  `pkcs1::RsaPublicKey` → `spki::SubjectPublicKeyInfoRef` mit `pkcs1::ALGORITHM_OID` und NULL.
+- **Kodierung in haex-vault** (SHA `8dce379`, `passkeys.ts`, und `@haex-space/vault-sdk` 3.7.0, `dist/index.mjs`):
+  `credential_id` ist Standard-Base64 (nicht Base64url) von 32 zufälligen Bytes; `private_key` ist
+  Standard-Base64 des PKCS8-DER (WebCrypto `exportKey('pkcs8')`), `public_key` Standard-Base64 des
+  SPKI-DER; `algorithm` ist -7 (ES256); `user_handle` wird als Text so gespeichert, wie die Anfrage ihn
+  lieferte. holzi schreibt dieselbe Kodierung (Standard-Base64) und nimmt beim Import Base64 und
+  Base64url an.
+- **Quellformate, nur aus dem Wissen eingetragen, nicht an echten Exporten geprüft**: Bitwarden
+  `fido2Credentials[]` mit `credentialId` (UUID-Text; wird zu den 16 Bytes der UUID und dann
+  Standard-Base64), `keyValue` (Base64 oder Base64url des PKCS8-DER), `keyAlgorithm` `ECDSA`,
+  `keyCurve` `P-256`, `rpId`, `rpName`, `userHandle`, `userName`, `userDisplayName`, `counter` (Text),
+  `discoverable` (Text `true`/`false`), `creationDate`; KeePassXC-Attribute `KPEX_PASSKEY_CREDENTIAL_ID`,
+  `KPEX_PASSKEY_PRIVATE_KEY_PEM` (PKCS8 als PEM), `KPEX_PASSKEY_RELYING_PARTY`, `KPEX_PASSKEY_USERNAME`,
+  `KPEX_PASSKEY_USER_HANDLE`. Der Parser nimmt Abweichungen als Eintrag im Bericht
+  (`passkey_key_unreadable`), nicht als Abbruch. Die Beispieldaten der Tests (T079) folgen diesen
+  Namen; stimmen sie nicht mit echten Dateien überein, ist das ein Fehler der Tests und des Parsers, den die
+  erste echte Datei des Betreibers aufdeckt.
+- Die zweite Wahl (`kdbxweb` plus `hash-wasm`) wird nicht gebraucht.
 
 **Verworfen**:
 
