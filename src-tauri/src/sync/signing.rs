@@ -5,13 +5,9 @@
 //! binds a signature to its purpose, so a device-list signature can never be
 //! replayed as, say, a key authorization.
 
-use std::sync::LazyLock;
-
-use secp256k1::{schnorr, All, Keypair, Secp256k1, SecretKey, XOnlyPublicKey};
+use secp256k1::{schnorr, Keypair, SecretKey, XOnlyPublicKey};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-
-static SECP: LazyLock<Secp256k1<All>> = LazyLock::new(Secp256k1::new);
 
 /// What a signature is for. The tag strings are part of the wire format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,12 +62,11 @@ pub fn digest(domain: Domain, bytes: &[u8]) -> [u8; 32] {
 
 /// Signs `bytes` in `domain` with the secp256k1 secret `secret`.
 pub fn sign(domain: Domain, bytes: &[u8], secret: &[u8; 32]) -> Result<[u8; 64], SigningError> {
-    let secret = SecretKey::from_byte_array(secret).map_err(|_| SigningError::InvalidSecretKey)?;
-    let keypair = Keypair::from_secret_key(&SECP, &secret);
+    let secret =
+        SecretKey::from_secret_bytes(*secret).map_err(|_| SigningError::InvalidSecretKey)?;
+    let keypair = Keypair::from_secret_key(&secret);
     let aux = crate::sync::keys::random_bytes::<32>();
-    Ok(SECP
-        .sign_schnorr_with_aux_rand(&digest(domain, bytes), &keypair, &aux)
-        .to_byte_array())
+    Ok(schnorr::sign_with_aux_rand(&digest(domain, bytes), &keypair, &aux).to_byte_array())
 }
 
 /// Verifies a signature made by [`sign`] against the x-only public key `pubkey`.
@@ -82,16 +77,17 @@ pub fn verify(
     pubkey: &[u8; 32],
 ) -> Result<(), SigningError> {
     let pubkey =
-        XOnlyPublicKey::from_byte_array(pubkey).map_err(|_| SigningError::InvalidPublicKey)?;
+        XOnlyPublicKey::from_byte_array(*pubkey).map_err(|_| SigningError::InvalidPublicKey)?;
     let signature = schnorr::Signature::from_byte_array(*signature);
-    SECP.verify_schnorr(&signature, &digest(domain, bytes), &pubkey)
+    schnorr::verify(&signature, &digest(domain, bytes), &pubkey)
         .map_err(|_| SigningError::BadSignature)
 }
 
 /// The x-only public key of the secp256k1 secret `secret`.
 pub fn xonly_public_key(secret: &[u8; 32]) -> Result<[u8; 32], SigningError> {
-    let secret = SecretKey::from_byte_array(secret).map_err(|_| SigningError::InvalidSecretKey)?;
-    Ok(secret.x_only_public_key(&SECP).0.serialize())
+    let secret =
+        SecretKey::from_secret_bytes(*secret).map_err(|_| SigningError::InvalidSecretKey)?;
+    Ok(secret.x_only_public_key().0.to_byte_array())
 }
 
 /// `u32 BE length ‖ bytes`, the length prefix of contracts/sync-protocol.md.
