@@ -98,6 +98,7 @@ function settingsRoutes(): AppRouteRecord[] {
 /** The view of each place of the password manager (spec 034); the stories add theirs. */
 const PASSWORDS_VIEWS: Partial<Record<string, Component>> = {
   list: defineAsyncComponent(() => import('~/components/passwords/List.vue')),
+  folder: defineAsyncComponent(() => import('~/components/passwords/List.vue')),
   entry: defineAsyncComponent(
     () => import('~/components/passwords/EntryPage.vue'),
   ),

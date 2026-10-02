@@ -21,6 +21,9 @@ pub mod clock;
 #[cfg(test)]
 mod clock_tests;
 pub mod commands;
+pub mod groups;
+#[cfg(test)]
+mod groups_tests;
 pub mod ids;
 #[cfg(test)]
 mod ids_tests;
@@ -37,10 +40,13 @@ pub mod reveal;
 #[cfg(test)]
 mod reveal_tests;
 pub mod service;
+pub mod sets;
 pub mod settings;
 #[cfg(test)]
 mod settings_tests;
 pub mod tags;
+#[cfg(test)]
+mod tags_tests;
 #[cfg(test)]
 pub(crate) mod test_support;
 pub mod totp;

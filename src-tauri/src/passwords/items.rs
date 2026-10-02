@@ -16,6 +16,7 @@ use super::model::{
     AgentHeader, AttachmentView, GroupRow, ItemDetail, ItemHeader, ItemInput, ItemPatch,
     KeyValuePatch, KeyValueView, Overview, Patch, TagRef, TagRow,
 };
+use super::sets::Sets;
 use super::totp::{self, otp_state, OtpParams};
 use super::{clock, passkeys, tags};
 use crate::error::{HolziError, Result};
@@ -154,7 +155,7 @@ pub fn load_overview(q: &mut impl Query) -> Result<Overview> {
     let headers = load_headers(q, None)?;
     let groups = q.query_map(
         "SELECT id, name, description, icon, color, sort_order, parent_id, trashed_from_parent_id \
-         FROM haex_passwords_groups ORDER BY sort_order, name COLLATE NOCASE, id",
+         FROM haex_passwords_groups ORDER BY COALESCE(sort_order, 0), name COLLATE NOCASE, id",
         &[],
         |r| {
             Ok(GroupRow {
@@ -393,36 +394,6 @@ struct Stored {
     updated_at: Option<String>,
 }
 
-/// The `SET` list of an update: only changed columns.
-#[derive(Default)]
-struct Sets {
-    columns: Vec<&'static str>,
-    values: Vec<Box<dyn ToSql>>,
-}
-
-impl Sets {
-    fn push(&mut self, column: &'static str, value: impl ToSql + 'static) {
-        self.columns.push(column);
-        self.values.push(Box::new(value));
-    }
-
-    fn text(&mut self, column: &'static str, current: &Option<String>, patch: &Patch<String>) {
-        match patch {
-            Patch::Keep => {}
-            Patch::Clear => {
-                if current.is_some() {
-                    self.push(column, Option::<String>::None);
-                }
-            }
-            Patch::Set(value) => {
-                if current.as_deref() != Some(value.as_str()) {
-                    self.push(column, value.clone());
-                }
-            }
-        }
-    }
-}
-
 /// Applies a partial update to an entry if `expected_updated_at` is still its token, and returns
 /// the new token. A missing entry is `PasswordsConflict { deleted }`, a changed one `{ changed }`.
 /// The TOTP is validated only when the patch touches it, so an entry with an invalid stored secret
@@ -484,21 +455,7 @@ pub fn update_item(
     // check; upgrade path: compare the row HLC).
     let new_token = clock::now_after(stored.updated_at.as_deref());
     sets.push("updated_at", new_token.clone());
-    let assignments: Vec<String> = sets
-        .columns
-        .iter()
-        .enumerate()
-        .map(|(i, column)| format!("{column} = ?{}", i + 1))
-        .collect();
-    let sql = format!(
-        "UPDATE haex_passwords_item_details SET {} WHERE id = ?{}",
-        assignments.join(", "),
-        sets.columns.len() + 1
-    );
-    let id_owned = id.to_string();
-    let mut bound: Vec<&dyn ToSql> = sets.values.iter().map(|v| v.as_ref()).collect();
-    bound.push(&id_owned);
-    tx.execute(&sql, &bound)?;
+    sets.execute(tx, "haex_passwords_item_details", "id", id)?;
 
     if let Some(names) = &patch.tags {
         tags::set_item_tags(tx, id, names)?;
@@ -616,24 +573,11 @@ fn replace_key_values(
                         sets.push("value", value.clone());
                     }
                 }
-                if sets.columns.is_empty() {
+                if sets.is_empty() {
                     continue;
                 }
                 sets.push("updated_at", now.to_string());
-                let assignments: Vec<String> = sets
-                    .columns
-                    .iter()
-                    .enumerate()
-                    .map(|(i, column)| format!("{column} = ?{}", i + 1))
-                    .collect();
-                let sql = format!(
-                    "UPDATE haex_passwords_item_key_values SET {} WHERE id = ?{}",
-                    assignments.join(", "),
-                    sets.columns.len() + 1
-                );
-                let mut bound: Vec<&dyn ToSql> = sets.values.iter().map(|v| v.as_ref()).collect();
-                bound.push(stored_id);
-                tx.execute(&sql, &bound)?;
+                sets.execute(tx, "haex_passwords_item_key_values", "id", stored_id)?;
             }
             None => {
                 tx.execute(

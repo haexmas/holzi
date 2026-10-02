@@ -248,3 +248,82 @@ async fn no_result_error_or_debug_print_carries_a_planted_value() {
         assert!(!text.contains(MARKER), "{text}");
     }
 }
+
+#[tokio::test]
+async fn a_bulk_move_and_a_bulk_tag_change_are_tracked_for_sync() {
+    use holzi_lib::passwords::model::{Target, TargetKind};
+    let f = fixture();
+    let first = f
+        .service
+        .create_item(&Caller::User, &[], ItemInput::default(), None)
+        .await
+        .expect("first");
+    let second = f
+        .service
+        .create_item(&Caller::User, &[], ItemInput::default(), None)
+        .await
+        .expect("second");
+    let folder = f
+        .service
+        .create_group(&Caller::User, "Folder".to_string(), None, None, None, None)
+        .await
+        .expect("folder");
+    let moved = f
+        .service
+        .move_targets(
+            &Caller::User,
+            [&first, &second]
+                .map(|id| Target {
+                    kind: TargetKind::Item,
+                    id: id.clone(),
+                })
+                .to_vec(),
+            Some(folder.clone()),
+        )
+        .await
+        .expect("move");
+    assert_eq!(moved, 2);
+    let changed = f
+        .service
+        .set_tags(
+            &Caller::User,
+            vec![first.clone(), second.clone()],
+            vec!["Bulk".to_string()],
+            vec![],
+        )
+        .await
+        .expect("tags");
+    assert_eq!(changed, 2);
+    for item in [&first, &second] {
+        let by_item: &[&dyn ToSql] = &[item];
+        hlc_of(&f.db, "haex_passwords_group_items", "item_id = ?1", by_item);
+        hlc_of(&f.db, "haex_passwords_item_tags", "item_id = ?1", by_item);
+    }
+    hlc_of(&f.db, "haex_passwords_groups", "id = ?1", &[&folder]);
+    // Tags can be renamed and deleted by the user alone.
+    let overview = f
+        .service
+        .load_overview(&Caller::User)
+        .await
+        .expect("overview");
+    let tag = overview
+        .tags
+        .iter()
+        .find(|t| t.name == "Bulk")
+        .expect("tag")
+        .id
+        .clone();
+    let outside = Caller::Extension {
+        id: "e".to_string(),
+    };
+    assert!(matches!(
+        f.service
+            .rename_tag(&outside, tag.clone(), "x".to_string())
+            .await,
+        Err(HolziError::PasswordsForbidden)
+    ));
+    assert!(matches!(
+        f.service.delete_tag(&outside, tag).await,
+        Err(HolziError::PasswordsForbidden)
+    ));
+}

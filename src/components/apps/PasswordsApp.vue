@@ -50,7 +50,9 @@ function onEscape() {
         :aria-label="t('passwords.title')"
         data-testid="passwords-sidebar"
         @keydown.esc="onEscape"
-      />
+      >
+        <PasswordsSidebar @navigated="close" />
+      </nav>
       <main
         class="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto"
         :inert="overlaying || undefined"

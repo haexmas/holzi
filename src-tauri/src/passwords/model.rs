@@ -479,3 +479,38 @@ impl fmt::Debug for SecretItem {
             .finish_non_exhaustive()
     }
 }
+
+/// What a bulk action works on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings/")]
+#[serde(rename_all = "camelCase")]
+pub enum TargetKind {
+    Item,
+    Group,
+}
+
+/// An entry or a folder, named by its id.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings/")]
+#[serde(rename_all = "camelCase")]
+pub struct Target {
+    pub kind: TargetKind,
+    pub id: String,
+}
+
+/// A partial update of a folder: a field that is absent stays as it is, `null` clears it.
+#[derive(Clone, Debug, Default, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings/")]
+#[serde(rename_all = "camelCase", default)]
+pub struct GroupPatch {
+    #[ts(type = "string | null", optional)]
+    pub name: Patch<String>,
+    #[ts(type = "string | null", optional)]
+    pub description: Patch<String>,
+    #[ts(type = "string | null", optional)]
+    pub icon: Patch<String>,
+    #[ts(type = "string | null", optional)]
+    pub color: Patch<String>,
+    #[ts(type = "number | null", optional)]
+    pub sort_order: Patch<i32>,
+}

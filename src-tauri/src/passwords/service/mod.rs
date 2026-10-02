@@ -17,6 +17,7 @@
 use super::access::{self, Caller};
 
 mod items;
+mod organize;
 mod passkeys;
 
 use crate::error::Result;

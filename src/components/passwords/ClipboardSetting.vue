@@ -34,6 +34,8 @@ async function chooseAsync(value: number) {
   const previous = seconds.value
   seconds.value = value
   try {
+    // action-exempt: a setting of the password manager window only; the agents get no action that
+    // reads, copies or changes anything of the password manager but the title search (FR-027).
     await setPrefAsync({ kind: 'vault' }, KEY, String(value))
     error.value = null
   } catch (cause) {

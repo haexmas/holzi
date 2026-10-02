@@ -60,6 +60,10 @@ use models::commands::{
     search_huggingface_models,
 };
 use passwords::commands::items::{passwords_create_item, passwords_update_item};
+use passwords::commands::organize::{
+    passwords_create_group, passwords_delete_tag, passwords_move, passwords_rename_tag,
+    passwords_reorder_groups, passwords_set_tag_color, passwords_set_tags, passwords_update_group,
+};
 use passwords::commands::passkeys::{passwords_passkey_delete, passwords_passkey_rename};
 use passwords::commands::read::{
     passwords_copy_field, passwords_get_item, passwords_load_overview, passwords_reveal,
@@ -270,6 +274,14 @@ pub fn run() {
             passwords_update_item,
             passwords_passkey_rename,
             passwords_passkey_delete,
+            passwords_create_group,
+            passwords_update_group,
+            passwords_reorder_groups,
+            passwords_move,
+            passwords_set_tags,
+            passwords_rename_tag,
+            passwords_set_tag_color,
+            passwords_delete_tag,
         ]))
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

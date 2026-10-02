@@ -951,7 +951,8 @@
     },
     "sidebar": {
       "show": "Show sidebar",
-      "hide": "Hide sidebar"
+      "hide": "Hide sidebar",
+      "all": "All entries"
     },
     "loading": "Loading …",
     "noMatches": "No matching entries",
@@ -985,7 +986,9 @@
       "custom": "Custom fields",
       "tags": "Tags",
       "icon": "Icon",
-      "color": "Color"
+      "color": "Color",
+      "name": "Name",
+      "description": "Description"
     },
     "totp": {
       "left": "{seconds} s left",
@@ -1053,6 +1056,55 @@
         "seconds": "{seconds} seconds",
         "description": "A copied value is removed from the clipboard after this time, if it still holds the same value."
       }
+    },
+    "moved": "{count} entry moved | {count} entries moved",
+    "folders": {
+      "new": "New folder",
+      "edit": "Edit folder",
+      "newChild": "New subfolder",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "delete": "Delete",
+      "expand": "Expand",
+      "collapse": "Collapse",
+      "menu": "Actions for folder {name}",
+      "nameRequired": "A folder needs a name.",
+      "unknown": "Folder"
+    },
+    "tags": {
+      "manage": "Manage tags",
+      "none": "No tags yet.",
+      "name": "Tag name",
+      "rename": "Rename",
+      "delete": "Delete tag",
+      "count": "no entries | {count} entry | {count} entries",
+      "deleteTitle": "Delete tag?",
+      "deleteBody": "The tag “{name}” is removed from {count} entries. The entries stay.",
+      "errors": {
+        "exists": "A tag with this name exists already.",
+        "empty": "A tag needs a name.",
+        "too_long": "The name is too long (at most 64 characters)."
+      }
+    },
+    "selection": {
+      "label": "Selection",
+      "count": "{count} selected | {count} selected",
+      "move": "Move",
+      "addTag": "Add tag",
+      "removeTag": "Remove tag",
+      "delete": "Delete",
+      "clear": "Clear selection",
+      "target": "Target folder",
+      "topLevel": "Top level",
+      "run": "Run",
+      "confirm": {
+        "move": "Move {count} entry? | Move {count} entries?",
+        "addTag": "Add a tag to {count} entry? | Add a tag to {count} entries?",
+        "removeTag": "Remove a tag from {count} entry? | Remove a tag from {count} entries?"
+      }
+    },
+    "trash": {
+      "title": "Trash"
     }
   }
 }

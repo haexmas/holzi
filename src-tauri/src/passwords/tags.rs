@@ -1,6 +1,5 @@
-//! Tags of the entries (spec 034, FR-011, research R2). This part holds what the entries need:
-//! creating a tag by name and setting the tags of an entry. Renaming, deleting and the bulk
-//! operations come with the folders and tags story.
+//! Tags of the entries (spec 034, FR-011, research R2): creating a tag by name, the tags of an
+//! entry, renaming, deleting and the bulk operations.
 //!
 //! There is no UNIQUE constraint (a conflict halts the sync): a tag's id is derived from its name
 //! (`ids::tag_id`), and the application keeps names unique by [`fold`] — case, surrounding space and
@@ -94,4 +93,125 @@ pub fn names_of_item(q: &mut impl Query, item_id: &str) -> Result<Vec<String>> {
         params![item_id],
         |r| r.get::<_, String>(0),
     )?)
+}
+
+/// Renames a tag; the id stays. A name that another tag already has (by [`fold`]) is
+/// `InvalidInput { exists }`; a change of case of the tag's own name is fine.
+pub fn rename_tag(tx: &mut CrdtTransaction<'_>, id: &str, name: &str) -> Result<()> {
+    let name = validate_name(name)?;
+    let all: Vec<(String, String)> =
+        tx.query_map("SELECT id, name FROM haex_passwords_tags", &[], |r| {
+            Ok((r.get(0)?, r.get(1)?))
+        })?;
+    let Some((_, current)) = all.iter().find(|(tag, _)| tag == id) else {
+        return Err(HolziError::PasswordsNotFound);
+    };
+    let wanted = fold(&name);
+    if all
+        .iter()
+        .any(|(tag, stored)| tag != id && fold(stored) == wanted)
+    {
+        return Err(HolziError::InvalidInput {
+            reason: "exists".to_string(),
+        });
+    }
+    if *current != name {
+        tx.execute(
+            "UPDATE haex_passwords_tags SET name = ?1 WHERE id = ?2",
+            params![name, id],
+        )?;
+    }
+    Ok(())
+}
+
+/// Sets or clears the color of a tag.
+pub fn set_color(tx: &mut CrdtTransaction<'_>, id: &str, color: Option<&str>) -> Result<()> {
+    let changed = tx.execute(
+        "UPDATE haex_passwords_tags SET color = ?1 WHERE id = ?2",
+        params![color, id],
+    )?;
+    if changed == 0 {
+        return Err(HolziError::PasswordsNotFound);
+    }
+    Ok(())
+}
+
+/// Deletes a tag for every entry: the links go first, one by one (a remote delete is applied
+/// without foreign keys, so every row needs its own marker), then the tag.
+pub fn delete_tag(tx: &mut CrdtTransaction<'_>, id: &str) -> Result<()> {
+    let links: Vec<String> = tx.query_map(
+        "SELECT id FROM haex_passwords_item_tags WHERE tag_id = ?1",
+        params![id],
+        |r| r.get(0),
+    )?;
+    for link in &links {
+        tx.execute(
+            "DELETE FROM haex_passwords_item_tags WHERE id = ?1",
+            params![link],
+        )?;
+    }
+    let removed = tx.execute("DELETE FROM haex_passwords_tags WHERE id = ?1", params![id])?;
+    if removed == 0 {
+        return Err(HolziError::PasswordsNotFound);
+    }
+    Ok(())
+}
+
+/// Adds and removes tags (by [`fold`]) on many entries at once and returns how many entries
+/// changed. Missing tags are created; an entry that does not exist is `target_missing`.
+pub fn bulk_set(
+    tx: &mut CrdtTransaction<'_>,
+    item_ids: &[String],
+    add: &[String],
+    remove: &[String],
+) -> Result<u32> {
+    let mut add_ids = Vec::new();
+    for name in add {
+        add_ids.push(get_or_create(tx, name)?);
+    }
+    let remove_folded: BTreeSet<String> = remove.iter().map(|name| fold(name)).collect();
+    let mut changed = 0;
+    for item in item_ids {
+        let exists = tx
+            .query_row(
+                "SELECT COUNT(*) FROM haex_passwords_item_details WHERE id = ?1",
+                params![item],
+                |r| r.get::<_, i64>(0),
+            )?
+            .unwrap_or(0);
+        if exists == 0 {
+            return Err(HolziError::InvalidInput {
+                reason: "target_missing".to_string(),
+            });
+        }
+        let links: Vec<(String, String, String)> = tx.query_map(
+            "SELECT it.id, it.tag_id, t.name FROM haex_passwords_item_tags it \
+             JOIN haex_passwords_tags t ON t.id = it.tag_id WHERE it.item_id = ?1",
+            params![item],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )?;
+        let mut touched = false;
+        for (link, _, name) in &links {
+            if remove_folded.contains(&fold(name)) {
+                tx.execute(
+                    "DELETE FROM haex_passwords_item_tags WHERE id = ?1",
+                    params![link],
+                )?;
+                touched = true;
+            }
+        }
+        for tag in &add_ids {
+            if !links.iter().any(|(_, existing, _)| existing == tag) {
+                tx.execute(
+                    "INSERT INTO haex_passwords_item_tags (id, item_id, tag_id) VALUES (?1, ?2, ?3)",
+                    params![item_tag_id(item, tag).to_string(), item, tag],
+                )?;
+                touched = true;
+            }
+        }
+        if touched {
+            changed += 1;
+        }
+    }
+    Ok(changed)
 }

@@ -4,12 +4,11 @@
 //! caller as an argument.
 
 pub mod items;
+pub mod organize;
 pub mod passkeys;
 pub mod read;
 
-use serde::Deserialize;
 use tauri::State;
-use ts_rs::TS;
 
 use super::service::PasswordsService;
 use crate::error::Result;
@@ -21,20 +20,4 @@ pub(crate) fn service(state: &State<'_, AppState>) -> Result<PasswordsService> {
     Ok(PasswordsService::new(active_database(state)?))
 }
 
-/// What a bulk action works on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
-#[ts(export, export_to = "../../src/types/bindings/")]
-#[serde(rename_all = "camelCase")]
-pub enum TargetKind {
-    Item,
-    Group,
-}
-
-/// An entry or a folder, named by its id.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
-#[ts(export, export_to = "../../src/types/bindings/")]
-#[serde(rename_all = "camelCase")]
-pub struct Target {
-    pub kind: TargetKind,
-    pub id: String,
-}
+pub use crate::passwords::model::{Target, TargetKind};

@@ -6,14 +6,25 @@
  */
 import type { ItemHeader } from '@bindings/ItemHeader'
 import { DEFAULT_ENTRY_ICON, isKnownIcon } from '~/lib/passwords/icons'
+import { draggedIds, ITEMS_MIME, itemsPayload } from '~/lib/passwords/dnd'
 import { displayTitle, isExpired, localDay } from '~/lib/passwords/format'
 
 const props = defineProps<{
   header: ItemHeader
+  /** Whether the entry is part of the selection. */
+  selected?: boolean
+  /** Whether a selection is going on (a plain click then toggles instead of opening). */
+  selecting?: boolean
+}>()
+
+const emit = defineEmits<{
+  /** A click with its modifier keys; the list decides between open, toggle and range. */
+  activate: [event: MouseEvent]
+  /** A long press on a touch screen starts or extends the selection. */
+  longPress: []
 }>()
 
 const { t } = useI18n()
-const router = useTabRouter()
 
 const title = computed(() => displayTitle(props.header.title))
 const iconName = computed(() =>
@@ -25,8 +36,38 @@ const expired = computed(() =>
   isExpired(props.header.expiresAt, localDay(new Date())),
 )
 
-function open() {
-  router.push(`/entry/${props.header.id}`)
+const selection = usePasswordsSelectionStore()
+
+let pressTimer: ReturnType<typeof setTimeout> | null = null
+let pressed = false
+
+function startPress(event: PointerEvent) {
+  if (event.pointerType !== 'touch') return
+  pressed = false
+  pressTimer = setTimeout(() => {
+    pressed = true
+    emit('longPress')
+  }, 500)
+}
+
+function endPress() {
+  if (pressTimer !== null) clearTimeout(pressTimer)
+  pressTimer = null
+}
+
+function onClick(event: MouseEvent) {
+  // The click that ends a long press is not an activation.
+  if (pressed) {
+    pressed = false
+    return
+  }
+  emit('activate', event)
+}
+
+function onDragStart(event: DragEvent) {
+  const ids = draggedIds(props.header.id, selection.ids)
+  event.dataTransfer?.setData(ITEMS_MIME, itemsPayload(ids))
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
 }
 </script>
 
@@ -35,9 +76,24 @@ function open() {
     <button
       type="button"
       class="flex min-h-14 w-full items-center gap-4 px-4 py-3 text-left hover:bg-foreground/5"
+      :class="selected ? 'bg-primary/10' : ''"
+      :aria-pressed="selecting ? selected : undefined"
+      draggable="true"
       :data-testid="`passwords-entry-${header.id}`"
-      @click="open"
+      @click="onClick"
+      @dragstart="onDragStart"
+      @pointerdown="startPress"
+      @pointerup="endPress"
+      @pointerleave="endPress"
+      @pointercancel="endPress"
     >
+      <ShadcnCheckbox
+        v-if="selecting"
+        :model-value="selected"
+        class="pointer-events-none shrink-0"
+        tabindex="-1"
+        aria-hidden="true"
+      />
       <span
         class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-background"
         :style="header.color ? { color: header.color } : undefined"

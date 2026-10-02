@@ -1,13 +1,18 @@
 import { invoke } from '@tauri-apps/api/core'
 import type { CopyField } from '@bindings/CopyField'
 import type { CopyResult } from '@bindings/CopyResult'
+import type { CreateGroupResult } from '@bindings/CreateGroupResult'
 import type { CreateItemResult } from '@bindings/CreateItemResult'
+import type { GroupPatch } from '@bindings/GroupPatch'
 import type { ItemDetail } from '@bindings/ItemDetail'
 import type { ItemInput } from '@bindings/ItemInput'
 import type { ItemPatch } from '@bindings/ItemPatch'
+import type { MoveResult } from '@bindings/MoveResult'
 import type { Overview } from '@bindings/Overview'
 import type { RevealedSecret } from '@bindings/RevealedSecret'
 import type { SecretField } from '@bindings/SecretField'
+import type { SetTagsResult } from '@bindings/SetTagsResult'
+import type { Target } from '@bindings/Target'
 import type { TotpCode } from '@bindings/TotpCode'
 import type { UpdateItemResult } from '@bindings/UpdateItemResult'
 
@@ -52,7 +57,48 @@ export function usePasswords() {
   const deletePasskeyAsync = (passkeyId: string) =>
     invoke<null>('passwords_passkey_delete', { args: { passkeyId } })
 
+  const createGroupAsync = (args: {
+    name: string
+    description?: string
+    icon?: string
+    color?: string
+    parentId?: string
+  }) => invoke<CreateGroupResult>('passwords_create_group', { args })
+
+  const updateGroupAsync = (groupId: string, patch: GroupPatch) =>
+    invoke<null>('passwords_update_group', { args: { groupId, patch } })
+
+  const reorderGroupsAsync = (parentId: string | null, orderedIds: string[]) =>
+    invoke<null>('passwords_reorder_groups', {
+      args: { parentId, orderedIds },
+    })
+
+  const moveAsync = (targets: Target[], toGroupId: string | null) =>
+    invoke<MoveResult>('passwords_move', { args: { targets, toGroupId } })
+
+  const setTagsAsync = (itemIds: string[], add: string[], remove: string[]) =>
+    invoke<SetTagsResult>('passwords_set_tags', {
+      args: { itemIds, add, remove },
+    })
+
+  const renameTagAsync = (tagId: string, name: string) =>
+    invoke<null>('passwords_rename_tag', { args: { tagId, name } })
+
+  const setTagColorAsync = (tagId: string, color: string | null) =>
+    invoke<null>('passwords_set_tag_color', { args: { tagId, color } })
+
+  const deleteTagAsync = (tagId: string) =>
+    invoke<null>('passwords_delete_tag', { args: { tagId } })
+
   return {
+    createGroupAsync,
+    updateGroupAsync,
+    reorderGroupsAsync,
+    moveAsync,
+    setTagsAsync,
+    renameTagAsync,
+    setTagColorAsync,
+    deleteTagAsync,
     loadOverviewAsync,
     getItemAsync,
     revealAsync,

@@ -951,7 +951,8 @@
     },
     "sidebar": {
       "show": "Seitenleiste einblenden",
-      "hide": "Seitenleiste ausblenden"
+      "hide": "Seitenleiste ausblenden",
+      "all": "Alle Einträge"
     },
     "loading": "Lädt …",
     "noMatches": "Keine passenden Einträge",
@@ -985,7 +986,9 @@
       "custom": "Eigene Felder",
       "tags": "Tags",
       "icon": "Symbol",
-      "color": "Farbe"
+      "color": "Farbe",
+      "name": "Name",
+      "description": "Beschreibung"
     },
     "totp": {
       "left": "noch {seconds} s",
@@ -1053,6 +1056,55 @@
         "seconds": "{seconds} Sekunden",
         "description": "Ein kopierter Wert wird nach dieser Zeit aus der Zwischenablage entfernt, sofern sie noch denselben Wert enthält."
       }
+    },
+    "moved": "{count} Eintrag verschoben | {count} Einträge verschoben",
+    "folders": {
+      "new": "Neuer Ordner",
+      "edit": "Ordner bearbeiten",
+      "newChild": "Unterordner anlegen",
+      "moveUp": "Nach oben",
+      "moveDown": "Nach unten",
+      "delete": "Löschen",
+      "expand": "Aufklappen",
+      "collapse": "Zuklappen",
+      "menu": "Aktionen für Ordner {name}",
+      "nameRequired": "Ein Ordner braucht einen Namen.",
+      "unknown": "Ordner"
+    },
+    "tags": {
+      "manage": "Tags verwalten",
+      "none": "Noch keine Tags.",
+      "name": "Tagname",
+      "rename": "Umbenennen",
+      "delete": "Tag löschen",
+      "count": "kein Eintrag | {count} Eintrag | {count} Einträge",
+      "deleteTitle": "Tag löschen?",
+      "deleteBody": "Der Tag „{name}“ wird von {count} Einträgen entfernt. Die Einträge bleiben.",
+      "errors": {
+        "exists": "Einen Tag mit diesem Namen gibt es schon.",
+        "empty": "Ein Tag braucht einen Namen.",
+        "too_long": "Der Name ist zu lang (höchstens 64 Zeichen)."
+      }
+    },
+    "selection": {
+      "label": "Auswahl",
+      "count": "{count} ausgewählt | {count} ausgewählt",
+      "move": "Verschieben",
+      "addTag": "Tag hinzufügen",
+      "removeTag": "Tag entfernen",
+      "delete": "Löschen",
+      "clear": "Auswahl aufheben",
+      "target": "Zielordner",
+      "topLevel": "Oberste Ebene",
+      "run": "Ausführen",
+      "confirm": {
+        "move": "{count} Eintrag verschieben? | {count} Einträge verschieben?",
+        "addTag": "Tag zu {count} Eintrag hinzufügen? | Tag zu {count} Einträgen hinzufügen?",
+        "removeTag": "Tag von {count} Eintrag entfernen? | Tag von {count} Einträgen entfernen?"
+      }
+    },
+    "trash": {
+      "title": "Papierkorb"
     }
   }
 }
