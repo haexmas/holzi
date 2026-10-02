@@ -46,7 +46,20 @@ impl Manifest {
     /// Reads the manifest of a bundle that `haex-bundle` verified. `displayMode` is accepted and
     /// ignored: an extension always opens as a tab (FR-014).
     pub fn from_verified(bundle: &VerifiedBundle) -> Result<Self, BundleRejection> {
-        let manifest = &bundle.manifest;
+        Self::from_object(&bundle.manifest)
+    }
+
+    /// Reads the stored `manifest_json` of a bundle that was verified when it was installed.
+    pub fn from_stored(manifest_json: &[u8]) -> Result<Self, BundleRejection> {
+        match haex_bundle::jcs::parse_canonical(manifest_json) {
+            Ok(JsonValue::Object(manifest)) => Self::from_object(&manifest),
+            _ => Err(BundleRejection::new(
+                haex_bundle::ErrorKind::ManifestNotCanonical,
+            )),
+        }
+    }
+
+    fn from_object(manifest: &BTreeMap<String, JsonValue>) -> Result<Self, BundleRejection> {
         let invalid = || BundleRejection::new(haex_bundle::ErrorKind::ManifestInvalid);
         let name = text(manifest, "name")
             .and_then(|n| ExtensionName::parse(&n).ok())
@@ -54,7 +67,9 @@ impl Manifest {
         let version = text(manifest, "version")
             .and_then(|v| semver::Version::parse(&v).ok())
             .ok_or_else(invalid)?;
-        let public_key = PublicKey::parse(&bundle.public_key).map_err(|_| invalid())?;
+        let public_key = text(manifest, "publicKey")
+            .and_then(|k| PublicKey::parse(&k).ok())
+            .ok_or_else(invalid)?;
         let permissions = manifest
             .get("permissions")
             .map(serde_json::Value::from)

@@ -49,6 +49,8 @@ use chat::thread_commands::{
     create_thread, delete_thread, list_messages, list_threads, rename_thread,
 };
 use device::commands::{current_device_info, list_vault_devices, update_device_alias};
+use extensions::commands::install::{extension_install, extension_install_preview};
+use extensions::commands::manage::{extension_icon, extension_list};
 use hardware::get_hardware_info;
 use instances::{
     cleanup_orphans_on_startup, close_instance, create_instance, list_instances, open_instance,
@@ -331,6 +333,10 @@ pub fn run() {
             passwords_import_cancel,
             passwords_import_report_save,
             passwords_icon_preview,
+            extension_install_preview,
+            extension_install,
+            extension_list,
+            extension_icon,
         ]))
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
