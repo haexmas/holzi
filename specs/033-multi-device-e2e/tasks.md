@@ -94,7 +94,7 @@ description: 'Task list for End-to-End Tests Across Several Vaults and Devices'
 
 **Independent Test**: `--grep sync-lock-during-sync` passes.
 
-- [ ] T029 [US5] **Gate G3** and M8: add `scripts/e2e/scenarios/sync-lock-during-sync.test.ts`: stop B, create N threads on A with `create_thread`, start B, wait until B holds some but not all, press `lock-instance` on A; check on B that A turns offline within the close promise of spec 013 plus detection time; start A again and check that B ends with exactly N threads, none missing and none duplicated. Calibrate N so the window is at least 2 s on a maintainer's machine and on the CI runner; record N and the measured window in `research.md` under G3. If no N gives 2 s, report the achieved overlap and amend the plan (bulk helper) before merging. Depends on T013, T017.
+- [x] T029 [US5] **Gate G3** and M8 (amended after G3: the receiving device is locked, N = 10,000 made by a loop on the page; see research.md R7): add `scripts/e2e/scenarios/sync-lock-during-sync.test.ts`: stop B, create N threads on A with `create_thread`, start B, wait until B holds some but not all, press `lock-instance` on A; check on B that A turns offline within the close promise of spec 013 plus detection time; start A again and check that B ends with exactly N threads, none missing and none duplicated. Calibrate N so the window is at least 2 s on a maintainer's machine and on the CI runner; record N and the measured window in `research.md` under G3. If no N gives 2 s, report the achieved overlap and amend the plan (bulk helper) before merging. Depends on T013, T017.
 
 **Checkpoint** (PR C ready: T025 to T029): M5 to M8 are automatic.
 

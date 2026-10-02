@@ -244,6 +244,15 @@ export async function threadTitles(device: ThreadDevice): Promise<string[]> {
   return threads.map((thread) => thread.title).sort()
 }
 
+/** How many threads the device holds. Counted on the page, so a large list is not carried through the driver. */
+export function threadCount(device: {
+  instance: Pick<Page, 'exec'>
+}): Promise<number> {
+  return device.instance.exec<number>(
+    `return window.__TAURI_INTERNALS__.invoke('list_threads').then((threads) => threads.length)`,
+  )
+}
+
 /** A new thread with the title; returns its id. */
 export async function addThread(
   device: ThreadDevice,
@@ -253,6 +262,35 @@ export async function addThread(
     'create_thread',
     await device.instance.invoke('create_thread', { args: { title } }),
   ).id
+}
+
+/**
+ * Many new threads at once: the loop runs on the page, so a thousand do not cost a thousand driver round
+ * trips. In chunks, so no single script runs long enough for the driver to give up on it.
+ */
+export async function addThreads(
+  device: { instance: Pick<Page, 'exec'> },
+  titles: string[],
+  chunk = 500,
+): Promise<void> {
+  for (let from = 0; from < titles.length; from += chunk) {
+    const outcome = await device.instance.exec<{
+      ok: boolean
+      error?: unknown
+    }>(
+      `const titles = arguments[0]
+       return (async () => {
+         for (const title of titles) {
+           await window.__TAURI_INTERNALS__.invoke('create_thread', { args: { title } })
+         }
+         return { ok: true }
+       })().catch((error) => ({ ok: false, error: String(error) }))`,
+      [titles.slice(from, from + chunk)],
+    )
+    if (!outcome.ok) {
+      throw new Error(`create_thread failed: ${JSON.stringify(outcome.error)}`)
+    }
+  }
 }
 
 export async function renameThread(
