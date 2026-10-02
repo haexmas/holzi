@@ -1,0 +1,144 @@
+//! Maps the `permissions` object of a manifest to declared permissions (contracts/permissions.md
+//! §Arten, research R15).
+//!
+//! Manifests of existing haextensions use several spellings for the same thing (`http` and `web`,
+//! `cloudStorage` and `remoteStorage`, `operation` and `action`, `readWrite` and `read_write`).
+//! They are unified here. Categories holzi does not offer are listed for the installation dialog
+//! and never become permissions; a declaration holzi cannot read is listed as invalid instead of
+//! being guessed.
+
+use serde_json::Value;
+
+use super::model::{Action, PermissionKind};
+use super::target::Target;
+
+/// One permission an extension declares in its manifest.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeclaredPermission {
+    pub kind: PermissionKind,
+    pub action: Action,
+    pub target: Target,
+    /// The target exactly as the manifest writes it; this is what is stored, and [`Target::parse`]
+    /// reads it back the same way.
+    pub target_text: String,
+}
+
+/// A declaration that could not be read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InvalidDeclaration {
+    pub category: String,
+    pub target: Option<String>,
+    pub action: Option<String>,
+}
+
+/// The result of [`map_manifest_permissions`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DeclaredPermissions {
+    pub declared: Vec<DeclaredPermission>,
+    /// Categories with at least one entry that holzi does not offer, sorted.
+    pub unsupported_categories: Vec<String>,
+    pub invalid: Vec<InvalidDeclaration>,
+}
+
+/// The kind a manifest category stands for, or `None` if holzi does not offer it.
+fn category_kind(category: &str) -> Option<PermissionKind> {
+    match category {
+        "database" => Some(PermissionKind::Database),
+        "filesystem" => Some(PermissionKind::Filesystem),
+        "http" | "web" => Some(PermissionKind::Web),
+        "notifications" => Some(PermissionKind::Notifications),
+        "passwords" => Some(PermissionKind::Passwords),
+        "cloudStorage" | "remoteStorage" => Some(PermissionKind::RemoteStorage),
+        "mail" => Some(PermissionKind::Mail),
+        "shell" => Some(PermissionKind::Shell),
+        _ => None,
+    }
+}
+
+/// The action a declaration without one gets: `read` where a kind has `read` and `readWrite`,
+/// every method for `web`, the only action of `notifications` and `shell`.
+/// `mail` has no such default and must name its action.
+fn default_action(kind: PermissionKind) -> Option<&'static str> {
+    match kind {
+        PermissionKind::Database
+        | PermissionKind::Filesystem
+        | PermissionKind::Passwords
+        | PermissionKind::RemoteStorage => Some("read"),
+        PermissionKind::Web => Some("*"),
+        PermissionKind::Notifications => Some("show"),
+        PermissionKind::Shell => Some("execute"),
+        PermissionKind::Mail => None,
+    }
+}
+
+/// Brings the manifest spelling of an action into the stored one.
+fn normalise_action(kind: PermissionKind, action: &str) -> String {
+    match (kind, action) {
+        (_, "read_write") => "readWrite".to_owned(),
+        (PermissionKind::Web, method) => method.to_ascii_uppercase(),
+        (_, other) => other.to_owned(),
+    }
+}
+
+/// Maps a manifest's `permissions` value. Anything that is not an object declares nothing.
+pub fn map_manifest_permissions(permissions: &Value) -> DeclaredPermissions {
+    let mut result = DeclaredPermissions::default();
+    let Some(categories) = permissions.as_object() else {
+        return result;
+    };
+    for (category, entries) in categories {
+        let Some(kind) = category_kind(category) else {
+            if entries.as_array().is_some_and(|e| !e.is_empty()) {
+                result.unsupported_categories.push(category.clone());
+            }
+            continue;
+        };
+        let Some(entries) = entries.as_array() else {
+            result.invalid.push(InvalidDeclaration {
+                category: category.clone(),
+                target: None,
+                action: None,
+            });
+            continue;
+        };
+        for entry in entries {
+            match map_entry(kind, entry) {
+                Some(declared) => result.declared.push(declared),
+                None => result.invalid.push(InvalidDeclaration {
+                    category: category.clone(),
+                    target: entry
+                        .get("target")
+                        .and_then(Value::as_str)
+                        .map(str::to_owned),
+                    action: entry
+                        .get("operation")
+                        .or_else(|| entry.get("action"))
+                        .and_then(Value::as_str)
+                        .map(str::to_owned),
+                }),
+            }
+        }
+    }
+    result.unsupported_categories.sort();
+    result
+}
+
+fn map_entry(kind: PermissionKind, entry: &Value) -> Option<DeclaredPermission> {
+    let target_text = entry.get("target")?.as_str()?.to_owned();
+    let action_text = match entry.get("operation").or_else(|| entry.get("action")) {
+        Some(value) => value.as_str()?.to_owned(),
+        None => default_action(kind)?.to_owned(),
+    };
+    let action = Action::parse(kind, &normalise_action(kind, &action_text))?;
+    let target = Target::parse(kind, &target_text)?;
+    Some(DeclaredPermission {
+        kind,
+        action,
+        target,
+        target_text,
+    })
+}
+
+#[cfg(test)]
+#[path = "manifest_map_tests.rs"]
+mod tests;

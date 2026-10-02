@@ -5,6 +5,7 @@ pub mod catalog;
 pub mod chat;
 pub mod device;
 pub mod error;
+pub mod extensions;
 pub mod hardware;
 pub mod identity;
 pub mod instances;

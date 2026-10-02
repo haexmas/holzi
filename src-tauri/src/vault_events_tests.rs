@@ -160,3 +160,45 @@ fn a_failed_write_is_not_reported() {
     assert!(failed.is_err());
     assert!(drain(&mut reports).is_empty());
 }
+
+/// Spec 017 (T023): a Rust subscriber of the change broadcast learns of local writes and of changes
+/// received from another device, through the same window as the frontend event.
+#[tokio::test]
+async fn a_subscriber_of_the_broadcast_receives_local_and_remote_commits() {
+    let device = Device::new();
+    let sender = Device::new();
+    let changes = changes_channel();
+    let subscriber = changes.subscribe();
+    let token = CancellationToken::new();
+    let publisher = changes.clone();
+    let feed = tokio::spawn(run(observe(device.db()), token.clone(), move |tables| {
+        publish(&publisher, &tables)
+    }));
+    let next = |subscriber: &tokio::sync::broadcast::Receiver<Arc<Vec<String>>>| {
+        let mut subscriber = subscriber.resubscribe();
+        async move {
+            tokio::time::timeout(std::time::Duration::from_secs(5), subscriber.recv())
+                .await
+                .expect("an announcement within the window")
+                .expect("the broadcast is open")
+        }
+    };
+
+    let local = next(&subscriber);
+    device
+        .db()
+        .write(|tx| preferences::insert_or_update(tx, PrefScope::Vault, COLOR_SCHEME_KEY, "dark"))
+        .expect("local write");
+    assert!(local.await.contains(&"preferences".to_string()));
+
+    let remote = next(&subscriber);
+    sender
+        .db()
+        .write(|tx| preferences::insert_or_update(tx, PrefScope::Vault, COLOR_SCHEME_KEY, "light"))
+        .expect("write on the other device");
+    device.pull_from(&sender);
+    assert!(remote.await.contains(&"preferences".to_string()));
+
+    token.cancel();
+    feed.await.expect("feed ends");
+}

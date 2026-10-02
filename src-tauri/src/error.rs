@@ -223,6 +223,25 @@ pub enum HolziError {
     /// `unsupported_format`, `encrypted_export`).
     #[error("Import failed: {reason}")]
     PasswordsImportFailed { reason: String },
+
+    /// An extension bundle was refused or could not be installed (spec 017,
+    /// contracts/bundle-format.md §Prüfung: `reason` is the error kind, e.g. `signature_invalid`,
+    /// `file_mismatch`, `legacy_signature_format`). Never carries content of the bundle.
+    #[error("Extension not installed: {reason}")]
+    ExtensionInstall { reason: String },
+
+    /// No installed extension with this id.
+    #[error("Extension not found")]
+    ExtensionNotFound,
+
+    /// The extension cannot start on this device yet (`status`: `transferring`,
+    /// `signature_failed`, `migration_failed`).
+    #[error("Extension not ready: {status}")]
+    ExtensionNotReady { status: String },
+
+    /// The extension is disabled (FR-007).
+    #[error("Extension disabled")]
+    ExtensionDisabled,
 }
 
 pub type Result<T> = std::result::Result<T, HolziError>;

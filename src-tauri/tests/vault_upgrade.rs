@@ -223,6 +223,58 @@ fn reopening_a_pre_0022_vault_installs_the_password_table_triggers() {
     }
 }
 
+/// `0023_extensions` (spec 017) introduces nine CRDT-tracked registry tables: a vault provisioned
+/// before it must have the `z_dirty_*` triggers on all of them after reopening through the
+/// production config (trigger version 15), or an installation would never reach the other devices.
+#[test]
+fn reopening_a_pre_0023_vault_installs_the_extension_table_triggers() {
+    const EXTENSION_TABLES: [&str; 9] = [
+        "extensions",
+        "extension_bundles",
+        "extension_bundle_files",
+        "extension_blobs",
+        "extension_migrations",
+        "extension_permissions",
+        "extension_limits",
+        "extension_device_status",
+        "extension_kv",
+    ];
+    let trigger_count = |db: &Database, table: &str| -> i64 {
+        db.with_connection(|conn| {
+            Ok(conn.query_row(
+                "SELECT COUNT(*) FROM sqlite_master \
+                 WHERE type = 'trigger' AND name LIKE 'z_dirty_' || ?1 || '_%'",
+                [table],
+                |r| r.get(0),
+            )?)
+        })
+        .expect("count triggers")
+    };
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db_path = dir.path().join("vault.db");
+    let installation_id = installation_id_path(dir.path());
+
+    let old = open_vault(
+        dir.path(),
+        source_without("0023_extensions"),
+        DEFAULT_TRIGGER_VERSION,
+    );
+    for table in EXTENSION_TABLES {
+        assert_eq!(trigger_count(&old, table), 0, "{table} does not exist yet");
+    }
+    drop(old);
+
+    let upgraded = Database::open(vault_config(PASSPHRASE, &db_path, &installation_id, false))
+        .expect("reopen upgraded vault");
+    for table in EXTENSION_TABLES {
+        assert!(
+            trigger_count(&upgraded, table) > 0,
+            "{table} is CRDT-tracked, but the production open path left it without triggers — \
+             its writes will not sync. Bump HOLZI_TRIGGER_VERSION."
+        );
+    }
+}
+
 #[test]
 fn a_vault_from_before_spec_024_gets_its_derived_identity_and_first_device_list() {
     let dir = tempfile::tempdir().expect("tempdir");
