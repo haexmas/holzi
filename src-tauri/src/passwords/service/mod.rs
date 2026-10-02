@@ -19,6 +19,7 @@ use super::access::{self, Caller};
 mod items;
 mod organize;
 mod passkeys;
+mod presets;
 
 use crate::error::Result;
 use crate::vault_gate::VaultDb;

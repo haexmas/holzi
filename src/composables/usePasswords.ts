@@ -7,6 +7,9 @@ import type { GroupPatch } from '@bindings/GroupPatch'
 import type { ItemDetail } from '@bindings/ItemDetail'
 import type { ItemInput } from '@bindings/ItemInput'
 import type { ItemPatch } from '@bindings/ItemPatch'
+import type { Preset } from '@bindings/Preset'
+import type { PresetInput } from '@bindings/PresetInput'
+import type { PresetSaveResult } from '@bindings/PresetSaveResult'
 import type { MoveResult } from '@bindings/MoveResult'
 import type { Overview } from '@bindings/Overview'
 import type { RevealedSecret } from '@bindings/RevealedSecret'
@@ -90,7 +93,18 @@ export function usePasswords() {
   const deleteTagAsync = (tagId: string) =>
     invoke<null>('passwords_delete_tag', { args: { tagId } })
 
+  const presetListAsync = () => invoke<Preset[]>('passwords_preset_list')
+
+  const presetSaveAsync = (preset: PresetInput) =>
+    invoke<PresetSaveResult>('passwords_preset_save', { args: { preset } })
+
+  const presetDeleteAsync = (presetId: string) =>
+    invoke<null>('passwords_preset_delete', { args: { presetId } })
+
   return {
+    presetListAsync,
+    presetSaveAsync,
+    presetDeleteAsync,
     createGroupAsync,
     updateGroupAsync,
     reorderGroupsAsync,

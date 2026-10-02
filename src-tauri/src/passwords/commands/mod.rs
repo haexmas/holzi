@@ -6,6 +6,7 @@
 pub mod items;
 pub mod organize;
 pub mod passkeys;
+pub mod presets;
 pub mod read;
 
 use tauri::State;

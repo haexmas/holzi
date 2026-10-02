@@ -1105,6 +1105,40 @@
     },
     "trash": {
       "title": "Trash"
+    },
+    "generator": {
+      "title": "Password generator",
+      "open": "Generate",
+      "again": "Generate again",
+      "copy": "Copy",
+      "copied": "Password copied.",
+      "use": "Use",
+      "preset": "Preset",
+      "noPreset": "None (defaults)",
+      "presetName": "Preset name",
+      "save": "Save as preset",
+      "makeDefault": "Save as default",
+      "delete": "Delete preset",
+      "usePattern": "Pattern instead of character classes",
+      "pattern": "Pattern",
+      "patternHelp": "c/C consonant, v/V vowel, a/A letter, d digit, s symbol (lower case: lowercase, upper case: uppercase). Every other character stands for itself; put \\ before a letter to keep it.",
+      "length": "Length: {length}",
+      "uppercase": "Uppercase letters",
+      "lowercase": "Lowercase letters",
+      "numbers": "Digits",
+      "symbols": "Symbols",
+      "exclude": "Excluded characters",
+      "errors": {
+        "length_range": "The length must be between 1 and 256.",
+        "no_class": "Choose at least one kind of character.",
+        "length_below_classes": "The length must be at least the number of chosen kinds of character.",
+        "class_empty": "The excluded characters leave nothing for a chosen kind of character.",
+        "pattern_empty": "Enter a pattern."
+      },
+      "presetErrors": {
+        "name": "A preset needs a name.",
+        "length": "The length must be between 1 and 256."
+      }
     }
   }
 }

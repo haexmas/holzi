@@ -514,3 +514,58 @@ pub struct GroupPatch {
     #[ts(type = "number | null", optional)]
     pub sort_order: Patch<i32>,
 }
+
+/// A saved generator configuration (FR-014). Exactly one preset is the default; with two flagged
+/// ones (concurrent writes on two devices) the list shows only the newest as the default.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings/")]
+#[serde(rename_all = "camelCase")]
+pub struct Preset {
+    pub id: String,
+    pub name: String,
+    pub length: u32,
+    pub uppercase: bool,
+    pub lowercase: bool,
+    pub numbers: bool,
+    pub symbols: bool,
+    pub exclude_chars: String,
+    pub use_pattern: bool,
+    pub pattern: String,
+    pub is_default: bool,
+}
+
+/// What the window sends to save a preset; an empty `id` creates one.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings/", optional_fields)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PresetInput {
+    pub id: String,
+    pub name: String,
+    pub length: u32,
+    pub uppercase: bool,
+    pub lowercase: bool,
+    pub numbers: bool,
+    pub symbols: bool,
+    pub exclude_chars: String,
+    pub use_pattern: bool,
+    pub pattern: String,
+    pub is_default: bool,
+}
+
+impl Default for PresetInput {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            name: String::new(),
+            length: 16,
+            uppercase: true,
+            lowercase: true,
+            numbers: true,
+            symbols: true,
+            exclude_chars: String::new(),
+            use_pattern: false,
+            pattern: String::new(),
+            is_default: false,
+        }
+    }
+}

@@ -1105,6 +1105,40 @@
     },
     "trash": {
       "title": "Papierkorb"
+    },
+    "generator": {
+      "title": "Passwortgenerator",
+      "open": "Generieren",
+      "again": "Neu erzeugen",
+      "copy": "Kopieren",
+      "copied": "Passwort kopiert.",
+      "use": "Übernehmen",
+      "preset": "Voreinstellung",
+      "noPreset": "Keine (Standardwerte)",
+      "presetName": "Name der Voreinstellung",
+      "save": "Als Voreinstellung speichern",
+      "makeDefault": "Als Standard speichern",
+      "delete": "Voreinstellung löschen",
+      "usePattern": "Muster statt Zeichenklassen",
+      "pattern": "Muster",
+      "patternHelp": "c/C Konsonant, v/V Vokal, a/A Buchstabe, d Ziffer, s Sonderzeichen (klein: Kleinbuchstabe, groß: Großbuchstabe). Alle anderen Zeichen stehen für sich; mit \\ davor auch die Buchstaben.",
+      "length": "Länge: {length}",
+      "uppercase": "Großbuchstaben",
+      "lowercase": "Kleinbuchstaben",
+      "numbers": "Ziffern",
+      "symbols": "Sonderzeichen",
+      "exclude": "Ausgeschlossene Zeichen",
+      "errors": {
+        "length_range": "Die Länge muss zwischen 1 und 256 liegen.",
+        "no_class": "Wähle mindestens eine Zeichenart.",
+        "length_below_classes": "Die Länge muss mindestens so groß sein wie die Zahl der gewählten Zeichenarten.",
+        "class_empty": "Die ausgeschlossenen Zeichen lassen für eine gewählte Zeichenart nichts übrig.",
+        "pattern_empty": "Gib ein Muster ein."
+      },
+      "presetErrors": {
+        "name": "Eine Voreinstellung braucht einen Namen.",
+        "length": "Die Länge muss zwischen 1 und 256 liegen."
+      }
     }
   }
 }

@@ -36,6 +36,9 @@ mod model_tests;
 pub mod passkeys;
 #[cfg(test)]
 mod passkeys_tests;
+pub mod presets;
+#[cfg(test)]
+mod presets_tests;
 pub mod reveal;
 #[cfg(test)]
 mod reveal_tests;

@@ -102,6 +102,9 @@ const PASSWORDS_VIEWS: Partial<Record<string, Component>> = {
   entry: defineAsyncComponent(
     () => import('~/components/passwords/EntryPage.vue'),
   ),
+  generator: defineAsyncComponent(
+    () => import('~/components/passwords/GeneratorPage.vue'),
+  ),
 }
 
 /** The password manager routes from the registry: `PasswordsApp` as the frame, one flat child per

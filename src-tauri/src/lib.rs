@@ -65,6 +65,9 @@ use passwords::commands::organize::{
     passwords_reorder_groups, passwords_set_tag_color, passwords_set_tags, passwords_update_group,
 };
 use passwords::commands::passkeys::{passwords_passkey_delete, passwords_passkey_rename};
+use passwords::commands::presets::{
+    passwords_preset_delete, passwords_preset_list, passwords_preset_save,
+};
 use passwords::commands::read::{
     passwords_copy_field, passwords_get_item, passwords_load_overview, passwords_reveal,
     passwords_totp_code,
@@ -282,6 +285,9 @@ pub fn run() {
             passwords_rename_tag,
             passwords_set_tag_color,
             passwords_delete_tag,
+            passwords_preset_list,
+            passwords_preset_save,
+            passwords_preset_delete,
         ]))
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

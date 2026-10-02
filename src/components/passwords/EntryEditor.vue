@@ -47,6 +47,7 @@ const conflict = ref<'changed' | 'deleted' | null>(null)
 const askingToLeave = ref(false)
 const tagInput = ref('')
 const replacingOtp = ref(false)
+const generatorOpen = ref(false)
 
 const isNew = computed(() => props.itemId === null)
 const dirty = computed(() => isDirty(initial.value, draft.value))
@@ -373,13 +374,25 @@ watch(saveError, (message) => {
                 {{ t('passwords.editor.replace') }}
               </UiButton>
             </div>
-            <UiInputPassword
-              v-else
-              id="pw-password"
-              v-model="passwordValue"
-              autocomplete="new-password"
-              data-testid="passwords-field-password"
-            />
+            <div v-else class="flex items-center gap-2">
+              <UiInputPassword
+                id="pw-password"
+                v-model="passwordValue"
+                autocomplete="new-password"
+                class="flex-1"
+                data-testid="passwords-field-password"
+              />
+              <UiButton
+                type="button"
+                variant="outline"
+                size="sm"
+                data-testid="passwords-generate"
+                @click="generatorOpen = true"
+              >
+                <Icon name="lucide:wand-sparkles" class="size-4" />
+                {{ t('passwords.generator.open') }}
+              </UiButton>
+            </div>
           </li>
           <li class="flex flex-col gap-1.5 px-4 py-3">
             <ShadcnLabel for="pw-url">{{
@@ -575,6 +588,23 @@ watch(saveError, (message) => {
         </SettingsGroup>
       </template>
     </form>
+
+    <UiDrawerModal
+      v-model:open="generatorOpen"
+      :title="t('passwords.generator.title')"
+    >
+      <template #content>
+        <PasswordsGeneratorPanel
+          embedded
+          @use="
+            (password: string) => {
+              passwordValue = password
+              generatorOpen = false
+            }
+          "
+        />
+      </template>
+    </UiDrawerModal>
 
     <PasswordsConflictDialog
       :open="conflict !== null"
