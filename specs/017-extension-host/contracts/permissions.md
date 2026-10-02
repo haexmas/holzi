@@ -1,0 +1,63 @@
+# Vertrag: Berechtigungen
+
+Begründung: [research.md](../research.md) R15, R18–R21. Modul `src-tauri/src/extensions/permissions/`
+(rein, ohne Datenbank testbar).
+
+## Arten, Aktionen, Ziele
+
+| Art (`kind`)    | Aktionen                | Ziel                                                                  | Abgleich                                        | Geltungsbereich gemerkt              |
+| --------------- | ----------------------- | --------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------ |
+| `database`      | `read`, `readWrite`     | Präfix einer Erweiterung (`<pk>__<name>__*`) oder eine ihrer Tabellen | exakt zerlegt (sql-policy)                      | vault-weit                           |
+| `filesystem`    | `read`, `readWrite`     | Pfad (Ordner mit Unterordnern) oder Datei                             | Präfix auf dem aufgelösten Pfad                 | **Gerät**, wählbar „für alle Geräte“ |
+| `web`           | HTTP-Methode oder `*`   | `*`, `schema://host/pfad*`, `*.domain`, Domain                        | wie HV `manager/url.rs`, jede Weiterleitung neu | vault-weit                           |
+| `notifications` | `show`                  | `*`                                                                   | –                                               | vault-weit                           |
+| `passwords`     | `read`, `readWrite`     | Tag oder `*`                                                          | über 034 (`Grant`, `Scope`)                     | vault-weit                           |
+| `remoteStorage` | `read`, `readWrite`     | Kennung der Speicherverbindung oder `*`                               | exakt                                           | vault-weit                           |
+| `mail`          | `fetch`, `send`, `poll` | `host:port` oder `host` (alle Ports)                                  | Host ohne Rücksicht auf Groß-/Kleinschreibung   | vault-weit                           |
+| `shell`         | `execute`               | Programm (kanonischer Pfad) oder `*`                                  | exakt nach Auflösung                            | **Gerät**, wählbar „für alle Geräte“ |
+
+- `readWrite` deckt `read`.
+- Manifest-Schreibweisen werden vereinheitlicht: `readWrite`/`read_write`, `http`/`web`,
+  `cloudStorage`/`remoteStorage`, Feld `operation` oder `action`.
+- Kategorien im Manifest, die holzi nicht anbietet (`spaces`, `identities`, `bookmarks`, `syncServers`,
+  `syncRules`), zeigt der Installationsdialog als „wird von holzi nicht unterstützt“; sie werden nie gespeichert.
+- Ein `database`-Ziel, das kein Präfix einer Erweiterung ist (etwa `chat_*`), wird beim Speichern abgelehnt.
+
+## Auswertung
+
+Für eine Anfrage (Erweiterung, Art, Aktion, Ziel) auf Gerät D:
+
+1. Kandidaten: gemerkte Zeilen mit `vault_device_uuid ∈ {Nil, D}` und vorläufige im Speicher, deren Ziel passt
+   und deren Aktion die angefragte deckt.
+2. Ein Kandidat mit `denied` → **verweigert** (1002).
+3. sonst einer mit `granted` → **erlaubt**.
+4. sonst (`ask` oder keiner) → **Anfrage** (1004).
+
+Feste Regeln vor der Auswertung (keine Berechtigung ändert sie): Kerntabellen (sql-policy), gesperrte Pfade
+(R19), Funktionen, die es für Erweiterungen nicht gibt (bridge.md), deaktivierte Erweiterung (8002).
+
+## Installation
+
+- Jede erklärte Berechtigung erscheint mit Art, Aktion, Ziel; Vorgabe angehakt.
+- Angehakt → `granted`, abgehakt → `ask`; beides mit `declared = 1`.
+- Gerätebezogene Arten bekommen die Kennung dieses Geräts, außer der Nutzer wählt „für alle Geräte“.
+- Update: nur neu erklärte Berechtigungen werden vorgelegt; vorhandene Zeilen bleiben.
+
+## Anfrage zur Laufzeit
+
+1. Rust antwortet der Erweiterung 1004 mit `{resourceType, action, target}` und sendet an die Oberfläche
+   `extension-permission-request` mit `requestId`, `extensionId`, `displayName`, `kind`, `action`,
+   `target`, `declared` und `deviceScoped`.
+2. Die Warteschlange im Frontend fasst gleiche (`extensionId, kind, action, target`) zusammen und zeigt eine
+   Anfrage nach der anderen: „Erlauben“, „Verweigern“, „Merken“, bei gerätebezogenen Arten zusätzlich „für
+   alle Geräte merken“ mit Hinweis auf die Wirkung; bei `shell` eine deutliche Warnung. Schließen des Dialogs
+   bricht ab, verweigert nicht.
+3. Die Entscheidung geht an `extension_permission_resolve`; Rust speichert (gemerkt) oder hält im Speicher
+   (vorläufig) und sendet `extension:permission-resolved` an alle Rahmen der Erweiterung; das SDK wiederholt.
+4. Sind alle wartenden Rahmen geschlossen, verschwindet die Anfrage.
+
+## Einstellungen (Kategorie „Erweiterungen“)
+
+Je Erweiterung: Berechtigungen mit Zustand, Geltungsbereich (vault-weit oder Gerät mit Namen), „erklärt“ oder
+„nicht erklärt“; Ändern von Zustand und Geltungsbereich, Widerrufen. Vorläufige Berechtigungen dieses Geräts
+mit „Entfernen“. Jede Änderung gilt sofort; der Cache in Rust wird verworfen.
