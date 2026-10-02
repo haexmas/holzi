@@ -1,48 +1,82 @@
 import { scenario } from '../lib/scenario.ts'
+import { connectProvider } from '../lib/flows.ts'
+import { waitForLocation } from '../lib/settings.ts'
+import { expectThreads } from '../lib/sync-flows.ts'
+import type { Device } from '../lib/group.ts'
 import {
-  addThread,
-  expectThreads,
-  linkDevice,
-  removeThread,
-  renameThread,
-  startFirstDevice,
-} from '../lib/sync-flows.ts'
+  chatTitles,
+  sendInNewChat,
+  sessionRestoreOn,
+  showApp,
+} from '../lib/sync-ui.ts'
 
-// Spec 024, user story 1 (SC-011): two devices of one vault, two application processes with data of
-// their own, connect without anything entered and keep what the user creates, renames and deletes in
-// step. The second device is linked the way a user does it (a code shown on the first). They find
-// each other through a Nostr relay run for this scenario.
-scenario('sync-two-devices', { timeoutMs: 240_000 }, async (ctx) => {
-  const relay = await ctx.nostrRelay()
-  const first = await startFirstDevice(ctx, relay.url, 'e2e-sync')
-  const second = await linkDevice(ctx, first, relay.url, {
-    deviceName: 'Zweitgerät',
-  })
+const FIRST = 'Hallo vom Laptop'
+const SECOND = 'Noch ein Chat, während das Telefon aus war'
 
-  const id = await addThread(first, 'vom ersten Gerät')
+async function showGeneralSettings(device: Device) {
+  await showApp(device.page, 'system.settings')
+  await waitForLocation(device.page, 'general')
+  await device.page.waitForDisplayed('session-restore-switch')
+}
+
+async function showChat(device: Device) {
+  await showApp(device.page, 'system.chat')
+  await device.page.waitForDisplayed('chat-input')
+}
+
+// Spec 024, user story 1 (M2 of its quickstart, SC-011): two devices of one vault keep what the person
+// does in step, seen through the interface. A chat started on one device shows in the chat list of the
+// other; a setting changed on one applies on the other; a device that was stopped catches up on what
+// the other did while it was away. (The reply of the model is a stand-in; the chat is the person's.)
+scenario('sync-two-devices', { timeoutMs: 420_000 }, async (ctx) => {
+  const provider = await ctx.provider({ kind: 'stream-then-finish', chunks: 2 })
+  const g = await ctx.group({ users: { anna: ['laptop', 'phone'] } })
+  const laptop = g.device('anna/laptop')
+  const phone = g.device('anna/phone')
+  await connectProvider(laptop.page, provider)
+
+  await showChat(laptop)
+  await sendInNewChat(laptop.page, FIRST)
+  await showChat(phone)
+  await ctx.waitFor(
+    'the chat from the laptop to show in the chat list of the phone',
+    async () => (await chatTitles(phone.page)).includes(FIRST),
+    { timeoutMs: 40_000, fixed: true },
+  )
+  ctx.step('a chat started on one device shows on the other')
+
+  await showGeneralSettings(laptop)
+  await showGeneralSettings(phone)
+  const before = await sessionRestoreOn(phone.page)
+  await phone.page.click('session-restore-switch')
+  await ctx.waitFor(
+    'the setting changed on the phone to apply on the laptop',
+    async () => (await sessionRestoreOn(laptop.page)) === !before,
+    { timeoutMs: 40_000, fixed: true },
+  )
+  ctx.step('a setting changed on the other applies')
+
+  await phone.stop()
+  await showChat(laptop)
+  await sendInNewChat(laptop.page, SECOND)
+  await showGeneralSettings(laptop)
+  await laptop.page.click('session-restore-switch')
+  await ctx.waitFor(
+    'the laptop to show its own change of the setting',
+    async () => (await sessionRestoreOn(laptop.page)) === before,
+  )
+  await phone.start()
   await expectThreads(
     ctx,
-    second,
-    ['vom ersten Gerät'],
-    'the new thread to show on the second device',
+    phone,
+    [FIRST, SECOND],
+    'the phone to catch up on the chat from while it was stopped',
   )
-  ctx.step('created on one device, shown on the other')
-
-  await renameThread(second, id, 'vom zweiten umbenannt')
-  await expectThreads(
-    ctx,
-    first,
-    ['vom zweiten umbenannt'],
-    'the new title to show on the first device',
+  await showGeneralSettings(phone)
+  await ctx.waitFor(
+    'the phone to catch up on the setting from while it was stopped',
+    async () => (await sessionRestoreOn(phone.page)) === before,
+    { timeoutMs: 40_000, fixed: true },
   )
-  ctx.step('renamed on the other, shown on the first')
-
-  await removeThread(first, id)
-  await expectThreads(
-    ctx,
-    second,
-    [],
-    'the deletion to reach the second device',
-  )
-  ctx.step('deleted on one, gone on the other')
+  ctx.step('a device that was stopped catches up on chat and setting')
 })

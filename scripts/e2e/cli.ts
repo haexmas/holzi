@@ -109,7 +109,7 @@ export function parseCliOptions(
       '--scenario-timeout',
       values['scenario-timeout'] ?? '60',
     ),
-    runTimeoutSec: positive('--run-timeout', values['run-timeout'] ?? '600'),
+    runTimeoutSec: positive('--run-timeout', values['run-timeout'] ?? '1800'),
     timeScale: positive('E2E_TIME_SCALE', env.E2E_TIME_SCALE ?? '1'),
   }
 }

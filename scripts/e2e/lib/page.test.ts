@@ -107,6 +107,20 @@ describe('click', () => {
     assert.equal(attempts, 2)
   })
 
+  it('retries a click that a moving window intercepted, and gives up at the deadline', async () => {
+    driver.onFind(() => ['el-1'])
+    driver.onDisplayed(() => true)
+    let attempts = 0
+    driver.onClick(() => {
+      attempts += 1
+      return attempts <= 2 ? 'intercepted' : 'ok'
+    })
+    await click(client, 'chat-new')
+    assert.equal(attempts, 3)
+    driver.onClick(() => 'intercepted')
+    await assert.rejects(click(client, 'chat-new', 120), /click intercepted/)
+  })
+
   it('fails naming the hook and the selector when nothing is displayed by the deadline', async () => {
     driver.onFind(() => ['el-1'])
     driver.onDisplayed(() => false)

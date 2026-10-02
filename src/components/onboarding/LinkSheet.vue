@@ -331,6 +331,7 @@ function onOpenVault() {
         :disabled="!canSubmit"
         :loading="submitting"
         class="w-full"
+        data-testid="link-submit"
       >
         {{ t('onboarding.link.submit') }}
       </UiButton>

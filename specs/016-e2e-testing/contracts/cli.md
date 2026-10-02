@@ -21,7 +21,7 @@ Nix shell the bridge script runs the command unchanged.
 | `--grep <text>`                   | Run only scenarios whose name contains the text.                                                                 |
 | `--keep`                          | Keep the run directory's material for passing scenarios too.                                                     |
 | `--scenario-timeout <seconds>`    | Per-scenario limit. Default 60.                                                                                  |
-| `--run-timeout <seconds>`         | Whole-run limit. Default 600.                                                                                    |
+| `--run-timeout <seconds>`         | Whole-run limit. Default 1800 (600 until the multi-device scenarios of spec 033)                                 |
 
 Environment: `E2E_APP` (same as `--app`), `E2E_ARTIFACTS_DIR` (run directory root),
 `E2E_TIME_SCALE` (multiplies generic scenario and run timeouts, default 1; close-promise conformance

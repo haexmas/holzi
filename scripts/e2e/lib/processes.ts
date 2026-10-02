@@ -65,6 +65,12 @@ export function pidAlive(pid: number): boolean {
   return statFields(pid)?.[0] !== 'Z'
 }
 
+/** The process group of a process, or null when it is gone. */
+export function processGroupOf(pid: number): number | null {
+  const group = Number(statFields(pid)?.[2])
+  return Number.isInteger(group) ? group : null
+}
+
 /** `<runner pid>:<runner start time>:<random>`, identical for every process one run starts. */
 export function newMarker(pid: number = process.pid): string {
   return `${pid}:${runnerStartTime(pid) ?? '0'}:${randomBytes(8).toString('hex')}`

@@ -92,10 +92,10 @@ const waitForAbort = (signal: AbortSignal) =>
   })
 
 describe('parseCliOptions', () => {
-  it('defaults to a 60 s scenario limit and a 600 s run limit', () => {
+  it('defaults to a 60 s scenario limit and an 1800 s run limit', () => {
     const options = parseCliOptions([], {})
     assert.equal(options.scenarioTimeoutSec, 60)
-    assert.equal(options.runTimeoutSec, 600)
+    assert.equal(options.runTimeoutSec, 1800)
     assert.equal(options.keep, false)
     assert.equal(options.app, undefined)
   })

@@ -1,94 +1,120 @@
 import assert from 'node:assert/strict'
 import { scenario } from '../lib/scenario.ts'
 import { unwrap } from '../lib/flows.ts'
-import { openSettings, runAction } from '../lib/settings.ts'
-import { onlyServers, startFirstDevice } from '../lib/sync-flows.ts'
+import { expectOnline } from '../lib/group-expect.ts'
+import { addThread, expectThreads } from '../lib/sync-flows.ts'
+import {
+  deviceRows,
+  linkProgress,
+  openFederation,
+  openLinkedVault,
+  showLinkCode,
+  submitLinkForm,
+} from '../lib/sync-ui.ts'
 
-// Spec 024, user story 5 (SC-009, SC-011): linking a new device, with the main device driven through
-// its own window and the new installation a second application process. The code shown in the window
-// brings the new device up, the main device shows its name and asks, "Verknüpfen" gives it the vault;
-// a second new device that is refused gets nothing and no vault is left on it. (The new installation
-// is driven by command, which is how it names the test relay without a network.)
+// Spec 024, user story 5 (M1 of its quickstart, SC-009, SC-011): linking a new device the way a person
+// does it. The main device shows a code in its window; the new installation is a second application
+// process whose start page takes the code, a device name, a vault name, a passphrase and the test relay.
+// The main device shows the new device's name and asks for the role, left at "no"; after "Verknüpfen"
+// the new device opens the vault with all of its data, and both list it as a linked device, online. A
+// device that is refused gets nothing and keeps no vault.
 scenario('sync-link', { timeoutMs: 360_000 }, async (ctx) => {
-  const relay = await ctx.nostrRelay()
-  const main = await startFirstDevice(ctx, relay.url, 'e2e-link')
-  const passphrase = ctx.credentials().passphrase
+  const g = await ctx.group({ users: { anna: ['laptop'] } })
+  const laptop = g.device('anna/laptop')
+  await addThread(laptop, 'vor dem Verknüpfen')
+  await openFederation(laptop.page)
 
-  const showCode = async (): Promise<string> => {
-    await ctx.waitFor('the link view to open', async () => {
-      await runAction(main.instance, 'settings.devices.link')
-      return main.instance.exec<boolean>(
-        `return document.querySelector('[data-testid="link-device-view"]') !== null`,
-      )
+  const join = async (name: string) => {
+    const device = g.addDevice('anna', name)
+    await device.startUnopened()
+    await submitLinkForm(device.page, {
+      code: await showLinkCode(laptop.page),
+      deviceName: name,
+      vaultName: device.vaultName,
+      passphrase: device.passphrase,
+      relayUrl: g.relay.url,
     })
-    // After a link the view offers to start again before it shows the button for a code.
-    const again = await main.instance.exec<boolean>(
-      `return document.querySelector('[data-testid="link-again"]') !== null`,
-    )
-    if (again) await main.instance.click('link-again')
-    await main.instance.click('link-show-code')
-    await main.instance.waitForDisplayed('link-code-text')
-    return main.instance.exec<string>(
-      `return document.querySelector('[data-testid="link-code-text"]').textContent.trim()`,
-    )
+    return device
   }
-  const join = async (code: string, deviceName: string) => {
-    const fresh = await ctx.startInstance()
-    unwrap(
-      'link_join_start',
-      await fresh.invoke('link_join_start', {
-        args: {
-          code,
-          vaultName: 'e2e-link',
-          deviceName,
-          passphrase,
-          servers: await onlyServers(fresh, relay.url),
-        },
-      }),
-    )
-    return fresh
-  }
-  const stateOf = async (fresh: Awaited<ReturnType<typeof join>>) =>
-    unwrap<{ state: string; reason?: string }>(
-      'link_join_status',
-      await fresh.invoke('link_join_status'),
-    )
-  const vaults = async (fresh: Awaited<ReturnType<typeof join>>) =>
-    unwrap<Array<{ name: string }>>(
-      'list_instances',
-      await fresh.invoke('list_instances'),
-    ).map((vault) => vault.name)
-
-  await openSettings(main.instance)
 
   // A new device that is agreed to.
-  const first = await join(await showCode(), 'Neues Gerät')
-  await main.instance.waitForDisplayed('link-confirm', 40_000)
-  const asked = await main.instance.exec<boolean>(
-    `return document.body.textContent.includes('Neues Gerät')`,
+  const phone = await join('phone')
+  await laptop.page.waitForDisplayed('link-confirm', 40_000)
+  assert.ok(
+    await laptop.page.exec<boolean>(
+      `return document.body.textContent.includes('phone')`,
+    ),
+    'the main device shows the name of the new device',
   )
-  assert.ok(asked, 'the main device shows the name of the new device')
-  await main.instance.click('link-confirm')
+  assert.equal(
+    await laptop.page.exec<boolean>(
+      `return document.querySelector('[data-testid="link-role-linked"]').checked === true && document.querySelector('[data-testid="link-role-main"]').checked === false`,
+    ),
+    true,
+    'the role question is answered "no" (a linked device) by default',
+  )
+  await laptop.page.click('link-confirm')
   await ctx.waitFor(
     'the new device to get the vault',
-    async () => (await stateOf(first)).state === 'done',
+    async () => (await linkProgress(phone.page)) === 'done',
     { timeoutMs: 40_000, fixed: true },
   )
-  assert.deepEqual(await vaults(first), ['e2e-link'])
-  ctx.step('agreed to, the vault arrived')
+  await openLinkedVault(phone.page, phone.passphrase)
+  await expectThreads(
+    ctx,
+    phone,
+    ['vor dem Verknüpfen'],
+    'the new device to show the data of the vault',
+  )
+  ctx.step('agreed to, the vault arrived with its data')
 
-  // A new device that is refused.
-  const second = await join(await showCode(), 'Fremdes Gerät')
-  await main.instance.waitForDisplayed('link-reject', 40_000)
-  await main.instance.click('link-reject')
+  await openFederation(phone.page)
+  await openFederation(laptop.page)
+  await expectOnline(ctx, laptop, phone, true)
+  await expectOnline(ctx, phone, laptop, true)
   await ctx.waitFor(
-    'the refused device to hear it was refused',
+    'both device lists to name both devices as such',
     async () => {
-      const state = await stateOf(second)
-      return state.state === 'failed' && state.reason === 'rejected'
+      const [mine, theirs] = [
+        await deviceRows(laptop.page),
+        await deviceRows(phone.page),
+      ]
+      return (
+        mine.some(
+          (row) => !row.current && row.role === 'linked' && row.online,
+        ) &&
+        theirs.some((row) => row.current && row.role === 'linked') &&
+        theirs.some((row) => !row.current && row.role === 'main' && row.online)
+      )
     },
     { timeoutMs: 40_000, fixed: true },
   )
-  assert.deepEqual(await vaults(second), [], 'a refused device keeps no vault')
+  ctx.step('both list the new device as a linked device, online')
+
+  // A new device that is refused.
+  const stranger = await join('stranger')
+  await laptop.page.waitForDisplayed('link-reject', 40_000)
+  await laptop.page.click('link-reject')
+  await ctx.waitFor(
+    'the refused device to hear it was refused',
+    async () => (await linkProgress(stranger.page)) === 'failed',
+    { timeoutMs: 40_000, fixed: true },
+  )
+  assert.deepEqual(
+    unwrap<{ state: string; reason?: string }>(
+      'link_join_status',
+      await stranger.page.invoke('link_join_status'),
+    ),
+    { state: 'failed', reason: 'rejected' },
+    'the stranger hears that the link was rejected',
+  )
+  assert.deepEqual(
+    unwrap<unknown[]>(
+      'list_instances',
+      await stranger.page.invoke('list_instances'),
+    ),
+    [],
+    'a refused device keeps no vault',
+  )
   ctx.step('refused, nothing left on the new device')
 })

@@ -85,6 +85,11 @@ async function findDisplayed(
   }
 }
 
+const RETRIED_CLICK_ERRORS = new Set([
+  'element not interactable',
+  'element click intercepted',
+])
+
 /** Clicks the displayed control and returns the element ID that was activated. */
 async function clickDisplayed(
   client: WebDriverClient,
@@ -104,12 +109,19 @@ async function clickDisplayed(
       await client.click(element)
       return element
     } catch (error) {
+      // Not interactable and intercepted are both "not ready yet": a window that was just brought to
+      // the front may still be animating over the control (found with scenarios that switch apps).
       if (
         !(error instanceof WebDriverError) ||
-        error.code !== 'element not interactable' ||
+        !RETRIED_CLICK_ERRORS.has(error.code) ||
         Date.now() >= end
       ) {
-        throw error
+        // Name the control: a bare driver error ("element click intercepted") does not say which one.
+        throw error instanceof WebDriverError
+          ? new Error(`clicking hook "${hook}" failed: ${error.message}`, {
+              cause: error,
+            })
+          : error
       }
       await sleep(50)
     }

@@ -23,13 +23,16 @@ They are part of this contract now: renaming one means updating the helpers in t
 
 ## Hooks to add
 
-| Hook                                                             | Element                                                          | File                                                     | Lines added |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------- | ----------- |
-| `data-testid="instance-entry"` and `data-instance-name="<name>"` | The button of each instance in the start list                    | `src/components/onboarding/InstancesList.vue` (44 lines) | 2           |
-| `data-testid="open-launcher"`                                    | The round button that opens the workspace app launcher           | `src/components/shell/ShellDesktop.vue`                  | 1           |
-| `data-testid="open-chat"`                                        | The Chat tile in the workspace app launcher                      | `src/components/shell/ShellLauncher.vue`                 | 1           |
-| `data-testid="lock-instance"`                                    | The lock tile in the app launcher (open it with `open-launcher`) | `src/components/wm/Launcher.vue`                         | 1           |
-| `data-testid="nav-back"`, `data-testid="nav-forward"`            | A window's back/forward buttons (spec 020)                       | `src/components/shell/ShellNavButtons.vue`               | 1           |
+| Hook                                                             | Element                                                               | File                                                     | Lines added |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------- | -------------------------------------------------------- | ----------- |
+| `data-testid="instance-entry"` and `data-instance-name="<name>"` | The button of each instance in the start list                         | `src/components/onboarding/InstancesList.vue` (44 lines) | 2           |
+| `data-testid="open-launcher"`                                    | The round button that opens the workspace app launcher                | `src/components/shell/ShellDesktop.vue`                  | 1           |
+| `data-testid="open-chat"`                                        | The Chat tile in the workspace app launcher                           | `src/components/shell/ShellLauncher.vue`                 | 1           |
+| `data-testid="lock-instance"`                                    | The lock tile in the app launcher (open it with `open-launcher`)      | `src/components/wm/Launcher.vue`                         | 1           |
+| `data-testid="nav-back"`, `data-testid="nav-forward"`            | A window's back/forward buttons (spec 020)                            | `src/components/shell/ShellNavButtons.vue`               | 1           |
+| `data-testid="link-submit"`                                      | The submit button of the form "Mit einer Vault verknüpfen" (spec 033) | `src/components/onboarding/LinkSheet.vue`                | 1           |
+| `data-testid="chat-input"`, `data-testid="chat-send"`            | The composer's text area and send button (spec 033)                   | `src/components/chat/Composer.vue`                       | 2           |
+| `data-testid="chat-new"`, `data-testid="chat-thread"`            | The new-chat button and each row of the thread list (spec 033)        | `src/components/chat/ThreadSidebar.vue`                  | 2           |
 
 `data-instance-name` carries the instance's name, which is data, not interface text, so an entry can be
 found by name without reading what is displayed.
@@ -39,8 +42,8 @@ the chat header, with a hook each; both are gone). It is reachable at every wind
 open the launcher with `open-launcher` (the `openLauncher` flow) and press `lock-instance`. The chat's
 sidebar is reached through `chat-sidebar-toggle`, which is also what `openChat` waits for.
 
-Not added now: hooks for the composer, the message list or settings. Each scenario that needs one adds
-it with the scenario, so no hook exists without a use.
+Not added now: hooks for the message list or settings. Each scenario that needs one adds it with the
+scenario, so no hook exists without a use.
 
 ## Finding a control
 

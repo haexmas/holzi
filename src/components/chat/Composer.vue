@@ -104,6 +104,7 @@ defineExpose({ reset })
           class="block w-full resize-none overflow-hidden bg-transparent px-4 pb-2 pt-3 text-sm leading-6 outline-none placeholder:text-muted-foreground"
           :placeholder="t('chat.composer.placeholder')"
           :disabled="composerInputDisabled"
+          data-testid="chat-input"
           @keydown.enter.exact.prevent="!voiceRecording && emit('send')"
         />
         <div
@@ -176,6 +177,7 @@ defineExpose({ reset })
               :disabled="!input.trim() || sendDisabled"
               :aria-label="t('chat.send')"
               :title="t('chat.send')"
+              data-testid="chat-send"
             >
               <Icon name="lucide:arrow-up" class="h-3.5 w-3.5" />
             </UiButton>
