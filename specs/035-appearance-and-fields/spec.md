@@ -148,8 +148,8 @@ Kontraste messen; zurücksetzen und die Standardwerte prüfen.
 **Acceptance Scenarios**:
 
 1. **Given** eine sehr helle Akzentfarbe, **When** sie gewählt wird, **Then** ist die
-   Schrift auf Knöpfen und Auswahlleisten lesbar (mindestens 4,5:1) und Ringe, Schalter und
-   Ränder erreichen mindestens 3:1 gegen ihren Untergrund.
+   Schrift auf Knöpfen und Auswahlleisten lesbar (mindestens 4,5:1) und Fokusring und Schalter
+   erreichen mindestens 3:1 gegen ihren Untergrund.
 2. **Given** ein Hintergrund, der gegen den Text weniger als 4,5:1 hätte, **When** er
    gewählt wird, **Then** wird der nächste erlaubte Ton angezeigt und gespeichert, und der
    Nutzer sieht, dass und warum angepasst wurde.
@@ -267,11 +267,12 @@ Darstellung wiederfinden; eine kaputte Datei importieren und eine verständliche
   Blaugrün.
 - **FR-016**: holzi MUSS Schrift auf der Akzentfarbe automatisch hell oder dunkel wählen
   und die Akzentfarbe in Hell und Dunkel so anpassen, dass Text auf Flächen mit der Farbe
-  mindestens 4,5:1 und Bedienelemente (Ring, Schalterspur, Rand) gegen ihren Untergrund
-  mindestens 3:1 erreichen.
+  mindestens 4,5:1 und Bedienelemente (Fokusring, Schalterspur, Hinweisumrandung des aktiven
+  Fensters) gegen ihren Untergrund mindestens 3:1 erreichen. Reine Zierränder von Flächen
+  fallen nicht darunter.
 - **FR-017**: Eine Wahl von Fenster- oder Container-Hintergrund, Texttönung oder
-  Komponententönung, die den Normaltext oder den gedämpften Text unter 4,5:1 oder Ränder und
-  Bedienelemente unter 3:1 brächte, MUSS auf den nächsten erlaubten Wert angepasst werden
+  Komponententönung, die den Normaltext oder den gedämpften Text unter 4,5:1 oder Bedienelemente
+  unter 3:1 brächte, MUSS auf den nächsten erlaubten Wert angepasst werden
   (nicht stillschweigend abgelehnt), und der Nutzer MUSS sehen, dass und warum. „Auf
   Standard zurücksetzen“ MUSS alle Werte der Darstellung (Akzent, beide Hintergründe, beide
   Tönungen, Fensterhinweis, eigene Farben) zurückbringen und das Schema unverändert lassen;
