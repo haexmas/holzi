@@ -12,20 +12,20 @@ stehen auf Deutsch, damit sie in der Oberfläche lesbar sind.
 
 ## Gemeinsam für alle Formate
 
-| Quelle                                         | Ziel in holzi                                                                                     |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Titel, Benutzername, Passwort, Adresse         | `title`, `username`, `password`, `url`                                                            |
-| Notiz                                          | `note`                                                                                            |
-| Erstellt, zuletzt geändert                     | `created_at`, `updated_at` (nicht der Importzeitpunkt)                                            |
-| Ordner                                         | `haex_passwords_groups`, geschachtelt wie in der Quelle                                           |
-| Gelöschter Eintrag, Papierkorb der Quelle      | Inhalt der Papierkorb-Zeile `trash`, ohne Herkunft (Wiederherstellen: Wurzel)                     |
-| Verlauf                                        | `item_snapshots` mit den Zeitpunkten der Quelle (und `snapshot_binaries`)                         |
-| TOTP (jede Form)                               | `otp_secret` und, wo angegeben, Ziffern, Periode, Algorithmus; **ungültig bleibt wie es ist**     |
-| Passkey                                        | `haex_passwords_passkeys`, jeder Algorithmus (research R12, Punkt 8)                              |
-| Anhang                                         | Anhang; über 25 MiB abgelehnt und im Bericht genannt (Dateiname, Größe, Eintrag, Ordnerpfad)      |
-| Symbol                                         | Standardsymbol als Symbolname von holzi, eigenes Symbol als Binärzeile `icon` und `binary:<hash>` |
-| Tag, Favorit                                   | Tag (Favorit: Tag „Favorit“)                                                                      |
-| Doppelter Eintrag (`title`, `username`, `url`) | wie vom Nutzer gewählt: überspringen oder trotzdem anlegen (FR-023)                               |
+| Quelle                                         | Ziel in holzi                                                                                                                                                                     |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Titel, Benutzername, Passwort, Adresse         | `title`, `username`, `password`, `url`                                                                                                                                            |
+| Notiz                                          | `note`                                                                                                                                                                            |
+| Erstellt, zuletzt geändert                     | `created_at`, `updated_at` (nicht der Importzeitpunkt)                                                                                                                            |
+| Ordner                                         | `haex_passwords_groups`, geschachtelt wie in der Quelle                                                                                                                           |
+| Gelöschter Eintrag, Papierkorb der Quelle      | Inhalt der Papierkorb-Zeile `trash`; nennt die Quelle den früheren Ordner (Bitwarden `folderId`, KeePass 4.1 `PreviousParentGroup`), ist er `trashed_from_group_id`, sonst Wurzel |
+| Verlauf                                        | `item_snapshots` mit den Zeitpunkten der Quelle (und `snapshot_binaries`)                                                                                                         |
+| TOTP (jede Form)                               | `otp_secret` und, wo angegeben, Ziffern, Periode, Algorithmus; **ungültig bleibt wie es ist**                                                                                     |
+| Passkey                                        | `haex_passwords_passkeys`, jeder Algorithmus (research R12, Punkt 8); schon vorhandene Credential-ID: nicht doppelt, Bericht `passkey_duplicate`                                  |
+| Anhang                                         | Anhang; über 25 MiB abgelehnt und im Bericht genannt (Dateiname, Größe, Eintrag, Ordnerpfad)                                                                                      |
+| Symbol                                         | Standardsymbol als Symbolname von holzi, eigenes Symbol als Binärzeile `icon` und `binary:<hash>`                                                                                 |
+| Tag, Favorit                                   | Tag (Favorit: Tag „Favorit“)                                                                                                                                                      |
+| Doppelter Eintrag (`title`, `username`, `url`) | wie vom Nutzer gewählt: überspringen oder trotzdem anlegen (FR-023)                                                                                                               |
 
 ## KeePass (kdbx)
 
@@ -94,6 +94,6 @@ Identitäts-, Passkey- und Verlaufsdaten; das ist eine Eigenschaft der Quelle, k
 
 Jede Zeile nennt Eintragstitel, Ordnerpfad, die Art der Stelle und den Namen des Feldes oder der
 Datei (bei Anhängen mit Größe in MiB und dem Limit), nie einen Wert. Arten: `attachment_too_large`,
-`attachment_unreadable`, `passkey_key_unreadable`, `passkey_public_key_missing`, `totp_invalid`,
+`attachment_unreadable`, `passkey_key_unreadable`, `passkey_public_key_missing`, `passkey_duplicate`, `totp_invalid`,
 `icon_not_mapped`, `value_not_storable`, `source_setting`. Der Bericht lässt sich als Textdatei
 speichern.

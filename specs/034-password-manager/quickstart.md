@@ -18,7 +18,7 @@ pnpm check:templates
 pnpm typecheck && pnpm typecheck:scripts && pnpm lint && pnpm format:check
 cargo test --manifest-path src-tauri/Cargo.toml passwords
 cargo test --manifest-path src-tauri/Cargo.toml --no-default-features passwords
-cargo test --manifest-path src-tauri/Cargo.toml --test passwords_roundtrip --test passwords_access
+cargo test --manifest-path src-tauri/Cargo.toml --test passwords_roundtrip --test passwords_access --test passwords_sync --test passwords_import
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 pnpm generate:ts-types        # danach darf git diff src/types/bindings leer sein
 pnpm export:eval-tools        # danach darf git diff src-tauri/src/chat/eval/tools.json leer sein
@@ -86,8 +86,11 @@ Stand. Manuell: Passwort ändern, im Verlauf den alten Stand öffnen (Passwort v
 ## 7. Anhänge (US5)
 
 `binaries_tests.rs`: Hash über Rohdaten, Deduplizierung, 25-MiB-Grenze (Datei vorher geprüft,
-26 MiB wird abgelehnt, ohne zu lesen), Karenzzeit beim Aufräumen (frische verwaiste Binärzeile
-bleibt, acht Tage alte verschwindet). Manuell: dieselbe Datei an zwei Einträge hängen,
+26 MiB wird abgelehnt, ohne zu lesen), Karenzzeit beim Aufräumen (`orphaned_at` wird beim
+Verwaisen gesetzt: eine alte Binärzeile, die erst jetzt verwaist, bleibt, eine seit acht Tagen
+verwaiste verschwindet; ein verspäteter Verweis setzt `orphaned_at` zurück; ein eigenes Symbol,
+das ein Eintrag, ein Ordner, ein Passkey oder ein Verlaufsstand noch nennt, bleibt auch nach acht
+Tagen, ein nicht mehr genanntes verschwindet). Manuell: dieselbe Datei an zwei Einträge hängen,
 herunterladen und mit `cmp` gegen das Original vergleichen (SC-009), Bild-Vorschau, PDF nur
 Herunterladen, 26-MiB-Datei zeigt die Meldung.
 
@@ -96,7 +99,9 @@ Herunterladen, 26-MiB-Datei zeigt die Meldung.
 `access_tests.rs` (Tabelle der Fälle aus [contracts/access.md](./contracts/access.md)) und
 `tests/passwords_access.rs`: Liste ohne Geheimnisse (der markierte Wert `SECRET-MARKER-…` darf in
 keiner serialisierten Antwort stehen, SC-005), Freigabe `Read` für Tag `s3`, Schreiben und
-Herausschreiben abgelehnt (SC-006), `BuiltinAgent` sieht nur `AgentHeader`. Manuell im Chat
+Herausschreiben abgelehnt (SC-006), `BuiltinAgent` sieht nur `AgentHeader`; ein Eintrag im
+Papierkorb mit Tag im Bereich ist für Aufrufer von außen nicht lesbar, änderbar oder löschbar und
+bleibt im Papierkorb (Z13). Manuell im Chat
 mit einem Modell: „Welche Einträge habe ich zu GitHub?“ → Treffer mit Titel und Tags; „Zeig mir
 das Passwort“ → das Modell kann es nicht lesen, es gibt keine Aktion dafür.
 
@@ -115,7 +120,9 @@ im Test erzeugt):
   eigenes Feld stehen als eigene Felder oder Tags am Eintrag.
 - Passkeys mit ES256, EdDSA und RS256: der abgeleitete öffentliche Schlüssel stimmt mit dem
   erzeugten überein; ein anderer Algorithmus wird gespeichert, sein öffentlicher Schlüssel bleibt
-  leer, der Bericht nennt ihn; ein unlesbarer Schlüssel stoppt den Eintrag nicht.
+  leer, der Bericht nennt ihn; ein unlesbarer Schlüssel stoppt den Eintrag nicht; ein Passkey mit
+  schon vorhandener Credential-ID wird nicht doppelt angelegt und steht im Bericht
+  (`passkey_duplicate`); ein gelöschter Bitwarden-Eintrag merkt seinen früheren Ordner.
 - Ungültiges TOTP wird wie es ist importiert und am Eintrag als ungültig angezeigt.
 - Ein Anhang von 26 MiB wird abgelehnt, der Eintrag ohne ihn importiert, der Bericht nennt Eintrag,
   Ordnerpfad, Dateiname und Größe.
@@ -135,7 +142,7 @@ erscheint auf dem anderen Gerät; gleichzeitige Änderung verschiedener Felder b
 Löschung je Zeile beim Peer an und ein später eintreffender alter Stand erweckt ihn nicht;
 dasselbe Tag unabhängig auf beiden Geräten angelegt ergibt eine Zeile; ein 25-MiB-Anhang
 kommt vollständig an. Manuell nach Spec 033 mit dem Mehrgeräte-Rahmen: zwei Geräte, ein
-Eintrag, Änderung sichtbar in unter fünf Sekunden (SC-007).
+Eintrag, Änderung sichtbar in wenigen Sekunden, grob unter zehn (SC-007).
 
 Hinweis: Nach Migration `0022` synchronisieren Geräte erst, wenn **alle** auf dem neuen Stand
 sind (Handshake, Spec 024).
@@ -153,6 +160,10 @@ zurück, das Passwort ist verdeckt, die gespeicherte Sitzung enthält keinen Wer
 ```bash
 pnpm test:e2e passwords-basic          # anlegen, suchen, TOTP-Code, Papierkorb
 pnpm test:e2e passwords-sync-two-devices
+pnpm test:e2e passwords-narrow-window
+pnpm test:e2e passwords-session-restore
 ```
 
-Erwartet: beide bestehen gegen die gebaute App; sie brauchen weder Netz noch Zeitmessung.
+Erwartet: alle vier bestehen gegen die gebaute App (SC-012); sie brauchen weder Netz noch
+Zeitmessung. Ordnen, Verlauf, Generator, Anhänge und Import prüfen §4 bis §9 über Integrationstests
+und manuell; Anhänge und Import gehen über Dateidialoge und sind nicht Teil der E2E-Szenen.
