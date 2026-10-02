@@ -3,7 +3,7 @@
 // `components/wm/appRoutes.ts`. No title, name or value of an entry ever goes into a path, a
 // query or a tab title; places carry opaque ids only (FR-039, FR-040).
 import type { TabLocation } from '../wm/navigation.ts'
-import { matchRoute, type RoutePattern } from '../wm/routeMatch.ts'
+import { matchRoute } from '../wm/routeMatch.ts'
 
 export type PasswordsLocation = {
   id: 'list' | 'folder' | 'entry' | 'history' | 'trash' | 'generator' | 'import'
@@ -29,7 +29,9 @@ export const PASSWORDS_LOCATIONS: readonly PasswordsLocation[] = [
 ]
 
 /** A `RoutePattern` that also names its location, so `appRoutes.ts` can attach the view. */
-export type PasswordsRoutePattern = RoutePattern & {
+export type PasswordsRoutePattern = {
+  path: string
+  titleKey?: string
   locationId?: PasswordsLocation['id']
   children?: readonly PasswordsRoutePattern[]
 }

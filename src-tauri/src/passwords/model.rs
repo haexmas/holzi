@@ -210,7 +210,7 @@ pub struct ImportReport {
 
 /// A custom field to create.
 #[derive(Clone, Deserialize, TS)]
-#[ts(export, export_to = "../../src/types/bindings/")]
+#[ts(export, export_to = "../../src/types/bindings/", optional_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct KeyValueInput {
     pub key: String,
@@ -228,7 +228,7 @@ impl fmt::Debug for KeyValueInput {
 
 /// The data to create an entry with. Everything may be empty, also the title (FR-001).
 #[derive(Clone, Default, Deserialize, TS)]
-#[ts(export, export_to = "../../src/types/bindings/")]
+#[ts(export, export_to = "../../src/types/bindings/", optional_fields)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ItemInput {
     pub title: Option<String>,
@@ -304,7 +304,7 @@ impl<T> fmt::Debug for Patch<T> {
 /// A custom field in a partial update: `id` names an existing field, a missing `value` keeps its
 /// stored value, a row with an empty key is dropped.
 #[derive(Clone, Deserialize, TS)]
-#[ts(export, export_to = "../../src/types/bindings/")]
+#[ts(export, export_to = "../../src/types/bindings/", optional_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct KeyValuePatch {
     pub id: Option<String>,

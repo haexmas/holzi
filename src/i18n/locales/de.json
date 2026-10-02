@@ -943,11 +943,116 @@
   },
   "passwords": {
     "title": "Passwörter",
-    "empty": "Noch keine Einträge",
-    "search": "Einträge suchen",
+    "empty": "Noch keine Einträge. Lege mit „Neu“ den ersten an.",
+    "search": {
+      "label": "Einträge suchen",
+      "placeholder": "Titel, Benutzername, Adresse, Tag",
+      "clear": "Suche leeren"
+    },
     "sidebar": {
       "show": "Seitenleiste einblenden",
       "hide": "Seitenleiste ausblenden"
+    },
+    "loading": "Lädt …",
+    "noMatches": "Keine passenden Einträge",
+    "noValue": "(leer)",
+    "untitled": "(ohne Titel)",
+    "expired": "Abgelaufen",
+    "expiredOn": "Abgelaufen am {date}",
+    "new": "Neu",
+    "back": "Zurück",
+    "edit": "Bearbeiten",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "entryGone": "Dieser Eintrag existiert nicht mehr.",
+    "markers": {
+      "totp": "Hat einen TOTP-Code",
+      "passkey": "Hat Passkeys"
+    },
+    "reveal": "{field} anzeigen",
+    "revealHint": "Gedrückt halten (am Touchscreen tippen)",
+    "copy": "{field} kopieren",
+    "copied": "{field} kopiert. Die Zwischenablage wird in {seconds} s geleert.",
+    "copiedKept": "{field} kopiert.",
+    "fields": {
+      "title": "Titel",
+      "username": "Benutzername",
+      "password": "Passwort",
+      "url": "Adresse",
+      "note": "Notiz",
+      "expires": "Ablaufdatum",
+      "totp": "TOTP-Code",
+      "custom": "Eigene Felder",
+      "tags": "Tags",
+      "icon": "Symbol",
+      "color": "Farbe"
+    },
+    "totp": {
+      "left": "noch {seconds} s",
+      "clockHint": "Der Code hängt von der Systemzeit dieses Geräts ab.",
+      "invalid": "Das gespeicherte TOTP-Secret ist ungültig. Es kann keinen Code liefern.",
+      "replace": "Secret ersetzen",
+      "remove": "Entfernen"
+    },
+    "passkeys": {
+      "title": "Passkeys",
+      "rename": "Spitzname ändern",
+      "delete": "Passkey löschen",
+      "nickname": "Spitzname",
+      "created": "Angelegt: {date}",
+      "lastUsed": "zuletzt genutzt: {date}",
+      "otherAlgorithm": "Algorithmus {number}",
+      "deleteTitle": "Passkey löschen?",
+      "deleteBody": "Der Passkey für {name} wird endgültig entfernt."
+    },
+    "editor": {
+      "newTitle": "Neuer Eintrag",
+      "editTitle": "Eintrag bearbeiten",
+      "replace": "Ersetzen",
+      "fieldName": "Name",
+      "fieldValue": "Wert",
+      "keepValue": "(unverändert)",
+      "addField": "Feld hinzufügen",
+      "removeField": "Feld entfernen",
+      "otpLabel": "TOTP-Secret oder otpauth-Adresse",
+      "otpPlaceholder": "JBSWY3DPEHPK3PXP",
+      "otpSet": "Ein TOTP-Secret ist gespeichert.",
+      "otpWillBeRemoved": "Das TOTP-Secret wird beim Speichern entfernt.",
+      "otpErrors": {
+        "otpSecret": "Das ist kein gültiges TOTP-Secret (Base32) und keine gültige otpauth-Adresse.",
+        "otpDigits": "Die Ziffernzahl muss zwischen 6 und 10 liegen.",
+        "otpPeriod": "Die Periode muss zwischen 1 und 300 Sekunden liegen.",
+        "otpAlgorithm": "Erlaubt sind SHA1, SHA256 und SHA512."
+      },
+      "tagPlaceholder": "Tag eingeben, Enter zum Hinzufügen",
+      "removeTag": "Tag {tag} entfernen",
+      "look": "Aussehen"
+    },
+    "conflict": {
+      "title": "Der Eintrag hat sich geändert",
+      "changed": "Der Eintrag wurde inzwischen auf einem anderen Gerät oder in einem anderen Fenster geändert. Deine Änderungen wurden nicht gespeichert.",
+      "deleted": "Der Eintrag wurde inzwischen gelöscht. Geheime Werte, die du nicht geändert hast, lassen sich dafür nicht mehr lesen und gehören dann nicht zum neuen Eintrag.",
+      "stay": "Weiter bearbeiten",
+      "takeCurrent": "Aktuellen Stand übernehmen",
+      "saveAsNew": "Meine Änderungen als neuen Eintrag speichern"
+    },
+    "unsaved": {
+      "title": "Ungespeicherte Änderungen",
+      "body": "Du hast Änderungen, die noch nicht gespeichert sind.",
+      "save": "Speichern",
+      "discard": "Verwerfen",
+      "stay": "Bleiben",
+      "reason": "Ein Eintrag im Passwortmanager hat ungespeicherte Änderungen."
+    },
+    "settings": {
+      "open": "Einstellungen",
+      "title": "Einstellungen des Passwortmanagers",
+      "clipboard": {
+        "title": "Zwischenablage leeren nach",
+        "off": "Nie",
+        "seconds": "{seconds} Sekunden",
+        "description": "Ein kopierter Wert wird nach dieser Zeit aus der Zwischenablage entfernt, sofern sie noch denselben Wert enthält."
+      }
     }
   }
 }

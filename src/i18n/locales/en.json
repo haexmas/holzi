@@ -943,11 +943,116 @@
   },
   "passwords": {
     "title": "Passwords",
-    "empty": "No entries yet",
-    "search": "Search entries",
+    "empty": "No entries yet. Use “New” to add the first one.",
+    "search": {
+      "label": "Search entries",
+      "placeholder": "Title, username, address, tag",
+      "clear": "Clear search"
+    },
     "sidebar": {
       "show": "Show sidebar",
       "hide": "Hide sidebar"
+    },
+    "loading": "Loading …",
+    "noMatches": "No matching entries",
+    "noValue": "(empty)",
+    "untitled": "(untitled)",
+    "expired": "Expired",
+    "expiredOn": "Expired on {date}",
+    "new": "New",
+    "back": "Back",
+    "edit": "Edit",
+    "save": "Save",
+    "cancel": "Cancel",
+    "entryGone": "This entry no longer exists.",
+    "markers": {
+      "totp": "Has a TOTP code",
+      "passkey": "Has passkeys"
+    },
+    "reveal": "Show {field}",
+    "revealHint": "Hold to show (tap on a touch screen)",
+    "copy": "Copy {field}",
+    "copied": "{field} copied. The clipboard is cleared in {seconds} s.",
+    "copiedKept": "{field} copied.",
+    "fields": {
+      "title": "Title",
+      "username": "Username",
+      "password": "Password",
+      "url": "Address",
+      "note": "Note",
+      "expires": "Expiry date",
+      "totp": "TOTP code",
+      "custom": "Custom fields",
+      "tags": "Tags",
+      "icon": "Icon",
+      "color": "Color"
+    },
+    "totp": {
+      "left": "{seconds} s left",
+      "clockHint": "The code depends on this device’s system clock.",
+      "invalid": "The stored TOTP secret is invalid. It cannot produce a code.",
+      "replace": "Replace secret",
+      "remove": "Remove"
+    },
+    "passkeys": {
+      "title": "Passkeys",
+      "rename": "Change nickname",
+      "delete": "Delete passkey",
+      "nickname": "Nickname",
+      "created": "Created: {date}",
+      "lastUsed": "last used: {date}",
+      "otherAlgorithm": "Algorithm {number}",
+      "deleteTitle": "Delete passkey?",
+      "deleteBody": "The passkey for {name} will be removed for good."
+    },
+    "editor": {
+      "newTitle": "New entry",
+      "editTitle": "Edit entry",
+      "replace": "Replace",
+      "fieldName": "Name",
+      "fieldValue": "Value",
+      "keepValue": "(unchanged)",
+      "addField": "Add field",
+      "removeField": "Remove field",
+      "otpLabel": "TOTP secret or otpauth address",
+      "otpPlaceholder": "JBSWY3DPEHPK3PXP",
+      "otpSet": "A TOTP secret is stored.",
+      "otpWillBeRemoved": "The TOTP secret is removed when you save.",
+      "otpErrors": {
+        "otpSecret": "This is not a valid TOTP secret (Base32) or otpauth address.",
+        "otpDigits": "The number of digits must be between 6 and 10.",
+        "otpPeriod": "The period must be between 1 and 300 seconds.",
+        "otpAlgorithm": "Allowed are SHA1, SHA256 and SHA512."
+      },
+      "tagPlaceholder": "Type a tag, Enter to add",
+      "removeTag": "Remove tag {tag}",
+      "look": "Appearance"
+    },
+    "conflict": {
+      "title": "The entry has changed",
+      "changed": "The entry was changed on another device or in another window in the meantime. Your changes have not been saved.",
+      "deleted": "The entry was deleted in the meantime. Secret values you did not change can no longer be read and will not be part of the new entry.",
+      "stay": "Keep editing",
+      "takeCurrent": "Take over the current state",
+      "saveAsNew": "Save my changes as a new entry"
+    },
+    "unsaved": {
+      "title": "Unsaved changes",
+      "body": "You have changes that are not saved yet.",
+      "save": "Save",
+      "discard": "Discard",
+      "stay": "Stay",
+      "reason": "An entry in the password manager has unsaved changes."
+    },
+    "settings": {
+      "open": "Settings",
+      "title": "Password manager settings",
+      "clipboard": {
+        "title": "Clear clipboard after",
+        "off": "Never",
+        "seconds": "{seconds} seconds",
+        "description": "A copied value is removed from the clipboard after this time, if it still holds the same value."
+      }
     }
   }
 }

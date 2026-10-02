@@ -95,8 +95,16 @@ function settingsRoutes(): AppRouteRecord[] {
   }))
 }
 
+/** The view of each place of the password manager (spec 034); the stories add theirs. */
+const PASSWORDS_VIEWS: Partial<Record<string, Component>> = {
+  list: defineAsyncComponent(() => import('~/components/passwords/List.vue')),
+  entry: defineAsyncComponent(
+    () => import('~/components/passwords/EntryPage.vue'),
+  ),
+}
+
 /** The password manager routes from the registry: `PasswordsApp` as the frame, one flat child per
- * place. The views are attached by the stories (list, entry, trash, …). */
+ * place. */
 function passwordsRoutes(): AppRouteRecord[] {
   return passwordsRoutePatterns().map((root) => ({
     path: root.path,
@@ -104,6 +112,7 @@ function passwordsRoutes(): AppRouteRecord[] {
     children: (root.children ?? []).map((child) => ({
       path: child.path,
       titleKey: child.titleKey,
+      component: PASSWORDS_VIEWS[child.locationId ?? ''],
     })),
   }))
 }

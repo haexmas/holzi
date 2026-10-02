@@ -4,8 +4,8 @@ import type { KeyValueInput } from "./KeyValueInput";
 /**
  * The data to create an entry with. Everything may be empty, also the title (FR-001).
  */
-export type ItemInput = { title: string | null, username: string | null, password: string | null, note: string | null, url: string | null, icon: string | null, color: string | null, expiresAt: string | null,
+export type ItemInput = { title?: string, username?: string, password?: string, note?: string, url?: string, icon?: string, color?: string, expiresAt?: string,
 /**
  * A secret or an `otpauth://` address; normalised and checked on create (FR-003).
  */
-otpSecret: string | null, otpDigits: number | null, otpPeriod: number | null, otpAlgorithm: string | null, autofillAliases: string | null, tags: Array<string>, keyValues: Array<KeyValueInput>, };
+otpSecret?: string, otpDigits?: number, otpPeriod?: number, otpAlgorithm?: string, autofillAliases?: string, tags: Array<string>, keyValues: Array<KeyValueInput>, };

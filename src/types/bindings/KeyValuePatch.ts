@@ -4,4 +4,4 @@
  * A custom field in a partial update: `id` names an existing field, a missing `value` keeps its
  * stored value, a row with an empty key is dropped.
  */
-export type KeyValuePatch = { id: string | null, key: string, value: string | null, };
+export type KeyValuePatch = { id?: string, key: string, value?: string, };

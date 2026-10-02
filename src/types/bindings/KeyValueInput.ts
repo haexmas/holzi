@@ -3,4 +3,4 @@
 /**
  * A custom field to create.
  */
-export type KeyValueInput = { key: string, value: string | null, };
+export type KeyValueInput = { key: string, value?: string, };

@@ -8,15 +8,16 @@
  */
 const { t } = useI18n()
 
+const store = usePasswordsStore()
+onMounted(() => {
+  void store.reloadAsync()
+})
+
 const root = useTemplateRef<HTMLElement>('root')
 const sidebar = useTemplateRef<HTMLElement>('sidebar')
 
 const { wideHidden, menuOpen, visible, overlaying, toggle, close } =
   useSidebarFrame(root, () => sidebar.value)
-
-const label = computed(() =>
-  visible.value ? t('passwords.sidebar.hide') : t('passwords.sidebar.show'),
-)
 
 const sidebarClass = computed(() => [
   'absolute inset-0 z-20 bg-background transition-[translate,width,visibility] duration-200 ease-out motion-reduce:transition-none',
@@ -36,21 +37,11 @@ function onEscape() {
 
 <template>
   <div ref="root" class="@container flex h-full min-h-0 flex-col bg-muted/20">
-    <div class="flex h-13 shrink-0 items-center gap-2 px-2">
-      <UiButton
-        variant="ghost"
-        size="icon"
-        :aria-label="label"
-        :tooltip="label"
-        :aria-expanded="visible"
-        aria-controls="passwords-sidebar"
-        data-testid="passwords-sidebar-toggle"
-        @keydown.esc="onEscape"
-        @click="toggle"
-      >
-        <Icon name="lucide:panel-left" class="size-4" />
-      </UiButton>
-    </div>
+    <PasswordsToolbar
+      class="h-13 shrink-0 px-2"
+      :sidebar-visible="visible"
+      @toggle-sidebar="toggle"
+    />
     <div class="relative flex min-h-0 flex-1 overflow-hidden">
       <nav
         id="passwords-sidebar"
