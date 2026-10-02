@@ -72,7 +72,10 @@ Die Namen sind Sprachschlüssel unter `settings.appearance.preset.*` (Deutsch un
 - `tokens`: die CSS-Variablen (siehe `contracts/token-map.md`), als `oklch(L C H)`.
 - `adjustments`: Liste der Anpassungen, die der Kontrast erzwungen hat, je mit Regler
   (`accent | window | container | text | component`), Art (`lightness | chroma`) und
-  Grund (Schlüssel für die Meldung „angepasst“ in der Zeile; FR-017).
+  Grund (Schlüssel für die Meldung „angepasst“ in der Zeile; FR-017). Beim Akzent ist die
+  Helligkeit immer abgeleitet (research R4); ein Farbfeld meldet darum nie eine Anpassung, eine
+  eigene Akzentfarbe nur, wenn ihre Helligkeit oder Sättigung im aktiven Schema geändert werden
+  musste.
 
 Zustand der Oberfläche: `useAppearance().appearance` (die gelesene Darstellung), `.tokens`
 (letzte Ableitung), `.adjustments`. Beides ist rein abgeleitet und wird nach jedem Wechsel von
@@ -92,7 +95,13 @@ Darstellung, Schema oder System-Schema neu berechnet.
 
 ## Standardwerte (Tabelle wird bei der Umsetzung gefüllt)
 
-Die Standardwerte der Tokens bleiben die aus `src/assets/css/tailwind.css`, bis auf den
-Akzent im hellen Schema (research R4). `check-appearance.ts` schreibt die gemessenen Kontraste
-dieser Standardwerte in die Beschreibung des PRs; Abweichungen von den heutigen Werten sind
-dort aufgelistet.
+Die Standardwerte der Tokens bleiben die aus `src/assets/css/tailwind.css`, bis auf diese
+(research R4), die dort neu eingetragen werden:
+
+- Akzent (`--primary`, `--primary-foreground`) im hellen Schema: dunkler oder mit dunkler Schrift;
+- `--muted-foreground` im hellen Schema: `L ≈ 0.53` statt `0.556`;
+- `--ring`, `--sidebar-primary`, `--sidebar-primary-foreground`, `--sidebar-ring` in beiden
+  Schemata: folgen dem Akzent statt Grau beziehungsweise Blau.
+
+`check-appearance.ts` prüft, dass `derive(Standard, Schema)` genau `tailwind.css` ergibt, und
+schreibt die gemessenen Kontraste dieser Standardwerte in die Beschreibung des PRs.

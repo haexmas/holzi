@@ -16,25 +16,27 @@ Variablen aus `src/assets/css/tailwind.css` (haex-ui-Tokens); nichts kommt neu h
 Nicht angefasst: `--destructive*`, `--error*`, `--success*`, `--warning*`, `--chart-*`, `--radius`.
 
 `--ring` folgt dem Akzent, damit „Ring in Primärfarbe“ (FR-003) auch für Bauteile gilt, die
-`ring-ring` benutzen.
+`ring-ring` benutzen. Die Felder aus haex-ui zeichnen den Fokus als `border-primary` mit einem
+halbtransparenten `ring-primary/50`; gemessen wird darum der volle Rand (`--primary`), nicht der
+halbtransparente Ring.
 
 ## Paare, die `check-appearance.ts` misst
 
 Schwelle „Text“ = 4,5:1, „Bedienelement“ = 3:1. Jedes Paar wird für jedes Farbfeld und jede
 Extremwert-Eingabe in `light` und `dark` gemessen.
 
-| Art             | Vordergrund                                  | Hintergrund                                                                              |
-| --------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Text            | `--foreground`                               | `--background`, `--card`, `--popover`, `--sidebar`, `--secondary`, `--muted`, `--accent` |
-| Text            | `--card-foreground`                          | `--card`                                                                                 |
-| Text            | `--popover-foreground`                       | `--popover`                                                                              |
-| Text            | `--sidebar-foreground`                       | `--sidebar`                                                                              |
-| Text            | `--secondary-foreground`                     | `--secondary`                                                                            |
-| Text            | `--accent-foreground`                        | `--accent`                                                                               |
-| Text (gedämpft) | `--muted-foreground`                         | `--background`, `--card`, `--muted`                                                      |
-| Text auf Akzent | `--primary-foreground`                       | `--primary`                                                                              |
-| Bedienelement   | `--primary` (Schalterspur, Hinweisumrandung) | `--background`, `--card`                                                                 |
-| Bedienelement   | `--ring`                                     | `--background`, `--card`                                                                 |
+| Art             | Vordergrund                                             | Hintergrund                                                                              |
+| --------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Text            | `--foreground`                                          | `--background`, `--card`, `--popover`, `--sidebar`, `--secondary`, `--muted`, `--accent` |
+| Text            | `--card-foreground`                                     | `--card`                                                                                 |
+| Text            | `--popover-foreground`                                  | `--popover`                                                                              |
+| Text            | `--sidebar-foreground`                                  | `--sidebar`                                                                              |
+| Text            | `--secondary-foreground`                                | `--secondary`                                                                            |
+| Text            | `--accent-foreground`                                   | `--accent`                                                                               |
+| Text (gedämpft) | `--muted-foreground`                                    | `--background`, `--card`, `--muted`                                                      |
+| Text auf Akzent | `--primary-foreground`                                  | `--primary`                                                                              |
+| Bedienelement   | `--primary` (Schalterspur, Fokusrand, Hinweisumrandung) | `--background`, `--card`, `--popover`, `--sidebar`, `--muted`                            |
+| Bedienelement   | `--ring`                                                | `--background`, `--card`, `--popover`, `--sidebar`, `--muted`                            |
 
 Zierränder (`--border`, `--input` gegen ihre Fläche) gehören **nicht** zur Prüfung (Spec FR-016);
 ein Eingabefeld erkennt man am Fokusring und am Label, nicht am Rand allein.

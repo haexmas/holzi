@@ -19,6 +19,12 @@ den Export einfach und schreibt bei „Zurücksetzen“ nur einmal.
 Import müsste mehrere Schreibvorgänge atomar machen); Schema in den neuen Wert ziehen
 (Migration ohne Nutzen).
 
+**Folge, bewusst**: Die Darstellung ist für den Sync **eine** Einstellung (eine Zelle, die
+jüngere Änderung gewinnt). Ändern zwei Geräte gleichzeitig verschiedene Regler (A den Akzent,
+B den Fensterhintergrund), gilt danach auf beiden die Darstellung des jüngeren Schreibers; die
+andere Änderung geht verloren. Das ist selten und sofort sichtbar, und der Preis für einen
+atomaren Import und ein einziges Zurücksetzen.
+
 ## R2 – Modell: Tönung statt Absolutfarbe
 
 **Entscheidung** (Klärung vom 2026-10-02): Fenster-, Container-, Text- und Komponententönung
@@ -58,18 +64,40 @@ erfüllt also die Spec-Grenzen (FR-016: 4,5:1 und 3:1) **nicht**.
 **Entscheidung**: Die Ableitung löst für jeden Akzent und jedes Schema die Helligkeit `L` so,
 dass (a) die bessere der beiden Textfarben (`0.985` weiß oder `0.145` schwarz) auf dem Akzent
 mindestens 4,5:1 erreicht und (b) der Akzent gegen Fenster- und Container-Fläche mindestens 3:1
-erreicht (Ring, Schalterspur, Rand). Gewählt wird die kleinste Änderung der Helligkeit gegenüber
-dem Ausgangswert; bei Gleichstand gewinnt die weiße Schrift. Im hellen Schema liegt das Fenster
-bei `L ≈ 0.55–0.60` mit dunkler Schrift oder `L ≈ 0.50` mit weißer; im dunklen bleibt der Standard.
+erreicht (Ring, Schalterspur, Rand), und zwar gegen jede Fläche, auf der Bedienelemente liegen:
+`--background`, `--card`, `--popover`, `--sidebar` und `--muted` (die Boxen der
+Einstellungsgruppen sind `bg-muted`, `components/settings/Group.vue`). Gewählt wird die kleinste
+Änderung der Helligkeit gegenüber dem Ausgangswert (Farbfeld: die heutige Helligkeit des
+Schemas, `0.65` hell und `0.70` dunkel; eigene Farbe: ihre eigene Helligkeit); bei Gleichstand
+gewinnt die weiße Schrift. Für den heutigen Farbton liegt der Akzent im hellen Schema bei
+`L ≈ 0.54–0.59` mit dunkler Schrift (bei `0.60` fällt er gegen `--background` schon auf 2,94:1)
+oder `L ≤ 0.50` mit weißer; die kleinste Änderung ist die dunkle Schrift bei `L ≈ 0.59`. Im
+dunklen Schema bleibt der Akzent.
 
 **Folge, sichtbar**: Der Standardakzent bleibt Blaugrün (Farbton 180), wird aber im **hellen**
 Schema dunkler (oder bekommt dunkle Schrift) als heute. Das ist die ehrliche Folge der
 Kontrastgrenzen aus der Spec; die genauen Werte stehen nach der Umsetzung in `data-model.md`
-(Tabelle „Standard“) und im PR. Dunkel bleibt unverändert.
+(Tabelle „Standard“) und im PR.
+
+**Weitere Standardwerte, die sich ändern** (gemessen mit derselben Rechnung):
+
+- `--muted-foreground` hell (`0.556`) erreicht heute nur **4,15:1** gegen `--background` und
+  **4,34:1** gegen `--muted`; FR-017 verlangt 4,5:1 für gedämpften Text. Neuer Standard
+  `L ≈ 0.53` (4,63:1 und 4,84:1). Dunkel (`0.708`, 6,91:1 und 5,83:1) bleibt.
+- `--ring` ist heute grau (hell `0.708`, dunkel `0.439`, je ~2,3:1 gegen den Hintergrund) und
+  `--sidebar-primary` hell fast schwarz, dunkel blau (Farbton 264). Beide folgen künftig dem
+  Akzent (`contracts/token-map.md`, FR-003, FR-015), auch im dunklen Schema.
+  `--sidebar-primary*` wird in `src/` heute nirgends benutzt; sichtbar ändert sich der Ring.
+
+**Die Standardwerte stehen in `tailwind.css`**: Die neuen Werte werden dort eingetragen, nicht nur
+von `useAppearance` gesetzt, denn ohne Vault, auf dem Sperrbildschirm und nach „Zurücksetzen“
+gilt `tailwind.css` (R5). `check-appearance.ts` prüft, dass `derive(Standard, Schema)` für jedes
+Schema genau die Werte aus `tailwind.css` ergibt.
 
 **Tönungen**: Obergrenze der Sättigung je Regler (Fenster `0.03`, Container `0.03`, Komponenten
 `0.04`, Text `0.04`). Nach der Ableitung wird jedes Paar (Text gegen Fenster, Container und
-Komponenten; gedämpfter Text; Rand gegen Fläche) gemessen; liegt eines unter der Grenze, wird
+Komponenten; gedämpfter Text; Bedienelemente gegen ihre Flächen; nicht Zierränder, FR-016)
+gemessen; liegt eines unter der Grenze, wird
 erst die Sättigung der verursachenden Tönung gesenkt, dann die Helligkeit des Textes
 nachgeführt. Die Anpassung wird dem Nutzer gemeldet (FR-017): die Zeile zeigt „angepasst“ mit
 Grund.
@@ -120,8 +148,8 @@ Attributen an den Auslöser (damit `choose(selectHook, value)` aus `scripts/e2e/
 unverändert geht) und einen Leer-Wert. Ohne A1 bleiben `UiSelect`-Umstellungen auf Auswahllisten
 ohne e2e-Hook und ohne Gruppen; Stufe 1 hängt nicht daran.
 
-**`labelBg`**: Felder in `SettingsGroup`-Boxen liegen auf `bg-muted`/`--card`: dort
-`label-bg="var(--card)"`, in Dialogen `var(--popover)`, auf der Seite der Standard
+**`labelBg`**: Felder in `SettingsGroup`-Boxen liegen auf `bg-muted`
+(`components/settings/Group.vue`): dort `label-bg="var(--muted)"`, auf Karten `var(--card)`, in Dialogen `var(--popover)`, auf der Seite der Standard
 `var(--background)`. Eine kleine Hilfe in `src/lib/` ist nicht nötig, die Werte stehen am Feld.
 
 ## R7 – Farbwähler und Dateien, auch mobil
@@ -157,7 +185,8 @@ immer nur ein aktives Fenster (`wm.focusWindow`), damit trifft FR-024 zu.
 ## R10 – Prüfstrategie
 
 - `check-appearance.ts`: Farbrechnung (bekannte Werte, Rückwandlung), Ableitung (Standard =
-  heutige Tokens für Dunkel; Hell mit den neuen Akzentwerten aus R4), **Kontrastmatrix**: jedes
+  Werte aus `tailwind.css` in beiden Schemata, nachdem dort die geänderten Standardwerte aus R4
+  eingetragen sind), **Kontrastmatrix**: jedes
   vordefinierte Farbfeld und die Extremwerte einer eigenen Farbe (Sättigung = Obergrenze, Farbton
   in 15°-Schritten) × beide Schemata × jedes Paar der Token-Tabelle (`contracts/token-map.md`);
   Datei: gültige Beispiele, jedes fehlerhafte Feld einzeln, „alles oder nichts“.

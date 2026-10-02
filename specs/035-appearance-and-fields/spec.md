@@ -151,8 +151,9 @@ Kontraste messen; zurücksetzen und die Standardwerte prüfen.
    Schrift auf Knöpfen und Auswahlleisten lesbar (mindestens 4,5:1) und Fokusring und Schalter
    erreichen mindestens 3:1 gegen ihren Untergrund.
 2. **Given** ein Hintergrund, der gegen den Text weniger als 4,5:1 hätte, **When** er
-   gewählt wird, **Then** wird der nächste erlaubte Ton angezeigt und gespeichert, und der
-   Nutzer sieht, dass und warum angepasst wurde.
+   gewählt wird, **Then** wird der nächste erlaubte Ton angezeigt, die Wahl bleibt
+   gespeichert und ergibt bei jedem Öffnen denselben angepassten Ton, und der Nutzer sieht,
+   dass und warum angepasst wurde.
 3. **Given** eine geänderte Darstellung, **When** der Nutzer auf Standard zurücksetzt und
    bestätigt, **Then** gelten wieder alle Standardwerte der Darstellung und das Schema
    bleibt unverändert.
@@ -189,8 +190,10 @@ Darstellung wiederfinden; eine kaputte Datei importieren und eine verständliche
 - Beim Wechsel der Vault zeigt holzi nie die Darstellung der vorherigen Vault.
 - Ein gespeicherter Wert, der kein gültiger Farbwert ist (nach einem Sync-Fehler oder per
   Hand verändert), zählt als nicht gesetzt und der Standard gilt.
-- Zwei Geräte ändern dieselbe Einstellung gleichzeitig: Es gewinnt wie bei allen
-  Vault-Einstellungen die jüngere Änderung; beide Geräte zeigen danach dieselbe Farbe.
+- Zwei Geräte ändern die Darstellung gleichzeitig: Es gewinnt wie bei allen
+  Vault-Einstellungen die jüngere Änderung; beide Geräte zeigen danach dieselbe Darstellung.
+  Die Darstellung zählt dabei als eine Einstellung: Ändert ein Gerät den Akzent und das
+  andere zugleich einen Hintergrund, bleibt nur die jüngere der beiden Änderungen.
 - Eine eigene Farbe wird eingegeben, während der Nutzer noch tippt (halbe Eingabe wie
   „#12“): Es gilt weiter die letzte gültige Farbe, es wird nichts gespeichert.
 - Felder ohne Label (zum Beispiel in einer Suchzeile oder einer Tabellenzelle) bleiben
@@ -289,9 +292,11 @@ Darstellung wiederfinden; eine kaputte Datei importieren und eine verständliche
   importieren können; ein Import MUSS die Datei vollständig prüfen und entweder alles oder
   nichts übernehmen (nie nur einen Teil), und bei Fehlern die Ursache nennen. Die Datei
   enthält nur Darstellungswerte (keine Vault-Daten, keine Pfade, keine Namen).
-- **FR-022**: Die Darstellung MUSS Teil der Prüfung `settings-color-scheme` aus 023 werden:
-  Der Kontrast wird für Standard, für jedes vordefinierte Farbfeld und für die Extremwerte
-  einer eigenen Farbe in beiden Schemata gemessen.
+- **FR-022**: Die Kontrastprüfung der Einstellungen aus 023 (`settings-color-scheme`) MUSS
+  die Darstellung abdecken: Der Kontrast wird für Standard, für jedes vordefinierte Farbfeld
+  und für die Extremwerte einer eigenen Farbe in beiden Schemata gemessen. Die vollständige
+  Matrix darf ohne laufende App gerechnet werden, solange sie dieselbe Farbrechnung benutzt
+  wie die App; die Messung in der laufenden App bestätigt mindestens den Standard.
 - **FR-023**: Alle Texte der Darstellung MÜSSEN Deutsch und Englisch haben, und die
   Einstellungen sagen „Sitzung“ und „Window Manager (wm)“ statt „Layout“ oder „Shell“.
 - **FR-024**: Der Nutzer MUSS einschalten können, dass das aktive Fenster des Window

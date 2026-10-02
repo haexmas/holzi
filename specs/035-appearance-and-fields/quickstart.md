@@ -11,7 +11,7 @@ nix develop --command pnpm check:appearance      # Farbrechnung, Ableitung, Kont
 nix develop --command pnpm check:fields          # alte Feldarten nur in der Positivliste
 nix develop --command pnpm check:settings
 nix develop --command pnpm check:agent-actions
-nix develop --command pnpm typecheck && pnpm typecheck:scripts && pnpm lint && pnpm format:check
+nix develop --command sh -c 'pnpm typecheck && pnpm typecheck:scripts && pnpm lint && pnpm format:check'
 # e2e gegen die gebaute App
 CARGO_TARGET_DIR=$PWD/src-tauri/target/e2e-build nix develop --command scripts/with-nix-host-bridge.sh pnpm tauri build --debug --no-bundle
 nix develop --command pnpm test:e2e --app $PWD/src-tauri/target/e2e-build/debug/holzi \

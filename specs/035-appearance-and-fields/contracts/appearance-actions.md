@@ -2,7 +2,8 @@
 
 Alle im Aktionskatalog (`src/lib/actions/settingsActions.ts`), `scope: 'settings.device'`,
 Handler in `src/stores/settingsActionHandlers.ts`. Fehler tragen die Schlüssel aus
-`contracts/appearance-file.md` beziehungsweise `settings.appearance.failed`.
+`contracts/appearance-file.md` (Import) beziehungsweise `settings.appearance.invalid` und
+`settings.appearance.failed` (alle anderen).
 
 ## `settings.appearance.set` — effect: write
 
@@ -27,7 +28,8 @@ Ergebnis: die gespeicherte Darstellung und `adjustments` (Liste, kann leer sein)
 { "appearance": { "v": 1, "accent": {…}, … }, "adjustments": [ { "control": "window", "kind": "chroma", "reason": "text-contrast" } ] }
 ```
 
-Fehler: `invalid` (Feld ungültig, nichts geschrieben).
+Fehler: `settings.appearance.invalid` (Feld ungültig, nichts geschrieben),
+`settings.appearance.failed` (Schreiben schlägt fehl, alter Zustand bleibt).
 
 ## `settings.appearance.reset` — effect: write
 

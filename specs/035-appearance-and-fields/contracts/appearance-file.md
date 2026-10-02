@@ -35,6 +35,7 @@ bricht den Import ab; die Meldung nennt die erste Ursache (Schlüssel, nicht den
 | `custom` kein sechsstelliges Hex                 | `settings.appearance.import.field`                |
 | `windowHint` kein Wahrheitswert                  | `settings.appearance.import.field`                |
 | fehlendes Feld                                   | `settings.appearance.import.field`                |
+| Schreiben in die Vault schlägt fehl              | `settings.appearance.import.failed`               |
 
 Anders als beim Lesen aus der Vault (ungültiges Feld → Standard, R1/data-model) ist der Import
 **streng**: kein Feld fällt auf den Standard, die Datei ist ganz gültig oder wird abgelehnt.
