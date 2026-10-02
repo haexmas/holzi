@@ -10,9 +10,8 @@ import type { ScenarioContext } from '../lib/scenario.ts'
 /** The Nostr servers of the settings (`SyncServersGroup`). */
 const NOSTR = 'settings-servers-nostrRelays'
 
-/** How long devices without a server are watched for finding each other. ponytail: a bounded wait is
- * no proof that they never will; the upgrade path is a counter of presence meetings in the app. */
-const WATCH_MS = 15_000
+/** The application may keep a vanished peer's session for about 30 s; the spec promises 60 s. */
+const NOTICED_WITHIN_MS = 60_000
 
 async function switchAllNostrServers(
   ctx: ScenarioContext,
@@ -75,20 +74,8 @@ scenario('sync-servers-off', { timeoutMs: 360_000 }, async (ctx) => {
     await switchAllNostrServers(ctx, device, 'off')
     await device.restart()
   }
-  const end = Date.now() + WATCH_MS
-  while (Date.now() < end) {
-    for (const [observer, other] of [
-      [laptop, phone],
-      [phone, laptop],
-    ] as const) {
-      const row = (await observer.deviceList()).find((r) => !r.isCurrent)
-      assert.ok(
-        row !== undefined && row.online === false,
-        `${observer.address} shows ${other.address} online with no server`,
-      )
-    }
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-  }
+  await expectOnline(ctx, laptop, phone, false, NOTICED_WITHIN_MS)
+  await expectOnline(ctx, phone, laptop, false, NOTICED_WITHIN_MS)
   ctx.step('with the servers off, they do not find each other')
 
   await addThread(laptop, 'nur am Laptop')
