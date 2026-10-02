@@ -85,8 +85,8 @@ description: 'Task list for End-to-End Tests Across Several Vaults and Devices'
 
 **Independent Test**: `--grep sync-copy` passes.
 
-- [ ] T027 [US4] M5: replace `scripts/e2e/scenarios/sync-copy-notice.test.ts` by `scripts/e2e/scenarios/sync-copy.test.ts`: stop A (main), `copyVaultTo` a new device C, start C: `copy-notice` shows, C is main and syncs both ways with A; copy linked B's file to D: D shows awaiting admission and neither sends nor receives; D makes a change; on A `admission-requests` lists it, `admission-admit` admits; D syncs and its change arrives everywhere; a second copy E is refused with `admission-reject` and stays outside. No injected store state, no `node:fs`. Depends on T005, T011, T017.
-- [ ] T028 [US4] Delete `sync-copy-notice.test.ts` and remove it from the seam allowlist in `scripts/e2e/lib/seam.test.ts`. Depends on T027.
+- [x] T027 [US4] M5: replace `scripts/e2e/scenarios/sync-copy-notice.test.ts` by `scripts/e2e/scenarios/sync-copy.test.ts`: stop A (main), `copyVaultTo` a new device C, start C: `copy-notice` shows, C is main and syncs both ways with A; copy linked B's file to D: D shows awaiting admission and neither sends nor receives; D makes a change; on A `admission-requests` lists it, `admission-admit` admits; D syncs and its change arrives everywhere; a second copy E is refused with `admission-reject` and stays outside. No injected store state, no `node:fs`. Depends on T005, T011, T017.
+- [x] T028 [US4] Delete `sync-copy-notice.test.ts` and remove it from the seam allowlist in `scripts/e2e/lib/seam.test.ts`. Depends on T027.
 
 ## Phase 7: User Story 5 - Locking during a large sync (P2)
 

@@ -314,3 +314,32 @@ export function federationNotice(page: FlowInstance): Promise<string | null> {
     `return document.querySelector('[data-testid="settings-federation-notice"]')?.textContent.trim() ?? null`,
   )
 }
+
+/** How many requests of copies to join the device view of a main device lists. */
+export function admissionRequestCount(page: FlowInstance): Promise<number> {
+  return page.exec<number>(
+    `return document.querySelectorAll('[data-testid="admission-request"]').length`,
+  )
+}
+
+/**
+ * On a main device: opens the device view, waits for the one open request of a copy and answers it with
+ * "Aufnehmen" or "Ablehnen", then waits until the request is gone from the list.
+ */
+export async function decideAdmission(
+  page: FlowInstance,
+  admit: boolean,
+): Promise<void> {
+  await openFederation(page)
+  await page.waitForDisplayed('admission-request')
+  const count = await admissionRequestCount(page)
+  if (count !== 1) {
+    throw new Error(`expected one open request of a copy, found ${count}`)
+  }
+  await page.click(admit ? 'admission-admit' : 'admission-reject')
+  const end = Date.now() + 15_000
+  while ((await admissionRequestCount(page)) > 0) {
+    if (Date.now() > end) throw new Error('the request stayed in the list')
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+}

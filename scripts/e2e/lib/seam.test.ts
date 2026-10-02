@@ -28,8 +28,6 @@ const SCENARIO_FACING = [
  * check, so this list can only shrink.
  */
 const KNOWN_VIOLATIONS: Record<string, string> = {
-  'scenarios/sync-copy-notice.test.ts':
-    'copies the vault file with node:fs; replaced by sync-copy (spec 033 T027)',
   'lib/sync-flows.ts':
     'its single-device helpers type a device by `Instance`; the scenarios move to the group (spec 033 T034)',
   'scenarios/relaunch-after-lock.test.ts':
