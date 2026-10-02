@@ -104,7 +104,7 @@ nostr-sdk = "0.45"
 # (reqwest) in the tree rustls cannot pick one itself: the first `wss://`
 # connect panics. `sync::presence` installs `ring` explicitly.
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
-secp256k1 = "0.30"
+secp256k1 = "0.33"
 iroh = { version = "1.2", default-features = false, features = ["tls-ring"] }
 hkdf = "0.13"
 # Link code proofs (spec 024, R11): HMAC-SHA256 over the link transcript, and the
