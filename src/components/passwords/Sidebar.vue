@@ -211,16 +211,20 @@ async function onRootDrop(event: DragEvent) {
       />
     </ul>
 
-    <section v-if="store.tags.length" class="flex flex-col gap-1">
+    <section v-if="store.displayTags.length" class="flex flex-col gap-1">
       <h2 class="px-3 text-xs font-semibold text-muted-foreground uppercase">
         {{ t('passwords.fields.tags') }}
       </h2>
       <ul class="flex flex-col gap-0.5">
-        <li v-for="tag in store.tags" :key="tag.id">
+        <li v-for="tag in store.displayTags" :key="tag.id">
           <button
             type="button"
             class="flex min-h-9 w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left hover:bg-foreground/5"
-            :class="activeTag === tag.id ? 'bg-foreground/10 font-medium' : ''"
+            :class="
+              activeTag !== null && tag.ids.includes(activeTag)
+                ? 'bg-foreground/10 font-medium'
+                : ''
+            "
             :data-testid="`passwords-tag-filter-${tag.id}`"
             @click="go(`/?tag=${tag.id}`)"
           >

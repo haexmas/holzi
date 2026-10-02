@@ -214,3 +214,103 @@ fn set_color_changes_only_the_color() {
     let missing = write(&db, |tx| tags::set_color(tx, "nope", None));
     assert!(matches!(missing, Err(HolziError::PasswordsNotFound)));
 }
+
+/// Two tags with equal names under different ids, as a rename race between two devices leaves them.
+fn duplicate_tags(db: &Database) -> (String, String, String, String) {
+    let a = item_with(db, &[]);
+    let b = item_with(db, &[]);
+    write(db, |tx| {
+        for (id, name) in [("tag-aaa", "Work"), ("tag-zzz", "work")] {
+            tx.execute(
+                "INSERT INTO haex_passwords_tags (id, name, created_at) VALUES (?1, ?2, 'x')",
+                params![id, name],
+            )?;
+        }
+        tx.execute(
+            "INSERT INTO haex_passwords_item_tags (id, item_id, tag_id) VALUES ('l1', ?1, 'tag-aaa')",
+            params![a],
+        )?;
+        tx.execute(
+            "INSERT INTO haex_passwords_item_tags (id, item_id, tag_id) VALUES ('l2', ?1, 'tag-zzz')",
+            params![a],
+        )?;
+        tx.execute(
+            "INSERT INTO haex_passwords_item_tags (id, item_id, tag_id) VALUES ('l3', ?1, 'tag-zzz')",
+            params![b],
+        )?;
+        Ok(())
+    })
+    .expect("duplicates");
+    (a, b, "tag-aaa".to_string(), "tag-zzz".to_string())
+}
+
+#[test]
+fn reconcile_keeps_the_smallest_id_and_every_entry_keeps_its_tag() {
+    let (_dir, db) = open_test_vault();
+    let (a, b, keep, gone) = duplicate_tags(&db);
+    let removed = write(&db, |tx| tags::reconcile_tags(tx)).expect("reconcile");
+    assert_eq!(removed, 1);
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM haex_passwords_tags"), 1);
+    assert_eq!(
+        count(
+            &db,
+            &format!("SELECT COUNT(*) FROM haex_passwords_tags WHERE id = '{keep}'")
+        ),
+        1
+    );
+    assert_eq!(
+        count(
+            &db,
+            &format!("SELECT COUNT(*) FROM haex_passwords_item_tags WHERE tag_id = '{gone}'")
+        ),
+        0
+    );
+    // Both entries have the one tag, the entry that had both links has it once.
+    assert_eq!(tag_names_of(&db, &a), vec!["Work".to_string()]);
+    assert_eq!(tag_names_of(&db, &b), vec!["Work".to_string()]);
+    assert_eq!(
+        count(&db, "SELECT COUNT(*) FROM haex_passwords_item_tags"),
+        2
+    );
+}
+
+#[test]
+fn reconcile_moves_a_link_to_a_derived_id_and_leaves_markers_for_what_it_removed() {
+    let (_dir, db) = open_test_vault();
+    let (_a, b, keep, _gone) = duplicate_tags(&db);
+    write(&db, |tx| tags::reconcile_tags(tx)).expect("reconcile");
+    let link_id: String = db
+        .with_connection(|c| {
+            Ok(c.query_row(
+                "SELECT id FROM haex_passwords_item_tags WHERE item_id = ?1",
+                params![b],
+                |r| r.get(0),
+            )?)
+        })
+        .expect("link");
+    assert_eq!(link_id, super::ids::item_tag_id(&b, &keep).to_string());
+    assert_eq!(
+        count(&db, "SELECT COUNT(*) FROM haex_deleted_rows WHERE table_name = 'haex_passwords_tags' AND haex_hlc_no_sync IS NOT NULL"),
+        1
+    );
+    assert_eq!(
+        count(&db, "SELECT COUNT(*) FROM haex_deleted_rows WHERE table_name = 'haex_passwords_item_tags' AND haex_hlc_no_sync IS NOT NULL"),
+        2,
+        "each link that moved or was dropped has a marker of its own"
+    );
+}
+
+#[test]
+fn reconcile_is_idempotent_and_leaves_distinct_tags_alone() {
+    let (_dir, db) = open_test_vault();
+    item_with(&db, &["alpha", "beta"]);
+    assert_eq!(write(&db, |tx| tags::reconcile_tags(tx)).expect("none"), 0);
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM haex_passwords_tags"), 2);
+    let (_a, _b, _keep, _gone) = duplicate_tags(&db);
+    assert_eq!(write(&db, |tx| tags::reconcile_tags(tx)).expect("first"), 1);
+    assert_eq!(
+        write(&db, |tx| tags::reconcile_tags(tx)).expect("second"),
+        0
+    );
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM haex_passwords_tags"), 3);
+}

@@ -157,6 +157,64 @@ pub fn delete_tag(tx: &mut CrdtTransaction<'_>, id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Merges tags whose names are equal by [`fold`] but whose ids differ (a rename race, or a tag
+/// renamed on one device and created again by name on another): the smallest id stays, the links
+/// of the others move to it (a link id is derived, so a link that is already there is not doubled)
+/// and the other tags go, each row with a marker of its own. Returns how many tags were removed;
+/// running it again changes nothing.
+///
+/// ponytail: ceiling is that duplicates stay visible until the next open (the window merges equal
+/// names for display meanwhile); upgrade path is an own `ApplyPolicy` in the sync of spec 024.
+pub fn reconcile_tags(tx: &mut CrdtTransaction<'_>) -> Result<u32> {
+    let all: Vec<(String, String)> = tx.query_map(
+        "SELECT id, name FROM haex_passwords_tags ORDER BY id",
+        &[],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
+    let mut by_name: std::collections::BTreeMap<String, Vec<String>> = Default::default();
+    for (id, name) in all {
+        by_name.entry(fold(&name)).or_default().push(id);
+    }
+    let mut removed = 0;
+    for ids in by_name.values().filter(|ids| ids.len() > 1) {
+        let keep = &ids[0];
+        for other in &ids[1..] {
+            let links: Vec<(String, String)> = tx.query_map(
+                "SELECT id, item_id FROM haex_passwords_item_tags WHERE tag_id = ?1",
+                params![other],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )?;
+            for (link_id, item_id) in links {
+                tx.execute(
+                    "DELETE FROM haex_passwords_item_tags WHERE id = ?1",
+                    params![link_id],
+                )?;
+                let already = tx
+                    .query_row(
+                        "SELECT COUNT(*) FROM haex_passwords_item_tags \
+                         WHERE item_id = ?1 AND tag_id = ?2",
+                        params![item_id, keep],
+                        |r| r.get::<_, i64>(0),
+                    )?
+                    .unwrap_or(0);
+                if already == 0 {
+                    tx.execute(
+                        "INSERT INTO haex_passwords_item_tags (id, item_id, tag_id) \
+                         VALUES (?1, ?2, ?3)",
+                        params![item_tag_id(&item_id, keep).to_string(), item_id, keep],
+                    )?;
+                }
+            }
+            tx.execute(
+                "DELETE FROM haex_passwords_tags WHERE id = ?1",
+                params![other],
+            )?;
+            removed += 1;
+        }
+    }
+    Ok(removed)
+}
+
 /// Adds and removes tags (by [`fold`]) on many entries at once and returns how many entries
 /// changed. Missing tags are created; an entry that does not exist is `target_missing`.
 pub fn bulk_set(

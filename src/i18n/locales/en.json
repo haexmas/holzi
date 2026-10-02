@@ -1305,6 +1305,12 @@
         "value_not_storable": "A value could not be stored.",
         "source_setting": "Settings of the source (search, Auto-Type per group, quality check) were not taken over."
       }
+    },
+    "stale": {
+      "changed": "This entry was changed on another device.",
+      "deleted": "This entry was deleted on another device.",
+      "reload": "Reload",
+      "back": "Back"
     }
   }
 }

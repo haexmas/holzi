@@ -3,8 +3,8 @@
 //! devices created under the same name at once. It runs as tracked session work, a failure is
 //! logged without any value and never blocks opening.
 
-use super::binaries;
 use super::clock::unix_millis;
+use super::{binaries, tags};
 use crate::state::AppState;
 
 /// Starts the tidy-up of the open vault in the background.
@@ -21,6 +21,15 @@ pub fn start_after_open(state: &AppState) {
             Ok(0) => {}
             Ok(deleted) => log::info!("passwords: removed {deleted} unused binary rows"),
             Err(error) => log::warn!("passwords: the clean-up of binary data failed: {error}"),
+        }
+        // Tags that two devices ended up with twice are one tag again (US8).
+        match db
+            .write(|tx| tags::reconcile_tags(tx).map_err(Into::into))
+            .await
+        {
+            Ok(0) => {}
+            Ok(merged) => log::info!("passwords: merged {merged} duplicate tags"),
+            Err(error) => log::warn!("passwords: merging duplicate tags failed: {error}"),
         }
     });
     if let Err(error) = started {

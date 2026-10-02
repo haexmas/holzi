@@ -1305,6 +1305,12 @@
         "value_not_storable": "Ein Wert ließ sich nicht speichern.",
         "source_setting": "Einstellungen der Quelle (Suche, Auto-Type je Gruppe, Qualitätsprüfung) wurden nicht übernommen."
       }
+    },
+    "stale": {
+      "changed": "Dieser Eintrag wurde auf einem anderen Gerät geändert.",
+      "deleted": "Dieser Eintrag wurde auf einem anderen Gerät gelöscht.",
+      "reload": "Neu laden",
+      "back": "Zurück"
     }
   }
 }

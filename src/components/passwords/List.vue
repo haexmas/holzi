@@ -23,8 +23,8 @@ const heading = computed(() => {
   if (inFolderPlace.value) {
     return displayTitle(folder.value?.name) ?? t('passwords.folders.unknown')
   }
-  const tag = store.tags.find(
-    (candidate) => candidate.id === router.route.query.tag,
+  const tag = store.displayTags.find((candidate) =>
+    candidate.ids.includes(router.route.query.tag ?? ''),
   )
   return tag ? tag.name : t('passwords.title')
 })
@@ -38,7 +38,9 @@ const visible = computed(() => {
   )
   const found = filterHeaders(live, {
     query: router.route.query.q ?? '',
-    tagId: router.route.query.tag,
+    ...(router.route.query.tag
+      ? { tagIds: store.tagIdsOf(router.route.query.tag) }
+      : {}),
   })
   return [...found].sort((a, b) => {
     const left = fold(a.title ?? '')

@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import type { GroupRow } from '@bindings/GroupRow'
 import type { ItemHeader } from '@bindings/ItemHeader'
 import type { TagRow } from '@bindings/TagRow'
+import { mergeTagsForDisplay, tagIdsFor } from '~/lib/passwords/remote'
 
 /**
  * The overview of the password manager (spec 034, research R15): every entry header, folder and
@@ -27,6 +28,17 @@ export const usePasswordsStore = defineStore('passwords', () => {
   const headersById = computed(
     () => new Map(headers.value.map((header) => [header.id, header])),
   )
+
+  /** The tags as the window shows them: equal names (two devices made the tag) show as one until
+   * the cleanup at the next open merges them for good. */
+  const displayTags = computed(() =>
+    mergeTagsForDisplay(tags.value, headers.value),
+  )
+
+  /** The ids a filter by `tagId` has to accept. */
+  function tagIdsOf(tagId: string): string[] {
+    return tagIdsFor(tagId, displayTags.value)
+  }
 
   async function loadAsync() {
     const overview = await loadOverviewAsync()
@@ -64,6 +76,8 @@ export const usePasswordsStore = defineStore('passwords', () => {
     headers,
     groups,
     tags,
+    displayTags,
+    tagIdsOf,
     headersById,
     isLoading,
     hasLoadedOnce,

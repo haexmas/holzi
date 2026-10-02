@@ -49,14 +49,19 @@ export function matchesQuery(header: SearchableHeader, query: string): boolean {
   return words.every((word) => texts.some((text) => text.includes(word)))
 }
 
-/** The headers that match the query and, when given, carry the tag. */
+/** The headers that match the query and, when given, carry the tag (`tagIds`: any of a group of
+ * tags that show as one). */
 export function filterHeaders<T extends SearchableHeader>(
   headers: readonly T[],
-  options: { query: string; tagId?: string },
+  options: { query: string; tagId?: string; tagIds?: readonly string[] },
 ): T[] {
   const words = terms(options.query)
+  const wanted = options.tagIds ?? (options.tagId ? [options.tagId] : [])
   return headers.filter((header) => {
-    if (options.tagId && !header.tags.some((tag) => tag.id === options.tagId)) {
+    if (
+      wanted.length > 0 &&
+      !header.tags.some((tag) => wanted.includes(tag.id))
+    ) {
       return false
     }
     if (words.length === 0) return true

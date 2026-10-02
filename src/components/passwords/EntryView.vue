@@ -10,6 +10,7 @@ import { toast } from 'vue-sonner'
 import type { CopyField } from '@bindings/CopyField'
 import type { ItemDetail } from '@bindings/ItemDetail'
 import { displayTitle, isExpired, localDay } from '~/lib/passwords/format'
+import { entryFreshness, type EntryFreshness } from '~/lib/passwords/remote'
 
 const props = defineProps<{
   itemId: string
@@ -42,11 +43,42 @@ async function loadAsync() {
   }
 }
 
-// A change from another window, an agent or a sync reloads the entry quietly.
-const token = computed(() => store.headersById.get(props.itemId)?.updatedAt)
-watch(token, () => {
-  if (detail.value) void loadAsync()
+// A change from another window, an agent or another device does not replace what the user is
+// looking at; a banner says so and offers to reload (US8). An own change reloads the entry itself,
+// so the banner waits a moment before it shows, to let that settle.
+const freshness = computed(() =>
+  entryFreshness({
+    overviewLoaded: store.hasLoadedOnce,
+    present: store.headersById.has(props.itemId),
+    loadedToken: detail.value?.updatedAt,
+    currentToken: store.headersById.get(props.itemId)?.updatedAt,
+  }),
+)
+const shownFreshness = ref<EntryFreshness>('fresh')
+let freshnessTimer: ReturnType<typeof setTimeout> | null = null
+watch(
+  freshness,
+  (value) => {
+    if (freshnessTimer !== null) clearTimeout(freshnessTimer)
+    if (value === 'fresh') {
+      shownFreshness.value = 'fresh'
+      return
+    }
+    freshnessTimer = setTimeout(() => {
+      shownFreshness.value = freshness.value
+    }, 400)
+  },
+  { immediate: true },
+)
+onBeforeUnmount(() => {
+  if (freshnessTimer !== null) clearTimeout(freshnessTimer)
 })
+
+/** An entry deleted elsewhere leaves the history entry behind; skipping it keeps back from
+ * returning to it. */
+function leaveDeleted() {
+  if (!router.skipCurrent()) router.replace('/')
+}
 onMounted(loadAsync)
 
 const title = computed(() => displayTitle(detail.value?.title))
@@ -178,6 +210,36 @@ async function removeOtpAsync() {
       </div>
 
       <template v-else>
+        <div
+          v-if="shownFreshness !== 'fresh'"
+          class="flex flex-wrap items-center gap-2 rounded-xl bg-muted px-4 py-3 text-sm"
+          role="status"
+          data-testid="passwords-entry-stale"
+        >
+          <Icon name="lucide:refresh-cw" class="size-4 shrink-0" />
+          <span class="min-w-0 flex-1">{{
+            shownFreshness === 'deleted'
+              ? t('passwords.stale.deleted')
+              : t('passwords.stale.changed')
+          }}</span>
+          <UiButton
+            v-if="shownFreshness === 'changed'"
+            size="sm"
+            data-testid="passwords-entry-reload"
+            @click="loadAsync"
+          >
+            {{ t('passwords.stale.reload') }}
+          </UiButton>
+          <UiButton
+            v-else
+            size="sm"
+            data-testid="passwords-entry-leave"
+            @click="leaveDeleted"
+          >
+            {{ t('passwords.stale.back') }}
+          </UiButton>
+        </div>
+
         <ShadcnBadge v-if="expired" variant="destructive" class="self-start">
           {{ t('passwords.expiredOn', { date: detail.expiresAt }) }}
         </ShadcnBadge>
