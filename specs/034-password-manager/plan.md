@@ -55,7 +55,7 @@ Technischer Ansatz (Begründungen und verworfene Alternativen in
 optional); TypeScript 6 (strict), Vue 3.5, Nuxt 4.5.2 (SPA), Node 22.19 für die Prüfskripte
 
 **Primary Dependencies**: vorhanden — `haex-crdt` (gepinnt auf `aeb26eb`), `rusqlite` über haex-crdt,
-`hmac` 0.13, `sha2` 0.11, `getrandom` 0.3, `zeroize`, `base64`, `uuid` (v4, v5), `serde_json`,
+`hmac` 0.13, `sha2` 0.11, `getrandom` 0.4, `zeroize`, `base64`, `uuid` (v4, v5), `serde_json`,
 `thiserror`, `ts-rs`, `tauri-plugin-dialog`; Frontend: Pinia, `@nuxtjs/i18n`, `reka-ui`/haex-ui-Layer.
 **Neu (Rust)**: `keepass` (KDBX, Version und Features prüft T003), `csv` (RFC 4180; in
 `Cargo.lock` nur über `llm-cpu`, daher direkte Abhängigkeit), `sha1` (RustCrypto), `p256`
@@ -94,9 +94,9 @@ Fehler, Protokoll, Ereignis, `Debug`-Ausgabe, Pfad, Abfrage oder Fenstertitel; e
 Schreibtransaktion unter 100 MiB (Anhänge einzeln); Tabellen- und Spaltennamen von haex-vault;
 Aufrufer nie als Command-Argument
 
-**Scale/Scope**: 12 Tabellen, rund 40 Commands, eine Aktion, 12 neue Rust-Module (+ Unterordner
-`import/` mit 6), rund 35 Vue-Komponenten, 5 reine TS-Module, 4 Prüfskripte, 8 Rust-Integrationstests,
-2 End-to-End-Szenen; Vorlage umfasst rund 12.000 Zeilen Vue/TS, von denen Logik und Struktur,
+**Scale/Scope**: 12 Tabellen, rund 37 Commands, eine Aktion, rund 20 Rust-Module (dazu `service/`
+mit 10, `import/` mit 6 und `commands/` mit 11 Dateien), rund 35 Vue-Komponenten, 8 reine
+TS-Module, 8 Prüfskripte, 4 Rust-Integrationstests, 4 End-to-End-Szenen; Vorlage umfasst rund 12.000 Zeilen Vue/TS, von denen Logik und Struktur,
 nicht Code, übernommen werden
 
 ## Constitution Check
@@ -166,7 +166,7 @@ src-tauri/src/
 │   ├── access.rs                  # Caller, Grant, Scope, Regeln Z1–Z10 (rein)      [neu]
 │   ├── service/                   # PasswordsService: der einzige Eingang, prüft den Aufrufer
 │   │   ├── mod.rs, items.rs, organize.rs, trash.rs, history.rs, attachments.rs,
-│   │   │   passkeys.rs, presets.rs, import.rs                                       [neu]
+│   │   │   passkeys.rs, presets.rs, import.rs, usage.rs                             [neu]
 │   ├── items.rs                   # Übersicht, Detail, Anlegen, Teil-Update         [neu]
 │   ├── reveal.rs                  # reveal, history_reveal, copy_field-Kern         [neu]
 │   ├── groups.rs                  # Baum, Verschieben, Zyklus                       [neu]

@@ -281,7 +281,10 @@ Die Wartezeit der Zwischenablage ist die Vault-Einstellung `passwords.clipboard_
 ## Fehlerarten
 
 Neue Varianten in `HolziError` (`src-tauri/src/error.rs`, Feld `kind`), Texte übersetzt das
-Frontend (`errors.passwords.*`); kein Wert eines Geheimnisses in einem Feld:
+Frontend (`errors.passwords.*`); kein Wert eines Geheimnisses in einem Feld. In den Abschnitten
+oben stehen die Fehler gekürzt (`NotFound`, `Conflict`, `AttachmentTooLarge`, `ImportFailed`,
+`ImportTooLarge`); im Feld `kind` tragen sie das Präfix `Passwords` wie in dieser Tabelle,
+`InvalidInput` ist die vorhandene Variante ohne Präfix:
 
 | `kind`                        | Felder           |
 | ----------------------------- | ---------------- |
