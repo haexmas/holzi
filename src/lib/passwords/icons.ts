@@ -120,3 +120,44 @@ export function isKnownIcon(name: string | null | undefined): boolean {
       (IMPORT_ICONS as readonly string[]).includes(name))
   )
 }
+
+/** What an `icon` value of an entry or folder shows: one of the pictures of the list, a picture of
+ * its own that the import stored (`binary:<hash>`), or the default of the place. */
+export type ResolvedIcon =
+  | { kind: 'name'; name: string }
+  | { kind: 'binary'; hash: string }
+  | { kind: 'default' }
+
+const BINARY_PREFIX = 'binary:'
+const SHA256_HEX = /^[0-9a-f]{64}$/i
+
+export function resolveIcon(value: string | null | undefined): ResolvedIcon {
+  if (typeof value !== 'string' || value === '') return { kind: 'default' }
+  if (value.startsWith(BINARY_PREFIX)) {
+    const hash = value.slice(BINARY_PREFIX.length)
+    return SHA256_HEX.test(hash)
+      ? { kind: 'binary', hash: hash.toLowerCase() }
+      : { kind: 'default' }
+  }
+  return isKnownIcon(value)
+    ? { kind: 'name', name: value }
+    : { kind: 'default' }
+}
+
+/** The mime type of a picture by its first bytes, so a blob URL shows it whatever the source called
+ * it; `image/png` when nothing matches (the browser sniffs the rest). */
+export function sniffImageType(bytes: Uint8Array): string {
+  const startsWith = (...signature: number[]) =>
+    signature.every((byte, index) => bytes[index] === byte)
+  if (startsWith(0xff, 0xd8, 0xff)) return 'image/jpeg'
+  if (startsWith(0x47, 0x49, 0x46, 0x38)) return 'image/gif'
+  if (
+    startsWith(0x52, 0x49, 0x46, 0x46) &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  )
+    return 'image/webp'
+  return 'image/png'
+}

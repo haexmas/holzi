@@ -241,7 +241,7 @@ async fn write_all(
         let path = folder_path(model, item.group_ref.as_deref());
         let title = item.title.clone().unwrap_or_default();
         for problem in item.problems.iter().chain(outcome.problems.iter()) {
-            report.add(&title, &path, problem);
+            report.add(Some(&outcome.id), &title, &path, problem);
         }
         report.imported += 1;
         if item.trashed {
@@ -293,7 +293,7 @@ async fn write_all(
         progress(done, Phase::Attachments);
     }
     for problem in &model.source_problems {
-        report.add("", "", problem);
+        report.add(None, "", "", problem);
     }
     Ok(report.finish())
 }

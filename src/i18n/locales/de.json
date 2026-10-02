@@ -784,7 +784,9 @@
         "wrong_credentials": "Passwort oder Schlüsseldatei sind falsch.",
         "corrupt": "Die Datei ist beschädigt.",
         "unsupported_format": "Das Format wird nicht unterstützt.",
-        "encrypted_export": "Der Export ist verschlüsselt und lässt sich ohne sein Kennwort nicht lesen."
+        "encrypted_export": "Der Export ist verschlüsselt und lässt sich ohne sein Kennwort nicht lesen.",
+        "cancelled": "Der Import wurde abgebrochen.",
+        "unwritable": "Die Datei ließ sich nicht schreiben."
       }
     }
   },
@@ -1212,6 +1214,97 @@
       "download": "Herunterladen",
       "preview": "Vorschau",
       "saved": "Datei gespeichert."
+    },
+    "import": {
+      "open": "Import",
+      "title": "Import",
+      "source": "Quelle",
+      "file": "Datei",
+      "sources": {
+        "keepass": "KeePass (kdbx)",
+        "bitwarden": "Bitwarden (JSON oder CSV)",
+        "lastpass": "LastPass (CSV)"
+      },
+      "hints": {
+        "keepass": "Datenbank von KeePass oder KeePassXC, mit Passwort und optional einer Schlüsseldatei.",
+        "bitwarden": "Unverschlüsselter Export aus dem Tresor (JSON enthält mehr als CSV).",
+        "lastpass": "Der CSV-Export aus dem Tresor."
+      },
+      "noFile": "Noch keine Datei gewählt",
+      "chooseFile": "Datei wählen",
+      "fileHint": "Die Datei wird nur gelesen, nichts davon bleibt außerhalb der Vault.",
+      "password": "Passwort der Datenbank",
+      "noKeyFile": "Keine Schlüsseldatei",
+      "chooseKeyFile": "Schlüsseldatei wählen",
+      "removeKeyFile": "Entfernen",
+      "keyFileHint": "Nur nötig, wenn die Datenbank eine Schlüsseldatei hat.",
+      "showPreview": "Vorschau",
+      "previewTitle": "Das steht in der Datei",
+      "counts": {
+        "entries": "Einträge",
+        "groups": "Ordner",
+        "trashedEntries": "Einträge im Papierkorb der Quelle",
+        "historyStates": "Verlaufsstände",
+        "attachments": "Anhänge",
+        "passkeys": "Passkeys",
+        "duplicates": "Einträge, die es schon gibt"
+      },
+      "warnings": "Hinweise",
+      "warningKinds": {
+        "attachment_too_large": "Anhänge über 25 MiB werden nicht übernommen.",
+        "attachment_unreadable": "Ein Anhang ließ sich nicht lesen.",
+        "passkey_key_unreadable": "Der Schlüssel eines Passkeys ließ sich nicht lesen.",
+        "passkey_public_key_missing": "Zu einem Passkey fehlt der öffentliche Schlüssel.",
+        "passkey_duplicate": "Ein Passkey kommt schon vor.",
+        "totp_invalid": "Ein TOTP-Secret ist ungültig und wird unverändert übernommen.",
+        "icon_not_mapped": "Ein Symbol der Quelle ließ sich nicht zuordnen.",
+        "value_not_storable": "Ein Wert ließ sich nicht speichern.",
+        "source_setting": "Einstellungen der Quelle werden nicht übernommen."
+      },
+      "onDuplicate": "Wenn es einen Eintrag schon gibt",
+      "skip": "Überspringen",
+      "skipHint": "Gleicher Titel, Benutzername und gleiche Adresse: der Eintrag wird nicht noch einmal angelegt.",
+      "create": "Trotzdem anlegen",
+      "createHint": "Der Eintrag wird ein zweites Mal angelegt.",
+      "change": "Zurück",
+      "start": "Importieren",
+      "running": "Import läuft",
+      "cancel": "Abbrechen",
+      "cancelled": "Import abgebrochen, es wurde nichts übernommen.",
+      "rollingBack": "Was schon geschrieben war, wird wieder entfernt.",
+      "phases": {
+        "reading": "Die Datei wird gelesen",
+        "groups": "Ordner",
+        "items": "Einträge",
+        "attachments": "Anhänge",
+        "rollback": "Rückgängig machen"
+      },
+      "done": "Import beendet",
+      "report": {
+        "imported": "Eingelesene Einträge",
+        "trashed": "davon im Papierkorb",
+        "historyStates": "Verlaufsstände",
+        "skippedDuplicates": "Übersprungene Doppelte"
+      },
+      "needsAttention": "Hier musst du nacharbeiten",
+      "sourceGroup": "Quelle insgesamt",
+      "openEntry": "Eintrag öffnen",
+      "nothingToDo": "Es gibt nichts nachzuarbeiten.",
+      "saveReport": "Bericht als Textdatei speichern",
+      "reportSaved": "Bericht gespeichert.",
+      "another": "Weitere Datei",
+      "toList": "Zur Liste",
+      "kinds": {
+        "attachment_too_large": "Anhang „{file}“ ist mit {size} MiB größer als das Limit von {limit} MiB und wurde nicht übernommen.",
+        "attachment_unreadable": "Anhang „{file}“ ließ sich nicht lesen.",
+        "passkey_key_unreadable": "Passkey „{field}“: der Schlüssel ließ sich nicht lesen.",
+        "passkey_public_key_missing": "Passkey „{field}“: der öffentliche Schlüssel konnte nicht abgeleitet werden.",
+        "passkey_duplicate": "Passkey „{field}“ gab es schon und wurde nicht noch einmal angelegt.",
+        "totp_invalid": "Das TOTP-Secret ist ungültig und steht unverändert im Eintrag.",
+        "icon_not_mapped": "Das Symbol der Quelle ließ sich nicht zuordnen.",
+        "value_not_storable": "Ein Wert ließ sich nicht speichern.",
+        "source_setting": "Einstellungen der Quelle (Suche, Auto-Type je Gruppe, Qualitätsprüfung) wurden nicht übernommen."
+      }
     }
   }
 }

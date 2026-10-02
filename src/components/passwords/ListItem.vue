@@ -5,7 +5,7 @@
  * for a TOTP and for passkeys. It holds a header only, never a secret.
  */
 import type { ItemHeader } from '@bindings/ItemHeader'
-import { DEFAULT_ENTRY_ICON, isKnownIcon } from '~/lib/passwords/icons'
+import { DEFAULT_ENTRY_ICON } from '~/lib/passwords/icons'
 import { draggedIds, ITEMS_MIME, itemsPayload } from '~/lib/passwords/dnd'
 import { displayTitle, isExpired, localDay } from '~/lib/passwords/format'
 
@@ -27,11 +27,6 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const title = computed(() => displayTitle(props.header.title))
-const iconName = computed(() =>
-  isKnownIcon(props.header.icon)
-    ? (props.header.icon as string)
-    : DEFAULT_ENTRY_ICON,
-)
 const expired = computed(() =>
   isExpired(props.header.expiresAt, localDay(new Date())),
 )
@@ -99,7 +94,12 @@ function onDragStart(event: DragEvent) {
         :style="header.color ? { color: header.color } : undefined"
         aria-hidden="true"
       >
-        <Icon :name="iconName" class="size-5" />
+        <span class="size-5">
+          <PasswordsEntryIcon
+            :value="header.icon"
+            :fallback="DEFAULT_ENTRY_ICON"
+          />
+        </span>
       </span>
       <span class="flex min-w-0 flex-1 flex-col">
         <span

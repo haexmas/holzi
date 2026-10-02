@@ -7,7 +7,6 @@
  */
 import type { GroupRow } from '@bindings/GroupRow'
 import { FOLDER_MIME, ITEMS_MIME, parseItemsPayload } from '~/lib/passwords/dnd'
-import { isKnownIcon } from '~/lib/passwords/icons'
 import type { TreeNode } from '~/lib/passwords/tree'
 
 const props = defineProps<{
@@ -39,12 +38,6 @@ const isOpen = computed(() => expanded.value.has(group.value.id))
 const hasChildren = computed(() => props.node.children.length > 0)
 const position = computed(() => props.siblingIds.indexOf(group.value.id))
 const dropping = ref(false)
-
-const iconName = computed(() =>
-  isKnownIcon(group.value.icon)
-    ? (group.value.icon as string)
-    : 'lucide:folder',
-)
 
 function toggleOpen() {
   const next = new Set(expanded.value)
@@ -122,11 +115,12 @@ function onDrop(event: DragEvent) {
         class="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left"
         @click="emit('select', group.id)"
       >
-        <Icon
-          :name="iconName"
+        <span
           class="size-4 shrink-0"
           :style="group.color ? { color: group.color } : undefined"
-        />
+        >
+          <PasswordsEntryIcon :value="group.icon" fallback="lucide:folder" />
+        </span>
         <span class="min-w-0 flex-1 truncate">{{ group.name }}</span>
         <span v-if="node.itemCount" class="text-xs text-muted-foreground">{{
           node.itemCount

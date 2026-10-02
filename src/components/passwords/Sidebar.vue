@@ -257,6 +257,24 @@ async function onRootDrop(event: DragEvent) {
         >
       </button>
       <UiButton
+        variant="ghost"
+        size="sm"
+        data-testid="passwords-open-generator"
+        @click="go('/generator')"
+      >
+        <Icon name="lucide:dices" class="size-4" />
+        {{ t('passwords.generator.title') }}
+      </UiButton>
+      <UiButton
+        variant="ghost"
+        size="sm"
+        data-testid="passwords-open-import"
+        @click="go('/import')"
+      >
+        <Icon name="lucide:file-down" class="size-4" />
+        {{ t('passwords.import.open') }}
+      </UiButton>
+      <UiButton
         variant="outline"
         size="sm"
         data-testid="passwords-new-folder"

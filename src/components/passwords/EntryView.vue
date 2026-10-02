@@ -5,6 +5,7 @@
  * the passkeys. The detail the backend sends holds flags, never a secret; the tab title stays the
  * static place title, never an entry value (FR-040).
  */
+import { DEFAULT_ENTRY_ICON } from '~/lib/passwords/icons'
 import { toast } from 'vue-sonner'
 import type { CopyField } from '@bindings/CopyField'
 import type { ItemDetail } from '@bindings/ItemDetail'
@@ -103,6 +104,17 @@ async function removeOtpAsync() {
         >
           <Icon name="lucide:arrow-left" class="size-5" />
         </UiButton>
+        <span
+          v-if="detail"
+          class="size-7 shrink-0"
+          :style="detail.color ? { color: detail.color } : undefined"
+          aria-hidden="true"
+        >
+          <PasswordsEntryIcon
+            :value="detail.icon"
+            :fallback="DEFAULT_ENTRY_ICON"
+          />
+        </span>
         <h1
           v-if="detail"
           class="min-w-0 flex-1 truncate text-2xl font-bold"

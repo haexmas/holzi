@@ -11,6 +11,10 @@ import type { Preset } from '@bindings/Preset'
 import type { PresetInput } from '@bindings/PresetInput'
 import type { PresetSaveResult } from '@bindings/PresetSaveResult'
 import type { MoveResult } from '@bindings/MoveResult'
+import type { ImportArgs } from '@bindings/ImportArgs'
+import type { ImportPreview } from '@bindings/ImportPreview'
+import type { ImportReport } from '@bindings/ImportReport'
+import type { ImportRunArgs } from '@bindings/ImportRunArgs'
 import type { AttachmentView } from '@bindings/AttachmentView'
 import type { AffectedResult } from '@bindings/AffectedResult'
 import type { HistorySecret } from '@bindings/HistorySecret'
@@ -80,6 +84,13 @@ export function usePasswords() {
     invoke<null>('passwords_attachment_remove', { args: { attachmentId } })
   const attachmentSaveAsync = (attachmentId: string, path: string) =>
     invoke<null>('passwords_attachment_save', { args: { attachmentId, path } })
+  const importPreviewAsync = (args: ImportArgs) =>
+    invoke<ImportPreview>('passwords_import_preview', { args })
+  const importRunAsync = (args: ImportRunArgs) =>
+    invoke<ImportReport>('passwords_import_run', { args })
+  const importCancelAsync = () => invoke<null>('passwords_import_cancel')
+  const importReportSaveAsync = (report: ImportReport, path: string) =>
+    invoke<null>('passwords_import_report_save', { args: { report, path } })
   const attachmentPreviewAsync = (attachmentId: string) =>
     invoke<ArrayBuffer>('passwords_attachment_preview', {
       args: { attachmentId },
@@ -197,5 +208,9 @@ export function usePasswords() {
     attachmentRemoveAsync,
     attachmentSaveAsync,
     attachmentPreviewAsync,
+    importPreviewAsync,
+    importRunAsync,
+    importCancelAsync,
+    importReportSaveAsync,
   }
 }

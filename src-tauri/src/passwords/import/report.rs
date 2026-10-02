@@ -51,8 +51,15 @@ pub struct ReportBuilder {
 
 impl ReportBuilder {
     /// Adds a row for a problem at an entry (`title` empty and `folder_path` empty for the source).
-    pub fn add(&mut self, title: &str, folder_path: &str, problem: &Problem) {
+    pub fn add(
+        &mut self,
+        item_id: Option<&str>,
+        title: &str,
+        folder_path: &str,
+        problem: &Problem,
+    ) {
         self.rows.push(AttentionRow {
+            item_id: item_id.map(str::to_string),
             title: title.to_string(),
             folder_path: folder_path.to_string(),
             kind: problem.kind,

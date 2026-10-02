@@ -192,6 +192,8 @@ pub enum AttentionKind {
 #[ts(export, export_to = "../../src/types/bindings/")]
 #[serde(rename_all = "camelCase")]
 pub struct AttentionRow {
+    /// The entry the place belongs to, so the window can open it; `None` for the source as a whole.
+    pub item_id: Option<String>,
     pub title: String,
     pub folder_path: String,
     pub kind: AttentionKind,

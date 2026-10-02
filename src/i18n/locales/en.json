@@ -784,7 +784,9 @@
         "wrong_credentials": "The password or key file is wrong.",
         "corrupt": "The file is damaged.",
         "unsupported_format": "The format is not supported.",
-        "encrypted_export": "The export is encrypted and cannot be read without its password."
+        "encrypted_export": "The export is encrypted and cannot be read without its password.",
+        "cancelled": "The import was cancelled.",
+        "unwritable": "The file could not be written."
       }
     }
   },
@@ -1212,6 +1214,97 @@
       "download": "Download",
       "preview": "Preview",
       "saved": "File saved."
+    },
+    "import": {
+      "open": "Import",
+      "title": "Import",
+      "source": "Source",
+      "file": "File",
+      "sources": {
+        "keepass": "KeePass (kdbx)",
+        "bitwarden": "Bitwarden (JSON or CSV)",
+        "lastpass": "LastPass (CSV)"
+      },
+      "hints": {
+        "keepass": "A database from KeePass or KeePassXC, with its password and optionally a key file.",
+        "bitwarden": "An unencrypted export from the vault (JSON holds more than CSV).",
+        "lastpass": "The CSV export from the vault."
+      },
+      "noFile": "No file chosen yet",
+      "chooseFile": "Choose file",
+      "fileHint": "The file is only read; nothing of it stays outside the vault.",
+      "password": "Database password",
+      "noKeyFile": "No key file",
+      "chooseKeyFile": "Choose key file",
+      "removeKeyFile": "Remove",
+      "keyFileHint": "Only needed if the database has a key file.",
+      "showPreview": "Preview",
+      "previewTitle": "What the file holds",
+      "counts": {
+        "entries": "Entries",
+        "groups": "Folders",
+        "trashedEntries": "Entries in the trash of the source",
+        "historyStates": "History states",
+        "attachments": "Attachments",
+        "passkeys": "Passkeys",
+        "duplicates": "Entries that already exist"
+      },
+      "warnings": "Notes",
+      "warningKinds": {
+        "attachment_too_large": "Attachments above 25 MiB are not taken over.",
+        "attachment_unreadable": "An attachment could not be read.",
+        "passkey_key_unreadable": "The key of a passkey could not be read.",
+        "passkey_public_key_missing": "A passkey has no public key.",
+        "passkey_duplicate": "A passkey already exists.",
+        "totp_invalid": "A TOTP secret is not valid and is taken over as it is.",
+        "icon_not_mapped": "An icon of the source could not be matched.",
+        "value_not_storable": "A value could not be stored.",
+        "source_setting": "Settings of the source are not taken over."
+      },
+      "onDuplicate": "If an entry already exists",
+      "skip": "Skip",
+      "skipHint": "Same title, user name and address: the entry is not created again.",
+      "create": "Create anyway",
+      "createHint": "The entry is created a second time.",
+      "change": "Back",
+      "start": "Import",
+      "running": "Import running",
+      "cancel": "Cancel",
+      "cancelled": "Import cancelled, nothing was taken over.",
+      "rollingBack": "What was already written is being removed again.",
+      "phases": {
+        "reading": "Reading the file",
+        "groups": "Folders",
+        "items": "Entries",
+        "attachments": "Attachments",
+        "rollback": "Undoing"
+      },
+      "done": "Import finished",
+      "report": {
+        "imported": "Entries read",
+        "trashed": "of them in the trash",
+        "historyStates": "History states",
+        "skippedDuplicates": "Skipped duplicates"
+      },
+      "needsAttention": "To rework by hand",
+      "sourceGroup": "The source as a whole",
+      "openEntry": "Open entry",
+      "nothingToDo": "Nothing needs to be reworked.",
+      "saveReport": "Save report as text file",
+      "reportSaved": "Report saved.",
+      "another": "Another file",
+      "toList": "To the list",
+      "kinds": {
+        "attachment_too_large": "Attachment “{file}” is {size} MiB, above the limit of {limit} MiB, and was not taken over.",
+        "attachment_unreadable": "Attachment “{file}” could not be read.",
+        "passkey_key_unreadable": "Passkey “{field}”: the key could not be read.",
+        "passkey_public_key_missing": "Passkey “{field}”: the public key could not be derived.",
+        "passkey_duplicate": "Passkey “{field}” already existed and was not created again.",
+        "totp_invalid": "The TOTP secret is not valid and stands in the entry as it was.",
+        "icon_not_mapped": "The icon of the source could not be matched.",
+        "value_not_storable": "A value could not be stored.",
+        "source_setting": "Settings of the source (search, Auto-Type per group, quality check) were not taken over."
+      }
     }
   }
 }
