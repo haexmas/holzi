@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { scenario } from '../lib/scenario.ts'
 import type { ScenarioContext } from '../lib/scenario.ts'
 import type { Device } from '../lib/group.ts'
+import { expectOnline } from '../lib/group-expect.ts'
 import { addThread, expectThreads, threadTitles } from '../lib/sync-flows.ts'
 import {
   admissionRequestCount,
@@ -91,6 +92,8 @@ scenario('sync-copy', { timeoutMs: 900_000 }, async (ctx) => {
   await b.stop()
   const d = await b.copyVaultTo('tablet')
   await b.start()
+  await expectOnline(ctx, a, b, true)
+  await expectOnline(ctx, b, a, true)
   await d.start()
   await expectState(
     ctx,
