@@ -65,9 +65,5 @@ pub fn verify_bundle(bytes: &[u8]) -> Result<VerifiedBundle, BundleRejection> {
 /// Lower-case hex of the SHA-256 of the signed message, the input of
 /// [`crate::extensions::ids::bundle_id`].
 pub fn signed_message_hex(bundle: &VerifiedBundle) -> String {
-    bundle
-        .signed_message_sha256
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect()
+    crate::sync::keys::hex(&bundle.signed_message_sha256)
 }
