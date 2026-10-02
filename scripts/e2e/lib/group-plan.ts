@@ -35,6 +35,7 @@ export interface PlannedUser {
 /** A name that is safe in a vault name, a window and a folder. */
 const NAME = /^[A-Za-z0-9][A-Za-z0-9_-]*$/
 
+/** Reads E2E_MAX_DEVICES, using the default when unset or empty; rejects nonpositive integers and fractions. */
 export function maxDevicesFrom(env: NodeJS.ProcessEnv): number {
   const value = env.E2E_MAX_DEVICES
   if (value === undefined || value === '') return DEFAULT_MAX_DEVICES
@@ -47,6 +48,7 @@ export function maxDevicesFrom(env: NodeJS.ProcessEnv): number {
   return number
 }
 
+/** Describes an exceeded device limit and the environment variable that changes it. */
 export function limitMessage(count: number, max: number): string {
   return `a group of ${count} devices is more than the limit of ${max}; set E2E_MAX_DEVICES to change it`
 }

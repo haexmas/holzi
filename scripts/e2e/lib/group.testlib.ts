@@ -134,6 +134,7 @@ export class FakeHost implements DeviceHost {
   }
 }
 
+/** Returns a relay stub with a fixed local URL and no-op lifecycle methods. */
 export function fakeRelay(): NostrRelay {
   return {
     url: 'ws://127.0.0.1:1',

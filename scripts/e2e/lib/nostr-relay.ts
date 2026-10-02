@@ -96,6 +96,7 @@ export function buildNostrRelay(
   return built
 }
 
+/** Extracts relay URLs from stdout log entries in order; a missing log yields an empty list. */
 function printedUrls(logFile: string): string[] {
   const log = existsSync(logFile) ? readFileSync(logFile, 'utf8') : ''
   return [...log.matchAll(new RegExp(URL_LINE, 'g'))].map((m) => m[1] ?? '')

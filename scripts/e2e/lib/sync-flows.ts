@@ -76,6 +76,7 @@ export async function createVaultOnRelay(
   )
 }
 
+/** Starts an instance, optionally reusing its data root, and opens the vault's workspace. */
 async function openAndShow(
   ctx: ScenarioContext,
   root: string | undefined,

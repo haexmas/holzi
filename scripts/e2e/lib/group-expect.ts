@@ -11,6 +11,7 @@ const SYNC_WAIT_MS = 40_000
 type Observer = Pick<Device, 'address' | 'deviceList'>
 type Target = Pick<Device, 'address' | 'pubkey'>
 
+/** Finds the target by public key in the observer's device list, or returns undefined. */
 async function rowOf(
   observer: Observer,
   target: Target,
