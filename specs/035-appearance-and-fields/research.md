@@ -156,9 +156,21 @@ ohne e2e-Hook und ohne Gruppen; Stufe 1 hängt nicht daran.
 
 **Entscheidung**: Eigene Farbe über `<input type="color">` (nativ, auf Android und iOS vom
 Webview als Farbwähler gezeigt) in einem Popover der „+“-Kachel, daneben ein Hex-Feld
-(`UiInput`, geprüft). Export/Import über `@tauri-apps/plugin-dialog` (`save`/`open`) und
-`plugin-fs`, wie der Passwortimport in `ImportWizard.vue`; die Dateiauswahl auf Mobilgeräten ist
-dort bereits abgedeckt. Die Datei ist klein (< 2 KiB) und wird im Speicher geprüft.
+(`UiInput`, geprüft). Export/Import über `@tauri-apps/plugin-dialog` (`save`/`open`) für den
+Pfad und `@tauri-apps/plugin-fs` (`readTextFile`/`writeTextFile`, vorher `stat` für die
+16-KiB-Grenze) im Frontend, wie in haex-vault (`useIdentityExport.ts`, `useIdentitiesActions.ts`).
+Der Passwortimport in `ImportWizard.vue` liest dagegen nicht im Frontend, sondern gibt den Pfad an
+einen Befehl im Backend; er ist hier kein Vorbild. Die Datei ist klein (< 2 KiB) und wird im
+Speicher geprüft.
+
+**Rechte**: `tauri-plugin-fs` steht schon in `Cargo.lock` (über `tauri-plugin-dialog`), das
+JS-Paket in `package.json`; neu sind nur der direkte Eintrag in `src-tauri/Cargo.toml`, die
+Registrierung in `lib.rs` und genau drei Rechte: `fs:allow-read-text-file`,
+`fs:allow-write-text-file`, `fs:allow-stat`, ohne `fs:default` und ohne `fs:scope`. `open()` und
+`save()` des Dialog-Plugins tragen die gewählte Datei zur Laufzeit in den Scope von `plugin-fs` ein
+(`try_fs_scope().allow_file`), darum darf die App nur die Datei anfassen, die der Nutzer gewählt
+hat. haex-vault erlaubt `fs:scope` mit `**` und breite Schreibrechte; das wird nicht übernommen.
+Auf Android liefert die Auswahl eine Content-URI; Lesen und Schreiben dort prüft die Handprüfung.
 
 **Verworfen**: Eigener Farbwähler (Aufwand ohne Nutzen für Stufe 2); Anzeigen und Einfügen von
 Text statt Datei (der Nutzer wünscht „Export/Import“ wie COSMIC, Datei).

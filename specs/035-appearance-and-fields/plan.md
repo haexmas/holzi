@@ -30,9 +30,9 @@ DOM nach.
 
 ## Technical Context
 
-**Language/Version**: TypeScript (Nuxt 4, Vue 3, `strict`), Rust nur unverändert (Preferences-Befehle `get_pref`/`set_pref` existieren).
+**Language/Version**: TypeScript (Nuxt 4, Vue 3, `strict`), Rust nur für die Registrierung von `tauri-plugin-fs` (eine Zeile, research R7); keine neuen Befehle (Preferences-Befehle `get_pref`/`set_pref` existieren).
 
-**Primary Dependencies**: haex-ui (`@haex-space/ui`, gepinnt auf `2dcb8bc`), Tailwind 4 mit den Tokens aus `src/assets/css/tailwind.css`, `@tauri-apps/plugin-dialog` für Dateiauswahl (schon im Projekt). **Keine neuen Abhängigkeiten**: Farbrechnung (OKLCH ↔ sRGB, WCAG-Kontrast) ist eine kleine eigene Funktion, weil jede Farbbibliothek mehr kostet als die ~120 Zeilen und das Ergebnis testbar sein muss.
+**Primary Dependencies**: haex-ui (`@haex-space/ui`, gepinnt auf `2dcb8bc`), Tailwind 4 mit den Tokens aus `src/assets/css/tailwind.css`, `@tauri-apps/plugin-dialog` für Dateiauswahl und `@tauri-apps/plugin-fs` für Lesen und Schreiben der Datei (beide schon im Projekt; `tauri-plugin-fs` steht über das Dialog-Plugin schon in `Cargo.lock` und wird nur direkt eingetragen und registriert, research R7). **Keine neuen Abhängigkeiten**: Farbrechnung (OKLCH ↔ sRGB, WCAG-Kontrast) ist eine kleine eigene Funktion, weil jede Farbbibliothek mehr kostet als die ~120 Zeilen und das Ergebnis testbar sein muss.
 
 **Storage**: Vault-Einstellungen (Tabelle `preferences`, Scope `vault`): `appearance.color_scheme` (bleibt, 023) und neu `appearance.theme` (JSON-String). Keine Migration, keine neue Tabelle.
 
@@ -129,7 +129,7 @@ scripts/
 **Structure Decision**: Reine Logik in `src/lib/appearance/` (wie `src/lib/settings/colorScheme.ts`
 und `src/lib/passwords/`), damit `node --test` sie ohne Nuxt prüft; Zustand und Anwendung in einem
 Composable nach dem Muster von `useColorScheme`; Oberfläche als Komponenten unter
-`components/settings/` mit dem bestehenden `Group`/`Row`. Kein neuer Rust-Code.
+`components/settings/` mit dem bestehenden `Group`/`Row`. Kein neuer Rust-Code außer der Registrierung von `tauri-plugin-fs` (research R7).
 
 ## Phasen der Umsetzung
 
