@@ -1,4 +1,5 @@
 import { defineAsyncComponent, type Component } from 'vue'
+import { passwordsRoutePatterns } from '~/lib/passwords/registry'
 import { settingsRoutePatterns } from '~/lib/settings/registry'
 import { getAppDefinition } from '~/lib/wm/apps'
 import { locationTitle, type RoutePattern } from '~/lib/wm/routeMatch'
@@ -24,6 +25,9 @@ const ChatApp = defineAsyncComponent(
 )
 const SettingsApp = defineAsyncComponent(
   () => import('~/components/apps/SettingsApp.vue'),
+)
+const PasswordsApp = defineAsyncComponent(
+  () => import('~/components/apps/PasswordsApp.vue'),
 )
 
 /** The view of each settings location (spec 023-settings-app, contracts §1). */
@@ -91,6 +95,19 @@ function settingsRoutes(): AppRouteRecord[] {
   }))
 }
 
+/** The password manager routes from the registry: `PasswordsApp` as the frame, one flat child per
+ * place. The views are attached by the stories (list, entry, trash, …). */
+function passwordsRoutes(): AppRouteRecord[] {
+  return passwordsRoutePatterns().map((root) => ({
+    path: root.path,
+    component: PasswordsApp,
+    children: (root.children ?? []).map((child) => ({
+      path: child.path,
+      titleKey: child.titleKey,
+    })),
+  }))
+}
+
 const APP_ROUTES: Record<string, readonly AppRouteRecord[]> = {
   // Chat (research R10): one mounted root; children only carry the location.
   'system.chat': [
@@ -104,6 +121,7 @@ const APP_ROUTES: Record<string, readonly AppRouteRecord[]> = {
     },
   ],
   'system.settings': settingsRoutes(),
+  'system.passwords': passwordsRoutes(),
 }
 
 /** `undefined` for an `appId` no routes are registered for — `wm/TabPanel.vue` then renders

@@ -113,7 +113,8 @@
     },
     "apps": {
       "chat": "Chat",
-      "settings": "Settings"
+      "settings": "Settings",
+      "passwords": "Passwords"
     },
     "launcher": {
       "lock": "Lock",
@@ -156,6 +157,15 @@
     },
     "chat": {
       "thread": "Conversation"
+    },
+    "passwords": {
+      "list": "Passwords",
+      "folder": "Folder",
+      "entry": "Entry",
+      "history": "History",
+      "trash": "Trash",
+      "generator": "Generator",
+      "import": "Import"
     }
   },
   "chat": {
@@ -760,6 +770,22 @@
       "modelRegistrationFailed": "The installation could not be completed.",
       "modelNotFound": "Model not found.",
       "generic": "Unknown error."
+    },
+    "passwords": {
+      "notFound": "The entry was not found.",
+      "forbidden": "This is not permitted.",
+      "conflictChanged": "The entry has changed in the meantime.",
+      "conflictDeleted": "The entry has been deleted in the meantime.",
+      "conflict": "The entry has changed or been deleted in the meantime.",
+      "attachmentTooLarge": "The file is larger than the limit of {limit} MiB.",
+      "importFailed": "The import failed.",
+      "importReason": {
+        "unreadable": "The file cannot be read.",
+        "wrong_credentials": "The password or key file is wrong.",
+        "corrupt": "The file is damaged.",
+        "unsupported_format": "The format is not supported.",
+        "encrypted_export": "The export is encrypted and cannot be read without its password."
+      }
     }
   },
   "actions": {
@@ -913,6 +939,15 @@
         "models": "Manage models"
       },
       "guardrails": "Guardrails (user only)"
+    }
+  },
+  "passwords": {
+    "title": "Passwords",
+    "empty": "No entries yet",
+    "search": "Search entries",
+    "sidebar": {
+      "show": "Show sidebar",
+      "hide": "Hide sidebar"
     }
   }
 }

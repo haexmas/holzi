@@ -113,7 +113,8 @@
     },
     "apps": {
       "chat": "Chat",
-      "settings": "Einstellungen"
+      "settings": "Einstellungen",
+      "passwords": "Passwörter"
     },
     "launcher": {
       "lock": "Sperren",
@@ -156,6 +157,15 @@
     },
     "chat": {
       "thread": "Unterhaltung"
+    },
+    "passwords": {
+      "list": "Passwörter",
+      "folder": "Ordner",
+      "entry": "Eintrag",
+      "history": "Verlauf",
+      "trash": "Papierkorb",
+      "generator": "Generator",
+      "import": "Import"
     }
   },
   "chat": {
@@ -760,6 +770,22 @@
       "modelRegistrationFailed": "Die Installation konnte nicht abgeschlossen werden.",
       "modelNotFound": "Modell wurde nicht gefunden.",
       "generic": "Unbekannter Fehler."
+    },
+    "passwords": {
+      "notFound": "Der Eintrag wurde nicht gefunden.",
+      "forbidden": "Dafür fehlt die Berechtigung.",
+      "conflictChanged": "Der Eintrag wurde inzwischen geändert.",
+      "conflictDeleted": "Der Eintrag wurde inzwischen gelöscht.",
+      "conflict": "Der Eintrag wurde inzwischen geändert oder gelöscht.",
+      "attachmentTooLarge": "Die Datei ist größer als das Limit von {limit} MiB.",
+      "importFailed": "Der Import ist fehlgeschlagen.",
+      "importReason": {
+        "unreadable": "Die Datei lässt sich nicht lesen.",
+        "wrong_credentials": "Passwort oder Schlüsseldatei sind falsch.",
+        "corrupt": "Die Datei ist beschädigt.",
+        "unsupported_format": "Das Format wird nicht unterstützt.",
+        "encrypted_export": "Der Export ist verschlüsselt und lässt sich ohne sein Kennwort nicht lesen."
+      }
     }
   },
   "actions": {
@@ -913,6 +939,15 @@
         "models": "Modelle verwalten"
       },
       "guardrails": "Leitplanken (nur Nutzer)"
+    }
+  },
+  "passwords": {
+    "title": "Passwörter",
+    "empty": "Noch keine Einträge",
+    "search": "Einträge suchen",
+    "sidebar": {
+      "show": "Seitenleiste einblenden",
+      "hide": "Seitenleiste ausblenden"
     }
   }
 }

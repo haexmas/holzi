@@ -10,7 +10,8 @@
  *
  * The frame is a size container, so the sidebar follows the window's width, not the screen's
  * (FR-004): from `@2xl` it sits beside the content and can be hidden, below it is gone and opens
- * over the content. Sidebar and search state are local to the open tab, nothing is kept.
+ * over the content (`useSidebarFrame`). Sidebar and search state are local to the open tab, nothing
+ * is kept.
  */
 import type { DeviceInfo } from '~/composables/useDevice'
 import { SETTINGS_DEVICE_KEY } from '~/components/settings/deviceContext'
@@ -34,27 +35,16 @@ const root = useTemplateRef<HTMLElement>('root')
 const sidebar = useTemplateRef<{ $el: HTMLElement; focusActive(): void }>(
   'sidebar',
 )
-/** Wide window: the operator hid the sidebar. */
-const wideHidden = ref(false)
-/** Narrow window: the sidebar is open over the content. */
-const menuOpen = ref(false)
-const wide = ref(true)
 
-/** Read from the sidebar's CSS rather than a second copy of the `@2xl` threshold. */
-function isWide(): boolean {
-  const el = sidebar.value?.$el
-  return el ? getComputedStyle(el).position !== 'absolute' : true
-}
-
-const { width } = useElementSize(root)
-watch(width, () => {
-  wide.value = isWide()
-  if (wide.value) menuOpen.value = false
-})
-
-const sidebarVisible = computed(() =>
-  wide.value ? !wideHidden.value : menuOpen.value,
-)
+const {
+  wideHidden,
+  menuOpen,
+  wide,
+  visible: sidebarVisible,
+  isWide,
+  show,
+  hide,
+} = useSidebarFrame(root, () => sidebar.value?.$el)
 
 const sidebarClass = computed(() => [
   'absolute inset-0 z-20 bg-background px-2 pb-2 transition-[translate,width,margin,visibility] duration-200 ease-out motion-reduce:transition-none',
@@ -66,20 +56,14 @@ const sidebarClass = computed(() => [
 ])
 
 async function showSidebar(focusList: boolean) {
-  if (isWide()) wideHidden.value = false
-  else menuOpen.value = true
+  show()
   if (!focusList) return
   await nextTick()
   sidebar.value?.focusActive()
 }
 
-function hideSidebar() {
-  if (isWide()) wideHidden.value = true
-  else menuOpen.value = false
-}
-
 function toggleSidebar() {
-  if (sidebarVisible.value) hideSidebar()
+  if (sidebarVisible.value) hide()
   else void showSidebar(true)
 }
 
@@ -166,7 +150,6 @@ function goBack() {
 onVaultTablesChanged(['known_devices'], reloadDeviceInfoAsync)
 
 onMounted(() => {
-  wide.value = isWide()
   void reloadDeviceInfoAsync()
 })
 </script>
