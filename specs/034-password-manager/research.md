@@ -6,8 +6,9 @@ Jede Entscheidung: **Entscheidung**, **Begründung**, **verworfene Alternativen*
 Belege sind Dateien im Repository (Stand `main` am 2026-10-02) und im Quellstand von
 haex-vault (`8dce379d94e18fcd42c3b73686a06f984ca3f574`). Wo etwas aus allgemeinem
 Wissen und nicht aus dem Code stammt, steht es dabei. **Nicht geprüft** wurde, ob die
-neuen Crates (`keepass`, `csv`, `sha1`, `tauri-plugin-clipboard-manager`) mit den
-gewünschten Funktionen bauen; das klärt Aufgabe T003 (R12, R9).
+neuen bzw. direkt gemachten Crates (`keepass`, `csv`, `sha1`, `p256`, `ed25519-dalek`,
+`pkcs1`, `spki`, `unicode-normalization`, `tauri-plugin-clipboard-manager`) mit den
+benötigten Funktionen in beiden Konfigurationen bauen; das klärt Aufgabe T003 (R12, R9).
 
 ## R1 — Zwölf Tabellen in einer Migration `0022`, Triggerversion 14, SQL in eigener Datei
 
@@ -345,7 +346,8 @@ Wert in die Tabelle kommen (anderes Gerät, andere Programmversion); darum melde
 einen Zustand `otpState` (`none`, `valid`, `invalid`), `passwords_totp_code` liefert für
 `invalid` einen `InvalidInput`, und die Oberfläche zeigt am Eintrag eine Meldung mit „Ersetzen“
 und „Entfernen“, ohne etwas still zu ändern. Beim Import wird ein ungültiges Secret nicht
-übernommen: der Eintrag entsteht ohne TOTP und steht im Bericht als „mit Verlust“.
+verworfen: der Eintrag erhält `otpState: invalid` und steht zusätzlich im Bericht
+(`totp_invalid`), damit der Nutzer es ersetzen oder entfernen kann.
 
 **Verworfen**: _`totp-rs`_ (zusätzliche Abhängigkeiten, die QR- und Serde-Funktionen
 nicht gebraucht werden), _`otpauth` im Frontend_ (Secret im Webview, R7).
@@ -493,7 +495,8 @@ Zuordnungen je Format stehen in [contracts/import-mapping.md](./contracts/import
 **Ungeprüft und deshalb Aufgabe T003**: ob `keepass` KDBX 3 und 4, Argon2-Varianten,
 Schlüsseldateien, Anhänge, Verlauf, eigene Symbole, benutzerdefinierte Daten, Auto-Type und die
 Eigenschaften der Einträge in der benötigten Form liefert und in beiden Feature-Konfigurationen
-baut, und ob `ed25519-dalek` und `pkcs1` die Ableitung wie beschrieben leisten. Fällt die Prüfung
+baut, und ob `p256`, `ed25519-dalek`, `pkcs1` und `spki` die Ableitung wie beschrieben leisten.
+Fällt die Prüfung
 für `keepass` negativ aus, ist die zweite Wahl der Weg von haex-vault (`kdbxweb` plus `hash-wasm`
 im Frontend, Parser liefert `ImportModel` als JSON an einen Rust-Command `apply_import`); die
 übrigen Teile des Plans ändern sich dann nicht.
