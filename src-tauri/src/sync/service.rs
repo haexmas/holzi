@@ -166,10 +166,12 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
     // otherwise the next attempt waits for the 30-second poll and can leave
     // a still-listed peer without a session after list convergence.
     let reconnect_now = Arc::new(Notify::new());
-    let reconnect_for_devices = Arc::clone(&reconnect_now);
     node.on_devices_changed(Arc::new(move || {
         events::emit(&devices_app, SYNC_DEVICES_CHANGED, ());
-        reconnect_for_devices.notify_one();
+    }));
+    let reconnect_for_connections = Arc::clone(&reconnect_now);
+    node.on_connection_ended(Arc::new(move || {
+        reconnect_for_connections.notify_one();
     }));
 
     // `notify` (the gate's shared commit signal) wakes at most one waiter

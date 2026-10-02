@@ -83,6 +83,8 @@ struct Inner {
     duplicates: DuplicateWatch,
     /// Called when a device's problem was set or cleared (FR-034).
     devices_changed: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
+    /// Called after a live session ends, so the service can replace it.
+    connection_ended: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
     /// Devices this device's list does not name whose presence claimed a
     /// newer list, waiting to be dialed once to fetch it (FR-007).
     candidates: Mutex<HashMap<[u8; 32], EndpointAddr>>,
@@ -168,6 +170,7 @@ impl SyncNode {
             applied_relays: Mutex::new(initial_relays),
             duplicates: DuplicateWatch::default(),
             devices_changed: Mutex::new(None),
+            connection_ended: Mutex::new(None),
             candidates: Mutex::new(HashMap::new()),
         });
         let router = Router::builder(endpoint)
@@ -230,6 +233,17 @@ impl SyncNode {
         *slot = Some(hook);
     }
 
+    /// Sets what runs after a live session ends, independently of device
+    /// problem notifications such as a peer refusing a removed device.
+    pub fn on_connection_ended(&self, hook: Arc<dyn Fn() + Send + Sync>) {
+        let mut slot = self
+            .inner
+            .connection_ended
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        *slot = Some(hook);
+    }
+
     /// Halts sync with `device` on evidence of `problem` (FR-029, FR-030):
     /// records it, and for a duplicate also holds the device back and ends
     /// its live session, since the real one cannot be told from the copy.
@@ -264,7 +278,11 @@ impl SyncNode {
     /// Devices with a live session.
     pub fn connected(&self) -> Vec<[u8; 32]> {
         let peers = self.inner.peers.lock().unwrap_or_else(|e| e.into_inner());
-        peers.keys().copied().collect()
+        peers
+            .iter()
+            .filter(|(_, connection)| connection.close_reason().is_none())
+            .map(|(device, _)| *device)
+            .collect()
     }
 
     /// Records a device's address from presence (spec 024, FR-007), so
@@ -443,6 +461,18 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
         // The last moment it was online is when the session ended.
         mark_seen(&inner, peer.device_pubkey).await;
         notify_devices_changed(&inner);
+        notify_connection_ended(&inner);
+    }
+}
+
+fn notify_connection_ended(inner: &Inner) {
+    let hook = inner
+        .connection_ended
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    if let Some(hook) = hook {
+        hook();
     }
 }
 
