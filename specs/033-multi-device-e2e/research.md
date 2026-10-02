@@ -10,6 +10,8 @@ Facts come from the code of `main` at `4ea5292` (spec 024 merged, rig of spec 01
 
 **Alternatives.** An injectable clock in the sync code (rejected: touches production code in about eight places for a value that is not a timer); faking the system time of the instance (rejected: needs privileges and also breaks TLS and signatures). FR-014 is aligned in the spec accordingly (see Spec alignment in the plan).
 
+**Measured (2026-10-02, `sync-presence`).** A stopped phone was shown as not online by the laptop after 34.6 s and a killed one after 30.0 s, so both are noticed at about the idle time of the connection, with a margin of nearly two over the 60 s deadline. A device stopped through the driver is not closed gracefully by the application (the driver ends the process group), so "stop" and "kill" look the same to the peer; a close that the application does itself (the lock, scenario M8) closes its sessions at once.
+
 ## R2 Taking a running device offline (decides FR-013)
 
 **Finding.** Sessions between devices of one machine are direct QUIC connections. Their addresses reach other devices only through Nostr presence and are kept in memory (`MemoryLookup`, `endpoint.rs`), never on disk. `sync_servers_set` applies iroh relays at once but changes the Nostr relays of the presence loop only at the next opening of the vault (`commands.rs:469-485`, `service.rs`). There is no in-app offline switch.
@@ -26,11 +28,15 @@ Facts come from the code of `main` at `4ea5292` (spec 024 merged, rig of spec 01
 
 **Decision.** The library offers `LocalRelay::builder().port(p)` (shown in its own example `local-relay-simple`), so the binary can take an optional port (argument or one environment variable); the harness picks a free port itself and passes it, so `relay.stop()` followed by `relay.start()` returns on the same URL. State is lost on restart, which is fine: presence meetings are ephemeral. **Gate (G1):** the client library of the application must reconnect to a relay that returns, and within a measured fixed deadline; the servers scenario depends on it only through the settings, but the edge case "relay restarted while devices run" does. A failed reconnect remains documented as an application finding, but also fails the scenario, keeps CI red, and blocks the dependent Stage 2 work until the plan is amended.
 
+**Gate G1 (2026-10-02, `sync-relay-return`).** Passed. With the relay stopped, both devices kept running and kept local work; a phone that restarted during the outage found the laptop again 2.8 s after the relay returned on the same URL, and both devices exchanged the work done in the pause. The laptop still holds the session of a vanished peer for about 30 s, so the scenario first waits until the laptop shows the phone as not online; otherwise "online" right after the relay returns would be the old session and prove nothing.
+
 ## R4 Linking through the start-page form (M1)
 
 **Finding.** The form (`LinkSheet.vue`) has hooks for code, device name, vault name and its server list, but its submit button has none, and the passphrase fields have only ids (`#link-passphrase`, `#link-passphrase-confirm`, which the hook syntax accepts as selectors). It can set Nostr relays but not iroh relays; the existing helpers avoid the problem by calling `link_join_start` with servers, which the form cannot do.
 
 **Decision.** Add one hook, `link-submit`, to the submit button (the only application change besides the relay binary). **Gate (G2):** whether a device joined through the form, with default iroh relays, connects to the host on loopback without waiting for or reaching the internet (spec 016 FR-007 keeps scenarios off the network). A measurement in Stage 2 decides. If it does, nothing else is needed. If it does not, the fallback is a build-time override of the default iroh relay list that exists only in debug builds and is read from one environment variable; it is documented in the plan's Complexity Tracking at that time and requires a reviewed amendment of this plan.
+
+**Gate G2 (2026-10-02, `sync-link`).** Passed: a device joined through the start-page form, with the group relay as its only Nostr server and the default iroh relays, linked and opened the vault with all of its data on loopback; the whole scenario takes 29 s. Not measured: whether that device contacted the public iroh relays on a machine that has internet. If scenarios must stay off the network, the debug-build override described above remains the fallback; nothing needs it for the scenario to pass.
 
 ## R5 Failure material for several devices
 
