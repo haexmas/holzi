@@ -19,7 +19,7 @@ Zeitstempel `TEXT` (`CURRENT_TIMESTAMP`, wo nicht anders gesagt).
 | A3  | kein UNIQUE auf `tags.name`, `passkeys.credential_id` und `item_tags (item_id, tag_id)`; stattdessen Indizes | R2    |
 | A4  | `item_binaries.binary_hash` und `snapshot_binaries.binary_hash`: `ON DELETE RESTRICT` statt `CASCADE`        | R4    |
 | A5  | zusätzliche Indizes auf Fremdschlüsselspalten                                                                | R1    |
-| A6  | `binaries.orphaned_at` (nullable): Beginn der Karenzzeit nach Verlust des letzten bekannten Verweises     | R4    |
+| A6  | `binaries.orphaned_at` (nullable): Beginn der Karenzzeit nach Verlust des letzten bekannten Verweises        | R4    |
 
 ## Tabellen
 
@@ -70,14 +70,14 @@ CASCADE (leer = Wurzel) · **`trashed_from_group_id` TEXT (A2)**. Index:
 
 ### `haex_passwords_binaries` — Binärdaten
 
-| Spalte       | Typ                    | Regel                                                                                           |
-| ------------ | ---------------------- | ----------------------------------------------------------------------------------------------- |
-| `hash`       | TEXT PK                | SHA-256 der Rohdaten, kleingeschriebenes Hex                                                    |
-| `data`       | **BLOB** NOT NULL (A1) | höchstens 25 MiB                                                                                |
-| `size`       | INTEGER NOT NULL       | Länge von `data`                                                                                |
-| `type`       | TEXT                   | `attachment` (Standard) oder `icon` (eigenes Symbol, vom Import; Verweis über `binary:<hash>`)  |
-| `created_at`  | TEXT                   | Zeitpunkt der Anlage; Rust schreibt RFC 3339 mit Millisekunden                                  |
-| `orphaned_at` | TEXT                  | nullable; Zeitpunkt, an dem kein Verweis mehr bekannt war; Karenzzeit über `datetime(orphaned_at)` |
+| Spalte        | Typ                    | Regel                                                                                              |
+| ------------- | ---------------------- | -------------------------------------------------------------------------------------------------- |
+| `hash`        | TEXT PK                | SHA-256 der Rohdaten, kleingeschriebenes Hex                                                       |
+| `data`        | **BLOB** NOT NULL (A1) | höchstens 25 MiB                                                                                   |
+| `size`        | INTEGER NOT NULL       | Länge von `data`                                                                                   |
+| `type`        | TEXT                   | `attachment` (Standard) oder `icon` (eigenes Symbol, vom Import; Verweis über `binary:<hash>`)     |
+| `created_at`  | TEXT                   | Zeitpunkt der Anlage; Rust schreibt RFC 3339 mit Millisekunden                                     |
+| `orphaned_at` | TEXT                   | nullable; Zeitpunkt, an dem kein Verweis mehr bekannt war; Karenzzeit über `datetime(orphaned_at)` |
 
 `data` wird nur in eigenen Abfragen gelesen. `size`, nicht `length(data)`, trägt die Anzeige.
 
