@@ -183,9 +183,9 @@ documentation and the template, in 60 lines or fewer.
 
 1. **Given** the scenario template, **When** a contributor names two users with two devices each, **Then**
    the four application processes start with separate data, and each can be addressed by its name.
-2. **Given** a running group, **When** a scenario makes one device unreachable, **Then** that device keeps
-   running but neither reaches nor is reached by the others and the test relay, until the scenario
-   restores it.
+2. **Given** a running group, **When** a scenario makes one device unreachable, **Then** that device is
+   running and works locally but neither reaches nor is reached by the others and the test relay, until
+   the scenario restores it.
 3. **Given** a scenario, **When** it needs the device list, a device's online state or a copy of a vault
    file, **Then** a helper provides it without the scenario touching the driver, the process or the file
    layout directly.
@@ -304,10 +304,10 @@ result names the scenario and keeps the material of the failure.
 - **FR-012**: The rig MUST let a scenario declare a group of users and devices with names, start them with
   separate data, and address each by name. Each user has exactly one vault in the group. Several users with
   their own vaults in one scenario MUST be possible, each with several devices.
-- **FR-013**: The rig MUST let a scenario control the network per device while the application keeps
-  running: make a device unreachable for the other devices and the test relay and restore it without
-  stopping or restarting the application, and switch
-  the test relay itself off and on.
+- **FR-013**: The rig MUST let a scenario control the network per device: make a device unreachable for
+  the other devices and the test relay and restore it, while the device stays up and usable for local
+  work in between (applying either change may restart the application once; plan, research R2), and
+  switch the test relay itself off and on.
 - **FR-014**: Time-based expectations MUST use a fixed deadline equal to the promise they check, which the
   time scale of the suite does not stretch. The 60-second expectation of M4 waits in real time and ends as
   soon as the expectation holds, within the bounds of SC-004. The application is not changed to let a
@@ -394,9 +394,10 @@ result names the scenario and keeps the material of the failure.
 - How the waiting time is controlled (moving the application's clock, a test-only setting, or waiting in
   real time) is a decision for the plan. The user-visible promise stays 60 seconds; the scenario of M4
   must not weaken it.
-- How a device is made unreachable while its application keeps running (network namespace, a blocked
-  relay address, a switch in the application) is a decision for the plan; the observable behavior is
-  fixed by FR-013.
+- A device is made unreachable by restarting its application with no servers and restored by restarting
+  it with the group's servers (plan, research R2, decided by the measurement G4); the observable behavior
+  is fixed by FR-013. Network namespaces were measured and are possible on a development machine but are
+  not adopted.
 - Only Linux is implemented. Per further platform, what is probably needed (to be confirmed in each
   follow-up spec): Windows, the Tauri WebDriver bridge with Microsoft's Edge driver and a Windows runner;
   macOS, no official driver for its web view, so a third-party driver or a bridge inside the application,

@@ -2,11 +2,14 @@
 // SC-004). `driver.log` needs no writing here: it already exists, written continuously for the life of
 // each instance (scripts/e2e/lib/instance.ts); this only adds the three files a failure specifically
 // needs.
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import type { CaptureDevice } from './group.ts'
 import type { Instance } from './instance.ts'
 import type { Provider } from './provider.ts'
 import type { Step } from './scenario.ts'
+
+const FAILURE_SCREENSHOT_LIMIT_MS = 5_000
 
 export interface CaptureFailureOptions {
   runDir: string
@@ -17,6 +20,8 @@ export interface CaptureFailureOptions {
   deadlineMs?: number
   instances: Instance[]
   providers: Provider[]
+  /** The devices of a group, each with a folder of its own (contracts/failure-material.md). */
+  devices?: CaptureDevice[]
 }
 
 function describeError(error: unknown): string {
@@ -38,11 +43,62 @@ async function screenshotOrNote(
     return 'no screenshot: the application had already ended'
   }
   try {
-    writeFileSync(join(dir, 'screenshot.png'), await instance.screenshot())
+    writeFileSync(
+      join(dir, 'screenshot.png'),
+      await instance.screenshot(FAILURE_SCREENSHOT_LIMIT_MS),
+    )
     return undefined
   } catch (error) {
     return `no screenshot: ${describeError(error)}`
   }
+}
+
+/**
+ * One folder per device of a group: a screenshot while the device lives (a note when it does not) and
+ * a copy of its data. A device that fails to capture leaves a note and never stops the others.
+ * Returns the files each folder holds, for the timeline.
+ */
+async function captureDevices(
+  dir: string,
+  devices: CaptureDevice[],
+): Promise<Array<{ folder: string; files: string[] }>> {
+  const kept: Array<{ folder: string; files: string[] }> = []
+  for (const device of devices) {
+    const deviceDir = join(dir, device.folder)
+    try {
+      mkdirSync(deviceDir, { recursive: true })
+      if (device.alive()) {
+        try {
+          writeFileSync(
+            join(deviceDir, 'screenshot.png'),
+            await device.screenshot(FAILURE_SCREENSHOT_LIMIT_MS),
+          )
+        } catch (error) {
+          writeFileSync(
+            join(deviceDir, 'screenshot-note.txt'),
+            `no screenshot: ${describeError(error)}\n`,
+          )
+        }
+      } else {
+        writeFileSync(
+          join(deviceDir, 'screenshot-note.txt'),
+          'no screenshot: the device was not running\n',
+        )
+      }
+      try {
+        device.keepData(deviceDir)
+      } catch (error) {
+        writeFileSync(
+          join(deviceDir, 'data-note.txt'),
+          `no data kept: ${describeError(error)}\n`,
+        )
+      }
+      kept.push({ folder: device.folder, files: readdirSync(deviceDir).sort() })
+    } catch {
+      // Best effort, as the rest of the capture.
+    }
+  }
+  return kept
 }
 
 /**
@@ -57,6 +113,7 @@ export async function captureFailure(
   try {
     mkdirSync(dir, { recursive: true })
     const screenshotNote = await screenshotOrNote(dir, options.instances)
+    const devices = await captureDevices(dir, options.devices ?? [])
     writeFileSync(
       join(dir, 'timeline.json'),
       JSON.stringify(
@@ -70,6 +127,7 @@ export async function captureFailure(
             ? {}
             : { deadlineMs: options.deadlineMs }),
           ...(screenshotNote === undefined ? {} : { screenshotNote }),
+          ...(devices.length === 0 ? {} : { devices }),
         },
         null,
         2,

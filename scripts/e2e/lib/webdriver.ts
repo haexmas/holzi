@@ -205,9 +205,14 @@ export class WebDriverClient {
     )
   }
 
-  async screenshot(): Promise<Buffer> {
+  async screenshot(callLimitMs = this.limitMs): Promise<Buffer> {
     return Buffer.from(
-      (await this.call('GET', this.session('/screenshot'))) as string,
+      (await this.call(
+        'GET',
+        this.session('/screenshot'),
+        undefined,
+        callLimitMs,
+      )) as string,
       'base64',
     )
   }

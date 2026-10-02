@@ -18,20 +18,20 @@ const laptop = g.device('anna/laptop')
 
 ## Device operations
 
-| Call                                        | Effect                                                                                                                                  |
-| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `device.page`                               | the `Page` of spec 016 (click, type, invoke, exec, screenshot, waitForDisplayed, navigate)                                              |
-| `device.stop()`                             | graceful end, data kept                                                                                                                 |
-| `device.kill()`                             | end without cleanup (SIGKILL on Linux), data kept                                                                                       |
-| `device.start()`                            | start over the same data and open the vault                                                                                             |
-| `device.restart()`                          | `stop()` then `start()`                                                                                                                 |
-| `device.goOffline()`                        | disable network access for the running application; it keeps running and working locally but cannot reach or be reached                 |
-| `device.goOnline()`                         | restore the group's network access while the application keeps running                                                                  |
-| `device.setNostrRelays(urls, { disabled })` | the settings action of the servers view, through the interface                                                                          |
-| `device.deviceList()`                       | the rows the device view shows: `{ name, role, current, online, lastSeen, text }`                                                       |
-| `device.status()`                           | `sync_status` of the device                                                                                                             |
-| `device.identity()`                         | `{ npub, hex }`                                                                                                                         |
-| `device.copyVaultTo(name, { user })`        | copy this device's vault file consistently to a new device `name` of the group (not started); reports failure instead of a partial copy |
+| Call                                 | Effect                                                                                                                                                                      |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `device.page`                        | the `Page` of spec 016 (click, type, invoke, exec, screenshot, waitForDisplayed, navigate)                                                                                  |
+| `device.stop()`                      | graceful end, data kept                                                                                                                                                     |
+| `device.kill()`                      | end without cleanup (SIGKILL on Linux), data kept                                                                                                                           |
+| `device.start()`                     | start over the same data and open the vault                                                                                                                                 |
+| `device.restart()`                   | `stop()` then `start()`                                                                                                                                                     |
+| `device.goOffline()`                 | set servers to none, restart; the device runs and works locally but cannot reach or be reached                                                                              |
+| `device.goOnline()`                  | set the group's servers back, restart                                                                                                                                       |
+| `device.setServers(servers)`         | the server lists of the vault (`sync_servers_set`); they apply at the next opening                                                                                          |
+| `device.deviceList()`                | the rows of `list_vault_devices`: `{ devicePubkey, alias, role, isCurrent, online, lastSeen, problem }`; the status text is read from the device view through `device.page` |
+| `device.status()`                    | `sync_status` of the device                                                                                                                                                 |
+| `device.identity()`                  | `{ npub, hex }`                                                                                                                                                             |
+| `device.copyVaultTo(name, { user })` | copy this device's vault file consistently to a new device `name` of the group (not started); reports failure instead of a partial copy                                     |
 
 ## Group operations
 

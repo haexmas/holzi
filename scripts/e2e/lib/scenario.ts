@@ -6,124 +6,37 @@ import { randomBytes } from 'node:crypto'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { removeRoot, startInstance } from './instance.ts'
-import type { ColorScheme, Instance } from './instance.ts'
+import type { Instance } from './instance.ts'
 import { toTools } from './preflight.ts'
-import type { Tools } from './preflight.ts'
 import { startNostrRelay } from './nostr-relay.ts'
-import type { NostrRelay } from './nostr-relay.ts'
 import { startProvider } from './provider.ts'
-import type { Behavior, Provider, StandInModel } from './provider.ts'
+import type { Provider } from './provider.ts'
 import { captureFailure } from './artifacts.ts'
+import { createGroup, maxDevicesFrom } from './group.ts'
+import type { CaptureDevice } from './group.ts'
+import { createLinuxHost } from './platform/linux.ts'
+import type {
+  E2EEnv,
+  RunDeps,
+  ScenarioContext,
+  ScenarioOptions,
+  ScenarioResult,
+  Step,
+} from './scenario-types.ts'
 
-export type CloseBehavior = 'exit' | 'relaunch'
-export type ScenarioStatus = 'passed' | 'failed' | 'skipped'
-
-export interface E2EEnv {
-  runDir: string
-  app: string
-  closeBehavior: CloseBehavior
-  tools: Tools
-  /** Default limit of a scenario that sets none. */
-  scenarioTimeoutMs: number
-  /** Multiplies generic timeouts. The close promises stay fixed and a scaled run is non-conformant. */
-  timeScale: number
-  marker: string
-  /** Keep the material of passing scenarios too. */
-  keep: boolean
-}
-
-export interface Step {
-  name: string
-  /** Milliseconds since the scenario started, from one monotonic clock. */
-  atMs: number
-  at: string
-  detail?: string
-}
-
-export interface ScenarioResult {
-  name: string
-  status: ScenarioStatus
-  durationMs: number
-  skipReason?: string
-  error?: string
-  steps: Step[]
-  /** The last step reached before a failure, or the failing wait's own description. Failed status only. */
-  failedStep?: string
-  /** Where the kept material for a failure is. Failed status only. */
-  material?: string
-}
-
-export interface ScenarioOptions {
-  needs?: { closeBehavior: CloseBehavior }
-  timeoutMs?: number
-}
-
-export interface StartInstanceRequest {
-  scenario: string
-  root: string
-  logFile: string
-  colorScheme?: ColorScheme
-  reuse: boolean
-  env: E2EEnv
-  /** Records a timeline entry on the scenario that made the request. */
-  step: (name: string, detail?: string) => void
-  /** Keeps the screen's current XWD image at `<framebufferDir>/Xvfb_screen0` (research R11, T068). */
-  framebufferDir?: string
-}
-
-export interface FailureInfo {
-  scenario: string
-  env: E2EEnv
-  error: unknown
-  steps: Step[]
-  instances: Instance[]
-  providers: Provider[]
-  failedStep?: string
-  deadlineMs?: number
-}
-
-export interface RunDeps {
-  env: E2EEnv
-  startInstance: (request: StartInstanceRequest) => Promise<Instance>
-  /** Called before teardown for body failures and after teardown for teardown failures. */
-  onFailure?: (info: FailureInfo) => Promise<void>
-}
-
-export interface WaitOptions {
-  timeoutMs?: number
-  intervalMs?: number
-  /** Do not multiply the limit by the time scale, for a wait that checks a fixed promise. */
-  fixed?: boolean
-}
-
-export interface ScenarioContext {
-  app: { path: string; closeBehavior: CloseBehavior }
-  name: string
-  /** Aborted when the scenario reaches its deadline. */
-  signal: AbortSignal
-  step(name: string, detail?: string): void
-  waitFor<T>(
-    description: string,
-    predicate: () => T | Promise<T>,
-    options?: WaitOptions,
-  ): Promise<Awaited<T>>
-  onTeardown(action: () => Promise<void> | void): void
-  startInstance(options?: {
-    colorScheme?: ColorScheme
-    reusesRoot?: string
-    /** Keeps the screen's current XWD image at `<framebufferDir>/Xvfb_screen0` (research R11, T068). */
-    framebufferDir?: string
-  }): Promise<Instance>
-  /** Starts a stand-in model provider ([stand-in-provider.md](stand-in-provider.md)); ended with the context. */
-  provider(
-    behavior?: Behavior,
-    options?: { models?: StandInModel[] },
-  ): Promise<Provider>
-  /** A Nostr relay (the binary built with `--features e2e`) the instances of a scenario can share; ended with the context. */
-  nostrRelay(): Promise<NostrRelay>
-  /** A passphrase and a provider key generated for this run; no credential is ever committed. */
-  credentials(): { passphrase: string; providerKey: string }
-}
+export type {
+  CloseBehavior,
+  E2EEnv,
+  FailureInfo,
+  RunDeps,
+  ScenarioContext,
+  ScenarioOptions,
+  ScenarioResult,
+  ScenarioStatus,
+  StartInstanceRequest,
+  Step,
+  WaitOptions,
+} from './scenario-types.ts'
 
 class WaitTimeoutError extends Error {
   description: string
@@ -221,16 +134,18 @@ export async function runScenario(
   const teardowns: Array<() => Promise<void> | void> = []
   const instances: Instance[] = []
   const providers: Provider[] = []
+  const deviceLists: Array<() => CaptureDevice[]> = []
   let pendingStep: string | undefined
   let instanceCount = 0
 
-  const step = (stepName: string, detail?: string) => {
+  const step = (stepName: string, detail?: string, device?: string) => {
     const entry: Step = {
       name: stepName,
       atMs: Math.round(performance.now() - startedAt),
       at: new Date().toISOString(),
     }
     if (detail !== undefined) entry.detail = detail
+    if (device !== undefined) entry.device = device
     steps.push(entry)
   }
   const scaled = (ms: number) => Math.round(ms * env.timeScale)
@@ -310,6 +225,27 @@ export async function runScenario(
       teardowns.push(() => relay.stop())
       return relay
     },
+    async group(spec) {
+      if (deps.createHost === undefined) {
+        throw new Error(
+          'this run has no driver layer, so it cannot make a group',
+        )
+      }
+      return createGroup(
+        {
+          host: deps.createHost({ scenario: name, env }),
+          relay: await ctx.nostrRelay(),
+          credentials: ctx.credentials,
+          onTeardown: ctx.onTeardown,
+          keep: env.keep,
+          maxDevices: maxDevicesFrom(process.env),
+          waitFor: ctx.waitFor,
+          step,
+          captureWith: (devices) => void deviceLists.push(devices),
+        },
+        spec,
+      )
+    },
     async provider(behavior, options) {
       const started = await startProvider(behavior, options)
       providers.push(started)
@@ -349,6 +285,7 @@ export async function runScenario(
         steps,
         instances,
         providers,
+        devices: deviceLists.flatMap((list) => list()),
         failedStep,
         deadlineMs:
           failure instanceof ScenarioDeadlineError ? limit : undefined,
@@ -390,6 +327,7 @@ export async function runScenario(
           steps,
           instances,
           providers,
+          devices: deviceLists.flatMap((list) => list()),
           failedStep,
         })
       } catch {
@@ -464,6 +402,7 @@ export function scenario(
           step: request.step,
           framebufferDir: request.framebufferDir,
         }),
+      createHost: (request) => createLinuxHost(request),
       onFailure: (info) =>
         captureFailure({
           runDir: info.env.runDir,
@@ -474,6 +413,7 @@ export function scenario(
           deadlineMs: info.deadlineMs,
           instances: info.instances,
           providers: info.providers,
+          devices: info.devices,
         }),
     })
     if (result.status === 'skipped') t.skip(result.skipReason)

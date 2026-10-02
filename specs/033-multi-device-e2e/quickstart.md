@@ -20,6 +20,7 @@ Prerequisites: the Nix development shell, a real `pnpm install` in the worktree 
 - **G1** relay returns on the same URL and the application's client reconnects (Stage 2; blocks the Stage 2 gate if it fails).
 - **G2** link through the form works on loopback with default iroh relays (Stage 2).
 - **G3** a data volume exists whose sync window is at least 2 s on the stock runner (Stage 3).
+- **G4** how a running device goes offline (Stage 1): decided on 2026-10-02, restart with no servers; result in research R2.
 
 ## Manual
 

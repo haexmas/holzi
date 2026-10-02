@@ -36,7 +36,7 @@ const sleep = (ms: number) =>
 
 /** A record of something the scenario did, on the runner's one clock (contracts/helpers.md). */
 export interface StepRecorder {
-  (name: string, detail?: string): void
+  (name: string, detail?: string, device?: string): void
 }
 
 /** A value starting with `#`, `.` or `[` is a selector as is; anything else is a `data-testid`. */
