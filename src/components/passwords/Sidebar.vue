@@ -7,6 +7,7 @@
  */
 import { toast } from 'vue-sonner'
 import type { GroupRow } from '@bindings/GroupRow'
+import type { Target } from '@bindings/Target'
 import { ITEMS_MIME, parseItemsPayload } from '~/lib/passwords/dnd'
 import {
   buildTree,
@@ -34,6 +35,8 @@ const editing = ref<GroupRow | null>(null)
 const parentForNew = ref<string | null>(null)
 const tagManager = ref(false)
 const rootDropping = ref(false)
+const deleteOpen = ref(false)
+const deleteTargets = ref<Target[]>([])
 
 const place = computed(() => {
   const path = router.route.path
@@ -58,6 +61,21 @@ function newFolder(parentId: string | null) {
   parentForNew.value = parentId
   folderDialog.value = true
   if (parentId) expanded.value = new Set(expanded.value).add(parentId)
+}
+
+function askDeleteFolder(group: GroupRow) {
+  deleteTargets.value = [{ kind: 'group', id: group.id }]
+  deleteOpen.value = true
+}
+
+/** After a folder went to the trash the window leaves it if it was showing it. */
+function afterFolderDelete() {
+  if (
+    activeFolderId.value &&
+    deleteTargets.value.some((t) => t.id === activeFolderId.value)
+  ) {
+    router.replace('/')
+  }
 }
 
 function editFolder(group: GroupRow) {
@@ -182,12 +200,14 @@ async function onRootDrop(event: DragEvent) {
         :depth="0"
         :sibling-ids="tree.roots.map((root) => root.group.id)"
         :active-id="activeFolderId"
+        can-delete
         @select="go(`/folder/${$event}`)"
         @edit="editFolder"
         @new-child="newFolder"
         @move="moveFolderAsync"
         @drop-folder="dropFolderAsync"
         @drop-items="dropItemsAsync"
+        @remove="askDeleteFolder"
       />
     </ul>
 
@@ -262,5 +282,10 @@ async function onRootDrop(event: DragEvent) {
       :parent-id="parentForNew"
     />
     <PasswordsTagManager v-model:open="tagManager" />
+    <PasswordsDeleteDialog
+      v-model:open="deleteOpen"
+      :targets="deleteTargets"
+      @done="afterFolderDelete"
+    />
   </div>
 </template>

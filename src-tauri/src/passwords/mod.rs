@@ -14,6 +14,7 @@ pub const TRASH_GROUP_ID: &str = "trash";
 pub mod access;
 #[cfg(test)]
 mod access_tests;
+pub mod binaries;
 pub mod clipboard;
 #[cfg(test)]
 mod clipboard_tests;
@@ -47,6 +48,9 @@ pub mod sets;
 pub mod settings;
 #[cfg(test)]
 mod settings_tests;
+pub mod snapshots;
+#[cfg(test)]
+mod snapshots_tests;
 pub mod tags;
 #[cfg(test)]
 mod tags_tests;
@@ -55,6 +59,9 @@ pub(crate) mod test_support;
 pub mod totp;
 #[cfg(test)]
 mod totp_tests;
+pub mod trash;
+#[cfg(test)]
+mod trash_tests;
 pub mod usage;
 #[cfg(test)]
 mod usage_tests;

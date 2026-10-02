@@ -327,3 +327,79 @@ async fn a_bulk_move_and_a_bulk_tag_change_are_tracked_for_sync() {
         Err(HolziError::PasswordsForbidden)
     ));
 }
+
+#[tokio::test]
+async fn deleting_for_good_leaves_one_delete_marker_per_removed_row() {
+    use holzi_lib::passwords::model::{Target, TargetKind};
+    let f = fixture();
+    let id = f
+        .service
+        .create_item(
+            &Caller::User,
+            &[],
+            ItemInput {
+                tags: vec!["a".to_string(), "b".to_string()],
+                key_values: vec![
+                    KeyValueInput {
+                        key: "one".to_string(),
+                        value: Some("1".to_string()),
+                    },
+                    KeyValueInput {
+                        key: "two".to_string(),
+                        value: Some("2".to_string()),
+                    },
+                ],
+                ..ItemInput::default()
+            },
+            None,
+        )
+        .await
+        .expect("create");
+    // A second state, so the history has two rows to remove.
+    let detail = f
+        .service
+        .get_item(&Caller::User, id.clone())
+        .await
+        .expect("detail");
+    f.service
+        .update_item(
+            &Caller::User,
+            &[],
+            id.clone(),
+            detail.header.updated_at.expect("token"),
+            ItemPatch {
+                title: Patch::Set("changed".to_string()),
+                ..ItemPatch::default()
+            },
+        )
+        .await
+        .expect("update");
+    let target = vec![Target {
+        kind: TargetKind::Item,
+        id: id.clone(),
+    }];
+    f.service
+        .trash_targets(&Caller::User, target.clone())
+        .await
+        .expect("trash");
+    f.service
+        .delete_permanently(&Caller::User, target)
+        .await
+        .expect("delete");
+    let markers = |table: &str| -> i64 {
+        f.db.with_connection(|conn| {
+            Ok(conn.query_row(
+                "SELECT COUNT(*) FROM haex_deleted_rows WHERE table_name = ?1 \
+                 AND haex_hlc_no_sync IS NOT NULL",
+                params![table],
+                |r| r.get(0),
+            )?)
+        })
+        .expect("markers")
+    };
+    assert_eq!(markers("haex_passwords_item_details"), 1);
+    assert_eq!(markers("haex_passwords_item_tags"), 2);
+    assert_eq!(markers("haex_passwords_item_key_values"), 2);
+    assert_eq!(markers("haex_passwords_item_snapshots"), 2);
+    assert_eq!(markers("haex_passwords_group_items"), 1);
+}

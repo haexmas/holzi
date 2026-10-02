@@ -18,7 +18,7 @@ use super::model::{
 };
 use super::sets::Sets;
 use super::totp::{self, otp_state, OtpParams};
-use super::{clock, passkeys, tags};
+use super::{clock, passkeys, snapshots, tags};
 use crate::error::{HolziError, Result};
 use crate::storage::query::Query;
 
@@ -49,7 +49,8 @@ pub(super) fn load_headers(q: &mut impl Query, only: Option<&str>) -> Result<Vec
                 d.created_at, d.updated_at, \
                 CASE WHEN d.password IS NOT NULL AND d.password <> '' THEN 1 ELSE 0 END, \
                 CASE WHEN d.otp_secret IS NOT NULL AND trim(d.otp_secret) <> '' THEN 1 ELSE 0 END, \
-                CASE WHEN g.id IS NULL THEN NULL ELSE gi.group_id END \
+                CASE WHEN g.id IS NULL THEN NULL ELSE gi.group_id END, \
+                gi.trashed_from_group_id \
          FROM haex_passwords_item_details d \
          LEFT JOIN haex_passwords_group_items gi ON gi.item_id = d.id \
          LEFT JOIN haex_passwords_groups g ON g.id = gi.group_id \
@@ -74,6 +75,7 @@ pub(super) fn load_headers(q: &mut impl Query, only: Option<&str>) -> Result<Vec
                 has_password: r.get::<_, i64>(9)? != 0,
                 has_totp: r.get::<_, i64>(10)? != 0,
                 group_id: r.get(11)?,
+                trashed_from_group_id: r.get(12)?,
                 tags: Vec::new(),
                 passkey_count: 0,
                 attachment_count: 0,
@@ -373,6 +375,7 @@ pub fn create_item(
             params![id, group],
         )?;
     }
+    snapshots::take_snapshot(tx, &id)?;
     Ok(id)
 }
 
@@ -463,6 +466,7 @@ pub fn update_item(
     if let Some(fields) = &patch.key_values {
         replace_key_values(tx, id, fields, &new_token)?;
     }
+    snapshots::take_snapshot(tx, id)?;
     Ok(new_token)
 }
 

@@ -6,19 +6,20 @@
  * entry or place is left, or when the entry changes. It is never written to the store, the title or
  * the history.
  */
-import type { SecretField } from '@bindings/SecretField'
-
 const props = defineProps<{
-  itemId: string
-  field: SecretField
+  /** Fetches the value for the moment the user asks (one backend call; nothing is cached). */
+  fetch: () => Promise<string>
+  /** Changes when the secret it stands for changes (entry or field), which hides it again. */
+  identity: string
   /** Whether the secret has a value at all; without one nothing can be revealed. */
   present: boolean
   label: string
+  /** Part of the test ids. */
+  kind: string
 }>()
 
 const { t } = useI18n()
 const { errString } = useErrorString()
-const { revealAsync } = usePasswords()
 
 const value = ref<string | null>(null)
 const error = ref<string | null>(null)
@@ -32,9 +33,9 @@ function hide() {
 async function showAsync() {
   const mine = ++token
   try {
-    const revealed = await revealAsync(props.itemId, props.field)
+    const revealed = await props.fetch()
     // A later hide or show outran this one.
-    if (mine === token) value.value = revealed.value
+    if (mine === token) value.value = revealed
     error.value = null
   } catch (cause) {
     error.value = errString(cause)
@@ -62,7 +63,7 @@ function onClick(event: MouseEvent) {
   if (!pointerHold) toggle()
 }
 
-watch(() => [props.itemId, props.field], hide, { deep: true })
+watch(() => props.identity, hide)
 onBeforeUnmount(hide)
 </script>
 
@@ -71,7 +72,7 @@ onBeforeUnmount(hide)
     <span
       class="min-w-0 flex-1 truncate font-mono text-sm"
       :class="value === null ? 'text-muted-foreground' : ''"
-      :data-testid="`passwords-value-${field.kind}`"
+      :data-testid="`passwords-value-${kind}`"
     >
       <template v-if="!present">{{ t('passwords.noValue') }}</template>
       <template v-else-if="value === null">••••••••</template>
@@ -85,7 +86,7 @@ onBeforeUnmount(hide)
       :aria-label="t('passwords.reveal', { field: label })"
       :aria-pressed="value !== null"
       :tooltip="t('passwords.revealHint')"
-      :data-testid="`passwords-reveal-${field.kind}`"
+      :data-testid="`passwords-reveal-${kind}`"
       @pointerdown="onPointerDown"
       @pointerup="onPointerEnd"
       @pointerleave="onPointerEnd"

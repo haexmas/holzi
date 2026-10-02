@@ -35,6 +35,9 @@ pub struct ItemHeader {
     pub color: Option<String>,
     /// `trash`, a folder id or `None` for the root.
     pub group_id: Option<String>,
+    /// For an entry deleted directly: the folder it came from (the trash shows its path); `None`
+    /// at the top level and for everything not deleted directly.
+    pub trashed_from_group_id: Option<String>,
     pub tags: Vec<TagRef>,
     /// `YYYY-MM-DD`.
     pub expires_at: Option<String>,
@@ -568,4 +571,73 @@ impl Default for PresetInput {
             is_default: false,
         }
     }
+}
+
+/// A key-value of a history state in the masked view: the name, whether it has a value.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings/")]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotKeyValueView {
+    pub key: Option<String>,
+    pub has_value: bool,
+}
+
+/// An attachment of a history state.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings/")]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotAttachmentView {
+    pub file_name: String,
+    pub binary_hash: String,
+    /// Whether the binary data is still there (a restore skips the attachment if it is not).
+    pub available: bool,
+}
+
+/// One history state of an entry without its secrets (FR-017): flags instead of the password, the
+/// TOTP secret and the values of custom fields; the values come only through `history_reveal`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings/")]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotView {
+    pub id: String,
+    pub item_id: String,
+    pub modified_at: Option<String>,
+    pub title: Option<String>,
+    pub username: Option<String>,
+    pub url: Option<String>,
+    pub note: Option<String>,
+    pub icon: Option<String>,
+    pub color: Option<String>,
+    pub expires_at: Option<String>,
+    pub has_password: bool,
+    pub has_otp_secret: bool,
+    pub otp_digits: Option<u32>,
+    pub otp_period: Option<u32>,
+    pub otp_algorithm: Option<String>,
+    pub tags: Vec<String>,
+    pub key_values: Vec<SnapshotKeyValueView>,
+    pub attachments: Vec<SnapshotAttachmentView>,
+}
+
+/// Which secret of a history state to reveal.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings/")]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum HistorySecret {
+    Password,
+    OtpSecret,
+    /// The custom field with this name (history states have no ids for them).
+    KeyValue {
+        key: String,
+    },
+}
+
+/// What a restore of a history state did.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings/")]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreOutcome {
+    pub updated_at: String,
+    /// File names of attachments whose binary data is gone and that were therefore not re-linked.
+    pub skipped_attachments: Vec<String>,
 }

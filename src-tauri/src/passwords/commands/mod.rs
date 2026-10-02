@@ -4,11 +4,13 @@
 //! caller as an argument.
 
 pub mod agent;
+pub mod history;
 pub mod items;
 pub mod organize;
 pub mod passkeys;
 pub mod presets;
 pub mod read;
+pub mod trash;
 pub mod usage;
 
 use tauri::State;

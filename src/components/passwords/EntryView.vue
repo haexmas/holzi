@@ -18,9 +18,11 @@ const { t } = useI18n()
 const { errString } = useErrorString()
 const router = useTabRouter()
 const store = usePasswordsStore()
-const { getItemAsync, copyFieldAsync, updateItemAsync } = usePasswords()
+const { getItemAsync, copyFieldAsync, updateItemAsync, revealAsync } =
+  usePasswords()
 
 const detail = ref<ItemDetail | null>(null)
+const deleteOpen = ref(false)
 const notFound = ref(false)
 const error = ref<string | null>(null)
 
@@ -119,6 +121,30 @@ async function removeOtpAsync() {
           <Icon name="lucide:pencil" class="size-4" />
           {{ t('passwords.edit') }}
         </UiButton>
+        <UiButton
+          v-if="detail"
+          variant="ghost"
+          size="icon"
+          class="shrink-0"
+          :aria-label="t('passwords.history.open')"
+          :tooltip="t('passwords.history.open')"
+          data-testid="passwords-history"
+          @click="router.push(`/entry/${itemId}/history`)"
+        >
+          <Icon name="lucide:history" class="size-4" />
+        </UiButton>
+        <UiButton
+          v-if="detail"
+          variant="ghost"
+          size="icon"
+          class="shrink-0"
+          :aria-label="t('passwords.delete.title')"
+          :tooltip="t('passwords.delete.title')"
+          data-testid="passwords-delete"
+          @click="deleteOpen = true"
+        >
+          <Icon name="lucide:trash-2" class="size-4" />
+        </UiButton>
       </div>
 
       <p
@@ -170,8 +196,12 @@ async function removeOtpAsync() {
           </SettingsRow>
           <SettingsRow :title="t('passwords.fields.password')">
             <PasswordsMaskedValue
-              :item-id="itemId"
-              :field="{ kind: 'password' }"
+              :fetch="
+                async () =>
+                  (await revealAsync(itemId, { kind: 'password' })).value
+              "
+              :identity="`${itemId}:password`"
+              kind="password"
               :present="detail.hasPassword"
               :label="t('passwords.fields.password')"
             />
@@ -228,8 +258,17 @@ async function removeOtpAsync() {
             :title="field.key ?? ''"
           >
             <PasswordsMaskedValue
-              :item-id="itemId"
-              :field="{ kind: 'keyValue', id: field.id }"
+              :fetch="
+                async () =>
+                  (
+                    await revealAsync(itemId, {
+                      kind: 'keyValue',
+                      id: field.id,
+                    })
+                  ).value
+              "
+              :identity="`${itemId}:${field.id}`"
+              kind="keyValue"
               :present="field.hasValue"
               :label="field.key ?? ''"
             />

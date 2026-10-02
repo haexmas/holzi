@@ -358,8 +358,12 @@ watch(saveError, (message) => {
             >
               <PasswordsMaskedValue
                 v-if="itemId"
-                :item-id="itemId"
-                :field="{ kind: 'password' }"
+                :fetch="
+                  async () =>
+                    (await revealAsync(itemId!, { kind: 'password' })).value
+                "
+                :identity="`${itemId}:password`"
+                kind="password"
                 :present="detail?.hasPassword ?? false"
                 :label="t('passwords.fields.password')"
                 class="flex-1"

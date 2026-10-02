@@ -9,7 +9,12 @@ export type ItemHeader = { id: string, title: string | null, username: string | 
 /**
  * `trash`, a folder id or `None` for the root.
  */
-groupId: string | null, tags: Array<TagRef>,
+groupId: string | null,
+/**
+ * For an entry deleted directly: the folder it came from (the trash shows its path); `None`
+ * at the top level and for everything not deleted directly.
+ */
+trashedFromGroupId: string | null, tags: Array<TagRef>,
 /**
  * `YYYY-MM-DD`.
  */

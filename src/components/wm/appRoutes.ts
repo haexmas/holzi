@@ -102,6 +102,12 @@ const PASSWORDS_VIEWS: Partial<Record<string, Component>> = {
   entry: defineAsyncComponent(
     () => import('~/components/passwords/EntryPage.vue'),
   ),
+  trash: defineAsyncComponent(
+    () => import('~/components/passwords/TrashView.vue'),
+  ),
+  history: defineAsyncComponent(
+    () => import('~/components/passwords/HistoryView.vue'),
+  ),
   generator: defineAsyncComponent(
     () => import('~/components/passwords/GeneratorPage.vue'),
   ),

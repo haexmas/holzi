@@ -19,10 +19,12 @@ use std::sync::Arc;
 use super::access::{self, Caller};
 use super::usage::UsageRegistry;
 
+mod history;
 mod items;
 mod organize;
 mod passkeys;
 mod presets;
+mod trash;
 mod usage;
 
 use crate::error::Result;

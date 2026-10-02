@@ -50,6 +50,7 @@ const visible = computed(() => {
 })
 
 const searching = computed(() => Boolean(router.route.query.q))
+const deleteOpen = ref(false)
 const visibleIds = computed(() => visible.value.map((header) => header.id))
 
 // What no longer shows (deleted elsewhere, filtered out) leaves the selection.
@@ -75,7 +76,7 @@ function longPress(id: string) {
       <h1 class="px-1 pt-1 text-2xl font-bold" data-testid="passwords-title">
         {{ heading }}
       </h1>
-      <PasswordsSelectionToolbar />
+      <PasswordsSelectionToolbar @delete="deleteOpen = true" />
       <p v-if="store.lastError" class="text-sm text-destructive" role="alert">
         {{ store.lastError }}
       </p>
@@ -107,5 +108,10 @@ function longPress(id: string) {
         />
       </SettingsGroup>
     </div>
+    <PasswordsDeleteDialog
+      v-model:open="deleteOpen"
+      :targets="selection.ids.map((id) => ({ kind: 'item' as const, id }))"
+      @done="selection.clear()"
+    />
   </div>
 </template>

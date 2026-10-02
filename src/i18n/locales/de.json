@@ -1112,7 +1112,22 @@
       }
     },
     "trash": {
-      "title": "Papierkorb"
+      "title": "Papierkorb",
+      "topLevel": "oberste Ebene",
+      "isEmpty": "Der Papierkorb ist leer.",
+      "folders": "Ordner",
+      "entries": "Einträge",
+      "cameFrom": "Aus: {path}",
+      "entriesInside": "kein Eintrag | {count} Eintrag | {count} Einträge",
+      "restore": "Wiederherstellen",
+      "restored": "Wiederhergestellt.",
+      "deleteForGood": "Endgültig löschen",
+      "deleteTitle": "Endgültig löschen?",
+      "deleteBody": "„{name}“ wird mit allem, was dazugehört (Verlauf, Passkeys, Verknüpfungen), endgültig entfernt.",
+      "deleteFolderBody": "Der Ordner „{name}“ wird mit allem, was darin liegt, endgültig entfernt.",
+      "empty": "Papierkorb leeren",
+      "emptyTitle": "Papierkorb leeren?",
+      "emptyBody": "{entries} Einträge und {folders} Ordner werden endgültig entfernt. Das lässt sich nicht rückgängig machen."
     },
     "generator": {
       "title": "Passwortgenerator",
@@ -1146,6 +1161,43 @@
       "presetErrors": {
         "name": "Eine Voreinstellung braucht einen Namen.",
         "length": "Die Länge muss zwischen 1 und 256 liegen."
+      }
+    },
+    "delete": {
+      "title": "Löschen",
+      "items": "{count} Eintrag | {count} Einträge",
+      "folders": "{count} Ordner | {count} Ordner",
+      "toTrash": "Sie kommen in den Papierkorb und lassen sich dort wiederherstellen.",
+      "folderContent": "Ein Ordner nimmt seinen Inhalt mit in den Papierkorb.",
+      "usedBy": "Wird von diesen Funktionen genutzt: {features}. Du kannst trotzdem löschen.",
+      "confirm": "In den Papierkorb",
+      "done": "In den Papierkorb verschoben."
+    },
+    "history": {
+      "open": "Verlauf",
+      "title": "Verlauf",
+      "states": "Stände (neueste zuerst)",
+      "restore": "Diesen Stand wiederherstellen",
+      "restored": "Stand wiederhergestellt.",
+      "skipped": "Wiederhergestellt, aber diese Anhänge fehlen und wurden nicht übernommen: {files}",
+      "attachmentGone": "Die Daten dieses Anhangs gibt es nicht mehr.",
+      "fields": {
+        "title": "Titel",
+        "username": "Benutzername",
+        "password": "Passwort",
+        "url": "Adresse",
+        "note": "Notiz",
+        "icon": "Symbol",
+        "color": "Farbe",
+        "expiresAt": "Ablaufdatum",
+        "otpSecret": "TOTP-Secret",
+        "otpDigits": "TOTP-Ziffern",
+        "otpPeriod": "TOTP-Periode",
+        "otpAlgorithm": "TOTP-Algorithmus",
+        "autofillAliases": "Autofill-Aliase",
+        "tags": "Tags",
+        "keyValues": "Eigene Felder",
+        "attachments": "Anhänge"
       }
     }
   }

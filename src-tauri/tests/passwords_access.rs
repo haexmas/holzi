@@ -604,3 +604,147 @@ async fn the_agent_search_filters_by_words_tag_and_limit_and_shows_no_username()
         .await;
     assert!(matches!(user, Err(HolziError::PasswordsForbidden)));
 }
+
+fn id_target(id: &str) -> holzi_lib::passwords::model::Target {
+    holzi_lib::passwords::model::Target {
+        kind: holzi_lib::passwords::model::TargetKind::Item,
+        id: id.to_string(),
+    }
+}
+
+#[tokio::test]
+async fn delete_needs_a_write_grant_and_an_entry_in_scope_and_only_moves_to_the_trash() {
+    let f = fixture();
+    let seeded = seed(&f).await;
+    for caller in outside_callers() {
+        let id = f
+            .service
+            .create_item(&caller, &write_grant("s3"), entry("victim", &["s3"]), None)
+            .await
+            .expect("create");
+        // A read grant does not delete; outside the scope it is not there.
+        assert!(matches!(
+            f.service
+                .delete_item(&caller, &read_grant("s3"), id.clone())
+                .await,
+            Err(HolziError::PasswordsForbidden)
+        ));
+        assert!(matches!(
+            f.service
+                .delete_item(&caller, &write_grant("s3"), seeded.bank.clone())
+                .await,
+            Err(HolziError::PasswordsNotFound)
+        ));
+        assert!(matches!(
+            f.service
+                .delete_item(&caller, &write_grant("s3"), "missing".to_string())
+                .await,
+            Err(HolziError::PasswordsNotFound)
+        ));
+        // In scope: the entry ends up in the trash with its data intact.
+        f.service
+            .delete_item(&caller, &write_grant("s3"), id.clone())
+            .await
+            .expect("delete");
+        let overview = f
+            .service
+            .load_overview(&Caller::User)
+            .await
+            .expect("overview");
+        let header = overview
+            .headers
+            .iter()
+            .find(|h| h.id == id)
+            .expect("still there");
+        assert_eq!(header.group_id.as_deref(), Some("trash"));
+        let secret = f
+            .service
+            .reveal(
+                &Caller::User,
+                id.clone(),
+                holzi_lib::passwords::model::SecretField::Password,
+            )
+            .await
+            .expect("data intact");
+        assert_eq!(secret.value.as_str(), format!("{MARKER}-password-victim"));
+        // A second delete from outside is not found and removes nothing for good.
+        assert!(matches!(
+            f.service
+                .delete_item(&caller, &write_grant("s3"), id.clone())
+                .await,
+            Err(HolziError::PasswordsNotFound)
+        ));
+        assert!(
+            f.service.get_item(&Caller::User, id).await.is_ok(),
+            "still in the trash"
+        );
+    }
+}
+
+#[tokio::test]
+async fn restoring_emptying_and_deleting_for_good_are_for_the_user_alone() {
+    let f = fixture();
+    let seeded = seed(&f).await;
+    let all = [Grant::new(GrantAction::ReadWrite, Scope::All)];
+    f.service
+        .delete_item(&Caller::User, &[], seeded.s3.clone())
+        .await
+        .expect("user deletes");
+    let mut everyone = outside_callers();
+    everyone.push(Caller::BuiltinAgent);
+    for caller in &everyone {
+        for result in [
+            f.service.restore(caller, vec![id_target(&seeded.s3)]).await,
+            f.service
+                .delete_permanently(caller, vec![id_target(&seeded.s3)])
+                .await,
+            f.service
+                .trash_targets(caller, vec![id_target(&seeded.s3)])
+                .await,
+            f.service.empty_trash(caller).await,
+        ] {
+            assert!(
+                matches!(result, Err(HolziError::PasswordsForbidden)),
+                "{caller:?}: {result:?}"
+            );
+        }
+        // The delete of an entry already in the trash stays "not there", also with a grant for all.
+        let again = f.service.delete_item(caller, &all, seeded.s3.clone()).await;
+        assert!(
+            matches!(
+                again,
+                Err(HolziError::PasswordsNotFound) | Err(HolziError::PasswordsForbidden)
+            ),
+            "{caller:?}: {again:?}"
+        );
+    }
+    // Nothing changed: the entry is still in the trash.
+    assert!(f
+        .service
+        .get_item(&Caller::User, seeded.s3.clone())
+        .await
+        .is_ok());
+    // The user restores it and later removes it for good in the trash.
+    assert_eq!(
+        f.service
+            .restore(&Caller::User, vec![id_target(&seeded.s3)])
+            .await
+            .expect("restore"),
+        1
+    );
+    f.service
+        .delete_item(&Caller::User, &[], seeded.s3.clone())
+        .await
+        .expect("delete");
+    assert_eq!(
+        f.service
+            .delete_permanently(&Caller::User, vec![id_target(&seeded.s3)])
+            .await
+            .expect("for good"),
+        1
+    );
+    assert!(matches!(
+        f.service.get_item(&Caller::User, seeded.s3).await,
+        Err(HolziError::PasswordsNotFound)
+    ));
+}

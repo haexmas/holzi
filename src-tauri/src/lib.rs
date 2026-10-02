@@ -60,6 +60,10 @@ use models::commands::{
     search_huggingface_models,
 };
 use passwords::commands::agent::passwords_agent_search;
+use passwords::commands::history::{
+    passwords_history_get, passwords_history_list, passwords_history_restore,
+    passwords_history_reveal,
+};
 use passwords::commands::items::{passwords_create_item, passwords_update_item};
 use passwords::commands::organize::{
     passwords_create_group, passwords_delete_tag, passwords_move, passwords_rename_tag,
@@ -72,6 +76,9 @@ use passwords::commands::presets::{
 use passwords::commands::read::{
     passwords_copy_field, passwords_get_item, passwords_load_overview, passwords_reveal,
     passwords_totp_code,
+};
+use passwords::commands::trash::{
+    passwords_delete_permanently, passwords_empty_trash, passwords_restore, passwords_trash,
 };
 use passwords::commands::usage::passwords_item_usage;
 use providers::connect::{connect_cli_delegate, submit_cli_delegate_code, DelegateConnectState};
@@ -292,6 +299,14 @@ pub fn run() {
             passwords_preset_delete,
             passwords_item_usage,
             passwords_agent_search,
+            passwords_trash,
+            passwords_restore,
+            passwords_delete_permanently,
+            passwords_empty_trash,
+            passwords_history_list,
+            passwords_history_get,
+            passwords_history_reveal,
+            passwords_history_restore,
         ]))
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

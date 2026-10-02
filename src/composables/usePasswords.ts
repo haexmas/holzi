@@ -11,7 +11,13 @@ import type { Preset } from '@bindings/Preset'
 import type { PresetInput } from '@bindings/PresetInput'
 import type { PresetSaveResult } from '@bindings/PresetSaveResult'
 import type { MoveResult } from '@bindings/MoveResult'
+import type { AffectedResult } from '@bindings/AffectedResult'
+import type { HistorySecret } from '@bindings/HistorySecret'
+import type { ItemUsageResult } from '@bindings/ItemUsageResult'
 import type { Overview } from '@bindings/Overview'
+import type { RestoreOutcome } from '@bindings/RestoreOutcome'
+import type { SnapshotHeader } from '@bindings/SnapshotHeader'
+import type { SnapshotView } from '@bindings/SnapshotView'
 import type { RevealedSecret } from '@bindings/RevealedSecret'
 import type { SecretField } from '@bindings/SecretField'
 import type { SetTagsResult } from '@bindings/SetTagsResult'
@@ -101,7 +107,52 @@ export function usePasswords() {
   const presetDeleteAsync = (presetId: string) =>
     invoke<null>('passwords_preset_delete', { args: { presetId } })
 
+  const trashAsync = (targets: Target[]) =>
+    invoke<AffectedResult>('passwords_trash', { args: { targets } })
+
+  const restoreAsync = (targets: Target[]) =>
+    invoke<AffectedResult>('passwords_restore', { args: { targets } })
+
+  const deletePermanentlyAsync = (targets: Target[]) =>
+    invoke<AffectedResult>('passwords_delete_permanently', {
+      args: { targets },
+    })
+
+  const emptyTrashAsync = () => invoke<AffectedResult>('passwords_empty_trash')
+
+  const itemUsageAsync = (itemId: string) =>
+    invoke<ItemUsageResult>('passwords_item_usage', { args: { itemId } })
+
+  const historyListAsync = (itemId: string) =>
+    invoke<SnapshotHeader[]>('passwords_history_list', { args: { itemId } })
+
+  const historyGetAsync = (snapshotId: string) =>
+    invoke<SnapshotView>('passwords_history_get', { args: { snapshotId } })
+
+  const historyRevealAsync = (snapshotId: string, field: HistorySecret) =>
+    invoke<RevealedSecret>('passwords_history_reveal', {
+      args: { snapshotId, field },
+    })
+
+  const historyRestoreAsync = (
+    itemId: string,
+    snapshotId: string,
+    expectedUpdatedAt: string,
+  ) =>
+    invoke<RestoreOutcome>('passwords_history_restore', {
+      args: { itemId, snapshotId, expectedUpdatedAt },
+    })
+
   return {
+    trashAsync,
+    restoreAsync,
+    deletePermanentlyAsync,
+    emptyTrashAsync,
+    itemUsageAsync,
+    historyListAsync,
+    historyGetAsync,
+    historyRevealAsync,
+    historyRestoreAsync,
     presetListAsync,
     presetSaveAsync,
     presetDeleteAsync,
