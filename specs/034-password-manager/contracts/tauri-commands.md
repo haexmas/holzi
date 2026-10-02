@@ -25,6 +25,8 @@ result: { headers: ItemHeader[], groups: GroupRow[], tags: TagRow[] }
 
 Eine Abfrage für den Store. Enthält nie `data`-Spalten, Notizen oder Geheimnisse; Einträge im
 Papierkorb sind enthalten (`groupId` ist `trash` oder ein Nachfahre), die Oberfläche trennt.
+Dieser Command ist ausschließlich für `Caller::User`; er ist die Nutzer-Übersicht und nicht
+die berechtigungsgefilterte `list_headers`-Methode für Aufrufer von außen.
 
 ### `passwords_get_item`
 
@@ -206,7 +208,7 @@ gewählt hat (Pfad stammt aus dem Dialog).
 ```text
 args:   { attachmentId }
 result: raw bytes (tauri::ipc::Response), Header: Content-Type nach Erweiterung
-errors: NotFound, InvalidInput { reason: 'not_previewable' }       // nur png, jpg, gif, webp
+errors: NotFound, InvalidInput { reason: 'not_previewable' }       // nur png, jpg/jpeg, gif, webp
 ```
 
 ## Verlauf

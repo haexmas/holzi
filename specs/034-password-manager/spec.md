@@ -240,7 +240,7 @@ endgültig entfernen.
 ### User Story 5 - Dateien an Einträge hängen (Priority: P2)
 
 Ein Nutzer hängt Dateien an einen Eintrag (Wiederherstellungsschlüssel als Textdatei, einen
-Scan, ein Zertifikat), sieht Bilder und PDFs als Vorschau, benennt Anhänge um, lädt sie in
+Scan, ein Zertifikat), sieht Bilder als Vorschau, benennt Anhänge um, lädt sie in
 eine Datei herunter und entfernt sie. Dieselbe Datei an mehreren Einträgen belegt nur einmal
 Platz.
 
@@ -331,7 +331,8 @@ die Ordnerstruktur und je ein Passwort, TOTP-Secret und Anhang mit der Quelle ve
 **Acceptance Scenarios**:
 
 1. **Given** eine gültige KeePass-Datei und das richtige Passwort, **When** der Nutzer
-   importiert, **Then** erscheinen Einträge und Ordner wie in der Quelle, und der Nutzer
+   importiert, **Then** erscheinen Einträge und Ordner wie in der Quelle (ohne den
+   Papierkorb der Quelle), und der Nutzer
    sieht die Zahl der importierten Einträge.
 2. **Given** ein falsches Passwort oder eine beschädigte Datei, **When** der Nutzer
    importiert, **Then** nennt holzi den Grund und importiert nichts.
@@ -664,8 +665,8 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
   verloren.
 - **SC-009**: Eine heruntergeladene Datei ist in 100 % der Fälle byteweise gleich dem Original.
 - **SC-010**: Beim Import der Beispieldateien aller drei Formate stimmen Zahl der Einträge und
-  Ordner zu 100 % mit der Quelle überein, und ein abgebrochener Import hinterlässt 0
-  veränderte Einträge.
+  Ordner zu 100 % mit der Quelle (beim KeePass-Import ohne den Papierkorb der Quelle) überein,
+  und ein abgebrochener Import hinterlässt 0 veränderte Einträge.
 - **SC-011**: Bei 360 px Breite sind alle Funktionen ohne waagerechtes Scrollen bedienbar.
 - **SC-012**: Jedes Quickstart-Szenario, das weder Netz noch ein zweites Gerät noch eine
   Zeitmessung braucht, läuft als End-to-End-Test gegen die gebaute App und besteht.

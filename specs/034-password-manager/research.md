@@ -561,7 +561,7 @@ Komponente verloren).
 **Entscheidung**: `dialog:allow-save` kommt in `capabilities/default.json`; Öffnen gibt es
 schon. Rust liest und schreibt die gewählten Pfade selbst (`spawn_blocking`). Die Pfade
 stammen immer aus einem Dialog oder einer Ablage-Geste des Nutzers und werden **nicht**
-dauerhaft gespeichert. Importdateien werden nur gelesen. Vorschau: Bilder (`png`, `jpg`,
+dauerhaft gespeichert. Importdateien werden nur gelesen. Vorschau: Bilder (`png`, `jpg`/`jpeg`,
 `gif`, `webp`) als Blob-URL (`img-src … blob:` ist erlaubt); **PDFs und andere Dateien nur
 Herunterladen** (R20): Die CSP hat `object-src 'none'` und kein `frame-src`, WebKitGTK
 bringt keinen PDF-Betrachter mit, und `pdfjs-dist` wäre eine schwere neue Abhängigkeit.

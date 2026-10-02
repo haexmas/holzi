@@ -104,7 +104,8 @@ das Passwort“ → das Modell kann es nicht lesen, es gibt keine Aktion dafür.
 
 `passwords_import.rs` mit Beispieldateien aus `src-tauri/tests/fixtures/passwords/` (je eine
 KeePass-, Bitwarden- und LastPass-Datei, Passwörter erfunden): Zahl der Einträge und Ordner
-stimmt mit der Quelle (SC-010), falsches Passwort und beschädigte Datei ändern nichts, ein
+stimmt mit der Quelle (beim KeePass-Import ohne den Papierkorb, SC-010), falsches Passwort
+und beschädigte Datei ändern nichts, ein
 Fehler in der Mitte hinterlässt nichts (Abbruch durch eine absichtlich ungültige Zeile),
 Doppelte erscheinen in der Vorschau, `onDuplicate: skip` überspringt sie, Zeilenumbrüche in
 Notizen bleiben erhalten. Passkeys: ein zur Laufzeit erzeugtes P-256-Schlüsselpaar wird als

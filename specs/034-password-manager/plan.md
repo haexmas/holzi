@@ -147,7 +147,7 @@ specs/034-password-manager/
 ├── quickstart.md                  # Phase 1
 ├── contracts/
 │   ├── tauri-commands.md          # Commands, Fehlerarten
-│   └── access.md                  # Aufrufer, Freigaben, Regeln Z1–Z10
+│   └── access.md                  # Aufrufer, Freigaben, Regeln Z1–Z12
 ├── checklists/requirements.md
 └── tasks.md                       # Phase 2 (/speckit-tasks)
 ```
@@ -163,7 +163,7 @@ src-tauri/src/
 │   ├── mod.rs                     # Modulliste, Konstanten (Limit, Karenzzeit)      [neu]
 │   ├── ids.rs                     # Namensräume, abgeleitete Kennungen, fold        [neu]
 │   ├── model.rs                   # Zeilen-/Antworttypen (ts-rs), Debug geschwärzt  [neu]
-│   ├── access.rs                  # Caller, Grant, Scope, Regeln Z1–Z10 (rein)      [neu]
+│   ├── access.rs                  # Caller, Grant, Scope, Regeln Z1–Z12 (rein)      [neu]
 │   ├── service/                   # PasswordsService: der einzige Eingang, prüft den Aufrufer
 │   │   ├── mod.rs, items.rs, organize.rs, trash.rs, history.rs, attachments.rs,
 │   │   │   passkeys.rs, presets.rs, import.rs, usage.rs                             [neu]
