@@ -245,21 +245,34 @@ Das Erzeugen selbst läuft im Frontend (research R10).
 
 ## Import
 
+Alles aus der Quelle wird übernommen; die Zuordnung je Format steht in
+[import-mapping.md](./import-mapping.md).
+
 ```text
 passwords_import_preview  args: ImportArgs   result: ImportPreview
 passwords_import_run      args: ImportArgs & { onDuplicate: 'skip' | 'create' }   result: ImportReport
+passwords_import_cancel   args: {}           result: ()
+passwords_import_report_save   args: { report: ImportReport, path: string }       result: ()
+passwords_icon_preview    args: { hash: string }                                  result: raw bytes
 
 ImportArgs    = { source: 'keepass' | 'bitwarden' | 'lastpass', path: string,
                   password?: string, keyFilePath?: string }
-ImportPreview = { entries, groups, attachments, duplicates, warnings: string[] }
-errors:       ImportFailed { reason: 'unreadable' | 'wrong_credentials' | 'corrupt' | 'unsupported_format' | 'encrypted_export' },
-              ImportTooLarge { bytes, limit }
+ImportPreview = { entries, groups, trashedEntries, historyStates, attachments, passkeys,
+                  duplicates, warnings: string[] }
+ImportReport  = { imported, trashed, historyStates, skippedDuplicates,
+                  needsAttention: [{ title, folderPath, kind, field?, fileName?, sizeMiB? }] }
+errors:       ImportFailed { reason: 'unreadable' | 'wrong_credentials' | 'corrupt' | 'unsupported_format' | 'encrypted_export' }
+event:        passwords-import-progress { done, total, phase: 'groups' | 'items' | 'attachments' | 'rollback' }
 ```
 
-Beide lesen die Datei neu. `run` ist alles oder nichts (ein `write`); `ImportReport` stellt
-`imported`, `skippedDuplicates`, `lossy` (Titel plus fehlende Teile), `skipped`
-(Titel plus Grund), `attachmentsSkipped` dar. Fehler tragen nie Passwort, Pfad-Inhalte oder
-Feldwerte.
+Beide Commands lesen die Datei neu. `run` schreibt in Schritten (Ordner, dann jeder Eintrag in einem
+eigenen `write`, dann jeder Anhang in einem eigenen `write`, [R12](../research.md)); ein
+Gesamtfehler oder `passwords_import_cancel` entfernt wieder, was der Import angelegt hat
+(Phase `rollback`). Fehler an einzelnen Stellen stoppen den Import nicht, sie stehen in
+`needsAttention` (Arten in [import-mapping.md](./import-mapping.md) §Bericht). Weder Fehler noch
+Bericht tragen Passwort, Pfadinhalt oder Werte von Geheimnissen. `passwords_import_report_save`
+schreibt den Bericht als Text in einen Pfad aus dem Speichern-Dialog; `passwords_icon_preview` liefert
+die Bytes eines eigenen Symbols (`binary:<hash>` in `icon`).
 
 ## Agent
 
@@ -284,8 +297,7 @@ Die Wartezeit der Zwischenablage ist die Vault-Einstellung `passwords.clipboard_
 
 Neue Varianten in `HolziError` (`src-tauri/src/error.rs`, Feld `kind`), Texte übersetzt das
 Frontend (`errors.passwords.*`); kein Wert eines Geheimnisses in einem Feld. In den Abschnitten
-oben stehen die Fehler gekürzt (`NotFound`, `Conflict`, `AttachmentTooLarge`, `ImportFailed`,
-`ImportTooLarge`); im Feld `kind` tragen sie das Präfix `Passwords` wie in dieser Tabelle,
+oben stehen die Fehler gekürzt (`NotFound`, `Conflict`, `AttachmentTooLarge`, `ImportFailed`); im Feld `kind` tragen sie das Präfix `Passwords` wie in dieser Tabelle,
 `InvalidInput` ist die vorhandene Variante ohne Präfix:
 
 | `kind`                        | Felder           |
@@ -295,7 +307,6 @@ oben stehen die Fehler gekürzt (`NotFound`, `Conflict`, `AttachmentTooLarge`, `
 | `PasswordsConflict`           | `reason`         |
 | `PasswordsAttachmentTooLarge` | `bytes`, `limit` |
 | `PasswordsImportFailed`       | `reason`         |
-| `PasswordsImportTooLarge`     | `bytes`, `limit` |
 
 Ungültige Eingaben sind das vorhandene `InvalidInput { reason }`; das Feld nennt den Namen,
 nie den Wert.

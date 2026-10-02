@@ -74,7 +74,7 @@ ausdrücklich nicht Teil dieser Spec. Referenz: haex-vault @
 - Q: (Analyse) Müssen Passkeys im ersten Wurf auch aus Importen kommen? → A: Ja (Bitwarden
   und KeePassXC). haex-vault importiert keine Passkeys; es erzeugt sie selbst über die Bridge und
   hat deshalb beide Schlüssel. Importquellen liefern nur den privaten Schlüssel, der öffentliche
-  wird für ES256 abgeleitet; dafür kommt `p256` hinzu.
+  wird abgeleitet (ES256, EdDSA, RS256; Details im Plan).
 - Q: (Analyse) Läuft die Oberfläche am Dienst vorbei? → A: Nein. Alles läuft über den Dienst; die
   Oberfläche ist der Aufrufer „Nutzer“.
 - Q: (Analyse) Dürfen ungültige Secrets angelegt werden? → A: Nein, das wird abgelehnt und
@@ -93,6 +93,12 @@ ausdrücklich nicht Teil dieser Spec. Referenz: haex-vault @
   ihre genutzten Einträge selbst meldet.
 - Q: (Klärung) Darf ein Eintrag ohne Titel gespeichert werden? → A: Ja, auch in der Oberfläche;
   der Titel ist nicht Pflicht. Die Oberfläche zeigt dann den Platzhalter „(ohne Titel)“.
+- Q: (Klärung) Was darf beim Import wegfallen? → A: Nichts, der Import übernimmt immer alles:
+  Papierkorb, Verlauf, Symbole, alle Passkeys, ungültige TOTP-Secrets, alle Typen und Felder von
+  Bitwarden (was kein eigenes Feld hat, kommt als eigenes Feld oder Tag). Anhänge über 25 MiB werden
+  abgelehnt, aber im Bericht genannt; Fehler im Import stehen im Bericht, damit der Nutzer von
+  Hand nacharbeiten kann. Der Import schreibt in mehreren Schritten und macht bei einem
+  Gesamtfehler oder Abbruch alles rückgängig (Option A).
 - Q: (Analyse) Wie hart sind Zeitvorgaben? → A: Grobe Zielgrenzen genügen; es gibt keine
   Messaufgaben für Zeiten.
 - Q: Soll das Datenmodell von haex-vault 1:1 übernommen werden? → A: Ja, Tabellen- und
@@ -319,8 +325,10 @@ anfordern (abgelehnt) und einen Eintrag schreiben wollen (abgelehnt).
 Ein Nutzer wechselt von KeePass, Bitwarden oder LastPass zu holzi. Er wählt die Exportdatei
 (bei KeePass die Datei der Datenbank mit Passwort oder Schlüsseldatei), sieht eine Vorschau,
 wie viele Einträge, Ordner und Anhänge gefunden wurden, und startet den Import. holzi
-übernimmt Einträge samt Ordnerstruktur, TOTP, eigenen Feldern, Tags, Anhängen und Passkeys,
-und meldet danach, was importiert wurde und was nicht.
+übernimmt **alles**, was die Quelle enthält: Einträge samt Ordnerstruktur, Papierkorb, Verlauf,
+Symbole, TOTP (auch ungültige), eigene Felder, Tags, Anhänge und Passkeys jedes Algorithmus. Was
+holzi kein eigenes Feld hat, kommt als eigenes Feld oder Tag mit. Danach zeigt holzi, was
+importiert wurde und wo der Nutzer von Hand nacharbeiten muss (etwa Anhänge über dem Limit).
 
 **Why this priority**: Ohne Import startet jeder Nutzer bei null und bleibt bei seinem alten
 Manager. Importieren ist aber nicht nötig, um den Passwortmanager zu benutzen.
@@ -331,26 +339,37 @@ die Ordnerstruktur und je ein Passwort, TOTP-Secret und Anhang mit der Quelle ve
 **Acceptance Scenarios**:
 
 1. **Given** eine gültige KeePass-Datei und das richtige Passwort, **When** der Nutzer
-   importiert, **Then** erscheinen Einträge und Ordner wie in der Quelle (ohne den
-   Papierkorb der Quelle), und der Nutzer
-   sieht die Zahl der importierten Einträge.
+   importiert, **Then** erscheinen Einträge und Ordner wie in der Quelle, der Papierkorb der
+   Quelle ist unser Papierkorb mit seinem Inhalt, der Verlauf der Einträge steht als
+   Verlaufsstände da, Symbole sind gesetzt, und der Nutzer sieht die Zahl der importierten
+   Einträge.
 2. **Given** ein falsches Passwort oder eine beschädigte Datei, **When** der Nutzer
    importiert, **Then** nennt holzi den Grund und importiert nichts.
 3. **Given** eine Bitwarden- oder LastPass-Exportdatei, **When** der Nutzer importiert,
    **Then** erscheinen die Einträge mit Ordnern, eigenen Feldern und TOTP.
-4. **Given** ein Eintrag der Quelle, den holzi nicht vollständig abbilden kann, **When** der
-   Import läuft, **Then** übernimmt holzi, was geht, und der Bericht nennt den Eintrag und
-   was fehlt, statt den Import abzubrechen.
-5. **Given** ein Import wurde gestartet, **When** er abgebrochen wird oder mitten drin
-   scheitert, **Then** bleibt die Vault in dem Zustand vor dem Import (alles oder nichts).
+4. **Given** ein Eintrag der Quelle mit einem Feld, einem Typ oder einer Angabe, für die holzi
+   kein eigenes Gegenstück hat (etwa Karten- und Identitätsdaten, Auto-Type, Farben,
+   Sammlungen, Favoriten), **When** der Nutzer importiert, **Then** steht die Angabe als eigenes
+   Feld oder Tag am Eintrag; nichts wird still verworfen.
+5. **Given** ein Import wurde gestartet, **When** ein Fehler ihn insgesamt stoppt (Datei nicht
+   lesbar, Speicherfehler) oder der Nutzer ihn abbricht, **Then** entfernt holzi wieder alles, was
+   der Import angelegt hat, und die Vault ist wie vor dem Import.
 6. **Given** ein Import hat Einträge angelegt, **When** der Nutzer ihn wiederholt, **Then**
    fragt holzi, ob doppelte Einträge übersprungen oder angelegt werden sollen.
-7. **Given** ein Eintrag der Quelle mit einem ES256-Passkey, **When** der Nutzer importiert,
-   **Then** erscheint der Passkey am Eintrag mit Relying Party und Nutzer, und sein öffentlicher
-   Schlüssel passt zum privaten; ein Passkey mit anderem Algorithmus steht im Bericht als nicht
-   übernommen.
+7. **Given** ein Eintrag der Quelle mit einem Passkey (ES256, EdDSA oder RS256), **When** der
+   Nutzer importiert, **Then** erscheint der Passkey am Eintrag mit Relying Party und Nutzer, und
+   sein öffentlicher Schlüssel passt zum privaten; ein Passkey mit einem anderen Algorithmus wird
+   ebenfalls übernommen, sein öffentlicher Schlüssel bleibt leer und der Bericht nennt ihn.
 8. **Given** ein Eintrag der Quelle mit ungültigem TOTP-Secret, **When** der Nutzer importiert,
-   **Then** wird der Eintrag ohne TOTP angelegt und der Bericht nennt ihn.
+   **Then** wird das Secret wie es ist übernommen und am Eintrag als ungültig angezeigt (ersetzen
+   oder entfernen möglich), und der Bericht nennt den Eintrag.
+9. **Given** ein Anhang der Quelle über dem Limit aus FR-020, **When** der Nutzer importiert,
+   **Then** lehnt holzi diesen Anhang ab, importiert den Eintrag ohne ihn, und der Bericht nennt
+   Eintrag, Dateiname und Größe, damit der Nutzer ihn von Hand nachholen kann.
+10. **Given** ein Eintrag, bei dem beim Import ein Fehler auftritt (etwa ein unlesbarer
+    Passkey-Schlüssel), **When** der Import weiterläuft, **Then** wird der Rest des Eintrags
+    übernommen, und der Bericht nennt den Eintrag, den Ordnerpfad und was fehlt, ohne
+    Geheimnisse zu enthalten; der Nutzer kann den Bericht als Textdatei speichern.
 
 ---
 
@@ -393,8 +412,8 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
   am Feld ab; fehlende Angaben bekommen die Standardwerte. Kommt ein ungültiger Wert dennoch
   an (Sync von einem anderen Gerät, ein anderes Programm), zeigt der Eintrag statt eines Codes
   eine Meldung und lässt zu, das Secret zu ersetzen oder zu entfernen; holzi stürzt nicht ab
-  und verändert nichts still. Beim Import wird der Eintrag ohne TOTP angelegt und im Bericht
-  genannt.
+  und verändert nichts still. Beim Import wird ein ungültiges Secret wie es ist übernommen
+  und im Bericht genannt.
 - **Die Uhr eines Geräts geht falsch.** Der TOTP-Code weicht dann ab; holzi weist an der
   Anzeige darauf hin, dass der Code von der Systemzeit abhängt.
 - **Ein Anhang ist leer, sehr groß oder hat einen ungewöhnlichen Namen** (Sonderzeichen,
@@ -442,8 +461,8 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
   Schlüsselpaar, Algorithmus, Zähler, Erkennbarkeit, Symbol, Farbe, Spitzname, letzte
   Nutzung) als Daten speichern, anzeigen, umbenennen (Spitzname) und löschen können. Das Anlegen
   durch die Oberfläche und das Benutzen von Passkeys (Signieren, Autofill) ist nicht Teil dieser
-  Spec. Passkeys kommen durch Import (FR-023) oder Sync hinein. Eine Credential-ID MUSS in der
-  Vault eindeutig sein.
+  Spec. Passkeys kommen durch Import (FR-023) oder Sync hinein und können jeden Algorithmus haben.
+  Eine Credential-ID MUSS in der Vault eindeutig sein.
 - **FR-005**: Passwörter, TOTP-Secrets, eigene Felder und Passkey-Schlüssel MÜSSEN
   standardmäßig verdeckt sein; Aufdecken MUSS eine bewusste Handlung des Nutzers sein (Halten
   mit der Maus, Tippen auf Mobilgeräten) und MUSS beim Verlassen des Eintrags enden.
@@ -520,16 +539,31 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
 **Import**
 
 - **FR-023**: Das System MUSS Einträge aus KeePass-Datenbanken (kdbx, mit Passwort und
-  optional Schlüsseldatei), Bitwarden-Exporten und LastPass-Exporten importieren, mit
-  Ordnerstruktur, eigenen Feldern, TOTP, Tags, Anhängen und Passkeys (Bitwarden, KeePassXC).
-  Weil diese Quellen nur den privaten Schlüssel liefern, MUSS der Import den öffentlichen
-  Schlüssel daraus ableiten; das gilt für ES256 (P-256). Ein Passkey mit anderem Algorithmus oder
-  unlesbarem Schlüssel MUSS im Bericht genannt und nicht übernommen werden. Der Import MUSS vorher eine Vorschau (Zahl der Einträge, Ordner, Anhänge) und
-  nachher einen Bericht (importiert, mit Verlust, übersprungen) zeigen, MUSS beim Scheitern
-  oder Abbruch die Vault unverändert lassen und bei erkannten Doppelten fragen. Übersteigt ein
-  Import insgesamt die Obergrenze einer Schreibtransaktion von 100 MiB, MUSS er vor dem
-  Schreiben mit einer Meldung abgelehnt werden; einzelne Anhänge über dem Limit aus FR-020
-  werden übersprungen und im Bericht genannt.
+  optional Schlüsseldatei), Bitwarden-Exporten und LastPass-Exporten importieren und dabei
+  **alles** übernehmen, was die Quelle enthält:
+  - Einträge mit allen Feldern, Ordnerstruktur, Tags, eigenen Feldern, TOTP, Anhängen, Zeitstempeln
+    und Symbolen (Standardsymbole der Quelle als Symbol von holzi, eigene Symbole als Bild);
+  - den **Papierkorb** der Quelle (KeePass-Papierkorb, gelöschte Einträge von Bitwarden) als
+    Inhalt unseres Papierkorbs, und den **Verlauf** der Einträge (KeePass-Verlauf, Bitwarden
+    `passwordHistory`) als Verlaufsstände samt ihrer Anhänge;
+  - **alle Passkeys**, jeden Algorithmus. Weil die Quellen nur den privaten Schlüssel liefern,
+    MUSS der Import den öffentlichen Schlüssel ableiten, wo der Algorithmus es zulässt (ES256,
+    EdDSA, RS256); sonst bleibt er leer und der Bericht nennt den Passkey;
+  - **ungültige TOTP-Secrets** wie sie sind (am Eintrag als ungültig angezeigt, FR-003);
+  - alle Eintragstypen und Felder von Bitwarden (Anmeldung, Notiz, Karte, Identität, SSH-Schlüssel,
+    unbekannte Typen) und alles, wofür holzi kein eigenes Feld hat (Auto-Type, Farben, Sammlungen,
+    Favoriten, Wiederholungsabfrage, URL-Zuordnungen und Ähnliches), als **eigene Felder** oder
+    Tags am Eintrag. Nichts darf still verloren gehen.
+
+  Der Import MUSS vorher eine Vorschau (Zahl der Einträge, Ordner, Anhänge, Verlaufsstände,
+  Doppelte) zeigen und bei erkannten Doppelten fragen. Anhänge über dem Limit aus FR-020 MÜSSEN
+  abgelehnt werden. Jeder Fehler und jede Auffälligkeit, die der Import nicht selbst auflöst
+  (abgelehnter Anhang mit Dateiname und Größe, unlesbarer Schlüssel, ein nicht speicherbarer
+  Wert), MUSS in einem Bericht stehen, der Eintrag, Ordnerpfad und das Fehlende nennt, damit der
+  Nutzer weiß, wo er nacharbeiten muss; der Bericht enthält keine Geheimnisse und lässt sich als
+  Textdatei speichern. Der Import schreibt in mehreren Schritten (jeder Anhang für sich); ein
+  Fehler, der den Import insgesamt stoppt, und ein Abbruch durch den Nutzer MÜSSEN alles wieder
+  entfernen, was der Import angelegt hat.
 
 **Zugriff von außen und Berechtigungen**
 
@@ -629,7 +663,9 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
 - **Tag**: eindeutig benannte Bezeichnung mit Farbe; zugleich Maßstab für den Bereich einer
   Freigabe.
 - **Passkey**: gespeichertes Schlüsselpaar mit Credential-ID und Relying Party, gehört zu
-  einem Eintrag; nur als Daten.
+  einem Eintrag; jeder Algorithmus; nur als Daten.
+- **Importbericht**: Ergebnis eines Imports mit Zahlen und der Liste der Stellen, an denen der
+  Nutzer nacharbeiten muss (Eintrag, Ordnerpfad, Fehlendes, ohne Geheimnisse).
 - **Binärdaten**: Inhalt einer Datei, durch den SHA-256-Wert eindeutig, mit Größe und Art
   (Anhang oder Symbol).
 - **Anhang**: Verknüpfung eines Eintrags (oder eines Verlaufsstands) mit Binärdaten unter einem
@@ -665,8 +701,9 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
   verloren.
 - **SC-009**: Eine heruntergeladene Datei ist in 100 % der Fälle byteweise gleich dem Original.
 - **SC-010**: Beim Import der Beispieldateien aller drei Formate stimmen Zahl der Einträge und
-  Ordner zu 100 % mit der Quelle (beim KeePass-Import ohne den Papierkorb der Quelle) überein,
-  und ein abgebrochener Import hinterlässt 0 veränderte Einträge.
+  Ordner zu 100 % mit der Quelle überein (der Papierkorb der Quelle inbegriffen), jede Stelle,
+  die nicht verlustfrei ankam, steht im Bericht (0 stille Verluste), und ein abgebrochener Import
+  hinterlässt 0 angelegte Einträge.
 - **SC-011**: Bei 360 px Breite sind alle Funktionen ohne waagerechtes Scrollen bedienbar.
 - **SC-012**: Jedes Quickstart-Szenario, das weder Netz noch ein zweites Gerät noch eine
   Zeitmessung braucht, läuft als End-to-End-Test gegen die gebaute App und besteht.
@@ -696,8 +733,9 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
   erhalten; die internen holzi-Funktionen (Spec 029) tragen ihren Bereich fest.
 - Die Datei- und Anhang-Aufnahme geht über den Dateidialog des Systems; Ziehen und Ablegen
   ist eine Verbesserung, keine Bedingung.
-- Beim KeePass-Import werden die Anhänge der Einträge übernommen, der Papierkorb der Quelle
-  nicht.
+- Beim Import werden auch der Papierkorb der Quelle und der Verlauf der Einträge übernommen. Ein
+  verschlüsselter Bitwarden-Export lässt sich ohne dessen Kennwort nicht lesen und wird mit einer
+  Meldung abgelehnt; sonst gilt: Was nicht ankommt, steht im Bericht.
 - Alle neuen Texte entstehen auf Deutsch und Englisch; weitere Sprachen sind nicht Teil dieser
   Spec.
 

@@ -392,60 +392,104 @@ Suchtext ist kein Geheimnis. 5.000 Einträge je rund 300 Byte sind 1,5 MB.
 Vorteil fehlt bei dieser Größe), _`fuse.js`_ (vorhanden, aber Unschärfe passt nicht zu
 einem Namensfilter; `fold` genügt und ist testbar).
 
-## R12 — Import in Rust: ein Einlesen, eine Transaktion, Vorschau vorab
+## R12 — Import in Rust: alles übernehmen, in Schritten, mit Bericht und Rückgängigmachen
 
 **Befund**: haex-vault importiert in der Oberfläche, schreibt Zeile für Zeile ohne
 Transaktion (ein Abbruch hinterlässt Halbes), erkennt bei Bitwarden und LastPass keine
-Doppelten und dupliziert beim KeePass-Wiederholen die Kindzeilen. Die CSV-Zerlegung ist
-zeilenweise und bricht bei Zeilenumbrüchen in Notizen. KeePass nutzt `kdbxweb` mit einem
-Argon2-Shim aus `hash-wasm`; Schlüsseldateien werden nicht unterstützt. Im Frontend fehlen
-`kdbxweb`, Argon2 und ein CSV-Parser; in Rust fehlen `keepass`, `argon2` und (ohne `llm-cpu`)
-`csv`.
+Doppelten und dupliziert beim KeePass-Wiederholen die Kindzeilen. Es lässt dabei vieles weg: den
+KeePass-Papierkorb (er wird dort nur auf den eigenen Papierkorb abgebildet, der Inhalt geht
+verloren), den Verlauf bei Bitwarden, bei Bitwarden die Typen Karte und Identität nur teilweise
+(Sozialversicherungs-, Pass- und Führerscheinnummer entfallen), SSH-Schlüssel und unbekannte
+Typen ganz, Favoriten überladen die Symbolspalte, Passkeys werden nicht importiert. Die
+CSV-Zerlegung ist zeilenweise und bricht bei Zeilenumbrüchen in Notizen. KeePass nutzt `kdbxweb`
+mit einem Argon2-Shim aus `hash-wasm`; Schlüsseldateien werden nicht unterstützt. Im Frontend
+fehlen `kdbxweb`, Argon2 und ein CSV-Parser; in Rust fehlen `keepass`, `argon2` und (ohne
+`llm-cpu`) `csv`.
+
+**Betreiber-Entscheidung (2026-10-02)**: Der Import übernimmt **alles**. Was holzi nicht als
+eigenes Feld kennt, kommt als eigenes Feld (`haex_passwords_item_key_values`) oder Tag mit. Was
+nicht ankommen kann, steht im Bericht, damit der Nutzer von Hand nacharbeiten kann. Die
+Zuordnungen je Format stehen in [contracts/import-mapping.md](./contracts/import-mapping.md).
 
 **Entscheidung**: Der Import liegt in Rust (`passwords/import/`). Reine Funktionen
-`bytes → ImportModel` (je Format), danach `apply_import` in **einem** `write`:
+`bytes → ImportModel` je Format, danach `apply` in Schritten:
 
 1. `passwords_import_preview` liest die Datei, gibt Zahl der Einträge, Ordner, Anhänge,
-   Doppelten und Hinweise zurück und schreibt nichts.
-2. `passwords_import_run` liest erneut und schreibt alles oder nichts. Gesamtgröße über
-   100 MiB (Obergrenze der Transaktion) wird **vor** dem Schreiben mit
-   `PasswordsImportTooLarge` abgelehnt; einzelne Anhänge über 25 MiB werden übersprungen und
-   gemeldet.
-3. **Formate**: KeePass-`kdbx` (Passwort, optional Schlüsseldatei) über das Crate `keepass`;
-   Bitwarden JSON (unverschlüsselt) und CSV; LastPass CSV, beide mit dem Crate `csv`
-   (RFC 4180, Zeilenumbrüche in Feldern). Zuordnungen wie in haex-vault, soweit sie dort
-   funktionieren: Ordner (LastPass: `grouping` an `/` teilen), Tags (Bitwarden-Typen werden
-   Tags `secure-note`, `credit-card`, `identity`), eigene Felder, TOTP (vorher geprüft, R8),
-   Anhänge (KeePass) und **Passkeys** (Bitwarden `fido2Credentials`, KeePassXC-Attribute). Die
-   Quellen liefern nur den privaten Schlüssel (PKCS8); die Tabelle verlangt auch den öffentlichen
-   (SPKI, `NOT NULL`). Er wird für **ES256 (P-256)** mit dem Crate `p256` (Features `pkcs8`,
-   `pem`; `pkcs8`, `spki` und `pem-rfc7468` stehen schon im `Cargo.lock`) abgeleitet. Passkeys
-   mit anderem Algorithmus oder unlesbarem Schlüssel stehen als „nicht übernommen“ im Bericht.
-   Schlüsselpaare für Tests entstehen zur Laufzeit im Test, nie als Datei im Repository
-   (Constitution I). Die Kodierungen der Felder (Base64 oder Base64url bei Credential-ID und
-   Benutzerkennung, UUID-Form der Bitwarden-Credential-ID) und die Kodierung in haex-vault prüft
-   Aufgabe T003 anhand des Codes dort und eigener Beispieldaten, damit gespeicherte Passkeys
-   zwischen beiden Produkten lesbar bleiben. **Warum nicht wie in haex-vault**: haex-vault
+   Verlaufsstände, Doppelten und Hinweise zurück und schreibt nichts.
+2. `passwords_import_run` liest erneut und schreibt **in Schritten**: erst die Ordner (die
+   KeePass-Papierkorb-Gruppe wird zu unserer Zeile `trash`), dann jeder Eintrag mit Tags,
+   eigenen Feldern, Passkeys und Verlaufsständen in einem eigenen `write`, dann jeder Anhang
+   (auch die der Verlaufsstände) in einem eigenen `write`. So bleibt jede Transaktion unter
+   100 MiB und der Import ist nicht an die Gesamtgröße gebunden (Option A der Klärung).
+3. **Rückgängig**: Ein Gesamtfehler (Speicherfehler) oder ein Abbruch durch den Nutzer entfernt
+   wieder, was der Import angelegt hat (ein im Speicher geführtes Verzeichnis der angelegten
+   Zeilen, in umgekehrter Reihenfolge über dieselbe Löschroutine wie das endgültige Löschen;
+   neu angelegte, nun unbenutzte Binärzeilen werden mitentfernt). **Fehler an einzelnen
+   Stellen** (abgelehnter Anhang, unlesbarer Passkey-Schlüssel) stoppen den Import nicht: der
+   Rest des Eintrags wird übernommen und die Stelle kommt in den Bericht.
+4. **Bericht** (`ImportReport`): Zahlen und eine Liste `needsAttention` mit Eintragstitel,
+   Ordnerpfad, Art der Stelle (`attachment_too_large`, `passkey_key_unreadable`,
+   `passkey_public_key_missing`, `totp_invalid`, `value_not_storable`, `source_setting`, …),
+   Feldname beziehungsweise Dateiname und Größe, aber **nie ein Wert eines Geheimnisses**. Die
+   Oberfläche zeigt die Liste und bietet an, sie als Textdatei zu speichern.
+5. **Formate**: KeePass-`kdbx` (Passwort, optional Schlüsseldatei) über das Crate `keepass`;
+   Bitwarden JSON (unverschlüsselt; ein verschlüsselter Export ist `ImportFailed
+{ reason: "encrypted_export" }`, weil ohne dessen Kennwort nichts lesbar ist) und CSV; LastPass
+   CSV, beide mit `csv` (RFC 4180, Zeilenumbrüche in Feldern).
+6. **Papierkorb und Verlauf**: KeePass-Papierkorb und Bitwarden-Einträge mit `deletedDate` landen
+   als Inhalt in unserem Papierkorb (ohne Herkunft, Wiederherstellen legt sie an die Wurzel);
+   KeePass-Verlauf und Bitwarden-`passwordHistory` werden Verlaufsstände mit den Zeitpunkten
+   der Quelle.
+7. **Symbole**: KeePass-Standardsymbole (0–68) werden über eine Tabelle zu Symbolnamen von
+   holzi (Literal in `src/lib/passwords/icons.ts`, die Tabelle liegt in `import/icons.rs`
+   mit einem Test, dass jeder Zielname in der Liste der Oberfläche steht), eigene Symbole werden
+   Binärzeilen vom Typ `icon` mit `icon = 'binary:<hash>'` (wie in haex-vault); die Oberfläche
+   zeigt sie über `passwords_icon_preview`. Symbole sind der niedrigste Rang: schlägt eine
+   Zuordnung fehl, bleibt das Symbol leer und der Bericht nennt es.
+8. **Passkeys**: Alle werden importiert. Die Quellen liefern nur den privaten Schlüssel (PKCS8);
+   die Tabelle verlangt auch den öffentlichen (SPKI, `NOT NULL`). Er wird abgeleitet für
+   **ES256** (`p256`, Features `pkcs8`, `pem`), **EdDSA** (`ed25519-dalek` mit `pkcs8`; steht
+   schon im `Cargo.lock`) und **RS256** (`pkcs1` liest Modulus und öffentlichen Exponenten aus
+   dem privaten Schlüssel, `spki` baut den öffentlichen Schlüssel; kein `rsa`-Crate, weil wir
+   keine RSA-Rechnung brauchen und dessen Sicherheitshinweis zu Zeitangriffen sonst im
+   Abhängigkeitsbaum stünde). Bei einem anderen Algorithmus oder einem unlesbaren öffentlichen
+   Teil bleibt `public_key` leer (`''`), der Passkey wird trotzdem gespeichert und der Bericht
+   nennt ihn; für Anmeldungen genügt der private Schlüssel. Schlüsselpaare für Tests entstehen zur
+   Laufzeit im Test, nie als Datei im Repository (Constitution I). Die Kodierungen der Felder
+   (Base64 oder Base64url bei Credential-ID und Benutzerkennung, UUID-Form der
+   Bitwarden-Credential-ID) und die Kodierung in haex-vault prüft Aufgabe T003, damit gespeicherte
+   Passkeys zwischen beiden Produkten lesbar bleiben. **Warum nicht wie in haex-vault**: haex-vault
    importiert keine Passkeys; es erzeugt sie selbst (`generatePasskeyPairAsync`, ES256) und hat
-   deshalb beide Schlüssel zur Hand. Der Fall „nur der private Schlüssel ist bekannt“ kommt dort
-   nicht vor. Der KeePass-Papierkorb wird nicht übernommen (Annahme der
-   Spec). Symbole und Verlauf der Quelle werden im ersten Wurf nicht importiert.
-4. Kennungen sind neu (v4); Doppelte erkennt `(title, username, url)` gegen vorhandene
-   Einträge **außerhalb** des Papierkorbs; `onDuplicate: skip | create` entscheidet die
-   Oberfläche nach der Vorschau (FR-023).
-5. Passwort und Schlüsseldatei-Pfad laufen als `Passphrase`-artiger Typ (zeroizing, `Debug`
-   geschwärzt) durch den Command.
+   deshalb beide Schlüssel.
+9. **Ungültiges TOTP** wird wie es ist als `otp_secret` übernommen (bei einer `otpauth://`-Adresse
+   mit nicht lesbaren Teilen der Text der Adresse); der Eintrag zeigt `otpState: invalid`, der
+   Bericht nennt ihn (R8).
+10. Kennungen sind neu (v4); Doppelte erkennt `(title, username, url)` gegen vorhandene Einträge
+    **außerhalb** des Papierkorbs; `onDuplicate: skip | create` entscheidet die Oberfläche nach
+    der Vorschau (FR-023). Zeitstempel (`created_at`, `updated_at`) kommen aus der Quelle.
+11. Passwort und Schlüsseldatei-Pfad laufen als zeroizing Typ mit geschwärztem `Debug` durch den
+    Command.
 
 **Ungeprüft und deshalb Aufgabe T003**: ob `keepass` KDBX 3 und 4, Argon2-Varianten,
-Schlüsseldateien, Anhänge und Eigenschaften der Einträge in der benötigten Form liefert und in
-beiden Feature-Konfigurationen baut. Fällt die Prüfung negativ aus, ist die zweite Wahl der
-Weg von haex-vault (`kdbxweb` plus `hash-wasm` im Frontend, Parser liefert `ImportModel` als
-JSON an einen Rust-Command `apply_import`); die übrigen Teile des Plans ändern sich dann
-nicht.
+Schlüsseldateien, Anhänge, Verlauf, eigene Symbole, benutzerdefinierte Daten, Auto-Type und die
+Eigenschaften der Einträge in der benötigten Form liefert und in beiden Feature-Konfigurationen
+baut, und ob `ed25519-dalek` und `pkcs1` die Ableitung wie beschrieben leisten. Fällt die Prüfung
+für `keepass` negativ aus, ist die zweite Wahl der Weg von haex-vault (`kdbxweb` plus `hash-wasm`
+im Frontend, Parser liefert `ImportModel` als JSON an einen Rust-Command `apply_import`); die
+übrigen Teile des Plans ändern sich dann nicht.
 
-**Verworfen**: _Import im Frontend wie haex-vault_ (kein Alles-oder-nichts, Passwörter und
-Anhänge durchlaufen den Webview, doppelte Parser für Test und Betrieb), _Import je Format als
-eigene App_ (ein Assistent mit drei Quellen genügt).
+**Verworfen**:
+
+- _Alles in einer Transaktion_ (die erste Fassung): macht den Import von der Gesamtgröße
+  abhängig (100 MiB) und lässt keine großen Anhänge zu.
+- _Anhänge über 25 MiB importieren_: das Limit schützt die Vault-Datenbank und den Sync; der
+  Betreiber will die Ablehnung mit klarer Meldung (Klärung).
+- _Import im Frontend wie haex-vault_ (kein Rückgängigmachen, Passwörter und Anhänge durchlaufen
+  den Webview, doppelte Parser für Test und Betrieb), _Import je Format als eigene App_.
+
+**ponytail**: Das Verzeichnis der angelegten Zeilen liegt nur im Speicher; ein Absturz mitten im
+Import hinterlässt Teile (Erkennung von Doppelten hilft beim erneuten Lauf). Aufrüstweg: eine
+`_no_sync`-Tabelle mit Importläufen.
 
 ## R13 — Oberfläche: eine App, Orte im Tab, kein Geheimnis in Verlauf oder Titel
 
@@ -589,11 +633,13 @@ Die folgenden Punkte stehen jetzt in der Spec (eigener Commit, mit Begründung h
 4. **FR-021** und **US5, Szenario 4**: Vorschau nur für Bilder; PDFs werden heruntergeladen
    (R18).
 5. **FR-022** und **US5, Szenario 6**: Aufräumen mit Karenzzeit von sieben Tagen (R4).
-6. **FR-023**: Gesamtgröße eines Imports über 100 MiB wird vor dem Schreiben abgelehnt;
-   Anhänge über 25 MiB werden übersprungen und gemeldet (R12).
+6. **FR-023** (erste Fassung, ersetzt durch Nr. 8): Gesamtgröße eines Imports über 100 MiB
+   wird abgelehnt, Anhänge über 25 MiB werden übersprungen.
 7. **FR-027**: Kopfdaten für den eingebauten Agenten ohne Benutzername und Adresse (R6).
-8. **FR-023** und **US7**: Passkeys (ES256) werden importiert, der öffentliche Schlüssel wird
-   abgeleitet; ungültiges TOTP führt zu einem Eintrag ohne TOTP (R12).
+8. **FR-023** und **US7** (zuletzt 2026-10-02): Der Import übernimmt alles (Papierkorb, Verlauf,
+   Symbole, alle Passkeys, ungültiges TOTP, alle Typen und Felder; Rest als eigenes Feld oder Tag);
+   Anhänge über 25 MiB werden abgelehnt, aber gemeldet; Schreiben in Schritten mit
+   Rückgängigmachen; Bericht mit den Stellen zum Nacharbeiten (R12).
 9. **FR-003** und der Edge Case „TOTP-Secret ungültig“: Ablehnen beim Anlegen und Ändern,
    Standardwerte, Erkennen und Beheben bei Sync und Import (R8).
 10. **FR-009**: Reihenfolge der Ordner ist änderbar, auch ohne Maus.

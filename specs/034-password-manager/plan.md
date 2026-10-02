@@ -38,15 +38,20 @@ Technischer Ansatz (Begründungen und verworfene Alternativen in
 - **Verlauf, Papierkorb, Konflikte** (R3, R5, R15): ein Verlaufsformat, Wiederherstellen neu
   gebaut (haex-vault kann es nicht), Papierkorb merkt den früheren Ort, Speichern mit
   `expectedUpdatedAt` erkennt Änderungen und Löschen durch ein anderes Gerät.
-- **Import** (R12): in Rust, ein Einlesen, eine Transaktion (alles oder nichts), Vorschau
-  vorab; KeePass über `keepass`, Bitwarden und LastPass über `csv` und `serde_json`. Die
-  Eignung von `keepass` prüft Aufgabe T003; zweite Wahl ist der Weg von haex-vault.
+- **Import** (R12): in Rust und **verlustfrei**: alles aus der Quelle (Papierkorb, Verlauf,
+  Symbole, alle Passkeys, ungültiges TOTP, alle Typen und Felder; was kein Feld hat, wird ein
+  eigenes Feld oder Tag, siehe [contracts/import-mapping.md](./contracts/import-mapping.md)),
+  Vorschau vorab, Schreiben in Schritten (jeder Eintrag, jeder Anhang für sich), bei Gesamtfehler
+  oder Abbruch Rückgängigmachen, ein Bericht mit den Stellen zum Nacharbeiten (zum Beispiel
+  Anhänge über 25 MiB). KeePass über `keepass`, Bitwarden und LastPass über `csv` und
+  `serde_json`. Die Eignung von `keepass` prüft Aufgabe T003; zweite Wahl ist der Weg von
+  haex-vault.
 - **Oberfläche** (R10, R11, R13, R17): App `system.passwords`, Mehrfachinstanz, Orte im Tab nur
   mit Kennungen, Generator und Suche als reines TS unter `src/lib/passwords/` (Node-Tests),
   vorhandene Bausteine (`SettingsGroup`/`Row`, `WmRouterView`, `onVaultTablesChanged`).
-- **Neue Abhängigkeiten**: Rust `keepass`, `csv`, `sha1`, `p256` (öffentlicher Schlüssel beim
-  Passkey-Import), `tauri-plugin-clipboard-manager` und `unicode-normalization` (steht schon
-  transitiv im `Cargo.lock`); Frontend keine. ADR-0007 hält „Geheimnisse unverschlüsselt in der Vault, Schutz durch
+- **Neue Abhängigkeiten**: Rust `keepass`, `csv`, `sha1`, `p256`, `ed25519-dalek` und `pkcs1`
+  (öffentlicher Schlüssel beim Passkey-Import), `tauri-plugin-clipboard-manager` und
+  `unicode-normalization` (steht schon transitiv im `Cargo.lock`); Frontend keine. ADR-0007 hält „Geheimnisse unverschlüsselt in der Vault, Schutz durch
   Freigaben“ fest (R19).
 
 ## Technical Context
@@ -59,7 +64,8 @@ optional); TypeScript 6 (strict), Vue 3.5, Nuxt 4.5.2 (SPA), Node 22.19 für die
 `thiserror`, `ts-rs`, `tauri-plugin-dialog`; Frontend: Pinia, `@nuxtjs/i18n`, `reka-ui`/haex-ui-Layer.
 **Neu (Rust)**: `keepass` (KDBX, Version und Features prüft T003), `csv` (RFC 4180; in
 `Cargo.lock` nur über `llm-cpu`, daher direkte Abhängigkeit), `sha1` (RustCrypto), `p256`
-(Features `pkcs8`, `pem`; leitet den öffentlichen Passkey-Schlüssel ab, R12),
+(Features `pkcs8`, `pem`), `ed25519-dalek` (Feature `pkcs8`) und `pkcs1` (leiten den öffentlichen
+Passkey-Schlüssel für ES256, EdDSA und RS256 ab, R12),
 `tauri-plugin-clipboard-manager` (nur Rust-API), `unicode-normalization` (NFC für Tag-Kennungen,
 R2; schon transitiv im Lock). Base32 wird selbst geschrieben (R8).
 
@@ -181,7 +187,7 @@ src-tauri/src/
 │   ├── clipboard.rs               # Schreiben + abbrechbares Löschen                [neu]
 │   ├── import/
 │   │   ├── mod.rs                 # ImportModel, Vorschau, Doppelte                 [neu]
-│   │   ├── keepass.rs, bitwarden.rs, lastpass.rs, csv.rs, apply.rs                  [neu]
+│   │   ├── keepass.rs, bitwarden.rs, lastpass.rs, csv.rs, icons.rs, apply.rs, report.rs [neu]
 │   ├── commands/
 │   │   ├── mod.rs, read.rs, items.rs, organize.rs, trash.rs, attachments.rs,
 │   │   │   history.rs, passkeys.rs, presets.rs, import.rs, agent.rs   (rufen nur den Dienst) [neu]
@@ -237,13 +243,13 @@ legt die Seitenleisten-Entscheidung in Aufgabe T002 (Graph-Abfrage), nicht jetzt
 
 ## Complexity Tracking
 
-| Verstoß / Aufwand                                                        | Warum nötig                                                                                                       | Einfachere Alternative verworfen, weil                                                                                                                                                  |
-| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Abweichung vom Datenmodell von haex-vault (A1–A5, vor allem kein UNIQUE) | UNIQUE-Konflikte halten den Sync an (R2); der Papierkorb soll den Ort merken (R3); BLOB statt Base64 (R4)         | 1:1-Übernahme brächte einen Sync, der wegen eines Tagnamens stehen bleibt, und den Verlust des Ortes beim Wiederherstellen                                                              |
-| Sechs Rust-Abhängigkeiten (drei davon schon transitiv im Lock)           | KDBX, RFC-4180-CSV, SHA-1 für TOTP, P-256 für den öffentlichen Passkey-Schlüssel, Zwischenablage mit Löschen, NFC | TOTP und Base32 selbst zu schreiben ist vertretbar (R8) und geschieht; KDBX/Argon2, CSV, Elliptische Kurven und Unicode-Normalisierung selbst zu schreiben wäre riskanter als ein Crate |
-| Teil-Update und `reveal` statt Klartext-Detail                           | Geheimnisse bleiben im Backend (R7, FR-005, FR-040)                                                               | Alle Felder im Klartext zu laden ist einfacher, legt aber alle Geheimnisse in den Webview                                                                                               |
-| Aufrufer-/Freigabe-Modul und Dienst ohne Verwalter für Freigaben         | FR-024 bis FR-030 verlangen die Prüfung jetzt; Spec 029 braucht den Zugriff, 017–019/021 den Rest                 | Prüfung später nachrüsten hieße, die Commands und den Dienst ein zweites Mal anzufassen; die Prüfung ist rein und klein                                                                 |
-| `identity/migrations.rs` bleibt über 500 Zeilen                          | Bestehende Überschreitung (577), nicht von dieser Spec                                                            | Aufspaltung ist eine eigene Änderung; hier genügt eine neue Datei für das neue SQL                                                                                                      |
+| Verstoß / Aufwand                                                        | Warum nötig                                                                                                                                     | Einfachere Alternative verworfen, weil                                                                                                                                                                          |
+| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Abweichung vom Datenmodell von haex-vault (A1–A5, vor allem kein UNIQUE) | UNIQUE-Konflikte halten den Sync an (R2); der Papierkorb soll den Ort merken (R3); BLOB statt Base64 (R4)                                       | 1:1-Übernahme brächte einen Sync, der wegen eines Tagnamens stehen bleibt, und den Verlust des Ortes beim Wiederherstellen                                                                                      |
+| Acht Rust-Abhängigkeiten (mehrere schon transitiv im Lock)               | KDBX, RFC-4180-CSV, SHA-1 für TOTP, P-256, EdDSA und RSA-Schlüsselteile für den öffentlichen Passkey-Schlüssel, Zwischenablage mit Löschen, NFC | TOTP und Base32 selbst zu schreiben ist vertretbar (R8) und geschieht; KDBX/Argon2, CSV, Elliptische Kurven, ASN.1-Schlüsselformate und Unicode-Normalisierung selbst zu schreiben wäre riskanter als ein Crate |
+| Teil-Update und `reveal` statt Klartext-Detail                           | Geheimnisse bleiben im Backend (R7, FR-005, FR-040)                                                                                             | Alle Felder im Klartext zu laden ist einfacher, legt aber alle Geheimnisse in den Webview                                                                                                                       |
+| Aufrufer-/Freigabe-Modul und Dienst ohne Verwalter für Freigaben         | FR-024 bis FR-030 verlangen die Prüfung jetzt; Spec 029 braucht den Zugriff, 017–019/021 den Rest                                               | Prüfung später nachrüsten hieße, die Commands und den Dienst ein zweites Mal anzufassen; die Prüfung ist rein und klein                                                                                         |
+| `identity/migrations.rs` bleibt über 500 Zeilen                          | Bestehende Überschreitung (577), nicht von dieser Spec                                                                                          | Aufspaltung ist eine eigene Änderung; hier genügt eine neue Datei für das neue SQL                                                                                                                              |
 
 ## Bewusste Grenzen (aus research.md)
 
@@ -256,10 +262,11 @@ legt die Seitenleisten-Entscheidung in Aufgabe T002 (Graph-Abfrage), nicht jetzt
   oder einen Datenstrom (R4).
 - Die Zwischenablage wird bei einem Absturz nicht geleert (R9).
 - Der Konflikt-Token ist auf Millisekunden genau (R15).
-- Kein PDF-Vorschau, keine Symbole und keine Verläufe aus dem Import, kein Export (Spec,
-  Nicht im Umfang; R18, R12).
-- Passkeys kommen beim Import nur für ES256 an (der öffentliche Schlüssel wird abgeleitet);
-  andere Algorithmen stehen im Bericht als nicht übernommen (R12).
+- Keine PDF-Vorschau und kein Export (Spec, Nicht im Umfang; R18). Der Import lässt dagegen nichts
+  weg; was nicht ankommt (Anhänge über 25 MiB, ein nicht ableitbarer öffentlicher Passkey-Schlüssel),
+  steht im Bericht (R12).
+- Das Verzeichnis der angelegten Zeilen für das Rückgängigmachen liegt nur im Speicher; ein
+  Absturz mitten im Import hinterlässt Teile (R12).
 - Der eingebaute Agent kennt nur Titel, Tags und Ordnernamen; mehr kommt mit 017–019 und 021
   über deren Eingänge (R6, R14).
 - Ob `keepass` den Bedarf deckt, zeigt T003; sonst gilt die zweite Wahl (R12).

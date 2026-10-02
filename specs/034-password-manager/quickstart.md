@@ -102,18 +102,30 @@ das Passwort“ → das Modell kann es nicht lesen, es gibt keine Aktion dafür.
 
 ## 9. Import (US7)
 
-`passwords_import.rs` mit Beispieldateien aus `src-tauri/tests/fixtures/passwords/` (je eine
-KeePass-, Bitwarden- und LastPass-Datei, Passwörter erfunden): Zahl der Einträge und Ordner
-stimmt mit der Quelle (beim KeePass-Import ohne den Papierkorb, SC-010), falsches Passwort
-und beschädigte Datei ändern nichts, ein
-Fehler in der Mitte hinterlässt nichts (Abbruch durch eine absichtlich ungültige Zeile),
-Doppelte erscheinen in der Vorschau, `onDuplicate: skip` überspringt sie, Zeilenumbrüche in
-Notizen bleiben erhalten. Passkeys: ein zur Laufzeit erzeugtes P-256-Schlüsselpaar wird als
-Bitwarden-`fido2Credentials` und als KeePassXC-Attribute exportiert, importiert, und der
-abgeleitete öffentliche Schlüssel stimmt mit dem erzeugten überein; ein Passkey mit anderem
-Algorithmus steht im Bericht als nicht übernommen; ein ungültiges TOTP führt zu einem Eintrag ohne
-TOTP und einer Zeile im Bericht. Manuell: den Assistenten mit einer eigenen Exportdatei
-ausprobieren.
+`passwords_import.rs` mit den Beispieldateien aus `src-tauri/tests/fixtures/passwords/` und der zur
+Laufzeit gebauten KDBX-Datei (`tests/common/kdbx_fixture.rs`, Passwörter erfunden, Schlüsselpaare
+im Test erzeugt):
+
+- Zahl der Einträge und Ordner stimmt mit der Quelle, **der Papierkorb inbegriffen** (SC-010);
+  nichts geht still verloren: jede Quelleinheit ist importiert, als Doppeltes übersprungen oder hat
+  eine Zeile im Bericht.
+- Papierkorb (KeePass, Bitwarden `deletedDate`) liegt im Papierkorb von holzi, Verlauf (KeePass,
+  `passwordHistory`) steht als Verlaufsstände mit den Zeiten der Quelle da, Symbole sind gesetzt
+  (Standardsymbol als Name, eigenes als Bild), Karten-, Identitäts- und SSH-Angaben und alles ohne
+  eigenes Feld stehen als eigene Felder oder Tags am Eintrag.
+- Passkeys mit ES256, EdDSA und RS256: der abgeleitete öffentliche Schlüssel stimmt mit dem
+  erzeugten überein; ein anderer Algorithmus wird gespeichert, sein öffentlicher Schlüssel bleibt
+  leer, der Bericht nennt ihn; ein unlesbarer Schlüssel stoppt den Eintrag nicht.
+- Ungültiges TOTP wird wie es ist importiert und am Eintrag als ungültig angezeigt.
+- Ein Anhang von 26 MiB wird abgelehnt, der Eintrag ohne ihn importiert, der Bericht nennt Eintrag,
+  Ordnerpfad, Dateiname und Größe.
+- Falsches Passwort, beschädigte Datei und ein verschlüsselter Bitwarden-Export ändern nichts; ein
+  Gesamtfehler (eingespritzt beim fünften Eintrag und bei einem Anhang) und ein Abbruch entfernen
+  alles Angelegte; Doppelte erscheinen in der Vorschau, `onDuplicate: skip` überspringt sie;
+  Zeilenumbrüche in Notizen bleiben erhalten; der Bericht enthält keinen `SECRET-MARKER-IMPORT`.
+
+Manuell: den Assistenten mit einer eigenen Exportdatei ausprobieren; im Bericht „Hier musst du
+nacharbeiten“ den Knopf „Eintrag öffnen“ und „Bericht als Textdatei speichern“ prüfen.
 
 ## 10. Sync zwischen eigenen Geräten (US8)
 

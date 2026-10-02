@@ -24,23 +24,23 @@ Zeitstempel `TEXT` (`CURRENT_TIMESTAMP`, wo nicht anders gesagt).
 
 ### `haex_passwords_item_details` — Eintrag
 
-| Spalte             | Typ     | Regel                                                                    |
-| ------------------ | ------- | ------------------------------------------------------------------------ |
-| `id`               | TEXT PK | UUIDv4                                                                   |
-| `title`            | TEXT    | optional, auch leer; die Oberfläche zeigt den Platzhalter „(ohne Titel)“ |
-| `username`         | TEXT    |                                                                          |
-| `password`         | TEXT    | Geheimnis; nie in Listen, Kopfdaten oder Fehlern                         |
-| `note`             | TEXT    |                                                                          |
-| `icon`, `color`    | TEXT    | `icon` ist ein Name aus der festen Liste der Oberfläche                  |
-| `url`              | TEXT    |                                                                          |
-| `otp_secret`       | TEXT    | Geheimnis; Base32, nach Normalisierung (`passwords/totp.rs`)             |
-| `otp_digits`       | INTEGER | Standard 6; zulässig 6–10                                                |
-| `otp_period`       | INTEGER | Standard 30; zulässig 1–300                                              |
-| `otp_algorithm`    | TEXT    | Standard `SHA1`; zulässig `SHA1`, `SHA256`, `SHA512`                     |
-| `expires_at`       | TEXT    | `YYYY-MM-DD`                                                             |
-| `autofill_aliases` | TEXT    | JSON `{ "username": [..], … }`; vom Passwortmanager nur verwahrt         |
-| `created_at`       | TEXT    | Standard `CURRENT_TIMESTAMP`; Rust schreibt RFC 3339 mit Millisekunden   |
-| `updated_at`       | TEXT    | von Rust bei jeder Änderung gesetzt (Konfliktprüfung, R15)               |
+| Spalte             | Typ     | Regel                                                                                                                               |
+| ------------------ | ------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `id`               | TEXT PK | UUIDv4                                                                                                                              |
+| `title`            | TEXT    | optional, auch leer; die Oberfläche zeigt den Platzhalter „(ohne Titel)“                                                            |
+| `username`         | TEXT    |                                                                                                                                     |
+| `password`         | TEXT    | Geheimnis; nie in Listen, Kopfdaten oder Fehlern                                                                                    |
+| `note`             | TEXT    |                                                                                                                                     |
+| `icon`, `color`    | TEXT    | `icon`: Name aus der festen Liste der Oberfläche oder `binary:<hash>` (eigenes Bild aus dem Import, Binärzeile vom Typ `icon`)      |
+| `url`              | TEXT    |                                                                                                                                     |
+| `otp_secret`       | TEXT    | Geheimnis; Base32 nach Normalisierung (`passwords/totp.rs`); aus Sync oder Import kann auch Ungültiges stehen (`otpState: invalid`) |
+| `otp_digits`       | INTEGER | Standard 6; zulässig 6–10                                                                                                           |
+| `otp_period`       | INTEGER | Standard 30; zulässig 1–300                                                                                                         |
+| `otp_algorithm`    | TEXT    | Standard `SHA1`; zulässig `SHA1`, `SHA256`, `SHA512`                                                                                |
+| `expires_at`       | TEXT    | `YYYY-MM-DD`                                                                                                                        |
+| `autofill_aliases` | TEXT    | JSON `{ "username": [..], … }`; vom Passwortmanager nur verwahrt                                                                    |
+| `created_at`       | TEXT    | Standard `CURRENT_TIMESTAMP`; Rust schreibt RFC 3339 mit Millisekunden                                                              |
+| `updated_at`       | TEXT    | von Rust bei jeder Änderung gesetzt (Konfliktprüfung, R15)                                                                          |
 
 Index: `idx_pw_items_updated (updated_at)`.
 
@@ -125,26 +125,28 @@ Indizes: `idx_pw_item_tags_item (item_id)`, `idx_pw_item_tags_tag (tag_id)`.
 
 ### `haex_passwords_passkeys` — Passkey (nur Daten)
 
-| Spalte                                                 | Typ                   | Regel                                                       |
-| ------------------------------------------------------ | --------------------- | ----------------------------------------------------------- |
-| `id`                                                   | TEXT PK               | `UUIDv5(NS_PASSKEY, credential_id)` (A3)                    |
-| `item_id`                                              | TEXT                  | → `item_details(id)` ON DELETE CASCADE; leer = ohne Eintrag |
-| `credential_id`                                        | TEXT NOT NULL         | Base64; kein UNIQUE (A3); Index `idx_pw_passkeys_cred`      |
-| `relying_party_id`                                     | TEXT NOT NULL         | Index `idx_pw_passkeys_rp`                                  |
-| `relying_party_name`, `user_name`, `user_display_name` | TEXT                  |                                                             |
-| `user_handle`                                          | TEXT NOT NULL         |                                                             |
-| `private_key`                                          | TEXT NOT NULL         | Geheimnis; PKCS8, Base64                                    |
-| `public_key`                                           | TEXT NOT NULL         | SPKI, Base64                                                |
-| `algorithm`                                            | INTEGER NOT NULL (-7) | COSE: -7 ES256, -8 EdDSA, -257 RS256                        |
-| `sign_count`                                           | INTEGER NOT NULL (0)  |                                                             |
-| `is_discoverable`                                      | INTEGER NOT NULL (1)  |                                                             |
-| `icon`, `color`, `nickname`                            | TEXT                  | `nickname` ist änderbar                                     |
-| `created_at`, `last_used_at`                           | TEXT                  |                                                             |
+| Spalte                                                 | Typ                   | Regel                                                         |
+| ------------------------------------------------------ | --------------------- | ------------------------------------------------------------- |
+| `id`                                                   | TEXT PK               | `UUIDv5(NS_PASSKEY, credential_id)` (A3)                      |
+| `item_id`                                              | TEXT                  | → `item_details(id)` ON DELETE CASCADE; leer = ohne Eintrag   |
+| `credential_id`                                        | TEXT NOT NULL         | Base64; kein UNIQUE (A3); Index `idx_pw_passkeys_cred`        |
+| `relying_party_id`                                     | TEXT NOT NULL         | Index `idx_pw_passkeys_rp`                                    |
+| `relying_party_name`, `user_name`, `user_display_name` | TEXT                  |                                                               |
+| `user_handle`                                          | TEXT NOT NULL         |                                                               |
+| `private_key`                                          | TEXT NOT NULL         | Geheimnis; PKCS8, Base64                                      |
+| `public_key`                                           | TEXT NOT NULL         | SPKI, Base64; `''`, wenn der Import ihn nicht ableiten konnte |
+| `algorithm`                                            | INTEGER NOT NULL (-7) | COSE: -7 ES256, -8 EdDSA, -257 RS256                          |
+| `sign_count`                                           | INTEGER NOT NULL (0)  |                                                               |
+| `is_discoverable`                                      | INTEGER NOT NULL (1)  |                                                               |
+| `icon`, `color`, `nickname`                            | TEXT                  | `nickname` ist änderbar                                       |
+| `created_at`, `last_used_at`                           | TEXT                  |                                                               |
 
 Regel: Die Oberfläche legt keine Passkeys an; sie entstehen durch Import oder Sync
 (später durch die External Bridge). Löschen und Spitznamen sind erlaubt. Beim Import liefern
-die Quellen nur den privaten Schlüssel; `public_key` wird für ES256 (P-256) aus ihm abgeleitet
-(`passkeys.rs`), andere Algorithmen werden nicht übernommen. Die Kodierung von `credential_id`,
+die Quellen nur den privaten Schlüssel; `public_key` wird aus ihm abgeleitet (`passkeys.rs`:
+ES256, EdDSA, RS256), bei einem anderen Algorithmus oder unlesbarem Schlüssel bleibt er leer
+(`''`; der Passkey wird trotzdem gespeichert, zum Anmelden genügt der private Schlüssel, der
+Bericht nennt ihn). Die Kodierung von `credential_id`,
 `user_handle` und der Schlüssel entspricht der von haex-vault (Prüfung in T003).
 
 ## Abgeleitete Kennungen
@@ -219,7 +221,7 @@ verwaist ── beim Öffnen der Vault, created_at älter als 7 Tage ──▶ g
 | `GroupRow`       | id, name, description, icon, color, sortOrder, parentId, trashedFromParentId                                                                                                                                                                                                                               |
 | `TagRow`         | id, name, color, itemCount                                                                                                                                                                                                                                                                                 |
 | `SnapshotHeader` | id, itemId, modifiedAt, changedFields `string[]`, attachmentCount                                                                                                                                                                                                                                          |
-| `ImportReport`   | imported, skippedDuplicates, lossy `[{title, missing[]}]`, skipped `[{title, reason}]`, attachmentsSkipped                                                                                                                                                                                                 |
+| `ImportReport`   | imported, trashed, historyStates, skippedDuplicates, needsAttention `[{title, folderPath, kind, field?, fileName?, sizeMiB?}]`                                                                                                                                                                             |
 
 Typen mit Geheimnissen (`PasswordInput`, `RevealedSecret`, `SnapshotData`) implementieren
 `Debug` ohne Werte; sie stehen nie in `Display` oder in Fehlerfeldern.
