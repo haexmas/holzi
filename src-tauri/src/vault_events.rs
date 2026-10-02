@@ -10,11 +10,13 @@
 //! frontend once.
 
 use std::collections::BTreeSet;
+use std::sync::Arc;
 use std::time::Duration;
 
 use haex_crdt::Database;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Runtime};
+use tokio::sync::broadcast;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use tokio::time::{sleep_until, Instant};
 use tokio_util::sync::CancellationToken;
@@ -28,6 +30,26 @@ pub const VAULT_DATA_CHANGED: &str = "vault-data-changed";
 /// event. Short enough that a change shows up at once; the window is fixed, not restarted by
 /// each report, so a steady stream of commits still yields an event every window.
 pub const WINDOW: Duration = Duration::from_millis(50);
+
+/// How many announcements a slow subscriber of [`VaultChanges`] may fall behind before it skips
+/// the oldest. A subscriber that lagged must treat that as "anything may have changed".
+pub const CHANGES_CAPACITY: usize = 256;
+
+/// The same announcements as [`VAULT_DATA_CHANGED`], for Rust subscribers: the extension host
+/// (spec 017) filters them per extension frame and follows registry changes from other devices.
+/// One sender lives in [`AppState`]; subscribing never touches the database observer, of which
+/// haex-crdt keeps only one (`observe_committed_changes` replaces an earlier one).
+pub type VaultChanges = broadcast::Sender<Arc<Vec<String>>>;
+
+/// A new, unconnected [`VaultChanges`] sender.
+pub fn changes_channel() -> VaultChanges {
+    broadcast::channel(CHANGES_CAPACITY).0
+}
+
+/// Hands one window's tables to every Rust subscriber. Having none is normal.
+pub(crate) fn publish(changes: &VaultChanges, tables: &[String]) {
+    let _ = changes.send(Arc::new(tables.to_vec()));
+}
 
 /// Payload of [`VAULT_DATA_CHANGED`]: the tables that changed, so a view reloads only what it
 /// shows from them.
@@ -51,7 +73,9 @@ pub fn start_for_active_instance<R: Runtime>(app: &AppHandle<R>, state: &AppStat
     let received = observe(&db.database());
     let gate = state.gate();
     let app = app.clone();
+    let changes = state.vault_changes().clone();
     if let Err(error) = gate.spawn(run(received, gate.token(), move |tables| {
+        publish(&changes, &tables);
         if let Err(error) = app.emit(VAULT_DATA_CHANGED, VaultDataChanged { tables }) {
             log::warn!("vault events: emit {VAULT_DATA_CHANGED} failed: {error}");
         }

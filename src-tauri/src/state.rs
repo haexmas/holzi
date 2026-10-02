@@ -48,6 +48,8 @@ pub struct AppState {
     usage: Arc<UsageRegistry>,
     /// The import of the password manager that is running, if any (spec 034, US7).
     password_import: Arc<ImportRegistry>,
+    /// Announces changed vault tables to Rust subscribers (spec 017; `vault_events`).
+    vault_changes: crate::vault_events::VaultChanges,
 }
 
 impl AppState {
@@ -60,6 +62,7 @@ impl AppState {
             clipboard: ClipboardClearer::new(),
             usage: Arc::new(UsageRegistry::new()),
             password_import: ImportRegistry::new(),
+            vault_changes: crate::vault_events::changes_channel(),
         }
     }
 
@@ -71,6 +74,11 @@ impl AppState {
     /// The slot of the password manager import and the flag that cancels it.
     pub fn password_import(&self) -> Arc<ImportRegistry> {
         Arc::clone(&self.password_import)
+    }
+
+    /// The announcements of changed vault tables for Rust subscribers (spec 017).
+    pub fn vault_changes(&self) -> &crate::vault_events::VaultChanges {
+        &self.vault_changes
     }
 
     /// The clearer of the clipboard; a close clears what it still holds (spec 034, FR-006).
