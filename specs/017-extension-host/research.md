@@ -625,9 +625,15 @@ setOf("*"))` (`wry-0.57.0/src/android/kotlin/RustWebView.kt:31`), ohne `for_main
   allen Rahmen sichtbar; Tauri lehnt aber jede Nachricht ohne den richtigen Invoke-Key ab
   (`tauri-2.12.1/src/error.rs:166-167`, `manager/mod.rs:688`). Windows hat dasselbe Problem (R12).
   **Korrektur** auf beiden Plattformen: Skripte mit `for_main_frame_only` in `if (window === window.top) { … }`
-  einschließen; auf Android zusätzlich nur für den Ursprung der App injizieren
-  (`setOf("http://tauri.localhost")` bzw. den konfigurierten Ursprung statt `"*"`). Ein Rahmen einer Erweiterung hat einen undurchsichtigen Ursprung bzw.
-  `http://holzi-ext.localhost` und bekommt den Schlüssel dann nie. PR an `tauri-apps/wry`; bis zur
+  einschließen. Auf Android wird zusätzlich der Rückfallweg ohne `addDocumentStartJavaScript` korrigiert: Dort
+  fügte wry die Skripte als `<script>`-Element in jedes HTML des eigenen Protokolls ein, auch in Unterrahmen, deren
+  Code den Text samt Invoke-Key aus dem DOM lesen könnte; jetzt bekommen Unterrahmen
+  (`WebResourceRequest.isForMainFrame()`) nur Skripte, die nicht auf den Hauptrahmen beschränkt sind. Die
+  Origin-Regeln bleiben `"*"` (Umsetzung, 2026-10-03): Sie filtern nach Ursprung, nicht nach Rahmen, würden
+  legitime Hauptrahmen auf anderen Ursprüngen (Remote-Capabilities, Entwicklungsserver) die IPC nehmen und einen
+  Unterrahmen mit gleichem Ursprung trotzdem nicht ausschließen; der Wächter ist der Schutz. Ein Rahmen einer
+  Erweiterung bekommt den Schlüssel damit nie. Ein Block statt einer Funktion hält `var` und Funktionsdeklarationen
+  global; Tauris Init-Skripte binden nichts mit `let`/`const` auf oberster Ebene (`tauri-2.12.1/scripts/*.js`). PR an `tauri-apps/wry`; bis zur
   Veröffentlichung nutzt holzi einen Fork über `[patch.crates-io]`, gepinnt auf den vollen SHA (Constitution
   IV). Abnahme: End-to-End-Szene auf dem Emulator prüft, dass `__TAURI_INTERNALS__` im Rahmen fehlt und ein
   Aufruf über `window.ipc` scheitert.
