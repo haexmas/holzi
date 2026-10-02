@@ -244,9 +244,9 @@ Darstellung wiederfinden; eine kaputte Datei importieren und eine verständliche
 - **FR-011**: Die Einstellungen MUSS eine Gruppe „Darstellung“ haben, die das bestehende
   Farbschema aufnimmt und um Akzentfarbe, Fensterhintergrund, Container-Hintergrund,
   Texttönung, Komponententönung und den Fensterhinweis (FR-024) erweitert, in der
-  Reihenfolge und Art des Dialogs „Aussehen“ von COSMIC; sie MUSS wie die anderen Einstellungen ohne Speichern-, Übernehmen- und
-  Zurücksetzen-Knopf pro Feld auskommen (Auswahl wird gespeichert); das gemeinsame
-  „Auf Standard zurücksetzen“ der Gruppe ist ausdrücklich erlaubt (FR-017).
+  Reihenfolge und Art des Dialogs „Aussehen“ von COSMIC; sie MUSS wie die anderen Einstellungen
+  ohne Speichern- und Übernehmen-Knopf auskommen (eine Auswahl wird gespeichert); ein Knopf
+  „Auf Standard zurücksetzen“ gehört zur Gruppe (FR-017).
 - **FR-012**: Der Nutzer MUSS die Akzentfarbe aus einer Reihe vordefinierter Farbfelder
   wählen oder über „+“ eine eigene Farbe festlegen können; die Reihe MUSS die gewählte eigene
   Farbe als weiteres Feld zeigen.

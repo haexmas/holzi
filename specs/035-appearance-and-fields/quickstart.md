@@ -59,5 +59,5 @@ nix develop --command pnpm test:e2e --app $PWD/src-tauri/target/e2e-build/debug/
 
 - Alle Prüfungen oben grün; die Kontrastmatrix (`check:appearance`) meldet keine Verletzung.
 - Eine Durchsicht per `git grep` findet kein Feld in alter Feldart außerhalb der Positivliste.
-- Keine Speichern-Knöpfe; der einzige Knopf mit Wirkung auf mehrere Werte ist „Auf Standard
-  zurücksetzen“, mit Bestätigung.
+- Keine Speichern- oder Übernehmen-Knöpfe; „Auf Standard zurücksetzen“ wirkt erst nach
+  Bestätigung.
