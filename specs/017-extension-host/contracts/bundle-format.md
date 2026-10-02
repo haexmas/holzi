@@ -10,6 +10,8 @@ Revision und Pfad nach `src-tauri/tests/fixtures/extension_bundles/` kopiert (Co
 - Einträge nur `Stored` oder `Deflate`, keine Verschlüsselung, keine Symlinks, keine Verzeichniseinträge mit
   Daten. Deterministisch erzeugt: feste Änderungszeit, keine Verzeichniseinträge.
 - Eintragszahl im Archivende = Zahl der gelesenen Einträge (doppelte Namen sind sonst unsichtbar).
+- Lokaler Kopf jedes Eintrags = sein Eintrag im zentralen Verzeichnis: Name, Methode, Verschlüsselung und, ohne
+  Datendeskriptor, CRC-32 und beide Größen. Sonst sähe ein Leser, der dem lokalen Kopf glaubt, andere Daten.
 - Höchstens 2.000 Einträge; je Eintrag ≤ 25 MiB entpackt und Verhältnis ≤ 200:1; gesamt ≤ 64 MiB entpackt.
   Ein Eintrag, der mehr Bytes liefert als angegeben, ist ein Fehler.
 
@@ -57,8 +59,17 @@ Hier lesbar umbrochen; die Datei selbst ist kompakt (JCS, ohne Leerzeichen).
 
 1. Archiv und Pfade nach den Regeln oben lesen (nie `extract`).
 2. Für jeden Eintrag Pfad, Größe und SHA-256 berechnen; die Menge muss genau `files` entsprechen.
-3. `manifest.publicKey == signature.publicKey`; Manifest nach [permissions.md](./permissions.md) gültig;
-   `name` nach FR-004.
+3. `manifest.publicKey == signature.publicKey`; Manifest gültig, sonst `manifest_invalid`:
+   - `name` nach FR-004; `publicKey` gültiger Ed25519-Schlüssel, nicht von kleiner Ordnung;
+   - `version` SemVer 2.0.0, wie das Rust-Crate `semver` sie liest (keine führenden Nullen außer in den
+     Build-Metadaten, keine leeren Teile, Haupt-, Neben- und Patchnummer ≤ u64);
+   - `entry` (Standard `index.html`) ist eine Datei des Bundles; `migrationsDir` ist ein gültiger Pfad;
+   - `permissions` ist ein Objekt; seinen Inhalt liest [permissions.md](./permissions.md) (nicht angebotene
+     Kategorien sind kein Fehler);
+   - Migrationen: Mit `<migrationsDir>/meta/_journal.json` ist das Journal eingeschränktes JSON (nicht
+     unbedingt kanonisch) mit einem Feld `entries`; jeder Eintrag hat ein eindeutiges ganzzahliges `idx` ≥ 0
+     und ein eindeutiges `tag`, und `<migrationsDir>/<tag>.sql` ist eine Datei des Bundles. Ohne Journal sind
+     die Migrationen die `*.sql`-Dateien direkt in `migrationsDir`. Jede Migrationsdatei ist UTF-8.
 4. Signatur prüfen.
 5. Erkennung des alten Formats: Manifest mit Feld `signature` und keine `signature.json` → Fehler
    `legacy_signature_format` („mit dem aktuellen Werkzeug `haex` neu signieren“).
@@ -66,7 +77,9 @@ Hier lesbar umbrochen; die Datei selbst ist kompakt (JCS, ohne Leerzeichen).
 Fehlerarten (für Installation und Start): `archive_too_large`, `archive_invalid`, `entry_path_invalid`,
 `entry_duplicate`, `entry_too_large`, `entry_ratio`, `entry_kind`, `manifest_not_canonical`,
 `manifest_invalid`, `file_mismatch { path }`, `public_key_mismatch`, `signature_invalid`,
-`legacy_signature_format`. Jede Art hat einen Test mit einem schlechten Bundle aus den Testvektoren.
+`legacy_signature_format`. Jede Art hat einen Test mit einem schlechten Bundle aus den Testvektoren, jede
+Manifestregel aus Schritt 3 einen eigenen Vektor. `haex verify` und holzi müssen für jeden Vektor dieselbe
+Fehlerart melden; eine Regel ohne Vektor gilt als nicht abgestimmt.
 
 ## Werkzeug `haex` (Änderung im vault-sdk, L0)
 
