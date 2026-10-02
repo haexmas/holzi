@@ -263,6 +263,7 @@ async function onRootDrop(event: DragEvent) {
       <UiButton
         variant="ghost"
         size="sm"
+        class="justify-start"
         data-testid="passwords-open-generator"
         @click="go('/generator')"
       >
@@ -272,6 +273,7 @@ async function onRootDrop(event: DragEvent) {
       <UiButton
         variant="ghost"
         size="sm"
+        class="justify-start"
         data-testid="passwords-open-import"
         @click="go('/import')"
       >
@@ -281,6 +283,7 @@ async function onRootDrop(event: DragEvent) {
       <UiButton
         variant="outline"
         size="sm"
+        class="justify-start"
         data-testid="passwords-new-folder"
         @click="newFolder(null)"
       >
@@ -290,6 +293,7 @@ async function onRootDrop(event: DragEvent) {
       <UiButton
         variant="ghost"
         size="sm"
+        class="justify-start"
         data-testid="passwords-manage-tags"
         @click="tagManager = true"
       >
