@@ -10,6 +10,7 @@ use ts_rs::TS;
 use crate::error::HolziError;
 
 pub mod manifest;
+pub mod store;
 
 pub use haex_bundle::format::limits;
 pub use haex_bundle::{Migration, VerifiedBundle};
