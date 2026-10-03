@@ -1,0 +1,369 @@
+//! The permission commands of holzi's window (US3, T067, contracts/tauri-commands.md
+//! §Berechtigungen). Only holzi's own window reaches them; an extension cannot grant, resolve or
+//! change a permission (FR-021).
+
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use tauri::{AppHandle, State};
+use ts_rs::TS;
+use uuid::Uuid;
+
+use super::frames::WindowEmitter;
+use crate::error::{HolziError, Result};
+use crate::extensions::bridge::dispatch::Emit;
+use crate::extensions::bridge::events::emit_to_frames;
+use crate::extensions::host::ExtensionHost;
+use crate::extensions::permissions::prompts::{PermissionDecision, Question};
+use crate::extensions::permissions::store::{self as permission_store, NewPermission};
+use crate::extensions::permissions::{Permission, PermissionKind, PermissionStatus, VAULT_WIDE};
+use crate::passwords::clock::unix_millis;
+use crate::state::AppState;
+use crate::state_utils::active_database;
+use crate::storage::known_devices;
+use crate::storage::wm_session_commands::current_device_uuid;
+use crate::vault_gate::VaultDb;
+
+/// One permission as the settings show it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/types/bindings/")]
+pub struct PermissionView {
+    /// Row id; `None` for a decision held in memory.
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    pub kind: String,
+    pub action: String,
+    pub target: String,
+    /// `granted`, `denied` or `ask`.
+    pub status: String,
+    pub declared: bool,
+    /// Holds on every own device.
+    pub all_devices: bool,
+    /// The device a device-scoped row holds on.
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub device_name: Option<String>,
+    /// Held only until holzi is closed.
+    pub temporary: bool,
+    /// holzi cannot read the row (FR-022); it counts as absent.
+    pub unreadable: bool,
+}
+
+fn parse_id(text: &str) -> Result<Uuid> {
+    Uuid::parse_str(text).map_err(|_| HolziError::ExtensionNotFound)
+}
+
+fn invalid(reason: &str) -> HolziError {
+    HolziError::InvalidInput {
+        reason: reason.to_owned(),
+    }
+}
+
+/// Remembered rows of every device and the decisions held in memory.
+pub fn list(db: &VaultDb, host: &ExtensionHost, extension_id: Uuid) -> Result<Vec<PermissionView>> {
+    let (rows, devices) = db.read_blocking(move |q| {
+        let rows = permission_store::rows_of(q, extension_id)
+            .map_err(|e| haex_crdt::Error::consumer(e.to_string()))?;
+        Ok((rows, known_devices::list_devices(q)?))
+    })?;
+    let device_name = |uuid: Uuid| {
+        devices
+            .iter()
+            .find(|d| d.vault_device_uuid == uuid)
+            .map(|d| d.alias.clone().unwrap_or_default())
+    };
+    let mut views: Vec<PermissionView> = rows
+        .into_iter()
+        .map(|row| PermissionView {
+            unreadable: Permission::from_row(
+                &row.kind,
+                &row.action,
+                &row.target,
+                &row.status,
+                row.vault_device_uuid,
+            )
+            .is_none(),
+            id: Some(row.id.to_string()),
+            all_devices: row.vault_device_uuid == VAULT_WIDE,
+            device_name: (row.vault_device_uuid != VAULT_WIDE)
+                .then(|| device_name(row.vault_device_uuid))
+                .flatten(),
+            kind: row.kind,
+            action: row.action,
+            target: row.target,
+            status: row.status,
+            declared: row.declared,
+            temporary: false,
+        })
+        .collect();
+    views.extend(
+        host.permissions
+            .held(extension_id)
+            .into_iter()
+            .map(|held| PermissionView {
+                id: None,
+                kind: held.kind.as_str().to_owned(),
+                action: held.action,
+                target: held.target,
+                status: held.status.as_str().to_owned(),
+                declared: false,
+                all_devices: false,
+                device_name: None,
+                temporary: true,
+                unreadable: false,
+            }),
+    );
+    Ok(views)
+}
+
+#[derive(Debug, Clone, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/types/bindings/")]
+pub struct PermissionSetArgs {
+    pub extension_id: String,
+    pub kind: String,
+    pub action: String,
+    pub target: String,
+    /// `granted`, `denied` or `ask`.
+    pub status: String,
+    /// Remember for every own device; else for this device only.
+    pub all_devices: bool,
+    /// The row this setting replaces (a change of scope), if any.
+    #[serde(default)]
+    pub replaces: Option<String>,
+}
+
+/// Writes a permission as the settings chose it; only forms holzi can read are accepted.
+pub fn set(db: &VaultDb, device: Uuid, args: PermissionSetArgs, now_ms: i64) -> Result<()> {
+    let extension_id = parse_id(&args.extension_id)?;
+    let scope = if args.all_devices { VAULT_WIDE } else { device };
+    if Permission::from_row(&args.kind, &args.action, &args.target, &args.status, scope).is_none() {
+        return Err(invalid("permission not understood"));
+    }
+    let replaces = args.replaces.as_deref().map(parse_id).transpose()?;
+    db.write_blocking(move |tx| {
+        let rows = permission_store::rows_of(tx, extension_id)?;
+        let declared = rows
+            .iter()
+            .any(|r| r.declared && r.is_about(&args.kind, &args.action, &args.target));
+        let id = permission_store::put(
+            tx,
+            extension_id,
+            &NewPermission {
+                kind: &args.kind,
+                action: &args.action,
+                target: &args.target,
+                status: &args.status,
+                declared,
+                vault_device_uuid: scope,
+            },
+            now_ms,
+        )?;
+        // Only a row of this extension (as in `remove`).
+        if let Some(old) = replaces.filter(|old| *old != id) {
+            if rows.iter().any(|r| r.id == old) {
+                permission_store::delete(tx, old)?;
+            }
+        }
+        Ok(())
+    })
+}
+
+#[derive(Debug, Clone, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/types/bindings/")]
+pub struct PermissionRemoveArgs {
+    pub extension_id: String,
+    /// A remembered row.
+    #[serde(default)]
+    pub permission_id: Option<String>,
+    /// A decision held in memory: `kind|action|target`.
+    #[serde(default)]
+    pub temporary_key: Option<String>,
+}
+
+pub fn remove(db: &VaultDb, host: &ExtensionHost, args: PermissionRemoveArgs) -> Result<()> {
+    let extension_id = parse_id(&args.extension_id)?;
+    if let Some(key) = args.temporary_key {
+        let mut parts = key.splitn(3, '|');
+        let (Some(kind), Some(action), Some(target)) = (parts.next(), parts.next(), parts.next())
+        else {
+            return Err(invalid("temporaryKey is kind|action|target"));
+        };
+        let kind = PermissionKind::parse(kind).ok_or_else(|| invalid("unknown kind"))?;
+        host.permissions.forget(extension_id, kind, action, target);
+        return Ok(());
+    }
+    let id = parse_id(args.permission_id.as_deref().unwrap_or_default())?;
+    db.write_blocking(move |tx| {
+        // Only a row of this extension.
+        if permission_store::rows_of(tx, extension_id)?
+            .iter()
+            .any(|r| r.id == id)
+        {
+            permission_store::delete(tx, id)?;
+        }
+        Ok(())
+    })
+}
+
+#[derive(Debug, Clone, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/types/bindings/")]
+pub struct PermissionResolveArgs {
+    pub request_id: String,
+    pub decision: PermissionDecision,
+    /// Store the decision; else it holds until holzi is closed.
+    pub remember: bool,
+    /// For device-scoped kinds: remember for every own device.
+    #[serde(default)]
+    pub all_devices: bool,
+}
+
+/// Answers an open question: remembered as a row or held in memory, then every frame of the
+/// extension hears `extension:permission-resolved` and the SDK repeats its call. A question that
+/// is gone (its frames closed) is ignored.
+pub fn resolve(
+    db: &VaultDb,
+    host: &ExtensionHost,
+    emitter: &dyn Emit,
+    device: Uuid,
+    args: PermissionResolveArgs,
+    now_ms: i64,
+) -> Result<()> {
+    let Some(question) = host.permissions.take(&args.request_id) else {
+        return Ok(());
+    };
+    let status = match args.decision {
+        PermissionDecision::Allow => PermissionStatus::Granted,
+        PermissionDecision::Deny => PermissionStatus::Denied,
+    };
+    if args.remember {
+        let scope = if question.kind.is_device_scoped() && !args.all_devices {
+            device
+        } else {
+            VAULT_WIDE
+        };
+        let Question {
+            extension_id,
+            kind,
+            action,
+            target,
+        } = question.clone();
+        db.write_blocking(move |tx| {
+            let declared = permission_store::rows_of(tx, extension_id)?
+                .iter()
+                .any(|r| r.declared && r.is_about(kind.as_str(), &action, &target));
+            permission_store::put(
+                tx,
+                extension_id,
+                &NewPermission {
+                    kind: kind.as_str(),
+                    action: &action,
+                    target: &target,
+                    status: status.as_str(),
+                    declared,
+                    vault_device_uuid: scope,
+                },
+                now_ms,
+            )
+            .map(drop)
+            .map_err(Into::into)
+        })?;
+    } else {
+        host.permissions.hold(&question, status);
+    }
+    emit_to_frames(
+        emitter,
+        host,
+        question.extension_id,
+        "extension:permission-resolved",
+        &json!({
+            "resourceType": question.kind.as_str(),
+            "action": question.action,
+            "target": question.target,
+            "decision": if status == PermissionStatus::Granted { "granted" } else { "denied" },
+        }),
+    );
+    Ok(())
+}
+
+/// The user closed the question without answering: it is no longer open, so the next identical
+/// call asks again. Nothing is decided (closing cancels, it never denies).
+pub fn cancel(host: &ExtensionHost, request_id: &str) {
+    host.permissions.take(request_id);
+}
+
+#[tauri::command]
+pub async fn extension_permissions_list(
+    state: State<'_, AppState>,
+    extension_id: String,
+) -> Result<Vec<PermissionView>> {
+    let id = parse_id(&extension_id)?;
+    let db = active_database(&state)?;
+    let host = state.extensions();
+    tauri::async_runtime::spawn_blocking(move || list(&db, &host, id))
+        .await
+        .map_err(|e| invalid(&format!("permissions task: {e}")))?
+}
+
+#[tauri::command]
+pub async fn extension_permission_set(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    args: PermissionSetArgs,
+) -> Result<()> {
+    let db = active_database(&state)?;
+    let device = current_device_uuid(&app, &db)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        set(&db, device, args, unix_millis(std::time::SystemTime::now()))
+    })
+    .await
+    .map_err(|e| invalid(&format!("permissions task: {e}")))?
+}
+
+#[tauri::command]
+pub async fn extension_permission_remove(
+    state: State<'_, AppState>,
+    args: PermissionRemoveArgs,
+) -> Result<()> {
+    let db = active_database(&state)?;
+    let host = state.extensions();
+    tauri::async_runtime::spawn_blocking(move || remove(&db, &host, args))
+        .await
+        .map_err(|e| invalid(&format!("permissions task: {e}")))?
+}
+
+#[tauri::command]
+pub async fn extension_permission_resolve(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    args: PermissionResolveArgs,
+) -> Result<()> {
+    let db = active_database(&state)?;
+    let device = current_device_uuid(&app, &db)?;
+    let host = state.extensions();
+    let emitter = WindowEmitter(app.clone());
+    tauri::async_runtime::spawn_blocking(move || {
+        resolve(
+            &db,
+            &host,
+            &emitter,
+            device,
+            args,
+            unix_millis(std::time::SystemTime::now()),
+        )
+    })
+    .await
+    .map_err(|e| invalid(&format!("permissions task: {e}")))?
+}
+
+#[tauri::command]
+pub fn extension_permission_cancel(state: State<'_, AppState>, request_id: String) {
+    cancel(&state.extensions(), &request_id);
+}
+
+#[cfg(test)]
+#[path = "permissions_tests.rs"]
+mod tests;

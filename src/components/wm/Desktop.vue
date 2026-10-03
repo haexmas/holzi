@@ -71,5 +71,6 @@ const openLauncher = useAction('wm.launcher.open')
     <WmWindowOverview v-model:open="wm.overlays.windows" />
     <WmWorkspaceOverview v-model:open="wm.overlays.workspaces" />
     <WmCloseConfirm />
+    <ExtensionsPermissionRequestDialog />
   </div>
 </template>

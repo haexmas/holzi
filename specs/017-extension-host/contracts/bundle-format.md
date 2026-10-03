@@ -1,6 +1,7 @@
 # Vertrag: Bundle-Format `haextension-bundle/2`
 
-Gilt für holzi (Prüfen) und das Werkzeug `haex` im vault-sdk (Erzeugen). Begründung:
+Gilt für holzi (Prüfen) und das Werkzeug `haex` im vault-sdk (Erzeugen und Prüfen). Beide nutzen dieselbe
+Umsetzung, das Rust-Crate `haex-bundle` im vault-sdk (holzi nativ, `haex` als WebAssembly). Begründung:
 [research.md](../research.md) R2, R3. Die Testvektoren liegen im vault-sdk und werden mit Repository, voller
 Revision und Pfad nach `src-tauri/tests/fixtures/extension_bundles/` kopiert (Constitution IV).
 
@@ -14,6 +15,11 @@ Revision und Pfad nach `src-tauri/tests/fixtures/extension_bundles/` kopiert (Co
   Datendeskriptor, CRC-32 und beide Größen. Sonst sähe ein Leser, der dem lokalen Kopf glaubt, andere Daten.
 - Höchstens 2.000 Einträge; je Eintrag ≤ 25 MiB entpackt und Verhältnis ≤ 200:1; gesamt ≤ 64 MiB entpackt.
   Ein Eintrag, der mehr Bytes liefert als angegeben, ist ein Fehler.
+- Aufbau wie vom Schreiber erzeugt, damit jeder Zip-Leser dieselben Einträge sieht: Archivende in den letzten
+  22 Bytes (kein Archivkommentar), Einträge lückenlos hintereinander ab Offset 0 in der Reihenfolge des
+  zentralen Verzeichnisses, zentrales Verzeichnis direkt nach dem letzten Eintrag, keine Datendeskriptoren,
+  keine Zusatzfelder, UTF-8-Kennzeichen bei Namen mit Nicht-ASCII-Zeichen. Ein Deflate-Strom endet genau am
+  Ende der Eintragsdaten.
 
 ## Pfade
 
@@ -53,20 +59,23 @@ Hier lesbar umbrochen; die Datei selbst ist kompakt (JCS, ohne Leerzeichen).
   (JavaScript: `Buffer.compare`, nicht `.sort()`).
 - `publicKey` = `manifest.publicKey`.
 - **Signierte Nachricht**: `"haextension-bundle/2\n"` gefolgt von der JCS-Form von `signature.json` ohne den
-  Schlüssel `signature`. Ed25519 (rein), Prüfung mit `verify_strict`, schwache Schlüssel abgelehnt.
+  Schlüssel `signature`. Ed25519 (rein), Prüfung mit `verify_strict` und S < L, schwache Schlüssel abgelehnt.
 
 ## Prüfung in holzi
 
 Reihenfolge wie `haex verify` und die Testvektoren (`test-vectors/bundles/README.md`); die erste verletzte
 Regel bestimmt die Fehlerart.
 
-1. Archiv nach den Regeln oben lesen (nie `extract`): Größe, Archivende und zentrales Verzeichnis lesbar,
-   Eintragszahl.
+1. Archiv nach den Regeln oben lesen (nie `extract`): Größe, Archivende in den letzten 22 Bytes, zentrales
+   Verzeichnis lesbar, Eintragszahl.
 2. Erkennung des alten Formats, vor allen Eintragsregeln (alte Bundles enthalten verbotene Dateien und
    Verzeichniseinträge): Manifest mit Feld `signature` und keine `signature.json` → Fehler
    `legacy_signature_format` („mit dem aktuellen Werkzeug `haex` neu signieren“).
 3. Jeder Eintrag in der Reihenfolge des zentralen Verzeichnisses: Art, Pfadregeln, Duplikate, Größen und
-   Verhältnis, lokaler Kopf, gelieferte Bytes und CRC-32.
+   Verhältnis, Aufbau (lückenlos, ohne Datendeskriptor und Zusatzfelder, UTF-8-Kennzeichen), lokaler Kopf,
+   gelieferte Bytes, Ende des Deflate-Stroms und CRC-32; danach beginnt das zentrale Verzeichnis direkt nach
+   dem letzten Eintrag. Die Aufbauregeln greifen erst hier, damit Bundles des alten Formats in Schritt 2
+   erkannt werden.
 4. Steuerdateien: Manifest vorhanden und kanonisch, `signature.json` vorhanden, kanonisch und wohlgeformt.
 5. Für jeden Eintrag außer `signature.json` Pfad, Größe und SHA-256 berechnen; die Menge muss genau `files`
    entsprechen.

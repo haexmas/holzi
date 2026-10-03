@@ -173,6 +173,13 @@ export class WebDriverClient {
     return found.map((element) => element[ELEMENT_KEY])
   }
 
+  /** Switches the session into an iframe (its element id) or back to the top document (`null`). */
+  async switchToFrame(element: string | null): Promise<void> {
+    await this.call('POST', this.session('/frame'), {
+      id: element === null ? null : { [ELEMENT_KEY]: element },
+    })
+  }
+
   async click(element: string): Promise<void> {
     await this.call('POST', this.session(`/element/${element}/click`), {})
   }

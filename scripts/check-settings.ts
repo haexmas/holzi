@@ -52,6 +52,8 @@ const LOCATION_PATHS: Record<string, string> = {
   'agents.providers': '/agents/providers',
   'agents.autonomy': '/agents/autonomy',
   'agents.denyRules': '/agents/deny-rules',
+  extensions: '/extensions',
+  'extensions.detail': '/extensions/00000000-0000-0000-0000-000000000001',
   federation: '/federation',
   'federation.link': '/federation/devices/link',
   'federation.remove': '/federation/devices/abc123/remove',
@@ -90,7 +92,7 @@ function germanT(): (key: string) => string {
   }
 }
 
-test('five categories in the order of FR-005, each at its own location', () => {
+test('six categories in the order of FR-005 (extensions from spec 017), each at its own location', () => {
   assert.deepEqual(
     SETTINGS_CATEGORIES.map((category) => [category.id, category.path]),
     [
@@ -98,6 +100,7 @@ test('five categories in the order of FR-005, each at its own location', () => {
       ['appearance', '/appearance'],
       ['models', '/models'],
       ['agents', '/agents'],
+      ['extensions', '/extensions'],
       ['federation', '/federation'],
     ],
   )

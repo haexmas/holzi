@@ -42,6 +42,7 @@ fn open_vault(dir: &Path) -> Database {
         migration_source: holzi_migration_source(),
         trigger_version: DEFAULT_TRIGGER_VERSION,
         max_transaction_bytes: haex_crdt::MAX_CRDT_TRANSACTION_BYTES,
+        max_value_bytes: haex_crdt::MAX_VALUE_BYTES,
     })
     .expect("vault open")
 }

@@ -5,6 +5,8 @@
 mod evaluate;
 pub mod manifest_map;
 mod model;
+pub mod prompts;
+pub mod store;
 mod target;
 
 pub use evaluate::{evaluate, Decision};

@@ -102,3 +102,49 @@ export function shouldYield(
       : action.yieldToTextInput?.default) ?? []
   return chords.includes(chord) && isEditableTarget(target)
 }
+
+/** One bound chord split into the fields of a key event, for documents embedded in a tab (the
+ * frame shim of extensions, spec 017): they compare fields instead of copying these chord rules. */
+export type ShortcutFields = {
+  /** The catalog action the chord runs. */
+  id: string
+  code: string
+  ctrl: boolean
+  alt: boolean
+  shift: boolean
+  meta: boolean
+}
+
+function chordFields(id: string, chord: KeyChord): ShortcutFields {
+  const parts = chord.split('+')
+  const code = parts.pop() ?? ''
+  return {
+    id,
+    code,
+    ctrl: parts.includes('Ctrl'),
+    alt: parts.includes('Alt'),
+    shift: parts.includes('Shift'),
+    meta: parts.includes('Meta'),
+  }
+}
+
+/**
+ * Every chord bound on this platform, as fields. Chords a focused text field needs are left out:
+ * an embedded document cannot ask `shouldYield`, so it never intercepts them.
+ * ponytail: those chords (Alt+Arrow on macOS) do not work while an extension frame has the focus;
+ * the shim would need its own text-field test to offer them.
+ */
+export function embeddedShortcuts(
+  catalog: readonly ActionDefinition[],
+  platform: Platform,
+): ShortcutFields[] {
+  return catalog.flatMap((action) => {
+    const yielding =
+      (platform === 'mac'
+        ? action.yieldToTextInput?.mac
+        : action.yieldToTextInput?.default) ?? []
+    return chordsFor(action, platform)
+      .filter((chord) => !yielding.includes(chord))
+      .map((chord) => chordFields(action.id, chord))
+  })
+}

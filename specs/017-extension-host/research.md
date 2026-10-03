@@ -63,32 +63,44 @@ in HV `src-tauri/src/extension/crypto.rs:43-136`, das nur Inhalte aneinanderhän
 Signaturdatei erspart das „Feld leeren und neu serialisieren“, das in HV von gleicher Ausgabe von JS und
 serde abhängt. Die Fehlermeldung kann die geänderte Datei nennen.
 
+**Umsetzung im Werkzeug**: haex-space/vault-sdk `c8588aadc7bac13f628cfb9c93e269edd5f7a81b` (#52), Signieren und
+Prüfen in `src/bundle/` (`sign.ts`, `verify.ts`, `jcs.ts`, `zip.ts`), Testvektoren unter `test-vectors/bundles/`,
+kopiert nach `src-tauri/tests/fixtures/extension_bundles/` (`SOURCE.md`). Seit haex-space/vault-sdk#54 (Release
+4.0.0, `36bf6e98f36c2362d42aa2d92c85288a3d91e775`) gibt es eine einzige Umsetzung, das Rust-Crate
+`crates/haex-bundle`: holzi bindet es per Git-SHA ein, `haex` nutzt seinen WebAssembly-Build; 46 Vektoren.
+
 **Alternativen**: Signatur als Manifest-Feld (wieder das Leeren); Merkle-Wurzel (keine lesbaren Fehler);
 abgesetzte `.sig`-Datei (geht beim Kopieren verloren); HV-Format (Spec-Entscheidung dagegen).
 
 ## R3 — Archiv lesen: Regeln und Grenzen
 
-**Entscheidung**: Direkte Abhängigkeit `zip = { version = "7", default-features = false,
-features = ["deflate-flate2"] }` (7.2.0 und flate2 sind schon im Lock). Nie `extract` aufrufen; Einträge in
-den Speicher lesen. Regeln, gleich im Werkzeug `haex` und in holzi, geprüft auf den rohen Namensbytes:
+**Entscheidung**: Das Bundle-Format hat genau eine Umsetzung, das Rust-Crate `haex-bundle` im vault-sdk
+(`crates/haex-bundle`, haex-space/vault-sdk#54). holzi bindet es per Git-Revision ein, das Werkzeug `haex` nutzt
+seinen WebAssembly-Build. Es liest das Archiv mit einem eigenen Leser (nicht dem `zip`-Crate) in den Speicher,
+ruft nie `extract` auf und prüft auf den rohen Namensbytes:
 
 - gültiges UTF-8 in NFC (sonst ablehnen, nie stillschweigend normalisieren); nur `/`; kein führendes `/`, kein
   `\`, `:`, NUL oder Steuerzeichen; keine leeren, `.`- oder `..`-Teile; Teil ≤ 255 Bytes, Pfad ≤ 1024 Bytes;
 - keine zwei Pfade, die nach NFC und Kleinschreibung gleich sind;
 - nur reguläre Dateien (keine Symlinks, keine Verzeichniseinträge mit Daten, nichts Verschlüsseltes), nur
   `Stored` oder `Deflate`;
-- **doppelte Namen**: zip 7.2 fasst sie still zusammen (`zip-7.2.0/src/read.rs:71-74`); holzi vergleicht
-  die Eintragszahl aus dem Archivende mit `archive.len()` und lehnt bei Abweichung ab;
+- **doppelte Namen**: das zentrale Verzeichnis wird roh gelesen, jeder Name einzeln geprüft (das `zip`-Crate
+  fasst sie still zusammen, `zip-7.2.0/src/read.rs:71-74`);
+- lokaler Kopf gleich dem Eintrag im zentralen Verzeichnis (Name, Methode, Verschlüsselung, CRC-32, Größen);
 - Grenzen: `.xt` ≤ 64 MiB vor dem Öffnen; je Datei ≤ 25 MiB, gesamt ≤ 64 MiB entpackt, ≤ 2.000 Einträge,
-  Verhältnis ≤ 200:1 je Eintrag; jeder Eintrag wird über `take(size + 1)` gelesen und scheitert, wenn mehr
-  kommt als angegeben.
+  Verhältnis ≤ 200:1 je Eintrag; jeder Eintrag scheitert, sobald er mehr Bytes liefert als angegeben.
 
 **Begründung**: Zip-Bomben, Pfad-Tricks und doppelte Einträge sind die üblichen Angriffe auf Installer; HV
 ruft `archive.extract` ohne Grenzen auf (HV `installer.rs:84-90`). 25 MiB je Datei entspricht der bewährten
 Grenze für Anhänge in 034 (R4 dort).
 
-**Alternativen**: zip 8 wie HV (zweite Hauptversion im Build); Entpacken in ein Verzeichnis (unnötige Kopie
-im Klartext, siehe R4).
+Ein Crate statt je einer Umsetzung in TypeScript (Werkzeug) und Rust (holzi): sonst müsste jede Regeländerung
+an zwei Stellen nachgezogen werden (Entscheidung des Betreibers, 2026-10-03). Die Testvektoren erzeugt weiter
+ein unabhängiges Node.js-Skript; sie prüfen das Crate nativ und über WebAssembly.
+
+**Alternativen**: `zip`-Crate 7 oder 8 wie HV (Duplikate unsichtbar, kein Vergleich der lokalen Köpfe, eigene
+Fehlerabbildung); zwei Umsetzungen mit gemeinsamen Testvektoren (doppelte Pflege); Entpacken in ein
+Verzeichnis (unnötige Kopie im Klartext, siehe R4).
 
 ## R4 — Bundles als Vault-Daten und Ausliefern aus der Datenbank
 
@@ -367,6 +379,24 @@ sich auf Windows nicht in `frame-src` festnageln (Platzhalter nur ganz links, DN
 **Alternativen**: Host je Erweiterung; Base64-Host plus Speicher wie HV (unsicher); `'unsafe-inline'` für
 Skripte (schwächer); CSP als `<meta>` (kann `frame-ancestors` nicht).
 
+**Befunde der Sandbox-Prüfung (T045)** an den Apps von haextension `db48f9a948522c18a00331aac232718825cc9317`
+(`apps/*/app`, `apps/*/src`; `haex-pass-browser` ist keine Erweiterung):
+
+- `confirm()` vor dem Löschen in haex-notes (`app/pages/index.vue:48`) und haex-draw (`app/pages/index.vue:62`):
+  ohne `allow-modals` gibt `confirm()` sofort `false` zurück, Löschen wäre unmöglich. **Entscheidung
+  (Betreiber, 2026-10-03)**: kein `allow-modals`; das SDK bekommt `client.dialog.confirm`, holzi zeigt den
+  Dialog über dem eigenen Tab (Brückenmethode `extension_dialog_confirm`), die Apps stellen um (T117–T119).
+- ics-Export in haex-calendar über `a.download` (`app/composables/useIcal.ts:400`): ohne `allow-downloads`
+  passiert nichts. **Entscheidung**: kein `allow-downloads`; der Export läuft künftig über den
+  Speichern-Dialog von holzi (L4, `extension_filesystem_*` mit Dialog-Auswahl), bis dahin geht er nicht.
+- Link mit `target="_blank"` in haex-calendar (`app/components/calendar/EventPreview.vue:56`): öffnet nichts;
+  Abhilfe ist `extension_web_open` (L4). `allow-popups` bleibt ausgeschlossen.
+- `navigator.clipboard.writeText` in haex-code (`app/components/TerminalView.vue:159`): im Rahmen ohne
+  Berechtigungs-Policy wirkungslos; kein L1-Thema (haex-code braucht ohnehin `shell`, L5).
+- Formulare haben überall `@submit.prevent` (haex-files, haex-mail, haex-pass); Blob-URLs für Bilder
+  (haex-image) sind nach `img-src … blob:` erlaubt; `alert(`, `prompt(`, `window.open(`, `localStorage` und
+  `indexedDB` kommen nicht vor.
+
 **Rest-Risiken**: WebRTC und DNS-Prefetch sind über CSP nicht sperrbar (Aufgabe: WebView2-Argument
 `--force-webrtc-ip-handling-policy`, WebKitGTK hat WebRTC standardmäßig aus, vermutet). Keine
 Prozesstrennung zwischen Rahmen (Spectre-artige Restrisiken).
@@ -379,12 +409,15 @@ Prozesstrennung zwischen Rahmen (Spectre-artige Restrisiken).
   an (Erweiterung, Tab, Rahmen), das in der URL des Rahmens steht (`?hf=<token>`). HTML-Dokumente liefert der
   Handler nur bei passendem Token für die `extId` des Pfads aus. So kann Rahmen A nicht zur Seite von B
   navigieren und B einen an A gebundenen Kanal erhalten.
-- Bei **jedem** `load` (HV nutzt `{once:true}` und verpasst Neuladen, `broadcast.ts:155-193`): alten Port
-  schließen, neuen `MessageChannel` anlegen, `PORT_INIT` alle 200 ms an `iframe.contentWindow` (Zielursprung
+- Bei **jedem neuen Dokument** (HV nutzt `{once:true}` und verpasst Neuladen, `broadcast.ts:155-193`): alten
+  Port schließen, neuen `MessageChannel` anlegen, `PORT_INIT` alle 200 ms an `iframe.contentWindow` (Zielursprung
   `'*'` ist bei undurchsichtigem Ursprung unvermeidbar) bis `PORT_READY` auf **diesem** Port kommt (SDK-Frist
   10 s, `client/init.ts:25`). Zuordnung nur über `Map<port, {extId, tabId, frameInstanceId, generation}>`.
   Meldungen vor `READY` werden gepuffert (FR-042). Konsolenausgaben kommen über
   `window.parent.postMessage` und werden über `event.source === iframe.contentWindow` zugeordnet.
+  Befund (T051): WebKitGTK feuert `load` am iframe auch für eine Hash-Navigation im Rahmen; das SDK nimmt
+  `PORT_INIT` aber nur einmal je Dokument an. Ein neues Dokument meldet deshalb der Rahmen-Shim
+  (`hello {fresh}`, contracts/bridge.md), nicht das `load` allein.
 - **SDK-Änderung (L0)**: `waitForHostPortAsync` nimmt heute jedes `PORT_INIT` an
   (`client/init.ts:345-366`). Ein Geschwisterrahmen erreicht andere über `top.frames[i].postMessage` und könnte
   holzi zuvorkommen und einen falschen Port unterschieben. Fix im SDK: `if (event.source !== window.parent)

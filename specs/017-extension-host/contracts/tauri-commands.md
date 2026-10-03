@@ -19,12 +19,13 @@ laufen über `VaultDb` und sind nach dem Schließen der Vault gesperrt (ADR-0003
 
 ## Berechtigungen (L1)
 
-| Command                        | Eingabe                                                      | Ausgabe                                                                    |
-| ------------------------------ | ------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| `extension_permissions_list`   | `{extensionId}`                                              | `PermissionView[]` (gemerkt mit Geltungsbereich und Gerätename, vorläufig) |
-| `extension_permission_set`     | `{extensionId, kind, action, target, status, scope}`         | –                                                                          |
-| `extension_permission_remove`  | `{permissionId}` oder `{temporaryKey}`                       | –                                                                          |
-| `extension_permission_resolve` | `{requestId, decision: allow \| deny, remember, allDevices}` | –                                                                          |
+| Command                        | Eingabe                                                                    | Ausgabe                                                                    |
+| ------------------------------ | -------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `extension_permissions_list`   | `{extensionId}`                                                            | `PermissionView[]` (gemerkt mit Geltungsbereich und Gerätename, vorläufig) |
+| `extension_permission_set`     | `{extensionId, kind, action, target, status, scope}`                       | –                                                                          |
+| `extension_permission_remove`  | `{permissionId}` oder `{temporaryKey}`                                     | –                                                                          |
+| `extension_permission_resolve` | `{requestId, decision: allow \| deny, remember, allDevices}`               | –                                                                          |
+| `extension_permission_cancel`  | `{requestId}` (Dialog geschlossen; die nächste gleiche Frage kommt wieder) | –                                                                          |
 
 Ereignis `extension-permission-request` (siehe [permissions.md](./permissions.md)).
 
@@ -48,6 +49,10 @@ Ereignis `extension-permission-request` (siehe [permissions.md](./permissions.md
 | `extension_bridge_call` | `{frame, id, method, params}` | `{id, result}` oder `{id, error}` (SDK-Form)                                       |
 
 Ereignis `extension-frame-event {frame, type, data, timestamp}`.
+
+`extension_host_context_set {theme, locale}` (nur holzis Fenster): Farbschema (`light` | `dark` | `system`) und
+Sprache, wie holzis Oberfläche sie anwendet; Grundlage von `extension_context_get`. So liest nur das Frontend
+die Einstellungen, und Rust kennt sie trotzdem.
 
 ## Weitere Ereignisse
 

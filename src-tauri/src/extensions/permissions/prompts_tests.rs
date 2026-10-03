@@ -1,0 +1,44 @@
+use super::*;
+
+fn question(ext: Uuid, target: &str) -> Question {
+    Question {
+        extension_id: ext,
+        kind: PermissionKind::Database,
+        action: "read".into(),
+        target: target.into(),
+    }
+}
+
+#[test]
+fn identical_questions_of_several_frames_are_one_and_vanish_with_their_frames() {
+    let state = PermissionState::default();
+    let ext = Uuid::new_v4();
+    let (id, new) = state.ask(question(ext, "t"), "f1");
+    assert!(new);
+    let (again, new) = state.ask(question(ext, "t"), "f2");
+    assert_eq!((again.as_str(), new), (id.as_str(), false));
+    let (other, new) = state.ask(question(ext, "u"), "f1");
+    assert!(new && other != id);
+
+    assert!(state.frame_closed("f1").contains(&other));
+    assert!(state.frame_closed("f2").contains(&id));
+    assert!(state.take(&id).is_none());
+}
+
+#[test]
+fn held_decisions_replace_each_other_and_can_be_forgotten() {
+    let state = PermissionState::default();
+    let ext = Uuid::new_v4();
+    let target = format!("{}__cal__*", "b".repeat(64));
+    let q = question(ext, &target);
+    state.hold(&q, PermissionStatus::Denied);
+    state.hold(&q, PermissionStatus::Granted);
+    let held = state.temporary(ext, PermissionKind::Database);
+    assert_eq!(held.len(), 1);
+    assert_eq!(held[0].status, PermissionStatus::Granted);
+    assert!(state
+        .temporary(Uuid::new_v4(), PermissionKind::Database)
+        .is_empty());
+    state.forget(ext, PermissionKind::Database, "read", &target);
+    assert!(state.held(ext).is_empty());
+}
