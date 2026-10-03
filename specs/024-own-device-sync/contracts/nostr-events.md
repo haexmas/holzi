@@ -47,7 +47,16 @@ Generation, info = "holzi/presence/v1" ‖ tag_u32)`, `tag` = Tage seit 1970 (UT
   (Kopie eines Hauptgeräts, FR-007): Nennt eine solche Meldung eine höhere `list_generation` als die
   eigene und ist der Absender nicht entfernt, wählt ein gelistetes Gerät ihn einmal je Meldung an
   (höchstens 16 Kandidaten zugleich); der Handshake übernimmt die Liste oder lehnt ab.
-- Abo: `{kinds: [21059], "#p": [mb_pk(heute), mb_pk(gestern)]}`, beim Tageswechsel erneuert.
+- Abo: `{kinds: [21059], "#p": [mb_pk(heute), mb_pk(gestern)]}` für den Inhaltsschlüssel der
+  höchsten Generation und zusätzlich für bis zu vier ältere Inhaltsschlüssel, die das Gerät hält
+  (neueste zuerst); erneuert beim Tageswechsel und sobald sich der Inhaltsschlüssel ändert. In den
+  Postfächern älterer Schlüssel wird nur gelesen, gesendet wird immer mit dem der höchsten
+  Generation: Ein Gerät, das offline war, während ein Gerät entfernt und der Schlüssel erneuert
+  wurde, kennt nur den alten Schlüssel und meldet sich mit ihm. Die anderen hören es dort, prüfen die
+  Meldung wie jede andere und wählen es an; Handshake und Sitzung bringen ihm die neue Liste und den
+  neuen Schlüssel (FR-027). Ein entferntes Gerät erfährt so nichts Neues, weil in alten Postfächern
+  niemand sendet, und seine eigenen Meldungen dort führen zu keiner Verbindung, weil die geltende
+  Liste es nicht nennt.
 
 ## Aufnahmeanfrage (inneres Ereignis Art 24101)
 

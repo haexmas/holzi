@@ -338,6 +338,29 @@ pub fn current_key(
     Ok(None)
 }
 
+/// Up to `limit` keys this device holds besides `current`, newest generation
+/// first. Presence only listens with them (contracts/nostr-events.md): a
+/// device that was away while the key changed still announces itself with
+/// an older one.
+pub fn older_keys(
+    q: &mut impl Query,
+    current: &[u8; 16],
+    limit: usize,
+) -> haex_crdt::Result<Vec<Zeroizing<[u8; 32]>>> {
+    let held: Vec<Vec<u8>> = q.query_map(
+        "SELECT key FROM vault_content_keys_no_sync WHERE key_id <> ?1 \
+         ORDER BY generation DESC LIMIT ?2",
+        params![current.as_slice(), i64::try_from(limit).unwrap_or(i64::MAX)],
+        |r| r.get(0),
+    )?;
+    held.into_iter()
+        .map(|key| {
+            let key = Zeroizing::new(key);
+            Ok(Zeroizing::new(fixed(&key)?))
+        })
+        .collect()
+}
+
 /// Serializes the vault content key and its metadata into a JSON payload and
 /// encrypts it for `recipient` with NIP-44 v2 using the sender's device secret.
 pub(crate) fn wrap(
