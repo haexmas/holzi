@@ -83,19 +83,71 @@ nix develop --command scripts/with-nix-host-bridge.sh pnpm test:e2e --app <path 
 A simple scenario like the one above typically finishes in 5-15 s; if it is still running well past
 that, something is stuck rather than merely slow.
 
-## Scenarios with several devices
+## Scenarios with several vaults and users
 
-A scenario for the sync of one vault (`sync-*.test.ts`) runs several application processes, each with
-data of its own, and a Nostr relay they share: `ctx.nostrRelay()` starts `e2e_nostr_relay`, the same
-in-process relay the integration tests use, as a process. It is a binary of the main package behind the
-Cargo feature `e2e` (`src-tauri/src/bin/e2e_nostr_relay.rs`), built by the command before the scenarios
-start, only if one of them asks for a relay. The helpers in [`lib/sync-flows.ts`](lib/sync-flows.ts) make a
-device the way a user does: `startFirstDevice` creates a vault and points it at the relay (the Nostr
-relays of a vault apply the next time it opens, so it is opened again), `linkDevice` links a new device
-with a code, `restartDevice` and `closeDevice` end and bring back a device's process, and `addThread`,
-`renameThread`, `removeThread` and `expectThreads` write and read the chat threads that stand for the
-vault's data. The new installation of a link is driven by command (`link_join_start` with the servers of
-the vault), because the form on the start page has no field for servers of its own.
+A scenario for the sync (`sync-*.test.ts`), for spaces or for anything else that needs more than one
+vault or device asks the context for a _group_. Every device is an application process with data of its
+own; all of them share one Nostr relay (`e2e_nostr_relay`, a binary of the main package behind the Cargo
+feature `e2e`, built before the scenarios start). The whole of it is
+[`scenarios/sync-two-users.test.ts`](scenarios/sync-two-users.test.ts), under 50 lines:
+
+```ts
+const g = await ctx.group({
+  users: { anna: ['laptop', 'phone'], ben: ['desktop', 'tablet'] },
+})
+const [laptop, phone] = [g.device('anna/laptop'), g.device('anna/phone')]
+await phone.goOffline() // the app keeps working, but no other device can be reached
+await expectOnline(ctx, laptop, phone, false)
+await addThread(laptop, 'Annas Chat')
+await phone.goOnline()
+await expectThreads(
+  ctx,
+  phone,
+  ['Annas Chat'],
+  "Anna's chat to reach her phone",
+)
+```
+
+Each user has one vault (`e2e-<user>`). The first device of a user creates it; the others are linked the
+way a person does it, with a code from a main device (`{ name: 'desk', main: true }` links a second main
+device). Devices are named `<user>/<device>`, and a device name is unique in the whole group. More devices
+than `E2E_MAX_DEVICES` (default 6) are refused before anything starts, because each device is an
+application, a virtual screen and a driver. Everything that was started ends with the scenario, in
+reverse order, whether it passed, failed or timed out; a failure keeps screenshot, driver log and data of
+every device in a folder of its own.
+
+On a device (`g.device('anna/laptop')`):
+
+| Call                                                | Effect                                                                                                          |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `device.page`                                       | The same surface as an instance: `click`, `type`, `invoke`, `exec`, `waitForDisplayed`, `screenshot`, …         |
+| `device.stop()` / `.start()` / `.restart()`         | Close the application gracefully / open it again over the same data / both.                                     |
+| `device.kill()`                                     | End it without its own shutdown; the data stays.                                                                |
+| `device.lock()`                                     | Press the lock control and wait for the process to end; resolves with the time from the press to the end.       |
+| `device.goOffline()` / `.goOnline()`                | Run without any Nostr relay, so no other device finds it, and back. Both restart the application (research R2). |
+| `device.setServers(servers)`                        | The server lists of the vault; they apply at the next opening.                                                  |
+| `device.deviceList()` / `.status()` / `.identity()` | The rows of `list_vault_devices`, `sync_status` and the public vault identity, through the interface.           |
+| `device.copyVaultTo(name, { user? })`               | Copy the vault file of a stopped device to a new, stopped device; the copy of a main device is a main device.   |
+
+On the group: `g.device(address)`, `g.relay.stop()` / `g.relay.start()` (the relay goes away and comes back
+on the same address), `g.link(host, name, { main? })` (a device linked later through a main device) and
+`g.addDevice(user, name)` (a device without a vault that the scenario links itself, for instance through
+the form on the start page).
+
+Waiting (`lib/group-expect.ts`, `lib/sync-flows.ts`): `expectOnline`, `expectLastSeen`, `expectRole` and
+`expectThreads` wait with a fixed deadline that `E2E_TIME_SCALE` does not stretch, because they wait for
+a promise of the product (40 s to sync, 60 s to notice a device that is gone) and not for a slow machine.
+Write, read and count the data with `addThread`, `addThreads` (many at once, in a loop on the page),
+`threadTitles` and `threadCount`; the chat threads stand for the vault's data until other data kinds
+exist. What a person does in the device view, the link form and the server lists is in
+[`lib/sync-ui.ts`](lib/sync-ui.ts), by the hooks of
+[`contracts/test-hooks.md`](../../specs/016-e2e-testing/contracts/test-hooks.md).
+
+A scenario never names a platform: it imports none of `instance.ts`, `processes.ts`, `webdriver.ts`,
+`build.ts`, `node:child_process`, `node:os` or `node:fs`, never calls `process.kill` and never writes
+`xvfb`, `tauri-driver` or `/proc`. `pnpm check:e2e-lib` fails on it. Everything platform specific lives
+in [`lib/platform/`](lib/platform/) behind the `DeviceHost` interface; what other platforms would need is
+in [`PLATFORMS.md`](PLATFORMS.md).
 
 ## Helpers
 
