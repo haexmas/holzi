@@ -42,6 +42,7 @@ pub(crate) fn setup() -> Setup {
     let everything = SqlGuard {
         authorizer: Arc::new(|_: &AuthContext<'_>| Authorization::Allow),
         progress: None,
+        max_value_bytes: None,
     };
     for ddl in [
         "CREATE TABLE t:pages (id TEXT PRIMARY KEY, body TEXT, n INTEGER, data BLOB)",

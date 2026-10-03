@@ -65,7 +65,10 @@ Lehnt der Authorizer etwas ab, was die Vorprüfung durchgelassen hat: 1000 „Fo
 - Werte: BLOB → Base64-Text; INTEGER → Zahl; REAL NaN/Inf → `null`. Parameter: Zahl, Text, `null`,
   Wahrheitswert → 0/1, `{"$bytes": b64}` → BLOB, Array/Objekt → JSON-Text.
 - Grenzen: Zeilen und Bytes im Callback, Laufzeit über Fortschritts-Callback (`SQLITE_INTERRUPT`),
-  gleichzeitige Anfragen per Semaphore. Überschreitung → 7000, die Transaktion wird zurückgerollt.
+  gleichzeitige Anfragen per Semaphore. Kein einzelner Wert und keine Zeile darf größer als die Antwortgrenze
+  werden (`SqlGuard::max_value_bytes` von haex-crdt, `SQLITE_LIMIT_LENGTH`), auch nicht in Migrationen; SQLite
+  lehnt z. B. `zeroblob(1e9)` ab, bevor der Wert angelegt wird. Überschreitung → 7000, die Transaktion wird
+  zurückgerollt.
 - Transaktion: alle Anweisungen erst vorgeprüft, dann in einem `write_guarded`; `rowsAffected` = Summe.
 - Schreibanweisungen laufen durch den CRDT-Transformer (Zeitstempel, Löschmarken, Größengrenze), FR-028.
 

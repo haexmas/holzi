@@ -13,6 +13,7 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use super::authorizer::{self, MigrationPhase, PhaseCell, MIGRATION_JOURNAL};
+use super::exec::limits_of;
 use super::migrate_rules::{plan, Step};
 use crate::extensions::default_limits::MIGRATION_TIMEOUT_MS;
 use crate::extensions::error::BridgeError;
@@ -113,6 +114,7 @@ fn apply(
     extension_id: Uuid,
     own: &TablePrefix,
     migration: &StoredMigration,
+    max_value_bytes: u64,
     now_ms: i64,
 ) -> Result<(), MigrationError> {
     let steps = plan(&migration.sql, own).map_err(|error| MigrationError::Refused {
@@ -126,6 +128,8 @@ fn apply(
     let guard = SqlGuard {
         authorizer: authorizer::migration(own.clone(), Arc::clone(&phase)),
         progress: Some((1000, Arc::new(move || Instant::now() > deadline))),
+        // As at run time: no value or row larger than an answer may be.
+        max_value_bytes: Some(usize::try_from(max_value_bytes).unwrap_or(usize::MAX)),
     };
     let record = migration.clone();
     db.write_guarded_blocking(
@@ -189,12 +193,20 @@ pub fn apply_pending(
     now_ms: i64,
 ) -> Result<Vec<String>, MigrationError> {
     let _applying = APPLYING.lock().unwrap_or_else(PoisonError::into_inner);
-    let pending = db
-        .read_blocking(move |q| Ok(pending(q, extension_id)))
-        .map_err(|_| MigrationError::Unavailable)??;
+    let (pending, limits) = db
+        .read_blocking(move |q| Ok((pending(q, extension_id), limits_of(q, extension_id)?)))
+        .map_err(|_| MigrationError::Unavailable)?;
+    let pending = pending?;
     let mut applied = Vec::with_capacity(pending.len());
     for migration in &pending {
-        apply(db, extension_id, own, migration, now_ms)?;
+        apply(
+            db,
+            extension_id,
+            own,
+            migration,
+            limits.max_response_bytes,
+            now_ms,
+        )?;
         applied.push(migration.name.clone());
     }
     Ok(applied)

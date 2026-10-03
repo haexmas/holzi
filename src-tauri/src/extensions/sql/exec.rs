@@ -118,6 +118,7 @@ fn map_error(error: haex_crdt::Error) -> BridgeError {
         haex_crdt::Error::Database(DatabaseError::TransactionTooLarge { .. }) => {
             limit("transaction too large")
         }
+        haex_crdt::Error::Database(DatabaseError::ValueTooLarge { .. }) => limit("value too large"),
         _ => BridgeError::new(
             ExtensionErrorCode::Database,
             error
@@ -237,6 +238,8 @@ fn guard(policy: Arc<SqlPolicy>, checked: &[Checked], limits: &Limits) -> SqlGua
     SqlGuard {
         authorizer: authorizer::runtime(policy, writable, ctes),
         progress: Some((1000, Arc::new(move || Instant::now() > deadline))),
+        // No value or row larger than the whole answer may be built (`zeroblob(1e9)`).
+        max_value_bytes: Some(usize::try_from(limits.max_response_bytes).unwrap_or(usize::MAX)),
     }
 }
 

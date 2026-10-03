@@ -109,6 +109,20 @@ fn changed_sql_under_an_applied_name_stops_the_extension() {
 }
 
 #[test]
+fn a_migration_cannot_build_a_value_larger_than_an_answer() {
+    let s = setup();
+    add(
+        &s,
+        0,
+        "0000_huge",
+        "CREATE TABLE t:books (id TEXT PRIMARY KEY, data BLOB);--> statement-breakpoint\n\
+         INSERT INTO t:books (id, data) VALUES ('a', zeroblob(999999999))",
+    );
+    assert!(matches!(migrate(&s), Err(MigrationError::Failed { .. })));
+    assert!(!table_exists(&s, "t:books"), "rolled back");
+}
+
+#[test]
 fn a_refused_or_failing_migration_applies_nothing() {
     let s = setup();
     add(
@@ -203,6 +217,7 @@ fn the_migration_authorizer_alone_refuses_what_the_rules_refuse() {
         let guard = SqlGuard {
             authorizer: migration(own(), Arc::clone(&cell)),
             progress: None,
+            max_value_bytes: None,
         };
         let text = t(sql);
         let result = s.vault.write_guarded_blocking(
