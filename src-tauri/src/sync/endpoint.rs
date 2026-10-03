@@ -451,6 +451,10 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
         connection.close(ErrorCode::Closed.as_u32().into(), b"duplicate");
         return;
     }
+    log::info!(
+        "sync: session with {} started ({side:?})",
+        crate::sync::keys::hex(&peer.device_pubkey[..4])
+    );
     // The device is online now: its time is now, and the list shows it.
     mark_seen(&inner, peer.device_pubkey).await;
     notify_devices_changed(&inner);
@@ -490,6 +494,10 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
         cancel: inner.cancel.child_token(),
     };
     session::run(ctx, connection.clone(), send, recv, peer.clone()).await;
+    log::info!(
+        "sync: session with {} ended",
+        crate::sync::keys::hex(&peer.device_pubkey[..4])
+    );
 
     let was_live = {
         let mut peers = inner.peers.lock().unwrap_or_else(|e| e.into_inner());
@@ -562,6 +570,11 @@ fn reset_connections_now(inner: &Arc<Inner>, reason: &[u8]) {
     if connections.is_empty() {
         return;
     }
+    log::info!(
+        "sync: ending {} session(s): {}",
+        connections.len(),
+        String::from_utf8_lossy(reason)
+    );
     for connection in connections {
         connection.close(ErrorCode::Closed.as_u32().into(), reason);
     }
