@@ -3967,7 +3967,7 @@ dependencies = [
 [[package]]
 name = "haex-crdt"
 version = "0.4.0"
-source = "git+https://github.com/haexmas/haex-crdt?rev=5694b96a5964820be3e5de4b7d4eca66a0ad179f#5694b96a5964820be3e5de4b7d4eca66a0ad179f"
+source = "git+https://github.com/haexmas/haex-crdt?rev=928d06af1ef61c507395a38fc3012ad03d15fc33#928d06af1ef61c507395a38fc3012ad03d15fc33"
 dependencies = [
  "base64 0.22.1",
  "fs2",
