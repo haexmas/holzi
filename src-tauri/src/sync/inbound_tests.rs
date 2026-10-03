@@ -377,6 +377,70 @@ fn remove_on(device: &Device, origin: Uuid, limit: &str) {
 }
 
 #[test]
+fn a_removal_in_a_list_that_lost_the_tie_break_does_not_reject_changes() {
+    // Two main devices removed each other: `b` holds both lists of the same
+    // generation, and the one removing `a` lost (FR-043).
+    let (a, b) = (Device::new(), Device::new());
+    write_thread(&a, "before", "kept");
+    let limit = query::read(a.db(), |r| {
+        r.query_row(
+            "SELECT haex_hlc_no_sync FROM chat_threads WHERE id = 'before'",
+            &[],
+            |row| row.get::<_, String>(0),
+        )
+        .map(|hlc| hlc.expect("row"))
+    })
+    .expect("limit");
+    write_thread(&a, "after", "kept too");
+    fork_on(&b, a.db().device_id(), &limit);
+
+    let received = b.pull_from(&a);
+
+    assert_eq!(title(&b, "after").as_deref(), Some("kept too"));
+    assert_eq!(received.iter().map(|r| r.rejected_groups).sum::<usize>(), 0);
+}
+
+/// Gives `device` a vault identity and two lists of the second generation:
+/// the effective one removes another device, the one that lost the
+/// tie-break removes `origin` with `limit`.
+fn fork_on(device: &Device, origin: Uuid, limit: &str) {
+    crate::sync::genesis::ensure_sync_state(device.db(), Uuid::new_v4(), true).expect("genesis");
+    device
+        .db()
+        .write(|tx| {
+            let vault = keys::vault_pubkey(tx)?.expect("identity");
+            let secret = keys::vault_secret(tx)?.expect("secret");
+            let first = device_list::valid_lists(&device_list::load_all(tx)?, &vault)
+                .into_values()
+                .next()
+                .expect("first list");
+            let removing = |device_pubkey, vault_device_uuid, limit_hlc: &str, issued_at| {
+                let list = DeviceList {
+                    generation: 2,
+                    removed: vec![RemovedDevice {
+                        device_pubkey,
+                        vault_device_uuid,
+                        limit_hlc: limit_hlc.to_string(),
+                        removed_at: 1,
+                    }],
+                    issued_at,
+                    base_list_hash: Some(first.hash),
+                    ..first.list.clone()
+                };
+                device_list::sign_list(list, &secret).map_err(haex_crdt::Error::consumer)
+            };
+            let winner = removing([7; 32], Uuid::new_v4(), limit, 1)?;
+            let loser = (2..)
+                .map(|issued_at| removing([8; 32], origin, limit, issued_at))
+                .find(|signed| signed.as_ref().map_or(true, |s| s.hash > winner.hash))
+                .expect("a losing list")?;
+            device_list::insert(tx, &winner)?;
+            device_list::insert(tx, &loser)
+        })
+        .expect("forked lists");
+}
+
+#[test]
 fn blob_credentials_arrive_as_blobs() {
     let (a, b) = (Device::new(), Device::new());
     let credentials: Vec<u8> = vec![0, 159, 146, 150, 255];
