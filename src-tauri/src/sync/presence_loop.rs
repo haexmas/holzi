@@ -76,16 +76,29 @@ pub async fn run(
 
     let mut notifications = client.notifications();
     let mut publish_tick = tokio::time::interval(PUBLISH_INTERVAL);
-    let mut subscribed_day: Option<u32> = None;
+    let mut subscribed: Option<(u32, [u8; 32])> = None;
     let mut asking_since = now_ms();
 
     loop {
         let day = crate::sync::presence::day_tag_now();
-        if subscribed_day != Some(day) {
-            if let Err(error) = resubscribe(&client, replica, vault, keys, day).await {
-                log::warn!("sync: presence subscription failed, retrying next tick: {error}");
-            } else {
-                subscribed_day = Some(day);
+        let current_mailbox_key = match mailbox_key(replica, vault, &keys.device_pubkey) {
+            Ok(key) => key,
+            Err(error) => {
+                log::warn!("sync: presence mailbox could not be read: {error}");
+                None
+            }
+        };
+        let wanted_subscription = current_mailbox_key.map(|key| (day, key));
+        if subscribed != wanted_subscription {
+            if subscribed.is_some() && subscribed.map(|(_, key)| key) != current_mailbox_key {
+                node.reset_connections();
+            }
+            match resubscribe(&client, replica, vault, keys, day).await {
+                Ok(Some(key)) => subscribed = Some((day, key)),
+                Ok(None) => subscribed = None,
+                Err(error) => {
+                    log::warn!("sync: presence subscription failed, retrying next tick: {error}");
+                }
             }
         }
         if now_ms().saturating_sub(asking_since) > REQUEST_RENEWAL_MS {
@@ -103,6 +116,28 @@ pub async fn run(
             result = changed.changed() => {
                 if result.is_err() {
                     return;
+                }
+                let current_mailbox_key = match mailbox_key(replica, vault, &keys.device_pubkey) {
+                    Ok(key) => key,
+                    Err(error) => {
+                        log::warn!("sync: presence mailbox could not be read: {error}");
+                        None
+                    }
+                };
+                let wanted_subscription = current_mailbox_key.map(|key| (day, key));
+                if subscribed != wanted_subscription {
+                    if subscribed.is_some()
+                        && subscribed.map(|(_, key)| key) != current_mailbox_key
+                    {
+                        node.reset_connections();
+                    }
+                    match resubscribe(&client, replica, vault, keys, day).await {
+                        Ok(Some(key)) => subscribed = Some((day, key)),
+                        Ok(None) => subscribed = None,
+                        Err(error) => {
+                            log::warn!("sync: presence subscription failed, retrying next tick: {error}");
+                        }
+                    }
                 }
                 if let Err(error) =
                     publish_own(&client, node, replica, keys, vault, day, asking_since).await
@@ -131,9 +166,10 @@ async fn resubscribe(
     vault: [u8; 32],
     keys: &DeviceKeys,
     day: u32,
-) -> Result<(), PresenceError> {
+) -> Result<Option<[u8; 32]>, PresenceError> {
     let Some(roster) = read_roster(replica, vault, &keys.device_pubkey)? else {
-        return Ok(());
+        let _ = client.unsubscribe_all().await;
+        return Ok(None);
     };
     let (_, today) = mailbox_keys(&roster.content_key, day)?;
     let (_, yesterday) = mailbox_keys(&roster.content_key, day.saturating_sub(1))?;
@@ -145,7 +181,18 @@ async fn resubscribe(
         .subscribe(filter)
         .await
         .map_err(|e| PresenceError::Crypto(e.to_string()))?;
-    Ok(())
+    Ok(Some(roster.content_key))
+}
+
+/// The content key identifies the mailbox subscription. It can change when a
+/// list removes a device that held the newest key, so list changes must also
+/// refresh presence subscriptions, not only republish presence.
+fn mailbox_key(
+    replica: &crate::sync::replica::Replica,
+    vault: [u8; 32],
+    own: &[u8; 32],
+) -> Result<Option<[u8; 32]>, PresenceError> {
+    Ok(read_roster(replica, vault, own)?.map(|roster| roster.content_key))
 }
 
 /// Publishes what this device has to say (see the module docs): presence,
@@ -433,20 +480,19 @@ pub(crate) fn read_roster(
     crate::storage::query::read(replica.db(), |r| {
         let vault_pubkey = crate::sync::keys::vault_pubkey(r)?.unwrap_or(vault);
         let rows = crate::sync::device_list::load_all(r)?;
-        // Every list this device holds that still checks out, not just the
-        // effective one: a same-generation fork that lost the tie-break
-        // (FR-005/FR-043) must not make a key generation it saw look safe.
-        let mut removed = Vec::new();
-        for row in &rows {
-            if let Ok(signed) = row.check(&vault_pubkey) {
-                removed.extend(signed.list.removed.iter().map(|r| r.device_pubkey));
-            }
-        }
-        let Some(key) = crate::sync::content_keys::current_key(r, &removed)? else {
-            return Ok(None);
-        };
         let valid = crate::sync::device_list::valid_lists(&rows, &vault_pubkey);
         let Some(effective) = crate::sync::device_list::effective(&valid) else {
+            return Ok(None);
+        };
+        let removed: Vec<_> = effective
+            .list
+            .removed
+            .iter()
+            .map(|removed| removed.device_pubkey)
+            .collect();
+        let Some(key) =
+            crate::sync::content_keys::current_key_for_list(r, &removed, Some(&effective.hash))?
+        else {
             return Ok(None);
         };
         let standing = if effective.list.removes(own) {

@@ -141,12 +141,21 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
     let bind_addr = deps.bind_addr;
     let devices_app = deps.app.clone();
     let link_app = deps.app.clone();
+    // Presence must refresh its mailbox as soon as a remote device-list pull
+    // changes the effective key, rather than waiting for its 60-second tick.
+    let (changed_tx, changed_rx) = tokio::sync::watch::channel(0u64);
+    let changed_tx = Arc::new(changed_tx);
     let registry = deps
         .app
         .try_state::<Arc<SyncRegistry>>()
         .map(|state| Arc::clone(&*state));
-    let on_applied =
-        applied_event_sink(deps.app, Arc::clone(&replica), presence_keys.clone(), vault);
+    let on_applied = applied_event_sink(
+        deps.app,
+        Arc::clone(&replica),
+        presence_keys.clone(),
+        vault,
+        Arc::clone(&changed_tx),
+    );
     let config = NodeConfig {
         relay_mode: deps.relay_mode,
         bind_addr,
@@ -176,12 +185,8 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
 
     // `notify` (the gate's shared commit signal) wakes at most one waiter
     // per commit, so it gets exactly one consumer here; fanning that out to
-    // presence (which also wants to know about a local commit, e.g. a
-    // device-list change this session just issued) goes through this
-    // `watch` channel instead.
-    let (changed_tx, changed_rx) = tokio::sync::watch::channel(0u64);
-    let changed_tx = Arc::new(changed_tx);
-
+    // presence (which also wants to know about a local or remote device-list
+    // change) goes through this `watch` channel instead.
     // Commands reach the running node through the registry (linking a
     // device); it is cleared again when this service ends.
     let runtime = Arc::new(SyncRuntime {
@@ -282,8 +287,12 @@ fn applied_event_sink<R: Runtime>(
     replica: Arc<Replica>,
     keys: DeviceKeys,
     vault: [u8; 32],
+    changed: Arc<tokio::sync::watch::Sender<u64>>,
 ) -> Arc<dyn Fn(std::collections::BTreeSet<String>) + Send + Sync> {
     Arc::new(move |tables| {
+        if tables.contains("device_lists") {
+            changed.send_modify(|n| *n = n.wrapping_add(1));
+        }
         if tables.contains("device_lists") {
             let replica = Arc::clone(&replica);
             let keys = keys.clone();

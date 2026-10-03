@@ -8,7 +8,7 @@
 //! Per device at most one connection lives: when both dial each other at
 //! once, the connection dialed by the smaller endpoint id stays.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -85,6 +85,13 @@ struct Inner {
     devices_changed: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
     /// Called after a live session ends, so the service can replace it.
     connection_ended: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
+    /// The effective device-list marker for which sessions were last reset.
+    /// Multiple sessions can observe the same list change concurrently; only
+    /// the first observer must restart the sessions.
+    sessions_reset_for_list: Mutex<Option<([u8; 32], u64)>>,
+    /// Invalidates handshakes that were already in flight when sessions were
+    /// reset for a newer effective device list.
+    connection_epoch: Mutex<u64>,
     /// Devices this device's list does not name whose presence claimed a
     /// newer list, waiting to be dialed once to fetch it (FR-007).
     candidates: Mutex<HashMap<[u8; 32], EndpointAddr>>,
@@ -171,6 +178,8 @@ impl SyncNode {
             duplicates: DuplicateWatch::default(),
             devices_changed: Mutex::new(None),
             connection_ended: Mutex::new(None),
+            sessions_reset_for_list: Mutex::new(None),
+            connection_epoch: Mutex::new(0),
             candidates: Mutex::new(HashMap::new()),
         });
         let router = Router::builder(endpoint)
@@ -216,6 +225,14 @@ impl SyncNode {
     /// after a local commit. Close signals collapse into one.
     pub fn local_changed(&self) {
         self.inner.bump.send_modify(|n| *n = n.wrapping_add(1));
+    }
+
+    /// Ends all sessions after a presence mailbox change. A device-list
+    /// update can rotate the mailbox key while an old transport connection is
+    /// still present; keeping that connection would make reconnect skip the
+    /// fresh presence address.
+    pub fn reset_connections(&self) {
+        reset_connections_now(&self.inner, b"presence mailbox changed");
     }
 
     /// This device's own key, which is on its device list but never a peer.
@@ -381,6 +398,7 @@ impl SyncNode {
 async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
     let remote = *connection.remote_id().as_bytes();
     let list_marker_before_handshake = current_device_list_marker(&inner);
+    let connection_epoch_before_handshake = connection_epoch(&inner);
     let streams = match side {
         Side::Accept => connection.open_bi().await,
         Side::Dial => connection.accept_bi().await,
@@ -403,12 +421,19 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
         }
         Side::Dial => handshake::dial(&mut send, &mut recv, &inner.replica, &local, remote).await,
     };
-    if list_marker_before_handshake != current_device_list_marker(&inner) {
-        // A handshake can store a newer effective list before it becomes a
-        // session, including when this peer is refused as removed. Discard
-        // only peers that are stale under that list; reset_stale_connections
-        // wakes reconnect only when it actually closed one.
-        reset_stale_connections(&inner);
+    let reset_by_this_connection =
+        if list_marker_before_handshake != current_device_list_marker(&inner) {
+            // A handshake can store a newer effective list before it becomes a
+            // session, including when this peer is refused as removed. Restart
+            // the existing sessions once for that list so their peer snapshot and
+            // progress exchange start from the converged state.
+            reset_connections_for_list_change(&inner)
+        } else {
+            false
+        };
+    if !reset_by_this_connection && connection_epoch(&inner) != connection_epoch_before_handshake {
+        connection.close(ErrorCode::Closed.as_u32().into(), b"device list changed");
+        return;
     }
     let peer = match handshake {
         Ok(peer) => peer,
@@ -460,11 +485,10 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
                     changed
                 };
                 if list_changed {
-                    // A new effective list can leave a session to a removed
-                    // peer open while that peer has already moved on. Close
-                    // only those stale sessions; valid peers can continue
-                    // syncing while the list converges.
-                    reset_stale_connections(&inner);
+                    // A new effective list changes the handshake context of
+                    // every session. The node-wide marker coalesces this
+                    // across concurrently applying sessions.
+                    reset_connections_for_list_change(&inner);
                 }
                 on_applied(tables);
             })
@@ -518,43 +542,49 @@ fn current_device_list_marker(inner: &Inner) -> Option<([u8; 32], u64)> {
     .flatten()
 }
 
-fn reset_stale_connections(inner: &Arc<Inner>) {
-    let listed = crate::storage::query::read(inner.replica.db(), |r| {
-        let valid = crate::sync::device_list::valid_lists(
-            &crate::sync::device_list::load_all(r)?,
-            &inner.vault,
-        );
-        Ok(crate::sync::device_list::effective(&valid).map(|signed| {
-            signed
-                .list
-                .devices
-                .iter()
-                .map(|device| (device.device_pubkey, device.endpoint_id))
-                .collect::<HashSet<_>>()
-        }))
-    })
-    .ok()
-    .flatten()
-    .unwrap_or_default();
+fn connection_epoch(inner: &Inner) -> u64 {
+    *inner
+        .connection_epoch
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+}
+
+fn reset_connections_for_list_change(inner: &Arc<Inner>) -> bool {
+    let Some(marker) = current_device_list_marker(inner) else {
+        return false;
+    };
+    {
+        let mut reset_for = inner
+            .sessions_reset_for_list
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if *reset_for == Some(marker) {
+            return false;
+        }
+        *reset_for = Some(marker);
+    }
+    reset_connections_now(inner, b"device list changed");
+    true
+}
+
+fn reset_connections_now(inner: &Arc<Inner>, reason: &[u8]) {
+    *inner
+        .connection_epoch
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) += 1;
+    // A device-list update learned during a handshake bypasses the normal
+    // applied-pull callback. Wake presence as well, so a rotated mailbox is
+    // subscribed before the next peer announces itself.
+    inner.bump.send_modify(|n| *n = n.wrapping_add(1));
     let connections: Vec<_> = {
         let mut peers = inner.peers.lock().unwrap_or_else(|e| e.into_inner());
-        let stale: Vec<_> = peers
-            .iter()
-            .filter(|(device, connection)| {
-                !listed.contains(&(**device, *connection.remote_id().as_bytes()))
-            })
-            .map(|(device, _)| *device)
-            .collect();
-        stale
-            .into_iter()
-            .filter_map(|device| peers.remove(&device))
-            .collect()
+        peers.drain().map(|(_, connection)| connection).collect()
     };
     if connections.is_empty() {
         return;
     }
     for connection in connections {
-        connection.close(ErrorCode::Closed.as_u32().into(), b"device list changed");
+        connection.close(ErrorCode::Closed.as_u32().into(), reason);
     }
     notify_devices_changed(inner);
     notify_connection_ended(inner);

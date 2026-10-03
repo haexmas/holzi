@@ -2,7 +2,12 @@ import assert from 'node:assert/strict'
 import { scenario } from '../lib/scenario.ts'
 import type { Device } from '../lib/group.ts'
 import { expectOnline } from '../lib/group-expect.ts'
-import { addThread, expectThreads, threadTitles } from '../lib/sync-flows.ts'
+import {
+  addThread,
+  expectThreads,
+  removeThread,
+  threadTitles,
+} from '../lib/sync-flows.ts'
 import {
   confirmRemoveDevice,
   exists,
@@ -12,6 +17,7 @@ import {
 } from '../lib/sync-ui.ts'
 
 const AFTER = 'Nach der Einigung'
+const BEFORE = 'Vor der Einigung'
 
 /** On `from`, removes `target` through the interface; the target is a main device, so the view warns. */
 async function removeMainDevice(from: Device, target: Device) {
@@ -37,6 +43,21 @@ scenario('sync-mutual-removal', { timeoutMs: 600_000 }, async (ctx) => {
     g.device(`anna/${name}`),
   )
   assert.ok(a && b && c)
+  // The linked device is admitted through the first main device. Before the
+  // two main devices go offline, let the other main device learn that device
+  // too; otherwise the eventual winner may not know where to announce its
+  // presence after the lists converge.
+  await expectOnline(ctx, c, b, true)
+  const beforeId = await addThread(c, BEFORE)
+  await expectThreads(
+    ctx,
+    b,
+    [BEFORE],
+    'the linked device to sync before the main devices go offline',
+  )
+  await removeThread(c, beforeId)
+  await expectThreads(ctx, a, [], 'the first main device to sync the cleanup')
+  await expectThreads(ctx, b, [], 'the linked device to sync the cleanup')
   const pubkeys = new Map<string, string>()
   for (const device of [a, b, c]) {
     pubkeys.set(device.address, await device.pubkey())
@@ -44,6 +65,7 @@ scenario('sync-mutual-removal', { timeoutMs: 600_000 }, async (ctx) => {
 
   await a.goOffline()
   await c.goOffline()
+  await expectOnline(ctx, b, c, false)
   ctx.step('both main devices are cut off from each other')
 
   await removeMainDevice(a, c)
@@ -93,10 +115,20 @@ scenario('sync-mutual-removal', { timeoutMs: 600_000 }, async (ctx) => {
   )
   await expectOnline(ctx, winner, b, true)
   await expectOnline(ctx, b, winner, true)
+  assert.equal(
+    (await b.status()).thisDevice,
+    'linked',
+    'the linked device remains a member after main-device convergence',
+  )
   ctx.step('the linked device follows the winner')
 
   await addThread(winner, AFTER)
-  await expectThreads(ctx, b, [AFTER], 'the linked device to get the new chat')
+  await expectThreads(
+    ctx,
+    b,
+    [AFTER],
+    'the linked device to get the new chat',
+  )
   assert.deepEqual(
     await threadTitles(loser),
     [],
