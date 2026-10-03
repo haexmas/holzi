@@ -13,6 +13,7 @@ import type { ShortcutFields } from '../wm/keybindings.ts'
 export const MAX_TITLE_LENGTH = 200
 
 export type ShimEffect =
+  | { kind: 'hello'; fresh: boolean }
   | { kind: 'navigate'; location: TabLocation; replace: boolean }
   | { kind: 'title'; title: string }
   | { kind: 'closeGuard'; active: boolean }
@@ -30,6 +31,10 @@ export function readShimMessage(
 ): ShimEffect | null {
   if (!isRecord(data)) return null
   switch (data.type) {
+    case 'hello':
+      return typeof data.fresh === 'boolean'
+        ? { kind: 'hello', fresh: data.fresh }
+        : null
     case 'nav': {
       if (typeof data.path !== 'string' || !data.path.startsWith('/'))
         return null

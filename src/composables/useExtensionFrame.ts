@@ -41,8 +41,9 @@ export type FrameDialog = {
 
 /**
  * One extension frame in a tab (spec 017, T046, contracts/bridge.md, research R13, R17): opens a
- * frame session in Rust, hands the SDK its port on **every** load (a reload gets a new channel),
- * relays requests to `extension_bridge_call` unchanged, holds events until the SDK is ready, and
+ * frame session in Rust, hands the SDK its port for **every** new document (a reload gets a new
+ * channel; the shim's `hello` tells a new document from a `load` that WebKitGTK fires for a
+ * fragment navigation inside the frame), relays requests to `extension_bridge_call` unchanged, holds events until the SDK is ready, and
  * maps the frame shim's messages onto this tab only.
  *
  * ponytail: moving the tab to another window or switching the workspace remounts the frame, so
@@ -97,14 +98,28 @@ export function useExtensionFrame(
     initDeadline = null
   }
 
-  function closePorts(): void {
+  function closeSdkPorts(): void {
     stopInit()
     for (const attempt of attempts) attempt.port1.close()
     attempts = []
     sdkPort?.close()
-    shimPort?.close()
     sdkPort = null
+  }
+
+  function closePorts(): void {
+    closeSdkPorts()
+    shimPort?.close()
     shimPort = null
+  }
+
+  /** The frame does not answer in time: shown as an error with "Neu laden". */
+  function armDeadline(): void {
+    if (initDeadline) clearTimeout(initDeadline)
+    initDeadline = setTimeout(() => {
+      stopInit()
+      state.value = 'error'
+      error.value = t('extensions.frame.timeout')
+    }, INIT_TIMEOUT_MS)
   }
 
   async function relay(port: MessagePort, data: unknown): Promise<void> {
@@ -147,6 +162,9 @@ export function useExtensionFrame(
     const effect = readShimMessage(data, shortcuts)
     if (!effect) return
     switch (effect.kind) {
+      case 'hello':
+        if (effect.fresh) startHandshake()
+        return
       case 'navigate': {
         lastShimLocation = effect.location
         const current = { path: router.route.path, query: router.route.query }
@@ -180,26 +198,28 @@ export function useExtensionFrame(
   function startShim(): void {
     const target = iframe.value?.contentWindow
     if (!target) return
+    shimPort?.close()
     const channel = new MessageChannel()
     shimPort = channel.port1
     shimPort.onmessage = (event: MessageEvent) => applyShim(event.data)
     target.postMessage(initMessage(shortcuts), '*', [channel.port2])
   }
 
-  /** Every load of the frame (first start or a reload inside it). */
-  function onLoad(): void {
-    if (!frame) return
-    closePorts()
+  /** A new document in the frame: a fresh SDK channel. */
+  function startHandshake(): void {
+    closeSdkPorts()
     events.reset()
     state.value = 'loading'
-    startShim()
     offerPort()
     initTimer = setInterval(offerPort, INIT_INTERVAL_MS)
-    initDeadline = setTimeout(() => {
-      stopInit()
-      state.value = 'error'
-      error.value = t('extensions.frame.timeout')
-    }, INIT_TIMEOUT_MS)
+    armDeadline()
+  }
+
+  /** Every `load` of the frame; the shim's `hello` then says whether its document is new. */
+  function onLoad(): void {
+    if (!frame) return
+    startShim()
+    if (state.value !== 'ready') armDeadline()
   }
 
   async function openAsync(): Promise<void> {

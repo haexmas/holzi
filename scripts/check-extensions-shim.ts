@@ -29,6 +29,19 @@ const SENT = [
   },
 ]
 
+test('hello says whether the document is new', () => {
+  assert.deepEqual(readShimMessage({ type: 'hello', fresh: true }, SENT), {
+    kind: 'hello',
+    fresh: true,
+  })
+  assert.deepEqual(readShimMessage({ type: 'hello', fresh: false }, SENT), {
+    kind: 'hello',
+    fresh: false,
+  })
+  assert.equal(readShimMessage({ type: 'hello' }, SENT), null)
+  assert.equal(readShimMessage({ type: 'hello', fresh: 'yes' }, SENT), null)
+})
+
 test('nav becomes a navigation of the own tab, with replace', () => {
   assert.deepEqual(
     readShimMessage(
