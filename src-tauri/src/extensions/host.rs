@@ -35,6 +35,8 @@ pub struct ExtensionHost {
     pub permissions: PermissionState,
     /// Entry and Content-Security-Policy per bundle started in this process.
     started: Mutex<HashMap<Uuid, Arc<Started>>>,
+    /// The bundle each extension last started with on this device, to see an update.
+    effective: Mutex<HashMap<Uuid, Uuid>>,
     context: Mutex<HostContext>,
     /// Open confirmation dialogs by request id: the frame that asked and where the answer goes.
     dialogs: Mutex<HashMap<String, (String, Sender<bool>)>>,
@@ -71,6 +73,22 @@ impl ExtensionHost {
 
     pub fn started(&self, bundle_id: Uuid) -> Option<Arc<Started>> {
         self.started_map().get(&bundle_id).cloned()
+    }
+
+    /// Records that `extension_id` now runs `bundle_id`; returns the bundle it ran before.
+    pub fn note_effective(&self, extension_id: Uuid, bundle_id: Uuid) -> Option<Uuid> {
+        self.effective
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(extension_id, bundle_id)
+    }
+
+    /// Forgets the bundle of a removed extension: its next start is not an update.
+    pub fn forget_effective(&self, extension_id: Uuid) {
+        self.effective
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(&extension_id);
     }
 
     pub fn context(&self) -> HostContext {

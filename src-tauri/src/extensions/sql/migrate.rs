@@ -42,12 +42,42 @@ pub enum MigrationError {
     },
     /// SQLite failed while running it; everything was rolled back.
     Failed { name: String, message: String },
+    /// The effective bundle lacks a migration this device applied (research R11).
+    Missing { name: String },
     /// The vault could not be read.
     Unavailable,
 }
 
 pub fn sql_sha256(sql: &str) -> String {
     hex(&Sha256::digest(sql.as_bytes()))
+}
+
+/// Whether `migrations` (name, SQL) of the effective bundle keep every migration this device
+/// applied, with the same SQL (research R11). Only then may the device switch to that bundle.
+pub fn check_applied_kept(
+    q: &mut impl Query,
+    extension_id: Uuid,
+    migrations: &[(String, String)],
+) -> Result<(), MigrationError> {
+    let applied: Vec<(String, String)> = q
+        .query_map(
+            &format!("SELECT name, sql_sha256 FROM {MIGRATION_JOURNAL} WHERE extension_id = ?1"),
+            &[&extension_id.to_string()],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .map_err(|_| MigrationError::Unavailable)?;
+    let offered: HashMap<&str, String> = migrations
+        .iter()
+        .map(|(name, sql)| (name.as_str(), sql_sha256(sql)))
+        .collect();
+    for (name, hash) in applied {
+        match offered.get(name.as_str()) {
+            Some(offered) if *offered == hash => {}
+            Some(_) => return Err(MigrationError::Changed { name }),
+            None => return Err(MigrationError::Missing { name }),
+        }
+    }
+    Ok(())
 }
 
 /// The migrations still to apply on this device, in order.
