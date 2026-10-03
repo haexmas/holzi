@@ -53,6 +53,7 @@ const LOCATION_PATHS: Record<string, string> = {
   'agents.autonomy': '/agents/autonomy',
   'agents.denyRules': '/agents/deny-rules',
   extensions: '/extensions',
+  'extensions.detail': '/extensions/00000000-0000-0000-0000-000000000001',
   federation: '/federation',
   'federation.link': '/federation/devices/link',
   'federation.remove': '/federation/devices/abc123/remove',

@@ -158,6 +158,8 @@ export const SETTINGS_LOCATIONS: readonly SettingsLocation[] = [
   }),
   // Spec 017: installed extensions, installing from a file.
   categoryLocation('extensions'),
+  // Reached from an extension's row in the list, never searched for.
+  subView('extensions.detail', 'extensions/:extensionId', 'extensions'),
   categoryLocation('federation'),
   subView('federation.link', 'federation/devices/link', 'federation', {
     icon: 'lucide:qr-code',

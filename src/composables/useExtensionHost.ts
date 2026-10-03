@@ -1,6 +1,7 @@
 import { watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { useColorScheme } from '~/composables/useColorScheme'
+import { useExtensionPermissionsStore } from '~/stores/extensionPermissions'
 import { useExtensionsStore } from '~/stores/extensions'
 
 /**
@@ -10,6 +11,7 @@ import { useExtensionsStore } from '~/stores/extensions'
  */
 export function useExtensionHost() {
   const extensions = useExtensionsStore()
+  const permissions = useExtensionPermissionsStore()
   const { scheme } = useColorScheme()
   const { locale } = useI18n()
 
@@ -28,7 +30,7 @@ export function useExtensionHost() {
 
   /** Loads the extension list; the session restore waits for it, so extension tabs survive. */
   async function startAsync(): Promise<void> {
-    await extensions.startAsync()
+    await Promise.all([extensions.startAsync(), permissions.startAsync()])
   }
 
   return { startAsync }

@@ -482,6 +482,11 @@
         "remove": {
           "title": "Remove a device"
         }
+      },
+      "extensions": {
+        "detail": {
+          "title": "Extension"
+        }
       }
     },
     "downloadModels": {
@@ -671,7 +676,25 @@
       "installFromFileHint": "Add a signed extension (.xt)",
       "installed": "Installed",
       "none": "No extension installed yet.",
-      "version": "Version {version}"
+      "version": "Version {version}",
+      "versionLabel": "Version",
+      "publisher": "Publisher key",
+      "stateHere": "On this device",
+      "notStartedHere": "Not started yet",
+      "permissions": "Permissions",
+      "noPermissions": "No permissions remembered.",
+      "status": {
+        "granted": "Allowed",
+        "ask": "Ask",
+        "denied": "Denied"
+      },
+      "temporary": "until holzi is closed",
+      "allDevices": "all devices",
+      "thisDevice": "this device",
+      "notDeclared": "not in the manifest",
+      "unreadable": "unknown, counts as absent",
+      "remove": "Remove",
+      "revoke": "Revoke"
     }
   },
   "models": {
@@ -1453,6 +1476,17 @@
         "mail": "Mail",
         "shell": "Run programs"
       }
+    },
+    "permissionRequest": {
+      "title": "“{name}” asks for a permission",
+      "notDeclared": "This permission is not in the extension's manifest.",
+      "targetMissing": "The extension whose data is requested is not installed.",
+      "shellWarning": "Caution: with this permission the extension can run programs on this device.",
+      "remember": "Remember",
+      "allDevices": "Remember for all devices",
+      "allDevicesNote": "The permission then also holds on your other devices once they have synchronised the vault.",
+      "allow": "Allow",
+      "deny": "Deny"
     }
   }
 }
