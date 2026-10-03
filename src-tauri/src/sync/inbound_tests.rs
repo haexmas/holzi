@@ -258,7 +258,7 @@ fn a_pull_cannot_apply_an_older_group_after_a_newer_page() {
     ));
 }
 
-fn page_with(change: Change) -> Page {
+pub(super) fn page_with(change: Change) -> Page {
     Page {
         changes: vec![change],
         group_continues: false,
@@ -267,7 +267,7 @@ fn page_with(change: Change) -> Page {
     }
 }
 
-fn foreign_change(table: &str) -> (Uuid, Change) {
+pub(super) fn foreign_change(table: &str) -> (Uuid, Change) {
     let origin = Uuid::new_v4();
     let node = u128::from_le_bytes(*origin.as_bytes());
     let now = uhlc_now();

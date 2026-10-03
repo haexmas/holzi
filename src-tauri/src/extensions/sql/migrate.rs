@@ -184,6 +184,12 @@ fn apply(
 /// would both see the same migration as pending, and the second run would fail.
 static APPLYING: Mutex<()> = Mutex::new(());
 
+/// The lock migrations run under; replaying parked sync groups takes it too, so no group lands
+/// between two migrations of an extension (research R10).
+pub(crate) fn applying() -> &'static Mutex<()> {
+    &APPLYING
+}
+
 /// Applies every pending migration in order; stops at the first that fails. Returns the names of
 /// the migrations applied now. Blocking.
 pub fn apply_pending(
