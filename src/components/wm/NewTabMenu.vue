@@ -9,8 +9,6 @@
  * the windows: `wm/Desktop.vue` keeps their growing `stack` z-indices
  * inside an isolated stacking context.
  */
-import { WM_APPS } from '~/lib/wm/apps'
-
 const props = defineProps<{
   windowId: string
 }>()
@@ -37,14 +35,20 @@ function select(appId: string) {
     </ShadcnDropdownMenuTrigger>
     <ShadcnDropdownMenuContent align="start">
       <ShadcnDropdownMenuItem
-        v-for="app in WM_APPS"
+        v-for="app in wm.apps()"
         :key="app.id"
         :data-app-id="app.id"
         class="gap-2"
         @select="select(app.id)"
       >
-        <Icon :name="app.icon" class="h-4 w-4" :aria-hidden="true" />
-        <span>{{ t(app.titleKey) }}</span>
+        <img
+          v-if="app.iconUrl"
+          :src="app.iconUrl"
+          alt=""
+          class="h-4 w-4 object-contain"
+        />
+        <Icon v-else :name="app.icon" class="h-4 w-4" :aria-hidden="true" />
+        <span>{{ app.title ?? t(app.titleKey) }}</span>
         <span
           v-if="isOpenElsewhere(app.id, app.multiInstance)"
           class="ml-auto text-xs text-muted-foreground"

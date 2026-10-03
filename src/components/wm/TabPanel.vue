@@ -8,11 +8,12 @@
  * inactive; lazy-mounted the first time it becomes active
  * (`wm.markTabMounted`), then left mounted. Spec 020: the content is
  * the tab's root `WmRouterView`, which renders the app for the tab's
- * current location.
+ * current location; an extension's tab (spec 017) shows its sandboxed frame instead.
  */
 import { computed, watchEffect } from 'vue'
 import { getAppRoutes } from '~/components/wm/appRoutes'
 import { provideWmTab } from '~/composables/useWmTab'
+import { extensionIdOf } from '~/lib/extensions/apps'
 import type { WmTab } from '~/lib/wm/types'
 
 const props = defineProps<{
@@ -24,6 +25,8 @@ const props = defineProps<{
 const wm = useWindowManagerStore()
 
 const hasRoutes = computed(() => getAppRoutes(props.tab.appId) !== undefined)
+// Spec 017: an extension's tab shows its frame instead of holzi routes.
+const extensionId = extensionIdOf(props.tab.appId)
 const mounted = computed(() => wm.runtimeFor(props.tab.id).mounted)
 
 provideWmTab({
@@ -60,6 +63,10 @@ watchEffect(() => {
     class="h-full min-h-0"
     :aria-hidden="!active"
   >
-    <WmRouterView v-if="hasRoutes && mounted" />
+    <ExtensionsExtensionFrame
+      v-if="extensionId !== null && mounted"
+      :extension-id="extensionId"
+    />
+    <WmRouterView v-else-if="hasRoutes && mounted" />
   </div>
 </template>

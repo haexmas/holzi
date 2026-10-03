@@ -1,6 +1,12 @@
 import { computed, reactive, toRefs } from 'vue'
 import { defineStore } from 'pinia'
-import { getAppDefinition, tabTitleFor, WM_APPS } from '~/lib/wm/apps'
+import {
+  getAppDefinition,
+  tabTitleFor,
+  type AppDefinition,
+} from '~/lib/wm/apps'
+import { allApps } from '~/lib/extensions/apps'
+import { useExtensionsStore } from '~/stores/extensions'
 import {
   closeWindow as closeWindowReducer,
   createWorkspace as createWorkspaceReducer,
@@ -55,6 +61,13 @@ import { createWmNavigation } from '~/stores/wmNavigation'
  * navigation. While the setting does not apply (the default), nothing is saved.
  */
 export const useWindowManagerStore = defineStore('windowManager', () => {
+  const extensions = useExtensionsStore()
+  /** holzi's apps and the installed extensions (spec 017); read when needed, so a newly installed
+   * extension is an app at once. */
+  function apps(): readonly AppDefinition[] {
+    return allApps(extensions.apps)
+  }
+
   const initialArea =
     typeof window === 'undefined'
       ? { width: 1280, height: 800 }
@@ -62,7 +75,7 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
   const state = reactive<WmState>(
     hydrate(
       { workspaces: [], windows: [], activeWorkspaceId: '' },
-      WM_APPS,
+      apps(),
       initialArea,
     ),
   )
@@ -83,7 +96,7 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
   const session = createSessionSync({
     state,
     histories: navigation.histories,
-    apps: WM_APPS,
+    apps,
     port: useWmSession(),
     onRestored: syncTabRuntime,
   })
@@ -173,7 +186,7 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
     titleOverride: string | null
     hasAttention: boolean
   } {
-    const app = getAppDefinition(tab.appId, WM_APPS)
+    const app = getAppDefinition(tab.appId, apps())
     const runtime = runtimeFor(tab.id)
     const history = navigation.historyOf(tab.id)
     const title = history
@@ -186,7 +199,8 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
       titleKey: title.key,
       titleParams: title.params,
       icon: app?.icon,
-      titleOverride: runtime.titleOverride,
+      // An extension's own name is not translated; it stands where the app sets no title.
+      titleOverride: runtime.titleOverride ?? app?.title ?? null,
       hasAttention: runtime.attention,
     }
   }
@@ -221,7 +235,7 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
       navigation.histories,
       appId,
       at,
-      WM_APPS,
+      apps(),
       (id) => runtimeFor(id).titleOverride,
     )
     syncTabRuntime()
@@ -241,7 +255,7 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
       windowId,
       appId,
       at,
-      WM_APPS,
+      apps(),
       (id) => runtimeFor(id).titleOverride,
     )
     syncTabRuntime()
@@ -294,7 +308,7 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
    * `wm/Desktop.vue`'s `useWindowSize` watcher) and re-clamps every window's stored geometry
    * into it — debounced like `updateWindowGeometry`, since a live resize can fire rapidly too. */
   function updateArea(area: Size) {
-    if (updateAreaReducer(state, area, WM_APPS).length > 0) session.saveSoon()
+    if (updateAreaReducer(state, area, apps()).length > 0) session.saveSoon()
   }
 
   /** Removes the window without asking anything — guard confirmation (FR-014) runs at the caller
@@ -386,6 +400,7 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
 
   return {
     ...toRefs(state),
+    apps,
     windowsInActiveWorkspace,
     restoreSessionAsync: session.restoreAsync,
     setSessionRestore,

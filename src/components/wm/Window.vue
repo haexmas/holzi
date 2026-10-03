@@ -74,7 +74,7 @@ const minSize = computed(() => {
   let width = 0
   let height = 0
   for (const tab of props.window.tabs) {
-    const app = getAppDefinition(tab.appId)
+    const app = getAppDefinition(tab.appId, wm.apps())
     if (app) {
       width = Math.max(width, app.minSize.width)
       height = Math.max(height, app.minSize.height)

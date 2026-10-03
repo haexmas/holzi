@@ -115,7 +115,8 @@
     "apps": {
       "chat": "Chat",
       "settings": "Settings",
-      "passwords": "Passwords"
+      "passwords": "Passwords",
+      "extension": "Extension"
     },
     "launcher": {
       "lock": "Lock",
@@ -842,6 +843,12 @@
         "cancelled": "The import was cancelled.",
         "unwritable": "The file could not be written."
       }
+    },
+    "extensions": {
+      "install": "The extension could not be installed.",
+      "notFound": "The extension does not exist (anymore).",
+      "disabled": "The extension is disabled.",
+      "notReady": "The extension is not ready on this device yet."
     }
   },
   "actions": {
@@ -1369,6 +1376,42 @@
       "deleted": "This entry was deleted on another device.",
       "reload": "Reload",
       "back": "Back"
+    }
+  },
+  "extensions": {
+    "install": {
+      "errors": {
+        "archive_too_large": "The file is too large.",
+        "archive_invalid": "The file is not a valid extension bundle.",
+        "entry_path_invalid": "The bundle contains a file name that is not allowed.",
+        "entry_duplicate": "The bundle contains a file twice.",
+        "entry_too_large": "A file in the bundle is too large.",
+        "entry_ratio": "A file in the bundle is suspiciously highly compressed.",
+        "entry_kind": "The bundle contains something other than plain files.",
+        "manifest_not_canonical": "The manifest is not in its signed form.",
+        "manifest_invalid": "The manifest is invalid.",
+        "file_mismatch": "A file was changed after signing.",
+        "public_key_mismatch": "Manifest and signature name different publishers.",
+        "signature_invalid": "The signature is invalid.",
+        "legacy_signature_format": "The bundle was signed with an old tool. Please sign it again with the current “haex” tool.",
+        "unreadable": "The file cannot be read.",
+        "downgrade_not_confirmed": "An older version is installed only after confirmation."
+      }
+    },
+    "status": {
+      "transferring": "Transferring",
+      "ready": "Ready",
+      "signature_failed": "Signature broken",
+      "migration_failed": "Database change failed",
+      "disabled": "Disabled"
+    },
+    "frame": {
+      "title": "Extension",
+      "loading": "Loading extension …",
+      "failed": "The extension could not be started.",
+      "timeout": "The extension does not respond.",
+      "reload": "Reload",
+      "closeGuard": "The extension has unsaved changes."
     }
   }
 }
