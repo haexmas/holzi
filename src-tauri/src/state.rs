@@ -50,6 +50,8 @@ pub struct AppState {
     password_import: Arc<ImportRegistry>,
     /// Announces changed vault tables to Rust subscribers (spec 017; `vault_events`).
     vault_changes: crate::vault_events::VaultChanges,
+    /// Frame sessions and started bundles of extensions (spec 017).
+    extensions: Arc<crate::extensions::host::ExtensionHost>,
 }
 
 impl AppState {
@@ -63,6 +65,7 @@ impl AppState {
             usage: Arc::new(UsageRegistry::new()),
             password_import: ImportRegistry::new(),
             vault_changes: crate::vault_events::changes_channel(),
+            extensions: Arc::default(),
         }
     }
 
@@ -79,6 +82,11 @@ impl AppState {
     /// The announcements of changed vault tables for Rust subscribers (spec 017).
     pub fn vault_changes(&self) -> &crate::vault_events::VaultChanges {
         &self.vault_changes
+    }
+
+    /// The extension host of this process (spec 017).
+    pub fn extensions(&self) -> Arc<crate::extensions::host::ExtensionHost> {
+        Arc::clone(&self.extensions)
     }
 
     /// The clearer of the clipboard; a close clears what it still holds (spec 034, FR-006).

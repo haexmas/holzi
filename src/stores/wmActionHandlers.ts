@@ -37,7 +37,7 @@ export function registerWmActionHandlers(wm: WmStore): void {
     at: string | null
   } {
     const alias = resolveAppAlias(String(input.appId))
-    if (!getAppDefinition(alias.appId)) {
+    if (!getAppDefinition(alias.appId, wm.apps())) {
       throw new Error(`unknown app ${alias.appId}`)
     }
     return {

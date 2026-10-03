@@ -65,7 +65,10 @@ Lehnt der Authorizer etwas ab, was die Vorprüfung durchgelassen hat: 1000 „Fo
 - Werte: BLOB → Base64-Text; INTEGER → Zahl; REAL NaN/Inf → `null`. Parameter: Zahl, Text, `null`,
   Wahrheitswert → 0/1, `{"$bytes": b64}` → BLOB, Array/Objekt → JSON-Text.
 - Grenzen: Zeilen und Bytes im Callback, Laufzeit über Fortschritts-Callback (`SQLITE_INTERRUPT`),
-  gleichzeitige Anfragen per Semaphore. Überschreitung → 7000, die Transaktion wird zurückgerollt.
+  gleichzeitige Anfragen per Semaphore. Kein einzelner Wert und keine Zeile darf größer als die Antwortgrenze
+  werden (`SqlGuard::max_value_bytes` von haex-crdt, `SQLITE_LIMIT_LENGTH`), auch nicht in Migrationen; SQLite
+  lehnt z. B. `zeroblob(1e9)` ab, bevor der Wert angelegt wird. Überschreitung → 7000, die Transaktion wird
+  zurückgerollt.
 - Transaktion: alle Anweisungen erst vorgeprüft, dann in einem `write_guarded`; `rowsAffected` = Summe.
 - Schreibanweisungen laufen durch den CRDT-Transformer (Zeitstempel, Löschmarken, Größengrenze), FR-028.
 
@@ -102,6 +105,9 @@ Die Trigger und der Umbau, die haex-crdt nach einer DDL selbst anlegt, laufen au
 Ablauf je Migration in einem `write_guarded` im Schema-Modus (Fremdschlüssel aus, `foreign_key_check` vor dem
 Commit): Anweisungen ausführen → für jede geänderte synchronisierte Tabelle Trigger neu anlegen → Umbau mit
 unveränderten Sync-Spalten → Journalzeile schreiben. Scheitert etwas, wird alles zurückgerollt (FR-034).
+Eine Migration hat ein eigenes Zeitlimit (60 s, Fortschritts-Callback wie zur Laufzeit), damit SQL einer
+Erweiterung die Schreibsperre des Vaults nie unbegrenzt hält. Lesen der offenen und Anwenden laufen je Prozess
+unter einer Sperre, damit zwei gleichzeitige Starts dieselbe Migration nicht zweimal anwenden.
 
 ## Umgehungssammlung (SC-002, `src-tauri/tests/extension_sql_bypass.rs`)
 
@@ -109,7 +115,7 @@ Jeder Fall dieser Liste ist eine verbotene Form und muss von der Vorprüfung **u
 allein abgelehnt werden. Positive Fälle und Fälle mit eigener Regel je Schicht stehen darunter. Mindestens:
 
 - `WITH x AS (SELECT * FROM chat_threads) SELECT * FROM x`; `WITH` mit eigenem Präfix als Name über eine
-  Kerntabelle; `WITH` mit dem Namen einer Kerntabelle
+  Kerntabelle
 - `EXISTS`, Unterabfragen in `SELECT`, `WHERE`, `HAVING`, `ORDER BY`, `LIMIT`, `VALUES`, `RETURNING`,
   `ON CONFLICT … DO UPDATE SET x = (SELECT …)`, `JOIN … ON (SELECT …)`, `CASE`, Funktionsargumente
 - `main.chat_threads`, `temp.x`, `"Chat_Threads"`, `[chat_threads]`, `` `chat_threads` ``
@@ -137,6 +143,18 @@ Fälle mit eigener Regel je Schicht:
   Der Authorizer sieht bei `INSERT` keine Spalten, und der Transformer schreibt diese Spalten selbst; ohne
   Vorprüfung muss der gespeicherte Wert trotzdem vom Transformer stammen (er überschreibt oder verwirft Werte
   der Anweisung).
+- `WITH` mit dem Namen einer Kerntabelle (`WITH chat_threads AS (SELECT 1) SELECT * FROM chat_threads`): die
+  Vorprüfung lehnt ab (1000). Der Authorizer allein sieht nur die CTE und lässt sie zu; gelesen wird nichts
+  Echtes, die Antwort ist die eigene Zeile der CTE.
+- Tabellenfunktionen (`json_each`, `json_tree`, `jsonb_*`): SQLite meldet sie als `Read` auf die gleichnamige
+  Tabelle in `main`; der Authorizer lässt diese zu, was ihre Argumente lesen, prüft er einzeln.
+- CTEs: SQLite meldet den Körper einer CTE mit ihrem Namen als `accessor` und das Lesen einer CTE ohne
+  Datenbank. Der Authorizer kennt die CTE-Namen der Anweisung und prüft beides wie SQL auf oberster Ebene; eine
+  CTE mit dem Namen eines Änderungstriggers gewinnt nichts.
+- Änderungstrigger (Ergebnis der Prüfaufgabe): der Transformer setzt den HLC als Literal in die Anweisung;
+  die Trigger rufen `gen_uuid` und `current_hlc` auf, lesen `haex_crdt_configs_no_sync` und lösen beim Löschen
+  den Trigger von `haex_deleted_rows` aus. Im Trigger erlaubt der Authorizer nur die eigene Tabelle und
+  `haex_*`-Tabellen sowie diese beiden Funktionen.
 - Zwei Anweisungen in einer Zeichenkette: die Vorprüfung lehnt ab (1000); ohne Vorprüfung lehnen
   `write_guarded`/`read_guarded` einen nicht leeren Rest nach der ersten Anweisung ab, statt ihn still zu
   verwerfen (T005).

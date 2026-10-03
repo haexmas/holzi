@@ -236,6 +236,42 @@ fn the_current_key_skips_generations_wrapped_for_a_removed_device() {
     );
 }
 
+/// A skipped higher generation is listened on as well, but does not take
+/// the place of a lower generation used by a device that was away.
+#[test]
+fn presence_listens_on_lower_generations_and_on_skipped_higher_ones() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db = open_vault(dir.path());
+    let main = DeviceKeys::generate();
+    let gone = DeviceKeys::generate();
+    let with_gone = signed_list(vec![
+        listed(&main, Role::Main, 1),
+        listed(&gone, Role::Linked, 2),
+    ]);
+    let without = signed_list(vec![listed(&main, Role::Main, 1)]);
+    let keys: Vec<ContentKey> = (1..=6).map(ContentKey::generate).collect();
+    db.write(|tx| {
+        for key in &keys {
+            let list = if key.generation == 6 {
+                &with_gone
+            } else {
+                &without
+            };
+            issue_generation(tx, key, list, &main, 5)?;
+        }
+        Ok(())
+    })
+    .expect("issue");
+
+    let current = query::read(&db, |r| current_key(r, &[gone.device_pubkey]))
+        .expect("read")
+        .expect("a key");
+    assert_eq!(current.generation, 5);
+    let listening = query::read(&db, |r| listening_keys(r, &current, 2)).expect("read");
+    let listening: Vec<[u8; 32]> = listening.iter().map(|key| **key).collect();
+    assert_eq!(listening, vec![*keys[3].key, *keys[2].key, *keys[5].key]);
+}
+
 #[test]
 fn a_sealed_name_opens_only_for_its_device() {
     let key = ContentKey::generate(3);

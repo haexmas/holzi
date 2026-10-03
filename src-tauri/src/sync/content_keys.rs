@@ -310,12 +310,48 @@ pub fn current_key(
     q: &mut impl Query,
     removed: &[[u8; 32]],
 ) -> haex_crdt::Result<Option<ContentKey>> {
-    let held: Vec<(Vec<u8>, i64, Vec<u8>)> = q.query_map(
-        "SELECT key_id, generation, key FROM vault_content_keys_no_sync \
-         ORDER BY generation DESC",
-        &[],
-        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-    )?;
+    current_key_for_list(q, removed, None)
+}
+
+/// The highest held key issued for `list_hash` whose envelopes do not name a
+/// removed device. A same-generation fork can leave two different keys in a
+/// replica; preferring the effective list's key avoids selecting a key from
+/// the losing fork when both generations are otherwise equal.
+pub fn current_key_for_list(
+    q: &mut impl Query,
+    removed: &[[u8; 32]],
+    list_hash: Option<&[u8; 32]>,
+) -> haex_crdt::Result<Option<ContentKey>> {
+    let mut held: Vec<(Vec<u8>, i64, Vec<u8>)> = if let Some(hash) = list_hash {
+        q.query_map(
+            "SELECT k.key_id, k.generation, k.key \
+             FROM vault_content_keys_no_sync k \
+             JOIN vault_key_generations g ON g.key_id = k.key_id \
+             WHERE g.device_list_hash = ?1 \
+                OR EXISTS (SELECT 1 FROM vault_key_envelopes e \
+                           WHERE e.key_id = k.key_id AND e.device_list_hash = ?1) \
+             ORDER BY k.generation DESC",
+            params![hash.as_slice()],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )?
+    } else {
+        q.query_map(
+            "SELECT key_id, generation, key FROM vault_content_keys_no_sync \
+             ORDER BY generation DESC",
+            &[],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )?
+    };
+    // Legacy databases may not have a generation explicitly tied to the current
+    // list yet. Fall back to the complete local key set in that case.
+    if held.is_empty() && list_hash.is_some() {
+        held = q.query_map(
+            "SELECT key_id, generation, key FROM vault_content_keys_no_sync \
+             ORDER BY generation DESC",
+            &[],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )?;
+    }
     for (key_id, generation, key) in held {
         let key = Zeroizing::new(key);
         let recipients: Vec<Vec<u8>> = q.query_map(
@@ -336,6 +372,39 @@ pub fn current_key(
         }));
     }
     Ok(None)
+}
+
+/// The keys this device holds besides `current`: up to `limit` of a lower
+/// generation, newest first, then up to `limit` of a higher one, which
+/// `current_key` skipped for a removed recipient. Presence only listens with
+/// them (contracts/nostr-events.md): a device that was away while the key
+/// changed still announces itself with a lower one, and one that has not yet
+/// heard of a removal with a skipped higher one.
+pub fn listening_keys(
+    q: &mut impl Query,
+    current: &ContentKey,
+    limit: usize,
+) -> haex_crdt::Result<Vec<Zeroizing<[u8; 32]>>> {
+    let generation = i64::try_from(current.generation).map_err(|_| KeyError::Malformed)?;
+    let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+    let mut held: Vec<Vec<u8>> = q.query_map(
+        "SELECT key FROM vault_content_keys_no_sync WHERE generation < ?1 \
+         ORDER BY generation DESC LIMIT ?2",
+        params![generation, limit],
+        |r| r.get(0),
+    )?;
+    held.extend(q.query_map(
+        "SELECT key FROM vault_content_keys_no_sync WHERE generation > ?1 \
+         ORDER BY generation ASC LIMIT ?2",
+        params![generation, limit],
+        |r| r.get(0),
+    )?);
+    held.into_iter()
+        .map(|key| {
+            let key = Zeroizing::new(key);
+            Ok(Zeroizing::new(fixed(&key)?))
+        })
+        .collect()
 }
 
 /// Serializes the vault content key and its metadata into a JSON payload and

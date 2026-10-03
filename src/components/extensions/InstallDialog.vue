@@ -1,0 +1,257 @@
+<script setup lang="ts">
+/**
+ * Installing an extension from a `.xt` file (spec 017, US1, T048, contracts/permissions.md
+ * §Installation): Rust reads and checks the file and shows what it is; every declared permission
+ * is listed with a checkbox (on by default; off means "ask when needed"), device-scoped kinds
+ * offer "nur dieses Gerät" or "alle Geräte". An update lists only the new permissions and warns
+ * before a downgrade. Nothing is written before "Installieren".
+ */
+import { invoke } from '@tauri-apps/api/core'
+import { open as openFile } from '@tauri-apps/plugin-dialog'
+import type { DeclaredPermissionView } from '@bindings/DeclaredPermissionView'
+import type { InstallPreview } from '@bindings/InstallPreview'
+import type { PermissionChoice } from '@bindings/PermissionChoice'
+
+const open = defineModel<boolean>('open', { required: true })
+const { t } = useI18n()
+const { errString } = useErrorString()
+
+const path = ref<string | null>(null)
+const preview = ref<InstallPreview | null>(null)
+const choices = ref<Record<string, { granted: boolean; allDevices: boolean }>>(
+  {},
+)
+const confirmDowngrade = ref(false)
+const busy = ref(false)
+const failure = ref<string | null>(null)
+
+const key = (p: DeclaredPermissionView) => `${p.kind}|${p.action}|${p.target}`
+
+/** On an update only the permissions it adds are put before the user. */
+const shown = computed(
+  () =>
+    preview.value?.existing?.newPermissions ?? preview.value?.declared ?? [],
+)
+const blocked = computed(
+  () =>
+    !preview.value?.signatureValid ||
+    (preview.value.existing?.isDowngrade === true && !confirmDowngrade.value),
+)
+
+function reset() {
+  path.value = null
+  preview.value = null
+  choices.value = {}
+  confirmDowngrade.value = false
+  failure.value = null
+}
+
+async function chooseAsync() {
+  reset()
+  const selected = await openFile({
+    multiple: false,
+    filters: [{ name: t('extensions.install.fileType'), extensions: ['xt'] }],
+  })
+  if (typeof selected !== 'string') {
+    open.value = false
+    return
+  }
+  busy.value = true
+  try {
+    path.value = selected
+    preview.value = await invoke<InstallPreview>('extension_install_preview', {
+      path: selected,
+    })
+    for (const permission of shown.value)
+      choices.value[key(permission)] = { granted: true, allDevices: false }
+  } catch (error) {
+    failure.value = errString(error)
+  } finally {
+    busy.value = false
+  }
+}
+
+async function installAsync() {
+  if (!path.value || blocked.value) return
+  busy.value = true
+  failure.value = null
+  try {
+    const accepted: PermissionChoice[] = shown.value.map((p) => ({
+      kind: p.kind,
+      action: p.action,
+      target: p.target,
+      granted: choices.value[key(p)]?.granted ?? false,
+      allDevices: choices.value[key(p)]?.allDevices ?? false,
+    }))
+    await invoke('extension_install', {
+      args: {
+        path: path.value,
+        accepted,
+        confirmDowngrade: confirmDowngrade.value,
+      },
+    })
+    open.value = false
+  } catch (error) {
+    failure.value = errString(error)
+  } finally {
+    busy.value = false
+  }
+}
+
+watch(open, (isOpen) => {
+  if (isOpen) void chooseAsync()
+  else reset()
+})
+</script>
+
+<template>
+  <UiDrawerModal v-model:open="open" :title="t('extensions.install.title')">
+    <template #content>
+      <div class="flex flex-col gap-4" data-testid="extensions-install-dialog">
+        <p v-if="busy && !preview" class="text-sm text-muted-foreground">
+          {{ t('extensions.install.checking') }}
+        </p>
+
+        <div
+          v-if="preview && !preview.signatureValid"
+          class="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive"
+          role="alert"
+          data-testid="extensions-install-refused"
+        >
+          <p>{{ t(`extensions.install.errors.${preview.error?.kind}`) }}</p>
+          <p v-if="preview.error?.path" class="mt-1 font-mono text-xs">
+            {{ preview.error.path }}
+          </p>
+        </div>
+
+        <template v-if="preview?.signatureValid">
+          <div class="flex flex-col gap-1">
+            <h3 class="text-base font-semibold">
+              {{ preview.displayName ?? preview.name }}
+              <span class="font-normal text-muted-foreground">{{
+                preview.version
+              }}</span>
+            </h3>
+            <p v-if="preview.description" class="text-sm">
+              {{ preview.description }}
+            </p>
+            <p class="text-xs text-muted-foreground">
+              {{
+                t('extensions.install.publisher', {
+                  author: preview.author ?? '—',
+                  fingerprint: preview.publisherFingerprint,
+                })
+              }}
+            </p>
+          </div>
+
+          <p
+            v-if="preview.sameNameOtherPublisher"
+            class="rounded-xl bg-muted px-4 py-3 text-sm"
+          >
+            {{ t('extensions.install.sameNameOtherPublisher') }}
+          </p>
+
+          <div
+            v-if="preview.existing"
+            class="rounded-xl bg-muted px-4 py-3 text-sm"
+          >
+            <p>
+              {{
+                t('extensions.install.update', {
+                  from: preview.existing.version,
+                  to: preview.version,
+                })
+              }}
+            </p>
+            <label
+              v-if="preview.existing.isDowngrade"
+              class="mt-2 flex items-center gap-2 text-destructive"
+            >
+              <ShadcnCheckbox v-model="confirmDowngrade" />
+              {{ t('extensions.install.confirmDowngrade') }}
+            </label>
+          </div>
+
+          <SettingsGroup
+            v-if="shown.length > 0"
+            :label="t('extensions.install.permissions')"
+          >
+            <li
+              v-for="permission in shown"
+              :key="key(permission)"
+              class="flex flex-col gap-2 px-4 py-3"
+            >
+              <label class="flex items-start gap-3">
+                <ShadcnCheckbox
+                  v-model="choices[key(permission)]!.granted"
+                  class="mt-0.5"
+                />
+                <span class="flex flex-col">
+                  <span class="text-sm">
+                    {{ t(`extensions.permissions.kinds.${permission.kind}`) }}
+                    · {{ permission.action }}
+                  </span>
+                  <span class="font-mono text-xs break-all">{{
+                    permission.target
+                  }}</span>
+                </span>
+              </label>
+              <div
+                v-if="permission.deviceScoped"
+                class="flex gap-4 pl-7 text-xs"
+                role="radiogroup"
+              >
+                <label class="flex items-center gap-1.5">
+                  <input
+                    v-model="choices[key(permission)]!.allDevices"
+                    type="radio"
+                    :value="false"
+                  />
+                  {{ t('extensions.install.thisDevice') }}
+                </label>
+                <label class="flex items-center gap-1.5">
+                  <input
+                    v-model="choices[key(permission)]!.allDevices"
+                    type="radio"
+                    :value="true"
+                  />
+                  {{ t('extensions.install.allDevices') }}
+                </label>
+              </div>
+            </li>
+          </SettingsGroup>
+
+          <p
+            v-if="preview.unsupportedCategories.length > 0"
+            class="text-xs text-muted-foreground"
+          >
+            {{
+              t('extensions.install.unsupported', {
+                categories: preview.unsupportedCategories.join(', '),
+              })
+            }}
+          </p>
+        </template>
+
+        <p v-if="failure" class="text-sm text-destructive" role="alert">
+          {{ failure }}
+        </p>
+
+        <div class="flex justify-end gap-2">
+          <UiButton variant="outline" @click="open = false">
+            {{ t('extensions.install.cancel') }}
+          </UiButton>
+          <UiButton
+            v-if="preview?.signatureValid"
+            :disabled="busy || blocked"
+            data-testid="extensions-install-confirm"
+            @click="installAsync"
+          >
+            {{ t('extensions.install.install') }}
+          </UiButton>
+        </div>
+      </div>
+    </template>
+  </UiDrawerModal>
+</template>
