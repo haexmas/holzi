@@ -6,6 +6,7 @@ use haex_crdt::rusqlite::params;
 use haex_crdt::CrdtTransaction;
 use uuid::Uuid;
 
+use super::{Permission, PermissionKind, VAULT_WIDE};
 use crate::error::Result;
 use crate::extensions::ids::permission_id;
 use crate::storage::query::Query;
@@ -59,6 +60,30 @@ pub fn rows_of(q: &mut impl Query, extension_id: Uuid) -> Result<Vec<PermissionR
                 declared: declared != 0,
                 vault_device_uuid: Uuid::parse_str(&device).ok()?,
             })
+        })
+        .collect())
+}
+
+/// The remembered permissions of one kind that can hold on `device`: vault-wide or this device's.
+/// Rows holzi cannot read are absent (FR-022).
+pub fn candidates(
+    q: &mut impl Query,
+    extension_id: Uuid,
+    kind: PermissionKind,
+    device: Uuid,
+) -> Result<Vec<Permission>> {
+    Ok(rows_of(q, extension_id)?
+        .into_iter()
+        .filter(|r| r.kind == kind.as_str())
+        .filter(|r| r.vault_device_uuid == VAULT_WIDE || r.vault_device_uuid == device)
+        .filter_map(|r| {
+            Permission::from_row(
+                &r.kind,
+                &r.action,
+                &r.target,
+                &r.status,
+                r.vault_device_uuid,
+            )
         })
         .collect())
 }

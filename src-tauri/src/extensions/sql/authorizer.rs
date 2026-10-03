@@ -3,12 +3,15 @@
 //! be wrong. Built per statement from the [`SqlPolicy`].
 
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 
 use haex_crdt::{AuthAction, AuthContext, Authorization, SqlAuthorizer};
 
+use super::migrate_rules::own_or_rebuild;
 use super::policy::SqlPolicy;
 use super::{function_allowed, TABLE_FUNCTIONS};
+use crate::extensions::ids::TablePrefix;
 
 fn allow(yes: bool) -> Authorization {
     if yes {
@@ -113,6 +116,132 @@ pub fn runtime(
             ),
             _ => Authorization::Deny,
         }
+    })
+}
+
+/// What the migration code is running at the moment; set by holzi's own code around each step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum MigrationPhase {
+    /// A checked `INSERT`/`UPDATE`/`DELETE`/query of the migration.
+    Data = 0,
+    /// A checked `CREATE`/`ALTER`/`DROP`: SQLite rewrites its schema tables meanwhile.
+    Schema = 1,
+    /// holzi writes the journal row of the migration.
+    Journal = 2,
+}
+
+/// The shared phase of one migration run.
+#[derive(Debug, Default)]
+pub struct PhaseCell(AtomicU8);
+
+impl PhaseCell {
+    pub fn set(&self, phase: MigrationPhase) {
+        self.0.store(phase as u8, Ordering::SeqCst);
+    }
+
+    fn get(&self) -> MigrationPhase {
+        match self.0.load(Ordering::SeqCst) {
+            1 => MigrationPhase::Schema,
+            2 => MigrationPhase::Journal,
+            _ => MigrationPhase::Data,
+        }
+    }
+}
+
+/// The journal table holzi writes after a migration (data-model.md).
+pub const MIGRATION_JOURNAL: &str = "extension_migrations_applied_no_sync";
+
+/// SQLite's own tables and functions it uses while it carries out a schema change.
+const SCHEMA_TABLES: &[&str] = &[
+    "sqlite_master",
+    "sqlite_schema",
+    "sqlite_sequence",
+    "sqlite_temp_master",
+];
+const SCHEMA_FUNCTIONS: &[&str] = &[
+    "sqlite_rename_table",
+    "sqlite_rename_test",
+    "sqlite_rename_column",
+    "sqlite_rename_quotefix",
+    "sqlite_drop_column",
+];
+
+/// The authorizer of migrations (contracts/sql-policy.md §Authorizer im Migrationsprofil): schema
+/// changes and data of the own tables (and the `__new_` tables of a rebuild) only; SQLite's schema
+/// tables only while a checked schema step runs; the journal only in the journal phase.
+pub fn migration(own: TablePrefix, phase: Arc<PhaseCell>) -> SqlAuthorizer {
+    Arc::new(move |context: &AuthContext<'_>| {
+        let phase = phase.get();
+        let mine = |table: &str| own_or_rebuild(table, &own);
+        if phase == MigrationPhase::Journal {
+            return allow(
+                matches!(
+                    context.action,
+                    AuthAction::Insert { table_name } if table_name.eq_ignore_ascii_case(MIGRATION_JOURNAL)
+                ) && in_main(context),
+            );
+        }
+        let schema = phase == MigrationPhase::Schema;
+        let schema_table =
+            |table: &str| schema && SCHEMA_TABLES.contains(&table.to_ascii_lowercase().as_str());
+        if let Some(accessor) = context.accessor {
+            let table = trigger_table(accessor);
+            let allowed = table.is_some_and(|t| mine(&t) || t.starts_with("haex_"));
+            if !allowed {
+                return Authorization::Deny;
+            }
+            return allow(match context.action {
+                AuthAction::Select => true,
+                AuthAction::Function { function_name } => {
+                    function_allowed(function_name)
+                        || TRIGGER_FUNCTIONS.contains(&function_name.to_ascii_lowercase().as_str())
+                }
+                AuthAction::Read { table_name, .. }
+                | AuthAction::Insert { table_name }
+                | AuthAction::Update { table_name, .. }
+                | AuthAction::Delete { table_name } => {
+                    in_main(context)
+                        && (mine(table_name)
+                            || table_name.to_ascii_lowercase().starts_with("haex_"))
+                }
+                _ => false,
+            });
+        }
+        allow(match context.action {
+            AuthAction::Select | AuthAction::Recursive => true,
+            AuthAction::Function { function_name } => {
+                function_allowed(function_name)
+                    || (schema
+                        && SCHEMA_FUNCTIONS.contains(&function_name.to_ascii_lowercase().as_str()))
+            }
+            AuthAction::CreateTable { table_name }
+            | AuthAction::DropTable { table_name }
+            | AuthAction::AlterTable { table_name, .. }
+            | AuthAction::CreateIndex { table_name, .. }
+            | AuthAction::DropIndex { table_name, .. } => schema && mine(table_name),
+            AuthAction::DropTrigger {
+                trigger_name,
+                table_name,
+            } => {
+                schema
+                    && mine(table_name)
+                    && trigger_name.to_ascii_lowercase().starts_with("z_dirty_")
+            }
+            AuthAction::Reindex { .. } => schema,
+            AuthAction::Read { table_name, .. }
+                if TABLE_FUNCTIONS.contains(&table_name.to_ascii_lowercase().as_str()) =>
+            {
+                true
+            }
+            AuthAction::Read { table_name, .. }
+            | AuthAction::Insert { table_name }
+            | AuthAction::Update { table_name, .. }
+            | AuthAction::Delete { table_name } => {
+                (in_main(context) && mine(table_name)) || schema_table(table_name)
+            }
+            _ => false,
+        })
     })
 }
 

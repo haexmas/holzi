@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use uuid::Uuid;
 
 use super::bridge::frames::FrameRegistry;
+use super::permissions::prompts::PermissionState;
 use super::registry::start::Started;
 
 /// What holzi's window reports about itself for `extension_context_get`.
@@ -30,11 +31,30 @@ impl Default for HostContext {
 #[derive(Default)]
 pub struct ExtensionHost {
     pub frames: FrameRegistry,
+    /// Open permission questions and decisions held in memory (US3).
+    pub permissions: PermissionState,
     /// Entry and Content-Security-Policy per bundle started in this process.
     started: Mutex<HashMap<Uuid, Arc<Started>>>,
     context: Mutex<HostContext>,
     /// Open confirmation dialogs by request id: the frame that asked and where the answer goes.
     dialogs: Mutex<HashMap<String, (String, Sender<bool>)>>,
+    /// Running SQL calls per extension (limit `max_concurrent`).
+    running_sql: Arc<Mutex<HashMap<Uuid, u64>>>,
+}
+
+/// A running SQL call; dropping it frees its place.
+pub struct SqlSlot {
+    running: Arc<Mutex<HashMap<Uuid, u64>>>,
+    extension_id: Uuid,
+}
+
+impl Drop for SqlSlot {
+    fn drop(&mut self) {
+        let mut running = self.running.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(count) = running.get_mut(&self.extension_id) {
+            *count = count.saturating_sub(1);
+        }
+    }
 }
 
 impl ExtensionHost {
@@ -99,5 +119,23 @@ impl ExtensionHost {
     /// Ends the dialogs of a closed frame: their calls answer `false`.
     pub fn drop_dialogs_of(&self, frame: &str) {
         self.dialogs().retain(|_, (f, _)| f != frame);
+    }
+
+    /// A place for one more SQL call of `extension_id`, or `None` while `max` are running. Other
+    /// extensions are not affected.
+    pub fn enter_sql(&self, extension_id: Uuid, max: u64) -> Option<SqlSlot> {
+        let mut running = self
+            .running_sql
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        let count = running.entry(extension_id).or_insert(0);
+        if *count >= max {
+            return None;
+        }
+        *count += 1;
+        Some(SqlSlot {
+            running: Arc::clone(&self.running_sql),
+            extension_id,
+        })
     }
 }

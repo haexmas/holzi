@@ -6,6 +6,8 @@
 pub mod ast_check;
 pub mod authorizer;
 pub mod exec;
+pub mod migrate;
+pub mod migrate_rules;
 pub mod parse;
 pub mod policy;
 pub mod values;

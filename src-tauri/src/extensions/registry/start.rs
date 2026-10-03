@@ -9,7 +9,9 @@ use super::status::{self, DeviceStatus};
 use crate::error::{HolziError, Result};
 use crate::extensions::bundle::store::{verify_stored_bundle, StoredBundleState};
 use crate::extensions::bundle::Manifest;
+use crate::extensions::ids::TablePrefix;
 use crate::extensions::protocol::{csp, prefix};
+use crate::extensions::sql::migrate::{apply_pending, MigrationError};
 use crate::storage::query::Query;
 use crate::vault_gate::VaultDb;
 
@@ -49,6 +51,16 @@ fn not_ready(status: DeviceStatus) -> HolziError {
     }
 }
 
+/// The error kind stored in the device status; no data of the extension.
+fn migration_error_kind(error: &MigrationError) -> &'static str {
+    match error {
+        MigrationError::Changed { .. } => "migration_changed",
+        MigrationError::Refused { .. } => "migration_refused",
+        MigrationError::Failed { .. } => "migration_failed",
+        MigrationError::Unavailable => "database_unavailable",
+    }
+}
+
 /// Checks and prepares `extension_id` on `device`. Blocking: run it on a blocking thread.
 pub fn start(db: &VaultDb, extension_id: Uuid, device: Uuid, now_ms: i64) -> Result<Started> {
     let checked = db.read_blocking(move |q| {
@@ -79,12 +91,29 @@ pub fn start(db: &VaultDb, extension_id: Uuid, device: Uuid, now_ms: i64) -> Res
         ),
         Some((bundle_id, StoredBundleState::Ready(bundle))) => {
             let manifest = Manifest::from_verified(&bundle)?;
-            let started = Started {
-                bundle_id,
-                entry: manifest.entry,
-                csp: csp::for_bundle(&bundle, &prefix(extension_id)),
+            let own = TablePrefix {
+                public_key: manifest.public_key.clone(),
+                name: manifest.name.clone(),
             };
-            (DeviceStatus::Ready, Some(bundle_id), None, Some(started))
+            match apply_pending(db, extension_id, &own, now_ms) {
+                Ok(_) => {
+                    let started = Started {
+                        bundle_id,
+                        entry: manifest.entry,
+                        csp: csp::for_bundle(&bundle, &prefix(extension_id)),
+                    };
+                    (DeviceStatus::Ready, Some(bundle_id), None, Some(started))
+                }
+                Err(error) => {
+                    log::warn!("extension {extension_id}: migrations failed: {error:?}");
+                    (
+                        DeviceStatus::MigrationFailed,
+                        Some(bundle_id),
+                        Some(migration_error_kind(&error).to_owned()),
+                        None,
+                    )
+                }
+            }
         }
     };
     db.write_blocking(move |tx| {
