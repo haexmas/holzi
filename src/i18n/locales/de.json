@@ -607,6 +607,22 @@
       "notMain": "Nur ein Hauptgerät kann Anfragen beantworten.",
       "copyNotice": "Diese Vault-Datei ist die Kopie eines Hauptgeräts. Dieses Gerät ist jetzt ebenfalls ein Hauptgerät und kann Geräte verknüpfen, aufnehmen und entfernen.",
       "dismiss": "Verstanden"
+    },
+    "appearance": {
+      "preset": {
+        "teal": "Blaugrün",
+        "blue": "Blau",
+        "violet": "Violett",
+        "pink": "Rosa",
+        "red": "Rot",
+        "orange": "Orange",
+        "yellow": "Gelb",
+        "green": "Grün",
+        "neutral": "Neutral",
+        "warm": "Warm",
+        "cool": "Kühl",
+        "rose": "Rosé"
+      }
     }
   },
   "models": {

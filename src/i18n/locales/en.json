@@ -607,6 +607,22 @@
       "notMain": "Only a main device can answer requests.",
       "copyNotice": "This vault file is a copy of a main device. This device is now a main device too and can link, admit and remove devices.",
       "dismiss": "Got it"
+    },
+    "appearance": {
+      "preset": {
+        "teal": "Teal",
+        "blue": "Blue",
+        "violet": "Violet",
+        "pink": "Pink",
+        "red": "Red",
+        "orange": "Orange",
+        "yellow": "Yellow",
+        "green": "Green",
+        "neutral": "Neutral",
+        "warm": "Warm",
+        "cool": "Cool",
+        "rose": "Rose"
+      }
     }
   },
   "models": {
