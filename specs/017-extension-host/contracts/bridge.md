@@ -16,9 +16,11 @@ Richtung B aus ADR-0004. Protokoll des vault-sdk v3.7.0 (`src/messages.ts`, `src
 
 ## Kanal (SDK)
 
-1. Bei jedem `load` des Rahmens: alter Port zu, neuer `MessageChannel`, alle 200 ms
+1. Bei jedem neuen Dokument im Rahmen: alter Port zu, neuer `MessageChannel`, alle 200 ms
    `contentWindow.postMessage({type: "haexspace:port:init"}, "*", [port2])` bis `{type: "haexspace:port:ready"}`
-   auf `port1` kommt (höchstens 10 s, dann Fehleransicht mit „Neu laden“).
+   auf `port1` kommt (höchstens 10 s, dann Fehleransicht mit „Neu laden“). Ein neues Dokument erkennt
+   holzi am `hello {fresh: true}` des Shims (unten), nicht am `load` allein: WebKitGTK feuert `load` am
+   iframe auch für eine Hash-Navigation im Rahmen, und das SDK nimmt `port:init` nur einmal je Dokument an.
 2. Danach Anfragen `{id, method, params, timestamp}` auf dem Port; Antwort `{id, result}` oder
    `{id, error: {code, message, details?}}`.
 3. Meldungen holzi → Erweiterung: `{type, data?, timestamp, …}` auf dem Port; vor `ready` gepuffert.
@@ -30,7 +32,8 @@ Richtung B aus ADR-0004. Protokoll des vault-sdk v3.7.0 (`src/messages.ts`, `src
 
 Inline-Skript, das holzi in jedes ausgelieferte HTML-Dokument der Erweiterung einfügt (CSP-Hash). holzi
 schickt `{type: "holzi:frame:init", shortcuts: [...]}` mit einem eigenen Port; der Shim nimmt es nur von
-`window.parent` an.
+`window.parent` an. holzi schickt das Init bei jedem `load`; der Shim antwortet zuerst mit `hello {fresh}`,
+`fresh` nur beim ersten Init seines Dokuments.
 
 Der Shim läuft im JavaScript der Erweiterung; jede Nachricht auf seinem Port ist eine Eingabe der Erweiterung
 und kann gefälscht sein. `nav`, `title`, `closeGuard` und `close` wirken nur auf den eigenen Tab. `shortcut`
@@ -40,6 +43,7 @@ kann die Erweiterung damit nicht auslösen.
 
 | Shim → holzi                 | Auslöser                                    | Wirkung in holzi                         |
 | ---------------------------- | ------------------------------------------- | ---------------------------------------- |
+| `hello {fresh}`              | `holzi:frame:init`                          | bei `fresh` neuer SDK-Kanal              |
 | `nav {path, query, replace}` | `hashchange`, `popstate`                    | `useTabRouter().push/replace` (Spec 020) |
 | `title {text}`               | Änderung von `document.title`               | `useWmTab().setTitle`                    |
 | `closeGuard {active}`        | `beforeunload`-Handler registriert/entfernt | `registerCloseGuard`                     |
@@ -80,26 +84,27 @@ Fehlertexte nennen keine Tabelle, Datei oder Eintrag außerhalb der Berechtigung
 Jede Methode, die hier nicht steht, antwortet 8000. Spalte „L“ = Lieferung (research R1). Berechtigung siehe
 [permissions.md](./permissions.md).
 
-| Methode (SDK)                                                                                                       | L     | Berechtigung                            | Bemerkung                                                      |
-| ------------------------------------------------------------------------------------------------------------------- | ----- | --------------------------------------- | -------------------------------------------------------------- |
-| `extension_context_get`                                                                                             | L1    | –                                       | `{theme, locale, platform, deviceId}`                          |
-| `extension_get_info`                                                                                                | L1    | –                                       | nur der eigenen Erweiterung                                    |
-| `extension_tab_attention`                                                                                           | L1    | –                                       | `{active}`; nur für den eigenen Tab (SDK-Ergänzung aus L0)     |
-| `extension_database_query`, `extension_database_execute`                                                            | L1    | eigene Tabellen frei; fremde `database` | Parameter `sql` oder `query`; [sql-policy.md](./sql-policy.md) |
-| `extension_database_transaction`                                                                                    | L1    | wie oben                                | `{statements: [[sql, params], …]}`, ganz oder gar nicht        |
-| `extension_database_register_migrations`                                                                            | L1    | –                                       | nur Migrationen der installierten Fassung                      |
-| `extension_permissions_check_database` / `_web` / `_filesystem`                                                     | L1/L4 | –                                       | liefert Zustand, erteilt nichts                                |
-| `extension_web_storage_get_item` / `_set_item` / `_remove_item` / `_clear` / `_keys`                                | L3    | –                                       | eigener Speicher, gerätebezogen                                |
-| `extension_logging_write` / `_read`                                                                                 | L3    | –                                       | Namen von HV, eigene Einträge                                  |
-| `extension_web_fetch`, `extension_web_open`                                                                         | L4    | `web`                                   | Weiterleitungen geprüft                                        |
-| `extension_notifications_show` / `_dismiss`                                                                         | L4    | `notifications`                         |                                                                |
-| `extension_filesystem_*` (18 Methoden)                                                                              | L4    | `filesystem`                            | Dialog-Auswahl ohne Rückfrage                                  |
-| `extension_password_list` / `_read` / `_create` / `_update` / `_delete`                                             | L5    | `passwords`                             | über 034, sonst 8001                                           |
-| `extension_remote_storage_*` (9 Methoden)                                                                           | L5    | `remoteStorage`                         | über 029, sonst 8001; Verwalten nur mit Dialog                 |
-| `extension_mail_*` (11 Methoden)                                                                                    | L5    | `mail`                                  | Host und Port                                                  |
-| `extension_shell_*` (5 Methoden)                                                                                    | L5    | `shell`                                 | nur Desktop, sonst 8001                                        |
-| `extension_space_*`, `set_auth_token`                                                                               | –     | –                                       | immer 8000 (FR-061)                                            |
-| `extension_context_set`, `extension_signal_ready`, alles für Berechtigungen erteilen, Grenzwerte, Bridge-Verwaltung | –     | –                                       | gibt es nicht (FR-021), 8000                                   |
+| Methode (SDK)                                                                                                       | L     | Berechtigung                            | Bemerkung                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------- | ----- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `extension_context_get`                                                                                             | L1    | –                                       | `{theme, locale, platform, deviceId}`                                                                                                         |
+| `extension_get_info`                                                                                                | L1    | –                                       | nur der eigenen Erweiterung                                                                                                                   |
+| `extension_tab_attention`                                                                                           | L1    | –                                       | `{active}`; nur für den eigenen Tab (SDK-Ergänzung aus L0)                                                                                    |
+| `extension_dialog_confirm`                                                                                          | L1    | –                                       | `{message, title?, confirmLabel?, cancelLabel?, destructive?}` → `true`/`false`; Dialog über dem eigenen Tab, ersetzt `confirm()` (R12, T118) |
+| `extension_database_query`, `extension_database_execute`                                                            | L1    | eigene Tabellen frei; fremde `database` | Parameter `sql` oder `query`; [sql-policy.md](./sql-policy.md)                                                                                |
+| `extension_database_transaction`                                                                                    | L1    | wie oben                                | `{statements: [[sql, params], …]}`, ganz oder gar nicht                                                                                       |
+| `extension_database_register_migrations`                                                                            | L1    | –                                       | nur Migrationen der installierten Fassung                                                                                                     |
+| `extension_permissions_check_database` / `_web` / `_filesystem`                                                     | L1/L4 | –                                       | liefert Zustand, erteilt nichts                                                                                                               |
+| `extension_web_storage_get_item` / `_set_item` / `_remove_item` / `_clear` / `_keys`                                | L3    | –                                       | eigener Speicher, gerätebezogen                                                                                                               |
+| `extension_logging_write` / `_read`                                                                                 | L3    | –                                       | Namen von HV, eigene Einträge                                                                                                                 |
+| `extension_web_fetch`, `extension_web_open`                                                                         | L4    | `web`                                   | Weiterleitungen geprüft                                                                                                                       |
+| `extension_notifications_show` / `_dismiss`                                                                         | L4    | `notifications`                         |                                                                                                                                               |
+| `extension_filesystem_*` (18 Methoden)                                                                              | L4    | `filesystem`                            | Dialog-Auswahl ohne Rückfrage                                                                                                                 |
+| `extension_password_list` / `_read` / `_create` / `_update` / `_delete`                                             | L5    | `passwords`                             | über 034, sonst 8001                                                                                                                          |
+| `extension_remote_storage_*` (9 Methoden)                                                                           | L5    | `remoteStorage`                         | über 029, sonst 8001; Verwalten nur mit Dialog                                                                                                |
+| `extension_mail_*` (11 Methoden)                                                                                    | L5    | `mail`                                  | Host und Port                                                                                                                                 |
+| `extension_shell_*` (5 Methoden)                                                                                    | L5    | `shell`                                 | nur Desktop, sonst 8001                                                                                                                       |
+| `extension_space_*`, `set_auth_token`                                                                               | –     | –                                       | immer 8000 (FR-061)                                                                                                                           |
+| `extension_context_set`, `extension_signal_ready`, alles für Berechtigungen erteilen, Grenzwerte, Bridge-Verwaltung | –     | –                                       | gibt es nicht (FR-021), 8000                                                                                                                  |
 
 ## Meldungen holzi → Erweiterung
 

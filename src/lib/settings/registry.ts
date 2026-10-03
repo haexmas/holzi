@@ -6,7 +6,7 @@ import { normalizePath, type TabHistory } from '../wm/navigation.ts'
 import { matchRoute } from '../wm/routeMatch.ts'
 
 export type SettingsCategoryId =
-  'general' | 'appearance' | 'models' | 'agents' | 'federation'
+  'general' | 'appearance' | 'models' | 'agents' | 'extensions' | 'federation'
 
 export type SettingsCategory = {
   id: SettingsCategoryId
@@ -57,6 +57,7 @@ export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
   category('appearance', '/appearance', 'lucide:palette'),
   category('models', '/models', 'lucide:box'),
   category('agents', '/agents', 'lucide:bot'),
+  category('extensions', '/extensions', 'lucide:puzzle'),
   category('federation', '/federation', 'lucide:share-2'),
 ]
 
@@ -155,6 +156,10 @@ export const SETTINGS_LOCATIONS: readonly SettingsLocation[] = [
     icon: 'lucide:ban',
     overviewRow: true,
   }),
+  // Spec 017: installed extensions, installing from a file.
+  categoryLocation('extensions'),
+  // Reached from an extension's row in the list, never searched for.
+  subView('extensions.detail', 'extensions/:extensionId', 'extensions'),
   categoryLocation('federation'),
   subView('federation.link', 'federation/devices/link', 'federation', {
     icon: 'lucide:qr-code',

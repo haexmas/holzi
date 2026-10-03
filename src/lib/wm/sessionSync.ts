@@ -30,7 +30,8 @@ export type SessionPort = {
 export function createSessionSync(deps: {
   state: WmState
   histories: Map<string, TabHistory>
-  apps: readonly AppDefinition[]
+  /** The apps a restored tab may run; read at restore time, so extensions loaded by then count. */
+  apps: () => readonly AppDefinition[]
   port: SessionPort
   /** Re-syncs per-tab runtime and histories after `state` was replaced. */
   onRestored: () => void
@@ -61,7 +62,7 @@ export function createSessionSync(deps: {
           layout: { workspaces: [], windows: [], activeWorkspaceId: '' },
           histories: new Map<string, TabHistory>(),
         }
-    Object.assign(state, hydrate(layout, deps.apps, state.area))
+    Object.assign(state, hydrate(layout, deps.apps(), state.area))
     histories.clear()
     for (const [tabId, history] of saved) histories.set(tabId, history)
     deps.onRestored()

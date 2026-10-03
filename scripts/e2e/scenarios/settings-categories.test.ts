@@ -3,7 +3,14 @@ import { scenario } from '../lib/scenario.ts'
 import { createAndUnlock } from '../lib/flows.ts'
 import { isShown, settingsLocation, waitForLocation } from '../lib/settings.ts'
 
-const CATEGORIES = ['general', 'appearance', 'models', 'agents', 'federation']
+const CATEGORIES = [
+  'general',
+  'appearance',
+  'models',
+  'agents',
+  'extensions',
+  'federation',
+]
 
 // Spec 023-settings-app, quickstart S1–S3 and the launcher half of S13 (FR-001, FR-002, FR-005, FR-007,
 // FR-016): the launcher has no federation app; the settings open on "Allgemein" with the toolbar, the

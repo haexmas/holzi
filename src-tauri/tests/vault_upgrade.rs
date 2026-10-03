@@ -51,6 +51,7 @@ fn open_vault(
         migration_source: source,
         trigger_version,
         max_transaction_bytes: haex_crdt::MAX_CRDT_TRANSACTION_BYTES,
+        max_value_bytes: haex_crdt::MAX_VALUE_BYTES,
     })
     .expect("vault open")
 }

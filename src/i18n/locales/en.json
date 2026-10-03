@@ -115,7 +115,8 @@
     "apps": {
       "chat": "Chat",
       "settings": "Settings",
-      "passwords": "Passwords"
+      "passwords": "Passwords",
+      "extension": "Extension"
     },
     "launcher": {
       "lock": "Lock",
@@ -415,6 +416,10 @@
         "title": "Agents",
         "keywords": "agents delegates Claude Codex"
       },
+      "extensions": {
+        "title": "Extensions",
+        "keywords": "extension haextension app install permissions"
+      },
       "federation": {
         "title": "Federation",
         "keywords": "devices vault synchronization sync"
@@ -476,6 +481,11 @@
         },
         "remove": {
           "title": "Remove a device"
+        }
+      },
+      "extensions": {
+        "detail": {
+          "title": "Extension"
         }
       }
     },
@@ -660,6 +670,31 @@
         "field": "Invalid value in the file: {field}",
         "failed": "The import could not be saved; nothing was changed."
       }
+    },
+    "extensions": {
+      "installFromFile": "Install from file",
+      "installFromFileHint": "Add a signed extension (.xt)",
+      "installed": "Installed",
+      "none": "No extension installed yet.",
+      "version": "Version {version}",
+      "versionLabel": "Version",
+      "publisher": "Publisher key",
+      "stateHere": "On this device",
+      "notStartedHere": "Not started yet",
+      "permissions": "Permissions",
+      "noPermissions": "No permissions remembered.",
+      "status": {
+        "granted": "Allowed",
+        "ask": "Ask",
+        "denied": "Denied"
+      },
+      "temporary": "until holzi is closed",
+      "allDevices": "all devices",
+      "thisDevice": "this device",
+      "notDeclared": "not in the manifest",
+      "unreadable": "unknown, counts as absent",
+      "remove": "Remove",
+      "revoke": "Revoke"
     }
   },
   "models": {
@@ -842,6 +877,12 @@
         "cancelled": "The import was cancelled.",
         "unwritable": "The file could not be written."
       }
+    },
+    "extensions": {
+      "install": "The extension could not be installed.",
+      "notFound": "The extension does not exist (anymore).",
+      "disabled": "The extension is disabled.",
+      "notReady": "The extension is not ready on this device yet."
     }
   },
   "actions": {
@@ -1369,6 +1410,83 @@
       "deleted": "This entry was deleted on another device.",
       "reload": "Reload",
       "back": "Back"
+    }
+  },
+  "extensions": {
+    "install": {
+      "errors": {
+        "archive_too_large": "The file is too large.",
+        "archive_invalid": "The file is not a valid extension bundle.",
+        "entry_path_invalid": "The bundle contains a file name that is not allowed.",
+        "entry_duplicate": "The bundle contains a file twice.",
+        "entry_too_large": "A file in the bundle is too large.",
+        "entry_ratio": "A file in the bundle is suspiciously highly compressed.",
+        "entry_kind": "The bundle contains something other than plain files.",
+        "manifest_not_canonical": "The manifest is not in its signed form.",
+        "manifest_invalid": "The manifest is invalid.",
+        "file_mismatch": "A file was changed after signing.",
+        "public_key_mismatch": "Manifest and signature name different publishers.",
+        "signature_invalid": "The signature is invalid.",
+        "legacy_signature_format": "The bundle was signed with an old tool. Please sign it again with the current “haex” tool.",
+        "unreadable": "The file cannot be read.",
+        "downgrade_not_confirmed": "An older version is installed only after confirmation."
+      },
+      "title": "Install extension",
+      "fileType": "Extension",
+      "checking": "Checking the file …",
+      "publisher": "Publisher: {author} · key {fingerprint}",
+      "sameNameOtherPublisher": "Another extension with the same name is already installed. This one comes from a different publisher and gets its own data.",
+      "update": "Update from {from} to {to}",
+      "confirmDowngrade": "Install the older version anyway",
+      "permissions": "Permissions",
+      "thisDevice": "this device only",
+      "allDevices": "all devices",
+      "unsupported": "Not supported by holzi: {categories}",
+      "cancel": "Cancel",
+      "install": "Install"
+    },
+    "status": {
+      "transferring": "Transferring",
+      "ready": "Ready",
+      "signature_failed": "Signature broken",
+      "migration_failed": "Database change failed",
+      "disabled": "Disabled"
+    },
+    "frame": {
+      "title": "Extension",
+      "loading": "Loading extension …",
+      "failed": "The extension could not be started.",
+      "timeout": "The extension does not respond.",
+      "reload": "Reload",
+      "closeGuard": "The extension has unsaved changes."
+    },
+    "dialog": {
+      "fromExtension": "Question from the extension",
+      "confirm": "OK",
+      "cancel": "Cancel"
+    },
+    "permissions": {
+      "kinds": {
+        "database": "Data of other extensions",
+        "filesystem": "Files",
+        "web": "Internet",
+        "notifications": "Notifications",
+        "passwords": "Passwords",
+        "remoteStorage": "Remote storage",
+        "mail": "Mail",
+        "shell": "Run programs"
+      }
+    },
+    "permissionRequest": {
+      "title": "“{name}” asks for a permission",
+      "notDeclared": "This permission is not in the extension's manifest.",
+      "targetMissing": "The extension whose data is requested is not installed.",
+      "shellWarning": "Caution: with this permission the extension can run programs on this device.",
+      "remember": "Remember",
+      "allDevices": "Remember for all devices",
+      "allDevicesNote": "The permission then also holds on your other devices once they have synchronised the vault.",
+      "allow": "Allow",
+      "deny": "Deny"
     }
   }
 }

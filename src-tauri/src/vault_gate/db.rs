@@ -11,7 +11,7 @@
 use std::ops::Deref;
 use std::sync::Arc;
 
-use haex_crdt::{CrdtTransaction, Database};
+use haex_crdt::{CrdtTransaction, Database, GuardedWriteOptions, ReadOnlyConnection, SqlGuard};
 use tokio::sync::Notify;
 use tokio_util::task::task_tracker::TaskTrackerToken;
 
@@ -86,6 +86,28 @@ impl VaultDb {
         f: impl FnOnce(&mut Reader<'_, '_>) -> haex_crdt::Result<R>,
     ) -> Result<R> {
         Ok(crate::storage::query::read(&self.db, f)?)
+    }
+
+    /// [`Self::write_blocking`] with a [`SqlGuard`] around the caller's statements (spec 017:
+    /// SQL of extensions), in schema or local mode as `options` say.
+    pub fn write_guarded_blocking<R>(
+        &self,
+        guard: &SqlGuard,
+        options: GuardedWriteOptions,
+        f: impl FnOnce(&mut CrdtTransaction<'_>) -> haex_crdt::Result<R>,
+    ) -> haex_crdt::Result<R> {
+        let value = self.db.write_guarded_with(guard, options, f)?;
+        self.sync_notify.notify_one();
+        Ok(value)
+    }
+
+    /// [`Self::read_blocking`] with a [`SqlGuard`] around the caller's statements.
+    pub fn read_guarded_blocking<R>(
+        &self,
+        guard: &SqlGuard,
+        f: impl FnOnce(&ReadOnlyConnection<'_>) -> haex_crdt::Result<R>,
+    ) -> haex_crdt::Result<R> {
+        self.db.read_guarded(guard, f)
     }
 
     /// The underlying database handle, for building an owner of the vault

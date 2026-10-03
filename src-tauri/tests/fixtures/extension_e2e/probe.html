@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <title>Probe</title>
+    <script>
+      // A minimal client of the vault-sdk protocol for the e2e scenes of spec 017: it takes holzi's port
+      // on `haexspace:port:init` (only from the parent), answers `port:ready` and offers
+      // `probe.request(method, params)` and the events it received to the scenario.
+      window.probe = {
+        port: null,
+        seq: 0,
+        pending: new Map(),
+        events: [],
+        request(method, params) {
+          return new Promise((resolve) => {
+            const id = 'p' + ++this.seq
+            this.pending.set(id, resolve)
+            this.port.postMessage({ id, method, params, timestamp: Date.now() })
+          })
+        },
+      }
+      window.addEventListener('message', (event) => {
+        if (event.source !== window.parent) return
+        const data = event.data
+        if (
+          !data ||
+          data.type !== 'haexspace:port:init' ||
+          !event.ports[0] ||
+          window.probe.port
+        )
+          return
+        const port = event.ports[0]
+        window.probe.port = port
+        port.onmessage = (message) => {
+          const answer = message.data
+          if (answer && answer.id && window.probe.pending.has(answer.id)) {
+            window.probe.pending.get(answer.id)(answer)
+            window.probe.pending.delete(answer.id)
+          } else if (answer && answer.type) {
+            window.probe.events.push(answer)
+          }
+        }
+        port.postMessage({ type: 'haexspace:port:ready' })
+        document.documentElement.dataset.probeReady = '1'
+      })
+      const show = () => {
+        const place = document.getElementById('place')
+        if (place) place.textContent = location.hash || '#/'
+      }
+      window.addEventListener('hashchange', show)
+      window.addEventListener('DOMContentLoaded', show)
+    </script>
+    <script type="module" src="./probe.js"></script>
+  </head>
+  <body>
+    <h1 id="title">Probe</h1>
+    <p id="place"></p>
+    <p id="module"></p>
+    <a id="to-second" href="#/second">second</a>
+  </body>
+</html>

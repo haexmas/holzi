@@ -33,6 +33,7 @@ async fn registration_keeps_the_vault_captured_before_a_transfer() {
                         migration_source: holzi_migration_source(),
                         trigger_version: HOLZI_TRIGGER_VERSION,
                         max_transaction_bytes: haex_crdt::MAX_CRDT_TRANSACTION_BYTES,
+                        max_value_bytes: haex_crdt::MAX_VALUE_BYTES,
                     })
                     .expect("open vault"),
                 ));
@@ -140,6 +141,7 @@ async fn registration_records_capabilities_derived_from_the_local_model_id() {
                     migration_source: holzi_migration_source(),
                     trigger_version: HOLZI_TRIGGER_VERSION,
                     max_transaction_bytes: haex_crdt::MAX_CRDT_TRANSACTION_BYTES,
+                    max_value_bytes: haex_crdt::MAX_VALUE_BYTES,
                 })
                 .expect("open vault"),
             )
