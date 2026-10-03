@@ -518,15 +518,15 @@ pub(crate) fn read_roster(
         let Some(effective) = crate::sync::device_list::effective(&valid) else {
             return Ok(None);
         };
-        // Only the effective list's removals count (FR-043): a same-generation fork that lost
-        // the tie-break may remove the remaining main device, whose keys would then all look
-        // unsafe.
         let removed: Vec<_> = effective
             .list
             .removed
             .iter()
             .map(|removed| removed.device_pubkey)
             .collect();
+        // Only the effective list's removals count (FR-043): a same-generation fork that lost
+        // the tie-break may remove the remaining main device, whose keys would then all look
+        // unsafe.
         let Some(key) =
             crate::sync::content_keys::current_key_for_list(r, &removed, Some(&effective.hash))?
         else {
