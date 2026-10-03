@@ -703,7 +703,7 @@
   {
     "toolName": "settings_get",
     "actionId": "settings.get",
-    "description": "Read the current settings: device name, color scheme, default and speech models, session restore, autonomy mode and delegate deny rules. Never includes credentials.",
+    "description": "Read the current settings: device name, color scheme, appearance, default and speech models, session restore, autonomy mode and delegate deny rules. Never includes credentials.",
     "inputSchema": {
       "type": "object",
       "properties": {}
@@ -834,6 +834,141 @@
     "titles": {
       "de": "Farbschema festlegen",
       "en": "Set the color scheme"
+    }
+  },
+  {
+    "toolName": "settings_appearance_set",
+    "actionId": "settings.appearance.set",
+    "description": "Set one or more parts of the appearance (accent colour, window, container, text and component tints, window hint) for the whole vault. A choice that would make text or controls unreadable is adjusted to the nearest readable value. It applies at once.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "accent": {
+          "type": "object",
+          "description": "Either { preset: <id of a colour field> } or { custom: '#rrggbb' }. Accent presets: teal, blue, violet, pink, red, orange, yellow, green, neutral. Tint presets (window, container, text, component): neutral, warm, cool, green, violet, rose.",
+          "properties": {
+            "preset": {
+              "type": "string"
+            },
+            "custom": {
+              "type": "string",
+              "description": "A colour as #rrggbb."
+            }
+          }
+        },
+        "window": {
+          "type": "object",
+          "description": "Either { preset: <id of a colour field> } or { custom: '#rrggbb' }. Accent presets: teal, blue, violet, pink, red, orange, yellow, green, neutral. Tint presets (window, container, text, component): neutral, warm, cool, green, violet, rose.",
+          "properties": {
+            "preset": {
+              "type": "string"
+            },
+            "custom": {
+              "type": "string",
+              "description": "A colour as #rrggbb."
+            }
+          }
+        },
+        "container": {
+          "type": "object",
+          "description": "Either { preset: <id of a colour field> } or { custom: '#rrggbb' }. Accent presets: teal, blue, violet, pink, red, orange, yellow, green, neutral. Tint presets (window, container, text, component): neutral, warm, cool, green, violet, rose.",
+          "properties": {
+            "preset": {
+              "type": "string"
+            },
+            "custom": {
+              "type": "string",
+              "description": "A colour as #rrggbb."
+            }
+          }
+        },
+        "text": {
+          "type": "object",
+          "description": "Either { preset: <id of a colour field> } or { custom: '#rrggbb' }. Accent presets: teal, blue, violet, pink, red, orange, yellow, green, neutral. Tint presets (window, container, text, component): neutral, warm, cool, green, violet, rose.",
+          "properties": {
+            "preset": {
+              "type": "string"
+            },
+            "custom": {
+              "type": "string",
+              "description": "A colour as #rrggbb."
+            }
+          }
+        },
+        "component": {
+          "type": "object",
+          "description": "Either { preset: <id of a colour field> } or { custom: '#rrggbb' }. Accent presets: teal, blue, violet, pink, red, orange, yellow, green, neutral. Tint presets (window, container, text, component): neutral, warm, cool, green, violet, rose.",
+          "properties": {
+            "preset": {
+              "type": "string"
+            },
+            "custom": {
+              "type": "string",
+              "description": "A colour as #rrggbb."
+            }
+          }
+        },
+        "windowHint": {
+          "type": "boolean",
+          "description": "Whether the active window of the window manager (wm) carries a border in the accent colour."
+        }
+      }
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Darstellung festlegen",
+      "en": "Set the appearance"
+    }
+  },
+  {
+    "toolName": "settings_appearance_reset",
+    "actionId": "settings.appearance.reset",
+    "description": "Reset the whole appearance (accent, tints, window hint) of the vault to the defaults. The color scheme stays.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Darstellung zurücksetzen",
+      "en": "Reset the appearance"
+    }
+  },
+  {
+    "toolName": "settings_appearance_export",
+    "actionId": "settings.appearance.export",
+    "description": "The appearance and the color scheme of the vault as the text of an appearance file (JSON).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "effect": "read",
+    "core": false,
+    "titles": {
+      "de": "Darstellung als Datei auslesen",
+      "en": "Read the appearance as a file"
+    }
+  },
+  {
+    "toolName": "settings_appearance_import",
+    "actionId": "settings.appearance.import",
+    "description": "Apply the text of an appearance file (JSON): color scheme and appearance, all or nothing. A file with any fault changes nothing.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "file": {
+          "type": "string"
+        }
+      },
+      "required": ["file"]
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Darstellung aus Datei übernehmen",
+      "en": "Apply the appearance from a file"
     }
   },
   {

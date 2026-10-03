@@ -72,6 +72,14 @@ export function useErrorString() {
         }
         return t('errors.passwords.importFailed')
       }
+      // Spec 035 (contracts/appearance-actions.md): the appearance actions name the cause by the
+      // language key in `reason`, and the field of a refused file in `field`.
+      if (kind === 'AppearanceError') {
+        const field = (e as { field?: unknown }).field
+        return typeof reason === 'string' && te(reason)
+          ? t(reason, { field: typeof field === 'string' ? field : '' })
+          : t('settings.appearance.failed')
+      }
       if (kind === 'InvalidInput' && typeof reason === 'string') {
         if (reason.startsWith(AUTONOMY_UNAVAILABLE_PREFIX))
           return t('errors.autonomyUnavailable')

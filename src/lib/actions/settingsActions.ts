@@ -30,6 +30,47 @@ const COLOR_SCHEME_STATE: JsonSchema = {
   properties: { scheme: COLOR_SCHEME },
   required: ['scheme'],
 }
+const COLOR_CHOICE: JsonSchema = {
+  type: 'object',
+  description:
+    "Either { preset: <id of a colour field> } or { custom: '#rrggbb' }. Accent presets: teal, blue, violet, pink, red, orange, yellow, green, neutral. Tint presets (window, container, text, component): neutral, warm, cool, green, violet, rose.",
+  properties: {
+    preset: { type: 'string' },
+    custom: { type: 'string', description: 'A colour as #rrggbb.' },
+  },
+}
+const APPEARANCE_PROPERTIES: Record<string, JsonSchema> = {
+  accent: COLOR_CHOICE,
+  window: COLOR_CHOICE,
+  container: COLOR_CHOICE,
+  text: COLOR_CHOICE,
+  component: COLOR_CHOICE,
+  windowHint: {
+    type: 'boolean',
+    description:
+      'Whether the active window of the window manager (wm) carries a border in the accent colour.',
+  },
+}
+const APPEARANCE_STATE: JsonSchema = {
+  type: 'object',
+  description:
+    'Appearance of the vault: accent colour, window, container, text and component tints and the window hint.',
+  properties: { v: { type: 'number' }, ...APPEARANCE_PROPERTIES },
+  required: ['v', ...Object.keys(APPEARANCE_PROPERTIES)],
+}
+const APPEARANCE_RESULT: JsonSchema = {
+  type: 'object',
+  properties: {
+    appearance: APPEARANCE_STATE,
+    adjustments: {
+      type: 'array',
+      description:
+        'Choices that had to be adjusted to stay readable in the current colour scheme.',
+      items: { type: 'object' },
+    },
+  },
+  required: ['appearance'],
+}
 const MODEL_ID: JsonSchema = {
   type: 'string',
   description: 'Installed model id (see settings.models.list).',
@@ -54,7 +95,7 @@ export const SETTINGS_ACTIONS: readonly ActionDefinition[] = [
   setting({
     id: 'settings.get',
     description:
-      'Read the current settings: device name, color scheme, default and speech models, session restore, autonomy mode and delegate deny rules. Never includes credentials.',
+      'Read the current settings: device name, color scheme, appearance, default and speech models, session restore, autonomy mode and delegate deny rules. Never includes credentials.',
     result: ANY_OBJECT,
     scope: 'settings.read',
     effect: 'read',
@@ -183,6 +224,51 @@ export const SETTINGS_ACTIONS: readonly ActionDefinition[] = [
       required: ['scheme'],
     },
     result: COLOR_SCHEME_STATE,
+    scope: 'settings.device',
+    effect: 'write',
+  }),
+  setting({
+    id: 'settings.appearance.set',
+    description:
+      'Set one or more parts of the appearance (accent colour, window, container, text and component tints, window hint) for the whole vault. A choice that would make text or controls unreadable is adjusted to the nearest readable value. It applies at once.',
+    input: {
+      type: 'object',
+      properties: APPEARANCE_PROPERTIES,
+    },
+    result: APPEARANCE_RESULT,
+    scope: 'settings.device',
+    effect: 'write',
+  }),
+  setting({
+    id: 'settings.appearance.reset',
+    description:
+      'Reset the whole appearance (accent, tints, window hint) of the vault to the defaults. The color scheme stays.',
+    result: APPEARANCE_RESULT,
+    scope: 'settings.device',
+    effect: 'write',
+  }),
+  setting({
+    id: 'settings.appearance.export',
+    description:
+      'The appearance and the color scheme of the vault as the text of an appearance file (JSON).',
+    result: {
+      type: 'object',
+      properties: { file: { type: 'string' } },
+      required: ['file'],
+    },
+    scope: 'settings.read',
+    effect: 'read',
+  }),
+  setting({
+    id: 'settings.appearance.import',
+    description:
+      'Apply the text of an appearance file (JSON): color scheme and appearance, all or nothing. A file with any fault changes nothing.',
+    input: {
+      type: 'object',
+      properties: { file: { type: 'string' } },
+      required: ['file'],
+    },
+    result: APPEARANCE_RESULT,
     scope: 'settings.device',
     effect: 'write',
   }),

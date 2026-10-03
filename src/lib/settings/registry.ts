@@ -105,7 +105,12 @@ export const SETTINGS_LOCATIONS: readonly SettingsLocation[] = [
     'settings.alias.label',
     'settings.sessionRestore.title',
   ]),
-  categoryLocation('appearance', ['settings.colorScheme.label']),
+  categoryLocation('appearance', [
+    'settings.colorScheme.label',
+    'settings.appearance.accent',
+    'settings.appearance.window',
+    'settings.appearance.container',
+  ]),
   categoryLocation('models'),
   subView('models.default', 'models/default', 'models', {
     icon: 'lucide:star',

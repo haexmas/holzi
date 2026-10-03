@@ -64,6 +64,9 @@ e2e = ["nostr-sdk/local-relay"]
 tauri = { version = "2.12.0", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
+# Reads and writes the one file the user picks in the dialog above (spec 035: export and import of
+# the appearance); only three permissions, no scope of its own (capabilities/default.json).
+tauri-plugin-fs = "2"
 tauri-plugin-opener = "2.5.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["preserve_order"] }

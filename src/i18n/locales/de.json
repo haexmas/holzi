@@ -607,6 +607,59 @@
       "notMain": "Nur ein Hauptgerät kann Anfragen beantworten.",
       "copyNotice": "Diese Vault-Datei ist die Kopie eines Hauptgeräts. Dieses Gerät ist jetzt ebenfalls ein Hauptgerät und kann Geräte verknüpfen, aufnehmen und entfernen.",
       "dismiss": "Verstanden"
+    },
+    "appearance": {
+      "preset": {
+        "teal": "Blaugrün",
+        "blue": "Blau",
+        "violet": "Violett",
+        "pink": "Rosa",
+        "red": "Rot",
+        "orange": "Orange",
+        "yellow": "Gelb",
+        "green": "Grün",
+        "neutral": "Neutral",
+        "warm": "Warm",
+        "cool": "Kühl",
+        "rose": "Rosé"
+      },
+      "accent": "Akzentfarbe",
+      "window": "Fensterhintergrund",
+      "container": "Container-Hintergrund",
+      "containerHint": "Für Seitenleisten, Listen, Karten und Dialoge",
+      "text": "Texttönung",
+      "textHint": "Grundlage der Textfarben der Oberfläche",
+      "component": "Komponententönung",
+      "componentHint": "Für Schaltflächen, Suchfelder und Eingabefelder",
+      "windowHint": "Akzentfarbe als Hinweis für das aktive Fenster",
+      "swatches": "Farbfelder",
+      "custom": "Eigene Farbe",
+      "addCustom": "Eigene Farbe wählen",
+      "hex": "Farbwert (#rrggbb)",
+      "adjusted": "angepasst",
+      "reasons": {
+        "accent-contrast": "Helligkeit angepasst, damit Text auf der Farbe lesbar bleibt.",
+        "text-contrast": "Sättigung oder Helligkeit angepasst, damit der Text lesbar bleibt."
+      },
+      "reset": "Auf Standard zurücksetzen",
+      "resetTitle": "Darstellung zurücksetzen?",
+      "resetBody": "Akzent, Hintergründe, Tönungen und Fensterhinweis gehen auf die Standardwerte zurück. Das Farbschema bleibt.",
+      "resetConfirm": "Zurücksetzen",
+      "cancel": "Abbrechen",
+      "importFile": "Importieren",
+      "exportFile": "Exportieren",
+      "imported": "Darstellung importiert.",
+      "exported": "Darstellung gespeichert.",
+      "saved": "Gespeichert.",
+      "invalid": "Ungültige Auswahl: {field}",
+      "failed": "Die Darstellung konnte nicht gespeichert werden.",
+      "import": {
+        "notJson": "Die Datei ist kein gültiges JSON oder größer als 16 KiB.",
+        "notAppearance": "Die Datei ist keine Darstellungsdatei.",
+        "version": "Diese Version der Darstellungsdatei wird nicht unterstützt.",
+        "field": "Ungültiger Wert in der Datei: {field}",
+        "failed": "Der Import konnte nicht gespeichert werden; nichts wurde geändert."
+      }
     }
   },
   "models": {
@@ -911,7 +964,11 @@
         "set": "Sitzung wiederherstellen ein- oder ausschalten"
       },
       "appearance": {
-        "setColorScheme": "Farbschema festlegen"
+        "setColorScheme": "Farbschema festlegen",
+        "set": "Darstellung festlegen",
+        "reset": "Darstellung zurücksetzen",
+        "export": "Darstellung als Datei auslesen",
+        "import": "Darstellung aus Datei übernehmen"
       },
       "devices": {
         "list": "Geräte der Vault auflisten",

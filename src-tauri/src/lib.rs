@@ -173,6 +173,7 @@ pub fn run() {
     let builder = builder.manage(sync::link::join_task::LinkJoin::default());
     builder
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         // Password manager (spec 034, research R9): used from Rust only, so a copied secret and its
         // timed clearing never pass through the webview. No JS permission is granted for it.
         .plugin(tauri_plugin_clipboard_manager::init())
