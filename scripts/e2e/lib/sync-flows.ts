@@ -3,7 +3,7 @@
 // way a user does it: the first by creating a vault, the others by linking with a code (user story 5).
 import type { Page } from './page.ts'
 import type { ScenarioContext } from './scenario.ts'
-import { unwrap, waitForPath } from './flows.ts'
+import { unwrap, waitForWorkspace } from './flows.ts'
 import type { FlowInstance } from './flows.ts'
 
 /** Devices on one machine find each other by address; the iroh relays would need a network, so they
@@ -49,7 +49,7 @@ export async function openVault(
     }),
   )
   await page.navigate(`tauri://localhost/workspace/${vaultName}`)
-  await waitForPath(page, '/workspace/')
+  await waitForWorkspace(page)
 }
 
 /** Creates the vault and points it at the test relay only (the servers apply at the next opening). */

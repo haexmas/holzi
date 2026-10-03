@@ -1,7 +1,7 @@
 // What a scenario reads and does in the device view of the settings ("Föderation") and in the server
 // lists, through the hooks the interface has (contracts/settings-app.md, spec 024). Scenario-facing:
 // no platform specifics, only the page.
-import { waitForPath } from './flows.ts'
+import { waitForWorkspace } from './flows.ts'
 import type { FlowInstance } from './flows.ts'
 import type { Device } from './group.ts'
 import {
@@ -182,7 +182,7 @@ export async function openLinkedVault(
   await page.waitForDisplayed('#unlock-passphrase')
   await page.type('#unlock-passphrase', passphrase)
   await page.click('[type="submit"][form="unlock-form"]')
-  await waitForPath(page, '/workspace/')
+  await waitForWorkspace(page)
 }
 
 /** The titles the chat's thread list shows (hook `chat-thread`), in the order shown. */

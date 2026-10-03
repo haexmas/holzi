@@ -51,7 +51,9 @@ describe('createAndUnlock', () => {
         assert.match(script, /"name":"test"/)
         return { value: { ok: true, data: { info: { name: 'test' } } } }
       }
-      return { value: '/workspace/test' }
+      return {
+        value: script.includes('sessionRestored') ? true : '/workspace/test',
+      }
     })
     await createAndUnlock(instance, { name: 'test' })
     assert.deepEqual(steps, [['unlocked', undefined]])
@@ -74,10 +76,14 @@ describe('createAndUnlock', () => {
   })
 
   it('percent-encodes a name with special characters in the workspace URL', async () => {
-    driver.onExecute((kind) =>
+    driver.onExecute((kind, script) =>
       kind === 'async'
         ? { value: { ok: true, data: {} } }
-        : { value: '/workspace/a%22b' },
+        : {
+            value: script.includes('sessionRestored')
+              ? true
+              : '/workspace/a%22b',
+          },
     )
     await createAndUnlock(instance, { name: 'a"b' })
     const nav = driver.requests.filter((r) => r.path.endsWith('/url')).pop()

@@ -1,4 +1,4 @@
-import { computed, reactive, toRefs } from 'vue'
+import { computed, reactive, ref, toRefs } from 'vue'
 import { defineStore } from 'pinia'
 import {
   getAppDefinition,
@@ -100,6 +100,18 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
     port: useWmSession(),
     onRestored: syncTabRuntime,
   })
+
+  /** Whether `restoreSessionAsync` has run. Until then a window opened is replaced by the restored
+   * session (or the empty start); tests wait for this before they open one. */
+  const sessionRestored = ref(false)
+
+  async function restoreSessionAsync(): Promise<void> {
+    try {
+      await session.restoreAsync()
+    } finally {
+      sessionRestored.value = true
+    }
+  }
 
   /** Retains runtime state for live tabs and initializes newly opened tabs. */
   function syncTabRuntime() {
@@ -402,7 +414,8 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
     ...toRefs(state),
     apps,
     windowsInActiveWorkspace,
-    restoreSessionAsync: session.restoreAsync,
+    restoreSessionAsync,
+    sessionRestored,
     setSessionRestore,
     getSessionRestore: session.getRestoreAsync,
     runtimeFor,
