@@ -15,7 +15,7 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use super::ast_check::{check, cte_names, RequiredAccess};
+use super::ast_check::{check, cte_names};
 use super::authorizer;
 use super::parse::{parse_one, returns_rows, violation};
 use super::policy::SqlPolicy;
@@ -133,8 +133,9 @@ pub struct Checked {
     params: Vec<SqlValue>,
     returns_rows: bool,
     is_query: bool,
-    access: RequiredAccess,
     ctes: HashSet<String>,
+    /// Lower-case names of the tables the statement may write (the authorizer's view).
+    writable: HashSet<String>,
 }
 
 fn full_name(table: &crate::extensions::ids::ExtensionTable) -> String {
@@ -193,14 +194,36 @@ pub fn prepare(
         returns_rows: returns_rows(&statement),
         is_query: matches!(statement, haex_crdt::sqlparser::ast::Statement::Query(_)),
         ctes: cte_names(&statement),
-        access,
+        writable: access.writes.iter().map(full_name).collect(),
     })
+}
+
+/// The authorizer alone, for the bypass corpus (T052): the statement skips the pre-check and the
+/// permission decision; only what the authorizer needs is taken from the syntax tree.
+#[cfg(test)]
+pub(crate) fn prepare_unchecked(sql: &str, params: Vec<SqlValue>) -> Checked {
+    use haex_crdt::sqlparser::dialect::SQLiteDialect;
+    use haex_crdt::sqlparser::parser::Parser;
+    let parsed = Parser::parse_sql(&SQLiteDialect {}, sql).ok();
+    let only = parsed.as_ref().filter(|s| s.len() == 1).map(|s| &s[0]);
+    Checked {
+        sql: sql.to_owned(),
+        params,
+        returns_rows: only.is_some_and(returns_rows),
+        is_query: matches!(only, Some(haex_crdt::sqlparser::ast::Statement::Query(_))),
+        ctes: only.map(cte_names).unwrap_or_default(),
+        writable: only
+            .and_then(|s| super::ast_check::write_targets(s).ok())
+            .unwrap_or_default()
+            .into_iter()
+            .collect(),
+    }
 }
 
 fn guard(policy: Arc<SqlPolicy>, checked: &[Checked], limits: &Limits) -> SqlGuard {
     let writable: HashSet<String> = checked
         .iter()
-        .flat_map(|c| c.access.writes.iter().map(full_name))
+        .flat_map(|c| c.writable.iter().cloned())
         .collect();
     let ctes: HashSet<String> = checked
         .iter()

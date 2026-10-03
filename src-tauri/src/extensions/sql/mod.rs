@@ -177,5 +177,9 @@ pub fn function_allowed(name: &str) -> bool {
 }
 
 #[cfg(test)]
+mod bypass_tests;
+#[cfg(test)]
+pub(crate) mod test_support;
+#[cfg(test)]
 #[path = "mod_tests.rs"]
 mod tests;

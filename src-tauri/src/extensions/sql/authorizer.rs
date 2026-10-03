@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use haex_crdt::{AuthAction, AuthContext, Authorization, SqlAuthorizer};
 
-use super::function_allowed;
 use super::policy::SqlPolicy;
+use super::{function_allowed, TABLE_FUNCTIONS};
 
 fn allow(yes: bool) -> Authorization {
     if yes {
@@ -93,6 +93,13 @@ pub fn runtime(
             AuthAction::Function { function_name } => allow(function_allowed(function_name)),
             AuthAction::Read { table_name, .. } if context.database_name.is_none() => {
                 allow(ctes.contains(&table_name.to_ascii_lowercase()))
+            }
+            // `json_each` and friends are eponymous tables; what their arguments read is
+            // judged on its own.
+            AuthAction::Read { table_name, .. }
+                if TABLE_FUNCTIONS.contains(&table_name.to_ascii_lowercase().as_str()) =>
+            {
+                Authorization::Allow
             }
             AuthAction::Read { table_name, .. } => {
                 allow(in_main(context) && policy.allows(table_name, false))
