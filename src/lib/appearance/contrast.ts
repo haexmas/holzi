@@ -6,12 +6,14 @@ import { oklchToRgb, type Oklch, type Rgb } from './oklch.ts'
 export const TEXT_MIN = 4.5
 export const CONTROL_MIN = 3
 
+/** WCAG relative luminance of gamma-encoded sRGB channels in 0..1. */
 export function luminance([red, green, blue]: Rgb): number {
   const linear = (value: number) =>
     value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
   return 0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue)
 }
 
+/** WCAG contrast ratio of two sRGB colours, from 1 (identical luminance) to 21 (black/white). */
 export function contrastRgb(a: Rgb, b: Rgb): number {
   const first = luminance(a)
   const second = luminance(b)

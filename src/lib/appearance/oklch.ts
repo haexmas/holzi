@@ -9,10 +9,12 @@ export type Rgb = [number, number, number]
 const toDegrees = (radians: number) => (radians * 180) / Math.PI
 const toRadians = (degrees: number) => (degrees * Math.PI) / 180
 
+/** Decodes a gamma-encoded sRGB channel to linear light. */
 function srgbToLinear(value: number): number {
   return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
 }
 
+/** Encodes a linear-light channel with the sRGB transfer function. */
 function linearToSrgb(value: number): number {
   return value <= 0.0031308 ? 12.92 * value : 1.055 * value ** (1 / 2.4) - 0.055
 }
@@ -71,6 +73,7 @@ export function fitTint(color: Oklch, maxShift = 0.03): Oklch {
   return mapToGamut(color)
 }
 
+/** Maps OKLCH into the sRGB gamut and returns gamma-encoded channels clamped to 0..1. */
 export function oklchToRgb(color: Oklch): Rgb {
   const mapped = mapToGamut(color)
   const linear = oklchToLinear(mapped)
@@ -79,6 +82,7 @@ export function oklchToRgb(color: Oklch): Rgb {
   ) as Rgb
 }
 
+/** Converts gamma-encoded sRGB channels in 0..1 to OKLCH, using hue 0 for near-greys. */
 export function rgbToOklch([red, green, blue]: Rgb): Oklch {
   const r = srgbToLinear(red)
   const g = srgbToLinear(green)
@@ -96,10 +100,12 @@ export function rgbToOklch([red, green, blue]: Rgb): Oklch {
 
 const HEX = /^#[0-9a-fA-F]{6}$/
 
+/** Whether a value is a #RRGGBB colour, accepting either letter case. */
 export function isHexColor(value: unknown): value is string {
   return typeof value === 'string' && HEX.test(value)
 }
 
+/** Parses #RRGGBB into gamma-encoded sRGB channels in 0..1, or returns null for invalid input. */
 export function parseHex(hex: string): Rgb | null {
   if (!isHexColor(hex)) return null
   return [1, 3, 5].map(
@@ -107,6 +113,7 @@ export function parseHex(hex: string): Rgb | null {
   ) as Rgb
 }
 
+/** Clamps and rounds gamma-encoded sRGB channels to bytes, returning lower-case #RRGGBB. */
 export function toHex(rgb: Rgb): string {
   return `#${rgb
     .map((channel) =>
@@ -127,6 +134,7 @@ export function formatOklch({ l, c, h }: Oklch): string {
 
 const OKLCH = /^oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\)$/
 
+/** Reads the unitless oklch(L C H) token format; returns null when the syntax does not match. */
 export function parseOklch(text: string): Oklch | null {
   const match = OKLCH.exec(text.trim())
   if (!match) return null

@@ -61,6 +61,7 @@ const WHITE: Oklch = { l: 0.985, c: 0, h: 0 }
 const BLACK: Oklch = { l: 0.145, c: 0, h: 0 }
 const ACCENT_START: Record<Scheme, number> = { light: 0.65, dark: 0.7 }
 
+/** Resolves a tint's hue and capped chroma; an invalid choice falls back to a neutral tint. */
 function tintOf(
   control: Exclude<Control, 'accent'>,
   choice: ColorChoice,
@@ -77,6 +78,7 @@ function tintOf(
   return { h, c: Math.min(c, cap) }
 }
 
+/** Resolves the initial accent, using scheme lightness for presets and a teal fallback. */
 function accentStart(choice: ColorChoice, scheme: Scheme): Oklch {
   if ('preset' in choice) {
     const preset =
@@ -87,6 +89,10 @@ function accentStart(choice: ColorChoice, scheme: Scheme): Oklch {
   return rgb ? rgbToOklch(rgb) : { l: ACCENT_START[scheme], c: 0.17, h: 180 }
 }
 
+/**
+ * Derives CSS tokens for a resolved scheme without changing the stored appearance. Adjusts tints
+ * and accent lightness for contrast and returns adjustment notices alongside the token strings.
+ */
 export function derive(appearance: Appearance, scheme: Scheme): Derived {
   const adjustments: Adjustment[] = []
   const note = (adjustment: Adjustment) => {
