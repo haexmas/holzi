@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict'
 import { scenario } from '../lib/scenario.ts'
-import { unwrap } from '../lib/flows.ts'
 import { createEntry, openPasswords } from '../lib/passwords.ts'
-import { KEY } from '../lib/settings.ts'
+import { KEY, setSessionRestore } from '../lib/settings.ts'
 
 const MARKER = 'SECRET-MARKER-E2E-RESTORE'
 
@@ -15,10 +14,7 @@ scenario('passwords-session-restore', { timeoutMs: 240_000 }, async (ctx) => {
   const device = group.device('anna/laptop')
   const page = device.page
 
-  unwrap(
-    'wm_session_restore_set',
-    await page.invoke('wm_session_restore_set', { args: { enabled: true } }),
-  )
+  await setSessionRestore(page, true)
   const id = await createEntry(page, {
     title: 'Restore me',
     username: 'anna',

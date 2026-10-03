@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { scenario } from '../lib/scenario.ts'
-import { unwrap } from '../lib/flows.ts'
+import { setSessionRestore } from '../lib/settings.ts'
 import {
   backInTab,
   fixture,
@@ -20,10 +20,7 @@ scenario('extension-install-open', { timeoutMs: 300_000 }, async (ctx) => {
   const group = await ctx.group({ users: { anna: ['laptop'] } })
   const device = group.device('anna/laptop')
   const page = device.page
-  unwrap(
-    'wm_session_restore_set',
-    await page.invoke('wm_session_restore_set', { args: { enabled: true } }),
-  )
+  await setSessionRestore(page, true)
 
   assert.equal(
     await refusal(page, fixture('vectors', 'bad-moved-content')),
