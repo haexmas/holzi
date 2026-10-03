@@ -217,6 +217,18 @@ this device first and marked "Dieses Gerät", the others by Gerätename, unnamed
 ones as "Unbenanntes Gerät". Other devices appear once the sync exists or in a
 copied vault; "zuletzt online" waits for the sync spec.
 
+**Darstellung (appearance) / Tönung / Farbfeld / Fensterhinweis** (spec 035):
+**Darstellung** is the category and the set of all look settings of a vault: the
+colour scheme (hell/dunkel/automatisch) and the appearance (`appearance.theme`,
+one synced value for the whole vault). A **Farbfeld** (colour field) is one
+choice in a row: a preset or a custom colour (`#rrggbb`). A **Tönung** (tint)
+is the hue and capped chroma of a colour field applied to the default surfaces
+of the current scheme (window, container, component, text); the accent is no
+tint but a colour whose lightness is derived for readability ("angepasst"
+tells the user when). The **Fensterhinweis** (window hint) draws the active
+window's border in the accent colour. "Sitzung" and "Window Manager (wm)" keep
+their meaning; the appearance is not part of a Sitzung.
+
 ### Sync zwischen eigenen Geräten (spec 024)
 
 **Hauptgerät (main device)**:

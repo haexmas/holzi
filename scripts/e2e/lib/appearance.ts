@@ -63,3 +63,21 @@ export async function themeLightness(
   const match = /oklch\(([\d.]+) /.exec(await theme(instance, name))
   return match ? Number(match[1]) : null
 }
+
+/** Whether the border of the window with this id has the colour of `--primary`: both are measured as
+ * the engine computes them, through a probe with the same border, so the notation does not matter. */
+export async function windowBorderIsAccent(
+  instance: FlowInstance,
+  windowId: string,
+): Promise<boolean> {
+  return instance.exec<boolean>(
+    `const frame = document.querySelector('[data-wm-window-id="' + arguments[0] + '"]')
+     const probe = document.createElement('div')
+     probe.style.cssText = 'border: 1px solid var(--primary); position: absolute; visibility: hidden'
+     document.body.append(probe)
+     const accent = getComputedStyle(probe).borderTopColor
+     probe.remove()
+     return getComputedStyle(frame).borderTopColor === accent`,
+    [windowId],
+  )
+}

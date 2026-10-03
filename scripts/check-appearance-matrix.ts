@@ -84,7 +84,13 @@ test('the defaults reach the limits in both schemes', () => {
   assert.deepEqual(failures, [])
 })
 
-for (const control of ['accent', 'window', 'container'] as const) {
+for (const control of [
+  'accent',
+  'window',
+  'container',
+  'text',
+  'component',
+] as const) {
   test(`every ${control} colour field and extreme custom colour reaches the limits`, () => {
     const failures: string[] = []
     for (const choice of choicesFor(control)) {
@@ -101,6 +107,67 @@ for (const control of ['accent', 'window', 'container'] as const) {
     assert.deepEqual(failures, [])
   })
 }
+
+test('all four tints at the extreme at once, for three hues, keep every pair readable', () => {
+  const failures: string[] = []
+  const stops = ['#ff0000', '#00ff00', '#0000ff']
+  const grey = ['#000000', '#ffffff']
+  for (const accent of [...stops, ...grey]) {
+    for (const tint of [...stops, ...grey, '#ffff00', '#ff00ff']) {
+      for (const scheme of SCHEMES) {
+        failures.push(
+          ...measure(
+            {
+              ...DEFAULT_APPEARANCE,
+              accent: { custom: accent },
+              window: { custom: tint },
+              container: { custom: tint },
+              text: { custom: tint },
+              component: { custom: tint },
+            },
+            scheme,
+            `all ${tint} accent ${accent}`,
+          ),
+        )
+      }
+    }
+  }
+  assert.deepEqual(failures, [])
+})
+
+test('text and component tints change only their own tokens', () => {
+  const base = derive(DEFAULT_APPEARANCE, 'light').tokens
+  const warmText = derive(
+    { ...DEFAULT_APPEARANCE, text: { preset: 'warm' } },
+    'light',
+  ).tokens
+  assert.notEqual(warmText.foreground, base.foreground)
+  assert.equal(warmText.background, base.background)
+  assert.equal(warmText.muted, base.muted)
+  const coolComponent = derive(
+    { ...DEFAULT_APPEARANCE, component: { preset: 'cool' } },
+    'light',
+  ).tokens
+  for (const name of ['secondary', 'muted', 'accent', 'input', 'border']) {
+    assert.notEqual(
+      coolComponent[name as TokenName],
+      base[name as TokenName],
+      name,
+    )
+  }
+  assert.equal(coolComponent.background, base.background)
+  assert.equal(coolComponent.card, base.card)
+  assert.equal(coolComponent.foreground, base.foreground)
+})
+
+test('the window hint is not part of the tokens', () => {
+  for (const scheme of SCHEMES) {
+    assert.deepEqual(
+      derive({ ...DEFAULT_APPEARANCE, windowHint: true }, scheme),
+      derive(DEFAULT_APPEARANCE, scheme),
+    )
+  }
+})
 
 test('an accent preset reports no adjustment; a custom one reports its lightness change', () => {
   for (const preset of ACCENT_PRESETS) {

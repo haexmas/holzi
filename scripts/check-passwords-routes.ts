@@ -146,13 +146,17 @@ test('a place that would carry an entry title is refused before it reaches a his
   }
 })
 
-// The locale files stay in lockstep for everything the password manager introduces (T098): every
-// key under these prefixes exists in German and English, and no value is empty.
+// The locale files stay in lockstep for everything the password manager introduces (T098) and for the
+// fields and the appearance (spec 035, T045): every key under these prefixes exists in German and
+// English, and no value is empty.
 const LOCALE_PREFIXES = [
   'passwords',
   'wm.passwords',
   'actions.passwords',
   'errors.passwords',
+  'fields',
+  'settings.appearance',
+  'actions.settings.appearance',
 ]
 
 function flatten(value: unknown, prefix = ''): Map<string, string> {
@@ -184,7 +188,10 @@ test('the German and English texts of the password manager have the same keys', 
     )
   const deKeys = [...de.keys()].filter(owned).sort()
   const enKeys = [...en.keys()].filter(owned).sort()
-  assert.ok(deKeys.length > 100, 'the password manager has its texts')
+  assert.ok(
+    deKeys.length > 100,
+    'the password manager, fields and appearance have their texts',
+  )
   assert.deepEqual(
     deKeys.filter((key) => !en.has(key)),
     [],

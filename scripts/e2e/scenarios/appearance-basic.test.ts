@@ -7,6 +7,7 @@ import {
   theme,
   themeHue,
   themeLightness,
+  windowBorderIsAccent,
 } from '../lib/appearance.ts'
 import {
   KEY,
@@ -14,6 +15,7 @@ import {
   runAction,
   textContrast,
   waitForLocation,
+  wmSnapshot,
 } from '../lib/settings.ts'
 
 // Spec 035-appearance-and-fields, quickstart Stage 2 (US2, US4, US5; FR-012, FR-013, FR-014, FR-017,
@@ -131,6 +133,73 @@ scenario('appearance-basic', { timeoutMs: 300_000 }, async (ctx) => {
   assert.equal(await theme(page, '--background'), afterWindow)
   assert.equal(await theme(page, '--popover'), await theme(page, '--card'))
   ctx.step('tints change only their own surfaces')
+
+  // The text tint changes the text tokens, the component tint the secondary surfaces and borders; the
+  // text on the surfaces stays readable (FR-012, FR-016).
+  const beforeTints = {
+    foreground: await theme(page, '--foreground'),
+    muted: await theme(page, '--muted'),
+    background: await theme(page, '--background'),
+  }
+  await reveal(page, 'appearance-swatch-text-violet')
+  await page.click('appearance-swatch-text-violet')
+  await ctx.waitFor(
+    'the text colour to change',
+    async () => (await theme(page, '--foreground')) !== beforeTints.foreground,
+  )
+  assert.equal(await theme(page, '--muted'), beforeTints.muted)
+  assert.equal(await theme(page, '--background'), beforeTints.background)
+  await reveal(page, 'appearance-swatch-component-green')
+  await page.click('appearance-swatch-component-green')
+  await ctx.waitFor(
+    'the component tint to change',
+    async () => (await theme(page, '--muted')) !== beforeTints.muted,
+  )
+  assert.equal(await theme(page, '--background'), beforeTints.background)
+  const faint = await textContrast(page, '[data-testid="settings-title"]')
+  assert.ok(faint >= 4.5, `the settings title: contrast ${faint.toFixed(2)}`)
+  ctx.step('text and component tints change their own tokens and stay readable')
+
+  // The window hint: only the active window carries the accent on its border (FR-024).
+  assert.ok(
+    (await runAction(page, 'wm.app.open', { appId: 'system.passwords' })).ok,
+  )
+  const windows = (await wmSnapshot(page)).windows
+  const settingsWindow = windows.find((w) =>
+    w.tabs.some((t) => t.appId === 'system.settings'),
+  )!
+  const otherWindow = windows.find((w) =>
+    w.tabs.some((t) => t.appId === 'system.passwords'),
+  )!
+  await runAction(page, 'wm.window.focus', { windowId: settingsWindow.id })
+  assert.equal(await windowBorderIsAccent(page, settingsWindow.id), false)
+  await reveal(page, 'appearance-window-hint')
+  await page.click('appearance-window-hint')
+  await ctx.waitFor(
+    'the hint to be stored',
+    async () =>
+      ((await storedAppearance(page)) as { windowHint: boolean }).windowHint,
+  )
+  await ctx.waitFor('the active window to carry the accent', async () =>
+    windowBorderIsAccent(page, settingsWindow.id),
+  )
+  assert.equal(await windowBorderIsAccent(page, otherWindow.id), false)
+  await runAction(page, 'wm.window.focus', { windowId: otherWindow.id })
+  await ctx.waitFor('the hint to move', async () =>
+    windowBorderIsAccent(page, otherWindow.id),
+  )
+  assert.equal(await windowBorderIsAccent(page, settingsWindow.id), false)
+  await runAction(page, 'wm.window.focus', { windowId: settingsWindow.id })
+  await runAction(page, 'wm.tab.close', { tabId: otherWindow.activeTabId })
+  await ctx.waitFor('the hint to be back on settings', async () =>
+    windowBorderIsAccent(page, settingsWindow.id),
+  )
+  await page.click('appearance-window-hint')
+  await ctx.waitFor(
+    'the hint to go',
+    async () => !(await windowBorderIsAccent(page, settingsWindow.id)),
+  )
+  ctx.step('the window hint marks only the active window')
 
   // Text on a primary button stays readable against it (FR-016, FR-022): the confirmation button of the
   // reset is a primary button.

@@ -110,6 +110,9 @@ export const SETTINGS_LOCATIONS: readonly SettingsLocation[] = [
     'settings.appearance.accent',
     'settings.appearance.window',
     'settings.appearance.container',
+    'settings.appearance.text',
+    'settings.appearance.component',
+    'settings.appearance.windowHint',
   ]),
   categoryLocation('models'),
   subView('models.default', 'models/default', 'models', {

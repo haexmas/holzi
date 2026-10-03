@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * The category "Darstellung" (spec 023-settings-app FR-013, spec 035-appearance-and-fields): the
- * colour scheme, then the accent colour and the backgrounds like the COSMIC dialog "Aussehen", with
+ * colour scheme, then the accent colour, the backgrounds, the text and component tints like the COSMIC dialog "Aussehen", with
  * import, export and reset. Every choice is saved as soon as it is made (no save button).
  */
 const { t } = useI18n()
@@ -41,6 +41,21 @@ const failed = (text: string) => (status.value = { kind: 'failed', text })
         @saved="saved"
         @failed="failed"
       />
+      <SettingsAppearanceColorRow
+        control="text"
+        title-key="text"
+        hint-key="textHint"
+        @saved="saved"
+        @failed="failed"
+      />
+      <SettingsAppearanceColorRow
+        control="component"
+        title-key="component"
+        hint-key="componentHint"
+        @saved="saved"
+        @failed="failed"
+      />
+      <SettingsAppearanceWindowHint @saved="saved" @failed="failed" />
     </SettingsGroup>
 
     <div class="flex flex-wrap items-center gap-2">
