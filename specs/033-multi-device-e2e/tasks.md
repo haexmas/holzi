@@ -125,7 +125,7 @@ description: 'Task list for End-to-End Tests Across Several Vaults and Devices'
 **Independent Test**: a branch with a broken sync fails the `e2e` job, names the scenario and keeps material per device.
 
 - [x] T036 [US8] The default whole-run limit of `pnpm test:e2e` rose from 600 s to 1800 s in PR B, because the sync scenarios alone now run longer than 600 s (a full local run failed at the limit). In `.github/workflows/ci.yml` check that the `e2e` job's `timeout-minutes` (45) still holds the whole suite and raise it only if the first CI run shows it is needed; keep every scenario name starting with `sync-` so `--grep sync-` runs them alone.
-- [ ] T037 [US8] Deliberate-failure trial (V7 of `quickstart.md`): on a throw-away branch make `device_remove` do nothing and push; the job fails, names `sync-remove-device`, and the uploaded `e2e-failure-material` has `screenshot.png` and `driver.log` in each encoded device folder. Record the run in the PR text.
+- [x] T037 [US8] Deliberate-failure trial (V7 of `quickstart.md`): on a throw-away branch make `device_remove` do nothing and push; the job fails, names `sync-remove-device`, and the uploaded `e2e-failure-material` has `screenshot.png` and `driver.log` in each encoded device folder. Record the run in the PR text.
 - [ ] T038 [US8] Measure SC-002: 20 consecutive green runs of the `e2e` job on the stock runner; list any red run with its cause and fix real flakiness before T040. Tracked after merge; this task stays open until then.
 
 ## Phase 11: Polish and cross-cutting
