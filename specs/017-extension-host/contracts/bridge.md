@@ -16,9 +16,11 @@ Richtung B aus ADR-0004. Protokoll des vault-sdk v3.7.0 (`src/messages.ts`, `src
 
 ## Kanal (SDK)
 
-1. Bei jedem `load` des Rahmens: alter Port zu, neuer `MessageChannel`, alle 200 ms
+1. Bei jedem neuen Dokument im Rahmen: alter Port zu, neuer `MessageChannel`, alle 200 ms
    `contentWindow.postMessage({type: "haexspace:port:init"}, "*", [port2])` bis `{type: "haexspace:port:ready"}`
-   auf `port1` kommt (höchstens 10 s, dann Fehleransicht mit „Neu laden“).
+   auf `port1` kommt (höchstens 10 s, dann Fehleransicht mit „Neu laden“). Ein neues Dokument erkennt
+   holzi am `hello {fresh: true}` des Shims (unten), nicht am `load` allein: WebKitGTK feuert `load` am
+   iframe auch für eine Hash-Navigation im Rahmen, und das SDK nimmt `port:init` nur einmal je Dokument an.
 2. Danach Anfragen `{id, method, params, timestamp}` auf dem Port; Antwort `{id, result}` oder
    `{id, error: {code, message, details?}}`.
 3. Meldungen holzi → Erweiterung: `{type, data?, timestamp, …}` auf dem Port; vor `ready` gepuffert.
@@ -30,7 +32,8 @@ Richtung B aus ADR-0004. Protokoll des vault-sdk v3.7.0 (`src/messages.ts`, `src
 
 Inline-Skript, das holzi in jedes ausgelieferte HTML-Dokument der Erweiterung einfügt (CSP-Hash). holzi
 schickt `{type: "holzi:frame:init", shortcuts: [...]}` mit einem eigenen Port; der Shim nimmt es nur von
-`window.parent` an.
+`window.parent` an. holzi schickt das Init bei jedem `load`; der Shim antwortet zuerst mit `hello {fresh}`,
+`fresh` nur beim ersten Init seines Dokuments.
 
 Der Shim läuft im JavaScript der Erweiterung; jede Nachricht auf seinem Port ist eine Eingabe der Erweiterung
 und kann gefälscht sein. `nav`, `title`, `closeGuard` und `close` wirken nur auf den eigenen Tab. `shortcut`
@@ -40,6 +43,7 @@ kann die Erweiterung damit nicht auslösen.
 
 | Shim → holzi                 | Auslöser                                    | Wirkung in holzi                         |
 | ---------------------------- | ------------------------------------------- | ---------------------------------------- |
+| `hello {fresh}`              | `holzi:frame:init`                          | bei `fresh` neuer SDK-Kanal              |
 | `nav {path, query, replace}` | `hashchange`, `popstate`                    | `useTabRouter().push/replace` (Spec 020) |
 | `title {text}`               | Änderung von `document.title`               | `useWmTab().setTitle`                    |
 | `closeGuard {active}`        | `beforeunload`-Handler registriert/entfernt | `registerCloseGuard`                     |

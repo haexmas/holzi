@@ -407,12 +407,15 @@ Prozesstrennung zwischen Rahmen (Spectre-artige Restrisiken).
   an (Erweiterung, Tab, Rahmen), das in der URL des Rahmens steht (`?hf=<token>`). HTML-Dokumente liefert der
   Handler nur bei passendem Token für die `extId` des Pfads aus. So kann Rahmen A nicht zur Seite von B
   navigieren und B einen an A gebundenen Kanal erhalten.
-- Bei **jedem** `load` (HV nutzt `{once:true}` und verpasst Neuladen, `broadcast.ts:155-193`): alten Port
-  schließen, neuen `MessageChannel` anlegen, `PORT_INIT` alle 200 ms an `iframe.contentWindow` (Zielursprung
+- Bei **jedem neuen Dokument** (HV nutzt `{once:true}` und verpasst Neuladen, `broadcast.ts:155-193`): alten
+  Port schließen, neuen `MessageChannel` anlegen, `PORT_INIT` alle 200 ms an `iframe.contentWindow` (Zielursprung
   `'*'` ist bei undurchsichtigem Ursprung unvermeidbar) bis `PORT_READY` auf **diesem** Port kommt (SDK-Frist
   10 s, `client/init.ts:25`). Zuordnung nur über `Map<port, {extId, tabId, frameInstanceId, generation}>`.
   Meldungen vor `READY` werden gepuffert (FR-042). Konsolenausgaben kommen über
   `window.parent.postMessage` und werden über `event.source === iframe.contentWindow` zugeordnet.
+  Befund (T051): WebKitGTK feuert `load` am iframe auch für eine Hash-Navigation im Rahmen; das SDK nimmt
+  `PORT_INIT` aber nur einmal je Dokument an. Ein neues Dokument meldet deshalb der Rahmen-Shim
+  (`hello {fresh}`, contracts/bridge.md), nicht das `load` allein.
 - **SDK-Änderung (L0)**: `waitForHostPortAsync` nimmt heute jedes `PORT_INIT` an
   (`client/init.ts:345-366`). Ein Geschwisterrahmen erreicht andere über `top.frames[i].postMessage` und könnte
   holzi zuvorkommen und einen falschen Port unterschieben. Fix im SDK: `if (event.source !== window.parent)

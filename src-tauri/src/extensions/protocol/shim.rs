@@ -3,6 +3,11 @@
 //! scripts. It talks to holzi over its own port and reports navigation, title, close guards,
 //! `window.close()` and holzi's shortcuts.
 //!
+//! WebKitGTK fires `load` on the frame element for a fragment navigation inside the frame, so
+//! holzi cannot take every `load` for a new document. The shim answers each init with
+//! `hello { fresh }`: `fresh` only on the first init of its document, and only then holzi hands
+//! the SDK a new port.
+//!
 //! The shim runs in the extension's realm, so every message it sends can be forged by the
 //! extension; holzi applies them only to the extension's own tab (bridge.md). Shortcuts arrive as
 //! fields (`code`, `ctrl`, `alt`, `shift`, `meta`) that holzi derives from its own chords, so the
@@ -106,6 +111,7 @@ pub const SHIM: &str = r#"(() => {
     if (event.source !== host) return;
     const data = event.data;
     if (!data || data.type !== 'holzi:frame:init' || !event.ports || !event.ports[0]) return;
+    const fresh = port === null;
     if (port) port.close();
     port = event.ports[0];
     port.onmessage = onHost;
@@ -113,6 +119,7 @@ pub const SHIM: &str = r#"(() => {
     lastNav = null;
     lastTitle = null;
     lastGuard = null;
+    send({ type: 'hello', fresh });
     reportNav();
     reportTitle();
     reportGuard();
