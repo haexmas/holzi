@@ -101,6 +101,7 @@ scenario('sync-two-users', { timeoutMs: 480_000 }, async (ctx) => {
     users: { anna: ['laptop', 'phone'], ben: ['desktop', 'tablet'] },
   })
   const [laptop, phone] = [g.device('anna/laptop'), g.device('anna/phone')]
+  await phone.pubkey() // read while it runs: a stopped device cannot be asked
   await phone.stop()
   await expectOnline(ctx, laptop, phone, false, 60_000) // laptop lists phone as not online
   await addThread(laptop, 'Annas Chat')

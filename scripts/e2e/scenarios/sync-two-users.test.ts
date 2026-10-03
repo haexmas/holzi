@@ -14,6 +14,7 @@ scenario('sync-two-users', { timeoutMs: 480_000 }, async (ctx) => {
   const [desktop, tablet] = [g.device('ben/desktop'), g.device('ben/tablet')]
 
   // Stopped, not `goOffline`: a device without servers still reaches the others it knew directly.
+  await phone.pubkey() // read now: the laptop looks the phone up while it is stopped
   await phone.stop()
   await expectOnline(ctx, laptop, phone, false, 60_000)
   await addThread(laptop, 'Annas Chat')
