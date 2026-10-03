@@ -377,18 +377,37 @@ pub fn current_key_for_list(
     Ok(None)
 }
 
-/// The content keys this device holds, newest generation first, at most `limit`.
-pub fn held_keys(q: &mut impl Query, limit: usize) -> haex_crdt::Result<Vec<[u8; 32]>> {
-    let rows: Vec<Vec<u8>> = q.query_map(
-        "SELECT key FROM vault_content_keys_no_sync ORDER BY generation DESC LIMIT ?1",
-        params![i64::try_from(limit).unwrap_or(i64::MAX)],
+/// The keys this device holds besides `current`: up to `limit` of a lower
+/// generation, newest first, then up to `limit` of a higher one, which
+/// `current_key` skipped for a removed recipient. Presence only listens with
+/// them (contracts/nostr-events.md): a device that was away while the key
+/// changed still announces itself with a lower one, and one that has not yet
+/// heard of a removal with a skipped higher one.
+pub fn listening_keys(
+    q: &mut impl Query,
+    current: &ContentKey,
+    limit: usize,
+) -> haex_crdt::Result<Vec<Zeroizing<[u8; 32]>>> {
+    let generation = i64::try_from(current.generation).map_err(|_| KeyError::Malformed)?;
+    let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+    let mut held: Vec<Vec<u8>> = q.query_map(
+        "SELECT key FROM vault_content_keys_no_sync WHERE generation < ?1 \
+         ORDER BY generation DESC LIMIT ?2",
+        params![generation, limit],
         |r| r.get(0),
     )?;
-    let mut keys = Vec::with_capacity(rows.len());
-    for key in &rows {
-        keys.push(fixed(key)?);
-    }
-    Ok(keys)
+    held.extend(q.query_map(
+        "SELECT key FROM vault_content_keys_no_sync WHERE generation > ?1 \
+         ORDER BY generation ASC LIMIT ?2",
+        params![generation, limit],
+        |r| r.get(0),
+    )?);
+    held.into_iter()
+        .map(|key| {
+            let key = Zeroizing::new(key);
+            Ok(Zeroizing::new(fixed(&key)?))
+        })
+        .collect()
 }
 
 /// Serializes the vault content key and its metadata into a JSON payload and

@@ -332,7 +332,12 @@ async fn a_meeting_from_the_listed_endpoint_records_no_problem() {
 
 /// A new content key generation for `main`, issued for the list it has now (a device was removed or
 /// added since the last one).
-fn rotate(main: &Member) {
+fn rotate(main: &Member) -> crate::sync::content_keys::ContentKey {
+    let old_key = crate::storage::query::read(main.device.db(), |r| {
+        crate::sync::content_keys::current_key(r, &[])
+    })
+    .expect("read")
+    .expect("a content key");
     main.device
         .db()
         .write(|tx| {
@@ -343,11 +348,12 @@ fn rotate(main: &Member) {
             let effective = crate::sync::device_list::effective(&valid)
                 .expect("a list")
                 .clone();
-            let generation = crate::sync::content_keys::held_keys(tx, usize::MAX)?.len() as u64 + 1;
+            let generation = crate::sync::envelopes::held_keys(tx)?.len() as u64 + 1;
             let key = crate::sync::content_keys::ContentKey::generate(generation);
             crate::sync::content_keys::issue_generation(tx, &key, &effective, &main.keys, 10)
         })
         .expect("issue the next generation");
+    old_key
 }
 
 /// A device that was away while the content key was replaced still speaks into the mailbox of the old
@@ -358,22 +364,22 @@ async fn a_device_on_an_older_content_key_is_heard_and_dialed() {
     let main = Member::genesis();
     let stale = Member::join(&main);
     main.add(&stale);
-    let old_key = crate::storage::query::read(main.device.db(), |r| {
-        crate::sync::content_keys::current_key(r, &[])
-    })
-    .expect("read")
-    .expect("the key of genesis");
-    rotate(&main);
+    let old_key = rotate(&main);
 
     let roster = read_roster(&main.device.replica, main.vault, &main.keys.device_pubkey)
         .expect("read roster")
         .expect("a roster");
-    assert_eq!(roster.held_keys.len(), 2, "both generations are held");
+    assert_eq!(
+        roster.listening_keys().len(),
+        2,
+        "both generations are held"
+    );
     assert_ne!(
-        roster.held_keys[0], *old_key.key,
+        roster.listening_keys()[0],
+        *old_key.key,
         "the current key comes first"
     );
-    assert!(roster.held_keys.contains(&*old_key.key));
+    assert!(roster.listening_keys().contains(&*old_key.key));
 
     let node = bind_loopback(&main).await;
     let day = day_tag_now();
@@ -403,16 +409,100 @@ async fn a_device_on_an_older_content_key_is_heard_and_dialed() {
     );
 }
 
-/// Only the keys this device holds are listened to, and no more than the limit, newest first.
+/// Only the current key and the configured number of neighboring generations are listened to.
 #[test]
-fn only_the_newest_held_keys_up_to_the_limit_are_listened_to() {
+fn only_the_nearest_held_keys_are_listened_to() {
     let main = Member::genesis();
-    for _ in 0..(MAX_MAILBOX_KEYS + 2) {
+    for _ in 0..(OTHER_MAILBOXES + 2) {
         rotate(&main);
     }
     let roster = read_roster(&main.device.replica, main.vault, &main.keys.device_pubkey)
         .expect("read roster")
         .expect("a roster");
-    assert_eq!(roster.held_keys.len(), MAX_MAILBOX_KEYS);
-    assert_eq!(roster.held_keys[0], roster.content_key);
+    assert_eq!(roster.listening_keys().len(), OTHER_MAILBOXES + 1);
+    assert_eq!(roster.listening_keys()[0], roster.content_key);
+}
+
+/// A removed or unknown device cannot use a retained older mailbox to make a
+/// fresh presence claim that would be dialed.
+#[tokio::test]
+async fn a_stranger_in_an_older_mailbox_is_not_dialed() {
+    let main = Member::genesis();
+    let linked = Member::join(&main);
+    main.add(&linked);
+    let old_key = rotate(&main);
+    let stranger = Member::genesis();
+    let node = bind_loopback(&main).await;
+    let day = day_tag_now();
+    let (_, old_mailbox) = mailbox_keys(&old_key.key, day).expect("mailbox keys");
+    let content = PresenceContent::own(
+        stranger.keys.device_pubkey,
+        stranger.keys.endpoint_id,
+        None,
+        vec![(Ipv4Addr::LOCALHOST, 4000).into()],
+        99,
+    );
+    let event = build(&stranger.keys, &content, &old_mailbox).expect("build");
+
+    let dial = handle_incoming(
+        &node,
+        &main.device.replica,
+        &main.keys,
+        main.vault,
+        day,
+        &event,
+    )
+    .await;
+
+    assert!(!dial);
+    assert!(node.take_candidates().is_empty());
+}
+
+/// A request from an unknown device in an older mailbox is not admitted into
+/// the synchronized request list.
+#[tokio::test]
+async fn a_request_in_an_older_mailbox_is_not_kept() {
+    let main = Member::genesis();
+    let linked = Member::join(&main);
+    main.add(&linked);
+    let old_key = rotate(&main);
+    let asking = Member::genesis();
+    let node = bind_loopback(&main).await;
+    let day = day_tag_now();
+    let (_, old_mailbox) = mailbox_keys(&old_key.key, day).expect("mailbox keys");
+    let request = admission::Request::sign(
+        &asking.keys,
+        asking.device.db().device_id(),
+        "Zweitrechner".to_string(),
+        now_ms(),
+    )
+    .expect("sign");
+    let addr = iroh::EndpointAddr::from_parts(
+        iroh::EndpointId::from_bytes(&asking.keys.endpoint_id).expect("endpoint"),
+        [iroh::TransportAddr::Ip((Ipv4Addr::LOCALHOST, 4000).into())],
+    );
+    let json = serde_json::to_string(&admission::Content::new(&request, &addr)).expect("encode");
+    let event = wrap_payload(
+        ADMISSION_KIND,
+        &asking.keys.device_secret,
+        &json,
+        &old_mailbox,
+    )
+    .expect("wrap");
+
+    handle_incoming(
+        &node,
+        &main.device.replica,
+        &main.keys,
+        main.vault,
+        day,
+        &event,
+    )
+    .await;
+
+    let open = crate::storage::query::read(main.device.db(), |r| {
+        admission::load_open(r, &HashSet::new())
+    })
+    .expect("read requests");
+    assert!(open.is_empty());
 }

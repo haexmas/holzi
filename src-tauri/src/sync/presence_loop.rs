@@ -37,13 +37,15 @@ const PUBLISH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60)
 /// (Constitution VII: a slow or dead relay never blocks the others). The
 /// relays keep connecting, and reconnecting, in the background.
 const RELAY_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
-/// How many content keys, newest first, presence listens for. A device that was away across more
-/// replacements than this is not found through presence any more (ponytail: keys are replaced only
-/// when a device is removed; the upgrade path is to bound by the oldest key a listed device holds).
-const MAX_MAILBOX_KEYS: usize = 8;
 /// A request to be admitted that has waited this long gets a new time, so a
 /// copy left running does not let its request go stale (R20: 30 days).
 const REQUEST_RENEWAL_MS: u64 = 7 * 24 * 60 * 60 * 1000;
+// ponytail: listens on the mailboxes of the 4 newest lower key generations (and of up to 4 higher
+// ones skipped for a removed recipient). Ceiling: a device that missed more key changes than that is
+// not heard and has to be dialed from a stored address or linked again. Upgrade path: raise it; each
+// key adds two `p` values to the one subscription.
+/// How many other content keys presence also listens with on either side of the current one.
+const OTHER_MAILBOXES: usize = 4;
 
 /// Runs presence for as long as this device's session lasts: connects to
 /// `relay_urls`, subscribes to today's and yesterday's mailbox, publishes
@@ -177,8 +179,9 @@ async fn resubscribe(
         let _ = client.unsubscribe_all().await;
         return Ok(None);
     };
-    let mut mailboxes = Vec::new();
-    for key in &roster.held_keys {
+    let content_keys = roster.listening_keys();
+    let mut mailboxes = Vec::with_capacity(content_keys.len() * 2);
+    for key in &content_keys {
         for day in [day, day.saturating_sub(1)] {
             mailboxes.push(mailbox_keys(key, day)?.1);
         }
@@ -191,7 +194,7 @@ async fn resubscribe(
         .subscribe(filter)
         .await
         .map_err(|e| PresenceError::Crypto(e.to_string()))?;
-    Ok(Some(roster.held_keys))
+    Ok(Some(content_keys))
 }
 
 /// The content keys whose mailboxes this device listens to, the current one first. The current key can
@@ -202,7 +205,7 @@ fn held_mailbox_keys(
     vault: [u8; 32],
     own: &[u8; 32],
 ) -> Result<Option<Vec<[u8; 32]>>, PresenceError> {
-    Ok(read_roster(replica, vault, own)?.map(|roster| roster.held_keys))
+    Ok(read_roster(replica, vault, own)?.map(|roster| roster.listening_keys()))
 }
 
 /// Publishes what this device has to say (see the module docs): presence,
@@ -288,16 +291,29 @@ pub(crate) async fn handle_incoming(
             return false;
         }
     };
-    // The mailbox of any key this device holds: a device still on an older key meets it there.
-    let opened = roster.held_keys.iter().find_map(|key| {
-        [day, day.saturating_sub(1)].into_iter().find_map(|day| {
-            let (secret, _) = mailbox_keys(key, day).ok()?;
-            unwrap_rumor(event, &secret).ok()
-        })
-    });
-    let Some((sender, kind, payload)) = opened else {
+    // The current key's mailboxes first; another one is a device that was away while the key
+    // changed, or has not heard of a removal yet.
+    let opened = roster
+        .listening_keys()
+        .iter()
+        .enumerate()
+        .find_map(|(index, content_key)| {
+            [day, day.saturating_sub(1)].into_iter().find_map(|tag| {
+                let (mb_sk, _) = mailbox_keys(content_key, tag).ok()?;
+                unwrap_rumor(event, &mb_sk)
+                    .ok()
+                    .map(|opened| (index > 0, opened))
+            })
+        });
+    let Some((other, (sender, kind, payload))) = opened else {
         return false;
     };
+    // A removed device still holds the other keys and could speak there under a fresh device key:
+    // only a listed device's meeting of a device the list names is heard in another mailbox, never
+    // a request to be admitted or a claim of a newer list.
+    if other && (roster.standing != Standing::Listed || !roster.names(&sender)) {
+        return false;
+    }
     if kind == ADMISSION_KIND {
         return handle_request(node, replica, keys, &roster, sender, &payload).await;
     }
@@ -460,9 +476,8 @@ pub(crate) enum Standing {
 /// list's generation, and the device keys that list currently names.
 pub(crate) struct Roster {
     content_key: [u8; 32],
-    /// Every content key this device holds, newest first, the current key among them (at most
-    /// [`MAX_MAILBOX_KEYS`]).
-    held_keys: Vec<[u8; 32]>,
+    /// Other keys this device holds (content_keys::listening_keys); presence only listens with them.
+    other_keys: Vec<[u8; 32]>,
     list_generation: u64,
     /// Each device the list names, with the endpoint it names for it.
     effective_devices: Vec<([u8; 32], [u8; 32])>,
@@ -476,6 +491,20 @@ pub(crate) struct Roster {
 }
 
 impl Roster {
+    /// The keys whose mailboxes presence listens on: the current one first.
+    fn listening_keys(&self) -> Vec<[u8; 32]> {
+        std::iter::once(self.content_key)
+            .chain(self.other_keys.iter().copied())
+            .collect()
+    }
+
+    /// Whether the effective list names `device`.
+    fn names(&self, device: &[u8; 32]) -> bool {
+        self.effective_devices
+            .iter()
+            .any(|(listed, _)| listed == device)
+    }
+
     /// Whether the effective list names any device besides this one.
     pub(crate) fn has_peers(&self) -> bool {
         self.effective_devices.len() > 1
@@ -514,16 +543,13 @@ pub(crate) fn read_roster(
         } else {
             Standing::Unlisted
         };
-        let mut held_keys = vec![*key.key];
-        for older in crate::sync::content_keys::held_keys(r, MAX_MAILBOX_KEYS)? {
-            if !held_keys.contains(&older) {
-                held_keys.push(older);
-            }
-        }
-        held_keys.truncate(MAX_MAILBOX_KEYS);
+        let other_keys = crate::sync::content_keys::listening_keys(r, &key, OTHER_MAILBOXES)?
+            .into_iter()
+            .map(|key| *key)
+            .collect();
         Ok(Some(Roster {
             content_key: *key.key,
-            held_keys,
+            other_keys,
             list_generation: effective.list.generation,
             effective_devices: effective
                 .list
