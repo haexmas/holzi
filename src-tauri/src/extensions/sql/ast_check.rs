@@ -183,7 +183,7 @@ pub fn cte_names(statement: &Statement) -> HashSet<String> {
 
 /// Checks the identifiers of the SQL text: ASCII only (SQLite folds only ASCII case, so anything
 /// else could name a table differently than this check sees it), and no sync column (`haex_*`).
-fn check_words(sql: &str) -> Result<(), BridgeError> {
+pub(crate) fn check_words(sql: &str) -> Result<(), BridgeError> {
     for word in words(sql)? {
         if !word.is_ascii() {
             return Err(violation("identifiers must be ASCII"));

@@ -279,3 +279,113 @@ fn dialog_parameters_are_checked() {
         );
     }
 }
+
+/// The migrations of the notes-like vector as the SDK sends them.
+fn vector_migrations() -> Value {
+    let bytes = std::fs::read(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/extension_bundles/good-notes-like.xt"),
+    )
+    .unwrap();
+    let bundle = haex_bundle::verify_archive(&bytes).unwrap();
+    Value::Array(
+        bundle
+            .migrations
+            .iter()
+            .map(|m| json!({"name": m.name, "sql": m.sql}))
+            .collect(),
+    )
+}
+
+fn notes_table() -> String {
+    format!(
+        "{}__notes-like__notes",
+        "3614253f84ba66a8faa168d317a6979992979a3e7ad15ae83ca2823f5ca97d34"
+    )
+}
+
+#[test]
+fn the_sdk_registers_the_bundle_migrations_and_then_reads_and_writes_its_tables() {
+    let s = setup();
+    let registered = call(
+        &s.ctx,
+        "extension_database_register_migrations",
+        &json!({"extensionVersion": "1.2.0", "migrations": vector_migrations()}),
+    )
+    .unwrap();
+    assert_eq!(registered["appliedCount"], 2);
+    let again = call(
+        &s.ctx,
+        "extension_database_register_migrations",
+        &json!({"extensionVersion": "1.2.0", "migrations": vector_migrations()}),
+    )
+    .unwrap();
+    assert_eq!(again["appliedCount"], 0);
+    assert_eq!(again["alreadyAppliedCount"], 2);
+
+    let table = notes_table();
+    call(
+        &s.ctx,
+        "extension_database_execute",
+        &json!({"sql": format!("INSERT INTO `{table}` (id, title, updated_at) VALUES (?, ?, ?)"), "params": ["n1", "Hallo", 1]}),
+    )
+    .unwrap();
+    let rows = call(
+        &s.ctx,
+        "extension_database_query",
+        &json!({"query": format!("SELECT id, title FROM `{table}`"), "params": []}),
+    )
+    .unwrap();
+    assert_eq!(rows["rows"], json!([["n1", "Hallo"]]));
+    assert_eq!(rows["columns"], json!(["id", "title"]));
+
+    let tx = call(
+        &s.ctx,
+        "extension_database_transaction",
+        &json!({"statements": [
+            [format!("UPDATE `{table}` SET title = 'x'"), []],
+            [format!("DELETE FROM `{table}` WHERE id = ?"), ["n1"]],
+        ]}),
+    )
+    .unwrap();
+    assert_eq!(tx["rowsAffected"], 2);
+}
+
+#[test]
+fn migrations_that_are_not_in_the_bundle_are_refused() {
+    let s = setup();
+    let error = call(
+        &s.ctx,
+        "extension_database_register_migrations",
+        &json!({"migrations": [{"name": "0000_init", "sql": "CREATE TABLE evil (id TEXT)"}]}),
+    )
+    .unwrap_err();
+    assert_eq!(error.code.as_u16(), 1000);
+}
+
+#[test]
+fn too_many_running_calls_of_one_extension_answer_7000_and_leave_others_alone() {
+    let s = setup();
+    let ext = s.ctx.session.extension_id;
+    let held: Vec<_> = (0..20)
+        .map(|_| s.ctx.host.enter_sql(ext, 20).unwrap())
+        .collect();
+    let error = call(
+        &s.ctx,
+        "extension_database_query",
+        &json!({"sql": "SELECT 1"}),
+    )
+    .unwrap_err();
+    assert_eq!(error.code.as_u16(), 7000);
+    assert!(
+        s.ctx.host.enter_sql(Uuid::new_v4(), 20).is_some(),
+        "another extension"
+    );
+    drop(held);
+    assert!(call(
+        &s.ctx,
+        "extension_database_query",
+        &json!({"sql": "SELECT 1"})
+    )
+    .is_ok());
+}

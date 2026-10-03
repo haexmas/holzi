@@ -149,7 +149,7 @@ pub fn write_registry_rows(
     }
 
     for (position, migration) in bundle.migrations.iter().enumerate() {
-        let sql_sha256 = sha256_hex(migration.sql.as_bytes());
+        let sql_sha256 = crate::extensions::sql::migrate::sql_sha256(&migration.sql);
         let id = migration_id(ids.extension_id, &migration.name, &sql_sha256).to_string();
         if !exists(
             tx,

@@ -68,10 +68,22 @@ pub async fn extension_frame_open(
 
 /// Ends a frame session.
 #[tauri::command]
-pub async fn extension_frame_close(state: State<'_, AppState>, frame: String) -> Result<()> {
+pub async fn extension_frame_close(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    frame: String,
+) -> Result<()> {
     let host = state.extensions();
     host.frames.close(&frame);
     host.drop_dialogs_of(&frame);
+    // Questions nobody waits for any more disappear from holzi's window.
+    let emitter = WindowEmitter(app);
+    for request_id in host.permissions.frame_closed(&frame) {
+        emitter.emit(
+            crate::extensions::bridge::permissions::PERMISSION_REQUEST_CANCELLED,
+            serde_json::json!({ "requestId": request_id }),
+        );
+    }
     Ok(())
 }
 
@@ -87,7 +99,7 @@ pub async fn extension_dialog_resolve(
 }
 
 /// Hands holzi's events to its own window.
-struct WindowEmitter(AppHandle);
+pub(crate) struct WindowEmitter(pub(crate) AppHandle);
 
 impl Emit for WindowEmitter {
     fn emit(&self, event: &str, payload: Value) {

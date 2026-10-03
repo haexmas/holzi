@@ -4,6 +4,7 @@
 pub mod frames;
 pub mod install;
 pub mod manage;
+pub mod permissions;
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};

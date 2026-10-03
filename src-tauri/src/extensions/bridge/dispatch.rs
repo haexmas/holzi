@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use super::frames::FrameSession;
-use super::methods;
+use super::{database, methods, permissions};
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
 use crate::extensions::host::ExtensionHost;
 use crate::storage::query::Query;
@@ -62,12 +62,37 @@ pub static METHODS: &[Method] = &[
         handler: methods::dialog_confirm,
         module: methods::MODULE,
     },
+    Method {
+        name: "extension_database_query",
+        handler: database::query,
+        module: database::MODULE,
+    },
+    Method {
+        name: "extension_database_execute",
+        handler: database::execute,
+        module: database::MODULE,
+    },
+    Method {
+        name: "extension_database_transaction",
+        handler: database::transaction,
+        module: database::MODULE,
+    },
+    Method {
+        name: "extension_permissions_check_database",
+        handler: permissions::check_database,
+        module: permissions::MODULE,
+    },
+    Method {
+        name: "extension_database_register_migrations",
+        handler: database::register_migrations,
+        module: database::MODULE,
+    },
 ];
 
 /// Methods of later deliveries (research R1): they answer 8001 until they land.
 const LATER: &[&str] = &[
-    "extension_database_",
-    "extension_permissions_check_",
+    "extension_permissions_check_web",
+    "extension_permissions_check_filesystem",
     "extension_web_storage_",
     "extension_logging_",
     "extension_web_fetch",
@@ -94,13 +119,18 @@ fn is_enabled(ctx: &CallContext) -> Result<bool, BridgeError> {
         .map_err(|_| BridgeError::new(ExtensionErrorCode::Database, "database unavailable"))
 }
 
-/// Runs one call. Blocking (methods read the vault).
+/// Runs one call. Blocking (methods read the vault). A call that needs a permission (1004) puts
+/// its question before the user (`permissions::ask`).
 pub fn call(ctx: &CallContext, method: &str, params: &Value) -> Result<Value, BridgeError> {
     if !is_enabled(ctx)? {
         return Err(BridgeError::disabled());
     }
     if let Some(found) = METHODS.iter().find(|m| m.name == method) {
-        return (found.handler)(ctx, params);
+        return (found.handler)(ctx, params).inspect_err(|error| {
+            if error.code == ExtensionErrorCode::PermissionPromptRequired {
+                super::permissions::ask(ctx, error);
+            }
+        });
     }
     if LATER.iter().any(|prefix| method.starts_with(prefix)) {
         return Err(BridgeError::not_available());
