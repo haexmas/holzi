@@ -170,7 +170,7 @@ description: 'Task list for spec 017-extension-host'
 - [x] T071 [P] [US3] Add the texts of T069/T070 to both locale files
 - [ ] T072 [US3] End-to-end scene `scripts/e2e/scenarios/extension-permission-prompt.test.ts` with a `perm-probe` test bundle (signed fixture): allow once, allow with remember (survives restart), deny, revoke in settings
 - [ ] T073 [US3] End-to-end scene `scripts/e2e/scenarios/extension-isolation.test.ts` per [quickstart.md](./quickstart.md) §5: from inside the frame `parent.document`, holzi's storage, `fetch('https://…')`, `new WebSocket(…)`, `<img src="https://…">`, `location = 'https://…'`, `window.open`, `__TAURI_INTERNALS__` and `ipc:` all fail; a sibling frame's `port:init` is ignored by an SDK v4 extension; a forged `shortcut` message on the shim port while the frame has no focus does nothing; navigating to another extension's page without its token is not served
-- [ ] T074 [US3] Create `src-tauri/tests/extension_bridge_contract.rs` (FR-009): enumerate `bridge::dispatch::METHODS`, fail if any method has no row in [contracts/bridge.md](./contracts/bridge.md) §Methoden (parse the table) or if any handler's module path is under `chat`, `llm`, `adapters` or `providers` (check via a `module_path!()` recorded per handler)
+- [x] T074 [US3] Create `src-tauri/tests/extension_bridge_contract.rs` (FR-009): enumerate `bridge::dispatch::METHODS`, fail if any method has no row in [contracts/bridge.md](./contracts/bridge.md) §Methoden (parse the table) or if any handler's module path is under `chat`, `llm`, `adapters` or `providers` (check via a `module_path!()` recorded per handler)
 
 **Checkpoint (end of L1)**: US1–US3 complete; quickstart §1–§5 green; open the L1 PR.
 
