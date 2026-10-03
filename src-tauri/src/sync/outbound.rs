@@ -62,6 +62,8 @@ pub fn serve_pull_with_budget(
     theirs: &Vector,
     budget: usize,
 ) -> haex_crdt::Result<Outbox> {
+    // Reading a large pull takes a while; the close waits for it (see [`Replica::hold`]).
+    let _held = replica.hold().map_err(haex_crdt::Error::consumer)?;
     let db = replica.db();
     let (served, changes) = {
         let _exchange = replica.exchange();

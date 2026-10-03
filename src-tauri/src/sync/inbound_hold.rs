@@ -13,6 +13,7 @@
 //! created is a real inconsistency and fails the pull as before.
 
 use std::collections::{HashMap, HashSet};
+use std::ops::Range;
 
 use haex_crdt::rusqlite::ToSql;
 use haex_crdt::{ColumnChange, Database};
@@ -90,6 +91,80 @@ pub(super) fn settle(db: &Database, groups: Vec<Group>, last: bool) -> haex_crdt
         held.extend(blocked);
         apply = rest;
     }
+}
+
+/// Splits `groups` into steps of at least `size` groups, each applied in a
+/// transaction of its own ([`super::Inbox::receive`]). A step never ends
+/// between groups that only together create a row: [`settle`] lets a row in
+/// whose cells come from several groups applied together, so a row that does
+/// not exist yet stays in one step from its first group to the one that
+/// completes it. A row that is never completed keeps every later group with
+/// it, as the single transaction did.
+pub(super) fn steps(
+    db: &Database,
+    groups: &[Group],
+    size: usize,
+) -> haex_crdt::Result<Vec<Range<usize>>> {
+    struct Seen {
+        first: usize,
+        cells: HashSet<String>,
+        complete: Option<usize>,
+    }
+    let mut required: HashMap<String, Vec<String>> = HashMap::new();
+    let mut rows: HashMap<RowKey, Seen> = HashMap::new();
+    for (i, group) in groups.iter().enumerate() {
+        let mut touched: HashSet<RowKey> = HashSet::new();
+        for column in &group.columns {
+            if column.table_name == DELETED_ROWS_TABLE {
+                continue;
+            }
+            let key = (column.table_name.clone(), column.row_pks.clone());
+            let seen = rows.entry(key.clone()).or_insert_with(|| Seen {
+                first: i,
+                cells: HashSet::new(),
+                complete: None,
+            });
+            if seen.complete.is_none() {
+                seen.cells.insert(column.column_name.clone());
+                touched.insert(key);
+            }
+        }
+        for key in touched {
+            if !required.contains_key(&key.0) {
+                required.insert(key.0.clone(), required_columns(db, &key.0)?);
+            }
+            let Some(seen) = rows.get_mut(&key) else {
+                continue;
+            };
+            if required[&key.0].iter().all(|c| seen.cells.contains(c)) {
+                seen.complete = Some(i);
+                seen.cells = HashSet::new();
+            }
+        }
+    }
+    // The last group each group's step must reach.
+    let mut until: Vec<usize> = (0..groups.len()).collect();
+    for (key, seen) in rows {
+        if seen.complete == Some(seen.first) || query::read(db, |r| row_exists(r, &key.0, &key.1))?
+        {
+            continue;
+        }
+        let end = seen.complete.unwrap_or(groups.len().saturating_sub(1));
+        until[seen.first] = until[seen.first].max(end);
+    }
+    let mut steps = Vec::new();
+    let (mut start, mut reach) = (0, 0);
+    for (i, end) in until.into_iter().enumerate() {
+        reach = reach.max(end);
+        if reach == i && i + 1 - start >= size {
+            steps.push(start..i + 1);
+            start = i + 1;
+        }
+    }
+    if start < groups.len() {
+        steps.push(start..groups.len());
+    }
+    Ok(steps)
 }
 
 /// The columns of `table` an INSERT must give a value: not empty, no default,

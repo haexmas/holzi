@@ -195,6 +195,9 @@ pub fn prune_absent_and_advance(
     kept: &HashSet<RowKey>,
     served: &Vector,
 ) -> haex_crdt::Result<Vec<String>> {
+    // Scanning and deleting every synced table takes a while; the close waits for it (see
+    // [`Replica::hold`]).
+    let _held = replica.hold().map_err(haex_crdt::Error::consumer)?;
     let touched = prune_absent(replica, kept, served)?;
     replica.db().write(|tx| progress::advance(tx, served))?;
     Ok(touched)
