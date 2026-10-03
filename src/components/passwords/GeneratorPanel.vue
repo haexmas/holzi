@@ -24,6 +24,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const fieldLabels = useFieldLabels()
 const { errString } = useErrorString()
 const { presetListAsync, presetSaveAsync, presetDeleteAsync } = usePasswords()
 
@@ -44,6 +45,22 @@ const presets = ref<Preset[]>([])
 const presetId = ref('')
 const presetName = ref('')
 const output = ref<{ value: string } | { error: string }>({ value: '' })
+
+/** The select cannot hold an empty value, so "no preset" gets a placeholder value. */
+const NO_PRESET = '__none__'
+const presetOptions = computed(() => [
+  { value: NO_PRESET, label: t('passwords.generator.noPreset') },
+  ...presets.value.map((preset) => ({
+    value: preset.id,
+    label: `${preset.name}${preset.isDefault ? ' ★' : ''}`,
+  })),
+])
+const presetSelection = computed({
+  get: () => presetId.value || NO_PRESET,
+  set: (value: string | null | undefined) =>
+    apply(presets.value.find((preset) => preset.id === value)),
+})
+/** The editor shows the generator in a dialog (popover surface); the page has none. */
 
 function regenerate() {
   output.value = generatePassword(config)
@@ -188,29 +205,13 @@ onMounted(loadAsync)
       </div>
     </div>
 
-    <div class="flex flex-col gap-1.5">
-      <ShadcnLabel for="pw-gen-preset">{{
-        t('passwords.generator.preset')
-      }}</ShadcnLabel>
-      <select
-        id="pw-gen-preset"
-        class="h-9 rounded-md border border-input bg-background px-2 text-sm"
-        :value="presetId"
-        data-testid="passwords-generator-preset"
-        @change="
-          apply(
-            presets.find(
-              (p) => p.id === ($event.target as HTMLSelectElement).value,
-            ),
-          )
-        "
-      >
-        <option value="">{{ t('passwords.generator.noPreset') }}</option>
-        <option v-for="preset in presets" :key="preset.id" :value="preset.id">
-          {{ preset.name }}{{ preset.isDefault ? ` ★` : '' }}
-        </option>
-      </select>
-    </div>
+    <UiSelect
+      id="pw-gen-preset"
+      v-model="presetSelection"
+      :options="presetOptions"
+      :label="t('passwords.generator.preset')"
+      data-testid="passwords-generator-preset"
+    />
 
     <label class="flex items-center gap-3">
       <ShadcnCheckbox
@@ -223,12 +224,11 @@ onMounted(loadAsync)
 
     <template v-if="config.usePattern">
       <div class="flex flex-col gap-1.5">
-        <ShadcnLabel for="pw-gen-pattern">{{
-          t('passwords.generator.pattern')
-        }}</ShadcnLabel>
-        <ShadcnInput
+        <UiInput
           id="pw-gen-pattern"
           v-model="config.pattern"
+          :label="t('passwords.generator.pattern')"
+          :labels="fieldLabels.input.value"
           spellcheck="false"
           data-testid="passwords-generator-pattern"
         />
@@ -283,12 +283,11 @@ onMounted(loadAsync)
         </label>
       </div>
       <div class="flex flex-col gap-1.5">
-        <ShadcnLabel for="pw-gen-exclude">{{
-          t('passwords.generator.exclude')
-        }}</ShadcnLabel>
-        <ShadcnInput
+        <UiInput
           id="pw-gen-exclude"
           v-model="config.excludeChars"
+          :label="t('passwords.generator.exclude')"
+          :labels="fieldLabels.input.value"
           spellcheck="false"
           data-testid="passwords-generator-exclude"
         />
@@ -296,12 +295,11 @@ onMounted(loadAsync)
     </template>
 
     <div class="flex flex-col gap-2 rounded-xl border border-border p-3">
-      <ShadcnLabel for="pw-gen-name">{{
-        t('passwords.generator.presetName')
-      }}</ShadcnLabel>
-      <ShadcnInput
+      <UiInput
         id="pw-gen-name"
         v-model="presetName"
+        :label="t('passwords.generator.presetName')"
+        :labels="fieldLabels.input.value"
         data-testid="passwords-generator-name"
       />
       <div class="flex flex-wrap gap-2">

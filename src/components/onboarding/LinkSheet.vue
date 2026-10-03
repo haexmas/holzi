@@ -27,12 +27,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const passwordLabels = computed(() => ({
-  show: t('onboarding.passwordField.show'),
-  hide: t('onboarding.passwordField.hide'),
-  copy: t('onboarding.passwordField.copy'),
-  copied: t('onboarding.passwordField.copied'),
-}))
+const fieldLabels = useFieldLabels()
 const { joinStartAsync, joinCancelAsync, onJoinState } = useDeviceLink()
 const { syncServersDefaultsAsync } = useSync()
 
@@ -208,64 +203,49 @@ function onOpenVault() {
         <p class="text-sm text-muted-foreground">
           {{ t('onboarding.link.intro') }}
         </p>
+        <UiInput
+          id="link-code"
+          v-model="code"
+          :label="t('onboarding.link.code')"
+          :labels="fieldLabels.input.value"
+          autofocus
+          autocomplete="off"
+          spellcheck="false"
+          class="font-mono uppercase"
+          :placeholder="t('onboarding.link.codePlaceholder')"
+          data-testid="link-code"
+        />
+        <UiInput
+          id="link-device-name"
+          v-model="deviceName"
+          :label="t('onboarding.link.deviceName')"
+          :labels="fieldLabels.input.value"
+          data-testid="link-device-name"
+        />
+        <UiInput
+          id="link-vault-name"
+          v-model="vaultName"
+          :label="t('onboarding.link.vaultName')"
+          :labels="fieldLabels.input.value"
+          data-testid="link-vault-name"
+        />
         <div class="space-y-1.5">
-          <ShadcnLabel for="link-code">
-            {{ t('onboarding.link.code') }}
-          </ShadcnLabel>
-          <ShadcnInput
-            id="link-code"
-            v-model="code"
-            autofocus
-            autocomplete="off"
-            spellcheck="false"
-            class="font-mono uppercase"
-            :placeholder="t('onboarding.link.codePlaceholder')"
-            data-testid="link-code"
-          />
-        </div>
-        <div class="space-y-1.5">
-          <ShadcnLabel for="link-device-name">
-            {{ t('onboarding.link.deviceName') }}
-          </ShadcnLabel>
-          <ShadcnInput
-            id="link-device-name"
-            v-model="deviceName"
-            data-testid="link-device-name"
-          />
-        </div>
-        <div class="space-y-1.5">
-          <ShadcnLabel for="link-vault-name">
-            {{ t('onboarding.link.vaultName') }}
-          </ShadcnLabel>
-          <ShadcnInput
-            id="link-vault-name"
-            v-model="vaultName"
-            data-testid="link-vault-name"
-          />
-        </div>
-        <div class="space-y-1.5">
-          <ShadcnLabel for="link-passphrase">
-            {{ t('onboarding.link.passphrase') }}
-          </ShadcnLabel>
           <UiInputPassword
             id="link-passphrase"
             v-model="passphrase"
-            :labels="passwordLabels"
+            :label="t('onboarding.link.passphrase')"
+            :labels="fieldLabels.password.value"
           />
           <p class="text-xs text-muted-foreground">
             {{ t('onboarding.link.passphraseHint') }}
           </p>
         </div>
-        <div class="space-y-1.5">
-          <ShadcnLabel for="link-passphrase-confirm">
-            {{ t('onboarding.create.passphraseConfirm') }}
-          </ShadcnLabel>
-          <UiInputPassword
-            id="link-passphrase-confirm"
-            v-model="passphraseConfirm"
-            :labels="passwordLabels"
-          />
-        </div>
+        <UiInputPassword
+          id="link-passphrase-confirm"
+          v-model="passphraseConfirm"
+          :label="t('onboarding.create.passphraseConfirm')"
+          :labels="fieldLabels.password.value"
+        />
         <SettingsServerList
           :label="t('onboarding.link.nostr')"
           :description="t('onboarding.link.nostrDescription')"

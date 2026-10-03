@@ -13,6 +13,7 @@ import type {
 } from '~/composables/useHuggingFace'
 
 const { t } = useI18n()
+const fieldLabels = useFieldLabels()
 const router = useTabRouter()
 const { searchAsync, detailsAsync } = useHuggingFace()
 
@@ -211,10 +212,12 @@ onMounted(() => {
 <template>
   <section class="flex flex-col gap-3">
     <form class="flex gap-2" @submit.prevent="onSubmit">
-      <ShadcnInput
+      <UiInput
         v-model="query"
         :placeholder="t('models.search.placeholder')"
         :aria-label="t('models.search.title')"
+        :labels="fieldLabels.input.value"
+        clearable
         class="flex-1"
       />
       <UiButton

@@ -5,6 +5,7 @@ import type { DelegateVendor, Provider } from '~/composables/useProviders'
 
 const { t } = useI18n()
 const { errString } = useErrorString()
+const fieldLabels = useFieldLabels()
 const { listAsync, onDelegateConnectProgress } = useProviders()
 // Spec 020 FR-024: provider writes run catalog actions (connect/submit are guardrails).
 const refreshModels = useActionOrThrow('settings.delegate.refreshModels')
@@ -262,18 +263,15 @@ function hasDetails(vendor: DelegateVendor): boolean {
               >
                 {{ progressUrl[vendor] }}
               </a>
-              <label class="flex flex-col gap-1">
-                <span class="text-sm font-medium">
-                  {{ t('settings.cliDelegate.codeInputLabel') }}
-                </span>
-                <ShadcnInput
-                  v-model="codeInput[vendor]"
-                  type="text"
-                  autocomplete="off"
-                  class="bg-background"
-                  @keyup.enter="onSubmitCode(vendor)"
-                />
-              </label>
+              <UiInput
+                v-model="codeInput[vendor]"
+                :label="t('settings.cliDelegate.codeInputLabel')"
+                :labels="fieldLabels.input.value"
+                label-bg="var(--muted)"
+                type="text"
+                autocomplete="off"
+                @keyup.enter="onSubmitCode(vendor)"
+              />
               <div class="flex items-center gap-3 flex-wrap">
                 <UiButton
                   type="button"

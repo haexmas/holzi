@@ -81,14 +81,15 @@ async function confirmDeleteAsync() {
         >
           <div class="flex flex-wrap items-center gap-2">
             <template v-if="editing === tag.id">
-              <ShadcnInput
-                v-model="name"
-                class="min-w-32 flex-1"
-                :aria-label="t('passwords.tags.name')"
-                :data-testid="`passwords-tag-name-${tag.id}`"
-                @keydown.enter.prevent="renameAsync(tag)"
-                @keydown.esc.prevent="editing = null"
-              />
+              <div class="min-w-32 flex-1">
+                <UiInput
+                  v-model="name"
+                  :aria-label="t('passwords.tags.name')"
+                  :data-testid="`passwords-tag-name-${tag.id}`"
+                  @keydown.enter.prevent="renameAsync(tag)"
+                  @keydown.esc.prevent="editing = null"
+                />
+              </div>
               <UiButton size="sm" @click="renameAsync(tag)">{{
                 t('passwords.save')
               }}</UiButton>

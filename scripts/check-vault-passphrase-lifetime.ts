@@ -44,6 +44,10 @@ function loadUnlockSheet(
     ['onSubmit', 'error', 'passphrase'],
     {
       useInstance,
+      useFieldLabels: () => ({
+        input: { value: {} },
+        password: { value: {} },
+      }),
       props: { open: true, name: 'vault' },
       emit,
     },
@@ -68,6 +72,10 @@ function loadCreateSheet(
     ['onSubmit', 'error', 'name', 'passphrase', 'passphraseConfirm'],
     {
       useInstance,
+      useFieldLabels: () => ({
+        input: { value: {} },
+        password: { value: {} },
+      }),
       props: { open: true },
       emit,
     },

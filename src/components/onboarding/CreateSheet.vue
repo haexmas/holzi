@@ -10,13 +10,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-// haex-ui ships German defaults only; pass the translated tooltips.
-const passwordLabels = computed(() => ({
-  show: t('onboarding.passwordField.show'),
-  hide: t('onboarding.passwordField.hide'),
-  copy: t('onboarding.passwordField.copy'),
-  copied: t('onboarding.passwordField.copied'),
-}))
+const fieldLabels = useFieldLabels()
 const { createAsync } = useInstance()
 
 const name = ref('')
@@ -84,32 +78,25 @@ async function onSubmit() {
         class="space-y-4 px-6 py-2"
         @submit.prevent="onSubmit"
       >
-        <div class="space-y-1.5">
-          <ShadcnLabel for="create-name">
-            {{ t('onboarding.create.name') }}
-          </ShadcnLabel>
-          <ShadcnInput id="create-name" v-model="name" autofocus />
-        </div>
-        <div class="space-y-1.5">
-          <ShadcnLabel for="create-passphrase">
-            {{ t('onboarding.create.passphrase') }}
-          </ShadcnLabel>
-          <UiInputPassword
-            id="create-passphrase"
-            v-model="passphrase"
-            :labels="passwordLabels"
-          />
-        </div>
-        <div class="space-y-1.5">
-          <ShadcnLabel for="create-passphrase-confirm">
-            {{ t('onboarding.create.passphraseConfirm') }}
-          </ShadcnLabel>
-          <UiInputPassword
-            id="create-passphrase-confirm"
-            v-model="passphraseConfirm"
-            :labels="passwordLabels"
-          />
-        </div>
+        <UiInput
+          id="create-name"
+          v-model="name"
+          :label="t('onboarding.create.name')"
+          :labels="fieldLabels.input.value"
+          autofocus
+        />
+        <UiInputPassword
+          id="create-passphrase"
+          v-model="passphrase"
+          :label="t('onboarding.create.passphrase')"
+          :labels="fieldLabels.password.value"
+        />
+        <UiInputPassword
+          id="create-passphrase-confirm"
+          v-model="passphraseConfirm"
+          :label="t('onboarding.create.passphraseConfirm')"
+          :labels="fieldLabels.password.value"
+        />
         <p v-if="error" class="text-sm text-destructive" role="alert">
           {{ error }}
         </p>

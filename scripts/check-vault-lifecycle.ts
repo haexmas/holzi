@@ -107,6 +107,7 @@ function loadUnlockSheet(openAsync: () => Promise<{ name: string }>) {
     ['onSubmit', 'error', 'passphrase'],
     {
       useInstance: () => ({ openAsync }),
+      useFieldLabels: () => ({ password: { value: {} } }),
       props: { open: true, name: 'vault' },
     },
   )

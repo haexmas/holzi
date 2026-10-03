@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const { t } = useI18n()
+const fieldLabels = useFieldLabels()
 
 const props = defineProps<{
   hostnameHint: string | null
@@ -39,22 +40,19 @@ function onSubmit() {
     <p class="text-sm text-muted-foreground">
       {{ t('onboarding.alias.description') }}
     </p>
-    <label class="flex flex-col gap-1">
-      <span class="text-sm font-medium">{{ t('onboarding.alias.label') }}</span>
-      <input
-        v-model="localValue"
-        type="text"
-        class="border border-input rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-ring"
-        :aria-invalid="showRequired && !localValue.trim() ? true : undefined"
-        @input="showRequired = false"
-      />
-      <span
-        v-if="showRequired && !localValue.trim()"
-        class="text-xs text-destructive"
-      >
-        {{ t('onboarding.alias.required') }}
-      </span>
-    </label>
+    <UiInput
+      :model-value="localValue"
+      :label="t('onboarding.alias.label')"
+      :labels="fieldLabels.input.value"
+      :error="
+        showRequired && !localValue.trim()
+          ? t('onboarding.alias.required')
+          : undefined
+      "
+      type="text"
+      @update:model-value="localValue = String($event ?? '')"
+      @input="showRequired = false"
+    />
     <div class="flex justify-end">
       <UiButton type="submit">
         {{ t('onboarding.wizard.next') }}

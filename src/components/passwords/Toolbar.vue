@@ -5,6 +5,8 @@
  * The search text is the only free text a place carries; it is never a secret (the search looks
  * at title, username, URL and tag names only).
  */
+import { Search } from '@lucide/vue'
+
 const props = defineProps<{
   sidebarVisible: boolean
 }>()
@@ -14,6 +16,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const fieldLabels = useFieldLabels()
 const router = useTabRouter()
 
 const query = ref(router.route.query.q ?? '')
@@ -24,6 +27,11 @@ watch(
     if (value !== query.value) query.value = value
   },
 )
+
+function onUpdate(value: string | number | null | undefined) {
+  query.value = String(value ?? '')
+  onInput()
+}
 
 function onInput() {
   router.setQuery({ q: query.value.trim() ? query.value : null })
@@ -58,32 +66,19 @@ const settingsOpen = ref(false)
     >
       <Icon name="lucide:panel-left" class="size-4" />
     </UiButton>
-    <label class="relative w-full max-w-72 min-w-0">
-      <span class="sr-only">{{ t('passwords.search.label') }}</span>
-      <Icon
-        name="lucide:search"
-        class="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-      />
-      <input
-        v-model="query"
-        type="search"
-        :placeholder="t('passwords.search.placeholder')"
-        class="h-9 w-full rounded-full border border-input bg-background pr-9 pl-9 text-sm [&::-webkit-search-cancel-button]:hidden focus:ring-2 focus:ring-ring focus:outline-none"
-        data-testid="passwords-search"
-        @input="onInput"
-        @keydown.esc.prevent.stop="clear"
-      />
-      <button
-        v-if="query"
-        type="button"
-        class="absolute top-1/2 right-1.5 flex size-6 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-        :aria-label="t('passwords.search.clear')"
-        data-testid="passwords-search-clear"
-        @click="clear"
-      >
-        <Icon name="lucide:x" class="size-4" />
-      </button>
-    </label>
+    <UiInput
+      :model-value="query"
+      type="search"
+      :placeholder="t('passwords.search.placeholder')"
+      :aria-label="t('passwords.search.label')"
+      :labels="fieldLabels.input.value"
+      :prepend-icon="Search"
+      clearable
+      class="max-w-72 min-w-0 [&_input::-webkit-search-cancel-button]:hidden"
+      data-testid="passwords-search"
+      @update:model-value="onUpdate"
+      @keydown.esc.prevent.stop="clear"
+    />
     <div class="ml-auto flex items-center gap-1">
       <UiButton
         variant="ghost"

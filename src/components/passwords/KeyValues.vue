@@ -9,6 +9,7 @@ import type { KeyValueDraft } from '~/lib/passwords/draft'
 const fields = defineModel<KeyValueDraft[]>({ required: true })
 
 const { t } = useI18n()
+const fieldLabels = useFieldLabels()
 
 function add() {
   fields.value = [
@@ -41,28 +42,30 @@ function setValue(index: number, value: string) {
       :key="field.id ?? `new-${index}`"
       class="flex flex-wrap items-center gap-2"
     >
-      <ShadcnInput
-        :model-value="field.key"
-        class="min-w-32 flex-1"
-        :placeholder="t('passwords.editor.fieldName')"
-        :aria-label="t('passwords.editor.fieldName')"
-        :data-testid="`passwords-kv-key-${index}`"
-        @update:model-value="setKey(index, String($event))"
-      />
-      <ShadcnInput
-        :model-value="field.value ?? ''"
-        type="password"
-        autocomplete="off"
-        class="min-w-32 flex-1"
-        :placeholder="
-          field.value === null && field.hasStoredValue
-            ? t('passwords.editor.keepValue')
-            : t('passwords.editor.fieldValue')
-        "
-        :aria-label="t('passwords.editor.fieldValue')"
-        :data-testid="`passwords-kv-value-${index}`"
-        @update:model-value="setValue(index, String($event))"
-      />
+      <div class="min-w-32 flex-1">
+        <UiInput
+          :model-value="field.key"
+          :placeholder="t('passwords.editor.fieldName')"
+          :aria-label="t('passwords.editor.fieldName')"
+          :data-testid="`passwords-kv-key-${index}`"
+          @update:model-value="setKey(index, String($event ?? ''))"
+        />
+      </div>
+      <div class="min-w-32 flex-1">
+        <UiInputPassword
+          :model-value="field.value ?? ''"
+          :labels="fieldLabels.password.value"
+          autocomplete="off"
+          :placeholder="
+            field.value === null && field.hasStoredValue
+              ? t('passwords.editor.keepValue')
+              : t('passwords.editor.fieldValue')
+          "
+          :aria-label="t('passwords.editor.fieldValue')"
+          :data-testid="`passwords-kv-value-${index}`"
+          @update:model-value="setValue(index, String($event ?? ''))"
+        />
+      </div>
       <UiButton
         variant="ghost"
         size="icon"

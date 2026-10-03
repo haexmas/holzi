@@ -3,6 +3,13 @@
     "welcome": "Willkommen bei Holzi",
     "lastUsed": "Zuletzt verwendet"
   },
+  "fields": {
+    "show": "Passwort anzeigen",
+    "hide": "Passwort verbergen",
+    "copy": "Kopieren",
+    "copied": "Kopiert!",
+    "clear": "Leeren"
+  },
   "onboarding": {
     "create": {
       "title": "Instanz anlegen",
@@ -59,12 +66,6 @@
       "downloadFailed": "Download fehlgeschlagen",
       "empty": "Keine Sprach-zu-Text-Modelle verfügbar.",
       "skip": "Später entscheiden"
-    },
-    "passwordField": {
-      "show": "Passwort anzeigen",
-      "hide": "Passwort verbergen",
-      "copy": "Kopieren",
-      "copied": "Kopiert!"
     },
     "link": {
       "title": "Mit einer Vault verknüpfen",

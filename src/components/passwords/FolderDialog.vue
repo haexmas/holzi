@@ -17,6 +17,7 @@ const props = defineProps<{
 const open = defineModel<boolean>('open', { required: true })
 
 const { t } = useI18n()
+const fieldLabels = useFieldLabels()
 const { errString } = useErrorString()
 const store = usePasswordsStore()
 const { createGroupAsync, updateGroupAsync } = usePasswords()
@@ -82,22 +83,19 @@ async function saveAsync() {
         data-testid="passwords-folder-form"
         @submit.prevent="saveAsync"
       >
-        <div class="flex flex-col gap-1.5">
-          <ShadcnLabel for="pw-folder-name">{{
-            t('passwords.fields.name')
-          }}</ShadcnLabel>
-          <ShadcnInput
-            id="pw-folder-name"
-            v-model="name"
-            data-testid="passwords-folder-name"
-          />
-        </div>
-        <div class="flex flex-col gap-1.5">
-          <ShadcnLabel for="pw-folder-description">{{
-            t('passwords.fields.description')
-          }}</ShadcnLabel>
-          <ShadcnInput id="pw-folder-description" v-model="description" />
-        </div>
+        <UiInput
+          id="pw-folder-name"
+          v-model="name"
+          :label="t('passwords.fields.name')"
+          :labels="fieldLabels.input.value"
+          data-testid="passwords-folder-name"
+        />
+        <UiInput
+          id="pw-folder-description"
+          v-model="description"
+          :label="t('passwords.fields.description')"
+          :labels="fieldLabels.input.value"
+        />
         <div
           class="flex flex-wrap gap-1.5"
           role="radiogroup"

@@ -23,6 +23,7 @@ export interface ScriptSetupGlobals {
   useInstance?: () => unknown
   useInstancesStore?: () => unknown
   useWindowManagerStore?: () => unknown
+  useFieldLabels?: () => unknown
   navigateTo?: (to: string) => unknown
   /** The route params the page reads, `{ instance: 'vault' }` by default. */
   params?: Record<string, string>
@@ -107,6 +108,7 @@ export function loadScriptSetup<T>(
       globals.useInstancesStore ?? notProvided('useInstancesStore'),
     useWindowManagerStore:
       globals.useWindowManagerStore ?? notProvided('useWindowManagerStore'),
+    useFieldLabels: globals.useFieldLabels ?? notProvided('useFieldLabels'),
     navigateTo: globals.navigateTo ?? notProvided('navigateTo'),
     window: 'window' in globals ? globals.window : notProvided('window'),
     document:

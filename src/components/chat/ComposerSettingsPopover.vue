@@ -10,7 +10,7 @@ export type ModelGroup = {
 }
 
 const MODEL_NAME_MAX_LENGTH = 20
-/** Sentinel `ShadcnSelect` value for "no override" (`effortLevel: null`) —
+/** Sentinel `UiSelect` value for "no override" (`effortLevel: null`) —
  * Reka UI's Select works over strings, so `null` never appears on the wire
  * between this component and its select. */
 const AUTO_VALUE = 'auto'
@@ -129,6 +129,14 @@ function onModelListKeydownCapture(event: KeyboardEvent) {
   event.stopPropagation()
   input.focus()
 }
+
+const effortOptions = computed(() => [
+  { value: AUTO_VALUE, label: t('chat.effort.auto') },
+  ...props.effortChoices.map((choice) => ({
+    value: choice.id,
+    label: choice.label,
+  })),
+])
 
 function updateEffort(value: unknown) {
   if (typeof value !== 'string') return
@@ -348,49 +356,29 @@ onBeforeUnmount(() => {
           >
             {{ t('chat.composer.settingsPopover.effortLabel') }}
           </label>
-          <ShadcnSelect
+          <UiSelect
             v-if="effortState === 'selectable'"
+            id="effort-level-popover"
             :model-value="effortLevel ?? AUTO_VALUE"
+            :options="effortOptions"
+            :aria-label="t('chat.composer.settingsPopover.effortLabel')"
             :disabled="disabled"
             @update:model-value="updateEffort"
-          >
-            <ShadcnSelectTrigger
-              id="effort-level-popover"
-              :aria-label="t('chat.composer.settingsPopover.effortLabel')"
-              class="h-9 w-full bg-background text-sm"
-            >
-              <ShadcnSelectValue />
-            </ShadcnSelectTrigger>
-            <ShadcnSelectContent>
-              <ShadcnSelectItem :value="AUTO_VALUE">
-                {{ t('chat.effort.auto') }}
-              </ShadcnSelectItem>
-              <ShadcnSelectItem
-                v-for="choice in effortChoices"
-                :key="choice.id"
-                :value="choice.id"
-              >
-                {{ choice.label }}
-              </ShadcnSelectItem>
-            </ShadcnSelectContent>
-          </ShadcnSelect>
+          />
           <!-- Nothing to choose, but worth saying why: the model reasons on
                its own, or its capabilities are not known yet (spec 012). -->
-          <ShadcnSelect v-else disabled>
-            <ShadcnSelectTrigger
-              id="effort-level-popover"
-              :aria-label="t('chat.composer.settingsPopover.effortLabel')"
-              class="h-9 w-full bg-background text-sm"
-            >
-              <ShadcnSelectValue
-                :placeholder="
-                  effortState === 'managed'
-                    ? t('chat.effort.managed')
-                    : t('chat.effort.unknown')
-                "
-              />
-            </ShadcnSelectTrigger>
-          </ShadcnSelect>
+          <UiSelect
+            v-else
+            id="effort-level-popover"
+            :options="[]"
+            :placeholder="
+              effortState === 'managed'
+                ? t('chat.effort.managed')
+                : t('chat.effort.unknown')
+            "
+            :aria-label="t('chat.composer.settingsPopover.effortLabel')"
+            disabled
+          />
         </div>
       </div>
     </Teleport>

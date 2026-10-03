@@ -28,6 +28,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const fieldLabels = useFieldLabels()
 const draft = ref('')
 const noneInUse = computed(() => props.entries.every((e) => !e.enabled))
 
@@ -92,10 +93,11 @@ async function onAdd() {
       {{ props.noneNote }}
     </li>
     <li class="flex items-center gap-2 px-4 py-3">
-      <ShadcnInput
+      <UiInput
         v-model="draft"
         :placeholder="props.placeholder"
         :aria-label="props.label"
+        :labels="fieldLabels.input.value"
         autocomplete="off"
         spellcheck="false"
         :data-testid="`${props.testId}-input`"

@@ -173,14 +173,15 @@ onBeforeUnmount(() => {
         icon="lucide:paperclip"
       >
         <template v-if="editing === attachment.id">
-          <ShadcnInput
-            v-model="fileName"
-            class="w-48"
-            :aria-label="t('passwords.attachments.name')"
-            :data-testid="`passwords-attachment-name-${attachment.id}`"
-            @keydown.enter.prevent="saveRenameAsync(attachment)"
-            @keydown.esc.prevent="editing = null"
-          />
+          <div class="w-48">
+            <UiInput
+              v-model="fileName"
+              :aria-label="t('passwords.attachments.name')"
+              :data-testid="`passwords-attachment-name-${attachment.id}`"
+              @keydown.enter.prevent="saveRenameAsync(attachment)"
+              @keydown.esc.prevent="editing = null"
+            />
+          </div>
           <UiButton size="sm" @click="saveRenameAsync(attachment)">{{
             t('passwords.save')
           }}</UiButton>
