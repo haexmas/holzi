@@ -48,6 +48,10 @@ Browser-Erweiterung) ist nicht Teil dieser Spec. Referenz: haex-vault @
   Freigabe für ein Tag dieses Eintrags darf alles zu diesem Eintrag sehen (nach Art der Freigabe)
   und auch dessen Passkeys benutzen. Eine eigene Ansicht für Passkeys, ein Zuordnen und ein
   Lösen entfallen; ein Passkey wird am Eintrag verwaltet.
+- Q: Dürfen externe Agenten über MCP Passkeys nur auflisten oder auch anlegen und bestätigen?
+  → A: Sie sind Aufrufer wie Erweiterungen: Mit einer Freigabe für ein Tag des Eintrags dürfen
+  sie alles, was die Art der Freigabe deckt. Nur der eingebaute Agent im Chat bekommt keine
+  Passkey-Funktion.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -224,8 +228,8 @@ Heute zeigt der Passwortmanager Passkeys nur an (aus Import oder Sync). Jetzt bi
 Dienst Funktionen, mit denen ein berechtigter Aufrufer einen Passkey **anlegt** (holzi erzeugt
 das Schlüsselpaar), eine Anmeldung **bestätigt** (holzi signiert die Aufgabe der Gegenstelle
 mit dem privaten Schlüssel, der Schlüssel verlässt den Dienst nie) und Passkeys **auflistet**.
-Aufrufer sind die haextensions und später die External Bridge, nicht ein Mensch an der
-Oberfläche. Ein Passkey ist immer Teil eines gewöhnlichen Eintrags; wer für ein Tag dieses
+Aufrufer sind die haextensions, externe Agenten über MCP und später die External Bridge,
+nicht ein Mensch an der Oberfläche. Ein Passkey ist immer Teil eines gewöhnlichen Eintrags; wer für ein Tag dieses
 Eintrags freigegeben ist, sieht den Eintrag samt seinen Passkeys und kann sie benutzen. Der
 Nutzer sieht und verwaltet die Passkeys eines Eintrags in dessen Tab Extra.
 
@@ -502,7 +506,9 @@ antippen, einen Anhang umbenennen.
   mindestens „Lesen“ im Bereich des Eintrags verlangen; **Auflisten** auch.
 - **FR-032**: Der eingebaute Agent im Chat MUSS von den Passkeys höchstens erfahren, dass ein
   Eintrag welche hat (der Hinweis in den Kopfdaten aus 034); er DARF keine der drei Funktionen
-  aufrufen. Externe Agenten über MCP DÜRFEN höchstens auflisten.
+  aufrufen. Externe Agenten über MCP sind Aufrufer wie Erweiterungen: Mit einer Freigabe für
+  ein Tag des Eintrags DÜRFEN sie auflisten, anlegen und bestätigen, soweit die Art der Freigabe
+  es deckt (FR-031).
 - **FR-033**: **Umbenennen und Löschen** eines Passkeys MUSS dem Nutzer
   vorbehalten bleiben (wie 034 für das Löschen eines Passkeys); andere Aufrufer MÜSSEN dafür
   abgelehnt werden.
@@ -608,8 +614,8 @@ antippen, einen Anhang umbenennen.
 - Ein **Passkey ohne Eintrag** kann in der Tabelle von 034 (und in haex-vault) vorkommen; holzi
   legt nie einen an und behandelt einen vorgefundenen als nicht vorhanden (siehe Randfälle).
 - Wer **Passkeys anlegen und bestätigen** darf, sind die Aufrufer mit Freigabe für ein Tag des
-  Eintrags (Erweiterungen, später die External Bridge); externe Agenten über MCP dürfen
-  höchstens auflisten, der eingebaute Agent gar nichts. Die Freigaben selbst vergeben die Specs 017–019 und 021.
+  Eintrags (Erweiterungen, externe Agenten über MCP, später die External Bridge); der
+  eingebaute Agent darf gar nichts. Die Freigaben selbst vergeben die Specs 017–019 und 021.
 - Ein Passkey an einem **Eintrag im Papierkorb** bleibt an ihm hängen und wird mit ihm
   wiederhergestellt (FR-035).
 - Eine **Vorschau** gibt es nur für Bilder (PNG, JPEG, GIF, WebP wie in 034); SVG, PDF und
