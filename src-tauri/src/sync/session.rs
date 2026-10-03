@@ -115,8 +115,8 @@ pub async fn run(
             log::debug!("sync: the connection ended: {error}");
             Ok(())
         }
-        result = read_progress(&ctx, control_recv, theirs_tx) => result,
-        result = send_progress(&ctx, control_send) => result,
+        result = read_progress(&ctx, control_recv, theirs_tx, &peer) => result,
+        result = send_progress(&ctx, control_send, &peer) => result,
         result = pull_when_behind(&ctx, &connection, theirs_rx, &peer) => result,
         result = serve_pulls(&ctx, &connection, &peer) => result,
     };
@@ -144,10 +144,13 @@ async fn read_progress(
     ctx: &SessionContext,
     mut recv: RecvStream,
     theirs: watch::Sender<Vector>,
+    peer: &Peer,
 ) -> Result<(), SessionError> {
     while let Some(message) = read_frame(&mut recv, FRAME_LIMIT).await? {
         match message {
             Message::Progress { vector, last_seen } => {
+                // A removed device's reports are not taken in.
+                ensure_listed(ctx, peer).await?;
                 theirs.send_replace(vector);
                 merge_last_seen(ctx, last_seen).await;
             }
@@ -177,11 +180,20 @@ async fn merge_last_seen(ctx: &SessionContext, reports: Vec<([u8; 32], u64)>) {
 }
 
 /// Sends this device's progress at the start and whenever it moved.
-async fn send_progress(ctx: &SessionContext, mut send: SendStream) -> Result<(), SessionError> {
+///
+/// Every change can be a device list that removes the peer, learned from
+/// another device. A removed peer that never pulls would otherwise keep the
+/// session and get the version vector and last-seen times of every device.
+async fn send_progress(
+    ctx: &SessionContext,
+    mut send: SendStream,
+    peer: &Peer,
+) -> Result<(), SessionError> {
     let mut changed = ctx.changed.clone();
     let mut last_sent: Option<Vector> = None;
     loop {
         changed.mark_unchanged();
+        ensure_listed(ctx, peer).await?;
         let own = own_progress(&ctx.replica).await?;
         if last_sent.as_ref() != Some(&own) {
             let message = Message::Progress {
