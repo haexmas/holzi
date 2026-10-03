@@ -1,4 +1,8 @@
 import { invoke } from '@tauri-apps/api/core'
+import {
+  useAppearance,
+  type AppearancePatch,
+} from '~/composables/useAppearance'
 import { useColorScheme } from '~/composables/useColorScheme'
 import { useDevice } from '~/composables/useDevice'
 import { useHuggingFace } from '~/composables/useHuggingFace'
@@ -36,6 +40,7 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
   const providers = useProviders()
   const sttModels = useSttModels()
   const colorScheme = useColorScheme()
+  const appearance = useAppearance()
   const sync = useSync()
   const done = { done: true }
   const on = wm.registerGlobalActionHandler
@@ -62,6 +67,7 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
     return {
       deviceAlias: device.alias,
       colorScheme: colorScheme.scheme.value,
+      appearance: appearance.appearance.value,
       ...(defaultModel ? { defaultModel } : {}),
       sttModel: stt,
       sessionRestore: sessionRestore.enabled,
@@ -126,6 +132,24 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
     if (!scheme) throw new Error(`unknown color scheme ${String(input.scheme)}`)
     return { scheme: await colorScheme.setAsync(scheme) }
   })
+
+  /** What the appearance actions answer: the stored appearance and what had to be adjusted. */
+  const appearanceResult = (stored: unknown) => ({
+    appearance: stored,
+    adjustments: [...appearance.adjustments.value],
+  })
+  on('settings.appearance.set', async ({ input }) =>
+    appearanceResult(await appearance.setAsync(input as AppearancePatch)),
+  )
+  on('settings.appearance.reset', async () =>
+    appearanceResult(await appearance.resetAsync()),
+  )
+  on('settings.appearance.export', async () => ({
+    file: appearance.exportText(),
+  }))
+  on('settings.appearance.import', async ({ input }) =>
+    appearanceResult(await appearance.importAsync(String(input.file ?? ''))),
+  )
 
   on('settings.device.setAlias', async ({ input }) => {
     const alias = String(input.alias).trim()

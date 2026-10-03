@@ -29,9 +29,12 @@ const router = useRouter()
 const instancesStore = useInstancesStore()
 const wm = useWindowManagerStore()
 const colorScheme = useColorScheme()
+const appearance = useAppearance()
 
 // The color scheme is a vault preference: another device or window can change it.
 onVaultTablesChanged(['preferences'], colorScheme.refreshAsync)
+// The appearance (spec 035) is a vault preference too.
+onVaultTablesChanged(['preferences'], appearance.refreshAsync)
 // Spec 020: create the models store here, inside a component setup (its setup calls `useI18n()`),
 // so the global chat actions (`stores/chatActionHandlers.ts`) find it when an action runs.
 useModelsStore()
@@ -75,15 +78,20 @@ watch([sessionRestored, () => route.query.open], ([restored]) => {
 // and friends have no route of their own).
 onMounted(async () => {
   instancesStore.setActiveInstance(instanceName.value)
+  // Spec 023 (FR-014): the vault's color scheme; a read error leaves the system's. Spec 035: the
+  // vault's appearance, a read error leaves the defaults. Both are started before the session is
+  // restored, so the windows are not first painted in the default colors.
+  void colorScheme.loadAsync().catch((error: unknown) => {
+    console.error('[settings] reading the color scheme failed', error)
+  })
+  void appearance.loadAsync().catch((error: unknown) => {
+    console.error('[settings] reading the appearance failed', error)
+  })
   try {
     await wm.restoreSessionAsync()
   } catch (error) {
     console.error('[wm] restoring the session failed; starting empty', error)
   }
-  // Spec 023 (FR-014): the vault's color scheme; a read error leaves the system's.
-  void colorScheme.loadAsync().catch((error: unknown) => {
-    console.error('[settings] reading the color scheme failed', error)
-  })
   void useModelDownloadsStore()
     .watchDownloads()
     .catch((error: unknown) => {

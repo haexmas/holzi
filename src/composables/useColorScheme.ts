@@ -11,12 +11,19 @@ import {
 const scheme = ref<ColorScheme>('system')
 let media: MediaQueryList | null = null
 
+/** Called after the scheme has been applied, however it changed (spec 035, `useAppearance`). */
+const listeners: (() => void)[] = []
+export function onColorSchemeApplied(listener: () => void) {
+  listeners.push(listener)
+}
+
 function apply() {
   const dark = isDark(scheme.value, media?.matches ?? false)
   const root = document.documentElement
   root.classList.toggle('dark', dark)
   // Native controls (radio buttons, scrollbars) follow `color-scheme`, not the class.
   root.style.colorScheme = dark ? 'dark' : 'light'
+  for (const listener of listeners) listener()
 }
 
 /** Follows the system's scheme; `apply` only changes something while `system` applies. */

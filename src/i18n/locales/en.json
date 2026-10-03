@@ -622,6 +622,43 @@
         "warm": "Warm",
         "cool": "Cool",
         "rose": "Rose"
+      },
+      "accent": "Accent color",
+      "window": "Window background",
+      "container": "Container background",
+      "containerHint": "Used for sidebars, lists, cards and dialogs",
+      "text": "Text tint",
+      "textHint": "Basis of the text colors of the interface",
+      "component": "Component tint",
+      "componentHint": "Used for buttons, search fields and input fields",
+      "windowHint": "Use the accent color as the active-window hint",
+      "swatches": "Colors",
+      "custom": "Custom color",
+      "addCustom": "Choose a custom color",
+      "hex": "Color value (#rrggbb)",
+      "adjusted": "adjusted",
+      "reasons": {
+        "accent-contrast": "Lightness adjusted so that text on the color stays readable.",
+        "text-contrast": "Saturation or lightness adjusted so that text stays readable."
+      },
+      "reset": "Reset to defaults",
+      "resetTitle": "Reset the appearance?",
+      "resetBody": "Accent, backgrounds, tints and the window hint go back to the defaults. The color scheme stays.",
+      "resetConfirm": "Reset",
+      "cancel": "Cancel",
+      "importFile": "Import",
+      "exportFile": "Export",
+      "imported": "Appearance imported.",
+      "exported": "Appearance saved.",
+      "saved": "Saved.",
+      "invalid": "Invalid choice: {field}",
+      "failed": "The appearance could not be saved.",
+      "import": {
+        "notJson": "The file is not valid JSON or is larger than 16 KiB.",
+        "notAppearance": "The file is not an appearance file.",
+        "version": "This version of the appearance file is not supported.",
+        "field": "Invalid value in the file: {field}",
+        "failed": "The import could not be saved; nothing was changed."
       }
     }
   },
@@ -927,7 +964,11 @@
         "set": "Turn session restore on or off"
       },
       "appearance": {
-        "setColorScheme": "Set the color scheme"
+        "setColorScheme": "Set the color scheme",
+        "set": "Set the appearance",
+        "reset": "Reset the appearance",
+        "export": "Read the appearance as a file",
+        "import": "Apply the appearance from a file"
       },
       "devices": {
         "list": "List the vault's devices",
