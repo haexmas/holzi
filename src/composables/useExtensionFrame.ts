@@ -1,4 +1,4 @@
-import { onBeforeUnmount, ref, watch, type Ref } from 'vue'
+import { nextTick, onBeforeUnmount, ref, watch, type Ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import type { FrameOpened } from '@bindings/FrameOpened'
@@ -253,15 +253,17 @@ export function useExtensionFrame(
     }
   }
 
-  /** Answers the open dialog; closing it counts as "cancel". */
+  /** Answers the open dialog; closing it counts as "cancel". The keyboard goes back to the frame,
+   * as after `window.confirm()`, once the frame is no longer inert. */
   function answerDialog(confirmed: boolean): void {
     const open = dialog.value
     dialog.value = null
-    if (open)
-      void invoke('extension_dialog_resolve', {
-        requestId: open.requestId,
-        confirmed,
-      }).catch(() => {})
+    if (!open) return
+    void invoke('extension_dialog_resolve', {
+      requestId: open.requestId,
+      confirmed,
+    }).catch(() => {})
+    void nextTick(() => iframe.value?.focus())
   }
 
   async function closeAsync(): Promise<void> {
