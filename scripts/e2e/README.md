@@ -114,7 +114,7 @@ scenario('sync-two-users', { timeoutMs: 480_000 }, async (ctx) => {
 })
 ```
 
-(An excerpt: the file leaves out Ben's part, which checks that his vault never holds Anna's chat.) The
+(An excerpt: it leaves out Ben's part, which checks that his vault never holds Anna's chat.) The
 second argument of `scenario` takes `timeoutMs`, the most the scenario may run; a group of four devices
 needs a few minutes just to start, so give such a scenario 300 to 600 s. A user may have a single device.
 

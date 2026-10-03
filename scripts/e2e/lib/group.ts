@@ -8,6 +8,7 @@ import {
   limitMessage,
   maxDevicesFrom,
   planGroup,
+  usableName,
 } from './group-plan.ts'
 import type { GroupSpec, PlannedDevice } from './group-plan.ts'
 import type { NostrRelay } from './nostr-relay.ts'
@@ -94,13 +95,23 @@ export class Group {
 
   /**
    * A new device of the host's user, linked the way a person does it with a code from the host (which
-   * must be a main device), and started. `main: true` makes it a main device too.
+   * must be a running main device), and started. `main: true` makes it a main device too.
    */
   async link(
     host: Device,
     name: string,
     options: { main?: boolean } = {},
   ): Promise<Device> {
+    if (host.role !== 'main') {
+      throw new Error(
+        `device ${host.address} is a linked device; only a main device can link another one`,
+      )
+    }
+    if (host.state !== 'running') {
+      throw new Error(
+        `device ${host.address} is ${host.state}; it must be running to link another one`,
+      )
+    }
     return linkDeviceInto(this, host, {
       user: host.user,
       name,
@@ -111,13 +122,26 @@ export class Group {
     })
   }
 
-  /** Registers a device that does not run yet; refuses one more than the limit allows. */
+  /**
+   * Registers a device that does not run yet; refuses an unusable name, a name another device of the
+   * group has (as `planGroup` does) and one more device than the limit allows.
+   */
   add(
     planned: PlannedDevice,
     vault: { vaultName: string; passphrase: string; role: 'main' | 'linked' },
   ): Device {
-    if (this.devices.has(planned.address)) {
-      throw new Error(`device "${planned.address}" already exists in the group`)
+    if (!usableName(planned.name)) {
+      throw new Error(`"${planned.name}" is not a usable device name`)
+    }
+    const other = [...this.devices.values()].find(
+      (device) => device.name === planned.name,
+    )
+    if (other !== undefined) {
+      throw new Error(
+        other.user === planned.user
+          ? `device "${planned.address}" already exists in the group`
+          : `device "${planned.name}" is used by users "${other.user}" and "${planned.user}"; device names are unique in a group`,
+      )
     }
     if (this.devices.size + 1 > this.deps.maxDevices) {
       throw new Error(limitMessage(this.devices.size + 1, this.deps.maxDevices))

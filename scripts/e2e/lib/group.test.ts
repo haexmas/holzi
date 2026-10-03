@@ -227,6 +227,32 @@ describe('creating a group', () => {
     )
   })
 
+  it('links only through a running main device, under a name the group does not have', async () => {
+    const { group, host } = await make({
+      anna: ['laptop', 'phone'],
+      ben: ['pc'],
+    })
+    const laptop = group.device('anna/laptop')
+    const starts = host.calls.length
+    await assert.rejects(
+      group.link(group.device('anna/phone'), 'tablet'),
+      /anna\/phone is a linked device/,
+    )
+    await assert.rejects(
+      group.link(laptop, 'pc'),
+      /used by users "ben" and "anna"/,
+    )
+    await assert.rejects(group.link(laptop, 'phone'), /already exists/)
+    await assert.rejects(group.link(laptop, 'x/y'), /not a usable device name/)
+    await laptop.stop()
+    await assert.rejects(
+      group.link(laptop, 'tablet'),
+      /anna\/laptop is stopped/,
+    )
+    assert.equal(group.devices.size, 3)
+    assert.deepEqual(host.calls.slice(starts), ['stop 4-anna-6-laptop'])
+  })
+
   it('gives every user and linked device its own passphrase', async () => {
     const { group } = await make({ anna: ['a', 'b'], ben: ['c'] })
     const passphrases = [...group.devices.values()].map((d) => d.passphrase)

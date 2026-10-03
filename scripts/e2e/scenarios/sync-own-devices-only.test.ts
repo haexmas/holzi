@@ -10,17 +10,11 @@ scenario('sync-own-devices-only', { timeoutMs: 300_000 }, async (ctx) => {
   const g = await ctx.group({
     users: { anna: ['laptop', 'phone'], ben: ['desktop', 'tablet'] },
   })
-  const [mine, linked, foreign, foreignPeer] = [
-    'laptop',
-    'phone',
-    'desktop',
-    'tablet',
-  ].map((name) =>
-    g.device(
-      `${name === 'laptop' || name === 'phone' ? 'anna' : 'ben'}/${name}`,
-    ),
-  )
-  assert.ok(mine && linked && foreign && foreignPeer)
+  const [mine, linked] = [g.device('anna/laptop'), g.device('anna/phone')]
+  const [foreign, foreignPeer] = [
+    g.device('ben/desktop'),
+    g.device('ben/tablet'),
+  ]
 
   await addThread(foreign, 'nur beim Fremden')
   await addThread(mine, 'nur bei mir')
