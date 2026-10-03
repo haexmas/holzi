@@ -143,3 +143,22 @@ test('window and container tints change only their own surfaces', () => {
     assert.notEqual(coolContainer[name], base[name], name)
   }
 })
+
+test('the accent keeps its hue in both schemes and is derived in lightness for each', () => {
+  for (const preset of ACCENT_PRESETS.filter((p) => p.c > 0)) {
+    const appearance = { ...DEFAULT_APPEARANCE, accent: { preset: preset.id } }
+    const light = parseOklch(derive(appearance, 'light').tokens.primary)!
+    const dark = parseOklch(derive(appearance, 'dark').tokens.primary)!
+    assert.equal(light.h, dark.h, preset.id)
+    assert.notEqual(light.l, dark.l, preset.id)
+  }
+})
+
+test('reset: the default appearance derives the same as the default tokens', () => {
+  for (const scheme of SCHEMES) {
+    assert.deepEqual(
+      derive({ ...DEFAULT_APPEARANCE }, scheme),
+      derive(DEFAULT_APPEARANCE, scheme),
+    )
+  }
+})

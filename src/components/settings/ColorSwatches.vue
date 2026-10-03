@@ -115,7 +115,8 @@ function pick(value: string) {
       <Icon
         v-if="isChecked(entry)"
         name="lucide:check"
-        class="size-4 text-white mix-blend-difference"
+        class="size-4 mix-blend-difference"
+        style="color: white"
       />
     </button>
 

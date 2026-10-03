@@ -55,9 +55,7 @@
           "description": "Signed number of entries."
         }
       },
-      "required": [
-        "steps"
-      ]
+      "required": ["steps"]
     },
     "effect": "write",
     "core": false,
@@ -85,9 +83,7 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "to"
-      ]
+      "required": ["to"]
     },
     "effect": "write",
     "core": false,
@@ -112,9 +108,7 @@
           "description": "Optional app-relative start location, e.g. '/thread/<id>'."
         }
       },
-      "required": [
-        "appId"
-      ]
+      "required": ["appId"]
     },
     "effect": "write",
     "core": true,
@@ -143,9 +137,7 @@
           "description": "Optional app-relative start location, e.g. '/thread/<id>'."
         }
       },
-      "required": [
-        "appId"
-      ]
+      "required": ["appId"]
     },
     "effect": "write",
     "core": true,
@@ -278,12 +270,7 @@
           "type": "number"
         }
       },
-      "required": [
-        "x",
-        "y",
-        "width",
-        "height"
-      ]
+      "required": ["x", "y", "width", "height"]
     },
     "effect": "write",
     "core": false,
@@ -328,9 +315,7 @@
           "description": "Destination workspace."
         }
       },
-      "required": [
-        "toWorkspaceId"
-      ]
+      "required": ["toWorkspaceId"]
     },
     "effect": "write",
     "core": false,
@@ -531,9 +516,7 @@
           "description": "Conversation id (see chat.conversations.list)."
         }
       },
-      "required": [
-        "threadId"
-      ]
+      "required": ["threadId"]
     },
     "effect": "write",
     "core": false,
@@ -557,10 +540,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "threadId",
-        "title"
-      ]
+      "required": ["threadId", "title"]
     },
     "effect": "write",
     "core": false,
@@ -581,9 +561,7 @@
           "description": "Conversation id (see chat.conversations.list)."
         }
       },
-      "required": [
-        "threadId"
-      ]
+      "required": ["threadId"]
     },
     "effect": "destructive",
     "core": false,
@@ -619,9 +597,7 @@
           "description": "Conversation id (see chat.conversations.list)."
         }
       },
-      "required": [
-        "threadId"
-      ]
+      "required": ["threadId"]
     },
     "effect": "read",
     "core": false,
@@ -641,9 +617,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "modelId"
-      ]
+      "required": ["modelId"]
     },
     "effect": "write",
     "core": false,
@@ -697,9 +671,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "entryId"
-      ]
+      "required": ["entryId"]
     },
     "effect": "write",
     "core": false,
@@ -719,9 +691,7 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "enabled"
-      ]
+      "required": ["enabled"]
     },
     "effect": "write",
     "core": false,
@@ -816,9 +786,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "alias"
-      ]
+      "required": ["alias"]
     },
     "effect": "write",
     "core": false,
@@ -838,9 +806,7 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "enabled"
-      ]
+      "required": ["enabled"]
     },
     "effect": "write",
     "core": false,
@@ -858,16 +824,10 @@
       "properties": {
         "scheme": {
           "type": "string",
-          "enum": [
-            "light",
-            "dark",
-            "system"
-          ]
+          "enum": ["light", "dark", "system"]
         }
       },
-      "required": [
-        "scheme"
-      ]
+      "required": ["scheme"]
     },
     "effect": "write",
     "core": true,
@@ -1002,9 +962,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "file"
-      ]
+      "required": ["file"]
     },
     "effect": "write",
     "core": false,
@@ -1025,9 +983,7 @@
           "description": "Installed model id (see settings.models.list)."
         }
       },
-      "required": [
-        "modelId"
-      ]
+      "required": ["modelId"]
     },
     "effect": "write",
     "core": false,
@@ -1062,9 +1018,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "catalogId"
-      ]
+      "required": ["catalogId"]
     },
     "effect": "write",
     "core": false,
@@ -1084,9 +1038,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "entryId"
-      ]
+      "required": ["entryId"]
     },
     "effect": "write",
     "core": false,
@@ -1124,10 +1076,7 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "repoId",
-        "filename"
-      ]
+      "required": ["repoId", "filename"]
     },
     "effect": "write",
     "core": false,
@@ -1148,9 +1097,7 @@
           "description": "Installed model id (see settings.models.list)."
         }
       },
-      "required": [
-        "modelId"
-      ]
+      "required": ["modelId"]
     },
     "effect": "write",
     "core": false,
@@ -1171,9 +1118,7 @@
           "description": "Installed model id (see settings.models.list)."
         }
       },
-      "required": [
-        "modelId"
-      ]
+      "required": ["modelId"]
     },
     "effect": "destructive",
     "core": false,
@@ -1193,9 +1138,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "providerId"
-      ]
+      "required": ["providerId"]
     },
     "effect": "write",
     "core": false,
