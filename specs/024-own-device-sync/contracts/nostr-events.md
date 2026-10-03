@@ -49,15 +49,18 @@ Generation, info = "holzi/presence/v1" ‖ tag_u32)`, `tag` = Tage seit 1970 (UT
   (höchstens 16 Kandidaten zugleich); der Handshake übernimmt die Liste oder lehnt ab.
 - Abo: `{kinds: [21059], "#p": [mb_pk(heute), mb_pk(gestern)]}` für den Inhaltsschlüssel der
   höchsten Generation und zusätzlich für bis zu vier ältere Inhaltsschlüssel, die das Gerät hält
-  (neueste zuerst); erneuert beim Tageswechsel und sobald sich der Inhaltsschlüssel ändert. In den
-  Postfächern älterer Schlüssel wird nur gelesen, gesendet wird immer mit dem der höchsten
-  Generation: Ein Gerät, das offline war, während ein Gerät entfernt und der Schlüssel erneuert
-  wurde, kennt nur den alten Schlüssel und meldet sich mit ihm. Die anderen hören es dort, prüfen die
-  Meldung wie jede andere und wählen es an; Handshake und Sitzung bringen ihm die neue Liste und den
-  neuen Schlüssel (FR-027). Ein entferntes Gerät erfährt so nichts Neues, weil in alten Postfächern
-  niemand sendet. Weil es die alten Schlüssel weiter hält, zählt dort nur die Meldung eines Geräts,
-  das die geltende Liste nennt, und nur für ein gelistetes Gerät: Aufnahmeanfragen und Meldungen
-  unbekannter Absender, auch mit höherer `list_generation`, werden in alten Postfächern verworfen.
+  (neueste zuerst), sowie für bis zu vier höhere, die es wegen eines entfernten Empfängers
+  übersprungen hat (R9; mit ihnen meldet sich ein Gerät, das von der Entfernung noch nichts weiß);
+  erneuert beim Tageswechsel und sobald sich der Inhaltsschlüssel ändert. In den übrigen Postfächern
+  wird nur gelesen, gesendet wird immer mit dem aktuellen Schlüssel: Ein Gerät, das offline war,
+  während ein Gerät entfernt und der Schlüssel erneuert wurde, kennt nur den alten Schlüssel und
+  meldet sich mit ihm. Die anderen hören es dort, prüfen die Meldung wie jede andere und wählen es
+  an; Handshake und Sitzung bringen ihm die neue Liste und den neuen Schlüssel (FR-027). Ein
+  entferntes Gerät erfährt so nichts Neues, weil in den übrigen Postfächern niemand sendet. Weil es
+  die alten Schlüssel weiter hält, zählt in jedem Postfach außer dem des aktuellen Schlüssels nur
+  die Meldung eines Geräts, das die geltende Liste nennt, und nur für ein gelistetes Gerät:
+  Aufnahmeanfragen und Meldungen unbekannter Absender, auch mit höherer `list_generation`, werden
+  dort verworfen.
 
 ## Aufnahmeanfrage (inneres Ereignis Art 24101)
 

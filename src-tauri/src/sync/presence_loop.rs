@@ -40,11 +40,12 @@ const RELAY_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_sec
 /// A request to be admitted that has waited this long gets a new time, so a
 /// copy left running does not let its request go stale (R20: 30 days).
 const REQUEST_RENEWAL_MS: u64 = 7 * 24 * 60 * 60 * 1000;
-// ponytail: listens on the mailboxes of the 4 newest older key generations. Ceiling: a device that
-// missed more key changes than that is not heard and has to be dialed from a stored address or
-// linked again. Upgrade path: raise it; each key adds two `p` values to the one subscription.
-/// How many older content keys presence also listens with, besides the current one.
-const OLDER_MAILBOXES: usize = 4;
+// ponytail: listens on the mailboxes of the 4 newest lower key generations (and of up to 4 higher
+// ones skipped for a removed recipient). Ceiling: a device that missed more key changes than that is
+// not heard and has to be dialed from a stored address or linked again. Upgrade path: raise it; each
+// key adds two `p` values to the one subscription.
+/// How many other content keys presence also listens with on either side of the current one.
+const OTHER_MAILBOXES: usize = 4;
 
 /// Runs presence for as long as this device's session lasts: connects to
 /// `relay_urls`, subscribes to today's and yesterday's mailbox, publishes
@@ -264,8 +265,8 @@ pub(crate) async fn handle_incoming(
             return false;
         }
     };
-    // The current key's mailboxes first; an older one is a device that was away while the key
-    // changed.
+    // The current key's mailboxes first; another one is a device that was away while the key
+    // changed, or has not heard of a removal yet.
     let opened = roster
         .listening_keys()
         .iter()
@@ -278,13 +279,13 @@ pub(crate) async fn handle_incoming(
                     .map(|opened| (index > 0, opened))
             })
         });
-    let Some((older, (sender, kind, payload))) = opened else {
+    let Some((other, (sender, kind, payload))) = opened else {
         return false;
     };
-    // A removed device still holds the older keys and could speak there under a fresh device key:
-    // only a listed device's meeting of a device the list names is heard in an older mailbox, never
+    // A removed device still holds the other keys and could speak there under a fresh device key:
+    // only a listed device's meeting of a device the list names is heard in another mailbox, never
     // a request to be admitted or a claim of a newer list.
-    if older && (roster.standing != Standing::Listed || !roster.names(&sender)) {
+    if other && (roster.standing != Standing::Listed || !roster.names(&sender)) {
         return false;
     }
     if kind == ADMISSION_KIND {
@@ -449,8 +450,8 @@ pub(crate) enum Standing {
 /// list's generation, and the device keys that list currently names.
 pub(crate) struct Roster {
     content_key: [u8; 32],
-    /// Older keys this device holds, newest first; presence only listens with them.
-    older_keys: Vec<[u8; 32]>,
+    /// Other keys this device holds (content_keys::listening_keys); presence only listens with them.
+    other_keys: Vec<[u8; 32]>,
     list_generation: u64,
     /// Each device the list names, with the endpoint it names for it.
     effective_devices: Vec<([u8; 32], [u8; 32])>,
@@ -467,7 +468,7 @@ impl Roster {
     /// The keys whose mailboxes presence listens on: the current one first.
     fn listening_keys(&self) -> Vec<[u8; 32]> {
         std::iter::once(self.content_key)
-            .chain(self.older_keys.iter().copied())
+            .chain(self.other_keys.iter().copied())
             .collect()
     }
 
@@ -517,13 +518,13 @@ pub(crate) fn read_roster(
         } else {
             Standing::Unlisted
         };
-        let older_keys = crate::sync::content_keys::older_keys(r, &key.key_id, OLDER_MAILBOXES)?
+        let other_keys = crate::sync::content_keys::listening_keys(r, &key, OTHER_MAILBOXES)?
             .into_iter()
             .map(|key| *key)
             .collect();
         Ok(Some(Roster {
             content_key: *key.key,
-            older_keys,
+            other_keys,
             list_generation: effective.list.generation,
             effective_devices: effective
                 .list

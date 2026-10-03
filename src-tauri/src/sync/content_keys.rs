@@ -338,21 +338,31 @@ pub fn current_key(
     Ok(None)
 }
 
-/// Up to `limit` keys this device holds besides `current`, newest generation
-/// first. Presence only listens with them (contracts/nostr-events.md): a
-/// device that was away while the key changed still announces itself with
-/// an older one.
-pub fn older_keys(
+/// The keys this device holds besides `current`: up to `limit` of a lower
+/// generation, newest first, then up to `limit` of a higher one, which
+/// `current_key` skipped for a removed recipient. Presence only listens with
+/// them (contracts/nostr-events.md): a device that was away while the key
+/// changed still announces itself with a lower one, and one that has not yet
+/// heard of a removal with a skipped higher one.
+pub fn listening_keys(
     q: &mut impl Query,
-    current: &[u8; 16],
+    current: &ContentKey,
     limit: usize,
 ) -> haex_crdt::Result<Vec<Zeroizing<[u8; 32]>>> {
-    let held: Vec<Vec<u8>> = q.query_map(
-        "SELECT key FROM vault_content_keys_no_sync WHERE key_id <> ?1 \
+    let generation = i64::try_from(current.generation).map_err(|_| KeyError::Malformed)?;
+    let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+    let mut held: Vec<Vec<u8>> = q.query_map(
+        "SELECT key FROM vault_content_keys_no_sync WHERE generation < ?1 \
          ORDER BY generation DESC LIMIT ?2",
-        params![current.as_slice(), i64::try_from(limit).unwrap_or(i64::MAX)],
+        params![generation, limit],
         |r| r.get(0),
     )?;
+    held.extend(q.query_map(
+        "SELECT key FROM vault_content_keys_no_sync WHERE generation > ?1 \
+         ORDER BY generation ASC LIMIT ?2",
+        params![generation, limit],
+        |r| r.get(0),
+    )?);
     held.into_iter()
         .map(|key| {
             let key = Zeroizing::new(key);
