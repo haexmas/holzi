@@ -101,10 +101,10 @@ scenario('sync-two-users', { timeoutMs: 480_000 }, async (ctx) => {
     users: { anna: ['laptop', 'phone'], ben: ['desktop', 'tablet'] },
   })
   const [laptop, phone] = [g.device('anna/laptop'), g.device('anna/phone')]
-  await phone.goOffline() // the app keeps working, but no other device can be reached
-  await expectOnline(ctx, laptop, phone, false) // laptop lists phone as not online
+  await phone.stop()
+  await expectOnline(ctx, laptop, phone, false, 60_000) // laptop lists phone as not online
   await addThread(laptop, 'Annas Chat')
-  await phone.goOnline()
+  await phone.start()
   await expectThreads(
     ctx,
     phone,
@@ -128,16 +128,16 @@ every device in a folder of its own.
 
 On a device (`g.device('anna/laptop')`):
 
-| Call                                                | Effect                                                                                                          |
-| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `device.page`                                       | The same surface as an instance: `click`, `type`, `invoke`, `exec`, `waitForDisplayed`, `screenshot`, …         |
-| `device.stop()` / `.start()` / `.restart()`         | Close the application gracefully / open it again over the same data / both.                                     |
-| `device.kill()`                                     | End it without its own shutdown; the data stays.                                                                |
-| `device.lock()`                                     | Press the lock control and wait for the process to end; resolves with the time from the press to the end.       |
-| `device.goOffline()` / `.goOnline()`                | Run without any Nostr relay, so no other device finds it, and back. Both restart the application (research R2). |
-| `device.setServers(servers)`                        | The server lists of the vault; they apply at the next opening.                                                  |
-| `device.deviceList()` / `.status()` / `.identity()` | The rows of `list_vault_devices`, `sync_status` and the public vault identity, through the interface.           |
-| `device.copyVaultTo(name, { user? })`               | Copy the vault file of a stopped device to a new, stopped device; the copy of a main device is a main device.   |
+| Call                                                | Effect                                                                                                        |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `device.page`                                       | The same surface as an instance: `click`, `type`, `invoke`, `exec`, `waitForDisplayed`, `screenshot`, …       |
+| `device.stop()` / `.start()` / `.restart()`         | Close the application gracefully / open it again over the same data / both.                                   |
+| `device.kill()`                                     | End it without its own shutdown; the data stays.                                                              |
+| `device.lock()`                                     | Press the lock control and wait for the process to end; resolves with the time from the press to the end.     |
+| `device.goOffline()` / `.goOnline()`                | Run without any server, and back; devices it knew can still reach it directly. Both restart (research R2).    |
+| `device.setServers(servers)`                        | The server lists of the vault; they apply at the next opening.                                                |
+| `device.deviceList()` / `.status()` / `.identity()` | The rows of `list_vault_devices`, `sync_status` and the public vault identity, through the interface.         |
+| `device.copyVaultTo(name, { user? })`               | Copy the vault file of a stopped device to a new, stopped device; the copy of a main device is a main device. |
 
 On the group: `g.device(address)`, `g.relay.stop()` / `g.relay.start()` (the relay goes away and comes back
 on the same address), `g.link(host, name, { main? })` (a device linked later through a main device) and
@@ -167,9 +167,10 @@ The helpers, all `async`, in the order of their arguments:
 What the group's relay does: `g.relay.stop()` and `g.relay.start()` take the Nostr relay away and bring it
 back on the same address. The relay is how devices _find_ each other; a pair that is already connected
 stays connected (the connection is direct), and a device that starts while the relay is away finds nobody
-until it is back, and then finds the others on its own, usually within seconds. To make one device
-unreachable while others keep running, use `device.goOffline()`; to see a device notice that another one
-has gone, stop or kill that one. Both take a while: a device that was ended cleanly is listed as gone at
+until it is back, and then finds the others on its own, usually within seconds. `device.goOffline()` is
+not unreachable: on one machine a device without servers still dials the devices it knew at their last
+address. To make a device unreachable while others keep running, and to see a device notice that another
+one has gone, stop or kill that one. Both take a while: a device that was ended cleanly is listed as gone at
 once, one that was killed or cut off within about 35 s, and the promise is 60 s.
 
 Nothing arrives is a claim without an event to wait for. Wait until a device that _should_ get the thing
