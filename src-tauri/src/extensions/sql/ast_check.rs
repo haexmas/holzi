@@ -130,7 +130,7 @@ impl Visitor for Collector {
 }
 
 /// The tables a write statement writes, as written.
-fn write_targets(statement: &Statement) -> Result<Vec<String>, BridgeError> {
+pub(crate) fn write_targets(statement: &Statement) -> Result<Vec<String>, BridgeError> {
     Ok(match statement {
         Statement::Insert(insert) => match &insert.table {
             TableObject::TableName(name) => vec![table_name(name)?],
