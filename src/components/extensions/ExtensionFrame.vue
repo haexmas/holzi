@@ -22,6 +22,8 @@ const { state, error, src, dialog, answerDialog, onLoad, reloadAsync } =
       ref="iframe"
       :src="src"
       sandbox="allow-scripts"
+      data-testid="extension-frame"
+      :data-extension-id="extensionId"
       referrerpolicy="no-referrer"
       class="h-full w-full border-0"
       :class="{ invisible: state !== 'ready' }"

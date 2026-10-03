@@ -71,7 +71,7 @@ test('events are held until the port is ready, then delivered in order, only for
   queue.push(event('f1', 'a'))
   queue.push(event('f2', 'foreign'))
   queue.push(event('f1', 'b'))
-  assert.deepEqual(delivered, [])
+  assert.equal(delivered.length, 0)
   queue.ready()
   assert.deepEqual(
     delivered.map((e) => e.type),
