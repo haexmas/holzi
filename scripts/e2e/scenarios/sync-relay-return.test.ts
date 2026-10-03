@@ -35,14 +35,8 @@ scenario('sync-relay-return', { timeoutMs: 360_000 }, async (ctx) => {
   ctx.step('without the relay the devices run and keep local work')
 
   // Neither knows where the other is now, so without the relay they have not met.
-  assert.equal(
-    (await laptop.deviceList()).find((r) => !r.isCurrent)?.online,
-    false,
-  )
-  assert.equal(
-    (await phone.deviceList()).find((r) => !r.isCurrent)?.online,
-    false,
-  )
+  await expectOnline(ctx, laptop, phone, false)
+  await expectOnline(ctx, phone, laptop, false)
 
   await g.relay.start()
   assert.equal(g.relay.state, 'up')
