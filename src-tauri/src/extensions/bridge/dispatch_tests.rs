@@ -189,3 +189,93 @@ fn frame_events_reach_only_the_frames_of_that_extension() {
     assert_ne!(recorded[0].1["frame"], json!(other.frame));
     assert_eq!(recorded[0].1["type"], "extension:permission-resolved");
 }
+
+/// Passes events on, so a test can wait for one instead of sleeping.
+struct Forward(Mutex<std::sync::mpsc::Sender<(String, Value)>>);
+
+impl Emit for Forward {
+    fn emit(&self, event: &str, payload: Value) {
+        let _ = self.0.lock().unwrap().send((event.to_owned(), payload));
+    }
+}
+
+fn with_forwarding(s: Setup) -> (Setup, std::sync::mpsc::Receiver<(String, Value)>) {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let ctx = CallContext {
+        db: s.ctx.db.clone(),
+        host: Arc::clone(&s.ctx.host),
+        session: Arc::clone(&s.ctx.session),
+        device: s.ctx.device,
+        emitter: Arc::new(Forward(Mutex::new(tx))),
+    };
+    (Setup { ctx, ..s }, rx)
+}
+
+#[test]
+fn a_confirm_dialog_waits_for_holzis_answer_for_the_own_frame() {
+    let (s, events) = with_forwarding(setup());
+    let s = Arc::new(s);
+    let caller = {
+        let s = Arc::clone(&s);
+        std::thread::spawn(move || {
+            call(
+                &s.ctx,
+                "extension_dialog_confirm",
+                &json!({"message": "Notiz löschen?", "destructive": true}),
+            )
+        })
+    };
+    let (event, payload) = events.recv().unwrap();
+    assert_eq!(event, "extension-dialog-request");
+    assert_eq!(payload["frame"], s.ctx.session.frame);
+    assert_eq!(payload["message"], "Notiz löschen?");
+    assert_eq!(payload["destructive"], true);
+
+    // A second dialog of the same frame while one is open is refused.
+    assert_eq!(
+        code(call(
+            &s.ctx,
+            "extension_dialog_confirm",
+            &json!({"message": "x"})
+        )),
+        7000
+    );
+
+    s.ctx
+        .host
+        .resolve_dialog(payload["requestId"].as_str().unwrap(), true);
+    assert_eq!(caller.join().unwrap().unwrap(), Value::Bool(true));
+}
+
+#[test]
+fn closing_the_frame_answers_an_open_dialog_with_false() {
+    let (s, events) = with_forwarding(setup());
+    let s = Arc::new(s);
+    let caller = {
+        let s = Arc::clone(&s);
+        std::thread::spawn(move || {
+            call(&s.ctx, "extension_dialog_confirm", &json!({"message": "?"}))
+        })
+    };
+    events.recv().unwrap();
+    s.ctx.host.drop_dialogs_of(&s.ctx.session.frame);
+    assert_eq!(caller.join().unwrap().unwrap(), Value::Bool(false));
+}
+
+#[test]
+fn dialog_parameters_are_checked() {
+    let s = setup();
+    for params in [
+        json!({}),
+        json!({"message": ""}),
+        json!({"message": "x".repeat(2001)}),
+        json!({"message": "ok", "title": "t".repeat(201)}),
+        json!({"message": "ok", "confirmLabel": 5}),
+    ] {
+        assert_eq!(
+            code(call(&s.ctx, "extension_dialog_confirm", &params)),
+            3001,
+            "{params}"
+        );
+    }
+}

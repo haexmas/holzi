@@ -1412,6 +1412,11 @@
       "timeout": "The extension does not respond.",
       "reload": "Reload",
       "closeGuard": "The extension has unsaved changes."
+    },
+    "dialog": {
+      "fromExtension": "Question from the extension",
+      "confirm": "OK",
+      "cancel": "Cancel"
     }
   }
 }
