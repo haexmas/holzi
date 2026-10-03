@@ -14,6 +14,7 @@ pub mod mime;
 pub mod permissions;
 pub mod protocol;
 pub mod registry;
+pub mod sql;
 
 // The limits of a bundle (size, entries, ratio) belong to the bundle format and live in the crate
 // `haex-bundle` (`haex_bundle::format::limits`), the one implementation shared with the `haex` tool.
