@@ -72,6 +72,18 @@ export function useErrorString() {
         }
         return t('errors.passwords.importFailed')
       }
+      // Spec 017: the extension host's kinds name a reason or a state, never data of an extension.
+      if (kind === 'ExtensionInstall') {
+        const key = `extensions.install.errors.${String(reason)}`
+        return te(key) ? t(key) : t('errors.extensions.install')
+      }
+      if (kind === 'ExtensionNotFound') return t('errors.extensions.notFound')
+      if (kind === 'ExtensionDisabled') return t('errors.extensions.disabled')
+      if (kind === 'ExtensionNotReady') {
+        const status = (e as { status?: unknown }).status
+        const key = `extensions.status.${String(status)}`
+        return te(key) ? t(key) : t('errors.extensions.notReady')
+      }
       if (kind === 'InvalidInput' && typeof reason === 'string') {
         if (reason.startsWith(AUTONOMY_UNAVAILABLE_PREFIX))
           return t('errors.autonomyUnavailable')

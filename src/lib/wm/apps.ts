@@ -3,16 +3,20 @@
 // this module stays free of Vue/Nuxt and loadable by scripts/check-wm-state.ts.
 import type { Size } from './types.ts'
 
-/** Describes what runs in a tab. `id` is namespaced (`system.*` here; a future `extension.*` is
- * valid on the wire per research R9 but unknown to this registry — an unresolvable tab is dropped
- * on hydrate, FR-025). `defaultSize`/`minSize` apply to a *new window* opened with this app as its
- * first tab; a window with more than one tab keeps its own geometry. */
+/** Describes what runs in a tab. `id` is namespaced: `system.*` here, `extension.*` for installed
+ * extensions (spec 017, `src/lib/extensions/apps.ts`); an unresolvable tab is dropped on hydrate,
+ * FR-025. `defaultSize`/`minSize` apply to a *new window* opened with this app as its first tab; a
+ * window with more than one tab keeps its own geometry. */
 export type AppDefinition = {
   id: string
   /** i18n key for the localized name shown in the Launcher and tab. */
   titleKey: string
+  /** A name that is not translated (an extension's own name); shown instead of `titleKey`. */
+  title?: string
   /** Iconify name (e.g. `lucide:message-square`). */
   icon: string
+  /** An image shown instead of `icon` (an extension's own icon as a `data:` URL). */
+  iconUrl?: string
   defaultSize: Size
   minSize: Size
   /** `false` = singleton: re-opening activates the existing tab instead of creating a second one

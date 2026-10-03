@@ -115,7 +115,8 @@
     "apps": {
       "chat": "Chat",
       "settings": "Einstellungen",
-      "passwords": "Passwörter"
+      "passwords": "Passwörter",
+      "extension": "Erweiterung"
     },
     "launcher": {
       "lock": "Sperren",
@@ -789,6 +790,12 @@
         "cancelled": "Der Import wurde abgebrochen.",
         "unwritable": "Die Datei ließ sich nicht schreiben."
       }
+    },
+    "extensions": {
+      "install": "Die Erweiterung konnte nicht installiert werden.",
+      "notFound": "Die Erweiterung gibt es nicht (mehr).",
+      "disabled": "Die Erweiterung ist deaktiviert.",
+      "notReady": "Die Erweiterung ist auf diesem Gerät noch nicht bereit."
     }
   },
   "actions": {
@@ -1312,6 +1319,42 @@
       "deleted": "Dieser Eintrag wurde auf einem anderen Gerät gelöscht.",
       "reload": "Neu laden",
       "back": "Zurück"
+    }
+  },
+  "extensions": {
+    "install": {
+      "errors": {
+        "archive_too_large": "Die Datei ist zu groß.",
+        "archive_invalid": "Die Datei ist kein gültiges Erweiterungspaket.",
+        "entry_path_invalid": "Das Paket enthält einen unzulässigen Dateinamen.",
+        "entry_duplicate": "Das Paket enthält eine Datei doppelt.",
+        "entry_too_large": "Eine Datei im Paket ist zu groß.",
+        "entry_ratio": "Eine Datei im Paket ist verdächtig stark komprimiert.",
+        "entry_kind": "Das Paket enthält etwas anderes als normale Dateien.",
+        "manifest_not_canonical": "Das Manifest ist nicht in der signierten Form.",
+        "manifest_invalid": "Das Manifest ist ungültig.",
+        "file_mismatch": "Eine Datei wurde nach dem Signieren verändert.",
+        "public_key_mismatch": "Manifest und Signatur nennen verschiedene Herausgeber.",
+        "signature_invalid": "Die Signatur ist ungültig.",
+        "legacy_signature_format": "Das Paket ist mit einem alten Werkzeug signiert. Bitte mit dem aktuellen Werkzeug „haex“ neu signieren.",
+        "unreadable": "Die Datei lässt sich nicht lesen.",
+        "downgrade_not_confirmed": "Eine ältere Fassung wird nur nach Bestätigung installiert."
+      }
+    },
+    "status": {
+      "transferring": "Wird übertragen",
+      "ready": "Bereit",
+      "signature_failed": "Signatur fehlerhaft",
+      "migration_failed": "Datenbank-Änderung fehlgeschlagen",
+      "disabled": "Deaktiviert"
+    },
+    "frame": {
+      "title": "Erweiterung",
+      "loading": "Erweiterung wird geladen …",
+      "failed": "Die Erweiterung konnte nicht gestartet werden.",
+      "timeout": "Die Erweiterung antwortet nicht.",
+      "reload": "Neu laden",
+      "closeGuard": "Die Erweiterung hat ungesicherte Änderungen."
     }
   }
 }

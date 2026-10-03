@@ -5,7 +5,7 @@ import {
   requestDeleteWorkspace,
 } from '~/composables/useWmTab'
 import { ALL_ACTIONS } from '~/lib/actions/catalog'
-import { getAppDefinition, WM_APPS } from '~/lib/wm/apps'
+import { getAppDefinition } from '~/lib/wm/apps'
 import { clampGeometry } from '~/lib/wm/geometry'
 import { formatLocation, currentLocation } from '~/lib/wm/navigation'
 import type { WmTab, WmWindow } from '~/lib/wm/types'
@@ -71,7 +71,7 @@ export function registerWmLayoutHandlers(wm: WmStore, t: Translate): void {
     if (!window) throw new Error('window not found')
     const minSize = window.tabs.reduce(
       (min, tab) => {
-        const app = getAppDefinition(tab.appId)
+        const app = getAppDefinition(tab.appId, wm.apps())
         return {
           width: Math.max(min.width, app?.minSize.width ?? 0),
           height: Math.max(min.height, app?.minSize.height ?? 0),
@@ -180,9 +180,9 @@ export function registerWmLayoutHandlers(wm: WmStore, t: Translate): void {
     }
   })
   on('wm.apps.list', () => ({
-    apps: WM_APPS.map((app) => ({
+    apps: wm.apps().map((app) => ({
       appId: app.id,
-      title: t(app.titleKey),
+      title: app.title ?? t(app.titleKey),
       multiInstance: app.multiInstance,
       locations: [...new Set(flattenRoutes(getAppRoutes(app.id) ?? []))],
     })),
