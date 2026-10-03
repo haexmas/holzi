@@ -133,7 +133,7 @@ async fn keep_subscribed(
     let wanted = match read_roster(replica, vault, &keys.device_pubkey) {
         Ok(roster) => roster.map(|roster| (day, roster.content_key)),
         Err(error) => {
-            log::warn!("sync: presence subscription failed, retrying next tick: {error}");
+            log::warn!("sync: presence mailbox could not be read, retrying next tick: {error}");
             return subscribed;
         }
     };

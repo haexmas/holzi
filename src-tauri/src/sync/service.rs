@@ -179,12 +179,6 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
     let reconnect_on_end = Arc::clone(&reconnect_now);
     node.on_session_ended(Arc::new(move || reconnect_on_end.notify_one()));
 
-    // `notify` (the gate's shared commit signal) wakes at most one waiter
-    // per commit, so it gets exactly one consumer here; fanning that out to
-    // presence (which also wants to know about a local commit, e.g. a
-    // device-list change this session just issued) goes through the
-    // `watch` channel above instead.
-
     // Commands reach the running node through the registry (linking a
     // device); it is cleared again when this service ends.
     let runtime = Arc::new(SyncRuntime {
@@ -209,6 +203,11 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
         registry.set(Arc::clone(&runtime));
     }
     finish_pending_links(&replica, &presence_keys, vault).await;
+    // `notify` (the gate's shared commit signal) wakes at most one waiter
+    // per commit, so it gets exactly one consumer here; fanning that out to
+    // presence (which also wants to know about a local commit, e.g. a
+    // device-list change this session just issued) goes through the
+    // `watch` channel instead.
     let notify_loop = async {
         loop {
             notify.notified().await;
