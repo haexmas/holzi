@@ -52,6 +52,27 @@ pub struct SyncDeps<R: Runtime> {
 /// this session has not connected to yet (spec 024, FR-010).
 const RECONNECT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
 
+/// The least time between two reconnect passes. A session end wakes reconnect, and a peer that
+/// refuses this device as a duplicate can end every new session immediately while it still holds
+/// the session of this device's earlier process. Without a gap that would create a reconnect storm.
+const RECONNECT_MIN_GAP: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Keeps reconnect passes apart while allowing the first wake to run immediately.
+#[derive(Default)]
+struct ReconnectPace {
+    last: Option<tokio::time::Instant>,
+}
+
+impl ReconnectPace {
+    /// Waits until a pass may start, and counts it as started.
+    async fn ready(&mut self) {
+        if let Some(last) = self.last {
+            tokio::time::sleep_until(last + RECONNECT_MIN_GAP).await;
+        }
+        self.last = Some(tokio::time::Instant::now());
+    }
+}
+
 /// Handle to the running service. Currently a marker: nothing outside this
 /// module needs to reach the bound [`SyncNode`] yet (a later spec-024 story
 /// adds `sync_status`).
@@ -226,12 +247,15 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
     );
     let reconnect_loop = async {
         let mut tick = tokio::time::interval(RECONNECT_INTERVAL);
+        tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        let mut pace = ReconnectPace::default();
         loop {
             tokio::select! {
                 _ = tick.tick() => {}
                 _ = reconnect_now.notified() => {}
             }
-            crate::sync::reconnect_missing(&node, &replica).await;
+            pace.ready().await;
+            crate::sync::reconnect_missing(&node, &replica);
         }
     };
 

@@ -228,7 +228,7 @@ async fn a_fresh_meeting_from_a_listed_device_is_recorded_and_looked_up() {
     tokio::time::timeout(Duration::from_secs(5), reconnect.notified())
         .await
         .expect("presence recording a fresh meeting wakes reconnect");
-    crate::sync::reconnect_missing(&linked_node, &linked.device.replica).await;
+    crate::sync::reconnect_missing(&linked_node, &linked.device.replica);
     tokio::time::timeout(Duration::from_secs(5), async {
         while linked_node.connected().is_empty() {
             tokio::task::yield_now().await;

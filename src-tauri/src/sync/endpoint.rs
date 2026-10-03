@@ -8,7 +8,7 @@
 //! Per device at most one connection lives: when both dial each other at
 //! once, the connection dialed by the smaller endpoint id stays.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -85,6 +85,9 @@ struct Inner {
     devices_changed: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
     /// Called after a live session ended, so reconnect can replace it.
     session_ended: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
+    /// Endpoints being dialed right now: a dial to a device that is gone waits for the connect
+    /// timeout, so dials run apart and each endpoint at most once at a time.
+    dialing: Mutex<HashSet<[u8; 32]>>,
     /// Devices this device's list does not name whose presence claimed a
     /// newer list, waiting to be dialed once to fetch it (FR-007).
     candidates: Mutex<HashMap<[u8; 32], EndpointAddr>>,
@@ -172,6 +175,7 @@ impl SyncNode {
             devices_changed: Mutex::new(None),
             session_ended: Mutex::new(None),
             candidates: Mutex::new(HashMap::new()),
+            dialing: Mutex::new(HashSet::new()),
         });
         let router = Router::builder(endpoint)
             .accept(SYNC_ALPN, SyncProtocol(Arc::clone(&inner)))
@@ -186,18 +190,37 @@ impl SyncNode {
 
     /// Dials a device at `addr` and runs the session in the background.
     pub async fn connect(&self, addr: EndpointAddr) -> Result<(), NodeError> {
-        self.inner.lookup.add_endpoint_info(addr.clone());
-        let connection = self
-            .inner
-            .endpoint
-            .connect(addr, SYNC_ALPN)
-            .await
-            .map_err(|e| NodeError::Connect(e.to_string()))?;
+        let connection = connect_sync(&self.inner, addr).await?;
         let inner = Arc::clone(&self.inner);
         self.inner
             .tracker
             .spawn(run_connection(inner, connection, Side::Dial));
         Ok(())
+    }
+
+    /// Dials a device at `addr` in the background, then runs the session. Returns at once: a
+    /// device that is gone keeps its dial waiting for the connect timeout, which must not hold
+    /// up the dials to the others. Does nothing while a dial to that endpoint is under way.
+    pub fn dial(&self, addr: EndpointAddr) {
+        let id = *addr.id.as_bytes();
+        let mut dialing = self.inner.dialing.lock().unwrap_or_else(|e| e.into_inner());
+        if !dialing.insert(id) {
+            return;
+        }
+        drop(dialing);
+        let inner = Arc::clone(&self.inner);
+        self.inner.tracker.spawn(async move {
+            let connected = connect_sync(&inner, addr).await;
+            inner
+                .dialing
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&id);
+            match connected {
+                Ok(connection) => run_connection(inner, connection, Side::Dial).await,
+                Err(error) => log::info!("sync: dialing a device did not succeed yet: {error}"),
+            }
+        });
     }
 
     /// Dials `addr` on the link protocol and hands the connection to the
@@ -378,6 +401,16 @@ impl SyncNode {
     }
 }
 
+/// Opens a connection to `addr` on the sync protocol.
+async fn connect_sync(inner: &Inner, addr: EndpointAddr) -> Result<Connection, NodeError> {
+    inner.lookup.add_endpoint_info(addr.clone());
+    inner
+        .endpoint
+        .connect(addr, SYNC_ALPN)
+        .await
+        .map_err(|e| NodeError::Connect(e.to_string()))
+}
+
 /// Handshake, then the session, for one connection.
 async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
     let remote = *connection.remote_id().as_bytes();
@@ -399,9 +432,27 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
     };
     let handshake = match side {
         Side::Accept => {
-            handshake::accept(&mut send, &mut recv, &inner.replica, &local, remote).await
+            handshake::accept_with(
+                &mut send,
+                &mut recv,
+                &inner.replica,
+                &local,
+                remote,
+                inner.on_applied.as_ref(),
+            )
+            .await
         }
-        Side::Dial => handshake::dial(&mut send, &mut recv, &inner.replica, &local, remote).await,
+        Side::Dial => {
+            handshake::dial_with(
+                &mut send,
+                &mut recv,
+                &inner.replica,
+                &local,
+                remote,
+                inner.on_applied.as_ref(),
+            )
+            .await
+        }
     };
     let peer = match handshake {
         Ok(peer) => peer,

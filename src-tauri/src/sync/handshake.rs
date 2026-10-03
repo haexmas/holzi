@@ -19,7 +19,7 @@
 //! side look the other up in its effective list: listed with exactly this
 //! endpoint, never removed. Before `Accept` nothing but device lists flows.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -107,6 +107,23 @@ where
     W: AsyncWrite + Unpin + Send,
     R: AsyncRead + Unpin + Send,
 {
+    let noop = |_tables: BTreeSet<String>| {};
+    accept_with(send, recv, replica, local, remote_endpoint, &noop).await
+}
+
+/// The accepting side with a callback for device lists learned in the handshake.
+pub(crate) async fn accept_with<W, R>(
+    send: &mut W,
+    recv: &mut R,
+    replica: &Arc<Replica>,
+    local: &Local<'_>,
+    remote_endpoint: [u8; 32],
+    on_applied: &(dyn Fn(BTreeSet<String>) + Send + Sync),
+) -> Result<Peer, HandshakeError>
+where
+    W: AsyncWrite + Unpin + Send,
+    R: AsyncRead + Unpin + Send,
+{
     let lists = load_lists(replica, local.vault).await?;
     let nonce_a = *keys::random_bytes::<32>();
     let challenge = Message::Challenge {
@@ -151,7 +168,8 @@ where
         return refuse(send, code, &device_d).await;
     }
 
-    let lists = store_pushed(replica, local.vault, pushed, lists).await?;
+    let (lists, changed) = store_pushed(replica, local.vault, pushed, lists).await?;
+    notify_applied(on_applied, changed);
     let own = effective_ref(&lists)?;
     push_if_better(send, &lists, &own, &their_list).await?;
     let peer = match admit(&lists, &device_d, &remote_endpoint, local) {
@@ -183,6 +201,23 @@ pub async fn dial<W, R>(
     replica: &Arc<Replica>,
     local: &Local<'_>,
     remote_endpoint: [u8; 32],
+) -> Result<Peer, HandshakeError>
+where
+    W: AsyncWrite + Unpin + Send,
+    R: AsyncRead + Unpin + Send,
+{
+    let noop = |_tables: BTreeSet<String>| {};
+    dial_with(send, recv, replica, local, remote_endpoint, &noop).await
+}
+
+/// The dialing side with a callback for device lists learned in the handshake.
+pub(crate) async fn dial_with<W, R>(
+    send: &mut W,
+    recv: &mut R,
+    replica: &Arc<Replica>,
+    local: &Local<'_>,
+    remote_endpoint: [u8; 32],
+    on_applied: &(dyn Fn(BTreeSet<String>) + Send + Sync),
 ) -> Result<Peer, HandshakeError>
 where
     W: AsyncWrite + Unpin + Send,
@@ -242,8 +277,11 @@ where
             // identity and checked on its own. It is how a removed device hears that it was
             // removed (FR-034), so it is kept although the peer refuses this device.
             if !pushed.is_empty() {
-                if let Err(error) = store_pushed(replica, local.vault, pushed, lists).await {
-                    log::debug!("sync: a list pushed before a refusal was not stored: {error}");
+                match store_pushed(replica, local.vault, pushed, lists).await {
+                    Ok((_, changed)) => notify_applied(on_applied, changed),
+                    Err(error) => {
+                        log::debug!("sync: a list pushed before a refusal was not stored: {error}")
+                    }
                 }
             }
             return Err(HandshakeError::RefusedByPeer(code));
@@ -263,7 +301,8 @@ where
     if schema != local.schema {
         return Err(halted(RejectCode::Incompatible, device_a));
     }
-    let lists = store_pushed(replica, local.vault, pushed, lists).await?;
+    let (lists, changed) = store_pushed(replica, local.vault, pushed, lists).await?;
+    notify_applied(on_applied, changed);
     admit(&lists, &device_a, &remote_endpoint, local).map_err(|code| halted(code, device_a))
 }
 
@@ -446,7 +485,7 @@ async fn store_pushed(
     vault: [u8; 32],
     pushed: Vec<(Vec<u8>, [u8; 64])>,
     lists: BTreeMap<[u8; 32], SignedList>,
-) -> Result<BTreeMap<[u8; 32], SignedList>, HandshakeError> {
+) -> Result<(BTreeMap<[u8; 32], SignedList>, bool), HandshakeError> {
     let fresh: Vec<SignedList> = pushed
         .iter()
         .filter_map(|(payload, signature)| {
@@ -461,7 +500,7 @@ async fn store_pushed(
         .filter(|signed| !lists.contains_key(&signed.hash))
         .collect();
     if fresh.is_empty() {
-        return Ok(lists);
+        return Ok((lists, false));
     }
     let writer = Arc::clone(replica);
     tokio::task::spawn_blocking(move || {
@@ -473,7 +512,13 @@ async fn store_pushed(
         })
     })
     .await??;
-    load_lists(replica, vault).await
+    Ok((load_lists(replica, vault).await?, true))
+}
+
+fn notify_applied(on_applied: &(dyn Fn(BTreeSet<String>) + Send + Sync), changed: bool) {
+    if changed {
+        on_applied(BTreeSet::from(["device_lists".to_owned()]));
+    }
 }
 
 #[cfg(test)]
