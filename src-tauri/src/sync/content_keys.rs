@@ -377,6 +377,20 @@ pub fn current_key_for_list(
     Ok(None)
 }
 
+/// The content keys this device holds, newest generation first, at most `limit`.
+pub fn held_keys(q: &mut impl Query, limit: usize) -> haex_crdt::Result<Vec<[u8; 32]>> {
+    let rows: Vec<Vec<u8>> = q.query_map(
+        "SELECT key FROM vault_content_keys_no_sync ORDER BY generation DESC LIMIT ?1",
+        params![i64::try_from(limit).unwrap_or(i64::MAX)],
+        |r| r.get(0),
+    )?;
+    let mut keys = Vec::with_capacity(rows.len());
+    for key in &rows {
+        keys.push(fixed(key)?);
+    }
+    Ok(keys)
+}
+
 /// Serializes the vault content key and its metadata into a JSON payload and
 /// encrypts it for `recipient` with NIP-44 v2 using the sender's device secret.
 pub(crate) fn wrap(
