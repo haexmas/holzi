@@ -208,6 +208,56 @@ describe('creating a group', () => {
     }
   })
 
+  it('links a device later through any main device of the user, as linked or main', async () => {
+    const { group, host } = await make({
+      anna: ['laptop', { name: 'desk', main: true }],
+    })
+    const desk = group.device('anna/desk')
+    const phone = await group.link(desk, 'phone')
+    const second = await group.link(desk, 'second', { main: true })
+    assert.equal(phone.role, 'linked')
+    assert.equal(second.role, 'main')
+    assert.equal(phone.user, 'anna')
+    assert.equal(phone.state, 'running')
+    assert.equal(group.device('anna/phone'), phone)
+    assert.ok(host.calls.includes('4-anna-4-desk: link_code_create'))
+    assert.deepEqual(
+      host.joins.map((join) => (join as { deviceName: string }).deviceName),
+      ['desk', 'phone', 'second'],
+    )
+  })
+
+  it('links only through a running main device, under a name the group does not have', async () => {
+    const { group, host } = await make({
+      anna: ['laptop', 'phone'],
+      ben: ['pc'],
+    })
+    const laptop = group.device('anna/laptop')
+    const { group: other } = await make({ anna: ['laptop'] })
+    const starts = host.calls.length
+    await assert.rejects(
+      group.link(other.device('anna/laptop'), 'tablet'),
+      /not a device of this group/,
+    )
+    await assert.rejects(
+      group.link(group.device('anna/phone'), 'tablet'),
+      /anna\/phone is a linked device/,
+    )
+    await assert.rejects(
+      group.link(laptop, 'pc'),
+      /used by users "ben" and "anna"/,
+    )
+    await assert.rejects(group.link(laptop, 'phone'), /already exists/)
+    await assert.rejects(group.link(laptop, 'x/y'), /not a usable device name/)
+    await laptop.stop()
+    await assert.rejects(
+      group.link(laptop, 'tablet'),
+      /anna\/laptop is stopped/,
+    )
+    assert.equal(group.devices.size, 3)
+    assert.deepEqual(host.calls.slice(starts), ['stop 4-anna-6-laptop'])
+  })
+
   it('gives every user and linked device its own passphrase', async () => {
     const { group } = await make({ anna: ['a', 'b'], ben: ['c'] })
     const passphrases = [...group.devices.values()].map((d) => d.passphrase)
@@ -361,12 +411,17 @@ describe('a device added later', () => {
   })
 
   it('starts without a vault and then counts as running', async () => {
-    const { group, host } = await make({ anna: ['laptop'] })
+    const { group, host, steps } = await make({ anna: ['laptop'] })
     const phone = group.addDevice('anna', 'phone')
     host.calls.length = 0
     await phone.startUnopened()
     assert.equal(phone.state, 'running')
     assert.deepEqual(host.calls, ['start 4-anna-5-phone'])
+    assert.deepEqual(steps.at(-1), {
+      name: 'device-started',
+      detail: 'anna/phone (no vault yet)',
+      device: 'anna/phone',
+    })
   })
 
   it('refuses an unknown user and a device over the limit', async () => {

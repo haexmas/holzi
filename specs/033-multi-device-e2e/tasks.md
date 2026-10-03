@@ -104,9 +104,9 @@ description: 'Task list for End-to-End Tests Across Several Vaults and Devices'
 
 **Independent Test**: a reviewer who has not seen the helpers writes the example from the README alone.
 
-- [ ] T030 [US6] Add `scripts/e2e/scenarios/sync-two-users.test.ts`, 60 lines or fewer, two users with two devices each: Anna's second device is made unreachable (`goOffline`) and restored (`goOnline`); Ben's vault never shows Anna's data; it is also the isolation check (US6 scenario 4) and the template. Depends on T017.
-- [ ] T031 [US6] Extend `scripts/e2e/README.md` with "Scenarios with several vaults and users": the group call, the device operations table of `contracts/group.md`, the waiting rules, the forbidden list, and `sync-two-users` as the example. Depends on T030.
-- [ ] T032 [US6] Run the newcomer test (SC-003): ask a reviewer (or a fresh agent session with only the README and the template) to write a two-user, two-device, unreachable-and-restore scenario; record its length and the questions asked; fix the README where they stumbled.
+- [x] T030 [US6] Add `scripts/e2e/scenarios/sync-two-users.test.ts`, 60 lines or fewer, two users with two devices each: Anna's second device is made unreachable and restored (amended after CI: stopped and started, because a device after `goOffline` still dials the devices it knew at their last address); Ben's vault never shows Anna's data; it is also the isolation check (US6 scenario 4) and the template. Depends on T017.
+- [x] T031 [US6] Extend `scripts/e2e/README.md` with "Scenarios with several vaults and users": the group call, the device operations table of `contracts/group.md`, the waiting rules, the forbidden list, and `sync-two-users` as the example. Depends on T030.
+- [x] T032 [US6] Run the newcomer test (SC-003; run 2026-10-03 with a fresh agent that saw only the README and `sync-two-users`: it wrote the relay-pause variant in 42 lines, asked 12 questions, and its scenario failed on a wrong belief that `g.relay.stop()` cuts established connections; the README now has the imports, the helper signatures, the relay semantics and a note on waiting for absence): ask a reviewer (or a fresh agent session with only the README and the template) to write a two-user, two-device, unreachable-and-restore scenario; record its length and the questions asked; fix the README where they stumbled.
 
 ## Phase 9: User Story 7 - The platform stays out of the scenarios (P3)
 
@@ -114,9 +114,9 @@ description: 'Task list for End-to-End Tests Across Several Vaults and Devices'
 
 **Independent Test**: `pnpm check:e2e-lib` fails when a scenario imports a platform file; `scripts/e2e/PLATFORMS.md` has all four entries.
 
-- [ ] T033 [P] [US7] Write `scripts/e2e/PLATFORMS.md` with an entry each for Windows, macOS, Android and iOS: driver, runner or device type, how several devices would be connected, known limits, from `research.md` R9; state at the top that the facts are to be confirmed in each follow-up spec and nothing is implemented.
-- [ ] T034 [US7] Empty `KNOWN_VIOLATIONS` in `scripts/e2e/lib/seam.test.ts` except `scenarios/relaunch-after-lock.test.ts` (it reads the virtual screen's framebuffer; a process-level scenario of spec 013 that stays Linux specific, with its reason in the list) and prove the scan works by a negative case (a temporary scenario that imports `../lib/processes.ts` makes the check fail; remove it again). Depends on T028.
-- [ ] T035 [P] [US7] Correct the stale sentence in `specs/016-e2e-testing/spec.md` if it still names two-process scenarios as out of scope (done in #199; verify, change nothing if correct).
+- [x] T033 [P] [US7] Write `scripts/e2e/PLATFORMS.md` with an entry each for Windows, macOS, Android and iOS: driver, runner or device type, how several devices would be connected, known limits, from `research.md` R9; state at the top that the facts are to be confirmed in each follow-up spec and nothing is implemented.
+- [x] T034 [US7] Empty `KNOWN_VIOLATIONS` in `scripts/e2e/lib/seam.test.ts` except `scenarios/relaunch-after-lock.test.ts` (it reads the virtual screen's framebuffer; a process-level scenario of spec 013 that stays Linux specific, with its reason in the list) and prove the scan works by a negative case (a temporary scenario that imports `../lib/processes.ts` makes the check fail; remove it again). Depends on T028.
+- [x] T035 [P] [US7] Correct the stale sentence in `specs/016-e2e-testing/spec.md` if it still names two-process scenarios as out of scope (done in #199; verify, change nothing if correct).
 
 ## Phase 10: User Story 8 - The new scenarios run in the existing CI job (P3)
 
@@ -124,15 +124,15 @@ description: 'Task list for End-to-End Tests Across Several Vaults and Devices'
 
 **Independent Test**: a branch with a broken sync fails the `e2e` job, names the scenario and keeps material per device.
 
-- [ ] T036 [US8] The default whole-run limit of `pnpm test:e2e` rose from 600 s to 1800 s in PR B, because the sync scenarios alone now run longer than 600 s (a full local run failed at the limit). In `.github/workflows/ci.yml` check that the `e2e` job's `timeout-minutes` (45) still holds the whole suite and raise it only if the first CI run shows it is needed; keep every scenario name starting with `sync-` so `--grep sync-` runs them alone.
-- [ ] T037 [US8] Deliberate-failure trial (V7 of `quickstart.md`): on a throw-away branch make `device_remove` do nothing and push; the job fails, names `sync-remove-device`, and the uploaded `e2e-failure-material` has `screenshot.png` and `driver.log` in each encoded device folder. Record the run in the PR text.
+- [x] T036 [US8] The default whole-run limit of `pnpm test:e2e` rose from 600 s to 1800 s in PR B, because the sync scenarios alone now run longer than 600 s (a full local run failed at the limit). In `.github/workflows/ci.yml` check that the `e2e` job's `timeout-minutes` (45) still holds the whole suite and raise it only if the first CI run shows it is needed; keep every scenario name starting with `sync-` so `--grep sync-` runs them alone.
+- [x] T037 [US8] Deliberate-failure trial (V7 of `quickstart.md`): on a throw-away branch make `device_remove` do nothing and push; the job fails, names `sync-remove-device`, and the uploaded `e2e-failure-material` has `screenshot.png` and `driver.log` in each encoded device folder. Record the run in the PR text.
 - [ ] T038 [US8] Measure SC-002: 20 consecutive green runs of the `e2e` job on the stock runner; list any red run with its cause and fix real flakiness before T040. Tracked after merge; this task stays open until then.
 
 ## Phase 11: Polish and cross-cutting
 
-- [ ] T039 [P] Run the whole CI set locally: `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`, `pnpm lint:rust`, `cargo test -j 4 --manifest-path src-tauri/Cargo.toml --lib sync::`, `pnpm check:settings`, `pnpm check:templates`, `pnpm typecheck`, `pnpm typecheck:scripts`, `pnpm lint`, `pnpm format:check`, `pnpm check:e2e-lib`; revert regenerated `src/types/bindings/` whitespace with `git checkout -- src/types/bindings/`.
+- [x] T039 [P] Run the whole CI set locally (the Rust steps are not needed here, this PR changes no Rust file): `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`, `pnpm lint:rust`, `cargo test -j 4 --manifest-path src-tauri/Cargo.toml --lib sync::`, `pnpm check:settings`, `pnpm check:templates`, `pnpm typecheck`, `pnpm typecheck:scripts`, `pnpm lint`, `pnpm format:check`, `pnpm check:e2e-lib`; revert regenerated `src/types/bindings/` whitespace with `git checkout -- src/types/bindings/`.
 - [ ] T040 After T038: replace the manual section of `specs/024-own-device-sync/quickstart.md` by a pointer to `pnpm test:e2e --grep sync-` and close T081 in `specs/024-own-device-sync/tasks.md` with the scenario run as its record (FR-011).
-- [ ] T041 [P] Check every touched file stays at or under 500 lines (`wc -l`), tests are in dedicated files, and no agent reference appears in any file, comment, commit or PR text.
+- [x] T041 [P] Check every touched file stays at or under 500 lines (`wc -l`), tests are in dedicated files, and no agent reference appears in any file, comment, commit or PR text.
 - [ ] T042 Run `quickstart.md` V1 to V8 once end to end and record the result in the PR text.
 
 ## Dependencies and order

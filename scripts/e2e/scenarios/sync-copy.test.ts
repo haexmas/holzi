@@ -18,6 +18,13 @@ const WHILE_WAITING = 'Während die Kopie wartet'
 const MADE_WAITING = 'In der Wartezeit der Kopie gemacht'
 const AFTER_REFUSAL = 'Nach der Ablehnung'
 
+/**
+ * How long a restarted device may need to reach a device again: the other side refuses it as a duplicate
+ * until the session of its earlier process idles out (about 30 s), and the next try may come up to 30 s
+ * later (as in sync-relay-return).
+ */
+const RECONNECT_MS = 90_000
+
 /** Gives the others time to send something that must not come; absence has no event to wait for. */
 const QUIET_MS = 5_000
 const quiet = () => new Promise((resolve) => setTimeout(resolve, QUIET_MS))
@@ -92,8 +99,8 @@ scenario('sync-copy', { timeoutMs: 900_000 }, async (ctx) => {
   await b.stop()
   const d = await b.copyVaultTo('tablet')
   await b.start()
-  await expectOnline(ctx, a, b, true)
-  await expectOnline(ctx, b, a, true)
+  await expectOnline(ctx, a, b, true, RECONNECT_MS)
+  await expectOnline(ctx, b, a, true, RECONNECT_MS)
   await d.start()
   await expectState(
     ctx,
@@ -158,6 +165,7 @@ scenario('sync-copy', { timeoutMs: 900_000 }, async (ctx) => {
   await b.stop()
   const e = await b.copyVaultTo('notebook')
   await b.start()
+  await expectOnline(ctx, b, a, true, RECONNECT_MS)
   await e.start()
   await expectState(
     ctx,

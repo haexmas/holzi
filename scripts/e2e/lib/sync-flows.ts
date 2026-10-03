@@ -1,7 +1,6 @@
 // Flows for scenarios with several devices of one vault (spec 024, T078): each device is its own
 // application process with its own data, all pointed at one Nostr test relay. A device is made the
 // way a user does it: the first by creating a vault, the others by linking with a code (user story 5).
-import type { Instance } from './instance.ts'
 import type { Page } from './page.ts'
 import type { ScenarioContext } from './scenario.ts'
 import { unwrap, waitForPath } from './flows.ts'
@@ -11,19 +10,12 @@ import type { FlowInstance } from './flows.ts'
  * point at a closed port, which refuses at once (as in `tests/common/sync_fixture.rs`). */
 const NO_IROH_RELAY = ['https://127.0.0.1:1']
 
-/** One device: the application process that has the vault open, and what unlocks it. */
-export interface Device {
-  instance: Instance
-  vaultName: string
-  passphrase: string
-}
-
 interface Thread {
   id: string
   title: string
 }
 
-/** Anything with a page to call backend commands on: a device of this file or of a group. */
+/** Anything with a page to call backend commands on: a device of a group. */
 export interface ThreadDevice {
   instance: Pick<Page, 'invoke'>
 }
@@ -82,57 +74,6 @@ export async function createVaultOnRelay(
 }
 
 /** Starts an instance, optionally reusing its data root, and opens the vault's workspace. */
-async function openAndShow(
-  ctx: ScenarioContext,
-  root: string | undefined,
-  vaultName: string,
-  passphrase: string,
-): Promise<Instance> {
-  const instance = await ctx.startInstance(
-    root === undefined ? {} : { reusesRoot: root },
-  )
-  await openVault(instance, vaultName, passphrase)
-  return instance
-}
-
-/**
- * The first device of a vault, using the relay. The Nostr relays of the vault apply the next time it
- * opens, so it is created, pointed at the relay, closed and opened again.
- */
-export async function startFirstDevice(
-  ctx: ScenarioContext,
-  relayUrl: string,
-  vaultName: string,
-): Promise<Device> {
-  const { passphrase } = ctx.credentials()
-  const first = await ctx.startInstance()
-  await createVaultOnRelay(first, relayUrl, vaultName, passphrase)
-  await first.stop()
-  const instance = await openAndShow(ctx, first.root, vaultName, passphrase)
-  return { instance, vaultName, passphrase }
-}
-
-/** Closes a device's process and opens its vault again in a new one over the same data. */
-export async function restartDevice(
-  ctx: ScenarioContext,
-  device: Device,
-): Promise<Device> {
-  const { root } = device.instance
-  await device.instance.stop()
-  const instance = await openAndShow(
-    ctx,
-    root,
-    device.vaultName,
-    device.passphrase,
-  )
-  return { ...device, instance }
-}
-
-/** Ends a device's process; its data stays for [`restartDevice`]. */
-export async function closeDevice(device: Device): Promise<void> {
-  await device.instance.stop()
-}
-
 /**
  * The steps of linking through commands: the host shows a code, the new installation enters it with
  * the servers of the vault, the host agrees, and the new installation reports it is done. The new
@@ -201,38 +142,6 @@ export async function runLink(
     { timeoutMs: 40_000, fixed: true },
   )
   ctx.step('linked', link.deviceName, link.device)
-}
-
-/**
- * Links a new device to `host` with a code: the main device shows the code, the new installation
- * enters it with the servers of the vault, the main device agrees, and the new device opens the
- * vault it was given.
- */
-export async function linkDevice(
-  ctx: ScenarioContext,
-  host: Device,
-  relayUrl: string,
-  options: { deviceName: string; asMainDevice?: boolean },
-): Promise<Device> {
-  const { passphrase } = ctx.credentials()
-  const fresh = await ctx.startInstance()
-  await runLink(ctx, host.instance, fresh, {
-    vaultName: host.vaultName,
-    deviceName: options.deviceName,
-    passphrase,
-    relayUrl,
-    asMainDevice: options.asMainDevice,
-  })
-  // The linked vault is a file of the new installation like any other: it is opened with the
-  // passphrase chosen for it, in a process over the same data.
-  await fresh.stop()
-  const instance = await openAndShow(
-    ctx,
-    fresh.root,
-    host.vaultName,
-    passphrase,
-  )
-  return { instance, vaultName: host.vaultName, passphrase }
 }
 
 /** The titles of a device's threads, sorted. */
