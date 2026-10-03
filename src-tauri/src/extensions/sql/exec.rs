@@ -1,0 +1,333 @@
+//! Running extension SQL (contracts/sql-policy.md §Ausführung, T059): pre-check, permission
+//! decision, then haex-crdt's guarded read or write with the authorizer and a run-time limit.
+//! Writes go through the CRDT transformer like every other write of holzi (FR-028).
+
+use std::cell::Cell;
+use std::collections::HashSet;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use haex_crdt::db::error::DatabaseError;
+use haex_crdt::rusqlite::types::Value as SqlValue;
+use haex_crdt::rusqlite::{self, Row, ToSql};
+use haex_crdt::{GuardedWriteOptions, SqlGuard};
+use serde::Serialize;
+use serde_json::{json, Value};
+use uuid::Uuid;
+
+use super::ast_check::{check, cte_names, RequiredAccess};
+use super::authorizer;
+use super::parse::{parse_one, returns_rows, violation};
+use super::policy::SqlPolicy;
+use super::values::to_json;
+use crate::extensions::default_limits;
+use crate::extensions::error::{BridgeError, ExtensionErrorCode};
+use crate::extensions::permissions::Decision;
+use crate::storage::query::Query;
+use crate::vault_gate::VaultDb;
+
+/// `extension_limits` of one extension (data-model.md).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Limits {
+    pub max_rows: u64,
+    pub max_concurrent: u64,
+    pub max_sql_bytes: u64,
+    pub timeout_ms: u64,
+    pub max_response_bytes: u64,
+}
+
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            max_rows: default_limits::MAX_ROWS,
+            max_concurrent: default_limits::MAX_CONCURRENT,
+            max_sql_bytes: default_limits::MAX_SQL_BYTES,
+            timeout_ms: default_limits::TIMEOUT_MS,
+            max_response_bytes: default_limits::MAX_RESPONSE_BYTES,
+        }
+    }
+}
+
+/// The limits of an extension; without a row the defaults.
+pub fn limits_of(q: &mut impl Query, extension_id: Uuid) -> haex_crdt::Result<Limits> {
+    let row = q.query_row(
+        "SELECT max_rows, max_concurrent, max_sql_bytes, timeout_ms, max_response_bytes \
+         FROM extension_limits WHERE extension_id = ?1",
+        &[&extension_id.to_string()],
+        |r| {
+            Ok(Limits {
+                max_rows: r.get::<_, i64>(0)?.max(0) as u64,
+                max_concurrent: r.get::<_, i64>(1)?.max(1) as u64,
+                max_sql_bytes: r.get::<_, i64>(2)?.max(0) as u64,
+                timeout_ms: r.get::<_, i64>(3)?.max(1) as u64,
+                max_response_bytes: r.get::<_, i64>(4)?.max(0) as u64,
+            })
+        },
+    )?;
+    Ok(row.unwrap_or_default())
+}
+
+/// The answer of a query or statement, as the vault-sdk reads it.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SqlResult {
+    pub rows: Vec<Vec<Value>>,
+    pub columns: Vec<String>,
+    pub rows_affected: u64,
+    pub last_insert_id: Option<i64>,
+}
+
+fn limit(message: &str) -> BridgeError {
+    BridgeError::new(ExtensionErrorCode::LimitExceeded, message)
+}
+
+/// Raised inside a row callback when the result grows over a limit; the statement stops there.
+#[derive(Debug)]
+struct LimitHit;
+
+impl std::fmt::Display for LimitHit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("result limit")
+    }
+}
+
+impl std::error::Error for LimitHit {}
+
+fn is_limit_hit(error: &haex_crdt::Error) -> bool {
+    matches!(
+        error.sqlite_error(),
+        Some(rusqlite::Error::UserFunctionError(inner)) if inner.is::<LimitHit>()
+    )
+}
+
+/// Maps a failure of the guarded run to the bridge's codes; nothing of holzi's schema leaks.
+fn map_error(error: haex_crdt::Error) -> BridgeError {
+    if is_limit_hit(&error) {
+        return limit("result too large");
+    }
+    match &error {
+        haex_crdt::Error::Database(DatabaseError::SqlGuardDenied { .. }) => {
+            violation("form not attributable")
+        }
+        haex_crdt::Error::Database(DatabaseError::MultipleStatements { .. }) => {
+            violation("exactly one statement is allowed")
+        }
+        haex_crdt::Error::Database(
+            DatabaseError::SqlGuardInterrupted { .. } | DatabaseError::TransactionAborted { .. },
+        ) => limit("time limit exceeded"),
+        haex_crdt::Error::Database(DatabaseError::TransactionTooLarge { .. }) => {
+            limit("transaction too large")
+        }
+        _ => BridgeError::new(
+            ExtensionErrorCode::Database,
+            error
+                .sqlite_error()
+                .map_or_else(|| "database error".to_owned(), ToString::to_string),
+        ),
+    }
+}
+
+/// A statement that passed the pre-check and the permission decision.
+pub struct Checked {
+    sql: String,
+    params: Vec<SqlValue>,
+    returns_rows: bool,
+    is_query: bool,
+    access: RequiredAccess,
+    ctes: HashSet<String>,
+}
+
+fn full_name(table: &crate::extensions::ids::ExtensionTable) -> String {
+    format!("{}{}", table.prefix, table.table)
+}
+
+/// The lower-case names of the tables of the database (a `WITH` name may not shadow one).
+pub fn existing_tables(db: &VaultDb) -> Result<HashSet<String>, BridgeError> {
+    db.read_blocking(|q| {
+        q.query_map(
+            "SELECT lower(name) FROM sqlite_master WHERE type IN ('table', 'view')",
+            &[],
+            |r| r.get::<_, String>(0),
+        )
+    })
+    .map(|names| names.into_iter().collect())
+    .map_err(|_| BridgeError::new(ExtensionErrorCode::Database, "database unavailable"))
+}
+
+/// Pre-checks one statement and decides its permissions: a foreign table without a permission
+/// is 1004 (ask) or 1002 (denied), with `{resourceType, action, target}` in `details`.
+pub fn prepare(
+    sql: &str,
+    params: Vec<SqlValue>,
+    policy: &SqlPolicy,
+    limits: &Limits,
+    existing: &HashSet<String>,
+) -> Result<Checked, BridgeError> {
+    if sql.len() as u64 > limits.max_sql_bytes {
+        return Err(limit("statement too long"));
+    }
+    let statement = parse_one(sql)?;
+    let access = check(&statement, sql, &policy.own, existing)?;
+    for (table, write) in access
+        .reads
+        .iter()
+        .map(|t| (t, false))
+        .chain(access.writes.iter().map(|t| (t, true)))
+    {
+        let code = match policy.decide(table, write) {
+            Decision::Allow => continue,
+            Decision::Deny => ExtensionErrorCode::PermissionDenied,
+            Decision::Prompt => ExtensionErrorCode::PermissionPromptRequired,
+        };
+        return Err(
+            BridgeError::new(code, "permission required").with_details(json!({
+                "resourceType": "database",
+                "action": if write { "readWrite" } else { "read" },
+                "target": full_name(table),
+            })),
+        );
+    }
+    Ok(Checked {
+        sql: sql.to_owned(),
+        params,
+        returns_rows: returns_rows(&statement),
+        is_query: matches!(statement, haex_crdt::sqlparser::ast::Statement::Query(_)),
+        ctes: cte_names(&statement),
+        access,
+    })
+}
+
+fn guard(policy: Arc<SqlPolicy>, checked: &[Checked], limits: &Limits) -> SqlGuard {
+    let writable: HashSet<String> = checked
+        .iter()
+        .flat_map(|c| c.access.writes.iter().map(full_name))
+        .collect();
+    let ctes: HashSet<String> = checked
+        .iter()
+        .flat_map(|c| c.ctes.iter().cloned())
+        .collect();
+    let deadline = Instant::now() + Duration::from_millis(limits.timeout_ms);
+    SqlGuard {
+        authorizer: authorizer::runtime(policy, writable, ctes),
+        progress: Some((1000, Arc::new(move || Instant::now() > deadline))),
+    }
+}
+
+/// Maps rows within the row and response limits.
+struct RowCollector {
+    rows: Cell<u64>,
+    bytes: Cell<u64>,
+    limits: Limits,
+}
+
+impl RowCollector {
+    fn new(limits: Limits) -> Self {
+        Self {
+            rows: Cell::new(0),
+            bytes: Cell::new(0),
+            limits,
+        }
+    }
+
+    fn row(&self, row: &Row<'_>) -> rusqlite::Result<Vec<Value>> {
+        self.rows.set(self.rows.get() + 1);
+        if self.rows.get() > self.limits.max_rows {
+            return Err(rusqlite::Error::UserFunctionError(Box::new(LimitHit)));
+        }
+        let mut values = Vec::with_capacity(row.as_ref().column_count());
+        for i in 0..row.as_ref().column_count() {
+            let (value, size) = to_json(row.get_ref(i)?);
+            self.bytes.set(self.bytes.get() + size as u64);
+            values.push(value);
+        }
+        if self.bytes.get() > self.limits.max_response_bytes {
+            return Err(rusqlite::Error::UserFunctionError(Box::new(LimitHit)));
+        }
+        Ok(values)
+    }
+}
+
+fn keep_marked<T>(items: Vec<T>, keep: &[bool]) -> Vec<T> {
+    items
+        .into_iter()
+        .zip(keep)
+        .filter_map(|(item, keep)| keep.then_some(item))
+        .collect()
+}
+
+/// Drops the sync columns (`haex_*`) of a result, e.g. from `SELECT *`.
+fn without_sync_columns(
+    columns: Vec<String>,
+    rows: Vec<Vec<Value>>,
+) -> (Vec<String>, Vec<Vec<Value>>) {
+    let keep: Vec<bool> = columns
+        .iter()
+        .map(|c| !c.to_ascii_lowercase().starts_with("haex_"))
+        .collect();
+    let rows = rows
+        .into_iter()
+        .map(|row| keep_marked(row, &keep))
+        .collect();
+    (keep_marked(columns, &keep), rows)
+}
+
+fn sql_refs(params: &[SqlValue]) -> Vec<&dyn ToSql> {
+    params.iter().map(|p| p as &dyn ToSql).collect()
+}
+
+/// Runs checked statements. One query alone runs on the read-only view; anything else runs in
+/// one guarded write, all or nothing.
+pub fn run(
+    db: &VaultDb,
+    policy: Arc<SqlPolicy>,
+    limits: &Limits,
+    checked: Vec<Checked>,
+) -> Result<SqlResult, BridgeError> {
+    let guard = guard(policy, &checked, limits);
+    let collector = RowCollector::new(*limits);
+    if let [only] = checked.as_slice() {
+        if only.is_query {
+            let result = db
+                .read_guarded_blocking(&guard, |conn| {
+                    conn.query_with_columns(
+                        &only.sql,
+                        rusqlite::params_from_iter(only.params.iter()),
+                        |row| collector.row(row),
+                    )
+                })
+                .map_err(map_error)?;
+            let (columns, rows) = without_sync_columns(result.columns, result.rows);
+            return Ok(SqlResult {
+                rows,
+                columns,
+                rows_affected: 0,
+                last_insert_id: None,
+            });
+        }
+    }
+    db.write_guarded_blocking(&guard, GuardedWriteOptions::default(), |tx| {
+        let mut result = SqlResult::default();
+        for statement in &checked {
+            let params = sql_refs(&statement.params);
+            if statement.returns_rows {
+                let rows =
+                    tx.query_with_columns(&statement.sql, &params, |row| collector.row(row))?;
+                if !statement.is_query {
+                    result.rows_affected += rows.rows.len() as u64;
+                }
+                (result.columns, result.rows) = without_sync_columns(rows.columns, rows.rows);
+            } else {
+                result.rows_affected += tx.execute(&statement.sql, &params)? as u64;
+            }
+            if !statement.is_query {
+                result.last_insert_id = Some(tx.last_insert_rowid());
+            }
+        }
+        Ok(result)
+    })
+    .map_err(map_error)
+}
+
+#[cfg(test)]
+#[path = "exec_tests.rs"]
+mod tests;
