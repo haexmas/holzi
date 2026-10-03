@@ -37,15 +37,24 @@ use crate::sync::resync::RowKey;
 
 #[path = "inbound_hold.rs"]
 mod hold;
-use hold::{settle, Group, Settled};
+use hold::{settle, steps, Group, Settled};
 
 /// haex-crdt's delete log, a synced table like any other.
 const DELETED_ROWS_TABLE: &str = "haex_deleted_rows";
 
 // ponytail: 256 groups per transaction. Ceiling: a close waits for one such step, which grows with
-// the size of the rows. Upgrade path: count bytes instead of groups.
-/// How many groups one transaction applies before a close may stop the pull.
+// the size of the rows and with groups that only together create a row. Upgrade path: count bytes
+// instead of groups.
+/// How many groups one transaction applies at least before a close may stop the pull
+/// ([`hold::steps`]).
 const APPLY_CHUNK: usize = 256;
+
+#[cfg(test)]
+thread_local! {
+    /// Runs after every applied step on this thread, so a test can close the vault between two.
+    pub(crate) static AFTER_STEP: std::cell::RefCell<Option<Box<dyn FnMut()>>> =
+        const { std::cell::RefCell::new(None) };
+}
 
 /// Slack on top of `max_transaction_bytes` for a buffered group's encoded
 /// size, which exceeds its SQL size by quoting and hex.
@@ -226,6 +235,7 @@ impl Inbox {
                 limit,
             });
         }
+        let steps = steps(db, &apply, APPLY_CHUNK)?;
         received.tables.extend(
             apply
                 .iter()
@@ -273,11 +283,11 @@ impl Inbox {
             self.finished = true;
         }
 
-        for chunk in apply.chunks(APPLY_CHUNK) {
+        for step in steps {
             if replica.closing() {
                 return Err(crate::sync::replica::Closing.into());
             }
-            let accepted: Vec<ColumnChange> = chunk
+            let accepted: Vec<ColumnChange> = apply[step]
                 .iter()
                 .flat_map(|g| g.columns.iter().cloned())
                 .collect();
@@ -288,6 +298,12 @@ impl Inbox {
                     outcome.skipped.len()
                 );
             }
+            #[cfg(test)]
+            AFTER_STEP.with_borrow_mut(|hook| {
+                if let Some(hook) = hook {
+                    hook();
+                }
+            });
         }
         if !updates.is_empty() {
             db.write(|tx| progress::advance(tx, &updates))?;

@@ -69,9 +69,18 @@ pub enum SessionError {
 }
 
 impl SessionError {
+    /// Whether the vault's close ended the session, which is no fault of it.
+    fn is_closing(&self) -> bool {
+        matches!(
+            self,
+            SessionError::Inbound(crate::sync::inbound::InboundError::Closing(_))
+        )
+    }
+
     fn code(&self) -> ErrorCode {
         match self {
             SessionError::Wire(e) => e.code(),
+            _ if self.is_closing() => ErrorCode::Closed,
             SessionError::Inbound(_) => ErrorCode::PullFailed,
             SessionError::Protocol(_) => ErrorCode::Protocol,
             SessionError::NoLongerListed => ErrorCode::Rejected,
@@ -114,7 +123,13 @@ pub async fn run(
     match result {
         Ok(()) => connection.close(ErrorCode::Closed.as_u32().into(), b"closed"),
         Err(error) => {
-            log::warn!(
+            let level = if error.is_closing() {
+                log::Level::Debug
+            } else {
+                log::Level::Warn
+            };
+            log::log!(
+                level,
                 "sync: the session with {} ended: {error}",
                 crate::sync::keys::hex(&peer.device_pubkey[..4])
             );

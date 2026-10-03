@@ -69,15 +69,24 @@ impl Device {
         from: &Device,
         budget: usize,
     ) -> Result<Vec<Received>, InboundError> {
-        let theirs = self.replica.progress()?;
-        let mut outbox = serve_pull_with_budget(&from.replica, &theirs, budget)?;
-        let mut inbox = Inbox::new();
-        let mut received = Vec::new();
-        while let Some(page) = outbox.next_page() {
-            received.push(inbox.receive(&self.replica, page)?);
-        }
-        Ok(received)
+        pull_into(&self.replica, from, budget)
     }
+}
+
+/// Pulls everything `from` has and `replica` lacks, as one pull with pages of `budget` bytes.
+pub fn pull_into(
+    replica: &Replica,
+    from: &Device,
+    budget: usize,
+) -> Result<Vec<Received>, InboundError> {
+    let theirs = replica.progress()?;
+    let mut outbox = serve_pull_with_budget(&from.replica, &theirs, budget)?;
+    let mut inbox = Inbox::new();
+    let mut received = Vec::new();
+    while let Some(page) = outbox.next_page() {
+        received.push(inbox.receive(replica, page)?);
+    }
+    Ok(received)
 }
 
 /// A device of a vault together with its keys.
