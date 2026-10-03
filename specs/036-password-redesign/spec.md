@@ -55,6 +55,21 @@ Browser-Erweiterung) ist nicht Teil dieser Spec. Referenz: haex-vault @
 - Q: Gilt die Ablage in allen Fenstern des Passwortmanagers oder nur im Fenster, in dem sie
   gefüllt wurde? → A: In allen Fenstern des Passwortmanagers im Prozess (FR-021); sie
   verschwindet mit dem letzten geschlossenen Fenster.
+- Q: Was kommt beim Ausschneiden und Kopieren ganzer Einträge und Ordner in die Zwischenablage
+  des Betriebssystems? → A: Nichts. Die Ablage der Einträge ist intern. Die normale
+  Zwischenablage gehört den einzelnen Werten (Benutzername, Passwort, TOTP-Code, Adresse), die
+  der Nutzer ausdrücklich kopiert, mit dem automatischen Leeren aus 034; sie lassen sich überall
+  einfügen, auch im Chatfenster, in einer Erweiterung oder im Browser.
+- Q: Was wird beim Kopieren eines Eintrags mitgenommen, und wie heißt die Kopie? → A: Alles.
+  Beim Einfügen einer Kopie fragt ein Dialog (auf schmalen Fenstern eine Schublade) per
+  Checkbox, ob der Verlauf übernommen wird, und ob Benutzername, Passwort und Passkeys als
+  Verweis statt als Wert übernommen werden; alle anderen Werte werden immer als Wert kopiert.
+  Der Titel ist im Dialog änderbar, Vorgabe ist der Originaltitel mit angehängtem „Kopie“
+  (Deutsch) oder „Copy“ (Englisch) je nach Sprache der Oberfläche.
+- Q: Wie funktionieren Verweise („by reference“)? → A: Ein einheitliches System, mit dem ein
+  Eintrag Werte eines anderen Eintrags referenziert, nicht nur beim Kopieren. Zuerst für
+  Benutzername, Passwort und Passkeys. In haex-vault gibt es Verweise nur bei Anhängen (über
+  die Prüfsumme); für die drei Werte ist es neu.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -165,10 +180,7 @@ Unterordner versuchen.
 3. **Given** zwei markierte Einträge, **When** der Nutzer „Ausschneiden“ wählt, in einen
    anderen Ordner geht und „Einfügen“ wählt, **Then** liegen die Einträge dort und nicht mehr
    im alten Ordner; die Ablage ist leer.
-4. **Given** ein markierter Ordner mit Unterordnern und Einträgen, **When** der Nutzer
-   „Kopieren“ und im Zielordner „Einfügen“ wählt, **Then** gibt es dort eine Kopie des
-   Ordners mit allen Unterordnern und Einträgen; das Original bleibt unverändert, die Ablage
-   bleibt gefüllt (mehrfaches Einfügen ist möglich).
+4. **Given** ein markierter Ordner mit Unterordnern und Einträgen, **When** der Nutzer „Kopieren“ und im Zielordner „Einfügen“ wählt, **Then** erscheint der Kopier-Dialog (FR-015), und nach dem Bestätigen gibt es dort eine Kopie des Ordners mit allen Unterordnern und Einträgen; das Original bleibt unverändert, die Ablage bleibt gefüllt (mehrfaches Einfügen ist möglich). Bricht der Nutzer den Dialog ab, entsteht nichts.
 5. **Given** ein ausgeschnittener Ordner, **When** der Nutzer ihn in sich selbst oder einen
    seiner Unterordner einfügen will, **Then** lehnt holzi ab, nennt den Grund, verschiebt
    nichts und lässt die Ablage gefüllt.
@@ -314,6 +326,50 @@ antippen, einen Anhang umbenennen.
 
 ---
 
+### User Story 7 - Werte eines Eintrags in anderen Einträgen wiederverwenden (Priority: P2)
+
+Wer dieselben Zugangsdaten für mehrere Dienste braucht (ein gemeinsames Konto, ein Passkey
+für mehrere Adressen), will sie nicht mehrfach pflegen. Ein Eintrag kann bei **Benutzername**,
+**Passwort** und **Passkeys** statt eines eigenen Werts einen **Verweis** auf den Wert eines
+anderen Eintrags tragen, beim Kopieren (Dialog aus Story 3) und im Editor. Ändert man den Wert
+in der Quelle, stimmt er in allen Zielen.
+
+**Why this priority**: Der Kopier-Dialog bietet es an, und es ist das eine einheitliche System
+für alle Verweise zwischen Einträgen. Ohne Verweise bleibt alles andere benutzbar.
+
+**Independent Test**: Einen Eintrag mit Benutzername, Passwort und Passkey kopieren und
+dabei das Passwort als Verweis wählen, das Passwort in der Quelle ändern, die Kopie ansehen,
+das Passwort in der Kopie überschreiben, die Quelle löschen.
+
+**Acceptance Scenarios**:
+
+1. **Given** ein Eintrag „Konto“ und eine Kopie mit „Passwort als Verweis“, **When** der Nutzer
+   das Passwort in „Konto“ ändert, **Then** zeigt, kopiert und benutzt die Kopie das neue
+   Passwort; das Feld trägt eine Marke „Verweis auf Konto“, und ein Tipp darauf öffnet die
+   Quelle.
+2. **Given** ein Verweisfeld in der Kopie, **When** der Nutzer dort einen eigenen Wert
+   eingibt oder „Verweis lösen“ wählt, **Then** wird nur dieses Feld zum eigenen Wert; die
+   anderen Verweise der Kopie bleiben.
+3. **Given** ein Eintrag im Bearbeiten, **When** der Nutzer beim Benutzernamen oder Passwort
+   „Verweis auf anderen Eintrag“ wählt und einen Eintrag aussucht, **Then** zeigt das Feld
+   dessen Wert; wählt er einen Eintrag, dessen Feld selbst ein Verweis ist, zeigt der Verweis
+   auf die Quelle dieses Felds.
+4. **Given** eine Kopie mit „Passkeys per Verweis übernehmen“, **When** ein Aufrufer über die
+   Kopie bestätigt, **Then** signiert der Dienst mit dem Schlüssel der Quelle, und der Zähler
+   der Quelle steigt; die Kopie hat keinen eigenen Schlüssel.
+5. **Given** eine Quelle, auf die zwei Einträge verweisen, **When** der Nutzer sie endgültig
+   löscht, **Then** warnt holzi mit der Zahl der Ziele und bietet an, die Verweise von
+   Benutzername und Passwort in eigene Werte umzuwandeln; Verweise von Passkeys fallen dabei
+   weg, was die Warnung sagt. Abbrechen lässt alles unverändert.
+6. **Given** ein Aufrufer, dessen Freigabe die Kopie, aber nicht die Quelle deckt, **When** er
+   das Passwort der Kopie liest, **Then** erhält er keinen Wert, nicht den der Quelle und
+   keinen Hinweis, dass ein Verweis besteht.
+7. **Given** ein Verweis in einem alten Stand des Verlaufs, **When** der Nutzer ihn
+   wiederherstellt, **Then** gilt der Verweis wieder; ist die Quelle weg, sagt holzi es und
+   stellt den Rest her.
+
+---
+
 ### Edge Cases
 
 - **Wischen im Bearbeiten.** Wer in einem Textfeld Text markiert oder den Cursor mit dem
@@ -324,10 +380,16 @@ antippen, einen Anhang umbenennen.
   wie in 034.
 - **Einfügen in den Papierkorb, in die Suche oder in eine Tag-Ansicht.** „Einfügen“ ist dort
   nicht angeboten, weil es keinen Zielordner gibt; die Ablage bleibt gefüllt.
-- **Kopieren eines Eintrags mit Passkeys.** Die Kopie bekommt die Passkeys nicht (eine
-  Credential-ID gibt es nur einmal), und holzi sagt das nach dem Einfügen.
-- **Kopieren eines Eintrags in einen Ordner mit gleichnamigem Eintrag.** Namen müssen nicht
-  eindeutig sein; die Kopie behält ihren Titel.
+- **Kopieren eines Eintrags mit Passkeys.** Ein Passkey wird nie als Wert kopiert (eine
+  Credential-ID gibt es nur einmal, eine Kopie wäre ein geklonter Passkey). Ohne die Checkbox
+  „Passkeys per Verweis“ bekommt die Kopie keine Passkeys, und der Dialog sagt das vorher.
+- **Kopieren in einen Ordner mit gleichnamigem Eintrag.** Namen müssen nicht eindeutig sein;
+  die Kopie trägt den Titel aus dem Dialog.
+- **Die Quelle eines Verweises wird auf einem anderen Gerät gelöscht oder ist (noch) nicht
+  angekommen.** Das Feld zeigt „Quelle nicht verfügbar“, nichts stürzt ab, und nichts wird still
+  geändert.
+- **Die Quelle eines Verweises liegt im Papierkorb.** Der Nutzer sieht den Wert weiter, ein
+  Aufrufer von außen nicht (wie bei jedem Eintrag im Papierkorb).
 - **Sehr viele ausgewählte Einträge** (mehrere hundert). Aktionen laufen als eine
   Änderung, bleiben benutzbar und melden das Ergebnis einmal.
 - **Ausschneiden und Fenster schließen.** Die Ablage hält nur Kennungen und überlebt das
@@ -419,12 +481,19 @@ antippen, einen Anhang umbenennen.
   Unterordner MUSS abgelehnt werden, bevor irgendetwas verschoben wird, mit einer Meldung, die
   den Grund nennt. Einträge und Ordner, die in der Zwischenzeit gelöscht wurden, MÜSSEN
   übersprungen und mit ihrer Zahl gemeldet werden; die übrigen werden eingefügt.
-- **FR-015**: Kopiert und eingefügt MÜSSEN Einträge als neue Einträge entstehen (neue Kennung)
-  mit allen Details, eigenen Feldern, Tags, TOTP, Aliasen und Anhängen (die Anhänge teilen
-  über ihre Prüfsumme die Binärdaten, es wird nichts doppelt gespeichert), aber ohne Verlauf
-  der Vorlage (die Kopie bekommt ihren eigenen Anfangsstand) und ohne Passkeys (eine
-  Credential-ID ist eindeutig). Ordner MÜSSEN rekursiv mit Unterordnern und Einträgen kopiert
-  werden. Der Titel der Kopie bleibt gleich. Ausschneiden und Kopieren steht im Papierkorb
+- **FR-015**: Beim **Einfügen einer Kopie** MUSS ein Dialog (auf schmalen Fenstern eine
+  Schublade) aufgehen, bevor etwas entsteht; Abbrechen legt nichts an. Er enthält: den
+  **Titel** (Vorgabe: der Originaltitel mit angehängtem „Kopie“ bei deutscher, „Copy“ bei
+  englischer Oberfläche, änderbar; bei mehreren Einträgen oder einem Ordner ein gemeinsamer
+  änderbarer Zusatz statt der Titel), die Checkbox **Verlauf übernehmen** (Vorgabe: aus; dann
+  bekommt die Kopie ihren eigenen Anfangsstand) und die Checkboxen **Benutzername als
+  Verweis**, **Passwort als Verweis** und **Passkeys per Verweis übernehmen** (Vorgabe: aus; aus
+  heißt für Benutzername und Passwort Kopie als Wert, für Passkeys: keine Passkeys, siehe
+  Randfälle). Alles andere (Adresse, Notiz, Ablaufdatum, Symbol, Farbe, TOTP, eigene Felder,
+  Tags, Aliase, Anhänge) MUSS immer als Wert kopiert werden; die Anhänge teilen über ihre
+  Prüfsumme die Binärdaten, es wird nichts doppelt gespeichert. Die Kopie ist ein neuer Eintrag
+  (neue Kennung). Ordner MÜSSEN rekursiv mit Unterordnern und Einträgen kopiert werden; die
+  Wahl im Dialog gilt für alle Einträge der Kopie. Ausschneiden und Kopieren steht im Papierkorb
   nicht zur Verfügung, Einfügen in ihn auch nicht.
 - **FR-016**: Auf der Liste MÜSSEN folgende Kürzel gelten (Strg, auf macOS Cmd), solange der
   Fokus nicht in einem Eingabefeld, einem Dialog oder einem markierten Text steht:
@@ -456,8 +525,9 @@ antippen, einen Anhang umbenennen.
 - **FR-021**: Die Ablage MUSS nur Kennungen und die Art (Ausschneiden oder Kopieren) halten,
   nie ein Geheimnis. Sie MUSS für alle Fenster des Passwortmanagers im Prozess gelten, nicht
   mit der Sitzung wiederhergestellt, nicht synchronisiert und mit dem letzten geschlossenen
-  Fenster oder dem Wechsel der Vault verworfen werden. Sie ist unabhängig von der
-  Zwischenablage des Betriebssystems.
+  Fenster oder dem Wechsel der Vault verworfen werden. Ausschneiden und Kopieren ganzer
+  Einträge und Ordner DARF nichts in die Zwischenablage des Betriebssystems legen und sie nicht
+  verändern; diese gehört den einzelnen Werten (FR-017).
 - **FR-022**: Alle Aktionen aus FR-012 bis FR-020 MÜSSEN für mehrere hundert Einträge als
   eine Änderung laufen, ein Ergebnis melden und bei einem Fehler nichts halb ausgeführt
   lassen.
@@ -550,6 +620,36 @@ antippen, einen Anhang umbenennen.
   geladen werden; die Lightbox lädt das Bild in voller Größe erst beim Öffnen. Lässt sich ein
   Bild nicht darstellen, MUSS die Karte das Typ-Symbol und die Lightbox eine Meldung zeigen.
 
+**Verweise zwischen Einträgen**
+
+- **FR-044**: Ein Eintrag („Ziel“) MUSS bei **Benutzername**, **Passwort** und **Passkeys**
+  statt eines eigenen Werts einen **Verweis** auf den entsprechenden Wert eines anderen
+  Eintrags („Quelle“) tragen können, einheitlich beim Kopieren (FR-015) und im Editor
+  („Verweis auf anderen Eintrag“ wählen, Quelle aussuchen, Verweis lösen). Ein Verweis nennt
+  Quelle und Art des Werts. Weitere Wertarten DÜRFEN später dazukommen, ohne dass sich die
+  Semantik ändert.
+- **FR-045**: Ein Verweisfeld MUSS den Wert der Quelle beim Anzeigen, Kopieren in die
+  Zwischenablage und Benutzen lesen (nie als Kopie speichern), eine Marke mit dem Titel der
+  Quelle tragen (ein Tipp öffnet sie) und Änderungen der Quelle sofort in allen Zielen zeigen.
+  Das Bearbeiten eines Verweisfelds im Ziel oder „Verweis lösen“ MUSS nur dieses Feld zum
+  eigenen Wert machen. Ein Verweis auf ein Verweisfeld MUSS auf dessen Quelle zeigen.
+- **FR-046**: Ein **Passkey per Verweis** MUSS im Ziel mit seinen Kopfdaten erscheinen;
+  Bestätigen über das Ziel MUSS mit dem Schlüssel der Quelle signieren, und der Zähler gehört
+  der Quelle. Ein Passkey wird nie als Wert kopiert.
+- **FR-047**: Ein Verweis DARF kein Zugriffsrecht geben: Ein Aufrufer außer dem Nutzer MUSS
+  einen Wert über einen Verweis nur erhalten, wenn seine Freigabe auch die Quelle deckt; sonst
+  ist der Wert für ihn nicht vorhanden, ohne dass erkennbar ist, dass ein Verweis besteht
+  (034 FR-029). Listen enthalten nie aufgelöste Werte (034 FR-026), der eingebaute Agent nie
+  ein Geheimnis (034 FR-027).
+- **FR-048**: Das endgültige Löschen einer Quelle MUSS vorher mit der Zahl der Ziele warnen und
+  anbieten, die Verweise von Benutzername und Passwort in eigene Werte umzuwandeln; Verweise
+  von Passkeys fallen dabei weg, und die Warnung sagt es. Der Papierkorb löst keine Verweise
+  auf (für den Nutzer bleibt der Wert sichtbar). Fehlt eine Quelle dennoch (Sync), MUSS das Feld
+  „Quelle nicht verfügbar“ zeigen, statt zu scheitern.
+- **FR-049**: Der Verlauf MUSS einen Verweis als Verweis speichern, nicht als aufgelösten
+  Wert (so gelangt kein Geheimnis der Quelle in den Verlauf des Ziels); Wiederherstellen
+  stellt den Verweis wieder her.
+
 **Allgemein**
 
 - **FR-042**: Alles Neue MUSS ohne waagerechtes Scrollen bei 360 px Breite benutzbar sein
@@ -571,6 +671,9 @@ antippen, einen Anhang umbenennen.
 - **Passkey**: unverändert aus 034 (Tabelle der Passkeys), jetzt auch mit Funktionen zum
   Anlegen, Bestätigen und Auflisten; gehört immer zu einem Eintrag und folgt dessen Tags; der
   Zähler steigt nur.
+- **Verweis**: ein Wert eines Eintrags (Benutzername, Passwort, Passkeys), der auf den Wert
+  eines anderen Eintrags zeigt, statt einen eigenen zu tragen; Quelle und Art des Werts, nie
+  ein Wert; folgt der Quelle sofort.
 - **Anhangskarte**: die Darstellung eines Anhangs (Vorschau oder Symbol, Name, Größe, Typ).
 
 ## Success Criteria _(mandatory)_
@@ -599,7 +702,10 @@ antippen, einen Anhang umbenennen.
   signieren oder den Zähler zu ändern.
 - **SC-008**: Die Lightbox öffnet ein 5-MiB-Bild in unter einer Sekunde; an einem Eintrag mit
   30 Bildern lädt der Tab Extra nur die sichtbaren Vorschaubilder.
-- **SC-009**: Die vorhandenen Szenarien des Passwortmanagers (034 SC-012) laufen unverändert
+- **SC-009**: Ändert der Nutzer das Passwort einer Quelle, zeigt jedes Ziel mit Verweis es
+  beim nächsten Öffnen ohne weiteres Zutun; in 100 Versuchen erhält ein Aufrufer ohne Bereich
+  für die Quelle über einen Verweis nie einen Wert und nie einen Hinweis auf den Verweis.
+- **SC-010**: Die vorhandenen Szenarien des Passwortmanagers (034 SC-012) laufen unverändert
   grün; neue Szenarien decken Tabs mit Wischgeste, Verlauf, Ablage mit Ordnerkopie,
   Kontextmenü, Passkey-Anlegen und -Bestätigen und die Lightbox ab.
 
@@ -607,9 +713,13 @@ antippen, einen Anhang umbenennen.
 
 - Die **Tab-Wischgeste** bekommt eine eigene Bibliothek für Gesten und Übergänge; welche, wird
   im Plan entschieden. haex-vault hat dort nur Tippen, die Wischgeste ist neu.
-- **Kopierte Einträge** behalten ihren Titel; ein Zusatz wie „(Kopie)“ ist nicht vorgesehen,
-  weil Namen nicht eindeutig sein müssen. Anhänge werden mitkopiert (billig durch die
-  Prüfsumme), Passkeys und Verlauf nicht.
+- Der **Kopier-Dialog** erscheint beim Einfügen, denn dann entsteht die Kopie; die Auswahl beim
+  Kopieren selbst bleibt ohne Dialog.
+- **Verweise** gibt es zunächst für Benutzername, Passwort und Passkeys; weitere Wertarten
+  lassen sich später ohne Änderung der Semantik zulassen. Ein Verweis zeigt immer auf den
+  Eintrag, der den Wert wirklich besitzt (ein Verweis auf ein Verweisfeld wird zur Quelle
+  aufgelöst), deshalb sind Zyklen ausgeschlossen.
+
 - Die **Kürzel** sind feste Voreinstellungen; das Umbelegen kommt mit dem Umbelegen der
   wm-Kürzel (Spec 020). Die Auswahl der Zeile mit Pfeiltasten gilt nur im Passwortmanager.
 - Ein **Passkey ohne Eintrag** kann in der Tabelle von 034 (und in haex-vault) vorkommen; holzi
