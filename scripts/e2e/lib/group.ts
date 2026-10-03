@@ -102,6 +102,9 @@ export class Group {
     name: string,
     options: { main?: boolean } = {},
   ): Promise<Device> {
+    if (this.devices.get(host.address) !== host) {
+      throw new Error(`device ${host.address} is not a device of this group`)
+    }
     if (host.role !== 'main') {
       throw new Error(
         `device ${host.address} is a linked device; only a main device can link another one`,

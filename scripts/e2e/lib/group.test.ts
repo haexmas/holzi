@@ -233,7 +233,12 @@ describe('creating a group', () => {
       ben: ['pc'],
     })
     const laptop = group.device('anna/laptop')
+    const { group: other } = await make({ anna: ['laptop'] })
     const starts = host.calls.length
+    await assert.rejects(
+      group.link(other.device('anna/laptop'), 'tablet'),
+      /not a device of this group/,
+    )
     await assert.rejects(
       group.link(group.device('anna/phone'), 'tablet'),
       /anna\/phone is a linked device/,
@@ -406,12 +411,17 @@ describe('a device added later', () => {
   })
 
   it('starts without a vault and then counts as running', async () => {
-    const { group, host } = await make({ anna: ['laptop'] })
+    const { group, host, steps } = await make({ anna: ['laptop'] })
     const phone = group.addDevice('anna', 'phone')
     host.calls.length = 0
     await phone.startUnopened()
     assert.equal(phone.state, 'running')
     assert.deepEqual(host.calls, ['start 4-anna-5-phone'])
+    assert.deepEqual(steps.at(-1), {
+      name: 'device-started',
+      detail: 'anna/phone (no vault yet)',
+      device: 'anna/phone',
+    })
   })
 
   it('refuses an unknown user and a device over the limit', async () => {

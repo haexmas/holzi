@@ -97,10 +97,14 @@ export class Device {
       data: this.data,
       folder: this.folder,
       step: (name, detail) =>
-        this.group.deps.step(name, detail ?? this.address),
+        this.group.deps.step(name, detail ?? this.address, this.address),
     })
     this.state = next
-    this.group.deps.step('device-started', `${this.address} (no vault yet)`)
+    this.group.deps.step(
+      'device-started',
+      `${this.address} (no vault yet)`,
+      this.address,
+    )
   }
 
   private async launch(): Promise<void> {
