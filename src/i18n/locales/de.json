@@ -482,6 +482,11 @@
         "remove": {
           "title": "Gerät entfernen"
         }
+      },
+      "extensions": {
+        "detail": {
+          "title": "Erweiterung"
+        }
       }
     },
     "downloadModels": {
@@ -618,7 +623,25 @@
       "installFromFileHint": "Eine signierte Erweiterung (.xt) hinzufügen",
       "installed": "Installiert",
       "none": "Noch keine Erweiterung installiert.",
-      "version": "Version {version}"
+      "version": "Version {version}",
+      "versionLabel": "Version",
+      "publisher": "Herausgeber-Schlüssel",
+      "stateHere": "Auf diesem Gerät",
+      "notStartedHere": "Noch nicht gestartet",
+      "permissions": "Berechtigungen",
+      "noPermissions": "Keine Berechtigungen gemerkt.",
+      "status": {
+        "granted": "Erlaubt",
+        "ask": "Nachfragen",
+        "denied": "Verweigert"
+      },
+      "temporary": "bis holzi beendet wird",
+      "allDevices": "alle Geräte",
+      "thisDevice": "dieses Gerät",
+      "notDeclared": "nicht im Manifest",
+      "unreadable": "unbekannt, gilt als nicht vorhanden",
+      "remove": "Entfernen",
+      "revoke": "Widerrufen"
     }
   },
   "models": {
@@ -1396,6 +1419,17 @@
         "mail": "Mail",
         "shell": "Programme ausführen"
       }
+    },
+    "permissionRequest": {
+      "title": "„{name}“ bittet um eine Berechtigung",
+      "notDeclared": "Diese Berechtigung steht nicht im Manifest der Erweiterung.",
+      "targetMissing": "Die Erweiterung, deren Daten angefragt werden, ist nicht installiert.",
+      "shellWarning": "Achtung: Mit dieser Berechtigung kann die Erweiterung Programme auf diesem Gerät ausführen.",
+      "remember": "Merken",
+      "allDevices": "Für alle Geräte merken",
+      "allDevicesNote": "Die Berechtigung gilt dann auch auf deinen anderen Geräten, sobald sie die Vault synchronisiert haben.",
+      "allow": "Erlauben",
+      "deny": "Verweigern"
     }
   }
 }

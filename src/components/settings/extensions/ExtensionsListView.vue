@@ -37,6 +37,7 @@ function description(version: string | undefined, status: string | undefined) {
         :key="extension.id"
         :title="extension.title"
         :description="description(extension.version, extension.statusHere)"
+        :to="`/extensions/${extension.id}`"
         :data-extension-id="extension.id"
       >
         <template #title>
