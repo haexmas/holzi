@@ -163,7 +163,9 @@ pub async fn device_remove(
     args: DeviceRemoveArgs,
 ) -> Result<()> {
     let target = parse_device(&args.device_pubkey)?;
-    remove_device_now(&runtime(&registry)?, target).await
+    // Deliberate failure for the trial of spec 033 T037: removing does nothing.
+    let _ = (&registry, target);
+    Ok(())
 }
 
 /// What `device_remove` does once the running service is at hand: publishes
