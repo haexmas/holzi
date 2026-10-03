@@ -322,7 +322,7 @@ pub fn current_key_for_list(
     removed: &[[u8; 32]],
     list_hash: Option<&[u8; 32]>,
 ) -> haex_crdt::Result<Option<ContentKey>> {
-    let held: Vec<(Vec<u8>, i64, Vec<u8>)> = if let Some(hash) = list_hash {
+    let mut held: Vec<(Vec<u8>, i64, Vec<u8>)> = if let Some(hash) = list_hash {
         q.query_map(
             "SELECT k.key_id, k.generation, k.key \
              FROM vault_content_keys_no_sync k \
@@ -342,6 +342,19 @@ pub fn current_key_for_list(
             |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )?
     };
+    // Older databases can hold a valid key from before the current list was
+    // written. Prefer a key explicitly issued for the effective list, but do
+    // not make presence disappear merely because that list has not received
+    // a new generation yet. If matching rows existed, keep the strict
+    // selection: their envelopes may deliberately exclude removed devices.
+    if held.is_empty() && list_hash.is_some() {
+        held = q.query_map(
+            "SELECT key_id, generation, key FROM vault_content_keys_no_sync \
+             ORDER BY generation DESC",
+            &[],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )?;
+    }
     for (key_id, generation, key) in held {
         let key = Zeroizing::new(key);
         let recipients: Vec<Vec<u8>> = q.query_map(
