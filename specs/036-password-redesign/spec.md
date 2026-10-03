@@ -7,8 +7,8 @@
 haex-vault: einen Eintrag in drei Tabs (Details, Extra, Verlauf) mit Wischgeste zwischen
 den Tabs, Brotkrumen, Auswahlleiste, Kontextmenüs, Ausschneiden, Kopieren und Einfügen und
 Tastaturkürzel in der Liste, Passkeys als Dienstfunktionen (anlegen, abrufen und signieren,
-auflisten) mit Aufrufer und Bereich samt sichtbaren und verwaltbaren eigenständigen
-Passkeys, und Dateianhänge als Karten mit Vorschau und Lightbox. Die Felder und die
+auflisten) mit Aufrufer und Bereich (ein Passkey gehört immer zu einem Eintrag und folgt
+dessen Tags), und Dateianhänge als Karten mit Vorschau und Lightbox. Die Felder und die
 Darstellung aus Spec 035 sind die Grundlage der Oberfläche. Die External Bridge (Autofill,
 Browser-Erweiterung) ist nicht Teil dieser Spec. Referenz: haex-vault @
 `8dce379d94e18fcd42c3b73686a06f984ca3f574`, `src/components/haex/system/passwords/`.
@@ -37,6 +37,17 @@ Browser-Erweiterung) ist nicht Teil dieser Spec. Referenz: haex-vault @
 - Geplante Specs **017–019 (haextensions)** und **021 (MCP-Server)**: Sie vergeben die
   Freigaben; diese Spec legt fest, was eine Freigabe für Passkeys bedeutet (FR-030 bis
   FR-036).
+
+## Clarifications
+
+### Session 2026-10-03
+
+- Q: Wer darf einen eigenständigen Passkey (ohne Eintrag) sehen, anlegen und benutzen? → A:
+  Es gibt keinen eigenständigen Passkey. Ein Passkey ist immer Teil eines gewöhnlichen
+  Eintrags, und dieser Eintrag trägt Tags. Jede Erweiterung oder die External Bridge mit einer
+  Freigabe für ein Tag dieses Eintrags darf alles zu diesem Eintrag sehen (nach Art der Freigabe)
+  und auch dessen Passkeys benutzen. Eine eigene Ansicht für Passkeys, ein Zuordnen und ein
+  Lösen entfallen; ein Passkey wird am Eintrag verwaltet.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -207,31 +218,33 @@ Ordner gehen, einfügen; Benutzername und Passwort per Kürzel kopieren.
 
 ---
 
-### User Story 5 - Passkeys: anlegen, benutzen, auflisten, verwalten (Priority: P2)
+### User Story 5 - Passkeys: anlegen, benutzen, auflisten, am Eintrag verwalten (Priority: P2)
 
 Heute zeigt der Passwortmanager Passkeys nur an (aus Import oder Sync). Jetzt bietet sein
 Dienst Funktionen, mit denen ein berechtigter Aufrufer einen Passkey **anlegt** (holzi erzeugt
 das Schlüsselpaar), eine Anmeldung **bestätigt** (holzi signiert die Aufgabe der Gegenstelle
 mit dem privaten Schlüssel, der Schlüssel verlässt den Dienst nie) und Passkeys **auflistet**.
 Aufrufer sind die haextensions und später die External Bridge, nicht ein Mensch an der
-Oberfläche. Der Nutzer sieht und verwaltet in der Oberfläche **alle** Passkeys: die an
-einem Eintrag im Tab Extra und, in einer eigenen Ansicht „Passkeys“ in der Seitenleiste,
-auch die **eigenständigen** Passkeys ohne Eintrag.
+Oberfläche. Ein Passkey ist immer Teil eines gewöhnlichen Eintrags; wer für ein Tag dieses
+Eintrags freigegeben ist, sieht den Eintrag samt seinen Passkeys und kann sie benutzen. Der
+Nutzer sieht und verwaltet die Passkeys eines Eintrags in dessen Tab Extra.
 
 **Why this priority**: Ohne diese Funktionen kann die External Bridge später nichts tun, und
-ein Passkey ohne Eintrag wäre heute unsichtbar. Für den Alltag ist es nachrangig, weil es
-noch keine Browser-Anbindung gibt.
+für den Alltag ist es nachrangig, weil es noch keine Browser-Anbindung gibt.
 
 **Independent Test**: Mit der Test-Freigabe einer Erweiterung einen Passkey für „example.com“
 anlegen, die Anmeldung bestätigen und die Signatur mit dem öffentlichen Schlüssel prüfen,
-den Passkey in der Ansicht „Passkeys“ sehen, umbenennen, einem Eintrag zuordnen und löschen.
+den Passkey im Tab Extra des Eintrags sehen, umbenennen und löschen.
 
 **Acceptance Scenarios**:
 
-1. **Given** ein Aufrufer mit Freigabe „Lesen und Schreiben“ für „alle“, **When** er einen
-   Passkey für eine Gegenstelle (Kennung, Name, Benutzer, Aufgabe) anlegt, **Then** gibt es
-   einen neuen Passkey mit eigenem Schlüsselpaar, Zähler 0 und der Antwort, die die
-   Gegenstelle zum Registrieren braucht; der private Schlüssel steht in keiner Antwort.
+1. **Given** ein Aufrufer mit Freigabe „Lesen und Schreiben“ für das Tag „web“ und ein
+   Eintrag mit diesem Tag, **When** er einen Passkey für eine Gegenstelle (Kennung, Name,
+   Benutzer, Aufgabe) an diesem Eintrag anlegt, **Then** hängt am Eintrag ein neuer Passkey mit
+   eigenem Schlüsselpaar und Zähler 0, und der Aufrufer erhält die Antwort, die die Gegenstelle
+   zum Registrieren braucht; der private Schlüssel steht in keiner Antwort. **When** er es für
+   einen Eintrag ohne Tag aus seinem Bereich oder ohne Angabe eines Eintrags versucht, **Then**
+   wird abgelehnt.
 2. **Given** ein Passkey und eine Aufgabe der Gegenstelle, **When** ein Aufrufer mit Freigabe
    „Lesen“ die Anmeldung bestätigt, **Then** erhält er eine gültige Signatur über die Aufgabe,
    der Zähler steigt um eins, und „zuletzt benutzt“ wird gesetzt; eine Signatur, die die
@@ -240,20 +253,18 @@ den Passkey in der Ansicht „Passkeys“ sehen, umbenennen, einem Eintrag zuord
    passt, **When** der Aufrufer bestätigen will, **Then** wird abgelehnt und nichts signiert.
 4. **Given** eine Anfrage mit einer Liste ausgeschlossener Passkeys, **When** ein passender
    schon existiert, **Then** legt holzi keinen neuen an und sagt es dem Aufrufer.
-5. **Given** mehrere passende Passkeys, **When** der Aufrufer sie auflistet, **Then** erhält er
-   Kennung, Gegenstelle, Benutzer, Spitzname, Zeiten, und ob der Passkey auffindbar ist, nie
-   Schlüssel; er kann nach Gegenstelle und Eintrag filtern.
-6. **Given** die Ansicht „Passkeys“, **When** der Nutzer sie öffnet, **Then** sieht er alle
-   Passkeys der Vault mit Spitzname oder Gegenstellenname, Gegenstelle, Benutzer, Anlegedatum,
-   zuletzt benutzt und dem Eintrag, an dem der Passkey hängt (Tipp darauf öffnet ihn), oder
-   dem Hinweis „Ohne Eintrag“.
-7. **Given** ein eigenständiger Passkey, **When** der Nutzer ihn einem Eintrag zuordnet,
-   **Then** hängt er danach an diesem Eintrag und erscheint in dessen Tab Extra; umgekehrt
-   kann er einen Passkey vom Eintrag lösen, ohne ihn zu löschen.
-8. **Given** ein Passkey, **When** der Nutzer ihn löscht und bestätigt, **Then** ist er weg
+5. **Given** mehrere passende Passkeys an Einträgen im Bereich des Aufrufers, **When** er sie
+   auflistet, **Then** erhält er Kennung, Gegenstelle, Benutzer, Spitzname, Zeiten, den
+   Eintrag und ob der Passkey auffindbar ist, nie Schlüssel; er kann nach Gegenstelle und
+   Eintrag filtern; Passkeys an Einträgen außerhalb seines Bereichs fehlen, ohne dass er es
+   erfährt.
+6. **Given** ein Eintrag mit zwei Passkeys, **When** der Nutzer den Tab Extra öffnet, **Then**
+   sieht er sie mit Spitzname oder Gegenstellenname, Gegenstelle, Benutzer, Anlegedatum und
+   zuletzt benutzt und kann sie umbenennen oder löschen.
+7. **Given** ein Passkey, **When** der Nutzer ihn löscht und bestätigt, **Then** ist er weg,
    und holzi nennt in der Bestätigung die Gegenstelle, damit er weiß, dass er sich dort
    nicht mehr mit ihm anmelden kann.
-9. **Given** ein Passkey, den zwei Geräte benutzt haben, **When** die Zähler sich über den
+8. **Given** ein Passkey, den zwei Geräte benutzt haben, **When** die Zähler sich über den
    Sync treffen, **Then** gilt der höhere Wert, damit der Zähler nie sinkt.
 
 ---
@@ -319,8 +330,11 @@ antippen, einen Anhang umbenennen.
   (wie FR-029 in 034).
 - **Die Uhr oder der Zähler eines Geräts geht falsch.** Der Zähler eines Passkeys hängt nicht
   an der Uhr; er steigt je Bestätigung und nimmt beim Sync den höheren Wert.
-- **Ein eigenständiger Passkey, dessen Gegenstelle der Nutzer nicht mehr kennt.** Die Ansicht
-  zeigt trotzdem Kennung und Benutzer; löschen geht immer.
+- **Ein Passkey ohne Eintrag** (nur durch Fremddaten oder einen Import ohne Eintrag möglich;
+  holzi legt nie einen an). Er zählt für Aufrufer von außen als nicht vorhanden und wird in
+  der Oberfläche nicht angezeigt; holzi löscht ihn nicht still.
+- **Ein Passkey, dessen Gegenstelle der Nutzer nicht mehr kennt.** Der Tab Extra zeigt
+  trotzdem Kennung und Benutzer; löschen geht immer.
 - **Ein Bild ist sehr groß** (bis zur Anhangsgrenze von 034). Die Vorschau wird verkleinert
   erzeugt; die Lightbox lädt das Bild erst beim Öffnen.
 - **Reduzierte Bewegung.** Weder Tabwechsel noch Lightbox noch die Auswahlleiste benutzen
@@ -447,7 +461,7 @@ antippen, einen Anhang umbenennen.
   (die Aufgabe der Gegenstelle mit dem privaten Schlüssel signieren) und **auflisten**. Sie
   gehen wie alle Zugriffe durch die Zugriffsprüfung aus 034 (FR-024) mit Aufrufer und
   Bereich; die Oberfläche des Nutzers DARF sie nicht zum Anlegen eines Passkeys anbieten
-  (kein Anlegen von Hand), ruft aber Auflisten, Umbenennen, Zuordnen und Löschen selbst auf.
+  (kein Anlegen von Hand), ruft aber Auflisten, Umbenennen und Löschen selbst auf.
 - **FR-024**: Beim **Anlegen** MUSS der Dienst ein neues Schlüsselpaar erzeugen, eine
   zufällige, eindeutige Credential-ID vergeben, den Passkey mit Zähler 0 speichern und dem
   Aufrufer die Angaben zurückgeben, die die Gegenstelle zum Registrieren braucht
@@ -455,8 +469,9 @@ antippen, einen Anhang umbenennen.
   Kennung und Name der Gegenstelle, Benutzerkennung, Benutzername und die Aufgabe der
   Gegenstelle MÜSSEN Pflicht sein; fehlt eine, wird abgelehnt. Eine Liste ausgeschlossener
   Credential-IDs MUSS dazu führen, dass kein neuer Passkey entsteht, wenn einer davon für
-  dieselbe Gegenstelle existiert. Der Passkey kann an einem Eintrag hängen oder eigenständig
-  sein.
+  dieselbe Gegenstelle existiert. Der Aufruf MUSS den **Eintrag** nennen, an dem der Passkey
+  hängt; ohne Eintrag wird abgelehnt. Einen neuen Eintrag legt der Aufrufer vorher mit den
+  gewöhnlichen Funktionen aus 034 an.
 - **FR-025**: Beim **Bestätigen** MUSS der Dienst den passenden Passkey finden (über die Liste
   zugelassener Credential-IDs und die Kennung der Gegenstelle, sonst über einen auffindbaren
   Passkey dieser Gegenstelle), den Zähler um eins erhöhen, „zuletzt benutzt“ setzen und die
@@ -468,32 +483,27 @@ antippen, einen Anhang umbenennen.
   eins, und trifft der Sync zwei Werte, MUSS der höhere gelten.
 - **FR-027**: Beim **Auflisten** MUSS der Dienst nur Kopfdaten liefern (Kennung, Gegenstelle
   samt Name, Benutzerkennung und -name, Spitzname, Algorithmus, auffindbar ja oder nein,
-  Anlege- und Zuletzt-benutzt-Zeit, Kennung des Eintrags oder „keiner“), filterbar nach
+  Anlege- und Zuletzt-benutzt-Zeit, Kennung des Eintrags), filterbar nach
   Gegenstelle, Eintrag und „nur auffindbare“; nie den privaten Schlüssel.
 - **FR-028**: Der private Schlüssel MUSS im Dienst bleiben: weder eine Antwort, ein Fehler,
   ein Protokoll noch ein Verlauf noch der Kontext des eingebauten Agenten DARF ihn enthalten.
-- **FR-029**: Der Nutzer MUSS in der Oberfläche alle Passkeys der Vault sehen und verwalten:
-  die eines Eintrags im Tab Extra (Spitzname, Gegenstellenname oder -kennung, Benutzer,
-  angelegt, zuletzt benutzt, „auffindbar“-Marke; Umbenennen und Löschen mit Bestätigung)
-  und in einer eigenen Ansicht „Passkeys“ in der Seitenleiste **alle**, auch die
-  eigenständigen, mit denselben Angaben und dem Eintrag, an dem sie hängen. Dort MÜSSEN
-  Umbenennen, Löschen, **einem Eintrag zuordnen** und **vom Eintrag lösen** gehen. Die
-  Ansicht „Passkeys“ MUSS ihren eigenen Ort haben (Vor, Zurück, Sitzung) und wie die
-  Papierkorb-Ansicht keine Geheimnisse zeigen.
-- **FR-030**: Passkeys MÜSSEN durch denselben Bereich gedeckt sein wie ihr Eintrag: Ein
-  Passkey an einem Eintrag gilt für einen Aufrufer als im Bereich, wenn der Eintrag es ist
-  (ein Tag aus dem Bereich). **Eigenständige** Passkeys tragen kein Tag und sind darum nur
-  für Freigaben mit dem Bereich „alle“ im Bereich; Freigaben mit einem Tag sehen sie nicht und
-  erfahren nicht, dass es sie gibt (034 FR-029).
-- **FR-031**: **Anlegen** MUSS die Art „Lesen und Schreiben“ verlangen und, für einen Passkey
-  an einem Eintrag, dass der Eintrag im Bereich des Aufrufers liegt; ein eigenständiger
-  Passkey darf nur mit dem Bereich „alle“ angelegt werden (analog 034 FR-028: nach der
-  Änderung muss das Ergebnis im Bereich liegen). **Bestätigen** MUSS mindestens „Lesen“ im
-  Bereich verlangen; **Auflisten** auch.
+- **FR-029**: Der Nutzer MUSS die Passkeys eines Eintrags im Tab Extra sehen und verwalten
+  (Spitzname, Gegenstellenname oder -kennung, Benutzer, angelegt, zuletzt benutzt,
+  „auffindbar“-Marke; Umbenennen und Löschen mit Bestätigung). Eine eigene Ansicht für alle
+  Passkeys und das Verschieben eines Passkeys zu einem anderen Eintrag gibt es nicht; ein
+  Passkey ist immer Teil eines gewöhnlichen Eintrags.
+- **FR-030**: Ein Passkey MUSS durch denselben Bereich gedeckt sein wie sein Eintrag: Er gilt
+  für einen Aufrufer als im Bereich, wenn der Eintrag es ist (er trägt ein Tag aus dem
+  Bereich, oder die Freigabe gilt für „alle“). Wer einen Eintrag sehen darf, sieht auch seine
+  Passkeys (nach Art der Freigabe: Kopfdaten beim Lesen, Benutzen beim Bestätigen). Ein Passkey
+  außerhalb des Bereichs MUSS wie ein nicht vorhandener behandelt werden (034 FR-029).
+- **FR-031**: **Anlegen** MUSS die Art „Lesen und Schreiben“ verlangen und dass der Eintrag, an
+  dem der Passkey entsteht, im Bereich des Aufrufers liegt (034 FR-028). **Bestätigen** MUSS
+  mindestens „Lesen“ im Bereich des Eintrags verlangen; **Auflisten** auch.
 - **FR-032**: Der eingebaute Agent im Chat MUSS von den Passkeys höchstens erfahren, dass ein
   Eintrag welche hat (der Hinweis in den Kopfdaten aus 034); er DARF keine der drei Funktionen
   aufrufen. Externe Agenten über MCP DÜRFEN höchstens auflisten.
-- **FR-033**: **Umbenennen, Zuordnen, Lösen und Löschen** eines Passkeys MUSS dem Nutzer
+- **FR-033**: **Umbenennen und Löschen** eines Passkeys MUSS dem Nutzer
   vorbehalten bleiben (wie 034 für das Löschen eines Passkeys); andere Aufrufer MÜSSEN dafür
   abgelehnt werden.
 - **FR-034**: Passkeys mit einem anderen Algorithmus als dem, den holzi beim Anlegen erzeugt
@@ -502,9 +512,9 @@ antippen, einen Anhang umbenennen.
 - **FR-035**: Ein Passkey an einem Eintrag im Papierkorb MUSS für andere Aufrufer als den
   Nutzer wie nicht vorhanden sein (Auflisten, Bestätigen), wie der Eintrag selbst (034
   FR-015), und kommt mit dem Eintrag zurück. Das endgültige Löschen des Eintrags löscht auch
-  seine Passkeys (034 FR-015); der Dialog nennt in diesem Fall die Zahl der Passkeys. Für
-  eigenständige Passkeys gibt es keinen Papierkorb: Löschen ist endgültig und braucht die
-  Bestätigung aus FR-029.
+  seine Passkeys (034 FR-015); der Dialog nennt in diesem Fall die Zahl der Passkeys. Das
+  Löschen eines einzelnen Passkeys am Eintrag ist endgültig und braucht die Bestätigung aus
+  Story 5.
 - **FR-036**: Die Funktionen MÜSSEN so gebaut sein, dass die External Bridge später als
   weiterer Aufrufer ohne Änderung von Datenmodell oder Freigabe-Semantik andocken kann
   (034 FR-032). Eine Browser-Erweiterung, Autofill und das Annehmen von Anfragen aus dem
@@ -550,7 +560,7 @@ antippen, einen Anhang umbenennen.
   synchronisiert.
 - **Auswahl**: die markierten Einträge und Ordner einer Liste; endet beim Ordnerwechsel.
 - **Passkey**: unverändert aus 034 (Tabelle der Passkeys), jetzt auch mit Funktionen zum
-  Anlegen, Bestätigen und Auflisten; kann an einem Eintrag hängen oder eigenständig sein; der
+  Anlegen, Bestätigen und Auflisten; gehört immer zu einem Eintrag und folgt dessen Tags; der
   Zähler steigt nur.
 - **Anhangskarte**: die Darstellung eines Anhangs (Vorschau oder Symbol, Name, Größe, Typ).
 
@@ -574,7 +584,8 @@ antippen, einen Anhang umbenennen.
   steigt bei jeder Bestätigung um genau eins und sinkt in keinem Sync-Szenario.
 - **SC-006**: In keiner Antwort, keinem Fehler, keiner Liste und keinem Protokoll des Dienstes
   steht ein privater Passkey-Schlüssel; ein Aufrufer mit einem Tag sieht, ändert und
-  bestätigt in 100 Versuchen keinen eigenständigen Passkey und erfährt nicht, dass es ihn gibt.
+  bestätigt in 100 Versuchen keinen Passkey an einem Eintrag außerhalb seines Bereichs und
+  erfährt nicht, dass es ihn gibt.
 - **SC-007**: Eine Anfrage mit falscher Herkunft wird in allen Versuchen abgelehnt, ohne zu
   signieren oder den Zähler zu ändern.
 - **SC-008**: Die Lightbox öffnet ein 5-MiB-Bild in unter einer Sekunde; an einem Eintrag mit
@@ -594,11 +605,11 @@ antippen, einen Anhang umbenennen.
   Prüfsumme), Passkeys und Verlauf nicht.
 - Die **Kürzel** sind feste Voreinstellungen; das Umbelegen kommt mit dem Umbelegen der
   wm-Kürzel (Spec 020). Die Auswahl der Zeile mit Pfeiltasten gilt nur im Passwortmanager.
-- **Eigenständige Passkeys** sind nur für Freigaben mit dem Bereich „alle“ sichtbar, weil sie
-  kein Tag tragen können (in haex-vault liegen sie ebenfalls außerhalb jedes Tag-Bereichs, hier steht es ausdrücklich).
-- Wer **Passkeys anlegen und bestätigen** darf, sind die Aufrufer mit Freigabe (Erweiterungen,
-  später die External Bridge); externe Agenten über MCP dürfen höchstens auflisten, der
-  eingebaute Agent gar nichts. Die Freigaben selbst vergeben die Specs 017–019 und 021.
+- Ein **Passkey ohne Eintrag** kann in der Tabelle von 034 (und in haex-vault) vorkommen; holzi
+  legt nie einen an und behandelt einen vorgefundenen als nicht vorhanden (siehe Randfälle).
+- Wer **Passkeys anlegen und bestätigen** darf, sind die Aufrufer mit Freigabe für ein Tag des
+  Eintrags (Erweiterungen, später die External Bridge); externe Agenten über MCP dürfen
+  höchstens auflisten, der eingebaute Agent gar nichts. Die Freigaben selbst vergeben die Specs 017–019 und 021.
 - Ein Passkey an einem **Eintrag im Papierkorb** bleibt an ihm hängen und wird mit ihm
   wiederhergestellt (FR-035).
 - Eine **Vorschau** gibt es nur für Bilder (PNG, JPEG, GIF, WebP wie in 034); SVG, PDF und
