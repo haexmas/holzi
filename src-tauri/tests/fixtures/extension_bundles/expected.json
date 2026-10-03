@@ -5,6 +5,9 @@
   "good-notes-like.xt": {
     "valid": true
   },
+  "good-large-deflated.xt": {
+    "valid": true
+  },
   "good-semver-prerelease.xt": {
     "valid": true
   },
@@ -108,6 +111,10 @@
     "valid": false,
     "kind": "public_key_mismatch"
   },
+  "bad-signature-unreduced-s.xt": {
+    "valid": false,
+    "kind": "signature_invalid"
+  },
   "bad-signature.xt": {
     "valid": false,
     "kind": "signature_invalid"
@@ -135,6 +142,44 @@
   "bad-local-header.xt": {
     "valid": false,
     "kind": "archive_invalid"
+  },
+  "bad-archive-comment.xt": {
+    "valid": false,
+    "kind": "archive_invalid"
+  },
+  "bad-entry-gap.xt": {
+    "valid": false,
+    "kind": "archive_invalid",
+    "path": "index.html"
+  },
+  "bad-gap-before-central-directory.xt": {
+    "valid": false,
+    "kind": "archive_invalid"
+  },
+  "bad-data-descriptor.xt": {
+    "valid": false,
+    "kind": "archive_invalid",
+    "path": "index.html"
+  },
+  "bad-central-extra-field.xt": {
+    "valid": false,
+    "kind": "archive_invalid",
+    "path": "index.html"
+  },
+  "bad-local-extra-field.xt": {
+    "valid": false,
+    "kind": "archive_invalid",
+    "path": "index.html"
+  },
+  "bad-utf8-flag-missing.xt": {
+    "valid": false,
+    "kind": "archive_invalid",
+    "path": "locales/übersicht.json"
+  },
+  "bad-deflate-trailing-data.xt": {
+    "valid": false,
+    "kind": "archive_invalid",
+    "path": "index.html"
   },
   "bad-forbidden-private-key.xt": {
     "valid": false,

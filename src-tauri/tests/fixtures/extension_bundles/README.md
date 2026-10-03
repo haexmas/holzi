@@ -16,16 +16,20 @@ never trust them and never sign anything else with them.
 
 The expected kind assumes this order; the first failing check wins.
 
-1. Archive: file ≤ 64 MiB (`archive_too_large`); end record and central directory readable, no ZIP64,
-   counts consistent (`archive_invalid`); ≤ 2000 entries (`archive_too_large`).
+1. Archive: file ≤ 64 MiB (`archive_too_large`); end record in the last 22 bytes (no archive comment),
+   central directory readable, no ZIP64, counts consistent (`archive_invalid`); ≤ 2000 entries
+   (`archive_too_large`).
 2. Legacy: no `haextension/signature.json` and `haextension/manifest.json` is JSON with a `signature`
    field → `legacy_signature_format`.
 3. Per entry, in central-directory order: name is UTF-8 (`entry_path_invalid`); regular file only,
    no directory/symlink/encryption, method Stored or Deflate (`entry_kind`); path rules and forbidden
    files (`entry_path_invalid`); exact or NFC+lowercase duplicate (`entry_duplicate`); declared size
    ≤ 25 MiB (`entry_too_large`); declared total ≤ 64 MiB (`archive_too_large`); ratio ≤ 200:1
-   (`entry_ratio`); data yields more bytes than declared (`entry_too_large`), fewer bytes, bad CRC or
-   inconsistent local header (`archive_invalid`).
+   (`entry_ratio`); layout (`archive_invalid`): the entry starts right after the previous one (the first
+   at offset 0), no data descriptor, no extra fields, a non-ASCII name carries the UTF-8 flag; data yields
+   more bytes than declared (`entry_too_large`), fewer bytes, bad CRC, bytes after the end of the deflate
+   stream or inconsistent local header (`archive_invalid`). After the last entry: the central directory
+   starts right after it (`archive_invalid`). The layout rules make every zip reader see the same entries.
 4. Control files: manifest present (`manifest_invalid`), canonical restricted JSON
    (`manifest_not_canonical`); `signature.json` present, canonical, well-formed (`signature_invalid`).
 5. Files: entries (without `signature.json`) equal `files` by path, size and SHA-256; the first differing
@@ -45,6 +49,7 @@ The expected kind assumes this order; the first failing check wins.
 
 - `good-minimal.xt` — valid — index.html and manifest only
 - `good-notes-like.xt` — valid — Nuxt-like build: inline scripts, nested and non-ASCII paths, Drizzle migrations
+- `good-large-deflated.xt` — valid — assets/big.js: 300 KiB deflated, so it inflates in several steps
 - `good-semver-prerelease.xt` — valid — version 2.0.0-rc.1+build.007 (leading zero allowed in build metadata)
 - `good-migrations-no-journal.xt` — valid — migrationsDir db with two .sql files and no meta/_journal.json
 - `bad-moved-content.xt` — `file_mismatch { path: "assets/a.js" }` — a line moved from assets/a.js to assets/b.js; concatenated content unchanged
@@ -70,6 +75,7 @@ The expected kind assumes this order; the first failing check wins.
 - `bad-journal-missing-sql.xt` — `manifest_invalid` — db/meta/_journal.json names 0001_tags, db/0001_tags.sql is absent
 - `bad-migration-not-utf8.xt` — `manifest_invalid` — db/0001_tags.sql named by the journal is not UTF-8
 - `bad-key-mismatch.xt` — `public_key_mismatch` — manifest.publicKey is test key B, signature.json is key A (validly signed by A)
+- `bad-signature-unreduced-s.xt` — `signature_invalid` — S of the signature replaced by S + L (verifies under a check that does not require S < L)
 - `bad-signature.xt` — `signature_invalid` — last byte of the signature flipped
 - `bad-zip-bomb.xt` — `entry_too_large` — listed bomb.bin: 26 MiB of zeros (> 25 MiB), deflated
 - `bad-entry-overflow.xt` — `entry_too_large` — index.html declares 16 bytes uncompressed but inflates to more
@@ -77,5 +83,13 @@ The expected kind assumes this order; the first failing check wins.
 - `bad-too-many-entries.xt` — `archive_too_large` — 2001 entries, all listed (limit 2000)
 - `bad-truncated.xt` — `archive_invalid` — good-minimal without its end-of-central-directory record
 - `bad-local-header.xt` — `archive_invalid` — index.html stored, but its local header claims Deflate (central directory says Stored)
+- `bad-archive-comment.xt` — `archive_invalid` — good-minimal with an archive comment after the end record
+- `bad-entry-gap.xt` — `archive_invalid { path: "index.html" }` — 16 unreferenced bytes between haextension/signature.json and index.html
+- `bad-gap-before-central-directory.xt` — `archive_invalid` — 16 unreferenced bytes between the last entry and the central directory
+- `bad-data-descriptor.xt` — `archive_invalid { path: "index.html" }` — index.html with a data descriptor (sizes and CRC-32 after the data)
+- `bad-central-extra-field.xt` — `archive_invalid { path: "index.html" }` — index.html with an Info-ZIP Unix extra field in its central-directory record
+- `bad-local-extra-field.xt` — `archive_invalid { path: "index.html" }` — index.html with an Info-ZIP Unix extra field in its local header
+- `bad-utf8-flag-missing.xt` — `archive_invalid { path: "locales/übersicht.json" }` — listed locales/übersicht.json without the UTF-8 flag
+- `bad-deflate-trailing-data.xt` — `archive_invalid { path: "index.html" }` — index.html deflated, with unsigned bytes after the end of its deflate stream
 - `bad-forbidden-private-key.xt` — `entry_path_invalid` — listed haextension/private.key (placeholder content, no key)
 - `legacy-format.xt` — `legacy_signature_format` — pre-v2 layout: signature in manifest, no signature.json, config, public.key and a directory entry

@@ -65,7 +65,9 @@ serde abhängt. Die Fehlermeldung kann die geänderte Datei nennen.
 
 **Umsetzung im Werkzeug**: haex-space/vault-sdk `c8588aadc7bac13f628cfb9c93e269edd5f7a81b` (#52), Signieren und
 Prüfen in `src/bundle/` (`sign.ts`, `verify.ts`, `jcs.ts`, `zip.ts`), Testvektoren unter `test-vectors/bundles/`,
-kopiert nach `src-tauri/tests/fixtures/extension_bundles/` (`SOURCE.md`).
+kopiert nach `src-tauri/tests/fixtures/extension_bundles/` (`SOURCE.md`). Seit haex-space/vault-sdk#54 (Release
+4.0.0, `36bf6e98f36c2362d42aa2d92c85288a3d91e775`) gibt es eine einzige Umsetzung, das Rust-Crate
+`crates/haex-bundle`: holzi bindet es per Git-SHA ein, `haex` nutzt seinen WebAssembly-Build; 46 Vektoren.
 
 **Alternativen**: Signatur als Manifest-Feld (wieder das Leeren); Merkle-Wurzel (keine lesbaren Fehler);
 abgesetzte `.sig`-Datei (geht beim Kopieren verloren); HV-Format (Spec-Entscheidung dagegen).

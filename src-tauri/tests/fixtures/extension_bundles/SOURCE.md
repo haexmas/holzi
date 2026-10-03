@@ -1,7 +1,7 @@
 # Source of the bundle test vectors (spec 017, T012)
 
 Copied unchanged from [haex-space/vault-sdk](https://github.com/haex-space/vault-sdk) at
-`c8588aadc7bac13f628cfb9c93e269edd5f7a81b` (merge of haex-space/vault-sdk#52), path
+`36bf6e98f36c2362d42aa2d92c85288a3d91e775` (release 4.0.0, after haex-space/vault-sdk#54), path
 `test-vectors/bundles/`. `README.md` and `expected.json` are part of the copy.
 
 The vectors are generated there by `scripts/generate-bundle-vectors.mjs`; never edit them here. To
