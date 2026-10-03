@@ -1,27 +1,26 @@
 import assert from 'node:assert/strict'
 import { scenario } from '../lib/scenario.ts'
-import {
-  addThread,
-  expectThreads,
-  linkDevice,
-  startFirstDevice,
-  threadTitles,
-} from '../lib/sync-flows.ts'
+import { addThread, expectThreads, threadTitles } from '../lib/sync-flows.ts'
 
 // Spec 024, user story 2 (SC-005, SC-011): a device of another vault, running against the same Nostr
 // relay at the same time, neither gets anything of this vault nor gives it anything. The two devices
 // of this vault sync (the positive control: the sync had its time), and by then the foreign device still
 // holds only its own.
 scenario('sync-own-devices-only', { timeoutMs: 300_000 }, async (ctx) => {
-  const relay = await ctx.nostrRelay()
-  const mine = await startFirstDevice(ctx, relay.url, 'e2e-mine')
-  const linked = await linkDevice(ctx, mine, relay.url, {
-    deviceName: 'Mein zweites Gerät',
+  const g = await ctx.group({
+    users: { anna: ['laptop', 'phone'], ben: ['desktop', 'tablet'] },
   })
-  const foreign = await startFirstDevice(ctx, relay.url, 'e2e-theirs')
-  const foreignPeer = await linkDevice(ctx, foreign, relay.url, {
-    deviceName: 'Noch ein fremdes Gerät',
-  })
+  const [mine, linked, foreign, foreignPeer] = [
+    'laptop',
+    'phone',
+    'desktop',
+    'tablet',
+  ].map((name) =>
+    g.device(
+      `${name === 'laptop' || name === 'phone' ? 'anna' : 'ben'}/${name}`,
+    ),
+  )
+  assert.ok(mine && linked && foreign && foreignPeer)
 
   await addThread(foreign, 'nur beim Fremden')
   await addThread(mine, 'nur bei mir')

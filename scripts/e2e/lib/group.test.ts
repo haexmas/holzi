@@ -208,6 +208,25 @@ describe('creating a group', () => {
     }
   })
 
+  it('links a device later through any main device of the user, as linked or main', async () => {
+    const { group, host } = await make({
+      anna: ['laptop', { name: 'desk', main: true }],
+    })
+    const desk = group.device('anna/desk')
+    const phone = await group.link(desk, 'phone')
+    const second = await group.link(desk, 'second', { main: true })
+    assert.equal(phone.role, 'linked')
+    assert.equal(second.role, 'main')
+    assert.equal(phone.user, 'anna')
+    assert.equal(phone.state, 'running')
+    assert.equal(group.device('anna/phone'), phone)
+    assert.ok(host.calls.includes('4-anna-4-desk: link_code_create'))
+    assert.deepEqual(
+      host.joins.map((join) => (join as { deviceName: string }).deviceName),
+      ['desk', 'phone', 'second'],
+    )
+  })
+
   it('gives every user and linked device its own passphrase', async () => {
     const { group } = await make({ anna: ['a', 'b'], ben: ['c'] })
     const passphrases = [...group.devices.values()].map((d) => d.passphrase)
