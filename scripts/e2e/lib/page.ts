@@ -286,6 +286,9 @@ export interface Page {
   waitForEnd(deadlineMs: number): Promise<number>
   markedProcesses(): MarkedProcess[]
   sampleUntilEnd<T = unknown>(script: string, intervalMs: number): Promise<T[]>
+  /** Runs the following calls inside the displayed iframe found by hook, or back in the top
+   * document with `null` (spec 017: extension frames). */
+  frame(hook: string | null, deadlineMs?: number): Promise<void>
 }
 
 export interface PageOptions {
@@ -318,5 +321,9 @@ export function createPage(options: PageOptions): Page {
     markedProcesses: () => markedProcesses(marker, executable),
     sampleUntilEnd: (script, intervalMs) =>
       sampleUntilEnd(client, script, intervalMs),
+    frame: async (hook, deadlineMs = 5000) =>
+      client.switchToFrame(
+        hook === null ? null : await findDisplayed(client, hook, deadlineMs),
+      ),
   }
 }
