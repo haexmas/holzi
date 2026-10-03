@@ -123,12 +123,7 @@ scenario('sync-mutual-removal', { timeoutMs: 600_000 }, async (ctx) => {
   ctx.step('the linked device follows the winner')
 
   await addThread(winner, AFTER)
-  await expectThreads(
-    ctx,
-    b,
-    [AFTER],
-    'the linked device to get the new chat',
-  )
+  await expectThreads(ctx, b, [AFTER], 'the linked device to get the new chat')
   assert.deepEqual(
     await threadTitles(loser),
     [],
