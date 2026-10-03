@@ -265,16 +265,28 @@ pub(crate) async fn handle_incoming(
         }
     };
     // The current key's mailboxes first; an older one is a device that was away while the key
-    // changed, and its meeting is checked like any other.
-    let opened = roster.listening_keys().iter().find_map(|content_key| {
-        [day, day.saturating_sub(1)].into_iter().find_map(|tag| {
-            let (mb_sk, _) = mailbox_keys(content_key, tag).ok()?;
-            unwrap_rumor(event, &mb_sk).ok()
-        })
-    });
-    let Some((sender, kind, payload)) = opened else {
+    // changed.
+    let opened = roster
+        .listening_keys()
+        .iter()
+        .enumerate()
+        .find_map(|(index, content_key)| {
+            [day, day.saturating_sub(1)].into_iter().find_map(|tag| {
+                let (mb_sk, _) = mailbox_keys(content_key, tag).ok()?;
+                unwrap_rumor(event, &mb_sk)
+                    .ok()
+                    .map(|opened| (index > 0, opened))
+            })
+        });
+    let Some((older, (sender, kind, payload))) = opened else {
         return false;
     };
+    // A removed device still holds the older keys and could speak there under a fresh device key:
+    // only a listed device's meeting of a device the list names is heard in an older mailbox, never
+    // a request to be admitted or a claim of a newer list.
+    if older && (roster.standing != Standing::Listed || !roster.names(&sender)) {
+        return false;
+    }
     if kind == ADMISSION_KIND {
         return handle_request(node, replica, keys, &roster, sender, &payload).await;
     }
@@ -457,6 +469,13 @@ impl Roster {
         std::iter::once(self.content_key)
             .chain(self.older_keys.iter().copied())
             .collect()
+    }
+
+    /// Whether the effective list names `device`.
+    fn names(&self, device: &[u8; 32]) -> bool {
+        self.effective_devices
+            .iter()
+            .any(|(listed, _)| listed == device)
     }
 
     /// Whether the effective list names any device besides this one.

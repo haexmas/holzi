@@ -55,8 +55,9 @@ Generation, info = "holzi/presence/v1" ‖ tag_u32)`, `tag` = Tage seit 1970 (UT
   wurde, kennt nur den alten Schlüssel und meldet sich mit ihm. Die anderen hören es dort, prüfen die
   Meldung wie jede andere und wählen es an; Handshake und Sitzung bringen ihm die neue Liste und den
   neuen Schlüssel (FR-027). Ein entferntes Gerät erfährt so nichts Neues, weil in alten Postfächern
-  niemand sendet, und seine eigenen Meldungen dort führen zu keiner Verbindung, weil die geltende
-  Liste es nicht nennt.
+  niemand sendet. Weil es die alten Schlüssel weiter hält, zählt dort nur die Meldung eines Geräts,
+  das die geltende Liste nennt, und nur für ein gelistetes Gerät: Aufnahmeanfragen und Meldungen
+  unbekannter Absender, auch mit höherer `list_generation`, werden in alten Postfächern verworfen.
 
 ## Aufnahmeanfrage (inneres Ereignis Art 24101)
 

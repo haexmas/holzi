@@ -330,14 +330,9 @@ async fn a_meeting_from_the_listed_endpoint_records_no_problem() {
     assert_eq!(problem_of(&main, &linked.keys.device_pubkey), None);
 }
 
-/// A device that was away while the content key changed still announces
-/// itself in the mailbox of the key it holds. The others listen there too,
-/// so they find it and hand it the new key in the session.
-#[tokio::test]
-async fn a_meeting_sealed_with_an_older_key_is_still_heard() {
-    let main = Member::genesis();
-    let linked = Member::join(&main);
-    main.add(&linked);
+/// Issues a new content key on `main`, as removing a device does, and
+/// returns the one it held before.
+fn rotate_key(main: &Member) -> crate::sync::content_keys::ContentKey {
     let old_key = crate::storage::query::read(main.device.db(), |r| {
         crate::sync::content_keys::current_key(r, &[])
     })
@@ -357,6 +352,18 @@ async fn a_meeting_sealed_with_an_older_key_is_still_heard() {
             crate::sync::content_keys::issue_generation(tx, &key, &effective, &main.keys, 10)
         })
         .expect("issue generation 2");
+    old_key
+}
+
+/// A device that was away while the content key changed still announces
+/// itself in the mailbox of the key it holds. The others listen there too,
+/// so they find it and hand it the new key in the session.
+#[tokio::test]
+async fn a_meeting_sealed_with_an_older_key_is_still_heard() {
+    let main = Member::genesis();
+    let linked = Member::join(&main);
+    main.add(&linked);
+    let old_key = rotate_key(&main);
     let roster = read_roster(&main.device.replica, main.vault, &main.keys.device_pubkey)
         .expect("read roster")
         .expect("a roster");
@@ -389,4 +396,89 @@ async fn a_meeting_sealed_with_an_older_key_is_still_heard() {
     .await;
 
     assert!(recorded, "the device that missed the new key is dialed");
+}
+
+/// A removed device still holds the older key. Speaking there under a fresh
+/// device key that claims a newer list gets it no connection: in an older
+/// mailbox only devices the list names are heard.
+#[tokio::test]
+async fn a_stranger_in_an_older_mailbox_is_not_dialed() {
+    let main = Member::genesis();
+    let linked = Member::join(&main);
+    main.add(&linked);
+    let old_key = rotate_key(&main);
+    let stranger = Member::genesis();
+    let node = bind_loopback(&main).await;
+    let day = day_tag_now();
+    let (_, old_mailbox) = mailbox_keys(&old_key.key, day).expect("mailbox keys");
+    let content = PresenceContent::own(
+        stranger.keys.device_pubkey,
+        stranger.keys.endpoint_id,
+        None,
+        vec![(Ipv4Addr::LOCALHOST, 4000).into()],
+        99,
+    );
+    let event = build(&stranger.keys, &content, &old_mailbox).expect("build");
+
+    let dial = handle_incoming(
+        &node,
+        &main.device.replica,
+        &main.keys,
+        main.vault,
+        day,
+        &event,
+    )
+    .await;
+
+    assert!(!dial);
+    assert!(node.take_candidates().is_empty());
+}
+
+/// Nor does a request to be admitted that arrives in an older mailbox reach
+/// the list of open requests.
+#[tokio::test]
+async fn a_request_in_an_older_mailbox_is_not_kept() {
+    let main = Member::genesis();
+    let linked = Member::join(&main);
+    main.add(&linked);
+    let old_key = rotate_key(&main);
+    let asking = Member::genesis();
+    let node = bind_loopback(&main).await;
+    let day = day_tag_now();
+    let (_, old_mailbox) = mailbox_keys(&old_key.key, day).expect("mailbox keys");
+    let request = admission::Request::sign(
+        &asking.keys,
+        asking.device.db().device_id(),
+        "Zweitrechner".to_string(),
+        now_ms(),
+    )
+    .expect("sign");
+    let addr = iroh::EndpointAddr::from_parts(
+        iroh::EndpointId::from_bytes(&asking.keys.endpoint_id).expect("endpoint"),
+        [iroh::TransportAddr::Ip((Ipv4Addr::LOCALHOST, 4000).into())],
+    );
+    let json = serde_json::to_string(&admission::Content::new(&request, &addr)).expect("encode");
+    let event = wrap_payload(
+        ADMISSION_KIND,
+        &asking.keys.device_secret,
+        &json,
+        &old_mailbox,
+    )
+    .expect("wrap");
+
+    handle_incoming(
+        &node,
+        &main.device.replica,
+        &main.keys,
+        main.vault,
+        day,
+        &event,
+    )
+    .await;
+
+    let open = crate::storage::query::read(main.device.db(), |r| {
+        admission::load_open(r, &HashSet::new())
+    })
+    .expect("read requests");
+    assert!(open.is_empty(), "no request is kept from an older mailbox");
 }
