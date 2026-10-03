@@ -56,8 +56,8 @@ use extensions::commands::frames::{
 use extensions::commands::install::{extension_install, extension_install_preview};
 use extensions::commands::manage::{extension_icon, extension_list};
 use extensions::commands::permissions::{
-    extension_permission_remove, extension_permission_resolve, extension_permission_set,
-    extension_permissions_list,
+    extension_permission_cancel, extension_permission_remove, extension_permission_resolve,
+    extension_permission_set, extension_permissions_list,
 };
 use hardware::get_hardware_info;
 use instances::{
@@ -356,6 +356,7 @@ pub fn run() {
             extension_permission_set,
             extension_permission_remove,
             extension_permission_resolve,
+            extension_permission_cancel,
         ]))
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

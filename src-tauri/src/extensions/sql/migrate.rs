@@ -4,7 +4,8 @@
 //! all (FR-034). The journal (`extension_migrations_applied_no_sync`) belongs to this device.
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
+use std::time::{Duration, Instant};
 
 use haex_crdt::rusqlite::params;
 use haex_crdt::{GuardedWriteOptions, SqlGuard};
@@ -13,6 +14,7 @@ use uuid::Uuid;
 
 use super::authorizer::{self, MigrationPhase, PhaseCell, MIGRATION_JOURNAL};
 use super::migrate_rules::{plan, Step};
+use crate::extensions::default_limits::MIGRATION_TIMEOUT_MS;
 use crate::extensions::error::BridgeError;
 use crate::extensions::ids::TablePrefix;
 use crate::storage::query::Query;
@@ -118,9 +120,12 @@ fn apply(
         error: Box::new(error),
     })?;
     let phase = Arc::new(PhaseCell::default());
+    // Extension SQL never holds the vault's write lock without a limit; a migration gets more time
+    // than a call because it may rebuild a large table.
+    let deadline = Instant::now() + Duration::from_millis(MIGRATION_TIMEOUT_MS);
     let guard = SqlGuard {
         authorizer: authorizer::migration(own.clone(), Arc::clone(&phase)),
-        progress: None,
+        progress: Some((1000, Arc::new(move || Instant::now() > deadline))),
     };
     let record = migration.clone();
     db.write_guarded_blocking(
@@ -171,6 +176,10 @@ fn apply(
     })
 }
 
+/// Held while migrations are read and applied: two starts at once (two tabs of a session restore)
+/// would both see the same migration as pending, and the second run would fail.
+static APPLYING: Mutex<()> = Mutex::new(());
+
 /// Applies every pending migration in order; stops at the first that fails. Returns the names of
 /// the migrations applied now. Blocking.
 pub fn apply_pending(
@@ -179,6 +188,7 @@ pub fn apply_pending(
     own: &TablePrefix,
     now_ms: i64,
 ) -> Result<Vec<String>, MigrationError> {
+    let _applying = APPLYING.lock().unwrap_or_else(PoisonError::into_inner);
     let pending = db
         .read_blocking(move |q| Ok(pending(q, extension_id)))
         .map_err(|_| MigrationError::Unavailable)??;

@@ -90,31 +90,52 @@ pub fn serve(
     let Some((extension_id, mut file)) = route(path) else {
         return Served::error(StatusCode::NOT_FOUND);
     };
-    let frames = host.frames.of_extension(extension_id);
-    let Some(newest) = frames.first() else {
-        return Served::error(StatusCode::FORBIDDEN);
-    };
     let token = start_token(query).and_then(|t| host.frames.by_token(extension_id, t));
-    let bundle_id = token.as_ref().map_or(newest.bundle_id, |s| s.bundle_id);
-    let Some(started) = host.started(bundle_id) else {
+    // With a token, the bundle of that frame. Without one (scripts, styles, lazy chunks) the
+    // request cannot name its frame: the bundles of the open frames are tried newest first, so a
+    // frame still on an older version finds its own (content-hashed) chunks after an update.
+    let mut bundles: Vec<Uuid> = Vec::new();
+    match &token {
+        Some(session) => bundles.push(session.bundle_id),
+        None => {
+            for session in host.frames.of_extension(extension_id) {
+                if !bundles.contains(&session.bundle_id) {
+                    bundles.push(session.bundle_id);
+                }
+            }
+        }
+    }
+    let started: Vec<_> = bundles
+        .into_iter()
+        .filter_map(|b| host.started(b))
+        .collect();
+    if started.is_empty() {
         return Served::error(StatusCode::FORBIDDEN);
-    };
+    }
 
-    let read = |path: String| {
+    let read = |bundle_id: Uuid, path: String| {
         db.read_blocking(move |q| read_verified_file(q, bundle_id, &path).map_err(Into::into))
     };
-    let mut data = match read(file.clone()) {
-        Ok(data) => data,
-        Err(_) => return Served::error(StatusCode::SERVICE_UNAVAILABLE),
-    };
-    if data.is_none() && !has_file_extension(&file) {
-        file = started.entry.clone();
-        data = match read(file.clone()) {
-            Ok(data) => data,
+    let mut found = None;
+    for bundle in &started {
+        match read(bundle.bundle_id, file.clone()) {
+            Ok(Some(data)) => {
+                found = Some((bundle, data));
+                break;
+            }
+            Ok(None) => {}
             Err(_) => return Served::error(StatusCode::SERVICE_UNAVAILABLE),
-        };
+        }
     }
-    let Some(data) = data else {
+    if found.is_none() && !has_file_extension(&file) {
+        let bundle = &started[0];
+        file = bundle.entry.clone();
+        match read(bundle.bundle_id, file.clone()) {
+            Ok(data) => found = data.map(|data| (bundle, data)),
+            Err(_) => return Served::error(StatusCode::SERVICE_UNAVAILABLE),
+        }
+    }
+    let Some((started, data)) = found else {
         return Served::error(StatusCode::NOT_FOUND);
     };
 

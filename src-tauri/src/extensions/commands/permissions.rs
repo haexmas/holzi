@@ -143,7 +143,8 @@ pub fn set(db: &VaultDb, device: Uuid, args: PermissionSetArgs, now_ms: i64) -> 
     }
     let replaces = args.replaces.as_deref().map(parse_id).transpose()?;
     db.write_blocking(move |tx| {
-        let declared = permission_store::rows_of(tx, extension_id)?
+        let rows = permission_store::rows_of(tx, extension_id)?;
+        let declared = rows
             .iter()
             .any(|r| r.declared && r.is_about(&args.kind, &args.action, &args.target));
         let id = permission_store::put(
@@ -159,8 +160,11 @@ pub fn set(db: &VaultDb, device: Uuid, args: PermissionSetArgs, now_ms: i64) -> 
             },
             now_ms,
         )?;
+        // Only a row of this extension (as in `remove`).
         if let Some(old) = replaces.filter(|old| *old != id) {
-            permission_store::delete(tx, old)?;
+            if rows.iter().any(|r| r.id == old) {
+                permission_store::delete(tx, old)?;
+            }
         }
         Ok(())
     })
@@ -285,6 +289,12 @@ pub fn resolve(
     Ok(())
 }
 
+/// The user closed the question without answering: it is no longer open, so the next identical
+/// call asks again. Nothing is decided (closing cancels, it never denies).
+pub fn cancel(host: &ExtensionHost, request_id: &str) {
+    host.permissions.take(request_id);
+}
+
 #[tauri::command]
 pub async fn extension_permissions_list(
     state: State<'_, AppState>,
@@ -347,6 +357,11 @@ pub async fn extension_permission_resolve(
     })
     .await
     .map_err(|e| invalid(&format!("permissions task: {e}")))?
+}
+
+#[tauri::command]
+pub fn extension_permission_cancel(state: State<'_, AppState>, request_id: String) {
+    cancel(&state.extensions(), &request_id);
 }
 
 #[cfg(test)]

@@ -48,9 +48,17 @@ export const useExtensionPermissionsStore = defineStore(
       })
     }
 
-    /** Closing the dialog cancels; it never denies. */
+    /**
+     * Closing the dialog cancels; it never denies. Rust drops the open question, so the next
+     * identical call asks again.
+     */
     function cancel(requestId: string): void {
       queue.value = remove(queue.value, requestId)
+      void invoke('extension_permission_cancel', { requestId }).catch(
+        (error: unknown) => {
+          console.error('[extensions] cancelling the question failed', error)
+        },
+      )
     }
 
     return { queue, shown, startAsync, answerAsync, cancel }

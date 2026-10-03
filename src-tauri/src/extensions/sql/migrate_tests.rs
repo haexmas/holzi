@@ -73,6 +73,23 @@ fn migrations_apply_in_order_once() {
 }
 
 #[test]
+fn two_starts_at_once_apply_a_migration_once_and_both_succeed() {
+    let s = setup();
+    add(
+        &s,
+        0,
+        "0000_init",
+        "CREATE TABLE t:books (id TEXT PRIMARY KEY)",
+    );
+    let results: Vec<_> = std::thread::scope(|scope| {
+        let runs: Vec<_> = (0..2).map(|_| scope.spawn(|| migrate(&s))).collect();
+        runs.into_iter().map(|r| r.join().unwrap()).collect()
+    });
+    let applied: Vec<String> = results.into_iter().flat_map(Result::unwrap).collect();
+    assert_eq!(applied, ["0000_init"]);
+}
+
+#[test]
 fn changed_sql_under_an_applied_name_stops_the_extension() {
     let s = setup();
     add(

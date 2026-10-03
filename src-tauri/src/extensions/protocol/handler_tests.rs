@@ -107,6 +107,16 @@ fn other_files_are_served_to_an_open_frame_with_type_and_csp() {
 }
 
 #[test]
+fn a_file_without_token_comes_from_the_bundle_of_an_older_frame_too() {
+    let s = setup("good-notes-like.xt");
+    s.open();
+    // A newer frame of the same extension on another bundle (after an update) that lacks the file.
+    s.host.frames.open(s.extension, Uuid::new_v4(), "tab-new");
+    assert_eq!(s.get("icon.svg", None).status, StatusCode::OK);
+    assert_eq!(s.get("missing.js", None).status, StatusCode::NOT_FOUND);
+}
+
+#[test]
 fn routes_without_a_file_extension_fall_back_to_the_entry() {
     let s = setup("good-notes-like.xt");
     let token = s.open();

@@ -56,7 +56,8 @@ Feste Regeln vor der Auswertung (keine Berechtigung ändert sie): Kerntabellen (
 2. Die Warteschlange im Frontend fasst gleiche (`extensionId, kind, action, target`) zusammen und zeigt eine
    Anfrage nach der anderen: „Erlauben“, „Verweigern“, „Merken“, bei gerätebezogenen Arten zusätzlich „für
    alle Geräte merken“ mit Hinweis auf die Wirkung; bei `shell` eine deutliche Warnung. Schließen des Dialogs
-   bricht ab, verweigert nicht.
+   bricht ab, verweigert nicht: `extension_permission_cancel {requestId}` nimmt die Frage aus den offenen,
+   der nächste gleiche Aufruf fragt wieder.
 3. Die Entscheidung geht an `extension_permission_resolve`; Rust speichert (gemerkt) oder hält im Speicher
    (vorläufig) und sendet `extension:permission-resolved` an alle Rahmen der Erweiterung; das SDK wiederholt.
 4. Sind alle wartenden Rahmen geschlossen, verschwindet die Anfrage: Rust sendet

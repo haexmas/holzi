@@ -27,6 +27,10 @@ fn writes_and_reads_of_own_tables_have_the_sdk_result_shape() {
         )
         .unwrap();
     assert_eq!(updated.rows_affected, 1);
+    assert_eq!(
+        updated.last_insert_id, None,
+        "the connection's last rowid is not this statement's"
+    );
 
     let all = s.sql("SELECT * FROM t:pages", json!([])).unwrap();
     assert_eq!(
@@ -141,6 +145,18 @@ fn limits_end_a_statement_with_7000_and_roll_back() {
     };
     assert_eq!(
         s.sql_with("SELECT id FROM t:pages", json!([]), &short)
+            .unwrap_err()
+            .code
+            .as_u16(),
+        7000
+    );
+
+    let small = Limits {
+        max_response_bytes: 1000,
+        ..Limits::default()
+    };
+    assert_eq!(
+        s.sql_with("SELECT zeroblob(4000)", json!([]), &small)
             .unwrap_err()
             .code
             .as_u16(),

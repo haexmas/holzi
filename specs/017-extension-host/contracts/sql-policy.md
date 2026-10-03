@@ -102,6 +102,9 @@ Die Trigger und der Umbau, die haex-crdt nach einer DDL selbst anlegt, laufen au
 Ablauf je Migration in einem `write_guarded` im Schema-Modus (Fremdschlüssel aus, `foreign_key_check` vor dem
 Commit): Anweisungen ausführen → für jede geänderte synchronisierte Tabelle Trigger neu anlegen → Umbau mit
 unveränderten Sync-Spalten → Journalzeile schreiben. Scheitert etwas, wird alles zurückgerollt (FR-034).
+Eine Migration hat ein eigenes Zeitlimit (60 s, Fortschritts-Callback wie zur Laufzeit), damit SQL einer
+Erweiterung die Schreibsperre des Vaults nie unbegrenzt hält. Lesen der offenen und Anwenden laufen je Prozess
+unter einer Sperre, damit zwei gleichzeitige Starts dieselbe Migration nicht zweimal anwenden.
 
 ## Umgehungssammlung (SC-002, `src-tauri/tests/extension_sql_bypass.rs`)
 

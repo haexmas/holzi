@@ -34,6 +34,12 @@ fn results_become_json_with_blobs_as_base64_and_no_nan() {
     assert_eq!(to_json(ValueRef::Text(b"hi")).0, json!("hi"));
     assert_eq!(to_json(ValueRef::Blob(&[0, 1, 2])).0, json!("AAEC"));
     assert_eq!(to_json(ValueRef::Null).0, Value::Null);
+    // The size known before encoding is the size of the encoded value.
+    for len in 0..8 {
+        let blob = vec![7u8; len];
+        let (value, size) = to_json(ValueRef::Blob(&blob));
+        assert_eq!(size, value.as_str().unwrap().len() + 2);
+    }
 }
 
 #[test]

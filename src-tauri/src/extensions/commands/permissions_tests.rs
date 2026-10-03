@@ -149,6 +149,83 @@ fn a_missing_permission_asks_once_and_a_remembered_grant_passes_afterwards() {
 }
 
 #[test]
+fn a_cancelled_question_is_asked_again_on_the_next_call() {
+    let s = setup();
+    assert_eq!(read_foreign(&s), 1004);
+    let request = s
+        .recorded
+        .named("extension-permission-request")
+        .pop()
+        .unwrap();
+    cancel(&s.ctx.host, request["requestId"].as_str().unwrap());
+    assert_eq!(read_foreign(&s), 1004, "closing cancels, it never denies");
+    assert_eq!(
+        s.recorded.named("extension-permission-request").len(),
+        2,
+        "the question is shown again"
+    );
+}
+
+#[test]
+fn a_setting_never_replaces_a_row_of_another_extension() {
+    let s = setup();
+    let bytes = std::fs::read(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/extension_bundles/good-minimal.xt"),
+    )
+    .unwrap();
+    let other = install(&s.ctx.db, &bytes, vec![], false, s.ctx.device, 1)
+        .unwrap()
+        .ids
+        .extension_id;
+    assert_ne!(other, s.ctx.session.extension_id);
+    let foreign_row = s
+        .ctx
+        .db
+        .write_blocking(move |tx| {
+            permission_store::put(
+                tx,
+                other,
+                &NewPermission {
+                    kind: "database",
+                    action: "read",
+                    target: &foreign(),
+                    status: "granted",
+                    declared: false,
+                    vault_device_uuid: VAULT_WIDE,
+                },
+                1,
+            )
+            .map_err(Into::into)
+        })
+        .unwrap();
+    set(
+        &s.ctx.db,
+        s.ctx.device,
+        PermissionSetArgs {
+            extension_id: s.ctx.session.extension_id.to_string(),
+            kind: "database".into(),
+            action: "read".into(),
+            target: foreign(),
+            status: "denied".into(),
+            all_devices: true,
+            replaces: Some(foreign_row.to_string()),
+        },
+        2,
+    )
+    .unwrap();
+    let rows = s
+        .ctx
+        .db
+        .read_blocking(move |q| {
+            permission_store::rows_of(q, other)
+                .map_err(|e| haex_crdt::Error::consumer(e.to_string()))
+        })
+        .unwrap();
+    assert!(rows.iter().any(|r| r.id == foreign_row), "kept");
+}
+
+#[test]
 fn a_decision_without_remember_is_held_and_a_denial_answers_1002() {
     let s = setup();
     read_foreign(&s);
@@ -230,6 +307,7 @@ fn an_unknown_stored_permission_is_absent_and_nothing_can_be_granted_over_the_br
     assert_eq!(read_foreign(&s), 1004);
     for method in [
         "extension_permission_resolve",
+        "extension_permission_cancel",
         "extension_permission_set",
         "extension_permissions_grant",
         "extension_limits_set",

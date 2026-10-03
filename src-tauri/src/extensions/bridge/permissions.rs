@@ -60,6 +60,8 @@ pub fn ask(ctx: &CallContext, error: &BridgeError) {
         Ok((display.unwrap_or_default(), declared, missing))
     });
     let Ok((display_name, declared, target_missing)) = facts else {
+        // Nobody was told: the question must not stay open, or every retry would be merged into it.
+        ctx.host.permissions.take(&request_id);
         return;
     };
     let event = PermissionRequestEvent {

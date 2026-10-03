@@ -74,6 +74,9 @@ export function useExtensionFrame(
   let unregisterGuard: (() => void) | null = null
   let lastShimLocation: TabLocation | null = null
   const unlisten: UnlistenFn[] = []
+  // Counts closes: an open that resolves after a close (unmount, "Neu laden") is closed at once.
+  let generation = 0
+  let unmounted = false
   const shortcuts = embeddedShortcuts(
     ALL_ACTIONS,
     detectPlatform(
@@ -223,6 +226,8 @@ export function useExtensionFrame(
   }
 
   async function openAsync(): Promise<void> {
+    if (unmounted) return
+    const opening = generation
     state.value = 'loading'
     error.value = null
     try {
@@ -230,12 +235,19 @@ export function useExtensionFrame(
         extensionId,
         tabId: tab.tabId,
       })
+      if (opening !== generation) {
+        await invoke('extension_frame_close', { frame: opened.frame }).catch(
+          () => {},
+        )
+        return
+      }
       frame = opened.frame
       events = new FrameEventQueue(opened.frame, (event: FrameEvent) =>
         sdkPort?.postMessage(eventMessage(event)),
       )
       src.value = opened.url + currentHash()
     } catch (e) {
+      if (opening !== generation) return
       state.value = 'error'
       error.value = errString(e)
     }
@@ -253,6 +265,7 @@ export function useExtensionFrame(
   }
 
   async function closeAsync(): Promise<void> {
+    generation++
     dialog.value = null
     closePorts()
     unregisterGuard?.()
@@ -320,9 +333,13 @@ export function useExtensionFrame(
         }
       },
     ),
-  ]).then((offs) => unlisten.push(...offs))
+  ]).then((offs) => {
+    if (unmounted) for (const off of offs) off()
+    else unlisten.push(...offs)
+  })
 
   onBeforeUnmount(() => {
+    unmounted = true
     window.removeEventListener('message', onWindowMessage)
     for (const off of unlisten) off()
     void closeAsync()

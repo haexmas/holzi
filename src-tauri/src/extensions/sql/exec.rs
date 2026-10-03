@@ -19,7 +19,7 @@ use super::ast_check::{check, cte_names};
 use super::authorizer;
 use super::parse::{parse_one, returns_rows, violation};
 use super::policy::SqlPolicy;
-use super::values::to_json;
+use super::values::{encoded_size, to_json};
 use crate::extensions::default_limits;
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
 use crate::extensions::permissions::Decision;
@@ -133,6 +133,8 @@ pub struct Checked {
     params: Vec<SqlValue>,
     returns_rows: bool,
     is_query: bool,
+    /// An `INSERT` (or `REPLACE`): only then the answer carries `lastInsertId`.
+    is_insert: bool,
     ctes: HashSet<String>,
     /// Lower-case names of the tables the statement may write (the authorizer's view).
     writable: HashSet<String>,
@@ -193,6 +195,7 @@ pub fn prepare(
         params,
         returns_rows: returns_rows(&statement),
         is_query: matches!(statement, haex_crdt::sqlparser::ast::Statement::Query(_)),
+        is_insert: matches!(statement, haex_crdt::sqlparser::ast::Statement::Insert(_)),
         ctes: cte_names(&statement),
         writable: access.writes.iter().map(full_name).collect(),
     })
@@ -211,6 +214,7 @@ pub(crate) fn prepare_unchecked(sql: &str, params: Vec<SqlValue>) -> Checked {
         params,
         returns_rows: only.is_some_and(returns_rows),
         is_query: matches!(only, Some(haex_crdt::sqlparser::ast::Statement::Query(_))),
+        is_insert: matches!(only, Some(haex_crdt::sqlparser::ast::Statement::Insert(_))),
         ctes: only.map(cte_names).unwrap_or_default(),
         writable: only
             .and_then(|s| super::ast_check::write_targets(s).ok())
@@ -259,12 +263,14 @@ impl RowCollector {
         }
         let mut values = Vec::with_capacity(row.as_ref().column_count());
         for i in 0..row.as_ref().column_count() {
-            let (value, size) = to_json(row.get_ref(i)?);
-            self.bytes.set(self.bytes.get() + size as u64);
-            values.push(value);
-        }
-        if self.bytes.get() > self.limits.max_response_bytes {
-            return Err(rusqlite::Error::UserFunctionError(Box::new(LimitHit)));
+            let value = row.get_ref(i)?;
+            // Checked before the value is copied and encoded: one huge value never doubles in memory.
+            self.bytes
+                .set(self.bytes.get() + encoded_size(value) as u64);
+            if self.bytes.get() > self.limits.max_response_bytes {
+                return Err(rusqlite::Error::UserFunctionError(Box::new(LimitHit)));
+            }
+            values.push(to_json(value).0);
         }
         Ok(values)
     }
@@ -332,17 +338,23 @@ pub fn run(
         let mut result = SqlResult::default();
         for statement in &checked {
             let params = sql_refs(&statement.params);
-            if statement.returns_rows {
+            let changed = if statement.returns_rows {
                 let rows =
                     tx.query_with_columns(&statement.sql, &params, |row| collector.row(row))?;
-                if !statement.is_query {
-                    result.rows_affected += rows.rows.len() as u64;
-                }
+                let changed = if statement.is_query {
+                    0
+                } else {
+                    rows.rows.len() as u64
+                };
                 (result.columns, result.rows) = without_sync_columns(rows.columns, rows.rows);
+                changed
             } else {
-                result.rows_affected += tx.execute(&statement.sql, &params)? as u64;
-            }
-            if !statement.is_query {
+                tx.execute(&statement.sql, &params)? as u64
+            };
+            result.rows_affected += changed;
+            // The connection's last rowid belongs to whatever holzi inserted last; only an insert of
+            // this statement that wrote a row may report it.
+            if statement.is_insert && changed > 0 {
                 result.last_insert_id = Some(tx.last_insert_rowid());
             }
         }

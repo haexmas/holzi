@@ -47,22 +47,30 @@ pub fn params(value: Option<&Value>) -> Result<Vec<SqlValue>, BridgeError> {
     }
 }
 
+/// The size of one result value in the response, known before it is converted.
+pub fn encoded_size(value: ValueRef<'_>) -> usize {
+    match value {
+        ValueRef::Null => 4,
+        ValueRef::Integer(_) => 20,
+        ValueRef::Real(_) => 24,
+        ValueRef::Text(bytes) => bytes.len() + 2,
+        ValueRef::Blob(bytes) => bytes.len().div_ceil(3) * 4 + 2,
+    }
+}
+
 /// One result value and its size for the response limit.
 pub fn to_json(value: ValueRef<'_>) -> (Value, usize) {
-    match value {
-        ValueRef::Null => (Value::Null, 4),
-        ValueRef::Integer(i) => (Value::from(i), 20),
-        ValueRef::Real(f) => (Number::from_f64(f).map_or(Value::Null, Value::Number), 24),
-        ValueRef::Text(bytes) => (
-            Value::String(String::from_utf8_lossy(bytes).into_owned()),
-            bytes.len() + 2,
-        ),
+    let size = encoded_size(value);
+    let json = match value {
+        ValueRef::Null => Value::Null,
+        ValueRef::Integer(i) => Value::from(i),
+        ValueRef::Real(f) => Number::from_f64(f).map_or(Value::Null, Value::Number),
+        ValueRef::Text(bytes) => Value::String(String::from_utf8_lossy(bytes).into_owned()),
         ValueRef::Blob(bytes) => {
-            let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
-            let size = encoded.len() + 2;
-            (Value::String(encoded), size)
+            Value::String(base64::engine::general_purpose::STANDARD.encode(bytes))
         }
-    }
+    };
+    (json, size)
 }
 
 /// Refuses parameters in an unexpected shape for a statement entry `[sql, params]`.
