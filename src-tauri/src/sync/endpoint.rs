@@ -33,6 +33,8 @@ const BIND_TIMEOUT: Duration = Duration::from_secs(15);
 /// How long a refusing side waits for the refused peer to read the refusal and close, before
 /// it closes itself.
 const REFUSAL_GRACE: Duration = Duration::from_secs(2);
+/// The close reason for a connection dropped because another one to that device stays.
+const DUPLICATE: &[u8] = b"duplicate";
 /// How long the router may take to shut down at the session end.
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -85,9 +87,11 @@ struct Inner {
     devices_changed: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
     /// Called after a live session ended, so reconnect can replace it.
     session_ended: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
-    /// Endpoints being dialed right now: a dial to a device that is gone waits for the connect
-    /// timeout, so dials run apart and each endpoint at most once at a time.
-    dialing: Mutex<HashSet<[u8; 32]>>,
+    /// Addresses being dialed right now: a dial to a device that is gone waits for the connect
+    /// timeout, so dials run apart, each address at most once at a time. Keyed by the whole
+    /// address, not the endpoint: a device that came back at a new address is dialed there at
+    /// once, while the dial to its old one still waits.
+    dialing: Mutex<HashSet<EndpointAddr>>,
     /// Devices this device's list does not name whose presence claimed a
     /// newer list, waiting to be dialed once to fetch it (FR-007).
     candidates: Mutex<HashMap<[u8; 32], EndpointAddr>>,
@@ -200,22 +204,21 @@ impl SyncNode {
 
     /// Dials a device at `addr` in the background, then runs the session. Returns at once: a
     /// device that is gone keeps its dial waiting for the connect timeout, which must not hold
-    /// up the dials to the others. Does nothing while a dial to that endpoint is under way.
+    /// up the dials to the others. Does nothing while a dial to that address is under way.
     pub fn dial(&self, addr: EndpointAddr) {
-        let id = *addr.id.as_bytes();
         let mut dialing = self.inner.dialing.lock().unwrap_or_else(|e| e.into_inner());
-        if !dialing.insert(id) {
+        if !dialing.insert(addr.clone()) {
             return;
         }
         drop(dialing);
         let inner = Arc::clone(&self.inner);
         self.inner.tracker.spawn(async move {
-            let connected = connect_sync(&inner, addr).await;
+            let connected = connect_sync(&inner, addr.clone()).await;
             inner
                 .dialing
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
-                .remove(&id);
+                .remove(&addr);
             match connected {
                 Ok(connection) => run_connection(inner, connection, Side::Dial).await,
                 Err(error) => log::info!("sync: dialing a device did not succeed yet: {error}"),
@@ -472,12 +475,12 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
         }
     };
     if inner.duplicates.holds(&peer.device_pubkey) {
-        connection.close(ErrorCode::Rejected.as_u32().into(), b"duplicate");
+        connection.close(ErrorCode::Rejected.as_u32().into(), DUPLICATE);
         return;
     }
     clear_problem(&inner, peer.device_pubkey).await;
     if !register(&inner, &peer, &connection, side, remote) {
-        connection.close(ErrorCode::Closed.as_u32().into(), b"duplicate");
+        connection.close(ErrorCode::Closed.as_u32().into(), DUPLICATE);
         return;
     }
     log::info!(
@@ -521,15 +524,30 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
         // The last moment it was online is when the session ended.
         mark_seen(&inner, peer.device_pubkey).await;
         notify_devices_changed(&inner);
-        let hook = inner
-            .session_ended
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
-        if let Some(hook) = hook {
-            hook();
+        // A peer that closed this one as a duplicate keeps another connection to this device,
+        // possibly one of this device's previous process it has not seen end yet; dialing again
+        // at once would only be refused again, and the stream of dials keeps that stale
+        // connection from timing out. The peer dials itself once it notices.
+        if !closed_as_duplicate(&connection) {
+            let hook = inner
+                .session_ended
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone();
+            if let Some(hook) = hook {
+                hook();
+            }
         }
     }
+}
+
+/// Whether the peer closed `connection` because it keeps another one to this device.
+fn closed_as_duplicate(connection: &Connection) -> bool {
+    matches!(
+        connection.close_reason(),
+        Some(iroh::endpoint::ConnectionError::ApplicationClosed(close))
+            if close.reason.as_ref() == DUPLICATE
+    )
 }
 
 /// The code to close the connection with: a wire error keeps its own
@@ -566,7 +584,7 @@ fn register(
         Some(existing) if existing.close_reason().is_none() && !preferred => false,
         Some(existing) => {
             if existing.stable_id() != connection.stable_id() {
-                existing.close(ErrorCode::Closed.as_u32().into(), b"duplicate");
+                existing.close(ErrorCode::Closed.as_u32().into(), DUPLICATE);
             }
             peers.insert(peer.device_pubkey, connection.clone());
             true

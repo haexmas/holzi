@@ -117,3 +117,48 @@ async fn a_device_that_is_gone_does_not_hold_up_the_others() {
     .expect("the device that is there is reached without waiting for the one that is gone");
     assert_eq!(main_node.connected(), vec![there.keys.device_pubkey]);
 }
+
+/// A device that restarted is reachable at a new address while the dial to
+/// its old one still waits for the connect timeout; the new one is dialed at
+/// once.
+#[tokio::test]
+async fn a_device_back_at_a_new_address_is_dialed_while_the_old_dial_waits() {
+    let main = Member::genesis();
+    let linked = Member::join(&main);
+    main.add(&linked);
+    linked.device.pull_from(&main.device);
+
+    let main_node = bind_loopback(&main).await;
+    let linked_node = bind_loopback(&linked).await;
+    // The address of its previous process: takes the dial's packets and never answers.
+    let silent = std::net::UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind");
+    let old_addr = iroh::EndpointAddr::new(
+        iroh::EndpointId::from_bytes(&linked.keys.endpoint_id).expect("endpoint id"),
+    )
+    .with_ip_addr(silent.local_addr().expect("addr"));
+    let record = |addr: &iroh::EndpointAddr| {
+        main.device
+            .db()
+            .write(|tx| presence::record_seen(tx, &linked.keys.device_pubkey, 1, Some(addr)))
+            .expect("record presence");
+    };
+    record(&old_addr);
+    reconnect_missing(&main_node, &main.device.replica);
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert!(
+        main_node.connected().is_empty(),
+        "the old address answers nothing"
+    );
+
+    record(&linked_node.addr());
+    reconnect_missing(&main_node, &main.device.replica);
+
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while main_node.connected().is_empty() {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("the new address is dialed without waiting for the old dial");
+    assert_eq!(main_node.connected(), vec![linked.keys.device_pubkey]);
+}
