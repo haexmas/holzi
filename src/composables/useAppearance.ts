@@ -46,6 +46,7 @@ const adjustments = shallowRef<Adjustment[]>([])
 let active = false
 let started = false
 let writeQueue: Promise<void> = Promise.resolve()
+let generation = 0
 
 const resolvedScheme = (): Scheme =>
   document.documentElement.classList.contains('dark') ? 'dark' : 'light'
@@ -92,6 +93,7 @@ export function useAppearance() {
       APPEARANCE_KEY,
       serializeAppearance(next),
     )
+    generation += 1
     appearance.value = next
     apply()
   }
@@ -112,17 +114,20 @@ export function useAppearance() {
     appearance.value = DEFAULT_APPEARANCE
     active = true
     apply()
-    appearance.value = parseAppearance(
-      await getPrefAsync({ kind: 'vault' }, APPEARANCE_KEY),
-    )
+    const at = generation
+    const stored = await getPrefAsync({ kind: 'vault' }, APPEARANCE_KEY)
+    if (at !== generation) return
+    appearance.value = parseAppearance(stored)
     apply()
   }
 
   /** Re-reads after a synced change; unlike `loadAsync` it keeps what is shown while reading. */
   async function refreshAsync(): Promise<void> {
-    const next = parseAppearance(
-      await getPrefAsync({ kind: 'vault' }, APPEARANCE_KEY),
-    )
+    const at = generation
+    const stored = await getPrefAsync({ kind: 'vault' }, APPEARANCE_KEY)
+    if (at !== generation) return
+    const next = parseAppearance(stored)
+    generation += 1
     if (serializeAppearance(next) === serializeAppearance(appearance.value))
       return
     appearance.value = next
