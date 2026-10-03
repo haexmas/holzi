@@ -22,6 +22,62 @@ fn a_one_device_vault_has_no_peers_to_publish_to() {
     );
 }
 
+/// Two lists of the same generation: the effective one removes a device that
+/// holds no key, the one that lost the tie-break removes the linked device the
+/// newest key is wrapped for (as when two main devices removed each other).
+/// Only the effective list's removals count (FR-043), so presence keeps the
+/// newest key instead of an older one or none.
+#[test]
+fn a_removal_in_a_list_that_lost_the_tie_break_keeps_the_newest_key() {
+    use crate::sync::content_keys::{issue_generation, ContentKey};
+    use crate::sync::device_list::{self, RemovedDevice};
+    let main = Member::genesis();
+    let linked = Member::join(&main);
+    main.add(&linked);
+    let newest = ContentKey::generate(2);
+    main.device
+        .db()
+        .write(|tx| {
+            let secret = crate::sync::keys::vault_secret(tx)?.expect("a main device");
+            let valid = device_list::valid_lists(&device_list::load_all(tx)?, &main.vault);
+            let base = device_list::effective(&valid).expect("a list").clone();
+            issue_generation(tx, &newest, &base, &main.keys, 2)?;
+            let removing = |device_pubkey, issued_at| {
+                let mut list = device_list::DeviceList {
+                    generation: base.list.generation + 1,
+                    base_list_hash: Some(base.hash),
+                    removed: vec![RemovedDevice {
+                        device_pubkey,
+                        vault_device_uuid: uuid::Uuid::new_v4(),
+                        limit_hlc: String::new(),
+                        removed_at: 1,
+                    }],
+                    issued_at,
+                    ..base.list.clone()
+                };
+                list.devices.retain(|d| d.device_pubkey != device_pubkey);
+                device_list::sign_list(list, &secret).map_err(haex_crdt::Error::consumer)
+            };
+            let winner = removing([7; 32], 1)?;
+            let loser = (2..)
+                .map(|issued_at| removing(linked.keys.device_pubkey, issued_at))
+                .find(|signed| signed.as_ref().map_or(true, |s| s.hash > winner.hash))
+                .expect("a losing list")?;
+            device_list::insert(tx, &winner)?;
+            device_list::insert(tx, &loser)
+        })
+        .expect("forked lists");
+
+    let roster = read_roster(&main.device.replica, main.vault, &main.keys.device_pubkey)
+        .expect("read roster")
+        .expect("a content key");
+    assert_eq!(roster.content_key, *newest.key);
+    assert!(
+        roster.has_peers(),
+        "the effective list still names the linked device"
+    );
+}
+
 /// Binds `member`'s endpoint on loopback with no iroh-Relay.
 pub(super) async fn bind_loopback(member: &Member) -> SyncNode {
     SyncNode::bind(
