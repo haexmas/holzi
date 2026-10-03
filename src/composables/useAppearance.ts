@@ -45,6 +45,7 @@ const adjustments = shallowRef<Adjustment[]>([])
 /** Whether a vault's appearance applies; before that `tailwind.css` has the defaults. */
 let active = false
 let started = false
+let writeQueue: Promise<void> = Promise.resolve()
 
 const resolvedScheme = (): Scheme =>
   document.documentElement.classList.contains('dark') ? 'dark' : 'light'
@@ -95,6 +96,15 @@ export function useAppearance() {
     apply()
   }
 
+  function enqueueWrite<T>(operation: () => Promise<T>): Promise<T> {
+    const queued = writeQueue.then(operation)
+    writeQueue = queued.then(
+      () => undefined,
+      () => undefined,
+    )
+    return queued
+  }
+
   /** Reads the vault's appearance once it is open; a read error leaves the defaults. */
   async function loadAsync(): Promise<void> {
     start()
@@ -121,28 +131,33 @@ export function useAppearance() {
 
   /** Writes the changed choices and applies them at once; a write error leaves the old state. */
   async function setAsync(patch: AppearancePatch): Promise<Appearance> {
-    const next: Appearance = { ...appearance.value }
+    const changes: Partial<Omit<Appearance, 'v'>> = {}
     for (const control of CONTROLS) {
       if (!(control in patch)) continue
       const choice = validChoice(control, patch[control])
       if (choice === null)
         throw appearanceError('settings.appearance.invalid', control)
-      next[control] = choice
+      changes[control] = choice
     }
     if ('windowHint' in patch) {
       if (typeof patch.windowHint !== 'boolean') {
         throw appearanceError('settings.appearance.invalid', 'windowHint')
       }
-      next.windowHint = patch.windowHint
+      changes.windowHint = patch.windowHint
     }
-    await writeAsync(next)
-    return next
+    return await enqueueWrite(async () => {
+      const next: Appearance = { ...appearance.value, ...changes }
+      await writeAsync(next)
+      return next
+    })
   }
 
   /** The defaults for every value; the colour scheme stays. */
   async function resetAsync(): Promise<Appearance> {
-    await writeAsync(DEFAULT_APPEARANCE)
-    return DEFAULT_APPEARANCE
+    return await enqueueWrite(async () => {
+      await writeAsync(DEFAULT_APPEARANCE)
+      return DEFAULT_APPEARANCE
+    })
   }
 
   /** The appearance file as text (FR-021); the stored scheme choice goes with it. */
@@ -162,19 +177,21 @@ export function useAppearance() {
         parsed.field,
       )
     }
-    const previousScheme = colorScheme.scheme.value
-    try {
-      await colorScheme.setAsync(parsed.colorScheme)
-    } catch {
-      throw appearanceError('settings.appearance.import.failed')
-    }
-    try {
-      await writeAsync(parsed.appearance)
-    } catch {
-      await colorScheme.setAsync(previousScheme).catch(() => undefined)
-      throw appearanceError('settings.appearance.import.failed')
-    }
-    return parsed.appearance
+    return await enqueueWrite(async () => {
+      const previousScheme = colorScheme.scheme.value
+      try {
+        await colorScheme.setAsync(parsed.colorScheme)
+      } catch {
+        throw appearanceError('settings.appearance.import.failed')
+      }
+      try {
+        await writeAsync(parsed.appearance)
+      } catch {
+        await colorScheme.setAsync(previousScheme).catch(() => undefined)
+        throw appearanceError('settings.appearance.import.failed')
+      }
+      return parsed.appearance
+    })
   }
 
   return {

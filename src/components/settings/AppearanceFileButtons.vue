@@ -26,7 +26,7 @@ async function exportAsync() {
   busy.value = true
   try {
     const path = await save({
-      defaultPath: 'holzi-appearance.json',
+      defaultPath: 'holzi.holzi-appearance.json',
       filters: FILTERS,
     })
     if (!path) return
