@@ -3,23 +3,23 @@
 /**
  * One extension of the vault.
  */
-export type ExtensionSummary = { id: string, name: string, 
+export type ExtensionSummary = { id: string, name: string,
 /**
  * `displayName` of the effective bundle, else `name`.
  */
-title: string, description?: string, 
+title: string, description?: string,
 /**
  * Version of the effective bundle; `None` while no bundle of it is live.
  */
-version?: string, publisherFingerprint: string, enabled: boolean, 
+version?: string, publisherFingerprint: string, enabled: boolean,
 /**
  * `installed` or `removed` (data kept, L3).
  */
-state: string, 
+state: string,
 /**
  * The app opens at most once (manifest `singleInstance`).
  */
-singleInstance: boolean, hasIcon: boolean, 
+singleInstance: boolean, hasIcon: boolean,
 /**
  * State on this device (`transferring`, `ready`, …); `None` before its first start here.
  */
