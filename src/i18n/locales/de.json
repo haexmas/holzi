@@ -1355,6 +1355,11 @@
       "timeout": "Die Erweiterung antwortet nicht.",
       "reload": "Neu laden",
       "closeGuard": "Die Erweiterung hat ungesicherte Änderungen."
+    },
+    "dialog": {
+      "fromExtension": "Frage der Erweiterung",
+      "confirm": "OK",
+      "cancel": "Abbrechen"
     }
   }
 }

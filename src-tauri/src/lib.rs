@@ -50,7 +50,8 @@ use chat::thread_commands::{
 };
 use device::commands::{current_device_info, list_vault_devices, update_device_alias};
 use extensions::commands::frames::{
-    extension_bridge_call, extension_frame_close, extension_frame_open, extension_host_context_set,
+    extension_bridge_call, extension_dialog_resolve, extension_frame_close, extension_frame_open,
+    extension_host_context_set,
 };
 use extensions::commands::install::{extension_install, extension_install_preview};
 use extensions::commands::manage::{extension_icon, extension_list};
@@ -345,6 +346,7 @@ pub fn run() {
             extension_frame_close,
             extension_bridge_call,
             extension_host_context_set,
+            extension_dialog_resolve,
         ]))
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

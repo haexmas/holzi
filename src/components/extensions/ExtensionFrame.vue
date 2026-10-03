@@ -11,10 +11,8 @@ const props = defineProps<{ extensionId: string }>()
 const { t } = useI18n()
 
 const iframe = ref<HTMLIFrameElement | null>(null)
-const { state, error, src, onLoad, reloadAsync } = useExtensionFrame(
-  iframe,
-  props.extensionId,
-)
+const { state, error, src, dialog, answerDialog, onLoad, reloadAsync } =
+  useExtensionFrame(iframe, props.extensionId)
 </script>
 
 <template>
@@ -41,6 +39,12 @@ const { state, error, src, onLoad, reloadAsync } = useExtensionFrame(
       class="absolute inset-0"
       :message="error ?? t('extensions.frame.failed')"
       @reload="reloadAsync"
+    />
+    <ExtensionsFrameDialog
+      v-if="dialog"
+      class="absolute inset-0"
+      :dialog="dialog"
+      @answer="answerDialog"
     />
   </div>
 </template>

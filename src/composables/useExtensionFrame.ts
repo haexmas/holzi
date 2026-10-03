@@ -29,6 +29,16 @@ const INIT_TIMEOUT_MS = 10_000
 
 export type FrameState = 'loading' | 'ready' | 'error'
 
+/** A confirmation the extension asked for (`extension_dialog_confirm`), shown over this tab. */
+export type FrameDialog = {
+  requestId: string
+  message: string
+  title: string | null
+  confirmLabel: string | null
+  cancelLabel: string | null
+  destructive: boolean
+}
+
 /**
  * One extension frame in a tab (spec 017, T046, contracts/bridge.md, research R13, R17): opens a
  * frame session in Rust, hands the SDK its port on **every** load (a reload gets a new channel),
@@ -52,6 +62,7 @@ export function useExtensionFrame(
   const state = ref<FrameState>('loading')
   const error = ref<string | null>(null)
   const src = ref<string | null>(null)
+  const dialog = ref<FrameDialog | null>(null)
 
   let frame: string | null = null
   let sdkPort: MessagePort | null = null
@@ -210,7 +221,19 @@ export function useExtensionFrame(
     }
   }
 
+  /** Answers the open dialog; closing it counts as "cancel". */
+  function answerDialog(confirmed: boolean): void {
+    const open = dialog.value
+    dialog.value = null
+    if (open)
+      void invoke('extension_dialog_resolve', {
+        requestId: open.requestId,
+        confirmed,
+      }).catch(() => {})
+  }
+
   async function closeAsync(): Promise<void> {
+    dialog.value = null
     closePorts()
     unregisterGuard?.()
     unregisterGuard = null
@@ -262,6 +285,21 @@ export function useExtensionFrame(
         else tab.clearAttention()
       },
     ),
+    listen<FrameDialog & { frame: string }>(
+      'extension-dialog-request',
+      (event) => {
+        const request = event.payload
+        if (request.frame !== frame) return
+        dialog.value = {
+          requestId: request.requestId,
+          message: request.message,
+          title: request.title,
+          confirmLabel: request.confirmLabel,
+          cancelLabel: request.cancelLabel,
+          destructive: request.destructive,
+        }
+      },
+    ),
   ]).then((offs) => unlisten.push(...offs))
 
   onBeforeUnmount(() => {
@@ -272,5 +310,5 @@ export function useExtensionFrame(
 
   void openAsync()
 
-  return { state, error, src, onLoad, reloadAsync }
+  return { state, error, src, dialog, answerDialog, onLoad, reloadAsync }
 }

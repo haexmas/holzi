@@ -69,7 +69,20 @@ pub async fn extension_frame_open(
 /// Ends a frame session.
 #[tauri::command]
 pub async fn extension_frame_close(state: State<'_, AppState>, frame: String) -> Result<()> {
-    state.extensions().frames.close(&frame);
+    let host = state.extensions();
+    host.frames.close(&frame);
+    host.drop_dialogs_of(&frame);
+    Ok(())
+}
+
+/// holzi's window answers a dialog an extension asked for (`extension_dialog_confirm`).
+#[tauri::command]
+pub async fn extension_dialog_resolve(
+    state: State<'_, AppState>,
+    request_id: String,
+    confirmed: bool,
+) -> Result<()> {
+    state.extensions().resolve_dialog(&request_id, confirmed);
     Ok(())
 }
 

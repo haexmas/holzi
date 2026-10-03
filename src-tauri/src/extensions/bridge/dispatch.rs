@@ -57,6 +57,11 @@ pub static METHODS: &[Method] = &[
         handler: methods::tab_attention,
         module: methods::MODULE,
     },
+    Method {
+        name: "extension_dialog_confirm",
+        handler: methods::dialog_confirm,
+        module: methods::MODULE,
+    },
 ];
 
 /// Methods of later deliveries (research R1): they answer 8001 until they land.
