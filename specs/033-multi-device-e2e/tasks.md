@@ -104,7 +104,7 @@ description: 'Task list for End-to-End Tests Across Several Vaults and Devices'
 
 **Independent Test**: a reviewer who has not seen the helpers writes the example from the README alone.
 
-- [ ] T030 [US6] Add `scripts/e2e/scenarios/sync-two-users.test.ts`, 60 lines or fewer, two users with two devices each: Anna's second device is made unreachable (`goOffline`) and restored (`goOnline`); Ben's vault never shows Anna's data; it is also the isolation check (US6 scenario 4) and the template. Depends on T017.
+- [x] T030 [US6] Add `scripts/e2e/scenarios/sync-two-users.test.ts`, 60 lines or fewer, two users with two devices each: Anna's second device is made unreachable (`goOffline`) and restored (`goOnline`); Ben's vault never shows Anna's data; it is also the isolation check (US6 scenario 4) and the template. Depends on T017.
 - [ ] T031 [US6] Extend `scripts/e2e/README.md` with "Scenarios with several vaults and users": the group call, the device operations table of `contracts/group.md`, the waiting rules, the forbidden list, and `sync-two-users` as the example. Depends on T030.
 - [ ] T032 [US6] Run the newcomer test (SC-003): ask a reviewer (or a fresh agent session with only the README and the template) to write a two-user, two-device, unreachable-and-restore scenario; record its length and the questions asked; fix the README where they stumbled.
 
@@ -115,7 +115,7 @@ description: 'Task list for End-to-End Tests Across Several Vaults and Devices'
 **Independent Test**: `pnpm check:e2e-lib` fails when a scenario imports a platform file; `scripts/e2e/PLATFORMS.md` has all four entries.
 
 - [ ] T033 [P] [US7] Write `scripts/e2e/PLATFORMS.md` with an entry each for Windows, macOS, Android and iOS: driver, runner or device type, how several devices would be connected, known limits, from `research.md` R9; state at the top that the facts are to be confirmed in each follow-up spec and nothing is implemented.
-- [ ] T034 [US7] Empty `KNOWN_VIOLATIONS` in `scripts/e2e/lib/seam.test.ts` except `scenarios/relaunch-after-lock.test.ts` (it reads the virtual screen's framebuffer; a process-level scenario of spec 013 that stays Linux specific, with its reason in the list) and prove the scan works by a negative case (a temporary scenario that imports `../lib/processes.ts` makes the check fail; remove it again). Depends on T028.
+- [x] T034 [US7] Empty `KNOWN_VIOLATIONS` in `scripts/e2e/lib/seam.test.ts` except `scenarios/relaunch-after-lock.test.ts` (it reads the virtual screen's framebuffer; a process-level scenario of spec 013 that stays Linux specific, with its reason in the list) and prove the scan works by a negative case (a temporary scenario that imports `../lib/processes.ts` makes the check fail; remove it again). Depends on T028.
 - [ ] T035 [P] [US7] Correct the stale sentence in `specs/016-e2e-testing/spec.md` if it still names two-process scenarios as out of scope (done in #199; verify, change nothing if correct).
 
 ## Phase 10: User Story 8 - The new scenarios run in the existing CI job (P3)
