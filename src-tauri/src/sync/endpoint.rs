@@ -83,6 +83,8 @@ struct Inner {
     duplicates: DuplicateWatch,
     /// Called when a device's problem was set or cleared (FR-034).
     devices_changed: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
+    /// Called after a live session ended, so reconnect can replace it.
+    session_ended: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
     /// Devices this device's list does not name whose presence claimed a
     /// newer list, waiting to be dialed once to fetch it (FR-007).
     candidates: Mutex<HashMap<[u8; 32], EndpointAddr>>,
@@ -168,6 +170,7 @@ impl SyncNode {
             applied_relays: Mutex::new(initial_relays),
             duplicates: DuplicateWatch::default(),
             devices_changed: Mutex::new(None),
+            session_ended: Mutex::new(None),
             candidates: Mutex::new(HashMap::new()),
         });
         let router = Router::builder(endpoint)
@@ -225,6 +228,18 @@ impl SyncNode {
         let mut slot = self
             .inner
             .devices_changed
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        *slot = Some(hook);
+    }
+
+    /// Sets what runs after a live session ended. A device that restarted is refused as a
+    /// duplicate until this side notices the old session is gone (the connection's idle time);
+    /// dialing right then, instead of on the next reconnect tick, brings it back at once.
+    pub fn on_session_ended(&self, hook: Arc<dyn Fn() + Send + Sync>) {
+        let mut slot = self
+            .inner
+            .session_ended
             .lock()
             .unwrap_or_else(|e| e.into_inner());
         *slot = Some(hook);
@@ -455,6 +470,14 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
         // The last moment it was online is when the session ended.
         mark_seen(&inner, peer.device_pubkey).await;
         notify_devices_changed(&inner);
+        let hook = inner
+            .session_ended
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        if let Some(hook) = hook {
+            hook();
+        }
     }
 }
 

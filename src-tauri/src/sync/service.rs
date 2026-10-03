@@ -173,6 +173,11 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
     node.on_devices_changed(Arc::new(move || {
         events::emit(&devices_app, SYNC_DEVICES_CHANGED, ());
     }));
+    // Presence and the end of a session wake reconnect, so a device that just appeared or came
+    // back is dialed without waiting out the tick.
+    let reconnect_now = Arc::new(Notify::new());
+    let reconnect_on_end = Arc::clone(&reconnect_now);
+    node.on_session_ended(Arc::new(move || reconnect_on_end.notify_one()));
 
     // `notify` (the gate's shared commit signal) wakes at most one waiter
     // per commit, so it gets exactly one consumer here; fanning that out to
@@ -204,9 +209,6 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
         registry.set(Arc::clone(&runtime));
     }
     finish_pending_links(&replica, &presence_keys, vault).await;
-    // Presence wakes reconnect as soon as it records a fresh meeting, so a
-    // device that just appeared is dialed without waiting out the tick.
-    let reconnect_now = Notify::new();
     let notify_loop = async {
         loop {
             notify.notified().await;
