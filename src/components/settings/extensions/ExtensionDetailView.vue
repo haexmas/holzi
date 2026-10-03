@@ -1,9 +1,13 @@
 <script setup lang="ts">
+import { statusErrorKey, statusKey } from '~/lib/extensions/apps'
+import type { DeviceState } from '@bindings/DeviceState'
+
 /**
  * One extension in the settings (spec 017, US3, T070): what it is and its state on this device,
- * then its permissions. Reached from its row in "Erweiterungen".
+ * its state on each own device (US4, T080), then its permissions. Reached from its row in
+ * "Erweiterungen".
  */
-const { t } = useI18n()
+const { t, te } = useI18n()
 const router = useTabRouter()
 const store = useExtensionsStore()
 
@@ -11,6 +15,21 @@ const extensionId = computed(() => router.route.params.extensionId ?? '')
 const extension = computed(() =>
   store.list.find((e) => e.id === extensionId.value),
 )
+
+/** A state with its error kind, e.g. "Datenbank-Änderung fehlgeschlagen · Migration fehlt". */
+function stateText(status: string, error?: string | null): string {
+  const text = t(statusKey(status))
+  const errorKey = statusErrorKey(status, error)
+  if (!errorKey) return text
+  return `${text} · ${te(errorKey) ? t(errorKey) : error}`
+}
+
+function deviceTitle(device: DeviceState): string {
+  const name = device.deviceName || t('settings.extensions.unnamedDevice')
+  return device.thisDevice
+    ? `${name} (${t('settings.extensions.thisDevice')})`
+    : name
+}
 </script>
 
 <template>
@@ -49,9 +68,21 @@ const extension = computed(() =>
           :title="t('settings.extensions.stateHere')"
           :description="
             extension.statusHere
-              ? t(`extensions.status.${extension.statusHere}`)
+              ? stateText(extension.statusHere, extension.statusErrorHere)
               : t('settings.extensions.notStartedHere')
           "
+        />
+      </SettingsGroup>
+      <SettingsGroup
+        v-if="extension.devices.length > 0"
+        :label="t('settings.extensions.devices')"
+      >
+        <SettingsRow
+          v-for="device in extension.devices"
+          :key="device.deviceName + device.thisDevice"
+          :title="deviceTitle(device)"
+          :description="stateText(device.status, device.error)"
+          data-testid="extension-device-state"
         />
       </SettingsGroup>
       <SettingsExtensionsExtensionPermissionsView

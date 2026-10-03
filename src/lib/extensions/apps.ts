@@ -15,6 +15,30 @@ export function extensionIdOf(appId: string): string | null {
   return appId.startsWith(PREFIX) ? appId.slice(PREFIX.length) : null
 }
 
+/** States on this device in which an extension cannot open (data-model.md §Zustände). */
+const UNAVAILABLE = new Set([
+  'transferring',
+  'signature_failed',
+  'migration_failed',
+])
+
+/** The i18n key of a device state. */
+export function statusKey(status: string): string {
+  return `extensions.status.${status}`
+}
+
+/** The i18n key of the error kind of a device state, or `null` without one: a broken signature
+ * names the rule the bundle broke, a failed migration what went wrong. */
+export function statusErrorKey(
+  status: string,
+  error: string | null | undefined,
+): string | null {
+  if (!error) return null
+  return status === 'signature_failed'
+    ? `extensions.install.errors.${error}`
+    : `extensions.statusError.${error}`
+}
+
 /** One app per installed and enabled extension, with its own name and icon. */
 export function extensionApps(
   extensions: readonly ExtensionSummary[],
@@ -32,6 +56,9 @@ export function extensionApps(
       minSize: { width: 360, height: 320 },
       multiInstance: !e.singleInstance,
       tabTitle: 'app' as const,
+      ...(e.statusHere && UNAVAILABLE.has(e.statusHere)
+        ? { unavailableKey: statusKey(e.statusHere) }
+        : {}),
     }))
 }
 

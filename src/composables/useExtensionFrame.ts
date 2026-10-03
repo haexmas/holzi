@@ -1,6 +1,7 @@
 import { onBeforeUnmount, ref, watch, type Ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import type { ExtensionStatusChanged } from '@bindings/ExtensionStatusChanged'
 import type { FrameOpened } from '@bindings/FrameOpened'
 import { ALL_ACTIONS } from '~/lib/actions/catalog'
 import {
@@ -318,6 +319,11 @@ export function useExtensionFrame(
         else tab.clearAttention()
       },
     ),
+    // A new effective bundle (an update from any own device): this tab loads it (FR-038).
+    listen<ExtensionStatusChanged>('extension-status-changed', (event) => {
+      if (event.payload.extensionId === extensionId && event.payload.reload)
+        void reloadAsync()
+    }),
     listen<FrameDialog & { frame: string }>(
       'extension-dialog-request',
       (event) => {

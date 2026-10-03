@@ -26,6 +26,9 @@ export type AppDefinition = {
    * conversation) or always the app's own title (the settings, spec 023 research R2). The history
    * list shows location titles either way. */
   tabTitle?: 'location' | 'app'
+  /** i18n key of why the app cannot open on this device (an extension that is not ready here);
+   * the Launcher shows the entry disabled with that reason (spec 017, T080). */
+  unavailableKey?: string
 }
 
 export const WM_APPS: readonly AppDefinition[] = [

@@ -694,7 +694,9 @@
       "notDeclared": "nicht im Manifest",
       "unreadable": "unbekannt, gilt als nicht vorhanden",
       "remove": "Entfernen",
-      "revoke": "Widerrufen"
+      "revoke": "Widerrufen",
+      "devices": "Auf deinen Geräten",
+      "unnamedDevice": "Gerät ohne Namen"
     }
   },
   "models": {
@@ -1487,6 +1489,13 @@
       "allDevicesNote": "Die Berechtigung gilt dann auch auf deinen anderen Geräten, sobald sie die Vault synchronisiert haben.",
       "allow": "Erlauben",
       "deny": "Verweigern"
+    },
+    "statusError": {
+      "migration_changed": "Eine angewendete Migration wurde geändert",
+      "migration_refused": "Eine Migration verstößt gegen die Regeln",
+      "migration_failed": "Eine Migration ist fehlgeschlagen",
+      "migration_missing": "Eine angewendete Migration fehlt in dieser Fassung",
+      "database_unavailable": "Die Datenbank war nicht erreichbar"
     }
   }
 }

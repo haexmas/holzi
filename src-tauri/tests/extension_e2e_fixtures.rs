@@ -22,7 +22,8 @@ fn test_key() -> SigningKey {
     SigningKey::from_bytes(&seed.into())
 }
 
-fn probe() -> Vec<u8> {
+/// The probe at `version`; 1.1.0 adds a column (the update of `extension-two-devices`).
+fn probe(version: &str) -> Vec<u8> {
     let key = test_key();
     let public_key: String = key
         .verifying_key()
@@ -31,14 +32,14 @@ fn probe() -> Vec<u8> {
         .map(|b| format!("{b:02x}"))
         .collect();
     let table = format!("{public_key}__probe__items");
-    let manifest = parse_restricted(
-        r#"{"name":"probe","version":"1.0.0","displayName":"Probe","migrationsDir":"db",
-            "permissions":{"filesystem":[{"target":"/tmp/holzi-probe","operation":"read"}]}}"#,
-    )
+    let manifest = parse_restricted(&format!(
+        r#"{{"name":"probe","version":"{version}","displayName":"Probe","migrationsDir":"db",
+            "permissions":{{"filesystem":[{{"target":"/tmp/holzi-probe","operation":"read"}}]}}}}"#
+    ))
     .expect("manifest");
     let page = std::fs::read(dir().join("probe.html")).expect("probe page");
     let module = std::fs::read(dir().join("probe.js")).expect("probe module");
-    let files = vec![
+    let mut files = vec![
         Entry {
             path: "index.html".into(),
             data: page,
@@ -53,19 +54,28 @@ fn probe() -> Vec<u8> {
                 .into_bytes(),
         },
     ];
+    if version != "1.0.0" {
+        files.push(Entry {
+            path: "db/0001_tag.sql".into(),
+            data: format!("ALTER TABLE `{table}` ADD `tag` text;").into_bytes(),
+        });
+    }
     build_archive(files, manifest, &key).expect("probe bundle")
 }
 
 #[test]
 fn the_committed_e2e_bundles_are_what_this_builds() {
-    let built = probe();
-    let path = dir().join("probe.xt");
-    if std::env::var_os("HOLZI_WRITE_E2E_FIXTURES").is_some() {
-        std::fs::write(&path, &built).expect("write probe.xt");
+    for (file, version) in [("probe.xt", "1.0.0"), ("probe-v2.xt", "1.1.0")] {
+        let built = probe(version);
+        let path = dir().join(file);
+        if std::env::var_os("HOLZI_WRITE_E2E_FIXTURES").is_some() {
+            std::fs::write(&path, &built).expect("write fixture");
+        }
+        let committed =
+            std::fs::read(&path).expect("fixture (HOLZI_WRITE_E2E_FIXTURES=1 builds it)");
+        assert!(
+            committed == built,
+            "{file} is stale; rebuild with HOLZI_WRITE_E2E_FIXTURES=1"
+        );
     }
-    let committed = std::fs::read(&path).expect("probe.xt (HOLZI_WRITE_E2E_FIXTURES=1 builds it)");
-    assert!(
-        committed == built,
-        "probe.xt is stale; rebuild with HOLZI_WRITE_E2E_FIXTURES=1"
-    );
 }

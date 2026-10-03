@@ -694,7 +694,9 @@
       "notDeclared": "not in the manifest",
       "unreadable": "unknown, counts as absent",
       "remove": "Remove",
-      "revoke": "Revoke"
+      "revoke": "Revoke",
+      "devices": "On your devices",
+      "unnamedDevice": "Unnamed device"
     }
   },
   "models": {
@@ -1487,6 +1489,13 @@
       "allDevicesNote": "The permission then also holds on your other devices once they have synchronised the vault.",
       "allow": "Allow",
       "deny": "Deny"
+    },
+    "statusError": {
+      "migration_changed": "An applied migration was changed",
+      "migration_refused": "A migration breaks the rules",
+      "migration_failed": "A migration failed",
+      "migration_missing": "This version lacks an applied migration",
+      "database_unavailable": "The database was not available"
     }
   }
 }

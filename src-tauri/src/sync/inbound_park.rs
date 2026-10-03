@@ -389,6 +389,9 @@ pub fn replay_ready(db: &Database) -> haex_crdt::Result<Replayed> {
             }
         }
         if !progressed {
+            if replayed.groups > 0 {
+                log::info!("sync: replayed {} parked groups", replayed.groups);
+            }
             return Ok(replayed);
         }
     }

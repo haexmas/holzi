@@ -282,6 +282,11 @@ impl Inbox {
                 }
                 continue;
             }
+            log::info!(
+                "sync: parked a group for extension {} ({})",
+                group.prefix,
+                group.reason
+            );
             context.add_parked(&group.prefix, &hlc, bytes);
             received.parked_groups += 1;
             parked.push((hlc, group, bytes));

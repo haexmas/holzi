@@ -11,7 +11,24 @@ use crate::error::Result;
 use crate::extensions::bundle::store::read_verified_file;
 use crate::extensions::bundle::Manifest;
 use crate::extensions::mime;
+use crate::storage::known_devices;
 use crate::storage::query::Query;
+
+/// The state of an extension on one own device (US4, T080).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/types/bindings/")]
+pub struct DeviceState {
+    /// The device's name; empty when it has none.
+    pub device_name: String,
+    pub this_device: bool,
+    /// `transferring`, `ready`, `signature_failed`, `migration_failed` or `disabled`.
+    pub status: String,
+    /// The error kind (`migration_changed`, …), never data of the extension.
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
 
 /// One extension of the vault.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -40,6 +57,14 @@ pub struct ExtensionSummary {
     #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status_here: Option<String>,
+    /// The error kind of that state.
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status_error_here: Option<String>,
+    /// The state on every own device that started it, this device first. Inline, so the binding
+    /// imports nothing (the check scripts load it with Node's own module rules).
+    #[ts(inline)]
+    pub devices: Vec<DeviceState>,
 }
 
 struct Row {
@@ -85,18 +110,41 @@ pub fn list(q: &mut impl Query, device: Uuid) -> Result<Vec<ExtensionSummary>> {
             })
         },
     )?;
+    let names: std::collections::HashMap<String, String> = known_devices::list_devices(q)?
+        .into_iter()
+        .map(|d| (d.vault_device_uuid.to_string(), d.alias.unwrap_or_default()))
+        .collect();
+    let here = device.to_string();
     let mut out = Vec::with_capacity(rows.len());
     for row in rows {
         let Ok(id) = Uuid::parse_str(&row.id) else {
             continue;
         };
         let manifest = effective_manifest(q, id)?.map(|(_, m)| m);
-        let status_here = q.query_row(
-            "SELECT status FROM extension_device_status \
-                 WHERE extension_id = ?1 AND vault_device_uuid = ?2",
-            &[&row.id, &device.to_string()],
-            |r| r.get::<_, String>(0),
+        let mut devices: Vec<DeviceState> = q.query_map(
+            "SELECT vault_device_uuid, status, error FROM extension_device_status \
+                 WHERE extension_id = ?1",
+            &[&row.id],
+            |r| {
+                let uuid: String = r.get(0)?;
+                Ok(DeviceState {
+                    device_name: names.get(&uuid).cloned().unwrap_or_default(),
+                    this_device: uuid == here,
+                    status: r.get(1)?,
+                    error: r.get(2)?,
+                })
+            },
         )?;
+        devices.sort_by(|a, b| {
+            b.this_device.cmp(&a.this_device).then_with(|| {
+                a.device_name
+                    .to_lowercase()
+                    .cmp(&b.device_name.to_lowercase())
+            })
+        });
+        let mine = devices.iter().find(|d| d.this_device);
+        let status_here = mine.map(|d| d.status.clone());
+        let status_error_here = mine.and_then(|d| d.error.clone());
         out.push(ExtensionSummary {
             title: manifest
                 .as_ref()
@@ -114,6 +162,8 @@ pub fn list(q: &mut impl Query, device: Uuid) -> Result<Vec<ExtensionSummary>> {
             enabled: row.enabled,
             state: row.state,
             status_here,
+            status_error_here,
+            devices,
         });
     }
     out.sort_by_key(|e| e.title.to_lowercase());

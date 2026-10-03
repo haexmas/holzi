@@ -416,3 +416,43 @@ fn keep_data_keeps_tables_journal_and_parked_groups_and_a_reinstall_does_not_mig
     assert_eq!(b.journal(), 1, "no migration ran again");
     assert_eq!(b.count("SELECT COUNT(*) FROM `{t}`"), Some(1));
 }
+
+/// Writes through the extension's own SQL path, as `extension_database_execute` does.
+fn write_as_extension(node: &Node, sql: &str) {
+    use crate::extensions::ids::{ExtensionName, PublicKey};
+    use crate::extensions::sql::exec::{existing_tables, prepare, run, Limits};
+    use crate::extensions::sql::policy::SqlPolicy;
+    let own = TablePrefix {
+        public_key: PublicKey::parse(&public_key()).expect("key"),
+        name: ExtensionName::parse("tasks").expect("name"),
+    };
+    let policy = Arc::new(SqlPolicy::own_only(own, node.me));
+    let limits = Limits::default();
+    let existing = existing_tables(&node.vault).expect("tables");
+    let checked = prepare(
+        &sql.replace("{t}", &items()),
+        Vec::new(),
+        &policy,
+        &limits,
+        &existing,
+    )
+    .expect("prepare");
+    run(&node.vault, policy, &limits, vec![checked]).expect("run");
+}
+
+#[test]
+fn rows_an_extension_writes_on_b_reach_a() {
+    let (a, b) = (Node::new(), Node::new());
+    let ext = a.install(&bundle("1.0.0", &[INIT]));
+    a.follow();
+    b.pull(&a);
+    b.follow();
+    assert!(ready(&b, ext));
+
+    write_as_extension(&b, "INSERT INTO `{t}` (id, label) VALUES ('b1', 'from b')");
+    a.pull(&b);
+    assert_eq!(
+        a.count("SELECT COUNT(*) FROM `{t}` WHERE id = 'b1'"),
+        Some(1)
+    );
+}
