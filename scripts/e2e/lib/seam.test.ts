@@ -17,6 +17,7 @@ const SCENARIO_FACING = [
   'lib/flows.ts',
   'lib/settings.ts',
   'lib/group.ts',
+  'lib/device.ts',
   'lib/group-plan.ts',
   'lib/group-expect.ts',
   'lib/sync-ui.ts',
@@ -28,8 +29,6 @@ const SCENARIO_FACING = [
  * check, so this list can only shrink.
  */
 const KNOWN_VIOLATIONS: Record<string, string> = {
-  'lib/sync-flows.ts':
-    'its single-device helpers type a device by `Instance`; the scenarios move to the group (spec 033 T034)',
   'scenarios/relaunch-after-lock.test.ts':
     'checks the window server of the virtual screen through its framebuffer; a process-level scenario of spec 013, not a multi-device one',
 }

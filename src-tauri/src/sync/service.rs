@@ -52,12 +52,16 @@ pub struct SyncDeps<R: Runtime> {
 /// this session has not connected to yet (spec 024, FR-010).
 const RECONNECT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
 
-/// The least time between two reconnect passes. A session end wakes reconnect, and a peer that
-/// refuses this device as a duplicate can end every new session immediately while it still holds
-/// the session of this device's earlier process. Without a gap that would create a reconnect storm.
+/// The least time between two reconnect passes. The end of a session wakes
+/// reconnect, and a peer that refuses this device (as a duplicate while it
+/// still holds the session of this device's earlier process) ends every new
+/// session at once: without a gap that dials it again and again, about
+/// fifty times a second.
 const RECONNECT_MIN_GAP: std::time::Duration = std::time::Duration::from_secs(2);
 
-/// Keeps reconnect passes apart while allowing the first wake to run immediately.
+/// Keeps reconnect passes [`RECONNECT_MIN_GAP`] apart. The first wake runs at
+/// once; wakes during the gap are left to the pass at its end (a [`Notify`]
+/// keeps at most one of them).
 #[derive(Default)]
 struct ReconnectPace {
     last: Option<tokio::time::Instant>,

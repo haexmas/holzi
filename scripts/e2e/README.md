@@ -83,19 +83,106 @@ nix develop --command scripts/with-nix-host-bridge.sh pnpm test:e2e --app <path 
 A simple scenario like the one above typically finishes in 5-15 s; if it is still running well past
 that, something is stuck rather than merely slow.
 
-## Scenarios with several devices
+## Scenarios with several vaults and users
 
-A scenario for the sync of one vault (`sync-*.test.ts`) runs several application processes, each with
-data of its own, and a Nostr relay they share: `ctx.nostrRelay()` starts `e2e_nostr_relay`, the same
-in-process relay the integration tests use, as a process. It is a binary of the main package behind the
-Cargo feature `e2e` (`src-tauri/src/bin/e2e_nostr_relay.rs`), built by the command before the scenarios
-start, only if one of them asks for a relay. The helpers in [`lib/sync-flows.ts`](lib/sync-flows.ts) make a
-device the way a user does: `startFirstDevice` creates a vault and points it at the relay (the Nostr
-relays of a vault apply the next time it opens, so it is opened again), `linkDevice` links a new device
-with a code, `restartDevice` and `closeDevice` end and bring back a device's process, and `addThread`,
-`renameThread`, `removeThread` and `expectThreads` write and read the chat threads that stand for the
-vault's data. The new installation of a link is driven by command (`link_join_start` with the servers of
-the vault), because the form on the start page has no field for servers of its own.
+A scenario for the sync (`sync-*.test.ts`), for spaces or for anything else that needs more than one
+vault or device asks the context for a _group_. Every device is an application process with data of its
+own; all of them share one Nostr relay (`e2e_nostr_relay`, a binary of the main package behind the Cargo
+feature `e2e`, built before the scenarios start). The whole of it is
+[`scenarios/sync-two-users.test.ts`](scenarios/sync-two-users.test.ts), under 50 lines:
+
+```ts
+import { scenario } from '../lib/scenario.ts'
+import { expectOnline } from '../lib/group-expect.ts'
+import { addThread, expectThreads } from '../lib/sync-flows.ts'
+
+scenario('sync-two-users', { timeoutMs: 480_000 }, async (ctx) => {
+  const g = await ctx.group({
+    users: { anna: ['laptop', 'phone'], ben: ['desktop', 'tablet'] },
+  })
+  const [laptop, phone] = [g.device('anna/laptop'), g.device('anna/phone')]
+  await phone.pubkey() // read while it runs: a stopped device cannot be asked
+  await phone.stop()
+  await expectOnline(ctx, laptop, phone, false, 60_000) // laptop lists phone as not online
+  await addThread(laptop, 'Annas Chat')
+  await phone.start()
+  await expectThreads(
+    ctx,
+    phone,
+    ['Annas Chat'],
+    "Anna's chat to reach her phone",
+  )
+})
+```
+
+(An excerpt: it leaves out Ben's part, which checks that his vault never holds Anna's chat.) The
+second argument of `scenario` takes `timeoutMs`, the most the scenario may run; a group of four devices
+needs a few minutes just to start, so give such a scenario 300 to 600 s. A user may have a single device.
+
+Each user has one vault (`e2e-<user>`). The first device of a user creates it; the others are linked the
+way a person does it, with a code from a main device (`{ name: 'desk', main: true }` links a second main
+device). Devices are named `<user>/<device>`, and a device name is unique in the whole group. More devices
+than `E2E_MAX_DEVICES` (default 6) are refused before anything starts, because each device is an
+application, a virtual screen and a driver. Everything that was started ends with the scenario, in
+reverse order, whether it passed, failed or timed out; a failure keeps screenshot, driver log and data of
+every device in a folder of its own.
+
+On a device (`g.device('anna/laptop')`):
+
+| Call                                                | Effect                                                                                                        |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `device.page`                                       | The same surface as an instance: `click`, `type`, `invoke`, `exec`, `waitForDisplayed`, `screenshot`, …       |
+| `device.stop()` / `.start()` / `.restart()`         | Close the application gracefully / open it again over the same data / both.                                   |
+| `device.kill()`                                     | End it without its own shutdown; the data stays.                                                              |
+| `device.lock()`                                     | Press the lock control and wait for the process to end; resolves with the time from the press to the end.     |
+| `device.goOffline()` / `.goOnline()`                | Run without any server, and back; devices it knew can still reach it directly. Both restart (research R2).    |
+| `device.setServers(servers)`                        | The server lists of the vault; they apply at the next opening.                                                |
+| `device.deviceList()` / `.status()` / `.identity()` | The rows of `list_vault_devices`, `sync_status` and the public vault identity, through the interface.         |
+| `device.copyVaultTo(name, { user? })`               | Copy the vault file of a stopped device to a new, stopped device; the copy of a main device is a main device. |
+
+On the group: `g.device(address)`, `g.relay.stop()` / `g.relay.start()` (the relay goes away and comes back
+on the same address), `g.link(host, name, { main? })` (a device linked later through a main device) and
+`g.addDevice(user, name)` (a device without a vault that the scenario links itself, for instance through
+the form on the start page).
+
+Waiting (`lib/group-expect.ts`, `lib/sync-flows.ts`): `expectOnline`, `expectLastSeen`, `expectRole` and
+`expectThreads` wait with a fixed deadline that `E2E_TIME_SCALE` does not stretch, because they wait for
+a promise of the product (40 s to sync, 60 s to notice a device that is gone) and not for a slow machine.
+Write, read and count the data with `addThread`, `addThreads` (many at once, in a loop on the page),
+`threadTitles` and `threadCount`; the chat threads stand for the vault's data until other data kinds
+exist. What a person does in the device view, the link form and the server lists is in
+[`lib/sync-ui.ts`](lib/sync-ui.ts), by the hooks of
+[`contracts/test-hooks.md`](../../specs/016-e2e-testing/contracts/test-hooks.md).
+
+The helpers, all `async`, in the order of their arguments:
+
+| Helper                                                    | From               | Meaning                                                                                                              |
+| --------------------------------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `expectOnline(ctx, observer, target, online, timeoutMs?)` | `lib/group-expect` | Wait until the device list of `observer` shows `target` online (`true`) or not online (`false`).                     |
+| `expectLastSeen(ctx, observer, target, { withinMs })`     | `lib/group-expect` | Wait until `observer` shows `target` not online with a last-seen time that recent.                                   |
+| `expectRole(ctx, device, role)`                           | `lib/group-expect` | Wait until the device reports `main`, `linked`, `awaiting_admission` or `removed` of itself.                         |
+| `expectThreads(ctx, device, titles, description)`         | `lib/sync-flows`   | Wait until the device holds exactly these thread titles (any order); `description` names what is awaited on failure. |
+| `addThread(device, title)` / `addThreads(device, titles)` | `lib/sync-flows`   | Make threads on the device (the second in a loop on the page, for thousands); works with no server reachable.        |
+| `threadTitles(device)` / `threadCount(device)`            | `lib/sync-flows`   | The sorted titles / the number of threads the device holds now. No waiting.                                          |
+
+What the group's relay does: `g.relay.stop()` and `g.relay.start()` take the Nostr relay away and bring it
+back on the same address. The relay is how devices _find_ each other; a pair that is already connected
+stays connected (the connection is direct), and a device that starts while the relay is away finds nobody
+until it is back, and then finds the others on its own, usually within seconds. `device.goOffline()` is
+not unreachable: on one machine a device without servers still dials the devices it knew at their last
+address. To make a device unreachable while others keep running, and to see a device notice that another
+one has gone, stop or kill that one. Both take a while: a device that was ended cleanly is listed as gone at
+once, one that was killed or cut off within about 35 s, and the promise is 60 s.
+
+Nothing arrives is a claim without an event to wait for. Wait until a device that _should_ get the thing
+has it (it was sent by then), then check the other with `threadTitles`; if that is not possible, a fixed
+wait of a few seconds with a comment saying so is the honest choice.
+
+A scenario never names a platform: it imports none of `instance.ts`, `processes.ts`, `webdriver.ts`,
+`build.ts`, `node:child_process`, `node:os` or `node:fs`, never calls `process.kill` and never writes
+`xvfb`, `tauri-driver` or `/proc`. `pnpm check:e2e-lib` fails on it. Everything platform specific lives
+in [`lib/platform/`](lib/platform/) behind the `DeviceHost` interface; what other platforms would need is
+in [`PLATFORMS.md`](PLATFORMS.md).
 
 ## Helpers
 
@@ -105,13 +192,14 @@ covered here (edge cases, exact error shapes).
 
 On the context (`ctx`, the argument to a scenario's body):
 
-| Member                     | What it does                                                                             |
-| -------------------------- | ---------------------------------------------------------------------------------------- |
-| `ctx.startInstance(opts?)` | A fresh, isolated running instance. Ended for you when the scenario ends.                |
-| `ctx.provider(behavior?)`  | A stand-in model provider (see below). Ended with the context.                           |
-| `ctx.step(name, detail?)`  | Adds a timeline entry, for the report and for diagnosing a failure without a second run. |
-| `ctx.waitFor(desc, pred)`  | Polls until `pred()` is truthy or the deadline passes. Use this, never a fixed sleep.    |
-| `ctx.credentials()`        | A generated passphrase and provider key, so none is ever committed.                      |
+| Member                     | What it does                                                                                  |
+| -------------------------- | --------------------------------------------------------------------------------------------- |
+| `ctx.startInstance(opts?)` | A fresh, isolated running instance. Ended for you when the scenario ends.                     |
+| `ctx.provider(behavior?)`  | A stand-in model provider (see below). Ended with the context.                                |
+| `ctx.group(spec)`          | Users with devices, see [several vaults and users](#scenarios-with-several-vaults-and-users). |
+| `ctx.step(name, detail?)`  | Adds a timeline entry, for the report and for diagnosing a failure without a second run.      |
+| `ctx.waitFor(desc, pred)`  | Polls until `pred()` is truthy or the deadline passes. Use this, never a fixed sleep.         |
+| `ctx.credentials()`        | A generated passphrase and provider key, so none is ever committed.                           |
 
 On an instance:
 

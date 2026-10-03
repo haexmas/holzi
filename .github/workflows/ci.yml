@@ -55,6 +55,9 @@ jobs:
       - name: Check fields
         run: corepack pnpm check:fields
 
+      - name: Check appearance
+        run: corepack pnpm check:appearance
+
       - name: Check live vault data
         run: corepack pnpm check:vault-data
 

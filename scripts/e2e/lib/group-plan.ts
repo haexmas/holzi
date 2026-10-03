@@ -35,6 +35,11 @@ export interface PlannedUser {
 /** A name that is safe in a vault name, a window and a folder. */
 const NAME = /^[A-Za-z0-9][A-Za-z0-9_-]*$/
 
+/** Whether a user or device name is safe in a vault name, a window and a folder. */
+export function usableName(name: string): boolean {
+  return NAME.test(name)
+}
+
 /** Reads E2E_MAX_DEVICES, using the default when unset or empty; rejects nonpositive integers and fractions. */
 export function maxDevicesFrom(env: NodeJS.ProcessEnv): number {
   const value = env.E2E_MAX_DEVICES
@@ -61,7 +66,8 @@ export function planGroup(spec: GroupSpec, maxDevices: number): PlannedUser[] {
   if (count > maxDevices) throw new Error(limitMessage(count, maxDevices))
   const owner = new Map<string, string>()
   return users.map(([user, devices]) => {
-    if (!NAME.test(user)) throw new Error(`"${user}" is not a usable user name`)
+    if (!usableName(user))
+      throw new Error(`"${user}" is not a usable user name`)
     if (devices.length === 0) {
       throw new Error(`user "${user}" needs at least one device`)
     }
@@ -70,7 +76,7 @@ export function planGroup(spec: GroupSpec, maxDevices: number): PlannedUser[] {
       vaultName: `e2e-${user}`,
       devices: devices.map((device, index) => {
         const name = typeof device === 'string' ? device : device.name
-        if (!NAME.test(name)) {
+        if (!usableName(name)) {
           throw new Error(`"${name}" is not a usable device name`)
         }
         const other = owner.get(name)
