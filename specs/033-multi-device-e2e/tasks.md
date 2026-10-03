@@ -124,15 +124,15 @@ description: 'Task list for End-to-End Tests Across Several Vaults and Devices'
 
 **Independent Test**: a branch with a broken sync fails the `e2e` job, names the scenario and keeps material per device.
 
-- [ ] T036 [US8] The default whole-run limit of `pnpm test:e2e` rose from 600 s to 1800 s in PR B, because the sync scenarios alone now run longer than 600 s (a full local run failed at the limit). In `.github/workflows/ci.yml` check that the `e2e` job's `timeout-minutes` (45) still holds the whole suite and raise it only if the first CI run shows it is needed; keep every scenario name starting with `sync-` so `--grep sync-` runs them alone.
+- [x] T036 [US8] The default whole-run limit of `pnpm test:e2e` rose from 600 s to 1800 s in PR B, because the sync scenarios alone now run longer than 600 s (a full local run failed at the limit). In `.github/workflows/ci.yml` check that the `e2e` job's `timeout-minutes` (45) still holds the whole suite and raise it only if the first CI run shows it is needed; keep every scenario name starting with `sync-` so `--grep sync-` runs them alone.
 - [ ] T037 [US8] Deliberate-failure trial (V7 of `quickstart.md`): on a throw-away branch make `device_remove` do nothing and push; the job fails, names `sync-remove-device`, and the uploaded `e2e-failure-material` has `screenshot.png` and `driver.log` in each encoded device folder. Record the run in the PR text.
 - [ ] T038 [US8] Measure SC-002: 20 consecutive green runs of the `e2e` job on the stock runner; list any red run with its cause and fix real flakiness before T040. Tracked after merge; this task stays open until then.
 
 ## Phase 11: Polish and cross-cutting
 
-- [ ] T039 [P] Run the whole CI set locally: `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`, `pnpm lint:rust`, `cargo test -j 4 --manifest-path src-tauri/Cargo.toml --lib sync::`, `pnpm check:settings`, `pnpm check:templates`, `pnpm typecheck`, `pnpm typecheck:scripts`, `pnpm lint`, `pnpm format:check`, `pnpm check:e2e-lib`; revert regenerated `src/types/bindings/` whitespace with `git checkout -- src/types/bindings/`.
+- [x] T039 [P] Run the whole CI set locally (the Rust steps are not needed here, this PR changes no Rust file): `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`, `pnpm lint:rust`, `cargo test -j 4 --manifest-path src-tauri/Cargo.toml --lib sync::`, `pnpm check:settings`, `pnpm check:templates`, `pnpm typecheck`, `pnpm typecheck:scripts`, `pnpm lint`, `pnpm format:check`, `pnpm check:e2e-lib`; revert regenerated `src/types/bindings/` whitespace with `git checkout -- src/types/bindings/`.
 - [ ] T040 After T038: replace the manual section of `specs/024-own-device-sync/quickstart.md` by a pointer to `pnpm test:e2e --grep sync-` and close T081 in `specs/024-own-device-sync/tasks.md` with the scenario run as its record (FR-011).
-- [ ] T041 [P] Check every touched file stays at or under 500 lines (`wc -l`), tests are in dedicated files, and no agent reference appears in any file, comment, commit or PR text.
+- [x] T041 [P] Check every touched file stays at or under 500 lines (`wc -l`), tests are in dedicated files, and no agent reference appears in any file, comment, commit or PR text.
 - [ ] T042 Run `quickstart.md` V1 to V8 once end to end and record the result in the PR text.
 
 ## Dependencies and order
