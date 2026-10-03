@@ -25,6 +25,7 @@ const props = defineProps<{
 }>()
 
 const wm = useWindowManagerStore()
+const { windowHint } = useAppearance()
 const { t } = useI18n()
 const runBack = useAction('wm.tab.back')
 const runForward = useAction('wm.tab.forward')
@@ -150,7 +151,13 @@ const RESIZE_HANDLES: { direction: ResizeDirection; class: string }[] = [
   <div
     v-show="!window.minimized"
     class="absolute flex flex-col overflow-hidden rounded-lg border bg-background shadow-lg"
-    :class="active ? 'border-foreground/40' : 'border-border'"
+    :class="
+      active
+        ? windowHint
+          ? 'border-primary'
+          : 'border-foreground/40'
+        : 'border-border'
+    "
     :style="{
       left: `${displayRect.x}px`,
       top: `${displayRect.y}px`,
