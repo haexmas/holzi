@@ -377,6 +377,24 @@ sich auf Windows nicht in `frame-src` festnageln (Platzhalter nur ganz links, DN
 **Alternativen**: Host je Erweiterung; Base64-Host plus Speicher wie HV (unsicher); `'unsafe-inline'` für
 Skripte (schwächer); CSP als `<meta>` (kann `frame-ancestors` nicht).
 
+**Befunde der Sandbox-Prüfung (T045)** an den Apps von haextension `db48f9a948522c18a00331aac232718825cc9317`
+(`apps/*/app`, `apps/*/src`; `haex-pass-browser` ist keine Erweiterung):
+
+- `confirm()` vor dem Löschen in haex-notes (`app/pages/index.vue:48`) und haex-draw (`app/pages/index.vue:62`):
+  ohne `allow-modals` gibt `confirm()` sofort `false` zurück, Löschen wäre unmöglich. **Entscheidung
+  (Betreiber, 2026-10-03)**: kein `allow-modals`; das SDK bekommt `client.dialog.confirm`, holzi zeigt den
+  Dialog über dem eigenen Tab (Brückenmethode `extension_dialog_confirm`), die Apps stellen um (T117–T119).
+- ics-Export in haex-calendar über `a.download` (`app/composables/useIcal.ts:400`): ohne `allow-downloads`
+  passiert nichts. **Entscheidung**: kein `allow-downloads`; der Export läuft künftig über den
+  Speichern-Dialog von holzi (L4, `extension_filesystem_*` mit Dialog-Auswahl), bis dahin geht er nicht.
+- Link mit `target="_blank"` in haex-calendar (`app/components/calendar/EventPreview.vue:56`): öffnet nichts;
+  Abhilfe ist `extension_web_open` (L4). `allow-popups` bleibt ausgeschlossen.
+- `navigator.clipboard.writeText` in haex-code (`app/components/TerminalView.vue:159`): im Rahmen ohne
+  Berechtigungs-Policy wirkungslos; kein L1-Thema (haex-code braucht ohnehin `shell`, L5).
+- Formulare haben überall `@submit.prevent` (haex-files, haex-mail, haex-pass); Blob-URLs für Bilder
+  (haex-image) sind nach `img-src … blob:` erlaubt; `alert(`, `prompt(`, `window.open(`, `localStorage` und
+  `indexedDB` kommen nicht vor.
+
 **Rest-Risiken**: WebRTC und DNS-Prefetch sind über CSP nicht sperrbar (Aufgabe: WebView2-Argument
 `--force-webrtc-ip-handling-policy`, WebKitGTK hat WebRTC standardmäßig aus, vermutet). Keine
 Prozesstrennung zwischen Rahmen (Spectre-artige Restrisiken).
