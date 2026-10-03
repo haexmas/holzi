@@ -416,6 +416,10 @@
         "title": "Agents",
         "keywords": "agents delegates Claude Codex"
       },
+      "extensions": {
+        "title": "Extensions",
+        "keywords": "extension haextension app install permissions"
+      },
       "federation": {
         "title": "Federation",
         "keywords": "devices vault synchronization sync"
@@ -608,6 +612,13 @@
       "notMain": "Only a main device can answer requests.",
       "copyNotice": "This vault file is a copy of a main device. This device is now a main device too and can link, admit and remove devices.",
       "dismiss": "Got it"
+    },
+    "extensions": {
+      "installFromFile": "Install from file",
+      "installFromFileHint": "Add a signed extension (.xt)",
+      "installed": "Installed",
+      "none": "No extension installed yet.",
+      "version": "Version {version}"
     }
   },
   "models": {
@@ -1339,7 +1350,20 @@
         "legacy_signature_format": "The bundle was signed with an old tool. Please sign it again with the current “haex” tool.",
         "unreadable": "The file cannot be read.",
         "downgrade_not_confirmed": "An older version is installed only after confirmation."
-      }
+      },
+      "title": "Install extension",
+      "fileType": "Extension",
+      "checking": "Checking the file …",
+      "publisher": "Publisher: {author} · key {fingerprint}",
+      "sameNameOtherPublisher": "Another extension with the same name is already installed. This one comes from a different publisher and gets its own data.",
+      "update": "Update from {from} to {to}",
+      "confirmDowngrade": "Install the older version anyway",
+      "permissions": "Permissions",
+      "thisDevice": "this device only",
+      "allDevices": "all devices",
+      "unsupported": "Not supported by holzi: {categories}",
+      "cancel": "Cancel",
+      "install": "Install"
     },
     "status": {
       "transferring": "Transferring",
@@ -1360,6 +1384,18 @@
       "fromExtension": "Question from the extension",
       "confirm": "OK",
       "cancel": "Cancel"
+    },
+    "permissions": {
+      "kinds": {
+        "database": "Data of other extensions",
+        "filesystem": "Files",
+        "web": "Internet",
+        "notifications": "Notifications",
+        "passwords": "Passwords",
+        "remoteStorage": "Remote storage",
+        "mail": "Mail",
+        "shell": "Run programs"
+      }
     }
   }
 }

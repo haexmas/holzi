@@ -416,6 +416,10 @@
         "title": "Agenten",
         "keywords": "Agenten Delegaten Claude Codex"
       },
+      "extensions": {
+        "title": "Erweiterungen",
+        "keywords": "Erweiterung Haextension App Installieren Berechtigungen"
+      },
       "federation": {
         "title": "Föderation",
         "keywords": "Geräte Vault Synchronisation Sync"
@@ -608,6 +612,13 @@
       "notMain": "Nur ein Hauptgerät kann Anfragen beantworten.",
       "copyNotice": "Diese Vault-Datei ist die Kopie eines Hauptgeräts. Dieses Gerät ist jetzt ebenfalls ein Hauptgerät und kann Geräte verknüpfen, aufnehmen und entfernen.",
       "dismiss": "Verstanden"
+    },
+    "extensions": {
+      "installFromFile": "Aus Datei installieren",
+      "installFromFileHint": "Eine signierte Erweiterung (.xt) hinzufügen",
+      "installed": "Installiert",
+      "none": "Noch keine Erweiterung installiert.",
+      "version": "Version {version}"
     }
   },
   "models": {
@@ -1339,7 +1350,20 @@
         "legacy_signature_format": "Das Paket ist mit einem alten Werkzeug signiert. Bitte mit dem aktuellen Werkzeug „haex“ neu signieren.",
         "unreadable": "Die Datei lässt sich nicht lesen.",
         "downgrade_not_confirmed": "Eine ältere Fassung wird nur nach Bestätigung installiert."
-      }
+      },
+      "title": "Erweiterung installieren",
+      "fileType": "Erweiterung",
+      "checking": "Datei wird geprüft …",
+      "publisher": "Herausgeber: {author} · Schlüssel {fingerprint}",
+      "sameNameOtherPublisher": "Eine andere Erweiterung mit demselben Namen ist schon installiert. Diese hier stammt von einem anderen Herausgeber und bekommt eigene Daten.",
+      "update": "Aktualisierung von {from} auf {to}",
+      "confirmDowngrade": "Ältere Fassung trotzdem installieren",
+      "permissions": "Berechtigungen",
+      "thisDevice": "nur dieses Gerät",
+      "allDevices": "alle Geräte",
+      "unsupported": "Wird von holzi nicht unterstützt: {categories}",
+      "cancel": "Abbrechen",
+      "install": "Installieren"
     },
     "status": {
       "transferring": "Wird übertragen",
@@ -1360,6 +1384,18 @@
       "fromExtension": "Frage der Erweiterung",
       "confirm": "OK",
       "cancel": "Abbrechen"
+    },
+    "permissions": {
+      "kinds": {
+        "database": "Daten anderer Erweiterungen",
+        "filesystem": "Dateien",
+        "web": "Internet",
+        "notifications": "Benachrichtigungen",
+        "passwords": "Passwörter",
+        "remoteStorage": "Entfernter Speicher",
+        "mail": "Mail",
+        "shell": "Programme ausführen"
+      }
     }
   }
 }
