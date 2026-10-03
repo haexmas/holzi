@@ -66,10 +66,13 @@ Browser-Erweiterung) ist nicht Teil dieser Spec. Referenz: haex-vault @
   Verweis statt als Wert übernommen werden; alle anderen Werte werden immer als Wert kopiert.
   Der Titel ist im Dialog änderbar, Vorgabe ist der Originaltitel mit angehängtem „Kopie“
   (Deutsch) oder „Copy“ (Englisch) je nach Sprache der Oberfläche.
-- Q: Wie funktionieren Verweise („by reference“)? → A: Ein einheitliches System, mit dem ein
-  Eintrag Werte eines anderen Eintrags referenziert, nicht nur beim Kopieren. Zuerst für
-  Benutzername, Passwort und Passkeys. In haex-vault gibt es Verweise nur bei Anhängen (über
-  die Prüfsumme); für die drei Werte ist es neu.
+- Q: Wie funktionieren Verweise („by reference“)? → A: Wie in KeePass als Platzhalter im Text
+  eines Werts: `{$<Eintrag>:username}`, `{$<Eintrag>:password}` und
+  `{$<Eintrag>:extra:<Schlüssel>}` für das Feld eines eigenen Schlüssel/Wert-Paares. Das ist ein
+  einheitliches System für Verweise zwischen Einträgen, nicht nur beim Kopieren; der Kopier-Dialog
+  setzt solche Platzhalter. Passkeys sind kein Text und werden per Verbindung verwiesen (FR-046).
+  In haex-vault, vault-sdk, haextension und atoms gibt es kein solches System (nur Anhänge
+  verweisen dort über die Prüfsumme); es ist neu.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -329,43 +332,53 @@ antippen, einen Anhang umbenennen.
 ### User Story 7 - Werte eines Eintrags in anderen Einträgen wiederverwenden (Priority: P2)
 
 Wer dieselben Zugangsdaten für mehrere Dienste braucht (ein gemeinsames Konto, ein Passkey
-für mehrere Adressen), will sie nicht mehrfach pflegen. Ein Eintrag kann bei **Benutzername**,
-**Passwort** und **Passkeys** statt eines eigenen Werts einen **Verweis** auf den Wert eines
-anderen Eintrags tragen, beim Kopieren (Dialog aus Story 3) und im Editor. Ändert man den Wert
-in der Quelle, stimmt er in allen Zielen.
+für mehrere Adressen), will sie nicht mehrfach pflegen. Wie in KeePass kann ein Wert eines
+Eintrags einen **Verweis** auf den Wert eines anderen Eintrags enthalten: einen Platzhalter
+wie `{$<Eintrag>:username}`, `{$<Eintrag>:password}` oder `{$<Eintrag>:extra:<Schlüssel>}`.
+Beim Anzeigen, Kopieren und Benutzen setzt holzi den Wert der Quelle ein; ändert man ihn in
+der Quelle, stimmt er in allen Zielen. Der Kopier-Dialog (Story 3) setzt solche Platzhalter,
+und der Editor bietet das Einfügen eines Verweises an. Ein Passkey ist kein Text und wird
+stattdessen per Verbindung zur Quelle verwiesen.
 
 **Why this priority**: Der Kopier-Dialog bietet es an, und es ist das eine einheitliche System
 für alle Verweise zwischen Einträgen. Ohne Verweise bleibt alles andere benutzbar.
 
-**Independent Test**: Einen Eintrag mit Benutzername, Passwort und Passkey kopieren und
-dabei das Passwort als Verweis wählen, das Passwort in der Quelle ändern, die Kopie ansehen,
-das Passwort in der Kopie überschreiben, die Quelle löschen.
+**Independent Test**: Einen Eintrag mit Benutzername, Passwort, einem eigenen Feld „PIN“ und
+einem Passkey kopieren und dabei das Passwort als Verweis wählen, das Passwort in der Quelle
+ändern, die Kopie ansehen, im Feld eines dritten Eintrags einen Verweis auf „PIN“ einfügen, das
+Passwort in der Kopie überschreiben, die Quelle löschen.
 
 **Acceptance Scenarios**:
 
-1. **Given** ein Eintrag „Konto“ und eine Kopie mit „Passwort als Verweis“, **When** der Nutzer
-   das Passwort in „Konto“ ändert, **Then** zeigt, kopiert und benutzt die Kopie das neue
-   Passwort; das Feld trägt eine Marke „Verweis auf Konto“, und ein Tipp darauf öffnet die
-   Quelle.
-2. **Given** ein Verweisfeld in der Kopie, **When** der Nutzer dort einen eigenen Wert
-   eingibt oder „Verweis lösen“ wählt, **Then** wird nur dieses Feld zum eigenen Wert; die
-   anderen Verweise der Kopie bleiben.
-3. **Given** ein Eintrag im Bearbeiten, **When** der Nutzer beim Benutzernamen oder Passwort
-   „Verweis auf anderen Eintrag“ wählt und einen Eintrag aussucht, **Then** zeigt das Feld
-   dessen Wert; wählt er einen Eintrag, dessen Feld selbst ein Verweis ist, zeigt der Verweis
-   auf die Quelle dieses Felds.
-4. **Given** eine Kopie mit „Passkeys per Verweis übernehmen“, **When** ein Aufrufer über die
+1. **Given** ein Eintrag „Konto“ und eine Kopie mit „Passwort als Verweis“ (ihr Passwort ist
+   `{$<Konto>:password}`), **When** der Nutzer das Passwort in „Konto“ ändert, **Then** zeigt,
+   kopiert und benutzt die Kopie das neue Passwort; das Feld zeigt den Verweis als Marke „Passwort
+   von Konto“, und ein Tipp darauf öffnet die Quelle.
+2. **Given** ein Wert mit Text und Verweis, etwa `admin-{$<Konto>:extra:PIN}`, **When** er
+   angezeigt oder kopiert wird, **Then** steht dort „admin-“ und die PIN der Quelle.
+3. **Given** ein Feld im Bearbeiten, **When** der Nutzer „Verweis einfügen“ wählt, einen Eintrag
+   sucht und Benutzername, Passwort oder eines seiner eigenen Felder wählt, **Then** steht der
+   Verweis an der Textstelle des Cursors; tippt der Nutzer einen Platzhalter von Hand, erkennt
+   holzi ihn ebenso.
+4. **Given** ein Verweisfeld, **When** der Nutzer die Marke löscht oder das Feld überschreibt,
+   **Then** wird nur dieser Teil zum eigenen Text; andere Verweise im Eintrag bleiben.
+5. **Given** eine Quelle, deren Wert selbst einen Verweis enthält, **When** das Ziel gelesen
+   wird, **Then** wird der Verweis bis zur eigentlichen Quelle aufgelöst; ein Verweis, der auf
+   sich selbst zurückführt (A verweist auf B, B auf A), wird beim Speichern abgelehnt, und
+   gelangt er dennoch an (Sync), zeigt das Feld „Verweiskreis“ statt eines Werts.
+6. **Given** eine Kopie mit „Passkeys per Verweis übernehmen“, **When** ein Aufrufer über die
    Kopie bestätigt, **Then** signiert der Dienst mit dem Schlüssel der Quelle, und der Zähler
    der Quelle steigt; die Kopie hat keinen eigenen Schlüssel.
-5. **Given** eine Quelle, auf die zwei Einträge verweisen, **When** der Nutzer sie endgültig
-   löscht, **Then** warnt holzi mit der Zahl der Ziele und bietet an, die Verweise von
-   Benutzername und Passwort in eigene Werte umzuwandeln; Verweise von Passkeys fallen dabei
-   weg, was die Warnung sagt. Abbrechen lässt alles unverändert.
-6. **Given** ein Aufrufer, dessen Freigabe die Kopie, aber nicht die Quelle deckt, **When** er
-   das Passwort der Kopie liest, **Then** erhält er keinen Wert, nicht den der Quelle und
-   keinen Hinweis, dass ein Verweis besteht.
-7. **Given** ein Verweis in einem alten Stand des Verlaufs, **When** der Nutzer ihn
-   wiederherstellt, **Then** gilt der Verweis wieder; ist die Quelle weg, sagt holzi es und
+7. **Given** eine Quelle, auf die zwei Einträge verweisen, **When** der Nutzer sie endgültig
+   löscht, **Then** warnt holzi mit der Zahl der Ziele und bietet an, die Verweise in eigene
+   Werte umzuwandeln (der Platzhalter wird durch den heutigen Wert ersetzt); Verweise von
+   Passkeys fallen dabei weg, was die Warnung sagt. Abbrechen lässt alles unverändert.
+8. **Given** ein Aufrufer, dessen Freigabe das Ziel, aber nicht die Quelle deckt, **When** er
+   ein Feld mit Verweis liest, **Then** erhält er für dieses Feld keinen Wert, nicht den der
+   Quelle und keinen Hinweis, dass ein Verweis besteht; in Listen erscheinen Felder mit Verweis
+   für ihn leer.
+9. **Given** ein Verweis in einem alten Stand des Verlaufs, **When** der Nutzer ihn
+   wiederherstellt, **Then** gilt der Platzhalter wieder; ist die Quelle weg, sagt holzi es und
    stellt den Rest her.
 
 ---
@@ -386,8 +399,13 @@ das Passwort in der Kopie überschreiben, die Quelle löschen.
 - **Kopieren in einen Ordner mit gleichnamigem Eintrag.** Namen müssen nicht eindeutig sein;
   die Kopie trägt den Titel aus dem Dialog.
 - **Die Quelle eines Verweises wird auf einem anderen Gerät gelöscht oder ist (noch) nicht
-  angekommen.** Das Feld zeigt „Quelle nicht verfügbar“, nichts stürzt ab, und nichts wird still
+  angekommen.** Das Feld zeigt „Quelle nicht verfügbar“, Kopieren und Benutzen melden das,
+  statt den Platzhalter als Text zu verwenden; nichts stürzt ab, und nichts wird still
   geändert.
+- **Ein Wert enthält Text, der wie ein Verweis aussieht** (etwa ein Passwort mit `{$`). Nur ein
+  Platzhalter in genau der Form `{$<Eintrag>:…}` mit einer vorhandenen Kennung gilt als Verweis;
+  alles andere bleibt Text. Ein Zeichen, das den Platzhalter bricht, wird im Schlüssel mit `\`
+  geschützt, und der Editor setzt den Platzhalter selbst richtig zusammen.
 - **Die Quelle eines Verweises liegt im Papierkorb.** Der Nutzer sieht den Wert weiter, ein
   Aufrufer von außen nicht (wie bei jedem Eintrag im Papierkorb).
 - **Sehr viele ausgewählte Einträge** (mehrere hundert). Aktionen laufen als eine
@@ -488,7 +506,8 @@ das Passwort in der Kopie überschreiben, die Quelle löschen.
   änderbarer Zusatz statt der Titel), die Checkbox **Verlauf übernehmen** (Vorgabe: aus; dann
   bekommt die Kopie ihren eigenen Anfangsstand) und die Checkboxen **Benutzername als
   Verweis**, **Passwort als Verweis** und **Passkeys per Verweis übernehmen** (Vorgabe: aus; aus
-  heißt für Benutzername und Passwort Kopie als Wert, für Passkeys: keine Passkeys, siehe
+  heißt für Benutzername und Passwort Kopie als Wert, an heißt: der Wert der Kopie ist der
+  Platzhalter auf den Wert der Vorlage (FR-044); für Passkeys heißt aus: keine Passkeys, siehe
   Randfälle). Alles andere (Adresse, Notiz, Ablaufdatum, Symbol, Farbe, TOTP, eigene Felder,
   Tags, Aliase, Anhänge) MUSS immer als Wert kopiert werden; die Anhänge teilen über ihre
   Prüfsumme die Binärdaten, es wird nichts doppelt gespeichert. Die Kopie ist ein neuer Eintrag
@@ -622,33 +641,42 @@ das Passwort in der Kopie überschreiben, die Quelle löschen.
 
 **Verweise zwischen Einträgen**
 
-- **FR-044**: Ein Eintrag („Ziel“) MUSS bei **Benutzername**, **Passwort** und **Passkeys**
-  statt eines eigenen Werts einen **Verweis** auf den entsprechenden Wert eines anderen
-  Eintrags („Quelle“) tragen können, einheitlich beim Kopieren (FR-015) und im Editor
-  („Verweis auf anderen Eintrag“ wählen, Quelle aussuchen, Verweis lösen). Ein Verweis nennt
-  Quelle und Art des Werts. Weitere Wertarten DÜRFEN später dazukommen, ohne dass sich die
-  Semantik ändert.
-- **FR-045**: Ein Verweisfeld MUSS den Wert der Quelle beim Anzeigen, Kopieren in die
-  Zwischenablage und Benutzen lesen (nie als Kopie speichern), eine Marke mit dem Titel der
-  Quelle tragen (ein Tipp öffnet sie) und Änderungen der Quelle sofort in allen Zielen zeigen.
-  Das Bearbeiten eines Verweisfelds im Ziel oder „Verweis lösen“ MUSS nur dieses Feld zum
-  eigenen Wert machen. Ein Verweis auf ein Verweisfeld MUSS auf dessen Quelle zeigen.
-- **FR-046**: Ein **Passkey per Verweis** MUSS im Ziel mit seinen Kopfdaten erscheinen;
-  Bestätigen über das Ziel MUSS mit dem Schlüssel der Quelle signieren, und der Zähler gehört
-  der Quelle. Ein Passkey wird nie als Wert kopiert.
+- **FR-044**: Der Text eines Werts MUSS **Verweise** auf Werte anderer Einträge als Platzhalter
+  enthalten können, in der Form `{$<Kennung des Eintrags>:username}`,
+  `{$<Kennung>:password}` und `{$<Kennung>:extra:<Schlüssel des eigenen Felds>}`, auch
+  mehrere im selben Wert und zusammen mit gewöhnlichem Text. Die Felder, in denen Verweise
+  gelten, sind Benutzername, Passwort, Adresse, Notiz und die Werte eigener Felder; die
+  verweisbaren Werte sind zunächst Benutzername, Passwort und eigene Felder. Weitere
+  Wertarten DÜRFEN später dazukommen, ohne dass sich die Form oder die Semantik ändert.
+- **FR-045**: Beim Anzeigen, beim Kopieren in die Zwischenablage und beim Benutzen MUSS holzi
+  jeden Platzhalter durch den Wert der Quelle ersetzen; gespeichert bleibt der Platzhalter,
+  nie der aufgelöste Wert. Änderungen der Quelle MÜSSEN sofort in allen Zielen wirken. Der
+  Editor MUSS einen Verweis als Marke mit dem Namen der Quelle und der Art des Werts zeigen
+  (ein Tipp öffnet die Quelle), das Einfügen eines Verweises anbieten (Eintrag suchen, Wert
+  wählen) und von Hand getippte Platzhalter erkennen. Ein Platzhalter, der nicht aufgelöst
+  werden kann (Quelle fehlt oder Kreis), MUSS als solcher gekennzeichnet sein und DARF beim
+  Kopieren oder Benutzen nicht als Text verwendet werden; es gibt eine Meldung.
+- **FR-046**: Aufgelöst wird bis zur eigentlichen Quelle (ein Wert, der selbst Verweise
+  enthält, wird ebenfalls aufgelöst) mit einer festen Obergrenze der Tiefe, die der Plan
+  festlegt. Ein Kreis MUSS beim Speichern abgelehnt werden und, wenn er dennoch ankommt
+  (Sync), als „Verweiskreis“ gekennzeichnet werden. Ein **Passkey** ist kein Text: Er wird beim
+  Kopieren (FR-015) per Verbindung zur Quelle verwiesen, erscheint im Ziel mit seinen
+  Kopfdaten, Bestätigen über das Ziel signiert mit dem Schlüssel der Quelle, und der Zähler
+  gehört der Quelle. Ein Passkey wird nie als Wert kopiert.
 - **FR-047**: Ein Verweis DARF kein Zugriffsrecht geben: Ein Aufrufer außer dem Nutzer MUSS
   einen Wert über einen Verweis nur erhalten, wenn seine Freigabe auch die Quelle deckt; sonst
-  ist der Wert für ihn nicht vorhanden, ohne dass erkennbar ist, dass ein Verweis besteht
-  (034 FR-029). Listen enthalten nie aufgelöste Werte (034 FR-026), der eingebaute Agent nie
-  ein Geheimnis (034 FR-027).
+  ist das ganze Feld für ihn nicht vorhanden, ohne dass erkennbar ist, dass ein Verweis
+  besteht (034 FR-029). Listen MÜSSEN Verweise nie auflösen (034 FR-026): Ein Feld mit Verweis
+  erscheint dort für Aufrufer von außen leer und in der Oberfläche als Marke; sonst könnte ein
+  Passwort-Verweis im Benutzernamen ein Geheimnis in die Liste tragen. Der eingebaute Agent
+  erhält nie ein aufgelöstes Geheimnis (034 FR-027).
 - **FR-048**: Das endgültige Löschen einer Quelle MUSS vorher mit der Zahl der Ziele warnen und
-  anbieten, die Verweise von Benutzername und Passwort in eigene Werte umzuwandeln; Verweise
-  von Passkeys fallen dabei weg, und die Warnung sagt es. Der Papierkorb löst keine Verweise
-  auf (für den Nutzer bleibt der Wert sichtbar). Fehlt eine Quelle dennoch (Sync), MUSS das Feld
-  „Quelle nicht verfügbar“ zeigen, statt zu scheitern.
-- **FR-049**: Der Verlauf MUSS einen Verweis als Verweis speichern, nicht als aufgelösten
-  Wert (so gelangt kein Geheimnis der Quelle in den Verlauf des Ziels); Wiederherstellen
-  stellt den Verweis wieder her.
+  anbieten, die Verweise in eigene Werte umzuwandeln (der Platzhalter wird durch den heutigen
+  Wert ersetzt); Verweise von Passkeys fallen dabei weg, und die Warnung sagt es. Der
+  Papierkorb löst keine Verweise auf (für den Nutzer bleibt der Wert sichtbar).
+- **FR-049**: Der Verlauf MUSS Platzhalter unverändert speichern, nie den aufgelösten Wert (so
+  gelangt kein Geheimnis der Quelle in den Verlauf des Ziels); Wiederherstellen stellt den
+  Platzhalter wieder her.
 
 **Allgemein**
 
@@ -671,9 +699,10 @@ das Passwort in der Kopie überschreiben, die Quelle löschen.
 - **Passkey**: unverändert aus 034 (Tabelle der Passkeys), jetzt auch mit Funktionen zum
   Anlegen, Bestätigen und Auflisten; gehört immer zu einem Eintrag und folgt dessen Tags; der
   Zähler steigt nur.
-- **Verweis**: ein Wert eines Eintrags (Benutzername, Passwort, Passkeys), der auf den Wert
-  eines anderen Eintrags zeigt, statt einen eigenen zu tragen; Quelle und Art des Werts, nie
-  ein Wert; folgt der Quelle sofort.
+- **Verweis**: ein Platzhalter im Text eines Werts (`{$<Eintrag>:username}`, `…:password`,
+  `…:extra:<Schlüssel>`), der beim Lesen durch den Wert des anderen Eintrags ersetzt wird; er
+  wird nie aufgelöst gespeichert und folgt der Quelle sofort. Für Passkeys eine Verbindung zur
+  Quelle.
 - **Anhangskarte**: die Darstellung eines Anhangs (Vorschau oder Symbol, Name, Größe, Typ).
 
 ## Success Criteria _(mandatory)_
@@ -704,7 +733,8 @@ das Passwort in der Kopie überschreiben, die Quelle löschen.
   30 Bildern lädt der Tab Extra nur die sichtbaren Vorschaubilder.
 - **SC-009**: Ändert der Nutzer das Passwort einer Quelle, zeigt jedes Ziel mit Verweis es
   beim nächsten Öffnen ohne weiteres Zutun; in 100 Versuchen erhält ein Aufrufer ohne Bereich
-  für die Quelle über einen Verweis nie einen Wert und nie einen Hinweis auf den Verweis.
+  für die Quelle über einen Verweis nie einen Wert und nie einen Hinweis auf den Verweis, und
+  keine Liste löst je einen Verweis auf.
 - **SC-010**: Die vorhandenen Szenarien des Passwortmanagers (034 SC-012) laufen unverändert
   grün; neue Szenarien decken Tabs mit Wischgeste, Verlauf, Ablage mit Ordnerkopie,
   Kontextmenü, Passkey-Anlegen und -Bestätigen und die Lightbox ab.
@@ -715,10 +745,10 @@ das Passwort in der Kopie überschreiben, die Quelle löschen.
   im Plan entschieden. haex-vault hat dort nur Tippen, die Wischgeste ist neu.
 - Der **Kopier-Dialog** erscheint beim Einfügen, denn dann entsteht die Kopie; die Auswahl beim
   Kopieren selbst bleibt ohne Dialog.
-- **Verweise** gibt es zunächst für Benutzername, Passwort und Passkeys; weitere Wertarten
-  lassen sich später ohne Änderung der Semantik zulassen. Ein Verweis zeigt immer auf den
-  Eintrag, der den Wert wirklich besitzt (ein Verweis auf ein Verweisfeld wird zur Quelle
-  aufgelöst), deshalb sind Zyklen ausgeschlossen.
+- **Verweise** sind zunächst auf Benutzername, Passwort und eigene Felder beschränkt, wie die
+  Beispiele zeigen; weitere Wertarten lassen sich später ohne Änderung der Form zulassen. Das
+  Umwandeln der Verweise von KeePass (`{REF:…}`) beim Import ist nicht Teil dieser Spec; sie
+  bleiben Text.
 
 - Die **Kürzel** sind feste Voreinstellungen; das Umbelegen kommt mit dem Umbelegen der
   wm-Kürzel (Spec 020). Die Auswahl der Zeile mit Pfeiltasten gilt nur im Passwortmanager.
