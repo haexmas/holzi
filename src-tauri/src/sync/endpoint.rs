@@ -89,9 +89,6 @@ struct Inner {
     /// Multiple sessions can observe the same list change concurrently; only
     /// the first observer must restart the sessions.
     sessions_reset_for_list: Mutex<Option<([u8; 32], u64)>>,
-    /// Invalidates handshakes that were already in flight when sessions were
-    /// reset for a newer effective device list.
-    connection_epoch: Mutex<u64>,
     /// Devices this device's list does not name whose presence claimed a
     /// newer list, waiting to be dialed once to fetch it (FR-007).
     candidates: Mutex<HashMap<[u8; 32], EndpointAddr>>,
@@ -179,7 +176,6 @@ impl SyncNode {
             devices_changed: Mutex::new(None),
             connection_ended: Mutex::new(None),
             sessions_reset_for_list: Mutex::new(None),
-            connection_epoch: Mutex::new(0),
             candidates: Mutex::new(HashMap::new()),
         });
         let router = Router::builder(endpoint)
@@ -398,7 +394,6 @@ impl SyncNode {
 async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
     let remote = *connection.remote_id().as_bytes();
     let list_marker_before_handshake = current_device_list_marker(&inner);
-    let connection_epoch_before_handshake = connection_epoch(&inner);
     let streams = match side {
         Side::Accept => connection.open_bi().await,
         Side::Dial => connection.accept_bi().await,
@@ -421,19 +416,14 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
         }
         Side::Dial => handshake::dial(&mut send, &mut recv, &inner.replica, &local, remote).await,
     };
-    let reset_by_this_connection =
-        if list_marker_before_handshake != current_device_list_marker(&inner) {
-            // A handshake can store a newer effective list before it becomes a
-            // session, including when this peer is refused as removed. Restart
-            // the existing sessions once for that list so their peer snapshot and
-            // progress exchange start from the converged state.
-            reset_connections_for_list_change(&inner)
-        } else {
-            false
-        };
-    if !reset_by_this_connection && connection_epoch(&inner) != connection_epoch_before_handshake {
-        connection.close(ErrorCode::Closed.as_u32().into(), b"device list changed");
-        return;
+    if list_marker_before_handshake != current_device_list_marker(&inner) {
+        // A handshake can store a newer effective list before it becomes a
+        // session, including when this peer is refused as removed. Restart
+        // the existing sessions once for that list so their peer snapshot and
+        // progress exchange start from the converged state. Handshakes already
+        // in flight are allowed to finish; register() still coalesces the
+        // simultaneous dials to one preferred connection.
+        reset_connections_for_list_change(&inner);
     }
     let peer = match handshake {
         Ok(peer) => peer,
@@ -542,13 +532,6 @@ fn current_device_list_marker(inner: &Inner) -> Option<([u8; 32], u64)> {
     .flatten()
 }
 
-fn connection_epoch(inner: &Inner) -> u64 {
-    *inner
-        .connection_epoch
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-}
-
 fn reset_connections_for_list_change(inner: &Arc<Inner>) -> bool {
     let Some(marker) = current_device_list_marker(inner) else {
         return false;
@@ -568,10 +551,6 @@ fn reset_connections_for_list_change(inner: &Arc<Inner>) -> bool {
 }
 
 fn reset_connections_now(inner: &Arc<Inner>, reason: &[u8]) {
-    *inner
-        .connection_epoch
-        .lock()
-        .unwrap_or_else(|e| e.into_inner()) += 1;
     // A device-list update learned during a handshake bypasses the normal
     // applied-pull callback. Wake presence as well, so a rotated mailbox is
     // subscribed before the next peer announces itself.
