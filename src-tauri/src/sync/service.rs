@@ -120,7 +120,7 @@ async fn resolve_deps<R: Runtime>(app: &AppHandle<R>, state: &AppState) -> Resul
         })?
         .map_err(HolziError::from)?;
     Ok(SyncDeps {
-        replica: Arc::new(Replica::new(db)),
+        replica: Arc::new(Replica::tracked(db, state.gate().clone())),
         keys: device_keys,
         vault,
         relay_mode,

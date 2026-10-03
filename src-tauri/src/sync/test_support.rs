@@ -42,6 +42,13 @@ impl Device {
         Self { _dir: dir, replica }
     }
 
+    /// A device whose replica counts its work with `gate`, as the sync service's does.
+    pub fn with_gate(gate: crate::vault_gate::VaultGate) -> Self {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let replica = Arc::new(Replica::tracked(Arc::new(open_vault(dir.path())), gate));
+        Self { _dir: dir, replica }
+    }
+
     pub fn db(&self) -> &Database {
         self.replica.db()
     }

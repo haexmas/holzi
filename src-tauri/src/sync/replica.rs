@@ -15,13 +15,22 @@
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use haex_crdt::{device_uuid_to_hlc_node, Database};
+use tokio_util::task::task_tracker::TaskTrackerToken;
 
 use crate::storage::query::{self, Query};
 use crate::sync::progress::{self, Vector};
 
+/// The vault is closing: work on its database does not start or go on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("the vault is closing")]
+pub struct Closing;
+
 /// The vault's database and the lock between applying and serving.
 pub struct Replica {
     db: Arc<Database>,
+    /// The open vault's gate, so a close waits for long work on the database instead of
+    /// ending the process under it (spec 013). `None` for a replica without a vault session.
+    gate: Option<crate::vault_gate::VaultGate>,
     exchange: Mutex<()>,
     /// The newest own cell found so far; see [`Replica::progress`].
     own_latest: Mutex<Option<String>>,
@@ -32,6 +41,7 @@ impl Replica {
     pub fn new(db: Arc<Database>) -> Self {
         Self {
             db,
+            gate: None,
             exchange: Mutex::new(()),
             own_latest: Mutex::new(None),
         }
@@ -63,6 +73,29 @@ impl Replica {
 
     pub fn db(&self) -> &Database {
         &self.db
+    }
+
+    /// A replica of the open vault whose long work counts with `gate` ([`Self::hold`]).
+    pub fn tracked(db: Arc<Database>, gate: crate::vault_gate::VaultGate) -> Self {
+        Self {
+            gate: Some(gate),
+            ..Self::new(db)
+        }
+    }
+
+    /// Counts one piece of work on the database with the vault's close until the token is
+    /// dropped: the close waits for it, since a thread still writing when the process ends
+    /// crashes it. `Err` once the close has started, so no new work begins.
+    pub fn hold(&self) -> Result<Option<TaskTrackerToken>, Closing> {
+        self.gate
+            .as_ref()
+            .map(|gate| gate.tracker_token().map_err(|_| Closing))
+            .transpose()
+    }
+
+    /// Whether the vault's close has started; long work stops at its next step.
+    pub fn closing(&self) -> bool {
+        self.gate.as_ref().is_some_and(|gate| gate.is_closing())
     }
 
     /// Held while applying received changes with their progress, and while

@@ -441,6 +441,75 @@ fn fork_on(device: &Device, origin: Uuid, limit: &str) {
 }
 
 #[test]
+fn more_groups_than_one_step_all_arrive() {
+    let (a, b) = (Device::new(), Device::new());
+    let count = APPLY_CHUNK * 2 + 3;
+    for i in 0..count {
+        write_thread(&a, &format!("t{i}"), "chat");
+    }
+
+    b.pull_from(&a);
+
+    let arrived = query::read(b.db(), |r| {
+        r.query_row("SELECT COUNT(*) FROM chat_threads", &[], |row| {
+            row.get::<_, i64>(0)
+        })
+    })
+    .expect("count");
+    assert_eq!(arrived, Some(i64::try_from(count).expect("count")));
+    assert!(!progress::has_more(
+        &a.replica.progress().expect("a"),
+        &b.replica.progress().expect("b")
+    ));
+}
+
+#[test]
+fn a_closing_vault_applies_nothing_and_keeps_its_progress() {
+    let a = Device::new();
+    let gate = crate::vault_gate::VaultGate::new();
+    let b = Device::with_gate(gate.clone());
+    write_thread(&a, "late", "not applied");
+    let before = b.replica.progress().expect("progress");
+    assert!(gate.request_close());
+
+    let result = b.try_pull_from(&a, 1024 * 1024);
+
+    assert!(
+        matches!(result, Err(InboundError::Closing(_))),
+        "{result:?}"
+    );
+    assert_eq!(title(&b, "late"), None);
+    assert_eq!(b.replica.progress().expect("progress"), before);
+}
+
+#[tokio::test]
+async fn the_close_waits_for_held_work() {
+    let gate = crate::vault_gate::VaultGate::new();
+    let device = Device::with_gate(gate.clone());
+    let held = device.replica.hold().expect("open vault");
+    let waiting = tokio::spawn({
+        let gate = gate.clone();
+        async move {
+            gate.drain_with(
+                std::time::Duration::from_millis(10),
+                std::time::Duration::from_secs(5),
+            )
+            .await
+        }
+    });
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    assert!(!waiting.is_finished(), "the drain waits while work is held");
+    assert!(device.replica.hold().is_err(), "no new work once closing");
+
+    drop(held);
+
+    assert_eq!(
+        waiting.await.expect("drain"),
+        crate::vault_gate::DrainOutcome::DrainedAfterAbort
+    );
+}
+
+#[test]
 fn blob_credentials_arrive_as_blobs() {
     let (a, b) = (Device::new(), Device::new());
     let credentials: Vec<u8> = vec![0, 159, 146, 150, 255];

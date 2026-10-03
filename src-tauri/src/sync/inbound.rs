@@ -13,9 +13,10 @@
 //!   an HLC beyond its limit, is rejected (R5);
 //! - a group whose rows cannot be created yet, because the cells they lack
 //!   come in a later group, waits ([`hold`]);
-//! - the rest goes to `Database::apply_remote_changes` in one transaction.
+//! - the rest goes to `Database::apply_remote_changes`, a few hundred groups per transaction,
+//!   so a close waits for one such step at most and then stops the pull.
 //!
-//! Only after that commit does progress rise, per origin to the highest
+//! Only after the last commit does progress rise, per origin to the highest
 //! group applied or rejected that lies below every group held, and after the
 //! last page to the progress the sender served against. An origin on no list is accepted: an own device
 //! vouches for what it delivers (FR-021).
@@ -41,6 +42,11 @@ use hold::{settle, Group, Settled};
 /// haex-crdt's delete log, a synced table like any other.
 const DELETED_ROWS_TABLE: &str = "haex_deleted_rows";
 
+// ponytail: 256 groups per transaction. Ceiling: a close waits for one such step, which grows with
+// the size of the rows. Upgrade path: count bytes instead of groups.
+/// How many groups one transaction applies before a close may stop the pull.
+const APPLY_CHUNK: usize = 256;
+
 /// Slack on top of `max_transaction_bytes` for a buffered group's encoded
 /// size, which exceeds its SQL size by quoting and hex.
 const BUFFER_SLACK: usize = 1024 * 1024;
@@ -58,6 +64,10 @@ pub enum InboundError {
     Change(#[from] ChangeError),
     #[error(transparent)]
     Crdt(#[from] haex_crdt::Error),
+    /// The vault started to close; what was applied stays, progress does not rise, and the
+    /// next pull fetches the rest.
+    #[error(transparent)]
+    Closing(#[from] crate::sync::replica::Closing),
 }
 
 /// What one page did.
@@ -129,6 +139,7 @@ impl Inbox {
                 "a continuing group on the last page or on an empty page",
             ));
         }
+        let _held = replica.hold()?;
         let db = replica.db();
         let limit = db.max_transaction_bytes();
         // Device removal publishes its limit under the same exchange lock. Read the
@@ -220,10 +231,6 @@ impl Inbox {
                 .iter()
                 .flat_map(|g| g.columns.iter().filter_map(changed_table)),
         );
-        let accepted: Vec<ColumnChange> = apply
-            .iter()
-            .flat_map(|g| g.columns.iter().cloned())
-            .collect();
         // Progress rises only below every group still held: those come
         // again in a pull that starts from it.
         let mut lowest_held: HashMap<Uuid, String> = HashMap::new();
@@ -249,11 +256,11 @@ impl Inbox {
         }
         self.held = held;
         if let Some(snapshot) = &mut self.snapshot {
-            snapshot.rows.extend(
-                accepted
+            snapshot.rows.extend(apply.iter().flat_map(|g| {
+                g.columns
                     .iter()
-                    .map(|c| (c.table_name.clone(), c.row_pks.clone())),
-            );
+                    .map(|c| (c.table_name.clone(), c.row_pks.clone()))
+            }));
         }
         if !page.more {
             if let Some(snapshot) = &mut self.snapshot {
@@ -266,7 +273,14 @@ impl Inbox {
             self.finished = true;
         }
 
-        if !accepted.is_empty() {
+        for chunk in apply.chunks(APPLY_CHUNK) {
+            if replica.closing() {
+                return Err(crate::sync::replica::Closing.into());
+            }
+            let accepted: Vec<ColumnChange> = chunk
+                .iter()
+                .flat_map(|g| g.columns.iter().cloned())
+                .collect();
             let outcome = db.apply_remote_changes(accepted)?;
             if !outcome.skipped.is_empty() {
                 log::debug!(
