@@ -47,7 +47,7 @@ Node 22.19 für die Prüfskripte
 
 **Primary Dependencies**: vorhanden — `p256` 0.14, `ed25519-dalek` 3, `pkcs1`/`pkcs8`/`spki`,
 `sha2`, `getrandom`, `base64`, `uuid`, `serde_json`, `thiserror`, `ts-rs`, `haex-crdt`
-(`aeb26eb`), `keepass`; Frontend Pinia, `@nuxtjs/i18n`, `reka-ui`/haex-ui-Layer
+(`928d06a`), `keepass`; Frontend Pinia, `@nuxtjs/i18n`, `reka-ui`/haex-ui-Layer
 (`ShadcnTabs`, `ShadcnContextMenu`, `ShadcnBreadcrumb`, `ShadcnDropdownMenu`,
 `ShadcnDrawer`/`UiDrawerModal`, `ShadcnCheckbox`), `@vueuse/core` 15.
 **Neu**: `swiper` 14 (MIT), `photoswipe` 5.4 (MIT, wie haex-vault); Rust `ciborium`, `psl`,
@@ -63,8 +63,10 @@ direktes `url`. RS256 wird nicht signiert, deshalb **kein** `rsa` zur Laufzeit (
 `passwords_sync.rs`); Frontend — `pnpm check:passwords` mit neuen Skripten
 (`-menus`, `-shortcuts`, `-breadcrumb`, `-clipboard`, `-tabs`), Regression
 `check:agent-actions`, `check:wm-navigation`, `check:templates`, `typecheck`,
-`typecheck:scripts`, `lint`, `format:check`; End-to-End `passwords-organize`,
-`passwords-tabs`, `passwords-sync-two-devices` erweitert, die vier vorhandenen unverändert;
+`typecheck:scripts`, `lint`, `format:check`; End-to-End neu `passwords-tabs`,
+`passwords-organize`, `passwords-references`, `passwords-passkeys`, `passwords-attachments`,
+dazu `passwords-narrow-window` und `passwords-session-restore` erweitert, die übrigen
+vorhandenen unverändert;
 manuell nach [quickstart.md](./quickstart.md) (Wischgeste, Lightbox-Gesten, fremde Programme)
 
 **Target Platform**: Tauri-Desktop (Linux, macOS, Windows); Wisch- und Langdruck-Bedienung
@@ -90,9 +92,9 @@ Abfrage oder Fenstertitel; ein aufgelöster Verweis nie im Verlauf, nie in Liste
 Passkey-Schlüssel in einer Antwort; keine `unwrap`/`expect` auf Eingabedaten; Aufrufer nie
 als Command-Argument; die Grammatik der Verweise genau einmal (Rust)
 
-**Scale/Scope**: 2 Tabellen, 7 neue und 6 geänderte Commands, 3 Dienstmethoden ohne
-Command, rund 8 neue Rust-Dateien (dazu Tests), rund 14 neue Vue-Komponenten, 6 reine
-TS-Module, 6 Prüfskripte, 3 Rust-Integrationstests, 2 neue End-to-End-Szenen
+**Scale/Scope**: 2 Tabellen, 6 neue und 10 geänderte Commands, 3 Dienstmethoden ohne
+Command, rund 16 neue Rust-Dateien (dazu Tests), rund 18 neue Vue-Komponenten, 5 neue reine
+TS-Module, 6 Prüfskripte, 3 Rust-Integrationstests, 5 neue End-to-End-Szenen
 
 ## Constitution Check
 
@@ -168,13 +170,14 @@ src-tauri/src/
 │   ├── passkeys_ops.rs, passkeys_ops_tests.rs  # create/confirm/list gegen die Datenbank           [neu]
 │   ├── passkey_counters.rs                     # wirksamer Zähler, Zeile je Gerät                  [neu]
 │   ├── passkey_links.rs                        # Verbindungen (Ziel/Quelle)                        [neu]
+│   ├── model_references.rs, model_passkeys.rs  # RefMark, ReferenceUsage, PasskeyHeader (ts-rs)    [neu]
 │   ├── service/copy.rs, service/references.rs  # nur Nutzer: copy, parse, token, usage, key_names  [neu]
 │   ├── service/passkeys.rs                     # + create, confirm, list, unlink                    [ändern]
 │   ├── commands/copy.rs, commands/references.rs# Tauri-Hüllen                                       [neu]
 │   ├── reveal.rs                               # löst Platzhalter auf                               [ändern]
 │   ├── items.rs                                # Kreisprüfung beim Speichern, headers_in_scope      [ändern, klein]
 │   ├── trash.rs                                # purge: Zähler und Verbindungen zuerst              [ändern, klein]
-│   └── import/references.rs, references_tests.rs, keepass.rs (source_ref), apply.rs (2. Durchgang) [neu / ändern]
+│   └── import/references.rs, references_tests.rs, apply_references.rs (2. Durchgang), keepass.rs (source_ref) [neu / ändern]
 ├── identity/migrations_passwords_refs.rs       # 0024: zwei Tabellen                                [neu]
 ├── identity/migrations.rs                      # Registrierung, Triggerversion 16                   [ändern]
 ├── Cargo.toml                                  # ciborium, psl, url                                 [ändern]
@@ -183,13 +186,15 @@ src-tauri/src/
 src/
 ├── lib/passwords/
 │   ├── menus.ts, shortcuts.ts, breadcrumb.ts   # reine Bausteine (Node-Tests)                       [neu]
+│   ├── clipboard.ts                            # Ablage: Zustandsmaschine, Kreis- und Fehlprüfung   [neu]
 │   ├── thumbnails.ts                           # Vorschaubilder (LRU, Verkleinern)                  [neu]
 │   ├── registry.ts                             # Abfrageschlüssel `tab`                             [ändern]
 │   └── search.ts                               # Platzhalter wegfalten                              [ändern]
 ├── stores/passwordsClipboard.ts                # Ablage                                             [neu]
 ├── composables/usePasswords.ts                 # + copy, references_*, usage, unlink                [ändern]
+├── composables/usePasswordsActions.ts          # eine Handler-Menge für Leiste, Menü und Kürzel     [neu]
 ├── components/passwords/
-│   ├── EntryTabs.vue, ViewDetails.vue, ViewExtra.vue, EditorDetails.vue, EditorExtra.vue            [neu]
+│   ├── EntryTabs.vue, EntryTabsSwiper.vue, ViewDetails.vue, ViewExtra.vue, EditorDetails.vue, EditorExtra.vue [neu]
 │   ├── HistoryTimeline.vue, HistorySnapshot.vue                                                     [neu; HistoryView.vue entfällt]
 │   ├── Breadcrumbs.vue, SelectionBar.vue (ersetzt SelectionToolbar.vue), EntryMenu.vue, ClipboardBar.vue [neu / ersetzt]
 │   ├── CopyDialog.vue, ReferenceValue.vue, ReferencePicker.vue, ReferenceUsageDialog.vue            [neu]
@@ -201,8 +206,8 @@ src/
 └── types/bindings/*.ts                         # ts-rs                                              [generiert]
 
 scripts/
-├── check-passwords-menus.ts, -shortcuts.ts, -breadcrumb.ts, -clipboard.ts, -tabs.ts                 [neu]
-└── e2e/scenarios/passwords-organize.test.ts, passwords-tabs.test.ts, lib/passwords.ts (+ Hilfen)    [neu / ändern]
+├── check-passwords-menus.ts, -shortcuts.ts, -breadcrumb.ts, -clipboard.ts, -tabs.ts, -thumbnails.ts [neu]
+└── e2e/scenarios/passwords-{tabs,organize,references,passkeys,attachments}.test.ts, lib/passwords.ts (+ Hilfen) [neu / ändern]
 
 docs/adr/0009-references-resolved-in-service-and-passkey-service.md                                  [neu]
 package.json                                    # swiper, photoswipe                                 [ändern]
@@ -230,6 +235,8 @@ Commands; kein Teil der Grammatik liegt im Frontend.
 - RS256-Passkeys erscheinen, werden aber nicht bestätigt (R8); `rsa` ist nur ein
   Release-Kandidat.
 - Beglaubigung `none`; Gegenstellen, die eine Beglaubigung verlangen, werden nicht bedient (R8).
+- Kein UV-Flag (kein Mensch bestätigt); Gegenstellen mit `userVerification: "required"` lehnen
+  ab (R8).
 - Marken der Verweise stehen unter dem Feld, nicht im Text (R11).
 - Vorschaubilder entstehen im Webview aus den vollen Bytes, höchstens zwei zugleich (R14).
 - Die Wischgeste ist nur manuell geprüft (WebKit-Webview unter Linux und Android, R1, R17).

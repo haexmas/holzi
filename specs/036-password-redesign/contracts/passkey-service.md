@@ -6,7 +6,8 @@ Drei Methoden von `PasswordsService` (`service/passkeys.rs`), Muster wie `read_s
 `pub async fn m(&self, caller: &Caller, grants: &[Grant], …)`. Es gibt **keine Tauri-Commands**
 dafür (FR-023). Der Aufrufer ergibt sich aus dem Eingang, nie aus einem Argument. Die
 Oberfläche des Nutzers benutzt weiter `passwords_passkey_rename` und `passwords_passkey_delete`
-(nur `Caller::User`, FR-033) und die neue Verbindungsfunktion `passwords_passkey_unlink`.
+(nur `Caller::User`, FR-033, beide unverändert aus 034) und den neuen Command
+`passwords_passkey_unlink` für Verbindungen.
 
 Alle Binärfelder sind Base64URL ohne Auffüllung (WebAuthn). Fehler tragen eine Art (`kind`),
 nie lokalisierten Text, nie einen Schlüssel.
@@ -23,11 +24,11 @@ errors:   Forbidden | NotFound | InvalidInput{field} | OriginMismatch | Unsuppor
 ```
 
 - **Berechtigung** (FR-031): `authorize_update` für `itemId` mit Art „Lesen und Schreiben“, der
-  Eintrag muss im Bereich liegen. Kein Eintrag (`itemId` fehlt oder gehört nicht zum Bereich):
+  Eintrag muss im Bereich liegen. Ein `itemId` außerhalb des Bereichs (oder ohne Eintrag):
   `NotFound` für Aufrufer mit Freigabe, `Forbidden` ohne. Der eingebaute Agent hat nie Zugriff
   (`reach()` → `Forbidden`).
-- **Pflicht**: `rpId`, `rpName`, `userHandle`, `userName`, `challenge`, `origin` (sonst
-  `InvalidInput`).
+- **Pflicht**: `itemId`, `rpId`, `rpName`, `userHandle`, `userName`, `challenge`, `origin`
+  (sonst `InvalidInput{field}`, FR-024).
 - **Herkunft**: `origin_matches(origin, rpId)` (R9) sonst `OriginMismatch`.
 - **Ausgeschlossene**: existiert ein Passkey der Gegenstelle mit einer Kennung aus
   `excludeCredentials` in einem für den Aufrufer **sichtbaren** Eintrag →
@@ -56,6 +57,11 @@ errors:   Forbidden | NotFound | OriginMismatch | UnsupportedAlgorithm | ChoiceR
   `allowCredentials` nur diese Kennungen, sonst nur `is_discoverable`; bei `itemId` nur dieser
   Eintrag; **Passkeys per Verbindung** zählen über das Ziel mit, wenn Ziel **und** Quelle
   lesbar sind (FR-047). Passkeys ohne Eintrag zählen nie.
+- **Ein Passkey ist ein Kandidat**, auch wenn er über mehrere Wege lesbar ist: Die Kandidaten
+  werden nach Passkey (`id`) zusammengefasst, bevor gezählt wird; als `itemId` der Antwort gilt
+  der eigene Eintrag, wenn er lesbar ist, sonst das erste lesbare Ziel. Ohne das gäbe derselbe
+  Passkey über seinen Eintrag und eine Verbindung zwei Kandidaten, und `ChoiceRequired` käme
+  auch mit seiner Kennung in `allowCredentials` immer wieder.
 - Kein Kandidat: `NotFound` (mit Freigabe) beziehungsweise `Forbidden` (ohne), nie ein Hinweis
   auf Passkeys außerhalb des Bereichs. Mehr als einer: `ChoiceRequired` mit den Kopfdaten; der
   Aufrufer wiederholt mit der Kennung in `allowCredentials`.
@@ -66,7 +72,8 @@ errors:   Forbidden | NotFound | OriginMismatch | UnsupportedAlgorithm | ChoiceR
   wird nichts zurückgegeben.
 - **Signatur**: über `authenticatorData ‖ SHA-256(clientDataJson)`; ES256 als DER-ECDSA (P-256,
   SHA-256), EdDSA als 64 Byte. `authenticatorData` = `SHA-256(rpId)` ‖ Flags `0x19` (UP, BE,
-  BS) ‖ Zähler (4 Byte, Big Endian). `clientDataJson` =
+  BS) ‖ Zähler (4 Byte, Big Endian). UV (`0x04`) steht weder hier noch beim Anlegen: kein
+  Mensch bestätigt die Anfrage (R8). `clientDataJson` =
   `{"type":"webauthn.get","challenge":…,"origin":…,"crossOrigin":false}`.
 - RS256 (importiert) → `UnsupportedAlgorithm` (FR-034); der Zähler steigt dabei nicht.
 
@@ -80,14 +87,18 @@ errors:   Forbidden
 ```
 
 Nur Passkeys an **lesbaren** Einträgen (Ziele per Verbindung zählen mit Ziel und Quelle),
-sonst gar nicht (kein Hinweis, FR-029); Passkeys ohne Eintrag und im Papierkorb nie, außer
-für den Nutzer in der Oberfläche (die über `get_item` liest). **Nie** ein Schlüssel.
+sonst gar nicht (kein Hinweis, FR-029); Passkeys im Papierkorb und ohne Eintrag nie. Die
+Oberfläche des Nutzers liest Passkeys nicht hier, sondern je Eintrag über `get_item` (dort
+erscheinen Passkeys im Papierkorb mit ihrem Eintrag; solche ohne Eintrag nirgends). **Nie**
+ein Schlüssel.
 
 ## Zusätzliche Funktion für die Oberfläche
 
 `passwords_passkey_unlink` (`{ itemId, passkeyId }`, nur Nutzer): löscht eine Verbindung
-(„Verweis lösen“), nicht den Passkey. `passwords_passkey_delete` löscht bei einer Verbindung
-**nur** die Verbindung; den Passkey löscht der Nutzer an dessen eigenem Eintrag.
+(„Verweis lösen“), nicht den Passkey. `passwords_passkey_delete` bleibt wie in 034
+(`{ passkeyId }`) und löscht immer den Passkey selbst samt seinen Zählern und Verbindungen; die
+Oberfläche bietet es nur am eigenen Eintrag des Passkeys an. Eine Verbindung über
+`passkey_delete` zu lösen ginge nicht: `passkeyId` allein sagt nicht, welches Ziel gemeint ist.
 
 ## Tests (Rust, `passkeys_ops_tests.rs`, `webauthn_tests.rs`, `src-tauri/tests/passwords_passkeys.rs`)
 
@@ -96,6 +107,9 @@ für den Nutzer in der Oberfläche (die über `get_item` liest). **Nie** ein Sch
 - Zwei Geräte: je ein Bestätigen, Sync, danach hat jedes Gerät einen wirksamen Zähler ≥ dem
   höchsten gesendeten; kein Gerät sieht den Wert sinken (`passwords_sync.rs`).
 - Herkunft: `evil.com` für `example.com`, `com` als `rpId`, `co.uk`, Unterdomäne, `localhost`
-  mit `http`, IDNA, Port; alles ohne Signatur und ohne Zähleränderung.
+  mit `http`, eine IP-Adresse als `rpId` (abgelehnt), IDNA, Port; jede Ablehnung ohne Signatur
+  und ohne Zähleränderung.
+- Verbindung: ein Passkey, der über seinen Eintrag und eine Verbindung lesbar ist, ist **ein**
+  Kandidat (kein `ChoiceRequired`).
 - Bereich: Tag A sieht und bestätigt nur Passkeys an Einträgen mit Tag A; Papierkorb,
   Verbindung (Quelle außerhalb → nicht vorhanden), Passkey ohne Eintrag, eingebauter Agent.

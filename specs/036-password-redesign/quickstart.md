@@ -28,12 +28,17 @@ nix develop --command sh -c '
 Rust (nacheinander, jedes für sich):
 
 ```sh
-for t in references webauthn copy passkeys_ops import::references; do
+for t in passwords::references passwords::webauthn passwords::copy passwords::passkeys_ops \
+         passwords::passkey_counters passwords::passkey_links passwords::import::references \
+         passwords::trash identity::migrations; do
   CARGO_BUILD_JOBS=4 scripts/with-nix-host-bridge.sh cargo test -j 4 \
-    --manifest-path src-tauri/Cargo.toml --lib passwords::$t
+    --manifest-path src-tauri/Cargo.toml --lib $t
 done
-CARGO_BUILD_JOBS=4 scripts/with-nix-host-bridge.sh cargo test -j 4 --manifest-path src-tauri/Cargo.toml \
-  --test passwords_references --test passwords_copy --test passwords_passkeys --test passwords_sync
+for t in passwords_references passwords_copy passwords_passkeys passwords_sync passwords_import \
+         vault_upgrade; do
+  CARGO_BUILD_JOBS=4 scripts/with-nix-host-bridge.sh cargo test -j 4 \
+    --manifest-path src-tauri/Cargo.toml --test $t
+done
 scripts/with-nix-host-bridge.sh cargo fmt --manifest-path src-tauri/Cargo.toml --check
 pnpm lint:rust
 pnpm generate:ts-types   # danach git diff src/types/bindings muss leer sein
@@ -49,13 +54,15 @@ und die Herkunftsfälle (SC-005, SC-007); `passwords_references` die Vektoren au
 CARGO_BUILD_JOBS=4 CARGO_TARGET_DIR=$PWD/src-tauri/target/e2e-build nix develop --command \
   scripts/with-nix-host-bridge.sh pnpm tauri build --debug --no-bundle
 for s in passwords-basic passwords-narrow-window passwords-session-restore \
-         passwords-sync-two-devices passwords-organize passwords-tabs; do
+         passwords-sync-two-devices passwords-tabs passwords-organize passwords-references \
+         passwords-passkeys passwords-attachments; do
   nix develop --command pnpm test:e2e --app $PWD/src-tauri/target/e2e-build/debug/holzi --grep $s
 done
 ```
 
-(Je Szenario ein `--grep`, ohne `|`.) Erwartung: die vier vorhandenen unverändert grün
-(SC-010); `passwords-organize` und `passwords-tabs` grün.
+(Je Szenario ein `--grep`, ohne `|`.) Erwartung: die vier vorhandenen grün (SC-010;
+`passwords-narrow-window` und `passwords-session-restore` sind um die Tabs erweitert), die fünf
+neuen grün.
 
 ## 3. Von Hand (`pnpm tauri:dev` in `nix develop`)
 

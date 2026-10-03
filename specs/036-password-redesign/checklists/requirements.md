@@ -31,10 +31,11 @@
 
 ## Notes
 
-- Keine Klärungsmarker: Entscheidungen mit Spielraum stehen in „Assumptions“ und sind
-  Kandidaten für `/speckit-clarify`: Ablage prozessweit oder je Fenster (FR-021), Titel
-  kopierter Einträge, Anhänge mitkopieren, welche Aufrufer Passkeys anlegen und bestätigen
-  dürfen (FR-031, FR-032), eigenständige Passkeys nur im Bereich „alle“ (FR-030), Zuordnen und
-  Lösen von Passkeys in der Oberfläche (FR-029), Verlauf nicht wählbar im Bearbeiten (FR-008).
+- Keine Klärungsmarker. Die Fragen mit Spielraum (Ablage prozessweit oder je Fenster,
+  Inhalt und Titel einer Kopie, Verweise, welche Aufrufer Passkeys anlegen und bestätigen
+  dürfen, eigenständige Passkeys) sind in der Sitzung vom 2026-10-03 geklärt (Abschnitt
+  „Clarifications“ der Spec): ein Passkey gehört immer zu einem Eintrag, eigenständige
+  Passkeys sowie Zuordnen und Lösen in der Oberfläche entfallen. Offen als Annahme bleibt nur
+  „Verlauf nicht wählbar im Bearbeiten“ (FR-008).
 - Die Begriffe Credential-ID, Gegenstelle (Relying Party), Herkunft und Zähler sind
   Fachbegriffe der Passkey-Welt, keine Umsetzungsdetails.

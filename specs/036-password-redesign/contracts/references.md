@@ -38,7 +38,10 @@ Beispiele:
 ## Auflösen
 
 `references::resolve(q, ctx, text) -> Result<String, ReferenceError>`; `ctx` trägt den
-Aufrufer, dessen Freigaben (`Caller`, `Grant[]`), die besuchten (Eintrag, Wert) und die Stufe.
+Aufrufer, dessen Freigaben (`Caller`, `Grant[]`), die **aktuelle Kette** der (Eintrag, Wert)
+vom gelesenen Feld bis hierher und die Stufe. Die Kette ist ein Stapel, keine Menge über den
+ganzen Aufruf: Derselbe Wert zweimal nebeneinander (`{$A:password}-{$A:password}`) ist kein
+Kreis.
 
 1. Platzhalter von links nach rechts finden; Text dazwischen bleibt.
 2. Für jeden: Quelle laden (`items::item_state`). **Sichtbarkeit** prüfen (`access::visible`
@@ -48,7 +51,8 @@ Aufrufer, dessen Freigaben (`Caller`, `Grant[]`), die besuchten (Eintrag, Wert) 
 3. Rohwert der Quelle lesen (`username`, `password` oder der Wert des eigenen Felds).
    Fehlt das eigene Feld: `Err(Missing)`.
 4. Enthält der Rohwert Platzhalter, mit `stufe + 1` rekursiv auflösen. Stufe 12 überschritten:
-   `Err(TooDeep)`. (Eintrag, Wert) schon besucht: `Err(Cycle)`.
+   `Err(TooDeep)`. (Eintrag, Wert) steht schon in der Kette (auch das gelesene Feld selbst):
+   `Err(Cycle)`. Nach dem Teil wird er wieder von der Kette genommen.
 5. Ersetzen. **Das Ergebnis eines Teils ist nie leer, weil ein Fehler war**; ein einzelner
    Fehler macht das ganze Feld zum Fehler (kein Teilergebnis).
 
@@ -59,15 +63,19 @@ als Text** (FR-045), sie melden den Fehler (Fehlerart `ReferenceError { kind }`)
 ## Speichern
 
 `references::validate(q, item_id, field_texts)` läuft in `create_item` und `update_item`
-(und im Kopieren, R7): findet für jeden neuen Platzhalter eine Tiefensuche (höchstens 12
-Stufen) einen Weg, der wieder auf **diesen** Eintrag trifft, lehnt es mit
-`ReferenceCycle { source_item_id }` ab. Einen Verweis auf einen nicht vorhandenen Eintrag
+(und im Kopieren, R7): findet für einen Platzhalter eine Tiefensuche (höchstens 12 Stufen)
+einen Weg, der wieder auf **dasselbe Feld** dieses Eintrags trifft, lehnt es mit
+`ReferenceCycle { source_item_id }` ab. Die Prüfung arbeitet auf (Eintrag, Wert) wie das
+Auflösen, nicht auf ganzen Einträgen: `password = {$<selbst>:extra:PIN}` ist erlaubt, nur
+`password = {$<selbst>:password}` oder ein Weg zurück zum Passwort nicht. Für den eigenen
+Eintrag gelten dabei die **neuen** Texte aus `field_texts`, nicht die gespeicherten. Einen Verweis auf einen nicht vorhandenen Eintrag
 lässt es zu (er kann per Sync ankommen) und kennzeichnet ihn (`status: missing`).
 
 ## Listen und Aufrufer von außen
 
-- `headers_in_scope` (Aufrufer von außen): Felder `username` und `url`, deren Wert `{$`
-  enthält, sind **leer** (FR-047). `read_secret_item` löst auf (Schritt 2 prüft die Quelle);
+- `headers_in_scope` (Aufrufer von außen): Felder `username` und `url`, deren Wert einen
+  Platzhalter enthält (`references::find`, nicht bloß die Zeichenfolge `{$`), sind **leer**
+  (FR-047). `read_secret_item` löst auf (Schritt 2 prüft die Quelle);
   ein Feld mit Fehler fehlt in der Antwort.
 - `load_overview` (Nutzer): roh; die Oberfläche zeigt Marken (`passwords_references_parse`).
 - `agent_headers` (eingebauter Agent): kennt weder Benutzername noch Adresse (034 FR-027),
@@ -90,16 +98,18 @@ Wiederherstellen gilt der Platzhalter wieder; fehlt die Quelle, meldet holzi es
 
 ## KeePass-Import (R13)
 
-`{REF:<Feld>@<Suche>:<Text>}` (KeePass): Feld `U` → `username`, `P` → `password`; Suche `I`
-mit 32 Hex-Zeichen = Kennung der Quelle in der Datei; `T`, `U`, `P`, `A`, `N`, `O` = Text im
-Titel, Benutzernamen, Passwort, der Adresse, den Notizen, einem eigenen Feld, **genau ein**
-Treffer in der Datei. Andere Felder (T, A, N, I, O) und alles ohne eindeutigen Treffer
-bleiben Text.
+`{REF:<Feld>@<Suche>:<Text>}` (KeePass): gewünschtes Feld `U` → `username`, `P` →
+`password`; Suche `I` mit 32 Hex-Zeichen = Kennung der Quelle in der Datei; Suche `T`, `U`,
+`P`, `A`, `N`, `O` = Text im Titel, Benutzernamen, Passwort, der Adresse, den Notizen, einem
+eigenen Feld, **genau ein** Treffer in der Datei. Ein anderes gewünschtes Feld (`T`, `A`, `N`,
+`I`) und alles ohne eindeutigen Treffer bleiben Text.
 
 ## Testvektoren
 
 Die Datei `src-tauri/tests/fixtures/reference_vectors.json` (beim Bau anzulegen) hält die
-Beispiele oben und weitere (Kette der Tiefe 12, Kreis A→B→A, Kreis A→A, Quelle fehlt,
-Quelle im Papierkorb, Schlüssel mit `}` und `\`, Text ohne Platzhalter, `{$` am Ende).
+Beispiele oben und weitere (Kette der Tiefe 12, Kreis A→B→A, Kreis A→A, derselbe Platzhalter
+zweimal in einem Wert (kein Kreis), Verweis auf ein anderes Feld desselben Eintrags (kein
+Kreis), Quelle fehlt, Quelle im Papierkorb, Schlüssel mit `}` und `\`, Text ohne
+Platzhalter, `{$` am Ende).
 Die Rust-Tests (`references_tests.rs`) lesen sie; das Frontend hat **keine** Kopie der
 Grammatik und braucht keine (R11).

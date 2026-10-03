@@ -12,8 +12,9 @@ WebKit-Webview unter Linux und Android; das prüft der manuelle Quickstart (R1).
 
 ## R1 — Tab-Wischgeste: Swiper
 
-**Entscheidung**: `swiper` 14 (MIT, nur `swiper/vue` und das Modul `Keyboard` entfällt, siehe
-unten) im Wrapper `EntryTabs.vue`. Die Tab-Leiste bleibt `ShadcnTabs` (reka-ui) mit
+**Entscheidung**: `swiper` 14 (MIT; eingebunden wird nur `swiper/vue`, ohne das Modul
+`Keyboard`, weil die Pfeiltasten der Tab-Leiste von reka-ui kommen, siehe unten) im Wrapper
+`EntryTabs.vue`. Die Tab-Leiste bleibt `ShadcnTabs` (reka-ui) mit
 `TabsTrigger`; die Wischfläche ist ein `Swiper` mit drei Folien, beide über denselben
 Zustand (`activeTab`) gekoppelt: Tippen auf einen Trigger ruft `slideTo`, ein Wisch setzt
 `activeTab` aus `activeIndex`. Einstellungen:
@@ -75,8 +76,8 @@ Hook-Punkte (vom Rust-Bericht belegt):
 - `reveal.rs`: `reveal`, `copy_value`, `secret_item` lösen auf, bevor sie ausliefern;
   `totp_code` nicht (das TOTP-Secret ist kein Verweisfeld, FR-044).
 - Listen: `items::load_headers` bleibt roh (die Oberfläche zeigt die Marke);
-  `headers_in_scope` (Aufrufer von außen) leert ein Feld, dessen Wert `{$` enthält
-  (FR-047). Die Kennzahl „hat Passwort“ zählt einen Verweis als Passwort.
+  `headers_in_scope` (Aufrufer von außen) leert ein Feld, dessen Wert einen Platzhalter
+  enthält (`references::find`, FR-047). Die Kennzahl „hat Passwort“ zählt einen Verweis als Passwort.
 - Verlauf: `snapshots.rs` kopiert rohe Spalten, FR-049 gilt ohne Änderung.
 - Schreiben: `create_item` und `update_item` rufen die Kreisprüfung (R4).
 
@@ -90,12 +91,15 @@ ausdrückbar); Auflösen im Frontend (Geheimnisse blieben nicht im Backend, FR-0
 ## R4 — Tiefe, Kreise, Ketten
 
 **Entscheidung**: Die Auflösung verfolgt Ketten bis zu **12 Stufen** (`MAX_REFERENCE_DEPTH`).
-Einen Kreis erkennt sie durch die Menge der besuchten (Eintrag, Feld); sie liefert dann
-`ReferenceError::Cycle`, bei Stufe 13 `ReferenceError::TooDeep`, bei fehlender Quelle
-`Missing`, bei Quelle außerhalb des Bereichs `NotVisible` (äußerlich nicht von `Missing` zu
-unterscheiden, FR-047). **Nie** leerer Text. Beim Speichern prüft `references::validate`,
-dass die neuen Platzhalter keinen Weg zurück zum gespeicherten Eintrag eröffnen (Tiefensuche
-ab jeder Quelle, höchstens 12 Stufen); sonst `ReferenceCycle`.
+Einen Kreis erkennt sie an der aktuellen Kette der (Eintrag, Feld) vom gelesenen Feld bis zur
+Stufe (ein Stapel, keine Menge über den ganzen Aufruf, sonst wäre derselbe Verweis zweimal in
+einem Wert ein falscher Kreis); sie liefert dann `ReferenceError::Cycle`, bei Stufe 13
+`ReferenceError::TooDeep`, bei fehlender Quelle und bei einer Quelle außerhalb des Bereichs
+`Missing` (eine eigene Art gibt es dafür nicht, damit beides von außen gleich aussieht,
+FR-047). **Nie** leerer Text. Beim Speichern prüft `references::validate`, dass die neuen
+Platzhalter keinen Weg zurück zum selben Feld des gespeicherten Eintrags eröffnen (Tiefensuche
+ab jeder Quelle, höchstens 12 Stufen); sonst `ReferenceCycle`. Ein Verweis auf ein anderes Feld
+desselben Eintrags ist kein Kreis.
 
 KeePass (`KeePass/Util/Spr/SprEngine.cs`, GitHub-Mirror `dlech/KeePass2.x`) geht so vor:
 `MaxRecursionDepth = 12`, jede verschachtelte Auflösung ruft `CompileInternal` mit
@@ -189,7 +193,10 @@ heute nur `0.10.0-rc` in den Dev-Abhängigkeiten ist. Beglaubigung `none` (`fmt:
 leerer `attStmt`). `clientDataJSON` baut der Dienst selbst aus Typ, Aufgabe und Herkunft
 (deterministisch) und gibt es zurück; so kann der Aufrufer Herkunft und Aufgabe nicht
 auseinanderfallen lassen. Flags der Authenticator-Daten: UP (0x01), BE (0x08), BS (0x10),
-beim Anlegen zusätzlich AT (0x40); BE und BS stehen, weil der Passkey synchronisiert wird.
+beim Anlegen zusätzlich AT (0x40); BE und BS stehen, weil der Passkey synchronisiert wird. UV
+(0x04) steht nie, weil kein Mensch die Anfrage bestätigt; eine Gegenstelle, die
+`userVerification: "required"` verlangt, lehnt die Antwort ab (bewusste Grenze, bis die
+External Bridge eine Bestätigung durch den Nutzer bringt).
 Neue Abhängigkeiten: `ciborium` (CBOR für COSE-Schlüssel und Beglaubigung, nicht im
 `Cargo.lock`), `psl` (öffentliche Suffixe, R9) und `url` (steht transitiv im Lock; jetzt
 direkt).
@@ -205,8 +212,9 @@ RS256 jetzt (Release-Kandidat-Crate in Produktion, und holzi legt keine RSA-Pass
 ## R9 — Herkunftsprüfung (FR-025)
 
 **Entscheidung**: Reine Funktion `origin_matches(origin, rp_id)` in `webauthn.rs`: `origin`
-parsen (`url::Url`), Schema `https` (oder `http` bei `localhost` und `127.0.0.1`), Host nach
-IDNA in Kleinbuchstaben; `rp_id` ebenso; erlaubt, wenn Host == `rp_id` oder Host endet auf
+parsen (`url::Url`), Schema `https` (oder `http` bei `localhost`), Host nach IDNA in
+Kleinbuchstaben; `rp_id` ebenso; eine IP-Adresse als Host oder `rp_id` wird abgelehnt (eine
+RP-ID ist nach WebAuthn ein Domänenname); erlaubt, wenn Host == `rp_id` oder Host endet auf
 `.` + `rp_id`, **und** `rp_id` kein öffentliches Suffix ist (`psl::suffix(rp_id)` ist der
 ganze String; `localhost` ausgenommen). Das schließt `rp_id = "com"` und `"co.uk"` aus, auch
 wenn die Herkunft darauf endet.
@@ -226,7 +234,8 @@ Liste wird mit einer Cargo-Aktualisierung erneuert.
 
 - **Ablage**: Pinia-Store `stores/passwordsClipboard.ts` (Kennungen und Art `cut`/`copy`, im
   Speicher, nicht in Sitzung, Sync oder Betriebssystem-Zwischenablage). Alle Fenster teilen
-  den Webview und damit den Store (FR-021); `PasswordsApp.vue` zählt seine Instanzen und
+  heute den Webview und damit den Store (FR-021); native Fenster gibt es noch nicht (020 bereitet
+  sie nur vor). Kommen sie, braucht die Ablage einen geteilten Zustand außerhalb des Webviews; `PasswordsApp.vue` zählt seine Instanzen und
   leert die Ablage, wenn die letzte geschlossen wird; ein Wechsel der Vault leert sie über
   den vorhandenen Abmelde-Pfad (`passwords.reset`).
 - **Menüs**: ein reiner Baustein `lib/passwords/menus.ts` liefert aus (Art, Papierkorb, Ablage
@@ -277,8 +286,9 @@ Ein Rich-Text-Eingabefeld mit Marken im Text wäre groß und fehleranfällig.
 
 **Entscheidung**: Vor dem endgültigen Löschen fragt das Frontend
 `passwords_reference_usage(item_ids)` (Zahl der Ziele je Quelle, getrennt in Textverweise und
-Passkey-Verbindungen; reine Abfrage `LIKE '%{$<id>:%'` über die fünf Textspalten und die
-Wertspalte der eigenen Felder, plus `passkey_links`); bei Treffern zeigt der Dialog die Zahl
+Passkey-Verbindungen; reine Abfrage `LIKE '%{$<id>:%'` über die vier Textspalten der Details
+(`username`, `password`, `url`, `note`) und die Wertspalte der eigenen Felder, plus
+`passkey_links`); bei Treffern zeigt der Dialog die Zahl
 und die Wahl „Verweise in eigene Werte umwandeln“. `passwords_delete_permanently` bekommt den
 Parameter `inline_references: bool`: dann ersetzt die Transaktion zuerst jeden Platzhalter
 durch den heutigen Wert (aufgelöst mit den Rechten des Nutzers), nimmt je Ziel einen neuen
@@ -367,8 +377,10 @@ Integration in `src-tauri/tests/` (`passwords_passkeys.rs`, `passwords_reference
 `check-passwords-menus.ts`, `-shortcuts.ts`, `-breadcrumb.ts`, `-clipboard.ts`,
 `-tabs.ts` (Registry); e2e `passwords-organize` (Auswahl, Ausschneiden, Kopieren mit Dialog,
 Brotkrumen, Kontextmenü, Kürzel), `passwords-tabs` (Tabs per Tippen und Pfeiltaste, Verlauf,
-Wiederherstellen, Verweise anlegen und ändern), `passwords-two-devices` erweitert um den
-Zähler. Wischgeste und Lightbox-Gesten sind **nur manuell** (Quickstart): der e2e-Rahmen
+Wiederherstellen), `passwords-references` (Verweise anlegen, ändern, Quelle löschen),
+`passwords-passkeys` (Passkeys im Tab Extra, Kopie per Verbindung, „Verweis lösen“),
+`passwords-attachments` (Karten und Lightbox per Tastatur); der Zähler zweier Geräte steht im
+Rust-Test `passwords_sync.rs`, `passwords-sync-two-devices` bleibt unverändert. Wischgeste und Lightbox-Gesten sind **nur manuell** (Quickstart): der e2e-Rahmen
 (tauri-driver, WebKitWebDriver) hat keine verlässlichen Berührungsgesten, und die
 Dateidialoge für Anhänge sind nativ (wie in 034 SC-012, dort schon ausgenommen).
 

@@ -34,9 +34,9 @@ Browser-Erweiterung) ist nicht Teil dieser Spec. Referenz: haex-vault @
 - [`015-workspace-shell`](../015-workspace-shell/spec.md): Tastaturkürzel der Liste gelten
   nur im Passwortmanager-Fenster und kollidieren nicht mit den Kürzeln des Window Managers
   (wm).
-- Geplante Specs **017–019 (haextensions)** und **021 (MCP-Server)**: Sie vergeben die
-  Freigaben; diese Spec legt fest, was eine Freigabe für Passkeys bedeutet (FR-030 bis
-  FR-036).
+- Specs **017–019 (haextensions)**, 017 im Bau, und die geplante Spec **021 (MCP-Server)**:
+  Sie vergeben die Freigaben; diese Spec legt fest, was eine Freigabe für Passkeys bedeutet
+  (FR-030 bis FR-036).
 
 ## Clarifications
 
@@ -185,7 +185,11 @@ Unterordner versuchen.
 3. **Given** zwei markierte Einträge, **When** der Nutzer „Ausschneiden“ wählt, in einen
    anderen Ordner geht und „Einfügen“ wählt, **Then** liegen die Einträge dort und nicht mehr
    im alten Ordner; die Ablage ist leer.
-4. **Given** ein markierter Ordner mit Unterordnern und Einträgen, **When** der Nutzer „Kopieren“ und im Zielordner „Einfügen“ wählt, **Then** erscheint der Kopier-Dialog (FR-015), und nach dem Bestätigen gibt es dort eine Kopie des Ordners mit allen Unterordnern und Einträgen; das Original bleibt unverändert, die Ablage bleibt gefüllt (mehrfaches Einfügen ist möglich). Bricht der Nutzer den Dialog ab, entsteht nichts.
+4. **Given** ein markierter Ordner mit Unterordnern und Einträgen, **When** der Nutzer
+   „Kopieren“ und im Zielordner „Einfügen“ wählt, **Then** erscheint der Kopier-Dialog
+   (FR-015), und nach dem Bestätigen gibt es dort eine Kopie des Ordners mit allen
+   Unterordnern und Einträgen; das Original bleibt unverändert, die Ablage bleibt gefüllt
+   (mehrfaches Einfügen ist möglich). Bricht der Nutzer den Dialog ab, entsteht nichts.
 5. **Given** ein ausgeschnittener Ordner, **When** der Nutzer ihn in sich selbst oder einen
    seiner Unterordner einfügen will, **Then** lehnt holzi ab, nennt den Grund, verschiebt
    nichts und lässt die Ablage gefüllt.
@@ -249,9 +253,10 @@ Dienst Funktionen, mit denen ein berechtigter Aufrufer einen Passkey **anlegt** 
 das Schlüsselpaar), eine Anmeldung **bestätigt** (holzi signiert die Aufgabe der Gegenstelle
 mit dem privaten Schlüssel, der Schlüssel verlässt den Dienst nie) und Passkeys **auflistet**.
 Aufrufer sind die haextensions, externe Agenten über MCP und später die External Bridge,
-nicht ein Mensch an der Oberfläche. Ein Passkey ist immer Teil eines gewöhnlichen Eintrags; wer für ein Tag dieses
-Eintrags freigegeben ist, sieht den Eintrag samt seinen Passkeys und kann sie benutzen. Der
-Nutzer sieht und verwaltet die Passkeys eines Eintrags in dessen Tab Extra.
+nicht ein Mensch an der Oberfläche. Ein Passkey ist immer Teil eines gewöhnlichen Eintrags;
+wer für ein Tag dieses Eintrags freigegeben ist, sieht den Eintrag samt seinen Passkeys und
+kann sie benutzen. Der Nutzer sieht und verwaltet die Passkeys eines Eintrags in dessen Tab
+Extra.
 
 **Why this priority**: Ohne diese Funktionen kann die External Bridge später nichts tun, und
 für den Alltag ist es nachrangig, weil es noch keine Browser-Anbindung gibt.
@@ -345,8 +350,8 @@ stattdessen per Verbindung zur Quelle verwiesen.
 **Why this priority**: Der Kopier-Dialog bietet es an, und es ist das eine einheitliche System
 für alle Verweise zwischen Einträgen. Ohne Verweise bleibt alles andere benutzbar.
 
-**Independent Test**: Eine KeePass-Datei mit einem Verweis auf ein Passwort importieren, einen Eintrag mit Benutzername, Passwort, einem eigenen Feld „PIN“ und
-einem Passkey kopieren und dabei das Passwort als Verweis wählen, das Passwort in der Quelle
+**Independent Test**: Eine KeePass-Datei mit einem Verweis auf ein Passwort importieren, einen
+Eintrag mit Benutzername, Passwort, einem eigenen Feld „PIN“ und einem Passkey kopieren und dabei das Passwort als Verweis wählen, das Passwort in der Quelle
 ändern, die Kopie ansehen, im Feld eines dritten Eintrags einen Verweis auf „PIN“ einfügen, das
 Passwort in der Kopie überschreiben, die Quelle löschen.
 
@@ -411,8 +416,9 @@ Passwort in der Kopie überschreiben, die Quelle löschen.
   statt den Platzhalter als Text zu verwenden; nichts stürzt ab, und nichts wird still
   geändert.
 - **Ein Wert enthält Text, der wie ein Verweis aussieht** (etwa ein Passwort mit `{$`). Nur ein
-  Platzhalter in genau der Form `{$<Eintrag>:…}` mit einer vorhandenen Kennung gilt als Verweis;
-  alles andere bleibt Text. Ein Zeichen, das den Platzhalter bricht, wird im Schlüssel mit `\`
+  Platzhalter in genau der Form `{$<Eintrag>:…}` mit einer Kennung in UUID-Form gilt als
+  Verweis; alles andere bleibt Text. Gibt es den Eintrag zu einer solchen Kennung nicht, ist es
+  trotzdem ein Verweis, und das Feld zeigt „Quelle nicht verfügbar“ (siehe oben). Ein Zeichen, das den Platzhalter bricht, wird im Schlüssel mit `\`
   geschützt, und der Editor setzt den Platzhalter selbst richtig zusammen.
 - **Die Quelle eines Verweises liegt im Papierkorb.** Der Nutzer sieht den Wert weiter, ein
   Aufrufer von außen nicht (wie bei jedem Eintrag im Papierkorb).
@@ -573,7 +579,8 @@ Passwort in der Kopie überschreiben, die Quelle löschen.
   Kennung und Name der Gegenstelle, Benutzerkennung, Benutzername und die Aufgabe der
   Gegenstelle MÜSSEN Pflicht sein; fehlt eine, wird abgelehnt. Eine Liste ausgeschlossener
   Credential-IDs MUSS dazu führen, dass kein neuer Passkey entsteht, wenn einer davon für
-  dieselbe Gegenstelle existiert. Der Aufruf MUSS den **Eintrag** nennen, an dem der Passkey
+  dieselbe Gegenstelle an einem Eintrag im Bereich des Aufrufers existiert (Passkeys außerhalb
+  des Bereichs verraten sich so nicht, FR-030). Der Aufruf MUSS den **Eintrag** nennen, an dem der Passkey
   hängt; ohne Eintrag wird abgelehnt. Einen neuen Eintrag legt der Aufrufer vorher mit den
   gewöhnlichen Funktionen aus 034 an.
 - **FR-025**: Beim **Bestätigen** MUSS der Dienst den passenden Passkey finden (über die Liste
@@ -684,15 +691,15 @@ Passwort in der Kopie überschreiben, die Quelle löschen.
   anbieten, die Verweise in eigene Werte umzuwandeln (der Platzhalter wird durch den heutigen
   Wert ersetzt); Verweise von Passkeys fallen dabei weg, und die Warnung sagt es. Der
   Papierkorb löst keine Verweise auf (für den Nutzer bleibt der Wert sichtbar).
+- **FR-049**: Der Verlauf MUSS Platzhalter unverändert speichern, nie den aufgelösten Wert (so
+  gelangt kein Geheimnis der Quelle in den Verlauf des Ziels); Wiederherstellen stellt den
+  Platzhalter wieder her.
 - **FR-050**: Der KeePass-Import (034 FR-023) MUSS KeePass-Verweise der Form
   `{REF:<Feld>@<Suche>:<Text>}` in Verweise dieses Systems umwandeln, wenn das gewünschte Feld
   Benutzername oder Passwort ist und die Quelle sich in der importierten Datenbank eindeutig
   findet (über die KeePass-Kennung oder über genau einen Treffer der Suche); die Kennung der
   Quelle ist dann die des importierten Eintrags. Alle anderen Verweise (anderes Feld, kein oder
   mehrere Treffer) bleiben Text, und der Importbericht nennt ihre Zahl.
-- **FR-049**: Der Verlauf MUSS Platzhalter unverändert speichern, nie den aufgelösten Wert (so
-  gelangt kein Geheimnis der Quelle in den Verlauf des Ziels); Wiederherstellen stellt den
-  Platzhalter wieder her.
 
 **Allgemein**
 
@@ -731,7 +738,7 @@ Passwort in der Kopie überschreiben, die Quelle löschen.
   der Liste mit Auswahl, Ausschneiden und Einfügen, in unter 20 Sekunden, auf dem Rechner
   und auf einem Telefon.
 - **SC-003**: Bei 360 px Breite gibt es in keinem neuen Teil (Tabs, Verlauf, Brotkrumen,
-  Auswahlleiste, Passkey-Ansicht, Anhangskarten, Lightbox) waagerechtes Scrollen der Seite,
+  Auswahlleiste, Passkeys im Tab Extra, Anhangskarten, Lightbox) waagerechtes Scrollen der Seite,
   und jede Aktion eines Kontextmenüs ist ohne rechte Maustaste erreichbar.
 - **SC-004**: In 100 Versuchen, einen Ordner in sich oder einen Unterordner einzufügen oder
   zu ziehen, verschiebt holzi nie etwas; in 100 Versuchen mit gelöschten Zielen geht kein
@@ -766,7 +773,7 @@ Passwort in der Kopie überschreiben, die Quelle löschen.
   Aufbau gleicht dem von KeePass (Auflösen beim Lesen, bis zu 12 Stufen); anders als dort
   erkennt holzi Kreise beim Speichern und liefert nie leeren Text.
 - Die **Kürzel** sind feste Voreinstellungen; das Umbelegen kommt mit dem Umbelegen der
-  wm-Kürzel (Spec 020). Die Auswahl der Zeile mit Pfeiltasten gilt nur im Passwortmanager.
+  wm-Kürzel in einer Folge-Spec (Befehle und Tastenkürzel; Spec 020 nimmt es ausdrücklich aus). Die Auswahl der Zeile mit Pfeiltasten gilt nur im Passwortmanager.
 - Ein **Passkey ohne Eintrag** kann in der Tabelle von 034 (und in haex-vault) vorkommen; holzi
   legt nie einen an und behandelt einen vorgefundenen als nicht vorhanden (siehe Randfälle).
 - Wer **Passkeys anlegen und bestätigen** darf, sind die Aufrufer mit Freigabe für ein Tag des
@@ -792,5 +799,5 @@ Passwort in der Kopie überschreiben, die Quelle löschen.
   Folgearbeiten“).
 - **Umbelegbare Kürzel** und Kürzel außerhalb der Liste.
 - **Freigaben verwalten** (Specs 017–019, 021) und das **Teilen** von Einträgen mit anderen.
-- Eine **Änderung des Datenmodells** aus 034, außer was FR-026 für den Zähler und FR-035 für
-  Passkeys im Papierkorb verlangen, falls das Modell es nicht schon hergibt.
+- Eine **Änderung der Tabellen** aus 034. Neu hinzukommen dürfen nur Tabellen, die der Zähler
+  (FR-026) und die Verbindung eines Passkeys zur Quelle (FR-046) brauchen.

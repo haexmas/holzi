@@ -48,8 +48,8 @@ Indizes: `idx_haex_passwords_passkey_links_item_id (item_id)`,
 
 Regeln: Ein Passkey hängt nie über eine Verbindung an dem Eintrag, dem er ohnehin gehört
 (`passkeys.item_id == item_id`: abgelehnt). Verbindungen auf Verbindungen gibt es nicht
-(die Quelle ist immer ein Passkey mit `item_id`). Doppelte Verbindungen (Sync-Wettlauf)
-zeigen im Ziel nur einmal (Gruppierung nach `passkey_id`).
+(die Quelle ist immer ein Passkey mit `item_id`). Legen zwei Geräte dieselbe Verbindung an,
+ergibt die abgeleitete Kennung dieselbe Zeile; doppelte Zeilen gibt es nicht.
 
 ## Verweise im Text (keine Tabelle)
 
@@ -71,13 +71,13 @@ Die Zahl der Verweise auf einen Eintrag ist abgeleitet (R12), nicht gespeichert.
 
 ## Zustand im Frontend (nichts gespeichert)
 
-| Zustand        | Ort                            | Inhalt                                                                                                      |
-| -------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| Ablage         | `stores/passwordsClipboard.ts` | `{ ids: Target[], mode: 'cut' \| 'copy' }`; nur Kennungen; leer bei `reset`, letztem Fenster, Vault-Wechsel |
-| Auswahl        | `stores/passwordsSelection.ts` | unverändert (034); endet beim Ordnerwechsel und Öffnen eines Eintrags                                       |
-| Tab            | Ort des Fenster-Tabs (`?tab=`) | `details` \| `extra`; `entry/:id/history` = Verlauf                                                         |
-| Kopier-Dialog  | `CopyDialog.vue` (lokal)       | Titel/Zusatz, `history`, `usernameAsReference`, `passwordAsReference`, `passkeysAsLinks`                    |
-| Vorschaubilder | `lib/passwords/thumbnails.ts`  | LRU 200, Blob-URLs nach Prüfsumme; beim Schließen des Fensters freigegeben                                  |
+| Zustand        | Ort                            | Inhalt                                                                                                                  |
+| -------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| Ablage         | `stores/passwordsClipboard.ts` | `{ targets: Target[], mode: 'cut' \| 'copy' } \| null`; nur Kennungen; leer bei `reset`, letztem Fenster, Vault-Wechsel |
+| Auswahl        | `stores/passwordsSelection.ts` | unverändert (034); endet beim Ordnerwechsel und Öffnen eines Eintrags                                                   |
+| Tab            | Ort des Fenster-Tabs (`?tab=`) | `details` \| `extra`; `entry/:id/history` = Verlauf                                                                     |
+| Kopier-Dialog  | `CopyDialog.vue` (lokal)       | Titel/Zusatz, `history`, `usernameAsReference`, `passwordAsReference`, `passkeysAsLinks`                                |
+| Vorschaubilder | `lib/passwords/thumbnails.ts`  | LRU 200, Blob-URLs nach Prüfsumme; beim Schließen des Fensters freigegeben                                              |
 
 ## Typänderungen (ts-rs nach `src/types/bindings/`)
 

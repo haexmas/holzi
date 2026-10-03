@@ -66,6 +66,9 @@ args:   { itemId, passkeyId }     // Ziel und Quelle
 result: { removed: bool }
 ```
 
+Löscht nur die Verbindung zwischen dem Ziel `itemId` und dem Passkey `passkeyId`, nie den
+Passkey.
+
 ## Geändert
 
 - **`passwords_delete_permanently`**: neuer Parameter `inlineReferences: bool` (Vorgabe `false`).
@@ -83,8 +86,9 @@ result: { removed: bool }
   (`ReferenceCycle { sourceItemId }`).
 - **`passwords_import_*`**: der Bericht bekommt `referencesConverted` und
   `referencesLeftAsText`.
-- **`passwords_passkey_delete`**: löscht bei einer Verbindung nur die Verbindung (`removed: 'link'`),
-  sonst den Passkey (`removed: 'passkey'`).
+- **`passwords_passkey_delete`**: Argumente unverändert (`{ passkeyId }`); löscht zusätzlich die
+  Zähler und Verbindungen des Passkeys (Kinder zuerst). Verbindungen löst nur
+  `passwords_passkey_unlink`.
 
 ## Fehlerarten (neu, in `useErrorString.ts`)
 
