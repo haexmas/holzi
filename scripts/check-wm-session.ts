@@ -190,7 +190,7 @@ function makeSync(load: SessionPort['load']) {
   const sync = createSessionSync({
     state,
     histories,
-    apps: APPS,
+    apps: () => APPS,
     port,
     onRestored: () => restoredCalls++,
   })

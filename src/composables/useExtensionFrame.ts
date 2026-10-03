@@ -1,0 +1,334 @@
+import { onBeforeUnmount, ref, watch, type Ref } from 'vue'
+import { invoke } from '@tauri-apps/api/core'
+import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import type { FrameOpened } from '@bindings/FrameOpened'
+import { ALL_ACTIONS } from '~/lib/actions/catalog'
+import {
+  FrameEventQueue,
+  encodeBytes,
+  eventMessage,
+  readRequest,
+  type FrameEvent,
+} from '~/lib/extensions/bridge'
+import {
+  initMessage,
+  navigateMessage,
+  readShimMessage,
+  sameLocation,
+} from '~/lib/extensions/shim-protocol'
+import { detectPlatform, embeddedShortcuts } from '~/lib/wm/keybindings'
+import { formatLocation, type TabLocation } from '~/lib/wm/navigation'
+import { useErrorString } from '~/composables/useErrorString'
+import { useTabRouter } from '~/composables/useTabRouter'
+import { useWmTab } from '~/composables/useWmTab'
+
+const PORT_INIT = 'haexspace:port:init'
+const PORT_READY = 'haexspace:port:ready'
+const INIT_INTERVAL_MS = 200
+const INIT_TIMEOUT_MS = 10_000
+
+export type FrameState = 'loading' | 'ready' | 'error'
+
+/** A confirmation the extension asked for (`extension_dialog_confirm`), shown over this tab. */
+export type FrameDialog = {
+  requestId: string
+  message: string
+  title: string | null
+  confirmLabel: string | null
+  cancelLabel: string | null
+  destructive: boolean
+}
+
+/**
+ * One extension frame in a tab (spec 017, T046, contracts/bridge.md, research R13, R17): opens a
+ * frame session in Rust, hands the SDK its port for **every** new document (a reload gets a new
+ * channel; the shim's `hello` tells a new document from a `load` that WebKitGTK fires for a
+ * fragment navigation inside the frame), relays requests to `extension_bridge_call` unchanged, holds events until the SDK is ready, and
+ * maps the frame shim's messages onto this tab only.
+ *
+ * ponytail: moving the tab to another window or switching the workspace remounts the frame, so
+ * the extension reloads (R17); keeping frames alive across moves needs a frame pool outside the
+ * tab panels.
+ */
+export function useExtensionFrame(
+  iframe: Ref<HTMLIFrameElement | null>,
+  extensionId: string,
+) {
+  const tab = useWmTab()
+  const router = useTabRouter()
+  const wm = useWindowManagerStore()
+  const { errString } = useErrorString()
+  const { t } = useI18n()
+
+  const state = ref<FrameState>('loading')
+  const error = ref<string | null>(null)
+  const src = ref<string | null>(null)
+  const dialog = ref<FrameDialog | null>(null)
+
+  let frame: string | null = null
+  let sdkPort: MessagePort | null = null
+  let shimPort: MessagePort | null = null
+  let attempts: MessageChannel[] = []
+  let initTimer: ReturnType<typeof setInterval> | null = null
+  let initDeadline: ReturnType<typeof setTimeout> | null = null
+  let unregisterGuard: (() => void) | null = null
+  let lastShimLocation: TabLocation | null = null
+  const unlisten: UnlistenFn[] = []
+  const shortcuts = embeddedShortcuts(
+    ALL_ACTIONS,
+    detectPlatform(
+      navigator as Navigator & { userAgentData?: { platform?: string } },
+    ),
+  )
+
+  // Replaced by the frame's own queue once the session is open.
+  let events = new FrameEventQueue('', () => {})
+
+  function currentHash(): string {
+    return (
+      '#' +
+      formatLocation({ path: router.route.path, query: router.route.query })
+    )
+  }
+
+  function stopInit(): void {
+    if (initTimer) clearInterval(initTimer)
+    if (initDeadline) clearTimeout(initDeadline)
+    initTimer = null
+    initDeadline = null
+  }
+
+  function closeSdkPorts(): void {
+    stopInit()
+    for (const attempt of attempts) attempt.port1.close()
+    attempts = []
+    sdkPort?.close()
+    sdkPort = null
+  }
+
+  function closePorts(): void {
+    closeSdkPorts()
+    shimPort?.close()
+    shimPort = null
+  }
+
+  /** The frame does not answer in time: shown as an error with "Neu laden". */
+  function armDeadline(): void {
+    if (initDeadline) clearTimeout(initDeadline)
+    initDeadline = setTimeout(() => {
+      stopInit()
+      state.value = 'error'
+      error.value = t('extensions.frame.timeout')
+    }, INIT_TIMEOUT_MS)
+  }
+
+  async function relay(port: MessagePort, data: unknown): Promise<void> {
+    const request = readRequest(data)
+    if (!request || !frame) return
+    const response = await invoke<unknown>('extension_bridge_call', {
+      frame,
+      id: request.id,
+      method: request.method,
+      params: encodeBytes(request.params),
+    }).catch((e: unknown) => ({
+      id: request.id,
+      error: { code: 1000, message: errString(e) },
+    }))
+    port.postMessage(response)
+  }
+
+  /** One handshake attempt: a fresh channel, since a port can be transferred only once. */
+  function offerPort(): void {
+    const target = iframe.value?.contentWindow
+    if (!target) return
+    const channel = new MessageChannel()
+    attempts.push(channel)
+    channel.port1.onmessage = (event: MessageEvent) => {
+      if (sdkPort === null && event.data?.type === PORT_READY) {
+        stopInit()
+        sdkPort = channel.port1
+        for (const other of attempts) if (other !== channel) other.port1.close()
+        attempts = []
+        state.value = 'ready'
+        events.ready()
+        return
+      }
+      if (sdkPort === channel.port1) void relay(channel.port1, event.data)
+    }
+    target.postMessage({ type: PORT_INIT }, '*', [channel.port2])
+  }
+
+  function applyShim(data: unknown): void {
+    const effect = readShimMessage(data, shortcuts)
+    if (!effect) return
+    switch (effect.kind) {
+      case 'hello':
+        if (effect.fresh) startHandshake()
+        return
+      case 'navigate': {
+        lastShimLocation = effect.location
+        const current = { path: router.route.path, query: router.route.query }
+        if (sameLocation(current, effect.location)) return
+        if (effect.replace) router.replace(effect.location)
+        else router.push(effect.location)
+        return
+      }
+      case 'title':
+        tab.setTitle(effect.title || null)
+        return
+      case 'closeGuard':
+        unregisterGuard?.()
+        unregisterGuard = effect.active
+          ? tab.registerCloseGuard(() => ({
+              reasonKey: 'extensions.frame.closeGuard',
+              confirmAsync: async () => {},
+            }))
+          : null
+        return
+      case 'close':
+        tab.closeSelf()
+        return
+      case 'shortcut':
+        // Only a key the user pressed while the frame has the focus (contracts/bridge.md).
+        if (document.hasFocus() && document.activeElement === iframe.value)
+          void wm.runAction(effect.actionId, {}, { kind: 'user' })
+    }
+  }
+
+  function startShim(): void {
+    const target = iframe.value?.contentWindow
+    if (!target) return
+    shimPort?.close()
+    const channel = new MessageChannel()
+    shimPort = channel.port1
+    shimPort.onmessage = (event: MessageEvent) => applyShim(event.data)
+    target.postMessage(initMessage(shortcuts), '*', [channel.port2])
+  }
+
+  /** A new document in the frame: a fresh SDK channel. */
+  function startHandshake(): void {
+    closeSdkPorts()
+    events.reset()
+    state.value = 'loading'
+    offerPort()
+    initTimer = setInterval(offerPort, INIT_INTERVAL_MS)
+    armDeadline()
+  }
+
+  /** Every `load` of the frame; the shim's `hello` then says whether its document is new. */
+  function onLoad(): void {
+    if (!frame) return
+    startShim()
+    if (state.value !== 'ready') armDeadline()
+  }
+
+  async function openAsync(): Promise<void> {
+    state.value = 'loading'
+    error.value = null
+    try {
+      const opened = await invoke<FrameOpened>('extension_frame_open', {
+        extensionId,
+        tabId: tab.tabId,
+      })
+      frame = opened.frame
+      events = new FrameEventQueue(opened.frame, (event: FrameEvent) =>
+        sdkPort?.postMessage(eventMessage(event)),
+      )
+      src.value = opened.url + currentHash()
+    } catch (e) {
+      state.value = 'error'
+      error.value = errString(e)
+    }
+  }
+
+  /** Answers the open dialog; closing it counts as "cancel". */
+  function answerDialog(confirmed: boolean): void {
+    const open = dialog.value
+    dialog.value = null
+    if (open)
+      void invoke('extension_dialog_resolve', {
+        requestId: open.requestId,
+        confirmed,
+      }).catch(() => {})
+  }
+
+  async function closeAsync(): Promise<void> {
+    dialog.value = null
+    closePorts()
+    unregisterGuard?.()
+    unregisterGuard = null
+    const closing = frame
+    frame = null
+    src.value = null
+    if (closing)
+      await invoke('extension_frame_close', { frame: closing }).catch(() => {})
+  }
+
+  /** "Neu laden": a new frame session and a fresh document. */
+  async function reloadAsync(): Promise<void> {
+    await closeAsync()
+    await openAsync()
+  }
+
+  // holzi Back/Forward: show the tab's location in the frame, unless the frame reported it.
+  watch(
+    () => ({ path: router.route.path, query: router.route.query }),
+    (location) => {
+      if (lastShimLocation && sameLocation(location, lastShimLocation)) return
+      lastShimLocation = location
+      shimPort?.postMessage(navigateMessage(location))
+    },
+  )
+
+  // Console output of the extension counts only from this frame's own window.
+  function onWindowMessage(event: MessageEvent): void {
+    if (!iframe.value || event.source !== iframe.value.contentWindow) return
+    const data = event.data as { type?: unknown } | null
+    if (
+      data &&
+      typeof data.type === 'string' &&
+      data.type.startsWith('haexspace:')
+    )
+      console.debug('[extension]', extensionId, data)
+  }
+  window.addEventListener('message', onWindowMessage)
+
+  void Promise.all([
+    listen<FrameEvent>('extension-frame-event', (event) =>
+      events.push(event.payload),
+    ),
+    listen<{ frame: string; active: boolean }>(
+      'extension-tab-attention',
+      (event) => {
+        if (event.payload.frame !== frame) return
+        if (event.payload.active) tab.requestAttention()
+        else tab.clearAttention()
+      },
+    ),
+    listen<FrameDialog & { frame: string }>(
+      'extension-dialog-request',
+      (event) => {
+        const request = event.payload
+        if (request.frame !== frame) return
+        dialog.value = {
+          requestId: request.requestId,
+          message: request.message,
+          title: request.title,
+          confirmLabel: request.confirmLabel,
+          cancelLabel: request.cancelLabel,
+          destructive: request.destructive,
+        }
+      },
+    ),
+  ]).then((offs) => unlisten.push(...offs))
+
+  onBeforeUnmount(() => {
+    window.removeEventListener('message', onWindowMessage)
+    for (const off of unlisten) off()
+    void closeAsync()
+  })
+
+  void openAsync()
+
+  return { state, error, src, dialog, answerDialog, onLoad, reloadAsync }
+}

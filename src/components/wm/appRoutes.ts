@@ -71,6 +71,12 @@ const SETTINGS_VIEWS: Record<string, Component> = {
   'agents.denyRules': defineAsyncComponent(
     () => import('~/components/settings/DelegateDenyRulesSetting.vue'),
   ),
+  extensions: defineAsyncComponent(
+    () => import('~/components/settings/extensions/ExtensionsListView.vue'),
+  ),
+  'extensions.detail': defineAsyncComponent(
+    () => import('~/components/settings/extensions/ExtensionDetailView.vue'),
+  ),
   federation: defineAsyncComponent(
     () => import('~/components/settings/FederationView.vue'),
   ),

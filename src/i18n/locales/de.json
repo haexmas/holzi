@@ -115,7 +115,8 @@
     "apps": {
       "chat": "Chat",
       "settings": "Einstellungen",
-      "passwords": "Passwörter"
+      "passwords": "Passwörter",
+      "extension": "Erweiterung"
     },
     "launcher": {
       "lock": "Sperren",
@@ -415,6 +416,10 @@
         "title": "Agenten",
         "keywords": "Agenten Delegaten Claude Codex"
       },
+      "extensions": {
+        "title": "Erweiterungen",
+        "keywords": "Erweiterung Haextension App Installieren Berechtigungen"
+      },
       "federation": {
         "title": "Föderation",
         "keywords": "Geräte Vault Synchronisation Sync"
@@ -476,6 +481,11 @@
         },
         "remove": {
           "title": "Gerät entfernen"
+        }
+      },
+      "extensions": {
+        "detail": {
+          "title": "Erweiterung"
         }
       }
     },
@@ -607,6 +617,31 @@
       "notMain": "Nur ein Hauptgerät kann Anfragen beantworten.",
       "copyNotice": "Diese Vault-Datei ist die Kopie eines Hauptgeräts. Dieses Gerät ist jetzt ebenfalls ein Hauptgerät und kann Geräte verknüpfen, aufnehmen und entfernen.",
       "dismiss": "Verstanden"
+    },
+    "extensions": {
+      "installFromFile": "Aus Datei installieren",
+      "installFromFileHint": "Eine signierte Erweiterung (.xt) hinzufügen",
+      "installed": "Installiert",
+      "none": "Noch keine Erweiterung installiert.",
+      "version": "Version {version}",
+      "versionLabel": "Version",
+      "publisher": "Herausgeber-Schlüssel",
+      "stateHere": "Auf diesem Gerät",
+      "notStartedHere": "Noch nicht gestartet",
+      "permissions": "Berechtigungen",
+      "noPermissions": "Keine Berechtigungen gemerkt.",
+      "status": {
+        "granted": "Erlaubt",
+        "ask": "Nachfragen",
+        "denied": "Verweigert"
+      },
+      "temporary": "bis holzi beendet wird",
+      "allDevices": "alle Geräte",
+      "thisDevice": "dieses Gerät",
+      "notDeclared": "nicht im Manifest",
+      "unreadable": "unbekannt, gilt als nicht vorhanden",
+      "remove": "Entfernen",
+      "revoke": "Widerrufen"
     }
   },
   "models": {
@@ -789,6 +824,12 @@
         "cancelled": "Der Import wurde abgebrochen.",
         "unwritable": "Die Datei ließ sich nicht schreiben."
       }
+    },
+    "extensions": {
+      "install": "Die Erweiterung konnte nicht installiert werden.",
+      "notFound": "Die Erweiterung gibt es nicht (mehr).",
+      "disabled": "Die Erweiterung ist deaktiviert.",
+      "notReady": "Die Erweiterung ist auf diesem Gerät noch nicht bereit."
     }
   },
   "actions": {
@@ -1312,6 +1353,83 @@
       "deleted": "Dieser Eintrag wurde auf einem anderen Gerät gelöscht.",
       "reload": "Neu laden",
       "back": "Zurück"
+    }
+  },
+  "extensions": {
+    "install": {
+      "errors": {
+        "archive_too_large": "Die Datei ist zu groß.",
+        "archive_invalid": "Die Datei ist kein gültiges Erweiterungspaket.",
+        "entry_path_invalid": "Das Paket enthält einen unzulässigen Dateinamen.",
+        "entry_duplicate": "Das Paket enthält eine Datei doppelt.",
+        "entry_too_large": "Eine Datei im Paket ist zu groß.",
+        "entry_ratio": "Eine Datei im Paket ist verdächtig stark komprimiert.",
+        "entry_kind": "Das Paket enthält etwas anderes als normale Dateien.",
+        "manifest_not_canonical": "Das Manifest ist nicht in der signierten Form.",
+        "manifest_invalid": "Das Manifest ist ungültig.",
+        "file_mismatch": "Eine Datei wurde nach dem Signieren verändert.",
+        "public_key_mismatch": "Manifest und Signatur nennen verschiedene Herausgeber.",
+        "signature_invalid": "Die Signatur ist ungültig.",
+        "legacy_signature_format": "Das Paket ist mit einem alten Werkzeug signiert. Bitte mit dem aktuellen Werkzeug „haex“ neu signieren.",
+        "unreadable": "Die Datei lässt sich nicht lesen.",
+        "downgrade_not_confirmed": "Eine ältere Fassung wird nur nach Bestätigung installiert."
+      },
+      "title": "Erweiterung installieren",
+      "fileType": "Erweiterung",
+      "checking": "Datei wird geprüft …",
+      "publisher": "Herausgeber: {author} · Schlüssel {fingerprint}",
+      "sameNameOtherPublisher": "Eine andere Erweiterung mit demselben Namen ist schon installiert. Diese hier stammt von einem anderen Herausgeber und bekommt eigene Daten.",
+      "update": "Aktualisierung von {from} auf {to}",
+      "confirmDowngrade": "Ältere Fassung trotzdem installieren",
+      "permissions": "Berechtigungen",
+      "thisDevice": "nur dieses Gerät",
+      "allDevices": "alle Geräte",
+      "unsupported": "Wird von holzi nicht unterstützt: {categories}",
+      "cancel": "Abbrechen",
+      "install": "Installieren"
+    },
+    "status": {
+      "transferring": "Wird übertragen",
+      "ready": "Bereit",
+      "signature_failed": "Signatur fehlerhaft",
+      "migration_failed": "Datenbank-Änderung fehlgeschlagen",
+      "disabled": "Deaktiviert"
+    },
+    "frame": {
+      "title": "Erweiterung",
+      "loading": "Erweiterung wird geladen …",
+      "failed": "Die Erweiterung konnte nicht gestartet werden.",
+      "timeout": "Die Erweiterung antwortet nicht.",
+      "reload": "Neu laden",
+      "closeGuard": "Die Erweiterung hat ungesicherte Änderungen."
+    },
+    "dialog": {
+      "fromExtension": "Frage der Erweiterung",
+      "confirm": "OK",
+      "cancel": "Abbrechen"
+    },
+    "permissions": {
+      "kinds": {
+        "database": "Daten anderer Erweiterungen",
+        "filesystem": "Dateien",
+        "web": "Internet",
+        "notifications": "Benachrichtigungen",
+        "passwords": "Passwörter",
+        "remoteStorage": "Entfernter Speicher",
+        "mail": "Mail",
+        "shell": "Programme ausführen"
+      }
+    },
+    "permissionRequest": {
+      "title": "„{name}“ bittet um eine Berechtigung",
+      "notDeclared": "Diese Berechtigung steht nicht im Manifest der Erweiterung.",
+      "targetMissing": "Die Erweiterung, deren Daten angefragt werden, ist nicht installiert.",
+      "shellWarning": "Achtung: Mit dieser Berechtigung kann die Erweiterung Programme auf diesem Gerät ausführen.",
+      "remember": "Merken",
+      "allDevices": "Für alle Geräte merken",
+      "allDevicesNote": "Die Berechtigung gilt dann auch auf deinen anderen Geräten, sobald sie die Vault synchronisiert haben.",
+      "allow": "Erlauben",
+      "deny": "Verweigern"
     }
   }
 }

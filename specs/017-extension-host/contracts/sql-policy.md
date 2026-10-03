@@ -109,7 +109,7 @@ Jeder Fall dieser Liste ist eine verbotene Form und muss von der Vorprüfung **u
 allein abgelehnt werden. Positive Fälle und Fälle mit eigener Regel je Schicht stehen darunter. Mindestens:
 
 - `WITH x AS (SELECT * FROM chat_threads) SELECT * FROM x`; `WITH` mit eigenem Präfix als Name über eine
-  Kerntabelle; `WITH` mit dem Namen einer Kerntabelle
+  Kerntabelle
 - `EXISTS`, Unterabfragen in `SELECT`, `WHERE`, `HAVING`, `ORDER BY`, `LIMIT`, `VALUES`, `RETURNING`,
   `ON CONFLICT … DO UPDATE SET x = (SELECT …)`, `JOIN … ON (SELECT …)`, `CASE`, Funktionsargumente
 - `main.chat_threads`, `temp.x`, `"Chat_Threads"`, `[chat_threads]`, `` `chat_threads` ``
@@ -137,6 +137,18 @@ Fälle mit eigener Regel je Schicht:
   Der Authorizer sieht bei `INSERT` keine Spalten, und der Transformer schreibt diese Spalten selbst; ohne
   Vorprüfung muss der gespeicherte Wert trotzdem vom Transformer stammen (er überschreibt oder verwirft Werte
   der Anweisung).
+- `WITH` mit dem Namen einer Kerntabelle (`WITH chat_threads AS (SELECT 1) SELECT * FROM chat_threads`): die
+  Vorprüfung lehnt ab (1000). Der Authorizer allein sieht nur die CTE und lässt sie zu; gelesen wird nichts
+  Echtes, die Antwort ist die eigene Zeile der CTE.
+- Tabellenfunktionen (`json_each`, `json_tree`, `jsonb_*`): SQLite meldet sie als `Read` auf die gleichnamige
+  Tabelle in `main`; der Authorizer lässt diese zu, was ihre Argumente lesen, prüft er einzeln.
+- CTEs: SQLite meldet den Körper einer CTE mit ihrem Namen als `accessor` und das Lesen einer CTE ohne
+  Datenbank. Der Authorizer kennt die CTE-Namen der Anweisung und prüft beides wie SQL auf oberster Ebene; eine
+  CTE mit dem Namen eines Änderungstriggers gewinnt nichts.
+- Änderungstrigger (Ergebnis der Prüfaufgabe): der Transformer setzt den HLC als Literal in die Anweisung;
+  die Trigger rufen `gen_uuid` und `current_hlc` auf, lesen `haex_crdt_configs_no_sync` und lösen beim Löschen
+  den Trigger von `haex_deleted_rows` aus. Im Trigger erlaubt der Authorizer nur die eigene Tabelle und
+  `haex_*`-Tabellen sowie diese beiden Funktionen.
 - Zwei Anweisungen in einer Zeichenkette: die Vorprüfung lehnt ab (1000); ohne Vorprüfung lehnen
   `write_guarded`/`read_guarded` einen nicht leeren Rest nach der ersten Anweisung ab, statt ihn still zu
   verwerfen (T005).

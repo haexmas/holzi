@@ -7,11 +7,9 @@
  * the affected window is elsewhere. Compact mode (T050) drops to two
  * columns so each tile stays a comfortable touch target on a narrow
  * screen, instead of three cramped ones. Spec 015-workspace-shell, T023,
- * T041, T050. The last tile locks the vault (`useVaultLock`) — the one place
+ * T041, T050. Installed extensions are apps too (spec 017). The last tile locks the vault (`useVaultLock`) — the one place
  * to lock now that the chat has no lock button.
  */
-import { WM_APPS } from '~/lib/wm/apps'
-
 const open = defineModel<boolean>('open', { default: false })
 
 const wm = useWindowManagerStore()
@@ -38,7 +36,7 @@ function launch(appId: string) {
         :class="wm.compact ? 'grid-cols-2' : 'grid-cols-3'"
       >
         <button
-          v-for="app in WM_APPS"
+          v-for="app in wm.apps()"
           :key="app.id"
           type="button"
           class="relative flex flex-col items-center gap-2 rounded-lg p-3 text-sm text-foreground hover:bg-accent"
@@ -51,8 +49,14 @@ function launch(appId: string) {
             class="absolute right-2 top-2 h-1.5 w-1.5 shrink-0 rounded-full bg-warning"
             :aria-label="t('wm.attention')"
           />
-          <Icon :name="app.icon" class="h-6 w-6" :aria-hidden="true" />
-          <span class="truncate">{{ t(app.titleKey) }}</span>
+          <img
+            v-if="app.iconUrl"
+            :src="app.iconUrl"
+            alt=""
+            class="h-6 w-6 object-contain"
+          />
+          <Icon v-else :name="app.icon" class="h-6 w-6" :aria-hidden="true" />
+          <span class="truncate">{{ app.title ?? t(app.titleKey) }}</span>
         </button>
         <button
           type="button"

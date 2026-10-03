@@ -51,14 +51,16 @@ Feste Regeln vor der Auswertung (keine Berechtigung ändert sie): Kerntabellen (
 
 1. Rust antwortet der Erweiterung 1004 mit `{resourceType, action, target}` und sendet an die Oberfläche
    `extension-permission-request` mit `requestId`, `extensionId`, `displayName`, `kind`, `action`,
-   `target`, `declared` und `deviceScoped`.
+   `target`, `declared`, `deviceScoped` und `targetMissing` (Ziel einer nicht installierten Erweiterung:
+   nur „Verweigern“, FR-062).
 2. Die Warteschlange im Frontend fasst gleiche (`extensionId, kind, action, target`) zusammen und zeigt eine
    Anfrage nach der anderen: „Erlauben“, „Verweigern“, „Merken“, bei gerätebezogenen Arten zusätzlich „für
    alle Geräte merken“ mit Hinweis auf die Wirkung; bei `shell` eine deutliche Warnung. Schließen des Dialogs
    bricht ab, verweigert nicht.
 3. Die Entscheidung geht an `extension_permission_resolve`; Rust speichert (gemerkt) oder hält im Speicher
    (vorläufig) und sendet `extension:permission-resolved` an alle Rahmen der Erweiterung; das SDK wiederholt.
-4. Sind alle wartenden Rahmen geschlossen, verschwindet die Anfrage.
+4. Sind alle wartenden Rahmen geschlossen, verschwindet die Anfrage: Rust sendet
+   `extension-permission-request-cancelled {requestId}`.
 
 ## Einstellungen (Kategorie „Erweiterungen“)
 

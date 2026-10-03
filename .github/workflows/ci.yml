@@ -49,6 +49,9 @@ jobs:
       - name: Check passwords
         run: corepack pnpm check:passwords
 
+      - name: Check extensions
+        run: corepack pnpm check:extensions
+
       - name: Check settings app
         run: corepack pnpm check:settings
 

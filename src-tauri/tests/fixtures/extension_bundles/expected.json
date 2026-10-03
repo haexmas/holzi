@@ -1,0 +1,147 @@
+{
+  "good-minimal.xt": {
+    "valid": true
+  },
+  "good-notes-like.xt": {
+    "valid": true
+  },
+  "good-semver-prerelease.xt": {
+    "valid": true
+  },
+  "good-migrations-no-journal.xt": {
+    "valid": true
+  },
+  "bad-moved-content.xt": {
+    "valid": false,
+    "kind": "file_mismatch",
+    "path": "assets/a.js"
+  },
+  "bad-renamed-file.xt": {
+    "valid": false,
+    "kind": "file_mismatch",
+    "path": "assets/app.js"
+  },
+  "bad-extra-file.xt": {
+    "valid": false,
+    "kind": "file_mismatch",
+    "path": "assets/evil.js"
+  },
+  "bad-missing-file.xt": {
+    "valid": false,
+    "kind": "file_mismatch",
+    "path": "assets/b.js"
+  },
+  "bad-empty-file-added.xt": {
+    "valid": false,
+    "kind": "file_mismatch",
+    "path": "assets/empty.js"
+  },
+  "bad-duplicate-entry.xt": {
+    "valid": false,
+    "kind": "entry_duplicate"
+  },
+  "bad-case-collision.xt": {
+    "valid": false,
+    "kind": "entry_duplicate"
+  },
+  "bad-dotdot.xt": {
+    "valid": false,
+    "kind": "entry_path_invalid"
+  },
+  "bad-absolute.xt": {
+    "valid": false,
+    "kind": "entry_path_invalid"
+  },
+  "bad-backslash.xt": {
+    "valid": false,
+    "kind": "entry_path_invalid"
+  },
+  "bad-symlink.xt": {
+    "valid": false,
+    "kind": "entry_kind"
+  },
+  "bad-not-nfc.xt": {
+    "valid": false,
+    "kind": "entry_path_invalid"
+  },
+  "bad-manifest-not-canonical.xt": {
+    "valid": false,
+    "kind": "manifest_not_canonical"
+  },
+  "bad-manifest-float.xt": {
+    "valid": false,
+    "kind": "manifest_not_canonical"
+  },
+  "bad-manifest-invalid.xt": {
+    "valid": false,
+    "kind": "manifest_invalid"
+  },
+  "bad-version-leading-zero.xt": {
+    "valid": false,
+    "kind": "manifest_invalid"
+  },
+  "bad-entry-missing.xt": {
+    "valid": false,
+    "kind": "manifest_invalid"
+  },
+  "bad-migrations-dir.xt": {
+    "valid": false,
+    "kind": "manifest_invalid"
+  },
+  "bad-permissions-array.xt": {
+    "valid": false,
+    "kind": "manifest_invalid"
+  },
+  "bad-weak-key.xt": {
+    "valid": false,
+    "kind": "manifest_invalid"
+  },
+  "bad-journal-missing-sql.xt": {
+    "valid": false,
+    "kind": "manifest_invalid"
+  },
+  "bad-migration-not-utf8.xt": {
+    "valid": false,
+    "kind": "manifest_invalid"
+  },
+  "bad-key-mismatch.xt": {
+    "valid": false,
+    "kind": "public_key_mismatch"
+  },
+  "bad-signature.xt": {
+    "valid": false,
+    "kind": "signature_invalid"
+  },
+  "bad-zip-bomb.xt": {
+    "valid": false,
+    "kind": "entry_too_large"
+  },
+  "bad-entry-overflow.xt": {
+    "valid": false,
+    "kind": "entry_too_large"
+  },
+  "bad-ratio.xt": {
+    "valid": false,
+    "kind": "entry_ratio"
+  },
+  "bad-too-many-entries.xt": {
+    "valid": false,
+    "kind": "archive_too_large"
+  },
+  "bad-truncated.xt": {
+    "valid": false,
+    "kind": "archive_invalid"
+  },
+  "bad-local-header.xt": {
+    "valid": false,
+    "kind": "archive_invalid"
+  },
+  "bad-forbidden-private-key.xt": {
+    "valid": false,
+    "kind": "entry_path_invalid"
+  },
+  "legacy-format.xt": {
+    "valid": false,
+    "kind": "legacy_signature_format"
+  }
+}

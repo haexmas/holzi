@@ -42,6 +42,9 @@ useWmKeyboard()
 // Spec 032: the actions a model in the chat may call (set up in `onMounted` once the vault is open).
 const agentActions = useAgentActions()
 
+// Spec 017: installed extensions are apps; their tabs are restored with the session.
+const extensionHost = useExtensionHost()
+
 // Spec 020 (research R7, FR-020, FR-035): the webview history is never navigation state. Pages
 // reach this one with `replace`, so the top document's history stays flat, and every router
 // navigation away from it — a webview back, or an embedded document's `history.back()` — is
@@ -75,6 +78,10 @@ watch([sessionRestored, () => route.query.open], ([restored]) => {
 // and friends have no route of their own).
 onMounted(async () => {
   instancesStore.setActiveInstance(instanceName.value)
+  // The extension list first: a restored tab of an extension unknown at that moment is dropped.
+  await extensionHost.startAsync().catch((error: unknown) => {
+    console.error('[extensions] loading the extension list failed', error)
+  })
   try {
     await wm.restoreSessionAsync()
   } catch (error) {

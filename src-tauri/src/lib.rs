@@ -49,6 +49,16 @@ use chat::thread_commands::{
     create_thread, delete_thread, list_messages, list_threads, rename_thread,
 };
 use device::commands::{current_device_info, list_vault_devices, update_device_alias};
+use extensions::commands::frames::{
+    extension_bridge_call, extension_dialog_resolve, extension_frame_close, extension_frame_open,
+    extension_host_context_set,
+};
+use extensions::commands::install::{extension_install, extension_install_preview};
+use extensions::commands::manage::{extension_icon, extension_list};
+use extensions::commands::permissions::{
+    extension_permission_remove, extension_permission_resolve, extension_permission_set,
+    extension_permissions_list,
+};
 use hardware::get_hardware_info;
 use instances::{
     cleanup_orphans_on_startup, close_instance, create_instance, list_instances, open_instance,
@@ -171,6 +181,8 @@ pub fn run() {
     // start page's link join runs without a vault.
     let builder = builder.manage(std::sync::Arc::new(sync::registry::SyncRegistry::default()));
     let builder = builder.manage(sync::link::join_task::LinkJoin::default());
+    // Spec 017: files of extensions for their sandboxed frames.
+    let builder = extensions::protocol::handler::register(builder);
     builder
         .plugin(tauri_plugin_dialog::init())
         // Password manager (spec 034, research R9): used from Rust only, so a copied secret and its
@@ -330,6 +342,19 @@ pub fn run() {
             passwords_import_cancel,
             passwords_import_report_save,
             passwords_icon_preview,
+            extension_install_preview,
+            extension_install,
+            extension_list,
+            extension_icon,
+            extension_frame_open,
+            extension_frame_close,
+            extension_bridge_call,
+            extension_host_context_set,
+            extension_dialog_resolve,
+            extension_permissions_list,
+            extension_permission_set,
+            extension_permission_remove,
+            extension_permission_resolve,
         ]))
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
