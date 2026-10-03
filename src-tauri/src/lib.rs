@@ -182,6 +182,10 @@ pub fn run() {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
                         .level(log::LevelFilter::Info)
+                        // iroh logs every sent packet at info; the log keeps only 40 kB, so
+                        // without this the sync lines are rotated away within seconds.
+                        .level_for("iroh", log::LevelFilter::Warn)
+                        .level_for("tracing::span", log::LevelFilter::Warn)
                         .build(),
                 )?;
             }

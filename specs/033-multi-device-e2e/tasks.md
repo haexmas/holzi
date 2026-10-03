@@ -76,8 +76,8 @@ description: 'Task list for End-to-End Tests Across Several Vaults and Devices'
 
 **Independent Test**: `--grep sync-remove-device`, `--grep sync-mutual-removal` pass.
 
-- [ ] T025 [US3] M6: add `scripts/e2e/scenarios/sync-remove-device.test.ts` with devices A (main), B (linked), C (main), D (linked): on A open `settings-device-remove` for D, check `remove-device-view` states the consequences before `remove-device-confirm`, confirm; D shows `settings-federation-notice` (removed) and `sync_status.thisDevice == 'removed'`, receives no new thread; A, B, C keep syncing a new thread. Depends on T017.
-- [ ] T026 [US3] M7: add `scripts/e2e/scenarios/sync-mutual-removal.test.ts` with A and C main, B linked: `goOffline` A and C, remove C on A and A on C through the interface, `goOnline` both, then check for either outcome: exactly one of A and C reports `main` and the other `removed` with the notice, B lists only the winner, B still has a main device. The tie rule itself stays covered by the unit tests `on_a_tie_the_smallest_hash_wins` and `two_main_devices_removing_each_other_leave_exactly_one_main_device` in `src-tauri/src/sync/device_list_tests.rs`. Depends on T011, T017.
+- [x] T025 [US3] M6: add `scripts/e2e/scenarios/sync-remove-device.test.ts` with devices A (main), B (linked), C (main), D (linked): on A open `settings-device-remove` for D, check `remove-device-view` states the consequences before `remove-device-confirm`, confirm; D shows `settings-federation-notice` (removed) and `sync_status.thisDevice == 'removed'`, receives no new thread; A, B, C keep syncing a new thread. Depends on T017.
+- [x] T026 [US3] M7: add `scripts/e2e/scenarios/sync-mutual-removal.test.ts` with A and C main, B linked: `goOffline` A and C, remove C on A and A on C through the interface, `goOnline` both, then check for either outcome: exactly one of A and C reports `main` and the other `removed` with the notice, B lists only the winner, B still has a main device. The tie rule itself stays covered by the unit tests `on_a_tie_the_smallest_hash_wins` and `two_main_devices_removing_each_other_leave_exactly_one_main_device` in `src-tauri/src/sync/device_list_tests.rs`. Depends on T011, T017.
 
 ## Phase 6: User Story 4 - Copies of the vault file (P2)
 
@@ -85,8 +85,8 @@ description: 'Task list for End-to-End Tests Across Several Vaults and Devices'
 
 **Independent Test**: `--grep sync-copy` passes.
 
-- [ ] T027 [US4] M5: replace `scripts/e2e/scenarios/sync-copy-notice.test.ts` by `scripts/e2e/scenarios/sync-copy.test.ts`: stop A (main), `copyVaultTo` a new device C, start C: `copy-notice` shows, C is main and syncs both ways with A; copy linked B's file to D: D shows awaiting admission and neither sends nor receives; D makes a change; on A `admission-requests` lists it, `admission-admit` admits; D syncs and its change arrives everywhere; a second copy E is refused with `admission-reject` and stays outside. No injected store state, no `node:fs`. Depends on T005, T011, T017.
-- [ ] T028 [US4] Delete `sync-copy-notice.test.ts` and remove it from the seam allowlist in `scripts/e2e/lib/seam.test.ts`. Depends on T027.
+- [x] T027 [US4] M5: replace `scripts/e2e/scenarios/sync-copy-notice.test.ts` by `scripts/e2e/scenarios/sync-copy.test.ts`: stop A (main), `copyVaultTo` a new device C, start C: `copy-notice` shows, C is main and syncs both ways with A; copy linked B's file to D: D shows awaiting admission and neither sends nor receives; D makes a change; on A `admission-requests` lists it, `admission-admit` admits; D syncs and its change arrives everywhere; a second copy E is refused with `admission-reject` and stays outside. No injected store state, no `node:fs`. Depends on T005, T011, T017.
+- [x] T028 [US4] Delete `sync-copy-notice.test.ts` and remove it from the seam allowlist in `scripts/e2e/lib/seam.test.ts`. Depends on T027.
 
 ## Phase 7: User Story 5 - Locking during a large sync (P2)
 
@@ -94,7 +94,7 @@ description: 'Task list for End-to-End Tests Across Several Vaults and Devices'
 
 **Independent Test**: `--grep sync-lock-during-sync` passes.
 
-- [ ] T029 [US5] **Gate G3** and M8: add `scripts/e2e/scenarios/sync-lock-during-sync.test.ts`: stop B, create N threads on A with `create_thread`, start B, wait until B holds some but not all, press `lock-instance` on A; check on B that A turns offline within the close promise of spec 013 plus detection time; start A again and check that B ends with exactly N threads, none missing and none duplicated. Calibrate N so the window is at least 2 s on a maintainer's machine and on the CI runner; record N and the measured window in `research.md` under G3. If no N gives 2 s, report the achieved overlap and amend the plan (bulk helper) before merging. Depends on T013, T017.
+- [x] T029 [US5] **Gate G3** and M8 (amended after G3: the receiving device is locked, N = 10,000 made by a loop on the page; see research.md R7): add `scripts/e2e/scenarios/sync-lock-during-sync.test.ts`: stop B, create N threads on A with `create_thread`, start B, wait until B holds some but not all, press `lock-instance` on A; check on B that A turns offline within the close promise of spec 013 plus detection time; start A again and check that B ends with exactly N threads, none missing and none duplicated. Calibrate N so the window is at least 2 s on a maintainer's machine and on the CI runner; record N and the measured window in `research.md` under G3. If no N gives 2 s, report the achieved overlap and amend the plan (bulk helper) before merging. Depends on T013, T017.
 
 **Checkpoint** (PR C ready: T025 to T029): M5 to M8 are automatic.
 

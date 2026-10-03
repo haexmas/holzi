@@ -3,6 +3,7 @@
 // no platform specifics, only the page.
 import { waitForPath } from './flows.ts'
 import type { FlowInstance } from './flows.ts'
+import type { Device } from './group.ts'
 import {
   openSettings,
   runAction,
@@ -251,6 +252,94 @@ async function waitForMounted(page: FlowInstance): Promise<void> {
     ))
   ) {
     if (Date.now() > end) throw new Error('the app did not mount')
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+}
+
+/**
+ * On the device view of the observer, presses "Entfernen" in the row of the target and waits for the
+ * view that explains the consequences. The rows carry no public key, so the row is found by the name
+ * the observer lists for the target (names are unique in a group).
+ */
+export async function openRemoveDevice(
+  observer: Pick<Device, 'address' | 'page' | 'deviceList'>,
+  target: Pick<Device, 'address' | 'pubkey'>,
+): Promise<void> {
+  const pubkey = await target.pubkey()
+  const alias = (await observer.deviceList()).find(
+    (row) => row.devicePubkey === pubkey,
+  )?.alias
+  if (alias === null || alias === undefined) {
+    throw new Error(
+      `${observer.address} lists no name for ${target.address}, its row cannot be found`,
+    )
+  }
+  await openFederation(observer.page)
+  const pressed = await observer.page.exec<boolean>(
+    `const row = [...document.querySelectorAll('[data-testid="settings-device"]')]
+       .find((r) => r.querySelector('span, label').textContent.trim() === arguments[0])
+     const button = row?.querySelector('[data-testid="settings-device-remove"]')
+     button?.click()
+     return button != null`,
+    [alias],
+  )
+  if (!pressed) {
+    throw new Error(
+      `${observer.address} offers no "Entfernen" for ${target.address} ("${alias}")`,
+    )
+  }
+  await observer.page.waitForDisplayed('remove-device-view')
+}
+
+/** The consequences the remove view lists, one entry each. */
+export function removeConsequences(page: FlowInstance): Promise<string[]> {
+  return page.exec<string[]>(
+    `return [...document.querySelectorAll('[data-testid="remove-device-view"] li li')].map((li) => li.textContent.trim())`,
+  )
+}
+
+/** Confirms the removal and waits until the view is left. */
+export async function confirmRemoveDevice(page: FlowInstance): Promise<void> {
+  await page.click('remove-device-confirm')
+  const end = Date.now() + 15_000
+  while (await exists(page, 'remove-device-view')) {
+    if (Date.now() > end) throw new Error('the remove view did not close')
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+}
+
+/** The notice a device without a place in the vault shows at the top of the device view, or null. */
+export function federationNotice(page: FlowInstance): Promise<string | null> {
+  return page.exec<string | null>(
+    `return document.querySelector('[data-testid="settings-federation-notice"]')?.textContent.trim() ?? null`,
+  )
+}
+
+/** How many requests of copies to join the device view of a main device lists. */
+export function admissionRequestCount(page: FlowInstance): Promise<number> {
+  return page.exec<number>(
+    `return document.querySelectorAll('[data-testid="admission-request"]').length`,
+  )
+}
+
+/**
+ * On a main device: opens the device view, waits for the one open request of a copy and answers it with
+ * "Aufnehmen" or "Ablehnen", then waits until the request is gone from the list.
+ */
+export async function decideAdmission(
+  page: FlowInstance,
+  admit: boolean,
+): Promise<void> {
+  await openFederation(page)
+  await page.waitForDisplayed('admission-request')
+  const count = await admissionRequestCount(page)
+  if (count !== 1) {
+    throw new Error(`expected one open request of a copy, found ${count}`)
+  }
+  await page.click(admit ? 'admission-admit' : 'admission-reject')
+  const end = Date.now() + 15_000
+  while ((await admissionRequestCount(page)) > 0) {
+    if (Date.now() > end) throw new Error('the request stayed in the list')
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
 }

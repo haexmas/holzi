@@ -310,12 +310,51 @@ pub fn current_key(
     q: &mut impl Query,
     removed: &[[u8; 32]],
 ) -> haex_crdt::Result<Option<ContentKey>> {
-    let held: Vec<(Vec<u8>, i64, Vec<u8>)> = q.query_map(
-        "SELECT key_id, generation, key FROM vault_content_keys_no_sync \
-         ORDER BY generation DESC",
-        &[],
-        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-    )?;
+    current_key_for_list(q, removed, None)
+}
+
+/// The highest held key issued for `list_hash` whose envelopes do not name a
+/// removed device. A same-generation fork can leave two different keys in a
+/// replica; selecting the key belonging to the effective list avoids treating
+/// the losing fork's removal as a reason to discard the winning key as well.
+pub fn current_key_for_list(
+    q: &mut impl Query,
+    removed: &[[u8; 32]],
+    list_hash: Option<&[u8; 32]>,
+) -> haex_crdt::Result<Option<ContentKey>> {
+    let mut held: Vec<(Vec<u8>, i64, Vec<u8>)> = if let Some(hash) = list_hash {
+        q.query_map(
+            "SELECT k.key_id, k.generation, k.key \
+             FROM vault_content_keys_no_sync k \
+             JOIN vault_key_generations g ON g.key_id = k.key_id \
+             WHERE g.device_list_hash = ?1 \
+                OR EXISTS (SELECT 1 FROM vault_key_envelopes e \
+                           WHERE e.key_id = k.key_id AND e.device_list_hash = ?1) \
+             ORDER BY k.generation DESC",
+            params![hash.as_slice()],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )?
+    } else {
+        q.query_map(
+            "SELECT key_id, generation, key FROM vault_content_keys_no_sync \
+             ORDER BY generation DESC",
+            &[],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )?
+    };
+    // Older databases can hold a valid key from before the current list was
+    // written. Prefer a key explicitly issued for the effective list, but do
+    // not make presence disappear merely because that list has not received
+    // a new generation yet. If matching rows existed, keep the strict
+    // selection: their envelopes may deliberately exclude removed devices.
+    if held.is_empty() && list_hash.is_some() {
+        held = q.query_map(
+            "SELECT key_id, generation, key FROM vault_content_keys_no_sync \
+             ORDER BY generation DESC",
+            &[],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )?;
+    }
     for (key_id, generation, key) in held {
         let key = Zeroizing::new(key);
         let recipients: Vec<Vec<u8>> = q.query_map(

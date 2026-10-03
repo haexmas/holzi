@@ -1,7 +1,8 @@
 // Groups of vaults and devices for scenarios (contracts/group.md): users with their own vaults, each
 // device an application over its own data, all pointed at one test relay. Everything a scenario asks of
 // a platform goes through the driver layer (`platform/host.ts`); nothing here names a platform.
-import { unwrap } from './flows.ts'
+import { PROCESS_END_LIMIT_MS } from './close-promises.ts'
+import { openLauncher, unwrap } from './flows.ts'
 import { deviceFolder } from './device-folder.ts'
 import {
   DEFAULT_MAX_DEVICES,
@@ -165,6 +166,30 @@ export class Device {
     this.process = undefined
     this.state = next
     this.group.deps.step('device-stopped', this.address, this.address)
+  }
+
+  /**
+   * Locks the vault through the lock control, as a person does; the application ends with it. The
+   * launcher is opened first unless it is already open. Returns the time from the press to the end of
+   * the process, which the close promise of spec 013 bounds.
+   */
+  async lock(limitMs: number = PROCESS_END_LIMIT_MS): Promise<number> {
+    const next = nextState(this.state, 'stop', this.offlineMode)
+    const running = this.page
+    try {
+      await running.waitForDisplayed('lock-instance', 0)
+    } catch {
+      await openLauncher(running)
+    }
+    const pressedAt = await running.press('lock-instance')
+    await running.waitForEnd(limitMs)
+    const elapsedMs = Date.now() - pressedAt
+    // The application is gone; this releases what the host kept for it.
+    await running.stop()
+    this.process = undefined
+    this.state = next
+    this.group.deps.step('device-locked', `${this.address} ${elapsedMs} ms`)
+    return elapsedMs
   }
 
   /** Ends the device without the application's shutdown. */

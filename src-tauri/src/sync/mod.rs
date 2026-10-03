@@ -74,7 +74,7 @@ pub async fn reconnect_missing(node: &endpoint::SyncNode, replica: &replica::Rep
             continue;
         };
         if let Err(error) = node.connect(addr).await {
-            log::debug!("sync: reconnect to a known device did not succeed yet: {error}");
+            log::info!("sync: reconnect to a known device did not succeed yet: {error}");
         }
     }
     // A device the list does not name yet announced a newer list: one dial

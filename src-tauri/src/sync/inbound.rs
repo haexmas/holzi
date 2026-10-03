@@ -312,14 +312,22 @@ fn groups(changes: Vec<Change>) -> Result<Vec<(String, Vec<Change>)>, InboundErr
     Ok(groups)
 }
 
-/// Per removed origin the smallest limit any known valid list sets.
+/// Per removed origin its limit in the effective list. Only that list's
+/// removals count (FR-043, FR-005): it carries forward every removal of the
+/// lists it builds on, and a same-generation fork that lost the tie-break has
+/// no say. Two main devices that removed each other each hold such a fork;
+/// counting the losing one would reject everything the remaining main device
+/// writes from then on.
 fn removal_limits(q: &mut impl query::Query) -> haex_crdt::Result<HashMap<Uuid, String>> {
     let Some(vault) = keys::vault_pubkey(q)? else {
         return Ok(HashMap::new());
     };
     let valid = device_list::valid_lists(&device_list::load_all(q)?, &vault);
+    let Some(effective) = device_list::effective(&valid) else {
+        return Ok(HashMap::new());
+    };
     let mut limits: HashMap<Uuid, String> = HashMap::new();
-    for removed in valid.values().flat_map(|signed| &signed.list.removed) {
+    for removed in &effective.list.removed {
         let limit = limits
             .entry(removed.vault_device_uuid)
             .or_insert_with(|| removed.limit_hlc.clone());
