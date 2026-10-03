@@ -7,8 +7,8 @@ import { addThread, expectThreads, threadTitles } from '../lib/sync-flows.ts'
 const RECONNECT_MS = 90_000
 
 // Spec 033, edge case and gate G1: the test relay is switched off while devices run and comes back on the
-// same address. The devices neither crash nor lose local work, and a device that started while the relay
-// was away finds the other once it is back.
+// same address. The devices neither crash nor lose local work, and devices that started while the relay
+// was away find each other once it is back.
 scenario('sync-relay-return', { timeoutMs: 360_000 }, async (ctx) => {
   const g = await ctx.group({ users: { anna: ['laptop', 'phone'] } })
   const laptop = g.device('anna/laptop')
@@ -17,7 +17,12 @@ scenario('sync-relay-return', { timeoutMs: 360_000 }, async (ctx) => {
 
   await g.relay.stop()
   assert.equal(g.relay.state, 'down')
-  await phone.restart()
+  // A device reaches the other at the address it last had without any relay. Both start anew while the
+  // relay is away, one after the other, so neither knows where the other is now and only the relay can
+  // bring them together.
+  await phone.stop()
+  await laptop.restart()
+  await phone.start()
   await addThread(laptop, 'während der Pause am Laptop')
   await addThread(phone, 'während der Pause am Telefon')
   assert.ok(
@@ -27,10 +32,9 @@ scenario('sync-relay-return', { timeoutMs: 360_000 }, async (ctx) => {
   assert.deepEqual(await threadTitles(laptop), ['während der Pause am Laptop'])
   ctx.step('without the relay the devices run and keep local work')
 
-  // The laptop still holds the session of the phone's earlier process until it notices the phone is
-  // gone (about the idle time of the connection); only then does "online" mean something again.
-  await expectOnline(ctx, laptop, phone, false, 60_000)
-  ctx.step('the laptop noticed the phone is gone')
+  await expectOnline(ctx, laptop, phone, false)
+  await expectOnline(ctx, phone, laptop, false)
+  ctx.step('without the relay they do not find each other')
 
   await g.relay.start()
   assert.equal(g.relay.state, 'up')

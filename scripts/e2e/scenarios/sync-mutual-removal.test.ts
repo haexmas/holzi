@@ -63,10 +63,11 @@ scenario('sync-mutual-removal', { timeoutMs: 600_000 }, async (ctx) => {
     pubkeys.set(device.address, await device.pubkey())
   }
 
-  // Going offline takes the servers away, not the direct path: some time after its restart (on the CI
-  // runner about half a minute) a main device reaches the linked device again at the address it last had,
-  // and the linked device would then carry the first removal to the other main device before that one
-  // removes. So both remove right away.
+  // Going offline takes the servers away, not the direct path: a main device would still reach the
+  // linked device at the address it last had, and the linked device would carry the first removal to the
+  // other main device before that one removes. So the linked device is away as well. It then comes back
+  // with the old content key only, and has to be found in that key's mailbox.
+  await b.stop()
   await a.goOffline()
   await c.goOffline()
   ctx.step('both main devices are cut off from each other')
@@ -77,6 +78,7 @@ scenario('sync-mutual-removal', { timeoutMs: 600_000 }, async (ctx) => {
 
   await a.goOnline()
   await c.goOnline()
+  await b.start()
 
   const outcome = await ctx.waitFor(
     'exactly one of the two main devices to stay main and the other to be removed',

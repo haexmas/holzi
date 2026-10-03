@@ -315,8 +315,8 @@ pub fn current_key(
 
 /// The highest held key issued for `list_hash` whose envelopes do not name a
 /// removed device. A same-generation fork can leave two different keys in a
-/// replica; selecting the key belonging to the effective list avoids treating
-/// the losing fork's removal as a reason to discard the winning key as well.
+/// replica; preferring the effective list's key avoids selecting a key from
+/// the losing fork when both generations are otherwise equal.
 pub fn current_key_for_list(
     q: &mut impl Query,
     removed: &[[u8; 32]],
@@ -342,11 +342,8 @@ pub fn current_key_for_list(
             |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )?
     };
-    // Older databases can hold a valid key from before the current list was
-    // written. Prefer a key explicitly issued for the effective list, but do
-    // not make presence disappear merely because that list has not received
-    // a new generation yet. If matching rows existed, keep the strict
-    // selection: their envelopes may deliberately exclude removed devices.
+    // Legacy databases may not have a generation explicitly tied to the current
+    // list yet. Fall back to the complete local key set in that case.
     if held.is_empty() && list_hash.is_some() {
         held = q.query_map(
             "SELECT key_id, generation, key FROM vault_content_keys_no_sync \

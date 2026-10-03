@@ -39,7 +39,7 @@ pub use service::{start_for_active_instance, SyncService};
 /// network change, or simply having just learned of a device presence has
 /// not been able to reach until now. Best-effort: a device still
 /// unreachable is left for the next call, never treated as an error.
-pub async fn reconnect_missing(node: &endpoint::SyncNode, replica: &replica::Replica) {
+pub fn reconnect_missing(node: &endpoint::SyncNode, replica: &replica::Replica) {
     let rows = match crate::storage::query::read(replica.db(), |r| presence::load_all(r)) {
         Ok(rows) => rows,
         Err(error) => {
@@ -70,19 +70,14 @@ pub async fn reconnect_missing(node: &endpoint::SyncNode, replica: &replica::Rep
         {
             continue;
         }
-        let Some(addr) = row.endpoint_addr else {
-            continue;
-        };
-        if let Err(error) = node.connect(addr).await {
-            log::info!("sync: reconnect to a known device did not succeed yet: {error}");
+        if let Some(addr) = row.endpoint_addr {
+            node.dial(addr);
         }
     }
     // A device the list does not name yet announced a newer list: one dial
     // fetches it, and the handshake then decides (FR-007).
     for addr in node.take_candidates() {
-        if let Err(error) = node.connect(addr).await {
-            log::debug!("sync: a device with a newer list did not answer yet: {error}");
-        }
+        node.dial(addr);
     }
 }
 

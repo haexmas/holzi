@@ -1,3 +1,6 @@
+use std::collections::BTreeSet;
+use std::sync::{Arc, Mutex};
+
 use tokio::io::{duplex, split};
 use zeroize::Zeroizing;
 
@@ -14,23 +17,38 @@ pub(super) async fn run(
     d_local: Local<'_>,
     endpoint_a_sees: [u8; 32],
 ) -> (Result<Peer, HandshakeError>, Result<Peer, HandshakeError>) {
+    let noop = |_tables: BTreeSet<String>| {};
+    run_with_callbacks(a, d, a_local, d_local, endpoint_a_sees, &noop, &noop).await
+}
+
+async fn run_with_callbacks(
+    a: &Member,
+    d: &Member,
+    a_local: Local<'_>,
+    d_local: Local<'_>,
+    endpoint_a_sees: [u8; 32],
+    a_applied: &(dyn Fn(BTreeSet<String>) + Send + Sync),
+    d_applied: &(dyn Fn(BTreeSet<String>) + Send + Sync),
+) -> (Result<Peer, HandshakeError>, Result<Peer, HandshakeError>) {
     let (a_side, d_side) = duplex(1 << 20);
     let (mut a_recv, mut a_send) = split(a_side);
     let (mut d_recv, mut d_send) = split(d_side);
     tokio::join!(
-        accept(
+        accept_with(
             &mut a_send,
             &mut a_recv,
             &a.device.replica,
             &a_local,
-            endpoint_a_sees
+            endpoint_a_sees,
+            a_applied,
         ),
-        dial(
+        dial_with(
             &mut d_send,
             &mut d_recv,
             &d.device.replica,
             &d_local,
-            a.keys.endpoint_id
+            a.keys.endpoint_id,
+            d_applied,
         ),
     )
 }
@@ -84,6 +102,37 @@ async fn the_newer_list_travels_in_the_handshake_both_ways() {
         "{at_other:?} {at_main:?}"
     );
     assert_eq!(at_other.expect("peer").list.generation, 3);
+}
+
+#[tokio::test]
+async fn a_device_list_learned_during_the_handshake_notifies_the_service() {
+    let main = Member::genesis();
+    let linked = Member::join(&main);
+    main.add(&linked);
+    let applied = Arc::new(Mutex::new(Vec::<BTreeSet<String>>::new()));
+    let signal = Arc::clone(&applied);
+    let on_linked_applied = move |tables: BTreeSet<String>| {
+        signal.lock().expect("callback lock").push(tables);
+    };
+    let noop = |_tables: BTreeSet<String>| {};
+
+    let (_, at_linked) = run_with_callbacks(
+        &main,
+        &linked,
+        main.local(),
+        linked.local(),
+        linked.keys.endpoint_id,
+        &noop,
+        &on_linked_applied,
+    )
+    .await;
+    at_linked.expect("handshake");
+
+    assert!(applied
+        .lock()
+        .expect("callback lock")
+        .iter()
+        .any(|tables| tables.contains("device_lists")));
 }
 
 #[tokio::test]

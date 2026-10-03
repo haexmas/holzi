@@ -8,7 +8,7 @@
 //! Per device at most one connection lives: when both dial each other at
 //! once, the connection dialed by the smaller endpoint id stays.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -33,6 +33,8 @@ const BIND_TIMEOUT: Duration = Duration::from_secs(15);
 /// How long a refusing side waits for the refused peer to read the refusal and close, before
 /// it closes itself.
 const REFUSAL_GRACE: Duration = Duration::from_secs(2);
+/// The close reason for a connection dropped because another one to that device stays.
+const DUPLICATE: &[u8] = b"duplicate";
 /// How long the router may take to shut down at the session end.
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -83,12 +85,13 @@ struct Inner {
     duplicates: DuplicateWatch,
     /// Called when a device's problem was set or cleared (FR-034).
     devices_changed: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
-    /// Called after a live session ends, so the service can replace it.
-    connection_ended: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
-    /// The effective device-list marker for which sessions were last reset.
-    /// Multiple sessions can observe the same list change concurrently; only
-    /// the first observer must restart the sessions.
-    sessions_reset_for_list: Mutex<Option<([u8; 32], u64)>>,
+    /// Called after a live session ended, so reconnect can replace it.
+    session_ended: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
+    /// Addresses being dialed right now: a dial to a device that is gone waits for the connect
+    /// timeout, so dials run apart, each address at most once at a time. Keyed by the whole
+    /// address, not the endpoint: a device that came back at a new address is dialed there at
+    /// once, while the dial to its old one still waits.
+    dialing: Mutex<HashSet<EndpointAddr>>,
     /// Devices this device's list does not name whose presence claimed a
     /// newer list, waiting to be dialed once to fetch it (FR-007).
     candidates: Mutex<HashMap<[u8; 32], EndpointAddr>>,
@@ -174,9 +177,9 @@ impl SyncNode {
             applied_relays: Mutex::new(initial_relays),
             duplicates: DuplicateWatch::default(),
             devices_changed: Mutex::new(None),
-            connection_ended: Mutex::new(None),
-            sessions_reset_for_list: Mutex::new(None),
+            session_ended: Mutex::new(None),
             candidates: Mutex::new(HashMap::new()),
+            dialing: Mutex::new(HashSet::new()),
         });
         let router = Router::builder(endpoint)
             .accept(SYNC_ALPN, SyncProtocol(Arc::clone(&inner)))
@@ -191,18 +194,36 @@ impl SyncNode {
 
     /// Dials a device at `addr` and runs the session in the background.
     pub async fn connect(&self, addr: EndpointAddr) -> Result<(), NodeError> {
-        self.inner.lookup.add_endpoint_info(addr.clone());
-        let connection = self
-            .inner
-            .endpoint
-            .connect(addr, SYNC_ALPN)
-            .await
-            .map_err(|e| NodeError::Connect(e.to_string()))?;
+        let connection = connect_sync(&self.inner, addr).await?;
         let inner = Arc::clone(&self.inner);
         self.inner
             .tracker
             .spawn(run_connection(inner, connection, Side::Dial));
         Ok(())
+    }
+
+    /// Dials a device at `addr` in the background, then runs the session. Returns at once: a
+    /// device that is gone keeps its dial waiting for the connect timeout, which must not hold
+    /// up the dials to the others. Does nothing while a dial to that address is under way.
+    pub fn dial(&self, addr: EndpointAddr) {
+        let mut dialing = self.inner.dialing.lock().unwrap_or_else(|e| e.into_inner());
+        if !dialing.insert(addr.clone()) {
+            return;
+        }
+        drop(dialing);
+        let inner = Arc::clone(&self.inner);
+        self.inner.tracker.spawn(async move {
+            let connected = connect_sync(&inner, addr.clone()).await;
+            inner
+                .dialing
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&addr);
+            match connected {
+                Ok(connection) => run_connection(inner, connection, Side::Dial).await,
+                Err(error) => log::info!("sync: dialing a device did not succeed yet: {error}"),
+            }
+        });
     }
 
     /// Dials `addr` on the link protocol and hands the connection to the
@@ -223,14 +244,6 @@ impl SyncNode {
         self.inner.bump.send_modify(|n| *n = n.wrapping_add(1));
     }
 
-    /// Ends all sessions after a presence mailbox change. A device-list
-    /// update can rotate the mailbox key while an old transport connection is
-    /// still present; keeping that connection would make reconnect skip the
-    /// fresh presence address.
-    pub fn reset_connections(&self) {
-        reset_connections_now(&self.inner, b"presence mailbox changed");
-    }
-
     /// This device's own key, which is on its device list but never a peer.
     pub fn device_pubkey(&self) -> [u8; 32] {
         self.inner.keys.device_pubkey
@@ -246,12 +259,13 @@ impl SyncNode {
         *slot = Some(hook);
     }
 
-    /// Sets what runs after a live session ends, independently of device
-    /// problem notifications such as a peer refusing a removed device.
-    pub fn on_connection_ended(&self, hook: Arc<dyn Fn() + Send + Sync>) {
+    /// Sets what runs after a live session ended. A device that restarted is refused as a
+    /// duplicate until this side notices the old session is gone (the connection's idle time);
+    /// dialing right then, instead of on the next reconnect tick, brings it back at once.
+    pub fn on_session_ended(&self, hook: Arc<dyn Fn() + Send + Sync>) {
         let mut slot = self
             .inner
-            .connection_ended
+            .session_ended
             .lock()
             .unwrap_or_else(|e| e.into_inner());
         *slot = Some(hook);
@@ -390,10 +404,19 @@ impl SyncNode {
     }
 }
 
+/// Opens a connection to `addr` on the sync protocol.
+async fn connect_sync(inner: &Inner, addr: EndpointAddr) -> Result<Connection, NodeError> {
+    inner.lookup.add_endpoint_info(addr.clone());
+    inner
+        .endpoint
+        .connect(addr, SYNC_ALPN)
+        .await
+        .map_err(|e| NodeError::Connect(e.to_string()))
+}
+
 /// Handshake, then the session, for one connection.
 async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
     let remote = *connection.remote_id().as_bytes();
-    let list_marker_before_handshake = current_device_list_marker(&inner);
     let streams = match side {
         Side::Accept => connection.open_bi().await,
         Side::Dial => connection.accept_bi().await,
@@ -412,19 +435,28 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
     };
     let handshake = match side {
         Side::Accept => {
-            handshake::accept(&mut send, &mut recv, &inner.replica, &local, remote).await
+            handshake::accept_with(
+                &mut send,
+                &mut recv,
+                &inner.replica,
+                &local,
+                remote,
+                inner.on_applied.as_ref(),
+            )
+            .await
         }
-        Side::Dial => handshake::dial(&mut send, &mut recv, &inner.replica, &local, remote).await,
+        Side::Dial => {
+            handshake::dial_with(
+                &mut send,
+                &mut recv,
+                &inner.replica,
+                &local,
+                remote,
+                inner.on_applied.as_ref(),
+            )
+            .await
+        }
     };
-    if list_marker_before_handshake != current_device_list_marker(&inner) {
-        // A handshake can store a newer effective list before it becomes a
-        // session, including when this peer is refused as removed. Restart
-        // the existing sessions once for that list so their peer snapshot and
-        // progress exchange start from the converged state. Handshakes already
-        // in flight are allowed to finish; register() still coalesces the
-        // simultaneous dials to one preferred connection.
-        reset_connections_for_list_change(&inner);
-    }
     let peer = match handshake {
         Ok(peer) => peer,
         Err(error) => {
@@ -443,12 +475,12 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
         }
     };
     if inner.duplicates.holds(&peer.device_pubkey) {
-        connection.close(ErrorCode::Rejected.as_u32().into(), b"duplicate");
+        connection.close(ErrorCode::Rejected.as_u32().into(), DUPLICATE);
         return;
     }
     clear_problem(&inner, peer.device_pubkey).await;
     if !register(&inner, &peer, &connection, side, remote) {
-        connection.close(ErrorCode::Closed.as_u32().into(), b"duplicate");
+        connection.close(ErrorCode::Closed.as_u32().into(), DUPLICATE);
         return;
     }
     log::info!(
@@ -458,7 +490,6 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
     // The device is online now: its time is now, and the list shows it.
     mark_seen(&inner, peer.device_pubkey).await;
     notify_devices_changed(&inner);
-    let list_marker = Arc::new(Mutex::new(current_device_list_marker(&inner)));
 
     let ctx = SessionContext {
         replica: Arc::clone(&inner.replica),
@@ -466,27 +497,7 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
         vault: inner.vault,
         changed: inner.changed.clone(),
         bump: Arc::clone(&inner.bump),
-        on_applied: {
-            let inner = Arc::clone(&inner);
-            let on_applied = Arc::clone(&inner.on_applied);
-            let list_marker = Arc::clone(&list_marker);
-            Arc::new(move |tables| {
-                let list_changed = tables.contains("device_lists") && {
-                    let current = current_device_list_marker(&inner);
-                    let mut previous = list_marker.lock().unwrap_or_else(|e| e.into_inner());
-                    let changed = *previous != current;
-                    *previous = current;
-                    changed
-                };
-                if list_changed {
-                    // A new effective list changes the handshake context of
-                    // every session. The node-wide marker coalesces this
-                    // across concurrently applying sessions.
-                    reset_connections_for_list_change(&inner);
-                }
-                on_applied(tables);
-            })
-        },
+        on_applied: Arc::clone(&inner.on_applied),
         on_devices_changed: {
             let inner = Arc::clone(&inner);
             Arc::new(move || notify_devices_changed(&inner))
@@ -513,73 +524,30 @@ async fn run_connection(inner: Arc<Inner>, connection: Connection, side: Side) {
         // The last moment it was online is when the session ended.
         mark_seen(&inner, peer.device_pubkey).await;
         notify_devices_changed(&inner);
-        notify_connection_ended(&inner);
-    }
-}
-
-fn notify_connection_ended(inner: &Inner) {
-    let hook = inner
-        .connection_ended
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .clone();
-    if let Some(hook) = hook {
-        hook();
-    }
-}
-
-fn current_device_list_marker(inner: &Inner) -> Option<([u8; 32], u64)> {
-    crate::storage::query::read(inner.replica.db(), |r| {
-        let vault = crate::sync::keys::vault_pubkey(r)?.unwrap_or([0; 32]);
-        let valid =
-            crate::sync::device_list::valid_lists(&crate::sync::device_list::load_all(r)?, &vault);
-        Ok(crate::sync::device_list::effective(&valid)
-            .map(|signed| (signed.hash, signed.list.generation)))
-    })
-    .ok()
-    .flatten()
-}
-
-fn reset_connections_for_list_change(inner: &Arc<Inner>) -> bool {
-    let Some(marker) = current_device_list_marker(inner) else {
-        return false;
-    };
-    {
-        let mut reset_for = inner
-            .sessions_reset_for_list
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        if *reset_for == Some(marker) {
-            return false;
+        // A peer that closed this one as a duplicate keeps another connection to this device,
+        // possibly one of this device's previous process it has not seen end yet; dialing again
+        // at once would only be refused again, and the stream of dials keeps that stale
+        // connection from timing out. The peer dials itself once it notices.
+        if !closed_as_duplicate(&connection) {
+            let hook = inner
+                .session_ended
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone();
+            if let Some(hook) = hook {
+                hook();
+            }
         }
-        *reset_for = Some(marker);
     }
-    reset_connections_now(inner, b"device list changed");
-    true
 }
 
-fn reset_connections_now(inner: &Arc<Inner>, reason: &[u8]) {
-    // A device-list update learned during a handshake bypasses the normal
-    // applied-pull callback. Wake presence as well, so a rotated mailbox is
-    // subscribed before the next peer announces itself.
-    inner.bump.send_modify(|n| *n = n.wrapping_add(1));
-    let connections: Vec<_> = {
-        let mut peers = inner.peers.lock().unwrap_or_else(|e| e.into_inner());
-        peers.drain().map(|(_, connection)| connection).collect()
-    };
-    if connections.is_empty() {
-        return;
-    }
-    log::info!(
-        "sync: ending {} session(s): {}",
-        connections.len(),
-        String::from_utf8_lossy(reason)
-    );
-    for connection in connections {
-        connection.close(ErrorCode::Closed.as_u32().into(), reason);
-    }
-    notify_devices_changed(inner);
-    notify_connection_ended(inner);
+/// Whether the peer closed `connection` because it keeps another one to this device.
+fn closed_as_duplicate(connection: &Connection) -> bool {
+    matches!(
+        connection.close_reason(),
+        Some(iroh::endpoint::ConnectionError::ApplicationClosed(close))
+            if close.reason.as_ref() == DUPLICATE
+    )
 }
 
 /// The code to close the connection with: a wire error keeps its own
@@ -616,7 +584,7 @@ fn register(
         Some(existing) if existing.close_reason().is_none() && !preferred => false,
         Some(existing) => {
             if existing.stable_id() != connection.stable_id() {
-                existing.close(ErrorCode::Closed.as_u32().into(), b"duplicate");
+                existing.close(ErrorCode::Closed.as_u32().into(), DUPLICATE);
             }
             peers.insert(peer.device_pubkey, connection.clone());
             true
