@@ -53,3 +53,48 @@ async fn a_closing_gate_ends_the_bound_service_within_budget() {
     .await
     .expect("the service ends once the close starts");
 }
+
+#[tokio::test(start_paused = true)]
+async fn reconnect_passes_keep_the_least_gap() {
+    let mut pace = ReconnectPace::default();
+    let start = tokio::time::Instant::now();
+    pace.ready().await;
+    assert_eq!(
+        start.elapsed(),
+        Duration::ZERO,
+        "the first pass runs at once"
+    );
+    pace.ready().await;
+    assert_eq!(
+        start.elapsed(),
+        RECONNECT_MIN_GAP,
+        "the next waits out the gap"
+    );
+    tokio::time::sleep(RECONNECT_MIN_GAP * 3).await;
+    let later = tokio::time::Instant::now();
+    pace.ready().await;
+    assert_eq!(
+        later.elapsed(),
+        Duration::ZERO,
+        "after a quiet while it runs at once"
+    );
+}
+
+/// A peer that ends every session at once wakes reconnect again after each pass: in ten seconds
+/// that is six passes, not the hundreds an unpaced loop made.
+#[tokio::test(start_paused = true)]
+async fn a_peer_ending_every_session_is_dialed_once_per_gap() {
+    let wake = Notify::new();
+    let mut pace = ReconnectPace::default();
+    let start = tokio::time::Instant::now();
+    let mut passes = 0;
+    wake.notify_one();
+    while start.elapsed() < Duration::from_secs(10) {
+        wake.notified().await;
+        pace.ready().await;
+        passes += 1;
+        // The session this pass opened ends at once, and the end wakes reconnect.
+        wake.notify_one();
+    }
+    assert_eq!(passes, 6);
+}
