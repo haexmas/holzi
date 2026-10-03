@@ -52,6 +52,9 @@ Browser-Erweiterung) ist nicht Teil dieser Spec. Referenz: haex-vault @
   → A: Sie sind Aufrufer wie Erweiterungen: Mit einer Freigabe für ein Tag des Eintrags dürfen
   sie alles, was die Art der Freigabe deckt. Nur der eingebaute Agent im Chat bekommt keine
   Passkey-Funktion.
+- Q: Gilt die Ablage in allen Fenstern des Passwortmanagers oder nur im Fenster, in dem sie
+  gefüllt wurde? → A: In allen Fenstern des Passwortmanagers im Prozess (FR-021); sie
+  verschwindet mit dem letzten geschlossenen Fenster.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -604,8 +607,6 @@ antippen, einen Anhang umbenennen.
 
 - Die **Tab-Wischgeste** bekommt eine eigene Bibliothek für Gesten und Übergänge; welche, wird
   im Plan entschieden. haex-vault hat dort nur Tippen, die Wischgeste ist neu.
-- Die **Ablage** gilt prozessweit für alle Fenster des Passwortmanagers (siehe FR-021); wer
-  sie lieber je Fenster hätte, ändert nur diese Zeile und FR-021.
 - **Kopierte Einträge** behalten ihren Titel; ein Zusatz wie „(Kopie)“ ist nicht vorgesehen,
   weil Namen nicht eindeutig sein müssen. Anhänge werden mitkopiert (billig durch die
   Prüfsumme), Passkeys und Verlauf nicht.
