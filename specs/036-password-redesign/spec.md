@@ -72,7 +72,9 @@ Browser-Erweiterung) ist nicht Teil dieser Spec. Referenz: haex-vault @
   einheitliches System für Verweise zwischen Einträgen, nicht nur beim Kopieren; der Kopier-Dialog
   setzt solche Platzhalter. Passkeys sind kein Text und werden per Verbindung verwiesen (FR-046).
   In haex-vault, vault-sdk, haextension und atoms gibt es kein solches System (nur Anhänge
-  verweisen dort über die Prüfsumme); es ist neu.
+  verweisen dort über die Prüfsumme); es ist neu. Die Tiefe ist eine Stufe (kein Verweis auf einen Verweis). Beim
+  KeePass-Import werden dessen Verweise `{REF:…}` in dieses System umgewandelt, soweit
+  eindeutig (haex-vault tut das nicht).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -343,7 +345,7 @@ stattdessen per Verbindung zur Quelle verwiesen.
 **Why this priority**: Der Kopier-Dialog bietet es an, und es ist das eine einheitliche System
 für alle Verweise zwischen Einträgen. Ohne Verweise bleibt alles andere benutzbar.
 
-**Independent Test**: Einen Eintrag mit Benutzername, Passwort, einem eigenen Feld „PIN“ und
+**Independent Test**: Eine KeePass-Datei mit einem Verweis auf ein Passwort importieren, einen Eintrag mit Benutzername, Passwort, einem eigenen Feld „PIN“ und
 einem Passkey kopieren und dabei das Passwort als Verweis wählen, das Passwort in der Quelle
 ändern, die Kopie ansehen, im Feld eines dritten Eintrags einen Verweis auf „PIN“ einfügen, das
 Passwort in der Kopie überschreiben, die Quelle löschen.
@@ -362,10 +364,11 @@ Passwort in der Kopie überschreiben, die Quelle löschen.
    holzi ihn ebenso.
 4. **Given** ein Verweisfeld, **When** der Nutzer die Marke löscht oder das Feld überschreibt,
    **Then** wird nur dieser Teil zum eigenen Text; andere Verweise im Eintrag bleiben.
-5. **Given** eine Quelle, deren Wert selbst einen Verweis enthält, **When** das Ziel gelesen
-   wird, **Then** wird der Verweis bis zur eigentlichen Quelle aufgelöst; ein Verweis, der auf
-   sich selbst zurückführt (A verweist auf B, B auf A), wird beim Speichern abgelehnt, und
-   gelangt er dennoch an (Sync), zeigt das Feld „Verweiskreis“ statt eines Werts.
+5. **Given** eine Quelle, deren Wert selbst einen Verweis enthält, **When** der Nutzer in einem
+   Ziel darauf verweisen will, **Then** lehnt holzi das ab und nennt die Quelle, auf die er
+   stattdessen verweisen kann (ein Verweis zeigt immer auf einen Wert, der kein Verweis ist);
+   kommt eine solche Kette dennoch an (Sync), zeigt das Feld „Verweis auf Verweis“ statt
+   eines Werts, und nichts wird weiter aufgelöst.
 6. **Given** eine Kopie mit „Passkeys per Verweis übernehmen“, **When** ein Aufrufer über die
    Kopie bestätigt, **Then** signiert der Dienst mit dem Schlüssel der Quelle, und der Zähler
    der Quelle steigt; die Kopie hat keinen eigenen Schlüssel.
@@ -377,9 +380,13 @@ Passwort in der Kopie überschreiben, die Quelle löschen.
    ein Feld mit Verweis liest, **Then** erhält er für dieses Feld keinen Wert, nicht den der
    Quelle und keinen Hinweis, dass ein Verweis besteht; in Listen erscheinen Felder mit Verweis
    für ihn leer.
-9. **Given** ein Verweis in einem alten Stand des Verlaufs, **When** der Nutzer ihn
-   wiederherstellt, **Then** gilt der Platzhalter wieder; ist die Quelle weg, sagt holzi es und
-   stellt den Rest her.
+9. **Given** eine KeePass-Datei, in der ein Eintrag mit `{REF:P@I:<UUID>}` das Passwort eines
+   anderen Eintrags nennt, **When** der Nutzer sie importiert, **Then** trägt der importierte
+   Eintrag den Verweis `{$<neue Kennung>:password}` auf den importierten Eintrag; ein Verweis
+   auf ein anderes Feld oder ohne eindeutigen Treffer bleibt Text und steht im Importbericht.
+10. **Given** ein Verweis in einem alten Stand des Verlaufs, **When** der Nutzer ihn
+    wiederherstellt, **Then** gilt der Platzhalter wieder; ist die Quelle weg, sagt holzi es und
+    stellt den Rest her.
 
 ---
 
@@ -654,12 +661,14 @@ Passwort in der Kopie überschreiben, die Quelle löschen.
   Editor MUSS einen Verweis als Marke mit dem Namen der Quelle und der Art des Werts zeigen
   (ein Tipp öffnet die Quelle), das Einfügen eines Verweises anbieten (Eintrag suchen, Wert
   wählen) und von Hand getippte Platzhalter erkennen. Ein Platzhalter, der nicht aufgelöst
-  werden kann (Quelle fehlt oder Kreis), MUSS als solcher gekennzeichnet sein und DARF beim
+  werden kann (Quelle fehlt oder ist selbst ein Verweis), MUSS als solcher gekennzeichnet sein und DARF beim
   Kopieren oder Benutzen nicht als Text verwendet werden; es gibt eine Meldung.
-- **FR-046**: Aufgelöst wird bis zur eigentlichen Quelle (ein Wert, der selbst Verweise
-  enthält, wird ebenfalls aufgelöst) mit einer festen Obergrenze der Tiefe, die der Plan
-  festlegt. Ein Kreis MUSS beim Speichern abgelehnt werden und, wenn er dennoch ankommt
-  (Sync), als „Verweiskreis“ gekennzeichnet werden. Ein **Passkey** ist kein Text: Er wird beim
+- **FR-046**: Aufgelöst wird **genau eine Stufe**: Ein Verweis zeigt auf einen Wert, der selbst
+  keinen Verweis enthält. Das Speichern eines Verweises auf einen Wert mit Verweis MUSS
+  abgelehnt werden (mit dem Hinweis, auf welche Quelle stattdessen verwiesen werden kann), und
+  ebenso das Speichern eines Verweises in einen Wert, auf den schon verwiesen wird. Kommt
+  dennoch eine Kette an (Sync), MUSS das Feld „Verweis auf Verweis“ zeigen, ohne weiter
+  aufzulösen. Kreise sind dadurch ausgeschlossen. Ein **Passkey** ist kein Text: Er wird beim
   Kopieren (FR-015) per Verbindung zur Quelle verwiesen, erscheint im Ziel mit seinen
   Kopfdaten, Bestätigen über das Ziel signiert mit dem Schlüssel der Quelle, und der Zähler
   gehört der Quelle. Ein Passkey wird nie als Wert kopiert.
@@ -674,6 +683,12 @@ Passwort in der Kopie überschreiben, die Quelle löschen.
   anbieten, die Verweise in eigene Werte umzuwandeln (der Platzhalter wird durch den heutigen
   Wert ersetzt); Verweise von Passkeys fallen dabei weg, und die Warnung sagt es. Der
   Papierkorb löst keine Verweise auf (für den Nutzer bleibt der Wert sichtbar).
+- **FR-050**: Der KeePass-Import (034 FR-023) MUSS KeePass-Verweise der Form
+  `{REF:<Feld>@<Suche>:<Text>}` in Verweise dieses Systems umwandeln, wenn das gewünschte Feld
+  Benutzername oder Passwort ist und die Quelle sich in der importierten Datenbank eindeutig
+  findet (über die KeePass-Kennung oder über genau einen Treffer der Suche); die Kennung der
+  Quelle ist dann die des importierten Eintrags. Alle anderen Verweise (anderes Feld, kein oder
+  mehrere Treffer, Verweis auf Verweis) bleiben Text, und der Importbericht nennt ihre Zahl.
 - **FR-049**: Der Verlauf MUSS Platzhalter unverändert speichern, nie den aufgelösten Wert (so
   gelangt kein Geheimnis der Quelle in den Verlauf des Ziels); Wiederherstellen stellt den
   Platzhalter wieder her.
@@ -746,10 +761,9 @@ Passwort in der Kopie überschreiben, die Quelle löschen.
 - Der **Kopier-Dialog** erscheint beim Einfügen, denn dann entsteht die Kopie; die Auswahl beim
   Kopieren selbst bleibt ohne Dialog.
 - **Verweise** sind zunächst auf Benutzername, Passwort und eigene Felder beschränkt, wie die
-  Beispiele zeigen; weitere Wertarten lassen sich später ohne Änderung der Form zulassen. Das
-  Umwandeln der Verweise von KeePass (`{REF:…}`) beim Import ist nicht Teil dieser Spec; sie
-  bleiben Text.
-
+  Beispiele zeigen; weitere Wertarten lassen sich später ohne Änderung der Form zulassen. Der
+  Aufbau gleicht dem von KeePass; auch dort lösen Verweise sich beim Lesen auf. Wir lösen nur
+  eine Stufe auf, damit weder Kreise noch lange Ketten entstehen.
 - Die **Kürzel** sind feste Voreinstellungen; das Umbelegen kommt mit dem Umbelegen der
   wm-Kürzel (Spec 020). Die Auswahl der Zeile mit Pfeiltasten gilt nur im Passwortmanager.
 - Ein **Passkey ohne Eintrag** kann in der Tabelle von 034 (und in haex-vault) vorkommen; holzi
