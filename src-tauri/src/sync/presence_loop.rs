@@ -40,6 +40,11 @@ const RELAY_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_sec
 /// A request to be admitted that has waited this long gets a new time, so a
 /// copy left running does not let its request go stale (R20: 30 days).
 const REQUEST_RENEWAL_MS: u64 = 7 * 24 * 60 * 60 * 1000;
+// ponytail: listens on the mailboxes of the 4 newest older key generations. Ceiling: a device that
+// missed more key changes than that is not heard and has to be dialed from a stored address or
+// linked again. Upgrade path: raise it; each key adds two `p` values to the one subscription.
+/// How many older content keys presence also listens with, besides the current one.
+const OLDER_MAILBOXES: usize = 4;
 
 /// Runs presence for as long as this device's session lasts: connects to
 /// `relay_urls`, subscribes to today's and yesterday's mailbox, publishes
@@ -76,7 +81,7 @@ pub async fn run(
 
     let mut notifications = client.notifications();
     let mut publish_tick = tokio::time::interval(PUBLISH_INTERVAL);
-    let mut subscribed: Option<(u32, [u8; 32])> = None;
+    let mut subscribed: Option<(u32, Vec<[u8; 32]>)> = None;
     let mut asking_since = now_ms();
 
     loop {
@@ -119,7 +124,7 @@ pub async fn run(
     }
 }
 
-/// Subscribes anew when the day or the content key changed since
+/// Subscribes anew when the day or the content keys changed since
 /// `subscribed`, and returns what it is subscribed to now. On a failure it
 /// keeps the old value, so the next round tries again.
 async fn keep_subscribed(
@@ -128,10 +133,10 @@ async fn keep_subscribed(
     vault: [u8; 32],
     keys: &DeviceKeys,
     day: u32,
-    subscribed: Option<(u32, [u8; 32])>,
-) -> Option<(u32, [u8; 32])> {
+    subscribed: Option<(u32, Vec<[u8; 32]>)>,
+) -> Option<(u32, Vec<[u8; 32]>)> {
     let wanted = match read_roster(replica, vault, &keys.device_pubkey) {
-        Ok(roster) => roster.map(|roster| (day, roster.content_key)),
+        Ok(roster) => roster.map(|roster| (day, roster.listening_keys())),
         Err(error) => {
             log::warn!("sync: presence subscription failed, retrying next tick: {error}");
             return subscribed;
@@ -140,7 +145,7 @@ async fn keep_subscribed(
     if wanted == subscribed {
         return subscribed;
     }
-    match resubscribe(client, wanted).await {
+    match resubscribe(client, wanted.as_ref()).await {
         Ok(()) => wanted,
         Err(error) => {
             log::warn!("sync: presence subscription failed, retrying next tick: {error}");
@@ -149,22 +154,26 @@ async fn keep_subscribed(
     }
 }
 
-/// Subscribes to today's and yesterday's mailbox of the content key,
+/// Subscribes to today's and yesterday's mailbox of each content key,
 /// replacing any earlier subscription (contracts/nostr-events.md: no `since`,
-/// renewed on day rollover); without a key it only ends the old one.
+/// renewed on day rollover); without keys it only ends the old one.
 async fn resubscribe(
     client: &nostr_sdk::client::Client,
-    wanted: Option<(u32, [u8; 32])>,
+    wanted: Option<&(u32, Vec<[u8; 32]>)>,
 ) -> Result<(), PresenceError> {
     let _ = client.unsubscribe_all().await;
-    let Some((day, content_key)) = wanted else {
+    let Some((day, content_keys)) = wanted else {
         return Ok(());
     };
-    let (_, today) = mailbox_keys(&content_key, day)?;
-    let (_, yesterday) = mailbox_keys(&content_key, day.saturating_sub(1))?;
+    let mut mailboxes = Vec::with_capacity(content_keys.len() * 2);
+    for content_key in content_keys {
+        for tag in [*day, day.saturating_sub(1)] {
+            mailboxes.push(mailbox_keys(content_key, tag)?.1);
+        }
+    }
     let filter = nostr::filter::Filter::new()
         .kind(crate::sync::presence::GIFT_WRAP_KIND)
-        .pubkeys([today, yesterday]);
+        .pubkeys(mailboxes);
     client
         .subscribe(filter)
         .await
@@ -255,15 +264,15 @@ pub(crate) async fn handle_incoming(
             return false;
         }
     };
-    let Ok((mb_sk_today, _)) = mailbox_keys(&roster.content_key, day) else {
-        return false;
-    };
-    let Ok((mb_sk_yesterday, _)) = mailbox_keys(&roster.content_key, day.saturating_sub(1)) else {
-        return false;
-    };
-    let opened =
-        unwrap_rumor(event, &mb_sk_today).or_else(|_| unwrap_rumor(event, &mb_sk_yesterday));
-    let Ok((sender, kind, payload)) = opened else {
+    // The current key's mailboxes first; an older one is a device that was away while the key
+    // changed, and its meeting is checked like any other.
+    let opened = roster.listening_keys().iter().find_map(|content_key| {
+        [day, day.saturating_sub(1)].into_iter().find_map(|tag| {
+            let (mb_sk, _) = mailbox_keys(content_key, tag).ok()?;
+            unwrap_rumor(event, &mb_sk).ok()
+        })
+    });
+    let Some((sender, kind, payload)) = opened else {
         return false;
     };
     if kind == ADMISSION_KIND {
@@ -428,6 +437,8 @@ pub(crate) enum Standing {
 /// list's generation, and the device keys that list currently names.
 pub(crate) struct Roster {
     content_key: [u8; 32],
+    /// Older keys this device holds, newest first; presence only listens with them.
+    older_keys: Vec<[u8; 32]>,
     list_generation: u64,
     /// Each device the list names, with the endpoint it names for it.
     effective_devices: Vec<([u8; 32], [u8; 32])>,
@@ -441,6 +452,13 @@ pub(crate) struct Roster {
 }
 
 impl Roster {
+    /// The keys whose mailboxes presence listens on: the current one first.
+    fn listening_keys(&self) -> Vec<[u8; 32]> {
+        std::iter::once(self.content_key)
+            .chain(self.older_keys.iter().copied())
+            .collect()
+    }
+
     /// Whether the effective list names any device besides this one.
     pub(crate) fn has_peers(&self) -> bool {
         self.effective_devices.len() > 1
@@ -480,8 +498,13 @@ pub(crate) fn read_roster(
         } else {
             Standing::Unlisted
         };
+        let older_keys = crate::sync::content_keys::older_keys(r, &key.key_id, OLDER_MAILBOXES)?
+            .into_iter()
+            .map(|key| *key)
+            .collect();
         Ok(Some(Roster {
             content_key: *key.key,
+            older_keys,
             list_generation: effective.list.generation,
             effective_devices: effective
                 .list

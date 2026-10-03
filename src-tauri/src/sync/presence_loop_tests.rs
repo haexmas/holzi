@@ -329,3 +329,64 @@ async fn a_meeting_from_the_listed_endpoint_records_no_problem() {
     assert!(recorded);
     assert_eq!(problem_of(&main, &linked.keys.device_pubkey), None);
 }
+
+/// A device that was away while the content key changed still announces
+/// itself in the mailbox of the key it holds. The others listen there too,
+/// so they find it and hand it the new key in the session.
+#[tokio::test]
+async fn a_meeting_sealed_with_an_older_key_is_still_heard() {
+    let main = Member::genesis();
+    let linked = Member::join(&main);
+    main.add(&linked);
+    let old_key = crate::storage::query::read(main.device.db(), |r| {
+        crate::sync::content_keys::current_key(r, &[])
+    })
+    .expect("read")
+    .expect("a content key");
+    main.device
+        .db()
+        .write(|tx| {
+            let valid = crate::sync::device_list::valid_lists(
+                &crate::sync::device_list::load_all(tx)?,
+                &main.vault,
+            );
+            let effective = crate::sync::device_list::effective(&valid)
+                .expect("a list")
+                .clone();
+            let key = crate::sync::content_keys::ContentKey::generate(2);
+            crate::sync::content_keys::issue_generation(tx, &key, &effective, &main.keys, 10)
+        })
+        .expect("issue generation 2");
+    let roster = read_roster(&main.device.replica, main.vault, &main.keys.device_pubkey)
+        .expect("read roster")
+        .expect("a roster");
+    assert_ne!(roster.content_key, *old_key.key, "the key changed");
+    assert_eq!(
+        roster.listening_keys(),
+        vec![roster.content_key, *old_key.key]
+    );
+
+    let node = bind_loopback(&main).await;
+    let day = day_tag_now();
+    let (_, old_mailbox) = mailbox_keys(&old_key.key, day).expect("mailbox keys");
+    let content = PresenceContent::own(
+        linked.keys.device_pubkey,
+        linked.keys.endpoint_id,
+        None,
+        vec![(Ipv4Addr::LOCALHOST, 4000).into()],
+        1,
+    );
+    let event = build(&linked.keys, &content, &old_mailbox).expect("build");
+
+    let recorded = handle_incoming(
+        &node,
+        &main.device.replica,
+        &main.keys,
+        main.vault,
+        day,
+        &event,
+    )
+    .await;
+
+    assert!(recorded, "the device that missed the new key is dialed");
+}
