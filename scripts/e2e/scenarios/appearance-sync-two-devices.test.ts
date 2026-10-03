@@ -47,7 +47,20 @@ scenario('appearance-sync-two-devices', { timeoutMs: 300_000 }, async (ctx) => {
         storedAppearance(laptop),
         storedAppearance(phone),
       ])
-      return JSON.stringify(a) === JSON.stringify(b)
+      if (JSON.stringify(a) !== JSON.stringify(b)) return false
+      const [
+        [laptopPrimary, phonePrimary],
+        [laptopBackground, phoneBackground],
+      ] = await Promise.all([
+        Promise.all([theme(laptop, '--primary'), theme(phone, '--primary')]),
+        Promise.all([
+          theme(laptop, '--background'),
+          theme(phone, '--background'),
+        ]),
+      ])
+      return (
+        laptopPrimary === phonePrimary && laptopBackground === phoneBackground
+      )
     },
     { timeoutMs: 60_000, fixed: true },
   )
