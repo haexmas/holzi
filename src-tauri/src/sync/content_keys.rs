@@ -377,6 +377,39 @@ pub fn current_key_for_list(
     Ok(None)
 }
 
+/// The keys this device holds besides `current`: up to `limit` of a lower
+/// generation, newest first, then up to `limit` of a higher one, which
+/// `current_key` skipped for a removed recipient. Presence only listens with
+/// them (contracts/nostr-events.md): a device that was away while the key
+/// changed still announces itself with a lower one, and one that has not yet
+/// heard of a removal with a skipped higher one.
+pub fn listening_keys(
+    q: &mut impl Query,
+    current: &ContentKey,
+    limit: usize,
+) -> haex_crdt::Result<Vec<Zeroizing<[u8; 32]>>> {
+    let generation = i64::try_from(current.generation).map_err(|_| KeyError::Malformed)?;
+    let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+    let mut held: Vec<Vec<u8>> = q.query_map(
+        "SELECT key FROM vault_content_keys_no_sync WHERE generation < ?1 \
+         ORDER BY generation DESC LIMIT ?2",
+        params![generation, limit],
+        |r| r.get(0),
+    )?;
+    held.extend(q.query_map(
+        "SELECT key FROM vault_content_keys_no_sync WHERE generation > ?1 \
+         ORDER BY generation ASC LIMIT ?2",
+        params![generation, limit],
+        |r| r.get(0),
+    )?);
+    held.into_iter()
+        .map(|key| {
+            let key = Zeroizing::new(key);
+            Ok(Zeroizing::new(fixed(&key)?))
+        })
+        .collect()
+}
+
 /// Serializes the vault content key and its metadata into a JSON payload and
 /// encrypts it for `recipient` with NIP-44 v2 using the sender's device secret.
 pub(crate) fn wrap(
