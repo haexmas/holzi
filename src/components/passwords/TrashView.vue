@@ -127,6 +127,7 @@ async function restoreOneAsync(item: Target) {
 function askDelete(item: Target, label: string) {
   deleting.value = item
   deletingLabel.value = label
+  inlineReferences.value = true
 }
 
 async function confirmDeleteAsync() {

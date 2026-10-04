@@ -27,6 +27,8 @@ const { t } = useI18n()
 const { referencesParseAsync } = usePasswords()
 
 const parsed = ref<RefMark[]>([])
+/** The text `parsed` belongs to; its offsets fit no other text. */
+const parsedFor = ref<string | null>(null)
 const pickerOpen = ref(false)
 let request = 0
 
@@ -34,13 +36,18 @@ async function parseAsync(text: string | null) {
   const mine = ++request
   if (text === null || !text.includes('{$')) {
     parsed.value = []
+    parsedFor.value = text
     return
   }
   try {
     const marks = await referencesParseAsync(text)
-    if (mine === request) parsed.value = marks
+    if (mine !== request) return
+    parsed.value = marks
+    parsedFor.value = text
   } catch {
-    if (mine === request) parsed.value = []
+    if (mine !== request) return
+    parsed.value = []
+    parsedFor.value = text
   }
 }
 
@@ -51,10 +58,16 @@ const marks = computed(() =>
   props.text === null ? (props.storedMarks ?? []) : parsed.value,
 )
 
+/** Removing waits for the parse of the current text (200 ms debounce), or offsets cut wrongly. */
+const canRemove = computed(
+  () => props.text !== null && parsedFor.value === props.text,
+)
+
 /** UTF-16 offsets, as the backend reports them. */
 function removeMark(mark: RefMark) {
   const text = props.text
-  if (text === null) return
+  if (text === null || parsedFor.value !== text) return
+  if (!text.startsWith('{$', mark.start)) return
   emit('update:text', text.slice(0, mark.start) + text.slice(mark.end))
 }
 
@@ -70,10 +83,16 @@ function insert(token: string) {
   >
     <template v-for="mark in marks" :key="`${mark.start}-${mark.sourceItemId}`">
       <span class="inline-flex items-center gap-0.5">
-        <PasswordsReferenceValue :marks="[mark]" :text="null" :kind="kind" />
+        <PasswordsReferenceValue
+          :marks="[mark]"
+          :text="null"
+          :kind="kind"
+          :navigable="false"
+        />
         <UiButton
           v-if="text !== null"
           type="button"
+          :disabled="!canRemove"
           variant="ghost"
           size="icon-sm"
           class="size-6"

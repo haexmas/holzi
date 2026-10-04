@@ -1523,6 +1523,7 @@
       }
     },
     "references": {
+      "listMark": "Reference",
       "kind": {
         "username": "Username",
         "password": "Password",
@@ -1554,7 +1555,8 @@
       "passwordReference": "Password as a reference to the original",
       "noPasskeys": "Passkeys are not copied.",
       "confirm": "Copy",
-      "created": "{count} entry copied | {count} entries copied"
+      "created": "{count} entry copied | {count} entries copied",
+      "createdFolders": "{count} folder copied | {count} folders copied"
     }
   },
   "extensions": {

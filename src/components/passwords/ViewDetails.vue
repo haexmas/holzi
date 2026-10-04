@@ -29,11 +29,22 @@ const { revealAsync } = usePasswords()
         v-if="detail.username"
         :title="t('passwords.fields.username')"
       >
-        <PasswordsReferenceValue
+        <template v-if="detail.references.username.length" #below>
+          <PasswordsReferenceValue
+            :marks="detail.references.username"
+            :text="detail.username"
+            kind="username"
+          />
+        </template>
+        <PasswordsMaskedValue
           v-if="detail.references.username.length"
-          :marks="detail.references.username"
-          :text="detail.username"
-          kind="username"
+          :fetch="
+            async () => (await revealAsync(itemId, { kind: 'username' })).value
+          "
+          :identity="`${itemId}:username:${detail.username}`"
+          kind="username-resolved"
+          present
+          :label="t('passwords.fields.username')"
         />
         <span
           v-else
@@ -88,11 +99,22 @@ const { revealAsync } = usePasswords()
         </UiButton>
       </SettingsRow>
       <SettingsRow v-if="detail.url" :title="t('passwords.fields.url')">
-        <PasswordsReferenceValue
+        <template v-if="detail.references.url.length" #below>
+          <PasswordsReferenceValue
+            :marks="detail.references.url"
+            :text="detail.url"
+            kind="url"
+          />
+        </template>
+        <PasswordsMaskedValue
           v-if="detail.references.url.length"
-          :marks="detail.references.url"
-          :text="detail.url"
-          kind="url"
+          :fetch="
+            async () => (await revealAsync(itemId, { kind: 'url' })).value
+          "
+          :identity="`${itemId}:url:${detail.url}`"
+          kind="url-resolved"
+          present
+          :label="t('passwords.fields.url')"
         />
         <span
           v-else
@@ -129,12 +151,23 @@ const { revealAsync } = usePasswords()
         class="px-4 py-3 text-sm whitespace-pre-wrap"
         data-testid="passwords-value-note"
       >
-        <PasswordsReferenceValue
-          v-if="detail.references.note.length"
-          :marks="detail.references.note"
-          :text="detail.note"
-          kind="note"
-        />
+        <template v-if="detail.references.note.length">
+          <PasswordsReferenceValue
+            :marks="detail.references.note"
+            :text="detail.note"
+            kind="note"
+          />
+          <PasswordsMaskedValue
+            class="mt-2"
+            :fetch="
+              async () => (await revealAsync(itemId, { kind: 'note' })).value
+            "
+            :identity="`${itemId}:note:${detail.note}`"
+            kind="note-resolved"
+            present
+            :label="t('passwords.fields.note')"
+          />
+        </template>
         <template v-else>{{ detail.note }}</template>
       </li>
     </SettingsGroup>

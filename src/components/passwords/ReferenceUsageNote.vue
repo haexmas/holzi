@@ -18,15 +18,21 @@ const { referenceUsageAsync } = usePasswords()
 const targets = ref(0)
 const passkeyLinks = ref(0)
 
+// The ids can change while the dialog is open (a sync reload); only the latest answer counts, and
+// the user's choice stays (the caller resets it when it asks).
 watch(
   () => props.itemIds.join(','),
-  async () => {
-    targets.value = 0
-    passkeyLinks.value = 0
-    inline.value = true
-    if (props.itemIds.length === 0) return
+  async (_ids, _old, onCleanup) => {
+    let stale = false
+    onCleanup(() => (stale = true))
+    if (props.itemIds.length === 0) {
+      targets.value = 0
+      passkeyLinks.value = 0
+      return
+    }
     try {
       const usage = await referenceUsageAsync([...props.itemIds])
+      if (stale) return
       targets.value = usage.reduce((sum, entry) => sum + entry.targetItems, 0)
       passkeyLinks.value = usage.reduce(
         (sum, entry) => sum + entry.passkeyLinks,
@@ -34,7 +40,9 @@ watch(
       )
     } catch {
       // Without the count there is no choice; the delete stays possible.
+      if (stale) return
       targets.value = 0
+      passkeyLinks.value = 0
     }
   },
   { immediate: true },

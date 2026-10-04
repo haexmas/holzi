@@ -7,7 +7,7 @@
  */
 import type { RefMarkKind } from '@bindings/RefMarkKind'
 import { displayTitle } from '~/lib/passwords/format'
-import { filterHeaders } from '~/lib/passwords/search'
+import { filterHeaders, placeholderParts } from '~/lib/passwords/search'
 import { isInTrash, trashGroupIds } from '~/lib/passwords/tree'
 
 const props = defineProps<{
@@ -48,18 +48,42 @@ const candidates = computed(() => {
   return filterHeaders(live, { query: query.value }).slice(0, 50)
 })
 
+/** The user name without raw placeholders; a reference reads as a mark word. */
+function usernameLabel(username: string | null): string | undefined {
+  if (!username) return undefined
+  return placeholderParts(username)
+    .map((part) =>
+      part.kind === 'text'
+        ? part.text
+        : `[${t('passwords.references.listMark')}]`,
+    )
+    .join('')
+}
+
 const source = computed(() =>
   sourceId.value ? store.headersById.get(sourceId.value) : undefined,
 )
 
+let keysRequest = 0
+
 async function chooseAsync(id: string) {
+  const mine = ++keysRequest
   sourceId.value = id
+  keys.value = []
   error.value = null
   try {
-    keys.value = await itemKeyNamesAsync(id)
+    const names = await itemKeyNamesAsync(id)
+    if (mine === keysRequest) keys.value = names
   } catch (cause) {
-    error.value = errString(cause)
+    if (mine === keysRequest) error.value = errString(cause)
   }
+}
+
+function back() {
+  keysRequest++
+  sourceId.value = null
+  keys.value = []
+  error.value = null
 }
 
 async function pickAsync(kind: RefMarkKind, key?: string) {
@@ -96,7 +120,7 @@ async function pickAsync(kind: RefMarkKind, key?: string) {
               v-for="header in candidates"
               :key="header.id"
               :title="displayTitle(header.title) ?? t('passwords.untitled')"
-              :description="header.username ?? undefined"
+              :description="usernameLabel(header.username)"
               navigates
               :data-testid="`passwords-reference-source-${header.id}`"
               @click="chooseAsync(header.id)"
@@ -106,10 +130,11 @@ async function pickAsync(kind: RefMarkKind, key?: string) {
         <template v-else>
           <div class="flex items-center gap-2">
             <UiButton
+              type="button"
               variant="ghost"
               size="icon-sm"
               :aria-label="t('passwords.back')"
-              @click="sourceId = null"
+              @click="back"
             >
               <Icon name="lucide:arrow-left" class="size-4" />
             </UiButton>

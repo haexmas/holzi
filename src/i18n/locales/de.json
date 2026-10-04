@@ -1523,6 +1523,7 @@
       }
     },
     "references": {
+      "listMark": "Verweis",
       "kind": {
         "username": "Benutzername",
         "password": "Passwort",
@@ -1554,7 +1555,8 @@
       "passwordReference": "Passwort als Verweis auf das Original",
       "noPasskeys": "Passkeys werden nicht mitkopiert.",
       "confirm": "Kopieren",
-      "created": "{count} Eintrag kopiert | {count} Einträge kopiert"
+      "created": "{count} Eintrag kopiert | {count} Einträge kopiert",
+      "createdFolders": "{count} Ordner kopiert | {count} Ordner kopiert"
     }
   },
   "extensions": {

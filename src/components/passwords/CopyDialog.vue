@@ -55,7 +55,8 @@ watch(open, (isOpen) => {
 
 async function confirmAsync() {
   const request = props.request
-  if (!request) return
+  // Enter in a field submits the form again while a copy runs; a second copy would duplicate.
+  if (!request || busy.value) return
   busy.value = true
   try {
     const report = await copyAsync(request.targets, request.into, {
@@ -65,11 +66,19 @@ async function confirmAsync() {
       passwordAsReference: passwordAsReference.value,
     })
     await store.quietReloadAsync()
-    const created = t(
-      'passwords.copyDialog.created',
-      { count: report.itemsCreated },
-      report.itemsCreated,
-    )
+    // Empty folders copy no entry; "0 Einträge kopiert" would read as a failure.
+    const created =
+      report.itemsCreated === 0 && report.groupsCreated > 0
+        ? t(
+            'passwords.copyDialog.createdFolders',
+            { count: report.groupsCreated },
+            report.groupsCreated,
+          )
+        : t(
+            'passwords.copyDialog.created',
+            { count: report.itemsCreated },
+            report.itemsCreated,
+          )
     toast.success(
       report.skippedMissing > 0
         ? t('passwords.clipboard.movedSome', {

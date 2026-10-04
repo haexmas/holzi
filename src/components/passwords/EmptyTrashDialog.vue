@@ -21,6 +21,10 @@ const { emptyTrashAsync } = usePasswords()
 const busy = ref(false)
 const inlineReferences = ref(true)
 
+watch(open, (isOpen) => {
+  if (isOpen) inlineReferences.value = true
+})
+
 async function confirmAsync() {
   busy.value = true
   try {

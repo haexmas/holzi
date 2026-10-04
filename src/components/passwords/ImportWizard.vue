@@ -460,9 +460,11 @@ onBeforeUnmount(() => {
             v-if="report.referencesConverted + report.referencesLeftAsText > 0"
             :title="t('passwords.import.report.referencesConverted')"
             :description="
-              t('passwords.import.report.referencesLeftAsText', {
-                count: report.referencesLeftAsText,
-              })
+              report.referencesLeftAsText > 0
+                ? t('passwords.import.report.referencesLeftAsText', {
+                    count: report.referencesLeftAsText,
+                  })
+                : undefined
             "
             data-testid="passwords-import-references"
           >

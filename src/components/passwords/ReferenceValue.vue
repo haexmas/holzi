@@ -15,6 +15,8 @@ const props = defineProps<{
   text?: string | null
   /** Part of the test ids. */
   kind: string
+  /** Whether a tap opens the source; off in the editor, where leaving drops the draft. */
+  navigable?: boolean
 }>()
 
 const { t } = useI18n()
@@ -56,7 +58,8 @@ function problem(mark: RefMark): string | null {
 }
 
 function open(mark: RefMark) {
-  if (mark.status !== 'missing') router.push(`/entry/${mark.sourceItemId}`)
+  if (props.navigable !== false && mark.status !== 'missing')
+    router.push(`/entry/${mark.sourceItemId}`)
 }
 </script>
 
@@ -78,8 +81,11 @@ function open(mark: RefMark) {
             ? 'border-primary/40 bg-primary/10 hover:bg-primary/20'
             : 'border-destructive/50 bg-destructive/10 text-destructive'
         "
-        :title="problem(part.mark) ?? t('passwords.references.open')"
-        :disabled="part.mark.status === 'missing'"
+        :title="
+          problem(part.mark) ??
+          (navigable === false ? undefined : t('passwords.references.open'))
+        "
+        :disabled="part.mark.status === 'missing' || navigable === false"
         :data-testid="`passwords-reference-mark-${part.mark.status}`"
         @click="open(part.mark)"
       >

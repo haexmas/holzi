@@ -8,6 +8,7 @@ import {
   filterHeaders,
   fold,
   matchesQuery,
+  placeholderParts,
   type SearchableHeader,
 } from '../src/lib/passwords/search.ts'
 
@@ -134,4 +135,23 @@ test('a reference placeholder is not searchable as text (spec 036)', () => {
   // Text that only looks like a placeholder stays searchable.
   const plain = header({ id: 'plain', username: 'price {$ 5' })
   assert.equal(matchesQuery(plain, '{$'), true)
+  // 36 hex digits and hyphens are no UUID unless the hyphens sit where Rust expects them.
+  const notUuid = header({
+    id: 'not-uuid',
+    username: '{$7c1e0000000040008000-000000000001---:password}',
+  })
+  assert.equal(matchesQuery(notUuid, '7c1e'), true)
+  // An escaped line break is part of the key, as in the Rust grammar.
+  const newline = header({ id: 'newline', url: `{$${id}:extra:a\\\nb}` })
+  assert.equal(matchesQuery(newline, 'extra'), false)
+})
+
+test('a list shows a placeholder as a mark, the text around it as text (spec 036)', () => {
+  const id = '7c1e0000-0000-4000-8000-000000000001'
+  assert.deepEqual(placeholderParts(`admin-{$${id}:username}!`), [
+    { kind: 'text', text: 'admin-' },
+    { kind: 'mark', text: `{$${id}:username}` },
+    { kind: 'text', text: '!' },
+  ])
+  assert.deepEqual(placeholderParts('plain'), [{ kind: 'text', text: 'plain' }])
 })
