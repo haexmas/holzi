@@ -193,13 +193,19 @@ async fn send_progress(
     let mut last_sent: Option<Vector> = None;
     loop {
         changed.mark_unchanged();
-        ensure_listed(ctx, peer).await?;
         let own = own_progress(&ctx.replica).await?;
-        if last_sent.as_ref() != Some(&own) {
-            let message = Message::Progress {
+        let message = if last_sent.as_ref() != Some(&own) {
+            Some(Message::Progress {
                 vector: own.clone(),
                 last_seen: last_seen_report(ctx).await,
-            };
+            })
+        } else {
+            None
+        };
+        // Checked after the data is read, as in `serve_pulls`: a removal applied in between
+        // is seen here, before the frame goes out.
+        ensure_listed(ctx, peer).await?;
+        if let Some(message) = message {
             write_frame(&mut send, &message, FRAME_LIMIT).await?;
             last_sent = Some(own);
         }
