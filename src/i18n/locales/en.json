@@ -1210,10 +1210,6 @@
     "folders": {
       "new": "New folder",
       "edit": "Edit folder",
-      "newChild": "New subfolder",
-      "moveUp": "Move up",
-      "moveDown": "Move down",
-      "delete": "Delete",
       "expand": "Expand",
       "collapse": "Collapse",
       "menu": "Actions for folder {name}",

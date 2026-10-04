@@ -45,33 +45,11 @@ const expired = computed(() =>
 
 const selection = usePasswordsSelectionStore()
 
-let pressTimer: ReturnType<typeof setTimeout> | null = null
-let pressed = false
-
-function startPress(event: PointerEvent) {
-  if (event.pointerType !== 'touch') return
-  pressed = false
-  pressTimer = setTimeout(() => {
-    pressed = true
-    // A short buzz where the device has one (FR-011).
-    navigator.vibrate?.(15)
-    emit('longPress')
-  }, 500)
-}
-
-function endPress() {
-  if (pressTimer !== null) clearTimeout(pressTimer)
-  pressTimer = null
-}
-
-function onClick(event: MouseEvent) {
-  // The click that ends a long press is not an activation.
-  if (pressed) {
-    pressed = false
-    return
-  }
-  emit('activate', event)
-}
+const button = useTemplateRef<HTMLElement>('button')
+const press = usePasswordsRowPress(button, {
+  activate: (event) => emit('activate', event),
+  longPress: () => emit('longPress'),
+})
 
 function onDragStart(event: DragEvent) {
   const ids = draggedIds(props.header.id, selection.ids)
@@ -95,6 +73,7 @@ function onDragStart(event: DragEvent) {
       @contextmenu.stop
     >
       <button
+        ref="button"
         type="button"
         class="flex min-h-14 min-w-0 flex-1 items-center gap-4 py-3 pl-4 text-left focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset"
         :aria-pressed="selecting ? selected : undefined"
@@ -102,13 +81,11 @@ function onDragStart(event: DragEvent) {
         draggable="true"
         :data-row-id="header.id"
         :data-testid="`passwords-entry-${header.id}`"
-        @click="onClick"
+        @click="press.onClick"
+        @contextmenu="press.onContextmenu"
         @focus="emit('focus')"
         @dragstart="onDragStart"
-        @pointerdown="startPress"
-        @pointerup="endPress"
-        @pointerleave="endPress"
-        @pointercancel="endPress"
+        @pointerdown="press.onPointerdown"
       >
         <ShadcnCheckbox
           v-if="selecting"

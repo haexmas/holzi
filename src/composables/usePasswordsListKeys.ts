@@ -59,6 +59,28 @@ export function usePasswordsListKeys(options: {
     })
   }
 
+  // A focused row can disappear without a change of place (deleted, moved away, or a dialog gives
+  // the focus back to a button that is gone); the focus then falls to the page and the shortcuts
+  // see nothing. While the focus was last in this window, it comes back to the list. Dialogs and
+  // menus live outside the app root (portals), so focus or clicks there change nothing.
+  let ownsFocus = false
+  function track(event: Event) {
+    const target = event.target
+    const frame = area.value?.closest('[data-passwords-app]')
+    if (!(target instanceof Node) || !frame) return
+    let appRoot: Element = frame
+    while (appRoot.parentElement && appRoot.parentElement !== document.body)
+      appRoot = appRoot.parentElement
+    if (frame.contains(target)) ownsFocus = true
+    else if (appRoot.contains(target)) ownsFocus = false
+  }
+  useEventListener(document, 'focusin', track, { capture: true })
+  useEventListener(document, 'pointerdown', track, { capture: true })
+  const activeElement = useActiveElement({ triggerOnRemoval: true })
+  watch(activeElement, (element) => {
+    if (ownsFocus && (!element || element === document.body)) keepFocus()
+  })
+
   /** The row that has the focus, if the focus is in the list. */
   function focusedRow(): string | null {
     const active = document.activeElement

@@ -1210,10 +1210,6 @@
     "folders": {
       "new": "Neuer Ordner",
       "edit": "Ordner bearbeiten",
-      "newChild": "Unterordner anlegen",
-      "moveUp": "Nach oben",
-      "moveDown": "Nach unten",
-      "delete": "Löschen",
       "expand": "Aufklappen",
       "collapse": "Zuklappen",
       "menu": "Aktionen für Ordner {name}",

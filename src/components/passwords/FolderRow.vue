@@ -45,31 +45,11 @@ const name = computed(
 )
 const dropping = ref(false)
 
-let pressTimer: ReturnType<typeof setTimeout> | null = null
-let pressed = false
-
-function startPress(event: PointerEvent) {
-  if (event.pointerType !== 'touch') return
-  pressed = false
-  pressTimer = setTimeout(() => {
-    pressed = true
-    navigator.vibrate?.(15)
-    emit('longPress')
-  }, 500)
-}
-
-function endPress() {
-  if (pressTimer !== null) clearTimeout(pressTimer)
-  pressTimer = null
-}
-
-function onClick(event: MouseEvent) {
-  if (pressed) {
-    pressed = false
-    return
-  }
-  emit('activate', event)
-}
+const button = useTemplateRef<HTMLElement>('button')
+const press = usePasswordsRowPress(button, {
+  activate: (event) => emit('activate', event),
+  longPress: () => emit('longPress'),
+})
 
 function onDragStart(event: DragEvent) {
   const ids = draggedIds(props.group.id, selection.ids)
@@ -115,6 +95,7 @@ function onDrop(event: DragEvent) {
       @drop="onDrop"
     >
       <button
+        ref="button"
         type="button"
         class="flex min-h-12 min-w-0 flex-1 items-center gap-4 py-2.5 pl-4 text-left focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset"
         :aria-pressed="selecting ? selected : undefined"
@@ -122,13 +103,11 @@ function onDrop(event: DragEvent) {
         draggable="true"
         :data-row-id="group.id"
         :data-testid="`passwords-list-folder-${group.id}`"
-        @click="onClick"
+        @click="press.onClick"
+        @contextmenu="press.onContextmenu"
         @focus="emit('focus')"
         @dragstart="onDragStart"
-        @pointerdown="startPress"
-        @pointerup="endPress"
-        @pointerleave="endPress"
-        @pointercancel="endPress"
+        @pointerdown="press.onPointerdown"
       >
         <ShadcnCheckbox
           v-if="selecting"
