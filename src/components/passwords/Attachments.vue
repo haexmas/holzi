@@ -182,13 +182,17 @@ onBeforeUnmount(() => {
               @keydown.esc.prevent="editing = null"
             />
           </div>
-          <UiButton size="sm" @click="saveRenameAsync(attachment)">{{
-            t('passwords.save')
-          }}</UiButton>
+          <UiButton
+            type="button"
+            size="sm"
+            @click="saveRenameAsync(attachment)"
+            >{{ t('passwords.save') }}</UiButton
+          >
         </template>
         <template v-else>
           <UiButton
             v-if="imageMime(attachment.fileName)"
+            type="button"
             variant="ghost"
             size="icon"
             :aria-label="t('passwords.attachments.preview')"
@@ -204,6 +208,7 @@ onBeforeUnmount(() => {
             />
           </UiButton>
           <UiButton
+            type="button"
             variant="ghost"
             size="icon"
             :aria-label="t('passwords.attachments.download')"
@@ -215,6 +220,7 @@ onBeforeUnmount(() => {
           </UiButton>
           <template v-if="!readonly">
             <UiButton
+              type="button"
               variant="ghost"
               size="icon"
               :aria-label="t('passwords.attachments.rename')"
@@ -225,6 +231,7 @@ onBeforeUnmount(() => {
               <Icon name="lucide:pencil" class="size-4" />
             </UiButton>
             <UiButton
+              type="button"
               variant="ghost"
               size="icon"
               :aria-label="t('passwords.attachments.remove')"
@@ -257,6 +264,7 @@ onBeforeUnmount(() => {
         icon="lucide:file-plus"
       >
         <UiButton
+          type="button"
           size="sm"
           :disabled="busy"
           data-testid="passwords-attachment-add"
