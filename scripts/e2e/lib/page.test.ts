@@ -121,6 +121,22 @@ describe('click', () => {
     await assert.rejects(click(client, 'chat-new', 120), /click intercepted/)
   })
 
+  it('finds the control again when it went stale between finding and clicking', async () => {
+    let finds = 0
+    driver.onFind(() => {
+      finds += 1
+      return [`el-${finds}`]
+    })
+    driver.onDisplayed(() => true)
+    const clicked: string[] = []
+    driver.onClick((element) => {
+      clicked.push(element)
+      return clicked.length === 1 ? 'stale' : 'ok'
+    })
+    await click(client, 'passwords-crumb-root')
+    assert.deepEqual(clicked, ['el-1', 'el-2'])
+  })
+
   it('fails naming the hook and the selector when nothing is displayed by the deadline', async () => {
     driver.onFind(() => ['el-1'])
     driver.onDisplayed(() => false)

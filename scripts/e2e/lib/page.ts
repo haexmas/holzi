@@ -88,6 +88,9 @@ async function findDisplayed(
 const RETRIED_CLICK_ERRORS = new Set([
   'element not interactable',
   'element click intercepted',
+  // The page re-rendered the control between finding and clicking it (seen in CI on a breadcrumb):
+  // the click never landed, so finding it again and clicking is safe.
+  'stale element reference',
 ])
 
 /** Clicks the displayed control and returns the element ID that was activated. */
