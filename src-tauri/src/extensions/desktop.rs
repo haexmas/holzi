@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Manager, Runtime};
-use tauri_plugin_notification::{Action, ActionPerformed, ActionType, NotificationExt};
+use tauri_plugin_notification::{Action, ActionType, NotificationExt};
 use tauri_plugin_opener::OpenerExt;
 
 use super::host::Desktop;
@@ -66,7 +66,7 @@ impl<R: Runtime> AppDesktop<R> {
             let Some(entry) = waiting.lock().remove(&id) else {
                 return;
             };
-            (entry.respond)(response(performed));
+            (entry.respond)(response(performed.action_id()));
         });
         if let Err(error) = listening {
             log::warn!("extensions: notification clicks are not reported: {error}");
@@ -79,12 +79,14 @@ impl<R: Runtime> AppDesktop<R> {
     }
 }
 
-fn response(performed: &ActionPerformed) -> NotificationResponse {
-    match performed.action_id() {
+/// What an action of the plugin means. Besides `tap` and the buttons, Android and iOS report
+/// `dismiss` when the user swipes the notification away: that is no click.
+fn response(action_id: &str) -> NotificationResponse {
+    match action_id {
         TAP => NotificationResponse::Body,
         action => match action.strip_prefix(BUTTON) {
             Some(button) => NotificationResponse::Button(button.to_owned()),
-            None => NotificationResponse::Body,
+            None => NotificationResponse::Closed,
         },
     }
 }
@@ -178,3 +180,7 @@ impl<R: Runtime> Desktop for AppDesktop<R> {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "desktop_tests.rs"]
+mod tests;

@@ -156,11 +156,44 @@ impl NotificationState {
         }
     }
 
-    fn with_tag(&self, extension_id: Uuid, tag: &str) -> Option<String> {
-        self.lock()
+    /// Enters the notification `id` of `extension_id` before it shows, so a response that comes at
+    /// once finds it. Under the same lock the one with the same `tag` and the oldest beyond
+    /// [`MAX_OPEN`] leave, so calls at the same time cannot pass the limit; they are returned to be
+    /// closed outside the lock.
+    fn admit(&self, extension_id: Uuid, id: &str, tag: Option<String>) -> Vec<Open> {
+        let mut open = self.lock();
+        let mut own: Vec<(String, u64)> = open
             .iter()
-            .find(|(_, o)| o.extension_id == extension_id && o.tag.as_deref() == Some(tag))
-            .map(|(id, _)| id.clone())
+            .filter(|(_, o)| o.extension_id == extension_id)
+            .map(|(id, o)| (id.clone(), o.seq))
+            .collect();
+        own.sort_by_key(|(_, seq)| *seq);
+        let mut gone = Vec::new();
+        if let Some(tag) = tag.as_deref() {
+            own.retain(|(id, _)| {
+                let same = open.get(id).is_some_and(|o| o.tag.as_deref() == Some(tag));
+                if same {
+                    gone.extend(open.remove(id));
+                }
+                !same
+            });
+        }
+        let excess = (own.len() + 1).saturating_sub(MAX_OPEN);
+        gone.extend(
+            own.iter()
+                .take(excess)
+                .filter_map(|(id, _)| open.remove(id)),
+        );
+        open.insert(
+            id.to_owned(),
+            Open {
+                extension_id,
+                seq: self.next.fetch_add(1, Ordering::Relaxed),
+                tag,
+                shown: None,
+            },
+        );
+        gone
     }
 }
 
@@ -377,24 +410,12 @@ pub fn show(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
     let desktop = ctx.host.desktop().ok_or_else(BridgeError::not_available)?;
     let extension_id = ctx.session.extension_id;
     let state = &ctx.host.notifications;
-    if let Some(previous) = tag.as_deref().and_then(|t| state.with_tag(extension_id, t)) {
-        state.close_own(extension_id, &previous);
-    }
-    let own = state.of_extension(extension_id);
-    for oldest in own.iter().take((own.len() + 1).saturating_sub(MAX_OPEN)) {
-        state.close_own(extension_id, oldest);
-    }
     let id = Uuid::new_v4().to_string();
-    // Entered before it shows, so a response that comes at once finds it.
-    state.lock().insert(
-        id.clone(),
-        Open {
-            extension_id,
-            seq: state.next.fetch_add(1, Ordering::Relaxed),
-            tag,
-            shown: None,
-        },
-    );
+    for replaced in state.admit(extension_id, &id, tag) {
+        if let Some(shown) = replaced.shown {
+            shown.close();
+        }
+    }
     let on_response = respond(
         Arc::clone(&ctx.host),
         Arc::clone(&ctx.emitter),

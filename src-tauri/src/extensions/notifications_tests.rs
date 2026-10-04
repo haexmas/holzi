@@ -330,6 +330,23 @@ fn the_same_tag_replaces_and_too_many_close_the_oldest() {
 }
 
 #[test]
+fn disabling_or_removing_an_extension_closes_its_notifications() {
+    let s = setup();
+    s.allow(&s.notes);
+    shown_id(&s.notes, json!({ "title": "1" }));
+    shown_id(&s.notes, json!({ "title": "2" }));
+    let extension_id = s.notes.session.extension_id;
+    s.notes.host.notifications.close_all(extension_id);
+    assert_eq!(s.desktop.closed(), [0, 1]);
+    assert!(s
+        .notes
+        .host
+        .notifications
+        .of_extension(extension_id)
+        .is_empty());
+}
+
+#[test]
 fn malformed_notifications_are_refused_before_anything_shows() {
     let s = setup();
     s.allow(&s.notes);
