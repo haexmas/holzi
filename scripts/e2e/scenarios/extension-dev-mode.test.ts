@@ -137,6 +137,32 @@ scenario('extension-dev-mode', { timeoutMs: 300_000 }, async (ctx) => {
     )
     ctx.step('console output shown')
 
+    // WebKitGTK fires `load` for a hash navigation too, and the SDK takes `port:init` once per
+    // document: the page keeps talking over the channel it has.
+    await inFrame(page, dev, `location.hash = '#elsewhere'; return true`)
+    await new Promise((resolve) => setTimeout(resolve, 1_000))
+    const afterHash = await probeRequest(
+      page,
+      dev,
+      'extension_database_query',
+      { query: `SELECT id FROM "${table}"`, params: [] },
+    )
+    assert.deepEqual(
+      (afterHash.result as { rows?: unknown[][] }).rows,
+      [['n1']],
+      JSON.stringify(afterHash),
+    )
+    assert.equal(
+      await page
+        .exec<string>(
+          `return document.querySelector('[data-testid="extension-frame"]').className`,
+        )
+        .then((name) => name.includes('invisible')),
+      false,
+      'the frame stays ready',
+    )
+    ctx.step('a hash navigation keeps the channel')
+
     title.text = 'Probe dev changed'
     await inFrame(page, dev, `location.reload(); return true`).catch(() => {})
     await ctx.waitFor(
