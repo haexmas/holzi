@@ -440,6 +440,25 @@ fn checking_tells_the_state_and_grants_nothing() {
     assert_eq!(check("https://example.org/x", None), "granted");
     assert_eq!(check("https://example.org/x", Some("PUT")), "ask");
     assert_eq!(check("file:///etc/passwd", None), "denied");
+    // `fetch` refuses `*` as a method, so no grant covers it.
+    s.grant("*", "https://example.org/*", "granted");
+    assert_eq!(check("https://example.org/x", Some("*")), "denied");
+}
+
+#[test]
+fn only_redirect_statuses_are_followed() {
+    let s = setup();
+    let server = s.server();
+    s.mount(
+        &server,
+        Mock::given(path("/cached")).respond_with(redirect("/elsewhere", 304)),
+    );
+    s.grant_server(&server);
+    let answer = s
+        .fetch(json!({ "url": format!("{}/cached", server.uri()) }))
+        .unwrap();
+    assert_eq!(answer["status"], 304);
+    assert_eq!(s.received(&server).len(), 1);
 }
 
 #[test]

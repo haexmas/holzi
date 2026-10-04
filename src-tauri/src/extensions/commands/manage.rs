@@ -67,6 +67,7 @@ pub async fn extension_remove(
         // An install of the same key and name gets the same id again: no decision carries over.
         host.permissions.forget_extension(id);
         host.fs.watches.end_all(id);
+        host.notifications.close_all(id);
         Ok(())
     })
     .await
@@ -105,6 +106,7 @@ pub async fn extension_set_enabled(
         set_enabled(db, id, enabled, now)?;
         if !enabled {
             host.fs.watches.end_all(id);
+            host.notifications.close_all(id);
         }
         Ok(())
     })

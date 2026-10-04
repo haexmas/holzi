@@ -194,15 +194,20 @@ fn parse_headers(params: &Value) -> Result<HeaderMap, BridgeError> {
     Ok(headers)
 }
 
+/// `method` of `params` (default `GET`): one a permission can name, not `*`.
+fn parse_method(params: &Value) -> Option<Method> {
+    let Some(method) = params.get("method").and_then(Value::as_str) else {
+        return Some(Method::GET);
+    };
+    let method = method.to_ascii_uppercase();
+    Action::parse(PermissionKind::Web, &method)
+        .filter(|a| *a != Action::AnyMethod)
+        .and_then(|_| Method::from_bytes(method.as_bytes()).ok())
+}
+
 fn parse_request(params: &Value, limits: &Limits) -> Result<Request, BridgeError> {
     let (url, web) = parse_url(text(params, "url")?)?;
-    let method = match params.get("method").and_then(Value::as_str) {
-        None => Method::GET,
-        Some(method) => Action::parse(PermissionKind::Web, &method.to_ascii_uppercase())
-            .filter(|a| *a != Action::AnyMethod)
-            .and_then(|_| Method::from_bytes(method.to_ascii_uppercase().as_bytes()).ok())
-            .ok_or_else(|| invalid("method not allowed"))?,
-    };
+    let method = parse_method(params).ok_or_else(|| invalid("method not allowed"))?;
     let body = match params.get("body").filter(|b| !b.is_null()) {
         None => None,
         Some(body) => {
@@ -263,6 +268,12 @@ fn answer(status: StatusCode, headers: &HeaderMap, body: &[u8], url: &Url) -> Va
     })
 }
 
+/// The statuses holzi follows, as `fetch` does; another 3xx with a `Location` (300, 304) is the
+/// answer.
+fn is_redirect(status: StatusCode) -> bool {
+    matches!(status.as_u16(), 301 | 302 | 303 | 307 | 308)
+}
+
 /// The method after a redirect: `303` turns everything but `HEAD` into `GET`, and so do `301`
 /// and `302` for a `POST` (as browsers do); `307` and `308` keep method and body.
 fn method_after(status: StatusCode, method: &Method) -> Method {
@@ -300,7 +311,7 @@ async fn send(
             .get(reqwest::header::LOCATION)
             .and_then(|l| l.to_str().ok())
             .map(str::to_owned);
-        if let (true, Some(location)) = (status.is_redirection(), location) {
+        if let (true, Some(location)) = (is_redirect(status), location) {
             if hop == MAX_REDIRECTS {
                 return Err(web_error("too many redirects"));
             }
@@ -397,11 +408,10 @@ pub fn check_web(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError
     let Ok((_, web)) = parse_url(text(params, "url")?) else {
         return Ok(json!({ "status": "denied" }));
     };
-    let method = params
-        .get("method")
-        .and_then(Value::as_str)
-        .and_then(|m| Method::from_bytes(m.to_ascii_uppercase().as_bytes()).ok())
-        .unwrap_or(Method::GET);
+    // A method `fetch` refuses is never granted.
+    let Some(method) = parse_method(params) else {
+        return Ok(json!({ "status": "denied" }));
+    };
     Ok(json!({
         "status": match decide(&grants(ctx)?, ctx.device, &method, &web) {
             Decision::Allow => "granted",

@@ -61,20 +61,32 @@ export function useExtensionHost() {
   )
 
   // A click on a notification of an extension brings its tab forward (spec 017 US8, FR-052); the
-  // extension itself hears the click through its frame.
+  // extension itself hears the click through its frame. Registered once per scope; a listener that
+  // arrives after the scope ended is dropped at once, and a failure does not stop the start.
+  const wm = useWindowManagerStore()
+  let disposed = false
   let unlistenClick: UnlistenFn | null = null
-  onScopeDispose(() => unlistenClick?.())
+  onScopeDispose(() => {
+    disposed = true
+    unlistenClick?.()
+  })
+  listen<{ extensionId: string }>('extension-notification-click', (event) =>
+    wm.showExtension(event.payload.extensionId),
+  )
+    .then((unlisten) => {
+      if (disposed) unlisten()
+      else unlistenClick = unlisten
+    })
+    .catch((error: unknown) => {
+      console.error(
+        '[extensions] listening to notification clicks failed',
+        error,
+      )
+    })
 
   /** Loads the extension list; the session restore waits for it, so extension tabs survive. */
   async function startAsync(): Promise<void> {
     if (await reloadForDevModeAsync()) return
-    if (!unlistenClick) {
-      const wm = useWindowManagerStore()
-      unlistenClick = await listen<{ extensionId: string }>(
-        'extension-notification-click',
-        (event) => wm.showExtension(event.payload.extensionId),
-      )
-    }
     await Promise.all([extensions.startAsync(), permissions.startAsync()])
   }
 
