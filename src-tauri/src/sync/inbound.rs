@@ -394,9 +394,13 @@ impl Inbox {
         // progress past them, with the state of an extension at its limit.
         if !updates.is_empty() || !parked.is_empty() || !newly_full.is_empty() {
             let now_ms = crate::passwords::clock::unix_millis(std::time::SystemTime::now());
+            let full_prefixes: Vec<String> = self.full_prefixes.iter().cloned().collect();
             db.write(|tx| {
                 park::store(tx, &parked, now_ms)?;
-                park::note_full(tx, &newly_full, db.device_id(), now_ms)?;
+                // A registry row can arrive on a later page than the group that filled the
+                // parking limit. Re-check every prefix already full in this Inbox so that page
+                // boundaries do not lose the status update.
+                park::note_full(tx, &full_prefixes, db.device_id(), now_ms)?;
                 progress::advance(tx, &updates)
             })?;
         }
