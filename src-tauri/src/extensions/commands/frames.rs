@@ -105,7 +105,10 @@ pub async fn extension_frame_close(
     frame: String,
 ) -> Result<()> {
     let host = state.extensions();
-    host.frames.close(&frame);
+    if let Some(closed) = host.frames.close(&frame) {
+        let last = host.frames.of_extension(closed.extension_id).is_empty();
+        host.fs.frame_closed(&frame, closed.extension_id, last);
+    }
     host.drop_dialogs_of(&frame);
     // Questions nobody waits for any more disappear from holzi's window.
     let emitter = WindowEmitter(app);

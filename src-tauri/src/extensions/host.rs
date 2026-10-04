@@ -32,6 +32,8 @@ impl Default for HostContext {
 #[derive(Default)]
 pub struct ExtensionHost {
     pub frames: FrameRegistry,
+    /// Dialog choices per frame, holzi's protected places and folder watches (US9).
+    pub fs: super::fs::FsState,
     /// Open permission questions and decisions held in memory (US3).
     pub permissions: PermissionState,
     /// Entry and Content-Security-Policy per bundle started in this process.
