@@ -65,6 +65,25 @@ fn forbidden_migration_statements_refuse_the_whole_migration() {
         "UPDATE haex_crdt_configs_no_sync SET value = 'x'",
         "INSERT INTO t:pages (id) SELECT id FROM chat_threads",
         format!("SELECT * FROM {}__cal__events", "b".repeat(64)).leak(),
+        // Another extension's tables, whatever it granted (US6).
+        format!("CREATE TABLE {}__cal__extra (id TEXT)", "b".repeat(64)).leak(),
+        format!(
+            "ALTER TABLE {}__cal__events ADD COLUMN x TEXT",
+            "b".repeat(64)
+        )
+        .leak(),
+        format!("DROP TABLE {}__cal__events", "b".repeat(64)).leak(),
+        format!("CREATE INDEX t:i ON {}__cal__events (id)", "b".repeat(64)).leak(),
+        format!(
+            "INSERT INTO {}__cal__events (id) VALUES ('x')",
+            "b".repeat(64)
+        )
+        .leak(),
+        format!(
+            "INSERT INTO t:pages (id) SELECT id FROM {}__cal__events",
+            "b".repeat(64)
+        )
+        .leak(),
     ] {
         let migration = format!("CREATE TABLE t:ok (id TEXT);--> statement-breakpoint\n{bad}");
         assert!(steps(&migration).is_err(), "{bad} was accepted");

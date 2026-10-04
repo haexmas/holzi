@@ -11,36 +11,43 @@ Begründung: [research.md](../research.md) R6–R8. Gilt für `extension_databas
 - **Fremde Tabelle**: Präfix einer anderen installierten Erweiterung. Ein wohlgeformtes Präfix
   (`<64 Hex>__<name>__`) einer nicht installierten Erweiterung bekommt dieselbe Antwort wie eine fremde Tabelle
   ohne Berechtigung (FR-062); die Anfrage an den Nutzer zeigt dann „nicht installiert“ und bietet nur
-  „Verweigern“.
+  „Verweigern“. Hat die aufrufende Erweiterung eine Berechtigung auf das Präfix einer nicht installierten
+  Erweiterung (auch nach „Entfernen, Daten behalten“), antwortet holzi wie bei einer nicht vorhandenen Tabelle
+  (US6 Szenario 5): 2000 `no such table: <name>`.
 - **Kerntabelle**: alles andere, einschließlich `sqlite_*`, `haex_*`, `pragma_*`-Funktionen.
 
 ## Laufzeit
 
 ### Vorprüfung (holzi)
 
-| Regel                                                                              | Ergebnis bei Verstoß              |
-| ---------------------------------------------------------------------------------- | --------------------------------- |
-| genau eine Anweisung (`parse_sql_statements(...).len() == 1`)                      | 1000                              |
-| Art ∈ {Query, Insert, Update, Delete}                                              | 1000                              |
-| keine Sync-Spalten (`haex_*`) gesetzt oder gelesen per Name                        | 1000                              |
-| Qualifizierer nur `main` oder keiner                                               | 1000                              |
-| Bezeichner nur ASCII                                                               | 1000                              |
-| kein `WITH`-Name gleich einem echten Tabellennamen                                 | 1000                              |
-| SQL-Länge ≤ `max_sql_bytes`                                                        | 7000                              |
-| jede Tabelle aus `visit_relations` (ohne eigene `WITH`-Namen) ist eigen oder fremd | Kerntabelle → 1000 ohne Rückfrage |
-| fremde Tabelle: Leseberechtigung (Query) bzw. Lesen und Schreiben (DML)            | fehlt → 1004 (Anfrage) bzw. 1002  |
+| Regel                                                                                                                             | Ergebnis bei Verstoß              |
+| --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| genau eine Anweisung (`parse_sql_statements(...).len() == 1`)                                                                     | 1000                              |
+| Art ∈ {Query, Insert, Update, Delete}                                                                                             | 1000                              |
+| keine Sync-Spalten (`haex_*`) gesetzt oder gelesen per Name                                                                       | 1000                              |
+| Qualifizierer nur `main` oder keiner                                                                                              | 1000                              |
+| Bezeichner nur ASCII                                                                                                              | 1000                              |
+| kein `WITH`-Name gleich einem echten Tabellennamen oder in der Form einer Erweiterungstabelle (ob es sie gibt oder nicht, FR-062) | 1000                              |
+| SQL-Länge ≤ `max_sql_bytes`                                                                                                       | 7000                              |
+| jede Tabelle aus `visit_relations` (ohne eigene `WITH`-Namen) ist eigen oder fremd                                                | Kerntabelle → 1000 ohne Rückfrage |
+| fremde Tabelle: Leseberechtigung (Query) bzw. Lesen und Schreiben (DML)                                                           | fehlt → 1004 (Anfrage) bzw. 1002  |
 
 ### Authorizer (haex-crdt `SqlGuard`, entscheidet)
 
 Oberste Ebene (`accessor = None`):
 
-| Aktion                       | erlaubt, wenn                                                          |
-| ---------------------------- | ---------------------------------------------------------------------- |
-| `Read`, `Select`             | `database = main` und Tabelle eigen oder fremd mit Leseberechtigung    |
-| `Insert`, `Update`, `Delete` | `database = main` und Tabelle eigen oder fremd mit Lesen und Schreiben |
-| `Function`                   | Funktion in der Erlaubtliste (unten)                                   |
-| `Recursive`                  | immer (rekursive `WITH`)                                               |
-| alles andere                 | nie                                                                    |
+| Aktion                       | erlaubt, wenn                                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------------ |
+| `Read`, `Select`             | `database = main` und Tabelle eigen oder einer installierten Erweiterung mit Leseberechtigung    |
+| `Insert`, `Update`, `Delete` | `database = main` und Tabelle eigen oder einer installierten Erweiterung mit Lesen und Schreiben |
+| `Function`                   | Funktion in der Erlaubtliste (unten)                                                             |
+| `Recursive`                  | immer (rekursive `WITH`)                                                                         |
+| alles andere                 | nie                                                                                              |
+
+Liest eine Anweisung keine Spalte einer Tabelle (`count(*)`, `SELECT 1`, `EXISTS`), meldet SQLite `Read` mit
+leerem Spaltennamen und dem Schema, wie es in der Anweisung steht, ohne Qualifizierer also ohne Datenbank; das
+zählt wie `main` (Erweiterungen erreichen kein anderes Schema), ein `WITH`-Name bleibt ein `WITH`-Name und
+`json_each` und Verwandte bleiben erlaubt. Das gilt auch für Migrationen.
 
 In Triggern: erlaubt nur, wenn `accessor` `z_dirty_<T>_(insert|update|delete)` ist und T eine Tabelle, die
 diese Anweisung schreiben darf.
@@ -62,6 +69,8 @@ Lehnt der Authorizer etwas ab, was die Vorprüfung durchgelassen hat: 1000 „Fo
 
 - Ergebnis-Anweisungen (`SELECT`, `RETURNING`) über `query_map`, sonst `execute`.
 - Ergebnis `{rows, columns, rowsAffected, lastInsertId}`; Sync-Spalten entfernt.
+- „Tabelle fehlt“ hat eine Schreibweise: `no such table: <name>`, klein und ohne `main.`, ob SQLite sie meldet
+  oder holzi die Tabellen einer nicht installierten Erweiterung verbirgt.
 - Werte: BLOB → Base64-Text; INTEGER → Zahl; REAL NaN/Inf → `null`. Parameter: Zahl, Text, `null`,
   Wahrheitswert → 0/1, `{"$bytes": b64}` → BLOB, Array/Objekt → JSON-Text.
 - Grenzen: Zeilen und Bytes im Callback, Laufzeit über Fortschritts-Callback (`SQLITE_INTERRUPT`),

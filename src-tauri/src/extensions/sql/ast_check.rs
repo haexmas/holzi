@@ -196,7 +196,8 @@ pub(crate) fn check_words(sql: &str) -> Result<(), BridgeError> {
 }
 
 /// Checks a run-time statement of the extension with the table prefix `own`. `existing` are the
-/// lower-case names of the tables of the database; a `WITH` name may not be one of them.
+/// lower-case names of the tables of the database; a `WITH` name may not be one of them, nor have
+/// the form of an extension's table.
 pub fn check(
     statement: &Statement,
     sql: &str,
@@ -215,7 +216,13 @@ pub fn check(
     if let ControlFlow::Break(e) = statement.visit(&mut collector) {
         return Err(e);
     }
-    if collector.ctes.iter().any(|cte| existing.contains(cte)) {
+    // An extension's table name is refused whether it exists or not: the answer must not tell
+    // whether another extension's table exists (FR-062).
+    if collector
+        .ctes
+        .iter()
+        .any(|cte| existing.contains(cte) || ExtensionTable::parse(cte).is_ok())
+    {
         return Err(violation("a WITH name may not be the name of a table"));
     }
 

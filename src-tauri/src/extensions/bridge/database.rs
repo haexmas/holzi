@@ -2,6 +2,7 @@
 //! `_transaction` and `_register_migrations`. Every call runs as the calling frame's extension,
 //! with its limits and at most `max_concurrent` at a time.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use serde_json::{json, Value};
@@ -65,17 +66,38 @@ pub fn policy(ctx: &CallContext) -> Result<SqlPolicy, BridgeError> {
     policy_for(&ctx.db, &ctx.host, ctx.session.extension_id, ctx.device)
 }
 
+/// The table prefixes of the installed extensions; a row holzi cannot read is left out.
+fn installed_prefixes(q: &mut impl Query) -> haex_crdt::Result<HashSet<TablePrefix>> {
+    let rows = q.query_map(
+        "SELECT public_key, name FROM extensions WHERE state = 'installed'",
+        &[],
+        |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+    )?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|(key, name)| {
+            Some(TablePrefix {
+                public_key: PublicKey::parse_case_insensitive(&key).ok()?,
+                name: ExtensionName::parse(&name).ok()?,
+            })
+        })
+        .collect())
+}
+
 /// The SQL policy of `extension_id` on `device` now: its remembered and temporary `database`
-/// permissions. The change notifications filter with the same policy (research R9).
+/// permissions and which extensions are installed. The change notifications filter with the same
+/// policy (research R9).
 pub fn policy_for(
     db: &VaultDb,
     host: &ExtensionHost,
     extension_id: Uuid,
     device: Uuid,
 ) -> Result<SqlPolicy, BridgeError> {
-    let mut grants = db
+    let (mut grants, installed) = db
         .read_blocking(move |q| {
-            candidates(q, extension_id, PermissionKind::Database, device).map_err(Into::into)
+            let grants = candidates(q, extension_id, PermissionKind::Database, device)
+                .map_err(haex_crdt::Error::from)?;
+            Ok((grants, installed_prefixes(q)?))
         })
         .map_err(|_| unavailable())?;
     grants.extend(
@@ -86,6 +108,7 @@ pub fn policy_for(
         own: prefix_of(db, extension_id)?,
         grants,
         device,
+        installed,
     })
 }
 
@@ -219,3 +242,7 @@ pub fn register_migrations(ctx: &CallContext, call_params: &Value) -> Result<Val
         "appliedMigrations": applied,
     }))
 }
+
+#[cfg(test)]
+#[path = "foreign_tables_tests.rs"]
+mod foreign_tables_tests;

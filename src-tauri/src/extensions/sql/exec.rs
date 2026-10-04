@@ -119,12 +119,15 @@ fn map_error(error: haex_crdt::Error) -> BridgeError {
             limit("transaction too large")
         }
         haex_crdt::Error::Database(DatabaseError::ValueTooLarge { .. }) => limit("value too large"),
-        _ => BridgeError::new(
-            ExtensionErrorCode::Database,
-            error
+        _ => {
+            let message = error
                 .sqlite_error()
-                .map_or_else(|| "database error".to_owned(), ToString::to_string),
-        ),
+                .map_or_else(|| "database error".to_owned(), ToString::to_string);
+            match message.strip_prefix(NO_SUCH_TABLE) {
+                Some(name) => no_such_table(name),
+                None => BridgeError::new(ExtensionErrorCode::Database, message),
+            }
+        }
     }
 }
 
@@ -158,6 +161,19 @@ pub fn existing_tables(db: &VaultDb) -> Result<HashSet<String>, BridgeError> {
     .map_err(|_| BridgeError::new(ExtensionErrorCode::Database, "database unavailable"))
 }
 
+/// SQLite's answer for a missing table, in one spelling: lower case, without `main.`, so it does not
+/// tell a table that never existed from one that holzi hides.
+fn no_such_table(name: &str) -> BridgeError {
+    let name = name.to_ascii_lowercase();
+    let name = name.strip_prefix("main.").unwrap_or(&name);
+    BridgeError::new(
+        ExtensionErrorCode::Database,
+        format!("{NO_SUCH_TABLE}{name}"),
+    )
+}
+
+const NO_SUCH_TABLE: &str = "no such table: ";
+
 /// Pre-checks one statement and decides its permissions: a foreign table without a permission
 /// is 1004 (ask) or 1002 (denied), with `{resourceType, action, target}` in `details`.
 pub fn prepare(
@@ -179,7 +195,10 @@ pub fn prepare(
         .chain(access.writes.iter().map(|t| (t, true)))
     {
         let code = match policy.decide(table, write) {
-            Decision::Allow => continue,
+            Decision::Allow if policy.is_present(&table.prefix) => continue,
+            // Granted, but the extension is gone: the same answer as a table that does not exist
+            // (US6 scenario 5), also when its tables were kept.
+            Decision::Allow => return Err(no_such_table(&full_name(table))),
             Decision::Deny => ExtensionErrorCode::PermissionDenied,
             Decision::Prompt => ExtensionErrorCode::PermissionPromptRequired,
         };

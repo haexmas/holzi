@@ -309,3 +309,18 @@ fn a_kept_migration_row_whose_sql_does_not_match_its_hash_does_not_run() {
     let kept = crate::storage::query::read(&s.db, |q| Ok(kept_migrations(q, extension()))).unwrap();
     assert!(matches!(kept, Err(MigrationError::Changed { .. })));
 }
+
+#[test]
+fn a_migration_may_read_an_own_table_without_naming_a_column() {
+    let s = setup();
+    add(
+        &s,
+        0,
+        "0000_settings",
+        "CREATE TABLE t:settings (id TEXT PRIMARY KEY);--> statement-breakpoint
+INSERT INTO t:settings (id) SELECT 'default' WHERE NOT EXISTS (SELECT 1 FROM t:settings);--> statement-breakpoint
+INSERT INTO t:settings (id) SELECT 'n' || count(*) FROM t:settings",
+    );
+    assert_eq!(migrate(&s).unwrap(), ["0000_settings"]);
+    assert_eq!(s.count(&t("SELECT count(*) FROM t:settings")), 2);
+}

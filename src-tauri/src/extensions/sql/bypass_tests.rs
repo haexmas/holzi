@@ -17,7 +17,7 @@ use std::sync::Arc;
 use serde_json::json;
 
 use super::exec::{existing_tables, prepare, prepare_unchecked, run, Limits};
-use super::test_support::{setup, t, Setup};
+use super::test_support::{setup, setup_reading_foreign, t, tf, Setup};
 use crate::extensions::error::BridgeError;
 
 const FORBIDDEN: &[&str] = &[
@@ -25,6 +25,9 @@ const FORBIDDEN: &[&str] = &[
     "WITH x AS (SELECT * FROM chat_threads) SELECT * FROM x",
     "WITH t:pages AS (SELECT * FROM chat_threads) SELECT * FROM t:pages",
     "SELECT * FROM t:pages WHERE EXISTS (SELECT 1 FROM chat_threads)",
+    "SELECT count(*) FROM chat_threads",
+    "SELECT 1 FROM sqlite_master",
+    "SELECT count(*) FROM t:pages, chat_threads",
     "SELECT (SELECT count(*) FROM chat_threads) FROM t:pages",
     "SELECT * FROM t:pages GROUP BY id HAVING count(*) < (SELECT count(*) FROM chat_threads)",
     "SELECT * FROM t:pages ORDER BY (SELECT id FROM chat_threads)",
@@ -86,6 +89,13 @@ const ALLOWED: &[&str] = &[
      SELECT p.id FROM t:pages p JOIN n ON n.x = 1",
     "SELECT value FROM json_each('[1,2,3]')",
     "DELETE FROM t:cache_no_sync WHERE key = 'k'",
+    // No column read: SQLite names the table without a database.
+    "SELECT count(*) FROM t:pages",
+    "SELECT 1 FROM t:pages",
+    "SELECT id FROM t:pages p WHERE EXISTS (SELECT 1 FROM t:cache_no_sync)",
+    "WITH c AS (SELECT id FROM t:pages) SELECT count(*) FROM c",
+    "SELECT count(*) FROM json_each('[1,2,3]')",
+    "SELECT 1 FROM t:pages p, json_each(p.body)",
 ];
 
 fn seeded() -> Setup {
@@ -191,4 +201,88 @@ fn a_with_name_shadowing_a_table_is_refused_by_the_pre_check_and_reads_nothing_r
     )
     .unwrap();
     assert_eq!(result.rows, vec![vec![json!("cte")]]);
+}
+
+/// With "read" on the extension `f:` (US6): what it may not do with that extension's tables.
+const FORBIDDEN_WITH_READ: &[&str] = &[
+    "INSERT INTO f:events (id) VALUES ('x')",
+    "REPLACE INTO f:events (id, title) VALUES ('e1', 'changed')",
+    "INSERT INTO f:events (id) SELECT id FROM t:pages RETURNING id",
+    "UPDATE f:events SET title = 'changed'",
+    "UPDATE f:events SET title = 'changed' WHERE id IN (SELECT id FROM t:pages)",
+    "DELETE FROM f:events",
+    "WITH x AS (SELECT 1) DELETE FROM f:events",
+    "CREATE TABLE f:extra (id TEXT)",
+    "ALTER TABLE f:events ADD COLUMN x TEXT",
+    "ALTER TABLE f:events RENAME TO f:moved",
+    "DROP TABLE f:events",
+    "CREATE INDEX f:idx ON f:events (title)",
+    "SELECT * FROM f:events e JOIN chat_threads c ON c.id = e.id",
+    "SELECT * FROM f:events WHERE id IN (SELECT id FROM extensions)",
+];
+
+const ALLOWED_WITH_READ: &[&str] = &[
+    "SELECT title FROM f:events",
+    "SELECT count(*) FROM f:events",
+    "SELECT p.id, e.title FROM t:pages p LEFT JOIN f:events e ON e.id = p.id",
+    "SELECT * FROM t:pages WHERE EXISTS (SELECT 1 FROM f:events)",
+    "WITH e AS (SELECT * FROM f:events) SELECT title FROM e",
+    "INSERT INTO t:pages (id, body) SELECT id, title FROM f:events",
+];
+
+fn seeded_reading_foreign() -> Setup {
+    let s = setup_reading_foreign();
+    s.sql("INSERT INTO t:pages (id) VALUES ('seed')", json!([]))
+        .unwrap();
+    s
+}
+
+/// What a forbidden statement must not have changed in the other extension's table.
+fn foreign_fingerprint(s: &Setup) -> (i64, i64, i64) {
+    (
+        s.count(&tf("SELECT count(*) FROM f:events")),
+        s.count(&tf("SELECT count(*) FROM f:events WHERE title = 'kept'")),
+        s.count("SELECT count(*) FROM sqlite_master"),
+    )
+}
+
+#[test]
+fn a_read_permission_never_writes_or_changes_the_other_extension_in_any_layer() {
+    for way in [pre_check_only, authorizer_only, both] {
+        for sql in FORBIDDEN_WITH_READ {
+            let s = seeded_reading_foreign();
+            let before = (fingerprint(&s), foreign_fingerprint(&s));
+            assert!(way(&s, &tf(sql)).is_err(), "accepted: {sql}");
+            assert_eq!(
+                (fingerprint(&s), foreign_fingerprint(&s)),
+                before,
+                "changed data: {sql}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_read_permission_reads_in_each_layer_alone_and_together() {
+    for way in [pre_check_only, authorizer_only, both] {
+        for sql in ALLOWED_WITH_READ {
+            let s = seeded_reading_foreign();
+            if let Err(error) = way(&s, &tf(sql)) {
+                panic!("refused: {sql}: {error:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn the_tables_of_an_extension_that_is_not_installed_are_refused_in_each_layer_despite_a_grant() {
+    for way in [pre_check_only, authorizer_only, both] {
+        let mut s = seeded_reading_foreign();
+        let mut policy = (*s.policy).clone();
+        policy.installed.clear();
+        s.policy = Arc::new(policy);
+        for sql in ALLOWED_WITH_READ {
+            assert!(way(&s, &tf(sql)).is_err(), "accepted: {sql}");
+        }
+    }
 }
