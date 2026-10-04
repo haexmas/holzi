@@ -61,7 +61,8 @@ die Einstellungen, und Rust kennt sie trotzdem.
 
 ## Weitere Ereignisse
 
-| Ereignis                   | Daten                                   | Zweck                                                                                                                                        |
-| -------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `extensions-changed`       | `{extensionIds}`                        | Liste neu laden (Launcher, Einstellungen, App-Liste des wm)                                                                                  |
-| `extension-status-changed` | `{extensionId, status, error?, reload}` | Anzeige „wird übertragen“, Fehler; `reload`: die wirksame Fassung einer laufenden Erweiterung hat gewechselt, offene Tabs laden neu (FR-038) |
+| Ereignis                       | Daten                                   | Zweck                                                                                                                                                               |
+| ------------------------------ | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `extensions-changed`           | `{extensionIds}`                        | Liste neu laden (Launcher, Einstellungen, App-Liste des wm)                                                                                                         |
+| `extension-status-changed`     | `{extensionId, status, error?, reload}` | Anzeige „wird übertragen“, Fehler; `reload`: die wirksame Fassung einer laufenden Erweiterung hat gewechselt, offene Tabs laden neu (FR-038)                        |
+| `extension-notification-click` | `{extensionId, path?}`                  | Klick auf eine Benachrichtigung einer Erweiterung: ihren Tab nach vorn holen oder sie öffnen (FR-052); die Erweiterung selbst hört `haextension:notification:click` |

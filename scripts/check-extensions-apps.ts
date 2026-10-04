@@ -11,6 +11,7 @@ import {
   extensionApps,
   extensionIdOf,
   statusErrorKey,
+  tabOfExtension,
   tabsOfStoppedExtensions,
 } from '../src/lib/extensions/apps.ts'
 import { WM_APPS, type AppDefinition } from '../src/lib/wm/apps.ts'
@@ -187,4 +188,22 @@ test('the tabs of a disabled or removed extension close, those of one not ready 
     ),
     [disabled, removed],
   )
+})
+
+test('a notification click finds the first tab of its extension, or none', () => {
+  const [notes, calendar] = [1, 2].map(
+    (n) => `00000000-0000-0000-0000-00000000000${n}`,
+  ) as [string, string]
+  const apps = allApps(extensionApps([summary({ id: notes })], {}))
+  const state = emptyState()
+  openApp(state, 'system.chat', apps)
+  openApp(state, extensionAppId(notes), apps)
+  const found = tabOfExtension(state.windows, notes)
+  const tab = state.windows
+    .flatMap((w) =>
+      w.tabs.map((t) => ({ windowId: w.id, tabId: t.id, appId: t.appId })),
+    )
+    .find((t) => t.appId === extensionAppId(notes))
+  assert.deepEqual(found, tab && { windowId: tab.windowId, tabId: tab.tabId })
+  assert.equal(tabOfExtension(state.windows, calendar), null)
 })

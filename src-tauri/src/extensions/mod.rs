@@ -14,6 +14,7 @@ pub mod ids;
 pub mod kv;
 pub mod logs;
 pub mod mime;
+pub mod notifications;
 pub mod permissions;
 pub mod protocol;
 pub mod registry;

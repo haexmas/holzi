@@ -12,7 +12,7 @@ use super::frames::FrameSession;
 use super::{database, methods, permissions};
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
 use crate::extensions::host::ExtensionHost;
-use crate::extensions::{kv, logs, web};
+use crate::extensions::{kv, logs, notifications, web};
 use crate::storage::query::Query;
 use crate::vault_gate::VaultDb;
 
@@ -134,6 +134,16 @@ pub static METHODS: &[Method] = &[
         module: web::MODULE,
     },
     Method {
+        name: "extension_notifications_show",
+        handler: notifications::show,
+        module: notifications::MODULE,
+    },
+    Method {
+        name: "extension_notifications_dismiss",
+        handler: notifications::dismiss,
+        module: notifications::MODULE,
+    },
+    Method {
         name: "extension_permissions_check_web",
         handler: web::check_web,
         module: web::MODULE,
@@ -143,7 +153,6 @@ pub static METHODS: &[Method] = &[
 /// Methods of later deliveries (research R1): they answer 8001 until they land.
 const LATER: &[&str] = &[
     "extension_permissions_check_filesystem",
-    "extension_notifications_",
     "extension_filesystem_",
     "extension_password_",
     "extension_remote_storage_",

@@ -241,6 +241,13 @@ candle-transformers = { version = "0.10.2", optional = true }
 # the pure-Rust regex engine candle's own whisper example uses instead of the
 # C-backed `onig` feature.
 tokenizers = { version = "0.23.2", default-features = false, features = ["fancy-regex"], optional = true }
+tauri-plugin-notification = "2.5.1"
+
+# Spec 017 US8 (research R20, T099): notifications of extensions on Linux and the BSDs go straight
+# to the notification server, which reports clicks; tauri-plugin-notification does not hand them on.
+# The same version tauri-plugin-notification pulls in.
+[target.'cfg(all(unix, not(any(target_os = "macos", target_os = "ios", target_os = "android"))))'.dependencies]
+notify-rust = "4.18.1"
 
 [target.'cfg(unix)'.dependencies]
 # Kills a whole process group (`kill(-pgid, SIGKILL)`) so a killed
