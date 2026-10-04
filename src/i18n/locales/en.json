@@ -735,6 +735,14 @@
           "info": "Information",
           "debug": "Details"
         }
+      },
+      "dev": {
+        "title": "Developer mode",
+        "mode": "Developer mode",
+        "modeHint": "On this device only. Switching reloads holzi's window.",
+        "load": "Load project",
+        "loadHint": "Folder with haextension/manifest.json",
+        "unload": "Unload"
       }
     }
   },
@@ -1526,7 +1534,16 @@
         "legacy_signature_format": "The bundle was signed with an old tool. Please sign it again with the current “haex” tool.",
         "unreadable": "The file cannot be read.",
         "downgrade_not_confirmed": "An older version is installed only after confirmation.",
-        "bundle_mismatch": "The package does not match what the vault records."
+        "bundle_mismatch": "The package does not match what the vault records.",
+        "dev_mode_off": "Developer mode is off.",
+        "dev_server_not_loopback": "The development server must run on localhost or 127.0.0.1.",
+        "dev_config_invalid": "haextension.config.json is invalid.",
+        "dev_config_unreadable": "haextension.config.json cannot be read.",
+        "dev_manifest_missing": "The project lacks haextension/manifest.json.",
+        "dev_public_key_invalid": "The publisher key in the manifest is not a valid Ed25519 key.",
+        "dev_installed_conflict": "An extension with this key and name is or was installed (also with kept data).",
+        "dev_tables_exist": "Tables with this extension's prefix exist already.",
+        "dev_prefix_conflict": "A development version of this extension is loaded on this device; unload it first."
       },
       "title": "Install extension",
       "fileType": "Extension",
@@ -1591,7 +1608,16 @@
       "migration_failed": "A migration failed",
       "migration_missing": "This version lacks an applied migration",
       "database_unavailable": "The database was not available",
-      "parked_limit": "Too much data waits for the installation; syncing this extension pauses until it is installed here or removed with “delete data”"
+      "parked_limit": "Too much data waits for the installation; syncing this extension pauses until it is installed here or removed with “delete data”",
+      "dev_prefix_conflict": "A development version runs on this device"
+    },
+    "dev": {
+      "badge": "Dev",
+      "badgeHint": "Development version: unsigned, from this device's development server",
+      "console": "Console ({count})",
+      "loadTitle": "Load an extension in developer mode",
+      "loadHint": "Unsigned, from the development server on this device. Its tables, permissions and storage stay on this device and go when it is unloaded.",
+      "load": "Load"
     }
   }
 }

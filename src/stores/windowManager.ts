@@ -197,6 +197,8 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
     icon: string | undefined
     titleOverride: string | null
     hasAttention: boolean
+    /** A development version of an extension (spec 017, US12). */
+    dev: boolean
   } {
     const app = getAppDefinition(tab.appId, apps())
     const runtime = runtimeFor(tab.id)
@@ -214,6 +216,7 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
       // An extension's own name is not translated; it stands where the app sets no title.
       titleOverride: runtime.titleOverride ?? app?.title ?? null,
       hasAttention: runtime.attention,
+      dev: app?.dev === true,
     }
   }
 

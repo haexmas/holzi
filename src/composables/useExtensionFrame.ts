@@ -3,6 +3,11 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import type { ExtensionStatusChanged } from '@bindings/ExtensionStatusChanged'
 import type { FrameOpened } from '@bindings/FrameOpened'
+import {
+  DEV_CONSOLE_LINES,
+  readConsoleForward,
+  type DevConsoleLine,
+} from '~/lib/extensions/devConsole'
 import { ALL_ACTIONS } from '~/lib/actions/catalog'
 import {
   FrameEventQueue,
@@ -65,6 +70,9 @@ export function useExtensionFrame(
   const error = ref<string | null>(null)
   const src = ref<string | null>(null)
   const dialog = ref<FrameDialog | null>(null)
+  /** A development version (spec 017, US12): no shim, and its console output is shown. */
+  const dev = ref(false)
+  const consoleLines = ref<DevConsoleLine[]>([])
 
   let frame: string | null = null
   let sdkPort: MessagePort | null = null
@@ -219,9 +227,14 @@ export function useExtensionFrame(
     armDeadline()
   }
 
-  /** Every `load` of the frame; the shim's `hello` then says whether its document is new. */
+  /** Every `load` of the frame; the shim's `hello` then says whether its document is new. A
+   * development server's page has no shim: every load is a new document. */
   function onLoad(): void {
     if (!frame) return
+    if (dev.value) {
+      startHandshake()
+      return
+    }
     startShim()
     if (state.value !== 'ready') armDeadline()
   }
@@ -243,6 +256,7 @@ export function useExtensionFrame(
         return
       }
       frame = opened.frame
+      dev.value = opened.dev
       events = new FrameEventQueue(opened.frame, (event: FrameEvent) =>
         sdkPort?.postMessage(eventMessage(event)),
       )
@@ -299,6 +313,14 @@ export function useExtensionFrame(
   // Console output of the extension counts only from this frame's own window.
   function onWindowMessage(event: MessageEvent): void {
     if (!iframe.value || event.source !== iframe.value.contentWindow) return
+    if (dev.value) {
+      const line = readConsoleForward(event.data)
+      if (line)
+        consoleLines.value = [...consoleLines.value, line].slice(
+          -DEV_CONSOLE_LINES,
+        )
+      return
+    }
     const data = event.data as { type?: unknown } | null
     if (
       data &&
@@ -355,5 +377,15 @@ export function useExtensionFrame(
 
   void openAsync()
 
-  return { state, error, src, dialog, answerDialog, onLoad, reloadAsync }
+  return {
+    state,
+    error,
+    src,
+    dialog,
+    dev,
+    consoleLines,
+    answerDialog,
+    onLoad,
+    reloadAsync,
+  }
 }

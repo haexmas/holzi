@@ -735,6 +735,14 @@
           "info": "Informationen",
           "debug": "Details"
         }
+      },
+      "dev": {
+        "title": "Entwicklermodus",
+        "mode": "Entwicklermodus",
+        "modeHint": "Nur auf diesem Gerät. Beim Umschalten lädt holzi das Fenster neu.",
+        "load": "Projekt laden",
+        "loadHint": "Ordner mit haextension/manifest.json",
+        "unload": "Entladen"
       }
     }
   },
@@ -1526,7 +1534,16 @@
         "legacy_signature_format": "Das Paket ist mit einem alten Werkzeug signiert. Bitte mit dem aktuellen Werkzeug „haex“ neu signieren.",
         "unreadable": "Die Datei lässt sich nicht lesen.",
         "downgrade_not_confirmed": "Eine ältere Fassung wird nur nach Bestätigung installiert.",
-        "bundle_mismatch": "Das Paket passt nicht zu den Angaben der Vault."
+        "bundle_mismatch": "Das Paket passt nicht zu den Angaben der Vault.",
+        "dev_mode_off": "Der Entwicklermodus ist aus.",
+        "dev_server_not_loopback": "Der Entwicklungsserver muss auf localhost oder 127.0.0.1 laufen.",
+        "dev_config_invalid": "haextension.config.json ist ungültig.",
+        "dev_config_unreadable": "haextension.config.json lässt sich nicht lesen.",
+        "dev_manifest_missing": "Im Projekt fehlt haextension/manifest.json.",
+        "dev_public_key_invalid": "Der Herausgeber-Schlüssel im Manifest ist kein gültiger Ed25519-Schlüssel.",
+        "dev_installed_conflict": "Eine Erweiterung mit diesem Schlüssel und Namen ist installiert oder war es (auch mit behaltenen Daten).",
+        "dev_tables_exist": "Es gibt schon Tabellen mit dem Präfix dieser Erweiterung.",
+        "dev_prefix_conflict": "Auf diesem Gerät ist eine Entwicklungsfassung dieser Erweiterung geladen; entlade sie zuerst."
       },
       "title": "Erweiterung installieren",
       "fileType": "Erweiterung",
@@ -1591,7 +1608,16 @@
       "migration_failed": "Eine Migration ist fehlgeschlagen",
       "migration_missing": "Eine angewendete Migration fehlt in dieser Fassung",
       "database_unavailable": "Die Datenbank war nicht erreichbar",
-      "parked_limit": "Zu viele Daten warten auf die Installation; der Sync dieser Erweiterung hält an, bis sie hier installiert oder mit „Daten löschen“ entfernt ist"
+      "parked_limit": "Zu viele Daten warten auf die Installation; der Sync dieser Erweiterung hält an, bis sie hier installiert oder mit „Daten löschen“ entfernt ist",
+      "dev_prefix_conflict": "Auf diesem Gerät läuft eine Entwicklungsfassung"
+    },
+    "dev": {
+      "badge": "Entwicklung",
+      "badgeHint": "Entwicklungsfassung: unsigniert, vom Entwicklungsserver dieses Geräts",
+      "console": "Konsole ({count})",
+      "loadTitle": "Erweiterung im Entwicklermodus laden",
+      "loadHint": "Unsigniert vom Entwicklungsserver auf diesem Gerät. Tabellen, Berechtigungen und Speicher bleiben auf diesem Gerät und gehen beim Entladen.",
+      "load": "Laden"
     }
   }
 }
