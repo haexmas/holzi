@@ -63,8 +63,8 @@ als Text** (FR-045), sie melden den Fehler (Fehlerart `ReferenceError { kind }`)
 ## Speichern
 
 `references::validate(q, item_id, field_texts)` läuft in `create_item` und `update_item`
-(und im Kopieren, R7): findet für einen Platzhalter eine Tiefensuche (höchstens 12 Stufen)
-einen Weg, der wieder auf **dasselbe Feld** dieses Eintrags trifft, lehnt es mit
+(und im Kopieren, R7): durchsucht für einen Platzhalter den erreichbaren Referenzgraphen ohne
+das Auflösungslimit von 12 Stufen nach einem Weg, der wieder auf **dasselbe Feld** dieses Eintrags trifft, lehnt es mit
 `ReferenceCycle { source_item_id }` ab. Die Prüfung arbeitet auf (Eintrag, Wert) wie das
 Auflösen, nicht auf ganzen Einträgen: `password = {$<selbst>:extra:PIN}` ist erlaubt, nur
 `password = {$<selbst>:password}` oder ein Weg zurück zum Passwort nicht. Für den eigenen
@@ -107,7 +107,8 @@ eigenen Feld, **genau ein** Treffer in der Datei. Ein anderes gewünschtes Feld 
 ## Testvektoren
 
 Die Datei `src-tauri/tests/fixtures/reference_vectors.json` (beim Bau anzulegen) hält die
-Beispiele oben und weitere (Kette der Tiefe 12, Kreis A→B→A, Kreis A→A, derselbe Platzhalter
+Beispiele oben und weitere (Kette der Tiefe 12, Kreis A→B→A, Kreis A→A, Kreis mit Rückweg
+erst auf Stufe 13, derselbe Platzhalter
 zweimal in einem Wert (kein Kreis), Verweis auf ein anderes Feld desselben Eintrags (kein
 Kreis), Quelle fehlt, Quelle im Papierkorb, Schlüssel mit `}` und `\`, Text ohne
 Platzhalter, `{$` am Ende).

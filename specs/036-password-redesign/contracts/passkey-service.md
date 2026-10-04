@@ -28,7 +28,8 @@ errors:   Forbidden | NotFound | InvalidInput{field} | OriginMismatch | Unsuppor
   `NotFound` für Aufrufer mit Freigabe, `Forbidden` ohne. Der eingebaute Agent hat nie Zugriff
   (`reach()` → `Forbidden`).
 - **Pflicht**: `itemId`, `rpId`, `rpName`, `userHandle`, `userName`, `challenge`, `origin`
-  (sonst `InvalidInput{field}`, FR-024).
+  (sonst `InvalidInput{field}`, FR-024). `userHandle` darf nach Base64URL-Dekodierung
+  höchstens 64 Byte lang sein; andernfalls gilt `InvalidInput{field:"userHandle"}`.
 - **Herkunft**: `origin_matches(origin, rpId)` (R9) sonst `OriginMismatch`.
 - **Ausgeschlossene**: existiert ein Passkey der Gegenstelle mit einer Kennung aus
   `excludeCredentials` in einem für den Aufrufer **sichtbaren** Eintrag →
@@ -40,7 +41,7 @@ errors:   Forbidden | NotFound | InvalidInput{field} | OriginMismatch | Unsuppor
   leer, `is_discoverable` aus der Anfrage; Kennung = UUIDv5 der Credential-ID (034 R2).
 - **Antwort**: `clientDataJson` = `{"type":"webauthn.create","challenge":…,"origin":…,"crossOrigin":false}`
   (Reihenfolge fest); `attestationObject` = CBOR `{fmt:"none", attStmt:{}, authData}`;
-  `authData` = `SHA-256(rpId)` ‖ Flags `0x59` (UP, BE, BS, AT) ‖ Zähler 0 (4 Byte) ‖
+  `authData` = `SHA-256(rpId)` ‖ Flags `0x58` (BE, BS, AT; kein UP ohne Presence-Nachweis) ‖ Zähler 0 (4 Byte) ‖
   AAGUID (16 Nullbytes) ‖ Länge der Credential-ID (2 Byte) ‖ Credential-ID ‖ COSE-Schlüssel;
   `publicKeySpki` für `getPublicKey()`.
 
@@ -67,15 +68,18 @@ errors:   Forbidden | NotFound | OriginMismatch | UnsupportedAlgorithm | ChoiceR
   Aufrufer wiederholt mit der Kennung in `allowCredentials`.
 - **Herkunft**: wie oben, **bevor** irgendetwas geschrieben oder signiert wird.
 - **Berechtigung**: mindestens „Lesen“ im Bereich des Eintrags (FR-031).
-- **Zähler**: `wirksamer Zähler + 1` in die eigene Zeile von `passkey_counters` (R5), und
-  `last_used_at`, in **derselben** Transaktion wie das Signieren. Schlägt das Schreiben fehl,
-  wird nichts zurückgegeben.
+- **Zähler**: immer 0 (R5), weil getrennte Offline-Geräte keinen global monotonen Wert
+  garantieren können; `last_used_at` wird in **derselben** Transaktion wie das Signieren
+  geschrieben. Schlägt das Schreiben fehl, wird nichts zurückgegeben.
 - **Signatur**: über `authenticatorData ‖ SHA-256(clientDataJson)`; ES256 als DER-ECDSA (P-256,
-  SHA-256), EdDSA als 64 Byte. `authenticatorData` = `SHA-256(rpId)` ‖ Flags `0x19` (UP, BE,
-  BS) ‖ Zähler (4 Byte, Big Endian). UV (`0x04`) steht weder hier noch beim Anlegen: kein
-  Mensch bestätigt die Anfrage (R8). `clientDataJson` =
+  SHA-256), EdDSA als 64 Byte. `authenticatorData` = `SHA-256(rpId)` ‖ Flags `0x18` (BE, BS;
+  kein UP ohne Presence-Nachweis) ‖ Zähler 0 (4 Byte, Big Endian). UV (`0x04`) steht weder
+  hier noch beim Anlegen: kein Mensch bestätigt die Anfrage (R8). Damit sind die Antworten
+  für Gegenstellen, die UP verlangen, bewusst nicht verwendbar, bis ein vertrauenswürdiger,
+  zeremoniegebundener Presence-Nachweis ergänzt ist. `clientDataJson` =
   `{"type":"webauthn.get","challenge":…,"origin":…,"crossOrigin":false}`.
-- RS256 (importiert) → `UnsupportedAlgorithm` (FR-034); der Zähler steigt dabei nicht.
+- RS256 (importiert) → `UnsupportedAlgorithm` (FR-034); es wird dabei kein Nutzungszustand
+  geschrieben.
 
 ## `passkey_list`
 
@@ -96,16 +100,16 @@ ein Schlüssel.
 
 `passwords_passkey_unlink` (`{ itemId, passkeyId }`, nur Nutzer): löscht eine Verbindung
 („Verweis lösen“), nicht den Passkey. `passwords_passkey_delete` bleibt wie in 034
-(`{ passkeyId }`) und löscht immer den Passkey selbst samt seinen Zählern und Verbindungen; die
+(`{ passkeyId }`) und löscht immer den Passkey selbst samt seinen Verbindungen; die
 Oberfläche bietet es nur am eigenen Eintrag des Passkeys an. Eine Verbindung über
 `passkey_delete` zu lösen ginge nicht: `passkeyId` allein sagt nicht, welches Ziel gemeint ist.
 
 ## Tests (Rust, `passkeys_ops_tests.rs`, `webauthn_tests.rs`, `src-tauri/tests/passwords_passkeys.rs`)
 
 - Anlegen → Bestätigen: Signatur mit dem öffentlichen Schlüssel prüfen (ES256 und EdDSA),
-  Zähler 1, 2, 3.
-- Zwei Geräte: je ein Bestätigen, Sync, danach hat jedes Gerät einen wirksamen Zähler ≥ dem
-  höchsten gesendeten; kein Gerät sieht den Wert sinken (`passwords_sync.rs`).
+  Zähler bleibt bei 0; UP und UV sind nicht gesetzt.
+- Zwei Geräte: je ein Bestätigen, Sync, danach bleibt der Zähler auf beiden Geräten 0
+  (`passwords_sync.rs`).
 - Herkunft: `evil.com` für `example.com`, `com` als `rpId`, `co.uk`, Unterdomäne, `localhost`
   mit `http`, eine IP-Adresse als `rpId` (abgelehnt), IDNA, Port; jede Ablehnung ohne Signatur
   und ohne Zähleränderung.

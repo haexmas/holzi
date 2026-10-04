@@ -276,8 +276,9 @@ den Passkey im Tab Extra des Eintrags sehen, umbenennen und löschen.
    wird abgelehnt.
 2. **Given** ein Passkey und eine Aufgabe der Gegenstelle, **When** ein Aufrufer mit Freigabe
    „Lesen“ die Anmeldung bestätigt, **Then** erhält er eine gültige Signatur über die Aufgabe,
-   der Zähler steigt um eins, und „zuletzt benutzt“ wird gesetzt; eine Signatur, die die
-   Gegenstelle mit dem öffentlichen Schlüssel prüft, ist gültig.
+   der Zähler bleibt bei 0, und „zuletzt benutzt“ wird gesetzt; eine Signatur, die die
+   Gegenstelle mit dem öffentlichen Schlüssel prüft, ist gültig. UP und UV werden ohne
+   vertrauenswürdigen, zeremoniegebundenen Presence-Nachweis nicht gesetzt.
 3. **Given** eine Anfrage, deren Herkunft nicht zur Kennung der Gegenstelle des Passkeys
    passt, **When** der Aufrufer bestätigen will, **Then** wird abgelehnt und nichts signiert.
 4. **Given** eine Anfrage mit einer Liste ausgeschlossener Passkeys, **When** ein passender
@@ -293,8 +294,9 @@ den Passkey im Tab Extra des Eintrags sehen, umbenennen und löschen.
 7. **Given** ein Passkey, **When** der Nutzer ihn löscht und bestätigt, **Then** ist er weg,
    und holzi nennt in der Bestätigung die Gegenstelle, damit er weiß, dass er sich dort
    nicht mehr mit ihm anmelden kann.
-8. **Given** ein Passkey, den zwei Geräte benutzt haben, **When** die Zähler sich über den
-   Sync treffen, **Then** gilt der höhere Wert, damit der Zähler nie sinkt.
+8. **Given** ein Passkey, den zwei Geräte benutzt haben, **When** die Geräte sich über den
+   Sync treffen, **Then** bleibt `signCount` auf beiden Geräten 0; ein synchronisierter
+   Nicht-Null-Zähler wird nicht vorgetäuscht.
 
 ---
 
@@ -376,8 +378,8 @@ Passwort in der Kopie überschreiben, die Quelle löschen.
    Stufen, zeigt das Feld „Verweiskreis oder zu tief“ statt eines Werts (KeePass liefert dort
    leeren Text; holzi nie).
 6. **Given** eine Kopie mit „Passkeys per Verweis übernehmen“, **When** ein Aufrufer über die
-   Kopie bestätigt, **Then** signiert der Dienst mit dem Schlüssel der Quelle, und der Zähler
-   der Quelle steigt; die Kopie hat keinen eigenen Schlüssel.
+   Kopie bestätigt, **Then** signiert der Dienst mit dem Schlüssel der Quelle, der Zähler
+   der Quelle bleibt 0, und die Kopie hat keinen eigenen Schlüssel.
 7. **Given** eine Quelle, auf die zwei Einträge verweisen, **When** der Nutzer sie endgültig
    löscht, **Then** warnt holzi mit der Zahl der Ziele und bietet an, die Verweise in eigene
    Werte umzuwandeln (der Platzhalter wird durch den heutigen Wert ersetzt); Verweise von
@@ -429,8 +431,9 @@ Passwort in der Kopie überschreiben, die Quelle löschen.
   dem letzten Fenster (oder dem Vault-Wechsel) ist sie weg.
 - **Ein Passkey-Aufrufer ohne passende Freigabe** erfährt nicht, ob ein Passkey existiert
   (wie FR-029 in 034).
-- **Die Uhr oder der Zähler eines Geräts geht falsch.** Der Zähler eines Passkeys hängt nicht
-  an der Uhr; er steigt je Bestätigung und nimmt beim Sync den höheren Wert.
+- **Die Uhr oder der Zähler eines Geräts geht falsch.** Der Zähler eines synchronisierten
+  Passkeys bleibt 0 und hängt nicht an der Uhr; die Oberfläche zeigt den Nutzungszeitpunkt
+  separat.
 - **Ein Passkey ohne Eintrag** (nur durch Fremddaten oder einen Import ohne Eintrag möglich;
   holzi legt nie einen an). Er zählt für Aufrufer von außen als nicht vorhanden und wird in
   der Oberfläche nicht angezeigt; holzi löscht ihn nicht still.
@@ -581,17 +584,20 @@ Passwort in der Kopie überschreiben, die Quelle löschen.
   Credential-IDs MUSS dazu führen, dass kein neuer Passkey entsteht, wenn einer davon für
   dieselbe Gegenstelle an einem Eintrag im Bereich des Aufrufers existiert (Passkeys außerhalb
   des Bereichs verraten sich so nicht, FR-030). Der Aufruf MUSS den **Eintrag** nennen, an dem der Passkey
-  hängt; ohne Eintrag wird abgelehnt. Einen neuen Eintrag legt der Aufrufer vorher mit den
+  hängt; ohne Eintrag wird abgelehnt. `userHandle` darf nach Base64URL-Dekodierung höchstens
+  64 Byte lang sein; andernfalls wird der Aufruf abgelehnt. Einen neuen Eintrag legt der Aufrufer vorher mit den
   gewöhnlichen Funktionen aus 034 an.
 - **FR-025**: Beim **Bestätigen** MUSS der Dienst den passenden Passkey finden (über die Liste
   zugelassener Credential-IDs und die Kennung der Gegenstelle, sonst über einen auffindbaren
-  Passkey dieser Gegenstelle), den Zähler um eins erhöhen, „zuletzt benutzt“ setzen und die
-  Aufgabe samt Zähler signieren. Die **Herkunft** der Anfrage MUSS zur Kennung der Gegenstelle
+  Passkey dieser Gegenstelle), `signCount` als 0 setzen, „zuletzt benutzt“ setzen und die
+  Aufgabe samt Zähler signieren. Ohne einen erfolgreichen, zeremoniegebundenen Presence-Nachweis
+  werden UP und UV nicht gesetzt. Die **Herkunft** der Anfrage MUSS zur Kennung der Gegenstelle
   des Passkeys passen (gleiche Domäne oder eine Oberdomäne der Herkunft); andernfalls MUSS
   abgelehnt und nichts signiert werden. Das schließt die feste Annahme von haex-vault aus,
   die Herkunft sei immer `https://<Kennung>`.
-- **FR-026**: Der **Zähler** eines Passkeys DARF nie sinken: bei jedem Bestätigen steigt er um
-  eins, und trifft der Sync zwei Werte, MUSS der höhere gelten.
+- **FR-026**: Der **Zähler** eines synchronisierten Passkeys MUSS bei Anlegen und Bestätigen 0
+  bleiben. Der Dienst führt keine unzuverlässige globale Nicht-Null-Reihenfolge über offline
+  bestätigende Geräte ein.
 - **FR-027**: Beim **Auflisten** MUSS der Dienst nur Kopfdaten liefern (Kennung, Gegenstelle
   samt Name, Benutzerkennung und -name, Spitzname, Algorithmus, auffindbar ja oder nein,
   Anlege- und Zuletzt-benutzt-Zeit, Kennung des Eintrags), filterbar nach
@@ -720,8 +726,8 @@ Passwort in der Kopie überschreiben, die Quelle löschen.
   synchronisiert.
 - **Auswahl**: die markierten Einträge und Ordner einer Liste; endet beim Ordnerwechsel.
 - **Passkey**: unverändert aus 034 (Tabelle der Passkeys), jetzt auch mit Funktionen zum
-  Anlegen, Bestätigen und Auflisten; gehört immer zu einem Eintrag und folgt dessen Tags; der
-  Zähler steigt nur.
+  Anlegen, Bestätigen und Auflisten; gehört immer zu einem Eintrag und folgt dessen Tags;
+  `signCount` bleibt bei synchronisierten Passkeys 0.
 - **Verweis**: ein Platzhalter im Text eines Werts (`{$<Eintrag>:username}`, `…:password`,
   `…:extra:<Schlüssel>`), der beim Lesen durch den Wert des anderen Eintrags ersetzt wird; er
   wird nie aufgelöst gespeichert und folgt der Quelle sofort. Für Passkeys eine Verbindung zur
@@ -744,14 +750,14 @@ Passwort in der Kopie überschreiben, die Quelle löschen.
   zu ziehen, verschiebt holzi nie etwas; in 100 Versuchen mit gelöschten Zielen geht kein
   Eintrag verloren.
 - **SC-005**: Eine Signatur, die der Dienst für einen angelegten Passkey erzeugt, prüft mit dem
-  öffentlichen Schlüssel erfolgreich, für jeden Algorithmus, den holzi anlegt; der Zähler
-  steigt bei jeder Bestätigung um genau eins und sinkt in keinem Sync-Szenario.
+  öffentlichen Schlüssel erfolgreich, für jeden Algorithmus, den holzi anlegt; `signCount`
+  bleibt bei jeder Bestätigung und in jedem Sync-Szenario 0.
 - **SC-006**: In keiner Antwort, keinem Fehler, keiner Liste und keinem Protokoll des Dienstes
   steht ein privater Passkey-Schlüssel; ein Aufrufer mit einem Tag sieht, ändert und
   bestätigt in 100 Versuchen keinen Passkey an einem Eintrag außerhalb seines Bereichs und
   erfährt nicht, dass es ihn gibt.
 - **SC-007**: Eine Anfrage mit falscher Herkunft wird in allen Versuchen abgelehnt, ohne zu
-  signieren oder den Zähler zu ändern.
+  signieren oder Nutzungszustand zu ändern.
 - **SC-008**: Die Lightbox öffnet ein 5-MiB-Bild in unter einer Sekunde; an einem Eintrag mit
   30 Bildern lädt der Tab Extra nur die sichtbaren Vorschaubilder.
 - **SC-009**: Ändert der Nutzer das Passwort einer Quelle, zeigt jedes Ziel mit Verweis es
@@ -785,8 +791,8 @@ Passwort in der Kopie überschreiben, die Quelle löschen.
   Text bekommen nur ein Symbol.
 - Die Tastaturkürzel und Menüs gelten für die **Liste**; im Editor bleiben Eingabe, Escape und
   die Standardkürzel der Eingabefelder wie bisher.
-- Der Zähler eines Passkeys wird beim Sync als **größter Wert** zusammengeführt; wie das im
-  CRDT-Format geschieht, entscheidet der Plan, ohne die Semantik zu ändern.
+- Der `signCount` eines synchronisierten Passkeys bleibt beim Sync **0**; eine globale
+  Nicht-Null-Reihenfolge ist über offline bestätigende Geräte nicht garantiert.
 
 ## Nicht im Umfang
 
@@ -799,5 +805,6 @@ Passwort in der Kopie überschreiben, die Quelle löschen.
   Folgearbeiten“).
 - **Umbelegbare Kürzel** und Kürzel außerhalb der Liste.
 - **Freigaben verwalten** (Specs 017–019, 021) und das **Teilen** von Einträgen mit anderen.
-- Eine **Änderung der Tabellen** aus 034. Neu hinzukommen dürfen nur Tabellen, die der Zähler
-  (FR-026) und die Verbindung eines Passkeys zur Quelle (FR-046) brauchen.
+- Eine **Änderung der Tabellen** aus 034. Neu hinzukommen dürfen nur Tabellen, die die
+  Verbindung eines Passkeys zur Quelle (FR-046) braucht; der synchronisierte Zähler benötigt
+  keine zusätzliche Tabelle.

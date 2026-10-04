@@ -4,35 +4,23 @@
 
 Aufbauend auf dem Datenmodell von [034](../034-password-manager/data-model.md): Es gibt **keine
 Änderung an vorhandenen Tabellen** (keine neue Spalte, kein neuer Index auf alten Tabellen).
-Verweise sind Text in vorhandenen Spalten (R3); neu sind zwei CRDT-Tabellen. Beide entstehen
+Verweise sind Text in vorhandenen Spalten (R3); neu ist eine CRDT-Tabelle. Sie entsteht
 in Migration `0024_passwords_refs` (SQL in `src-tauri/src/identity/migrations_passwords_refs.rs`,
-weil `identity/migrations.rs` schon über 500 Zeilen steht), sind CRDT-synchronisiert (kein
-`_no_sync`-Suffix), gehören der Vault, haben **keine UNIQUE-Constraints** (ein Konflikt hält
-den Sync an; Eindeutigkeit über abgeleitete Kennungen, wie in 034 R2) und werden beim
+weil `identity/migrations.rs` schon über 500 Zeilen steht), ist CRDT-synchronisiert (kein
+`_no_sync`-Suffix), gehört der Vault, hat **keine UNIQUE-Constraints** (ein Konflikt hält
+den Sync an; Eindeutigkeit über abgeleitete Kennungen, wie in 034 R2) und wird beim
 endgültigen Löschen eines Eintrags oder Passkeys **ausdrücklich zuerst** gelöscht
 (`trash::purge_item`; der Sync wendet entfernte Löschungen ohne Fremdschlüssel an).
-`HOLZI_TRIGGER_VERSION` 15 → 16 (wie bei 0022 und 0023, damit die CRDT-Trigger der neuen
-Tabellen angelegt werden); eine Zeile im Versionsverlauf der Konstante.
+`HOLZI_TRIGGER_VERSION` 15 → 16 (wie bei 0022 und 0023, damit der CRDT-Trigger der neuen
+Tabelle angelegt wird); eine Zeile im Versionsverlauf der Konstante.
 
-## Neue Tabellen
+## Neue Tabelle
 
-### `haex_passwords_passkey_counters` — Zähler je Passkey und Gerät (R5)
-
-| Spalte       | Typ                        | Regel                                                                                  |
-| ------------ | -------------------------- | -------------------------------------------------------------------------------------- |
-| `id`         | TEXT PK                    | UUIDv5 (`NS_PASSKEY_COUNTER`) aus `passkey_id` + `:` + `device_id` (kein UNIQUE nötig) |
-| `passkey_id` | TEXT NOT NULL              | Passkey (`haex_passwords_passkeys.id`); FK `ON DELETE CASCADE`                         |
-| `device_id`  | TEXT NOT NULL              | `vault_device_uuid` des schreibenden Geräts (Gerät, nicht Installation)                |
-| `count`      | INTEGER NOT NULL DEFAULT 0 | Letzter von diesem Gerät gesendeter Zähler; wächst nur                                 |
-| `updated_at` | TEXT                       | `CURRENT_TIMESTAMP`                                                                    |
-
-Index: `idx_haex_passwords_passkey_counters_passkey_id (passkey_id)`.
-
-**Wirksamer Zähler** eines Passkeys: `max(passkeys.sign_count, max(count))` über seine Zeilen.
-Beim Bestätigen schreibt das Gerät `wirksamer Zähler + 1` in **seine** Zeile (Upsert über die
-abgeleitete Kennung) — jede Zelle hat genau einen Schreiber, LWW kann nichts überschreiben,
-und das Maximum sinkt nie. Die Spalte `passkeys.sign_count` ist nach dieser Spec der
-Ausgangswert (Import, haex-vault) und wird nicht mehr geschrieben.
+Die WebAuthn-Signaturzähler bleiben für diesen synchronisierten Dienst immer 0. Eine
+inkrementierende CRDT-Tabelle würde bei zwei offline bestätigenden Geräten denselben
+Nicht-Null-Wert erzeugen; das wäre für Gegenstellen nicht von einem Clone oder einer Race
+Condition zu unterscheiden. `passkeys.sign_count` bleibt als importierter Bestandswert erhalten,
+wird aber für neue Bestätigungen nicht erhöht.
 
 ### `haex_passwords_passkey_links` — Passkey per Verweis (R6)
 
@@ -64,8 +52,8 @@ Die Zahl der Verweise auf einen Eintrag ist abgeleitet (R12), nicht gespeichert.
   zählt für alle Aufrufer außer dem Nutzer als nicht vorhanden (Spec, Randfall) und wird in
   der Oberfläche nicht angezeigt. holzi legt keinen an; der Import legt immer einen Eintrag an
   (034 FR-023).
-- `trash::purge_item` löscht zusätzlich `passkey_counters` und `passkey_links` (als Quelle und
-  als Ziel) **vor** den Passkeys.
+- `trash::purge_item` löscht zusätzlich `passkey_links` (als Quelle und als Ziel) **vor** den
+  Passkeys.
 - `restore` aus dem Papierkorb hebt nichts auf: Verbindungen und Platzhalter sind nicht an den
   Ort gebunden.
 
@@ -81,7 +69,7 @@ Die Zahl der Verweise auf einen Eintrag ist abgeleitet (R12), nicht gespeichert.
 
 ## Typänderungen (ts-rs nach `src/types/bindings/`)
 
-- `PasskeyView` bekommt `itemId`, `isDiscoverable`, `signCount` (wirksamer Zähler),
+- `PasskeyView` bekommt `itemId`, `isDiscoverable`, `signCount` (für neue Bestätigungen immer 0),
   `linkedFrom: { itemId, title } | null` (gesetzt bei Verbindung, dann ohne Umbenennen und
   Löschen, nur „Verweis lösen“).
 - `ItemDetail` bekommt `passwordReferences`, `usernameReferences`, `urlReferences`,

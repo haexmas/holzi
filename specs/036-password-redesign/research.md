@@ -97,9 +97,10 @@ einem Wert ein falscher Kreis); sie liefert dann `ReferenceError::Cycle`, bei St
 `ReferenceError::TooDeep`, bei fehlender Quelle und bei einer Quelle außerhalb des Bereichs
 `Missing` (eine eigene Art gibt es dafür nicht, damit beides von außen gleich aussieht,
 FR-047). **Nie** leerer Text. Beim Speichern prüft `references::validate`, dass die neuen
-Platzhalter keinen Weg zurück zum selben Feld des gespeicherten Eintrags eröffnen (Tiefensuche
-ab jeder Quelle, höchstens 12 Stufen); sonst `ReferenceCycle`. Ein Verweis auf ein anderes Feld
-desselben Eintrags ist kein Kreis.
+Platzhalter keinen Weg zurück zum selben Feld des gespeicherten Eintrags eröffnen. Diese
+Kreisprüfung durchsucht den erreichbaren Referenzgraphen ohne das Auflösungslimit von 12
+Stufen; sonst könnte ein Kreis erst auf Stufe 13 durchrutschen. Ein Verweis auf ein anderes
+Feld desselben Eintrags ist kein Kreis.
 
 KeePass (`KeePass/Util/Spr/SprEngine.cs`, GitHub-Mirror `dlech/KeePass2.x`) geht so vor:
 `MaxRecursionDepth = 12`, jede verschachtelte Auflösung ruft `CompileInternal` mit
@@ -115,29 +116,16 @@ einige Platzhalter trägt.
 das auf den Administrator“ gehen dann nicht); Kreise nur über die Tiefe erkennen (ergibt nach
 zwölf Runden dieselbe Meldung, aber ohne die Warnung beim Speichern).
 
-## R5 — Passkey-Zähler: eine Zeile je Gerät
+## R5 — Passkey-Zähler: synchronisiert immer 0
 
-**Entscheidung**: Neue CRDT-Tabelle `haex_passwords_passkey_counters` (Kennung = UUIDv5 aus
-Passkey-Kennung und Geräte-Kennung, Spalten `passkey_id`, `device_id`, `count`). Der wirksame
-Zähler ist `max(sign_count der Passkey-Zeile, max(count aller Zeilen))`. Bestätigen schreibt
-`wirksamer Zähler + 1` in die **eigene** Zeile des Geräts. Die Spalte `sign_count` bleibt
-(Import und haex-vault) als Ausgangswert und wird nicht mehr verändert.
+**Entscheidung**: Der Dienst sendet bei Anlegen und Bestätigen immer `signCount = 0` und
+erhöht `passkeys.sign_count` nicht. Ein CRDT-Zähler pro Gerät wäre nicht ausreichend: Zwei
+offline bestätigende Geräte könnten denselben Nicht-Null-Wert senden; eine Gegenstelle kann
+das nicht von einem Clone, einer Fehlfunktion oder einer Race Condition unterscheiden.
 
-**Begründung**: FR-026 verlangt, dass der Zähler nie sinkt und dass beim Sync der höhere Wert
-gilt. Der CRDT-Kern führt Zellen per LWW nach HLC zusammen; ein `max` bräuchte eine eigene
-`ApplyPolicy` (`haex-crdt` kennt nur Überspringen oder Ersetzen je Zelle, ein höherer Wert mit
-älterem HLC wäre nur über ein direktes `UPDATE` im Hook zu retten, und `sync/inbound.rs`
-ruft fest `SignatureApplyPolicy`). Mit einer Zeile je Gerät schreibt jede Zelle nur ein Gerät,
-LWW kann nichts überschreiben, und das Maximum über die Zeilen ist von selbst monoton.
-
-**Verworfen**: Eigene `ApplyPolicy` mit Max-Zusammenführung (greift in den Sync-Eingang ein,
-verlangt Tests im Sync-Kern, das Risiko liegt in Spec 024); Summe statt Maximum (der Zähler
-spränge bei jedem Gerät um dessen Anzahl, kein Mehrwert).
-
-**Bewusste Grenze**: Zwei Geräte, die offline bestätigen, können **denselben** Zähler senden;
-eine Gegenstelle, die streng „größer als zuletzt“ verlangt, lehnt das zweite ab. Gesyncte
-Passkeys (iCloud, Google) senden deshalb meist 0; die Spec verlangt bewusst einen steigenden
-Zähler (FR-026). Ein späterer Schalter „immer 0“ ist möglich, ohne das Modell zu ändern.
+Das entspricht der WebAuthn-Variante für Authenticatoren ohne Signaturzähler. Der Dienst
+verzichtet damit bewusst auf Clone-Signale, statt eine unzuverlässige globale Ordnung zu
+behaupten. Die Passkey-Tabelle braucht deshalb keine zusätzliche Zählertabelle.
 
 ## R6 — Passkey per Verbindung (FR-046)
 
@@ -192,11 +180,12 @@ bestätigt holzi nicht** (importierte RS256-Passkeys erscheinen, `passkey_confir
 heute nur `0.10.0-rc` in den Dev-Abhängigkeiten ist. Beglaubigung `none` (`fmt: "none"`,
 leerer `attStmt`). `clientDataJSON` baut der Dienst selbst aus Typ, Aufgabe und Herkunft
 (deterministisch) und gibt es zurück; so kann der Aufrufer Herkunft und Aufgabe nicht
-auseinanderfallen lassen. Flags der Authenticator-Daten: UP (0x01), BE (0x08), BS (0x10),
-beim Anlegen zusätzlich AT (0x40); BE und BS stehen, weil der Passkey synchronisiert wird. UV
-(0x04) steht nie, weil kein Mensch die Anfrage bestätigt; eine Gegenstelle, die
-`userVerification: "required"` verlangt, lehnt die Antwort ab (bewusste Grenze, bis die
-External Bridge eine Bestätigung durch den Nutzer bringt).
+auseinanderfallen lassen. Flags der Authenticator-Daten: BE (0x08), BS (0x10), beim Anlegen
+zusätzlich AT (0x40); UP wird ohne einen erfolgreichen, zeremoniegebundenen Presence-Nachweis
+nicht gesetzt. UV (0x04) steht nie, weil kein Mensch die Anfrage bestätigt. Die aktuellen
+Antworten sind damit für Gegenstellen, die UP oder `userVerification: "required"` verlangen,
+bewusst nicht verwendbar. Ein vertrauenswürdiger Presence-Provider ist Voraussetzung, bevor
+UP gesetzt werden darf.
 Neue Abhängigkeiten: `ciborium` (CBOR für COSE-Schlüssel und Beglaubigung, nicht im
 `Cargo.lock`), `psl` (öffentliche Suffixe, R9) und `url` (steht transitiv im Lock; jetzt
 direkt).
@@ -373,14 +362,14 @@ bleiben die Hüllen (Kopf, Speichern, Konflikt, Entwurf) und werden kleiner als 
 der Grammatik-Datei, `webauthn_tests` mit festen Schlüsseln und der Prüfung der Signatur mit
 dem öffentlichen Schlüssel, `copy_tests`, `passkeys_ops_tests`, `import/references_tests`),
 Integration in `src-tauri/tests/` (`passwords_passkeys.rs`, `passwords_references.rs`,
-`passwords_copy.rs`, Zähler im Sync-Test `passwords_sync.rs`); Frontend-Prüfskripte
+`passwords_copy.rs`); Frontend-Prüfskripte
 `check-passwords-menus.ts`, `-shortcuts.ts`, `-breadcrumb.ts`, `-clipboard.ts`,
 `-tabs.ts` (Registry); e2e `passwords-organize` (Auswahl, Ausschneiden, Kopieren mit Dialog,
 Brotkrumen, Kontextmenü, Kürzel), `passwords-tabs` (Tabs per Tippen und Pfeiltaste, Verlauf,
 Wiederherstellen), `passwords-references` (Verweise anlegen, ändern, Quelle löschen),
 `passwords-passkeys` (Passkeys im Tab Extra, Kopie per Verbindung, „Verweis lösen“),
-`passwords-attachments` (Karten und Lightbox per Tastatur); der Zähler zweier Geräte steht im
-Rust-Test `passwords_sync.rs`, `passwords-sync-two-devices` bleibt unverändert. Wischgeste und Lightbox-Gesten sind **nur manuell** (Quickstart): der e2e-Rahmen
+`passwords-attachments` (Karten und Lightbox per Tastatur); `passwords-sync-two-devices` bleibt
+unverändert. Wischgeste und Lightbox-Gesten sind **nur manuell** (Quickstart): der e2e-Rahmen
 (tauri-driver, WebKitWebDriver) hat keine verlässlichen Berührungsgesten, und die
 Dateidialoge für Anhänge sind nativ (wie in 034 SC-012, dort schon ausgenommen).
 
@@ -388,5 +377,6 @@ Dateidialoge für Anhänge sind nativ (wie in 034 SC-012, dort schon ausgenommen
 
 **Entscheidung**: ADR-0009 „Verweise zwischen Einträgen werden im Dienst aufgelöst und nie
 aufgelöst gespeichert“ (Grammatik, 12 Stufen, kein stilles Leeren, Bereichsprüfung an der
-Quelle, Listen ohne Auflösung) und der Passkey-Dienst (Herkunftsprüfung, Zähler je Gerät).
+Quelle, Listen ohne Auflösung) und der Passkey-Dienst (Herkunftsprüfung, synchronisierter
+Zähler immer 0, kein UP/UV ohne Presence-Nachweis).
 Sie berühren die Aussage aus ADR-0007 („der Schutz ist die Berechtigung“) und erweitern sie.

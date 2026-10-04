@@ -9,8 +9,8 @@
 Der Passwortmanager aus Spec 034 bekommt die Bedienung von haex-vault und zwei Dinge, die es
 dort nicht gibt: Verweise zwischen Einträgen (Platzhalter im Text, KeePass-Vorbild) und
 Passkey-Funktionen im Dienst. Den Umfang bestimmt die Spec (US1–US7); die External Bridge
-bleibt draußen. Es gibt **keine Änderung an vorhandenen Tabellen**; neu sind zwei kleine
-CRDT-Tabellen (Zähler je Gerät, Passkey-Verbindungen).
+bleibt draußen. Es gibt **keine Änderung an vorhandenen Tabellen**; neu ist eine kleine
+CRDT-Tabelle für Passkey-Verbindungen; synchronisierte Passkey-Zähler bleiben 0.
 
 Technischer Ansatz (Begründungen und verworfene Alternativen in [research.md](./research.md)):
 
@@ -31,8 +31,9 @@ Technischer Ansatz (Begründungen und verworfene Alternativen in [research.md](.
   Betriebssystems.
 - **Passkeys** (R5, R6, R8, R9): drei Dienstmethoden (`create`, `confirm`, `list`) ohne
   Tauri-Commands; ES256 und EdDSA (Anlegen und Bestätigen), RS256 nur anzeigen; Herkunft gegen
-  die Kennung der Gegenstelle mit öffentlicher Suffixliste; **Zähler je Gerät** statt
-  Max-Zusammenführung im Sync; Passkey per Verbindung statt Kopie.
+  die Kennung der Gegenstelle mit öffentlicher Suffixliste; synchronisierte Passkey-Zähler
+  bleiben 0 statt eine unzuverlässige globale Ordnung zu behaupten; Passkey per Verbindung
+  statt Kopie.
 - **Anhänge** (R14): Karten, Vorschaubilder im Frontend (sichtbarer Bereich, höchstens zwei
   gleichzeitig), PhotoSwipe als Lightbox.
 - **KeePass-Verweise beim Import** (R13): zweiter Durchgang nach dem Schreiben,
@@ -53,14 +54,14 @@ Node 22.19 für die Prüfskripte
 **Neu**: `swiper` 14 (MIT), `photoswipe` 5.4 (MIT, wie haex-vault); Rust `ciborium`, `psl`,
 direktes `url`. RS256 wird nicht signiert, deshalb **kein** `rsa` zur Laufzeit (R8).
 
-**Storage**: Migration `0024_passwords_refs`: zwei CRDT-Tabellen
-(`haex_passwords_passkey_counters`, `haex_passwords_passkey_links`), `HOLZI_TRIGGER_VERSION`
+**Storage**: Migration `0024_passwords_refs`: eine CRDT-Tabelle
+(`haex_passwords_passkey_links`), `HOLZI_TRIGGER_VERSION`
 15 → 16. Keine Änderung vorhandener Tabellen. Details in [data-model.md](./data-model.md).
 
 **Testing**: Rust — Einheitstests in `*_tests.rs` (`references`, `webauthn`, `copy`,
 `passkeys_ops`, `import/references`), Integration in `src-tauri/tests/`
-(`passwords_references.rs`, `passwords_copy.rs`, `passwords_passkeys.rs`, Zähler in
-`passwords_sync.rs`); Frontend — `pnpm check:passwords` mit neuen Skripten
+(`passwords_references.rs`, `passwords_copy.rs`, `passwords_passkeys.rs`); Frontend —
+`pnpm check:passwords` mit neuen Skripten
 (`-menus`, `-shortcuts`, `-breadcrumb`, `-clipboard`, `-tabs`), Regression
 `check:agent-actions`, `check:wm-navigation`, `check:templates`, `typecheck`,
 `typecheck:scripts`, `lint`, `format:check`; End-to-End neu `passwords-tabs`,
@@ -103,24 +104,24 @@ _GATE: Muss vor Phase 0 bestehen. Nach Phase 1 erneut geprüft — Ergebnis unte
 Geprüft gegen `.specify/memory/constitution.md` (v1.4.0) und die spaex-Constitution
 `.spaex/constitution.md`.
 
-| Prinzip / Vorgabe                                                          | Status | Begründung                                                                                                                                                     |
-| -------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| I Keine Geheimnisse in Git                                                 | ✅     | Testvektoren, Schlüssel und Fixtures sind erfunden (`SECRET-MARKER-…`, feste Testschlüssel ohne Bezug zu Konten); keine echten Passkeys                        |
-| II Keine lokalen absoluten Pfade in versionierter Konfiguration            | ✅     | Quickstart nutzt repo-relative Pfade; keine Capability ändert sich                                                                                             |
-| III Projektidentität geräteunabhängig                                      | ✅     | Berührt nicht; die Geräte-Kennung im Zähler ist `vault_device_uuid`, kein Pfad                                                                                 |
-| IV Cross-Repo-Referenzen an unveränderliche SHAs gepinnt                   | ✅     | haex-vault weiterhin `8dce379d94e18fcd42c3b73686a06f984ca3f574`; KeePass-Quelle nur als gelesener Beleg (Mirror), nicht als Abhängigkeit                       |
-| V Externe Quellen nur per Opt-in                                           | ✅     | Keine neue Harness-Quelle; neue Bibliotheken sind Abhängigkeiten, keine Harness-Inhalte                                                                        |
-| VI Selbstverändernde Anweisungen review-pflichtig                          | ✅     | Keine Änderung an Constitution, Skills oder Berechtigungen; Freigaben bleiben bei 017–019 und 021                                                              |
-| VII Relay-Ausfall blockiert lokale Arbeit nicht                            | ✅     | Alles läuft lokal; der Zähler je Gerät braucht keinen Sync, um zu steigen                                                                                      |
-| VIII Keine Verheimlichung in Agent-Ausgaben                                | ✅     | Der eingebaute Agent bekommt keine neue Aktion; Fehlerzustände von Verweisen sind sichtbar und benannt, nie still leer                                         |
-| Workflow: speckit-Stufen, PR auf `main`, Conventional Commits, kein Squash | ✅     | specify → clarify → plan → tasks → implement; Topic-Branch im Worktree `.worktrees/036-password-redesign`; mehrere PRs (siehe Lieferung)                       |
-| ADR bei prinzipienrelevanter Entscheidung                                  | ✅     | ADR-0009 „Verweise im Dienst aufgelöst, Passkey-Dienst“ (Aufgabe in tasks), erweitert ADR-0007                                                                 |
-| Test-Code in separaten Dateien                                             | ✅     | `*_tests.rs` per `#[path]`, `src-tauri/tests/`, `scripts/check-passwords-*.ts`                                                                                 |
-| Worktree je Änderung                                                       | ✅     | `.worktrees/036-password-redesign`                                                                                                                             |
-| 500-LoC-Grenze                                                             | ⚠️     | Vorhandene Dateien über 500 Zeilen wachsen nicht (neue Dateien); `EntryEditor.vue` (645) wird kleiner; `identity/migrations.rs` bleibt (nicht von dieser Spec) |
-| Graphify vor neuen benannten Artefakten                                    | ✅     | Aufgabe T002: Abfragen für Tab-Rahmen, Karten, Menüs, Auflöser-Hooks, Kopieren, Passkey-Dienst, bevor die ersten Dateien entstehen                             |
-| `ponytail:`-Kommentar bei bewusster Vereinfachung                          | ✅     | Geplant an: Marken unter dem Feld statt im Text (R11), Vorschaubilder im Frontend (R14), Zähler je Gerät mit möglicher Dopplung (R5), Beglaubigung `none` (R8) |
-| Nicht-triviale Logik hinterlässt einen ausführbaren Check                  | ✅     | `references_tests`, `webauthn_tests`, `copy_tests`, `passwords_passkeys`, `passwords_sync`, `check:passwords`, End-to-End                                      |
+| Prinzip / Vorgabe                                                          | Status | Begründung                                                                                                                                                                         |
+| -------------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| I Keine Geheimnisse in Git                                                 | ✅     | Testvektoren, Schlüssel und Fixtures sind erfunden (`SECRET-MARKER-…`, feste Testschlüssel ohne Bezug zu Konten); keine echten Passkeys                                            |
+| II Keine lokalen absoluten Pfade in versionierter Konfiguration            | ✅     | Quickstart nutzt repo-relative Pfade; keine Capability ändert sich                                                                                                                 |
+| III Projektidentität geräteunabhängig                                      | ✅     | Berührt nicht; keine Geräte-Kennung wird für den synchronisierten Signaturzähler benötigt                                                                                          |
+| IV Cross-Repo-Referenzen an unveränderliche SHAs gepinnt                   | ✅     | haex-vault weiterhin `8dce379d94e18fcd42c3b73686a06f984ca3f574`; KeePass-Quelle nur als gelesener Beleg (Mirror), nicht als Abhängigkeit                                           |
+| V Externe Quellen nur per Opt-in                                           | ✅     | Keine neue Harness-Quelle; neue Bibliotheken sind Abhängigkeiten, keine Harness-Inhalte                                                                                            |
+| VI Selbstverändernde Anweisungen review-pflichtig                          | ✅     | Keine Änderung an Constitution, Skills oder Berechtigungen; Freigaben bleiben bei 017–019 und 021                                                                                  |
+| VII Relay-Ausfall blockiert lokale Arbeit nicht                            | ✅     | Alles läuft lokal; der synchronisierte Zähler bleibt ohne Sync sicher bei 0                                                                                                        |
+| VIII Keine Verheimlichung in Agent-Ausgaben                                | ✅     | Der eingebaute Agent bekommt keine neue Aktion; Fehlerzustände von Verweisen sind sichtbar und benannt, nie still leer                                                             |
+| Workflow: speckit-Stufen, PR auf `main`, Conventional Commits, kein Squash | ✅     | specify → clarify → plan → tasks → implement; Topic-Branch im Worktree `.worktrees/036-password-redesign`; mehrere PRs (siehe Lieferung)                                           |
+| ADR bei prinzipienrelevanter Entscheidung                                  | ✅     | ADR-0009 „Verweise im Dienst aufgelöst, Passkey-Dienst“ (Aufgabe in tasks), erweitert ADR-0007                                                                                     |
+| Test-Code in separaten Dateien                                             | ✅     | `*_tests.rs` per `#[path]`, `src-tauri/tests/`, `scripts/check-passwords-*.ts`                                                                                                     |
+| Worktree je Änderung                                                       | ✅     | `.worktrees/036-password-redesign`                                                                                                                                                 |
+| 500-LoC-Grenze                                                             | ⚠️     | Vorhandene Dateien über 500 Zeilen wachsen nicht (neue Dateien); `EntryEditor.vue` (645) wird kleiner; `identity/migrations.rs` bleibt (nicht von dieser Spec)                     |
+| Graphify vor neuen benannten Artefakten                                    | ✅     | Aufgabe T002: Abfragen für Tab-Rahmen, Karten, Menüs, Auflöser-Hooks, Kopieren, Passkey-Dienst, bevor die ersten Dateien entstehen                                                 |
+| `ponytail:`-Kommentar bei bewusster Vereinfachung                          | ✅     | Geplant an: Marken unter dem Feld statt im Text (R11), Vorschaubilder im Frontend (R14), konstante Zähler und kein UP/UV ohne Presence-Nachweis (R5, R8), Beglaubigung `none` (R8) |
+| Nicht-triviale Logik hinterlässt einen ausführbaren Check                  | ✅     | `references_tests`, `webauthn_tests`, `copy_tests`, `passwords_passkeys`, `passwords_sync`, `check:passwords`, End-to-End                                                          |
 
 **Ergebnis nach Phase 1**: keine Verletzung. Das ⚠️ bei der 500-Zeilen-Grenze besteht schon,
 diese Spec verschlechtert es nicht (neue Logik in neuen Dateien; die größte Datei, die sie
@@ -128,16 +129,16 @@ anfasst, wird kleiner).
 
 ## Lieferung in Stufen (jede ein PR, jede auslieferbar)
 
-| Stufe | Inhalt                                                                                | Stories             | Berührt                                                                   |
-| ----- | ------------------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------- |
-| 1     | Eintrag in Tabs mit Wischgeste, Verlauf als Tab, Zerlegung des Editors                | US1, US2            | Frontend; Registry (`tab`); keine Rust-Änderung                           |
-| 2     | Brotkrumen, Auswahlleiste, Ablage (Ausschneiden, Einfügen), Kontextmenüs, Kürzel      | US3, US4            | Frontend; keine Rust-Änderung                                             |
-| 3     | Verweise (Auflöser, Marken, Editor, Löschen), Kopieren mit Dialog, KeePass-Verweise   | US3 (Kopieren), US7 | Rust `references`, `copy`, `import/references`; Frontend; keine Migration |
-| 4     | Passkeys: Dienstmethoden, Zähler je Gerät, Verbindungen, Passkey-Ansicht im Tab Extra | US5                 | Rust `webauthn`, `passkeys_ops`; Migration `0024`; Frontend               |
-| 5     | Anhänge als Karten mit Lightbox                                                       | US6                 | Frontend (`photoswipe`)                                                   |
+| Stufe | Inhalt                                                                                    | Stories             | Berührt                                                                   |
+| ----- | ----------------------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------- |
+| 1     | Eintrag in Tabs mit Wischgeste, Verlauf als Tab, Zerlegung des Editors                    | US1, US2            | Frontend; Registry (`tab`); keine Rust-Änderung                           |
+| 2     | Brotkrumen, Auswahlleiste, Ablage (Ausschneiden, Einfügen), Kontextmenüs, Kürzel          | US3, US4            | Frontend; keine Rust-Änderung                                             |
+| 3     | Verweise (Auflöser, Marken, Editor, Löschen), Kopieren mit Dialog, KeePass-Verweise       | US3 (Kopieren), US7 | Rust `references`, `copy`, `import/references`; Frontend; keine Migration |
+| 4     | Passkeys: Dienstmethoden, konstanter Zähler 0, Verbindungen, Passkey-Ansicht im Tab Extra | US5                 | Rust `webauthn`, `passkeys_ops`; Migration `0024`; Frontend               |
+| 5     | Anhänge als Karten mit Lightbox                                                           | US6                 | Frontend (`photoswipe`)                                                   |
 
 Die Stufen 1 und 2 brauchen kein Rust; die Migration `0024` liegt einmal vor (Stufe 4) und
-enthält beide Tabellen, Stufe 3 nutzt von ihr nichts. Der Kopier-Dialog in Stufe 3 bietet
+enthält die Passkey-Verbindungen, Stufe 3 nutzt von ihr nichts. Der Kopier-Dialog in Stufe 3 bietet
 „Passkeys per Verweis“ erst an, wenn Stufe 4 da ist (bis dahin ausgeblendet).
 
 ## Project Structure
@@ -168,7 +169,6 @@ src-tauri/src/
 │   ├── copy.rs, copy_tests.rs                  # Tiefenkopie in einer Transaktion                  [neu]
 │   ├── webauthn.rs, webauthn_tests.rs          # authData, COSE, Signatur, Herkunft (rein)         [neu]
 │   ├── passkeys_ops.rs, passkeys_ops_tests.rs  # create/confirm/list gegen die Datenbank           [neu]
-│   ├── passkey_counters.rs                     # wirksamer Zähler, Zeile je Gerät                  [neu]
 │   ├── passkey_links.rs                        # Verbindungen (Ziel/Quelle)                        [neu]
 │   ├── model_references.rs, model_passkeys.rs  # RefMark, ReferenceUsage, PasskeyHeader (ts-rs)    [neu]
 │   ├── service/copy.rs, service/references.rs  # nur Nutzer: copy, parse, token, usage, key_names  [neu]
@@ -176,9 +176,9 @@ src-tauri/src/
 │   ├── commands/copy.rs, commands/references.rs# Tauri-Hüllen                                       [neu]
 │   ├── reveal.rs                               # löst Platzhalter auf                               [ändern]
 │   ├── items.rs                                # Kreisprüfung beim Speichern, headers_in_scope      [ändern, klein]
-│   ├── trash.rs                                # purge: Zähler und Verbindungen zuerst              [ändern, klein]
+│   ├── trash.rs                                # purge: Verbindungen zuerst                         [ändern, klein]
 │   └── import/references.rs, references_tests.rs, apply_references.rs (2. Durchgang), keepass.rs (source_ref) [neu / ändern]
-├── identity/migrations_passwords_refs.rs       # 0024: zwei Tabellen                                [neu]
+├── identity/migrations_passwords_refs.rs       # 0024: Passkey-Verbindungen                         [neu]
 ├── identity/migrations.rs                      # Registrierung, Triggerversion 16                   [ändern]
 ├── Cargo.toml                                  # ciborium, psl, url                                 [ändern]
 └── tests/passwords_references.rs, passwords_copy.rs, passwords_passkeys.rs, fixtures/reference_vectors.json [neu]
@@ -222,7 +222,7 @@ Commands; kein Teil der Grammatik liegt im Frontend.
 
 | Verstoß / Aufwand                                                         | Warum nötig                                                                                                                                  |
 | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Zwei neue CRDT-Tabellen und Migration                                     | Zähler je Gerät (FR-026 ohne Eingriff in den Sync, R5) und Passkey-Verbindungen (FR-046, R6)                                                 |
+| Eine neue CRDT-Tabelle und Migration                                      | Passkey-Verbindungen (FR-046, R6); synchronisierte Signaturzähler bleiben 0 (R5)                                                             |
 | Drei neue Rust-Abhängigkeiten (`ciborium`, `psl`, direkt `url`)           | CBOR für COSE und Beglaubigung, öffentliche Suffixliste für die Herkunftsprüfung, URL-Zerlegung (R8, R9)                                     |
 | Zwei neue Frontend-Abhängigkeiten (`swiper`, `photoswipe`)                | Wischgeste (Vorgabe) und Lightbox mit Zoom und Gesten; beides wie in haex-vault, nur bei Bedarf geladen (R1, R14)                            |
 | Ein Auflöser mit Bereichsprüfung an der Quelle und Kreiserkennung         | FR-044 bis FR-049: ein Verweis darf kein Zugriffsrecht geben, nie leerer Text, nie ein aufgelöstes Geheimnis in Listen oder Verlauf (R3, R4) |
@@ -230,13 +230,13 @@ Commands; kein Teil der Grammatik liegt im Frontend.
 
 ## Bewusste Grenzen (aus research.md)
 
-- Zwei Geräte, die offline bestätigen, können denselben Zähler senden; strenge Gegenstellen
-  lehnen das zweite ab (R5). Ein Schalter „immer 0“ ist später möglich.
+- Synchronisierte Passkeys senden immer den Zähler 0; damit gibt es kein unzuverlässiges
+  Duplikat eines Nicht-Null-Werts zwischen offline bestätigenden Geräten (R5).
 - RS256-Passkeys erscheinen, werden aber nicht bestätigt (R8); `rsa` ist nur ein
   Release-Kandidat.
 - Beglaubigung `none`; Gegenstellen, die eine Beglaubigung verlangen, werden nicht bedient (R8).
-- Kein UV-Flag (kein Mensch bestätigt); Gegenstellen mit `userVerification: "required"` lehnen
-  ab (R8).
+- Kein UP- oder UV-Flag ohne vertrauenswürdigen Presence-Nachweis; Gegenstellen, die diese
+  Flags verlangen, lehnen ab (R8).
 - Marken der Verweise stehen unter dem Feld, nicht im Text (R11).
 - Vorschaubilder entstehen im Webview aus den vollen Bytes, höchstens zwei zugleich (R14).
 - Die Wischgeste ist nur manuell geprüft (WebKit-Webview unter Linux und Android, R1, R17).

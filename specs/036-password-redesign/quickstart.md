@@ -28,20 +28,22 @@ nix develop --command sh -c '
 Rust (nacheinander, jedes für sich):
 
 ```sh
-for t in passwords::references passwords::webauthn passwords::copy passwords::passkeys_ops \
-         passwords::passkey_counters passwords::passkey_links passwords::import::references \
-         passwords::trash identity::migrations; do
-  CARGO_BUILD_JOBS=4 scripts/with-nix-host-bridge.sh cargo test -j 4 \
-    --manifest-path src-tauri/Cargo.toml --lib $t
-done
-for t in passwords_references passwords_copy passwords_passkeys passwords_sync passwords_import \
-         vault_upgrade; do
-  CARGO_BUILD_JOBS=4 scripts/with-nix-host-bridge.sh cargo test -j 4 \
-    --manifest-path src-tauri/Cargo.toml --test $t
-done
-scripts/with-nix-host-bridge.sh cargo fmt --manifest-path src-tauri/Cargo.toml --check
-pnpm lint:rust
-pnpm generate:ts-types   # danach git diff src/types/bindings muss leer sein
+nix develop --command sh -c '
+  for t in passwords::references passwords::webauthn passwords::copy passwords::passkeys_ops \
+           passwords::passkey_links passwords::import::references \
+           passwords::trash identity::migrations; do
+    CARGO_BUILD_JOBS=4 scripts/with-nix-host-bridge.sh cargo test -j 4 \
+      --manifest-path src-tauri/Cargo.toml --lib "$t"
+  done
+  for t in passwords_references passwords_copy passwords_passkeys passwords_sync passwords_import \
+           vault_upgrade; do
+    CARGO_BUILD_JOBS=4 scripts/with-nix-host-bridge.sh cargo test -j 4 \
+      --manifest-path src-tauri/Cargo.toml --test "$t"
+  done
+  scripts/with-nix-host-bridge.sh cargo fmt --manifest-path src-tauri/Cargo.toml --check
+  pnpm lint:rust
+  pnpm generate:ts-types   # danach git diff src/types/bindings muss leer sein
+'
 ```
 
 Erwartung: alle grün; `passwords_passkeys` prüft Signaturen mit dem öffentlichen Schlüssel

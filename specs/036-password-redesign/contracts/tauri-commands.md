@@ -24,7 +24,9 @@ errors: NotFound | InvalidInput{field} | IntoTrash      // Ziel im Papierkorb od
 Eine Schreibtransaktion (alles oder nichts). Fehlende Quellen (gelöscht) werden übersprungen und
 in `skippedMissing` gezählt. `exact` bei mehr als einem Ziel oder bei einem Ordner:
 `InvalidInput{field:'options.title'}`. Kopieren in den Papierkorb oder einen Teil davon:
-`IntoTrash`. Das Ergebnis enthält die Kennungen **nicht** (die Oberfläche lädt neu).
+`IntoTrash`. In Stage 3 wird `passkeysAsLinks: true` vor jeder Schreibarbeit mit
+`InvalidInput{field:'options.passkeysAsLinks'}` abgelehnt; false oder ein fehlender Wert
+kopiert keine Passkeys. Das Ergebnis enthält die Kennungen **nicht** (die Oberfläche lädt neu).
 
 ### `passwords_references_parse`
 
@@ -87,7 +89,7 @@ Passkey.
 - **`passwords_import_*`**: der Bericht bekommt `referencesConverted` und
   `referencesLeftAsText`.
 - **`passwords_passkey_delete`**: Argumente unverändert (`{ passkeyId }`); löscht zusätzlich die
-  Zähler und Verbindungen des Passkeys (Kinder zuerst). Verbindungen löst nur
+  Verbindungen des Passkeys (Kinder zuerst). Verbindungen löst nur
   `passwords_passkey_unlink`.
 
 ## Fehlerarten (neu, in `useErrorString.ts`)
