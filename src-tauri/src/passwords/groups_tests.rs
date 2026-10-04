@@ -11,6 +11,7 @@ use super::groups::{self, siblings};
 use super::items;
 use super::model::{GroupPatch, ItemInput, Patch, Target, TargetKind};
 use super::test_support::open_test_vault;
+use super::trash;
 use crate::error::HolziError;
 use crate::storage::query;
 
@@ -206,6 +207,22 @@ fn nothing_can_be_moved_into_the_trash() {
         groups::move_targets(tx, &[group_target("trash")], None)
     });
     assert_eq!(reason_of(trash_itself), "target_in_trash");
+
+    let trashed_item = item(&db);
+    write(&db, |tx| trash::trash(tx, &[item_target(&trashed_item)])).expect("trash item");
+    let moving_trashed_item = write(&db, |tx| {
+        groups::move_targets(tx, &[item_target(&trashed_item)], None)
+    });
+    assert_eq!(reason_of(moving_trashed_item), "target_in_trash");
+    assert_eq!(group_of(&db, &trashed_item), Some("trash".to_string()));
+
+    let trashed_group = group(&db, "Trashed", None);
+    write(&db, |tx| trash::trash(tx, &[group_target(&trashed_group)])).expect("trash group");
+    let moving_trashed_group = write(&db, |tx| {
+        groups::move_targets(tx, &[group_target(&trashed_group)], None)
+    });
+    assert_eq!(reason_of(moving_trashed_group), "target_in_trash");
+    assert_eq!(parent_of(&db, &trashed_group), Some("trash".to_string()));
 }
 
 #[test]

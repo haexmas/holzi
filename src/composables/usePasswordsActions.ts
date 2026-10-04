@@ -125,10 +125,16 @@ export function usePasswordsActions() {
 
   /** Einfügen into `to`: a cut moves and empties the Ablage; on a failure it stays. */
   async function pasteAsync(to: string | null) {
-    const ablage = clipboard.ablage
-    // A copy is pasted through the copy dialog of stage 3 (FR-015).
-    if (!ablage || ablage.mode !== 'cut') return
-    clipboard.settle(await moveTargetsAsync(ablage.targets, to))
+    const operation = clipboard.beginPaste()
+    // A copy is pasted through the copy dialog of stage 3 (FR-015), and only one paste may run at
+    // a time because all password-manager windows share this Ablage.
+    if (!operation) return
+    let succeeded = false
+    try {
+      succeeded = await moveTargetsAsync(operation.ablage.targets, to)
+    } finally {
+      clipboard.settle(operation, succeeded)
+    }
   }
 
   /** Copies the username or the password of an entry as the entry page does: the value never

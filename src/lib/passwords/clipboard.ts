@@ -12,6 +12,8 @@ export type AblageMode = 'cut' | 'copy'
 
 export type Ablage = { targets: readonly Target[]; mode: AblageMode } | null
 
+export type PasteOperation = { ablage: Exclude<Ablage, null> }
+
 /** The selection as targets: an id that names a folder is a folder, every other id an entry. */
 export function toTargets(
   ids: readonly string[],
@@ -35,11 +37,37 @@ export function fillAblage(
   return unique.length > 0 ? { targets: unique, mode } : null
 }
 
+/** Starts one cut paste unless another paste is still in flight. */
+export function beginPaste(
+  ablage: Ablage,
+  pending: PasteOperation | null,
+): PasteOperation | null {
+  if (pending !== null || ablage?.mode !== 'cut') return null
+  return { ablage }
+}
+
 /** The Ablage after Einfügen: a cut that worked is done, a copy can be pasted again, and after a
  * failure everything stays. */
 export function afterPaste(ablage: Ablage, succeeded: boolean): Ablage {
   if (ablage === null) return null
   return succeeded && ablage.mode === 'cut' ? null : ablage
+}
+
+/** Finishes a paste without consuming a newer Ablage that replaced its operation. */
+export function settlePaste(
+  current: Ablage,
+  pending: PasteOperation | null,
+  operation: PasteOperation,
+  succeeded: boolean,
+): { ablage: Ablage; pending: PasteOperation | null } {
+  if (pending !== operation) return { ablage: current, pending }
+  return {
+    ablage:
+      current === operation.ablage
+        ? afterPaste(operation.ablage, succeeded)
+        : current,
+    pending: null,
+  }
 }
 
 /** The ids the list and the tree dim: those of a cut Ablage. */

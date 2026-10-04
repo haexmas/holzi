@@ -6,8 +6,10 @@ import { test } from 'node:test'
 
 import {
   afterPaste,
+  beginPaste,
   cutIds,
   fillAblage,
+  settlePaste,
   splitMissing,
   toTargets,
   wouldCycle,
@@ -53,6 +55,19 @@ test('a successful paste of a cut empties the Ablage, of a copy keeps it; a fail
   assert.deepEqual(afterPaste(cut, false), cut)
   assert.deepEqual(afterPaste(copy, false), copy)
   assert.equal(afterPaste(null, true), null)
+})
+
+test('a paste cannot settle a newer Ablage or run twice at once', () => {
+  const first = fillAblage([{ kind: 'item', id: 'a' }], 'cut')
+  const operation = beginPaste(first, null)
+  assert.ok(operation)
+  assert.equal(beginPaste(first, operation), null)
+
+  const newer = fillAblage([{ kind: 'item', id: 'b' }], 'cut')
+  assert.deepEqual(settlePaste(newer, operation, operation, true), {
+    ablage: newer,
+    pending: null,
+  })
 })
 
 test('only a cut Ablage dims its rows', () => {

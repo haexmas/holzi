@@ -1,11 +1,13 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import {
-  afterPaste,
+  beginPaste as beginPasteOperation,
   cutIds,
   fillAblage,
+  settlePaste,
   type Ablage,
   type AblageMode,
+  type PasteOperation,
   type Target,
 } from '~/lib/passwords/clipboard'
 
@@ -21,6 +23,7 @@ export const usePasswordsClipboardStore = defineStore(
   'passwordsClipboard',
   () => {
     const ablage = ref<Ablage>(null)
+    let pending: PasteOperation | null = null
 
     const filled = computed(() => ablage.value !== null)
     const count = computed(() => ablage.value?.targets.length ?? 0)
@@ -30,13 +33,30 @@ export const usePasswordsClipboardStore = defineStore(
     function fill(targets: readonly Target[], next: AblageMode) {
       ablage.value = fillAblage(targets, next)
     }
-    function settle(succeeded: boolean) {
-      ablage.value = afterPaste(ablage.value, succeeded)
+    function beginPaste() {
+      const operation = beginPasteOperation(ablage.value, pending)
+      if (operation) pending = operation
+      return operation
+    }
+    function settle(operation: PasteOperation, succeeded: boolean) {
+      const next = settlePaste(ablage.value, pending, operation, succeeded)
+      ablage.value = next.ablage
+      pending = next.pending
     }
     function clear() {
       ablage.value = null
     }
 
-    return { ablage, filled, count, mode, dimmed, fill, settle, clear }
+    return {
+      ablage,
+      filled,
+      count,
+      mode,
+      dimmed,
+      fill,
+      beginPaste,
+      settle,
+      clear,
+    }
   },
 )
