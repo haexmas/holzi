@@ -167,7 +167,12 @@ scenario('extension-lifecycle', { timeoutMs: 300_000 }, async (ctx) => {
       )) === 1,
     { timeoutMs: 5_000 },
   )
-  assert.equal(await rowsField(page), '10000')
+  // The refusal shows before the stored value is read back into the field.
+  await ctx.waitFor(
+    'the stored limit to come back after the refusal',
+    async () => (await rowsField(page)) === '10000',
+    { timeoutMs: 5_000 },
+  )
   await page.type(
     'extension-limit-maxRows',
     KEY.backspace.repeat(5) + '500' + KEY.enter,

@@ -5,19 +5,22 @@
 use std::sync::Arc;
 
 use serde_json::{json, Value};
+use uuid::Uuid;
 
 use super::dispatch::CallContext;
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
-use crate::extensions::host::SqlSlot;
+use crate::extensions::host::{ExtensionHost, SqlSlot};
 use crate::extensions::ids::{ExtensionName, PublicKey, TablePrefix};
 use crate::extensions::permissions::store::candidates;
 use crate::extensions::permissions::PermissionKind;
+use crate::extensions::registry::start::{effective, migrate, Effective};
 use crate::extensions::sql::exec::{existing_tables, limits_of, prepare, run, Limits, SqlResult};
-use crate::extensions::sql::migrate::{apply_pending, sql_sha256, MigrationError};
+use crate::extensions::sql::migrate::MigrationError;
 use crate::extensions::sql::policy::SqlPolicy;
 use crate::extensions::sql::values::{params, statement_entry};
 use crate::passwords::clock::unix_millis;
 use crate::storage::query::Query;
+use crate::vault_gate::VaultDb;
 
 pub const MODULE: &str = module_path!();
 
@@ -31,9 +34,13 @@ fn invalid(message: &str) -> BridgeError {
 
 /// The calling extension's table prefix, from its registry row.
 fn own_prefix(ctx: &CallContext) -> Result<TablePrefix, BridgeError> {
-    let id = ctx.session.extension_id.to_string();
-    let (key, name) = ctx
-        .db
+    prefix_of(&ctx.db, ctx.session.extension_id)
+}
+
+/// An extension's table prefix, from its registry row.
+fn prefix_of(db: &VaultDb, extension_id: Uuid) -> Result<TablePrefix, BridgeError> {
+    let id = extension_id.to_string();
+    let (key, name) = db
         .read_blocking(move |q| {
             q.query_row(
                 "SELECT public_key, name FROM extensions WHERE id = ?1",
@@ -60,21 +67,28 @@ struct SqlCall {
 /// this device and the decisions held in memory (read fresh on every call, so a change applies
 /// to the next call of an open frame).
 pub fn policy(ctx: &CallContext) -> Result<SqlPolicy, BridgeError> {
-    let extension_id = ctx.session.extension_id;
-    let device = ctx.device;
-    let mut grants = ctx
-        .db
+    policy_for(&ctx.db, &ctx.host, ctx.session.extension_id, ctx.device)
+}
+
+/// The SQL policy of `extension_id` on `device` now: its remembered and temporary `database`
+/// permissions. The change notifications filter with the same policy (research R9).
+pub fn policy_for(
+    db: &VaultDb,
+    host: &ExtensionHost,
+    extension_id: Uuid,
+    device: Uuid,
+) -> Result<SqlPolicy, BridgeError> {
+    let mut grants = db
         .read_blocking(move |q| {
             candidates(q, extension_id, PermissionKind::Database, device).map_err(Into::into)
         })
         .map_err(|_| unavailable())?;
     grants.extend(
-        ctx.host
-            .permissions
+        host.permissions
             .temporary(extension_id, PermissionKind::Database),
     );
     Ok(SqlPolicy {
-        own: own_prefix(ctx)?,
+        own: prefix_of(db, extension_id)?,
         grants,
         device,
     })
@@ -163,44 +177,40 @@ pub fn transaction(ctx: &CallContext, call_params: &Value) -> Result<Value, Brid
     )?)
 }
 
-/// `{extensionVersion, migrations: [{name, sql}]}`: only migrations of the installed bundle are
-/// accepted (same name and SQL); pending ones are applied. Answers the SDK's `MigrationResult`.
+/// `{extensionVersion, migrations: [{name, sql}]}`: only migrations of the verified effective
+/// bundle are accepted (same name and SQL); its pending ones are applied (FR-003). Answers the
+/// SDK's `MigrationResult`.
 pub fn register_migrations(ctx: &CallContext, call_params: &Value) -> Result<Value, BridgeError> {
     let migrations = call_params
         .get("migrations")
         .and_then(Value::as_array)
         .ok_or_else(|| invalid("migrations must be an array"))?;
     let extension_id = ctx.session.extension_id;
-    let ext = extension_id.to_string();
-    let known: Vec<(String, String)> = ctx
-        .db
-        .read_blocking(move |q| {
-            q.query_map(
-                "SELECT name, sql_sha256 FROM extension_migrations WHERE extension_id = ?1",
-                &[&ext],
-                |r| Ok((r.get(0)?, r.get(1)?)),
-            )
-        })
-        .map_err(|_| unavailable())?;
+    let Effective::Ready(prepared) = effective(&ctx.db, extension_id).map_err(|_| unavailable())?
+    else {
+        return Err(unavailable());
+    };
     for migration in migrations {
         let name = migration.get("name").and_then(Value::as_str);
         let sql = migration.get("sql").and_then(Value::as_str);
         let (Some(name), Some(sql)) = (name, sql) else {
             return Err(invalid("a migration needs name and sql"));
         };
-        let hash = sql_sha256(sql);
-        if !known.iter().any(|(n, h)| n == name && *h == hash) {
+        if !prepared
+            .migrations
+            .iter()
+            .any(|(n, s)| n == name && s == sql)
+        {
             return Err(BridgeError::new(
                 ExtensionErrorCode::SecurityViolation,
                 "migration is not part of the installed bundle",
             ));
         }
     }
-    let own = own_prefix(ctx)?;
-    let applied = apply_pending(
+    let applied = migrate(
         &ctx.db,
         extension_id,
-        &own,
+        &prepared,
         unix_millis(std::time::SystemTime::now()),
     )
     .map_err(|error| match error {

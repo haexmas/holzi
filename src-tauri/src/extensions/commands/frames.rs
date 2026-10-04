@@ -4,13 +4,15 @@
 use std::sync::Arc;
 
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, State};
 use ts_rs::TS;
 use uuid::Uuid;
 
 use crate::error::{HolziError, Result};
 use crate::extensions::bridge::dispatch::{answer, call, CallContext, Emit};
+use crate::extensions::bridge::events::emit_to_frames;
+use crate::extensions::bridge::methods::context_of;
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
 use crate::extensions::protocol::{encode_path, prefix};
 use crate::extensions::registry::start::start;
@@ -98,6 +100,9 @@ pub async fn extension_dialog_resolve(
     Ok(())
 }
 
+/// The SDK's event type for a changed context.
+pub const CONTEXT_CHANGED: &str = "haextension:context:changed";
+
 /// Hands holzi's events to its own window.
 pub(crate) struct WindowEmitter(pub(crate) AppHandle);
 
@@ -151,14 +156,29 @@ pub async fn extension_bridge_call(
     Ok(answer(id, outcome))
 }
 
-/// holzi's window reports its color scheme and language (for `extension_context_get`). Only
+/// holzi's window reports its color scheme and language (for `extension_context_get`); when
+/// either changed, every open frame hears `haextension:context:changed {context}` (T084). Only
 /// holzi's own window can call this; an extension reaches nothing but `extension_bridge_call`.
 #[tauri::command]
 pub async fn extension_host_context_set(
+    app: AppHandle,
     state: State<'_, AppState>,
     theme: String,
     locale: String,
 ) -> Result<()> {
-    state.extensions().set_context(&theme, &locale);
+    let host = state.extensions();
+    if !host.set_context(&theme, &locale) {
+        return Ok(());
+    }
+    // Without an open vault there is no frame to tell.
+    let Ok(db) = active_database(&state) else {
+        return Ok(());
+    };
+    let device = current_device_uuid(&app, &db)?;
+    let data = json!({ "context": context_of(&host, device) });
+    let emitter = WindowEmitter(app);
+    for extension_id in host.frames.extensions() {
+        emit_to_frames(&emitter, &host, extension_id, CONTEXT_CHANGED, &data);
+    }
     Ok(())
 }

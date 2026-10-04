@@ -265,7 +265,7 @@ Start (nicht atomar, kein Schema-Modus, kein metadatentreuer Umbau); haex-crdt-E
 `broadcast::Sender<Arc<Vec<String>>>`. Der Host kürzt sie je offenem Rahmen mit derselben Funktion
 `policy::can_read(ext, table)`, die der Authorizer nutzt (eigene Tabellen einschließlich `_no_sync` oder
 Leseberechtigung, nie Kerntabellen), und schickt sie als `haextension:sync:tables-updated` (SDK-Name) an den
-Rahmen. Nach Migrationen kommt dieselbe Meldung mit allen Tabellen, deren Schema sich geändert hat (das SDK hat keinen eigenen Typ dafür). Berechtigungen werden im Speicher
+Rahmen. Nach Migrationen kommt dieselbe Meldung mit allen Tabellen, deren Schema sich geändert hat (das SDK hat keinen eigenen Typ dafür). Weil DDL keine Zeilen schreibt, sieht der Commit-Bericht nur die Journalzeile der Migration; dann vergleicht der Host die Tabellen der Erweiterungen mit dem letzten Stand von `sqlite_master`. Berechtigungen werden im Speicher
 gehalten und bei Änderung verworfen.
 
 **Begründung**: `observe_committed_changes` ersetzt einen früheren Beobachter (`database/mod.rs:174-188`); ein
@@ -284,7 +284,7 @@ oder eine Spalte, die einer Erweiterungstabelle noch fehlt? Dann wird die **ganz
 läuft weiter (FR-037). Unbekannte Tabellen ohne Präfix brechen weiter ab; `_no_sync`-Tabellen einer
 Erweiterung auf der Leitung sind ein Protokollfehler. Der Lebenszyklus-Dienst (R11) wendet nach den Migrationen
 die geparkten Gruppen dieses Präfixes in HLC-Reihenfolge an (`apply_remote_changes`) und löscht sie danach.
-Grenze für geparkte Bytes je Erweiterung (256 MiB): an der Grenze wird keine Gruppe verworfen, sondern der Fortschritt des Ursprungsgeräts hält vor der nächsten Gruppe dieses Präfixes an, mit einer Statusmeldung; „Daten löschen“ verwirft die geparkten Gruppen. Nach jedem Anwenden wird geprüft, dass
+Grenze für geparkte Bytes je Erweiterung (256 MiB): an der Grenze wird keine Gruppe verworfen, sondern der Fortschritt des Ursprungsgeräts hält vor der nächsten Gruppe dieses Präfixes an, mit einer Statusmeldung (Fehler `parked_limit` am Gerätezustand dieser Erweiterung, solange sie dort noch übertragen wird; er endet, sobald sie dort startet oder mit „Daten löschen“ entfernt wird); „Daten löschen“ verwirft die geparkten Gruppen. Nach jedem Anwenden wird geprüft, dass
 keine unbekannte Spalte übersprungen wurde.
 
 Regel für holzi: synchronisierte Zeilen von Kern- und Erweiterungstabellen werden nie in einer Schreibgruppe
@@ -311,7 +311,10 @@ Austauschs).
 - Vor dem Wechsel prüft ein Gerät, dass die Migrationen der neuen Fassung eine Obermenge der angewendeten
   (Name, SHA-256) sind; sonst startet die Erweiterung dort nicht. Ausnahme bestätigtes Downgrade: die
   Migrationen der älteren Fassung müssen mit den angewendeten übereinstimmen, soweit sie dieselben Namen haben;
-  angewendete, die die ältere Fassung nicht kennt, bleiben (nichts wird zurückgenommen, US7-3).
+  angewendete, die die ältere Fassung nicht kennt, bleiben (nichts wird zurückgenommen, US7-3). Jedes Gerät
+  führt nach einem Downgrade auch die Migrationen der zurückgezogenen höheren Bundles aus, die die ältere
+  Fassung nicht kennt, sofern deren Bundle verifiziert; sonst blieben die Zeilen mit ihren Spalten dort
+  geparkt.
 - **Deaktivieren**: Last-Writer-Wins auf `extensions.enabled` (FR-039).
 - **Entfernen**: Das auslösende Gerät setzt `state = removed`, `purge_data` und `purge_hlc` an der
   Erweiterungszeile (sie bleibt als Grabstein) und löscht seine Registry-Zeilen normal. Jedes Gerät räumt

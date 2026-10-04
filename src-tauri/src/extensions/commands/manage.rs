@@ -5,6 +5,7 @@ use tauri::{AppHandle, State};
 use uuid::Uuid;
 
 use crate::error::{HolziError, Result};
+use crate::extensions::logs::{self, LogEntry, LogQuery};
 use crate::extensions::registry::limits::{self, ExtensionLimits, ExtensionLimitsView};
 use crate::extensions::registry::list::{icon_data_url, list, ExtensionSummary};
 use crate::extensions::registry::remove::{purge_kept_data, remove, set_enabled};
@@ -129,4 +130,26 @@ pub async fn extension_limits_set(
         .map_err(|e| HolziError::InvalidInput {
             reason: format!("extension task: {e}"),
         })?
+}
+
+/// The log of an extension on this device, newest first, for the settings (T086).
+#[tauri::command]
+pub async fn extension_logs_read(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    extension_id: String,
+    level: Option<String>,
+    limit: i64,
+    before: Option<i64>,
+) -> Result<Vec<LogEntry>> {
+    let id = parse_extension_id(&extension_id)?;
+    let db = active_database(&state)?;
+    let device = current_device_uuid(&app, &db)?;
+    let query = LogQuery {
+        level,
+        limit,
+        offset: 0,
+        before,
+    };
+    db.read(move |q| logs::read(q, id, device, &query)).await
 }

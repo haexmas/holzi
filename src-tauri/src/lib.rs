@@ -56,7 +56,7 @@ use extensions::commands::frames::{
 use extensions::commands::install::{extension_install, extension_install_preview};
 use extensions::commands::manage::{
     extension_icon, extension_limits_get, extension_limits_set, extension_list,
-    extension_purge_kept_data, extension_remove, extension_set_enabled,
+    extension_logs_read, extension_purge_kept_data, extension_remove, extension_set_enabled,
 };
 use extensions::commands::permissions::{
     extension_permission_cancel, extension_permission_remove, extension_permission_resolve,
@@ -354,6 +354,7 @@ pub fn run() {
             extension_purge_kept_data,
             extension_limits_get,
             extension_limits_set,
+            extension_logs_read,
             extension_icon,
             extension_frame_open,
             extension_frame_close,

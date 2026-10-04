@@ -722,6 +722,19 @@
         "timeoutMs": "Run time of a request (milliseconds)",
         "maxResponseBytes": "Size of an answer (bytes)",
         "range": "{min} to {max}"
+      },
+      "logs": {
+        "title": "Log on this device",
+        "level": "Level",
+        "none": "No entries.",
+        "older": "Older entries",
+        "levels": {
+          "all": "All",
+          "error": "Errors",
+          "warn": "Warnings",
+          "info": "Information",
+          "debug": "Details"
+        }
       }
     }
   },
@@ -1516,7 +1529,8 @@
         "signature_invalid": "The signature is invalid.",
         "legacy_signature_format": "The bundle was signed with an old tool. Please sign it again with the current “haex” tool.",
         "unreadable": "The file cannot be read.",
-        "downgrade_not_confirmed": "An older version is installed only after confirmation."
+        "downgrade_not_confirmed": "An older version is installed only after confirmation.",
+        "bundle_mismatch": "The package does not match what the vault records."
       },
       "title": "Install extension",
       "fileType": "Extension",
@@ -1580,7 +1594,8 @@
       "migration_refused": "A migration breaks the rules",
       "migration_failed": "A migration failed",
       "migration_missing": "This version lacks an applied migration",
-      "database_unavailable": "The database was not available"
+      "database_unavailable": "The database was not available",
+      "parked_limit": "Too much data waits for the installation; syncing this extension pauses until it is installed here or removed with “delete data”"
     }
   }
 }

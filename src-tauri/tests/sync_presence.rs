@@ -63,7 +63,7 @@ async fn a_one_device_vault_publishes_no_presence_until_it_has_a_second_device()
     .await;
     assert!(quiet.is_err(), "a vault with one device published presence");
 
-    let _linked = sync_fixture::join(&main, relay_url.as_str()).await;
+    let linked = sync_fixture::join(&main, relay_url.as_str()).await;
     let seen = tokio::time::timeout(Duration::from_secs(20), async {
         while let Some(notification) = notifications.next().await {
             if matches!(notification, ClientNotification::Event { .. }) {
@@ -75,4 +75,8 @@ async fn a_one_device_vault_publishes_no_presence_until_it_has_a_second_device()
     .await
     .expect("presence appears once the vault has a second device");
     assert!(seen);
+
+    // The binary exits right after this test: services still running against the vaults then
+    // crashed it (SIGSEGV) in CI.
+    tokio::join!(main.shutdown(), linked.shutdown());
 }
